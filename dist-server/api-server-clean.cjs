@@ -49,16 +49,13 @@ function buildDatabaseUrl() {
   const db2 = process.env.PGDATABASE || "2thier";
   const host = process.env.PGHOST || "localhost";
   const port2 = process.env.PGPORT || "5432";
-  const instance = process.env.CLOUDSQL_INSTANCE;
-  if (instance) {
-    const pgHost = process.env.PGHOST;
-    const socketHost = pgHost && pgHost.startsWith("/cloudsql/") ? pgHost : `/cloudsql/${instance}`;
+  if (host.startsWith("/cloudsql/")) {
     const encodedPwd2 = encodeURIComponent(password);
-    const url = `postgresql://${user}:${encodedPwd2}@localhost:5432/${db2}?host=${encodeURIComponent(socketHost)}`;
-    console.warn("[Database] URL reconstruite depuis Cloud SQL:", {
+    const url = `postgresql://${user}:${encodedPwd2}@localhost/${db2}?host=${encodeURIComponent(host)}`;
+    console.warn("[Database] Connexion via Unix socket Cloud SQL:", {
       PGUSER: user,
       PGDATABASE: db2,
-      CLOUDSQL_INSTANCE: instance
+      PGHOST: host
     });
     return url;
   }
@@ -2142,7 +2139,6 @@ async function evaluateTokens(tokens2, opts) {
           break;
         }
         case "ent":
-        case "int":
           r = mapNumericValue(args[0] ?? 0, Math.floor);
           break;
         case "tronque":
@@ -2160,8 +2156,7 @@ async function evaluateTokens(tokens2, opts) {
           r = multiple === 0 ? val : Math.ceil(val / multiple) * multiple;
           break;
         }
-        case "plancher":
-        case "floor": {
+        case "plancher": {
           const val = toNumber2(args[0] ?? 0);
           const multiple = toNumber2(args[1] ?? 1);
           r = multiple === 0 ? val : Math.floor(val / multiple) * multiple;
@@ -2217,9 +2212,9 @@ async function evaluateTokens(tokens2, opts) {
         case "log10":
           r = mapNumericValue(args[0] ?? 0, (val) => val <= 0 ? 0 : Math.log10(val));
           break;
-        case "abs":
-          r = mapNumericValue(args[0] ?? 0, Math.abs);
-          break;
+        // case 'abs': // Déjà défini plus haut
+        //   r = mapNumericValue(args[0] ?? 0, Math.abs);
+        //   break;
         case "signe":
         case "sign":
           r = mapNumericValue(args[0] ?? 0, Math.sign);
@@ -2230,17 +2225,7 @@ async function evaluateTokens(tokens2, opts) {
           r = divisor === 0 ? 0 : val % divisor;
           break;
         }
-        // Ã°Å¸â€œÅ  STATISTIQUES (complÃƒÂ©ments)
-        case "min": {
-          const vals = args.flatMap((a) => Array.isArray(a) ? a : [toNumber2(a ?? 0)]);
-          r = vals.length ? Math.min(...vals) : 0;
-          break;
-        }
-        case "max": {
-          const vals = args.flatMap((a) => Array.isArray(a) ? a : [toNumber2(a ?? 0)]);
-          r = vals.length ? Math.max(...vals) : 0;
-          break;
-        }
+        // 📊 STATISTIQUES (compléments) - min/max définis plus haut
         case "moyenne":
         case "average": {
           const vals = args.flatMap((a) => Array.isArray(a) ? a : [toNumber2(a ?? 0)]);
@@ -4045,7 +4030,7 @@ __export(api_server_clean_exports, {
 });
 module.exports = __toCommonJS(api_server_clean_exports);
 var import_dotenv = __toESM(require("dotenv"), 1);
-var import_express88 = __toESM(require("express"), 1);
+var import_express90 = __toESM(require("express"), 1);
 var import_path7 = __toESM(require("path"), 1);
 var import_fs7 = __toESM(require("fs"), 1);
 var import_cors = __toESM(require("cors"), 1);
@@ -28041,8 +28026,8 @@ function getOrgId(req2) {
   const headerOrg = req2.headers?.["x-organization-id"] || req2.headers?.["x-organization"] || req2.headers?.["organization-id"];
   return user.organizationId || headerOrg || null;
 }
-function registerSumDisplayFieldRoutes(router85) {
-  router85.post("/trees/:treeId/nodes/:nodeId/sum-display-field", async (req2, res) => {
+function registerSumDisplayFieldRoutes(router87) {
+  router87.post("/trees/:treeId/nodes/:nodeId/sum-display-field", async (req2, res) => {
     try {
       const { treeId, nodeId } = req2.params;
       const organizationId = getOrgId(req2);
@@ -28299,7 +28284,7 @@ function registerSumDisplayFieldRoutes(router85) {
       res.status(500).json({ error: "Erreur lors de la cr\xC3\u0192\xC2\xA9ation du champ Total", details: errMsg });
     }
   });
-  router85.delete("/trees/:treeId/nodes/:nodeId/sum-display-field", async (req2, res) => {
+  router87.delete("/trees/:treeId/nodes/:nodeId/sum-display-field", async (req2, res) => {
     try {
       const { treeId, nodeId } = req2.params;
       const organizationId = getOrgId(req2);
@@ -46814,21 +46799,21 @@ router67.get("/status", requireRole2(["admin", "super_admin"]), async (req2, res
   try {
     const organizationId = req2.user?.organizationId;
     if (!organizationId) return res.status(400).json({ success: false, message: "Organization ID manquant" });
-    const [google9, telnyx, adPlatforms] = await Promise.all([
+    const [google10, telnyx, adPlatforms] = await Promise.all([
       prisma37.googleWorkspaceConfig.findUnique({ where: { organizationId } }),
       prisma37.telnyxConnection.findMany({ where: { organizationId } }),
       prisma37.adPlatformIntegration.findMany({ where: { organizationId } })
     ]);
     const status = {
       google: {
-        enabled: !!google9?.enabled || !!google9?.isActive,
-        gmail: !!google9?.gmailEnabled,
-        calendar: !!google9?.calendarEnabled,
-        drive: !!google9?.driveEnabled,
-        meet: !!google9?.meetEnabled,
-        sheets: !!google9?.sheetsEnabled,
-        voice: !!google9?.voiceEnabled,
-        lastSync: google9?.updatedAt ?? null
+        enabled: !!google10?.enabled || !!google10?.isActive,
+        gmail: !!google10?.gmailEnabled,
+        calendar: !!google10?.calendarEnabled,
+        drive: !!google10?.driveEnabled,
+        meet: !!google10?.meetEnabled,
+        sheets: !!google10?.sheetsEnabled,
+        voice: !!google10?.voiceEnabled,
+        lastSync: google10?.updatedAt ?? null
       },
       telnyx: {
         connections: telnyx.map((t) => ({ id: t.id, name: t.name, status: t.status, type: t.type })),
@@ -54172,12 +54157,780 @@ router73.post("/store-batch-calculated-values", async (req2, res) => {
 });
 var calculatedValueController_default = router73;
 
-// src/api/websites.ts
+// src/routes/tbl-batch-routes.ts
 var import_express76 = require("express");
 init_database();
 var router74 = (0, import_express76.Router)();
+function getAuthCtx5(req2) {
+  const user = req2.user;
+  return {
+    organizationId: user?.organizationId || null,
+    isSuperAdmin: user?.isSuperAdmin || false
+  };
+}
+router74.get("/trees/:treeId/formulas", async (req2, res) => {
+  try {
+    const { treeId } = req2.params;
+    const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx5(req2);
+    const treeWhereFilter = isSuperAdmin2 || !organizationId ? { id: treeId } : { id: treeId, organizationId };
+    const tree = await db.treeBranchLeafTree.findFirst({ where: treeWhereFilter });
+    if (!tree) {
+      return res.status(404).json({ error: "Arbre non trouv\xE9" });
+    }
+    const nodes = await db.treeBranchLeafNode.findMany({
+      where: { treeId },
+      select: { id: true }
+    });
+    const nodeIds = nodes.map((n) => n.id);
+    const allFormulas = await db.treeBranchLeafNodeFormula.findMany({
+      where: { nodeId: { in: nodeIds } },
+      orderBy: { createdAt: "asc" }
+    });
+    const formulasByNode = {};
+    for (const formula of allFormulas) {
+      if (!formulasByNode[formula.nodeId]) {
+        formulasByNode[formula.nodeId] = [];
+      }
+      formulasByNode[formula.nodeId].push(formula);
+    }
+    return res.json({
+      success: true,
+      treeId,
+      totalFormulas: allFormulas.length,
+      nodesWithFormulas: Object.keys(formulasByNode).length,
+      formulasByNode
+    });
+  } catch (error) {
+    console.error("[TBL Batch API] Error batch fetching formulas:", error);
+    res.status(500).json({ error: "Erreur lors de la r\xE9cup\xE9ration batch des formules" });
+  }
+});
+router74.get("/trees/:treeId/calculated-values", async (req2, res) => {
+  try {
+    const { treeId } = req2.params;
+    const { leadId } = req2.query;
+    const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx5(req2);
+    const treeWhereFilter = isSuperAdmin2 || !organizationId ? { id: treeId } : { id: treeId, organizationId };
+    const tree = await db.treeBranchLeafTree.findFirst({ where: treeWhereFilter });
+    if (!tree) {
+      return res.status(404).json({ error: "Arbre non trouv\xE9" });
+    }
+    const nodes = await db.treeBranchLeafNode.findMany({
+      where: { treeId },
+      select: {
+        id: true,
+        fieldType: true,
+        calculatedValue: true,
+        calculatedAt: true,
+        calculatedBy: true
+      }
+    });
+    let submissionValues = {};
+    if (leadId && typeof leadId === "string") {
+      const submission = await db.treeBranchLeafSubmission.findFirst({
+        where: {
+          treeId,
+          leadId
+        },
+        orderBy: { updatedAt: "desc" },
+        select: { id: true }
+      });
+      if (submission?.id) {
+        const submissionData = await db.treeBranchLeafSubmissionData.findMany({
+          where: { submissionId: submission.id },
+          select: { nodeId: true, value: true }
+        });
+        for (const data of submissionData) {
+          if (data.value !== null) {
+            submissionValues[data.nodeId] = data.value;
+          }
+        }
+      }
+    }
+    const valuesByNode = {};
+    for (const node of nodes) {
+      if (node.calculatedValue !== null || submissionValues[node.id] !== void 0) {
+        valuesByNode[node.id] = {
+          calculatedValue: node.calculatedValue,
+          calculatedAt: node.calculatedAt,
+          calculatedBy: node.calculatedBy,
+          submissionValue: submissionValues[node.id]
+        };
+      }
+    }
+    return res.json({
+      success: true,
+      treeId,
+      leadId: leadId || null,
+      totalValues: Object.keys(valuesByNode).length,
+      valuesByNode
+    });
+  } catch (error) {
+    console.error("[TBL Batch API] Error batch fetching calculated values:", error);
+    res.status(500).json({ error: "Erreur lors de la r\xE9cup\xE9ration batch des valeurs calcul\xE9es" });
+  }
+});
+router74.get("/trees/:treeId/select-configs", async (req2, res) => {
+  try {
+    const { treeId } = req2.params;
+    const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx5(req2);
+    const treeWhereFilter = isSuperAdmin2 || !organizationId ? { id: treeId } : { id: treeId, organizationId };
+    const tree = await db.treeBranchLeafTree.findFirst({ where: treeWhereFilter });
+    if (!tree) {
+      return res.status(404).json({ error: "Arbre non trouv\xE9" });
+    }
+    const selectNodes = await db.treeBranchLeafNode.findMany({
+      where: {
+        treeId,
+        OR: [
+          { fieldType: "select" },
+          { fieldType: "radio" },
+          { fieldType: "checkbox" },
+          { fieldType: "multi-select" },
+          { fieldType: { contains: "select" } }
+        ]
+      },
+      select: {
+        id: true,
+        fieldType: true,
+        select_options: true,
+        // Utiliser la relation pour les configs avancées
+        TreeBranchLeafSelectConfig: {
+          select: {
+            optionsSource: true,
+            tableReference: true,
+            keyColumn: true,
+            displayColumn: true
+          }
+        }
+      }
+    });
+    const configsByNode = {};
+    for (const node of selectNodes) {
+      const selectConfig = node.TreeBranchLeafSelectConfig;
+      configsByNode[node.id] = {
+        fieldType: node.fieldType,
+        options: node.select_options,
+        sourceType: selectConfig?.optionsSource || null,
+        sourceTableId: selectConfig?.tableReference || null,
+        sourceColumn: selectConfig?.keyColumn || null,
+        displayColumn: selectConfig?.displayColumn || null
+      };
+    }
+    return res.json({
+      success: true,
+      treeId,
+      totalSelectFields: Object.keys(configsByNode).length,
+      configsByNode
+    });
+  } catch (error) {
+    console.error("[TBL Batch API] Error batch fetching select configs:", error);
+    res.status(500).json({ error: "Erreur lors de la r\xE9cup\xE9ration batch des configs select" });
+  }
+});
+router74.get("/trees/:treeId/all", async (req2, res) => {
+  const { treeId } = req2.params;
+  console.log(`[TBL Batch API] /all called for treeId: ${treeId}`);
+  try {
+    const { leadId } = req2.query;
+    const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx5(req2);
+    console.log(`[TBL Batch API] Auth context: org=${organizationId}, superAdmin=${isSuperAdmin2}`);
+    const treeWhereFilter = isSuperAdmin2 || !organizationId ? { id: treeId } : { id: treeId, organizationId };
+    const tree = await db.treeBranchLeafTree.findFirst({ where: treeWhereFilter });
+    if (!tree) {
+      return res.status(404).json({ error: "Arbre non trouv\xE9" });
+    }
+    const nodes = await db.treeBranchLeafNode.findMany({
+      where: { treeId },
+      select: {
+        id: true,
+        fieldType: true,
+        calculatedValue: true,
+        calculatedAt: true,
+        calculatedBy: true,
+        select_options: true,
+        // Inclure la config select si elle existe (relation 1-1)
+        TreeBranchLeafSelectConfig: {
+          select: {
+            optionsSource: true,
+            tableReference: true,
+            displayColumn: true,
+            keyColumn: true,
+            valueColumn: true
+          }
+        }
+      }
+    });
+    const nodeIds = nodes.map((n) => n.id);
+    const [allFormulas, submission] = await Promise.all([
+      // Toutes les formules (en utilisant nodeId: { in: nodeIds })
+      db.treeBranchLeafNodeFormula.findMany({
+        where: {
+          nodeId: { in: nodeIds }
+        },
+        orderBy: { createdAt: "asc" }
+      }),
+      // Submission si leadId
+      leadId && typeof leadId === "string" ? db.treeBranchLeafSubmission.findFirst({
+        where: { treeId, leadId },
+        orderBy: { updatedAt: "desc" },
+        select: { id: true }
+      }) : Promise.resolve(null)
+    ]);
+    let submissionValues = {};
+    if (submission?.id) {
+      const submissionData = await db.treeBranchLeafSubmissionData.findMany({
+        where: { submissionId: submission.id },
+        select: { nodeId: true, value: true }
+      });
+      for (const data of submissionData) {
+        if (data.value !== null) {
+          submissionValues[data.nodeId] = data.value;
+        }
+      }
+    }
+    const formulasByNode = {};
+    for (const formula of allFormulas) {
+      if (!formulasByNode[formula.nodeId]) {
+        formulasByNode[formula.nodeId] = [];
+      }
+      formulasByNode[formula.nodeId].push(formula);
+    }
+    const valuesByNode = {};
+    const configsByNode = {};
+    for (const node of nodes) {
+      if (node.calculatedValue !== null || submissionValues[node.id] !== void 0) {
+        valuesByNode[node.id] = {
+          calculatedValue: node.calculatedValue,
+          calculatedAt: node.calculatedAt,
+          calculatedBy: node.calculatedBy,
+          submissionValue: submissionValues[node.id]
+        };
+      }
+      const isSelectType = ["select", "radio", "checkbox", "multi-select"].includes(node.fieldType || "") || (node.fieldType || "").includes("select");
+      if (isSelectType) {
+        const selectConfig = node.TreeBranchLeafSelectConfig;
+        configsByNode[node.id] = {
+          fieldType: node.fieldType,
+          options: node.select_options,
+          sourceType: selectConfig?.optionsSource || null,
+          sourceTableId: selectConfig?.tableReference || null,
+          sourceColumn: selectConfig?.keyColumn || null,
+          displayColumn: selectConfig?.displayColumn || null
+        };
+      }
+    }
+    return res.json({
+      success: true,
+      treeId,
+      leadId: leadId || null,
+      stats: {
+        totalNodes: nodes.length,
+        totalFormulas: allFormulas.length,
+        nodesWithFormulas: Object.keys(formulasByNode).length,
+        nodesWithValues: Object.keys(valuesByNode).length,
+        selectFields: Object.keys(configsByNode).length
+      },
+      formulasByNode,
+      valuesByNode,
+      configsByNode
+    });
+  } catch (error) {
+    const errorDetails = {
+      message: error instanceof Error ? error.message : String(error),
+      name: error instanceof Error ? error.name : "Unknown",
+      stack: error instanceof Error ? error.stack : void 0
+    };
+    console.error("[TBL Batch API] Error super batch fetching:", JSON.stringify(errorDetails, null, 2));
+    res.status(500).json({
+      error: "Erreur lors de la r\xE9cup\xE9ration batch compl\xE8te",
+      details: errorDetails.message
+    });
+  }
+});
+router74.get("/trees/:treeId/node-data", async (req2, res) => {
+  try {
+    const { treeId } = req2.params;
+    const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx5(req2);
+    const treeWhereFilter = isSuperAdmin2 || !organizationId ? { id: treeId } : { id: treeId, organizationId };
+    const tree = await db.treeBranchLeafTree.findFirst({ where: treeWhereFilter });
+    if (!tree) {
+      return res.status(404).json({ error: "Arbre non trouv\xE9" });
+    }
+    const nodesWithData = await db.treeBranchLeafNode.findMany({
+      where: {
+        treeId,
+        hasData: true
+      },
+      select: {
+        id: true,
+        data_activeId: true,
+        linkedVariableIds: true
+      }
+    });
+    const allVariableIds = /* @__PURE__ */ new Set();
+    for (const node of nodesWithData) {
+      if (node.data_activeId) allVariableIds.add(node.data_activeId);
+      if (node.linkedVariableIds && Array.isArray(node.linkedVariableIds)) {
+        for (const vid of node.linkedVariableIds) {
+          if (typeof vid === "string") allVariableIds.add(vid);
+        }
+      }
+    }
+    const allVariables = await db.treeBranchLeafNodeVariable.findMany({
+      where: {
+        id: { in: Array.from(allVariableIds) }
+      }
+    });
+    const variablesMap = new Map(allVariables.map((v) => [v.id, v]));
+    const dataByNode = {};
+    for (const node of nodesWithData) {
+      let variable = null;
+      let ownerNodeId = null;
+      if (node.data_activeId) {
+        variable = variablesMap.get(node.data_activeId) || null;
+        ownerNodeId = variable?.nodeId || null;
+      } else if (node.linkedVariableIds && Array.isArray(node.linkedVariableIds)) {
+        for (const vid of node.linkedVariableIds) {
+          if (typeof vid === "string" && variablesMap.has(vid)) {
+            variable = variablesMap.get(vid) || null;
+            ownerNodeId = variable?.nodeId || null;
+            break;
+          }
+        }
+      }
+      dataByNode[node.id] = {
+        usedVariableId: node.data_activeId || variable?.id || null,
+        variable,
+        ownerNodeId
+      };
+    }
+    return res.json({
+      success: true,
+      treeId,
+      totalNodesWithData: Object.keys(dataByNode).length,
+      dataByNode
+    });
+  } catch (error) {
+    console.error("[TBL Batch API] Error batch fetching node data:", error);
+    res.status(500).json({ error: "Erreur lors de la r\xE9cup\xE9ration batch des donn\xE9es de noeuds" });
+  }
+});
+router74.get("/trees/:treeId/conditions", async (req2, res) => {
+  try {
+    const { treeId } = req2.params;
+    const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx5(req2);
+    const treeWhereFilter = isSuperAdmin2 || !organizationId ? { id: treeId } : { id: treeId, organizationId };
+    const tree = await db.treeBranchLeafTree.findFirst({ where: treeWhereFilter });
+    if (!tree) {
+      return res.status(404).json({ error: "Arbre non trouv\xE9" });
+    }
+    const nodes = await db.treeBranchLeafNode.findMany({
+      where: { treeId },
+      select: { id: true, condition_activeId: true, linkedConditionIds: true }
+    });
+    const nodeIds = nodes.map((n) => n.id);
+    const allConditions = await db.treeBranchLeafNodeCondition.findMany({
+      where: { nodeId: { in: nodeIds } },
+      orderBy: { createdAt: "asc" }
+    });
+    const conditionsByNode = {};
+    for (const condition of allConditions) {
+      if (!conditionsByNode[condition.nodeId]) {
+        conditionsByNode[condition.nodeId] = [];
+      }
+      conditionsByNode[condition.nodeId].push(condition);
+    }
+    const conditionsById = {};
+    for (const condition of allConditions) {
+      conditionsById[condition.id] = condition;
+    }
+    const activeConditionByNode = {};
+    for (const node of nodes) {
+      activeConditionByNode[node.id] = node.condition_activeId;
+    }
+    return res.json({
+      success: true,
+      treeId,
+      totalConditions: allConditions.length,
+      nodesWithConditions: Object.keys(conditionsByNode).length,
+      conditionsByNode,
+      conditionsById,
+      activeConditionByNode
+    });
+  } catch (error) {
+    console.error("[TBL Batch API] Error batch fetching conditions:", error);
+    res.status(500).json({ error: "Erreur lors de la r\xE9cup\xE9ration batch des conditions" });
+  }
+});
+var tbl_batch_routes_default = router74;
+
+// src/routes/batch-routes.ts
+var import_express77 = require("express");
+init_database();
+var import_googleapis9 = require("googleapis");
+var router75 = (0, import_express77.Router)();
+function getAuthCtx6(req2) {
+  const user = req2.user;
+  return {
+    userId: user?.id,
+    organizationId: user?.organizationId || null,
+    isSuperAdmin: user?.isSuperAdmin || false
+  };
+}
+router75.post("/gmail/modify", async (req2, res) => {
+  try {
+    const { userId, organizationId } = getAuthCtx6(req2);
+    const { messageIds, addLabelIds = [], removeLabelIds = [] } = req2.body;
+    if (!messageIds || !Array.isArray(messageIds) || messageIds.length === 0) {
+      return res.status(400).json({ error: "messageIds requis (array non vide)" });
+    }
+    const googleToken = await db.googleToken.findFirst({
+      where: { userId }
+    });
+    if (!googleToken) {
+      return res.status(401).json({ error: "Tokens Google non trouv\xE9s" });
+    }
+    const oauth2Client = new import_googleapis9.google.auth.OAuth2();
+    oauth2Client.setCredentials({
+      access_token: googleToken.accessToken,
+      refresh_token: googleToken.refreshToken
+    });
+    const gmail = import_googleapis9.google.gmail({ version: "v1", auth: oauth2Client });
+    await gmail.users.messages.batchModify({
+      userId: "me",
+      requestBody: {
+        ids: messageIds,
+        addLabelIds,
+        removeLabelIds
+      }
+    });
+    console.log(`[BATCH] \u2705 Gmail: ${messageIds.length} messages modifi\xE9s`);
+    res.json({
+      success: true,
+      count: messageIds.length,
+      message: `${messageIds.length} message(s) modifi\xE9(s)`
+    });
+  } catch (error) {
+    console.error("[BATCH] \u274C Gmail modify error:", error);
+    res.status(500).json({ error: error.message || "Erreur batch Gmail" });
+  }
+});
+router75.post("/gmail/trash", async (req2, res) => {
+  try {
+    const { userId } = getAuthCtx6(req2);
+    const { messageIds } = req2.body;
+    if (!messageIds || !Array.isArray(messageIds) || messageIds.length === 0) {
+      return res.status(400).json({ error: "messageIds requis (array non vide)" });
+    }
+    const googleToken = await db.googleToken.findFirst({
+      where: { userId }
+    });
+    if (!googleToken) {
+      return res.status(401).json({ error: "Tokens Google non trouv\xE9s" });
+    }
+    const oauth2Client = new import_googleapis9.google.auth.OAuth2();
+    oauth2Client.setCredentials({
+      access_token: googleToken.accessToken,
+      refresh_token: googleToken.refreshToken
+    });
+    const gmail = import_googleapis9.google.gmail({ version: "v1", auth: oauth2Client });
+    await gmail.users.messages.batchModify({
+      userId: "me",
+      requestBody: {
+        ids: messageIds,
+        addLabelIds: ["TRASH"],
+        removeLabelIds: ["INBOX"]
+      }
+    });
+    console.log(`[BATCH] \u2705 Gmail: ${messageIds.length} messages mis \xE0 la corbeille`);
+    res.json({
+      success: true,
+      count: messageIds.length,
+      message: `${messageIds.length} message(s) mis \xE0 la corbeille`
+    });
+  } catch (error) {
+    console.error("[BATCH] \u274C Gmail trash error:", error);
+    res.status(500).json({ error: error.message || "Erreur batch Gmail" });
+  }
+});
+router75.delete("/gmail/delete", async (req2, res) => {
+  try {
+    const { userId } = getAuthCtx6(req2);
+    const { messageIds } = req2.body;
+    if (!messageIds || !Array.isArray(messageIds) || messageIds.length === 0) {
+      return res.status(400).json({ error: "messageIds requis (array non vide)" });
+    }
+    const googleToken = await db.googleToken.findFirst({
+      where: { userId }
+    });
+    if (!googleToken) {
+      return res.status(401).json({ error: "Tokens Google non trouv\xE9s" });
+    }
+    const oauth2Client = new import_googleapis9.google.auth.OAuth2();
+    oauth2Client.setCredentials({
+      access_token: googleToken.accessToken,
+      refresh_token: googleToken.refreshToken
+    });
+    const gmail = import_googleapis9.google.gmail({ version: "v1", auth: oauth2Client });
+    await gmail.users.messages.batchDelete({
+      userId: "me",
+      requestBody: {
+        ids: messageIds
+      }
+    });
+    console.log(`[BATCH] \u2705 Gmail: ${messageIds.length} messages supprim\xE9s d\xE9finitivement`);
+    res.json({
+      success: true,
+      count: messageIds.length,
+      message: `${messageIds.length} message(s) supprim\xE9(s) d\xE9finitivement`
+    });
+  } catch (error) {
+    console.error("[BATCH] \u274C Gmail delete error:", error);
+    res.status(500).json({ error: error.message || "Erreur batch Gmail" });
+  }
+});
+router75.patch("/leads/status", async (req2, res) => {
+  try {
+    const { organizationId } = getAuthCtx6(req2);
+    const { leadIds, statusId } = req2.body;
+    if (!leadIds || !Array.isArray(leadIds) || leadIds.length === 0) {
+      return res.status(400).json({ error: "leadIds requis (array non vide)" });
+    }
+    if (!statusId) {
+      return res.status(400).json({ error: "statusId requis" });
+    }
+    const status = await db.leadStatus.findUnique({
+      where: { id: statusId }
+    });
+    if (!status) {
+      return res.status(404).json({ error: "Statut non trouv\xE9" });
+    }
+    const result = await db.lead.updateMany({
+      where: {
+        id: { in: leadIds },
+        organizationId: organizationId || void 0
+      },
+      data: {
+        leadStatusId: statusId,
+        updatedAt: /* @__PURE__ */ new Date()
+      }
+    });
+    console.log(`[BATCH] \u2705 Leads: ${result.count} leads mis \xE0 jour vers statut "${status.name}"`);
+    res.json({
+      success: true,
+      count: result.count,
+      message: `${result.count} lead(s) mis \xE0 jour`
+    });
+  } catch (error) {
+    console.error("[BATCH] \u274C Leads status error:", error);
+    res.status(500).json({ error: error.message || "Erreur batch leads" });
+  }
+});
+router75.patch("/leads/assign", async (req2, res) => {
+  try {
+    const { organizationId } = getAuthCtx6(req2);
+    const { leadIds, assignedToId } = req2.body;
+    if (!leadIds || !Array.isArray(leadIds) || leadIds.length === 0) {
+      return res.status(400).json({ error: "leadIds requis (array non vide)" });
+    }
+    const result = await db.lead.updateMany({
+      where: {
+        id: { in: leadIds },
+        organizationId: organizationId || void 0
+      },
+      data: {
+        assignedToId: assignedToId || null,
+        updatedAt: /* @__PURE__ */ new Date()
+      }
+    });
+    console.log(`[BATCH] \u2705 Leads: ${result.count} leads assign\xE9s`);
+    res.json({
+      success: true,
+      count: result.count,
+      message: `${result.count} lead(s) assign\xE9(s)`
+    });
+  } catch (error) {
+    console.error("[BATCH] \u274C Leads assign error:", error);
+    res.status(500).json({ error: error.message || "Erreur batch leads" });
+  }
+});
+router75.delete("/leads", async (req2, res) => {
+  try {
+    const { organizationId } = getAuthCtx6(req2);
+    const { leadIds } = req2.body;
+    if (!leadIds || !Array.isArray(leadIds) || leadIds.length === 0) {
+      return res.status(400).json({ error: "leadIds requis (array non vide)" });
+    }
+    const result = await db.lead.deleteMany({
+      where: {
+        id: { in: leadIds },
+        organizationId: organizationId || void 0
+      }
+    });
+    console.log(`[BATCH] \u2705 Leads: ${result.count} leads supprim\xE9s`);
+    res.json({
+      success: true,
+      count: result.count,
+      message: `${result.count} lead(s) supprim\xE9(s)`
+    });
+  } catch (error) {
+    console.error("[BATCH] \u274C Leads delete error:", error);
+    res.status(500).json({ error: error.message || "Erreur batch leads" });
+  }
+});
+router75.post("/fields/configs", async (req2, res) => {
+  try {
+    const { fieldIds } = req2.body;
+    if (!fieldIds || !Array.isArray(fieldIds) || fieldIds.length === 0) {
+      return res.status(400).json({ error: "fieldIds requis (array non vide)" });
+    }
+    const configs = await db.fieldConfig.findMany({
+      where: {
+        fieldId: { in: fieldIds }
+      },
+      include: {
+        field: true
+      }
+    });
+    const configsByFieldId = {};
+    for (const config of configs) {
+      configsByFieldId[config.fieldId] = config;
+    }
+    console.log(`[BATCH] \u2705 Fields: ${configs.length} configs charg\xE9es pour ${fieldIds.length} fields`);
+    res.json({
+      success: true,
+      count: configs.length,
+      configs: configsByFieldId
+    });
+  } catch (error) {
+    console.error("[BATCH] \u274C Fields configs error:", error);
+    res.status(500).json({ error: error.message || "Erreur batch fields" });
+  }
+});
+router75.patch("/modules/toggle", async (req2, res) => {
+  try {
+    const { organizationId } = getAuthCtx6(req2);
+    const { moduleIds, enabled } = req2.body;
+    if (!moduleIds || !Array.isArray(moduleIds) || moduleIds.length === 0) {
+      return res.status(400).json({ error: "moduleIds requis (array non vide)" });
+    }
+    if (typeof enabled !== "boolean") {
+      return res.status(400).json({ error: "enabled requis (boolean)" });
+    }
+    const result = await db.organizationModule.updateMany({
+      where: {
+        moduleId: { in: moduleIds },
+        organizationId: organizationId || void 0
+      },
+      data: {
+        enabled,
+        updatedAt: /* @__PURE__ */ new Date()
+      }
+    });
+    console.log(`[BATCH] \u2705 Modules: ${result.count} modules ${enabled ? "activ\xE9s" : "d\xE9sactiv\xE9s"}`);
+    res.json({
+      success: true,
+      count: result.count,
+      message: `${result.count} module(s) ${enabled ? "activ\xE9(s)" : "d\xE9sactiv\xE9(s)"}`
+    });
+  } catch (error) {
+    console.error("[BATCH] \u274C Modules toggle error:", error);
+    res.status(500).json({ error: error.message || "Erreur batch modules" });
+  }
+});
+router75.get("/analytics/leads-by-status", async (req2, res) => {
+  try {
+    const { organizationId } = getAuthCtx6(req2);
+    const counts = await db.lead.groupBy({
+      by: ["leadStatusId"],
+      where: {
+        organizationId: organizationId || void 0
+      },
+      _count: {
+        id: true
+      }
+    });
+    const statusIds = counts.map((c) => c.leadStatusId).filter(Boolean);
+    const statuses = await db.leadStatus.findMany({
+      where: { id: { in: statusIds } },
+      select: { id: true, name: true, color: true }
+    });
+    const statusMap = new Map(statuses.map((s) => [s.id, s]));
+    const result = counts.map((c) => ({
+      statusId: c.leadStatusId,
+      statusName: c.leadStatusId ? statusMap.get(c.leadStatusId)?.name : "Sans statut",
+      statusColor: c.leadStatusId ? statusMap.get(c.leadStatusId)?.color : "#999",
+      count: c._count.id
+    }));
+    console.log(`[BATCH] \u2705 Analytics: Leads par statut (${counts.length} groupes)`);
+    res.json({ success: true, data: result });
+  } catch (error) {
+    console.error("[BATCH] \u274C Analytics leads-by-status error:", error);
+    res.status(500).json({ error: error.message || "Erreur analytics" });
+  }
+});
+router75.get("/analytics/leads-by-source", async (req2, res) => {
+  try {
+    const { organizationId } = getAuthCtx6(req2);
+    const counts = await db.lead.groupBy({
+      by: ["source"],
+      where: {
+        organizationId: organizationId || void 0
+      },
+      _count: {
+        id: true
+      }
+    });
+    const result = counts.map((c) => ({
+      source: c.source || "Non d\xE9finie",
+      count: c._count.id
+    }));
+    console.log(`[BATCH] \u2705 Analytics: Leads par source (${counts.length} sources)`);
+    res.json({ success: true, data: result });
+  } catch (error) {
+    console.error("[BATCH] \u274C Analytics leads-by-source error:", error);
+    res.status(500).json({ error: error.message || "Erreur analytics" });
+  }
+});
+router75.get("/analytics/leads-by-assignee", async (req2, res) => {
+  try {
+    const { organizationId } = getAuthCtx6(req2);
+    const counts = await db.lead.groupBy({
+      by: ["assignedToId"],
+      where: {
+        organizationId: organizationId || void 0
+      },
+      _count: {
+        id: true
+      }
+    });
+    const userIds = counts.map((c) => c.assignedToId).filter(Boolean);
+    const users = await db.user.findMany({
+      where: { id: { in: userIds } },
+      select: { id: true, firstName: true, lastName: true }
+    });
+    const userMap = new Map(users.map((u) => [u.id, u]));
+    const result = counts.map((c) => ({
+      assignedToId: c.assignedToId,
+      assigneeName: c.assignedToId ? `${userMap.get(c.assignedToId)?.firstName || ""} ${userMap.get(c.assignedToId)?.lastName || ""}`.trim() : "Non assign\xE9",
+      count: c._count.id
+    }));
+    console.log(`[BATCH] \u2705 Analytics: Leads par assign\xE9 (${counts.length} groupes)`);
+    res.json({ success: true, data: result });
+  } catch (error) {
+    console.error("[BATCH] \u274C Analytics leads-by-assignee error:", error);
+    res.status(500).json({ error: error.message || "Erreur analytics" });
+  }
+});
+var batch_routes_default = router75;
+
+// src/api/websites.ts
+var import_express78 = require("express");
+init_database();
+var router76 = (0, import_express78.Router)();
 var prisma43 = db;
-router74.get("/websites", authenticateToken, async (req2, res) => {
+router76.get("/websites", authenticateToken, async (req2, res) => {
   try {
     const organizationId = req2.headers["x-organization-id"];
     const showAll = req2.query.all === "true";
@@ -54205,7 +54958,7 @@ router74.get("/websites", authenticateToken, async (req2, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
-router74.get("/websites/:slug", async (req2, res) => {
+router76.get("/websites/:slug", async (req2, res) => {
   try {
     const { slug } = req2.params;
     const organizationId = req2.headers["x-organization-id"];
@@ -54276,7 +55029,7 @@ router74.get("/websites/:slug", async (req2, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
-router74.get("/websites/:slug/services", async (req2, res) => {
+router76.get("/websites/:slug/services", async (req2, res) => {
   try {
     const { slug } = req2.params;
     const website = await prisma43.webSite.findFirst({
@@ -54299,7 +55052,7 @@ router74.get("/websites/:slug/services", async (req2, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
-router74.get("/websites/:slug/projects", async (req2, res) => {
+router76.get("/websites/:slug/projects", async (req2, res) => {
   try {
     const { slug } = req2.params;
     const { featured } = req2.query;
@@ -54327,7 +55080,7 @@ router74.get("/websites/:slug/projects", async (req2, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
-router74.get("/websites/:slug/testimonials", async (req2, res) => {
+router76.get("/websites/:slug/testimonials", async (req2, res) => {
   try {
     const { slug } = req2.params;
     const { featured } = req2.query;
@@ -54355,7 +55108,7 @@ router74.get("/websites/:slug/testimonials", async (req2, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
-router74.get("/websites/:slug/blog", async (req2, res) => {
+router76.get("/websites/:slug/blog", async (req2, res) => {
   try {
     const { slug } = req2.params;
     const { limit = "10", featured } = req2.query;
@@ -54394,7 +55147,7 @@ router74.get("/websites/:slug/blog", async (req2, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
-router74.get("/websites/:slug/blog/:postSlug", async (req2, res) => {
+router76.get("/websites/:slug/blog/:postSlug", async (req2, res) => {
   try {
     const { slug, postSlug } = req2.params;
     const website = await prisma43.webSite.findFirst({
@@ -54431,7 +55184,7 @@ router74.get("/websites/:slug/blog/:postSlug", async (req2, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
-router74.put("/websites/:id", authenticateToken, async (req2, res) => {
+router76.put("/websites/:id", authenticateToken, async (req2, res) => {
   try {
     const websiteId = parseInt(req2.params.id);
     const organizationId = req2.headers["x-organization-id"];
@@ -54475,7 +55228,7 @@ router74.put("/websites/:id", authenticateToken, async (req2, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
-router74.post("/websites", authenticateToken, async (req2, res) => {
+router76.post("/websites", authenticateToken, async (req2, res) => {
   try {
     const organizationId = req2.headers["x-organization-id"];
     const data = req2.body;
@@ -54504,7 +55257,7 @@ router74.post("/websites", authenticateToken, async (req2, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
-router74.delete("/websites/:id", authenticateToken, async (req2, res) => {
+router76.delete("/websites/:id", authenticateToken, async (req2, res) => {
   console.log("\u{1F5D1}\uFE0F [WEBSITES] DELETE /websites/:id atteint!");
   console.log("\u{1F5D1}\uFE0F [WEBSITES] ID du site:", req2.params.id);
   try {
@@ -54540,14 +55293,14 @@ router74.delete("/websites/:id", authenticateToken, async (req2, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
-var websites_default = router74;
+var websites_default = router76;
 
 // src/api/website-services.ts
-var import_express77 = require("express");
+var import_express79 = require("express");
 init_database();
-var router75 = (0, import_express77.Router)();
+var router77 = (0, import_express79.Router)();
 var prisma44 = db;
-router75.get("/website-services/:websiteId", async (req2, res) => {
+router77.get("/website-services/:websiteId", async (req2, res) => {
   try {
     const { websiteId } = req2.params;
     const services = await prisma44.webSiteService.findMany({
@@ -54564,7 +55317,7 @@ router75.get("/website-services/:websiteId", async (req2, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
-router75.post("/website-services", async (req2, res) => {
+router77.post("/website-services", async (req2, res) => {
   try {
     const { websiteId, key: key2, icon, title, description, features, ctaText, ctaUrl, isActive } = req2.body;
     if (!websiteId || !key2 || !title) {
@@ -54594,7 +55347,7 @@ router75.post("/website-services", async (req2, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
-router75.put("/website-services/:id", async (req2, res) => {
+router77.put("/website-services/:id", async (req2, res) => {
   try {
     const { id } = req2.params;
     const { key: key2, icon, title, description, features, ctaText, ctaUrl, isActive } = req2.body;
@@ -54617,7 +55370,7 @@ router75.put("/website-services/:id", async (req2, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
-router75.delete("/website-services/:id", async (req2, res) => {
+router77.delete("/website-services/:id", async (req2, res) => {
   try {
     const { id } = req2.params;
     await prisma44.webSiteService.delete({
@@ -54629,7 +55382,7 @@ router75.delete("/website-services/:id", async (req2, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
-router75.post("/website-services/reorder", async (req2, res) => {
+router77.post("/website-services/reorder", async (req2, res) => {
   try {
     const { services } = req2.body;
     if (!Array.isArray(services)) {
@@ -54649,14 +55402,14 @@ router75.post("/website-services/reorder", async (req2, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
-var website_services_default = router75;
+var website_services_default = router77;
 
 // src/api/website-projects.ts
-var import_express78 = require("express");
+var import_express80 = require("express");
 init_database();
-var router76 = (0, import_express78.Router)();
+var router78 = (0, import_express80.Router)();
 var prisma45 = db;
-router76.get("/website-projects/:websiteId", async (req2, res) => {
+router78.get("/website-projects/:websiteId", async (req2, res) => {
   try {
     const { websiteId } = req2.params;
     const projects = await prisma45.webSiteProject.findMany({
@@ -54673,7 +55426,7 @@ router76.get("/website-projects/:websiteId", async (req2, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
-router76.post("/website-projects", async (req2, res) => {
+router78.post("/website-projects", async (req2, res) => {
   try {
     const { websiteId, title, location, details, tags, isActive, isFeatured, completedAt } = req2.body;
     if (!websiteId || !title) {
@@ -54702,7 +55455,7 @@ router76.post("/website-projects", async (req2, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
-router76.put("/website-projects/:id", async (req2, res) => {
+router78.put("/website-projects/:id", async (req2, res) => {
   try {
     const { id } = req2.params;
     const { title, location, details, tags, isActive, isFeatured, completedAt } = req2.body;
@@ -54724,7 +55477,7 @@ router76.put("/website-projects/:id", async (req2, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
-router76.delete("/website-projects/:id", async (req2, res) => {
+router78.delete("/website-projects/:id", async (req2, res) => {
   try {
     const { id } = req2.params;
     await prisma45.webSiteProject.delete({
@@ -54736,7 +55489,7 @@ router76.delete("/website-projects/:id", async (req2, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
-router76.post("/website-projects/reorder", async (req2, res) => {
+router78.post("/website-projects/reorder", async (req2, res) => {
   try {
     const { projects } = req2.body;
     if (!Array.isArray(projects)) {
@@ -54756,14 +55509,14 @@ router76.post("/website-projects/reorder", async (req2, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
-var website_projects_default = router76;
+var website_projects_default = router78;
 
 // src/api/website-testimonials.ts
-var import_express79 = require("express");
+var import_express81 = require("express");
 init_database();
-var router77 = (0, import_express79.Router)();
+var router79 = (0, import_express81.Router)();
 var prisma46 = db;
-router77.get("/website-testimonials/:websiteId", async (req2, res) => {
+router79.get("/website-testimonials/:websiteId", async (req2, res) => {
   try {
     const { websiteId } = req2.params;
     const testimonials = await prisma46.webSiteTestimonial.findMany({
@@ -54780,7 +55533,7 @@ router77.get("/website-testimonials/:websiteId", async (req2, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
-router77.post("/website-testimonials", async (req2, res) => {
+router79.post("/website-testimonials", async (req2, res) => {
   try {
     const { websiteId, customerName, location, service, rating, text, isActive, isFeatured, publishedAt } = req2.body;
     if (!websiteId || !customerName || !text) {
@@ -54810,7 +55563,7 @@ router77.post("/website-testimonials", async (req2, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
-router77.put("/website-testimonials/:id", async (req2, res) => {
+router79.put("/website-testimonials/:id", async (req2, res) => {
   try {
     const { id } = req2.params;
     const { customerName, location, service, rating, text, isActive, isFeatured, publishedAt } = req2.body;
@@ -54833,7 +55586,7 @@ router77.put("/website-testimonials/:id", async (req2, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
-router77.delete("/website-testimonials/:id", async (req2, res) => {
+router79.delete("/website-testimonials/:id", async (req2, res) => {
   try {
     const { id } = req2.params;
     await prisma46.webSiteTestimonial.delete({
@@ -54845,7 +55598,7 @@ router77.delete("/website-testimonials/:id", async (req2, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
-router77.post("/website-testimonials/reorder", async (req2, res) => {
+router79.post("/website-testimonials/reorder", async (req2, res) => {
   try {
     const { testimonials } = req2.body;
     if (!Array.isArray(testimonials)) {
@@ -54865,14 +55618,14 @@ router77.post("/website-testimonials/reorder", async (req2, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
-var website_testimonials_default = router77;
+var website_testimonials_default = router79;
 
 // src/api/website-sections.ts
-var import_express80 = __toESM(require("express"), 1);
+var import_express82 = __toESM(require("express"), 1);
 init_database();
-var router78 = import_express80.default.Router();
+var router80 = import_express82.default.Router();
 var prisma47 = db;
-router78.get("/website-sections/:websiteId", async (req2, res) => {
+router80.get("/website-sections/:websiteId", async (req2, res) => {
   try {
     const { websiteId } = req2.params;
     const sections = await prisma47.webSiteSection.findMany({
@@ -54889,7 +55642,7 @@ router78.get("/website-sections/:websiteId", async (req2, res) => {
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
-router78.post("/website-sections", async (req2, res) => {
+router80.post("/website-sections", async (req2, res) => {
   try {
     const { websiteId, key: key2, type, name, content, backgroundColor, textColor, customCss } = req2.body;
     const maxOrder = await prisma47.webSiteSection.aggregate({
@@ -54917,7 +55670,7 @@ router78.post("/website-sections", async (req2, res) => {
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
-router78.put("/website-sections/:id", async (req2, res) => {
+router80.put("/website-sections/:id", async (req2, res) => {
   try {
     const { id } = req2.params;
     const { name, content, backgroundColor, textColor, customCss, isActive } = req2.body;
@@ -54968,7 +55721,7 @@ router78.put("/website-sections/:id", async (req2, res) => {
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
-router78.patch("/website-sections/:id", async (req2, res) => {
+router80.patch("/website-sections/:id", async (req2, res) => {
   try {
     const { id } = req2.params;
     const { name, content, backgroundColor, textColor, customCss, isActive } = req2.body;
@@ -55016,7 +55769,7 @@ router78.patch("/website-sections/:id", async (req2, res) => {
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
-router78.delete("/website-sections/:id", async (req2, res) => {
+router80.delete("/website-sections/:id", async (req2, res) => {
   try {
     const { id } = req2.params;
     const section = await prisma47.webSiteSection.findUnique({
@@ -55034,7 +55787,7 @@ router78.delete("/website-sections/:id", async (req2, res) => {
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
-router78.post("/website-sections/reorder", async (req2, res) => {
+router80.post("/website-sections/reorder", async (req2, res) => {
   try {
     const { sections } = req2.body;
     await prisma47.$transaction(
@@ -55051,7 +55804,7 @@ router78.post("/website-sections/reorder", async (req2, res) => {
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
-router78.post("/website-sections/duplicate/:id", async (req2, res) => {
+router80.post("/website-sections/duplicate/:id", async (req2, res) => {
   try {
     const { id } = req2.params;
     const original = await prisma47.webSiteSection.findUnique({
@@ -55082,13 +55835,13 @@ router78.post("/website-sections/duplicate/:id", async (req2, res) => {
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
-var website_sections_default = router78;
+var website_sections_default = router80;
 
 // src/api/website-themes.ts
-var import_express81 = require("express");
+var import_express83 = require("express");
 init_prisma();
-var router79 = (0, import_express81.Router)();
-router79.get("/:websiteId", async (req2, res) => {
+var router81 = (0, import_express83.Router)();
+router81.get("/:websiteId", async (req2, res) => {
   try {
     const { websiteId } = req2.params;
     console.log("\u{1F4E1} [API] GET theme websiteId:", websiteId);
@@ -55104,7 +55857,7 @@ router79.get("/:websiteId", async (req2, res) => {
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
-router79.post("/", async (req2, res) => {
+router81.post("/", async (req2, res) => {
   try {
     const themeData = req2.body;
     console.log("\u{1F4E1} [API] POST theme:", themeData);
@@ -55117,7 +55870,7 @@ router79.post("/", async (req2, res) => {
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
-router79.put("/:id", async (req2, res) => {
+router81.put("/:id", async (req2, res) => {
   try {
     const { id } = req2.params;
     const themeData = req2.body;
@@ -55132,7 +55885,7 @@ router79.put("/:id", async (req2, res) => {
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
-router79.delete("/:id", async (req2, res) => {
+router81.delete("/:id", async (req2, res) => {
   try {
     const { id } = req2.params;
     console.log("\u{1F4E1} [API] DELETE theme:", id);
@@ -55145,12 +55898,12 @@ router79.delete("/:id", async (req2, res) => {
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
-var website_themes_default = router79;
+var website_themes_default = router81;
 
 // src/api/contact-form.ts
-var import_express82 = require("express");
+var import_express84 = require("express");
 init_database();
-var router80 = (0, import_express82.Router)();
+var router82 = (0, import_express84.Router)();
 var prisma48 = db;
 var isValidEmail = (email) => {
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -55168,7 +55921,7 @@ var isSpam = (data) => {
   }
   return false;
 };
-router80.post("/contact-form", async (req2, res) => {
+router82.post("/contact-form", async (req2, res) => {
   try {
     const data = req2.body;
     if (!data.name || data.name.trim().length < 2) {
@@ -55244,7 +55997,7 @@ router80.post("/contact-form", async (req2, res) => {
     });
   }
 });
-router80.get("/contact-submissions/:websiteId", async (req2, res) => {
+router82.get("/contact-submissions/:websiteId", async (req2, res) => {
   try {
     const websiteId = parseInt(req2.params.websiteId);
     const submissions = await prisma48.contactSubmission.findMany({
@@ -55259,7 +56012,7 @@ router80.get("/contact-submissions/:websiteId", async (req2, res) => {
     res.status(500).json({ success: false, message: "Erreur serveur" });
   }
 });
-router80.patch("/contact-submission/:id/read", async (req2, res) => {
+router82.patch("/contact-submission/:id/read", async (req2, res) => {
   try {
     const id = parseInt(req2.params.id);
     const submission = await prisma48.contactSubmission.update({
@@ -55272,7 +56025,7 @@ router80.patch("/contact-submission/:id/read", async (req2, res) => {
     res.status(500).json({ success: false, message: "Erreur serveur" });
   }
 });
-router80.patch("/contact-submission/:id/status", async (req2, res) => {
+router82.patch("/contact-submission/:id/status", async (req2, res) => {
   try {
     const id = parseInt(req2.params.id);
     const { status, notes } = req2.body;
@@ -55294,7 +56047,7 @@ router80.patch("/contact-submission/:id/status", async (req2, res) => {
     res.status(500).json({ success: false, message: "Erreur serveur" });
   }
 });
-router80.delete("/contact-submission/:id", async (req2, res) => {
+router82.delete("/contact-submission/:id", async (req2, res) => {
   try {
     const id = parseInt(req2.params.id);
     await prisma48.contactSubmission.delete({
@@ -55306,15 +56059,15 @@ router80.delete("/contact-submission/:id", async (req2, res) => {
     res.status(500).json({ success: false, message: "Erreur serveur" });
   }
 });
-var contact_form_default = router80;
+var contact_form_default = router82;
 
 // src/api/image-upload.ts
-var import_express83 = require("express");
+var import_express85 = require("express");
 var import_multer2 = __toESM(require("multer"), 1);
 var import_path6 = __toESM(require("path"), 1);
 var import_promises = __toESM(require("fs/promises"), 1);
 init_database();
-var router81 = (0, import_express83.Router)();
+var router83 = (0, import_express85.Router)();
 var prisma49 = db;
 var storage2 = import_multer2.default.diskStorage({
   destination: async (req2, file, cb) => {
@@ -55343,7 +56096,7 @@ var upload2 = (0, import_multer2.default)({
     // 5MB max
   }
 });
-router81.post("/upload", upload2.single("file"), async (req2, res) => {
+router83.post("/upload", upload2.single("file"), async (req2, res) => {
   try {
     if (!req2.file) {
       return res.status(400).json({
@@ -55386,7 +56139,7 @@ router81.post("/upload", upload2.single("file"), async (req2, res) => {
     });
   }
 });
-router81.post("/upload-image", upload2.single("image"), async (req2, res) => {
+router83.post("/upload-image", upload2.single("image"), async (req2, res) => {
   try {
     if (!req2.file) {
       return res.status(400).json({
@@ -55443,7 +56196,7 @@ router81.post("/upload-image", upload2.single("image"), async (req2, res) => {
     });
   }
 });
-router81.get("/images/:websiteId", async (req2, res) => {
+router83.get("/images/:websiteId", async (req2, res) => {
   try {
     const websiteId = parseInt(req2.params.websiteId);
     const { category } = req2.query;
@@ -55467,7 +56220,7 @@ router81.get("/images/:websiteId", async (req2, res) => {
     });
   }
 });
-router81.delete("/image/:id", async (req2, res) => {
+router83.delete("/image/:id", async (req2, res) => {
   try {
     const id = parseInt(req2.params.id);
     const mediaFile = await prisma49.webSiteMediaFile.findUnique({
@@ -55499,10 +56252,10 @@ router81.delete("/image/:id", async (req2, res) => {
     });
   }
 });
-var image_upload_default = router81;
+var image_upload_default = router83;
 
 // src/api/ai-content.ts
-var import_express84 = require("express");
+var import_express86 = require("express");
 
 // src/services/aiContentService.ts
 var AIContentService = class {
@@ -55715,8 +56468,8 @@ R\xE8gles :
 var aiContentService = new AIContentService();
 
 // src/api/ai-content.ts
-var router82 = (0, import_express84.Router)();
-router82.post("/generate-service", async (req2, res) => {
+var router84 = (0, import_express86.Router)();
+router84.post("/generate-service", async (req2, res) => {
   try {
     const { siteName, industry, serviceType, keywords } = req2.body;
     if (!siteName || !industry || !serviceType) {
@@ -55742,7 +56495,7 @@ router82.post("/generate-service", async (req2, res) => {
     });
   }
 });
-router82.post("/generate-project", async (req2, res) => {
+router84.post("/generate-project", async (req2, res) => {
   try {
     const { siteName, industry, projectType, location } = req2.body;
     if (!siteName || !industry || !projectType) {
@@ -55768,7 +56521,7 @@ router82.post("/generate-project", async (req2, res) => {
     });
   }
 });
-router82.post("/generate-testimonial", async (req2, res) => {
+router84.post("/generate-testimonial", async (req2, res) => {
   try {
     const { siteName, industry, serviceType, customerType } = req2.body;
     if (!siteName || !industry || !serviceType) {
@@ -55794,7 +56547,7 @@ router82.post("/generate-testimonial", async (req2, res) => {
     });
   }
 });
-router82.post("/generate-page", async (req2, res) => {
+router84.post("/generate-page", async (req2, res) => {
   try {
     const { siteName, siteType, industry, mainServices, targetAudience } = req2.body;
     if (!siteName || !siteType || !industry || !mainServices) {
@@ -55821,7 +56574,7 @@ router82.post("/generate-page", async (req2, res) => {
     });
   }
 });
-router82.post("/optimize-seo", async (req2, res) => {
+router84.post("/optimize-seo", async (req2, res) => {
   try {
     const { currentTitle, currentDescription, pageContent, targetKeywords, siteName, industry } = req2.body;
     if (!pageContent || !siteName || !industry) {
@@ -55849,7 +56602,7 @@ router82.post("/optimize-seo", async (req2, res) => {
     });
   }
 });
-router82.post("/generate-multiple-services", async (req2, res) => {
+router84.post("/generate-multiple-services", async (req2, res) => {
   try {
     const { siteName, industry, serviceTypes } = req2.body;
     if (!siteName || !industry || !serviceTypes || !Array.isArray(serviceTypes)) {
@@ -55875,15 +56628,15 @@ router82.post("/generate-multiple-services", async (req2, res) => {
     });
   }
 });
-var ai_content_default = router82;
+var ai_content_default = router84;
 
 // src/api/ai.ts
-var import_express85 = __toESM(require("express"), 1);
+var import_express87 = __toESM(require("express"), 1);
 var import_generative_ai2 = require("@google/generative-ai");
-var router83 = import_express85.default.Router();
+var router85 = import_express87.default.Router();
 var genAI = new import_generative_ai2.GoogleGenerativeAI(process.env.GEMINI_API_KEY || "");
 var MODEL_NAME = "gemini-pro";
-router83.post("/generate", async (req2, res) => {
+router85.post("/generate", async (req2, res) => {
   try {
     const { prompt, context, sectionType, currentValue } = req2.body;
     if (!prompt) {
@@ -56046,7 +56799,7 @@ function formatSuggestions(data, context) {
       return [{ value: data }];
   }
 }
-router83.post("/analyze-section", async (req2, res) => {
+router85.post("/analyze-section", async (req2, res) => {
   try {
     const { sectionType, content, prompt } = req2.body;
     if (!process.env.GEMINI_API_KEY) {
@@ -56181,7 +56934,7 @@ function generateFallbackAnalysis(sectionType, content) {
     }
   };
 }
-router83.post("/optimize-seo", async (req2, res) => {
+router85.post("/optimize-seo", async (req2, res) => {
   try {
     const { content, sectionType } = req2.body;
     if (!process.env.GEMINI_API_KEY) {
@@ -56221,7 +56974,7 @@ Format de r\xE9ponse : JSON avec { metaTitle, metaDescription, keywords: [], slu
     });
   }
 });
-router83.post("/improve-content", async (req2, res) => {
+router85.post("/improve-content", async (req2, res) => {
   try {
     const { content, instructions } = req2.body;
     if (!process.env.GEMINI_API_KEY) {
@@ -56258,7 +57011,7 @@ Retourne le contenu am\xE9lior\xE9 au format JSON identique \xE0 l'original.`;
     });
   }
 });
-router83.post("/optimize-layout", async (req2, res) => {
+router85.post("/optimize-layout", async (req2, res) => {
   try {
     const { itemCount, sectionType, currentLayout } = req2.body;
     if (!process.env.GEMINI_API_KEY) {
@@ -56313,7 +57066,7 @@ Format de r\xE9ponse : JSON array avec :
     });
   }
 });
-router83.post("/generate-palette", async (req2, res) => {
+router85.post("/generate-palette", async (req2, res) => {
   try {
     const { baseColor, mood, industry } = req2.body;
     if (!process.env.GEMINI_API_KEY) {
@@ -56452,13 +57205,13 @@ function generateFallbackPalettes(baseColor) {
     }
   ];
 }
-var ai_default2 = router83;
+var ai_default2 = router85;
 
 // src/routes/ai-field-generator.ts
-var import_express86 = __toESM(require("express"), 1);
-var router84 = import_express86.default.Router();
+var import_express88 = __toESM(require("express"), 1);
+var router86 = import_express88.default.Router();
 var geminiService3 = new GoogleGeminiService();
-router84.use(authMiddleware);
+router86.use(authMiddleware);
 var SmartPromptBuilder = class {
   /**
    * Construit un prompt optimisé selon le type de champ
@@ -56841,7 +57594,7 @@ var QualityAnalyzer = class {
     }
   }
 };
-router84.post("/generate-field", async (req2, res) => {
+router86.post("/generate-field", async (req2, res) => {
   const startTime = Date.now();
   try {
     const { fieldId, fieldType, fieldLabel, currentValue, aiContext } = req2.body;
@@ -56928,7 +57681,7 @@ router84.post("/generate-field", async (req2, res) => {
     });
   }
 });
-router84.get("/status", async (_req, res) => {
+router86.get("/status", async (_req, res) => {
   try {
     const isAvailable = !!process.env.GOOGLE_API_KEY || !!process.env.GEMINI_API_KEY;
     res.json({
@@ -56945,10 +57698,10 @@ router84.get("/status", async (_req, res) => {
     });
   }
 });
-var ai_field_generator_default = router84;
+var ai_field_generator_default = router86;
 
 // src/components/TreeBranchLeaf/treebranchleaf-new/api/repeat/repeat-routes.ts
-var import_express87 = require("express");
+var import_express89 = require("express");
 
 // src/components/TreeBranchLeaf/treebranchleaf-new/api/repeat/repeat-blueprint-builder.ts
 var parseJsonArray = (value) => {
@@ -60037,10 +60790,10 @@ function normalizeMetadata(metadata) {
 
 // src/components/TreeBranchLeaf/treebranchleaf-new/api/repeat/repeat-routes.ts
 function createRepeatRouter(prisma51) {
-  const router85 = (0, import_express87.Router)();
+  const router87 = (0, import_express89.Router)();
   const inFlightExecuteByRepeater = /* @__PURE__ */ new Set();
-  router85.use(authenticateToken);
-  router85.post("/:repeaterNodeId/instances", async (req2, res) => {
+  router87.use(authenticateToken);
+  router87.post("/:repeaterNodeId/instances", async (req2, res) => {
     const { repeaterNodeId } = req2.params;
     const body2 = req2.body || {};
     try {
@@ -60072,7 +60825,7 @@ function createRepeatRouter(prisma51) {
       });
     }
   });
-  router85.post("/:repeaterNodeId/instances/execute", async (req2, res) => {
+  router87.post("/:repeaterNodeId/instances/execute", async (req2, res) => {
     const { repeaterNodeId } = req2.params;
     const body2 = req2.body || {};
     if (inFlightExecuteByRepeater.has(repeaterNodeId)) {
@@ -60124,7 +60877,7 @@ function createRepeatRouter(prisma51) {
       inFlightExecuteByRepeater.delete(repeaterNodeId);
     }
   });
-  return router85;
+  return router87;
 }
 
 // src/middleware/websiteDetection.ts
@@ -60369,10 +61122,10 @@ var CRM_DOMAINS = [
   "api.2thier.be",
   "crm.2thier.be",
   "localhost",
-  "railway.app",
-  // Railway deployments
-  "up.railway.app"
-  // Railway preview URLs
+  "run.app",
+  // Google Cloud Run
+  "appspot.com"
+  // Google App Engine
 ];
 async function detectWebsite(req2, res, next) {
   try {
@@ -60592,13 +61345,17 @@ var anomalyDetection = (req2, res, next) => {
       userAgent: req2.headers["user-agent"]
     }, "warn");
   }
-  if (uniqueEndpoints > 20 && totalRequests > 50) {
-    logSecurityEvent("ANOMALY_ENDPOINT_SCANNING", {
-      ip: clientIP,
-      uniqueEndpoints,
-      totalRequests,
-      endpoints: Array.from(new Set(recentHistory.map((r) => r.endpoint)))
-    }, "warn");
+  if (uniqueEndpoints > 150 && totalRequests > 300) {
+    const nonTblEndpoints = Array.from(new Set(recentHistory.map((r) => r.endpoint))).filter((ep) => !ep.includes("/treebranchleaf/") && !ep.includes("/tree-nodes/") && !ep.includes("/tbl/") && !ep.includes("/api/modules") && !ep.includes("/api/auth/") && !ep.includes("/assets/"));
+    if (nonTblEndpoints.length > 50) {
+      logSecurityEvent("ANOMALY_ENDPOINT_SCANNING", {
+        ip: clientIP,
+        uniqueEndpoints,
+        totalRequests,
+        suspiciousEndpoints: nonTblEndpoints.slice(0, 20)
+        // Limiter la taille du log
+      }, "warn");
+    }
   }
   next();
 };
@@ -60700,9 +61457,9 @@ logSecurityEvent("SERVER_STARTUP", {
   environment: process.env.NODE_ENV || "development",
   securityLevel: "ENTERPRISE"
 }, "info");
-var app = (0, import_express88.default)();
+var app = (0, import_express90.default)();
 app.set("trust proxy", 1);
-var port = Number(process.env.PORT || 4e3);
+var port = Number(process.env.PORT || 8080);
 var BUILD_VERSION = process.env.BUILD_VERSION || "dev-local";
 var GIT_SHA = process.env.GIT_SHA || "unknown";
 app.use((req2, res, next) => {
@@ -60778,10 +61535,10 @@ var prodOrigins = [
   FRONTEND_URL || "https://app.2thier.be",
   "https://www.2thier.be",
   "https://crm.2thier.be",
-  /\.railway\.app$/,
-  // Railway preview URLs
-  /\.up\.railway\.app$/
-  // Railway deployments
+  /\.run\.app$/,
+  // Google Cloud Run
+  /\.appspot\.com$/
+  // Google App Engine
 ];
 var devOrigins = [FRONTEND_URL || "http://localhost:5173", "http://localhost:3000"];
 app.use((0, import_cors.default)({
@@ -60792,7 +61549,7 @@ app.use((0, import_cors.default)({
   exposedHeaders: ["X-Total-Count", "X-Rate-Limit-Remaining", "x-organization-id"]
 }));
 app.use(inputSanitization);
-app.use(import_express88.default.json({
+app.use(import_express90.default.json({
   limit: "50mb",
   verify: (req2, res, buf) => {
     try {
@@ -60806,7 +61563,7 @@ app.use(import_express88.default.json({
     }
   }
 }));
-app.use(import_express88.default.urlencoded({ extended: true, limit: "50mb" }));
+app.use(import_express90.default.urlencoded({ extended: true, limit: "50mb" }));
 app.use((0, import_cookie_parser.default)());
 app.use((0, import_express_session.default)({
   secret: process.env.SESSION_SECRET || "crm-dev-secret-2024",
@@ -60832,7 +61589,7 @@ app.use("/uploads", (req2, res, next) => {
   res.setHeader("Access-Control-Allow-Headers", "Content-Type");
   res.setHeader("Cross-Origin-Resource-Policy", "cross-origin");
   next();
-}, import_express88.default.static(uploadsDir, {
+}, import_express90.default.static(uploadsDir, {
   maxAge: "1h",
   // Cache 1 heure
   etag: true,
@@ -60859,6 +61616,8 @@ app.use("/api", contact_form_default);
 app.use("/api/image-upload", image_upload_default);
 app.use("/api/documents", documents_default);
 app.use("/api/tbl", tbl_submission_evaluator_default);
+app.use("/api/tbl/batch", tbl_batch_routes_default);
+app.use("/api/batch", batch_routes_default);
 app.use("/api/tree-nodes", calculatedValueController_default);
 app.use("/api/treebranchleaf", treebranchleaf_routes_default);
 var repeatRouter = createRepeatRouter(db);
@@ -60888,7 +61647,7 @@ if (process.env.NODE_ENV === "production") {
   if (import_fs7.default.existsSync(indexHtml)) {
     console.log("\u{1F5C2}\uFE0F [STATIC] Distribution front d\xE9tect\xE9e, activation du serveur statique");
     const assetsDir = import_path7.default.join(distDir, "assets");
-    app.use("/assets", import_express88.default.static(assetsDir, {
+    app.use("/assets", import_express90.default.static(assetsDir, {
       setHeaders: (res) => {
         res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
       }
