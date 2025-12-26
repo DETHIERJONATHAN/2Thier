@@ -200,11 +200,15 @@ router.get('/trees/:treeId/select-configs', async (req, res) => {
         id: true,
         fieldType: true,
         select_options: true,
-        select_sourceType: true,
-        select_sourceTableId: true,
-        select_sourceColumn: true,
-        select_displayColumn: true,
-        table_lookupConfig: true
+        // Utiliser la relation pour les configs avancées
+        TreeBranchLeafSelectConfig: {
+          select: {
+            optionsSource: true,
+            tableReference: true,
+            keyColumn: true,
+            displayColumn: true
+          }
+        }
       }
     });
 
@@ -216,18 +220,17 @@ router.get('/trees/:treeId/select-configs', async (req, res) => {
       sourceTableId: string | null;
       sourceColumn: string | null;
       displayColumn: string | null;
-      lookupConfig: unknown;
     }> = {};
 
     for (const node of selectNodes) {
+      const selectConfig = node.TreeBranchLeafSelectConfig;
       configsByNode[node.id] = {
         fieldType: node.fieldType,
         options: node.select_options,
-        sourceType: node.select_sourceType,
-        sourceTableId: node.select_sourceTableId,
-        sourceColumn: node.select_sourceColumn,
-        displayColumn: node.select_displayColumn,
-        lookupConfig: node.table_lookupConfig
+        sourceType: selectConfig?.optionsSource || null,
+        sourceTableId: selectConfig?.tableReference || null,
+        sourceColumn: selectConfig?.keyColumn || null,
+        displayColumn: selectConfig?.displayColumn || null
       };
     }
 
@@ -281,8 +284,7 @@ router.get('/trees/:treeId/all', async (req: Request, res: Response) => {
         calculatedAt: true,
         calculatedBy: true,
         select_options: true,
-        table_lookupConfig: true,
-        // Inclure la config select si elle existe
+        // Inclure la config select si elle existe (relation 1-1)
         TreeBranchLeafSelectConfig: {
           select: {
             optionsSource: true,
@@ -368,8 +370,7 @@ router.get('/trees/:treeId/all', async (req: Request, res: Response) => {
           sourceType: selectConfig?.optionsSource || null,
           sourceTableId: selectConfig?.tableReference || null,
           sourceColumn: selectConfig?.keyColumn || null,
-          displayColumn: selectConfig?.displayColumn || null,
-          lookupConfig: node.table_lookupConfig
+          displayColumn: selectConfig?.displayColumn || null
         };
       }
     }
