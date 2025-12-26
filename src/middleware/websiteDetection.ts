@@ -27,8 +27,8 @@ const CRM_DOMAINS = [
   'api.2thier.be',
   'crm.2thier.be',
   'localhost',
-  'railway.app',     // Railway deployments
-  'up.railway.app'   // Railway preview URLs
+  'run.app',         // Google Cloud Run
+  'appspot.com'      // Google App Engine
 ];
 
 export interface WebsiteRequest extends Request {

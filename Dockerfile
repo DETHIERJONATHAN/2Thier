@@ -34,18 +34,20 @@ COPY --from=build /app/dist-server ./dist-server
 COPY --from=build /app/package.json ./package.json
 COPY --from=build /app/prisma ./prisma
 
-# Expose port that Cloud Run expects
+# Expose port that Cloud Run expects (défaut: 8080)
 EXPOSE 8080
+ENV PORT=8080
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
-	CMD wget -qO- http://127.0.0.1:8080/health || exit 1
+	CMD wget -qO- http://127.0.0.1:${PORT:-8080}/health || exit 1
 
-# Start API server using the start script from package.json
+# Configuration Cloud SQL
 ENV PGHOST=/cloudsql/thiernew:europe-west1:crm-postgres-prod
 ENV PGDATABASE=2thier
 ENV PGUSER=postgres
 
 # Variables d'environnement pour la production
+ENV NODE_ENV=production
 ENV FRONTEND_URL=https://app.2thier.be
 ENV BACKEND_URL=https://app.2thier.be
 ENV GOOGLE_REDIRECT_URI=https://app.2thier.be/api/google-auth/callback

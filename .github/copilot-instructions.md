@@ -7,7 +7,7 @@ Ce guide contient les conventions et l'architecture essentielles pour développe
 L'application est un monorepo qui contient :
 - Un **frontend React** (Vite, TypeScript, Ant Design, Tailwind CSS) dans `src/`.
 - Un **serveur API Node.js** (probablement Express) défini dans `src/api-server.ts`.
-- Une **base de données PostgreSQL sur Railway**, accédée via une couche d'abstraction dans `src/lib/database.ts`.
+- Une **base de données PostgreSQL sur Google Cloud SQL**, accédée via une couche d'abstraction dans `src/lib/database.ts`.
 
 Le flux de données typique est : Composant React -> Hook `useAuthenticatedApi` -> Serveur API -> Database Layer (`db`) -> Base de données.
 

@@ -73,7 +73,7 @@ const app = express();
 // 🌐 Configuration pour Cloud Run / reverse proxies (1 = single proxy, not true which is permissive)
 app.set('trust proxy', 1);
 
-const port = Number(process.env.PORT || 4000);
+const port = Number(process.env.PORT || 8080); // Cloud Run utilise le PORT 8080 par défaut
 // 📦 Métadonnées build (injectées par le script de déploiement)
 const BUILD_VERSION = process.env.BUILD_VERSION || 'dev-local';
 const GIT_SHA = process.env.GIT_SHA || 'unknown';
@@ -163,14 +163,14 @@ app.use(advancedRateLimit);
 // 🛡️ SÉCURITÉ NIVEAU 4 - DÉTECTION D'ANOMALIES
 app.use(anomalyDetection);
 
-// ⚡ Configuration CORS sécurisée (ajout app.2thier.be + Railway)
+// ⚡ Configuration CORS sécurisée (Google Cloud Run + domaines 2thier.be)
 const FRONTEND_URL = process.env.FRONTEND_URL;
 const prodOrigins = [
   FRONTEND_URL || 'https://app.2thier.be',
   'https://www.2thier.be',
   'https://crm.2thier.be',
-  /\.railway\.app$/,  // Railway preview URLs
-  /\.up\.railway\.app$/  // Railway deployments
+  /\.run\.app$/,       // Google Cloud Run
+  /\.appspot\.com$/    // Google App Engine
 ];
 const devOrigins = [FRONTEND_URL || 'http://localhost:5173', 'http://localhost:3000'];
 app.use(cors({

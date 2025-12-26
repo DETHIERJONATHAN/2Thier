@@ -78,7 +78,7 @@ const DB_CONFIG = {
 
 /**
  * Construit l'URL de connexion à la base de données.
- * Supporte Railway, Cloud SQL, et connexions directes.
+ * Supporte Google Cloud SQL (Unix socket) et connexions directes.
  */
 function buildDatabaseUrl(): string {
   const direct = process.env.DATABASE_URL;
@@ -109,7 +109,7 @@ function buildDatabaseUrl(): string {
     return url;
   }
 
-  // Connexion standard (Railway, local, etc.)
+  // Connexion standard (local, Cloud SQL avec DATABASE_URL, etc.)
   const encodedPwd = encodeURIComponent(password);
   return `postgresql://${user}:${encodedPwd}@${host}:${port}/${db}`;
 }
