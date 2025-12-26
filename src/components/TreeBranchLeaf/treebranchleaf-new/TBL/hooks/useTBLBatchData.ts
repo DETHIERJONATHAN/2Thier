@@ -67,11 +67,26 @@ export interface BatchNodeData {
   ownerNodeId: string | null;
 }
 
+// 🚀 NOUVEAU: Types pour les conditions batch
+export interface BatchCondition {
+  id: string;
+  nodeId: string;
+  name: string;
+  conditionSet: unknown;
+  description?: string | null;
+  isDefault?: boolean;
+  order?: number;
+}
+
 export interface TBLBatchData {
   formulasByNode: Record<string, BatchFormula[]>;
   valuesByNode: Record<string, BatchCalculatedValue>;
   configsByNode: Record<string, BatchSelectConfig>;
   dataByNode: Record<string, BatchNodeData>;
+  // 🚀 NOUVEAU: Conditions
+  conditionsByNode?: Record<string, BatchCondition[]>;
+  conditionsById?: Record<string, BatchCondition>;
+  activeConditionByNode?: Record<string, string | null>;
   stats: {
     totalNodes: number;
     totalFormulas: number;
@@ -79,6 +94,7 @@ export interface TBLBatchData {
     nodesWithValues: number;
     selectFields: number;
     nodesWithData: number;
+    nodesWithConditions?: number; // 🚀 NOUVEAU
   };
 }
 
@@ -99,6 +115,12 @@ interface UseTBLBatchDataResult {
   getSelectConfigForNode: (nodeId: string) => BatchSelectConfig | null;
   /** Récupère la configuration data/variable d'un noeud depuis le cache batch */
   getNodeDataForNode: (nodeId: string) => BatchNodeData | null;
+  /** 🚀 NOUVEAU: Récupère les conditions d'un noeud depuis le cache batch */
+  getConditionsForNode: (nodeId: string) => BatchCondition[];
+  /** 🚀 NOUVEAU: Récupère une condition par son ID */
+  getConditionById: (conditionId: string) => BatchCondition | null;
+  /** 🚀 NOUVEAU: Récupère la condition active d'un noeud */
+  getActiveConditionForNode: (nodeId: string) => BatchCondition | null;
   /** Force un rechargement du batch */
   refresh: () => void;
 }
@@ -157,21 +179,22 @@ export const useTBLBatchData = (
       setError(null);
 
       try {
-        // 🚀 Charger les données de base ET les node-data en parallèle
+        // 🚀 Charger les données de base, node-data ET conditions en parallèle
         const baseUrl = leadId
           ? `/api/tbl/batch/trees/${treeId}/all?leadId=${leadId}`
           : `/api/tbl/batch/trees/${treeId}/all`;
         const nodeDataUrl = `/api/tbl/batch/trees/${treeId}/node-data`;
+        const conditionsUrl = `/api/tbl/batch/trees/${treeId}/conditions`;
 
         console.log(`🚀 [useTBLBatchData] Chargement batch pour tree ${treeId}...`);
         const startTime = performance.now();
 
-        const [baseResponse, nodeDataResponse] = await Promise.all([
+        const [baseResponse, nodeDataResponse, conditionsResponse] = await Promise.all([
           api.get<{
             success: boolean;
             treeId: string;
             leadId: string | null;
-            stats: Omit<TBLBatchData['stats'], 'nodesWithData'>;
+            stats: Omit<TBLBatchData['stats'], 'nodesWithData' | 'nodesWithConditions'>;
             formulasByNode: TBLBatchData['formulasByNode'];
             valuesByNode: TBLBatchData['valuesByNode'];
             configsByNode: TBLBatchData['configsByNode'];
@@ -181,7 +204,16 @@ export const useTBLBatchData = (
             treeId: string;
             totalNodesWithData: number;
             dataByNode: TBLBatchData['dataByNode'];
-          }>(nodeDataUrl).catch(() => null) // Ne pas bloquer si node-data échoue
+          }>(nodeDataUrl).catch(() => null), // Ne pas bloquer si node-data échoue
+          api.get<{
+            success: boolean;
+            treeId: string;
+            totalConditions: number;
+            nodesWithConditions: number;
+            conditionsByNode: TBLBatchData['conditionsByNode'];
+            conditionsById: TBLBatchData['conditionsById'];
+            activeConditionByNode: TBLBatchData['activeConditionByNode'];
+          }>(conditionsUrl).catch(() => null) // Ne pas bloquer si conditions échoue
         ]);
 
         const duration = performance.now() - startTime;
@@ -192,6 +224,10 @@ export const useTBLBatchData = (
             valuesByNode: baseResponse.valuesByNode || {},
             configsByNode: baseResponse.configsByNode || {},
             dataByNode: nodeDataResponse?.dataByNode || {},
+            // 🚀 NOUVEAU: Conditions
+            conditionsByNode: conditionsResponse?.conditionsByNode || {},
+            conditionsById: conditionsResponse?.conditionsById || {},
+            activeConditionByNode: conditionsResponse?.activeConditionByNode || {},
             stats: {
               ...(baseResponse.stats || {
                 totalNodes: 0,
@@ -200,7 +236,8 @@ export const useTBLBatchData = (
                 nodesWithValues: 0,
                 selectFields: 0
               }),
-              nodesWithData: nodeDataResponse?.totalNodesWithData || 0
+              nodesWithData: nodeDataResponse?.totalNodesWithData || 0,
+              nodesWithConditions: conditionsResponse?.nodesWithConditions || 0
             }
           };
 
@@ -213,7 +250,8 @@ export const useTBLBatchData = (
             `${data.stats.totalFormulas} formules,`,
             `${data.stats.nodesWithValues} valeurs,`,
             `${data.stats.selectFields} selects,`,
-            `${data.stats.nodesWithData} node-data`
+            `${data.stats.nodesWithData} node-data,`,
+            `${data.stats.nodesWithConditions} conditions`
           );
         }
       } catch (err) {
@@ -336,6 +374,47 @@ export const useTBLBatchData = (
     return null;
   }, [batchData]);
 
+  // 🚀 NOUVEAU: Helper pour récupérer les conditions d'un nœud
+  const getConditionsForNode = useCallback((nodeId: string): BatchCondition[] => {
+    if (!batchData?.conditionsByNode) return [];
+    
+    if (batchData.conditionsByNode[nodeId]) {
+      return batchData.conditionsByNode[nodeId];
+    }
+    
+    if (nodeId.endsWith('-1')) {
+      const baseId = nodeId.slice(0, -2);
+      if (batchData.conditionsByNode[baseId]) {
+        return batchData.conditionsByNode[baseId];
+      }
+    }
+    
+    if (!nodeId.endsWith('-1')) {
+      const suffixedId = `${nodeId}-1`;
+      if (batchData.conditionsByNode[suffixedId]) {
+        return batchData.conditionsByNode[suffixedId];
+      }
+    }
+    
+    return [];
+  }, [batchData]);
+
+  // 🚀 NOUVEAU: Helper pour récupérer une condition par son ID
+  const getConditionById = useCallback((conditionId: string): BatchCondition | null => {
+    if (!batchData?.conditionsById) return null;
+    return batchData.conditionsById[conditionId] || null;
+  }, [batchData]);
+
+  // 🚀 NOUVEAU: Helper pour récupérer la condition active d'un nœud
+  const getActiveConditionForNode = useCallback((nodeId: string): BatchCondition | null => {
+    if (!batchData?.activeConditionByNode || !batchData?.conditionsById) return null;
+    
+    const activeId = batchData.activeConditionByNode[nodeId];
+    if (!activeId) return null;
+    
+    return batchData.conditionsById[activeId] || null;
+  }, [batchData]);
+
   const refresh = useCallback(() => {
     lastLoadedTreeId.current = null;
     lastLoadedLeadId.current = undefined;
@@ -355,6 +434,9 @@ export const useTBLBatchData = (
     getCalculatedValueForNode,
     getSelectConfigForNode,
     getNodeDataForNode,
+    getConditionsForNode,
+    getConditionById,
+    getActiveConditionForNode,
     refresh
   };
 };

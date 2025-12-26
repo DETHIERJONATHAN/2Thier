@@ -1,10 +1,12 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { useAuthenticatedApi } from '../../../../../hooks/useAuthenticatedApi';
+import { useTBLBatch } from '../contexts/TBLBatchContext';
 
 /**
  * 🎯 Hook pour récupérer la valeur calculée d'un champ depuis le backend
  * 
  * ✅ OPTIMISÉ : Ne recharge QUE si les données métier changent
+ * 🚀 BATCH FIRST : Utilise d'abord le cache batch, puis fallback API
  * 
  * Appelle `/api/tbl/submissions/preview-evaluate` pour un nodeId donné
  * et retourne la valeur calculée par operation-interpreter.ts
@@ -28,11 +30,13 @@ export const useCalculatedFieldValue = (
   formData: Record<string, unknown>
 ) => {
   const { api } = useAuthenticatedApi();
+  const batchContext = useTBLBatch();
   const [value, setValue] = useState<unknown>(undefined);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [humanText, setHumanText] = useState<string>('');
   const [displayConfig, setDisplayConfig] = useState<DisplayConfig | null>(null);
+  const [refreshToken, setRefreshToken] = useState(0);
 
   // 🆕 Stocker formData dans une ref pour toujours avoir la dernière version
   const formDataRef = useRef(formData);
@@ -54,8 +58,66 @@ export const useCalculatedFieldValue = (
     [formData]
   );
 
+  // 🚀 BATCH MODE : Récupérer la valeur depuis le cache batch si disponible
+  const batchValue = useMemo(() => {
+    if (!nodeId || !batchContext?.isReady) return undefined;
+    
+    const cachedValue = batchContext.getCalculatedValueForNode(nodeId);
+    if (cachedValue) {
+      console.log(`🚀 [useCalculatedFieldValue] BATCH HIT pour ${nodeId}:`, cachedValue);
+      // Prendre submissionValue en priorité, sinon calculatedValue
+      return cachedValue.submissionValue ?? cachedValue.calculatedValue;
+    }
+    return undefined;
+  }, [nodeId, batchContext?.isReady, batchContext?.getCalculatedValueForNode]);
+
+  // 🔄 Écouter les events de mise à jour pour forcer un refresh
   useEffect(() => {
-    if (!nodeId || !treeId || !api) {
+    if (!nodeId) return;
+
+    const handleNodeEvent = (event: Event) => {
+      const custom = event as CustomEvent<{
+        node?: { id?: string };
+        nodeId?: string;
+        targetNodeIds?: string[];
+      }>;
+      const detail = custom.detail;
+      const candidates = [detail?.node?.id, detail?.nodeId, ...(detail?.targetNodeIds || [])];
+      if (candidates.includes(nodeId)) {
+        setRefreshToken(t => t + 1);
+      }
+    };
+
+    window.addEventListener('tbl-node-updated', handleNodeEvent as EventListener);
+    window.addEventListener('tbl-force-retransform', handleNodeEvent as EventListener);
+
+    return () => {
+      window.removeEventListener('tbl-node-updated', handleNodeEvent as EventListener);
+      window.removeEventListener('tbl-force-retransform', handleNodeEvent as EventListener);
+    };
+  }, [nodeId]);
+
+  useEffect(() => {
+    if (!nodeId || !treeId) {
+      setValue(undefined);
+      return;
+    }
+
+    // 🚀 BATCH MODE : Si on a une valeur batch et pas de refresh forcé, l'utiliser directement
+    if (batchValue !== undefined && refreshToken === 0) {
+      setValue(batchValue);
+      setLoading(false);
+      return;
+    }
+
+    // Si batch en chargement, attendre
+    if (batchContext && batchContext.loading && refreshToken === 0) {
+      setLoading(true);
+      return;
+    }
+
+    // 🔄 FALLBACK : Appel API individuel
+    if (!api) {
       setValue(undefined);
       return;
     }
@@ -65,11 +127,7 @@ export const useCalculatedFieldValue = (
         setLoading(true);
         setError(null);
 
-        if (process.env.NODE_ENV === 'development') {
-          console.warn('🚨🚨🚨 [DEBUG FORMDATA] Appel API pour nodeId:', nodeId);
-          console.warn('🚨🚨🚨 [DEBUG FORMDATA] Keys:', Object.keys(formDataRef.current));
-          console.warn('🚨🚨🚨 [DEBUG FORMDATA] Contenu complet:', formDataRef.current);
-        }
+        console.warn(`⚠️ [useCalculatedFieldValue] FALLBACK API pour nodeId: ${nodeId}`);
 
         // ✅ Utiliser formDataRef.current pour toujours avoir la dernière version
         const responseData = await api.post<{
@@ -87,48 +145,14 @@ export const useCalculatedFieldValue = (
           leadId // ✅ Version stable du leadId
         });
 
-        console.error('═══════════════════════════════════════════════════════');
-        console.error('🔍 [STEP 2] RÉPONSE BACKEND REÇUE');
-        console.error('Success:', responseData?.success);
-        console.error('Nombre de résultats:', responseData?.results?.length);
-        console.error('═══════════════════════════════════════════════════════');
-
         if (responseData?.success && responseData?.results) {
           const result = responseData.results.find(
             (r: { nodeId: string }) => r.nodeId === nodeId
           );
 
-          console.error('═══════════════════════════════════════════════════════');
-          console.error('🔍 [STEP 3] RECHERCHE DU RÉSULTAT');
-          console.error('NodeId recherché:', nodeId);
-          console.error('Résultat trouvé:', !!result);
-          if (result) {
-            console.error('result.value:', (result as any).value);
-            console.error('result.calculatedValue:', (result as any).calculatedValue);
-            console.error('Type de result.value:', typeof (result as any).value);
-          }
-          console.error('═══════════════════════════════════════════════════════');
-
           if (result) {
             // ✅ PRENDRE DIRECTEMENT LA VALEUR DU BACKEND
             let calculatedValue: unknown = (result as any).value ?? (result as any).calculatedValue;
-
-            console.error('═══════════════════════════════════════════════════════');
-            console.error('� [STEP 4] EXTRACTION DE LA VALEUR');
-            console.error('Valeur extraite:', calculatedValue);
-            console.error('Type:', typeof calculatedValue);
-            console.error('Est undefined?', calculatedValue === undefined);
-            console.error('Est null?', calculatedValue === null);
-            console.error('Est 0?', calculatedValue === 0);
-            console.error('Est "0"?', calculatedValue === "0");
-            console.error('Est 56?', calculatedValue === 56);
-            console.error('Est "56"?', calculatedValue === "56");
-            console.error('═══════════════════════════════════════════════════════');
-
-            console.error('═══════════════════════════════════════════════════════');
-            console.error('� [STEP 5] APPEL DE setValue()');
-            console.error('Valeur passée à setValue:', calculatedValue);
-            console.error('═══════════════════════════════════════════════════════');
 
             setValue(calculatedValue);
             setHumanText((result.operationResult as any)?.humanText || '');
@@ -149,7 +173,7 @@ export const useCalculatedFieldValue = (
     };
 
     fetchValue();
-  }, [nodeId, treeId, formDataKey, leadId, api]); // ✅ Seulement formDataKey (pas formData)
+  }, [nodeId, treeId, formDataKey, leadId, api, batchValue, batchContext, refreshToken]);
 
   return { value, loading, error, humanText, displayConfig };
 };

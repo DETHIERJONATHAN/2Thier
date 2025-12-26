@@ -24,7 +24,8 @@ import {
   BatchFormula, 
   BatchCalculatedValue, 
   BatchSelectConfig,
-  BatchNodeData
+  BatchNodeData,
+  BatchCondition
 } from '../hooks/useTBLBatchData';
 import { setBatchNodeDataCache } from '../hooks/useTBLDataPrismaComplete';
 
@@ -46,6 +47,12 @@ interface TBLBatchContextValue {
   getSelectConfigForNode: (nodeId: string) => BatchSelectConfig | null;
   /** Récupère la config data/variable d'un noeud depuis le cache batch */
   getNodeDataForNode: (nodeId: string) => BatchNodeData | null;
+  /** 🚀 NOUVEAU: Récupère les conditions d'un noeud */
+  getConditionsForNode: (nodeId: string) => BatchCondition[];
+  /** 🚀 NOUVEAU: Récupère une condition par son ID */
+  getConditionById: (conditionId: string) => BatchCondition | null;
+  /** 🚀 NOUVEAU: Récupère la condition active d'un noeud */
+  getActiveConditionForNode: (nodeId: string) => BatchCondition | null;
   /** Force un rechargement du batch */
   refresh: () => void;
   /** ID du tree actuel */
@@ -64,6 +71,9 @@ const defaultContextValue: TBLBatchContextValue = {
   getCalculatedValueForNode: () => null,
   getSelectConfigForNode: () => null,
   getNodeDataForNode: () => null,
+  getConditionsForNode: () => [],
+  getConditionById: () => null,
+  getActiveConditionForNode: () => null,
   refresh: () => {},
   treeId: undefined,
   leadId: undefined
@@ -97,6 +107,9 @@ export const TBLBatchProvider: React.FC<TBLBatchProviderProps> = ({
     getCalculatedValueForNode,
     getSelectConfigForNode,
     getNodeDataForNode,
+    getConditionsForNode,
+    getConditionById,
+    getActiveConditionForNode,
     refresh
   } = useTBLBatchData(treeId, leadId);
 
@@ -118,6 +131,9 @@ export const TBLBatchProvider: React.FC<TBLBatchProviderProps> = ({
     getCalculatedValueForNode,
     getSelectConfigForNode,
     getNodeDataForNode,
+    getConditionsForNode,
+    getConditionById,
+    getActiveConditionForNode,
     refresh,
     treeId,
     leadId
@@ -130,6 +146,9 @@ export const TBLBatchProvider: React.FC<TBLBatchProviderProps> = ({
     getCalculatedValueForNode,
     getSelectConfigForNode,
     getNodeDataForNode,
+    getConditionsForNode,
+    getConditionById,
+    getActiveConditionForNode,
     refresh,
     treeId,
     leadId

@@ -9,11 +9,16 @@
  * 2. On récupère le tableau référencé (tableReference -> TreeBranchLeafNodeTable)
  * 3. On génère les options depuis les colonnes/lignes du tableau
  * 4. On retourne les options formatées pour le SELECT
+ * 
+ * 🚀 OPTIMISATION BATCHING:
+ * - Utilise le TBLBatchContext pour récupérer la config SELECT
+ * - Évite les appels API individuels /select-config et /trees/:id/nodes
  */
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useContext } from 'react';
 import { useAuthenticatedApi } from '../../../../../hooks/useAuthenticatedApi';
 import { tblLog, tblWarn, isTBLDebugEnabled } from '../../../../../utils/tblDebug';
+import { useTBLBatch } from '../contexts/TBLBatchContext';
 
 export interface TableLookupOption {
   value: string | number;
@@ -88,6 +93,10 @@ export function useTBLTableLookup(
   formData?: Record<string, any> // 🆕 ÉTAPE 2.5: Valeurs du formulaire pour filtrage dynamique
 ): TableLookupResult {
   const { api } = useAuthenticatedApi();
+  
+  // 🚀 BATCHING: Utiliser le contexte batch pour les configs
+  const batchContext = useTBLBatch();
+  
   const [options, setOptions] = useState<TableLookupOption[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -131,13 +140,33 @@ export function useTBLTableLookup(
         setLoading(true);
         setError(null);
 
-        // 1. Récupérer la configuration SELECT du champ
-        // 🎯 404 = Normal (le champ n'a pas de config lookup)
-        if (isTargetField) console.log(`[DEBUG][Test - liste] ➡️ GET /api/treebranchleaf/nodes/${fieldId}/select-config`);
-        const selectConfig = await api.get<TreeBranchLeafSelectConfig>(
-          `/api/treebranchleaf/nodes/${fieldId}/select-config`,
-          { suppressErrorLogForStatuses: [404] }
-        );
+        // 🚀 BATCHING: 1. Essayer d'abord le cache batch pour la config SELECT
+        let selectConfig: TreeBranchLeafSelectConfig | null = null;
+        
+        if (batchContext.isReady && fieldId) {
+          const batchConfig = batchContext.getSelectConfigForNode(fieldId);
+          if (batchConfig) {
+            if (isTargetField) console.log(`[DEBUG][Test - liste] 🚀 Config SELECT trouvée dans le cache batch:`, batchConfig);
+            // Convertir le format batch vers le format attendu
+            selectConfig = {
+              id: fieldId,
+              nodeId: fieldId,
+              optionsSource: batchConfig.sourceType as 'table' | 'static' | 'api' || 'static',
+              tableReference: batchConfig.sourceTableId || undefined,
+              keyColumn: batchConfig.sourceColumn || undefined,
+              displayColumn: batchConfig.displayColumn || undefined,
+            };
+          }
+        }
+        
+        // Fallback: appel API individuel si pas dans le cache batch
+        if (!selectConfig) {
+          if (isTargetField) console.log(`[DEBUG][Test - liste] ➡️ GET /api/treebranchleaf/nodes/${fieldId}/select-config (fallback)`);
+          selectConfig = await api.get<TreeBranchLeafSelectConfig>(
+            `/api/treebranchleaf/nodes/${fieldId}/select-config`,
+            { suppressErrorLogForStatuses: [404] }
+          );
+        }
 
         if (isTargetField) console.log(`[DEBUG][Test - liste] ⬅️ Réponse select-config:`, selectConfig);
 
@@ -193,32 +222,53 @@ export function useTBLTableLookup(
               return acc;
             }, {} as Record<string, any>);
           
-          // 🔥 ÉTAPE 2.5.1: Charger les valeurs calculées manquantes depuis Prisma
-          // Les champs avec formules/data ont leurs valeurs dans calculatedValue, pas dans formData
-          // On doit les récupérer manuellement pour le filtrage
+          // � BATCHING: Utiliser le cache batch pour les valeurs calculées au lieu de charger tous les nœuds
+          // Cela évite un appel API /trees/:id/nodes pour CHAQUE champ SELECT
           try {
-            // Récupérer tous les champs de l'arbre pour trouver les champs avec calculatedValue
-            const treeId = (window as any).__TBL_LAST_TREE_ID; // Stocké globalement par TBL.tsx (ligne 447)
-            if (treeId) {
-              const allNodesResponse = await api.get(`/api/treebranchleaf/trees/${treeId}/nodes`);
-              const allNodes = allNodesResponse as Array<{ id: string; calculatedValue?: string | number | boolean; hasFormula?: boolean; hasData?: boolean }>;
-              
-              // Pour chaque nœud avec calculatedValue, l'ajouter aux formValues
-              for (const node of allNodes) {
-                if (node.calculatedValue === null || node.calculatedValue === undefined || node.calculatedValue === '') {
+            if (batchContext.isReady && batchContext.batchData?.valuesByNode) {
+              // Utiliser le cache batch pour injecter les valeurs calculées
+              const valuesByNode = batchContext.batchData.valuesByNode;
+              for (const [nodeId, valueData] of Object.entries(valuesByNode)) {
+                const calculatedValue = valueData.calculatedValue ?? valueData.submissionValue;
+                if (calculatedValue === null || calculatedValue === undefined || calculatedValue === '') {
                   continue;
                 }
 
-                const existingValue = filteredFormData[node.id];
-                const isComputedField = Boolean(node.hasFormula || node.hasData);
-                const shouldOverride = isComputedField || existingValue === undefined || existingValue === null || existingValue === '';
+                const existingValue = filteredFormData[nodeId];
+                const shouldOverride = existingValue === undefined || existingValue === null || existingValue === '';
 
                 if (shouldOverride) {
-                  filteredFormData[node.id] = node.calculatedValue;
+                  filteredFormData[nodeId] = calculatedValue;
                   if (isTargetField) {
-                    console.log(`[DEBUG][Test - liste] ✅ Valeur calculée injectée (${shouldOverride ? 'override' : 'set'}) pour ${node.id}: ${node.calculatedValue}`);
+                    console.log(`[DEBUG][Test - liste] 🚀 Valeur batch injectée pour ${nodeId}: ${calculatedValue}`);
                   }
                 }
+              }
+              if (isTargetField) console.log(`[DEBUG][Test - liste] 🚀 Valeurs calculées depuis batch cache`);
+            } else {
+              // Fallback: Charger depuis API si batch pas disponible
+              const treeId = (window as any).__TBL_LAST_TREE_ID;
+              if (treeId) {
+                if (isTargetField) console.log(`[DEBUG][Test - liste] ⚠️ Batch pas prêt, fallback API /trees/${treeId}/nodes`);
+                const allNodesResponse = await api.get(`/api/treebranchleaf/trees/${treeId}/nodes`);
+                const allNodes = allNodesResponse as Array<{ id: string; calculatedValue?: string | number | boolean; hasFormula?: boolean; hasData?: boolean }>;
+              
+                // Pour chaque nœud avec calculatedValue, l'ajouter aux formValues
+                for (const node of allNodes) {
+                  if (node.calculatedValue === null || node.calculatedValue === undefined || node.calculatedValue === '') {
+                    continue;
+                  }
+
+                  const existingValue = filteredFormData[node.id];
+                  const isComputedField = Boolean(node.hasFormula || node.hasData);
+                  const shouldOverride = isComputedField || existingValue === undefined || existingValue === null || existingValue === '';
+
+                  if (shouldOverride) {
+                    filteredFormData[node.id] = node.calculatedValue;
+                    if (isTargetField) {
+                      console.log(`[DEBUG][Test - liste] ✅ Valeur calculée injectée (${shouldOverride ? 'override' : 'set'}) pour ${node.id}: ${node.calculatedValue}`);
+                    }
+                  }
               }
             }
           } catch (err) {
@@ -297,7 +347,7 @@ export function useTBLTableLookup(
     return () => {
       cancelled = true;
     };
-  }, [fieldId, nodeId, api, enabled, formData]); // 🆕 Ajout de formData aux dépendances (re-fetch si formData change)
+  }, [fieldId, nodeId, api, enabled, formData, batchContext.isReady]); // 🚀 Ajout de batchContext.isReady pour utiliser le cache quand prêt
 
   return { options, loading, error, tableData, config };
 }

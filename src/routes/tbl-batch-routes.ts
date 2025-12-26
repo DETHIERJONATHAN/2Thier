@@ -527,4 +527,74 @@ router.get('/trees/:treeId/node-data', async (req, res) => {
   }
 });
 
+/**
+ * GET /api/tbl/batch/trees/:treeId/conditions
+ * 
+ * 🚀 Récupère TOUTES les conditions de tous les nœuds d'un tree
+ * Pour pré-charger les conditions et éviter les appels individuels
+ */
+router.get('/trees/:treeId/conditions', async (req: Request, res: Response) => {
+  try {
+    const { treeId } = req.params;
+    const { organizationId, isSuperAdmin } = getAuthCtx(req);
+
+    // Vérifier l'accès au tree
+    const treeWhereFilter = isSuperAdmin || !organizationId 
+      ? { id: treeId } 
+      : { id: treeId, organizationId };
+    
+    const tree = await db.treeBranchLeafTree.findFirst({ where: treeWhereFilter });
+    if (!tree) {
+      return res.status(404).json({ error: 'Arbre non trouvé' });
+    }
+
+    // Récupérer tous les nodeIds de ce tree
+    const nodes = await db.treeBranchLeafNode.findMany({
+      where: { treeId },
+      select: { id: true, condition_activeId: true, linkedConditionIds: true }
+    });
+    const nodeIds = nodes.map(n => n.id);
+
+    // Récupérer toutes les conditions de tous ces noeuds EN UNE REQUÊTE
+    const allConditions = await db.treeBranchLeafNodeCondition.findMany({
+      where: { nodeId: { in: nodeIds } },
+      orderBy: { createdAt: 'asc' }
+    });
+
+    // Grouper par nodeId
+    const conditionsByNode: Record<string, typeof allConditions> = {};
+    for (const condition of allConditions) {
+      if (!conditionsByNode[condition.nodeId]) {
+        conditionsByNode[condition.nodeId] = [];
+      }
+      conditionsByNode[condition.nodeId].push(condition);
+    }
+
+    // Construire aussi une map id -> condition pour lookup direct
+    const conditionsById: Record<string, typeof allConditions[0]> = {};
+    for (const condition of allConditions) {
+      conditionsById[condition.id] = condition;
+    }
+
+    // Ajouter les activeConditionId par noeud
+    const activeConditionByNode: Record<string, string | null> = {};
+    for (const node of nodes) {
+      activeConditionByNode[node.id] = node.condition_activeId;
+    }
+
+    return res.json({
+      success: true,
+      treeId,
+      totalConditions: allConditions.length,
+      nodesWithConditions: Object.keys(conditionsByNode).length,
+      conditionsByNode,
+      conditionsById,
+      activeConditionByNode
+    });
+  } catch (error) {
+    console.error('[TBL Batch API] Error batch fetching conditions:', error);
+    res.status(500).json({ error: 'Erreur lors de la récupération batch des conditions' });
+  }
+});
+
 export default router;

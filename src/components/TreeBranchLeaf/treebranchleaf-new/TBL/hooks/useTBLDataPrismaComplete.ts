@@ -211,6 +211,12 @@ let batchNodeDataTreeId: string | null = null;
 export const setBatchNodeDataCache = (treeId: string, dataByNode: Record<string, unknown>) => {
   batchNodeDataCache = dataByNode;
   batchNodeDataTreeId = treeId;
+  console.log(`🚀 [BATCH_CACHE] Cache node-data mis à jour: ${Object.keys(dataByNode).length} nodes pour tree ${treeId}`);
+};
+
+// 🚀 FONCTION OPTIMISÉE: Vérifie si le cache batch est prêt pour ce tree
+export const isBatchCacheReady = (treeId: string): boolean => {
+  return batchNodeDataCache !== null && batchNodeDataTreeId === treeId;
 };
 
 // 🎯 NOUVELLE FONCTION: Résolution des valeurs dynamiques depuis TreeBranchLeafNodeVariable
@@ -232,26 +238,33 @@ const resolveFieldValue = async (
   }
 
   try {
-    // ♻️ Cache local
+    // ♻️ Cache local (TTL court)
     const cached = valueResolutionCache.get(node.id);
     if (cached && Date.now() - cached.timestamp < VALUE_CACHE_TTL_MS) {
-      if (verbose()) dlog(`♻️ [RESOLVE_VALUE] Cache hit pour "${node.label}"`);
+      if (verbose()) dlog(`♻️ [RESOLVE_VALUE] Cache local hit pour "${node.label}"`);
       return cached.result;
     }
 
-    // 🚀 BATCH: Essayer d'abord le cache batch
+    // 🚀 BATCH FIRST: Essayer d'abord le cache batch (priorité absolue)
     let variableConfig: Record<string, unknown> | undefined;
+    let usedBatch = false;
     
     if (batchNodeDataCache && batchNodeDataTreeId === treeId) {
       const batchData = batchNodeDataCache[node.id] as { variable?: Record<string, unknown> } | undefined;
       if (batchData?.variable) {
         variableConfig = batchData.variable;
-        if (verbose()) dlog(`🚀 [RESOLVE_VALUE] Batch cache hit pour "${node.label}"`);
+        usedBatch = true;
+        if (verbose()) dlog(`🚀 [RESOLVE_VALUE] BATCH HIT pour "${node.label}"`);
+      } else if (batchData) {
+        // Le node est dans le batch mais sans variable - utiliser la valeur par défaut
+        usedBatch = true;
+        if (verbose()) dlog(`🚀 [RESOLVE_VALUE] BATCH (sans variable) pour "${node.label}"`);
       }
     }
 
-    // Fallback: Récupérer la configuration de la variable depuis l'API
-    if (!variableConfig) {
+    // ⚠️ FALLBACK API: Seulement si le batch n'est vraiment pas disponible
+    if (!variableConfig && !usedBatch) {
+      console.warn(`⚠️ [RESOLVE_VALUE] FALLBACK API pour "${node.label}" - batch non prêt (treeId: ${treeId}, cacheTreeId: ${batchNodeDataTreeId})`);
       const variableResponse = await api.get(`/api/treebranchleaf/trees/${treeId}/nodes/${node.id}/data`);
       if (verbose()) dlog('🧾 [RESOLVE_VALUE] Payload brut /data pour', node.label, ':', variableResponse);
 
