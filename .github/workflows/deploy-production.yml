@@ -54,6 +54,13 @@ jobs:
           docker push ${{ env.IMAGE_NAME }}:${{ github.sha }}
           docker push ${{ env.IMAGE_NAME }}:latest
       
+      - name: Clear all environment variables and secrets
+        run: |
+          gcloud run services update ${{ env.SERVICE_NAME }} \
+            --region ${{ env.REGION }} \
+            --clear-env-vars \
+            --clear-secrets
+      
       - name: Deploy to Cloud Run
         run: |
           gcloud run deploy ${{ env.SERVICE_NAME }} \
@@ -69,8 +76,8 @@ jobs:
             --timeout 300 \
             --concurrency 80 \
             --set-cloudsql-instances thiernew:europe-west1:crm-postgres-prod \
-            --update-env-vars "NODE_ENV=production,PORT=8080,PGHOST=/cloudsql/thiernew:europe-west1:crm-postgres-prod,PGDATABASE=2thier,PGUSER=postgres,FRONTEND_URL=https://app.2thier.be,BACKEND_URL=https://app.2thier.be,BUILD_VERSION=$(date +%Y%m%d-%H%M%S)-${{ github.sha }},GIT_SHA=${{ github.sha }}" \
-            --update-secrets "PGPASSWORD=crm-postgres-password:latest,JWT_SECRET=crm-jwt-secret:latest,SESSION_SECRET=crm-session-secret:latest,ENCRYPTION_KEY=crm-encryption-key:latest,CRYPTO_SECRET_KEY=crm-crypto-secret:latest,GOOGLE_AI_API_KEY=google-ai-api-key:latest,GOOGLE_CLIENT_ID=google-client-id:latest,GOOGLE_CLIENT_SECRET=google-client-secret:latest"
+            --set-env-vars "NODE_ENV=production,PORT=8080,PGHOST=/cloudsql/thiernew:europe-west1:crm-postgres-prod,PGDATABASE=2thier,PGUSER=postgres,FRONTEND_URL=https://app.2thier.be,BACKEND_URL=https://app.2thier.be,BUILD_VERSION=$(date +%Y%m%d-%H%M%S)-${{ github.sha }},GIT_SHA=${{ github.sha }}" \
+            --set-secrets "PGPASSWORD=crm-postgres-password:latest,JWT_SECRET=crm-jwt-secret:latest,SESSION_SECRET=crm-session-secret:latest,ENCRYPTION_KEY=crm-encryption-key:latest,CRYPTO_SECRET_KEY=crm-crypto-secret:latest,GOOGLE_AI_API_KEY=google-ai-api-key:latest,GOOGLE_CLIENT_ID=google-client-id:latest,GOOGLE_CLIENT_SECRET=google-client-secret:latest"
       
       - name: Get Service URL
         id: get-url
