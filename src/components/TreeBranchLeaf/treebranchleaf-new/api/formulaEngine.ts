@@ -907,9 +907,7 @@ export async function evaluateTokens(tokens: FormulaToken[], opts: EvaluateOptio
           r = divisor === 0 ? 0 : val % divisor;
           break; }
 
-          const vals = args.flatMap(a => Array.isArray(a) ? a : [toNumber(a ?? 0)]);
-          r = vals.length ? Math.max(...vals) : 0;
-          break; }
+        // 📊 STATISTIQUES (compléments) - min/max définis plus haut
         case 'moyenne':
         case 'average': {
           const vals = args.flatMap(a => Array.isArray(a) ? a : [toNumber(a ?? 0)]);
