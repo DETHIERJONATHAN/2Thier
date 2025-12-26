@@ -140,6 +140,14 @@ export function useTBLTableLookup(
         setLoading(true);
         setError(null);
 
+        // 🚀 BATCHING: Attendre un court instant si le batch est en cours de chargement
+        // Cela évite les 404 inutiles sur les IDs de repeater
+        if (!batchContext.isReady && batchContext.loading) {
+          if (isTargetField) console.log(`[DEBUG][Test - liste] ⏳ Batch en cours de chargement, attente...`);
+          await new Promise(resolve => setTimeout(resolve, 100));
+          if (cancelled) return;
+        }
+
         // 🚀 BATCHING: 1. Essayer d'abord le cache batch pour la config SELECT
         let selectConfig: TreeBranchLeafSelectConfig | null = null;
         
@@ -161,9 +169,11 @@ export function useTBLTableLookup(
         
         // Fallback: appel API individuel si pas dans le cache batch
         if (!selectConfig) {
-          if (isTargetField) console.log(`[DEBUG][Test - liste] ➡️ GET /api/treebranchleaf/nodes/${fieldId}/select-config (fallback)`);
+          // 🔄 REPEATER SUPPORT: Extraire l'ID de base si c'est un ID de repeater (ex: uuid-1 -> uuid)
+          const baseFieldId = fieldId.replace(/-\d+$/, '');
+          if (isTargetField) console.log(`[DEBUG][Test - liste] ➡️ GET /api/treebranchleaf/nodes/${baseFieldId}/select-config (fallback, baseId from ${fieldId})`);
           selectConfig = await api.get<TreeBranchLeafSelectConfig>(
-            `/api/treebranchleaf/nodes/${fieldId}/select-config`,
+            `/api/treebranchleaf/nodes/${baseFieldId}/select-config`,
             { suppressErrorLogForStatuses: [404] }
           );
         }
