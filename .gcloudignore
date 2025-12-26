@@ -14,8 +14,7 @@ node_modules/
 .vscode/
 .idea/
 
-# Build artifacts
-dist/
+# Build artifacts (Note: dist-server/ must be included for Docker build)
 dist-ssr/
 build/
 coverage/
@@ -27,17 +26,28 @@ backup*/
 sauvegarde*/
 database-export.*
 *.sql
+*.dump
 
 # Documentation and test files
 *.md
+!README.md
 docs/
 Oracle/
+scripts/
+test/
+tests/
+*.test.ts
+*.test.js
+*.spec.ts
+*.spec.js
 
-# Scripts archivés
+# Scripts archivés et fichiers volumineux non nécessaires
 archived-scripts/
+chromewebdata*.html
+eslint-report.json
 
-# Scripts de développement à la racine (non nécessaires pour le build)
-/*.js
+# Scripts de développement à la racine (non nécessaires pour le build Docker)
+# Note: Les scripts dans /scripts/ sont aussi exclus
 /*.cjs
 /*.mjs
 /*.sh
