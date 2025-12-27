@@ -106,8 +106,7 @@ jobs:
             --max-instances 10 \
             --set-env-vars "NODE_ENV=production" \
             --set-env-vars "DATABASE_URL=postgresql://postgres:Jlsl2022%40@/2thier?host=/cloudsql/thiernew:europe-west1:crm-postgres-prod" \
-            --add-cloudsql-instances thiernew:europe-west1:crm-postgres-prod \
-            --service-account crm-api@thiernew.iam.gserviceaccount.com
+            --add-cloudsql-instances thiernew:europe-west1:crm-postgres-prod
 
       # ============================================
       # 9. AFFICHER L'URL DU SERVICE
