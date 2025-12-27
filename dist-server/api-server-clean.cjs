@@ -33751,11 +33751,6 @@ router56.get("/trees/:treeId/nodes", async (req2, res) => {
     const nodes = await prisma30.treeBranchLeafNode.findMany({
       where: { treeId },
       include: {
-        _count: {
-          select: {
-            other_TreeBranchLeafNode: true
-          }
-        },
         TreeBranchLeafNodeTable: {
           include: {
             tableColumns: {
