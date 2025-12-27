@@ -2601,8 +2601,15 @@ export const useTBLDataPrismaComplete = ({ tree_id, disabled = false, triggerRet
   }, [api, tree_id, disabled]);
 
   // 🔥 NEW: REACT TO EXTERNAL RETRANSFORM TRIGGER (from TreeBranchLeafEditor)
+  // 🔧 FIX: Utiliser un ref pour suivre le dernier triggerRetransform traité et éviter les boucles infinies
+  const lastProcessedRetransformRef = useRef<number>(0);
+  
   useEffect(() => {
+    // 🔥 FIX: Ne pas exécuter si pas de trigger ou si déjà traité
     if (!triggerRetransform || rawNodes.length === 0) return;
+    if (triggerRetransform === lastProcessedRetransformRef.current) return; // Déjà traité
+    
+    lastProcessedRetransformRef.current = triggerRetransform;
     
     console.error('🔥 [useTBLDataPrismaComplete] Retransform triggered!', { triggerRetransform, rawNodesCount: rawNodes.length });
     
@@ -2619,7 +2626,8 @@ export const useTBLDataPrismaComplete = ({ tree_id, disabled = false, triggerRet
         }));
 
         // 🔎 Pour chaque section, lister les champs Panneau présents (diagnostic plus fin)
-        Object.entries(sectionsByTab).forEach(([tabId, secs]) => {
+        // 🔧 FIX: Utiliser sectionsByTabRef au lieu de sectionsByTab pour éviter la dépendance circulaire
+        Object.entries(sectionsByTabRef.current).forEach(([tabIdDiag, secs]) => {
           secs.forEach(sec => {
             const found = (sec.fields || []).filter(f => 
               (f.label && (f.label.includes('Panneau') || f.label.includes('panneau'))) ||
@@ -2629,7 +2637,7 @@ export const useTBLDataPrismaComplete = ({ tree_id, disabled = false, triggerRet
               f.id.startsWith('fb35d781-')
             );
           if (found.length > 0) {
-            if (verbose()) console.log('🔎 [DIAGNOSTIC SECTION] Panneau fields in section:', { tabId, sectionId: sec.id, sectionName: sec.name, fields: found.map(f => ({ id: f.id, label: f.label, parentRepeaterId: (f as any).parentRepeaterId, sourceTemplateId: (f as any).sourceTemplateId || (f as any).metadata?.sourceTemplateId, subTabKey: (f as any).subTabKey, subTabKeys: (f as any).subTabKeys, visible: f.visible })) });
+            if (verbose()) console.log('🔎 [DIAGNOSTIC SECTION] Panneau fields in section:', { tabId: tabIdDiag, sectionId: sec.id, sectionName: sec.name, fields: found.map(f => ({ id: f.id, label: f.label, parentRepeaterId: (f as any).parentRepeaterId, sourceTemplateId: (f as any).sourceTemplateId || (f as any).metadata?.sourceTemplateId, subTabKey: (f as any).subTabKey, subTabKeys: (f as any).subTabKeys, visible: f.visible })) });
             }
           });
         });
@@ -2643,7 +2651,7 @@ export const useTBLDataPrismaComplete = ({ tree_id, disabled = false, triggerRet
     } catch (err) {
       console.error('❌ [useTBLDataPrismaComplete] Retransform error:', err);
     }
-  }, [triggerRetransform, rawNodes, sectionsByTab]);
+  }, [triggerRetransform, rawNodes]); // 🔧 FIX: Retiré sectionsByTab des dépendances pour éviter la boucle infinie
 
   const reconcileDuplicatedNodes = useCallback(async (duplicated: Array<{ id: string; parentId?: string; sourceTemplateId?: string }>) => {
     if (!duplicated || duplicated.length === 0) return;

@@ -102,6 +102,7 @@ export default defineConfig({
   
   server: {
     port: 5173,
+    host: true, // Exposer sur le réseau (requis pour Codespaces)
     strictPort: true, // Forcer l'utilisation du port 5173, échouer si occupé
     proxy: {
       '/api': 'http://localhost:4000'

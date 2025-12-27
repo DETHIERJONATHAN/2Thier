@@ -13,29 +13,30 @@
     <script>
       (function() {
         // Déterminer si c'est production ou développement
-        // Liste des domaines de production (URLs relatives = même serveur pour API)
-        const productionDomains = [
+        // Liste des domaines qui utilisent URLs relatives (proxy ou même serveur pour API)
+        const relativeUrlDomains = [
           '2thier.be',
           'devis1min.be',
           'railway.app',      // Railway deployments
-          'up.railway.app'    // Railway preview URLs
+          'up.railway.app',   // Railway preview URLs
+          'github.dev',       // GitHub Codespaces (proxy Vite)
+          'codespaces.new'    // GitHub Codespaces alternate
         ];
         
         const hostname = window.location.hostname;
-        const isProduction = productionDomains.some(domain => hostname.includes(domain));
-        const isDev = !isProduction && hostname !== '127.0.0.1';
+        const useRelativeUrls = relativeUrlDomains.some(domain => hostname.includes(domain));
         
-        // En production: URLs relatives (même domaine = API sur le même serveur)
-        // En développement local: localhost:4000
-        const apiBaseUrl = isProduction ? '' : (isDev ? 'http://localhost:4000' : '');
+        // URLs relatives si production OU Codespace (le proxy Vite gère le forwarding)
+        // localhost:4000 uniquement si vraiment en local (127.0.0.1 ou localhost)
+        const apiBaseUrl = useRelativeUrls ? '' : (hostname === 'localhost' || hostname === '127.0.0.1' ? 'http://localhost:4000' : '');
         
         // Injecter les configurations globales IMMÉDIATEMENT
         window.__API_BASE_URL = apiBaseUrl;
         window.__BACKEND_URL = apiBaseUrl;
         
-        console.log('[ENV-CONFIG] API Base URL:', apiBaseUrl || '(relative - same origin)');
+        console.log('[ENV-CONFIG] API Base URL:', apiBaseUrl || '(relative - using proxy)');
         console.log('[ENV-CONFIG] Host:', hostname);
-        console.log('[ENV-CONFIG] Mode:', isProduction ? 'PRODUCTION' : 'DEVELOPMENT');
+        console.log('[ENV-CONFIG] Mode:', useRelativeUrls ? 'PROXY/PRODUCTION' : 'LOCAL DEV');
       })();
     </script>
   </head>

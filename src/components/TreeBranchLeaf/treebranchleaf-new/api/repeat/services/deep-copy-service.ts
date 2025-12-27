@@ -255,7 +255,7 @@ export async function deepCopyNodeInternal(
   }
 
   const idMap = new Map<string, string>();
-  // Les templateNodeIds sont maintenant garantis sans suffixes grÃƒÂ¢ce au filtrage en amont
+  // Les templateNodeIds sont maintenant garantis sans suffixes grâce au filtrage en amont
   // On applique directement le suffixe sans normalisation
   for (const oldId of toCopy) {
     const candidateId = appendSuffix(oldId);

@@ -66,8 +66,16 @@ export const TableauConfigEditor: React.FC<TableauConfigEditorProps> = ({
 
   const crossingData = useMemo(() => config.crossingData || {}, [config.crossingData]);
 
-  // Synchroniser les états quand la config change
+  // 🔥 FIX: Flag pour éviter la boucle infinie de synchronisation
+  // Quand on reçoit des données du parent, on ne doit pas rappeler onChange
+  const isExternalUpdateRef = useRef(false);
+  // Stocker la dernière config envoyée pour éviter les mises à jour inutiles
+  const lastSentConfigRef = useRef<string>('');
+
+  // Synchroniser les états quand la config change (depuis le parent)
   useEffect(() => {
+    isExternalUpdateRef.current = true; // Marquer comme mise à jour externe
+    
     if (Array.isArray(config.columns)) {
       setColumns(config.columns as Column[]);
     }
@@ -80,22 +88,43 @@ export const TableauConfigEditor: React.FC<TableauConfigEditorProps> = ({
     if (Array.isArray(config.data)) {
       setData(config.data as Array<Record<string, unknown>>);
     }
+    
+    // Reset le flag après un tick pour permettre les changements utilisateur
+    requestAnimationFrame(() => {
+      isExternalUpdateRef.current = false;
+    });
   }, [config.columns, config.rows, config.templates, config.data]);
 
-  // Synchronisation avec le parent
+  // Synchronisation avec le parent - SEULEMENT pour les changements internes (utilisateur)
   useEffect(() => {
-    onChangeRef.current({ 
-      columns, 
-      rows, 
-      templates, 
-      data, 
-      crossingData
-    });
+    // 🔥 FIX: Ne pas synchroniser si c'est une mise à jour externe
+    if (isExternalUpdateRef.current) {
+      return;
+    }
+    
+    // 🔥 FIX: Éviter les mises à jour redondantes avec JSON comparison
+    const newConfig = { columns, rows, templates, data, crossingData };
+    const newConfigStr = JSON.stringify(newConfig);
+    
+    if (newConfigStr === lastSentConfigRef.current) {
+      return; // Pas de changement réel, éviter l'appel onChange
+    }
+    
+    lastSentConfigRef.current = newConfigStr;
+    onChangeRef.current(newConfig);
   }, [columns, rows, templates, data, crossingData]);
 
   // Migration des anciennes données vers crossingData si nécessaire
+  // 🔥 FIX: Utiliser un ref pour éviter les migrations multiples
+  const hasMigratedRef = useRef(false);
+  
   useEffect(() => {
+    // Ne migrer qu'une seule fois
+    if (hasMigratedRef.current) return;
+    
     if (!config.crossingData && config.data && Array.isArray(config.data) && config.data.length > 0) {
+      hasMigratedRef.current = true; // Marquer comme migré AVANT d'appeler onChange
+      
       console.log('[TableauConfigEditor] Migration des anciennes données...');
       const newCrossingData: Record<string, unknown> = {};
       
@@ -113,13 +142,16 @@ export const TableauConfigEditor: React.FC<TableauConfigEditorProps> = ({
       
       console.log('[TableauConfigEditor] Données migrées:', Object.keys(newCrossingData).length);
       
-      // Mettre à jour la configuration avec les données migrées
-      onChange({
-        ...config,
+      // Mettre à jour la configuration avec les données migrées via le ref stable
+      onChangeRef.current({
+        columns: Array.isArray(config.columns) ? config.columns as Column[] : [],
+        rows: Array.isArray(config.rows) ? config.rows as Row[] : [],
+        templates: Array.isArray(config.templates) ? config.templates as Template[] : [],
+        data: config.data as Array<Record<string, unknown>>,
         crossingData: newCrossingData
       });
     }
-  }, [config.data, config.crossingData, rows, onChange, config]);
+  }, [config.data, config.crossingData, config.columns, config.rows, config.templates, rows]);
 
   // Gestion des colonnes
   const addColumn = () => {

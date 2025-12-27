@@ -5697,29 +5697,32 @@ router.get('/reusables/formulas', async (req, res) => {
 
     const allFormulas = await prisma.treeBranchLeafNodeFormula.findMany({
       where: whereFilter,
-      include: {
-        TreeBranchLeafNode: {
-          select: {
-            label: true,
-            treeId: true
-          }
-        }
-      },
       orderBy: { createdAt: 'desc' }
     });
 
-    // Ajouter les mÃƒÆ’Ã‚Â©tadonnÃƒÆ’Ã‚Â©es pour le frontend
-    const items = allFormulas.map(f => ({
-      ...f,
-      type: 'node',
-      nodeLabel: f.TreeBranchLeafNode?.label || 'NÃƒâ€¦Ã¢â‚¬Å“ud inconnu',
-      treeId: f.TreeBranchLeafNode?.treeId || null
-    }));
+    // Recuperer les infos des noeuds separement
+    const nodeIds = [...new Set(allFormulas.map(f => f.nodeId))];
+    const nodes = await prisma.treeBranchLeafNode.findMany({
+      where: { id: { in: nodeIds } },
+      select: { id: true, label: true, treeId: true }
+    });
+    const nodeMap = new Map(nodes.map(n => [n.id, n]));
+
+    // Ajouter les metadonnees pour le frontend
+    const items = allFormulas.map(f => {
+      const node = nodeMap.get(f.nodeId);
+      return {
+        ...f,
+        type: 'node',
+        nodeLabel: node?.label || 'Noeud inconnu',
+        treeId: node?.treeId || null
+      };
+    });
 
     return res.json({ items });
   } catch (error) {
     console.error('[TreeBranchLeaf API] Error listing all formulas:', error);
-    res.status(500).json({ error: 'Erreur lors de la rÃƒÆ’Ã‚Â©cupÃƒÆ’Ã‚Â©ration des formules' });
+    res.status(500).json({ error: 'Erreur lors de la recuperation des formules' });
   }
 });
 
@@ -5731,35 +5734,32 @@ router.get('/reusables/formulas/:id', async (req, res) => {
     const { organizationId, isSuperAdmin } = getAuthCtx(req as unknown as MinimalReq);
 
     const item = await prisma.treeBranchLeafNodeFormula.findUnique({ 
-      where: { id },
-      include: {
-        TreeBranchLeafNode: {
-          select: {
-            label: true,
-            treeId: true
-          }
-        }
-      }
+      where: { id }
     });
     
-    if (!item) return res.status(404).json({ error: 'Formule non trouvÃƒÆ’Ã‚Â©e' });
+    if (!item) return res.status(404).json({ error: 'Formule non trouvee' });
 
     if (!isSuperAdmin) {
-      // AutorisÃƒÆ’Ã‚Â© si globale ou mÃƒÆ’Ã‚Âªme organisation
       if (item.organizationId && item.organizationId !== organizationId) {
-        return res.status(403).json({ error: 'AccÃƒÆ’Ã‚Â¨s refusÃƒÆ’Ã‚Â©' });
+        return res.status(403).json({ error: 'Acces refuse' });
       }
     }
+
+    // Recuperer les infos du noeud separement
+    const node = await prisma.treeBranchLeafNode.findUnique({
+      where: { id: item.nodeId },
+      select: { label: true, treeId: true }
+    });
 
     return res.json({
       ...item,
       type: 'node',
-      nodeLabel: item.TreeBranchLeafNode?.label || 'NÃƒâ€¦Ã¢â‚¬Å“ud inconnu',
-      treeId: item.TreeBranchLeafNode?.treeId || null
+      nodeLabel: node?.label || 'Noeud inconnu',
+      treeId: node?.treeId || null
     });
   } catch (error) {
     console.error('[TreeBranchLeaf API] Error getting formula:', error);
-    res.status(500).json({ error: 'Erreur lors de la rÃƒÆ’Ã‚Â©cupÃƒÆ’Ã‚Â©ration de la formule' });
+    res.status(500).json({ error: 'Erreur lors de la recuperation de la formule' });
   }
 });
 
@@ -5786,31 +5786,33 @@ router.get('/reusables/conditions', async (req, res) => {
 
     const allConditions = await prisma.treeBranchLeafNodeCondition.findMany({
       where: whereFilter,
-      include: {
-        TreeBranchLeafNode: {
-          select: {
-            label: true,
-            treeId: true
-          }
-        }
-      },
       orderBy: { createdAt: 'desc' }
     });
 
-    // Ajouter les mÃƒÆ’Ã‚Â©tadonnÃƒÆ’Ã‚Â©es pour le frontend
-    const items = allConditions.map(c => ({
-      ...c,
-      type: 'node',
-      nodeLabel: c.TreeBranchLeafNode?.label || 'NÃƒâ€¦Ã¢â‚¬Å“ud inconnu',
-      treeId: c.TreeBranchLeafNode?.treeId || null,
-      nodeId: c.nodeId
-    }));
+    // Recuperer les infos des noeuds separement
+    const nodeIds = [...new Set(allConditions.map(c => c.nodeId))];
+    const nodes = await prisma.treeBranchLeafNode.findMany({
+      where: { id: { in: nodeIds } },
+      select: { id: true, label: true, treeId: true }
+    });
+    const nodeMap = new Map(nodes.map(n => [n.id, n]));
 
+    // Ajouter les metadonnees pour le frontend
+    const items = allConditions.map(c => {
+      const node = nodeMap.get(c.nodeId);
+      return {
+        ...c,
+        type: 'node',
+        nodeLabel: node?.label || 'Noeud inconnu',
+        treeId: node?.treeId || null,
+        nodeId: c.nodeId
+      };
+    });
 
     return res.json({ items });
   } catch (error) {
     console.error('[TreeBranchLeaf API] Error listing reusable conditions:', error);
-    res.status(500).json({ error: 'Erreur lors de la rÃƒÆ’Ã‚Â©cupÃƒÆ’Ã‚Â©ration des conditions rÃƒÆ’Ã‚Â©utilisables' });
+    res.status(500).json({ error: 'Erreur lors de la recuperation des conditions reutilisables' });
   }
 });
 
@@ -5822,35 +5824,32 @@ router.get('/reusables/conditions/:id', async (req, res) => {
     const { organizationId, isSuperAdmin } = getAuthCtx(req as unknown as MinimalReq);
 
     const item = await prisma.treeBranchLeafNodeCondition.findUnique({ 
-      where: { id },
-      include: {
-        TreeBranchLeafNode: {
-          select: {
-            label: true,
-            treeId: true
-          }
-        }
-      }
+      where: { id }
     });
     
-    if (!item) return res.status(404).json({ error: 'Condition non trouvÃƒÆ’Ã‚Â©e' });
+    if (!item) return res.status(404).json({ error: 'Condition non trouvee' });
 
     if (!isSuperAdmin) {
-      // AutorisÃƒÆ’Ã‚Â© si globale ou mÃƒÆ’Ã‚Âªme organisation
       if (item.organizationId && item.organizationId !== organizationId) {
-        return res.status(403).json({ error: 'AccÃƒÆ’Ã‚Â¨s refusÃƒÆ’Ã‚Â©' });
+        return res.status(403).json({ error: 'Acces refuse' });
       }
     }
+
+    // Recuperer les infos du noeud separement
+    const node = await prisma.treeBranchLeafNode.findUnique({
+      where: { id: item.nodeId },
+      select: { label: true, treeId: true }
+    });
 
     return res.json({
       ...item,
       type: 'node',
-      nodeLabel: item.TreeBranchLeafNode?.label || 'NÃƒâ€¦Ã¢â‚¬Å“ud inconnu',
-      treeId: item.TreeBranchLeafNode?.treeId || null
+      nodeLabel: node?.label || 'Noeud inconnu',
+      treeId: node?.treeId || null
     });
   } catch (error) {
     console.error('[TreeBranchLeaf API] Error getting condition:', error);
-    res.status(500).json({ error: 'Erreur lors de la rÃƒÆ’Ã‚Â©cupÃƒÆ’Ã‚Â©ration de la condition' });
+    res.status(500).json({ error: 'Erreur lors de la recuperation de la condition' });
   }
 });
 
@@ -5873,35 +5872,37 @@ router.get('/reusables/tables', async (req, res) => {
 
     const allTables = await prisma.treeBranchLeafNodeTable.findMany({
       where: whereFilter,
-      include: {
-        TreeBranchLeafNode: {
-          select: {
-            label: true,
-            treeId: true
-          }
-        }
-      },
       orderBy: { createdAt: 'desc' }
     });
 
-    // Ajouter les mÃƒÆ’Ã‚Â©tadonnÃƒÆ’Ã‚Â©es pour le frontend
-    const items = allTables.map(t => ({
-      id: t.id,
-      name: t.name,
-      type: t.type,
-      description: t.description,
-      nodeLabel: t.TreeBranchLeafNode?.label || 'NÃƒâ€¦Ã¢â‚¬Å“ud inconnu',
-      treeId: t.TreeBranchLeafNode?.treeId || null,
-      nodeId: t.nodeId,
-      createdAt: t.createdAt,
-      updatedAt: t.updatedAt
-    }));
+    // Recuperer les infos des noeuds separement
+    const nodeIds = [...new Set(allTables.map(t => t.nodeId))];
+    const nodes = await prisma.treeBranchLeafNode.findMany({
+      where: { id: { in: nodeIds } },
+      select: { id: true, label: true, treeId: true }
+    });
+    const nodeMap = new Map(nodes.map(n => [n.id, n]));
 
+    // Ajouter les metadonnees pour le frontend
+    const items = allTables.map(t => {
+      const node = nodeMap.get(t.nodeId);
+      return {
+        id: t.id,
+        name: t.name,
+        type: t.type,
+        description: t.description,
+        nodeLabel: node?.label || 'Noeud inconnu',
+        treeId: node?.treeId || null,
+        nodeId: t.nodeId,
+        createdAt: t.createdAt,
+        updatedAt: t.updatedAt
+      };
+    });
 
     return res.json({ items });
   } catch (error) {
     console.error('[TreeBranchLeaf API] Error listing reusable tables:', error);
-    res.status(500).json({ error: 'Erreur lors de la rÃƒÆ’Ã‚Â©cupÃƒÆ’Ã‚Â©ration des tables rÃƒÆ’Ã‚Â©utilisables' });
+    res.status(500).json({ error: 'Erreur lors de la recuperation des tables reutilisables' });
   }
 });
 
@@ -10310,20 +10311,50 @@ router.get('/nodes/:nodeId/table/lookup', async (req, res) => {
     }
 
     // Fallback: Si pas de keyRow/keyColumn, retourner le tableau complet
-    // ÃƒÂ°Ã…Â¸Ã¢â‚¬ÂÃ‚Â¥ AUTO-DEFAULT MATRIX (Orientation / Inclinaison) : GÃƒÆ’Ã‚Â©nÃƒÆ’Ã‚Â©rer options dynamiques si structure A1 dÃƒÆ’Ã‚Â©tectÃƒÆ’Ã‚Â©e
+    // 🔥 AUTO-DEFAULT MATRIX (Orientation / Inclinaison) : Générer options dynamiques selon le rôle du champ
     if (table.type === 'matrix') {
       const hasNoConfig = !selectConfig?.keyRow && !selectConfig?.keyColumn;
-      const a1 = rows[0];
-      const firstColHeader = columns[0];
-      // Heuristique : si A1 est identique au header de la premiÃƒÆ’Ã‚Â¨re colonne, on suppose colonne A = labels (Orientation, Nord, ...)
-      if (hasNoConfig && firstColHeader && a1 && firstColHeader === a1) {
-        // ÃƒÂ°Ã…Â¸Ã¢â‚¬Â Ã¢â‚¬Â¢ FILTRAGE: N'inclure que les lignes qui passent les filtres (sauf rows[0] = A1)
-        const autoOptions = filteredRowIndices
-          .filter(idx => idx > 0) // Exclure rows[0] (A1)
-          .map(idx => rows[idx])
-          .filter(r => r && r !== 'undefined' && r !== 'null')
-          .map(r => ({ value: r, label: r }));
-        // Upsert automatique d'une configuration SELECT minimale basÃƒÂ¯Ã‚Â¿Ã‚Â½e sur la colonne A (A1)
+      const a1 = rows[0]; // Ex: "Orientation" (cellule A1)
+      const firstColHeader = columns[0]; // Ex: "Orientation" (header colonne A)
+      
+      // 🎯 DÉTECTION DU RÔLE: Vérifier si ce nodeId est le rowFieldId ou columnFieldId dans meta.lookup
+      const lookupMeta = rawLookup as Record<string, unknown> | undefined;
+      const rowFieldId = lookupMeta?.selectors && typeof lookupMeta.selectors === 'object' 
+        ? (lookupMeta.selectors as Record<string, unknown>).rowFieldId 
+        : undefined;
+      const columnFieldId = lookupMeta?.selectors && typeof lookupMeta.selectors === 'object' 
+        ? (lookupMeta.selectors as Record<string, unknown>).columnFieldId 
+        : undefined;
+      
+      const isRowField = rowFieldId === nodeId;
+      const isColumnField = columnFieldId === nodeId;
+      
+      if (hasNoConfig && firstColHeader && a1) {
+        let autoOptions: { value: string; label: string }[] = [];
+        let keyColumnValue: string | null = null;
+        let keyRowValue: string | null = null;
+        
+        if (isRowField) {
+          // 🔥 Ce champ est pour les LIGNES (ex: Inclinaison) → extraire depuis la ligne A1 (en-têtes de colonnes)
+          // Les valeurs sont dans columns[] (sauf colonne 0 qui est le label "Orientation")
+          autoOptions = columns
+            .slice(1) // Exclure la première colonne (label)
+            .filter(c => c && c !== 'undefined' && c !== 'null' && c !== '')
+            .map(c => ({ value: String(c), label: String(c) }));
+          keyRowValue = a1; // Ex: "Orientation" (la ligne A1)
+          
+        } else if (isColumnField || (!isRowField && !isColumnField)) {
+          // 🔥 Ce champ est pour les COLONNES (ex: Orientation) → extraire depuis la colonne A (labels de lignes)
+          // Fallback par défaut si aucun rôle détecté
+          autoOptions = filteredRowIndices
+            .filter(idx => idx > 0) // Exclure rows[0] (A1)
+            .map(idx => rows[idx])
+            .filter(r => r && r !== 'undefined' && r !== 'null')
+            .map(r => ({ value: r, label: r }));
+          keyColumnValue = firstColHeader; // Ex: "Orientation" (la colonne A)
+        }
+        
+        // Upsert automatique avec la bonne config (keyRow OU keyColumn)
         try {
           await prisma.treeBranchLeafSelectConfig.upsert({
             where: { nodeId },
@@ -10336,8 +10367,8 @@ router.get('/nodes/:nodeId/table/lookup', async (req, res) => {
               allowCustom: false,
               optionsSource: 'table',
               tableReference: table.id,
-              keyColumn: firstColHeader,
-              keyRow: null,
+              keyColumn: keyColumnValue,
+              keyRow: keyRowValue,
               valueColumn: null,
               valueRow: null,
               displayColumn: null,
@@ -10349,8 +10380,8 @@ router.get('/nodes/:nodeId/table/lookup', async (req, res) => {
             update: {
               optionsSource: 'table',
               tableReference: table.id,
-              keyColumn: firstColHeader,
-              keyRow: null,
+              keyColumn: keyColumnValue,
+              keyRow: keyRowValue,
               valueColumn: null,
               valueRow: null,
               displayColumn: null,
@@ -10359,9 +10390,18 @@ router.get('/nodes/:nodeId/table/lookup', async (req, res) => {
             }
           });
         } catch (e) {
-          console.warn(`[TreeBranchLeaf API] ?? Auto-upsert select-config a ÃƒÂ¯Ã‚Â¿Ã‚Â½chouÃƒÂ¯Ã‚Â¿Ã‚Â½ (non bloquant):`, e);
+          console.warn(`[TreeBranchLeaf API] ⚠️ Auto-upsert select-config a échoué (non bloquant):`, e);
         }
-        return res.json({ options: autoOptions, autoDefault: { source: 'columnA', keyColumnCandidate: firstColHeader } });
+        
+        return res.json({ 
+          options: autoOptions, 
+          autoDefault: { 
+            source: isRowField ? 'rowA1' : 'columnA', 
+            keyColumnCandidate: keyColumnValue,
+            keyRowCandidate: keyRowValue,
+            detectedRole: isRowField ? 'rowField' : isColumnField ? 'columnField' : 'fallback'
+          } 
+        });
       }
     }
 
