@@ -4237,6 +4237,7 @@ var import_jsonwebtoken2 = __toESM(require("jsonwebtoken"), 1);
 
 // src/prisma.ts
 init_database();
+var prisma_default = db;
 
 // src/config.prod.ts
 var config_prod_exports = {};
@@ -4353,6 +4354,28 @@ var authenticateToken = (req2, res, next) => {
     console.log("[AUTH] \u274C Token invalide ou expir\xE9:", error.message);
     console.log("[AUTH] \u274C Erreur d\xE9taill\xE9e:", error);
     return res.status(401).json({ error: "Token invalide ou expir\xE9" });
+  }
+};
+var fetchFullUser = async (req2, res, next) => {
+  console.log("<<<<< [MIDDLEWARE] fetchFullUser: Ex\xE9cution. >>>>>");
+  if (!req2.user || !req2.user.userId) {
+    console.log("<<<<< [MIDDLEWARE] fetchFullUser: req.user ou req.user.userId manquant. Le middleware authenticateToken doit \xEAtre ex\xE9cut\xE9 avant. >>>>>");
+    return res.status(401).json({ message: "Utilisateur non authentifi\xE9." });
+  }
+  try {
+    const userFromDb = await prisma_default.user.findUnique({
+      where: { id: req2.user.userId }
+    });
+    if (!userFromDb) {
+      console.log(`<<<<< [MIDDLEWARE] fetchFullUser: Utilisateur avec ID ${req2.user.userId} non trouv\xE9 dans la DB. >>>>>`);
+      return res.status(401).json({ message: "Utilisateur non valide." });
+    }
+    req2.user = { ...userFromDb, ...req2.user };
+    console.log("<<<<< [MIDDLEWARE] fetchFullUser: req.user enrichi avec succ\xE8s. >>>>>");
+    next();
+  } catch (error) {
+    console.error("<<<<< [MIDDLEWARE] fetchFullUser: Erreur lors de la r\xE9cup\xE9ration de l'utilisateur.", error);
+    res.status(500).json({ message: "Erreur interne du serveur." });
   }
 };
 var extractOrganization = (req2, res, next) => {
@@ -52469,7 +52492,7 @@ apiRouter.use("/ai", ai_default);
 apiRouter.use("/ai", ai_code_default);
 apiRouter.use("/advanced-select", advanced_select_default);
 apiRouter.use("/dynamic-formulas", dynamic_formulas_default);
-apiRouter.use("/treebranchleaf", treebranchleaf_routes_default);
+apiRouter.use("/treebranchleaf", authenticateToken, fetchFullUser, treebranchleaf_routes_default);
 apiRouter.use("/tbl", tbl_intelligence_routes_default);
 apiRouter.use("/tbl", tbl_routes_default);
 apiRouter.use("/tbl", tbl_capabilities_default);
@@ -61619,7 +61642,6 @@ app.use("/api/tbl", tbl_submission_evaluator_default);
 app.use("/api/tbl/batch", tbl_batch_routes_default);
 app.use("/api/batch", batch_routes_default);
 app.use("/api/tree-nodes", calculatedValueController_default);
-app.use("/api/treebranchleaf", treebranchleaf_routes_default);
 var repeatRouter = createRepeatRouter(db);
 app.use("/api/treebranchleaf/repeat", repeatRouter);
 app.use("/api/repeat", repeatRouter);
@@ -61677,6 +61699,15 @@ if (process.env.NODE_ENV === "production") {
       if (import_fs7.default.existsSync(swPath)) {
         res.setHeader("Content-Type", "application/javascript");
         res.sendFile(swPath);
+      } else {
+        res.status(404).end();
+      }
+    });
+    app.get(/^\/workbox-.*\.js$/, (req2, res) => {
+      const filePath = import_path7.default.join(distDir, req2.path);
+      if (import_fs7.default.existsSync(filePath)) {
+        res.setHeader("Content-Type", "application/javascript");
+        res.sendFile(filePath);
       } else {
         res.status(404).end();
       }

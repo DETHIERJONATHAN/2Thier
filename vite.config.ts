@@ -55,8 +55,16 @@ export default defineConfig({
   // 🔧 CORRECTION: Augmenter limite fichiers lourds (assets ~13MB)
   maximumFileSizeToCacheInBytes: 20 * 1024 * 1024, // 20MB au lieu de 2MB
         
+        // 🚫 EXCLURE les requêtes API du Service Worker - NE JAMAIS CACHER
+        navigateFallbackDenylist: [/^\/api\//],
+        
         // Cache strategy agressif
         runtimeCaching: [
+          {
+            // 🚫 CRITIQUE: Les API doivent TOUJOURS aller au réseau
+            urlPattern: /^.*\/api\/.*/i,
+            handler: 'NetworkOnly',
+          },
           {
             urlPattern: /^https:\/\/fonts\.googleapis\.com\/.*/i,
             handler: 'CacheFirst',

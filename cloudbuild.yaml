@@ -1,13 +1,14 @@
 # Configuration Cloud Build pour Google Cloud Run
 # Utilise Artifact Registry (europe-west1-docker.pkg.dev) au lieu de gcr.io
+
 steps:
   # Build the container image
   - name: 'gcr.io/cloud-builders/docker'
-    args: ['build', '-t', 'europe-west1-docker.pkg.dev/$PROJECT_ID/crm-2thier/app:$COMMIT_SHA', '.']
+    args: ['build', '-t', 'europe-west1-docker.pkg.dev/$PROJECT_ID/crm-2thier/app:latest', '.']
   
   # Push the container image to Artifact Registry
   - name: 'gcr.io/cloud-builders/docker'
-    args: ['push', 'europe-west1-docker.pkg.dev/$PROJECT_ID/crm-2thier/app:$COMMIT_SHA']
+    args: ['push', 'europe-west1-docker.pkg.dev/$PROJECT_ID/crm-2thier/app:latest']
   
   # Deploy container image to Cloud Run
   - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
@@ -17,7 +18,7 @@ steps:
     - 'deploy'
     - 'crm-api'
     - '--image'
-    - 'europe-west1-docker.pkg.dev/$PROJECT_ID/crm-2thier/app:$COMMIT_SHA'
+    - 'europe-west1-docker.pkg.dev/$PROJECT_ID/crm-2thier/app:latest'
     - '--region'
     - 'europe-west1'
     - '--platform'
@@ -40,9 +41,12 @@ steps:
     - '--add-cloudsql-instances'
     - 'thiernew:europe-west1:crm-postgres-prod'
     - '--set-env-vars'
-    - 'NODE_ENV=production,PORT=8080,PGHOST=/cloudsql/thiernew:europe-west1:crm-postgres-prod,PGDATABASE=2thier,PGUSER=postgres,FRONTEND_URL=https://app.2thier.be,BACKEND_URL=https://app.2thier.be'
+    - 'NODE_ENV=production,PGHOST=/cloudsql/thiernew:europe-west1:crm-postgres-prod,PGDATABASE=2thier,PGUSER=postgres,FRONTEND_URL=https://app.2thier.be,BACKEND_URL=https://app.2thier.be'
     - '--update-secrets'
-    - 'PGPASSWORD=crm-postgres-password:latest,JWT_SECRET=crm-jwt-secret:latest,SESSION_SECRET=crm-session-secret:latest,ENCRYPTION_KEY=crm-encryption-key:latest,CRYPTO_SECRET_KEY=crm-crypto-secret:latest,GOOGLE_AI_API_KEY=google-ai-api-key:latest,GOOGLE_CLIENT_ID=google-client-id:latest,GOOGLE_CLIENT_SECRET=google-client-secret:latest'
+    - 'PGPASSWORD=crm-postgres-password:latest,JWT_SECRET=JWT_SECRET:latest,SESSION_SECRET=SESSION_SECRET:latest,ENCRYPTION_KEY=ENCRYPTION_KEY:latest,CRYPTO_SECRET_KEY=CRYPTO_SECRET_KEY:latest,GOOGLE_AI_API_KEY=GOOGLE_AI_API_KEY:latest,GOOGLE_CLIENT_ID=GOOGLE_CLIENT_ID:latest,GOOGLE_CLIENT_SECRET=GOOGLE_CLIENT_SECRET:latest'
 
 images:
-- 'europe-west1-docker.pkg.dev/$PROJECT_ID/crm-2thier/app:$COMMIT_SHA'
+- 'europe-west1-docker.pkg.dev/$PROJECT_ID/crm-2thier/app:latest'
+
+options:
+  logging: CLOUD_LOGGING_ONLY

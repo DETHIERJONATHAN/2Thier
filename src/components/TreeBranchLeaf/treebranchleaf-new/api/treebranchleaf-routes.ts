@@ -3881,20 +3881,20 @@ router.delete('/trees/:treeId/nodes/:nodeId', async (req, res) => {
       });
 
 
-      // ?? ÃƒÂ¯Ã‚Â¿Ã‚Â½tape 2: Filtrer - Ne supprimer QUE les variables SUFFIXÃƒÂ¯Ã‚Â¿Ã‚Â½ES
+      // 🔄 Étape 2: Filtrer - Ne supprimer QUE les variables SUFFIXÉES
       // Les variables originales (sans suffixe) doivent rester intactes
       const varIdsToDelete: string[] = [];
-      const suffixPattern = /-\d+$/; // DÃƒÂ¯Ã‚Â¿Ã‚Â½tecte un suffixe numÃƒÂ¯Ã‚Â¿Ã‚Â½rique ÃƒÂ¯Ã‚Â¿Ã‚Â½ la fin
+      const suffixPattern = /-\d+$/; // Détecte un suffixe numérique à la fin
 
       for (const variable of variablesToCheck) {
-        // ? Ne supprimer que si c'est une variable SUFFIXÃƒÂ¯Ã‚Â¿Ã‚Â½E (copie)
+        // ✅ Ne supprimer que si c'est une variable SUFFIXÉE (copie)
         if (suffixPattern.test(variable.id)) {
           varIdsToDelete.push(variable.id);
         } else {
         }
       }
 
-      // ??? ÃƒÂ¯Ã‚Â¿Ã‚Â½tape 3: Supprimer SEULEMENT les variables suffixÃƒÂ¯Ã‚Â¿Ã‚Â½es
+      // ✅ Étape 3: Supprimer SEULEMENT les variables suffixées
       if (varIdsToDelete.length > 0) {
         const deletedVarCount = await prisma.treeBranchLeafNodeVariable.deleteMany({
           where: { id: { in: varIdsToDelete } }
@@ -3903,6 +3903,28 @@ router.delete('/trees/:treeId/nodes/:nodeId', async (req, res) => {
       }
     } catch (varCleanError) {
       // Erreur silencieuse - ne pas bloquer la suppression sur cette erreur de nettoyage
+    }
+
+    // 🧹 NOUVEAU: Nettoyer les variables orphelines (nodeId référence un nœud supprimé)
+    // Ceci inclut les variables -sum-total dont le nœud source a été supprimé
+    try {
+      // Construire les patterns de nodeId à supprimer: 
+      // - nodeId exact (déjà géré par CASCADE)
+      // - nodeId-sum-total (variable Total du nœud)
+      // - nodeId-1, nodeId-2... (copies du nœud)
+      const sumTotalNodeIds = allDeletedIds.map(id => `${id}-sum-total`);
+      
+      // Supprimer les variables dont le nodeId correspond aux nœuds supprimés + leurs sum-total
+      const orphanedVariables = await prisma.treeBranchLeafNodeVariable.deleteMany({
+        where: {
+          nodeId: { in: sumTotalNodeIds }
+        }
+      });
+      if (orphanedVariables.count > 0) {
+        console.log(`[DELETE] 🧹 Supprimé ${orphanedVariables.count} variable(s) -sum-total orpheline(s)`);
+      }
+    } catch (orphanCleanError) {
+      console.warn('[DELETE] Erreur nettoyage variables orphelines:', (orphanCleanError as Error).message);
     }
 
     // ?? Mise ÃƒÂ¯Ã‚Â¿Ã‚Â½ jour des champs Total aprÃƒÂ¯Ã‚Â¿Ã‚Â½s suppression de copies
