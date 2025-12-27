@@ -15,7 +15,7 @@ import { createServer } from 'http';
  * 🔧 CONFIGURATION ET INSTANCES
  */
 const app = express();
-const PORT = process.env.PORT || 4000;
+const PORT = process.env.PORT || 8080;
 const prisma = db;
 const server = createServer(app);
 

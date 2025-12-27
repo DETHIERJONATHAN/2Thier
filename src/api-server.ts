@@ -43,7 +43,7 @@ console.log('✅ [DEBUG] Google Token Scheduler importé');
 console.log('🚀 [DEBUG] Création de l\'app Express...');
 const app = express();
 console.log('✅ [DEBUG] App Express créée');
-const port = process.env.PORT || 4000;
+const port = process.env.PORT || 8080;
 console.log(`🔧 [DEBUG] Port configuré: ${port}`);
 
 console.log('🔧 [DEBUG] Configuration CORS...');
