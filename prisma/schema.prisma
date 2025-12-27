@@ -1528,6 +1528,9 @@ model TreeBranchLeafNode {
   tableConfig                 Json?
   apiConfig                   Json?
   linkConfig                  Json?
+
+  // Relation vers l'arbre parent
+  TreeBranchLeafTree          TreeBranchLeafTree @relation(fields: [treeId], references: [id], onDelete: Cascade)
   defaultValue                String?
   calculatedValue             String?
   metadata                    Json      @default("{}")
@@ -1663,6 +1666,9 @@ model TreeBranchLeafNode {
   section_gutter              Int?      @default(16)
   section_showChildrenCount   Boolean?  @default(false)
 
+  // Relation vers la variable exposée (1-to-1)
+  TreeBranchLeafNodeVariable  TreeBranchLeafNodeVariable?
+
   @@index([api_activeId])
   @@index([condition_activeId])
   @@index([data_exposedKey])
@@ -1797,6 +1803,9 @@ model TreeBranchLeafNodeVariable {
   selectedNodeId String?
   sourceRef      String?
   sourceType     String?  @default("fixed")
+
+  // Relation vers le node parent
+  TreeBranchLeafNode TreeBranchLeafNode @relation(fields: [nodeId], references: [id], onDelete: Cascade)
 
   @@index([exposedKey])
   @@index([nodeId])
@@ -1991,6 +2000,9 @@ model TreeBranchLeafTree {
   createdAt        DateTime           @default(now())
   updatedAt        DateTime
   DocumentTemplate DocumentTemplate[]
+
+  // Relation vers les nodes de l'arbre
+  TreeBranchLeafNode TreeBranchLeafNode[]
 
   @@index([category])
   @@index([organizationId])
