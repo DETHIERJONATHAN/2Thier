@@ -1,0 +1,20 @@
+#!/bin/sh
+echo "🔧 Build automatique avant push..."
+
+# Build uniquement le serveur API (plus rapide et essentiel)
+npm run build:server
+if [ $? -ne 0 ]; then
+  echo "❌ Build serveur échoué ! Push annulé."
+  exit 1
+fi
+echo "✅ Build serveur réussi !"
+
+# Vérifier si dist-server a changé
+if ! git diff --quiet dist-server/ 2>/dev/null; then
+  echo "📦 dist-server modifié, ajout au commit..."
+  git add dist-server/
+  git commit --amend --no-edit
+  echo "✅ Commit mis à jour avec dist-server"
+fi
+
+echo "�� Push autorisé !"
