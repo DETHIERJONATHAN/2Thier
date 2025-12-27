@@ -1669,6 +1669,7 @@ model TreeBranchLeafNode {
   // Relation vers la variable exposée (1-to-1)
   TreeBranchLeafNodeVariable  TreeBranchLeafNodeVariable?
   TreeBranchLeafNodeTable     TreeBranchLeafNodeTable[]
+  TreeBranchLeafSelectConfig  TreeBranchLeafSelectConfig?
 
   @@index([api_activeId])
   @@index([condition_activeId])
@@ -1864,6 +1865,9 @@ model TreeBranchLeafSelectConfig {
   displayRow      String?
   keyRow          String?
   valueRow        String?
+
+  // Relation vers le node parent
+  TreeBranchLeafNode TreeBranchLeafNode @relation(fields: [nodeId], references: [id], onDelete: Cascade)
 
   @@index([nodeId])
   @@index([optionsSource])

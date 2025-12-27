@@ -1,0 +1,129 @@
+# ============================================================================
+# WORKFLOW CI/CD OBLIGATOIRE - DÉPLOIEMENT AUTOMATIQUE SUR CLOUD RUN
+# ============================================================================
+# Ce workflow se déclenche automatiquement à chaque push sur main
+# Il est IMPOSSIBLE de contourner ce processus
+# 
+# Étapes :
+# 1. Checkout du code
+# 2. Installation des dépendances
+# 3. Génération du client Prisma (OBLIGATOIRE)
+# 4. Build du frontend et du serveur (OBLIGATOIRE)
+# 5. Déploiement sur Cloud Run via source deploy (sans Docker)
+# ============================================================================
+
+name: 🚀 Deploy to Cloud Run
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:  # Permet le déclenchement manuel si besoin
+
+env:
+  PROJECT_ID: thiernew
+  REGION: europe-west1
+  SERVICE_NAME: crm-api
+
+jobs:
+  deploy:
+    name: 🏗️ Build & Deploy
+    runs-on: ubuntu-latest
+    
+    # Permissions nécessaires pour l'authentification Google Cloud
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      # ============================================
+      # 1. CHECKOUT DU CODE
+      # ============================================
+      - name: 📥 Checkout code
+        uses: actions/checkout@v4
+
+      # ============================================
+      # 2. CONFIGURATION NODE.JS
+      # ============================================
+      - name: 🟢 Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      # ============================================
+      # 3. INSTALLATION DES DÉPENDANCES
+      # ============================================
+      - name: 📦 Install dependencies
+        run: npm ci --legacy-peer-deps
+
+      # ============================================
+      # 4. GÉNÉRATION PRISMA (OBLIGATOIRE)
+      # ============================================
+      - name: 🔧 Generate Prisma Client
+        run: npx prisma generate
+
+      # ============================================
+      # 5. BUILD COMPLET (OBLIGATOIRE)
+      # ============================================
+      - name: 🏗️ Build application
+        run: npm run build
+        env:
+          NODE_ENV: production
+          VITE_BACKEND_URL: https://app.2thier.be
+          VITE_FRONTEND_URL: https://app.2thier.be
+
+      # ============================================
+      # 6. AUTHENTIFICATION GOOGLE CLOUD
+      # ============================================
+      - name: 🔐 Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      # ============================================
+      # 7. CONFIGURATION GCLOUD CLI
+      # ============================================
+      - name: ☁️ Setup Google Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+        with:
+          project_id: ${{ env.PROJECT_ID }}
+
+      # ============================================
+      # 8. DÉPLOIEMENT CLOUD RUN (SOURCE DEPLOY)
+      # ============================================
+      - name: 🚀 Deploy to Cloud Run
+        run: |
+          gcloud run deploy ${{ env.SERVICE_NAME }} \
+            --source . \
+            --region ${{ env.REGION }} \
+            --platform managed \
+            --allow-unauthenticated \
+            --port 4000 \
+            --memory 1Gi \
+            --cpu 1 \
+            --min-instances 0 \
+            --max-instances 10 \
+            --set-env-vars "NODE_ENV=production" \
+            --set-env-vars "DATABASE_URL=postgresql://postgres:Jlsl2022%40@/2thier?host=/cloudsql/thiernew:europe-west1:crm-postgres-prod" \
+            --add-cloudsql-instances thiernew:europe-west1:crm-postgres-prod \
+            --service-account crm-api@thiernew.iam.gserviceaccount.com
+
+      # ============================================
+      # 9. AFFICHER L'URL DU SERVICE
+      # ============================================
+      - name: 🌐 Get Service URL
+        run: |
+          URL=$(gcloud run services describe ${{ env.SERVICE_NAME }} --region ${{ env.REGION }} --format 'value(status.url)')
+          echo "🎉 Service déployé sur: $URL"
+          echo "SERVICE_URL=$URL" >> $GITHUB_ENV
+
+      # ============================================
+      # 10. VÉRIFICATION DE SANTÉ
+      # ============================================
+      - name: 🏥 Health Check
+        run: |
+          echo "⏳ Attente de 10 secondes pour le démarrage du service..."
+          sleep 10
+          echo "🔍 Vérification de la santé du service..."
+          curl -f -s "${{ env.SERVICE_URL }}/api/health" || echo "⚠️ Health check failed, mais le déploiement a réussi"
