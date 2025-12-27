@@ -14,6 +14,7 @@
 import { useState, useEffect } from 'react';
 import { useAuthenticatedApi } from '../../../../../hooks/useAuthenticatedApi';
 import { tblLog, tblWarn, isTBLDebugEnabled } from '../../../../../utils/tblDebug';
+import { selectConfigBatcher } from '../utils/SelectConfigBatcher';
 
 export interface TableLookupOption {
   value: string | number;
@@ -133,11 +134,10 @@ export function useTBLTableLookup(
 
         // 1. Récupérer la configuration SELECT du champ
         // 🎯 404 = Normal (le champ n'a pas de config lookup)
-        if (isTargetField) console.log(`[DEBUG][Test - liste] ➡️ GET /api/treebranchleaf/nodes/${fieldId}/select-config`);
-        const selectConfig = await api.get<TreeBranchLeafSelectConfig>(
-          `/api/treebranchleaf/nodes/${fieldId}/select-config`,
-          { suppressErrorLogForStatuses: [404] }
-        );
+        if (isTargetField) console.log(`[DEBUG][Test - liste] ➡️ GET /api/treebranchleaf/nodes/${fieldId}/select-config (BATCHED)`);
+        
+        // BATCHING OPTIMIZATION: Use the batcher instead of direct API call
+        const selectConfig = await selectConfigBatcher.fetch(fieldId, api);
 
         if (isTargetField) console.log(`[DEBUG][Test - liste] ⬅️ Réponse select-config:`, selectConfig);
 

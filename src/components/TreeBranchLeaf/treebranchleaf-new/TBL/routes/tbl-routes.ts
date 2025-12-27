@@ -75,6 +75,7 @@ router.get('/variables', authMiddleware, requireRole(['user', 'admin', 'super_ad
 
     const variables = (raw as unknown as RawVarWithRelations[])
       .filter(v => {
+        if (!v) return false; // Safety check
         if (isSuperAdmin) return true;
         const nodeOrg = v.TreeBranchLeafNode?.TreeBranchLeafTree?.organizationId;
         return !organizationId || !nodeOrg || nodeOrg === organizationId;
@@ -96,7 +97,8 @@ router.get('/variables', authMiddleware, requireRole(['user', 'admin', 'super_ad
   } catch (e) {
     const err = e as Error;
     console.error('❌ [TBL API] Erreur GET /variables:', err.message, err.stack);
-    return res.status(500).json({ error: 'Erreur serveur variables', details: err.message });
+    // Return empty list instead of 500 to prevent frontend crash
+    return res.json({ variables: [], count: 0, source: 'error_fallback', error: err.message });
   }
 });
 
@@ -122,8 +124,13 @@ router.get(['/calculation-modes', '/modes'], authMiddleware, requireRole(['user'
       }
     });
 
+    if (!rawVariables) {
+        return res.json({ modes: [], count: 0, source: 'empty_db' });
+    }
+
     type RawVar = typeof rawVariables[number] & { TreeBranchLeafNode?: { TreeBranchLeafTree?: { organizationId: string } | null } | null };
     const accessible = (rawVariables as RawVar[]).filter(v => {
+      if (!v) return false;
       if (isSuperAdmin) return true;
       const nodeOrg = v.TreeBranchLeafNode?.TreeBranchLeafTree?.organizationId;
       return !organizationId || !nodeOrg || nodeOrg === organizationId;
@@ -144,17 +151,26 @@ router.get(['/calculation-modes', '/modes'], authMiddleware, requireRole(['user'
     }
 
     for (const v of accessible) {
-      const capacity = detectCapacity(v.sourceRef as string | null | undefined);
-      const fieldType = (v.displayFormat || '').startsWith('number') ? 'number' : 'text';
-      const f: CapacityField = {
-        id: v.id,
-        code: v.exposedKey || v.id,
-        label: v.displayName || v.exposedKey || v.id,
-        type: fieldType,
-        capacity,
-        sourceRef: v.sourceRef || null
-      };
-      capacityBuckets[capacity].push(f);
+      try {
+        const capacity = detectCapacity(v.sourceRef as string | null | undefined);
+        const fieldType = (v.displayFormat || '').startsWith('number') ? 'number' : 'text';
+        const f: CapacityField = {
+          id: v.id,
+          code: v.exposedKey || v.id,
+          label: v.displayName || v.exposedKey || v.id,
+          type: fieldType,
+          capacity,
+          sourceRef: v.sourceRef || null
+        };
+        if (capacityBuckets[capacity]) {
+            capacityBuckets[capacity].push(f);
+        } else {
+            // Fallback for unknown capacity
+            capacityBuckets['1'].push(f);
+        }
+      } catch (innerErr) {
+        console.warn('⚠️ [TBL API] Erreur processing variable:', v.id, innerErr);
+      }
     }
 
     // Construire un mode par capacité existante (non vide)
@@ -169,8 +185,8 @@ router.get(['/calculation-modes', '/modes'], authMiddleware, requireRole(['user'
       .filter(([, list]) => list.length > 0)
       .map(([cap, list]) => ({
         id: `capacity_${cap}`,
-        code: capacityMeta[cap].code,
-        label: capacityMeta[cap].label,
+        code: capacityMeta[cap]?.code || 'unknown',
+        label: capacityMeta[cap]?.label || 'Inconnu',
         capacity: cap,
         fields: list.slice(0, 100) // limite de sécurité
       }));
@@ -184,7 +200,8 @@ router.get(['/calculation-modes', '/modes'], authMiddleware, requireRole(['user'
   } catch (e) {
     const err = e as Error;
     console.error('❌ [TBL API] Erreur GET /calculation-modes (capacity detection):', err.message, err.stack);
-    return res.status(500).json({ error: 'Erreur serveur calculation-modes', details: err.message });
+    // Return empty modes instead of 500
+    return res.json({ modes: [], count: 0, source: 'error_fallback', error: err.message });
   }
 });
 

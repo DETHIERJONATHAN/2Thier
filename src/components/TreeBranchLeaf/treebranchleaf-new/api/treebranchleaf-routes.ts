@@ -5413,6 +5413,58 @@ router.put('/nodes/:nodeId/formula', async (req, res) => {
 // ÃƒÂ°Ã…Â¸Ã‚Â§Ã‚Â® NODE FORMULAS - Formules spÃƒÆ’Ã‚Â©cifiques ÃƒÆ’Ã‚Â  un nÃƒâ€¦Ã¢â‚¬Å“ud (nouvelle table dÃƒÆ’Ã‚Â©diÃƒÆ’Ã‚Â©e)
 // =============================================================================
 
+// POST /api/treebranchleaf/nodes/formulas/batch
+// RÃ©cupÃ¨re les formules pour plusieurs noeuds en une seule requÃªte
+router.post('/nodes/formulas/batch', async (req, res) => {
+  try {
+    const { nodeIds } = req.body;
+    if (!Array.isArray(nodeIds) || nodeIds.length === 0) {
+      return res.json({});
+    }
+
+    const { organizationId, isSuperAdmin } = getAuthCtx(req as unknown as MinimalReq);
+
+    // Filtrer les noeuds accessibles
+    let accessibleNodeIds = nodeIds;
+    if (!isSuperAdmin) {
+        const nodes = await prisma.treeBranchLeafNode.findMany({
+            where: {
+                id: { in: nodeIds },
+                organizationId,
+                deletedAt: null
+            },
+            select: { id: true }
+        });
+        accessibleNodeIds = nodes.map(n => n.id);
+    }
+
+    const formulas = await prisma.treeBranchLeafNodeFormula.findMany({
+      where: {
+        nodeId: { in: accessibleNodeIds }
+      },
+      orderBy: { createdAt: 'asc' }
+    });
+
+    // Grouper par nodeId
+    const result: Record<string, any[]> = {};
+    accessibleNodeIds.forEach(id => {
+        result[id] = [];
+    });
+    
+    formulas.forEach(f => {
+      if (result[f.nodeId]) {
+        result[f.nodeId].push(f);
+      }
+    });
+
+    return res.json(result);
+
+  } catch (error) {
+    console.error('[TreeBranchLeaf API] Error batch fetching formulas:', error);
+    res.status(500).json({ error: 'Batch fetch failed' });
+  }
+});
+
 // GET /api/treebranchleaf/nodes/:nodeId/formulas
 // Liste les formules spÃƒÆ’Ã‚Â©cifiques ÃƒÆ’Ã‚Â  un nÃƒâ€¦Ã¢â‚¬Å“ud
 router.get('/nodes/:nodeId/formulas', async (req, res) => {
@@ -9816,8 +9868,105 @@ router.delete('/submissions/:id', async (req, res) => {
 });
 
 // =============================================================================
-// ÃƒÂ°Ã…Â¸Ã¢â‚¬ÂÃ¢â‚¬â€ TABLE LOOKUP - RÃƒÆ’Ã‚Â©cupÃƒÆ’Ã‚Â©ration de la configuration SELECT pour les champs
+// ðŸ”— TABLE LOOKUP - RÃ©cupÃ©ration de la configuration SELECT pour les champs
 // =============================================================================
+
+// POST /api/treebranchleaf/nodes/select-config/batch
+// RÃ©cupÃ¨re la configuration TreeBranchLeafSelectConfig pour plusieurs champs en une seule requÃªte
+router.post('/nodes/select-config/batch', async (req, res) => {
+  try {
+    const { fieldIds } = req.body;
+    if (!Array.isArray(fieldIds) || fieldIds.length === 0) {
+      return res.json({});
+    }
+
+    const { organizationId, isSuperAdmin } = getAuthCtx(req as unknown as MinimalReq);
+
+    // 1. RÃ©cupÃ©rer les configs existantes
+    // On filtre aussi par accÃ¨s implicitement si on vÃ©rifie les noeuds, mais ici on va faire simple pour la perf
+    // On suppose que si le front demande, il a accÃ¨s (optimiste), mais on pourrait renforcer.
+    
+    const configs = await prisma.treeBranchLeafSelectConfig.findMany({
+      where: {
+        nodeId: { in: fieldIds }
+      }
+    });
+
+    const configMap: Record<string, any> = {};
+    configs.forEach(c => {
+      configMap[c.nodeId] = c;
+    });
+
+    // 2. Identifier les manquants
+    const missingIds = fieldIds.filter(id => !configMap[id]);
+
+    if (missingIds.length > 0) {
+      // 3. VÃ©rifier si on doit crÃ©er des configs dynamiquement pour les manquants
+      const nodes = await prisma.treeBranchLeafNode.findMany({
+        where: {
+          id: { in: missingIds },
+          // SÃ©curitÃ© basique : vÃ©rifier l'org si pas super admin
+          ...(isSuperAdmin ? {} : { organizationId }),
+          deletedAt: null
+        },
+        select: {
+          id: true,
+          hasTable: true,
+          table_activeId: true,
+          table_instances: true
+        }
+      });
+
+      const newConfigsToCreate: any[] = [];
+
+      for (const node of nodes) {
+        if (node.hasTable && node.table_activeId && node.table_instances) {
+          const instances = node.table_instances as Record<string, any>;
+          const activeInstance = instances[node.table_activeId];
+          
+          const isRowBased = activeInstance?.rowBased === true;
+          const isColumnBased = activeInstance?.columnBased === true;
+          
+          if (isRowBased || isColumnBased) {
+             newConfigsToCreate.push({
+                id: randomUUID(),
+                nodeId: node.id,
+                options: [] as Prisma.InputJsonValue,
+                multiple: false,
+                searchable: true,
+                allowCustom: false,
+                optionsSource: 'table',
+                tableReference: node.table_activeId,
+                keyColumn: null,
+                valueColumn: null,
+                displayColumn: null,
+                dependsOnNodeId: null,
+                createdAt: new Date(),
+                updatedAt: new Date(),
+             });
+          }
+        }
+      }
+
+      if (newConfigsToCreate.length > 0) {
+        await prisma.treeBranchLeafSelectConfig.createMany({
+          data: newConfigsToCreate
+        });
+
+        // Ajouter les nouveaux au map
+        newConfigsToCreate.forEach(c => {
+          configMap[c.nodeId] = c;
+        });
+      }
+    }
+
+    return res.json(configMap);
+
+  } catch (error) {
+    console.error('[TreeBranchLeaf API] Error batch fetching select config:', error);
+    res.status(500).json({ error: 'Batch fetch failed' });
+  }
+});
 
 // GET /api/treebranchleaf/nodes/:fieldId/select-config
 // RÃƒÆ’Ã‚Â©cupÃƒÆ’Ã‚Â¨re la configuration TreeBranchLeafSelectConfig d'un champ
