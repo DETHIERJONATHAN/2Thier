@@ -1,52 +1,53 @@
-# Configuration Cloud Build pour Google Cloud Run
-# Utilise Artifact Registry (europe-west1-docker.pkg.dev) au lieu de gcr.io
+# ⚡ SOURCE DEPLOY - Cloud Run (sans Dockerfile)
+# Cloud Build génère automatiquement le conteneur via Buildpacks
 
 steps:
-  # Build the container image
-  - name: 'gcr.io/cloud-builders/docker'
-    args: ['build', '-t', 'europe-west1-docker.pkg.dev/$PROJECT_ID/crm-2thier/app:latest', '.']
+  # 1. Setup Node.js
+  - name: 'gcr.io/cloud-builders/npm'
+    args: ['ci']
   
-  # Push the container image to Artifact Registry
-  - name: 'gcr.io/cloud-builders/docker'
-    args: ['push', 'europe-west1-docker.pkg.dev/$PROJECT_ID/crm-2thier/app:latest']
+  # 2. Generate Prisma Client
+  - name: 'gcr.io/cloud-builders/npm'
+    args: ['run', 'prisma:generate']
+    env:
+      - 'DATABASE_URL=dummy'  # Prisma generate ne nécessite pas une DB valide
   
-  # Deploy container image to Cloud Run
+  # 3. Build application (frontend + backend)
+  - name: 'gcr.io/cloud-builders/npm'
+    args: ['run', 'build']
+  
+  # 4. Deploy to Cloud Run (source deploy)
   - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
     entrypoint: gcloud
     args:
-    - 'run'
-    - 'deploy'
-    - 'crm-api'
-    - '--image'
-    - 'europe-west1-docker.pkg.dev/$PROJECT_ID/crm-2thier/app:latest'
-    - '--region'
-    - 'europe-west1'
-    - '--platform'
-    - 'managed'
-    - '--allow-unauthenticated'
-    - '--port'
-    - '8080'
-    - '--memory'
-    - '2Gi'
-    - '--cpu'
-    - '2'
-    - '--min-instances'
-    - '1'
-    - '--max-instances'
-    - '10'
-    - '--timeout'
-    - '300'
-    - '--concurrency'
-    - '80'
-    - '--add-cloudsql-instances'
-    - 'thiernew:europe-west1:crm-postgres-prod'
-    - '--set-env-vars'
-    - 'NODE_ENV=production,PGHOST=/cloudsql/thiernew:europe-west1:crm-postgres-prod,PGDATABASE=2thier,PGUSER=postgres,FRONTEND_URL=https://app.2thier.be,BACKEND_URL=https://app.2thier.be'
-    - '--update-secrets'
-    - 'PGPASSWORD=crm-postgres-password:latest,JWT_SECRET=JWT_SECRET:latest,SESSION_SECRET=SESSION_SECRET:latest,ENCRYPTION_KEY=ENCRYPTION_KEY:latest,CRYPTO_SECRET_KEY=CRYPTO_SECRET_KEY:latest,GOOGLE_AI_API_KEY=GOOGLE_AI_API_KEY:latest,GOOGLE_CLIENT_ID=GOOGLE_CLIENT_ID:latest,GOOGLE_CLIENT_SECRET=GOOGLE_CLIENT_SECRET:latest'
-
-images:
-- 'europe-west1-docker.pkg.dev/$PROJECT_ID/crm-2thier/app:latest'
+      - 'run'
+      - 'deploy'
+      - 'crm-api'
+      - '--source'
+      - '.'
+      - '--region'
+      - 'europe-west1'
+      - '--platform'
+      - 'managed'
+      - '--allow-unauthenticated'
+      - '--memory'
+      - '2Gi'
+      - '--cpu'
+      - '2'
+      - '--min-instances'
+      - '1'
+      - '--max-instances'
+      - '10'
+      - '--timeout'
+      - '300'
+      - '--concurrency'
+      - '80'
+      - '--add-cloudsql-instances'
+      - 'thiernew:europe-west1:crm-postgres-prod'
+      - '--set-env-vars'
+      - 'NODE_ENV=production,PORT=8080,PGHOST=/cloudsql/thiernew:europe-west1:crm-postgres-prod,PGDATABASE=2thier,PGUSER=postgres,FRONTEND_URL=https://app.2thier.be,BACKEND_URL=https://app.2thier.be'
+      - '--update-secrets'
+      - 'PGPASSWORD=crm-postgres-password:latest,JWT_SECRET=JWT_SECRET:latest,SESSION_SECRET=SESSION_SECRET:latest,ENCRYPTION_KEY=ENCRYPTION_KEY:latest,CRYPTO_SECRET_KEY=CRYPTO_SECRET_KEY:latest,GOOGLE_AI_API_KEY=GOOGLE_AI_API_KEY:latest,GOOGLE_CLIENT_ID=GOOGLE_CLIENT_ID:latest,GOOGLE_CLIENT_SECRET=GOOGLE_CLIENT_SECRET:latest'
 
 options:
   logging: CLOUD_LOGGING_ONLY

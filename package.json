@@ -8,6 +8,7 @@
   "type": "module",
   "scripts": {
     "gcp-build": "npm run build",
+    "prisma:generate": "prisma generate",
     "dev:server": "tsx watch --clear-screen=false --env-file=.env src/api-server-clean.ts",
     "dev:client": "vite",
     "dev": "concurrently \"npm:dev:server\" \"npm:dev:client\"",
@@ -34,7 +35,7 @@
     "build:client": "tsc -p tsconfig.build.json && vite build",
     "build:analyze": "ANALYZE=true vite build",
     "preview": "vite preview",
-    "start": "NODE_ENV=production node dist-server/api-server-clean.cjs",
+    "start": "sh -c 'npx prisma migrate deploy && NODE_ENV=production node dist-server/api-server-clean.cjs'",
     "prod": "npm run build && npm run start",
     "test:ai": "tsx scripts/test-ai-calendar.ts",
     "test:ai:extended": "tsx scripts/test-ai-extended.ts",
