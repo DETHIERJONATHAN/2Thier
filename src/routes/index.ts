@@ -73,6 +73,7 @@ import integrationsRoutes from './integrations'; // 🔌 Intégrations (advertis
 import publicLeadsRoutes from './publicLeads'; // 🌍 API publique leads
 import documentsRoutes from './documents'; // 📄 Routes documents (templates, génération PDF)
 import syncTempRoutes from './sync-temp'; // 🔄 TEMPORAIRE: Sync documents
+import { authenticateToken, fetchFullUser } from '../middleware/auth'; // 🔐 Middleware auth pour TBL
 
 const apiRouter = Router();
 
@@ -280,7 +281,8 @@ apiRouter.use('/dynamic-formulas', dynamicFormulasRoutes);
 
 
 // Routes TreeBranchLeaf 🌳 NOUVEAU système centralisé
-apiRouter.use('/treebranchleaf', treeBranchLeafNewRoutes);
+// 🔐 Appliquer authenticateToken + fetchFullUser pour que req.user.role soit disponible
+apiRouter.use('/treebranchleaf', authenticateToken, fetchFullUser, treeBranchLeafNewRoutes);
 
 
 // Routes TreeBranchLeaf V2 🌳 (DÉSACTIVÉ - Migration vers architecture centralisée)
