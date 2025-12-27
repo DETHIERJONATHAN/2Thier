@@ -1668,6 +1668,7 @@ model TreeBranchLeafNode {
 
   // Relation vers la variable exposée (1-to-1)
   TreeBranchLeafNodeVariable  TreeBranchLeafNodeVariable?
+  TreeBranchLeafNodeTable     TreeBranchLeafNodeTable[]
 
   @@index([api_activeId])
   @@index([condition_activeId])
@@ -1755,6 +1756,11 @@ model TreeBranchLeafNodeTable {
   columnCount          Int      @default(0)
   rowCount             Int      @default(0)
 
+  // Relations
+  TreeBranchLeafNode TreeBranchLeafNode @relation(fields: [nodeId], references: [id], onDelete: Cascade)
+  tableColumns       TreeBranchLeafNodeTableColumn[]
+  tableRows          TreeBranchLeafNodeTableRow[]
+
   @@unique([nodeId, name])
   @@index([lookupSelectColumn])
   @@index([nodeId])
@@ -1771,6 +1777,9 @@ model TreeBranchLeafNodeTableColumn {
   format      String?
   metadata    Json    @default("{}")
 
+  // Relation vers la table parente
+  TreeBranchLeafNodeTable TreeBranchLeafNodeTable @relation(fields: [tableId], references: [id], onDelete: Cascade)
+
   @@unique([tableId, columnIndex])
   @@index([tableId])
 }
@@ -1780,6 +1789,9 @@ model TreeBranchLeafNodeTableRow {
   tableId  String
   cells    Json
   rowIndex Int
+
+  // Relation vers la table parente
+  TreeBranchLeafNodeTable TreeBranchLeafNodeTable @relation(fields: [tableId], references: [id], onDelete: Cascade)
 
   @@unique([tableId, rowIndex])
   @@index([tableId])
