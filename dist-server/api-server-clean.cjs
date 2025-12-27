@@ -61704,6 +61704,39 @@ if (process.env.NODE_ENV === "production") {
         res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
       }
     }));
+    app.get(/^\/[^/]+\.(png|jpg|jpeg|gif|svg|ico|webp|js|css|woff|woff2|ttf|eot|json|webmanifest|html|txt|xml)$/i, (req2, res, next) => {
+      const filePath = import_path7.default.join(distDir, req2.path);
+      if (import_fs7.default.existsSync(filePath)) {
+        const ext = import_path7.default.extname(req2.path).toLowerCase();
+        const mimeTypes = {
+          ".png": "image/png",
+          ".jpg": "image/jpeg",
+          ".jpeg": "image/jpeg",
+          ".gif": "image/gif",
+          ".svg": "image/svg+xml",
+          ".ico": "image/x-icon",
+          ".webp": "image/webp",
+          ".js": "application/javascript",
+          ".css": "text/css",
+          ".woff": "font/woff",
+          ".woff2": "font/woff2",
+          ".ttf": "font/ttf",
+          ".eot": "application/vnd.ms-fontobject",
+          ".json": "application/json",
+          ".webmanifest": "application/manifest+json",
+          ".html": "text/html",
+          ".txt": "text/plain",
+          ".xml": "application/xml"
+        };
+        if (mimeTypes[ext]) {
+          res.setHeader("Content-Type", mimeTypes[ext]);
+        }
+        res.setHeader("Cache-Control", "public, max-age=86400");
+        console.log(`\u{1F4C1} [STATIC] Serving: ${req2.path}`);
+        return res.sendFile(filePath);
+      }
+      next();
+    });
     app.get(/^\/pwa-.*/, (req2, res) => {
       const filePath = import_path7.default.join(distDir, req2.path);
       if (import_fs7.default.existsSync(filePath)) {

@@ -309,6 +309,43 @@ if (process.env.NODE_ENV === 'production') {
       }
     }));
     
+    // 🔥 NOUVEAU: Servir TOUS les fichiers statiques de dist/ (images, JS, CSS, etc.)
+    // Cette route intercepte les fichiers avec extension AVANT le catch-all SPA
+    app.get(/^\/[^/]+\.(png|jpg|jpeg|gif|svg|ico|webp|js|css|woff|woff2|ttf|eot|json|webmanifest|html|txt|xml)$/i, (req, res, next) => {
+      const filePath = path.join(distDir, req.path);
+      if (fs.existsSync(filePath)) {
+        // Définir le bon Content-Type selon l'extension
+        const ext = path.extname(req.path).toLowerCase();
+        const mimeTypes: Record<string, string> = {
+          '.png': 'image/png',
+          '.jpg': 'image/jpeg',
+          '.jpeg': 'image/jpeg',
+          '.gif': 'image/gif',
+          '.svg': 'image/svg+xml',
+          '.ico': 'image/x-icon',
+          '.webp': 'image/webp',
+          '.js': 'application/javascript',
+          '.css': 'text/css',
+          '.woff': 'font/woff',
+          '.woff2': 'font/woff2',
+          '.ttf': 'font/ttf',
+          '.eot': 'application/vnd.ms-fontobject',
+          '.json': 'application/json',
+          '.webmanifest': 'application/manifest+json',
+          '.html': 'text/html',
+          '.txt': 'text/plain',
+          '.xml': 'application/xml'
+        };
+        if (mimeTypes[ext]) {
+          res.setHeader('Content-Type', mimeTypes[ext]);
+        }
+        res.setHeader('Cache-Control', 'public, max-age=86400'); // 1 jour
+        console.log(`📁 [STATIC] Serving: ${req.path}`);
+        return res.sendFile(filePath);
+      }
+      next();
+    });
+    
     // Servir aussi les fichiers PWA et favicon à la racine du dist
     app.get(/^\/pwa-.*/, (req, res) => {
       const filePath = path.join(distDir, req.path);
