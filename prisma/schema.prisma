@@ -1042,6 +1042,7 @@ model Organization {
   TelnyxUserConfig         TelnyxUserConfig[]
   TimelineEvent            TimelineEvent[]
   UserOrganization         UserOrganization[]
+  UserFavoriteModule       UserFavoriteModule[]
   contact_submissions      contact_submissions[]
   websites                 websites[]
 }
@@ -2062,6 +2063,7 @@ model User {
   TelnyxUserConfig                                    TelnyxUserConfig?
   UserOrganization                                    UserOrganization[]
   UserService                                         UserService[]
+  UserFavoriteModule                                  UserFavoriteModule[]
   website_blog_posts                                  website_blog_posts[]
   website_media_files                                 website_media_files[]
 }
@@ -2479,4 +2481,19 @@ enum UserOrganizationStatus {
   ACTIVE
   INACTIVE
   REJECTED
+}
+
+model UserFavoriteModule {
+  id             String       @id @default(cuid())
+  userId         String
+  organizationId String
+  moduleKey      String       // Ex: "leads", "dashboard", "email", etc.
+  createdAt      DateTime     @default(now())
+  
+  User           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  Organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, organizationId, moduleKey])
+  @@index([userId])
+  @@index([organizationId])
 }

@@ -42,6 +42,7 @@ import {
   BankOutlined
 } from '@ant-design/icons';
 import { useAuth } from '../../auth/useAuth';
+import { useAuthenticatedApi } from '../../hooks/useAuthenticatedApi';
 import { useSharedSections } from '../../hooks/useSharedSections';
 import { organizeModulesInSections } from '../../utils/modulesSections';
 
@@ -167,31 +168,65 @@ const MainLayout: React.FC<MainLayoutProps> = ({
 
   // État des favoris
   const [favoriteModules, setFavoriteModules] = useState<string[]>([]);
+  const [loadingFavorites, setLoadingFavorites] = useState(true);
   
-  // Charger les favoris depuis le localStorage
+  // Hook pour l'API authentifiée
+  const { api } = useAuthenticatedApi();
+  
+  // Charger les favoris depuis l'API (lié à l'utilisateur et l'organisation)
   useEffect(() => {
-    const savedFavorites = localStorage.getItem(`favorites_${user?.id || 'guest'}`);
-    if (savedFavorites) {
-      setFavoriteModules(JSON.parse(savedFavorites));
-    }
-  }, [user?.id]);
+    const loadFavorites = async () => {
+      if (!user?.id) {
+        setLoadingFavorites(false);
+        return;
+      }
+
+      try {
+        const response = await api.get('/user/favorites');
+        if (response && response.favorites) {
+          setFavoriteModules(response.favorites);
+          console.log('⭐ [Favoris] Chargés:', response.favorites);
+        }
+      } catch (error) {
+        console.error('❌ [Favoris] Erreur chargement:', error);
+        // En cas d'erreur, utiliser un fallback du localStorage pour ne pas bloquer l'UX
+        const savedFavorites = localStorage.getItem(`favorites_${user?.id || 'guest'}`);
+        if (savedFavorites) {
+          setFavoriteModules(JSON.parse(savedFavorites));
+        }
+      } finally {
+        setLoadingFavorites(false);
+      }
+    };
+
+    loadFavorites();
+  }, [user?.id, api]);
 
   // Fonction pour toggler un module en favori
-  const toggleFavorite = useCallback((moduleKey: string, event?: React.MouseEvent) => {
+  const toggleFavorite = useCallback(async (moduleKey: string, event?: React.MouseEvent) => {
     if (event) {
       event.stopPropagation(); // Empêcher la navigation
     }
     
-    setFavoriteModules(prev => {
-      const newFavorites = prev.includes(moduleKey) 
-        ? prev.filter(key => key !== moduleKey)
-        : [...prev, moduleKey];
-      
-      // Sauvegarder dans localStorage
-      localStorage.setItem(`favorites_${user?.id || 'guest'}`, JSON.stringify(newFavorites));
-      return newFavorites;
-    });
-  }, [user?.id]);
+    const isFavorite = favoriteModules.includes(moduleKey);
+    
+    try {
+      if (isFavorite) {
+        // Supprimer des favoris
+        await api.delete(`/user/favorites/${moduleKey}`);
+        setFavoriteModules(prev => prev.filter(key => key !== moduleKey));
+        console.log(`⭐ [Favoris] Supprimé: ${moduleKey}`);
+      } else {
+        // Ajouter aux favoris
+        await api.post('/user/favorites', { moduleKey });
+        setFavoriteModules(prev => [...prev, moduleKey]);
+        console.log(`⭐ [Favoris] Ajouté: ${moduleKey}`);
+      }
+    } catch (error) {
+      console.error('❌ [Favoris] Erreur toggle:', error);
+      // Notification d'erreur optionnelle
+    }
+  }, [favoriteModules, api]);
 
   // Utiliser directement useSharedSections pour la synchronisation en temps réel
   const { sections: sharedSections } = useSharedSections();

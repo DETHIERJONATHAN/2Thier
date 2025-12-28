@@ -46,21 +46,21 @@ function buildDatabaseUrl() {
   }
   const user = process.env.PGUSER || "postgres";
   const password = process.env.PGPASSWORD || "";
-  const db2 = process.env.PGDATABASE || "2thier";
+  const db3 = process.env.PGDATABASE || "2thier";
   const host = process.env.PGHOST || "localhost";
   const port2 = process.env.PGPORT || "5432";
   if (host.startsWith("/cloudsql/")) {
     const encodedPwd2 = encodeURIComponent(password);
-    const url = `postgresql://${user}:${encodedPwd2}@localhost/${db2}?host=${encodeURIComponent(host)}`;
+    const url = `postgresql://${user}:${encodedPwd2}@localhost/${db3}?host=${encodeURIComponent(host)}`;
     console.warn("[Database] Connexion via Unix socket Cloud SQL:", {
       PGUSER: user,
-      PGDATABASE: db2,
+      PGDATABASE: db3,
       PGHOST: host
     });
     return url;
   }
   const encodedPwd = encodeURIComponent(password);
-  return `postgresql://${user}:${encodedPwd}@${host}:${port2}/${db2}`;
+  return `postgresql://${user}:${encodedPwd}@${host}:${port2}/${db3}`;
 }
 function createPrismaInstance() {
   if (globalForDb.__db_instance) {
@@ -4030,7 +4030,7 @@ __export(api_server_clean_exports, {
 });
 module.exports = __toCommonJS(api_server_clean_exports);
 var import_dotenv = __toESM(require("dotenv"), 1);
-var import_express90 = __toESM(require("express"), 1);
+var import_express91 = __toESM(require("express"), 1);
 var import_path7 = __toESM(require("path"), 1);
 var import_fs7 = __toESM(require("fs"), 1);
 var import_cors = __toESM(require("cors"), 1);
@@ -5012,8 +5012,8 @@ var GoogleGmailService = class _GoogleGmailService {
    */
   async loadOrganizationInfo() {
     try {
-      const { db: db2 } = await Promise.resolve().then(() => (init_database(), database_exports));
-      const organization = await db2.organization.findUnique({
+      const { db: db3 } = await Promise.resolve().then(() => (init_database(), database_exports));
+      const organization = await db3.organization.findUnique({
         where: { id: this.organizationId },
         include: {
           GoogleWorkspaceConfig: true
@@ -28049,8 +28049,8 @@ function getOrgId(req2) {
   const headerOrg = req2.headers?.["x-organization-id"] || req2.headers?.["x-organization"] || req2.headers?.["organization-id"];
   return user.organizationId || headerOrg || null;
 }
-function registerSumDisplayFieldRoutes(router87) {
-  router87.post("/trees/:treeId/nodes/:nodeId/sum-display-field", async (req2, res) => {
+function registerSumDisplayFieldRoutes(router88) {
+  router88.post("/trees/:treeId/nodes/:nodeId/sum-display-field", async (req2, res) => {
     try {
       const { treeId, nodeId } = req2.params;
       const organizationId = getOrgId(req2);
@@ -28307,7 +28307,7 @@ function registerSumDisplayFieldRoutes(router87) {
       res.status(500).json({ error: "Erreur lors de la cr\xC3\u0192\xC2\xA9ation du champ Total", details: errMsg });
     }
   });
-  router87.delete("/trees/:treeId/nodes/:nodeId/sum-display-field", async (req2, res) => {
+  router88.delete("/trees/:treeId/nodes/:nodeId/sum-display-field", async (req2, res) => {
     try {
       const { treeId, nodeId } = req2.params;
       const organizationId = getOrgId(req2);
@@ -28369,9 +28369,9 @@ function registerSumDisplayFieldRoutes(router87) {
   });
 }
 async function updateSumDisplayFieldAfterCopyChange(sourceNodeId, prismaClient) {
-  const db2 = prismaClient || prisma28;
+  const db3 = prismaClient || prisma28;
   try {
-    const sourceNode = await db2.treeBranchLeafNode.findUnique({
+    const sourceNode = await db3.treeBranchLeafNode.findUnique({
       where: { id: sourceNodeId },
       select: {
         id: true,
@@ -28386,13 +28386,13 @@ async function updateSumDisplayFieldAfterCopyChange(sourceNodeId, prismaClient) 
     if (!hasSum || !sumFieldNodeId) {
       return;
     }
-    const mainVariable = await db2.treeBranchLeafNodeVariable.findUnique({
+    const mainVariable = await db3.treeBranchLeafNodeVariable.findUnique({
       where: { nodeId: sourceNodeId },
       select: { id: true, exposedKey: true, displayName: true }
     });
     if (!mainVariable) return;
     const baseExposedKey = mainVariable.exposedKey.replace(/-\d+$/, "");
-    const allCopies = await db2.treeBranchLeafNodeVariable.findMany({
+    const allCopies = await db3.treeBranchLeafNodeVariable.findMany({
       where: {
         OR: [
           { exposedKey: baseExposedKey },
@@ -28415,14 +28415,14 @@ async function updateSumDisplayFieldAfterCopyChange(sourceNodeId, prismaClient) 
       tokens: sumTokens,
       description: `Somme automatique de toutes les copies de ${mainVariable.displayName}`
     };
-    const sumNodeExists = await db2.treeBranchLeafNode.findUnique({
+    const sumNodeExists = await db3.treeBranchLeafNode.findUnique({
       where: { id: sumFieldNodeId },
       select: { id: true }
     });
     if (!sumNodeExists) {
       return;
     }
-    await db2.treeBranchLeafNodeFormula.upsert({
+    await db3.treeBranchLeafNodeFormula.upsert({
       where: { id: sumFormulaId },
       update: { tokens: sumTokens, updatedAt: now },
       create: {
@@ -28435,7 +28435,7 @@ async function updateSumDisplayFieldAfterCopyChange(sourceNodeId, prismaClient) 
       }
     });
     const copyNodeIds = allCopies.map((c) => c.nodeId);
-    const copyNodes = await db2.treeBranchLeafNode.findMany({
+    const copyNodes = await db3.treeBranchLeafNode.findMany({
       where: { id: { in: copyNodeIds } },
       select: { id: true, calculatedValue: true }
     });
@@ -28443,12 +28443,12 @@ async function updateSumDisplayFieldAfterCopyChange(sourceNodeId, prismaClient) 
     for (const node of copyNodes) {
       newCalculatedValue += parseFloat(String(node.calculatedValue)) || 0;
     }
-    const sumNode = await db2.treeBranchLeafNode.findUnique({
+    const sumNode = await db3.treeBranchLeafNode.findUnique({
       where: { id: sumFieldNodeId },
       select: { metadata: true }
     });
     if (sumNode) {
-      await db2.treeBranchLeafNode.update({
+      await db3.treeBranchLeafNode.update({
         where: { id: sumFieldNodeId },
         data: {
           updatedAt: now,
@@ -60838,10 +60838,10 @@ function normalizeMetadata(metadata) {
 
 // src/components/TreeBranchLeaf/treebranchleaf-new/api/repeat/repeat-routes.ts
 function createRepeatRouter(prisma51) {
-  const router87 = (0, import_express89.Router)();
+  const router88 = (0, import_express89.Router)();
   const inFlightExecuteByRepeater = /* @__PURE__ */ new Set();
-  router87.use(authenticateToken);
-  router87.post("/:repeaterNodeId/instances", async (req2, res) => {
+  router88.use(authenticateToken);
+  router88.post("/:repeaterNodeId/instances", async (req2, res) => {
     const { repeaterNodeId } = req2.params;
     const body2 = req2.body || {};
     try {
@@ -60873,7 +60873,7 @@ function createRepeatRouter(prisma51) {
       });
     }
   });
-  router87.post("/:repeaterNodeId/instances/execute", async (req2, res) => {
+  router88.post("/:repeaterNodeId/instances/execute", async (req2, res) => {
     const { repeaterNodeId } = req2.params;
     const body2 = req2.body || {};
     if (inFlightExecuteByRepeater.has(repeaterNodeId)) {
@@ -60925,8 +60925,122 @@ function createRepeatRouter(prisma51) {
       inFlightExecuteByRepeater.delete(repeaterNodeId);
     }
   });
-  return router87;
+  return router88;
 }
+
+// src/routes/userFavoritesRoutes.ts
+var import_express90 = require("express");
+var import_database56 = require("@/lib/database");
+var import_api_server_clean = require("@/api-server-clean");
+var router87 = (0, import_express90.Router)();
+router87.get("/", import_api_server_clean.authMiddleware, async (req2, res) => {
+  try {
+    const userId = req2.user?.id;
+    const organizationId = req2.user?.organizationId;
+    if (!userId || !organizationId) {
+      return res.status(401).json({ error: "Non authentifi\xE9" });
+    }
+    console.log(`[UserFavorites] GET /favorites - userId: ${userId}, orgId: ${organizationId}`);
+    const favorites = await import_database56.db.userFavoriteModule.findMany({
+      where: {
+        userId,
+        organizationId
+      },
+      select: {
+        moduleKey: true,
+        createdAt: true
+      },
+      orderBy: {
+        createdAt: "asc"
+      }
+    });
+    const moduleKeys = favorites.map((f) => f.moduleKey);
+    console.log(`[UserFavorites] \u2705 ${moduleKeys.length} favoris trouv\xE9s`, moduleKeys);
+    res.json({ favorites: moduleKeys });
+  } catch (error) {
+    console.error("[UserFavorites] \u274C Erreur GET /favorites:", error);
+    res.status(500).json({
+      error: "Erreur lors de la r\xE9cup\xE9ration des favoris",
+      details: error instanceof Error ? error.message : "Erreur inconnue"
+    });
+  }
+});
+router87.post("/", import_api_server_clean.authMiddleware, async (req2, res) => {
+  try {
+    const userId = req2.user?.id;
+    const organizationId = req2.user?.organizationId;
+    const { moduleKey } = req2.body;
+    if (!userId || !organizationId) {
+      return res.status(401).json({ error: "Non authentifi\xE9" });
+    }
+    if (!moduleKey || typeof moduleKey !== "string") {
+      return res.status(400).json({ error: "moduleKey requis et doit \xEAtre une cha\xEEne" });
+    }
+    console.log(`[UserFavorites] POST /favorites - moduleKey: ${moduleKey}`);
+    const existing = await import_database56.db.userFavoriteModule.findUnique({
+      where: {
+        userId_organizationId_moduleKey: {
+          userId,
+          organizationId,
+          moduleKey
+        }
+      }
+    });
+    if (existing) {
+      console.log(`[UserFavorites] \u26A0\uFE0F Favori d\xE9j\xE0 existant: ${moduleKey}`);
+      return res.status(409).json({ error: "Ce module est d\xE9j\xE0 dans les favoris" });
+    }
+    const favorite = await import_database56.db.userFavoriteModule.create({
+      data: {
+        userId,
+        organizationId,
+        moduleKey
+      }
+    });
+    console.log(`[UserFavorites] \u2705 Favori cr\xE9\xE9: ${moduleKey}`);
+    res.status(201).json({ favorite: favorite.moduleKey });
+  } catch (error) {
+    console.error("[UserFavorites] \u274C Erreur POST /favorites:", error);
+    res.status(500).json({
+      error: "Erreur lors de l'ajout du favori",
+      details: error instanceof Error ? error.message : "Erreur inconnue"
+    });
+  }
+});
+router87.delete("/:moduleKey", import_api_server_clean.authMiddleware, async (req2, res) => {
+  try {
+    const userId = req2.user?.id;
+    const organizationId = req2.user?.organizationId;
+    const { moduleKey } = req2.params;
+    if (!userId || !organizationId) {
+      return res.status(401).json({ error: "Non authentifi\xE9" });
+    }
+    if (!moduleKey) {
+      return res.status(400).json({ error: "moduleKey requis" });
+    }
+    console.log(`[UserFavorites] DELETE /favorites/:${moduleKey}`);
+    const deleted = await import_database56.db.userFavoriteModule.deleteMany({
+      where: {
+        userId,
+        organizationId,
+        moduleKey
+      }
+    });
+    if (deleted.count === 0) {
+      console.log(`[UserFavorites] \u26A0\uFE0F Favori non trouv\xE9: ${moduleKey}`);
+      return res.status(404).json({ error: "Ce favori n'existe pas" });
+    }
+    console.log(`[UserFavorites] \u2705 Favori supprim\xE9: ${moduleKey}`);
+    res.json({ message: "Favori supprim\xE9 avec succ\xE8s" });
+  } catch (error) {
+    console.error("[UserFavorites] \u274C Erreur DELETE /favorites/:moduleKey:", error);
+    res.status(500).json({
+      error: "Erreur lors de la suppression du favori",
+      details: error instanceof Error ? error.message : "Erreur inconnue"
+    });
+  }
+});
+var userFavoritesRoutes_default = router87;
 
 // src/middleware/websiteDetection.ts
 init_prisma();
@@ -61505,7 +61619,7 @@ logSecurityEvent("SERVER_STARTUP", {
   environment: process.env.NODE_ENV || "development",
   securityLevel: "ENTERPRISE"
 }, "info");
-var app = (0, import_express90.default)();
+var app = (0, import_express91.default)();
 app.set("trust proxy", 1);
 var port = Number(process.env.PORT || 8080);
 var BUILD_VERSION = process.env.BUILD_VERSION || "dev-local";
@@ -61597,7 +61711,7 @@ app.use((0, import_cors.default)({
   exposedHeaders: ["X-Total-Count", "X-Rate-Limit-Remaining", "x-organization-id"]
 }));
 app.use(inputSanitization);
-app.use(import_express90.default.json({
+app.use(import_express91.default.json({
   limit: "50mb",
   verify: (req2, res, buf) => {
     try {
@@ -61611,7 +61725,7 @@ app.use(import_express90.default.json({
     }
   }
 }));
-app.use(import_express90.default.urlencoded({ extended: true, limit: "50mb" }));
+app.use(import_express91.default.urlencoded({ extended: true, limit: "50mb" }));
 app.use((0, import_cookie_parser.default)());
 app.use((0, import_express_session.default)({
   secret: process.env.SESSION_SECRET || "crm-dev-secret-2024",
@@ -61637,7 +61751,7 @@ app.use("/uploads", (req2, res, next) => {
   res.setHeader("Access-Control-Allow-Headers", "Content-Type");
   res.setHeader("Cross-Origin-Resource-Policy", "cross-origin");
   next();
-}, import_express90.default.static(uploadsDir, {
+}, import_express91.default.static(uploadsDir, {
   maxAge: "1h",
   // Cache 1 heure
   etag: true,
@@ -61667,6 +61781,7 @@ app.use("/api/tbl", tbl_submission_evaluator_default);
 app.use("/api/tbl/batch", tbl_batch_routes_default);
 app.use("/api/batch", batch_routes_default);
 app.use("/api/tree-nodes", calculatedValueController_default);
+app.use("/api/user/favorites", userFavoritesRoutes_default);
 var repeatRouter = createRepeatRouter(db);
 app.use("/api/treebranchleaf/repeat", repeatRouter);
 app.use("/api/repeat", repeatRouter);
@@ -61694,7 +61809,7 @@ if (process.env.NODE_ENV === "production") {
   if (import_fs7.default.existsSync(indexHtml)) {
     console.log("\u{1F5C2}\uFE0F [STATIC] Distribution front d\xE9tect\xE9e, activation du serveur statique");
     const assetsDir = import_path7.default.join(distDir, "assets");
-    app.use("/assets", import_express90.default.static(assetsDir, {
+    app.use("/assets", import_express91.default.static(assetsDir, {
       setHeaders: (res) => {
         res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
       }

@@ -43,6 +43,9 @@ import createRepeatRouter from './components/TreeBranchLeaf/treebranchleaf-new/a
 // 📄 ROUTES GESTION DOCUMENTS PDF
 import documentsRouter from './routes/documents'; // 📄 TEMPLATES DE DOCUMENTS (ADMIN)
 
+// 👤 ROUTES UTILISATEURS
+import userFavoritesRouter from './routes/userFavoritesRoutes'; // ⭐ FAVORIS MODULES UTILISATEUR
+
 // 🌐 MIDDLEWARE DÉTECTION SITES VITRINES AUTOMATIQUE
 import { detectWebsite, websiteInterceptor } from './middleware/websiteDetection';
 import { renderWebsite } from './middleware/websiteRenderer';
@@ -263,6 +266,7 @@ app.use('/api/tbl', tblSubmissionEvaluatorRouter); // 🔥 TBL PRISMA EVALUATOR
 app.use('/api/tbl/batch', tblBatchRoutes); // 🚀 BATCH LOADING TBL (réduit ~100 requêtes à 1)
 app.use('/api/batch', batchRoutes); // 🚀 BATCH GLOBAL (Gmail, Leads, Analytics)
 app.use('/api/tree-nodes', calculatedValueController); // 🎯 VALEURS CALCULÉES STOCKÉES DANS PRISMA
+app.use('/api/user/favorites', userFavoritesRouter); // ⭐ FAVORIS MODULES UTILISATEUR
 // ⚠️ SUPPRIMÉ - Déjà monté via apiRouter ligne 249: app.use('/api/treebranchleaf', tableRoutesNewRouter);
 const repeatRouter = createRepeatRouter(prisma);
 app.use('/api/treebranchleaf/repeat', repeatRouter); // 🔁 Compatibilité historique
