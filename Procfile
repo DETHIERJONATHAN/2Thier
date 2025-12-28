@@ -1,1 +1,1 @@
-web: sh entrypoint.sh
+web: node dist-server/api-server-clean.cjs
