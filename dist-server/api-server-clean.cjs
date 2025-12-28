@@ -46,21 +46,21 @@ function buildDatabaseUrl() {
   }
   const user = process.env.PGUSER || "postgres";
   const password = process.env.PGPASSWORD || "";
-  const db3 = process.env.PGDATABASE || "2thier";
+  const db2 = process.env.PGDATABASE || "2thier";
   const host = process.env.PGHOST || "localhost";
   const port2 = process.env.PGPORT || "5432";
   if (host.startsWith("/cloudsql/")) {
     const encodedPwd2 = encodeURIComponent(password);
-    const url = `postgresql://${user}:${encodedPwd2}@localhost/${db3}?host=${encodeURIComponent(host)}`;
+    const url = `postgresql://${user}:${encodedPwd2}@localhost/${db2}?host=${encodeURIComponent(host)}`;
     console.warn("[Database] Connexion via Unix socket Cloud SQL:", {
       PGUSER: user,
-      PGDATABASE: db3,
+      PGDATABASE: db2,
       PGHOST: host
     });
     return url;
   }
   const encodedPwd = encodeURIComponent(password);
-  return `postgresql://${user}:${encodedPwd}@${host}:${port2}/${db3}`;
+  return `postgresql://${user}:${encodedPwd}@${host}:${port2}/${db2}`;
 }
 function createPrismaInstance() {
   if (globalForDb.__db_instance) {
@@ -5012,8 +5012,8 @@ var GoogleGmailService = class _GoogleGmailService {
    */
   async loadOrganizationInfo() {
     try {
-      const { db: db3 } = await Promise.resolve().then(() => (init_database(), database_exports));
-      const organization = await db3.organization.findUnique({
+      const { db: db2 } = await Promise.resolve().then(() => (init_database(), database_exports));
+      const organization = await db2.organization.findUnique({
         where: { id: this.organizationId },
         include: {
           GoogleWorkspaceConfig: true
@@ -28369,9 +28369,9 @@ function registerSumDisplayFieldRoutes(router88) {
   });
 }
 async function updateSumDisplayFieldAfterCopyChange(sourceNodeId, prismaClient) {
-  const db3 = prismaClient || prisma28;
+  const db2 = prismaClient || prisma28;
   try {
-    const sourceNode = await db3.treeBranchLeafNode.findUnique({
+    const sourceNode = await db2.treeBranchLeafNode.findUnique({
       where: { id: sourceNodeId },
       select: {
         id: true,
@@ -28386,13 +28386,13 @@ async function updateSumDisplayFieldAfterCopyChange(sourceNodeId, prismaClient) 
     if (!hasSum || !sumFieldNodeId) {
       return;
     }
-    const mainVariable = await db3.treeBranchLeafNodeVariable.findUnique({
+    const mainVariable = await db2.treeBranchLeafNodeVariable.findUnique({
       where: { nodeId: sourceNodeId },
       select: { id: true, exposedKey: true, displayName: true }
     });
     if (!mainVariable) return;
     const baseExposedKey = mainVariable.exposedKey.replace(/-\d+$/, "");
-    const allCopies = await db3.treeBranchLeafNodeVariable.findMany({
+    const allCopies = await db2.treeBranchLeafNodeVariable.findMany({
       where: {
         OR: [
           { exposedKey: baseExposedKey },
@@ -28415,14 +28415,14 @@ async function updateSumDisplayFieldAfterCopyChange(sourceNodeId, prismaClient) 
       tokens: sumTokens,
       description: `Somme automatique de toutes les copies de ${mainVariable.displayName}`
     };
-    const sumNodeExists = await db3.treeBranchLeafNode.findUnique({
+    const sumNodeExists = await db2.treeBranchLeafNode.findUnique({
       where: { id: sumFieldNodeId },
       select: { id: true }
     });
     if (!sumNodeExists) {
       return;
     }
-    await db3.treeBranchLeafNodeFormula.upsert({
+    await db2.treeBranchLeafNodeFormula.upsert({
       where: { id: sumFormulaId },
       update: { tokens: sumTokens, updatedAt: now },
       create: {
@@ -28435,7 +28435,7 @@ async function updateSumDisplayFieldAfterCopyChange(sourceNodeId, prismaClient) 
       }
     });
     const copyNodeIds = allCopies.map((c) => c.nodeId);
-    const copyNodes = await db3.treeBranchLeafNode.findMany({
+    const copyNodes = await db2.treeBranchLeafNode.findMany({
       where: { id: { in: copyNodeIds } },
       select: { id: true, calculatedValue: true }
     });
@@ -28443,12 +28443,12 @@ async function updateSumDisplayFieldAfterCopyChange(sourceNodeId, prismaClient) 
     for (const node of copyNodes) {
       newCalculatedValue += parseFloat(String(node.calculatedValue)) || 0;
     }
-    const sumNode = await db3.treeBranchLeafNode.findUnique({
+    const sumNode = await db2.treeBranchLeafNode.findUnique({
       where: { id: sumFieldNodeId },
       select: { metadata: true }
     });
     if (sumNode) {
-      await db3.treeBranchLeafNode.update({
+      await db2.treeBranchLeafNode.update({
         where: { id: sumFieldNodeId },
         data: {
           updatedAt: now,
@@ -60930,10 +60930,9 @@ function createRepeatRouter(prisma51) {
 
 // src/routes/userFavoritesRoutes.ts
 var import_express90 = require("express");
-var import_database56 = require("@/lib/database");
-var import_api_server_clean = require("@/api-server-clean");
+init_database();
 var router87 = (0, import_express90.Router)();
-router87.get("/", import_api_server_clean.authMiddleware, async (req2, res) => {
+router87.get("/", authMiddleware, async (req2, res) => {
   try {
     const userId = req2.user?.id;
     const organizationId = req2.user?.organizationId;
@@ -60941,7 +60940,7 @@ router87.get("/", import_api_server_clean.authMiddleware, async (req2, res) => {
       return res.status(401).json({ error: "Non authentifi\xE9" });
     }
     console.log(`[UserFavorites] GET /favorites - userId: ${userId}, orgId: ${organizationId}`);
-    const favorites = await import_database56.db.userFavoriteModule.findMany({
+    const favorites = await db.userFavoriteModule.findMany({
       where: {
         userId,
         organizationId
@@ -60965,7 +60964,7 @@ router87.get("/", import_api_server_clean.authMiddleware, async (req2, res) => {
     });
   }
 });
-router87.post("/", import_api_server_clean.authMiddleware, async (req2, res) => {
+router87.post("/", authMiddleware, async (req2, res) => {
   try {
     const userId = req2.user?.id;
     const organizationId = req2.user?.organizationId;
@@ -60977,7 +60976,7 @@ router87.post("/", import_api_server_clean.authMiddleware, async (req2, res) => 
       return res.status(400).json({ error: "moduleKey requis et doit \xEAtre une cha\xEEne" });
     }
     console.log(`[UserFavorites] POST /favorites - moduleKey: ${moduleKey}`);
-    const existing = await import_database56.db.userFavoriteModule.findUnique({
+    const existing = await db.userFavoriteModule.findUnique({
       where: {
         userId_organizationId_moduleKey: {
           userId,
@@ -60990,7 +60989,7 @@ router87.post("/", import_api_server_clean.authMiddleware, async (req2, res) => 
       console.log(`[UserFavorites] \u26A0\uFE0F Favori d\xE9j\xE0 existant: ${moduleKey}`);
       return res.status(409).json({ error: "Ce module est d\xE9j\xE0 dans les favoris" });
     }
-    const favorite = await import_database56.db.userFavoriteModule.create({
+    const favorite = await db.userFavoriteModule.create({
       data: {
         userId,
         organizationId,
@@ -61007,7 +61006,7 @@ router87.post("/", import_api_server_clean.authMiddleware, async (req2, res) => 
     });
   }
 });
-router87.delete("/:moduleKey", import_api_server_clean.authMiddleware, async (req2, res) => {
+router87.delete("/:moduleKey", authMiddleware, async (req2, res) => {
   try {
     const userId = req2.user?.id;
     const organizationId = req2.user?.organizationId;
@@ -61019,7 +61018,7 @@ router87.delete("/:moduleKey", import_api_server_clean.authMiddleware, async (re
       return res.status(400).json({ error: "moduleKey requis" });
     }
     console.log(`[UserFavorites] DELETE /favorites/:${moduleKey}`);
-    const deleted = await import_database56.db.userFavoriteModule.deleteMany({
+    const deleted = await db.userFavoriteModule.deleteMany({
       where: {
         userId,
         organizationId,
