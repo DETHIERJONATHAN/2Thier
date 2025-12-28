@@ -12,12 +12,15 @@
 
 echo "🚀 Initialisation de l'environnement de développement..."
 
-# 1. Arrêt du proxy existant s'il tourne
-if pgrep -f "cloud-sql-proxy" > /dev/null; then
-    echo "🛑 Arrêt du proxy Cloud SQL existant..."
-    pkill -f "cloud-sql-proxy"
-    sleep 2
-fi
+# 1. Arrêt de TOUS les processus existants (proxy, serveur, vite)
+echo "🛑 Arrêt des processus existants..."
+pkill -f "cloud-sql-proxy" 2>/dev/null
+pkill -f "npm run dev" 2>/dev/null
+pkill -f "vite" 2>/dev/null
+pkill -f "tsx" 2>/dev/null
+pkill -f "node.*api-server" 2>/dev/null
+sleep 2
+echo "✅ Processus arrêtés"
 
 # 2. Vérification de l'authentification gcloud
 echo "🔑 Vérification du token Google Cloud..."

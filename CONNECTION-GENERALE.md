@@ -24,8 +24,15 @@
 bash scripts/start-local.sh
 ```
 
+⚠️ **IMPORTANT** : Le script tue automatiquement tous les processus existants avant de relancer. Si vous avez des problèmes de port déjà utilisé, vous pouvez aussi les tuer manuellement :
+
+```bash
+# Tuer tous les processus manuellement avant de lancer
+pkill -f 'cloud-sql-proxy' ; pkill -f 'npm run dev' ; pkill -f 'vite' ; pkill -f 'tsx'
+```
+
 Ce script fait automatiquement :
-1. ✅ Arrête les anciennes instances du proxy
+1. ✅ **Tue tous les processus existants** (proxy, vite, tsx, npm)
 2. ✅ Vérifie/récupère un token Google Cloud valide
 3. ✅ Démarre le Cloud SQL Proxy sur le port 5432
 4. ✅ Lance `npm run dev` (frontend + backend)
@@ -56,12 +63,15 @@ pkill -f 'npm run dev' && pkill -f 'cloud-sql-proxy'
 
 echo "🚀 Initialisation de l'environnement de développement..."
 
-# 1. Arrêt du proxy existant s'il tourne
-if pgrep -f "cloud-sql-proxy" > /dev/null; then
-    echo "🛑 Arrêt du proxy Cloud SQL existant..."
-    pkill -f "cloud-sql-proxy"
-    sleep 2
-fi
+# 1. Arrêt de TOUS les processus existants (proxy, serveur, vite)
+echo "🛑 Arrêt des processus existants..."
+pkill -f "cloud-sql-proxy" 2>/dev/null
+pkill -f "npm run dev" 2>/dev/null
+pkill -f "vite" 2>/dev/null
+pkill -f "tsx" 2>/dev/null
+pkill -f "node.*api-server" 2>/dev/null
+sleep 2
+echo "✅ Processus arrêtés"
 
 # 2. Vérification de l'authentification gcloud
 echo "🔑 Vérification du token Google Cloud..."
