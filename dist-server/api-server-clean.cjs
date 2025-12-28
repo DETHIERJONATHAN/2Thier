@@ -61603,6 +61603,9 @@ async function initializeTreeBranchLeafSync() {
 
 // src/api-server-clean.ts
 import_dotenv.default.config();
+console.log("\u{1F3AC} [BOOTSTRAP] api-server-clean.cjs loaded at", (/* @__PURE__ */ new Date()).toISOString());
+console.log("\u{1F3AC} [BOOTSTRAP] PORT env:", process.env.PORT || "(not set, using 8080)");
+console.log("\u{1F3AC} [BOOTSTRAP] NODE_ENV:", process.env.NODE_ENV || "development");
 console.log("\u{1F680} [API-SERVER-CLEAN] D\xE9marrage du serveur CRM...");
 logSecurityEvent("SERVER_STARTUP", {
   timestamp: (/* @__PURE__ */ new Date()).toISOString(),
@@ -61613,6 +61616,7 @@ logSecurityEvent("SERVER_STARTUP", {
 var app = (0, import_express91.default)();
 app.set("trust proxy", 1);
 var port = Number(process.env.PORT || 8080);
+console.log("\u{1F3AF} [BOOTSTRAP] Server will listen on port:", port);
 var BUILD_VERSION = process.env.BUILD_VERSION || "dev-local";
 var GIT_SHA = process.env.GIT_SHA || "unknown";
 app.use((req2, res, next) => {

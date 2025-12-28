@@ -61,6 +61,11 @@ import {
   inputSanitization
 } from './security/securityMiddleware';
 
+// 🎯 LOG IMMÉDIAT - Confirme que le fichier est chargé par Node.js
+console.log('🎬 [BOOTSTRAP] api-server-clean.cjs loaded at', new Date().toISOString());
+console.log('🎬 [BOOTSTRAP] PORT env:', process.env.PORT || '(not set, using 8080)');
+console.log('🎬 [BOOTSTRAP] NODE_ENV:', process.env.NODE_ENV || 'development');
+
 console.log('🚀 [API-SERVER-CLEAN] Démarrage du serveur CRM...');
 
 // 🔒 INITIALISATION LOGGING SÉCURISÉ ENTERPRISE
@@ -77,6 +82,8 @@ const app = express();
 app.set('trust proxy', 1);
 
 const port = Number(process.env.PORT || 8080); // Cloud Run utilise le PORT 8080 par défaut
+console.log('🎯 [BOOTSTRAP] Server will listen on port:', port);
+
 // 📦 Métadonnées build (injectées par le script de déploiement)
 const BUILD_VERSION = process.env.BUILD_VERSION || 'dev-local';
 const GIT_SHA = process.env.GIT_SHA || 'unknown';
