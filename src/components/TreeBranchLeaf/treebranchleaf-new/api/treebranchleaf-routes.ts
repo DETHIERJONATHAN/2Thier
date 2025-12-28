@@ -1107,8 +1107,7 @@ router.get('/trees', async (req, res) => {
       include: {
         _count: {
           select: {
-            TreeBranchLeafNode: true,
-            TreeBranchLeafSubmission: true
+            TreeBranchLeafNode: true
           }
         }
       },
@@ -1136,8 +1135,7 @@ router.get('/trees/:id', async (req, res) => {
       include: {
         _count: {
           select: {
-            TreeBranchLeafNode: true,
-            TreeBranchLeafSubmission: true
+            TreeBranchLeafNode: true
           }
         }
       }

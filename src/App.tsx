@@ -245,6 +245,15 @@ const App: React.FC = () => {
       
       {/* Route callback Google OAuth (principal) */}
       <Route 
+        path="/auth/google/callback" 
+        element={
+          <Suspense fallback={<LoadingSpinner />}>
+            <GoogleAuthCallback />
+          </Suspense>
+        } 
+      />
+      {/* Routes callback Google OAuth (aliases pour compatibilité) */}
+      <Route 
         path="/google-auth/callback" 
         element={
           <Suspense fallback={<LoadingSpinner />}>
@@ -252,7 +261,6 @@ const App: React.FC = () => {
           </Suspense>
         } 
       />
-      {/* Alias pour compat avec les redirections actuelles du backend */}
       <Route 
         path="/google-auth-callback" 
         element={

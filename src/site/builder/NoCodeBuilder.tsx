@@ -17,6 +17,7 @@ import type { SectionInstance } from '../schemas/types';
 import ThemeManager from '../../components/websites/ThemeManager';
 import TestimonialsManager from '../../components/websites/TestimonialsManager';
 import AIContentAssistant from '../../components/AIContentAssistant';
+import CloudRunDomainSelector from '../../components/websites/CloudRunDomainSelector';
 
 const { Title, Text } = Typography;
 
@@ -57,13 +58,30 @@ const NoCodeBuilder: React.FC<NoCodeBuilderProps> = ({ websiteId, siteName }) =>
   const [editorVisible, setEditorVisible] = useState(false);
   const [previewMode, setPreviewMode] = useState(false);
   const [showLibrary, setShowLibrary] = useState(true);
-  const [activeTab, setActiveTab] = useState<'builder' | 'preview' | 'theme' | 'testimonials' | 'seo'>('builder');
+  const [activeTab, setActiveTab] = useState<'builder' | 'preview' | 'theme' | 'testimonials' | 'seo' | 'settings'>('builder');
+  const [websiteData, setWebsiteData] = useState<any>(null);
+  const [savingSettings, setSavingSettings] = useState(false);
 
   // 🔥 CHARGEMENT INITIAL
   useEffect(() => {
     console.log('🎨 [NoCodeBuilder v2] Initialisation websiteId:', websiteId);
     fetchSections();
+    fetchWebsiteData();
   }, [websiteId]);
+
+  /**
+   * 📡 RÉCUPÉRATION DES DONNÉES DU SITE
+   */
+  const fetchWebsiteData = async () => {
+    try {
+      console.log('📡 [NoCodeBuilder v2] Chargement données site...');
+      const response = await api.get(`/api/websites/id/${websiteId}`);
+      console.log('✅ [NoCodeBuilder v2] Données site chargées:', response);
+      setWebsiteData(response);
+    } catch (error) {
+      console.error('❌ [NoCodeBuilder v2] Erreur chargement site:', error);
+    }
+  };
 
   /**
    * 📡 RÉCUPÉRATION DES SECTIONS DEPUIS L'API
@@ -309,6 +327,34 @@ const NoCodeBuilder: React.FC<NoCodeBuilderProps> = ({ websiteId, siteName }) =>
     message.success('✅ Toutes les sections sont sauvegardées automatiquement !');
   };
 
+  /**
+   * 💾 SAUVEGARDE DES PARAMÈTRES DU SITE
+   */
+  const handleSaveSettings = async (cloudRunData: any) => {
+    setSavingSettings(true);
+    try {
+      console.log('💾 [NoCodeBuilder v2] Sauvegarde paramètres site:', cloudRunData);
+      
+      // ⚠️ IMPORTANT: N'envoyer QUE les champs autorisés par le schéma Prisma
+      // Ne PAS spreader websiteData car il contient des relations imbriquées
+      const payload = {
+        cloudRunDomain: cloudRunData?.cloudRunDomain,
+        cloudRunServiceName: cloudRunData?.cloudRunServiceName,
+        cloudRunRegion: cloudRunData?.cloudRunRegion
+      };
+      
+      console.log('📤 [NoCodeBuilder v2] Payload envoyé:', payload);
+      await api.put(`/api/websites/${websiteId}`, payload);
+      message.success('Paramètres du site sauvegardés !');
+      await fetchWebsiteData();
+    } catch (error) {
+      console.error('❌ [NoCodeBuilder v2] Erreur sauvegarde:', error);
+      message.error('Erreur lors de la sauvegarde');
+    } finally {
+      setSavingSettings(false);
+    }
+  };
+
   // 🔄 LOADING STATE
   if (loading) {
     return (
@@ -385,10 +431,10 @@ const NoCodeBuilder: React.FC<NoCodeBuilderProps> = ({ websiteId, siteName }) =>
           </Space>
         </div>
 
-        {/* Onglets Builder / Preview / Thème / SEO */}
+        {/* Onglets Builder / Preview / Thème / SEO / Paramètres */}
         <Tabs
           activeKey={activeTab}
-          onChange={(key) => setActiveTab(key as 'builder' | 'preview' | 'theme' | 'seo')}
+          onChange={(key) => setActiveTab(key as 'builder' | 'preview' | 'theme' | 'seo' | 'settings')}
           style={{ marginTop: '16px', marginBottom: 0 }}
           items={[
             {
@@ -420,6 +466,14 @@ const NoCodeBuilder: React.FC<NoCodeBuilderProps> = ({ websiteId, siteName }) =>
               label: (
                 <span>
                   🔍 SEO
+                </span>
+              )
+            },
+            {
+              key: 'settings',
+              label: (
+                <span>
+                  ⚙️ Paramètres
                 </span>
               )
             }
@@ -531,6 +585,71 @@ const NoCodeBuilder: React.FC<NoCodeBuilderProps> = ({ websiteId, siteName }) =>
                     console.log('SEO:', suggestions);
                   }}
                 />
+              </Space>
+            </Card>
+          </div>
+        ) : activeTab === 'settings' ? (
+          /* ⚙️ SETTINGS MODE - Paramètres du site */
+          <div style={{ 
+            flex: 1, 
+            overflow: 'auto', 
+            background: '#f0f2f5',
+            padding: '24px'
+          }}>
+            <Card 
+              title="⚙️ Paramètres du site"
+              style={{ maxWidth: '1200px', margin: '0 auto' }}
+              extra={
+                <Button
+                  type="primary"
+                  htmlType="button"
+                  icon={<SaveOutlined />}
+                  loading={savingSettings}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    const cloudRunData = {
+                      cloudRunDomain: websiteData?.cloudRunDomain,
+                      cloudRunServiceName: websiteData?.cloudRunServiceName,
+                      cloudRunRegion: websiteData?.cloudRunRegion
+                    };
+                    handleSaveSettings(cloudRunData);
+                  }}
+                >
+                  Sauvegarder
+                </Button>
+              }
+            >
+              <Space direction="vertical" size="large" style={{ width: '100%' }}>
+                <Alert
+                  message="Configuration du domaine Cloud Run"
+                  description="Liez ce site à un domaine déjà mappé dans Google Cloud Run pour le rendre accessible via une URL personnalisée."
+                  type="info"
+                  showIcon
+                />
+                
+                {websiteData && (
+                  <CloudRunDomainSelector
+                    value={{
+                      cloudRunDomain: websiteData.cloudRunDomain,
+                      cloudRunServiceName: websiteData.cloudRunServiceName,
+                      cloudRunRegion: websiteData.cloudRunRegion
+                    }}
+                    onChange={(newValue) => {
+                      console.log('🔄 CloudRunDomainSelector onChange:', newValue);
+                      setWebsiteData({
+                        ...websiteData,
+                        ...newValue
+                      });
+                    }}
+                  />
+                )}
+
+                {!websiteData && (
+                  <div style={{ textAlign: 'center', padding: '40px' }}>
+                    <Spin tip="Chargement des paramètres..." />
+                  </div>
+                )}
               </Space>
             </Card>
           </div>

@@ -2353,32 +2353,38 @@ model website_themes {
 }
 
 model websites {
-  id                   Int                    @id @default(autoincrement())
-  organizationId       String
-  siteName             String
-  siteType             String
-  slug                 String
-  domain               String?
-  isActive             Boolean                @default(true)
-  isPublished          Boolean                @default(false)
-  maintenanceMode      Boolean                @default(false)
-  maintenanceMessage   String?
-  createdAt            DateTime               @default(now())
-  updatedAt            DateTime
-  contact_submissions  contact_submissions[]
-  website_blog_posts   website_blog_posts[]
-  website_configs      website_configs?
-  website_media_files  website_media_files[]
-  website_projects     website_projects[]
-  website_sections     website_sections[]
-  website_services     website_services[]
-  website_testimonials website_testimonials[]
-  website_themes       website_themes?
-  Organization         Organization           @relation(fields: [organizationId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  id                      Int                    @id @default(autoincrement())
+  organizationId          String
+  siteName                String
+  siteType                String
+  slug                    String
+  domain                  String?
+  cloudRunDomain          String?                // Domaine mappé dans Cloud Run (ex: 2thier.be)
+  cloudRunServiceName     String?                // Nom du service Cloud Run (ex: crm2thier-vite-prod)
+  cloudRunRegion          String?                @default("europe-west1") // Région Cloud Run
+  cloudRunMappingVerified Boolean                @default(false) // Mapping vérifié et fonctionnel
+  cloudRunMappingVerifiedAt DateTime?            // Date de vérification
+  isActive                Boolean                @default(true)
+  isPublished             Boolean                @default(false)
+  maintenanceMode         Boolean                @default(false)
+  maintenanceMessage      String?
+  createdAt               DateTime               @default(now())
+  updatedAt               DateTime
+  contact_submissions     contact_submissions[]
+  website_blog_posts      website_blog_posts[]
+  website_configs         website_configs?
+  website_media_files     website_media_files[]
+  website_projects        website_projects[]
+  website_sections        website_sections[]
+  website_services        website_services[]
+  website_testimonials    website_testimonials[]
+  website_themes          website_themes?
+  Organization            Organization           @relation(fields: [organizationId], references: [id], onDelete: NoAction, onUpdate: NoAction)
 
   @@unique([organizationId, slug])
   @@index([organizationId])
   @@index([slug])
+  @@index([cloudRunDomain])
 }
 
 enum DocumentStatus {

@@ -39,6 +39,7 @@ import aiContentRouter from './api/ai-content';
 import aiRouter from './api/ai'; // 🤖 GEMINI AI (optimisation, suggestions)
 import aiFieldGeneratorRouter from './routes/ai-field-generator'; // 🤖 IA GÉNÉRATION INTELLIGENTE DE CONTENU
 import createRepeatRouter from './components/TreeBranchLeaf/treebranchleaf-new/api/repeat/repeat-routes';
+import cloudRunDomainsRouter from './api/cloud-run-domains'; // ☁️ GESTION DOMAINES CLOUD RUN
 
 // 📄 ROUTES GESTION DOCUMENTS PDF
 import documentsRouter from './routes/documents'; // 📄 TEMPLATES DE DOCUMENTS (ADMIN)
@@ -264,6 +265,7 @@ app.use('/api', websiteTestimonialsRouter); // 🌐 CRUD TESTIMONIALS
 app.use('/api', websiteSectionsRouter); // 🎨 CRUD SECTIONS (PAGE BUILDER)
 app.use('/api/website-themes', websiteThemesRouter); // 🎨 GESTION THÈMES SITES WEB
 app.use('/api/ai-content', aiContentRouter); // 🤖 GÉNÉRATION CONTENU IA (Gemini)
+app.use('/api', cloudRunDomainsRouter); // ☁️ MAPPING DOMAINES CLOUD RUN
 app.use('/api/ai', aiFieldGeneratorRouter); // 🤖 IA GÉNÉRATION INTELLIGENTE (generate-field, status)
 app.use('/api/ai', aiRouter); // 🤖 GEMINI AI (suggestions, optimisations)
 app.use('/api', contactFormRouter); // 📧 FORMULAIRE DE CONTACT SITE VITRINE

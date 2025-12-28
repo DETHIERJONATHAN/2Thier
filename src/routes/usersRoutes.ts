@@ -729,4 +729,86 @@ router.get('/:userId/rights-summary', requireRole(['admin', 'super_admin']), asy
   }
 });
 
+// 🔄 POST /api/users/me/current-organization - Changer l'organisation courante
+router.post('/me/current-organization', async (req: Request, res: Response) => {
+  const authReq = req as AuthenticatedRequest;
+  
+  try {
+    const userId = authReq.user?.id;
+    const { organizationId } = req.body;
+
+    if (!userId) {
+      return res.status(401).json({
+        success: false,
+        message: 'Utilisateur non authentifié'
+      });
+    }
+
+    if (!organizationId) {
+      return res.status(400).json({
+        success: false,
+        message: 'ID organisation requis'
+      });
+    }
+
+    console.log(`[USERS] Changement d'organisation pour ${userId} vers ${organizationId}`);
+
+    // Vérifier que l'utilisateur appartient bien à cette organisation
+    const userOrg = await prisma.userOrganization.findFirst({
+      where: {
+        userId: userId,
+        organizationId: organizationId
+      },
+      include: {
+        Organization: true,
+        Role: true
+      }
+    });
+
+    if (!userOrg) {
+      return res.status(403).json({
+        success: false,
+        message: 'Vous n\'appartenez pas à cette organisation'
+      });
+    }
+
+    // Mettre à jour la session avec la nouvelle organisation
+    if (req.session) {
+      req.session.currentOrganizationId = organizationId;
+      
+      // Sauvegarder la session de manière synchrone
+      await new Promise<void>((resolve, reject) => {
+        req.session.save((err) => {
+          if (err) reject(err);
+          else resolve();
+        });
+      });
+
+      console.log(`[USERS] ✅ Organisation changée avec succès vers ${userOrg.Organization.name}`);
+      
+      return res.json({
+        success: true,
+        message: 'Organisation changée avec succès',
+        data: {
+          organizationId: organizationId,
+          organizationName: userOrg.Organization.name,
+          role: userOrg.Role.label
+        }
+      });
+    } else {
+      return res.status(500).json({
+        success: false,
+        message: 'Session non disponible'
+      });
+    }
+
+  } catch (error) {
+    console.error('[USERS] Erreur changement organisation:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Erreur lors du changement d\'organisation'
+    });
+  }
+});
+
 export default router;

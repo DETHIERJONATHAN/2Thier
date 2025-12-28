@@ -6,7 +6,19 @@ import { GoogleAutoConnectionStatus } from '../components/GoogleAutoConnectionSt
 import { GoogleConnectionCard } from '../components/GoogleConnectionCard';
 
 const OrganizationDetails = () => {
-    const { currentOrganization, can } = useAuth();
+    const { currentOrganization, can, isSuperAdmin, organizations, selectOrganization } = useAuth();
+    const [changingOrg, setChangingOrg] = useState(false);
+
+    const handleOrgChange = async (orgId: string) => {
+        setChangingOrg(true);
+        try {
+            await selectOrganization(orgId);
+        } catch (error) {
+            console.error('Erreur lors du changement d\'organisation:', error);
+        } finally {
+            setChangingOrg(false);
+        }
+    };
 
     if (!currentOrganization) return <div>Chargement des informations de l'organisation...</div>;
 
@@ -14,7 +26,41 @@ const OrganizationDetails = () => {
         <div className="bg-white p-8 rounded-lg shadow-md">
             <h2 className="text-xl font-bold mb-4">Mon Organisation</h2>
             <p><strong>Nom :</strong> {currentOrganization.name}</p>
-            <p><strong>Statut :</strong> {currentOrganization.status || 'Indéfini'}</p> 
+            <p><strong>Statut :</strong> {currentOrganization.status || 'Indéfini'}</p>
+            
+            {/* Sélecteur d'organisation pour Super Admin */}
+            {isSuperAdmin && organizations && organizations.length > 1 && (
+                <div className="mt-6 pt-6 border-t border-gray-200">
+                    <h3 className="text-lg font-semibold mb-4">Changer d'organisation</h3>
+                    <p className="text-sm text-gray-600 mb-4">
+                        En tant que Super Admin, vous pouvez basculer entre vos organisations.
+                    </p>
+                    <div className="space-y-2">
+                        {organizations.map(org => (
+                            <button
+                                key={org.id}
+                                onClick={() => handleOrgChange(org.id)}
+                                disabled={changingOrg || currentOrganization.id === org.id}
+                                className={`w-full text-left px-4 py-3 rounded-lg border transition-colors ${
+                                    currentOrganization.id === org.id
+                                        ? 'bg-indigo-50 border-indigo-500 text-indigo-700 font-medium'
+                                        : 'bg-white border-gray-300 hover:bg-gray-50'
+                                } ${changingOrg ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
+                            >
+                                <div className="flex items-center justify-between">
+                                    <span>{org.name}</span>
+                                    {currentOrganization.id === org.id && (
+                                        <svg className="h-5 w-5 text-indigo-600" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                                            <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                                        </svg>
+                                    )}
+                                </div>
+                            </button>
+                        ))}
+                    </div>
+                </div>
+            )}
+            
             <div className="mt-4">
                 {can('organization:read') && (
                     <Link to="/settings/organization" className="text-indigo-600 hover:text-indigo-800">

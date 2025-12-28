@@ -9,6 +9,7 @@ import { refreshGoogleTokenIfNeeded } from '../utils/googleTokenRefresh.js';
 import { googleOAuthService, GOOGLE_SCOPES_LIST } from '../google-auth/core/GoogleOAuthCore.js';
 import gmailRoutes from '../google-auth/routes/gmail'; // Routes Gmail centralisées
 import { logSecurityEvent } from '../security/securityLogger.js';
+import { googleOAuthConfig } from '../auth/googleConfig.js'; // Import de la config avec auto-détection
 
 const router = Router();
 
@@ -204,14 +205,18 @@ router.get('/url', authMiddleware, async (req: AuthenticatedRequest, res) => {
       });
     }
 
-    // Générer l'URL d'authentification Google avec la configuration de la BDD
+    // Générer l'URL d'authentification Google avec auto-détection de l'environnement
     const stateObj = {
       userId: req.user?.userId || null,
       organizationId
     };
+    // Utiliser googleOAuthConfig.redirectUri qui détecte automatiquement l'environnement (local/Codespaces/production)
+    const actualRedirectUri = googleOAuthConfig.redirectUri;
+    console.log('[GOOGLE-AUTH] 🎯 Redirect URI auto-détecté:', actualRedirectUri);
+    
     const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?` +
       `client_id=${config.clientId}&` +
-      `redirect_uri=${encodeURIComponent(config.redirectUri)}&` +
+      `redirect_uri=${encodeURIComponent(actualRedirectUri)}&` +
       `scope=${encodeURIComponent(GOOGLE_SCOPES)}&` +
       `response_type=code&` +
       `access_type=offline&` +
@@ -270,17 +275,20 @@ router.get('/connect', authMiddleware, async (req: AuthenticatedRequest, res) =>
 
     console.log('[GOOGLE-AUTH] ✅ Configuration valide détectée');
     console.log('[GOOGLE-AUTH] 🆔 ClientId:', config.clientId);
-    console.log('[GOOGLE-AUTH] 🔗 RedirectUri:', config.redirectUri);
     console.log('[GOOGLE-AUTH] 🏢 Domain:', config.domain);
 
-    // Générer l'URL d'authentification Google avec la configuration de la BDD
+    // Utiliser auto-détection de l'environnement pour redirectUri
+    const actualRedirectUri = googleOAuthConfig.redirectUri;
+    console.log('[GOOGLE-AUTH] 🎯 Redirect URI auto-détecté:', actualRedirectUri);
+
+    // Générer l'URL d'authentification Google
     const stateObj = {
       userId: req.user?.userId || null,
       organizationId
     };
     const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?` +
       `client_id=${config.clientId}&` +
-      `redirect_uri=${encodeURIComponent(config.redirectUri)}&` +
+      `redirect_uri=${encodeURIComponent(actualRedirectUri)}&` +
       `scope=${encodeURIComponent(GOOGLE_SCOPES)}&` +
       `response_type=code&` +
       `access_type=offline&` +
@@ -374,11 +382,15 @@ router.get('/callback', async (req, res) => {
     console.log('[GOOGLE-AUTH] ✅ Configuration trouvée, email admin cible:', config.adminEmail);
     console.log('[GOOGLE-AUTH] 🔄 Échange du code contre les tokens...');
 
+    // Utiliser auto-détection pour le redirectUri
+    const actualRedirectUri = googleOAuthConfig.redirectUri;
+    console.log('[GOOGLE-AUTH] 🎯 Redirect URI pour échange de tokens:', actualRedirectUri);
+
     // Créer le client OAuth2 Google
     const oauth2Client = new google.auth.OAuth2(
       config.clientId,
       config.clientSecret,
-      config.redirectUri
+      actualRedirectUri
     );
 
     try {

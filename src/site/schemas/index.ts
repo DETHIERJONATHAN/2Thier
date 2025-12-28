@@ -28,6 +28,8 @@ import footerSchema from './footer.schema';
 import valuesSchema from './values.schema';
 import processSchema from './process.schema';
 import projectsSchema from './projects.schema';
+import aboutSchema from './about.schema';
+import contactSchema from './contact.schema';
 
 /**
  * 🗂️ Registre complet des schémas
@@ -46,9 +48,10 @@ export const sectionRegistry: SectionSchemaRegistry = {
   values: valuesSchema,
   process: processSchema,
   projects: projectsSchema,
+  about: aboutSchema,
+  contact: contactSchema,
   
   // 📦 À VENIR (créez les fichiers correspondants) :
-  // contact: contactSchema,
   // team: teamSchema,
   // pricing: pricingSchema,
   // faq: faqSchema,

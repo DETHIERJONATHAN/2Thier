@@ -13,6 +13,8 @@ import { FooterRenderer } from './sections/FooterRenderer';
 import { ValuesRenderer } from './sections/ValuesRenderer';
 import { ProcessRenderer } from './sections/ProcessRenderer';
 import { ProjectsRenderer } from './sections/ProjectsRenderer';
+import { AboutRenderer } from './sections/AboutRenderer';
+import { ContactRenderer } from './sections/ContactRenderer';
 
 /**
  * 🎨 SECTION RENDERER UNIVERSEL
@@ -99,6 +101,14 @@ export const SectionRenderer: React.FC<SectionRendererProps> = ({
       
       case 'projects':
         content = <ProjectsRenderer content={section.content} mode={mode} />;
+        break;
+      
+      case 'about':
+        content = <AboutRenderer content={section.content} mode={mode} />;
+        break;
+      
+      case 'contact':
+        content = <ContactRenderer content={section.content} mode={mode} />;
         break;
       
       default:

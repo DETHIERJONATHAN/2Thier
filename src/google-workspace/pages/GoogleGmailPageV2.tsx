@@ -925,7 +925,7 @@ const GoogleGmailPageV2: React.FC = () => {
             allowClear
             onSearch={handleSearch}
             style={{ width: 200, flexShrink: 0 }}
-            loading={searchLoading}
+            loading={_searchLoading}
             size="middle"
           />
         )}

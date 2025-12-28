@@ -4030,7 +4030,7 @@ __export(api_server_clean_exports, {
 });
 module.exports = __toCommonJS(api_server_clean_exports);
 var import_dotenv = __toESM(require("dotenv"), 1);
-var import_express91 = __toESM(require("express"), 1);
+var import_express92 = __toESM(require("express"), 1);
 var import_path7 = __toESM(require("path"), 1);
 var import_fs7 = __toESM(require("fs"), 1);
 var import_cors = __toESM(require("cors"), 1);
@@ -4437,13 +4437,21 @@ function readEnv(key2) {
   return value;
 }
 function computeRedirectUri() {
+  const codespaceName = readEnv("CODESPACE_NAME");
+  if (codespaceName) {
+    const codespaceUrl = `https://${codespaceName}-5173.app.github.dev`;
+    console.log("[GoogleConfig] \u{1F680} Codespaces d\xE9tect\xE9, redirect_uri:", `${codespaceUrl}/auth/google/callback`);
+    return `${codespaceUrl}/auth/google/callback`;
+  }
   const explicit = readEnv("GOOGLE_REDIRECT_URI");
   if (explicit) {
+    console.log("[GoogleConfig] \u{1F4CC} GOOGLE_REDIRECT_URI explicite:", explicit);
     return explicit;
   }
   const base = readEnv("API_URL") || readEnv("BACKEND_URL") || readEnv("FRONTEND_URL");
   const fallbackBase = (readEnv("NODE_ENV") || "").toLowerCase() === "production" ? DEFAULT_PROD_API_BASE : DEFAULT_DEV_API_BASE;
   const trimmedBase = (base || fallbackBase).replace(/\/$/, "");
+  console.log("[GoogleConfig] \u{1F527} Redirect URI d\xE9duit:", `${trimmedBase}/api/google-auth/callback`);
   return `${trimmedBase}/api/google-auth/callback`;
 }
 var GOOGLE_OAUTH_SCOPES = [
@@ -4528,6 +4536,8 @@ var GoogleOAuthService = class {
       state,
       prompt: "consent"
     });
+    console.log("[GoogleOAuthService] \u{1F517} URL d'autorisation g\xE9n\xE9r\xE9e:", authUrl);
+    console.log("[GoogleOAuthService] \u{1F3AF} Redirect URI configur\xE9:", GOOGLE_REDIRECT_URI);
     return authUrl;
   }
   // Échanger le code contre des tokens
@@ -10843,7 +10853,9 @@ router12.get("/url", authMiddleware, async (req2, res) => {
       userId: req2.user?.userId || null,
       organizationId
     };
-    const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${config.clientId}&redirect_uri=${encodeURIComponent(config.redirectUri)}&scope=${encodeURIComponent(GOOGLE_SCOPES)}&response_type=code&access_type=offline&prompt=consent&state=${encodeURIComponent(JSON.stringify(stateObj))}`;
+    const actualRedirectUri = googleOAuthConfig.redirectUri;
+    console.log("[GOOGLE-AUTH] \u{1F3AF} Redirect URI auto-d\xE9tect\xE9:", actualRedirectUri);
+    const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${config.clientId}&redirect_uri=${encodeURIComponent(actualRedirectUri)}&scope=${encodeURIComponent(GOOGLE_SCOPES)}&response_type=code&access_type=offline&prompt=consent&state=${encodeURIComponent(JSON.stringify(stateObj))}`;
     res.json({
       success: true,
       data: {
@@ -10885,13 +10897,14 @@ router12.get("/connect", authMiddleware, async (req2, res) => {
     }
     console.log("[GOOGLE-AUTH] \u2705 Configuration valide d\xE9tect\xE9e");
     console.log("[GOOGLE-AUTH] \u{1F194} ClientId:", config.clientId);
-    console.log("[GOOGLE-AUTH] \u{1F517} RedirectUri:", config.redirectUri);
     console.log("[GOOGLE-AUTH] \u{1F3E2} Domain:", config.domain);
+    const actualRedirectUri = googleOAuthConfig.redirectUri;
+    console.log("[GOOGLE-AUTH] \u{1F3AF} Redirect URI auto-d\xE9tect\xE9:", actualRedirectUri);
     const stateObj = {
       userId: req2.user?.userId || null,
       organizationId
     };
-    const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${config.clientId}&redirect_uri=${encodeURIComponent(config.redirectUri)}&scope=${encodeURIComponent(GOOGLE_SCOPES)}&response_type=code&access_type=offline&prompt=consent&state=${encodeURIComponent(JSON.stringify(stateObj))}`;
+    const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${config.clientId}&redirect_uri=${encodeURIComponent(actualRedirectUri)}&scope=${encodeURIComponent(GOOGLE_SCOPES)}&response_type=code&access_type=offline&prompt=consent&state=${encodeURIComponent(JSON.stringify(stateObj))}`;
     console.log("[GOOGLE-AUTH] \u{1F310} URL g\xE9n\xE9r\xE9e:", authUrl);
     res.json({
       success: true,
@@ -10959,10 +10972,12 @@ router12.get("/callback", async (req2, res) => {
     }
     console.log("[GOOGLE-AUTH] \u2705 Configuration trouv\xE9e, email admin cible:", config.adminEmail);
     console.log("[GOOGLE-AUTH] \u{1F504} \xC9change du code contre les tokens...");
+    const actualRedirectUri = googleOAuthConfig.redirectUri;
+    console.log("[GOOGLE-AUTH] \u{1F3AF} Redirect URI pour \xE9change de tokens:", actualRedirectUri);
     const oauth2Client = new import_googleapis6.google.auth.OAuth2(
       config.clientId,
       config.clientSecret,
-      config.redirectUri
+      actualRedirectUri
     );
     try {
       const { tokens: tokens2 } = await oauth2Client.getToken(code);
@@ -15843,6 +15858,72 @@ router22.get("/:userId/rights-summary", requireRole2(["admin", "super_admin"]), 
     res.status(500).json({
       success: false,
       message: "Erreur interne du serveur lors de la r\xE9cup\xE9ration du r\xE9sum\xE9 des droits"
+    });
+  }
+});
+router22.post("/me/current-organization", async (req2, res) => {
+  const authReq = req2;
+  try {
+    const userId = authReq.user?.id;
+    const { organizationId } = req2.body;
+    if (!userId) {
+      return res.status(401).json({
+        success: false,
+        message: "Utilisateur non authentifi\xE9"
+      });
+    }
+    if (!organizationId) {
+      return res.status(400).json({
+        success: false,
+        message: "ID organisation requis"
+      });
+    }
+    console.log(`[USERS] Changement d'organisation pour ${userId} vers ${organizationId}`);
+    const userOrg = await prisma11.userOrganization.findFirst({
+      where: {
+        userId,
+        organizationId
+      },
+      include: {
+        Organization: true,
+        Role: true
+      }
+    });
+    if (!userOrg) {
+      return res.status(403).json({
+        success: false,
+        message: "Vous n'appartenez pas \xE0 cette organisation"
+      });
+    }
+    if (req2.session) {
+      req2.session.currentOrganizationId = organizationId;
+      await new Promise((resolve, reject) => {
+        req2.session.save((err) => {
+          if (err) reject(err);
+          else resolve();
+        });
+      });
+      console.log(`[USERS] \u2705 Organisation chang\xE9e avec succ\xE8s vers ${userOrg.Organization.name}`);
+      return res.json({
+        success: true,
+        message: "Organisation chang\xE9e avec succ\xE8s",
+        data: {
+          organizationId,
+          organizationName: userOrg.Organization.name,
+          role: userOrg.Role.label
+        }
+      });
+    } else {
+      return res.status(500).json({
+        success: false,
+        message: "Session non disponible"
+      });
+    }
+  } catch (error) {
+    console.error("[USERS] Erreur changement organisation:", error);
+    res.status(500).json({
+      success: false,
+      message: "Erreur lors du changement d'organisation"
     });
   }
 });
@@ -28060,8 +28141,8 @@ function getOrgId(req2) {
   const headerOrg = req2.headers?.["x-organization-id"] || req2.headers?.["x-organization"] || req2.headers?.["organization-id"];
   return user.organizationId || headerOrg || null;
 }
-function registerSumDisplayFieldRoutes(router88) {
-  router88.post("/trees/:treeId/nodes/:nodeId/sum-display-field", async (req2, res) => {
+function registerSumDisplayFieldRoutes(router89) {
+  router89.post("/trees/:treeId/nodes/:nodeId/sum-display-field", async (req2, res) => {
     try {
       const { treeId, nodeId } = req2.params;
       const organizationId = getOrgId(req2);
@@ -28318,7 +28399,7 @@ function registerSumDisplayFieldRoutes(router88) {
       res.status(500).json({ error: "Erreur lors de la cr\xC3\u0192\xC2\xA9ation du champ Total", details: errMsg });
     }
   });
-  router88.delete("/trees/:treeId/nodes/:nodeId/sum-display-field", async (req2, res) => {
+  router89.delete("/trees/:treeId/nodes/:nodeId/sum-display-field", async (req2, res) => {
     try {
       const { treeId, nodeId } = req2.params;
       const organizationId = getOrgId(req2);
@@ -33611,8 +33692,7 @@ router56.get("/trees", async (req2, res) => {
       include: {
         _count: {
           select: {
-            TreeBranchLeafNode: true,
-            TreeBranchLeafSubmission: true
+            TreeBranchLeafNode: true
           }
         }
       },
@@ -33635,8 +33715,7 @@ router56.get("/trees/:id", async (req2, res) => {
       include: {
         _count: {
           select: {
-            TreeBranchLeafNode: true,
-            TreeBranchLeafSubmission: true
+            TreeBranchLeafNode: true
           }
         }
       }
@@ -51547,17 +51626,17 @@ router70.get("/templates", async (req2, res) => {
     const templates = await prisma40.documentTemplate.findMany({
       where,
       include: {
-        sections: {
+        DocumentSection: {
           orderBy: { order: "asc" }
         },
-        theme: true,
-        tree: {
+        DocumentTheme: true,
+        TreeBranchLeafTree: {
           select: {
             id: true,
             name: true
           }
         },
-        createdByUser: {
+        User: {
           select: {
             id: true,
             firstName: true,
@@ -51566,7 +51645,7 @@ router70.get("/templates", async (req2, res) => {
           }
         },
         _count: {
-          select: { generatedDocuments: true }
+          select: { GeneratedDocument: true }
         }
       },
       orderBy: { createdAt: "desc" }
@@ -51581,16 +51660,18 @@ router70.get("/templates/:id", async (req2, res) => {
   try {
     const { id } = req2.params;
     const organizationId = req2.headers["x-organization-id"];
+    const isSuperAdmin2 = req2.headers["x-is-super-admin"] === "true";
+    const whereClause = { id };
+    if (!isSuperAdmin2 && organizationId) {
+      whereClause.organizationId = organizationId;
+    }
     const template = await prisma40.documentTemplate.findFirst({
-      where: {
-        id,
-        organizationId
-      },
+      where: whereClause,
       include: {
-        sections: {
+        DocumentSection: {
           orderBy: { order: "asc" }
         },
-        theme: true
+        DocumentTheme: true
       }
     });
     if (!template) {
@@ -51629,7 +51710,8 @@ router70.post("/templates", async (req2, res) => {
         defaultLanguage: defaultLanguage || "fr",
         themeId,
         createdBy: userId,
-        sections: {
+        updatedAt: /* @__PURE__ */ new Date(),
+        DocumentSection: {
           create: (sections || []).map((section, index) => ({
             id: (0, import_nanoid2.nanoid)(),
             order: section.order || index,
@@ -51638,13 +51720,14 @@ router70.post("/templates", async (req2, res) => {
             displayConditions: section.displayConditions,
             linkedNodeIds: section.linkedNodeIds || [],
             linkedVariables: section.linkedVariables || [],
-            translations: section.translations || {}
+            translations: section.translations || {},
+            updatedAt: /* @__PURE__ */ new Date()
           }))
         }
       },
       include: {
-        sections: true,
-        theme: true
+        DocumentSection: true,
+        DocumentTheme: true
       }
     });
     res.status(201).json(template);
@@ -51657,6 +51740,7 @@ router70.put("/templates/:id", async (req2, res) => {
   try {
     const { id } = req2.params;
     const organizationId = req2.headers["x-organization-id"];
+    const isSuperAdmin2 = req2.headers["x-is-super-admin"] === "true";
     const {
       name,
       type,
@@ -51669,8 +51753,12 @@ router70.put("/templates/:id", async (req2, res) => {
       sections
     } = req2.body;
     console.log("\u{1F4DD} [TEMPLATE UPDATE] Mise \xE0 jour template:", { id, name, treeId, type });
+    const whereClause = { id };
+    if (!isSuperAdmin2 && organizationId) {
+      whereClause.organizationId = organizationId;
+    }
     const existing = await prisma40.documentTemplate.findFirst({
-      where: { id, organizationId }
+      where: whereClause
     });
     if (!existing) {
       return res.status(404).json({ error: "Template non trouv\xE9" });
@@ -51692,8 +51780,9 @@ router70.put("/templates/:id", async (req2, res) => {
         defaultLanguage,
         themeId,
         isActive,
+        updatedAt: /* @__PURE__ */ new Date(),
         ...sections && {
-          sections: {
+          DocumentSection: {
             create: sections.map((section, index) => ({
               id: (0, import_nanoid2.nanoid)(),
               order: section.order || index,
@@ -51702,15 +51791,16 @@ router70.put("/templates/:id", async (req2, res) => {
               displayConditions: section.displayConditions,
               linkedNodeIds: section.linkedNodeIds || [],
               linkedVariables: section.linkedVariables || [],
-              translations: section.translations || {}
+              translations: section.translations || {},
+              updatedAt: /* @__PURE__ */ new Date()
             }))
           }
         }
       },
       include: {
-        sections: { orderBy: { order: "asc" } },
-        theme: true,
-        tree: {
+        DocumentSection: { orderBy: { order: "asc" } },
+        DocumentTheme: true,
+        TreeBranchLeafTree: {
           select: { id: true, name: true }
         }
       }
@@ -51882,7 +51972,8 @@ router70.post("/templates/:templateId/sections", async (req2, res) => {
         templateId,
         type,
         order: order ?? 0,
-        config: config || {}
+        config: config || {},
+        updatedAt: /* @__PURE__ */ new Date()
       }
     });
     res.json(section);
@@ -52054,10 +52145,10 @@ router70.post("/generated/generate", async (req2, res) => {
         organizationId
       },
       include: {
-        sections: {
+        DocumentSection: {
           orderBy: { order: "asc" }
         },
-        theme: true
+        DocumentTheme: true
       }
     });
     console.log("\u{1F4C4} [GENERATE DOC] Template trouv\xE9:", template ? template.id : "null");
@@ -52087,10 +52178,11 @@ router70.post("/generated/generate", async (req2, res) => {
           generatedAt: (/* @__PURE__ */ new Date()).toISOString(),
           generatedBy: userId
         },
-        createdBy: userId || null
+        createdBy: userId || null,
+        updatedAt: /* @__PURE__ */ new Date()
       },
       include: {
-        template: {
+        DocumentTemplate: {
           select: {
             id: true,
             name: true,
@@ -52178,15 +52270,15 @@ router70.get("/generated/:id/download", async (req2, res) => {
         organizationId
       },
       include: {
-        template: {
+        DocumentTemplate: {
           include: {
-            sections: {
+            DocumentSection: {
               orderBy: { order: "asc" }
             },
-            theme: true
+            DocumentTheme: true
           }
         },
-        lead: true
+        Lead: true
       }
     });
     if (!document) {
@@ -52204,7 +52296,7 @@ router70.get("/generated/:id/download", async (req2, res) => {
       where: { id: organizationId }
     });
     const dataSnapshot = document.dataSnapshot || {};
-    const templateTheme = document.template?.theme;
+    const templateTheme = document.DocumentTemplate?.DocumentTheme;
     const themeSource = templateTheme || defaultTheme;
     const theme = themeSource ? {
       primaryColor: themeSource.primaryColor || "#1890ff",
@@ -52230,7 +52322,7 @@ router70.get("/generated/:id/download", async (req2, res) => {
       primaryColor: theme.primaryColor,
       fontFamily: theme.fontFamily
     });
-    const sections = document.template?.sections?.map((s) => ({
+    const sections = document.DocumentTemplate?.DocumentSection?.map((s) => ({
       id: s.id,
       type: s.type,
       name: s.name || s.type,
@@ -52359,16 +52451,16 @@ router70.get("/generated/:id/preview", async (req2, res) => {
         organizationId
       },
       include: {
-        template: {
+        DocumentTemplate: {
           include: {
-            sections: {
+            DocumentSection: {
               orderBy: { order: "asc" }
             },
-            theme: true
+            DocumentTheme: true
           }
         },
-        lead: true,
-        submission: true
+        Lead: true,
+        TreeBranchLeafSubmission: true
       }
     });
     if (!document) {
@@ -52386,8 +52478,8 @@ router70.get("/generated/:id/preview", async (req2, res) => {
       notes: document.notes,
       createdAt: document.createdAt,
       updatedAt: document.updatedAt,
-      template: document.template,
-      lead: document.lead,
+      template: document.DocumentTemplate,
+      lead: document.Lead,
       dataSnapshot: document.dataSnapshot,
       // Informations de signature/paiement
       signedAt: document.signedAt,
@@ -55016,11 +55108,160 @@ router76.get("/websites", authenticateToken, async (req2, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
-router76.get("/websites/:slug", async (req2, res) => {
+router76.get("/websites/id/:id", authenticateToken, async (req2, res) => {
   try {
-    const { slug } = req2.params;
+    const { id } = req2.params;
+    const websiteId = parseInt(id, 10);
+    if (isNaN(websiteId)) {
+      return res.status(400).json({ error: "Invalid website ID" });
+    }
+    const website = await db.websites.findUnique({
+      where: { id: websiteId },
+      include: {
+        website_configs: true,
+        website_themes: true
+      }
+    });
+    if (!website) {
+      return res.status(404).json({ error: "Website not found" });
+    }
+    res.json(website);
+  } catch (error) {
+    console.error("Error fetching website by ID:", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+router76.put("/websites/:id", authenticateToken, async (req2, res) => {
+  try {
+    const websiteId = parseInt(req2.params.id);
     const organizationId = req2.headers["x-organization-id"];
-    const whereClause = { slug, isActive: true };
+    const isSuperAdmin2 = req2.headers["x-is-super-admin"] === "true";
+    const data = req2.body;
+    console.log("\u{1F50D} [WEBSITES PUT] ===== D\xC9BUT =====");
+    console.log("\u{1F50D} [WEBSITES PUT] websiteId:", websiteId);
+    console.log("\u{1F50D} [WEBSITES PUT] organizationId from header:", organizationId);
+    console.log("\u{1F50D} [WEBSITES PUT] isSuperAdmin:", isSuperAdmin2);
+    console.log("\u{1F50D} [WEBSITES PUT] All headers:", JSON.stringify(req2.headers, null, 2));
+    console.log("\u{1F50D} [WEBSITES PUT] Body:", JSON.stringify(data, null, 2));
+    if (!organizationId && !isSuperAdmin2) {
+      console.log("\u{1F50D} [WEBSITES PUT] \u274C Pas d'organizationId dans les headers");
+      return res.status(400).json({ error: "Organization ID is required" });
+    }
+    const whereClause = { id: websiteId };
+    if (!isSuperAdmin2) {
+      whereClause.organizationId = organizationId;
+    }
+    console.log("\u{1F50D} [WEBSITES PUT] Recherche du site avec:", whereClause);
+    const existingWebsite = await db.websites.findFirst({
+      where: whereClause
+    });
+    console.log("\u{1F50D} [WEBSITES PUT] R\xE9sultat recherche:", existingWebsite ? "TROUV\xC9" : "NON TROUV\xC9");
+    if (existingWebsite) {
+      console.log("\u{1F50D} [WEBSITES PUT] Site trouv\xE9:", {
+        id: existingWebsite.id,
+        organizationId: existingWebsite.organizationId,
+        siteName: existingWebsite.siteName
+      });
+    }
+    if (!existingWebsite) {
+      console.log("\u{1F50D} [WEBSITES PUT] \u274C Website not found - 404");
+      return res.status(404).json({ error: "Website not found" });
+    }
+    const updateData = {
+      updatedAt: /* @__PURE__ */ new Date()
+    };
+    if (data.siteName !== void 0) updateData.siteName = data.siteName;
+    if (data.siteType !== void 0) updateData.siteType = data.siteType;
+    if (data.slug !== void 0) updateData.slug = data.slug;
+    if (data.domain !== void 0) updateData.domain = data.domain;
+    if (data.isActive !== void 0) updateData.isActive = data.isActive;
+    if (data.isPublished !== void 0) updateData.isPublished = data.isPublished;
+    if (data.maintenanceMode !== void 0) updateData.maintenanceMode = data.maintenanceMode;
+    if (data.maintenanceMessage !== void 0) updateData.maintenanceMessage = data.maintenanceMessage;
+    if (data.cloudRunDomain !== void 0) updateData.cloudRunDomain = data.cloudRunDomain;
+    if (data.cloudRunServiceName !== void 0) updateData.cloudRunServiceName = data.cloudRunServiceName;
+    if (data.cloudRunRegion !== void 0) updateData.cloudRunRegion = data.cloudRunRegion;
+    console.log("\u{1F4DD} [WEBSITES] Donn\xE9es de mise \xE0 jour:", updateData);
+    const updatedWebsite = await db.websites.update({
+      where: { id: websiteId },
+      data: updateData,
+      include: {
+        website_configs: true
+      }
+    });
+    console.log("\u2705 [WEBSITES] Site mis \xE0 jour:", updatedWebsite.id);
+    res.json(updatedWebsite);
+  } catch (error) {
+    console.error("Error updating website:", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+router76.delete("/websites/:id", authenticateToken, async (req2, res) => {
+  try {
+    const websiteId = parseInt(req2.params.id);
+    const organizationId = req2.headers["x-organization-id"];
+    const isSuperAdmin2 = req2.headers["x-is-super-admin"] === "true";
+    const whereClause = { id: websiteId };
+    if (!isSuperAdmin2 || organizationId && organizationId !== "all") {
+      whereClause.organizationId = organizationId;
+    }
+    const existingWebsite = await db.websites.findFirst({
+      where: whereClause
+    });
+    if (!existingWebsite) {
+      return res.status(404).json({ error: "Website not found" });
+    }
+    await db.websites.delete({
+      where: { id: websiteId }
+    });
+    res.json({ success: true });
+  } catch (error) {
+    console.error("Error deleting website:", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+router76.post("/websites", authenticateToken, async (req2, res) => {
+  try {
+    const organizationId = req2.headers["x-organization-id"];
+    const data = req2.body;
+    if (!organizationId) {
+      return res.status(400).json({ error: "Organization ID is required" });
+    }
+    const newWebsite = await db.websites.create({
+      data: {
+        organizationId,
+        siteName: data.siteName,
+        siteType: data.siteType || "vitrine",
+        slug: data.slug,
+        domain: data.domain,
+        cloudRunDomain: data.cloudRunDomain,
+        cloudRunServiceName: data.cloudRunServiceName,
+        cloudRunRegion: data.cloudRunRegion || "europe-west1",
+        isActive: true,
+        createdAt: /* @__PURE__ */ new Date(),
+        updatedAt: /* @__PURE__ */ new Date()
+      },
+      include: {
+        website_configs: true
+      }
+    });
+    res.status(201).json(newWebsite);
+  } catch (error) {
+    console.error("Error creating website:", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+router76.get("/websites/:idOrSlug", async (req2, res) => {
+  try {
+    const { idOrSlug } = req2.params;
+    const organizationId = req2.headers["x-organization-id"];
+    const isId = /^\d+$/.test(idOrSlug);
+    const whereClause = { isActive: true };
+    if (isId) {
+      whereClause.id = parseInt(idOrSlug, 10);
+    } else {
+      whereClause.slug = idOrSlug;
+    }
     if (organizationId) {
       whereClause.organizationId = organizationId;
     }
@@ -55222,115 +55463,6 @@ router76.get("/websites/:slug/blog/:postSlug", async (req2, res) => {
     res.json(blogPost);
   } catch (error) {
     console.error("Error fetching blog post:", error);
-    res.status(500).json({ error: "Internal server error" });
-  }
-});
-router76.put("/websites/:id", authenticateToken, async (req2, res) => {
-  try {
-    const websiteId = parseInt(req2.params.id);
-    const organizationId = req2.headers["x-organization-id"];
-    const data = req2.body;
-    if (!organizationId) {
-      return res.status(400).json({ error: "Organization ID is required" });
-    }
-    const existingWebsite = await db.websites.findFirst({
-      where: {
-        id: websiteId,
-        organizationId
-      }
-    });
-    if (!existingWebsite) {
-      return res.status(404).json({ error: "Website not found" });
-    }
-    const updatedWebsite = await db.websites.update({
-      where: { id: websiteId },
-      data: {
-        name: data.name,
-        slug: data.slug,
-        domain: data.domain,
-        description: data.description,
-        language: data.language,
-        timezone: data.timezone,
-        isActive: data.isActive,
-        maintenanceMode: data.maintenanceMode,
-        maintenanceMessage: data.maintenanceMessage,
-        analyticsCode: data.analyticsCode,
-        customCss: data.customCss,
-        customJs: data.customJs,
-        seoMetadata: data.seoMetadata
-      },
-      include: {
-        website_configs: true
-      }
-    });
-    res.json(updatedWebsite);
-  } catch (error) {
-    console.error("Error updating website:", error);
-    res.status(500).json({ error: "Internal server error" });
-  }
-});
-router76.post("/websites", authenticateToken, async (req2, res) => {
-  try {
-    const organizationId = req2.headers["x-organization-id"];
-    const data = req2.body;
-    if (!organizationId) {
-      return res.status(400).json({ error: "Organization ID is required" });
-    }
-    const newWebsite = await db.websites.create({
-      data: {
-        name: data.name,
-        slug: data.slug,
-        domain: data.domain,
-        description: data.description,
-        language: data.language || "fr",
-        timezone: data.timezone || "Europe/Brussels",
-        organizationId,
-        isActive: true,
-        maintenanceMode: false
-      },
-      include: {
-        website_configs: true
-      }
-    });
-    res.status(201).json(newWebsite);
-  } catch (error) {
-    console.error("Error creating website:", error);
-    res.status(500).json({ error: "Internal server error" });
-  }
-});
-router76.delete("/websites/:id", authenticateToken, async (req2, res) => {
-  console.log("\u{1F5D1}\uFE0F [WEBSITES] DELETE /websites/:id atteint!");
-  console.log("\u{1F5D1}\uFE0F [WEBSITES] ID du site:", req2.params.id);
-  try {
-    const websiteId = parseInt(req2.params.id);
-    const organizationId = req2.headers["x-organization-id"];
-    const user = req2.user;
-    console.log("\u{1F5D1}\uFE0F [WEBSITES] User:", user?.email, "isSuperAdmin:", user?.isSuperAdmin);
-    console.log("\u{1F5D1}\uFE0F [WEBSITES] OrganizationId:", organizationId);
-    if (!organizationId && !user?.isSuperAdmin) {
-      console.log("\u274C [WEBSITES] Organization ID requis et user n'est pas Super Admin");
-      return res.status(400).json({ error: "Organization ID is required" });
-    }
-    const whereClause = { id: websiteId };
-    if (!user?.isSuperAdmin && organizationId) {
-      whereClause.organizationId = organizationId;
-    }
-    const existingWebsite = await db.websites.findFirst({
-      where: whereClause
-    });
-    if (!existingWebsite) {
-      return res.status(404).json({ error: "Website not found" });
-    }
-    await db.websites.delete({
-      where: { id: websiteId }
-    });
-    console.log(`\u2705 Site web ${websiteId} (${existingWebsite.name}) supprim\xE9 par ${user?.email || "unknown"}`);
-    res.json({
-      success: true,
-      message: `Site "${existingWebsite.name}" supprim\xE9 avec succ\xE8s`
-    });
-  } catch (error) {
-    console.error("Error deleting website:", error);
     res.status(500).json({ error: "Internal server error" });
   }
 });
@@ -60830,10 +60962,10 @@ function normalizeMetadata(metadata) {
 
 // src/components/TreeBranchLeaf/treebranchleaf-new/api/repeat/repeat-routes.ts
 function createRepeatRouter(prisma49) {
-  const router88 = (0, import_express89.Router)();
+  const router89 = (0, import_express89.Router)();
   const inFlightExecuteByRepeater = /* @__PURE__ */ new Set();
-  router88.use(authenticateToken);
-  router88.post("/:repeaterNodeId/instances", async (req2, res) => {
+  router89.use(authenticateToken);
+  router89.post("/:repeaterNodeId/instances", async (req2, res) => {
     const { repeaterNodeId } = req2.params;
     const body2 = req2.body || {};
     try {
@@ -60865,7 +60997,7 @@ function createRepeatRouter(prisma49) {
       });
     }
   });
-  router88.post("/:repeaterNodeId/instances/execute", async (req2, res) => {
+  router89.post("/:repeaterNodeId/instances/execute", async (req2, res) => {
     const { repeaterNodeId } = req2.params;
     const body2 = req2.body || {};
     if (inFlightExecuteByRepeater.has(repeaterNodeId)) {
@@ -60917,14 +61049,114 @@ function createRepeatRouter(prisma49) {
       inFlightExecuteByRepeater.delete(repeaterNodeId);
     }
   });
-  return router88;
+  return router89;
 }
 
-// src/routes/userFavoritesRoutes.ts
+// src/api/cloud-run-domains.ts
 var import_express90 = require("express");
-init_database();
 var router87 = (0, import_express90.Router)();
-router87.get("/", authMiddleware, async (req2, res) => {
+router87.get("/cloud-run-domains", authenticateToken, async (req2, res) => {
+  try {
+    const user = req2.user;
+    if (!user.isSuperAdmin) {
+      return res.status(403).json({
+        error: "Acc\xE8s refus\xE9. Fonctionnalit\xE9 r\xE9serv\xE9e aux Super Admins."
+      });
+    }
+    const mappedDomains = [
+      {
+        domain: "2thier.be",
+        serviceName: "crm2thier-vite-prod",
+        region: "europe-west1",
+        status: "active",
+        mappedAt: "2024-12-01",
+        // Date approximative
+        description: "Site principal 2Thier Energy"
+      },
+      {
+        domain: "devis1minute.be",
+        serviceName: "crm2thier-vite-prod",
+        region: "europe-west1",
+        status: "active",
+        mappedAt: "2024-12-01",
+        description: "Landing page Devis1Minute"
+      }
+      // Ajoutez ici vos autres domaines mappés dans Cloud Run
+    ];
+    console.log("\u2705 [CloudRunDomains] R\xE9cup\xE9ration des domaines mapp\xE9s:", mappedDomains.length);
+    res.json({
+      success: true,
+      domains: mappedDomains,
+      count: mappedDomains.length
+    });
+  } catch (error) {
+    console.error("\u274C [CloudRunDomains] Erreur:", error);
+    res.status(500).json({
+      error: "Erreur lors de la r\xE9cup\xE9ration des domaines Cloud Run",
+      details: error.message
+    });
+  }
+});
+router87.post("/cloud-run-domains/verify", authenticateToken, async (req2, res) => {
+  try {
+    const user = req2.user;
+    const { domain } = req2.body;
+    if (!user.isSuperAdmin) {
+      return res.status(403).json({
+        error: "Acc\xE8s refus\xE9. Fonctionnalit\xE9 r\xE9serv\xE9e aux Super Admins."
+      });
+    }
+    if (!domain) {
+      return res.status(400).json({ error: "Le domaine est requis" });
+    }
+    const isReachable = await checkDomainReachability(domain);
+    res.json({
+      success: true,
+      domain,
+      verified: isReachable,
+      verifiedAt: (/* @__PURE__ */ new Date()).toISOString()
+    });
+  } catch (error) {
+    console.error("\u274C [CloudRunDomains] Erreur v\xE9rification:", error);
+    res.status(500).json({
+      error: "Erreur lors de la v\xE9rification du domaine",
+      details: error.message
+    });
+  }
+});
+async function checkDomainReachability(domain) {
+  try {
+    const https = await import("https");
+    return new Promise((resolve) => {
+      const options = {
+        hostname: domain,
+        port: 443,
+        path: "/",
+        method: "HEAD",
+        timeout: 5e3
+      };
+      const req2 = https.request(options, (res) => {
+        resolve(res.statusCode !== void 0 && res.statusCode < 500);
+      });
+      req2.on("error", () => resolve(false));
+      req2.on("timeout", () => {
+        req2.destroy();
+        resolve(false);
+      });
+      req2.end();
+    });
+  } catch (error) {
+    console.error("\u274C Erreur lors de la v\xE9rification du domaine:", error);
+    return false;
+  }
+}
+var cloud_run_domains_default = router87;
+
+// src/routes/userFavoritesRoutes.ts
+var import_express91 = require("express");
+init_database();
+var router88 = (0, import_express91.Router)();
+router88.get("/", authMiddleware, async (req2, res) => {
   try {
     const userId = req2.user?.userId;
     const organizationId = req2.user?.organizationId;
@@ -60956,7 +61188,7 @@ router87.get("/", authMiddleware, async (req2, res) => {
     });
   }
 });
-router87.post("/", authMiddleware, async (req2, res) => {
+router88.post("/", authMiddleware, async (req2, res) => {
   try {
     const userId = req2.user?.userId;
     const organizationId = req2.user?.organizationId;
@@ -60998,7 +61230,7 @@ router87.post("/", authMiddleware, async (req2, res) => {
     });
   }
 });
-router87.delete("/:moduleKey", authMiddleware, async (req2, res) => {
+router88.delete("/:moduleKey", authMiddleware, async (req2, res) => {
   try {
     const userId = req2.user?.userId;
     const organizationId = req2.user?.organizationId;
@@ -61031,7 +61263,7 @@ router87.delete("/:moduleKey", authMiddleware, async (req2, res) => {
     });
   }
 });
-var userFavoritesRoutes_default = router87;
+var userFavoritesRoutes_default = router88;
 
 // src/middleware/websiteDetection.ts
 init_prisma();
@@ -61613,7 +61845,7 @@ logSecurityEvent("SERVER_STARTUP", {
   environment: process.env.NODE_ENV || "development",
   securityLevel: "ENTERPRISE"
 }, "info");
-var app = (0, import_express91.default)();
+var app = (0, import_express92.default)();
 app.set("trust proxy", 1);
 var port = Number(process.env.PORT || 8080);
 console.log("\u{1F3AF} [BOOTSTRAP] Server will listen on port:", port);
@@ -61706,7 +61938,7 @@ app.use((0, import_cors.default)({
   exposedHeaders: ["X-Total-Count", "X-Rate-Limit-Remaining", "x-organization-id"]
 }));
 app.use(inputSanitization);
-app.use(import_express91.default.json({
+app.use(import_express92.default.json({
   limit: "50mb",
   verify: (req2, res, buf) => {
     try {
@@ -61720,7 +61952,7 @@ app.use(import_express91.default.json({
     }
   }
 }));
-app.use(import_express91.default.urlencoded({ extended: true, limit: "50mb" }));
+app.use(import_express92.default.urlencoded({ extended: true, limit: "50mb" }));
 app.use((0, import_cookie_parser.default)());
 app.use((0, import_express_session.default)({
   secret: process.env.SESSION_SECRET || "crm-dev-secret-2024",
@@ -61746,7 +61978,7 @@ app.use("/uploads", (req2, res, next) => {
   res.setHeader("Access-Control-Allow-Headers", "Content-Type");
   res.setHeader("Cross-Origin-Resource-Policy", "cross-origin");
   next();
-}, import_express91.default.static(uploadsDir, {
+}, import_express92.default.static(uploadsDir, {
   maxAge: "1h",
   // Cache 1 heure
   etag: true,
@@ -61767,6 +61999,7 @@ app.use("/api", website_testimonials_default);
 app.use("/api", website_sections_default);
 app.use("/api/website-themes", website_themes_default);
 app.use("/api/ai-content", ai_content_default);
+app.use("/api", cloud_run_domains_default);
 app.use("/api/ai", ai_field_generator_default);
 app.use("/api/ai", ai_default2);
 app.use("/api", contact_form_default);
@@ -61804,7 +62037,7 @@ if (process.env.NODE_ENV === "production") {
   if (import_fs7.default.existsSync(indexHtml)) {
     console.log("\u{1F5C2}\uFE0F [STATIC] Distribution front d\xE9tect\xE9e, activation du serveur statique");
     const assetsDir = import_path7.default.join(distDir, "assets");
-    app.use("/assets", import_express91.default.static(assetsDir, {
+    app.use("/assets", import_express92.default.static(assetsDir, {
       setHeaders: (res) => {
         res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
       }

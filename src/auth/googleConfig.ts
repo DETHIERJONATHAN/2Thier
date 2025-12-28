@@ -51,11 +51,23 @@ function readEnv(key: string): string | undefined {
 }
 
 function computeRedirectUri(): string {
+  // 🚀 PRIORITÉ 1: Détection automatique GitHub Codespaces
+  const codespaceName = readEnv('CODESPACE_NAME');
+  if (codespaceName) {
+    // Format: https://<codespace-name>-5173.app.github.dev/auth/google/callback (FRONTEND)
+    const codespaceUrl = `https://${codespaceName}-5173.app.github.dev`;
+    console.log('[GoogleConfig] 🚀 Codespaces détecté, redirect_uri:', `${codespaceUrl}/auth/google/callback`);
+    return `${codespaceUrl}/auth/google/callback`;
+  }
+
+  // PRIORITÉ 2: Variable d'environnement explicite
   const explicit = readEnv('GOOGLE_REDIRECT_URI');
   if (explicit) {
+    console.log('[GoogleConfig] 📌 GOOGLE_REDIRECT_URI explicite:', explicit);
     return explicit;
   }
 
+  // PRIORITÉ 3: Déduction depuis autres variables
   const base =
     readEnv('API_URL') ||
     readEnv('BACKEND_URL') ||
@@ -66,6 +78,7 @@ function computeRedirectUri(): string {
     : DEFAULT_DEV_API_BASE;
 
   const trimmedBase = (base || fallbackBase).replace(/\/$/, '');
+  console.log('[GoogleConfig] 🔧 Redirect URI déduit:', `${trimmedBase}/api/google-auth/callback`);
   return `${trimmedBase}/api/google-auth/callback`;
 }
 

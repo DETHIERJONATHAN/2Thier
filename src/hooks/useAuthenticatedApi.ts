@@ -181,8 +181,21 @@ export function useAuthenticatedApi() {
         L.debug('Headers réponse', Object.fromEntries(response.headers.entries()));
 
         if (response.status === 401) {
-          if (redirectOnAuth && window.location.pathname !== '/login') logout();
-          return Promise.reject(new Error('Session expirée. Veuillez vous reconnecter.'));
+          // Ne déconnecter que si c'est une erreur d'authentification CRM, 
+          // pas une erreur OAuth Google (Gmail, Drive, etc.)
+          const isGoogleApi = finalUrl.includes('/gmail/') || 
+                             finalUrl.includes('/drive/') || 
+                             finalUrl.includes('/calendar/') ||
+                             finalUrl.includes('/google-');
+          
+          if (!isGoogleApi && redirectOnAuth && window.location.pathname !== '/login') {
+            logout();
+          }
+          
+          const errorMessage = isGoogleApi 
+            ? 'Tokens Google expirés. Veuillez reconnecter votre compte Google.'
+            : 'Session expirée. Veuillez vous reconnecter.';
+          return Promise.reject(new Error(errorMessage));
         }
 
         // Pas de contenu

@@ -40,6 +40,7 @@ import TestimonialsManager from '../../components/websites/TestimonialsManager';
 import SectionsManager from '../../components/websites/SectionsManager';
 import { NoCodeBuilder } from '../../site'; // 🔥 NOUVEAU SYSTÈME UNIVERSEL
 import ThemeManager from '../../components/websites/ThemeManager';
+import CloudRunDomainSelector from '../../components/websites/CloudRunDomainSelector';
 
 const { Title, Text } = Typography;
 const { TextArea } = Input;
@@ -306,11 +307,21 @@ export const WebsitesAdminPage: React.FC = () => {
           layout="vertical"
           onFinish={async (values) => {
             try {
+              // Extraction des données Cloud Run mapping
+              const cloudRunData = values.cloudRunMapping || {};
+              const payload = {
+                ...values,
+                cloudRunDomain: cloudRunData.cloudRunDomain,
+                cloudRunServiceName: cloudRunData.cloudRunServiceName,
+                cloudRunRegion: cloudRunData.cloudRunRegion,
+                cloudRunMapping: undefined // Suppression du champ temporaire
+              };
+              
               if (currentWebsite) {
-                await api.put(`/api/websites/${currentWebsite.id}`, values);
+                await api.put(`/api/websites/${currentWebsite.id}`, payload);
                 message.success('Site mis à jour');
               } else {
-                await api.post('/api/websites', values);
+                await api.post('/api/websites', payload);
                 message.success('Site créé');
               }
               setModalVisible(false);
@@ -335,60 +346,171 @@ export const WebsitesAdminPage: React.FC = () => {
               />
             </div>
           ) : (
-            <Card>
-              <Alert
-                message="Créez d'abord le site"
-                description="Vous pourrez gérer les sections après avoir créé le site"
-                type="info"
-                showIcon
-                style={{ fontSize: '16px' }}
-              />
+            <Card title="➕ Créer un nouveau site" style={{ marginBottom: '80px' }}>
+              <Row gutter={[16, 16]}>
+                <Col xs={24} md={12}>
+                  <Form.Item
+                    label="Nom du site"
+                    name="siteName"
+                    rules={[{ required: true, message: 'Le nom est requis' }]}
+                  >
+                    <Input 
+                      size="large" 
+                      placeholder="Ex: 2Thier Energy, Devis1Minute..." 
+                    />
+                  </Form.Item>
+                </Col>
+                
+                <Col xs={24} md={12}>
+                  <Form.Item
+                    label="Type de site"
+                    name="siteType"
+                    rules={[{ required: true, message: 'Le type est requis' }]}
+                    initialValue="vitrine"
+                  >
+                    <Select size="large">
+                      <Select.Option value="vitrine">Site Vitrine</Select.Option>
+                      <Select.Option value="landing">Landing Page</Select.Option>
+                      <Select.Option value="blog">Blog</Select.Option>
+                    </Select>
+                  </Form.Item>
+                </Col>
+
+                <Col xs={24} md={12}>
+                  <Form.Item
+                    label="Slug (URL)"
+                    name="slug"
+                    rules={[
+                      { required: true, message: 'Le slug est requis' },
+                      { pattern: /^[a-z0-9-]+$/, message: 'Format: minuscules, chiffres et tirets uniquement' }
+                    ]}
+                  >
+                    <Input 
+                      size="large"
+                      placeholder="Ex: 2thier, devis1minute..." 
+                      prefix="/"
+                    />
+                  </Form.Item>
+                </Col>
+
+                <Col xs={24} md={12}>
+                  <Form.Item
+                    label="Domaine personnalisé (optionnel)"
+                    name="domain"
+                  >
+                    <Input 
+                      size="large"
+                      placeholder="Ex: www.monsite.be" 
+                    />
+                  </Form.Item>
+                </Col>
+
+                <Col xs={24}>
+                  <Divider orientation="left">☁️ Mapping Cloud Run</Divider>
+                  <Form.Item
+                    label="Domaine Cloud Run"
+                    name={['cloudRunMapping']}
+                    tooltip="Liez ce site à un domaine déjà mappé dans Google Cloud Run"
+                  >
+                    <CloudRunDomainSelector />
+                  </Form.Item>
+                </Col>
+
+                <Col xs={24}>
+                  <Divider orientation="left">Paramètres</Divider>
+                </Col>
+
+                <Col xs={24} md={8}>
+                  <Form.Item
+                    label="Actif"
+                    name="isActive"
+                    valuePropName="checked"
+                    initialValue={true}
+                  >
+                    <Switch checkedChildren="Oui" unCheckedChildren="Non" />
+                  </Form.Item>
+                </Col>
+
+                <Col xs={24} md={8}>
+                  <Form.Item
+                    label="Publié"
+                    name="isPublished"
+                    valuePropName="checked"
+                    initialValue={false}
+                  >
+                    <Switch checkedChildren="Oui" unCheckedChildren="Non" />
+                  </Form.Item>
+                </Col>
+
+                <Col xs={24} md={8}>
+                  <Form.Item
+                    label="Mode maintenance"
+                    name="maintenanceMode"
+                    valuePropName="checked"
+                    initialValue={false}
+                  >
+                    <Switch checkedChildren="Oui" unCheckedChildren="Non" />
+                  </Form.Item>
+                </Col>
+
+                <Col xs={24}>
+                  <Alert
+                    message="💡 Après création"
+                    description="Vous pourrez gérer les sections, services, projets et témoignages après avoir créé le site."
+                    type="info"
+                    showIcon
+                  />
+                </Col>
+              </Row>
             </Card>
           )}
         </Form>
 
         {/* Boutons de sauvegarde FIXES en bas du modal */}
-        <div 
-          style={{
-            position: 'fixed',
-            bottom: 0,
-            left: 0,
-            right: 0,
-            backgroundColor: 'white',
-            padding: '16px 24px',
-            borderTop: '2px solid #f0f0f0',
-            display: 'flex',
-            gap: '12px',
-            justifyContent: 'flex-end',
-            zIndex: 2000,
-            boxShadow: '0 -2px 8px rgba(0,0,0,0.1)'
-          }}
-          className="mobile-action-buttons"
-        >
-          <Button 
-            size="large"
-            onClick={() => setModalVisible(false)}
-            style={{ 
-              minWidth: '120px',
-              flex: '1',
-              maxWidth: '200px'
+        {/* 🎯 BOUTONS D'ACTION - Affichés UNIQUEMENT pour la création, pas pour l'édition */}
+        {!currentWebsite && (
+          <div 
+            style={{
+              position: 'fixed',
+              bottom: 0,
+              left: 0,
+              right: 0,
+              backgroundColor: 'white',
+              padding: '16px 24px',
+              borderTop: '2px solid #f0f0f0',
+              display: 'flex',
+              gap: '12px',
+              justifyContent: 'flex-end',
+              zIndex: 2000,
+              boxShadow: '0 -2px 8px rgba(0,0,0,0.1)'
             }}
+            className="mobile-action-buttons"
           >
-            ❌ Annuler
-          </Button>
-          <Button 
-            type="primary" 
-            size="large"
-            onClick={() => form.submit()}
-            style={{ 
-              minWidth: '120px',
-              flex: '1',
-              maxWidth: '200px'
-            }}
-          >
-            {currentWebsite ? '💾 Sauvegarder' : '➕ Créer le site'}
-          </Button>
-        </div>
+            <Button 
+              size="large"
+              onClick={() => setModalVisible(false)}
+              style={{ 
+                minWidth: '120px',
+                flex: '1',
+                maxWidth: '200px'
+              }}
+            >
+              ❌ Annuler
+            </Button>
+            <Button 
+              type="primary" 
+              htmlType="submit"
+              size="large"
+              style={{ 
+                minWidth: '120px',
+                flex: '1',
+                maxWidth: '200px'
+              }}
+            >
+              ➕ Créer le site
+            </Button>
+          </div>
+        )}
 
         {/* Styles responsive pour mobile */}
         <style>{`

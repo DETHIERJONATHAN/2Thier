@@ -7,9 +7,9 @@
  * Structure: 7 sections WebSiteSection avec configuration complète
  */
 
-import { db } from '../lib/database';
+import { PrismaClient } from '@prisma/client';
 
-const prisma = db;
+const prisma = new PrismaClient();
 
 async function seed2ThierSite() {
   console.log('🌱 Seeding 2THIER site...');

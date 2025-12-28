@@ -1,0 +1,19 @@
+# Configuration pour Google Cloud Buildpacks
+# Ceci contrôle comment le conteneur est construit et démarré
+
+[project]
+id = "crm-api"
+name = "CRM 2Thier API"
+
+[[build.env]]
+name = "GOOGLE_BUILDABLE"
+value = "."
+
+[[build.env]]
+name = "GOOGLE_ENTRYPOINT"
+value = "npm run start"
+
+# Désactiver les optimisations qui peuvent causer des problèmes
+[[build.env]]
+name = "GOOGLE_RUNTIME_VERSION"
+value = "20"

@@ -55,16 +55,227 @@ router.get('/websites', authenticateToken, async (req: Request, res: Response) =
 });
 
 /**
- * GET /api/websites/:slug
- * Récupère tous les détails d'un site par son slug
+ * GET /api/websites/id/:id
+ * Récupère un site par son ID (pour l'édition dans le NoCodeBuilder)
+ * 🔒 PROTÉGÉE: Nécessite authentification
  */
-router.get('/websites/:slug', async (req: Request, res: Response) => {
+router.get('/websites/id/:id', authenticateToken, async (req: Request, res: Response) => {
   try {
-    const { slug } = req.params;
+    const { id } = req.params;
+    const websiteId = parseInt(id, 10);
+
+    if (isNaN(websiteId)) {
+      return res.status(400).json({ error: 'Invalid website ID' });
+    }
+
+    const website = await db.websites.findUnique({
+      where: { id: websiteId },
+      include: {
+        website_configs: true,
+        website_themes: true
+      }
+    });
+
+    if (!website) {
+      return res.status(404).json({ error: 'Website not found' });
+    }
+
+    res.json(website);
+  } catch (error) {
+    console.error('Error fetching website by ID:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+/**
+ * PUT /api/websites/:id
+ * Met à jour un site web
+ * 🔒 PROTÉGÉE: Nécessite authentification
+ */
+router.put('/websites/:id', authenticateToken, async (req: Request, res: Response) => {
+  try {
+    const websiteId = parseInt(req.params.id);
+    const organizationId = req.headers['x-organization-id'] as string;
+    const isSuperAdmin = req.headers['x-is-super-admin'] === 'true';
+    const data = req.body;
+
+    console.log('🔍 [WEBSITES PUT] ===== DÉBUT =====');
+    console.log('🔍 [WEBSITES PUT] websiteId:', websiteId);
+    console.log('🔍 [WEBSITES PUT] organizationId from header:', organizationId);
+    console.log('🔍 [WEBSITES PUT] isSuperAdmin:', isSuperAdmin);
+    console.log('🔍 [WEBSITES PUT] All headers:', JSON.stringify(req.headers, null, 2));
+    console.log('🔍 [WEBSITES PUT] Body:', JSON.stringify(data, null, 2));
+
+    if (!organizationId && !isSuperAdmin) {
+      console.log('🔍 [WEBSITES PUT] ❌ Pas d\'organizationId dans les headers');
+      return res.status(400).json({ error: 'Organization ID is required' });
+    }
+
+    // Vérifier que le site existe et appartient à l'organisation (sauf pour Super Admin)
+    const whereClause: any = { id: websiteId };
+    // Super Admin peut modifier n'importe quel site, pas de filtre organizationId
+    if (!isSuperAdmin) {
+      whereClause.organizationId = organizationId;
+    }
+    
+    console.log('🔍 [WEBSITES PUT] Recherche du site avec:', whereClause);
+    const existingWebsite = await db.websites.findFirst({
+      where: whereClause
+    });
+
+    console.log('🔍 [WEBSITES PUT] Résultat recherche:', existingWebsite ? 'TROUVÉ' : 'NON TROUVÉ');
+    if (existingWebsite) {
+      console.log('🔍 [WEBSITES PUT] Site trouvé:', { 
+        id: existingWebsite.id, 
+        organizationId: existingWebsite.organizationId,
+        siteName: existingWebsite.siteName 
+      });
+    }
+
+    if (!existingWebsite) {
+      console.log('🔍 [WEBSITES PUT] ❌ Website not found - 404');
+      return res.status(404).json({ error: 'Website not found' });
+    }
+
+    // Préparer les données de mise à jour
+    const updateData: any = {
+      updatedAt: new Date()
+    };
+
+    // Champs de base
+    if (data.siteName !== undefined) updateData.siteName = data.siteName;
+    if (data.siteType !== undefined) updateData.siteType = data.siteType;
+    if (data.slug !== undefined) updateData.slug = data.slug;
+    if (data.domain !== undefined) updateData.domain = data.domain;
+    if (data.isActive !== undefined) updateData.isActive = data.isActive;
+    if (data.isPublished !== undefined) updateData.isPublished = data.isPublished;
+    if (data.maintenanceMode !== undefined) updateData.maintenanceMode = data.maintenanceMode;
+    if (data.maintenanceMessage !== undefined) updateData.maintenanceMessage = data.maintenanceMessage;
+
+    // Champs Cloud Run
+    if (data.cloudRunDomain !== undefined) updateData.cloudRunDomain = data.cloudRunDomain;
+    if (data.cloudRunServiceName !== undefined) updateData.cloudRunServiceName = data.cloudRunServiceName;
+    if (data.cloudRunRegion !== undefined) updateData.cloudRunRegion = data.cloudRunRegion;
+
+    console.log('📝 [WEBSITES] Données de mise à jour:', updateData);
+
+    // Mettre à jour le site
+    const updatedWebsite = await db.websites.update({
+      where: { id: websiteId },
+      data: updateData,
+      include: {
+        website_configs: true
+      }
+    });
+
+    console.log('✅ [WEBSITES] Site mis à jour:', updatedWebsite.id);
+    res.json(updatedWebsite);
+  } catch (error) {
+    console.error('Error updating website:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+/**
+ * DELETE /api/websites/:id
+ * Supprime un site web
+ * 🔒 PROTÉGÉE: Nécessite authentification
+ */
+router.delete('/websites/:id', authenticateToken, async (req: Request, res: Response) => {
+  try {
+    const websiteId = parseInt(req.params.id);
+    const organizationId = req.headers['x-organization-id'] as string;
+    const isSuperAdmin = req.headers['x-is-super-admin'] === 'true';
+
+    // Vérifier que le site existe et appartient à l'organisation (sauf pour Super Admin)
+    const whereClause: any = { id: websiteId };
+    if (!isSuperAdmin || (organizationId && organizationId !== 'all')) {
+      whereClause.organizationId = organizationId;
+    }
+    
+    const existingWebsite = await db.websites.findFirst({
+      where: whereClause
+    });
+
+    if (!existingWebsite) {
+      return res.status(404).json({ error: 'Website not found' });
+    }
+
+    // Supprimer le site (cascade)
+    await db.websites.delete({
+      where: { id: websiteId }
+    });
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error deleting website:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+/**
+ * POST /api/websites
+ * Crée un nouveau site web
+ * 🔒 PROTÉGÉE: Nécessite authentification
+ */
+router.post('/websites', authenticateToken, async (req: Request, res: Response) => {
+  try {
+    const organizationId = req.headers['x-organization-id'] as string;
+    const data = req.body;
+
+    if (!organizationId) {
+      return res.status(400).json({ error: 'Organization ID is required' });
+    }
+
+    // Créer le site
+    const newWebsite = await db.websites.create({
+      data: {
+        organizationId,
+        siteName: data.siteName,
+        siteType: data.siteType || 'vitrine',
+        slug: data.slug,
+        domain: data.domain,
+        cloudRunDomain: data.cloudRunDomain,
+        cloudRunServiceName: data.cloudRunServiceName,
+        cloudRunRegion: data.cloudRunRegion || 'europe-west1',
+        isActive: true,
+        createdAt: new Date(),
+        updatedAt: new Date()
+      },
+      include: {
+        website_configs: true
+      }
+    });
+
+    res.status(201).json(newWebsite);
+  } catch (error) {
+    console.error('Error creating website:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+/**
+ * GET /api/websites/:idOrSlug
+ * Récupère tous les détails d'un site par son ID ou son slug
+ * Si c'est un nombre, on cherche par ID, sinon par slug
+ */
+router.get('/websites/:idOrSlug', async (req: Request, res: Response) => {
+  try {
+    const { idOrSlug } = req.params;
     const organizationId = req.headers['x-organization-id'] as string;
 
+    // Déterminer si c'est un ID (nombre) ou un slug (string)
+    const isId = /^\d+$/.test(idOrSlug);
+    
+    const whereClause: any = { isActive: true };
+    
+    if (isId) {
+      whereClause.id = parseInt(idOrSlug, 10);
+    } else {
+      whereClause.slug = idOrSlug;
+    }
+
     // Si pas d'organization ID dans les headers, on cherche le site publiquement
-    const whereClause: any = { slug, isActive: true };
     if (organizationId) {
       whereClause.organizationId = organizationId;
     }
@@ -323,158 +534,6 @@ router.get('/websites/:slug/blog/:postSlug', async (req: Request, res: Response)
     res.json(blogPost);
   } catch (error) {
     console.error('Error fetching blog post:', error);
-    res.status(500).json({ error: 'Internal server error' });
-  }
-});
-
-/**
- * PUT /api/websites/:id
- * Met à jour un site web
- * 🔒 PROTÉGÉE: Nécessite authentification
- */
-router.put('/websites/:id', authenticateToken, async (req: Request, res: Response) => {
-  try {
-    const websiteId = parseInt(req.params.id);
-    const organizationId = req.headers['x-organization-id'] as string;
-    const data = req.body;
-
-    if (!organizationId) {
-      return res.status(400).json({ error: 'Organization ID is required' });
-    }
-
-    // Vérifier que le site appartient bien à l'organisation
-    const existingWebsite = await db.websites.findFirst({
-      where: {
-        id: websiteId,
-        organizationId
-      }
-    });
-
-    if (!existingWebsite) {
-      return res.status(404).json({ error: 'Website not found' });
-    }
-
-    // Mettre à jour le site
-    const updatedWebsite = await db.websites.update({
-      where: { id: websiteId },
-      data: {
-        name: data.name,
-        slug: data.slug,
-        domain: data.domain,
-        description: data.description,
-        language: data.language,
-        timezone: data.timezone,
-        isActive: data.isActive,
-        maintenanceMode: data.maintenanceMode,
-        maintenanceMessage: data.maintenanceMessage,
-        analyticsCode: data.analyticsCode,
-        customCss: data.customCss,
-        customJs: data.customJs,
-        seoMetadata: data.seoMetadata
-      },
-      include: {
-        website_configs: true
-      }
-    });
-
-    res.json(updatedWebsite);
-  } catch (error) {
-    console.error('Error updating website:', error);
-    res.status(500).json({ error: 'Internal server error' });
-  }
-});
-
-/**
- * POST /api/websites
- * Crée un nouveau site web
- * 🔒 PROTÉGÉE: Nécessite authentification
- */
-router.post('/websites', authenticateToken, async (req: Request, res: Response) => {
-  try {
-    const organizationId = req.headers['x-organization-id'] as string;
-    const data = req.body;
-
-    if (!organizationId) {
-      return res.status(400).json({ error: 'Organization ID is required' });
-    }
-
-    const newWebsite = await db.websites.create({
-      data: {
-        name: data.name,
-        slug: data.slug,
-        domain: data.domain,
-        description: data.description,
-        language: data.language || 'fr',
-        timezone: data.timezone || 'Europe/Brussels',
-        organizationId,
-        isActive: true,
-        maintenanceMode: false
-      },
-      include: {
-        website_configs: true
-      }
-    });
-
-    res.status(201).json(newWebsite);
-  } catch (error) {
-    console.error('Error creating website:', error);
-    res.status(500).json({ error: 'Internal server error' });
-  }
-});
-
-/**
- * DELETE /api/websites/:id
- * Supprime un site web et toutes ses données associées (cascade)
- * Super Admin peut supprimer n'importe quel site
- * 🔒 PROTÉGÉE: Nécessite authentification
- */
-router.delete('/websites/:id', authenticateToken, async (req: Request, res: Response) => {
-  console.log('🗑️ [WEBSITES] DELETE /websites/:id atteint!');
-  console.log('🗑️ [WEBSITES] ID du site:', req.params.id);
-  
-  try {
-    const websiteId = parseInt(req.params.id);
-    const organizationId = req.headers['x-organization-id'] as string;
-    const user = (req as any).user;
-
-    console.log('🗑️ [WEBSITES] User:', user?.email, 'isSuperAdmin:', user?.isSuperAdmin);
-    console.log('🗑️ [WEBSITES] OrganizationId:', organizationId);
-
-    if (!organizationId && !user?.isSuperAdmin) {
-      console.log('❌ [WEBSITES] Organization ID requis et user n\'est pas Super Admin');
-      return res.status(400).json({ error: 'Organization ID is required' });
-    }
-
-    // Super Admin peut supprimer n'importe quel site
-    const whereClause: any = { id: websiteId };
-    
-    // Si ce n'est pas un Super Admin, on vérifie l'organisation
-    if (!user?.isSuperAdmin && organizationId) {
-      whereClause.organizationId = organizationId;
-    }
-
-    // Vérifier que le site existe
-    const existingWebsite = await db.websites.findFirst({
-      where: whereClause
-    });
-
-    if (!existingWebsite) {
-      return res.status(404).json({ error: 'Website not found' });
-    }
-
-    // Supprimer le site (cascade delete configuré dans Prisma supprimera automatiquement:
-    // sections, services, projects, testimonials, blogPosts, mediaFiles, config)
-    await db.websites.delete({
-      where: { id: websiteId }
-    });
-
-    console.log(`✅ Site web ${websiteId} (${existingWebsite.name}) supprimé par ${user?.email || 'unknown'}`);
-    res.json({ 
-      success: true, 
-      message: `Site "${existingWebsite.name}" supprimé avec succès` 
-    });
-  } catch (error) {
-    console.error('Error deleting website:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 });

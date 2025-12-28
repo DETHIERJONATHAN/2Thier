@@ -4,30 +4,87 @@ import { CheckCircleOutlined, ExclamationCircleOutlined } from '@ant-design/icon
 import { emergencyGoogleAuthReset, isInGoogleAuthLoop } from '../utils/googleAuthReset';
 
 const GoogleAuthCallback: React.FC = () => {
+  const [isProcessing, setIsProcessing] = React.useState(false);
+
   useEffect(() => {
-    // Vérification de sécurité : détection de boucle
-    if (isInGoogleAuthLoop()) {
-      console.warn('[GoogleAuthCallback] 🚨 BOUCLE DÉTECTÉE - Application du reset d\'urgence');
-      emergencyGoogleAuthReset();
-    }
+    const processCallback = async () => {
+      // Vérification de sécurité : détection de boucle
+      if (isInGoogleAuthLoop()) {
+        console.warn('[GoogleAuthCallback] 🚨 BOUCLE DÉTECTÉE - Application du reset d\'urgence');
+        emergencyGoogleAuthReset();
+        return;
+      }
 
-    // Récupérer les paramètres de l'URL
-    const urlParams = new URLSearchParams(window.location.search);
-    const googleSuccess = urlParams.get('google_success');
-    const googleError = urlParams.get('google_error');
-    const organizationId = urlParams.get('organizationId');
-    // Le backend peut renvoyer "user" ou "admin_email" – on accepte les deux
-    const userEmail = urlParams.get('user') || urlParams.get('admin_email');
+      // Récupérer les paramètres de l'URL
+      const urlParams = new URLSearchParams(window.location.search);
+      const code = urlParams.get('code');
+      const state = urlParams.get('state');
+      const googleSuccess = urlParams.get('google_success');
+      const googleError = urlParams.get('google_error');
+      const organizationId = urlParams.get('organizationId');
+      const userEmail = urlParams.get('user') || urlParams.get('admin_email');
 
-    console.log('[GoogleAuthCallback] Paramètres reçus:', {
-      googleSuccess,
-      googleError,
-      organizationId,
-      userEmail
-    });
+      console.log('[GoogleAuthCallback] Paramètres reçus:', {
+        hasCode: !!code,
+        hasState: !!state,
+        googleSuccess,
+        googleError,
+        organizationId,
+        userEmail
+      });
 
-    // Si succès: marquer l'auth Google comme « tout juste complétée » pour éviter un auto-connect immédiat
-    if (googleSuccess === '1') {
+      // CAS 1: Callback initial de Google (avec code et state)
+      if (code && state && !googleSuccess && !googleError) {
+        console.log('[GoogleAuthCallback] 🔄 Traitement du code OAuth...');
+        setIsProcessing(true);
+        
+        try {
+          // Envoyer le code au backend pour l'échanger contre des tokens
+          const response = await fetch('/api/google-auth/callback?' + urlParams.toString(), {
+            method: 'GET',
+            credentials: 'include'
+          });
+
+          // Le backend va rediriger, suivre la redirection
+          if (response.redirected) {
+            window.location.href = response.url;
+            return;
+          }
+
+          // Si pas de redirection, vérifier la réponse
+          if (response.ok) {
+            const data = await response.json();
+            console.log('[GoogleAuthCallback] ✅ Tokens échangés avec succès');
+            
+            // Marquer comme complété
+            sessionStorage.setItem('google_auth_just_completed', JSON.stringify({
+              ts: Date.now(),
+              organizationId: data.organizationId || null,
+              email: data.email || null,
+            }));
+
+            // Rediriger vers la page principale
+            window.location.replace('/');
+          } else {
+            throw new Error(`Erreur serveur: ${response.status}`);
+          }
+        } catch (error) {
+          console.error('[GoogleAuthCallback] ❌ Erreur lors de l\'échange du code:', error);
+          sessionStorage.setItem('google_auth_error', JSON.stringify({
+            ts: Date.now(),
+            error: 'callback_error',
+          }));
+          setTimeout(() => window.location.replace('/'), 3000);
+        } finally {
+          setIsProcessing(false);
+        }
+        return;
+      }
+
+      // CAS 2: Retour du backend avec résultat (google_success ou google_error)
+      // CAS 2: Retour du backend avec résultat (google_success ou google_error)
+      // Si succès: marquer l'auth Google comme « tout juste complétée » pour éviter un auto-connect immédiat
+      if (googleSuccess === '1') {
       try {
         const now = Date.now();
         const payload = {
@@ -103,6 +160,9 @@ const GoogleAuthCallback: React.FC = () => {
     } catch {
       // ignore
     }
+    };
+
+    processCallback();
   }, []);
 
   // Déterminer l'état d'affichage
@@ -110,6 +170,18 @@ const GoogleAuthCallback: React.FC = () => {
   const googleSuccess = urlParams.get('google_success');
   const googleError = urlParams.get('google_error');
   const userEmail = urlParams.get('user');
+
+  // Affichage pendant le traitement du code OAuth
+  if (isProcessing) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="text-center">
+          <Spin size="large" />
+          <p className="mt-4 text-gray-600">Échange des tokens OAuth en cours...</p>
+        </div>
+      </div>
+    );
+  }
 
   if (googleSuccess === '1') {
     return (

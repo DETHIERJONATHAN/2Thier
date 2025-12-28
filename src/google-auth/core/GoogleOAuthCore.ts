@@ -53,6 +53,9 @@ export class GoogleOAuthService {
       prompt: 'consent'
     });
     
+    console.log('[GoogleOAuthService] 🔗 URL d\'autorisation générée:', authUrl);
+    console.log('[GoogleOAuthService] 🎯 Redirect URI configuré:', GOOGLE_REDIRECT_URI);
+    
     return authUrl;
   }
 

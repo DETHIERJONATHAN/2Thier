@@ -164,17 +164,17 @@ router.get('/templates', async (req: Request, res: Response) => {
     const templates = await prisma.documentTemplate.findMany({
       where,
       include: {
-        sections: {
+        DocumentSection: {
           orderBy: { order: 'asc' }
         },
-        theme: true,
-        tree: {
+        DocumentTheme: true,
+        TreeBranchLeafTree: {
           select: {
             id: true,
             name: true
           }
         },
-        createdByUser: {
+        User: {
           select: {
             id: true,
             firstName: true,
@@ -183,7 +183,7 @@ router.get('/templates', async (req: Request, res: Response) => {
           }
         },
         _count: {
-          select: { generatedDocuments: true }
+          select: { GeneratedDocument: true }
         }
       },
       orderBy: { createdAt: 'desc' }
@@ -201,17 +201,21 @@ router.get('/templates/:id', async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     const organizationId = req.headers['x-organization-id'] as string;
+    const isSuperAdmin = req.headers['x-is-super-admin'] === 'true';
+
+    // Construire la clause where en fonction du rôle
+    const whereClause: any = { id };
+    if (!isSuperAdmin && organizationId) {
+      whereClause.organizationId = organizationId;
+    }
 
     const template = await prisma.documentTemplate.findFirst({
-      where: { 
-        id,
-        organizationId 
-      },
+      where: whereClause,
       include: {
-        sections: {
+        DocumentSection: {
           orderBy: { order: 'asc' }
         },
-        theme: true
+        DocumentTheme: true
       }
     });
 
@@ -257,7 +261,8 @@ router.post('/templates', async (req: Request, res: Response) => {
         defaultLanguage: defaultLanguage || 'fr',
         themeId,
         createdBy: userId,
-        sections: {
+        updatedAt: new Date(),
+        DocumentSection: {
           create: (sections || []).map((section: any, index: number) => ({
             id: nanoid(),
             order: section.order || index,
@@ -266,13 +271,14 @@ router.post('/templates', async (req: Request, res: Response) => {
             displayConditions: section.displayConditions,
             linkedNodeIds: section.linkedNodeIds || [],
             linkedVariables: section.linkedVariables || [],
-            translations: section.translations || {}
+            translations: section.translations || {},
+            updatedAt: new Date()
           }))
         }
       },
       include: {
-        sections: true,
-        theme: true
+        DocumentSection: true,
+        DocumentTheme: true
       }
     });
 
@@ -288,6 +294,7 @@ router.put('/templates/:id', async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     const organizationId = req.headers['x-organization-id'] as string;
+    const isSuperAdmin = req.headers['x-is-super-admin'] === 'true';
     
     const {
       name,
@@ -304,8 +311,13 @@ router.put('/templates/:id', async (req: Request, res: Response) => {
     console.log('📝 [TEMPLATE UPDATE] Mise à jour template:', { id, name, treeId, type });
 
     // Vérifier que le template existe et appartient à l'organisation
+    const whereClause: any = { id };
+    if (!isSuperAdmin && organizationId) {
+      whereClause.organizationId = organizationId;
+    }
+    
     const existing = await prisma.documentTemplate.findFirst({
-      where: { id, organizationId }
+      where: whereClause
     });
 
     if (!existing) {
@@ -330,8 +342,9 @@ router.put('/templates/:id', async (req: Request, res: Response) => {
         defaultLanguage,
         themeId,
         isActive,
+        updatedAt: new Date(),
         ...(sections && {
-          sections: {
+          DocumentSection: {
             create: sections.map((section: any, index: number) => ({
               id: nanoid(),
               order: section.order || index,
@@ -340,15 +353,16 @@ router.put('/templates/:id', async (req: Request, res: Response) => {
               displayConditions: section.displayConditions,
               linkedNodeIds: section.linkedNodeIds || [],
               linkedVariables: section.linkedVariables || [],
-              translations: section.translations || {}
+              translations: section.translations || {},
+              updatedAt: new Date()
             }))
           }
         })
       },
       include: {
-        sections: { orderBy: { order: 'asc' } },
-        theme: true,
-        tree: {
+        DocumentSection: { orderBy: { order: 'asc' } },
+        DocumentTheme: true,
+        TreeBranchLeafTree: {
           select: { id: true, name: true }
         }
       }
@@ -578,7 +592,8 @@ router.post('/templates/:templateId/sections', async (req: Request, res: Respons
         templateId,
         type,
         order: order ?? 0,
-        config: config || {}
+        config: config || {},
+        updatedAt: new Date()
       }
     });
 
@@ -796,10 +811,10 @@ router.post('/generated/generate', async (req: Request, res: Response) => {
         organizationId 
       },
       include: {
-        sections: {
+        DocumentSection: {
           orderBy: { order: 'asc' }
         },
-        theme: true
+        DocumentTheme: true
       }
     });
 
@@ -835,10 +850,11 @@ router.post('/generated/generate', async (req: Request, res: Response) => {
           generatedAt: new Date().toISOString(),
           generatedBy: userId
         },
-        createdBy: userId || null
+        createdBy: userId || null,
+        updatedAt: new Date()
       },
       include: {
-        template: {
+        DocumentTemplate: {
           select: {
             id: true,
             name: true,
@@ -943,15 +959,15 @@ router.get('/generated/:id/download', async (req: Request, res: Response) => {
         organizationId
       },
       include: {
-        template: {
+        DocumentTemplate: {
           include: {
-            sections: {
+            DocumentSection: {
               orderBy: { order: 'asc' }
             },
-            theme: true
+            DocumentTheme: true
           }
         },
-        lead: true
+        Lead: true
       }
     });
 
@@ -979,7 +995,7 @@ router.get('/generated/:id/download', async (req: Request, res: Response) => {
     const dataSnapshot = (document.dataSnapshot || {}) as Record<string, any>;
     
     // Priorité : theme du template (relation) > theme par défaut de l'org > valeurs par défaut
-    const templateTheme = document.template?.theme;
+    const templateTheme = document.DocumentTemplate?.DocumentTheme;
     const themeSource = templateTheme || defaultTheme;
     const theme = themeSource ? {
       primaryColor: themeSource.primaryColor || '#1890ff',
@@ -1008,7 +1024,7 @@ router.get('/generated/:id/download', async (req: Request, res: Response) => {
     });
     
     // Mapper les sections
-    const sections = document.template?.sections?.map(s => ({
+    const sections = document.DocumentTemplate?.DocumentSection?.map(s => ({
       id: s.id,
       type: s.type,
       name: (s as any).name || s.type,
@@ -1157,16 +1173,16 @@ router.get('/generated/:id/preview', async (req: Request, res: Response) => {
         organizationId
       },
       include: {
-        template: {
+        DocumentTemplate: {
           include: {
-            sections: {
+            DocumentSection: {
               orderBy: { order: 'asc' }
             },
-            theme: true
+            DocumentTheme: true
           }
         },
-        lead: true,
-        submission: true
+        Lead: true,
+        TreeBranchLeafSubmission: true
       }
     });
 
@@ -1188,8 +1204,8 @@ router.get('/generated/:id/preview', async (req: Request, res: Response) => {
       notes: document.notes,
       createdAt: document.createdAt,
       updatedAt: document.updatedAt,
-      template: document.template,
-      lead: document.lead,
+      template: document.DocumentTemplate,
+      lead: document.Lead,
       dataSnapshot: document.dataSnapshot,
       // Informations de signature/paiement
       signedAt: document.signedAt,
