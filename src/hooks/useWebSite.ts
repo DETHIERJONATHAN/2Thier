@@ -6,7 +6,8 @@
 import { useState, useEffect } from 'react';
 import axios from 'axios';
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000';
+// Utiliser une URL relative pour passer par le proxy Vite (évite les problèmes CORS/Codespaces)
+const API_BASE_URL = '';
 
 interface WebSiteConfig {
   id: number;
@@ -107,6 +108,21 @@ interface WebSiteBlogPost {
   };
 }
 
+interface WebSiteSection {
+  id: number;
+  websiteId: number;
+  key: string;
+  type: string;
+  name: string;
+  content: any;
+  backgroundColor?: string;
+  textColor?: string;
+  customCss?: string;
+  displayOrder: number;
+  isActive: boolean;
+  isLocked: boolean;
+}
+
 interface WebSiteData {
   id: number;
   organizationId: string;
@@ -121,6 +137,7 @@ interface WebSiteData {
   createdAt: string;
   updatedAt: string;
   config?: WebSiteConfig;
+  sections: WebSiteSection[];
   services: WebSiteService[];
   projects: WebSiteProject[];
   testimonials: WebSiteTestimonial[];
@@ -151,7 +168,20 @@ export const useWebSite = (slug: string): UseWebSiteReturn => {
 
       const response = await axios.get(`${API_BASE_URL}/api/websites/${slug}`);
       
-      setData(response.data);
+      // Mapper les noms Prisma vers les noms attendus par le frontend
+      const apiData = response.data;
+      const mappedData: WebSiteData = {
+        ...apiData,
+        config: apiData.website_configs,
+        sections: apiData.website_sections || [],
+        services: apiData.website_services || [],
+        projects: apiData.website_projects || [],
+        testimonials: apiData.website_testimonials || [],
+        blogPosts: apiData.website_blog_posts || [],
+        mediaFiles: apiData.website_media_files || []
+      };
+      
+      setData(mappedData);
     } catch (err: any) {
       console.error('Error fetching website:', err);
       setError(err.response?.data?.error || 'Une erreur est survenue lors du chargement du site');

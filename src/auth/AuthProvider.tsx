@@ -516,7 +516,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
       window.__authLoginInFlight = true;
       try {
-        await staticApi.post('/auth/login', { email, password });
+        const loginResponse = await staticApi.post('/auth/login', { email, password });
+        console.log('[AuthProvider] ✅ Login réussi, réponse:', loginResponse);
+        
+        // Petit délai pour laisser le navigateur stocker le cookie
+        await new Promise(resolve => setTimeout(resolve, 100));
+        
         // Force un refresh immédiat en ignorant le TTL
         await fetchMe({ force: true });
       } catch (error) {
@@ -539,6 +544,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
 
     const logout = () => {
+      // 🔄 Réinitialiser les flags de single-flight AVANT tout appel pour permettre un re-login immédiat
+      window.__authLoginInFlight = false;
+      window.__authFetchMeInFlight = false;
+      delete window.__authMeCooldownUntil;
+      
       // Appeler l'API de déconnexion pour nettoyer le cookie côté serveur
       staticApi.post('/logout', {}).catch(err => {
         console.warn('Erreur lors de la déconnexion côté serveur:', err);

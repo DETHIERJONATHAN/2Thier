@@ -43,6 +43,11 @@ console.log('✅ [DEBUG] Google Token Scheduler importé');
 console.log('🚀 [DEBUG] Création de l\'app Express...');
 const app = express();
 console.log('✅ [DEBUG] App Express créée');
+
+// 🔧 Trust proxy pour Codespaces/reverse proxy - permet d'utiliser X-Forwarded-Proto
+app.set('trust proxy', 1);
+console.log('✅ [DEBUG] Trust proxy activé');
+
 const port = process.env.PORT || 8080;
 console.log(`🔧 [DEBUG] Port configuré: ${port}`);
 

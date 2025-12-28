@@ -182,13 +182,17 @@ const MainLayout: React.FC<MainLayoutProps> = ({
       }
 
       try {
-        const response = await api.get('/user/favorites');
+        // redirectOnAuth: false pour ne pas déconnecter si 401 (évite la boucle de déconnexion)
+        const response = await api.get('/user/favorites', { redirectOnAuth: false });
         if (response && response.favorites) {
           setFavoriteModules(response.favorites);
           console.log('⭐ [Favoris] Chargés:', response.favorites);
         }
       } catch (error) {
-        console.error('❌ [Favoris] Erreur chargement:', error);
+        // Silencieux si 401 - l'utilisateur n'est juste pas encore authentifié
+        if (!(error instanceof Error && error.message.includes('401'))) {
+          console.error('❌ [Favoris] Erreur chargement:', error);
+        }
         // En cas d'erreur, utiliser un fallback du localStorage pour ne pas bloquer l'UX
         const savedFavorites = localStorage.getItem(`favorites_${user?.id || 'guest'}`);
         if (savedFavorites) {
@@ -213,12 +217,12 @@ const MainLayout: React.FC<MainLayoutProps> = ({
     try {
       if (isFavorite) {
         // Supprimer des favoris
-        await api.delete(`/user/favorites/${moduleKey}`);
+        await api.delete(`/user/favorites/${moduleKey}`, { redirectOnAuth: false });
         setFavoriteModules(prev => prev.filter(key => key !== moduleKey));
         console.log(`⭐ [Favoris] Supprimé: ${moduleKey}`);
       } else {
         // Ajouter aux favoris
-        await api.post('/user/favorites', { moduleKey });
+        await api.post('/user/favorites', { moduleKey }, { redirectOnAuth: false });
         setFavoriteModules(prev => [...prev, moduleKey]);
         console.log(`⭐ [Favoris] Ajouté: ${moduleKey}`);
       }

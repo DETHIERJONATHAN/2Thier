@@ -3,8 +3,8 @@ import { useAuth } from '../auth/useAuth';
 import { useNavigate, Link } from 'react-router-dom';
 
 export default function Connexion() {
-  const [email, setEmail] = useState('dethier.jls@gmail.com');
-  const [password, setPassword] = useState('password');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const { login } = useAuth();
@@ -15,7 +15,8 @@ export default function Connexion() {
     setLoading(true);
     setError('');
     try {
-      console.log('[Connexion] Début de la soumission du formulaire.');
+      console.log(`[Connexion] 🔐 Tentative de login avec email="${email}", password.length=${password?.length || 0}`);
+      console.log(`[Connexion] 🔐 __authLoginInFlight=`, window.__authLoginInFlight);
       await login(email, password);
       console.log('[Connexion] Appel à login terminé avec succès.');
       navigate('/dashboard'); // Redirection vers le tableau de bord

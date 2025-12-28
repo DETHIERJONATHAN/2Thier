@@ -105,7 +105,24 @@ export default defineConfig({
     host: true, // Exposer sur le réseau (requis pour Codespaces)
     strictPort: true, // Forcer l'utilisation du port 5173, échouer si occupé
     proxy: {
-      '/api': 'http://localhost:4000'
+      '/api': {
+        target: 'http://localhost:4000',
+        changeOrigin: true,
+        secure: false,
+        // 🍪 CRITIQUE: Forward les cookies Set-Cookie du backend
+        cookieDomainRewrite: '',
+        cookiePathRewrite: '/',
+        // 🔧 Codespaces: indiquer au backend que l'origine est HTTPS
+        configure: (proxy) => {
+          proxy.on('proxyReq', (proxyReq, req) => {
+            // Propager les headers X-Forwarded-* pour que le backend sache qu'on est en HTTPS
+            const forwardedProto = req.headers['x-forwarded-proto'] || 'https';
+            const forwardedHost = req.headers['x-forwarded-host'] || req.headers.host;
+            proxyReq.setHeader('X-Forwarded-Proto', forwardedProto);
+            proxyReq.setHeader('X-Forwarded-Host', forwardedHost || '');
+          });
+        },
+      }
     }
   },
   

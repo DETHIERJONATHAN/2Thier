@@ -89,7 +89,9 @@ export function useAuthenticatedApi() {
   const fetchApi = useCallback(
     async <T = unknown>(url: string, options: ApiOptions = {}): Promise<T> => {
       const { showErrors = true, redirectOnAuth = true, params, ...fetchOptions } = options;
-      let finalUrl = url;
+      
+      // 🔧 Normaliser l'URL: ajouter /api si manquant (cohérent avec staticApi de AuthProvider)
+      let finalUrl = url.startsWith('/api') ? url : `/api${url}`;
 
       // Query params GET
       if (params && Object.keys(params).length > 0) {

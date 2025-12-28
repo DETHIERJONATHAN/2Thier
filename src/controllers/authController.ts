@@ -36,9 +36,17 @@ const getJWTSecret = (): string => {
 
 export const login = async (req: Request, res: Response) => {
   try {
+    // DEBUG: Afficher le body complet reçu
+    console.log(`[AUTH] 📦 Body reçu:`, JSON.stringify(req.body));
+    console.log(`[AUTH] 📦 Content-Type:`, req.headers['content-type']);
+    
     const { email, password } = req.body;
 
+    console.log(`[AUTH] 🔐 Tentative de connexion pour: ${email}`);
+    console.log(`[AUTH] 🔐 Password reçu: "${password}" (length: ${password?.length || 0}, type: ${typeof password})`);
+
     if (!email || !password) {
+      console.log(`[AUTH] ❌ Email ou password manquant`);
       return res.status(400).json({ message: 'Email et mot de passe requis' });
     }
 
@@ -59,11 +67,17 @@ export const login = async (req: Request, res: Response) => {
     });
 
     if (!user || !user.passwordHash) {
+      console.log(`[AUTH] ❌ Utilisateur non trouvé ou pas de passwordHash pour: ${email}`);
       return res.status(401).json({ message: 'Identifiants invalides' });
     }
 
+    console.log(`[AUTH] 👤 Utilisateur trouvé: ${user.firstName} ${user.lastName}`);
+    
     const isPasswordValid = await bcrypt.compare(password, user.passwordHash);
+    console.log(`[AUTH] 🔑 Comparaison mot de passe: ${isPasswordValid ? '✅ VALIDE' : '❌ INVALIDE'}`);
+    
     if (!isPasswordValid) {
+      console.log(`[AUTH] ❌ Mot de passe incorrect pour: ${email}`);
       return res.status(401).json({ message: 'Identifiants invalides' });
     }
 
@@ -109,16 +123,23 @@ export const login = async (req: Request, res: Response) => {
     );
 
     // Définir le cookie
+    // Codespaces: le frontend est servi en HTTPS, le navigateur a besoin de Secure
+    // Le cookie est défini via le proxy Vite qui est sur le même domaine HTTPS
     const isProduction = process.env.NODE_ENV === 'production';
+    const isCodespaces = process.env.CODESPACES === 'true';
+    const needsSecureCookie = isProduction || isCodespaces;
+    
+    console.log(`[AUTH] 🍪 Cookie config: isProduction=${isProduction}, isCodespaces=${isCodespaces}, needsSecure=${needsSecureCookie}`);
+    
     res.cookie('token', token, {
       httpOnly: true,
-      secure: isProduction,
-      sameSite: isProduction ? 'none' : 'lax', // 'none' requis pour cross-site en production avec secure
+      secure: needsSecureCookie,
+      sameSite: needsSecureCookie ? 'none' : 'lax',
       maxAge: 24 * 60 * 60 * 1000, // 24 heures
       path: '/',
     });
 
-    console.log(`[AUTH] Connexion réussie pour ${email}`);
+    console.log(`[AUTH] ✅ Connexion réussie pour ${email} (cookie secure=${needsSecureCookie}, sameSite=${needsSecureCookie ? 'none' : 'lax'})`);
     res.status(200).json(response);
   } catch (error) {
     console.error('[AUTH] Erreur lors de la connexion:', error);

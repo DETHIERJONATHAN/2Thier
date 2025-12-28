@@ -7,14 +7,13 @@ import express from 'express';
 import { db } from '../lib/database';
 
 const router = express.Router();
-const prisma = db;
 
 // GET /api/website-sections/:websiteId - Liste des sections d'un site
 router.get('/website-sections/:websiteId', async (req, res) => {
   try {
     const { websiteId } = req.params;
 
-    const sections = await prisma.webSiteSection.findMany({
+    const sections = await db.website_sections.findMany({
       where: {
         websiteId: parseInt(websiteId)
       },
@@ -36,12 +35,12 @@ router.post('/website-sections', async (req, res) => {
     const { websiteId, key, type, name, content, backgroundColor, textColor, customCss } = req.body;
 
     // Obtenir le displayOrder max actuel
-    const maxOrder = await prisma.webSiteSection.aggregate({
+    const maxOrder = await db.website_sections.aggregate({
       where: { websiteId: parseInt(websiteId) },
       _max: { displayOrder: true }
     });
 
-    const section = await prisma.webSiteSection.create({
+    const section = await db.website_sections.create({
       data: {
         websiteId: parseInt(websiteId),
         key,
@@ -76,7 +75,7 @@ router.put('/website-sections/:id', async (req, res) => {
     console.log('  Content keys:', content ? Object.keys(content) : 'undefined');
 
     // 🔥 FIX: Charger le content existant pour fusionner
-    const existing = await prisma.webSiteSection.findUnique({
+    const existing = await db.website_sections.findUnique({
       where: { id: parseInt(id) }
     });
 
@@ -118,7 +117,7 @@ router.put('/website-sections/:id', async (req, res) => {
     console.log('  🔍 Existing content keys:', existing.content ? Object.keys(existing.content as object) : 'none');
     console.log('  🔍 Merged content keys:', mergedContent ? Object.keys(mergedContent as object) : 'none');
 
-    const section = await prisma.webSiteSection.update({
+    const section = await db.website_sections.update({
       where: { id: parseInt(id) },
       data: {
         ...(name !== undefined && { name }),
@@ -149,7 +148,7 @@ router.patch('/website-sections/:id', async (req, res) => {
     console.log('  Body keys:', Object.keys(req.body));
 
     // 🔥 FIX: Charger le content existant pour fusionner
-    const existing = await prisma.webSiteSection.findUnique({
+    const existing = await db.website_sections.findUnique({
       where: { id: parseInt(id) }
     });
 
@@ -188,7 +187,7 @@ router.patch('/website-sections/:id', async (req, res) => {
       ? deepMerge(existing.content as object, content)
       : existing.content;
 
-    const section = await prisma.webSiteSection.update({
+    const section = await db.website_sections.update({
       where: { id: parseInt(id) },
       data: {
         ...(name !== undefined && { name }),
@@ -214,7 +213,7 @@ router.delete('/website-sections/:id', async (req, res) => {
     const { id } = req.params;
 
     // Vérifier si la section est verrouillée
-    const section = await prisma.webSiteSection.findUnique({
+    const section = await db.website_sections.findUnique({
       where: { id: parseInt(id) }
     });
 
@@ -222,7 +221,7 @@ router.delete('/website-sections/:id', async (req, res) => {
       return res.status(403).json({ error: 'Cette section est verrouillée et ne peut pas être supprimée' });
     }
 
-    await prisma.webSiteSection.delete({
+    await db.website_sections.delete({
       where: { id: parseInt(id) }
     });
 
@@ -238,9 +237,9 @@ router.post('/website-sections/reorder', async (req, res) => {
   try {
     const { sections } = req.body; // [{ id, displayOrder }, ...]
 
-    await prisma.$transaction(
+    await db.$transaction(
       sections.map((section: { id: number; displayOrder: number }) =>
-        prisma.webSiteSection.update({
+        db.website_sections.update({
           where: { id: section.id },
           data: { displayOrder: section.displayOrder }
         })
@@ -259,7 +258,7 @@ router.post('/website-sections/duplicate/:id', async (req, res) => {
   try {
     const { id } = req.params;
 
-    const original = await prisma.webSiteSection.findUnique({
+    const original = await db.website_sections.findUnique({
       where: { id: parseInt(id) }
     });
 
@@ -270,7 +269,7 @@ router.post('/website-sections/duplicate/:id', async (req, res) => {
     // Générer une nouvelle clé unique
     const newKey = `${original.key}-copy-${Date.now()}`;
 
-    const duplicate = await prisma.webSiteSection.create({
+    const duplicate = await db.website_sections.create({
       data: {
         websiteId: original.websiteId,
         key: newKey,

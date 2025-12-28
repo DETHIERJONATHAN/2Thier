@@ -9,7 +9,6 @@ import { db } from '../lib/database';
 import { authenticateToken } from '../middleware/auth';
 
 const router = Router();
-const prisma = db;
 
 // ⚠️ IMPORTANT: Les routes GET sont publiques (affichage site vitrine)
 // Les routes POST/PUT/PATCH/DELETE sont protégées par authenticateToken
@@ -38,10 +37,10 @@ router.get('/websites', authenticateToken, async (req: Request, res: Response) =
       whereClause.organizationId = organizationId;
     }
 
-    const websites = await prisma.webSite.findMany({
+    const websites = await db.websites.findMany({
       where: whereClause,
       include: {
-        config: true
+        website_configs: true
       },
       orderBy: {
         createdAt: 'desc'
@@ -70,49 +69,32 @@ router.get('/websites/:slug', async (req: Request, res: Response) => {
       whereClause.organizationId = organizationId;
     }
 
-    const website = await prisma.webSite.findFirst({
+    const website = await db.websites.findFirst({
       where: whereClause,
       include: {
-        config: {
-          include: {
-            logoFile: true,
-            faviconFile: true,
-            heroBackgroundFile: true,
-            ogImageFile: true
-          }
-        },
-        sections: {
+        website_configs: true,
+        website_sections: {
           where: { isActive: true },
           orderBy: { displayOrder: 'asc' }
         },
-        services: {
+        website_services: {
           where: { isActive: true },
           orderBy: { displayOrder: 'asc' }
         },
-        projects: {
+        website_projects: {
           where: { isActive: true },
           orderBy: { displayOrder: 'asc' }
         },
-        testimonials: {
+        website_testimonials: {
           where: { isActive: true },
           orderBy: { displayOrder: 'asc' }
         },
-        blogPosts: {
+        website_blog_posts: {
           where: { isPublished: true },
           orderBy: { publishedAt: 'desc' },
-          take: 10,
-          include: {
-            author: {
-              select: {
-                id: true,
-                firstName: true,
-                lastName: true,
-                avatarUrl: true
-              }
-            }
-          }
+          take: 10
         },
-        mediaFiles: {
+        website_media_files: {
           where: { isPublic: true },
           orderBy: { createdAt: 'desc' }
         }
@@ -146,7 +128,7 @@ router.get('/websites/:slug/services', async (req: Request, res: Response) => {
   try {
     const { slug } = req.params;
 
-    const website = await prisma.webSite.findFirst({
+    const website = await db.websites.findFirst({
       where: { slug, isActive: true },
       select: { id: true }
     });
@@ -155,7 +137,7 @@ router.get('/websites/:slug/services', async (req: Request, res: Response) => {
       return res.status(404).json({ error: 'Website not found' });
     }
 
-    const services = await prisma.webSiteService.findMany({
+    const services = await db.website_services.findMany({
       where: {
         websiteId: website.id,
         isActive: true
@@ -179,7 +161,7 @@ router.get('/websites/:slug/projects', async (req: Request, res: Response) => {
     const { slug } = req.params;
     const { featured } = req.query;
 
-    const website = await prisma.webSite.findFirst({
+    const website = await db.websites.findFirst({
       where: { slug, isActive: true },
       select: { id: true }
     });
@@ -197,7 +179,7 @@ router.get('/websites/:slug/projects', async (req: Request, res: Response) => {
       whereClause.isFeatured = true;
     }
 
-    const projects = await prisma.webSiteProject.findMany({
+    const projects = await db.website_projects.findMany({
       where: whereClause,
       orderBy: { displayOrder: 'asc' }
     });
@@ -218,7 +200,7 @@ router.get('/websites/:slug/testimonials', async (req: Request, res: Response) =
     const { slug } = req.params;
     const { featured } = req.query;
 
-    const website = await prisma.webSite.findFirst({
+    const website = await db.websites.findFirst({
       where: { slug, isActive: true },
       select: { id: true }
     });
@@ -236,7 +218,7 @@ router.get('/websites/:slug/testimonials', async (req: Request, res: Response) =
       whereClause.isFeatured = true;
     }
 
-    const testimonials = await prisma.webSiteTestimonial.findMany({
+    const testimonials = await db.website_testimonials.findMany({
       where: whereClause,
       orderBy: { displayOrder: 'asc' }
     });
@@ -257,7 +239,7 @@ router.get('/websites/:slug/blog', async (req: Request, res: Response) => {
     const { slug } = req.params;
     const { limit = '10', featured } = req.query;
 
-    const website = await prisma.webSite.findFirst({
+    const website = await db.websites.findFirst({
       where: { slug, isActive: true },
       select: { id: true }
     });
@@ -275,7 +257,7 @@ router.get('/websites/:slug/blog', async (req: Request, res: Response) => {
       whereClause.isFeatured = true;
     }
 
-    const blogPosts = await prisma.webSiteBlogPost.findMany({
+    const blogPosts = await db.website_blog_posts.findMany({
       where: whereClause,
       orderBy: { publishedAt: 'desc' },
       take: parseInt(limit as string),
@@ -306,7 +288,7 @@ router.get('/websites/:slug/blog/:postSlug', async (req: Request, res: Response)
   try {
     const { slug, postSlug } = req.params;
 
-    const website = await prisma.webSite.findFirst({
+    const website = await db.websites.findFirst({
       where: { slug, isActive: true },
       select: { id: true }
     });
@@ -315,7 +297,7 @@ router.get('/websites/:slug/blog/:postSlug', async (req: Request, res: Response)
       return res.status(404).json({ error: 'Website not found' });
     }
 
-    const blogPost = await prisma.webSiteBlogPost.findFirst({
+    const blogPost = await db.website_blog_posts.findFirst({
       where: {
         websiteId: website.id,
         slug: postSlug,
@@ -361,7 +343,7 @@ router.put('/websites/:id', authenticateToken, async (req: Request, res: Respons
     }
 
     // Vérifier que le site appartient bien à l'organisation
-    const existingWebsite = await prisma.webSite.findFirst({
+    const existingWebsite = await db.websites.findFirst({
       where: {
         id: websiteId,
         organizationId
@@ -373,7 +355,7 @@ router.put('/websites/:id', authenticateToken, async (req: Request, res: Respons
     }
 
     // Mettre à jour le site
-    const updatedWebsite = await prisma.webSite.update({
+    const updatedWebsite = await db.websites.update({
       where: { id: websiteId },
       data: {
         name: data.name,
@@ -391,7 +373,7 @@ router.put('/websites/:id', authenticateToken, async (req: Request, res: Respons
         seoMetadata: data.seoMetadata
       },
       include: {
-        config: true
+        website_configs: true
       }
     });
 
@@ -416,7 +398,7 @@ router.post('/websites', authenticateToken, async (req: Request, res: Response) 
       return res.status(400).json({ error: 'Organization ID is required' });
     }
 
-    const newWebsite = await prisma.webSite.create({
+    const newWebsite = await db.websites.create({
       data: {
         name: data.name,
         slug: data.slug,
@@ -429,7 +411,7 @@ router.post('/websites', authenticateToken, async (req: Request, res: Response) 
         maintenanceMode: false
       },
       include: {
-        config: true
+        website_configs: true
       }
     });
 
@@ -472,7 +454,7 @@ router.delete('/websites/:id', authenticateToken, async (req: Request, res: Resp
     }
 
     // Vérifier que le site existe
-    const existingWebsite = await prisma.webSite.findFirst({
+    const existingWebsite = await db.websites.findFirst({
       where: whereClause
     });
 
@@ -482,7 +464,7 @@ router.delete('/websites/:id', authenticateToken, async (req: Request, res: Resp
 
     // Supprimer le site (cascade delete configuré dans Prisma supprimera automatiquement:
     // sections, services, projects, testimonials, blogPosts, mediaFiles, config)
-    await prisma.webSite.delete({
+    await db.websites.delete({
       where: { id: websiteId }
     });
 

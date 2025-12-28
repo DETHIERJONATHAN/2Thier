@@ -3,15 +3,13 @@
  * Site Vitrine 2Thier + Devis1Minute
  */
 
-import { PrismaClient } from '@prisma/client';
-
-const prisma = new PrismaClient();
+import { db } from '../src/lib/database';
 
 async function main() {
   console.log('🌱 Début du seed des sites web...');
 
   // Récupérer l'organisation 2Thier (Super Admin)
-  const org2Thier = await prisma.organization.findFirst({
+  const org2Thier = await db.organization.findFirst({
     where: {
       OR: [
         { name: { contains: '2thier', mode: 'insensitive' } },
@@ -24,7 +22,7 @@ async function main() {
     console.error('❌ Organisation 2Thier non trouvée !');
     console.log('💡 Création de l\'organisation 2Thier...');
     
-    const newOrg = await prisma.organization.create({
+    const newOrg = await db.organization.create({
       data: {
         id: '2thier-org-id',
         name: '2Thier',
@@ -40,7 +38,7 @@ async function main() {
     console.log('✅ Organisation 2Thier créée !');
   }
 
-  const organization = org2Thier || await prisma.organization.findFirst({
+  const organization = org2Thier || await db.organization.findFirst({
     where: { name: { contains: '2thier', mode: 'insensitive' } }
   });
 
@@ -57,7 +55,7 @@ async function main() {
   console.log('\n📱 Création du Site Vitrine 2Thier...');
 
   // Vérifier si le site existe déjà
-  let siteVitrine = await prisma.webSite.findFirst({
+  let siteVitrine = await db.websites.findFirst({
     where: {
       organizationId: organization.id,
       slug: 'site-vitrine-2thier'
@@ -66,10 +64,16 @@ async function main() {
 
   if (siteVitrine) {
     console.log('⚠️  Site Vitrine existe déjà, suppression et recréation...');
-    await prisma.webSite.delete({ where: { id: siteVitrine.id } });
+    // Supprimer les données liées d'abord
+    await db.website_services.deleteMany({ where: { websiteId: siteVitrine.id } });
+    await db.website_projects.deleteMany({ where: { websiteId: siteVitrine.id } });
+    await db.website_testimonials.deleteMany({ where: { websiteId: siteVitrine.id } });
+    await db.website_sections.deleteMany({ where: { websiteId: siteVitrine.id } });
+    await db.website_configs.deleteMany({ where: { websiteId: siteVitrine.id } });
+    await db.websites.delete({ where: { id: siteVitrine.id } });
   }
 
-  siteVitrine = await prisma.webSite.create({
+  siteVitrine = await db.websites.create({
     data: {
       organizationId: organization.id,
       siteName: '2Thier SRL',
@@ -78,14 +82,15 @@ async function main() {
       domain: '2thier.be',
       isActive: true,
       isPublished: true,
-      maintenanceMode: false
+      maintenanceMode: false,
+      updatedAt: new Date()
     }
   });
 
   console.log('✅ Site Vitrine créé !');
 
   // Configuration du site vitrine
-  await prisma.webSiteConfig.create({
+  await db.website_configs.create({
     data: {
       websiteId: siteVitrine.id,
       primaryColor: '#10b981',
@@ -146,11 +151,169 @@ async function main() {
           title: 'Garanties Étendues',
           description: 'Garanties constructeur jusqu\'à 30 ans et service après-vente réactif'
         }
-      ]
+      ],
+      updatedAt: new Date()
     }
   });
 
   console.log('✅ Configuration du Site Vitrine créée !');
+
+  // Sections du site vitrine
+  const sections = [
+    {
+      key: 'header',
+      type: 'header',
+      name: 'En-tête',
+      content: {
+        logo: '/logo-2thier.png',
+        navigation: [
+          { label: 'Accueil', href: '#hero' },
+          { label: 'Services', href: '#services' },
+          { label: 'Réalisations', href: '#projects' },
+          { label: 'Témoignages', href: '#testimonials' },
+          { label: 'Contact', href: '#contact' }
+        ],
+        ctaButton: { label: 'Devis Gratuit', href: '#contact' }
+      },
+      displayOrder: 1,
+      isLocked: true
+    },
+    {
+      key: 'hero',
+      type: 'hero',
+      name: 'Section Héro',
+      content: {
+        title: 'Votre Partenaire en Transition Énergétique',
+        subtitle: 'Photovoltaïque • Batteries • Bornes de Recharge • Pompes à Chaleur • Isolation • Toiture • Électricité • Gros Œuvre',
+        backgroundImage: '/hero-bg.jpg',
+        ctaPrimary: { label: 'Demander un devis gratuit', href: '#contact' },
+        ctaSecondary: { label: 'Nos réalisations', href: '#projects' }
+      },
+      displayOrder: 2
+    },
+    {
+      key: 'stats',
+      type: 'stats',
+      name: 'Statistiques',
+      content: {
+        items: [
+          { value: '500+', label: 'Installations réalisées', icon: 'CheckCircleOutlined' },
+          { value: '15 MW', label: 'Puissance installée', icon: 'ThunderboltOutlined' },
+          { value: '4.9/5', label: 'Satisfaction client', icon: 'StarFilled' },
+          { value: '100%', label: 'Wallonie', icon: 'EnvironmentOutlined' }
+        ]
+      },
+      backgroundColor: '#f0fdf4',
+      displayOrder: 3
+    },
+    {
+      key: 'services',
+      type: 'services',
+      name: 'Nos Services',
+      content: {
+        title: 'Nos Services',
+        subtitle: 'Une expertise complète pour votre transition énergétique',
+        displayMode: 'grid'
+      },
+      displayOrder: 4
+    },
+    {
+      key: 'about',
+      type: 'about',
+      name: 'À Propos',
+      content: {
+        title: 'Qui sommes-nous ?',
+        text: '2Thier Energy est votre partenaire de confiance pour tous vos projets de transition énergétique. Depuis notre création, nous accompagnons particuliers et professionnels dans leur démarche vers l\'autonomie énergétique.',
+        image: '/about-team.jpg',
+        values: [
+          { icon: 'SafetyCertificateOutlined', title: 'Expertise Multi-Services', description: 'Un seul partenaire pour tous vos projets' },
+          { icon: 'StarFilled', title: 'Qualité Premium', description: 'Produits durables et techniciens certifiés' },
+          { icon: 'CustomerServiceOutlined', title: 'Service Personnalisé', description: 'Suivi de A à Z' },
+          { icon: 'CheckCircleOutlined', title: 'Garanties Étendues', description: 'Jusqu\'à 30 ans de garantie' }
+        ]
+      },
+      displayOrder: 5
+    },
+    {
+      key: 'projects',
+      type: 'projects',
+      name: 'Nos Réalisations',
+      content: {
+        title: 'Nos Réalisations',
+        subtitle: 'Découvrez quelques-uns de nos projets récents',
+        displayCount: 4
+      },
+      displayOrder: 6
+    },
+    {
+      key: 'testimonials',
+      type: 'testimonials',
+      name: 'Témoignages',
+      content: {
+        title: 'Ce que disent nos clients',
+        subtitle: 'La satisfaction de nos clients est notre priorité',
+        displayCount: 3
+      },
+      backgroundColor: '#f8fafc',
+      displayOrder: 7
+    },
+    {
+      key: 'cta',
+      type: 'cta',
+      name: 'Call to Action',
+      content: {
+        title: 'Prêt à passer à l\'énergie verte ?',
+        subtitle: 'Obtenez votre devis personnalisé gratuit en quelques clics',
+        button: { label: 'Demander un devis gratuit', href: '#contact' }
+      },
+      backgroundColor: '#10b981',
+      textColor: '#ffffff',
+      displayOrder: 8
+    },
+    {
+      key: 'contact',
+      type: 'contact',
+      name: 'Contact',
+      content: {
+        title: 'Contactez-nous',
+        subtitle: 'Notre équipe est à votre disposition',
+        showForm: true,
+        showMap: true,
+        showInfo: true
+      },
+      displayOrder: 9
+    },
+    {
+      key: 'footer',
+      type: 'footer',
+      name: 'Pied de page',
+      content: {
+        copyright: '© 2025 2Thier SRL. Tous droits réservés.',
+        links: [
+          { label: 'Mentions légales', href: '/mentions-legales' },
+          { label: 'Politique de confidentialité', href: '/confidentialite' }
+        ],
+        showSocialLinks: true
+      },
+      displayOrder: 10,
+      isLocked: true
+    }
+  ];
+
+  for (const section of sections) {
+    await db.website_sections.create({
+      data: {
+        websiteId: siteVitrine.id,
+        ...section,
+        content: section.content,
+        isActive: true,
+        isLocked: section.isLocked || false,
+        updatedAt: new Date()
+      }
+    });
+  }
+
+  console.log(`✅ ${sections.length} sections créées !`);
 
   // Services du site vitrine
   const services = [
@@ -229,12 +392,13 @@ async function main() {
   ];
 
   for (const service of services) {
-    await prisma.webSiteService.create({
+    await db.website_services.create({
       data: {
         websiteId: siteVitrine.id,
         ...service,
         features: service.features,
-        isActive: true
+        isActive: true,
+        updatedAt: new Date()
       }
     });
   }
@@ -282,12 +446,13 @@ async function main() {
   ];
 
   for (const project of projects) {
-    await prisma.webSiteProject.create({
+    await db.website_projects.create({
       data: {
         websiteId: siteVitrine.id,
         ...project,
         tags: project.tags,
-        isActive: true
+        isActive: true,
+        updatedAt: new Date()
       }
     });
   }
@@ -329,11 +494,12 @@ async function main() {
   ];
 
   for (const testimonial of testimonials) {
-    await prisma.webSiteTestimonial.create({
+    await db.website_testimonials.create({
       data: {
         websiteId: siteVitrine.id,
         ...testimonial,
-        isActive: true
+        isActive: true,
+        updatedAt: new Date()
       }
     });
   }
@@ -346,7 +512,7 @@ async function main() {
 
   console.log('\n🚀 Création du site Devis1Minute...');
 
-  let siteDevis1Minute = await prisma.webSite.findFirst({
+  let siteDevis1Minute = await db.websites.findFirst({
     where: {
       organizationId: organization.id,
       slug: 'devis1minute'
@@ -355,10 +521,16 @@ async function main() {
 
   if (siteDevis1Minute) {
     console.log('⚠️  Devis1Minute existe déjà, suppression et recréation...');
-    await prisma.webSite.delete({ where: { id: siteDevis1Minute.id } });
+    // Supprimer les données liées d'abord
+    await db.website_services.deleteMany({ where: { websiteId: siteDevis1Minute.id } });
+    await db.website_projects.deleteMany({ where: { websiteId: siteDevis1Minute.id } });
+    await db.website_testimonials.deleteMany({ where: { websiteId: siteDevis1Minute.id } });
+    await db.website_sections.deleteMany({ where: { websiteId: siteDevis1Minute.id } });
+    await db.website_configs.deleteMany({ where: { websiteId: siteDevis1Minute.id } });
+    await db.websites.delete({ where: { id: siteDevis1Minute.id } });
   }
 
-  siteDevis1Minute = await prisma.webSite.create({
+  siteDevis1Minute = await db.websites.create({
     data: {
       organizationId: organization.id,
       siteName: 'Devis1Minute',
@@ -367,14 +539,15 @@ async function main() {
       domain: 'devis1minute.be',
       isActive: true,
       isPublished: true,
-      maintenanceMode: false
+      maintenanceMode: false,
+      updatedAt: new Date()
     }
   });
 
   console.log('✅ Site Devis1Minute créé !');
 
   // Configuration Devis1Minute
-  await prisma.webSiteConfig.create({
+  await db.website_configs.create({
     data: {
       websiteId: siteDevis1Minute.id,
       primaryColor: '#10b981',
@@ -396,11 +569,111 @@ async function main() {
         devis_generated: 1000,
         response_time: '1 minute',
         satisfaction: 4.8
-      }
+      },
+      updatedAt: new Date()
     }
   });
 
   console.log('✅ Configuration Devis1Minute créée !');
+
+  // Sections pour Devis1Minute (landing page)
+  const sectionsDevis = [
+    {
+      key: 'header',
+      type: 'header',
+      name: 'En-tête',
+      content: {
+        logo: '/logo-devis1minute.png',
+        navigation: [
+          { label: 'Services', href: '#services' },
+          { label: 'Comment ça marche', href: '#howto' },
+          { label: 'Contact', href: '#contact' }
+        ],
+        ctaButton: { label: 'Devis Gratuit', href: '#form' }
+      },
+      displayOrder: 1,
+      isLocked: true
+    },
+    {
+      key: 'hero',
+      type: 'hero',
+      name: 'Section Héro',
+      content: {
+        title: 'Votre Devis en 1 Minute Chrono',
+        subtitle: 'Panneaux solaires, batteries, pompes à chaleur et plus encore. Réponse immédiate garantie !',
+        backgroundImage: '/hero-devis.jpg',
+        ctaPrimary: { label: 'Obtenir mon devis gratuit', href: '#form' },
+        ctaSecondary: { label: 'En savoir plus', href: '#services' }
+      },
+      displayOrder: 2
+    },
+    {
+      key: 'form',
+      type: 'form',
+      name: 'Formulaire de devis',
+      content: {
+        title: 'Obtenez votre devis instantané',
+        subtitle: 'Remplissez le formulaire en moins d\'une minute',
+        formType: 'quick-quote'
+      },
+      backgroundColor: '#f0fdf4',
+      displayOrder: 3
+    },
+    {
+      key: 'services',
+      type: 'services',
+      name: 'Nos Services',
+      content: {
+        title: 'Nos Services',
+        subtitle: 'Des solutions adaptées à vos besoins',
+        displayMode: 'cards'
+      },
+      displayOrder: 4
+    },
+    {
+      key: 'howto',
+      type: 'steps',
+      name: 'Comment ça marche',
+      content: {
+        title: 'Comment ça marche ?',
+        steps: [
+          { number: 1, title: 'Remplissez le formulaire', description: 'En moins d\'une minute' },
+          { number: 2, title: 'Recevez votre devis', description: 'Instantanément par email' },
+          { number: 3, title: 'Un expert vous contacte', description: 'Pour affiner votre projet' }
+        ]
+      },
+      displayOrder: 5
+    },
+    {
+      key: 'footer',
+      type: 'footer',
+      name: 'Pied de page',
+      content: {
+        copyright: '© 2025 Devis1Minute - Un service 2Thier SRL',
+        links: [
+          { label: 'Mentions légales', href: '/mentions-legales' },
+          { label: 'Politique de confidentialité', href: '/confidentialite' }
+        ]
+      },
+      displayOrder: 6,
+      isLocked: true
+    }
+  ];
+
+  for (const section of sectionsDevis) {
+    await db.website_sections.create({
+      data: {
+        websiteId: siteDevis1Minute.id,
+        ...section,
+        content: section.content,
+        isActive: true,
+        isLocked: section.isLocked || false,
+        updatedAt: new Date()
+      }
+    });
+  }
+
+  console.log(`✅ ${sectionsDevis.length} sections Devis1Minute créées !`);
 
   // Services simplifiés pour Devis1Minute
   const servicesDevis = [
@@ -434,12 +707,13 @@ async function main() {
   ];
 
   for (const service of servicesDevis) {
-    await prisma.webSiteService.create({
+    await db.website_services.create({
       data: {
         websiteId: siteDevis1Minute.id,
         ...service,
         features: service.features,
-        isActive: true
+        isActive: true,
+        updatedAt: new Date()
       }
     });
   }
@@ -449,8 +723,8 @@ async function main() {
   console.log('\n🎉 Seed terminé avec succès !');
   console.log(`\n📊 Résumé :`);
   console.log(`   - 2 sites web créés`);
-  console.log(`   - Site Vitrine : ${services.length} services, ${projects.length} projets, ${testimonials.length} témoignages`);
-  console.log(`   - Devis1Minute : ${servicesDevis.length} services`);
+  console.log(`   - Site Vitrine : ${sections.length} sections, ${services.length} services, ${projects.length} projets, ${testimonials.length} témoignages`);
+  console.log(`   - Devis1Minute : ${sectionsDevis.length} sections, ${servicesDevis.length} services`);
   console.log(`\n✅ Vous pouvez maintenant accéder aux sites :`);
   console.log(`   - http://localhost:5173/site-vitrine-2thier`);
   console.log(`   - http://localhost:5173/devis1minute`);
@@ -460,7 +734,4 @@ main()
   .catch((e) => {
     console.error('❌ Erreur lors du seed :', e);
     process.exit(1);
-  })
-  .finally(async () => {
-    await prisma.$disconnect();
   });

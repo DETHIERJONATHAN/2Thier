@@ -143,15 +143,20 @@ router.post("/login", async (req: Request, res: Response) => {
 
     // ✅ DÉFINIR LE COOKIE HTTPONLY SÉCURISÉ
     console.log('🍪 [LOGIN] Définition du cookie d\'authentification...');
+    // Codespaces: le frontend est servi en HTTPS, le navigateur a besoin de Secure
+    const isProduction = process.env.NODE_ENV === 'production';
+    const isCodespaces = process.env.CODESPACES === 'true';
+    const needsSecureCookie = isProduction || isCodespaces;
+    
     res.cookie('token', token, {
-        httpOnly: true,        // Empêche l'accès via JavaScript côté client (sécurité)
-        secure: false,         // true en production avec HTTPS, false en développement
-        sameSite: 'lax',       // Protection CSRF tout en permettant les redirections
+        httpOnly: true,
+        secure: needsSecureCookie,
+        sameSite: needsSecureCookie ? 'none' : 'lax',
         maxAge: 24 * 60 * 60 * 1000, // 24 heures en millisecondes
-        path: '/'              // Cookie disponible sur tout le site
+        path: '/'
     });
     
-    console.log('✅ [LOGIN] Cookie défini avec succès');
+    console.log('✅ [LOGIN] Cookie défini avec succès (secure:', needsSecureCookie, ')');
 
     res.json({
         token,
@@ -257,11 +262,16 @@ router.get(
 router.post("/logout", (_req: Request, res: Response) => {
     console.log('🚪 [LOGOUT] Demande de déconnexion reçue');
     
+    // Détecter si on est sur Codespaces (HTTPS même en dev) ou en production
+    const isProduction = process.env.NODE_ENV === 'production';
+    const isCodespaces = process.env.CODESPACES === 'true' || process.env.GITHUB_CODESPACES_PORT_FORWARDING_DOMAIN;
+    const needsSecureCookie = isProduction || isCodespaces;
+    
     // Nettoyer le cookie principal avec la même configuration que lors de la création
     res.clearCookie('token', {
         httpOnly: true,
-        secure: false,  // Même valeur qu'à la création
-        sameSite: 'lax',
+        secure: needsSecureCookie,
+        sameSite: needsSecureCookie ? 'none' : 'lax',
         path: '/'
     });
     
@@ -269,16 +279,17 @@ router.post("/logout", (_req: Request, res: Response) => {
     const cookieOptions = [
         { path: '/' },
         { path: '/', httpOnly: true },
-        { path: '/', secure: false },
-        { path: '/', sameSite: 'lax' as const }
+        { path: '/', secure: needsSecureCookie },
+        { path: '/', sameSite: (needsSecureCookie ? 'none' : 'lax') as const }
     ];
     
     cookieOptions.forEach(options => {
         res.clearCookie('token', options);
     });
     
-    // Headers pour forcer le nettoyage côté client
-    res.header('Clear-Site-Data', '"cookies"');
+    // ⚠️ SUPPRIMÉ: Clear-Site-Data header - causait des problèmes avec les requêtes suivantes
+    // sur certains navigateurs (bloque ou interfère avec les cookies des requêtes futures)
+    // res.header('Clear-Site-Data', '"cookies"');
     res.header('Cache-Control', 'no-cache, no-store, must-revalidate');
     
     console.log('✅ [LOGOUT] Cookie nettoyé avec succès');

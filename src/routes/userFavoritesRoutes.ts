@@ -10,7 +10,7 @@ const router = Router();
  */
 router.get('/', authMiddleware, async (req: Request, res: Response) => {
   try {
-    const userId = req.user?.id;
+    const userId = req.user?.userId; // ✅ FIX: C'est .userId, pas .id
     const organizationId = req.user?.organizationId;
 
     if (!userId || !organizationId) {
@@ -52,7 +52,7 @@ router.get('/', authMiddleware, async (req: Request, res: Response) => {
  */
 router.post('/', authMiddleware, async (req: Request, res: Response) => {
   try {
-    const userId = req.user?.id;
+    const userId = req.user?.userId; // ✅ FIX: C'est .userId, pas .id
     const organizationId = req.user?.organizationId;
     const { moduleKey } = req.body;
 
@@ -109,7 +109,7 @@ router.post('/', authMiddleware, async (req: Request, res: Response) => {
  */
 router.delete('/:moduleKey', authMiddleware, async (req: Request, res: Response) => {
   try {
-    const userId = req.user?.id;
+    const userId = req.user?.userId; // ✅ FIX: C'est .userId, pas .id
     const organizationId = req.user?.organizationId;
     const { moduleKey } = req.params;
 

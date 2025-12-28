@@ -116,7 +116,7 @@ router.post('/mail/settings', requireRole(['super_admin']), async (req: Request,
 router.get('/mail/settings', async (req: Request, res: Response): Promise<void> => {
   try {
     // Récupère l'ID de l'utilisateur à partir du token JWT
-    const userId = req.user?.id;
+    const userId = req.user?.userId; // ✅ FIX: C'est .userId, pas .id
     
     if (!userId) {
       res.status(401).json({ error: 'Utilisateur non authentifié.' });
