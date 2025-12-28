@@ -4,18 +4,51 @@ Ce fichier documente la procédure simplifiée pour lancer l'environnement de d�
 
 ## 🚀 Lancement Rapide
 
-Pour tout lancer en une seule commande (Proxy + Serveur + Client), exécutez simplement :
+Pour tout lancer en une seule commande (Proxy + Serveur + Client) **en arrière-plan** :
 
 ```bash
 ./scripts/start-local.sh
 ```
+
+✅ **Le serveur s'exécute en arrière-plan** - la conversation reste libre ! Tu peux continuer à coder.
 
 ## 📋 Ce que fait le script
 
 1.  **Arrêt du proxy existant** : Il tue tout processus `cloud-sql-proxy` qui pourrait bloquer le port.
 2.  **Authentification** : Il vérifie si vous avez un token Google valide. Si ce n'est pas le cas, il lance `gcloud auth login` pour vous reconnecter.
 3.  **Démarrage du Proxy** : Il lance le proxy Cloud SQL en utilisant votre token d'accès personnel (ce qui contourne les problèmes de "Application Default Credentials" expirés).
-4.  **Lancement de l'App** : Il exécute `npm run dev` pour démarrer le frontend (Vite) et le backend (Node.js).
+4.  **Lancement de l'App** : Il exécute `npm run dev` **en arrière-plan** pour démarrer le frontend (Vite) et le backend (Node.js).
+
+## 📍 URLs Disponibles
+
+Une fois le script lancé :
+- **Frontend** : http://localhost:5173
+- **Backend API** : http://localhost:4000
+- **Base de données** : Proxy Cloud SQL sur `localhost:5432`
+
+## 📊 Suivre les Logs en Arrière-Plan
+
+Comme le serveur s'exécute en arrière-plan, tu peux récupérer les logs à tout moment :
+
+```bash
+# Récupère les logs du terminal (remplace TERMINAL_ID par l'ID fourni)
+get_terminal_output <TERMINAL_ID>
+```
+
+## 🛑 Arrêter le Serveur
+
+Pour arrêter tous les processus :
+
+```bash
+pkill -f 'npm run dev'
+pkill -f 'cloud-sql-proxy'
+```
+
+Ou pour vérifier les processus en cours :
+
+```bash
+ps aux | grep -E 'npm run dev|cloud-sql-proxy'
+```
 
 ## 🛠️ Dépannage
 

@@ -54,7 +54,14 @@ echo "✅ Proxy connecté à thiernew:europe-west1:crm-postgres-prod sur le port
 
 # 4. Lancement de l'application
 echo "💻 Lancement de 'npm run dev'..."
-npm run dev
+echo "💡 Le serveur s'exécute en ARRIÈRE-PLAN. La conversation reste libre."
+echo "📋 Pour voir les logs, utilisez: get_terminal_output avec l'ID du terminal."
+echo ""
+npm run dev &
 
-# Nettoyage à la sortie (quand on fait Ctrl+C sur npm run dev)
-kill $PROXY_PID
+echo "✅ Environnement de développement prêt!"
+echo "   🌐 Frontend: http://localhost:5173"
+echo "   🔧 Backend API: http://localhost:4000"
+echo "   💾 DB: Proxy Cloud SQL sur localhost:5432"
+echo ""
+echo "Pour fermer tout: pkill -f 'npm run dev' && pkill -f 'cloud-sql-proxy'"
