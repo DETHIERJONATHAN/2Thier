@@ -35,7 +35,7 @@
     "build:client": "tsc -p tsconfig.build.json && vite build",
     "build:analyze": "ANALYZE=true vite build",
     "preview": "vite preview",
-    "start": "sh ./entrypoint.sh",
+    "start": "NODE_ENV=production node dist-server/api-server-clean.cjs",
     "prod": "npm run build && npm run start",
     "test:ai": "tsx scripts/test-ai-calendar.ts",
     "test:ai:extended": "tsx scripts/test-ai-extended.ts",
