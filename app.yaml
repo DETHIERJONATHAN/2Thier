@@ -1,4 +1,9 @@
 runtime: nodejs20
+
+# ⚠️ Ce fichier est pour App Engine seulement
+# Cloud Run utilise le Procfile et entrypoint.sh
+# Pour Cloud Run: gcloud run deploy crm-api --source .
+
 handlers:
 - url: /.*
   script: auto
