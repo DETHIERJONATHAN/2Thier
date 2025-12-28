@@ -61839,7 +61839,7 @@ var errorHandler = (err, req2, res, next) => {
   res.status(status).json(errorResponse);
 };
 app.use(errorHandler);
-app.listen(port, () => {
+var server = app.listen(port, "0.0.0.0", () => {
   logSecurityEvent("SERVER_READY", {
     port,
     securityLevel: "ENTERPRISE",
@@ -61853,7 +61853,7 @@ app.listen(port, () => {
       "Timing Attack Protection"
     ]
   }, "info");
-  console.log(`\u{1F389} [API-SERVER-CLEAN] Serveur CRM d\xE9marr\xE9 avec succ\xE8s sur http://localhost:${port}`);
+  console.log(`\u{1F389} [API-SERVER-CLEAN] Serveur CRM d\xE9marr\xE9 avec succ\xE8s sur http://0.0.0.0:${port}`);
   console.log(`\u{1F6E1}\uFE0F [ENTERPRISE-SECURITY] S\xE9curit\xE9 niveau 100% activ\xE9e`);
   if (process.env.NODE_ENV !== "production") {
     console.log("\u{1F504} [TREEBRANCHLEAF] Synchronisation des sourceRef...");

@@ -487,7 +487,7 @@ app.use(errorHandler);
 import { initializeTreeBranchLeafSync } from './components/TreeBranchLeaf/treebranchleaf-new/api/sync-variable-hook';
 
 // Démarrage du serveur
-app.listen(port, () => {
+const server = app.listen(port, '0.0.0.0', () => {
   logSecurityEvent('SERVER_READY', {
     port,
     securityLevel: 'ENTERPRISE',
@@ -502,7 +502,7 @@ app.listen(port, () => {
     ]
   }, 'info');
 
-  console.log(`🎉 [API-SERVER-CLEAN] Serveur CRM démarré avec succès sur http://localhost:${port}`);
+  console.log(`🎉 [API-SERVER-CLEAN] Serveur CRM démarré avec succès sur http://0.0.0.0:${port}`);
   console.log(`🛡️ [ENTERPRISE-SECURITY] Sécurité niveau 100% activée`);
   
   // 🔄 Synchronisation automatique des sourceRef TreeBranchLeaf
