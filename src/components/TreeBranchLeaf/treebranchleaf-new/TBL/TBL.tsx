@@ -30,7 +30,7 @@ import {
   Skeleton,
   Tooltip
 } from 'antd';
-import { FileTextOutlined, DownloadOutlined, ClockCircleOutlined, FolderOpenOutlined, PlusOutlined, UserOutlined, FileAddOutlined, SearchOutlined, MailOutlined, PhoneOutlined, HomeOutlined } from '@ant-design/icons';
+import { FileTextOutlined, DownloadOutlined, ClockCircleOutlined, FolderOpenOutlined, PlusOutlined, UserOutlined, FileAddOutlined, SearchOutlined, MailOutlined, PhoneOutlined, HomeOutlined, SwapOutlined, LeftOutlined, RightOutlined } from '@ant-design/icons';
 import { useAuth } from '../../../../auth/useAuth';
 import { useParams } from 'react-router-dom';
 import { useTreeBranchLeafConfig } from '../../hooks/useTreeBranchLeafConfig';
@@ -51,6 +51,7 @@ import { buildMirrorKeys } from './utils/mirrorNormalization';
 import LeadSelectorModal from '../../lead-integration/LeadSelectorModal';
 import LeadCreatorModalAdvanced from '../../lead-integration/LeadCreatorModalAdvanced';
 import type { TBLLead } from '../../lead-integration/types/lead-types';
+import { useTBLSwipeNavigation } from './hooks/useTBLSwipeNavigation';
 
 // Déclaration étendue pour éviter usage de any lors de l'injection diag
 declare global { interface Window { TBL_DEP_GRAPH?: Map<string, Set<string>>; TBL_FORM_DATA?: Record<string, unknown>; } }
@@ -234,6 +235,10 @@ const TBL: React.FC<TBLProps> = ({
   const [formData, setFormData] = useState<TBLFormData>({});
   const [autoSaveEnabled] = useState(true);
   const [saveModalVisible, setSaveModalVisible] = useState(false);
+  
+  // 🔄 État centralisé pour les sous-onglets actifs (pour navigation swipe)
+  const [activeSubTabs, setActiveSubTabs] = useState<Record<string, string | undefined>>({});
+  const tblSwipeContainerRef = useRef<HTMLDivElement>(null);
 
   // LOGS AUTOMATIQUES pour analyser l'état des mirrors et cartes
   // 🔥 DÉSACTIVÉ: Effet de debug qui causait des re-renders excessifs
@@ -537,6 +542,55 @@ const TBL: React.FC<TBLProps> = ({
       completion: requiredFields ? (completedRequired / requiredFields) * 100 : 100
     };
   }, [tabs, formData]);
+
+  // 🔄 SWIPE NAVIGATION - État pour stocker les sous-onglets de chaque onglet
+  const [tabSubTabsMap, setTabSubTabsMap] = useState<Record<string, { key: string; label: string }[]>>({});
+  
+  // Callback pour recevoir les sous-onglets calculés de chaque onglet
+  const handleSubTabsComputed = useCallback((tabId: string, subTabs: { key: string; label: string }[]) => {
+    setTabSubTabsMap(prev => {
+      // Éviter les mises à jour inutiles
+      const current = prev[tabId];
+      if (current && JSON.stringify(current) === JSON.stringify(subTabs)) {
+        return prev;
+      }
+      return { ...prev, [tabId]: subTabs };
+    });
+  }, []);
+
+  // Construire la structure des onglets pour le swipe
+  const swipeTabsStructure = useMemo(() => {
+    return (tabs || []).map(tab => ({
+      id: tab.id,
+      label: tab.label || tab.name || tab.id,
+      subTabs: tabSubTabsMap[tab.id] || []
+    }));
+  }, [tabs, tabSubTabsMap]);
+
+  // Callback pour changer de sous-onglet depuis le swipe
+  const handleSwipeSubTabChange = useCallback((tabId: string, subTabKey: string | undefined) => {
+    setActiveSubTabs(prev => ({ ...prev, [tabId]: subTabKey }));
+  }, []);
+
+  // Sous-onglets de l'onglet actif (pour le hook de swipe)
+  const currentTabSubTabs = useMemo(() => {
+    return tabSubTabsMap[activeTab] || [];
+  }, [tabSubTabsMap, activeTab]);
+
+  // 🔄 Hook de navigation par swipe (mobile uniquement)
+  const { getNavigationInfo, navigateToIndex } = useTBLSwipeNavigation({
+    containerRef: tblSwipeContainerRef,
+    tabs: swipeTabsStructure,
+    activeTab,
+    setActiveTab,
+    activeSubTabs,
+    setActiveSubTab: handleSwipeSubTabChange,
+    currentTabSubTabs,
+    isMobile
+  });
+
+  // Info de navigation pour l'indicateur visuel
+  const swipeNavInfo = useMemo(() => getNavigationInfo(), [getNavigationInfo]);
 
   // Gestionnaire de changement de champ avec validation
   // Type minimal interne pour compléter dynamiquement la config
@@ -1979,6 +2033,8 @@ const TBL: React.FC<TBLProps> = ({
                 />
               </div>
 
+              {/* 🔄 Conteneur avec gestion du swipe (mobile uniquement) - navigation invisible */}
+              <div ref={tblSwipeContainerRef}>
               {/* Onglets dynamiques */}
               <Tabs
                 activeKey={activeTab}
@@ -2220,6 +2276,10 @@ const TBL: React.FC<TBLProps> = ({
                         tabSubTabs={tab.subTabs}
                         tabId={tab.id}
                         submissionId={submissionId}
+                        // 🔄 Props pour navigation swipe mobile
+                        controlledActiveSubTab={isMobile ? activeSubTabs[tab.id] : undefined}
+                        onSubTabChange={isMobile ? (subTabKey) => handleSwipeSubTabChange(tab.id, subTabKey) : undefined}
+                        onSubTabsComputed={isMobile ? (subTabs) => handleSubTabsComputed(tab.id, subTabs) : undefined}
                       />
                     </div>
                   )
@@ -2227,6 +2287,7 @@ const TBL: React.FC<TBLProps> = ({
                 }) : [])
                 ]}
               />
+              </div> {/* Fin conteneur swipe */}
 
               {/* Indicateur d'auto-sauvegarde */}
               {autoSaveEnabled && autosaveLast && (
@@ -2783,6 +2844,10 @@ interface TBLTabContentWithSectionsProps {
   tabSubTabs?: { key: string; label: string }[] | undefined;
   tabId?: string;
   submissionId?: string | null;
+  // 🔄 Props pour navigation swipe centralisée
+  controlledActiveSubTab?: string;
+  onSubTabChange?: (subTabKey: string | undefined) => void;
+  onSubTabsComputed?: (subTabs: { key: string; label: string }[]) => void;
 }
 
 const TBLTabContentWithSections: React.FC<TBLTabContentWithSectionsProps> = React.memo(({
@@ -2799,7 +2864,10 @@ const TBLTabContentWithSections: React.FC<TBLTabContentWithSectionsProps> = Reac
   ,
   tabSubTabs,
   tabId,
-  submissionId
+  submissionId,
+  controlledActiveSubTab,
+  onSubTabChange,
+  onSubTabsComputed
 }) => {
   const stats = useMemo(() => {
     let total = 0;
@@ -2922,12 +2990,33 @@ const TBLTabContentWithSections: React.FC<TBLTabContentWithSectionsProps> = Reac
     return orderedTabs;
   }, [sections, fields, tabSubTabs]);
 
-  const [activeSubTab, setActiveSubTab] = useState<string | undefined>(allSubTabs.length > 0 ? allSubTabs[0].key : undefined);
+  // 🔄 Notifier le parent des sous-onglets calculés (pour la navigation swipe)
+  useEffect(() => {
+    if (onSubTabsComputed && allSubTabs.length > 0) {
+      onSubTabsComputed(allSubTabs);
+    }
+  }, [allSubTabs, onSubTabsComputed]);
+
+  // 🔄 État local du sous-onglet (utilisé si pas de contrôle parent)
+  const [localActiveSubTab, setLocalActiveSubTab] = useState<string | undefined>(allSubTabs.length > 0 ? allSubTabs[0].key : undefined);
+  
+  // 🔄 Utiliser soit l'état contrôlé (parent) soit l'état local
+  const activeSubTab = controlledActiveSubTab !== undefined ? controlledActiveSubTab : localActiveSubTab;
+  const setActiveSubTab = useCallback((value: string | undefined) => {
+    if (onSubTabChange) {
+      onSubTabChange(value);
+    } else {
+      setLocalActiveSubTab(value);
+    }
+  }, [onSubTabChange]);
   
   // 🔧 FIX: Retirer activeSubTab des dépendances pour éviter la boucle infinie (React Error #185)
   // On utilise une ref pour accéder à la valeur actuelle sans créer de dépendance
   useEffect(() => { 
-    setActiveSubTab(prev => {
+    // Ne mettre à jour que si on n'est pas en mode contrôlé
+    if (controlledActiveSubTab !== undefined) return;
+    
+    setLocalActiveSubTab(prev => {
       // Si allSubTabs est vide, garder la valeur actuelle
       if (allSubTabs.length === 0) return prev;
       // Si l'onglet actuel n'existe plus dans allSubTabs, sélectionner le premier
@@ -2935,7 +3024,7 @@ const TBLTabContentWithSections: React.FC<TBLTabContentWithSectionsProps> = Reac
       // Sinon garder la valeur actuelle
       return prev;
     });
-  }, [allSubTabs]);
+  }, [allSubTabs, controlledActiveSubTab]);
 
   // Log ActiveSubTab supprimé pour performance (utilisez window.enableTBLDebug() si besoin)
 
@@ -2989,13 +3078,24 @@ const TBLTabContentWithSections: React.FC<TBLTabContentWithSectionsProps> = Reac
       return (
         <div className="space-y-6">
           {showSubTabs && (
-            <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
+            <div style={{ 
+              display: 'flex', 
+              gap: 8, 
+              marginBottom: 8,
+              overflowX: 'auto',
+              overflowY: 'hidden',
+              WebkitOverflowScrolling: 'touch',
+              scrollbarWidth: 'none',
+              msOverflowStyle: 'none',
+              paddingBottom: 4
+            }} className="hide-scrollbar">
               {(allSubTabs || []).map(st => (
                 <Button
                   key={st.key}
                   size="small"
                   type={st.key === activeSubTab ? 'primary' : 'default'}
                   onClick={() => setActiveSubTab(st.key)}
+                  style={{ flexShrink: 0 }}
                 >
                   {st.label}
                 </Button>
@@ -3059,13 +3159,24 @@ const TBLTabContentWithSections: React.FC<TBLTabContentWithSectionsProps> = Reac
       return (
         <div>
           {showSubTabs && (
-            <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
+            <div style={{ 
+              display: 'flex', 
+              gap: 8, 
+              marginBottom: 8,
+              overflowX: 'auto',
+              overflowY: 'hidden',
+              WebkitOverflowScrolling: 'touch',
+              scrollbarWidth: 'none',
+              msOverflowStyle: 'none',
+              paddingBottom: 4
+            }} className="hide-scrollbar">
               {(allSubTabs || []).map(st => (
                 <Button
                   key={st.key}
                   size="small"
                   type={st.key === activeSubTab ? 'primary' : 'default'}
                   onClick={() => setActiveSubTab(st.key)}
+                  style={{ flexShrink: 0 }}
                 >
                   {st.label}
                 </Button>

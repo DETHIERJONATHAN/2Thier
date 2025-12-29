@@ -69,3 +69,42 @@
 /* ========== ONGLETS TBL - RÈGLES DYNAMIQUES SEULEMENT ========== */
 
 /* CSS supprimé - on utilise l'API native d'Ant Design maintenant */
+
+/* ========== SOUS-ONGLETS SCROLLABLES - MOBILE ========== */
+/* Cacher la scrollbar pour les sous-onglets mais garder le scroll fonctionnel */
+.hide-scrollbar {
+  -ms-overflow-style: none !important;  /* IE and Edge */
+  scrollbar-width: none !important;  /* Firefox */
+}
+
+.hide-scrollbar::-webkit-scrollbar {
+  display: none !important; /* Chrome, Safari, Opera */
+  width: 0 !important;
+  height: 0 !important;
+}
+
+/* ========== MISE EN PAGE FIXE TBL MOBILE ========== */
+/* Empêcher le scroll horizontal sur le conteneur principal TBL */
+@media (max-width: 1024px) {
+  .ant-layout-content {
+    overflow-x: hidden !important;
+    max-width: 100vw !important;
+  }
+  
+  /* Fixer la largeur du Card principal */
+  .ant-card {
+    max-width: 100% !important;
+    overflow-x: hidden !important;
+  }
+  
+  /* Conteneur des onglets TBL - pas de débordement */
+  .tbl-tabs {
+    max-width: 100% !important;
+    overflow-x: hidden !important;
+  }
+  
+  /* Permettre le scroll horizontal uniquement sur les sous-onglets */
+  .tbl-tabs .ant-tabs-content-holder {
+    overflow-x: hidden !important;
+  }
+}
