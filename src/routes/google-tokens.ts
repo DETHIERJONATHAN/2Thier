@@ -69,14 +69,18 @@ router.get('/scheduler/status', async (_req, res) => {
 
 /**
  * GET /api/google-tokens/organization/:organizationId
- * Informations détaillées sur le token d'une organisation
+ * Informations détaillées sur les tokens d'une organisation
+ * Note: Retourne le premier token trouvé (pour compatibilité admin)
  */
 router.get('/organization/:organizationId', async (req, res) => {
   try {
     const { organizationId } = req.params;
 
-    const token = await prisma.googleToken.findUnique({
-      where: { organizationId }
+    // Avec le nouveau modèle, il peut y avoir plusieurs tokens par organisation
+    // (un par utilisateur). On retourne le premier trouvé pour l'admin.
+    const token = await prisma.googleToken.findFirst({
+      where: { organizationId },
+      include: { User: { select: { email: true, firstName: true, lastName: true } } }
     });
 
     if (!token) {
@@ -103,6 +107,10 @@ router.get('/organization/:organizationId', async (req, res) => {
     const tokenInfo = {
       id: token.id,
       organizationId: token.organizationId,
+      userId: token.userId,
+      userEmail: token.User?.email,
+      userName: token.User ? `${token.User.firstName} ${token.User.lastName}` : null,
+      googleEmail: token.googleEmail,
       accessToken: token.accessToken ? `${token.accessToken.substring(0, 20)}...` : '', // Masquer le token
       refreshToken: token.refreshToken ? 'Présent' : 'Absent',
       tokenType: token.tokenType || 'Bearer',

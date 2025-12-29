@@ -334,109 +334,27 @@ const GoogleWorkspaceConfig: React.FC<GoogleWorkspaceConfigProps> = ({
       // Appel à la route pour obtenir l'URL d'authentification Google
       const response = await api.get(`/api/google-auth/connect?organizationId=${organizationId}`);
       if (response.success && response.data?.authUrl) {
-        // Ouvrir la page d'authentification Google dans une popup centrée
-        const width = 500;
-        const height = 600;
-        const left = (window.screen.width / 2) - (width / 2);
-        const top = (window.screen.height / 2) - (height / 2);
+        console.log('[GoogleWorkspaceConfig] 🔗 Redirection vers Google OAuth...');
+        message.info('🔐 Redirection vers Google pour authentification...');
         
-        const popup = window.open(
-          response.data.authUrl, 
-          'google-auth', 
-          `width=${width},height=${height},left=${left},top=${top},scrollbars=yes,resizable=yes,status=yes,location=yes`
-        );
+        // Stocker l'état pour savoir qu'on attend un retour OAuth
+        localStorage.setItem('google_oauth_pending', 'true');
+        localStorage.setItem('google_oauth_org_id', organizationId);
         
-        if (!popup) {
-          message.error('Impossible d\'ouvrir la popup. Vérifiez que les popups ne sont pas bloquées.');
-          return;
-        }
-
-        message.info('🔐 Authentification Google en cours...');
-        
-        // Écouter les messages de la popup (communication cross-window)
-        const handleMessage = (event: MessageEvent) => {
-          // Vérifier l'origine pour la sécurité
-          if (event.origin !== window.location.origin) return;
-          
-          if (event.data.type === 'GOOGLE_AUTH_SUCCESS') {
-            console.log('[GoogleWorkspaceConfig] ✅ Authentification Google réussie');
-            popup.close();
-            message.success('✅ Connexion Google réussie !');
-            setTimeout(() => {
-              checkGoogleConnection(); // Mettre à jour le statut
-            }, 500);
-            window.removeEventListener('message', handleMessage);
-          } else if (event.data.type === 'GOOGLE_AUTH_ERROR') {
-            console.log('[GoogleWorkspaceConfig] ❌ Erreur authentification:', event.data.error);
-            popup.close();
-            const errorMessages = {
-              'token_exchange_failed': 'Erreur lors de l\'échange des tokens. Vérifiez votre configuration OAuth.',
-              'invalid_client_config': '🔧 Configuration OAuth invalide.\n\n👉 Solution : Vérifiez votre Client Secret dans Google Cloud Console',
-              'invalid_authorization_code': 'Code d\'autorisation expiré. Réessayez la connexion.',
-              'unauthorized_client': 'Client non autorisé. Vérifiez vos identifiants OAuth.',
-              'config_not_found': 'Configuration Google Workspace non trouvée.',
-              'user_not_found': 'Utilisateur non trouvé dans l\'organisation.',
-              'missing_params': 'Paramètres OAuth manquants.',
-              'callback_error': 'Erreur générale lors du callback OAuth.'
-            };
-            const userFriendlyError = errorMessages[event.data.error as keyof typeof errorMessages] || 'Erreur lors de l\'authentification Google';
-            
-            if (event.data.error === 'invalid_client_config') {
-              // Erreur spécifique de configuration - proposer une solution
-              message.error({
-                content: (
-                  <div>
-                    <div>❌ {userFriendlyError}</div>
-                    <div style={{ marginTop: '8px', fontSize: '12px' }}>
-                      💡 <strong>Solution :</strong><br/>
-                      1. Vérifiez votre Client Secret dans Google Cloud Console<br/>
-                      2. Régénérez le Client Secret si nécessaire<br/>
-                      3. Mettez à jour la configuration ici
-                    </div>
-                  </div>
-                ),
-                duration: 10,
-                style: { maxWidth: '400px' }
-              });
-            } else {
-              message.error(`❌ ${userFriendlyError}`);
-            }
-            window.removeEventListener('message', handleMessage);
-          }
-        };
-        
-        window.addEventListener('message', handleMessage);
-        
-        // Surveiller la fermeture manuelle de la popup
-        const checkClosed = setInterval(() => {
-          if (popup?.closed) {
-            clearInterval(checkClosed);
-            console.log('[GoogleWorkspaceConfig] 🪟 Popup fermée manuellement');
-            window.removeEventListener('message', handleMessage);
-            setTimeout(() => {
-              checkGoogleConnection(); // Vérifier le statut au cas où l'auth aurait réussi
-            }, 1000);
-          }
-        }, 1000);
-        
-        // Timeout de sécurité (5 minutes)
-        setTimeout(() => {
-          if (!popup?.closed) {
-            popup.close();
-            window.removeEventListener('message', handleMessage);
-            message.warning('⏱️ Délai d\'authentification expiré');
-          }
-        }, 300000);
+        // Utiliser une redirection complète au lieu d'un popup
+        // Cela évite les problèmes de Cross-Origin-Opener-Policy sur Codespaces
+        window.location.href = response.data.authUrl;
         
       } else {
         message.error('Impossible de générer l\'URL d\'authentification Google');
+        setConnecting(false);
       }
     } catch (error) {
       console.error('Erreur lors de l\'authentification Google:', error);
       message.error('Erreur lors de l\'authentification Google');
-    } finally {
       setConnecting(false);
     }
+    // Note: setConnecting(false) n'est pas appelé ici car on redirige
   };
 
   // --- NOUVELLE VUE POUR LA CONFIGURATION DU DOMAINE ---

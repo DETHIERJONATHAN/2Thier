@@ -423,12 +423,14 @@ router.get('/callback', async (req, res) => {
 
       console.log('[GOOGLE-AUTH] ✅ Connexion Google validée pour l\'admin:', config.adminEmail);
 
-      // Sauvegarder ou mettre à jour les tokens pour l'organisation
-      console.log('[GOOGLE-AUTH] 💾 Sauvegarde des tokens pour l\'organisation:', organizationId);
-      await googleOAuthService.saveUserTokens(userId, organizationId, tokens);
-      const googleTokenRecord = await prisma.googleToken.findUnique({ where: { organizationId } });
+      // Sauvegarder ou mettre à jour les tokens pour l'utilisateur dans cette organisation
+      console.log('[GOOGLE-AUTH] 💾 Sauvegarde des tokens pour l\'utilisateur:', userId, 'dans l\'organisation:', organizationId);
+      await googleOAuthService.saveUserTokens(userId, organizationId, tokens, userInfo.data.email || undefined);
+      const googleTokenRecord = await prisma.googleToken.findFirst({ 
+        where: { userId, organizationId } 
+      });
 
-      console.log('[GOOGLE-AUTH] ✅ Tokens sauvegardés pour l\'organisation:', googleTokenRecord?.id);
+      console.log('[GOOGLE-AUTH] ✅ Tokens sauvegardés pour l\'utilisateur:', googleTokenRecord?.id);
 
       // Activer automatiquement les modules Google Workspace pour cette organisation
       console.log('[GOOGLE-AUTH] 🔧 Activation des modules Google Workspace...');
@@ -501,10 +503,11 @@ router.get('/status', authMiddleware, async (req: AuthenticatedRequest, res) => 
       });
     }
 
-    console.log('[GOOGLE-AUTH] 🔄 Tentative de refresh automatique pour organisation:', organizationId);
+    const userId = req.user?.userId;
+    console.log('[GOOGLE-AUTH] 🔄 Tentative de refresh automatique pour organisation:', organizationId, 'userId:', userId);
 
-    // 🆕 NOUVEAU: Utiliser le système de refresh automatique
-    const refreshResult = await refreshGoogleTokenIfNeeded(organizationId);
+    // 🆕 NOUVEAU: Utiliser le système de refresh automatique avec userId
+    const refreshResult = await refreshGoogleTokenIfNeeded(organizationId, userId);
     
     if (!refreshResult.success) {
       console.log('[GOOGLE-AUTH] ❌ Refresh automatique échoué:', refreshResult.error);
@@ -581,9 +584,16 @@ router.get('/status', authMiddleware, async (req: AuthenticatedRequest, res) => 
       tokenValid = true;
       
       // Récupérer les scopes depuis la base de données
-      const googleToken = await prisma.googleToken.findUnique({
-        where: { organizationId }
-      });
+      let googleToken;
+      if (userId) {
+        googleToken = await prisma.googleToken.findUnique({
+          where: { userId_organizationId: { userId, organizationId } }
+        });
+      } else {
+        googleToken = await prisma.googleToken.findFirst({
+          where: { organizationId }
+        });
+      }
       scopes = googleToken?.scope ? googleToken.scope.split(' ') : [];
       
       console.log('[GOOGLE-AUTH] ✅ Token validé avec succès, email:', userEmail);
@@ -594,9 +604,16 @@ router.get('/status', authMiddleware, async (req: AuthenticatedRequest, res) => 
     }
 
     // Récupérer les informations de dernière synchronisation
-    const googleToken = await prisma.googleToken.findUnique({
-      where: { organizationId }
-    });
+    let googleTokenInfo;
+    if (userId) {
+      googleTokenInfo = await prisma.googleToken.findUnique({
+        where: { userId_organizationId: { userId, organizationId } }
+      });
+    } else {
+      googleTokenInfo = await prisma.googleToken.findFirst({
+        where: { organizationId }
+      });
+    }
 
     res.json({
       success: true,
@@ -604,7 +621,7 @@ router.get('/status', authMiddleware, async (req: AuthenticatedRequest, res) => 
         connected: tokenValid,
         email: userEmail,
         scopes: scopes,
-        lastSync: googleToken?.updatedAt,
+        lastSync: googleTokenInfo?.updatedAt,
         expiresAt: refreshResult.expiresAt,
         isExpired: false, // Le token est maintenant garanti valide
         autoRefreshEnabled: true // Indicateur que le refresh automatique est actif
@@ -653,10 +670,19 @@ router.post('/disconnect', authMiddleware, async (req: AuthenticatedRequest, res
       console.warn('[GOOGLE-AUTH] Warn: échec logSecurityEvent (REQUESTED):', (e as Error)?.message);
     }
 
-    // Chercher les tokens Google de l'organisation
-    const googleToken = await prisma.googleToken.findUnique({
-      where: { organizationId: organizationId }
-    });
+    const currentUserId = req.user.userId;
+    
+    // Chercher les tokens Google de l'utilisateur dans cette organisation
+    let googleToken;
+    if (currentUserId) {
+      googleToken = await prisma.googleToken.findUnique({
+        where: { userId_organizationId: { userId: currentUserId, organizationId } }
+      });
+    } else {
+      googleToken = await prisma.googleToken.findFirst({
+        where: { organizationId }
+      });
+    }
 
     if (googleToken) {
       try {
@@ -676,9 +702,15 @@ router.post('/disconnect', authMiddleware, async (req: AuthenticatedRequest, res
 
       // Supprimer le token de notre base de données
       console.log('[GOOGLE-AUTH] 🗑️ Suppression du token de la base...');
-      await prisma.googleToken.delete({
-        where: { organizationId: organizationId }
-      });
+      if (currentUserId) {
+        await prisma.googleToken.delete({
+          where: { userId_organizationId: { userId: currentUserId, organizationId } }
+        });
+      } else if (googleToken.id) {
+        await prisma.googleToken.delete({
+          where: { id: googleToken.id }
+        });
+      }
 
       console.log('[GOOGLE-AUTH] ✅ Token supprimé de la base');
     }
@@ -788,10 +820,18 @@ router.post('/toggle-module', authMiddleware, async (req: AuthenticatedRequest, 
       });
     }
 
-    // Vérifier que l'organisation a des tokens Google valides
-    const googleToken = await prisma.googleToken.findUnique({
-      where: { organizationId: organizationId }
-    });
+    // Vérifier que l'utilisateur a des tokens Google valides pour cette organisation
+    const userId = req.user?.userId;
+    let googleToken;
+    if (userId) {
+      googleToken = await prisma.googleToken.findUnique({
+        where: { userId_organizationId: { userId, organizationId } }
+      });
+    } else {
+      googleToken = await prisma.googleToken.findFirst({
+        where: { organizationId }
+      });
+    }
 
     if (!googleToken && enabled) {
       return res.status(400).json({

@@ -73,6 +73,8 @@ const OrganizationDetails = () => {
 };
 
 const GoogleIntegration = () => {
+    const { currentOrganization } = useAuth();
+    
     return (
         <div className="bg-white p-8 rounded-lg shadow-md">
             <h2 className="text-xl font-bold mb-6">Intégration Google Workspace</h2>
@@ -88,7 +90,7 @@ const GoogleIntegration = () => {
             {/* Détails de connexion Google */}
             <div className="mb-6">
                 <h3 className="text-lg font-medium mb-4">Détails de connexion</h3>
-                <GoogleConnectionCard />
+                <GoogleConnectionCard organizationId={currentOrganization?.id} />
             </div>
         </div>
     );

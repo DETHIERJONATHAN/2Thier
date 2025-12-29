@@ -4546,9 +4546,12 @@ var GoogleOAuthService = class {
     return tokens2;
   }
   // Sauvegarder les tokens
-  async saveUserTokens(userId, organizationId, tokens2) {
+  async saveUserTokens(userId, organizationId, tokens2, googleEmail) {
     if (!organizationId) {
       throw new Error("L'ID de l'organisation est requis pour sauvegarder les tokens Google.");
+    }
+    if (!userId) {
+      throw new Error("L'ID de l'utilisateur est requis pour sauvegarder les tokens Google.");
     }
     const updateData = {
       accessToken: tokens2.access_token,
@@ -4561,11 +4564,15 @@ var GoogleOAuthService = class {
       updatedAt: /* @__PURE__ */ new Date()
     };
     const existingToken = await db.googleToken.findUnique({
-      where: { organizationId }
+      where: {
+        userId_organizationId: { userId, organizationId }
+      }
     });
     if (existingToken) {
       await db.googleToken.update({
-        where: { organizationId },
+        where: {
+          userId_organizationId: { userId, organizationId }
+        },
         data: {
           accessToken: updateData.accessToken,
           // Ne met à jour le refresh token que s'il est nouveau, sinon conserve l'ancien
@@ -4574,33 +4581,42 @@ var GoogleOAuthService = class {
           scope: updateData.scope,
           updatedAt: updateData.updatedAt,
           lastRefreshAt: /* @__PURE__ */ new Date(),
-          refreshCount: { increment: 1 }
+          refreshCount: { increment: 1 },
+          googleEmail: googleEmail ?? existingToken.googleEmail
         }
       });
     } else {
       await db.googleToken.create({
         data: {
           id: (0, import_crypto.randomUUID)(),
+          userId,
           organizationId,
           accessToken: updateData.accessToken,
           refreshToken: updateData.refreshToken,
           tokenType: updateData.tokenType,
           expiresAt: updateData.expiresAt,
           scope: updateData.scope,
+          googleEmail,
           updatedAt: /* @__PURE__ */ new Date()
         }
       });
     }
-    console.log(`[GoogleOAuthService] Tokens sauvegard\xE9s/mis \xE0 jour pour l'utilisateur ${userId} (org: ${organizationId})`);
+    console.log(`[GoogleOAuthService] Tokens sauvegard\xE9s/mis \xE0 jour pour l'utilisateur ${userId} (org: ${organizationId}, email: ${googleEmail})`);
   }
-  // Récupérer les tokens par userId (en passant par l'utilisateur et son organisation)
-  async getUserTokens(userId) {
+  // Récupérer les tokens par userId et organizationId
+  async getUserTokens(userId, organizationId) {
+    if (organizationId) {
+      return await db.googleToken.findUnique({
+        where: {
+          userId_organizationId: { userId, organizationId }
+        }
+      });
+    }
     const userWithOrg = await db.user.findUnique({
       where: { id: userId },
       include: {
         UserOrganization: {
           take: 1,
-          // Prendre la première organisation
           orderBy: { createdAt: "desc" }
         }
       }
@@ -4609,13 +4625,16 @@ var GoogleOAuthService = class {
       console.log(`[GoogleOAuthService] Utilisateur ${userId} ou organisation non trouv\xE9`);
       return null;
     }
-    const organizationId = userWithOrg.UserOrganization[0].organizationId;
+    const defaultOrgId = userWithOrg.UserOrganization[0].organizationId;
     return await db.googleToken.findUnique({
-      where: { organizationId }
+      where: {
+        userId_organizationId: { userId, organizationId: defaultOrgId }
+      }
     });
   }
   // Client authentifié avec email administrateur Google Workspace
-  async getAuthenticatedClientForOrganization(organizationId) {
+  // Maintenant, chaque utilisateur a son propre token
+  async getAuthenticatedClientForOrganization(organizationId, userId) {
     const organization = await db.organization.findUnique({
       where: { id: organizationId },
       include: {
@@ -4629,9 +4648,18 @@ var GoogleOAuthService = class {
     if (!googleConfig || !googleConfig.adminEmail || !googleConfig.domain) {
       return null;
     }
-    const tokens2 = await db.googleToken.findUnique({
-      where: { organizationId: organization.id }
-    });
+    let tokens2;
+    if (userId) {
+      tokens2 = await db.googleToken.findUnique({
+        where: {
+          userId_organizationId: { userId, organizationId: organization.id }
+        }
+      });
+    } else {
+      tokens2 = await db.googleToken.findFirst({
+        where: { organizationId: organization.id }
+      });
+    }
     if (!tokens2) {
       return null;
     }
@@ -4654,7 +4682,7 @@ var GoogleOAuthService = class {
         const { credentials: newCredentials } = await adminOAuth2Client.refreshAccessToken();
         if (newCredentials.access_token && newCredentials.expiry_date) {
           await db.googleToken.update({
-            where: { organizationId: organization.id },
+            where: { id: tokens2.id },
             data: {
               accessToken: newCredentials.access_token,
               // Mettre à jour le refresh token SEULEMENT s'il est nouveau
@@ -4674,9 +4702,9 @@ var GoogleOAuthService = class {
     }
     return adminOAuth2Client;
   }
-  // Client authentifié
-  async getAuthenticatedClient(userId) {
-    const tokens2 = await this.getUserTokens(userId);
+  // Client authentifié pour un utilisateur spécifique dans une organisation
+  async getAuthenticatedClient(userId, organizationId) {
+    const tokens2 = await this.getUserTokens(userId, organizationId);
     if (!tokens2) {
       console.log(`[GoogleOAuthService] \u274C Aucun token trouv\xE9 pour l'utilisateur ${userId}`);
       return null;
@@ -4793,7 +4821,9 @@ var GoogleOAuthService = class {
     });
     if (userWithOrg?.UserOrganization[0]) {
       const organizationId = userWithOrg.UserOrganization[0].organizationId;
-      await db.googleToken.delete({ where: { organizationId } });
+      await db.googleToken.delete({
+        where: { userId_organizationId: { userId, organizationId } }
+      });
       console.log(`[GoogleOAuthService] Tokens supprim\xE9s de la DB pour l'utilisateur ${userId} (org: ${organizationId})`);
     } else {
       console.log(`[GoogleOAuthService] Impossible de trouver l'organization pour l'utilisateur ${userId}`);
@@ -4830,19 +4860,20 @@ var GoogleAuthManager = class _GoogleAuthManager {
     return _GoogleAuthManager.instance;
   }
   /**
-   * Obtient un client Google authentifié pour une organisation
+   * Obtient un client Google authentifié pour un utilisateur dans une organisation
    * 
    * @param organizationId - ID de l'organisation
+   * @param userId - ID de l'utilisateur (optionnel pour rétrocompatibilité)
    * @returns Client OAuth2 authentifié ou null si échec
    */
-  async getAuthenticatedClient(organizationId) {
+  async getAuthenticatedClient(organizationId, userId) {
     if (!organizationId) {
       console.error("[GoogleAuthManager] \u274C organizationId est requis");
       return null;
     }
-    console.log(`[GoogleAuthManager] \u{1F510} Demande de client authentifi\xE9 pour l'organisation: ${organizationId}`);
+    console.log(`[GoogleAuthManager] \u{1F510} Demande de client authentifi\xE9 pour l'organisation: ${organizationId}, utilisateur: ${userId || "non sp\xE9cifi\xE9"}`);
     try {
-      return await googleOAuthService.getAuthenticatedClientForOrganization(organizationId);
+      return await googleOAuthService.getAuthenticatedClientForOrganization(organizationId, userId);
     } catch (error) {
       console.error("[GoogleAuthManager] \u274C Erreur lors de l'obtention du client authentifi\xE9:", error);
       return null;
@@ -4864,10 +4895,11 @@ var GoogleAuthManager = class _GoogleAuthManager {
    * @param code - Code d'autorisation reçu de Google
    * @param userId - ID de l'utilisateur
    * @param organizationId - ID de l'organisation
+   * @param googleEmail - Email du compte Google connecté (optionnel)
    */
-  async exchangeCodeForTokens(code, userId, organizationId) {
+  async exchangeCodeForTokens(code, userId, organizationId, googleEmail) {
     const tokens2 = await googleOAuthService.getTokenFromCode(code);
-    await googleOAuthService.saveUserTokens(userId, organizationId, tokens2);
+    await googleOAuthService.saveUserTokens(userId, organizationId, tokens2, googleEmail);
   }
 };
 var googleAuthManager = GoogleAuthManager.getInstance();
@@ -4885,11 +4917,11 @@ var GoogleCalendarService = class _GoogleCalendarService {
     return _GoogleCalendarService.instance;
   }
   /**
-   * Obtient une instance de l'API Google Calendar pour une organisation
+   * Obtient une instance de l'API Google Calendar pour un utilisateur dans une organisation
    */
-  async getCalendarAPI(organizationId) {
-    console.log(`[GoogleCalendarService] \u{1F4C5} Cr\xE9ation instance API Calendar pour organisation: ${organizationId}`);
-    const authClient = await googleAuthManager.getAuthenticatedClient(organizationId);
+  async getCalendarAPI(organizationId, userId) {
+    console.log(`[GoogleCalendarService] \u{1F4C5} Cr\xE9ation instance API Calendar pour organisation: ${organizationId}, utilisateur: ${userId || "non sp\xE9cifi\xE9"}`);
+    const authClient = await googleAuthManager.getAuthenticatedClient(organizationId, userId);
     if (!authClient) {
       throw new Error("Connexion Google non configur\xE9e.");
     }
@@ -4898,9 +4930,9 @@ var GoogleCalendarService = class _GoogleCalendarService {
   /**
    * Récupère les événements du calendrier
    */
-  async getEvents(organizationId, startDate, endDate) {
+  async getEvents(organizationId, startDate, endDate, userId) {
     try {
-      const calendar = await this.getCalendarAPI(organizationId);
+      const calendar = await this.getCalendarAPI(organizationId, userId);
       const params = {
         calendarId: "primary",
         singleEvents: true,
@@ -4936,9 +4968,9 @@ var GoogleCalendarService = class _GoogleCalendarService {
   /**
    * Crée un nouvel événement
    */
-  async createEvent(organizationId, event) {
+  async createEvent(organizationId, event, userId) {
     try {
-      const calendar = await this.getCalendarAPI(organizationId);
+      const calendar = await this.getCalendarAPI(organizationId, userId);
       const response = await calendar.events.insert({
         calendarId: "primary",
         requestBody: {
@@ -4958,9 +4990,9 @@ var GoogleCalendarService = class _GoogleCalendarService {
   /**
    * Met à jour un événement existant
    */
-  async updateEvent(organizationId, eventId, event) {
+  async updateEvent(organizationId, eventId, event, userId) {
     try {
-      const calendar = await this.getCalendarAPI(organizationId);
+      const calendar = await this.getCalendarAPI(organizationId, userId);
       await calendar.events.update({
         calendarId: "primary",
         eventId,
@@ -4980,9 +5012,9 @@ var GoogleCalendarService = class _GoogleCalendarService {
   /**
    * Supprime un événement
    */
-  async deleteEvent(organizationId, eventId) {
+  async deleteEvent(organizationId, eventId, userId) {
     try {
-      const calendar = await this.getCalendarAPI(organizationId);
+      const calendar = await this.getCalendarAPI(organizationId, userId);
       await calendar.events.delete({
         calendarId: "primary",
         eventId
@@ -4995,10 +5027,10 @@ var GoogleCalendarService = class _GoogleCalendarService {
   /**
    * Synchronise les événements avec Google Calendar
    */
-  async syncEvents(organizationId, startDate, endDate) {
-    console.log(`[GoogleCalendarService] \u{1F504} Synchronisation des \xE9v\xE9nements pour l'organisation: ${organizationId}`);
+  async syncEvents(organizationId, startDate, endDate, userId) {
+    console.log(`[GoogleCalendarService] \u{1F504} Synchronisation des \xE9v\xE9nements pour l'organisation: ${organizationId}, utilisateur: ${userId}`);
     console.log(`[GoogleCalendarService] \u{1F4C5} P\xE9riode: ${startDate.toISOString()} -> ${endDate.toISOString()}`);
-    return await this.getEvents(organizationId, startDate, endDate);
+    return await this.getEvents(organizationId, startDate, endDate, userId);
   }
 };
 var googleCalendarService = GoogleCalendarService.getInstance();
@@ -5008,23 +5040,25 @@ var import_googleapis3 = require("googleapis");
 var GoogleGmailService = class _GoogleGmailService {
   gmail;
   organizationId;
+  userId = null;
   adminEmail = null;
-  constructor(gmail, organizationId) {
+  constructor(gmail, organizationId, userId) {
     this.gmail = gmail;
     this.organizationId = organizationId;
+    this.userId = userId || null;
   }
   /**
-   * Crée une instance du service Gmail pour une organisation
+   * Crée une instance du service Gmail pour un utilisateur dans une organisation
    */
-  static async create(organizationId) {
-    console.log(`[GoogleGmailService] Cr\xE9ation du service pour l'organisation: ${organizationId}`);
-    const authClient = await googleAuthManager.getAuthenticatedClient(organizationId);
+  static async create(organizationId, userId) {
+    console.log(`[GoogleGmailService] Cr\xE9ation du service pour l'organisation: ${organizationId}, utilisateur: ${userId || "non sp\xE9cifi\xE9"}`);
+    const authClient = await googleAuthManager.getAuthenticatedClient(organizationId, userId);
     if (!authClient) {
       console.error(`[GoogleGmailService] Impossible d'obtenir le client authentifi\xE9 pour l'organisation: ${organizationId}`);
       return null;
     }
     const gmail = import_googleapis3.google.gmail({ version: "v1", auth: authClient });
-    const service = new _GoogleGmailService(gmail, organizationId);
+    const service = new _GoogleGmailService(gmail, organizationId, userId);
     await service.loadOrganizationInfo();
     return service;
   }
@@ -5756,11 +5790,11 @@ var GoogleDriveService = class _GoogleDriveService {
     return _GoogleDriveService.instance;
   }
   /**
-   * Obtient une instance de l'API Google Drive pour une organisation
+   * Obtient une instance de l'API Google Drive pour un utilisateur dans une organisation
    */
-  async getDriveAPI(organizationId) {
-    console.log(`[GoogleDriveService] \u{1F4C1} Cr\xE9ation instance API Drive pour organisation: ${organizationId}`);
-    const authClient = await googleAuthManager.getAuthenticatedClient(organizationId);
+  async getDriveAPI(organizationId, userId) {
+    console.log(`[GoogleDriveService] \u{1F4C1} Cr\xE9ation instance API Drive pour organisation: ${organizationId}, utilisateur: ${userId || "non sp\xE9cifi\xE9"}`);
+    const authClient = await googleAuthManager.getAuthenticatedClient(organizationId, userId);
     if (!authClient) {
       throw new Error("Connexion Google non configur\xE9e.");
     }
@@ -5769,10 +5803,10 @@ var GoogleDriveService = class _GoogleDriveService {
   /**
    * Récupère les fichiers et dossiers du Drive
    */
-  async getFiles(organizationId, folderId = "root", pageSize = 50, pageToken) {
+  async getFiles(organizationId, folderId = "root", pageSize = 50, pageToken, userId) {
     try {
-      console.log(`[GoogleDriveService] \u{1F50D} R\xE9cup\xE9ration des fichiers pour folder: ${folderId}`);
-      const drive = await this.getDriveAPI(organizationId);
+      console.log(`[GoogleDriveService] \u{1F50D} R\xE9cup\xE9ration des fichiers pour folder: ${folderId}, userId: ${userId}`);
+      const drive = await this.getDriveAPI(organizationId, userId);
       const query = folderId === "root" ? "'root' in parents and trashed = false" : `'${folderId}' in parents and trashed = false`;
       const response = await drive.files.list({
         q: query,
@@ -5811,10 +5845,10 @@ var GoogleDriveService = class _GoogleDriveService {
   /**
    * Récupère les fichiers partagés avec l'utilisateur
    */
-  async getSharedFiles(organizationId, pageSize = 50, pageToken) {
+  async getSharedFiles(organizationId, pageSize = 50, pageToken, userId) {
     try {
       console.log(`[GoogleDriveService] \u{1F50D} R\xE9cup\xE9ration des fichiers partag\xE9s`);
-      const drive = await this.getDriveAPI(organizationId);
+      const drive = await this.getDriveAPI(organizationId, userId);
       const response = await drive.files.list({
         q: "sharedWithMe = true and trashed = false",
         pageSize,
@@ -5852,10 +5886,10 @@ var GoogleDriveService = class _GoogleDriveService {
   /**
    * Récupère les drives partagés (Team Drives)
    */
-  async getSharedDrives(organizationId, pageSize = 50) {
+  async getSharedDrives(organizationId, pageSize = 50, userId) {
     try {
       console.log(`[GoogleDriveService] \u{1F50D} R\xE9cup\xE9ration des drives partag\xE9s`);
-      const drive = await this.getDriveAPI(organizationId);
+      const drive = await this.getDriveAPI(organizationId, userId);
       const response = await drive.drives.list({
         pageSize,
         fields: "drives(id, name)"
@@ -5874,10 +5908,10 @@ var GoogleDriveService = class _GoogleDriveService {
   /**
    * Récupère les fichiers d'un Drive partagé (Team Drive)
    */
-  async getSharedDriveFiles(organizationId, driveId, folderId, pageSize = 50, pageToken) {
+  async getSharedDriveFiles(organizationId, driveId, folderId, pageSize = 50, pageToken, userId) {
     try {
       console.log(`[GoogleDriveService] \u{1F50D} R\xE9cup\xE9ration des fichiers du drive partag\xE9: ${driveId}, folder: ${folderId || "root"}`);
-      const drive = await this.getDriveAPI(organizationId);
+      const drive = await this.getDriveAPI(organizationId, userId);
       const parentId = folderId || driveId;
       const query = `'${parentId}' in parents and trashed = false`;
       const response = await drive.files.list({
@@ -5919,10 +5953,10 @@ var GoogleDriveService = class _GoogleDriveService {
   /**
    * Recherche des fichiers dans le Drive
    */
-  async searchFiles(organizationId, searchQuery, pageSize = 50) {
+  async searchFiles(organizationId, searchQuery, pageSize = 50, userId) {
     try {
       console.log(`[GoogleDriveService] \u{1F50E} Recherche: "${searchQuery}"`);
-      const drive = await this.getDriveAPI(organizationId);
+      const drive = await this.getDriveAPI(organizationId, userId);
       const response = await drive.files.list({
         q: `name contains '${searchQuery}' and trashed = false`,
         pageSize,
@@ -5952,10 +5986,10 @@ var GoogleDriveService = class _GoogleDriveService {
   /**
    * Crée un nouveau dossier
    */
-  async createFolder(organizationId, name, parentId = "root") {
+  async createFolder(organizationId, name, parentId = "root", userId) {
     try {
       console.log(`[GoogleDriveService] \u{1F4C2} Cr\xE9ation du dossier: "${name}"`);
-      const drive = await this.getDriveAPI(organizationId);
+      const drive = await this.getDriveAPI(organizationId, userId);
       const response = await drive.files.create({
         requestBody: {
           name,
@@ -5980,10 +6014,10 @@ var GoogleDriveService = class _GoogleDriveService {
   /**
    * Supprime un fichier ou dossier (mise à la corbeille)
    */
-  async deleteFile(organizationId, fileId) {
+  async deleteFile(organizationId, fileId, userId) {
     try {
       console.log(`[GoogleDriveService] \u{1F5D1}\uFE0F Suppression du fichier: ${fileId}`);
-      const drive = await this.getDriveAPI(organizationId);
+      const drive = await this.getDriveAPI(organizationId, userId);
       await drive.files.update({
         fileId,
         supportsAllDrives: true,
@@ -6001,9 +6035,9 @@ var GoogleDriveService = class _GoogleDriveService {
   /**
    * Récupère les informations d'un fichier
    */
-  async getFileInfo(organizationId, fileId) {
+  async getFileInfo(organizationId, fileId, userId) {
     try {
-      const drive = await this.getDriveAPI(organizationId);
+      const drive = await this.getDriveAPI(organizationId, userId);
       const response = await drive.files.get({
         fileId,
         fields: "id, name, mimeType, size, modifiedTime, createdTime, webViewLink, webContentLink, iconLink, thumbnailLink, parents, shared, ownedByMe"
@@ -6031,9 +6065,9 @@ var GoogleDriveService = class _GoogleDriveService {
   /**
    * Récupère les informations de stockage
    */
-  async getStorageInfo(organizationId) {
+  async getStorageInfo(organizationId, userId) {
     try {
-      const drive = await this.getDriveAPI(organizationId);
+      const drive = await this.getDriveAPI(organizationId, userId);
       const response = await drive.about.get({
         fields: "storageQuota"
       });
@@ -6052,10 +6086,10 @@ var GoogleDriveService = class _GoogleDriveService {
   /**
    * Upload un fichier vers Google Drive
    */
-  async uploadFile(organizationId, fileName, mimeType, fileBuffer, parentId = "root") {
+  async uploadFile(organizationId, fileName, mimeType, fileBuffer, parentId = "root", userId) {
     try {
       console.log(`[GoogleDriveService] \u{1F4E4} Upload du fichier: "${fileName}"`);
-      const drive = await this.getDriveAPI(organizationId);
+      const drive = await this.getDriveAPI(organizationId, userId);
       const { Readable } = await import("stream");
       const stream = Readable.from(fileBuffer);
       const response = await drive.files.create({
@@ -6089,10 +6123,10 @@ var GoogleDriveService = class _GoogleDriveService {
   /**
    * Renommer un fichier ou dossier
    */
-  async renameFile(organizationId, fileId, newName) {
+  async renameFile(organizationId, fileId, newName, userId) {
     try {
       console.log(`[GoogleDriveService] \u270F\uFE0F Renommer fichier ${fileId} en "${newName}"`);
-      const drive = await this.getDriveAPI(organizationId);
+      const drive = await this.getDriveAPI(organizationId, userId);
       const response = await drive.files.update({
         fileId,
         supportsAllDrives: true,
@@ -6117,10 +6151,10 @@ var GoogleDriveService = class _GoogleDriveService {
   /**
    * Déplacer un fichier vers un autre dossier
    */
-  async moveFile(organizationId, fileId, newParentId) {
+  async moveFile(organizationId, fileId, newParentId, userId) {
     try {
       console.log(`[GoogleDriveService] \u{1F4E6} D\xE9placer fichier ${fileId} vers ${newParentId}`);
-      const drive = await this.getDriveAPI(organizationId);
+      const drive = await this.getDriveAPI(organizationId, userId);
       const file = await drive.files.get({
         fileId,
         supportsAllDrives: true,
@@ -6150,10 +6184,10 @@ var GoogleDriveService = class _GoogleDriveService {
   /**
    * Copier un fichier
    */
-  async copyFile(organizationId, fileId, newName) {
+  async copyFile(organizationId, fileId, newName, userId) {
     try {
       console.log(`[GoogleDriveService] \u{1F4CB} Copier fichier ${fileId}`);
-      const drive = await this.getDriveAPI(organizationId);
+      const drive = await this.getDriveAPI(organizationId, userId);
       const response = await drive.files.copy({
         fileId,
         supportsAllDrives: true,
@@ -6177,10 +6211,10 @@ var GoogleDriveService = class _GoogleDriveService {
   /**
    * Obtenir le lien de partage d'un fichier
    */
-  async getShareLink(organizationId, fileId) {
+  async getShareLink(organizationId, fileId, userId) {
     try {
       console.log(`[GoogleDriveService] \u{1F517} Obtenir lien de partage pour ${fileId}`);
-      const drive = await this.getDriveAPI(organizationId);
+      const drive = await this.getDriveAPI(organizationId, userId);
       const response = await drive.files.get({
         fileId,
         supportsAllDrives: true,
@@ -6198,10 +6232,10 @@ var GoogleDriveService = class _GoogleDriveService {
   /**
    * Rendre un fichier accessible à tous avec un lien
    */
-  async makePublic(organizationId, fileId) {
+  async makePublic(organizationId, fileId, userId) {
     try {
       console.log(`[GoogleDriveService] \u{1F310} Rendre public ${fileId}`);
-      const drive = await this.getDriveAPI(organizationId);
+      const drive = await this.getDriveAPI(organizationId, userId);
       await drive.permissions.create({
         fileId,
         supportsAllDrives: true,
@@ -6227,10 +6261,10 @@ var GoogleDriveService = class _GoogleDriveService {
   /**
    * Récupérer les fichiers récents
    */
-  async getRecentFiles(organizationId, pageSize = 50) {
+  async getRecentFiles(organizationId, pageSize = 50, userId) {
     try {
       console.log(`[GoogleDriveService] \u{1F550} R\xE9cup\xE9ration des fichiers r\xE9cents`);
-      const drive = await this.getDriveAPI(organizationId);
+      const drive = await this.getDriveAPI(organizationId, userId);
       const response = await drive.files.list({
         pageSize,
         orderBy: "viewedByMeTime desc",
@@ -6260,10 +6294,10 @@ var GoogleDriveService = class _GoogleDriveService {
   /**
    * Récupérer les fichiers favoris (étoilés)
    */
-  async getStarredFiles(organizationId, pageSize = 50) {
+  async getStarredFiles(organizationId, pageSize = 50, userId) {
     try {
       console.log(`[GoogleDriveService] \u2B50 R\xE9cup\xE9ration des fichiers favoris`);
-      const drive = await this.getDriveAPI(organizationId);
+      const drive = await this.getDriveAPI(organizationId, userId);
       const response = await drive.files.list({
         pageSize,
         q: "starred = true and trashed = false",
@@ -6293,10 +6327,10 @@ var GoogleDriveService = class _GoogleDriveService {
   /**
    * Ajouter/retirer un fichier des favoris
    */
-  async toggleStar(organizationId, fileId, starred) {
+  async toggleStar(organizationId, fileId, starred, userId) {
     try {
       console.log(`[GoogleDriveService] \u2B50 ${starred ? "Ajouter aux" : "Retirer des"} favoris: ${fileId}`);
-      const drive = await this.getDriveAPI(organizationId);
+      const drive = await this.getDriveAPI(organizationId, userId);
       await drive.files.update({
         fileId,
         supportsAllDrives: true,
@@ -6314,10 +6348,10 @@ var GoogleDriveService = class _GoogleDriveService {
   /**
    * Récupérer les fichiers dans la corbeille
    */
-  async getTrash(organizationId, pageSize = 50) {
+  async getTrash(organizationId, pageSize = 50, userId) {
     try {
       console.log(`[GoogleDriveService] \u{1F5D1}\uFE0F R\xE9cup\xE9ration de la corbeille`);
-      const drive = await this.getDriveAPI(organizationId);
+      const drive = await this.getDriveAPI(organizationId, userId);
       const response = await drive.files.list({
         pageSize,
         q: "trashed = true",
@@ -6344,10 +6378,10 @@ var GoogleDriveService = class _GoogleDriveService {
   /**
    * Restaurer un fichier de la corbeille
    */
-  async restoreFile(organizationId, fileId) {
+  async restoreFile(organizationId, fileId, userId) {
     try {
       console.log(`[GoogleDriveService] \u267B\uFE0F Restaurer fichier: ${fileId}`);
-      const drive = await this.getDriveAPI(organizationId);
+      const drive = await this.getDriveAPI(organizationId, userId);
       await drive.files.update({
         fileId,
         supportsAllDrives: true,
@@ -6365,10 +6399,10 @@ var GoogleDriveService = class _GoogleDriveService {
   /**
    * Supprimer définitivement un fichier
    */
-  async deleteFilePermanently(organizationId, fileId) {
+  async deleteFilePermanently(organizationId, fileId, userId) {
     try {
       console.log(`[GoogleDriveService] \u274C Suppression d\xE9finitive: ${fileId}`);
-      const drive = await this.getDriveAPI(organizationId);
+      const drive = await this.getDriveAPI(organizationId, userId);
       await drive.files.delete({
         fileId,
         supportsAllDrives: true
@@ -6383,10 +6417,10 @@ var GoogleDriveService = class _GoogleDriveService {
   /**
    * Vider la corbeille
    */
-  async emptyTrash(organizationId) {
+  async emptyTrash(organizationId, userId) {
     try {
       console.log(`[GoogleDriveService] \u{1F5D1}\uFE0F Vider la corbeille`);
-      const drive = await this.getDriveAPI(organizationId);
+      const drive = await this.getDriveAPI(organizationId, userId);
       await drive.files.emptyTrash();
       console.log(`[GoogleDriveService] \u2705 Corbeille vid\xE9e`);
       return true;
@@ -6398,10 +6432,10 @@ var GoogleDriveService = class _GoogleDriveService {
   /**
    * Télécharger un fichier (obtenir l'URL de téléchargement)
    */
-  async getDownloadUrl(organizationId, fileId) {
+  async getDownloadUrl(organizationId, fileId, userId) {
     try {
       console.log(`[GoogleDriveService] \u2B07\uFE0F Obtenir URL de t\xE9l\xE9chargement: ${fileId}`);
-      const drive = await this.getDriveAPI(organizationId);
+      const drive = await this.getDriveAPI(organizationId, userId);
       const response = await drive.files.get({
         fileId,
         supportsAllDrives: true,
@@ -6434,10 +6468,10 @@ var GoogleDriveService = class _GoogleDriveService {
   /**
    * Créer un document Google (Docs, Sheets, Slides)
    */
-  async createGoogleDoc(organizationId, name, type, parentId = "root") {
+  async createGoogleDoc(organizationId, name, type, parentId = "root", userId) {
     try {
       console.log(`[GoogleDriveService] \u{1F4C4} Cr\xE9er ${type}: "${name}"`);
-      const drive = await this.getDriveAPI(organizationId);
+      const drive = await this.getDriveAPI(organizationId, userId);
       const mimeTypes = {
         document: "application/vnd.google-apps.document",
         spreadsheet: "application/vnd.google-apps.spreadsheet",
@@ -6474,7 +6508,7 @@ var getThreads = async (req2, res) => {
     if (!organizationId) {
       return res.status(401).json({ error: "Organization ID manquant dans la requ\xEAte" });
     }
-    const gmailService = await GoogleGmailService.create(organizationId);
+    const gmailService = await GoogleGmailService.create(organizationId, req2.user?.id || req2.user?.userId);
     if (!gmailService) {
       return res.status(401).json({ error: "Google non connect\xE9 pour cette organisation" });
     }
@@ -6496,7 +6530,7 @@ var getMessages = async (req2, res) => {
     if (!organizationId) {
       return res.status(401).json({ error: "Organization ID manquant dans la requ\xEAte" });
     }
-    const gmailService = await GoogleGmailService.create(organizationId);
+    const gmailService = await GoogleGmailService.create(organizationId, req2.user?.id || req2.user?.userId);
     if (!gmailService) {
       return res.status(401).json({ error: "Google non connect\xE9 pour cette organisation" });
     }
@@ -6565,7 +6599,7 @@ var getMessage = async (req2, res) => {
     if (!id) {
       return res.status(400).json({ error: "ID du message manquant" });
     }
-    const gmailService = await GoogleGmailService.create(organizationId);
+    const gmailService = await GoogleGmailService.create(organizationId, req2.user?.id || req2.user?.userId);
     if (!gmailService) {
       return res.status(401).json({ error: "Google non connect\xE9 pour cette organisation" });
     }
@@ -6641,7 +6675,7 @@ var sendMessage = async (req2, res) => {
     console.log("[Gmail Controller] \u{1F4E4} Envoi email avec", req2.files ? Object.keys(req2.files) : "aucun", "fichiers");
     console.log("[Gmail Controller] \u{1F4E7} Destinataire:", to, "Sujet:", subject);
     console.log("[Gmail Controller]  Cr\xE9ation du service Gmail...");
-    const gmailService = await GoogleGmailService.create(organizationId);
+    const gmailService = await GoogleGmailService.create(organizationId, req2.user?.id || req2.user?.userId);
     if (!gmailService) {
       console.log("[Gmail Controller] \u274C Impossible de cr\xE9er le service Gmail");
       return res.status(401).json({ error: "Google non connect\xE9 pour cette organisation" });
@@ -6714,7 +6748,7 @@ var modifyMessage = async (req2, res) => {
     if (!id) {
       return res.status(400).json({ error: "ID du message manquant" });
     }
-    const gmailService = await GoogleGmailService.create(organizationId);
+    const gmailService = await GoogleGmailService.create(organizationId, req2.user?.id || req2.user?.userId);
     if (!gmailService) {
       return res.status(401).json({ error: "Google non connect\xE9 pour cette organisation" });
     }
@@ -6761,7 +6795,7 @@ var deleteMessage = async (req2, res) => {
     if (!id) {
       return res.status(400).json({ error: "ID du message manquant" });
     }
-    const gmailService = await GoogleGmailService.create(organizationId);
+    const gmailService = await GoogleGmailService.create(organizationId, req2.user?.id || req2.user?.userId);
     if (!gmailService) {
       return res.status(401).json({ error: "Google non connect\xE9 pour cette organisation" });
     }
@@ -6781,7 +6815,7 @@ var getLabels = async (req2, res) => {
     if (!organizationId) {
       return res.status(401).json({ error: "Organization ID manquant dans la requ\xEAte" });
     }
-    const gmailService = await GoogleGmailService.create(organizationId);
+    const gmailService = await GoogleGmailService.create(organizationId, req2.user?.id || req2.user?.userId);
     if (!gmailService) {
       return res.status(401).json({ error: "Google non connect\xE9 pour cette organisation" });
     }
@@ -6802,7 +6836,7 @@ var trashMessage = async (req2, res) => {
     if (!id) {
       return res.status(400).json({ error: "ID du message manquant" });
     }
-    const gmailService = await GoogleGmailService.create(organizationId);
+    const gmailService = await GoogleGmailService.create(organizationId, req2.user?.id || req2.user?.userId);
     if (!gmailService) {
       return res.status(401).json({ error: "Google non connect\xE9 pour cette organisation" });
     }
@@ -6826,7 +6860,7 @@ var untrashMessage = async (req2, res) => {
     if (!id) {
       return res.status(400).json({ error: "ID du message manquant" });
     }
-    const gmailService = await GoogleGmailService.create(organizationId);
+    const gmailService = await GoogleGmailService.create(organizationId, req2.user?.id || req2.user?.userId);
     if (!gmailService) {
       return res.status(401).json({ error: "Google non connect\xE9 pour cette organisation" });
     }
@@ -6846,7 +6880,7 @@ var emptyTrash = async (req2, res) => {
     if (!organizationId) {
       return res.status(401).json({ error: "Organization ID manquant dans la requ\xEAte" });
     }
-    const gmailService = await GoogleGmailService.create(organizationId);
+    const gmailService = await GoogleGmailService.create(organizationId, req2.user?.id || req2.user?.userId);
     if (!gmailService) {
       return res.status(401).json({ error: "Google non connect\xE9 pour cette organisation" });
     }
@@ -6870,7 +6904,7 @@ var createLabel = async (req2, res) => {
     if (!name) {
       return res.status(400).json({ error: "Nom du label requis" });
     }
-    const gmailService = await GoogleGmailService.create(organizationId);
+    const gmailService = await GoogleGmailService.create(organizationId, req2.user?.id || req2.user?.userId);
     if (!gmailService) {
       return res.status(401).json({ error: "Google non connect\xE9 pour cette organisation" });
     }
@@ -6898,7 +6932,7 @@ var updateLabel = async (req2, res) => {
     if (!id || !name) {
       return res.status(400).json({ error: "ID et nom du label requis" });
     }
-    const gmailService = await GoogleGmailService.create(organizationId);
+    const gmailService = await GoogleGmailService.create(organizationId, req2.user?.id || req2.user?.userId);
     if (!gmailService) {
       return res.status(401).json({ error: "Google non connect\xE9 pour cette organisation" });
     }
@@ -6922,7 +6956,7 @@ var deleteLabel = async (req2, res) => {
     if (!id) {
       return res.status(400).json({ error: "ID du label manquant" });
     }
-    const gmailService = await GoogleGmailService.create(organizationId);
+    const gmailService = await GoogleGmailService.create(organizationId, req2.user?.id || req2.user?.userId);
     if (!gmailService) {
       return res.status(401).json({ error: "Google non connect\xE9 pour cette organisation" });
     }
@@ -6956,7 +6990,7 @@ var getAttachment = async (req2, res) => {
     }
     console.log(`[Gmail Controller] \u{1F4CE} R\xE9cup\xE9ration pi\xE8ce jointe: ${attachmentId} du message: ${messageId}`);
     console.log(`[Gmail Controller] \u{1F3E2} Organization ID utilis\xE9: ${organizationId}`);
-    const gmailService = await GoogleGmailService.create(organizationId);
+    const gmailService = await GoogleGmailService.create(organizationId, req2.user?.id || req2.user?.userId);
     if (!gmailService) {
       return res.status(401).json({ error: "Google non connect\xE9 pour cette organisation" });
     }
@@ -7008,7 +7042,7 @@ var getDrafts = async (req2, res) => {
     if (!organizationId) {
       return res.status(401).json({ error: "Organization ID manquant dans la requ\xEAte" });
     }
-    const gmailService = await GoogleGmailService.create(organizationId);
+    const gmailService = await GoogleGmailService.create(organizationId, req2.user?.id || req2.user?.userId);
     if (!gmailService) {
       return res.status(401).json({ error: "Google non connect\xE9 pour cette organisation" });
     }
@@ -7029,7 +7063,7 @@ var saveDraft = async (req2, res) => {
     if (!to || !subject) {
       return res.status(400).json({ error: "Destinataire et sujet requis" });
     }
-    const gmailService = await GoogleGmailService.create(organizationId);
+    const gmailService = await GoogleGmailService.create(organizationId, req2.user?.id || req2.user?.userId);
     if (!gmailService) {
       return res.status(401).json({ error: "Google non connect\xE9 pour cette organisation" });
     }
@@ -7070,7 +7104,7 @@ var deleteDraft = async (req2, res) => {
     if (!id) {
       return res.status(400).json({ error: "ID du brouillon manquant" });
     }
-    const gmailService = await GoogleGmailService.create(organizationId);
+    const gmailService = await GoogleGmailService.create(organizationId, req2.user?.id || req2.user?.userId);
     if (!gmailService) {
       return res.status(401).json({ error: "Google non connect\xE9 pour cette organisation" });
     }
@@ -7094,7 +7128,7 @@ var sendDraft = async (req2, res) => {
     if (!id) {
       return res.status(400).json({ error: "ID du brouillon manquant" });
     }
-    const gmailService = await GoogleGmailService.create(organizationId);
+    const gmailService = await GoogleGmailService.create(organizationId, req2.user?.id || req2.user?.userId);
     if (!gmailService) {
       return res.status(401).json({ error: "Google non connect\xE9 pour cette organisation" });
     }
@@ -7122,7 +7156,7 @@ var health = async (req2, res) => {
     if (!organizationId) {
       return res.status(200).json({ ok: false, reason: "organizationId manquant" });
     }
-    const gmailService = await GoogleGmailService.create(organizationId);
+    const gmailService = await GoogleGmailService.create(organizationId, req2.user?.id || req2.user?.userId);
     return res.status(200).json({ ok: !!gmailService });
   } catch (e) {
     return res.status(200).json({ ok: false, reason: e?.message });
@@ -10747,7 +10781,9 @@ router10.get("/status", authMiddleware, async (req2, res) => {
   }
   try {
     const tokens2 = await db.googleToken.findUnique({
-      where: { organizationId }
+      where: {
+        userId_organizationId: { userId, organizationId }
+      }
     });
     if (!tokens2 || !tokens2.accessToken) {
       return res.json({
@@ -10760,14 +10796,11 @@ router10.get("/status", authMiddleware, async (req2, res) => {
         }
       });
     }
-    const gwConfig = await db.googleWorkspaceConfig.findUnique({
-      where: { organizationId }
-    });
     return res.json({
       success: true,
       data: {
         connected: true,
-        email: gwConfig?.adminEmail || null,
+        email: tokens2.googleEmail || null,
         scopes: tokens2.scope?.split(" ") || [],
         lastSync: tokens2.updatedAt || null,
         expiresAt: tokens2.expiresAt
@@ -10875,12 +10908,22 @@ var import_googleapis7 = require("googleapis");
 // src/utils/googleTokenRefresh.ts
 var import_googleapis6 = require("googleapis");
 init_prisma();
-async function refreshGoogleTokenIfNeeded(organizationId) {
+async function refreshGoogleTokenIfNeeded(organizationId, userId) {
   try {
-    console.log("[REFRESH-TOKEN] \u{1F50D} V\xE9rification token pour organisation:", organizationId);
-    const googleToken = await db.googleToken.findUnique({
-      where: { organizationId }
-    });
+    console.log("[REFRESH-TOKEN] \u{1F50D} V\xE9rification token pour organisation:", organizationId, "userId:", userId);
+    let googleToken;
+    if (userId) {
+      googleToken = await db.googleToken.findUnique({
+        where: {
+          userId_organizationId: { userId, organizationId }
+        }
+      });
+    } else {
+      console.log("[REFRESH-TOKEN] \u26A0\uFE0F userId non fourni, fallback sur findFirst");
+      googleToken = await db.googleToken.findFirst({
+        where: { organizationId }
+      });
+    }
     if (!googleToken) {
       console.log("[REFRESH-TOKEN] \u274C Aucun token trouv\xE9 pour l'organisation:", organizationId);
       return { success: false, error: "no_token_found" };
@@ -10944,18 +10987,38 @@ async function refreshGoogleTokenIfNeeded(organizationId) {
       console.log("[REFRESH-TOKEN] \u{1F4CB} Nouveau refresh token re\xE7u:", !!credentials.refresh_token);
       const newExpiresAt = credentials.expiry_date ? new Date(credentials.expiry_date) : null;
       console.log("[REFRESH-TOKEN] \u{1F4BE} Sauvegarde du nouveau token...");
-      await db.googleToken.update({
-        where: { organizationId },
-        data: {
-          accessToken: credentials.access_token,
-          expiresAt: newExpiresAt,
-          updatedAt: /* @__PURE__ */ new Date(),
-          // Garder l'ancien refresh token sauf si un nouveau est fourni
-          ...credentials.refresh_token && {
-            refreshToken: credentials.refresh_token
+      if (userId) {
+        await db.googleToken.update({
+          where: {
+            userId_organizationId: { userId, organizationId }
+          },
+          data: {
+            accessToken: credentials.access_token,
+            expiresAt: newExpiresAt,
+            updatedAt: /* @__PURE__ */ new Date(),
+            lastRefreshAt: /* @__PURE__ */ new Date(),
+            refreshCount: { increment: 1 },
+            // Garder l'ancien refresh token sauf si un nouveau est fourni
+            ...credentials.refresh_token && {
+              refreshToken: credentials.refresh_token
+            }
           }
-        }
-      });
+        });
+      } else if (googleToken.id) {
+        await db.googleToken.update({
+          where: { id: googleToken.id },
+          data: {
+            accessToken: credentials.access_token,
+            expiresAt: newExpiresAt,
+            updatedAt: /* @__PURE__ */ new Date(),
+            lastRefreshAt: /* @__PURE__ */ new Date(),
+            refreshCount: { increment: 1 },
+            ...credentials.refresh_token && {
+              refreshToken: credentials.refresh_token
+            }
+          }
+        });
+      }
       console.log("[REFRESH-TOKEN] \u{1F4BE} Token mis \xE0 jour en base de donn\xE9es");
       return {
         success: true,
@@ -11529,10 +11592,12 @@ router12.get("/callback", async (req2, res) => {
         return res.redirect(`${process.env.FRONTEND_URL || "http://localhost:5173"}/google-auth-callback?google_error=account_mismatch&expected=${encodeURIComponent(config.adminEmail)}&connected_as=${encodeURIComponent(userInfo.data.email || "")}`);
       }
       console.log("[GOOGLE-AUTH] \u2705 Connexion Google valid\xE9e pour l'admin:", config.adminEmail);
-      console.log("[GOOGLE-AUTH] \u{1F4BE} Sauvegarde des tokens pour l'organisation:", organizationId);
-      await googleOAuthService.saveUserTokens(userId, organizationId, tokens2);
-      const googleTokenRecord = await db.googleToken.findUnique({ where: { organizationId } });
-      console.log("[GOOGLE-AUTH] \u2705 Tokens sauvegard\xE9s pour l'organisation:", googleTokenRecord?.id);
+      console.log("[GOOGLE-AUTH] \u{1F4BE} Sauvegarde des tokens pour l'utilisateur:", userId, "dans l'organisation:", organizationId);
+      await googleOAuthService.saveUserTokens(userId, organizationId, tokens2, userInfo.data.email || void 0);
+      const googleTokenRecord = await db.googleToken.findFirst({
+        where: { userId, organizationId }
+      });
+      console.log("[GOOGLE-AUTH] \u2705 Tokens sauvegard\xE9s pour l'utilisateur:", googleTokenRecord?.id);
       console.log("[GOOGLE-AUTH] \u{1F527} Activation des modules Google Workspace...");
       await activateGoogleModules(organizationId, tokens2.scope || "");
       console.log("[GOOGLE-AUTH] \u{1F389} Authentification Google compl\xE8te avec succ\xE8s !");
@@ -11590,8 +11655,9 @@ router12.get("/status", authMiddleware, async (req2, res) => {
         }
       });
     }
-    console.log("[GOOGLE-AUTH] \u{1F504} Tentative de refresh automatique pour organisation:", organizationId);
-    const refreshResult = await refreshGoogleTokenIfNeeded(organizationId);
+    const userId = req2.user?.userId;
+    console.log("[GOOGLE-AUTH] \u{1F504} Tentative de refresh automatique pour organisation:", organizationId, "userId:", userId);
+    const refreshResult = await refreshGoogleTokenIfNeeded(organizationId, userId);
     if (!refreshResult.success) {
       console.log("[GOOGLE-AUTH] \u274C Refresh automatique \xE9chou\xE9:", refreshResult.error);
       if (refreshResult.error === "no_token_found") {
@@ -11655,25 +11721,39 @@ router12.get("/status", authMiddleware, async (req2, res) => {
       const userInfo = await oauth2.userinfo.get();
       userEmail = userInfo.data.email;
       tokenValid = true;
-      const googleToken2 = await db.googleToken.findUnique({
-        where: { organizationId }
-      });
-      scopes = googleToken2?.scope ? googleToken2.scope.split(" ") : [];
+      let googleToken;
+      if (userId) {
+        googleToken = await db.googleToken.findUnique({
+          where: { userId_organizationId: { userId, organizationId } }
+        });
+      } else {
+        googleToken = await db.googleToken.findFirst({
+          where: { organizationId }
+        });
+      }
+      scopes = googleToken?.scope ? googleToken.scope.split(" ") : [];
       console.log("[GOOGLE-AUTH] \u2705 Token valid\xE9 avec succ\xE8s, email:", userEmail);
     } catch (tokenError) {
       console.log("[GOOGLE-AUTH] \u274C Erreur validation token final:", tokenError);
       tokenValid = false;
     }
-    const googleToken = await db.googleToken.findUnique({
-      where: { organizationId }
-    });
+    let googleTokenInfo;
+    if (userId) {
+      googleTokenInfo = await db.googleToken.findUnique({
+        where: { userId_organizationId: { userId, organizationId } }
+      });
+    } else {
+      googleTokenInfo = await db.googleToken.findFirst({
+        where: { organizationId }
+      });
+    }
     res.json({
       success: true,
       data: {
         connected: tokenValid,
         email: userEmail,
         scopes,
-        lastSync: googleToken?.updatedAt,
+        lastSync: googleTokenInfo?.updatedAt,
         expiresAt: refreshResult.expiresAt,
         isExpired: false,
         // Le token est maintenant garanti valide
@@ -11715,9 +11795,17 @@ router12.post("/disconnect", authMiddleware, async (req2, res) => {
     } catch (e) {
       console.warn("[GOOGLE-AUTH] Warn: \xE9chec logSecurityEvent (REQUESTED):", e?.message);
     }
-    const googleToken = await db.googleToken.findUnique({
-      where: { organizationId }
-    });
+    const currentUserId = req2.user.userId;
+    let googleToken;
+    if (currentUserId) {
+      googleToken = await db.googleToken.findUnique({
+        where: { userId_organizationId: { userId: currentUserId, organizationId } }
+      });
+    } else {
+      googleToken = await db.googleToken.findFirst({
+        where: { organizationId }
+      });
+    }
     if (googleToken) {
       try {
         console.log("[GOOGLE-AUTH] \u{1F6AB} R\xE9vocation du token c\xF4t\xE9 Google...");
@@ -11731,9 +11819,15 @@ router12.post("/disconnect", authMiddleware, async (req2, res) => {
         console.log("[GOOGLE-AUTH] \u26A0\uFE0F Erreur r\xE9vocation c\xF4t\xE9 Google (peut-\xEAtre d\xE9j\xE0 r\xE9voqu\xE9):", revokeError);
       }
       console.log("[GOOGLE-AUTH] \u{1F5D1}\uFE0F Suppression du token de la base...");
-      await db.googleToken.delete({
-        where: { organizationId }
-      });
+      if (currentUserId) {
+        await db.googleToken.delete({
+          where: { userId_organizationId: { userId: currentUserId, organizationId } }
+        });
+      } else if (googleToken.id) {
+        await db.googleToken.delete({
+          where: { id: googleToken.id }
+        });
+      }
       console.log("[GOOGLE-AUTH] \u2705 Token supprim\xE9 de la base");
     }
     console.log("[GOOGLE-AUTH] \u{1F527} D\xE9sactivation des modules Google...");
@@ -11824,9 +11918,17 @@ router12.post("/toggle-module", authMiddleware, async (req2, res) => {
         message: "Param\xE8tres invalides (moduleName et enabled requis)"
       });
     }
-    const googleToken = await db.googleToken.findUnique({
-      where: { organizationId }
-    });
+    const userId = req2.user?.userId;
+    let googleToken;
+    if (userId) {
+      googleToken = await db.googleToken.findUnique({
+        where: { userId_organizationId: { userId, organizationId } }
+      });
+    } else {
+      googleToken = await db.googleToken.findFirst({
+        where: { organizationId }
+      });
+    }
     if (!googleToken && enabled) {
       return res.status(400).json({
         success: false,
@@ -12044,11 +12146,13 @@ var GoogleTokenRefreshScheduler = class {
       const tokenData = await response.json();
       const newExpiresAt = new Date(Date.now() + tokenData.expires_in * 1e3);
       await db.googleToken.update({
-        where: { organizationId: token.organizationId },
+        where: { id: token.id },
         data: {
           accessToken: tokenData.access_token,
           expiresAt: newExpiresAt,
           updatedAt: /* @__PURE__ */ new Date(),
+          lastRefreshAt: /* @__PURE__ */ new Date(),
+          refreshCount: { increment: 1 },
           // Mettre à jour le refresh token s'il y en a un nouveau
           ...tokenData.refresh_token && { refreshToken: tokenData.refresh_token },
           // Mettre à jour le scope s'il y en a un nouveau
@@ -12301,8 +12405,9 @@ router14.get("/scheduler/status", async (_req, res) => {
 router14.get("/organization/:organizationId", async (req2, res) => {
   try {
     const { organizationId } = req2.params;
-    const token = await db.googleToken.findUnique({
-      where: { organizationId }
+    const token = await db.googleToken.findFirst({
+      where: { organizationId },
+      include: { User: { select: { email: true, firstName: true, lastName: true } } }
     });
     if (!token) {
       return res.json({
@@ -12325,6 +12430,10 @@ router14.get("/organization/:organizationId", async (req2, res) => {
     const tokenInfo = {
       id: token.id,
       organizationId: token.organizationId,
+      userId: token.userId,
+      userEmail: token.User?.email,
+      userName: token.User ? `${token.User.firstName} ${token.User.lastName}` : null,
+      googleEmail: token.googleEmail,
       accessToken: token.accessToken ? `${token.accessToken.substring(0, 20)}...` : "",
       // Masquer le token
       refreshToken: token.refreshToken ? "Pr\xE9sent" : "Absent",
@@ -17147,7 +17256,7 @@ router28.get("/events", async (req2, res) => {
       try {
         const syncStart = startDate ? new Date(startDate) : new Date(Date.now() - 7 * 24 * 3600 * 1e3);
         const syncEnd = endDate ? new Date(endDate) : new Date(Date.now() + 30 * 24 * 3600 * 1e3);
-        const googleEvents = await googleCalendarService.syncEvents(organizationId, syncStart, syncEnd);
+        const googleEvents = await googleCalendarService.syncEvents(organizationId, syncStart, syncEnd, userIdToSearch);
         console.log("[CALENDAR ROUTES] Google events r\xE9cup\xE9r\xE9s:", googleEvents.length);
         for (const gEvent of googleEvents) {
           const gId = gEvent.id;
@@ -17309,7 +17418,8 @@ router28.post("/sync", async (req2, res) => {
     const googleEvents = await googleCalendarService.syncEvents(
       organizationId,
       syncStart,
-      syncEnd
+      syncEnd,
+      req2.user.userId
     );
     let createdCount = 0;
     let updatedCount = 0;
@@ -17396,7 +17506,7 @@ router28.post("/events", async (req2, res) => {
           timeZone: "Europe/Brussels"
         }
       };
-      const externalCalendarId = await googleCalendarService.createEvent(organizationId, googleEventData);
+      const externalCalendarId = await googleCalendarService.createEvent(organizationId, googleEventData, req2.user.userId);
       const updatedEvent = await db.calendarEvent.update({
         where: { id: event.id },
         data: {
@@ -17598,7 +17708,7 @@ router28.put("/events/:id", async (req2, res) => {
             timeZone: "Europe/Brussels"
           }
         };
-        await googleCalendarService.updateEvent(organizationId, updatedEvent.externalCalendarId, googleEventData);
+        await googleCalendarService.updateEvent(organizationId, updatedEvent.externalCalendarId, googleEventData, req2.user.userId);
       } catch (googleError) {
         console.warn("[CALENDAR ROUTES] Erreur mise \xE0 jour Google Calendar:", googleError);
       }
@@ -17628,7 +17738,7 @@ router28.delete("/events/:id", async (req2, res) => {
     if (eventToDelete.externalCalendarId) {
       try {
         console.log("[CALENDAR ROUTES] \u{1F504} Suppression de Google Calendar...");
-        await googleCalendarService.deleteEvent(organizationId, eventToDelete.externalCalendarId);
+        await googleCalendarService.deleteEvent(organizationId, eventToDelete.externalCalendarId, req2.user.userId);
         console.log("[CALENDAR ROUTES] \u2705 \xC9v\xE9nement supprim\xE9 de Google Calendar");
       } catch (googleError) {
         console.warn("[CALENDAR ROUTES] \u26A0\uFE0F Erreur suppression Google Calendar:", googleError);
@@ -20401,6 +20511,7 @@ var router36 = (0, import_express37.Router)();
 router36.get("/files", authMiddleware, async (req2, res) => {
   try {
     const organizationId = req2.user?.organizationId;
+    const userId = req2.user?.id || req2.user?.userId;
     if (!organizationId) {
       return res.status(401).json({ error: "Organisation non trouv\xE9e" });
     }
@@ -20408,7 +20519,7 @@ router36.get("/files", authMiddleware, async (req2, res) => {
     const pageSize = parseInt(req2.query.pageSize) || 50;
     const pageToken = req2.query.pageToken;
     console.log(`[Google Drive Routes] \u{1F4C1} GET /files - folderId: ${folderId}`);
-    const result = await googleDriveService.getFiles(organizationId, folderId, pageSize, pageToken);
+    const result = await googleDriveService.getFiles(organizationId, folderId, pageSize, pageToken, userId);
     res.json(result);
   } catch (error) {
     console.error("[Google Drive Routes] \u274C Erreur GET /files:", error);
@@ -20418,13 +20529,14 @@ router36.get("/files", authMiddleware, async (req2, res) => {
 router36.get("/shared", authMiddleware, async (req2, res) => {
   try {
     const organizationId = req2.user?.organizationId;
+    const userId = req2.user?.id || req2.user?.userId;
     if (!organizationId) {
       return res.status(401).json({ error: "Organisation non trouv\xE9e" });
     }
     const pageSize = parseInt(req2.query.pageSize) || 50;
     const pageToken = req2.query.pageToken;
     console.log(`[Google Drive Routes] \u{1F4E4} GET /shared - Fichiers partag\xE9s avec moi`);
-    const result = await googleDriveService.getSharedFiles(organizationId, pageSize, pageToken);
+    const result = await googleDriveService.getSharedFiles(organizationId, pageSize, pageToken, userId);
     res.json(result);
   } catch (error) {
     console.error("[Google Drive Routes] \u274C Erreur GET /shared:", error);
@@ -20434,11 +20546,12 @@ router36.get("/shared", authMiddleware, async (req2, res) => {
 router36.get("/shared-drives", authMiddleware, async (req2, res) => {
   try {
     const organizationId = req2.user?.organizationId;
+    const userId = req2.user?.id || req2.user?.userId;
     if (!organizationId) {
       return res.status(401).json({ error: "Organisation non trouv\xE9e" });
     }
     console.log(`[Google Drive Routes] \u{1F3E2} GET /shared-drives - Drives partag\xE9s`);
-    const result = await googleDriveService.getSharedDrives(organizationId);
+    const result = await googleDriveService.getSharedDrives(organizationId, 50, userId);
     res.json(result);
   } catch (error) {
     console.error("[Google Drive Routes] \u274C Erreur GET /shared-drives:", error);
@@ -20448,6 +20561,7 @@ router36.get("/shared-drives", authMiddleware, async (req2, res) => {
 router36.get("/shared-drives/:driveId/files", authMiddleware, async (req2, res) => {
   try {
     const organizationId = req2.user?.organizationId;
+    const userId = req2.user?.id || req2.user?.userId;
     if (!organizationId) {
       return res.status(401).json({ error: "Organisation non trouv\xE9e" });
     }
@@ -20456,7 +20570,7 @@ router36.get("/shared-drives/:driveId/files", authMiddleware, async (req2, res) 
     const pageSize = parseInt(req2.query.pageSize) || 50;
     const pageToken = req2.query.pageToken;
     console.log(`[Google Drive Routes] \u{1F3E2} GET /shared-drives/${driveId}/files - folderId: ${folderId || "root"}`);
-    const result = await googleDriveService.getSharedDriveFiles(organizationId, driveId, folderId, pageSize, pageToken);
+    const result = await googleDriveService.getSharedDriveFiles(organizationId, driveId, folderId, pageSize, pageToken, userId);
     res.json(result);
   } catch (error) {
     console.error("[Google Drive Routes] \u274C Erreur GET /shared-drives/:driveId/files:", error);
@@ -20466,6 +20580,7 @@ router36.get("/shared-drives/:driveId/files", authMiddleware, async (req2, res) 
 router36.get("/search", authMiddleware, async (req2, res) => {
   try {
     const organizationId = req2.user?.organizationId;
+    const userId = req2.user?.id || req2.user?.userId;
     if (!organizationId) {
       return res.status(401).json({ error: "Organisation non trouv\xE9e" });
     }
@@ -20474,7 +20589,7 @@ router36.get("/search", authMiddleware, async (req2, res) => {
       return res.status(400).json({ error: "Param\xE8tre de recherche requis" });
     }
     console.log(`[Google Drive Routes] \u{1F50E} GET /search - query: "${query}"`);
-    const files = await googleDriveService.searchFiles(organizationId, query);
+    const files = await googleDriveService.searchFiles(organizationId, query, 50, userId);
     res.json({ files });
   } catch (error) {
     console.error("[Google Drive Routes] \u274C Erreur GET /search:", error);
@@ -20484,11 +20599,12 @@ router36.get("/search", authMiddleware, async (req2, res) => {
 router36.get("/storage", authMiddleware, async (req2, res) => {
   try {
     const organizationId = req2.user?.organizationId;
+    const userId = req2.user?.id || req2.user?.userId;
     if (!organizationId) {
       return res.status(401).json({ error: "Organisation non trouv\xE9e" });
     }
     console.log(`[Google Drive Routes] \u{1F4BE} GET /storage`);
-    const storageInfo = await googleDriveService.getStorageInfo(organizationId);
+    const storageInfo = await googleDriveService.getStorageInfo(organizationId, userId);
     res.json(storageInfo);
   } catch (error) {
     console.error("[Google Drive Routes] \u274C Erreur GET /storage:", error);
@@ -20498,12 +20614,13 @@ router36.get("/storage", authMiddleware, async (req2, res) => {
 router36.get("/files/:fileId", authMiddleware, async (req2, res) => {
   try {
     const organizationId = req2.user?.organizationId;
+    const userId = req2.user?.id || req2.user?.userId;
     if (!organizationId) {
       return res.status(401).json({ error: "Organisation non trouv\xE9e" });
     }
     const { fileId } = req2.params;
     console.log(`[Google Drive Routes] \u{1F4C4} GET /files/${fileId}`);
-    const fileInfo = await googleDriveService.getFileInfo(organizationId, fileId);
+    const fileInfo = await googleDriveService.getFileInfo(organizationId, fileId, userId);
     res.json(fileInfo);
   } catch (error) {
     console.error("[Google Drive Routes] \u274C Erreur GET /files/:fileId:", error);
@@ -20513,6 +20630,7 @@ router36.get("/files/:fileId", authMiddleware, async (req2, res) => {
 router36.post("/folders", authMiddleware, async (req2, res) => {
   try {
     const organizationId = req2.user?.organizationId;
+    const userId = req2.user?.id || req2.user?.userId;
     if (!organizationId) {
       return res.status(401).json({ error: "Organisation non trouv\xE9e" });
     }
@@ -20521,7 +20639,7 @@ router36.post("/folders", authMiddleware, async (req2, res) => {
       return res.status(400).json({ error: "Nom du dossier requis" });
     }
     console.log(`[Google Drive Routes] \u{1F4C2} POST /folders - name: "${name}"`);
-    const folder = await googleDriveService.createFolder(organizationId, name, parentId || "root");
+    const folder = await googleDriveService.createFolder(organizationId, name, parentId || "root", userId);
     res.status(201).json(folder);
   } catch (error) {
     console.error("[Google Drive Routes] \u274C Erreur POST /folders:", error);
@@ -20531,12 +20649,13 @@ router36.post("/folders", authMiddleware, async (req2, res) => {
 router36.delete("/files/:fileId", authMiddleware, async (req2, res) => {
   try {
     const organizationId = req2.user?.organizationId;
+    const userId = req2.user?.id || req2.user?.userId;
     if (!organizationId) {
       return res.status(401).json({ error: "Organisation non trouv\xE9e" });
     }
     const { fileId } = req2.params;
     console.log(`[Google Drive Routes] \u{1F5D1}\uFE0F DELETE /files/${fileId}`);
-    await googleDriveService.deleteFile(organizationId, fileId);
+    await googleDriveService.deleteFile(organizationId, fileId, userId);
     res.json({ success: true, message: "Fichier mis \xE0 la corbeille" });
   } catch (error) {
     console.error("[Google Drive Routes] \u274C Erreur DELETE /files/:fileId:", error);
@@ -20546,6 +20665,7 @@ router36.delete("/files/:fileId", authMiddleware, async (req2, res) => {
 router36.post("/upload", authMiddleware, async (req2, res) => {
   try {
     const organizationId = req2.user?.organizationId;
+    const userId = req2.user?.id || req2.user?.userId;
     if (!organizationId) {
       return res.status(401).json({ error: "Organisation non trouv\xE9e" });
     }
@@ -20567,7 +20687,7 @@ router36.post("/upload", authMiddleware, async (req2, res) => {
       try {
         const fileBuffer = Buffer.concat(chunks);
         console.log(`[Google Drive Routes] \u{1F4E4} POST /upload - file: "${fileName}", size: ${fileBuffer.length}`);
-        const file = await googleDriveService.uploadFile(organizationId, fileName, mimeType, fileBuffer, parentId);
+        const file = await googleDriveService.uploadFile(organizationId, fileName, mimeType, fileBuffer, parentId, userId);
         res.status(201).json(file);
       } catch (error) {
         console.error("[Google Drive Routes] \u274C Erreur POST /upload:", error);
@@ -20582,6 +20702,7 @@ router36.post("/upload", authMiddleware, async (req2, res) => {
 router36.patch("/files/:fileId/rename", authMiddleware, async (req2, res) => {
   try {
     const organizationId = req2.user?.organizationId;
+    const userId = req2.user?.id || req2.user?.userId;
     if (!organizationId) {
       return res.status(401).json({ error: "Organisation non trouv\xE9e" });
     }
@@ -20591,7 +20712,7 @@ router36.patch("/files/:fileId/rename", authMiddleware, async (req2, res) => {
       return res.status(400).json({ error: "Nouveau nom requis" });
     }
     console.log(`[Google Drive Routes] \u270F\uFE0F PATCH /files/${fileId}/rename - name: "${name}"`);
-    const file = await googleDriveService.renameFile(organizationId, fileId, name);
+    const file = await googleDriveService.renameFile(organizationId, fileId, name, userId);
     res.json(file);
   } catch (error) {
     console.error("[Google Drive Routes] \u274C Erreur PATCH /files/:fileId/rename:", error);
@@ -20601,6 +20722,7 @@ router36.patch("/files/:fileId/rename", authMiddleware, async (req2, res) => {
 router36.patch("/files/:fileId/move", authMiddleware, async (req2, res) => {
   try {
     const organizationId = req2.user?.organizationId;
+    const userId = req2.user?.id || req2.user?.userId;
     if (!organizationId) {
       return res.status(401).json({ error: "Organisation non trouv\xE9e" });
     }
@@ -20610,7 +20732,7 @@ router36.patch("/files/:fileId/move", authMiddleware, async (req2, res) => {
       return res.status(400).json({ error: "Dossier de destination requis" });
     }
     console.log(`[Google Drive Routes] \u{1F4E6} PATCH /files/${fileId}/move - to: ${newParentId}`);
-    const file = await googleDriveService.moveFile(organizationId, fileId, newParentId);
+    const file = await googleDriveService.moveFile(organizationId, fileId, newParentId, userId);
     res.json(file);
   } catch (error) {
     console.error("[Google Drive Routes] \u274C Erreur PATCH /files/:fileId/move:", error);
@@ -20620,13 +20742,14 @@ router36.patch("/files/:fileId/move", authMiddleware, async (req2, res) => {
 router36.post("/files/:fileId/copy", authMiddleware, async (req2, res) => {
   try {
     const organizationId = req2.user?.organizationId;
+    const userId = req2.user?.id || req2.user?.userId;
     if (!organizationId) {
       return res.status(401).json({ error: "Organisation non trouv\xE9e" });
     }
     const { fileId } = req2.params;
     const { newName } = req2.body;
     console.log(`[Google Drive Routes] \u{1F4CB} POST /files/${fileId}/copy`);
-    const file = await googleDriveService.copyFile(organizationId, fileId, newName);
+    const file = await googleDriveService.copyFile(organizationId, fileId, newName, userId);
     res.status(201).json(file);
   } catch (error) {
     console.error("[Google Drive Routes] \u274C Erreur POST /files/:fileId/copy:", error);
@@ -20636,12 +20759,13 @@ router36.post("/files/:fileId/copy", authMiddleware, async (req2, res) => {
 router36.get("/files/:fileId/share", authMiddleware, async (req2, res) => {
   try {
     const organizationId = req2.user?.organizationId;
+    const userId = req2.user?.id || req2.user?.userId;
     if (!organizationId) {
       return res.status(401).json({ error: "Organisation non trouv\xE9e" });
     }
     const { fileId } = req2.params;
     console.log(`[Google Drive Routes] \u{1F517} GET /files/${fileId}/share`);
-    const links = await googleDriveService.getShareLink(organizationId, fileId);
+    const links = await googleDriveService.getShareLink(organizationId, fileId, userId);
     res.json(links);
   } catch (error) {
     console.error("[Google Drive Routes] \u274C Erreur GET /files/:fileId/share:", error);
@@ -20651,12 +20775,13 @@ router36.get("/files/:fileId/share", authMiddleware, async (req2, res) => {
 router36.post("/files/:fileId/make-public", authMiddleware, async (req2, res) => {
   try {
     const organizationId = req2.user?.organizationId;
+    const userId = req2.user?.id || req2.user?.userId;
     if (!organizationId) {
       return res.status(401).json({ error: "Organisation non trouv\xE9e" });
     }
     const { fileId } = req2.params;
     console.log(`[Google Drive Routes] \u{1F310} POST /files/${fileId}/make-public`);
-    const result = await googleDriveService.makePublic(organizationId, fileId);
+    const result = await googleDriveService.makePublic(organizationId, fileId, userId);
     res.json(result);
   } catch (error) {
     console.error("[Google Drive Routes] \u274C Erreur POST /files/:fileId/make-public:", error);
@@ -20666,11 +20791,12 @@ router36.post("/files/:fileId/make-public", authMiddleware, async (req2, res) =>
 router36.get("/recent", authMiddleware, async (req2, res) => {
   try {
     const organizationId = req2.user?.organizationId;
+    const userId = req2.user?.id || req2.user?.userId;
     if (!organizationId) {
       return res.status(401).json({ error: "Organisation non trouv\xE9e" });
     }
     console.log(`[Google Drive Routes] \u{1F550} GET /recent`);
-    const files = await googleDriveService.getRecentFiles(organizationId);
+    const files = await googleDriveService.getRecentFiles(organizationId, 50, userId);
     res.json({ files });
   } catch (error) {
     console.error("[Google Drive Routes] \u274C Erreur GET /recent:", error);
@@ -20680,11 +20806,12 @@ router36.get("/recent", authMiddleware, async (req2, res) => {
 router36.get("/starred", authMiddleware, async (req2, res) => {
   try {
     const organizationId = req2.user?.organizationId;
+    const userId = req2.user?.id || req2.user?.userId;
     if (!organizationId) {
       return res.status(401).json({ error: "Organisation non trouv\xE9e" });
     }
     console.log(`[Google Drive Routes] \u2B50 GET /starred`);
-    const files = await googleDriveService.getStarredFiles(organizationId);
+    const files = await googleDriveService.getStarredFiles(organizationId, 50, userId);
     res.json({ files });
   } catch (error) {
     console.error("[Google Drive Routes] \u274C Erreur GET /starred:", error);
@@ -20694,13 +20821,14 @@ router36.get("/starred", authMiddleware, async (req2, res) => {
 router36.patch("/files/:fileId/star", authMiddleware, async (req2, res) => {
   try {
     const organizationId = req2.user?.organizationId;
+    const userId = req2.user?.id || req2.user?.userId;
     if (!organizationId) {
       return res.status(401).json({ error: "Organisation non trouv\xE9e" });
     }
     const { fileId } = req2.params;
     const { starred } = req2.body;
     console.log(`[Google Drive Routes] \u2B50 PATCH /files/${fileId}/star - starred: ${starred}`);
-    await googleDriveService.toggleStar(organizationId, fileId, starred);
+    await googleDriveService.toggleStar(organizationId, fileId, starred, userId);
     res.json({ success: true });
   } catch (error) {
     console.error("[Google Drive Routes] \u274C Erreur PATCH /files/:fileId/star:", error);
@@ -20710,11 +20838,12 @@ router36.patch("/files/:fileId/star", authMiddleware, async (req2, res) => {
 router36.get("/trash", authMiddleware, async (req2, res) => {
   try {
     const organizationId = req2.user?.organizationId;
+    const userId = req2.user?.id || req2.user?.userId;
     if (!organizationId) {
       return res.status(401).json({ error: "Organisation non trouv\xE9e" });
     }
     console.log(`[Google Drive Routes] \u{1F5D1}\uFE0F GET /trash`);
-    const files = await googleDriveService.getTrash(organizationId);
+    const files = await googleDriveService.getTrash(organizationId, 50, userId);
     res.json({ files });
   } catch (error) {
     console.error("[Google Drive Routes] \u274C Erreur GET /trash:", error);
@@ -20724,12 +20853,13 @@ router36.get("/trash", authMiddleware, async (req2, res) => {
 router36.post("/files/:fileId/restore", authMiddleware, async (req2, res) => {
   try {
     const organizationId = req2.user?.organizationId;
+    const userId = req2.user?.id || req2.user?.userId;
     if (!organizationId) {
       return res.status(401).json({ error: "Organisation non trouv\xE9e" });
     }
     const { fileId } = req2.params;
     console.log(`[Google Drive Routes] \u267B\uFE0F POST /files/${fileId}/restore`);
-    await googleDriveService.restoreFile(organizationId, fileId);
+    await googleDriveService.restoreFile(organizationId, fileId, userId);
     res.json({ success: true });
   } catch (error) {
     console.error("[Google Drive Routes] \u274C Erreur POST /files/:fileId/restore:", error);
@@ -20739,12 +20869,13 @@ router36.post("/files/:fileId/restore", authMiddleware, async (req2, res) => {
 router36.delete("/files/:fileId/permanent", authMiddleware, async (req2, res) => {
   try {
     const organizationId = req2.user?.organizationId;
+    const userId = req2.user?.id || req2.user?.userId;
     if (!organizationId) {
       return res.status(401).json({ error: "Organisation non trouv\xE9e" });
     }
     const { fileId } = req2.params;
     console.log(`[Google Drive Routes] \u274C DELETE /files/${fileId}/permanent`);
-    await googleDriveService.deleteFilePermanently(organizationId, fileId);
+    await googleDriveService.deleteFilePermanently(organizationId, fileId, userId);
     res.json({ success: true });
   } catch (error) {
     console.error("[Google Drive Routes] \u274C Erreur DELETE /files/:fileId/permanent:", error);
@@ -20754,11 +20885,12 @@ router36.delete("/files/:fileId/permanent", authMiddleware, async (req2, res) =>
 router36.delete("/trash", authMiddleware, async (req2, res) => {
   try {
     const organizationId = req2.user?.organizationId;
+    const userId = req2.user?.id || req2.user?.userId;
     if (!organizationId) {
       return res.status(401).json({ error: "Organisation non trouv\xE9e" });
     }
     console.log(`[Google Drive Routes] \u{1F5D1}\uFE0F DELETE /trash`);
-    await googleDriveService.emptyTrash(organizationId);
+    await googleDriveService.emptyTrash(organizationId, userId);
     res.json({ success: true });
   } catch (error) {
     console.error("[Google Drive Routes] \u274C Erreur DELETE /trash:", error);
@@ -20768,12 +20900,13 @@ router36.delete("/trash", authMiddleware, async (req2, res) => {
 router36.get("/files/:fileId/download", authMiddleware, async (req2, res) => {
   try {
     const organizationId = req2.user?.organizationId;
+    const userId = req2.user?.id || req2.user?.userId;
     if (!organizationId) {
       return res.status(401).json({ error: "Organisation non trouv\xE9e" });
     }
     const { fileId } = req2.params;
     console.log(`[Google Drive Routes] \u2B07\uFE0F GET /files/${fileId}/download`);
-    const result = await googleDriveService.getDownloadUrl(organizationId, fileId);
+    const result = await googleDriveService.getDownloadUrl(organizationId, fileId, userId);
     res.json(result);
   } catch (error) {
     console.error("[Google Drive Routes] \u274C Erreur GET /files/:fileId/download:", error);
@@ -20783,6 +20916,7 @@ router36.get("/files/:fileId/download", authMiddleware, async (req2, res) => {
 router36.post("/create-doc", authMiddleware, async (req2, res) => {
   try {
     const organizationId = req2.user?.organizationId;
+    const userId = req2.user?.id || req2.user?.userId;
     if (!organizationId) {
       return res.status(401).json({ error: "Organisation non trouv\xE9e" });
     }
@@ -20791,7 +20925,7 @@ router36.post("/create-doc", authMiddleware, async (req2, res) => {
       return res.status(400).json({ error: "Nom et type requis" });
     }
     console.log(`[Google Drive Routes] \u{1F4C4} POST /create-doc - type: ${type}, name: "${name}"`);
-    const file = await googleDriveService.createGoogleDoc(organizationId, name, type, parentId || "root");
+    const file = await googleDriveService.createGoogleDoc(organizationId, name, type, parentId || "root", userId);
     res.status(201).json(file);
   } catch (error) {
     console.error("[Google Drive Routes] \u274C Erreur POST /create-doc:", error);

@@ -69,27 +69,29 @@ export interface GmailDraft {
 export class GoogleGmailService {
   private gmail: gmail_v1.Gmail;
   private organizationId: string;
+  private userId: string | null = null;
   private adminEmail: string | null = null;
 
-  constructor(gmail: gmail_v1.Gmail, organizationId: string) {
+  constructor(gmail: gmail_v1.Gmail, organizationId: string, userId?: string) {
     this.gmail = gmail;
     this.organizationId = organizationId;
+    this.userId = userId || null;
   }
 
   /**
-   * Crée une instance du service Gmail pour une organisation
+   * Crée une instance du service Gmail pour un utilisateur dans une organisation
    */
-  static async create(organizationId: string): Promise<GoogleGmailService | null> {
-    console.log(`[GoogleGmailService] Création du service pour l'organisation: ${organizationId}`);
+  static async create(organizationId: string, userId?: string): Promise<GoogleGmailService | null> {
+    console.log(`[GoogleGmailService] Création du service pour l'organisation: ${organizationId}, utilisateur: ${userId || 'non spécifié'}`);
     
-    const authClient = await googleAuthManager.getAuthenticatedClient(organizationId);
+    const authClient = await googleAuthManager.getAuthenticatedClient(organizationId, userId);
     if (!authClient) {
       console.error(`[GoogleGmailService] Impossible d'obtenir le client authentifié pour l'organisation: ${organizationId}`);
       return null;
     }
 
     const gmail = google.gmail({ version: 'v1', auth: authClient });
-    const service = new GoogleGmailService(gmail, organizationId);
+    const service = new GoogleGmailService(gmail, organizationId, userId);
     
     // Récupérer l'email administrateur pour l'utiliser comme expéditeur
     await service.loadOrganizationInfo();

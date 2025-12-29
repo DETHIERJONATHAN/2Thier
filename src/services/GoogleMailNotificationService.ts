@@ -348,9 +348,15 @@ Body: ${email.textContent || email.snippet}
   /**
    * 🔧 MÉTHODES UTILITAIRES
    */
-  private async getGoogleTokens(userId: string) {
+  private async getGoogleTokens(userId: string, organizationId?: string) {
+    if (organizationId) {
+      return prisma.googleToken.findUnique({
+        where: { userId_organizationId: { userId, organizationId } }
+      });
+    }
+    // Fallback: chercher le premier token de l'utilisateur
     return prisma.googleToken.findFirst({
-      where: { userId, isActive: true }
+      where: { userId }
     });
   }
 

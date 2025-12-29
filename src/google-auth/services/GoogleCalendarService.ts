@@ -39,12 +39,12 @@ export class GoogleCalendarService {
   }
 
   /**
-   * Obtient une instance de l'API Google Calendar pour une organisation
+   * Obtient une instance de l'API Google Calendar pour un utilisateur dans une organisation
    */
-  private async getCalendarAPI(organizationId: string) {
-    console.log(`[GoogleCalendarService] 📅 Création instance API Calendar pour organisation: ${organizationId}`);
+  private async getCalendarAPI(organizationId: string, userId?: string) {
+    console.log(`[GoogleCalendarService] 📅 Création instance API Calendar pour organisation: ${organizationId}, utilisateur: ${userId || 'non spécifié'}`);
     
-    const authClient = await googleAuthManager.getAuthenticatedClient(organizationId);
+    const authClient = await googleAuthManager.getAuthenticatedClient(organizationId, userId);
     if (!authClient) {
       throw new Error('Connexion Google non configurée.');
     }
@@ -55,9 +55,9 @@ export class GoogleCalendarService {
   /**
    * Récupère les événements du calendrier
    */
-  async getEvents(organizationId: string, startDate?: Date, endDate?: Date): Promise<CalendarEvent[]> {
+  async getEvents(organizationId: string, startDate?: Date, endDate?: Date, userId?: string): Promise<CalendarEvent[]> {
     try {
-      const calendar = await this.getCalendarAPI(organizationId);
+      const calendar = await this.getCalendarAPI(organizationId, userId);
 
       const params = {
         calendarId: 'primary',
@@ -97,9 +97,9 @@ export class GoogleCalendarService {
   /**
    * Crée un nouvel événement
    */
-  async createEvent(organizationId: string, event: CalendarEvent): Promise<string> {
+  async createEvent(organizationId: string, event: CalendarEvent, userId?: string): Promise<string> {
     try {
-      const calendar = await this.getCalendarAPI(organizationId);
+      const calendar = await this.getCalendarAPI(organizationId, userId);
 
       const response = await calendar.events.insert({
         calendarId: 'primary',
@@ -122,9 +122,9 @@ export class GoogleCalendarService {
   /**
    * Met à jour un événement existant
    */
-  async updateEvent(organizationId: string, eventId: string, event: Partial<CalendarEvent>): Promise<void> {
+  async updateEvent(organizationId: string, eventId: string, event: Partial<CalendarEvent>, userId?: string): Promise<void> {
     try {
-      const calendar = await this.getCalendarAPI(organizationId);
+      const calendar = await this.getCalendarAPI(organizationId, userId);
 
       await calendar.events.update({
         calendarId: 'primary',
@@ -146,9 +146,9 @@ export class GoogleCalendarService {
   /**
    * Supprime un événement
    */
-  async deleteEvent(organizationId: string, eventId: string): Promise<void> {
+  async deleteEvent(organizationId: string, eventId: string, userId?: string): Promise<void> {
     try {
-      const calendar = await this.getCalendarAPI(organizationId);
+      const calendar = await this.getCalendarAPI(organizationId, userId);
 
       await calendar.events.delete({
         calendarId: 'primary',
@@ -163,11 +163,11 @@ export class GoogleCalendarService {
   /**
    * Synchronise les événements avec Google Calendar
    */
-  async syncEvents(organizationId: string, startDate: Date, endDate: Date): Promise<CalendarEvent[]> {
-    console.log(`[GoogleCalendarService] 🔄 Synchronisation des événements pour l'organisation: ${organizationId}`);
+  async syncEvents(organizationId: string, startDate: Date, endDate: Date, userId?: string): Promise<CalendarEvent[]> {
+    console.log(`[GoogleCalendarService] 🔄 Synchronisation des événements pour l'organisation: ${organizationId}, utilisateur: ${userId}`);
     console.log(`[GoogleCalendarService] 📅 Période: ${startDate.toISOString()} -> ${endDate.toISOString()}`);
     
-    return await this.getEvents(organizationId, startDate, endDate);
+    return await this.getEvents(organizationId, startDate, endDate, userId);
   }
 }
 

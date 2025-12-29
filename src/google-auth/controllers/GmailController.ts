@@ -38,7 +38,7 @@ export const getThreads = async (req: AuthenticatedRequest, res: Response) => {
       return res.status(401).json({ error: 'Organization ID manquant dans la requête' });
     }
 
-    const gmailService = await GoogleGmailService.create(organizationId);
+    const gmailService = await GoogleGmailService.create(organizationId, req.user?.id || req.user?.userId);
     if (!gmailService) {
       return res.status(401).json({ error: 'Google non connecté pour cette organisation' });
     }
@@ -69,7 +69,7 @@ export const getMessages = async (req: AuthenticatedRequest, res: Response) => {
       return res.status(401).json({ error: 'Organization ID manquant dans la requête' });
     }
 
-    const gmailService = await GoogleGmailService.create(organizationId);
+    const gmailService = await GoogleGmailService.create(organizationId, req.user?.id || req.user?.userId);
     if (!gmailService) {
       return res.status(401).json({ error: 'Google non connecté pour cette organisation' });
     }
@@ -158,7 +158,7 @@ export const getMessage = async (req: AuthenticatedRequest, res: Response) => {
       return res.status(400).json({ error: 'ID du message manquant' });
     }
 
-    const gmailService = await GoogleGmailService.create(organizationId);
+    const gmailService = await GoogleGmailService.create(organizationId, req.user?.id || req.user?.userId);
     if (!gmailService) {
       return res.status(401).json({ error: 'Google non connecté pour cette organisation' });
     }
@@ -253,7 +253,7 @@ export const sendMessage = async (req: AuthenticatedRequest, res: Response) => {
     console.log('[Gmail Controller] 📧 Destinataire:', to, 'Sujet:', subject);
 
     console.log('[Gmail Controller]  Création du service Gmail...');
-    const gmailService = await GoogleGmailService.create(organizationId);
+    const gmailService = await GoogleGmailService.create(organizationId, req.user?.id || req.user?.userId);
     if (!gmailService) {
       console.log('[Gmail Controller] ❌ Impossible de créer le service Gmail');
       return res.status(401).json({ error: 'Google non connecté pour cette organisation' });
@@ -341,7 +341,7 @@ export const modifyMessage = async (req: AuthenticatedRequest, res: Response) =>
       return res.status(400).json({ error: 'ID du message manquant' });
     }
 
-    const gmailService = await GoogleGmailService.create(organizationId);
+    const gmailService = await GoogleGmailService.create(organizationId, req.user?.id || req.user?.userId);
     if (!gmailService) {
       return res.status(401).json({ error: 'Google non connecté pour cette organisation' });
     }
@@ -403,7 +403,7 @@ export const deleteMessage = async (req: AuthenticatedRequest, res: Response) =>
       return res.status(400).json({ error: 'ID du message manquant' });
     }
 
-    const gmailService = await GoogleGmailService.create(organizationId);
+    const gmailService = await GoogleGmailService.create(organizationId, req.user?.id || req.user?.userId);
     if (!gmailService) {
       return res.status(401).json({ error: 'Google non connecté pour cette organisation' });
     }
@@ -430,7 +430,7 @@ export const getLabels = async (req: AuthenticatedRequest, res: Response) => {
       return res.status(401).json({ error: 'Organization ID manquant dans la requête' });
     }
 
-    const gmailService = await GoogleGmailService.create(organizationId);
+    const gmailService = await GoogleGmailService.create(organizationId, req.user?.id || req.user?.userId);
     if (!gmailService) {
       return res.status(401).json({ error: 'Google non connecté pour cette organisation' });
     }
@@ -458,7 +458,7 @@ export const trashMessage = async (req: AuthenticatedRequest, res: Response) => 
       return res.status(400).json({ error: 'ID du message manquant' });
     }
 
-    const gmailService = await GoogleGmailService.create(organizationId);
+    const gmailService = await GoogleGmailService.create(organizationId, req.user?.id || req.user?.userId);
     if (!gmailService) {
       return res.status(401).json({ error: 'Google non connecté pour cette organisation' });
     }
@@ -488,7 +488,7 @@ export const untrashMessage = async (req: AuthenticatedRequest, res: Response) =
       return res.status(400).json({ error: 'ID du message manquant' });
     }
 
-    const gmailService = await GoogleGmailService.create(organizationId);
+    const gmailService = await GoogleGmailService.create(organizationId, req.user?.id || req.user?.userId);
     if (!gmailService) {
       return res.status(401).json({ error: 'Google non connecté pour cette organisation' });
     }
@@ -515,7 +515,7 @@ export const emptyTrash = async (req: AuthenticatedRequest, res: Response) => {
       return res.status(401).json({ error: 'Organization ID manquant dans la requête' });
     }
 
-    const gmailService = await GoogleGmailService.create(organizationId);
+    const gmailService = await GoogleGmailService.create(organizationId, req.user?.id || req.user?.userId);
     if (!gmailService) {
       return res.status(401).json({ error: 'Google non connecté pour cette organisation' });
     }
@@ -544,7 +544,7 @@ export const createLabel = async (req: AuthenticatedRequest, res: Response) => {
       return res.status(400).json({ error: 'Nom du label requis' });
     }
 
-    const gmailService = await GoogleGmailService.create(organizationId);
+    const gmailService = await GoogleGmailService.create(organizationId, req.user?.id || req.user?.userId);
     if (!gmailService) {
       return res.status(401).json({ error: 'Google non connecté pour cette organisation' });
     }
@@ -578,7 +578,7 @@ export const updateLabel = async (req: AuthenticatedRequest, res: Response) => {
       return res.status(400).json({ error: 'ID et nom du label requis' });
     }
 
-    const gmailService = await GoogleGmailService.create(organizationId);
+    const gmailService = await GoogleGmailService.create(organizationId, req.user?.id || req.user?.userId);
     if (!gmailService) {
       return res.status(401).json({ error: 'Google non connecté pour cette organisation' });
     }
@@ -607,7 +607,7 @@ export const deleteLabel = async (req: AuthenticatedRequest, res: Response) => {
       return res.status(400).json({ error: 'ID du label manquant' });
     }
 
-    const gmailService = await GoogleGmailService.create(organizationId);
+    const gmailService = await GoogleGmailService.create(organizationId, req.user?.id || req.user?.userId);
     if (!gmailService) {
       return res.status(401).json({ error: 'Google non connecté pour cette organisation' });
     }
@@ -653,7 +653,7 @@ export const getAttachment = async (req: AuthenticatedRequest, res: Response) =>
     console.log(`[Gmail Controller] 📎 Récupération pièce jointe: ${attachmentId} du message: ${messageId}`);
     console.log(`[Gmail Controller] 🏢 Organization ID utilisé: ${organizationId}`);
 
-    const gmailService = await GoogleGmailService.create(organizationId);
+    const gmailService = await GoogleGmailService.create(organizationId, req.user?.id || req.user?.userId);
     if (!gmailService) {
       return res.status(401).json({ error: 'Google non connecté pour cette organisation' });
     }
@@ -729,7 +729,7 @@ export const getDrafts = async (req: AuthenticatedRequest, res: Response) => {
       return res.status(401).json({ error: 'Organization ID manquant dans la requête' });
     }
 
-    const gmailService = await GoogleGmailService.create(organizationId);
+    const gmailService = await GoogleGmailService.create(organizationId, req.user?.id || req.user?.userId);
     if (!gmailService) {
       return res.status(401).json({ error: 'Google non connecté pour cette organisation' });
     }
@@ -758,7 +758,7 @@ export const saveDraft = async (req: AuthenticatedRequest, res: Response) => {
       return res.status(400).json({ error: 'Destinataire et sujet requis' });
     }
 
-    const gmailService = await GoogleGmailService.create(organizationId);
+    const gmailService = await GoogleGmailService.create(organizationId, req.user?.id || req.user?.userId);
     if (!gmailService) {
       return res.status(401).json({ error: 'Google non connecté pour cette organisation' });
     }
@@ -806,7 +806,7 @@ export const deleteDraft = async (req: AuthenticatedRequest, res: Response) => {
       return res.status(400).json({ error: 'ID du brouillon manquant' });
     }
 
-    const gmailService = await GoogleGmailService.create(organizationId);
+    const gmailService = await GoogleGmailService.create(organizationId, req.user?.id || req.user?.userId);
     if (!gmailService) {
       return res.status(401).json({ error: 'Google non connecté pour cette organisation' });
     }
@@ -838,7 +838,7 @@ export const sendDraft = async (req: AuthenticatedRequest, res: Response) => {
       return res.status(400).json({ error: 'ID du brouillon manquant' });
     }
 
-    const gmailService = await GoogleGmailService.create(organizationId);
+    const gmailService = await GoogleGmailService.create(organizationId, req.user?.id || req.user?.userId);
     if (!gmailService) {
       return res.status(401).json({ error: 'Google non connecté pour cette organisation' });
     }
@@ -870,7 +870,7 @@ export const health = async (req: AuthenticatedRequest, res: Response) => {
     if (!organizationId) {
       return res.status(200).json({ ok: false, reason: 'organizationId manquant' });
     }
-    const gmailService = await GoogleGmailService.create(organizationId);
+    const gmailService = await GoogleGmailService.create(organizationId, req.user?.id || req.user?.userId);
     return res.status(200).json({ ok: !!gmailService });
   } catch (e) {
     return res.status(200).json({ ok: false, reason: (e as Error)?.message });

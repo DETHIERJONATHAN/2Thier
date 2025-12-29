@@ -45,12 +45,12 @@ export class GoogleDriveService {
   }
 
   /**
-   * Obtient une instance de l'API Google Drive pour une organisation
+   * Obtient une instance de l'API Google Drive pour un utilisateur dans une organisation
    */
-  private async getDriveAPI(organizationId: string): Promise<drive_v3.Drive> {
-    console.log(`[GoogleDriveService] 📁 Création instance API Drive pour organisation: ${organizationId}`);
+  private async getDriveAPI(organizationId: string, userId?: string): Promise<drive_v3.Drive> {
+    console.log(`[GoogleDriveService] 📁 Création instance API Drive pour organisation: ${organizationId}, utilisateur: ${userId || 'non spécifié'}`);
     
-    const authClient = await googleAuthManager.getAuthenticatedClient(organizationId);
+    const authClient = await googleAuthManager.getAuthenticatedClient(organizationId, userId);
     if (!authClient) {
       throw new Error('Connexion Google non configurée.');
     }
@@ -65,11 +65,12 @@ export class GoogleDriveService {
     organizationId: string, 
     folderId: string = 'root',
     pageSize: number = 50,
-    pageToken?: string
+    pageToken?: string,
+    userId?: string
   ): Promise<{ files: DriveFile[]; nextPageToken?: string }> {
     try {
-      console.log(`[GoogleDriveService] 🔍 Récupération des fichiers pour folder: ${folderId}`);
-      const drive = await this.getDriveAPI(organizationId);
+      console.log(`[GoogleDriveService] 🔍 Récupération des fichiers pour folder: ${folderId}, userId: ${userId}`);
+      const drive = await this.getDriveAPI(organizationId, userId);
 
       const query = folderId === 'root' 
         ? "'root' in parents and trashed = false"
@@ -119,11 +120,12 @@ export class GoogleDriveService {
   async getSharedFiles(
     organizationId: string,
     pageSize: number = 50,
-    pageToken?: string
+    pageToken?: string,
+    userId?: string
   ): Promise<{ files: DriveFile[]; nextPageToken?: string }> {
     try {
       console.log(`[GoogleDriveService] 🔍 Récupération des fichiers partagés`);
-      const drive = await this.getDriveAPI(organizationId);
+      const drive = await this.getDriveAPI(organizationId, userId);
 
       const response = await drive.files.list({
         q: "sharedWithMe = true and trashed = false",
@@ -168,11 +170,12 @@ export class GoogleDriveService {
    */
   async getSharedDrives(
     organizationId: string,
-    pageSize: number = 50
+    pageSize: number = 50,
+    userId?: string
   ): Promise<{ drives: { id: string; name: string }[] }> {
     try {
       console.log(`[GoogleDriveService] 🔍 Récupération des drives partagés`);
-      const drive = await this.getDriveAPI(organizationId);
+      const drive = await this.getDriveAPI(organizationId, userId);
 
       const response = await drive.drives.list({
         pageSize,
@@ -201,11 +204,12 @@ export class GoogleDriveService {
     driveId: string,
     folderId?: string,
     pageSize: number = 50,
-    pageToken?: string
+    pageToken?: string,
+    userId?: string
   ): Promise<{ files: DriveFile[]; nextPageToken?: string }> {
     try {
       console.log(`[GoogleDriveService] 🔍 Récupération des fichiers du drive partagé: ${driveId}, folder: ${folderId || 'root'}`);
-      const drive = await this.getDriveAPI(organizationId);
+      const drive = await this.getDriveAPI(organizationId, userId);
 
       // Si folderId est fourni, on liste les fichiers de ce dossier, sinon la racine du drive
       const parentId = folderId || driveId;
@@ -257,11 +261,12 @@ export class GoogleDriveService {
   async searchFiles(
     organizationId: string,
     searchQuery: string,
-    pageSize: number = 50
+    pageSize: number = 50,
+    userId?: string
   ): Promise<DriveFile[]> {
     try {
       console.log(`[GoogleDriveService] 🔎 Recherche: "${searchQuery}"`);
-      const drive = await this.getDriveAPI(organizationId);
+      const drive = await this.getDriveAPI(organizationId, userId);
 
       const response = await drive.files.list({
         q: `name contains '${searchQuery}' and trashed = false`,
@@ -298,11 +303,12 @@ export class GoogleDriveService {
   async createFolder(
     organizationId: string,
     name: string,
-    parentId: string = 'root'
+    parentId: string = 'root',
+    userId?: string
   ): Promise<DriveFolder> {
     try {
       console.log(`[GoogleDriveService] 📂 Création du dossier: "${name}"`);
-      const drive = await this.getDriveAPI(organizationId);
+      const drive = await this.getDriveAPI(organizationId, userId);
 
       const response = await drive.files.create({
         requestBody: {
@@ -331,10 +337,10 @@ export class GoogleDriveService {
   /**
    * Supprime un fichier ou dossier (mise à la corbeille)
    */
-  async deleteFile(organizationId: string, fileId: string): Promise<boolean> {
+  async deleteFile(organizationId: string, fileId: string, userId?: string): Promise<boolean> {
     try {
       console.log(`[GoogleDriveService] 🗑️ Suppression du fichier: ${fileId}`);
-      const drive = await this.getDriveAPI(organizationId);
+      const drive = await this.getDriveAPI(organizationId, userId);
 
       // Mise à la corbeille plutôt que suppression définitive
       await drive.files.update({
@@ -356,9 +362,9 @@ export class GoogleDriveService {
   /**
    * Récupère les informations d'un fichier
    */
-  async getFileInfo(organizationId: string, fileId: string): Promise<DriveFile> {
+  async getFileInfo(organizationId: string, fileId: string, userId?: string): Promise<DriveFile> {
     try {
-      const drive = await this.getDriveAPI(organizationId);
+      const drive = await this.getDriveAPI(organizationId, userId);
 
       const response = await drive.files.get({
         fileId,
@@ -389,14 +395,14 @@ export class GoogleDriveService {
   /**
    * Récupère les informations de stockage
    */
-  async getStorageInfo(organizationId: string): Promise<{
+  async getStorageInfo(organizationId: string, userId?: string): Promise<{
     limit: string;
     usage: string;
     usageInDrive: string;
     usageInTrash: string;
   }> {
     try {
-      const drive = await this.getDriveAPI(organizationId);
+      const drive = await this.getDriveAPI(organizationId, userId);
 
       const response = await drive.about.get({
         fields: 'storageQuota',
@@ -424,11 +430,12 @@ export class GoogleDriveService {
     fileName: string,
     mimeType: string,
     fileBuffer: Buffer,
-    parentId: string = 'root'
+    parentId: string = 'root',
+    userId?: string
   ): Promise<DriveFile> {
     try {
       console.log(`[GoogleDriveService] 📤 Upload du fichier: "${fileName}"`);
-      const drive = await this.getDriveAPI(organizationId);
+      const drive = await this.getDriveAPI(organizationId, userId);
 
       const { Readable } = await import('stream');
       const stream = Readable.from(fileBuffer);
@@ -467,10 +474,10 @@ export class GoogleDriveService {
   /**
    * Renommer un fichier ou dossier
    */
-  async renameFile(organizationId: string, fileId: string, newName: string): Promise<DriveFile> {
+  async renameFile(organizationId: string, fileId: string, newName: string, userId?: string): Promise<DriveFile> {
     try {
       console.log(`[GoogleDriveService] ✏️ Renommer fichier ${fileId} en "${newName}"`);
-      const drive = await this.getDriveAPI(organizationId);
+      const drive = await this.getDriveAPI(organizationId, userId);
 
       const response = await drive.files.update({
         fileId,
@@ -499,10 +506,10 @@ export class GoogleDriveService {
   /**
    * Déplacer un fichier vers un autre dossier
    */
-  async moveFile(organizationId: string, fileId: string, newParentId: string): Promise<DriveFile> {
+  async moveFile(organizationId: string, fileId: string, newParentId: string, userId?: string): Promise<DriveFile> {
     try {
       console.log(`[GoogleDriveService] 📦 Déplacer fichier ${fileId} vers ${newParentId}`);
-      const drive = await this.getDriveAPI(organizationId);
+      const drive = await this.getDriveAPI(organizationId, userId);
 
       // D'abord, récupérer les parents actuels
       const file = await drive.files.get({
@@ -539,10 +546,10 @@ export class GoogleDriveService {
   /**
    * Copier un fichier
    */
-  async copyFile(organizationId: string, fileId: string, newName?: string): Promise<DriveFile> {
+  async copyFile(organizationId: string, fileId: string, newName?: string, userId?: string): Promise<DriveFile> {
     try {
       console.log(`[GoogleDriveService] 📋 Copier fichier ${fileId}`);
-      const drive = await this.getDriveAPI(organizationId);
+      const drive = await this.getDriveAPI(organizationId, userId);
 
       const response = await drive.files.copy({
         fileId,
@@ -570,10 +577,10 @@ export class GoogleDriveService {
   /**
    * Obtenir le lien de partage d'un fichier
    */
-  async getShareLink(organizationId: string, fileId: string): Promise<{ webViewLink: string; webContentLink?: string }> {
+  async getShareLink(organizationId: string, fileId: string, userId?: string): Promise<{ webViewLink: string; webContentLink?: string }> {
     try {
       console.log(`[GoogleDriveService] 🔗 Obtenir lien de partage pour ${fileId}`);
-      const drive = await this.getDriveAPI(organizationId);
+      const drive = await this.getDriveAPI(organizationId, userId);
 
       const response = await drive.files.get({
         fileId,
@@ -594,10 +601,10 @@ export class GoogleDriveService {
   /**
    * Rendre un fichier accessible à tous avec un lien
    */
-  async makePublic(organizationId: string, fileId: string): Promise<{ webViewLink: string }> {
+  async makePublic(organizationId: string, fileId: string, userId?: string): Promise<{ webViewLink: string }> {
     try {
       console.log(`[GoogleDriveService] 🌐 Rendre public ${fileId}`);
-      const drive = await this.getDriveAPI(organizationId);
+      const drive = await this.getDriveAPI(organizationId, userId);
 
       // Créer une permission "anyone with link"
       await drive.permissions.create({
@@ -630,10 +637,10 @@ export class GoogleDriveService {
   /**
    * Récupérer les fichiers récents
    */
-  async getRecentFiles(organizationId: string, pageSize: number = 50): Promise<DriveFile[]> {
+  async getRecentFiles(organizationId: string, pageSize: number = 50, userId?: string): Promise<DriveFile[]> {
     try {
       console.log(`[GoogleDriveService] 🕐 Récupération des fichiers récents`);
-      const drive = await this.getDriveAPI(organizationId);
+      const drive = await this.getDriveAPI(organizationId, userId);
 
       const response = await drive.files.list({
         pageSize,
@@ -667,10 +674,10 @@ export class GoogleDriveService {
   /**
    * Récupérer les fichiers favoris (étoilés)
    */
-  async getStarredFiles(organizationId: string, pageSize: number = 50): Promise<DriveFile[]> {
+  async getStarredFiles(organizationId: string, pageSize: number = 50, userId?: string): Promise<DriveFile[]> {
     try {
       console.log(`[GoogleDriveService] ⭐ Récupération des fichiers favoris`);
-      const drive = await this.getDriveAPI(organizationId);
+      const drive = await this.getDriveAPI(organizationId, userId);
 
       const response = await drive.files.list({
         pageSize,
@@ -704,10 +711,10 @@ export class GoogleDriveService {
   /**
    * Ajouter/retirer un fichier des favoris
    */
-  async toggleStar(organizationId: string, fileId: string, starred: boolean): Promise<boolean> {
+  async toggleStar(organizationId: string, fileId: string, starred: boolean, userId?: string): Promise<boolean> {
     try {
       console.log(`[GoogleDriveService] ⭐ ${starred ? 'Ajouter aux' : 'Retirer des'} favoris: ${fileId}`);
-      const drive = await this.getDriveAPI(organizationId);
+      const drive = await this.getDriveAPI(organizationId, userId);
 
       await drive.files.update({
         fileId,
@@ -728,10 +735,10 @@ export class GoogleDriveService {
   /**
    * Récupérer les fichiers dans la corbeille
    */
-  async getTrash(organizationId: string, pageSize: number = 50): Promise<DriveFile[]> {
+  async getTrash(organizationId: string, pageSize: number = 50, userId?: string): Promise<DriveFile[]> {
     try {
       console.log(`[GoogleDriveService] 🗑️ Récupération de la corbeille`);
-      const drive = await this.getDriveAPI(organizationId);
+      const drive = await this.getDriveAPI(organizationId, userId);
 
       const response = await drive.files.list({
         pageSize,
@@ -762,10 +769,10 @@ export class GoogleDriveService {
   /**
    * Restaurer un fichier de la corbeille
    */
-  async restoreFile(organizationId: string, fileId: string): Promise<boolean> {
+  async restoreFile(organizationId: string, fileId: string, userId?: string): Promise<boolean> {
     try {
       console.log(`[GoogleDriveService] ♻️ Restaurer fichier: ${fileId}`);
-      const drive = await this.getDriveAPI(organizationId);
+      const drive = await this.getDriveAPI(organizationId, userId);
 
       await drive.files.update({
         fileId,
@@ -786,10 +793,10 @@ export class GoogleDriveService {
   /**
    * Supprimer définitivement un fichier
    */
-  async deleteFilePermanently(organizationId: string, fileId: string): Promise<boolean> {
+  async deleteFilePermanently(organizationId: string, fileId: string, userId?: string): Promise<boolean> {
     try {
       console.log(`[GoogleDriveService] ❌ Suppression définitive: ${fileId}`);
-      const drive = await this.getDriveAPI(organizationId);
+      const drive = await this.getDriveAPI(organizationId, userId);
 
       await drive.files.delete({
         fileId,
@@ -807,10 +814,10 @@ export class GoogleDriveService {
   /**
    * Vider la corbeille
    */
-  async emptyTrash(organizationId: string): Promise<boolean> {
+  async emptyTrash(organizationId: string, userId?: string): Promise<boolean> {
     try {
       console.log(`[GoogleDriveService] 🗑️ Vider la corbeille`);
-      const drive = await this.getDriveAPI(organizationId);
+      const drive = await this.getDriveAPI(organizationId, userId);
 
       await drive.files.emptyTrash();
 
@@ -825,10 +832,10 @@ export class GoogleDriveService {
   /**
    * Télécharger un fichier (obtenir l'URL de téléchargement)
    */
-  async getDownloadUrl(organizationId: string, fileId: string): Promise<{ downloadUrl: string; fileName: string; mimeType: string }> {
+  async getDownloadUrl(organizationId: string, fileId: string, userId?: string): Promise<{ downloadUrl: string; fileName: string; mimeType: string }> {
     try {
       console.log(`[GoogleDriveService] ⬇️ Obtenir URL de téléchargement: ${fileId}`);
-      const drive = await this.getDriveAPI(organizationId);
+      const drive = await this.getDriveAPI(organizationId, userId);
 
       const response = await drive.files.get({
         fileId,
@@ -873,11 +880,12 @@ export class GoogleDriveService {
     organizationId: string,
     name: string,
     type: 'document' | 'spreadsheet' | 'presentation',
-    parentId: string = 'root'
+    parentId: string = 'root',
+    userId?: string
   ): Promise<DriveFile> {
     try {
       console.log(`[GoogleDriveService] 📄 Créer ${type}: "${name}"`);
-      const drive = await this.getDriveAPI(organizationId);
+      const drive = await this.getDriveAPI(organizationId, userId);
 
       const mimeTypes: { [key: string]: string } = {
         document: 'application/vnd.google-apps.document',

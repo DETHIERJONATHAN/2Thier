@@ -18,15 +18,25 @@ export interface RefreshTokenResult {
 
 /**
  * Vérifie et rafraîchit automatiquement un token Google si nécessaire
+ * @param organizationId L'ID de l'organisation
+ * @param userId L'ID de l'utilisateur (requis pour la clé composite)
  */
-export async function refreshGoogleTokenIfNeeded(organizationId: string): Promise<RefreshTokenResult> {
+export async function refreshGoogleTokenIfNeeded(organizationId: string, userId?: string): Promise<RefreshTokenResult> {
   try {
-    console.log('[REFRESH-TOKEN] 🔍 Vérification token pour organisation:', organizationId);
+    console.log('[REFRESH-TOKEN] 🔍 Vérification token pour organisation:', organizationId, 'userId:', userId);
 
     // 1. Récupérer le token actuel
-    const googleToken = await prisma.googleToken.findUnique({
-      where: { organizationId }
-    });
+    let googleToken;
+    if (userId) {
+      googleToken = await prisma.googleToken.findUnique({
+        where: { userId_organizationId: { userId, organizationId } }
+      });
+    } else {
+      // Fallback legacy
+      googleToken = await prisma.googleToken.findFirst({
+        where: { organizationId }
+      });
+    }
 
     if (!googleToken) {
       console.log('[REFRESH-TOKEN] ❌ Aucun token trouvé');
@@ -105,18 +115,32 @@ export async function refreshGoogleTokenIfNeeded(organizationId: string): Promis
       // 7. Sauvegarder le nouveau token
       const newExpiresAt = credentials.expiry_date ? new Date(credentials.expiry_date) : null;
       
-      await prisma.googleToken.update({
-        where: { organizationId },
-        data: {
-          accessToken: encrypt(credentials.access_token!),
-          expiresAt: newExpiresAt,
-          updatedAt: new Date(),
-          // Garder l'ancien refresh token sauf si un nouveau est fourni
-          ...(credentials.refresh_token && {
-            refreshToken: encrypt(credentials.refresh_token)
-          })
-        }
-      });
+      // Mise à jour avec la clé composite ou l'ID
+      if (userId) {
+        await prisma.googleToken.update({
+          where: { userId_organizationId: { userId, organizationId } },
+          data: {
+            accessToken: encrypt(credentials.access_token!),
+            expiresAt: newExpiresAt,
+            updatedAt: new Date(),
+            ...(credentials.refresh_token && {
+              refreshToken: encrypt(credentials.refresh_token)
+            })
+          }
+        });
+      } else if (googleToken.id) {
+        await prisma.googleToken.update({
+          where: { id: googleToken.id },
+          data: {
+            accessToken: encrypt(credentials.access_token!),
+            expiresAt: newExpiresAt,
+            updatedAt: new Date(),
+            ...(credentials.refresh_token && {
+              refreshToken: encrypt(credentials.refresh_token)
+            })
+          }
+        });
+      }
 
       console.log('[REFRESH-TOKEN] 💾 Token mis à jour en base de données');
 
@@ -164,10 +188,12 @@ export function googleTokenRefreshMiddleware() {
         return next();
       }
 
-      console.log('[REFRESH-MIDDLEWARE] 🔍 Vérification token pour organisation:', organizationId);
+      // Récupérer userId depuis la requête authentifiée
+      const userId = (req as any).user?.userId || (req as any).user?.id;
+      console.log('[REFRESH-MIDDLEWARE] 🔍 Vérification token pour organisation:', organizationId, 'userId:', userId);
 
       // Tenter le refresh si nécessaire
-      const refreshResult = await refreshGoogleTokenIfNeeded(organizationId);
+      const refreshResult = await refreshGoogleTokenIfNeeded(organizationId as string, userId);
       
       if (refreshResult.success) {
         console.log('[REFRESH-MIDDLEWARE] ✅ Token valide ou rafraîchi avec succès');
@@ -196,8 +222,8 @@ export function googleTokenRefreshMiddleware() {
 /**
  * Fonction utilitaire pour obtenir un token Google valide
  */
-export async function getValidGoogleToken(organizationId: string) {
-  const refreshResult = await refreshGoogleTokenIfNeeded(organizationId);
+export async function getValidGoogleToken(organizationId: string, userId?: string) {
+  const refreshResult = await refreshGoogleTokenIfNeeded(organizationId, userId);
   
   if (!refreshResult.success) {
     throw new Error(`Failed to get valid Google token: ${refreshResult.error}`);

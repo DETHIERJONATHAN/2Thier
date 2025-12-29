@@ -8,6 +8,7 @@ const router = Router();
 router.get('/files', authMiddleware, async (req, res) => {
   try {
     const organizationId = req.user?.organizationId;
+    const userId = req.user?.id || req.user?.userId;
     if (!organizationId) {
       return res.status(401).json({ error: 'Organisation non trouvée' });
     }
@@ -18,7 +19,7 @@ router.get('/files', authMiddleware, async (req, res) => {
 
     console.log(`[Google Drive Routes] 📁 GET /files - folderId: ${folderId}`);
 
-    const result = await googleDriveService.getFiles(organizationId, folderId, pageSize, pageToken);
+    const result = await googleDriveService.getFiles(organizationId, folderId, pageSize, pageToken, userId);
     
     res.json(result);
   } catch (error) {
@@ -31,6 +32,7 @@ router.get('/files', authMiddleware, async (req, res) => {
 router.get('/shared', authMiddleware, async (req, res) => {
   try {
     const organizationId = req.user?.organizationId;
+    const userId = req.user?.id || req.user?.userId;
     if (!organizationId) {
       return res.status(401).json({ error: 'Organisation non trouvée' });
     }
@@ -40,7 +42,7 @@ router.get('/shared', authMiddleware, async (req, res) => {
 
     console.log(`[Google Drive Routes] 📤 GET /shared - Fichiers partagés avec moi`);
 
-    const result = await googleDriveService.getSharedFiles(organizationId, pageSize, pageToken);
+    const result = await googleDriveService.getSharedFiles(organizationId, pageSize, pageToken, userId);
     
     res.json(result);
   } catch (error) {
@@ -53,13 +55,14 @@ router.get('/shared', authMiddleware, async (req, res) => {
 router.get('/shared-drives', authMiddleware, async (req, res) => {
   try {
     const organizationId = req.user?.organizationId;
+    const userId = req.user?.id || req.user?.userId;
     if (!organizationId) {
       return res.status(401).json({ error: 'Organisation non trouvée' });
     }
 
     console.log(`[Google Drive Routes] 🏢 GET /shared-drives - Drives partagés`);
 
-    const result = await googleDriveService.getSharedDrives(organizationId);
+    const result = await googleDriveService.getSharedDrives(organizationId, 50, userId);
     
     res.json(result);
   } catch (error) {
@@ -72,6 +75,7 @@ router.get('/shared-drives', authMiddleware, async (req, res) => {
 router.get('/shared-drives/:driveId/files', authMiddleware, async (req, res) => {
   try {
     const organizationId = req.user?.organizationId;
+    const userId = req.user?.id || req.user?.userId;
     if (!organizationId) {
       return res.status(401).json({ error: 'Organisation non trouvée' });
     }
@@ -83,7 +87,7 @@ router.get('/shared-drives/:driveId/files', authMiddleware, async (req, res) => 
 
     console.log(`[Google Drive Routes] 🏢 GET /shared-drives/${driveId}/files - folderId: ${folderId || 'root'}`);
 
-    const result = await googleDriveService.getSharedDriveFiles(organizationId, driveId, folderId, pageSize, pageToken);
+    const result = await googleDriveService.getSharedDriveFiles(organizationId, driveId, folderId, pageSize, pageToken, userId);
     
     res.json(result);
   } catch (error) {
@@ -96,6 +100,7 @@ router.get('/shared-drives/:driveId/files', authMiddleware, async (req, res) => 
 router.get('/search', authMiddleware, async (req, res) => {
   try {
     const organizationId = req.user?.organizationId;
+    const userId = req.user?.id || req.user?.userId;
     if (!organizationId) {
       return res.status(401).json({ error: 'Organisation non trouvée' });
     }
@@ -107,7 +112,7 @@ router.get('/search', authMiddleware, async (req, res) => {
 
     console.log(`[Google Drive Routes] 🔎 GET /search - query: "${query}"`);
 
-    const files = await googleDriveService.searchFiles(organizationId, query);
+    const files = await googleDriveService.searchFiles(organizationId, query, 50, userId);
     
     res.json({ files });
   } catch (error) {
@@ -120,13 +125,14 @@ router.get('/search', authMiddleware, async (req, res) => {
 router.get('/storage', authMiddleware, async (req, res) => {
   try {
     const organizationId = req.user?.organizationId;
+    const userId = req.user?.id || req.user?.userId;
     if (!organizationId) {
       return res.status(401).json({ error: 'Organisation non trouvée' });
     }
 
     console.log(`[Google Drive Routes] 💾 GET /storage`);
 
-    const storageInfo = await googleDriveService.getStorageInfo(organizationId);
+    const storageInfo = await googleDriveService.getStorageInfo(organizationId, userId);
     
     res.json(storageInfo);
   } catch (error) {
@@ -139,6 +145,7 @@ router.get('/storage', authMiddleware, async (req, res) => {
 router.get('/files/:fileId', authMiddleware, async (req, res) => {
   try {
     const organizationId = req.user?.organizationId;
+    const userId = req.user?.id || req.user?.userId;
     if (!organizationId) {
       return res.status(401).json({ error: 'Organisation non trouvée' });
     }
@@ -147,7 +154,7 @@ router.get('/files/:fileId', authMiddleware, async (req, res) => {
 
     console.log(`[Google Drive Routes] 📄 GET /files/${fileId}`);
 
-    const fileInfo = await googleDriveService.getFileInfo(organizationId, fileId);
+    const fileInfo = await googleDriveService.getFileInfo(organizationId, fileId, userId);
     
     res.json(fileInfo);
   } catch (error) {
@@ -160,6 +167,7 @@ router.get('/files/:fileId', authMiddleware, async (req, res) => {
 router.post('/folders', authMiddleware, async (req, res) => {
   try {
     const organizationId = req.user?.organizationId;
+    const userId = req.user?.id || req.user?.userId;
     if (!organizationId) {
       return res.status(401).json({ error: 'Organisation non trouvée' });
     }
@@ -171,7 +179,7 @@ router.post('/folders', authMiddleware, async (req, res) => {
 
     console.log(`[Google Drive Routes] 📂 POST /folders - name: "${name}"`);
 
-    const folder = await googleDriveService.createFolder(organizationId, name, parentId || 'root');
+    const folder = await googleDriveService.createFolder(organizationId, name, parentId || 'root', userId);
     
     res.status(201).json(folder);
   } catch (error) {
@@ -184,6 +192,7 @@ router.post('/folders', authMiddleware, async (req, res) => {
 router.delete('/files/:fileId', authMiddleware, async (req, res) => {
   try {
     const organizationId = req.user?.organizationId;
+    const userId = req.user?.id || req.user?.userId;
     if (!organizationId) {
       return res.status(401).json({ error: 'Organisation non trouvée' });
     }
@@ -192,7 +201,7 @@ router.delete('/files/:fileId', authMiddleware, async (req, res) => {
 
     console.log(`[Google Drive Routes] 🗑️ DELETE /files/${fileId}`);
 
-    await googleDriveService.deleteFile(organizationId, fileId);
+    await googleDriveService.deleteFile(organizationId, fileId, userId);
     
     res.json({ success: true, message: 'Fichier mis à la corbeille' });
   } catch (error) {
@@ -205,6 +214,7 @@ router.delete('/files/:fileId', authMiddleware, async (req, res) => {
 router.post('/upload', authMiddleware, async (req, res) => {
   try {
     const organizationId = req.user?.organizationId;
+    const userId = req.user?.id || req.user?.userId;
     if (!organizationId) {
       return res.status(401).json({ error: 'Organisation non trouvée' });
     }
@@ -232,7 +242,7 @@ router.post('/upload', authMiddleware, async (req, res) => {
         const fileBuffer = Buffer.concat(chunks);
         console.log(`[Google Drive Routes] 📤 POST /upload - file: "${fileName}", size: ${fileBuffer.length}`);
 
-        const file = await googleDriveService.uploadFile(organizationId, fileName, mimeType, fileBuffer, parentId);
+        const file = await googleDriveService.uploadFile(organizationId, fileName, mimeType, fileBuffer, parentId, userId);
         res.status(201).json(file);
       } catch (error) {
         console.error('[Google Drive Routes] ❌ Erreur POST /upload:', error);
@@ -249,6 +259,7 @@ router.post('/upload', authMiddleware, async (req, res) => {
 router.patch('/files/:fileId/rename', authMiddleware, async (req, res) => {
   try {
     const organizationId = req.user?.organizationId;
+    const userId = req.user?.id || req.user?.userId;
     if (!organizationId) {
       return res.status(401).json({ error: 'Organisation non trouvée' });
     }
@@ -261,7 +272,7 @@ router.patch('/files/:fileId/rename', authMiddleware, async (req, res) => {
 
     console.log(`[Google Drive Routes] ✏️ PATCH /files/${fileId}/rename - name: "${name}"`);
 
-    const file = await googleDriveService.renameFile(organizationId, fileId, name);
+    const file = await googleDriveService.renameFile(organizationId, fileId, name, userId);
     res.json(file);
   } catch (error) {
     console.error('[Google Drive Routes] ❌ Erreur PATCH /files/:fileId/rename:', error);
@@ -273,6 +284,7 @@ router.patch('/files/:fileId/rename', authMiddleware, async (req, res) => {
 router.patch('/files/:fileId/move', authMiddleware, async (req, res) => {
   try {
     const organizationId = req.user?.organizationId;
+    const userId = req.user?.id || req.user?.userId;
     if (!organizationId) {
       return res.status(401).json({ error: 'Organisation non trouvée' });
     }
@@ -285,7 +297,7 @@ router.patch('/files/:fileId/move', authMiddleware, async (req, res) => {
 
     console.log(`[Google Drive Routes] 📦 PATCH /files/${fileId}/move - to: ${newParentId}`);
 
-    const file = await googleDriveService.moveFile(organizationId, fileId, newParentId);
+    const file = await googleDriveService.moveFile(organizationId, fileId, newParentId, userId);
     res.json(file);
   } catch (error) {
     console.error('[Google Drive Routes] ❌ Erreur PATCH /files/:fileId/move:', error);
@@ -297,6 +309,7 @@ router.patch('/files/:fileId/move', authMiddleware, async (req, res) => {
 router.post('/files/:fileId/copy', authMiddleware, async (req, res) => {
   try {
     const organizationId = req.user?.organizationId;
+    const userId = req.user?.id || req.user?.userId;
     if (!organizationId) {
       return res.status(401).json({ error: 'Organisation non trouvée' });
     }
@@ -306,7 +319,7 @@ router.post('/files/:fileId/copy', authMiddleware, async (req, res) => {
 
     console.log(`[Google Drive Routes] 📋 POST /files/${fileId}/copy`);
 
-    const file = await googleDriveService.copyFile(organizationId, fileId, newName);
+    const file = await googleDriveService.copyFile(organizationId, fileId, newName, userId);
     res.status(201).json(file);
   } catch (error) {
     console.error('[Google Drive Routes] ❌ Erreur POST /files/:fileId/copy:', error);
@@ -318,6 +331,7 @@ router.post('/files/:fileId/copy', authMiddleware, async (req, res) => {
 router.get('/files/:fileId/share', authMiddleware, async (req, res) => {
   try {
     const organizationId = req.user?.organizationId;
+    const userId = req.user?.id || req.user?.userId;
     if (!organizationId) {
       return res.status(401).json({ error: 'Organisation non trouvée' });
     }
@@ -326,7 +340,7 @@ router.get('/files/:fileId/share', authMiddleware, async (req, res) => {
 
     console.log(`[Google Drive Routes] 🔗 GET /files/${fileId}/share`);
 
-    const links = await googleDriveService.getShareLink(organizationId, fileId);
+    const links = await googleDriveService.getShareLink(organizationId, fileId, userId);
     res.json(links);
   } catch (error) {
     console.error('[Google Drive Routes] ❌ Erreur GET /files/:fileId/share:', error);
@@ -338,6 +352,7 @@ router.get('/files/:fileId/share', authMiddleware, async (req, res) => {
 router.post('/files/:fileId/make-public', authMiddleware, async (req, res) => {
   try {
     const organizationId = req.user?.organizationId;
+    const userId = req.user?.id || req.user?.userId;
     if (!organizationId) {
       return res.status(401).json({ error: 'Organisation non trouvée' });
     }
@@ -346,7 +361,7 @@ router.post('/files/:fileId/make-public', authMiddleware, async (req, res) => {
 
     console.log(`[Google Drive Routes] 🌐 POST /files/${fileId}/make-public`);
 
-    const result = await googleDriveService.makePublic(organizationId, fileId);
+    const result = await googleDriveService.makePublic(organizationId, fileId, userId);
     res.json(result);
   } catch (error) {
     console.error('[Google Drive Routes] ❌ Erreur POST /files/:fileId/make-public:', error);
@@ -358,13 +373,14 @@ router.post('/files/:fileId/make-public', authMiddleware, async (req, res) => {
 router.get('/recent', authMiddleware, async (req, res) => {
   try {
     const organizationId = req.user?.organizationId;
+    const userId = req.user?.id || req.user?.userId;
     if (!organizationId) {
       return res.status(401).json({ error: 'Organisation non trouvée' });
     }
 
     console.log(`[Google Drive Routes] 🕐 GET /recent`);
 
-    const files = await googleDriveService.getRecentFiles(organizationId);
+    const files = await googleDriveService.getRecentFiles(organizationId, 50, userId);
     res.json({ files });
   } catch (error) {
     console.error('[Google Drive Routes] ❌ Erreur GET /recent:', error);
@@ -376,13 +392,14 @@ router.get('/recent', authMiddleware, async (req, res) => {
 router.get('/starred', authMiddleware, async (req, res) => {
   try {
     const organizationId = req.user?.organizationId;
+    const userId = req.user?.id || req.user?.userId;
     if (!organizationId) {
       return res.status(401).json({ error: 'Organisation non trouvée' });
     }
 
     console.log(`[Google Drive Routes] ⭐ GET /starred`);
 
-    const files = await googleDriveService.getStarredFiles(organizationId);
+    const files = await googleDriveService.getStarredFiles(organizationId, 50, userId);
     res.json({ files });
   } catch (error) {
     console.error('[Google Drive Routes] ❌ Erreur GET /starred:', error);
@@ -394,6 +411,7 @@ router.get('/starred', authMiddleware, async (req, res) => {
 router.patch('/files/:fileId/star', authMiddleware, async (req, res) => {
   try {
     const organizationId = req.user?.organizationId;
+    const userId = req.user?.id || req.user?.userId;
     if (!organizationId) {
       return res.status(401).json({ error: 'Organisation non trouvée' });
     }
@@ -403,7 +421,7 @@ router.patch('/files/:fileId/star', authMiddleware, async (req, res) => {
 
     console.log(`[Google Drive Routes] ⭐ PATCH /files/${fileId}/star - starred: ${starred}`);
 
-    await googleDriveService.toggleStar(organizationId, fileId, starred);
+    await googleDriveService.toggleStar(organizationId, fileId, starred, userId);
     res.json({ success: true });
   } catch (error) {
     console.error('[Google Drive Routes] ❌ Erreur PATCH /files/:fileId/star:', error);
@@ -415,13 +433,14 @@ router.patch('/files/:fileId/star', authMiddleware, async (req, res) => {
 router.get('/trash', authMiddleware, async (req, res) => {
   try {
     const organizationId = req.user?.organizationId;
+    const userId = req.user?.id || req.user?.userId;
     if (!organizationId) {
       return res.status(401).json({ error: 'Organisation non trouvée' });
     }
 
     console.log(`[Google Drive Routes] 🗑️ GET /trash`);
 
-    const files = await googleDriveService.getTrash(organizationId);
+    const files = await googleDriveService.getTrash(organizationId, 50, userId);
     res.json({ files });
   } catch (error) {
     console.error('[Google Drive Routes] ❌ Erreur GET /trash:', error);
@@ -433,6 +452,7 @@ router.get('/trash', authMiddleware, async (req, res) => {
 router.post('/files/:fileId/restore', authMiddleware, async (req, res) => {
   try {
     const organizationId = req.user?.organizationId;
+    const userId = req.user?.id || req.user?.userId;
     if (!organizationId) {
       return res.status(401).json({ error: 'Organisation non trouvée' });
     }
@@ -441,7 +461,7 @@ router.post('/files/:fileId/restore', authMiddleware, async (req, res) => {
 
     console.log(`[Google Drive Routes] ♻️ POST /files/${fileId}/restore`);
 
-    await googleDriveService.restoreFile(organizationId, fileId);
+    await googleDriveService.restoreFile(organizationId, fileId, userId);
     res.json({ success: true });
   } catch (error) {
     console.error('[Google Drive Routes] ❌ Erreur POST /files/:fileId/restore:', error);
@@ -453,6 +473,7 @@ router.post('/files/:fileId/restore', authMiddleware, async (req, res) => {
 router.delete('/files/:fileId/permanent', authMiddleware, async (req, res) => {
   try {
     const organizationId = req.user?.organizationId;
+    const userId = req.user?.id || req.user?.userId;
     if (!organizationId) {
       return res.status(401).json({ error: 'Organisation non trouvée' });
     }
@@ -461,7 +482,7 @@ router.delete('/files/:fileId/permanent', authMiddleware, async (req, res) => {
 
     console.log(`[Google Drive Routes] ❌ DELETE /files/${fileId}/permanent`);
 
-    await googleDriveService.deleteFilePermanently(organizationId, fileId);
+    await googleDriveService.deleteFilePermanently(organizationId, fileId, userId);
     res.json({ success: true });
   } catch (error) {
     console.error('[Google Drive Routes] ❌ Erreur DELETE /files/:fileId/permanent:', error);
@@ -473,13 +494,14 @@ router.delete('/files/:fileId/permanent', authMiddleware, async (req, res) => {
 router.delete('/trash', authMiddleware, async (req, res) => {
   try {
     const organizationId = req.user?.organizationId;
+    const userId = req.user?.id || req.user?.userId;
     if (!organizationId) {
       return res.status(401).json({ error: 'Organisation non trouvée' });
     }
 
     console.log(`[Google Drive Routes] 🗑️ DELETE /trash`);
 
-    await googleDriveService.emptyTrash(organizationId);
+    await googleDriveService.emptyTrash(organizationId, userId);
     res.json({ success: true });
   } catch (error) {
     console.error('[Google Drive Routes] ❌ Erreur DELETE /trash:', error);
@@ -491,6 +513,7 @@ router.delete('/trash', authMiddleware, async (req, res) => {
 router.get('/files/:fileId/download', authMiddleware, async (req, res) => {
   try {
     const organizationId = req.user?.organizationId;
+    const userId = req.user?.id || req.user?.userId;
     if (!organizationId) {
       return res.status(401).json({ error: 'Organisation non trouvée' });
     }
@@ -499,7 +522,7 @@ router.get('/files/:fileId/download', authMiddleware, async (req, res) => {
 
     console.log(`[Google Drive Routes] ⬇️ GET /files/${fileId}/download`);
 
-    const result = await googleDriveService.getDownloadUrl(organizationId, fileId);
+    const result = await googleDriveService.getDownloadUrl(organizationId, fileId, userId);
     res.json(result);
   } catch (error) {
     console.error('[Google Drive Routes] ❌ Erreur GET /files/:fileId/download:', error);
@@ -511,6 +534,7 @@ router.get('/files/:fileId/download', authMiddleware, async (req, res) => {
 router.post('/create-doc', authMiddleware, async (req, res) => {
   try {
     const organizationId = req.user?.organizationId;
+    const userId = req.user?.id || req.user?.userId;
     if (!organizationId) {
       return res.status(401).json({ error: 'Organisation non trouvée' });
     }
@@ -522,7 +546,7 @@ router.post('/create-doc', authMiddleware, async (req, res) => {
 
     console.log(`[Google Drive Routes] 📄 POST /create-doc - type: ${type}, name: "${name}"`);
 
-    const file = await googleDriveService.createGoogleDoc(organizationId, name, type, parentId || 'root');
+    const file = await googleDriveService.createGoogleDoc(organizationId, name, type, parentId || 'root', userId);
     res.status(201).json(file);
   } catch (error) {
     console.error('[Google Drive Routes] ❌ Erreur POST /create-doc:', error);

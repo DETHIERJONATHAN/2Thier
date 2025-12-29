@@ -135,20 +135,33 @@ const GoogleAuthCallback: React.FC = () => {
         window.close();
       }, 1500);
     } else {
-      // Si pas de fenêtre parent, rediriger vers la page principale
-      console.log('[GoogleAuthCallback] Pas de fenêtre parent, redirection...');
+      // Mode redirection complète (pas de popup) - cas de Codespaces
+      console.log('[GoogleAuthCallback] Mode redirection complète (pas de popup)');
+      
+      // Nettoyer le flag OAuth pending
+      localStorage.removeItem('google_oauth_pending');
       
       // Si c'est une erreur, attendre plus longtemps pour laisser le temps à l'utilisateur de voir
-      const delay = googleError ? 5000 : 2000;
+      const delay = googleError ? 4000 : 1500;
       
       setTimeout(() => {
-        // Vérification de sécurité : éviter les boucles si on est déjà sur la page principale
-        if (window.location.pathname !== '/' && window.location.pathname !== '') {
-          console.log('[GoogleAuthCallback] Redirection vers la page principale...');
-          // Utiliser replace pour ne pas polluer l'historique
+        // Vérifier si on a un organizationId pour rediriger vers la bonne page
+        const savedOrgId = localStorage.getItem('google_oauth_org_id');
+        localStorage.removeItem('google_oauth_org_id');
+        
+        if (googleSuccess === '1' && (organizationId || savedOrgId)) {
+          // Rediriger vers la page des organisations avec l'ID
+          const targetOrgId = organizationId || savedOrgId;
+          console.log('[GoogleAuthCallback] ✅ Redirection vers la page organisations avec orgId:', targetOrgId);
+          window.location.replace(`/super-admin/organizations?selected=${targetOrgId}&tab=workspace`);
+        } else if (googleError) {
+          // En cas d'erreur, rediriger vers la page principale avec un message
+          console.log('[GoogleAuthCallback] ❌ Redirection avec erreur vers la page principale');
           window.location.replace('/');
         } else {
-          console.log('[GoogleAuthCallback] Déjà sur la page principale, pas de redirection');
+          // Redirection par défaut vers la page principale
+          console.log('[GoogleAuthCallback] Redirection vers la page principale...');
+          window.location.replace('/');
         }
       }, delay);
     }

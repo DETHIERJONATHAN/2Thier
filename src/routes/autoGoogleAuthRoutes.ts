@@ -29,9 +29,12 @@ router.get('/status', authMiddleware, async (req: AuthenticatedRequest, res) => 
   }
 
   try {
-    // Vérifier si des tokens existent pour cette organisation
+    // Vérifier si des tokens existent pour cet utilisateur dans cette organisation
+    // IMPORTANT: On utilise la clé composite userId_organizationId
     const tokens = await prisma.googleToken.findUnique({
-      where: { organizationId }
+      where: { 
+        userId_organizationId: { userId, organizationId }
+      }
     });
 
     if (!tokens || !tokens.accessToken) {
@@ -46,16 +49,12 @@ router.get('/status', authMiddleware, async (req: AuthenticatedRequest, res) => 
       });
     }
 
-    // Récupérer la config Google Workspace pour l'email admin
-    const gwConfig = await prisma.googleWorkspaceConfig.findUnique({
-      where: { organizationId }
-    });
-
+    // L'email Google est maintenant stocké directement dans le token
     return res.json({
       success: true,
       data: {
         connected: true,
-        email: gwConfig?.adminEmail || null,
+        email: tokens.googleEmail || null,
         scopes: tokens.scope?.split(' ') || [],
         lastSync: tokens.updatedAt || null,
         expiresAt: tokens.expiresAt

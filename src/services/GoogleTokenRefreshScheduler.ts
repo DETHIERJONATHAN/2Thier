@@ -186,13 +186,15 @@ export class GoogleTokenRefreshScheduler {
       const tokenData = await response.json();
       const newExpiresAt = new Date(Date.now() + (tokenData.expires_in * 1000));
 
-      // Mettre à jour le token dans la base
+      // Mettre à jour le token dans la base en utilisant l'ID du token
       await prisma.googleToken.update({
-        where: { organizationId: token.organizationId },
+        where: { id: token.id },
         data: {
           accessToken: tokenData.access_token,
           expiresAt: newExpiresAt,
           updatedAt: new Date(),
+          lastRefreshAt: new Date(),
+          refreshCount: { increment: 1 },
           // Mettre à jour le refresh token s'il y en a un nouveau
           ...(tokenData.refresh_token && { refreshToken: tokenData.refresh_token }),
           // Mettre à jour le scope s'il y en a un nouveau

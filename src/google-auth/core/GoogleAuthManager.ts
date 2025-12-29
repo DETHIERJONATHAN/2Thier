@@ -5,10 +5,10 @@
  * Il est le SEUL point d'entrée pour obtenir un client Google authentifié.
  * 
  * Logique d'authentification :
- * - L'utilisateur se connecte au CRM avec son email personnel (ex: dethier.jls@gmail.com)
- * - Pour Google Workspace, on utilise l'email administrateur de l'organisation (ex: jonathan.dethier@2thier.be)
- * - Cet email administrateur est configuré dans googleWorkspaceConfig.adminEmail
- * - Les tokens sont stockés au niveau de l'organisation, pas de l'utilisateur
+ * - L'utilisateur se connecte au CRM avec son email CRM
+ * - Chaque utilisateur a son propre token Google par organisation
+ * - Les tokens sont stockés au niveau utilisateur + organisation (ex: userId + organizationId)
+ * - Cela permet à chaque membre de l'organisation d'accéder à sa propre boîte Gmail
  */
 
 import { OAuth2Client } from 'google-auth-library';
@@ -29,21 +29,22 @@ export class GoogleAuthManager {
   }
 
   /**
-   * Obtient un client Google authentifié pour une organisation
+   * Obtient un client Google authentifié pour un utilisateur dans une organisation
    * 
    * @param organizationId - ID de l'organisation
+   * @param userId - ID de l'utilisateur (optionnel pour rétrocompatibilité)
    * @returns Client OAuth2 authentifié ou null si échec
    */
-  async getAuthenticatedClient(organizationId: string): Promise<OAuth2Client | null> {
+  async getAuthenticatedClient(organizationId: string, userId?: string): Promise<OAuth2Client | null> {
     if (!organizationId) {
       console.error('[GoogleAuthManager] ❌ organizationId est requis');
       return null;
     }
 
-    console.log(`[GoogleAuthManager] 🔐 Demande de client authentifié pour l'organisation: ${organizationId}`);
+    console.log(`[GoogleAuthManager] 🔐 Demande de client authentifié pour l'organisation: ${organizationId}, utilisateur: ${userId || 'non spécifié'}`);
     
     try {
-      return await googleOAuthService.getAuthenticatedClientForOrganization(organizationId);
+      return await googleOAuthService.getAuthenticatedClientForOrganization(organizationId, userId);
     } catch (error) {
       console.error('[GoogleAuthManager] ❌ Erreur lors de l\'obtention du client authentifié:', error);
       return null;
@@ -67,10 +68,11 @@ export class GoogleAuthManager {
    * @param code - Code d'autorisation reçu de Google
    * @param userId - ID de l'utilisateur
    * @param organizationId - ID de l'organisation
+   * @param googleEmail - Email du compte Google connecté (optionnel)
    */
-  async exchangeCodeForTokens(code: string, userId: string, organizationId: string): Promise<void> {
+  async exchangeCodeForTokens(code: string, userId: string, organizationId: string, googleEmail?: string): Promise<void> {
     const tokens = await googleOAuthService.getTokenFromCode(code);
-    await googleOAuthService.saveUserTokens(userId, organizationId, tokens);
+    await googleOAuthService.saveUserTokens(userId, organizationId, tokens, googleEmail);
   }
 }
 

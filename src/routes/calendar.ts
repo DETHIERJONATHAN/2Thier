@@ -138,7 +138,7 @@ router.get('/events', async (req: AuthenticatedRequest, res) => {
       try {
         const syncStart = startDate ? new Date(startDate) : new Date(Date.now() - 7 * 24 * 3600 * 1000); // -7j par défaut
         const syncEnd = endDate ? new Date(endDate) : new Date(Date.now() + 30 * 24 * 3600 * 1000); // +30j
-        const googleEvents = await googleCalendarService.syncEvents(organizationId, syncStart, syncEnd);
+        const googleEvents = await googleCalendarService.syncEvents(organizationId, syncStart, syncEnd, userIdToSearch);
         console.log('[CALENDAR ROUTES] Google events récupérés:', googleEvents.length);
 
         for (const gEvent of googleEvents) {
@@ -323,7 +323,8 @@ router.post('/sync', async (req: AuthenticatedRequest, res) => {
     const googleEvents = await googleCalendarService.syncEvents(
       organizationId,
       syncStart,
-      syncEnd
+      syncEnd,
+      req.user!.userId
     );
 
     let createdCount = 0;
@@ -426,7 +427,7 @@ router.post('/events', async (req: AuthenticatedRequest, res) => {
         },
       };
       
-      const externalCalendarId = await googleCalendarService.createEvent(organizationId, googleEventData);
+      const externalCalendarId = await googleCalendarService.createEvent(organizationId, googleEventData, req.user!.userId);
       
       const updatedEvent = await prisma.calendarEvent.update({
         where: { id: event.id },
@@ -648,7 +649,7 @@ router.put('/events/:id', async (req: AuthenticatedRequest, res) => {
           },
         };
         
-        await googleCalendarService.updateEvent(organizationId, updatedEvent.externalCalendarId, googleEventData);
+        await googleCalendarService.updateEvent(organizationId, updatedEvent.externalCalendarId, googleEventData, req.user!.userId);
       } catch (googleError) {
         console.warn('[CALENDAR ROUTES] Erreur mise à jour Google Calendar:', googleError);
       }
@@ -686,7 +687,7 @@ router.delete('/events/:id', async (req: AuthenticatedRequest, res) => {
     if (eventToDelete.externalCalendarId) {
       try {
         console.log('[CALENDAR ROUTES] 🔄 Suppression de Google Calendar...');
-        await googleCalendarService.deleteEvent(organizationId, eventToDelete.externalCalendarId);
+        await googleCalendarService.deleteEvent(organizationId, eventToDelete.externalCalendarId, req.user!.userId);
         console.log('[CALENDAR ROUTES] ✅ Événement supprimé de Google Calendar');
       } catch (googleError) {
         console.warn('[CALENDAR ROUTES] ⚠️ Erreur suppression Google Calendar:', googleError);

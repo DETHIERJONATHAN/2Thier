@@ -43,11 +43,21 @@ export const GoogleConnectionCard: React.FC<GoogleConnectionCardProps> = ({ orga
   const checkConnectionStatus = useCallback(async () => {
     console.log('[GoogleConnectionCard] 🔍 Début checkConnectionStatus');
     console.log('[GoogleConnectionCard] 🏢 OrganizationId:', organizationId);
+    
+    if (!organizationId) {
+      console.log('[GoogleConnectionCard] ⚠️ Pas d\'organizationId, impossible de vérifier le statut');
+      setConnectionStatus({ isConnected: false });
+      setError('Organization ID requis pour vérifier la connexion Google');
+      return;
+    }
+    
     try {
       setLoading(true);
-      console.log('[GoogleConnectionCard] 📡 Appel API /google-auth/status...');
+      // Passer l'organizationId dans la requête
+      const statusUrl = `/api/google-auth/status?organizationId=${organizationId}`;
+      console.log('[GoogleConnectionCard] 📡 Appel API:', statusUrl);
       
-      const responseData = await api.get('/api/google-auth/status');
+      const responseData = await api.get(statusUrl);
       console.log('[GoogleConnectionCard] ✅ Données status reçues:', responseData);
       console.log('[GoogleConnectionCard] 📊 Structure responseData:', JSON.stringify(responseData, null, 2));
       console.log('[GoogleConnectionCard] 🔍 responseData.data:', responseData.data);

@@ -652,13 +652,18 @@ model GoogleToken {
   scope                     String?
   createdAt                 DateTime                    @default(now())
   updatedAt                 DateTime
-  organizationId            String                      @unique
+  organizationId            String
+  userId                    String                      // Chaque utilisateur a son propre token
+  googleEmail               String?                     // Email du compte Google connecté
   lastRefreshAt             DateTime?
   refreshCount              Int                         @default(0)
   Organization              Organization                @relation(fields: [organizationId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  User                      User                        @relation(fields: [userId], references: [id], onDelete: NoAction, onUpdate: NoAction)
   GoogleTokenRefreshHistory GoogleTokenRefreshHistory[]
 
+  @@unique([userId, organizationId])  // Un token par utilisateur par organisation
   @@index([organizationId])
+  @@index([userId])
 }
 
 model GoogleTokenRefreshHistory {
@@ -1014,7 +1019,7 @@ model Organization {
   EmailTemplate            EmailTemplate[]
   GeneratedDocument        GeneratedDocument[]
   GoogleMailWatch          GoogleMailWatch[]
-  GoogleToken              GoogleToken?
+  GoogleToken              GoogleToken[]
   GoogleVoiceCall          GoogleVoiceCall[]
   GoogleVoiceConfig        GoogleVoiceConfig?
   GoogleVoiceSMS           GoogleVoiceSMS[]
@@ -2052,6 +2057,7 @@ model User {
   GeneratedDocument_GeneratedDocument_createdByToUser GeneratedDocument[]    @relation("GeneratedDocument_createdByToUser")
   GeneratedDocument_GeneratedDocument_sentByToUser    GeneratedDocument[]    @relation("GeneratedDocument_sentByToUser")
   GoogleMailWatch                                     GoogleMailWatch?
+  GoogleToken                                         GoogleToken[]          // Tokens Google par organisation
   GoogleVoiceCall                                     GoogleVoiceCall[]
   GoogleVoiceSMS                                      GoogleVoiceSMS[]
   GoogleWorkspaceUser                                 GoogleWorkspaceUser?

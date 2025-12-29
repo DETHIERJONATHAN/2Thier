@@ -63,14 +63,17 @@ export class GoogleOAuthService {
   }
 
   // Sauvegarder les tokens en fusionnant avec les anciens pour protéger le refresh_token
-  async saveUserTokens(userId: string, organizationId: string, tokens: Credentials) {
+  async saveUserTokens(userId: string, organizationId: string, tokens: Credentials, googleEmail?: string) {
     if (!organizationId) {
       throw new Error("L'ID de l'organisation est requis pour sauvegarder les tokens Google.");
     }
+    if (!userId) {
+      throw new Error("L'ID de l'utilisateur est requis pour sauvegarder les tokens Google.");
+    }
 
-    // 1. Récupérer les tokens existants
+    // 1. Récupérer les tokens existants pour cet utilisateur dans cette organisation
     const existingTokens = await prisma.googleToken.findUnique({
-      where: { organizationId },
+      where: { userId_organizationId: { userId, organizationId } },
     });
 
     // 2. Préparer les données de mise à jour
@@ -81,7 +84,8 @@ export class GoogleOAuthService {
       tokenType: tokens.token_type || 'Bearer',
       expiresAt: tokens.expiry_date ? new Date(tokens.expiry_date) : null,
       scope: tokens.scope,
-      updatedAt: new Date()
+      updatedAt: new Date(),
+      googleEmail: googleEmail || existingTokens?.googleEmail
     };
 
     
@@ -91,16 +95,18 @@ export class GoogleOAuthService {
     // 3. Utiliser upsert pour créer ou mettre à jour
     try {
       await prisma.googleToken.upsert({
-        where: { organizationId },
+        where: { userId_organizationId: { userId, organizationId } },
         update: updateData,
         create: {
           id: crypto.randomUUID(),
+          userId,
           organizationId,
           accessToken: updateData.accessToken,
           refreshToken: updateData.refreshToken,
           tokenType: updateData.tokenType,
           expiresAt: updateData.expiresAt,
           scope: updateData.scope,
+          googleEmail: updateData.googleEmail,
         }
       });
       
@@ -110,9 +116,16 @@ export class GoogleOAuthService {
     }
   }
 
-  // Récupérer les tokens par userId (en passant par l'utilisateur et son organisation)
-  async getUserTokens(userId: string) {
-    // D'abord, récupérer l'utilisateur avec sa relation UserOrganization
+  // Récupérer les tokens par userId et organizationId
+  async getUserTokens(userId: string, organizationId?: string) {
+    // Si organizationId est fourni, recherche directe
+    if (organizationId) {
+      return await prisma.googleToken.findUnique({
+        where: { userId_organizationId: { userId, organizationId } }
+      });
+    }
+
+    // Sinon, récupérer l'organisation par défaut de l'utilisateur
     const userWithOrg = await prisma.user.findUnique({
       where: { id: userId },
       include: { 
@@ -128,16 +141,16 @@ export class GoogleOAuthService {
       return null;
     }
 
-    const organizationId = userWithOrg.UserOrganization[0].organizationId;
+    const defaultOrgId = userWithOrg.UserOrganization[0].organizationId;
 
-    // Puis récupérer les tokens pour cette organisation
+    // Puis récupérer les tokens pour cet utilisateur dans cette organisation
     return await prisma.googleToken.findUnique({
-      where: { organizationId }
+      where: { userId_organizationId: { userId, organizationId: defaultOrgId } }
     });
   }
 
   // Client authentifié avec email administrateur Google Workspace
-  async getAuthenticatedClientForOrganization(organizationId: string): Promise<OAuth2Client | null> {
+  async getAuthenticatedClientForOrganization(organizationId: string, userId?: string): Promise<OAuth2Client | null> {
     // Récupérer l'organisation et sa config Google Workspace
     const organization = await prisma.organization.findUnique({
       where: { id: organizationId },
@@ -156,10 +169,18 @@ export class GoogleOAuthService {
       return null;
     }
 
-    // Récupérer les tokens pour cette organisation
-    const tokens = await prisma.googleToken.findUnique({
-      where: { organizationId: organization.id }
-    });
+    // Récupérer les tokens pour cet utilisateur dans cette organisation
+    let tokens;
+    if (userId) {
+      tokens = await prisma.googleToken.findUnique({
+        where: { userId_organizationId: { userId, organizationId: organization.id } }
+      });
+    } else {
+      // Fallback : prendre le premier token disponible pour cette organisation (legacy)
+      tokens = await prisma.googleToken.findFirst({
+        where: { organizationId: organization.id }
+      });
+    }
 
     if (!tokens) {
       return null;
@@ -192,7 +213,7 @@ export class GoogleOAuthService {
         
         if (newCredentials.access_token && newCredentials.expiry_date) {
           await prisma.googleToken.update({
-            where: { organizationId: organization.id },
+            where: { id: tokens.id },
             data: {
               accessToken: newCredentials.access_token,
               refreshToken: newCredentials.refresh_token || tokens.refreshToken,
@@ -210,11 +231,11 @@ export class GoogleOAuthService {
     return adminOAuth2Client;
   }
 
-  // Client authentifié
-  async getAuthenticatedClient(userId: string): Promise<OAuth2Client | null> {
+  // Client authentifié pour un utilisateur
+  async getAuthenticatedClient(userId: string, organizationId?: string): Promise<OAuth2Client | null> {
     
     
-    const tokens = await this.getUserTokens(userId);
+    const tokens = await this.getUserTokens(userId, organizationId);
     if (!tokens) {
       
       return null;
@@ -308,8 +329,9 @@ export class GoogleOAuthService {
 
     const organizationId = userWithOrg.UserOrganization[0].organizationId;
 
+    // Utiliser la clé composite userId + organizationId
     await prisma.googleToken.update({
-      where: { organizationId },
+      where: { userId_organizationId: { userId, organizationId } },
       data: {
         accessToken: tokenData.accessToken,
         refreshToken: tokenData.refreshToken,
@@ -352,8 +374,10 @@ export class GoogleOAuthService {
 
     if (userWithOrg?.UserOrganization[0]) {
       const organizationId = userWithOrg.UserOrganization[0].organizationId;
-      // Supprimer de la base de données avec organizationId
-      await prisma.googleToken.delete({ where: { organizationId } });
+      // Supprimer de la base de données avec la clé composite
+      await prisma.googleToken.delete({ 
+        where: { userId_organizationId: { userId, organizationId } } 
+      });
       
     } else {
       

@@ -16,15 +16,30 @@ export interface RefreshTokenResult {
 
 /**
  * Vérifie et rafraîchit automatiquement un token Google si nécessaire
+ * @param organizationId L'ID de l'organisation
+ * @param userId L'ID de l'utilisateur (requis pour la clé composite)
  */
-export async function refreshGoogleTokenIfNeeded(organizationId: string): Promise<RefreshTokenResult> {
+export async function refreshGoogleTokenIfNeeded(organizationId: string, userId?: string): Promise<RefreshTokenResult> {
   try {
-    console.log('[REFRESH-TOKEN] 🔍 Vérification token pour organisation:', organizationId);
+    console.log('[REFRESH-TOKEN] 🔍 Vérification token pour organisation:', organizationId, 'userId:', userId);
 
     // 1. Récupérer le token actuel
-    const googleToken = await prisma.googleToken.findUnique({
-      where: { organizationId }
-    });
+    let googleToken;
+    
+    if (userId) {
+      // Nouveau modèle : clé composite userId + organizationId
+      googleToken = await prisma.googleToken.findUnique({
+        where: { 
+          userId_organizationId: { userId, organizationId }
+        }
+      });
+    } else {
+      // Fallback legacy : chercher le premier token pour cette organisation
+      console.log('[REFRESH-TOKEN] ⚠️ userId non fourni, fallback sur findFirst');
+      googleToken = await prisma.googleToken.findFirst({
+        where: { organizationId }
+      });
+    }
 
     if (!googleToken) {
       console.log('[REFRESH-TOKEN] ❌ Aucun token trouvé pour l\'organisation:', organizationId);
@@ -112,18 +127,41 @@ export async function refreshGoogleTokenIfNeeded(organizationId: string): Promis
       const newExpiresAt = credentials.expiry_date ? new Date(credentials.expiry_date) : null;
       
       console.log('[REFRESH-TOKEN] 💾 Sauvegarde du nouveau token...');
-      await prisma.googleToken.update({
-        where: { organizationId },
-        data: {
-          accessToken: credentials.access_token!,
-          expiresAt: newExpiresAt,
-          updatedAt: new Date(),
-          // Garder l'ancien refresh token sauf si un nouveau est fourni
-          ...(credentials.refresh_token && {
-            refreshToken: credentials.refresh_token
-          })
-        }
-      });
+      
+      // Utiliser la clé composite pour la mise à jour
+      if (userId) {
+        await prisma.googleToken.update({
+          where: { 
+            userId_organizationId: { userId, organizationId }
+          },
+          data: {
+            accessToken: credentials.access_token!,
+            expiresAt: newExpiresAt,
+            updatedAt: new Date(),
+            lastRefreshAt: new Date(),
+            refreshCount: { increment: 1 },
+            // Garder l'ancien refresh token sauf si un nouveau est fourni
+            ...(credentials.refresh_token && {
+              refreshToken: credentials.refresh_token
+            })
+          }
+        });
+      } else if (googleToken.id) {
+        // Fallback: utiliser l'ID du token
+        await prisma.googleToken.update({
+          where: { id: googleToken.id },
+          data: {
+            accessToken: credentials.access_token!,
+            expiresAt: newExpiresAt,
+            updatedAt: new Date(),
+            lastRefreshAt: new Date(),
+            refreshCount: { increment: 1 },
+            ...(credentials.refresh_token && {
+              refreshToken: credentials.refresh_token
+            })
+          }
+        });
+      }
 
       console.log('[REFRESH-TOKEN] 💾 Token mis à jour en base de données');
 
