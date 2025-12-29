@@ -1,8 +1,11 @@
 import React from 'react';
-import { Modal, Form, Input, Select, Button, message } from 'antd';
+import { Modal, Form, Input, Select, Button, message, Checkbox, Alert, Space } from 'antd';
+import { MailOutlined } from '@ant-design/icons';
 import { useAuthenticatedApi } from '../../hooks/useAuthenticatedApi';
 import { useAuth } from '../../auth/useAuth';
 import { Role } from '../../types';
+
+const { Text } = Alert;
 
 interface InvitationModalProps {
   visible: boolean;
@@ -17,7 +20,11 @@ const InvitationModal: React.FC<InvitationModalProps> = ({ visible, onCancel, on
   const { currentOrganization } = useAuth();
   const [loading, setLoading] = React.useState(false);
 
-  const handleInvite = async (values: { email: string; roleName: string }) => {
+  const handleInvite = async (values: { 
+    email: string; 
+    roleName: string;
+    createWorkspaceAccount?: boolean;
+  }) => {
     if (!currentOrganization?.id) {
       message.error("Aucune organisation sélectionnée");
       return;
@@ -26,11 +33,17 @@ const InvitationModal: React.FC<InvitationModalProps> = ({ visible, onCancel, on
     setLoading(true);
     try {
       const response = await api.post('/api/users/invitations', {
-        ...values,
-        organizationId: currentOrganization.id
+        email: values.email,
+        roleName: values.roleName,
+        organizationId: currentOrganization.id,
+        createWorkspaceAccount: values.createWorkspaceAccount || false,
       });
+      
       if (response.success) {
-        message.success(response.message || "Invitation envoyée avec succès !");
+        const successMsg = values.createWorkspaceAccount
+          ? "Invitation envoyée ! Un compte Google Workspace sera créé automatiquement lors de l'acceptation."
+          : "Invitation envoyée avec succès !";
+        message.success(successMsg);
         onSuccess();
         form.resetFields();
       } else {
@@ -75,6 +88,32 @@ const InvitationModal: React.FC<InvitationModalProps> = ({ visible, onCancel, on
               <Select.Option key={role.id} value={role.name}>{role.label || role.name}</Select.Option>
             ))}
           </Select>
+        </Form.Item>
+
+        <Form.Item 
+          name="createWorkspaceAccount" 
+          valuePropName="checked"
+          tooltip="Si coché, un compte Google Workspace sera créé automatiquement avec l'adresse prénom.nom@votredomaine.be lors de l'acceptation de l'invitation"
+        >
+          <Checkbox>
+            <Space>
+              <MailOutlined />
+              <span>Créer automatiquement un compte Google Workspace</span>
+            </Space>
+          </Checkbox>
+        </Form.Item>
+
+        <Form.Item noStyle shouldUpdate={(prev, curr) => prev.createWorkspaceAccount !== curr.createWorkspaceAccount}>
+          {({ getFieldValue }) => 
+            getFieldValue('createWorkspaceAccount') ? (
+              <Alert
+                type="info"
+                message="L'utilisateur recevra un email avec ses identifiants Google Workspace après acceptation"
+                showIcon
+                className="mb-4"
+              />
+            ) : null
+          }
         </Form.Item>
       </Form>
     </Modal>

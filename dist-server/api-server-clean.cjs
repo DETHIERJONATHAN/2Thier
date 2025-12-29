@@ -166,8 +166,8 @@ function encrypt(text) {
     console.warn("[CRYPTO] encrypt() appel\xE9 sans cl\xE9 valide en environnement non-production. Retour en clair.");
     return text;
   }
-  const iv = crypto.randomBytes(IV_LENGTH);
-  const cipher = crypto.createCipheriv(ALGORITHM, key, iv);
+  const iv = crypto2.randomBytes(IV_LENGTH);
+  const cipher = crypto2.createCipheriv(ALGORITHM, key, iv);
   let encrypted = cipher.update(text, "utf8", "hex");
   encrypted += cipher.final("hex");
   return iv.toString("hex") + ":" + encrypted;
@@ -191,7 +191,7 @@ function decrypt(text) {
     }
     const iv = Buffer.from(ivHex, "hex");
     const encryptedText = textParts.join(":");
-    const decipher = crypto.createDecipheriv(ALGORITHM, key, iv);
+    const decipher = crypto2.createDecipheriv(ALGORITHM, key, iv);
     let decrypted = decipher.update(encryptedText, "hex", "utf8");
     decrypted += decipher.final("utf8");
     return decrypted;
@@ -200,10 +200,10 @@ function decrypt(text) {
     return text;
   }
 }
-var crypto, ALGORITHM, IV_LENGTH, ENCRYPTION_KEY, key;
+var crypto2, ALGORITHM, IV_LENGTH, ENCRYPTION_KEY, key;
 var init_crypto = __esm({
   "src/utils/crypto.ts"() {
-    crypto = __toESM(require("crypto"), 1);
+    crypto2 = __toESM(require("crypto"), 1);
     ALGORITHM = "aes-256-cbc";
     IV_LENGTH = 16;
     ENCRYPTION_KEY = process.env.ENCRYPTION_KEY;
@@ -4030,7 +4030,7 @@ __export(api_server_clean_exports, {
 });
 module.exports = __toCommonJS(api_server_clean_exports);
 var import_dotenv = __toESM(require("dotenv"), 1);
-var import_express92 = __toESM(require("express"), 1);
+var import_express93 = __toESM(require("express"), 1);
 var import_path7 = __toESM(require("path"), 1);
 var import_fs7 = __toESM(require("fs"), 1);
 var import_cors = __toESM(require("cors"), 1);
@@ -4042,7 +4042,7 @@ var import_compression = __toESM(require("compression"), 1);
 var import_express_winston = __toESM(require("express-winston"), 1);
 
 // src/routes/index.ts
-var import_express73 = require("express");
+var import_express74 = require("express");
 
 // src/routes/authRoutes.ts
 var import_express = require("express");
@@ -7279,6 +7279,7 @@ async function impersonationMiddleware(req2, res, next) {
 
 // src/routes/misc.ts
 init_prisma();
+var import_crypto2 = require("crypto");
 var router2 = (0, import_express3.Router)();
 var userWithOrgsArgs = {
   include: {
@@ -7296,27 +7297,131 @@ var userWithOrgsArgs = {
   }
 };
 router2.post("/register", async (req2, res) => {
-  const { email, password, firstName, lastName } = req2.body;
+  const {
+    email,
+    password,
+    firstName,
+    lastName,
+    registrationType = "freelance",
+    // Par défaut: utilisateur libre
+    organizationName,
+    // Pour createOrg
+    domain,
+    // Pour createOrg (optionnel)
+    organizationId,
+    // Pour joinOrg
+    message
+    // Pour joinOrg (message de demande)
+  } = req2.body;
   if (!email || !password || !firstName) {
     return res.status(400).json({ error: "Email, mot de passe et pr\xE9nom sont requis" });
   }
+  if (registrationType === "createOrg" && !organizationName) {
+    return res.status(400).json({ error: "Le nom de l'organisation est requis pour cr\xE9er une organisation" });
+  }
+  if (registrationType === "joinOrg" && !organizationId) {
+    return res.status(400).json({ error: "L'ID de l'organisation est requis pour rejoindre une organisation" });
+  }
   try {
     const hashedPassword = await import_bcryptjs3.default.hash(password, 10);
-    const user = await db.user.create({
-      data: {
-        email,
-        passwordHash: hashedPassword,
-        firstName,
-        lastName,
-        status: "active",
-        role: "user"
+    const result = await db.$transaction(async (tx) => {
+      const userId = (0, import_crypto2.randomUUID)();
+      const user = await tx.user.create({
+        data: {
+          id: userId,
+          email,
+          passwordHash: hashedPassword,
+          firstName,
+          lastName,
+          status: "active",
+          role: "user"
+        }
+      });
+      let organization = null;
+      let joinRequest = null;
+      if (registrationType === "createOrg") {
+        const orgId = (0, import_crypto2.randomUUID)();
+        organization = await tx.organization.create({
+          data: {
+            id: orgId,
+            name: organizationName.trim(),
+            description: domain ? `Domaine: ${domain}` : void 0,
+            status: "active"
+          }
+        });
+        const adminRole = await tx.role.create({
+          data: {
+            id: (0, import_crypto2.randomUUID)(),
+            name: "admin",
+            label: "Administrateur",
+            organizationId: orgId
+          }
+        });
+        await tx.role.create({
+          data: {
+            id: (0, import_crypto2.randomUUID)(),
+            name: "user",
+            label: "Utilisateur",
+            organizationId: orgId
+          }
+        });
+        await tx.userOrganization.create({
+          data: {
+            id: (0, import_crypto2.randomUUID)(),
+            userId: user.id,
+            organizationId: orgId,
+            roleId: adminRole.id,
+            status: import_client2.UserOrganizationStatus.ACTIVE
+          }
+        });
+        console.log(`[Register] Utilisateur ${email} a cr\xE9\xE9 l'organisation "${organizationName}" (${orgId})`);
+      } else if (registrationType === "joinOrg") {
+        const targetOrg = await tx.organization.findUnique({
+          where: { id: organizationId }
+        });
+        if (!targetOrg) {
+          throw new Error("Organisation non trouv\xE9e");
+        }
+        joinRequest = await tx.joinRequest.create({
+          data: {
+            id: (0, import_crypto2.randomUUID)(),
+            userId: user.id,
+            organizationId,
+            message: message?.trim() || null,
+            status: import_client2.JoinRequestStatus.PENDING
+          },
+          include: {
+            Organization: { select: { name: true } }
+          }
+        });
+        console.log(`[Register] Utilisateur ${email} a envoy\xE9 une demande \xE0 "${targetOrg.name}" (${organizationId})`);
+      } else {
+        console.log(`[Register] Nouvel utilisateur libre: ${email}`);
       }
+      return { user, organization, joinRequest };
     });
-    res.status(201).json({ success: true, id: user.id, email: user.email });
+    let successMessage = "Inscription r\xE9ussie !";
+    if (registrationType === "createOrg") {
+      successMessage = `Organisation "${organizationName}" cr\xE9\xE9e avec succ\xE8s. Vous en \xEAtes l'administrateur.`;
+    } else if (registrationType === "joinOrg") {
+      successMessage = `Demande d'adh\xE9sion envoy\xE9e. En attente d'approbation de l'organisation.`;
+    }
+    res.status(201).json({
+      success: true,
+      id: result.user.id,
+      email: result.user.email,
+      registrationType,
+      organization: result.organization ? { id: result.organization.id, name: result.organization.name } : null,
+      joinRequest: result.joinRequest ? { id: result.joinRequest.id, status: result.joinRequest.status } : null,
+      message: successMessage
+    });
   } catch (error) {
     console.error("[API][register] Erreur lors de l'inscription:", error);
     if (error instanceof import_client2.Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
       return res.status(409).json({ error: "Cette adresse email est d\xE9j\xE0 utilis\xE9e." });
+    }
+    if (error instanceof Error) {
+      return res.status(400).json({ error: error.message });
     }
     res.status(500).json({ error: "Erreur lors de la cr\xE9ation de l'utilisateur" });
   }
@@ -8318,8 +8423,8 @@ router5.post("/categories", requireRole2(["admin", "super_admin"]), async (req2,
       return;
     }
     console.log("[ADMIN-MODULES] POST /categories - Cr\xE9ation category:", { name, icon, organizationId });
-    const { randomUUID: randomUUID9 } = await import("crypto");
-    const categoryId = randomUUID9();
+    const { randomUUID: randomUUID10 } = await import("crypto");
+    const categoryId = randomUUID10();
     const now = /* @__PURE__ */ new Date();
     const category = await db.category.create({
       data: {
@@ -9225,7 +9330,7 @@ var import_express10 = require("express");
 init_database();
 var import_zod2 = require("zod");
 var import_express_rate_limit = __toESM(require("express-rate-limit"), 1);
-var import_crypto2 = require("crypto");
+var import_crypto3 = require("crypto");
 var router9 = (0, import_express10.Router)();
 var prisma7 = db;
 var sanitizeString = (input) => {
@@ -9481,6 +9586,43 @@ var handleZodError = (error) => {
     errors: error.errors.map((e) => `${e.path.join(".")}: ${e.message}`)
   };
 };
+router9.get("/public", async (_req, res) => {
+  try {
+    const organizations = await prisma7.organization.findMany({
+      where: {
+        status: { in: ["ACTIVE", "active"] }
+      },
+      select: {
+        id: true,
+        name: true,
+        description: true,
+        // Optionnel: nombre de membres pour affichage
+        _count: {
+          select: {
+            UserOrganization: {
+              where: { status: "ACTIVE" }
+            }
+          }
+        }
+      },
+      orderBy: { name: "asc" }
+    });
+    const publicOrgs = organizations.map((org) => ({
+      id: org.id,
+      name: org.name,
+      description: org.description || void 0,
+      memberCount: org._count?.UserOrganization || 0
+    }));
+    console.log(`[Organizations] /public - ${publicOrgs.length} organisations retourn\xE9es`);
+    res.json({
+      success: true,
+      data: publicOrgs
+    });
+  } catch (error) {
+    console.error("[Organizations] Erreur /public:", error);
+    res.status(500).json({ success: false, error: "Erreur serveur" });
+  }
+});
 router9.use(authMiddleware);
 router9.use(organizationsRateLimit);
 router9.get("/active", async (req2, res) => {
@@ -9714,7 +9856,7 @@ router9.post("/", organizationsCreateRateLimit, requireRole2(["super_admin"]), a
       });
     }
     const now = /* @__PURE__ */ new Date();
-    const generatedId = (0, import_crypto2.randomUUID)();
+    const generatedId = (0, import_crypto3.randomUUID)();
     const newOrganization = await prisma7.$transaction(async (tx) => {
       const org = await tx.organization.create({
         data: {
@@ -20576,7 +20718,7 @@ var import_express40 = __toESM(require("express"), 1);
 var import_fs5 = __toESM(require("fs"), 1);
 var import_path4 = __toESM(require("path"), 1);
 init_prisma();
-var import_crypto7 = require("crypto");
+var import_crypto8 = require("crypto");
 var geminiSingleton = new GoogleGeminiService_default();
 var router39 = import_express40.default.Router();
 router39.use(authMiddleware);
@@ -20650,7 +20792,7 @@ async function logAiUsage(params) {
     };
     await db.aiUsageLog?.create?.({
       data: {
-        id: (0, import_crypto7.randomUUID)(),
+        id: (0, import_crypto8.randomUUID)(),
         organizationId: organizationId || void 0,
         userId: userId || void 0,
         type,
@@ -20666,7 +20808,7 @@ async function logAiUsage(params) {
     }).catch(async () => {
       await db.$executeRawUnsafe(
         'INSERT INTO "AiUsageLog" (id, "userId", "organizationId", type, model, "tokensPrompt", "tokensOutput", "latencyMs", success, "errorCode", "errorMessage", meta) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12);',
-        (0, import_crypto7.randomUUID)(),
+        (0, import_crypto8.randomUUID)(),
         userId,
         organizationId,
         type,
@@ -22330,7 +22472,7 @@ var ai_default = router39;
 var import_express41 = __toESM(require("express"), 1);
 var import_fs6 = __toESM(require("fs"), 1);
 var import_path5 = __toESM(require("path"), 1);
-var import_crypto8 = __toESM(require("crypto"), 1);
+var import_crypto9 = __toESM(require("crypto"), 1);
 var router40 = import_express41.default.Router();
 router40.use(authenticateToken);
 var ALLOWED_ROOTS = ["src", "prisma"];
@@ -22414,7 +22556,7 @@ router40.get("/code/file", (req2, res) => {
     const content = import_fs6.default.readFileSync(target, "utf8");
     const totalBytes = Buffer.byteLength(content, "utf8");
     const lines = content.split(/\r?\n/);
-    const etag = 'W/"' + import_crypto8.default.createHash("sha256").update(content).digest("hex").slice(0, 16) + '"';
+    const etag = 'W/"' + import_crypto9.default.createHash("sha256").update(content).digest("hex").slice(0, 16) + '"';
     const ifNoneMatch = req2.headers["if-none-match"];
     if (ifNoneMatch && ifNoneMatch === etag) {
       res.status(304).end();
@@ -27982,7 +28124,7 @@ function getValidationErrorMessage(parentType, parentSubType, childType, childSu
 }
 
 // src/components/TreeBranchLeaf/treebranchleaf-new/api/treebranchleaf-routes.ts
-var import_crypto10 = require("crypto");
+var import_crypto11 = require("crypto");
 init_operation_interpreter();
 
 // src/components/TreeBranchLeaf/treebranchleaf-new/api/registry/repeat-id-registry.ts
@@ -28141,8 +28283,8 @@ function getOrgId(req2) {
   const headerOrg = req2.headers?.["x-organization-id"] || req2.headers?.["x-organization"] || req2.headers?.["organization-id"];
   return user.organizationId || headerOrg || null;
 }
-function registerSumDisplayFieldRoutes(router89) {
-  router89.post("/trees/:treeId/nodes/:nodeId/sum-display-field", async (req2, res) => {
+function registerSumDisplayFieldRoutes(router90) {
+  router90.post("/trees/:treeId/nodes/:nodeId/sum-display-field", async (req2, res) => {
     try {
       const { treeId, nodeId } = req2.params;
       const organizationId = getOrgId(req2);
@@ -28399,7 +28541,7 @@ function registerSumDisplayFieldRoutes(router89) {
       res.status(500).json({ error: "Erreur lors de la cr\xC3\u0192\xC2\xA9ation du champ Total", details: errMsg });
     }
   });
-  router89.delete("/trees/:treeId/nodes/:nodeId/sum-display-field", async (req2, res) => {
+  router90.delete("/trees/:treeId/nodes/:nodeId/sum-display-field", async (req2, res) => {
     try {
       const { treeId, nodeId } = req2.params;
       const organizationId = getOrgId(req2);
@@ -32669,7 +32811,7 @@ async function deepCopyNodeInternal(prisma49, req2, nodeId, opts) {
 var import_express56 = require("express");
 var import_client5 = require("@prisma/client");
 init_database();
-var import_crypto9 = require("crypto");
+var import_crypto10 = require("crypto");
 var router55 = (0, import_express56.Router)();
 var prisma29 = db;
 function getAuthCtx2(req2) {
@@ -32714,7 +32856,7 @@ router55.post("/nodes/:nodeId/tables", async (req2, res) => {
       });
       finalName = `${name} (${existingCount + 1})`;
     }
-    const tableId = (0, import_crypto9.randomUUID)();
+    const tableId = (0, import_crypto10.randomUUID)();
     const tableData = {
       id: tableId,
       nodeId,
@@ -33395,7 +33537,7 @@ var computeLogicVersion = () => {
     entries: stats.entries,
     parseCount: stats.parseCount
   });
-  const version = (0, import_crypto10.createHash)("sha1").update(seed).digest("hex").slice(0, 8);
+  const version = (0, import_crypto11.createHash)("sha1").update(seed).digest("hex").slice(0, 8);
   return { version, metrics, stats };
 };
 function getAuthCtx3(req2) {
@@ -33751,7 +33893,7 @@ router56.post("/trees", async (req2, res) => {
     if (!targetOrgId) {
       return res.status(400).json({ error: "organizationId requis (en-t\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xAAte x-organization-id ou dans le corps)" });
     }
-    const id = (0, import_crypto10.randomUUID)();
+    const id = (0, import_crypto11.randomUUID)();
     const tree = await prisma30.treeBranchLeafTree.create({
       data: {
         id,
@@ -34228,8 +34370,8 @@ router56.post("/trees/:treeId/nodes", async (req2, res) => {
         });
       }
     }
-    const { randomUUID: randomUUID9 } = await import("crypto");
-    const nodeId = randomUUID9();
+    const { randomUUID: randomUUID10 } = await import("crypto");
+    const nodeId = randomUUID10();
     const node = await prisma30.treeBranchLeafNode.create({
       data: {
         id: nodeId,
@@ -35934,7 +36076,7 @@ router56.put("/trees/:treeId/nodes/:nodeId/data", async (req2, res) => {
           updatedAt: /* @__PURE__ */ new Date()
         },
         create: {
-          id: (0, import_crypto10.randomUUID)(),
+          id: (0, import_crypto11.randomUUID)(),
           nodeId: targetNodeId,
           exposedKey: safeExposedKey || `var_${String(nodeId).slice(0, 4)}`,
           displayName,
@@ -36376,7 +36518,7 @@ router56.post("/nodes/:nodeId/formulas", async (req2, res) => {
     }
     const formula = await prisma30.treeBranchLeafNodeFormula.create({
       data: {
-        id: (0, import_crypto10.randomUUID)(),
+        id: (0, import_crypto11.randomUUID)(),
         nodeId,
         organizationId: organizationId || null,
         name: uniqueName,
@@ -36792,7 +36934,7 @@ router56.post("/nodes/:nodeId/conditions", async (req2, res) => {
     }
     const condition = await prisma30.treeBranchLeafNodeCondition.create({
       data: {
-        id: (0, import_crypto10.randomUUID)(),
+        id: (0, import_crypto11.randomUUID)(),
         nodeId,
         organizationId: organizationId || null,
         name: uniqueName,
@@ -37549,7 +37691,7 @@ router56.post("/nodes/:nodeId/table/generate-selects", async (req2, res) => {
     let insertOrder = siblingsCount;
     const now = /* @__PURE__ */ new Date();
     for (const item of toCreate) {
-      const newNodeId = (0, import_crypto10.randomUUID)();
+      const newNodeId = (0, import_crypto11.randomUUID)();
       const nodeMetadata = {
         generatedFrom: "table_lookup",
         tableNodeId: baseNode.id,
@@ -37588,7 +37730,7 @@ router56.post("/nodes/:nodeId/table/generate-selects", async (req2, res) => {
       });
       await prisma30.treeBranchLeafSelectConfig.create({
         data: {
-          id: (0, import_crypto10.randomUUID)(),
+          id: (0, import_crypto11.randomUUID)(),
           nodeId: newNode.id,
           options: [],
           multiple: false,
@@ -39127,7 +39269,7 @@ router56.post("/submissions", async (req2, res) => {
       const now = /* @__PURE__ */ new Date();
       const created = await prisma30.treeBranchLeafSubmission.create({
         data: {
-          id: (0, import_crypto10.randomUUID)(),
+          id: (0, import_crypto11.randomUUID)(),
           treeId: normalizedTreeId,
           userId: safeUserId,
           leadId: normalizedLeadId,
@@ -39153,7 +39295,7 @@ router56.post("/submissions", async (req2, res) => {
           if (toCreate.length > 0) {
             await tx.treeBranchLeafSubmissionData.createMany({
               data: toCreate.map(({ nodeId, value: raw }) => ({
-                id: (0, import_crypto10.randomUUID)(),
+                id: (0, import_crypto11.randomUUID)(),
                 submissionId: created.id,
                 nodeId,
                 value: raw == null ? null : String(raw),
@@ -39362,7 +39504,7 @@ router56.get("/nodes/:fieldId/select-config", async (req2, res) => {
         if (isRowBased || isColumnBased) {
           selectConfig = await prisma30.treeBranchLeafSelectConfig.create({
             data: {
-              id: (0, import_crypto10.randomUUID)(),
+              id: (0, import_crypto11.randomUUID)(),
               nodeId: fieldId,
               options: [],
               multiple: false,
@@ -39412,7 +39554,7 @@ router56.post("/nodes/:fieldId/select-config", async (req2, res) => {
     const selectConfig = await prisma30.treeBranchLeafSelectConfig.upsert({
       where: { nodeId: fieldId },
       create: {
-        id: (0, import_crypto10.randomUUID)(),
+        id: (0, import_crypto11.randomUUID)(),
         nodeId: fieldId,
         options: [],
         multiple: false,
@@ -39487,7 +39629,7 @@ router56.get("/nodes/:nodeId/table/lookup", async (req2, res) => {
         await prisma30.treeBranchLeafSelectConfig.upsert({
           where: { nodeId },
           create: {
-            id: (0, import_crypto10.randomUUID)(),
+            id: (0, import_crypto11.randomUUID)(),
             nodeId,
             options: [],
             multiple: false,
@@ -39692,7 +39834,7 @@ router56.get("/nodes/:nodeId/table/lookup", async (req2, res) => {
           await prisma30.treeBranchLeafSelectConfig.upsert({
             where: { nodeId },
             create: {
-              id: (0, import_crypto10.randomUUID)(),
+              id: (0, import_crypto11.randomUUID)(),
               nodeId,
               options: [],
               multiple: false,
@@ -39818,7 +39960,7 @@ router56.put("/nodes/:nodeId/capabilities/table", async (req2, res) => {
         await prisma30.treeBranchLeafSelectConfig.upsert({
           where: { nodeId },
           create: {
-            id: (0, import_crypto10.randomUUID)(),
+            id: (0, import_crypto11.randomUUID)(),
             nodeId,
             options: [],
             multiple: false,
@@ -40032,7 +40174,7 @@ router56.put("/submissions/:id", async (req2, res) => {
               }
             }
             return {
-              id: (0, import_crypto10.randomUUID)(),
+              id: (0, import_crypto11.randomUUID)(),
               submissionId: id,
               nodeId,
               value: valueStr,
@@ -40182,7 +40324,7 @@ router56.put("/submissions/:id", async (req2, res) => {
         const allRows2 = await tx.treeBranchLeafSubmissionData.findMany({ where: { submissionId: id }, select: { nodeId: true, value: true } });
         const valuesMapTxAll = new Map(allRows2.map((r) => [r.nodeId, r.value == null ? null : String(r.value)]));
         const missingRows = await Promise.all(missingVars.map(async (v) => ({
-          id: (0, import_crypto10.randomUUID)(),
+          id: (0, import_crypto11.randomUUID)(),
           submissionId: id,
           nodeId: v.nodeId,
           value: null,
@@ -40621,7 +40763,7 @@ router56.post("/submissions/stage", async (req2, res) => {
       }
       stage = await prisma30.treeBranchLeafStage.create({
         data: {
-          id: (0, import_crypto10.randomUUID)(),
+          id: (0, import_crypto11.randomUUID)(),
           treeId,
           submissionId,
           leadId,
@@ -40797,7 +40939,7 @@ router56.post("/submissions/stage/commit", async (req2, res) => {
       const result = await prisma30.$transaction(async (tx) => {
         const submission = await tx.treeBranchLeafSubmission.create({
           data: {
-            id: (0, import_crypto10.randomUUID)(),
+            id: (0, import_crypto11.randomUUID)(),
             treeId: stage.treeId,
             userId: stage.userId,
             leadId: stage.leadId,
@@ -40811,7 +40953,7 @@ router56.post("/submissions/stage/commit", async (req2, res) => {
         if (results.length > 0) {
           await tx.treeBranchLeafSubmissionData.createMany({
             data: results.map((r) => ({
-              id: (0, import_crypto10.randomUUID)(),
+              id: (0, import_crypto11.randomUUID)(),
               submissionId: submission.id,
               nodeId: r.nodeId,
               value: String(r.operationResult || ""),
@@ -40826,7 +40968,7 @@ router56.post("/submissions/stage/commit", async (req2, res) => {
         }
         await tx.treeBranchLeafSubmissionVersion.create({
           data: {
-            id: (0, import_crypto10.randomUUID)(),
+            id: (0, import_crypto11.randomUUID)(),
             submissionId: submission.id,
             version: 1,
             formData: stage.formData,
@@ -40953,7 +41095,7 @@ router56.post("/submissions/stage/commit", async (req2, res) => {
         if (results.length > 0) {
           await tx.treeBranchLeafSubmissionData.createMany({
             data: results.map((r) => ({
-              id: (0, import_crypto10.randomUUID)(),
+              id: (0, import_crypto11.randomUUID)(),
               submissionId: updated.id,
               nodeId: r.nodeId,
               value: String(r.operationResult || ""),
@@ -40968,7 +41110,7 @@ router56.post("/submissions/stage/commit", async (req2, res) => {
         }
         await tx.treeBranchLeafSubmissionVersion.create({
           data: {
-            id: (0, import_crypto10.randomUUID)(),
+            id: (0, import_crypto11.randomUUID)(),
             submissionId: updated.id,
             version: nextVersion,
             formData: stage.formData,
@@ -41151,7 +41293,7 @@ router56.post("/submissions/:id/restore/:version", async (req2, res) => {
     }
     const stage = await prisma30.treeBranchLeafStage.create({
       data: {
-        id: (0, import_crypto10.randomUUID)(),
+        id: (0, import_crypto11.randomUUID)(),
         treeId: submission.treeId,
         submissionId: id,
         leadId: submission.leadId || "unknown",
@@ -46925,7 +47067,7 @@ var dispatch_default = router66;
 
 // src/routes/integrationsStatus.ts
 var import_express68 = require("express");
-var import_crypto11 = require("crypto");
+var import_crypto12 = require("crypto");
 var import_express_rate_limit13 = __toESM(require("express-rate-limit"), 1);
 init_database();
 var router67 = (0, import_express68.Router)();
@@ -46988,7 +47130,7 @@ router67.post("/ad-platform/connect", requireRole2(["admin", "super_admin"]), as
     } else {
       rec = await prisma37.adPlatformIntegration.create({
         data: {
-          id: (0, import_crypto11.randomUUID)(),
+          id: (0, import_crypto12.randomUUID)(),
           organizationId,
           platform,
           name: name || platform,
@@ -47046,7 +47188,7 @@ var import_express69 = require("express");
 init_database();
 var import_axios2 = __toESM(require("axios"), 1);
 var import_googleapis8 = require("googleapis");
-var import_crypto12 = require("crypto");
+var import_crypto13 = require("crypto");
 
 // src/services/adPlatformService.ts
 init_prisma();
@@ -47864,7 +48006,7 @@ function sanitizeClientValue(raw) {
 function fingerprintSecret(secret) {
   if (!secret) return null;
   try {
-    const hex = (0, import_crypto12.createHash)("sha256").update(secret).digest("hex");
+    const hex = (0, import_crypto13.createHash)("sha256").update(secret).digest("hex");
     return hex.slice(0, 12);
   } catch {
     return null;
@@ -47964,7 +48106,7 @@ router68.get("/advertising/oauth/:platform/callback", async (req2, res) => {
       }
       const created = await prisma38.adPlatformIntegration.create({
         data: {
-          id: (0, import_crypto12.randomUUID)(),
+          id: (0, import_crypto13.randomUUID)(),
           organizationId,
           platform,
           name: data.name || platform,
@@ -52567,8 +52709,252 @@ router71.post("/sync-documents", async (req2, res) => {
 });
 var sync_temp_default = router71;
 
+// src/routes/join-requests.ts
+var import_express73 = require("express");
+init_database();
+var import_client6 = require("@prisma/client");
+var router72 = (0, import_express73.Router)();
+router72.post("/", authMiddleware, async (req2, res) => {
+  try {
+    const userId = req2.user?.userId;
+    const { organizationId, message } = req2.body;
+    if (!userId) {
+      return res.status(401).json({ success: false, error: "Non authentifi\xE9" });
+    }
+    if (!organizationId) {
+      return res.status(400).json({ success: false, error: "organizationId requis" });
+    }
+    const organization = await db.organization.findUnique({
+      where: { id: organizationId }
+    });
+    if (!organization) {
+      return res.status(404).json({ success: false, error: "Organisation non trouv\xE9e" });
+    }
+    const existingMembership = await db.userOrganization.findFirst({
+      where: { userId, organizationId }
+    });
+    if (existingMembership) {
+      return res.status(409).json({
+        success: false,
+        error: "Vous \xEAtes d\xE9j\xE0 membre de cette organisation"
+      });
+    }
+    const existingRequest = await db.joinRequest.findUnique({
+      where: { userId_organizationId: { userId, organizationId } }
+    });
+    if (existingRequest) {
+      return res.status(409).json({
+        success: false,
+        error: "Une demande existe d\xE9j\xE0 pour cette organisation",
+        status: existingRequest.status
+      });
+    }
+    const joinRequest = await db.joinRequest.create({
+      data: {
+        userId,
+        organizationId,
+        message: message?.trim() || null,
+        status: import_client6.JoinRequestStatus.PENDING
+      },
+      include: {
+        Organization: { select: { id: true, name: true } }
+      }
+    });
+    console.log(`[JoinRequest] Nouvelle demande cr\xE9\xE9e: user=${userId} -> org=${organizationId}`);
+    res.status(201).json({
+      success: true,
+      data: joinRequest,
+      message: "Demande d'adh\xE9sion envoy\xE9e avec succ\xE8s"
+    });
+  } catch (error) {
+    console.error("[JoinRequest] Erreur cr\xE9ation:", error);
+    res.status(500).json({ success: false, error: "Erreur serveur" });
+  }
+});
+router72.get("/my-requests", authMiddleware, async (req2, res) => {
+  try {
+    const userId = req2.user?.userId;
+    if (!userId) {
+      return res.status(401).json({ success: false, error: "Non authentifi\xE9" });
+    }
+    const requests = await db.joinRequest.findMany({
+      where: { userId },
+      include: {
+        Organization: { select: { id: true, name: true, description: true } }
+      },
+      orderBy: { createdAt: "desc" }
+    });
+    res.json({ success: true, data: requests });
+  } catch (error) {
+    console.error("[JoinRequest] Erreur r\xE9cup\xE9ration:", error);
+    res.status(500).json({ success: false, error: "Erreur serveur" });
+  }
+});
+router72.get("/pending", authMiddleware, requireRole2(["admin", "super_admin"]), async (req2, res) => {
+  try {
+    const organizationId = req2.user?.organizationId;
+    const isSuperAdmin2 = req2.user?.role === "super_admin";
+    const whereClause = isSuperAdmin2 ? { status: import_client6.JoinRequestStatus.PENDING } : { organizationId, status: import_client6.JoinRequestStatus.PENDING };
+    if (!isSuperAdmin2 && !organizationId) {
+      return res.status(403).json({ success: false, error: "Organisation requise" });
+    }
+    const requests = await db.joinRequest.findMany({
+      where: whereClause,
+      include: {
+        User: { select: { id: true, firstName: true, lastName: true, email: true } },
+        Organization: { select: { id: true, name: true } }
+      },
+      orderBy: { createdAt: "asc" }
+    });
+    res.json({ success: true, data: requests });
+  } catch (error) {
+    console.error("[JoinRequest] Erreur liste pending:", error);
+    res.status(500).json({ success: false, error: "Erreur serveur" });
+  }
+});
+router72.post("/:id/approve", authMiddleware, requireRole2(["admin", "super_admin"]), async (req2, res) => {
+  try {
+    const { id } = req2.params;
+    const { roleId } = req2.body;
+    const adminId = req2.user?.userId;
+    const adminOrgId = req2.user?.organizationId;
+    const isSuperAdmin2 = req2.user?.role === "super_admin";
+    const joinRequest = await db.joinRequest.findUnique({
+      where: { id },
+      include: { Organization: true, User: true }
+    });
+    if (!joinRequest) {
+      return res.status(404).json({ success: false, error: "Demande non trouv\xE9e" });
+    }
+    if (!isSuperAdmin2 && joinRequest.organizationId !== adminOrgId) {
+      return res.status(403).json({ success: false, error: "Non autoris\xE9" });
+    }
+    if (joinRequest.status !== import_client6.JoinRequestStatus.PENDING) {
+      return res.status(400).json({
+        success: false,
+        error: `Demande d\xE9j\xE0 trait\xE9e (${joinRequest.status})`
+      });
+    }
+    let finalRoleId = roleId;
+    if (!finalRoleId) {
+      const defaultRole = await db.role.findFirst({
+        where: {
+          organizationId: joinRequest.organizationId,
+          name: "user"
+          // Rôle par défaut
+        }
+      });
+      finalRoleId = defaultRole?.id;
+    }
+    if (!finalRoleId) {
+      return res.status(400).json({
+        success: false,
+        error: "Aucun r\xF4le disponible. Veuillez sp\xE9cifier un roleId."
+      });
+    }
+    const result = await db.$transaction(async (tx) => {
+      const updatedRequest = await tx.joinRequest.update({
+        where: { id },
+        data: {
+          status: import_client6.JoinRequestStatus.APPROVED,
+          reviewedBy: adminId,
+          reviewedAt: /* @__PURE__ */ new Date()
+        }
+      });
+      const userOrg = await tx.userOrganization.create({
+        data: {
+          id: crypto.randomUUID(),
+          userId: joinRequest.userId,
+          organizationId: joinRequest.organizationId,
+          roleId: finalRoleId,
+          status: import_client6.UserOrganizationStatus.ACTIVE,
+          updatedAt: /* @__PURE__ */ new Date()
+        }
+      });
+      return { request: updatedRequest, userOrganization: userOrg };
+    });
+    console.log(`[JoinRequest] Demande ${id} approuv\xE9e par ${adminId}`);
+    res.json({
+      success: true,
+      data: result,
+      message: `Demande approuv\xE9e. ${joinRequest.User?.firstName} ${joinRequest.User?.lastName} est maintenant membre de ${joinRequest.Organization?.name}`
+    });
+  } catch (error) {
+    console.error("[JoinRequest] Erreur approbation:", error);
+    res.status(500).json({ success: false, error: "Erreur serveur" });
+  }
+});
+router72.post("/:id/reject", authMiddleware, requireRole2(["admin", "super_admin"]), async (req2, res) => {
+  try {
+    const { id } = req2.params;
+    const { reason } = req2.body;
+    const adminId = req2.user?.userId;
+    const adminOrgId = req2.user?.organizationId;
+    const isSuperAdmin2 = req2.user?.role === "super_admin";
+    const joinRequest = await db.joinRequest.findUnique({
+      where: { id }
+    });
+    if (!joinRequest) {
+      return res.status(404).json({ success: false, error: "Demande non trouv\xE9e" });
+    }
+    if (!isSuperAdmin2 && joinRequest.organizationId !== adminOrgId) {
+      return res.status(403).json({ success: false, error: "Non autoris\xE9" });
+    }
+    if (joinRequest.status !== import_client6.JoinRequestStatus.PENDING) {
+      return res.status(400).json({
+        success: false,
+        error: `Demande d\xE9j\xE0 trait\xE9e (${joinRequest.status})`
+      });
+    }
+    const updatedRequest = await db.joinRequest.update({
+      where: { id },
+      data: {
+        status: import_client6.JoinRequestStatus.REJECTED,
+        reviewedBy: adminId,
+        reviewedAt: /* @__PURE__ */ new Date()
+      }
+    });
+    console.log(`[JoinRequest] Demande ${id} rejet\xE9e par ${adminId}. Raison: ${reason || "Non sp\xE9cifi\xE9e"}`);
+    res.json({
+      success: true,
+      data: updatedRequest,
+      message: "Demande rejet\xE9e"
+    });
+  } catch (error) {
+    console.error("[JoinRequest] Erreur rejet:", error);
+    res.status(500).json({ success: false, error: "Erreur serveur" });
+  }
+});
+router72.delete("/:id", authMiddleware, async (req2, res) => {
+  try {
+    const { id } = req2.params;
+    const userId = req2.user?.userId;
+    const joinRequest = await db.joinRequest.findUnique({
+      where: { id }
+    });
+    if (!joinRequest) {
+      return res.status(404).json({ success: false, error: "Demande non trouv\xE9e" });
+    }
+    if (joinRequest.userId !== userId) {
+      return res.status(403).json({ success: false, error: "Non autoris\xE9" });
+    }
+    if (joinRequest.status !== import_client6.JoinRequestStatus.PENDING) {
+      return res.status(400).json({
+        success: false,
+        error: "Impossible d'annuler une demande d\xE9j\xE0 trait\xE9e"
+      });
+    }
+    await db.joinRequest.delete({ where: { id } });
+    res.json({ success: true, message: "Demande annul\xE9e" });
+  } catch (error) {
+    console.error("[JoinRequest] Erreur suppression:", error);
+    res.status(500).json({ success: false, error: "Erreur serveur" });
+  }
+});
+var join_requests_default = router72;
+
 // src/routes/index.ts
-var apiRouter = (0, import_express73.Router)();
+var apiRouter = (0, import_express74.Router)();
 apiRouter.use("/auth", authRoutes_default);
 console.log("[ROUTER] Routes d'authentification mont\xE9es sur /auth");
 apiRouter.use("/auto-google-auth", autoGoogleAuthRoutes_default);
@@ -52628,6 +53014,7 @@ apiRouter.use("/validations", validations_default);
 apiRouter.use("/formulas", formulas_default2);
 apiRouter.use("/dependencies", dependencies_default2);
 apiRouter.use("/invitations", invitations_default);
+apiRouter.use("/join-requests", join_requests_default);
 apiRouter.use("/lead-generation", leadGeneration_default);
 apiRouter.use("/marketplace", marketplace_fixed_default);
 apiRouter.use("/partner", partner_default);
@@ -52650,7 +53037,7 @@ var routes_default = apiRouter;
 init_prisma();
 
 // src/components/TreeBranchLeaf/tbl-bridge/routes/tbl-submission-evaluator.ts
-var import_express74 = require("express");
+var import_express75 = require("express");
 init_database();
 init_operation_interpreter();
 
@@ -52710,7 +53097,7 @@ async function storeCalculatedValues(values, submissionId) {
 }
 
 // src/components/TreeBranchLeaf/tbl-bridge/routes/tbl-submission-evaluator.ts
-var router72 = (0, import_express74.Router)();
+var router73 = (0, import_express75.Router)();
 var prisma42 = db;
 var stagingStore = /* @__PURE__ */ new Map();
 var STAGE_TTL_MS = 1e3 * 60 * 60;
@@ -52997,7 +53384,7 @@ async function evaluateCapacitiesForSubmission(submissionId, organizationId, use
   }
   return results;
 }
-router72.post("/submissions/:submissionId/evaluate-all", async (req2, res) => {
+router73.post("/submissions/:submissionId/evaluate-all", async (req2, res) => {
   try {
     const { submissionId } = req2.params;
     const { forceUpdate = false } = req2.body || {};
@@ -53125,7 +53512,7 @@ router72.post("/submissions/:submissionId/evaluate-all", async (req2, res) => {
     });
   }
 });
-router72.get("/submissions/:submissionId/verification", async (req2, res) => {
+router73.get("/submissions/:submissionId/verification", async (req2, res) => {
   try {
     const { submissionId } = req2.params;
     console.log("\u{1F50D} [TBL VERIFICATION] V\xE9rification soumission:", submissionId);
@@ -53181,7 +53568,7 @@ router72.get("/submissions/:submissionId/verification", async (req2, res) => {
     });
   }
 });
-router72.post("/submissions/create-and-evaluate", async (req2, res) => {
+router73.post("/submissions/create-and-evaluate", async (req2, res) => {
   try {
     const { treeId, clientId, formData, status = "draft", providedName, reuseSubmissionId } = req2.body;
     const cleanFormData = formData && typeof formData === "object" ? sanitizeFormData(formData) : void 0;
@@ -53361,7 +53748,7 @@ router72.post("/submissions/create-and-evaluate", async (req2, res) => {
     });
   }
 });
-router72.put("/submissions/:submissionId/update-and-evaluate", async (req2, res) => {
+router73.put("/submissions/:submissionId/update-and-evaluate", async (req2, res) => {
   try {
     const { submissionId } = req2.params;
     const { formData, status } = req2.body || {};
@@ -53415,7 +53802,7 @@ router72.put("/submissions/:submissionId/update-and-evaluate", async (req2, res)
     return res.status(500).json({ success: false, error: error instanceof Error ? error.message : "Erreur interne" });
   }
 });
-router72.post("/submissions/preview-evaluate", async (req2, res) => {
+router73.post("/submissions/preview-evaluate", async (req2, res) => {
   try {
     const { treeId, formData, baseSubmissionId, leadId } = req2.body || {};
     const organizationId = req2.headers["x-organization-id"] || req2.user?.organizationId;
@@ -53691,7 +54078,7 @@ router72.post("/submissions/preview-evaluate", async (req2, res) => {
     return res.status(500).json({ success: false, error: error instanceof Error ? error.message : "Erreur interne" });
   }
 });
-router72.post("/submissions/stage", async (req2, res) => {
+router73.post("/submissions/stage", async (req2, res) => {
   try {
     pruneStages();
     const { stageId, treeId, submissionId, formData } = req2.body || {};
@@ -53722,7 +54109,7 @@ router72.post("/submissions/stage", async (req2, res) => {
     return res.status(500).json({ success: false, error: e instanceof Error ? e.message : "Erreur interne" });
   }
 });
-router72.post("/submissions/stage/preview", async (req2, res) => {
+router73.post("/submissions/stage/preview", async (req2, res) => {
   try {
     pruneStages();
     const { stageId } = req2.body || {};
@@ -53801,7 +54188,7 @@ router72.post("/submissions/stage/preview", async (req2, res) => {
     return res.status(500).json({ success: false, error: e instanceof Error ? e.message : "Erreur interne" });
   }
 });
-router72.post("/submissions/stage/commit", async (req2, res) => {
+router73.post("/submissions/stage/commit", async (req2, res) => {
   try {
     pruneStages();
     const { stageId, asNew } = req2.body || {};
@@ -53827,14 +54214,14 @@ router72.post("/submissions/stage/commit", async (req2, res) => {
     return res.status(500).json({ success: false, error: e instanceof Error ? e.message : "Erreur interne" });
   }
 });
-router72.post("/submissions/stage/discard", (req2, res) => {
+router73.post("/submissions/stage/discard", (req2, res) => {
   pruneStages();
   const { stageId } = req2.body || {};
   if (!stageId || !stagingStore.has(stageId)) return res.json({ success: true, discarded: false });
   stagingStore.delete(stageId);
   return res.json({ success: true, discarded: true });
 });
-router72.get("/tables/:tableId", async (req2, res) => {
+router73.get("/tables/:tableId", async (req2, res) => {
   try {
     const { tableId } = req2.params;
     console.log(`\u{1F4CA} [GET TABLE] R\xE9cup\xE9ration table: ${tableId}`);
@@ -53906,13 +54293,13 @@ router72.get("/tables/:tableId", async (req2, res) => {
     });
   }
 });
-var tbl_submission_evaluator_default = router72;
+var tbl_submission_evaluator_default = router73;
 
 // src/controllers/calculatedValueController.ts
-var import_express75 = require("express");
-var import_crypto13 = require("crypto");
+var import_express76 = require("express");
+var import_crypto14 = require("crypto");
 init_prisma();
-var router73 = (0, import_express75.Router)();
+var router74 = (0, import_express76.Router)();
 var parseStoredStringValue = (raw) => {
   if (raw === null || raw === void 0) {
     return null;
@@ -53980,7 +54367,7 @@ var toIsoString = (date) => {
     return void 0;
   }
 };
-router73.get("/:nodeId/calculated-value", async (req2, res) => {
+router74.get("/:nodeId/calculated-value", async (req2, res) => {
   try {
     const { nodeId } = req2.params;
     const pickQueryString = (key2) => {
@@ -54071,7 +54458,7 @@ router73.get("/:nodeId/calculated-value", async (req2, res) => {
                   lastResolved: resolvedAt
                 },
                 create: {
-                  id: (0, import_crypto13.randomUUID)(),
+                  id: (0, import_crypto14.randomUUID)(),
                   submissionId,
                   nodeId,
                   value: persistedValue,
@@ -54206,7 +54593,7 @@ router73.get("/:nodeId/calculated-value", async (req2, res) => {
     return res.status(500).json({ error: String(error) });
   }
 });
-router73.post("/:nodeId/store-calculated-value", async (req2, res) => {
+router74.post("/:nodeId/store-calculated-value", async (req2, res) => {
   try {
     const { nodeId } = req2.params;
     const { calculatedValue, calculatedBy, submissionId } = req2.body;
@@ -54259,7 +54646,7 @@ router73.post("/:nodeId/store-calculated-value", async (req2, res) => {
     return res.status(500).json({ error: String(error) });
   }
 });
-router73.post("/store-batch-calculated-values", async (req2, res) => {
+router74.post("/store-batch-calculated-values", async (req2, res) => {
   try {
     const { values, submissionId } = req2.body;
     if (!Array.isArray(values) || values.length === 0) {
@@ -54306,12 +54693,12 @@ router73.post("/store-batch-calculated-values", async (req2, res) => {
     return res.status(500).json({ error: String(error) });
   }
 });
-var calculatedValueController_default = router73;
+var calculatedValueController_default = router74;
 
 // src/routes/tbl-batch-routes.ts
-var import_express76 = require("express");
+var import_express77 = require("express");
 init_database();
-var router74 = (0, import_express76.Router)();
+var router75 = (0, import_express77.Router)();
 function getAuthCtx5(req2) {
   const user = req2.user;
   return {
@@ -54319,7 +54706,7 @@ function getAuthCtx5(req2) {
     isSuperAdmin: user?.isSuperAdmin || false
   };
 }
-router74.get("/trees/:treeId/formulas", async (req2, res) => {
+router75.get("/trees/:treeId/formulas", async (req2, res) => {
   try {
     const { treeId } = req2.params;
     const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx5(req2);
@@ -54356,7 +54743,7 @@ router74.get("/trees/:treeId/formulas", async (req2, res) => {
     res.status(500).json({ error: "Erreur lors de la r\xE9cup\xE9ration batch des formules" });
   }
 });
-router74.get("/trees/:treeId/calculated-values", async (req2, res) => {
+router75.get("/trees/:treeId/calculated-values", async (req2, res) => {
   try {
     const { treeId } = req2.params;
     const { leadId } = req2.query;
@@ -54421,7 +54808,7 @@ router74.get("/trees/:treeId/calculated-values", async (req2, res) => {
     res.status(500).json({ error: "Erreur lors de la r\xE9cup\xE9ration batch des valeurs calcul\xE9es" });
   }
 });
-router74.get("/trees/:treeId/select-configs", async (req2, res) => {
+router75.get("/trees/:treeId/select-configs", async (req2, res) => {
   try {
     const { treeId } = req2.params;
     const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx5(req2);
@@ -54479,7 +54866,7 @@ router74.get("/trees/:treeId/select-configs", async (req2, res) => {
     res.status(500).json({ error: "Erreur lors de la r\xE9cup\xE9ration batch des configs select" });
   }
 });
-router74.get("/trees/:treeId/all", async (req2, res) => {
+router75.get("/trees/:treeId/all", async (req2, res) => {
   const { treeId } = req2.params;
   console.log(`[TBL Batch API] /all called for treeId: ${treeId}`);
   try {
@@ -54599,7 +54986,7 @@ router74.get("/trees/:treeId/all", async (req2, res) => {
     });
   }
 });
-router74.get("/trees/:treeId/node-data", async (req2, res) => {
+router75.get("/trees/:treeId/node-data", async (req2, res) => {
   try {
     const { treeId } = req2.params;
     const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx5(req2);
@@ -54667,7 +55054,7 @@ router74.get("/trees/:treeId/node-data", async (req2, res) => {
     res.status(500).json({ error: "Erreur lors de la r\xE9cup\xE9ration batch des donn\xE9es de noeuds" });
   }
 });
-router74.get("/trees/:treeId/conditions", async (req2, res) => {
+router75.get("/trees/:treeId/conditions", async (req2, res) => {
   try {
     const { treeId } = req2.params;
     const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx5(req2);
@@ -54714,13 +55101,13 @@ router74.get("/trees/:treeId/conditions", async (req2, res) => {
     res.status(500).json({ error: "Erreur lors de la r\xE9cup\xE9ration batch des conditions" });
   }
 });
-var tbl_batch_routes_default = router74;
+var tbl_batch_routes_default = router75;
 
 // src/routes/batch-routes.ts
-var import_express77 = require("express");
+var import_express78 = require("express");
 init_database();
 var import_googleapis9 = require("googleapis");
-var router75 = (0, import_express77.Router)();
+var router76 = (0, import_express78.Router)();
 function getAuthCtx6(req2) {
   const user = req2.user;
   return {
@@ -54729,7 +55116,7 @@ function getAuthCtx6(req2) {
     isSuperAdmin: user?.isSuperAdmin || false
   };
 }
-router75.post("/gmail/modify", async (req2, res) => {
+router76.post("/gmail/modify", async (req2, res) => {
   try {
     const { userId, organizationId } = getAuthCtx6(req2);
     const { messageIds, addLabelIds = [], removeLabelIds = [] } = req2.body;
@@ -54767,7 +55154,7 @@ router75.post("/gmail/modify", async (req2, res) => {
     res.status(500).json({ error: error.message || "Erreur batch Gmail" });
   }
 });
-router75.post("/gmail/trash", async (req2, res) => {
+router76.post("/gmail/trash", async (req2, res) => {
   try {
     const { userId } = getAuthCtx6(req2);
     const { messageIds } = req2.body;
@@ -54805,7 +55192,7 @@ router75.post("/gmail/trash", async (req2, res) => {
     res.status(500).json({ error: error.message || "Erreur batch Gmail" });
   }
 });
-router75.delete("/gmail/delete", async (req2, res) => {
+router76.delete("/gmail/delete", async (req2, res) => {
   try {
     const { userId } = getAuthCtx6(req2);
     const { messageIds } = req2.body;
@@ -54841,7 +55228,7 @@ router75.delete("/gmail/delete", async (req2, res) => {
     res.status(500).json({ error: error.message || "Erreur batch Gmail" });
   }
 });
-router75.patch("/leads/status", async (req2, res) => {
+router76.patch("/leads/status", async (req2, res) => {
   try {
     const { organizationId } = getAuthCtx6(req2);
     const { leadIds, statusId } = req2.body;
@@ -54878,7 +55265,7 @@ router75.patch("/leads/status", async (req2, res) => {
     res.status(500).json({ error: error.message || "Erreur batch leads" });
   }
 });
-router75.patch("/leads/assign", async (req2, res) => {
+router76.patch("/leads/assign", async (req2, res) => {
   try {
     const { organizationId } = getAuthCtx6(req2);
     const { leadIds, assignedToId } = req2.body;
@@ -54906,7 +55293,7 @@ router75.patch("/leads/assign", async (req2, res) => {
     res.status(500).json({ error: error.message || "Erreur batch leads" });
   }
 });
-router75.delete("/leads", async (req2, res) => {
+router76.delete("/leads", async (req2, res) => {
   try {
     const { organizationId } = getAuthCtx6(req2);
     const { leadIds } = req2.body;
@@ -54930,7 +55317,7 @@ router75.delete("/leads", async (req2, res) => {
     res.status(500).json({ error: error.message || "Erreur batch leads" });
   }
 });
-router75.post("/fields/configs", async (req2, res) => {
+router76.post("/fields/configs", async (req2, res) => {
   try {
     const { fieldIds } = req2.body;
     if (!fieldIds || !Array.isArray(fieldIds) || fieldIds.length === 0) {
@@ -54959,7 +55346,7 @@ router75.post("/fields/configs", async (req2, res) => {
     res.status(500).json({ error: error.message || "Erreur batch fields" });
   }
 });
-router75.patch("/modules/toggle", async (req2, res) => {
+router76.patch("/modules/toggle", async (req2, res) => {
   try {
     const { organizationId } = getAuthCtx6(req2);
     const { moduleIds, enabled } = req2.body;
@@ -54990,7 +55377,7 @@ router75.patch("/modules/toggle", async (req2, res) => {
     res.status(500).json({ error: error.message || "Erreur batch modules" });
   }
 });
-router75.get("/analytics/leads-by-status", async (req2, res) => {
+router76.get("/analytics/leads-by-status", async (req2, res) => {
   try {
     const { organizationId } = getAuthCtx6(req2);
     const counts = await db.lead.groupBy({
@@ -55021,7 +55408,7 @@ router75.get("/analytics/leads-by-status", async (req2, res) => {
     res.status(500).json({ error: error.message || "Erreur analytics" });
   }
 });
-router75.get("/analytics/leads-by-source", async (req2, res) => {
+router76.get("/analytics/leads-by-source", async (req2, res) => {
   try {
     const { organizationId } = getAuthCtx6(req2);
     const counts = await db.lead.groupBy({
@@ -55044,7 +55431,7 @@ router75.get("/analytics/leads-by-source", async (req2, res) => {
     res.status(500).json({ error: error.message || "Erreur analytics" });
   }
 });
-router75.get("/analytics/leads-by-assignee", async (req2, res) => {
+router76.get("/analytics/leads-by-assignee", async (req2, res) => {
   try {
     const { organizationId } = getAuthCtx6(req2);
     const counts = await db.lead.groupBy({
@@ -55074,13 +55461,13 @@ router75.get("/analytics/leads-by-assignee", async (req2, res) => {
     res.status(500).json({ error: error.message || "Erreur analytics" });
   }
 });
-var batch_routes_default = router75;
+var batch_routes_default = router76;
 
 // src/api/websites.ts
-var import_express78 = require("express");
+var import_express79 = require("express");
 init_database();
-var router76 = (0, import_express78.Router)();
-router76.get("/websites", authenticateToken, async (req2, res) => {
+var router77 = (0, import_express79.Router)();
+router77.get("/websites", authenticateToken, async (req2, res) => {
   try {
     const organizationId = req2.headers["x-organization-id"];
     const showAll = req2.query.all === "true";
@@ -55108,7 +55495,7 @@ router76.get("/websites", authenticateToken, async (req2, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
-router76.get("/websites/id/:id", authenticateToken, async (req2, res) => {
+router77.get("/websites/id/:id", authenticateToken, async (req2, res) => {
   try {
     const { id } = req2.params;
     const websiteId = parseInt(id, 10);
@@ -55131,7 +55518,7 @@ router76.get("/websites/id/:id", authenticateToken, async (req2, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
-router76.put("/websites/:id", authenticateToken, async (req2, res) => {
+router77.put("/websites/:id", authenticateToken, async (req2, res) => {
   try {
     const websiteId = parseInt(req2.params.id);
     const organizationId = req2.headers["x-organization-id"];
@@ -55196,7 +55583,7 @@ router76.put("/websites/:id", authenticateToken, async (req2, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
-router76.delete("/websites/:id", authenticateToken, async (req2, res) => {
+router77.delete("/websites/:id", authenticateToken, async (req2, res) => {
   try {
     const websiteId = parseInt(req2.params.id);
     const organizationId = req2.headers["x-organization-id"];
@@ -55220,7 +55607,7 @@ router76.delete("/websites/:id", authenticateToken, async (req2, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
-router76.post("/websites", authenticateToken, async (req2, res) => {
+router77.post("/websites", authenticateToken, async (req2, res) => {
   try {
     const organizationId = req2.headers["x-organization-id"];
     const data = req2.body;
@@ -55251,7 +55638,7 @@ router76.post("/websites", authenticateToken, async (req2, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
-router76.get("/websites/:idOrSlug", async (req2, res) => {
+router77.get("/websites/:idOrSlug", async (req2, res) => {
   try {
     const { idOrSlug } = req2.params;
     const organizationId = req2.headers["x-organization-id"];
@@ -55311,7 +55698,7 @@ router76.get("/websites/:idOrSlug", async (req2, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
-router76.get("/websites/:slug/services", async (req2, res) => {
+router77.get("/websites/:slug/services", async (req2, res) => {
   try {
     const { slug } = req2.params;
     const website = await db.websites.findFirst({
@@ -55334,7 +55721,7 @@ router76.get("/websites/:slug/services", async (req2, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
-router76.get("/websites/:slug/projects", async (req2, res) => {
+router77.get("/websites/:slug/projects", async (req2, res) => {
   try {
     const { slug } = req2.params;
     const { featured } = req2.query;
@@ -55362,7 +55749,7 @@ router76.get("/websites/:slug/projects", async (req2, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
-router76.get("/websites/:slug/testimonials", async (req2, res) => {
+router77.get("/websites/:slug/testimonials", async (req2, res) => {
   try {
     const { slug } = req2.params;
     const { featured } = req2.query;
@@ -55390,7 +55777,7 @@ router76.get("/websites/:slug/testimonials", async (req2, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
-router76.get("/websites/:slug/blog", async (req2, res) => {
+router77.get("/websites/:slug/blog", async (req2, res) => {
   try {
     const { slug } = req2.params;
     const { limit = "10", featured } = req2.query;
@@ -55429,7 +55816,7 @@ router76.get("/websites/:slug/blog", async (req2, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
-router76.get("/websites/:slug/blog/:postSlug", async (req2, res) => {
+router77.get("/websites/:slug/blog/:postSlug", async (req2, res) => {
   try {
     const { slug, postSlug } = req2.params;
     const website = await db.websites.findFirst({
@@ -55466,14 +55853,14 @@ router76.get("/websites/:slug/blog/:postSlug", async (req2, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
-var websites_default = router76;
+var websites_default = router77;
 
 // src/api/website-services.ts
-var import_express79 = require("express");
+var import_express80 = require("express");
 init_database();
-var router77 = (0, import_express79.Router)();
+var router78 = (0, import_express80.Router)();
 var prisma43 = db;
-router77.get("/website-services/:websiteId", async (req2, res) => {
+router78.get("/website-services/:websiteId", async (req2, res) => {
   try {
     const { websiteId } = req2.params;
     const services = await prisma43.webSiteService.findMany({
@@ -55490,7 +55877,7 @@ router77.get("/website-services/:websiteId", async (req2, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
-router77.post("/website-services", async (req2, res) => {
+router78.post("/website-services", async (req2, res) => {
   try {
     const { websiteId, key: key2, icon, title, description, features, ctaText, ctaUrl, isActive } = req2.body;
     if (!websiteId || !key2 || !title) {
@@ -55520,7 +55907,7 @@ router77.post("/website-services", async (req2, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
-router77.put("/website-services/:id", async (req2, res) => {
+router78.put("/website-services/:id", async (req2, res) => {
   try {
     const { id } = req2.params;
     const { key: key2, icon, title, description, features, ctaText, ctaUrl, isActive } = req2.body;
@@ -55543,7 +55930,7 @@ router77.put("/website-services/:id", async (req2, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
-router77.delete("/website-services/:id", async (req2, res) => {
+router78.delete("/website-services/:id", async (req2, res) => {
   try {
     const { id } = req2.params;
     await prisma43.webSiteService.delete({
@@ -55555,7 +55942,7 @@ router77.delete("/website-services/:id", async (req2, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
-router77.post("/website-services/reorder", async (req2, res) => {
+router78.post("/website-services/reorder", async (req2, res) => {
   try {
     const { services } = req2.body;
     if (!Array.isArray(services)) {
@@ -55575,14 +55962,14 @@ router77.post("/website-services/reorder", async (req2, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
-var website_services_default = router77;
+var website_services_default = router78;
 
 // src/api/website-projects.ts
-var import_express80 = require("express");
+var import_express81 = require("express");
 init_database();
-var router78 = (0, import_express80.Router)();
+var router79 = (0, import_express81.Router)();
 var prisma44 = db;
-router78.get("/website-projects/:websiteId", async (req2, res) => {
+router79.get("/website-projects/:websiteId", async (req2, res) => {
   try {
     const { websiteId } = req2.params;
     const projects = await prisma44.webSiteProject.findMany({
@@ -55599,7 +55986,7 @@ router78.get("/website-projects/:websiteId", async (req2, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
-router78.post("/website-projects", async (req2, res) => {
+router79.post("/website-projects", async (req2, res) => {
   try {
     const { websiteId, title, location, details, tags, isActive, isFeatured, completedAt } = req2.body;
     if (!websiteId || !title) {
@@ -55628,7 +56015,7 @@ router78.post("/website-projects", async (req2, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
-router78.put("/website-projects/:id", async (req2, res) => {
+router79.put("/website-projects/:id", async (req2, res) => {
   try {
     const { id } = req2.params;
     const { title, location, details, tags, isActive, isFeatured, completedAt } = req2.body;
@@ -55650,7 +56037,7 @@ router78.put("/website-projects/:id", async (req2, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
-router78.delete("/website-projects/:id", async (req2, res) => {
+router79.delete("/website-projects/:id", async (req2, res) => {
   try {
     const { id } = req2.params;
     await prisma44.webSiteProject.delete({
@@ -55662,7 +56049,7 @@ router78.delete("/website-projects/:id", async (req2, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
-router78.post("/website-projects/reorder", async (req2, res) => {
+router79.post("/website-projects/reorder", async (req2, res) => {
   try {
     const { projects } = req2.body;
     if (!Array.isArray(projects)) {
@@ -55682,14 +56069,14 @@ router78.post("/website-projects/reorder", async (req2, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
-var website_projects_default = router78;
+var website_projects_default = router79;
 
 // src/api/website-testimonials.ts
-var import_express81 = require("express");
+var import_express82 = require("express");
 init_database();
-var router79 = (0, import_express81.Router)();
+var router80 = (0, import_express82.Router)();
 var prisma45 = db;
-router79.get("/website-testimonials/:websiteId", async (req2, res) => {
+router80.get("/website-testimonials/:websiteId", async (req2, res) => {
   try {
     const { websiteId } = req2.params;
     const testimonials = await prisma45.webSiteTestimonial.findMany({
@@ -55706,7 +56093,7 @@ router79.get("/website-testimonials/:websiteId", async (req2, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
-router79.post("/website-testimonials", async (req2, res) => {
+router80.post("/website-testimonials", async (req2, res) => {
   try {
     const { websiteId, customerName, location, service, rating, text, isActive, isFeatured, publishedAt } = req2.body;
     if (!websiteId || !customerName || !text) {
@@ -55736,7 +56123,7 @@ router79.post("/website-testimonials", async (req2, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
-router79.put("/website-testimonials/:id", async (req2, res) => {
+router80.put("/website-testimonials/:id", async (req2, res) => {
   try {
     const { id } = req2.params;
     const { customerName, location, service, rating, text, isActive, isFeatured, publishedAt } = req2.body;
@@ -55759,7 +56146,7 @@ router79.put("/website-testimonials/:id", async (req2, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
-router79.delete("/website-testimonials/:id", async (req2, res) => {
+router80.delete("/website-testimonials/:id", async (req2, res) => {
   try {
     const { id } = req2.params;
     await prisma45.webSiteTestimonial.delete({
@@ -55771,7 +56158,7 @@ router79.delete("/website-testimonials/:id", async (req2, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
-router79.post("/website-testimonials/reorder", async (req2, res) => {
+router80.post("/website-testimonials/reorder", async (req2, res) => {
   try {
     const { testimonials } = req2.body;
     if (!Array.isArray(testimonials)) {
@@ -55791,13 +56178,13 @@ router79.post("/website-testimonials/reorder", async (req2, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
-var website_testimonials_default = router79;
+var website_testimonials_default = router80;
 
 // src/api/website-sections.ts
-var import_express82 = __toESM(require("express"), 1);
+var import_express83 = __toESM(require("express"), 1);
 init_database();
-var router80 = import_express82.default.Router();
-router80.get("/website-sections/:websiteId", async (req2, res) => {
+var router81 = import_express83.default.Router();
+router81.get("/website-sections/:websiteId", async (req2, res) => {
   try {
     const { websiteId } = req2.params;
     const sections = await db.website_sections.findMany({
@@ -55814,7 +56201,7 @@ router80.get("/website-sections/:websiteId", async (req2, res) => {
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
-router80.post("/website-sections", async (req2, res) => {
+router81.post("/website-sections", async (req2, res) => {
   try {
     const { websiteId, key: key2, type, name, content, backgroundColor, textColor, customCss } = req2.body;
     const maxOrder = await db.website_sections.aggregate({
@@ -55842,7 +56229,7 @@ router80.post("/website-sections", async (req2, res) => {
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
-router80.put("/website-sections/:id", async (req2, res) => {
+router81.put("/website-sections/:id", async (req2, res) => {
   try {
     const { id } = req2.params;
     const { name, content, backgroundColor, textColor, customCss, isActive } = req2.body;
@@ -55893,7 +56280,7 @@ router80.put("/website-sections/:id", async (req2, res) => {
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
-router80.patch("/website-sections/:id", async (req2, res) => {
+router81.patch("/website-sections/:id", async (req2, res) => {
   try {
     const { id } = req2.params;
     const { name, content, backgroundColor, textColor, customCss, isActive } = req2.body;
@@ -55941,7 +56328,7 @@ router80.patch("/website-sections/:id", async (req2, res) => {
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
-router80.delete("/website-sections/:id", async (req2, res) => {
+router81.delete("/website-sections/:id", async (req2, res) => {
   try {
     const { id } = req2.params;
     const section = await db.website_sections.findUnique({
@@ -55959,7 +56346,7 @@ router80.delete("/website-sections/:id", async (req2, res) => {
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
-router80.post("/website-sections/reorder", async (req2, res) => {
+router81.post("/website-sections/reorder", async (req2, res) => {
   try {
     const { sections } = req2.body;
     await db.$transaction(
@@ -55976,7 +56363,7 @@ router80.post("/website-sections/reorder", async (req2, res) => {
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
-router80.post("/website-sections/duplicate/:id", async (req2, res) => {
+router81.post("/website-sections/duplicate/:id", async (req2, res) => {
   try {
     const { id } = req2.params;
     const original = await db.website_sections.findUnique({
@@ -56007,13 +56394,13 @@ router80.post("/website-sections/duplicate/:id", async (req2, res) => {
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
-var website_sections_default = router80;
+var website_sections_default = router81;
 
 // src/api/website-themes.ts
-var import_express83 = require("express");
+var import_express84 = require("express");
 init_prisma();
-var router81 = (0, import_express83.Router)();
-router81.get("/:websiteId", async (req2, res) => {
+var router82 = (0, import_express84.Router)();
+router82.get("/:websiteId", async (req2, res) => {
   try {
     const { websiteId } = req2.params;
     console.log("\u{1F4E1} [API] GET theme websiteId:", websiteId);
@@ -56029,7 +56416,7 @@ router81.get("/:websiteId", async (req2, res) => {
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
-router81.post("/", async (req2, res) => {
+router82.post("/", async (req2, res) => {
   try {
     const themeData = req2.body;
     console.log("\u{1F4E1} [API] POST theme:", themeData);
@@ -56042,7 +56429,7 @@ router81.post("/", async (req2, res) => {
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
-router81.put("/:id", async (req2, res) => {
+router82.put("/:id", async (req2, res) => {
   try {
     const { id } = req2.params;
     const themeData = req2.body;
@@ -56057,7 +56444,7 @@ router81.put("/:id", async (req2, res) => {
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
-router81.delete("/:id", async (req2, res) => {
+router82.delete("/:id", async (req2, res) => {
   try {
     const { id } = req2.params;
     console.log("\u{1F4E1} [API] DELETE theme:", id);
@@ -56070,12 +56457,12 @@ router81.delete("/:id", async (req2, res) => {
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
-var website_themes_default = router81;
+var website_themes_default = router82;
 
 // src/api/contact-form.ts
-var import_express84 = require("express");
+var import_express85 = require("express");
 init_database();
-var router82 = (0, import_express84.Router)();
+var router83 = (0, import_express85.Router)();
 var prisma46 = db;
 var isValidEmail = (email) => {
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -56093,7 +56480,7 @@ var isSpam = (data) => {
   }
   return false;
 };
-router82.post("/contact-form", async (req2, res) => {
+router83.post("/contact-form", async (req2, res) => {
   try {
     const data = req2.body;
     if (!data.name || data.name.trim().length < 2) {
@@ -56169,7 +56556,7 @@ router82.post("/contact-form", async (req2, res) => {
     });
   }
 });
-router82.get("/contact-submissions/:websiteId", async (req2, res) => {
+router83.get("/contact-submissions/:websiteId", async (req2, res) => {
   try {
     const websiteId = parseInt(req2.params.websiteId);
     const submissions = await prisma46.contactSubmission.findMany({
@@ -56184,7 +56571,7 @@ router82.get("/contact-submissions/:websiteId", async (req2, res) => {
     res.status(500).json({ success: false, message: "Erreur serveur" });
   }
 });
-router82.patch("/contact-submission/:id/read", async (req2, res) => {
+router83.patch("/contact-submission/:id/read", async (req2, res) => {
   try {
     const id = parseInt(req2.params.id);
     const submission = await prisma46.contactSubmission.update({
@@ -56197,7 +56584,7 @@ router82.patch("/contact-submission/:id/read", async (req2, res) => {
     res.status(500).json({ success: false, message: "Erreur serveur" });
   }
 });
-router82.patch("/contact-submission/:id/status", async (req2, res) => {
+router83.patch("/contact-submission/:id/status", async (req2, res) => {
   try {
     const id = parseInt(req2.params.id);
     const { status, notes } = req2.body;
@@ -56219,7 +56606,7 @@ router82.patch("/contact-submission/:id/status", async (req2, res) => {
     res.status(500).json({ success: false, message: "Erreur serveur" });
   }
 });
-router82.delete("/contact-submission/:id", async (req2, res) => {
+router83.delete("/contact-submission/:id", async (req2, res) => {
   try {
     const id = parseInt(req2.params.id);
     await prisma46.contactSubmission.delete({
@@ -56231,15 +56618,15 @@ router82.delete("/contact-submission/:id", async (req2, res) => {
     res.status(500).json({ success: false, message: "Erreur serveur" });
   }
 });
-var contact_form_default = router82;
+var contact_form_default = router83;
 
 // src/api/image-upload.ts
-var import_express85 = require("express");
+var import_express86 = require("express");
 var import_multer2 = __toESM(require("multer"), 1);
 var import_path6 = __toESM(require("path"), 1);
 var import_promises = __toESM(require("fs/promises"), 1);
 init_database();
-var router83 = (0, import_express85.Router)();
+var router84 = (0, import_express86.Router)();
 var prisma47 = db;
 var storage2 = import_multer2.default.diskStorage({
   destination: async (req2, file, cb) => {
@@ -56268,7 +56655,7 @@ var upload2 = (0, import_multer2.default)({
     // 5MB max
   }
 });
-router83.post("/upload", upload2.single("file"), async (req2, res) => {
+router84.post("/upload", upload2.single("file"), async (req2, res) => {
   try {
     if (!req2.file) {
       return res.status(400).json({
@@ -56311,7 +56698,7 @@ router83.post("/upload", upload2.single("file"), async (req2, res) => {
     });
   }
 });
-router83.post("/upload-image", upload2.single("image"), async (req2, res) => {
+router84.post("/upload-image", upload2.single("image"), async (req2, res) => {
   try {
     if (!req2.file) {
       return res.status(400).json({
@@ -56368,7 +56755,7 @@ router83.post("/upload-image", upload2.single("image"), async (req2, res) => {
     });
   }
 });
-router83.get("/images/:websiteId", async (req2, res) => {
+router84.get("/images/:websiteId", async (req2, res) => {
   try {
     const websiteId = parseInt(req2.params.websiteId);
     const { category } = req2.query;
@@ -56392,7 +56779,7 @@ router83.get("/images/:websiteId", async (req2, res) => {
     });
   }
 });
-router83.delete("/image/:id", async (req2, res) => {
+router84.delete("/image/:id", async (req2, res) => {
   try {
     const id = parseInt(req2.params.id);
     const mediaFile = await prisma47.webSiteMediaFile.findUnique({
@@ -56424,10 +56811,10 @@ router83.delete("/image/:id", async (req2, res) => {
     });
   }
 });
-var image_upload_default = router83;
+var image_upload_default = router84;
 
 // src/api/ai-content.ts
-var import_express86 = require("express");
+var import_express87 = require("express");
 
 // src/services/aiContentService.ts
 var AIContentService = class {
@@ -56640,8 +57027,8 @@ R\xE8gles :
 var aiContentService = new AIContentService();
 
 // src/api/ai-content.ts
-var router84 = (0, import_express86.Router)();
-router84.post("/generate-service", async (req2, res) => {
+var router85 = (0, import_express87.Router)();
+router85.post("/generate-service", async (req2, res) => {
   try {
     const { siteName, industry, serviceType, keywords } = req2.body;
     if (!siteName || !industry || !serviceType) {
@@ -56667,7 +57054,7 @@ router84.post("/generate-service", async (req2, res) => {
     });
   }
 });
-router84.post("/generate-project", async (req2, res) => {
+router85.post("/generate-project", async (req2, res) => {
   try {
     const { siteName, industry, projectType, location } = req2.body;
     if (!siteName || !industry || !projectType) {
@@ -56693,7 +57080,7 @@ router84.post("/generate-project", async (req2, res) => {
     });
   }
 });
-router84.post("/generate-testimonial", async (req2, res) => {
+router85.post("/generate-testimonial", async (req2, res) => {
   try {
     const { siteName, industry, serviceType, customerType } = req2.body;
     if (!siteName || !industry || !serviceType) {
@@ -56719,7 +57106,7 @@ router84.post("/generate-testimonial", async (req2, res) => {
     });
   }
 });
-router84.post("/generate-page", async (req2, res) => {
+router85.post("/generate-page", async (req2, res) => {
   try {
     const { siteName, siteType, industry, mainServices, targetAudience } = req2.body;
     if (!siteName || !siteType || !industry || !mainServices) {
@@ -56746,7 +57133,7 @@ router84.post("/generate-page", async (req2, res) => {
     });
   }
 });
-router84.post("/optimize-seo", async (req2, res) => {
+router85.post("/optimize-seo", async (req2, res) => {
   try {
     const { currentTitle, currentDescription, pageContent, targetKeywords, siteName, industry } = req2.body;
     if (!pageContent || !siteName || !industry) {
@@ -56774,7 +57161,7 @@ router84.post("/optimize-seo", async (req2, res) => {
     });
   }
 });
-router84.post("/generate-multiple-services", async (req2, res) => {
+router85.post("/generate-multiple-services", async (req2, res) => {
   try {
     const { siteName, industry, serviceTypes } = req2.body;
     if (!siteName || !industry || !serviceTypes || !Array.isArray(serviceTypes)) {
@@ -56800,15 +57187,15 @@ router84.post("/generate-multiple-services", async (req2, res) => {
     });
   }
 });
-var ai_content_default = router84;
+var ai_content_default = router85;
 
 // src/api/ai.ts
-var import_express87 = __toESM(require("express"), 1);
+var import_express88 = __toESM(require("express"), 1);
 var import_generative_ai2 = require("@google/generative-ai");
-var router85 = import_express87.default.Router();
+var router86 = import_express88.default.Router();
 var genAI = new import_generative_ai2.GoogleGenerativeAI(process.env.GEMINI_API_KEY || "");
 var MODEL_NAME = "gemini-pro";
-router85.post("/generate", async (req2, res) => {
+router86.post("/generate", async (req2, res) => {
   try {
     const { prompt, context, sectionType, currentValue } = req2.body;
     if (!prompt) {
@@ -56971,7 +57358,7 @@ function formatSuggestions(data, context) {
       return [{ value: data }];
   }
 }
-router85.post("/analyze-section", async (req2, res) => {
+router86.post("/analyze-section", async (req2, res) => {
   try {
     const { sectionType, content, prompt } = req2.body;
     if (!process.env.GEMINI_API_KEY) {
@@ -57106,7 +57493,7 @@ function generateFallbackAnalysis(sectionType, content) {
     }
   };
 }
-router85.post("/optimize-seo", async (req2, res) => {
+router86.post("/optimize-seo", async (req2, res) => {
   try {
     const { content, sectionType } = req2.body;
     if (!process.env.GEMINI_API_KEY) {
@@ -57146,7 +57533,7 @@ Format de r\xE9ponse : JSON avec { metaTitle, metaDescription, keywords: [], slu
     });
   }
 });
-router85.post("/improve-content", async (req2, res) => {
+router86.post("/improve-content", async (req2, res) => {
   try {
     const { content, instructions } = req2.body;
     if (!process.env.GEMINI_API_KEY) {
@@ -57183,7 +57570,7 @@ Retourne le contenu am\xE9lior\xE9 au format JSON identique \xE0 l'original.`;
     });
   }
 });
-router85.post("/optimize-layout", async (req2, res) => {
+router86.post("/optimize-layout", async (req2, res) => {
   try {
     const { itemCount, sectionType, currentLayout } = req2.body;
     if (!process.env.GEMINI_API_KEY) {
@@ -57238,7 +57625,7 @@ Format de r\xE9ponse : JSON array avec :
     });
   }
 });
-router85.post("/generate-palette", async (req2, res) => {
+router86.post("/generate-palette", async (req2, res) => {
   try {
     const { baseColor, mood, industry } = req2.body;
     if (!process.env.GEMINI_API_KEY) {
@@ -57377,13 +57764,13 @@ function generateFallbackPalettes(baseColor) {
     }
   ];
 }
-var ai_default2 = router85;
+var ai_default2 = router86;
 
 // src/routes/ai-field-generator.ts
-var import_express88 = __toESM(require("express"), 1);
-var router86 = import_express88.default.Router();
+var import_express89 = __toESM(require("express"), 1);
+var router87 = import_express89.default.Router();
 var geminiService3 = new GoogleGeminiService();
-router86.use(authMiddleware);
+router87.use(authMiddleware);
 var SmartPromptBuilder = class {
   /**
    * Construit un prompt optimisé selon le type de champ
@@ -57766,7 +58153,7 @@ var QualityAnalyzer = class {
     }
   }
 };
-router86.post("/generate-field", async (req2, res) => {
+router87.post("/generate-field", async (req2, res) => {
   const startTime = Date.now();
   try {
     const { fieldId, fieldType, fieldLabel, currentValue, aiContext } = req2.body;
@@ -57853,7 +58240,7 @@ router86.post("/generate-field", async (req2, res) => {
     });
   }
 });
-router86.get("/status", async (_req, res) => {
+router87.get("/status", async (_req, res) => {
   try {
     const isAvailable = !!process.env.GOOGLE_API_KEY || !!process.env.GEMINI_API_KEY;
     res.json({
@@ -57870,10 +58257,10 @@ router86.get("/status", async (_req, res) => {
     });
   }
 });
-var ai_field_generator_default = router86;
+var ai_field_generator_default = router87;
 
 // src/components/TreeBranchLeaf/treebranchleaf-new/api/repeat/repeat-routes.ts
-var import_express89 = require("express");
+var import_express90 = require("express");
 
 // src/components/TreeBranchLeaf/treebranchleaf-new/api/repeat/repeat-blueprint-builder.ts
 var parseJsonArray = (value) => {
@@ -58350,7 +58737,7 @@ async function executeRepeatDuplication(prisma49, repeaterNodeId, options = {}) 
 }
 
 // src/components/TreeBranchLeaf/treebranchleaf-new/api/repeat/repeat-executor.ts
-var import_client6 = require("@prisma/client");
+var import_client7 = require("@prisma/client");
 
 // src/components/TreeBranchLeaf/treebranchleaf-new/api/copy-variable-with-capacities.ts
 function parseSourceRef3(sourceRef) {
@@ -60838,7 +61225,7 @@ function normalizeNodeBase2(value) {
   return value.replace(/-\d+(?:-\d+)*$/, "");
 }
 function isUniqueConstraintError(error) {
-  return error instanceof import_client6.Prisma.PrismaClientKnownRequestError && error.code === "P2002";
+  return error instanceof import_client7.Prisma.PrismaClientKnownRequestError && error.code === "P2002";
 }
 async function reassignCopiedNodesToDuplicatedParents(prisma49, copiedNodeIds, originalNodeIdByCopyId) {
   if (!copiedNodeIds.size) {
@@ -60962,10 +61349,10 @@ function normalizeMetadata(metadata) {
 
 // src/components/TreeBranchLeaf/treebranchleaf-new/api/repeat/repeat-routes.ts
 function createRepeatRouter(prisma49) {
-  const router89 = (0, import_express89.Router)();
+  const router90 = (0, import_express90.Router)();
   const inFlightExecuteByRepeater = /* @__PURE__ */ new Set();
-  router89.use(authenticateToken);
-  router89.post("/:repeaterNodeId/instances", async (req2, res) => {
+  router90.use(authenticateToken);
+  router90.post("/:repeaterNodeId/instances", async (req2, res) => {
     const { repeaterNodeId } = req2.params;
     const body2 = req2.body || {};
     try {
@@ -60997,7 +61384,7 @@ function createRepeatRouter(prisma49) {
       });
     }
   });
-  router89.post("/:repeaterNodeId/instances/execute", async (req2, res) => {
+  router90.post("/:repeaterNodeId/instances/execute", async (req2, res) => {
     const { repeaterNodeId } = req2.params;
     const body2 = req2.body || {};
     if (inFlightExecuteByRepeater.has(repeaterNodeId)) {
@@ -61049,13 +61436,13 @@ function createRepeatRouter(prisma49) {
       inFlightExecuteByRepeater.delete(repeaterNodeId);
     }
   });
-  return router89;
+  return router90;
 }
 
 // src/api/cloud-run-domains.ts
-var import_express90 = require("express");
-var router87 = (0, import_express90.Router)();
-router87.get("/cloud-run-domains", authenticateToken, async (req2, res) => {
+var import_express91 = require("express");
+var router88 = (0, import_express91.Router)();
+router88.get("/cloud-run-domains", authenticateToken, async (req2, res) => {
   try {
     const user = req2.user;
     if (!user.isSuperAdmin) {
@@ -61097,7 +61484,7 @@ router87.get("/cloud-run-domains", authenticateToken, async (req2, res) => {
     });
   }
 });
-router87.post("/cloud-run-domains/verify", authenticateToken, async (req2, res) => {
+router88.post("/cloud-run-domains/verify", authenticateToken, async (req2, res) => {
   try {
     const user = req2.user;
     const { domain } = req2.body;
@@ -61150,13 +61537,13 @@ async function checkDomainReachability(domain) {
     return false;
   }
 }
-var cloud_run_domains_default = router87;
+var cloud_run_domains_default = router88;
 
 // src/routes/userFavoritesRoutes.ts
-var import_express91 = require("express");
+var import_express92 = require("express");
 init_database();
-var router88 = (0, import_express91.Router)();
-router88.get("/", authMiddleware, async (req2, res) => {
+var router89 = (0, import_express92.Router)();
+router89.get("/", authMiddleware, async (req2, res) => {
   try {
     const userId = req2.user?.userId;
     const organizationId = req2.user?.organizationId;
@@ -61188,7 +61575,7 @@ router88.get("/", authMiddleware, async (req2, res) => {
     });
   }
 });
-router88.post("/", authMiddleware, async (req2, res) => {
+router89.post("/", authMiddleware, async (req2, res) => {
   try {
     const userId = req2.user?.userId;
     const organizationId = req2.user?.organizationId;
@@ -61230,7 +61617,7 @@ router88.post("/", authMiddleware, async (req2, res) => {
     });
   }
 });
-router88.delete("/:moduleKey", authMiddleware, async (req2, res) => {
+router89.delete("/:moduleKey", authMiddleware, async (req2, res) => {
   try {
     const userId = req2.user?.userId;
     const organizationId = req2.user?.organizationId;
@@ -61263,7 +61650,7 @@ router88.delete("/:moduleKey", authMiddleware, async (req2, res) => {
     });
   }
 });
-var userFavoritesRoutes_default = router88;
+var userFavoritesRoutes_default = router89;
 
 // src/middleware/websiteDetection.ts
 init_prisma();
@@ -61604,10 +61991,10 @@ function websiteInterceptor(req2, res, next) {
 
 // src/security/securityMiddleware.ts
 var import_express_rate_limit15 = __toESM(require("express-rate-limit"), 1);
-var import_crypto14 = __toESM(require("crypto"), 1);
+var import_crypto15 = __toESM(require("crypto"), 1);
 var securityMonitoring = (req2, res, next) => {
   const startTime = Date.now();
-  const requestId = import_crypto14.default.randomUUID();
+  const requestId = import_crypto15.default.randomUUID();
   req2.requestId = requestId;
   const suspiciousPatterns = [
     /(\<script\>)/gi,
@@ -61845,7 +62232,7 @@ logSecurityEvent("SERVER_STARTUP", {
   environment: process.env.NODE_ENV || "development",
   securityLevel: "ENTERPRISE"
 }, "info");
-var app = (0, import_express92.default)();
+var app = (0, import_express93.default)();
 app.set("trust proxy", 1);
 var port = Number(process.env.PORT || 8080);
 console.log("\u{1F3AF} [BOOTSTRAP] Server will listen on port:", port);
@@ -61938,7 +62325,7 @@ app.use((0, import_cors.default)({
   exposedHeaders: ["X-Total-Count", "X-Rate-Limit-Remaining", "x-organization-id"]
 }));
 app.use(inputSanitization);
-app.use(import_express92.default.json({
+app.use(import_express93.default.json({
   limit: "50mb",
   verify: (req2, res, buf) => {
     try {
@@ -61952,7 +62339,7 @@ app.use(import_express92.default.json({
     }
   }
 }));
-app.use(import_express92.default.urlencoded({ extended: true, limit: "50mb" }));
+app.use(import_express93.default.urlencoded({ extended: true, limit: "50mb" }));
 app.use((0, import_cookie_parser.default)());
 app.use((0, import_express_session.default)({
   secret: process.env.SESSION_SECRET || "crm-dev-secret-2024",
@@ -61978,7 +62365,7 @@ app.use("/uploads", (req2, res, next) => {
   res.setHeader("Access-Control-Allow-Headers", "Content-Type");
   res.setHeader("Cross-Origin-Resource-Policy", "cross-origin");
   next();
-}, import_express92.default.static(uploadsDir, {
+}, import_express93.default.static(uploadsDir, {
   maxAge: "1h",
   // Cache 1 heure
   etag: true,
@@ -62037,7 +62424,7 @@ if (process.env.NODE_ENV === "production") {
   if (import_fs7.default.existsSync(indexHtml)) {
     console.log("\u{1F5C2}\uFE0F [STATIC] Distribution front d\xE9tect\xE9e, activation du serveur statique");
     const assetsDir = import_path7.default.join(distDir, "assets");
-    app.use("/assets", import_express92.default.static(assetsDir, {
+    app.use("/assets", import_express93.default.static(assetsDir, {
       setHeaders: (res) => {
         res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
       }

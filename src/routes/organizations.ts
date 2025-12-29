@@ -366,6 +366,62 @@ const handleZodError = (error: z.ZodError) => {
   };
 };
 
+// ============================================================================
+// 🌐 ROUTES PUBLIQUES (SANS AUTHENTIFICATION)
+// ============================================================================
+
+/**
+ * GET /api/organizations/public
+ * Retourne la liste des organisations publiques pour le dropdown d'inscription
+ * Route accessible SANS authentification (pour inscription type "joinOrg")
+ */
+router.get('/public', async (_req, res) => {
+  try {
+    const organizations = await prisma.organization.findMany({
+      where: {
+        status: { in: ['ACTIVE', 'active'] }
+      },
+      select: {
+        id: true,
+        name: true,
+        description: true,
+        // Optionnel: nombre de membres pour affichage
+        _count: {
+          select: {
+            UserOrganization: {
+              where: { status: 'ACTIVE' }
+            }
+          }
+        }
+      },
+      orderBy: { name: 'asc' }
+    });
+
+    // Formater pour le frontend
+    const publicOrgs = organizations.map(org => ({
+      id: org.id,
+      name: org.name,
+      description: org.description || undefined,
+      memberCount: org._count?.UserOrganization || 0
+    }));
+
+    console.log(`[Organizations] /public - ${publicOrgs.length} organisations retournées`);
+
+    res.json({
+      success: true,
+      data: publicOrgs
+    });
+
+  } catch (error) {
+    console.error('[Organizations] Erreur /public:', error);
+    res.status(500).json({ success: false, error: 'Erreur serveur' });
+  }
+});
+
+// ============================================================================
+// 🔒 ROUTES AUTHENTIFIÉES
+// ============================================================================
+
 // Appliquer l'authentification et rate limiting
 router.use(authMiddleware);
 router.use(organizationsRateLimit);

@@ -1043,6 +1043,7 @@ model Organization {
   TimelineEvent            TimelineEvent[]
   UserOrganization         UserOrganization[]
   UserFavoriteModule       UserFavoriteModule[]
+  JoinRequest              JoinRequest[]
   contact_submissions      contact_submissions[]
   websites                 websites[]
 }
@@ -2061,9 +2062,10 @@ model User {
   TelnyxPhoneNumber                                   TelnyxPhoneNumber[]
   TelnyxSettings                                      TelnyxSettings?
   TelnyxUserConfig                                    TelnyxUserConfig?
-  UserOrganization                                    UserOrganization[]
+  UserOrganization         UserOrganization[]
   UserService                                         UserService[]
   UserFavoriteModule                                  UserFavoriteModule[]
+  JoinRequest                                         JoinRequest[]
   website_blog_posts                                  website_blog_posts[]
   website_media_files                                 website_media_files[]
 }
@@ -2487,6 +2489,33 @@ enum UserOrganizationStatus {
   ACTIVE
   INACTIVE
   REJECTED
+}
+
+// Demandes d'adhésion à une organisation (type "joinOrg" à l'inscription)
+enum JoinRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+model JoinRequest {
+  id             String            @id @default(cuid())
+  userId         String
+  organizationId String
+  message        String?           // Message optionnel de l'utilisateur
+  status         JoinRequestStatus @default(PENDING)
+  reviewedBy     String?           // ID de l'admin qui a traité la demande
+  reviewedAt     DateTime?
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+
+  User           User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  Organization   Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, organizationId]) // Un user ne peut faire qu'une demande par org
+  @@index([userId])
+  @@index([organizationId])
+  @@index([status])
 }
 
 model UserFavoriteModule {

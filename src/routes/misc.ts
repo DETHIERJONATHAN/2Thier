@@ -1,5 +1,5 @@
 import { Router, Response, Request, RequestHandler } from "express";
-import { Prisma, UserOrganizationStatus } from "@prisma/client";
+import { Prisma, UserOrganizationStatus, JoinRequestStatus } from "@prisma/client";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import { authMiddleware } from "../middlewares/auth";
@@ -7,6 +7,7 @@ import { impersonationMiddleware } from "../middlewares/impersonation"; // Impor
 import type { AuthenticatedRequest } from "../middlewares/auth";
 import { JWT_SECRET } from "../config";
 import { prisma } from '../lib/prisma';
+import { randomUUID } from 'crypto';
 
 const router = Router();
 
@@ -27,33 +28,173 @@ const userWithOrgsArgs = {
 
 type UserWithOrgs = Prisma.UserGetPayload<typeof userWithOrgsArgs>;
 
-// POST /api/register - Inscription d'un nouvel utilisateur
+// ============================================================================
+// POST /api/register - Inscription avec support de 3 types
+// - freelance: Créer un compte utilisateur libre (attendre une invitation)
+// - createOrg: Créer un compte ET une organisation (devenir admin)
+// - joinOrg: Créer un compte ET envoyer une demande à une organisation existante
+// ============================================================================
 router.post("/register", async (req: Request, res: Response) => {
-  const { email, password, firstName, lastName } = req.body;
+  const { 
+    email, 
+    password, 
+    firstName, 
+    lastName,
+    registrationType = 'freelance', // Par défaut: utilisateur libre
+    organizationName,  // Pour createOrg
+    domain,            // Pour createOrg (optionnel)
+    organizationId,    // Pour joinOrg
+    message            // Pour joinOrg (message de demande)
+  } = req.body;
 
+  // Validation de base
   if (!email || !password || !firstName) {
     return res.status(400).json({ error: "Email, mot de passe et prénom sont requis" });
   }
 
+  // Validation selon le type
+  if (registrationType === 'createOrg' && !organizationName) {
+    return res.status(400).json({ error: "Le nom de l'organisation est requis pour créer une organisation" });
+  }
+
+  if (registrationType === 'joinOrg' && !organizationId) {
+    return res.status(400).json({ error: "L'ID de l'organisation est requis pour rejoindre une organisation" });
+  }
+
   try {
     const hashedPassword = await bcrypt.hash(password, 10);
-    const user = await prisma.user.create({
-      data: {
-        email,
-        passwordHash: hashedPassword,
-        firstName,
-        lastName,
-        status: 'active',
-        role: 'user',
-      },
+    
+    // Transaction pour créer l'utilisateur + actions selon le type
+    const result = await prisma.$transaction(async (tx) => {
+      // 1. Créer l'utilisateur
+      const userId = randomUUID();
+      const user = await tx.user.create({
+        data: {
+          id: userId,
+          email,
+          passwordHash: hashedPassword,
+          firstName,
+          lastName,
+          status: 'active',
+          role: 'user',
+        },
+      });
+
+      let organization = null;
+      let joinRequest = null;
+
+      // 2. Actions selon le type d'inscription
+      if (registrationType === 'createOrg') {
+        // === TYPE: CRÉER ORGANISATION ===
+        const orgId = randomUUID();
+        
+        organization = await tx.organization.create({
+          data: {
+            id: orgId,
+            name: organizationName.trim(),
+            description: domain ? `Domaine: ${domain}` : undefined,
+            status: 'active',
+          }
+        });
+
+        // Créer le rôle admin pour cette organisation
+        const adminRole = await tx.role.create({
+          data: {
+            id: randomUUID(),
+            name: 'admin',
+            label: 'Administrateur',
+            organizationId: orgId,
+          }
+        });
+
+        // Créer le rôle user par défaut
+        await tx.role.create({
+          data: {
+            id: randomUUID(),
+            name: 'user',
+            label: 'Utilisateur',
+            organizationId: orgId,
+          }
+        });
+
+        // Associer l'utilisateur à l'organisation en tant qu'admin
+        await tx.userOrganization.create({
+          data: {
+            id: randomUUID(),
+            userId: user.id,
+            organizationId: orgId,
+            roleId: adminRole.id,
+            status: UserOrganizationStatus.ACTIVE,
+          }
+        });
+
+        console.log(`[Register] Utilisateur ${email} a créé l'organisation "${organizationName}" (${orgId})`);
+
+      } else if (registrationType === 'joinOrg') {
+        // === TYPE: DEMANDE D'ADHÉSION ===
+        
+        // Vérifier que l'organisation existe
+        const targetOrg = await tx.organization.findUnique({
+          where: { id: organizationId }
+        });
+
+        if (!targetOrg) {
+          throw new Error("Organisation non trouvée");
+        }
+
+        // Créer la demande d'adhésion
+        joinRequest = await tx.joinRequest.create({
+          data: {
+            id: randomUUID(),
+            userId: user.id,
+            organizationId: organizationId,
+            message: message?.trim() || null,
+            status: JoinRequestStatus.PENDING,
+          },
+          include: {
+            Organization: { select: { name: true } }
+          }
+        });
+
+        console.log(`[Register] Utilisateur ${email} a envoyé une demande à "${targetOrg.name}" (${organizationId})`);
+
+      } else {
+        // === TYPE: UTILISATEUR LIBRE (freelance) ===
+        console.log(`[Register] Nouvel utilisateur libre: ${email}`);
+      }
+
+      return { user, organization, joinRequest };
     });
-    res.status(201).json({ success: true, id: user.id, email: user.email });
+
+    // Message de succès adapté
+    let successMessage = 'Inscription réussie !';
+    if (registrationType === 'createOrg') {
+      successMessage = `Organisation "${organizationName}" créée avec succès. Vous en êtes l'administrateur.`;
+    } else if (registrationType === 'joinOrg') {
+      successMessage = `Demande d'adhésion envoyée. En attente d'approbation de l'organisation.`;
+    }
+
+    res.status(201).json({ 
+      success: true, 
+      id: result.user.id, 
+      email: result.user.email,
+      registrationType,
+      organization: result.organization ? { id: result.organization.id, name: result.organization.name } : null,
+      joinRequest: result.joinRequest ? { id: result.joinRequest.id, status: result.joinRequest.status } : null,
+      message: successMessage
+    });
+
   } catch (error) {
     console.error("[API][register] Erreur lors de l'inscription:", error);
     
     // Gestion spécifique de l'erreur de contrainte d'unicité
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
       return res.status(409).json({ error: "Cette adresse email est déjà utilisée." });
+    }
+    
+    // Erreur métier
+    if (error instanceof Error) {
+      return res.status(400).json({ error: error.message });
     }
     
     res.status(500).json({ error: "Erreur lors de la création de l'utilisateur" });

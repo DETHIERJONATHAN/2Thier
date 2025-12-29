@@ -73,6 +73,7 @@ import integrationsRoutes from './integrations'; // 🔌 Intégrations (advertis
 import publicLeadsRoutes from './publicLeads'; // 🌍 API publique leads
 import documentsRoutes from './documents'; // 📄 Routes documents (templates, génération PDF)
 import syncTempRoutes from './sync-temp'; // 🔄 TEMPORAIRE: Sync documents
+import joinRequestsRoutes from './join-requests'; // 📝 Routes demandes d'adhésion
 import { authenticateToken, fetchFullUser } from '../middleware/auth'; // 🔐 Middleware auth pour TBL
 
 const apiRouter = Router();
@@ -317,6 +318,10 @@ apiRouter.use('/dependencies', dependenciesApiRoutes);
 
 // Routes des invitations
 apiRouter.use('/invitations', invitationRoutes);
+
+
+// Routes des demandes d'adhésion (JoinRequest)
+apiRouter.use('/join-requests', joinRequestsRoutes);
 
 
 // 🎯 DEVIS1MINUTE - Nouvelles routes modularisées

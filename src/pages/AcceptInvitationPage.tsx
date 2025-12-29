@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../auth/useAuth';
 import { Button, Card, Form, Input, Spin, Typography, Alert } from 'antd';
+import { MailOutlined } from '@ant-design/icons';
 import { NotificationManager, NotificationsContainer } from '../components/Notifications';
 
 const { Title, Text } = Typography;
@@ -58,11 +59,24 @@ export default function AcceptInvitationPage() {
         throw new Error(responseData.message || "Erreur lors de l'acceptation de l'invitation.");
       }
 
-      NotificationManager.success(responseData.message || 'Opération réussie !');
+      // Message différent si workspace
+      if (invitation?.createWorkspaceAccount) {
+        NotificationManager.success(
+          'Inscription réussie ! Vous allez recevoir vos identifiants Google Workspace par email.',
+          'Compte créé avec succès',
+          5000
+        );
+      } else {
+        NotificationManager.success(
+          responseData.message || 'Opération réussie !',
+          'Bienvenue !',
+          3000
+        );
+      }
       
       // Si l'utilisateur était déjà connecté, on le redirige vers le tableau de bord.
       // Sinon, vers la page de connexion pour qu'il puisse se connecter.
-      navigate(authenticatedUser ? '/dashboard' : '/login');
+      setTimeout(() => navigate(authenticatedUser ? '/dashboard' : '/login'), 2000);
 
     } catch (err: any) {
       setError(err.message);
@@ -123,6 +137,26 @@ export default function AcceptInvitationPage() {
         <Text className="block text-center mb-4">
           Pour rejoindre <strong>{invitation.organization.name}</strong> en tant que <strong>{invitation.role.label || invitation.role.name}</strong>.
         </Text>
+
+        {/* Info Google Workspace si activé */}
+        {invitation.createWorkspaceAccount && (
+          <Alert
+            type="success"
+            message="Compte Google Workspace inclus !"
+            description={
+              <>
+                <p>Un compte Google Workspace sera créé automatiquement pour vous.</p>
+                <p className="text-sm mb-0">
+                  Vous recevrez vos identifiants par email après validation de votre inscription.
+                </p>
+              </>
+            }
+            showIcon
+            icon={<MailOutlined />}
+            className="mb-4"
+          />
+        )}
+
         <Form form={form} layout="vertical" onFinish={handleAccept}>
           <Form.Item label="Prénom" name="firstName" rules={[{ required: true, message: 'Le prénom est requis.' }]}>
             <Input />

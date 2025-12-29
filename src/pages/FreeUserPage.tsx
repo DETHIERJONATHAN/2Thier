@@ -1,10 +1,65 @@
-import React, { useState } from 'react';
-import { Button, Typography, Card, Space, Modal, Form, Input, message } from 'antd';
-import { LogoutOutlined, UserOutlined, BankOutlined } from '@ant-design/icons';
+import React, { useState, useEffect } from 'react';
+import { Button, Typography, Card, Space, Modal, Form, Input, message, Spin, Tag } from 'antd';
+import { LogoutOutlined, UserOutlined, BankOutlined, ClockCircleOutlined } from '@ant-design/icons';
 import { useAuth } from '../auth/useAuth';
 import { useAuthenticatedApi } from '../hooks/useAuthenticatedApi';
 
 const { Title, Text } = Typography;
+
+// Composant pour afficher les demandes d'adhésion en attente
+const JoinRequestsStatus: React.FC = () => {
+  const { api } = useAuthenticatedApi();
+  const [joinRequests, setJoinRequests] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchJoinRequests = async () => {
+      try {
+        const response = await api.get('/api/join-requests/my-requests');
+        if (response.success) {
+          setJoinRequests(response.data || []);
+        }
+      } catch (error) {
+        console.error('Erreur chargement demandes:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchJoinRequests();
+  }, [api]);
+
+  if (loading) return <Spin size="small" />;
+  if (joinRequests.length === 0) return null;
+
+  return (
+    <div className="bg-blue-50 border border-blue-200 p-4 rounded-lg">
+      <div className="flex items-center gap-2 mb-2">
+        <ClockCircleOutlined className="text-blue-600" />
+        <Text strong className="text-blue-800">Mes demandes en attente</Text>
+      </div>
+      <div className="space-y-2">
+        {joinRequests.map((req: any) => (
+          <div key={req.id} className="flex justify-between items-center bg-white p-2 rounded">
+            <div>
+              <Text strong>{req.Organization?.name || 'Organisation'}</Text>
+              <br />
+              <Text className="text-xs text-gray-500">
+                Envoyée le {new Date(req.createdAt).toLocaleDateString()}
+              </Text>
+            </div>
+            <Tag color={
+              req.status === 'PENDING' ? 'blue' :
+              req.status === 'APPROVED' ? 'green' : 'red'
+            }>
+              {req.status === 'PENDING' ? 'En attente' :
+               req.status === 'APPROVED' ? 'Approuvée' : 'Refusée'}
+            </Tag>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+};
 
 export default function FreeUserPage() {
   const [msgApi, msgCtx] = message.useMessage();
@@ -82,6 +137,9 @@ export default function FreeUserPage() {
               Contactez un administrateur pour obtenir l'accès aux fonctionnalités du CRM.
             </Text>
           </div>
+
+          {/* Section demandes d'adhésion */}
+          <JoinRequestsStatus />
 
           {/* Actions disponibles */}
           <Space direction="vertical" className="w-full" size="middle">
