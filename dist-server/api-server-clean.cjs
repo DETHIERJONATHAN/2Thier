@@ -8912,16 +8912,350 @@ var emailService = new EmailService();
 
 // src/routes/invitations.ts
 init_prisma();
+
+// src/services/GoogleWorkspaceService.ts
+var import_googleapis5 = require("googleapis");
+var import_google_auth_library = require("google-auth-library");
+var GoogleWorkspaceService = class {
+  config;
+  adminClient;
+  constructor(config) {
+    this.config = config;
+    this.initializeClient();
+  }
+  initializeClient() {
+    try {
+      const jwtClient = new import_google_auth_library.JWT({
+        email: this.config.serviceAccountEmail,
+        key: this.config.privateKey.replace(/\\n/g, "\n"),
+        scopes: [
+          "https://www.googleapis.com/auth/admin.directory.user",
+          "https://www.googleapis.com/auth/admin.directory.group",
+          "https://www.googleapis.com/auth/admin.directory.orgunit"
+        ],
+        subject: this.config.adminEmail
+        // Impersonification de l'admin
+      });
+      this.adminClient = import_googleapis5.google.admin({ version: "directory_v1", auth: jwtClient });
+    } catch (error) {
+      console.error("[GoogleWorkspace] Erreur initialisation client:", error);
+      throw new Error("Impossible d'initialiser le client Google Workspace");
+    }
+  }
+  /**
+   * Teste la connexion à Google Workspace
+   */
+  async testConnection() {
+    try {
+      console.log("\u{1F9EA} [GoogleWorkspace] Test de connexion...");
+      await this.adminClient.users.list({
+        domain: this.config.domain,
+        maxResults: 1
+      });
+      console.log("\u2705 [GoogleWorkspace] Test de connexion r\xE9ussi");
+      return {
+        success: true,
+        message: `Connexion r\xE9ussie au domaine ${this.config.domain}`
+      };
+    } catch (error) {
+      console.error("\u274C [GoogleWorkspace] Erreur test connexion:", error);
+      const errorMessage = error instanceof Error ? error.message : "Erreur inconnue";
+      return {
+        success: false,
+        message: `Erreur de connexion: ${errorMessage}`
+      };
+    }
+  }
+  /**
+   * Crée un nouvel utilisateur Google Workspace
+   */
+  async createUser(userData) {
+    try {
+      console.log(`\u{1F464} [GoogleWorkspace] Cr\xE9ation utilisateur ${userData.email}...`);
+      const googleUser = {
+        name: {
+          givenName: userData.firstName,
+          familyName: userData.lastName
+        },
+        primaryEmail: userData.email,
+        password: userData.password,
+        suspended: false,
+        orgUnitPath: "/"
+        // Unité organisationnelle par défaut
+      };
+      const response = await this.adminClient.users.insert({
+        requestBody: googleUser
+      });
+      console.log("\u2705 [GoogleWorkspace] Utilisateur cr\xE9\xE9 avec succ\xE8s:", userData.email);
+      return {
+        success: true,
+        user: response.data
+      };
+    } catch (error) {
+      console.error("\u274C [GoogleWorkspace] Erreur cr\xE9ation utilisateur:", error);
+      const errorMessage = error instanceof Error ? error.message : "Erreur inconnue";
+      return {
+        success: false,
+        error: errorMessage
+      };
+    }
+  }
+  /**
+   * Met à jour le mot de passe d'un utilisateur
+   */
+  async updateUserPassword(email, newPassword) {
+    try {
+      console.log(`\u{1F511} [GoogleWorkspace] Mise \xE0 jour mot de passe ${email}...`);
+      await this.adminClient.users.update({
+        userKey: email,
+        requestBody: {
+          password: newPassword
+        }
+      });
+      console.log("\u2705 [GoogleWorkspace] Mot de passe mis \xE0 jour:", email);
+      return { success: true };
+    } catch (error) {
+      console.error("\u274C [GoogleWorkspace] Erreur mise \xE0 jour mot de passe:", error);
+      const errorMessage = error instanceof Error ? error.message : "Erreur inconnue";
+      return {
+        success: false,
+        error: errorMessage
+      };
+    }
+  }
+  /**
+   * Vérifie si un utilisateur existe
+   */
+  async userExists(email) {
+    try {
+      await this.adminClient.users.get({ userKey: email });
+      return true;
+    } catch {
+      return false;
+    }
+  }
+  /**
+   * Liste tous les utilisateurs du domaine
+   */
+  async listUsers() {
+    try {
+      const response = await this.adminClient.users.list({
+        domain: this.config.domain,
+        maxResults: 500
+      });
+      return response.data.users ?? [];
+    } catch (error) {
+      console.error("[GoogleWorkspace] Erreur liste utilisateurs:", error);
+      return [];
+    }
+  }
+  /**
+   * Supprime un utilisateur
+   */
+  async deleteUser(email) {
+    try {
+      console.log(`\u{1F5D1}\uFE0F [GoogleWorkspace] Suppression utilisateur ${email}...`);
+      await this.adminClient.users.delete({ userKey: email });
+      console.log("\u2705 [GoogleWorkspace] Utilisateur supprim\xE9:", email);
+      return { success: true };
+    } catch (error) {
+      console.error("\u274C [GoogleWorkspace] Erreur suppression utilisateur:", error);
+      const errorMessage = error instanceof Error ? error.message : "Erreur inconnue";
+      return {
+        success: false,
+        error: errorMessage
+      };
+    }
+  }
+};
+
+// src/services/GoogleWorkspaceIntegrationService.ts
+init_crypto();
+init_prisma();
+var GoogleWorkspaceIntegrationService = class _GoogleWorkspaceIntegrationService {
+  static instance = null;
+  googleWorkspaceService = null;
+  isInitialized = false;
+  constructor() {
+  }
+  static getInstance() {
+    if (!this.instance) {
+      this.instance = new _GoogleWorkspaceIntegrationService();
+    }
+    return this.instance;
+  }
+  /**
+   * Initialise le service avec la configuration Google Workspace
+   */
+  async initialize() {
+    try {
+      const config = await db.googleWorkspaceConfig.findFirst({
+        where: { isActive: true }
+      });
+      if (!config) {
+        console.log("\u26A0\uFE0F [GoogleWorkspaceIntegration] Aucune configuration Google Workspace trouv\xE9e");
+        this.isInitialized = false;
+        return false;
+      }
+      const decryptedConfig = {
+        clientId: config.clientId,
+        clientSecret: decrypt(config.clientSecret),
+        domain: config.domain,
+        adminEmail: config.adminEmail,
+        serviceAccountEmail: config.serviceAccountEmail,
+        privateKey: decrypt(config.privateKey),
+        isActive: config.isActive
+      };
+      this.googleWorkspaceService = new GoogleWorkspaceService(decryptedConfig);
+      this.isInitialized = true;
+      console.log("\u2705 [GoogleWorkspaceIntegration] Service initialis\xE9 avec succ\xE8s");
+      return true;
+    } catch (error) {
+      console.error("\u274C [GoogleWorkspaceIntegration] Erreur initialisation:", error);
+      this.isInitialized = false;
+      return false;
+    }
+  }
+  /**
+   * Crée automatiquement un compte Google Workspace pour un utilisateur CRM
+   */
+  async createWorkspaceUserForCrmUser(crmUser) {
+    try {
+      console.log(`\u{1F680} [GoogleWorkspaceIntegration] Cr\xE9ation compte Workspace pour ${crmUser.email}...`);
+      if (!this.isInitialized || !this.googleWorkspaceService) {
+        const initialized = await this.initialize();
+        if (!initialized) {
+          return {
+            success: false,
+            error: "Service Google Workspace non configur\xE9"
+          };
+        }
+      }
+      const tempPassword = this.generateSecurePassword();
+      const result = await this.googleWorkspaceService.createUser({
+        firstName: crmUser.firstName,
+        lastName: crmUser.lastName,
+        email: crmUser.email,
+        password: tempPassword
+      });
+      if (result.success) {
+        await this.saveWorkspaceUserInfo(crmUser.id, {
+          workspaceUserId: result.user?.id || "unknown",
+          email: crmUser.email,
+          tempPassword,
+          // À chiffrer en production
+          createdAt: /* @__PURE__ */ new Date()
+        });
+        console.log(`\u2705 [GoogleWorkspaceIntegration] Compte Workspace cr\xE9\xE9 pour ${crmUser.email}`);
+        await this.sendWelcomeEmail(crmUser, tempPassword);
+        return {
+          success: true,
+          workspaceUser: result.user
+        };
+      } else {
+        console.error(`\u274C [GoogleWorkspaceIntegration] \xC9chec cr\xE9ation compte pour ${crmUser.email}:`, result.error);
+        return {
+          success: false,
+          error: result.error || "Erreur inconnue lors de la cr\xE9ation du compte"
+        };
+      }
+    } catch (error) {
+      console.error("\u274C [GoogleWorkspaceIntegration] Erreur cr\xE9ation utilisateur:", error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : "Erreur inconnue"
+      };
+    }
+  }
+  /**
+   * Vérifie si l'intégration Google Workspace est active
+   */
+  async isIntegrationActive() {
+    try {
+      const config = await db.googleWorkspaceConfig.findFirst({
+        where: { isActive: true }
+      });
+      return !!config;
+    } catch (error) {
+      console.error("\u274C [GoogleWorkspaceIntegration] Erreur v\xE9rification statut:", error);
+      return false;
+    }
+  }
+  /**
+   * Met à jour le mot de passe d'un utilisateur Google Workspace
+   */
+  async updateUserPassword(email, newPassword) {
+    try {
+      if (!this.isInitialized || !this.googleWorkspaceService) {
+        const initialized = await this.initialize();
+        if (!initialized) {
+          return {
+            success: false,
+            error: "Service Google Workspace non configur\xE9"
+          };
+        }
+      }
+      return await this.googleWorkspaceService.updateUserPassword(email, newPassword);
+    } catch (error) {
+      console.error("\u274C [GoogleWorkspaceIntegration] Erreur mise \xE0 jour mot de passe:", error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : "Erreur inconnue"
+      };
+    }
+  }
+  /**
+   * Génère un mot de passe sécurisé temporaire
+   */
+  generateSecurePassword() {
+    const length = 16;
+    const charset = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*";
+    let password = "";
+    password += "ABCDEFGHIJKLMNOPQRSTUVWXYZ"[Math.floor(Math.random() * 26)];
+    password += "abcdefghijklmnopqrstuvwxyz"[Math.floor(Math.random() * 26)];
+    password += "0123456789"[Math.floor(Math.random() * 10)];
+    password += "!@#$%^&*"[Math.floor(Math.random() * 8)];
+    for (let i = password.length; i < length; i++) {
+      password += charset[Math.floor(Math.random() * charset.length)];
+    }
+    return password.split("").sort(() => Math.random() - 0.5).join("");
+  }
+  /**
+   * Sauvegarde les informations du compte Workspace dans la DB
+   */
+  async saveWorkspaceUserInfo(crmUserId, workspaceInfo) {
+    try {
+      console.log(`\u{1F4BE} [GoogleWorkspaceIntegration] Sauvegarde infos Workspace pour user ${crmUserId}`, workspaceInfo);
+    } catch (error) {
+      console.error("\u274C [GoogleWorkspaceIntegration] Erreur sauvegarde infos Workspace:", error);
+    }
+  }
+  /**
+   * Envoie un email de bienvenue avec les informations de connexion
+   */
+  async sendWelcomeEmail(user, _tempPassword) {
+    try {
+      console.log(`\u{1F4E7} [GoogleWorkspaceIntegration] Envoi email de bienvenue \xE0 ${user.email}`);
+    } catch (error) {
+      console.error("\u274C [GoogleWorkspaceIntegration] Erreur envoi email de bienvenue:", error);
+    }
+  }
+};
+var googleWorkspaceIntegration = GoogleWorkspaceIntegrationService.getInstance();
+
+// src/routes/invitations.ts
 var router8 = (0, import_express9.Router)();
 router8.use(authMiddleware, impersonationMiddleware);
 var createInvitationSchema = import_zod.z.object({
   email: import_zod.z.string().email("L'adresse e-mail est invalide."),
   roleName: import_zod.z.string().min(1, "Le nom du r\xF4le est requis."),
-  organizationId: import_zod.z.string().uuid("L'ID de l'organisation est requis et doit \xEAtre un UUID valide.")
+  organizationId: import_zod.z.string().uuid("L'ID de l'organisation est requis et doit \xEAtre un UUID valide."),
+  createWorkspaceAccount: import_zod.z.boolean().optional().default(false)
+  // ✅ NOUVEAU
 });
 router8.post("/", authMiddleware, requireRole2(["admin", "super_admin"]), async (req2, res) => {
   try {
-    const { email, roleName, organizationId } = createInvitationSchema.parse(req2.body);
+    const { email, roleName, organizationId, createWorkspaceAccount } = createInvitationSchema.parse(req2.body);
     const inviterId = req2.user.userId;
     const existingUserInOrg = await db.userOrganization.findFirst({
       where: {
@@ -8973,7 +9307,9 @@ router8.post("/", authMiddleware, requireRole2(["admin", "super_admin"]), async 
       // Relation "Invitation_invitedByIdToUser" côté Invitation est exposée comme
       // User_Invitation_invitedByIdToUser dans le client Prisma
       User_Invitation_invitedByIdToUser: { connect: { id: inviterId } },
-      status: "PENDING"
+      status: "PENDING",
+      createWorkspaceAccount: createWorkspaceAccount || false
+      // ✅ NOUVEAU
     };
     if (targetUser) {
       invitationData.User_Invitation_targetUserIdToUser = { connect: { id: targetUser.id } };
@@ -9134,6 +9470,10 @@ router8.post("/accept", async (req2, res) => {
         token: invitationToken,
         expiresAt: { gte: /* @__PURE__ */ new Date() },
         status: "PENDING"
+      },
+      include: {
+        Organization: true
+        // Pour récupérer les infos organisation
       }
     });
     if (!invitation) {
@@ -9160,7 +9500,28 @@ router8.post("/accept", async (req2, res) => {
           data: { status: "ACCEPTED" }
         });
       });
-      res.status(200).json({ success: true, message: `Vous avez rejoint l'organisation avec succ\xE8s.` });
+      if (invitation.createWorkspaceAccount) {
+        try {
+          const workspaceService = new GoogleWorkspaceIntegrationService(invitation.organizationId);
+          await workspaceService.initialize();
+          const workspaceResult = await workspaceService.createUserAccount(
+            user.id,
+            user.firstName || "",
+            user.lastName || ""
+          );
+          if (workspaceResult.success) {
+            console.log(`\u2705 [Invitation] Compte workspace cr\xE9\xE9 pour ${user.email}: ${workspaceResult.email}`);
+          } else {
+            console.error(`\u26A0\uFE0F [Invitation] \xC9chec cr\xE9ation workspace pour ${user.email}:`, workspaceResult.error);
+          }
+        } catch (wsError) {
+          console.error(`\u26A0\uFE0F [Invitation] Erreur cr\xE9ation workspace:`, wsError);
+        }
+      }
+      res.status(200).json({
+        success: true,
+        message: invitation.createWorkspaceAccount ? `Vous avez rejoint l'organisation avec succ\xE8s. Un compte Google Workspace sera cr\xE9\xE9.` : `Vous avez rejoint l'organisation avec succ\xE8s.`
+      });
       return;
     }
     const { firstName, lastName, password } = acceptInvitationSchema.parse(req2.body);
@@ -9194,7 +9555,34 @@ router8.post("/accept", async (req2, res) => {
       });
       return createdUser;
     });
-    res.status(201).json({ success: true, message: "Inscription r\xE9ussie!", data: { userId: newUser.id } });
+    let workspaceEmail = null;
+    if (invitation.createWorkspaceAccount) {
+      try {
+        const workspaceService = new GoogleWorkspaceIntegrationService(invitation.organizationId);
+        await workspaceService.initialize();
+        const workspaceResult = await workspaceService.createUserAccount(
+          newUser.id,
+          firstName,
+          lastName
+        );
+        if (workspaceResult.success) {
+          workspaceEmail = workspaceResult.email || null;
+          console.log(`\u2705 [Invitation] Compte workspace cr\xE9\xE9 pour nouvel utilisateur: ${workspaceEmail}`);
+        } else {
+          console.error(`\u26A0\uFE0F [Invitation] \xC9chec cr\xE9ation workspace:`, workspaceResult.error);
+        }
+      } catch (wsError) {
+        console.error(`\u26A0\uFE0F [Invitation] Erreur cr\xE9ation workspace:`, wsError);
+      }
+    }
+    res.status(201).json({
+      success: true,
+      message: invitation.createWorkspaceAccount ? "Inscription r\xE9ussie! Votre compte Google Workspace est en cours de cr\xE9ation." : "Inscription r\xE9ussie!",
+      data: {
+        userId: newUser.id,
+        workspaceEmail
+      }
+    });
   } catch (error) {
     if (error instanceof import_zod.z.ZodError) {
       res.status(400).json({ message: "Donn\xE9es d'inscription invalides.", details: error.errors });
@@ -9330,7 +9718,7 @@ var import_express10 = require("express");
 init_database();
 var import_zod2 = require("zod");
 var import_express_rate_limit = __toESM(require("express-rate-limit"), 1);
-var import_crypto3 = require("crypto");
+var import_crypto4 = require("crypto");
 var router9 = (0, import_express10.Router)();
 var prisma7 = db;
 var sanitizeString = (input) => {
@@ -9856,7 +10244,7 @@ router9.post("/", organizationsCreateRateLimit, requireRole2(["super_admin"]), a
       });
     }
     const now = /* @__PURE__ */ new Date();
-    const generatedId = (0, import_crypto3.randomUUID)();
+    const generatedId = (0, import_crypto4.randomUUID)();
     const newOrganization = await prisma7.$transaction(async (tx) => {
       const org = await tx.organization.create({
         data: {
@@ -10482,10 +10870,10 @@ var autoGoogleAuthRoutes_default = router10;
 var import_express13 = require("express");
 init_prisma();
 init_crypto();
-var import_googleapis6 = require("googleapis");
+var import_googleapis7 = require("googleapis");
 
 // src/utils/googleTokenRefresh.ts
-var import_googleapis5 = require("googleapis");
+var import_googleapis6 = require("googleapis");
 init_prisma();
 async function refreshGoogleTokenIfNeeded(organizationId) {
   try {
@@ -10538,7 +10926,7 @@ async function refreshGoogleTokenIfNeeded(organizationId) {
       return { success: false, error: "missing_oauth_config" };
     }
     console.log("[REFRESH-TOKEN] \u{1F527} Configuration OAuth client...");
-    const oauth2Client = new import_googleapis5.google.auth.OAuth2(
+    const oauth2Client = new import_googleapis6.google.auth.OAuth2(
       googleConfig.clientId,
       googleConfig.clientSecret,
       googleConfig.redirectUri
@@ -11116,7 +11504,7 @@ router12.get("/callback", async (req2, res) => {
     console.log("[GOOGLE-AUTH] \u{1F504} \xC9change du code contre les tokens...");
     const actualRedirectUri = googleOAuthConfig.redirectUri;
     console.log("[GOOGLE-AUTH] \u{1F3AF} Redirect URI pour \xE9change de tokens:", actualRedirectUri);
-    const oauth2Client = new import_googleapis6.google.auth.OAuth2(
+    const oauth2Client = new import_googleapis7.google.auth.OAuth2(
       config.clientId,
       config.clientSecret,
       actualRedirectUri
@@ -11130,7 +11518,7 @@ router12.get("/callback", async (req2, res) => {
         scope: tokens2.scope
       });
       oauth2Client.setCredentials(tokens2);
-      const oauth2 = import_googleapis6.google.oauth2({ version: "v2", auth: oauth2Client });
+      const oauth2 = import_googleapis7.google.oauth2({ version: "v2", auth: oauth2Client });
       const userInfo = await oauth2.userinfo.get();
       console.log("[GOOGLE-AUTH] \u2705 Informations du compte Google connect\xE9:", {
         email: userInfo.data.email,
@@ -11257,13 +11645,13 @@ router12.get("/status", authMiddleware, async (req2, res) => {
     let tokenValid = false;
     let scopes = [];
     try {
-      const oauth2Client = new import_googleapis6.google.auth.OAuth2();
+      const oauth2Client = new import_googleapis7.google.auth.OAuth2();
       oauth2Client.setCredentials({
         access_token: refreshResult.accessToken,
         refresh_token: refreshResult.refreshToken,
         expiry_date: refreshResult.expiresAt?.getTime()
       });
-      const oauth2 = import_googleapis6.google.oauth2({ version: "v2", auth: oauth2Client });
+      const oauth2 = import_googleapis7.google.oauth2({ version: "v2", auth: oauth2Client });
       const userInfo = await oauth2.userinfo.get();
       userEmail = userInfo.data.email;
       tokenValid = true;
@@ -11333,7 +11721,7 @@ router12.post("/disconnect", authMiddleware, async (req2, res) => {
     if (googleToken) {
       try {
         console.log("[GOOGLE-AUTH] \u{1F6AB} R\xE9vocation du token c\xF4t\xE9 Google...");
-        const oauth2Client = new import_googleapis6.google.auth.OAuth2();
+        const oauth2Client = new import_googleapis7.google.auth.OAuth2();
         oauth2Client.setCredentials({
           access_token: googleToken.accessToken
         });
@@ -17619,7 +18007,7 @@ var projects_default = router30;
 var import_express32 = require("express");
 
 // src/services/GmailService.ts
-var import_googleapis7 = require("googleapis");
+var import_googleapis8 = require("googleapis");
 
 // src/services/AutoGoogleAuthService.ts
 init_prisma();
@@ -17837,7 +18225,7 @@ var GmailService = class {
   }
   async getGmailClient(userId) {
     const oauth2Client = this.getOAuthClientForUser(userId);
-    return import_googleapis7.google.gmail({ version: "v1", auth: oauth2Client });
+    return import_googleapis8.google.gmail({ version: "v1", auth: oauth2Client });
   }
   // Extrait un header spécifique d'une liste de headers
   extractHeader(headers, name) {
@@ -20718,7 +21106,7 @@ var import_express40 = __toESM(require("express"), 1);
 var import_fs5 = __toESM(require("fs"), 1);
 var import_path4 = __toESM(require("path"), 1);
 init_prisma();
-var import_crypto8 = require("crypto");
+var import_crypto9 = require("crypto");
 var geminiSingleton = new GoogleGeminiService_default();
 var router39 = import_express40.default.Router();
 router39.use(authMiddleware);
@@ -20792,7 +21180,7 @@ async function logAiUsage(params) {
     };
     await db.aiUsageLog?.create?.({
       data: {
-        id: (0, import_crypto8.randomUUID)(),
+        id: (0, import_crypto9.randomUUID)(),
         organizationId: organizationId || void 0,
         userId: userId || void 0,
         type,
@@ -20808,7 +21196,7 @@ async function logAiUsage(params) {
     }).catch(async () => {
       await db.$executeRawUnsafe(
         'INSERT INTO "AiUsageLog" (id, "userId", "organizationId", type, model, "tokensPrompt", "tokensOutput", "latencyMs", success, "errorCode", "errorMessage", meta) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12);',
-        (0, import_crypto8.randomUUID)(),
+        (0, import_crypto9.randomUUID)(),
         userId,
         organizationId,
         type,
@@ -22472,7 +22860,7 @@ var ai_default = router39;
 var import_express41 = __toESM(require("express"), 1);
 var import_fs6 = __toESM(require("fs"), 1);
 var import_path5 = __toESM(require("path"), 1);
-var import_crypto9 = __toESM(require("crypto"), 1);
+var import_crypto10 = __toESM(require("crypto"), 1);
 var router40 = import_express41.default.Router();
 router40.use(authenticateToken);
 var ALLOWED_ROOTS = ["src", "prisma"];
@@ -22556,7 +22944,7 @@ router40.get("/code/file", (req2, res) => {
     const content = import_fs6.default.readFileSync(target, "utf8");
     const totalBytes = Buffer.byteLength(content, "utf8");
     const lines = content.split(/\r?\n/);
-    const etag = 'W/"' + import_crypto9.default.createHash("sha256").update(content).digest("hex").slice(0, 16) + '"';
+    const etag = 'W/"' + import_crypto10.default.createHash("sha256").update(content).digest("hex").slice(0, 16) + '"';
     const ifNoneMatch = req2.headers["if-none-match"];
     if (ifNoneMatch && ifNoneMatch === etag) {
       res.status(304).end();
@@ -28124,7 +28512,7 @@ function getValidationErrorMessage(parentType, parentSubType, childType, childSu
 }
 
 // src/components/TreeBranchLeaf/treebranchleaf-new/api/treebranchleaf-routes.ts
-var import_crypto11 = require("crypto");
+var import_crypto12 = require("crypto");
 init_operation_interpreter();
 
 // src/components/TreeBranchLeaf/treebranchleaf-new/api/registry/repeat-id-registry.ts
@@ -32811,7 +33199,7 @@ async function deepCopyNodeInternal(prisma49, req2, nodeId, opts) {
 var import_express56 = require("express");
 var import_client5 = require("@prisma/client");
 init_database();
-var import_crypto10 = require("crypto");
+var import_crypto11 = require("crypto");
 var router55 = (0, import_express56.Router)();
 var prisma29 = db;
 function getAuthCtx2(req2) {
@@ -32856,7 +33244,7 @@ router55.post("/nodes/:nodeId/tables", async (req2, res) => {
       });
       finalName = `${name} (${existingCount + 1})`;
     }
-    const tableId = (0, import_crypto10.randomUUID)();
+    const tableId = (0, import_crypto11.randomUUID)();
     const tableData = {
       id: tableId,
       nodeId,
@@ -33537,7 +33925,7 @@ var computeLogicVersion = () => {
     entries: stats.entries,
     parseCount: stats.parseCount
   });
-  const version = (0, import_crypto11.createHash)("sha1").update(seed).digest("hex").slice(0, 8);
+  const version = (0, import_crypto12.createHash)("sha1").update(seed).digest("hex").slice(0, 8);
   return { version, metrics, stats };
 };
 function getAuthCtx3(req2) {
@@ -33893,7 +34281,7 @@ router56.post("/trees", async (req2, res) => {
     if (!targetOrgId) {
       return res.status(400).json({ error: "organizationId requis (en-t\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xAAte x-organization-id ou dans le corps)" });
     }
-    const id = (0, import_crypto11.randomUUID)();
+    const id = (0, import_crypto12.randomUUID)();
     const tree = await prisma30.treeBranchLeafTree.create({
       data: {
         id,
@@ -36076,7 +36464,7 @@ router56.put("/trees/:treeId/nodes/:nodeId/data", async (req2, res) => {
           updatedAt: /* @__PURE__ */ new Date()
         },
         create: {
-          id: (0, import_crypto11.randomUUID)(),
+          id: (0, import_crypto12.randomUUID)(),
           nodeId: targetNodeId,
           exposedKey: safeExposedKey || `var_${String(nodeId).slice(0, 4)}`,
           displayName,
@@ -36518,7 +36906,7 @@ router56.post("/nodes/:nodeId/formulas", async (req2, res) => {
     }
     const formula = await prisma30.treeBranchLeafNodeFormula.create({
       data: {
-        id: (0, import_crypto11.randomUUID)(),
+        id: (0, import_crypto12.randomUUID)(),
         nodeId,
         organizationId: organizationId || null,
         name: uniqueName,
@@ -36934,7 +37322,7 @@ router56.post("/nodes/:nodeId/conditions", async (req2, res) => {
     }
     const condition = await prisma30.treeBranchLeafNodeCondition.create({
       data: {
-        id: (0, import_crypto11.randomUUID)(),
+        id: (0, import_crypto12.randomUUID)(),
         nodeId,
         organizationId: organizationId || null,
         name: uniqueName,
@@ -37691,7 +38079,7 @@ router56.post("/nodes/:nodeId/table/generate-selects", async (req2, res) => {
     let insertOrder = siblingsCount;
     const now = /* @__PURE__ */ new Date();
     for (const item of toCreate) {
-      const newNodeId = (0, import_crypto11.randomUUID)();
+      const newNodeId = (0, import_crypto12.randomUUID)();
       const nodeMetadata = {
         generatedFrom: "table_lookup",
         tableNodeId: baseNode.id,
@@ -37730,7 +38118,7 @@ router56.post("/nodes/:nodeId/table/generate-selects", async (req2, res) => {
       });
       await prisma30.treeBranchLeafSelectConfig.create({
         data: {
-          id: (0, import_crypto11.randomUUID)(),
+          id: (0, import_crypto12.randomUUID)(),
           nodeId: newNode.id,
           options: [],
           multiple: false,
@@ -39269,7 +39657,7 @@ router56.post("/submissions", async (req2, res) => {
       const now = /* @__PURE__ */ new Date();
       const created = await prisma30.treeBranchLeafSubmission.create({
         data: {
-          id: (0, import_crypto11.randomUUID)(),
+          id: (0, import_crypto12.randomUUID)(),
           treeId: normalizedTreeId,
           userId: safeUserId,
           leadId: normalizedLeadId,
@@ -39295,7 +39683,7 @@ router56.post("/submissions", async (req2, res) => {
           if (toCreate.length > 0) {
             await tx.treeBranchLeafSubmissionData.createMany({
               data: toCreate.map(({ nodeId, value: raw }) => ({
-                id: (0, import_crypto11.randomUUID)(),
+                id: (0, import_crypto12.randomUUID)(),
                 submissionId: created.id,
                 nodeId,
                 value: raw == null ? null : String(raw),
@@ -39504,7 +39892,7 @@ router56.get("/nodes/:fieldId/select-config", async (req2, res) => {
         if (isRowBased || isColumnBased) {
           selectConfig = await prisma30.treeBranchLeafSelectConfig.create({
             data: {
-              id: (0, import_crypto11.randomUUID)(),
+              id: (0, import_crypto12.randomUUID)(),
               nodeId: fieldId,
               options: [],
               multiple: false,
@@ -39554,7 +39942,7 @@ router56.post("/nodes/:fieldId/select-config", async (req2, res) => {
     const selectConfig = await prisma30.treeBranchLeafSelectConfig.upsert({
       where: { nodeId: fieldId },
       create: {
-        id: (0, import_crypto11.randomUUID)(),
+        id: (0, import_crypto12.randomUUID)(),
         nodeId: fieldId,
         options: [],
         multiple: false,
@@ -39629,7 +40017,7 @@ router56.get("/nodes/:nodeId/table/lookup", async (req2, res) => {
         await prisma30.treeBranchLeafSelectConfig.upsert({
           where: { nodeId },
           create: {
-            id: (0, import_crypto11.randomUUID)(),
+            id: (0, import_crypto12.randomUUID)(),
             nodeId,
             options: [],
             multiple: false,
@@ -39834,7 +40222,7 @@ router56.get("/nodes/:nodeId/table/lookup", async (req2, res) => {
           await prisma30.treeBranchLeafSelectConfig.upsert({
             where: { nodeId },
             create: {
-              id: (0, import_crypto11.randomUUID)(),
+              id: (0, import_crypto12.randomUUID)(),
               nodeId,
               options: [],
               multiple: false,
@@ -39960,7 +40348,7 @@ router56.put("/nodes/:nodeId/capabilities/table", async (req2, res) => {
         await prisma30.treeBranchLeafSelectConfig.upsert({
           where: { nodeId },
           create: {
-            id: (0, import_crypto11.randomUUID)(),
+            id: (0, import_crypto12.randomUUID)(),
             nodeId,
             options: [],
             multiple: false,
@@ -40174,7 +40562,7 @@ router56.put("/submissions/:id", async (req2, res) => {
               }
             }
             return {
-              id: (0, import_crypto11.randomUUID)(),
+              id: (0, import_crypto12.randomUUID)(),
               submissionId: id,
               nodeId,
               value: valueStr,
@@ -40324,7 +40712,7 @@ router56.put("/submissions/:id", async (req2, res) => {
         const allRows2 = await tx.treeBranchLeafSubmissionData.findMany({ where: { submissionId: id }, select: { nodeId: true, value: true } });
         const valuesMapTxAll = new Map(allRows2.map((r) => [r.nodeId, r.value == null ? null : String(r.value)]));
         const missingRows = await Promise.all(missingVars.map(async (v) => ({
-          id: (0, import_crypto11.randomUUID)(),
+          id: (0, import_crypto12.randomUUID)(),
           submissionId: id,
           nodeId: v.nodeId,
           value: null,
@@ -40763,7 +41151,7 @@ router56.post("/submissions/stage", async (req2, res) => {
       }
       stage = await prisma30.treeBranchLeafStage.create({
         data: {
-          id: (0, import_crypto11.randomUUID)(),
+          id: (0, import_crypto12.randomUUID)(),
           treeId,
           submissionId,
           leadId,
@@ -40939,7 +41327,7 @@ router56.post("/submissions/stage/commit", async (req2, res) => {
       const result = await prisma30.$transaction(async (tx) => {
         const submission = await tx.treeBranchLeafSubmission.create({
           data: {
-            id: (0, import_crypto11.randomUUID)(),
+            id: (0, import_crypto12.randomUUID)(),
             treeId: stage.treeId,
             userId: stage.userId,
             leadId: stage.leadId,
@@ -40953,7 +41341,7 @@ router56.post("/submissions/stage/commit", async (req2, res) => {
         if (results.length > 0) {
           await tx.treeBranchLeafSubmissionData.createMany({
             data: results.map((r) => ({
-              id: (0, import_crypto11.randomUUID)(),
+              id: (0, import_crypto12.randomUUID)(),
               submissionId: submission.id,
               nodeId: r.nodeId,
               value: String(r.operationResult || ""),
@@ -40968,7 +41356,7 @@ router56.post("/submissions/stage/commit", async (req2, res) => {
         }
         await tx.treeBranchLeafSubmissionVersion.create({
           data: {
-            id: (0, import_crypto11.randomUUID)(),
+            id: (0, import_crypto12.randomUUID)(),
             submissionId: submission.id,
             version: 1,
             formData: stage.formData,
@@ -41095,7 +41483,7 @@ router56.post("/submissions/stage/commit", async (req2, res) => {
         if (results.length > 0) {
           await tx.treeBranchLeafSubmissionData.createMany({
             data: results.map((r) => ({
-              id: (0, import_crypto11.randomUUID)(),
+              id: (0, import_crypto12.randomUUID)(),
               submissionId: updated.id,
               nodeId: r.nodeId,
               value: String(r.operationResult || ""),
@@ -41110,7 +41498,7 @@ router56.post("/submissions/stage/commit", async (req2, res) => {
         }
         await tx.treeBranchLeafSubmissionVersion.create({
           data: {
-            id: (0, import_crypto11.randomUUID)(),
+            id: (0, import_crypto12.randomUUID)(),
             submissionId: updated.id,
             version: nextVersion,
             formData: stage.formData,
@@ -41293,7 +41681,7 @@ router56.post("/submissions/:id/restore/:version", async (req2, res) => {
     }
     const stage = await prisma30.treeBranchLeafStage.create({
       data: {
-        id: (0, import_crypto11.randomUUID)(),
+        id: (0, import_crypto12.randomUUID)(),
         treeId: submission.treeId,
         submissionId: id,
         leadId: submission.leadId || "unknown",
@@ -47067,7 +47455,7 @@ var dispatch_default = router66;
 
 // src/routes/integrationsStatus.ts
 var import_express68 = require("express");
-var import_crypto12 = require("crypto");
+var import_crypto13 = require("crypto");
 var import_express_rate_limit13 = __toESM(require("express-rate-limit"), 1);
 init_database();
 var router67 = (0, import_express68.Router)();
@@ -47079,21 +47467,21 @@ router67.get("/status", requireRole2(["admin", "super_admin"]), async (req2, res
   try {
     const organizationId = req2.user?.organizationId;
     if (!organizationId) return res.status(400).json({ success: false, message: "Organization ID manquant" });
-    const [google10, telnyx, adPlatforms] = await Promise.all([
+    const [google11, telnyx, adPlatforms] = await Promise.all([
       prisma37.googleWorkspaceConfig.findUnique({ where: { organizationId } }),
       prisma37.telnyxConnection.findMany({ where: { organizationId } }),
       prisma37.adPlatformIntegration.findMany({ where: { organizationId } })
     ]);
     const status = {
       google: {
-        enabled: !!google10?.enabled || !!google10?.isActive,
-        gmail: !!google10?.gmailEnabled,
-        calendar: !!google10?.calendarEnabled,
-        drive: !!google10?.driveEnabled,
-        meet: !!google10?.meetEnabled,
-        sheets: !!google10?.sheetsEnabled,
-        voice: !!google10?.voiceEnabled,
-        lastSync: google10?.updatedAt ?? null
+        enabled: !!google11?.enabled || !!google11?.isActive,
+        gmail: !!google11?.gmailEnabled,
+        calendar: !!google11?.calendarEnabled,
+        drive: !!google11?.driveEnabled,
+        meet: !!google11?.meetEnabled,
+        sheets: !!google11?.sheetsEnabled,
+        voice: !!google11?.voiceEnabled,
+        lastSync: google11?.updatedAt ?? null
       },
       telnyx: {
         connections: telnyx.map((t) => ({ id: t.id, name: t.name, status: t.status, type: t.type })),
@@ -47130,7 +47518,7 @@ router67.post("/ad-platform/connect", requireRole2(["admin", "super_admin"]), as
     } else {
       rec = await prisma37.adPlatformIntegration.create({
         data: {
-          id: (0, import_crypto12.randomUUID)(),
+          id: (0, import_crypto13.randomUUID)(),
           organizationId,
           platform,
           name: name || platform,
@@ -47187,8 +47575,8 @@ var integrationsStatus_default = router67;
 var import_express69 = require("express");
 init_database();
 var import_axios2 = __toESM(require("axios"), 1);
-var import_googleapis8 = require("googleapis");
-var import_crypto13 = require("crypto");
+var import_googleapis9 = require("googleapis");
+var import_crypto14 = require("crypto");
 
 // src/services/adPlatformService.ts
 init_prisma();
@@ -48006,7 +48394,7 @@ function sanitizeClientValue(raw) {
 function fingerprintSecret(secret) {
   if (!secret) return null;
   try {
-    const hex = (0, import_crypto13.createHash)("sha256").update(secret).digest("hex");
+    const hex = (0, import_crypto14.createHash)("sha256").update(secret).digest("hex");
     return hex.slice(0, 12);
   } catch {
     return null;
@@ -48106,7 +48494,7 @@ router68.get("/advertising/oauth/:platform/callback", async (req2, res) => {
       }
       const created = await prisma38.adPlatformIntegration.create({
         data: {
-          id: (0, import_crypto13.randomUUID)(),
+          id: (0, import_crypto14.randomUUID)(),
           organizationId,
           platform,
           name: data.name || platform,
@@ -48129,7 +48517,7 @@ router68.get("/advertising/oauth/:platform/callback", async (req2, res) => {
         await upsertIntegration({ name: "Google Ads (OAuth pending)", credentials: { authCode: code, error: "missing_client_creds", userId } });
       } else {
         try {
-          const oauth2 = new import_googleapis8.google.auth.OAuth2(clientId, clientSecret, redirectUri);
+          const oauth2 = new import_googleapis9.google.auth.OAuth2(clientId, clientSecret, redirectUri);
           const { tokens: tokens2 } = await oauth2.getToken(code);
           console.log("\u2705 Google Ads OAuth tokens received successfully");
           await upsertIntegration({ name: "Google Ads OAuth", credentials: { tokens: tokens2, userId } });
@@ -48491,7 +48879,7 @@ router68.get("/advertising/oauth/:platform/url", async (req2, res) => {
         return res.json({ success: true, platform, demo: true, requiredEnv: missing, authUrl: demoUrl, message: "Mode d\xE9mo: variables d'environnement manquantes" });
       }
       try {
-        const oauth2 = new import_googleapis8.google.auth.OAuth2(clientId, clientSecret, redirectUri);
+        const oauth2 = new import_googleapis9.google.auth.OAuth2(clientId, clientSecret, redirectUri);
         const authUrl = oauth2.generateAuthUrl({
           access_type: "offline",
           prompt: "consent",
@@ -48567,7 +48955,7 @@ router68.get("/advertising/oauth/google_ads/debug", async (req2, res) => {
     try {
       if (clientId) {
         const stateRaw = JSON.stringify({ platform: "google_ads", organizationId, userId: user.userId, ts: Date.now() });
-        const oauth2 = new import_googleapis8.google.auth.OAuth2(clientId, clientSecret, redirectUri);
+        const oauth2 = new import_googleapis9.google.auth.OAuth2(clientId, clientSecret, redirectUri);
         authUrl = oauth2.generateAuthUrl({ access_type: "offline", prompt: "consent", scope: defaultScopes, state: stateRaw });
         testAuthUrl = oauth2.generateAuthUrl({ access_type: "offline", prompt: "consent", scope: testScopes, state: stateRaw });
       }
@@ -48735,7 +49123,7 @@ router68.get("/advertising/:platform/accounts", async (req2, res) => {
       const refreshToken = storedTokens.refresh_token;
       try {
         if ((!accessToken || storedTokens.expiry_date) && clientId && clientSecret && (refreshToken || storedTokens.expiry_date)) {
-          const oauth2 = new import_googleapis8.google.auth.OAuth2(clientId, clientSecret, redirectUri);
+          const oauth2 = new import_googleapis9.google.auth.OAuth2(clientId, clientSecret, redirectUri);
           oauth2.setCredentials({
             access_token: storedTokens.access_token,
             refresh_token: storedTokens.refresh_token,
@@ -49335,7 +49723,7 @@ router68.get("/advertising/google_ads/test/customers-get", async (req2, res) => 
     const refreshToken = storedTokens.refresh_token;
     try {
       if ((!accessToken || storedTokens.expiry_date) && clientId && clientSecret && (refreshToken || storedTokens.expiry_date)) {
-        const oauth2 = new import_googleapis8.google.auth.OAuth2(clientId, clientSecret, redirectUri);
+        const oauth2 = new import_googleapis9.google.auth.OAuth2(clientId, clientSecret, redirectUri);
         oauth2.setCredentials({
           access_token: storedTokens.access_token,
           refresh_token: storedTokens.refresh_token,
@@ -54297,7 +54685,7 @@ var tbl_submission_evaluator_default = router73;
 
 // src/controllers/calculatedValueController.ts
 var import_express76 = require("express");
-var import_crypto14 = require("crypto");
+var import_crypto15 = require("crypto");
 init_prisma();
 var router74 = (0, import_express76.Router)();
 var parseStoredStringValue = (raw) => {
@@ -54458,7 +54846,7 @@ router74.get("/:nodeId/calculated-value", async (req2, res) => {
                   lastResolved: resolvedAt
                 },
                 create: {
-                  id: (0, import_crypto14.randomUUID)(),
+                  id: (0, import_crypto15.randomUUID)(),
                   submissionId,
                   nodeId,
                   value: persistedValue,
@@ -55106,7 +55494,7 @@ var tbl_batch_routes_default = router75;
 // src/routes/batch-routes.ts
 var import_express78 = require("express");
 init_database();
-var import_googleapis9 = require("googleapis");
+var import_googleapis10 = require("googleapis");
 var router76 = (0, import_express78.Router)();
 function getAuthCtx6(req2) {
   const user = req2.user;
@@ -55129,12 +55517,12 @@ router76.post("/gmail/modify", async (req2, res) => {
     if (!googleToken) {
       return res.status(401).json({ error: "Tokens Google non trouv\xE9s" });
     }
-    const oauth2Client = new import_googleapis9.google.auth.OAuth2();
+    const oauth2Client = new import_googleapis10.google.auth.OAuth2();
     oauth2Client.setCredentials({
       access_token: googleToken.accessToken,
       refresh_token: googleToken.refreshToken
     });
-    const gmail = import_googleapis9.google.gmail({ version: "v1", auth: oauth2Client });
+    const gmail = import_googleapis10.google.gmail({ version: "v1", auth: oauth2Client });
     await gmail.users.messages.batchModify({
       userId: "me",
       requestBody: {
@@ -55167,12 +55555,12 @@ router76.post("/gmail/trash", async (req2, res) => {
     if (!googleToken) {
       return res.status(401).json({ error: "Tokens Google non trouv\xE9s" });
     }
-    const oauth2Client = new import_googleapis9.google.auth.OAuth2();
+    const oauth2Client = new import_googleapis10.google.auth.OAuth2();
     oauth2Client.setCredentials({
       access_token: googleToken.accessToken,
       refresh_token: googleToken.refreshToken
     });
-    const gmail = import_googleapis9.google.gmail({ version: "v1", auth: oauth2Client });
+    const gmail = import_googleapis10.google.gmail({ version: "v1", auth: oauth2Client });
     await gmail.users.messages.batchModify({
       userId: "me",
       requestBody: {
@@ -55205,12 +55593,12 @@ router76.delete("/gmail/delete", async (req2, res) => {
     if (!googleToken) {
       return res.status(401).json({ error: "Tokens Google non trouv\xE9s" });
     }
-    const oauth2Client = new import_googleapis9.google.auth.OAuth2();
+    const oauth2Client = new import_googleapis10.google.auth.OAuth2();
     oauth2Client.setCredentials({
       access_token: googleToken.accessToken,
       refresh_token: googleToken.refreshToken
     });
-    const gmail = import_googleapis9.google.gmail({ version: "v1", auth: oauth2Client });
+    const gmail = import_googleapis10.google.gmail({ version: "v1", auth: oauth2Client });
     await gmail.users.messages.batchDelete({
       userId: "me",
       requestBody: {
@@ -61991,10 +62379,10 @@ function websiteInterceptor(req2, res, next) {
 
 // src/security/securityMiddleware.ts
 var import_express_rate_limit15 = __toESM(require("express-rate-limit"), 1);
-var import_crypto15 = __toESM(require("crypto"), 1);
+var import_crypto16 = __toESM(require("crypto"), 1);
 var securityMonitoring = (req2, res, next) => {
   const startTime = Date.now();
-  const requestId = import_crypto15.default.randomUUID();
+  const requestId = import_crypto16.default.randomUUID();
   req2.requestId = requestId;
   const suspiciousPatterns = [
     /(\<script\>)/gi,

@@ -8,6 +8,7 @@ import { Prisma } from '@prisma/client';
 import bcrypt from 'bcryptjs';
 import { emailService } from "../services/EmailService";
 import { prisma } from '../lib/prisma';
+import { GoogleWorkspaceIntegrationService } from "../services/GoogleWorkspaceIntegrationService";
 
 const router = Router();
 
@@ -18,12 +19,13 @@ const createInvitationSchema = z.object({
   email: z.string().email("L'adresse e-mail est invalide."),
   roleName: z.string().min(1, "Le nom du rôle est requis."),
   organizationId: z.string().uuid("L'ID de l'organisation est requis et doit être un UUID valide."),
+  createWorkspaceAccount: z.boolean().optional().default(false), // ✅ NOUVEAU
 });
 
 // Route pour créer une nouvelle invitation
 router.post('/', authMiddleware, requireRole(['admin', 'super_admin']), async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
-    const { email, roleName, organizationId } = createInvitationSchema.parse(req.body);
+    const { email, roleName, organizationId, createWorkspaceAccount } = createInvitationSchema.parse(req.body);
   const inviterId = req.user!.userId; // ID de l'utilisateur qui invite
 
     // 1. Vérifier si l'utilisateur est déjà dans l'organisation
@@ -87,6 +89,7 @@ router.post('/', authMiddleware, requireRole(['admin', 'super_admin']), async (r
       // User_Invitation_invitedByIdToUser dans le client Prisma
       User_Invitation_invitedByIdToUser: { connect: { id: inviterId } },
       status: 'PENDING',
+      createWorkspaceAccount: createWorkspaceAccount || false, // ✅ NOUVEAU
     };
 
     // Si un utilisateur existe (quel que soit son statut ou ses organisations), on lie l'invitation
@@ -292,6 +295,9 @@ router.post('/accept', async (req: Request, res: Response): Promise<void> => {
                 expiresAt: { gte: new Date() },
                 status: 'PENDING'
             },
+            include: {
+                Organization: true, // Pour récupérer les infos organisation
+            }
         });
 
         if (!invitation) {
@@ -326,7 +332,35 @@ router.post('/accept', async (req: Request, res: Response): Promise<void> => {
                 });
             });
 
-            res.status(200).json({ success: true, message: `Vous avez rejoint l'organisation avec succès.` });
+            // ✅ Si createWorkspaceAccount est activé, créer le compte Google Workspace
+            if (invitation.createWorkspaceAccount) {
+                try {
+                    const workspaceService = new GoogleWorkspaceIntegrationService(invitation.organizationId);
+                    await workspaceService.initialize();
+                    
+                    const workspaceResult = await workspaceService.createUserAccount(
+                        user.id,
+                        user.firstName || '',
+                        user.lastName || ''
+                    );
+                    
+                    if (workspaceResult.success) {
+                        console.log(`✅ [Invitation] Compte workspace créé pour ${user.email}: ${workspaceResult.email}`);
+                    } else {
+                        console.error(`⚠️ [Invitation] Échec création workspace pour ${user.email}:`, workspaceResult.error);
+                    }
+                } catch (wsError) {
+                    console.error(`⚠️ [Invitation] Erreur création workspace:`, wsError);
+                    // Ne pas bloquer l'acceptation si le workspace échoue
+                }
+            }
+
+            res.status(200).json({ 
+                success: true, 
+                message: invitation.createWorkspaceAccount 
+                    ? `Vous avez rejoint l'organisation avec succès. Un compte Google Workspace sera créé.`
+                    : `Vous avez rejoint l'organisation avec succès.`
+            });
             return;
         }
 
@@ -370,7 +404,41 @@ router.post('/accept', async (req: Request, res: Response): Promise<void> => {
             return createdUser;
         });
 
-        res.status(201).json({ success: true, message: "Inscription réussie!", data: { userId: newUser.id } });
+        // ✅ Si createWorkspaceAccount est activé, créer le compte Google Workspace
+        let workspaceEmail: string | null = null;
+        if (invitation.createWorkspaceAccount) {
+            try {
+                const workspaceService = new GoogleWorkspaceIntegrationService(invitation.organizationId);
+                await workspaceService.initialize();
+                
+                const workspaceResult = await workspaceService.createUserAccount(
+                    newUser.id,
+                    firstName,
+                    lastName
+                );
+                
+                if (workspaceResult.success) {
+                    workspaceEmail = workspaceResult.email || null;
+                    console.log(`✅ [Invitation] Compte workspace créé pour nouvel utilisateur: ${workspaceEmail}`);
+                } else {
+                    console.error(`⚠️ [Invitation] Échec création workspace:`, workspaceResult.error);
+                }
+            } catch (wsError) {
+                console.error(`⚠️ [Invitation] Erreur création workspace:`, wsError);
+                // Ne pas bloquer l'inscription si le workspace échoue
+            }
+        }
+
+        res.status(201).json({ 
+            success: true, 
+            message: invitation.createWorkspaceAccount 
+                ? "Inscription réussie! Votre compte Google Workspace est en cours de création."
+                : "Inscription réussie!",
+            data: { 
+                userId: newUser.id,
+                workspaceEmail: workspaceEmail
+            } 
+        });
 
     } catch (error) {
         if (error instanceof z.ZodError) {

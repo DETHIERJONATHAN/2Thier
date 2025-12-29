@@ -1,8 +1,10 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { Button, Table, Input, message, Card, Row, Spin, Empty, Tooltip, Tag, Modal } from 'antd';
+import { Button, Table, Input, message, Card, Row, Spin, Empty, Tooltip, Tag, Modal, Form, Select } from 'antd';
 import { SettingOutlined, PlusOutlined, SyncOutlined, UserOutlined, TeamOutlined, SafetyOutlined, EyeOutlined, EditOutlined } from '@ant-design/icons';
 import { PageHeader } from '../components/PageHeader';
 import { StatCard } from '../components/StatCard';
+import { useAuthenticatedApi } from '../hooks/useAuthenticatedApi';
+import { useAuth } from '../auth/useAuth';
 
 const { Search } = Input;
 
@@ -28,14 +30,18 @@ interface AdminStats {
 
 export const GoogleAdminPage: React.FC = () => {
   const [msgApi, msgCtx] = message.useMessage();
+  const { api } = useAuthenticatedApi();
+  const { currentOrganization } = useAuth();
   const [users, setUsers] = useState<GoogleAdminUser[]>([]);
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState<AdminStats>({ totalUsers: 0, activeUsers: 0, suspendedUsers: 0, adminUsers: 0 });
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedUser, setSelectedUser] = useState<GoogleAdminUser | null>(null);
   const [detailsModalVisible, setDetailsModalVisible] = useState(false);
-
-  // TODO: Utiliser useAuthenticatedApi et useAuth quand l'implémentation backend sera prête
+  const [createModalVisible, setCreateModalVisible] = useState(false);
+  const [usersWithoutWorkspace, setUsersWithoutWorkspace] = useState<any[]>([]);
+  const [creatingAccount, setCreatingAccount] = useState(false);
+  const [createForm] = Form.useForm();
 
   const updateStats = useCallback((usersData: GoogleAdminUser[]) => {
     const totalUsers = usersData.length;
@@ -49,65 +55,77 @@ export const GoogleAdminPage: React.FC = () => {
   const fetchUsers = useCallback(async () => {
     setLoading(true);
     try {
-      // TODO: Remplacer par un vrai appel API Google Admin
-      // const response = await api.get('/google/admin/users');
+      // ✅ Vraie API Google Workspace
+      const response = await api.get('/api/google-workspace/users');
       
-      // Simulation d'une réponse d'API pour Google Admin
-      const mockUsers: GoogleAdminUser[] = [
-        { 
-          id: '1', 
-          name: 'Jean Dupont', 
-          email: 'jean.dupont@organisation.be', 
-          role: 'SUPER_ADMIN',
-          lastLoginTime: new Date().toISOString(),
-          suspended: false,
-          organizationalUnit: '/Administrators',
-          creationTime: '2023-01-15T10:30:00Z'
-        },
-        { 
-          id: '2', 
-          name: 'Marie Martin', 
-          email: 'marie.martin@organisation.be', 
-          role: 'ADMIN',
-          lastLoginTime: new Date(Date.now() - 86400000).toISOString(),
-          suspended: false,
-          organizationalUnit: '/IT Department',
-          creationTime: '2023-02-20T14:15:00Z'
-        },
-        { 
-          id: '3', 
-          name: 'Pierre Durand', 
-          email: 'pierre.durand@organisation.be', 
-          role: 'USER',
-          lastLoginTime: new Date(Date.now() - 3600000).toISOString(),
-          suspended: false,
-          organizationalUnit: '/Sales',
-          creationTime: '2023-03-10T09:45:00Z'
-        },
-        { 
-          id: '4', 
-          name: 'Sophie Legrand', 
-          email: 'sophie.legrand@organisation.be', 
-          role: 'USER',
-          lastLoginTime: new Date(Date.now() - 172800000).toISOString(),
-          suspended: true,
-          organizationalUnit: '/Marketing',
-          creationTime: '2023-04-05T16:20:00Z'
-        },
-      ];
-      setUsers(mockUsers);
-      updateStats(mockUsers);
+      if (response.success && response.data) {
+        const workspaceUsers: GoogleAdminUser[] = response.data.map((wu: any) => ({
+          id: wu.id,
+          name: `${wu.User?.firstName || ''} ${wu.User?.lastName || ''}`.trim() || wu.email,
+          email: wu.email,
+          role: wu.User?.role?.toUpperCase() || 'USER',
+          lastLoginTime: wu.lastSync || wu.createdAt || new Date().toISOString(),
+          suspended: !wu.isActive,
+          organizationalUnit: '/',
+          creationTime: wu.createdAt || new Date().toISOString(),
+        }));
+        
+        setUsers(workspaceUsers);
+        updateStats(workspaceUsers);
+      } else {
+        // Fallback si pas de données
+        setUsers([]);
+        updateStats([]);
+      }
     } catch (error) {
-      msgApi.error('Erreur lors de la récupération des utilisateurs Google Admin.');
-      console.error('Erreur:', error);
+      msgApi.error('Erreur lors de la récupération des utilisateurs Google Workspace.');
+      console.error('Erreur fetchUsers:', error);
+      setUsers([]);
+      updateStats([]);
     } finally {
       setLoading(false);
     }
-  }, [updateStats, msgApi]);
+  }, [updateStats, msgApi, api]);
+
+  // Charger les utilisateurs sans compte workspace (pour le modal de création)
+  const fetchUsersWithoutWorkspace = useCallback(async () => {
+    try {
+      const response = await api.get('/api/users?withoutWorkspace=true');
+      if (response.success) {
+        setUsersWithoutWorkspace(response.data || []);
+      }
+    } catch (error) {
+      console.error('Erreur chargement users sans workspace:', error);
+    }
+  }, [api]);
+
+  // Créer un compte workspace pour un utilisateur existant
+  const handleCreateWorkspaceAccount = async (values: { userId: string }) => {
+    setCreatingAccount(true);
+    try {
+      const response = await api.post('/api/google-workspace/create-account', {
+        userId: values.userId,
+      });
+
+      if (response.success) {
+        msgApi.success(`Compte workspace créé : ${response.email || 'succès'}`);
+        setCreateModalVisible(false);
+        createForm.resetFields();
+        fetchUsers(); // Rafraîchir la liste
+      } else {
+        msgApi.error(response.message || 'Erreur lors de la création');
+      }
+    } catch (error) {
+      msgApi.error('Erreur lors de la création du compte workspace');
+    } finally {
+      setCreatingAccount(false);
+    }
+  };
 
   useEffect(() => {
     fetchUsers();
-  }, [fetchUsers]);
+    fetchUsersWithoutWorkspace();
+  }, [fetchUsers, fetchUsersWithoutWorkspace]);
 
   // Filtrage des utilisateurs selon le terme de recherche
   const filteredUsers = useMemo(() => {
@@ -271,9 +289,12 @@ export const GoogleAdminPage: React.FC = () => {
           <Button 
             type="primary" 
             icon={<PlusOutlined />}
-            onClick={() => msgApi.info('Création d\'un nouvel utilisateur (à implémenter)')}
+            onClick={() => {
+              fetchUsersWithoutWorkspace();
+              setCreateModalVisible(true);
+            }}
           >
-            Nouvel utilisateur
+            Créer compte Workspace
           </Button>
         </div>
 
@@ -338,6 +359,64 @@ export const GoogleAdminPage: React.FC = () => {
             </div>
           </div>
         )}
+      </Modal>
+
+      {/* ✅ Modal création compte Workspace */}
+      <Modal
+        title="Créer un compte Google Workspace"
+        open={createModalVisible}
+        onCancel={() => {
+          setCreateModalVisible(false);
+          createForm.resetFields();
+        }}
+        footer={null}
+      >
+        <Form
+          form={createForm}
+          onFinish={handleCreateWorkspaceAccount}
+          layout="vertical"
+        >
+          <Form.Item
+            name="userId"
+            label="Sélectionner un utilisateur"
+            rules={[{ required: true, message: 'Veuillez sélectionner un utilisateur' }]}
+          >
+            <Select
+              placeholder="Choisir un utilisateur sans compte Workspace"
+              showSearch
+              optionFilterProp="children"
+              filterOption={(input, option) =>
+                (option?.children as unknown as string)?.toLowerCase().includes(input.toLowerCase())
+              }
+            >
+              {usersWithoutWorkspace.map(user => (
+                <Select.Option key={user.id} value={user.id}>
+                  {user.firstName} {user.lastName} ({user.email})
+                </Select.Option>
+              ))}
+            </Select>
+          </Form.Item>
+
+          {usersWithoutWorkspace.length === 0 && (
+            <div className="text-center py-4 text-gray-500">
+              Tous les utilisateurs ont déjà un compte Google Workspace.
+            </div>
+          )}
+
+          <Form.Item className="mb-0 text-right">
+            <Button onClick={() => setCreateModalVisible(false)} className="mr-2">
+              Annuler
+            </Button>
+            <Button 
+              type="primary" 
+              htmlType="submit" 
+              loading={creatingAccount}
+              disabled={usersWithoutWorkspace.length === 0}
+            >
+              Créer le compte
+            </Button>
+          </Form.Item>
+        </Form>
       </Modal>
     </div>
   );

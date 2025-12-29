@@ -830,6 +830,7 @@ model Invitation {
   status                             InvitationStatus @default(PENDING)
   invitedById                        String
   targetUserId                       String?
+  createWorkspaceAccount             Boolean          @default(false)
   User_Invitation_invitedByIdToUser  User             @relation("Invitation_invitedByIdToUser", fields: [invitedById], references: [id], onDelete: NoAction, onUpdate: NoAction)
   Organization                       Organization     @relation(fields: [organizationId], references: [id], onDelete: NoAction, onUpdate: NoAction)
   Role                               Role             @relation(fields: [roleId], references: [id], onDelete: NoAction, onUpdate: NoAction)
