@@ -1,0 +1,133 @@
+# ==============================================================================
+# .dockerignore - Fichiers à exclure du contexte de build Docker
+# ==============================================================================
+# Réduit la taille du contexte et accélère le build
+
+# Dépendances Node.js (seront installées dans le Dockerfile)
+node_modules/
+npm-debug.log
+yarn-error.log
+
+# Fichiers de build locaux (seront régénérés dans le Dockerfile)
+dist/
+dist-server/
+dist-ssr/
+build/
+
+# Fichiers de développement
+.env
+.env.*
+!.env.production.example
+.vscode/
+.idea/
+.devcontainer/
+
+# Git et contrôle de version
+.git/
+.github/
+.gitignore
+.gcloudignore
+
+# Documentation et notes
+*.md
+!README.md
+docs/
+Oracle/
+documentation/
+archive/
+
+# Sauvegardes et exports de base de données
+db-backups/
+backups/
+backup*/
+sauvegarde*/
+database-export.*
+*.sql
+*.dump
+backup_local.dump
+local_db_backup.dump
+
+# Scripts de développement et tests
+scripts/
+tests/
+test/
+*.test.ts
+*.test.js
+*.spec.ts
+*.spec.js
+coverage/
+
+# Logs et fichiers temporaires
+logs/
+*.log
+tmp/
+temp/
+*.tmp
+.DS_Store
+Thumbs.db
+
+# Fichiers de configuration locaux
+config_*.md
+proxy.log
+token.json
+current_project.txt
+
+# Fichiers volumineux et rapports
+chromewebdata*.html
+eslint-report.json
+lighthouse-*.json
+monitoring-dashboard.json
+
+# Fichiers de diagnostic et debug
+diagnose*.cjs
+diagnose*.js
+diagnose*.mjs
+find-*.cjs
+find-*.js
+find-*.mjs
+check-*.cjs
+check-*.js
+check-*.mjs
+check-*.ts
+inspect-*.cjs
+inspect-*.js
+inspect-*.mjs
+trace-*.cjs
+trace-*.js
+trace-*.mjs
+debug*.md
+temp*.js
+temp*.txt
+
+# Fichiers de comparaison et analyse
+compare-*.cjs
+compare-*.js
+simulate-*.cjs
+simulate-*.js
+simulate-*.mjs
+investigate-*.cjs
+
+# Routes et fichiers cassés
+*-broken.ts
+*-backup.tsx
+*.backup.*
+
+# Cloud SQL proxy local
+cloud-sql-proxy
+cloud-sql-proxy.exe
+
+# Fichiers de déploiement pour d'autres plateformes
+heroku.yml
+compose.yaml
+
+# Fichiers de configuration de build (déjà présents)
+cloudbuild.yaml
+app.yaml
+project.toml
+
+# Vite et autres outils de build
+# GARDER vite.config.ts pour les alias de build
+vite.config.prod.ts
+vitest.config.ts
+# NE PAS EXCLURE les tsconfig - nécessaires pour le build
+eslint.config.js

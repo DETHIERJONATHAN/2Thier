@@ -159,6 +159,89 @@ web: node dist-server/api-server-clean.cjs
 
 ---
 
+### Problème 5: Build échoue avec Buildpacks - Timeout pendant npm ci
+
+**Erreur:**
+```
+Building using Buildpacks and deploying container to Cloud Run service [crm-api]
+Building Container... failed
+ERROR: Build failed; check build logs for details
+```
+
+**Cause:** Les Buildpacks automatiques génèrent un Dockerfile qui timeout pendant `npm ci` à cause de la taille des dépendances (749KB de package-lock.json, 104MB de contexte).
+
+**Solution:** Créer un Dockerfile multi-stage optimisé et un `.dockerignore` pour réduire le contexte.
+
+**Fichiers créés:**
+
+1. **Dockerfile** - Build multi-stage avec cache Docker
+```dockerfile
+FROM node:20-alpine AS base
+# ... (voir fichier complet)
+FROM base AS deps
+RUN npm ci --only=production --legacy-peer-deps
+FROM base AS builder
+RUN npm ci --legacy-peer-deps && npm run build
+FROM base AS runner
+COPY --from=deps /app/node_modules ./node_modules
+COPY --from=builder /app/dist ./dist
+CMD ["node", "dist-server/api-server-clean.cjs"]
+```
+
+2. **.dockerignore** - Réduire le contexte de build
+```dockerignore
+node_modules/
+dist/
+*.md
+!README.md
+logs/
+*.sql
+# IMPORTANT: Garder ces fichiers pour le build
+!vite.config.ts
+!tsconfig*.json
+```
+
+3. **cloudbuild.yaml** - Utiliser Docker au lieu de Buildpacks
+```yaml
+steps:
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['build', '-t', '...', '.']
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['push', '...']
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    args: ['run', 'deploy', 'crm-api', '--image', '...']
+```
+
+**Déploiement:**
+```bash
+gcloud run deploy crm-api --source . --clear-base-image [...]
+```
+
+Le flag `--clear-base-image` est **nécessaire** pour passer de Buildpacks à Dockerfile.
+
+---
+
+### Problème 6: Vite ne peut pas résoudre les alias (@/...)
+
+**Erreur:**
+```
+error during build:
+[vite]: Rollup failed to resolve import "@/auth/useAuth" from "/app/src/components/..."
+```
+
+**Cause:** Le fichier `vite.config.ts` était exclu par `.dockerignore`, donc les alias (`@`, `@components`, etc.) ne sont pas résolus lors du build Docker.
+
+**Solution:** Garder `vite.config.ts` dans le contexte de build.
+
+```diff
+# .dockerignore
+- vite.config.ts
++ # GARDER vite.config.ts pour les alias de build
+  vite.config.prod.ts
+```
+
+---
+
 ## 🔧 Problèmes Rencontrés et Solutions
 
 ### Problème 1: PORT=4000 au lieu de 8080
@@ -200,7 +283,70 @@ gcloud run services update crm-api --command="" --args=""
 
 ---
 
-### Problème 3: entrypoint.sh non trouvé
+### Problème 3: tsconfig.base.json non trouvé
+
+**Erreur:**
+```
+failed to resolve "extends":"./tsconfig.base.json" in /app/tsconfig.json
+error during build:
+[vite:build-html] failed to resolve "extends":"./tsconfig.base.json" in /app/tsconfig.json
+```
+
+**Cause:** Le fichier `tsconfig.base.json` était exclu par le `.dockerignore`, empêchant Vite de résoudre la configuration TypeScript.
+
+**Solution:** Retirer l'exclusion des fichiers tsconfig dans `.dockerignore` :
+
+```diff
+# .dockerignore
+- tsconfig.*.json
+- !tsconfig.json
++ # NE PAS EXCLURE les tsconfig - nécessaires pour le build
+```
+
+---
+
+### Problème 4: Build timeout avec Buildpacks
+
+**Erreur:**
+```
+Step 5/32 : RUN npm ci --legacy-peer-deps
+ ---> Running in 74d5d5447b64
+[Le build s'arrête et timeout]
+```
+
+**Cause:** Les Buildpacks automatiques de Cloud Run génèrent un Dockerfile qui échoue pendant `npm ci` avec un grand `package-lock.json` (749KB).
+
+**Solution:** Créer un Dockerfile optimisé multi-stage :
+
+1. **Créer `Dockerfile`** avec build multi-stage (voir fichier créé)
+2. **Créer `.dockerignore`** pour réduire le contexte de build
+3. **Modifier `cloudbuild.yaml`** pour utiliser le Dockerfile au lieu de Buildpacks
+4. **Ajouter `--clear-base-image`** lors du déploiement
+
+```bash
+gcloud run deploy crm-api --source . --clear-base-image ...
+```
+
+---
+
+### Problème 5: entrypoint.sh non trouvé
+
+**Erreur:**
+```
+sh: 0: cannot open entrypoint.sh: No such file
+Container called exit(2).
+```
+
+**Cause:** Le Procfile utilisait `sh entrypoint.sh` mais Buildpacks ne copie pas ce fichier ou le chemin est incorrect.
+
+**Solution:** Modifier le `Procfile` pour utiliser directement Node.js :
+
+```diff
+- web: sh entrypoint.sh
++ web: node dist-server/api-server-clean.cjs
+```
+
+### Problème 5: entrypoint.sh non trouvé
 
 **Erreur:**
 ```
@@ -219,7 +365,7 @@ Container called exit(2).
 
 ---
 
-### Problème 4: Variable PORT réservée
+### Problème 6: Variable PORT réservée
 
 **Erreur:**
 ```

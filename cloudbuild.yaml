@@ -1,30 +1,39 @@
-# ⚡ SOURCE DEPLOY - Cloud Run (sans Dockerfile)
-# Cloud Build génère automatiquement le conteneur via Buildpacks
+# ==============================================================================
+# CLOUD BUILD - CONFIGURATION OPTIMISÉE AVEC DOCKERFILE
+# ==============================================================================
+# Build Docker et déploiement sur Cloud Run
 
 steps:
-  # 1. Setup Node.js
-  - name: 'gcr.io/cloud-builders/npm'
-    args: ['ci']
+  # 1. Build de l'image Docker
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'build'
+      - '-t'
+      - 'europe-west1-docker.pkg.dev/$PROJECT_ID/cloud-run-source-deploy/crm-api:$COMMIT_SHA'
+      - '-t'
+      - 'europe-west1-docker.pkg.dev/$PROJECT_ID/cloud-run-source-deploy/crm-api:latest'
+      - '--cache-from'
+      - 'europe-west1-docker.pkg.dev/$PROJECT_ID/cloud-run-source-deploy/crm-api:latest'
+      - '--build-arg'
+      - 'BUILDKIT_INLINE_CACHE=1'
+      - '.'
   
-  # 2. Generate Prisma Client
-  - name: 'gcr.io/cloud-builders/npm'
-    args: ['run', 'prisma:generate']
-    env:
-      - 'DATABASE_URL=dummy'  # Prisma generate ne nécessite pas une DB valide
+  # 2. Push de l'image vers Artifact Registry
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'push'
+      - '--all-tags'
+      - 'europe-west1-docker.pkg.dev/$PROJECT_ID/cloud-run-source-deploy/crm-api'
   
-  # 3. Build application (frontend + backend)
-  - name: 'gcr.io/cloud-builders/npm'
-    args: ['run', 'build']
-  
-  # 4. Deploy to Cloud Run (source deploy)
+  # 3. Déploiement sur Cloud Run
   - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
     entrypoint: gcloud
     args:
       - 'run'
       - 'deploy'
       - 'crm-api'
-      - '--source'
-      - '.'
+      - '--image'
+      - 'europe-west1-docker.pkg.dev/$PROJECT_ID/cloud-run-source-deploy/crm-api:$COMMIT_SHA'
       - '--region'
       - 'europe-west1'
       - '--platform'
@@ -53,5 +62,12 @@ steps:
       - '--update-secrets'
       - 'PGPASSWORD=crm-postgres-password:latest,JWT_SECRET=JWT_SECRET:latest,SESSION_SECRET=SESSION_SECRET:latest,ENCRYPTION_KEY=ENCRYPTION_KEY:latest,CRYPTO_SECRET_KEY=CRYPTO_SECRET_KEY:latest,GOOGLE_AI_API_KEY=GOOGLE_AI_API_KEY:latest,GOOGLE_CLIENT_ID=GOOGLE_CLIENT_ID:latest,GOOGLE_CLIENT_SECRET=GOOGLE_CLIENT_SECRET:latest'
 
+# Options de build
 options:
   logging: CLOUD_LOGGING_ONLY
+  machineType: 'E2_HIGHCPU_8'  # Machine plus puissante pour accélérer le build
+  
+# Images à stocker dans Artifact Registry
+images:
+  - 'europe-west1-docker.pkg.dev/$PROJECT_ID/cloud-run-source-deploy/crm-api:$COMMIT_SHA'
+  - 'europe-west1-docker.pkg.dev/$PROJECT_ID/cloud-run-source-deploy/crm-api:latest'
