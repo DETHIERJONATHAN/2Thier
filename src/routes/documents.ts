@@ -711,14 +711,14 @@ router.get('/generated', async (req: Request, res: Response) => {
     const documents = await prisma.generatedDocument.findMany({
       where,
       include: {
-        template: {
+        DocumentTemplate: {
           select: {
             id: true,
             name: true,
             type: true
           }
         },
-        sentByUser: {
+        User_GeneratedDocument_sentByToUser: {
           select: {
             id: true,
             firstName: true,
@@ -726,7 +726,7 @@ router.get('/generated', async (req: Request, res: Response) => {
             email: true
           }
         },
-        lead: {
+        Lead: {
           select: {
             id: true,
             firstName: true,
@@ -738,7 +738,18 @@ router.get('/generated', async (req: Request, res: Response) => {
       orderBy: { createdAt: 'desc' }
     });
 
-    res.json(documents);
+    // Mapper les noms de relations pour compatibilité frontend
+    const mappedDocuments = documents.map((doc: any) => ({
+      ...doc,
+      template: doc.DocumentTemplate,
+      sentByUser: doc.User_GeneratedDocument_sentByToUser,
+      lead: doc.Lead,
+      DocumentTemplate: undefined,
+      User_GeneratedDocument_sentByToUser: undefined,
+      Lead: undefined
+    }));
+
+    res.json(mappedDocuments);
   } catch (error: any) {
     console.error('❌ [GET /generated] Erreur récupération documents générés:', error?.message);
     res.status(500).json({ error: 'Erreur serveur', details: error?.message });
@@ -757,8 +768,8 @@ router.get('/generated/:id', async (req: Request, res: Response) => {
         organizationId
       },
       include: {
-        template: true,
-        sentByUser: {
+        DocumentTemplate: true,
+        User_GeneratedDocument_sentByToUser: {
           select: {
             id: true,
             firstName: true,
@@ -766,7 +777,7 @@ router.get('/generated/:id', async (req: Request, res: Response) => {
             email: true
           }
         },
-        lead: true
+        Lead: true
       }
     });
 
@@ -774,7 +785,18 @@ router.get('/generated/:id', async (req: Request, res: Response) => {
       return res.status(404).json({ error: 'Document non trouvé' });
     }
 
-    res.json(document);
+    // Mapper les noms de relations pour compatibilité frontend
+    const mappedDocument = {
+      ...document,
+      template: (document as any).DocumentTemplate,
+      sentByUser: (document as any).User_GeneratedDocument_sentByToUser,
+      lead: (document as any).Lead,
+      DocumentTemplate: undefined,
+      User_GeneratedDocument_sentByToUser: undefined,
+      Lead: undefined
+    };
+
+    res.json(mappedDocument);
   } catch (error) {
     console.error('Erreur récupération document:', error);
     res.status(500).json({ error: 'Erreur serveur' });

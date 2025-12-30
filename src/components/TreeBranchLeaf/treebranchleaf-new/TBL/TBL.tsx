@@ -30,7 +30,7 @@ import {
   Skeleton,
   Tooltip
 } from 'antd';
-import { FileTextOutlined, DownloadOutlined, ClockCircleOutlined, FolderOpenOutlined, PlusOutlined, UserOutlined, FileAddOutlined, SearchOutlined, MailOutlined, PhoneOutlined, HomeOutlined, SwapOutlined, LeftOutlined, RightOutlined } from '@ant-design/icons';
+import { FileTextOutlined, DownloadOutlined, ClockCircleOutlined, FolderOpenOutlined, PlusOutlined, UserOutlined, FileAddOutlined, SearchOutlined, MailOutlined, PhoneOutlined, HomeOutlined, SwapOutlined, LeftOutlined, RightOutlined, SaveOutlined } from '@ant-design/icons';
 import { useAuth } from '../../../../auth/useAuth';
 import { useParams } from 'react-router-dom';
 import { useTreeBranchLeafConfig } from '../../hooks/useTreeBranchLeafConfig';
@@ -140,6 +140,14 @@ const TBL: React.FC<TBLProps> = ({
   const lastQueuedSignatureRef = useRef<string | null>(null);
   const previewDebounceRef = useRef<number | null>(null);
   const lastPreviewSignatureRef = useRef<string | null>(null);
+  
+  // 🆕 SYSTÈME DEVIS PAR DÉFAUT + COPIE AUTOMATIQUE
+  const [isDefaultDraft, setIsDefaultDraft] = useState<boolean>(!urlLeadId); // Mode simulation si pas de lead
+  const [isLoadedDevis, setIsLoadedDevis] = useState<boolean>(false); // True si on a chargé un devis existant
+  const [originalDevisId, setOriginalDevisId] = useState<string | null>(null); // ID du devis original (pour copie)
+  const [originalDevisName, setOriginalDevisName] = useState<string | null>(null); // Nom du devis original
+  const [hasCopiedDevis, setHasCopiedDevis] = useState<boolean>(false); // True si copie déjà créée
+  const [isDevisSaved, setIsDevisSaved] = useState<boolean>(false); // True si devis enregistré (pas draft)
 
   // Charger les données Lead si leadId fourni
   useEffect(() => {
@@ -190,19 +198,110 @@ const TBL: React.FC<TBLProps> = ({
     setLeadCreatorVisible(true);
   }, []);
 
+  // 🆕 RESET TBL - Vide tous les champs sauf les métadonnées et calculatedValues
+  const resetTBLForm = useCallback(() => {
+    console.log('🔄 [TBL] RESET du formulaire');
+    setFormData(prev => {
+      const newData: TBLFormData = {};
+      // Garder uniquement les clés système (commencent par __)
+      Object.keys(prev).forEach(key => {
+        if (key.startsWith('__')) {
+          newData[key] = prev[key];
+        }
+      });
+      return newData;
+    });
+    // Reset des états liés au devis
+    setSubmissionId(null);
+    setDevisName('');
+    setDevisCreatedAt(null);
+    setIsLoadedDevis(false);
+    setOriginalDevisId(null);
+    setOriginalDevisName(null);
+    setHasCopiedDevis(false);
+    setIsDevisSaved(false);
+    // Reset signatures autosave
+    lastSavedSignatureRef.current = null;
+    lastQueuedSignatureRef.current = null;
+    lastPreviewSignatureRef.current = null;
+  }, []);
+
+  // 🆕 Générer un suffixe de copie (2), (3), etc.
+  const generateCopySuffix = useCallback(async (baseName: string, currentLeadId: string): Promise<string> => {
+    try {
+      if (!api) return `${baseName} (2)`;
+      
+      // Récupérer tous les devis du lead actuel
+      const response = await api.get(`/api/treebranchleaf/submissions?leadId=${currentLeadId}`);
+      const existingSubmissions = response.data || response || [];
+      
+      // Extraire les noms existants
+      const existingNames = (Array.isArray(existingSubmissions) ? existingSubmissions : []).map(
+        (submission: { summary?: { name?: string }, name?: string }) => 
+          submission.summary?.name || submission.name || ''
+      ).filter((name: string) => name.trim() !== '');
+      
+      // Extraire le nom de base sans suffixe existant
+      const baseNameWithoutSuffix = baseName.replace(/\s*\(\d+\)\s*$/, '').trim();
+      
+      // Chercher le prochain numéro disponible
+      let counter = 2;
+      let uniqueName = `${baseNameWithoutSuffix} (${counter})`;
+      
+      while (existingNames.includes(uniqueName) && counter < 1000) {
+        counter++;
+        uniqueName = `${baseNameWithoutSuffix} (${counter})`;
+      }
+      
+      console.log('🔢 [TBL] Suffixe copie généré:', uniqueName);
+      return uniqueName;
+    } catch (error) {
+      console.error('❌ [TBL] Erreur génération suffixe:', error);
+      return `${baseName} (2)`;
+    }
+  }, [api]);
+
   // Gestion de sélection d'un lead existant
-  const handleSelectLead = useCallback((selectedLead: TBLLead) => {
+  const handleSelectLead = useCallback(async (selectedLead: TBLLead) => {
     // Si le modal de création de devis est ouvert, on met à jour le lead sélectionné pour le devis
     if (devisCreatorVisible) {
       setSelectedLeadForDevis(selectedLead);
       setLeadSelectorVisible(false);
       message.success(`Lead sélectionné : ${selectedLead.firstName} ${selectedLead.lastName}`);
     } else {
-      // Sinon, comportement normal : redirection vers TBL avec le lead sélectionné
-      window.location.href = `/tbl/${selectedLead.id}`;
+      // 🆕 NOUVEAU COMPORTEMENT: Ajouter le lead SANS réinitialiser les données
+      console.log('👤 [TBL] Sélection lead - PRÉSERVATION des données du formulaire');
+      
+      // Mettre à jour le lead local sans réinitialiser
+      setLeadId(selectedLead.id);
+      setClientData({
+        id: selectedLead.id,
+        name: `${selectedLead.firstName || ''} ${selectedLead.lastName || ''}`.trim() || selectedLead.company || 'Lead sans nom',
+        email: selectedLead.email || '',
+        phone: selectedLead.phone || '',
+        address: selectedLead.address || ''
+      });
+      
+      // 🔄 Mettre à jour le clientId du default-draft existant en DB (si on est en mode default-draft)
+      if (isDefaultDraft && submissionId && api) {
+        try {
+          console.log('🔄 [TBL] Mise à jour du clientId dans le default-draft:', submissionId);
+          await api.patch(`/api/treebranchleaf/submissions/${submissionId}`, {
+            clientId: selectedLead.id
+          });
+          console.log('✅ [TBL] ClientId mis à jour dans le default-draft');
+        } catch (error) {
+          console.warn('⚠️ [TBL] Impossible de mettre à jour le clientId du default-draft:', error);
+        }
+      }
+      
+      // On reste en mode default-draft mais avec un lead maintenant associé
+      // isDefaultDraft reste true jusqu'à ce qu'on clique sur "Sauvegarder"
+      
       setLeadSelectorVisible(false);
+      message.success(`Lead "${selectedLead.firstName} ${selectedLead.lastName}" associé au devis`);
     }
-  }, [devisCreatorVisible]);
+  }, [devisCreatorVisible, isDefaultDraft, submissionId, api]);
 
   // Orchestrateur post-création (le modal crée déjà le lead via l'API)
   // Ici: pas de re-post API pour éviter les doublons; on peut éventuellement préparer une soumission TBL.
@@ -460,6 +559,117 @@ const TBL: React.FC<TBLProps> = ({
   const { isSuperAdmin, user, organization } = useAuth();
   // const { enqueue } = useEvalBridge(); // (actuellement non utilisé dans cette version de l'écran)
 
+  // 🆕 SYSTÈME DEVIS PAR DÉFAUT
+  // ID fixe pour le devis par défaut de l'utilisateur (simulation sans lead)
+  const defaultDraftId = useMemo(() => {
+    if (!user?.id || !effectiveTreeId) return null;
+    return `default-draft-${user.id}-${effectiveTreeId}`;
+  }, [user?.id, effectiveTreeId]);
+
+  // 🆕 Initialiser ou charger le devis par défaut au montage (si pas de lead)
+  useEffect(() => {
+    const initDefaultDraft = async () => {
+      console.log('🔍 [TBL] initDefaultDraft check:', { leadId, api: !!api, effectiveTreeId, defaultDraftId, isDefaultDraft, userId: user?.id });
+      
+      // Ne pas initialiser si on a un lead ou si pas d'API
+      if (leadId || !api || !effectiveTreeId || !defaultDraftId || !isDefaultDraft) {
+        console.log('⏭️ [TBL] initDefaultDraft skip - conditions not met');
+        return;
+      }
+      
+      console.log('📋 [TBL] Mode simulation - Recherche/création du devis par défaut');
+      
+      try {
+        // Essayer de récupérer le draft par défaut existant
+        const url = `/api/treebranchleaf/submissions?treeId=${effectiveTreeId}&status=default-draft&userId=${user?.id}`;
+        console.log('🔎 [TBL] Fetching drafts:', url);
+        const existingDrafts = await api.get(url);
+        console.log('📦 [TBL] existingDrafts response:', existingDrafts);
+        
+        const draftsArray = Array.isArray(existingDrafts) ? existingDrafts : existingDrafts?.data || [];
+        console.log('📦 [TBL] draftsArray:', draftsArray.length, 'items');
+        
+        const defaultDraft = draftsArray.find((d: { id?: string, status?: string }) => d.status === 'default-draft');
+        console.log('🎯 [TBL] defaultDraft found:', defaultDraft?.id);
+        
+        if (defaultDraft && defaultDraft.id) {
+          console.log('✅ [TBL] Devis par défaut trouvé:', defaultDraft.id);
+          setSubmissionId(defaultDraft.id);
+          setDevisName('Simulation (non enregistré)');
+          
+          // Charger les données du draft depuis TreeBranchLeafSubmissionData
+          try {
+            const submissionDataResponse = await api.get(`/api/treebranchleaf/submissions/${defaultDraft.id}/fields`);
+            console.log('📥 [TBL] submissionDataResponse:', submissionDataResponse);
+            const fieldsMap = submissionDataResponse?.fields || {};
+            console.log('📥 [TBL] fieldsMap keys:', Object.keys(fieldsMap));
+
+            // Réhydrater le lead associé si présent dans le draft
+            if (submissionDataResponse?.leadId) {
+              const lead = submissionDataResponse.lead;
+              const leadName = lead ? (`${lead.firstName || ''} ${lead.lastName || ''}`.trim() || lead.company || 'Lead sans nom') : 'Lead associé';
+              setLeadId(submissionDataResponse.leadId);
+              setClientData({
+                id: submissionDataResponse.leadId,
+                name: leadName,
+                email: lead?.email || '',
+                phone: lead?.phone || '',
+                address: lead?.fullAddress || ''
+              });
+              setFormData(prev => ({ ...prev, __leadId: submissionDataResponse.leadId }));
+            }
+            
+            if (Object.keys(fieldsMap).length > 0) {
+              const restoredData: Record<string, string> = {};
+              
+              Object.entries(fieldsMap).forEach(([nodeId, fieldData]: [string, unknown]) => {
+                const field = fieldData as { value?: unknown; rawValue?: string; calculatedBy?: string };
+                console.log(`📥 [TBL] Field ${nodeId}:`, { calculatedBy: field.calculatedBy, rawValue: field.rawValue, value: field.value });
+                // Ne restaurer que les valeurs entrées par l'utilisateur (neutral)
+                if (field.calculatedBy === 'neutral' && field.rawValue !== undefined && field.rawValue !== null) {
+                  restoredData[nodeId] = String(field.rawValue);
+                }
+              });
+              
+              console.log('📥 [TBL] Données à restaurer:', restoredData);
+              if (Object.keys(restoredData).length > 0) {
+                console.log('📥 [TBL] Données restaurées:', Object.keys(restoredData).length, 'champs');
+                setFormData(prev => ({ ...prev, ...restoredData }));
+              } else {
+                console.warn('⚠️ [TBL] Aucune donnée neutral trouvée dans les champs');
+              }
+            } else {
+              console.warn('⚠️ [TBL] fieldsMap vide');
+            }
+          } catch (loadError) {
+            console.warn('⚠️ [TBL] Impossible de charger les données du draft:', loadError);
+          }
+        } else {
+          console.log('📝 [TBL] Création du devis par défaut...');
+          // Créer un nouveau draft par défaut
+          const response = await api.post('/api/tbl/submissions/create-and-evaluate', {
+            treeId: effectiveTreeId,
+            formData: {},
+            status: 'default-draft',
+            providedName: 'Simulation (devis par défaut)'
+          });
+          
+          if (response?.submission?.id) {
+            setSubmissionId(response.submission.id);
+            setDevisName('Simulation (non enregistré)');
+            console.log('✅ [TBL] Devis par défaut créé:', response.submission.id);
+          }
+        }
+      } catch (error) {
+        console.warn('⚠️ [TBL] Impossible d\'initialiser le devis par défaut:', error);
+        // Mode fallback: on continue sans draft persistant
+        setDevisName('Simulation (non sauvegardé)');
+      }
+    };
+    
+    initDefaultDraft();
+  }, [leadId, api, effectiveTreeId, defaultDraftId, isDefaultDraft, user?.id]);
+
   // SYNCHRONISATION: Initialiser formData avec les mirrors créés par useTBLDataPrismaComplete
   useEffect(() => {
     if (typeof window !== 'undefined' && window.TBL_FORM_DATA && Object.keys(window.TBL_FORM_DATA).length > 0) {
@@ -694,11 +904,15 @@ const TBL: React.FC<TBLProps> = ({
         broadcastCalculatedRefresh({ reason: 'preview-no-save' });
       } else {
         // Devis existant: mise à jour idempotente
+        // Pour un default-draft (mode simulation), on garde ce status et on ne passe pas de clientId
+        const effectiveStatus = isDefaultDraft ? 'default-draft' : 'draft';
+        const effectiveClientId = isDefaultDraft ? null : leadId;
+        
         const evaluationResponse = await api.post('/api/tbl/submissions/create-and-evaluate', {
           submissionId,
           formData,
-          clientId: leadId,
-          status: 'draft'
+          clientId: effectiveClientId,
+          status: effectiveStatus
         });
         lastSavedSignatureRef.current = sig;
         setAutosaveLast(new Date());
@@ -715,7 +929,7 @@ const TBL: React.FC<TBLProps> = ({
       lastQueuedSignatureRef.current = null;
       setIsAutosaving(false);
     }
-  }, [api, tree, normalizePayload, computeSignature, submissionId, leadId, previewNoSave, broadcastCalculatedRefresh]);
+  }, [api, tree, normalizePayload, computeSignature, submissionId, leadId, isDefaultDraft, previewNoSave, broadcastCalculatedRefresh]);
 
   // Déclencheur débouncé
   const scheduleAutosave = useCallback((data: TBLFormData) => {
@@ -864,8 +1078,183 @@ const TBL: React.FC<TBLProps> = ({
     }
   }, [useFixed, newData, oldData, rawNodes]);
 
+  // 🆕 Générer un nom unique de devis en évitant les doublons (version useCallback)
+  const generateUniqueDevisName = useCallback(async (baseName: string, currentLeadId: string): Promise<string> => {
+    try {
+      if (!api) return baseName;
+      
+      // Récupérer tous les devis du lead actuel
+      const response = await api.get(`/api/treebranchleaf/submissions?leadId=${currentLeadId}`);
+      const existingSubmissions = response.data || response || [];
+      
+      // Extraire les noms existants
+      const existingNames = (Array.isArray(existingSubmissions) ? existingSubmissions : []).map(
+        (submission: { summary?: { name?: string }, name?: string }) => 
+          submission.summary?.name || submission.name || ''
+      ).filter((name: string) => name.trim() !== '');
+      
+      // Vérifier si le nom de base est unique
+      if (!existingNames.includes(baseName)) {
+        return baseName;
+      }
+      
+      // Chercher le prochain numéro disponible
+      let counter = 1;
+      let uniqueName = `${baseName} (${counter})`;
+      
+      while (existingNames.includes(uniqueName) && counter < 1000) {
+        counter++;
+        uniqueName = `${baseName} (${counter})`;
+      }
+      
+      return uniqueName;
+    } catch (error) {
+      console.error('❌ [TBL] Erreur lors de la génération du nom unique:', error);
+      return baseName;
+    }
+  }, [api]);
+
+  // 🆕 FONCTION ENREGISTRER - Convertit le default-draft en vrai devis
+  const handleSaveDevis = useCallback(async () => {
+    // Vérifier qu'on a un lead (OBLIGATOIRE)
+    if (!leadId) {
+      message.warning('Veuillez sélectionner un lead pour enregistrer le devis');
+      return;
+    }
+    
+    try {
+      console.log('💾 [TBL] Enregistrement du devis - Conversion default-draft → vrai devis');
+      message.loading('Enregistrement en cours...', 1);
+      
+      const clientName = clientData.name || 'Client';
+      const baseName = `Devis ${new Date().toLocaleDateString('fr-FR')} - ${clientName}`;
+      const finalName = await generateUniqueDevisName(baseName, leadId);
+      
+      // Sauvegarder l'ID du default-draft actuel pour le vider après
+      const oldDefaultDraftId = isDefaultDraft ? submissionId : null;
+      
+      // Créer le VRAI devis avec les données actuelles
+      const response = await api.post('/api/tbl/submissions/create-and-evaluate', {
+        treeId: effectiveTreeId,
+        clientId: leadId,
+        formData: normalizePayload(formData),
+        status: 'completed',
+        providedName: finalName
+      });
+      
+      if (response?.submission?.id) {
+        const newSubmissionId = response.submission.id;
+        
+        // Pointer vers le nouveau devis (les données restent à l'écran)
+        setSubmissionId(newSubmissionId);
+        setDevisName(finalName);
+        setDevisCreatedAt(new Date());
+        setIsDevisSaved(true);
+        setIsDefaultDraft(false); // On n'est plus en mode simulation
+        setIsLoadedDevis(false);
+        setOriginalDevisId(null);
+        setOriginalDevisName(null);
+        setHasCopiedDevis(false);
+        
+        // Marquer signature comme sauvegardée
+        try {
+          const normalized = normalizePayload(formData);
+          const sig = computeSignature(normalized);
+          lastSavedSignatureRef.current = sig;
+        } catch {/* noop */}
+        
+        // 🔄 VIDER le default-draft en DB (pas supprimer, juste vider car il n'y en a qu'un seul)
+        if (oldDefaultDraftId && api) {
+          try {
+            console.log('🔄 [TBL] Vidage du default-draft:', oldDefaultDraftId);
+            await api.put(`/api/treebranchleaf/submissions/${oldDefaultDraftId}`, {
+              formData: {},
+              clientId: null
+            });
+            console.log('✅ [TBL] Default-draft vidé (prêt pour le prochain devis)');
+          } catch (error) {
+            console.warn('⚠️ [TBL] Impossible de vider le default-draft:', error);
+            // Ce n'est pas critique, on continue
+          }
+        }
+        
+        message.success(`Devis "${finalName}" enregistré avec succès !`);
+        console.log('✅ [TBL] Devis enregistré:', newSubmissionId);
+      } else {
+        message.error('Erreur lors de l\'enregistrement');
+      }
+    } catch (error) {
+      console.error('❌ [TBL] Erreur enregistrement:', error);
+      message.error('Erreur lors de l\'enregistrement du devis');
+    }
+  }, [leadId, clientData.name, effectiveTreeId, api, formData, normalizePayload, computeSignature, generateUniqueDevisName, isDefaultDraft, submissionId]);
+
+  // 🆕 Créer une copie automatique du devis chargé
+  const createDevisCopy = useCallback(async (): Promise<string | null> => {
+    if (!originalDevisName || !leadId || !api || !effectiveTreeId) return null;
+    
+    try {
+      console.log('📋 [TBL] Création copie automatique du devis:', originalDevisName);
+      
+      // Générer un nom avec suffixe
+      const copyName = await generateCopySuffix(originalDevisName, leadId);
+      
+      // Créer la nouvelle submission (copie)
+      const response = await api.post('/api/tbl/submissions/create-and-evaluate', {
+        treeId: effectiveTreeId,
+        clientId: leadId,
+        formData: normalizePayload(formData),
+        status: 'draft',
+        providedName: copyName
+      });
+      
+      if (response?.submission?.id) {
+        const newSubmissionId = response.submission.id;
+        
+        // Mettre à jour les états
+        setSubmissionId(newSubmissionId);
+        setDevisName(copyName);
+        setHasCopiedDevis(true);
+        setIsLoadedDevis(false); // On travaille maintenant sur la copie
+        
+        // Marquer signature comme sauvegardée
+        try {
+          const normalized = normalizePayload(formData);
+          const sig = computeSignature(normalized);
+          lastSavedSignatureRef.current = sig;
+        } catch {/* noop */}
+        
+        message.info(`Copie créée : "${copyName}"`);
+        console.log('✅ [TBL] Copie créée:', newSubmissionId);
+        
+        return newSubmissionId;
+      }
+      
+      return null;
+    } catch (error) {
+      console.error('❌ [TBL] Erreur création copie:', error);
+      message.error('Erreur lors de la création de la copie');
+      return null;
+    }
+  }, [originalDevisName, leadId, api, effectiveTreeId, formData, normalizePayload, computeSignature, generateCopySuffix]);
+
   const handleFieldChange = useCallback((fieldId: string, value: string | number | boolean | string[] | null | undefined) => {
     console.log(`🔄🔄🔄 [TBL] handleFieldChange appelé: fieldId=${fieldId}, value=${value}`);
+    
+    // 🆕 COPIE AUTOMATIQUE: Si c'est un devis chargé et première modification → créer copie
+    if (isLoadedDevis && !hasCopiedDevis && originalDevisId) {
+      console.log('📋 [TBL] Première modification d\'un devis chargé → création copie...');
+      // Déclencher la création de copie (async, mais on continue)
+      createDevisCopy().then(newId => {
+        if (newId) {
+          console.log('✅ [TBL] Copie créée avec succès, nouvelles modifications iront sur:', newId);
+        }
+      }).catch(err => {
+        console.error('❌ [TBL] Erreur création copie:', err);
+      });
+      // Marquer immédiatement pour éviter plusieurs copies
+      setHasCopiedDevis(true);
+    }
     
     // Vérifier si le champ existe dans la configuration
     let fieldConfig = tblConfig?.fields.find(f => f.id === fieldId);
@@ -1099,7 +1488,7 @@ const TBL: React.FC<TBLProps> = ({
       } catch {/* noop */}
       return next as typeof prev;
     });
-  }, [tblConfig, tabs, scheduleAutosave, scheduleCapabilityPreview]);
+  }, [tblConfig, tabs, scheduleAutosave, scheduleCapabilityPreview, isLoadedDevis, hasCopiedDevis, originalDevisId, createDevisCopy]);
 
 
   // Sauvegarder comme devis
@@ -1278,65 +1667,44 @@ const TBL: React.FC<TBLProps> = ({
     }
   }, [treeId, api, clientData, leadId]);
 
-  // Générer un nom unique en évitant les doublons
-  const generateUniqueDevisName = async (baseName: string, leadId: string): Promise<string> => {
-    try {
-      if (!api) return baseName;
-      
-      // Récupérer tous les devis du lead actuel
-      const response = await api.get(`/api/treebranchleaf/submissions?leadId=${leadId}`);
-      const existingSubmissions = response.data || [];
-      
-      // Extraire les noms existants
-      const existingNames = existingSubmissions.map((submission: { summary?: { name?: string }, name?: string }) => 
-        submission.summary?.name || submission.name || ''
-      ).filter(name => name.trim() !== '');
-      
-      // console.log('🔍 [TBL] Noms de devis existants:', existingNames);
-      
-      // Vérifier si le nom de base est unique
-      if (!existingNames.includes(baseName)) {
-        return baseName;
-      }
-      
-      // Chercher le prochain numéro disponible
-      let counter = 1;
-      let uniqueName = `${baseName} (${counter})`;
-      
-      while (existingNames.includes(uniqueName) && counter < 1000) {
-        counter++;
-        uniqueName = `${baseName} (${counter})`;
-      }
-      
-      // console.log('🔢 [TBL] Nom unique généré:', uniqueName);
-      return uniqueName;
-    } catch (error) {
-      console.error('❌ [TBL] Erreur lors de la génération du nom unique:', error);
-      return baseName; // Fallback sur le nom de base
-    }
-  };
-
-  // Créer un nouveau devis pour le lead actuel
+  // 🆕 NOUVEAU DEVIS - Vide le default-draft existant (il n'y en a qu'UN seul)
   const handleNewDevis = async () => {
     try {
-      // Générer un nom par défaut basé sur les données actuelles
-      const clientName = clientData.name || 'Client';
-      const baseName = `Devis ${new Date().toLocaleDateString('fr-FR')} - ${clientName}`;
+      console.log('🆕 [TBL] NOUVEAU DEVIS - Vidage du default-draft existant');
       
-      // Générer un nom unique en évitant les doublons
-      const uniqueName = await generateUniqueDevisName(baseName, leadId || '');
+      // 1. Réinitialiser tout le formulaire (vide les données locales)
+      resetTBLForm();
       
-      setDevisName(uniqueName);
-      form.setFieldsValue({ devisName: uniqueName });
-      setDevisCreatorVisible(true);
+      // 2. Vider le lead
+      setLeadId(null);
+      setClientData({
+        id: '',
+        name: '',
+        email: '',
+        phone: '',
+        address: ''
+      });
+      
+      // 3. Revenir en mode default-draft
+      setIsDefaultDraft(true);
+      
+      // 4. VIDER complètement le default-draft (données + lead + status)
+      if (submissionId && api) {
+        try {
+          console.log('🔄 [TBL] Vidage du default-draft existant:', submissionId);
+          await api.post(`/api/treebranchleaf/submissions/${submissionId}/reset-data`, {
+            status: 'default-draft'
+          });
+          console.log('✅ [TBL] Default-draft vidé (données supprimées)');
+        } catch (error) {
+          console.warn('⚠️ [TBL] Impossible de vider le default-draft:', error);
+        }
+      }
+      
+      message.success('Formulaire réinitialisé');
     } catch (error) {
-      console.error('❌ [TBL] Erreur lors de la création du nouveau devis:', error);
-      // Fallback sur le nom simple
-      const clientName = clientData.name || 'Client';
-      const defaultName = `Devis ${new Date().toLocaleDateString('fr-FR')} - ${clientName}`;
-      setDevisName(defaultName);
-      form.setFieldsValue({ devisName: defaultName });
-      setDevisCreatorVisible(true);
+      console.error('❌ [TBL] Erreur lors de la réinitialisation:', error);
+      message.error('Erreur lors de la réinitialisation');
     }
   };
 
@@ -1831,16 +2199,25 @@ const TBL: React.FC<TBLProps> = ({
         } catch { /* noop */ }
         // console.log('✅ [TBL] FormData mis à jour');
         
-        const devisName = submission.summary?.name || submission.name || `Devis ${devisId.slice(0, 8)}`;
-        // console.log('🔍 [TBL] Nom du devis:', devisName);
+        const loadedDevisName = submission.summary?.name || submission.name || `Devis ${devisId.slice(0, 8)}`;
+        // console.log('🔍 [TBL] Nom du devis:', loadedDevisName);
+        
+        // 🆕 SYSTÈME DE COPIE AUTOMATIQUE
+        // Marquer que c'est un devis chargé (pour créer copie à la première modification)
+        setIsLoadedDevis(true);
+        setOriginalDevisId(devisId);
+        setOriginalDevisName(loadedDevisName);
+        setHasCopiedDevis(false);
+        setIsDevisSaved(true); // Le devis original est déjà enregistré
+        setIsDefaultDraft(false); // On n'est plus en mode simulation
         
         // Mettre à jour le nom et la date du devis dans l'état
-        setDevisName(devisName);
+        setDevisName(loadedDevisName);
         if (submission.createdAt) {
           setDevisCreatedAt(new Date(submission.createdAt));
         }
         
-        message.success(`Devis "${devisName}" chargé avec succès (${Object.keys(formattedData).length} champs)`);
+        message.success(`Devis "${loadedDevisName}" chargé avec succès (${Object.keys(formattedData).length} champs)`);
       } else {
         console.warn('🔍 [TBL] Aucune donnée TreeBranchLeafSubmissionData trouvée');
         console.warn('🔍 [TBL] Structure de submission:', Object.keys(submission || {}));
@@ -1968,11 +2345,39 @@ const TBL: React.FC<TBLProps> = ({
               <div className={headerContainerClass}>
                 <div className="flex-1">
                   <Title level={4} className="mb-0 text-gray-800">
-                    {clientData.name || 'Aucun lead'}
-                    {' - '}
-                    {devisName || (tree.name ? `${tree.name} (Nouveau devis)` : 'Nouveau devis')}
-                    {devisCreatedAt && ` - ${devisCreatedAt.toLocaleDateString('fr-FR')}`}
+                    {/* 🆕 Affichage du mode + informations */}
+                    {isDefaultDraft ? (
+                      <>
+                        <span style={{ color: '#faad14' }}>🔬 Mode Simulation</span>
+                        {' - '}
+                        {devisName || 'Devis par défaut'}
+                      </>
+                    ) : (
+                      <>
+                        {clientData.name || 'Aucun lead'}
+                        {' - '}
+                        {devisName || (tree.name ? `${tree.name} (Nouveau devis)` : 'Nouveau devis')}
+                        {devisCreatedAt && ` - ${devisCreatedAt.toLocaleDateString('fr-FR')}`}
+                        {isLoadedDevis && !hasCopiedDevis && (
+                          <span style={{ color: '#1890ff', fontSize: '0.8em', marginLeft: 8 }}>
+                            (original - modifications créeront une copie)
+                          </span>
+                        )}
+                        {hasCopiedDevis && (
+                          <span style={{ color: '#52c41a', fontSize: '0.8em', marginLeft: 8 }}>
+                            (copie)
+                          </span>
+                        )}
+                      </>
+                    )}
                   </Title>
+                  {/* Indicateur de sauvegarde automatique */}
+                  {autosaveLast && !isDefaultDraft && (
+                    <Text type="secondary" style={{ fontSize: '0.75em' }}>
+                      <ClockCircleOutlined style={{ marginRight: 4 }} />
+                      Dernière sauvegarde : {autosaveLast.toLocaleTimeString('fr-FR')}
+                    </Text>
+                  )}
                 </div>
                 
                 <Space
@@ -1982,32 +2387,45 @@ const TBL: React.FC<TBLProps> = ({
                   wrap={!isMobile}
                   align={headerActionsAlign}
                 >
-                  <Tooltip title="Charger Lead" placement="bottom">
+                  <Tooltip title="Nouveau Devis" placement="bottom">
+                    <Button 
+                      icon={<FileAddOutlined />}
+                      onClick={handleNewDevis}
+                      type="primary"
+                      block={actionButtonBlock}
+                    />
+                  </Tooltip>
+                  <Tooltip title="Sélectionner un lead" placement="bottom">
                     <Button 
                       icon={<UserOutlined />}
                       onClick={handleLoadLead}
                       block={actionButtonBlock}
                     />
                   </Tooltip>
-                  <Tooltip title="Nouveau Lead" placement="bottom">
+                  <Tooltip title="Créer un lead" placement="bottom">
                     <Button 
                       icon={<PlusOutlined />}
                       onClick={handleNewLead}
                       block={actionButtonBlock}
                     />
                   </Tooltip>
-                  <Tooltip title="Charger Devis" placement="bottom">
+                  <Tooltip title={leadId ? "Enregistrer le devis" : "Sélectionnez un lead pour enregistrer"} placement="bottom">
+                    <Button 
+                      icon={<SaveOutlined />}
+                      onClick={handleSaveDevis}
+                      disabled={!leadId}
+                      type={leadId && !isDevisSaved ? "primary" : "default"}
+                      danger={!leadId}
+                      block={actionButtonBlock}
+                      style={leadId && !isDevisSaved ? { backgroundColor: '#52c41a', borderColor: '#52c41a' } : undefined}
+                    >
+                      {isMobile ? '' : (isDevisSaved ? 'Enregistré ✓' : 'Enregistrer')}
+                    </Button>
+                  </Tooltip>
+                  <Tooltip title="Charger un devis" placement="bottom">
                     <Button 
                       icon={<FolderOpenOutlined />}
                       onClick={handleLoadDevis}
-                      block={actionButtonBlock}
-                    />
-                  </Tooltip>
-                  <Tooltip title="Nouveau Devis" placement="bottom">
-                    <Button 
-                      icon={<FileAddOutlined />}
-                      onClick={handleNewDevis}
-                      type="primary"
                       block={actionButtonBlock}
                     />
                   </Tooltip>

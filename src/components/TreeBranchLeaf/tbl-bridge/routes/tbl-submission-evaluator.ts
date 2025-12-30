@@ -161,21 +161,30 @@ async function saveUserEntriesNeutral(
   let saved = 0;
   const entries = new Map<string, SubmissionDataEntry>();
 
-  // 🚫 ÉTAPE 1 : Récupérer UNIQUEMENT les nodes avec "preview-unknown-user" dans calculatedBy (= DISPLAY fields à exclure)
-  const displayNodes = treeId 
+  // 🚫 ÉTAPE 1 : Récupérer les nodes à EXCLURE (calculés/affichage)
+  // - preview-unknown-user dans calculatedBy (displays)
+  // - formulaConfig non null (formules)
+  // - conditionConfig non null (conditions)
+  // - tableConfig non null (tables/lookups)
+  const excludedNodes = treeId 
     ? await prisma.treeBranchLeafNode.findMany({
         where: { 
           treeId,
-          calculatedBy: { contains: "preview-unknown-user" } // ✅ Seulement les displays avec preview-unknown-user
+          OR: [
+            { calculatedBy: { contains: "preview-unknown-user" } }, // DISPLAY fields
+            { formulaConfig: { not: Prisma.JsonNull } },           // Formulas
+            { conditionConfig: { not: Prisma.JsonNull } },         // Conditions  
+            { tableConfig: { not: Prisma.JsonNull } }              // Tables/Lookups
+          ]
         },
-        select: { id: true, calculatedBy: true, label: true }
+        select: { id: true, calculatedBy: true, label: true, formulaConfig: true, conditionConfig: true, tableConfig: true }
       })
     : [];
 
-  const displayNodeIds = new Set(displayNodes.map(n => n.id));
+  const excludedNodeIds = new Set(excludedNodes.map(n => n.id));
   
-  if (displayNodeIds.size > 0) {
-    console.log(`🚫 [SAVE] ${displayNodeIds.size} DISPLAY fields (preview-unknown-user) identifiés - ne seront PAS sauvegardés`);
+  if (excludedNodeIds.size > 0) {
+    console.log(`🚫 [SAVE] ${excludedNodeIds.size} champs calculés/affichage identifiés - ne seront PAS sauvegardés`);
   }
 
   const sharedRefKeys = Object.keys(formData).filter(isSharedReferenceId);
@@ -189,10 +198,9 @@ async function saveUserEntriesNeutral(
     }
     if (!isAcceptedNodeId(key)) continue;
     
-    // 🚫 ÉTAPE 2 : Skip UNIQUEMENT les DISPLAY fields avec "preview-unknown-user"
-    if (displayNodeIds.has(key)) {
-      console.log(`🚫 [SAVE] Display field ignoré: ${key} (preview-unknown-user dans calculatedBy)`);
-      continue; // Ne PAS sauvegarder les displays
+    // 🚫 ÉTAPE 2 : Skip les champs calculés/affichage (formules, conditions, tables, displays)
+    if (excludedNodeIds.has(key)) {
+      continue; // Ne PAS sauvegarder les champs calculés
     }
     
     // ✅ ÉTAPE 3 : Sauvegarder les champs complétés (skip null/undefined/vide)
@@ -443,7 +451,8 @@ router.post('/submissions/:submissionId/evaluate-all', async (req, res) => {
     
     // Récupérer l'organisation de l'utilisateur authentifié (endpoint PUT)
     const organizationId = req.headers['x-organization-id'] as string || (req as AuthenticatedRequest).user?.organizationId;
-    const userId = (req as AuthenticatedRequest).user?.userId || 'unknown-user';
+    // 🔑 Récupérer userId depuis le header X-User-Id ou le middleware auth
+    const userId = req.headers['x-user-id'] as string || (req as AuthenticatedRequest).user?.userId || 'unknown-user';
     
     if (!organizationId) {
       return res.status(400).json({
@@ -677,7 +686,8 @@ router.post('/submissions/create-and-evaluate', async (req, res) => {
     
     // Récupérer l'organisation de l'utilisateur authentifié (endpoint POST)
     const organizationId = req.headers['x-organization-id'] as string || (req as AuthenticatedRequest).user?.organizationId;
-    const userId = (req as AuthenticatedRequest).user?.userId || 'unknown-user';
+    // 🔑 Récupérer userId depuis le header X-User-Id ou le middleware auth
+    const userId = req.headers['x-user-id'] as string || (req as AuthenticatedRequest).user?.userId || 'unknown-user';
     
     if (!organizationId) {
       return res.status(400).json({
@@ -732,10 +742,15 @@ router.post('/submissions/create-and-evaluate', async (req, res) => {
     
     // 2. Vérifier et gérer le Lead (clientId)
     // 🔥 IMPORTANT: TOUT DEVIS DOIT AVOIR UN LEAD ASSOCIÉ (organizationId + treeId + leadId)
-    // ⚠️ VALIDATION STRICTE: Le lead est OBLIGATOIRE, pas de création automatique de lead par défaut
+    // ⚠️ EXCEPTION: Les devis "default-draft" peuvent être créés sans lead (brouillon par défaut)
     
-    if (!clientId) {
-      console.log('❌ [TBL CREATE-AND-EVALUATE] Aucun leadId fourni - REQUIS');
+    let effectiveLeadId: string | null = clientId || null;
+    
+    // Pour les default-draft, on autorise la création sans lead
+    const isDefaultDraft = status === 'default-draft';
+    
+    if (!clientId && !isDefaultDraft) {
+      console.log('❌ [TBL CREATE-AND-EVALUATE] Aucun leadId fourni - REQUIS (sauf pour default-draft)');
       return res.status(400).json({
         success: false,
         error: 'Lead obligatoire',
@@ -743,35 +758,37 @@ router.post('/submissions/create-and-evaluate', async (req, res) => {
       });
     }
     
-    let effectiveLeadId = clientId;
-    
-    // Vérifier que le lead fourni existe bien
-    const leadExists = await prisma.lead.findUnique({
-      where: { id: effectiveLeadId },
-      select: { id: true, firstName: true, lastName: true, email: true, organizationId: true }
-    });
-    
-    if (!leadExists) {
-      console.log(`❌ [TBL CREATE-AND-EVALUATE] Lead ${effectiveLeadId} introuvable`);
-      return res.status(404).json({
-        success: false,
-        error: 'Lead introuvable',
-        message: `Le lead ${effectiveLeadId} n'existe pas. Veuillez sélectionner un lead valide.`
+    if (clientId) {
+      // Vérifier que le lead fourni existe bien
+      const leadExists = await prisma.lead.findUnique({
+        where: { id: clientId },
+        select: { id: true, firstName: true, lastName: true, email: true, organizationId: true }
       });
+      
+      if (!leadExists) {
+        console.log(`❌ [TBL CREATE-AND-EVALUATE] Lead ${clientId} introuvable`);
+        return res.status(404).json({
+          success: false,
+          error: 'Lead introuvable',
+          message: `Le lead ${clientId} n'existe pas. Veuillez sélectionner un lead valide.`
+        });
+      }
+      
+      // Vérifier que le lead appartient bien à la même organisation
+      if (leadExists.organizationId !== organizationId) {
+        console.log(`❌ [TBL CREATE-AND-EVALUATE] Le lead ${clientId} n'appartient pas à l'organisation ${organizationId}`);
+        return res.status(403).json({
+          success: false,
+          error: 'Lead non autorisé',
+          message: 'Le lead sélectionné n\'appartient pas à votre organisation.'
+        });
+      }
+      
+      console.log(`✅ [TBL CREATE-AND-EVALUATE] Lead validé: ${clientId} (${leadExists.firstName} ${leadExists.lastName})`);
+      effectiveLeadId = leadExists.id;
+    } else {
+      console.log('📝 [TBL CREATE-AND-EVALUATE] Création default-draft SANS lead');
     }
-    
-    // Vérifier que le lead appartient bien à la même organisation
-    if (leadExists.organizationId !== organizationId) {
-      console.log(`❌ [TBL CREATE-AND-EVALUATE] Le lead ${effectiveLeadId} n'appartient pas à l'organisation ${organizationId}`);
-      return res.status(403).json({
-        success: false,
-        error: 'Lead non autorisé',
-        message: 'Le lead sélectionné n\'appartient pas à votre organisation.'
-      });
-    }
-    
-    console.log(`✅ [TBL CREATE-AND-EVALUATE] Lead validé: ${effectiveLeadId} (${leadExists.firstName} ${leadExists.lastName})`);
-    effectiveLeadId = leadExists.id;
     
     // 3. Vérifier l'utilisateur si fourni
     let effectiveUserId = userId;
@@ -798,23 +815,45 @@ router.post('/submissions/create-and-evaluate', async (req, res) => {
     }
     
     // 🔥 NOUVEAU: Chercher une submission draft existante AVANT de créer une nouvelle
-    // ⚠️ IMPORTANT: On cherche TOUJOURS avec les 3 critères: organizationId + treeId + leadId
-    // Car désormais, TOUT devis a un lead associé (créé par défaut si nécessaire)
+    // ⚠️ IMPORTANT: Pour default-draft, on cherche par userId + treeId + status
+    // Pour les autres drafts, on cherche par organizationId + treeId + leadId
     if (!submissionId) {
-      const existingDraft = await prisma.treeBranchLeafSubmission.findFirst({
-        where: {
-          treeId: effectiveTreeId,
-          leadId: effectiveLeadId,
-          organizationId: organizationId,
-          status: 'draft'
-        },
-        orderBy: { updatedAt: 'desc' },
-        select: { id: true }
-      });
+      let existingDraft;
+      
+      if (isDefaultDraft) {
+        // Pour default-draft: chercher par userId + treeId + status="default-draft"
+        existingDraft = await prisma.treeBranchLeafSubmission.findFirst({
+          where: {
+            treeId: effectiveTreeId,
+            userId: effectiveUserId,
+            organizationId: organizationId,
+            status: 'default-draft'
+          },
+          orderBy: { updatedAt: 'desc' },
+          select: { id: true }
+        });
+        if (existingDraft) {
+          console.log(`♻️ [TBL CREATE-AND-EVALUATE] Réutilisation du default-draft existant: ${existingDraft.id}`);
+        }
+      } else if (effectiveLeadId) {
+        // Pour les drafts normaux: chercher par leadId + treeId
+        existingDraft = await prisma.treeBranchLeafSubmission.findFirst({
+          where: {
+            treeId: effectiveTreeId,
+            leadId: effectiveLeadId,
+            organizationId: organizationId,
+            status: 'draft'
+          },
+          orderBy: { updatedAt: 'desc' },
+          select: { id: true }
+        });
+        if (existingDraft) {
+          console.log(`♻️ [TBL CREATE-AND-EVALUATE] Réutilisation du draft existant: ${existingDraft.id} (leadId: ${effectiveLeadId})`);
+        }
+      }
       
       if (existingDraft) {
         submissionId = existingDraft.id;
-        console.log(`♻️ [TBL CREATE-AND-EVALUATE] Réutilisation du draft existant: ${submissionId} (leadId: ${effectiveLeadId})`);
       }
     }
     
@@ -881,18 +920,23 @@ router.post('/submissions/create-and-evaluate', async (req, res) => {
     // 3. Évaluation immédiate déjà effectuée via operation-interpreter ci-dessus.
     //    On évite une seconde passe redondante qui réécrit inutilement en base.
     
-    // 4. Retourner la soumission complète
+    // 4. Retourner la soumission complète (sans include - pas de relation définie)
     const finalSubmission = await prisma.treeBranchLeafSubmission.findUnique({
-      where: { id: submissionId },
-      include: {
-        TreeBranchLeafSubmissionData: true
-      }
+      where: { id: submissionId }
+    });
+    
+    // Récupérer les données de soumission séparément
+    const submissionData = await prisma.treeBranchLeafSubmissionData.findMany({
+      where: { submissionId: submissionId }
     });
     
     return res.status(201).json({
       success: true,
       message: 'Soumission créée et évaluée avec TBL Prisma',
-      submission: finalSubmission
+      submission: {
+        ...finalSubmission,
+        TreeBranchLeafSubmissionData: submissionData
+      }
     });
     
   } catch (error) {
@@ -988,7 +1032,8 @@ router.post('/submissions/preview-evaluate', async (req, res) => {
     const { treeId, formData, baseSubmissionId, leadId } = req.body || {};
 
     const organizationId = req.headers['x-organization-id'] as string || (req as AuthenticatedRequest).user?.organizationId;
-    const userId = (req as AuthenticatedRequest).user?.userId || 'unknown-user';
+    // 🔑 Récupérer userId depuis le header X-User-Id ou le middleware auth
+    const userId = req.headers['x-user-id'] as string || (req as AuthenticatedRequest).user?.userId || 'unknown-user';
 
     if (!organizationId) {
       return res.status(400).json({ success: false, error: 'Organisation ID manquant - authentification requise' });
@@ -1336,7 +1381,8 @@ router.post('/submissions/stage', async (req, res) => {
     pruneStages();
     const { stageId, treeId, submissionId, formData } = req.body || {};
     const organizationId = req.headers['x-organization-id'] as string || (req as AuthenticatedRequest).user?.organizationId;
-    const userId = (req as AuthenticatedRequest).user?.userId || 'unknown-user';
+    // 🔑 Récupérer userId depuis le header X-User-Id ou le middleware auth
+    const userId = req.headers['x-user-id'] as string || (req as AuthenticatedRequest).user?.userId || 'unknown-user';
     if (!organizationId) return res.status(400).json({ success: false, error: 'Organisation ID manquant' });
 
     // Résoudre treeId

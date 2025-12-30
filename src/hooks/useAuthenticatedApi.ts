@@ -57,7 +57,7 @@ export function useAuthenticatedApi() {
   const [globalError, setGlobalError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const navigate = useNavigate();
-  const { logout: authLogout, currentOrganization, isSuperAdmin } = useAuth();
+  const { logout: authLogout, currentOrganization, isSuperAdmin, user } = useAuth();
 
   const apiBaseUrl = useMemo(() => {
     if (typeof window === 'undefined') {
@@ -109,6 +109,9 @@ export function useAuthenticatedApi() {
       const organizationId = currentOrganization?.id;
       if (organizationId) headers.set('X-Organization-Id', organizationId);
       if (isSuperAdmin) headers.set('X-Is-Super-Admin', 'true');
+      
+      // 🔑 Envoyer l'ID utilisateur pour les routes qui n'utilisent pas le middleware auth
+      if (user?.id) headers.set('X-User-Id', user.id);
 
       const impersonatedUserId = sessionStorage.getItem('impersonatedUserId');
       const impersonatedOrgId = sessionStorage.getItem('impersonatedOrgId');

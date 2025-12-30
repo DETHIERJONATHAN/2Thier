@@ -39000,58 +39000,39 @@ router56.get("/formulas/:formulaId", async (req2, res) => {
 router56.get("/submissions", async (req2, res) => {
   try {
     const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx3(req2);
-    const { treeId, leadId, userId } = req2.query;
+    const { treeId, leadId, userId, status } = req2.query;
     const whereClause = {};
     if (treeId) whereClause.treeId = treeId;
     if (leadId) whereClause.leadId = leadId;
     if (userId) whereClause.userId = userId;
+    if (status) whereClause.status = status;
     if (!isSuperAdmin2 && organizationId) {
-      whereClause.TreeBranchLeafTree = {
-        organizationId
-      };
+      whereClause.organizationId = organizationId;
     }
     const submissions = await prisma30.treeBranchLeafSubmission.findMany({
       where: whereClause,
-      include: {
-        TreeBranchLeafTree: {
-          select: {
-            id: true,
-            name: true,
-            organizationId: true
-          }
-        },
-        TreeBranchLeafSubmissionData: {
-          include: {
-            TreeBranchLeafNode: {
-              select: {
-                id: true,
-                label: true,
-                type: true
-              }
-            }
-          }
-        },
-        Lead: {
-          select: {
-            id: true,
-            firstName: true,
-            lastName: true,
-            email: true,
-            company: true
-          }
-        },
-        User_TreeBranchLeafSubmission_userIdToUser: {
-          select: {
-            id: true,
-            email: true,
-            firstName: true,
-            lastName: true
-          }
-        }
-      },
       orderBy: { createdAt: "desc" }
     });
-    res.json(submissions);
+    const leadIds = [...new Set(submissions.map((s) => s.leadId).filter(Boolean))];
+    const userIds = [...new Set(submissions.map((s) => s.userId).filter(Boolean))];
+    const [leads, users] = await Promise.all([
+      leadIds.length > 0 ? prisma30.lead.findMany({
+        where: { id: { in: leadIds } },
+        select: { id: true, firstName: true, lastName: true, email: true, company: true }
+      }) : Promise.resolve([]),
+      userIds.length > 0 ? prisma30.user.findMany({
+        where: { id: { in: userIds } },
+        select: { id: true, email: true, firstName: true, lastName: true }
+      }) : Promise.resolve([])
+    ]);
+    const leadMap = new Map(leads.map((l) => [l.id, l]));
+    const userMap = new Map(users.map((u) => [u.id, u]));
+    const enrichedSubmissions = submissions.map((submission) => ({
+      ...submission,
+      Lead: submission.leadId ? leadMap.get(submission.leadId) || null : null,
+      User_TreeBranchLeafSubmission_userIdToUser: submission.userId ? userMap.get(submission.userId) || null : null
+    }));
+    res.json(enrichedSubmissions);
   } catch (error) {
     console.error("[TreeBranchLeaf API] Error fetching submissions:", error);
     res.status(500).json({ error: "Erreur lors de la r\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9cup\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9ration des soumissions" });
@@ -39088,53 +39069,199 @@ router56.get("/submissions/by-leads", async (req2, res) => {
         { email: { contains: search, mode: "insensitive" } }
       ];
     }
-    const leadsWithSubmissions = await prisma30.lead.findMany({
+    const submissions = await prisma30.treeBranchLeafSubmission.findMany({
+      where: {
+        ...submissionWhere,
+        leadId: { not: null }
+      },
+      select: {
+        id: true,
+        leadId: true,
+        status: true,
+        summary: true,
+        createdAt: true,
+        updatedAt: true,
+        treeId: true
+      },
+      orderBy: { createdAt: "desc" }
+    });
+    const treeIds = [...new Set(submissions.map((s) => s.treeId))];
+    const trees = await prisma30.treeBranchLeafTree.findMany({
+      where: { id: { in: treeIds } },
+      select: { id: true, name: true }
+    });
+    const treeMap = new Map(trees.map((t) => [t.id, t.name]));
+    const leadIds = [...new Set(submissions.map((s) => s.leadId).filter(Boolean))];
+    const leads = await prisma30.lead.findMany({
       where: {
         ...leadWhere,
-        TreeBranchLeafSubmission: {
-          some: submissionWhere
-        }
+        id: { in: leadIds }
       },
-      include: {
-        TreeBranchLeafSubmission: {
-          where: submissionWhere,
-          select: {
-            id: true,
-            status: true,
-            summary: true,
-            createdAt: true,
-            updatedAt: true,
-            TreeBranchLeafTree: {
-              select: { id: true, name: true }
-            }
-          },
-          orderBy: { createdAt: "desc" }
-        }
+      select: {
+        id: true,
+        firstName: true,
+        lastName: true,
+        email: true,
+        company: true
       },
       orderBy: [
         { firstName: "asc" },
         { lastName: "asc" }
       ]
     });
-    const formattedData = leadsWithSubmissions.map((lead) => ({
+    const submissionsByLead = /* @__PURE__ */ new Map();
+    for (const submission of submissions) {
+      if (submission.leadId) {
+        const existing = submissionsByLead.get(submission.leadId) || [];
+        existing.push(submission);
+        submissionsByLead.set(submission.leadId, existing);
+      }
+    }
+    const formattedData = leads.map((lead) => ({
       id: lead.id,
       firstName: lead.firstName,
       lastName: lead.lastName,
       email: lead.email,
       company: lead.company,
-      submissions: lead.TreeBranchLeafSubmission.map((submission) => ({
+      submissions: (submissionsByLead.get(lead.id) || []).map((submission) => ({
         id: submission.id,
         name: submission.summary?.name || `Devis ${new Date(submission.createdAt).toLocaleDateString("fr-FR")}`,
         status: submission.status,
         createdAt: submission.createdAt,
         updatedAt: submission.updatedAt,
-        treeName: submission.TreeBranchLeafTree?.name
+        treeName: treeMap.get(submission.treeId)
       }))
     }));
     res.json(formattedData);
   } catch (error) {
     console.error("[TreeBranchLeaf API] Error getting submissions by leads:", error);
-    res.status(500).json({ error: "Erreur lors de la r\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9cup\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9ration des devis par leads" });
+    res.status(500).json({ error: "Erreur lors de la r\xE9cup\xE9ration des devis par leads" });
+  }
+});
+router56.get("/submissions/:id/fields", async (req2, res) => {
+  try {
+    const { id } = req2.params;
+    const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx3(req2);
+    console.log(`[TBL-FIELDS] \u25B6\uFE0F GET /submissions/${id}/fields`);
+    let submission = null;
+    try {
+      submission = await prisma30.treeBranchLeafSubmission.findUnique({ where: { id } });
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      console.warn("[TBL-FIELDS] \u26A0\uFE0F findUnique submission \xE9chou\xE9:", msg);
+      submission = null;
+    }
+    if (!submission) {
+      return res.status(404).json({ error: "Soumission non trouv\xE9e" });
+    }
+    let tree = null;
+    if (submission.treeId) {
+      try {
+        tree = await prisma30.treeBranchLeafTree.findUnique({
+          where: { id: submission.treeId },
+          select: { id: true, organizationId: true }
+        });
+      } catch (e) {
+        console.warn("[TBL-FIELDS] \u26A0\uFE0F findUnique tree \xE9chou\xE9:", e instanceof Error ? e.message : String(e));
+        tree = null;
+      }
+    }
+    const treeOrg = tree?.organizationId;
+    if (!isSuperAdmin2 && treeOrg && treeOrg !== organizationId) {
+      return res.status(403).json({ error: "Acc\xE8s refus\xE9" });
+    }
+    let lead = null;
+    if (submission.leadId) {
+      try {
+        lead = await prisma30.lead.findUnique({
+          where: { id: submission.leadId },
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            email: true,
+            phone: true,
+            company: true
+          }
+        });
+      } catch (e) {
+        console.warn("[TBL-FIELDS] \u26A0\uFE0F findUnique lead \xE9chou\xE9:", e instanceof Error ? e.message : String(e));
+        lead = null;
+      }
+    }
+    let dataRows = [];
+    try {
+      dataRows = await prisma30.treeBranchLeafSubmissionData.findMany({
+        where: { submissionId: id },
+        orderBy: { createdAt: "asc" }
+      });
+    } catch (e) {
+      console.warn("[TBL-FIELDS] \u26A0\uFE0F findMany submissionData \xE9chou\xE9:", e instanceof Error ? e.message : String(e));
+      dataRows = [];
+    }
+    console.log(`[TBL-FIELDS] \u2139\uFE0F dataRows=${dataRows.length}`);
+    const nodeIds = [...new Set(
+      dataRows.map((r) => r?.nodeId).filter((nid) => typeof nid === "string" && nid.length > 0)
+    )];
+    console.log(`[TBL-FIELDS] \u2139\uFE0F nodeIds=${nodeIds.length}`);
+    let nodes = [];
+    if (nodeIds.length > 0) {
+      try {
+        nodes = await prisma30.treeBranchLeafNode.findMany({
+          where: { id: { in: nodeIds } },
+          select: { id: true, type: true, label: true, fieldType: true, fieldSubType: true }
+        });
+      } catch (e) {
+        console.warn("[TreeBranchLeaf API] \u26A0\uFE0F findMany nodes \xE9chou\xE9, retour des champs vides.", e instanceof Error ? e.message : String(e));
+        nodes = [];
+      }
+    }
+    console.log(`[TBL-FIELDS] \u2139\uFE0F nodes=${nodes.length}`);
+    const nodesMap = new Map(nodes.map((n) => [n.id, n]));
+    const fieldsMap = {};
+    for (const row of dataRows) {
+      const node = nodesMap.get(row.nodeId);
+      if (!node) continue;
+      const key2 = node.id;
+      const raw = typeof row.value === "string" ? row.value : JSON.stringify(row.value ?? null);
+      fieldsMap[key2] = {
+        nodeId: node.id,
+        label: node.label || "",
+        type: node.type || "unknown",
+        fieldType: node.fieldType || void 0,
+        fieldSubType: node.fieldSubType || void 0,
+        value: row.value,
+        rawValue: raw ?? "",
+        calculatedBy: row.operationSource || void 0
+      };
+    }
+    const response = {
+      submissionId: submission.id,
+      treeId: submission.treeId,
+      treeName: tree?.id || null,
+      leadId: submission.leadId,
+      lead: lead ? {
+        id: lead.id,
+        firstName: lead.firstName,
+        lastName: lead.lastName,
+        fullName: `${lead.firstName || ""} ${lead.lastName || ""}`.trim(),
+        email: lead.email,
+        phone: lead.phone,
+        company: lead.company,
+        fullAddress: null
+      } : null,
+      status: submission.status,
+      createdAt: submission.createdAt,
+      updatedAt: submission.updatedAt,
+      fields: fieldsMap,
+      totalFields: Object.keys(fieldsMap).length
+    };
+    return res.json(response);
+  } catch (error) {
+    const errorMsg = error instanceof Error ? error.message : String(error);
+    console.error("[TreeBranchLeaf API] \u{1F4A5} Erreur GET /submissions/:id/fields:", errorMsg);
+    console.error("[TreeBranchLeaf API] Stack:", error instanceof Error ? error.stack : "");
+    return res.status(500).json({ error: "Erreur lors de la r\xE9cup\xE9ration des champs", details: errorMsg });
   }
 });
 router56.get("/submissions/:id", async (req2, res) => {
@@ -39144,178 +39271,39 @@ router56.get("/submissions/:id", async (req2, res) => {
     const submission = await prisma30.treeBranchLeafSubmission.findUnique({
       where: { id },
       include: {
-        TreeBranchLeafTree: {
-          select: {
-            id: true,
-            name: true,
-            organizationId: true
-          }
-        },
+        // Données de soumission + nœud associé (relation déclarée)
         TreeBranchLeafSubmissionData: {
           include: {
             TreeBranchLeafNode: {
-              select: {
-                id: true,
-                label: true,
-                type: true
-              }
+              select: { id: true, label: true, type: true }
             }
           }
-        },
-        Lead: {
-          select: {
-            id: true,
-            firstName: true,
-            lastName: true,
-            email: true,
-            company: true
-          }
-        },
-        User_TreeBranchLeafSubmission_userIdToUser: {
-          select: {
-            id: true,
-            email: true,
-            firstName: true,
-            lastName: true
-          }
-        },
-        User_TreeBranchLeafSubmission_lastEditedByToUser: {
-          select: {
-            id: true,
-            email: true,
-            firstName: true,
-            lastName: true
-          }
-        },
-        User_TreeBranchLeafSubmission_lockedByToUser: {
-          select: {
-            id: true,
-            email: true,
-            firstName: true,
-            lastName: true
-          }
-        },
-        Organization: {
-          select: {
-            id: true,
-            name: true
-          }
         }
       }
     });
     if (!submission) {
-      return res.status(404).json({ error: "Soumission non trouv\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9e" });
+      return res.status(404).json({ error: "Soumission non trouv\xE9e" });
     }
-    const treeOrg = submission.TreeBranchLeafTree?.organizationId;
+    const tree = await prisma30.treeBranchLeafTree.findUnique({
+      where: { id: submission.treeId },
+      select: { id: true, organizationId: true }
+    });
+    const treeOrg = tree?.organizationId ?? null;
     if (!isSuperAdmin2 && treeOrg && treeOrg !== organizationId) {
-      return res.status(403).json({ error: "Acc\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA8s refus\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9 \xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA0 cette soumission" });
+      return res.status(403).json({ error: "Acc\xE8s refus\xE9 \xE0 cette soumission" });
     }
-    res.json(submission);
+    let leadBasic = null;
+    if (submission.leadId) {
+      const lead = await prisma30.lead.findUnique({
+        where: { id: submission.leadId },
+        select: { id: true, firstName: true, lastName: true, email: true, company: true }
+      });
+      leadBasic = lead ?? null;
+    }
+    return res.json({ ...submission, Lead: leadBasic });
   } catch (error) {
     console.error("[TreeBranchLeaf API] Error fetching submission:", error);
-    res.status(500).json({ error: "Erreur lors de la r\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9cup\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9ration de la soumission" });
-  }
-});
-router56.get("/submissions/:id/fields", async (req2, res) => {
-  try {
-    const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx3(req2);
-    const { id } = req2.params;
-    const submission = await prisma30.treeBranchLeafSubmission.findUnique({
-      where: { id },
-      include: {
-        TreeBranchLeafTree: { select: { id: true, organizationId: true } },
-        Lead: {
-          select: {
-            id: true,
-            firstName: true,
-            lastName: true,
-            email: true,
-            phone: true,
-            street: true,
-            streetNumber: true,
-            postalCode: true,
-            city: true,
-            company: true
-          }
-        }
-      }
-    });
-    if (!submission) {
-      return res.status(404).json({ error: "Soumission non trouv\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9e" });
-    }
-    const treeOrg = submission.TreeBranchLeafTree?.organizationId;
-    if (!isSuperAdmin2 && treeOrg && treeOrg !== organizationId) {
-      return res.status(403).json({ error: "Acc\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA8s refus\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9" });
-    }
-    const dataRows = await prisma30.treeBranchLeafSubmissionData.findMany({
-      where: { submissionId: id },
-      include: {
-        TreeBranchLeafNode: {
-          select: {
-            id: true,
-            type: true,
-            label: true,
-            name: true,
-            fieldType: true,
-            fieldSubType: true
-          }
-        }
-      },
-      orderBy: { createdAt: "asc" }
-    });
-    const fieldsMap = {};
-    for (const row of dataRows) {
-      const node = row.TreeBranchLeafNode;
-      if (!node) continue;
-      const key2 = node.name || node.label || node.id;
-      fieldsMap[key2] = {
-        nodeId: node.id,
-        label: node.label || "",
-        name: node.name,
-        type: node.type || "unknown",
-        fieldType: node.fieldType,
-        fieldSubType: node.fieldSubType,
-        value: row.value,
-        // Valeur parsÃƒÆ’Ã‚Â©e (JSON)
-        rawValue: row.rawValue
-        // Valeur brute (string)
-      };
-    }
-    const response = {
-      submissionId: submission.id,
-      treeId: submission.treeId,
-      treeName: submission.TreeBranchLeafTree?.id,
-      leadId: submission.leadId,
-      lead: submission.Lead ? {
-        id: submission.Lead.id,
-        firstName: submission.Lead.firstName,
-        lastName: submission.Lead.lastName,
-        fullName: `${submission.Lead.firstName || ""} ${submission.Lead.lastName || ""}`.trim(),
-        email: submission.Lead.email,
-        phone: submission.Lead.phone,
-        street: submission.Lead.street,
-        streetNumber: submission.Lead.streetNumber,
-        postalCode: submission.Lead.postalCode,
-        city: submission.Lead.city,
-        company: submission.Lead.company,
-        fullAddress: [
-          submission.Lead.street,
-          submission.Lead.streetNumber,
-          submission.Lead.postalCode,
-          submission.Lead.city
-        ].filter(Boolean).join(", ")
-      } : null,
-      status: submission.status,
-      createdAt: submission.createdAt,
-      updatedAt: submission.updatedAt,
-      fields: fieldsMap,
-      // Tous les champs de la soumission
-      totalFields: Object.keys(fieldsMap).length
-    };
-    res.json(response);
-  } catch (error) {
-    console.error("[TreeBranchLeaf API] \xC3\u0192\xC2\xA2\xC3\u201A\xC2\x9D\xC3\u2026\xE2\u20AC\u2122 Erreur GET /submissions/:id/fields:", error);
-    res.status(500).json({ error: "Erreur lors de la r\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9cup\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9ration des champs" });
+    res.status(500).json({ error: "Erreur lors de la r\xE9cup\xE9ration de la soumission" });
   }
 });
 router56.get("/submissions/:id/summary", async (req2, res) => {
@@ -39323,13 +39311,16 @@ router56.get("/submissions/:id/summary", async (req2, res) => {
     const { id } = req2.params;
     const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx3(req2);
     const submission = await prisma30.treeBranchLeafSubmission.findUnique({
-      where: { id },
-      include: { TreeBranchLeafTree: { select: { id: true, organizationId: true } } }
+      where: { id }
     });
     if (!submission) {
       return res.status(404).json({ error: "Soumission non trouv\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9e" });
     }
-    const treeOrg = submission.TreeBranchLeafTree?.organizationId;
+    const tree = submission ? await prisma30.treeBranchLeafTree.findUnique({
+      where: { id: submission.treeId },
+      select: { id: true, organizationId: true }
+    }) : null;
+    const treeOrg = tree?.organizationId;
     if (!isSuperAdmin2 && treeOrg && treeOrg !== organizationId) {
       return res.status(403).json({ error: "Acc\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA8s refus\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9 \xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA0 cette soumission" });
     }
@@ -40539,6 +40530,123 @@ router56.put("/nodes/:nodeId/capabilities/table", async (req2, res) => {
     return res.status(500).json({ error: "Erreur lors de la mise \xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA0 jour de la capacit\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9 Table" });
   }
 });
+router56.patch("/submissions/:id", async (req2, res) => {
+  const { id } = req2.params;
+  const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx3(req2);
+  const { clientId, status, name, formData } = req2.body;
+  try {
+    console.log("[TreeBranchLeaf API] PATCH /submissions/:id payload", {
+      id,
+      clientId,
+      status,
+      namePresent: name !== void 0,
+      formDataPresent: formData !== void 0,
+      organizationId,
+      isSuperAdmin: isSuperAdmin2
+    });
+    const submission = await prisma30.treeBranchLeafSubmission.findUnique({
+      where: { id },
+      select: { id: true, treeId: true, leadId: true, organizationId: true }
+    });
+    if (!submission) {
+      return res.status(404).json({ error: "Soumission non trouv\xE9e" });
+    }
+    const treeOrg = submission.organizationId ?? (await prisma30.treeBranchLeafTree.findUnique({
+      where: { id: submission.treeId },
+      select: { organizationId: true }
+    }))?.organizationId ?? null;
+    if (!isSuperAdmin2 && treeOrg && treeOrg !== organizationId) {
+      return res.status(403).json({ error: "Acc\xE8s refus\xE9 \xE0 cette soumission" });
+    }
+    if (clientId !== void 0) {
+      if (clientId !== null && typeof clientId !== "string") {
+        return res.status(400).json({ error: "clientId doit \xEAtre une cha\xEEne ou null" });
+      }
+      if (typeof clientId === "string") {
+        const lead = await prisma30.lead.findUnique({
+          where: { id: clientId },
+          select: { id: true, organizationId: true }
+        });
+        if (!lead) {
+          return res.status(404).json({ error: "Lead non trouv\xE9" });
+        }
+        if (!isSuperAdmin2 && lead.organizationId && treeOrg && lead.organizationId !== treeOrg) {
+          return res.status(403).json({ error: "Lead et soumission appartiennent \xE0 des organisations diff\xE9rentes" });
+        }
+      }
+      if ((clientId ?? null) === (submission.leadId ?? null) && status === void 0 && name === void 0 && formData === void 0) {
+        console.log(`[TreeBranchLeaf API] PATCH /submissions/${id} - aucun changement (clientId inchang\xE9)`);
+        return res.json(submission);
+      }
+    }
+    const updateData = {
+      updatedAt: /* @__PURE__ */ new Date()
+    };
+    if (clientId !== void 0) {
+      updateData.leadId = clientId;
+    }
+    if (status !== void 0) {
+      updateData.status = status;
+    }
+    if (name !== void 0) {
+      updateData.name = name;
+    }
+    if (formData !== void 0) {
+      updateData.formData = formData;
+    }
+    const updatedSubmission = await prisma30.treeBranchLeafSubmission.update({
+      where: { id },
+      data: updateData
+    });
+    console.log(`[TreeBranchLeaf API] \u2705 PATCH /submissions/${id} - clientId: ${clientId}, status: ${status}`);
+    res.json(updatedSubmission);
+  } catch (error) {
+    if (error && error.code) {
+      const e = error;
+      console.error("[TreeBranchLeaf API] \u274C Prisma error PATCH /submissions/:id:", e);
+      return res.status(400).json({ error: `Erreur de requ\xEAte (${e.code})`, message: e.message });
+    }
+    const err = error;
+    console.error("[TreeBranchLeaf API] \u274C Erreur PATCH /submissions/:id:", { message: err?.message, stack: err?.stack });
+    return res.status(400).json({ error: "PATCH_UPDATE_ERROR", message: err?.message || "Erreur lors de la mise \xE0 jour de la soumission" });
+  }
+});
+router56.post("/submissions/:id/reset-data", async (req2, res) => {
+  const { id } = req2.params;
+  const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx3(req2);
+  const { status } = req2.body;
+  try {
+    const submission = await prisma30.treeBranchLeafSubmission.findUnique({
+      where: { id },
+      select: { id: true, treeId: true, organizationId: true }
+    });
+    if (!submission) {
+      return res.status(404).json({ error: "Soumission non trouv\xE9e" });
+    }
+    const treeOrg = submission.organizationId ?? (await prisma30.treeBranchLeafTree.findUnique({
+      where: { id: submission.treeId },
+      select: { organizationId: true }
+    }))?.organizationId ?? null;
+    if (!isSuperAdmin2 && treeOrg && treeOrg !== organizationId) {
+      return res.status(403).json({ error: "Acc\xE8s refus\xE9 \xE0 cette soumission" });
+    }
+    await prisma30.$transaction(async (tx) => {
+      await tx.treeBranchLeafSubmissionData.deleteMany({ where: { submissionId: id } });
+      await tx.treeBranchLeafSubmission.update({
+        where: { id },
+        data: {
+          leadId: null,
+          status: status ?? "default-draft",
+          updatedAt: /* @__PURE__ */ new Date()
+        }
+      });
+    });
+    return res.json({ success: true });
+  } catch (error) {
+    console.error("[TreeBranchLeaf API] \u274C Erreur POST /submissions/:id/reset-data:", error);
+    return res.status(500).json({ error: "Erreur lors de la r\xE9initialisation de la soumission" });
+  }
+});
 router56.put("/submissions/:id", async (req2, res) => {
   const { id } = req2.params;
   const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx3(req2);
@@ -40546,13 +40654,16 @@ router56.put("/submissions/:id", async (req2, res) => {
   try {
     const submission = await prisma30.treeBranchLeafSubmission.findUnique({
       where: { id },
-      include: { TreeBranchLeafTree: { select: { id: true, organizationId: true } } }
+      select: { id: true, treeId: true, organizationId: true }
     });
     if (!submission) {
       return res.status(404).json({ error: "Soumission non trouv\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9e" });
     }
     const treeId = submission.treeId;
-    const treeOrg = submission.TreeBranchLeafTree?.organizationId;
+    const treeOrg = submission.organizationId ?? (await prisma30.treeBranchLeafTree.findUnique({
+      where: { id: treeId },
+      select: { organizationId: true }
+    }))?.organizationId ?? null;
     if (!isSuperAdmin2 && treeOrg && treeOrg !== organizationId) {
       return res.status(403).json({ error: "Acc\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA8s refus\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9 \xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA0 cette soumission" });
     }
@@ -52722,14 +52833,14 @@ router70.get("/generated", async (req2, res) => {
     const documents = await prisma40.generatedDocument.findMany({
       where,
       include: {
-        template: {
+        DocumentTemplate: {
           select: {
             id: true,
             name: true,
             type: true
           }
         },
-        sentByUser: {
+        User_GeneratedDocument_sentByToUser: {
           select: {
             id: true,
             firstName: true,
@@ -52737,7 +52848,7 @@ router70.get("/generated", async (req2, res) => {
             email: true
           }
         },
-        lead: {
+        Lead: {
           select: {
             id: true,
             firstName: true,
@@ -52748,7 +52859,16 @@ router70.get("/generated", async (req2, res) => {
       },
       orderBy: { createdAt: "desc" }
     });
-    res.json(documents);
+    const mappedDocuments = documents.map((doc) => ({
+      ...doc,
+      template: doc.DocumentTemplate,
+      sentByUser: doc.User_GeneratedDocument_sentByToUser,
+      lead: doc.Lead,
+      DocumentTemplate: void 0,
+      User_GeneratedDocument_sentByToUser: void 0,
+      Lead: void 0
+    }));
+    res.json(mappedDocuments);
   } catch (error) {
     console.error("\u274C [GET /generated] Erreur r\xE9cup\xE9ration documents g\xE9n\xE9r\xE9s:", error?.message);
     res.status(500).json({ error: "Erreur serveur", details: error?.message });
@@ -52764,8 +52884,8 @@ router70.get("/generated/:id", async (req2, res) => {
         organizationId
       },
       include: {
-        template: true,
-        sentByUser: {
+        DocumentTemplate: true,
+        User_GeneratedDocument_sentByToUser: {
           select: {
             id: true,
             firstName: true,
@@ -52773,13 +52893,22 @@ router70.get("/generated/:id", async (req2, res) => {
             email: true
           }
         },
-        lead: true
+        Lead: true
       }
     });
     if (!document) {
       return res.status(404).json({ error: "Document non trouv\xE9" });
     }
-    res.json(document);
+    const mappedDocument = {
+      ...document,
+      template: document.DocumentTemplate,
+      sentByUser: document.User_GeneratedDocument_sentByToUser,
+      lead: document.Lead,
+      DocumentTemplate: void 0,
+      User_GeneratedDocument_sentByToUser: void 0,
+      Lead: void 0
+    };
+    res.json(mappedDocument);
   } catch (error) {
     console.error("Erreur r\xE9cup\xE9ration document:", error);
     res.status(500).json({ error: "Erreur serveur" });
@@ -53560,6 +53689,7 @@ init_prisma();
 
 // src/components/TreeBranchLeaf/tbl-bridge/routes/tbl-submission-evaluator.ts
 var import_express75 = require("express");
+var import_client7 = require("@prisma/client");
 init_database();
 init_operation_interpreter();
 
@@ -53699,17 +53829,25 @@ async function saveUserEntriesNeutral(submissionId, formData, treeId) {
   if (!formData || typeof formData !== "object") return 0;
   let saved = 0;
   const entries = /* @__PURE__ */ new Map();
-  const displayNodes = treeId ? await prisma42.treeBranchLeafNode.findMany({
+  const excludedNodes = treeId ? await prisma42.treeBranchLeafNode.findMany({
     where: {
       treeId,
-      calculatedBy: { contains: "preview-unknown-user" }
-      // ✅ Seulement les displays avec preview-unknown-user
+      OR: [
+        { calculatedBy: { contains: "preview-unknown-user" } },
+        // DISPLAY fields
+        { formulaConfig: { not: import_client7.Prisma.JsonNull } },
+        // Formulas
+        { conditionConfig: { not: import_client7.Prisma.JsonNull } },
+        // Conditions  
+        { tableConfig: { not: import_client7.Prisma.JsonNull } }
+        // Tables/Lookups
+      ]
     },
-    select: { id: true, calculatedBy: true, label: true }
+    select: { id: true, calculatedBy: true, label: true, formulaConfig: true, conditionConfig: true, tableConfig: true }
   }) : [];
-  const displayNodeIds = new Set(displayNodes.map((n) => n.id));
-  if (displayNodeIds.size > 0) {
-    console.log(`\u{1F6AB} [SAVE] ${displayNodeIds.size} DISPLAY fields (preview-unknown-user) identifi\xE9s - ne seront PAS sauvegard\xE9s`);
+  const excludedNodeIds = new Set(excludedNodes.map((n) => n.id));
+  if (excludedNodeIds.size > 0) {
+    console.log(`\u{1F6AB} [SAVE] ${excludedNodeIds.size} champs calcul\xE9s/affichage identifi\xE9s - ne seront PAS sauvegard\xE9s`);
   }
   const sharedRefKeys = Object.keys(formData).filter(isSharedReferenceId);
   const sharedRefAliasMap = sharedRefKeys.length ? await resolveSharedReferenceAliases(sharedRefKeys, treeId) : /* @__PURE__ */ new Map();
@@ -53718,8 +53856,7 @@ async function saveUserEntriesNeutral(submissionId, formData, treeId) {
       continue;
     }
     if (!isAcceptedNodeId(key2)) continue;
-    if (displayNodeIds.has(key2)) {
-      console.log(`\u{1F6AB} [SAVE] Display field ignor\xE9: ${key2} (preview-unknown-user dans calculatedBy)`);
+    if (excludedNodeIds.has(key2)) {
       continue;
     }
     if (value === null || value === void 0 || value === "") {
@@ -53911,7 +54048,7 @@ router73.post("/submissions/:submissionId/evaluate-all", async (req2, res) => {
     const { submissionId } = req2.params;
     const { forceUpdate = false } = req2.body || {};
     const organizationId = req2.headers["x-organization-id"] || req2.user?.organizationId;
-    const userId = req2.user?.userId || "unknown-user";
+    const userId = req2.headers["x-user-id"] || req2.user?.userId || "unknown-user";
     if (!organizationId) {
       return res.status(400).json({
         success: false,
@@ -54095,7 +54232,7 @@ router73.post("/submissions/create-and-evaluate", async (req2, res) => {
     const { treeId, clientId, formData, status = "draft", providedName, reuseSubmissionId } = req2.body;
     const cleanFormData = formData && typeof formData === "object" ? sanitizeFormData(formData) : void 0;
     const organizationId = req2.headers["x-organization-id"] || req2.user?.organizationId;
-    const userId = req2.user?.userId || "unknown-user";
+    const userId = req2.headers["x-user-id"] || req2.user?.userId || "unknown-user";
     if (!organizationId) {
       return res.status(400).json({
         success: false,
@@ -54135,37 +54272,42 @@ router73.post("/submissions/create-and-evaluate", async (req2, res) => {
         console.log(`\u2705 [TBL CREATE-AND-EVALUATE] Arbre valid\xE9: ${effectiveTreeId} (${treeExists.name})`);
       }
     }
-    if (!clientId) {
-      console.log("\u274C [TBL CREATE-AND-EVALUATE] Aucun leadId fourni - REQUIS");
+    let effectiveLeadId = clientId || null;
+    const isDefaultDraft = status === "default-draft";
+    if (!clientId && !isDefaultDraft) {
+      console.log("\u274C [TBL CREATE-AND-EVALUATE] Aucun leadId fourni - REQUIS (sauf pour default-draft)");
       return res.status(400).json({
         success: false,
         error: "Lead obligatoire",
         message: "Un lead doit \xEAtre s\xE9lectionn\xE9 pour cr\xE9er un devis. Veuillez s\xE9lectionner ou cr\xE9er un lead."
       });
     }
-    let effectiveLeadId = clientId;
-    const leadExists = await prisma42.lead.findUnique({
-      where: { id: effectiveLeadId },
-      select: { id: true, firstName: true, lastName: true, email: true, organizationId: true }
-    });
-    if (!leadExists) {
-      console.log(`\u274C [TBL CREATE-AND-EVALUATE] Lead ${effectiveLeadId} introuvable`);
-      return res.status(404).json({
-        success: false,
-        error: "Lead introuvable",
-        message: `Le lead ${effectiveLeadId} n'existe pas. Veuillez s\xE9lectionner un lead valide.`
+    if (clientId) {
+      const leadExists = await prisma42.lead.findUnique({
+        where: { id: clientId },
+        select: { id: true, firstName: true, lastName: true, email: true, organizationId: true }
       });
+      if (!leadExists) {
+        console.log(`\u274C [TBL CREATE-AND-EVALUATE] Lead ${clientId} introuvable`);
+        return res.status(404).json({
+          success: false,
+          error: "Lead introuvable",
+          message: `Le lead ${clientId} n'existe pas. Veuillez s\xE9lectionner un lead valide.`
+        });
+      }
+      if (leadExists.organizationId !== organizationId) {
+        console.log(`\u274C [TBL CREATE-AND-EVALUATE] Le lead ${clientId} n'appartient pas \xE0 l'organisation ${organizationId}`);
+        return res.status(403).json({
+          success: false,
+          error: "Lead non autoris\xE9",
+          message: "Le lead s\xE9lectionn\xE9 n'appartient pas \xE0 votre organisation."
+        });
+      }
+      console.log(`\u2705 [TBL CREATE-AND-EVALUATE] Lead valid\xE9: ${clientId} (${leadExists.firstName} ${leadExists.lastName})`);
+      effectiveLeadId = leadExists.id;
+    } else {
+      console.log("\u{1F4DD} [TBL CREATE-AND-EVALUATE] Cr\xE9ation default-draft SANS lead");
     }
-    if (leadExists.organizationId !== organizationId) {
-      console.log(`\u274C [TBL CREATE-AND-EVALUATE] Le lead ${effectiveLeadId} n'appartient pas \xE0 l'organisation ${organizationId}`);
-      return res.status(403).json({
-        success: false,
-        error: "Lead non autoris\xE9",
-        message: "Le lead s\xE9lectionn\xE9 n'appartient pas \xE0 votre organisation."
-      });
-    }
-    console.log(`\u2705 [TBL CREATE-AND-EVALUATE] Lead valid\xE9: ${effectiveLeadId} (${leadExists.firstName} ${leadExists.lastName})`);
-    effectiveLeadId = leadExists.id;
     let effectiveUserId = userId;
     if (effectiveUserId) {
       const userExists = await prisma42.user.findUnique({
@@ -54185,19 +54327,38 @@ router73.post("/submissions/create-and-evaluate", async (req2, res) => {
       if (!existing) submissionId = void 0;
     }
     if (!submissionId) {
-      const existingDraft = await prisma42.treeBranchLeafSubmission.findFirst({
-        where: {
-          treeId: effectiveTreeId,
-          leadId: effectiveLeadId,
-          organizationId,
-          status: "draft"
-        },
-        orderBy: { updatedAt: "desc" },
-        select: { id: true }
-      });
+      let existingDraft;
+      if (isDefaultDraft) {
+        existingDraft = await prisma42.treeBranchLeafSubmission.findFirst({
+          where: {
+            treeId: effectiveTreeId,
+            userId: effectiveUserId,
+            organizationId,
+            status: "default-draft"
+          },
+          orderBy: { updatedAt: "desc" },
+          select: { id: true }
+        });
+        if (existingDraft) {
+          console.log(`\u267B\uFE0F [TBL CREATE-AND-EVALUATE] R\xE9utilisation du default-draft existant: ${existingDraft.id}`);
+        }
+      } else if (effectiveLeadId) {
+        existingDraft = await prisma42.treeBranchLeafSubmission.findFirst({
+          where: {
+            treeId: effectiveTreeId,
+            leadId: effectiveLeadId,
+            organizationId,
+            status: "draft"
+          },
+          orderBy: { updatedAt: "desc" },
+          select: { id: true }
+        });
+        if (existingDraft) {
+          console.log(`\u267B\uFE0F [TBL CREATE-AND-EVALUATE] R\xE9utilisation du draft existant: ${existingDraft.id} (leadId: ${effectiveLeadId})`);
+        }
+      }
       if (existingDraft) {
         submissionId = existingDraft.id;
-        console.log(`\u267B\uFE0F [TBL CREATE-AND-EVALUATE] R\xE9utilisation du draft existant: ${submissionId} (leadId: ${effectiveLeadId})`);
       }
     }
     if (!submissionId) {
@@ -54252,15 +54413,18 @@ router73.post("/submissions/create-and-evaluate", async (req2, res) => {
       console.log(`\u2705 [TBL CREATE-AND-EVALUATE] Capacit\xE9s: ${evalStats.updated} mises \xE0 jour, ${evalStats.created} cr\xE9\xE9es, ${evalStats.stored} valeurs stock\xE9es`);
     }
     const finalSubmission = await prisma42.treeBranchLeafSubmission.findUnique({
-      where: { id: submissionId },
-      include: {
-        TreeBranchLeafSubmissionData: true
-      }
+      where: { id: submissionId }
+    });
+    const submissionData = await prisma42.treeBranchLeafSubmissionData.findMany({
+      where: { submissionId }
     });
     return res.status(201).json({
       success: true,
       message: "Soumission cr\xE9\xE9e et \xE9valu\xE9e avec TBL Prisma",
-      submission: finalSubmission
+      submission: {
+        ...finalSubmission,
+        TreeBranchLeafSubmissionData: submissionData
+      }
     });
   } catch (error) {
     console.error("\u274C [TBL CREATE-AND-EVALUATE] Erreur:", error);
@@ -54328,7 +54492,7 @@ router73.post("/submissions/preview-evaluate", async (req2, res) => {
   try {
     const { treeId, formData, baseSubmissionId, leadId } = req2.body || {};
     const organizationId = req2.headers["x-organization-id"] || req2.user?.organizationId;
-    const userId = req2.user?.userId || "unknown-user";
+    const userId = req2.headers["x-user-id"] || req2.user?.userId || "unknown-user";
     if (!organizationId) {
       return res.status(400).json({ success: false, error: "Organisation ID manquant - authentification requise" });
     }
@@ -54605,7 +54769,7 @@ router73.post("/submissions/stage", async (req2, res) => {
     pruneStages();
     const { stageId, treeId, submissionId, formData } = req2.body || {};
     const organizationId = req2.headers["x-organization-id"] || req2.user?.organizationId;
-    const userId = req2.user?.userId || "unknown-user";
+    const userId = req2.headers["x-user-id"] || req2.user?.userId || "unknown-user";
     if (!organizationId) return res.status(400).json({ success: false, error: "Organisation ID manquant" });
     let effectiveTreeId = treeId;
     if (!effectiveTreeId) {
@@ -59259,7 +59423,7 @@ async function executeRepeatDuplication(prisma49, repeaterNodeId, options = {}) 
 }
 
 // src/components/TreeBranchLeaf/treebranchleaf-new/api/repeat/repeat-executor.ts
-var import_client7 = require("@prisma/client");
+var import_client8 = require("@prisma/client");
 
 // src/components/TreeBranchLeaf/treebranchleaf-new/api/copy-variable-with-capacities.ts
 function parseSourceRef3(sourceRef) {
@@ -61747,7 +61911,7 @@ function normalizeNodeBase2(value) {
   return value.replace(/-\d+(?:-\d+)*$/, "");
 }
 function isUniqueConstraintError(error) {
-  return error instanceof import_client7.Prisma.PrismaClientKnownRequestError && error.code === "P2002";
+  return error instanceof import_client8.Prisma.PrismaClientKnownRequestError && error.code === "P2002";
 }
 async function reassignCopiedNodesToDuplicatedParents(prisma49, copiedNodeIds, originalNodeIdByCopyId) {
   if (!copiedNodeIds.size) {
