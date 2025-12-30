@@ -4141,10 +4141,10 @@ var login = async (req2, res) => {
       getJWTSecret(),
       { expiresIn: "24h" }
     );
-    const isProduction3 = process.env.NODE_ENV === "production";
+    const isProduction4 = process.env.NODE_ENV === "production";
     const isCodespaces = process.env.CODESPACES === "true";
-    const needsSecureCookie = isProduction3 || isCodespaces;
-    console.log(`[AUTH] \u{1F36A} Cookie config: isProduction=${isProduction3}, isCodespaces=${isCodespaces}, needsSecure=${needsSecureCookie}`);
+    const needsSecureCookie = isProduction4 || isCodespaces;
+    console.log(`[AUTH] \u{1F36A} Cookie config: isProduction=${isProduction4}, isCodespaces=${isCodespaces}, needsSecure=${needsSecureCookie}`);
     res.cookie("token", token, {
       httpOnly: true,
       secure: needsSecureCookie,
@@ -7518,9 +7518,9 @@ router2.post("/login", async (req2, res) => {
       // Ajout du statut de la relation
     }));
     console.log("\u{1F36A} [LOGIN] D\xE9finition du cookie d'authentification...");
-    const isProduction3 = process.env.NODE_ENV === "production";
+    const isProduction4 = process.env.NODE_ENV === "production";
     const isCodespaces = process.env.CODESPACES === "true";
-    const needsSecureCookie = isProduction3 || isCodespaces;
+    const needsSecureCookie = isProduction4 || isCodespaces;
     res.cookie("token", token, {
       httpOnly: true,
       secure: needsSecureCookie,
@@ -7613,9 +7613,9 @@ router2.get(
 );
 router2.post("/logout", (_req, res) => {
   console.log("\u{1F6AA} [LOGOUT] Demande de d\xE9connexion re\xE7ue");
-  const isProduction3 = process.env.NODE_ENV === "production";
+  const isProduction4 = process.env.NODE_ENV === "production";
   const isCodespaces = process.env.CODESPACES === "true" || process.env.GITHUB_CODESPACES_PORT_FORWARDING_DOMAIN;
-  const needsSecureCookie = isProduction3 || isCodespaces;
+  const needsSecureCookie = isProduction4 || isCodespaces;
   res.clearCookie("token", {
     httpOnly: true,
     secure: needsSecureCookie,
@@ -11182,36 +11182,22 @@ var gmail_default = router11;
 var import_winston = __toESM(require("winston"), 1);
 var import_winston_daily_rotate_file = __toESM(require("winston-daily-rotate-file"), 1);
 var import_path3 = __toESM(require("path"), 1);
-var securityLogger = import_winston.default.createLogger({
-  level: "info",
-  format: import_winston.default.format.combine(
-    import_winston.default.format.timestamp({
-      format: "YYYY-MM-DD HH:mm:ss"
-    }),
-    import_winston.default.format.errors({ stack: true }),
-    import_winston.default.format.json(),
-    import_winston.default.format.printf(({ timestamp, level, message, ...meta }) => {
-      return JSON.stringify({
-        timestamp,
-        level: level.toUpperCase(),
-        message,
-        ...sanitizeLogData(meta)
-      });
-    })
-  ),
-  defaultMeta: { service: "crm-security" },
-  transports: [
-    // Console pour développement
-    new import_winston.default.transports.Console({
-      format: import_winston.default.format.combine(
-        import_winston.default.format.colorize(),
-        import_winston.default.format.simple(),
-        import_winston.default.format.printf(({ timestamp, level, message, ...meta }) => {
-          const sanitized2 = sanitizeLogData(meta);
-          return `${timestamp} [${level}]: ${message} ${Object.keys(sanitized2).length ? JSON.stringify(sanitized2) : ""}`;
-        })
-      )
-    }),
+var isProduction2 = process.env.NODE_ENV === "production";
+var transports = [
+  // Console pour tous les environnements
+  new import_winston.default.transports.Console({
+    format: import_winston.default.format.combine(
+      import_winston.default.format.colorize(),
+      import_winston.default.format.simple(),
+      import_winston.default.format.printf(({ timestamp, level, message, ...meta }) => {
+        const sanitized2 = sanitizeLogData(meta);
+        return `${timestamp} [${level}]: ${message} ${Object.keys(sanitized2).length ? JSON.stringify(sanitized2) : ""}`;
+      })
+    )
+  })
+];
+if (!isProduction2) {
+  transports.push(
     // Fichier de log rotatif pour la sécurité
     new import_winston_daily_rotate_file.default({
       filename: import_path3.default.join(process.cwd(), "logs", "security-%DATE%.log"),
@@ -11231,7 +11217,27 @@ var securityLogger = import_winston.default.createLogger({
       maxSize: "20m",
       maxFiles: "30d"
     })
-  ]
+  );
+}
+var securityLogger = import_winston.default.createLogger({
+  level: "info",
+  format: import_winston.default.format.combine(
+    import_winston.default.format.timestamp({
+      format: "YYYY-MM-DD HH:mm:ss"
+    }),
+    import_winston.default.format.errors({ stack: true }),
+    import_winston.default.format.json(),
+    import_winston.default.format.printf(({ timestamp, level, message, ...meta }) => {
+      return JSON.stringify({
+        timestamp,
+        level: level.toUpperCase(),
+        message,
+        ...sanitizeLogData(meta)
+      });
+    })
+  ),
+  defaultMeta: { service: "crm-security" },
+  transports
 });
 function sanitizeLogData(data) {
   if (!data || typeof data !== "object") return data;
@@ -62574,7 +62580,7 @@ async function renderWebsite(req2, res) {
 // src/middleware/websiteDetection.ts
 var websiteCache = /* @__PURE__ */ new Map();
 var CACHE_TTL = 6e4;
-var isProduction2 = process.env.NODE_ENV === "production";
+var isProduction3 = process.env.NODE_ENV === "production";
 var CRM_DOMAINS = [
   "app.2thier.be",
   "api.2thier.be",
@@ -62591,12 +62597,12 @@ async function detectWebsite(req2, res, next) {
     const hostHeader = req2.headers.host;
     let hostname = forwardedHost || hostHeader || req2.hostname || "";
     hostname = hostname.split(":")[0];
-    if (!isProduction2) {
+    if (!isProduction3) {
       console.log(`\u{1F50D} [WEBSITE-DETECTION] Headers - X-Forwarded-Host: ${forwardedHost}, Host: ${hostHeader}, hostname: ${req2.hostname}`);
       console.log(`\u{1F50D} [WEBSITE-DETECTION] Domaine d\xE9tect\xE9: ${hostname}`);
     }
     if (CRM_DOMAINS.some((crm) => hostname.includes(crm))) {
-      if (!isProduction2) {
+      if (!isProduction3) {
         console.log(`\u{1F4F1} [WEBSITE-DETECTION] Domaine CRM d\xE9tect\xE9: ${hostname}`);
       }
       req2.isWebsiteRoute = false;
@@ -62614,7 +62620,7 @@ async function detectWebsite(req2, res, next) {
       }
       return next();
     }
-    if (!isProduction2) {
+    if (!isProduction3) {
       console.log(`\u{1F310} [WEBSITE-DETECTION] Recherche site pour: ${cleanDomain}`);
     }
     const website = await db.webSite.findFirst({
@@ -62635,7 +62641,7 @@ async function detectWebsite(req2, res, next) {
       }
     });
     if (website) {
-      if (!isProduction2) {
+      if (!isProduction3) {
         console.log(`\u2705 [WEBSITE-DETECTION] Site trouv\xE9: ${website.siteName} (${website.slug})`);
       }
       const websiteData = {
@@ -62651,7 +62657,7 @@ async function detectWebsite(req2, res, next) {
       req2.websiteData = websiteData;
       req2.isWebsiteRoute = true;
     } else {
-      if (!isProduction2) {
+      if (!isProduction3) {
         console.log(`\u26A0\uFE0F [WEBSITE-DETECTION] Aucun site trouv\xE9 pour: ${cleanDomain}`);
       }
       websiteCache.set(cacheKey, { data: null, timestamp: Date.now() });

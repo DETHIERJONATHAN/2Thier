@@ -2,7 +2,51 @@ import winston from 'winston';
 import DailyRotateFile from 'winston-daily-rotate-file';
 import path from 'path';
 
+const isProduction = process.env.NODE_ENV === 'production';
+
 // 🔒 Configuration du logger de sécurité Enterprise
+// En production (Cloud Run), on utilise uniquement la console car:
+// 1. Le système de fichiers est en lecture seule (sauf /tmp)
+// 2. Cloud Run intègre nativement Cloud Logging
+const transports: winston.transport[] = [
+  // Console pour tous les environnements
+  new winston.transports.Console({
+    format: winston.format.combine(
+      winston.format.colorize(),
+      winston.format.simple(),
+      winston.format.printf(({ timestamp, level, message, ...meta }) => {
+        const sanitized = sanitizeLogData(meta);
+        return `${timestamp} [${level}]: ${message} ${Object.keys(sanitized).length ? JSON.stringify(sanitized) : ''}`;
+      })
+    )
+  })
+];
+
+// En développement uniquement, ajouter les logs fichiers
+if (!isProduction) {
+  transports.push(
+    // Fichier de log rotatif pour la sécurité
+    new DailyRotateFile({
+      filename: path.join(process.cwd(), 'logs', 'security-%DATE%.log'),
+      datePattern: 'YYYY-MM-DD',
+      zippedArchive: true,
+      maxSize: '20m',
+      maxFiles: '14d',
+      createSymlink: true,
+      symlinkName: 'security-current.log'
+    }),
+    // Fichier séparé pour les erreurs critiques
+    new DailyRotateFile({
+      filename: path.join(process.cwd(), 'logs', 'security-errors-%DATE%.log'),
+      datePattern: 'YYYY-MM-DD',
+      level: 'error',
+      zippedArchive: true,
+      maxSize: '20m',
+      maxFiles: '30d'
+    })
+  );
+}
+
 const securityLogger = winston.createLogger({
   level: 'info',
   format: winston.format.combine(
@@ -21,40 +65,7 @@ const securityLogger = winston.createLogger({
     })
   ),
   defaultMeta: { service: 'crm-security' },
-  transports: [
-    // Console pour développement
-    new winston.transports.Console({
-      format: winston.format.combine(
-        winston.format.colorize(),
-        winston.format.simple(),
-        winston.format.printf(({ timestamp, level, message, ...meta }) => {
-          const sanitized = sanitizeLogData(meta);
-          return `${timestamp} [${level}]: ${message} ${Object.keys(sanitized).length ? JSON.stringify(sanitized) : ''}`;
-        })
-      )
-    }),
-    
-    // Fichier de log rotatif pour la sécurité
-    new DailyRotateFile({
-      filename: path.join(process.cwd(), 'logs', 'security-%DATE%.log'),
-      datePattern: 'YYYY-MM-DD',
-      zippedArchive: true,
-      maxSize: '20m',
-      maxFiles: '14d',
-      createSymlink: true,
-      symlinkName: 'security-current.log'
-    }),
-    
-    // Fichier séparé pour les erreurs critiques
-    new DailyRotateFile({
-      filename: path.join(process.cwd(), 'logs', 'security-errors-%DATE%.log'),
-      datePattern: 'YYYY-MM-DD',
-      level: 'error',
-      zippedArchive: true,
-      maxSize: '20m',
-      maxFiles: '30d'
-    })
-  ]
+  transports
 });
 
 // 🛡️ Fonction de sanitisation des données sensibles
