@@ -175,7 +175,7 @@ export interface NodeType {
 
 export type CapabilityKey = 
   | 'data' | 'formula' | 'condition' | 'table' 
-  | 'api' | 'link' | 'markers' | 'validation';
+  | 'api' | 'link' | 'markers' | 'validation' | 'aiMeasure';
 
 export interface CapabilityModule {
   key: CapabilityKey;
@@ -183,13 +183,34 @@ export interface CapabilityModule {
   icon: string;
   emoji: string;
   description: string;
-  category: 'calculation' | 'logic' | 'data' | 'integration' | 'navigation' | 'organization';
+  category: 'calculation' | 'logic' | 'data' | 'integration' | 'navigation' | 'organization' | 'ai';
   autoOpen: boolean;
   requiresConfig: boolean;
   compatibleWith: NodeTypeKey[];
   panelComponent: string;
   validationRules: string[];
   dependencies: CapabilityKey[];
+}
+
+// =============================================================================
+// 📐 AI MEASURE - Types pour l'analyse d'images avec IA
+// =============================================================================
+
+export interface AIMeasureMapping {
+  id: string;
+  key: string;          // Clé du résultat (ex: "largeur", "hauteur")
+  label: string;        // Label affiché (ex: "Largeur (cm)")
+  targetRef: string;    // Référence du champ cible (@value.nodeId)
+  targetLabel?: string; // Label du champ cible
+  type: 'number' | 'text' | 'boolean';
+}
+
+export interface AIMeasureConfig {
+  enabled: boolean;
+  prompt: string;           // Prompt personnalisé pour l'analyse
+  measureKeys: string[];    // Liste des clés à extraire
+  mappings: AIMeasureMapping[];
+  autoTrigger: boolean;     // Déclencher automatiquement à l'upload
 }
 
 // =============================================================================

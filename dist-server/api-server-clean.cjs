@@ -19097,6 +19097,178 @@ Bien \xE0 vous`;
     this.modelCache.set(modelName, model);
     return model;
   }
+  /**
+   * 📐 ANALYSE D'IMAGE AVEC VISION API
+   * Analyse une image et extrait des mesures/informations selon le prompt
+   */
+  async analyzeImageForMeasures(imageBase64, mimeType, prompt, measureKeys) {
+    try {
+      console.log(`\u{1F4D0} [Gemini Vision] Analyse d'image avec ${measureKeys.length} cl\xE9s \xE0 extraire`);
+      if (this.isDemoMode) {
+        return this.generateDemoImageMeasures(measureKeys);
+      }
+      if (this.degradedUntil && Date.now() < this.degradedUntil) {
+        console.warn("\u26A0\uFE0F [Gemini Vision] Circuit breaker actif, retour mode d\xE9mo");
+        return {
+          ...this.generateDemoImageMeasures(measureKeys),
+          error: this.lastError || "circuit-breaker-active"
+        };
+      }
+      const structuredPrompt = this.buildMeasurePrompt(prompt, measureKeys);
+      const result = await this.callVisionAPI(imageBase64, mimeType, structuredPrompt);
+      if (result.success && result.content) {
+        this.recordSuccess();
+        const measurements = this.parseMeasureResponse(result.content, measureKeys);
+        return {
+          success: true,
+          measurements,
+          rawResponse: result.content,
+          model: result.modelUsed
+        };
+      }
+      this.recordFailure(result.error || "unknown-vision-error");
+      console.warn("\u26A0\uFE0F [Gemini Vision] Erreur API, fallback vers d\xE9mo");
+      return {
+        ...this.generateDemoImageMeasures(measureKeys),
+        error: result.error
+      };
+    } catch (error) {
+      const msg = error.message;
+      console.error("\u274C [Gemini Vision] Erreur:", msg);
+      this.recordFailure(msg);
+      return {
+        success: false,
+        error: msg
+      };
+    }
+  }
+  /**
+   * 🔍 Appel à l'API Vision Gemini avec image en base64
+   */
+  async callVisionAPI(imageBase64, mimeType, prompt) {
+    try {
+      if (!this.genAI) {
+        return { success: false, error: "API Gemini non initialis\xE9e", modelUsed: this.primaryModelName };
+      }
+      const visionModelName = this.primaryModelName;
+      const model = this.getModelInstance(visionModelName);
+      console.log(`\u{1F4F7} [Gemini Vision] Envoi de l'image (${mimeType}) au mod\xE8le ${visionModelName}`);
+      const result = await model.generateContent([
+        { text: prompt },
+        {
+          inlineData: {
+            mimeType,
+            data: imageBase64
+          }
+        }
+      ]);
+      const response = await result.response;
+      const text = response.text();
+      console.log(`\u2705 [Gemini Vision] R\xE9ponse re\xE7ue (${text.length} caract\xE8res)`);
+      return { success: true, content: text, modelUsed: visionModelName };
+    } catch (error) {
+      console.error("\u274C [Gemini Vision API] Erreur:", error);
+      return { success: false, error: error.message, modelUsed: this.primaryModelName };
+    }
+  }
+  /**
+   * 📝 Construit le prompt pour l'extraction de mesures
+   */
+  buildMeasurePrompt(userPrompt, measureKeys) {
+    const keysDescription = measureKeys.map((k) => `"${k}"`).join(", ");
+    return `Tu es un assistant expert en analyse d'images et en prise de mesures.
+
+INSTRUCTION UTILISATEUR:
+${userPrompt}
+
+CL\xC9S \xC0 EXTRAIRE:
+${keysDescription}
+
+R\xC8GLES IMPORTANTES:
+1. Analyse l'image attentivement
+2. TU DOIS TOUJOURS ESTIMER les dimensions (largeur, hauteur, profondeur) en centim\xE8tres, m\xEAme si c'est approximatif
+3. Utilise des indices visuels (proportions, objets de r\xE9f\xE9rence, perspective) pour estimer les mesures
+4. Pour les ch\xE2ssis/fen\xEAtres standard, une fen\xEAtre typique fait entre 60-150cm de large et 80-200cm de haut
+5. NE JAMAIS r\xE9pondre "non_visible" pour les dimensions - FAIS TOUJOURS UNE ESTIMATION RAISONNABLE
+6. Pour les autres champs (type, couleur, mat\xE9riau, nombre), tu peux r\xE9pondre "non_visible" UNIQUEMENT si vraiment impossible \xE0 d\xE9terminer
+7. Pour les dimensions, utilise les unit\xE9s en centim\xE8tres (cm) - donne un nombre entier
+8. R\xE9ponds UNIQUEMENT au format JSON suivant (sans texte avant ou apr\xE8s):
+
+{
+  ${measureKeys.map((k) => `"${k}": <valeur_num\xE9rique_ou_texte>`).join(",\n  ")}
+}
+
+Analyse maintenant cette image et ESTIME toutes les dimensions:`;
+  }
+  /**
+   * 🔄 Parse la réponse JSON et extrait les mesures
+   */
+  parseMeasureResponse(content, measureKeys) {
+    try {
+      const jsonMatch = content.match(/\{[\s\S]*\}/);
+      if (!jsonMatch) {
+        console.warn("\u26A0\uFE0F [Gemini Vision] Pas de JSON trouv\xE9 dans la r\xE9ponse");
+        return this.createEmptyMeasurements(measureKeys);
+      }
+      const parsed = JSON.parse(jsonMatch[0]);
+      const measurements = {};
+      for (const key2 of measureKeys) {
+        if (parsed[key2] !== void 0) {
+          measurements[key2] = parsed[key2];
+        } else {
+          measurements[key2] = "non_visible";
+        }
+      }
+      return measurements;
+    } catch (error) {
+      console.warn("\u26A0\uFE0F [Gemini Vision] Erreur parsing JSON:", error);
+      return this.createEmptyMeasurements(measureKeys);
+    }
+  }
+  /**
+   * 🎭 Génère des mesures de démonstration
+   */
+  generateDemoImageMeasures(measureKeys) {
+    const measurements = {};
+    for (const key2 of measureKeys) {
+      const keyLower = key2.toLowerCase();
+      if (keyLower.includes("largeur") || keyLower.includes("width")) {
+        measurements[key2] = Math.round(80 + Math.random() * 120);
+      } else if (keyLower.includes("hauteur") || keyLower.includes("height")) {
+        measurements[key2] = Math.round(100 + Math.random() * 150);
+      } else if (keyLower.includes("profondeur") || keyLower.includes("depth")) {
+        measurements[key2] = Math.round(5 + Math.random() * 30);
+      } else if (keyLower.includes("nombre") || keyLower.includes("count") || keyLower.includes("nb")) {
+        measurements[key2] = Math.floor(1 + Math.random() * 5);
+      } else if (keyLower.includes("type") || keyLower.includes("style")) {
+        const types = ["oscillo-battant", "\xE0 soufflet", "fixe", "coulissant"];
+        measurements[key2] = types[Math.floor(Math.random() * types.length)];
+      } else if (keyLower.includes("couleur") || keyLower.includes("color")) {
+        const colors = ["blanc", "gris anthracite", "noir", "ch\xEAne dor\xE9"];
+        measurements[key2] = colors[Math.floor(Math.random() * colors.length)];
+      } else if (keyLower.includes("materiau") || keyLower.includes("material")) {
+        const materials = ["PVC", "aluminium", "bois", "mixte bois-alu"];
+        measurements[key2] = materials[Math.floor(Math.random() * materials.length)];
+      } else {
+        measurements[key2] = Math.round(10 + Math.random() * 100);
+      }
+    }
+    return {
+      success: true,
+      measurements,
+      model: "demo"
+    };
+  }
+  /**
+   * 📋 Crée un objet de mesures vide
+   */
+  createEmptyMeasurements(measureKeys) {
+    const measurements = {};
+    for (const key2 of measureKeys) {
+      measurements[key2] = "non_visible";
+    }
+    return measurements;
+  }
   async callGeminiAPIWithFallbacks(prompt, modelCandidates) {
     const candidates = modelCandidates && modelCandidates.length > 0 ? modelCandidates : [this.primaryModelName, ...this.fallbackModelNames];
     let lastError;
@@ -35353,6 +35525,11 @@ function buildResponseFromColumns2(node) {
     text_helpTooltipType: node.text_helpTooltipType,
     text_helpTooltipText: node.text_helpTooltipText,
     text_helpTooltipImage: node.text_helpTooltipImage,
+    // 🔧 AI MEASURE: Colonnes dédiées pour la configuration IA Mesure
+    aiMeasure_enabled: node.aiMeasure_enabled ?? false,
+    aiMeasure_autoTrigger: node.aiMeasure_autoTrigger ?? true,
+    aiMeasure_prompt: node.aiMeasure_prompt || null,
+    aiMeasure_keys: node.aiMeasure_keys || null,
     // ÃƒÂ°Ã…Â¸Ã¢â‚¬ÂÃ‚Â¥ TABLES : Inclure les tables avec leurs colonnes/lignes pour le lookup
     tables: node.TreeBranchLeafNodeTable || [],
     // ÃƒÂ°Ã…Â¸Ã¢â‚¬ÂÃ¢â‚¬â€ SHARED REFERENCES : Inclure les rÃƒÆ’Ã‚Â©fÃƒÆ’Ã‚Â©rences partagÃƒÆ’Ã‚Â©es pour les cascades
@@ -35497,6 +35674,12 @@ function removeJSONFromUpdate(updateData) {
     }
     if ("subTab" in metaObj) {
       preservedMeta.subTab = metaObj.subTab;
+    }
+    if ("aiMeasure" in metaObj) {
+      preservedMeta.aiMeasure = metaObj.aiMeasure;
+    }
+    if ("repeater" in metaObj) {
+      preservedMeta.repeater = metaObj.repeater;
     }
     if (Object.keys(preservedMeta).length > 0) {
       return {
@@ -35702,6 +35885,36 @@ var updateOrMoveNode = async (req2, res) => {
         console.warn("[updateOrMoveNode] Suppression explicite de metadata.repeater car repeater_templateNodeIds = NULL");
       }
     }
+    if (updateObj.metadata && typeof updateObj.metadata === "object") {
+      const currentMetadata = existingNode.metadata || {};
+      const newMetadata = updateObj.metadata;
+      if (newMetadata.aiMeasure) {
+        const aiConfig = newMetadata.aiMeasure;
+        updateObj.aiMeasure_enabled = aiConfig.enabled ?? false;
+        updateObj.aiMeasure_autoTrigger = aiConfig.autoTrigger ?? true;
+        updateObj.aiMeasure_prompt = aiConfig.customPrompt || null;
+        updateObj.aiMeasure_keys = aiConfig.keys && aiConfig.keys.length > 0 ? aiConfig.keys : null;
+        console.log("\u{1F4CA} [updateOrMoveNode] AI Measure extrait vers colonnes d\xE9di\xE9es:", {
+          enabled: updateObj.aiMeasure_enabled,
+          autoTrigger: updateObj.aiMeasure_autoTrigger,
+          prompt: updateObj.aiMeasure_prompt,
+          keys: updateObj.aiMeasure_keys
+        });
+        delete newMetadata.aiMeasure;
+      }
+      updateObj.metadata = {
+        ...currentMetadata,
+        ...newMetadata
+      };
+      if (updateObj.metadata.aiMeasure) {
+        delete updateObj.metadata.aiMeasure;
+      }
+      console.log("\u{1F500} [updateOrMoveNode] Fusion metadata:", {
+        avant: currentMetadata,
+        nouveau: newMetadata,
+        resultat: updateObj.metadata
+      });
+    }
     await prisma30.treeBranchLeafNode.update({
       where: { id: nodeId },
       data: { ...updateObj, updatedAt: /* @__PURE__ */ new Date() }
@@ -35724,6 +35937,25 @@ var updateOrMoveNode = async (req2, res) => {
 };
 router56.put("/trees/:treeId/nodes/:nodeId", updateOrMoveNode);
 router56.patch("/trees/:treeId/nodes/:nodeId", updateOrMoveNode);
+router56.put("/nodes/:nodeId", async (req2, res) => {
+  try {
+    const { nodeId } = req2.params;
+    console.log("\u{1F3AF} [PUT /nodes/:nodeId] Requ\xEAte re\xE7ue pour nodeId:", nodeId);
+    console.log("\u{1F4CB} [PUT /nodes/:nodeId] Body:", JSON.stringify(req2.body, null, 2));
+    const node = await prisma30.treeBranchLeafNode.findUnique({
+      where: { id: nodeId },
+      select: { treeId: true }
+    });
+    if (!node) {
+      return res.status(404).json({ error: "Noeud non trouve" });
+    }
+    req2.params.treeId = node.treeId;
+    return updateOrMoveNode(req2, res);
+  } catch (error) {
+    console.error("[TreeBranchLeaf API] Erreur PUT /nodes/:nodeId:", error);
+    res.status(500).json({ error: "Erreur lors de la mise a jour du noeud", details: error.message });
+  }
+});
 router56.delete("/trees/:treeId/nodes/:nodeId", async (req2, res) => {
   try {
     const { treeId, nodeId } = req2.params;
@@ -36190,6 +36422,11 @@ router56.get("/nodes/:nodeId", async (req2, res) => {
         subType: true,
         label: true,
         metadata: true,
+        // Colonnes AI Measure dédiées
+        aiMeasure_enabled: true,
+        aiMeasure_autoTrigger: true,
+        aiMeasure_prompt: true,
+        aiMeasure_keys: true,
         TreeBranchLeafTree: { select: { organizationId: true } }
       }
     });
@@ -36206,7 +36443,12 @@ router56.get("/nodes/:nodeId", async (req2, res) => {
       type: node.type,
       subType: node.subType,
       label: node.label,
-      metadata: node.metadata
+      metadata: node.metadata,
+      // Colonnes AI Measure dédiées
+      aiMeasure_enabled: node.aiMeasure_enabled,
+      aiMeasure_autoTrigger: node.aiMeasure_autoTrigger,
+      aiMeasure_prompt: node.aiMeasure_prompt,
+      aiMeasure_keys: node.aiMeasure_keys
     });
   } catch (error) {
     console.error("[TreeBranchLeaf API] Error fetching node info:", error);
@@ -58601,6 +58843,166 @@ function generateFallbackPalettes(baseColor) {
     }
   ];
 }
+var geminiMeasureService = new GoogleGeminiService_default();
+router86.post("/measure-image", async (req2, res) => {
+  const startTime = Date.now();
+  try {
+    const {
+      imageBase64,
+      // Image en base64 (sans le préfixe data:image/...)
+      mimeType,
+      // Type MIME (image/jpeg, image/png, etc.)
+      prompt,
+      // Prompt personnalisé pour l'analyse
+      measureKeys,
+      // Clés à extraire (ex: ["largeur", "hauteur", "type"])
+      nodeId,
+      // ID du nœud source (pour logging)
+      treeId
+      // ID de l'arbre (pour logging)
+    } = req2.body;
+    if (!imageBase64) {
+      return res.status(400).json({
+        success: false,
+        error: "Image base64 requise"
+      });
+    }
+    if (!mimeType) {
+      return res.status(400).json({
+        success: false,
+        error: "Type MIME requis"
+      });
+    }
+    if (!prompt) {
+      return res.status(400).json({
+        success: false,
+        error: "Prompt requis"
+      });
+    }
+    if (!measureKeys || !Array.isArray(measureKeys) || measureKeys.length === 0) {
+      return res.status(400).json({
+        success: false,
+        error: "Liste des cl\xE9s \xE0 extraire requise"
+      });
+    }
+    console.log(`\u{1F4D0} [AI Measure] Analyse pour node=${nodeId}, tree=${treeId}, ${measureKeys.length} cl\xE9s`);
+    const result = await geminiMeasureService.analyzeImageForMeasures(
+      imageBase64,
+      mimeType,
+      prompt,
+      measureKeys
+    );
+    const duration = Date.now() - startTime;
+    if (!result.success) {
+      console.error(`\u274C [AI Measure] \xC9chec apr\xE8s ${duration}ms:`, result.error);
+      return res.status(500).json({
+        success: false,
+        error: result.error || "Erreur lors de l'analyse de l'image",
+        duration
+      });
+    }
+    console.log(`\u2705 [AI Measure] Succ\xE8s en ${duration}ms, ${Object.keys(result.measurements || {}).length} mesures extraites`);
+    return res.json({
+      success: true,
+      measurements: result.measurements,
+      rawResponse: result.rawResponse,
+      metadata: {
+        model: result.model,
+        duration,
+        nodeId,
+        treeId,
+        timestamp: (/* @__PURE__ */ new Date()).toISOString()
+      }
+    });
+  } catch (error) {
+    const duration = Date.now() - startTime;
+    console.error("\u274C [AI Measure] Erreur:", error);
+    return res.status(500).json({
+      success: false,
+      error: error.message || "Erreur interne",
+      duration
+    });
+  }
+});
+router86.post("/measure-image/apply", async (req2, res) => {
+  try {
+    const {
+      measurements,
+      // Mesures extraites { key: value }
+      mappings,
+      // Mappings { key, targetRef, type }[]
+      treeId,
+      organizationId
+    } = req2.body;
+    if (!measurements || typeof measurements !== "object") {
+      return res.status(400).json({
+        success: false,
+        error: "Mesures requises"
+      });
+    }
+    if (!mappings || !Array.isArray(mappings) || mappings.length === 0) {
+      return res.status(400).json({
+        success: false,
+        error: "Mappings requis"
+      });
+    }
+    console.log(`\u{1F3AF} [AI Measure Apply] Application de ${Object.keys(measurements).length} mesures vers ${mappings.length} champs`);
+    const updates = [];
+    for (const mapping of mappings) {
+      const { key: key2, targetRef, type } = mapping;
+      const value = measurements[key2];
+      if (value !== void 0 && value !== "non_visible") {
+        let finalValue = value;
+        if (type === "number" && typeof value === "string") {
+          const parsed = parseFloat(value);
+          if (!isNaN(parsed)) {
+            finalValue = parsed;
+          }
+        }
+        updates.push({
+          targetRef,
+          value: finalValue,
+          key: key2
+        });
+      }
+    }
+    console.log(`\u2705 [AI Measure Apply] ${updates.length} mises \xE0 jour pr\xE9par\xE9es`);
+    return res.json({
+      success: true,
+      updates,
+      skipped: mappings.length - updates.length,
+      metadata: {
+        timestamp: (/* @__PURE__ */ new Date()).toISOString()
+      }
+    });
+  } catch (error) {
+    console.error("\u274C [AI Measure Apply] Erreur:", error);
+    return res.status(500).json({
+      success: false,
+      error: error.message || "Erreur interne"
+    });
+  }
+});
+router86.get("/measure-image/status", async (_req, res) => {
+  try {
+    const status = geminiMeasureService.getStatus();
+    res.json({
+      success: true,
+      available: status.mode === "live",
+      service: "Google Gemini Vision",
+      model: status.model,
+      mode: status.mode,
+      degraded: status.degraded,
+      timestamp: (/* @__PURE__ */ new Date()).toISOString()
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      available: false,
+      error: error.message
+    });
+  }
+});
 var ai_default2 = router86;
 
 // src/routes/ai-field-generator.ts

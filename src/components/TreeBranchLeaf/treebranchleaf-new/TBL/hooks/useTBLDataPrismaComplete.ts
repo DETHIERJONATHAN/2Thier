@@ -480,6 +480,19 @@ export interface TreeBranchLeafNode {
   image_crop?: boolean;
   image_thumbnails?: Record<string, unknown> | null;
   
+  // 🤖 AI MEASURE: Colonnes dédiées pour la mesure par IA (analyse d'images)
+  aiMeasure_enabled?: boolean;
+  aiMeasure_autoTrigger?: boolean;
+  aiMeasure_prompt?: string | null;
+  aiMeasure_keys?: Array<{
+    id: string;
+    key: string;
+    label: string;
+    type: string;
+    targetRef?: string;
+    targetLabel?: string;
+  }> | null;
+  
   // Option + Champ
   option_label?: string;
   field_label?: string;
@@ -686,6 +699,19 @@ export interface TBLField {
   // Propriété pour le bouton d'ajout de nouveau versant
   canAddNewCopy?: boolean;
   isLastInCopyGroup?: boolean;
+  
+  // 🤖 AI MEASURE: Propriétés pour la mesure par IA sur champs IMAGE
+  aiMeasure_enabled?: boolean;
+  aiMeasure_autoTrigger?: boolean;
+  aiMeasure_prompt?: string | null;
+  aiMeasure_keys?: Array<{
+    id: string;
+    key: string;
+    label: string;
+    type: string;
+    targetRef?: string;
+    targetLabel?: string;
+  }> | null;
 }
 
 const tryParseJSON = (value: unknown): unknown => {
@@ -1655,8 +1681,12 @@ const transformPrismaNodeToField = (
         crop: node.image_crop,
         thumbnails: node.image_thumbnails,
       },
-      capabilities
-      ,
+      capabilities,
+      // 🤖 AI MEASURE: Transmettre la configuration IA Mesure pour les champs IMAGE
+      aiMeasure_enabled: node.aiMeasure_enabled,
+      aiMeasure_autoTrigger: node.aiMeasure_autoTrigger,
+      aiMeasure_prompt: node.aiMeasure_prompt,
+      aiMeasure_keys: node.aiMeasure_keys,
       subTabKey: primarySubTabKey ?? undefined,
       subTabKeys: subTabAssignments.length ? subTabAssignments : undefined
     };

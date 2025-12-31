@@ -329,6 +329,53 @@ router.put('/nodes/:nodeId', requireSuperAdmin, async (req, res) => {
   }
 });
 
+// ✅ ALIAS: Route alternative avec treeId (pour compatibilité frontend)
+router.put('/trees/:treeId/nodes/:nodeId', requireSuperAdmin, async (req, res) => {
+  try {
+    const { organizationId } = req.user!;
+    const { nodeId } = req.params;
+    const updateData = req.body;
+
+    console.log('🔄 [TreeBranchLeaf API] PUT /trees/:treeId/nodes/:nodeId (alias)');
+    console.log('   NodeId:', nodeId);
+    console.log('   updateData:', JSON.stringify(updateData, null, 2));
+
+    // Vérifier que le nœud appartient à un arbre de l'organisation
+    const node = await prisma.treeBranchLeafNode.findFirst({
+      where: {
+        id: nodeId,
+        Tree: {
+          organizationId,
+        },
+      },
+    });
+
+    if (!node) {
+      return res.status(404).json({ error: 'Nœud non trouvé' });
+    }
+
+    const updatedNode = await prisma.treeBranchLeafNode.update({
+      where: { id: nodeId },
+      data: {
+        ...updateData,
+        updatedAt: new Date(),
+      },
+      include: {
+        MarkerLinks: {
+          include: {
+            Marker: true,
+          },
+        },
+      },
+    });
+
+    res.json(updatedNode);
+  } catch (error) {
+    console.error('[TREEBRANCHLEAF_API] Error updating node:', error);
+    res.status(500).json({ error: 'Erreur lors de la mise à jour du nœud' });
+  }
+});
+
 // Supprimer un nœud
 router.delete('/nodes/:nodeId', requireSuperAdmin, async (req, res) => {
   try {

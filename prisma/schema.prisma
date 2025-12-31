@@ -1674,6 +1674,12 @@ model TreeBranchLeafNode {
   section_gutter              Int?      @default(16)
   section_showChildrenCount   Boolean?  @default(false)
 
+  // AI Measure configuration (colonnes dédiées pour éviter problèmes JSON)
+  aiMeasure_enabled           Boolean   @default(false)
+  aiMeasure_autoTrigger       Boolean   @default(true)
+  aiMeasure_prompt            String?
+  aiMeasure_keys              Json?     @db.Json
+
   // Relation vers la variable exposée (1-to-1)
   TreeBranchLeafNodeVariable  TreeBranchLeafNodeVariable?
   TreeBranchLeafNodeTable     TreeBranchLeafNodeTable[]

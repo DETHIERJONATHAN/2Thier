@@ -3581,6 +3581,7 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
             value={extractFieldValue(field.id)}
             allNodes={allNodes}
             onChange={(value) => handleFieldChange(field.id, value, field.label)}
+            onUpdateAnyField={onChange} // 🤖 AI Measure: Passer le callback pour mettre à jour n'importe quel champ
             isValidation={isValidation}
             formData={formData}
             treeId={treeId}
@@ -4918,6 +4919,7 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
                           value={extractFieldValue(field.id)}
                           allNodes={allNodes}
                           onChange={(value) => handleFieldChange(field.id, value, field.label)}
+                          onUpdateAnyField={onChange} // 🤖 AI Measure
                           disabled={disabled}
                           formData={formData}
                           treeMetadata={field.treeMetadata}
@@ -4978,6 +4980,7 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
                                 value={extractFieldValue(condField.id)}
                                 allNodes={allNodes}
                                 onChange={(value) => handleFieldChange(condField.id, value, condField.label)}
+                                onUpdateAnyField={onChange} // 🤖 AI Measure
                                 disabled={disabled}
                                 formData={formData}
                                 treeMetadata={condField.treeMetadata}
@@ -5002,6 +5005,7 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
                                 value={extractFieldValue(field.id)}
                                 allNodes={allNodes}
                                 onChange={(value) => handleFieldChange(field.id, value, field.label)}
+                                onUpdateAnyField={onChange} // 🤖 AI Measure
                                 disabled={disabled}
                                 formData={formData}
                                 treeMetadata={field.treeMetadata}
@@ -5038,6 +5042,7 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
                               value={extractFieldValue(field.id)}
                               allNodes={allNodes}
                               onChange={(value) => handleFieldChange(field.id, value, field.label)}
+                              onUpdateAnyField={onChange} // 🤖 AI Measure
                               disabled={disabled}
                               formData={formData}
                               treeMetadata={field.treeMetadata}
@@ -5100,6 +5105,7 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
                           value={extractFieldValue(field.id)}
                           allNodes={allNodes}
                           onChange={(value) => handleFieldChange(field.id, value, field.label)}
+                          onUpdateAnyField={onChange} // 🤖 AI Measure
                           disabled={disabled}
                           formData={formData}
                           treeMetadata={field.treeMetadata}

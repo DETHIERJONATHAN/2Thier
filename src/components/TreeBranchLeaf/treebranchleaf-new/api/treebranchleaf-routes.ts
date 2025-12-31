@@ -2975,6 +2975,11 @@ function buildResponseFromColumns(node: any): Record<string, unknown> {
     text_helpTooltipType: node.text_helpTooltipType,
     text_helpTooltipText: node.text_helpTooltipText,
     text_helpTooltipImage: node.text_helpTooltipImage,
+    // 🔧 AI MEASURE: Colonnes dédiées pour la configuration IA Mesure
+    aiMeasure_enabled: node.aiMeasure_enabled ?? false,
+    aiMeasure_autoTrigger: node.aiMeasure_autoTrigger ?? true,
+    aiMeasure_prompt: node.aiMeasure_prompt || null,
+    aiMeasure_keys: node.aiMeasure_keys || null,
     // ÃƒÂ°Ã…Â¸Ã¢â‚¬ÂÃ‚Â¥ TABLES : Inclure les tables avec leurs colonnes/lignes pour le lookup
     tables: node.TreeBranchLeafNodeTable || [],
     // ÃƒÂ°Ã…Â¸Ã¢â‚¬ÂÃ¢â‚¬â€ SHARED REFERENCES : Inclure les rÃƒÆ’Ã‚Â©fÃƒÆ’Ã‚Â©rences partagÃƒÆ’Ã‚Â©es pour les cascades
@@ -3152,6 +3157,14 @@ function removeJSONFromUpdate(updateData: Record<string, unknown>): Record<strin
     }
     if ('subTab' in metaObj) {
       preservedMeta.subTab = metaObj.subTab;
+    }
+    // ✅ AJOUT: Préserver aiMeasure pour la configuration IA Mesure
+    if ('aiMeasure' in metaObj) {
+      preservedMeta.aiMeasure = metaObj.aiMeasure;
+    }
+    // ✅ AJOUT: Préserver repeater pour la configuration repeater
+    if ('repeater' in metaObj) {
+      preservedMeta.repeater = metaObj.repeater;
     }
     
     if (Object.keys(preservedMeta).length > 0) {
@@ -3460,6 +3473,48 @@ const updateOrMoveNode = async (req, res) => {
       }
     }
     
+    // ✅ FIX: Fusionner metadata.aiMeasure avec le metadata existant (ne pas écraser)
+    if (updateObj.metadata && typeof updateObj.metadata === 'object') {
+      const currentMetadata = existingNode.metadata as any || {};
+      const newMetadata = updateObj.metadata as any;
+      
+      // 🔧 NOUVEAU: Extraire aiMeasure du metadata et le convertir en colonnes dédiées
+      if (newMetadata.aiMeasure) {
+        const aiConfig = newMetadata.aiMeasure;
+        updateObj.aiMeasure_enabled = aiConfig.enabled ?? false;
+        updateObj.aiMeasure_autoTrigger = aiConfig.autoTrigger ?? true;
+        updateObj.aiMeasure_prompt = aiConfig.customPrompt || null;
+        updateObj.aiMeasure_keys = aiConfig.keys && aiConfig.keys.length > 0 ? aiConfig.keys : null;
+        
+        console.log('📊 [updateOrMoveNode] AI Measure extrait vers colonnes dédiées:', {
+          enabled: updateObj.aiMeasure_enabled,
+          autoTrigger: updateObj.aiMeasure_autoTrigger,
+          prompt: updateObj.aiMeasure_prompt,
+          keys: updateObj.aiMeasure_keys
+        });
+        
+        // Supprimer aiMeasure du metadata car il est maintenant dans des colonnes
+        delete newMetadata.aiMeasure;
+      }
+      
+      // Fusionner les métadonnées : garder l'existant + ajouter/remplacer les nouvelles clés
+      updateObj.metadata = {
+        ...currentMetadata,
+        ...newMetadata
+      };
+      
+      // Nettoyer aiMeasure de metadata.existant aussi
+      if ((updateObj.metadata as any).aiMeasure) {
+        delete (updateObj.metadata as any).aiMeasure;
+      }
+      
+      console.log('🔀 [updateOrMoveNode] Fusion metadata:', {
+        avant: currentMetadata,
+        nouveau: newMetadata,
+        resultat: updateObj.metadata
+      });
+    }
+    
     await prisma.treeBranchLeafNode.update({
       where: { id: nodeId },
       data: { ...(updateObj as Prisma.TreeBranchLeafNodeUpdateInput), updatedAt: new Date() }
@@ -3490,6 +3545,35 @@ const updateOrMoveNode = async (req, res) => {
 router.put('/trees/:treeId/nodes/:nodeId', updateOrMoveNode);
 // PATCH (alias) pour compatibilitÃƒÆ’Ã‚Â© cÃƒÆ’Ã‚Â´tÃƒÆ’Ã‚Â© client
 router.patch('/trees/:treeId/nodes/:nodeId', updateOrMoveNode);
+
+// ✅ PUT /api/treebranchleaf/nodes/:nodeId - Alias sans treeId (récupère le treeId automatiquement)
+// Utilisé par AIMeasurePanel et autres composants qui n'ont pas accès au treeId
+router.put('/nodes/:nodeId', async (req, res) => {
+  try {
+    const { nodeId } = req.params;
+    
+    console.log('🎯 [PUT /nodes/:nodeId] Requête reçue pour nodeId:', nodeId);
+    console.log('📋 [PUT /nodes/:nodeId] Body:', JSON.stringify(req.body, null, 2));
+    
+    // Récupérer le treeId depuis la base de données
+    const node = await prisma.treeBranchLeafNode.findUnique({
+      where: { id: nodeId },
+      select: { treeId: true }
+    });
+    
+    if (!node) {
+      return res.status(404).json({ error: 'Noeud non trouve' });
+    }
+    
+    // Injecter le treeId dans les params et déléguer à updateOrMoveNode
+    req.params.treeId = node.treeId;
+    return updateOrMoveNode(req, res);
+  } catch (error) {
+    console.error('[TreeBranchLeaf API] Erreur PUT /nodes/:nodeId:', error);
+    res.status(500).json({ error: 'Erreur lors de la mise a jour du noeud', details: error.message });
+  }
+});
+
 
 // DELETE /api/treebranchleaf/trees/:treeId/nodes/:nodeId - Supprimer un nÃƒâ€¦Ã¢â‚¬Å“ud
 router.delete('/trees/:treeId/nodes/:nodeId', async (req, res) => {
@@ -4037,6 +4121,11 @@ router.get('/nodes/:nodeId', async (req, res) => {
         subType: true,
         label: true,
         metadata: true,
+        // Colonnes AI Measure dédiées
+        aiMeasure_enabled: true,
+        aiMeasure_autoTrigger: true,
+        aiMeasure_prompt: true,
+        aiMeasure_keys: true,
         TreeBranchLeafTree: { select: { organizationId: true } }
       }
     });
@@ -4057,7 +4146,12 @@ router.get('/nodes/:nodeId', async (req, res) => {
       type: node.type,
       subType: node.subType,
       label: node.label,
-      metadata: node.metadata
+      metadata: node.metadata,
+      // Colonnes AI Measure dédiées
+      aiMeasure_enabled: node.aiMeasure_enabled,
+      aiMeasure_autoTrigger: node.aiMeasure_autoTrigger,
+      aiMeasure_prompt: node.aiMeasure_prompt,
+      aiMeasure_keys: node.aiMeasure_keys,
     });
   } catch (error) {
     console.error('[TreeBranchLeaf API] Error fetching node info:', error);

@@ -46,6 +46,9 @@ import { useNodeFormulas, getConstraintFormulas, extractSourceNodeIdFromTokens }
 import { useNodeCalculatedValue } from '../../../../../hooks/useNodeCalculatedValue';
 import { generateMirrorVariants } from '../utils/mirrorNormalization';
 import { tblLog, isTBLDebugEnabled } from '../../../../../utils/tblDebug';
+// 🤖 AI Measure: Import du composant et de la fonction de config
+import TBLImageFieldWithAI from './TBLImageFieldWithAI';
+import { getAIMeasureConfig } from '../../../../../hooks/useAIMeasure';
 
 import type { RawTreeNode } from '../types';
 
@@ -631,6 +634,8 @@ interface TBLFieldAdvancedProps {
   // 🎯 Props de validation pour les couleurs dynamiques
   isValidating?: boolean;
   hasValidationError?: boolean;
+  // 🤖 AI Measure: Callback pour mettre à jour n'importe quel champ par son ID
+  onUpdateAnyField?: (fieldId: string, value: unknown) => void;
 }
 
 /**
@@ -780,7 +785,8 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
   treeMetadata = {},
   treeId,
   submissionId,
-  allNodes = []
+  allNodes = [],
+  onUpdateAnyField // 🤖 AI Measure: Callback pour mettre à jour n'importe quel champ
 }) => {
   
   const screens = useBreakpoint();
@@ -2862,7 +2868,7 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
           />
         );
 
-      case 'IMAGE':
+      case 'IMAGE': {
         const imageConfig = fieldConfig.imageConfig || {};
         const acceptedFormats = Array.isArray(imageConfig.formats) && imageConfig.formats.length > 0
           ? imageConfig.formats.map(fmt => (fmt.startsWith('.') ? fmt : `.${fmt.toLowerCase()}`))
@@ -2871,6 +2877,57 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
         const maxImageSizeBytes = imageConfig.maxSize ? imageConfig.maxSize * 1024 * 1024 : undefined;
         const enforcedRatio = imageConfig.ratio;
         const imageThumbnails = imageConfig.thumbnails;
+        
+        // 🤖 AI Measure: Vérifier si l'IA est activée pour ce champ
+        const aiMeasureConfig = getAIMeasureConfig({
+          metadata: field.metadata as Record<string, unknown> | null,
+          // Les colonnes dédiées (maintenant typées dans TBLField)
+          aiMeasure_enabled: field.aiMeasure_enabled,
+          aiMeasure_autoTrigger: field.aiMeasure_autoTrigger,
+          aiMeasure_prompt: field.aiMeasure_prompt,
+          aiMeasure_keys: field.aiMeasure_keys,
+        });
+        
+        const isAIMeasureEnabled = aiMeasureConfig?.enabled === true;
+        
+        // 🤖 Si AI Measure activé, utiliser TBLImageFieldWithAI
+        if (isAIMeasureEnabled) {
+          // Handler pour remplir les champs cibles avec les résultats de l'IA
+          const handleAIFieldUpdate = (targetFieldId: string, value: unknown) => {
+            // Nettoyer le targetRef (enlever @value. si présent)
+            const cleanFieldId = targetFieldId.startsWith('@value.') 
+              ? targetFieldId.replace('@value.', '') 
+              : targetFieldId;
+            
+            console.log(`🤖 [AI Measure] Mise à jour du champ ${cleanFieldId} avec:`, value);
+            
+            if (onUpdateAnyField) {
+              onUpdateAnyField(cleanFieldId, value);
+            } else {
+              console.warn('[AI Measure] onUpdateAnyField non disponible - impossible de remplir le champ cible');
+            }
+          };
+          
+          return (
+            <TBLImageFieldWithAI
+              nodeId={field.id}
+              metadata={field.metadata as Record<string, unknown>}
+              aiMeasure_enabled={field.aiMeasure_enabled}
+              aiMeasure_autoTrigger={field.aiMeasure_autoTrigger}
+              aiMeasure_prompt={field.aiMeasure_prompt}
+              aiMeasure_keys={field.aiMeasure_keys}
+              imageConfig={imageConfig}
+              value={finalValue as string | null}
+              onChange={handleChange}
+              onFieldUpdate={handleAIFieldUpdate}
+              disabled={isDisabled}
+              size={resolvedSize}
+              style={commonProps.style}
+            />
+          );
+        }
+        
+        // Comportement standard sans IA
         return (
           <div>
             <Upload
@@ -2911,12 +2968,9 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
                       
                       // Traiter les thumbnails si configurés
                       if (imageThumbnails && typeof imageThumbnails === 'object') {
-                        // console.log(`🖼️ Configuration thumbnails:`, thumbnails); // ✨ Log réduit
-                        // Stocker à la fois l'image originale et la config thumbnails
                         imageData = {
                           original: e.target?.result,
-                          thumbnails: imageThumbnails
-,
+                          thumbnails: imageThumbnails,
                         };
                       }
                       
@@ -2949,13 +3003,13 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
                   height: '100px', 
                   objectFit: 'cover', 
                   border: '1px solid #d9d9d9',
-                  borderRadius: '6px'
-,
+                  borderRadius: '6px',
                 }} 
               />
             )}
           </div>
         );
+      }
 
       case 'FILE': {
         const fileConfig = fieldConfig.fileConfig || {};

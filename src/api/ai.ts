@@ -732,4 +732,208 @@ function generateFallbackPalettes(baseColor: string): any[] {
   ];
 }
 
+// =============================================================================
+// 📐 ANALYSE D'IMAGE AVEC IA - MESURES ET EXTRACTION
+// =============================================================================
+
+import GoogleGeminiService from '../services/GoogleGeminiService';
+
+const geminiMeasureService = new GoogleGeminiService();
+
+/**
+ * POST /api/ai/measure-image
+ * Analyse une image et extrait des mesures selon la configuration
+ */
+router.post('/measure-image', async (req, res) => {
+  const startTime = Date.now();
+  
+  try {
+    const { 
+      imageBase64,      // Image en base64 (sans le préfixe data:image/...)
+      mimeType,         // Type MIME (image/jpeg, image/png, etc.)
+      prompt,           // Prompt personnalisé pour l'analyse
+      measureKeys,      // Clés à extraire (ex: ["largeur", "hauteur", "type"])
+      nodeId,           // ID du nœud source (pour logging)
+      treeId            // ID de l'arbre (pour logging)
+    } = req.body;
+
+    // Validation des paramètres requis
+    if (!imageBase64) {
+      return res.status(400).json({
+        success: false,
+        error: 'Image base64 requise'
+      });
+    }
+
+    if (!mimeType) {
+      return res.status(400).json({
+        success: false,
+        error: 'Type MIME requis'
+      });
+    }
+
+    if (!prompt) {
+      return res.status(400).json({
+        success: false,
+        error: 'Prompt requis'
+      });
+    }
+
+    if (!measureKeys || !Array.isArray(measureKeys) || measureKeys.length === 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'Liste des clés à extraire requise'
+      });
+    }
+
+    console.log(`📐 [AI Measure] Analyse pour node=${nodeId}, tree=${treeId}, ${measureKeys.length} clés`);
+
+    // Appel au service Gemini Vision
+    const result = await geminiMeasureService.analyzeImageForMeasures(
+      imageBase64,
+      mimeType,
+      prompt,
+      measureKeys
+    );
+
+    const duration = Date.now() - startTime;
+
+    if (!result.success) {
+      console.error(`❌ [AI Measure] Échec après ${duration}ms:`, result.error);
+      return res.status(500).json({
+        success: false,
+        error: result.error || 'Erreur lors de l\'analyse de l\'image',
+        duration
+      });
+    }
+
+    console.log(`✅ [AI Measure] Succès en ${duration}ms, ${Object.keys(result.measurements || {}).length} mesures extraites`);
+
+    return res.json({
+      success: true,
+      measurements: result.measurements,
+      rawResponse: result.rawResponse,
+      metadata: {
+        model: result.model,
+        duration,
+        nodeId,
+        treeId,
+        timestamp: new Date().toISOString()
+      }
+    });
+
+  } catch (error: any) {
+    const duration = Date.now() - startTime;
+    console.error('❌ [AI Measure] Erreur:', error);
+
+    return res.status(500).json({
+      success: false,
+      error: error.message || 'Erreur interne',
+      duration
+    });
+  }
+});
+
+/**
+ * POST /api/ai/measure-image/apply
+ * Applique les mesures extraites aux champs cibles
+ */
+router.post('/measure-image/apply', async (req, res) => {
+  try {
+    const {
+      measurements,     // Mesures extraites { key: value }
+      mappings,         // Mappings { key, targetRef, type }[]
+      treeId,
+      organizationId
+    } = req.body;
+
+    if (!measurements || typeof measurements !== 'object') {
+      return res.status(400).json({
+        success: false,
+        error: 'Mesures requises'
+      });
+    }
+
+    if (!mappings || !Array.isArray(mappings) || mappings.length === 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'Mappings requis'
+      });
+    }
+
+    console.log(`🎯 [AI Measure Apply] Application de ${Object.keys(measurements).length} mesures vers ${mappings.length} champs`);
+
+    // Construire les mises à jour à appliquer
+    const updates: Array<{ targetRef: string; value: string | number; key: string }> = [];
+
+    for (const mapping of mappings) {
+      const { key, targetRef, type } = mapping;
+      const value = measurements[key];
+
+      if (value !== undefined && value !== 'non_visible') {
+        // Convertir selon le type
+        let finalValue: string | number = value;
+        if (type === 'number' && typeof value === 'string') {
+          const parsed = parseFloat(value);
+          if (!isNaN(parsed)) {
+            finalValue = parsed;
+          }
+        }
+
+        updates.push({
+          targetRef,
+          value: finalValue,
+          key
+        });
+      }
+    }
+
+    console.log(`✅ [AI Measure Apply] ${updates.length} mises à jour préparées`);
+
+    // Retourner les mises à jour à appliquer côté client
+    // (Le client utilisera l'API de mise à jour des nœuds pour chaque champ)
+    return res.json({
+      success: true,
+      updates,
+      skipped: mappings.length - updates.length,
+      metadata: {
+        timestamp: new Date().toISOString()
+      }
+    });
+
+  } catch (error: any) {
+    console.error('❌ [AI Measure Apply] Erreur:', error);
+    return res.status(500).json({
+      success: false,
+      error: error.message || 'Erreur interne'
+    });
+  }
+});
+
+/**
+ * GET /api/ai/measure-image/status
+ * Vérifie si le service de mesure IA est disponible
+ */
+router.get('/measure-image/status', async (_req, res) => {
+  try {
+    const status = geminiMeasureService.getStatus();
+    
+    res.json({
+      success: true,
+      available: status.mode === 'live',
+      service: 'Google Gemini Vision',
+      model: status.model,
+      mode: status.mode,
+      degraded: status.degraded,
+      timestamp: new Date().toISOString()
+    });
+  } catch (error: any) {
+    res.status(500).json({
+      success: false,
+      available: false,
+      error: error.message
+    });
+  }
+});
+
 export default router;

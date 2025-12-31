@@ -174,7 +174,7 @@ export const FIELD_TYPES: Record<string, FieldType> = {
     defaultVariant: 'upload',
     hasOptions: false,
     hasSubfields: false,
-    capabilities: ['data', 'condition', 'validation'],
+    capabilities: ['data', 'condition', 'validation', 'aiMeasure'],
     appearanceConfig: {
       variants: [
         { key: 'upload', label: 'Upload simple', icon: 'UploadOutlined' },
@@ -326,6 +326,22 @@ export const CAPABILITY_MODULES: Record<string, CapabilityModule> = {
     panelComponent: 'MarkerConfigPanel',
     validationRules: [],
     dependencies: []
+  },
+
+  // 📐 AI MEASURE (Analyse d'images avec IA)
+  aiMeasure: {
+    key: 'aiMeasure',
+    label: 'IA Mesure',
+    icon: 'CameraOutlined',
+    emoji: '📐',
+    description: 'Analyse de photos pour extraire des mesures avec IA',
+    category: 'ai',
+    autoOpen: true,
+    requiresConfig: true,
+    compatibleWith: ['leaf'],
+    panelComponent: 'AIMeasureConfigPanel',
+    validationRules: ['prompt', 'measureKeys', 'mappings'],
+    dependencies: []
   }
 };
 
@@ -450,7 +466,8 @@ export const CapabilityPanels = {
   table: () => import('../components/Parameters/capabilities/TablePanel'),
   api: () => import('../components/Parameters/capabilities/APIPanel'),
   link: () => import('../components/Parameters/capabilities/LinkPanel'),
-  markers: () => import('../components/Parameters/capabilities/MarkersPanel')
+  markers: () => import('../components/Parameters/capabilities/MarkersPanel'),
+  aiMeasure: () => import('../components/Parameters/capabilities/AIMeasurePanel')
 };
 
 // =============================================================================

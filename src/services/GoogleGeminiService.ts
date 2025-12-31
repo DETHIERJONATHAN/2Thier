@@ -46,6 +46,30 @@ export interface SuggestionsResult {
   callToAction: string;
 }
 
+// Types pour l'analyse d'images (Vision API)
+export interface ImageMeasureResult {
+  success: boolean;
+  measurements?: Record<string, string | number>;
+  rawResponse?: string;
+  error?: string;
+  model?: string;
+}
+
+export interface AIMeasureMapping {
+  key: string;          // Clé du résultat (ex: "largeur", "hauteur")
+  label: string;        // Label affiché (ex: "Largeur (cm)")
+  targetRef: string;    // Référence du champ cible (@value.nodeId)
+  type: 'number' | 'text' | 'boolean';
+}
+
+export interface AIMeasureConfig {
+  enabled: boolean;
+  prompt: string;           // Prompt personnalisé pour l'analyse
+  measureKeys: string[];    // Liste des clés à extraire (ex: ["largeur", "hauteur", "type"])
+  mappings: AIMeasureMapping[];
+  autoTrigger: boolean;     // Déclencher automatiquement à l'upload
+}
+
 export class GoogleGeminiService {
   private isDemoMode: boolean;
   private apiKey: string | undefined;
@@ -551,6 +575,225 @@ Bien à vous`;
     const model = this.genAI!.getGenerativeModel({ model: modelName }, { apiVersion: 'v1beta' });
     this.modelCache.set(modelName, model);
     return model;
+  }
+
+  /**
+   * 📐 ANALYSE D'IMAGE AVEC VISION API
+   * Analyse une image et extrait des mesures/informations selon le prompt
+   */
+  async analyzeImageForMeasures(
+    imageBase64: string,
+    mimeType: string,
+    prompt: string,
+    measureKeys: string[]
+  ): Promise<ImageMeasureResult> {
+    try {
+      console.log(`📐 [Gemini Vision] Analyse d'image avec ${measureKeys.length} clés à extraire`);
+
+      if (this.isDemoMode) {
+        return this.generateDemoImageMeasures(measureKeys);
+      }
+
+      // Circuit breaker actif ?
+      if (this.degradedUntil && Date.now() < this.degradedUntil) {
+        console.warn('⚠️ [Gemini Vision] Circuit breaker actif, retour mode démo');
+        return {
+          ...this.generateDemoImageMeasures(measureKeys),
+          error: this.lastError || 'circuit-breaker-active'
+        };
+      }
+
+      // Construction du prompt structuré pour l'extraction
+      const structuredPrompt = this.buildMeasurePrompt(prompt, measureKeys);
+
+      // Appel à l'API Vision avec l'image
+      const result = await this.callVisionAPI(imageBase64, mimeType, structuredPrompt);
+
+      if (result.success && result.content) {
+        this.recordSuccess();
+        
+        // Parser la réponse JSON
+        const measurements = this.parseMeasureResponse(result.content, measureKeys);
+        
+        return {
+          success: true,
+          measurements,
+          rawResponse: result.content,
+          model: result.modelUsed
+        };
+      }
+
+      // Fallback en cas d'erreur
+      this.recordFailure(result.error || 'unknown-vision-error');
+      console.warn('⚠️ [Gemini Vision] Erreur API, fallback vers démo');
+      return {
+        ...this.generateDemoImageMeasures(measureKeys),
+        error: result.error
+      };
+
+    } catch (error) {
+      const msg = (error as Error).message;
+      console.error('❌ [Gemini Vision] Erreur:', msg);
+      this.recordFailure(msg);
+      return {
+        success: false,
+        error: msg
+      };
+    }
+  }
+
+  /**
+   * 🔍 Appel à l'API Vision Gemini avec image en base64
+   */
+  private async callVisionAPI(
+    imageBase64: string,
+    mimeType: string,
+    prompt: string
+  ): Promise<{ success: boolean; content?: string; error?: string; modelUsed: string }> {
+    try {
+      if (!this.genAI) {
+        return { success: false, error: 'API Gemini non initialisée', modelUsed: this.primaryModelName };
+      }
+
+      // Utiliser le modèle Flash qui supporte la vision
+      const visionModelName = this.primaryModelName; // gemini-2.5-flash supporte vision nativement
+      const model = this.getModelInstance(visionModelName);
+
+      console.log(`📷 [Gemini Vision] Envoi de l'image (${mimeType}) au modèle ${visionModelName}`);
+
+      // Construire le contenu multimodal
+      const result = await model.generateContent([
+        { text: prompt },
+        {
+          inlineData: {
+            mimeType: mimeType as 'image/jpeg' | 'image/png' | 'image/webp' | 'image/gif',
+            data: imageBase64
+          }
+        }
+      ]);
+
+      const response = await result.response;
+      const text = response.text();
+
+      console.log(`✅ [Gemini Vision] Réponse reçue (${text.length} caractères)`);
+      return { success: true, content: text, modelUsed: visionModelName };
+
+    } catch (error) {
+      console.error('❌ [Gemini Vision API] Erreur:', error);
+      return { success: false, error: (error as Error).message, modelUsed: this.primaryModelName };
+    }
+  }
+
+  /**
+   * 📝 Construit le prompt pour l'extraction de mesures
+   */
+  private buildMeasurePrompt(userPrompt: string, measureKeys: string[]): string {
+    const keysDescription = measureKeys.map(k => `"${k}"`).join(', ');
+    
+    return `Tu es un assistant expert en analyse d'images et en prise de mesures.
+
+INSTRUCTION UTILISATEUR:
+${userPrompt}
+
+CLÉS À EXTRAIRE:
+${keysDescription}
+
+RÈGLES IMPORTANTES:
+1. Analyse l'image attentivement
+2. TU DOIS TOUJOURS ESTIMER les dimensions (largeur, hauteur, profondeur) en centimètres, même si c'est approximatif
+3. Utilise des indices visuels (proportions, objets de référence, perspective) pour estimer les mesures
+4. Pour les châssis/fenêtres standard, une fenêtre typique fait entre 60-150cm de large et 80-200cm de haut
+5. NE JAMAIS répondre "non_visible" pour les dimensions - FAIS TOUJOURS UNE ESTIMATION RAISONNABLE
+6. Pour les autres champs (type, couleur, matériau, nombre), tu peux répondre "non_visible" UNIQUEMENT si vraiment impossible à déterminer
+7. Pour les dimensions, utilise les unités en centimètres (cm) - donne un nombre entier
+8. Réponds UNIQUEMENT au format JSON suivant (sans texte avant ou après):
+
+{
+  ${measureKeys.map(k => `"${k}": <valeur_numérique_ou_texte>`).join(',\n  ')}
+}
+
+Analyse maintenant cette image et ESTIME toutes les dimensions:`;
+  }
+
+  /**
+   * 🔄 Parse la réponse JSON et extrait les mesures
+   */
+  private parseMeasureResponse(content: string, measureKeys: string[]): Record<string, string | number> {
+    try {
+      // Chercher le JSON dans la réponse
+      const jsonMatch = content.match(/\{[\s\S]*\}/);
+      if (!jsonMatch) {
+        console.warn('⚠️ [Gemini Vision] Pas de JSON trouvé dans la réponse');
+        return this.createEmptyMeasurements(measureKeys);
+      }
+
+      const parsed = JSON.parse(jsonMatch[0]);
+      const measurements: Record<string, string | number> = {};
+
+      for (const key of measureKeys) {
+        if (parsed[key] !== undefined) {
+          measurements[key] = parsed[key];
+        } else {
+          measurements[key] = 'non_visible';
+        }
+      }
+
+      return measurements;
+
+    } catch (error) {
+      console.warn('⚠️ [Gemini Vision] Erreur parsing JSON:', error);
+      return this.createEmptyMeasurements(measureKeys);
+    }
+  }
+
+  /**
+   * 🎭 Génère des mesures de démonstration
+   */
+  private generateDemoImageMeasures(measureKeys: string[]): ImageMeasureResult {
+    const measurements: Record<string, string | number> = {};
+    
+    for (const key of measureKeys) {
+      // Générer des valeurs démo réalistes selon le nom de la clé
+      const keyLower = key.toLowerCase();
+      if (keyLower.includes('largeur') || keyLower.includes('width')) {
+        measurements[key] = Math.round(80 + Math.random() * 120); // 80-200 cm
+      } else if (keyLower.includes('hauteur') || keyLower.includes('height')) {
+        measurements[key] = Math.round(100 + Math.random() * 150); // 100-250 cm
+      } else if (keyLower.includes('profondeur') || keyLower.includes('depth')) {
+        measurements[key] = Math.round(5 + Math.random() * 30); // 5-35 cm
+      } else if (keyLower.includes('nombre') || keyLower.includes('count') || keyLower.includes('nb')) {
+        measurements[key] = Math.floor(1 + Math.random() * 5); // 1-5
+      } else if (keyLower.includes('type') || keyLower.includes('style')) {
+        const types = ['oscillo-battant', 'à soufflet', 'fixe', 'coulissant'];
+        measurements[key] = types[Math.floor(Math.random() * types.length)];
+      } else if (keyLower.includes('couleur') || keyLower.includes('color')) {
+        const colors = ['blanc', 'gris anthracite', 'noir', 'chêne doré'];
+        measurements[key] = colors[Math.floor(Math.random() * colors.length)];
+      } else if (keyLower.includes('materiau') || keyLower.includes('material')) {
+        const materials = ['PVC', 'aluminium', 'bois', 'mixte bois-alu'];
+        measurements[key] = materials[Math.floor(Math.random() * materials.length)];
+      } else {
+        // Valeur numérique générique
+        measurements[key] = Math.round(10 + Math.random() * 100);
+      }
+    }
+
+    return {
+      success: true,
+      measurements,
+      model: 'demo'
+    };
+  }
+
+  /**
+   * 📋 Crée un objet de mesures vide
+   */
+  private createEmptyMeasurements(measureKeys: string[]): Record<string, string | number> {
+    const measurements: Record<string, string | number> = {};
+    for (const key of measureKeys) {
+      measurements[key] = 'non_visible';
+    }
+    return measurements;
   }
 
   private async callGeminiAPIWithFallbacks(
