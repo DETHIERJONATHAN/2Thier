@@ -7,9 +7,10 @@
  * NO RECALCULATION - Just fetch and display
  */
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useAuthenticatedApi } from './useAuthenticatedApi';
 import { tblLog, isTBLDebugEnabled } from '../utils/tblDebug';
+
 
 interface CalculatedValueResult {
   value: string | number | boolean | null;
@@ -46,6 +47,10 @@ export function useNodeCalculatedValue(
   const [error, setError] = useState<string | null>(null);
   const [calculatedAt, setCalculatedAt] = useState<string>();
   const [calculatedBy, setCalculatedBy] = useState<string>();
+  
+  // 🎯 NOUVELLE PROTECTION: Compteur d'évaluations API en cours pour éviter les overwrites
+  const [isProtected, setIsProtected] = useState(false);
+  const pendingEvaluationsRef = useRef<number>(0);
 
   // Fonction pour récupérer la valeur
   const fetchCalculatedValue = useCallback(async () => {
@@ -101,12 +106,36 @@ export function useNodeCalculatedValue(
           });
         }
 
+        // 🎯 PROTECTION: Ne pas écraser une valeur existante par null/vide/[] si des évaluations sont en cours
+        const isValueBeingCleared = (
+          extractedValue === null || 
+          extractedValue === undefined || 
+          extractedValue === '' ||
+          extractedValue === '∅' ||
+          (Array.isArray(extractedValue) && extractedValue.length === 0) // 🔥 NOUVEAU: Bloquer les tableaux vides []
+        );
+        const hasCurrentValue = (
+          value !== null && 
+          value !== undefined && 
+          value !== '' && 
+          value !== '∅' &&
+          !(Array.isArray(value) && value.length === 0)
+        );
+        
+        if (isProtected && isValueBeingCleared && hasCurrentValue) {
+          console.log(`🛡️ [GRD nodeId=${nodeId}] PROTECTION: ne pas écraser "${value}" avec "${extractedValue}" (${pendingEvaluationsRef.current} évaluations en cours)`);
+          return; // Bloquer l'overwrite
+        }
+
         // Si on a une valeur valide, l'utiliser directement
         if (extractedValue !== null && extractedValue !== undefined && extractedValue !== '') {
+          console.log(`🔄 [useNodeCalculatedValue] Mise à jour valeur pour nodeId=${nodeId}:`, extractedValue);
           setValue(extractedValue as string | number | boolean | null);
           setCalculatedAt(data.calculatedAt as string | undefined);
           setCalculatedBy(data.calculatedBy as string | undefined);
           return; // On a trouvé une valeur, pas besoin de fallback
+        } else {
+          console.log(`❌ [useNodeCalculatedValue] Valeur vide/null pour nodeId=${nodeId}:`, extractedValue);
         }
       }
       
@@ -139,37 +168,123 @@ export function useNodeCalculatedValue(
     }
   }, [nodeId, treeId, fetchCalculatedValue]);
 
+  // 🎯 NOUVELLE PROTECTION: Écouter l'événement de fin d'évaluation
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    
+    const handleEvaluationComplete = () => {
+      if (pendingEvaluationsRef.current > 0) {
+        pendingEvaluationsRef.current--;
+        console.log(`⬇️ [GRD nodeId=${nodeId}] Évaluation terminée (${pendingEvaluationsRef.current} restantes)`);
+        
+        // Désactiver la protection quand le compteur atteint 0
+        if (pendingEvaluationsRef.current === 0) {
+          setIsProtected(false);
+        }
+      }
+    };
+    
+    window.addEventListener('tbl-evaluation-complete', handleEvaluationComplete);
+    return () => window.removeEventListener('tbl-evaluation-complete', handleEvaluationComplete);
+  }, [nodeId]);
+
   // 🔄 Rafraîchir automatiquement quand un événement global force la retransformation
   useEffect(() => {
     if (typeof window === 'undefined') {
       return;
     }
+    
+    let debounceTimer: ReturnType<typeof setTimeout> | null = null;
+    
     const handler = (event: Event) => {
       const detail = (event as CustomEvent<{ nodeId?: string; submissionId?: string; debugId?: string }>).detail;
       if (!detail?.nodeId || detail.nodeId === nodeId) {
-        // Log supprimé - appelé très fréquemment
-        fetchCalculatedValue();
+        // 🎯 PROTECTION: Incrémenter le compteur quand un refresh est demandé
+        pendingEvaluationsRef.current++;
+        setIsProtected(true);
+        console.log(`⬆️ [GRD nodeId=${nodeId}] Rafraîchissement demandé (${pendingEvaluationsRef.current} en cours)`);
+        
+        // 🔥 DEBOUNCE: Attendre 500ms avant de rafraîchir pour éviter les clignotements
+        if (debounceTimer) {
+          clearTimeout(debounceTimer);
+        }
+        debounceTimer = setTimeout(() => {
+          fetchCalculatedValue();
+        }, 500);
       }
     };
+    
     window.addEventListener('tbl-force-retransform', handler);
-    return () => window.removeEventListener('tbl-force-retransform', handler);
+    return () => {
+      window.removeEventListener('tbl-force-retransform', handler);
+      if (debounceTimer) {
+        clearTimeout(debounceTimer);
+      }
+    };
   }, [fetchCalculatedValue, nodeId, submissionId]);
 
-  // 🔔 Rafraîchir aussi quand un événement tbl-node-updated est dispatché avec notre nodeId
+  // � NOUVEAU: Rafraîchir automatiquement quand les données du formulaire changent
+  // Pour les display fields comme GRD qui dépendent de lead.postalCode, etc.
   useEffect(() => {
     if (typeof window === 'undefined') return;
+    
+    let debounceTimer: ReturnType<typeof setTimeout> | null = null;
+    
+    const handler = () => {
+      // 🔥 DEBOUNCE: Attendre 800ms après le dernier changement pour éviter les appels multiples
+      // Silencieux - pas de console.log pour ne pas polluer
+      if (debounceTimer) {
+        clearTimeout(debounceTimer);
+      }
+      debounceTimer = setTimeout(() => {
+        fetchCalculatedValue();
+      }, 800);
+    };
+    
+    window.addEventListener('tbl-field-changed', handler);
+    return () => {
+      window.removeEventListener('tbl-field-changed', handler);
+      if (debounceTimer) {
+        clearTimeout(debounceTimer);
+      }
+    };
+  }, [fetchCalculatedValue]);
+
+  // �🔔 Rafraîchir aussi quand un événement tbl-node-updated est dispatché avec notre nodeId
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    
+    let debounceTimer: ReturnType<typeof setTimeout> | null = null;
+    
     const handler = (event: Event) => {
       try {
         const detail = (event as CustomEvent<{ node?: { id?: string } }>).detail;
         if (!detail?.node?.id || detail.node.id === nodeId) {
-          fetchCalculatedValue();
+          // 🎯 PROTECTION: Incrémenter le compteur quand un update est signalé
+          pendingEvaluationsRef.current++;
+          setIsProtected(true);
+          console.log(`⬆️ [GRD nodeId=${nodeId}] Update signalé (${pendingEvaluationsRef.current} en cours)`);
+          
+          // 🔥 DEBOUNCE: Attendre 500ms avant de rafraîchir pour éviter les clignotements
+          if (debounceTimer) {
+            clearTimeout(debounceTimer);
+          }
+          debounceTimer = setTimeout(() => {
+            fetchCalculatedValue();
+          }, 500);
         }
       } catch (err) {
         // noop
       }
     };
+    
     window.addEventListener('tbl-node-updated', handler);
-    return () => window.removeEventListener('tbl-node-updated', handler);
+    return () => {
+      window.removeEventListener('tbl-node-updated', handler);
+      if (debounceTimer) {
+        clearTimeout(debounceTimer);
+      }
+    };
   }, [fetchCalculatedValue, nodeId]);
 
   const refresh = useCallback(() => {

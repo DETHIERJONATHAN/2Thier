@@ -26,6 +26,34 @@ export const useBackendValue = (
   const [loading, setLoading] = useState(false);
   const [refreshToken, setRefreshToken] = useState(0);
   const usedBatch = useRef(false);
+  
+  // 🛡️ REF POUR GARDER LA DERNIÈRE VALEUR VALIDE
+  const lastValidValue = useRef<unknown>(undefined);
+  
+  // 🛡️ FONCTION HELPER : Mettre à jour la valeur de manière sécurisée
+  const setValueSafely = (newValue: unknown) => {
+    const isEmptyValue = newValue === null || newValue === undefined || 
+      newValue === '' || newValue === '[]' || 
+      (Array.isArray(newValue) && newValue.length === 0);
+    
+    const hasValidLastValue = lastValidValue.current !== undefined && 
+      lastValidValue.current !== null && 
+      lastValidValue.current !== '' && 
+      lastValidValue.current !== '[]' && 
+      !(Array.isArray(lastValidValue.current) && lastValidValue.current.length === 0);
+    
+    if (isEmptyValue && hasValidLastValue) {
+      console.log(`🛡️ [useBackendValue] PROTECTION REF: garder lastValidValue pour ${nodeId}`, lastValidValue.current);
+      setValue(lastValidValue.current); // Garder l'ancienne valeur
+      return;
+    }
+    
+    // Sinon, mettre à jour normalement
+    if (!isEmptyValue) {
+      lastValidValue.current = newValue; // Sauvegarder la nouvelle valeur valide
+    }
+    setValue(newValue);
+  };
 
   // 🚀 BATCH : Essayer d'utiliser le cache batch d'abord
   const batchContext = useTBLBatchOptional();
@@ -39,11 +67,25 @@ export const useBackendValue = (
   const batchValue = useMemo(() => {
     if (!nodeId || !batchContext?.isReady) return undefined;
     
+    // PRIORITÉ 1: Valeur calculée (formules)
     const cachedValue = batchContext.getCalculatedValueForNode(nodeId);
     if (cachedValue) {
       // Prendre submissionValue en priorité, sinon calculatedValue
       return cachedValue.submissionValue ?? cachedValue.calculatedValue;
     }
+    
+    // PRIORITÉ 2: Node-data (variables/données) - pour les champs comme GRD, Prix Kwh, etc.
+    const nodeData = batchContext.getNodeDataForNode(nodeId);
+    if (nodeData?.variable) {
+      const variable = nodeData.variable as { fixedValue?: unknown; sourceType?: string };
+      // Si c'est une valeur fixe, la retourner directement
+      if (variable.sourceType === 'fixed' && variable.fixedValue !== undefined) {
+        return variable.fixedValue;
+      }
+      // Sinon retourner la config pour traitement ultérieur
+      return variable.fixedValue;
+    }
+    
     return undefined;
   }, [nodeId, batchContext]);
 
@@ -101,7 +143,7 @@ export const useBackendValue = (
 
   useEffect(() => {
     if (!nodeId || !treeId) {
-      setValue(undefined);
+      setValueSafely(undefined);
       return;
     }
 
@@ -111,7 +153,7 @@ export const useBackendValue = (
         // console.log(`🚀 [useBackendValue] Mode BATCH - valeur pour ${nodeId}:`, batchValue);
       }
       usedBatch.current = true;
-      setValue(batchValue);
+      setValueSafely(batchValue);
       setLoading(false);
       return;
     }
@@ -124,23 +166,32 @@ export const useBackendValue = (
 
     // 🔄 FALLBACK : Appel API individuel
     if (!api) {
-      setValue(undefined);
+      setValueSafely(undefined);
       return;
     }
 
     const fetchBackendValue = async () => {
       try {
         setLoading(true);
+        
+        // 🔑 Extraire le submissionId du formData pour les lookups de table
+        const parsedFormData = JSON.parse(formDataHash);
+        const submissionId = parsedFormData.__submissionId || parsedFormData.submissionId || '';
 
         // 🚀 ÉTAPE 1 : CHERCHER D'ABORD LA VALEUR STOCKÉE DANS PRISMA
         try {
+          // 🔑 Passer le submissionId pour que l'operation-interpreter puisse résoudre les lookups
+          const url = submissionId 
+            ? `/api/tree-nodes/${nodeId}/calculated-value?submissionId=${encodeURIComponent(submissionId)}`
+            : `/api/tree-nodes/${nodeId}/calculated-value`;
+          
           const cachedResponse = await api.get<{
             success?: boolean;
             value?: unknown;
             calculatedValue?: unknown;
             calculatedAt?: string;
             calculatedBy?: string;
-          }>(`/api/tree-nodes/${nodeId}/calculated-value`);
+          }>(url);
 
           const hasStoredValue = cachedResponse && typeof cachedResponse === 'object'
             && (
@@ -150,17 +201,32 @@ export const useBackendValue = (
 
           if (hasStoredValue) {
             const storedValue = (cachedResponse as Record<string, unknown>).value ?? (cachedResponse as Record<string, unknown>).calculatedValue;
-            setValue(storedValue);
+            // 🛡️ PROTECTION: Ne pas écraser une valeur vide si on avait déjà une valeur valide
+            const isEmptyValue = storedValue === null || storedValue === undefined || 
+              storedValue === '' || storedValue === '[]' || 
+              (Array.isArray(storedValue) && storedValue.length === 0);
+            
+            if (!isEmptyValue) {
+              setValueSafely(storedValue);
+              setLoading(false);
+              return; // 🎯 Sortir ici si valeur trouvée !
+            }
+            // Si valeur vide mais on a déjà une valeur en state, la garder
+            if (isEmptyValue && value !== undefined && value !== null && value !== '' && value !== '[]') {
+              console.log(`🛡️ [useBackendValue] Protection: garder ancienne valeur pour ${nodeId}`);
+              setLoading(false);
+              return;
+            }
+            setValueSafely(storedValue);
             setLoading(false);
-            return; // 🎯 Sortir ici si valeur trouvée !
+            return;
           }
         } catch {
           // Pas de valeur stockée, continuer vers le calcul backend
         }
 
         // 🚀 ÉTAPE 2 : SI PAS DE VALEUR STOCKÉE, CALCULER VIA BACKEND
-        // Reconstituer formData depuis le hash
-        const parsedFormData = JSON.parse(formDataHash);
+        // (parsedFormData déjà déclaré au début de fetchBackendValue)
 
         // Appel API vers le backend
         const response = await api.post<{
@@ -212,17 +278,52 @@ export const useBackendValue = (
               }
             }
             
-            setValue(backendValue);
+            // 🛡️ PROTECTION ULTIME : Ne JAMAIS écraser une valeur valide par une valeur vide
+            const isEmptyBackendValue = backendValue === null || backendValue === undefined || 
+              backendValue === '' || backendValue === '[]' || 
+              (Array.isArray(backendValue) && backendValue.length === 0);
+            
+            const hasValidCurrentValue = value !== undefined && value !== null && 
+              value !== '' && value !== '[]' && 
+              !(Array.isArray(value) && value.length === 0);
+            
+            if (isEmptyBackendValue && hasValidCurrentValue) {
+              console.log(`🛡️ [useBackendValue] PROTECTION: garder valeur existante pour ${nodeId} (backend retourné vide)`);
+              setLoading(false);
+              return; // ⛔ Ne PAS écraser !
+            }
+            
+            setValueSafely(backendValue);
           } else {
             // NodeId non trouvé dans les résultats - c'est normal pour les champs sans capacité de calcul
-            setValue(undefined);
+            // 🛡️ Ne pas écraser si on a déjà une valeur valide
+            const hasValidCurrentValue = value !== undefined && value !== null && 
+              value !== '' && value !== '[]' && 
+              !(Array.isArray(value) && value.length === 0);
+            
+            if (hasValidCurrentValue) {
+              console.log(`🛡️ [useBackendValue] PROTECTION: garder valeur existante pour ${nodeId} (non trouvé dans results)`);
+              setLoading(false);
+              return;
+            }
+            setValueSafely(undefined);
           }
         } else {
-          setValue(undefined);
+          // Pas de résultats - ne pas écraser une valeur existante
+          const hasValidCurrentValue = value !== undefined && value !== null && 
+            value !== '' && value !== '[]' && 
+            !(Array.isArray(value) && value.length === 0);
+          
+          if (hasValidCurrentValue) {
+            console.log(`🛡️ [useBackendValue] PROTECTION: garder valeur existante pour ${nodeId} (pas de results)`);
+            setLoading(false);
+            return;
+          }
+          setValueSafely(undefined);
         }
       } catch (err) {
         console.error('❌ [useBackendValue] Erreur:', err);
-        setValue(undefined);
+        setValueSafely(undefined);
       } finally {
         setLoading(false);
       }

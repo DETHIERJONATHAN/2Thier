@@ -280,6 +280,108 @@ async function enrichDataFromSubmission(
       treeId = firstSubmissionNode?.TreeBranchLeafNode?.treeId;
     }
     
+    
+    // 🆕 2b. Enrichir avec les données Lead (lead.postalCode, lead.address, etc.)
+    // 🔥 FIX: Récupérer le leadId depuis la soumission directement (pas depuis SubmissionData)
+    let leadId: string | null = null;
+    
+    // D'abord essayer depuis TreeBranchLeafSubmission.leadId (méthode principale)
+    const submission = await prisma.treeBranchLeafSubmission.findUnique({
+      where: { id: submissionId },
+      select: { leadId: true }
+    });
+    if (submission?.leadId) {
+      leadId = submission.leadId;
+    }
+    
+    // Fallback: chercher dans les données de soumission si pas trouvé
+    if (!leadId) {
+      const leadNode = await prisma.treeBranchLeafSubmissionData.findFirst({
+        where: { 
+          submissionId, 
+          fieldLabel: { contains: 'ID Lead' } 
+        },
+        select: { value: true }
+      });
+      
+      if (leadNode?.value) {
+        try {
+          leadId = typeof leadNode.value === 'string' ? JSON.parse(leadNode.value) : leadNode.value;
+        } catch {
+          leadId = leadNode.value as string;
+        }
+      }
+    }
+    
+    if (leadId && typeof leadId === 'string') {
+      const lead = await prisma.lead.findUnique({
+        where: { id: leadId },
+        select: {
+          firstName: true,
+          lastName: true,
+          email: true,
+          phone: true,
+          company: true,
+          leadNumber: true,
+          linkedin: true,
+          website: true,
+          status: true,
+          notes: true,
+          data: true
+        }
+      });
+      
+      if (lead) {
+        // Ajouter les champs standards du lead
+        valueMap.set('lead.firstName', lead.firstName);
+        valueMap.set('lead.lastName', lead.lastName);
+        valueMap.set('lead.email', lead.email);
+        valueMap.set('lead.phone', lead.phone);
+        valueMap.set('lead.company', lead.company);
+        valueMap.set('lead.leadNumber', lead.leadNumber);
+        valueMap.set('lead.linkedin', lead.linkedin);
+        valueMap.set('lead.website', lead.website);
+        valueMap.set('lead.status', lead.status);
+        valueMap.set('lead.notes', lead.notes);
+        
+        // Extraire les données de l'objet JSON `data` s'il existe
+        if (lead.data && typeof lead.data === 'object') {
+          const leadData = lead.data as Record<string, unknown>;
+          
+          // Ajouter le code postal s'il existe dans data
+          if (leadData.postalCode) {
+            valueMap.set('lead.postalCode', leadData.postalCode);
+          } else if (leadData.address && typeof leadData.address === 'string') {
+            // Extraire le code postal depuis l'adresse (format: "Rue..., 5150 Ville, Pays")
+            const postalCodeMatch = leadData.address.match(/\b(\d{4})\b/);
+            if (postalCodeMatch) {
+              const extractedPostalCode = postalCodeMatch[1];
+              valueMap.set('lead.postalCode', extractedPostalCode);
+            }
+          }
+          
+          if (leadData.address) {
+            valueMap.set('lead.address', leadData.address);
+          }
+          if (leadData.city) {
+            valueMap.set('lead.city', leadData.city);
+          }
+          if (leadData.country) {
+            valueMap.set('lead.country', leadData.country);
+          }
+          if (leadData.locality) {
+            valueMap.set('lead.locality', leadData.locality);
+          }
+          if (leadData.streetName) {
+            valueMap.set('lead.streetName', leadData.streetName);
+          }
+          if (leadData.streetNumber) {
+            valueMap.set('lead.streetNumber', leadData.streetNumber);
+          }
+        }
+      }
+    }
+    
     if (treeId) {
       // 3. RÃƒÂ©cupÃƒÂ©rer TOUS les labels ET calculatedValue de l'arbre
       // Ã°Å¸â€Â¥ AJOUT: calculatedValue pour les variables calculÃƒÂ©es (ex: Rampant toiture-1)
@@ -371,7 +473,20 @@ async function getNodeValue(
   valueMap?: Map<string, unknown>,
   options?: GetNodeValueOptions
 ): Promise<string | null> {
-  // Ã°Å¸Å½Â¯ PRIORITÃƒâ€° 1: VÃƒÂ©rifier dans valueMap si fourni
+  // 🆕 PRIORITÉ 0: Si c'est une clé virtuelle (lead.*, etc.), chercher SEULEMENT dans valueMap
+  if (nodeId && (nodeId.startsWith('lead.') || nodeId.includes('.'))) {
+    if (valueMap && valueMap.has(nodeId)) {
+      const val = valueMap.get(nodeId);
+      if (val === null || val === undefined) {
+        return options?.preserveEmpty ? null : "0";
+      }
+      return String(val);
+    }
+    // Pas de fallback Prisma pour les clés virtuelles - elles n'existent que dans valueMap
+    return options?.preserveEmpty ? null : "0";
+  }
+  
+  // 🎯 PRIORITÉ 1: Vérifier dans valueMap si fourni
   if (valueMap && valueMap.has(nodeId)) {
     const val = valueMap.get(nodeId);
     if (val === null || val === undefined) {
@@ -381,7 +496,7 @@ async function getNodeValue(
   }
 
   
-  // Ã°Å¸Å½Â¯ PRIORITÃƒâ€° 2: RequÃƒÂªte Prisma pour rÃƒÂ©cupÃƒÂ©rer depuis TreeBranchLeafSubmissionData
+  // 🎯 PRIORITÉ 2: Requête Prisma pour récupérer depuis TreeBranchLeafSubmissionData
   const data = await prisma.treeBranchLeafSubmissionData.findFirst({
     where: {
       nodeId,
@@ -396,9 +511,9 @@ async function getNodeValue(
     return String(data.value);
   }
   
-  // Ã°Å¸Å½Â¯ PRIORITÃƒâ€° 3 (NOUVEAU): RÃƒÂ©cupÃƒÂ©rer depuis TreeBranchLeafNode.calculatedValue
-  // Ceci permet de rÃƒÂ©cupÃƒÂ©rer les valeurs calculÃƒÂ©es d'autres formules (ex: Mur, Mur-1)
-  // mÃƒÂªme si elles ne sont pas dans le valueMap ou SubmissionData
+  // 🎯 PRIORITÉ 3 (NOUVEAU): Récupérer depuis TreeBranchLeafNode.calculatedValue
+  // Ceci permet de récupérer les valeurs calculées d'autres formules (ex: Mur, Mur-1)
+  // même si elles ne sont pas dans le valueMap ou SubmissionData
   const node = await prisma.treeBranchLeafNode.findUnique({
     where: { id: nodeId },
     select: { calculatedValue: true, label: true }
@@ -409,7 +524,7 @@ async function getNodeValue(
   }
 
   
-  // Retourner "0" par dÃƒÂ©faut si aucune valeur trouvÃƒÂ©e
+  // Retourner "0" par défaut si aucune valeur trouvée
   return options?.preserveEmpty ? null : "0";
 }
 
@@ -734,7 +849,7 @@ async function interpretCondition(
   });
   
   if (!condition) {
-    // Log supprim�
+    // Log supprim�
     return {
       result: 'Ã¢Ë†â€¦',
       humanText: `Condition introuvable: ${conditionId}`,
@@ -751,7 +866,7 @@ async function interpretCondition(
   const when = branch?.when;
   
   if (!when) {
-    // Log supprim�
+    // Log supprim�
     return {
       result: 'Ã¢Ë†â€¦',
       humanText: 'Structure condition invalide',
@@ -786,7 +901,7 @@ async function interpretCondition(
         return { value: optionNode.id, label: optionNode.label };
       }
       
-      // Log supprim�
+      // Log supprim�
       return { value: optionNodeId, label: 'Option inconnue' };
     }
 
@@ -1018,7 +1133,7 @@ function evaluateOperator(op: string, left: any, right: any): boolean {
       return Number(left) <= Number(right);
     
     default:
-      // Log supprim�
+      // Log supprim�
       return false;
   }
 }

@@ -64,11 +64,12 @@ export const CalculatedValueDisplay: React.FC<CalculatedValueDisplayProps> = ({
   fallbackValue
   , fallbackNodeIds = []
 }) => {
-  // ⚠️ DISPLAY FIELDS: Ne JAMAIS passer submissionId - calcul uniquement depuis l'arbre
+  // 🔥 CORRECTION: Passer le submissionId pour que le backend puisse recalculer
+  // les table lookups (GRD, etc.) avec les bonnes valeurs de champs
   const { value, loading, error, calculatedAt, calculatedBy, refresh } = useNodeCalculatedValue(
     nodeId,
     treeId,
-    undefined  // 🚫 submissionId désactivé pour display fields
+    submissionId  // ✅ Réactivé pour permettre les recalculs table lookup
   );
 
   // Support client-side fallback: try fallbackNodeIds if primary node returns nothing

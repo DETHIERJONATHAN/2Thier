@@ -3716,9 +3716,9 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
           <CalculatedValueDisplay
             nodeId={nodeIdToUse}
             treeId={treeId}
-            // ⚠️ NE PAS passer submissionId pour les display fields
-            // Les display fields calculent en temps réel basés sur l'arbre, pas sur une soumission
-            submissionId={undefined}
+            // 🔥 CORRECTION: Passer le submissionId pour que le backend puisse
+            // recalculer les table lookups avec les bonnes valeurs de champs
+            submissionId={submissionId}
             placeholder="---"
             precision={finalPrecision}
             prefix={finalPrefix}

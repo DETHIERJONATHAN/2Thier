@@ -177,7 +177,6 @@ export const TBLFieldRenderer: React.FC<TBLFieldRendererProps> = ({
       disabled,
       placeholder: field.config.placeholder,
       value: calculatedValue
-,
     };
 
     switch (field.type) {

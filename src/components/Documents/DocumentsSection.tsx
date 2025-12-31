@@ -13,14 +13,19 @@ import {
   Descriptions,
   Typography,
   Row,
-  Col
+  Col,
+  List,
+  Divider
 } from 'antd';
 import { 
   DownloadOutlined, 
   SendOutlined, 
   EyeOutlined,
   DeleteOutlined,
-  MoreOutlined
+  MoreOutlined,
+  FileTextOutlined,
+  FolderOpenOutlined,
+  ExclamationCircleOutlined
 } from '@ant-design/icons';
 import { useAuthenticatedApi } from '../../hooks/useAuthenticatedApi';
 
@@ -43,16 +48,30 @@ interface GeneratedDocument {
   };
 }
 
+interface TBLSubmission {
+  id: string;
+  name: string;
+  status: string;
+  createdAt: string;
+  updatedAt?: string;
+  treeName?: string;
+}
+
 interface DocumentsSectionProps {
   submissionId?: string;
   leadId?: string;
+  treeId?: string;
+  onLoadDevis?: (devisId: string) => void;
+  onDeleteDevis?: (devisId: string, devisName: string) => void;
 }
 
-const DocumentsSection = ({ submissionId, leadId }: DocumentsSectionProps) => {
+const DocumentsSection = ({ submissionId, leadId, treeId, onLoadDevis, onDeleteDevis }: DocumentsSectionProps) => {
   const { api } = useAuthenticatedApi();
   
   const [documents, setDocuments] = useState<GeneratedDocument[]>([]);
+  const [tblSubmissions, setTblSubmissions] = useState<TBLSubmission[]>([]);
   const [loading, setLoading] = useState(false);
+  const [loadingSubmissions, setLoadingSubmissions] = useState(false);
   const [sendModalVisible, setSendModalVisible] = useState(false);
   const [previewModalVisible, setPreviewModalVisible] = useState(false);
   const [previewData, setPreviewData] = useState<any>(null);
@@ -68,27 +87,64 @@ const DocumentsSection = ({ submissionId, leadId }: DocumentsSectionProps) => {
       if (submissionId) params.append('submissionId', submissionId);
       if (leadId) params.append('leadId', leadId);
       
+      console.log('📄 [DocumentsSection] Chargement documents:', { submissionId, leadId, params: params.toString() });
       const response = await api.get(`/api/documents/generated?${params.toString()}`);
-      setDocuments(response);
+      console.log('📄 [DocumentsSection] Documents reçus:', response);
+      setDocuments(Array.isArray(response) ? response : []);
     } catch (error) {
-      console.error('Erreur chargement documents:', error);
+      console.error('❌ [DocumentsSection] Erreur chargement documents:', error);
+      setDocuments([]);
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Charger les devis TBL (submissions)
+  const loadTblSubmissions = async () => {
+    if (!leadId) return;
+    
+    try {
+      setLoadingSubmissions(true);
+      const effectiveTreeId = treeId || 'cmf1mwoz10005gooked1j6orn';
+      
+      console.log('📄 [DocumentsSection] Chargement devis TBL pour lead:', leadId);
+      const allLeadsWithSubmissions = await api.get(`/api/treebranchleaf/submissions/by-leads?treeId=${effectiveTreeId}`);
+      
+      // Filtrer pour ce lead
+      const thisLeadData = allLeadsWithSubmissions?.find((lead: any) => lead.id === leadId);
+      const submissions = thisLeadData?.submissions || [];
+      
+      console.log('📄 [DocumentsSection] Devis TBL trouvés:', submissions.length);
+      setTblSubmissions(submissions);
+    } catch (error) {
+      console.error('❌ [DocumentsSection] Erreur chargement devis TBL:', error);
+      setTblSubmissions([]);
+    } finally {
+      setLoadingSubmissions(false);
     }
   };
 
   useEffect(() => {
     if (submissionId || leadId) {
       loadDocuments();
+    } else {
+      setDocuments([]);
+    }
+    if (leadId) {
+      loadTblSubmissions();
+    } else {
+      // Pas de lead = pas de devis à afficher
+      setTblSubmissions([]);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [submissionId, leadId]);
+  }, [submissionId, leadId, treeId]);
 
   // Écouter l'événement de génération de document pour rafraîchir la liste
   useEffect(() => {
     const handleDocumentGenerated = () => {
       console.log('📄 [DocumentsSection] Document généré, rafraîchissement de la liste...');
       loadDocuments();
+      loadTblSubmissions();
     };
 
     window.addEventListener('document-generated', handleDocumentGenerated);
@@ -96,7 +152,7 @@ const DocumentsSection = ({ submissionId, leadId }: DocumentsSectionProps) => {
       window.removeEventListener('document-generated', handleDocumentGenerated);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [submissionId, leadId]);
+  }, [submissionId, leadId, treeId]);
 
   // Télécharger le PDF
   const handleDownload = async (doc: GeneratedDocument) => {
@@ -233,19 +289,133 @@ const DocumentsSection = ({ submissionId, leadId }: DocumentsSectionProps) => {
     return flags[lang] || lang.toUpperCase();
   };
 
+  // Statut TBL submission
+  const getTblStatusTag = (status: string) => {
+    const statusConfig: Record<string, { label: string; color: string }> = {
+      draft: { label: 'Brouillon', color: 'default' },
+      'default-draft': { label: 'En cours', color: 'processing' },
+      submitted: { label: 'Soumis', color: 'blue' },
+      accepted: { label: 'Accepté', color: 'green' },
+      rejected: { label: 'Refusé', color: 'red' },
+      completed: { label: 'Complété', color: 'success' }
+    };
+    const config = statusConfig[status] || { label: status, color: 'default' };
+    return <Tag color={config.color}>{config.label}</Tag>;
+  };
+
   return (
     <Card
       title="📄 Documents"
     >
+      {/* Devis enregistrés (TBL Submissions) */}
+      <Spin spinning={loadingSubmissions}>
+        {tblSubmissions.length > 0 && (
+          <>
+            <div style={{ marginBottom: 16 }}>
+              <Text strong style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <FolderOpenOutlined />
+                Devis enregistrés ({tblSubmissions.length})
+              </Text>
+            </div>
+            <List
+              size="small"
+              dataSource={tblSubmissions}
+              renderItem={(devis) => (
+                <List.Item
+                  key={devis.id}
+                  actions={[
+                    onLoadDevis && (
+                      <Button
+                        key="load"
+                        type="primary"
+                        size="small"
+                        icon={<EyeOutlined />}
+                        onClick={() => onLoadDevis(devis.id)}
+                      >
+                        Charger
+                      </Button>
+                    ),
+                    onDeleteDevis && (
+                      <Button
+                        key="delete"
+                        danger
+                        size="small"
+                        icon={<DeleteOutlined />}
+                        onClick={async () => {
+                          console.log('🗑️ [DocumentsSection] Clic bouton supprimer pour devis:', devis.id);
+                          
+                          // Utiliser window.confirm au lieu de Modal.confirm (incompatible React 19)
+                          const confirmed = window.confirm(
+                            `Supprimer le devis "${devis.name || 'Devis'}" ?\n\nCette action est irréversible.`
+                          );
+                          
+                          if (!confirmed) {
+                            console.log('🚫 [DocumentsSection] Suppression annulée');
+                            return;
+                          }
+                          
+                          console.log('🗑️ [DocumentsSection] Confirmation suppression:', devis.id);
+                          try {
+                            await onDeleteDevis(devis.id, devis.name || 'Devis');
+                            console.log('✅ [DocumentsSection] Suppression réussie, rechargement liste');
+                            // Rafraîchir la liste après suppression
+                            loadTblSubmissions();
+                          } catch (err) {
+                            console.error('❌ [DocumentsSection] Erreur suppression:', err);
+                          }
+                        }}
+                      />
+                    )
+                  ].filter(Boolean)}
+                >
+                  <List.Item.Meta
+                    avatar={<FileTextOutlined style={{ fontSize: 20, color: '#1890ff' }} />}
+                    title={
+                      <Space>
+                        <span>{devis.name || `Devis ${new Date(devis.createdAt).toLocaleDateString('fr-FR')}`}</span>
+                        {getTblStatusTag(devis.status)}
+                      </Space>
+                    }
+                    description={
+                      <Space direction="vertical" size={0}>
+                        <span>Créé le {new Date(devis.createdAt).toLocaleDateString('fr-FR', {
+                          day: '2-digit',
+                          month: '2-digit',
+                          year: 'numeric',
+                          hour: '2-digit',
+                          minute: '2-digit'
+                        })}</span>
+                        {devis.treeName && <span style={{ color: '#888' }}>{devis.treeName}</span>}
+                      </Space>
+                    }
+                  />
+                </List.Item>
+              )}
+            />
+            {documents.length > 0 && <Divider />}
+          </>
+        )}
+      </Spin>
+
+      {/* Documents générés (PDFs) */}
       <Spin spinning={loading}>
-        {documents.length === 0 ? (
+        {documents.length === 0 && tblSubmissions.length === 0 ? (
           <Empty 
-            description="Aucun document généré"
+            description="Aucun document"
             image={Empty.PRESENTED_IMAGE_SIMPLE}
           />
-        ) : (
+        ) : documents.length > 0 ? (
           /* Affichage horizontal des documents - Row/Col responsive */
-          <Row gutter={[12, 12]}>
+          <>
+            {tblSubmissions.length > 0 && (
+              <div style={{ marginBottom: 16, marginTop: 8 }}>
+                <Text strong style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <DownloadOutlined />
+                  Documents générés ({documents.length})
+                </Text>
+              </div>
+            )}
+            <Row gutter={[12, 12]}>
             {documents.map(doc => (
               <Col key={doc.id} xs={24} sm={12} md={8} lg={6} xl={4}>
                 <Card
@@ -334,7 +504,8 @@ const DocumentsSection = ({ submissionId, leadId }: DocumentsSectionProps) => {
               </Col>
             ))}
           </Row>
-        )}
+          </>
+        ) : null}
       </Spin>
 
       {/* Modal Envoi */}

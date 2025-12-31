@@ -63,6 +63,7 @@ function newStageId() {
 }
 
 // Utilitaire: nettoyer les formData des clés techniques (__mirror_, __formula_, __condition_, __*)
+// ⚠️ GARDE les valeurs vides (null/undefined/"") pour permettre la suppression en base !
 function sanitizeFormData(input: unknown): unknown {
   if (Array.isArray(input)) {
     return input.map(sanitizeFormData);
@@ -73,8 +74,7 @@ function sanitizeFormData(input: unknown): unknown {
       if (k.startsWith('__') || k.startsWith('__mirror_') || k.startsWith('__formula_') || k.startsWith('__condition_')) {
         continue;
       }
-      // Omettre valeurs vides (null/undefined/"")
-      if (v === null || v === undefined || v === '') continue;
+      // ✅ GARDER les valeurs vides pour permettre la suppression
       result[k] = sanitizeFormData(v);
     }
     return result;
@@ -160,31 +160,24 @@ async function saveUserEntriesNeutral(
 
   let saved = 0;
   const entries = new Map<string, SubmissionDataEntry>();
+  const entriesToDelete = new Set<string>(); // 🗑️ Champs à supprimer (vidés)
 
-  // 🚫 ÉTAPE 1 : Récupérer les nodes à EXCLURE (calculés/affichage)
-  // - preview-unknown-user dans calculatedBy (displays)
-  // - formulaConfig non null (formules)
-  // - conditionConfig non null (conditions)
-  // - tableConfig non null (tables/lookups)
+  // 🚫 ÉTAPE 1 : Récupérer les nodes à EXCLURE
+  // SEULE CONDITION : calculatedValue NON NULL = champ calculé = ne pas sauvegarder
   const excludedNodes = treeId 
     ? await prisma.treeBranchLeafNode.findMany({
         where: { 
           treeId,
-          OR: [
-            { calculatedBy: { contains: "preview-unknown-user" } }, // DISPLAY fields
-            { formulaConfig: { not: Prisma.JsonNull } },           // Formulas
-            { conditionConfig: { not: Prisma.JsonNull } },         // Conditions  
-            { tableConfig: { not: Prisma.JsonNull } }              // Tables/Lookups
-          ]
+          calculatedValue: { not: null }  // ✅ SEULE condition: calculatedValue rempli
         },
-        select: { id: true, calculatedBy: true, label: true, formulaConfig: true, conditionConfig: true, tableConfig: true }
+        select: { id: true, label: true, calculatedValue: true }
       })
     : [];
 
   const excludedNodeIds = new Set(excludedNodes.map(n => n.id));
   
   if (excludedNodeIds.size > 0) {
-    console.log(`🚫 [SAVE] ${excludedNodeIds.size} champs calculés/affichage identifiés - ne seront PAS sauvegardés`);
+    console.log(`🚫 [SAVE] ${excludedNodeIds.size} champs avec calculatedValue exclus:`, excludedNodes.map(n => n.label).join(', '));
   }
 
   const sharedRefKeys = Object.keys(formData).filter(isSharedReferenceId);
@@ -198,15 +191,13 @@ async function saveUserEntriesNeutral(
     }
     if (!isAcceptedNodeId(key)) continue;
     
-    // 🚫 ÉTAPE 2 : Skip les champs calculés/affichage (formules, conditions, tables, displays)
+    // 🚫 ÉTAPE 2 : Skip les champs avec calculatedValue (seule condition d'exclusion)
     if (excludedNodeIds.has(key)) {
       continue; // Ne PAS sauvegarder les champs calculés
     }
     
-    // ✅ ÉTAPE 3 : Sauvegarder les champs complétés (skip null/undefined/vide)
-    if (value === null || value === undefined || value === '') {
-      continue; // Ne sauvegarder que les champs remplis
-    }
+    // ✅ ÉTAPE 3 : Gérer les valeurs (remplies OU vides)
+    const isEmpty = value === null || value === undefined || value === '';
 
     const storageIds = isSharedReferenceId(key)
       ? [key, ...(sharedRefAliasMap.get(key) || [])]
@@ -215,32 +206,34 @@ async function saveUserEntriesNeutral(
     for (const nodeId of storageIds) {
       if (!isAcceptedNodeId(nodeId)) continue;
 
-      const serializedValue =
-        value === null || value === undefined
-          ? null
-          : typeof value === 'string'
-            ? value
-            : JSON.stringify(value);
+      if (isEmpty) {
+        // 🗑️ Si vide → marquer pour SUPPRESSION
+        entriesToDelete.add(nodeId);
+      } else {
+        // ✅ Si rempli → marquer pour SAUVEGARDE
+        const serializedValue = typeof value === 'string' ? value : JSON.stringify(value);
 
-      const entry: SubmissionDataEntry = {
-        id: `${submissionId}-${nodeId}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-        submissionId,
-        nodeId,
-        value: serializedValue,
-        operationSource: 'neutral',
-        operationDetail: {
-          inputValue: value,
+        const entry: SubmissionDataEntry = {
+          id: `${submissionId}-${nodeId}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+          submissionId,
           nodeId,
-          action: 'user_input',
-          sourceNodeId: key,
-          aliasResolved: nodeId !== key
-        } as Prisma.InputJsonValue
-      };
+          value: serializedValue,
+          operationSource: 'neutral',
+          operationDetail: {
+            inputValue: value,
+            nodeId,
+            action: 'user_input',
+            sourceNodeId: key,
+            aliasResolved: nodeId !== key
+          } as Prisma.InputJsonValue
+        };
 
-      entries.set(nodeId, entry);
+        entries.set(nodeId, entry);
+      }
     }
   }
 
+  // ✅ SAUVEGARDER les entrées remplies
   for (const entry of entries.values()) {
     const key = { submissionId_nodeId: { submissionId: entry.submissionId, nodeId: entry.nodeId } } as const;
     const existing = await prisma.treeBranchLeafSubmissionData.findUnique({ where: key });
@@ -271,6 +264,21 @@ async function saveUserEntriesNeutral(
       saved++;
     }
   }
+
+  // 🗑️ SUPPRIMER les entrées vidées
+  for (const nodeId of entriesToDelete) {
+    // Ne pas supprimer si on a aussi une entrée à sauvegarder (cas de mise à jour)
+    if (entries.has(nodeId)) continue;
+    
+    const key = { submissionId_nodeId: { submissionId, nodeId } } as const;
+    const existing = await prisma.treeBranchLeafSubmissionData.findUnique({ where: key });
+    if (existing) {
+      await prisma.treeBranchLeafSubmissionData.delete({ where: key });
+      console.log(`🗑️ [SAVE] Champ vidé supprimé: ${nodeId}`);
+      saved++;
+    }
+  }
+
   return saved;
 }
 
@@ -688,6 +696,9 @@ router.post('/submissions/create-and-evaluate', async (req, res) => {
     const organizationId = req.headers['x-organization-id'] as string || (req as AuthenticatedRequest).user?.organizationId;
     // 🔑 Récupérer userId depuis le header X-User-Id ou le middleware auth
     const userId = req.headers['x-user-id'] as string || (req as AuthenticatedRequest).user?.userId || 'unknown-user';
+    // 🔑 Vérifier si l'utilisateur est Super Admin
+    const userRole = (req as AuthenticatedRequest).user?.role;
+    const isSuperAdmin = userRole === 'super_admin';
     
     if (!organizationId) {
       return res.status(400).json({
@@ -774,14 +785,18 @@ router.post('/submissions/create-and-evaluate', async (req, res) => {
         });
       }
       
-      // Vérifier que le lead appartient bien à la même organisation
-      if (leadExists.organizationId !== organizationId) {
+      // Vérifier que le lead appartient bien à la même organisation (sauf pour Super Admin)
+      if (!isSuperAdmin && leadExists.organizationId !== organizationId) {
         console.log(`❌ [TBL CREATE-AND-EVALUATE] Le lead ${clientId} n'appartient pas à l'organisation ${organizationId}`);
         return res.status(403).json({
           success: false,
           error: 'Lead non autorisé',
           message: 'Le lead sélectionné n\'appartient pas à votre organisation.'
         });
+      }
+      
+      if (isSuperAdmin && leadExists.organizationId !== organizationId) {
+        console.log(`🔑 [TBL CREATE-AND-EVALUATE] Super Admin - Bypass vérification organisation pour lead ${clientId}`);
       }
       
       console.log(`✅ [TBL CREATE-AND-EVALUATE] Lead validé: ${clientId} (${leadExists.firstName} ${leadExists.lastName})`);

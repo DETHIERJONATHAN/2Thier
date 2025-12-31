@@ -2478,6 +2478,90 @@ async function enrichDataFromSubmission(submissionId, prisma49, valueMap, labelM
       });
       treeId = firstSubmissionNode?.TreeBranchLeafNode?.treeId;
     }
+    let leadId = null;
+    const submission = await prisma49.treeBranchLeafSubmission.findUnique({
+      where: { id: submissionId },
+      select: { leadId: true }
+    });
+    if (submission?.leadId) {
+      leadId = submission.leadId;
+    }
+    if (!leadId) {
+      const leadNode = await prisma49.treeBranchLeafSubmissionData.findFirst({
+        where: {
+          submissionId,
+          fieldLabel: { contains: "ID Lead" }
+        },
+        select: { value: true }
+      });
+      if (leadNode?.value) {
+        try {
+          leadId = typeof leadNode.value === "string" ? JSON.parse(leadNode.value) : leadNode.value;
+        } catch {
+          leadId = leadNode.value;
+        }
+      }
+    }
+    if (leadId && typeof leadId === "string") {
+      const lead = await prisma49.lead.findUnique({
+        where: { id: leadId },
+        select: {
+          firstName: true,
+          lastName: true,
+          email: true,
+          phone: true,
+          company: true,
+          leadNumber: true,
+          linkedin: true,
+          website: true,
+          status: true,
+          notes: true,
+          data: true
+        }
+      });
+      if (lead) {
+        valueMap.set("lead.firstName", lead.firstName);
+        valueMap.set("lead.lastName", lead.lastName);
+        valueMap.set("lead.email", lead.email);
+        valueMap.set("lead.phone", lead.phone);
+        valueMap.set("lead.company", lead.company);
+        valueMap.set("lead.leadNumber", lead.leadNumber);
+        valueMap.set("lead.linkedin", lead.linkedin);
+        valueMap.set("lead.website", lead.website);
+        valueMap.set("lead.status", lead.status);
+        valueMap.set("lead.notes", lead.notes);
+        if (lead.data && typeof lead.data === "object") {
+          const leadData = lead.data;
+          if (leadData.postalCode) {
+            valueMap.set("lead.postalCode", leadData.postalCode);
+          } else if (leadData.address && typeof leadData.address === "string") {
+            const postalCodeMatch = leadData.address.match(/\b(\d{4})\b/);
+            if (postalCodeMatch) {
+              const extractedPostalCode = postalCodeMatch[1];
+              valueMap.set("lead.postalCode", extractedPostalCode);
+            }
+          }
+          if (leadData.address) {
+            valueMap.set("lead.address", leadData.address);
+          }
+          if (leadData.city) {
+            valueMap.set("lead.city", leadData.city);
+          }
+          if (leadData.country) {
+            valueMap.set("lead.country", leadData.country);
+          }
+          if (leadData.locality) {
+            valueMap.set("lead.locality", leadData.locality);
+          }
+          if (leadData.streetName) {
+            valueMap.set("lead.streetName", leadData.streetName);
+          }
+          if (leadData.streetNumber) {
+            valueMap.set("lead.streetNumber", leadData.streetNumber);
+          }
+        }
+      }
+    }
     if (treeId) {
       const allNodes = await prisma49.treeBranchLeafNode.findMany({
         where: { treeId },
@@ -2517,6 +2601,16 @@ async function enrichDataFromSubmission(submissionId, prisma49, valueMap, labelM
   }
 }
 async function getNodeValue(nodeId, submissionId, prisma49, valueMap, options) {
+  if (nodeId && (nodeId.startsWith("lead.") || nodeId.includes("."))) {
+    if (valueMap && valueMap.has(nodeId)) {
+      const val = valueMap.get(nodeId);
+      if (val === null || val === void 0) {
+        return options?.preserveEmpty ? null : "0";
+      }
+      return String(val);
+    }
+    return options?.preserveEmpty ? null : "0";
+  }
   if (valueMap && valueMap.has(nodeId)) {
     const val = valueMap.get(nodeId);
     if (val === null || val === void 0) {
@@ -11289,6 +11383,25 @@ var securityMetrics = {
 // src/routes/google-auth.ts
 var router12 = (0, import_express13.Router)();
 var GOOGLE_SCOPES = GOOGLE_SCOPES_LIST.join(" ");
+function getFrontendUrl() {
+  const codespaceName = process.env.CODESPACE_NAME;
+  if (codespaceName) {
+    const codespaceUrl = `https://${codespaceName}-5173.app.github.dev`;
+    console.log("[GOOGLE-AUTH] \u{1F680} Codespaces d\xE9tect\xE9, FRONTEND_URL:", codespaceUrl);
+    return codespaceUrl;
+  }
+  const frontendUrl = process.env.FRONTEND_URL;
+  if (frontendUrl) {
+    console.log("[GOOGLE-AUTH] \u{1F4CC} FRONTEND_URL explicite:", frontendUrl);
+    return frontendUrl;
+  }
+  if (process.env.NODE_ENV === "production") {
+    console.log("[GOOGLE-AUTH] \u{1F310} Production d\xE9tect\xE9e, FRONTEND_URL: https://app.2thier.be");
+    return "https://app.2thier.be";
+  }
+  console.log("[GOOGLE-AUTH] \u{1F3E0} Local d\xE9tect\xE9, FRONTEND_URL: http://localhost:5173");
+  return "http://localhost:5173";
+}
 async function getGoogleWorkspaceConfig(organizationId) {
   try {
     console.log("[GOOGLE-AUTH] \u{1F4CB} Recherche config pour organisation:", organizationId);
@@ -11530,11 +11643,11 @@ router12.get("/callback", async (req2, res) => {
     console.log("[GOOGLE-AUTH] \u274C Erreur pr\xE9sente:", !!error);
     if (error) {
       console.log("[GOOGLE-AUTH] \u274C Erreur OAuth:", error);
-      return res.redirect(`${process.env.FRONTEND_URL || "http://localhost:5173"}/google-auth-callback?google_error=${error}`);
+      return res.redirect(`${getFrontendUrl()}/google-auth-callback?google_error=${error}`);
     }
     if (!code || !state) {
       console.log("[GOOGLE-AUTH] \u274C Param\xE8tres manquants - Code:", !!code, "State:", !!state);
-      return res.redirect(`${process.env.FRONTEND_URL || "http://localhost:5173"}/google-auth-callback?google_error=missing_params`);
+      return res.redirect(`${getFrontendUrl()}/google-auth-callback?google_error=missing_params`);
     }
     let organizationId;
     let userId;
@@ -11561,13 +11674,13 @@ router12.get("/callback", async (req2, res) => {
       }
     } catch {
       console.error("[GOOGLE-AUTH] \u274C State invalide, non-JSON ou champs manquants:", state);
-      return res.redirect(`${process.env.FRONTEND_URL || "http://localhost:5173"}/google-auth-callback?google_error=invalid_state`);
+      return res.redirect(`${getFrontendUrl()}/google-auth-callback?google_error=invalid_state`);
     }
     console.log("[GOOGLE-AUTH] \u{1F3E2} Organisation cible:", organizationId, "pour utilisateur:", userId);
     const config = await getGoogleWorkspaceConfig(organizationId);
     if (!config || !config.isConfigured || !config.adminEmail) {
       console.log("[GOOGLE-AUTH] \u274C Configuration manquante ou email admin non d\xE9fini pour org:", organizationId);
-      return res.redirect(`${process.env.FRONTEND_URL || "http://localhost:5173"}/google-auth-callback?google_error=config_incomplete`);
+      return res.redirect(`${getFrontendUrl()}/google-auth-callback?google_error=config_incomplete`);
     }
     console.log("[GOOGLE-AUTH] \u2705 Configuration trouv\xE9e, email admin cible:", config.adminEmail);
     console.log("[GOOGLE-AUTH] \u{1F504} \xC9change du code contre les tokens...");
@@ -11595,7 +11708,7 @@ router12.get("/callback", async (req2, res) => {
       });
       if (userInfo.data.email?.toLowerCase() !== config.adminEmail.toLowerCase()) {
         console.log(`[GOOGLE-AUTH] \u274C ERREUR DE COMPTE : L'utilisateur s'est connect\xE9 avec ${userInfo.data.email}, mais la configuration attendait ${config.adminEmail}.`);
-        return res.redirect(`${process.env.FRONTEND_URL || "http://localhost:5173"}/google-auth-callback?google_error=account_mismatch&expected=${encodeURIComponent(config.adminEmail)}&connected_as=${encodeURIComponent(userInfo.data.email || "")}`);
+        return res.redirect(`${getFrontendUrl()}/google-auth-callback?google_error=account_mismatch&expected=${encodeURIComponent(config.adminEmail)}&connected_as=${encodeURIComponent(userInfo.data.email || "")}`);
       }
       console.log("[GOOGLE-AUTH] \u2705 Connexion Google valid\xE9e pour l'admin:", config.adminEmail);
       console.log("[GOOGLE-AUTH] \u{1F4BE} Sauvegarde des tokens pour l'utilisateur:", userId, "dans l'organisation:", organizationId);
@@ -11607,7 +11720,7 @@ router12.get("/callback", async (req2, res) => {
       console.log("[GOOGLE-AUTH] \u{1F527} Activation des modules Google Workspace...");
       await activateGoogleModules(organizationId, tokens2.scope || "");
       console.log("[GOOGLE-AUTH] \u{1F389} Authentification Google compl\xE8te avec succ\xE8s !");
-      return res.redirect(`${process.env.FRONTEND_URL || "http://localhost:5173"}/google-auth-callback?google_success=1&organizationId=${organizationId}&admin_email=${encodeURIComponent(config.adminEmail)}`);
+      return res.redirect(`${getFrontendUrl()}/google-auth-callback?google_success=1&organizationId=${organizationId}&admin_email=${encodeURIComponent(config.adminEmail)}`);
     } catch (tokenError) {
       const error2 = tokenError;
       console.error("[GOOGLE-AUTH] \u274C Erreur lors de l'\xE9change des tokens:", error2);
@@ -11626,11 +11739,11 @@ router12.get("/callback", async (req2, res) => {
       } else if (error2.response?.status === 401) {
         errorType = "unauthorized_client";
       }
-      return res.redirect(`${process.env.FRONTEND_URL || "http://localhost:5173"}/google-auth-callback?google_error=${errorType}&details=${encodeURIComponent(error2.message || "Erreur inconnue")}`);
+      return res.redirect(`${getFrontendUrl()}/google-auth-callback?google_error=${errorType}&details=${encodeURIComponent(error2.message || "Erreur inconnue")}`);
     }
   } catch (error) {
     console.error("[GOOGLE-AUTH] \u274C Erreur callback g\xE9n\xE9rale:", error);
-    return res.redirect(`${process.env.FRONTEND_URL || "http://localhost:5173"}/google-auth-callback?google_error=callback_error`);
+    return res.redirect(`${getFrontendUrl()}/google-auth-callback?google_error=callback_error`);
   }
 });
 router12.get("/status", authMiddleware, async (req2, res) => {
@@ -12626,16 +12739,17 @@ router15.get("/:id/google-workspace/config", requireRole2(["admin", "super_admin
     const isCompleteConfig = !!(config.clientId && config.clientSecret && config.domain && config.adminEmail);
     const safeConfig = {
       isConfigured: isCompleteConfig,
-      clientId: config.clientId || "",
+      clientId: config.clientId ? decrypt(config.clientId) : "",
+      // 🔓 Décrypter pour affichage
       clientSecret: config.clientSecret ? decrypt(config.clientSecret) : "",
-      // Afficher la vraie valeur décryptée
+      // 🔓 Décrypter pour affichage
       hasClientSecret: !!config.clientSecret,
       redirectUri: config.redirectUri || `${process.env.FRONTEND_URL || "http://localhost:3000"}/api/auth/google/callback`,
       domain: config.domain || "",
       adminEmail: config.adminEmail || "",
       serviceAccountEmail: config.serviceAccountEmail || "",
       privateKey: config.privateKey ? decrypt(config.privateKey) : "",
-      // Afficher la vraie valeur décryptée
+      // 🔓 Décrypter pour affichage
       hasPrivateKey: !!config.privateKey,
       isActive: config.enabled || false,
       gmailEnabled: config.gmailEnabled,
@@ -12693,15 +12807,17 @@ router15.post("/:id/google-workspace/config", requireRole2(["super_admin"]), asy
     const existingConfig = await prisma8.googleWorkspaceConfig.findUnique({
       where: { organizationId: id }
     });
+    const encryptedClientId = data.clientId ? encrypt(data.clientId) : existingConfig?.clientId;
+    const encryptedClientSecret = data.clientSecret ? encrypt(data.clientSecret) : existingConfig?.clientSecret;
+    const encryptedPrivateKey = data.privateKey ? encrypt(data.privateKey) : existingConfig?.privateKey;
     const configData = {
-      clientId: data.clientId,
-      clientSecret: data.clientSecret || existingConfig?.clientSecret,
-      // Garder l'ancien si vide
+      clientId: encryptedClientId,
+      clientSecret: encryptedClientSecret,
       redirectUri,
       domain: data.domain,
       adminEmail: data.adminEmail,
       serviceAccountEmail: data.serviceAccountEmail || existingConfig?.serviceAccountEmail,
-      privateKey: data.privateKey || existingConfig?.privateKey,
+      privateKey: encryptedPrivateKey,
       enabled: data.isActive || false,
       gmailEnabled: data.gmailEnabled,
       calendarEnabled: data.calendarEnabled,
@@ -39274,18 +39390,9 @@ router56.get("/submissions/:id", async (req2, res) => {
   try {
     const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx3(req2);
     const { id } = req2.params;
+    console.log(`[TBL-API] \u25B6\uFE0F GET /submissions/${id}`);
     const submission = await prisma30.treeBranchLeafSubmission.findUnique({
-      where: { id },
-      include: {
-        // Données de soumission + nœud associé (relation déclarée)
-        TreeBranchLeafSubmissionData: {
-          include: {
-            TreeBranchLeafNode: {
-              select: { id: true, label: true, type: true }
-            }
-          }
-        }
-      }
+      where: { id }
     });
     if (!submission) {
       return res.status(404).json({ error: "Soumission non trouv\xE9e" });
@@ -39298,6 +39405,19 @@ router56.get("/submissions/:id", async (req2, res) => {
     if (!isSuperAdmin2 && treeOrg && treeOrg !== organizationId) {
       return res.status(403).json({ error: "Acc\xE8s refus\xE9 \xE0 cette soumission" });
     }
+    const submissionData = await prisma30.treeBranchLeafSubmissionData.findMany({
+      where: { submissionId: id }
+    });
+    const nodeIds = [...new Set(submissionData.map((d) => d.nodeId))];
+    const nodes = nodeIds.length > 0 ? await prisma30.treeBranchLeafNode.findMany({
+      where: { id: { in: nodeIds } },
+      select: { id: true, label: true, type: true, calculatedValue: true }
+    }) : [];
+    const nodesMap = new Map(nodes.map((n) => [n.id, n]));
+    const enrichedData = submissionData.map((d) => ({
+      ...d,
+      TreeBranchLeafNode: nodesMap.get(d.nodeId) || null
+    }));
     let leadBasic = null;
     if (submission.leadId) {
       const lead = await prisma30.lead.findUnique({
@@ -39306,7 +39426,11 @@ router56.get("/submissions/:id", async (req2, res) => {
       });
       leadBasic = lead ?? null;
     }
-    return res.json({ ...submission, Lead: leadBasic });
+    return res.json({
+      ...submission,
+      TreeBranchLeafSubmissionData: enrichedData,
+      Lead: leadBasic
+    });
   } catch (error) {
     console.error("[TreeBranchLeaf API] Error fetching submission:", error);
     res.status(500).json({ error: "Erreur lors de la r\xE9cup\xE9ration de la soumission" });
@@ -39968,27 +40092,33 @@ router56.delete("/submissions/:id", async (req2, res) => {
   try {
     const { id } = req2.params;
     const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx3(req2);
-    const submission = await prisma30.treeBranchLeafSubmission.findFirst({
-      where: {
-        id,
-        ...isSuperAdmin2 ? {} : { Lead: { organizationId } }
-      },
-      include: {
-        Lead: {
-          select: { organizationId: true }
-        }
-      }
+    const submission = await prisma30.treeBranchLeafSubmission.findUnique({
+      where: { id }
     });
     if (!submission) {
-      return res.status(404).json({ error: "Soumission non trouv\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9e ou acc\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA8s refus\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9" });
+      return res.status(404).json({ error: "Soumission non trouvee" });
+    }
+    if (!isSuperAdmin2) {
+      if (submission.leadId) {
+        const lead = await prisma30.lead.findFirst({
+          where: { id: submission.leadId, organizationId }
+        });
+        if (!lead) {
+          return res.status(403).json({ error: "Acces refuse: le lead n'appartient pas a votre organisation" });
+        }
+      }
     }
     await prisma30.treeBranchLeafSubmissionData.deleteMany({
+      where: { submissionId: id }
+    });
+    await prisma30.treeBranchLeafSubmissionVersion.deleteMany({
       where: { submissionId: id }
     });
     await prisma30.treeBranchLeafSubmission.delete({
       where: { id }
     });
-    res.json({ success: true, message: "Soumission supprim\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9e avec succ\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA8s" });
+    console.log(`[TreeBranchLeaf API] Soumission ${id} supprimee avec succes`);
+    res.json({ success: true, message: "Soumission supprimee avec succes" });
   } catch (error) {
     console.error("[TreeBranchLeaf API] Error deleting submission:", error);
     res.status(500).json({ error: "Erreur lors de la suppression de la soumission" });
@@ -53695,7 +53825,6 @@ init_prisma();
 
 // src/components/TreeBranchLeaf/tbl-bridge/routes/tbl-submission-evaluator.ts
 var import_express75 = require("express");
-var import_client7 = require("@prisma/client");
 init_database();
 init_operation_interpreter();
 
@@ -53778,7 +53907,6 @@ function sanitizeFormData(input) {
       if (k.startsWith("__") || k.startsWith("__mirror_") || k.startsWith("__formula_") || k.startsWith("__condition_")) {
         continue;
       }
-      if (v === null || v === void 0 || v === "") continue;
       result[k] = sanitizeFormData(v);
     }
     return result;
@@ -53835,25 +53963,18 @@ async function saveUserEntriesNeutral(submissionId, formData, treeId) {
   if (!formData || typeof formData !== "object") return 0;
   let saved = 0;
   const entries = /* @__PURE__ */ new Map();
+  const entriesToDelete = /* @__PURE__ */ new Set();
   const excludedNodes = treeId ? await prisma42.treeBranchLeafNode.findMany({
     where: {
       treeId,
-      OR: [
-        { calculatedBy: { contains: "preview-unknown-user" } },
-        // DISPLAY fields
-        { formulaConfig: { not: import_client7.Prisma.JsonNull } },
-        // Formulas
-        { conditionConfig: { not: import_client7.Prisma.JsonNull } },
-        // Conditions  
-        { tableConfig: { not: import_client7.Prisma.JsonNull } }
-        // Tables/Lookups
-      ]
+      calculatedValue: { not: null }
+      // ✅ SEULE condition: calculatedValue rempli
     },
-    select: { id: true, calculatedBy: true, label: true, formulaConfig: true, conditionConfig: true, tableConfig: true }
+    select: { id: true, label: true, calculatedValue: true }
   }) : [];
   const excludedNodeIds = new Set(excludedNodes.map((n) => n.id));
   if (excludedNodeIds.size > 0) {
-    console.log(`\u{1F6AB} [SAVE] ${excludedNodeIds.size} champs calcul\xE9s/affichage identifi\xE9s - ne seront PAS sauvegard\xE9s`);
+    console.log(`\u{1F6AB} [SAVE] ${excludedNodeIds.size} champs avec calculatedValue exclus:`, excludedNodes.map((n) => n.label).join(", "));
   }
   const sharedRefKeys = Object.keys(formData).filter(isSharedReferenceId);
   const sharedRefAliasMap = sharedRefKeys.length ? await resolveSharedReferenceAliases(sharedRefKeys, treeId) : /* @__PURE__ */ new Map();
@@ -53865,28 +53986,30 @@ async function saveUserEntriesNeutral(submissionId, formData, treeId) {
     if (excludedNodeIds.has(key2)) {
       continue;
     }
-    if (value === null || value === void 0 || value === "") {
-      continue;
-    }
+    const isEmpty = value === null || value === void 0 || value === "";
     const storageIds = isSharedReferenceId(key2) ? [key2, ...sharedRefAliasMap.get(key2) || []] : [key2];
     for (const nodeId of storageIds) {
       if (!isAcceptedNodeId(nodeId)) continue;
-      const serializedValue = value === null || value === void 0 ? null : typeof value === "string" ? value : JSON.stringify(value);
-      const entry = {
-        id: `${submissionId}-${nodeId}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-        submissionId,
-        nodeId,
-        value: serializedValue,
-        operationSource: "neutral",
-        operationDetail: {
-          inputValue: value,
+      if (isEmpty) {
+        entriesToDelete.add(nodeId);
+      } else {
+        const serializedValue = typeof value === "string" ? value : JSON.stringify(value);
+        const entry = {
+          id: `${submissionId}-${nodeId}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+          submissionId,
           nodeId,
-          action: "user_input",
-          sourceNodeId: key2,
-          aliasResolved: nodeId !== key2
-        }
-      };
-      entries.set(nodeId, entry);
+          value: serializedValue,
+          operationSource: "neutral",
+          operationDetail: {
+            inputValue: value,
+            nodeId,
+            action: "user_input",
+            sourceNodeId: key2,
+            aliasResolved: nodeId !== key2
+          }
+        };
+        entries.set(nodeId, entry);
+      }
     }
   }
   for (const entry of entries.values()) {
@@ -53916,6 +54039,16 @@ async function saveUserEntriesNeutral(submissionId, formData, treeId) {
       }
     } else {
       await prisma42.treeBranchLeafSubmissionData.create({ data: entry });
+      saved++;
+    }
+  }
+  for (const nodeId of entriesToDelete) {
+    if (entries.has(nodeId)) continue;
+    const key2 = { submissionId_nodeId: { submissionId, nodeId } };
+    const existing = await prisma42.treeBranchLeafSubmissionData.findUnique({ where: key2 });
+    if (existing) {
+      await prisma42.treeBranchLeafSubmissionData.delete({ where: key2 });
+      console.log(`\u{1F5D1}\uFE0F [SAVE] Champ vid\xE9 supprim\xE9: ${nodeId}`);
       saved++;
     }
   }
@@ -54239,6 +54372,8 @@ router73.post("/submissions/create-and-evaluate", async (req2, res) => {
     const cleanFormData = formData && typeof formData === "object" ? sanitizeFormData(formData) : void 0;
     const organizationId = req2.headers["x-organization-id"] || req2.user?.organizationId;
     const userId = req2.headers["x-user-id"] || req2.user?.userId || "unknown-user";
+    const userRole = req2.user?.role;
+    const isSuperAdmin2 = userRole === "super_admin";
     if (!organizationId) {
       return res.status(400).json({
         success: false,
@@ -54301,13 +54436,16 @@ router73.post("/submissions/create-and-evaluate", async (req2, res) => {
           message: `Le lead ${clientId} n'existe pas. Veuillez s\xE9lectionner un lead valide.`
         });
       }
-      if (leadExists.organizationId !== organizationId) {
+      if (!isSuperAdmin2 && leadExists.organizationId !== organizationId) {
         console.log(`\u274C [TBL CREATE-AND-EVALUATE] Le lead ${clientId} n'appartient pas \xE0 l'organisation ${organizationId}`);
         return res.status(403).json({
           success: false,
           error: "Lead non autoris\xE9",
           message: "Le lead s\xE9lectionn\xE9 n'appartient pas \xE0 votre organisation."
         });
+      }
+      if (isSuperAdmin2 && leadExists.organizationId !== organizationId) {
+        console.log(`\u{1F511} [TBL CREATE-AND-EVALUATE] Super Admin - Bypass v\xE9rification organisation pour lead ${clientId}`);
       }
       console.log(`\u2705 [TBL CREATE-AND-EVALUATE] Lead valid\xE9: ${clientId} (${leadExists.firstName} ${leadExists.lastName})`);
       effectiveLeadId = leadExists.id;
@@ -55202,12 +55340,19 @@ router74.get("/:nodeId/calculated-value", async (req2, res) => {
         });
       }
     }
-    const isTBLField = node.type === "field" && node.metadata && typeof node.metadata === "object";
-    const hasTableLookup = isTBLField && node.metadata?.lookup?.enabled === true && node.metadata?.lookup?.tableReference;
+    const isTBLField = (node.type === "field" || node.type === "leaf_field") && node.metadata && typeof node.metadata === "object";
+    const nodeMetadata = node.metadata;
     const variableMeta2 = await db.treeBranchLeafNodeVariable.findUnique({
       where: { nodeId },
       select: { sourceType: true, sourceRef: true }
     });
+    const hasLookupEnabled = isTBLField && nodeMetadata?.lookup?.enabled === true && nodeMetadata?.lookup?.tableReference;
+    const datasArray = nodeMetadata?.capabilities?.datas;
+    const hasTableInDatas = Array.isArray(datasArray) && datasArray.some(
+      (d) => d?.config?.sourceRef?.startsWith("@table.")
+    );
+    const hasTableInVariable = variableMeta2?.sourceRef?.startsWith("@table.");
+    const hasTableLookup = hasLookupEnabled || hasTableInDatas || hasTableInVariable;
     const hasFormulaVariable = variableMeta2?.sourceRef?.startsWith("node-formula:");
     const hasConditionVariable = variableMeta2?.sourceRef?.startsWith("condition:");
     const hasTreeSourceVariable = variableMeta2?.sourceType === "tree" && (hasFormulaVariable || hasConditionVariable);
@@ -59429,7 +59574,7 @@ async function executeRepeatDuplication(prisma49, repeaterNodeId, options = {}) 
 }
 
 // src/components/TreeBranchLeaf/treebranchleaf-new/api/repeat/repeat-executor.ts
-var import_client8 = require("@prisma/client");
+var import_client7 = require("@prisma/client");
 
 // src/components/TreeBranchLeaf/treebranchleaf-new/api/copy-variable-with-capacities.ts
 function parseSourceRef3(sourceRef) {
@@ -61917,7 +62062,7 @@ function normalizeNodeBase2(value) {
   return value.replace(/-\d+(?:-\d+)*$/, "");
 }
 function isUniqueConstraintError(error) {
-  return error instanceof import_client8.Prisma.PrismaClientKnownRequestError && error.code === "P2002";
+  return error instanceof import_client7.Prisma.PrismaClientKnownRequestError && error.code === "P2002";
 }
 async function reassignCopiedNodesToDuplicatedParents(prisma49, copiedNodeIds, originalNodeIdByCopyId) {
   if (!copiedNodeIds.size) {

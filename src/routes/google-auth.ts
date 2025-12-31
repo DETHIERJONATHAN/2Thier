@@ -15,6 +15,44 @@ const router = Router();
 
 const GOOGLE_SCOPES = GOOGLE_SCOPES_LIST.join(' ');
 
+/**
+ * 🚀 Helper pour obtenir la FRONTEND_URL correcte selon l'environnement
+ * Détecte automatiquement GitHub Codespaces et construit l'URL appropriée
+ * 
+ * Ordre de priorité:
+ * 1. Codespaces → https://<codespace-name>-5173.app.github.dev
+ * 2. FRONTEND_URL explicite (production: https://app.2thier.be)
+ * 3. Production sans FRONTEND_URL → https://app.2thier.be
+ * 4. Local → http://localhost:5173
+ */
+function getFrontendUrl(): string {
+  // PRIORITÉ 1: Détection automatique GitHub Codespaces
+  const codespaceName = process.env.CODESPACE_NAME;
+  if (codespaceName) {
+    // Format Codespaces: https://<codespace-name>-5173.app.github.dev (sans port explicite)
+    const codespaceUrl = `https://${codespaceName}-5173.app.github.dev`;
+    console.log('[GOOGLE-AUTH] 🚀 Codespaces détecté, FRONTEND_URL:', codespaceUrl);
+    return codespaceUrl;
+  }
+  
+  // PRIORITÉ 2: Variable d'environnement explicite
+  const frontendUrl = process.env.FRONTEND_URL;
+  if (frontendUrl) {
+    console.log('[GOOGLE-AUTH] 📌 FRONTEND_URL explicite:', frontendUrl);
+    return frontendUrl;
+  }
+  
+  // PRIORITÉ 3: Production → https://app.2thier.be
+  if (process.env.NODE_ENV === 'production') {
+    console.log('[GOOGLE-AUTH] 🌐 Production détectée, FRONTEND_URL: https://app.2thier.be');
+    return 'https://app.2thier.be';
+  }
+  
+  // PRIORITÉ 4: Fallback local
+  console.log('[GOOGLE-AUTH] 🏠 Local détecté, FRONTEND_URL: http://localhost:5173');
+  return 'http://localhost:5173';
+}
+
 // Fonction utilitaire pour récupérer la configuration Google Workspace
 async function getGoogleWorkspaceConfig(organizationId: string) {
   try {
@@ -327,12 +365,12 @@ router.get('/callback', async (req, res) => {
 
     if (error) {
       console.log('[GOOGLE-AUTH] ❌ Erreur OAuth:', error);
-      return res.redirect(`${process.env.FRONTEND_URL || 'http://localhost:5173'}/google-auth-callback?google_error=${error}`);
+      return res.redirect(`${getFrontendUrl()}/google-auth-callback?google_error=${error}`);
     }
 
     if (!code || !state) {
       console.log('[GOOGLE-AUTH] ❌ Paramètres manquants - Code:', !!code, 'State:', !!state);
-      return res.redirect(`${process.env.FRONTEND_URL || 'http://localhost:5173'}/google-auth-callback?google_error=missing_params`);
+      return res.redirect(`${getFrontendUrl()}/google-auth-callback?google_error=missing_params`);
     }
 
   let organizationId: string;
@@ -366,7 +404,7 @@ router.get('/callback', async (req, res) => {
       
     } catch {
       console.error('[GOOGLE-AUTH] ❌ State invalide, non-JSON ou champs manquants:', state);
-      return res.redirect(`${process.env.FRONTEND_URL || 'http://localhost:5173'}/google-auth-callback?google_error=invalid_state`);
+      return res.redirect(`${getFrontendUrl()}/google-auth-callback?google_error=invalid_state`);
     }
 
     console.log('[GOOGLE-AUTH] 🏢 Organisation cible:', organizationId, 'pour utilisateur:', userId);
@@ -376,7 +414,7 @@ router.get('/callback', async (req, res) => {
     
     if (!config || !config.isConfigured || !config.adminEmail) {
       console.log('[GOOGLE-AUTH] ❌ Configuration manquante ou email admin non défini pour org:', organizationId);
-      return res.redirect(`${process.env.FRONTEND_URL || 'http://localhost:5173'}/google-auth-callback?google_error=config_incomplete`);
+      return res.redirect(`${getFrontendUrl()}/google-auth-callback?google_error=config_incomplete`);
     }
 
     console.log('[GOOGLE-AUTH] ✅ Configuration trouvée, email admin cible:', config.adminEmail);
@@ -418,7 +456,7 @@ router.get('/callback', async (req, res) => {
       // VÉRIFICATION CRUCIALE : L'email du compte Google connecté doit correspondre à l'adminEmail de la config
       if (userInfo.data.email?.toLowerCase() !== config.adminEmail.toLowerCase()) {
         console.log(`[GOOGLE-AUTH] ❌ ERREUR DE COMPTE : L'utilisateur s'est connecté avec ${userInfo.data.email}, mais la configuration attendait ${config.adminEmail}.`);
-        return res.redirect(`${process.env.FRONTEND_URL || 'http://localhost:5173'}/google-auth-callback?google_error=account_mismatch&expected=${encodeURIComponent(config.adminEmail)}&connected_as=${encodeURIComponent(userInfo.data.email || '')}`);
+        return res.redirect(`${getFrontendUrl()}/google-auth-callback?google_error=account_mismatch&expected=${encodeURIComponent(config.adminEmail)}&connected_as=${encodeURIComponent(userInfo.data.email || '')}`);
       }
 
       console.log('[GOOGLE-AUTH] ✅ Connexion Google validée pour l\'admin:', config.adminEmail);
@@ -439,7 +477,7 @@ router.get('/callback', async (req, res) => {
       console.log('[GOOGLE-AUTH] 🎉 Authentification Google complète avec succès !');
       
       // Redirection vers notre page de callback spécialisée
-      return res.redirect(`${process.env.FRONTEND_URL || 'http://localhost:5173'}/google-auth-callback?google_success=1&organizationId=${organizationId}&admin_email=${encodeURIComponent(config.adminEmail)}`);
+      return res.redirect(`${getFrontendUrl()}/google-auth-callback?google_success=1&organizationId=${organizationId}&admin_email=${encodeURIComponent(config.adminEmail)}`);
 
     } catch (tokenError: unknown) {
       const error = tokenError as { response?: { status?: number; data?: { error?: string } }; message?: string; config?: { url?: string } };
@@ -461,12 +499,12 @@ router.get('/callback', async (req, res) => {
         errorType = 'unauthorized_client';
       }
       
-      return res.redirect(`${process.env.FRONTEND_URL || 'http://localhost:5173'}/google-auth-callback?google_error=${errorType}&details=${encodeURIComponent(error.message || 'Erreur inconnue')}`);
+      return res.redirect(`${getFrontendUrl()}/google-auth-callback?google_error=${errorType}&details=${encodeURIComponent(error.message || 'Erreur inconnue')}`);
     }
 
   } catch (error) {
     console.error('[GOOGLE-AUTH] ❌ Erreur callback générale:', error);
-    return res.redirect(`${process.env.FRONTEND_URL || 'http://localhost:5173'}/google-auth-callback?google_error=callback_error`);
+    return res.redirect(`${getFrontendUrl()}/google-auth-callback?google_error=callback_error`);
   }
 });
 

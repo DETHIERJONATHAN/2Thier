@@ -9007,20 +9007,11 @@ router.get('/submissions/:id', async (req, res) => {
   try {
     const { organizationId, isSuperAdmin } = getAuthCtx(req as unknown as MinimalReq);
     const { id } = req.params;
+    console.log(`[TBL-API] ▶️ GET /submissions/${id}`);
 
-    // Charger la soumission sans includes invalides
+    // Charger la soumission SANS include (relations non définies dans Prisma)
     const submission = await prisma.treeBranchLeafSubmission.findUnique({
-      where: { id },
-      include: {
-        // Données de soumission + nœud associé (relation déclarée)
-        TreeBranchLeafSubmissionData: {
-          include: {
-            TreeBranchLeafNode: {
-              select: { id: true, label: true, type: true }
-            }
-          }
-        }
-      }
+      where: { id }
     });
 
     if (!submission) {
@@ -9037,7 +9028,26 @@ router.get('/submissions/:id', async (req, res) => {
       return res.status(403).json({ error: 'Accès refusé à cette soumission' });
     }
 
-    // Optionnel: hydrater le lead basique si présent, sans relation Prisma
+    // Charger les données de soumission séparément
+    const submissionData = await prisma.treeBranchLeafSubmissionData.findMany({
+      where: { submissionId: id }
+    });
+
+    // Récupérer les nodeIds pour enrichir avec les infos des nodes
+    const nodeIds = [...new Set(submissionData.map(d => d.nodeId))];
+    const nodes = nodeIds.length > 0 ? await prisma.treeBranchLeafNode.findMany({
+      where: { id: { in: nodeIds } },
+      select: { id: true, label: true, type: true, calculatedValue: true }
+    }) : [];
+    const nodesMap = new Map(nodes.map(n => [n.id, n]));
+
+    // Enrichir les données avec les infos des nodes
+    const enrichedData = submissionData.map(d => ({
+      ...d,
+      TreeBranchLeafNode: nodesMap.get(d.nodeId) || null
+    }));
+
+    // Optionnel: hydrater le lead basique si présent
     let leadBasic: { id: string; firstName?: string | null; lastName?: string | null; email?: string | null; company?: string | null } | null = null;
     if (submission.leadId) {
       const lead = await prisma.lead.findUnique({
@@ -9047,8 +9057,12 @@ router.get('/submissions/:id', async (req, res) => {
       leadBasic = lead ?? null;
     }
 
-    // Retourner la soumission avec un champ dérivé minimal pour le lead
-    return res.json({ ...submission, Lead: leadBasic });
+    // Retourner la soumission avec les données et le lead
+    return res.json({ 
+      ...submission, 
+      TreeBranchLeafSubmissionData: enrichedData,
+      Lead: leadBasic 
+    });
   } catch (error) {
     console.error('[TreeBranchLeaf API] Error fetching submission:', error);
     res.status(500).json({ error: 'Erreur lors de la récupération de la soumission' });
@@ -9835,26 +9849,36 @@ router.delete('/submissions/:id', async (req, res) => {
     const { id } = req.params;
     const { organizationId, isSuperAdmin } = getAuthCtx(req as unknown as MinimalReq);
 
-
-    // VÃƒÆ’Ã‚Â©rifier que la soumission existe et appartient ÃƒÆ’Ã‚Â  l'organisation
-    const submission = await prisma.treeBranchLeafSubmission.findFirst({
-      where: { 
-        id,
-        ...(isSuperAdmin ? {} : { Lead: { organizationId } })
-      },
-      include: {
-        Lead: {
-          select: { organizationId: true }
-        }
-      }
+    // Verifier que la soumission existe
+    const submission = await prisma.treeBranchLeafSubmission.findUnique({
+      where: { id }
     });
 
     if (!submission) {
-      return res.status(404).json({ error: 'Soumission non trouvÃƒÆ’Ã‚Â©e ou accÃƒÆ’Ã‚Â¨s refusÃƒÆ’Ã‚Â©' });
+      return res.status(404).json({ error: 'Soumission non trouvee' });
     }
 
-    // Supprimer les donnÃƒÆ’Ã‚Â©es associÃƒÆ’Ã‚Â©es d'abord
+    // Verification des droits d'acces (sauf SuperAdmin)
+    if (!isSuperAdmin) {
+      // Si la soumission a un leadId, verifier que le lead appartient a l'organisation
+      if (submission.leadId) {
+        const lead = await prisma.lead.findFirst({
+          where: { id: submission.leadId, organizationId }
+        });
+        if (!lead) {
+          return res.status(403).json({ error: 'Acces refuse: le lead n\'appartient pas a votre organisation' });
+        }
+      }
+      // Si pas de leadId, on autorise la suppression (draft sans lead)
+    }
+
+    // Supprimer les donnees associees d'abord
     await prisma.treeBranchLeafSubmissionData.deleteMany({
+      where: { submissionId: id }
+    });
+
+    // Supprimer les versions si elles existent
+    await prisma.treeBranchLeafSubmissionVersion.deleteMany({
       where: { submissionId: id }
     });
 
@@ -9863,17 +9887,14 @@ router.delete('/submissions/:id', async (req, res) => {
       where: { id }
     });
 
-    res.json({ success: true, message: 'Soumission supprimÃƒÆ’Ã‚Â©e avec succÃƒÆ’Ã‚Â¨s' });
+    console.log(`[TreeBranchLeaf API] Soumission ${id} supprimee avec succes`);
+    res.json({ success: true, message: 'Soumission supprimee avec succes' });
 
   } catch (error) {
     console.error('[TreeBranchLeaf API] Error deleting submission:', error);
     res.status(500).json({ error: 'Erreur lors de la suppression de la soumission' });
   }
 });
-
-// =============================================================================
-// ÃƒÂ°Ã…Â¸Ã¢â‚¬ÂÃ¢â‚¬â€ TABLE LOOKUP - RÃƒÆ’Ã‚Â©cupÃƒÆ’Ã‚Â©ration de la configuration SELECT pour les champs
-// =============================================================================
 
 // GET /api/treebranchleaf/nodes/:fieldId/select-config
 // RÃƒÆ’Ã‚Â©cupÃƒÆ’Ã‚Â¨re la configuration TreeBranchLeafSelectConfig d'un champ

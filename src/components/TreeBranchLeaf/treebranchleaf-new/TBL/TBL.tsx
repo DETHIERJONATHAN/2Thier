@@ -148,6 +148,11 @@ const TBL: React.FC<TBLProps> = ({
   const [originalDevisName, setOriginalDevisName] = useState<string | null>(null); // Nom du devis original
   const [hasCopiedDevis, setHasCopiedDevis] = useState<boolean>(false); // True si copie déjà créée
   const [isDevisSaved, setIsDevisSaved] = useState<boolean>(false); // True si devis enregistré (pas draft)
+  
+  // 🆕 Modal d'enregistrement avec nom personnalisé
+  const [saveDevisModalVisible, setSaveDevisModalVisible] = useState<boolean>(false);
+  const [saveDevisName, setSaveDevisName] = useState<string>('');
+  const [isSavingDevis, setIsSavingDevis] = useState<boolean>(false);
 
   // Charger les données Lead si leadId fourni
   useEffect(() => {
@@ -965,9 +970,21 @@ const TBL: React.FC<TBLProps> = ({
         baseSubmissionId: submissionId || undefined,
         leadId: leadId || undefined
       });
+      
+      // 🎯 NOUVEAU: Dispatcher un événement pour signaler la fin de l'évaluation
+      window.dispatchEvent(new CustomEvent('tbl-evaluation-complete', { 
+        detail: { reason: 'preview-evaluate', signature: sig } 
+      }));
+      
       broadcastCalculatedRefresh({ reason: 'preview-evaluate-live', signature: sig });
     } catch (err) {
       lastPreviewSignatureRef.current = null;
+      
+      // Dispatcher l'événement même en cas d'erreur pour décrémenter le compteur
+      window.dispatchEvent(new CustomEvent('tbl-evaluation-complete', { 
+        detail: { reason: 'preview-evaluate-error' } 
+      }));
+      
       if (isVerbose()) console.warn('⚠️ [TBL][PREVIEW] Échec preview-evaluate live', err);
     }
   }, [api, tree?.id, normalizePayload, computeSignature, buildPreviewPayload, submissionId, leadId, broadcastCalculatedRefresh]);
@@ -1114,7 +1131,7 @@ const TBL: React.FC<TBLProps> = ({
     }
   }, [api]);
 
-  // 🆕 FONCTION ENREGISTRER - Convertit le default-draft en vrai devis
+  // 🆕 FONCTION ENREGISTRER - Ouvre le modal pour choisir le nom du devis
   const handleSaveDevis = useCallback(async () => {
     // Vérifier qu'on a un lead (OBLIGATOIRE)
     if (!leadId) {
@@ -1122,13 +1139,33 @@ const TBL: React.FC<TBLProps> = ({
       return;
     }
     
+    // Proposer un nom par défaut
+    const clientName = clientData.name || 'Client';
+    const defaultName = `Devis ${new Date().toLocaleDateString('fr-FR')} - ${clientName}`;
+    setSaveDevisName(defaultName);
+    setSaveDevisModalVisible(true);
+  }, [leadId, clientData.name]);
+
+  // 🆕 CONFIRMER L'ENREGISTREMENT avec le nom choisi
+  const handleConfirmSaveDevis = useCallback(async () => {
+    // Vérifier qu'on a un lead (OBLIGATOIRE)
+    if (!leadId) {
+      message.warning('Veuillez sélectionner un lead pour enregistrer le devis');
+      return;
+    }
+    
+    if (!saveDevisName.trim()) {
+      message.warning('Veuillez saisir un nom pour le devis');
+      return;
+    }
+    
     try {
+      setIsSavingDevis(true);
       console.log('💾 [TBL] Enregistrement du devis - Conversion default-draft → vrai devis');
       message.loading('Enregistrement en cours...', 1);
       
-      const clientName = clientData.name || 'Client';
-      const baseName = `Devis ${new Date().toLocaleDateString('fr-FR')} - ${clientName}`;
-      const finalName = await generateUniqueDevisName(baseName, leadId);
+      // Générer le nom unique basé sur le nom choisi par l'utilisateur
+      const finalName = await generateUniqueDevisName(saveDevisName.trim(), leadId);
       
       // Sauvegarder l'ID du default-draft actuel pour le vider après
       const oldDefaultDraftId = isDefaultDraft ? submissionId : null;
@@ -1167,10 +1204,8 @@ const TBL: React.FC<TBLProps> = ({
         if (oldDefaultDraftId && api) {
           try {
             console.log('🔄 [TBL] Vidage du default-draft:', oldDefaultDraftId);
-            await api.put(`/api/treebranchleaf/submissions/${oldDefaultDraftId}`, {
-              formData: {},
-              clientId: null
-            });
+            // Utiliser POST reset-data au lieu de PUT pour vider proprement
+            await api.post(`/api/treebranchleaf/submissions/${oldDefaultDraftId}/reset-data`, {});
             console.log('✅ [TBL] Default-draft vidé (prêt pour le prochain devis)');
           } catch (error) {
             console.warn('⚠️ [TBL] Impossible de vider le default-draft:', error);
@@ -1180,14 +1215,17 @@ const TBL: React.FC<TBLProps> = ({
         
         message.success(`Devis "${finalName}" enregistré avec succès !`);
         console.log('✅ [TBL] Devis enregistré:', newSubmissionId);
+        setSaveDevisModalVisible(false);
       } else {
         message.error('Erreur lors de l\'enregistrement');
       }
     } catch (error) {
       console.error('❌ [TBL] Erreur enregistrement:', error);
       message.error('Erreur lors de l\'enregistrement du devis');
+    } finally {
+      setIsSavingDevis(false);
     }
-  }, [leadId, clientData.name, effectiveTreeId, api, formData, normalizePayload, computeSignature, generateUniqueDevisName, isDefaultDraft, submissionId]);
+  }, [leadId, saveDevisName, effectiveTreeId, api, formData, normalizePayload, computeSignature, generateUniqueDevisName, isDefaultDraft, submissionId]);
 
   // 🆕 Créer une copie automatique du devis chargé
   const createDevisCopy = useCallback(async (): Promise<string | null> => {
@@ -1486,6 +1524,22 @@ const TBL: React.FC<TBLProps> = ({
       try {
         scheduleCapabilityPreview(next as TBLFormData);
       } catch {/* noop */}
+      
+      // 🔄 NOUVEAU: Dispatch événement pour refresh automatique des display fields
+      try {
+        if (typeof window !== 'undefined') {
+          const event = new CustomEvent('tbl-field-changed', { 
+            detail: { 
+              fieldId, 
+              value, 
+              formData: next,
+              timestamp: Date.now()
+            } 
+          });
+          window.dispatchEvent(event);
+        }
+      } catch { /* noop */ }
+      
       return next as typeof prev;
     });
   }, [tblConfig, tabs, scheduleAutosave, scheduleCapabilityPreview, isLoadedDevis, hasCopiedDevis, originalDevisId, createDevisCopy]);
@@ -2169,23 +2223,32 @@ const TBL: React.FC<TBLProps> = ({
       // console.log('🔍 [TBL] Réponse API complète:', submission);
       
       if (submission && submission.TreeBranchLeafSubmissionData) {
-        // console.log('🔍 [TBL] Données de submission trouvées:', submission.TreeBranchLeafSubmissionData);
-        // console.log('🔍 [TBL] Nombre d\'éléments:', submission.TreeBranchLeafSubmissionData.length);
+        // console.log('🔍 [TBL] Données de submission trouvées:', submission.TreeBranchLeafSubmissionData.length, 'éléments');
         
         // Reformater les données pour le formulaire
         const formattedData: TBLFormData = {};
-  submission.TreeBranchLeafSubmissionData.forEach((item: {nodeId: string, value?: string}) => {
-          // console.log(`🔍 [TBL] Item ${index}:`, item);
+        let skippedCalculated = 0;
+        
+        // ✅ FILTRE CRITIQUE : Exclure les champs avec calculatedValue (champs calculés/display)
+        // On charge UNIQUEMENT les champs de saisie utilisateur
+        submission.TreeBranchLeafSubmissionData.forEach((item: {nodeId: string, value?: string, TreeBranchLeafNode?: {calculatedValue?: string | null}}) => {
+          // ❌ IGNORER les champs avec calculatedValue (champs calculés/display)
+          const hasCalculatedValue = item.TreeBranchLeafNode?.calculatedValue !== null && item.TreeBranchLeafNode?.calculatedValue !== undefined;
+          if (hasCalculatedValue) {
+            skippedCalculated++;
+            return;
+          }
+          
+          // ✅ CHARGER uniquement les champs de saisie utilisateur (sans calculatedValue)
           if (item.value !== undefined && item.value !== null && item.value !== '') {
             formattedData[item.nodeId] = item.value;
-            // console.log(`✅ [TBL] Ajouté: ${item.nodeId} = ${item.value}`);
-          } else {
-            // console.log(`⚠️ [TBL] Ignoré (valeur vide): ${item.nodeId} = ${item.value}`);
           }
         });
         
-        // console.log('🔍 [TBL] Données formatées finales:', formattedData);
-        // console.log('🔍 [TBL] Nombre de champs avec données:', Object.keys(formattedData).length);
+        if (skippedCalculated > 0) {
+          console.log(`🚫 [TBL LOAD] ${skippedCalculated} champs calculés ignorés (ont calculatedValue)`);
+        }
+        console.log(`✅ [TBL LOAD] ${Object.keys(formattedData).length} champs utilisateur chargés`);
         
         // Mettre à jour le formulaire
         setFormData(formattedData);
@@ -2543,6 +2606,22 @@ const TBL: React.FC<TBLProps> = ({
                         <DocumentsSection 
                           submissionId={submissionId}
                           leadId={leadId}
+                          treeId={treeId}
+                          onLoadDevis={(devisId) => handleSelectDevis(devisId)}
+                          onDeleteDevis={async (devisId, devisName) => {
+                            try {
+                              console.log('🗑️ [TBL][DELETE-DOC] Suppression du devis depuis Documents:', devisId);
+                              await api.delete(`/api/treebranchleaf/submissions/${devisId}`);
+                              console.log('✅ [TBL][DELETE-DOC] Devis supprimé avec succès');
+                              message.success(`Devis "${devisName}" supprimé avec succès`);
+                              // Recharger la liste des devis dans le modal "Charger"
+                              await handleLoadDevis();
+                            } catch (error) {
+                              console.error('❌ [TBL][DELETE-DOC] Erreur lors de la suppression:', error);
+                              message.error('Erreur lors de la suppression du devis');
+                              // Ne pas throw - laisser le modal se fermer
+                            }
+                          }}
                         />
                       </div>
                     )
@@ -3237,6 +3316,87 @@ const TBL: React.FC<TBLProps> = ({
               ))}
             </div>
           )}
+        </div>
+      </Modal>
+
+      {/* 🆕 Modal d'enregistrement du devis - Permet de choisir le nom */}
+      <Modal
+        title="💾 Enregistrer le devis"
+        open={saveDevisModalVisible}
+        onCancel={() => {
+          setSaveDevisModalVisible(false);
+          setSaveDevisName('');
+        }}
+        footer={[
+          <Button 
+            key="cancel" 
+            onClick={() => {
+              setSaveDevisModalVisible(false);
+              setSaveDevisName('');
+            }}
+          >
+            Annuler
+          </Button>,
+          <Button 
+            key="save" 
+            type="primary" 
+            loading={isSavingDevis}
+            onClick={handleConfirmSaveDevis}
+            disabled={!saveDevisName.trim()}
+          >
+            Enregistrer
+          </Button>
+        ]}
+        width={isMobile ? 360 : 500}
+      >
+        <div className="space-y-4">
+          {/* Info client */}
+          <div className="p-3 bg-green-50 rounded-lg border border-green-200">
+            <div className="flex items-center gap-2 mb-2">
+              <UserOutlined className="text-green-600" />
+              <span className="font-medium text-green-900">Client : {clientData.name || 'Non renseigné'}</span>
+            </div>
+            <div className="text-sm text-green-700">
+              {clientData.email && <div>✉️ {clientData.email}</div>}
+              {clientData.phone && <div>📞 {clientData.phone}</div>}
+            </div>
+          </div>
+          
+          {/* Champ nom du devis */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Nom du devis <span className="text-red-500">*</span>
+            </label>
+            <Input
+              size="large"
+              placeholder="Entrez le nom du devis..."
+              value={saveDevisName}
+              onChange={(e) => setSaveDevisName(e.target.value)}
+              onPressEnter={() => {
+                if (saveDevisName.trim() && !isSavingDevis) {
+                  handleConfirmSaveDevis();
+                }
+              }}
+              autoFocus
+            />
+            <p className="text-xs text-gray-500 mt-1">
+              Si ce nom existe déjà, un numéro sera automatiquement ajouté (ex: "Mon Devis (2)")
+            </p>
+          </div>
+          
+          {/* Résumé des données */}
+          <div className="p-3 bg-gray-50 rounded-lg border border-gray-200">
+            <div className="text-sm text-gray-600">
+              <div className="flex justify-between">
+                <span>Champs remplis :</span>
+                <span className="font-medium">{Object.keys(formData).filter(k => !k.startsWith('__') && formData[k] !== null && formData[k] !== undefined && formData[k] !== '').length}</span>
+              </div>
+              <div className="flex justify-between mt-1">
+                <span>Mode actuel :</span>
+                <span className="font-medium">{isDefaultDraft ? 'Simulation (nouveau)' : isLoadedDevis ? 'Copie de devis' : 'Édition'}</span>
+              </div>
+            </div>
+          </div>
         </div>
       </Modal>
     </Layout>

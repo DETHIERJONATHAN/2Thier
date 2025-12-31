@@ -249,6 +249,8 @@ const resolveFieldValue = async (
     let variableConfig: Record<string, unknown> | undefined;
     let usedBatch = false;
     
+    // 🔄 Vérifier si le batch est prêt - NE PAS attendre car le batch charge en parallèle
+    // Les composants se mettront à jour automatiquement quand le batch sera disponible
     if (batchNodeDataCache && batchNodeDataTreeId === treeId) {
       const batchData = batchNodeDataCache[node.id] as { variable?: Record<string, unknown> } | undefined;
       if (batchData?.variable) {
@@ -262,23 +264,17 @@ const resolveFieldValue = async (
       }
     }
 
-    // ⚠️ FALLBACK API: Seulement si le batch n'est vraiment pas disponible
+    // 🔄 SKIP API FALLBACK: Si le batch n'est pas prêt, retourner null
+    // Les valeurs seront résolues quand le batch sera chargé (via le contexte)
+    // Cela évite N appels API individuels qui sont remplacés par 1 seul batch
     if (!variableConfig && !usedBatch) {
-      console.warn(`⚠️ [RESOLVE_VALUE] FALLBACK API pour "${node.label}" - batch non prêt (treeId: ${treeId}, cacheTreeId: ${batchNodeDataTreeId})`);
-      const variableResponse = await api.get(`/api/treebranchleaf/trees/${treeId}/nodes/${node.id}/data`);
-      if (verbose()) dlog('🧾 [RESOLVE_VALUE] Payload brut /data pour', node.label, ':', variableResponse);
-
-      // 🔄 Normalisation: supporter deux formats possibles
-      if (variableResponse && typeof variableResponse === 'object') {
-        const vrAny = variableResponse as { data?: unknown } & Record<string, unknown>;
-        if (vrAny.data && typeof vrAny.data === 'object' && !Array.isArray(vrAny.data)) {
-          variableConfig = vrAny.data as Record<string, unknown>;
-          if (verbose()) dlog('🧪 [RESOLVE_VALUE] Forme axios détectée (utilisation de .data)');
-        } else {
-          variableConfig = vrAny as Record<string, unknown>;
-          if (verbose()) dlog('🧪 [RESOLVE_VALUE] Forme plate détectée (objet direct sans .data)');
-        }
-      }
+      if (verbose()) dlog(`⏳ [RESOLVE_VALUE] Batch non prêt pour "${node.label}" - résolution différée (treeId: ${treeId}, cacheTreeId: ${batchNodeDataTreeId})`);
+      // Retourner la valeur par défaut du node en attendant le batch
+      const defaultValue = node.defaultValue || node.value || 
+                          node.bool_defaultValue || node.text_defaultValue || 
+                          node.number_defaultValue || node.select_defaultValue || 
+                          node.date_defaultValue;
+      return { value: defaultValue as string | number | boolean | null };
     }
 
     if (variableConfig && Object.keys(variableConfig).length === 0) {

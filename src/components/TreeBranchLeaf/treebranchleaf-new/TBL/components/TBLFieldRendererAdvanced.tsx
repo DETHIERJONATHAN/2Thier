@@ -957,23 +957,67 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
   // 🔥 Ref pour tracker si le changement vient de l'intérieur (éviter l'écrasement pendant la frappe)
   const isInternalChangeRef = useRef(false);
   const previousValueRef = useRef(value);
+  const pendingEvaluations = useRef<number>(0); // Compteur d'évaluations API en cours au lieu de timestamp
   
   // Synchronisation avec la valeur externe - SEULEMENT si le changement vient de l'extérieur
   useEffect(() => {
+    const isNumberField = field.type === 'NUMBER' || field.type === 'number';
+    
+    // 🔍 DEBUG: Tracer tous les changements de valeur externe pour les champs NUMBER
+    if (isNumberField) {
+      console.log(`🔍 [${field.label}] useEffect value change:`, {
+        newValue: value,
+        previousValue: previousValueRef.current,
+        localValue,
+        isInternalChange: isInternalChangeRef.current,
+        pendingEvals: pendingEvaluations.current
+      });
+    }
+    
     // Si c'est un changement interne qu'on vient de faire, ignorer
     if (isInternalChangeRef.current) {
       isInternalChangeRef.current = false;
       previousValueRef.current = value;
+      if (isNumberField) {
+        console.log(`✅ [${field.label}] Changement interne détecté - protection activée`);
+      }
       return;
+    }
+    
+    // 🛡️ PROTECTION CRITIQUE: Ne jamais écraser une valeur saisie manuellement avec null/undefined
+    // Ceci se produit quand l'API preview-evaluate retourne null pour les champs non calculés
+    const hasPendingEvaluations = pendingEvaluations.current > 0;
+    const isValueBeingCleared = (value === null || value === undefined || value === '');
+    const hasLocalValue = localValue !== null && localValue !== undefined && localValue !== '';
+    
+    if (hasPendingEvaluations && isValueBeingCleared && hasLocalValue) {
+      console.log(`🛡️ [${field.label}] PROTECTION useEffect: ne pas écraser "${localValue}" avec "${value}" (${pendingEvaluations.current} évaluations en cours)`);
+      return; // Ne pas mettre à jour - gardons la valeur locale
     }
     
     // Seulement synchroniser si la valeur a vraiment changé de l'extérieur
     // (par exemple initialisation, reset, ou changement depuis un autre composant)
     if (value !== previousValueRef.current) {
+      if (isNumberField) {
+        console.log(`🔄 [${field.label}] Synchronisation depuis extérieur: "${previousValueRef.current}" → "${value}"`);
+      }
       setLocalValue(value);
       previousValueRef.current = value;
     }
-  }, [value]);
+  }, [value, localValue, field.label, field.type]);
+
+  // 🎯 NOUVEAU: Écouter les événements de fin d'évaluation pour décrémenter le compteur
+  useEffect(() => {
+    const handleEvaluationComplete = () => {
+      if (pendingEvaluations.current > 0) {
+        pendingEvaluations.current--;
+        console.log(`⬇️ [${field.label}] Évaluation terminée (${pendingEvaluations.current} restantes)`);
+      }
+    };
+
+    window.addEventListener('tbl-evaluation-complete', handleEvaluationComplete);
+    return () => window.removeEventListener('tbl-evaluation-complete', handleEvaluationComplete);
+  }, [field.label]);
 
   // Configuration complète du champ depuis TreeBranchLeaf
   const fieldConfig: TreeBranchLeafFieldConfig = useMemo(() => {
@@ -1791,6 +1835,17 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
       return;
     }
     
+    // �️ PROTECTION PRIMAIRE: Empêcher l'écrasement par null juste après une saisie utilisateur
+    // Cette protection arrive AVANT setLocalValue(), donc elle empêche la corruption à la source
+    const hasPendingEvaluations = pendingEvaluations.current > 0;
+    const isValueBeingCleared = (newValue === null || newValue === undefined || newValue === '');
+    const hasLocalValue = localValue !== null && localValue !== undefined && localValue !== '';
+    
+    if (hasPendingEvaluations && isValueBeingCleared && hasLocalValue) {
+      console.log(`🛡️ [${field.label}] PROTECTION handleChange: ne pas écraser "${localValue}" avec "${newValue}" (${pendingEvaluations.current} évaluations en cours)`);
+      return; // Bloquer complètement - ne pas appeler setLocalValue
+    }
+    
     // 🔥 Marquer ce changement comme interne pour éviter que le useEffect ne l'écrase
     isInternalChangeRef.current = true;
     
@@ -2187,6 +2242,20 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
     const finalValue = useCalculatedValue ? calculatedValue : localValue;
     const isReadOnly = useCalculatedValue;
     const isDisabled = disabled || isReadOnly;
+    
+    // 🔍 DEBUG: Log pour diagnostiquer les champs désactivés
+    if (isDisabled && fieldConfig.fieldType === 'NUMBER') {
+      console.log(`❌ [NUMBER DISABLED] "${fieldConfig.label}":`, {
+        disabled,
+        isReadOnly,
+        useCalculatedValue,
+        hasFormula: fieldConfig.hasFormula,
+        manualOverrideAllowed,
+        formulaIsConstraint,
+        finalValue,
+        localValue
+      });
+    }
 
     // 🎨 Construction du style avec largeur configurée
     const appearanceStyle = fieldConfig.appearance?.style || {};
@@ -2338,6 +2407,19 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
         
         // 🆕 Handler pour onChange - ne pas clamper, laisser l'utilisateur saisir librement
         const handleNumberChange = (val: number | null) => {
+          console.log(`🔢 [NUMBER CHANGE] "${fieldConfig.label}":`, { 
+            oldValue: finalValue, 
+            newValue: val,
+            isDisabled,
+            disabled,
+            isReadOnly 
+          });
+          
+          // Marquer comme changement interne et incrémenter le compteur d'évaluations
+          isInternalChangeRef.current = true;
+          pendingEvaluations.current++;
+          console.log(`⬆️ [${field.label}] Évaluation démarrée (${pendingEvaluations.current} en cours)`);
+          
           // Simplement propager la valeur, sans clamper pendant la frappe
           handleChange(val);
         };
@@ -2389,10 +2471,15 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
           }
         };
         
+        // 🔧 Convertir finalValue en nombre valide pour InputNumber
+        const numericValue = finalValue === '' || finalValue === null || finalValue === undefined 
+          ? null 
+          : Number(finalValue);
+        
         return (
           <InputNumber
             {...commonProps}
-            value={finalValue}
+            value={numericValue}
             onChange={handleNumberChange}
             onBlur={handleNumberBlur}
             step={numberStep}

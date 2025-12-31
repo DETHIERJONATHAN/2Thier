@@ -277,16 +277,32 @@ router.get('/:nodeId/calculated-value', async (req: Request, res: Response) => {
     }
 
     // 🔥 NOUVEAU: Si c'est un champ TBL avec une table lookup, invoquer operation-interpreter
-    const isTBLField = node.type === 'field' && node.metadata && typeof node.metadata === 'object';
-    const hasTableLookup = isTBLField && 
-      (node.metadata as any)?.lookup?.enabled === true && 
-      (node.metadata as any)?.lookup?.tableReference;
-
-    // 🆕 Vérifier si le node a une variable avec formule ou condition (pour les sum-total, etc.)
+    const isTBLField = (node.type === 'field' || node.type === 'leaf_field') && node.metadata && typeof node.metadata === 'object';
+    const nodeMetadata = node.metadata as Record<string, unknown> | null;
+    
+    // 🆕 D'abord récupérer les métadonnées de la variable (déplacé ici AVANT utilisation)
     const variableMeta2 = await prisma.treeBranchLeafNodeVariable.findUnique({
       where: { nodeId },
       select: { sourceType: true, sourceRef: true }
     });
+    
+    // Détecter table lookup de plusieurs façons:
+    // 1. Via lookup.enabled (ancien format)
+    const hasLookupEnabled = isTBLField && 
+      (nodeMetadata as any)?.lookup?.enabled === true && 
+      (nodeMetadata as any)?.lookup?.tableReference;
+    
+    // 2. Via capabilities.datas[].config.sourceRef commençant par @table. (nouveau format)
+    const datasArray = (nodeMetadata as any)?.capabilities?.datas as Array<{ config?: { sourceRef?: string } }> | undefined;
+    const hasTableInDatas = Array.isArray(datasArray) && datasArray.some(
+      d => d?.config?.sourceRef?.startsWith('@table.')
+    );
+    
+    // 3. Via variable.sourceRef commençant par @table.
+    const hasTableInVariable = variableMeta2?.sourceRef?.startsWith('@table.');
+    
+    const hasTableLookup = hasLookupEnabled || hasTableInDatas || hasTableInVariable;
+
     // 🔥 FIX: Inclure aussi sourceType="tree" avec condition: ou node-formula:
     const hasFormulaVariable = variableMeta2?.sourceRef?.startsWith('node-formula:');
     const hasConditionVariable = variableMeta2?.sourceRef?.startsWith('condition:');

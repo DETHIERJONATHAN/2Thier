@@ -3,7 +3,7 @@ import { type AuthenticatedRequest } from '../middlewares/auth.js';
 import { requireRole } from '../middlewares/requireRole.js';
 import { db } from '../lib/database';
 import { z } from 'zod';
-import { decrypt } from '../utils/crypto.js';
+import { decrypt, encrypt } from '../utils/crypto.js';
 import { authMiddleware } from '../middlewares/auth.js';
 import { nanoid } from 'nanoid';
 
@@ -90,14 +90,14 @@ router.get('/:id/google-workspace/config', requireRole(['admin', 'super_admin'])
     
     const safeConfig = {
       isConfigured: isCompleteConfig,
-      clientId: config.clientId || '',
-      clientSecret: config.clientSecret ? decrypt(config.clientSecret) : '', // Afficher la vraie valeur décryptée
+      clientId: config.clientId ? decrypt(config.clientId) : '', // 🔓 Décrypter pour affichage
+      clientSecret: config.clientSecret ? decrypt(config.clientSecret) : '', // 🔓 Décrypter pour affichage
       hasClientSecret: !!config.clientSecret,
       redirectUri: config.redirectUri || `${process.env.FRONTEND_URL || 'http://localhost:3000'}/api/auth/google/callback`,
       domain: config.domain || '',
       adminEmail: config.adminEmail || '',
       serviceAccountEmail: config.serviceAccountEmail || '',
-      privateKey: config.privateKey ? decrypt(config.privateKey) : '', // Afficher la vraie valeur décryptée
+      privateKey: config.privateKey ? decrypt(config.privateKey) : '', // 🔓 Décrypter pour affichage
       hasPrivateKey: !!config.privateKey,
       isActive: config.enabled || false,
       gmailEnabled: config.gmailEnabled,
@@ -172,15 +172,20 @@ router.post('/:id/google-workspace/config', requireRole(['super_admin']), async 
       where: { organizationId: id }
     });
     
+    // 🔐 CRYPTER les credentials avant de sauvegarder
+    const encryptedClientId = data.clientId ? encrypt(data.clientId) : existingConfig?.clientId;
+    const encryptedClientSecret = data.clientSecret ? encrypt(data.clientSecret) : existingConfig?.clientSecret;
+    const encryptedPrivateKey = data.privateKey ? encrypt(data.privateKey) : existingConfig?.privateKey;
+    
     // Préparer les données à sauvegarder
     const configData = {
-      clientId: data.clientId,
-      clientSecret: data.clientSecret || existingConfig?.clientSecret, // Garder l'ancien si vide
+      clientId: encryptedClientId,
+      clientSecret: encryptedClientSecret,
       redirectUri: redirectUri,
       domain: data.domain,
       adminEmail: data.adminEmail,
       serviceAccountEmail: data.serviceAccountEmail || existingConfig?.serviceAccountEmail,
-      privateKey: data.privateKey || existingConfig?.privateKey,
+      privateKey: encryptedPrivateKey,
       enabled: data.isActive || false,
       gmailEnabled: data.gmailEnabled,
       calendarEnabled: data.calendarEnabled,
