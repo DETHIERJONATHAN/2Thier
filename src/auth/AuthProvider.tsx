@@ -267,31 +267,37 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           const allOrgs = (await staticApi.get('/organizations')).data || [];
           setOrganizations(allOrgs);
 
+          // 🔧 Filtrer uniquement les organisations ACTIVES pour la sélection automatique
+          const activeOrgs = allOrgs.filter((o: { status: string; }) => o.status === 'ACTIVE');
+
           let orgToSet: AuthOrganization | null = null;
 
           // 1. Essayer de trouver l'organisation depuis le localStorage
           if (storedOrgId && storedOrgId !== 'all') {
-            const foundOrg = allOrgs.find((o: { id: string; }) => o.id === storedOrgId);
+            const foundOrg = activeOrgs.find((o: { id: string; }) => o.id === storedOrgId);
             if (foundOrg) {
               console.log('[AuthProvider] Organisation restaurée depuis localStorage:', foundOrg.name);
               orgToSet = { ...foundOrg, role: 'super_admin', permissions: currentUser.permissions || [] };
             }
           }
 
-          // 2. Sinon, essayer de trouver une organisation préférée (2Thier CRM ou similaire)
-          if (!orgToSet && allOrgs.length > 0) {
-            // Chercher d'abord une organisation avec "2Thier" dans le nom
-            const preferredOrg = allOrgs.find((o: { name: string; }) => 
-              o.name.toLowerCase().includes('2thier') || 
+          // 2. Sinon, essayer de trouver une organisation préférée (2Thier CRM en priorité)
+          if (!orgToSet && activeOrgs.length > 0) {
+            // Chercher d'abord "2Thier CRM" spécifiquement, puis "crm", puis "2thier"
+            const preferredOrg = activeOrgs.find((o: { name: string; }) => 
+              o.name.toLowerCase() === '2thier crm'
+            ) || activeOrgs.find((o: { name: string; }) => 
               o.name.toLowerCase().includes('crm')
+            ) || activeOrgs.find((o: { name: string; }) => 
+              o.name.toLowerCase().includes('2thier')
             );
             
             if (preferredOrg) {
               console.log('[AuthProvider] Organisation préférée sélectionnée:', preferredOrg.name);
               orgToSet = { ...preferredOrg, role: 'super_admin', permissions: currentUser.permissions || [] };
             } else {
-              // Fallback: prendre la première organisation de la liste
-              const firstOrg = allOrgs[0];
+              // Fallback: prendre la première organisation ACTIVE de la liste
+              const firstOrg = activeOrgs[0];
               orgToSet = { ...firstOrg, role: 'super_admin', permissions: currentUser.permissions || [] };
             }
           }
