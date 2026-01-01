@@ -9,7 +9,29 @@ import { refreshGoogleTokenIfNeeded } from '../utils/googleTokenRefresh.js';
 import { googleOAuthService, GOOGLE_SCOPES_LIST } from '../google-auth/core/GoogleOAuthCore.js';
 import gmailRoutes from '../google-auth/routes/gmail'; // Routes Gmail centralisées
 import { logSecurityEvent } from '../security/securityLogger.js';
-import { googleOAuthConfig } from '../auth/googleConfig.js'; // Import de la config avec auto-détection
+import { googleOAuthConfig } from '../auth/googleConfig.js'; // Import pour GOOGLE_SCOPES uniquement
+
+/**
+ * ⚠️ IMPORTANT - USAGE DE googleOAuthConfig :
+ * 
+ * Dans ce fichier, nous utilisons UNIQUEMENT googleOAuthConfig pour les SCOPES.
+ * Pour le redirectUri, nous utilisons TOUJOURS config.redirectUri depuis la BDD (googleWorkspaceConfig).
+ * 
+ * POURQUOI ?
+ * - Chaque organisation a sa propre config OAuth en BDD (Client ID, Secret, redirectUri)
+ * - Le redirectUri DOIT correspondre EXACTEMENT à celui configuré dans Google Cloud Console
+ * - googleOAuthConfig.redirectUri est auto-détecté et peut varier (Codespaces, local, prod)
+ * - config.redirectUri (BDD) est la source de vérité pour l'OAuth par organisation
+ * 
+ * ✅ Utilisation correcte :
+ *   const config = await getGoogleWorkspaceConfig(organizationId);
+ *   const actualRedirectUri = config.redirectUri; // ← Depuis la BDD
+ * 
+ * ❌ NE JAMAIS FAIRE :
+ *   const actualRedirectUri = googleOAuthConfig.redirectUri; // ← Auto-détecté, peut varier !
+ * 
+ * Voir : FIX-GOOGLE-OAUTH-UNAUTHORIZED.md pour l'explication complète du problème résolu
+ */
 
 const router = Router();
 

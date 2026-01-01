@@ -1,9 +1,41 @@
 import type { OAuth2ClientOptions } from 'google-auth-library';
 
 /**
- * Source unique de vérité pour la configuration Google OAuth / Workspace.
- * Centralise les accès aux variables d'environnement afin d'éviter les divergences
- * entre l'API, les jobs (Cloud Run) et le frontend.
+ * 🔧 CONFIGURATION GOOGLE OAUTH - Source unique de vérité
+ * 
+ * Ce fichier centralise la configuration Google OAuth depuis les variables d'environnement.
+ * 
+ * ⚠️ ATTENTION - USAGE CRITIQUE :
+ * 
+ * ✅ UTILISER googleOAuthConfig POUR :
+ *   - Services système qui n'ont pas de configuration BDD par organisation
+ *   - Scripts de maintenance et d'administration
+ *   - Refresh automatique des tokens (GoogleTokenRefreshScheduler)
+ *   - Notifications Gmail système (GoogleGmailNotificationService)
+ *   - Tout code qui s'exécute SANS contexte d'organisation
+ * 
+ * ❌ NE PAS UTILISER googleOAuthConfig.redirectUri POUR :
+ *   - Routes d'authentification OAuth (/api/google-auth/*)
+ *   - Génération d'URL d'autorisation Google
+ *   - Échange de code OAuth contre tokens
+ *   → UTILISER PLUTÔT config.redirectUri depuis googleWorkspaceConfig (BDD)
+ * 
+ * 🎯 POURQUOI ?
+ *   - Chaque organisation peut avoir son propre Client ID/Secret/redirectUri
+ *   - Le redirectUri DOIT correspondre EXACTEMENT à celui configuré dans Google Cloud Console
+ *   - googleOAuthConfig.redirectUri est auto-détecté (peut varier selon l'environnement)
+ *   - config.redirectUri (BDD) est la source de vérité pour l'OAuth par organisation
+ * 
+ * 📋 EXPORTS DISPONIBLES :
+ *   - googleOAuthConfig: Configuration complète (clientId, clientSecret, redirectUri, etc.)
+ *   - GOOGLE_OAUTH_SCOPES: Liste des permissions Google demandées
+ *   - isGoogleOAuthConfigured(): Vérifie si les credentials sont présents
+ *   - describeGoogleOAuthConfig(): Résumé de la config pour debug
+ *   - resetGoogleOAuthConfigCache(): Réinitialiser le cache des variables d'env
+ * 
+ * 🔗 VOIR AUSSI :
+ *   - src/routes/google-auth.ts - Utilise config.redirectUri (BDD) ✅
+ *   - FIX-GOOGLE-OAUTH-UNAUTHORIZED.md - Explication du problème résolu
  */
 
 type EnvSource = Record<string, unknown> | undefined;
@@ -18,6 +50,18 @@ function readEnvFromImportMeta(key: string): string | undefined {
     const meta = import.meta as unknown as { env?: EnvSource };
     const candidate = meta?.env?.[key];
     if (typeof candidate === 'string' && candidate.trim()) {
+/**
+ * 🎯 Calcule le redirectUri depuis les variables d'environnement
+ * 
+ * ⚠️ IMPORTANT : Cette fonction est utilisée comme FALLBACK pour les services système.
+ * Pour les routes OAuth (/api/google-auth/*), utiliser config.redirectUri (BDD) à la place !
+ * 
+ * Ordre de priorité :
+ * 1. GitHub Codespaces → https://<codespace>-5173.app.github.dev/auth/google/callback
+ * 2. GOOGLE_REDIRECT_URI explicite
+ * 3. Déduction depuis BACKEND_URL/FRONTEND_URL/API_URL
+ * 4. Fallback : production = https://app.2thier.be, dev = http://localhost:4000
+ */
       return candidate.trim();
     }
   } catch {
@@ -38,6 +82,12 @@ function readEnv(key: string): string | undefined {
   }
 
   if (!value) {
+/**
+ * 🔐 SCOPES GOOGLE OAUTH - Permissions demandées lors de l'authentification
+ * 
+ * Cette liste définit toutes les permissions que l'application demande aux utilisateurs.
+ * Ces scopes sont utilisés partout dans l'application (routes OAuth, services, etc.)
+ */
     value = readEnvFromImportMeta(key);
   }
 
@@ -56,42 +106,68 @@ function computeRedirectUri(): string {
   if (codespaceName) {
     // Format: https://<codespace-name>-5173.app.github.dev/auth/google/callback (FRONTEND)
     const codespaceUrl = `https://${codespaceName}-5173.app.github.dev`;
-    console.log('[GoogleConfig] 🚀 Codespaces détecté, redirect_uri:', `${codespaceUrl}/auth/google/callback`);
-    return `${codespaceUrl}/auth/google/callback`;
-  }
+/**
+ * 📦 Interface de configuration Google OAuth
+ */
+export interface GoogleOAuthConfig {
+  clientId: string;
+  clientSecret: string;
+  redirectUri: string; // ⚠️ Auto-détecté - NE PAS utiliser pour les routes OAuth ! Utiliser config.redirectUri (BDD)
+  projectId?: string;
+  oauthOptions: OAuth2ClientOptions;
+}
 
-  // PRIORITÉ 2: Variable d'environnement explicite
-  const explicit = readEnv('GOOGLE_REDIRECT_URI');
-  if (explicit) {
-    console.log('[GoogleConfig] 📌 GOOGLE_REDIRECT_URI explicite:', explicit);
-    return explicit;
-  }
+function buildOAuthOptions(clientId: string, clientSecret: string, redirectUri: string): OAuth2ClientOptions {
+  return {
+    clientId: clientId || undefined,
+    clientSecret: clientSecret || undefined,
+    redirectUri,
+  };
+}
 
-  // PRIORITÉ 3: Déduction depuis autres variables
-  const base =
-    readEnv('API_URL') ||
-    readEnv('BACKEND_URL') ||
-    readEnv('FRONTEND_URL');
+/**
+ * 🌐 CONFIGURATION GLOBALE GOOGLE OAUTH
+ * 
+ * Chargée depuis les variables d'environnement au démarrage de l'application.
+ * 
+ * ⚠️ USAGE RESTREINT :
+ * - ✅ Services système sans contexte d'organisation
+ * - ✅ Scripts d'administration
+ * - ✅ Refresh automatique de tokens
+ * - ❌ Routes OAuth (utiliser googleWorkspaceConfig depuis BDD)
+ */    readEnv('FRONTEND_URL');
 
   const fallbackBase = (readEnv('NODE_ENV') || '').toLowerCase() === 'production'
     ? DEFAULT_PROD_API_BASE
     : DEFAULT_DEV_API_BASE;
 
-  const trimmedBase = (base || fallbackBase).replace(/\/$/, '');
-  console.log('[GoogleConfig] 🔧 Redirect URI déduit:', `${trimmedBase}/api/google-auth/callback`);
-  return `${trimmedBase}/api/google-auth/callback`;
+/**
+ * ✅ Vérifie si les credentials Google OAuth sont configurés
+ * Utile pour les checks avant d'utiliser les services Google
+ */
+export function isGoogleOAuthConfigured(): boolean {
+  return Boolean(googleOAuthConfig.clientId && googleOAuthConfig.clientSecret);
 }
 
-export const GOOGLE_OAUTH_SCOPES: readonly string[] = [
-  'https://www.googleapis.com/auth/userinfo.email',
-  'https://www.googleapis.com/auth/userinfo.profile',
-  'https://mail.google.com/',
-  'https://www.googleapis.com/auth/gmail.readonly',
-  'https://www.googleapis.com/auth/gmail.send',
-  'https://www.googleapis.com/auth/gmail.modify',
-  'https://www.googleapis.com/auth/gmail.labels',
-  'https://www.googleapis.com/auth/calendar',
-  'https://www.googleapis.com/auth/calendar.events',
+/**
+ * 📊 Retourne un résumé de la configuration pour debug/monitoring
+ * Masque les valeurs sensibles (clientId/Secret)
+ */
+export function describeGoogleOAuthConfig(): Record<string, string | boolean | undefined> {
+  return {
+    clientId: googleOAuthConfig.clientId ? '[set]' : '[missing]',
+    clientSecret: googleOAuthConfig.clientSecret ? '[set]' : '[missing]',
+    redirectUri: googleOAuthConfig.redirectUri,
+    projectId: googleOAuthConfig.projectId,
+    scopes: GOOGLE_OAUTH_SCOPES.length,
+    isConfigured: isGoogleOAuthConfigured(),
+  };
+}
+
+/**
+ * 🔄 Réinitialise le cache des variables d'environnement
+ * Utile pour forcer le rechargement de la config (tests, hot-reload)
+ */  'https://www.googleapis.com/auth/calendar.events',
   'https://www.googleapis.com/auth/drive',
   'https://www.googleapis.com/auth/documents',
   'https://www.googleapis.com/auth/spreadsheets',

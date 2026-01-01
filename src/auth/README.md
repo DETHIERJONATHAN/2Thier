@@ -2,6 +2,31 @@
 
 Ce document décrit l'architecture du système d'authentification et d'autorisation centralisé du CRM.
 
+## 🔐 Configuration Google OAuth
+
+### Fichier `googleConfig.ts`
+
+Configuration centralisée pour Google OAuth depuis les variables d'environnement.
+
+**⚠️ USAGE CRITIQUE :**
+
+#### ✅ UTILISER `googleOAuthConfig` pour :
+- Services système sans contexte d'organisation
+- Scripts d'administration et maintenance
+- Refresh automatique de tokens
+- Notifications Gmail système
+
+#### ❌ NE PAS UTILISER `googleOAuthConfig.redirectUri` pour :
+- Routes OAuth (`/api/google-auth/*`) → Utiliser `config.redirectUri` (BDD)
+- Génération d'URL d'autorisation Google
+- Échange de code OAuth contre tokens
+
+**Pourquoi ?** Chaque organisation a sa propre configuration OAuth en BDD. Le `redirectUri` DOIT correspondre EXACTEMENT à celui configuré dans Google Cloud Console. `googleOAuthConfig.redirectUri` est auto-détecté et peut varier.
+
+**Documentation complète :** Voir `FIX-GOOGLE-OAUTH-UNAUTHORIZED.md` pour l'explication du problème résolu en janvier 2026.
+
+---
+
 ## 1. Philosophie et Objectifs
 
 L'approche adoptée est celle d'une **architecture modulaire et centralisée**. L'objectif est de fournir une "source unique de vérité" pour tout ce qui concerne l'identité de l'utilisateur, ses droits, ses rôles et son contexte organisationnel.
