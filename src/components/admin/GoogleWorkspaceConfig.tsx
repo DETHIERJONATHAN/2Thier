@@ -1,6 +1,6 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { Card, Form, Input, Button, Alert, Divider, Space, Switch, message, Spin, Steps, Typography, Tabs } from 'antd';
-import { GoogleOutlined, CheckCircleOutlined, ExclamationCircleOutlined, LoginOutlined, EyeInvisibleOutlined, EyeTwoTone, RedoOutlined, CopyOutlined, SettingOutlined, CloudOutlined, ApiOutlined } from '@ant-design/icons';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { Card, Form, Input, Button, Alert, Divider, Space, Switch, message, Spin, Steps, Typography, Tabs, Collapse, Tag, Tooltip } from 'antd';
+import { GoogleOutlined, CheckCircleOutlined, ExclamationCircleOutlined, LoginOutlined, EyeInvisibleOutlined, EyeTwoTone, RedoOutlined, CopyOutlined, SettingOutlined, CloudOutlined, ApiOutlined, InfoCircleOutlined, DesktopOutlined, CloudServerOutlined, GithubOutlined } from '@ant-design/icons';
 import { useAuthenticatedApi } from '../../hooks/useAuthenticatedApi';
 import GoogleTokenMonitor from './GoogleTokenMonitor';
 
@@ -15,6 +15,16 @@ interface GoogleWorkspaceConfig {
   privateKey: string;
   isActive: boolean;
   lastSync?: string;
+}
+
+// 🔗 Configuration des URIs de redirection pour tous les environnements
+interface RedirectUriConfig {
+  environment: 'local' | 'codespaces' | 'production';
+  label: string;
+  icon: React.ReactNode;
+  uri: string;
+  description: string;
+  isCurrent: boolean;
 }
 
 interface DnsRecords {
@@ -47,6 +57,91 @@ interface GoogleWorkspaceConfigProps {
 
 const { Step } = Steps;
 const { Title, Text, Paragraph } = Typography;
+const { Panel } = Collapse;
+
+// 🔗 Fonction pour générer toutes les URIs de redirection
+function getAllRedirectUris(): RedirectUriConfig[] {
+  const codespaceName = typeof window !== 'undefined' 
+    ? window.location.hostname.match(/^(.+)-\d+\.app\.github\.dev$/)?.[1] || import.meta.env.VITE_CODESPACE_NAME
+    : null;
+  
+  const currentHostname = typeof window !== 'undefined' ? window.location.hostname : '';
+  const isLocal = currentHostname === 'localhost' || currentHostname === '127.0.0.1';
+  const isCodespaces = currentHostname.includes('.app.github.dev');
+  const isProduction = currentHostname === 'app.2thier.be';
+  
+  const uris: RedirectUriConfig[] = [
+    {
+      environment: 'local',
+      label: 'Local (Développement)',
+      icon: <DesktopOutlined />,
+      uri: 'http://localhost:4000/api/google-auth/callback',
+      description: 'Pour le développement local avec npm run dev',
+      isCurrent: isLocal
+    },
+    {
+      environment: 'production',
+      label: 'Production',
+      icon: <CloudServerOutlined />,
+      uri: 'https://app.2thier.be/api/google-auth/callback',
+      description: 'Pour l\'application en production (Cloud Run)',
+      isCurrent: isProduction
+    }
+  ];
+  
+  // Ajouter l'URI Codespaces si on est dans un codespace
+  if (codespaceName || isCodespaces) {
+    const csName = codespaceName || currentHostname.replace(/-\d+\.app\.github\.dev$/, '').replace(/^https?:\/\//, '');
+    uris.splice(1, 0, {
+      environment: 'codespaces',
+      label: 'GitHub Codespaces',
+      icon: <GithubOutlined />,
+      uri: `https://${csName}-4000.app.github.dev/api/google-auth/callback`,
+      description: 'Pour le développement dans GitHub Codespaces',
+      isCurrent: isCodespaces
+    });
+  }
+  
+  return uris;
+}
+
+// Composant pour afficher une URI avec bouton de copie
+const RedirectUriItem: React.FC<{ config: RedirectUriConfig }> = ({ config }) => (
+  <div style={{ 
+    display: 'flex', 
+    alignItems: 'center', 
+    justifyContent: 'space-between',
+    padding: '8px 12px',
+    background: config.isCurrent ? '#f6ffed' : '#fafafa',
+    border: config.isCurrent ? '1px solid #b7eb8f' : '1px solid #d9d9d9',
+    borderRadius: '6px',
+    marginBottom: '8px'
+  }}>
+    <div style={{ flex: 1 }}>
+      <Space>
+        {config.icon}
+        <Text strong>{config.label}</Text>
+        {config.isCurrent && <Tag color="green">Environnement actuel</Tag>}
+      </Space>
+      <div style={{ marginTop: '4px' }}>
+        <Text code copyable style={{ fontSize: '12px' }}>{config.uri}</Text>
+      </div>
+      <div>
+        <Text type="secondary" style={{ fontSize: '11px' }}>{config.description}</Text>
+      </div>
+    </div>
+    <Tooltip title="Copier l'URI">
+      <Button 
+        icon={<CopyOutlined />} 
+        size="small"
+        onClick={() => {
+          navigator.clipboard.writeText(config.uri);
+          message.success('URI copiée !');
+        }}
+      />
+    </Tooltip>
+  </div>
+);
 
 // Composant pour afficher un enregistrement DNS
 const DnsRecord = ({ type, value, description }: { type: string; value: string; description: string }) => (
@@ -89,6 +184,12 @@ const GoogleWorkspaceConfig: React.FC<GoogleWorkspaceConfigProps> = ({
 
   const { api } = useAuthenticatedApi();
 
+  // 🔗 Calculer l'URI de redirection correcte pour l'environnement actuel
+  const currentRedirectUri = useMemo(() => {
+    const currentUri = getAllRedirectUris().find(u => u.isCurrent);
+    return currentUri?.uri || 'https://app.2thier.be/api/google-auth/callback';
+  }, []);
+
   // Définir loadConfig en premier pour éviter l'erreur de référence
   const loadConfig = useCallback(async () => {
     try {
@@ -104,19 +205,20 @@ const GoogleWorkspaceConfig: React.FC<GoogleWorkspaceConfigProps> = ({
         
         setConfig(response.data);
         
-        // Assurer que tous les champs sont définis dans le formulaire
+        // 🔗 Toujours utiliser l'URI correcte pour l'environnement actuel (auto-détection)
         const formData = {
           domain: response.data.domain || '2thier.be',
           adminEmail: response.data.adminEmail || '',
           clientId: response.data.clientId || '',
           clientSecret: response.data.clientSecret || '',
-          redirectUri: response.data.redirectUri || (import.meta.env.VITE_API_BASE_URL?.replace(/\/$/, '') || window.location.origin) + '/api/auth/google/callback',
+          redirectUri: currentRedirectUri, // Toujours l'URI de l'environnement actuel
           serviceAccountEmail: response.data.serviceAccountEmail || '',
           privateKey: response.data.privateKey || '',
           isActive: response.data.isActive || response.data.enabled || false
         };
         
         console.log('[GoogleWorkspaceConfig] 📝 Données form à définir:', formData);
+        console.log('[GoogleWorkspaceConfig] 🔗 URI de redirection (auto-détectée):', currentRedirectUri);
         form.setFieldsValue(formData);
         // Pas besoin de setConnectionStatus car on utilise maintenant les vrais états
       } else {
@@ -124,14 +226,14 @@ const GoogleWorkspaceConfig: React.FC<GoogleWorkspaceConfigProps> = ({
         // Définir les valeurs par défaut si pas de config
         form.setFieldsValue({
           domain: '2thier.be',
-          redirectUri: (import.meta.env.VITE_API_BASE_URL?.replace(/\/$/, '') || window.location.origin) + '/api/auth/google/callback',
+          redirectUri: currentRedirectUri,
           isActive: false
         });
       }
     } catch (err) {
       console.error('[GoogleWorkspaceConfig] ❌ Erreur lors du chargement de la configuration:', err);
     }
-  }, [api, organizationId, form]);
+  }, [api, organizationId, form, currentRedirectUri]);
 
   // Fonction pour vérifier le statut du domaine et charger la config si nécessaire
   const checkDomainAndLoadConfig = useCallback(async () => {
@@ -604,7 +706,7 @@ const GoogleWorkspaceConfig: React.FC<GoogleWorkspaceConfigProps> = ({
         onFinish={handleSave}
         initialValues={{
           domain: '2thier.be',
-          redirectUri: (import.meta.env.VITE_API_BASE_URL?.replace(/\/$/, '') || window.location.origin) + '/api/auth/google/callback',
+          redirectUri: currentRedirectUri, // 🔗 Auto-détection de l'environnement
           isActive: false
         }}
       >
@@ -650,16 +752,69 @@ const GoogleWorkspaceConfig: React.FC<GoogleWorkspaceConfigProps> = ({
           />
         </Form.Item>
 
+        {/* 🔗 Section des URIs de redirection améliorée */}
         <Form.Item
-          label="URI de redirection"
+          label={
+            <Space>
+              <span>URI de redirection active</span>
+              <Tooltip title="L'URI utilisée pour l'environnement actuel">
+                <InfoCircleOutlined style={{ color: '#1890ff' }} />
+              </Tooltip>
+            </Space>
+          }
           name="redirectUri"
           rules={[{ required: true, message: 'L\'URI de redirection est requise' }]}
-          help="Cette URI doit être ajoutée dans la console Google Cloud"
         >
           <Input 
-            placeholder={(import.meta.env.VITE_API_BASE_URL?.replace(/\/$/, '') || 'https://api.2thier.com') + '/api/auth/google/callback'}
+            placeholder="https://app.2thier.be/api/google-auth/callback"
+            readOnly
+            style={{ background: '#f5f5f5' }}
           />
         </Form.Item>
+
+        <Collapse 
+          ghost 
+          style={{ marginBottom: '24px', background: '#fafafa', borderRadius: '8px' }}
+        >
+          <Panel 
+            header={
+              <Space>
+                <InfoCircleOutlined style={{ color: '#1890ff' }} />
+                <Text strong>📋 Toutes les URIs à configurer dans Google Cloud Console</Text>
+              </Space>
+            } 
+            key="uris"
+          >
+            <Alert
+              type="info"
+              showIcon
+              icon={<GoogleOutlined />}
+              message="Configuration Google Cloud Console"
+              description={
+                <div>
+                  <Paragraph style={{ marginBottom: '8px' }}>
+                    Pour que l'authentification fonctionne dans <strong>tous les environnements</strong>, 
+                    vous devez ajouter <strong>toutes</strong> ces URIs dans :
+                  </Paragraph>
+                  <Text code>Google Cloud Console → APIs & Services → Credentials → [Votre Client OAuth] → Authorized redirect URIs</Text>
+                </div>
+              }
+              style={{ marginBottom: '16px' }}
+            />
+            
+            {getAllRedirectUris().map((uriConfig, index) => (
+              <RedirectUriItem key={index} config={uriConfig} />
+            ))}
+            
+            <Alert
+              type="warning"
+              showIcon
+              message="Important"
+              description="Le système détecte automatiquement l'environnement et utilise l'URI appropriée. Vous n'avez pas besoin de changer cette valeur manuellement."
+              style={{ marginTop: '12px' }}
+            />
+          </Panel>
+        </Collapse>
 
         <Divider>Compte de service</Divider>
 
