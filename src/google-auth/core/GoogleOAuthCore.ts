@@ -50,7 +50,9 @@ export class GoogleOAuthService {
       access_type: 'offline',
       scope: SCOPES,
       state: state,
-      prompt: 'consent'
+      prompt: 'select_account', // ✅ Ne force plus le consentement à chaque fois
+      include_granted_scopes: true, // ✅ Active l'autorisation incrémentielle
+      enable_granular_consent: true // ✅ Protection multicompte
     });
     
     console.log('[GoogleOAuthService] 🔗 URL d\'autorisation générée:', authUrl);

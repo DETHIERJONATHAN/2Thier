@@ -280,7 +280,9 @@ router.get('/url', authMiddleware, async (req: AuthenticatedRequest, res) => {
       `scope=${encodeURIComponent(GOOGLE_SCOPES)}&` +
       `response_type=code&` +
       `access_type=offline&` +
-      `prompt=consent&` +
+      `prompt=select_account&` +
+      `include_granted_scopes=true&` +
+      `enable_granular_consent=true&` +
       `state=${encodeURIComponent(JSON.stringify(stateObj))}`;
 
     res.json({
@@ -352,7 +354,9 @@ router.get('/connect', authMiddleware, async (req: AuthenticatedRequest, res) =>
       `scope=${encodeURIComponent(GOOGLE_SCOPES)}&` +
       `response_type=code&` +
       `access_type=offline&` +
-      `prompt=consent&` +
+      `prompt=select_account&` +
+      `include_granted_scopes=true&` +
+      `enable_granular_consent=true&` +
       `state=${encodeURIComponent(JSON.stringify(stateObj))}`;
 
     console.log('[GOOGLE-AUTH] 🌐 URL générée:', authUrl);

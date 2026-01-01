@@ -4628,7 +4628,12 @@ var GoogleOAuthService = class {
       access_type: "offline",
       scope: SCOPES,
       state,
-      prompt: "consent"
+      prompt: "select_account",
+      // ✅ Ne force plus le consentement à chaque fois
+      include_granted_scopes: true,
+      // ✅ Active l'autorisation incrémentielle
+      enable_granular_consent: true
+      // ✅ Protection multicompte
     });
     console.log("[GoogleOAuthService] \u{1F517} URL d'autorisation g\xE9n\xE9r\xE9e:", authUrl);
     console.log("[GoogleOAuthService] \u{1F3AF} Redirect URI configur\xE9:", GOOGLE_REDIRECT_URI);
@@ -11567,7 +11572,7 @@ router12.get("/url", authMiddleware, async (req2, res) => {
     };
     const actualRedirectUri = config.redirectUri;
     console.log("[GOOGLE-AUTH] \u{1F3AF} Redirect URI depuis BDD:", actualRedirectUri);
-    const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${config.clientId}&redirect_uri=${encodeURIComponent(actualRedirectUri)}&scope=${encodeURIComponent(GOOGLE_SCOPES)}&response_type=code&access_type=offline&prompt=consent&state=${encodeURIComponent(JSON.stringify(stateObj))}`;
+    const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${config.clientId}&redirect_uri=${encodeURIComponent(actualRedirectUri)}&scope=${encodeURIComponent(GOOGLE_SCOPES)}&response_type=code&access_type=offline&prompt=select_account&include_granted_scopes=true&enable_granular_consent=true&state=${encodeURIComponent(JSON.stringify(stateObj))}`;
     res.json({
       success: true,
       data: {
@@ -11616,7 +11621,7 @@ router12.get("/connect", authMiddleware, async (req2, res) => {
       userId: req2.user?.userId || null,
       organizationId
     };
-    const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${config.clientId}&redirect_uri=${encodeURIComponent(actualRedirectUri)}&scope=${encodeURIComponent(GOOGLE_SCOPES)}&response_type=code&access_type=offline&prompt=consent&state=${encodeURIComponent(JSON.stringify(stateObj))}`;
+    const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${config.clientId}&redirect_uri=${encodeURIComponent(actualRedirectUri)}&scope=${encodeURIComponent(GOOGLE_SCOPES)}&response_type=code&access_type=offline&prompt=select_account&include_granted_scopes=true&enable_granular_consent=true&state=${encodeURIComponent(JSON.stringify(stateObj))}`;
     console.log("[GOOGLE-AUTH] \u{1F310} URL g\xE9n\xE9r\xE9e:", authUrl);
     res.json({
       success: true,
