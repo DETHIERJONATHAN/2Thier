@@ -11565,8 +11565,8 @@ router12.get("/url", authMiddleware, async (req2, res) => {
       userId: req2.user?.userId || null,
       organizationId
     };
-    const actualRedirectUri = googleOAuthConfig.redirectUri;
-    console.log("[GOOGLE-AUTH] \u{1F3AF} Redirect URI auto-d\xE9tect\xE9:", actualRedirectUri);
+    const actualRedirectUri = config.redirectUri;
+    console.log("[GOOGLE-AUTH] \u{1F3AF} Redirect URI depuis BDD:", actualRedirectUri);
     const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${config.clientId}&redirect_uri=${encodeURIComponent(actualRedirectUri)}&scope=${encodeURIComponent(GOOGLE_SCOPES)}&response_type=code&access_type=offline&prompt=consent&state=${encodeURIComponent(JSON.stringify(stateObj))}`;
     res.json({
       success: true,
@@ -11610,8 +11610,8 @@ router12.get("/connect", authMiddleware, async (req2, res) => {
     console.log("[GOOGLE-AUTH] \u2705 Configuration valide d\xE9tect\xE9e");
     console.log("[GOOGLE-AUTH] \u{1F194} ClientId:", config.clientId);
     console.log("[GOOGLE-AUTH] \u{1F3E2} Domain:", config.domain);
-    const actualRedirectUri = googleOAuthConfig.redirectUri;
-    console.log("[GOOGLE-AUTH] \u{1F3AF} Redirect URI auto-d\xE9tect\xE9:", actualRedirectUri);
+    const actualRedirectUri = config.redirectUri;
+    console.log("[GOOGLE-AUTH] \u{1F3AF} Redirect URI depuis BDD:", actualRedirectUri);
     const stateObj = {
       userId: req2.user?.userId || null,
       organizationId
@@ -11684,8 +11684,8 @@ router12.get("/callback", async (req2, res) => {
     }
     console.log("[GOOGLE-AUTH] \u2705 Configuration trouv\xE9e, email admin cible:", config.adminEmail);
     console.log("[GOOGLE-AUTH] \u{1F504} \xC9change du code contre les tokens...");
-    const actualRedirectUri = googleOAuthConfig.redirectUri;
-    console.log("[GOOGLE-AUTH] \u{1F3AF} Redirect URI pour \xE9change de tokens:", actualRedirectUri);
+    const actualRedirectUri = config.redirectUri;
+    console.log("[GOOGLE-AUTH] \u{1F3AF} Redirect URI pour \xE9change de tokens (depuis BDD):", actualRedirectUri);
     const oauth2Client = new import_googleapis7.google.auth.OAuth2(
       config.clientId,
       config.clientSecret,

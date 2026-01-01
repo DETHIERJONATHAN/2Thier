@@ -248,9 +248,9 @@ router.get('/url', authMiddleware, async (req: AuthenticatedRequest, res) => {
       userId: req.user?.userId || null,
       organizationId
     };
-    // Utiliser googleOAuthConfig.redirectUri qui détecte automatiquement l'environnement (local/Codespaces/production)
-    const actualRedirectUri = googleOAuthConfig.redirectUri;
-    console.log('[GOOGLE-AUTH] 🎯 Redirect URI auto-détecté:', actualRedirectUri);
+    // CRITIQUE: Utiliser config.redirectUri depuis la BDD (configuré dans Google Cloud Console)
+    const actualRedirectUri = config.redirectUri;
+    console.log('[GOOGLE-AUTH] 🎯 Redirect URI depuis BDD:', actualRedirectUri);
     
     const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?` +
       `client_id=${config.clientId}&` +
@@ -315,9 +315,9 @@ router.get('/connect', authMiddleware, async (req: AuthenticatedRequest, res) =>
     console.log('[GOOGLE-AUTH] 🆔 ClientId:', config.clientId);
     console.log('[GOOGLE-AUTH] 🏢 Domain:', config.domain);
 
-    // Utiliser auto-détection de l'environnement pour redirectUri
-    const actualRedirectUri = googleOAuthConfig.redirectUri;
-    console.log('[GOOGLE-AUTH] 🎯 Redirect URI auto-détecté:', actualRedirectUri);
+    // CRITIQUE: Utiliser config.redirectUri depuis la BDD (configuré dans Google Cloud Console)
+    const actualRedirectUri = config.redirectUri;
+    console.log('[GOOGLE-AUTH] 🎯 Redirect URI depuis BDD:', actualRedirectUri);
 
     // Générer l'URL d'authentification Google
     const stateObj = {
@@ -420,9 +420,9 @@ router.get('/callback', async (req, res) => {
     console.log('[GOOGLE-AUTH] ✅ Configuration trouvée, email admin cible:', config.adminEmail);
     console.log('[GOOGLE-AUTH] 🔄 Échange du code contre les tokens...');
 
-    // Utiliser auto-détection pour le redirectUri
-    const actualRedirectUri = googleOAuthConfig.redirectUri;
-    console.log('[GOOGLE-AUTH] 🎯 Redirect URI pour échange de tokens:', actualRedirectUri);
+    // CRITIQUE: Utiliser config.redirectUri depuis la BDD (configuré dans Google Cloud Console)
+    const actualRedirectUri = config.redirectUri;
+    console.log('[GOOGLE-AUTH] 🎯 Redirect URI pour échange de tokens (depuis BDD):', actualRedirectUri);
 
     // Créer le client OAuth2 Google
     const oauth2Client = new google.auth.OAuth2(
