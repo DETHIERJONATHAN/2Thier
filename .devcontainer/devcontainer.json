@@ -2,13 +2,23 @@
   "name": "CRM 2Thier",
   "image": "mcr.microsoft.com/devcontainers/javascript-node:20",
   
+  "hostRequirements": {
+    "cpus": 4,
+    "memory": "16gb",
+    "storage": "64gb"
+  },
+  
   "features": {
     "ghcr.io/devcontainers/features/node:1": {
       "version": "20"
     }
   },
 
-  "postCreateCommand": "npm install && curl -o cloud-sql-proxy https://storage.googleapis.com/cloud-sql-connectors/cloud-sql-proxy/v2.14.2/cloud-sql-proxy.linux.amd64 && chmod +x cloud-sql-proxy",
+  "containerEnv": {
+    "NODE_OPTIONS": "--max-old-space-size=8192"
+  },
+
+  "postCreateCommand": "npm install && npx prisma generate && curl -o cloud-sql-proxy https://storage.googleapis.com/cloud-sql-connectors/cloud-sql-proxy/v2.14.2/cloud-sql-proxy.linux.amd64 && chmod +x cloud-sql-proxy",
   
   "postStartCommand": ".devcontainer/start-proxy.sh",
 
@@ -20,10 +30,15 @@
         "dbaeumer.vscode-eslint",
         "esbenp.prettier-vscode",
         "prisma.prisma",
-        "bradlc.vscode-tailwindcss"
+        "bradlc.vscode-tailwindcss",
+        "GitHub.copilot"
       ],
       "settings": {
-        "terminal.integrated.defaultProfile.linux": "bash"
+        "terminal.integrated.defaultProfile.linux": "bash",
+        "typescript.tsserver.maxTsServerMemory": 4096,
+        "files.watcherExclude": {
+          "**/node_modules/**": true
+        }
       }
     }
   },
