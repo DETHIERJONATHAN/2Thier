@@ -4124,7 +4124,7 @@ __export(api_server_clean_exports, {
 });
 module.exports = __toCommonJS(api_server_clean_exports);
 var import_dotenv = __toESM(require("dotenv"), 1);
-var import_express93 = __toESM(require("express"), 1);
+var import_express95 = __toESM(require("express"), 1);
 var import_path7 = __toESM(require("path"), 1);
 var import_fs7 = __toESM(require("fs"), 1);
 var import_cors = __toESM(require("cors"), 1);
@@ -29104,8 +29104,8 @@ function getOrgId(req2) {
   const headerOrg = req2.headers?.["x-organization-id"] || req2.headers?.["x-organization"] || req2.headers?.["organization-id"];
   return user.organizationId || headerOrg || null;
 }
-function registerSumDisplayFieldRoutes(router90) {
-  router90.post("/trees/:treeId/nodes/:nodeId/sum-display-field", async (req2, res) => {
+function registerSumDisplayFieldRoutes(router92) {
+  router92.post("/trees/:treeId/nodes/:nodeId/sum-display-field", async (req2, res) => {
     try {
       const { treeId, nodeId } = req2.params;
       const organizationId = getOrgId(req2);
@@ -29362,7 +29362,7 @@ function registerSumDisplayFieldRoutes(router90) {
       res.status(500).json({ error: "Erreur lors de la cr\xC3\u0192\xC2\xA9ation du champ Total", details: errMsg });
     }
   });
-  router90.delete("/trees/:treeId/nodes/:nodeId/sum-display-field", async (req2, res) => {
+  router92.delete("/trees/:treeId/nodes/:nodeId/sum-display-field", async (req2, res) => {
     try {
       const { treeId, nodeId } = req2.params;
       const organizationId = getOrgId(req2);
@@ -55371,11 +55371,94 @@ router73.get("/tables/:tableId", async (req2, res) => {
 });
 var tbl_submission_evaluator_default = router73;
 
+// src/components/TreeBranchLeaf/treebranchleaf-new/TBL/routes/ia-config-routes.ts
+var import_express76 = __toESM(require("express"), 1);
+init_database();
+var router74 = import_express76.default.Router();
+router74.get("/nodes/:nodeId/ia-config", async (req2, res) => {
+  try {
+    const { nodeId } = req2.params;
+    console.log(`\u{1F4CA} [IA-CONFIG] R\xE9cup\xE9ration config pour node ${nodeId}`);
+    const node = await db.treeBranchLeafNode.findUnique({
+      where: { id: nodeId },
+      select: { iaMesureConfig: true }
+    });
+    if (!node) {
+      console.warn(`\u26A0\uFE0F [IA-CONFIG] Node ${nodeId} non trouv\xE9`);
+      return res.status(404).json({ error: "Node not found" });
+    }
+    const defaultConfig = {
+      enabled: false,
+      referenceObjects: [],
+      detectionSettings: {
+        minPhotos: 3,
+        confidenceThreshold: 0.7,
+        useSharp: true,
+        useFusion: true
+      }
+    };
+    const config = node.iaMesureConfig || defaultConfig;
+    console.log(`\u2705 [IA-CONFIG] Config r\xE9cup\xE9r\xE9e:`, JSON.stringify(config).substring(0, 100));
+    res.json(config);
+  } catch (error) {
+    console.error("\u274C [IA-CONFIG] Erreur r\xE9cup\xE9ration config:", error);
+    res.status(500).json({ error: "Failed to fetch IA config" });
+  }
+});
+router74.put("/nodes/:nodeId/ia-config", async (req2, res) => {
+  try {
+    const { nodeId } = req2.params;
+    const config = req2.body;
+    console.log(`\u{1F4BE} [IA-CONFIG] Mise \xE0 jour config pour node ${nodeId}`);
+    if (!config || typeof config !== "object") {
+      console.warn(`\u26A0\uFE0F [IA-CONFIG] Format de config invalide`);
+      return res.status(400).json({ error: "Invalid config format" });
+    }
+    if (config.enabled !== void 0 && typeof config.enabled !== "boolean") {
+      return res.status(400).json({ error: "enabled must be a boolean" });
+    }
+    if (config.referenceObjects && !Array.isArray(config.referenceObjects)) {
+      return res.status(400).json({ error: "referenceObjects must be an array" });
+    }
+    await db.treeBranchLeafNode.update({
+      where: { id: nodeId },
+      data: {
+        iaMesureConfig: config,
+        updatedAt: /* @__PURE__ */ new Date()
+      }
+    });
+    console.log(`\u2705 [IA-CONFIG] Config sauvegard\xE9e avec succ\xE8s`);
+    res.json({ success: true, config });
+  } catch (error) {
+    console.error("\u274C [IA-CONFIG] Erreur sauvegarde config:", error);
+    res.status(500).json({ error: "Failed to update IA config" });
+  }
+});
+router74.delete("/nodes/:nodeId/ia-config", async (req2, res) => {
+  try {
+    const { nodeId } = req2.params;
+    console.log(`\u{1F5D1}\uFE0F [IA-CONFIG] Suppression config pour node ${nodeId}`);
+    await db.treeBranchLeafNode.update({
+      where: { id: nodeId },
+      data: {
+        iaMesureConfig: null,
+        updatedAt: /* @__PURE__ */ new Date()
+      }
+    });
+    console.log(`\u2705 [IA-CONFIG] Config supprim\xE9e`);
+    res.json({ success: true });
+  } catch (error) {
+    console.error("\u274C [IA-CONFIG] Erreur suppression config:", error);
+    res.status(500).json({ error: "Failed to delete IA config" });
+  }
+});
+var ia_config_routes_default = router74;
+
 // src/controllers/calculatedValueController.ts
-var import_express76 = require("express");
+var import_express77 = require("express");
 var import_crypto15 = require("crypto");
 init_prisma();
-var router74 = (0, import_express76.Router)();
+var router75 = (0, import_express77.Router)();
 var parseStoredStringValue = (raw) => {
   if (raw === null || raw === void 0) {
     return null;
@@ -55443,7 +55526,7 @@ var toIsoString = (date) => {
     return void 0;
   }
 };
-router74.get("/:nodeId/calculated-value", async (req2, res) => {
+router75.get("/:nodeId/calculated-value", async (req2, res) => {
   try {
     const { nodeId } = req2.params;
     const pickQueryString = (key2) => {
@@ -55676,7 +55759,7 @@ router74.get("/:nodeId/calculated-value", async (req2, res) => {
     return res.status(500).json({ error: String(error) });
   }
 });
-router74.post("/:nodeId/store-calculated-value", async (req2, res) => {
+router75.post("/:nodeId/store-calculated-value", async (req2, res) => {
   try {
     const { nodeId } = req2.params;
     const { calculatedValue, calculatedBy, submissionId } = req2.body;
@@ -55729,7 +55812,7 @@ router74.post("/:nodeId/store-calculated-value", async (req2, res) => {
     return res.status(500).json({ error: String(error) });
   }
 });
-router74.post("/store-batch-calculated-values", async (req2, res) => {
+router75.post("/store-batch-calculated-values", async (req2, res) => {
   try {
     const { values, submissionId } = req2.body;
     if (!Array.isArray(values) || values.length === 0) {
@@ -55776,12 +55859,12 @@ router74.post("/store-batch-calculated-values", async (req2, res) => {
     return res.status(500).json({ error: String(error) });
   }
 });
-var calculatedValueController_default = router74;
+var calculatedValueController_default = router75;
 
 // src/routes/tbl-batch-routes.ts
-var import_express77 = require("express");
+var import_express78 = require("express");
 init_database();
-var router75 = (0, import_express77.Router)();
+var router76 = (0, import_express78.Router)();
 function getAuthCtx5(req2) {
   const user = req2.user;
   return {
@@ -55789,7 +55872,7 @@ function getAuthCtx5(req2) {
     isSuperAdmin: user?.isSuperAdmin || false
   };
 }
-router75.get("/trees/:treeId/formulas", async (req2, res) => {
+router76.get("/trees/:treeId/formulas", async (req2, res) => {
   try {
     const { treeId } = req2.params;
     const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx5(req2);
@@ -55826,7 +55909,7 @@ router75.get("/trees/:treeId/formulas", async (req2, res) => {
     res.status(500).json({ error: "Erreur lors de la r\xE9cup\xE9ration batch des formules" });
   }
 });
-router75.get("/trees/:treeId/calculated-values", async (req2, res) => {
+router76.get("/trees/:treeId/calculated-values", async (req2, res) => {
   try {
     const { treeId } = req2.params;
     const { leadId } = req2.query;
@@ -55891,7 +55974,7 @@ router75.get("/trees/:treeId/calculated-values", async (req2, res) => {
     res.status(500).json({ error: "Erreur lors de la r\xE9cup\xE9ration batch des valeurs calcul\xE9es" });
   }
 });
-router75.get("/trees/:treeId/select-configs", async (req2, res) => {
+router76.get("/trees/:treeId/select-configs", async (req2, res) => {
   try {
     const { treeId } = req2.params;
     const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx5(req2);
@@ -55949,7 +56032,7 @@ router75.get("/trees/:treeId/select-configs", async (req2, res) => {
     res.status(500).json({ error: "Erreur lors de la r\xE9cup\xE9ration batch des configs select" });
   }
 });
-router75.get("/trees/:treeId/all", async (req2, res) => {
+router76.get("/trees/:treeId/all", async (req2, res) => {
   const { treeId } = req2.params;
   console.log(`[TBL Batch API] /all called for treeId: ${treeId}`);
   try {
@@ -56069,7 +56152,7 @@ router75.get("/trees/:treeId/all", async (req2, res) => {
     });
   }
 });
-router75.get("/trees/:treeId/node-data", async (req2, res) => {
+router76.get("/trees/:treeId/node-data", async (req2, res) => {
   try {
     const { treeId } = req2.params;
     const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx5(req2);
@@ -56137,7 +56220,7 @@ router75.get("/trees/:treeId/node-data", async (req2, res) => {
     res.status(500).json({ error: "Erreur lors de la r\xE9cup\xE9ration batch des donn\xE9es de noeuds" });
   }
 });
-router75.get("/trees/:treeId/conditions", async (req2, res) => {
+router76.get("/trees/:treeId/conditions", async (req2, res) => {
   try {
     const { treeId } = req2.params;
     const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx5(req2);
@@ -56184,13 +56267,13 @@ router75.get("/trees/:treeId/conditions", async (req2, res) => {
     res.status(500).json({ error: "Erreur lors de la r\xE9cup\xE9ration batch des conditions" });
   }
 });
-var tbl_batch_routes_default = router75;
+var tbl_batch_routes_default = router76;
 
 // src/routes/batch-routes.ts
-var import_express78 = require("express");
+var import_express79 = require("express");
 init_database();
 var import_googleapis10 = require("googleapis");
-var router76 = (0, import_express78.Router)();
+var router77 = (0, import_express79.Router)();
 function getAuthCtx6(req2) {
   const user = req2.user;
   return {
@@ -56199,7 +56282,7 @@ function getAuthCtx6(req2) {
     isSuperAdmin: user?.isSuperAdmin || false
   };
 }
-router76.post("/gmail/modify", async (req2, res) => {
+router77.post("/gmail/modify", async (req2, res) => {
   try {
     const { userId, organizationId } = getAuthCtx6(req2);
     const { messageIds, addLabelIds = [], removeLabelIds = [] } = req2.body;
@@ -56237,7 +56320,7 @@ router76.post("/gmail/modify", async (req2, res) => {
     res.status(500).json({ error: error.message || "Erreur batch Gmail" });
   }
 });
-router76.post("/gmail/trash", async (req2, res) => {
+router77.post("/gmail/trash", async (req2, res) => {
   try {
     const { userId } = getAuthCtx6(req2);
     const { messageIds } = req2.body;
@@ -56275,7 +56358,7 @@ router76.post("/gmail/trash", async (req2, res) => {
     res.status(500).json({ error: error.message || "Erreur batch Gmail" });
   }
 });
-router76.delete("/gmail/delete", async (req2, res) => {
+router77.delete("/gmail/delete", async (req2, res) => {
   try {
     const { userId } = getAuthCtx6(req2);
     const { messageIds } = req2.body;
@@ -56311,7 +56394,7 @@ router76.delete("/gmail/delete", async (req2, res) => {
     res.status(500).json({ error: error.message || "Erreur batch Gmail" });
   }
 });
-router76.patch("/leads/status", async (req2, res) => {
+router77.patch("/leads/status", async (req2, res) => {
   try {
     const { organizationId } = getAuthCtx6(req2);
     const { leadIds, statusId } = req2.body;
@@ -56348,7 +56431,7 @@ router76.patch("/leads/status", async (req2, res) => {
     res.status(500).json({ error: error.message || "Erreur batch leads" });
   }
 });
-router76.patch("/leads/assign", async (req2, res) => {
+router77.patch("/leads/assign", async (req2, res) => {
   try {
     const { organizationId } = getAuthCtx6(req2);
     const { leadIds, assignedToId } = req2.body;
@@ -56376,7 +56459,7 @@ router76.patch("/leads/assign", async (req2, res) => {
     res.status(500).json({ error: error.message || "Erreur batch leads" });
   }
 });
-router76.delete("/leads", async (req2, res) => {
+router77.delete("/leads", async (req2, res) => {
   try {
     const { organizationId } = getAuthCtx6(req2);
     const { leadIds } = req2.body;
@@ -56400,7 +56483,7 @@ router76.delete("/leads", async (req2, res) => {
     res.status(500).json({ error: error.message || "Erreur batch leads" });
   }
 });
-router76.post("/fields/configs", async (req2, res) => {
+router77.post("/fields/configs", async (req2, res) => {
   try {
     const { fieldIds } = req2.body;
     if (!fieldIds || !Array.isArray(fieldIds) || fieldIds.length === 0) {
@@ -56429,7 +56512,7 @@ router76.post("/fields/configs", async (req2, res) => {
     res.status(500).json({ error: error.message || "Erreur batch fields" });
   }
 });
-router76.patch("/modules/toggle", async (req2, res) => {
+router77.patch("/modules/toggle", async (req2, res) => {
   try {
     const { organizationId } = getAuthCtx6(req2);
     const { moduleIds, enabled } = req2.body;
@@ -56460,7 +56543,7 @@ router76.patch("/modules/toggle", async (req2, res) => {
     res.status(500).json({ error: error.message || "Erreur batch modules" });
   }
 });
-router76.get("/analytics/leads-by-status", async (req2, res) => {
+router77.get("/analytics/leads-by-status", async (req2, res) => {
   try {
     const { organizationId } = getAuthCtx6(req2);
     const counts = await db.lead.groupBy({
@@ -56491,7 +56574,7 @@ router76.get("/analytics/leads-by-status", async (req2, res) => {
     res.status(500).json({ error: error.message || "Erreur analytics" });
   }
 });
-router76.get("/analytics/leads-by-source", async (req2, res) => {
+router77.get("/analytics/leads-by-source", async (req2, res) => {
   try {
     const { organizationId } = getAuthCtx6(req2);
     const counts = await db.lead.groupBy({
@@ -56514,7 +56597,7 @@ router76.get("/analytics/leads-by-source", async (req2, res) => {
     res.status(500).json({ error: error.message || "Erreur analytics" });
   }
 });
-router76.get("/analytics/leads-by-assignee", async (req2, res) => {
+router77.get("/analytics/leads-by-assignee", async (req2, res) => {
   try {
     const { organizationId } = getAuthCtx6(req2);
     const counts = await db.lead.groupBy({
@@ -56544,13 +56627,13 @@ router76.get("/analytics/leads-by-assignee", async (req2, res) => {
     res.status(500).json({ error: error.message || "Erreur analytics" });
   }
 });
-var batch_routes_default = router76;
+var batch_routes_default = router77;
 
 // src/api/websites.ts
-var import_express79 = require("express");
+var import_express80 = require("express");
 init_database();
-var router77 = (0, import_express79.Router)();
-router77.get("/websites", authenticateToken, async (req2, res) => {
+var router78 = (0, import_express80.Router)();
+router78.get("/websites", authenticateToken, async (req2, res) => {
   try {
     const organizationId = req2.headers["x-organization-id"];
     const showAll = req2.query.all === "true";
@@ -56578,7 +56661,7 @@ router77.get("/websites", authenticateToken, async (req2, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
-router77.get("/websites/id/:id", authenticateToken, async (req2, res) => {
+router78.get("/websites/id/:id", authenticateToken, async (req2, res) => {
   try {
     const { id } = req2.params;
     const websiteId = parseInt(id, 10);
@@ -56601,7 +56684,7 @@ router77.get("/websites/id/:id", authenticateToken, async (req2, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
-router77.put("/websites/:id", authenticateToken, async (req2, res) => {
+router78.put("/websites/:id", authenticateToken, async (req2, res) => {
   try {
     const websiteId = parseInt(req2.params.id);
     const organizationId = req2.headers["x-organization-id"];
@@ -56666,7 +56749,7 @@ router77.put("/websites/:id", authenticateToken, async (req2, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
-router77.delete("/websites/:id", authenticateToken, async (req2, res) => {
+router78.delete("/websites/:id", authenticateToken, async (req2, res) => {
   try {
     const websiteId = parseInt(req2.params.id);
     const organizationId = req2.headers["x-organization-id"];
@@ -56690,7 +56773,7 @@ router77.delete("/websites/:id", authenticateToken, async (req2, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
-router77.post("/websites", authenticateToken, async (req2, res) => {
+router78.post("/websites", authenticateToken, async (req2, res) => {
   try {
     const organizationId = req2.headers["x-organization-id"];
     const data = req2.body;
@@ -56721,7 +56804,7 @@ router77.post("/websites", authenticateToken, async (req2, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
-router77.get("/websites/:idOrSlug", async (req2, res) => {
+router78.get("/websites/:idOrSlug", async (req2, res) => {
   try {
     const { idOrSlug } = req2.params;
     const organizationId = req2.headers["x-organization-id"];
@@ -56781,7 +56864,7 @@ router77.get("/websites/:idOrSlug", async (req2, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
-router77.get("/websites/:slug/services", async (req2, res) => {
+router78.get("/websites/:slug/services", async (req2, res) => {
   try {
     const { slug } = req2.params;
     const website = await db.websites.findFirst({
@@ -56804,7 +56887,7 @@ router77.get("/websites/:slug/services", async (req2, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
-router77.get("/websites/:slug/projects", async (req2, res) => {
+router78.get("/websites/:slug/projects", async (req2, res) => {
   try {
     const { slug } = req2.params;
     const { featured } = req2.query;
@@ -56832,7 +56915,7 @@ router77.get("/websites/:slug/projects", async (req2, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
-router77.get("/websites/:slug/testimonials", async (req2, res) => {
+router78.get("/websites/:slug/testimonials", async (req2, res) => {
   try {
     const { slug } = req2.params;
     const { featured } = req2.query;
@@ -56860,7 +56943,7 @@ router77.get("/websites/:slug/testimonials", async (req2, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
-router77.get("/websites/:slug/blog", async (req2, res) => {
+router78.get("/websites/:slug/blog", async (req2, res) => {
   try {
     const { slug } = req2.params;
     const { limit = "10", featured } = req2.query;
@@ -56899,7 +56982,7 @@ router77.get("/websites/:slug/blog", async (req2, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
-router77.get("/websites/:slug/blog/:postSlug", async (req2, res) => {
+router78.get("/websites/:slug/blog/:postSlug", async (req2, res) => {
   try {
     const { slug, postSlug } = req2.params;
     const website = await db.websites.findFirst({
@@ -56936,14 +57019,14 @@ router77.get("/websites/:slug/blog/:postSlug", async (req2, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
-var websites_default = router77;
+var websites_default = router78;
 
 // src/api/website-services.ts
-var import_express80 = require("express");
+var import_express81 = require("express");
 init_database();
-var router78 = (0, import_express80.Router)();
+var router79 = (0, import_express81.Router)();
 var prisma43 = db;
-router78.get("/website-services/:websiteId", async (req2, res) => {
+router79.get("/website-services/:websiteId", async (req2, res) => {
   try {
     const { websiteId } = req2.params;
     const services = await prisma43.webSiteService.findMany({
@@ -56960,7 +57043,7 @@ router78.get("/website-services/:websiteId", async (req2, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
-router78.post("/website-services", async (req2, res) => {
+router79.post("/website-services", async (req2, res) => {
   try {
     const { websiteId, key: key2, icon, title, description, features, ctaText, ctaUrl, isActive } = req2.body;
     if (!websiteId || !key2 || !title) {
@@ -56990,7 +57073,7 @@ router78.post("/website-services", async (req2, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
-router78.put("/website-services/:id", async (req2, res) => {
+router79.put("/website-services/:id", async (req2, res) => {
   try {
     const { id } = req2.params;
     const { key: key2, icon, title, description, features, ctaText, ctaUrl, isActive } = req2.body;
@@ -57013,7 +57096,7 @@ router78.put("/website-services/:id", async (req2, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
-router78.delete("/website-services/:id", async (req2, res) => {
+router79.delete("/website-services/:id", async (req2, res) => {
   try {
     const { id } = req2.params;
     await prisma43.webSiteService.delete({
@@ -57025,7 +57108,7 @@ router78.delete("/website-services/:id", async (req2, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
-router78.post("/website-services/reorder", async (req2, res) => {
+router79.post("/website-services/reorder", async (req2, res) => {
   try {
     const { services } = req2.body;
     if (!Array.isArray(services)) {
@@ -57045,14 +57128,14 @@ router78.post("/website-services/reorder", async (req2, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
-var website_services_default = router78;
+var website_services_default = router79;
 
 // src/api/website-projects.ts
-var import_express81 = require("express");
+var import_express82 = require("express");
 init_database();
-var router79 = (0, import_express81.Router)();
+var router80 = (0, import_express82.Router)();
 var prisma44 = db;
-router79.get("/website-projects/:websiteId", async (req2, res) => {
+router80.get("/website-projects/:websiteId", async (req2, res) => {
   try {
     const { websiteId } = req2.params;
     const projects = await prisma44.webSiteProject.findMany({
@@ -57069,7 +57152,7 @@ router79.get("/website-projects/:websiteId", async (req2, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
-router79.post("/website-projects", async (req2, res) => {
+router80.post("/website-projects", async (req2, res) => {
   try {
     const { websiteId, title, location, details, tags, isActive, isFeatured, completedAt } = req2.body;
     if (!websiteId || !title) {
@@ -57098,7 +57181,7 @@ router79.post("/website-projects", async (req2, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
-router79.put("/website-projects/:id", async (req2, res) => {
+router80.put("/website-projects/:id", async (req2, res) => {
   try {
     const { id } = req2.params;
     const { title, location, details, tags, isActive, isFeatured, completedAt } = req2.body;
@@ -57120,7 +57203,7 @@ router79.put("/website-projects/:id", async (req2, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
-router79.delete("/website-projects/:id", async (req2, res) => {
+router80.delete("/website-projects/:id", async (req2, res) => {
   try {
     const { id } = req2.params;
     await prisma44.webSiteProject.delete({
@@ -57132,7 +57215,7 @@ router79.delete("/website-projects/:id", async (req2, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
-router79.post("/website-projects/reorder", async (req2, res) => {
+router80.post("/website-projects/reorder", async (req2, res) => {
   try {
     const { projects } = req2.body;
     if (!Array.isArray(projects)) {
@@ -57152,14 +57235,14 @@ router79.post("/website-projects/reorder", async (req2, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
-var website_projects_default = router79;
+var website_projects_default = router80;
 
 // src/api/website-testimonials.ts
-var import_express82 = require("express");
+var import_express83 = require("express");
 init_database();
-var router80 = (0, import_express82.Router)();
+var router81 = (0, import_express83.Router)();
 var prisma45 = db;
-router80.get("/website-testimonials/:websiteId", async (req2, res) => {
+router81.get("/website-testimonials/:websiteId", async (req2, res) => {
   try {
     const { websiteId } = req2.params;
     const testimonials = await prisma45.webSiteTestimonial.findMany({
@@ -57176,7 +57259,7 @@ router80.get("/website-testimonials/:websiteId", async (req2, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
-router80.post("/website-testimonials", async (req2, res) => {
+router81.post("/website-testimonials", async (req2, res) => {
   try {
     const { websiteId, customerName, location, service, rating, text, isActive, isFeatured, publishedAt } = req2.body;
     if (!websiteId || !customerName || !text) {
@@ -57206,7 +57289,7 @@ router80.post("/website-testimonials", async (req2, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
-router80.put("/website-testimonials/:id", async (req2, res) => {
+router81.put("/website-testimonials/:id", async (req2, res) => {
   try {
     const { id } = req2.params;
     const { customerName, location, service, rating, text, isActive, isFeatured, publishedAt } = req2.body;
@@ -57229,7 +57312,7 @@ router80.put("/website-testimonials/:id", async (req2, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
-router80.delete("/website-testimonials/:id", async (req2, res) => {
+router81.delete("/website-testimonials/:id", async (req2, res) => {
   try {
     const { id } = req2.params;
     await prisma45.webSiteTestimonial.delete({
@@ -57241,7 +57324,7 @@ router80.delete("/website-testimonials/:id", async (req2, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
-router80.post("/website-testimonials/reorder", async (req2, res) => {
+router81.post("/website-testimonials/reorder", async (req2, res) => {
   try {
     const { testimonials } = req2.body;
     if (!Array.isArray(testimonials)) {
@@ -57261,13 +57344,13 @@ router80.post("/website-testimonials/reorder", async (req2, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
-var website_testimonials_default = router80;
+var website_testimonials_default = router81;
 
 // src/api/website-sections.ts
-var import_express83 = __toESM(require("express"), 1);
+var import_express84 = __toESM(require("express"), 1);
 init_database();
-var router81 = import_express83.default.Router();
-router81.get("/website-sections/:websiteId", async (req2, res) => {
+var router82 = import_express84.default.Router();
+router82.get("/website-sections/:websiteId", async (req2, res) => {
   try {
     const { websiteId } = req2.params;
     const sections = await db.website_sections.findMany({
@@ -57284,7 +57367,7 @@ router81.get("/website-sections/:websiteId", async (req2, res) => {
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
-router81.post("/website-sections", async (req2, res) => {
+router82.post("/website-sections", async (req2, res) => {
   try {
     const { websiteId, key: key2, type, name, content, backgroundColor, textColor, customCss } = req2.body;
     const maxOrder = await db.website_sections.aggregate({
@@ -57312,7 +57395,7 @@ router81.post("/website-sections", async (req2, res) => {
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
-router81.put("/website-sections/:id", async (req2, res) => {
+router82.put("/website-sections/:id", async (req2, res) => {
   try {
     const { id } = req2.params;
     const { name, content, backgroundColor, textColor, customCss, isActive } = req2.body;
@@ -57363,7 +57446,7 @@ router81.put("/website-sections/:id", async (req2, res) => {
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
-router81.patch("/website-sections/:id", async (req2, res) => {
+router82.patch("/website-sections/:id", async (req2, res) => {
   try {
     const { id } = req2.params;
     const { name, content, backgroundColor, textColor, customCss, isActive } = req2.body;
@@ -57411,7 +57494,7 @@ router81.patch("/website-sections/:id", async (req2, res) => {
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
-router81.delete("/website-sections/:id", async (req2, res) => {
+router82.delete("/website-sections/:id", async (req2, res) => {
   try {
     const { id } = req2.params;
     const section = await db.website_sections.findUnique({
@@ -57429,7 +57512,7 @@ router81.delete("/website-sections/:id", async (req2, res) => {
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
-router81.post("/website-sections/reorder", async (req2, res) => {
+router82.post("/website-sections/reorder", async (req2, res) => {
   try {
     const { sections } = req2.body;
     await db.$transaction(
@@ -57446,7 +57529,7 @@ router81.post("/website-sections/reorder", async (req2, res) => {
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
-router81.post("/website-sections/duplicate/:id", async (req2, res) => {
+router82.post("/website-sections/duplicate/:id", async (req2, res) => {
   try {
     const { id } = req2.params;
     const original = await db.website_sections.findUnique({
@@ -57477,13 +57560,13 @@ router81.post("/website-sections/duplicate/:id", async (req2, res) => {
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
-var website_sections_default = router81;
+var website_sections_default = router82;
 
 // src/api/website-themes.ts
-var import_express84 = require("express");
+var import_express85 = require("express");
 init_prisma();
-var router82 = (0, import_express84.Router)();
-router82.get("/:websiteId", async (req2, res) => {
+var router83 = (0, import_express85.Router)();
+router83.get("/:websiteId", async (req2, res) => {
   try {
     const { websiteId } = req2.params;
     console.log("\u{1F4E1} [API] GET theme websiteId:", websiteId);
@@ -57499,7 +57582,7 @@ router82.get("/:websiteId", async (req2, res) => {
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
-router82.post("/", async (req2, res) => {
+router83.post("/", async (req2, res) => {
   try {
     const themeData = req2.body;
     console.log("\u{1F4E1} [API] POST theme:", themeData);
@@ -57512,7 +57595,7 @@ router82.post("/", async (req2, res) => {
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
-router82.put("/:id", async (req2, res) => {
+router83.put("/:id", async (req2, res) => {
   try {
     const { id } = req2.params;
     const themeData = req2.body;
@@ -57527,7 +57610,7 @@ router82.put("/:id", async (req2, res) => {
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
-router82.delete("/:id", async (req2, res) => {
+router83.delete("/:id", async (req2, res) => {
   try {
     const { id } = req2.params;
     console.log("\u{1F4E1} [API] DELETE theme:", id);
@@ -57540,12 +57623,12 @@ router82.delete("/:id", async (req2, res) => {
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
-var website_themes_default = router82;
+var website_themes_default = router83;
 
 // src/api/contact-form.ts
-var import_express85 = require("express");
+var import_express86 = require("express");
 init_database();
-var router83 = (0, import_express85.Router)();
+var router84 = (0, import_express86.Router)();
 var prisma46 = db;
 var isValidEmail = (email) => {
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -57563,7 +57646,7 @@ var isSpam = (data) => {
   }
   return false;
 };
-router83.post("/contact-form", async (req2, res) => {
+router84.post("/contact-form", async (req2, res) => {
   try {
     const data = req2.body;
     if (!data.name || data.name.trim().length < 2) {
@@ -57639,7 +57722,7 @@ router83.post("/contact-form", async (req2, res) => {
     });
   }
 });
-router83.get("/contact-submissions/:websiteId", async (req2, res) => {
+router84.get("/contact-submissions/:websiteId", async (req2, res) => {
   try {
     const websiteId = parseInt(req2.params.websiteId);
     const submissions = await prisma46.contactSubmission.findMany({
@@ -57654,7 +57737,7 @@ router83.get("/contact-submissions/:websiteId", async (req2, res) => {
     res.status(500).json({ success: false, message: "Erreur serveur" });
   }
 });
-router83.patch("/contact-submission/:id/read", async (req2, res) => {
+router84.patch("/contact-submission/:id/read", async (req2, res) => {
   try {
     const id = parseInt(req2.params.id);
     const submission = await prisma46.contactSubmission.update({
@@ -57667,7 +57750,7 @@ router83.patch("/contact-submission/:id/read", async (req2, res) => {
     res.status(500).json({ success: false, message: "Erreur serveur" });
   }
 });
-router83.patch("/contact-submission/:id/status", async (req2, res) => {
+router84.patch("/contact-submission/:id/status", async (req2, res) => {
   try {
     const id = parseInt(req2.params.id);
     const { status, notes } = req2.body;
@@ -57689,7 +57772,7 @@ router83.patch("/contact-submission/:id/status", async (req2, res) => {
     res.status(500).json({ success: false, message: "Erreur serveur" });
   }
 });
-router83.delete("/contact-submission/:id", async (req2, res) => {
+router84.delete("/contact-submission/:id", async (req2, res) => {
   try {
     const id = parseInt(req2.params.id);
     await prisma46.contactSubmission.delete({
@@ -57701,15 +57784,15 @@ router83.delete("/contact-submission/:id", async (req2, res) => {
     res.status(500).json({ success: false, message: "Erreur serveur" });
   }
 });
-var contact_form_default = router83;
+var contact_form_default = router84;
 
 // src/api/image-upload.ts
-var import_express86 = require("express");
+var import_express87 = require("express");
 var import_multer2 = __toESM(require("multer"), 1);
 var import_path6 = __toESM(require("path"), 1);
 var import_promises = __toESM(require("fs/promises"), 1);
 init_database();
-var router84 = (0, import_express86.Router)();
+var router85 = (0, import_express87.Router)();
 var prisma47 = db;
 var storage2 = import_multer2.default.diskStorage({
   destination: async (req2, file, cb) => {
@@ -57738,7 +57821,7 @@ var upload2 = (0, import_multer2.default)({
     // 5MB max
   }
 });
-router84.post("/upload", upload2.single("file"), async (req2, res) => {
+router85.post("/upload", upload2.single("file"), async (req2, res) => {
   try {
     if (!req2.file) {
       return res.status(400).json({
@@ -57781,7 +57864,7 @@ router84.post("/upload", upload2.single("file"), async (req2, res) => {
     });
   }
 });
-router84.post("/upload-image", upload2.single("image"), async (req2, res) => {
+router85.post("/upload-image", upload2.single("image"), async (req2, res) => {
   try {
     if (!req2.file) {
       return res.status(400).json({
@@ -57838,7 +57921,7 @@ router84.post("/upload-image", upload2.single("image"), async (req2, res) => {
     });
   }
 });
-router84.get("/images/:websiteId", async (req2, res) => {
+router85.get("/images/:websiteId", async (req2, res) => {
   try {
     const websiteId = parseInt(req2.params.websiteId);
     const { category } = req2.query;
@@ -57862,7 +57945,7 @@ router84.get("/images/:websiteId", async (req2, res) => {
     });
   }
 });
-router84.delete("/image/:id", async (req2, res) => {
+router85.delete("/image/:id", async (req2, res) => {
   try {
     const id = parseInt(req2.params.id);
     const mediaFile = await prisma47.webSiteMediaFile.findUnique({
@@ -57894,10 +57977,10 @@ router84.delete("/image/:id", async (req2, res) => {
     });
   }
 });
-var image_upload_default = router84;
+var image_upload_default = router85;
 
 // src/api/ai-content.ts
-var import_express87 = require("express");
+var import_express88 = require("express");
 
 // src/services/aiContentService.ts
 var AIContentService = class {
@@ -58110,8 +58193,8 @@ R\xE8gles :
 var aiContentService = new AIContentService();
 
 // src/api/ai-content.ts
-var router85 = (0, import_express87.Router)();
-router85.post("/generate-service", async (req2, res) => {
+var router86 = (0, import_express88.Router)();
+router86.post("/generate-service", async (req2, res) => {
   try {
     const { siteName, industry, serviceType, keywords } = req2.body;
     if (!siteName || !industry || !serviceType) {
@@ -58137,7 +58220,7 @@ router85.post("/generate-service", async (req2, res) => {
     });
   }
 });
-router85.post("/generate-project", async (req2, res) => {
+router86.post("/generate-project", async (req2, res) => {
   try {
     const { siteName, industry, projectType, location } = req2.body;
     if (!siteName || !industry || !projectType) {
@@ -58163,7 +58246,7 @@ router85.post("/generate-project", async (req2, res) => {
     });
   }
 });
-router85.post("/generate-testimonial", async (req2, res) => {
+router86.post("/generate-testimonial", async (req2, res) => {
   try {
     const { siteName, industry, serviceType, customerType } = req2.body;
     if (!siteName || !industry || !serviceType) {
@@ -58189,7 +58272,7 @@ router85.post("/generate-testimonial", async (req2, res) => {
     });
   }
 });
-router85.post("/generate-page", async (req2, res) => {
+router86.post("/generate-page", async (req2, res) => {
   try {
     const { siteName, siteType, industry, mainServices, targetAudience } = req2.body;
     if (!siteName || !siteType || !industry || !mainServices) {
@@ -58216,7 +58299,7 @@ router85.post("/generate-page", async (req2, res) => {
     });
   }
 });
-router85.post("/optimize-seo", async (req2, res) => {
+router86.post("/optimize-seo", async (req2, res) => {
   try {
     const { currentTitle, currentDescription, pageContent, targetKeywords, siteName, industry } = req2.body;
     if (!pageContent || !siteName || !industry) {
@@ -58244,7 +58327,7 @@ router85.post("/optimize-seo", async (req2, res) => {
     });
   }
 });
-router85.post("/generate-multiple-services", async (req2, res) => {
+router86.post("/generate-multiple-services", async (req2, res) => {
   try {
     const { siteName, industry, serviceTypes } = req2.body;
     if (!siteName || !industry || !serviceTypes || !Array.isArray(serviceTypes)) {
@@ -58270,15 +58353,15 @@ router85.post("/generate-multiple-services", async (req2, res) => {
     });
   }
 });
-var ai_content_default = router85;
+var ai_content_default = router86;
 
 // src/api/ai.ts
-var import_express88 = __toESM(require("express"), 1);
+var import_express89 = __toESM(require("express"), 1);
 var import_generative_ai2 = require("@google/generative-ai");
-var router86 = import_express88.default.Router();
+var router87 = import_express89.default.Router();
 var genAI = new import_generative_ai2.GoogleGenerativeAI(process.env.GEMINI_API_KEY || "");
 var MODEL_NAME = "gemini-pro";
-router86.post("/generate", async (req2, res) => {
+router87.post("/generate", async (req2, res) => {
   try {
     const { prompt, context, sectionType, currentValue } = req2.body;
     if (!prompt) {
@@ -58441,7 +58524,7 @@ function formatSuggestions(data, context) {
       return [{ value: data }];
   }
 }
-router86.post("/analyze-section", async (req2, res) => {
+router87.post("/analyze-section", async (req2, res) => {
   try {
     const { sectionType, content, prompt } = req2.body;
     if (!process.env.GEMINI_API_KEY) {
@@ -58576,7 +58659,7 @@ function generateFallbackAnalysis(sectionType, content) {
     }
   };
 }
-router86.post("/optimize-seo", async (req2, res) => {
+router87.post("/optimize-seo", async (req2, res) => {
   try {
     const { content, sectionType } = req2.body;
     if (!process.env.GEMINI_API_KEY) {
@@ -58616,7 +58699,7 @@ Format de r\xE9ponse : JSON avec { metaTitle, metaDescription, keywords: [], slu
     });
   }
 });
-router86.post("/improve-content", async (req2, res) => {
+router87.post("/improve-content", async (req2, res) => {
   try {
     const { content, instructions } = req2.body;
     if (!process.env.GEMINI_API_KEY) {
@@ -58653,7 +58736,7 @@ Retourne le contenu am\xE9lior\xE9 au format JSON identique \xE0 l'original.`;
     });
   }
 });
-router86.post("/optimize-layout", async (req2, res) => {
+router87.post("/optimize-layout", async (req2, res) => {
   try {
     const { itemCount, sectionType, currentLayout } = req2.body;
     if (!process.env.GEMINI_API_KEY) {
@@ -58708,7 +58791,7 @@ Format de r\xE9ponse : JSON array avec :
     });
   }
 });
-router86.post("/generate-palette", async (req2, res) => {
+router87.post("/generate-palette", async (req2, res) => {
   try {
     const { baseColor, mood, industry } = req2.body;
     if (!process.env.GEMINI_API_KEY) {
@@ -58848,7 +58931,7 @@ function generateFallbackPalettes(baseColor) {
   ];
 }
 var geminiMeasureService = new GoogleGeminiService_default();
-router86.post("/measure-image", async (req2, res) => {
+router87.post("/measure-image", async (req2, res) => {
   const startTime = Date.now();
   try {
     const {
@@ -58928,7 +59011,7 @@ router86.post("/measure-image", async (req2, res) => {
     });
   }
 });
-router86.post("/measure-image/apply", async (req2, res) => {
+router87.post("/measure-image/apply", async (req2, res) => {
   try {
     const {
       measurements,
@@ -58987,7 +59070,7 @@ router86.post("/measure-image/apply", async (req2, res) => {
     });
   }
 });
-router86.get("/measure-image/status", async (_req, res) => {
+router87.get("/measure-image/status", async (_req, res) => {
   try {
     const status = geminiMeasureService.getStatus();
     res.json({
@@ -59007,13 +59090,13 @@ router86.get("/measure-image/status", async (_req, res) => {
     });
   }
 });
-var ai_default2 = router86;
+var ai_default2 = router87;
 
 // src/routes/ai-field-generator.ts
-var import_express89 = __toESM(require("express"), 1);
-var router87 = import_express89.default.Router();
+var import_express90 = __toESM(require("express"), 1);
+var router88 = import_express90.default.Router();
 var geminiService3 = new GoogleGeminiService();
-router87.use(authMiddleware);
+router88.use(authMiddleware);
 var SmartPromptBuilder = class {
   /**
    * Construit un prompt optimisé selon le type de champ
@@ -59396,7 +59479,7 @@ var QualityAnalyzer = class {
     }
   }
 };
-router87.post("/generate-field", async (req2, res) => {
+router88.post("/generate-field", async (req2, res) => {
   const startTime = Date.now();
   try {
     const { fieldId, fieldType, fieldLabel, currentValue, aiContext } = req2.body;
@@ -59483,7 +59566,7 @@ router87.post("/generate-field", async (req2, res) => {
     });
   }
 });
-router87.get("/status", async (_req, res) => {
+router88.get("/status", async (_req, res) => {
   try {
     const isAvailable = !!process.env.GOOGLE_API_KEY || !!process.env.GEMINI_API_KEY;
     res.json({
@@ -59500,10 +59583,10 @@ router87.get("/status", async (_req, res) => {
     });
   }
 });
-var ai_field_generator_default = router87;
+var ai_field_generator_default = router88;
 
 // src/components/TreeBranchLeaf/treebranchleaf-new/api/repeat/repeat-routes.ts
-var import_express90 = require("express");
+var import_express91 = require("express");
 
 // src/components/TreeBranchLeaf/treebranchleaf-new/api/repeat/repeat-blueprint-builder.ts
 var parseJsonArray = (value) => {
@@ -62592,10 +62675,10 @@ function normalizeMetadata(metadata) {
 
 // src/components/TreeBranchLeaf/treebranchleaf-new/api/repeat/repeat-routes.ts
 function createRepeatRouter(prisma49) {
-  const router90 = (0, import_express90.Router)();
+  const router92 = (0, import_express91.Router)();
   const inFlightExecuteByRepeater = /* @__PURE__ */ new Set();
-  router90.use(authenticateToken);
-  router90.post("/:repeaterNodeId/instances", async (req2, res) => {
+  router92.use(authenticateToken);
+  router92.post("/:repeaterNodeId/instances", async (req2, res) => {
     const { repeaterNodeId } = req2.params;
     const body2 = req2.body || {};
     try {
@@ -62627,7 +62710,7 @@ function createRepeatRouter(prisma49) {
       });
     }
   });
-  router90.post("/:repeaterNodeId/instances/execute", async (req2, res) => {
+  router92.post("/:repeaterNodeId/instances/execute", async (req2, res) => {
     const { repeaterNodeId } = req2.params;
     const body2 = req2.body || {};
     if (inFlightExecuteByRepeater.has(repeaterNodeId)) {
@@ -62679,13 +62762,13 @@ function createRepeatRouter(prisma49) {
       inFlightExecuteByRepeater.delete(repeaterNodeId);
     }
   });
-  return router90;
+  return router92;
 }
 
 // src/api/cloud-run-domains.ts
-var import_express91 = require("express");
-var router88 = (0, import_express91.Router)();
-router88.get("/cloud-run-domains", authenticateToken, async (req2, res) => {
+var import_express92 = require("express");
+var router89 = (0, import_express92.Router)();
+router89.get("/cloud-run-domains", authenticateToken, async (req2, res) => {
   try {
     const user = req2.user;
     if (!user.isSuperAdmin) {
@@ -62727,7 +62810,7 @@ router88.get("/cloud-run-domains", authenticateToken, async (req2, res) => {
     });
   }
 });
-router88.post("/cloud-run-domains/verify", authenticateToken, async (req2, res) => {
+router89.post("/cloud-run-domains/verify", authenticateToken, async (req2, res) => {
   try {
     const user = req2.user;
     const { domain } = req2.body;
@@ -62780,13 +62863,1436 @@ async function checkDomainReachability(domain) {
     return false;
   }
 }
-var cloud_run_domains_default = router88;
+var cloud_run_domains_default = router89;
+
+// src/api/measurement-reference.ts
+var import_express93 = require("express");
+init_database();
+
+// src/services/EdgeDetectionService.ts
+var import_sharp = __toESM(require("sharp"), 1);
+var EdgeDetectionService = class {
+  /**
+   * 🎯 Détecte les 4 coins d'une feuille BLANCHE dans une zone de l'image
+   * NOUVELLE APPROCHE: 
+   * 1. Créer un masque binaire (blanc vs non-blanc)
+   * 2. Trouver le contour de la zone blanche
+   * 3. Approximer le contour par un quadrilatère
+   * 4. Extraire les 4 coins
+   */
+  async detectWhitePaperCorners(imageBase64, selectionZone, mimeType = "image/jpeg") {
+    try {
+      console.log("\u{1F50D} [EdgeDetection V2] D\xE9but d\xE9tection de la feuille blanche...");
+      console.log(`\u{1F4D0} [EdgeDetection V2] Zone: ${selectionZone.x.toFixed(1)}%, ${selectionZone.y.toFixed(1)}% - ${selectionZone.width.toFixed(1)}x${selectionZone.height.toFixed(1)}%`);
+      const imageBuffer = Buffer.from(imageBase64, "base64");
+      const metadata = await (0, import_sharp.default)(imageBuffer).metadata();
+      const imgWidth = metadata.width || 0;
+      const imgHeight = metadata.height || 0;
+      console.log(`\u{1F4F7} [EdgeDetection V2] Image: ${imgWidth}x${imgHeight}px`);
+      const zoneX = Math.round(selectionZone.x / 100 * imgWidth);
+      const zoneY = Math.round(selectionZone.y / 100 * imgHeight);
+      const zoneW = Math.round(selectionZone.width / 100 * imgWidth);
+      const zoneH = Math.round(selectionZone.height / 100 * imgHeight);
+      console.log(`\u{1F4D0} [EdgeDetection V2] Zone en pixels: x=${zoneX}, y=${zoneY}, w=${zoneW}, h=${zoneH}`);
+      const { data: pixels, info } = await (0, import_sharp.default)(imageBuffer).extract({ left: zoneX, top: zoneY, width: zoneW, height: zoneH }).raw().toBuffer({ resolveWithObject: true });
+      console.log(`\u{1F5BC}\uFE0F [EdgeDetection V2] Zone extraite: ${info.width}x${info.height}, ${info.channels} channels`);
+      const binaryMask = this.createWhiteMask(pixels, info.width, info.height, info.channels);
+      const contourPoints = this.findContour(binaryMask, info.width, info.height);
+      console.log(`\u{1F4CD} [EdgeDetection V2] Contour trouv\xE9: ${contourPoints.length} points`);
+      if (contourPoints.length < 50) {
+        console.log("\u26A0\uFE0F [EdgeDetection V2] Contour trop petit");
+        return { success: false, error: "Contour de la feuille trop petit ou non d\xE9tect\xE9" };
+      }
+      const corners = this.approximateQuadrilateral(contourPoints, info.width, info.height);
+      if (!corners) {
+        console.log("\u26A0\uFE0F [EdgeDetection V2] Impossible d'approximer un quadrilat\xE8re");
+        return { success: false, error: "Impossible de trouver 4 coins distincts" };
+      }
+      const globalCorners = {
+        topLeft: {
+          x: (zoneX + corners.topLeft.x) / imgWidth * 100,
+          y: (zoneY + corners.topLeft.y) / imgHeight * 100
+        },
+        topRight: {
+          x: (zoneX + corners.topRight.x) / imgWidth * 100,
+          y: (zoneY + corners.topRight.y) / imgHeight * 100
+        },
+        bottomLeft: {
+          x: (zoneX + corners.bottomLeft.x) / imgWidth * 100,
+          y: (zoneY + corners.bottomLeft.y) / imgHeight * 100
+        },
+        bottomRight: {
+          x: (zoneX + corners.bottomRight.x) / imgWidth * 100,
+          y: (zoneY + corners.bottomRight.y) / imgHeight * 100
+        }
+      };
+      console.log("\u2705 [EdgeDetection V2] Coins d\xE9tect\xE9s:", JSON.stringify(globalCorners, null, 2));
+      const confidence = this.calculateConfidence(corners, info.width, info.height);
+      return {
+        success: true,
+        corners: globalCorners,
+        confidence,
+        debug: {
+          imageWidth: imgWidth,
+          imageHeight: imgHeight,
+          whitePixelsFound: binaryMask.filter((v) => v).length,
+          edgePointsFound: contourPoints.length,
+          contourLength: contourPoints.length
+        }
+      };
+    } catch (error) {
+      console.error("\u274C [EdgeDetection V2] Erreur:", error);
+      return {
+        success: false,
+        error: error.message
+      };
+    }
+  }
+  /**
+   * 📝 Crée un masque binaire: true = pixel blanc, false = autre
+   * Utilise une analyse HSL pour mieux détecter le blanc
+   */
+  createWhiteMask(pixels, width, height, channels) {
+    const mask = new Array(width * height).fill(false);
+    const MIN_LUMINOSITY = 170;
+    const MAX_SATURATION = 40;
+    let whiteCount = 0;
+    for (let y = 0; y < height; y++) {
+      for (let x = 0; x < width; x++) {
+        const idx = (y * width + x) * channels;
+        const r = pixels[idx] || 0;
+        const g = pixels[idx + 1] || 0;
+        const b = pixels[idx + 2] || 0;
+        const max = Math.max(r, g, b);
+        const min = Math.min(r, g, b);
+        const luminosity = (max + min) / 2;
+        const saturation = max === 0 ? 0 : (max - min) / max * 100;
+        if (luminosity >= MIN_LUMINOSITY && saturation <= MAX_SATURATION) {
+          mask[y * width + x] = true;
+          whiteCount++;
+        }
+      }
+    }
+    console.log(`\u2B1C [EdgeDetection V2] Pixels blancs: ${whiteCount}/${width * height} (${(whiteCount / (width * height) * 100).toFixed(1)}%)`);
+    return mask;
+  }
+  /**
+   * 🔲 Trouve le contour de la zone blanche (algorithme de suivi de contour)
+   * Utilise l'algorithme de Moore (marching squares simplifié)
+   */
+  findContour(mask, width, height) {
+    const contour = [];
+    const visited = /* @__PURE__ */ new Set();
+    let startX = -1, startY = -1;
+    outer: for (let y = 0; y < height; y++) {
+      for (let x = 0; x < width; x++) {
+        if (mask[y * width + x]) {
+          if (this.isEdgePixel(mask, x, y, width, height)) {
+            startX = x;
+            startY = y;
+            break outer;
+          }
+        }
+      }
+    }
+    if (startX === -1) {
+      console.log("\u26A0\uFE0F [EdgeDetection V2] Pas de point de d\xE9part trouv\xE9");
+      return [];
+    }
+    for (let y = 0; y < height; y++) {
+      for (let x = 0; x < width; x++) {
+        if (mask[y * width + x] && this.isEdgePixel(mask, x, y, width, height)) {
+          const key2 = `${x},${y}`;
+          if (!visited.has(key2)) {
+            visited.add(key2);
+            contour.push({ x, y });
+          }
+        }
+      }
+    }
+    return contour;
+  }
+  /**
+   * Vérifie si un pixel blanc est sur le bord (a au moins un voisin non-blanc)
+   */
+  isEdgePixel(mask, x, y, width, height) {
+    const dirs = [[-1, -1], [0, -1], [1, -1], [-1, 0], [1, 0], [-1, 1], [0, 1], [1, 1]];
+    for (const [dx, dy] of dirs) {
+      const nx = x + dx;
+      const ny = y + dy;
+      if (nx < 0 || nx >= width || ny < 0 || ny >= height) {
+        return true;
+      }
+      if (!mask[ny * width + nx]) {
+        return true;
+      }
+    }
+    return false;
+  }
+  /**
+   * 🎯 Approxime le contour par un quadrilatère (4 coins)
+   * Utilise l'algorithme de Douglas-Peucker + détection des coins extrêmes
+   */
+  approximateQuadrilateral(contourPoints, width, height) {
+    if (contourPoints.length < 4) return null;
+    let topLeft = contourPoints[0];
+    let topRight = contourPoints[0];
+    let bottomLeft = contourPoints[0];
+    let bottomRight = contourPoints[0];
+    let minSum = Infinity;
+    let maxSum = -Infinity;
+    let minDiff = Infinity;
+    let maxDiff = -Infinity;
+    for (const p of contourPoints) {
+      const sum = p.x + p.y;
+      const diff = p.x - p.y;
+      if (sum < minSum) {
+        minSum = sum;
+        topLeft = p;
+      }
+      if (sum > maxSum) {
+        maxSum = sum;
+        bottomRight = p;
+      }
+      if (diff > maxDiff) {
+        maxDiff = diff;
+        topRight = p;
+      }
+      if (diff < minDiff) {
+        minDiff = diff;
+        bottomLeft = p;
+      }
+    }
+    const corners = [topLeft, topRight, bottomLeft, bottomRight];
+    const uniqueKeys = new Set(corners.map((c) => `${c.x},${c.y}`));
+    if (uniqueKeys.size < 4) {
+      console.log("\u26A0\uFE0F [EdgeDetection V2] Coins non distincts, utilisation de la m\xE9thode alternative");
+      return this.findCornersAlternative(contourPoints, width, height);
+    }
+    const refined = {
+      topLeft: this.refineCornerPosition(topLeft, contourPoints, "topLeft"),
+      topRight: this.refineCornerPosition(topRight, contourPoints, "topRight"),
+      bottomLeft: this.refineCornerPosition(bottomLeft, contourPoints, "bottomLeft"),
+      bottomRight: this.refineCornerPosition(bottomRight, contourPoints, "bottomRight")
+    };
+    console.log(`\u{1F3AF} [EdgeDetection V2] Coins approxim\xE9s:
+      TL: (${refined.topLeft.x}, ${refined.topLeft.y})
+      TR: (${refined.topRight.x}, ${refined.topRight.y})
+      BL: (${refined.bottomLeft.x}, ${refined.bottomLeft.y})
+      BR: (${refined.bottomRight.x}, ${refined.bottomRight.y})`);
+    return refined;
+  }
+  /**
+   * Méthode alternative pour trouver les coins si la première échoue
+   */
+  findCornersAlternative(contourPoints, width, height) {
+    let cx = 0, cy = 0;
+    for (const p of contourPoints) {
+      cx += p.x;
+      cy += p.y;
+    }
+    cx /= contourPoints.length;
+    cy /= contourPoints.length;
+    const quadrants = {
+      topLeft: [],
+      topRight: [],
+      bottomLeft: [],
+      bottomRight: []
+    };
+    for (const p of contourPoints) {
+      if (p.x < cx && p.y < cy) quadrants.topLeft.push(p);
+      else if (p.x >= cx && p.y < cy) quadrants.topRight.push(p);
+      else if (p.x < cx && p.y >= cy) quadrants.bottomLeft.push(p);
+      else quadrants.bottomRight.push(p);
+    }
+    const findFarthest = (points, cx2, cy2) => {
+      if (points.length === 0) return null;
+      let maxDist = 0;
+      let farthest = points[0];
+      for (const p of points) {
+        const dist = Math.sqrt((p.x - cx2) ** 2 + (p.y - cy2) ** 2);
+        if (dist > maxDist) {
+          maxDist = dist;
+          farthest = p;
+        }
+      }
+      return farthest;
+    };
+    const tl = findFarthest(quadrants.topLeft, cx, cy);
+    const tr = findFarthest(quadrants.topRight, cx, cy);
+    const bl = findFarthest(quadrants.bottomLeft, cx, cy);
+    const br = findFarthest(quadrants.bottomRight, cx, cy);
+    if (!tl || !tr || !bl || !br) {
+      return null;
+    }
+    return {
+      topLeft: tl,
+      topRight: tr,
+      bottomLeft: bl,
+      bottomRight: br
+    };
+  }
+  /**
+   * Affine la position d'un coin en cherchant le point le plus "en coin"
+   * parmi les points proches
+   */
+  refineCornerPosition(corner, contourPoints, cornerType) {
+    const SEARCH_RADIUS = 20;
+    const nearby = contourPoints.filter(
+      (p) => Math.abs(p.x - corner.x) < SEARCH_RADIUS && Math.abs(p.y - corner.y) < SEARCH_RADIUS
+    );
+    if (nearby.length < 3) return corner;
+    let best = corner;
+    let bestScore = -Infinity;
+    for (const p of nearby) {
+      let score = 0;
+      switch (cornerType) {
+        case "topLeft":
+          score = -p.x - p.y;
+          break;
+        case "topRight":
+          score = p.x - p.y;
+          break;
+        case "bottomLeft":
+          score = -p.x + p.y;
+          break;
+        case "bottomRight":
+          score = p.x + p.y;
+          break;
+      }
+      if (score > bestScore) {
+        bestScore = score;
+        best = p;
+      }
+    }
+    return best;
+  }
+  /**
+   * Calcule un score de confiance basé sur la géométrie du quadrilatère
+   */
+  calculateConfidence(corners, width, height) {
+    const topWidth = Math.sqrt(
+      (corners.topRight.x - corners.topLeft.x) ** 2 + (corners.topRight.y - corners.topLeft.y) ** 2
+    );
+    const bottomWidth = Math.sqrt(
+      (corners.bottomRight.x - corners.bottomLeft.x) ** 2 + (corners.bottomRight.y - corners.bottomLeft.y) ** 2
+    );
+    const leftHeight = Math.sqrt(
+      (corners.bottomLeft.x - corners.topLeft.x) ** 2 + (corners.bottomLeft.y - corners.topLeft.y) ** 2
+    );
+    const rightHeight = Math.sqrt(
+      (corners.bottomRight.x - corners.topRight.x) ** 2 + (corners.bottomRight.y - corners.topRight.y) ** 2
+    );
+    const widthRatio = Math.min(topWidth, bottomWidth) / Math.max(topWidth, bottomWidth);
+    const heightRatio = Math.min(leftHeight, rightHeight) / Math.max(leftHeight, rightHeight);
+    const avgWidth = (topWidth + bottomWidth) / 2;
+    const avgHeight = (leftHeight + rightHeight) / 2;
+    const aspectRatio = Math.max(avgWidth, avgHeight) / Math.min(avgWidth, avgHeight);
+    const a4Ratio = 297 / 210;
+    const aspectScore = 1 - Math.abs(aspectRatio - a4Ratio) / a4Ratio;
+    const confidence = Math.round(
+      widthRatio * 30 + heightRatio * 30 + Math.max(0, aspectScore) * 40
+    );
+    console.log(`\u{1F4CA} [EdgeDetection V2] Confiance: ${confidence}% (widthRatio=${widthRatio.toFixed(2)}, heightRatio=${heightRatio.toFixed(2)}, aspect=${aspectScore.toFixed(2)})`);
+    return Math.max(0, Math.min(100, confidence));
+  }
+};
+var edgeDetectionService = new EdgeDetectionService();
+
+// src/services/MultiPhotoFusionService.ts
+var import_sharp2 = __toESM(require("sharp"), 1);
+var MultiPhotoFusionService = class {
+  /**
+   * 🎯 FUSION PRINCIPALE - Combine plusieurs photos en une image optimisée
+   * 
+   * @param photos - Tableau de photos à fusionner
+   * @param options - Options de fusion
+   * @returns Image fusionnée optimisée pour la détection
+   */
+  async fusePhotos(photos, options = {}) {
+    const {
+      enhanceEdges = true,
+      boostWhite = true,
+      localContrast = true,
+      targetWidth = 1920,
+      outputQuality = 95
+    } = options;
+    try {
+      console.log(`\u{1F500} [Fusion] D\xE9but fusion de ${photos.length} photos...`);
+      if (photos.length === 0) {
+        return { success: false, mimeType: "image/jpeg", error: "Aucune photo fournie" };
+      }
+      if (photos.length === 1) {
+        console.log("\u{1F4F7} [Fusion] Une seule photo - optimisation directe");
+        return this.optimizeSinglePhoto(photos[0], { enhanceEdges, boostWhite, localContrast, targetWidth, outputQuality });
+      }
+      console.log("\u{1F4CA} [Fusion] Analyse qualit\xE9 des photos...");
+      const photoAnalysis = await this.analyzePhotos(photos);
+      const usablePhotos = photoAnalysis.filter((p) => p.quality >= 30);
+      console.log(`\u2705 [Fusion] ${usablePhotos.length}/${photos.length} photos utilisables`);
+      if (usablePhotos.length === 0) {
+        const best = photoAnalysis.sort((a, b) => b.quality - a.quality)[0];
+        console.warn(`\u26A0\uFE0F [Fusion] Aucune photo de bonne qualit\xE9, utilisation de la #${best.index}`);
+        return this.optimizeSinglePhoto(photos[best.index], { enhanceEdges, boostWhite, localContrast, targetWidth, outputQuality });
+      }
+      console.log("\u{1F4D0} [Fusion] Normalisation des dimensions...");
+      const normalizedBuffers = await this.normalizePhotos(
+        usablePhotos.map((p) => photos[p.index]),
+        targetWidth
+      );
+      console.log("\u{1F500} [Fusion] Fusion pond\xE9r\xE9e par qualit\xE9...");
+      let fusedBuffer = await this.weightedBlend(normalizedBuffers, usablePhotos.map((p) => p.weight));
+      if (enhanceEdges) {
+        console.log("\u{1F532} [Fusion] Am\xE9lioration des contours...");
+        fusedBuffer = await this.enhanceEdges(fusedBuffer);
+      }
+      if (boostWhite) {
+        console.log("\u2B1C [Fusion] Amplification zones blanches (feuille A4)...");
+        fusedBuffer = await this.boostWhiteAreas(fusedBuffer);
+      }
+      if (localContrast) {
+        console.log("\u{1F39B}\uFE0F [Fusion] Am\xE9lioration contraste local...");
+        fusedBuffer = await this.enhanceLocalContrast(fusedBuffer);
+      }
+      const finalBuffer = await (0, import_sharp2.default)(fusedBuffer).jpeg({ quality: outputQuality }).toBuffer();
+      const fusedImageBase64 = finalBuffer.toString("base64");
+      const finalStats = await this.analyzeImageStats(fusedBuffer);
+      console.log(`\u2705 [Fusion] Termin\xE9e ! Sharpness finale: ${finalStats.sharpness.toFixed(1)}, WhiteRatio: ${(finalStats.whiteRatio * 100).toFixed(1)}%`);
+      return {
+        success: true,
+        fusedImageBase64,
+        mimeType: "image/jpeg",
+        metrics: {
+          inputPhotos: photos.length,
+          usedPhotos: usablePhotos.length,
+          averageQuality: usablePhotos.reduce((s, p) => s + p.quality, 0) / usablePhotos.length,
+          edgeEnhancement: enhanceEdges ? 1 : 0,
+          whiteBoost: boostWhite ? 1 : 0,
+          finalSharpness: finalStats.sharpness
+        },
+        photoAnalysis
+      };
+    } catch (error) {
+      console.error("\u274C [Fusion] Erreur:", error);
+      return {
+        success: false,
+        mimeType: "image/jpeg",
+        error: error.message
+      };
+    }
+  }
+  /**
+   * 📊 Analyse la qualité de chaque photo
+   */
+  async analyzePhotos(photos) {
+    const results = await Promise.all(photos.map(async (photo, index) => {
+      const buffer = Buffer.from(photo.base64, "base64");
+      const stats = await this.analyzeImageStats(buffer);
+      const issues = [];
+      if (stats.sharpness < 30) issues.push("Floue");
+      if (stats.brightness < 50) issues.push("Trop sombre");
+      if (stats.brightness > 220) issues.push("Surexpos\xE9e");
+      if (stats.contrast < 20) issues.push("Manque de contraste");
+      const quality = Math.min(100, Math.max(
+        0,
+        stats.sharpness * 0.4 + (100 - Math.abs(stats.brightness - 128) / 1.28) * 0.3 + stats.contrast * 0.3
+      ));
+      const weight = Math.pow(quality / 100, 2);
+      console.log(`  \u{1F4F7} Photo ${index + 1}: Quality=${quality.toFixed(0)}, Sharpness=${stats.sharpness.toFixed(0)}, Brightness=${stats.brightness.toFixed(0)}, Issues=[${issues.join(", ")}]`);
+      return {
+        index,
+        quality,
+        sharpness: stats.sharpness,
+        brightness: stats.brightness,
+        weight,
+        issues
+      };
+    }));
+    const totalWeight = results.reduce((s, r) => s + r.weight, 0);
+    results.forEach((r) => r.weight = r.weight / totalWeight);
+    return results;
+  }
+  /**
+   * 📈 Analyse les statistiques d'une image
+   */
+  async analyzeImageStats(buffer) {
+    const image = (0, import_sharp2.default)(buffer);
+    const { data, info } = await image.grayscale().raw().toBuffer({ resolveWithObject: true });
+    const pixels = new Uint8Array(data);
+    const totalPixels = info.width * info.height;
+    let brightnessSum = 0;
+    for (let i = 0; i < pixels.length; i++) {
+      brightnessSum += pixels[i];
+    }
+    const brightness = brightnessSum / totalPixels;
+    let varianceSum = 0;
+    for (let i = 0; i < pixels.length; i++) {
+      varianceSum += Math.pow(pixels[i] - brightness, 2);
+    }
+    const contrast = Math.sqrt(varianceSum / totalPixels) / 1.28;
+    let laplacianSum = 0;
+    let laplacianCount = 0;
+    const width = info.width;
+    for (let y = 1; y < info.height - 1; y++) {
+      for (let x = 1; x < width - 1; x++) {
+        const idx = y * width + x;
+        const laplacian = 4 * pixels[idx] - pixels[idx - width] - pixels[idx + width] - pixels[idx - 1] - pixels[idx + 1];
+        laplacianSum += laplacian * laplacian;
+        laplacianCount++;
+      }
+    }
+    const sharpness = Math.min(100, Math.sqrt(laplacianSum / laplacianCount) / 5);
+    let whiteCount = 0;
+    for (let i = 0; i < pixels.length; i++) {
+      if (pixels[i] > 200) whiteCount++;
+    }
+    const whiteRatio = whiteCount / totalPixels;
+    return { sharpness, brightness, contrast, whiteRatio };
+  }
+  /**
+   * 📐 Normalise toutes les photos à la même dimension
+   */
+  async normalizePhotos(photos, targetWidth) {
+    return Promise.all(photos.map(async (photo) => {
+      const buffer = Buffer.from(photo.base64, "base64");
+      return (0, import_sharp2.default)(buffer).resize(targetWidth, null, { fit: "inside", withoutEnlargement: true }).toBuffer();
+    }));
+  }
+  /**
+   * 🔀 Fusion MULTI-PERSPECTIVE des images
+   * 
+   * STRATÉGIE MULTI-PERSPECTIVE:
+   * Les 3 photos sont prises de DIFFÉRENTS ANGLES. Chaque perspective
+   * révèle mieux certains bords du papier (ceux face à la caméra).
+   * 
+   * Au lieu de moyenner (qui floute), on:
+   * 1. Détecte les BORDS (gradient) dans CHAQUE image
+   * 2. Pour les zones de bord: prend l'image avec le MEILLEUR contraste
+   * 3. Pour les zones uniformes: moyenne pour réduire le bruit
+   * 
+   * Résultat: Une image avec TOUS les bords bien définis, même ceux
+   * partiellement cachés dans certaines perspectives.
+   */
+  async weightedBlend(buffers, weights) {
+    if (buffers.length === 1) return buffers[0];
+    const firstMeta = await (0, import_sharp2.default)(buffers[0]).metadata();
+    const width = firstMeta.width;
+    const height = firstMeta.height;
+    console.log(`\u{1F500} [Fusion Multi-Perspective] Combinaison de ${buffers.length} perspectives (${width}x${height})`);
+    const pixelArrays = await Promise.all(buffers.map(async (buf) => {
+      const { data } = await (0, import_sharp2.default)(buf).resize(width, height, { fit: "fill" }).raw().ensureAlpha().toBuffer({ resolveWithObject: true });
+      return new Uint8Array(data);
+    }));
+    console.log("\u{1F50D} [Fusion] Calcul des cartes de gradient pour chaque perspective...");
+    const gradientMaps = [];
+    for (let imgIdx = 0; imgIdx < pixelArrays.length; imgIdx++) {
+      const pixels = pixelArrays[imgIdx];
+      const gradient = new Array(width * height).fill(0);
+      for (let y = 1; y < height - 1; y++) {
+        for (let x = 1; x < width - 1; x++) {
+          const idx = (y * width + x) * 4;
+          const currentLum = 0.299 * pixels[idx] + 0.587 * pixels[idx + 1] + 0.114 * pixels[idx + 2];
+          const leftIdx = (y * width + (x - 1)) * 4;
+          const rightIdx = (y * width + (x + 1)) * 4;
+          const topIdx = ((y - 1) * width + x) * 4;
+          const bottomIdx = ((y + 1) * width + x) * 4;
+          const leftLum = 0.299 * pixels[leftIdx] + 0.587 * pixels[leftIdx + 1] + 0.114 * pixels[leftIdx + 2];
+          const rightLum = 0.299 * pixels[rightIdx] + 0.587 * pixels[rightIdx + 1] + 0.114 * pixels[rightIdx + 2];
+          const topLum = 0.299 * pixels[topIdx] + 0.587 * pixels[topIdx + 1] + 0.114 * pixels[topIdx + 2];
+          const bottomLum = 0.299 * pixels[bottomIdx] + 0.587 * pixels[bottomIdx + 1] + 0.114 * pixels[bottomIdx + 2];
+          const gx = Math.abs(rightLum - leftLum);
+          const gy = Math.abs(bottomLum - topLum);
+          gradient[y * width + x] = Math.sqrt(gx * gx + gy * gy);
+        }
+      }
+      gradientMaps.push(gradient);
+    }
+    const maxGradients = gradientMaps.map((g) => Math.max(...g));
+    console.log(`\u{1F4CA} [Fusion] Gradients max par perspective: ${maxGradients.map((g) => g.toFixed(1)).join(", ")}`);
+    const outputPixels = new Uint8Array(width * height * 4);
+    const GRADIENT_THRESHOLD = 15;
+    let edgePixels = 0;
+    let smoothPixels = 0;
+    for (let y = 0; y < height; y++) {
+      for (let x = 0; x < width; x++) {
+        const pixelIndex = y * width + x;
+        const idx = pixelIndex * 4;
+        const gradientsAtPixel = gradientMaps.map((g) => g[pixelIndex]);
+        const maxGradient = Math.max(...gradientsAtPixel);
+        if (maxGradient > GRADIENT_THRESHOLD) {
+          edgePixels++;
+          const bestImageIdx = gradientsAtPixel.indexOf(maxGradient);
+          const bestPixels = pixelArrays[bestImageIdx];
+          outputPixels[idx] = bestPixels[idx];
+          outputPixels[idx + 1] = bestPixels[idx + 1];
+          outputPixels[idx + 2] = bestPixels[idx + 2];
+        } else {
+          smoothPixels++;
+          let r = 0, g = 0, b = 0;
+          for (let j = 0; j < pixelArrays.length; j++) {
+            r += pixelArrays[j][idx] * weights[j];
+            g += pixelArrays[j][idx + 1] * weights[j];
+            b += pixelArrays[j][idx + 2] * weights[j];
+          }
+          outputPixels[idx] = Math.round(r);
+          outputPixels[idx + 1] = Math.round(g);
+          outputPixels[idx + 2] = Math.round(b);
+        }
+        outputPixels[idx + 3] = 255;
+      }
+    }
+    console.log(`\u2705 [Fusion Multi-Perspective] Termin\xE9e: ${edgePixels} pixels de bord (meilleure perspective), ${smoothPixels} pixels uniformes (moyenn\xE9s)`);
+    return (0, import_sharp2.default)(Buffer.from(outputPixels), {
+      raw: { width, height, channels: 4 }
+    }).png().toBuffer();
+  }
+  /**
+   * 🔲 Amélioration des contours (Unsharp Mask AGRESSIF)
+   * ⚠️ Ne modifie pas les dimensions !
+   */
+  async enhanceEdges(buffer) {
+    return (0, import_sharp2.default)(buffer).sharpen({
+      sigma: 2,
+      // Rayon du flou (plus grand = bords plus larges)
+      m1: 2.5,
+      // Quantité de sharpening pour les zones sombres (augmenté)
+      m2: 1.5,
+      // Quantité de sharpening pour les zones claires (augmenté)
+      x1: 2,
+      // Seuil bas
+      y2: 15,
+      // Seuil haut (augmenté)
+      y3: 15
+      // Maximum (augmenté)
+    }).toBuffer();
+  }
+  /**
+   * ⬜ Amplification des zones blanches (pour mieux voir la feuille A4)
+   * 
+   * Technique: Augmente le contraste des pixels clairs pour que le papier blanc
+   * ressorte mieux du fond
+   */
+  async boostWhiteAreas(buffer) {
+    const meta = await (0, import_sharp2.default)(buffer).metadata();
+    const width = meta.width;
+    const height = meta.height;
+    const { data } = await (0, import_sharp2.default)(buffer).raw().ensureAlpha().toBuffer({ resolveWithObject: true });
+    const pixels = new Uint8Array(data);
+    const outputPixels = new Uint8Array(pixels.length);
+    const whiteThreshold = 180;
+    const boostFactor = 1.2;
+    const darkenFactor = 0.9;
+    for (let i = 0; i < pixels.length; i += 4) {
+      const r = pixels[i];
+      const g = pixels[i + 1];
+      const b = pixels[i + 2];
+      const luminance = 0.299 * r + 0.587 * g + 0.114 * b;
+      if (luminance > whiteThreshold) {
+        outputPixels[i] = Math.min(255, Math.round(r * boostFactor));
+        outputPixels[i + 1] = Math.min(255, Math.round(g * boostFactor));
+        outputPixels[i + 2] = Math.min(255, Math.round(b * boostFactor));
+      } else {
+        outputPixels[i] = Math.round(r * darkenFactor);
+        outputPixels[i + 1] = Math.round(g * darkenFactor);
+        outputPixels[i + 2] = Math.round(b * darkenFactor);
+      }
+      outputPixels[i + 3] = 255;
+    }
+    return (0, import_sharp2.default)(Buffer.from(outputPixels), {
+      raw: { width, height, channels: 4 }
+    }).png().toBuffer();
+  }
+  /**
+   * 🎛️ Amélioration du contraste local (CLAHE-like)
+   * 
+   * Normalise le contraste localement pour mieux voir les bords
+   */
+  async enhanceLocalContrast(buffer) {
+    return (0, import_sharp2.default)(buffer).normalize().modulate({
+      brightness: 1,
+      saturation: 1.1,
+      // Légère saturation pour mieux distinguer couleurs
+      lightness: 0
+      // Pas de changement de luminosité globale
+    }).linear(1.1, -10).toBuffer();
+  }
+  /**
+   * 📷 Optimise une seule photo (même traitement que fusion mais pour 1 image)
+   */
+  async optimizeSinglePhoto(photo, options) {
+    try {
+      let buffer = Buffer.from(photo.base64, "base64");
+      buffer = Buffer.from(await (0, import_sharp2.default)(buffer).resize(options.targetWidth, null, { fit: "inside", withoutEnlargement: true }).toBuffer());
+      if (options.enhanceEdges) {
+        buffer = Buffer.from(await this.enhanceEdges(buffer));
+      }
+      if (options.boostWhite) {
+        buffer = Buffer.from(await this.boostWhiteAreas(buffer));
+      }
+      if (options.localContrast) {
+        buffer = Buffer.from(await this.enhanceLocalContrast(buffer));
+      }
+      const finalBuffer = await (0, import_sharp2.default)(buffer).jpeg({ quality: options.outputQuality }).toBuffer();
+      const stats = await this.analyzeImageStats(finalBuffer);
+      return {
+        success: true,
+        fusedImageBase64: finalBuffer.toString("base64"),
+        mimeType: "image/jpeg",
+        metrics: {
+          inputPhotos: 1,
+          usedPhotos: 1,
+          averageQuality: 100,
+          edgeEnhancement: options.enhanceEdges ? 1 : 0,
+          whiteBoost: options.boostWhite ? 1 : 0,
+          finalSharpness: stats.sharpness
+        },
+        photoAnalysis: [{
+          index: 0,
+          quality: 100,
+          sharpness: stats.sharpness,
+          brightness: stats.brightness,
+          weight: 1,
+          issues: []
+        }]
+      };
+    } catch (error) {
+      return {
+        success: false,
+        mimeType: "image/jpeg",
+        error: error.message
+      };
+    }
+  }
+  /**
+   * 🎯 FUSION OPTIMISÉE POUR DÉTECTION DE RÉFÉRENCE
+   * 
+   * Version spécialisée pour détecter une feuille A4 ou carte de référence.
+   * Applique des traitements spécifiques pour maximiser la visibilité des bords.
+   * 
+   * ⚠️ IMPORTANT: Ne modifie PAS les proportions de l'image !
+   * Les coordonnées retournées sont en % et doivent correspondre à l'image originale.
+   */
+  async fuseForReferenceDetection(photos, referenceType = "a4") {
+    console.log(`\u{1F3AF} [Fusion Reference] Fusion optimis\xE9e pour ${referenceType.toUpperCase()}...`);
+    let targetWidth = 1920;
+    if (photos.length > 0) {
+      try {
+        const firstBuffer = Buffer.from(photos[0].base64, "base64");
+        const meta = await (0, import_sharp2.default)(firstBuffer).metadata();
+        if (meta.width) {
+          targetWidth = Math.min(meta.width, 2048);
+          console.log(`\u{1F4D0} [Fusion Reference] Dimensions pr\xE9serv\xE9es: ${meta.width}x${meta.height} \u2192 target ${targetWidth}px`);
+        }
+      } catch (e) {
+        console.warn("\u26A0\uFE0F [Fusion Reference] Impossible de lire les dimensions, utilisation par d\xE9faut");
+      }
+    }
+    const params = {
+      a4: {
+        enhanceEdges: true,
+        boostWhite: true,
+        // A4 blanc = boost zones blanches
+        localContrast: true,
+        targetWidth,
+        // Préserver les proportions !
+        outputQuality: 95
+      },
+      card: {
+        enhanceEdges: true,
+        boostWhite: false,
+        // Carte pas forcément blanche
+        localContrast: true,
+        targetWidth,
+        outputQuality: 95
+      },
+      meter: {
+        enhanceEdges: true,
+        boostWhite: false,
+        localContrast: true,
+        targetWidth: 2048,
+        outputQuality: 95
+      },
+      custom: {
+        enhanceEdges: true,
+        boostWhite: false,
+        localContrast: true,
+        targetWidth: 1920,
+        outputQuality: 95
+      }
+    };
+    const config = params[referenceType] || params.a4;
+    const result = await this.fusePhotos(photos, config);
+    if (referenceType === "a4" && result.success && result.fusedImageBase64) {
+      console.log("\u{1F4C4} [Fusion Reference] Post-traitement sp\xE9cial A4...");
+      result.fusedImageBase64 = await this.enhanceA4Detection(result.fusedImageBase64);
+    }
+    return result;
+  }
+  /**
+   * 📄 Post-traitement spécial pour feuille A4
+   * 
+   * Accentue les transitions blanc/autre pour faciliter la détection
+   * ⚠️ NE MODIFIE PAS les dimensions de l'image !
+   */
+  async enhanceA4Detection(base64) {
+    console.log("\u{1F4C4} [Fusion A4] Accentuation des bords de la feuille blanche...");
+    let buffer = Buffer.from(base64, "base64");
+    const meta = await (0, import_sharp2.default)(buffer).metadata();
+    const width = meta.width;
+    const height = meta.height;
+    console.log(`\u{1F4D0} [Fusion A4] Dimensions pr\xE9serv\xE9es: ${width}x${height}`);
+    const { data } = await (0, import_sharp2.default)(buffer).raw().ensureAlpha().toBuffer({ resolveWithObject: true });
+    const pixels = new Uint8Array(data);
+    const outputPixels = new Uint8Array(pixels.length);
+    const EDGE_RADIUS = 3;
+    let edgesFound = 0;
+    for (let y = 0; y < height; y++) {
+      for (let x = 0; x < width; x++) {
+        const idx = (y * width + x) * 4;
+        outputPixels[idx] = pixels[idx];
+        outputPixels[idx + 1] = pixels[idx + 1];
+        outputPixels[idx + 2] = pixels[idx + 2];
+        outputPixels[idx + 3] = 255;
+        const currentLum = 0.299 * pixels[idx] + 0.587 * pixels[idx + 1] + 0.114 * pixels[idx + 2];
+        if (currentLum > 180) {
+          let hasDarkNeighbor = false;
+          let maxLumDiff = 0;
+          for (let dy = -EDGE_RADIUS; dy <= EDGE_RADIUS && !hasDarkNeighbor; dy++) {
+            for (let dx = -EDGE_RADIUS; dx <= EDGE_RADIUS && !hasDarkNeighbor; dx++) {
+              const nx = x + dx;
+              const ny = y + dy;
+              if (nx >= 0 && nx < width && ny >= 0 && ny < height && (dx !== 0 || dy !== 0)) {
+                const nIdx = (ny * width + nx) * 4;
+                const neighborLum = 0.299 * pixels[nIdx] + 0.587 * pixels[nIdx + 1] + 0.114 * pixels[nIdx + 2];
+                const lumDiff = currentLum - neighborLum;
+                if (lumDiff > maxLumDiff) maxLumDiff = lumDiff;
+                if (lumDiff > 40) {
+                  hasDarkNeighbor = true;
+                }
+              }
+            }
+          }
+          if (hasDarkNeighbor) {
+            const boostFactor = Math.min(30, maxLumDiff * 0.3);
+            outputPixels[idx] = Math.min(255, outputPixels[idx] + boostFactor);
+            outputPixels[idx + 1] = Math.min(255, outputPixels[idx + 1] + boostFactor);
+            outputPixels[idx + 2] = Math.min(255, outputPixels[idx + 2] + boostFactor);
+            edgesFound++;
+          }
+        } else if (currentLum < 160 && currentLum > 80) {
+          let hasWhiteNeighbor = false;
+          for (let dy = -2; dy <= 2 && !hasWhiteNeighbor; dy++) {
+            for (let dx = -2; dx <= 2 && !hasWhiteNeighbor; dx++) {
+              const nx = x + dx;
+              const ny = y + dy;
+              if (nx >= 0 && nx < width && ny >= 0 && ny < height) {
+                const nIdx = (ny * width + nx) * 4;
+                const neighborLum = 0.299 * pixels[nIdx] + 0.587 * pixels[nIdx + 1] + 0.114 * pixels[nIdx + 2];
+                if (neighborLum > 180) {
+                  hasWhiteNeighbor = true;
+                }
+              }
+            }
+          }
+          if (hasWhiteNeighbor) {
+            outputPixels[idx] = Math.max(0, outputPixels[idx] - 15);
+            outputPixels[idx + 1] = Math.max(0, outputPixels[idx + 1] - 15);
+            outputPixels[idx + 2] = Math.max(0, outputPixels[idx + 2] - 15);
+          }
+        }
+      }
+    }
+    console.log(`\u{1F3AF} [Fusion A4] Bords accentu\xE9s: ${edgesFound} pixels de bordure d\xE9tect\xE9s`);
+    const finalBuffer = await (0, import_sharp2.default)(Buffer.from(outputPixels), {
+      raw: { width, height, channels: 4 }
+    }).jpeg({ quality: 95 }).toBuffer();
+    return finalBuffer.toString("base64");
+  }
+};
+var multiPhotoFusionService = new MultiPhotoFusionService();
+
+// src/api/measurement-reference.ts
+var router90 = (0, import_express93.Router)();
+var geminiService4 = new GoogleGeminiService_default();
+router90.get("/", authenticateToken, async (req2, res) => {
+  try {
+    if (!req2.user?.id) {
+      return res.status(401).json({ error: "Non authentifi\xE9" });
+    }
+    const userOrg = await db.userOrganization.findFirst({
+      where: { userId: req2.user.id },
+      select: { organizationId: true }
+    });
+    if (!userOrg?.organizationId) {
+      return res.json({ config: null });
+    }
+    const config = await db.organizationMeasurementReferenceConfig.findFirst({
+      where: {
+        organizationId: userOrg.organizationId,
+        isActive: true
+      }
+    });
+    res.json({ config: config || null });
+  } catch (error) {
+    console.error("\u274C [API] Erreur r\xE9cup\xE9ration config r\xE9f\xE9rence (fallback):", error);
+    res.status(500).json({ error: "Erreur serveur" });
+  }
+});
+router90.get("/:organizationId", authenticateToken, async (req2, res) => {
+  try {
+    const { organizationId } = req2.params;
+    if (!req2.user?.id) {
+      return res.status(401).json({ error: "Non authentifi\xE9" });
+    }
+    const userOrg = await db.userOrganization.findFirst({
+      where: {
+        userId: req2.user.id,
+        organizationId
+      }
+    });
+    if (!userOrg) {
+      return res.status(403).json({ error: "Acc\xE8s interdit \xE0 cette organisation" });
+    }
+    const config = await db.organizationMeasurementReferenceConfig.findFirst({
+      where: {
+        organizationId,
+        isActive: true
+      }
+    });
+    if (!config) {
+      return res.json({ config: null });
+    }
+    res.json({ config });
+  } catch (error) {
+    console.error("\u274C [API] Erreur r\xE9cup\xE9ration config r\xE9f\xE9rence:", error);
+    res.status(500).json({ error: "Erreur serveur" });
+  }
+});
+router90.post("/", authenticateToken, async (req2, res) => {
+  try {
+    const {
+      organizationId,
+      referenceType,
+      customName,
+      customWidth,
+      customHeight
+    } = req2.body;
+    if (!req2.user?.id) {
+      return res.status(401).json({ error: "Non authentifi\xE9" });
+    }
+    if (!organizationId || !referenceType) {
+      return res.status(400).json({
+        error: "Param\xE8tres manquants: organizationId et referenceType requis"
+      });
+    }
+    const validTypes = ["meter", "card", "a4", "custom"];
+    if (!validTypes.includes(referenceType)) {
+      return res.status(400).json({
+        error: `referenceType invalide. Attendu: ${validTypes.join(", ")}`
+      });
+    }
+    if (referenceType === "custom" && (!customWidth || !customHeight)) {
+      return res.status(400).json({
+        error: "Pour un type custom, customWidth et customHeight sont requis"
+      });
+    }
+    const userOrg = await db.userOrganization.findFirst({
+      where: {
+        userId: req2.user.id,
+        organizationId
+      },
+      include: {
+        Role: true
+      }
+    });
+    if (!userOrg) {
+      return res.status(403).json({
+        error: "Vous n'appartenez pas \xE0 cette organisation"
+      });
+    }
+    const isAdmin = userOrg.Role?.name?.toLowerCase().includes("admin") || userOrg.Role?.name?.toLowerCase().includes("owner") || req2.user.isSuperAdmin;
+    if (!isAdmin) {
+      return res.status(403).json({
+        error: "Seuls les administrateurs peuvent modifier la configuration"
+      });
+    }
+    await db.organizationMeasurementReferenceConfig.updateMany({
+      where: {
+        organizationId,
+        isActive: true
+      },
+      data: {
+        isActive: false
+      }
+    });
+    const config = await db.organizationMeasurementReferenceConfig.create({
+      data: {
+        organizationId,
+        referenceType,
+        customName: customName || void 0,
+        customWidth: customWidth ? parseFloat(customWidth) : void 0,
+        customHeight: customHeight ? parseFloat(customHeight) : void 0,
+        isActive: true,
+        createdBy: req2.user.id
+      }
+    });
+    console.log(`\u2705 [API] Config r\xE9f\xE9rence cr\xE9\xE9e pour organisation ${organizationId}: ${referenceType}`);
+    res.json({
+      success: true,
+      config
+    });
+  } catch (error) {
+    console.error("\u274C [API] Erreur cr\xE9ation config r\xE9f\xE9rence:", error);
+    res.status(500).json({ error: "Erreur serveur" });
+  }
+});
+router90.put("/:configId", authenticateToken, async (req2, res) => {
+  try {
+    const { configId } = req2.params;
+    const {
+      referenceType,
+      customName,
+      customWidth,
+      customHeight,
+      defaultUnit
+    } = req2.body;
+    if (!req2.user?.id) {
+      return res.status(401).json({ error: "Non authentifi\xE9" });
+    }
+    const existingConfig = await db.organizationMeasurementReferenceConfig.findUnique({
+      where: { id: configId }
+    });
+    if (!existingConfig) {
+      return res.status(404).json({ error: "Configuration non trouv\xE9e" });
+    }
+    const userOrg = await db.userOrganization.findFirst({
+      where: {
+        userId: req2.user.id,
+        organizationId: existingConfig.organizationId
+      },
+      include: {
+        Role: true
+      }
+    });
+    if (!userOrg) {
+      return res.status(403).json({ error: "Acc\xE8s interdit" });
+    }
+    const isAdmin = userOrg.Role?.name?.toLowerCase().includes("admin") || userOrg.Role?.name?.toLowerCase().includes("owner") || req2.user.isSuperAdmin;
+    if (!isAdmin) {
+      return res.status(403).json({ error: "Acc\xE8s interdit" });
+    }
+    const config = await db.organizationMeasurementReferenceConfig.update({
+      where: { id: configId },
+      data: {
+        ...referenceType && { referenceType },
+        ...customName !== void 0 && { customName },
+        ...customWidth && { customWidth: parseFloat(customWidth) },
+        ...customHeight && { customHeight: parseFloat(customHeight) },
+        ...defaultUnit && { defaultUnit }
+      }
+    });
+    res.json({
+      success: true,
+      config
+    });
+  } catch (error) {
+    console.error("\u274C [API] Erreur mise \xE0 jour config r\xE9f\xE9rence:", error);
+    res.status(500).json({ error: "Erreur serveur" });
+  }
+});
+router90.delete("/:configId", authenticateToken, async (req2, res) => {
+  try {
+    const { configId } = req2.params;
+    if (!req2.user?.id) {
+      return res.status(401).json({ error: "Non authentifi\xE9" });
+    }
+    const existingConfig = await db.organizationMeasurementReferenceConfig.findUnique({
+      where: { id: configId }
+    });
+    if (!existingConfig) {
+      return res.status(404).json({ error: "Configuration non trouv\xE9e" });
+    }
+    const userOrg = await db.userOrganization.findFirst({
+      where: {
+        userId: req2.user.id,
+        organizationId: existingConfig.organizationId
+      },
+      include: {
+        Role: true
+      }
+    });
+    if (!userOrg) {
+      return res.status(403).json({ error: "Acc\xE8s interdit" });
+    }
+    const isAdmin = userOrg.Role?.name?.toLowerCase().includes("admin") || userOrg.Role?.name?.toLowerCase().includes("owner") || req2.user.isSuperAdmin;
+    if (!isAdmin) {
+      return res.status(403).json({ error: "Acc\xE8s interdit" });
+    }
+    await db.organizationMeasurementReferenceConfig.delete({
+      where: { id: configId }
+    });
+    res.json({ success: true });
+  } catch (error) {
+    console.error("\u274C [API] Erreur suppression config r\xE9f\xE9rence:", error);
+    res.status(500).json({ error: "Erreur serveur" });
+  }
+});
+router90.post("/detect", authenticateToken, async (req2, res) => {
+  try {
+    const { imageBase64, mimeType, referenceType, customPrompt } = req2.body;
+    if (!req2.user?.id) {
+      return res.status(401).json({ error: "Non authentifi\xE9" });
+    }
+    if (!imageBase64 || !mimeType || !referenceType) {
+      return res.status(400).json({
+        error: "Param\xE8tres manquants: imageBase64, mimeType, referenceType requis"
+      });
+    }
+    const result = await geminiService4.detectReferenceObject(
+      imageBase64,
+      mimeType,
+      referenceType,
+      customPrompt
+    );
+    res.json(result);
+  } catch (error) {
+    console.error("\u274C [API] Erreur d\xE9tection r\xE9f\xE9rence:", error);
+    res.status(500).json({
+      success: false,
+      error: "Erreur serveur lors de la d\xE9tection"
+    });
+  }
+});
+router90.post("/detect-multi", authenticateToken, async (req2, res) => {
+  try {
+    const { images, referenceType, customPrompt } = req2.body;
+    if (!req2.user?.id) {
+      return res.status(401).json({ error: "Non authentifi\xE9" });
+    }
+    if (!images || !Array.isArray(images) || images.length === 0) {
+      return res.status(400).json({
+        error: "Param\xE8tres manquants: images[] requis (tableau d'objets {base64, mimeType})"
+      });
+    }
+    if (!referenceType) {
+      return res.status(400).json({
+        error: "Param\xE8tres manquants: referenceType requis (a4, card, meter, custom)"
+      });
+    }
+    console.log(`\u{1F50D} [API] D\xE9tection multi-photos: ${images.length} images, type: ${referenceType}`);
+    const result = await geminiService4.detectReferenceMultiPhotos(
+      images.map((img) => ({
+        base64: img.base64,
+        mimeType: img.mimeType || "image/jpeg",
+        metadata: img.metadata
+      })),
+      referenceType,
+      customPrompt
+    );
+    console.log(`\u2705 [API] R\xE9sultat fusion multi-photos:`, {
+      success: result.success,
+      confidence: result.confidence,
+      usablePhotos: result.qualityAnalysis?.filter((p) => p.usable).length,
+      bestPhoto: result.bestPhotoIndex
+    });
+    res.json(result);
+  } catch (error) {
+    console.error("\u274C [API] Erreur d\xE9tection multi-photos:", error);
+    res.status(500).json({
+      success: false,
+      error: "Erreur serveur lors de la d\xE9tection multi-photos"
+    });
+  }
+});
+router90.post("/analyze-frame", authenticateToken, async (req2, res) => {
+  try {
+    const { imageBase64, mimeType, referenceType } = req2.body;
+    if (!req2.user?.id) {
+      return res.status(401).json({ error: "Non authentifi\xE9" });
+    }
+    if (!imageBase64 || !mimeType || !referenceType) {
+      return res.status(400).json({
+        error: "Param\xE8tres manquants: imageBase64, mimeType, referenceType requis"
+      });
+    }
+    const result = await geminiService4.analyzeFrameForGuidance(
+      imageBase64,
+      mimeType,
+      referenceType
+    );
+    res.json(result);
+  } catch (error) {
+    console.error("\u274C [API] Erreur analyse frame:", error);
+    res.status(500).json({
+      canCapture: true,
+      issues: [],
+      suggestions: [],
+      scores: { visibility: 50, centering: 50, lighting: 50, sharpness: 50, perspective: 50 },
+      message: "\u{1F4F7} Capturez quand pr\xEAt"
+    });
+  }
+});
+router90.post("/snap-to-edges", authenticateToken, async (req2, res) => {
+  try {
+    const { imageBase64, mimeType, points, targetType, objectDescription } = req2.body;
+    if (!req2.user?.id) {
+      return res.status(401).json({ error: "Non authentifi\xE9" });
+    }
+    if (!imageBase64 || !mimeType || !points || !Array.isArray(points)) {
+      return res.status(400).json({
+        error: "Param\xE8tres manquants: imageBase64, mimeType, points[] requis"
+      });
+    }
+    console.log(`\u{1F3AF} [API] Snap to edges: ${targetType}, ${points.length} points`);
+    console.log(`\u{1F4CD} [API] Points re\xE7us:`, points.map((p) => `${p.label}(${p.x?.toFixed?.(0) || p.x}, ${p.y?.toFixed?.(0) || p.y})`).join(", "));
+    const result = await geminiService4.snapPointsToEdges(
+      imageBase64,
+      mimeType,
+      points,
+      targetType || "measurement",
+      objectDescription
+    );
+    console.log(`\u2705 [API] R\xE9sultat snap:`, result.success ? `${result.points?.length} points ajust\xE9s` : result.error);
+    res.json(result);
+  } catch (error) {
+    console.error("\u274C [API] Erreur snap to edges:", error);
+    res.status(500).json({
+      success: false,
+      error: "Erreur serveur lors du snap to edges"
+    });
+  }
+});
+router90.post("/suggest-points", authenticateToken, async (req2, res) => {
+  try {
+    const { imageBase64, mimeType, objectType, pointCount = 4, measureKeys = ["largeur_cm", "hauteur_cm"] } = req2.body;
+    if (!req2.user?.id) {
+      return res.status(401).json({ error: "Non authentifi\xE9" });
+    }
+    if (!imageBase64 || !mimeType) {
+      return res.status(400).json({
+        error: "Param\xE8tres manquants: imageBase64, mimeType requis"
+      });
+    }
+    console.log(`\u{1F4D0} [API] Suggestion points pour mesures: ${measureKeys.join(", ")}`);
+    const result = await geminiService4.suggestMeasurementPoints(
+      imageBase64,
+      mimeType,
+      objectType || "objet principal",
+      pointCount,
+      measureKeys
+    );
+    res.json(result);
+  } catch (error) {
+    console.error("\u274C [API] Erreur suggestion points:", error);
+    res.status(500).json({
+      success: false,
+      error: "Erreur serveur lors de la suggestion de points"
+    });
+  }
+});
+router90.post("/detect-corners-in-zone", authenticateToken, async (req2, res) => {
+  try {
+    const {
+      imageBase64,
+      mimeType,
+      selectionZone,
+      objectType,
+      objectDescription,
+      realDimensions,
+      targetType
+    } = req2.body;
+    if (!req2.user?.id) {
+      return res.status(401).json({ error: "Non authentifi\xE9" });
+    }
+    if (!imageBase64 || !mimeType || !selectionZone) {
+      return res.status(400).json({
+        error: "Param\xE8tres manquants: imageBase64, mimeType, selectionZone requis"
+      });
+    }
+    if (typeof selectionZone.x !== "number" || typeof selectionZone.y !== "number" || typeof selectionZone.width !== "number" || typeof selectionZone.height !== "number") {
+      return res.status(400).json({
+        error: "selectionZone invalide: doit contenir x, y, width, height (en pourcentage 0-100)"
+      });
+    }
+    console.log(`\u{1F3AF} [API] D\xE9tection coins dans zone: ${objectType || "a4"} (targetType: ${targetType || "auto"})`);
+    console.log(`\u{1F4D0} [API] Zone: x=${selectionZone.x.toFixed(1)}%, y=${selectionZone.y.toFixed(1)}%, ${selectionZone.width.toFixed(1)}x${selectionZone.height.toFixed(1)}%`);
+    if (objectDescription) console.log(`\u{1F4DD} [API] Description: ${objectDescription}`);
+    if (realDimensions) console.log(`\u{1F4CF} [API] Dimensions r\xE9elles: ${realDimensions.width}cm \xD7 ${realDimensions.height}cm`);
+    console.log("\u{1F52C} [API] Tentative d\xE9tection par analyse de contours (Sharp)...");
+    const edgeResult = await edgeDetectionService.detectWhitePaperCorners(
+      imageBase64,
+      selectionZone,
+      mimeType
+    );
+    if (edgeResult.success && edgeResult.corners) {
+      console.log("\u2705 [API] D\xE9tection par contours R\xC9USSIE !");
+      console.log(`\u{1F4CD} [API] Coins d\xE9tect\xE9s:
+        TopLeft: (${edgeResult.corners.topLeft.x.toFixed(2)}%, ${edgeResult.corners.topLeft.y.toFixed(2)}%)
+        TopRight: (${edgeResult.corners.topRight.x.toFixed(2)}%, ${edgeResult.corners.topRight.y.toFixed(2)}%)
+        BottomLeft: (${edgeResult.corners.bottomLeft.x.toFixed(2)}%, ${edgeResult.corners.bottomLeft.y.toFixed(2)}%)
+        BottomRight: (${edgeResult.corners.bottomRight.x.toFixed(2)}%, ${edgeResult.corners.bottomRight.y.toFixed(2)}%)`);
+      const yDiffTop = Math.abs(edgeResult.corners.topLeft.y - edgeResult.corners.topRight.y);
+      const yDiffBottom = Math.abs(edgeResult.corners.bottomLeft.y - edgeResult.corners.bottomRight.y);
+      console.log(`\u{1F4D0} [API] Diff\xE9rence Y haut: ${yDiffTop.toFixed(2)}%, bas: ${yDiffBottom.toFixed(2)}%`);
+      return res.json({
+        success: true,
+        objectFound: true,
+        corners: edgeResult.corners,
+        confidence: edgeResult.confidence || 90,
+        method: "edge-detection",
+        debug: edgeResult.debug
+      });
+    }
+    console.log("\u26A0\uFE0F [API] D\xE9tection par contours \xE9chou\xE9e, fallback vers Gemini...");
+    console.log(`   Raison: ${edgeResult.error || "Pas assez de points de contour"}`);
+    const result = await geminiService4.detectCornersInZone(
+      imageBase64,
+      mimeType,
+      selectionZone,
+      objectType || "a4",
+      objectDescription,
+      realDimensions,
+      targetType
+    );
+    console.log(
+      `\u2705 [API] R\xE9sultat d\xE9tection Gemini:`,
+      result.success ? `${result.objectFound ? "Objet trouv\xE9" : "Objet non trouv\xE9"}, confiance: ${result.confidence}%` : result.error
+    );
+    res.json({
+      ...result,
+      method: "gemini-ai"
+    });
+  } catch (error) {
+    console.error("\u274C [API] Erreur d\xE9tection coins dans zone:", error);
+    res.status(500).json({
+      success: false,
+      error: "Erreur serveur lors de la d\xE9tection des coins"
+    });
+  }
+});
+router90.post("/fuse-photos", authenticateToken, async (req2, res) => {
+  try {
+    const { photos, referenceType = "a4" } = req2.body;
+    if (!req2.user?.id) {
+      return res.status(401).json({ error: "Non authentifi\xE9" });
+    }
+    if (!photos || !Array.isArray(photos) || photos.length === 0) {
+      return res.status(400).json({
+        error: "Param\xE8tre photos requis: array de { base64, mimeType }"
+      });
+    }
+    console.log(`\u{1F500} [API] Demande fusion de ${photos.length} photos (type: ${referenceType})`);
+    const cleanedPhotos = photos.map((photo) => ({
+      ...photo,
+      base64: photo.base64.includes(",") ? photo.base64.split(",")[1] : photo.base64,
+      mimeType: photo.mimeType || "image/jpeg"
+    }));
+    const result = await multiPhotoFusionService.fuseForReferenceDetection(
+      cleanedPhotos,
+      referenceType
+    );
+    if (result.success) {
+      console.log(`\u2705 [API] Fusion r\xE9ussie: ${result.metrics?.usedPhotos}/${result.metrics?.inputPhotos} photos utilis\xE9es`);
+      console.log(`   \u{1F4CA} Sharpness finale: ${result.metrics?.finalSharpness?.toFixed(1)}`);
+    } else {
+      console.error(`\u274C [API] Fusion \xE9chou\xE9e: ${result.error}`);
+    }
+    res.json(result);
+  } catch (error) {
+    console.error("\u274C [API] Erreur fusion photos:", error);
+    res.status(500).json({
+      success: false,
+      error: "Erreur serveur lors de la fusion des photos"
+    });
+  }
+});
+router90.post("/detect-with-fusion", authenticateToken, async (req2, res) => {
+  try {
+    const {
+      photos,
+      selectionZone,
+      referenceType = "a4",
+      objectDescription,
+      realDimensions,
+      targetType = "reference"
+    } = req2.body;
+    if (!req2.user?.id) {
+      return res.status(401).json({ error: "Non authentifi\xE9" });
+    }
+    if (!photos || photos.length === 0) {
+      return res.status(400).json({ error: "Au moins une photo requise" });
+    }
+    if (!selectionZone) {
+      return res.status(400).json({ error: "selectionZone requise" });
+    }
+    console.log(`\u{1F3AF} [API] D\xE9tection avec fusion: ${photos.length} photos, type: ${referenceType}`);
+    console.log(`\u{1F4D0} [API] Zone: x=${selectionZone.x?.toFixed(1)}%, y=${selectionZone.y?.toFixed(1)}%`);
+    console.log("\u{1F500} [API] \xC9tape 1: Fusion des photos...");
+    const cleanedPhotos = photos.map((photo) => ({
+      base64: photo.base64.includes(",") ? photo.base64.split(",")[1] : photo.base64,
+      mimeType: photo.mimeType || "image/jpeg"
+    }));
+    const fusionResult = await multiPhotoFusionService.fuseForReferenceDetection(
+      cleanedPhotos,
+      referenceType
+    );
+    if (!fusionResult.success || !fusionResult.fusedImageBase64) {
+      console.error("\u274C [API] Fusion \xE9chou\xE9e:", fusionResult.error);
+      console.log("\u26A0\uFE0F [API] Fallback sur premi\xE8re photo...");
+    }
+    const imageToUse = fusionResult.fusedImageBase64 || cleanedPhotos[0].base64;
+    const mimeTypeToUse = fusionResult.mimeType || "image/jpeg";
+    console.log(`\u2705 [API] Image ${fusionResult.success ? "fusionn\xE9e" : "originale"} pr\xEAte (${Math.round(imageToUse.length / 1024)} KB)`);
+    console.log("\u{1F50D} [API] \xC9tape 2: D\xE9tection des coins sur image optimis\xE9e...");
+    console.log("\u{1F52C} [API] Tentative d\xE9tection par analyse de contours (Sharp)...");
+    const edgeResult = await edgeDetectionService.detectWhitePaperCorners(
+      imageToUse,
+      selectionZone,
+      mimeTypeToUse
+    );
+    if (edgeResult.success && edgeResult.corners) {
+      console.log("\u2705 [API] D\xE9tection par contours R\xC9USSIE sur image fusionn\xE9e !");
+      return res.json({
+        success: true,
+        objectFound: true,
+        corners: edgeResult.corners,
+        confidence: Math.min(98, (edgeResult.confidence || 90) + 5),
+        // +5% bonus fusion
+        method: "edge-detection-with-fusion",
+        fusionMetrics: fusionResult.metrics,
+        debug: edgeResult.debug
+      });
+    }
+    console.log("\u26A0\uFE0F [API] D\xE9tection par contours \xE9chou\xE9e, fallback vers Gemini...");
+    const geminiResult = await geminiService4.detectCornersInZone(
+      imageToUse,
+      mimeTypeToUse,
+      selectionZone,
+      referenceType,
+      objectDescription,
+      realDimensions,
+      targetType
+    );
+    res.json({
+      ...geminiResult,
+      method: geminiResult.success ? "gemini-with-fusion" : "gemini-failed",
+      fusionMetrics: fusionResult.metrics
+    });
+  } catch (error) {
+    console.error("\u274C [API] Erreur d\xE9tection avec fusion:", error);
+    res.status(500).json({
+      success: false,
+      error: "Erreur serveur lors de la d\xE9tection avec fusion"
+    });
+  }
+});
+var measurement_reference_default = router90;
 
 // src/routes/userFavoritesRoutes.ts
-var import_express92 = require("express");
+var import_express94 = require("express");
 init_database();
-var router89 = (0, import_express92.Router)();
-router89.get("/", authMiddleware, async (req2, res) => {
+var router91 = (0, import_express94.Router)();
+router91.get("/", authMiddleware, async (req2, res) => {
   try {
     const userId = req2.user?.userId;
     const organizationId = req2.user?.organizationId;
@@ -62818,7 +64324,7 @@ router89.get("/", authMiddleware, async (req2, res) => {
     });
   }
 });
-router89.post("/", authMiddleware, async (req2, res) => {
+router91.post("/", authMiddleware, async (req2, res) => {
   try {
     const userId = req2.user?.userId;
     const organizationId = req2.user?.organizationId;
@@ -62860,7 +64366,7 @@ router89.post("/", authMiddleware, async (req2, res) => {
     });
   }
 });
-router89.delete("/:moduleKey", authMiddleware, async (req2, res) => {
+router91.delete("/:moduleKey", authMiddleware, async (req2, res) => {
   try {
     const userId = req2.user?.userId;
     const organizationId = req2.user?.organizationId;
@@ -62893,7 +64399,7 @@ router89.delete("/:moduleKey", authMiddleware, async (req2, res) => {
     });
   }
 });
-var userFavoritesRoutes_default = router89;
+var userFavoritesRoutes_default = router91;
 
 // src/middleware/websiteDetection.ts
 init_prisma();
@@ -63475,7 +64981,7 @@ logSecurityEvent("SERVER_STARTUP", {
   environment: process.env.NODE_ENV || "development",
   securityLevel: "ENTERPRISE"
 }, "info");
-var app = (0, import_express93.default)();
+var app = (0, import_express95.default)();
 app.set("trust proxy", 1);
 var port = Number(process.env.PORT || 8080);
 console.log("\u{1F3AF} [BOOTSTRAP] Server will listen on port:", port);
@@ -63568,7 +65074,7 @@ app.use((0, import_cors.default)({
   exposedHeaders: ["X-Total-Count", "X-Rate-Limit-Remaining", "x-organization-id"]
 }));
 app.use(inputSanitization);
-app.use(import_express93.default.json({
+app.use(import_express95.default.json({
   limit: "50mb",
   verify: (req2, res, buf) => {
     try {
@@ -63582,7 +65088,7 @@ app.use(import_express93.default.json({
     }
   }
 }));
-app.use(import_express93.default.urlencoded({ extended: true, limit: "50mb" }));
+app.use(import_express95.default.urlencoded({ extended: true, limit: "50mb" }));
 app.use((0, import_cookie_parser.default)());
 app.use((0, import_express_session.default)({
   secret: process.env.SESSION_SECRET || "crm-dev-secret-2024",
@@ -63608,7 +65114,7 @@ app.use("/uploads", (req2, res, next) => {
   res.setHeader("Access-Control-Allow-Headers", "Content-Type");
   res.setHeader("Cross-Origin-Resource-Policy", "cross-origin");
   next();
-}, import_express93.default.static(uploadsDir, {
+}, import_express95.default.static(uploadsDir, {
   maxAge: "1h",
   // Cache 1 heure
   etag: true,
@@ -63635,7 +65141,9 @@ app.use("/api/ai", ai_default2);
 app.use("/api", contact_form_default);
 app.use("/api/image-upload", image_upload_default);
 app.use("/api/documents", documents_default);
+app.use("/api/measurement-reference", measurement_reference_default);
 app.use("/api/tbl", tbl_routes_default);
+app.use("/api/treebranchleaf", ia_config_routes_default);
 app.use("/api/tbl", tbl_submission_evaluator_default);
 app.use("/api/tbl/batch", tbl_batch_routes_default);
 app.use("/api/batch", batch_routes_default);
@@ -63668,7 +65176,7 @@ if (process.env.NODE_ENV === "production") {
   if (import_fs7.default.existsSync(indexHtml)) {
     console.log("\u{1F5C2}\uFE0F [STATIC] Distribution front d\xE9tect\xE9e, activation du serveur statique");
     const assetsDir = import_path7.default.join(distDir, "assets");
-    app.use("/assets", import_express93.default.static(assetsDir, {
+    app.use("/assets", import_express95.default.static(assetsDir, {
       setHeaders: (res) => {
         res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
       }

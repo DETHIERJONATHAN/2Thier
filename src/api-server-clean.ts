@@ -17,6 +17,7 @@ import { prisma } from './lib/prisma';
 // 🔥 ROUTES TBL SPÉCIALISÉES
 import tblSubmissionEvaluatorRouter from './components/TreeBranchLeaf/tbl-bridge/routes/tbl-submission-evaluator';
 import tblConfigRouter from './components/TreeBranchLeaf/treebranchleaf-new/TBL/routes/tbl-routes'; // 🔧 TBL CONFIG (variables, calculation-modes, fields)
+import iaConfigRouter from './components/TreeBranchLeaf/treebranchleaf-new/TBL/routes/ia-config-routes'; // 🎯 IA MESURE CONFIG (objets référence, paramètres détection)
 import tableRoutesNewRouter from './components/TreeBranchLeaf/treebranchleaf-new/api/treebranchleaf-routes';
 import calculatedValueController from './controllers/calculatedValueController'; // 🎯 VALEURS CALCULÉES STOCKÉES
 import tblBatchRoutes from './routes/tbl-batch-routes'; // 🚀 BATCH LOADING TBL
@@ -44,6 +45,7 @@ import cloudRunDomainsRouter from './api/cloud-run-domains'; // ☁️ GESTION D
 
 // 📄 ROUTES GESTION DOCUMENTS PDF
 import documentsRouter from './routes/documents'; // 📄 TEMPLATES DE DOCUMENTS (ADMIN)
+import measurementReferenceRouter from './api/measurement-reference'; // 📐 CONFIGURATION OBJETS DE RÉFÉRENCE POUR MESURES IA
 
 // 👤 ROUTES UTILISATEURS
 import userFavoritesRouter from './routes/userFavoritesRoutes'; // ⭐ FAVORIS MODULES UTILISATEUR
@@ -272,7 +274,9 @@ app.use('/api/ai', aiRouter); // 🤖 GEMINI AI (suggestions, optimisations)
 app.use('/api', contactFormRouter); // 📧 FORMULAIRE DE CONTACT SITE VITRINE
 app.use('/api/image-upload', imageUploadRouter); // 📸 UPLOAD D'IMAGES (LOGOS, PHOTOS)
 app.use('/api/documents', documentsRouter); // 📄 TEMPLATES DE DOCUMENTS (ADMIN + GÉNÉRATION)
+app.use('/api/measurement-reference', measurementReferenceRouter); // 📐 OBJETS RÉFÉRENCE MESURE IA (/:organizationId)
 app.use('/api/tbl', tblConfigRouter); // 🔧 TBL CONFIG ROUTES (/variables, /calculation-modes, /fields)
+app.use('/api/treebranchleaf', iaConfigRouter); // 🎯 IA MESURE CONFIG (/nodes/:nodeId/ia-config)
 app.use('/api/tbl', tblSubmissionEvaluatorRouter); // 🔥 TBL PRISMA EVALUATOR
 app.use('/api/tbl/batch', tblBatchRoutes); // 🚀 BATCH LOADING TBL (réduit ~100 requêtes à 1)
 app.use('/api/batch', batchRoutes); // 🚀 BATCH GLOBAL (Gmail, Leads, Analytics)

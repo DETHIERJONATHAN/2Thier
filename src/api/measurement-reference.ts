@@ -19,6 +19,41 @@ const router = Router();
 const geminiService = new GoogleGeminiService();
 
 /**
+ * GET /api/measurement-reference/
+ * Route fallback - Récupère la config via l'organizationId de l'utilisateur connecté
+ */
+router.get('/', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    if (!req.user?.id) {
+      return res.status(401).json({ error: 'Non authentifié' });
+    }
+
+    // Récupérer l'organizationId de l'utilisateur
+    const userOrg = await db.userOrganization.findFirst({
+      where: { userId: req.user.id },
+      select: { organizationId: true }
+    });
+
+    if (!userOrg?.organizationId) {
+      return res.json({ config: null }); // Pas d'organisation, pas de config
+    }
+
+    // Récupérer la config active pour cette organisation
+    const config = await db.organizationMeasurementReferenceConfig.findFirst({
+      where: {
+        organizationId: userOrg.organizationId,
+        isActive: true
+      }
+    });
+
+    res.json({ config: config || null });
+  } catch (error) {
+    console.error('❌ [API] Erreur récupération config référence (fallback):', error);
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
+
+/**
  * GET /api/measurement-reference/:organizationId
  * Récupère la configuration de référence active pour une organisation
  */

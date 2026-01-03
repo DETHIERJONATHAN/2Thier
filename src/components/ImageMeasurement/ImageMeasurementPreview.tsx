@@ -456,11 +456,13 @@ export const ImageMeasurementPreview: React.FC<ImageMeasurementPreviewProps> = (
       return;
     }
 
-    console.log('🔄 [ImageMeasurementPreview] useEffect triggered:', { visible, hasImageBase64: !!imageBase64, imageBase64Length: imageBase64?.length });
+    console.log('🔄 [ImageMeasurementPreview] useEffect triggered:', { visible, hasImageBase64: !!imageBase64, imageBase64Length: imageBase64?.length, imageUrl: imageUrl?.substring(0, 50) });
 
     const runWorkflow = async () => {
       setStep('loading');
       setError(null);
+      
+      console.log('🚀 [ImageMeasurementPreview] runWorkflow starting...');
 
       // 1. Charger config de référence (pour connaître les dimensions de la référence A4)
       const config = await loadReferenceConfig();

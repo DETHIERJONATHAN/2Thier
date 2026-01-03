@@ -7,6 +7,30 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+// Configuration de l'objet de référence pour mesures IA par organisation
+model OrganizationMeasurementReferenceConfig {
+  id               String       @id @default(cuid())
+  organizationId   String
+  referenceType    String       // 'meter', 'card', 'a4', 'custom'
+  customName       String?
+  customSize       Float        // Taille en unité spécifiée
+  customUnit       String       @default("cm") // 'cm', 'm', 'mm', 'inch'
+  customWidth      Float?       // Largeur pour références rectangulaires
+  customHeight     Float?       // Hauteur pour références rectangulaires
+  referenceImageUrl String?     // Photo de référence
+  detectionPrompt  String?      // Prompt personnalisé pour détection
+  isActive         Boolean      @default(true)
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+  createdBy        String
+
+  Organization     Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  User             User         @relation("MeasurementConfigCreator", fields: [createdBy], references: [id], onDelete: SetNull)
+
+  @@index([organizationId])
+  @@index([createdBy])
+}
+
 model AIRecommendation {
   id             String       @id
   leadId         String
@@ -1052,6 +1076,7 @@ model Organization {
   JoinRequest              JoinRequest[]
   contact_submissions      contact_submissions[]
   websites                 websites[]
+  MeasurementReferenceConfig OrganizationMeasurementReferenceConfig[]
 }
 
 model OrganizationModuleStatus {
@@ -1679,6 +1704,10 @@ model TreeBranchLeafNode {
   aiMeasure_autoTrigger       Boolean   @default(true)
   aiMeasure_prompt            String?
   aiMeasure_keys              Json?     @db.Json
+  
+  // 🆕 Configuration complète IA Mesure (objets de référence + paramètres détection)
+  iaMesureConfig              Json?     @db.Json @map("ia_mesure_config")
+  // Structure: { enabled: boolean, referenceObjects: [{type,width,height,unit}], detectionSettings: {minPhotos,confidenceThreshold,useSharp,useFusion} }
 
   // Relation vers la variable exposée (1-to-1)
   TreeBranchLeafNodeVariable  TreeBranchLeafNodeVariable?
@@ -2081,6 +2110,7 @@ model User {
   JoinRequest                                         JoinRequest[]
   website_blog_posts                                  website_blog_posts[]
   website_media_files                                 website_media_files[]
+  MeasurementReferenceConfig                          OrganizationMeasurementReferenceConfig[] @relation("MeasurementConfigCreator")
 }
 
 model UserOrganization {

@@ -11,7 +11,7 @@
  * @author 2Thier CRM Team
  */
 
-import React, { useState, useCallback, useRef } from 'react';
+import React, { useState, useCallback, useRef, useMemo } from 'react';
 import { Upload, Button, message, Spin, Space, Tag, Tooltip, Dropdown } from 'antd';
 import type { MenuProps } from 'antd';
 import { 
@@ -22,9 +22,19 @@ import {
   CheckCircleOutlined,
   ExclamationCircleOutlined,
   PictureOutlined,
-  VideoCameraOutlined
+  VideoCameraOutlined,
+  SettingOutlined,
+  ThunderboltOutlined
 } from '@ant-design/icons';
+import { useAuth } from '../../../../../auth/useAuth';
 import { useAIMeasure, getAIMeasureConfig, type AIMeasureConfig, type AIMeasureResult } from '../../../../../hooks/useAIMeasure';
+import { useSmartCameraConfig } from '../../../../../hooks/useSmartCameraConfig';
+import SmartCaptureFlow from '../../../../SmartCamera/SmartCaptureFlow';
+import type { CapturedPhoto } from '../../../../SmartCamera/SmartCameraMobile';
+import type { MultiPhotoAnalysis } from '../../../../SmartCamera/PhotoAnalyzer';
+import { ReferenceObjectsConfig } from '../../../../SmartCamera/ReferenceObjectsConfig';
+import { ImageMeasurementPreview } from '../../../../ImageMeasurement/ImageMeasurementPreview';
+import type { MeasurementResults, ImageAnnotations } from '../../../../../types/measurement';
 
 interface TBLImageFieldWithAIProps {
   // Configuration du champ
@@ -85,9 +95,24 @@ const TBLImageFieldWithAI: React.FC<TBLImageFieldWithAIProps> = ({
   style,
   onFieldUpdate
 }) => {
+  // Hook auth pour récupérer l'organizationId
+  const { user } = useAuth();
+  const organizationId = user?.organizationId || '';
+  
   // État local pour l'analyse IA
   const [isAnalyzingAI, setIsAnalyzingAI] = useState(false);
   const [lastAIResult, setLastAIResult] = useState<AIMeasureResult | null>(null);
+  
+  // États pour les modaux SmartCamera
+  const [showSmartCamera, setShowSmartCamera] = useState(false);
+  const [showReferenceConfig, setShowReferenceConfig] = useState(false);
+  
+  // 🆕 États pour ImageMeasurementPreview (canvas de sélection des lignes)
+  const [showMeasurementCanvas, setShowMeasurementCanvas] = useState(false);
+  const [capturedPhotos, setCapturedPhotos] = useState<CapturedPhoto[]>([]);
+  const [processedImageUrl, setProcessedImageUrl] = useState<string | null>(null);
+  const [processedImageBase64, setProcessedImageBase64] = useState<string | null>(null);
+  const [isFromSmartCapture, setIsFromSmartCapture] = useState(false);
   
   // Refs pour les inputs file (galerie et caméra)
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -103,6 +128,10 @@ const TBLImageFieldWithAI: React.FC<TBLImageFieldWithAIProps> = ({
       console.error('[TBLImageFieldWithAI] Erreur analyse IA:', error);
     }
   });
+  
+  // Hook pour la config SmartCamera (stabilisé pour éviter re-renders)
+  const smartCameraHook = useSmartCameraConfig(nodeId);
+  const smartConfig = useMemo(() => smartCameraHook.config, [smartCameraHook.config]);
   
   // 🔧 NOUVEAU: Récupérer la config AI depuis les colonnes dédiées OU metadata (fallback)
   const aiConfig = getAIMeasureConfig({ 
@@ -284,6 +313,97 @@ const TBLImageFieldWithAI: React.FC<TBLImageFieldWithAIProps> = ({
   const openCamera = useCallback(() => {
     cameraInputRef.current?.click();
   }, []);
+  
+  /**
+   * Handler pour le SmartCamera (capture multi-photos avec fusion + IA)
+   */
+  const handleSmartCapture = useCallback(async (photos: CapturedPhoto[], analysis: MultiPhotoAnalysis) => {
+    console.log('[TBLImageFieldWithAI] SmartCamera capture:', photos.length, 'photos', 'analysis:', analysis);
+    
+    if (photos.length === 0) {
+      message.error('Aucune photo capturée');
+      setShowSmartCamera(false);
+      return;
+    }
+    
+    // Sauvegarder les photos pour le canvas de mesure
+    setCapturedPhotos(photos);
+    
+    // Utiliser l'image fusionnée si disponible, sinon la première photo
+    // CORRECTION: La propriété s'appelle imageBase64, pas dataUrl !
+    const mainPhotoBase64 = photos[0]?.imageBase64 || '';
+    const imageToProcess = analysis?.fusedImage || mainPhotoBase64;
+    
+    console.log('[TBLImageFieldWithAI] imageToProcess:', imageToProcess ? `${imageToProcess.substring(0, 50)}...` : 'NULL');
+    
+    if (!imageToProcess) {
+      message.error('Aucune image disponible pour le traitement');
+      setShowSmartCamera(false);
+      return;
+    }
+    
+    // Extraire le base64 (après la virgule du data URL) ou utiliser directement si déjà base64
+    const base64Part = imageToProcess.includes(',') 
+      ? imageToProcess.split(',')[1] 
+      : imageToProcess;
+    
+    console.log('[TBLImageFieldWithAI] Setting processedImageUrl (canvas will NOT open automatically)');
+    console.log('[TBLImageFieldWithAI] base64Part length:', base64Part?.length || 0);
+    
+    // IMPORTANT: Mettre à jour les états dans le bon ordre
+    setProcessedImageUrl(imageToProcess);
+    setProcessedImageBase64(base64Part);
+    setIsFromSmartCapture(true); // Marquer comme venant de SmartCapture
+    
+    // Fermer SmartCamera
+    setShowSmartCamera(false);
+    
+    // NE PAS ouvrir le canvas automatiquement - l'utilisateur cliquera sur le bouton "Mesurer l'image actuelle"
+    const qualityScore = analysis?.quality?.overall || analysis?.photos?.[0]?.quality || 75;
+    message.success(`📸 ${photos.length} photo(s) capturée(s) avec succès ! Qualité: ${qualityScore}%`);
+  }, []);
+
+  /**
+   * 🆕 Handler pour la validation des mesures depuis ImageMeasurementCanvas
+   */
+  const handleMeasurementsComplete = useCallback((measurements: MeasurementResults, annotations?: ImageAnnotations) => {
+    console.log('[TBLImageFieldWithAI] Mesures extraites:', measurements, 'annotations:', annotations);
+    
+    // Sauvegarder l'image traitée dans le champ
+    if (processedImageUrl) {
+      onChange(processedImageUrl);
+    }
+    
+    // Appliquer les mesures aux champs mappés
+    if (aiMeasure_keys && onFieldUpdate) {
+      let appliedCount = 0;
+      aiMeasure_keys.forEach(mapping => {
+        // Accéder à la mesure par clé (string index)
+        const value = measurements[mapping.key as keyof MeasurementResults];
+        if (value !== undefined && mapping.targetRef) {
+          console.log(`[TBLImageFieldWithAI] Application: ${mapping.key} = ${value} → ${mapping.targetRef}`);
+          onFieldUpdate(mapping.targetRef, value);
+          appliedCount++;
+        }
+      });
+      
+      if (appliedCount > 0) {
+        message.success(`📐 ${appliedCount} mesure(s) appliquée(s) aux champs !`);
+      }
+    }
+    
+    // Fermer le canvas
+    setShowMeasurementCanvas(false);
+  }, [processedImageUrl, onChange, aiMeasure_keys, onFieldUpdate]);
+
+  /**
+   * 🆕 Handler pour l'annulation du canvas de mesure
+   */
+  const handleMeasurementCancel = useCallback(() => {
+    console.log('[TBLImageFieldWithAI] Canvas de mesure annulé');
+    setShowMeasurementCanvas(false);
+    // Optionnel: réouvrir SmartCamera si l'utilisateur veut reprendre des photos
+  }, []);
 
   /**
    * Menu dropdown pour choisir entre galerie et caméra
@@ -325,33 +445,85 @@ const TBLImageFieldWithAI: React.FC<TBLImageFieldWithAIProps> = ({
         
         {/* Boutons d'action */}
         <Space wrap>
-          {/* Dropdown avec galerie + caméra */}
-          <Dropdown 
-            menu={{ items: uploadMenuItems }} 
-            disabled={disabled || isAnalyzingAI}
-            trigger={['click']}
-          >
-            <Button 
-              icon={<CameraOutlined />}
-              disabled={disabled || isAnalyzingAI}
-              size={size}
-              style={style}
-              type={value ? 'default' : 'primary'}
-            >
-              {value ? 'Modifier' : '📷 Photo / Galerie'} ▾
-            </Button>
-          </Dropdown>
+          {/* Dropdown avec galerie + caméra - Caché si image vient de SmartCapture */}
+          {!isFromSmartCapture && (
+            <>
+              <Dropdown 
+                menu={{ items: uploadMenuItems }} 
+                disabled={disabled || isAnalyzingAI}
+                trigger={['click']}
+              >
+                <Button 
+                  icon={<CameraOutlined />}
+                  disabled={disabled || isAnalyzingAI}
+                  size={size}
+                  style={style}
+                  type={value ? 'default' : 'primary'}
+                >
+                  {value ? 'Modifier' : '📷 Photo / Galerie'} ▾
+                </Button>
+              </Dropdown>
+              
+              {/* Bouton rapide caméra (mobile) */}
+              <Tooltip title="Ouvrir l'appareil photo">
+                <Button
+                  icon={<VideoCameraOutlined />}
+                  onClick={openCamera}
+                  disabled={disabled || isAnalyzingAI}
+                  size={size}
+                  type="default"
+                />
+              </Tooltip>
+            </>
+          )}
           
-          {/* Bouton rapide caméra (mobile) */}
-          <Tooltip title="Ouvrir l'appareil photo">
-            <Button
-              icon={<VideoCameraOutlined />}
-              onClick={openCamera}
-              disabled={disabled || isAnalyzingAI}
-              size={size}
-              type="default"
-            />
-          </Tooltip>
+          {/* 🎯 NOUVEAU: SmartCamera IA (multi-photos) - Visible si capacité aiMeasure activée */}
+          {aiMeasure_enabled && (
+            <>
+              <Tooltip title="Capture IA multi-photos (3+ photos)">
+                <Button
+                  icon={<ThunderboltOutlined />}
+                  onClick={() => setShowSmartCamera(true)}
+                  disabled={disabled || isAnalyzingAI}
+                  size={size}
+                  type="default"
+                  style={{ borderColor: '#722ed1', color: '#722ed1' }}
+                />
+              </Tooltip>
+              
+              {/* 🆕 Bouton pour rouvrir le canvas de mesure sur l'image existante */}
+              {value && (
+                <Tooltip title="Mesurer l'image actuelle">
+                  <Button
+                    icon={<RobotOutlined />}
+                    onClick={() => {
+                      setProcessedImageUrl(typeof value === 'string' ? value : (value as any)?.original);
+                      setProcessedImageBase64(
+                        typeof value === 'string' 
+                          ? value.split(',')[1] || value 
+                          : (value as any)?.original?.split(',')[1] || (value as any)?.original
+                      );
+                      setShowMeasurementCanvas(true);
+                    }}
+                    disabled={disabled || isAnalyzingAI}
+                    size={size}
+                    type="default"
+                    style={{ borderColor: '#1890ff', color: '#1890ff' }}
+                  />
+                </Tooltip>
+              )}
+              
+              <Tooltip title="Configurer les objets de référence">
+                <Button
+                  icon={<SettingOutlined />}
+                  onClick={() => setShowReferenceConfig(true)}
+                  disabled={disabled || isAnalyzingAI}
+                  size={size}
+                  type="default"
+                />
+              </Tooltip>
+            </>
+          )}
         </Space>
         
         {/* Badge AI si activé */}
@@ -439,6 +611,50 @@ const TBLImageFieldWithAI: React.FC<TBLImageFieldWithAIProps> = ({
           </div>
         )}
       </Space>
+      
+      {/* 🎯 NOUVEAU: Modaux SmartCamera - Visibles si capacité aiMeasure activée */}
+      {aiMeasure_enabled && (
+        <>
+          {/* Modal de capture SmartCamera multi-photos */}
+          <SmartCaptureFlow
+            visible={showSmartCamera}
+            onClose={() => setShowSmartCamera(false)}
+            onComplete={handleSmartCapture}
+            targetObject="custom"
+            objectLabel="panneau solaire"
+          />
+          
+          {/* Modal de configuration des objets de référence */}
+          <ReferenceObjectsConfig
+            visible={showReferenceConfig}
+            onClose={() => setShowReferenceConfig(false)}
+            nodeId={nodeId}
+          />
+          
+          {/* 🆕 Modal de mesure interactive (canvas avec sélection de lignes) */}
+          <ImageMeasurementPreview
+            visible={showMeasurementCanvas && !!processedImageUrl}
+            imageUrl={processedImageUrl || ''}
+            imageBase64={processedImageBase64 || undefined}
+            organizationId={organizationId}
+            nodeId={nodeId}
+            onComplete={handleMeasurementsComplete}
+            onCancel={handleMeasurementCancel}
+            measureKeys={aiMeasure_keys?.map(k => k.key) || ['largeur_cm', 'hauteur_cm']}
+            allPhotos={capturedPhotos.map(photo => ({
+              imageBase64: photo.imageBase64?.includes(',') 
+                ? photo.imageBase64.split(',')[1] 
+                : photo.imageBase64 || '',
+              mimeType: 'image/jpeg',
+              metadata: {
+                qualityScore: photo.metadata?.quality?.overallScore || 85,
+                sharpness: photo.metadata?.quality?.sharpness || 85,
+                brightness: photo.metadata?.lighting?.brightness || 128
+              }
+            }))}
+          />
+        </>
+      )}
     </div>
   );
 };
