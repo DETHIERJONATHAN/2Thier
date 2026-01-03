@@ -24,6 +24,7 @@ import aiFieldGeneratorRouter from './routes/ai-field-generator'; // 🤖 IA GÉ
 import treebranchleafRouter from './components/TreeBranchLeaf/treebranchleaf-new/api/treebranchleaf-routes';
 import centralizedOperationsRouter from './components/TreeBranchLeaf/treebranchleaf-new/api/centralized-operations-routes';
 import tblSubmissionEvaluatorRouter from './components/TreeBranchLeaf/tbl-bridge/routes/tbl-submission-evaluator';
+import tblConfigRouter from './components/TreeBranchLeaf/treebranchleaf-new/TBL/routes/tbl-routes'; // 🔧 TBL CONFIG (variables, calculation-modes)
 import calculatedValueController from './controllers/calculatedValueController'; // 🎯 VALEURS CALCULÉES
 import websitesRouter from './api/websites'; // 🌐 GESTION DES SITES WEB
 import imageUploadRouter from './api/image-upload'; // 📸 UPLOAD D'IMAGES
@@ -426,6 +427,7 @@ app.use('/api/ai/internal', aiInternalRouter);
 app.use('/api/ai', aiFieldGeneratorRouter); // 🤖 IA GÉNÉRATION INTELLIGENTE DE CONTENU
 app.use('/api/treebranchleaf', treebranchleafRouter);
 app.use('/api/treebranchleaf-ops', centralizedOperationsRouter);
+app.use('/api/tbl', tblConfigRouter); // 🔧 TBL CONFIG ROUTES (/variables, /calculation-modes, /fields)
 app.use('/api/tbl', tblSubmissionEvaluatorRouter); // 🔥 TBL PRISMA EVALUATOR
 app.use('/api/image-upload', imageUploadRouter); // 📸 UPLOAD D'IMAGES
 app.use('/api/documents', documentsRouter); // 📄 TEMPLATES DE DOCUMENTS (ADMIN + GÉNÉRATION)

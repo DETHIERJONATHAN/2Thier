@@ -41,42 +41,28 @@ router.get('/variables', authMiddleware, requireRole(['user', 'admin', 'super_ad
   try {
     const { isSuperAdmin, organizationId } = getAuthCtx(req);
 
-    // Relation correcte = "TreeBranchLeafNode" (et non "node").
+    // 1. Récupérer d'abord tous les nodeIds existants (évite l'erreur Prisma sur données orphelines)
+    const existingNodes = await prisma.treeBranchLeafNode.findMany({
+      select: { 
+        id: true, 
+        treeId: true,
+        TreeBranchLeafTree: { select: { organizationId: true } }
+      }
+    });
+    const existingNodeIds = new Set(existingNodes.map(n => n.id));
+    const nodeOrgMap = new Map(existingNodes.map(n => [n.id, n.TreeBranchLeafTree?.organizationId]));
+
+    // 2. Récupérer les variables (sans include problématique)
     const raw = await prisma.treeBranchLeafNodeVariable.findMany({
-      include: {
-        TreeBranchLeafNode: {
-          select: {
-            id: true,
-            treeId: true,
-            TreeBranchLeafTree: { select: { organizationId: true } }
-          }
-        }
-      },
       orderBy: { updatedAt: 'desc' }
     });
 
-    interface RawVarWithRelations {
-      id: string;
-      nodeId: string;
-      exposedKey: string;
-      displayName: string;
-      displayFormat: string;
-      unit: string | null;
-      precision: number | null;
-      sourceRef: string | null;
-      sourceType: string | null;
-      updatedAt: Date;
-      TreeBranchLeafNode?: {
-        id: string;
-        treeId: string;
-        TreeBranchLeafTree?: { organizationId: string } | null;
-      } | null;
-    }
-
-    const variables = (raw as unknown as RawVarWithRelations[])
+    // 3. Filtrer les variables orphelines et par organisation
+    const variables = raw
+      .filter(v => existingNodeIds.has(v.nodeId)) // Exclure les orphelins
       .filter(v => {
         if (isSuperAdmin) return true;
-        const nodeOrg = v.TreeBranchLeafNode?.TreeBranchLeafTree?.organizationId;
+        const nodeOrg = nodeOrgMap.get(v.nodeId);
         return !organizationId || !nodeOrg || nodeOrg === organizationId;
       })
       .map(v => ({
@@ -108,26 +94,30 @@ router.get(['/calculation-modes', '/modes'], authMiddleware, requireRole(['user'
   try {
     const { isSuperAdmin, organizationId } = getAuthCtx(req);
 
-    const rawVariables = await prisma.treeBranchLeafNodeVariable.findMany({
-      include: {
-        TreeBranchLeafNode: {
-          select: {
-            id: true,
-            treeId: true,
-            parentId: true,
-            type: true,
-            TreeBranchLeafTree: { select: { organizationId: true } }
-          }
-        }
+    // 1. Récupérer d'abord tous les nodeIds existants (évite l'erreur Prisma sur données orphelines)
+    const existingNodes = await prisma.treeBranchLeafNode.findMany({
+      select: { 
+        id: true, 
+        treeId: true,
+        parentId: true,
+        type: true,
+        TreeBranchLeafTree: { select: { organizationId: true } }
       }
     });
+    const existingNodeIds = new Set(existingNodes.map(n => n.id));
+    const nodeOrgMap = new Map(existingNodes.map(n => [n.id, n.TreeBranchLeafTree?.organizationId]));
 
-    type RawVar = typeof rawVariables[number] & { TreeBranchLeafNode?: { TreeBranchLeafTree?: { organizationId: string } | null } | null };
-    const accessible = (rawVariables as RawVar[]).filter(v => {
-      if (isSuperAdmin) return true;
-      const nodeOrg = v.TreeBranchLeafNode?.TreeBranchLeafTree?.organizationId;
-      return !organizationId || !nodeOrg || nodeOrg === organizationId;
-    });
+    // 2. Récupérer les variables (sans include problématique)
+    const rawVariables = await prisma.treeBranchLeafNodeVariable.findMany();
+
+    // 3. Filtrer les variables orphelines et par organisation
+    const accessible = rawVariables
+      .filter(v => existingNodeIds.has(v.nodeId)) // Exclure les orphelins
+      .filter(v => {
+        if (isSuperAdmin) return true;
+        const nodeOrg = nodeOrgMap.get(v.nodeId);
+        return !organizationId || !nodeOrg || nodeOrg === organizationId;
+      });
 
     interface CapacityField { id: string; code: string; label: string; type: string; capacity: string; sourceRef: string | null }
     interface Mode { id: string; code: string; label: string; capacity: string; fields: CapacityField[] }

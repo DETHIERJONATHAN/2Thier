@@ -42842,21 +42842,21 @@ function getAuthCtx4(req2) {
 router57.get("/variables", authMiddleware, requireRole(["user", "admin", "super_admin"]), async (req2, res) => {
   try {
     const { isSuperAdmin: isSuperAdmin2, organizationId } = getAuthCtx4(req2);
+    const existingNodes = await prisma31.treeBranchLeafNode.findMany({
+      select: {
+        id: true,
+        treeId: true,
+        TreeBranchLeafTree: { select: { organizationId: true } }
+      }
+    });
+    const existingNodeIds = new Set(existingNodes.map((n) => n.id));
+    const nodeOrgMap = new Map(existingNodes.map((n) => [n.id, n.TreeBranchLeafTree?.organizationId]));
     const raw = await prisma31.treeBranchLeafNodeVariable.findMany({
-      include: {
-        TreeBranchLeafNode: {
-          select: {
-            id: true,
-            treeId: true,
-            TreeBranchLeafTree: { select: { organizationId: true } }
-          }
-        }
-      },
       orderBy: { updatedAt: "desc" }
     });
-    const variables = raw.filter((v) => {
+    const variables = raw.filter((v) => existingNodeIds.has(v.nodeId)).filter((v) => {
       if (isSuperAdmin2) return true;
-      const nodeOrg = v.TreeBranchLeafNode?.TreeBranchLeafTree?.organizationId;
+      const nodeOrg = nodeOrgMap.get(v.nodeId);
       return !organizationId || !nodeOrg || nodeOrg === organizationId;
     }).map((v) => ({
       id: v.id,
@@ -42887,22 +42887,21 @@ router57.get(["/calculation-modes", "/modes"], authMiddleware, requireRole(["use
       return "1";
     };
     const { isSuperAdmin: isSuperAdmin2, organizationId } = getAuthCtx4(req2);
-    const rawVariables = await prisma31.treeBranchLeafNodeVariable.findMany({
-      include: {
-        TreeBranchLeafNode: {
-          select: {
-            id: true,
-            treeId: true,
-            parentId: true,
-            type: true,
-            TreeBranchLeafTree: { select: { organizationId: true } }
-          }
-        }
+    const existingNodes = await prisma31.treeBranchLeafNode.findMany({
+      select: {
+        id: true,
+        treeId: true,
+        parentId: true,
+        type: true,
+        TreeBranchLeafTree: { select: { organizationId: true } }
       }
     });
-    const accessible = rawVariables.filter((v) => {
+    const existingNodeIds = new Set(existingNodes.map((n) => n.id));
+    const nodeOrgMap = new Map(existingNodes.map((n) => [n.id, n.TreeBranchLeafTree?.organizationId]));
+    const rawVariables = await prisma31.treeBranchLeafNodeVariable.findMany();
+    const accessible = rawVariables.filter((v) => existingNodeIds.has(v.nodeId)).filter((v) => {
       if (isSuperAdmin2) return true;
-      const nodeOrg = v.TreeBranchLeafNode?.TreeBranchLeafTree?.organizationId;
+      const nodeOrg = nodeOrgMap.get(v.nodeId);
       return !organizationId || !nodeOrg || nodeOrg === organizationId;
     });
     const capacityBuckets = { "1": [], "2": [], "3": [], "4": [] };
@@ -63636,6 +63635,7 @@ app.use("/api/ai", ai_default2);
 app.use("/api", contact_form_default);
 app.use("/api/image-upload", image_upload_default);
 app.use("/api/documents", documents_default);
+app.use("/api/tbl", tbl_routes_default);
 app.use("/api/tbl", tbl_submission_evaluator_default);
 app.use("/api/tbl/batch", tbl_batch_routes_default);
 app.use("/api/batch", batch_routes_default);
