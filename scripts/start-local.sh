@@ -24,6 +24,12 @@ echo "✅ Processus arrêtés"
 
 # 2. Vérification de l'authentification gcloud
 echo "🔑 Vérification du token Google Cloud..."
+
+# Ajouter gcloud au PATH si installé dans /tmp (Codespaces)
+if [ -d "/tmp/google-cloud-sdk/bin" ]; then
+    export PATH="/tmp/google-cloud-sdk/bin:$PATH"
+fi
+
 TOKEN=$(gcloud auth print-access-token 2>/dev/null)
 
 if [ -z "$TOKEN" ]; then
@@ -40,8 +46,12 @@ fi
 
 # 3. Démarrage du proxy
 echo "🔌 Démarrage du Cloud SQL Proxy..."
-# Note: On utilise le binaire à la racine. Assurez-vous qu'il est exécutable (chmod +x cloud-sql-proxy)
-./cloud-sql-proxy thiernew:europe-west1:crm-postgres-prod --port 5432 --token "$TOKEN" > /dev/null 2>&1 &
+# Utiliser cloud-sql-proxy depuis le PATH (installé via gcloud components ou à la racine)
+PROXY_CMD="cloud-sql-proxy"
+if [ -f "./cloud-sql-proxy" ]; then
+    PROXY_CMD="./cloud-sql-proxy"
+fi
+$PROXY_CMD thiernew:europe-west1:crm-postgres-prod --port 5432 --token "$TOKEN" > /dev/null 2>&1 &
 PROXY_PID=$!
 
 echo "⏳ Attente du démarrage du proxy (5s)..."
