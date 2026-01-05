@@ -544,6 +544,7 @@ const server = app.listen(port, '0.0.0.0', () => {
   console.log(`   - Notifications: http://localhost:${port}/api/notifications`);
   console.log(`   - Modules: http://localhost:${port}/api/modules/all`);
   console.log(`   - Blocks: http://localhost:${port}/api/blocks`);
-  console.log(`   - Google Auth: http://localhost:${port}/api/auto-google-auth/connect`);
+  console.log(`   - Auto Google Auth (POST): http://localhost:${port}/api/auto-google-auth/connect`);
+  console.log(`   - Auto Google Status (GET): http://localhost:${port}/api/auto-google-auth/status`);
 });
 export { app };
