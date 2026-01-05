@@ -140,6 +140,7 @@ router.post('/nodes/:nodeId/tables', async (req, res) => {
       const colMetadata = typeof col === 'object' && col.metadata ? col.metadata : {};
 
       return {
+        id: randomUUID(),
         tableId: tableId,
         columnIndex: index,
         name: colName,
@@ -152,6 +153,7 @@ router.post('/nodes/:nodeId/tables', async (req, res) => {
 
     // PrÃƒÂ©parer les lignes
     const tableRowsData = rows.map((row, index) => ({
+      id: randomUUID(),
       tableId: tableId,
       rowIndex: index,
       // IMPORTANT: Prisma JSON ne supporte pas undefined/NaN/BigInt/Date
@@ -334,7 +336,8 @@ router.post('/nodes/:nodeId/tables', async (req, res) => {
     console.error(`Ã¢ÂÅ’ [NEW POST /tables] Erreur lors de la crÃƒÂ©ation de la table:`, error);
     if (error instanceof Prisma.PrismaClientValidationError) {
       return res.status(400).json({
-        error: 'DonnÃƒÂ©es invalides pour la table (valeurs non compatibles JSON).',
+        error: 'RequÃªte invalide pour la crÃƒÂ©ation de la table.',
+        details: error.message,
       });
     }
     if (error instanceof Prisma.PrismaClientKnownRequestError) {

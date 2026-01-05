@@ -69,10 +69,13 @@ export function useNodeCalculatedValue(
       // ⚠️ IMPORTANT: Le submissionId est envoyé UNIQUEMENT pour lire les valeurs
       // des champs sources nécessaires au calcul. Le résultat calculé lui-même
       // n'est JAMAIS enregistré dans la submission - il reste dynamique.
+      // ✅ IMPORTANT: Un 404 doit être toléré (ex: display field pas encore créé en DB)
+      // et ne doit pas polluer la console ni casser l'UI.
       const response = await api.get(
         `/api/tree-nodes/${nodeId}/calculated-value`,
         {
-          params: submissionId ? { submissionId } : undefined
+          params: submissionId ? { submissionId } : undefined,
+          suppressErrorLogForStatuses: [404]
         }
       );
 
@@ -149,6 +152,14 @@ export function useNodeCalculatedValue(
         setValue(null);
       }
     } catch (err) {
+      const status = (err as Error & { status?: number })?.status;
+      if (status === 404) {
+        // Tolérer le 404 (nœud inexistant / pas encore créé) -> valeur vide
+        setValue(null);
+        setError(null);
+        return;
+      }
+
       const errMsg = err instanceof Error ? err.message : String(err);
       setError(errMsg);
       console.error('❌ [useNodeCalculatedValue] Erreur récupération:', {
