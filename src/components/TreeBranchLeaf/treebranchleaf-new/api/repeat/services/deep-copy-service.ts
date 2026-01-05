@@ -1161,33 +1161,38 @@ export async function deepCopyNodeInternal(
       });
 
       if (!existingCopyConfig) {
-        // 🎯 FIX 05/01/2026: Pour les lookups vers table PARTAGÉE (optionsSource='table'),
-        // on garde le MÊME tableReference sans suffixe car la table est partagée.
-        // Pour les selects avec table locale (copiée), on suffixe.
+        // 🎯 FIX 05/01/2026 v2: Distinguer table PARTAGÉE (lookup externe) vs table LOCALE
+        // - Table PARTAGÉE: table.nodeId !== selectConfig.nodeId → garder tableReference original
+        // - Table LOCALE: table.nodeId === selectConfig.nodeId → suffixer tableReference
         
-        // Vérifier si la table référencée existe déjà avec suffixe (= table copiée)
-        // ou si on doit garder l'original (= table partagée)
         let newTableReference: string | null = null;
+        let shouldSuffixColumns = true; // Par défaut on suffixe
+        
         if (originalSelectConfig.tableReference) {
-          const suffixedTableRef = appendSuffix(originalSelectConfig.tableReference);
-          // Vérifier si la table suffixée existe (= c'est une copie locale)
-          const suffixedTableExists = await prisma.treeBranchLeafNodeTable.findUnique({
-            where: { id: suffixedTableRef },
-            select: { id: true }
+          // Vérifier si la table référencée appartient au même nœud (locale) ou à un autre (partagée)
+          const referencedTable = await prisma.treeBranchLeafNodeTable.findUnique({
+            where: { id: originalSelectConfig.tableReference },
+            select: { id: true, nodeId: true }
           });
           
-          if (suffixedTableExists) {
-            // La table a été copiée → utiliser l'ID suffixé
-            newTableReference = suffixedTableRef;
+          if (referencedTable) {
+            const isSharedLookupTable = referencedTable.nodeId !== oldId;
+            
+            if (isSharedLookupTable) {
+              // Table partagée (lookup externe) → garder l'original
+              newTableReference = originalSelectConfig.tableReference;
+              shouldSuffixColumns = false;
+            } else {
+              // Table locale → suffixer
+              newTableReference = appendSuffix(originalSelectConfig.tableReference);
+              shouldSuffixColumns = true;
+            }
           } else {
-            // La table n'a pas été copiée → c'est une table partagée, garder l'original
-            newTableReference = originalSelectConfig.tableReference;
+            // Table non trouvée → suffixer par défaut (comportement original)
+            newTableReference = appendSuffix(originalSelectConfig.tableReference);
+            shouldSuffixColumns = true;
           }
         }
-
-        // 🎯 FIX: Pour les colonnes (keyColumn, valueColumn, displayColumn),
-        // on ne suffixe QUE si c'est une table copiée, sinon on garde l'original
-        const shouldSuffixColumns = newTableReference !== originalSelectConfig.tableReference;
 
 
         try {
@@ -1206,7 +1211,7 @@ export async function deepCopyNodeInternal(
               dependsOnNodeId: originalSelectConfig.dependsOnNodeId 
                 ? (idMap.get(originalSelectConfig.dependsOnNodeId) || appendSuffix(originalSelectConfig.dependsOnNodeId))
                 : null,
-              // 🎯 Ne suffixer les colonnes QUE si la table a été copiée
+              // Suffixer les colonnes seulement si table locale
               keyColumn: originalSelectConfig.keyColumn 
                 ? (shouldSuffixColumns ? `${originalSelectConfig.keyColumn}${computedLabelSuffix}` : originalSelectConfig.keyColumn)
                 : null,
