@@ -5295,8 +5295,9 @@ router.delete('/trees/:treeId/nodes/:nodeId/data', async (req, res) => {
     // RÃƒÆ’Ã‚Â©soudre la variable (support des nÃƒâ€¦Ã¢â‚¬Å“uds proxys/display)
     const { variable, ownerNodeId, proxiedFromNodeId } = await resolveNodeVariable(nodeId, node.linkedVariableIds);
 
+    // Idempotence: si la variable n'existe plus, on considÃƒÆ’Ã‚Â¨re que la suppression est dÃƒÆ’Ã‚Â©jÃƒÆ’Ã‚Â  effective.
     if (!variable || !ownerNodeId) {
-      return res.status(404).json({ error: 'Variable non trouvÃƒÆ’Ã‚Â©e' });
+      return res.status(200).json({ success: true, message: 'Variable dÃƒÆ’Ã‚Â©jÃƒÆ’Ã‚Â  supprimÃƒÆ’Ã‚Â©e' });
     }
 
 

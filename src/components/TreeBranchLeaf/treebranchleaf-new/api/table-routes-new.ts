@@ -18,6 +18,42 @@ import { addToNodeLinkedField } from './repeat/services/shared-helpers';
 const router = Router();
 const prisma = db;
 
+function toJsonSafe(value: unknown): Prisma.InputJsonValue {
+  if (value === undefined) return null;
+  if (value === null) return null;
+
+  if (typeof value === 'number') {
+    return Number.isFinite(value) ? value : null;
+  }
+
+  if (typeof value === 'bigint') {
+    return value.toString();
+  }
+
+  if (value instanceof Date) {
+    return value.toISOString();
+  }
+
+  if (Array.isArray(value)) {
+    return value.map(v => toJsonSafe(v)) as unknown as Prisma.InputJsonValue;
+  }
+
+  if (typeof value === 'object') {
+    const obj = value as Record<string, unknown>;
+    const out: Record<string, Prisma.InputJsonValue> = {};
+    for (const [k, v] of Object.entries(obj)) {
+      out[k] = toJsonSafe(v);
+    }
+    return out as unknown as Prisma.InputJsonValue;
+  }
+
+  if (typeof value === 'string' || typeof value === 'boolean') {
+    return value;
+  }
+
+  return String(value);
+}
+
 type MinimalReqUser = { organizationId?: string | null; isSuperAdmin?: boolean; role?: string; userRole?: string };
 type MinimalReq = { user?: MinimalReqUser; headers?: Record<string, unknown> };
 
@@ -110,7 +146,7 @@ router.post('/nodes/:nodeId/tables', async (req, res) => {
         type: colType,
         width: colWidth,
         format: colFormat,
-        metadata: colMetadata as Prisma.InputJsonValue,
+        metadata: toJsonSafe(colMetadata),
       };
     });
 
@@ -118,7 +154,8 @@ router.post('/nodes/:nodeId/tables', async (req, res) => {
     const tableRowsData = rows.map((row, index) => ({
       tableId: tableId,
       rowIndex: index,
-      cells: row as Prisma.InputJsonValue,
+      // IMPORTANT: Prisma JSON ne supporte pas undefined/NaN/BigInt/Date
+      cells: toJsonSafe(row),
     }));
 
     if (rows.length > 0) {
@@ -295,6 +332,11 @@ router.post('/nodes/:nodeId/tables', async (req, res) => {
 
   } catch (error) {
     console.error(`Ã¢ÂÅ’ [NEW POST /tables] Erreur lors de la crÃƒÂ©ation de la table:`, error);
+    if (error instanceof Prisma.PrismaClientValidationError) {
+      return res.status(400).json({
+        error: 'DonnÃƒÂ©es invalides pour la table (valeurs non compatibles JSON).',
+      });
+    }
     if (error instanceof Prisma.PrismaClientKnownRequestError) {
       // P2002 = Violation de contrainte unique
       if (error.code === 'P2002') {
