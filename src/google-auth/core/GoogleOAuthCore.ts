@@ -42,6 +42,18 @@ export class GoogleOAuthService {
       GOOGLE_REDIRECT_URI
     );
   }
+  
+  private formatOAuthError(error: unknown): Record<string, unknown> {
+    const asAny = error as any;
+    const responseData = asAny?.response?.data;
+    return {
+      message: asAny instanceof Error ? asAny.message : String(error),
+      code: asAny?.code,
+      status: asAny?.response?.status ?? asAny?.status,
+      error: responseData?.error,
+      error_description: responseData?.error_description
+    };
+  }
 
   // Générer l'URL d'autorisation Google
   getAuthUrl(
@@ -265,7 +277,7 @@ export class GoogleOAuthService {
           });
         }
       } catch (error) {
-        console.error(`[GoogleOAuthService] ❌ Échec du rafraîchissement pour admin ${googleConfig.adminEmail}:`, error);
+        console.error(`[GoogleOAuthService] ❌ Échec du rafraîchissement pour admin ${googleConfig.adminEmail}:`, this.formatOAuthError(error));
         return null;
       }
     }
@@ -311,8 +323,8 @@ export class GoogleOAuthService {
     }
 
     console.log(`[GoogleOAuthService] 🔍 Tokens trouvés pour ${userId}:`);
-    console.log(`[GoogleOAuthService] - Access token: ${tokens.accessToken ? tokens.accessToken.substring(0, 20) + '...' : 'MANQUANT'}`);
-    console.log(`[GoogleOAuthService] - Refresh token: ${tokens.refreshToken ? tokens.refreshToken.substring(0, 20) + '...' : 'MANQUANT'}`);
+    console.log(`[GoogleOAuthService] - Access token: ${tokens.accessToken ? 'Présent' : 'MANQUANT'}`);
+    console.log(`[GoogleOAuthService] - Refresh token: ${tokens.refreshToken ? 'Présent' : 'MANQUANT'}`);
     console.log(`[GoogleOAuthService] - Expires at: ${tokens.expiresAt}`);
 
     // Configuration des credentials
@@ -325,9 +337,7 @@ export class GoogleOAuthService {
     
     console.log(`[GoogleOAuthService] 🔧 Configuration credentials:`, {
       hasAccessToken: !!credentials.access_token,
-      accessTokenLength: credentials.access_token?.length,
       hasRefreshToken: !!credentials.refresh_token,
-      refreshTokenLength: credentials.refresh_token?.length,
       tokenType: credentials.token_type,
       expiryDate: credentials.expiry_date ? new Date(credentials.expiry_date).toISOString() : 'NON_DÉFINI'
     });
@@ -369,7 +379,7 @@ export class GoogleOAuthService {
         console.log(`[GoogleOAuthService] ✅ Token rafraîchi avec succès pour l'utilisateur ${userId}`);
       }
     } catch (error) {
-      console.error(`[GoogleOAuthService] ❌ Échec du rafraîchissement du token pour ${userId}:`, error);
+        console.error(`[GoogleOAuthService] ❌ Échec du rafraîchissement du token pour ${userId}:`, this.formatOAuthError(error));
       return null;
     }
   } else if (expiryDate) {

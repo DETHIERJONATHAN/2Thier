@@ -36,14 +36,13 @@ const getJWTSecret = (): string => {
 
 export const login = async (req: Request, res: Response) => {
   try {
-    // DEBUG: Afficher le body complet reçu
-    console.log(`[AUTH] 📦 Body reçu:`, JSON.stringify(req.body));
-    console.log(`[AUTH] 📦 Content-Type:`, req.headers['content-type']);
-    
     const { email, password } = req.body;
 
-    console.log(`[AUTH] 🔐 Tentative de connexion pour: ${email}`);
-    console.log(`[AUTH] 🔐 Password reçu: "${password}" (length: ${password?.length || 0}, type: ${typeof password})`);
+    console.log('[AUTH] 🔐 Tentative de connexion', {
+      email,
+      hasPassword: typeof password === 'string' && password.length > 0,
+      contentType: req.headers['content-type']
+    });
 
     if (!email || !password) {
       console.log(`[AUTH] ❌ Email ou password manquant`);

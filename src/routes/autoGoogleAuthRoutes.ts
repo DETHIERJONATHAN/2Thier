@@ -116,19 +116,31 @@ router.post('/connect', authMiddleware, async (req: AuthenticatedRequest, res) =
       return res.json({ ...cached.payload, cached: true });
     }
 
-    // 1. Essayer d'obtenir un client authentifié (ce qui gère le refresh token)
-    const authClient = await googleOAuthService.getAuthenticatedClientForOrganization(organizationId);
+    // 1. Vérifier uniquement la présence/validité locale du token (sans appeler Google).
+    // L'auto-OAuth est désactivé: on ne tente PAS de refresh ici.
+    const tokens = await db.googleToken.findUnique({
+      where: {
+        userId_organizationId: { userId, organizationId }
+      }
+    });
 
-    if (authClient) {
-      // L'utilisateur est déjà connecté et le token est valide (ou a été rafraîchi)
+    const nowDate = new Date();
+    const isLocallyValid = !!tokens?.accessToken && !!tokens?.expiresAt && tokens.expiresAt > nowDate;
+    if (isLocallyValid) {
       const ttlConnected = 15_000;
-      const payload = { success: true, isConnected: true, needsManualAuth: false, message: 'Connexion Google déjà active.', cacheTtlMs: ttlConnected };
+      const payload = {
+        success: true,
+        isConnected: true,
+        needsManualAuth: false,
+        message: 'Connexion Google déjà active (token local valide).',
+        cacheTtlMs: ttlConnected
+      };
       connectCache.set(key, { expiresAt: now + ttlConnected, payload });
       res.setHeader('X-AutoGoogle-Cache-Until', new Date(now + ttlConnected).toISOString());
       return res.json(payload);
     }
 
-    // 2. Aucun token valide → on ne lance PLUS l'OAuth ici.
+    // 2. Aucun token local valide → on ne lance PLUS l'OAuth ici.
     // Désormais, tout passe par la page Admin Organisation Google Workspace + le scheduler.
     console.log('[AutoGoogleAuth] ⚠️ Connexion Google non active: OAuth désactivé via auto-connect.');
 
