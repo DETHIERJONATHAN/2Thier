@@ -1,7 +1,8 @@
 import { google } from 'googleapis';
 import { OAuth2Client, Credentials } from 'google-auth-library';
 import { randomUUID } from 'crypto';
-import { prisma } from '../../lib/prisma';
+import { db } from '../../lib/database';
+import { decrypt } from '../../utils/crypto';
 
 import {
   googleOAuthConfig,
@@ -43,20 +44,33 @@ export class GoogleOAuthService {
   }
 
   // Générer l'URL d'autorisation Google
-  getAuthUrl(userId: string, organizationId: string): string {
+  getAuthUrl(
+    userId: string,
+    organizationId: string,
+    hostHeaderOrForceConsent: string | boolean = false,
+    maybeForceConsent?: boolean
+  ): string {
+    // Compat: certains call-sites historiques passaient un hostHeader en 3e param.
+    const forceConsent = typeof hostHeaderOrForceConsent === 'boolean'
+      ? hostHeaderOrForceConsent
+      : (maybeForceConsent ?? false);
+
     const state = JSON.stringify({ userId, organizationId });
 
     const authUrl = this.oauth2Client.generateAuthUrl({
-      access_type: 'offline',
+      access_type: 'offline', // ✅ ESSENTIEL : Obtenir un refresh token
       scope: SCOPES,
       state: state,
-      prompt: 'select_account', // ✅ Ne force plus le consentement à chaque fois
+      // Si forceConsent ou première connexion : demander le consentement pour obtenir refresh_token
+      // Sinon : juste sélectionner le compte (plus fluide)
+      prompt: forceConsent ? 'consent' : 'select_account',
       include_granted_scopes: true, // ✅ Active l'autorisation incrémentielle
       enable_granular_consent: true // ✅ Protection multicompte
     });
     
     console.log('[GoogleOAuthService] 🔗 URL d\'autorisation générée:', authUrl);
     console.log('[GoogleOAuthService] 🎯 Redirect URI configuré:', GOOGLE_REDIRECT_URI);
+    console.log('[GoogleOAuthService] 🔄 Force consent:', forceConsent);
     
     return authUrl;
   }
@@ -88,14 +102,14 @@ export class GoogleOAuthService {
     };
 
     // Rechercher par userId + organizationId (nouveau modèle)
-    const existingToken = await prisma.googleToken.findUnique({
+    const existingToken = await db.googleToken.findUnique({
       where: { 
         userId_organizationId: { userId, organizationId }
       }
     });
 
     if (existingToken) {
-      await prisma.googleToken.update({
+      await db.googleToken.update({
         where: { 
           userId_organizationId: { userId, organizationId }
         },
@@ -112,7 +126,7 @@ export class GoogleOAuthService {
         }
       });
     } else {
-      await prisma.googleToken.create({
+      await db.googleToken.create({
         data: {
           id: randomUUID(),
           userId,
@@ -134,7 +148,7 @@ export class GoogleOAuthService {
   async getUserTokens(userId: string, organizationId?: string) {
     // Si organizationId est fourni, recherche directe
     if (organizationId) {
-      return await prisma.googleToken.findUnique({
+      return await db.googleToken.findUnique({
         where: { 
           userId_organizationId: { userId, organizationId }
         }
@@ -142,7 +156,7 @@ export class GoogleOAuthService {
     }
 
     // Sinon, récupérer l'organisation par défaut de l'utilisateur
-    const userWithOrg = await prisma.user.findUnique({
+    const userWithOrg = await db.user.findUnique({
       where: { id: userId },
       include: { 
         UserOrganization: {
@@ -159,7 +173,7 @@ export class GoogleOAuthService {
 
     const defaultOrgId = userWithOrg.UserOrganization[0].organizationId;
 
-    return await prisma.googleToken.findUnique({
+    return await db.googleToken.findUnique({
       where: { 
         userId_organizationId: { userId, organizationId: defaultOrgId }
       }
@@ -170,7 +184,7 @@ export class GoogleOAuthService {
   // Maintenant, chaque utilisateur a son propre token
   async getAuthenticatedClientForOrganization(organizationId: string, userId?: string): Promise<OAuth2Client | null> {
     // Récupérer l'organisation et sa config Google Workspace
-    const organization = await prisma.organization.findUnique({
+    const organization = await db.organization.findUnique({
       where: { id: organizationId },
       include: {
         GoogleWorkspaceConfig: true,
@@ -187,17 +201,24 @@ export class GoogleOAuthService {
       return null;
     }
 
+    const clientId = googleConfig.clientId ? decrypt(googleConfig.clientId) : null;
+    const clientSecret = googleConfig.clientSecret ? decrypt(googleConfig.clientSecret) : null;
+    if (!clientId || !clientSecret) {
+      console.warn('[GoogleOAuthService] ❌ clientId/clientSecret manquants pour org', organizationId);
+      return null;
+    }
+
     // Récupérer les tokens pour cet utilisateur dans cette organisation
     let tokens;
     if (userId) {
-      tokens = await prisma.googleToken.findUnique({
+      tokens = await db.googleToken.findUnique({
         where: { 
           userId_organizationId: { userId, organizationId: organization.id }
         }
       });
     } else {
       // Fallback : prendre le premier token disponible pour cette organisation (legacy)
-      tokens = await prisma.googleToken.findFirst({
+      tokens = await db.googleToken.findFirst({
         where: { organizationId: organization.id }
       });
     }
@@ -215,11 +236,8 @@ export class GoogleOAuthService {
     };
 
     // Créer une nouvelle instance OAuth2Client pour l'admin
-    const adminOAuth2Client = new google.auth.OAuth2(
-      GOOGLE_CLIENT_ID,
-      GOOGLE_CLIENT_SECRET,
-      GOOGLE_REDIRECT_URI
-    );
+    // Pour l'utilisation API + refresh, le redirectUri n'est pas requis.
+    const adminOAuth2Client = new google.auth.OAuth2(clientId, clientSecret);
 
     adminOAuth2Client.setCredentials(credentials);
 
@@ -232,7 +250,7 @@ export class GoogleOAuthService {
         const { credentials: newCredentials } = await adminOAuth2Client.refreshAccessToken();
         
         if (newCredentials.access_token && newCredentials.expiry_date) {
-          await prisma.googleToken.update({
+          await db.googleToken.update({
             where: { id: tokens.id },
             data: {
               accessToken: newCredentials.access_token,
@@ -263,6 +281,35 @@ export class GoogleOAuthService {
       return null;
     }
 
+    // Déterminer l'organisation cible
+    let orgId = organizationId;
+    if (!orgId) {
+      const userWithOrg = await db.user.findUnique({
+        where: { id: userId },
+        include: {
+          UserOrganization: {
+            take: 1,
+            orderBy: { createdAt: 'desc' }
+          }
+        }
+      });
+      orgId = userWithOrg?.UserOrganization?.[0]?.organizationId;
+    }
+
+    if (!orgId) {
+      console.log(`[GoogleOAuthService] ❌ Impossible de déterminer l'organisation pour l'utilisateur ${userId}`);
+      return null;
+    }
+
+    // Charger la config OAuth (org) et la déchiffrer
+    const googleConfig = await db.googleWorkspaceConfig.findUnique({ where: { organizationId: orgId } });
+    const clientId = googleConfig?.clientId ? decrypt(googleConfig.clientId) : null;
+    const clientSecret = googleConfig?.clientSecret ? decrypt(googleConfig.clientSecret) : null;
+    if (!clientId || !clientSecret) {
+      console.warn('[GoogleOAuthService] ❌ clientId/clientSecret manquants pour org', orgId);
+      return null;
+    }
+
     console.log(`[GoogleOAuthService] 🔍 Tokens trouvés pour ${userId}:`);
     console.log(`[GoogleOAuthService] - Access token: ${tokens.accessToken ? tokens.accessToken.substring(0, 20) + '...' : 'MANQUANT'}`);
     console.log(`[GoogleOAuthService] - Refresh token: ${tokens.refreshToken ? tokens.refreshToken.substring(0, 20) + '...' : 'MANQUANT'}`);
@@ -285,12 +332,9 @@ export class GoogleOAuthService {
       expiryDate: credentials.expiry_date ? new Date(credentials.expiry_date).toISOString() : 'NON_DÉFINI'
     });
 
-    // Créer une NOUVELLE instance OAuth2Client pour cet utilisateur
-    const userOAuth2Client = new google.auth.OAuth2(
-      GOOGLE_CLIENT_ID,
-      GOOGLE_CLIENT_SECRET,
-      GOOGLE_REDIRECT_URI
-    );
+    // Créer une NOUVELLE instance OAuth2Client pour cet utilisateur (org-specific)
+    // Pour l'utilisation API + refresh, le redirectUri n'est pas requis.
+    const userOAuth2Client = new google.auth.OAuth2(clientId, clientSecret);
 
     userOAuth2Client.setCredentials(credentials);
     
@@ -346,7 +390,7 @@ export class GoogleOAuthService {
     expiresAt: Date;
   }) {
     // Récupérer l'utilisateur avec sa relation UserOrganization
-    const userWithOrg = await prisma.user.findUnique({
+    const userWithOrg = await db.user.findUnique({
       where: { id: userId },
       include: { 
         UserOrganization: {
@@ -362,8 +406,8 @@ export class GoogleOAuthService {
 
     const organizationId = userWithOrg.UserOrganization[0].organizationId;
 
-    await prisma.googleToken.update({
-      where: { organizationId },
+    await db.googleToken.update({
+      where: { userId_organizationId: { userId, organizationId } },
       data: {
         accessToken: tokenData.accessToken,
         refreshToken: tokenData.refreshToken,
@@ -394,7 +438,7 @@ export class GoogleOAuthService {
     }
 
     // Récupérer l'utilisateur avec sa relation UserOrganization
-    const userWithOrg = await prisma.user.findUnique({
+    const userWithOrg = await db.user.findUnique({
       where: { id: userId },
       include: { 
         UserOrganization: {
@@ -407,7 +451,7 @@ export class GoogleOAuthService {
     if (userWithOrg?.UserOrganization[0]) {
       const organizationId = userWithOrg.UserOrganization[0].organizationId;
       // Supprimer de la base de données avec la clé composite userId + organizationId
-      await prisma.googleToken.delete({ 
+      await db.googleToken.delete({ 
         where: { userId_organizationId: { userId, organizationId } } 
       });
       console.log(`[GoogleOAuthService] Tokens supprimés de la DB pour l'utilisateur ${userId} (org: ${organizationId})`);

@@ -75,8 +75,9 @@ export class AutoGoogleAuthService {
       }
 
       // 3. Première connexion nécessaire - générer l'URL d'autorisation
-      const authUrl = googleOAuthService.getAuthUrl(userId);
-      
+      console.log('[AutoGoogleAuth] 🔐 Génération de l\'URL d\'autorisation pour première connexion');
+      const authUrl = googleOAuthService.getAuthUrl(userId, userId); // Utiliser userId comme fallback pour organizationId
+      console.log('[AutoGoogleAuth] URL générée:', authUrl);
       
       return {
         success: true,

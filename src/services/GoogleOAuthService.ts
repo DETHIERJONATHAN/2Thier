@@ -4,13 +4,12 @@ import crypto from 'crypto';
 import { prisma } from '../lib/prisma';
 
 import {
-  googleOAuthConfig,
   GOOGLE_OAUTH_SCOPES,
   describeGoogleOAuthConfig,
   isGoogleOAuthConfigured,
 } from '../auth/googleConfig';
+import { computeRedirectUri } from '../auth/googleConfig'; // ⭐ Importer la fonction de calcul dynamique
 
-const { clientId: GOOGLE_CLIENT_ID, clientSecret: GOOGLE_CLIENT_SECRET, redirectUri: GOOGLE_REDIRECT_URI } = googleOAuthConfig;
 const SCOPES = [...GOOGLE_OAUTH_SCOPES];
 
 // Interface pour les informations utilisateur de Google
@@ -25,27 +24,67 @@ interface UserInfo {
 }
 
 export class GoogleOAuthService {
-  private oauth2Client: OAuth2Client;
+  // ⭐ CHANGEMENT: Ne pas créer oauth2Client au startup, créer dynamiquement à chaque requête
+  private getOAuth2Client(redirectUri: string): OAuth2Client {
+    // Récupérer les credentials depuis googleConfig
+    // Utiliser require() pour récupérer les valeurs actuelles
+    const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
+    const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET;
+    
+    if (!GOOGLE_CLIENT_ID || !GOOGLE_CLIENT_SECRET) {
+      console.warn('[GoogleOAuthService] Credentials Google manquants');
+      throw new Error('Google OAuth credentials not configured');
+    }
+    
+    return new google.auth.OAuth2(
+      GOOGLE_CLIENT_ID,
+      GOOGLE_CLIENT_SECRET,
+      redirectUri
+    );
+  }
 
   constructor() {
     if (!isGoogleOAuthConfigured()) {
       console.warn('[GoogleOAuthService] Configuration Google OAuth incomplète');
     }
-
-    this.oauth2Client = new google.auth.OAuth2(
-      GOOGLE_CLIENT_ID,
-      GOOGLE_CLIENT_SECRET,
-      GOOGLE_REDIRECT_URI
-    );
   }
 
   // Générer l'URL d'autorisation Google
-  getAuthUrl(userId: string, organizationId: string): string {
+  getAuthUrl(userId: string, organizationId: string, hostHeader?: string): string {
     console.log('[GoogleOAuthService] Scopes:', SCOPES);
     
+    // ⭐ IMPORTANT: Utiliser le Host header s'il est fourni pour cohérence avec le callback
+    // Sinon, utiliser la détection d'environnement automatique via env vars
+    let redirectUri: string;
+    
+    if (hostHeader) {
+      // Utiliser la même logique que le callback endpoint
+      console.log('[GoogleOAuthService] Host header fourni:', hostHeader);
+      if (hostHeader.includes('app.github.dev')) {
+        // Codespaces
+        const match = hostHeader.split(':')[0].match(/^(.+?)-\d+\.app\.github\.dev$/);
+        const codespaceName = match ? match[1] : hostHeader.replace('.app.github.dev', '').split(':')[0];
+        redirectUri = `https://${codespaceName}-4000.app.github.dev/api/google-auth/callback`;
+        console.log('[GoogleOAuthService] Codespaces détecté:', { codespaceName, redirectUri });
+      } else if (hostHeader.includes('2thier.be')) {
+        // Production
+        redirectUri = 'https://app.2thier.be/api/google-auth/callback';
+        console.log('[GoogleOAuthService] Production détectée:', { redirectUri });
+      } else {
+        // Local
+        redirectUri = 'http://localhost:4000/api/google-auth/callback';
+        console.log('[GoogleOAuthService] Local détecté:', { redirectUri });
+      }
+    } else {
+      // Fallback: utiliser computeRedirectUri() pour la détection automatique
+      redirectUri = computeRedirectUri();
+      console.log('[GoogleOAuthService] Redirect URI automatique (sans Host header):', redirectUri);
+    }
+    
+    const oauth2Client = this.getOAuth2Client(redirectUri);
     const state = JSON.stringify({ userId, organizationId });
 
-    const authUrl = this.oauth2Client.generateAuthUrl({
+    const authUrl = oauth2Client.generateAuthUrl({
       access_type: 'offline',
       scope: SCOPES,
       state: state,
@@ -57,8 +96,13 @@ export class GoogleOAuthService {
   }
 
   // Échanger le code contre des tokens
-  async getTokenFromCode(code: string): Promise<Credentials> {
-    const { tokens } = await this.oauth2Client.getToken(code);
+  async getTokenFromCode(code: string, redirectUri?: string): Promise<Credentials> {
+    // ⭐ Si pas d'URI fournie, recalculer dynamiquement
+    const actualRedirectUri = redirectUri || computeRedirectUri();
+    const oauth2Client = this.getOAuth2Client(actualRedirectUri);
+    
+    console.log('[GoogleOAuthService] Échange de code avec redirectUri:', actualRedirectUri);
+    const { tokens } = await oauth2Client.getToken(code);
     return tokens;
   }
 

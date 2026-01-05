@@ -9,23 +9,23 @@ datasource db {
 
 // Configuration de l'objet de référence pour mesures IA par organisation
 model OrganizationMeasurementReferenceConfig {
-  id               String       @id @default(cuid())
-  organizationId   String
-  referenceType    String       // 'meter', 'card', 'a4', 'custom'
-  customName       String?
-  customSize       Float        // Taille en unité spécifiée
-  customUnit       String       @default("cm") // 'cm', 'm', 'mm', 'inch'
-  customWidth      Float?       // Largeur pour références rectangulaires
-  customHeight     Float?       // Hauteur pour références rectangulaires
-  referenceImageUrl String?     // Photo de référence
-  detectionPrompt  String?      // Prompt personnalisé pour détection
-  isActive         Boolean      @default(true)
-  createdAt        DateTime     @default(now())
-  updatedAt        DateTime     @updatedAt
-  createdBy        String
+  id                String   @id @default(cuid())
+  organizationId    String
+  referenceType     String // 'meter', 'card', 'a4', 'custom'
+  customName        String?
+  customSize        Float // Taille en unité spécifiée
+  customUnit        String   @default("cm") // 'cm', 'm', 'mm', 'inch'
+  customWidth       Float? // Largeur pour références rectangulaires
+  customHeight      Float? // Hauteur pour références rectangulaires
+  referenceImageUrl String? // Photo de référence
+  detectionPrompt   String? // Prompt personnalisé pour détection
+  isActive          Boolean  @default(true)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  createdBy         String
 
-  Organization     Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  User             User         @relation("MeasurementConfigCreator", fields: [createdBy], references: [id], onDelete: SetNull)
+  Organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  User         User         @relation("MeasurementConfigCreator", fields: [createdBy], references: [id], onDelete: SetNull)
 
   @@index([organizationId])
   @@index([createdBy])
@@ -677,31 +677,29 @@ model GoogleToken {
   createdAt                 DateTime                    @default(now())
   updatedAt                 DateTime
   organizationId            String
-  userId                    String                      // Chaque utilisateur a son propre token
-  googleEmail               String?                     // Email du compte Google connecté
+  userId                    String // Chaque utilisateur a son propre token
+  googleEmail               String? // Email du compte Google connecté
   lastRefreshAt             DateTime?
   refreshCount              Int                         @default(0)
   Organization              Organization                @relation(fields: [organizationId], references: [id], onDelete: NoAction, onUpdate: NoAction)
   User                      User                        @relation(fields: [userId], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  GoogleTokenRefreshHistory GoogleTokenRefreshHistory[]
 
-  @@unique([userId, organizationId])  // Un token par utilisateur par organisation
-  @@index([organizationId])
-  @@index([userId])
+  @@unique([userId, organizationId])
 }
 
 model GoogleTokenRefreshHistory {
-  id           String      @id
-  tokenId      String
-  refreshedAt  DateTime    @default(now())
-  success      Boolean
-  errorMessage String?
-  oldExpiresAt DateTime?
-  newExpiresAt DateTime?
-  GoogleToken  GoogleToken @relation(fields: [tokenId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  id             String       @id @default(cuid())
+  organizationId String
+  refreshedAt    DateTime     @default(now())
+  success        Boolean
+  message        String?
+  errorDetails   String?
+  oldExpiresAt   DateTime?
+  newExpiresAt   DateTime?
+  Organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
+  @@index([organizationId])
   @@index([refreshedAt])
-  @@index([tokenId])
 }
 
 model GoogleVoiceCall {
@@ -1015,68 +1013,69 @@ model Order {
 }
 
 model Organization {
-  id                       String                     @id
-  name                     String                     @unique
-  createdAt                DateTime                   @default(now())
-  updatedAt                DateTime
-  features                 String[]                   @default([])
-  status                   String                     @default("active")
-  address                  String?
-  description              String?
-  phone                    String?
-  website                  String?
-  AIRecommendation         AIRecommendation[]
-  AdCampaign               AdCampaign[]
-  AdPlatformIntegration    AdPlatformIntegration[]
-  AnalyticsEvent           AnalyticsEvent[]
-  AutomationRule           AutomationRule[]
-  Block                    Block[]
-  CalendarEvent            CalendarEvent[]
-  CallStatus               CallStatus[]
-  CallToLeadMapping        CallToLeadMapping[]
-  Category                 Category[]
-  DocumentTemplate         DocumentTemplate[]
-  DocumentTheme            DocumentTheme[]
-  EcommerceIntegration     EcommerceIntegration[]
-  EmailAccount             EmailAccount[]
-  EmailDomain              EmailDomain[]
-  EmailTemplate            EmailTemplate[]
-  GeneratedDocument        GeneratedDocument[]
-  GoogleMailWatch          GoogleMailWatch[]
-  GoogleToken              GoogleToken[]
-  GoogleVoiceCall          GoogleVoiceCall[]
-  GoogleVoiceConfig        GoogleVoiceConfig?
-  GoogleVoiceSMS           GoogleVoiceSMS[]
-  GoogleWorkspaceConfig    GoogleWorkspaceConfig?
-  IntegrationsSettings     IntegrationsSettings[]
-  Invitation               Invitation[]
-  Lead                     Lead[]
-  LeadSource               LeadSource[]
-  LeadStatus               LeadStatus[]
-  Module                   Module[]
-  Notification             Notification[]
-  Order                    Order[]
-  OrganizationModuleStatus OrganizationModuleStatus[]
-  OrganizationRoleStatus   OrganizationRoleStatus[]
-  Permission               Permission[]
-  Product                  Product[]
-  PublicForm               PublicForm[]
-  PublicFormSubmission     PublicFormSubmission[]
-  Quote                    Quote[]
-  Role                     Role[]
-  TechnicalData            TechnicalData[]
-  TelnyxCall               TelnyxCall[]
-  TelnyxConnection         TelnyxConnection[]
-  TelnyxMessage            TelnyxMessage[]
-  TelnyxPhoneNumber        TelnyxPhoneNumber[]
-  TelnyxUserConfig         TelnyxUserConfig[]
-  TimelineEvent            TimelineEvent[]
-  UserOrganization         UserOrganization[]
-  UserFavoriteModule       UserFavoriteModule[]
-  JoinRequest              JoinRequest[]
-  contact_submissions      contact_submissions[]
-  websites                 websites[]
+  id                         String                                   @id
+  name                       String                                   @unique
+  createdAt                  DateTime                                 @default(now())
+  updatedAt                  DateTime
+  features                   String[]                                 @default([])
+  status                     String                                   @default("active")
+  address                    String?
+  description                String?
+  phone                      String?
+  website                    String?
+  AIRecommendation           AIRecommendation[]
+  AdCampaign                 AdCampaign[]
+  AdPlatformIntegration      AdPlatformIntegration[]
+  AnalyticsEvent             AnalyticsEvent[]
+  AutomationRule             AutomationRule[]
+  Block                      Block[]
+  CalendarEvent              CalendarEvent[]
+  CallStatus                 CallStatus[]
+  CallToLeadMapping          CallToLeadMapping[]
+  Category                   Category[]
+  DocumentTemplate           DocumentTemplate[]
+  DocumentTheme              DocumentTheme[]
+  EcommerceIntegration       EcommerceIntegration[]
+  EmailAccount               EmailAccount[]
+  EmailDomain                EmailDomain[]
+  EmailTemplate              EmailTemplate[]
+  GeneratedDocument          GeneratedDocument[]
+  GoogleMailWatch            GoogleMailWatch[]
+  GoogleToken                GoogleToken[]
+  GoogleVoiceCall            GoogleVoiceCall[]
+  GoogleVoiceConfig          GoogleVoiceConfig?
+  GoogleVoiceSMS             GoogleVoiceSMS[]
+  GoogleWorkspaceConfig      GoogleWorkspaceConfig?
+  IntegrationsSettings       IntegrationsSettings[]
+  Invitation                 Invitation[]
+  Lead                       Lead[]
+  LeadSource                 LeadSource[]
+  LeadStatus                 LeadStatus[]
+  Module                     Module[]
+  Notification               Notification[]
+  Order                      Order[]
+  OrganizationModuleStatus   OrganizationModuleStatus[]
+  OrganizationRoleStatus     OrganizationRoleStatus[]
+  Permission                 Permission[]
+  Product                    Product[]
+  PublicForm                 PublicForm[]
+  PublicFormSubmission       PublicFormSubmission[]
+  Quote                      Quote[]
+  Role                       Role[]
+  TechnicalData              TechnicalData[]
+  TelnyxCall                 TelnyxCall[]
+  TelnyxConnection           TelnyxConnection[]
+  TelnyxMessage              TelnyxMessage[]
+  TelnyxPhoneNumber          TelnyxPhoneNumber[]
+  TelnyxUserConfig           TelnyxUserConfig[]
+  TimelineEvent              TimelineEvent[]
+  UserOrganization           UserOrganization[]
+  UserFavoriteModule         UserFavoriteModule[]
+  JoinRequest                JoinRequest[]
+  contact_submissions        contact_submissions[]
+  websites                   websites[]
   MeasurementReferenceConfig OrganizationMeasurementReferenceConfig[]
+  GoogleTokenRefreshHistory  GoogleTokenRefreshHistory[]
 }
 
 model OrganizationModuleStatus {
@@ -1543,44 +1542,44 @@ model TreeBranchLeafMarker {
 }
 
 model TreeBranchLeafNode {
-  id                          String    @id
-  treeId                      String
-  parentId                    String?
-  type                        String
-  subType                     String?
-  label                       String
-  description                 String?
-  value                       String?
-  order                       Int       @default(0)
-  isRequired                  Boolean   @default(false)
-  isVisible                   Boolean   @default(true)
-  isActive                    Boolean   @default(true)
-  fieldConfig                 Json?
-  conditionConfig             Json?
-  formulaConfig               Json?
-  tableConfig                 Json?
-  apiConfig                   Json?
-  linkConfig                  Json?
+  id              String  @id
+  treeId          String
+  parentId        String?
+  type            String
+  subType         String?
+  label           String
+  description     String?
+  value           String?
+  order           Int     @default(0)
+  isRequired      Boolean @default(false)
+  isVisible       Boolean @default(true)
+  isActive        Boolean @default(true)
+  fieldConfig     Json?
+  conditionConfig Json?
+  formulaConfig   Json?
+  tableConfig     Json?
+  apiConfig       Json?
+  linkConfig      Json?
 
   // Relation vers l'arbre parent
   TreeBranchLeafTree          TreeBranchLeafTree @relation(fields: [treeId], references: [id], onDelete: Cascade)
   defaultValue                String?
   calculatedValue             String?
-  metadata                    Json      @default("{}")
-  createdAt                   DateTime  @default(now())
+  metadata                    Json               @default("{}")
+  createdAt                   DateTime           @default(now())
   updatedAt                   DateTime
-  hasAPI                      Boolean   @default(false)
-  hasCondition                Boolean   @default(false)
-  hasData                     Boolean   @default(false)
-  hasFormula                  Boolean   @default(false)
-  hasLink                     Boolean   @default(false)
-  hasMarkers                  Boolean   @default(false)
-  hasTable                    Boolean   @default(false)
+  hasAPI                      Boolean            @default(false)
+  hasCondition                Boolean            @default(false)
+  hasData                     Boolean            @default(false)
+  hasFormula                  Boolean            @default(false)
+  hasLink                     Boolean            @default(false)
+  hasMarkers                  Boolean            @default(false)
+  hasTable                    Boolean            @default(false)
   api_activeId                String?
   api_bodyVars                Json?
   api_instances               Json?
   api_name                    String?
-  appearance_size             String?   @default("md")
+  appearance_size             String?            @default("md")
   appearance_variant          String?
   appearance_width            String?
   bool_defaultValue           Boolean?
@@ -1595,13 +1594,13 @@ model TreeBranchLeafNode {
   data_displayFormat          String?
   data_exposedKey             String?
   data_instances              Json?
-  data_precision              Int?      @default(2)
+  data_precision              Int?               @default(2)
   data_unit                   String?
-  data_visibleToUser          Boolean?  @default(false)
-  date_format                 String?   @default("DD/MM/YYYY")
+  data_visibleToUser          Boolean?           @default(false)
+  date_format                 String?            @default("DD/MM/YYYY")
   date_maxDate                DateTime?
   date_minDate                DateTime?
-  date_showTime               Boolean?  @default(false)
+  date_showTime               Boolean?           @default(false)
   fieldSubType                String?
   fieldType                   String?
   field_label                 String?
@@ -1609,14 +1608,14 @@ model TreeBranchLeafNode {
   formula_instances           Json?
   formula_name                String?
   formula_tokens              Json?
-  image_crop                  Boolean?  @default(false)
+  image_crop                  Boolean?           @default(false)
   image_maxSize               Int?
   image_ratio                 String?
   image_thumbnails            Json?
   link_activeId               String?
-  link_carryContext           Boolean?  @default(false)
+  link_carryContext           Boolean?           @default(false)
   link_instances              Json?
-  link_mode                   String?   @default("JUMP")
+  link_mode                   String?            @default("JUMP")
   link_name                   String?
   link_params                 Json?
   link_targetNodeId           String?
@@ -1626,93 +1625,93 @@ model TreeBranchLeafNode {
   markers_instances           Json?
   markers_name                String?
   markers_selectedIds         Json?
-  number_decimals             Int?      @default(0)
+  number_decimals             Int?               @default(0)
   number_defaultValue         Decimal?
   number_max                  Decimal?
   number_min                  Decimal?
   number_prefix               String?
-  number_step                 Decimal?  @default(1)
+  number_step                 Decimal?           @default(1)
   number_suffix               String?
   number_unit                 String?
   option_label                String?
-  select_allowClear           Boolean?  @default(true)
+  select_allowClear           Boolean?           @default(true)
   select_defaultValue         String?
-  select_multiple             Boolean?  @default(false)
+  select_multiple             Boolean?           @default(false)
   select_options              Json?
-  select_searchable           Boolean?  @default(true)
+  select_searchable           Boolean?           @default(true)
   table_activeId              String?
   table_columns               Json?
   table_data                  Json?
   table_importSource          String?
   table_instances             Json?
-  table_isImported            Boolean?  @default(false)
+  table_isImported            Boolean?           @default(false)
   table_meta                  Json?
   table_name                  String?
   table_rows                  Json?
-  table_type                  String?   @default("columns")
+  table_type                  String?            @default("columns")
   text_mask                   String?
   text_maxLength              Int?
   text_minLength              Int?
   text_placeholder            String?
   text_regex                  String?
-  text_rows                   Int?      @default(3)
-  tbl_auto_generated          Boolean   @default(false)
+  text_rows                   Int?               @default(3)
+  tbl_auto_generated          Boolean            @default(false)
   tbl_capacity                Int?
-  tbl_code                    String?   @db.VarChar(20)
+  tbl_code                    String?            @db.VarChar(20)
   tbl_created_at              DateTime?
   tbl_type                    Int?
   tbl_updated_at              DateTime?
-  text_helpTooltipType        String?   @default("none")
+  text_helpTooltipType        String?            @default("none")
   text_helpTooltipText        String?
   text_helpTooltipImage       String?
   repeater_templateNodeIds    String?
-  repeater_minItems           Int?      @default(0)
+  repeater_minItems           Int?               @default(0)
   repeater_maxItems           Int?
   repeater_addButtonLabel     String?
   repeater_templateNodeLabels String?
-  isMultiple                  Boolean?  @default(false)
-  isSharedReference           Boolean?  @default(false)
+  isMultiple                  Boolean?           @default(false)
+  isSharedReference           Boolean?           @default(false)
   sharedReferenceCategory     String?
   sharedReferenceDescription  String?
   sharedReferenceId           String?
   sharedReferenceName         String?
-  sharedReferenceIds          String[]  @default([])
-  repeater_buttonSize         String?   @default("middle")
-  repeater_buttonWidth        String?   @default("auto")
-  repeater_iconOnly           Boolean?  @default(false)
-  linkedConditionIds          String[]  @default([])
-  linkedFormulaIds            String[]  @default([])
-  linkedTableIds              String[]  @default([])
-  linkedVariableIds           String[]  @default([])
+  sharedReferenceIds          String[]           @default([])
+  repeater_buttonSize         String?            @default("middle")
+  repeater_buttonWidth        String?            @default("auto")
+  repeater_iconOnly           Boolean?           @default(false)
+  linkedConditionIds          String[]           @default([])
+  linkedFormulaIds            String[]           @default([])
+  linkedTableIds              String[]           @default([])
+  linkedVariableIds           String[]           @default([])
   calculatedAt                DateTime?
   calculatedBy                String?
-  subtabs                     Json?     @db.Json
-  subtab                      Json?     @db.Json
+  subtabs                     Json?              @db.Json
+  subtab                      Json?              @db.Json
   file_allowedTypes           String?
   file_maxSize                Int?
-  file_multiple               Boolean?  @default(false)
-  file_showPreview            Boolean?  @default(true)
-  section_collapsible         Boolean?  @default(false)
-  section_columnsDesktop      Int?      @default(2)
-  section_columnsMobile       Int?      @default(1)
-  section_defaultCollapsed    Boolean?  @default(false)
-  section_gutter              Int?      @default(16)
-  section_showChildrenCount   Boolean?  @default(false)
+  file_multiple               Boolean?           @default(false)
+  file_showPreview            Boolean?           @default(true)
+  section_collapsible         Boolean?           @default(false)
+  section_columnsDesktop      Int?               @default(2)
+  section_columnsMobile       Int?               @default(1)
+  section_defaultCollapsed    Boolean?           @default(false)
+  section_gutter              Int?               @default(16)
+  section_showChildrenCount   Boolean?           @default(false)
 
   // AI Measure configuration (colonnes dédiées pour éviter problèmes JSON)
-  aiMeasure_enabled           Boolean   @default(false)
-  aiMeasure_autoTrigger       Boolean   @default(true)
-  aiMeasure_prompt            String?
-  aiMeasure_keys              Json?     @db.Json
-  
+  aiMeasure_enabled     Boolean @default(false)
+  aiMeasure_autoTrigger Boolean @default(true)
+  aiMeasure_prompt      String?
+  aiMeasure_keys        Json?   @db.Json
+
   // 🆕 Configuration complète IA Mesure (objets de référence + paramètres détection)
-  iaMesureConfig              Json?     @db.Json @map("ia_mesure_config")
+  iaMesureConfig Json? @map("ia_mesure_config") @db.Json
   // Structure: { enabled: boolean, referenceObjects: [{type,width,height,unit}], detectionSettings: {minPhotos,confidenceThreshold,useSharp,useFusion} }
 
   // Relation vers la variable exposée (1-to-1)
-  TreeBranchLeafNodeVariable  TreeBranchLeafNodeVariable?
-  TreeBranchLeafNodeTable     TreeBranchLeafNodeTable[]
-  TreeBranchLeafSelectConfig  TreeBranchLeafSelectConfig?
+  TreeBranchLeafNodeVariable TreeBranchLeafNodeVariable?
+  TreeBranchLeafNodeTable    TreeBranchLeafNodeTable[]
+  TreeBranchLeafSelectConfig TreeBranchLeafSelectConfig?
 
   @@index([api_activeId])
   @@index([condition_activeId])
@@ -1801,7 +1800,7 @@ model TreeBranchLeafNodeTable {
   rowCount             Int      @default(0)
 
   // Relations
-  TreeBranchLeafNode TreeBranchLeafNode @relation(fields: [nodeId], references: [id], onDelete: Cascade)
+  TreeBranchLeafNode TreeBranchLeafNode              @relation(fields: [nodeId], references: [id], onDelete: Cascade)
   tableColumns       TreeBranchLeafNodeTableColumn[]
   tableRows          TreeBranchLeafNodeTableRow[]
 
@@ -2069,19 +2068,19 @@ model TreeBranchLeafTree {
 }
 
 model User {
-  id                                                  String                 @id
-  email                                               String                 @unique
-  createdAt                                           DateTime               @default(now())
+  id                                                  String                                   @id
+  email                                               String                                   @unique
+  createdAt                                           DateTime                                 @default(now())
   updatedAt                                           DateTime
   passwordHash                                        String
-  status                                              String                 @default("active")
+  status                                              String                                   @default("active")
   address                                             String?
   avatarUrl                                           String?
   firstName                                           String?
   lastName                                            String?
   phoneNumber                                         String?
   vatNumber                                           String?
-  role                                                String                 @default("user")
+  role                                                String                                   @default("user")
   CalendarEvent                                       CalendarEvent[]
   CalendarParticipant                                 CalendarParticipant[]
   DeletedEmail                                        DeletedEmail[]
@@ -2089,22 +2088,22 @@ model User {
   Email                                               Email[]
   EmailAccount                                        EmailAccount?
   FormSubmission                                      FormSubmission[]
-  GeneratedDocument_GeneratedDocument_createdByToUser GeneratedDocument[]    @relation("GeneratedDocument_createdByToUser")
-  GeneratedDocument_GeneratedDocument_sentByToUser    GeneratedDocument[]    @relation("GeneratedDocument_sentByToUser")
+  GeneratedDocument_GeneratedDocument_createdByToUser GeneratedDocument[]                      @relation("GeneratedDocument_createdByToUser")
+  GeneratedDocument_GeneratedDocument_sentByToUser    GeneratedDocument[]                      @relation("GeneratedDocument_sentByToUser")
   GoogleMailWatch                                     GoogleMailWatch?
-  GoogleToken                                         GoogleToken[]          // Tokens Google par organisation
+  GoogleToken                                         GoogleToken[] // Tokens Google par organisation
   GoogleVoiceCall                                     GoogleVoiceCall[]
   GoogleVoiceSMS                                      GoogleVoiceSMS[]
   GoogleWorkspaceUser                                 GoogleWorkspaceUser?
   IntegrationsSettings                                IntegrationsSettings[]
-  Invitation_Invitation_invitedByIdToUser             Invitation[]           @relation("Invitation_invitedByIdToUser")
-  Invitation_Invitation_targetUserIdToUser            Invitation[]           @relation("Invitation_targetUserIdToUser")
+  Invitation_Invitation_invitedByIdToUser             Invitation[]                             @relation("Invitation_invitedByIdToUser")
+  Invitation_Invitation_targetUserIdToUser            Invitation[]                             @relation("Invitation_targetUserIdToUser")
   Lead                                                Lead[]
   Notification                                        Notification[]
   TelnyxPhoneNumber                                   TelnyxPhoneNumber[]
   TelnyxSettings                                      TelnyxSettings?
   TelnyxUserConfig                                    TelnyxUserConfig?
-  UserOrganization         UserOrganization[]
+  UserOrganization                                    UserOrganization[]
   UserService                                         UserService[]
   UserFavoriteModule                                  UserFavoriteModule[]
   JoinRequest                                         JoinRequest[]
@@ -2398,33 +2397,33 @@ model website_themes {
 }
 
 model websites {
-  id                      Int                    @id @default(autoincrement())
-  organizationId          String
-  siteName                String
-  siteType                String
-  slug                    String
-  domain                  String?
-  cloudRunDomain          String?                // Domaine mappé dans Cloud Run (ex: 2thier.be)
-  cloudRunServiceName     String?                // Nom du service Cloud Run (ex: crm2thier-vite-prod)
-  cloudRunRegion          String?                @default("europe-west1") // Région Cloud Run
-  cloudRunMappingVerified Boolean                @default(false) // Mapping vérifié et fonctionnel
-  cloudRunMappingVerifiedAt DateTime?            // Date de vérification
-  isActive                Boolean                @default(true)
-  isPublished             Boolean                @default(false)
-  maintenanceMode         Boolean                @default(false)
-  maintenanceMessage      String?
-  createdAt               DateTime               @default(now())
-  updatedAt               DateTime
-  contact_submissions     contact_submissions[]
-  website_blog_posts      website_blog_posts[]
-  website_configs         website_configs?
-  website_media_files     website_media_files[]
-  website_projects        website_projects[]
-  website_sections        website_sections[]
-  website_services        website_services[]
-  website_testimonials    website_testimonials[]
-  website_themes          website_themes?
-  Organization            Organization           @relation(fields: [organizationId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  id                        Int                    @id @default(autoincrement())
+  organizationId            String
+  siteName                  String
+  siteType                  String
+  slug                      String
+  domain                    String?
+  cloudRunDomain            String? // Domaine mappé dans Cloud Run (ex: 2thier.be)
+  cloudRunServiceName       String? // Nom du service Cloud Run (ex: crm2thier-vite-prod)
+  cloudRunRegion            String?                @default("europe-west1") // Région Cloud Run
+  cloudRunMappingVerified   Boolean                @default(false) // Mapping vérifié et fonctionnel
+  cloudRunMappingVerifiedAt DateTime? // Date de vérification
+  isActive                  Boolean                @default(true)
+  isPublished               Boolean                @default(false)
+  maintenanceMode           Boolean                @default(false)
+  maintenanceMessage        String?
+  createdAt                 DateTime               @default(now())
+  updatedAt                 DateTime
+  contact_submissions       contact_submissions[]
+  website_blog_posts        website_blog_posts[]
+  website_configs           website_configs?
+  website_media_files       website_media_files[]
+  website_projects          website_projects[]
+  website_sections          website_sections[]
+  website_services          website_services[]
+  website_testimonials      website_testimonials[]
+  website_themes            website_themes?
+  Organization              Organization           @relation(fields: [organizationId], references: [id], onDelete: NoAction, onUpdate: NoAction)
 
   @@unique([organizationId, slug])
   @@index([organizationId])
@@ -2545,15 +2544,15 @@ model JoinRequest {
   id             String            @id @default(cuid())
   userId         String
   organizationId String
-  message        String?           // Message optionnel de l'utilisateur
+  message        String? // Message optionnel de l'utilisateur
   status         JoinRequestStatus @default(PENDING)
-  reviewedBy     String?           // ID de l'admin qui a traité la demande
+  reviewedBy     String? // ID de l'admin qui a traité la demande
   reviewedAt     DateTime?
   createdAt      DateTime          @default(now())
   updatedAt      DateTime          @updatedAt
 
-  User           User              @relation(fields: [userId], references: [id], onDelete: Cascade)
-  Organization   Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  User         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  Organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
   @@unique([userId, organizationId]) // Un user ne peut faire qu'une demande par org
   @@index([userId])
@@ -2562,16 +2561,83 @@ model JoinRequest {
 }
 
 model UserFavoriteModule {
-  id             String       @id @default(cuid())
+  id             String   @id @default(cuid())
   userId         String
   organizationId String
-  moduleKey      String       // Ex: "leads", "dashboard", "email", etc.
-  createdAt      DateTime     @default(now())
-  
-  User           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
-  Organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  moduleKey      String // Ex: "leads", "dashboard", "email", etc.
+  createdAt      DateTime @default(now())
+
+  User         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  Organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
   @@unique([userId, organizationId, moduleKey])
   @@index([userId])
+  @@index([organizationId])
+}
+
+// ============================================================================
+// 📷 Mesures photo (ArUco / homographie) - Nouveau flux vision
+// ============================================================================
+
+model MeasurePhoto {
+  id              String   @id @default(cuid())
+  organizationId  String
+  treeId          String?
+  nodeId          String?
+  fieldId         String?
+  fileUrl         String?
+  storageRef      String?
+  mimeType        String?
+  widthPx         Int?
+  heightPx        Int?
+  exif            Json?
+  deviceInfo      Json? // { make, model, focal, fov, orientation }
+  referenceType   String? // a4|card|arucoTag|custom
+  referenceSizeMm Json? // { width, height }
+  arucoId         Int?
+  arucoCornersPx  Json? // [[x,y]...]
+  homography      Json? // { matrix, quality, rmsePx }
+  pose            Json? // { pitch,yaw,roll,depthMm,reprojError }
+  measurements    Json? // { key: value }
+  status          String? // draft|ok|failed
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  MeasurePhotoPoints MeasurePhotoPoint[]
+
+  @@index([organizationId])
+  @@index([treeId])
+  @@index([nodeId])
+  @@index([fieldId])
+}
+
+model MeasurePhotoPoint {
+  id             String  @id @default(cuid())
+  measurePhotoId String
+  label          String
+  xPx            Float
+  yPx            Float
+  source         String? // detected|manual
+  confidence     Float?
+
+  MeasurePhoto MeasurePhoto @relation(fields: [measurePhotoId], references: [id], onDelete: Cascade)
+
+  @@index([measurePhotoId])
+}
+
+model CalibrationProfile {
+  id              String   @id @default(cuid())
+  organizationId  String
+  name            String
+  referenceType   String // a4|card|arucoTag|custom
+  referenceSizeMm Json? // { width, height }
+  arucoId         Int?
+  cameraModel     String?
+  lensFov         Float?
+  notes           String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@unique([organizationId, name])
   @@index([organizationId])
 }

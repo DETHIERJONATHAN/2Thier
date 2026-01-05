@@ -1,0 +1,103 @@
+🚀 OPTION 3 QUICKSTART (2 minutes)
+
+═══════════════════════════════════════════════════════════
+
+▶️ ÉTAPE 1: Ouvrir l'interface (30 secondes)
+
+   Terminal:
+   $ cd /workspaces/2Thier/public
+   $ open option3-test.html
+   
+   Ou browser → File → Open → /workspaces/2Thier/public/option3-test.html
+
+▶️ ÉTAPE 2: Calibrer (30 secondes)
+
+   1. Avoir un marqueur 18×18cm imprimé
+   2. Mesurer le marqueur sur votre écran (ex: 320px)
+   3. Vous êtes à 50cm du marqueur
+   4. Calculer: focal_length = (320/18)*50 = 889
+   5. Dans interface:
+      - Entrer 889 dans "Focal length"
+      - Cliquer "✓ Appliquer"
+
+   ✅ Caméra calibrée!
+
+▶️ ÉTAPE 3: Détecter (1 minute)
+
+   1. Cliquer "📹 Démarrer caméra"
+   2. Attendre permission caméra
+   3. Positioner marqueur en face caméra
+   4. Cliquer "📷 Capturer"
+   5. Cliquer "🔍 Détecter"
+   
+   Attendre 100-200ms...
+   
+   ✅ Voir résultats en temps réel:
+      - Pose 3D (angles Euler)
+      - Profondeur (cm)
+      - Qualité détection (%)
+      - Coins détectés sur image
+
+▶️ ÉTAPE 4: Exporter (30 secondes)
+
+   1. Cliquer "📋 Exporter JSON"
+   2. Fichier "marker-2025-02-15.json" téléchargé
+   3. Ouvrir dans Fusion 360 / AutoCAD
+   
+   ✅ Prêt pour CAO!
+
+═══════════════════════════════════════════════════════════
+
+📊 RÉSULTATS ATTENDUS:
+
+   ✅ Profondeur: 50cm (si marqueur à 50cm)
+   ✅ Angles Euler: proche de 0° (si marqueur frontal)
+   ✅ Qualité: > 85%
+   ✅ RMSE: < 1.0 pixel
+   ✅ JSON: 10 sections complètes
+
+═══════════════════════════════════════════════════════════
+
+💡 CONSEILS:
+
+   • Marqueur DOIT être 18×18cm exactement
+   • Contours nets (noir, blanc, noir, magenta)
+   • Distance idéale: 40-60cm
+   • Angle < 20° (pas trop incliné)
+   • Éclairage uniforme
+   • Image bien mise au point
+
+═══════════════════════════════════════════════════════════
+
+❓ ÇA NE MARCHE PAS?
+
+   Contours pas détectés?
+   → Vérifier impression marqueur
+   → Éclairage pas uniforme?
+   
+   Profondeur fausse?
+   → Focal length incorrect
+   → Mesurer distance réelle exactement
+   → Recalibrer avec photo référence
+   
+   Angles faux?
+   → Marqueur trop incliné
+   → Positioner plus frontal
+   
+   Besoin d'aide?
+   → Lire: OPTION3-GUIDE-COMPLET.md
+   → Consulter: OPTION3-CHECKLIST.md
+
+═══════════════════════════════════════════════════════════
+
+📚 POUR EN SAVOIR PLUS:
+
+   Vue d'ensemble:     OPTION3-RECAP.md
+   Guide détaillé:     OPTION3-GUIDE-COMPLET.md
+   Validation:         OPTION3-CHECKLIST.md
+   Index complet:      OPTION3-INDEX.md
+   Code source:        homography-precise.js (commentaires)
+
+═══════════════════════════════════════════════════════════
+
+✅ C'EST TOUT! Vous pouvez commencer! 🚀

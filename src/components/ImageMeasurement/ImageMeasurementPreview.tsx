@@ -528,14 +528,27 @@ export const ImageMeasurementPreview: React.FC<ImageMeasurementPreviewProps> = (
       }
       
       // Appeler l'API d'analyse avec la config de référence
-      console.log('📡 [ImageMeasurementPreview] POST /api/ai/measure-image avec referenceConfig:', referenceConfig);
-      const response = await api.post('/api/ai/measure-image', {
-        imageBase64: cleanBase64,
-        mimeType,
-        prompt: aiConfig.prompt,
-        measureKeys: aiConfig.measureKeys,
-        referenceConfig // 🎯 PASSER LA CONFIG DE RÉFÉRENCE POUR CALIBRATION
-      });
+      const measureEngine = (import.meta.env.VITE_AI_MEASURE_ENGINE || 'gemini').toLowerCase();
+      console.log('📡 [ImageMeasurementPreview] Analyse via', measureEngine, 'avec referenceConfig:', referenceConfig);
+
+      const response = measureEngine === 'vision_ar'
+        ? await api.post('/api/measure/photo', {
+            imageBase64: cleanBase64,
+            mimeType,
+            measureKeys: aiConfig.measureKeys,
+            prompt: aiConfig.prompt,
+            referenceHint: referenceConfig,
+            deviceInfo: undefined,
+            exif: undefined,
+            persist: false
+          })
+        : await api.post('/api/ai/measure-image', {
+            imageBase64: cleanBase64,
+            mimeType,
+            prompt: aiConfig.prompt,
+            measureKeys: aiConfig.measureKeys,
+            referenceConfig // 🎯 PASSER LA CONFIG DE RÉFÉRENCE POUR CALIBRATION
+          });
       
       console.log('📩 [ImageMeasurementPreview] Résultat analyse:', response);
       

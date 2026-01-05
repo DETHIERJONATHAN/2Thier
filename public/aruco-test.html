@@ -1,0 +1,1758 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🎯 Test ArUco - 2Thier</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #1a1a2e;
+            color: white;
+            min-height: 100vh;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        h1 {
+            text-align: center;
+            margin-bottom: 20px;
+            color: #00d4ff;
+        }
+        .status {
+            text-align: center;
+            padding: 10px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            font-weight: bold;
+        }
+        .status.loading { background: #ff9800; color: black; }
+        .status.ready { background: #4caf50; }
+        .status.error { background: #f44336; }
+        .status.detected { background: #00d4ff; color: black; }
+        
+        .main-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+        @media (max-width: 900px) {
+            .main-grid { grid-template-columns: 1fr; }
+        }
+        
+        .video-container {
+            position: relative;
+            background: #000;
+            border-radius: 12px;
+            overflow: hidden;
+        }
+        #video, #canvas {
+            width: 100%;
+            display: block;
+        }
+        #canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+        }
+        
+        .info-panel {
+            background: #16213e;
+            border-radius: 12px;
+            padding: 20px;
+        }
+        .info-panel h2 {
+            color: #00d4ff;
+            margin-bottom: 15px;
+            font-size: 1.2em;
+        }
+        .info-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 10px 0;
+            border-bottom: 1px solid #333;
+        }
+        .info-row:last-child { border-bottom: none; }
+        .info-label { color: #888; }
+        .info-value { font-weight: bold; font-family: monospace; font-size: 1.1em; }
+        .info-value.good { color: #4caf50; }
+        .info-value.warning { color: #ff9800; }
+        .info-value.bad { color: #f44336; }
+        
+        .marker-preview {
+            background: white;
+            padding: 20px;
+            border-radius: 12px;
+            text-align: center;
+            margin-top: 20px;
+        }
+        .marker-preview h3 {
+            color: #1a1a2e;
+            margin-bottom: 10px;
+        }
+        #markerCanvas {
+            border: 2px solid #333;
+            max-width: 200px;
+        }
+        .print-btn {
+            margin-top: 15px;
+            padding: 12px 24px;
+            background: #00d4ff;
+            color: #1a1a2e;
+            border: none;
+            border-radius: 8px;
+            font-size: 1em;
+            font-weight: bold;
+            cursor: pointer;
+        }
+        .print-btn:hover { background: #00b8e6; }
+        
+        .controls {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+        .btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 8px;
+            font-size: 1em;
+            cursor: pointer;
+            font-weight: bold;
+        }
+        .btn-primary { background: #00d4ff; color: #1a1a2e; }
+        .btn-secondary { background: #333; color: white; }
+        .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+        
+        .pose-visualization {
+            display: flex;
+            gap: 20px;
+            margin-top: 20px;
+            justify-content: center;
+        }
+        .pose-axis {
+            text-align: center;
+        }
+        .pose-axis .value {
+            font-size: 2em;
+            font-weight: bold;
+            font-family: monospace;
+        }
+        .pose-axis .label {
+            color: #888;
+            font-size: 0.9em;
+        }
+        .pose-axis.x .value { color: #f44336; }
+        .pose-axis.y .value { color: #4caf50; }
+        .pose-axis.z .value { color: #2196f3; }
+        
+        .instructions {
+            background: #0f3460;
+            border-radius: 12px;
+            padding: 20px;
+            margin-top: 20px;
+        }
+        .instructions h3 {
+            color: #00d4ff;
+            margin-bottom: 10px;
+        }
+        .instructions ol {
+            padding-left: 20px;
+        }
+        .instructions li {
+            margin: 8px 0;
+            color: #ccc;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎯 Test Détection ArUco - 2Thier</h1>
+        
+        <div id="status" class="status loading">⏳ Chargement d'OpenCV.js...</div>
+        
+        <div class="controls">
+            <button id="startBtn" class="btn btn-primary" disabled>📷 Démarrer Caméra</button>
+            <button id="stopBtn" class="btn btn-secondary" disabled>⏹️ Arrêter</button>
+            <button id="captureBtn" class="btn btn-secondary" disabled>📸 Capturer Photo</button>
+            <label class="btn btn-primary" style="background: #9c27b0;">
+                📁 Uploader Photo(s)
+                <input type="file" id="fileInput" accept="image/*" multiple style="display: none;">
+            </label>
+            <select id="cameraSelect" class="btn btn-secondary">
+                <option value="">Sélectionner caméra...</option>
+            </select>
+        </div>
+        
+        <!-- Thumbnails des photos uploadées -->
+        <div id="uploadedPhotos" style="display: none; margin-bottom: 20px;">
+            <h3 style="color: #00d4ff; margin-bottom: 10px;">📷 Photos uploadées (cliquez pour analyser)</h3>
+            <div id="photoThumbnails" style="display: flex; gap: 10px; flex-wrap: wrap;"></div>
+        </div>
+        
+        <div class="main-grid">
+            <div class="video-container">
+                <video id="video" autoplay playsinline></video>
+                <canvas id="canvas"></canvas>
+                <img id="uploadedImage" style="display: none; width: 100%;" />
+            </div>
+            
+            <div class="info-panel">
+                <h2>📊 Informations Détectées</h2>
+                
+                <div class="info-row">
+                    <span class="info-label">Marqueur Détecté</span>
+                    <span id="detected" class="info-value">-</span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">ID Marqueur</span>
+                    <span id="markerId" class="info-value">-</span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">Taille en pixels</span>
+                    <span id="markerSize" class="info-value">-</span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">Distance estimée</span>
+                    <span id="distance" class="info-value">-</span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">Qualité</span>
+                    <span id="quality" class="info-value">-</span>
+                </div>
+                
+                <h2 style="margin-top: 20px;">📐 Pose (Orientation)</h2>
+                <div class="pose-visualization">
+                    <div class="pose-axis x">
+                        <div id="rotX" class="value">0°</div>
+                        <div class="label">Rotation X (haut/bas)</div>
+                    </div>
+                    <div class="pose-axis y">
+                        <div id="rotY" class="value">0°</div>
+                        <div class="label">Rotation Y (gauche/droite)</div>
+                    </div>
+                    <div class="pose-axis z">
+                        <div id="rotZ" class="value">0°</div>
+                        <div class="label">Rotation Z (inclinaison)</div>
+                    </div>
+                </div>
+                
+                <div class="marker-preview">
+                    <h3>📄 Marqueur 18x18cm sur tableau ALU 24x24cm</h3>
+                    <canvas id="markerCanvas" width="240" height="240"></canvas>
+                    <br>
+                    <button class="print-btn" onclick="printMarker()">🖨️ Imprimer le Marqueur</button>
+                </div>
+            </div>
+        </div>
+        
+        <div class="instructions">
+            <h3>📋 Instructions</h3>
+            <ol>
+                <li><strong>Imprimez le marqueur</strong> en cliquant sur "Imprimer" (marqueur 18cm sur tableau 24cm)</li>
+                <li><strong>Prenez une photo</strong> ou utilisez la caméra</li>
+                <li><strong>Le système détecte les points MAGENTA</strong> avec centres blancs</li>
+                <li><strong>Observez les angles</strong> - ils indiquent la position de la caméra</li>
+                <li>✅ <strong>Idéal</strong>: Angles X et Y < 30° pour une bonne mesure</li>
+            </ol>
+        </div>
+    </div>
+
+    <script>
+        // =====================================================
+        // DÉTECTEUR V6 - MARQUEUR 2THIER INTELLIGENT
+        // Structure connue + mesures exactes pour homographie
+        // =====================================================
+        
+        // ========== MESURES RÉELLES DU MARQUEUR (en cm) ==========
+        const MARKER_SPECS = {
+            // Dimensions totales
+            markerSize: 18,        // Marqueur : 18cm x 18cm
+            boardSize: 24,         // Tableau ALU : 24cm x 24cm
+            boardMargin: 3,        // Marge autour du marqueur : 3cm
+            
+            // Structure concentrique (depuis l'extérieur)
+            outerBlackBand: 3,     // Bordure noire : 3cm
+            whiteBand: 3,          // Bande blanche : 3cm
+            innerBlackSquare: 6,   // Carré noir central : 6cm x 6cm
+            
+            // Points de visée
+            magentaRadius: 0.5,    // Point magenta : 5mm de rayon
+            whiteRadius: 0.1,      // Centre blanc : 1mm de rayon
+            
+            // Distances calculées pour l'homographie
+            cornerToCorner: 18,           // Entre 2 coins adjacents
+            diagonal: 18 * Math.SQRT2,    // Diagonale ≈ 25.46cm
+            centerToCorner: 9 * Math.SQRT2 // Centre au coin ≈ 12.73cm
+        };
+        
+        class MarkerDetector {
+            constructor() {
+                this.minSize = 30;
+                this.maxSize = 1500;
+                
+                // Seuils STRICTS pour détecter le MAGENTA vrai (#FF00FF)
+                // On cherche un rose/magenta vif, pas du marron ou du beige !
+                this.magentaMinR = 150;  // Rouge FORT
+                this.magentaMaxG = 120;  // Vert FAIBLE (clé pour exclure les autres couleurs)
+                this.magentaMinB = 120;  // Bleu FORT
+                
+                // Ratio R/G et B/G pour identifier le magenta même avec éclairage variable
+                this.minRGRatio = 1.5;   // R doit être > 1.5x G (plus strict)
+                this.minBGRatio = 1.2;   // B doit être > 1.2x G (plus strict)
+            }
+            
+            detect(imageData) {
+                const width = imageData.width;
+                const height = imageData.height;
+                const data = imageData.data;
+                
+                console.log(`🔍 Détection marqueur 2Thier sur image ${width}x${height}`);
+                console.log(`📐 RÈGLE: le marqueur n'existe QUE si on trouve 4 coins MAGENTA`);
+
+                // 1) PRIORITÉ : trouver directement les 4 taches MAGENTA (signal unique)
+                const magentaFirst = this.detectFromMagentaOnly(data, width, height);
+                if (magentaFirst.length > 0) {
+                    console.log('✅ Détection par MAGENTA réussie (prioritaire)');
+                    return magentaFirst;
+                }
+
+                // 2) SECOURS : tenter un cadre noir, MAIS uniquement si 4 magentas sont trouvés près des coins
+                const blackRegions = this.findBlackOuterFrame(data, width, height);
+                if (!blackRegions || blackRegions.length === 0) {
+                    console.log('❌ Aucune région noire exploitable');
+                    return [];
+                }
+
+                const frameCorners = this.getFrameCorners(blackRegions, data, width, height);
+                if (!frameCorners) {
+                    console.log('❌ Aucun cadre noir crédible (avec magenta)');
+                    return [];
+                }
+
+                const magentaPositions = [];
+                const corners = [];
+                for (const corner of frameCorners) {
+                    const magenta = this.findMagentaNear(data, width, height, corner.x, corner.y, 90);
+                    if (!magenta) continue;
+                    magentaPositions.push({ x: magenta.x, y: magenta.y });
+                    const white = this.findWhiteCenterAt(data, width, height, magenta.x, magenta.y, 25);
+                    corners.push(white || { x: magenta.x, y: magenta.y });
+                }
+
+                if (corners.length !== 4) {
+                    console.log(`❌ Cadre noir rejeté: coins magenta trouvés = ${corners.length}/4`);
+                    return [];
+                }
+
+                const orderedCorners = this.orderCorners(corners);
+                const orderedMagenta = this.orderCorners(magentaPositions);
+                if (!orderedCorners || !orderedMagenta) {
+                    console.log('❌ Impossible d\'ordonner les coins');
+                    return [];
+                }
+
+                const measurements = this.calculateMeasurements(orderedCorners);
+                console.log(`✅ Marqueur détecté (secours cadre noir) !`);
+
+                return [{
+                    id: 0,
+                    corners: orderedCorners,
+                    magentaPositions: orderedMagenta,
+                    size: measurements.avgSidePx,
+                    center: measurements.center,
+                    score: 0.9,
+                    magentaFound: 4,
+                    homography: {
+                        realSizeCm: MARKER_SPECS.markerSize,
+                        pixelsPerCm: measurements.pixelsPerCm,
+                        sides: measurements.sides,
+                        angles: measurements.angles
+                    }
+                }];
+            }
+            
+            // Détecter le cadre NOIR extérieur du marqueur
+            findBlackOuterFrame(data, width, height) {
+                // Créer une image binaire : noir = 1, autre = 0
+                const binary = new Uint8Array(width * height);
+                
+                for (let y = 0; y < height; y++) {
+                    for (let x = 0; x < width; x++) {
+                        const idx = (y * width + x) * 4;
+                        const r = data[idx];
+                        const g = data[idx + 1];
+                        const b = data[idx + 2];
+                        
+                        // Pixel NOIR : tous les canaux bas
+                        const brightness = (r + g + b) / 3;
+                        binary[y * width + x] = brightness < 80 ? 1 : 0;
+                    }
+                }
+                
+                // Trouver les contours des régions noires connectées
+                const visited = new Uint8Array(width * height);
+                const regions = [];
+                
+                for (let y = 0; y < height; y++) {
+                    for (let x = 0; x < width; x++) {
+                        if (binary[y * width + x] === 1 && visited[y * width + x] === 0) {
+                            // BFS pour trouver la région connectée
+                            const region = { pixels: [], minX: Infinity, maxX: -Infinity, minY: Infinity, maxY: -Infinity };
+                            const queue = [{ x, y }];
+                            visited[y * width + x] = 1;
+                            
+                            while (queue.length > 0 && region.pixels.length < 50000) {
+                                const p = queue.shift();
+                                region.pixels.push(p);
+                                region.minX = Math.min(region.minX, p.x);
+                                region.maxX = Math.max(region.maxX, p.x);
+                                region.minY = Math.min(region.minY, p.y);
+                                region.maxY = Math.max(region.maxY, p.y);
+                                
+                                // 4 voisins
+                                for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+                                    const nx = p.x + dx, ny = p.y + dy;
+                                    if (nx >= 0 && nx < width && ny >= 0 && ny < height) {
+                                        const nidx = ny * width + nx;
+                                        if (binary[nidx] === 1 && visited[nidx] === 0) {
+                                            visited[nidx] = 1;
+                                            queue.push({ x: nx, y: ny });
+                                        }
+                                    }
+                                }
+                            }
+                            
+                            // Garder les régions de taille significative
+                            if (region.pixels.length > 500) {
+                                const w = region.maxX - region.minX;
+                                const h = region.maxY - region.minY;
+                                region.width = w;
+                                region.height = h;
+                                region.area = region.pixels.length;
+                                region.cx = (region.minX + region.maxX) / 2;
+                                region.cy = (region.minY + region.maxY) / 2;
+                                regions.push(region);
+                            }
+                        }
+                    }
+                }
+                
+                console.log(`🖤 ${regions.length} régions noires trouvées`);
+                
+                // Trier par taille et trouver la plus grande région en forme de cadre
+                regions.sort((a, b) => b.area - a.area);
+                
+                // Retourner les régions pour analyse des coins
+                return regions.length > 0 ? regions : null;
+            }
+            
+            // Extraire les 4 coins du cadre noir (mais choisir un cadre qui a du magenta près de ses coins)
+            getFrameCorners(regions, data, width, height) {
+                if (!regions || regions.length === 0) return null;
+
+                // Garder des candidats à peu près carrés, pas énormes (évite la porte / gros objets)
+                const maxSide = Math.max(width, height);
+                const minFrame = Math.max(40, maxSide * 0.03);
+                const maxFrame = maxSide * 0.8;
+
+                const candidates = regions
+                    .filter(r => {
+                        const w = r.maxX - r.minX;
+                        const h = r.maxY - r.minY;
+                        const ar = Math.max(w, h) / Math.max(1, Math.min(w, h));
+                        const sizeOk = w >= minFrame && h >= minFrame && w <= maxFrame && h <= maxFrame;
+                        return sizeOk && ar < 1.8;
+                    })
+                    .slice(0, 30);
+
+                if (candidates.length === 0) return null;
+
+                let best = null;
+                let bestScore = -Infinity;
+
+                for (const frame of candidates) {
+                    const corners = [
+                        { x: frame.minX, y: frame.minY },
+                        { x: frame.maxX, y: frame.minY },
+                        { x: frame.maxX, y: frame.maxY },
+                        { x: frame.minX, y: frame.maxY }
+                    ];
+
+                    let hits = 0;
+                    for (const c of corners) {
+                        const m = this.findMagentaNear(data, width, height, c.x, c.y, 90);
+                        if (m) hits++;
+                    }
+
+                    if (hits < 4) continue;
+
+                    const w = frame.maxX - frame.minX;
+                    const h = frame.maxY - frame.minY;
+                    const areaScore = Math.min(w, h); // plus grand = mieux, mais borné par filtres
+                    const score = hits * 1e6 + areaScore;
+                    if (score > bestScore) {
+                        bestScore = score;
+                        best = frame;
+                    }
+                }
+
+                if (!best) return null;
+
+                console.log(`📐 Cadre noir sélectionné: ${(best.maxX - best.minX).toFixed(0)}x${(best.maxY - best.minY).toFixed(0)}px, aire: ${best.area}px`);
+                return [
+                    { x: best.minX, y: best.minY },
+                    { x: best.maxX, y: best.minY },
+                    { x: best.maxX, y: best.maxY },
+                    { x: best.minX, y: best.maxY }
+                ];
+            }
+            
+            // Chercher le MAGENTA près d'un point donné
+            findMagentaNear(data, width, height, cx, cy, radius) {
+                let bestX = null, bestY = null;
+                let maxScore = 0;
+                
+                // Scanner une zone autour du coin
+                for (let dy = -radius; dy <= radius; dy++) {
+                    for (let dx = -radius; dx <= radius; dx++) {
+                        const x = Math.round(cx + dx);
+                        const y = Math.round(cy + dy);
+                        
+                        if (x < 0 || x >= width || y < 0 || y >= height) continue;
+                        
+                        const idx = (y * width + x) * 4;
+                        const r = data[idx];
+                        const g = data[idx + 1];
+                        const b = data[idx + 2];
+                        
+                        // Détection MAGENTA : R élevé, G faible, B moyen-élevé
+                        // Score basé sur "à quel point c'est magenta"
+                        if (r > 100 && g < r && g < b && (r - g) > 30 && b > 50) {
+                            const magentaScore = (r - g) + (b - g); // Plus R et B dominent G, mieux c'est
+                            
+                            if (magentaScore > maxScore) {
+                                maxScore = magentaScore;
+                                bestX = x;
+                                bestY = y;
+                            }
+                        }
+                    }
+                }
+                
+                if (bestX !== null) {
+                    // Maintenant trouver le CENTRE de la zone magenta autour de ce point
+                    return this.findMagentaCenter(data, width, height, bestX, bestY);
+                }
+                
+                return null;
+            }
+            
+            // Trouver le centre d'une zone magenta
+            findMagentaCenter(data, width, height, startX, startY) {
+                // Flood-fill pour trouver tous les pixels magenta connectés
+                const visited = new Set();
+                const queue = [{ x: startX, y: startY }];
+                const pixels = [];
+                
+                while (queue.length > 0 && pixels.length < 5000) {
+                    const p = queue.shift();
+                    const key = `${p.x},${p.y}`;
+                    
+                    if (visited.has(key)) continue;
+                    if (p.x < 0 || p.x >= width || p.y < 0 || p.y >= height) continue;
+                    
+                    const idx = (p.y * width + p.x) * 4;
+                    const r = data[idx];
+                    const g = data[idx + 1];
+                    const b = data[idx + 2];
+                    
+                    // Est-ce du magenta ?
+                    if (r > 80 && g < r && (r - g) > 20 && b > 40) {
+                        visited.add(key);
+                        pixels.push(p);
+                        
+                        // Ajouter les voisins
+                        queue.push({ x: p.x + 1, y: p.y });
+                        queue.push({ x: p.x - 1, y: p.y });
+                        queue.push({ x: p.x, y: p.y + 1 });
+                        queue.push({ x: p.x, y: p.y - 1 });
+                    }
+                }
+                
+                if (pixels.length < 5) return null;
+                
+                // Calculer le barycentre (centre de masse)
+                const sumX = pixels.reduce((s, p) => s + p.x, 0);
+                const sumY = pixels.reduce((s, p) => s + p.y, 0);
+                
+                return {
+                    x: sumX / pixels.length,
+                    y: sumY / pixels.length,
+                    size: pixels.length
+                };
+            }
+            
+            // Fallback : détecter uniquement depuis les magenta si le cadre noir échoue
+            detectFromMagentaOnly(data, width, height) {
+                console.log('🔄 Fallback: détection par magenta uniquement');
+                
+                const magentaPixels = this.findAllMagentaPixels(data, width, height);
+                console.log(`💜 ${magentaPixels.length} pixels magenta détectés`);
+                
+                if (magentaPixels.length < 20) {
+                    console.log('❌ Pas assez de pixels magenta');
+                    return [];
+                }
+                
+                const clusters = this.clusterMagentaPixels(magentaPixels);
+                console.log(`🎯 ${clusters.length} zones magenta identifiées`);
+                
+                if (clusters.length < 4) {
+                    console.log(`❌ Seulement ${clusters.length} points magenta`);
+                    return [];
+                }
+                
+                const topClusters = clusters.slice(0, 4);
+                const corners = [];
+                const magentaPositions = [];
+                
+                for (const cluster of topClusters) {
+                    magentaPositions.push({ x: cluster.cx, y: cluster.cy });
+                    const white = this.findWhiteCenterAt(data, width, height, cluster.cx, cluster.cy, 10);
+                    corners.push(white || { x: cluster.cx, y: cluster.cy });
+                }
+                
+                const orderedCorners = this.orderCorners(corners);
+                const orderedMagenta = this.orderCorners(magentaPositions);
+                
+                if (!orderedCorners) return [];
+                
+                const measurements = this.calculateMeasurements(orderedCorners);
+                
+                return [{
+                    id: 0,
+                    corners: orderedCorners,
+                    magentaPositions: orderedMagenta,
+                    size: measurements.avgSidePx,
+                    center: measurements.center,
+                    score: 0.8,
+                    magentaFound: 4,
+                    homography: {
+                        realSizeCm: MARKER_SPECS.markerSize,
+                        pixelsPerCm: measurements.pixelsPerCm,
+                        sides: measurements.sides,
+                        angles: measurements.angles
+                    }
+                }];
+            }
+            
+            // Trouver TOUS les pixels magenta dans l'image (robuste: score + saturation)
+            findAllMagentaPixels(data, width, height) {
+                const pixels = [];
+
+                // Pas = accélération; 1 = full, 2 = 1/4 des pixels.
+                // De loin, les pastilles sont petites → on garde assez fin.
+                const step = Math.max(1, Math.floor(Math.min(width, height) / 900));
+
+                for (let y = 0; y < height; y += step) {
+                    for (let x = 0; x < width; x += step) {
+                        const idx = (y * width + x) * 4;
+                        const r = data[idx];
+                        const g = data[idx + 1];
+                        const b = data[idx + 2];
+
+                        // Saturation (approx) = max-min
+                        const maxc = Math.max(r, g, b);
+                        const minc = Math.min(r, g, b);
+                        const sat = maxc - minc;
+
+                        // Magenta = rouge + bleu forts, vert faible, saturation élevée
+                        // On score plutôt que des seuils trop durs.
+                        if (sat < 50) continue;
+                        if (g > 140) continue;
+                        if (r < 70 || b < 70) continue;
+                        if (g >= r || g >= b) continue;
+
+                        // Score: plus R/B dominent G, mieux c'est
+                        const score = (r - g) + (b - g) + sat * 0.5;
+                        if (score < 140) continue;
+
+                        pixels.push({ x, y, r, g, b, score });
+                    }
+                }
+
+                console.log(`🔍 Total pixels magenta bruts: ${pixels.length} (step=${step})`);
+                return pixels;
+            }
+            
+            // Regrouper les pixels magenta en clusters et calculer le VRAI centre
+            clusterMagentaPixels(pixels) {
+                if (pixels.length === 0) return [];
+                
+                // Utiliser une grille pour accélérer
+                const cellSize = 12;
+                const grid = new Map();
+                
+                for (const p of pixels) {
+                    const key = `${Math.floor(p.x / cellSize)},${Math.floor(p.y / cellSize)}`;
+                    if (!grid.has(key)) grid.set(key, []);
+                    grid.get(key).push(p);
+                }
+                
+                // Fusionner les cellules adjacentes en clusters
+                const clusters = [];
+                const usedCells = new Set();
+                
+                for (const [key, cellPixels] of grid) {
+                    if (usedCells.has(key)) continue;
+                    
+                    // BFS pour trouver toutes les cellules connectées
+                    const cluster = [...cellPixels];
+                    const queue = [key];
+                    usedCells.add(key);
+                    
+                    while (queue.length > 0) {
+                        const currentKey = queue.shift();
+                        const [cx, cy] = currentKey.split(',').map(Number);
+                        
+                        // Vérifier les 8 voisins
+                        for (let dx = -1; dx <= 1; dx++) {
+                            for (let dy = -1; dy <= 1; dy++) {
+                                if (dx === 0 && dy === 0) continue;
+                                const neighborKey = `${cx + dx},${cy + dy}`;
+                                
+                                if (grid.has(neighborKey) && !usedCells.has(neighborKey)) {
+                                    cluster.push(...grid.get(neighborKey));
+                                    usedCells.add(neighborKey);
+                                    queue.push(neighborKey);
+                                }
+                            }
+                        }
+                    }
+                    
+                    if (cluster.length >= 6) {
+                        // Centre pondéré (privilégie les pixels les plus "magenta")
+                        let sumX = 0, sumY = 0, sumW = 0;
+                        let minX = Infinity, maxX = -Infinity;
+                        let minY = Infinity, maxY = -Infinity;
+                        
+                        for (const p of cluster) {
+                            const w = Math.max(1, p.score || 1);
+                            sumX += p.x * w;
+                            sumY += p.y * w;
+                            sumW += w;
+                            minX = Math.min(minX, p.x);
+                            maxX = Math.max(maxX, p.x);
+                            minY = Math.min(minY, p.y);
+                            maxY = Math.max(maxY, p.y);
+                        }
+                        
+                        // Le VRAI centre = barycentre
+                        const cx = sumX / Math.max(1, sumW);
+                        const cy = sumY / Math.max(1, sumW);
+                        
+                        const width = maxX - minX;
+                        const height = maxY - minY;
+                        
+                        // Filtrer les clusters trop allongés (pas des cercles)
+                        const ratio = Math.max(width, height) / Math.max(1, Math.min(width, height));
+                        
+                        if (ratio < 2.5) { // Doit être approximativement circulaire
+                            clusters.push({ 
+                                cx, cy, 
+                                size: cluster.length,
+                                width, height
+                            });
+                            console.log(`💜 Cluster magenta: (${cx.toFixed(0)}, ${cy.toFixed(0)}), ${cluster.length}px, ${width.toFixed(0)}x${height.toFixed(0)}`);
+                        }
+                    }
+                }
+                
+                // Trier par taille et garder les 4 plus gros
+                clusters.sort((a, b) => b.size - a.size);
+                
+                // Si on a plus de 4, garder seulement les 4 qui forment le meilleur quadrilatère
+                if (clusters.length > 4) {
+                    return this.selectBest4Corners(clusters);
+                }
+                
+                return clusters;
+            }
+            
+            // Sélectionner les 4 clusters qui forment le quadrilatère le plus régulier
+            selectBest4Corners(clusters) {
+                if (clusters.length <= 4) return clusters;
+                
+                // Prendre les 6 plus gros et tester toutes les combinaisons de 4
+                const candidates = clusters.slice(0, Math.min(8, clusters.length));
+                
+                let bestCombo = candidates.slice(0, 4);
+                let bestScore = -Infinity;
+                
+                for (let i = 0; i < candidates.length; i++) {
+                    for (let j = i + 1; j < candidates.length; j++) {
+                        for (let k = j + 1; k < candidates.length; k++) {
+                            for (let l = k + 1; l < candidates.length; l++) {
+                                const combo = [candidates[i], candidates[j], candidates[k], candidates[l]];
+                                const score = this.scoreQuadrilateral(combo);
+                                
+                                if (score > bestScore) {
+                                    bestScore = score;
+                                    bestCombo = combo;
+                                }
+                            }
+                        }
+                    }
+                }
+                
+                console.log(`✅ Meilleur quadrilatère sélectionné (score: ${bestScore.toFixed(0)})`);
+                return bestCombo;
+            }
+            
+            // Score un ensemble de 4 points selon à quel point ils forment un bon quadrilatère
+            scoreQuadrilateral(points) {
+                const ordered = this.orderCorners(points.map(p => ({ x: p.cx, y: p.cy })));
+                if (!ordered) return -Infinity;
+                
+                // Calculer les 4 côtés
+                const sides = [];
+                for (let i = 0; i < 4; i++) {
+                    const p1 = ordered[i];
+                    const p2 = ordered[(i + 1) % 4];
+                    sides.push(Math.sqrt((p2.x - p1.x) ** 2 + (p2.y - p1.y) ** 2));
+                }
+                
+                // Score basé sur la régularité (côtés similaires = bon)
+                const avgSide = sides.reduce((a, b) => a + b, 0) / 4;
+                const variance = sides.reduce((sum, s) => sum + Math.abs(s - avgSide), 0) / 4;
+                
+                // Bonus pour la taille (plus c'est grand, mieux c'est)
+                const sizeBonus = avgSide;
+                
+                // Pénalité pour l'irrégularité
+                const regularityPenalty = variance;
+                
+                return sizeBonus - regularityPenalty * 2;
+            }
+            
+            // Trouver le centre blanc à proximité d'un point magenta
+            findWhiteCenterAt(data, width, height, cx, cy, radius) {
+                let sumX = 0, sumY = 0, sumW = 0;
+                let bestX = 0, bestY = 0, bestScore = 0;
+                
+                for (let dy = -radius; dy <= radius; dy++) {
+                    for (let dx = -radius; dx <= radius; dx++) {
+                        const x = Math.round(cx + dx);
+                        const y = Math.round(cy + dy);
+                        
+                        if (x < 0 || x >= width || y < 0 || y >= height) continue;
+                        
+                        const idx = (y * width + x) * 4;
+                        const r = data[idx];
+                        const g = data[idx + 1];
+                        const b = data[idx + 2];
+                        
+                        const brightness = (r + g + b) / 3;
+                        const variance = Math.abs(r - brightness) + Math.abs(g - brightness) + Math.abs(b - brightness);
+
+                        // Blanc (robuste): assez lumineux et pas trop coloré
+                        if (brightness > 175 && variance < 70) {
+                            const distFromCenter = Math.sqrt(dx * dx + dy * dy);
+                            const w = brightness / (1 + distFromCenter * 0.6);
+                            sumX += x * w;
+                            sumY += y * w;
+                            sumW += w;
+
+                            if (w > bestScore) {
+                                bestScore = w;
+                                bestX = x;
+                                bestY = y;
+                            }
+                        }
+                    }
+                }
+
+                if (sumW > 0) {
+                    return { x: sumX / sumW, y: sumY / sumW };
+                }
+
+                return bestScore > 0 ? { x: bestX, y: bestY } : null;
+            }
+            
+            // Calculer les mesures du quadrilatère pour l'homographie
+            calculateMeasurements(quad) {
+                const [tl, tr, br, bl] = quad;
+                
+                // Calculer les 4 côtés
+                const sides = [
+                    Math.sqrt((tr.x - tl.x) ** 2 + (tr.y - tl.y) ** 2), // Haut
+                    Math.sqrt((br.x - tr.x) ** 2 + (br.y - tr.y) ** 2), // Droit
+                    Math.sqrt((bl.x - br.x) ** 2 + (bl.y - br.y) ** 2), // Bas
+                    Math.sqrt((tl.x - bl.x) ** 2 + (tl.y - bl.y) ** 2)  // Gauche
+                ];
+                
+                const avgSidePx = sides.reduce((a, b) => a + b, 0) / 4;
+                const pixelsPerCm = avgSidePx / MARKER_SPECS.markerSize;
+                
+                // Calculer les angles aux coins
+                const angles = [
+                    this.calculateAngle(bl, tl, tr),
+                    this.calculateAngle(tl, tr, br),
+                    this.calculateAngle(tr, br, bl),
+                    this.calculateAngle(br, bl, tl)
+                ];
+                
+                return {
+                    sides,
+                    avgSidePx,
+                    pixelsPerCm,
+                    angles,
+                    center: {
+                        x: (tl.x + tr.x + br.x + bl.x) / 4,
+                        y: (tl.y + tr.y + br.y + bl.y) / 4
+                    }
+                };
+            }
+            
+            calculateAngle(p1, vertex, p2) {
+                const v1 = { x: p1.x - vertex.x, y: p1.y - vertex.y };
+                const v2 = { x: p2.x - vertex.x, y: p2.y - vertex.y };
+                const dot = v1.x * v2.x + v1.y * v2.y;
+                const mag1 = Math.sqrt(v1.x ** 2 + v1.y ** 2);
+                const mag2 = Math.sqrt(v2.x ** 2 + v2.y ** 2);
+                return Math.acos(dot / (mag1 * mag2)) * 180 / Math.PI;
+            }
+            
+            // Trouver les 4 coins qui forment le meilleur quadrilatère
+            findBestQuadrilateral(corners) {
+                if (corners.length < 4) return null;
+                if (corners.length === 4) return this.orderCorners(corners);
+                
+                let bestQuad = null;
+                let bestScore = 0;
+                
+                // Tester toutes les combinaisons de 4 coins
+                for (let i = 0; i < corners.length; i++) {
+                    for (let j = i + 1; j < corners.length; j++) {
+                        for (let k = j + 1; k < corners.length; k++) {
+                            for (let l = k + 1; l < corners.length; l++) {
+                                const quad = this.orderCorners([
+                                    corners[i], corners[j], corners[k], corners[l]
+                                ]);
+                                
+                                if (quad && this.isValidQuad(quad)) {
+                                    const score = this.scoreQuad(quad);
+                                    if (score > bestScore) {
+                                        bestScore = score;
+                                        bestQuad = quad;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                
+                return bestQuad;
+            }
+            
+            // Score basé sur à quel point c'est proche d'un carré
+            scoreQuad(quad) {
+                const measurements = this.calculateMeasurements(quad);
+                
+                // Pénaliser si les côtés sont très différents
+                const sideVariance = Math.max(...measurements.sides) / Math.min(...measurements.sides);
+                
+                // Pénaliser si les angles sont loin de 90°
+                const angleDeviation = measurements.angles.reduce((sum, a) => sum + Math.abs(a - 90), 0);
+                
+                // Plus c'est grand, mieux c'est (mais pas trop)
+                const size = measurements.avgSidePx;
+                const sizeScore = size > this.minSize && size < this.maxSize ? size : 0;
+                
+                return sizeScore / (sideVariance * (1 + angleDeviation / 90));
+            }
+            
+            orderCorners(corners) {
+                const cx = corners.reduce((s, c) => s + c.x, 0) / 4;
+                const cy = corners.reduce((s, c) => s + c.y, 0) / 4;
+                
+                const topLeft = corners.filter(c => c.x < cx && c.y < cy)[0];
+                const topRight = corners.filter(c => c.x >= cx && c.y < cy)[0];
+                const bottomRight = corners.filter(c => c.x >= cx && c.y >= cy)[0];
+                const bottomLeft = corners.filter(c => c.x < cx && c.y >= cy)[0];
+                
+                if (!topLeft || !topRight || !bottomRight || !bottomLeft) return null;
+                return [topLeft, topRight, bottomRight, bottomLeft];
+            }
+            
+            isValidQuad(quad) {
+                const [tl, tr, br, bl] = quad;
+                if (tl.y > bl.y || tr.y > br.y) return false;
+                if (tl.x > tr.x || bl.x > br.x) return false;
+                
+                const width = Math.max(tr.x - tl.x, br.x - bl.x);
+                const height = Math.max(bl.y - tl.y, br.y - tr.y);
+                
+                return width >= this.minSize && height >= this.minSize &&
+                       width <= this.maxSize && height <= this.maxSize;
+            }
+        }
+    </script>
+    
+    <script>
+        // Variables globales
+        let video, canvas, ctx;
+        let streaming = false;
+        let animationId = null;
+        let cvReady = false;
+        let detector = null;
+        
+        // Taille réelle du marqueur en cm
+        const MARKER_SIZE_CM = 20;
+        
+        // Éléments DOM - attendre que le DOM soit prêt
+        let statusEl, startBtn, stopBtn, captureBtn, cameraSelect;
+        let fileInput, uploadedPhotosDiv, photoThumbnails, uploadedImage;
+        
+        // Initialiser les éléments DOM au chargement
+        document.addEventListener('DOMContentLoaded', () => {
+            statusEl = document.getElementById('status');
+            startBtn = document.getElementById('startBtn');
+            stopBtn = document.getElementById('stopBtn');
+            captureBtn = document.getElementById('captureBtn');
+            cameraSelect = document.getElementById('cameraSelect');
+            video = document.getElementById('video');
+            canvas = document.getElementById('canvas');
+            ctx = canvas.getContext('2d');
+            fileInput = document.getElementById('fileInput');
+            uploadedPhotosDiv = document.getElementById('uploadedPhotos');
+            photoThumbnails = document.getElementById('photoThumbnails');
+            uploadedImage = document.getElementById('uploadedImage');
+            
+            // Initialiser le détecteur ArUco
+            try {
+                detector = new MarkerDetector();
+                cvReady = true;
+                console.log('✅ Détecteur de marqueurs initialisé');
+                statusEl.textContent = '✅ Prêt - Uploadez une photo ou démarrez la caméra';
+                statusEl.className = 'status ready';
+                startBtn.disabled = false;
+            } catch (err) {
+                console.error('❌ Erreur init:', err);
+                statusEl.textContent = '❌ Erreur: ' + err.message;
+                statusEl.className = 'status error';
+            }
+            
+            // Setup file input listener
+            setupFileInput();
+            
+            // Setup autres listeners
+            setupEventListeners();
+            
+            // Dessiner le marqueur
+            drawMarkerForPrint();
+            
+            // Lister les caméras
+            listCameras();
+            
+            console.log('✅ DOM initialisé');
+        });
+        
+        // Marqueur 2THIER Intelligent 18x18cm
+        // Structure : Noir(3cm) > Blanc(3cm) > Noir(6cm) > Blanc(3cm) > Noir(3cm)
+        // Points MAGENTA de 10mm au centre et aux 4 coins EXACTS
+        // + Marge blanche de 1cm pour voir les points entiers
+        
+        // Dessiner le marqueur à imprimer
+        // Le marqueur fait 18cm, sera monté sur un tableau ALU de 24cm
+        // => 3cm de marge de chaque côté
+        // Les bords du tableau ALU servent de référence (pas de lignes à dessiner)
+        function drawMarkerForPrint() {
+            const markerCanvas = document.getElementById('markerCanvas');
+            const mCtx = markerCanvas.getContext('2d');
+            
+            // Canvas = 24cm total (taille du tableau alu)
+            // Représenté en 240px pour l'aperçu
+            const size = 240;
+            const unit = size / 24; // 1cm en pixels (total 24cm = taille tableau)
+            const margin = 3 * unit; // 3cm de marge (tableau 24cm - marqueur 18cm) / 2
+            const markerSize = 18 * unit; // 18cm le marqueur
+            
+            // Fond BLANC (marge = le tableau alu sera visible autour)
+            mCtx.fillStyle = 'white';
+            mCtx.fillRect(0, 0, size, size);
+            
+            // Bordure NOIRE externe du marqueur (de 3cm à 21cm = 18cm de large)
+            mCtx.fillStyle = 'black';
+            mCtx.fillRect(margin, margin, markerSize, markerSize);
+            
+            // Zone BLANCHE intérieure (3cm à 15cm depuis le bord du marqueur)
+            // = 6cm à 18cm en coordonnées totales
+            mCtx.fillStyle = 'white';
+            mCtx.fillRect(margin + 3 * unit, margin + 3 * unit, 12 * unit, 12 * unit);
+            
+            // Carré NOIR central (6cm à 12cm depuis le bord du marqueur)
+            // = 9cm à 15cm en coordonnées totales
+            mCtx.fillStyle = 'black';
+            mCtx.fillRect(margin + 6 * unit, margin + 6 * unit, 6 * unit, 6 * unit);
+            
+            // PAS de ligne de contour ni de référence - le tableau ALU sert de repère !
+            
+            // Points MAGENTA avec centre BLANC (point de visée précis)
+            const pointRadius = 0.5 * unit; // 5mm de rayon magenta
+            const whiteRadius = 0.1 * unit; // 1mm de rayon blanc (point de visée)
+            
+            // Points aux 4 COINS EXACTS du marqueur 18x18cm
+            // Les centres des points BLANCS sont EXACTEMENT aux coins = mesure 18cm pile !
+            
+            // Fonction pour dessiner un point avec centre blanc
+            function drawTargetPoint(x, y) {
+                // Cercle MAGENTA
+                mCtx.fillStyle = '#FF00FF';
+                mCtx.beginPath();
+                mCtx.arc(x, y, pointRadius, 0, 2 * Math.PI);
+                mCtx.fill();
+                
+                // Point BLANC au centre (visée précise)
+                mCtx.fillStyle = '#FFFFFF';
+                mCtx.beginPath();
+                mCtx.arc(x, y, whiteRadius, 0, 2 * Math.PI);
+                mCtx.fill();
+            }
+            
+            // Haut-gauche (coin exact du marqueur)
+            drawTargetPoint(margin, margin);
+            
+            // Haut-droit
+            drawTargetPoint(margin + markerSize, margin);
+            
+            // Bas-droit
+            drawTargetPoint(margin + markerSize, margin + markerSize);
+            
+            // Bas-gauche
+            drawTargetPoint(margin, margin + markerSize);
+        }
+        
+        function printMarker() {
+            const printWindow = window.open('', '_blank');
+            
+            // Générer un marqueur haute résolution pour l'impression
+            // 24cm = 2400px (100px par cm = haute résolution)
+            const hiResCanvas = document.createElement('canvas');
+            const totalSize = 2400; // 24cm à 100px/cm
+            const unit = totalSize / 24; // 100px par cm
+            const margin = 3 * unit; // 3cm de marge
+            const markerSize = 18 * unit; // 18cm le marqueur
+            
+            hiResCanvas.width = totalSize;
+            hiResCanvas.height = totalSize;
+            const ctx = hiResCanvas.getContext('2d');
+            
+            // Fond BLANC (le tableau ALU)
+            ctx.fillStyle = 'white';
+            ctx.fillRect(0, 0, totalSize, totalSize);
+            
+            // Bordure NOIRE externe (18x18cm)
+            ctx.fillStyle = 'black';
+            ctx.fillRect(margin, margin, markerSize, markerSize);
+            
+            // Zone BLANCHE intérieure (12x12cm, 3cm du bord)
+            ctx.fillStyle = 'white';
+            ctx.fillRect(margin + 3 * unit, margin + 3 * unit, 12 * unit, 12 * unit);
+            
+            // Carré NOIR central (6x6cm)
+            ctx.fillStyle = 'black';
+            ctx.fillRect(margin + 6 * unit, margin + 6 * unit, 6 * unit, 6 * unit);
+            
+            // Points MAGENTA avec centre BLANC
+            const pointRadius = 0.5 * unit; // 5mm de rayon magenta
+            const whiteRadius = 0.1 * unit; // 1mm de rayon blanc
+            
+            function drawTargetPoint(x, y) {
+                // Cercle MAGENTA
+                ctx.fillStyle = '#FF00FF';
+                ctx.beginPath();
+                ctx.arc(x, y, pointRadius, 0, 2 * Math.PI);
+                ctx.fill();
+                
+                // Point BLANC au centre
+                ctx.fillStyle = '#FFFFFF';
+                ctx.beginPath();
+                ctx.arc(x, y, whiteRadius, 0, 2 * Math.PI);
+                ctx.fill();
+            }
+            
+            // 4 coins du marqueur 18cm
+            drawTargetPoint(margin, margin); // Haut-gauche
+            drawTargetPoint(margin + markerSize, margin); // Haut-droit
+            drawTargetPoint(margin + markerSize, margin + markerSize); // Bas-droit
+            drawTargetPoint(margin, margin + markerSize); // Bas-gauche
+            
+            printWindow.document.write(`
+                <!DOCTYPE html>
+                <html>
+                <head>
+                    <title>Marqueur 18x18cm sur tableau 24x24cm - 2Thier</title>
+                    <style>
+                        @page { 
+                            size: A4 portrait; 
+                            margin: 0; 
+                        }
+                        * {
+                            margin: 0;
+                            padding: 0;
+                            box-sizing: border-box;
+                        }
+                        html, body { 
+                            width: 210mm;
+                            height: 297mm;
+                            font-family: Arial, sans-serif;
+                        }
+                        .page {
+                            width: 210mm;
+                            height: 297mm;
+                            display: flex;
+                            flex-direction: column;
+                            align-items: center;
+                            justify-content: center;
+                            padding: 5mm;
+                        }
+                        .marker-container {
+                            width: 240mm;
+                            height: 240mm;
+                            display: flex;
+                            align-items: center;
+                            justify-content: center;
+                        }
+                        .marker { 
+                            width: 240mm; 
+                            height: 240mm;
+                            image-rendering: pixelated;
+                            image-rendering: -moz-crisp-edges;
+                            image-rendering: crisp-edges;
+                        }
+                        .title {
+                            font-size: 12pt;
+                            font-weight: bold;
+                            margin-bottom: 3mm;
+                            color: #333;
+                        }
+                        .info {
+                            font-size: 9pt;
+                            color: #666;
+                            margin-top: 3mm;
+                            text-align: center;
+                        }
+                        .warning {
+                            font-size: 8pt;
+                            color: #e74c3c;
+                            margin-top: 2mm;
+                        }
+                        @media print {
+                            .page { 
+                                page-break-after: avoid;
+                            }
+                        }
+                    </style>
+                </head>
+                <body>
+                    <div class="page">
+                        <div class="title">🎯 Marqueur 2Thier - 18x18cm</div>
+                        <div class="marker-container">
+                            <img class="marker" src="${hiResCanvas.toDataURL('image/png')}" />
+                        </div>
+                        <div class="info">
+                            <strong>Marqueur: 18cm × 18cm</strong> | Tableau ALU: 24cm × 24cm<br>
+                            Points magenta aux 4 coins (centre blanc = visée précise)
+                        </div>
+                        <div class="warning">
+                            ⚠️ Imprimez à 100% (sans mise à l'échelle) pour garantir les dimensions exactes
+                        </div>
+                    </div>
+                </body>
+                </html>
+            `);
+            printWindow.document.close();
+            
+            // Attendre le chargement puis imprimer
+            printWindow.onload = () => {
+                printWindow.print();
+            };
+        }
+        
+        // Lister les caméras disponibles
+        async function listCameras() {
+            try {
+                const devices = await navigator.mediaDevices.enumerateDevices();
+                const videoDevices = devices.filter(d => d.kind === 'videoinput');
+                
+                if (cameraSelect) {
+                    cameraSelect.innerHTML = '<option value="">Caméra par défaut</option>';
+                    videoDevices.forEach((device, i) => {
+                        const option = document.createElement('option');
+                        option.value = device.deviceId;
+                        option.textContent = device.label || `Caméra ${i + 1}`;
+                        cameraSelect.appendChild(option);
+                    });
+                }
+            } catch (err) {
+                console.error('Erreur listing caméras:', err);
+            }
+        }
+        
+        // Démarrer la caméra
+        async function startCamera() {
+            video = document.getElementById('video');
+            canvas = document.getElementById('canvas');
+            ctx = canvas.getContext('2d');
+            
+            const constraints = {
+                video: {
+                    width: { ideal: 1280 },
+                    height: { ideal: 720 },
+                    facingMode: 'environment'
+                }
+            };
+            
+            if (cameraSelect.value) {
+                constraints.video.deviceId = { exact: cameraSelect.value };
+            }
+            
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia(constraints);
+                video.srcObject = stream;
+                
+                video.onloadedmetadata = () => {
+                    canvas.width = video.videoWidth;
+                    canvas.height = video.videoHeight;
+                    streaming = true;
+                    
+                    statusEl.textContent = '📷 Caméra active - Pointez vers le marqueur ArUco';
+                    statusEl.className = 'status ready';
+                    
+                    startBtn.disabled = true;
+                    stopBtn.disabled = false;
+                    captureBtn.disabled = false;
+                    
+                    // Démarrer la détection
+                    detectLoop();
+                };
+            } catch (err) {
+                console.error('Erreur caméra:', err);
+                statusEl.textContent = '❌ Erreur: ' + err.message;
+                statusEl.className = 'status error';
+            }
+        }
+        
+        // Arrêter la caméra
+        function stopCamera() {
+            streaming = false;
+            if (animationId) {
+                cancelAnimationFrame(animationId);
+            }
+            
+            if (video && video.srcObject) {
+                video.srcObject.getTracks().forEach(track => track.stop());
+                video.srcObject = null;
+            }
+            
+            startBtn.disabled = false;
+            stopBtn.disabled = true;
+            captureBtn.disabled = true;
+            
+            statusEl.textContent = '⏹️ Caméra arrêtée';
+            statusEl.className = 'status ready';
+            
+            // Reset affichage
+            resetDisplay();
+        }
+        
+        function resetDisplay() {
+            document.getElementById('detected').textContent = '-';
+            document.getElementById('detected').className = 'info-value';
+            document.getElementById('markerId').textContent = '-';
+            document.getElementById('markerSize').textContent = '-';
+            document.getElementById('distance').textContent = '-';
+            document.getElementById('quality').textContent = '-';
+            document.getElementById('rotX').textContent = '0°';
+            document.getElementById('rotY').textContent = '0°';
+            document.getElementById('rotZ').textContent = '0°';
+        }
+        
+        // Boucle de détection avec js-aruco
+        function detectLoop() {
+            if (!streaming) return;
+            
+            try {
+                // Dessiner la vidéo sur le canvas
+                ctx.drawImage(video, 0, 0);
+                
+                // Récupérer les données de l'image
+                const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+                
+                // Détecter les marqueurs
+                const markers = detector.detect(imageData);
+                
+                if (markers.length > 0) {
+                    const marker = markers[0];
+                    const id = marker.id;
+                    const corners = marker.corners;
+                    
+                    // Dessiner le contour
+                    ctx.strokeStyle = '#00ff00';
+                    ctx.lineWidth = 4;
+                    ctx.beginPath();
+                    ctx.moveTo(corners[0].x, corners[0].y);
+                    ctx.lineTo(corners[1].x, corners[1].y);
+                    ctx.lineTo(corners[2].x, corners[2].y);
+                    ctx.lineTo(corners[3].x, corners[3].y);
+                    ctx.closePath();
+                    ctx.stroke();
+                    
+                    // Afficher l'ID
+                    ctx.fillStyle = '#00ff00';
+                    ctx.font = 'bold 24px Arial';
+                    ctx.fillText(`ID: ${id}`, corners[0].x, corners[0].y - 10);
+                    
+                    const p1 = corners[0];
+                    const p2 = corners[1];
+                    const p3 = corners[2];
+                    const p4 = corners[3];
+                    
+                    // Calculer la taille en pixels
+                    const side1 = Math.sqrt(Math.pow(p2.x - p1.x, 2) + Math.pow(p2.y - p1.y, 2));
+                    const side2 = Math.sqrt(Math.pow(p3.x - p2.x, 2) + Math.pow(p3.y - p2.y, 2));
+                    const avgSize = (side1 + side2) / 2;
+                    
+                    // Estimer la distance
+                    const focalLength = 800;
+                    const distance = (MARKER_SIZE_CM * focalLength) / avgSize;
+                    
+                    // Calculer les rotations approximatives
+                    const rotX = estimateRotationX(p1, p2, p3, p4);
+                    const rotY = estimateRotationY(p1, p2, p3, p4);
+                    const rotZ = estimateRotationZ(p1, p2);
+                    
+                    // Qualité basée sur la taille et les angles
+                    const quality = calculateQuality(avgSize, rotX, rotY);
+                    
+                    // Mettre à jour l'affichage
+                    updateDisplay(id, avgSize, distance, rotX, rotY, rotZ, quality);
+                    
+                    statusEl.textContent = `🎯 Marqueur ID ${id} détecté!`;
+                    statusEl.className = 'status detected';
+                } else {
+                    statusEl.textContent = '🔍 Recherche du marqueur...';
+                    statusEl.className = 'status ready';
+                    
+                    document.getElementById('detected').textContent = 'Non';
+                    document.getElementById('detected').className = 'info-value bad';
+                }
+                
+            } catch (err) {
+                console.error('Erreur détection:', err);
+            }
+            
+            animationId = requestAnimationFrame(detectLoop);
+        }
+        
+        // Estimer rotation X (basculement avant/arrière)
+        function estimateRotationX(p1, p2, p3, p4) {
+            const topWidth = Math.sqrt(Math.pow(p2.x - p1.x, 2) + Math.pow(p2.y - p1.y, 2));
+            const bottomWidth = Math.sqrt(Math.pow(p3.x - p4.x, 2) + Math.pow(p3.y - p4.y, 2));
+            const ratio = topWidth / bottomWidth;
+            return Math.round(Math.atan2(ratio - 1, 0.5) * 180 / Math.PI);
+        }
+        
+        // Estimer rotation Y (basculement gauche/droite)
+        function estimateRotationY(p1, p2, p3, p4) {
+            const leftHeight = Math.sqrt(Math.pow(p4.x - p1.x, 2) + Math.pow(p4.y - p1.y, 2));
+            const rightHeight = Math.sqrt(Math.pow(p3.x - p2.x, 2) + Math.pow(p3.y - p2.y, 2));
+            const ratio = leftHeight / rightHeight;
+            return Math.round(Math.atan2(ratio - 1, 0.5) * 180 / Math.PI);
+        }
+        
+        // Estimer rotation Z (inclinaison)
+        function estimateRotationZ(p1, p2) {
+            return Math.round(Math.atan2(p2.y - p1.y, p2.x - p1.x) * 180 / Math.PI);
+        }
+        
+        // Calculer la qualité
+        function calculateQuality(size, rotX, rotY) {
+            let score = 100;
+            
+            // Pénalité si trop petit
+            if (size < 50) score -= 40;
+            else if (size < 100) score -= 20;
+            
+            // Pénalité angles
+            score -= Math.abs(rotX) * 0.5;
+            score -= Math.abs(rotY) * 0.5;
+            
+            return Math.max(0, Math.min(100, Math.round(score)));
+        }
+        
+        // Mettre à jour l'affichage
+        function updateDisplay(id, size, distance, rotX, rotY, rotZ, quality) {
+            document.getElementById('detected').textContent = 'OUI ✓';
+            document.getElementById('detected').className = 'info-value good';
+            
+            document.getElementById('markerId').textContent = id;
+            document.getElementById('markerSize').textContent = Math.round(size) + ' px';
+            document.getElementById('distance').textContent = distance.toFixed(1) + ' cm';
+            
+            const qualityEl = document.getElementById('quality');
+            qualityEl.textContent = quality + '%';
+            qualityEl.className = 'info-value ' + (quality > 70 ? 'good' : quality > 40 ? 'warning' : 'bad');
+            
+            document.getElementById('rotX').textContent = rotX + '°';
+            document.getElementById('rotY').textContent = rotY + '°';
+            document.getElementById('rotZ').textContent = rotZ + '°';
+        }
+        
+        // Capturer une photo
+        function capturePhoto() {
+            const dataUrl = canvas.toDataURL('image/jpeg', 0.9);
+            
+            // Créer un lien de téléchargement
+            const link = document.createElement('a');
+            link.download = `aruco-capture-${Date.now()}.jpg`;
+            link.href = dataUrl;
+            link.click();
+            
+            statusEl.textContent = '📸 Photo capturée!';
+            setTimeout(() => {
+                if (streaming) {
+                    statusEl.textContent = '📷 Caméra active - Pointez vers le marqueur ArUco';
+                }
+            }, 2000);
+        }
+        
+        // =====================================================
+        // ANALYSE D'UNE PHOTO UPLOADÉE
+        // =====================================================
+        
+        function analyzeUploadedPhoto(dataUrl, index) {
+            console.log(`🔍 Analyse photo ${index + 1}...`);
+            
+            // Mettre en surbrillance la thumbnail sélectionnée
+            const thumbs = photoThumbnails.children;
+            for (let i = 0; i < thumbs.length; i++) {
+                thumbs[i].style.borderColor = i === index ? '#00d4ff' : 'transparent';
+            }
+            
+            // Cacher la vidéo, montrer l'image
+            video.style.display = 'none';
+            uploadedImage.style.display = 'block';
+            uploadedImage.src = dataUrl;
+            
+            // Attendre que l'image soit chargée
+            uploadedImage.onload = () => {
+                console.log(`📐 Image chargée: ${uploadedImage.naturalWidth}x${uploadedImage.naturalHeight}`);
+                
+                // Cacher l'image car on va dessiner sur le canvas
+                uploadedImage.style.display = 'none';
+                
+                // Configurer le canvas pour afficher l'image
+                canvas.width = uploadedImage.naturalWidth;
+                canvas.height = uploadedImage.naturalHeight;
+                canvas.style.position = 'relative';
+                canvas.style.display = 'block';
+                canvas.style.maxWidth = '100%';
+                canvas.style.height = 'auto';
+                
+                // Dessiner l'image sur le canvas
+                ctx = canvas.getContext('2d');
+                ctx.drawImage(uploadedImage, 0, 0);
+                
+                // Analyser avec OpenCV
+                if (cvReady) {
+                    analyzeImageForAruco();
+                } else {
+                    statusEl.textContent = '⏳ OpenCV charge encore...';
+                    statusEl.className = 'status loading';
+                }
+            };
+        }
+        
+        function analyzeImageForAruco() {
+            try {
+                console.log('🔍 === DÉBUT ANALYSE ARUCO ===');
+                console.log(`Canvas: ${canvas.width}x${canvas.height}`);
+                
+                // Récupérer les données de l'image
+                const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+                
+                // Détecter les marqueurs avec notre détecteur custom
+                const markers = detector.detect(imageData);
+                
+                console.log(`✅ Marqueurs trouvés: ${markers.length}`);
+                if (markers.length > 0) {
+                    console.log('📦 Premier marqueur:', markers[0]);
+                }
+
+                if (markers.length > 0) {
+                    const marker = markers[0];
+                    const id = marker.id;
+                    const corners = marker.corners;
+                    
+                    console.log(`📍 Marqueur détecté - Score: ${marker.score?.toFixed(2) || 'N/A'}`);
+                    console.log(`   Centre: (${marker.center?.x?.toFixed(0)}, ${marker.center?.y?.toFixed(0)})`);
+                    console.log(`   Taille: ${marker.size?.toFixed(0)}px`);
+                    
+                    // Dessiner le contour vert (utilise les coins pour le calcul = blanc ou magenta)
+                    ctx.strokeStyle = '#00ff00';
+                    ctx.lineWidth = 3;
+                    ctx.beginPath();
+                    ctx.moveTo(corners[0].x, corners[0].y);
+                    ctx.lineTo(corners[1].x, corners[1].y);
+                    ctx.lineTo(corners[2].x, corners[2].y);
+                    ctx.lineTo(corners[3].x, corners[3].y);
+                    ctx.closePath();
+                    ctx.stroke();
+                    
+                    // Dessiner les points rouges CENTRÉS dans les cercles MAGENTA
+                    // Utiliser magentaPositions si disponible, sinon corners
+                    const displayPositions = marker.magentaPositions || corners;
+                    
+                    displayPositions.forEach((pos, i) => {
+                        // Point rouge PETIT (doit être plus petit que le cercle magenta imprimé ~10mm)
+                        // Sur une photo, 10mm ≈ 20-50px selon la distance, donc un point de 2px est bien visible
+                        ctx.fillStyle = '#ff0000';
+                        ctx.beginPath();
+                        ctx.arc(pos.x, pos.y, 2, 0, 2 * Math.PI);
+                        ctx.fill();
+                        
+                        // Numéro du coin (petit, à côté)
+                        ctx.fillStyle = '#ff0000';
+                        ctx.font = 'bold 12px Arial';
+                        ctx.fillText(i + 1, pos.x + 6, pos.y + 3);
+                    });
+                    
+                    // Afficher l'ID
+                    ctx.fillStyle = '#00ff00';
+                    ctx.font = 'bold 32px Arial';
+                    ctx.fillText(`ID: ${id}`, corners[0].x, corners[0].y - 15);
+                    
+                    const p1 = corners[0];
+                    const p2 = corners[1];
+                    const p3 = corners[2];
+                    const p4 = corners[3];
+                    
+                    const side1 = Math.sqrt(Math.pow(p2.x - p1.x, 2) + Math.pow(p2.y - p1.y, 2));
+                    const side2 = Math.sqrt(Math.pow(p3.x - p2.x, 2) + Math.pow(p3.y - p2.y, 2));
+                    const avgSize = (side1 + side2) / 2;
+                    
+                    const focalLength = 800;
+                    const distance = (MARKER_SIZE_CM * focalLength) / avgSize;
+                    
+                    const rotX = estimateRotationX(p1, p2, p3, p4);
+                    const rotY = estimateRotationY(p1, p2, p3, p4);
+                    const rotZ = estimateRotationZ(p1, p2);
+                    const quality = calculateQuality(avgSize, rotX, rotY);
+                    
+                    updateDisplay(id, avgSize, distance, rotX, rotY, rotZ, quality);
+                    
+                    statusEl.textContent = `🎯 Marqueur ID ${id} détecté sur la photo!`;
+                    statusEl.className = 'status detected';
+                } else {
+                    statusEl.textContent = '❌ Aucun marqueur détecté sur cette photo';
+                    statusEl.className = 'status error';
+                    
+                    document.getElementById('detected').textContent = 'Non';
+                    document.getElementById('detected').className = 'info-value bad';
+                }
+                
+            } catch (err) {
+                console.error('Erreur analyse:', err);
+                statusEl.textContent = '❌ Erreur: ' + err.message;
+                statusEl.className = 'status error';
+            }
+        }
+        
+        // =====================================================
+        // SETUP FILE INPUT
+        // =====================================================
+        let uploadedFiles = [];
+        
+        function setupFileInput() {
+            fileInput.addEventListener('change', (e) => {
+                console.log('📁 Fichiers sélectionnés:', e.target.files.length);
+                
+                const files = Array.from(e.target.files);
+                if (files.length === 0) return;
+                
+                if (!cvReady) {
+                    statusEl.textContent = '⏳ OpenCV charge encore, patientez...';
+                    statusEl.className = 'status loading';
+                    return;
+                }
+                
+                uploadedFiles = files;
+                photoThumbnails.innerHTML = '';
+                uploadedPhotosDiv.style.display = 'block';
+                
+                // Arrêter la caméra si elle tourne
+                if (streaming) {
+                    stopCamera();
+                }
+                
+                files.forEach((file, index) => {
+                    const reader = new FileReader();
+                    reader.onload = (event) => {
+                        console.log(`📷 Photo ${index + 1} chargée`);
+                        
+                        const thumb = document.createElement('div');
+                        thumb.style.cssText = 'cursor: pointer; border: 3px solid transparent; border-radius: 8px; overflow: hidden;';
+                        thumb.innerHTML = `
+                            <img src="${event.target.result}" style="width: 120px; height: 90px; object-fit: cover; display: block;" />
+                            <div style="text-align: center; font-size: 12px; padding: 4px; background: #333;">Photo ${index + 1}</div>
+                        `;
+                        thumb.onclick = () => analyzeUploadedPhoto(event.target.result, index);
+                        photoThumbnails.appendChild(thumb);
+                        
+                        // Analyser automatiquement la première photo
+                        if (index === 0) {
+                            setTimeout(() => analyzeUploadedPhoto(event.target.result, 0), 100);
+                        }
+                    };
+                    reader.readAsDataURL(file);
+                });
+                
+                statusEl.textContent = `📁 ${files.length} photo(s) uploadée(s) - Analyse en cours...`;
+                statusEl.className = 'status ready';
+            });
+        }
+        
+        // =====================================================
+        // SETUP EVENT LISTENERS
+        // =====================================================
+        function setupEventListeners() {
+            startBtn.addEventListener('click', () => {
+                // Cacher l'image uploadée, montrer la vidéo
+                uploadedImage.style.display = 'none';
+                video.style.display = 'block';
+                startCamera();
+            });
+            stopBtn.addEventListener('click', stopCamera);
+            captureBtn.addEventListener('click', capturePhoto);
+            cameraSelect.addEventListener('change', () => {
+                if (streaming) {
+                    stopCamera();
+                    setTimeout(startCamera, 500);
+                }
+            });
+        }
+    </script>
+</body>
+</html>

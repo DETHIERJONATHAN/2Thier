@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { googleOAuthService } from '../google-auth/core/GoogleOAuthCore.js';
-import { prisma } from '../lib/prisma';
+import { db } from '../lib/database.js';
 import { authMiddleware, type AuthenticatedRequest } from '../middlewares/auth.js';
 
 const router = Router();
@@ -31,7 +31,7 @@ router.get('/status', authMiddleware, async (req: AuthenticatedRequest, res) => 
   try {
     // Vérifier si des tokens existent pour cet utilisateur dans cette organisation
     // IMPORTANT: On utilise la clé composite userId_organizationId
-    const tokens = await prisma.googleToken.findUnique({
+    const tokens = await db.googleToken.findUnique({
       where: { 
         userId_organizationId: { userId, organizationId }
       }
@@ -100,7 +100,7 @@ router.post('/connect', authMiddleware, async (req: AuthenticatedRequest, res) =
 
   // 🔒 Vérifier l'appartenance à l'organisation (sauf super_admin)
   if (!isSuperAdmin) {
-    const membership = await prisma.userOrganization.findFirst({ where: { userId: caller.userId, organizationId } });
+    const membership = await db.userOrganization.findFirst({ where: { userId: caller.userId, organizationId } });
     if (!membership) {
       return res.status(403).json({ success: false, error: "Accès interdit: organisation non autorisée." });
     }
@@ -128,31 +128,17 @@ router.post('/connect', authMiddleware, async (req: AuthenticatedRequest, res) =
       return res.json(payload);
     }
 
-    // 2. Si aucun client n'est retourné, cela signifie qu'il n'y a pas de tokens valides.
-    // Il faut donc initier le processus d'autorisation manuelle.
-    console.log('[AutoGoogleAuth] 🔐 Connexion Google non active, génération de l\'URL d\'autorisation...');
-    
-    // Récupérer l'email de l'admin pour l'organisation
-    const org = await prisma.organization.findUnique({
-      where: { id: organizationId },
-      include: { GoogleWorkspaceConfig: true }
-    });
-
-    if (!org?.GoogleWorkspaceConfig?.adminEmail) {
-      return res.status(404).json({ success: false, error: 'Configuration Google Workspace introuvable pour cette organisation.' });
-    }
-
-    // Générer l'URL d'autorisation
-    const authUrl = googleOAuthService.getAuthUrl(userId, organizationId);
+    // 2. Aucun token valide → on ne lance PLUS l'OAuth ici.
+    // Désormais, tout passe par la page Admin Organisation Google Workspace + le scheduler.
+    console.log('[AutoGoogleAuth] ⚠️ Connexion Google non active: OAuth désactivé via auto-connect.');
 
     const ttlManual = 60_000;
     const payload = {
       success: true,
       isConnected: false,
       needsManualAuth: true,
-      authUrl: authUrl,
-      adminEmail: org.GoogleWorkspaceConfig.adminEmail,
-      message: 'Autorisation manuelle requise.',
+      message: 'Connexion Google requise: demandez à un admin d\'activer Google Workspace via la page Organisation (Admin) et le scheduler.',
+      requiresAdmin: true,
       cacheTtlMs: ttlManual
     } as const;
     connectCache.set(key, { expiresAt: now + ttlManual, payload: payload as unknown as Record<string, unknown> });

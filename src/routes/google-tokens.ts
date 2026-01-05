@@ -10,7 +10,7 @@
 
 import { Router, type RequestHandler } from 'express';
 import { googleTokenScheduler } from '../services/GoogleTokenRefreshScheduler';
-import { prisma } from '../lib/prisma';
+import { db } from '../lib/database.js';
 import { requireRole } from '../middlewares/requireRole';
 import { authMiddleware } from '../middlewares/auth.js';
 
@@ -30,8 +30,8 @@ router.get('/scheduler/status', async (_req, res) => {
     const status = googleTokenScheduler.getStatus();
     
     // Compter le nombre total d'utilisateurs avec des tokens Google
-    const totalTokens = await prisma.googleToken.count();
-    const activeTokens = await prisma.googleToken.count({
+    const totalTokens = await db.googleToken.count();
+    const activeTokens = await db.googleToken.count({
       where: {
         expiresAt: {
           gt: new Date()
@@ -46,8 +46,8 @@ router.get('/scheduler/status', async (_req, res) => {
     const schedulerStatus = {
       isRunning: status.isRunning,
       nextRefresh: status.isRunning ? new Date(Date.now() + 50 * 60 * 1000).toISOString() : null, // 50 min dans le futur
-      lastRefresh: null, // À implémenter si nécessaire
-      refreshCount: 0, // À implémenter si nécessaire
+      lastRefresh: status.lastRefresh ? status.lastRefresh.toISOString() : null,
+      refreshCount: status.refreshCount,
       totalUsers: totalTokens,
       activeTokens: activeTokens,
       errors: recentErrors
@@ -76,12 +76,33 @@ router.get('/organization/:organizationId', async (req, res) => {
   try {
     const { organizationId } = req.params;
 
-    // Avec le nouveau modèle, il peut y avoir plusieurs tokens par organisation
-    // (un par utilisateur). On retourne le premier trouvé pour l'admin.
-    const token = await prisma.googleToken.findFirst({
+    // Avec le nouveau modèle, il peut y avoir plusieurs tokens par organisation (un par utilisateur).
+    // Pour le monitoring Admin, on préfère le token du compte Google administrateur configuré.
+    const googleConfig = await db.googleWorkspaceConfig.findUnique({
       where: { organizationId },
-      include: { User: { select: { email: true, firstName: true, lastName: true } } }
+      select: { adminEmail: true }
     });
+
+    const adminEmail = googleConfig?.adminEmail?.trim() || null;
+
+    const token = adminEmail
+      ? await db.googleToken.findFirst({
+        where: {
+          organizationId,
+          googleEmail: {
+            equals: adminEmail,
+            mode: 'insensitive'
+          }
+        },
+        orderBy: { updatedAt: 'desc' },
+        include: { User: { select: { email: true, firstName: true, lastName: true } } }
+      })
+      : await db.googleToken.findFirst({
+        where: { organizationId },
+        orderBy: { updatedAt: 'desc' },
+        include: { User: { select: { email: true, firstName: true, lastName: true } } }
+      });
+
 
     if (!token) {
       return res.json({
@@ -112,13 +133,16 @@ router.get('/organization/:organizationId', async (req, res) => {
       userName: token.User ? `${token.User.firstName} ${token.User.lastName}` : null,
       googleEmail: token.googleEmail,
       accessToken: token.accessToken ? `${token.accessToken.substring(0, 20)}...` : '', // Masquer le token
-      refreshToken: token.refreshToken ? 'Présent' : 'Absent',
+      refreshToken: token.refreshToken, // ✅ Retourner null au lieu de 'Absent' pour que le frontend puisse détecter
+      hasRefreshToken: !!token.refreshToken, // ✅ Ajouter un indicateur booléen clair
       tokenType: token.tokenType || 'Bearer',
       expiresIn: 3600, // Les tokens Google durent 1 heure
       scope: token.scope || '',
       createdAt: token.createdAt?.toISOString() || '',
       updatedAt: token.updatedAt?.toISOString() || '',
       expiresAt: expiresAt?.toISOString() || '',
+      lastRefreshAt: token.lastRefreshAt?.toISOString() || null,
+      refreshCount: token.refreshCount || 0,
       isExpired,
       timeUntilExpiry
     };
@@ -210,9 +234,10 @@ router.post('/scheduler/refresh-now', async (_req, res) => {
 router.get('/refresh-history/:organizationId', async (req, res) => {
   try {
     const { organizationId } = req.params;
+    console.log(`[GoogleTokensAPI] Récupération historique pour org: ${organizationId}`);
     
     // Récupérer l'historique des refresh pour cette organisation
-    const history = await prisma.googleTokenRefreshHistory.findMany({
+    const history = await db.googleTokenRefreshHistory.findMany({
       where: {
         organizationId
       },
@@ -239,10 +264,10 @@ router.get('/refresh-history/:organizationId', async (req, res) => {
     });
   } catch (error) {
     console.error('[GoogleTokensAPI] Erreur refresh history:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Erreur lors de la récupération de l\'historique',
-      error: error instanceof Error ? error.message : 'Erreur inconnue'
+    // En cas d'erreur, retourner un tableau vide
+    res.json({
+      success: true,
+      data: []
     });
   }
 });

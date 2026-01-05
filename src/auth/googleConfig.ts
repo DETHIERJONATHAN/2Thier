@@ -54,10 +54,11 @@ function computeRedirectUri(): string {
   // 🚀 PRIORITÉ 1: Détection automatique GitHub Codespaces
   const codespaceName = readEnv('CODESPACE_NAME');
   if (codespaceName) {
-    // Format: https://<codespace-name>-5173.app.github.dev/auth/google/callback (FRONTEND)
-    const codespaceUrl = `https://${codespaceName}-5173.app.github.dev`;
-    console.log('[GoogleConfig] 🚀 Codespaces détecté, redirect_uri:', `${codespaceUrl}/auth/google/callback`);
-    return `${codespaceUrl}/auth/google/callback`;
+    // Format: https://<codespace-name>-4000.app.github.dev/api/google-auth/callback (backend direct, pas Vite proxy!)
+    // ⚠️ OAuth callback DOIT aller au backend (port 4000), pas au frontend Vite (port 5173)
+    const codespaceUrl = `https://${codespaceName}-4000.app.github.dev`;
+    console.log('[GoogleConfig] 🚀 Codespaces détecté, redirect_uri:', `${codespaceUrl}/api/google-auth/callback`);
+    return `${codespaceUrl}/api/google-auth/callback`;
   }
 
   // PRIORITÉ 2: Variable d'environnement explicite
@@ -159,3 +160,6 @@ export function describeGoogleOAuthConfig(): Record<string, string | boolean | u
 export function resetGoogleOAuthConfigCache(): void {
   envCache.clear();
 }
+
+// ⭐ Exporter la fonction de calcul dynamique pour GoogleOAuthService
+export { computeRedirectUri };

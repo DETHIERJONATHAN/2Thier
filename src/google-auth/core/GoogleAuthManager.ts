@@ -56,10 +56,11 @@ export class GoogleAuthManager {
    * 
    * @param userId - ID de l'utilisateur
    * @param organizationId - ID de l'organisation
+   * @param hostHeader - Host header du request (optionnel, utilisé pour détection d'environnement)
    * @returns URL d'autorisation
    */
-  getAuthorizationUrl(userId: string, organizationId: string): string {
-    return googleOAuthService.getAuthUrl(userId, organizationId);
+  getAuthorizationUrl(userId: string, organizationId: string, hostHeader?: string): string {
+    return googleOAuthService.getAuthUrl(userId, organizationId, hostHeader);
   }
 
   /**

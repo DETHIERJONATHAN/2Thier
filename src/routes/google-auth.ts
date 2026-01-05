@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { authMiddleware, type AuthenticatedRequest } from '../middlewares/auth.js';
 // import { requireRole } from '../middlewares/requireRole.js';
-import { prisma } from '../lib/prisma.js';
+import { db } from '../lib/database.js';
 import { decrypt } from '../utils/crypto.js';
 import { google } from 'googleapis';
 // import axios from 'axios';
@@ -9,28 +9,25 @@ import { refreshGoogleTokenIfNeeded } from '../utils/googleTokenRefresh.js';
 import { googleOAuthService, GOOGLE_SCOPES_LIST } from '../google-auth/core/GoogleOAuthCore.js';
 import gmailRoutes from '../google-auth/routes/gmail'; // Routes Gmail centralisées
 import { logSecurityEvent } from '../security/securityLogger.js';
-import { googleOAuthConfig } from '../auth/googleConfig.js'; // Import pour GOOGLE_SCOPES uniquement
+// import { googleOAuthConfig } from '../auth/googleConfig.js';
 
 /**
- * ⚠️ IMPORTANT - USAGE DE googleOAuthConfig :
+ * ⚠️ IMPORTANT - GESTION DU redirectUri :
  * 
- * Dans ce fichier, nous utilisons UNIQUEMENT googleOAuthConfig pour les SCOPES.
- * Pour le redirectUri, nous utilisons TOUJOURS config.redirectUri depuis la BDD (googleWorkspaceConfig).
+ * Le redirectUri OAuth est maintenant détecté AUTOMATIQUEMENT selon l'environnement
+ * via la fonction getOAuthRedirectUri(). Cela permet de supporter plusieurs environnements
+ * sans modifier la configuration en BDD.
  * 
- * POURQUOI ?
- * - Chaque organisation a sa propre config OAuth en BDD (Client ID, Secret, redirectUri)
- * - Le redirectUri DOIT correspondre EXACTEMENT à celui configuré dans Google Cloud Console
- * - googleOAuthConfig.redirectUri est auto-détecté et peut varier (Codespaces, local, prod)
- * - config.redirectUri (BDD) est la source de vérité pour l'OAuth par organisation
+ * PRIORITÉ DE DÉTECTION :
+ * 1. Codespaces → https://<codespace-name>-4000.app.github.dev/api/google-auth/callback
+ * 2. Production → https://app.2thier.be/api/google-auth/callback
+ * 3. Local → http://localhost:4000/api/google-auth/callback
  * 
- * ✅ Utilisation correcte :
- *   const config = await getGoogleWorkspaceConfig(organizationId);
- *   const actualRedirectUri = config.redirectUri; // ← Depuis la BDD
+ * ⚠️ TOUS ces URIs doivent être enregistrés dans Google Cloud Console !
  * 
- * ❌ NE JAMAIS FAIRE :
- *   const actualRedirectUri = googleOAuthConfig.redirectUri; // ← Auto-détecté, peut varier !
- * 
- * Voir : FIX-GOOGLE-OAUTH-UNAUTHORIZED.md pour l'explication complète du problème résolu
+ * La config BDD (googleWorkspaceConfig) est toujours utilisée pour :
+ * - clientId et clientSecret (propres à chaque organisation)
+ * - adminEmail (email de l'admin Google Workspace)
  */
 
 const router = Router();
@@ -75,12 +72,87 @@ function getFrontendUrl(): string {
   return 'http://localhost:5173';
 }
 
+/**
+ * 🔗 Helper pour obtenir le redirectUri OAuth correct selon l'environnement
+ * CRITIQUE: Ce redirectUri DOIT correspondre EXACTEMENT à celui configuré dans Google Cloud Console
+ * 
+ * Ordre de priorité:
+ * 1. Codespaces → https://<codespace-name>-4000.app.github.dev/api/google-auth/callback (backend direct)
+ * 2. Production → https://app.2thier.be/api/google-auth/callback
+ * 3. Local → http://localhost:4000/api/google-auth/callback
+ * 
+ * ⚠️ IMPORTANT: Tous ces URIs doivent être enregistrés dans Google Cloud Console !
+ */
+function getOAuthRedirectUri(hostHeader?: string): string {
+  // Déterminer le host
+  const host = hostHeader || 'localhost:4000';
+  
+  console.log('[GOOGLE-AUTH] 📍 Détection environnement - Host reçu:', host);
+  
+  // CAS 1: Codespaces (hostname contient app.github.dev)
+  if (host.includes('app.github.dev')) {
+    // Extraire le nom du Codespaces et reconstruire l'URI avec le port 4000
+    // De "cautious-space-guide-7q4w46vpr6gfwqqg-5173.app.github.dev" 
+    // À "cautious-space-guide-7q4w46vpr6gfwqqg-4000.app.github.dev"
+    const hostWithoutPort = host.split(':')[0]; // Enlever le port si présent: cautious-space-guide-7q4w46vpr6gfwqqg-5173.app.github.dev
+    
+    // Extraire le nom du codespace en supprimant le port (qui est à la fin avant .app.github.dev)
+    // "cautious-space-guide-7q4w46vpr6gfwqqg-5173.app.github.dev" -> "cautious-space-guide-7q4w46vpr6gfwqqg"
+    const match = hostWithoutPort.match(/^(.+?)-\d+\.app\.github\.dev$/);
+    const codespaceName = match ? match[1] : hostWithoutPort.replace('.app.github.dev', '');
+    
+    const redirectUri = `https://${codespaceName}-4000.app.github.dev/api/google-auth/callback`;
+    
+    console.log('[GOOGLE-AUTH] 🚀 Codespaces détecté:', {
+      originalHost: host,
+      hostWithoutPort,
+      codespaceName,
+      redirectUri
+    });
+    return redirectUri;
+  }
+  
+  // CAS 2: Production (app.2thier.be)
+  if (host.includes('app.2thier.be') || host.includes('2thier.be')) {
+    const redirectUri = 'https://app.2thier.be/api/google-auth/callback';
+    console.log('[GOOGLE-AUTH] 🌐 Production détectée:', { host, redirectUri });
+    return redirectUri;
+  }
+  
+  // CAS 3: Local (localhost ou 127.0.0.1)
+  const redirectUri = 'http://localhost:4000/api/google-auth/callback';
+  console.log('[GOOGLE-AUTH] 🏠 Local détecté:', { host, redirectUri });
+  return redirectUri;
+}
+
+type OAuthState = {
+  organizationId?: string;
+  userId?: string;
+  platform?: string;
+  redirectUri?: string;
+};
+
+function encodeOAuthState(stateObj: OAuthState): string {
+  // base64url(JSON) pour éviter les soucis d'encodage et garantir une lecture robuste côté callback
+  return Buffer.from(JSON.stringify(stateObj), 'utf8').toString('base64url');
+}
+
+function parseOAuthState(raw: string): OAuthState {
+  // Le state peut être JSON direct ou base64url(JSON)
+  try {
+    return JSON.parse(raw) as OAuthState;
+  } catch {
+    const decoded = Buffer.from(String(raw), 'base64url').toString('utf8');
+    return JSON.parse(decoded) as OAuthState;
+  }
+}
+
 // Fonction utilitaire pour récupérer la configuration Google Workspace
 async function getGoogleWorkspaceConfig(organizationId: string) {
   try {
     console.log('[GOOGLE-AUTH] 📋 Recherche config pour organisation:', organizationId);
     
-    const config = await prisma.googleWorkspaceConfig.findUnique({
+    const config = await db.googleWorkspaceConfig.findUnique({
       where: { organizationId }
     });
 
@@ -178,7 +250,7 @@ async function activateGoogleModules(organizationId: string, grantedScopes: stri
     // Mettre à jour la configuration Google Workspace
     if (Object.keys(configUpdates).length > 0) {
       console.log('[GOOGLE-AUTH] 💾 Mise à jour config avec modules:', configUpdates);
-      await prisma.googleWorkspaceConfig.update({
+      await db.googleWorkspaceConfig.update({
         where: { organizationId },
         data: {
           ...configUpdates,
@@ -194,7 +266,7 @@ async function activateGoogleModules(organizationId: string, grantedScopes: stri
     for (const moduleName of modulesToActivate) {
       try {
         // Trouver le module par nom
-        const module = await prisma.module.findFirst({
+        const module = await db.module.findFirst({
           where: {
             label: {
               contains: moduleName,
@@ -205,7 +277,7 @@ async function activateGoogleModules(organizationId: string, grantedScopes: stri
 
         if (module) {
           // Activer le module pour l'organisation
-          await prisma.organizationModule.upsert({
+          await db.organizationModule.upsert({
             where: {
               organizationId_moduleId: {
                 organizationId,
@@ -243,6 +315,33 @@ async function activateGoogleModules(organizationId: string, grantedScopes: stri
   }
 }
 
+// GET /api/google-auth/debug - DEBUG: Voir exactement quelle URI est générée
+router.get('/debug', (req, res) => {
+  const hostHeader = req.headers.host || 'localhost:4000';
+  const redirectUri = getOAuthRedirectUri(hostHeader);
+  
+  res.json({
+    debug: {
+      host_header: hostHeader,
+      generated_redirect_uri: redirectUri,
+      environment: hostHeader.includes('app.github.dev') ? 'Codespaces' : 
+                   hostHeader.includes('2thier.be') ? 'Production' : 'Local'
+    }
+  });
+});
+
+// GET /api/google-auth/redirect-uri - Récupérer l'URI de redirection pour l'environnement actuel
+router.get('/redirect-uri', (req, res) => {
+  const hostHeader = req.headers.host || 'localhost:4000';
+  const redirectUri = getOAuthRedirectUri(hostHeader);
+  
+  res.json({
+    redirectUri,
+    environment: hostHeader.includes('app.github.dev') ? 'Codespaces' : 
+                 hostHeader.includes('2thier.be') ? 'Production' : 'Local'
+  });
+});
+
 // GET /api/google-auth/url - Générer l'URL d'authentification Google
 router.get('/url', authMiddleware, async (req: AuthenticatedRequest, res) => {
   try {
@@ -266,13 +365,18 @@ router.get('/url', authMiddleware, async (req: AuthenticatedRequest, res) => {
     }
 
     // Générer l'URL d'authentification Google avec auto-détection de l'environnement
-    const stateObj = {
-      userId: req.user?.userId || null,
+    const stateObj: OAuthState = {
+      userId: req.user?.userId || undefined,
       organizationId
     };
-    // CRITIQUE: Utiliser config.redirectUri depuis la BDD (configuré dans Google Cloud Console)
-    const actualRedirectUri = config.redirectUri;
-    console.log('[GOOGLE-AUTH] 🎯 Redirect URI depuis BDD:', actualRedirectUri);
+    // DYNAMIQUE: Utiliser getOAuthRedirectUri() avec le Host header pour détecter l'environnement automatiquement
+    const hostHeader1 = req.headers.host || 'localhost:4000';
+    const actualRedirectUri = getOAuthRedirectUri(hostHeader1);
+    console.log('[GOOGLE-AUTH] 🎯 Redirect URI (auto-détecté):', actualRedirectUri);
+
+    // 🔒 Verrouiller le redirectUri dans le state pour garantir qu'il sera IDENTIQUE lors de l'échange de tokens
+    stateObj.redirectUri = actualRedirectUri;
+    const stateParam = encodeOAuthState(stateObj);
     
     const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?` +
       `client_id=${config.clientId}&` +
@@ -280,10 +384,10 @@ router.get('/url', authMiddleware, async (req: AuthenticatedRequest, res) => {
       `scope=${encodeURIComponent(GOOGLE_SCOPES)}&` +
       `response_type=code&` +
       `access_type=offline&` +
-      `prompt=select_account&` +
+      `prompt=consent&` +
       `include_granted_scopes=true&` +
       `enable_granular_consent=true&` +
-      `state=${encodeURIComponent(JSON.stringify(stateObj))}`;
+      `state=${encodeURIComponent(stateParam)}`;
 
     res.json({
       success: true,
@@ -308,8 +412,10 @@ router.get('/connect', authMiddleware, async (req: AuthenticatedRequest, res) =>
   try {
     // Récupérer l'organizationId depuis l'utilisateur connecté
     const organizationId = req.query.organizationId as string || req.user?.organizationId?.toString();
+    const forceConsent = req.query.force_consent === 'true'; // Nouveau paramètre pour forcer le consentement
     
     console.log('[GOOGLE-AUTH] 🔍 OrganizationId extrait:', organizationId);
+    console.log('[GOOGLE-AUTH] 🔄 Force consent:', forceConsent);
     console.log('[GOOGLE-AUTH] 👤 User info:', req.user ? 'Présent' : 'Absent');
     console.log('[GOOGLE-AUTH] 🏢 User organizationId:', req.user?.organizationId);
     
@@ -319,6 +425,23 @@ router.get('/connect', authMiddleware, async (req: AuthenticatedRequest, res) =>
         success: false,
         message: 'Organization ID requis (non trouvé dans query ou profil utilisateur)'
       });
+    }
+
+    // Si force_consent, supprimer l'ancien token pour forcer un nouveau consentement
+    if (forceConsent && req.user?.userId) {
+      console.log('[GOOGLE-AUTH] 🗑️ Suppression de l\'ancien token pour forcer le consentement...');
+      try {
+        await db.googleToken.deleteMany({
+          where: {
+            userId: req.user.userId,
+            organizationId: organizationId
+          }
+        });
+        console.log('[GOOGLE-AUTH] ✅ Ancien token supprimé');
+      } catch (deleteError) {
+        console.warn('[GOOGLE-AUTH] ⚠️ Erreur suppression ancien token:', deleteError);
+        // Continue anyway
+      }
     }
 
     // Récupérer la configuration Google Workspace pour cette organisation
@@ -339,25 +462,29 @@ router.get('/connect', authMiddleware, async (req: AuthenticatedRequest, res) =>
     console.log('[GOOGLE-AUTH] 🆔 ClientId:', config.clientId);
     console.log('[GOOGLE-AUTH] 🏢 Domain:', config.domain);
 
-    // CRITIQUE: Utiliser config.redirectUri depuis la BDD (configuré dans Google Cloud Console)
-    const actualRedirectUri = config.redirectUri;
-    console.log('[GOOGLE-AUTH] 🎯 Redirect URI depuis BDD:', actualRedirectUri);
+    // DYNAMIQUE: Utiliser getOAuthRedirectUri() avec le Host header pour détecter l'environnement automatiquement
+    const hostHeader = req.headers.host || 'localhost:4000';
+    const actualRedirectUri = getOAuthRedirectUri(hostHeader);
+    console.log('[GOOGLE-AUTH] 🎯 Redirect URI (auto-détecté):', actualRedirectUri);
 
-    // Générer l'URL d'authentification Google
-    const stateObj = {
-      userId: req.user?.userId || null,
-      organizationId
-    };
+    // 🔒 Verrouiller le redirectUri dans le state (évite redirect_uri_mismatch entre /connect et /callback)
+    const stateParam = encodeOAuthState({
+      userId: req.user?.userId || undefined,
+      organizationId,
+      redirectUri: actualRedirectUri
+    });
+    
+    // Toujours forcer le consentement pour obtenir le refresh_token
     const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?` +
       `client_id=${config.clientId}&` +
       `redirect_uri=${encodeURIComponent(actualRedirectUri)}&` +
       `scope=${encodeURIComponent(GOOGLE_SCOPES)}&` +
       `response_type=code&` +
       `access_type=offline&` +
-      `prompt=select_account&` +
+      `prompt=consent&` +  // ✅ Toujours forcer le consentement pour obtenir refresh_token
       `include_granted_scopes=true&` +
       `enable_granular_consent=true&` +
-      `state=${encodeURIComponent(JSON.stringify(stateObj))}`;
+      `state=${encodeURIComponent(stateParam)}`;
 
     console.log('[GOOGLE-AUTH] 🌐 URL générée:', authUrl);
 
@@ -366,7 +493,8 @@ router.get('/connect', authMiddleware, async (req: AuthenticatedRequest, res) =>
       data: {
         authUrl,
         scopes: GOOGLE_SCOPES.split(' '),
-        clientConfigured: true
+        clientConfigured: true,
+        forceConsent: true // Indique qu'on force le consentement
       }
     });
 
@@ -399,22 +527,17 @@ router.get('/callback', async (req, res) => {
       return res.redirect(`${getFrontendUrl()}/google-auth-callback?google_error=missing_params`);
     }
 
-  let organizationId: string;
-  let userId: string;
-  let platform: string | undefined;
+    let organizationId: string;
+    let userId: string;
+    let platform: string | undefined;
+    let redirectUriFromState: string | undefined;
 
     try {
-      // Le state peut être JSON direct ou base64url(JSON)
-  let parsedState: { organizationId?: string; userId?: string; platform?: string };
-      try {
-        parsedState = JSON.parse(state as string);
-      } catch {
-        const raw = Buffer.from(String(state), 'base64url').toString('utf8');
-        parsedState = JSON.parse(raw);
-      }
+      const parsedState = parseOAuthState(state as string);
       organizationId = parsedState.organizationId;
-      userId = parsedState.userId; // On récupère aussi l'userId
-      platform = parsedState.platform; // Nouveau: détection de la plateforme publicitaire
+      userId = parsedState.userId;
+      platform = parsedState.platform;
+      redirectUriFromState = parsedState.redirectUri;
       
       if (!organizationId || !userId) {
         throw new Error('State object is missing organizationId or userId');
@@ -446,9 +569,18 @@ router.get('/callback', async (req, res) => {
     console.log('[GOOGLE-AUTH] ✅ Configuration trouvée, email admin cible:', config.adminEmail);
     console.log('[GOOGLE-AUTH] 🔄 Échange du code contre les tokens...');
 
-    // CRITIQUE: Utiliser config.redirectUri depuis la BDD (configuré dans Google Cloud Console)
-    const actualRedirectUri = config.redirectUri;
-    console.log('[GOOGLE-AUTH] 🎯 Redirect URI pour échange de tokens (depuis BDD):', actualRedirectUri);
+    // DYNAMIQUE: Utiliser getOAuthRedirectUri() avec le Host header pour détecter l'environnement automatiquement
+    // L'URI DOIT être identique à celle utilisée lors de l'initiation OAuth
+    const hostHeader2 = req.headers.host || 'localhost:4000';
+    const actualRedirectUri = (redirectUriFromState && typeof redirectUriFromState === 'string')
+      ? redirectUriFromState
+      : getOAuthRedirectUri(hostHeader2);
+    console.log('[GOOGLE-AUTH] 🎯 Callback - Redirect URI pour échange de tokens:', {
+      hostHeader: hostHeader2,
+      redirectUri: actualRedirectUri,
+      environment: hostHeader2.includes('app.github.dev') ? 'Codespaces' : 
+                   hostHeader2.includes('2thier.be') ? 'Production' : 'Local'
+    });
 
     // Créer le client OAuth2 Google
     const oauth2Client = new google.auth.OAuth2(
@@ -459,6 +591,12 @@ router.get('/callback', async (req, res) => {
 
     try {
       // Échanger le code d'autorisation contre les tokens
+      console.log('[GOOGLE-AUTH] 🔑 Tentative d\'échange de code avec Google:', {
+        clientId: config.clientId.substring(0, 20) + '...',
+        redirectUri: actualRedirectUri,
+        code: (code as string).substring(0, 20) + '...'
+      });
+      
       const { tokens } = await oauth2Client.getToken(code as string);
       console.log('[GOOGLE-AUTH] ✅ Tokens reçus:', {
         accessToken: !!tokens.access_token,
@@ -490,7 +628,7 @@ router.get('/callback', async (req, res) => {
       // Sauvegarder ou mettre à jour les tokens pour l'utilisateur dans cette organisation
       console.log('[GOOGLE-AUTH] 💾 Sauvegarde des tokens pour l\'utilisateur:', userId, 'dans l\'organisation:', organizationId);
       await googleOAuthService.saveUserTokens(userId, organizationId, tokens, userInfo.data.email || undefined);
-      const googleTokenRecord = await prisma.googleToken.findFirst({ 
+      const googleTokenRecord = await db.googleToken.findFirst({ 
         where: { userId, organizationId } 
       });
 
@@ -650,11 +788,11 @@ router.get('/status', authMiddleware, async (req: AuthenticatedRequest, res) => 
       // Récupérer les scopes depuis la base de données
       let googleToken;
       if (userId) {
-        googleToken = await prisma.googleToken.findUnique({
+        googleToken = await db.googleToken.findUnique({
           where: { userId_organizationId: { userId, organizationId } }
         });
       } else {
-        googleToken = await prisma.googleToken.findFirst({
+        googleToken = await db.googleToken.findFirst({
           where: { organizationId }
         });
       }
@@ -670,11 +808,11 @@ router.get('/status', authMiddleware, async (req: AuthenticatedRequest, res) => 
     // Récupérer les informations de dernière synchronisation
     let googleTokenInfo;
     if (userId) {
-      googleTokenInfo = await prisma.googleToken.findUnique({
+      googleTokenInfo = await db.googleToken.findUnique({
         where: { userId_organizationId: { userId, organizationId } }
       });
     } else {
-      googleTokenInfo = await prisma.googleToken.findFirst({
+      googleTokenInfo = await db.googleToken.findFirst({
         where: { organizationId }
       });
     }
@@ -683,6 +821,7 @@ router.get('/status', authMiddleware, async (req: AuthenticatedRequest, res) => 
       success: true,
       data: {
         connected: tokenValid,
+        isValid: tokenValid, // ✅ Ajout explicite pour vérification côté client
         email: userEmail,
         scopes: scopes,
         lastSync: googleTokenInfo?.updatedAt,
@@ -739,11 +878,11 @@ router.post('/disconnect', authMiddleware, async (req: AuthenticatedRequest, res
     // Chercher les tokens Google de l'utilisateur dans cette organisation
     let googleToken;
     if (currentUserId) {
-      googleToken = await prisma.googleToken.findUnique({
+      googleToken = await db.googleToken.findUnique({
         where: { userId_organizationId: { userId: currentUserId, organizationId } }
       });
     } else {
-      googleToken = await prisma.googleToken.findFirst({
+      googleToken = await db.googleToken.findFirst({
         where: { organizationId }
       });
     }
@@ -767,11 +906,11 @@ router.post('/disconnect', authMiddleware, async (req: AuthenticatedRequest, res
       // Supprimer le token de notre base de données
       console.log('[GOOGLE-AUTH] 🗑️ Suppression du token de la base...');
       if (currentUserId) {
-        await prisma.googleToken.delete({
+        await db.googleToken.delete({
           where: { userId_organizationId: { userId: currentUserId, organizationId } }
         });
       } else if (googleToken.id) {
-        await prisma.googleToken.delete({
+        await db.googleToken.delete({
           where: { id: googleToken.id }
         });
       }
@@ -781,7 +920,7 @@ router.post('/disconnect', authMiddleware, async (req: AuthenticatedRequest, res
 
     // Désactiver les modules Google Workspace pour l'organisation
     console.log('[GOOGLE-AUTH] 🔧 Désactivation des modules Google...');
-    await prisma.googleWorkspaceConfig.update({
+    await db.googleWorkspaceConfig.update({
       where: { organizationId: organizationId },
       data: {
         enabled: false,
@@ -797,7 +936,7 @@ router.post('/disconnect', authMiddleware, async (req: AuthenticatedRequest, res
     });
 
     // Désactiver aussi les modules dans la table organizationModule
-    const googleModules = await prisma.module.findMany({
+    const googleModules = await db.module.findMany({
       where: {
         name: {
           in: ['Gmail', 'Calendar', 'Drive', 'Docs', 'Sheets', 'Meet'],
@@ -807,7 +946,7 @@ router.post('/disconnect', authMiddleware, async (req: AuthenticatedRequest, res
     });
 
     for (const module of googleModules) {
-      await prisma.organizationModule.updateMany({
+      await db.organizationModule.updateMany({
         where: {
           organizationId: organizationId,
           moduleId: module.id
@@ -888,11 +1027,11 @@ router.post('/toggle-module', authMiddleware, async (req: AuthenticatedRequest, 
     const userId = req.user?.userId;
     let googleToken;
     if (userId) {
-      googleToken = await prisma.googleToken.findUnique({
+      googleToken = await db.googleToken.findUnique({
         where: { userId_organizationId: { userId, organizationId } }
       });
     } else {
-      googleToken = await prisma.googleToken.findFirst({
+      googleToken = await db.googleToken.findFirst({
         where: { organizationId }
       });
     }
@@ -929,13 +1068,13 @@ router.post('/toggle-module', authMiddleware, async (req: AuthenticatedRequest, 
       updatedAt: new Date()
     };
 
-    await prisma.googleWorkspaceConfig.update({
+    await db.googleWorkspaceConfig.update({
       where: { organizationId: organizationId },
       data: updateData
     });
 
     // Mettre à jour aussi le module dans la table organizationModule
-    const module = await prisma.module.findFirst({
+    const module = await db.module.findFirst({
       where: {
         name: {
           contains: moduleName,
@@ -945,7 +1084,7 @@ router.post('/toggle-module', authMiddleware, async (req: AuthenticatedRequest, 
     });
 
     if (module) {
-      await prisma.organizationModule.upsert({
+      await db.organizationModule.upsert({
         where: {
           organizationId_moduleId: {
             organizationId: organizationId,

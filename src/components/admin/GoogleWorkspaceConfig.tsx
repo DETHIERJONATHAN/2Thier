@@ -433,7 +433,21 @@ const GoogleWorkspaceConfig: React.FC<GoogleWorkspaceConfigProps> = ({
 
     setConnecting(true);
     try {
-      // Appel à la route pour obtenir l'URL d'authentification Google
+      // Vérifier d'abord si un token valide existe déjà
+      const statusResponse = await api.get(`/api/google-auth/status?organizationId=${organizationId}`);
+      
+      if (statusResponse.success && statusResponse.data?.connected && statusResponse.data?.isValid) {
+        console.log('[GoogleWorkspaceConfig] ✅ Token Google déjà valide, pas besoin de se réauthentifier');
+        message.success('Vous êtes déjà connecté à Google avec un token valide');
+        setIsGoogleConnected(true);
+        setConnecting(false);
+        
+        // Rafraîchir les données
+        await loadConfig();
+        return;
+      }
+      
+      // Si pas de token valide, procéder à l'authentification
       const response = await api.get(`/api/google-auth/connect?organizationId=${organizationId}`);
       if (response.success && response.data?.authUrl) {
         console.log('[GoogleWorkspaceConfig] 🔗 Redirection vers Google OAuth...');

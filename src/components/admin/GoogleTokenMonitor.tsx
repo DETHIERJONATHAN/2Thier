@@ -35,7 +35,7 @@ interface TokenInfo {
   id: string;
   organizationId: string;
   accessToken: string;
-  refreshToken: string;
+  refreshToken: string | null;
   tokenType: string;
   expiresIn: number;
   scope: string;
@@ -74,6 +74,25 @@ const GoogleTokenMonitor: React.FC<GoogleTokenMonitorProps> = ({ organizationId 
   const [tokenInfo, setTokenInfo] = useState<TokenInfo | null>(null);
   const [refreshHistory, setRefreshHistory] = useState<RefreshHistoryEntry[]>([]);
   const { api } = useAuthenticatedApi();
+
+  const startGoogleOAuth = useCallback(async (forceConsent: boolean) => {
+    try {
+      const response = await api.get(
+        `/api/google-auth/connect?organizationId=${encodeURIComponent(organizationId)}&force_consent=${forceConsent ? 'true' : 'false'}`
+      );
+
+      const authUrl: string | undefined = response?.data?.authUrl;
+      if (!authUrl) {
+        message.error('Impossible de démarrer la connexion Google (authUrl manquant)');
+        return;
+      }
+
+      window.location.href = authUrl;
+    } catch (error) {
+      console.error('[GoogleTokenMonitor] Erreur démarrage OAuth:', error);
+      message.error('Erreur lors du démarrage de la connexion Google');
+    }
+  }, [api, organizationId]);
 
   // Charger les informations du scheduler et des tokens
   const loadData = useCallback(async () => {
@@ -163,11 +182,12 @@ const GoogleTokenMonitor: React.FC<GoogleTokenMonitorProps> = ({ organizationId 
     
     const now = new Date().getTime();
     const expiresAt = new Date(tokenInfo.expiresAt).getTime();
-    const createdAt = new Date(tokenInfo.createdAt).getTime();
-    
-    const totalDuration = expiresAt - createdAt;
+
+    // Un access token Google dure ~1h. `createdAt` reste fixe en DB (création du record),
+    // donc on ne peut pas l'utiliser pour une barre de progression fiable après refresh.
+    const totalDuration = 60 * 60 * 1000;
     const remainingDuration = expiresAt - now;
-    
+
     const percentage = (remainingDuration / totalDuration) * 100;
     return Math.max(0, Math.min(100, percentage));
   };
@@ -289,58 +309,128 @@ const GoogleTokenMonitor: React.FC<GoogleTokenMonitorProps> = ({ organizationId 
 
       {/* Informations sur le Token de cette Organisation */}
       {tokenInfo && (
-        <Card title="Token de cette Organisation" className="mb-6">
-          <Row gutter={[16, 16]}>
-            <Col xs={24} lg={12}>
-              <div className="space-y-4">
+        <>
+          {/* Alerte si pas de refresh token OU si refresh token révoqué */}
+          {(() => {
+            const now = Date.now();
+            const expiresAtMs = tokenInfo.expiresAt ? new Date(tokenInfo.expiresAt).getTime() : 0;
+            const isNearExpiry = tokenInfo.isExpired || (expiresAtMs > 0 && expiresAtMs <= now + 10 * 60 * 1000);
+
+            const hasRecentRefreshFailures = refreshHistory.length > 0 &&
+              refreshHistory.slice(0, 3).every(h => !h.success && (
+                (h.message || '').includes('401') ||
+                (h.message || '').toLowerCase().includes('révoqué') ||
+                (h.message || '').toLowerCase().includes('invalid_grant')
+              ));
+
+            return !tokenInfo.refreshToken || (isNearExpiry && hasRecentRefreshFailures);
+          })() && (
+            <Alert
+              message="⚠️ Token invalide - Réauthentification requise"
+              description={
                 <div>
-                  <Text strong>Statut: </Text>
-                  <Badge 
-                    status={tokenInfo.isExpired ? 'error' : 'success'} 
-                    text={tokenInfo.isExpired ? 'Expiré' : 'Valide'} 
-                  />
-                </div>
-                
-                <div>
-                  <Text strong>Expire dans: </Text>
-                  <Text type={tokenInfo.isExpired ? 'danger' : 'default'}>
-                    {tokenInfo.timeUntilExpiry}
-                  </Text>
-                </div>
-                
-                <div>
-                  <Text strong>Dernière mise à jour: </Text>
-                  <Text>{new Date(tokenInfo.updatedAt).toLocaleString('fr-FR')}</Text>
-                </div>
-                
-                <div>
-                  <Text strong>Scopes: </Text>
-                  <Paragraph ellipsis={{ rows: 2, expandable: true }}>
-                    {tokenInfo.scope}
+                  <Paragraph>
+                    {!tokenInfo.refreshToken ? (
+                      <>Le token Google de cette organisation <strong>n'a pas de refresh token</strong>.</>
+                    ) : (
+                      <>Le refresh token de cette organisation est <strong>révoqué ou invalide</strong> (échecs de refresh récents).</>
+                    )}
+                    {' '}Cela signifie qu'il ne peut pas être renouvelé automatiquement et vous devrez
+                    vous réauthentifier manuellement à chaque expiration (toutes les heures).
                   </Paragraph>
+                  <Paragraph>
+                    <strong>Solution:</strong> Reconnectez-vous à Google en cliquant sur le bouton
+                    "Forcer la réauthentification" ci-dessous. Cela demandera à nouveau le consentement
+                    et Google fournira un nouveau token avec refresh token valide inclus.
+                  </Paragraph>
+                  <Space>
+                    <Button
+                      type="primary"
+                      danger
+                      icon={<ExclamationCircleOutlined />}
+                      onClick={() => startGoogleOAuth(true)}
+                    >
+                      Forcer la réauthentification
+                    </Button>
+                    <Button
+                      onClick={toggleScheduler}
+                      disabled={!schedulerStatus?.isRunning}
+                    >
+                      {schedulerStatus?.isRunning ? 'Arrêter le scheduler (stopper les erreurs)' : 'Scheduler déjà arrêté'}
+                    </Button>
+                  </Space>
                 </div>
-              </div>
-            </Col>
-            
-            <Col xs={24} lg={12}>
-              <div className="space-y-4">
-                <Text strong>Temps restant avant expiration:</Text>
-                <Progress 
-                  percent={tokenProgress} 
-                  strokeColor={progressColor}
-                  status={tokenInfo.isExpired ? 'exception' : 'active'}
-                  format={(percent) => `${Math.round(percent || 0)}%`}
-                />
-                
-                <Tooltip title="Temps avant expiration basé sur la durée de vie standard d'1 heure">
-                  <Text type="secondary" style={{ fontSize: '12px' }}>
-                    Les tokens Google expirent automatiquement après 1 heure
-                  </Text>
-                </Tooltip>
-              </div>
-            </Col>
-          </Row>
-        </Card>
+              }
+              type="error"
+              showIcon
+              className="mb-6"
+            />
+          )}
+
+          <Card title="Token de cette Organisation" className="mb-6">
+            <Row gutter={[16, 16]}>
+              <Col xs={24} lg={12}>
+                <div className="space-y-4">
+                  <div>
+                    <Text strong>Statut: </Text>
+                    <Badge 
+                      status={tokenInfo.isExpired ? 'error' : 'success'} 
+                      text={tokenInfo.isExpired ? 'Expiré' : 'Valide'} 
+                    />
+                  </div>
+                  
+                  <div>
+                    <Text strong>Refresh Token: </Text>
+                    <Badge 
+                      status={tokenInfo.refreshToken ? 'success' : 'error'} 
+                      text={tokenInfo.refreshToken ? 'Présent' : 'Manquant'} 
+                    />
+                  </div>
+                  
+                  <div>
+                    <Text strong>Expire dans: </Text>
+                    <Text type={tokenInfo.isExpired ? 'danger' : 'default'}>
+                      {tokenInfo.timeUntilExpiry}
+                    </Text>
+                  </div>
+                  
+                  <div>
+                    <Text strong>Dernière mise à jour: </Text>
+                    <Text>{new Date(tokenInfo.updatedAt).toLocaleString('fr-FR')}</Text>
+                  </div>
+                  
+                  <div>
+                    <Text strong>Scopes: </Text>
+                    <Paragraph ellipsis={{ rows: 2, expandable: true }}>
+                      {tokenInfo.scope}
+                    </Paragraph>
+                  </div>
+                </div>
+              </Col>
+              
+              <Col xs={24} lg={12}>
+                <div className="space-y-4">
+                  <Text strong>Temps restant avant expiration:</Text>
+                  <Progress 
+                    percent={tokenProgress} 
+                    strokeColor={progressColor}
+                    status={tokenInfo.isExpired ? 'exception' : 'active'}
+                    format={(percent) => `${Math.round(percent || 0)}%`}
+                  />
+                  
+                  <Tooltip title="Temps avant expiration basé sur la durée de vie standard d'1 heure">
+                    <Text type="secondary" style={{ fontSize: '12px' }}>
+                      {tokenInfo.refreshToken 
+                        ? 'Les tokens Google expirent après 1h mais sont automatiquement renouvelés'
+                        : '⚠️ Sans refresh token, vous devrez vous réauthentifier manuellement'
+                      }
+                    </Text>
+                  </Tooltip>
+                </div>
+              </Col>
+            </Row>
+          </Card>
+        </>
       )}
 
       {/* Actions */}

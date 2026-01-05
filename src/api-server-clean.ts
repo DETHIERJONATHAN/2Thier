@@ -40,6 +40,7 @@ import imageUploadRouter from './api/image-upload';
 import aiContentRouter from './api/ai-content';
 import aiRouter from './api/ai'; // 🤖 GEMINI AI (optimisation, suggestions)
 import aiFieldGeneratorRouter from './routes/ai-field-generator'; // 🤖 IA GÉNÉRATION INTELLIGENTE DE CONTENU
+import measureRouter from './api/measure'; // 📷 Vision AR / mesure photo
 import createRepeatRouter from './components/TreeBranchLeaf/treebranchleaf-new/api/repeat/repeat-routes';
 import cloudRunDomainsRouter from './api/cloud-run-domains'; // ☁️ GESTION DOMAINES CLOUD RUN
 
@@ -271,6 +272,7 @@ app.use('/api/ai-content', aiContentRouter); // 🤖 GÉNÉRATION CONTENU IA (Ge
 app.use('/api', cloudRunDomainsRouter); // ☁️ MAPPING DOMAINES CLOUD RUN
 app.use('/api/ai', aiFieldGeneratorRouter); // 🤖 IA GÉNÉRATION INTELLIGENTE (generate-field, status)
 app.use('/api/ai', aiRouter); // 🤖 GEMINI AI (suggestions, optimisations)
+app.use('/api/measure', measureRouter); // 📷 Vision AR (ArUco / homographie) - stub
 app.use('/api', contactFormRouter); // 📧 FORMULAIRE DE CONTACT SITE VITRINE
 app.use('/api/image-upload', imageUploadRouter); // 📸 UPLOAD D'IMAGES (LOGOS, PHOTOS)
 app.use('/api/documents', documentsRouter); // 📄 TEMPLATES DE DOCUMENTS (ADMIN + GÉNÉRATION)

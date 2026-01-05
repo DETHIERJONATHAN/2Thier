@@ -47,6 +47,35 @@ export interface AIMeasureResult {
   rawResponse?: string;
   error?: string;
   timestamp: number;
+  // 🆕 Données Vision AR (marqueur MAGENTA)
+  detected?: boolean;
+  marker?: {
+    id: number;
+    corners: Array<{ x: number; y: number }>;
+    magentaPositions: Array<{ x: number; y: number }>;
+    center: { x: number; y: number };
+    sizePx: number;
+    score: number;
+    magentaFound: number;
+  };
+  homography?: {
+    matrix: number[][];
+    pixelsPerCm: number | null;
+    realSizeCm: number;
+    sides?: number[];
+    angles?: number[];
+    quality: number;
+  };
+  calibration?: {
+    pixelPerCm: number;
+    referenceType: string;
+    referenceSize: { width: number; height: number };
+  };
+  pose?: {
+    rotX: number;
+    rotY: number;
+    rotZ: number;
+  };
 }
 
 /**
@@ -56,6 +85,12 @@ export interface UseAIMeasureOptions {
   onSuccess?: (result: AIMeasureResult) => void;
   onError?: (error: string) => void;
   onFieldUpdate?: (fieldId: string, value: unknown) => void;
+  visionOptions?: {
+    referenceHint?: unknown;
+    deviceInfo?: unknown;
+    exif?: unknown;
+    persist?: boolean;
+  };
 }
 
 /**
@@ -122,43 +157,78 @@ export function useAIMeasure(options: UseAIMeasureOptions = {}) {
         measureKeys: config.measureKeys 
       });
       
+      const measureEngine = (import.meta.env.VITE_AI_MEASURE_ENGINE || 'gemini').toLowerCase();
+
       // Préparer la requête avec les champs attendus par l'API
+      const commonMappings = config.mappings.map(m => ({
+        measureKey: m.measureKey,
+        targetFieldId: m.targetFieldId,
+        transform: m.transform || 'none',
+        unit: m.unit
+      }));
+
       const requestBody = {
         imageBase64: cleanBase64,
         mimeType,
         prompt: config.prompt,
         measureKeys: config.measureKeys,
-        mappings: config.mappings.map(m => ({
-          measureKey: m.measureKey,
-          targetFieldId: m.targetFieldId,
-          transform: m.transform || 'none',
-          unit: m.unit
-        })),
+        mappings: commonMappings,
         fieldMappings
       };
 
-      // Appel API pour analyse
-      const response = await api.post('/api/ai/measure-image', requestBody);
+      const visionPayload = {
+        imageBase64: cleanBase64,
+        mimeType,
+        measureKeys: config.measureKeys,
+        mappings: commonMappings,
+        referenceHint: options.visionOptions?.referenceHint,
+        deviceInfo: options.visionOptions?.deviceInfo,
+        exif: options.visionOptions?.exif,
+        persist: options.visionOptions?.persist,
+        prompt: config.prompt
+      };
+
+      const response = measureEngine === 'vision_ar'
+        ? await api.post('/api/measure/photo', visionPayload)
+        : await api.post('/api/ai/measure-image', requestBody);
       
       if (!response || !response.success) {
         throw new Error(response?.error || 'Erreur lors de l\'analyse');
       }
 
+      // Pour vision_ar, on peut avoir une détection sans mesures (l'utilisateur les fera manuellement)
+      const isVisionAR = measureEngine === 'vision_ar';
+      const detected = isVisionAR ? response.detected : true;
+
       const result: AIMeasureResult = {
         success: true,
         measures: response.measurements || response.measures || {},
-        confidence: response.confidence,
-        rawResponse: response.rawResponse,
-        timestamp: Date.now()
+        confidence: response.confidence ?? response?.homography?.quality ?? (detected ? 80 : 0),
+        rawResponse: response.rawResponse || JSON.stringify(response),
+        timestamp: Date.now(),
+        // 🆕 Données supplémentaires pour vision_ar
+        ...(isVisionAR && {
+          detected,
+          marker: response.marker,
+          homography: response.homography,
+          calibration: response.calibration,
+          pose: response.pose
+        })
       };
 
       setLastResult(result);
       options.onSuccess?.(result);
 
-      // Notification de succès
-      notification.success({
-        message: 'Analyse IA terminée',
-        description: `${Object.keys(result.measures).length} mesure(s) extraite(s)`,
+      // Notification de succès adaptée
+      const notifMessage = isVisionAR && detected
+        ? `Marqueur détecté! Calibration: ${response.calibration?.pixelPerCm?.toFixed(1) || '?'} px/cm`
+        : isVisionAR && !detected
+        ? 'Aucun marqueur détecté - calibration manuelle requise'
+        : `${Object.keys(result.measures).length} mesure(s) extraite(s)`;
+
+      notification[detected ? 'success' : 'warning']({
+        message: isVisionAR ? 'Analyse Vision AR' : 'Analyse IA terminée',
+        description: notifMessage,
         duration: 3
       });
 

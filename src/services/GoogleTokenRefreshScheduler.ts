@@ -17,8 +17,8 @@
  * - Gestion d'erreurs robuste
  */
 
-import { prisma } from '../lib/prisma';
-import { googleOAuthConfig, isGoogleOAuthConfigured } from '../auth/googleConfig';
+import { db } from '../lib/database.js';
+import { decrypt } from '../utils/crypto.js';
 
 export class GoogleTokenRefreshScheduler {
   private intervalId: NodeJS.Timeout | null = null;
@@ -70,36 +70,46 @@ export class GoogleTokenRefreshScheduler {
 
   async forceRefreshAll(): Promise<void> {
     console.log('🔥 [GoogleTokenScheduler] Refresh forcé de tous les tokens');
-    await this.refreshAllTokens();
+    await this.refreshAllTokens({ ignoreExpiry: true });
   }
 
-  private async refreshAllTokens(): Promise<void> {
+  private async refreshAllTokens(options: { ignoreExpiry?: boolean } = {}): Promise<void> {
     try {
       console.log('🔄 [GoogleTokenScheduler] Début du refresh de tous les tokens...');
       this.lastRefreshTime = new Date();
+
+      const ignoreExpiry = options.ignoreExpiry === true;
       
-      // Récupérer tous les tokens qui expirent dans moins de 10 minutes
-      const tokensToRefresh = await prisma.googleToken.findMany({
+      // Récupérer les tokens à refresher
+      const tokensToRefresh = await db.googleToken.findMany({
         where: {
-          OR: [
-            // Tokens qui expirent dans moins de 10 minutes
-            {
-              expiresAt: {
-                lte: new Date(Date.now() + 10 * 60 * 1000)
-              }
-            },
-            // Ou tokens sans date d'expiration (considérés comme expirés)
-            {
-              expiresAt: null
-            }
-          ]
+          // Ne tenter un refresh que si un refresh token existe
+          refreshToken: {
+            not: null,
+          },
+          ...(ignoreExpiry
+            ? {}
+            : {
+              OR: [
+                // Tokens qui expirent dans moins de 10 minutes
+                {
+                  expiresAt: {
+                    lte: new Date(Date.now() + 10 * 60 * 1000)
+                  }
+                },
+                // Ou tokens sans date d'expiration (considérés comme expirés)
+                {
+                  expiresAt: null
+                }
+              ]
+            })
         },
         include: {
           Organization: true
         }
       });
 
-      console.log(`🔍 [GoogleTokenScheduler] ${tokensToRefresh.length} tokens trouvés à refresher`);
+      console.log(`🔍 [GoogleTokenScheduler] ${tokensToRefresh.length} tokens trouvés à refresher${ignoreExpiry ? ' (mode forcé)' : ''}`);
 
       let successCount = 0;
       let errorCount = 0;
@@ -125,6 +135,7 @@ export class GoogleTokenRefreshScheduler {
     organizationId: string; 
     refreshToken: string | null; 
     expiresAt: Date | null;
+    googleEmail?: string | null;
     Organization?: { name: string } | null;
   }): Promise<boolean> {
     const oldExpiresAt = token.expiresAt;
@@ -147,11 +158,36 @@ export class GoogleTokenRefreshScheduler {
         return false;
       }
 
-      if (!isGoogleOAuthConfigured()) {
-        throw new Error('Configuration Google OAuth manquante pour GoogleTokenRefreshScheduler.');
+      // Charger la configuration OAuth de l'organisation (par-organisation)
+      const googleConfig = await db.googleWorkspaceConfig.findUnique({
+        where: { organizationId: token.organizationId }
+      });
+
+      // Si un adminEmail est défini, on ne refresh que le token associé à ce compte.
+      // Cela évite de polluer le monitoring avec d'anciens tokens (non-admin) dans la même organisation.
+      const adminEmail = googleConfig?.adminEmail?.trim().toLowerCase();
+      const tokenEmail = token.googleEmail?.trim().toLowerCase();
+      if (adminEmail && tokenEmail !== adminEmail) {
+        console.log(`⏭️ [GoogleTokenScheduler] Token ignoré (non-admin) pour org ${token.organizationId}: ${token.googleEmail ?? '(sans googleEmail)'}`);
+        return true;
       }
 
-      const { clientId, clientSecret } = googleOAuthConfig;
+      const clientId = googleConfig?.clientId ? decrypt(googleConfig.clientId) : null;
+      const clientSecret = googleConfig?.clientSecret ? decrypt(googleConfig.clientSecret) : null;
+
+      if (!clientId || !clientSecret) {
+        const errorMsg = 'Configuration OAuth (clientId/clientSecret) manquante ou invalide';
+        console.error(`❌ [GoogleTokenScheduler] ${errorMsg} pour org ${token.organizationId}`);
+        await this.logRefreshHistory({
+          organizationId: token.organizationId,
+          success: false,
+          message: errorMsg,
+          errorDetails: 'Missing or invalid encrypted OAuth credentials',
+          oldExpiresAt,
+          newExpiresAt: null
+        });
+        return false;
+      }
 
       // Appeler l'API Google pour refresher le token
       const response = await fetch('https://oauth2.googleapis.com/token', {
@@ -168,15 +204,49 @@ export class GoogleTokenRefreshScheduler {
       });
 
       if (!response.ok) {
-        const errorData = await response.text();
-        const errorMsg = `Erreur Google OAuth: ${response.status}`;
-        console.error(`❌ [GoogleTokenScheduler] ${errorMsg} pour org ${token.organizationId}:`, errorData);
+        const rawBody = await response.text();
+        let googleError: string | undefined;
+        let googleErrorDescription: string | undefined;
+        try {
+          const parsed = JSON.parse(rawBody) as { error?: string; error_description?: string };
+          googleError = parsed.error;
+          googleErrorDescription = parsed.error_description;
+        } catch {
+          // body non JSON
+        }
+
+        let errorMsg = `Erreur Google OAuth: ${response.status}`;
+        if (googleError === 'invalid_grant') {
+          errorMsg = 'Refresh token révoqué/invalide (réauthentification requise)';
+
+          // Nettoyer le refresh token pour stopper les refreshs répétés et refléter l'état réel dans l'UI.
+          try {
+            await db.googleToken.update({
+              where: { id: token.id },
+              data: { refreshToken: null, updatedAt: new Date() }
+            });
+          } catch (cleanupError) {
+            console.warn('[GoogleTokenScheduler] ⚠️ Impossible de nettoyer refreshToken après invalid_grant:', cleanupError);
+          }
+        } else if (googleError === 'invalid_client') {
+          errorMsg = 'Client OAuth invalide (clientId/clientSecret incorrects)';
+        } else if (googleError) {
+          errorMsg = `Erreur Google OAuth (${googleError})`;
+        }
+
+        const errorDetails = [
+          googleError ? `error=${googleError}` : null,
+          googleErrorDescription ? `error_description=${googleErrorDescription}` : null,
+          rawBody || null
+        ].filter(Boolean).join(' | ');
+
+        console.error(`❌ [GoogleTokenScheduler] ${errorMsg} pour org ${token.organizationId}:`, errorDetails);
         
         await this.logRefreshHistory({
           organizationId: token.organizationId,
           success: false,
           message: errorMsg,
-          errorDetails: errorData,
+          errorDetails,
           oldExpiresAt,
           newExpiresAt: null
         });
@@ -187,7 +257,7 @@ export class GoogleTokenRefreshScheduler {
       const newExpiresAt = new Date(Date.now() + (tokenData.expires_in * 1000));
 
       // Mettre à jour le token dans la base en utilisant l'ID du token
-      await prisma.googleToken.update({
+      await db.googleToken.update({
         where: { id: token.id },
         data: {
           accessToken: tokenData.access_token,
@@ -251,7 +321,7 @@ export class GoogleTokenRefreshScheduler {
     newExpiresAt: Date | null;
   }): Promise<void> {
     try {
-      await prisma.googleTokenRefreshHistory.create({
+      await db.googleTokenRefreshHistory.create({
         data: {
           organizationId,
           success,

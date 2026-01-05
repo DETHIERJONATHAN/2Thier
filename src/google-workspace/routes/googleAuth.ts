@@ -19,8 +19,19 @@ router.get('/connect', authMiddleware, async (req: AuthenticatedRequest, res) =>
       return res.status(400).json({ error: 'ID utilisateur et ID organisation manquants' });
     }
 
+    // ✅ Vérifier si un refresh token existe pour décider si on force le consentement
+    const existingTokens = await googleOAuthService.getUserTokens(userId, organizationId);
+    const hasRefreshToken = existingTokens && existingTokens.refreshToken;
+    const forceConsent = !hasRefreshToken; // Force consent si pas de refresh token
+    
+    console.log('[GoogleAuth] Token existant:', !!existingTokens);
+    console.log('[GoogleAuth] Refresh token présent:', hasRefreshToken);
+    console.log('[GoogleAuth] Force consent:', forceConsent);
     console.log('[GoogleAuth] Génération URL d\'autorisation...');
-    const authUrl = googleOAuthService.getAuthUrl(userId, organizationId); // Passer les deux IDs
+    
+    // ⭐ IMPORTANT: Passer le Host header pour cohérence avec le callback
+    const hostHeader = req.headers.host || 'localhost:4000';
+    const authUrl = googleOAuthService.getAuthUrl(userId, organizationId, hostHeader);
     console.log('[GoogleAuth] URL générée:', authUrl);
     
     const response = { authUrl };

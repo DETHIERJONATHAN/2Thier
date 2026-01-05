@@ -10,7 +10,7 @@
 
 import { Router, type RequestHandler } from 'express';
 import { googleTokenScheduler } from '../services/GoogleTokenRefreshScheduler';
-import { prisma } from '../lib/prisma';
+import { db } from '../lib/database.js';
 import { authMiddleware } from '../middlewares/auth.js';
 import { requireRole } from '../middlewares/requireRole.js';
 
@@ -140,7 +140,7 @@ router.post('/restart', (_req, res) => {
  */
 router.get('/tokens-info', async (_req, res) => {
   try {
-    const tokens = await prisma.googleToken.findMany({
+    const tokens = await db.googleToken.findMany({
       include: {
         organization: {
           select: {

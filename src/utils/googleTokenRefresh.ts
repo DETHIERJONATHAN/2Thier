@@ -4,7 +4,8 @@
  */
 
 import { google } from 'googleapis';
-import { prisma } from '../lib/prisma.js';
+import { db } from '../lib/database.js';
+import { decrypt } from './crypto.js';
 
 export interface RefreshTokenResult {
   success: boolean;
@@ -28,7 +29,7 @@ export async function refreshGoogleTokenIfNeeded(organizationId: string, userId?
     
     if (userId) {
       // Nouveau modèle : clé composite userId + organizationId
-      googleToken = await prisma.googleToken.findUnique({
+      googleToken = await db.googleToken.findUnique({
         where: { 
           userId_organizationId: { userId, organizationId }
         }
@@ -36,7 +37,7 @@ export async function refreshGoogleTokenIfNeeded(organizationId: string, userId?
     } else {
       // Fallback legacy : chercher le premier token pour cette organisation
       console.log('[REFRESH-TOKEN] ⚠️ userId non fourni, fallback sur findFirst');
-      googleToken = await prisma.googleToken.findFirst({
+      googleToken = await db.googleToken.findFirst({
         where: { organizationId }
       });
     }
@@ -85,7 +86,7 @@ export async function refreshGoogleTokenIfNeeded(organizationId: string, userId?
     console.log('[REFRESH-TOKEN] 🔄 Token expiré/expirant (moins de 30min), tentative de refresh...');
 
     // 5. Récupérer la configuration OAuth
-    const googleConfig = await prisma.googleWorkspaceConfig.findUnique({
+    const googleConfig = await db.googleWorkspaceConfig.findUnique({
       where: { organizationId }
     });
 
@@ -101,11 +102,15 @@ export async function refreshGoogleTokenIfNeeded(organizationId: string, userId?
 
     // 6. Créer le client OAuth et tenter le refresh
     console.log('[REFRESH-TOKEN] 🔧 Configuration OAuth client...');
-    const oauth2Client = new google.auth.OAuth2(
-      googleConfig.clientId,
-      googleConfig.clientSecret,
-      googleConfig.redirectUri
-    );
+    const clientId = googleConfig.clientId ? decrypt(googleConfig.clientId) : null;
+    const clientSecret = googleConfig.clientSecret ? decrypt(googleConfig.clientSecret) : null;
+    if (!clientId || !clientSecret) {
+      console.log('[REFRESH-TOKEN] ❌ Configuration OAuth manquante/invalide (après déchiffrement)');
+      return { success: false, error: 'missing_oauth_config' };
+    }
+
+    // Pour un refresh, le redirectUri n'est pas nécessaire.
+    const oauth2Client = new google.auth.OAuth2(clientId, clientSecret);
 
     // Configurer le refresh token
     console.log('[REFRESH-TOKEN] 🔑 Configuration des credentials...');
@@ -130,7 +135,7 @@ export async function refreshGoogleTokenIfNeeded(organizationId: string, userId?
       
       // Utiliser la clé composite pour la mise à jour
       if (userId) {
-        await prisma.googleToken.update({
+        await db.googleToken.update({
           where: { 
             userId_organizationId: { userId, organizationId }
           },
@@ -148,7 +153,7 @@ export async function refreshGoogleTokenIfNeeded(organizationId: string, userId?
         });
       } else if (googleToken.id) {
         // Fallback: utiliser l'ID du token
-        await prisma.googleToken.update({
+        await db.googleToken.update({
           where: { id: googleToken.id },
           data: {
             accessToken: credentials.access_token!,
