@@ -1161,10 +1161,33 @@ export async function deepCopyNodeInternal(
       });
 
       if (!existingCopyConfig) {
-        // Calculer le nouveau tableReference avec le suffixe
-        const newTableReference = originalSelectConfig.tableReference 
-          ? appendSuffix(originalSelectConfig.tableReference)
-          : null;
+        // 🎯 FIX 05/01/2026: Pour les lookups vers table PARTAGÉE (optionsSource='table'),
+        // on garde le MÊME tableReference sans suffixe car la table est partagée.
+        // Pour les selects avec table locale (copiée), on suffixe.
+        
+        // Vérifier si la table référencée existe déjà avec suffixe (= table copiée)
+        // ou si on doit garder l'original (= table partagée)
+        let newTableReference: string | null = null;
+        if (originalSelectConfig.tableReference) {
+          const suffixedTableRef = appendSuffix(originalSelectConfig.tableReference);
+          // Vérifier si la table suffixée existe (= c'est une copie locale)
+          const suffixedTableExists = await prisma.treeBranchLeafNodeTable.findUnique({
+            where: { id: suffixedTableRef },
+            select: { id: true }
+          });
+          
+          if (suffixedTableExists) {
+            // La table a été copiée → utiliser l'ID suffixé
+            newTableReference = suffixedTableRef;
+          } else {
+            // La table n'a pas été copiée → c'est une table partagée, garder l'original
+            newTableReference = originalSelectConfig.tableReference;
+          }
+        }
+
+        // 🎯 FIX: Pour les colonnes (keyColumn, valueColumn, displayColumn),
+        // on ne suffixe QUE si c'est une table copiée, sinon on garde l'original
+        const shouldSuffixColumns = newTableReference !== originalSelectConfig.tableReference;
 
 
         try {
@@ -1183,14 +1206,15 @@ export async function deepCopyNodeInternal(
               dependsOnNodeId: originalSelectConfig.dependsOnNodeId 
                 ? (idMap.get(originalSelectConfig.dependsOnNodeId) || appendSuffix(originalSelectConfig.dependsOnNodeId))
                 : null,
+              // 🎯 Ne suffixer les colonnes QUE si la table a été copiée
               keyColumn: originalSelectConfig.keyColumn 
-                ? `${originalSelectConfig.keyColumn}${computedLabelSuffix}`
+                ? (shouldSuffixColumns ? `${originalSelectConfig.keyColumn}${computedLabelSuffix}` : originalSelectConfig.keyColumn)
                 : null,
               valueColumn: originalSelectConfig.valueColumn
-                ? `${originalSelectConfig.valueColumn}${computedLabelSuffix}`
+                ? (shouldSuffixColumns ? `${originalSelectConfig.valueColumn}${computedLabelSuffix}` : originalSelectConfig.valueColumn)
                 : null,
               displayColumn: originalSelectConfig.displayColumn
-                ? `${originalSelectConfig.displayColumn}${computedLabelSuffix}`
+                ? (shouldSuffixColumns ? `${originalSelectConfig.displayColumn}${computedLabelSuffix}` : originalSelectConfig.displayColumn)
                 : null,
               displayRow: originalSelectConfig.displayRow,
               keyRow: originalSelectConfig.keyRow,
