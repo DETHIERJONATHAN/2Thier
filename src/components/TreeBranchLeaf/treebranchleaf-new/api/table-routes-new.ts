@@ -497,13 +497,14 @@ router.put('/tables/:id', async (req, res) => {
         
         if (columns.length > 0) {
           const newColumnsData = columns.map((col: any, index: number) => ({
+            id: randomUUID(),
             tableId: id,
             columnIndex: index,
             name: typeof col === 'string' ? col : (col.name || `Colonne ${index + 1}`),
             type: typeof col === 'object' ? col.type : 'text',
             width: typeof col === 'object' ? col.width : null,
             format: typeof col === 'object' ? col.format : null,
-            metadata: typeof col === 'object' && col.metadata ? col.metadata : {},
+            metadata: toJsonSafe(typeof col === 'object' && col.metadata ? col.metadata : {}),
           }));
           await tx.treeBranchLeafNodeTableColumn.createMany({ data: newColumnsData });
         }
@@ -520,9 +521,10 @@ router.put('/tables/:id', async (req, res) => {
             const row = rows[index];
             await tx.treeBranchLeafNodeTableRow.create({
               data: {
+                id: randomUUID(),
                 tableId: id,
                 rowIndex: index,
-                cells: row as Prisma.InputJsonValue,
+                cells: toJsonSafe(row),
               }
             });
           }
@@ -752,7 +754,7 @@ router.put('/nodes/:nodeId/tables/:tableId', async (req, res) => {
       const updatedTable = await prisma.treeBranchLeafNodeTable.update({
         where: { id: tableId },
         data: {
-          meta: meta as Prisma.InputJsonValue,
+          meta: toJsonSafe(meta),
           updatedAt: new Date(),
         },
       });
@@ -786,7 +788,7 @@ router.put('/nodes/:nodeId/tables/:tableId', async (req, res) => {
       if (name) updateData.name = name;
       if (description !== undefined) updateData.description = description;
       if (type) updateData.type = type;
-      if (meta) updateData.meta = meta as Prisma.InputJsonValue;
+      if (meta) updateData.meta = toJsonSafe(meta);
       // NE mettre ÃƒÂ  jour columnCount/rowCount QUE si les arrays contiennent rÃƒÂ©ellement des donnÃƒÂ©es
       if (Array.isArray(columns) && columns.length > 0) updateData.columnCount = columns.length;
       if (Array.isArray(rows) && rows.length > 0) updateData.rowCount = rows.length;
@@ -802,13 +804,14 @@ router.put('/nodes/:nodeId/tables/:tableId', async (req, res) => {
         await tx.treeBranchLeafNodeTableColumn.deleteMany({ where: { tableId } });
         
         const newColumnsData = columns.map((col: any, index: number) => ({
+          id: randomUUID(),
           tableId,
           columnIndex: index,
           name: typeof col === 'string' ? col : (col.name || `Colonne ${index + 1}`),
           type: typeof col === 'object' ? col.type : 'text',
           width: typeof col === 'object' ? col.width : null,
           format: typeof col === 'object' ? col.format : null,
-          metadata: typeof col === 'object' && col.metadata ? col.metadata : {},
+          metadata: toJsonSafe(typeof col === 'object' && col.metadata ? col.metadata : {}),
         }));
         await tx.treeBranchLeafNodeTableColumn.createMany({ data: newColumnsData });
       }
@@ -828,9 +831,10 @@ router.put('/nodes/:nodeId/tables/:tableId', async (req, res) => {
           const row = rows[index];
           await tx.treeBranchLeafNodeTableRow.create({
             data: {
+              id: randomUUID(),
               tableId,
               rowIndex: index,
-              cells: row as Prisma.InputJsonValue,
+              cells: toJsonSafe(row),
             }
           });
         }
