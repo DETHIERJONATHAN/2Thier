@@ -55,6 +55,10 @@ BEGIN
   END IF;
 END $$;
 
+-- If any rows couldn't be backfilled (e.g. orphaned legacy rows), remove them
+DELETE FROM "public"."GoogleTokenRefreshHistory"
+WHERE "organizationId" IS NULL;
+
 -- organizationId must be present for the new relation
 ALTER TABLE "public"."GoogleTokenRefreshHistory" ALTER COLUMN "organizationId" SET NOT NULL;
 
