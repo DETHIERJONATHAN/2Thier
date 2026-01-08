@@ -4124,7 +4124,7 @@ __export(api_server_clean_exports, {
 });
 module.exports = __toCommonJS(api_server_clean_exports);
 var import_dotenv = __toESM(require("dotenv"), 1);
-var import_express95 = __toESM(require("express"), 1);
+var import_express96 = __toESM(require("express"), 1);
 var import_path7 = __toESM(require("path"), 1);
 var import_fs7 = __toESM(require("fs"), 1);
 var import_cors = __toESM(require("cors"), 1);
@@ -4169,11 +4169,12 @@ var getJWTSecret = () => {
 };
 var login = async (req2, res) => {
   try {
-    console.log(`[AUTH] \u{1F4E6} Body re\xE7u:`, JSON.stringify(req2.body));
-    console.log(`[AUTH] \u{1F4E6} Content-Type:`, req2.headers["content-type"]);
     const { email, password } = req2.body;
-    console.log(`[AUTH] \u{1F510} Tentative de connexion pour: ${email}`);
-    console.log(`[AUTH] \u{1F510} Password re\xE7u: "${password}" (length: ${password?.length || 0}, type: ${typeof password})`);
+    console.log("[AUTH] \u{1F510} Tentative de connexion", {
+      email,
+      hasPassword: typeof password === "string" && password.length > 0,
+      contentType: req2.headers["content-type"]
+    });
     if (!email || !password) {
       console.log(`[AUTH] \u274C Email ou password manquant`);
       return res.status(400).json({ message: "Email et mot de passe requis" });
@@ -4494,7 +4495,8 @@ var extractOrganization = (req2, res, next) => {
 // src/google-auth/core/GoogleOAuthCore.ts
 var import_googleapis = require("googleapis");
 var import_crypto = require("crypto");
-init_prisma();
+init_database();
+init_crypto();
 
 // src/auth/googleConfig.ts
 var import_meta = {};
@@ -4533,9 +4535,9 @@ function readEnv(key2) {
 function computeRedirectUri() {
   const codespaceName = readEnv("CODESPACE_NAME");
   if (codespaceName) {
-    const codespaceUrl = `https://${codespaceName}-5173.app.github.dev`;
-    console.log("[GoogleConfig] \u{1F680} Codespaces d\xE9tect\xE9, redirect_uri:", `${codespaceUrl}/auth/google/callback`);
-    return `${codespaceUrl}/auth/google/callback`;
+    const codespaceUrl = `https://${codespaceName}-4000.app.github.dev`;
+    console.log("[GoogleConfig] \u{1F680} Codespaces d\xE9tect\xE9, redirect_uri:", `${codespaceUrl}/api/google-auth/callback`);
+    return `${codespaceUrl}/api/google-auth/callback`;
   }
   const explicit = readEnv("GOOGLE_REDIRECT_URI");
   if (explicit) {
@@ -4621,15 +4623,29 @@ var GoogleOAuthService = class {
       GOOGLE_REDIRECT_URI
     );
   }
+  formatOAuthError(error) {
+    const asAny = error;
+    const responseData = asAny?.response?.data;
+    return {
+      message: asAny instanceof Error ? asAny.message : String(error),
+      code: asAny?.code,
+      status: asAny?.response?.status ?? asAny?.status,
+      error: responseData?.error,
+      error_description: responseData?.error_description
+    };
+  }
   // Générer l'URL d'autorisation Google
-  getAuthUrl(userId, organizationId) {
+  getAuthUrl(userId, organizationId, hostHeaderOrForceConsent = false, maybeForceConsent) {
+    const forceConsent = typeof hostHeaderOrForceConsent === "boolean" ? hostHeaderOrForceConsent : maybeForceConsent ?? false;
     const state = JSON.stringify({ userId, organizationId });
     const authUrl = this.oauth2Client.generateAuthUrl({
       access_type: "offline",
+      // ✅ ESSENTIEL : Obtenir un refresh token
       scope: SCOPES,
       state,
-      prompt: "select_account",
-      // ✅ Ne force plus le consentement à chaque fois
+      // Si forceConsent ou première connexion : demander le consentement pour obtenir refresh_token
+      // Sinon : juste sélectionner le compte (plus fluide)
+      prompt: forceConsent ? "consent" : "select_account",
       include_granted_scopes: true,
       // ✅ Active l'autorisation incrémentielle
       enable_granular_consent: true
@@ -4637,6 +4653,7 @@ var GoogleOAuthService = class {
     });
     console.log("[GoogleOAuthService] \u{1F517} URL d'autorisation g\xE9n\xE9r\xE9e:", authUrl);
     console.log("[GoogleOAuthService] \u{1F3AF} Redirect URI configur\xE9:", GOOGLE_REDIRECT_URI);
+    console.log("[GoogleOAuthService] \u{1F504} Force consent:", forceConsent);
     return authUrl;
   }
   // Échanger le code contre des tokens
@@ -4747,6 +4764,12 @@ var GoogleOAuthService = class {
     if (!googleConfig || !googleConfig.adminEmail || !googleConfig.domain) {
       return null;
     }
+    const clientId = googleConfig.clientId ? decrypt(googleConfig.clientId) : null;
+    const clientSecret = googleConfig.clientSecret ? decrypt(googleConfig.clientSecret) : null;
+    if (!clientId || !clientSecret) {
+      console.warn("[GoogleOAuthService] \u274C clientId/clientSecret manquants pour org", organizationId);
+      return null;
+    }
     let tokens2;
     if (userId) {
       tokens2 = await db.googleToken.findUnique({
@@ -4768,11 +4791,7 @@ var GoogleOAuthService = class {
       token_type: tokens2.tokenType,
       expiry_date: tokens2.expiresAt?.getTime()
     };
-    const adminOAuth2Client = new import_googleapis.google.auth.OAuth2(
-      GOOGLE_CLIENT_ID,
-      GOOGLE_CLIENT_SECRET,
-      GOOGLE_REDIRECT_URI
-    );
+    const adminOAuth2Client = new import_googleapis.google.auth.OAuth2(clientId, clientSecret);
     adminOAuth2Client.setCredentials(credentials);
     const now = /* @__PURE__ */ new Date();
     const expiryDate = tokens2.expiresAt;
@@ -4795,7 +4814,7 @@ var GoogleOAuthService = class {
           });
         }
       } catch (error) {
-        console.error(`[GoogleOAuthService] \u274C \xC9chec du rafra\xEEchissement pour admin ${googleConfig.adminEmail}:`, error);
+        console.error(`[GoogleOAuthService] \u274C \xC9chec du rafra\xEEchissement pour admin ${googleConfig.adminEmail}:`, this.formatOAuthError(error));
         return null;
       }
     }
@@ -4808,9 +4827,33 @@ var GoogleOAuthService = class {
       console.log(`[GoogleOAuthService] \u274C Aucun token trouv\xE9 pour l'utilisateur ${userId}`);
       return null;
     }
+    let orgId = organizationId;
+    if (!orgId) {
+      const userWithOrg = await db.user.findUnique({
+        where: { id: userId },
+        include: {
+          UserOrganization: {
+            take: 1,
+            orderBy: { createdAt: "desc" }
+          }
+        }
+      });
+      orgId = userWithOrg?.UserOrganization?.[0]?.organizationId;
+    }
+    if (!orgId) {
+      console.log(`[GoogleOAuthService] \u274C Impossible de d\xE9terminer l'organisation pour l'utilisateur ${userId}`);
+      return null;
+    }
+    const googleConfig = await db.googleWorkspaceConfig.findUnique({ where: { organizationId: orgId } });
+    const clientId = googleConfig?.clientId ? decrypt(googleConfig.clientId) : null;
+    const clientSecret = googleConfig?.clientSecret ? decrypt(googleConfig.clientSecret) : null;
+    if (!clientId || !clientSecret) {
+      console.warn("[GoogleOAuthService] \u274C clientId/clientSecret manquants pour org", orgId);
+      return null;
+    }
     console.log(`[GoogleOAuthService] \u{1F50D} Tokens trouv\xE9s pour ${userId}:`);
-    console.log(`[GoogleOAuthService] - Access token: ${tokens2.accessToken ? tokens2.accessToken.substring(0, 20) + "..." : "MANQUANT"}`);
-    console.log(`[GoogleOAuthService] - Refresh token: ${tokens2.refreshToken ? tokens2.refreshToken.substring(0, 20) + "..." : "MANQUANT"}`);
+    console.log(`[GoogleOAuthService] - Access token: ${tokens2.accessToken ? "Pr\xE9sent" : "MANQUANT"}`);
+    console.log(`[GoogleOAuthService] - Refresh token: ${tokens2.refreshToken ? "Pr\xE9sent" : "MANQUANT"}`);
     console.log(`[GoogleOAuthService] - Expires at: ${tokens2.expiresAt}`);
     const credentials = {
       access_token: tokens2.accessToken,
@@ -4820,17 +4863,11 @@ var GoogleOAuthService = class {
     };
     console.log(`[GoogleOAuthService] \u{1F527} Configuration credentials:`, {
       hasAccessToken: !!credentials.access_token,
-      accessTokenLength: credentials.access_token?.length,
       hasRefreshToken: !!credentials.refresh_token,
-      refreshTokenLength: credentials.refresh_token?.length,
       tokenType: credentials.token_type,
       expiryDate: credentials.expiry_date ? new Date(credentials.expiry_date).toISOString() : "NON_D\xC9FINI"
     });
-    const userOAuth2Client = new import_googleapis.google.auth.OAuth2(
-      GOOGLE_CLIENT_ID,
-      GOOGLE_CLIENT_SECRET,
-      GOOGLE_REDIRECT_URI
-    );
+    const userOAuth2Client = new import_googleapis.google.auth.OAuth2(clientId, clientSecret);
     userOAuth2Client.setCredentials(credentials);
     console.log(`[GoogleOAuthService] \u{1F4CB} Credentials d\xE9finies sur nouveau OAuth2Client`);
     const now = /* @__PURE__ */ new Date();
@@ -4856,7 +4893,7 @@ var GoogleOAuthService = class {
           console.log(`[GoogleOAuthService] \u2705 Token rafra\xEEchi avec succ\xE8s pour l'utilisateur ${userId}`);
         }
       } catch (error) {
-        console.error(`[GoogleOAuthService] \u274C \xC9chec du rafra\xEEchissement du token pour ${userId}:`, error);
+        console.error(`[GoogleOAuthService] \u274C \xC9chec du rafra\xEEchissement du token pour ${userId}:`, this.formatOAuthError(error));
         return null;
       }
     } else if (expiryDate) {
@@ -4883,7 +4920,7 @@ var GoogleOAuthService = class {
     }
     const organizationId = userWithOrg.UserOrganization[0].organizationId;
     await db.googleToken.update({
-      where: { organizationId },
+      where: { userId_organizationId: { userId, organizationId } },
       data: {
         accessToken: tokenData.accessToken,
         refreshToken: tokenData.refreshToken,
@@ -4983,10 +5020,11 @@ var GoogleAuthManager = class _GoogleAuthManager {
    * 
    * @param userId - ID de l'utilisateur
    * @param organizationId - ID de l'organisation
+   * @param hostHeader - Host header du request (optionnel, utilisé pour détection d'environnement)
    * @returns URL d'autorisation
    */
-  getAuthorizationUrl(userId, organizationId) {
-    return googleOAuthService.getAuthUrl(userId, organizationId);
+  getAuthorizationUrl(userId, organizationId, hostHeader) {
+    return googleOAuthService.getAuthUrl(userId, organizationId, hostHeader);
   }
   /**
    * Échange un code d'autorisation contre des tokens
@@ -7412,7 +7450,7 @@ async function impersonationMiddleware(req2, res, next) {
 
 // src/routes/misc.ts
 init_prisma();
-var import_crypto2 = require("crypto");
+var import_crypto3 = require("crypto");
 var router2 = (0, import_express3.Router)();
 var userWithOrgsArgs = {
   include: {
@@ -7458,7 +7496,7 @@ router2.post("/register", async (req2, res) => {
   try {
     const hashedPassword = await import_bcryptjs3.default.hash(password, 10);
     const result = await db.$transaction(async (tx) => {
-      const userId = (0, import_crypto2.randomUUID)();
+      const userId = (0, import_crypto3.randomUUID)();
       const user = await tx.user.create({
         data: {
           id: userId,
@@ -7473,7 +7511,7 @@ router2.post("/register", async (req2, res) => {
       let organization = null;
       let joinRequest = null;
       if (registrationType === "createOrg") {
-        const orgId = (0, import_crypto2.randomUUID)();
+        const orgId = (0, import_crypto3.randomUUID)();
         organization = await tx.organization.create({
           data: {
             id: orgId,
@@ -7484,7 +7522,7 @@ router2.post("/register", async (req2, res) => {
         });
         const adminRole = await tx.role.create({
           data: {
-            id: (0, import_crypto2.randomUUID)(),
+            id: (0, import_crypto3.randomUUID)(),
             name: "admin",
             label: "Administrateur",
             organizationId: orgId
@@ -7492,7 +7530,7 @@ router2.post("/register", async (req2, res) => {
         });
         await tx.role.create({
           data: {
-            id: (0, import_crypto2.randomUUID)(),
+            id: (0, import_crypto3.randomUUID)(),
             name: "user",
             label: "Utilisateur",
             organizationId: orgId
@@ -7500,7 +7538,7 @@ router2.post("/register", async (req2, res) => {
         });
         await tx.userOrganization.create({
           data: {
-            id: (0, import_crypto2.randomUUID)(),
+            id: (0, import_crypto3.randomUUID)(),
             userId: user.id,
             organizationId: orgId,
             roleId: adminRole.id,
@@ -7517,7 +7555,7 @@ router2.post("/register", async (req2, res) => {
         }
         joinRequest = await tx.joinRequest.create({
           data: {
-            id: (0, import_crypto2.randomUUID)(),
+            id: (0, import_crypto3.randomUUID)(),
             userId: user.id,
             organizationId,
             message: message?.trim() || null,
@@ -8556,8 +8594,8 @@ router5.post("/categories", requireRole2(["admin", "super_admin"]), async (req2,
       return;
     }
     console.log("[ADMIN-MODULES] POST /categories - Cr\xE9ation category:", { name, icon, organizationId });
-    const { randomUUID: randomUUID10 } = await import("crypto");
-    const categoryId = randomUUID10();
+    const { randomUUID: randomUUID11 } = await import("crypto");
+    const categoryId = randomUUID11();
     const now = /* @__PURE__ */ new Date();
     const category = await db.category.create({
       data: {
@@ -9851,7 +9889,7 @@ var import_express10 = require("express");
 init_database();
 var import_zod2 = require("zod");
 var import_express_rate_limit = __toESM(require("express-rate-limit"), 1);
-var import_crypto4 = require("crypto");
+var import_crypto5 = require("crypto");
 var router9 = (0, import_express10.Router)();
 var prisma7 = db;
 var sanitizeString = (input) => {
@@ -10377,7 +10415,7 @@ router9.post("/", organizationsCreateRateLimit, requireRole2(["super_admin"]), a
       });
     }
     const now = /* @__PURE__ */ new Date();
-    const generatedId = (0, import_crypto4.randomUUID)();
+    const generatedId = (0, import_crypto5.randomUUID)();
     const newOrganization = await prisma7.$transaction(async (tx) => {
       const org = await tx.organization.create({
         data: {
@@ -10861,7 +10899,7 @@ var organizations_default = router9;
 
 // src/routes/autoGoogleAuthRoutes.ts
 var import_express11 = require("express");
-init_prisma();
+init_database();
 var router10 = (0, import_express11.Router)();
 var connectCache = /* @__PURE__ */ new Map();
 router10.get("/status", authMiddleware, async (req2, res) => {
@@ -10946,31 +10984,34 @@ router10.post("/connect", authMiddleware, async (req2, res) => {
       res.setHeader("X-AutoGoogle-Cache-Until", new Date(cached.expiresAt).toISOString());
       return res.json({ ...cached.payload, cached: true });
     }
-    const authClient = await googleOAuthService.getAuthenticatedClientForOrganization(organizationId);
-    if (authClient) {
+    const tokens2 = await db.googleToken.findUnique({
+      where: {
+        userId_organizationId: { userId, organizationId }
+      }
+    });
+    const nowDate = /* @__PURE__ */ new Date();
+    const isLocallyValid = !!tokens2?.accessToken && !!tokens2?.expiresAt && tokens2.expiresAt > nowDate;
+    if (isLocallyValid) {
       const ttlConnected = 15e3;
-      const payload2 = { success: true, isConnected: true, needsManualAuth: false, message: "Connexion Google d\xE9j\xE0 active.", cacheTtlMs: ttlConnected };
+      const payload2 = {
+        success: true,
+        isConnected: true,
+        needsManualAuth: false,
+        message: "Connexion Google d\xE9j\xE0 active (token local valide).",
+        cacheTtlMs: ttlConnected
+      };
       connectCache.set(key2, { expiresAt: now + ttlConnected, payload: payload2 });
       res.setHeader("X-AutoGoogle-Cache-Until", new Date(now + ttlConnected).toISOString());
       return res.json(payload2);
     }
-    console.log("[AutoGoogleAuth] \u{1F510} Connexion Google non active, g\xE9n\xE9ration de l'URL d'autorisation...");
-    const org = await db.organization.findUnique({
-      where: { id: organizationId },
-      include: { GoogleWorkspaceConfig: true }
-    });
-    if (!org?.GoogleWorkspaceConfig?.adminEmail) {
-      return res.status(404).json({ success: false, error: "Configuration Google Workspace introuvable pour cette organisation." });
-    }
-    const authUrl = googleOAuthService.getAuthUrl(userId, organizationId);
+    console.log("[AutoGoogleAuth] \u26A0\uFE0F Connexion Google non active: OAuth d\xE9sactiv\xE9 via auto-connect.");
     const ttlManual = 6e4;
     const payload = {
       success: true,
       isConnected: false,
       needsManualAuth: true,
-      authUrl,
-      adminEmail: org.GoogleWorkspaceConfig.adminEmail,
-      message: "Autorisation manuelle requise.",
+      message: "Connexion Google requise: demandez \xE0 un admin d'activer Google Workspace via la page Organisation (Admin) et le scheduler.",
+      requiresAdmin: true,
       cacheTtlMs: ttlManual
     };
     connectCache.set(key2, { expiresAt: now + ttlManual, payload });
@@ -11000,13 +11041,14 @@ var autoGoogleAuthRoutes_default = router10;
 
 // src/routes/google-auth.ts
 var import_express13 = require("express");
-init_prisma();
+init_database();
 init_crypto();
 var import_googleapis7 = require("googleapis");
 
 // src/utils/googleTokenRefresh.ts
 var import_googleapis6 = require("googleapis");
-init_prisma();
+init_database();
+init_crypto();
 async function refreshGoogleTokenIfNeeded(organizationId, userId) {
   try {
     console.log("[REFRESH-TOKEN] \u{1F50D} V\xE9rification token pour organisation:", organizationId, "userId:", userId);
@@ -11068,11 +11110,13 @@ async function refreshGoogleTokenIfNeeded(organizationId, userId) {
       return { success: false, error: "missing_oauth_config" };
     }
     console.log("[REFRESH-TOKEN] \u{1F527} Configuration OAuth client...");
-    const oauth2Client = new import_googleapis6.google.auth.OAuth2(
-      googleConfig.clientId,
-      googleConfig.clientSecret,
-      googleConfig.redirectUri
-    );
+    const clientId = googleConfig.clientId ? decrypt(googleConfig.clientId) : null;
+    const clientSecret = googleConfig.clientSecret ? decrypt(googleConfig.clientSecret) : null;
+    if (!clientId || !clientSecret) {
+      console.log("[REFRESH-TOKEN] \u274C Configuration OAuth manquante/invalide (apr\xE8s d\xE9chiffrement)");
+      return { success: false, error: "missing_oauth_config" };
+    }
+    const oauth2Client = new import_googleapis6.google.auth.OAuth2(clientId, clientSecret);
     console.log("[REFRESH-TOKEN] \u{1F511} Configuration des credentials...");
     oauth2Client.setCredentials({
       refresh_token: googleToken.refreshToken || void 0
@@ -11407,6 +11451,42 @@ function getFrontendUrl() {
   console.log("[GOOGLE-AUTH] \u{1F3E0} Local d\xE9tect\xE9, FRONTEND_URL: http://localhost:5173");
   return "http://localhost:5173";
 }
+function getOAuthRedirectUri(hostHeader) {
+  const host = hostHeader || "localhost:4000";
+  console.log("[GOOGLE-AUTH] \u{1F4CD} D\xE9tection environnement - Host re\xE7u:", host);
+  if (host.includes("app.github.dev")) {
+    const hostWithoutPort = host.split(":")[0];
+    const match = hostWithoutPort.match(/^(.+?)-\d+\.app\.github\.dev$/);
+    const codespaceName = match ? match[1] : hostWithoutPort.replace(".app.github.dev", "");
+    const redirectUri2 = `https://${codespaceName}-4000.app.github.dev/api/google-auth/callback`;
+    console.log("[GOOGLE-AUTH] \u{1F680} Codespaces d\xE9tect\xE9:", {
+      originalHost: host,
+      hostWithoutPort,
+      codespaceName,
+      redirectUri: redirectUri2
+    });
+    return redirectUri2;
+  }
+  if (host.includes("app.2thier.be") || host.includes("2thier.be")) {
+    const redirectUri2 = "https://app.2thier.be/api/google-auth/callback";
+    console.log("[GOOGLE-AUTH] \u{1F310} Production d\xE9tect\xE9e:", { host, redirectUri: redirectUri2 });
+    return redirectUri2;
+  }
+  const redirectUri = "http://localhost:4000/api/google-auth/callback";
+  console.log("[GOOGLE-AUTH] \u{1F3E0} Local d\xE9tect\xE9:", { host, redirectUri });
+  return redirectUri;
+}
+function encodeOAuthState(stateObj) {
+  return Buffer.from(JSON.stringify(stateObj), "utf8").toString("base64url");
+}
+function parseOAuthState(raw) {
+  try {
+    return JSON.parse(raw);
+  } catch {
+    const decoded = Buffer.from(String(raw), "base64url").toString("utf8");
+    return JSON.parse(decoded);
+  }
+}
 async function getGoogleWorkspaceConfig(organizationId) {
   try {
     console.log("[GOOGLE-AUTH] \u{1F4CB} Recherche config pour organisation:", organizationId);
@@ -11550,6 +11630,25 @@ async function activateGoogleModules(organizationId, grantedScopes) {
     return [];
   }
 }
+router12.get("/debug", (req2, res) => {
+  const hostHeader = req2.headers.host || "localhost:4000";
+  const redirectUri = getOAuthRedirectUri(hostHeader);
+  res.json({
+    debug: {
+      host_header: hostHeader,
+      generated_redirect_uri: redirectUri,
+      environment: hostHeader.includes("app.github.dev") ? "Codespaces" : hostHeader.includes("2thier.be") ? "Production" : "Local"
+    }
+  });
+});
+router12.get("/redirect-uri", (req2, res) => {
+  const hostHeader = req2.headers.host || "localhost:4000";
+  const redirectUri = getOAuthRedirectUri(hostHeader);
+  res.json({
+    redirectUri,
+    environment: hostHeader.includes("app.github.dev") ? "Codespaces" : hostHeader.includes("2thier.be") ? "Production" : "Local"
+  });
+});
 router12.get("/url", authMiddleware, async (req2, res) => {
   try {
     const organizationId = req2.query.organizationId;
@@ -11567,12 +11666,15 @@ router12.get("/url", authMiddleware, async (req2, res) => {
       });
     }
     const stateObj = {
-      userId: req2.user?.userId || null,
+      userId: req2.user?.userId || void 0,
       organizationId
     };
-    const actualRedirectUri = config.redirectUri;
-    console.log("[GOOGLE-AUTH] \u{1F3AF} Redirect URI depuis BDD:", actualRedirectUri);
-    const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${config.clientId}&redirect_uri=${encodeURIComponent(actualRedirectUri)}&scope=${encodeURIComponent(GOOGLE_SCOPES)}&response_type=code&access_type=offline&prompt=select_account&include_granted_scopes=true&enable_granular_consent=true&state=${encodeURIComponent(JSON.stringify(stateObj))}`;
+    const hostHeader1 = req2.headers.host || "localhost:4000";
+    const actualRedirectUri = getOAuthRedirectUri(hostHeader1);
+    console.log("[GOOGLE-AUTH] \u{1F3AF} Redirect URI (auto-d\xE9tect\xE9):", actualRedirectUri);
+    stateObj.redirectUri = actualRedirectUri;
+    const stateParam = encodeOAuthState(stateObj);
+    const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${config.clientId}&redirect_uri=${encodeURIComponent(actualRedirectUri)}&scope=${encodeURIComponent(GOOGLE_SCOPES)}&response_type=code&access_type=offline&prompt=consent&include_granted_scopes=true&enable_granular_consent=true&state=${encodeURIComponent(stateParam)}`;
     res.json({
       success: true,
       data: {
@@ -11592,7 +11694,9 @@ router12.get("/url", authMiddleware, async (req2, res) => {
 router12.get("/connect", authMiddleware, async (req2, res) => {
   try {
     const organizationId = req2.query.organizationId || req2.user?.organizationId?.toString();
+    const forceConsent = req2.query.force_consent === "true";
     console.log("[GOOGLE-AUTH] \u{1F50D} OrganizationId extrait:", organizationId);
+    console.log("[GOOGLE-AUTH] \u{1F504} Force consent:", forceConsent);
     console.log("[GOOGLE-AUTH] \u{1F464} User info:", req2.user ? "Pr\xE9sent" : "Absent");
     console.log("[GOOGLE-AUTH] \u{1F3E2} User organizationId:", req2.user?.organizationId);
     if (!organizationId) {
@@ -11601,6 +11705,20 @@ router12.get("/connect", authMiddleware, async (req2, res) => {
         success: false,
         message: "Organization ID requis (non trouv\xE9 dans query ou profil utilisateur)"
       });
+    }
+    if (forceConsent && req2.user?.userId) {
+      console.log("[GOOGLE-AUTH] \u{1F5D1}\uFE0F Suppression de l'ancien token pour forcer le consentement...");
+      try {
+        await db.googleToken.deleteMany({
+          where: {
+            userId: req2.user.userId,
+            organizationId
+          }
+        });
+        console.log("[GOOGLE-AUTH] \u2705 Ancien token supprim\xE9");
+      } catch (deleteError) {
+        console.warn("[GOOGLE-AUTH] \u26A0\uFE0F Erreur suppression ancien token:", deleteError);
+      }
     }
     const config = await getGoogleWorkspaceConfig(organizationId);
     console.log("[GOOGLE-AUTH] \u{1F50D} Configuration r\xE9cup\xE9r\xE9e pour org:", organizationId);
@@ -11615,20 +11733,24 @@ router12.get("/connect", authMiddleware, async (req2, res) => {
     console.log("[GOOGLE-AUTH] \u2705 Configuration valide d\xE9tect\xE9e");
     console.log("[GOOGLE-AUTH] \u{1F194} ClientId:", config.clientId);
     console.log("[GOOGLE-AUTH] \u{1F3E2} Domain:", config.domain);
-    const actualRedirectUri = config.redirectUri;
-    console.log("[GOOGLE-AUTH] \u{1F3AF} Redirect URI depuis BDD:", actualRedirectUri);
-    const stateObj = {
-      userId: req2.user?.userId || null,
-      organizationId
-    };
-    const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${config.clientId}&redirect_uri=${encodeURIComponent(actualRedirectUri)}&scope=${encodeURIComponent(GOOGLE_SCOPES)}&response_type=code&access_type=offline&prompt=select_account&include_granted_scopes=true&enable_granular_consent=true&state=${encodeURIComponent(JSON.stringify(stateObj))}`;
+    const hostHeader = req2.headers.host || "localhost:4000";
+    const actualRedirectUri = getOAuthRedirectUri(hostHeader);
+    console.log("[GOOGLE-AUTH] \u{1F3AF} Redirect URI (auto-d\xE9tect\xE9):", actualRedirectUri);
+    const stateParam = encodeOAuthState({
+      userId: req2.user?.userId || void 0,
+      organizationId,
+      redirectUri: actualRedirectUri
+    });
+    const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${config.clientId}&redirect_uri=${encodeURIComponent(actualRedirectUri)}&scope=${encodeURIComponent(GOOGLE_SCOPES)}&response_type=code&access_type=offline&prompt=consent&include_granted_scopes=true&enable_granular_consent=true&state=${encodeURIComponent(stateParam)}`;
     console.log("[GOOGLE-AUTH] \u{1F310} URL g\xE9n\xE9r\xE9e:", authUrl);
     res.json({
       success: true,
       data: {
         authUrl,
         scopes: GOOGLE_SCOPES.split(" "),
-        clientConfigured: true
+        clientConfigured: true,
+        forceConsent: true
+        // Indique qu'on force le consentement
       }
     });
   } catch (error) {
@@ -11657,17 +11779,13 @@ router12.get("/callback", async (req2, res) => {
     let organizationId;
     let userId;
     let platform;
+    let redirectUriFromState;
     try {
-      let parsedState;
-      try {
-        parsedState = JSON.parse(state);
-      } catch {
-        const raw = Buffer.from(String(state), "base64url").toString("utf8");
-        parsedState = JSON.parse(raw);
-      }
+      const parsedState = parseOAuthState(state);
       organizationId = parsedState.organizationId;
       userId = parsedState.userId;
       platform = parsedState.platform;
+      redirectUriFromState = parsedState.redirectUri;
       if (!organizationId || !userId) {
         throw new Error("State object is missing organizationId or userId");
       }
@@ -11689,14 +11807,24 @@ router12.get("/callback", async (req2, res) => {
     }
     console.log("[GOOGLE-AUTH] \u2705 Configuration trouv\xE9e, email admin cible:", config.adminEmail);
     console.log("[GOOGLE-AUTH] \u{1F504} \xC9change du code contre les tokens...");
-    const actualRedirectUri = config.redirectUri;
-    console.log("[GOOGLE-AUTH] \u{1F3AF} Redirect URI pour \xE9change de tokens (depuis BDD):", actualRedirectUri);
+    const hostHeader2 = req2.headers.host || "localhost:4000";
+    const actualRedirectUri = redirectUriFromState && typeof redirectUriFromState === "string" ? redirectUriFromState : getOAuthRedirectUri(hostHeader2);
+    console.log("[GOOGLE-AUTH] \u{1F3AF} Callback - Redirect URI pour \xE9change de tokens:", {
+      hostHeader: hostHeader2,
+      redirectUri: actualRedirectUri,
+      environment: hostHeader2.includes("app.github.dev") ? "Codespaces" : hostHeader2.includes("2thier.be") ? "Production" : "Local"
+    });
     const oauth2Client = new import_googleapis7.google.auth.OAuth2(
       config.clientId,
       config.clientSecret,
       actualRedirectUri
     );
     try {
+      console.log("[GOOGLE-AUTH] \u{1F511} Tentative d'\xE9change de code avec Google:", {
+        clientId: config.clientId.substring(0, 20) + "...",
+        redirectUri: actualRedirectUri,
+        code: code.substring(0, 20) + "..."
+      });
       const { tokens: tokens2 } = await oauth2Client.getToken(code);
       console.log("[GOOGLE-AUTH] \u2705 Tokens re\xE7us:", {
         accessToken: !!tokens2.access_token,
@@ -11875,6 +12003,8 @@ router12.get("/status", authMiddleware, async (req2, res) => {
       success: true,
       data: {
         connected: tokenValid,
+        isValid: tokenValid,
+        // ✅ Ajout explicite pour vérification côté client
         email: userEmail,
         scopes,
         lastSync: googleTokenInfo?.updatedAt,
@@ -12137,7 +12267,8 @@ var google_auth_default = router12;
 var import_express14 = require("express");
 
 // src/services/GoogleTokenRefreshScheduler.ts
-init_prisma();
+init_database();
+init_crypto();
 var GoogleTokenRefreshScheduler = class {
   intervalId = null;
   isRunning = false;
@@ -12178,32 +12309,39 @@ var GoogleTokenRefreshScheduler = class {
   }
   async forceRefreshAll() {
     console.log("\u{1F525} [GoogleTokenScheduler] Refresh forc\xE9 de tous les tokens");
-    await this.refreshAllTokens();
+    await this.refreshAllTokens({ ignoreExpiry: true });
   }
-  async refreshAllTokens() {
+  async refreshAllTokens(options = {}) {
     try {
       console.log("\u{1F504} [GoogleTokenScheduler] D\xE9but du refresh de tous les tokens...");
       this.lastRefreshTime = /* @__PURE__ */ new Date();
+      const ignoreExpiry = options.ignoreExpiry === true;
       const tokensToRefresh = await db.googleToken.findMany({
         where: {
-          OR: [
-            // Tokens qui expirent dans moins de 10 minutes
-            {
-              expiresAt: {
-                lte: new Date(Date.now() + 10 * 60 * 1e3)
+          // Ne tenter un refresh que si un refresh token existe
+          refreshToken: {
+            not: null
+          },
+          ...ignoreExpiry ? {} : {
+            OR: [
+              // Tokens qui expirent dans moins de 10 minutes
+              {
+                expiresAt: {
+                  lte: new Date(Date.now() + 10 * 60 * 1e3)
+                }
+              },
+              // Ou tokens sans date d'expiration (considérés comme expirés)
+              {
+                expiresAt: null
               }
-            },
-            // Ou tokens sans date d'expiration (considérés comme expirés)
-            {
-              expiresAt: null
-            }
-          ]
+            ]
+          }
         },
         include: {
           Organization: true
         }
       });
-      console.log(`\u{1F50D} [GoogleTokenScheduler] ${tokensToRefresh.length} tokens trouv\xE9s \xE0 refresher`);
+      console.log(`\u{1F50D} [GoogleTokenScheduler] ${tokensToRefresh.length} tokens trouv\xE9s \xE0 refresher${ignoreExpiry ? " (mode forc\xE9)" : ""}`);
       let successCount = 0;
       let errorCount = 0;
       for (const token of tokensToRefresh) {
@@ -12237,10 +12375,30 @@ var GoogleTokenRefreshScheduler = class {
         });
         return false;
       }
-      if (!isGoogleOAuthConfigured()) {
-        throw new Error("Configuration Google OAuth manquante pour GoogleTokenRefreshScheduler.");
+      const googleConfig = await db.googleWorkspaceConfig.findUnique({
+        where: { organizationId: token.organizationId }
+      });
+      const adminEmail = googleConfig?.adminEmail?.trim().toLowerCase();
+      const tokenEmail = token.googleEmail?.trim().toLowerCase();
+      if (adminEmail && tokenEmail !== adminEmail) {
+        console.log(`\u23ED\uFE0F [GoogleTokenScheduler] Token ignor\xE9 (non-admin) pour org ${token.organizationId}: ${token.googleEmail ?? "(sans googleEmail)"}`);
+        return true;
       }
-      const { clientId, clientSecret } = googleOAuthConfig;
+      const clientId = googleConfig?.clientId ? decrypt(googleConfig.clientId) : null;
+      const clientSecret = googleConfig?.clientSecret ? decrypt(googleConfig.clientSecret) : null;
+      if (!clientId || !clientSecret) {
+        const errorMsg = "Configuration OAuth (clientId/clientSecret) manquante ou invalide";
+        console.error(`\u274C [GoogleTokenScheduler] ${errorMsg} pour org ${token.organizationId}`);
+        await this.logRefreshHistory({
+          organizationId: token.organizationId,
+          success: false,
+          message: errorMsg,
+          errorDetails: "Missing or invalid encrypted OAuth credentials",
+          oldExpiresAt,
+          newExpiresAt: null
+        });
+        return false;
+      }
       const response = await fetch("https://oauth2.googleapis.com/token", {
         method: "POST",
         headers: {
@@ -12254,14 +12412,42 @@ var GoogleTokenRefreshScheduler = class {
         })
       });
       if (!response.ok) {
-        const errorData = await response.text();
-        const errorMsg = `Erreur Google OAuth: ${response.status}`;
-        console.error(`\u274C [GoogleTokenScheduler] ${errorMsg} pour org ${token.organizationId}:`, errorData);
+        const rawBody = await response.text();
+        let googleError;
+        let googleErrorDescription;
+        try {
+          const parsed = JSON.parse(rawBody);
+          googleError = parsed.error;
+          googleErrorDescription = parsed.error_description;
+        } catch {
+        }
+        let errorMsg = `Erreur Google OAuth: ${response.status}`;
+        if (googleError === "invalid_grant") {
+          errorMsg = "Refresh token r\xE9voqu\xE9/invalide (r\xE9authentification requise)";
+          try {
+            await db.googleToken.update({
+              where: { id: token.id },
+              data: { refreshToken: null, updatedAt: /* @__PURE__ */ new Date() }
+            });
+          } catch (cleanupError) {
+            console.warn("[GoogleTokenScheduler] \u26A0\uFE0F Impossible de nettoyer refreshToken apr\xE8s invalid_grant:", cleanupError);
+          }
+        } else if (googleError === "invalid_client") {
+          errorMsg = "Client OAuth invalide (clientId/clientSecret incorrects)";
+        } else if (googleError) {
+          errorMsg = `Erreur Google OAuth (${googleError})`;
+        }
+        const errorDetails = [
+          googleError ? `error=${googleError}` : null,
+          googleErrorDescription ? `error_description=${googleErrorDescription}` : null,
+          rawBody || null
+        ].filter(Boolean).join(" | ");
+        console.error(`\u274C [GoogleTokenScheduler] ${errorMsg} pour org ${token.organizationId}:`, errorDetails);
         await this.logRefreshHistory({
           organizationId: token.organizationId,
           success: false,
           message: errorMsg,
-          errorDetails: errorData,
+          errorDetails,
           oldExpiresAt,
           newExpiresAt: null
         });
@@ -12337,7 +12523,7 @@ var GoogleTokenRefreshScheduler = class {
 var googleTokenScheduler = new GoogleTokenRefreshScheduler();
 
 // src/routes/google-scheduler.ts
-init_prisma();
+init_database();
 var router13 = (0, import_express14.Router)();
 router13.use(authMiddleware);
 router13.use(requireRole2(["admin", "super_admin"]));
@@ -12485,7 +12671,7 @@ var google_scheduler_default = router13;
 
 // src/routes/google-tokens.ts
 var import_express15 = require("express");
-init_prisma();
+init_database();
 var router14 = (0, import_express15.Router)();
 router14.use(authMiddleware);
 router14.use(requireRole2(["admin", "super_admin"]));
@@ -12505,10 +12691,8 @@ router14.get("/scheduler/status", async (_req, res) => {
       isRunning: status.isRunning,
       nextRefresh: status.isRunning ? new Date(Date.now() + 50 * 60 * 1e3).toISOString() : null,
       // 50 min dans le futur
-      lastRefresh: null,
-      // À implémenter si nécessaire
-      refreshCount: 0,
-      // À implémenter si nécessaire
+      lastRefresh: status.lastRefresh ? status.lastRefresh.toISOString() : null,
+      refreshCount: status.refreshCount,
       totalUsers: totalTokens,
       activeTokens,
       errors: recentErrors
@@ -12529,8 +12713,24 @@ router14.get("/scheduler/status", async (_req, res) => {
 router14.get("/organization/:organizationId", async (req2, res) => {
   try {
     const { organizationId } = req2.params;
-    const token = await db.googleToken.findFirst({
+    const googleConfig = await db.googleWorkspaceConfig.findUnique({
       where: { organizationId },
+      select: { adminEmail: true }
+    });
+    const adminEmail = googleConfig?.adminEmail?.trim() || null;
+    const token = adminEmail ? await db.googleToken.findFirst({
+      where: {
+        organizationId,
+        googleEmail: {
+          equals: adminEmail,
+          mode: "insensitive"
+        }
+      },
+      orderBy: { updatedAt: "desc" },
+      include: { User: { select: { email: true, firstName: true, lastName: true } } }
+    }) : await db.googleToken.findFirst({
+      where: { organizationId },
+      orderBy: { updatedAt: "desc" },
       include: { User: { select: { email: true, firstName: true, lastName: true } } }
     });
     if (!token) {
@@ -12560,7 +12760,10 @@ router14.get("/organization/:organizationId", async (req2, res) => {
       googleEmail: token.googleEmail,
       accessToken: token.accessToken ? `${token.accessToken.substring(0, 20)}...` : "",
       // Masquer le token
-      refreshToken: token.refreshToken ? "Pr\xE9sent" : "Absent",
+      refreshToken: token.refreshToken,
+      // ✅ Retourner null au lieu de 'Absent' pour que le frontend puisse détecter
+      hasRefreshToken: !!token.refreshToken,
+      // ✅ Ajouter un indicateur booléen clair
       tokenType: token.tokenType || "Bearer",
       expiresIn: 3600,
       // Les tokens Google durent 1 heure
@@ -12568,6 +12771,8 @@ router14.get("/organization/:organizationId", async (req2, res) => {
       createdAt: token.createdAt?.toISOString() || "",
       updatedAt: token.updatedAt?.toISOString() || "",
       expiresAt: expiresAt?.toISOString() || "",
+      lastRefreshAt: token.lastRefreshAt?.toISOString() || null,
+      refreshCount: token.refreshCount || 0,
       isExpired,
       timeUntilExpiry
     };
@@ -12635,6 +12840,7 @@ router14.post("/scheduler/refresh-now", async (_req, res) => {
 router14.get("/refresh-history/:organizationId", async (req2, res) => {
   try {
     const { organizationId } = req2.params;
+    console.log(`[GoogleTokensAPI] R\xE9cup\xE9ration historique pour org: ${organizationId}`);
     const history = await db.googleTokenRefreshHistory.findMany({
       where: {
         organizationId
@@ -12660,10 +12866,9 @@ router14.get("/refresh-history/:organizationId", async (req2, res) => {
     });
   } catch (error) {
     console.error("[GoogleTokensAPI] Erreur refresh history:", error);
-    res.status(500).json({
-      success: false,
-      message: "Erreur lors de la r\xE9cup\xE9ration de l'historique",
-      error: error instanceof Error ? error.message : "Erreur inconnue"
+    res.json({
+      success: true,
+      data: []
     });
   }
 });
@@ -18295,7 +18500,9 @@ var AutoGoogleAuthService = class _AutoGoogleAuthService {
           };
         }
       }
-      const authUrl = googleOAuthService.getAuthUrl(userId);
+      console.log("[AutoGoogleAuth] \u{1F510} G\xE9n\xE9ration de l'URL d'autorisation pour premi\xE8re connexion");
+      const authUrl = googleOAuthService.getAuthUrl(userId, userId);
+      console.log("[AutoGoogleAuth] URL g\xE9n\xE9r\xE9e:", authUrl);
       return {
         success: true,
         isConnected: false,
@@ -21539,7 +21746,7 @@ var import_express40 = __toESM(require("express"), 1);
 var import_fs5 = __toESM(require("fs"), 1);
 var import_path4 = __toESM(require("path"), 1);
 init_prisma();
-var import_crypto9 = require("crypto");
+var import_crypto12 = require("crypto");
 var geminiSingleton = new GoogleGeminiService_default();
 var router39 = import_express40.default.Router();
 router39.use(authMiddleware);
@@ -21613,7 +21820,7 @@ async function logAiUsage(params) {
     };
     await db.aiUsageLog?.create?.({
       data: {
-        id: (0, import_crypto9.randomUUID)(),
+        id: (0, import_crypto12.randomUUID)(),
         organizationId: organizationId || void 0,
         userId: userId || void 0,
         type,
@@ -21629,7 +21836,7 @@ async function logAiUsage(params) {
     }).catch(async () => {
       await db.$executeRawUnsafe(
         'INSERT INTO "AiUsageLog" (id, "userId", "organizationId", type, model, "tokensPrompt", "tokensOutput", "latencyMs", success, "errorCode", "errorMessage", meta) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12);',
-        (0, import_crypto9.randomUUID)(),
+        (0, import_crypto12.randomUUID)(),
         userId,
         organizationId,
         type,
@@ -23293,7 +23500,7 @@ var ai_default = router39;
 var import_express41 = __toESM(require("express"), 1);
 var import_fs6 = __toESM(require("fs"), 1);
 var import_path5 = __toESM(require("path"), 1);
-var import_crypto10 = __toESM(require("crypto"), 1);
+var import_crypto13 = __toESM(require("crypto"), 1);
 var router40 = import_express41.default.Router();
 router40.use(authenticateToken);
 var ALLOWED_ROOTS = ["src", "prisma"];
@@ -23377,7 +23584,7 @@ router40.get("/code/file", (req2, res) => {
     const content = import_fs6.default.readFileSync(target, "utf8");
     const totalBytes = Buffer.byteLength(content, "utf8");
     const lines = content.split(/\r?\n/);
-    const etag = 'W/"' + import_crypto10.default.createHash("sha256").update(content).digest("hex").slice(0, 16) + '"';
+    const etag = 'W/"' + import_crypto13.default.createHash("sha256").update(content).digest("hex").slice(0, 16) + '"';
     const ifNoneMatch = req2.headers["if-none-match"];
     if (ifNoneMatch && ifNoneMatch === etag) {
       res.status(304).end();
@@ -28501,19 +28708,9 @@ function extractNodeAndCapacityRefsFromFormula(tokens2) {
 function extractNodeIdsFromTable(tableData) {
   const ids = /* @__PURE__ */ new Set();
   if (!tableData || typeof tableData !== "object") return ids;
-  const str = JSON.stringify(tableData);
-  const uuidRegex = /([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}(?:-\d+)?)/gi;
-  let match;
-  while ((match = uuidRegex.exec(str)) !== null) {
-    ids.add(match[1]);
-  }
-  const nodeRegex = /(node_[a-z0-9_-]+(?:-\d+)?)/gi;
-  while ((match = nodeRegex.exec(str)) !== null) {
-    ids.add(match[1]);
-  }
-  const sharedRefRegex = /(shared-ref-[a-z0-9-]+(?:-\d+)?)/gi;
-  while ((match = sharedRefRegex.exec(str)) !== null) {
-    ids.add(match[1]);
+  const table = tableData;
+  if (table.nodeId && typeof table.nodeId === "string") {
+    ids.add(table.nodeId);
   }
   return ids;
 }
@@ -28668,11 +28865,19 @@ async function linkTableToAllNodes(client, tableId, tableData) {
   let errorCount = 0;
   for (const nodeId of nodeIds) {
     try {
+      const node = await client.treeBranchLeafNode.findUnique({
+        where: { id: nodeId },
+        select: { fieldType: true, id: true }
+      });
+      if (!node) continue;
+      if (node.fieldType === null || node.fieldType === "" || node.fieldType === void 0) {
+        continue;
+      }
       await addToNodeLinkedField(client, nodeId, "linkedTableIds", [tableId]);
       successCount++;
     } catch (e) {
       errorCount++;
-      console.error(`   \xC3\xA2\xC2\x9D\xC5\u2019 ${nodeId} \xC3\xA2\xE2\u20AC\xA0\xE2\u20AC\u2122 \xC3\u0192\xE2\u20AC\xB0CHEC:`, e.message);
+      console.error(`   \u2717 ${nodeId} ECHEC:`, e.message);
     }
   }
 }
@@ -28945,7 +29150,7 @@ function getValidationErrorMessage(parentType, parentSubType, childType, childSu
 }
 
 // src/components/TreeBranchLeaf/treebranchleaf-new/api/treebranchleaf-routes.ts
-var import_crypto12 = require("crypto");
+var import_crypto16 = require("crypto");
 init_operation_interpreter();
 
 // src/components/TreeBranchLeaf/treebranchleaf-new/api/registry/repeat-id-registry.ts
@@ -29104,8 +29309,8 @@ function getOrgId(req2) {
   const headerOrg = req2.headers?.["x-organization-id"] || req2.headers?.["x-organization"] || req2.headers?.["organization-id"];
   return user.organizationId || headerOrg || null;
 }
-function registerSumDisplayFieldRoutes(router92) {
-  router92.post("/trees/:treeId/nodes/:nodeId/sum-display-field", async (req2, res) => {
+function registerSumDisplayFieldRoutes(router93) {
+  router93.post("/trees/:treeId/nodes/:nodeId/sum-display-field", async (req2, res) => {
     try {
       const { treeId, nodeId } = req2.params;
       const organizationId = getOrgId(req2);
@@ -29362,7 +29567,7 @@ function registerSumDisplayFieldRoutes(router92) {
       res.status(500).json({ error: "Erreur lors de la cr\xC3\u0192\xC2\xA9ation du champ Total", details: errMsg });
     }
   });
-  router92.delete("/trees/:treeId/nodes/:nodeId/sum-display-field", async (req2, res) => {
+  router93.delete("/trees/:treeId/nodes/:nodeId/sum-display-field", async (req2, res) => {
     try {
       const { treeId, nodeId } = req2.params;
       const organizationId = getOrgId(req2);
@@ -29822,11 +30027,13 @@ async function copyFormulaCapacity(originalFormulaId, newNodeId, suffix, prisma4
       } else {
       }
     }
+    const formulaIdShort = originalFormula.id.substring(0, 8);
+    const uniqueName = originalFormula.name ? `${originalFormula.name}-${formulaIdShort}-${suffix}` : `formula-${formulaIdShort}-${suffix}`;
     const newFormula = await prisma49.treeBranchLeafNodeFormula.upsert({
       where: { id: newFormulaId },
       update: {
         nodeId: finalOwnerNodeId,
-        name: originalFormula.name ? `${originalFormula.name}-${suffix}` : null,
+        name: uniqueName,
         description: originalFormula.description,
         tokens: rewrittenTokens,
         targetProperty: originalFormula.targetProperty,
@@ -29839,7 +30046,7 @@ async function copyFormulaCapacity(originalFormulaId, newNodeId, suffix, prisma4
         id: newFormulaId,
         nodeId: finalOwnerNodeId,
         organizationId: originalFormula.organizationId,
-        name: originalFormula.name ? `${originalFormula.name}-${suffix}` : null,
+        name: uniqueName,
         description: originalFormula.description,
         tokens: rewrittenTokens,
         // 🏯 CHAMPS CRITIQUES - Copie de la cible et des propriétés
@@ -30419,44 +30626,14 @@ async function copyTableCapacity2(originalTableId, newNodeId, suffix, prisma49, 
             }
             if (rewritten?.lookup?.rowSourceOption?.comparisonColumn) {
               const val = rewritten.lookup.rowSourceOption.comparisonColumn;
-              if (!/^-?\d+(\.\d+)?$/.test(val.trim()) && !val.endsWith(`-${suffix}`)) {
-                rewritten.lookup.rowSourceOption.comparisonColumn = `${val}-${suffix}`;
+              if (!val.endsWith(`-${suffixNum}`)) {
+                rewritten.lookup.rowSourceOption.comparisonColumn = `${val}-${suffixNum}`;
               }
             }
             if (rewritten?.lookup?.columnSourceOption?.comparisonColumn) {
               const val = rewritten.lookup.columnSourceOption.comparisonColumn;
-              if (!/^-?\d+(\.\d+)?$/.test(val.trim()) && !val.endsWith(`-${suffix}`)) {
-                rewritten.lookup.columnSourceOption.comparisonColumn = `${val}-${suffix}`;
-              }
-            }
-            if (rewritten?.lookup?.displayColumn) {
-              if (Array.isArray(rewritten.lookup.displayColumn)) {
-                rewritten.lookup.displayColumn = rewritten.lookup.displayColumn.map((col) => {
-                  if (col && !/^-?\d+(\.\d+)?$/.test(col.trim()) && !col.endsWith(`-${suffix}`)) {
-                    return `${col}-${suffix}`;
-                  }
-                  return col;
-                });
-              } else if (typeof rewritten.lookup.displayColumn === "string") {
-                const val = rewritten.lookup.displayColumn;
-                if (!/^-?\d+(\.\d+)?$/.test(val.trim()) && !val.endsWith(`-${suffix}`)) {
-                  rewritten.lookup.displayColumn = `${val}-${suffix}`;
-                }
-              }
-            }
-            if (rewritten?.lookup?.displayRow) {
-              if (Array.isArray(rewritten.lookup.displayRow)) {
-                rewritten.lookup.displayRow = rewritten.lookup.displayRow.map((row) => {
-                  if (row && !/^-?\d+(\.\d+)?$/.test(row.trim()) && !row.endsWith(`-${suffix}`)) {
-                    return `${row}-${suffix}`;
-                  }
-                  return row;
-                });
-              } else if (typeof rewritten.lookup.displayRow === "string") {
-                const val = rewritten.lookup.displayRow;
-                if (!/^-?\d+(\.\d+)?$/.test(val.trim()) && !val.endsWith(`-${suffix}`)) {
-                  rewritten.lookup.displayRow = `${val}-${suffix}`;
-                }
+              if (!val.endsWith(`-${suffixNum}`)) {
+                rewritten.lookup.columnSourceOption.comparisonColumn = `${val}-${suffixNum}`;
               }
             }
             return rewritten;
@@ -30492,44 +30669,14 @@ async function copyTableCapacity2(originalTableId, newNodeId, suffix, prisma49, 
             }
             if (rewritten?.lookup?.rowSourceOption?.comparisonColumn) {
               const val = rewritten.lookup.rowSourceOption.comparisonColumn;
-              if (!/^-?\d+(\.\d+)?$/.test(val.trim()) && !val.endsWith(`-${suffix}`)) {
-                rewritten.lookup.rowSourceOption.comparisonColumn = `${val}-${suffix}`;
+              if (!val.endsWith(`-${suffixNum}`)) {
+                rewritten.lookup.rowSourceOption.comparisonColumn = `${val}-${suffixNum}`;
               }
             }
             if (rewritten?.lookup?.columnSourceOption?.comparisonColumn) {
               const val = rewritten.lookup.columnSourceOption.comparisonColumn;
-              if (!/^-?\d+(\.\d+)?$/.test(val.trim()) && !val.endsWith(`-${suffix}`)) {
-                rewritten.lookup.columnSourceOption.comparisonColumn = `${val}-${suffix}`;
-              }
-            }
-            if (rewritten?.lookup?.displayColumn) {
-              if (Array.isArray(rewritten.lookup.displayColumn)) {
-                rewritten.lookup.displayColumn = rewritten.lookup.displayColumn.map((col) => {
-                  if (col && !/^-?\d+(\.\d+)?$/.test(col.trim()) && !col.endsWith(`-${suffix}`)) {
-                    return `${col}-${suffix}`;
-                  }
-                  return col;
-                });
-              } else if (typeof rewritten.lookup.displayColumn === "string") {
-                const val = rewritten.lookup.displayColumn;
-                if (!/^-?\d+(\.\d+)?$/.test(val.trim()) && !val.endsWith(`-${suffix}`)) {
-                  rewritten.lookup.displayColumn = `${val}-${suffix}`;
-                }
-              }
-            }
-            if (rewritten?.lookup?.displayRow) {
-              if (Array.isArray(rewritten.lookup.displayRow)) {
-                rewritten.lookup.displayRow = rewritten.lookup.displayRow.map((row) => {
-                  if (row && !/^-?\d+(\.\d+)?$/.test(row.trim()) && !row.endsWith(`-${suffix}`)) {
-                    return `${row}-${suffix}`;
-                  }
-                  return row;
-                });
-              } else if (typeof rewritten.lookup.displayRow === "string") {
-                const val = rewritten.lookup.displayRow;
-                if (!/^-?\d+(\.\d+)?$/.test(val.trim()) && !val.endsWith(`-${suffix}`)) {
-                  rewritten.lookup.displayRow = `${val}-${suffix}`;
-                }
+              if (!val.endsWith(`-${suffixNum}`)) {
+                rewritten.lookup.columnSourceOption.comparisonColumn = `${val}-${suffixNum}`;
               }
             }
             return rewritten;
@@ -30966,6 +31113,7 @@ async function copyVariableWithCapacities(originalVarId, suffix, newNodeId, pris
               treeId: true,
               order: true,
               linkedTableIds: true,
+              linkedVariableIds: true,
               hasTable: true,
               table_name: true,
               table_activeId: true,
@@ -31014,6 +31162,7 @@ async function copyVariableWithCapacities(originalVarId, suffix, newNodeId, pris
             subtab: true,
             subtabs: true,
             linkedTableIds: true,
+            linkedVariableIds: true,
             hasTable: true,
             table_name: true,
             table_activeId: true,
@@ -31209,6 +31358,18 @@ async function copyVariableWithCapacities(originalVarId, suffix, newNodeId, pris
             const tableSourceNode = originalDisplayNode ?? originalOwnerNode;
             const displayLabel = forceSingleSuffix(originalVar.displayName || "Donn\xE9e");
             const resolvedOrder = originalDisplayNode?.order ?? (originalOwnerNode.order ?? 0) + 1;
+            let actuallyOwnsTable = false;
+            if (capacityType === "table" && newSourceRef) {
+              const tableIdMatch = newSourceRef.match(/table:\/\/([^/:\s]+)/);
+              if (tableIdMatch) {
+                const tableId = tableIdMatch[1];
+                const tableOwner = await prisma49.treeBranchLeafNodeTable.findUnique({
+                  where: { id: tableId },
+                  select: { nodeId: true }
+                });
+                actuallyOwnsTable = tableOwner?.nodeId === originalVar.nodeId;
+              }
+            }
             const resolvedSubTabsJson = (() => {
               const resolved = Array.isArray(inheritedSubTabs) && inheritedSubTabs.length ? inheritedSubTabs : ownerSubTabsArray;
               return resolved?.length ? JSON.stringify(resolved) : null;
@@ -31249,18 +31410,22 @@ async function copyVariableWithCapacities(originalVarId, suffix, newNodeId, pris
               hasFormula: capacityType === "formula" ? tableSourceNode.hasFormula ?? true : false,
               hasLink: tableSourceNode.hasLink ?? false,
               hasMarkers: tableSourceNode.hasMarkers ?? false,
-              hasTable: capacityType === "table" ? tableSourceNode.hasTable ?? true : false,
-              table_name: capacityType === "table" ? tableSourceNode.table_name : null,
-              table_activeId: capacityType === "table" && tableSourceNode.table_activeId ? appendSuffix(String(tableSourceNode.table_activeId)) : null,
-              table_instances: capacityType === "table" ? cloneAndSuffixInstances(tableSourceNode.table_instances) : null,
-              table_columns: capacityType === "table" ? tableSourceNode.table_columns : null,
-              table_data: capacityType === "table" ? tableSourceNode.table_data : null,
-              table_importSource: capacityType === "table" ? tableSourceNode.table_importSource : null,
-              table_isImported: capacityType === "table" ? tableSourceNode.table_isImported ?? false : false,
-              table_meta: capacityType === "table" ? tableSourceNode.table_meta : null,
-              table_rows: capacityType === "table" ? tableSourceNode.table_rows : null,
-              table_type: capacityType === "table" ? tableSourceNode.table_type : null,
-              linkedTableIds: capacityType === "table" && Array.isArray(tableSourceNode.linkedTableIds) ? tableSourceNode.linkedTableIds.map((id) => appendSuffix(String(id))) : [],
+              // 🔧 FIX 06/01/2026: SEULEMENT mettre hasTable: true si:
+              // 1) La variable référence une table (capacityType === 'table')
+              // 2) ET le node est le PROPRIÉTAIRE de la table (actuallyOwnsTable === true)
+              // Sinon Inclinaison-1 (qui affiche une valeur de table d'Orientation) aurait hasTable: true incorrectement
+              hasTable: actuallyOwnsTable ? tableSourceNode.hasTable ?? true : false,
+              table_name: actuallyOwnsTable ? tableSourceNode.table_name : null,
+              table_activeId: actuallyOwnsTable && tableSourceNode.table_activeId ? appendSuffix(String(tableSourceNode.table_activeId)) : null,
+              table_instances: actuallyOwnsTable ? cloneAndSuffixInstances(tableSourceNode.table_instances) : null,
+              table_columns: actuallyOwnsTable ? tableSourceNode.table_columns : null,
+              table_data: actuallyOwnsTable ? tableSourceNode.table_data : null,
+              table_importSource: actuallyOwnsTable ? tableSourceNode.table_importSource : null,
+              table_isImported: actuallyOwnsTable ? tableSourceNode.table_isImported ?? false : false,
+              table_meta: actuallyOwnsTable ? tableSourceNode.table_meta : null,
+              table_rows: actuallyOwnsTable ? tableSourceNode.table_rows : null,
+              table_type: actuallyOwnsTable ? tableSourceNode.table_type : null,
+              linkedTableIds: actuallyOwnsTable && Array.isArray(tableSourceNode.linkedTableIds) ? tableSourceNode.linkedTableIds.map((id) => appendSuffix(String(id))) : [],
               // 🔧 FIX 24/12/2025: Explicitement mettre à null/[] les IDs de capacités non pertinentes
               // pour éviter qu'un champ simple hérite des formules/conditions du nœud source
               formula_activeId: capacityType === "formula" && tableSourceNode.formula_activeId ? appendSuffix(String(tableSourceNode.formula_activeId)) : null,
@@ -31269,7 +31434,11 @@ async function copyVariableWithCapacities(originalVarId, suffix, newNodeId, pris
               // Sera rempli après si capacityType === 'formula'
               linkedConditionIds: [],
               // Sera rempli après si capacityType === 'condition'
-              linkedVariableIds: [newVarId],
+              // 🔧 FIX 07/01/2026: Pour les composites (qui référencent d'autres variables via linkedVariableIds),
+              // on doit copier les linkedVariableIds du nœud ORIGINAL en les suffixant,
+              // pas seulement mettre [newVarId]. Exemple: Orientation-inclinaison-1 doit référencer
+              // [Orientation-1, Inclinaison-1], pas seulement [Orientation-inclinaison-1]
+              linkedVariableIds: Array.isArray(tableSourceNode.linkedVariableIds) && tableSourceNode.linkedVariableIds.length > 0 ? tableSourceNode.linkedVariableIds.map((varId) => appendSuffixOnce(String(varId))) : [newVarId],
               data_activeId: tableSourceNode.data_activeId ? appendSuffix(String(tableSourceNode.data_activeId)) : null,
               data_displayFormat: tableSourceNode.data_displayFormat,
               data_exposedKey: tableSourceNode.data_exposedKey,
@@ -31381,7 +31550,9 @@ async function copyVariableWithCapacities(originalVarId, suffix, newNodeId, pris
                 });
               }
               const copiedTableIds = [];
-              if (tableSourceNode.hasTable && Array.isArray(tableSourceNode.linkedTableIds) && tableSourceNode.linkedTableIds.length > 0) {
+              const originalDisplayNodeId = originalVar.nodeId;
+              const tableOwnerIsSameAsDisplay = tableSourceNode.id === originalDisplayNodeId;
+              if (tableOwnerIsSameAsDisplay && tableSourceNode.hasTable && Array.isArray(tableSourceNode.linkedTableIds) && tableSourceNode.linkedTableIds.length > 0) {
                 for (const originalTableId of tableSourceNode.linkedTableIds) {
                   const newTableId = appendSuffixOnce(stripTrailingNumeric(String(originalTableId)));
                   const existingTable = await prisma49.treeBranchLeafNodeTable.findUnique({ where: { id: newTableId } });
@@ -31705,17 +31876,23 @@ async function copyVariableWithCapacities(originalVarId, suffix, newNodeId, pris
               } catch (e) {
               }
             } else if (parsedCap.type === "table") {
-              const tbl = await prisma49.treeBranchLeafNodeTable.findUnique({ where: { id: capId }, select: { name: true, type: true } });
-              await prisma49.treeBranchLeafNode.update({
-                where: { id: finalNodeId2 },
-                data: {
-                  hasTable: true,
-                  table_activeId: capId,
-                  table_name: tbl?.name || null,
-                  table_type: tbl?.type || null
-                }
+              const tbl = await prisma49.treeBranchLeafNodeTable.findUnique({
+                where: { id: capId },
+                select: { name: true, type: true, nodeId: true }
               });
-              await addToNodeLinkedField5(prisma49, finalNodeId2, "linkedTableIds", [capId]);
+              const tableOwnerIsFinalNode = tbl?.nodeId === finalNodeId2;
+              if (tableOwnerIsFinalNode) {
+                await prisma49.treeBranchLeafNode.update({
+                  where: { id: finalNodeId2 },
+                  data: {
+                    hasTable: true,
+                    table_activeId: capId,
+                    table_name: tbl?.name || null,
+                    table_type: tbl?.type || null
+                  }
+                });
+                await addToNodeLinkedField5(prisma49, finalNodeId2, "linkedTableIds", [capId]);
+              }
             }
           }
         }
@@ -31827,6 +32004,7 @@ async function createDisplayNodeForExistingVariable(variableId, prisma49, displa
   const displayParentId = owner.parentId;
   console.log(`\u{1F4CC} [createDisplayNodeForExistingVariable] R\xC8GLE: Copie dans le M\xCAME parent que l'original: ${displayParentId}`);
   const now = /* @__PURE__ */ new Date();
+  const variableHasTableCapacity = v.sourceType === "table" || v.sourceRef?.includes("table:");
   const baseData = {
     id: displayNodeId,
     treeId: owner.treeId,
@@ -31861,12 +32039,13 @@ async function createDisplayNodeForExistingVariable(variableId, prisma49, displa
     hasFormula: false,
     hasLink: false,
     hasMarkers: false,
-    // 📊 TABLE: Copier les colonnes table du nœud original
-    hasTable: owner.hasTable ?? false,
-    table_name: owner.table_name,
-    table_activeId: owner.table_activeId,
-    table_instances: owner.table_instances,
-    linkedTableIds: Array.isArray(owner.linkedTableIds) ? owner.linkedTableIds : [],
+    // 📊 TABLE: SEULEMENT mettre hasTable: true si la VARIABLE a une capacité table
+    // Sinon, une variable qui affiche une valeur de table (ex: Inclinaison) aurait incorrectement hasTable: true
+    hasTable: variableHasTableCapacity ? owner.hasTable ?? false : false,
+    table_name: variableHasTableCapacity ? owner.table_name : null,
+    table_activeId: variableHasTableCapacity ? owner.table_activeId : null,
+    table_instances: variableHasTableCapacity ? owner.table_instances : null,
+    linkedTableIds: variableHasTableCapacity && Array.isArray(owner.linkedTableIds) ? owner.linkedTableIds : [],
     linkedConditionIds: [],
     linkedFormulaIds: [],
     linkedVariableIds: [variableId],
@@ -32484,6 +32663,372 @@ function deriveRepeatContextFromMetadata(carrier, fallback = {}) {
   };
 }
 
+// src/components/TreeBranchLeaf/treebranchleaf-new/api/repeat/services/table-lookup-duplication-service.ts
+var import_crypto14 = require("crypto");
+var TableLookupDuplicationService = class {
+  /**
+   * Duplique complÃƒÂ¨tement les tables TBL et leurs configurations SELECT associÃƒÂ©es
+   * Assure l'indÃƒÂ©pendance totale des lookups pour les nÃ…â€œuds copiÃƒÂ©s
+   */
+  async duplicateTableLookupSystem(prisma49, originalNodeId, arg) {
+    let suffixToken = typeof arg === "string" ? arg : arg?.suffixToken ?? "-1";
+    if (!suffixToken) suffixToken = "-1";
+    if (!suffixToken.startsWith("-")) {
+      suffixToken = `-${suffixToken}`;
+    }
+    const normalizedOriginalId = normalizeNodeBase(originalNodeId);
+    const copiedNodeId = typeof arg === "object" && arg?.copiedNodeId ? arg.copiedNodeId : `${normalizedOriginalId}${suffixToken}`;
+    console.log(`[TBL-DUP] START duplicateTableLookupSystem: orig=${originalNodeId}, copy=${copiedNodeId}`);
+    try {
+      const copiedNode = await prisma49.treeBranchLeafNode.findUnique({
+        where: { id: copiedNodeId }
+      });
+      if (!copiedNode) {
+        console.log(`[TBL-DUP] \u26A0\uFE0F Copied node does not exist (shared reference): ${copiedNodeId}, skipping`);
+        return;
+      }
+      console.log(`[TBL-DUP] \u2705 Copied node exists: ${copiedNode.label}, proceeding...`);
+      const originalSelectConfigs = await prisma49.treeBranchLeafSelectConfig.findMany({
+        where: { nodeId: originalNodeId }
+      });
+      console.log(`[TBL-DUP] Found ${originalSelectConfigs.length} SelectConfigs for node=${originalNodeId}`);
+      if (originalSelectConfigs.length === 0) {
+        console.log(`[TBL-DUP] No SelectConfigs, returning`);
+        return;
+      }
+      for (const selectConfig of originalSelectConfigs) {
+        console.log(`[TBL-DUP] Processing SelectConfig id=${selectConfig.id} tableRef=${selectConfig.tableReference}`);
+        await this.duplicateTableAndSelectConfig(prisma49, selectConfig, copiedNodeId, suffixToken);
+        console.log(`[TBL-DUP] \u2705 Completed SelectConfig ${selectConfig.id}`);
+      }
+      console.log(`[TBL-DUP] \u2705 SUCCESS duplicateTableLookupSystem`);
+    } catch (error) {
+      console.error(`[TBL-DUP] ERROR: ${error instanceof Error ? error.message : String(error)}`);
+      if (error instanceof Error) console.error(`[TBL-DUP] Stack: ${error.stack}`);
+      throw error;
+    }
+  }
+  /**
+   * Duplique une table TBL et sa configuration SELECT associÃƒÂ©e
+   */
+  async duplicateTableAndSelectConfig(prisma49, originalSelectConfig, copiedNodeId, suffix) {
+    const originalTableId = originalSelectConfig.tableReference;
+    const copiedTableId = `${originalTableId}${suffix}`;
+    try {
+      const originalTable = await prisma49.treeBranchLeafNodeTable.findUnique({
+        where: { id: originalTableId },
+        include: {
+          tableColumns: true,
+          tableRows: true
+        }
+      });
+      if (!originalTable) {
+        return;
+      }
+      const originalNodeIdBase = normalizeNodeBase(originalSelectConfig.nodeId);
+      const tableOwnerNodeIdBase = normalizeNodeBase(originalTable.nodeId);
+      const isTableOwnedByThisNode = originalNodeIdBase === tableOwnerNodeIdBase;
+      const copiedTableOwnerNodeId = isTableOwnedByThisNode ? copiedNodeId : `${tableOwnerNodeIdBase}${suffix}`;
+      let nodeOwnerExists = await prisma49.treeBranchLeafNode.findUnique({
+        where: { id: copiedTableOwnerNodeId },
+        select: { id: true }
+      });
+      if (!nodeOwnerExists && !isTableOwnedByThisNode) {
+        console.log(
+          `[TBL-DUP] Creating stub node "${copiedTableOwnerNodeId}" for table owner`
+        );
+        const originalOwnerNode = await prisma49.treeBranchLeafNode.findUnique({
+          where: { id: originalTable.nodeId },
+          select: {
+            type: true,
+            label: true,
+            treeId: true,
+            parentId: true
+          }
+        });
+        if (originalOwnerNode) {
+          try {
+            const createdNode = await prisma49.treeBranchLeafNode.create({
+              data: {
+                id: copiedTableOwnerNodeId,
+                type: originalOwnerNode.type,
+                label: originalOwnerNode.label ? `${originalOwnerNode.label}${suffix}` : "Stub",
+                treeId: originalOwnerNode.treeId,
+                parentId: null,
+                order: 0,
+                createdAt: /* @__PURE__ */ new Date(),
+                updatedAt: /* @__PURE__ */ new Date()
+              }
+            });
+            nodeOwnerExists = createdNode;
+            console.log(`[TBL-DUP] \u2705 Stub node created: ${copiedTableOwnerNodeId}`);
+          } catch (err) {
+            console.error(`[TBL-DUP] \u274C Failed to create stub node: ${err.message}`);
+            throw err;
+          }
+        }
+      }
+      if (!nodeOwnerExists) {
+        console.warn(
+          `[TBL-DUP] Cannot duplicate table: owner node "${copiedTableOwnerNodeId}" doesn't exist`
+        );
+        return;
+      }
+      const existingCopiedTable = await prisma49.treeBranchLeafNodeTable.findUnique({
+        where: { id: copiedTableId }
+      });
+      if (!existingCopiedTable) {
+        await prisma49.treeBranchLeafNodeTable.create({
+          data: {
+            id: copiedTableId,
+            nodeId: copiedTableOwnerNodeId,
+            // 🔧 FIX: Utiliser le vrai propriétaire,
+            name: originalTable.name + suffix,
+            type: originalTable.type,
+            description: originalTable.description,
+            // Ã°Å¸â€Â¢ COPIE TABLE META: suffixer UUIDs et comparisonColumn
+            meta: (() => {
+              if (!originalTable.meta) return originalTable.meta;
+              try {
+                const metaObj = typeof originalTable.meta === "string" ? JSON.parse(originalTable.meta) : JSON.parse(JSON.stringify(originalTable.meta));
+                const suffixNum = parseInt(suffix.replace("-", "")) || 1;
+                if (metaObj?.lookup?.selectors?.columnFieldId && !metaObj.lookup.selectors.columnFieldId.endsWith(`-${suffixNum}`)) {
+                  metaObj.lookup.selectors.columnFieldId = `${metaObj.lookup.selectors.columnFieldId}-${suffixNum}`;
+                }
+                if (metaObj?.lookup?.selectors?.rowFieldId && !metaObj.lookup.selectors.rowFieldId.endsWith(`-${suffixNum}`)) {
+                  metaObj.lookup.selectors.rowFieldId = `${metaObj.lookup.selectors.rowFieldId}-${suffixNum}`;
+                }
+                if (metaObj?.lookup?.rowSourceOption?.sourceField && !metaObj.lookup.rowSourceOption.sourceField.endsWith(`-${suffixNum}`)) {
+                  metaObj.lookup.rowSourceOption.sourceField = `${metaObj.lookup.rowSourceOption.sourceField}-${suffixNum}`;
+                }
+                if (metaObj?.lookup?.columnSourceOption?.sourceField && !metaObj.lookup.columnSourceOption.sourceField.endsWith(`-${suffixNum}`)) {
+                  metaObj.lookup.columnSourceOption.sourceField = `${metaObj.lookup.columnSourceOption.sourceField}-${suffixNum}`;
+                }
+                if (metaObj?.lookup?.rowSourceOption?.comparisonColumn) {
+                  const val = metaObj.lookup.rowSourceOption.comparisonColumn;
+                  if (!/^-?\d+(\.\d+)?$/.test(val.trim()) && !val.endsWith(suffix)) {
+                    metaObj.lookup.rowSourceOption.comparisonColumn = `${val}${suffix}`;
+                  }
+                }
+                if (metaObj?.lookup?.columnSourceOption?.comparisonColumn) {
+                  const val = metaObj.lookup.columnSourceOption.comparisonColumn;
+                  if (!/^-?\d+(\.\d+)?$/.test(val.trim()) && !val.endsWith(suffix)) {
+                    metaObj.lookup.columnSourceOption.comparisonColumn = `${val}${suffix}`;
+                  }
+                }
+                if (metaObj?.lookup?.displayColumn) {
+                  if (Array.isArray(metaObj.lookup.displayColumn)) {
+                    metaObj.lookup.displayColumn = metaObj.lookup.displayColumn.map((col) => {
+                      if (col && !/^-?\d+(\.\d+)?$/.test(col.trim()) && !col.endsWith(suffix)) {
+                        return `${col}${suffix}`;
+                      }
+                      return col;
+                    });
+                  } else if (typeof metaObj.lookup.displayColumn === "string") {
+                    const val = metaObj.lookup.displayColumn;
+                    if (!/^-?\d+(\.\d+)?$/.test(val.trim()) && !val.endsWith(suffix)) {
+                      metaObj.lookup.displayColumn = `${val}${suffix}`;
+                    }
+                  }
+                }
+                if (metaObj?.lookup?.displayRow) {
+                  if (Array.isArray(metaObj.lookup.displayRow)) {
+                    metaObj.lookup.displayRow = metaObj.lookup.displayRow.map((row) => {
+                      if (row && !/^-?\d+(\.\d+)?$/.test(row.trim()) && !row.endsWith(suffix)) {
+                        return `${row}${suffix}`;
+                      }
+                      return row;
+                    });
+                  } else if (typeof metaObj.lookup.displayRow === "string") {
+                    const val = metaObj.lookup.displayRow;
+                    if (!/^-?\d+(\.\d+)?$/.test(val.trim()) && !val.endsWith(suffix)) {
+                      metaObj.lookup.displayRow = `${val}${suffix}`;
+                    }
+                  }
+                }
+                return metaObj;
+              } catch {
+                return originalTable.meta;
+              }
+            })(),
+            organizationId: originalTable.organizationId,
+            rowCount: originalTable.rowCount,
+            columnCount: originalTable.columnCount,
+            lookupDisplayColumns: originalTable.lookupDisplayColumns,
+            lookupSelectColumn: originalTable.lookupSelectColumn,
+            createdAt: /* @__PURE__ */ new Date(),
+            updatedAt: /* @__PURE__ */ new Date(),
+            // Duplication des colonnes
+            // Ã°Å¸â€Â¢ COPIE TABLE COLUMN: suffixe seulement pour texte, pas pour nombres
+            // ð ˆâ€  FIX 07/01/2026: RÃ©assigner les columnIndex en sÃ©quence (0, 1, 2, ...) pour prÃ©server l'ordre
+            tableColumns: {
+              create: originalTable.tableColumns.map((col, idx) => {
+                const newName = idx === 0 ? `${col.name}${suffix}` : col.name;
+                console.log(`[TBL-DUP] Column ${idx}: "${col.name}" -> "${newName}" (columnIndex: ${col.columnIndex} -> ${idx})`);
+                return {
+                  id: col.id ? `${col.id}${suffix}` : (0, import_crypto14.randomUUID)(),
+                  tableId: copiedTableId,
+                  columnIndex: idx,
+                  // ✅ FIX: Réassigner en séquence au lieu de copier
+                  name: newName,
+                  type: col.type,
+                  width: col.width,
+                  format: col.format,
+                  metadata: col.metadata
+                };
+              })
+            },
+            // Duplication des lignes
+            // ✅ FIX 07/01/2026: Réassigner aussi les rowIndex en séquence pour préserver l'ordre
+            tableRows: {
+              create: originalTable.tableRows.map((row, idx) => ({
+                id: row.id ? `${row.id}${suffix}` : (0, import_crypto14.randomUUID)(),
+                tableId: copiedTableId,
+                rowIndex: idx,
+                // ✅ FIX: Réassigner en séquence
+                cells: row.cells
+              }))
+            }
+          }
+        });
+      } else {
+        console.log(`[TBL-DUP] Table "${copiedTableId}" existe d\xE9j\xE0, mise \xE0 jour des colonnes...`);
+        await prisma49.treeBranchLeafNodeTableColumn.deleteMany({
+          where: { tableId: copiedTableId }
+        });
+        const newColumns = await Promise.all(
+          originalTable.tableColumns.map((col, idx) => {
+            const newName = idx === 0 ? `${col.name}${suffix}` : col.name;
+            console.log(`[TBL-DUP] Update Column ${idx}: "${col.name}" -> "${newName}"`);
+            return prisma49.treeBranchLeafNodeTableColumn.create({
+              data: {
+                id: col.id ? `${col.id}${suffix}` : (0, import_crypto14.randomUUID)(),
+                tableId: copiedTableId,
+                columnIndex: col.columnIndex,
+                name: newName,
+                type: col.type,
+                width: col.width,
+                format: col.format,
+                metadata: col.metadata
+              }
+            });
+          })
+        );
+        console.log(`[TBL-DUP] \u2705 ${newColumns.length} colonnes cr\xE9\xE9es avec suffixe`);
+      }
+      const existingSelectConfig = await prisma49.treeBranchLeafSelectConfig.findUnique({
+        where: { nodeId: copiedNodeId }
+      });
+      if (!existingSelectConfig) {
+        const shouldSuffixColumns = true;
+        const suffix2 = computedLabelSuffix;
+        await prisma49.treeBranchLeafSelectConfig.create({
+          data: {
+            id: (0, import_crypto14.randomUUID)(),
+            // 🔧 FIX: Générer l'id manuellement
+            nodeId: copiedNodeId,
+            tableReference: copiedTableId,
+            // 🔥 SUFFIXER les références de colonnes/lignes si elles pointent vers la première colonne/ligne
+            keyColumn: originalSelectConfig.keyColumn ? `${originalSelectConfig.keyColumn}${suffix2}` : null,
+            keyRow: originalSelectConfig.keyRow ? `${originalSelectConfig.keyRow}${suffix2}` : null,
+            valueColumn: originalSelectConfig.valueColumn ? `${originalSelectConfig.valueColumn}${suffix2}` : null,
+            valueRow: originalSelectConfig.valueRow ? `${originalSelectConfig.valueRow}${suffix2}` : null,
+            displayColumn: originalSelectConfig.displayColumn ? `${originalSelectConfig.displayColumn}${suffix2}` : null,
+            displayRow: originalSelectConfig.displayRow ? `${originalSelectConfig.displayRow}${suffix2}` : null,
+            // 🔧 FIX 07/01/2026: Copier TOUS les autres champs du SelectConfig original
+            options: originalSelectConfig.options,
+            multiple: originalSelectConfig.multiple,
+            searchable: originalSelectConfig.searchable,
+            allowCustom: originalSelectConfig.allowCustom,
+            maxSelections: originalSelectConfig.maxSelections,
+            optionsSource: originalSelectConfig.optionsSource,
+            apiEndpoint: originalSelectConfig.apiEndpoint,
+            // 🔥 CRITICAL: Suffixer dependsOnNodeId s'il existe (référence à un autre nœud)
+            dependsOnNodeId: originalSelectConfig.dependsOnNodeId ? `${originalSelectConfig.dependsOnNodeId}${suffix2}` : null,
+            createdAt: /* @__PURE__ */ new Date(),
+            updatedAt: /* @__PURE__ */ new Date()
+          }
+        });
+        try {
+          const node = await prisma49.treeBranchLeafNode.findUnique({ where: { id: copiedNodeId }, select: { capabilities: true, linkedTableIds: true, fieldType: true } });
+          const currentCapabilities = node?.capabilities && typeof node.capabilities === "object" ? node.capabilities : {};
+          const isInputField = node?.fieldType === null || node?.fieldType === "" || node?.fieldType === void 0;
+          const currentLinked = node?.linkedTableIds || [];
+          const newLinked = isInputField ? [] : Array.from(/* @__PURE__ */ new Set([...currentLinked, copiedTableId]));
+          if (isTableOwnedByThisNode) {
+            currentCapabilities.table = currentCapabilities.table || {};
+            currentCapabilities.table.enabled = true;
+            currentCapabilities.table.activeId = copiedTableId;
+            currentCapabilities.table.instances = currentCapabilities.table.instances || {};
+            currentCapabilities.table.instances[copiedTableId] = currentCapabilities.table.instances[copiedTableId] || {};
+            await prisma49.treeBranchLeafNode.update({
+              where: { id: copiedNodeId },
+              data: {
+                hasTable: true,
+                // ✅ Seulement le propriétaire a hasTable: true
+                table_activeId: copiedTableId,
+                table_instances: { set: currentCapabilities.table.instances },
+                table_name: originalTable.name + suffix2,
+                table_type: originalTable.type,
+                capabilities: currentCapabilities,
+                linkedTableIds: { set: newLinked }
+              }
+            });
+          } else {
+            await prisma49.treeBranchLeafNode.update({
+              where: { id: copiedNodeId },
+              data: {
+                hasTable: false,
+                // ✅ IMPORTANT: Les non-propriétaires NE doivent PAS avoir hasTable: true!
+                linkedTableIds: { set: newLinked }
+              }
+            });
+          }
+        } catch (nodeUpdateErr) {
+          console.warn(`   \u26A0\uFE0F Warning updating node ${copiedNodeId} capabilities:`, nodeUpdateErr.message);
+        }
+      } else {
+      }
+    } catch (error) {
+      console.error(`\u274C Erreur duplication table/config ${originalTableId}:`, error);
+      throw error;
+    }
+  }
+  /**
+   * RÃƒÂ©pare les configurations SELECT manquantes pour les nÃ…â€œuds copiÃƒÂ©s existants
+   */
+  async repairMissingSelectConfigs(prisma49) {
+    try {
+      const copiedNodes = await prisma49.treeBranchLeafNode.findMany({
+        where: {
+          id: {
+            endsWith: "-1"
+          }
+        }
+      });
+      for (const copiedNode of copiedNodes) {
+        const originalNodeId = copiedNode.id.replace("-1", "");
+        const copiedSelectConfigs = await prisma49.treeBranchLeafSelectConfig.findMany({
+          where: { nodeId: copiedNode.id }
+        });
+        if (copiedSelectConfigs.length === 0) {
+          await this.duplicateTableLookupSystem(prisma49, originalNodeId, {
+            copiedNodeId: copiedNode.id,
+            suffixToken: "-1"
+          });
+        }
+      }
+    } catch (error) {
+      console.error(`\xC3\xA2\xC2\x9D\xC5\u2019 [TableLookupDuplication] Erreur r\xC3\u0192\xC2\xA9paration:`, error);
+      throw error;
+    }
+  }
+};
+var tableLookupDuplicationService = new TableLookupDuplicationService();
+function normalizeNodeBase(value) {
+  return value.replace(/-\d+(?:-\d+)*$/, "");
+}
+
 // src/components/TreeBranchLeaf/treebranchleaf-new/api/repeat/services/deep-copy-service.ts
 async function deepCopyNodeInternal(prisma49, req2, nodeId, opts) {
   const {
@@ -32595,7 +33140,7 @@ async function deepCopyNodeInternal(prisma49, req2, nodeId, opts) {
     }
   }
   const suffixToken = sanitizedForcedSuffix || `${copySuffixNum}`;
-  const computedLabelSuffix = `-${suffixToken}`;
+  const computedLabelSuffix2 = `-${suffixToken}`;
   const suffixPattern = new RegExp(`-${suffixToken.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`);
   const numericSuffixPattern = /-\d+$/;
   const hasCurrentSuffix = (value) => suffixPattern.test(value);
@@ -32941,8 +33486,10 @@ async function deepCopyNodeInternal(prisma49, req2, nodeId, opts) {
     sharedReferenceDescription: preserveSharedReferences ? oldNode.sharedReferenceDescription : null,
     linkedFormulaIds: Array.isArray(oldNode.linkedFormulaIds) ? oldNode.linkedFormulaIds : [],
     linkedConditionIds: Array.isArray(oldNode.linkedConditionIds) ? oldNode.linkedConditionIds : [],
-    linkedTableIds: Array.isArray(oldNode.linkedTableIds) ? oldNode.linkedTableIds.map((id) => ensureSuffix(id) || id) : [],
-    // Suffixer aussi les linkedVariableIds pour que les copies pointent vers les variables copiÃƒÂ©es
+    // CRITIQUE: Ne copier linkedTableIds QUE si le noeud n'est PAS un INPUT pur
+    // Un INPUT (fieldType = NULL) ne doit JAMAIS avoir de linkedTableIds !
+    linkedTableIds: Array.isArray(oldNode.linkedTableIds) && oldNode.fieldType !== null && oldNode.fieldType !== "" && oldNode.fieldType !== void 0 ? oldNode.linkedTableIds.map((id) => ensureSuffix(id) || id) : [],
+    // Suffixer aussi les linkedVariableIds pour que les copies pointent vers les variables copiees
     linkedVariableIds: Array.isArray(oldNode.linkedVariableIds) ? oldNode.linkedVariableIds.map((id) => ensureSuffix(id) || id) : [],
     updatedAt: /* @__PURE__ */ new Date()
   });
@@ -33023,6 +33570,15 @@ async function deepCopyNodeInternal(prisma49, req2, nodeId, opts) {
     await prisma49.treeBranchLeafNode.create({ data: cloneData });
     createdNodes.push({ oldId, newId, newParentId });
     existingNodeIds.add(newId);
+    try {
+      const tableLookupService = new TableLookupDuplicationService();
+      await tableLookupService.duplicateTableLookupSystem(prisma49, oldId, {
+        suffixToken,
+        copiedNodeId: newId
+      });
+    } catch (lookupError) {
+      console.warn(`[DEEP-COPY] Warning duplicating table lookup for ${oldId} -> ${newId}:`, lookupError.message);
+    }
     if (Array.isArray(cloneData.linkedTableIds) && cloneData.linkedTableIds.length > 0) {
       displayNodeIds.push(newId);
     }
@@ -33124,7 +33680,7 @@ async function deepCopyNodeInternal(prisma49, req2, nodeId, opts) {
           id: newConditionId,
           nodeId: newId,
           organizationId: c.organizationId,
-          name: c.name ? `${c.name}${computedLabelSuffix}` : c.name,
+          name: c.name ? `${c.name}${computedLabelSuffix2}` : c.name,
           conditionSet: newSet,
           description: c.description,
           isDefault: c.isDefault,
@@ -33234,12 +33790,58 @@ async function deepCopyNodeInternal(prisma49, req2, nodeId, opts) {
       if (linkedTableIdOrder.includes(t.id)) {
         newLinkedTableIds.push(newTableId);
       }
+      const tableOwnerNodeId = t.nodeId === oldId ? newId : appendSuffix(t.nodeId);
+      let nodeExists = await prisma49.treeBranchLeafNode.findUnique({
+        where: { id: tableOwnerNodeId },
+        select: { id: true }
+      });
+      if (!nodeExists && tableOwnerNodeId !== newId) {
+        console.log(
+          `[DEEP-COPY] Creating stub node "${tableOwnerNodeId}" for linked table owner`
+        );
+        const originalOwnerNode = await prisma49.treeBranchLeafNode.findUnique({
+          where: { id: t.nodeId },
+          select: {
+            type: true,
+            label: true,
+            treeId: true,
+            parentId: true
+          }
+        });
+        if (originalOwnerNode) {
+          try {
+            const createdNode = await prisma49.treeBranchLeafNode.create({
+              data: {
+                id: tableOwnerNodeId,
+                type: originalOwnerNode.type,
+                label: originalOwnerNode.label ? `${originalOwnerNode.label}-1` : "Stub",
+                treeId: originalOwnerNode.treeId,
+                parentId: originalOwnerNode.parentId ? appendSuffix(originalOwnerNode.parentId) : null,
+                order: 0,
+                createdAt: /* @__PURE__ */ new Date(),
+                updatedAt: /* @__PURE__ */ new Date()
+              }
+            });
+            nodeExists = createdNode;
+            console.log(`[DEEP-COPY] \u2705 Stub node created: ${tableOwnerNodeId}`);
+          } catch (err) {
+            console.error(`[DEEP-COPY] \u274C Failed to create stub node: ${err.message}`);
+            throw err;
+          }
+        }
+      }
+      if (!nodeExists) {
+        console.warn(
+          `[DEEP-COPY] \u26A0\uFE0F Cannot create table "${t.name}": owner node "${tableOwnerNodeId}" doesn't exist. Original nodeId: "${t.nodeId}", oldId: "${oldId}", newId: "${newId}"`
+        );
+        return;
+      }
       await prisma49.treeBranchLeafNodeTable.create({
         data: {
           id: newTableId,
-          nodeId: newId,
+          nodeId: tableOwnerNodeId,
           organizationId: t.organizationId,
-          name: t.name ? `${t.name}${computedLabelSuffix}` : t.name,
+          name: t.name ? `${t.name}${computedLabelSuffix2}` : t.name,
           description: t.description,
           type: t.type,
           rowCount: t.rowCount,
@@ -33263,48 +33865,6 @@ async function deepCopyNodeInternal(prisma49, req2, nodeId, opts) {
               if (metaObj?.lookup?.columnSourceOption?.sourceField && !metaObj.lookup.columnSourceOption.sourceField.endsWith(`-${copySuffixNum}`)) {
                 metaObj.lookup.columnSourceOption.sourceField = `${metaObj.lookup.columnSourceOption.sourceField}-${copySuffixNum}`;
               }
-              if (metaObj?.lookup?.rowSourceOption?.comparisonColumn) {
-                const val = metaObj.lookup.rowSourceOption.comparisonColumn;
-                if (!/^-?\d+(\.\d+)?$/.test(val.trim()) && !val.endsWith(computedLabelSuffix)) {
-                  metaObj.lookup.rowSourceOption.comparisonColumn = `${val}${computedLabelSuffix}`;
-                }
-              }
-              if (metaObj?.lookup?.columnSourceOption?.comparisonColumn) {
-                const val = metaObj.lookup.columnSourceOption.comparisonColumn;
-                if (!/^-?\d+(\.\d+)?$/.test(val.trim()) && !val.endsWith(computedLabelSuffix)) {
-                  metaObj.lookup.columnSourceOption.comparisonColumn = `${val}${computedLabelSuffix}`;
-                }
-              }
-              if (metaObj?.lookup?.displayColumn) {
-                if (Array.isArray(metaObj.lookup.displayColumn)) {
-                  metaObj.lookup.displayColumn = metaObj.lookup.displayColumn.map((col) => {
-                    if (col && !/^-?\d+(\.\d+)?$/.test(col.trim()) && !col.endsWith(computedLabelSuffix)) {
-                      return `${col}${computedLabelSuffix}`;
-                    }
-                    return col;
-                  });
-                } else if (typeof metaObj.lookup.displayColumn === "string") {
-                  const val = metaObj.lookup.displayColumn;
-                  if (!/^-?\d+(\.\d+)?$/.test(val.trim()) && !val.endsWith(computedLabelSuffix)) {
-                    metaObj.lookup.displayColumn = `${val}${computedLabelSuffix}`;
-                  }
-                }
-              }
-              if (metaObj?.lookup?.displayRow) {
-                if (Array.isArray(metaObj.lookup.displayRow)) {
-                  metaObj.lookup.displayRow = metaObj.lookup.displayRow.map((row) => {
-                    if (row && !/^-?\d+(\.\d+)?$/.test(row.trim()) && !row.endsWith(computedLabelSuffix)) {
-                      return `${row}${computedLabelSuffix}`;
-                    }
-                    return row;
-                  });
-                } else if (typeof metaObj.lookup.displayRow === "string") {
-                  const val = metaObj.lookup.displayRow;
-                  if (!/^-?\d+(\.\d+)?$/.test(val.trim()) && !val.endsWith(computedLabelSuffix)) {
-                    metaObj.lookup.displayRow = `${val}${computedLabelSuffix}`;
-                  }
-                }
-              }
               return metaObj;
             } catch (err) {
               console.warn("[table.meta] Erreur traitement meta, copie tel quel:", err);
@@ -33321,8 +33881,9 @@ async function deepCopyNodeInternal(prisma49, req2, nodeId, opts) {
             create: t.tableColumns.map((col) => ({
               id: appendSuffix(col.id),
               columnIndex: col.columnIndex,
-              // Ã°Å¸â€Â¢ COPIE TABLE COLUMN: suffixe seulement pour texte, pas pour nombres
-              name: col.name ? /^-?\d+(\.\d+)?$/.test(col.name.trim()) ? col.name : `${col.name}${computedLabelSuffix}` : col.name,
+              // 🐛 FIX 06/01/2026: NE JAMAIS suffixer les noms de colonnes !
+              // Les cells gardent "Orientation" (jamais suffixé), donc colonnes aussi
+              name: col.name,
               type: col.type,
               width: col.width,
               format: col.format,
@@ -33363,7 +33924,19 @@ async function deepCopyNodeInternal(prisma49, req2, nodeId, opts) {
         where: { nodeId: newId }
       });
       if (!existingCopyConfig) {
-        const newTableReference = originalSelectConfig.tableReference ? appendSuffix(originalSelectConfig.tableReference) : null;
+        let newTableReference = null;
+        const shouldSuffixColumns = true;
+        if (originalSelectConfig.tableReference) {
+          const tableWasCopied = tableIdMap2.has(originalSelectConfig.tableReference);
+          console.log(`[DEEP-COPY SelectConfig] nodeId=${oldId} \u2192 tableReference=${originalSelectConfig.tableReference}, tableWasCopied=${tableWasCopied}, tableIdMap.size=${tableIdMap2.size}`);
+          if (tableWasCopied) {
+            newTableReference = tableIdMap2.get(originalSelectConfig.tableReference);
+            console.log(`[DEEP-COPY SelectConfig] \u2705 Table copi\xE9e, utilisation de newTableReference=${newTableReference}`);
+          } else {
+            newTableReference = originalSelectConfig.tableReference;
+            console.log(`[DEEP-COPY SelectConfig] \u26A0\uFE0F Table partag\xE9e, conservation de tableReference original`);
+          }
+        }
         try {
           await prisma49.treeBranchLeafSelectConfig.create({
             data: {
@@ -33378,9 +33951,10 @@ async function deepCopyNodeInternal(prisma49, req2, nodeId, opts) {
               apiEndpoint: originalSelectConfig.apiEndpoint,
               tableReference: newTableReference,
               dependsOnNodeId: originalSelectConfig.dependsOnNodeId ? idMap.get(originalSelectConfig.dependsOnNodeId) || appendSuffix(originalSelectConfig.dependsOnNodeId) : null,
-              keyColumn: originalSelectConfig.keyColumn ? `${originalSelectConfig.keyColumn}${computedLabelSuffix}` : null,
-              valueColumn: originalSelectConfig.valueColumn ? `${originalSelectConfig.valueColumn}${computedLabelSuffix}` : null,
-              displayColumn: originalSelectConfig.displayColumn ? `${originalSelectConfig.displayColumn}${computedLabelSuffix}` : null,
+              // Suffixer les colonnes seulement si table locale
+              keyColumn: originalSelectConfig.keyColumn ? shouldSuffixColumns ? `${originalSelectConfig.keyColumn}${computedLabelSuffix2}` : originalSelectConfig.keyColumn : null,
+              valueColumn: originalSelectConfig.valueColumn ? shouldSuffixColumns ? `${originalSelectConfig.valueColumn}${computedLabelSuffix2}` : originalSelectConfig.valueColumn : null,
+              displayColumn: originalSelectConfig.displayColumn ? shouldSuffixColumns ? `${originalSelectConfig.displayColumn}${computedLabelSuffix2}` : originalSelectConfig.displayColumn : null,
               displayRow: originalSelectConfig.displayRow,
               keyRow: originalSelectConfig.keyRow,
               valueRow: originalSelectConfig.valueRow,
@@ -33632,9 +34206,37 @@ async function deepCopyNodeInternal(prisma49, req2, nodeId, opts) {
 var import_express56 = require("express");
 var import_client5 = require("@prisma/client");
 init_database();
-var import_crypto11 = require("crypto");
+var import_crypto15 = require("crypto");
 var router55 = (0, import_express56.Router)();
 var prisma29 = db;
+function toJsonSafe(value) {
+  if (value === void 0) return null;
+  if (value === null) return null;
+  if (typeof value === "number") {
+    return Number.isFinite(value) ? value : null;
+  }
+  if (typeof value === "bigint") {
+    return value.toString();
+  }
+  if (value instanceof Date) {
+    return value.toISOString();
+  }
+  if (Array.isArray(value)) {
+    return value.map((v) => toJsonSafe(v));
+  }
+  if (typeof value === "object") {
+    const obj = value;
+    const out = {};
+    for (const [k, v] of Object.entries(obj)) {
+      out[k] = toJsonSafe(v);
+    }
+    return out;
+  }
+  if (typeof value === "string" || typeof value === "boolean") {
+    return value;
+  }
+  return String(value);
+}
 function getAuthCtx2(req2) {
   const user = req2 && req2.user || {};
   const headerOrg = req2?.headers?.["x-organization-id"] || req2?.headers?.["x-organization"] || req2?.headers?.["organization-id"];
@@ -33677,7 +34279,7 @@ router55.post("/nodes/:nodeId/tables", async (req2, res) => {
       });
       finalName = `${name} (${existingCount + 1})`;
     }
-    const tableId = (0, import_crypto11.randomUUID)();
+    const tableId = (0, import_crypto15.randomUUID)();
     const tableData = {
       id: tableId,
       nodeId,
@@ -33697,19 +34299,22 @@ router55.post("/nodes/:nodeId/tables", async (req2, res) => {
       const colFormat = typeof col === "object" && col.format ? col.format : null;
       const colMetadata = typeof col === "object" && col.metadata ? col.metadata : {};
       return {
+        id: (0, import_crypto15.randomUUID)(),
         tableId,
         columnIndex: index,
         name: colName,
         type: colType,
         width: colWidth,
         format: colFormat,
-        metadata: colMetadata
+        metadata: toJsonSafe(colMetadata)
       };
     });
     const tableRowsData = rows.map((row, index) => ({
+      id: (0, import_crypto15.randomUUID)(),
       tableId,
       rowIndex: index,
-      cells: row
+      // IMPORTANT: Prisma JSON ne supporte pas undefined/NaN/BigInt/Date
+      cells: toJsonSafe(row)
     }));
     if (rows.length > 0) {
       if (rows.length > 1) {
@@ -33847,6 +34452,12 @@ router55.post("/nodes/:nodeId/tables", async (req2, res) => {
     });
   } catch (error) {
     console.error(`\xC3\xA2\xC2\x9D\xC5\u2019 [NEW POST /tables] Erreur lors de la cr\xC3\u0192\xC2\xA9ation de la table:`, error);
+    if (error instanceof import_client5.Prisma.PrismaClientValidationError) {
+      return res.status(400).json({
+        error: "Requ\xC3\xAAte invalide pour la cr\xC3\u0192\xC2\xA9ation de la table.",
+        details: error.message
+      });
+    }
     if (error instanceof import_client5.Prisma.PrismaClientKnownRequestError) {
       if (error.code === "P2002") {
         return res.status(409).json({
@@ -33965,13 +34576,14 @@ router55.put("/tables/:id", async (req2, res) => {
         await tx.treeBranchLeafNodeTableColumn.deleteMany({ where: { tableId: id } });
         if (columns.length > 0) {
           const newColumnsData = columns.map((col, index) => ({
+            id: (0, import_crypto15.randomUUID)(),
             tableId: id,
             columnIndex: index,
             name: typeof col === "string" ? col : col.name || `Colonne ${index + 1}`,
             type: typeof col === "object" ? col.type : "text",
             width: typeof col === "object" ? col.width : null,
             format: typeof col === "object" ? col.format : null,
-            metadata: typeof col === "object" && col.metadata ? col.metadata : {}
+            metadata: toJsonSafe(typeof col === "object" && col.metadata ? col.metadata : {})
           }));
           await tx.treeBranchLeafNodeTableColumn.createMany({ data: newColumnsData });
         }
@@ -33983,9 +34595,10 @@ router55.put("/tables/:id", async (req2, res) => {
             const row = rows[index];
             await tx.treeBranchLeafNodeTableRow.create({
               data: {
+                id: (0, import_crypto15.randomUUID)(),
                 tableId: id,
                 rowIndex: index,
-                cells: row
+                cells: toJsonSafe(row)
               }
             });
           }
@@ -34155,7 +34768,7 @@ router55.put("/nodes/:nodeId/tables/:tableId", async (req2, res) => {
       const updatedTable2 = await prisma29.treeBranchLeafNodeTable.update({
         where: { id: tableId },
         data: {
-          meta,
+          meta: toJsonSafe(meta),
           updatedAt: /* @__PURE__ */ new Date()
         }
       });
@@ -34183,7 +34796,7 @@ router55.put("/nodes/:nodeId/tables/:tableId", async (req2, res) => {
       if (name) updateData.name = name;
       if (description !== void 0) updateData.description = description;
       if (type) updateData.type = type;
-      if (meta) updateData.meta = meta;
+      if (meta) updateData.meta = toJsonSafe(meta);
       if (Array.isArray(columns) && columns.length > 0) updateData.columnCount = columns.length;
       if (Array.isArray(rows) && rows.length > 0) updateData.rowCount = rows.length;
       const tableUpdated = await tx.treeBranchLeafNodeTable.update({
@@ -34193,13 +34806,14 @@ router55.put("/nodes/:nodeId/tables/:tableId", async (req2, res) => {
       if (Array.isArray(columns) && columns.length > 0) {
         await tx.treeBranchLeafNodeTableColumn.deleteMany({ where: { tableId } });
         const newColumnsData = columns.map((col, index) => ({
+          id: (0, import_crypto15.randomUUID)(),
           tableId,
           columnIndex: index,
           name: typeof col === "string" ? col : col.name || `Colonne ${index + 1}`,
           type: typeof col === "object" ? col.type : "text",
           width: typeof col === "object" ? col.width : null,
           format: typeof col === "object" ? col.format : null,
-          metadata: typeof col === "object" && col.metadata ? col.metadata : {}
+          metadata: toJsonSafe(typeof col === "object" && col.metadata ? col.metadata : {})
         }));
         await tx.treeBranchLeafNodeTableColumn.createMany({ data: newColumnsData });
       }
@@ -34211,9 +34825,10 @@ router55.put("/nodes/:nodeId/tables/:tableId", async (req2, res) => {
           const row = rows[index];
           await tx.treeBranchLeafNodeTableRow.create({
             data: {
+              id: (0, import_crypto15.randomUUID)(),
               tableId,
               rowIndex: index,
-              cells: row
+              cells: toJsonSafe(row)
             }
           });
         }
@@ -34358,7 +34973,7 @@ var computeLogicVersion = () => {
     entries: stats.entries,
     parseCount: stats.parseCount
   });
-  const version = (0, import_crypto12.createHash)("sha1").update(seed).digest("hex").slice(0, 8);
+  const version = (0, import_crypto16.createHash)("sha1").update(seed).digest("hex").slice(0, 8);
   return { version, metrics, stats };
 };
 function getAuthCtx3(req2) {
@@ -34714,7 +35329,7 @@ router56.post("/trees", async (req2, res) => {
     if (!targetOrgId) {
       return res.status(400).json({ error: "organizationId requis (en-t\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xAAte x-organization-id ou dans le corps)" });
     }
-    const id = (0, import_crypto12.randomUUID)();
+    const id = (0, import_crypto16.randomUUID)();
     const tree = await prisma30.treeBranchLeafTree.create({
       data: {
         id,
@@ -35191,8 +35806,8 @@ router56.post("/trees/:treeId/nodes", async (req2, res) => {
         });
       }
     }
-    const { randomUUID: randomUUID10 } = await import("crypto");
-    const nodeId = randomUUID10();
+    const { randomUUID: randomUUID11 } = await import("crypto");
+    const nodeId = randomUUID11();
     const node = await prisma30.treeBranchLeafNode.create({
       data: {
         id: nodeId,
@@ -35882,14 +36497,6 @@ var updateOrMoveNode = async (req2, res) => {
       };
       console.warn("\xC3\u0192\xC2\xB0\xC3\u2026\xC2\xB8\xC3\xA2\xE2\u201A\xAC\xC2\x9D\xC3\u201A\xC2\xA5 [updateOrMoveNode] Synchronisation metadata.repeater:", updatedRepeaterMetadata);
     }
-    if ("repeater_templateNodeIds" in updateObj && updateObj.repeater_templateNodeIds === null) {
-      const currentMetadata = existingNode.metadata || {};
-      if (currentMetadata.repeater) {
-        const { repeater, ...metadataWithoutRepeater } = currentMetadata;
-        updateObj.metadata = metadataWithoutRepeater;
-        console.warn("[updateOrMoveNode] Suppression explicite de metadata.repeater car repeater_templateNodeIds = NULL");
-      }
-    }
     if (updateObj.metadata && typeof updateObj.metadata === "object") {
       const currentMetadata = existingNode.metadata || {};
       const newMetadata = updateObj.metadata;
@@ -35919,6 +36526,14 @@ var updateOrMoveNode = async (req2, res) => {
         nouveau: newMetadata,
         resultat: updateObj.metadata
       });
+    }
+    if ("repeater_templateNodeIds" in updateObj && updateObj.repeater_templateNodeIds === null) {
+      const currentMeta = updateObj.metadata || existingNode.metadata || {};
+      if (currentMeta.repeater) {
+        const { repeater, ...metadataWithoutRepeater } = currentMeta;
+        updateObj.metadata = metadataWithoutRepeater;
+        console.warn("[updateOrMoveNode] \u{1F5D1}\uFE0F Suppression explicite de metadata.repeater car repeater_templateNodeIds = NULL");
+      }
     }
     await prisma30.treeBranchLeafNode.update({
       where: { id: nodeId },
@@ -36967,7 +37582,7 @@ router56.put("/trees/:treeId/nodes/:nodeId/data", async (req2, res) => {
           updatedAt: /* @__PURE__ */ new Date()
         },
         create: {
-          id: (0, import_crypto12.randomUUID)(),
+          id: (0, import_crypto16.randomUUID)(),
           nodeId: targetNodeId,
           exposedKey: safeExposedKey || `var_${String(nodeId).slice(0, 4)}`,
           displayName,
@@ -37227,7 +37842,7 @@ router56.delete("/trees/:treeId/nodes/:nodeId/data", async (req2, res) => {
     }
     const { variable, ownerNodeId, proxiedFromNodeId } = await resolveNodeVariable(nodeId, node.linkedVariableIds);
     if (!variable || !ownerNodeId) {
-      return res.status(404).json({ error: "Variable non trouv\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9e" });
+      return res.status(200).json({ success: true, message: "Variable d\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9j\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA0 supprim\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9e" });
     }
     await prisma30.treeBranchLeafNodeVariable.delete({
       where: { nodeId: ownerNodeId }
@@ -37409,7 +38024,7 @@ router56.post("/nodes/:nodeId/formulas", async (req2, res) => {
     }
     const formula = await prisma30.treeBranchLeafNodeFormula.create({
       data: {
-        id: (0, import_crypto12.randomUUID)(),
+        id: (0, import_crypto16.randomUUID)(),
         nodeId,
         organizationId: organizationId || null,
         name: uniqueName,
@@ -37825,7 +38440,7 @@ router56.post("/nodes/:nodeId/conditions", async (req2, res) => {
     }
     const condition = await prisma30.treeBranchLeafNodeCondition.create({
       data: {
-        id: (0, import_crypto12.randomUUID)(),
+        id: (0, import_crypto16.randomUUID)(),
         nodeId,
         organizationId: organizationId || null,
         name: uniqueName,
@@ -38582,7 +39197,7 @@ router56.post("/nodes/:nodeId/table/generate-selects", async (req2, res) => {
     let insertOrder = siblingsCount;
     const now = /* @__PURE__ */ new Date();
     for (const item of toCreate) {
-      const newNodeId = (0, import_crypto12.randomUUID)();
+      const newNodeId = (0, import_crypto16.randomUUID)();
       const nodeMetadata = {
         generatedFrom: "table_lookup",
         tableNodeId: baseNode.id,
@@ -38621,7 +39236,7 @@ router56.post("/nodes/:nodeId/table/generate-selects", async (req2, res) => {
       });
       await prisma30.treeBranchLeafSelectConfig.create({
         data: {
-          id: (0, import_crypto12.randomUUID)(),
+          id: (0, import_crypto16.randomUUID)(),
           nodeId: newNode.id,
           options: [],
           multiple: false,
@@ -40159,7 +40774,7 @@ router56.post("/submissions", async (req2, res) => {
       const now = /* @__PURE__ */ new Date();
       const created = await prisma30.treeBranchLeafSubmission.create({
         data: {
-          id: (0, import_crypto12.randomUUID)(),
+          id: (0, import_crypto16.randomUUID)(),
           treeId: normalizedTreeId,
           userId: safeUserId,
           leadId: normalizedLeadId,
@@ -40185,7 +40800,7 @@ router56.post("/submissions", async (req2, res) => {
           if (toCreate.length > 0) {
             await tx.treeBranchLeafSubmissionData.createMany({
               data: toCreate.map(({ nodeId, value: raw }) => ({
-                id: (0, import_crypto12.randomUUID)(),
+                id: (0, import_crypto16.randomUUID)(),
                 submissionId: created.id,
                 nodeId,
                 value: raw == null ? null : String(raw),
@@ -40400,7 +41015,7 @@ router56.get("/nodes/:fieldId/select-config", async (req2, res) => {
         if (isRowBased || isColumnBased) {
           selectConfig = await prisma30.treeBranchLeafSelectConfig.create({
             data: {
-              id: (0, import_crypto12.randomUUID)(),
+              id: (0, import_crypto16.randomUUID)(),
               nodeId: fieldId,
               options: [],
               multiple: false,
@@ -40450,7 +41065,7 @@ router56.post("/nodes/:fieldId/select-config", async (req2, res) => {
     const selectConfig = await prisma30.treeBranchLeafSelectConfig.upsert({
       where: { nodeId: fieldId },
       create: {
-        id: (0, import_crypto12.randomUUID)(),
+        id: (0, import_crypto16.randomUUID)(),
         nodeId: fieldId,
         options: [],
         multiple: false,
@@ -40525,7 +41140,7 @@ router56.get("/nodes/:nodeId/table/lookup", async (req2, res) => {
         await prisma30.treeBranchLeafSelectConfig.upsert({
           where: { nodeId },
           create: {
-            id: (0, import_crypto12.randomUUID)(),
+            id: (0, import_crypto16.randomUUID)(),
             nodeId,
             options: [],
             multiple: false,
@@ -40730,7 +41345,7 @@ router56.get("/nodes/:nodeId/table/lookup", async (req2, res) => {
           await prisma30.treeBranchLeafSelectConfig.upsert({
             where: { nodeId },
             create: {
-              id: (0, import_crypto12.randomUUID)(),
+              id: (0, import_crypto16.randomUUID)(),
               nodeId,
               options: [],
               multiple: false,
@@ -40763,6 +41378,11 @@ router56.get("/nodes/:nodeId/table/lookup", async (req2, res) => {
         } catch (e) {
           console.warn(`[TreeBranchLeaf API] \u26A0\uFE0F Auto-upsert select-config a \xE9chou\xE9 (non bloquant):`, e);
         }
+        console.log(`[TreeBranchLeaf API] \u{1F3AF} AUTO-DEFAULT pour nodeId=${nodeId}:`, {
+          optionsCount: autoOptions.length,
+          firstFive: autoOptions.slice(0, 5),
+          detectedRole: isRowField ? "rowField" : isColumnField ? "columnField" : "fallback"
+        });
         return res.json({
           options: autoOptions,
           autoDefault: {
@@ -40856,7 +41476,7 @@ router56.put("/nodes/:nodeId/capabilities/table", async (req2, res) => {
         await prisma30.treeBranchLeafSelectConfig.upsert({
           where: { nodeId },
           create: {
-            id: (0, import_crypto12.randomUUID)(),
+            id: (0, import_crypto16.randomUUID)(),
             nodeId,
             options: [],
             multiple: false,
@@ -41190,7 +41810,7 @@ router56.put("/submissions/:id", async (req2, res) => {
               }
             }
             return {
-              id: (0, import_crypto12.randomUUID)(),
+              id: (0, import_crypto16.randomUUID)(),
               submissionId: id,
               nodeId,
               value: valueStr,
@@ -41340,7 +41960,7 @@ router56.put("/submissions/:id", async (req2, res) => {
         const allRows2 = await tx.treeBranchLeafSubmissionData.findMany({ where: { submissionId: id }, select: { nodeId: true, value: true } });
         const valuesMapTxAll = new Map(allRows2.map((r) => [r.nodeId, r.value == null ? null : String(r.value)]));
         const missingRows = await Promise.all(missingVars.map(async (v) => ({
-          id: (0, import_crypto12.randomUUID)(),
+          id: (0, import_crypto16.randomUUID)(),
           submissionId: id,
           nodeId: v.nodeId,
           value: null,
@@ -41779,7 +42399,7 @@ router56.post("/submissions/stage", async (req2, res) => {
       }
       stage = await prisma30.treeBranchLeafStage.create({
         data: {
-          id: (0, import_crypto12.randomUUID)(),
+          id: (0, import_crypto16.randomUUID)(),
           treeId,
           submissionId,
           leadId,
@@ -41955,7 +42575,7 @@ router56.post("/submissions/stage/commit", async (req2, res) => {
       const result = await prisma30.$transaction(async (tx) => {
         const submission = await tx.treeBranchLeafSubmission.create({
           data: {
-            id: (0, import_crypto12.randomUUID)(),
+            id: (0, import_crypto16.randomUUID)(),
             treeId: stage.treeId,
             userId: stage.userId,
             leadId: stage.leadId,
@@ -41969,7 +42589,7 @@ router56.post("/submissions/stage/commit", async (req2, res) => {
         if (results.length > 0) {
           await tx.treeBranchLeafSubmissionData.createMany({
             data: results.map((r) => ({
-              id: (0, import_crypto12.randomUUID)(),
+              id: (0, import_crypto16.randomUUID)(),
               submissionId: submission.id,
               nodeId: r.nodeId,
               value: String(r.operationResult || ""),
@@ -41984,7 +42604,7 @@ router56.post("/submissions/stage/commit", async (req2, res) => {
         }
         await tx.treeBranchLeafSubmissionVersion.create({
           data: {
-            id: (0, import_crypto12.randomUUID)(),
+            id: (0, import_crypto16.randomUUID)(),
             submissionId: submission.id,
             version: 1,
             formData: stage.formData,
@@ -42111,7 +42731,7 @@ router56.post("/submissions/stage/commit", async (req2, res) => {
         if (results.length > 0) {
           await tx.treeBranchLeafSubmissionData.createMany({
             data: results.map((r) => ({
-              id: (0, import_crypto12.randomUUID)(),
+              id: (0, import_crypto16.randomUUID)(),
               submissionId: updated.id,
               nodeId: r.nodeId,
               value: String(r.operationResult || ""),
@@ -42126,7 +42746,7 @@ router56.post("/submissions/stage/commit", async (req2, res) => {
         }
         await tx.treeBranchLeafSubmissionVersion.create({
           data: {
-            id: (0, import_crypto12.randomUUID)(),
+            id: (0, import_crypto16.randomUUID)(),
             submissionId: updated.id,
             version: nextVersion,
             formData: stage.formData,
@@ -42309,7 +42929,7 @@ router56.post("/submissions/:id/restore/:version", async (req2, res) => {
     }
     const stage = await prisma30.treeBranchLeafStage.create({
       data: {
-        id: (0, import_crypto12.randomUUID)(),
+        id: (0, import_crypto16.randomUUID)(),
         treeId: submission.treeId,
         submissionId: id,
         leadId: submission.leadId || "unknown",
@@ -42354,32 +42974,25 @@ router56.get("/shared-references", async (req2, res) => {
         label: true,
         sharedReferenceName: true,
         // ÃƒÂ¢Ã…â€œÃ¢â‚¬Â¦ sharedReferenceCategory SUPPRIMÃƒÆ’Ã¢â‚¬Â°
-        sharedReferenceDescription: true,
-        referenceUsages: {
-          select: {
-            id: true,
-            treeId: true,
-            TreeBranchLeafTree: {
-              select: {
-                name: true
-              }
-            }
-          }
-        }
+        sharedReferenceDescription: true
       }
     });
-    templates.forEach((t, i) => {
+    const templateIds = templates.map((t) => t.id);
+    const usageCounts = await prisma30.treeBranchLeafNode.groupBy({
+      by: ["sharedReferenceId"],
+      where: {
+        sharedReferenceId: { in: templateIds }
+      },
+      _count: { id: true }
     });
+    const usageMap2 = new Map(usageCounts.map((u) => [u.sharedReferenceId, u._count.id]));
     const formatted = templates.map((template) => ({
       id: template.id,
       label: template.sharedReferenceName || template.label,
       // ÃƒÂ¢Ã…â€œÃ¢â‚¬Â¦ category SUPPRIMÃƒÆ’Ã¢â‚¬Â°
       description: template.sharedReferenceDescription,
-      usageCount: template.referenceUsages.length,
-      usages: template.referenceUsages.map((usage) => ({
-        treeId: usage.treeId,
-        path: `${usage.TreeBranchLeafTree.name}`
-      }))
+      usageCount: usageMap2.get(template.id) || 0,
+      usages: []
     }));
     res.json(formatted);
   } catch (error) {
@@ -42405,18 +43018,7 @@ router56.get("/shared-references/:refId", async (req2, res) => {
         label: true,
         sharedReferenceName: true,
         // ÃƒÂ¢Ã…â€œÃ¢â‚¬Â¦ sharedReferenceCategory SUPPRIMÃƒÆ’Ã¢â‚¬Â°
-        sharedReferenceDescription: true,
-        referenceUsages: {
-          select: {
-            id: true,
-            treeId: true,
-            TreeBranchLeafTree: {
-              select: {
-                name: true
-              }
-            }
-          }
-        }
+        sharedReferenceDescription: true
       }
     });
     if (!template) {
@@ -42427,11 +43029,8 @@ router56.get("/shared-references/:refId", async (req2, res) => {
       label: template.sharedReferenceName || template.label,
       // ÃƒÂ¢Ã…â€œÃ¢â‚¬Â¦ category SUPPRIMÃƒÆ’Ã¢â‚¬Â°
       description: template.sharedReferenceDescription,
-      usageCount: template.referenceUsages.length,
-      usages: template.referenceUsages.map((usage) => ({
-        treeId: usage.treeId,
-        path: `${usage.TreeBranchLeafTree.name}`
-      }))
+      usageCount: usageMap.get(template.id) || 0,
+      usages: []
     });
   } catch (error) {
     console.error("\xC3\u0192\xC2\xA2\xC3\u201A\xC2\x9D\xC3\u2026\xE2\u20AC\u2122 [SHARED REF] Erreur d\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9tails:", error);
@@ -42489,15 +43088,15 @@ router56.delete("/shared-references/:refId", async (req2, res) => {
         TreeBranchLeafTree: {
           organizationId
         }
-      },
-      include: {
-        referenceUsages: true
       }
     });
     if (!template) {
       return res.status(404).json({ error: "R\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9f\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9rence introuvable" });
     }
-    if (template.referenceUsages.length > 0) {
+    const usageCount = await prisma30.treeBranchLeafNode.count({
+      where: { sharedReferenceId: refId }
+    });
+    if (usageCount > 0) {
       await prisma30.treeBranchLeafNode.updateMany({
         where: {
           sharedReferenceId: refId
@@ -48082,7 +48681,7 @@ var dispatch_default = router66;
 
 // src/routes/integrationsStatus.ts
 var import_express68 = require("express");
-var import_crypto13 = require("crypto");
+var import_crypto17 = require("crypto");
 var import_express_rate_limit13 = __toESM(require("express-rate-limit"), 1);
 init_database();
 var router67 = (0, import_express68.Router)();
@@ -48145,7 +48744,7 @@ router67.post("/ad-platform/connect", requireRole2(["admin", "super_admin"]), as
     } else {
       rec = await prisma37.adPlatformIntegration.create({
         data: {
-          id: (0, import_crypto13.randomUUID)(),
+          id: (0, import_crypto17.randomUUID)(),
           organizationId,
           platform,
           name: name || platform,
@@ -48203,7 +48802,7 @@ var import_express69 = require("express");
 init_database();
 var import_axios2 = __toESM(require("axios"), 1);
 var import_googleapis9 = require("googleapis");
-var import_crypto14 = require("crypto");
+var import_crypto18 = require("crypto");
 
 // src/services/adPlatformService.ts
 init_prisma();
@@ -49021,7 +49620,7 @@ function sanitizeClientValue(raw) {
 function fingerprintSecret(secret) {
   if (!secret) return null;
   try {
-    const hex = (0, import_crypto14.createHash)("sha256").update(secret).digest("hex");
+    const hex = (0, import_crypto18.createHash)("sha256").update(secret).digest("hex");
     return hex.slice(0, 12);
   } catch {
     return null;
@@ -49121,7 +49720,7 @@ router68.get("/advertising/oauth/:platform/callback", async (req2, res) => {
       }
       const created = await prisma38.adPlatformIntegration.create({
         data: {
-          id: (0, import_crypto14.randomUUID)(),
+          id: (0, import_crypto18.randomUUID)(),
           organizationId,
           platform,
           name: data.name || platform,
@@ -55456,7 +56055,7 @@ var ia_config_routes_default = router74;
 
 // src/controllers/calculatedValueController.ts
 var import_express77 = require("express");
-var import_crypto15 = require("crypto");
+var import_crypto19 = require("crypto");
 init_prisma();
 var router75 = (0, import_express77.Router)();
 var parseStoredStringValue = (raw) => {
@@ -55617,7 +56216,7 @@ router75.get("/:nodeId/calculated-value", async (req2, res) => {
                   lastResolved: resolvedAt
                 },
                 create: {
-                  id: (0, import_crypto15.randomUUID)(),
+                  id: (0, import_crypto19.randomUUID)(),
                   submissionId,
                   nodeId,
                   value: persistedValue,
@@ -55991,7 +56590,9 @@ router76.get("/trees/:treeId/select-configs", async (req2, res) => {
           { fieldType: "radio" },
           { fieldType: "checkbox" },
           { fieldType: "multi-select" },
-          { fieldType: { contains: "select" } }
+          { fieldType: { contains: "select" } },
+          // 🔥 CRITICAL: Inclure aussi les nœuds avec SelectConfig même si fieldType: null
+          { TreeBranchLeafSelectConfig: { isNot: null } }
         ]
       },
       select: {
@@ -59585,8 +60186,702 @@ router88.get("/status", async (_req, res) => {
 });
 var ai_field_generator_default = router88;
 
+// src/api/measure.ts
+var import_express91 = __toESM(require("express"), 1);
+init_database();
+var sharpModule = __toESM(require("sharp"), 1);
+
+// src/lib/marker-detector.ts
+var MARKER_SPECS = {
+  markerSize: 18,
+  // Taille du marqueur carré en cm
+  boardSize: 24,
+  // Taille du tableau ALU support en cm
+  magentaRadius: 0.5,
+  // Rayon des cercles magenta en cm
+  whiteRadius: 0.1
+  // Rayon du point blanc central en cm
+  // Structure: Noir(3cm) > Blanc(3cm) > Noir(6cm centre) > Blanc(3cm) > Noir(3cm)
+};
+var MarkerDetector = class {
+  minSize;
+  maxSize;
+  constructor(minSize = 30, maxSize = 2e3) {
+    this.minSize = minSize;
+    this.maxSize = maxSize;
+  }
+  /**
+   * Détecter les marqueurs dans une image
+   */
+  detect(imageData) {
+    const { data, width, height } = imageData;
+    console.log(`\u{1F50D} MarkerDetector.detect: ${width}x${height}`);
+    const markers = this.detectFromMagentaOnly(data, width, height);
+    if (markers.length > 0) {
+      console.log(`\u2705 ${markers.length} marqueur(s) d\xE9tect\xE9(s)`);
+    } else {
+      console.log("\u274C Aucun marqueur d\xE9tect\xE9");
+    }
+    return markers;
+  }
+  /**
+   * Détecter uniquement depuis les points magenta (fallback robuste)
+   */
+  detectFromMagentaOnly(data, width, height) {
+    console.log("\u{1F504} D\xE9tection par magenta uniquement");
+    const magentaPixels = this.findAllMagentaPixels(data, width, height);
+    console.log(`\u{1F49C} ${magentaPixels.length} pixels magenta d\xE9tect\xE9s`);
+    if (magentaPixels.length < 20) {
+      console.log("\u274C Pas assez de pixels magenta");
+      return [];
+    }
+    const clusters = this.clusterMagentaPixels(magentaPixels);
+    console.log(`\u{1F3AF} ${clusters.length} zones magenta identifi\xE9es`);
+    if (clusters.length < 4) {
+      console.log(`\u274C Seulement ${clusters.length} points magenta (besoin de 4)`);
+      return [];
+    }
+    const topClusters = clusters.slice(0, 4);
+    const corners = [];
+    const magentaPositions = [];
+    for (const cluster of topClusters) {
+      magentaPositions.push({ x: cluster.cx, y: cluster.cy });
+      const white = this.findWhiteCenterAt(data, width, height, cluster.cx, cluster.cy, 10);
+      corners.push(white || { x: cluster.cx, y: cluster.cy });
+    }
+    const orderedCorners = this.orderCorners(corners);
+    const orderedMagenta = this.orderCorners(magentaPositions);
+    if (!orderedCorners) {
+      console.log("\u274C Impossible d'ordonner les coins");
+      return [];
+    }
+    const measurements = this.calculateMeasurements(orderedCorners);
+    return [{
+      id: 0,
+      corners: orderedCorners,
+      magentaPositions: orderedMagenta || magentaPositions,
+      size: measurements.avgSidePx,
+      center: measurements.center,
+      score: 0.8,
+      magentaFound: 4,
+      homography: {
+        realSizeCm: MARKER_SPECS.markerSize,
+        pixelsPerCm: measurements.pixelsPerCm,
+        sides: measurements.sides,
+        angles: measurements.angles
+      }
+    }];
+  }
+  /**
+   * Trouver TOUS les pixels magenta dans l'image
+   * Magenta = rouge + bleu forts, vert faible, saturation élevée
+   */
+  findAllMagentaPixels(data, width, height) {
+    const pixels = [];
+    const step = Math.max(1, Math.floor(Math.min(width, height) / 900));
+    for (let y = 0; y < height; y += step) {
+      for (let x = 0; x < width; x += step) {
+        const idx = (y * width + x) * 4;
+        const r = data[idx];
+        const g = data[idx + 1];
+        const b = data[idx + 2];
+        const maxc = Math.max(r, g, b);
+        const minc = Math.min(r, g, b);
+        const sat = maxc - minc;
+        if (sat < 50) continue;
+        if (g > 140) continue;
+        if (r < 70 || b < 70) continue;
+        if (g >= r || g >= b) continue;
+        const score = r - g + (b - g) + sat * 0.5;
+        if (score < 140) continue;
+        pixels.push({ x, y, r, g, b, score });
+      }
+    }
+    return pixels;
+  }
+  /**
+   * Regrouper les pixels magenta en clusters
+   */
+  clusterMagentaPixels(pixels) {
+    if (pixels.length === 0) return [];
+    const cellSize = 12;
+    const grid = /* @__PURE__ */ new Map();
+    for (const p of pixels) {
+      const key2 = `${Math.floor(p.x / cellSize)},${Math.floor(p.y / cellSize)}`;
+      if (!grid.has(key2)) grid.set(key2, []);
+      grid.get(key2).push(p);
+    }
+    const clusters = [];
+    const usedCells = /* @__PURE__ */ new Set();
+    const gridEntries = Array.from(grid.entries());
+    for (const [key2, cellPixels] of gridEntries) {
+      if (usedCells.has(key2)) continue;
+      const cluster = [...cellPixels];
+      const queue = [key2];
+      usedCells.add(key2);
+      while (queue.length > 0) {
+        const currentKey = queue.shift();
+        const [cx, cy] = currentKey.split(",").map(Number);
+        for (let dx = -1; dx <= 1; dx++) {
+          for (let dy = -1; dy <= 1; dy++) {
+            if (dx === 0 && dy === 0) continue;
+            const neighborKey = `${cx + dx},${cy + dy}`;
+            if (grid.has(neighborKey) && !usedCells.has(neighborKey)) {
+              cluster.push(...grid.get(neighborKey));
+              usedCells.add(neighborKey);
+              queue.push(neighborKey);
+            }
+          }
+        }
+      }
+      if (cluster.length >= 6) {
+        let sumX = 0, sumY = 0, sumW = 0;
+        let minX = Infinity, maxX = -Infinity;
+        let minY = Infinity, maxY = -Infinity;
+        for (const p of cluster) {
+          const w = Math.max(1, p.score || 1);
+          sumX += p.x * w;
+          sumY += p.y * w;
+          sumW += w;
+          minX = Math.min(minX, p.x);
+          maxX = Math.max(maxX, p.x);
+          minY = Math.min(minY, p.y);
+          maxY = Math.max(maxY, p.y);
+        }
+        const clusterWidth = maxX - minX;
+        const clusterHeight = maxY - minY;
+        const ratio = Math.max(clusterWidth, clusterHeight) / Math.max(1, Math.min(clusterWidth, clusterHeight));
+        if (ratio < 2.5) {
+          clusters.push({
+            cx: sumX / Math.max(1, sumW),
+            cy: sumY / Math.max(1, sumW),
+            size: cluster.length,
+            width: clusterWidth,
+            height: clusterHeight
+          });
+        }
+      }
+    }
+    clusters.sort((a, b) => b.size - a.size);
+    if (clusters.length > 4) {
+      return this.selectBest4Corners(clusters);
+    }
+    return clusters;
+  }
+  /**
+   * Sélectionner les 4 clusters qui forment le meilleur quadrilatère
+   */
+  selectBest4Corners(clusters) {
+    if (clusters.length <= 4) return clusters;
+    const candidates = clusters.slice(0, Math.min(8, clusters.length));
+    let bestCombo = candidates.slice(0, 4);
+    let bestScore = -Infinity;
+    for (let i = 0; i < candidates.length; i++) {
+      for (let j = i + 1; j < candidates.length; j++) {
+        for (let k = j + 1; k < candidates.length; k++) {
+          for (let l = k + 1; l < candidates.length; l++) {
+            const combo = [candidates[i], candidates[j], candidates[k], candidates[l]];
+            const score = this.scoreQuadrilateral(combo);
+            if (score > bestScore) {
+              bestScore = score;
+              bestCombo = combo;
+            }
+          }
+        }
+      }
+    }
+    console.log(`\u2705 Meilleur quadrilat\xE8re s\xE9lectionn\xE9 (score: ${bestScore.toFixed(0)})`);
+    return bestCombo;
+  }
+  /**
+   * Score un ensemble de 4 points selon la qualité du quadrilatère
+   */
+  scoreQuadrilateral(points) {
+    const ordered = this.orderCorners(points.map((p) => ({ x: p.cx, y: p.cy })));
+    if (!ordered) return -Infinity;
+    const sides = [];
+    for (let i = 0; i < 4; i++) {
+      const p1 = ordered[i];
+      const p2 = ordered[(i + 1) % 4];
+      sides.push(Math.sqrt((p2.x - p1.x) ** 2 + (p2.y - p1.y) ** 2));
+    }
+    const avgSide = sides.reduce((a, b) => a + b, 0) / 4;
+    const variance = sides.reduce((sum, s) => sum + Math.abs(s - avgSide), 0) / 4;
+    return avgSide - variance * 2;
+  }
+  /**
+   * Trouver le centre blanc à proximité d'un point magenta
+   */
+  findWhiteCenterAt(data, width, height, cx, cy, radius) {
+    let sumX = 0, sumY = 0, sumW = 0;
+    let bestX = 0, bestY = 0, bestScore = 0;
+    for (let dy = -radius; dy <= radius; dy++) {
+      for (let dx = -radius; dx <= radius; dx++) {
+        const x = Math.round(cx + dx);
+        const y = Math.round(cy + dy);
+        if (x < 0 || x >= width || y < 0 || y >= height) continue;
+        const idx = (y * width + x) * 4;
+        const r = data[idx];
+        const g = data[idx + 1];
+        const b = data[idx + 2];
+        const brightness = (r + g + b) / 3;
+        const variance = Math.abs(r - brightness) + Math.abs(g - brightness) + Math.abs(b - brightness);
+        if (brightness > 175 && variance < 70) {
+          const distFromCenter = Math.sqrt(dx * dx + dy * dy);
+          const w = brightness / (1 + distFromCenter * 0.6);
+          sumX += x * w;
+          sumY += y * w;
+          sumW += w;
+          if (w > bestScore) {
+            bestScore = w;
+            bestX = x;
+            bestY = y;
+          }
+        }
+      }
+    }
+    if (sumW > 0) {
+      return { x: sumX / sumW, y: sumY / sumW };
+    }
+    return bestScore > 0 ? { x: bestX, y: bestY } : null;
+  }
+  /**
+   * Calculer les mesures du quadrilatère pour l'homographie
+   */
+  calculateMeasurements(quad) {
+    const [tl, tr, br, bl] = quad;
+    const sides = [
+      Math.sqrt((tr.x - tl.x) ** 2 + (tr.y - tl.y) ** 2),
+      // Haut
+      Math.sqrt((br.x - tr.x) ** 2 + (br.y - tr.y) ** 2),
+      // Droit
+      Math.sqrt((bl.x - br.x) ** 2 + (bl.y - br.y) ** 2),
+      // Bas
+      Math.sqrt((tl.x - bl.x) ** 2 + (tl.y - bl.y) ** 2)
+      // Gauche
+    ];
+    const avgSidePx = sides.reduce((a, b) => a + b, 0) / 4;
+    const pixelsPerCm = avgSidePx / MARKER_SPECS.markerSize;
+    const angles = [
+      this.calculateAngle(bl, tl, tr),
+      this.calculateAngle(tl, tr, br),
+      this.calculateAngle(tr, br, bl),
+      this.calculateAngle(br, bl, tl)
+    ];
+    return {
+      sides,
+      avgSidePx,
+      pixelsPerCm,
+      angles,
+      center: {
+        x: (tl.x + tr.x + br.x + bl.x) / 4,
+        y: (tl.y + tr.y + br.y + bl.y) / 4
+      }
+    };
+  }
+  /**
+   * Calculer l'angle entre trois points
+   */
+  calculateAngle(p1, vertex, p2) {
+    const v1 = { x: p1.x - vertex.x, y: p1.y - vertex.y };
+    const v2 = { x: p2.x - vertex.x, y: p2.y - vertex.y };
+    const dot = v1.x * v2.x + v1.y * v2.y;
+    const mag1 = Math.sqrt(v1.x ** 2 + v1.y ** 2);
+    const mag2 = Math.sqrt(v2.x ** 2 + v2.y ** 2);
+    return Math.acos(dot / (mag1 * mag2)) * 180 / Math.PI;
+  }
+  /**
+   * Ordonner les 4 coins en [TL, TR, BR, BL]
+   */
+  orderCorners(corners) {
+    if (corners.length !== 4) return null;
+    const cx = corners.reduce((s, c) => s + c.x, 0) / 4;
+    const cy = corners.reduce((s, c) => s + c.y, 0) / 4;
+    const topLeft = corners.find((c) => c.x < cx && c.y < cy);
+    const topRight = corners.find((c) => c.x >= cx && c.y < cy);
+    const bottomRight = corners.find((c) => c.x >= cx && c.y >= cy);
+    const bottomLeft = corners.find((c) => c.x < cx && c.y >= cy);
+    if (!topLeft || !topRight || !bottomRight || !bottomLeft) return null;
+    return [topLeft, topRight, bottomRight, bottomLeft];
+  }
+  /**
+   * Vérifier si un quadrilatère est valide
+   */
+  isValidQuad(quad) {
+    if (quad.length !== 4) return false;
+    const [tl, tr, br, bl] = quad;
+    if (tl.y > bl.y || tr.y > br.y) return false;
+    if (tl.x > tr.x || bl.x > br.x) return false;
+    const width = Math.max(tr.x - tl.x, br.x - bl.x);
+    const height = Math.max(bl.y - tl.y, br.y - tr.y);
+    return width >= this.minSize && height >= this.minSize && width <= this.maxSize && height <= this.maxSize;
+  }
+};
+function computeHomography(srcPoints, dstPoints) {
+  if (srcPoints.length !== 4 || dstPoints.length !== 4) {
+    console.error("computeHomography: besoin de 4 points source et 4 points destination");
+    return [[1, 0, 0], [0, 1, 0], [0, 0, 1]];
+  }
+  const A = [];
+  for (let i = 0; i < 4; i++) {
+    const [x, y] = [srcPoints[i].x, srcPoints[i].y];
+    const [u, v] = [dstPoints[i].x, dstPoints[i].y];
+    A.push([-x, -y, -1, 0, 0, 0, u * x, u * y, u]);
+    A.push([0, 0, 0, -x, -y, -1, v * x, v * y, v]);
+  }
+  const h = solveHomographyDLT(A);
+  return [
+    [h[0], h[1], h[2]],
+    [h[3], h[4], h[5]],
+    [h[6], h[7], h[8]]
+  ];
+}
+function solveHomographyDLT(A) {
+  const n = 9;
+  const AtA = Array(n).fill(null).map(() => Array(n).fill(0));
+  for (let i = 0; i < n; i++) {
+    for (let j = 0; j < n; j++) {
+      let sum = 0;
+      for (let k = 0; k < A.length; k++) {
+        sum += A[k][i] * A[k][j];
+      }
+      AtA[i][j] = sum;
+    }
+  }
+  let h = Array(n).fill(1 / Math.sqrt(n));
+  for (let iter = 0; iter < 100; iter++) {
+    const newH = Array(n).fill(0);
+    for (let i = 0; i < n; i++) {
+      for (let j = 0; j < n; j++) {
+        newH[i] += AtA[i][j] * h[j];
+      }
+    }
+    const norm = Math.sqrt(newH.reduce((s, v) => s + v * v, 0));
+    if (norm > 1e-10) {
+      for (let i = 0; i < n; i++) {
+        h[i] = newH[i] / norm;
+      }
+    }
+  }
+  if (Math.abs(h[8]) > 1e-10) {
+    const scale = 1 / h[8];
+    for (let i = 0; i < n; i++) {
+      h[i] *= scale;
+    }
+  }
+  return h;
+}
+function transformPoint(H, p) {
+  const x = H[0][0] * p.x + H[0][1] * p.y + H[0][2];
+  const y = H[1][0] * p.x + H[1][1] * p.y + H[1][2];
+  const w = H[2][0] * p.x + H[2][1] * p.y + H[2][2];
+  return {
+    x: x / w,
+    y: y / w
+  };
+}
+function measureDistanceCm(H, p1Px, p2Px) {
+  const p1Cm = transformPoint(H, p1Px);
+  const p2Cm = transformPoint(H, p2Px);
+  return Math.sqrt((p2Cm.x - p1Cm.x) ** 2 + (p2Cm.y - p1Cm.y) ** 2);
+}
+function estimatePose(corners) {
+  if (corners.length !== 4) {
+    return { rotX: 0, rotY: 0, rotZ: 0 };
+  }
+  const [tl, tr, br, bl] = corners;
+  const topWidth = Math.sqrt((tr.x - tl.x) ** 2 + (tr.y - tl.y) ** 2);
+  const bottomWidth = Math.sqrt((br.x - bl.x) ** 2 + (br.y - bl.y) ** 2);
+  const ratioX = topWidth / bottomWidth;
+  const rotX = Math.round(Math.atan2(ratioX - 1, 0.5) * 180 / Math.PI);
+  const leftHeight = Math.sqrt((bl.x - tl.x) ** 2 + (bl.y - tl.y) ** 2);
+  const rightHeight = Math.sqrt((br.x - tr.x) ** 2 + (br.y - tr.y) ** 2);
+  const ratioY = leftHeight / rightHeight;
+  const rotY = Math.round(Math.atan2(ratioY - 1, 0.5) * 180 / Math.PI);
+  const rotZ = Math.round(Math.atan2(tr.y - tl.y, tr.x - tl.x) * 180 / Math.PI);
+  return { rotX, rotY, rotZ };
+}
+function calculateQualityScore(corners, avgSizePx, rotX, rotY) {
+  let score = 100;
+  if (avgSizePx < 50) score -= 40;
+  else if (avgSizePx < 100) score -= 20;
+  score -= Math.abs(rotX) * 0.5;
+  score -= Math.abs(rotY) * 0.5;
+  return Math.max(0, Math.min(100, Math.round(score)));
+}
+
+// src/api/measure.ts
+var sharp = sharpModule.default || sharpModule;
+var router89 = import_express91.default.Router();
+var detector = new MarkerDetector(30, 2e3);
+var measureMode = process.env.AI_MEASURE_ENGINE || "gemini";
+console.log(`\u{1F4F7} [MEASURE] Mode de mesure photo: ${measureMode.toUpperCase()}`);
+console.log(`   \u2192 Marqueur: ${MARKER_SPECS.markerSize}cm \xD7 ${MARKER_SPECS.markerSize}cm avec points MAGENTA`);
+router89.get("/photo/status", async (_req, res) => {
+  try {
+    const mode = process.env.AI_MEASURE_ENGINE || "gemini";
+    res.json({
+      success: true,
+      service: "vision_ar",
+      available: true,
+      // Toujours disponible maintenant
+      mode,
+      version: "v1.0-magenta",
+      markerSpecs: MARKER_SPECS,
+      timestamp: (/* @__PURE__ */ new Date()).toISOString()
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, available: false, error: error?.message || "Unknown error" });
+  }
+});
+router89.post("/photo", async (req2, res) => {
+  const startTime = Date.now();
+  try {
+    const {
+      imageBase64,
+      mimeType,
+      nodeId,
+      treeId,
+      fieldId,
+      organizationId,
+      referenceHint,
+      deviceInfo,
+      exif,
+      persist,
+      measureKeys,
+      mappings
+    } = req2.body || {};
+    if (!imageBase64) {
+      return res.status(400).json({ success: false, error: "imageBase64 requis" });
+    }
+    console.log("[measure/photo] \u{1F50D} Analyse image...");
+    const buffer = Buffer.from(imageBase64, "base64");
+    const image = sharp(buffer);
+    const metadata = await image.metadata();
+    const { width, height } = metadata;
+    if (!width || !height) {
+      return res.status(400).json({ success: false, error: "Impossible de lire les dimensions de l'image" });
+    }
+    console.log(`[measure/photo] \u{1F4D0} Image: ${width}x${height}`);
+    const { data, info } = await image.ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+    const markers = detector.detect({
+      data,
+      width: info.width,
+      height: info.height
+    });
+    let response;
+    if (markers.length > 0) {
+      const marker = markers[0];
+      console.log(`[measure/photo] \u2705 Marqueur d\xE9tect\xE9! Score: ${marker.score}, Taille: ${marker.size.toFixed(0)}px`);
+      const srcPoints = marker.corners;
+      const dstPoints = [
+        { x: 0, y: 0 },
+        // TL
+        { x: MARKER_SPECS.markerSize, y: 0 },
+        // TR
+        { x: MARKER_SPECS.markerSize, y: MARKER_SPECS.markerSize },
+        // BR
+        { x: 0, y: MARKER_SPECS.markerSize }
+        // BL
+      ];
+      const homographyMatrix = computeHomography(srcPoints, dstPoints);
+      const pose = estimatePose(marker.corners);
+      const quality = calculateQualityScore(
+        marker.corners,
+        marker.size,
+        pose.rotX,
+        pose.rotY
+      );
+      const measurements = {};
+      measurements["markerSizePx"] = marker.size;
+      measurements["pixelsPerCm"] = marker.homography.pixelsPerCm;
+      if (measureKeys && Array.isArray(measureKeys)) {
+        for (const key2 of measureKeys) {
+          measurements[key2] = 0;
+        }
+      }
+      response = {
+        success: true,
+        detected: true,
+        measurements,
+        marker: {
+          id: marker.id,
+          corners: marker.corners,
+          magentaPositions: marker.magentaPositions,
+          center: marker.center,
+          sizePx: marker.size,
+          score: marker.score,
+          magentaFound: marker.magentaFound
+        },
+        homography: {
+          matrix: homographyMatrix,
+          pixelsPerCm: marker.homography.pixelsPerCm,
+          realSizeCm: MARKER_SPECS.markerSize,
+          sides: marker.homography.sides,
+          angles: marker.homography.angles,
+          quality
+        },
+        pose,
+        calibration: {
+          pixelPerCm: marker.homography.pixelsPerCm,
+          referenceType: "aruco_magenta",
+          referenceSize: { width: MARKER_SPECS.markerSize, height: MARKER_SPECS.markerSize }
+        },
+        referenceUsed: referenceHint || "aruco_magenta_18cm",
+        imageMeta: {
+          mimeType: mimeType || "image/jpeg",
+          width,
+          height,
+          exif: exif || null
+        },
+        debug: {
+          markerSpecs: MARKER_SPECS,
+          mode: process.env.AI_MEASURE_ENGINE || "gemini",
+          detectionMethod: "magenta_clustering"
+        },
+        durationMs: Date.now() - startTime
+      };
+      if (persist && nodeId && organizationId) {
+        try {
+          const measurePhoto = await db.measurePhoto.create({
+            data: {
+              organizationId,
+              treeId: treeId || null,
+              nodeId,
+              fieldId: fieldId || null,
+              mimeType: mimeType || "image/jpeg",
+              widthPx: width,
+              heightPx: height,
+              exif: exif ? JSON.stringify(exif) : null,
+              deviceInfo: deviceInfo ? JSON.stringify(deviceInfo) : null,
+              referenceType: "aruco_magenta",
+              referenceSizeMm: JSON.stringify({ width: MARKER_SPECS.markerSize * 10, height: MARKER_SPECS.markerSize * 10 }),
+              arucoId: marker.id,
+              arucoCornersPx: JSON.stringify(marker.corners),
+              homography: JSON.stringify({ matrix: homographyMatrix, quality }),
+              pose: JSON.stringify(pose),
+              measurements: JSON.stringify(measurements),
+              status: "detected"
+            }
+          });
+          for (let i = 0; i < marker.magentaPositions.length; i++) {
+            const pos = marker.magentaPositions[i];
+            await db.measurePhotoPoint.create({
+              data: {
+                measurePhotoId: measurePhoto.id,
+                label: `magenta_${i + 1}`,
+                xPx: pos.x,
+                yPx: pos.y,
+                source: "auto_detect",
+                confidence: marker.score
+              }
+            });
+          }
+          console.log(`[measure/photo] \u{1F4BE} Sauvegard\xE9: MeasurePhoto #${measurePhoto.id}`);
+          response.persistedId = measurePhoto.id;
+        } catch (dbError) {
+          console.error("[measure/photo] \u26A0\uFE0F Erreur persistance:", dbError.message);
+        }
+      }
+    } else {
+      console.log("[measure/photo] \u274C Aucun marqueur d\xE9tect\xE9");
+      response = {
+        success: true,
+        detected: false,
+        measurements: {},
+        marker: null,
+        homography: {
+          matrix: [[1, 0, 0], [0, 1, 0], [0, 0, 1]],
+          pixelsPerCm: null,
+          quality: 0
+        },
+        pose: null,
+        calibration: null,
+        referenceUsed: null,
+        imageMeta: {
+          mimeType: mimeType || "image/jpeg",
+          width,
+          height,
+          exif: exif || null
+        },
+        error: "Aucun marqueur MAGENTA d\xE9tect\xE9. Assurez-vous que le marqueur 18cm avec les 4 points magenta est visible.",
+        debug: {
+          markerSpecs: MARKER_SPECS,
+          mode: process.env.AI_MEASURE_ENGINE || "gemini",
+          tip: "Le marqueur doit avoir 4 cercles magenta aux coins avec un centre blanc"
+        },
+        durationMs: Date.now() - startTime
+      };
+    }
+    return res.json(response);
+  } catch (error) {
+    const durationMs = Date.now() - startTime;
+    console.error("[measure/photo] \u274C Erreur:", error);
+    return res.status(500).json({
+      success: false,
+      detected: false,
+      error: error?.message || "Erreur interne",
+      durationMs
+    });
+  }
+});
+router89.post("/photo/measure", async (req2, res) => {
+  try {
+    const { homographyMatrix, point1, point2 } = req2.body || {};
+    if (!homographyMatrix || !point1 || !point2) {
+      return res.status(400).json({
+        success: false,
+        error: "homographyMatrix, point1 et point2 sont requis"
+      });
+    }
+    const distanceCm = measureDistanceCm(homographyMatrix, point1, point2);
+    const point1Cm = transformPoint(homographyMatrix, point1);
+    const point2Cm = transformPoint(homographyMatrix, point2);
+    return res.json({
+      success: true,
+      distanceCm,
+      distanceM: distanceCm / 100,
+      point1Cm,
+      point2Cm,
+      unit: "cm"
+    });
+  } catch (error) {
+    console.error("[measure/photo/measure] \u274C Erreur:", error);
+    return res.status(500).json({
+      success: false,
+      error: error?.message || "Erreur interne"
+    });
+  }
+});
+router89.get("/calibration-profiles", async (req2, res) => {
+  try {
+    const organizationId = req2.query.organizationId;
+    if (!organizationId) {
+      return res.status(400).json({ success: false, error: "organizationId requis" });
+    }
+    const profiles = await db.calibrationProfile.findMany({
+      where: { organizationId },
+      orderBy: { createdAt: "desc" }
+    });
+    return res.json({
+      success: true,
+      profiles,
+      defaultProfile: {
+        name: "Marqueur MAGENTA 18cm",
+        referenceType: "aruco_magenta",
+        referenceSizeMm: MARKER_SPECS.markerSize * 10,
+        description: "Marqueur carr\xE9 18x18cm avec 4 cercles magenta aux coins"
+      }
+    });
+  } catch (error) {
+    console.error("[calibration-profiles] \u274C Erreur:", error);
+    return res.status(500).json({ success: false, error: error?.message || "Erreur interne" });
+  }
+});
+var measure_default = router89;
+
 // src/components/TreeBranchLeaf/treebranchleaf-new/api/repeat/repeat-routes.ts
-var import_express91 = require("express");
+var import_express92 = require("express");
 
 // src/components/TreeBranchLeaf/treebranchleaf-new/api/repeat/repeat-blueprint-builder.ts
 var parseJsonArray = (value) => {
@@ -59679,13 +60974,22 @@ async function buildBlueprintForRepeater(prisma49, repeaterNodeId) {
       linkedVariableIds: true
     }
   });
+  const cleanVariableId = (id) => {
+    if (!id) return id;
+    return id.replace(/(-\d+)+$/, "");
+  };
+  const suffixedToOriginal = /* @__PURE__ */ new Map();
   for (const node of templateNodesWithLinks) {
     if (node.linkedVariableIds && node.linkedVariableIds.length > 0) {
       for (const varId of node.linkedVariableIds) {
-        if (!linkedVarsByNode.has(varId)) {
-          linkedVarsByNode.set(varId, /* @__PURE__ */ new Set());
+        const cleanedId = cleanVariableId(varId);
+        if (cleanedId !== varId) {
+          suffixedToOriginal.set(varId, cleanedId);
         }
-        linkedVarsByNode.get(varId).add(node.id);
+        if (!linkedVarsByNode.has(cleanedId)) {
+          linkedVarsByNode.set(cleanedId, /* @__PURE__ */ new Set());
+        }
+        linkedVarsByNode.get(cleanedId).add(node.id);
       }
     }
   }
@@ -60427,7 +61731,7 @@ async function copyVariableWithCapacities2(originalVarId, suffix, newNodeId, pri
             }
             await prisma49.treeBranchLeafNode.update({
               where: { id: displayNodeId2 },
-              data: { hasTable: true }
+              data: { hasTable: originalOwnerNode.hasTable ?? false }
             });
           }
         } else {
@@ -60960,14 +62264,11 @@ async function enforceStrictIsolation(prisma49, copiedNodeIds) {
       const node = await prisma49.treeBranchLeafNode.findUnique({
         where: { id: nodeId },
         include: {
-          TreeBranchLeafNodeFormula: true,
-          TreeBranchLeafNodeCondition: true,
-          TreeBranchLeafNodeTable: true,
-          TreeBranchLeafNodeVariable: true
+          TreeBranchLeafNodeTable: true
         }
       });
       if (!node) {
-        result.errors.push({ nodeId, error: "N\xC3\u2026\xE2\u20AC\u0153ud non trouv\xC3\u0192\xC2\xA9" });
+        result.errors.push({ nodeId, error: "N\u0153ud non trouv\xE9" });
         continue;
       }
       if (node.hasFormula || node.hasCondition || node.hasTable) {
@@ -60976,29 +62277,15 @@ async function enforceStrictIsolation(prisma49, copiedNodeIds) {
             where: { id: nodeId },
             data: { calculatedValue: null }
           });
-          changes.push(`calculatedValue: ${node.calculatedValue} \xC3\xA2\xE2\u20AC\xA0\xE2\u20AC\u2122 null`);
+          changes.push(`calculatedValue: ${node.calculatedValue} \u2192 null`);
         }
       }
-      if (node.hasFormula && node.TreeBranchLeafNodeFormula.length === 0) {
-        await prisma49.treeBranchLeafNode.update({
-          where: { id: nodeId },
-          data: { hasFormula: false }
-        });
-        changes.push("hasFormula: true \xC3\xA2\xE2\u20AC\xA0\xE2\u20AC\u2122 false (aucune formule trouv\xC3\u0192\xC2\xA9e)");
-      }
-      if (node.hasCondition && node.TreeBranchLeafNodeCondition.length === 0) {
-        await prisma49.treeBranchLeafNode.update({
-          where: { id: nodeId },
-          data: { hasCondition: false }
-        });
-        changes.push("hasCondition: true \xC3\xA2\xE2\u20AC\xA0\xE2\u20AC\u2122 false (aucune condition trouv\xC3\u0192\xC2\xA9e)");
-      }
-      if (node.hasTable && node.TreeBranchLeafNodeTable.length === 0) {
+      if (node.hasTable && (!node.TreeBranchLeafNodeTable || node.TreeBranchLeafNodeTable.length === 0)) {
         await prisma49.treeBranchLeafNode.update({
           where: { id: nodeId },
           data: { hasTable: false }
         });
-        changes.push("hasTable: true \xC3\xA2\xE2\u20AC\xA0\xE2\u20AC\u2122 false (aucune table trouv\xC3\u0192\xC2\xA9e)");
+        changes.push("hasTable: true \u2192 false (aucune table trouv\xE9e)");
       }
       const currentMetadata = node.metadata && typeof node.metadata === "object" ? node.metadata : {};
       const updatedMetadata = {
@@ -61012,7 +62299,7 @@ async function enforceStrictIsolation(prisma49, copiedNodeIds) {
         where: { id: nodeId },
         data: { metadata: updatedMetadata }
       });
-      changes.push("metadata: marqu\xC3\u0192\xC2\xA9 comme strictement isol\xC3\u0192\xC2\xA9");
+      changes.push("metadata: marqu\xE9 comme strictement isol\xE9");
       result.isolatedNodes.push({
         nodeId: node.id,
         label: node.label,
@@ -61021,7 +62308,7 @@ async function enforceStrictIsolation(prisma49, copiedNodeIds) {
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error);
       result.errors.push({ nodeId, error: errorMsg });
-      console.error(`\xC3\xA2\xC2\x9D\xC5\u2019 [ISOLATION] Erreur pour ${nodeId}:`, errorMsg);
+      console.error(`\u274C [ISOLATION] Erreur pour ${nodeId}:`, errorMsg);
     }
   }
   return result;
@@ -61058,10 +62345,9 @@ async function forceIndependentCalculation(prisma49, copiedNodeIds) {
       const node = await prisma49.treeBranchLeafNode.findUnique({
         where: { id: nodeId },
         include: {
-          TreeBranchLeafNodeFormula: true,
-          TreeBranchLeafNodeCondition: true,
           TreeBranchLeafNodeTable: true,
-          TreeBranchLeafNodeVariable: true
+          TreeBranchLeafNodeVariable: true,
+          TreeBranchLeafSelectConfig: true
         }
       });
       if (!node) continue;
@@ -61141,8 +62427,6 @@ async function fixCompleteDuplication(prisma49, originalNodeId, copiedNodeId, su
     prisma49.treeBranchLeafNode.findUnique({
       where: { id: originalNodeId },
       include: {
-        TreeBranchLeafNodeFormula: true,
-        TreeBranchLeafNodeCondition: true,
         TreeBranchLeafNodeTable: {
           include: {
             tableColumns: true,
@@ -61320,12 +62604,16 @@ async function fixCompleteDuplication(prisma49, originalNodeId, copiedNodeId, su
       result.fieldConfigUpdated = true;
     }
   }
+  const copiedNodeTables = await prisma49.treeBranchLeafNodeTable.count({
+    where: { nodeId: copiedNodeId }
+  });
   await prisma49.treeBranchLeafNode.update({
     where: { id: copiedNodeId },
     data: {
       hasFormula: originalNode.TreeBranchLeafNodeFormula.length > 0,
       hasCondition: originalNode.TreeBranchLeafNodeCondition.length > 0,
-      hasTable: originalNode.TreeBranchLeafNodeTable.length > 0,
+      hasTable: copiedNodeTables > 0,
+      // Vérifier les tables du node COPIÉ, pas de l'original
       calculatedValue: null,
       calculatedAt: null,
       calculatedBy: null
@@ -61529,8 +62817,6 @@ async function forceNodeRecalculationWithOwnData(prisma49, copiedNodeId) {
   const copiedNode = await prisma49.treeBranchLeafNode.findUnique({
     where: { id: copiedNodeId },
     include: {
-      TreeBranchLeafNodeFormula: true,
-      TreeBranchLeafNodeCondition: true,
       TreeBranchLeafNodeTable: {
         include: {
           tableColumns: true,
@@ -61686,244 +62972,6 @@ async function blockFallbackToOriginalValues(prisma49, copiedNodeIds) {
       });
     }
   }
-}
-
-// src/components/TreeBranchLeaf/treebranchleaf-new/api/repeat/services/table-lookup-duplication-service.ts
-var TableLookupDuplicationService = class {
-  /**
-   * Duplique complÃƒÂ¨tement les tables TBL et leurs configurations SELECT associÃƒÂ©es
-   * Assure l'indÃƒÂ©pendance totale des lookups pour les nÃ…â€œuds copiÃƒÂ©s
-   */
-  async duplicateTableLookupSystem(prisma49, originalNodeId, arg) {
-    let suffixToken = typeof arg === "string" ? arg : arg?.suffixToken ?? "-1";
-    if (!suffixToken) suffixToken = "-1";
-    if (!suffixToken.startsWith("-")) {
-      suffixToken = `-${suffixToken}`;
-    }
-    const normalizedOriginalId = normalizeNodeBase(originalNodeId);
-    const copiedNodeId = typeof arg === "object" && arg?.copiedNodeId ? arg.copiedNodeId : `${normalizedOriginalId}${suffixToken}`;
-    try {
-      const originalSelectConfigs = await prisma49.treeBranchLeafSelectConfig.findMany({
-        where: { nodeId: originalNodeId }
-      });
-      if (originalSelectConfigs.length === 0) {
-        return;
-      }
-      for (const selectConfig of originalSelectConfigs) {
-        await this.duplicateTableAndSelectConfig(prisma49, selectConfig, copiedNodeId, suffixToken);
-      }
-    } catch (error) {
-      console.error(`\xC3\xA2\xC2\x9D\xC5\u2019 [TableLookupDuplication] Erreur pour ${originalNodeId}:`, error);
-      throw error;
-    }
-  }
-  /**
-   * Duplique une table TBL et sa configuration SELECT associÃƒÂ©e
-   */
-  async duplicateTableAndSelectConfig(prisma49, originalSelectConfig, copiedNodeId, suffix) {
-    const originalTableId = originalSelectConfig.tableReference;
-    const copiedTableId = `${originalTableId}${suffix}`;
-    try {
-      const originalTable = await prisma49.treeBranchLeafNodeTable.findUnique({
-        where: { id: originalTableId },
-        include: {
-          tableColumns: true,
-          tableRows: true
-        }
-      });
-      if (!originalTable) {
-        return;
-      }
-      const existingCopiedTable = await prisma49.treeBranchLeafNodeTable.findUnique({
-        where: { id: copiedTableId }
-      });
-      if (!existingCopiedTable) {
-        await prisma49.treeBranchLeafNodeTable.create({
-          data: {
-            id: copiedTableId,
-            nodeId: copiedNodeId,
-            name: originalTable.name + suffix,
-            type: originalTable.type,
-            description: originalTable.description,
-            // Ã°Å¸â€Â¢ COPIE TABLE META: suffixer UUIDs et comparisonColumn
-            meta: (() => {
-              if (!originalTable.meta) return originalTable.meta;
-              try {
-                const metaObj = typeof originalTable.meta === "string" ? JSON.parse(originalTable.meta) : JSON.parse(JSON.stringify(originalTable.meta));
-                const suffixNum = parseInt(suffix.replace("-", "")) || 1;
-                if (metaObj?.lookup?.selectors?.columnFieldId && !metaObj.lookup.selectors.columnFieldId.endsWith(`-${suffixNum}`)) {
-                  metaObj.lookup.selectors.columnFieldId = `${metaObj.lookup.selectors.columnFieldId}-${suffixNum}`;
-                }
-                if (metaObj?.lookup?.selectors?.rowFieldId && !metaObj.lookup.selectors.rowFieldId.endsWith(`-${suffixNum}`)) {
-                  metaObj.lookup.selectors.rowFieldId = `${metaObj.lookup.selectors.rowFieldId}-${suffixNum}`;
-                }
-                if (metaObj?.lookup?.rowSourceOption?.sourceField && !metaObj.lookup.rowSourceOption.sourceField.endsWith(`-${suffixNum}`)) {
-                  metaObj.lookup.rowSourceOption.sourceField = `${metaObj.lookup.rowSourceOption.sourceField}-${suffixNum}`;
-                }
-                if (metaObj?.lookup?.columnSourceOption?.sourceField && !metaObj.lookup.columnSourceOption.sourceField.endsWith(`-${suffixNum}`)) {
-                  metaObj.lookup.columnSourceOption.sourceField = `${metaObj.lookup.columnSourceOption.sourceField}-${suffixNum}`;
-                }
-                if (metaObj?.lookup?.rowSourceOption?.comparisonColumn) {
-                  const val = metaObj.lookup.rowSourceOption.comparisonColumn;
-                  if (!/^-?\d+(\.\d+)?$/.test(val.trim()) && !val.endsWith(suffix)) {
-                    metaObj.lookup.rowSourceOption.comparisonColumn = `${val}${suffix}`;
-                  }
-                }
-                if (metaObj?.lookup?.columnSourceOption?.comparisonColumn) {
-                  const val = metaObj.lookup.columnSourceOption.comparisonColumn;
-                  if (!/^-?\d+(\.\d+)?$/.test(val.trim()) && !val.endsWith(suffix)) {
-                    metaObj.lookup.columnSourceOption.comparisonColumn = `${val}${suffix}`;
-                  }
-                }
-                if (metaObj?.lookup?.displayColumn) {
-                  if (Array.isArray(metaObj.lookup.displayColumn)) {
-                    metaObj.lookup.displayColumn = metaObj.lookup.displayColumn.map((col) => {
-                      if (col && !/^-?\d+(\.\d+)?$/.test(col.trim()) && !col.endsWith(suffix)) {
-                        return `${col}${suffix}`;
-                      }
-                      return col;
-                    });
-                  } else if (typeof metaObj.lookup.displayColumn === "string") {
-                    const val = metaObj.lookup.displayColumn;
-                    if (!/^-?\d+(\.\d+)?$/.test(val.trim()) && !val.endsWith(suffix)) {
-                      metaObj.lookup.displayColumn = `${val}${suffix}`;
-                    }
-                  }
-                }
-                if (metaObj?.lookup?.displayRow) {
-                  if (Array.isArray(metaObj.lookup.displayRow)) {
-                    metaObj.lookup.displayRow = metaObj.lookup.displayRow.map((row) => {
-                      if (row && !/^-?\d+(\.\d+)?$/.test(row.trim()) && !row.endsWith(suffix)) {
-                        return `${row}${suffix}`;
-                      }
-                      return row;
-                    });
-                  } else if (typeof metaObj.lookup.displayRow === "string") {
-                    const val = metaObj.lookup.displayRow;
-                    if (!/^-?\d+(\.\d+)?$/.test(val.trim()) && !val.endsWith(suffix)) {
-                      metaObj.lookup.displayRow = `${val}${suffix}`;
-                    }
-                  }
-                }
-                return metaObj;
-              } catch {
-                return originalTable.meta;
-              }
-            })(),
-            organizationId: originalTable.organizationId,
-            rowCount: originalTable.rowCount,
-            columnCount: originalTable.columnCount,
-            lookupDisplayColumns: originalTable.lookupDisplayColumns,
-            lookupSelectColumn: originalTable.lookupSelectColumn,
-            // Duplication des colonnes
-            // Ã°Å¸â€Â¢ COPIE TABLE COLUMN: suffixe seulement pour texte, pas pour nombres
-            tableColumns: {
-              create: originalTable.tableColumns.map((col) => ({
-                columnIndex: col.columnIndex,
-                name: col.name ? /^-?\d+(\.\d+)?$/.test(col.name.trim()) ? col.name : `${col.name}${suffix}` : col.name,
-                type: col.type,
-                width: col.width,
-                format: col.format,
-                metadata: col.metadata
-              }))
-            },
-            // Duplication des lignes
-            tableRows: {
-              create: originalTable.tableRows.map((row) => ({
-                rowIndex: row.rowIndex,
-                cells: row.cells
-              }))
-            }
-          }
-        });
-      } else {
-      }
-      const existingSelectConfig = await prisma49.treeBranchLeafSelectConfig.findFirst({
-        where: {
-          nodeId: copiedNodeId,
-          tableReference: copiedTableId
-        }
-      });
-      if (!existingSelectConfig) {
-        await prisma49.treeBranchLeafSelectConfig.create({
-          data: {
-            nodeId: copiedNodeId,
-            tableReference: copiedTableId,
-            keyColumn: originalSelectConfig.keyColumn,
-            keyRow: originalSelectConfig.keyRow,
-            valueColumn: originalSelectConfig.valueColumn,
-            valueRow: originalSelectConfig.valueRow,
-            displayColumn: originalSelectConfig.displayColumn,
-            displayRow: originalSelectConfig.displayRow,
-            createdAt: /* @__PURE__ */ new Date(),
-            updatedAt: /* @__PURE__ */ new Date()
-          }
-        });
-        try {
-          const node = await prisma49.treeBranchLeafNode.findUnique({ where: { id: copiedNodeId }, select: { capabilities: true, linkedTableIds: true } });
-          const currentCapabilities = node?.capabilities && typeof node.capabilities === "object" ? node.capabilities : {};
-          currentCapabilities.table = currentCapabilities.table || {};
-          currentCapabilities.table.enabled = true;
-          currentCapabilities.table.activeId = copiedTableId;
-          currentCapabilities.table.instances = currentCapabilities.table.instances || {};
-          currentCapabilities.table.instances[copiedTableId] = currentCapabilities.table.instances[copiedTableId] || {};
-          const currentLinked = node?.linkedTableIds || [];
-          const newLinked = Array.from(/* @__PURE__ */ new Set([...currentLinked, copiedTableId]));
-          await prisma49.treeBranchLeafNode.update({
-            where: { id: copiedNodeId },
-            data: {
-              hasTable: true,
-              table_activeId: copiedTableId,
-              table_instances: { set: currentCapabilities.table.instances },
-              table_name: originalTable.name + suffix,
-              table_type: originalTable.type,
-              capabilities: currentCapabilities,
-              linkedTableIds: { set: newLinked }
-            }
-          });
-        } catch (nodeUpdateErr) {
-          console.warn(`   \xC3\xA2\xC5\xA1\xC2\xA0\xC3\xAF\xC2\xB8\xC2\x8F Warning updating node ${copiedNodeId} capabilities:`, nodeUpdateErr.message);
-        }
-      } else {
-      }
-    } catch (error) {
-      console.error(`\xC3\xA2\xC2\x9D\xC5\u2019 Erreur duplication table/config ${originalTableId}:`, error);
-      throw error;
-    }
-  }
-  /**
-   * RÃƒÂ©pare les configurations SELECT manquantes pour les nÃ…â€œuds copiÃƒÂ©s existants
-   */
-  async repairMissingSelectConfigs(prisma49) {
-    try {
-      const copiedNodes = await prisma49.treeBranchLeafNode.findMany({
-        where: {
-          id: {
-            endsWith: "-1"
-          }
-        }
-      });
-      for (const copiedNode of copiedNodes) {
-        const originalNodeId = copiedNode.id.replace("-1", "");
-        const copiedSelectConfigs = await prisma49.treeBranchLeafSelectConfig.findMany({
-          where: { nodeId: copiedNode.id }
-        });
-        if (copiedSelectConfigs.length === 0) {
-          await this.duplicateTableLookupSystem(prisma49, originalNodeId, {
-            copiedNodeId: copiedNode.id,
-            suffixToken: "-1"
-          });
-        }
-      }
-    } catch (error) {
-      console.error(`\xC3\xA2\xC2\x9D\xC5\u2019 [TableLookupDuplication] Erreur r\xC3\u0192\xC2\xA9paration:`, error);
-      throw error;
-    }
-  }
-};
-var tableLookupDuplicationService = new TableLookupDuplicationService();
-function normalizeNodeBase(value) {
-  return value.replace(/-\d+(?:-\d+)*$/, "");
 }
 
 // src/components/TreeBranchLeaf/treebranchleaf-new/api/repeat/services/recalculate-with-interpreter.ts
@@ -62675,10 +63723,10 @@ function normalizeMetadata(metadata) {
 
 // src/components/TreeBranchLeaf/treebranchleaf-new/api/repeat/repeat-routes.ts
 function createRepeatRouter(prisma49) {
-  const router92 = (0, import_express91.Router)();
+  const router93 = (0, import_express92.Router)();
   const inFlightExecuteByRepeater = /* @__PURE__ */ new Set();
-  router92.use(authenticateToken);
-  router92.post("/:repeaterNodeId/instances", async (req2, res) => {
+  router93.use(authenticateToken);
+  router93.post("/:repeaterNodeId/instances", async (req2, res) => {
     const { repeaterNodeId } = req2.params;
     const body2 = req2.body || {};
     try {
@@ -62710,7 +63758,7 @@ function createRepeatRouter(prisma49) {
       });
     }
   });
-  router92.post("/:repeaterNodeId/instances/execute", async (req2, res) => {
+  router93.post("/:repeaterNodeId/instances/execute", async (req2, res) => {
     const { repeaterNodeId } = req2.params;
     const body2 = req2.body || {};
     if (inFlightExecuteByRepeater.has(repeaterNodeId)) {
@@ -62762,13 +63810,13 @@ function createRepeatRouter(prisma49) {
       inFlightExecuteByRepeater.delete(repeaterNodeId);
     }
   });
-  return router92;
+  return router93;
 }
 
 // src/api/cloud-run-domains.ts
-var import_express92 = require("express");
-var router89 = (0, import_express92.Router)();
-router89.get("/cloud-run-domains", authenticateToken, async (req2, res) => {
+var import_express93 = require("express");
+var router90 = (0, import_express93.Router)();
+router90.get("/cloud-run-domains", authenticateToken, async (req2, res) => {
   try {
     const user = req2.user;
     if (!user.isSuperAdmin) {
@@ -62810,7 +63858,7 @@ router89.get("/cloud-run-domains", authenticateToken, async (req2, res) => {
     });
   }
 });
-router89.post("/cloud-run-domains/verify", authenticateToken, async (req2, res) => {
+router90.post("/cloud-run-domains/verify", authenticateToken, async (req2, res) => {
   try {
     const user = req2.user;
     const { domain } = req2.body;
@@ -62863,10 +63911,10 @@ async function checkDomainReachability(domain) {
     return false;
   }
 }
-var cloud_run_domains_default = router89;
+var cloud_run_domains_default = router90;
 
 // src/api/measurement-reference.ts
-var import_express93 = require("express");
+var import_express94 = require("express");
 init_database();
 
 // src/services/EdgeDetectionService.ts
@@ -63712,9 +64760,9 @@ var MultiPhotoFusionService = class {
 var multiPhotoFusionService = new MultiPhotoFusionService();
 
 // src/api/measurement-reference.ts
-var router90 = (0, import_express93.Router)();
+var router91 = (0, import_express94.Router)();
 var geminiService4 = new GoogleGeminiService_default();
-router90.get("/", authenticateToken, async (req2, res) => {
+router91.get("/", authenticateToken, async (req2, res) => {
   try {
     if (!req2.user?.id) {
       return res.status(401).json({ error: "Non authentifi\xE9" });
@@ -63738,7 +64786,7 @@ router90.get("/", authenticateToken, async (req2, res) => {
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
-router90.get("/:organizationId", authenticateToken, async (req2, res) => {
+router91.get("/:organizationId", authenticateToken, async (req2, res) => {
   try {
     const { organizationId } = req2.params;
     if (!req2.user?.id) {
@@ -63768,7 +64816,7 @@ router90.get("/:organizationId", authenticateToken, async (req2, res) => {
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
-router90.post("/", authenticateToken, async (req2, res) => {
+router91.post("/", authenticateToken, async (req2, res) => {
   try {
     const {
       organizationId,
@@ -63846,7 +64894,7 @@ router90.post("/", authenticateToken, async (req2, res) => {
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
-router90.put("/:configId", authenticateToken, async (req2, res) => {
+router91.put("/:configId", authenticateToken, async (req2, res) => {
   try {
     const { configId } = req2.params;
     const {
@@ -63900,7 +64948,7 @@ router90.put("/:configId", authenticateToken, async (req2, res) => {
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
-router90.delete("/:configId", authenticateToken, async (req2, res) => {
+router91.delete("/:configId", authenticateToken, async (req2, res) => {
   try {
     const { configId } = req2.params;
     if (!req2.user?.id) {
@@ -63937,7 +64985,7 @@ router90.delete("/:configId", authenticateToken, async (req2, res) => {
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
-router90.post("/detect", authenticateToken, async (req2, res) => {
+router91.post("/detect", authenticateToken, async (req2, res) => {
   try {
     const { imageBase64, mimeType, referenceType, customPrompt } = req2.body;
     if (!req2.user?.id) {
@@ -63963,7 +65011,7 @@ router90.post("/detect", authenticateToken, async (req2, res) => {
     });
   }
 });
-router90.post("/detect-multi", authenticateToken, async (req2, res) => {
+router91.post("/detect-multi", authenticateToken, async (req2, res) => {
   try {
     const { images, referenceType, customPrompt } = req2.body;
     if (!req2.user?.id) {
@@ -64004,7 +65052,7 @@ router90.post("/detect-multi", authenticateToken, async (req2, res) => {
     });
   }
 });
-router90.post("/analyze-frame", authenticateToken, async (req2, res) => {
+router91.post("/analyze-frame", authenticateToken, async (req2, res) => {
   try {
     const { imageBase64, mimeType, referenceType } = req2.body;
     if (!req2.user?.id) {
@@ -64032,7 +65080,7 @@ router90.post("/analyze-frame", authenticateToken, async (req2, res) => {
     });
   }
 });
-router90.post("/snap-to-edges", authenticateToken, async (req2, res) => {
+router91.post("/snap-to-edges", authenticateToken, async (req2, res) => {
   try {
     const { imageBase64, mimeType, points, targetType, objectDescription } = req2.body;
     if (!req2.user?.id) {
@@ -64062,7 +65110,7 @@ router90.post("/snap-to-edges", authenticateToken, async (req2, res) => {
     });
   }
 });
-router90.post("/suggest-points", authenticateToken, async (req2, res) => {
+router91.post("/suggest-points", authenticateToken, async (req2, res) => {
   try {
     const { imageBase64, mimeType, objectType, pointCount = 4, measureKeys = ["largeur_cm", "hauteur_cm"] } = req2.body;
     if (!req2.user?.id) {
@@ -64090,7 +65138,7 @@ router90.post("/suggest-points", authenticateToken, async (req2, res) => {
     });
   }
 });
-router90.post("/detect-corners-in-zone", authenticateToken, async (req2, res) => {
+router91.post("/detect-corners-in-zone", authenticateToken, async (req2, res) => {
   try {
     const {
       imageBase64,
@@ -64170,7 +65218,7 @@ router90.post("/detect-corners-in-zone", authenticateToken, async (req2, res) =>
     });
   }
 });
-router90.post("/fuse-photos", authenticateToken, async (req2, res) => {
+router91.post("/fuse-photos", authenticateToken, async (req2, res) => {
   try {
     const { photos, referenceType = "a4" } = req2.body;
     if (!req2.user?.id) {
@@ -64206,7 +65254,7 @@ router90.post("/fuse-photos", authenticateToken, async (req2, res) => {
     });
   }
 });
-router90.post("/detect-with-fusion", authenticateToken, async (req2, res) => {
+router91.post("/detect-with-fusion", authenticateToken, async (req2, res) => {
   try {
     const {
       photos,
@@ -64286,13 +65334,13 @@ router90.post("/detect-with-fusion", authenticateToken, async (req2, res) => {
     });
   }
 });
-var measurement_reference_default = router90;
+var measurement_reference_default = router91;
 
 // src/routes/userFavoritesRoutes.ts
-var import_express94 = require("express");
+var import_express95 = require("express");
 init_database();
-var router91 = (0, import_express94.Router)();
-router91.get("/", authMiddleware, async (req2, res) => {
+var router92 = (0, import_express95.Router)();
+router92.get("/", authMiddleware, async (req2, res) => {
   try {
     const userId = req2.user?.userId;
     const organizationId = req2.user?.organizationId;
@@ -64324,7 +65372,7 @@ router91.get("/", authMiddleware, async (req2, res) => {
     });
   }
 });
-router91.post("/", authMiddleware, async (req2, res) => {
+router92.post("/", authMiddleware, async (req2, res) => {
   try {
     const userId = req2.user?.userId;
     const organizationId = req2.user?.organizationId;
@@ -64366,7 +65414,7 @@ router91.post("/", authMiddleware, async (req2, res) => {
     });
   }
 });
-router91.delete("/:moduleKey", authMiddleware, async (req2, res) => {
+router92.delete("/:moduleKey", authMiddleware, async (req2, res) => {
   try {
     const userId = req2.user?.userId;
     const organizationId = req2.user?.organizationId;
@@ -64399,7 +65447,7 @@ router91.delete("/:moduleKey", authMiddleware, async (req2, res) => {
     });
   }
 });
-var userFavoritesRoutes_default = router91;
+var userFavoritesRoutes_default = router92;
 
 // src/middleware/websiteDetection.ts
 init_prisma();
@@ -64740,10 +65788,10 @@ function websiteInterceptor(req2, res, next) {
 
 // src/security/securityMiddleware.ts
 var import_express_rate_limit15 = __toESM(require("express-rate-limit"), 1);
-var import_crypto16 = __toESM(require("crypto"), 1);
+var import_crypto20 = __toESM(require("crypto"), 1);
 var securityMonitoring = (req2, res, next) => {
   const startTime = Date.now();
-  const requestId = import_crypto16.default.randomUUID();
+  const requestId = import_crypto20.default.randomUUID();
   req2.requestId = requestId;
   const suspiciousPatterns = [
     /(\<script\>)/gi,
@@ -64819,11 +65867,40 @@ var advancedRateLimit = (0, import_express_rate_limit15.default)({
   trustProxy: 1,
   // Spécifique pour Cloud Run
   max: (req2) => {
+    const isDevEnv = process.env.NODE_ENV !== "production";
+    const normalizeIp = (ip) => {
+      if (!ip) return "";
+      return ip.startsWith("::ffff:") ? ip.slice("::ffff:".length) : ip;
+    };
+    const isPrivateIp = (ip) => {
+      if (ip === "127.0.0.1" || ip === "::1") return true;
+      if (ip.startsWith("10.")) return true;
+      if (ip.startsWith("192.168.")) return true;
+      const m = ip.match(/^172\.(\d{1,3})\./);
+      if (m) {
+        const second = Number(m[1]);
+        return second >= 16 && second <= 31;
+      }
+      return false;
+    };
     if (req2.method === "OPTIONS") return 1e4;
     if (req2.path.startsWith("/assets/") || req2.path === "/manifest.webmanifest" || req2.path === "/registerSW.js" || req2.path === "/sw.js") return 1e4;
-    const trustedIPs = ["127.0.0.1", "::1", "localhost"];
-    if (trustedIPs.includes(req2.ip)) return 1e4;
-    return 1e3;
+    const clientIp = normalizeIp(req2.ip);
+    if (isDevEnv && isPrivateIp(clientIp)) {
+      const envMax2 = Number(process.env.RATE_LIMIT_MAX_DEV || "20000");
+      return Number.isFinite(envMax2) && envMax2 > 0 ? envMax2 : 2e4;
+    }
+    const cookieHeader = typeof req2.headers.cookie === "string" ? req2.headers.cookie : "";
+    const hasSessionCookie = cookieHeader.includes("connect.sid=");
+    const hasUserHeader = typeof req2.headers["x-user-id"] === "string" && req2.headers["x-user-id"].length > 0;
+    const hasOrgHeader = typeof req2.headers["x-organization-id"] === "string" && req2.headers["x-organization-id"].length > 0;
+    const hasAuth = hasSessionCookie || hasUserHeader || hasOrgHeader;
+    if (hasAuth) {
+      const envMax2 = Number(process.env.RATE_LIMIT_MAX_AUTH || "5000");
+      return Number.isFinite(envMax2) && envMax2 > 0 ? envMax2 : 5e3;
+    }
+    const envMax = Number(process.env.RATE_LIMIT_MAX_ANON || "1000");
+    return Number.isFinite(envMax) && envMax > 0 ? envMax : 1e3;
   },
   skip: (req2) => {
     return req2.method === "OPTIONS" || req2.path.startsWith("/assets/") || req2.path === "/manifest.webmanifest" || req2.path === "/registerSW.js" || req2.path === "/sw.js";
@@ -64981,7 +66058,7 @@ logSecurityEvent("SERVER_STARTUP", {
   environment: process.env.NODE_ENV || "development",
   securityLevel: "ENTERPRISE"
 }, "info");
-var app = (0, import_express95.default)();
+var app = (0, import_express96.default)();
 app.set("trust proxy", 1);
 var port = Number(process.env.PORT || 8080);
 console.log("\u{1F3AF} [BOOTSTRAP] Server will listen on port:", port);
@@ -65074,7 +66151,7 @@ app.use((0, import_cors.default)({
   exposedHeaders: ["X-Total-Count", "X-Rate-Limit-Remaining", "x-organization-id"]
 }));
 app.use(inputSanitization);
-app.use(import_express95.default.json({
+app.use(import_express96.default.json({
   limit: "50mb",
   verify: (req2, res, buf) => {
     try {
@@ -65088,7 +66165,7 @@ app.use(import_express95.default.json({
     }
   }
 }));
-app.use(import_express95.default.urlencoded({ extended: true, limit: "50mb" }));
+app.use(import_express96.default.urlencoded({ extended: true, limit: "50mb" }));
 app.use((0, import_cookie_parser.default)());
 app.use((0, import_express_session.default)({
   secret: process.env.SESSION_SECRET || "crm-dev-secret-2024",
@@ -65114,7 +66191,7 @@ app.use("/uploads", (req2, res, next) => {
   res.setHeader("Access-Control-Allow-Headers", "Content-Type");
   res.setHeader("Cross-Origin-Resource-Policy", "cross-origin");
   next();
-}, import_express95.default.static(uploadsDir, {
+}, import_express96.default.static(uploadsDir, {
   maxAge: "1h",
   // Cache 1 heure
   etag: true,
@@ -65138,6 +66215,7 @@ app.use("/api/ai-content", ai_content_default);
 app.use("/api", cloud_run_domains_default);
 app.use("/api/ai", ai_field_generator_default);
 app.use("/api/ai", ai_default2);
+app.use("/api/measure", measure_default);
 app.use("/api", contact_form_default);
 app.use("/api/image-upload", image_upload_default);
 app.use("/api/documents", documents_default);
@@ -65176,7 +66254,7 @@ if (process.env.NODE_ENV === "production") {
   if (import_fs7.default.existsSync(indexHtml)) {
     console.log("\u{1F5C2}\uFE0F [STATIC] Distribution front d\xE9tect\xE9e, activation du serveur statique");
     const assetsDir = import_path7.default.join(distDir, "assets");
-    app.use("/assets", import_express95.default.static(assetsDir, {
+    app.use("/assets", import_express96.default.static(assetsDir, {
       setHeaders: (res) => {
         res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
       }
@@ -65352,7 +66430,8 @@ var server = app.listen(port, "0.0.0.0", () => {
   console.log(`   - Notifications: http://localhost:${port}/api/notifications`);
   console.log(`   - Modules: http://localhost:${port}/api/modules/all`);
   console.log(`   - Blocks: http://localhost:${port}/api/blocks`);
-  console.log(`   - Google Auth: http://localhost:${port}/api/auto-google-auth/connect`);
+  console.log(`   - Auto Google Auth (POST): http://localhost:${port}/api/auto-google-auth/connect`);
+  console.log(`   - Auto Google Status (GET): http://localhost:${port}/api/auto-google-auth/status`);
 });
 // Annotate the CommonJS export names for ESM import in node:
 0 && (module.exports = {

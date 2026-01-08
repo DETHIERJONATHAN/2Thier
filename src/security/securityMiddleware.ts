@@ -95,6 +95,27 @@ export const advancedRateLimit = rateLimit({
   windowMs: 15 * 60 * 1000,
   trustProxy: 1, // Spécifique pour Cloud Run
   max: (req: Request) => {
+    const isDevEnv = process.env.NODE_ENV !== 'production';
+
+    const normalizeIp = (ip: string | undefined): string => {
+      if (!ip) return '';
+      return ip.startsWith('::ffff:') ? ip.slice('::ffff:'.length) : ip;
+    };
+
+    const isPrivateIp = (ip: string): boolean => {
+      // RFC1918 + loopback
+      if (ip === '127.0.0.1' || ip === '::1') return true;
+      if (ip.startsWith('10.')) return true;
+      if (ip.startsWith('192.168.')) return true;
+      // 172.16.0.0 – 172.31.255.255
+      const m = ip.match(/^172\.(\d{1,3})\./);
+      if (m) {
+        const second = Number(m[1]);
+        return second >= 16 && second <= 31;
+      }
+      return false;
+    };
+
     // OPTIONS jamais compté (CORS preflight)
     if (req.method === 'OPTIONS') return 10_000;
 
@@ -106,10 +127,29 @@ export const advancedRateLimit = rateLimit({
       req.path === '/sw.js'
     ) return 10_000;
 
-    const trustedIPs = ['127.0.0.1', '::1', 'localhost'];
-    if (trustedIPs.includes(req.ip)) return 10_000;
+    const clientIp = normalizeIp(req.ip);
 
-    return 1000; // plafond général relevé
+    // En dev: rendre le rate-limit très haut (TBL est très bavard) et inclure les IP privées des dev containers.
+    if (isDevEnv && isPrivateIp(clientIp)) {
+      const envMax = Number(process.env.RATE_LIMIT_MAX_DEV || '20000');
+      return Number.isFinite(envMax) && envMax > 0 ? envMax : 20000;
+    }
+
+    // En prod: donner plus de marge aux requêtes "probablement authentifiées".
+    // NOTE: advancedRateLimit est appliqué avant le parsing de session/cookies, donc on se base sur les headers.
+    // Dans ce projet, le frontend envoie des cookies + X-Organization-Id et souvent X-User-Id.
+    const cookieHeader = typeof req.headers.cookie === 'string' ? req.headers.cookie : '';
+    const hasSessionCookie = cookieHeader.includes('connect.sid=');
+    const hasUserHeader = typeof req.headers['x-user-id'] === 'string' && req.headers['x-user-id'].length > 0;
+    const hasOrgHeader = typeof req.headers['x-organization-id'] === 'string' && req.headers['x-organization-id'].length > 0;
+    const hasAuth = hasSessionCookie || hasUserHeader || hasOrgHeader;
+    if (hasAuth) {
+      const envMax = Number(process.env.RATE_LIMIT_MAX_AUTH || '5000');
+      return Number.isFinite(envMax) && envMax > 0 ? envMax : 5000;
+    }
+
+    const envMax = Number(process.env.RATE_LIMIT_MAX_ANON || '1000');
+    return Number.isFinite(envMax) && envMax > 0 ? envMax : 1000;
   },
   skip: (req: Request) => {
     return (

@@ -12,6 +12,7 @@ import {
 import { copyVariableWithCapacities } from './variable-copy-engine.js';
 import { deriveRepeatContextFromMetadata } from './repeat-context-utils.js';
 import { copyFormulaCapacity } from '../../copy-capacity-formula.js';
+import { TableLookupDuplicationService } from './table-lookup-duplication-service';
 
 export interface DeepCopyOptions {
   targetParentId?: string | null;
@@ -592,10 +593,12 @@ export async function deepCopyNodeInternal(
     sharedReferenceDescription: preserveSharedReferences ? oldNode.sharedReferenceDescription : null,
     linkedFormulaIds: Array.isArray(oldNode.linkedFormulaIds) ? oldNode.linkedFormulaIds : [],
     linkedConditionIds: Array.isArray(oldNode.linkedConditionIds) ? oldNode.linkedConditionIds : [],
-    linkedTableIds: Array.isArray(oldNode.linkedTableIds)
+    // CRITIQUE: Ne copier linkedTableIds QUE si le noeud n'est PAS un INPUT pur
+    // Un INPUT (fieldType = NULL) ne doit JAMAIS avoir de linkedTableIds !
+    linkedTableIds: (Array.isArray(oldNode.linkedTableIds) && oldNode.fieldType !== null && oldNode.fieldType !== '' && oldNode.fieldType !== undefined)
       ? oldNode.linkedTableIds.map(id => ensureSuffix(id) || id)
       : [],
-    // Suffixer aussi les linkedVariableIds pour que les copies pointent vers les variables copiÃƒÂ©es
+    // Suffixer aussi les linkedVariableIds pour que les copies pointent vers les variables copiees
     linkedVariableIds: Array.isArray(oldNode.linkedVariableIds)
       ? oldNode.linkedVariableIds.map(id => ensureSuffix(id) || id)
       : [],
@@ -703,6 +706,17 @@ export async function deepCopyNodeInternal(
     await prisma.treeBranchLeafNode.create({ data: cloneData });
     createdNodes.push({ oldId, newId, newParentId });
     existingNodeIds.add(newId);
+
+    // 🔧 CRITICAL: Dupliquer les SelectConfigs pour les tables lookup associées
+    try {
+      const tableLookupService = new TableLookupDuplicationService();
+      await tableLookupService.duplicateTableLookupSystem(prisma, oldId, {
+        suffixToken,
+        copiedNodeId: newId
+      });
+    } catch (lookupError) {
+      console.warn(`[DEEP-COPY] Warning duplicating table lookup for ${oldId} -> ${newId}:`, (lookupError as Error).message);
+    }
 
     // Ã°Å¸â€ â€¢ Si ce node a des tables liÃƒÂ©es (linkedTableIds), l'ajouter ÃƒÂ  displayNodeIds
     // pour que le post-processing crÃƒÂ©e les variables pour afficher les donnÃƒÂ©es
@@ -1010,10 +1024,69 @@ export async function deepCopyNodeInternal(
         newLinkedTableIds.push(newTableId);
       }
       
+      // 🔧 FIX: Le nodeId de la table doit être le nodeId ORIGINAL suffixé, pas newId !
+      // Si la table appartient à un autre node (cas linkedTableIds), on garde la relation originale
+      const tableOwnerNodeId = t.nodeId === oldId 
+        ? newId  // La table appartient au node en cours de copie
+        : appendSuffix(t.nodeId);  // La table appartient à un autre node, suffixer son nodeId original
+      
+      // 🔧 FIX 07/01/2026: Vérifier que le nodeId propriétaire existe avant de créer la table
+      // Si ce n'est pas le cas et que c'est un node en linkedTableIds, créer un stub de node d'abord
+      let nodeExists = await prisma.treeBranchLeafNode.findUnique({
+        where: { id: tableOwnerNodeId },
+        select: { id: true }
+      });
+
+      if (!nodeExists && tableOwnerNodeId !== newId) {
+        // C'est un node en linkedTableIds qui n'a pas été copié. On crée un stub.
+        console.log(
+          `[DEEP-COPY] Creating stub node "${tableOwnerNodeId}" for linked table owner`
+        );
+        const originalOwnerNode = await prisma.treeBranchLeafNode.findUnique({
+          where: { id: t.nodeId },
+          select: { 
+            type: true,
+            label: true,
+            treeId: true,
+            parentId: true
+          }
+        });
+
+        if (originalOwnerNode) {
+          try {
+            const createdNode = await prisma.treeBranchLeafNode.create({
+              data: {
+                id: tableOwnerNodeId,
+                type: originalOwnerNode.type,
+                label: originalOwnerNode.label ? `${originalOwnerNode.label}-1` : 'Stub',
+                treeId: originalOwnerNode.treeId,
+                parentId: originalOwnerNode.parentId ? appendSuffix(originalOwnerNode.parentId) : null,
+                order: 0,
+                createdAt: new Date(),
+                updatedAt: new Date()
+              }
+            });
+            nodeExists = createdNode;
+            console.log(`[DEEP-COPY] ✅ Stub node created: ${tableOwnerNodeId}`);
+          } catch (err) {
+            console.error(`[DEEP-COPY] ❌ Failed to create stub node: ${err.message}`);
+            throw err; // Propager l'erreur pour arrêter le processus
+          }
+        }
+      }
+
+      if (!nodeExists) {
+        console.warn(
+          `[DEEP-COPY] ⚠️ Cannot create table "${t.name}": owner node "${tableOwnerNodeId}" doesn't exist. ` +
+          `Original nodeId: "${t.nodeId}", oldId: "${oldId}", newId: "${newId}"`
+        );
+        return; // Skip this table creation
+      }
+      
       await prisma.treeBranchLeafNodeTable.create({
         data: {
           id: newTableId,
-          nodeId: newId,
+          nodeId: tableOwnerNodeId,
           organizationId: t.organizationId,
           name: t.name ? `${t.name}${computedLabelSuffix}` : t.name,
           description: t.description,
@@ -1044,53 +1117,9 @@ export async function deepCopyNodeInternal(
               if (metaObj?.lookup?.columnSourceOption?.sourceField && !metaObj.lookup.columnSourceOption.sourceField.endsWith(`-${copySuffixNum}`)) {
                 metaObj.lookup.columnSourceOption.sourceField = `${metaObj.lookup.columnSourceOption.sourceField}-${copySuffixNum}`;
               }
-              // Suffixer comparisonColumn si c'est du texte
-              if (metaObj?.lookup?.rowSourceOption?.comparisonColumn) {
-                const val = metaObj.lookup.rowSourceOption.comparisonColumn;
-                if (!/^-?\d+(\.\d+)?$/.test(val.trim()) && !val.endsWith(computedLabelSuffix)) {
-                  metaObj.lookup.rowSourceOption.comparisonColumn = `${val}${computedLabelSuffix}`;
-                }
-              }
-              if (metaObj?.lookup?.columnSourceOption?.comparisonColumn) {
-                const val = metaObj.lookup.columnSourceOption.comparisonColumn;
-                if (!/^-?\d+(\.\d+)?$/.test(val.trim()) && !val.endsWith(computedLabelSuffix)) {
-                  metaObj.lookup.columnSourceOption.comparisonColumn = `${val}${computedLabelSuffix}`;
-                }
-              }
-              
-              // Ã°Å¸â€Â¥ FIX: Suffixer displayColumn (peut ÃƒÂªtre string ou array)
-              if (metaObj?.lookup?.displayColumn) {
-                if (Array.isArray(metaObj.lookup.displayColumn)) {
-                  metaObj.lookup.displayColumn = metaObj.lookup.displayColumn.map((col: string) => {
-                    if (col && !/^-?\d+(\.\d+)?$/.test(col.trim()) && !col.endsWith(computedLabelSuffix)) {
-                      return `${col}${computedLabelSuffix}`;
-                    }
-                    return col;
-                  });
-                } else if (typeof metaObj.lookup.displayColumn === 'string') {
-                  const val = metaObj.lookup.displayColumn;
-                  if (!/^-?\d+(\.\d+)?$/.test(val.trim()) && !val.endsWith(computedLabelSuffix)) {
-                    metaObj.lookup.displayColumn = `${val}${computedLabelSuffix}`;
-                  }
-                }
-              }
-              
-              // Ã°Å¸â€Â¥ FIX: Suffixer displayRow (peut ÃƒÂªtre string ou array)
-              if (metaObj?.lookup?.displayRow) {
-                if (Array.isArray(metaObj.lookup.displayRow)) {
-                  metaObj.lookup.displayRow = metaObj.lookup.displayRow.map((row: string) => {
-                    if (row && !/^-?\d+(\.\d+)?$/.test(row.trim()) && !row.endsWith(computedLabelSuffix)) {
-                      return `${row}${computedLabelSuffix}`;
-                    }
-                    return row;
-                  });
-                } else if (typeof metaObj.lookup.displayRow === 'string') {
-                  const val = metaObj.lookup.displayRow;
-                  if (!/^-?\d+(\.\d+)?$/.test(val.trim()) && !val.endsWith(computedLabelSuffix)) {
-                    metaObj.lookup.displayRow = `${val}${computedLabelSuffix}`;
-                  }
-                }
-              }
+              // 🐛 FIX 06/01/2026: NE PAS suffixer comparisonColumn, displayColumn, displayRow
+              // Ce sont des noms de colonnes/lignes dans la table, et les cells ne sont JAMAIS suffixées
+              // Donc ces références doivent rester "Orientation", pas "Orientation-1"
               
               
               return metaObj as Prisma.InputJsonValue;
@@ -1109,10 +1138,9 @@ export async function deepCopyNodeInternal(
             create: t.tableColumns.map(col => ({
               id: appendSuffix(col.id),
               columnIndex: col.columnIndex,
-              // Ã°Å¸â€Â¢ COPIE TABLE COLUMN: suffixe seulement pour texte, pas pour nombres
-              name: col.name 
-                ? (/^-?\d+(\.\d+)?$/.test(col.name.trim()) ? col.name : `${col.name}${computedLabelSuffix}`)
-                : col.name,
+              // 🐛 FIX 06/01/2026: NE JAMAIS suffixer les noms de colonnes !
+              // Les cells gardent "Orientation" (jamais suffixé), donc colonnes aussi
+              name: col.name,
               type: col.type,
               width: col.width,
               format: col.format,
@@ -1161,36 +1189,33 @@ export async function deepCopyNodeInternal(
       });
 
       if (!existingCopyConfig) {
-        // 🎯 FIX 05/01/2026 v2: Distinguer table PARTAGÉE (lookup externe) vs table LOCALE
-        // - Table PARTAGÉE: table.nodeId !== selectConfig.nodeId → garder tableReference original
-        // - Table LOCALE: table.nodeId === selectConfig.nodeId → suffixer tableReference
+        // 🎯 FIX 06/01/2026: Distinguer table PARTAGÉE (lookup externe) vs table LOCALE/COPIÉE
+        // - Table PARTAGÉE: la table N'a PAS été copiée → garder tableReference original
+        // - Table LOCALE/COPIÉE: la table A été copiée → suffixer tableReference
         
         let newTableReference: string | null = null;
-        let shouldSuffixColumns = true; // Par défaut on suffixe
+        // 🎯 FIX 06/01/2026 (v3): TOUJOURS suffixer les colonnes !
+        // Les colonnes de table SONT suffixées (ex: "Orientation" → "Orientation-1")
+        // Donc keyColumn doit aussi être suffixé pour matcher
+        const shouldSuffixColumns = true; // TOUJOURS suffixer pour matcher les colonnes copiées
         
         if (originalSelectConfig.tableReference) {
-          // Vérifier si la table référencée appartient au même nœud (locale) ou à un autre (partagée)
-          const referencedTable = await prisma.treeBranchLeafNodeTable.findUnique({
-            where: { id: originalSelectConfig.tableReference },
-            select: { id: true, nodeId: true }
-          });
+          // 🐛 FIX 06/01/2026: Utiliser tableIdMap pour vérifier si la table a été copiée
+          // IMPORTANT: Ne PAS utiliser idMap car les nodes créés via linkedVariableIds
+          // (comme Orientation-inclinaison) ne sont PAS dans idMap (qui ne contient que les nodes du template).
+          // La table est copiée par copyRepeaterCapacityTable() AVANT ce code, donc tableIdMap est fiable.
+          const tableWasCopied = tableIdMap.has(originalSelectConfig.tableReference);
           
-          if (referencedTable) {
-            const isSharedLookupTable = referencedTable.nodeId !== oldId;
-            
-            if (isSharedLookupTable) {
-              // Table partagée (lookup externe) → garder l'original
-              newTableReference = originalSelectConfig.tableReference;
-              shouldSuffixColumns = false;
-            } else {
-              // Table locale → suffixer
-              newTableReference = appendSuffix(originalSelectConfig.tableReference);
-              shouldSuffixColumns = true;
-            }
+          console.log(`[DEEP-COPY SelectConfig] nodeId=${oldId} → tableReference=${originalSelectConfig.tableReference}, tableWasCopied=${tableWasCopied}, tableIdMap.size=${tableIdMap.size}`);
+          
+          if (tableWasCopied) {
+            // Table copiée → utiliser la référence suffixée
+            newTableReference = tableIdMap.get(originalSelectConfig.tableReference)!;
+            console.log(`[DEEP-COPY SelectConfig] ✅ Table copiée, utilisation de newTableReference=${newTableReference}`);
           } else {
-            // Table non trouvée → suffixer par défaut (comportement original)
-            newTableReference = appendSuffix(originalSelectConfig.tableReference);
-            shouldSuffixColumns = true;
+            // Table partagée (lookup externe) → garder l'original
+            newTableReference = originalSelectConfig.tableReference;
+            console.log(`[DEEP-COPY SelectConfig] ⚠️ Table partagée, conservation de tableReference original`);
           }
         }
 

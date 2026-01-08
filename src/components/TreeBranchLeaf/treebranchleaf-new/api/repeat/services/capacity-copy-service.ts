@@ -47,12 +47,10 @@ export async function copyMissingCapacities(
   nodeIdMap?: Map<string, string>
 ): Promise<CapacityCopyResult> {
 
-  // 1. RÃƒÂ©cupÃƒÂ©rer le nÃ…â€œud original avec toutes ses capacitÃƒÂ©s
+  // 1. Récupérer le nœud original avec les tables
   const originalNode = await prisma.treeBranchLeafNode.findUnique({
     where: { id: originalNodeId },
     include: {
-      TreeBranchLeafNodeFormula: true,
-      TreeBranchLeafNodeCondition: true,
       TreeBranchLeafNodeTable: {
         include: {
           tableColumns: true,
@@ -337,11 +335,18 @@ export async function copyMissingCapacities(
     }
   }
 
-  // 6. Mettre ÃƒÂ  jour les flags du nÃ…â€œud copiÃƒÂ©
+  // 6. Mettre à jour les flags du nœud copié
+  // 🔧 FIX 06/01/2026: Vérifier que les tables sont vraiment assignées à ce node
+  // avant de mettre hasTable: true. Sinon un node comme Inclinaison-1 qui affiche
+  // une valeur de table mais ne possède pas la table aura incorrectement hasTable: true
+  const copiedNodeTables = await prisma.treeBranchLeafNodeTable.count({
+    where: { nodeId: copiedNodeId }
+  });
+  
   const newFlags = {
     hasFormula: originalNode.TreeBranchLeafNodeFormula.length > 0,
     hasCondition: originalNode.TreeBranchLeafNodeCondition.length > 0,
-    hasTable: originalNode.TreeBranchLeafNodeTable.length > 0
+    hasTable: copiedNodeTables > 0  // Vérifier les tables du node COPIÉ, pas de l'original
   };
 
   await prisma.treeBranchLeafNode.update({

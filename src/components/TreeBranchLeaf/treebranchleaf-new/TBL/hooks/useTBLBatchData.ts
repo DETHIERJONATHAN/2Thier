@@ -327,26 +327,11 @@ export const useTBLBatchData = (
   const getSelectConfigForNode = useCallback((nodeId: string): BatchSelectConfig | null => {
     if (!batchData?.configsByNode) return null;
     
-    // Même logique de fallback pour les suffixes
-    if (batchData.configsByNode[nodeId]) {
-      return batchData.configsByNode[nodeId];
-    }
-    
-    if (nodeId.endsWith('-1')) {
-      const baseId = nodeId.slice(0, -2);
-      if (batchData.configsByNode[baseId]) {
-        return batchData.configsByNode[baseId];
-      }
-    }
-    
-    if (!nodeId.endsWith('-1')) {
-      const suffixedId = `${nodeId}-1`;
-      if (batchData.configsByNode[suffixedId]) {
-        return batchData.configsByNode[suffixedId];
-      }
-    }
-    
-    return null;
+    // 🔥 CRITICAL FIX 07/01/2026: Ne JAMAIS fallback sur l'original pour les nœuds copiés!
+    // Si c071a466-5a0f-4b4e-afb0-fd69ac79d51a-1 n'a pas de config, c'est qu'elle n'a pas été chargée.
+    // On ne doit PAS retourner la config de c071a466-5a0f-4b4e-afb0-fd69ac79d51a (l'original)!
+    // Sinon on affiche les données de l'original au lieu de la copie.
+    return batchData.configsByNode[nodeId] || null;
   }, [batchData]);
 
   const getNodeDataForNode = useCallback((nodeId: string): BatchNodeData | null => {

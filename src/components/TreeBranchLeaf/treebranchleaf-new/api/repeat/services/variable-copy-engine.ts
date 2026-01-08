@@ -473,6 +473,7 @@ export async function copyVariableWithCapacities(
             treeId: true,
             order: true,
             linkedTableIds: true,
+            linkedVariableIds: true,
             hasTable: true,
             table_name: true,
             table_activeId: true,
@@ -522,6 +523,7 @@ export async function copyVariableWithCapacities(
           subtab: true,
           subtabs: true,
           linkedTableIds: true,
+          linkedVariableIds: true,
           hasTable: true,
           table_name: true,
           table_activeId: true,
@@ -824,6 +826,26 @@ export async function copyVariableWithCapacities(
           const displayLabel = forceSingleSuffix(originalVar.displayName || 'Donnée');
           const resolvedOrder = originalDisplayNode?.order ?? (originalOwnerNode.order ?? 0) + 1;
 
+          // 🔧 FIX 06/01/2026: Vérifier si la table appartient RÉELLEMENT à ce display node
+          // AVANT de mettre hasTable: true. Si la variable a capacityType='table' mais que
+          // la table appartient à un AUTRE node (ex: Orientation-inclinaison), on ne doit PAS
+          // mettre hasTable: true sur Inclinaison-1 !
+          let actuallyOwnsTable = false;
+          if (capacityType === 'table' && newSourceRef) {
+            const tableIdMatch = newSourceRef.match(/table:\/\/([^/:\s]+)/);
+            if (tableIdMatch) {
+              const tableId = tableIdMatch[1];
+              // Vérifier si cette table appartient au node original
+              const tableOwner = await prisma.treeBranchLeafNodeTable.findUnique({
+                where: { id: tableId },
+                select: { nodeId: true }
+              });
+              // La table appartient à ce node si son nodeId === le node de la variable OU
+              // si le node copié sera le propriétaire de la copie de table
+              actuallyOwnsTable = tableOwner?.nodeId === originalVar.nodeId;
+            }
+          }
+
           const resolvedSubTabsJson = (() => {
             const resolved = Array.isArray(inheritedSubTabs) && inheritedSubTabs.length
               ? inheritedSubTabs
@@ -867,18 +889,22 @@ export async function copyVariableWithCapacities(
             hasFormula: capacityType === 'formula' ? (tableSourceNode.hasFormula ?? true) : false,
             hasLink: tableSourceNode.hasLink ?? false,
             hasMarkers: tableSourceNode.hasMarkers ?? false,
-            hasTable: capacityType === 'table' ? (tableSourceNode.hasTable ?? true) : false,
-            table_name: capacityType === 'table' ? tableSourceNode.table_name : null,
-            table_activeId: capacityType === 'table' && tableSourceNode.table_activeId ? appendSuffix(String(tableSourceNode.table_activeId)) : null,
-            table_instances: capacityType === 'table' ? cloneAndSuffixInstances(tableSourceNode.table_instances) as any : null,
-            table_columns: capacityType === 'table' ? tableSourceNode.table_columns as any : null,
-            table_data: capacityType === 'table' ? tableSourceNode.table_data as any : null,
-            table_importSource: capacityType === 'table' ? tableSourceNode.table_importSource as any : null,
-            table_isImported: capacityType === 'table' ? (tableSourceNode.table_isImported ?? false) : false,
-            table_meta: capacityType === 'table' ? tableSourceNode.table_meta as any : null,
-            table_rows: capacityType === 'table' ? tableSourceNode.table_rows as any : null,
-            table_type: capacityType === 'table' ? tableSourceNode.table_type as any : null,
-            linkedTableIds: capacityType === 'table' && Array.isArray(tableSourceNode.linkedTableIds)
+            // 🔧 FIX 06/01/2026: SEULEMENT mettre hasTable: true si:
+            // 1) La variable référence une table (capacityType === 'table')
+            // 2) ET le node est le PROPRIÉTAIRE de la table (actuallyOwnsTable === true)
+            // Sinon Inclinaison-1 (qui affiche une valeur de table d'Orientation) aurait hasTable: true incorrectement
+            hasTable: actuallyOwnsTable ? (tableSourceNode.hasTable ?? true) : false,
+            table_name: actuallyOwnsTable ? tableSourceNode.table_name : null,
+            table_activeId: actuallyOwnsTable && tableSourceNode.table_activeId ? appendSuffix(String(tableSourceNode.table_activeId)) : null,
+            table_instances: actuallyOwnsTable ? cloneAndSuffixInstances(tableSourceNode.table_instances) as any : null,
+            table_columns: actuallyOwnsTable ? tableSourceNode.table_columns as any : null,
+            table_data: actuallyOwnsTable ? tableSourceNode.table_data as any : null,
+            table_importSource: actuallyOwnsTable ? tableSourceNode.table_importSource as any : null,
+            table_isImported: actuallyOwnsTable ? (tableSourceNode.table_isImported ?? false) : false,
+            table_meta: actuallyOwnsTable ? tableSourceNode.table_meta as any : null,
+            table_rows: actuallyOwnsTable ? tableSourceNode.table_rows as any : null,
+            table_type: actuallyOwnsTable ? tableSourceNode.table_type as any : null,
+            linkedTableIds: actuallyOwnsTable && Array.isArray(tableSourceNode.linkedTableIds)
               ? tableSourceNode.linkedTableIds.map(id => appendSuffix(String(id)))
               : [] as any,
             // 🔧 FIX 24/12/2025: Explicitement mettre à null/[] les IDs de capacités non pertinentes
@@ -891,7 +917,13 @@ export async function copyVariableWithCapacities(
               : null,
             linkedFormulaIds: [] as any,  // Sera rempli après si capacityType === 'formula'
             linkedConditionIds: [] as any,  // Sera rempli après si capacityType === 'condition'
-            linkedVariableIds: [newVarId],
+            // 🔧 FIX 07/01/2026: Pour les composites (qui référencent d'autres variables via linkedVariableIds),
+            // on doit copier les linkedVariableIds du nœud ORIGINAL en les suffixant,
+            // pas seulement mettre [newVarId]. Exemple: Orientation-inclinaison-1 doit référencer
+            // [Orientation-1, Inclinaison-1], pas seulement [Orientation-inclinaison-1]
+            linkedVariableIds: Array.isArray(tableSourceNode.linkedVariableIds) && tableSourceNode.linkedVariableIds.length > 0
+              ? tableSourceNode.linkedVariableIds.map(varId => appendSuffixOnce(String(varId)))
+              : [newVarId],
             data_activeId: tableSourceNode.data_activeId ? appendSuffix(String(tableSourceNode.data_activeId)) : null,
             data_displayFormat: tableSourceNode.data_displayFormat,
             data_exposedKey: tableSourceNode.data_exposedKey,
@@ -1033,10 +1065,17 @@ export async function copyVariableWithCapacities(
               });
             }
 
-            // Copier les tables du nœud propriétaire original
+            // 🔧 FIX 06/01/2026: NE PAS copier les tables ici si le displayNode n'est pas
+            // le propriétaire original des tables. Les tables sont déjà copiées dans
+            // deep-copy-service quand le node propriétaire est copié.
+            // Sinon, les tables sont assignées au mauvais node (ex: Inclinaison au lieu d'Orientation)
             const copiedTableIds: string[] = [];
             
-            if (tableSourceNode.hasTable && Array.isArray(tableSourceNode.linkedTableIds) && tableSourceNode.linkedTableIds.length > 0) {
+            // Seulement copier si le displayNode ORIGINAL possède les tables (pas un autre node)
+            const originalDisplayNodeId = originalVar.nodeId;
+            const tableOwnerIsSameAsDisplay = tableSourceNode.id === originalDisplayNodeId;
+            
+            if (tableOwnerIsSameAsDisplay && tableSourceNode.hasTable && Array.isArray(tableSourceNode.linkedTableIds) && tableSourceNode.linkedTableIds.length > 0) {
               for (const originalTableId of tableSourceNode.linkedTableIds) {
                 const newTableId = appendSuffixOnce(stripTrailingNumeric(String(originalTableId)));
                 const existingTable = await prisma.treeBranchLeafNodeTable.findUnique({ where: { id: newTableId } });
@@ -1442,17 +1481,28 @@ export async function copyVariableWithCapacities(
               // Erreur sync linkedVariableIds silencieuse
             }
             } else if (parsedCap.type === 'table') {
-              const tbl = await prisma.treeBranchLeafNodeTable.findUnique({ where: { id: capId }, select: { name: true, type: true } });
-              await prisma.treeBranchLeafNode.update({
-                where: { id: finalNodeId },
-                data: {
-                  hasTable: true,
-                  table_activeId: capId,
-                  table_name: tbl?.name || null,
-                  table_type: tbl?.type || null
-                }
+              // 🔧 FIX 06/01/2026: Vérifier que la table appartient bien à finalNodeId avant de mettre hasTable: true
+              // Sinon, un node comme Inclinaison-1 qui ne possède PAS de table pourrait être marqué hasTable: true
+              const tbl = await prisma.treeBranchLeafNodeTable.findUnique({ 
+                where: { id: capId }, 
+                select: { name: true, type: true, nodeId: true } 
               });
-              await addToNodeLinkedField(prisma, finalNodeId, 'linkedTableIds', [capId]);
+              
+              // Seulement mettre hasTable: true si la table appartient vraiment à ce node
+              const tableOwnerIsFinalNode = tbl?.nodeId === finalNodeId;
+              
+              if (tableOwnerIsFinalNode) {
+                await prisma.treeBranchLeafNode.update({
+                  where: { id: finalNodeId },
+                  data: {
+                    hasTable: true,
+                    table_activeId: capId,
+                    table_name: tbl?.name || null,
+                    table_type: tbl?.type || null
+                  }
+                });
+                await addToNodeLinkedField(prisma, finalNodeId, 'linkedTableIds', [capId]);
+              }
             }
           }
         }
@@ -1619,6 +1669,13 @@ export async function createDisplayNodeForExistingVariable(
   console.log(`📌 [createDisplayNodeForExistingVariable] RÈGLE: Copie dans le MÊME parent que l'original: ${displayParentId}`);
 
   const now = new Date();
+  
+  // 🔧 FIX 06/01/2026: Déterminer si la variable référence UNE TABLE (capacité table)
+  // vs. si le nœud POSSÈDE une table. Une variable peut référencer une table sans posséder de table!
+  // Ex: Inclinaison (variable) peut afficher une valeur de la table d'Orientation,
+  // mais Inclinaison-1 ne POSSÈDE pas la table → hasTable doit être FALSE
+  const variableHasTableCapacity = v.sourceType === 'table' || v.sourceRef?.includes('table:');
+  
   const baseData = {
     id: displayNodeId,
     treeId: owner.treeId,
@@ -1653,12 +1710,13 @@ export async function createDisplayNodeForExistingVariable(
     hasFormula: false,
     hasLink: false,
     hasMarkers: false,
-    // 📊 TABLE: Copier les colonnes table du nœud original
-    hasTable: owner.hasTable ?? false,
-    table_name: owner.table_name,
-    table_activeId: owner.table_activeId,
-    table_instances: owner.table_instances as any,
-    linkedTableIds: Array.isArray(owner.linkedTableIds) ? owner.linkedTableIds : [] as any,
+    // 📊 TABLE: SEULEMENT mettre hasTable: true si la VARIABLE a une capacité table
+    // Sinon, une variable qui affiche une valeur de table (ex: Inclinaison) aurait incorrectement hasTable: true
+    hasTable: variableHasTableCapacity ? (owner.hasTable ?? false) : false,
+    table_name: variableHasTableCapacity ? owner.table_name : null,
+    table_activeId: variableHasTableCapacity ? owner.table_activeId : null,
+    table_instances: variableHasTableCapacity ? (owner.table_instances as any) : null,
+    linkedTableIds: variableHasTableCapacity && Array.isArray(owner.linkedTableIds) ? owner.linkedTableIds : [] as any,
     linkedConditionIds: [] as any,
     linkedFormulaIds: [] as any,
     linkedVariableIds: [variableId] as any,

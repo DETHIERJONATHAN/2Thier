@@ -11,6 +11,19 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { useAuthenticatedApi } from './useAuthenticatedApi';
 import { tblLog, isTBLDebugEnabled } from '../utils/tblDebug';
 
+// 🧠 Coalescing global (module-level): évite les bursts de requêtes identiques
+const inFlightByKey = new Map<string, Promise<void>>();
+const lastFetchAtByKey = new Map<string, number>();
+
+const hashString = (input: string): number => {
+  let h = 0;
+  for (let i = 0; i < input.length; i++) {
+    h = ((h << 5) - h) + input.charCodeAt(i);
+    h |= 0;
+  }
+  return Math.abs(h);
+};
+
 
 interface CalculatedValueResult {
   value: string | number | boolean | null;
@@ -52,14 +65,50 @@ export function useNodeCalculatedValue(
   const [isProtected, setIsProtected] = useState(false);
   const pendingEvaluationsRef = useRef<number>(0);
 
+  // Refs pour éviter les closures périmées sans créer de boucles de dépendances
+  const valueRef = useRef<string | number | boolean | null>(null);
+  const isProtectedRef = useRef<boolean>(false);
+
+  useEffect(() => {
+    valueRef.current = value;
+  }, [value]);
+
+  useEffect(() => {
+    isProtectedRef.current = isProtected;
+  }, [isProtected]);
+
+  // 🔇 Anti-spam: mémoriser les derniers refresh globaux traités
+  const lastGlobalRefreshKeyRef = useRef<string | null>(null);
+  const lastGlobalRefreshAtRef = useRef<number>(0);
+
   // Fonction pour récupérer la valeur
   const fetchCalculatedValue = useCallback(async () => {
     if (!nodeId || !treeId) {
-      setError('nodeId et treeId requis');
+      // Cas courant: certains composants appellent le hook avec nodeId temporairement vide.
+      // On n'émet pas d'erreur et on n'appelle pas l'API.
+      setLoading(false);
+      setError(null);
+      setValue(null);
+      return;
+    }
+
+    const requestKey = `${treeId}::${submissionId || ''}::${nodeId}`;
+    const now = Date.now();
+
+    // Throttle court (évite l'empilement d'events: preview + autosave + retransform)
+    const last = lastFetchAtByKey.get(requestKey);
+    if (last && now - last < 450) {
+      return;
+    }
+
+    const inFlight = inFlightByKey.get(requestKey);
+    if (inFlight) {
+      await inFlight;
       return;
     }
 
     try {
+      lastFetchAtByKey.set(requestKey, now);
       setLoading(true);
       setError(null);
 
@@ -71,86 +120,83 @@ export function useNodeCalculatedValue(
       // n'est JAMAIS enregistré dans la submission - il reste dynamique.
       // ✅ IMPORTANT: Un 404 doit être toléré (ex: display field pas encore créé en DB)
       // et ne doit pas polluer la console ni casser l'UI.
-      const response = await api.get(
-        `/api/tree-nodes/${nodeId}/calculated-value`,
-        {
-          params: submissionId ? { submissionId } : undefined,
-          suppressErrorLogForStatuses: [404]
-        }
-      );
-
-      // Déclarer extractedValue au niveau supérieur pour pouvoir l'utiliser dans le fallback
-      let extractedValue: string | number | boolean | null = null;
-      
-      if (response && typeof response === 'object') {
-        const data = response as Record<string, unknown>;
-        
-        // Extraire les données de la réponse
-        extractedValue = data.value ?? data.calculatedValue ?? null;
-        
-        // 🔥 Si c'est un objet, extraire la valeur intelligemment
-        if (typeof extractedValue === 'object' && extractedValue !== null) {
-          const obj = extractedValue as Record<string, unknown>;
-          extractedValue = 
-            obj.value ?? 
-            obj.result ?? 
-            obj.calculatedValue ?? 
-            obj.text ?? 
-            extractedValue;
-        }
-
-        if (isTBLDebugEnabled()) {
-          tblLog('✅ [useNodeCalculatedValue] Valeur récupérée:', {
-            nodeId,
-            treeId,
-            value: extractedValue,
-            calculatedAt: data.calculatedAt,
-            calculatedBy: data.calculatedBy
-          });
-        }
-
-        // 🎯 PROTECTION: Ne pas écraser une valeur existante par null/vide/[] si des évaluations sont en cours
-        const isValueBeingCleared = (
-          extractedValue === null || 
-          extractedValue === undefined || 
-          extractedValue === '' ||
-          extractedValue === '∅' ||
-          (Array.isArray(extractedValue) && extractedValue.length === 0) // 🔥 NOUVEAU: Bloquer les tableaux vides []
+      const reqPromise = (async () => {
+        const response = await api.get(
+          `/api/tree-nodes/${nodeId}/calculated-value`,
+          {
+            params: submissionId ? { submissionId } : undefined,
+            suppressErrorLogForStatuses: [404]
+          }
         );
-        const hasCurrentValue = (
-          value !== null && 
-          value !== undefined && 
-          value !== '' && 
-          value !== '∅' &&
-          !(Array.isArray(value) && value.length === 0)
-        );
-        
-        if (isProtected && isValueBeingCleared && hasCurrentValue) {
-          console.log(`🛡️ [GRD nodeId=${nodeId}] PROTECTION: ne pas écraser "${value}" avec "${extractedValue}" (${pendingEvaluationsRef.current} évaluations en cours)`);
-          return; // Bloquer l'overwrite
-        }
 
-        // Si on a une valeur valide, l'utiliser directement
-        if (extractedValue !== null && extractedValue !== undefined && extractedValue !== '') {
-          console.log(`🔄 [useNodeCalculatedValue] Mise à jour valeur pour nodeId=${nodeId}:`, extractedValue);
-          setValue(extractedValue as string | number | boolean | null);
-          setCalculatedAt(data.calculatedAt as string | undefined);
-          setCalculatedBy(data.calculatedBy as string | undefined);
-          return; // On a trouvé une valeur, pas besoin de fallback
-        } else {
-          console.log(`❌ [useNodeCalculatedValue] Valeur vide/null pour nodeId=${nodeId}:`, extractedValue);
+        // Déclarer extractedValue au niveau supérieur pour pouvoir l'utiliser dans le fallback
+        let extractedValue: string | number | boolean | null = null;
+        
+        if (response && typeof response === 'object') {
+          const data = response as Record<string, unknown>;
+          
+          // Extraire les données de la réponse
+          extractedValue = data.value ?? data.calculatedValue ?? null;
+          
+          // 🔥 Si c'est un objet, extraire la valeur intelligemment
+          if (typeof extractedValue === 'object' && extractedValue !== null) {
+            const obj = extractedValue as Record<string, unknown>;
+            extractedValue = 
+              obj.value ?? 
+              obj.result ?? 
+              obj.calculatedValue ?? 
+              obj.text ?? 
+              extractedValue;
+          }
+
+          if (isTBLDebugEnabled()) {
+            tblLog('✅ [useNodeCalculatedValue] Valeur récupérée:', {
+              nodeId,
+              treeId,
+              value: extractedValue,
+              calculatedAt: data.calculatedAt,
+              calculatedBy: data.calculatedBy
+            });
+          }
+
+          // 🎯 PROTECTION: Ne pas écraser une valeur existante par null/vide/[] si des évaluations sont en cours
+          const isValueBeingCleared = (
+            extractedValue === null || 
+            extractedValue === undefined || 
+            extractedValue === '' ||
+            extractedValue === '∅' ||
+            (Array.isArray(extractedValue) && extractedValue.length === 0) // 🔥 NOUVEAU: Bloquer les tableaux vides []
+          );
+          const currentValue = valueRef.current;
+          const hasCurrentValue = (
+            currentValue !== null && 
+            currentValue !== undefined && 
+            currentValue !== '' && 
+            currentValue !== '∅' &&
+            !(Array.isArray(currentValue) && currentValue.length === 0)
+          );
+          
+          if (isProtectedRef.current && isValueBeingCleared && hasCurrentValue) {
+            console.log(`🛡️ [GRD nodeId=${nodeId}] PROTECTION: ne pas écraser "${currentValue}" avec "${extractedValue}" (${pendingEvaluationsRef.current} évaluations en cours)`);
+            return;
+          }
+
+          // Si on a une valeur valide, l'utiliser directement
+          if (extractedValue !== null && extractedValue !== undefined && extractedValue !== '') {
+            console.log(`🔄 [useNodeCalculatedValue] Mise à jour valeur pour nodeId=${nodeId}:`, extractedValue);
+            setValue(extractedValue as string | number | boolean | null);
+            setCalculatedAt(data.calculatedAt as string | undefined);
+            setCalculatedBy(data.calculatedBy as string | undefined);
+            return;
+          }
         }
-      }
-      
-      // 🔥 DÉSACTIVÉ: Plus de fallback automatique sur l'original!
-      // Les champs copié's doivent rester INDÉPENDANTS de leur template original
-      // Chaque copie a sa propre valeur calculée stockée en base
-      // Si la valeur est vide, elle le reste jusqu'à ce qu'elle soit calculée
-      if ((extractedValue === null || extractedValue === undefined || extractedValue === '') && nodeId) {
-        // Log supprimé - trop fréquent
-        // Ne pas chercher l'original - on l'affiche vide intentionnellement!
+        
+        // Si la valeur est vide, on l'affiche vide intentionnellement
         setValue(null);
-      }
+      })();
+
+      inFlightByKey.set(requestKey, reqPromise);
+      await reqPromise;
     } catch (err) {
       const status = (err as Error & { status?: number })?.status;
       if (status === 404) {
@@ -168,6 +214,8 @@ export function useNodeCalculatedValue(
         error: errMsg
       });
     } finally {
+      const requestKey = `${treeId}::${submissionId || ''}::${nodeId}`;
+      inFlightByKey.delete(requestKey);
       setLoading(false);
     }
   }, [nodeId, treeId, submissionId, api]);
@@ -182,6 +230,7 @@ export function useNodeCalculatedValue(
   // 🎯 NOUVELLE PROTECTION: Écouter l'événement de fin d'évaluation
   useEffect(() => {
     if (typeof window === 'undefined') return;
+    if (!nodeId || !treeId) return;
     
     const handleEvaluationComplete = () => {
       if (pendingEvaluationsRef.current > 0) {
@@ -197,31 +246,60 @@ export function useNodeCalculatedValue(
     
     window.addEventListener('tbl-evaluation-complete', handleEvaluationComplete);
     return () => window.removeEventListener('tbl-evaluation-complete', handleEvaluationComplete);
-  }, [nodeId]);
+  }, [nodeId, treeId]);
 
   // 🔄 Rafraîchir automatiquement quand un événement global force la retransformation
   useEffect(() => {
     if (typeof window === 'undefined') {
       return;
     }
+    if (!nodeId || !treeId) {
+      return;
+    }
     
     let debounceTimer: ReturnType<typeof setTimeout> | null = null;
     
     const handler = (event: Event) => {
-      const detail = (event as CustomEvent<{ nodeId?: string; submissionId?: string; debugId?: string }>).detail;
-      if (!detail?.nodeId || detail.nodeId === nodeId) {
+      const detail = (event as CustomEvent<{ nodeId?: string; submissionId?: string; treeId?: string | number; reason?: string; signature?: string; timestamp?: number; debugId?: string }>).detail;
+
+      // Filtrer par treeId si présent
+      if (detail?.treeId !== undefined && detail?.treeId !== null && String(detail.treeId) !== String(treeId)) {
+        return;
+      }
+
+      // Filtrer par submissionId si présent
+      if (detail?.submissionId && submissionId && String(detail.submissionId) !== String(submissionId)) {
+        return;
+      }
+
+      // Anti-spam: ignorer les doubles refresh globaux identiques
+      const refreshKey = `${detail?.reason || ''}::${detail?.signature || ''}::${detail?.timestamp || ''}`;
+      const now = Date.now();
+      if (lastGlobalRefreshKeyRef.current === refreshKey && (now - lastGlobalRefreshAtRef.current) < 400) {
+        return;
+      }
+
+      // Global refresh sans nodeId => tous les champs, mais étalé pour éviter un burst de requêtes
+      const isGlobal = !detail?.nodeId;
+      if (isGlobal || detail.nodeId === nodeId) {
         // 🎯 PROTECTION: Incrémenter le compteur quand un refresh est demandé
         pendingEvaluationsRef.current++;
         setIsProtected(true);
         console.log(`⬆️ [GRD nodeId=${nodeId}] Rafraîchissement demandé (${pendingEvaluationsRef.current} en cours)`);
+
+        lastGlobalRefreshKeyRef.current = refreshKey;
+        lastGlobalRefreshAtRef.current = now;
         
-        // 🔥 DEBOUNCE: Attendre 500ms avant de rafraîchir pour éviter les clignotements
+        // 🔥 DEBOUNCE/STAGGER: étaler les refresh globaux
         if (debounceTimer) {
           clearTimeout(debounceTimer);
         }
+        const delay = isGlobal
+          ? 220 + (hashString(nodeId) % 420) // 220..639ms
+          : 180;
         debounceTimer = setTimeout(() => {
           fetchCalculatedValue();
-        }, 500);
+        }, delay);
       }
     };
     
@@ -232,12 +310,13 @@ export function useNodeCalculatedValue(
         clearTimeout(debounceTimer);
       }
     };
-  }, [fetchCalculatedValue, nodeId, submissionId]);
+  }, [fetchCalculatedValue, nodeId, submissionId, treeId]);
 
   // � NOUVEAU: Rafraîchir automatiquement quand les données du formulaire changent
   // Pour les display fields comme GRD qui dépendent de lead.postalCode, etc.
   useEffect(() => {
     if (typeof window === 'undefined') return;
+    if (!nodeId || !treeId) return;
     
     let debounceTimer: ReturnType<typeof setTimeout> | null = null;
     
@@ -247,9 +326,13 @@ export function useNodeCalculatedValue(
       if (debounceTimer) {
         clearTimeout(debounceTimer);
       }
+      // Si un refresh global vient d'arriver, ne pas doubler.
+      if (Date.now() - lastGlobalRefreshAtRef.current < 1200) {
+        return;
+      }
       debounceTimer = setTimeout(() => {
         fetchCalculatedValue();
-      }, 800);
+      }, 900);
     };
     
     window.addEventListener('tbl-field-changed', handler);
@@ -259,11 +342,12 @@ export function useNodeCalculatedValue(
         clearTimeout(debounceTimer);
       }
     };
-  }, [fetchCalculatedValue]);
+  }, [fetchCalculatedValue, nodeId, treeId]);
 
   // �🔔 Rafraîchir aussi quand un événement tbl-node-updated est dispatché avec notre nodeId
   useEffect(() => {
     if (typeof window === 'undefined') return;
+    if (!nodeId || !treeId) return;
     
     let debounceTimer: ReturnType<typeof setTimeout> | null = null;
     
@@ -275,6 +359,8 @@ export function useNodeCalculatedValue(
           pendingEvaluationsRef.current++;
           setIsProtected(true);
           console.log(`⬆️ [GRD nodeId=${nodeId}] Update signalé (${pendingEvaluationsRef.current} en cours)`);
+
+          lastGlobalRefreshAtRef.current = Date.now();
           
           // 🔥 DEBOUNCE: Attendre 500ms avant de rafraîchir pour éviter les clignotements
           if (debounceTimer) {
@@ -284,7 +370,7 @@ export function useNodeCalculatedValue(
             fetchCalculatedValue();
           }, 500);
         }
-      } catch (err) {
+      } catch {
         // noop
       }
     };
@@ -296,7 +382,7 @@ export function useNodeCalculatedValue(
         clearTimeout(debounceTimer);
       }
     };
-  }, [fetchCalculatedValue, nodeId]);
+  }, [fetchCalculatedValue, nodeId, treeId]);
 
   const refresh = useCallback(() => {
     fetchCalculatedValue();

@@ -1994,6 +1994,15 @@ export const transformNodesToTBLComplete = (
   const processedNodeIds = new Set<string>(); // 🎯 ÉVITER LES DOUBLONS
   const detectedSections = new Map<string, { node: TreeBranchLeafNode, fields: TBLField[] }>(); // 🎯 SECTIONS DÉTECTÉES
   
+  // 🎯 NOUVEAU: Compteur d'ordre hiérarchique global pour respecter l'ordre de l'arbre
+  let globalHierarchyOrder = 0;
+  
+  // 🎯 Helper pour assigner l'ordre hiérarchique global à un champ
+  const assignHierarchyOrder = (field: TBLField): TBLField => {
+    field.order = globalHierarchyOrder++;
+    return field;
+  };
+  
   // 🔍 PREMIÈRE PASSE PRÉALABLE: Construire la map templateId -> tabId d'origine AVANT le processing
   const templateToTabMap = new Map<string, string>();
   niveau1Nodes.forEach(ongletNode => {
@@ -2057,7 +2066,7 @@ export const transformNodesToTBLComplete = (
           if (hasOptions) {
             // 🎯 BRANCHE AVEC OPTIONS = LISTE DÉROULANTE
             const selectField = transformPrismaNodeToField(child, childrenMap, nodeMap, activeSharedReferences, formData);
-            processedFields.push(selectField);
+            processedFields.push(assignHierarchyOrder(selectField));
             if (verbose()) dlog(`      ✅ Liste déroulante: "${selectField.label}" avec ${selectField.options?.length || 0} options`);
           } else {
             // 🎯 BRANCHE SANS OPTIONS = CONTENEUR - TRAITER SES ENFANTS
@@ -2078,7 +2087,7 @@ export const transformNodesToTBLComplete = (
           }
           
           const field = transformPrismaNodeToField(child, childrenMap, nodeMap, activeSharedReferences, formData);
-          processedFields.push(field);
+          processedFields.push(assignHierarchyOrder(field));
           processedNodeIds.add(child.id); // 🎯 MARQUER COMME TRAITÉ
           if (verbose()) dlog(`      🍃 Champ simple: "${field.label}" (${field.type})`);
           
@@ -2093,7 +2102,7 @@ export const transformNodesToTBLComplete = (
         } else if (child.type === 'leaf_repeater') {
           // 🔁 C'EST UN RÉPÉTABLE = AJOUTER COMME CHAMP SPÉCIAL
           const repeaterField = transformPrismaNodeToField(child, childrenMap, nodeMap, activeSharedReferences, formData);
-          processedFields.push(repeaterField);
+          processedFields.push(assignHierarchyOrder(repeaterField));
           processedNodeIds.add(child.id); // 🎯 MARQUER COMME TRAITÉ
           if (verbose()) dlog(`      🔁 Répétable: "${repeaterField.label}" avec metadata.repeater:`, repeaterField.metadata?.repeater);
           
@@ -2143,7 +2152,7 @@ export const transformNodesToTBLComplete = (
             copyField.isLastInCopyGroup = (index === realCopies.length - 1);
             copyField.canAddNewCopy = copyField.isLastInCopyGroup;
             
-            processedFields.push(copyField);
+            processedFields.push(assignHierarchyOrder(copyField));
             processedNodeIds.add(copyNode.id);
             if (verbose()) dlog(`        📋 Copie ajoutée: "${copyField.label}" (sourceTemplate: ${(copyNode.metadata as any)?.sourceTemplateId}) ${copyField.isLastInCopyGroup ? '➕' : ''}`);
           });
@@ -2157,7 +2166,7 @@ export const transformNodesToTBLComplete = (
             originalTemplateField.isLastInCopyGroup = true;
             originalTemplateField.parentRepeaterId = child.id;
             
-            processedFields.push(originalTemplateField);
+            processedFields.push(assignHierarchyOrder(originalTemplateField));
             processedNodeIds.add(originalTemplate.id);
             if (verbose()) dlog(`        📝 Template original avec bouton +: "${originalTemplateField.label}"`);
           }
@@ -2197,6 +2206,9 @@ export const transformNodesToTBLComplete = (
     .sort((a, b) => a.order - b.order)
     .forEach(ongletNode => {
   if (verbose()) dlog(`📑 [TBL-PRISMA] === ONGLET: "${ongletNode.label}" ===`);
+      
+      // 🎯 RESET: Réinitialiser le compteur d'ordre hiérarchique pour chaque onglet
+      globalHierarchyOrder = 0;
       
       // Traiter RÉCURSIVEMENT tous les descendants à partir du niveau 2
       const ongletFields = processNodeRecursively(ongletNode.id, 2);

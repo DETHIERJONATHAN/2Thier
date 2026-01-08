@@ -197,7 +197,9 @@ router.get('/trees/:treeId/select-configs', async (req, res) => {
       return res.status(404).json({ error: 'Arbre non trouvé' });
     }
 
-    // Récupérer les noeuds de type select/radio/checkbox avec leurs options
+    // 🔧 FIX 07/01/2026: Récupérer AUSSI les nœuds sans fieldType mais avec un SelectConfig
+    // Les nœuds de lookup (Orientation-Inclinaison) ont fieldType: null mais TreeBranchLeafSelectConfig
+    // Il faut les inclure sinon le batch ne les charge pas et le frontend fallback sur l'original!
     const selectNodes = await db.treeBranchLeafNode.findMany({
       where: { 
         treeId,
@@ -206,7 +208,9 @@ router.get('/trees/:treeId/select-configs', async (req, res) => {
           { fieldType: 'radio' },
           { fieldType: 'checkbox' },
           { fieldType: 'multi-select' },
-          { fieldType: { contains: 'select' } }
+          { fieldType: { contains: 'select' } },
+          // 🔥 CRITICAL: Inclure aussi les nœuds avec SelectConfig même si fieldType: null
+          { TreeBranchLeafSelectConfig: { isNot: null } }
         ]
       },
       select: {

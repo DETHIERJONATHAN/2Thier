@@ -53,13 +53,11 @@ export async function fixCompleteDuplication(
     calculatedValueReset: false
   };
 
-  // 1. RÃƒÂ©cupÃƒÂ©rer les nÃ…â€œuds
+  // 1. Récupérer les nœuds
   const [originalNode, copiedNode] = await Promise.all([
     prisma.treeBranchLeafNode.findUnique({
       where: { id: originalNodeId },
       include: {
-        TreeBranchLeafNodeFormula: true,
-        TreeBranchLeafNodeCondition: true,
         TreeBranchLeafNodeTable: {
           include: {
             tableColumns: true,
@@ -273,13 +271,20 @@ export async function fixCompleteDuplication(
     }
   }
 
-  // 7. Mettre ÃƒÂ  jour les flags et rÃƒÂ©initialiser la valeur calculÃƒÂ©e
+  // 7. Mettre à jour les flags et réinitialiser la valeur calculée
+  // 🔧 FIX 06/01/2026: Vérifier que les tables sont vraiment assignées au node copié
+  // avant de mettre hasTable: true. Sinon un node comme Inclinaison-1 qui n'a pas de table
+  // aura incorrectement hasTable: true
+  const copiedNodeTables = await prisma.treeBranchLeafNodeTable.count({
+    where: { nodeId: copiedNodeId }
+  });
+  
   await prisma.treeBranchLeafNode.update({
     where: { id: copiedNodeId },
     data: {
       hasFormula: originalNode.TreeBranchLeafNodeFormula.length > 0,
       hasCondition: originalNode.TreeBranchLeafNodeCondition.length > 0,
-      hasTable: originalNode.TreeBranchLeafNodeTable.length > 0,
+      hasTable: copiedNodeTables > 0,  // Vérifier les tables du node COPIÉ, pas de l'original
       calculatedValue: null,
       calculatedAt: null,
       calculatedBy: null

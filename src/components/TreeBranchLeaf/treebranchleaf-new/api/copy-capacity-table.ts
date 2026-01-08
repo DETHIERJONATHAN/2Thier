@@ -265,49 +265,18 @@ export async function copyTableCapacity(
             if (rewritten?.lookup?.columnSourceOption?.sourceField && !rewritten.lookup.columnSourceOption.sourceField.endsWith(`-${suffixNum}`)) {
               rewritten.lookup.columnSourceOption.sourceField = `${rewritten.lookup.columnSourceOption.sourceField}-${suffixNum}`;
             }
-            // Suffixer comparisonColumn si c'est du texte
+            // � FIX 06/01/2026 (v3): TOUJOURS suffixer comparisonColumn
+            // Les colonnes de table SONT suffixées (ex: "Orientation" → "Orientation-1")
             if (rewritten?.lookup?.rowSourceOption?.comparisonColumn) {
               const val = rewritten.lookup.rowSourceOption.comparisonColumn;
-              if (!/^-?\d+(\.\d+)?$/.test(val.trim()) && !val.endsWith(`-${suffix}`)) {
-                rewritten.lookup.rowSourceOption.comparisonColumn = `${val}-${suffix}`;
+              if (!val.endsWith(`-${suffixNum}`)) {
+                rewritten.lookup.rowSourceOption.comparisonColumn = `${val}-${suffixNum}`;
               }
             }
             if (rewritten?.lookup?.columnSourceOption?.comparisonColumn) {
               const val = rewritten.lookup.columnSourceOption.comparisonColumn;
-              if (!/^-?\d+(\.\d+)?$/.test(val.trim()) && !val.endsWith(`-${suffix}`)) {
-                rewritten.lookup.columnSourceOption.comparisonColumn = `${val}-${suffix}`;
-              }
-            }
-            // Ã°Å¸â€Â¥ FIX: Suffixer displayColumn (peut ÃƒÂªtre string ou array)
-            if (rewritten?.lookup?.displayColumn) {
-              if (Array.isArray(rewritten.lookup.displayColumn)) {
-                rewritten.lookup.displayColumn = rewritten.lookup.displayColumn.map((col: string) => {
-                  if (col && !/^-?\d+(\.\d+)?$/.test(col.trim()) && !col.endsWith(`-${suffix}`)) {
-                    return `${col}-${suffix}`;
-                  }
-                  return col;
-                });
-              } else if (typeof rewritten.lookup.displayColumn === 'string') {
-                const val = rewritten.lookup.displayColumn;
-                if (!/^-?\d+(\.\d+)?$/.test(val.trim()) && !val.endsWith(`-${suffix}`)) {
-                  rewritten.lookup.displayColumn = `${val}-${suffix}`;
-                }
-              }
-            }
-            // Ã°Å¸â€Â¥ FIX: Suffixer displayRow (peut ÃƒÂªtre string ou array)
-            if (rewritten?.lookup?.displayRow) {
-              if (Array.isArray(rewritten.lookup.displayRow)) {
-                rewritten.lookup.displayRow = rewritten.lookup.displayRow.map((row: string) => {
-                  if (row && !/^-?\d+(\.\d+)?$/.test(row.trim()) && !row.endsWith(`-${suffix}`)) {
-                    return `${row}-${suffix}`;
-                  }
-                  return row;
-                });
-              } else if (typeof rewritten.lookup.displayRow === 'string') {
-                const val = rewritten.lookup.displayRow;
-                if (!/^-?\d+(\.\d+)?$/.test(val.trim()) && !val.endsWith(`-${suffix}`)) {
-                  rewritten.lookup.displayRow = `${val}-${suffix}`;
-                }
+              if (!val.endsWith(`-${suffixNum}`)) {
+                rewritten.lookup.columnSourceOption.comparisonColumn = `${val}-${suffixNum}`;
               }
             }
             return rewritten;
@@ -343,49 +312,18 @@ export async function copyTableCapacity(
             if (rewritten?.lookup?.columnSourceOption?.sourceField && !rewritten.lookup.columnSourceOption.sourceField.endsWith(`-${suffixNum}`)) {
               rewritten.lookup.columnSourceOption.sourceField = `${rewritten.lookup.columnSourceOption.sourceField}-${suffixNum}`;
             }
-            // Suffixer comparisonColumn si c'est du texte
+            // � FIX 06/01/2026 (v3): TOUJOURS suffixer comparisonColumn
+            // Les colonnes de table SONT suffixées (ex: "Orientation" → "Orientation-1")
             if (rewritten?.lookup?.rowSourceOption?.comparisonColumn) {
               const val = rewritten.lookup.rowSourceOption.comparisonColumn;
-              if (!/^-?\d+(\.\d+)?$/.test(val.trim()) && !val.endsWith(`-${suffix}`)) {
-                rewritten.lookup.rowSourceOption.comparisonColumn = `${val}-${suffix}`;
+              if (!val.endsWith(`-${suffixNum}`)) {
+                rewritten.lookup.rowSourceOption.comparisonColumn = `${val}-${suffixNum}`;
               }
             }
             if (rewritten?.lookup?.columnSourceOption?.comparisonColumn) {
               const val = rewritten.lookup.columnSourceOption.comparisonColumn;
-              if (!/^-?\d+(\.\d+)?$/.test(val.trim()) && !val.endsWith(`-${suffix}`)) {
-                rewritten.lookup.columnSourceOption.comparisonColumn = `${val}-${suffix}`;
-              }
-            }
-            // Ã°Å¸â€Â¥ FIX: Suffixer displayColumn (peut ÃƒÂªtre string ou array)
-            if (rewritten?.lookup?.displayColumn) {
-              if (Array.isArray(rewritten.lookup.displayColumn)) {
-                rewritten.lookup.displayColumn = rewritten.lookup.displayColumn.map((col: string) => {
-                  if (col && !/^-?\d+(\.\d+)?$/.test(col.trim()) && !col.endsWith(`-${suffix}`)) {
-                    return `${col}-${suffix}`;
-                  }
-                  return col;
-                });
-              } else if (typeof rewritten.lookup.displayColumn === 'string') {
-                const val = rewritten.lookup.displayColumn;
-                if (!/^-?\d+(\.\d+)?$/.test(val.trim()) && !val.endsWith(`-${suffix}`)) {
-                  rewritten.lookup.displayColumn = `${val}-${suffix}`;
-                }
-              }
-            }
-            // Ã°Å¸â€Â¥ FIX: Suffixer displayRow (peut ÃƒÂªtre string ou array)
-            if (rewritten?.lookup?.displayRow) {
-              if (Array.isArray(rewritten.lookup.displayRow)) {
-                rewritten.lookup.displayRow = rewritten.lookup.displayRow.map((row: string) => {
-                  if (row && !/^-?\d+(\.\d+)?$/.test(row.trim()) && !row.endsWith(`-${suffix}`)) {
-                    return `${row}-${suffix}`;
-                  }
-                  return row;
-                });
-              } else if (typeof rewritten.lookup.displayRow === 'string') {
-                const val = rewritten.lookup.displayRow;
-                if (!/^-?\d+(\.\d+)?$/.test(val.trim()) && !val.endsWith(`-${suffix}`)) {
-                  rewritten.lookup.displayRow = `${val}-${suffix}`;
-                }
+              if (!val.endsWith(`-${suffixNum}`)) {
+                rewritten.lookup.columnSourceOption.comparisonColumn = `${val}-${suffixNum}`;
               }
             }
             return rewritten;

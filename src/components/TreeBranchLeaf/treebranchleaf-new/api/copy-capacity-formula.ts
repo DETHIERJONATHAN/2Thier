@@ -323,11 +323,20 @@ export async function copyFormulaCapacity(
     // - isDefault: Formule par dÃƒÂ©faut
     // - order: Ordre d'affichage
     // 🔄 Utiliser upsert pour éviter les conflits d'ID (P2002)
+    // 🔧 FIX COLLISION: Utiliser l'ID de formule dans le nom pour garantir l'unicité
+    // Plusieurs formules peuvent avoir le même "name" (ex: "Formule") sur des nœuds différents.
+    // Quand elles sont copiées sur le MÊME nœud copié, leurs noms "Formule-1" entrent en collision.
+    // Solution: Inclure les 8 premiers caractères de l'ID de la formule originale dans le nom.
+    const formulaIdShort = originalFormula.id.substring(0, 8);
+    const uniqueName = originalFormula.name 
+      ? `${originalFormula.name}-${formulaIdShort}-${suffix}` 
+      : `formula-${formulaIdShort}-${suffix}`;
+
     const newFormula = await prisma.treeBranchLeafNodeFormula.upsert({
       where: { id: newFormulaId },
       update: {
         nodeId: finalOwnerNodeId,
-        name: originalFormula.name ? `${originalFormula.name}-${suffix}` : null,
+        name: uniqueName,
         description: originalFormula.description,
         tokens: rewrittenTokens,
         targetProperty: originalFormula.targetProperty,
@@ -340,7 +349,7 @@ export async function copyFormulaCapacity(
         id: newFormulaId,
         nodeId: finalOwnerNodeId,
         organizationId: originalFormula.organizationId,
-        name: originalFormula.name ? `${originalFormula.name}-${suffix}` : null,
+        name: uniqueName,
         description: originalFormula.description,
         tokens: rewrittenTokens,
         // 🏯 CHAMPS CRITIQUES - Copie de la cible et des propriétés

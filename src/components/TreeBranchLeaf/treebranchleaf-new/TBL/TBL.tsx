@@ -956,6 +956,13 @@ const TBL: React.FC<TBLProps> = ({
 
   const previewEvaluateAndStore = useCallback(async (data: TBLFormData) => {
     if (!api || !tree?.id) return;
+
+    // ✅ IMPORTANT: quand un devis existe déjà, l'autosave (create-and-evaluate)
+    // fait déjà l'évaluation côté serveur. Le preview-evaluate en parallèle doublonne
+    // les appels + les refresh et finit en 429.
+    if (submissionId) {
+      return;
+    }
     try {
       const normalized = normalizePayload(data);
       const sig = computeSignature(normalized);

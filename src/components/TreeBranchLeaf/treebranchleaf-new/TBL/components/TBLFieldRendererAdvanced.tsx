@@ -868,6 +868,9 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
   
   // � DEBUG 17/12/2025: Tracer pourquoi Onduleur n'est pas SELECT
   useEffect(() => {
+    if (typeof window === 'undefined') return;
+    if (localStorage.getItem('TBL_DIAG') !== '1') return;
+
     if (field.label?.toLowerCase().includes('onduleur')) {
       console.log(`🔴 [DEBUG ONDULEUR] "${field.label}" (${field.id}):`, {
         hasTableCapability,
@@ -878,6 +881,15 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
         fieldType: field.type,
         fieldSubType: field.subType,
         fieldKeys: Object.keys(field)
+      });
+    }
+    // 🔴 DEBUG: Tracer Orientation
+    if (field.label?.toLowerCase() === 'orientation') {
+      console.log(`🔴 [DEBUG ORIENTATION] "${field.label}" (${field.id}):`, {
+        hasTableCapability,
+        fieldHasTable: field.hasTable,
+        fieldType: field.type,
+        fieldSubType: field.subType,
       });
     }
   }, [field, hasTableCapability, treeMetadata]);
@@ -892,20 +904,40 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
   const looksLikeUUID = (s?: string) => typeof s === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(s);
   // Éviter les IDs namespacés type node_123_abcdef
   const isNamespacedNodeLike = (s?: string) => typeof s === 'string' && /^node_\d+_[a-z0-9]+$/i.test(s);
+  
+  // 🔧 FIX 07/01/2026: Pour les champs créés via repeat (duplicatedFromRepeater=true),
+  // TOUJOURS utiliser field.id au lieu de repeaterTemplateNodeId qui pointe à l'original
+  const isDuplicatedFromRepeater = (field as Record<string, any>)?.metadata?.duplicatedFromRepeater === true;
+  
   // Choisir le meilleur candidat d'ID pour le lookup table côté backend
-  let lookupNodeId = repeaterTemplateNodeId || originalFieldId || metaOriginalNodeId || sourceTemplateNodeId || field.id;
-  // Si l'ID courant ne ressemble pas à un UUID et qu'on a un candidat meilleur qui en est un, basculer dessus
-  if (!looksLikeUUID(lookupNodeId)) {
-    const candidates = [repeaterTemplateNodeId, originalFieldId, metaOriginalNodeId, sourceTemplateNodeId].filter(Boolean) as string[];
-    const uuidCandidate = candidates.find(looksLikeUUID);
-    if (uuidCandidate) {
-      lookupNodeId = uuidCandidate;
-    } else if (isNamespacedNodeLike(lookupNodeId) && candidates.length > 0) {
-      // Dernier recours: prendre le premier candidat non-vide (même si pas UUID) pour éviter node_*
-      lookupNodeId = candidates[0]!;
+  let lookupNodeId: string;
+  
+  if (isDuplicatedFromRepeater) {
+    // Les champs dupliqués depuis repeat doivent utiliser leur propre ID, pas celui du template
+    lookupNodeId = field.id;
+    console.log(`[TBL-DEBUG] Champ dupliqué depuis repeat: ${field.label} (${field.id})`);
+  } else {
+    // Pour les champs normaux, essayer les autres candidats
+    lookupNodeId = repeaterTemplateNodeId || originalFieldId || metaOriginalNodeId || sourceTemplateNodeId || field.id;
+    
+    // Si l'ID courant ne ressemble pas à un UUID et qu'on a un candidat meilleur qui en est un, basculer dessus
+    if (!looksLikeUUID(lookupNodeId)) {
+      const candidates = [repeaterTemplateNodeId, originalFieldId, metaOriginalNodeId, sourceTemplateNodeId].filter(Boolean) as string[];
+      const uuidCandidate = candidates.find(looksLikeUUID);
+      if (uuidCandidate) {
+        lookupNodeId = uuidCandidate;
+      } else if (isNamespacedNodeLike(lookupNodeId) && candidates.length > 0) {
+        // Dernier recours: prendre le premier candidat non-vide (même si pas UUID) pour éviter node_*
+        lookupNodeId = candidates[0]!;
+      }
     }
   }
+  
+  console.log(`[TBL-DEBUG] Field: ${field.label}, field.id=${field.id}, lookupNodeId=${lookupNodeId}, duplicatedFromRepeater=${isDuplicatedFromRepeater}`);
 
+  // 🔧 FIX 06/01/2026: Le hook useTBLTableLookup charge la SelectConfig si elle existe
+  // Si la SelectConfig n'existe pas, tableLookup.selectConfig sera null et ne causera pas de problème
+  // Si elle existe, les options seront chargées depuis la table de capacité
   const tableLookup = useTBLTableLookup(lookupNodeId, lookupNodeId, hasTableCapability, formData);
 
   const templateAppearanceOverrides = useMemo(() => {

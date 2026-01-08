@@ -28,14 +28,11 @@ export async function analyzeCapacityMismatches(
   
   const results: CapacityMismatchAnalysis[] = [];
   
-  // RÃƒÂ©cupÃƒÂ©rer le nÃ…â€œud avec toutes ses capacitÃƒÂ©s
+  // Récupérer le nœud avec ses tables
   const node = await prisma.treeBranchLeafNode.findUnique({
     where: { id: nodeId },
     include: {
-      TreeBranchLeafNodeFormula: true,
-      TreeBranchLeafNodeCondition: true,
-      TreeBranchLeafNodeTable: true,
-      TreeBranchLeafNodeVariable: true
+      TreeBranchLeafNodeTable: true
     }
   });
 
@@ -51,10 +48,7 @@ export async function analyzeCapacityMismatches(
     originalNode = await prisma.treeBranchLeafNode.findUnique({
       where: { id: originalId },
       include: {
-        TreeBranchLeafNodeFormula: true,
-        TreeBranchLeafNodeCondition: true,
-        TreeBranchLeafNodeTable: true,
-        TreeBranchLeafNodeVariable: true
+        TreeBranchLeafNodeTable: true
       }
     });
   }

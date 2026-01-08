@@ -698,7 +698,7 @@ export async function copyVariableWithCapacities(
             // Mettre Ã  jour hasTable sur le display node crÃ©Ã©
             await prisma.treeBranchLeafNode.update({
               where: { id: displayNodeId },
-              data: { hasTable: true }
+              data: { hasTable: originalOwnerNode.hasTable ?? false }
             });
           }
         } else {
@@ -1055,6 +1055,10 @@ export async function createDisplayNodeForExistingVariable(
   const displayParentId: string | null = owner.parentId;
 
   const now = new Date();
+  
+  // FIX 06/01/2026: Verifier si la variable a capacite table
+  const variableHasTableCapacity = v.sourceType === 'table' || v.sourceRef?.includes('table:');
+  
   const baseData = {
     id: displayNodeId,
     treeId: owner.treeId,

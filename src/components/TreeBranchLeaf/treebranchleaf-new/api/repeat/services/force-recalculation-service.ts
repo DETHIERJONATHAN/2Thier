@@ -45,8 +45,6 @@ export async function forceNodeRecalculationWithOwnData(
   const copiedNode = await prisma.treeBranchLeafNode.findUnique({
     where: { id: copiedNodeId },
     include: {
-      TreeBranchLeafNodeFormula: true,
-      TreeBranchLeafNodeCondition: true,
       TreeBranchLeafNodeTable: {
         include: {
           tableColumns: true,

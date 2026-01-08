@@ -3463,16 +3463,6 @@ const updateOrMoveNode = async (req, res) => {
       console.warn('ÃƒÂ°Ã…Â¸Ã¢â‚¬ÂÃ‚Â¥ [updateOrMoveNode] Synchronisation metadata.repeater:', updatedRepeaterMetadata);
     }
     
-    // CRITIQUE : Si repeater_templateNodeIds est explicitement NULL, supprimer metadata.repeater
-    if ('repeater_templateNodeIds' in updateObj && updateObj.repeater_templateNodeIds === null) {
-      const currentMetadata = existingNode.metadata as any || {};
-      if (currentMetadata.repeater) {
-        const { repeater, ...metadataWithoutRepeater } = currentMetadata;
-        updateObj.metadata = metadataWithoutRepeater;
-        console.warn('[updateOrMoveNode] Suppression explicite de metadata.repeater car repeater_templateNodeIds = NULL');
-      }
-    }
-    
     // ✅ FIX: Fusionner metadata.aiMeasure avec le metadata existant (ne pas écraser)
     if (updateObj.metadata && typeof updateObj.metadata === 'object') {
       const currentMetadata = existingNode.metadata as any || {};
@@ -3513,6 +3503,17 @@ const updateOrMoveNode = async (req, res) => {
         nouveau: newMetadata,
         resultat: updateObj.metadata
       });
+    }
+    
+    // 🔥 CRITIQUE : Si repeater_templateNodeIds est explicitement NULL, supprimer metadata.repeater
+    // ⚠️ DOIT ÊTRE APRÈS la fusion des métadonnées pour ne pas être écrasé par currentMetadata
+    if ('repeater_templateNodeIds' in updateObj && updateObj.repeater_templateNodeIds === null) {
+      const currentMeta = (updateObj.metadata || existingNode.metadata) as any || {};
+      if (currentMeta.repeater) {
+        const { repeater, ...metadataWithoutRepeater } = currentMeta;
+        updateObj.metadata = metadataWithoutRepeater;
+        console.warn('[updateOrMoveNode] 🗑️ Suppression explicite de metadata.repeater car repeater_templateNodeIds = NULL');
+      }
     }
     
     await prisma.treeBranchLeafNode.update({
@@ -10541,6 +10542,13 @@ router.get('/nodes/:nodeId/table/lookup', async (req, res) => {
           console.warn(`[TreeBranchLeaf API] ⚠️ Auto-upsert select-config a échoué (non bloquant):`, e);
         }
         
+        // 🔴 DEBUG: Log pour voir si on passe par AUTO-DEFAULT
+        console.log(`[TreeBranchLeaf API] 🎯 AUTO-DEFAULT pour nodeId=${nodeId}:`, {
+          optionsCount: autoOptions.length,
+          firstFive: autoOptions.slice(0, 5),
+          detectedRole: isRowField ? 'rowField' : isColumnField ? 'columnField' : 'fallback'
+        });
+        
         return res.json({ 
           options: autoOptions, 
           autoDefault: { 
@@ -12612,34 +12620,28 @@ router.get('/shared-references', async (req, res) => {
         label: true,
         sharedReferenceName: true,
         // ÃƒÂ¢Ã…â€œÃ¢â‚¬Â¦ sharedReferenceCategory SUPPRIMÃƒÆ’Ã¢â‚¬Â°
-        sharedReferenceDescription: true,
-        referenceUsages: {
-          select: {
-            id: true,
-            treeId: true,
-            TreeBranchLeafTree: {
-              select: {
-                name: true
-              }
-            }
-          }
-        }
+        sharedReferenceDescription: true
       }
     });
 
-    templates.forEach((t, i) => {
+    // Compter les usages (noeuds qui utilisent cette ref via sharedReferenceId)
+    const templateIds = templates.map(t => t.id);
+    const usageCounts = await prisma.treeBranchLeafNode.groupBy({
+      by: ['sharedReferenceId'],
+      where: {
+        sharedReferenceId: { in: templateIds }
+      },
+      _count: { id: true }
     });
+    const usageMap = new Map(usageCounts.map(u => [u.sharedReferenceId, u._count.id]));
 
     const formatted = templates.map(template => ({
       id: template.id,
       label: template.sharedReferenceName || template.label,
       // ÃƒÂ¢Ã…â€œÃ¢â‚¬Â¦ category SUPPRIMÃƒÆ’Ã¢â‚¬Â°
       description: template.sharedReferenceDescription,
-      usageCount: template.referenceUsages.length,
-      usages: template.referenceUsages.map(usage => ({
-        treeId: usage.treeId,
-        path: `${usage.TreeBranchLeafTree.name}`
-      }))
+      usageCount: usageMap.get(template.id) || 0,
+      usages: []
     }));
 
     res.json(formatted);
@@ -12669,18 +12671,7 @@ router.get('/shared-references/:refId', async (req, res) => {
         label: true,
         sharedReferenceName: true,
         // ÃƒÂ¢Ã…â€œÃ¢â‚¬Â¦ sharedReferenceCategory SUPPRIMÃƒÆ’Ã¢â‚¬Â°
-        sharedReferenceDescription: true,
-        referenceUsages: {
-          select: {
-            id: true,
-            treeId: true,
-            TreeBranchLeafTree: {
-              select: {
-                name: true
-              }
-            }
-          }
-        }
+        sharedReferenceDescription: true
       }
     });
 
@@ -12693,11 +12684,8 @@ router.get('/shared-references/:refId', async (req, res) => {
       label: template.sharedReferenceName || template.label,
       // ÃƒÂ¢Ã…â€œÃ¢â‚¬Â¦ category SUPPRIMÃƒÆ’Ã¢â‚¬Â°
       description: template.sharedReferenceDescription,
-      usageCount: template.referenceUsages.length,
-      usages: template.referenceUsages.map(usage => ({
-        treeId: usage.treeId,
-        path: `${usage.TreeBranchLeafTree.name}`
-      }))
+      usageCount: usageMap.get(template.id) || 0,
+      usages: []
     });
   } catch (error) {
     console.error('ÃƒÂ¢Ã‚ÂÃ…â€™ [SHARED REF] Erreur dÃƒÆ’Ã‚Â©tails:', error);
@@ -12767,9 +12755,6 @@ router.delete('/shared-references/:refId', async (req, res) => {
         TreeBranchLeafTree: {
           organizationId
         }
-      },
-      include: {
-        referenceUsages: true
       }
     });
 
@@ -12778,7 +12763,12 @@ router.delete('/shared-references/:refId', async (req, res) => {
     }
 
     // Si la rÃƒÆ’Ã‚Â©fÃƒÆ’Ã‚Â©rence est utilisÃƒÆ’Ã‚Â©e, dÃƒÆ’Ã‚Â©tacher tous les usages avant de supprimer
-    if (template.referenceUsages.length > 0) {
+    // Compter les usages
+    const usageCount = await prisma.treeBranchLeafNode.count({
+      where: { sharedReferenceId: refId }
+    })
+
+    if (usageCount > 0) {
       
       // DÃƒÆ’Ã‚Â©tacher tous les nÃƒâ€¦Ã¢â‚¬Å“uds qui utilisent cette rÃƒÆ’Ã‚Â©fÃƒÆ’Ã‚Â©rence
       await prisma.treeBranchLeafNode.updateMany({

@@ -169,13 +169,34 @@ export function useTBLTableLookup(
         
         // Fallback: appel API individuel si pas dans le cache batch
         if (!selectConfig) {
-          // 🔄 REPEATER SUPPORT: Extraire l'ID de base si c'est un ID de repeater (ex: uuid-1 -> uuid)
-          const baseFieldId = fieldId.replace(/-\d+$/, '');
-          if (isTargetField) console.log(`[DEBUG][Test - liste] ➡️ GET /api/treebranchleaf/nodes/${baseFieldId}/select-config (fallback, baseId from ${fieldId})`);
+          // 🔄 REPEATER SUPPORT: D'abord essayer avec l'ID complet (suffixé), puis fallback sur l'ID de base
+          // ⚠️ FIX 06/01/2026: Pour les repeaters, la SelectConfig copiée a un nodeId suffixé (ex: uuid-1)
+          // Il faut d'abord chercher avec cet ID suffixé avant de fallback sur l'original
+          
+          // Détecte si le fieldId a un suffixe de repeater (-1, -2, etc.)
+          const suffixMatch = fieldId.match(/-(\d{1,3})$/);
+          const hasSuffix = !!suffixMatch;
+          const baseFieldId = hasSuffix ? fieldId.replace(/-\d{1,3}$/, '') : fieldId;
+          
+          console.log(`[useTBLTableLookup] 🔍 Recherche SelectConfig pour fieldId=${fieldId}, hasSuffix=${hasSuffix}, baseFieldId=${baseFieldId}`);
+          
+          // 🔥 FIX: D'abord TOUJOURS essayer avec l'ID tel quel (qui peut être suffixé ou non)
+          console.log(`[useTBLTableLookup] ➡️ GET /api/treebranchleaf/nodes/${fieldId}/select-config (primary)`);
           selectConfig = await api.get<TreeBranchLeafSelectConfig>(
-            `/api/treebranchleaf/nodes/${baseFieldId}/select-config`,
+            `/api/treebranchleaf/nodes/${fieldId}/select-config`,
             { suppressErrorLogForStatuses: [404] }
           );
+          
+          // Si pas trouvé et qu'on a un suffixe, essayer avec l'ID de base (l'original)
+          if (!selectConfig && hasSuffix) {
+            console.log(`[useTBLTableLookup] ➡️ GET /api/treebranchleaf/nodes/${baseFieldId}/select-config (fallback to base ID)`);
+            selectConfig = await api.get<TreeBranchLeafSelectConfig>(
+              `/api/treebranchleaf/nodes/${baseFieldId}/select-config`,
+              { suppressErrorLogForStatuses: [404] }
+            );
+          }
+          
+          console.log(`[useTBLTableLookup] ⬅️ SelectConfig trouvée:`, selectConfig ? `nodeId=${selectConfig.nodeId}, tableRef=${selectConfig.tableReference}` : 'null');
         }
 
         if (isTargetField) console.log(`[DEBUG][Test - liste] ⬅️ Réponse select-config:`, selectConfig);

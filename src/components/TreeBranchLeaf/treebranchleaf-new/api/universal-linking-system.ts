@@ -348,24 +348,19 @@ export function extractNodeIdsFromTable(tableData: unknown): Set<string> {
   const ids = new Set<string>();
   if (!tableData || typeof tableData !== 'object') return ids;
   
-  const str = JSON.stringify(tableData);
+  const table = tableData as any;
   
-  // Extraire tous les patterns possibles AVEC suffixes
-  const uuidRegex = /([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}(?:-\d+)?)/gi;
-  let match;
-  while ((match = uuidRegex.exec(str)) !== null) {
-    ids.add(match[1]);
+  // 🔑 CRITIQUE : Ne LIER une table QUE si elle est EXPLICITEMENT déclarée comme propriétaire
+  // du nœud via la colonne "nodeId", PAS juste parce qu'un UUID apparaît dans les données !
+  
+  // Vérifier si la table a un champ "nodeId" explicite
+  if (table.nodeId && typeof table.nodeId === 'string') {
+    ids.add(table.nodeId);
   }
   
-  const nodeRegex = /(node_[a-z0-9_-]+(?:-\d+)?)/gi;
-  while ((match = nodeRegex.exec(str)) !== null) {
-    ids.add(match[1]);
-  }
-  
-  const sharedRefRegex = /(shared-ref-[a-z0-9-]+(?:-\d+)?)/gi;
-  while ((match = sharedRefRegex.exec(str)) !== null) {
-    ids.add(match[1]);
-  }
+  // Sinon, ne pas extraire aveuglément tous les UUIDs
+  // Cela évite de lier la table à des champs qui n'en ont pas besoin (comme Inclinaison-1)
+  // Les vraies sélections seront définies via TreeBranchLeafSelectConfig
   
   return ids;
 }
@@ -649,17 +644,32 @@ export async function linkTableToAllNodes(
   // 1. Extraire TOUS les nodeIds
   const nodeIds = extractNodeIdsFromTable(tableData);
   
-  // 2. Pour CHAQUE nÃ…â€œud, ajouter l'ID de la table dans linkedTableIds
+  // 2. Pour CHAQUE nœud, ajouter l'ID de la table MAIS vérifier que c'est correct
   let successCount = 0;
   let errorCount = 0;
   
   for (const nodeId of nodeIds) {
     try {
+      // 🔐 FILTRE CRITIQUE : Vérifier que le nœud cible n'est pas un INPUT pur
+      // Les champs INPUT (fieldType IS NULL) ne doivent JAMAIS avoir de linkedTableIds
+      const node = await (client as PrismaClient).treeBranchLeafNode.findUnique({
+        where: { id: nodeId },
+        select: { fieldType: true, id: true }
+      });
+      
+      if (!node) continue; // Nœud n'existe pas, ignorer
+      
+      // 🚫 NE PAS lier si fieldType = NULL (INPUT pur)
+      if (node.fieldType === null || node.fieldType === '' || node.fieldType === undefined) {
+        continue; // Skip INPUT fields
+      }
+      
+      // ✅ OK, lier la table au SELECT field
       await addToNodeLinkedField(client, nodeId, 'linkedTableIds', [tableId]);
       successCount++;
     } catch (e) {
       errorCount++;
-      console.error(`   Ã¢ÂÅ’ ${nodeId} Ã¢â€ â€™ Ãƒâ€°CHEC:`, (e as Error).message);
+      console.error(`   ✗ ${nodeId} ECHEC:`, (e as Error).message);
     }
   }
   

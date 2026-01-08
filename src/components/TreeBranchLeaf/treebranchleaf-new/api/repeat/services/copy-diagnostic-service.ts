@@ -43,14 +43,11 @@ export async function diagnoseCopyProblems(
     recommendations: []
   };
 
-  // RÃƒÂ©cupÃƒÂ©rer tous les nÃ…â€œuds copiÃƒÂ©s avec leurs capacitÃƒÂ©s
+  // Récupérer tous les nœuds copiés avec leurs tables
   const copiedNodes = await prisma.treeBranchLeafNode.findMany({
     where: { id: { in: copiedNodeIds } },
     include: {
-      TreeBranchLeafNodeFormula: true,
-      TreeBranchLeafNodeCondition: true,
-      TreeBranchLeafNodeTable: true,
-      TreeBranchLeafNodeVariable: true
+      TreeBranchLeafNodeTable: true
     }
   });
 
@@ -63,10 +60,7 @@ export async function diagnoseCopyProblems(
     const original = await prisma.treeBranchLeafNode.findUnique({
       where: { id: originalId },
       include: {
-        TreeBranchLeafNodeFormula: true,
-        TreeBranchLeafNodeCondition: true,
-        TreeBranchLeafNodeTable: true,
-        TreeBranchLeafNodeVariable: true
+        TreeBranchLeafNodeTable: true
       }
     });
 

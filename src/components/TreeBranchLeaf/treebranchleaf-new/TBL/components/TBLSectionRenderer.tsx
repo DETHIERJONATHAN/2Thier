@@ -5058,7 +5058,13 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
                             {/* 🗑️ BOUTON SUPPRIMER TOUTE LA COPIE (affiché sur le dernier champ du groupe) */}
                             {(() => {
                               const isLastInGroup = (field as any).isLastInCopyGroup === true;
-                              const isCopyField = field.id.includes('-'); // Copies have suffix like "xxx-1", "xxx-2"
+                              // 🔧 FIX: Un UUID standard a 5 segments séparés par des tirets (8-4-4-4-12 chars)
+                              // Une copie a un suffixe numérique APRÈS l'UUID: "uuid-1", "uuid-2", etc.
+                              // On vérifie si l'ID se termine par un tiret suivi de 1-3 chiffres APRÈS un UUID complet
+                              const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}-\d{1,3}$/i;
+                              const isCopyField = uuidPattern.test(field.id) || 
+                                (field as any).isDeletableCopy === true ||
+                                ((field as any).parentRepeaterId && (field as any).repeaterInstanceIndex !== undefined && (field as any).repeaterInstanceIndex > 0);
                               const shouldShowDelete = isLastInGroup && isCopyField;
                               
                               // Debug pour comprendre pourquoi le bouton n'apparaît pas

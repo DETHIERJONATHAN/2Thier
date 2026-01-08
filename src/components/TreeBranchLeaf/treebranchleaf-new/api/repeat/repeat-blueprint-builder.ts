@@ -148,13 +148,31 @@ export async function buildBlueprintForRepeater(
     }
   });
 
+  // 🔧 FIX: Nettoyer les suffixes des linkedVariableIds car certains templates
+  // peuvent référencer des variables avec des IDs suffixés (ex: var-1) qui n'existent pas en DB
+  // On doit mapper vers l'ID original de la variable
+  const cleanVariableId = (id: string): string => {
+    if (!id) return id;
+    // Pattern: UUID complet suivi de -N (suffixe de copie)
+    return id.replace(/(-\d+)+$/, '');
+  };
+
+  // Map: originalVarId -> Set<templateNodeId>
+  // Et aussi: suffixedVarId -> originalVarId (pour retrouver l'original)
+  const suffixedToOriginal = new Map<string, string>();
+
   for (const node of templateNodesWithLinks) {
     if (node.linkedVariableIds && node.linkedVariableIds.length > 0) {
       for (const varId of node.linkedVariableIds) {
-        if (!linkedVarsByNode.has(varId)) {
-          linkedVarsByNode.set(varId, new Set());
+        const cleanedId = cleanVariableId(varId);
+        if (cleanedId !== varId) {
+          suffixedToOriginal.set(varId, cleanedId);
         }
-        linkedVarsByNode.get(varId)!.add(node.id);
+        // Utiliser l'ID nettoyé comme clé
+        if (!linkedVarsByNode.has(cleanedId)) {
+          linkedVarsByNode.set(cleanedId, new Set());
+        }
+        linkedVarsByNode.get(cleanedId)!.add(node.id);
       }
     }
   }

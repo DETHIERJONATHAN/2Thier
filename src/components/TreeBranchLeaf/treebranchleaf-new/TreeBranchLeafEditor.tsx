@@ -357,6 +357,14 @@ const TreeBranchLeafEditor: React.FC<TreeBranchLeafEditorProps> = ({
           position
         });
         console.log('✅ DROP RÉUSSI !');
+        
+        // 🔄 IMPORTANT: Recharger les données pour avoir les orders corrects du serveur
+        // Le backend réindexe tous les siblings, l'optimiste ne le fait pas complètement
+        const updatedNodes = await api.get(`/api/treebranchleaf/trees/${selectedTree.id}/nodes`);
+        if (updatedNodes) {
+          onNodesUpdate(updatedNodes);
+          console.log('🔄 Données rechargées après déplacement');
+        }
       } catch (patchError: any) {
         // Tentative de fallback avec PUT
         console.warn('⚠️ PATCH échoué, tentative PUT fallback');
@@ -367,6 +375,13 @@ const TreeBranchLeafEditor: React.FC<TreeBranchLeafEditorProps> = ({
             position
           });
           console.log('✅ DROP RÉUSSI (via PUT) !');
+          
+          // 🔄 Recharger aussi après PUT
+          const updatedNodes = await api.get(`/api/treebranchleaf/trees/${selectedTree.id}/nodes`);
+          if (updatedNodes) {
+            onNodesUpdate(updatedNodes);
+            console.log('🔄 Données rechargées après déplacement (PUT)');
+          }
         } catch (putError: any) {
           // 🔄 ROLLBACK : Les deux appels ont échoué, restaurer l'état précédent
           console.error('❌ Échec serveur, rollback de la mise à jour optimiste');
@@ -392,10 +407,7 @@ const TreeBranchLeafEditor: React.FC<TreeBranchLeafEditorProps> = ({
         }
       }
 
-      // ✅ PAS de GET après PATCH : on fait confiance à la mise à jour optimiste
-      // Le serveur a confirmé que tout est OK, inutile de tout recharger et perdre la hiérarchie
-      
-      // Resynchroniser selectedNode
+      // Resynchroniser selectedNode (après rechargement des données)
       setUIState(prev => {
         if (!prev.selectedNode) return prev;
         // Chercher dans la hiérarchie optimiste
@@ -757,8 +769,11 @@ const TreeBranchLeafEditor: React.FC<TreeBranchLeafEditorProps> = ({
     }
 
     try {
+      // 🔧 FIX: Aplatir la hiérarchie pour trouver les siblings correctement
+      const flatNodes = flattenNodes(nodesRef.current);
+      
       // Trouver le sibling précédent sous le même parent
-      const siblings = (nodesRef.current || [])
+      const siblings = flatNodes
         .filter(n => (n.parentId || null) === (node.parentId || null))
         .sort((a, b) => {
           const od = (a.order ?? 0) - (b.order ?? 0);
@@ -798,8 +813,11 @@ const TreeBranchLeafEditor: React.FC<TreeBranchLeafEditorProps> = ({
     }
 
     try {
+      // 🔧 FIX: Aplatir la hiérarchie pour trouver les siblings correctement
+      const flatNodes = flattenNodes(nodesRef.current);
+      
       // Trouver le sibling suivant sous le même parent
-      const siblings = (nodesRef.current || [])
+      const siblings = flatNodes
         .filter(n => (n.parentId || null) === (node.parentId || null))
         .sort((a, b) => {
           const od = (a.order ?? 0) - (b.order ?? 0);
@@ -1051,8 +1069,15 @@ const TreeBranchLeafEditor: React.FC<TreeBranchLeafEditorProps> = ({
       if (target.position === 'before' || target.position === 'after') {
         const sibling = map.get(String(target.nodeId));
         if (!sibling) return isRootTypeAllowed(sourceNodeType);
-        parentNode = sibling.parentId ? map.get(String(sibling.parentId)) : undefined;
-        if (!parentNode) return isRootTypeAllowed(sourceNodeType);
+        
+        // Si le sibling n'a pas de parentId, il est à la racine
+        if (sibling.parentId) {
+          parentNode = map.get(String(sibling.parentId));
+        }
+        
+        if (!parentNode) {
+          return isRootTypeAllowed(sourceNodeType);
+        }
       } else {
         parentNode = map.get(String(target.nodeId));
         if (!parentNode) return isRootTypeAllowed(sourceNodeType);
@@ -1061,6 +1086,7 @@ const TreeBranchLeafEditor: React.FC<TreeBranchLeafEditorProps> = ({
       return canBeChildOf(sourceNodeType, parentNode.type);
     } catch (e) {
       console.warn('[validateHierarchicalDrop] Exception', e);
+      return false;
       return false;
     }
   }, [propNodes]);
@@ -1110,7 +1136,6 @@ const TreeBranchLeafEditor: React.FC<TreeBranchLeafEditorProps> = ({
 
   const handleDragStart = useCallback((event: DragStartEvent) => {
     const { active } = event;
-    console.log(`🔥 DRAG START - ID: ${active.id}`);
     const dragItem: DragItem = {
       id: String(active.id),
       type: active.data.current?.type || 'node',
@@ -1148,7 +1173,6 @@ const TreeBranchLeafEditor: React.FC<TreeBranchLeafEditorProps> = ({
 
   const handleDragEnd = useCallback(async (event: DragEndEvent) => {
     const { over } = event;
-    console.log(`🎯 DRAG END - Over: ${over?.id}, Dragged: ${draggedItem?.id}, ValidDrop: ${validDrop}`);
 
     if (!over || !draggedItem || !validDrop) {
       setDraggedItem(null);
@@ -1165,8 +1189,6 @@ const TreeBranchLeafEditor: React.FC<TreeBranchLeafEditorProps> = ({
       accepts: over.data.current?.accepts || [],
       slot: over.data.current?.slot
     };
-
-    console.log(`🚀 EXECUTING DROP:`, { draggedItem, targetData });
 
     try {
       if (draggedItem.type === 'palette-item') {

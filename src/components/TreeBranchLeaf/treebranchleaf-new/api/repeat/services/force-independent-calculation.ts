@@ -20,10 +20,9 @@ export async function forceIndependentCalculation(
       const node = await prisma.treeBranchLeafNode.findUnique({
         where: { id: nodeId },
         include: {
-          TreeBranchLeafNodeFormula: true,
-          TreeBranchLeafNodeCondition: true,
           TreeBranchLeafNodeTable: true,
-          TreeBranchLeafNodeVariable: true
+          TreeBranchLeafNodeVariable: true,
+          TreeBranchLeafSelectConfig: true
         }
       });
 
