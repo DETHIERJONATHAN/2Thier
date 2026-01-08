@@ -282,50 +282,108 @@ async function saveUserEntriesNeutral(
   return saved;
 }
 
-// Réutilisables: évaluation et sauvegarde des capacités pour une soumission (NO-OP)
+/**
+ * 🔥 FONCTION UNIFIÉE D'ÉVALUATION DES CAPACITÉS
+ * 
+ * Cette fonction évalue TOUTES les capacités (formules, conditions, tables) pour un arbre
+ * et stocke les résultats :
+ * - Display fields (leaf_field, DISPLAY) → UNIQUEMENT dans TreeBranchLeafNode.calculatedValue
+ * - Autres capacités → dans SubmissionData (pour les champs non-display)
+ * 
+ * @param submissionId - ID de la soumission
+ * @param organizationId - ID de l'organisation
+ * @param userId - ID de l'utilisateur
+ * @param treeId - ID de l'arbre
+ * @param formData - 🔑 NOUVEAU: Données fraîches du formulaire pour évaluation réactive
+ */
 async function evaluateCapacitiesForSubmission(
   submissionId: string,
   organizationId: string,
   userId: string | null,
-  treeId: string
+  treeId: string,
+  formData?: Record<string, unknown>
 ) {
-  // Capacités pour l'arbre
-  const capacities = await prisma.treeBranchLeafNodeVariable.findMany({
+  // 🔑 ÉTAPE 1: Construire le valueMap avec les données fraîches du formulaire
+  const valueMap = new Map<string, unknown>();
+  
+  if (formData && typeof formData === 'object') {
+    // Appliquer les données du formulaire au valueMap (avec résolution des sharedReferences)
+    const entries = Object.entries(formData).filter(([k]) => !k.startsWith('__'));
+    await applySharedReferenceValues(valueMap, entries as Array<[string, unknown]>, treeId);
+    console.log(`🔑 [EVALUATE] valueMap initialisé avec ${valueMap.size} entrées depuis formData`);
+  }
+  
+  // Capacités pour l'arbre (triées: formules simples d'abord, sum-total ensuite)
+  const capacitiesRaw = await prisma.treeBranchLeafNodeVariable.findMany({
     where: { TreeBranchLeafNode: { treeId }, sourceRef: { not: null } },
     include: { TreeBranchLeafNode: { select: { id: true, label: true, fieldType: true, type: true } } }
   });
+  
+  // 🔑 TRIER: formules simples d'abord, sum-total ensuite
+  const capacities = capacitiesRaw.sort((a, b) => {
+    const aIsSumFormula = a.sourceRef?.includes('sum-formula') || a.sourceRef?.includes('sum-total') ? 1 : 0;
+    const bIsSumFormula = b.sourceRef?.includes('sum-formula') || b.sourceRef?.includes('sum-total') ? 1 : 0;
+    return aIsSumFormula - bIsSumFormula;
+  });
 
-  const _tblContext = {
-    submissionId,
-    labelMap: new Map<string, string | null>(),
-    valueMap: new Map<string, unknown>(),
-    organizationId,
-    userId: userId || 'unknown-user',
-    treeId
+  const results: { updated: number; created: number; stored: number; displayFieldsUpdated: number } = { 
+    updated: 0, created: 0, stored: 0, displayFieldsUpdated: 0 
   };
-
-  const results: { updated: number; created: number; stored: number } = { updated: 0, created: 0, stored: 0 };
-  const calculatedValuesToStore: { nodeId: string; calculatedValue: string | number | boolean; calculatedBy?: string }[] = [];
+  
+  // 🎯 UNIQUEMENT pour les display fields - JAMAIS SubmissionData
+  const displayFieldValuesToStore: { nodeId: string; calculatedValue: string | number | boolean; calculatedBy?: string }[] = [];
 
   for (const capacity of capacities) {
     const sourceRef = capacity.sourceRef!;
     
-    // 🚫 SKIP les display fields - ils ne doivent JAMAIS être persistés
+    // 🎯 DÉTECTION des display fields: leaf_field copiés OU type DISPLAY
     const isDisplayField = capacity.TreeBranchLeafNode?.fieldType === 'DISPLAY' 
-      || capacity.TreeBranchLeafNode?.type === 'DISPLAY';
-    
-    if (isDisplayField) {
-      console.log(`🚫 [TBL CAPACITY] Display field ignoré: ${capacity.nodeId} (${capacity.TreeBranchLeafNode?.label})`);
-      continue; // Skip complètement ce capacity
-    }
+      || capacity.TreeBranchLeafNode?.type === 'DISPLAY'
+      || capacity.TreeBranchLeafNode?.type === 'leaf_field';
     
     try {
-      // ✨ UTILISATION DU SYSTÈME UNIFIÉ operation-interpreter.ts
+      // ✨ ÉVALUATION avec le valueMap contenant les données FRAÎCHES
       const capacityResult = await evaluateVariableOperation(
         capacity.nodeId,
         submissionId,
-        prisma
+        prisma,
+        valueMap  // 🔑 PASSER LE VALUEMAP avec les données fraîches !
       );
+      
+      // Extraire la valeur calculée
+      const rawValue = (capacityResult as { value?: unknown; calculatedValue?: unknown; result?: unknown }).value
+        ?? (capacityResult as { calculatedValue?: unknown }).calculatedValue
+        ?? (capacityResult as { result?: unknown }).result;
+      const stringified = rawValue === null || rawValue === undefined ? null : String(rawValue).trim();
+      const hasValidValue = rawValue !== null && rawValue !== undefined && stringified !== '' && stringified !== '∅';
+      
+      // 🔑 AJOUTER la valeur au valueMap pour les calculs suivants (chaînage)
+      if (hasValidValue) {
+        valueMap.set(capacity.nodeId, rawValue);
+      }
+      
+      // 🎯 DISPLAY FIELDS: UNIQUEMENT dans calculatedValue, JAMAIS dans SubmissionData
+      if (isDisplayField) {
+        if (hasValidValue) {
+          let normalizedValue: string | number | boolean;
+          if (typeof rawValue === 'number' || typeof rawValue === 'boolean') {
+            normalizedValue = rawValue;
+          } else {
+            normalizedValue = String(rawValue);
+          }
+
+          displayFieldValuesToStore.push({
+            nodeId: capacity.nodeId,
+            calculatedValue: normalizedValue,
+            calculatedBy: `reactive-${userId || 'unknown'}`
+          });
+          console.log(`✅ [DISPLAY FIELD] ${capacity.nodeId} (${capacity.TreeBranchLeafNode?.label}) = ${normalizedValue}`);
+        }
+        // ❌ SKIP: Ne JAMAIS persister dans SubmissionData pour les display fields
+        continue;
+      }
+      
+      // 📦 AUTRES CAPACITÉS (non-display): Persister dans SubmissionData
       const normalizedOperationSource: OperationSourceType = (typeof capacityResult.operationSource === 'string'
         ? (capacityResult.operationSource as string).toLowerCase()
         : 'neutral') as OperationSourceType;
@@ -357,7 +415,7 @@ async function evaluateCapacitiesForSubmission(
           await prisma.treeBranchLeafSubmissionData.update({
             where: key,
             data: {
-              value: null,
+              value: hasValidValue ? String(rawValue) : null,
               sourceRef,
               operationSource: normalizedOperationSource,
               fieldLabel: capacity.TreeBranchLeafNode?.label || null,
@@ -373,7 +431,7 @@ async function evaluateCapacitiesForSubmission(
             id: `${submissionId}-${capacity.nodeId}-cap-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
             submissionId,
             nodeId: capacity.nodeId,
-            value: null,
+            value: hasValidValue ? String(rawValue) : null,
             sourceRef,
             operationSource: normalizedOperationSource,
             fieldLabel: capacity.TreeBranchLeafNode?.label || null,
@@ -383,63 +441,23 @@ async function evaluateCapacitiesForSubmission(
         });
         results.created++;
       }
-
-      const rawValue = (capacityResult as { value?: unknown; calculatedValue?: unknown; result?: unknown }).value
-        ?? (capacityResult as { calculatedValue?: unknown }).calculatedValue
-        ?? (capacityResult as { result?: unknown }).result;
-      const stringified = rawValue === null || rawValue === undefined ? null : String(rawValue).trim();
-      if (rawValue !== null && rawValue !== undefined && stringified !== '' && stringified !== '∅') {
-        let normalizedValue: string | number | boolean;
-        if (typeof rawValue === 'number' || typeof rawValue === 'boolean') {
-          normalizedValue = rawValue;
-        } else {
-          normalizedValue = String(rawValue);
-        }
-
-        calculatedValuesToStore.push({
-          nodeId: capacity.nodeId,
-          calculatedValue: normalizedValue,
-          calculatedBy: `submission-${submissionId}`
-        });
-      }
     } catch (error) {
       console.error(`[TBL CAPACITY ERROR] ${sourceRef}:`, error);
     }
   }
 
-  if (calculatedValuesToStore.length > 0) {
+  // 🎯 STOCKER les display fields UNIQUEMENT dans TreeBranchLeafNode.calculatedValue
+  if (displayFieldValuesToStore.length > 0) {
     try {
-      // 🚨 IMPORTANT : Récupérer les infos des nodes pour filtrer les DISPLAY fields
-      const nodeIds = calculatedValuesToStore.map(v => v.nodeId);
-      const nodesInfo = await prisma.treeBranchLeafNode.findMany({
-        where: { id: { in: nodeIds } },
-        select: { id: true, fieldType: true, type: true }
-      });
-      const displayFieldIds = new Set(
-        nodesInfo
-          .filter(n => n.fieldType === 'DISPLAY' || n.type === 'DISPLAY')
-          .map(n => n.id)
-      );
-      
-      // 🚫 Filtrer les display fields AVANT de stocker
-      const valuesToStoreFiltered = calculatedValuesToStore.filter(v => {
-        if (displayFieldIds.has(v.nodeId)) {
-          console.log(`🚫 [TBL CAPACITY STORE] Display field exclu de la persistence: ${v.nodeId}`);
-          return false;
-        }
-        return true;
-      });
-      
-      if (valuesToStoreFiltered.length > 0) {
-        const storeResult = await storeCalculatedValues(valuesToStoreFiltered, submissionId);
-        results.stored = storeResult.stored;
-        console.log(`[TBL CAPACITY STORE] ✅ ${results.stored} valeurs stockées (${displayFieldIds.size} display fields exclus)`);
-        if (!storeResult.success && storeResult.errors.length > 0) {
-          console.warn('[TBL CAPACITY STORE] Certaines valeurs n\'ont pas pu être enregistrées:', storeResult.errors);
-        }
+      console.log(`🎯 [DISPLAY FIELDS] Stockage de ${displayFieldValuesToStore.length} display fields dans calculatedValue`);
+      const displayStoreResult = await storeCalculatedValues(displayFieldValuesToStore, submissionId);
+      results.displayFieldsUpdated = displayStoreResult.stored;
+      console.log(`✅ [DISPLAY FIELDS] ${displayStoreResult.stored} display fields mis à jour dans calculatedValue`);
+      if (!displayStoreResult.success && displayStoreResult.errors.length > 0) {
+        console.warn('[DISPLAY FIELDS] Erreurs:', displayStoreResult.errors);
       }
-    } catch (storeError) {
-      console.error('[TBL CAPACITY STORE] Erreur lors du stockage des valeurs calculées:', storeError);
+    } catch (displayStoreError) {
+      console.error('[DISPLAY FIELDS] Erreur stockage:', displayStoreError);
     }
   }
 
@@ -927,9 +945,9 @@ router.post('/submissions/create-and-evaluate', async (req, res) => {
       
       console.log(`🎯 [TBL CREATE-AND-EVALUATE] ${capacities.length} capacités trouvées`);
       
-      // C. Évaluer et persister les capacités avec NO-OP
-      const evalStats = await evaluateCapacitiesForSubmission(submissionId!, organizationId!, userId || null, effectiveTreeId);
-      console.log(`✅ [TBL CREATE-AND-EVALUATE] Capacités: ${evalStats.updated} mises à jour, ${evalStats.created} créées, ${evalStats.stored} valeurs stockées`);
+      // C. Évaluer et persister les capacités avec NO-OP - 🔑 PASSER LE FORMDATA pour réactivité !
+      const evalStats = await evaluateCapacitiesForSubmission(submissionId!, organizationId!, userId || null, effectiveTreeId, cleanFormData);
+      console.log(`✅ [TBL CREATE-AND-EVALUATE] Capacités: ${evalStats.updated} mises à jour, ${evalStats.created} créées, ${evalStats.displayFieldsUpdated} display fields réactifs`);
     }
     
     // 3. Évaluation immédiate déjà effectuée via operation-interpreter ci-dessus.
@@ -1013,8 +1031,8 @@ router.put('/submissions/:submissionId/update-and-evaluate', async (req, res) =>
       await prisma.treeBranchLeafSubmission.update({ where: { id: submissionId }, data: updateData });
     }
 
-    // 3) Évaluer et persister les capacités liées à l'arbre
-    const stats = await evaluateCapacitiesForSubmission(submissionId, organizationId, userId, submission.treeId);
+    // 3) Évaluer et persister les capacités liées à l'arbre - 🔑 PASSER LE FORMDATA pour réactivité !
+    const stats = await evaluateCapacitiesForSubmission(submissionId, organizationId, userId, submission.treeId, cleanFormData);
 
     // 4) Retourner la soumission complète
     const finalSubmission = await prisma.treeBranchLeafSubmission.findUnique({
@@ -1024,7 +1042,7 @@ router.put('/submissions/:submissionId/update-and-evaluate', async (req, res) =>
 
     return res.json({
       success: true,
-      message: `Soumission mise à jour (${saved} entrées) et évaluée (${stats.updated} mises à jour, ${stats.created} créées, ${stats.stored} valeurs stockées)`,
+      message: `Soumission mise à jour (${saved} entrées) et évaluée (${stats.updated} mises à jour, ${stats.created} créées, ${stats.displayFieldsUpdated} display fields réactifs)`,
       submission: finalSubmission
     });
 
@@ -1045,6 +1063,16 @@ router.put('/submissions/:submissionId/update-and-evaluate', async (req, res) =>
 router.post('/submissions/preview-evaluate', async (req, res) => {
   try {
     const { treeId, formData, baseSubmissionId, leadId } = req.body || {};
+
+    // 🔍 DEBUG: Log formData pour voir quelles clés sont envoyées par le frontend
+    if (formData) {
+      const keys = Object.keys(formData).filter(k => !k.startsWith('__'));
+      const orientationKeys = keys.filter(k => k.includes('c071a466') || k.includes('Orientation'));
+      const inclinaisonKeys = keys.filter(k => k.includes('76a40eb1') || k.includes('Inclinaison'));
+      console.log('🔍 [PREVIEW-EVALUATE DEBUG] formData keys contenant Orientation:', orientationKeys);
+      console.log('🔍 [PREVIEW-EVALUATE DEBUG] formData keys contenant Inclinaison:', inclinaisonKeys);
+      console.log('🔍 [PREVIEW-EVALUATE DEBUG] Toutes les clés -1:', keys.filter(k => k.endsWith('-1')));
+    }
 
     const organizationId = req.headers['x-organization-id'] as string || (req as AuthenticatedRequest).user?.organizationId;
     // 🔑 Récupérer userId depuis le header X-User-Id ou le middleware auth
@@ -1332,7 +1360,7 @@ router.post('/submissions/preview-evaluate', async (req, res) => {
 
     // 💾 STOCKER LES VALEURS CALCULÉES DANS PRISMA
     try {
-      // 🚨 IMPORTANT : Récupérer les infos des nodes pour filtrer les DISPLAY fields
+      // 🚨 IMPORTANT : Récupérer les infos des nodes pour identifier les DISPLAY fields
       const nodeIds = results.map(r => r.nodeId);
       const nodesInfo = await prisma.treeBranchLeafNode.findMany({
         where: { id: { in: nodeIds } },
@@ -1340,17 +1368,42 @@ router.post('/submissions/preview-evaluate', async (req, res) => {
       });
       const displayFieldIds = new Set(
         nodesInfo
-          .filter(n => n.fieldType === 'DISPLAY' || n.type === 'DISPLAY')
+          .filter(n => n.fieldType === 'DISPLAY' || n.type === 'DISPLAY' || n.type === 'leaf_field')
           .map(n => n.id)
       );
       
+      // 🎯 DISPLAY FIELDS: Stocker dans calculatedValue (PAS dans SubmissionData)
+      const displayFieldValues = results
+        .filter(r => displayFieldIds.has(r.nodeId))
+        .map(r => {
+          const candidate = r.value ?? (r as { calculatedValue?: unknown }).calculatedValue;
+          return { ...r, candidate };
+        })
+        .filter(r => {
+          if (r.candidate === null || r.candidate === undefined) return false;
+          const strValue = String(r.candidate).trim();
+          if (strValue === '' || strValue === '∅') return false;
+          return true;
+        })
+        .map(r => ({
+          nodeId: r.nodeId,
+          calculatedValue: String(r.candidate),
+          calculatedBy: `preview-${userId}`
+        }));
+
+      if (displayFieldValues.length > 0) {
+        console.log(`🎯 [PREVIEW] Stockage de ${displayFieldValues.length} display fields dans calculatedValue`);
+        await storeCalculatedValues(displayFieldValues, submissionId);
+      }
+      
+      // 🔥 AUTRES CHAMPS: Ne PAS stocker les display fields dans SubmissionData
       const calculatedValues = results
         .map(r => {
           const candidate = r.value ?? (r as { calculatedValue?: unknown }).calculatedValue;
           return { ...r, candidate };
         })
         .filter(r => {
-          // 🚫 EXCLURE les display fields - ils ne doivent JAMAIS être persistés
+          // 🚫 EXCLURE les display fields de SubmissionData - ils sont dans calculatedValue
           if (displayFieldIds.has(r.nodeId)) {
             return false;
           }
@@ -1371,6 +1424,7 @@ router.post('/submissions/preview-evaluate', async (req, res) => {
       }
     } catch (storeError) {
       // Silencieux - ne pas bloquer la réponse si le stockage échoue
+      console.error('[PREVIEW] Erreur stockage:', storeError);
     }
 
     return res.json({

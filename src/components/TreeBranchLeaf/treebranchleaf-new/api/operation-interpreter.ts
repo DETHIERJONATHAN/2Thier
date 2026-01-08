@@ -32,7 +32,7 @@ import { PrismaClient } from '@prisma/client';
 import { evaluateExpression } from './formulaEngine.js';
 
 function formatDebugValue(value: unknown): string {
-  if (value === null || value === undefined) return 'Ã¢Ë†â€¦';
+  if (value === null || value === undefined) return '∅';
   if (typeof value === 'string') {
     return value.length > 120 ? `${value.slice(0, 117)}...` : value;
   }
@@ -636,7 +636,7 @@ async function interpretReference(
   if (depth > 10) {
     console.error(`[INTERPRÃƒâ€°TATION] Ã¢ÂÅ’ RÃƒÂ©cursion trop profonde (depth=${depth}) pour ref:`, ref);
     return {
-      result: 'Ã¢Ë†â€¦',
+      result: '∅',
       humanText: 'Ã¢Å¡Â Ã¯Â¸Â RÃƒÂ©cursion trop profonde',
       details: {
         type: 'error',
@@ -696,7 +696,7 @@ async function interpretReference(
       default:
         console.error(`[INTERPRÃƒâ€°TATION] Ã¢ÂÅ’ Type inconnu: ${type}`);
         result = {
-          result: 'Ã¢Ë†â€¦',
+          result: '∅',
           humanText: `Type inconnu: ${type}`,
           details: { type: 'error', error: 'Unknown type' }
         };
@@ -705,7 +705,7 @@ async function interpretReference(
     // Gestion des erreurs d'interprÃƒÂ©tation
     console.error(`[INTERPRÃƒâ€°TATION] Ã¢ÂÅ’ Erreur lors de l'interprÃƒÂ©tation:`, error);
     result = {
-      result: 'Ã¢Ë†â€¦',
+      result: '∅',
       humanText: `Erreur: ${error instanceof Error ? error.message : 'Inconnue'}`,
       details: {
         type: 'error',
@@ -750,7 +750,7 @@ async function interpretReference(
  * SINON : Utiliser la valeur saisie = Prix Kw/h
  * 
  * RÃƒÂ©sultat affichÃƒÂ© :
- * "Si Prix Kw/h(Ã¢Ë†â€¦) est vide; 
+ * "Si Prix Kw/h(∅) est vide; 
  *  ALORS: Calcul du prix Kw/h(1250)/Consommation(5000) = 0.25; 
  *  SINON: Prix Kw/h(150) = 150 
  *  Ã¢â€ â€™ [ALORS SÃƒâ€°LECTIONNÃƒâ€°] Result = 0.25"
@@ -851,7 +851,7 @@ async function interpretCondition(
   if (!condition) {
     // Log supprim�
     return {
-      result: 'Ã¢Ë†â€¦',
+      result: '∅',
       humanText: `Condition introuvable: ${conditionId}`,
       details: { type: 'condition', error: 'Not found' }
     };
@@ -868,7 +868,7 @@ async function interpretCondition(
   if (!when) {
     // Log supprim�
     return {
-      result: 'Ã¢Ë†â€¦',
+      result: '∅',
       humanText: 'Structure condition invalide',
       details: { type: 'condition', error: 'Missing WHEN' }
     };
@@ -983,7 +983,7 @@ async function interpretCondition(
   // Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
   
   // Ã°Å¸â€œÅ’ InterprÃƒÂ©ter la branche ALORS
-  let alorsResult: InterpretResult = { result: 'Ã¢Ë†â€¦', humanText: 'Aucune action' };
+  let alorsResult: InterpretResult = { result: '∅', humanText: 'Aucune action' };
   
   if (branch && branch.actions && branch.actions.length > 0) {
     const alorsAction = branch.actions[0];
@@ -1003,7 +1003,7 @@ async function interpretCondition(
   }
   
   // Ã°Å¸â€œÅ’ InterprÃƒÂ©ter la branche SINON
-  let sinonResult: InterpretResult = { result: 'Ã¢Ë†â€¦', humanText: 'Aucune action' };
+  let sinonResult: InterpretResult = { result: '∅', humanText: 'Aucune action' };
   
   if (condSet.fallback && condSet.fallback.actions && condSet.fallback.actions.length > 0) {
     const sinonAction = condSet.fallback.actions[0];
@@ -1026,7 +1026,7 @@ async function interpretCondition(
   // Ã°Å¸â€œÂ Ãƒâ€°TAPE 8 : Construire le texte humain COMPLET (les 2 branches)
   // Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
   const operatorText = getOperatorText(operator);
-  const leftDisplay = `${leftLabel}(${leftValue || 'Ã¢Ë†â€¦'})`;
+  const leftDisplay = `${leftLabel}(${leftValue || '∅'})`;
   const rightDisplay = rightLabel !== 'Inconnu' ? `${rightLabel}` : '';
   
   // Construction de la condition
@@ -1498,7 +1498,7 @@ async function interpretFormula(
   if (!formula) {
     // Formule introuvable - silencieux en preview
     return {
-      result: 'Ã¢Ë†â€¦',
+      result: '∅',
       humanText: `Formule introuvable: ${formulaId}`,
       details: { type: 'formula', error: 'Not found' }
     };
@@ -1583,7 +1583,7 @@ async function interpretFormula(
   } catch (error) {
     console.error('[FORMULE] Ã¢ÂÅ’ Erreur evaluateExpression:', error);
     return {
-      result: 'Ã¢Ë†â€¦',
+      result: '∅',
       humanText: 'Erreur de calcul de la formule',
       details: {
         type: 'formula',
@@ -1870,7 +1870,7 @@ async function interpretTable(
   if (!table) {
     // Valeur introuvable - silencieux
     return {
-      result: 'Ã¢Ë†â€¦',
+      result: '∅',
       humanText: `Table introuvable: ${tableId}`,
       details: { type: 'table', error: 'Not found' }
     };
@@ -1941,7 +1941,7 @@ async function interpretTable(
   if (!isLookupActive) {
     console.error(`[TABLE] Ã¢ÂÅ’ Lookup non configurÃƒÂ© ou dÃƒÂ©sactivÃƒÂ©`);
     return {
-      result: 'Ã¢Ë†â€¦',
+      result: '∅',
       humanText: `Lookup non configurÃƒÂ© pour table ${table.name}`,
       details: { type: 'table', error: 'Lookup not enabled' }
     };
@@ -1993,7 +1993,7 @@ async function interpretTable(
     
     if (!colSelectorValue) {
       return {
-        result: 'Ã¢Ë†â€¦',
+        result: '∅',
         humanText: `Table "${table.name}" - Aucune sÃƒÂ©lection colonne`,
         details: { type: 'table', mode: 1, error: 'No column selection' }
       };
@@ -2296,7 +2296,7 @@ async function interpretTable(
     
     if (!rowSelectorValue) {
       return {
-        result: 'Ã¢Ë†â€¦',
+        result: '∅',
         humanText: `Table "${table.name}" - Aucune sÃƒÂ©lection ligne`,
         details: { type: 'table', mode: 2, error: 'No row selection' }
       };
@@ -2539,7 +2539,7 @@ async function interpretTable(
   else {
     console.error(`[TABLE] Ã¢ÂÅ’ Configuration lookup invalide`);
     return {
-      result: 'Ã¢Ë†â€¦',
+      result: '∅',
       humanText: `Configuration lookup invalide pour table ${table.name}`,
       details: { type: 'table', error: 'Invalid configuration' }
     };
@@ -2584,7 +2584,7 @@ async function interpretTable(
   
   if (!rowSelectorValue || !colSelectorValue) {
     return {
-      result: 'Ã¢Ë†â€¦',
+      result: '∅',
       humanText: `Table "${table.name}"[${rowLabel}(${rowSelectorValue || '?'}), ${colLabel}(${colSelectorValue || '?'})] = aucune sÃƒÂ©lection`,
       details: { type: 'table', error: 'Missing selection' }
     };
@@ -2679,7 +2679,7 @@ async function interpretTable(
   if (finalRowIndex === -1 || finalColIndex === -1) {
     // Valeur introuvable - silencieux
     return {
-      result: 'Ã¢Ë†â€¦',
+      result: '∅',
       humanText: `Table "${table.name}"[${actualRowValue}, ${actualColValue}] = valeur introuvable`,
       details: { type: 'table', error: 'Value not found in rows/columns' }
     };
@@ -2699,7 +2699,7 @@ async function interpretTable(
   if (dataRowIndex < 0 || dataColIndex < 0 || !data[dataRowIndex]) {
     console.error(`[TABLE] Ã¢ÂÅ’ Index hors limites`);
     return {
-      result: 'Ã¢Ë†â€¦',
+      result: '∅',
       humanText: `Table "${table.name}"[${actualRowValue}, ${actualColValue}] = hors limites`,
       details: { type: 'table', error: 'Index out of bounds' }
     };
@@ -2978,7 +2978,7 @@ export async function evaluateVariableOperation(
   
   // CAS 3 : Valeur par dÃƒÂ©faut
   return {
-    value: variable.defaultValue || 'Ã¢Ë†â€¦',
+    value: variable.defaultValue || '∅',
     operationDetail: { type: 'default', value: variable.defaultValue },
     operationResult: `Valeur par dÃƒÂ©faut: ${variable.defaultValue || 'aucune'}`,
     operationSource: 'field',

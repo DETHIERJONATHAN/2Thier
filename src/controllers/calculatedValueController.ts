@@ -145,7 +145,38 @@ router.get('/:nodeId/calculated-value', async (req: Request, res: Response) => {
       return res.status(404).json({ error: 'Nœud non trouvé' });
     }
 
-    const preferSubmissionData = Boolean(submissionId);
+    // 🎯 RÈGLE CRITIQUE: Les champs d'AFFICHAGE ne doivent JAMAIS utiliser les submissions
+    // Ils lisent UNIQUEMENT depuis TreeBranchLeafNode.calculatedValue
+    const isDisplayField = node.fieldType === 'DISPLAY' || node.type === 'DISPLAY' || node.type === 'leaf_field';
+    
+    // 🔥 FIX: Pour les display fields, TOUJOURS retourner calculatedValue directement
+    if (isDisplayField && node.calculatedValue) {
+      const existingValue = node.calculatedValue;
+      const hasValidExistingValue = existingValue && 
+        existingValue !== '' && 
+        existingValue !== '0' && 
+        existingValue !== '[]' &&
+        existingValue !== 'null' &&
+        existingValue !== 'undefined';
+      
+      if (hasValidExistingValue) {
+        console.log(`✅ [CalculatedValueController] Display field "${node.label}" - retour direct du calculatedValue:`, existingValue);
+        return res.json({
+          success: true,
+          nodeId: node.id,
+          label: node.label,
+          value: parseStoredStringValue(existingValue),
+          calculatedAt: toIsoString(node.calculatedAt),
+          calculatedBy: node.calculatedBy,
+          type: node.type,
+          fieldType: node.fieldType,
+          fromStoredValue: true,
+          isDisplayField: true
+        });
+      }
+    }
+
+    const preferSubmissionData = Boolean(submissionId) && !isDisplayField; // 🔥 Ne PAS préférer submission pour display fields
     const forceFlag =
       pickQueryString('force') ||
       pickQueryString('forceRefresh') ||
@@ -318,7 +349,7 @@ router.get('/:nodeId/calculated-value', async (req: Request, res: Response) => {
       existingValue !== 'null' &&
       existingValue !== 'undefined';
     
-    // Si on a déjà une valeur valide, la retourner directement sans recalculer
+    // Si on a déjà une valeur valide (et ce n'est pas une copie repeater), la retourner directement sans recalculer
     if (hasValidExistingValue) {
       return res.json({
         success: true,

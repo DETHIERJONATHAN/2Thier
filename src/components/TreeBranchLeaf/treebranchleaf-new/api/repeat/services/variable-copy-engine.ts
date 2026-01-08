@@ -1105,10 +1105,22 @@ export async function copyVariableWithCapacities(
               }
               
               if (copiedTableIds.length > 0) {
-                await prisma.treeBranchLeafNode.update({
+                // 🔧 FIX 08/01/2026: SEULEMENT mettre hasTable: true si le nœud n'est pas un INPUT
+                // Sinon Orienation-inclinaison-1 (un champ affichage/composite) aurait hasTable: true incorrectement
+                // ce qui ferait que calculatedValue serait null (cf. deep-copy-service ligne 398)
+                const displayNode = await prisma.treeBranchLeafNode.findUnique({
                   where: { id: displayNodeId },
-                  data: { hasTable: true, linkedTableIds: copiedTableIds }
+                  select: { fieldType: true }
                 });
+                
+                const isInputField = !displayNode || !displayNode.fieldType || displayNode.fieldType === '' || displayNode.fieldType === null;
+                
+                if (!isInputField) {
+                  await prisma.treeBranchLeafNode.update({
+                    where: { id: displayNodeId },
+                    data: { hasTable: true, linkedTableIds: copiedTableIds }
+                  });
+                }
               }
             }
 

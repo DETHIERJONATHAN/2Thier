@@ -31577,10 +31577,17 @@ async function copyVariableWithCapacities(originalVarId, suffix, newNodeId, pris
                   }
                 }
                 if (copiedTableIds.length > 0) {
-                  await prisma49.treeBranchLeafNode.update({
+                  const displayNode = await prisma49.treeBranchLeafNode.findUnique({
                     where: { id: displayNodeId2 },
-                    data: { hasTable: true, linkedTableIds: copiedTableIds }
+                    select: { fieldType: true }
                   });
+                  const isInputField = !displayNode || !displayNode.fieldType || displayNode.fieldType === "" || displayNode.fieldType === null;
+                  if (!isInputField) {
+                    await prisma49.treeBranchLeafNode.update({
+                      where: { id: displayNodeId2 },
+                      data: { hasTable: true, linkedTableIds: copiedTableIds }
+                    });
+                  }
                 }
               }
             } catch (copyCapErr) {
@@ -56284,8 +56291,9 @@ router75.get("/:nodeId/calculated-value", async (req2, res) => {
     const hasFormulaVariable = variableMeta2?.sourceRef?.startsWith("node-formula:");
     const hasConditionVariable = variableMeta2?.sourceRef?.startsWith("condition:");
     const hasTreeSourceVariable = variableMeta2?.sourceType === "tree" && (hasFormulaVariable || hasConditionVariable);
+    const isRepeaterCopy = nodeId.match(/-\d+$/) !== null;
     const existingValue = node.calculatedValue;
-    const hasValidExistingValue = existingValue && existingValue !== "" && existingValue !== "0" && existingValue !== "[]" && existingValue !== "null" && existingValue !== "undefined";
+    const hasValidExistingValue = !isRepeaterCopy && existingValue && existingValue !== "" && existingValue !== "0" && existingValue !== "[]" && existingValue !== "null" && existingValue !== "undefined";
     if (hasValidExistingValue) {
       return res.json({
         success: true,

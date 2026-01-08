@@ -13,6 +13,7 @@ import { copyVariableWithCapacities } from './variable-copy-engine.js';
 import { deriveRepeatContextFromMetadata } from './repeat-context-utils.js';
 import { copyFormulaCapacity } from '../../copy-capacity-formula.js';
 import { TableLookupDuplicationService } from './table-lookup-duplication-service';
+import { applySuffixToSourceRef } from '../utils/source-ref.js';
 
 export interface DeepCopyOptions {
   targetParentId?: string | null;
@@ -1487,7 +1488,7 @@ export async function deepCopyNodeInternal(
             metadata: originalVar.metadata || {},
             fixedValue: originalVar.fixedValue,
             selectedNodeId: originalVar.selectedNodeId,
-            sourceRef: originalVar.sourceRef,
+            sourceRef: applySuffixToSourceRef(originalVar.sourceRef, Number(suffixToken)),
             sourceType: originalVar.sourceType,
             updatedAt: new Date()
           }

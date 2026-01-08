@@ -3741,9 +3741,10 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
 
       // 🔥 FIX PRIORITAIRE: Forcer l'affichage via CalculatedValueDisplay pour TOUTES les copies
       if (treeId && isCopyWithSuffix) {
+        const resolvedNodeId = resolveBackendNodeId(field) || field.id;
         if (isTBLDebugEnabled()) tblLog(`🚀 [COPY FIX CHAMPS DONNÉES] Forçage CalculatedValueDisplay pour copie de données: ${field.id} (${field.label})`);
         // Les configs d'apparence sont maintenant automatiquement extraites par renderStoredCalculatedValue
-        return renderStoredCalculatedValue(resolveBackendNodeId(field) || field.id, {
+        return renderStoredCalculatedValue(resolvedNodeId, {
           fallbackValue: rawValue
         });
       }
