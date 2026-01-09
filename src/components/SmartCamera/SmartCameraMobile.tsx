@@ -3,9 +3,11 @@
  * 
  * Utilise l'input file native pour une compatibilité maximale sur mobile
  * Pas de getUserMedia, pas de bugs WebView !
+ * 
+ * 📱 Intègre le gyroscope pour améliorer les mesures ArUco
  */
 
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { Button, Card, Space, Typography, Progress, Image, message } from 'antd';
 import { 
   CameraOutlined, 
@@ -13,6 +15,7 @@ import {
   DeleteOutlined,
   PlusOutlined
 } from '@ant-design/icons';
+import { useDeviceOrientation } from '../../hooks/useDeviceOrientation';
 
 const { Text, Title } = Typography;
 
@@ -22,7 +25,12 @@ export interface CapturedPhoto {
     timestamp: number;
     photoIndex: number;
     totalPhotosNeeded: number;
-    gyroscope: { alpha: number; beta: number; gamma: number };
+    gyroscope: { 
+      alpha: number; 
+      beta: number; 
+      gamma: number;
+      quality?: number;  // 📱 Qualité de l'orientation (0-100)
+    };
     accelerometer: { x: number; y: number; z: number };
     camera: { facingMode: 'environment'; zoom: number };
     lighting: { brightness: number; contrast: number; uniformity: number };
@@ -45,6 +53,17 @@ const SmartCameraMobile: React.FC<SmartCameraMobileProps> = ({
 }) => {
   const [photos, setPhotos] = useState<CapturedPhoto[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
+  
+  // 📱 Hook gyroscope pour capturer l'orientation réelle du téléphone
+  const { orientation, analyze, isAvailable, hasPermission, requestPermission } = useDeviceOrientation(true);
+  
+  // Demander permission gyroscope au montage (iOS nécessite un geste utilisateur)
+  useEffect(() => {
+    if (isAvailable && !hasPermission) {
+      // On ne demande pas automatiquement, on attend un clic
+      console.log('📱 [SmartCamera] Gyroscope disponible, permission non accordée');
+    }
+  }, [isAvailable, hasPermission]);
   const inputRef = useRef<HTMLInputElement>(null);
 
   // Convertir fichier en base64
@@ -74,6 +93,16 @@ const SmartCameraMobile: React.FC<SmartCameraMobileProps> = ({
 
     setIsProcessing(true);
     
+    // 📱 Capturer l'orientation actuelle du téléphone (gyroscope)
+    const currentOrientation = {
+      alpha: orientation.alpha,
+      beta: orientation.beta,
+      gamma: orientation.gamma,
+      quality: analyze().quality  // 0-100, qualité de l'orientation
+    };
+    
+    console.log(`📱 [SmartCamera] Gyroscope au moment de la capture: beta=${currentOrientation.beta.toFixed(1)}°, gamma=${currentOrientation.gamma.toFixed(1)}°, qualité=${currentOrientation.quality}%`);
+    
     try {
       const base64s = await Promise.all(filesToProcess.map(fileToBase64));
 
@@ -87,7 +116,8 @@ const SmartCameraMobile: React.FC<SmartCameraMobileProps> = ({
             timestamp: Date.now(),
             photoIndex: startIndex + i,
             totalPhotosNeeded: minPhotos,
-            gyroscope: { alpha: 0, beta: 0, gamma: 0 },
+            // 📱 Utiliser les vraies données du gyroscope !
+            gyroscope: currentOrientation,
             accelerometer: { x: 0, y: 0, z: 0 },
             camera: { facingMode: 'environment', zoom: 1 },
             lighting: { brightness: 128, contrast: 50, uniformity: 80 },
@@ -142,14 +172,21 @@ const SmartCameraMobile: React.FC<SmartCameraMobileProps> = ({
     }
   };
 
-  // Ouvrir la caméra
-  const openCamera = () => {
+  // Ouvrir la caméra (avec permission gyroscope sur iOS)
+  const openCamera = useCallback(async () => {
+    // Sur iOS, demander la permission gyroscope au premier clic
+    if (isAvailable && !hasPermission) {
+      await requestPermission();
+    }
     inputRef.current?.click();
-  };
+  }, [isAvailable, hasPermission, requestPermission]);
 
   const canValidate = photos.length >= minPhotos;
   const maxPhotosEffective = maxPhotos ?? Number.POSITIVE_INFINITY;
   const canAddMore = photos.length < maxPhotosEffective;
+  
+  // 📱 Analyser l'orientation pour l'indicateur visuel
+  const orientationAnalysis = analyze();
 
   return (
     <div style={{
@@ -164,16 +201,33 @@ const SmartCameraMobile: React.FC<SmartCameraMobileProps> = ({
       flexDirection: 'column',
       overflow: 'hidden'
     }}>
-      {/* Header */}
+      {/* Header avec indicateur gyroscope discret */}
       <div style={{
         padding: '16px',
         background: 'linear-gradient(to bottom, rgba(0,0,0,0.9), rgba(0,0,0,0.7))',
         color: '#fff'
       }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <Title level={4} style={{ color: '#fff', margin: 0 }}>
-            📸 SmartCamera
-          </Title>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <Title level={4} style={{ color: '#fff', margin: 0 }}>
+              📸 SmartCamera
+            </Title>
+            {/* 📱 Indicateur gyroscope discret - juste un petit point coloré */}
+            {hasPermission && (
+              <span 
+                title={`Orientation: ${orientationAnalysis.quality}%`}
+                style={{
+                  width: 8,
+                  height: 8,
+                  borderRadius: '50%',
+                  backgroundColor: orientationAnalysis.colorCode === 'green' ? '#52c41a' 
+                    : orientationAnalysis.colorCode === 'orange' ? '#faad14' 
+                    : '#ff4d4f',
+                  transition: 'background-color 0.3s'
+                }}
+              />
+            )}
+          </div>
           <Text style={{ color: '#fff' }}>
             {maxPhotos === undefined ? `${photos.length} photo(s)` : `${photos.length} / ${maxPhotos} photos`}
           </Text>

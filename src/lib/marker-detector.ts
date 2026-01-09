@@ -3805,17 +3805,31 @@ export interface OptimalCorrectionResult {
 }
 
 /**
+ * 📱 Données du gyroscope pour compensation mathématique
+ */
+export interface GyroscopeData {
+  /** Inclinaison avant/arrière (90° = perpendiculaire) */
+  beta: number;
+  /** Inclinaison gauche/droite (0° = droit) */
+  gamma: number;
+  /** Qualité de l'orientation (0-100) */
+  quality?: number;
+}
+
+/**
  * 🎯 Calculer la correction OPTIMALE en combinant TOUTES les données disponibles
  * 
  * Sources de correction:
  * 1. Analyse des bandes (ratios mesurés vs théoriques)
  * 2. Erreur RANSAC (inliers vs outliers)
  * 3. Erreur de reprojection moyenne
- * 4. Compensation de pose (angles de vue)
- * 5. Différences par axe (X vs Y)
+ * 4. Compensation de pose (angles de vue calculés depuis ArUco)
+ * 5. Compensation gyroscope (angles réels du téléphone) 🆕
+ * 6. Différences par axe (X vs Y)
  * 
  * @param analysis - Analyse complète du marqueur
  * @param ultraPrecisionResult - Résultat des 105 points
+ * @param gyroscopeData - Données du gyroscope (optionnel mais améliore la précision)
  */
 export function calculateOptimalCorrection(
   analysis: ArucoMarkerAnalysis,
@@ -3824,7 +3838,8 @@ export function calculateOptimalCorrection(
     inlierPoints: number;
     reprojectionError: number;
     quality: number;
-  }
+  },
+  gyroscopeData?: GyroscopeData
 ): OptimalCorrectionResult {
   
   console.log(`\n${'='.repeat(60)}`);
@@ -3834,12 +3849,14 @@ export function calculateOptimalCorrection(
   console.log(`📊 bandAnalysis.transitionRatios.length: ${analysis.bandAnalysis.transitionRatios.length}`);
   console.log(`📊 bandAnalysis.suggestedCorrection: ${analysis.bandAnalysis.suggestedCorrection}`);
   console.log(`📊 ultraPrecision: ${ultraPrecisionResult ? `${ultraPrecisionResult.totalPoints} points` : 'non fourni'}`);
+  console.log(`📱 gyroscope: ${gyroscopeData ? `beta=${gyroscopeData.beta.toFixed(1)}°, gamma=${gyroscopeData.gamma.toFixed(1)}°` : 'non fourni'}`);
   
   const contributions = {
     bandAnalysis: { correction: 1.0, weight: 0, confidence: 0 },
     ransacError: { correction: 1.0, weight: 0, confidence: 0 },
     reprojection: { correction: 1.0, weight: 0, confidence: 0 },
-    poseCompensation: { correction: 1.0, weight: 0, confidence: 0 }
+    poseCompensation: { correction: 1.0, weight: 0, confidence: 0 },
+    gyroscopeCompensation: { correction: 1.0, weight: 0, confidence: 0 } // 🆕
   };
   
   // ═══════════════════════════════════════════════════════════════════════════
@@ -3851,7 +3868,7 @@ export function calculateOptimalCorrection(
     
     contributions.bandAnalysis = {
       correction: bandCorr,
-      weight: 0.5,  // Poids élevé car très fiable
+      weight: 0.45,  // Légèrement réduit pour faire place au gyroscope
       confidence: bandConf
     };
     
@@ -3899,7 +3916,7 @@ export function calculateOptimalCorrection(
   }
   
   // ═══════════════════════════════════════════════════════════════════════════
-  // 4️⃣ COMPENSATION DE POSE (angles de vue)
+  // 4️⃣ COMPENSATION DE POSE (angles de vue estimés depuis ArUco)
   // ═══════════════════════════════════════════════════════════════════════════
   const { rotX, rotY, rotZ } = analysis.pose;
   
@@ -3914,14 +3931,69 @@ export function calculateOptimalCorrection(
   
   contributions.poseCompensation = {
     correction: Math.max(0.95, Math.min(1.1, poseCorr)),  // Limiter à -5% / +10%
-    weight: 0.15,
+    weight: gyroscopeData ? 0.10 : 0.15, // Réduit si gyroscope disponible
     confidence: poseConf
   };
   
   console.log(`📊 [CORRECTION] Pose: ×${poseCorr.toFixed(4)} (rotX=${rotX}°, rotY=${rotY}°)`);
   
   // ═══════════════════════════════════════════════════════════════════════════
-  // 5️⃣ CALCUL DE LA CORRECTION FINALE (moyenne pondérée)
+  // 5️⃣ COMPENSATION GYROSCOPE (angles RÉELS du téléphone) 🆕
+  // ═══════════════════════════════════════════════════════════════════════════
+  if (gyroscopeData) {
+    const { beta, gamma, quality: gyroQuality } = gyroscopeData;
+    
+    // Beta idéal = 80-90° (téléphone quasi perpendiculaire au panneau)
+    // Gamma idéal = 0° (téléphone pas penché latéralement)
+    const IDEAL_BETA = 85;
+    
+    // Calculer l'écart par rapport à l'idéal
+    const betaError = Math.abs(beta - IDEAL_BETA);
+    const gammaError = Math.abs(gamma);
+    
+    // Correction basée sur la trigonométrie
+    // Plus l'angle s'éloigne de la perpendiculaire, plus les mesures sont compressées
+    const betaRad = (betaError * Math.PI) / 180;
+    const gammaRad = (gammaError * Math.PI) / 180;
+    
+    // Facteur de correction: 1/cos(angle) pour compenser la compression perspective
+    const betaFactor = betaError < 60 ? 1 / Math.cos(betaRad) : 1.5;
+    const gammaFactor = gammaError < 60 ? 1 / Math.cos(gammaRad) : 1.5;
+    
+    // Moyenne géométrique des facteurs
+    const gyroCorr = Math.sqrt(betaFactor * gammaFactor);
+    
+    // Confiance: élevée si angles faibles et qualité bonne
+    const angleScore = Math.max(0, 1 - (betaError + gammaError) / 60);
+    const gyroConf = (gyroQuality !== undefined ? gyroQuality / 100 : 0.8) * angleScore;
+    
+    contributions.gyroscopeCompensation = {
+      correction: Math.max(0.95, Math.min(1.15, gyroCorr)),  // Limiter à -5% / +15%
+      weight: 0.15,  // Poids significatif car données réelles
+      confidence: Math.max(0.4, gyroConf)
+    };
+    
+    console.log(`📱 [CORRECTION] Gyroscope: ×${gyroCorr.toFixed(4)} (beta=${beta.toFixed(1)}°, gamma=${gamma.toFixed(1)}°, conf=${(gyroConf * 100).toFixed(0)}%)`);
+    
+    // 🔍 VALIDATION CROISÉE: Comparer pose ArUco vs gyroscope
+    // Si les deux sont très différents, c'est suspect !
+    const deltaRotX = Math.abs(rotX - (90 - beta));
+    const deltaRotY = Math.abs(rotY - gamma);
+    
+    if (deltaRotX > 15 || deltaRotY > 15) {
+      console.warn(`⚠️ [VALIDATION] Écart pose/gyro important: ΔX=${deltaRotX.toFixed(1)}°, ΔY=${deltaRotY.toFixed(1)}°`);
+      // Réduire la confiance dans les deux si incohérents
+      contributions.poseCompensation.confidence *= 0.7;
+      contributions.gyroscopeCompensation.confidence *= 0.7;
+    } else {
+      console.log(`✅ [VALIDATION] Pose et gyroscope cohérents (ΔX=${deltaRotX.toFixed(1)}°, ΔY=${deltaRotY.toFixed(1)}°)`);
+      // Bonus de confiance si cohérents
+      contributions.gyroscopeCompensation.confidence = Math.min(1, contributions.gyroscopeCompensation.confidence * 1.2);
+    }
+  }
+  
+  // ═══════════════════════════════════════════════════════════════════════════
+  // 6️⃣ CALCUL DE LA CORRECTION FINALE (moyenne pondérée)
   // ═══════════════════════════════════════════════════════════════════════════
   let totalWeight = 0;
   let weightedSum = 0;
@@ -3968,14 +4040,27 @@ export function calculateOptimalCorrection(
     console.log(`📊 [CORRECTION] Axe X: ×${correctionX.toFixed(4)}, Axe Y: ×${correctionY.toFixed(4)}`);
   }
   
+  // Ajuster par axe avec gyroscope si disponible
+  if (gyroscopeData && Math.abs(gyroscopeData.gamma) > 10) {
+    // Si le téléphone est penché latéralement, l'axe horizontal est plus compressé
+    const gammaRad = (Math.abs(gyroscopeData.gamma) * Math.PI) / 180;
+    const lateralFactor = 1 / Math.cos(gammaRad);
+    correctionX *= Math.min(1.1, lateralFactor);
+    console.log(`📱 [CORRECTION] Ajustement latéral X: ×${lateralFactor.toFixed(4)} (gamma=${gyroscopeData.gamma.toFixed(1)}°)`);
+  }
+  
   // ═══════════════════════════════════════════════════════════════════════════
   // RÉSULTAT FINAL
   // ═══════════════════════════════════════════════════════════════════════════
+  const gyroStr = gyroscopeData 
+    ? `\n  - Gyroscope: ×${contributions.gyroscopeCompensation.correction.toFixed(4)} (poids ${(contributions.gyroscopeCompensation.weight * 100).toFixed(0)}%)`
+    : '';
+    
   const explanation = `Correction optimale: ×${finalCorrection.toFixed(4)} (confiance ${(globalConfidence * 100).toFixed(0)}%)
   - Bandes: ×${contributions.bandAnalysis.correction.toFixed(4)} (poids ${(contributions.bandAnalysis.weight * 100).toFixed(0)}%)
   - RANSAC: ×${contributions.ransacError.correction.toFixed(4)} (poids ${(contributions.ransacError.weight * 100).toFixed(0)}%)
   - Reprojection: ×${contributions.reprojection.correction.toFixed(4)} (poids ${(contributions.reprojection.weight * 100).toFixed(0)}%)
-  - Pose: ×${contributions.poseCompensation.correction.toFixed(4)} (poids ${(contributions.poseCompensation.weight * 100).toFixed(0)}%)`;
+  - Pose: ×${contributions.poseCompensation.correction.toFixed(4)} (poids ${(contributions.poseCompensation.weight * 100).toFixed(0)}%)${gyroStr}`;
   
   console.log(`\n🎯 [CORRECTION OPTIMALE] ${explanation}\n`);
   

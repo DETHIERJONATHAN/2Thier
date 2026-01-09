@@ -794,11 +794,18 @@ router.post('/ultra-fusion-detect', authenticateToken, async (req: Authenticated
       arucoAnalysis: ArucoMarkerAnalysis | null; // 🔬 Analyse complète pour le Canvas
       imageWidth: number;
       imageHeight: number;
+      photoMetadata?: any; // 📱 Métadonnées originales (gyroscope, etc.)
     }> = [];
     
     for (let i = 0; i < cleanedPhotos.length; i++) {
       const photo = cleanedPhotos[i];
       console.log(`   📷 Photo ${i}: Analyse...`);
+      
+      // 📱 Log gyroscope si disponible
+      if (photo.metadata?.gyroscope) {
+        const gyro = photo.metadata.gyroscope;
+        console.log(`      📱 Gyroscope: beta=${gyro.beta?.toFixed(1)}°, gamma=${gyro.gamma?.toFixed(1)}°, qualité=${gyro.quality || 'N/A'}%`);
+      }
       
       try {
         const imageBuffer = Buffer.from(photo.base64, 'base64');
@@ -890,7 +897,8 @@ router.post('/ultra-fusion-detect', authenticateToken, async (req: Authenticated
               estimatedPrecision: ultraResult.reprojectionError < 0.5 ? '±0.2mm' : 
                                  ultraResult.reprojectionError < 1 ? '±0.5mm' : '±1mm',
               corners: cornersPercent
-            }
+            },
+            photoMetadata: photo.metadata // 📱 Stocker les métadonnées (gyroscope)
           });
           
           console.log(`   ✅ Photo ${i}: ArUco détecté! score=${(globalScore * 100).toFixed(1)}%, reproj=${ultraResult.reprojectionError.toFixed(2)}mm`);
@@ -932,6 +940,22 @@ router.post('/ultra-fusion-detect', authenticateToken, async (req: Authenticated
     
     let optimalCorrection: OptimalCorrectionResult | null = null;
     
+    // 📱 Extraire les données gyroscope de la meilleure photo
+    let gyroscopeData: { beta: number; gamma: number; quality?: number } | undefined;
+    if (bestPhoto.photoMetadata?.gyroscope) {
+      const gyro = bestPhoto.photoMetadata.gyroscope;
+      if (typeof gyro.beta === 'number' && typeof gyro.gamma === 'number') {
+        gyroscopeData = {
+          beta: gyro.beta,
+          gamma: gyro.gamma,
+          quality: gyro.quality
+        };
+        console.log(`   📱 Gyroscope disponible: beta=${gyro.beta.toFixed(1)}°, gamma=${gyro.gamma.toFixed(1)}°, qualité=${gyro.quality || 'N/A'}%`);
+      }
+    } else {
+      console.log(`   📱 Gyroscope: non disponible`);
+    }
+    
     if (bestPhoto.arucoAnalysis) {
       optimalCorrection = calculateOptimalCorrection(
         bestPhoto.arucoAnalysis,
@@ -940,13 +964,17 @@ router.post('/ultra-fusion-detect', authenticateToken, async (req: Authenticated
           inlierPoints: bestPhoto.ultraPrecision.inlierPoints,
           reprojectionError: bestPhoto.reprojectionError,
           quality: bestPhoto.quality
-        }
+        },
+        gyroscopeData  // 📱 Passer les données gyroscope si disponibles
       );
       
       console.log(`   🎯 CORRECTION FINALE: ×${optimalCorrection.finalCorrection.toFixed(4)}`);
       console.log(`      📊 Confiance: ${(optimalCorrection.globalConfidence * 100).toFixed(0)}%`);
       console.log(`      📏 Correction X: ×${optimalCorrection.correctionX.toFixed(4)}`);
       console.log(`      📏 Correction Y: ×${optimalCorrection.correctionY.toFixed(4)}`);
+      if (gyroscopeData) {
+        console.log(`      📱 Gyroscope inclus dans le calcul !`);
+      }
     }
     
     // ============================================
