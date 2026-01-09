@@ -74,14 +74,29 @@ const SmartCaptureFlow: React.FC<SmartCaptureFlowProps> = ({
       const analysisResult = await analyzePhotos(photos);
       setAnalysis(analysisResult);
       
-      // Si l'IA dit qu'il faut plus de photos, revenir à la capture
-      if (analysisResult.needsMorePhotos && photos.length < 6) {
-        // On reste sur analysis pour montrer le feedback
-      } else {
-        setCurrentStep('complete');
+      // 🚀 BYPASS: Aller directement au canvas de mesure sans page intermédiaire
+      // Si on a assez de photos et que le marqueur est détecté, passer directement
+      if (!analysisResult.needsMorePhotos || photos.length >= 3) {
+        // Appeler onComplete directement pour bypass la page "Capture réussie"
+        console.log('[SmartCaptureFlow] 🚀 Bypass page complete → direct canvas');
+        onComplete(photos, analysisResult);
+        onClose();
+        return;
       }
+      // Sinon rester sur analysis pour feedback
     } catch (err) {
       console.error('Analysis error:', err);
+      // En cas d'erreur, aller quand même au canvas avec les photos
+      const fallbackAnalysis: MultiPhotoAnalysis = {
+        photos: photos.map((p, i) => ({ index: i, usableForMeasurement: true, quality: 80 })),
+        overallReadiness: 'acceptable' as const,
+        needsMorePhotos: false,
+        angleCoverage: { horizontal: 0, vertical: 0 },
+        markerDetection: { detected: false },
+        shadowAnalysis: { hasShadows: false }
+      };
+      onComplete(photos, fallbackAnalysis);
+      onClose();
     } finally {
       setIsAnalyzing(false);
     }

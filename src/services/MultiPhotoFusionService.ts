@@ -396,8 +396,14 @@ class MultiPhotoFusionService {
       gradientMaps.push(gradient);
     }
     
-    // 📊 Statistiques des gradients
-    const maxGradients = gradientMaps.map(g => Math.max(...g));
+    // 📊 Statistiques des gradients (éviter Math.max(...arr) sur gros tableaux → stack overflow)
+    const maxGradients = gradientMaps.map(g => {
+      let max = 0;
+      for (let i = 0; i < g.length; i++) {
+        if (g[i] > max) max = g[i];
+      }
+      return max;
+    });
     console.log(`📊 [Fusion] Gradients max par perspective: ${maxGradients.map(g => g.toFixed(1)).join(', ')}`);
     
     // Créer le buffer de sortie

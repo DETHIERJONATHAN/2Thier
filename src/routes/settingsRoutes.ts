@@ -1311,4 +1311,124 @@ router.post('/initialize-default-statuses', async (req, res) => {
   }
 });
 
+// ============================================================================
+// 🎯 IA MESURE - Configuration du marqueur ArUco
+// ============================================================================
+
+// GET /api/settings/ai-measure - Récupérer la configuration
+router.get('/ai-measure', async (req, res) => {
+  try {
+    const authReq = req as AuthenticatedRequest;
+    const organizationId = authReq.user?.organizationId;
+    
+    if (!organizationId) {
+      // Pour les super admin sans organisation, utiliser les valeurs par défaut
+      return res.json({ 
+        success: true, 
+        data: { 
+          markerSizeCm: 16.8, 
+          boardSizeCm: 24 
+        } 
+      });
+    }
+    
+    console.log('[AI-MEASURE] Récupération config pour organisation:', organizationId);
+    
+    // Chercher dans SystemConfig
+    const config = await prisma.systemConfig.findFirst({
+      where: {
+        organizationId: organizationId,
+        key: 'ai_measure_marker'
+      }
+    });
+    
+    if (config && config.value) {
+      const value = typeof config.value === 'string' ? JSON.parse(config.value) : config.value;
+      console.log('[AI-MEASURE] Config trouvée:', value);
+      return res.json({ success: true, data: value });
+    }
+    
+    // Valeurs par défaut
+    console.log('[AI-MEASURE] Pas de config, utilisation des valeurs par défaut');
+    res.json({ 
+      success: true, 
+      data: { 
+        markerSizeCm: 16.8, 
+        boardSizeCm: 24 
+      } 
+    });
+    
+  } catch (error) {
+    console.error('[AI-MEASURE] Erreur récupération config:', error);
+    res.status(500).json({ 
+      success: false,
+      error: 'Erreur lors de la récupération de la configuration',
+      message: error instanceof Error ? error.message : 'Erreur inconnue'
+    });
+  }
+});
+
+// POST /api/settings/ai-measure - Sauvegarder la configuration
+router.post('/ai-measure', async (req, res) => {
+  try {
+    const authReq = req as AuthenticatedRequest;
+    const organizationId = authReq.user?.organizationId;
+    
+    if (!organizationId) {
+      return res.status(400).json({ 
+        success: false,
+        error: 'Organisation non spécifiée' 
+      });
+    }
+    
+    const { markerSizeCm, boardSizeCm } = req.body;
+    
+    // Validation
+    if (!markerSizeCm || markerSizeCm < 5 || markerSizeCm > 50) {
+      return res.status(400).json({ 
+        success: false,
+        error: 'Taille du marqueur invalide (doit être entre 5 et 50 cm)' 
+      });
+    }
+    
+    console.log('[AI-MEASURE] Sauvegarde config pour organisation:', organizationId);
+    console.log('[AI-MEASURE] Nouvelles valeurs:', { markerSizeCm, boardSizeCm });
+    
+    // Upsert dans SystemConfig
+    const config = await prisma.systemConfig.upsert({
+      where: {
+        organizationId_key: {
+          organizationId: organizationId,
+          key: 'ai_measure_marker'
+        }
+      },
+      update: {
+        value: { markerSizeCm, boardSizeCm },
+        updatedAt: new Date()
+      },
+      create: {
+        organizationId: organizationId,
+        key: 'ai_measure_marker',
+        value: { markerSizeCm, boardSizeCm },
+        description: 'Configuration du marqueur ArUco pour IA Mesure'
+      }
+    });
+    
+    console.log('[AI-MEASURE] Config sauvegardée:', config.id);
+    res.json({ 
+      success: true, 
+      message: 'Configuration sauvegardée',
+      data: { markerSizeCm, boardSizeCm }
+    });
+    
+  } catch (error) {
+    console.error('[AI-MEASURE] Erreur sauvegarde config:', error);
+    res.status(500).json({ 
+      success: false,
+      error: 'Erreur lors de la sauvegarde de la configuration',
+      message: error instanceof Error ? error.message : 'Erreur inconnue'
+    });
+  }
+});
+
 export default router;

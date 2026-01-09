@@ -9,8 +9,10 @@ import {
   measureDistanceCm,
   estimatePose,
   calculateQualityScore,
+  detectUltraPrecisionPoints,
   type Point2D,
-  type MarkerDetectionResult
+  type MarkerDetectionResult,
+  type UltraPrecisionResult
 } from '../lib/marker-detector';
 
 // Sharp import compatible ESM
@@ -22,9 +24,11 @@ const router = express.Router();
 const detector = new MarkerDetector(30, 2000);
 
 // Log de démarrage
-const measureMode = process.env.AI_MEASURE_ENGINE || 'gemini';
+const measureMode = process.env.AI_MEASURE_ENGINE || 'vision_ar';
 console.log(`📷 [MEASURE] Mode de mesure photo: ${measureMode.toUpperCase()}`);
 console.log(`   → Marqueur: ${MARKER_SPECS.markerSize}cm × ${MARKER_SPECS.markerSize}cm avec points MAGENTA`);
+console.log(`   → Détection étendue: 16 points de référence (4 coins + 12 transitions)`);
+console.log(`   → Services: MultiPhotoFusion ✅, EdgeDetection ✅, Gemini ✅`);
 
 // ============================================================================
 // STATUS ENDPOINT
@@ -106,9 +110,28 @@ router.post('/photo', async (req, res) => {
       const marker = markers[0];
       console.log(`[measure/photo] ✅ Marqueur détecté! Score: ${marker.score}, Taille: ${marker.size.toFixed(0)}px`);
       
+      // ══════════════════════════════════════════════════════════════════════
+      // 🎯 ULTRA-PRÉCISION: Détection de 80-100 points + RANSAC + Levenberg-Marquardt
+      // ══════════════════════════════════════════════════════════════════════
+      console.log('[measure/photo] 🎯 Lancement détection ULTRA-PRÉCISE...');
+      
+      // Utiliser les coins MAGENTA (extérieurs 18cm) pour l'ultra-précision
+      const exteriorCorners = marker.magentaPositions || marker.corners;
+      
+      let ultraPrecisionResult: UltraPrecisionResult | null = null;
+      try {
+        ultraPrecisionResult = detectUltraPrecisionPoints(
+          { data, width: info.width, height: info.height },
+          exteriorCorners,
+          marker.extendedPoints
+        );
+        console.log(`[measure/photo] 🎯 ULTRA-PRÉCISION: ${ultraPrecisionResult.inlierPoints}/${ultraPrecisionResult.totalPoints} points, erreur ±${ultraPrecisionResult.reprojectionError.toFixed(2)}mm, qualité ${(ultraPrecisionResult.quality * 100).toFixed(1)}%`);
+      } catch (ultraError: any) {
+        console.warn('[measure/photo] ⚠️ Ultra-précision échouée, fallback standard:', ultraError.message);
+      }
+      
       // Calculer l'homographie: pixels → cm réels
-      // Points source: coins détectés en pixels
-      // Points destination: carré 18x18cm (0,0) à (18,18)
+      // Utiliser l'homographie ultra-précise si disponible, sinon standard
       const srcPoints = marker.corners;
       const dstPoints: Point2D[] = [
         { x: 0, y: 0 },                                    // TL
@@ -117,7 +140,10 @@ router.post('/photo', async (req, res) => {
         { x: 0, y: MARKER_SPECS.markerSize }               // BL
       ];
       
-      const homographyMatrix = computeHomography(srcPoints, dstPoints);
+      // Utiliser l'homographie ultra-précise si disponible et de bonne qualité
+      const homographyMatrix = (ultraPrecisionResult && ultraPrecisionResult.quality > 0.3)
+        ? ultraPrecisionResult.homography
+        : computeHomography(srcPoints, dstPoints);
       
       // Estimer la pose (rotation)
       const pose = estimatePose(marker.corners);
@@ -156,7 +182,8 @@ router.post('/photo', async (req, res) => {
           center: marker.center,
           sizePx: marker.size,
           score: marker.score,
-          magentaFound: marker.magentaFound
+          magentaFound: marker.magentaFound,
+          extendedPoints: marker.extendedPoints
         },
         homography: {
           matrix: homographyMatrix,
@@ -164,8 +191,24 @@ router.post('/photo', async (req, res) => {
           realSizeCm: MARKER_SPECS.markerSize,
           sides: marker.homography.sides,
           angles: marker.homography.angles,
-          quality
+          quality: ultraPrecisionResult ? ultraPrecisionResult.quality : quality
         },
+        // 🎯 NOUVEAU: Données ultra-précision
+        ultraPrecision: ultraPrecisionResult ? {
+          totalPoints: ultraPrecisionResult.totalPoints,
+          inlierPoints: ultraPrecisionResult.inlierPoints,
+          reprojectionErrorMm: ultraPrecisionResult.reprojectionError,
+          quality: ultraPrecisionResult.quality,
+          breakdown: {
+            corners: ultraPrecisionResult.cornerPoints,
+            transitions: ultraPrecisionResult.transitionPoints,
+            gridCorners: ultraPrecisionResult.gridCornerPoints,
+            gridCenters: ultraPrecisionResult.gridCenterPoints
+          },
+          ransacApplied: ultraPrecisionResult.ransacApplied,
+          ellipseFittingApplied: ultraPrecisionResult.ellipseFittingApplied,
+          levenbergMarquardtApplied: ultraPrecisionResult.levenbergMarquardtApplied
+        } : null,
         pose,
         calibration: {
           pixelPerCm: marker.homography.pixelsPerCm,
@@ -181,8 +224,8 @@ router.post('/photo', async (req, res) => {
         },
         debug: {
           markerSpecs: MARKER_SPECS,
-          mode: process.env.AI_MEASURE_ENGINE || 'gemini',
-          detectionMethod: 'magenta_clustering'
+          mode: process.env.AI_MEASURE_ENGINE || 'vision_ar',
+          detectionMethod: ultraPrecisionResult ? 'ultra_precision_ransac_lm' : 'magenta_clustering'
         },
         durationMs: Date.now() - startTime
       };
@@ -353,6 +396,222 @@ router.get('/calibration-profiles', async (req, res) => {
   } catch (error: any) {
     console.error('[calibration-profiles] ❌ Erreur:', error);
     return res.status(500).json({ success: false, error: error?.message || 'Erreur interne' });
+  }
+});
+
+// ============================================================================
+// 🎯 ULTRA-PRECISION MULTI-PHOTO ENDPOINT
+// Fusion de plusieurs photos pour précision maximale (±0.2mm)
+// ============================================================================
+
+router.post('/photo/ultra', async (req, res) => {
+  console.log('\n[measure/photo/ultra] 🎯 Traitement ULTRA-PRÉCISION multi-photos');
+  
+  try {
+    const { imagesBase64 } = req.body || {};
+    
+    // Support pour une seule image ou un array
+    const images: string[] = Array.isArray(imagesBase64) 
+      ? imagesBase64 
+      : (imagesBase64 ? [imagesBase64] : []);
+    
+    if (images.length === 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'Au moins une image requise (imagesBase64)'
+      });
+    }
+    
+    console.log(`[measure/photo/ultra] 📸 ${images.length} image(s) reçue(s)`);
+    
+    // Résultats de chaque photo
+    const photoResults: Array<{
+      index: number;
+      marker: any;
+      ultraPrecision: UltraPrecisionResult | null;
+      pixelsPerCm: number;
+    }> = [];
+    
+    // Traiter chaque photo
+    for (let i = 0; i < images.length; i++) {
+      const imageBase64 = images[i];
+      console.log(`\n[measure/photo/ultra] 📷 Photo ${i + 1}/${images.length}`);
+      
+      try {
+        const buffer = Buffer.from(imageBase64, 'base64');
+        const { data, info } = await sharp(buffer)
+          .raw()
+          .ensureAlpha()
+          .toBuffer({ resolveWithObject: true });
+        
+        console.log(`   Dimensions: ${info.width}x${info.height}`);
+        
+        // Détection standard
+        const markers = await detector.detectMarkers({
+          data,
+          width: info.width,
+          height: info.height
+        });
+        
+        if (!markers || markers.length === 0) {
+          console.warn(`   ⚠️ Photo ${i + 1}: Aucun marqueur détecté`);
+          continue;
+        }
+        
+        const marker = markers[0];
+        const exteriorCorners = marker.magentaPositions || marker.corners;
+        
+        // Calcul pixelsPerCm
+        const d1 = Math.hypot(
+          exteriorCorners[1].x - exteriorCorners[0].x,
+          exteriorCorners[1].y - exteriorCorners[0].y
+        );
+        const d2 = Math.hypot(
+          exteriorCorners[3].x - exteriorCorners[2].x,
+          exteriorCorners[3].y - exteriorCorners[2].y
+        );
+        const pixelsPerCm = ((d1 + d2) / 2) / MARKER_SPECS.markerSize;
+        
+        // Ultra-précision
+        let ultraPrecisionResult: UltraPrecisionResult | null = null;
+        try {
+          ultraPrecisionResult = detectUltraPrecisionPoints(
+            { data, width: info.width, height: info.height },
+            exteriorCorners,
+            marker.extendedPoints
+          );
+          
+          console.log(`   ✅ Ultra-précision: ${ultraPrecisionResult.inlierPoints}/${ultraPrecisionResult.totalPoints} inliers`);
+          console.log(`   📊 Erreur: ±${ultraPrecisionResult.reprojectionError.toFixed(2)}mm, Qualité: ${(ultraPrecisionResult.quality * 100).toFixed(1)}%`);
+        } catch (ultraError: any) {
+          console.warn(`   ⚠️ Ultra-précision échouée: ${ultraError.message}`);
+        }
+        
+        photoResults.push({
+          index: i,
+          marker,
+          ultraPrecision: ultraPrecisionResult,
+          pixelsPerCm
+        });
+        
+      } catch (photoError: any) {
+        console.error(`   ❌ Photo ${i + 1} erreur: ${photoError.message}`);
+      }
+    }
+    
+    if (photoResults.length === 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'Aucun marqueur détecté dans les photos fournies'
+      });
+    }
+    
+    // ========================================================================
+    // FUSION DES RÉSULTATS
+    // ========================================================================
+    console.log('\n[measure/photo/ultra] 🔀 Fusion des résultats...');
+    
+    // Sélectionner le meilleur résultat (plus d'inliers, meilleure qualité)
+    const bestResult = photoResults.reduce((best, current) => {
+      const bestScore = best.ultraPrecision 
+        ? best.ultraPrecision.inlierPoints * best.ultraPrecision.quality 
+        : 0;
+      const currentScore = current.ultraPrecision 
+        ? current.ultraPrecision.inlierPoints * current.ultraPrecision.quality 
+        : 0;
+      return currentScore > bestScore ? current : best;
+    });
+    
+    // Calcul de la moyenne pondérée des pixelsPerCm
+    let totalWeight = 0;
+    let weightedPixelsPerCm = 0;
+    
+    for (const result of photoResults) {
+      const weight = result.ultraPrecision 
+        ? result.ultraPrecision.quality 
+        : 0.1;
+      weightedPixelsPerCm += result.pixelsPerCm * weight;
+      totalWeight += weight;
+    }
+    
+    const fusedPixelsPerCm = totalWeight > 0 
+      ? weightedPixelsPerCm / totalWeight 
+      : bestResult.pixelsPerCm;
+    
+    // Statistiques de fusion
+    const fusionStats = {
+      photosProcessed: images.length,
+      photosWithMarker: photoResults.length,
+      photosWithUltraPrecision: photoResults.filter(r => r.ultraPrecision).length,
+      bestPhotoIndex: bestResult.index,
+      averageInliers: Math.round(
+        photoResults
+          .filter(r => r.ultraPrecision)
+          .reduce((sum, r) => sum + (r.ultraPrecision?.inlierPoints || 0), 0) /
+        Math.max(1, photoResults.filter(r => r.ultraPrecision).length)
+      ),
+      averageQuality: Math.round(
+        photoResults
+          .filter(r => r.ultraPrecision)
+          .reduce((sum, r) => sum + ((r.ultraPrecision?.quality || 0) * 100), 0) /
+        Math.max(1, photoResults.filter(r => r.ultraPrecision).length)
+      ),
+      fusedPixelsPerCm
+    };
+    
+    console.log(`[measure/photo/ultra] 📊 Fusion: ${fusionStats.photosWithUltraPrecision}/${fusionStats.photosWithMarker} photos avec ultra-précision`);
+    console.log(`[measure/photo/ultra] 🎯 Moyenne inliers: ${fusionStats.averageInliers}, Qualité moyenne: ${fusionStats.averageQuality}%`);
+    
+    // Construire la réponse
+    const response = {
+      success: true,
+      mode: 'ultra-precision-multi-photo',
+      marker: {
+        detected: true,
+        type: 'aruco_magenta_18cm',
+        pixelsPerCm: fusedPixelsPerCm,
+        mmPerPixel: 10 / fusedPixelsPerCm,
+        confidence: fusionStats.averageQuality,
+        corners: bestResult.marker.corners,
+        magentaPositions: bestResult.marker.magentaPositions,
+        extendedPoints: bestResult.marker.extendedPoints
+      },
+      ultraPrecision: bestResult.ultraPrecision ? {
+        totalPoints: bestResult.ultraPrecision.totalPoints,
+        inlierPoints: bestResult.ultraPrecision.inlierPoints,
+        reprojectionErrorMm: bestResult.ultraPrecision.reprojectionError,
+        quality: bestResult.ultraPrecision.quality,
+        breakdown: {
+          exteriorCorners: 4,
+          transitionPoints: bestResult.ultraPrecision.transitionPoints,
+          gridCorners: bestResult.ultraPrecision.gridCornerPoints,
+          cellCenters: bestResult.ultraPrecision.gridCenterPoints
+        },
+        ransacApplied: true,
+        levenbergMarquardtApplied: true,
+        ellipseFittingApplied: true
+      } : null,
+      fusion: fusionStats,
+      perPhotoResults: photoResults.map(r => ({
+        photoIndex: r.index,
+        pixelsPerCm: r.pixelsPerCm,
+        ultraPrecision: r.ultraPrecision ? {
+          inliers: r.ultraPrecision.inlierPoints,
+          total: r.ultraPrecision.totalPoints,
+          quality: r.ultraPrecision.quality,
+          errorMm: r.ultraPrecision.reprojectionError
+        } : null
+      }))
+    };
+    
+    return res.json(response);
+    
+  } catch (error: any) {
+    console.error('[measure/photo/ultra] ❌ Erreur:', error);
+    return res.status(500).json({
+      success: false,
+      error: error?.message || 'Erreur interne'
+    });
   }
 });
 

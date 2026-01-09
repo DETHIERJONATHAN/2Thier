@@ -17,32 +17,65 @@
  */
 
 /**
- * Spécifications du marqueur physique imprimé ArUco 18x18cm
+ * 🎯 CONFIGURATION DYNAMIQUE DU MARQUEUR
+ * La taille du marqueur peut être configurée dans Paramètres > IA Mesure
+ * Valeur par défaut: 16.8cm (mesure réelle du marqueur 2Thier)
+ */
+let _markerSizeCm = 16.8; // Valeur par défaut corrigée !
+
+/**
+ * Met à jour la taille du marqueur (appelé depuis l'API ou au chargement)
+ * @param sizeCm - Taille du marqueur en cm
+ */
+export function setMarkerSize(sizeCm: number): void {
+  if (sizeCm >= 5 && sizeCm <= 50) {
+    _markerSizeCm = sizeCm;
+    console.log(`🎯 [MARKER] Taille du marqueur mise à jour: ${sizeCm}cm`);
+  } else {
+    console.warn(`⚠️ [MARKER] Taille invalide: ${sizeCm}cm (doit être entre 5 et 50cm)`);
+  }
+}
+
+/**
+ * Retourne la taille actuelle du marqueur en cm
+ */
+export function getMarkerSize(): number {
+  return _markerSizeCm;
+}
+
+/**
+ * Spécifications du marqueur physique imprimé ArUco
+ * ⚠️ La propriété markerSize est DYNAMIQUE - utiliser getMarkerSize() pour la valeur à jour
  */
 export const MARKER_SPECS = {
-  markerSize: 18,        // Taille du marqueur carré en cm
+  get markerSize() { return _markerSizeCm; },  // Getter dynamique !
   boardSize: 24,         // Taille du tableau ALU support en cm
   magentaRadius: 0.5,    // Rayon des cercles magenta en cm
   whiteRadius: 0.1,      // Rayon du point blanc central en cm
   
-  // Structure des bandes (distances depuis le bord externe)
-  // TOTAL = 18cm
-  bands: {
-    blackOuter: 3,       // Bande noire externe: 0-3cm
-    whiteOuter: 6,       // Bande blanche: 3-6cm  
-    blackCenter: 12,     // Centre noir: 6-12cm (le pattern ArUco)
-    whiteInner: 15,      // Bande blanche: 12-15cm
-    blackInner: 18       // Bande noire interne: 15-18cm
+  // Structure des bandes (ratios relatifs au markerSize)
+  get bands() {
+    const size = _markerSizeCm;
+    return {
+      blackOuter: size / 6,       // Bande noire externe: 0 → 1/6
+      whiteOuter: size / 3,       // Bande blanche: 1/6 → 1/3
+      blackCenter: size * 2/3,    // Centre noir: 1/3 → 2/3
+      whiteInner: size * 5/6,     // Bande blanche: 2/3 → 5/6
+      blackInner: size            // Bande noire interne: 5/6 → 1
+    };
   },
   
   // Points de transition (en cm depuis le bord)
-  transitions: [3, 6, 12, 15] as const,
+  get transitions() {
+    const size = _markerSizeCm;
+    return [size/6, size/3, size*2/3, size*5/6] as const;
+  },
   
-  // 🆕 Ratios géométriques clés pour validation
+  // Ratios géométriques clés pour validation (constants)
   ratios: {
-    innerToOuter: 6 / 18,    // Pattern central / total = 1/3
-    whiteToOuter: 12 / 18,   // Zone blanche / total = 2/3
-    bandWidth: 3 / 18        // Largeur bande / total = 1/6
+    innerToOuter: 1/3,    // Pattern central / total = 1/3
+    whiteToOuter: 2/3,    // Zone blanche / total = 2/3
+    bandWidth: 1/6        // Largeur bande / total = 1/6
   }
 };
 

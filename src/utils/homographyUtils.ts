@@ -189,6 +189,59 @@ export function createA4DestinationPoints(orientation: 'portrait' | 'paysage'): 
 }
 
 /**
+ * 🎯 Variable pour stocker la taille du marqueur (synchronisée avec marker-detector)
+ * Valeur par défaut: 16.8cm = 168mm
+ */
+let _arucoMarkerSizeMm = 168; // 16.8cm par défaut
+
+/**
+ * Met à jour la taille du marqueur pour l'homographie
+ * @param sizeCm - Taille en cm
+ */
+export function setArucoMarkerSize(sizeCm: number): void {
+  _arucoMarkerSizeMm = sizeCm * 10; // Convert cm to mm
+  console.log(`🎯 [HOMOGRAPHY] Taille marqueur mise à jour: ${sizeCm}cm = ${_arucoMarkerSizeMm}mm`);
+}
+
+/**
+ * Retourne la taille actuelle du marqueur en mm
+ */
+export function getArucoMarkerSizeMm(): number {
+  return _arucoMarkerSizeMm;
+}
+
+/**
+ * 🎯 Crée les points destination pour un marqueur ArUco MAGENTA
+ * 
+ * Utilise la taille configurée dans Paramètres > IA Mesure
+ * Par défaut: 16.8cm = 168mm
+ */
+export function createArucoDestinationPoints(): Point2D[] {
+  const markerSizeMm = _arucoMarkerSizeMm;
+  return [
+    [0, 0],                     // topLeft
+    [markerSizeMm, 0],          // topRight
+    [markerSizeMm, markerSizeMm], // bottomRight
+    [0, markerSizeMm]           // bottomLeft
+  ];
+}
+
+/**
+ * 🔧 Crée les points destination selon le type de référence
+ * @param refType - 'aruco' ou 'a4'
+ * @param orientation - utilisé seulement pour A4: 'portrait' ou 'paysage'
+ */
+export function createReferenceDestinationPoints(
+  refType: 'aruco' | 'a4', 
+  orientation: 'portrait' | 'paysage' = 'portrait'
+): Point2D[] {
+  if (refType === 'aruco') {
+    return createArucoDestinationPoints();
+  }
+  return createA4DestinationPoints(orientation);
+}
+
+/**
  * 🔍 Convertit les corners en tableau de points
  */
 export function cornersToPoints(corners: HomographyCorners): Point2D[] {

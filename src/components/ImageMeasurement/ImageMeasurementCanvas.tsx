@@ -64,13 +64,18 @@ import {
   applyHomography,
   computeRealDistanceWithUncertainty,
   createA4DestinationPoints,
+  createReferenceDestinationPoints,
   cornersToPoints,
   formatMeasurementWithUncertainty,
   generateDebugGrid,
+  setArucoMarkerSize,
+  getArucoMarkerSizeMm,
   type Matrix3x3,
   type HomographyResult,
   type HomographyCorners
 } from '../../utils/homographyUtils';
+import { estimatePose, setMarkerSize, getMarkerSize } from '../../lib/marker-detector';
+import { useAuthenticatedApi } from '../../hooks/useAuthenticatedApi';
 
 const { Text } = Typography;
 const { Option } = Select;
@@ -224,7 +229,11 @@ export const ImageMeasurementCanvas: React.FC<ImageMeasurementCanvasProps> = ({
   // 🆕 Flag pour éviter la re-conversion après ajustement manuel
   const [isManuallyCalibrated, setIsManuallyCalibrated] = useState(false);
   
-  // 🆕 Facteur de correction de perspective (ajustable par l'utilisateur)
+  // � Mode ArUco MAGENTA (18×18cm) vs A4 (21×29.7cm)
+  // Quand ArUco est détecté, on utilise 18×18cm pour la calibration
+  const [isArucoMode, setIsArucoMode] = useState(false);
+  
+  // �🆕 Facteur de correction de perspective (ajustable par l'utilisateur)
   // Ce facteur compense le fait que l'objet de référence (A4) n'est pas dans le même plan
   // que les points de mesure (ex: A4 sur la porte, mais on mesure le cadre)
   const [perspectiveCorrectionX, setPerspectiveCorrectionX] = useState(1.0);
@@ -249,6 +258,12 @@ export const ImageMeasurementCanvas: React.FC<ImageMeasurementCanvasProps> = ({
   const [useHomography, setUseHomography] = useState(true); // Activé par défaut
   const [debugMode, setDebugMode] = useState(false); // Mode debug pour voir la grille
   const [debugGrid, setDebugGrid] = useState<{ src: [number, number]; dst: [number, number] }[]>([]);
+  
+  // 📐 POSE (Orientation) - Angles de rotation estimés depuis les corners
+  const [pose, setPose] = useState<{ rotX: number; rotY: number; rotZ: number } | null>(null);
+  
+  // 📏 PROFONDEUR (Distance caméra ↔ marqueur) estimée en cm
+  const [estimatedDepth, setEstimatedDepth] = useState<number | null>(null);
 
   // 🆕 WORKFLOW GUIDÉ - Étapes: 1) Zone référence A4, 2) Zone objet à mesurer, 3) Ajustement
   type WorkflowStep = 'selectReferenceZone' | 'selectMeasureZone' | 'adjusting';
@@ -584,6 +599,32 @@ export const ImageMeasurementCanvas: React.FC<ImageMeasurementCanvasProps> = ({
   }, [image, imageDimensions]);
 
   // ============================================================================
+  // 🎯 CHARGEMENT CONFIG MARQUEUR ARUCO
+  // ============================================================================
+  const { api } = useAuthenticatedApi();
+  const [markerSizeCm, setMarkerSizeCmState] = useState(16.8); // Valeur par défaut
+  
+  useEffect(() => {
+    // Charger la configuration du marqueur depuis l'API
+    const loadMarkerConfig = async () => {
+      try {
+        const response = await api.get('/api/settings/ai-measure');
+        if (response.success && response.data?.markerSizeCm) {
+          const sizeCm = response.data.markerSizeCm;
+          console.log(`🎯 [Canvas] Configuration marqueur chargée: ${sizeCm}cm`);
+          setMarkerSizeCmState(sizeCm);
+          // Mettre à jour les modules de calcul
+          setMarkerSize(sizeCm);
+          setArucoMarkerSize(sizeCm);
+        }
+      } catch (error) {
+        console.warn('[Canvas] Impossible de charger la config marqueur, utilisation valeur par défaut:', error);
+      }
+    };
+    loadMarkerConfig();
+  }, [api]);
+
+  // ============================================================================
   // RESPONSIVE CONTAINER (Mobile-friendly)
   // ============================================================================
 
@@ -715,7 +756,99 @@ export const ImageMeasurementCanvas: React.FC<ImageMeasurementCanvasProps> = ({
     img.src = imageUrl;
   }, [imageUrl, maxWidth, maxHeight, containerWidth, canvasViewportSize.width, canvasViewportSize.height, isMobileFullscreen]);
 
-  // 🆕 Recalculer pixelPerCm quand le rectangle de référence est ajusté
+  // � ULTRA-PRECISION: Auto-initialiser avec les fusedCorners si disponibles
+  // Cet effet permet de skip l'étape de sélection manuelle de la référence ArUco
+  useEffect(() => {
+    if (!fusedCorners || !homographyReady || !imageDimensions.width || !imageDimensions.height) {
+      return;
+    }
+    
+    // Éviter de ré-initialiser si déjà fait
+    if (referenceCorners && quadrilateralMode) {
+      return;
+    }
+    
+    console.log('🎯 [Canvas] ULTRA-PRECISION: Initialisation automatique avec fusedCorners !');
+    console.log('   📍 fusedCorners (% de l\'image):', fusedCorners);
+    
+    // Convertir les corners de % (0-100) vers pixels
+    const cornersInPixels = {
+      topLeft: { 
+        x: (fusedCorners.topLeft.x / 100) * imageDimensions.width, 
+        y: (fusedCorners.topLeft.y / 100) * imageDimensions.height 
+      },
+      topRight: { 
+        x: (fusedCorners.topRight.x / 100) * imageDimensions.width, 
+        y: (fusedCorners.topRight.y / 100) * imageDimensions.height 
+      },
+      bottomRight: { 
+        x: (fusedCorners.bottomRight.x / 100) * imageDimensions.width, 
+        y: (fusedCorners.bottomRight.y / 100) * imageDimensions.height 
+      },
+      bottomLeft: { 
+        x: (fusedCorners.bottomLeft.x / 100) * imageDimensions.width, 
+        y: (fusedCorners.bottomLeft.y / 100) * imageDimensions.height 
+      }
+    };
+    
+    console.log('   📍 cornersInPixels:', cornersInPixels);
+    
+    // Initialiser les coins de référence
+    setReferenceCorners(cornersInPixels);
+    setQuadrilateralMode(true);
+    
+    // 📐 CALCUL DE LA POSE (orientation de la caméra)
+    const cornersArray = [
+      { x: cornersInPixels.topLeft.x, y: cornersInPixels.topLeft.y },
+      { x: cornersInPixels.topRight.x, y: cornersInPixels.topRight.y },
+      { x: cornersInPixels.bottomRight.x, y: cornersInPixels.bottomRight.y },
+      { x: cornersInPixels.bottomLeft.x, y: cornersInPixels.bottomLeft.y }
+    ];
+    const estimatedPose = estimatePose(cornersArray);
+    setPose(estimatedPose);
+    console.log(`📐 [Canvas] POSE initiale: rotX=${estimatedPose.rotX}°, rotY=${estimatedPose.rotY}°, rotZ=${estimatedPose.rotZ}°`);
+    
+    // Calculer le bounding box pour compatibilité
+    const minX = Math.min(cornersInPixels.topLeft.x, cornersInPixels.bottomLeft.x);
+    const maxX = Math.max(cornersInPixels.topRight.x, cornersInPixels.bottomRight.x);
+    const minY = Math.min(cornersInPixels.topLeft.y, cornersInPixels.topRight.y);
+    const maxY = Math.max(cornersInPixels.bottomLeft.y, cornersInPixels.bottomRight.y);
+    
+    const fusedBox = {
+      x: minX,
+      y: minY,
+      width: maxX - minX,
+      height: maxY - minY
+    };
+    
+    setAdjustableRefBox(fusedBox);
+    
+    // 🎯 ARUCO: Calculer immédiatement la calibration avec les dimensions ArUco configurées
+    // La taille est paramétrable dans Paramètres > IA Mesure
+    const arucoSizeCm = markerSizeCm;
+    const newPixelPerCmX = fusedBox.width / arucoSizeCm;
+    const newPixelPerCmY = fusedBox.height / arucoSizeCm;
+    const newPixelPerCm = (newPixelPerCmX + newPixelPerCmY) / 2;
+    
+    console.log(`🎯 [Canvas] Calibration ArUco MAGENTA (${markerSizeCm}cm × ${markerSizeCm}cm)`);
+    console.log(`   📏 Box: ${fusedBox.width.toFixed(0)}×${fusedBox.height.toFixed(0)}px`);
+    console.log(`   📏 pixelPerCmX: ${newPixelPerCmX.toFixed(2)}, pixelPerCmY: ${newPixelPerCmY.toFixed(2)}`);
+    
+    // 🎯 Activer le mode ArUco
+    setIsArucoMode(true);
+    
+    // Appliquer la calibration avec les setters existants
+    setPixelPerCmX(newPixelPerCmX);
+    setPixelPerCmY(newPixelPerCmY);
+    setPixelPerCm(newPixelPerCm);
+    
+    // 🚀 PASSER DIRECTEMENT À L'ÉTAPE DE MESURE (skip la sélection de référence)
+    console.log('🚀 [Canvas] Passage automatique à l\'étape selectMeasureZone');
+    setWorkflowStep('selectMeasureZone');
+    
+  }, [fusedCorners, homographyReady, imageDimensions.width, imageDimensions.height, referenceCorners, quadrilateralMode]);
+
+  // 🔄 Recalculer pixelPerCm quand le rectangle de référence est ajusté
   const recalculateCalibration = useCallback((box: { x: number; y: number; width: number; height: number }, skipSnap: boolean = false) => {
     // 🆕 ÉTAPE 1: Snapper aux vrais bords de l'objet (détection de contours locale)
     let snappedBox = box;
@@ -727,22 +860,33 @@ export const ImageMeasurementCanvas: React.FC<ImageMeasurementCanvasProps> = ({
     const ratio = snappedBox.width / snappedBox.height;
     const isLandscape = ratio > 1; // Plus large que haut = paysage
     
-    // Ajuster les dimensions A4 selon l'orientation détectée
-    let refWidth = referenceRealSize.width;
-    let refHeight = referenceRealSize.height;
+    // 🎯 ARUCO MODE: Si ArUco détecté, utiliser markerSizeCm × markerSizeCm au lieu de referenceRealSize
+    let refWidth: number;
+    let refHeight: number;
     
-    // Si le rectangle est en paysage mais les dimensions sont en portrait (ou vice versa), inverser
-    const dimensionsArePortrait = referenceRealSize.width < referenceRealSize.height;
-    if (isLandscape && dimensionsArePortrait) {
-      // Rectangle paysage mais dimensions portrait → inverser
-      refWidth = referenceRealSize.height;
-      refHeight = referenceRealSize.width;
-      console.log(`🔄 [Canvas] Rectangle PAYSAGE détecté, inversion: ${refWidth}x${refHeight}cm`);
-    } else if (!isLandscape && !dimensionsArePortrait) {
-      // Rectangle portrait mais dimensions paysage → inverser
-      refWidth = referenceRealSize.height;
-      refHeight = referenceRealSize.width;
-      console.log(`🔄 [Canvas] Rectangle PORTRAIT détecté, inversion: ${refWidth}x${refHeight}cm`);
+    if (isArucoMode) {
+      // ArUco MAGENTA est toujours un carré (taille configurée)
+      refWidth = 18;
+      refHeight = 18;
+      console.log(`🎯 [Canvas] Mode ARUCO: utilisation ${markerSizeCm}×${markerSizeCm}cm`);
+    } else {
+      // Ajuster les dimensions A4 selon l'orientation détectée
+      refWidth = referenceRealSize.width;
+      refHeight = referenceRealSize.height;
+      
+      // Si le rectangle est en paysage mais les dimensions sont en portrait (ou vice versa), inverser
+      const dimensionsArePortrait = referenceRealSize.width < referenceRealSize.height;
+      if (isLandscape && dimensionsArePortrait) {
+        // Rectangle paysage mais dimensions portrait → inverser
+        refWidth = referenceRealSize.height;
+        refHeight = referenceRealSize.width;
+        console.log(`🔄 [Canvas] Rectangle PAYSAGE détecté, inversion: ${refWidth}x${refHeight}cm`);
+      } else if (!isLandscape && !dimensionsArePortrait) {
+        // Rectangle portrait mais dimensions paysage → inverser
+        refWidth = referenceRealSize.height;
+        refHeight = referenceRealSize.width;
+        console.log(`🔄 [Canvas] Rectangle PORTRAIT détecté, inversion: ${refWidth}x${refHeight}cm`);
+      }
     }
     
     // 🆕 ÉTAPE 2: CALCUL HOMOGRAPHIE - Transformation perspective exacte
@@ -763,8 +907,11 @@ export const ImageMeasurementCanvas: React.FC<ImageMeasurementCanvasProps> = ({
     const rightEdgeDx = Math.abs(srcCorners.bottomRight.x - srcCorners.topRight.x);
     const maxPerspectiveDeform = Math.max(topEdgeDy, bottomEdgeDy, leftEdgeDx, rightEdgeDx);
     
-    // Rectangle A4 parfait (en mm pour précision)
-    const dstPoints = createA4DestinationPoints(isLandscape ? 'paysage' : 'portrait');
+    // Rectangle destination selon le type de référence 
+    // ⚠️ ArUco: 170mm entre CENTRES des cercles magenta (pas 180mm du bord du marqueur)
+    const dstPoints = isArucoMode 
+      ? createReferenceDestinationPoints('aruco')
+      : createReferenceDestinationPoints('a4', isLandscape ? 'paysage' : 'portrait');
     const srcPoints = cornersToPoints(srcCorners);
     
     // 🚨 Si le rectangle source est trop "parfait" (pas de perspective), skip l'homographie
@@ -848,7 +995,7 @@ export const ImageMeasurementCanvas: React.FC<ImageMeasurementCanvasProps> = ({
       console.log(`   🆕 Callback parent: pixelPerCmX_base1000=${pixelPerCmX_base1000.toFixed(2)}, pixelPerCmY_base1000=${pixelPerCmY_base1000.toFixed(2)}`);
       onReferenceAdjusted(boxBase1000, pixelPerCmX_base1000, pixelPerCmY_base1000);
     }
-  }, [referenceRealSize, imageDimensions, onReferenceAdjusted, image, snapRectangleToEdges, debugMode]);
+  }, [referenceRealSize, imageDimensions, onReferenceAdjusted, image, snapRectangleToEdges, debugMode, isArucoMode]);
 
   // 🆕 Recalculer l'homographie à partir des 4 coins ajustables (mode quadrilatère)
   const recalculateHomographyFromCorners = useCallback((corners: {
@@ -883,37 +1030,53 @@ export const ImageMeasurementCanvas: React.FC<ImageMeasurementCanvasProps> = ({
     const avgWidth = ((corners.topRight.x - corners.topLeft.x) + (corners.bottomRight.x - corners.bottomLeft.x)) / 2;
     const avgHeight = ((corners.bottomLeft.y - corners.topLeft.y) + (corners.bottomRight.y - corners.topRight.y)) / 2;
     
-    // 🛡️ VALIDATION: Vérifier que le quadrilatère a une taille raisonnable pour un A4
-    // Un A4 fait ~21x30cm, donc le ratio largeur/hauteur devrait être entre 0.5 et 2.0
-    // Et la taille ne devrait pas être trop grande (max ~50% de l'image)
+    // 🛡️ VALIDATION: Vérifier que le quadrilatère a une taille raisonnable
+    // ArUco 18×18cm = ratio 1:1, A4 ~21x30cm = ratio entre 0.5 et 2.0
+    // En mode ArUco, accepter les carrés (ratio ~1:1)
     const ratio = Math.abs(avgWidth / avgHeight);
     const area = Math.abs(avgWidth * avgHeight);
     const imageArea = imageDimensions.width * imageDimensions.height;
     const areaRatio = area / imageArea;
     
-    console.log(`   Ratio largeur/hauteur: ${ratio.toFixed(2)}`);
+    console.log(`   Ratio largeur/hauteur: ${ratio.toFixed(2)} ${isArucoMode ? '(ArUco attendu ~1.0)' : '(A4 attendu 0.7-1.4)'}`);
     console.log(`   Surface relative: ${(areaRatio * 100).toFixed(1)}% de l'image`);
     
-    // Si le ratio ou la surface sont aberrants, ne pas recalculer
-    if (ratio < 0.3 || ratio > 3.0) {
-      console.warn('⚠️ [Canvas] Ratio aberrant - les coins ne forment pas un A4 valide');
+    // Validation adaptée au mode
+    const minRatio = isArucoMode ? 0.7 : 0.3;  // ArUco est carré, tolérer 0.7-1.4
+    const maxRatio = isArucoMode ? 1.4 : 3.0;  // A4 peut être très allongé
+    
+    if (ratio < minRatio || ratio > maxRatio) {
+      console.warn(`⚠️ [Canvas] Ratio aberrant - les coins ne forment pas un ${isArucoMode ? 'ArUco valide (carré)' : 'A4 valide'}`);
       return;
     }
-    if (areaRatio > 0.5 || areaRatio < 0.01) {
-      console.warn('⚠️ [Canvas] Surface aberrante - le quadrilatère est trop grand ou trop petit pour un A4');
+    if (areaRatio > 0.5 || areaRatio < 0.001) {  // Permettre des marqueurs plus petits
+      console.warn(`⚠️ [Canvas] Surface aberrante - le quadrilatère est trop grand ou trop petit pour un ${isArucoMode ? 'ArUco 18cm' : 'A4'}`);
       return;
     }
     
     const isLandscape = avgWidth > avgHeight;
     
-    // Points destination = A4 parfait
-    const dstPoints = createA4DestinationPoints(isLandscape ? 'paysage' : 'portrait');
+    // Points destination selon le type de référence
+    const dstPoints = isArucoMode 
+      ? createReferenceDestinationPoints('aruco')
+      : createReferenceDestinationPoints('a4', isLandscape ? 'paysage' : 'portrait');
     
-    console.log(`   📐 Orientation A4 utilisée: ${isLandscape ? 'PAYSAGE (297x210mm)' : 'PORTRAIT (210x297mm)'}`);
-    console.log(`   📐 Points destination A4:`, dstPoints.map(p => `(${p[0]}, ${p[1]})`).join(', '));
+    const refLabel = isArucoMode ? `ArUco ${markerSizeCm * 10}×${markerSizeCm * 10}mm (${markerSizeCm}cm)` : `A4 ${isLandscape ? 'PAYSAGE (297x210mm)' : 'PORTRAIT (210x297mm)'}`;
+    console.log(`   📐 Référence utilisée: ${refLabel}`);
+    console.log(`   📐 Points destination:`, dstPoints.map(p => `(${p[0]}, ${p[1]})`).join(', '));
     
     try {
       const homography = computeHomography(srcPoints, dstPoints);
+      
+      // 🔍 VÉRIFICATION: La distance entre TL et TR devrait être exactement 180mm (ArUco) ou 210mm (A4)
+      const topLeftReal = applyHomography(homography.matrix, srcPoints[0]);
+      const topRightReal = applyHomography(homography.matrix, srcPoints[1]);
+      const verifyDistanceMm = Math.hypot(topRightReal[0] - topLeftReal[0], topRightReal[1] - topLeftReal[1]);
+      const expectedDistanceMm = isArucoMode ? (markerSizeCm * 10) : (isLandscape ? 297 : 210);
+      console.log(`   🔍 VÉRIFICATION HOMOGRAPHIE: distance TL↔TR = ${verifyDistanceMm.toFixed(1)}mm (attendu: ${expectedDistanceMm}mm)`);
+      if (Math.abs(verifyDistanceMm - expectedDistanceMm) > 1) {
+        console.warn(`   ⚠️ ERREUR HOMOGRAPHIE: écart de ${Math.abs(verifyDistanceMm - expectedDistanceMm).toFixed(1)}mm !`);
+      }
       
       console.log('✅ [Canvas] HOMOGRAPHIE depuis 4 coins:', {
         quality: homography.quality.toFixed(1) + '%',
@@ -923,6 +1086,29 @@ export const ImageMeasurementCanvas: React.FC<ImageMeasurementCanvasProps> = ({
       
       if (homography.quality > 10) {
         setHomographyResult(homography);
+        
+        // 📐 CALCUL DE LA POSE (orientation de la caméra)
+        const cornersArray = [
+          { x: corners.topLeft.x, y: corners.topLeft.y },
+          { x: corners.topRight.x, y: corners.topRight.y },
+          { x: corners.bottomRight.x, y: corners.bottomRight.y },
+          { x: corners.bottomLeft.x, y: corners.bottomLeft.y }
+        ];
+        const estimatedPose = estimatePose(cornersArray);
+        setPose(estimatedPose);
+        console.log(`📐 [Canvas] POSE estimée: rotX=${estimatedPose.rotX}°, rotY=${estimatedPose.rotY}°, rotZ=${estimatedPose.rotZ}°`);
+        
+        // 📏 CALCUL DE LA PROFONDEUR (distance caméra ↔ marqueur)
+        // Formule: distance = (taille_réelle_cm × focale_pixels) / taille_pixels
+        // Focale typique smartphone ~800px (approximation pour capteur standard)
+        const side1 = Math.hypot(corners.topRight.x - corners.topLeft.x, corners.topRight.y - corners.topLeft.y);
+        const side2 = Math.hypot(corners.bottomLeft.x - corners.topLeft.x, corners.bottomLeft.y - corners.topLeft.y);
+        const avgSizePx = (side1 + side2) / 2;
+        const markerSizeForDepth = isArucoMode ? markerSizeCm : 21; // ArUco configurable, A4 ~21cm
+        const focalLength = 800; // Focale approximative en pixels
+        const depth = (markerSizeCm * focalLength) / avgSizePx;
+        setEstimatedDepth(Math.round(depth));
+        console.log(`📏 [Canvas] PROFONDEUR estimée: ${depth.toFixed(0)}cm (marqueur ${avgSizePx.toFixed(0)}px)`);
         
         // Générer la grille de debug si activé
         if (debugMode) {
@@ -1015,19 +1201,21 @@ export const ImageMeasurementCanvas: React.FC<ImageMeasurementCanvasProps> = ({
       console.log(`   leftEdgeDx: ${leftEdgeDx.toFixed(1)}px, rightEdgeDx: ${rightEdgeDx.toFixed(1)}px`);
       console.log(`   maxPerspectiveDeform: ${maxPerspectiveDeform.toFixed(1)}px`);
       
-      // 🆕 Détecter l'orientation de l'A4 à partir des dimensions des srcPoints EN PIXELS (pas fusedCorners qui est en %)
+      // 🆕 Détecter l'orientation à partir des dimensions des srcPoints EN PIXELS (pas fusedCorners qui est en %)
       const avgWidth = ((srcPoints[1][0] - srcPoints[0][0]) + (srcPoints[2][0] - srcPoints[3][0])) / 2;
       const avgHeight = ((srcPoints[3][1] - srcPoints[0][1]) + (srcPoints[2][1] - srcPoints[1][1])) / 2;
       const isLandscape = avgWidth > avgHeight;
-      console.log(`   📐 A4 détecté: ${isLandscape ? 'PAYSAGE' : 'PORTRAIT'} (${avgWidth.toFixed(0)}x${avgHeight.toFixed(0)}px)`);
+      const refLabel = isArucoMode ? `ArUco ${markerSizeCm}×${markerSizeCm}cm` : `A4 ${isLandscape ? 'PAYSAGE' : 'PORTRAIT'}`;
+      console.log(`   📐 Référence détectée: ${refLabel} (${avgWidth.toFixed(0)}x${avgHeight.toFixed(0)}px)`);
       
       // Si perspective suffisante (>5px), calculer l'homographie
       if (maxPerspectiveDeform > 5) {
-        // Créer les points destination A4 (rectangle parfait) - utiliser l'orientation DÉTECTÉE !
-        const dstPoints = createA4DestinationPoints(isLandscape ? 'paysage' : 'portrait');
+        // Créer les points destination selon le type de référence - utiliser l'orientation DÉTECTÉE !
+        const dstPoints = isArucoMode 
+          ? createReferenceDestinationPoints('aruco')
+          : createReferenceDestinationPoints('a4', isLandscape ? 'paysage' : 'portrait');
         
-        console.log(`   📐 Orientation A4 utilisée: ${isLandscape ? 'PAYSAGE (297x210mm)' : 'PORTRAIT (210x297mm)'}`);
-        console.log(`   📐 Points destination A4:`, dstPoints.map(p => `(${p[0]}, ${p[1]})`).join(', '));
+        console.log(`   📐 Points destination ${isArucoMode ? 'ArUco 180×180mm' : isLandscape ? 'A4 297x210mm' : 'A4 210x297mm'}:`, dstPoints.map(p => `(${p[0]}, ${p[1]})`).join(', '));
         
         // Calculer l'homographie directement depuis les corners fusionnés
         const homography = computeHomography(srcPoints, dstPoints);
@@ -1185,8 +1373,10 @@ export const ImageMeasurementCanvas: React.FC<ImageMeasurementCanvasProps> = ({
       [referenceCorners.bottomLeft.x, referenceCorners.bottomLeft.y]
     ];
     
-    // Points destination = rectangle parfait A4 en mm
-    const dstPoints = createA4DestinationPoints(isLandscape ? 'paysage' : 'portrait');
+    // Points destination selon le type de référence (ArUco 180mm ou A4)
+    const dstPoints = isArucoMode 
+      ? createReferenceDestinationPoints('aruco')
+      : createReferenceDestinationPoints('a4', isLandscape ? 'paysage' : 'portrait');
     
     // Calculer la déformation perspective
     const topEdgeDy = Math.abs(referenceCorners.topRight.y - referenceCorners.topLeft.y);
@@ -1195,7 +1385,8 @@ export const ImageMeasurementCanvas: React.FC<ImageMeasurementCanvasProps> = ({
     const rightEdgeDx = Math.abs(referenceCorners.bottomRight.x - referenceCorners.topRight.x);
     const maxPerspectiveDeform = Math.max(topEdgeDy, bottomEdgeDy, leftEdgeDx, rightEdgeDx);
     
-    console.log(`📐 [Canvas] Analyse PERSPECTIVE de l'A4:`);
+    const refLabel = isArucoMode ? `ArUco ${markerSizeCm}cm` : 'A4';
+    console.log(`📐 [Canvas] Analyse PERSPECTIVE ${refLabel}:`);
     console.log(`   Déformation haut: ${topEdgeDy.toFixed(1)}px, bas: ${bottomEdgeDy.toFixed(1)}px`);
     console.log(`   Déformation gauche: ${leftEdgeDx.toFixed(1)}px, droite: ${rightEdgeDx.toFixed(1)}px`);
     console.log(`   🎯 Déformation MAX: ${maxPerspectiveDeform.toFixed(1)}px`);
@@ -2014,33 +2205,51 @@ export const ImageMeasurementCanvas: React.FC<ImageMeasurementCanvasProps> = ({
       const result = await detectCornersInZone(zonePercent, targetType);
 
       if (result?.success && result.corners) {
+        // 🔧 Normaliser corners: peut être Array [tl, tr, br, bl] ou Object {topLeft, topRight, ...}
+        let cornersObj: { topLeft: {x: number, y: number}, topRight: {x: number, y: number}, bottomRight: {x: number, y: number}, bottomLeft: {x: number, y: number} };
+        
+        if (Array.isArray(result.corners)) {
+          // API ArUco retourne un Array [TL, TR, BR, BL]
+          cornersObj = {
+            topLeft: result.corners[0],
+            topRight: result.corners[1],
+            bottomRight: result.corners[2],
+            bottomLeft: result.corners[3]
+          };
+          console.log('🔧 [Canvas] Corners convertis depuis Array:', cornersObj);
+        } else {
+          // Format objet déjà correct
+          cornersObj = result.corners;
+        }
+        
         // Convertir les coins de pourcentage en pixels
         const cornersPixels = {
           topLeft: {
-            x: (result.corners.topLeft.x / 100) * imageDimensions.width,
-            y: (result.corners.topLeft.y / 100) * imageDimensions.height
+            x: (cornersObj.topLeft.x / 100) * imageDimensions.width,
+            y: (cornersObj.topLeft.y / 100) * imageDimensions.height
           },
           topRight: {
-            x: (result.corners.topRight.x / 100) * imageDimensions.width,
-            y: (result.corners.topRight.y / 100) * imageDimensions.height
+            x: (cornersObj.topRight.x / 100) * imageDimensions.width,
+            y: (cornersObj.topRight.y / 100) * imageDimensions.height
           },
           bottomLeft: {
-            x: (result.corners.bottomLeft.x / 100) * imageDimensions.width,
-            y: (result.corners.bottomLeft.y / 100) * imageDimensions.height
+            x: (cornersObj.bottomLeft.x / 100) * imageDimensions.width,
+            y: (cornersObj.bottomLeft.y / 100) * imageDimensions.height
           },
           bottomRight: {
-            x: (result.corners.bottomRight.x / 100) * imageDimensions.width,
-            y: (result.corners.bottomRight.y / 100) * imageDimensions.height
+            x: (cornersObj.bottomRight.x / 100) * imageDimensions.width,
+            y: (cornersObj.bottomRight.y / 100) * imageDimensions.height
           }
         };
 
         if (workflowStep === 'selectReferenceZone') {
-          // Étape 1: Référence A4 détectée → passer à l'étape 2
-          console.log('📐 [Canvas] Référence A4 détectée, coins:', cornersPixels);
+          // Étape 1: Référence détectée (ArUco ou A4) → passer à l'étape 2
+          const refType = isArucoMode ? `ArUco MAGENTA ${markerSizeCm}cm` : 'A4';
+          console.log(`📐 [Canvas] Référence ${refType} détectée, coins:`, cornersPixels);
           console.log('📐 [Canvas] Confiance:', result.confidence, '% - Objet trouvé:', result.objectFound);
           setReferenceCorners(cornersPixels);
           setQuadrilateralMode(true);
-          message.success(`✅ Référence A4 détectée (confiance: ${Math.round(result.confidence || 0)}%)`);
+          message.success(`✅ Référence ${refType} détectée (confiance: ${Math.round(result.confidence || 0)}%)`);
           setWorkflowStep('selectMeasureZone');
         } else {
           // Étape 2: Objet à mesurer détecté → passer à l'étape 3
@@ -2614,7 +2823,7 @@ export const ImageMeasurementCanvas: React.FC<ImageMeasurementCanvasProps> = ({
                   })()
                 )}
                 
-                {/* Référence A4 - Quadrilatère avec 4 coins draggables */}
+                {/* Référence (ArUco ou A4) - Quadrilatère avec 4 coins draggables */}
                 {referenceCorners && (
                   <>
                     <Line
@@ -2993,7 +3202,7 @@ export const ImageMeasurementCanvas: React.FC<ImageMeasurementCanvasProps> = ({
                       setReferenceCorners(null);
                       setQuadrilateralMode(false);
                       setWorkflowStep('selectReferenceZone');
-                      message.info('Référence A4 effacée. Redessinez autour de la feuille A4.');
+                      message.info(isArucoMode ? 'Référence ArUco effacée.' : 'Référence A4 effacée. Redessinez autour de la feuille A4.');
                     }}
                     style={{ marginLeft: 8 }}
                   >
@@ -3027,7 +3236,7 @@ export const ImageMeasurementCanvas: React.FC<ImageMeasurementCanvasProps> = ({
                     setPoints([]);
                     setHomographyResult(null);
                     setWorkflowStep('selectReferenceZone');
-                    message.info('Tout effacé. Recommencez depuis la référence A4.');
+                    message.info(isArucoMode ? 'Tout effacé.' : 'Tout effacé. Recommencez depuis la référence A4.');
                   }}
                   style={{ marginLeft: 4 }}
                 >
@@ -3225,6 +3434,99 @@ export const ImageMeasurementCanvas: React.FC<ImageMeasurementCanvasProps> = ({
                 showIcon
                 style={{ padding: '4px 12px' }}
               />
+            </div>
+          )}
+          
+          {/* 📐 POSE (Orientation) - Affichage des angles de rotation */}
+          {pose && (
+            <div style={{ marginTop: 8 }}>
+              <div style={{ 
+                background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                borderRadius: 8,
+                padding: '12px 16px',
+                color: 'white'
+              }}>
+                <div style={{ fontSize: 14, fontWeight: 'bold', marginBottom: 8 }}>
+                  📐 Pose (Orientation de la caméra)
+                </div>
+                <div style={{ display: 'flex', gap: 16, justifyContent: 'space-around' }}>
+                  <div style={{ textAlign: 'center' }}>
+                    <div style={{ 
+                      fontSize: 24, 
+                      fontWeight: 'bold',
+                      color: Math.abs(pose.rotX) < 15 ? '#52c41a' : Math.abs(pose.rotX) < 30 ? '#faad14' : '#ff4d4f'
+                    }}>
+                      {pose.rotX}°
+                    </div>
+                    <div style={{ fontSize: 11, opacity: 0.8 }}>Rotation X</div>
+                    <div style={{ fontSize: 10, opacity: 0.6 }}>haut/bas</div>
+                  </div>
+                  <div style={{ textAlign: 'center' }}>
+                    <div style={{ 
+                      fontSize: 24, 
+                      fontWeight: 'bold',
+                      color: Math.abs(pose.rotY) < 15 ? '#52c41a' : Math.abs(pose.rotY) < 30 ? '#faad14' : '#ff4d4f'
+                    }}>
+                      {pose.rotY}°
+                    </div>
+                    <div style={{ fontSize: 11, opacity: 0.8 }}>Rotation Y</div>
+                    <div style={{ fontSize: 10, opacity: 0.6 }}>gauche/droite</div>
+                  </div>
+                  <div style={{ textAlign: 'center' }}>
+                    <div style={{ 
+                      fontSize: 24, 
+                      fontWeight: 'bold',
+                      color: Math.abs(pose.rotZ) < 10 ? '#52c41a' : Math.abs(pose.rotZ) < 20 ? '#faad14' : '#ff4d4f'
+                    }}>
+                      {pose.rotZ}°
+                    </div>
+                    <div style={{ fontSize: 11, opacity: 0.8 }}>Rotation Z</div>
+                    <div style={{ fontSize: 10, opacity: 0.6 }}>inclinaison</div>
+                  </div>
+                </div>
+                
+                {/* 📏 PROFONDEUR (Distance caméra ↔ marqueur) */}
+                {estimatedDepth && (
+                  <div style={{ 
+                    marginTop: 12, 
+                    padding: '8px 12px',
+                    background: 'rgba(255,255,255,0.15)',
+                    borderRadius: 6,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: 8
+                  }}>
+                    <span style={{ fontSize: 18 }}>📏</span>
+                    <div>
+                      <div style={{ fontSize: 11, opacity: 0.8 }}>Distance caméra ↔ marqueur</div>
+                      <div style={{ 
+                        fontSize: 20, 
+                        fontWeight: 'bold',
+                        color: estimatedDepth < 50 ? '#52c41a' : estimatedDepth < 100 ? '#faad14' : '#ff7875'
+                      }}>
+                        ~{estimatedDepth} cm
+                        <span style={{ fontSize: 12, fontWeight: 'normal', opacity: 0.7, marginLeft: 4 }}>
+                          ({(estimatedDepth / 100).toFixed(2)} m)
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                )}
+                
+                <div style={{ 
+                  marginTop: 8, 
+                  fontSize: 11, 
+                  opacity: 0.7,
+                  textAlign: 'center'
+                }}>
+                  {Math.abs(pose.rotX) < 15 && Math.abs(pose.rotY) < 15 
+                    ? '✅ Angles idéaux pour une mesure précise' 
+                    : Math.abs(pose.rotX) < 30 && Math.abs(pose.rotY) < 30
+                      ? '⚠️ Angles acceptables - correction homographie appliquée'
+                      : '⚠️ Photo très inclinée - précision réduite'}
+                </div>
+              </div>
             </div>
           )}
         </Card>
@@ -3687,8 +3989,8 @@ export const ImageMeasurementCanvas: React.FC<ImageMeasurementCanvasProps> = ({
                   x={adjustableRefBox.x}
                   y={adjustableRefBox.y - 28}
                   text={isRefSelected 
-                    ? `⚠️ AJUSTEZ ce rectangle sur la VRAIE feuille A4 !`
-                    : `📐 Feuille A4 (${referenceRealSize.width}×${referenceRealSize.height}cm) - CLIQUEZ pour ajuster`}
+                    ? `⚠️ AJUSTEZ ce rectangle sur la VRAIE ${isArucoMode ? 'référence ArUco' : 'feuille A4'} !`
+                    : `📐 ${isArucoMode ? 'ArUco MAGENTA' : 'Feuille A4'} (${referenceRealSize.width}×${referenceRealSize.height}cm) - CLIQUEZ pour ajuster`}
                   fontSize={11}
                   fontStyle="bold"
                   fill={isRefSelected ? "#ff4d4f" : "#52c41a"}
@@ -3816,7 +4118,7 @@ export const ImageMeasurementCanvas: React.FC<ImageMeasurementCanvasProps> = ({
                 <KonvaText
                   x={referenceCorners.topLeft.x}
                   y={referenceCorners.topLeft.y - 40}
-                  text={`📐 Feuille A4 (${referenceRealSize.width}×${referenceRealSize.height}cm)`}
+                  text={`📐 ${isArucoMode ? 'ArUco MAGENTA' : 'Feuille A4'} (${referenceRealSize.width}×${referenceRealSize.height}cm)`}
                   fontSize={12}
                   fontStyle="bold"
                   fill="#52c41a"

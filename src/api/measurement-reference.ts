@@ -12,11 +12,26 @@ import { authenticateToken, type AuthenticatedRequest } from '../middleware/auth
 import GoogleGeminiService from '../services/GoogleGeminiService';
 import { edgeDetectionService } from '../services/EdgeDetectionService';
 import { multiPhotoFusionService } from '../services/MultiPhotoFusionService';
+// 🎯 Import ArUco detector pour détection 105 points
+import { 
+  MarkerDetector, 
+  MARKER_SPECS, 
+  detectUltraPrecisionPoints,
+  type UltraPrecisionResult 
+} from '../lib/marker-detector';
+// 🔥 Import HomographyFusionService pour le vrai pipeline multi-photo
+import { homographyFusionService } from '../services/HomographyFusionService';
+import * as sharpModule from 'sharp';
+
+const sharp = (sharpModule as any).default || sharpModule;
 
 const router = Router();
 
 // Instance du service Gemini
 const geminiService = new GoogleGeminiService();
+
+// 🎯 Singleton ArUco detector
+const arucoDetector = new MarkerDetector(30, 2000);
 
 /**
  * GET /api/measurement-reference/
@@ -717,6 +732,335 @@ router.post('/fuse-photos', authenticateToken, async (req: AuthenticatedRequest,
 });
 
 /**
+ * 🔥 POST /api/measurement-reference/ultra-fusion-detect
+ * 
+ * PIPELINE OPTIMISÉ: HOMOGRAPHIE PAR PHOTO + SÉLECTION MEILLEURE
+ * 
+ * Workflow:
+ * 1️⃣ DÉTECTER ArUco sur CHAQUE photo individuellement → homographie par photo
+ * 2️⃣ SÉLECTIONNER la MEILLEURE photo (score détection + qualité homographie)
+ * 3️⃣ ULTRA-PRÉCISION: 105 POINTS sur la meilleure photo
+ * 4️⃣ Retourner les coins ArUco + métriques pour le canvas
+ * 
+ * PAS de fusion d'images - juste sélection intelligente !
+ * 
+ * @body photos - Array de { base64, mimeType, metadata? }
+ */
+router.post('/ultra-fusion-detect', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
+  const startTime = Date.now();
+  
+  try {
+    const { photos } = req.body;
+
+    if (!req.user?.id) {
+      return res.status(401).json({ error: 'Non authentifié' });
+    }
+
+    if (!photos || photos.length === 0) {
+      return res.status(400).json({ error: 'Au moins une photo requise' });
+    }
+
+    console.log(`\n${'='.repeat(80)}`);
+    console.log(`🔥 [BEST-PHOTO] SÉLECTION MEILLEURE PHOTO - ${photos.length} photos`);
+    console.log(`${'='.repeat(80)}\n`);
+
+    // Nettoyer les photos
+    const cleanedPhotos = photos.map((photo: { base64: string; mimeType?: string; metadata?: object }) => ({
+      base64: photo.base64.includes(',') ? photo.base64.split(',')[1] : photo.base64,
+      mimeType: photo.mimeType || 'image/jpeg',
+      metadata: photo.metadata
+    }));
+
+    // ============================================
+    // 1️⃣ ANALYSER CHAQUE PHOTO INDIVIDUELLEMENT
+    // ============================================
+    console.log('1️⃣ Analyse ArUco sur chaque photo...\n');
+    
+    const arucoDetector = new MarkerDetector();
+    const photoAnalyses: Array<{
+      index: number;
+      base64: string;
+      marker: any;
+      score: number;
+      homography: number[][] | null;
+      reprojectionError: number;
+      quality: number;
+      corners: any;
+      ultraPrecision: any;
+    }> = [];
+    
+    for (let i = 0; i < cleanedPhotos.length; i++) {
+      const photo = cleanedPhotos[i];
+      console.log(`   📷 Photo ${i}: Analyse...`);
+      
+      try {
+        const imageBuffer = Buffer.from(photo.base64, 'base64');
+        const metadata = await sharp(imageBuffer).metadata();
+        const width = metadata.width || 1920;
+        const height = metadata.height || 1080;
+        
+        // Convertir en raw RGBA
+        const rawBuffer = await sharp(imageBuffer)
+          .ensureAlpha()
+          .raw()
+          .toBuffer();
+        
+        const imageData = {
+          data: new Uint8ClampedArray(rawBuffer),
+          width,
+          height
+        };
+        
+        // Détection ArUco
+        const markers = arucoDetector.detect(imageData);
+        
+        if (markers.length > 0) {
+          const marker = markers[0];
+          
+          // Ultra-précision avec 105 points
+          const cornersForUltra = marker.magentaPositions || marker.corners;
+          const ultraResult = detectUltraPrecisionPoints(imageData, cornersForUltra, marker.extendedPoints);
+          
+          // Calculer un score global (détection + homographie)
+          const detectionScore = marker.score || 0;
+          const homographyQuality = ultraResult.quality || 0;
+          const globalScore = (detectionScore * 0.4) + (homographyQuality * 0.3) + ((1 - ultraResult.reprojectionError / 10) * 0.3);
+          
+          // 🎯 CRITIQUE: Utiliser magentaPositions (coins EXTÉRIEURS 18cm) pas corners (6cm intérieur)!
+          // marker.corners = coins du pattern central 6cm (pour homographie interne)
+          // marker.magentaPositions = coins MAGENTA extérieurs 18cm (pour calibration!)
+          const outerCorners = marker.magentaPositions || marker.corners;
+          const cornersPercent = {
+            topLeft: { x: (outerCorners[0].x / width) * 100, y: (outerCorners[0].y / height) * 100 },
+            topRight: { x: (outerCorners[1].x / width) * 100, y: (outerCorners[1].y / height) * 100 },
+            bottomRight: { x: (outerCorners[2].x / width) * 100, y: (outerCorners[2].y / height) * 100 },
+            bottomLeft: { x: (outerCorners[3].x / width) * 100, y: (outerCorners[3].y / height) * 100 }
+          };
+          
+          console.log(`   🎯 Coins EXTÉRIEURS 18cm utilisés: TL=(${outerCorners[0].x.toFixed(0)},${outerCorners[0].y.toFixed(0)}) TR=(${outerCorners[1].x.toFixed(0)},${outerCorners[1].y.toFixed(0)})`);
+          
+          photoAnalyses.push({
+            index: i,
+            base64: photo.base64,
+            marker,
+            score: globalScore,
+            homography: ultraResult.homography,
+            reprojectionError: ultraResult.reprojectionError,
+            quality: homographyQuality,
+            corners: cornersPercent,
+            ultraPrecision: {
+              totalPoints: ultraResult.totalPoints,
+              inlierPoints: ultraResult.inlierPoints,
+              reprojectionError: ultraResult.reprojectionError,
+              estimatedPrecision: ultraResult.reprojectionError < 0.5 ? '±0.2mm' : 
+                                 ultraResult.reprojectionError < 1 ? '±0.5mm' : '±1mm',
+              corners: cornersPercent
+            }
+          });
+          
+          console.log(`   ✅ Photo ${i}: ArUco détecté! score=${(globalScore * 100).toFixed(1)}%, reproj=${ultraResult.reprojectionError.toFixed(2)}mm`);
+        } else {
+          console.log(`   ❌ Photo ${i}: ArUco non détecté`);
+        }
+      } catch (err) {
+        console.error(`   ❌ Photo ${i}: Erreur -`, err);
+      }
+    }
+    
+    if (photoAnalyses.length === 0) {
+      console.error('❌ [BEST-PHOTO] Aucun ArUco détecté sur aucune photo !');
+      return res.status(400).json({
+        success: false,
+        error: 'ArUco MAGENTA non détecté. Assurez-vous que le marqueur est visible.',
+        detections: 0
+      });
+    }
+    
+    // ============================================
+    // 2️⃣ SÉLECTIONNER LA MEILLEURE PHOTO
+    // ============================================
+    console.log('\n2️⃣ Sélection de la meilleure photo...');
+    
+    // Trier par score global (le plus élevé = meilleur)
+    photoAnalyses.sort((a, b) => b.score - a.score);
+    const bestPhoto = photoAnalyses[0];
+    
+    console.log(`   🏆 MEILLEURE PHOTO: ${bestPhoto.index}`);
+    console.log(`      📊 Score global: ${(bestPhoto.score * 100).toFixed(1)}%`);
+    console.log(`      📏 Reprojection error: ${bestPhoto.reprojectionError.toFixed(2)}mm`);
+    console.log(`      🎯 Précision estimée: ${bestPhoto.ultraPrecision.estimatedPrecision}`);
+    
+    // ============================================
+    // RÉSULTAT FINAL
+    // ============================================
+    const totalTime = Date.now() - startTime;
+    
+    console.log(`\n${'='.repeat(80)}`);
+    console.log(`✅ [BEST-PHOTO] SUCCÈS - ${totalTime}ms`);
+    console.log(`${'='.repeat(80)}\n`);
+
+    // 🎯 ARUCO: Calculer pixelPerCm depuis les dimensions du marqueur (18cm × 18cm)
+    const markerSizeCm = MARKER_SPECS.markerSize; // 18cm
+    const markerWidthPx = (bestPhoto.corners.bottomRight.x - bestPhoto.corners.topLeft.x) / 100 * 1920; // Estimation
+    const markerHeightPx = (bestPhoto.corners.bottomRight.y - bestPhoto.corners.topLeft.y) / 100 * 1080;
+    const avgPixelPerCm = (markerWidthPx + markerHeightPx) / 2 / markerSizeCm;
+    
+    return res.json({
+      success: true,
+      method: 'best-photo-selection',
+      
+      // 🏆 Meilleure photo (à utiliser dans le canvas)
+      bestPhotoBase64: bestPhoto.base64,
+      
+      // 🎯 Corners ArUco en % (pour le canvas)
+      fusedCorners: bestPhoto.corners,
+      homographyReady: true,
+      
+      // 🎯 NOUVEAU: Données pour calibration précise
+      markerSizeCm: markerSizeCm, // 18cm ArUco MAGENTA
+      pixelPerCm: avgPixelPerCm,  // Pixels par cm (estimation)
+      homographyMatrix: bestPhoto.homography, // Matrice 3x3 si disponible
+      reprojectionErrorMm: bestPhoto.reprojectionError, // Erreur en mm
+      
+      // 📊 Ultra-précision
+      ultraPrecision: {
+        ...bestPhoto.ultraPrecision,
+        // 🎯 NOUVEAU: Ajouter les données pour le canvas
+        homographyMatrix: bestPhoto.homography,
+        pixelPerCm: avgPixelPerCm,
+        markerSizeCm: markerSizeCm
+      },
+      
+      // 🏆 Infos sur la meilleure photo
+      bestPhoto: {
+        index: bestPhoto.index,
+        score: bestPhoto.score,
+        reprojectionError: bestPhoto.reprojectionError
+      },
+      
+      // 📊 Résultats de toutes les photos (pour affichage)
+      allPhotoScores: photoAnalyses.map(p => ({
+        index: p.index,
+        score: p.score,
+        reprojectionError: p.reprojectionError,
+        detected: true
+      })),
+      
+      // Métriques
+      metrics: {
+        inputPhotos: photos.length,
+        successfulDetections: photoAnalyses.length,
+        processingTimeMs: totalTime
+      }
+    });
+
+  } catch (error) {
+    console.error('❌ [BEST-PHOTO] Erreur:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Erreur serveur lors de l\'analyse des photos'
+    });
+  }
+});
+
+/**
+ * 📏 Fonction helper pour détecter les contours d'un objet à mesurer
+ * Utilise EdgeDetection puis Gemini comme fallback
+ */
+async function detectObjectInZone(
+  imageBuffer: Buffer,
+  cropZone: { x: number; y: number; width: number; height: number },
+  imageWidth: number,
+  imageHeight: number,
+  objectType: string,
+  objectDescription?: string
+): Promise<{
+  success: boolean;
+  method: string;
+  corners: { x: number; y: number }[] | null;
+  confidence: number;
+}> {
+  try {
+    // Convertir le buffer en base64 pour les services de détection
+    const imageBase64 = imageBuffer.toString('base64');
+    
+    // Zone de sélection en % pour EdgeDetection
+    const selectionZonePercent = {
+      x: (cropZone.x / imageWidth) * 100,
+      y: (cropZone.y / imageHeight) * 100,
+      width: (cropZone.width / imageWidth) * 100,
+      height: (cropZone.height / imageHeight) * 100
+    };
+
+    console.log(`📏 [DETECT OBJECT] Détection objet "${objectType}" dans zone ${cropZone.width}x${cropZone.height}px`);
+
+    // 1. Essayer EdgeDetection
+    console.log('🔍 [DETECT OBJECT] Tentative EdgeDetection...');
+    const edgeResult = await edgeDetectionService.detectWhitePaperCorners(
+      imageBase64,
+      selectionZonePercent,
+      'image/jpeg'
+    );
+
+    // EdgeDetection retourne un objet {topLeft, topRight, bottomLeft, bottomRight}
+    if (edgeResult.success && edgeResult.corners) {
+      const corners = edgeResult.corners;
+      
+      // Vérifier si c'est un objet avec les 4 coins
+      if (corners.topLeft && corners.topRight && corners.bottomLeft && corners.bottomRight) {
+        console.log(`✅ [DETECT OBJECT] EdgeDetection réussie avec 4 coins (objet)`);
+        
+        // Convertir en tableau [TL, TR, BR, BL] pour le Canvas
+        const cornersArray = [
+          corners.topLeft,
+          corners.topRight,
+          corners.bottomRight,
+          corners.bottomLeft
+        ];
+        
+        return {
+          success: true,
+          method: 'edge-detection-object',
+          corners: cornersArray,
+          confidence: edgeResult.confidence || 70
+        };
+      }
+      
+      // Si c'est déjà un tableau
+      if (Array.isArray(corners) && corners.length === 4) {
+        console.log(`✅ [DETECT OBJECT] EdgeDetection réussie: ${corners.length} coins (array)`);
+        return {
+          success: true,
+          method: 'edge-detection-object',
+          corners: corners,
+          confidence: edgeResult.confidence || 70
+        };
+      }
+    }
+
+    console.log('⚠️ [DETECT OBJECT] EdgeDetection échouée ou format invalide');
+    
+    // 2. Pas de fallback Gemini pour l'instant - retourner échec
+    // (geminiService.detectCornersInZone n'existe pas)
+    return {
+      success: false,
+      method: 'detection-failed',
+      corners: null,
+      confidence: 0
+    };
+
+  } catch (error) {
+    console.error('❌ [DETECT OBJECT] Erreur:', error);
+    return {
+      success: false,
+      method: 'error',
+      corners: null,
+      confidence: 0
+    };
+  }
+}
+
+/**
  * 🎯 POST /api/measurement-reference/detect-with-fusion
  * ENDPOINT COMBINÉ: Fusionne les photos PUIS détecte les coins
  * 
@@ -724,20 +1068,26 @@ router.post('/fuse-photos', authenticateToken, async (req: AuthenticatedRequest,
  * 
  * FLUX:
  * 1. Fusion des N photos → 1 image optimisée
- * 2. Détection de coins sur l'image fusionnée (EdgeDetection puis Gemini fallback)
- * 3. Retour des corners avec haute confiance
+ * 2. 🎯 Détection ArUco MAGENTA avec 105 POINTS :
+ *    - 4 coins du marqueur
+ *    - 16 points de transition noir/blanc
+ *    - 49 coins de grille intérieure (Harris)
+ *    - 36 centres de cellules
+ * 3. RANSAC homographie (1000 itérations)
+ * 4. Levenberg-Marquardt refinement (50 itérations)
+ * 5. Retour des mesures avec précision ±0.2mm
  * 
  * @body photos - Array de { base64, mimeType }
  * @body selectionZone - { x, y, width, height } en %
- * @body referenceType - Type de référence
- * @body objectDescription - Description pour l'IA (optionnel)
+ * @body referenceType - Type de référence (aruco_magenta recommandé)
+ * @body objectDescription - Description pour l'IA (optionnel, fallback)
  */
 router.post('/detect-with-fusion', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { 
       photos, 
       selectionZone, 
-      referenceType = 'a4',
+      referenceType = 'aruco_magenta',
       objectDescription,
       realDimensions,
       targetType = 'reference'
@@ -755,43 +1105,255 @@ router.post('/detect-with-fusion', authenticateToken, async (req: AuthenticatedR
       return res.status(400).json({ error: 'selectionZone requise' });
     }
 
-    console.log(`🎯 [API] Détection avec fusion: ${photos.length} photos, type: ${referenceType}`);
-    console.log(`📐 [API] Zone: x=${selectionZone.x?.toFixed(1)}%, y=${selectionZone.y?.toFixed(1)}%`);
+    const isMeasurementTarget = targetType === 'measurement';
+    console.log(`🎯 [FUSION] Détection: ${photos.length} photos, type: ${referenceType}, target: ${targetType}`);
+    console.log(`📐 [FUSION] Zone: x=${selectionZone.x?.toFixed(1)}%, y=${selectionZone.y?.toFixed(1)}%`);
+    
+    if (isMeasurementTarget) {
+      console.log(`📏 [FUSION] MODE MESURE OBJET → Utilisation EdgeDetection/Gemini (pas ArUco)`);
+    }
 
     // ============================================
     // ÉTAPE 1: FUSION DES PHOTOS
     // ============================================
-    console.log('🔀 [API] Étape 1: Fusion des photos...');
+    console.log('🔀 [FUSION] Étape 1: Fusion des photos...');
     
     const cleanedPhotos = photos.map((photo: { base64: string; mimeType?: string }) => ({
       base64: photo.base64.includes(',') ? photo.base64.split(',')[1] : photo.base64,
       mimeType: photo.mimeType || 'image/jpeg'
     }));
 
+    // Pour la fusion, mapper aruco_magenta sur custom (taille similaire)
+    const fusionType = referenceType === 'aruco_magenta' ? 'custom' : referenceType;
     const fusionResult = await multiPhotoFusionService.fuseForReferenceDetection(
       cleanedPhotos,
-      referenceType as 'a4' | 'card' | 'meter' | 'custom'
+      fusionType as 'a4' | 'card' | 'meter' | 'custom'
     );
 
-    if (!fusionResult.success || !fusionResult.fusedImageBase64) {
-      console.error('❌ [API] Fusion échouée:', fusionResult.error);
-      // Fallback: utiliser la première photo
-      console.log('⚠️ [API] Fallback sur première photo...');
-    }
-
-    // Image à utiliser pour la détection (fusionnée ou première photo si fusion échouée)
+    // Image à utiliser (fusionnée ou première photo si fusion échouée)
     const imageToUse = fusionResult.fusedImageBase64 || cleanedPhotos[0].base64;
     const mimeTypeToUse = fusionResult.mimeType || 'image/jpeg';
 
-    console.log(`✅ [API] Image ${fusionResult.success ? 'fusionnée' : 'originale'} prête (${Math.round(imageToUse.length / 1024)} KB)`);
+    console.log(`✅ [FUSION+ARUCO] Image ${fusionResult.success ? 'fusionnée' : 'originale'} prête (${Math.round(imageToUse.length / 1024)} KB)`);
 
     // ============================================
-    // ÉTAPE 2: DÉTECTION DES COINS
+    // ÉTAPE 2: DÉTECTION ARUCO MAGENTA (105 POINTS)
     // ============================================
-    console.log('🔍 [API] Étape 2: Détection des coins sur image optimisée...');
+    console.log('🎯 [FUSION+ARUCO] Étape 2: Détection ArUco MAGENTA avec 105 points...');
 
-    // 🔬 MÉTHODE 1: Détection de contours avec Sharp (PRIORITAIRE)
-    console.log('🔬 [API] Tentative détection par analyse de contours (Sharp)...');
+    // Décoder l'image
+    const imageBuffer = Buffer.from(imageToUse, 'base64');
+    const metadata = await sharp(imageBuffer).metadata();
+    const imageWidth = metadata.width || 1920;
+    const imageHeight = metadata.height || 1080;
+
+    console.log(`📷 [FUSION+ARUCO] Dimensions image: ${imageWidth}x${imageHeight}`);
+
+    // Convertir zone de sélection (%) en pixels
+    const cropZone = {
+      x: Math.round(selectionZone.x * imageWidth / 100),
+      y: Math.round(selectionZone.y * imageHeight / 100),
+      width: Math.round(selectionZone.width * imageWidth / 100),
+      height: Math.round(selectionZone.height * imageHeight / 100)
+    };
+
+    console.log(`📐 [FUSION] Zone crop: ${cropZone.x},${cropZone.y} -> ${cropZone.width}x${cropZone.height}`);
+
+    // ============================================
+    // MODE MESURE OBJET → Utiliser directement EdgeDetection/Gemini
+    // ============================================
+    if (isMeasurementTarget) {
+      console.log('📏 [MESURE OBJET] Saut de la détection ArUco → EdgeDetection/Gemini direct');
+      
+      // Utiliser la détection générique pour l'objet à mesurer
+      const objectDetectionResult = await detectObjectInZone(
+        imageBuffer,
+        cropZone,
+        imageWidth,
+        imageHeight,
+        referenceType, // 'door', 'window', 'chassis', etc.
+        objectDescription
+      );
+      
+      if (objectDetectionResult.success) {
+        return res.json({
+          success: true,
+          objectFound: true,
+          method: objectDetectionResult.method,
+          corners: objectDetectionResult.corners,
+          confidence: objectDetectionResult.confidence,
+          fusionMetrics: fusionResult.metrics,
+          debug: {
+            imageSize: { width: imageWidth, height: imageHeight },
+            cropZone,
+            mode: 'measurement-object'
+          }
+        });
+      }
+      
+      // Si échec, retourner erreur
+      return res.json({
+        success: true,
+        objectFound: false,
+        corners: null,
+        confidence: 0,
+        message: `Impossible de détecter les contours de l'objet (${referenceType})`,
+        fusionMetrics: fusionResult.metrics
+      });
+    }
+
+    // ============================================
+    // MODE REFERENCE → Détection ArUco MAGENTA (105 points)
+    // ============================================
+    console.log('🎯 [REFERENCE] Étape 2: Détection ArUco MAGENTA avec 105 points...');
+
+    // 🎯 MÉTHODE PRINCIPALE: Détection ArUco MAGENTA
+    try {
+      // Extraire la zone de sélection et obtenir les données RGBA
+      const extractWidth = Math.min(cropZone.width, imageWidth - cropZone.x);
+      const extractHeight = Math.min(cropZone.height, imageHeight - cropZone.y);
+      
+      const croppedRaw = await sharp(imageBuffer)
+        .extract({
+          left: Math.max(0, cropZone.x),
+          top: Math.max(0, cropZone.y),
+          width: extractWidth,
+          height: extractHeight
+        })
+        .ensureAlpha()
+        .raw()
+        .toBuffer();
+
+      // Créer l'objet ImageData pour MarkerDetector
+      const imageDataForDetector = {
+        data: new Uint8ClampedArray(croppedRaw),
+        width: extractWidth,
+        height: extractHeight
+      };
+
+      console.log(`🔍 [FUSION+ARUCO] Détection ArUco sur zone ${extractWidth}x${extractHeight}...`);
+
+      // Détection ArUco de base avec la méthode detect()
+      const markers = arucoDetector.detect(imageDataForDetector);
+
+      if (markers.length > 0) {
+        const marker = markers[0];
+        // score est un nombre entre 0-1, on le convertit en %
+        const markerConfidence = Math.round(marker.score * 100);
+        console.log(`✅ [FUSION+ARUCO] ArUco détecté: ID=${marker.id}, Confidence=${markerConfidence}%`);
+        
+        // 🔬 ULTRA-PRÉCISION: 105 points !
+        console.log('🔬 [FUSION+ARUCO] Étape 3: Détection ULTRA-PRÉCISION 105 points...');
+        
+        // Utiliser les coins magenta extérieurs pour l'ultra-précision
+        const cornersForUltra = marker.magentaPositions || marker.corners;
+        
+        const ultraResult = detectUltraPrecisionPoints(
+          imageDataForDetector,
+          cornersForUltra,
+          marker.extendedPoints
+        );
+
+        console.log(`🎯 [FUSION+ARUCO] Ultra-précision: ${ultraResult.totalPoints} points détectés`);
+        console.log(`   📊 Coins: ${ultraResult.cornerPoints}`);
+        console.log(`   📊 Transitions: ${ultraResult.transitionPoints}`);
+        console.log(`   📊 Grille: ${ultraResult.gridCornerPoints}`);
+        console.log(`   📊 Centres: ${ultraResult.gridCenterPoints}`);
+        console.log(`   ✅ RANSAC inliers: ${ultraResult.inlierPoints}/${ultraResult.totalPoints}`);
+        console.log(`   ✅ Reprojection error: ${ultraResult.reprojectionError.toFixed(3)}mm`);
+        console.log(`   ✅ Quality: ${(ultraResult.quality * 100).toFixed(1)}%`);
+
+        // 🎯 CORRECTION BUG: Utiliser magentaPositions (coins EXTÉRIEURS 18cm) et NON corners (intérieurs 6cm) !
+        const outerCorners = marker.magentaPositions || marker.corners;
+        const adjustedCorners = outerCorners.map(corner => ({
+          x: ((cropZone.x + corner.x) / imageWidth) * 100,
+          y: ((cropZone.y + corner.y) / imageHeight) * 100
+        }));
+
+        // Convertir tous les points ultra-précision de crop vers image complète
+        // UltraPrecisionPoint a .pixel (Point2D), pas imageX/imageY
+        const adjustedUltraPoints = ultraResult.points.map(p => ({
+          ...p,
+          pixel: {
+            x: ((cropZone.x + p.pixel.x) / imageWidth) * 100,
+            y: ((cropZone.y + p.pixel.y) / imageHeight) * 100
+          }
+        }));
+
+        return res.json({
+          success: true,
+          objectFound: true,
+          method: 'aruco-ultra-precision-105-points',
+          
+          // 4 coins du marqueur (pour compatibilité)
+          corners: adjustedCorners,
+          
+          // 🎯 ULTRA-PRÉCISION: 105 points
+          ultraPrecision: {
+            enabled: true,
+            totalPoints: ultraResult.totalPoints,
+            inlierPoints: ultraResult.inlierPoints,
+            points: adjustedUltraPoints,
+            
+            // Compteurs par source
+            cornerPoints: ultraResult.cornerPoints,
+            transitionPoints: ultraResult.transitionPoints,
+            gridCornerPoints: ultraResult.gridCornerPoints,
+            gridCenterPoints: ultraResult.gridCenterPoints,
+            
+            // Homographie RANSAC + Levenberg-Marquardt
+            homography: {
+              matrix: ultraResult.homography,
+              inlierRatio: ultraResult.inlierPoints / ultraResult.totalPoints,
+              reprojectionError: ultraResult.reprojectionError,
+              method: 'RANSAC-1000-iter + Levenberg-Marquardt-50-iter'
+            },
+            
+            // Métriques de qualité
+            quality: ultraResult.quality,
+            ransacApplied: ultraResult.ransacApplied,
+            ellipseFittingApplied: ultraResult.ellipseFittingApplied,
+            levenbergMarquardtApplied: ultraResult.levenbergMarquardtApplied,
+            
+            // Précision estimée
+            estimatedPrecision: ultraResult.reprojectionError < 0.5 ? '±0.2mm' : 
+                               ultraResult.reprojectionError < 1 ? '±0.5mm' : '±1mm'
+          },
+          
+          // Infos marqueur ArUco
+          marker: {
+            id: marker.id,
+            type: 'MAGENTA',
+            physicalSize: MARKER_SPECS.markerSize,
+            unit: 'mm',
+            confidence: markerConfidence
+          },
+          
+          // Métriques de fusion
+          fusionMetrics: fusionResult.metrics,
+          
+          // Confiance globale (basée sur inliers RANSAC + qualité)
+          confidence: Math.round(ultraResult.quality * 100),
+
+          debug: {
+            imageSize: { width: imageWidth, height: imageHeight },
+            cropZone,
+            extractSize: { width: extractWidth, height: extractHeight },
+            processingTime: Date.now()
+          }
+        });
+      }
+
+      console.log('⚠️ [FUSION+ARUCO] Aucun marqueur ArUco détecté, fallback détection générique...');
+
+    } catch (arucoError) {
+      console.error('❌ [FUSION+ARUCO] Erreur détection ArUco:', arucoError);
+    }
+
+    // ============================================
+    // FALLBACK: DÉTECTION GÉNÉRIQUE (EdgeDetection + Gemini)
+    // ============================================
+    console.log('🔄 [FUSION+ARUCO] Fallback: Détection générique EdgeDetection...');
     
     const edgeResult = await edgeDetectionService.detectWhitePaperCorners(
       imageToUse,
@@ -800,21 +1362,21 @@ router.post('/detect-with-fusion', authenticateToken, async (req: AuthenticatedR
     );
 
     if (edgeResult.success && edgeResult.corners) {
-      console.log('✅ [API] Détection par contours RÉUSSIE sur image fusionnée !');
+      console.log('✅ [FUSION+ARUCO] Détection EdgeDetection réussie (fallback)');
       
       return res.json({
         success: true,
         objectFound: true,
         corners: edgeResult.corners,
-        confidence: Math.min(98, (edgeResult.confidence || 90) + 5), // +5% bonus fusion
-        method: 'edge-detection-with-fusion',
+        confidence: edgeResult.confidence || 80,
+        method: 'edge-detection-fallback',
         fusionMetrics: fusionResult.metrics,
         debug: edgeResult.debug
       });
     }
 
-    // 🤖 MÉTHODE 2: Fallback vers Gemini IA
-    console.log('⚠️ [API] Détection par contours échouée, fallback vers Gemini...');
+    // Dernier recours: Gemini IA
+    console.log('🤖 [FUSION+ARUCO] Dernier recours: Gemini IA...');
     
     const geminiResult = await geminiService.detectCornersInZone(
       imageToUse,
@@ -828,12 +1390,12 @@ router.post('/detect-with-fusion', authenticateToken, async (req: AuthenticatedR
 
     res.json({
       ...geminiResult,
-      method: geminiResult.success ? 'gemini-with-fusion' : 'gemini-failed',
+      method: geminiResult.success ? 'gemini-fallback' : 'detection-failed',
       fusionMetrics: fusionResult.metrics
     });
 
   } catch (error) {
-    console.error('❌ [API] Erreur détection avec fusion:', error);
+    console.error('❌ [FUSION+ARUCO] Erreur détection avec fusion:', error);
     res.status(500).json({
       success: false,
       error: 'Erreur serveur lors de la détection avec fusion'

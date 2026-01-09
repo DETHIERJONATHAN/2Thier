@@ -93,6 +93,7 @@ const ProfilePage = lazy(() => import('./pages/ProfilePage'));
 const OrganizationSettings = lazy(() => import('./pages/settings/OrganizationSettings'));
 const ProfileSettings = lazy(() => import('./pages/settings/ProfileSettings'));
 const EmailSettings = lazy(() => import('./pages/settings/EmailSettings'));
+const AIMeasureSettings = lazy(() => import('./pages/settings/AIMeasureSettings'));
 
 // Pages Documents (Admin)
 const DocumentTemplatesPage = lazy(() => import('./pages/DocumentTemplatesPage'));
@@ -304,6 +305,7 @@ export default function AppLayout() {
               <Route path="profile" element={<ProfileSettings />} />
               <Route path="organization" element={<OrganizationSettings />} />
               <Route path="emails" element={<EmailSettings />} />
+              <Route path="ai-measure" element={<AIMeasureSettings />} />
               <Route path="" element={<Navigate to="/settings/profile" replace />} />
             </Route>
             <Route path="/profile" element={<ProfilePage />} />

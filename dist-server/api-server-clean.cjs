@@ -15227,6 +15227,100 @@ router19.post("/initialize-default-statuses", async (req2, res) => {
     });
   }
 });
+router19.get("/ai-measure", async (req2, res) => {
+  try {
+    const authReq = req2;
+    const organizationId = authReq.user?.organizationId;
+    if (!organizationId) {
+      return res.json({
+        success: true,
+        data: {
+          markerSizeCm: 16.8,
+          boardSizeCm: 24
+        }
+      });
+    }
+    console.log("[AI-MEASURE] R\xE9cup\xE9ration config pour organisation:", organizationId);
+    const config = await db.systemConfig.findFirst({
+      where: {
+        organizationId,
+        key: "ai_measure_marker"
+      }
+    });
+    if (config && config.value) {
+      const value = typeof config.value === "string" ? JSON.parse(config.value) : config.value;
+      console.log("[AI-MEASURE] Config trouv\xE9e:", value);
+      return res.json({ success: true, data: value });
+    }
+    console.log("[AI-MEASURE] Pas de config, utilisation des valeurs par d\xE9faut");
+    res.json({
+      success: true,
+      data: {
+        markerSizeCm: 16.8,
+        boardSizeCm: 24
+      }
+    });
+  } catch (error) {
+    console.error("[AI-MEASURE] Erreur r\xE9cup\xE9ration config:", error);
+    res.status(500).json({
+      success: false,
+      error: "Erreur lors de la r\xE9cup\xE9ration de la configuration",
+      message: error instanceof Error ? error.message : "Erreur inconnue"
+    });
+  }
+});
+router19.post("/ai-measure", async (req2, res) => {
+  try {
+    const authReq = req2;
+    const organizationId = authReq.user?.organizationId;
+    if (!organizationId) {
+      return res.status(400).json({
+        success: false,
+        error: "Organisation non sp\xE9cifi\xE9e"
+      });
+    }
+    const { markerSizeCm, boardSizeCm } = req2.body;
+    if (!markerSizeCm || markerSizeCm < 5 || markerSizeCm > 50) {
+      return res.status(400).json({
+        success: false,
+        error: "Taille du marqueur invalide (doit \xEAtre entre 5 et 50 cm)"
+      });
+    }
+    console.log("[AI-MEASURE] Sauvegarde config pour organisation:", organizationId);
+    console.log("[AI-MEASURE] Nouvelles valeurs:", { markerSizeCm, boardSizeCm });
+    const config = await db.systemConfig.upsert({
+      where: {
+        organizationId_key: {
+          organizationId,
+          key: "ai_measure_marker"
+        }
+      },
+      update: {
+        value: { markerSizeCm, boardSizeCm },
+        updatedAt: /* @__PURE__ */ new Date()
+      },
+      create: {
+        organizationId,
+        key: "ai_measure_marker",
+        value: { markerSizeCm, boardSizeCm },
+        description: "Configuration du marqueur ArUco pour IA Mesure"
+      }
+    });
+    console.log("[AI-MEASURE] Config sauvegard\xE9e:", config.id);
+    res.json({
+      success: true,
+      message: "Configuration sauvegard\xE9e",
+      data: { markerSizeCm, boardSizeCm }
+    });
+  } catch (error) {
+    console.error("[AI-MEASURE] Erreur sauvegarde config:", error);
+    res.status(500).json({
+      success: false,
+      error: "Erreur lors de la sauvegarde de la configuration",
+      message: error instanceof Error ? error.message : "Erreur inconnue"
+    });
+  }
+});
 var settingsRoutes_default = router19;
 
 // src/routes/leadsRoutes.ts
@@ -60243,78 +60337,825 @@ init_database();
 var sharpModule = __toESM(require("sharp"), 1);
 
 // src/lib/marker-detector.ts
+var _markerSizeCm = 16.8;
 var MARKER_SPECS = {
-  markerSize: 18,
-  // Taille du marqueur carré en cm
+  get markerSize() {
+    return _markerSizeCm;
+  },
+  // Getter dynamique !
   boardSize: 24,
   // Taille du tableau ALU support en cm
   magentaRadius: 0.5,
   // Rayon des cercles magenta en cm
-  whiteRadius: 0.1
+  whiteRadius: 0.1,
   // Rayon du point blanc central en cm
-  // Structure: Noir(3cm) > Blanc(3cm) > Noir(6cm centre) > Blanc(3cm) > Noir(3cm)
+  // Structure des bandes (ratios relatifs au markerSize)
+  get bands() {
+    const size = _markerSizeCm;
+    return {
+      blackOuter: size / 6,
+      // Bande noire externe: 0 → 1/6
+      whiteOuter: size / 3,
+      // Bande blanche: 1/6 → 1/3
+      blackCenter: size * 2 / 3,
+      // Centre noir: 1/3 → 2/3
+      whiteInner: size * 5 / 6,
+      // Bande blanche: 2/3 → 5/6
+      blackInner: size
+      // Bande noire interne: 5/6 → 1
+    };
+  },
+  // Points de transition (en cm depuis le bord)
+  get transitions() {
+    const size = _markerSizeCm;
+    return [size / 6, size / 3, size * 2 / 3, size * 5 / 6];
+  },
+  // Ratios géométriques clés pour validation (constants)
+  ratios: {
+    innerToOuter: 1 / 3,
+    // Pattern central / total = 1/3
+    whiteToOuter: 2 / 3,
+    // Zone blanche / total = 2/3
+    bandWidth: 1 / 6
+    // Largeur bande / total = 1/6
+  }
 };
 var MarkerDetector = class {
   minSize;
   maxSize;
-  constructor(minSize = 30, maxSize = 2e3) {
+  enableExtendedDetection;
+  constructor(minSize = 30, maxSize = 2e3, enableExtendedDetection = true) {
     this.minSize = minSize;
     this.maxSize = maxSize;
+    this.enableExtendedDetection = enableExtendedDetection;
   }
   /**
    * Détecter les marqueurs dans une image
+   * 
+   * PRIORITÉ 1: Détecter les LIGNES NOIRES extérieures
+   * PRIORITÉ 2: Valider/raffiner avec les coins magenta
    */
   detect(imageData) {
     const { data, width, height } = imageData;
     console.log(`\u{1F50D} MarkerDetector.detect: ${width}x${height}`);
-    const markers = this.detectFromMagentaOnly(data, width, height);
+    console.log("\u{1F3AF} STRAT\xC9GIE: Lignes noires PRIORITAIRES + validation magenta");
+    let markers = this.detectFromBlackLines(data, width, height);
+    if (markers.length === 0) {
+      console.log("\u26A0\uFE0F Lignes noires non d\xE9tect\xE9es, fallback magenta...");
+      markers = this.detectFromMagentaOnly(data, width, height);
+    }
     if (markers.length > 0) {
       console.log(`\u2705 ${markers.length} marqueur(s) d\xE9tect\xE9(s)`);
+      if (this.enableExtendedDetection) {
+        for (const marker of markers) {
+          try {
+            const outerCorners = marker.magentaPositions || marker.corners;
+            marker.extendedPoints = this.detectExtendedReferencePoints(
+              data,
+              width,
+              height,
+              outerCorners
+            );
+            if (marker.extendedPoints.allPoints.length >= 8) {
+              const homographyResult = computeHomographyExtended(marker.extendedPoints, 0.5);
+              marker.preciseHomography = homographyResult.H;
+              marker.homographyQuality = homographyResult.quality;
+              console.log(`\u{1F4D0} Homographie: ${marker.extendedPoints.detectedCount}/${marker.extendedPoints.allPoints.length} points (qualit\xE9: ${(homographyResult.quality * 100).toFixed(0)}%)`);
+            } else {
+              console.log(`\u{1F4D0} Points \xE9tendus: ${marker.extendedPoints.detectedCount}/20 (confiance: ${(marker.extendedPoints.confidence * 100).toFixed(0)}%)`);
+            }
+          } catch (err) {
+            console.warn("\u26A0\uFE0F D\xE9tection \xE9tendue \xE9chou\xE9e:", err);
+          }
+        }
+      }
     } else {
       console.log("\u274C Aucun marqueur d\xE9tect\xE9");
     }
     return markers;
   }
   /**
-   * Détecter uniquement depuis les points magenta (fallback robuste)
+   * 🎯 NOUVELLE MÉTHODE PRINCIPALE: Détection par LIGNES NOIRES
+   * 
+   * Algorithme:
+   * 1. Détecter les contours (gradients forts = transitions)
+   * 2. Trouver les 4 lignes formant le quadrilatère externe
+   * 3. Calculer les intersections = coins du marqueur
+   * 4. Valider avec les positions magenta si disponibles
    */
-  detectFromMagentaOnly(data, width, height) {
-    console.log("\u{1F504} D\xE9tection par magenta uniquement");
+  detectFromBlackLines(data, width, height) {
+    console.log("\u{1F532} [ArUco] D\xE9tection par LIGNES NOIRES EXT\xC9RIEURES...");
+    const edgeMap = this.computeEdgeMap(data, width, height);
+    const lines = this.findDominantLines(edgeMap, width, height);
+    if (lines.length < 4) {
+      console.log(`   \u26A0\uFE0F Seulement ${lines.length} lignes trouv\xE9es (besoin de 4)`);
+      return [];
+    }
+    const quad = this.findBestQuadrilateral(lines, width, height);
+    if (!quad) {
+      console.log("   \u26A0\uFE0F Aucun quadrilat\xE8re valide trouv\xE9");
+      return [];
+    }
+    console.log("   \u2705 Quadrilat\xE8re trouv\xE9 via lignes noires");
     const magentaPixels = this.findAllMagentaPixels(data, width, height);
-    console.log(`\u{1F49C} ${magentaPixels.length} pixels magenta d\xE9tect\xE9s`);
-    if (magentaPixels.length < 20) {
-      console.log("\u274C Pas assez de pixels magenta");
-      return [];
+    const magentaClusters = this.clusterMagentaPixels(magentaPixels);
+    let finalCorners = quad.corners;
+    let magentaFound = 0;
+    if (magentaClusters.length >= 3) {
+      const refinedCorners = this.refineWithMagenta(quad.corners, magentaClusters);
+      if (refinedCorners) {
+        finalCorners = refinedCorners.corners;
+        magentaFound = refinedCorners.matchedCount;
+        console.log(`   \u{1F3AF} Coins raffin\xE9s avec ${magentaFound} points magenta`);
+      }
     }
-    const clusters = this.clusterMagentaPixels(magentaPixels);
-    console.log(`\u{1F3AF} ${clusters.length} zones magenta identifi\xE9es`);
-    if (clusters.length < 4) {
-      console.log(`\u274C Seulement ${clusters.length} points magenta (besoin de 4)`);
-      return [];
-    }
-    const topClusters = clusters.slice(0, 4);
-    const corners = [];
-    const magentaPositions = [];
-    for (const cluster of topClusters) {
-      magentaPositions.push({ x: cluster.cx, y: cluster.cy });
-      const white = this.findWhiteCenterAt(data, width, height, cluster.cx, cluster.cy, 10);
-      corners.push(white || { x: cluster.cx, y: cluster.cy });
-    }
-    const orderedCorners = this.orderCorners(corners);
-    const orderedMagenta = this.orderCorners(magentaPositions);
-    if (!orderedCorners) {
-      console.log("\u274C Impossible d'ordonner les coins");
-      return [];
-    }
+    const orderedCorners = this.orderCornersClockwise(finalCorners);
+    const innerOffset = 6 / 18;
+    const [tl, tr, br, bl] = orderedCorners;
+    const innerCorners = [
+      {
+        x: tl.x + (tr.x - tl.x) * innerOffset + (bl.x - tl.x) * innerOffset,
+        y: tl.y + (tr.y - tl.y) * innerOffset + (bl.y - tl.y) * innerOffset
+      },
+      {
+        x: tr.x + (tl.x - tr.x) * innerOffset + (br.x - tr.x) * innerOffset,
+        y: tr.y + (tl.y - tr.y) * innerOffset + (br.y - tr.y) * innerOffset
+      },
+      {
+        x: br.x + (bl.x - br.x) * innerOffset + (tr.x - br.x) * innerOffset,
+        y: br.y + (bl.y - br.y) * innerOffset + (tr.y - br.y) * innerOffset
+      },
+      {
+        x: bl.x + (br.x - bl.x) * innerOffset + (tl.x - bl.x) * innerOffset,
+        y: bl.y + (br.y - bl.y) * innerOffset + (tl.y - bl.y) * innerOffset
+      }
+    ];
     const measurements = this.calculateMeasurements(orderedCorners);
     return [{
       id: 0,
-      corners: orderedCorners,
-      magentaPositions: orderedMagenta || magentaPositions,
+      corners: innerCorners,
+      magentaPositions: orderedCorners,
       size: measurements.avgSidePx,
       center: measurements.center,
-      score: 0.8,
-      magentaFound: 4,
+      score: 0.8 + magentaFound / 4 * 0.15,
+      magentaFound,
+      homography: {
+        realSizeCm: MARKER_SPECS.markerSize,
+        pixelsPerCm: measurements.pixelsPerCm,
+        sides: measurements.sides,
+        angles: measurements.angles
+      }
+    }];
+  }
+  /**
+   * Calculer la carte des contours (edge map)
+   * Utilise un Sobel simplifié pour détecter les gradients
+   */
+  computeEdgeMap(data, width, height) {
+    const edgeMap = new Float32Array(width * height);
+    for (let y = 1; y < height - 1; y++) {
+      for (let x = 1; x < width - 1; x++) {
+        const getL = (px, py) => {
+          const idx = (py * width + px) * 4;
+          return (data[idx] + data[idx + 1] + data[idx + 2]) / 3;
+        };
+        const gx = -getL(x - 1, y - 1) + getL(x + 1, y - 1) - 2 * getL(x - 1, y) + 2 * getL(x + 1, y) - getL(x - 1, y + 1) + getL(x + 1, y + 1);
+        const gy = -getL(x - 1, y - 1) - 2 * getL(x, y - 1) - getL(x + 1, y - 1) + getL(x - 1, y + 1) + 2 * getL(x, y + 1) + getL(x + 1, y + 1);
+        edgeMap[y * width + x] = Math.sqrt(gx * gx + gy * gy);
+      }
+    }
+    return edgeMap;
+  }
+  /**
+   * Trouver les lignes dominantes via une transformation de Hough simplifiée
+   */
+  findDominantLines(edgeMap, width, height) {
+    const thetaSteps = 180;
+    const rhoMax = Math.sqrt(width * width + height * height);
+    const rhoSteps = Math.ceil(rhoMax * 2);
+    const accumulator = new Uint32Array(thetaSteps * rhoSteps);
+    const edgeThreshold = 50;
+    const step = 2;
+    for (let y = 0; y < height; y += step) {
+      for (let x = 0; x < width; x += step) {
+        const edge = edgeMap[y * width + x];
+        if (edge < edgeThreshold) continue;
+        for (let thetaIdx = 0; thetaIdx < thetaSteps; thetaIdx++) {
+          const theta = thetaIdx / thetaSteps * Math.PI;
+          const rho = x * Math.cos(theta) + y * Math.sin(theta);
+          const rhoIdx = Math.round(rho + rhoMax);
+          if (rhoIdx >= 0 && rhoIdx < rhoSteps) {
+            accumulator[thetaIdx * rhoSteps + rhoIdx]++;
+          }
+        }
+      }
+    }
+    const lines = [];
+    const minVotes = Math.max(30, width * height * 1e-4);
+    for (let thetaIdx = 0; thetaIdx < thetaSteps; thetaIdx++) {
+      for (let rhoIdx = 0; rhoIdx < rhoSteps; rhoIdx++) {
+        const votes = accumulator[thetaIdx * rhoSteps + rhoIdx];
+        if (votes > minVotes) {
+          const theta = thetaIdx / thetaSteps * Math.PI;
+          const rho = rhoIdx - rhoMax;
+          const tooClose = lines.some(
+            (l) => Math.abs(l.theta - theta) < 0.1 && Math.abs(l.rho - rho) < 20
+          );
+          if (!tooClose) {
+            lines.push({ rho, theta, votes });
+          }
+        }
+      }
+    }
+    lines.sort((a, b) => b.votes - a.votes);
+    console.log(`   \u{1F4CF} ${lines.length} lignes dominantes trouv\xE9es`);
+    return lines.slice(0, 20);
+  }
+  /**
+   * Trouver le meilleur quadrilatère parmi les lignes
+   */
+  findBestQuadrilateral(lines, width, height) {
+    if (lines.length < 4) return null;
+    const horizontal = [];
+    const vertical = [];
+    for (const line of lines) {
+      const angleDeg = line.theta * 180 / Math.PI % 180;
+      if (angleDeg < 45 || angleDeg > 135) {
+        vertical.push(line);
+      } else {
+        horizontal.push(line);
+      }
+    }
+    console.log(`   \u{1F4D0} ${horizontal.length} horizontales, ${vertical.length} verticales`);
+    if (horizontal.length < 2 || vertical.length < 2) {
+      return this.findQuadFromAllLines(lines, width, height);
+    }
+    const h1 = horizontal[0], h2 = horizontal[1];
+    const v1 = vertical[0], v2 = vertical[1];
+    const corners = [];
+    const intersect = (l1, l2) => {
+      const cos1 = Math.cos(l1.theta), sin1 = Math.sin(l1.theta);
+      const cos2 = Math.cos(l2.theta), sin2 = Math.sin(l2.theta);
+      const det = cos1 * sin2 - sin1 * cos2;
+      if (Math.abs(det) < 1e-3) return null;
+      const x = (l1.rho * sin2 - l2.rho * sin1) / det;
+      const y = (l2.rho * cos1 - l1.rho * cos2) / det;
+      return { x, y };
+    };
+    const c1 = intersect(h1, v1);
+    const c2 = intersect(h1, v2);
+    const c3 = intersect(h2, v1);
+    const c4 = intersect(h2, v2);
+    if (!c1 || !c2 || !c3 || !c4) return null;
+    const margin = -50;
+    const inBounds = (p) => p.x >= margin && p.x < width - margin && p.y >= margin && p.y < height - margin;
+    if (!inBounds(c1) || !inBounds(c2) || !inBounds(c3) || !inBounds(c4)) {
+      return this.findQuadFromAllLines(lines, width, height);
+    }
+    return { corners: [c1, c2, c3, c4] };
+  }
+  /**
+   * Fallback: chercher un quadrilatère parmi toutes les lignes
+   */
+  findQuadFromAllLines(lines, width, height) {
+    for (let i = 0; i < Math.min(lines.length, 8); i++) {
+      for (let j = i + 1; j < Math.min(lines.length, 8); j++) {
+        for (let k = j + 1; k < Math.min(lines.length, 8); k++) {
+          for (let l = k + 1; l < Math.min(lines.length, 8); l++) {
+            const quad = this.tryMakeQuad([lines[i], lines[j], lines[k], lines[l]], width, height);
+            if (quad) return quad;
+          }
+        }
+      }
+    }
+    return null;
+  }
+  /**
+   * Essayer de former un quadrilatère avec 4 lignes
+   */
+  tryMakeQuad(lines, width, height) {
+    const corners = [];
+    for (let i = 0; i < 4; i++) {
+      for (let j = i + 1; j < 4; j++) {
+        const l1 = lines[i], l2 = lines[j];
+        const cos1 = Math.cos(l1.theta), sin1 = Math.sin(l1.theta);
+        const cos2 = Math.cos(l2.theta), sin2 = Math.sin(l2.theta);
+        const det = cos1 * sin2 - sin1 * cos2;
+        if (Math.abs(det) < 0.1) continue;
+        const x = (l1.rho * sin2 - l2.rho * sin1) / det;
+        const y = (l2.rho * cos1 - l1.rho * cos2) / det;
+        if (x >= -50 && x < width + 50 && y >= -50 && y < height + 50) {
+          corners.push({ x, y });
+        }
+      }
+    }
+    if (corners.length !== 4) return null;
+    const ordered = this.orderCornersClockwise(corners);
+    const area = this.calculateQuadArea(ordered);
+    const minArea = width * height * 0.01;
+    const maxArea = width * height * 0.9;
+    if (area < minArea || area > maxArea) return null;
+    return { corners: ordered };
+  }
+  /**
+   * Calculer l'aire d'un quadrilatère
+   */
+  calculateQuadArea(corners) {
+    let area = 0;
+    for (let i = 0; i < 4; i++) {
+      const j = (i + 1) % 4;
+      area += corners[i].x * corners[j].y;
+      area -= corners[j].x * corners[i].y;
+    }
+    return Math.abs(area) / 2;
+  }
+  /**
+   * Raffiner les coins du quadrilatère avec les positions magenta
+   */
+  refineWithMagenta(corners, clusters) {
+    const refined = [];
+    let matchedCount = 0;
+    for (const corner of corners) {
+      let bestCluster = null;
+      let bestDist = 100;
+      for (const cluster of clusters) {
+        const dist = Math.sqrt(
+          (cluster.cx - corner.x) ** 2 + (cluster.cy - corner.y) ** 2
+        );
+        if (dist < bestDist) {
+          bestDist = dist;
+          bestCluster = cluster;
+        }
+      }
+      if (bestCluster) {
+        refined.push({ x: bestCluster.cx, y: bestCluster.cy });
+        matchedCount++;
+      } else {
+        refined.push(corner);
+      }
+    }
+    if (matchedCount < 3) return null;
+    return { corners: refined, matchedCount };
+  }
+  /**
+   * Ordonner les coins en sens horaire: [TL, TR, BR, BL]
+   */
+  orderCornersClockwise(corners) {
+    const cx = corners.reduce((s, p) => s + p.x, 0) / 4;
+    const cy = corners.reduce((s, p) => s + p.y, 0) / 4;
+    const sorted = [...corners].sort((a, b) => {
+      const angleA = Math.atan2(a.y - cy, a.x - cx);
+      const angleB = Math.atan2(b.y - cy, b.x - cx);
+      return angleA - angleB;
+    });
+    let tlIdx = 0;
+    let minSum = Infinity;
+    for (let i = 0; i < 4; i++) {
+      const sum = sorted[i].x + sorted[i].y;
+      if (sum < minSum) {
+        minSum = sum;
+        tlIdx = i;
+      }
+    }
+    return [
+      sorted[tlIdx],
+      sorted[(tlIdx + 1) % 4],
+      sorted[(tlIdx + 2) % 4],
+      sorted[(tlIdx + 3) % 4]
+    ];
+  }
+  /**
+   * ⭐ NOUVEAU: Détecter les 16 points de référence étendus
+   * - 4 coins (déjà détectés par magenta)
+   * - 12 transitions NOIR→BLANC et BLANC→NOIR sur chaque bord
+   */
+  detectExtendedReferencePoints(data, width, height, corners) {
+    const [tl, tr, br, bl] = corners;
+    const transitions = MARKER_SPECS.transitions;
+    const markerSize = MARKER_SPECS.markerSize;
+    const allPoints = [];
+    const cornerPositions = [
+      { pixel: tl, real: { x: 0, y: 0 } },
+      { pixel: tr, real: { x: markerSize, y: 0 } },
+      { pixel: br, real: { x: markerSize, y: markerSize } },
+      { pixel: bl, real: { x: 0, y: markerSize } }
+    ];
+    for (const corner of cornerPositions) {
+      allPoints.push({
+        pixel: corner.pixel,
+        real: corner.real,
+        confidence: 0.95,
+        type: "corner"
+      });
+    }
+    const topTransitions = [];
+    const rightTransitions = [];
+    const bottomTransitions = [];
+    const leftTransitions = [];
+    for (const t of transitions) {
+      const ratio = t / markerSize;
+      const result = this.detectTransitionOnEdge(data, width, height, tl, tr, ratio);
+      topTransitions.push(result.point);
+      allPoints.push({
+        pixel: result.point,
+        real: { x: t, y: 0 },
+        confidence: result.confidence,
+        type: "transition"
+      });
+    }
+    for (const t of transitions) {
+      const ratio = t / markerSize;
+      const result = this.detectTransitionOnEdge(data, width, height, tr, br, ratio);
+      rightTransitions.push(result.point);
+      allPoints.push({
+        pixel: result.point,
+        real: { x: markerSize, y: t },
+        confidence: result.confidence,
+        type: "transition"
+      });
+    }
+    for (const t of transitions) {
+      const ratio = t / markerSize;
+      const result = this.detectTransitionOnEdge(data, width, height, bl, br, ratio);
+      bottomTransitions.push(result.point);
+      allPoints.push({
+        pixel: result.point,
+        real: { x: t, y: markerSize },
+        confidence: result.confidence,
+        type: "transition"
+      });
+    }
+    for (const t of transitions) {
+      const ratio = t / markerSize;
+      const result = this.detectTransitionOnEdge(data, width, height, tl, bl, ratio);
+      leftTransitions.push(result.point);
+      allPoints.push({
+        pixel: result.point,
+        real: { x: 0, y: t },
+        confidence: result.confidence,
+        type: "transition"
+      });
+    }
+    const detectedCount = allPoints.filter((p) => p.confidence > 0.5).length;
+    const avgConfidence = allPoints.reduce((sum, p) => sum + p.confidence, 0) / allPoints.length;
+    return {
+      corners,
+      topTransitions,
+      rightTransitions,
+      bottomTransitions,
+      leftTransitions,
+      allPoints,
+      confidence: avgConfidence,
+      detectedCount
+    };
+  }
+  /**
+   * ⭐ NOUVEAU: Détecter une transition NOIR↔BLANC sur un bord
+   * Utilise le gradient de luminosité pour trouver le point exact
+   */
+  detectTransitionOnEdge(data, width, height, start, end, ratio) {
+    const estimatedX = start.x + (end.x - start.x) * ratio;
+    const estimatedY = start.y + (end.y - start.y) * ratio;
+    const searchRadius = Math.max(5, Math.abs(end.x - start.x + end.y - start.y) * 0.03);
+    const edgeLength = Math.sqrt((end.x - start.x) ** 2 + (end.y - start.y) ** 2);
+    const perpX = -(end.y - start.y) / edgeLength;
+    const perpY = (end.x - start.x) / edgeLength;
+    const alongX = (end.x - start.x) / edgeLength;
+    const alongY = (end.y - start.y) / edgeLength;
+    let bestPoint = { x: estimatedX, y: estimatedY };
+    let bestGradient = 0;
+    let confidence = 0.5;
+    for (let offset = -searchRadius; offset <= searchRadius; offset += 0.5) {
+      const scanX = estimatedX + alongX * offset;
+      const scanY = estimatedY + alongY * offset;
+      const gradient = this.calculateGradientAt(data, width, height, scanX, scanY, perpX, perpY);
+      if (Math.abs(gradient) > Math.abs(bestGradient)) {
+        bestGradient = gradient;
+        bestPoint = { x: scanX, y: scanY };
+      }
+    }
+    if (Math.abs(bestGradient) > 30) {
+      confidence = Math.min(0.95, 0.5 + Math.abs(bestGradient) / 200);
+      const refined = this.refineTransitionSubPixel(
+        data,
+        width,
+        height,
+        bestPoint,
+        alongX,
+        alongY
+      );
+      if (refined) {
+        bestPoint = refined;
+        confidence = Math.min(0.98, confidence + 0.1);
+      }
+    }
+    return { point: bestPoint, confidence };
+  }
+  /**
+   * Calculer le gradient de luminosité à une position donnée
+   */
+  calculateGradientAt(data, width, height, x, y, dirX, dirY) {
+    const step = 2;
+    const before = this.sampleLuminosity(data, width, height, x - dirX * step, y - dirY * step);
+    const after = this.sampleLuminosity(data, width, height, x + dirX * step, y + dirY * step);
+    return after - before;
+  }
+  /**
+   * Échantillonner la luminosité à une position (avec interpolation bilinéaire)
+   */
+  sampleLuminosity(data, width, height, x, y) {
+    x = Math.max(0, Math.min(width - 1, x));
+    y = Math.max(0, Math.min(height - 1, y));
+    const x0 = Math.floor(x);
+    const y0 = Math.floor(y);
+    const x1 = Math.min(x0 + 1, width - 1);
+    const y1 = Math.min(y0 + 1, height - 1);
+    const dx = x - x0;
+    const dy = y - y0;
+    const getL = (px, py) => {
+      const idx = (py * width + px) * 4;
+      return (data[idx] + data[idx + 1] + data[idx + 2]) / 3;
+    };
+    const l00 = getL(x0, y0);
+    const l10 = getL(x1, y0);
+    const l01 = getL(x0, y1);
+    const l11 = getL(x1, y1);
+    return l00 * (1 - dx) * (1 - dy) + l10 * dx * (1 - dy) + l01 * (1 - dx) * dy + l11 * dx * dy;
+  }
+  /**
+   * Raffiner la position de transition au sub-pixel
+   */
+  refineTransitionSubPixel(data, width, height, point, dirX, dirY) {
+    const step = 0.5;
+    const g0 = this.calculateGradientAt(data, width, height, point.x - dirX * step, point.y - dirY * step, dirX, dirY);
+    const g1 = this.calculateGradientAt(data, width, height, point.x, point.y, dirX, dirY);
+    const g2 = this.calculateGradientAt(data, width, height, point.x + dirX * step, point.y + dirY * step, dirX, dirY);
+    const denom = 2 * (g0 - 2 * g1 + g2);
+    if (Math.abs(denom) < 1e-3) return null;
+    const offset = (g0 - g2) / denom * step;
+    if (Math.abs(offset) > step) return null;
+    return {
+      x: point.x + dirX * offset,
+      y: point.y + dirY * offset
+    };
+  }
+  /**
+   * 🎯 DÉTECTION COMPLÈTE UTILISANT TOUS LES REPÈRES DE L'ARUCO
+   * 
+   * L'ArUco 18cm a cette structure:
+   * - Bordure NOIRE extérieure (0-3cm et 15-18cm)
+   * - Bandes BLANCHES (3-6cm et 12-15cm)  
+   * - Pattern ARUCO central NOIR (6-12cm)
+   * - 4 coins MAGENTA aux extrémités (avec centre BLANC)
+   * 
+   * Ratios clés: 1:2:3 (6cm:12cm:18cm)
+   */
+  detectFromMagentaOnly(data, width, height) {
+    console.log("\u{1F3AF} [ArUco] D\xE9tection COMPL\xC8TE avec tous les rep\xE8res...");
+    console.log("   Structure: 18cm total = 3cm noir + 3cm blanc + 6cm pattern + 3cm blanc + 3cm noir");
+    const magentaPixels = this.findAllMagentaPixels(data, width, height);
+    console.log(`\u{1F49C} ${magentaPixels.length} pixels magenta d\xE9tect\xE9s`);
+    if (magentaPixels.length < 10) {
+      console.log("\u26A0\uFE0F Peu de magenta, tentative de d\xE9tection par contours...");
+      return this.detectFromBlackBorders(data, width, height);
+    }
+    const magentaClusters = this.clusterMagentaPixels(magentaPixels);
+    console.log(`\u{1F3AF} ${magentaClusters.length} zones magenta identifi\xE9es`);
+    if (magentaClusters.length < 4) {
+      console.log(`\u274C Seulement ${magentaClusters.length} coins magenta (besoin de 4)`);
+      return [];
+    }
+    const topClusters = magentaClusters.slice(0, 4);
+    const candidateCorners = [];
+    console.log("\u{1F50D} [ArUco] Analyse des 4 coins magenta:");
+    for (const cluster of topClusters) {
+      const searchRadius = Math.max(20, Math.min(60, Math.max(cluster.width, cluster.height)));
+      const whiteCenter = this.findWhiteCenterAt(data, width, height, cluster.cx, cluster.cy, searchRadius);
+      candidateCorners.push({
+        magentaCenter: { x: cluster.cx, y: cluster.cy },
+        whiteCenter,
+        cluster
+      });
+      console.log(`   \u{1F4CD} Magenta(${cluster.cx.toFixed(0)}, ${cluster.cy.toFixed(0)}) \u2192 Blanc: ${whiteCenter ? `(${whiteCenter.x.toFixed(0)}, ${whiteCenter.y.toFixed(0)})` : "NON TROUV\xC9"}`);
+    }
+    const magentaCornersUnordered = candidateCorners.map((c) => c.magentaCenter);
+    const orderedMagentaCorners = this.orderCorners(magentaCornersUnordered);
+    if (!orderedMagentaCorners) {
+      console.log("\u274C Impossible d'ordonner les coins magenta");
+      return [];
+    }
+    console.log("\u{1F50D} [ArUco] Coins MAGENTA ordonn\xE9s (TL, TR, BR, BL) - EXT\xC9RIEURS 18cm:");
+    orderedMagentaCorners.forEach((p, i) => console.log(`   [${["TL", "TR", "BR", "BL"][i]}] x=${p.x.toFixed(1)}, y=${p.y.toFixed(1)}`));
+    const validation = this.validateArucoGeometry(data, width, height, orderedMagentaCorners);
+    console.log(`\u{1F4D0} [ArUco] Validation g\xE9om\xE9trique: ${validation.valid ? "\u2705" : "\u274C"} (score: ${validation.score.toFixed(2)})`);
+    const innerOffset = 6 / 18;
+    const [tl, tr, br, bl] = orderedMagentaCorners;
+    const innerCorners = [
+      // TL intérieur = TL + 1/3 vers TR + 1/3 vers BL
+      {
+        x: tl.x + (tr.x - tl.x) * innerOffset + (bl.x - tl.x) * innerOffset,
+        y: tl.y + (tr.y - tl.y) * innerOffset + (bl.y - tl.y) * innerOffset
+      },
+      // TR intérieur = TR + 1/3 vers TL + 1/3 vers BR
+      {
+        x: tr.x + (tl.x - tr.x) * innerOffset + (br.x - tr.x) * innerOffset,
+        y: tr.y + (tl.y - tr.y) * innerOffset + (br.y - tr.y) * innerOffset
+      },
+      // BR intérieur = BR + 1/3 vers BL + 1/3 vers TR
+      {
+        x: br.x + (bl.x - br.x) * innerOffset + (tr.x - br.x) * innerOffset,
+        y: br.y + (bl.y - br.y) * innerOffset + (tr.y - br.y) * innerOffset
+      },
+      // BL intérieur = BL + 1/3 vers BR + 1/3 vers TL
+      {
+        x: bl.x + (br.x - bl.x) * innerOffset + (tl.x - bl.x) * innerOffset,
+        y: bl.y + (br.y - bl.y) * innerOffset + (tl.y - bl.y) * innerOffset
+      }
+    ];
+    console.log("\u{1F50D} [ArUco] Coins INT\xC9RIEURS calcul\xE9s (pattern 6cm\xD76cm):");
+    innerCorners.forEach((p, i) => console.log(`   [${["TL", "TR", "BR", "BL"][i]}] x=${p.x.toFixed(1)}, y=${p.y.toFixed(1)}`));
+    const measurements = this.calculateMeasurements(orderedMagentaCorners);
+    const finalScore = Math.min(0.95, 0.6 + validation.score * 0.35);
+    return [{
+      id: 0,
+      corners: innerCorners,
+      // Coins du pattern INTÉRIEUR 6cm pour l'homographie du pattern
+      magentaPositions: orderedMagentaCorners,
+      // Coins EXTÉRIEURS 18cm pour l'affichage visuel!
+      size: measurements.avgSidePx,
+      center: measurements.center,
+      score: finalScore,
+      magentaFound: candidateCorners.filter((c) => c.whiteCenter).length,
+      homography: {
+        realSizeCm: MARKER_SPECS.markerSize,
+        pixelsPerCm: measurements.pixelsPerCm,
+        sides: measurements.sides,
+        angles: measurements.angles
+      }
+    }];
+  }
+  /**
+   * 🆕 Valider la géométrie de l'ArUco avec les ratios connus
+   */
+  validateArucoGeometry(data, width, height, corners) {
+    const [tl, tr, br, bl] = corners;
+    const sides = [
+      Math.sqrt((tr.x - tl.x) ** 2 + (tr.y - tl.y) ** 2),
+      // Haut
+      Math.sqrt((br.x - tr.x) ** 2 + (br.y - tr.y) ** 2),
+      // Droite
+      Math.sqrt((br.x - bl.x) ** 2 + (br.y - bl.y) ** 2),
+      // Bas
+      Math.sqrt((bl.x - tl.x) ** 2 + (bl.y - tl.y) ** 2)
+      // Gauche
+    ];
+    const avgSide = sides.reduce((a, b) => a + b, 0) / 4;
+    const sideVariance = sides.reduce((sum, s) => sum + Math.abs(s - avgSide), 0) / 4;
+    const regularityScore = Math.max(0, 1 - sideVariance / avgSide);
+    let transitionScore = 0;
+    const bandRatio = MARKER_SPECS.ratios.bandWidth;
+    const sampleCount = 10;
+    let foundBlackOuter = 0;
+    let foundWhite = 0;
+    let foundBlackCenter = 0;
+    for (let i = 0; i < sampleCount; i++) {
+      const t = i / (sampleCount - 1);
+      const x = Math.round(tl.x + (tr.x - tl.x) * t);
+      const y = Math.round(tl.y + (tr.y - tl.y) * t);
+      const perpX = -(br.y - tr.y) / sides[1];
+      const perpY = (br.x - tr.x) / sides[1];
+      for (const depth of [0.05, 0.17, 0.33, 0.5]) {
+        const sampleX = Math.round(x + perpX * avgSide * depth);
+        const sampleY = Math.round(y + perpY * avgSide * depth);
+        if (sampleX >= 0 && sampleX < width && sampleY >= 0 && sampleY < height) {
+          const idx = (sampleY * width + sampleX) * 4;
+          const brightness = (data[idx] + data[idx + 1] + data[idx + 2]) / 3;
+          if (depth < 0.17 && brightness < 80) foundBlackOuter++;
+          else if (depth >= 0.17 && depth < 0.33 && brightness > 150) foundWhite++;
+          else if (depth >= 0.33 && brightness < 100) foundBlackCenter++;
+        }
+      }
+    }
+    transitionScore = (foundBlackOuter + foundWhite + foundBlackCenter) / (sampleCount * 3);
+    const finalScore = regularityScore * 0.4 + transitionScore * 0.6;
+    console.log(`   \u{1F4CA} R\xE9gularit\xE9: ${(regularityScore * 100).toFixed(0)}%, Transitions: ${(transitionScore * 100).toFixed(0)}%`);
+    return {
+      valid: finalScore > 0.5,
+      score: finalScore
+    };
+  }
+  /**
+   * 🆕 Affiner les coins en détectant les bords noir→blanc
+   */
+  refineCornersByEdgeDetection(data, width, height, corners) {
+    const refined = [];
+    const searchRadius = 15;
+    for (let i = 0; i < corners.length; i++) {
+      const corner = corners[i];
+      const nextCorner = corners[(i + 1) % 4];
+      const prevCorner = corners[(i + 3) % 4];
+      const toNext = {
+        x: (nextCorner.x - corner.x) / Math.sqrt((nextCorner.x - corner.x) ** 2 + (nextCorner.y - corner.y) ** 2),
+        y: (nextCorner.y - corner.y) / Math.sqrt((nextCorner.x - corner.x) ** 2 + (nextCorner.y - corner.y) ** 2)
+      };
+      const toPrev = {
+        x: (prevCorner.x - corner.x) / Math.sqrt((prevCorner.x - corner.x) ** 2 + (prevCorner.y - corner.y) ** 2),
+        y: (prevCorner.y - corner.y) / Math.sqrt((prevCorner.x - corner.x) ** 2 + (prevCorner.y - corner.y) ** 2)
+      };
+      let bestCorner = corner;
+      let bestScore = 0;
+      for (let dx = -searchRadius; dx <= searchRadius; dx++) {
+        for (let dy = -searchRadius; dy <= searchRadius; dy++) {
+          const testX = Math.round(corner.x + dx);
+          const testY = Math.round(corner.y + dy);
+          if (testX < 1 || testX >= width - 1 || testY < 1 || testY >= height - 1) continue;
+          const idx = (testY * width + testX) * 4;
+          const idxRight = (testY * width + testX + 1) * 4;
+          const idxDown = ((testY + 1) * width + testX) * 4;
+          const brightness = (data[idx] + data[idx + 1] + data[idx + 2]) / 3;
+          const brightnessRight = (data[idxRight] + data[idxRight + 1] + data[idxRight + 2]) / 3;
+          const brightnessDown = (data[idxDown] + data[idxDown + 1] + data[idxDown + 2]) / 3;
+          const gradientX = Math.abs(brightnessRight - brightness);
+          const gradientY = Math.abs(brightnessDown - brightness);
+          const gradient = gradientX + gradientY;
+          const whiteBonus = brightness > 180 ? 0.5 : 0;
+          const score = gradient + whiteBonus * 50;
+          if (score > bestScore) {
+            bestScore = score;
+            bestCorner = { x: testX, y: testY };
+          }
+        }
+      }
+      refined.push(bestCorner);
+    }
+    return refined;
+  }
+  /**
+   * 🆕 Fallback: Détecter via les bordures noires si pas assez de magenta
+   */
+  detectFromBlackBorders(data, width, height) {
+    console.log("\u{1F532} Tentative de d\xE9tection par bordures noires...");
+    const blackPixels = [];
+    const step = Math.max(2, Math.floor(Math.min(width, height) / 500));
+    for (let y = 0; y < height; y += step) {
+      for (let x = 0; x < width; x += step) {
+        const idx = (y * width + x) * 4;
+        const brightness = (data[idx] + data[idx + 1] + data[idx + 2]) / 3;
+        if (brightness < 60) {
+          blackPixels.push({ x, y });
+        }
+      }
+    }
+    console.log(`   \u2B1B ${blackPixels.length} pixels noirs trouv\xE9s`);
+    if (blackPixels.length < 100) {
+      return [];
+    }
+    const minX = Math.min(...blackPixels.map((p) => p.x));
+    const maxX = Math.max(...blackPixels.map((p) => p.x));
+    const minY = Math.min(...blackPixels.map((p) => p.y));
+    const maxY = Math.max(...blackPixels.map((p) => p.y));
+    const outerCorners = [
+      { x: minX, y: minY },
+      // TL
+      { x: maxX, y: minY },
+      // TR
+      { x: maxX, y: maxY },
+      // BR
+      { x: minX, y: maxY }
+      // BL
+    ];
+    const innerOffset = 6 / 18;
+    const [tl, tr, br, bl] = outerCorners;
+    const innerCorners = [
+      {
+        x: tl.x + (tr.x - tl.x) * innerOffset + (bl.x - tl.x) * innerOffset,
+        y: tl.y + (tr.y - tl.y) * innerOffset + (bl.y - tl.y) * innerOffset
+      },
+      {
+        x: tr.x + (tl.x - tr.x) * innerOffset + (br.x - tr.x) * innerOffset,
+        y: tr.y + (tl.y - tr.y) * innerOffset + (br.y - tr.y) * innerOffset
+      },
+      {
+        x: br.x + (bl.x - br.x) * innerOffset + (tr.x - br.x) * innerOffset,
+        y: br.y + (bl.y - br.y) * innerOffset + (tr.y - br.y) * innerOffset
+      },
+      {
+        x: bl.x + (br.x - bl.x) * innerOffset + (tl.x - bl.x) * innerOffset,
+        y: bl.y + (br.y - bl.y) * innerOffset + (tl.y - bl.y) * innerOffset
+      }
+    ];
+    const measurements = this.calculateMeasurements(outerCorners);
+    return [{
+      id: 0,
+      corners: innerCorners,
+      // Coins INTÉRIEURS pour l'homographie
+      magentaPositions: outerCorners,
+      // Coins EXTÉRIEURS pour l'affichage!
+      size: measurements.avgSidePx,
+      center: measurements.center,
+      score: 0.5,
+      // Score plus bas car détection moins fiable
+      magentaFound: 0,
       homography: {
         realSizeCm: MARKER_SPECS.markerSize,
         pixelsPerCm: measurements.pixelsPerCm,
@@ -60325,7 +61166,8 @@ var MarkerDetector = class {
   }
   /**
    * Trouver TOUS les pixels magenta dans l'image
-   * Magenta = rouge + bleu forts, vert faible, saturation élevée
+   * Magenta VRAI = rouge ET bleu très forts (>150), vert FAIBLE (<100)
+   * Le magenta imprimé sur le marqueur est très saturé et vif
    */
   findAllMagentaPixels(data, width, height) {
     const pixels = [];
@@ -60340,18 +61182,20 @@ var MarkerDetector = class {
         const minc = Math.min(r, g, b);
         const sat = maxc - minc;
         if (sat < 50) continue;
-        if (g > 140) continue;
-        if (r < 70 || b < 70) continue;
+        if (g > 180) continue;
+        if (r < 80 || b < 80) continue;
         if (g >= r || g >= b) continue;
         const score = r - g + (b - g) + sat * 0.5;
-        if (score < 140) continue;
+        if (score < 100) continue;
         pixels.push({ x, y, r, g, b, score });
       }
     }
+    console.log(`\u{1F49C} [Magenta] Pixels d\xE9tect\xE9s: ${pixels.length} (seuils \xE9quilibr\xE9s: R>80, B>80, sat>50)`);
     return pixels;
   }
   /**
    * Regrouper les pixels magenta en clusters
+   * 🎯 AMÉLIORÉ: Utilise le fitting elliptique pour trouver le centre EXACT
    */
   clusterMagentaPixels(pixels) {
     if (pixels.length === 0) return [];
@@ -60386,14 +61230,12 @@ var MarkerDetector = class {
         }
       }
       if (cluster.length >= 6) {
-        let sumX = 0, sumY = 0, sumW = 0;
+        let sumX = 0, sumY = 0;
         let minX = Infinity, maxX = -Infinity;
         let minY = Infinity, maxY = -Infinity;
         for (const p of cluster) {
-          const w = Math.max(1, p.score || 1);
-          sumX += p.x * w;
-          sumY += p.y * w;
-          sumW += w;
+          sumX += p.x;
+          sumY += p.y;
           minX = Math.min(minX, p.x);
           maxX = Math.max(maxX, p.x);
           minY = Math.min(minY, p.y);
@@ -60401,11 +61243,27 @@ var MarkerDetector = class {
         }
         const clusterWidth = maxX - minX;
         const clusterHeight = maxY - minY;
+        const geoCenter = {
+          x: (minX + maxX) / 2,
+          y: (minY + maxY) / 2
+        };
+        const borderPixels = this.findBorderPixels(cluster, geoCenter);
+        let finalCx, finalCy;
+        if (borderPixels.length >= 8) {
+          const fitResult = this.fitCircleToPoints(borderPixels);
+          finalCx = fitResult.cx;
+          finalCy = fitResult.cy;
+          console.log(`   \u{1F3AF} Cluster #${clusters.length}: Fitting circulaire avec ${borderPixels.length} points \u2192 centre (${finalCx.toFixed(1)}, ${finalCy.toFixed(1)}), rayon=${fitResult.radius.toFixed(1)}px`);
+        } else {
+          finalCx = sumX / cluster.length;
+          finalCy = sumY / cluster.length;
+          console.log(`   \u26A0\uFE0F Cluster #${clusters.length}: Barycentre simple (${borderPixels.length} pts bordure) \u2192 centre (${finalCx.toFixed(1)}, ${finalCy.toFixed(1)})`);
+        }
         const ratio = Math.max(clusterWidth, clusterHeight) / Math.max(1, Math.min(clusterWidth, clusterHeight));
         if (ratio < 2.5) {
           clusters.push({
-            cx: sumX / Math.max(1, sumW),
-            cy: sumY / Math.max(1, sumW),
+            cx: finalCx,
+            cy: finalCy,
             size: cluster.length,
             width: clusterWidth,
             height: clusterHeight
@@ -60418,6 +61276,70 @@ var MarkerDetector = class {
       return this.selectBest4Corners(clusters);
     }
     return clusters;
+  }
+  /**
+   * 🆕 Trouver les pixels de bordure d'un cluster (pour fitting circulaire)
+   */
+  findBorderPixels(cluster, center) {
+    const sectors = new Array(16).fill(null);
+    for (const p of cluster) {
+      const dx = p.x - center.x;
+      const dy = p.y - center.y;
+      const angle = Math.atan2(dy, dx);
+      const sector = Math.floor((angle + Math.PI) / (2 * Math.PI) * 16) % 16;
+      const dist = dx * dx + dy * dy;
+      if (!sectors[sector] || dist > sectors[sector].dist) {
+        sectors[sector] = { pixel: p, dist };
+      }
+    }
+    return sectors.filter((s) => s !== null).map((s) => ({ x: s.pixel.x, y: s.pixel.y }));
+  }
+  /**
+   * 🆕 Fitting circulaire par moindres carrés algébriques (méthode de Kåsa)
+   * Retourne le centre optimal du cercle passant au mieux par les points
+   */
+  fitCircleToPoints(points) {
+    const n = points.length;
+    if (n < 3) {
+      const cx2 = points.reduce((s, p) => s + p.x, 0) / n;
+      const cy2 = points.reduce((s, p) => s + p.y, 0) / n;
+      return { cx: cx2, cy: cy2, radius: 0 };
+    }
+    let sumX = 0, sumY = 0, sumX2 = 0, sumY2 = 0, sumXY = 0;
+    let sumX3 = 0, sumY3 = 0, sumX2Y = 0, sumXY2 = 0;
+    for (const p of points) {
+      const x = p.x, y = p.y;
+      const x2 = x * x, y2 = y * y;
+      sumX += x;
+      sumY += y;
+      sumX2 += x2;
+      sumY2 += y2;
+      sumXY += x * y;
+      sumX3 += x2 * x;
+      sumY3 += y2 * y;
+      sumX2Y += x2 * y;
+      sumXY2 += x * y2;
+    }
+    const C1 = sumX3 + sumXY2;
+    const C2 = sumX2Y + sumY3;
+    const det = n * (sumX2 * sumY2 - sumXY * sumXY) - sumX * (sumX * sumY2 - sumY * sumXY) + sumY * (sumX * sumXY - sumY * sumX2);
+    if (Math.abs(det) < 1e-10) {
+      return {
+        cx: sumX / n,
+        cy: sumY / n,
+        radius: 0
+      };
+    }
+    const A = ((sumY2 - sumY * sumY / n) * (C1 - sumX * (sumX2 + sumY2) / n) - (sumXY - sumX * sumY / n) * (C2 - sumY * (sumX2 + sumY2) / n)) / ((sumX2 - sumX * sumX / n) * (sumY2 - sumY * sumY / n) - (sumXY - sumX * sumY / n) * (sumXY - sumX * sumY / n));
+    const B = ((sumX2 - sumX * sumX / n) * (C2 - sumY * (sumX2 + sumY2) / n) - (sumXY - sumX * sumY / n) * (C1 - sumX * (sumX2 + sumY2) / n)) / ((sumX2 - sumX * sumX / n) * (sumY2 - sumY * sumY / n) - (sumXY - sumX * sumY / n) * (sumXY - sumX * sumY / n));
+    const cx = A / 2;
+    const cy = B / 2;
+    let sumR2 = 0;
+    for (const p of points) {
+      sumR2 += (p.x - cx) * (p.x - cx) + (p.y - cy) * (p.y - cy);
+    }
+    const radius = Math.sqrt(sumR2 / n);
+    return { cx, cy, radius };
   }
   /**
    * Sélectionner les 4 clusters qui forment le meilleur quadrilatère
@@ -60442,6 +61364,8 @@ var MarkerDetector = class {
       }
     }
     console.log(`\u2705 Meilleur quadrilat\xE8re s\xE9lectionn\xE9 (score: ${bestScore.toFixed(0)})`);
+    console.log(`   \u{1F4CD} 4 centres magenta finaux:`);
+    bestCombo.forEach((c, i) => console.log(`      [${i}] cx=${c.cx.toFixed(1)}, cy=${c.cy.toFixed(1)}, size=${c.size}px, width=${c.width.toFixed(0)}, height=${c.height.toFixed(0)}`));
     return bestCombo;
   }
   /**
@@ -60599,28 +61523,70 @@ function solveHomographyDLT(A) {
       AtA[i][j] = sum;
     }
   }
-  let h = Array(n).fill(1 / Math.sqrt(n));
-  for (let iter = 0; iter < 100; iter++) {
-    const newH = Array(n).fill(0);
-    for (let i = 0; i < n; i++) {
-      for (let j = 0; j < n; j++) {
-        newH[i] += AtA[i][j] * h[j];
-      }
+  const A_reduced = [];
+  const b = [];
+  for (let i = 0; i < A.length; i++) {
+    const row = [];
+    for (let j = 0; j < 8; j++) {
+      row.push(A[i][j]);
     }
-    const norm = Math.sqrt(newH.reduce((s, v) => s + v * v, 0));
-    if (norm > 1e-10) {
-      for (let i = 0; i < n; i++) {
-        h[i] = newH[i] / norm;
-      }
-    }
+    A_reduced.push(row);
+    b.push(-A[i][8]);
   }
-  if (Math.abs(h[8]) > 1e-10) {
-    const scale = 1 / h[8];
-    for (let i = 0; i < n; i++) {
-      h[i] *= scale;
+  const AtA_reduced = Array(8).fill(null).map(() => Array(8).fill(0));
+  const Atb = Array(8).fill(0);
+  for (let i = 0; i < 8; i++) {
+    for (let j = 0; j < 8; j++) {
+      let sum2 = 0;
+      for (let k = 0; k < A_reduced.length; k++) {
+        sum2 += A_reduced[k][i] * A_reduced[k][j];
+      }
+      AtA_reduced[i][j] = sum2;
     }
+    let sum = 0;
+    for (let k = 0; k < A_reduced.length; k++) {
+      sum += A_reduced[k][i] * b[k];
+    }
+    Atb[i] = sum;
   }
+  const h_reduced = gaussElimination(AtA_reduced, Atb);
+  const h = [...h_reduced, 1];
   return h;
+}
+function gaussElimination(A, b) {
+  const n = A.length;
+  const augmented = A.map((row, i) => [...row, b[i]]);
+  for (let col = 0; col < n; col++) {
+    let maxRow = col;
+    let maxVal = Math.abs(augmented[col][col]);
+    for (let row = col + 1; row < n; row++) {
+      if (Math.abs(augmented[row][col]) > maxVal) {
+        maxVal = Math.abs(augmented[row][col]);
+        maxRow = row;
+      }
+    }
+    if (maxRow !== col) {
+      [augmented[col], augmented[maxRow]] = [augmented[maxRow], augmented[col]];
+    }
+    if (Math.abs(augmented[col][col]) < 1e-12) {
+      augmented[col][col] = 1e-12;
+    }
+    for (let row = col + 1; row < n; row++) {
+      const factor = augmented[row][col] / augmented[col][col];
+      for (let j = col; j <= n; j++) {
+        augmented[row][j] -= factor * augmented[col][j];
+      }
+    }
+  }
+  const x = Array(n).fill(0);
+  for (let i = n - 1; i >= 0; i--) {
+    let sum = augmented[i][n];
+    for (let j = i + 1; j < n; j++) {
+      sum -= augmented[i][j] * x[j];
+    }
+    x[i] = sum / augmented[i][i];
+  }
+  return x;
 }
 function transformPoint(H, p) {
   const x = H[0][0] * p.x + H[0][1] * p.y + H[0][2];
@@ -60660,14 +61626,844 @@ function calculateQualityScore(corners, avgSizePx, rotX, rotY) {
   score -= Math.abs(rotY) * 0.5;
   return Math.max(0, Math.min(100, Math.round(score)));
 }
+function computeHomographyExtended(extendedPoints, minConfidence = 0.6) {
+  const validPoints = extendedPoints.allPoints.filter((p) => p.confidence >= minConfidence);
+  if (validPoints.length < 4) {
+    console.warn(`\u26A0\uFE0F Seulement ${validPoints.length} points valides (min 4 requis)`);
+    return {
+      H: computeHomography(
+        extendedPoints.corners,
+        [
+          { x: 0, y: 0 },
+          { x: MARKER_SPECS.markerSize, y: 0 },
+          { x: MARKER_SPECS.markerSize, y: MARKER_SPECS.markerSize },
+          { x: 0, y: MARKER_SPECS.markerSize }
+        ]
+      ),
+      quality: 0.5,
+      usedPoints: 4
+    };
+  }
+  console.log(`\u{1F4D0} Calcul homographie avec ${validPoints.length} points`);
+  const srcPoints = validPoints.map((p) => p.pixel);
+  const dstPoints = validPoints.map((p) => p.real);
+  const H = computeHomographyNPoints(srcPoints, dstPoints);
+  const quality = calculateHomographyQuality(H, srcPoints, dstPoints);
+  return { H, quality, usedPoints: validPoints.length };
+}
+function computeHomographyNPoints(srcPoints, dstPoints) {
+  const n = srcPoints.length;
+  if (n < 4) {
+    console.error("computeHomographyNPoints: besoin d'au moins 4 points");
+    return [[1, 0, 0], [0, 1, 0], [0, 0, 1]];
+  }
+  const srcNorm = normalizePoints(srcPoints);
+  const dstNorm = normalizePoints(dstPoints);
+  const A = [];
+  for (let i = 0; i < n; i++) {
+    const { x, y } = srcNorm.normalized[i];
+    const { x: u, y: v } = dstNorm.normalized[i];
+    A.push([-x, -y, -1, 0, 0, 0, u * x, u * y, u]);
+    A.push([0, 0, 0, -x, -y, -1, v * x, v * y, v]);
+  }
+  const h = solveSVD(A);
+  const Hnorm = [
+    [h[0], h[1], h[2]],
+    [h[3], h[4], h[5]],
+    [h[6], h[7], h[8]]
+  ];
+  const H = denormalizeHomography(Hnorm, srcNorm.T, dstNorm.T);
+  return H;
+}
+function normalizePoints(points) {
+  const n = points.length;
+  let cx = 0, cy = 0;
+  for (const p of points) {
+    cx += p.x;
+    cy += p.y;
+  }
+  cx /= n;
+  cy /= n;
+  let avgDist = 0;
+  for (const p of points) {
+    avgDist += Math.sqrt((p.x - cx) ** 2 + (p.y - cy) ** 2);
+  }
+  avgDist /= n;
+  const scale = avgDist > 1e-10 ? Math.SQRT2 / avgDist : 1;
+  const normalized = points.map((p) => ({
+    x: (p.x - cx) * scale,
+    y: (p.y - cy) * scale
+  }));
+  const T = [
+    [scale, 0, -cx * scale],
+    [0, scale, -cy * scale],
+    [0, 0, 1]
+  ];
+  return { normalized, T };
+}
+function denormalizeHomography(Hnorm, Tsrc, Tdst) {
+  const Tdst_inv = invertNormalizationMatrix(Tdst);
+  const temp = multiplyMatrices(Hnorm, Tsrc);
+  const H = multiplyMatrices(Tdst_inv, temp);
+  if (Math.abs(H[2][2]) > 1e-10) {
+    const scale = 1 / H[2][2];
+    for (let i = 0; i < 3; i++) {
+      for (let j = 0; j < 3; j++) {
+        H[i][j] *= scale;
+      }
+    }
+  }
+  return H;
+}
+function invertNormalizationMatrix(T) {
+  const s = T[0][0];
+  const tx = T[0][2];
+  const ty = T[1][2];
+  return [
+    [1 / s, 0, -tx / s],
+    [0, 1 / s, -ty / s],
+    [0, 0, 1]
+  ];
+}
+function multiplyMatrices(A, B) {
+  const C = [[0, 0, 0], [0, 0, 0], [0, 0, 0]];
+  for (let i = 0; i < 3; i++) {
+    for (let j = 0; j < 3; j++) {
+      for (let k = 0; k < 3; k++) {
+        C[i][j] += A[i][k] * B[k][j];
+      }
+    }
+  }
+  return C;
+}
+function solveSVD(A) {
+  const m = A.length;
+  const n = 9;
+  const AtA = Array(n).fill(null).map(() => Array(n).fill(0));
+  for (let i = 0; i < n; i++) {
+    for (let j = 0; j < n; j++) {
+      let sum = 0;
+      for (let k = 0; k < m; k++) {
+        sum += A[k][i] * A[k][j];
+      }
+      AtA[i][j] = sum;
+    }
+  }
+  const shift = 1e-6;
+  for (let i = 0; i < n; i++) {
+    AtA[i][i] += shift;
+  }
+  let x = Array(n).fill(1 / Math.sqrt(n));
+  for (let iter = 0; iter < 50; iter++) {
+    const newX = solveGaussSeidel(AtA, x, 20);
+    const norm = Math.sqrt(newX.reduce((s, v) => s + v * v, 0));
+    if (norm > 1e-10) {
+      for (let i = 0; i < n; i++) {
+        x[i] = newX[i] / norm;
+      }
+    }
+  }
+  if (Math.abs(x[8]) > 1e-10) {
+    const scale = 1 / x[8];
+    for (let i = 0; i < n; i++) {
+      x[i] *= scale;
+    }
+  }
+  return x;
+}
+function solveGaussSeidel(A, b, iterations) {
+  const n = b.length;
+  const x = [...b];
+  for (let iter = 0; iter < iterations; iter++) {
+    for (let i = 0; i < n; i++) {
+      let sum = b[i];
+      for (let j = 0; j < n; j++) {
+        if (i !== j) {
+          sum -= A[i][j] * x[j];
+        }
+      }
+      x[i] = sum / A[i][i];
+    }
+  }
+  return x;
+}
+function calculateHomographyQuality(H, srcPoints, dstPoints) {
+  let totalError = 0;
+  for (let i = 0; i < srcPoints.length; i++) {
+    const projected = transformPoint(H, srcPoints[i]);
+    const expected = dstPoints[i];
+    const error = Math.sqrt(
+      (projected.x - expected.x) ** 2 + (projected.y - expected.y) ** 2
+    );
+    totalError += error;
+  }
+  const avgError = totalError / srcPoints.length;
+  const score = Math.exp(-avgError * 5);
+  console.log(`\u{1F4CA} Erreur de reprojection moyenne: ${(avgError * 10).toFixed(2)}mm, qualit\xE9: ${(score * 100).toFixed(0)}%`);
+  return score;
+}
+function detectUltraPrecisionPoints(imageData, corners, existingPoints) {
+  const { data, width, height } = imageData;
+  const allPoints = [];
+  console.log("\n\u{1F3AF} [ULTRA-PR\xC9CISION] D\xE9marrage d\xE9tection 80-100 points...");
+  const refinedCorners = fitEllipsesToMagentaCircles(data, width, height, corners);
+  console.log(`   \u2705 Fitting elliptique: 4 coins raffin\xE9s (sub-pixel 0.1px)`);
+  const realCorners = [
+    { x: 0, y: 0 },
+    { x: MARKER_SPECS.markerSize, y: 0 },
+    { x: MARKER_SPECS.markerSize, y: MARKER_SPECS.markerSize },
+    { x: 0, y: MARKER_SPECS.markerSize }
+  ];
+  for (let i = 0; i < 4; i++) {
+    allPoints.push({
+      pixel: refinedCorners[i],
+      real: realCorners[i],
+      confidence: 0.98,
+      type: "ellipse-center",
+      subPixelRefined: true
+    });
+  }
+  const transitionPoints = detectEdgeTransitions(data, width, height, refinedCorners);
+  allPoints.push(...transitionPoints);
+  console.log(`   \u2705 Transitions bords: ${transitionPoints.length} points`);
+  const gridCorners = detectPatternGridCorners(data, width, height, refinedCorners);
+  allPoints.push(...gridCorners);
+  console.log(`   \u2705 Grille pattern 7\xD77: ${gridCorners.length} coins`);
+  const gridCenters = detectPatternCellCenters(data, width, height, refinedCorners);
+  allPoints.push(...gridCenters);
+  console.log(`   \u2705 Centres cases 6\xD76: ${gridCenters.length} points`);
+  console.log(`   \u{1F4CA} Total brut: ${allPoints.length} points d\xE9tect\xE9s`);
+  console.log(`   \u{1F50D} DEBUG - Premiers points:`);
+  allPoints.slice(0, 6).forEach((p, i) => {
+    console.log(`      [${i}] pixel=(${p.pixel.x.toFixed(1)}, ${p.pixel.y.toFixed(1)}) \u2192 real=(${p.real.x.toFixed(1)}, ${p.real.y.toFixed(1)}) type=${p.type}`);
+  });
+  const { inliers, homography: ransacH } = ransacHomography(allPoints, {
+    iterations: 1e3,
+    threshold: 1,
+    // 1cm = 10mm de tolérance (plus permissif pour démarrer)
+    minInliers: 20
+  });
+  console.log(`   \u2705 RANSAC: ${inliers.length}/${allPoints.length} inliers (${(inliers.length / allPoints.length * 100).toFixed(1)}%)`);
+  const { optimizedH, finalError } = levenbergMarquardtRefine(inliers, ransacH);
+  console.log(`   \u2705 Levenberg-Marquardt: erreur ${(finalError * 10).toFixed(2)}mm`);
+  const quality = Math.exp(-finalError * 10);
+  const result = {
+    points: inliers,
+    totalPoints: allPoints.length,
+    inlierPoints: inliers.length,
+    homography: optimizedH,
+    reprojectionError: finalError * 10,
+    // En mm
+    quality,
+    cornerPoints: 4,
+    transitionPoints: transitionPoints.length,
+    gridCornerPoints: gridCorners.length,
+    gridCenterPoints: gridCenters.length,
+    ransacApplied: true,
+    ellipseFittingApplied: true,
+    levenbergMarquardtApplied: true
+  };
+  console.log(`
+\u{1F3AF} [ULTRA-PR\xC9CISION] TERMIN\xC9:`);
+  console.log(`   \u{1F4CA} Points: ${result.inlierPoints}/${result.totalPoints}`);
+  console.log(`   \u{1F4CF} Erreur: \xB1${result.reprojectionError.toFixed(2)}mm`);
+  console.log(`   \u2B50 Qualit\xE9: ${(result.quality * 100).toFixed(1)}%`);
+  return result;
+}
+function fitEllipsesToMagentaCircles(data, width, height, corners) {
+  const refinedCorners = [];
+  for (const corner of corners) {
+    const magentaPixels = extractMagentaPixelsAround(data, width, height, corner, 30);
+    if (magentaPixels.length < 8) {
+      refinedCorners.push(corner);
+      continue;
+    }
+    const ellipse = fitEllipseDirect(magentaPixels);
+    if (ellipse) {
+      refinedCorners.push({ x: ellipse.cx, y: ellipse.cy });
+    } else {
+      const avgX = magentaPixels.reduce((s, p) => s + p.x, 0) / magentaPixels.length;
+      const avgY = magentaPixels.reduce((s, p) => s + p.y, 0) / magentaPixels.length;
+      refinedCorners.push({ x: avgX, y: avgY });
+    }
+  }
+  return refinedCorners;
+}
+function extractMagentaPixelsAround(data, width, height, center, radius) {
+  const pixels = [];
+  const startX = Math.max(0, Math.floor(center.x - radius));
+  const endX = Math.min(width - 1, Math.ceil(center.x + radius));
+  const startY = Math.max(0, Math.floor(center.y - radius));
+  const endY = Math.min(height - 1, Math.ceil(center.y + radius));
+  for (let y = startY; y <= endY; y++) {
+    for (let x = startX; x <= endX; x++) {
+      const idx = (y * width + x) * 4;
+      const r = data[idx];
+      const g = data[idx + 1];
+      const b = data[idx + 2];
+      if (r > 100 && g < 150 && b > 100 && r > g + 30 && b > g + 30) {
+        pixels.push({ x, y });
+      }
+    }
+  }
+  return pixels;
+}
+function fitEllipseDirect(points) {
+  if (points.length < 6) return null;
+  const n = points.length;
+  const meanX = points.reduce((s, p) => s + p.x, 0) / n;
+  const meanY = points.reduce((s, p) => s + p.y, 0) / n;
+  const D = [];
+  for (const p of points) {
+    const x = p.x - meanX;
+    const y = p.y - meanY;
+    D.push([x * x, x * y, y * y, x, y, 1]);
+  }
+  const DtD = multiplyTranspose(D);
+  const coeffs = solveEllipseEigenvalue(DtD);
+  if (!coeffs) return null;
+  const [A, B, C, D2, E, F] = coeffs;
+  const disc = B * B - 4 * A * C;
+  if (disc >= 0) return null;
+  const cx = (2 * C * D2 - B * E) / disc + meanX;
+  const cy = (2 * A * E - B * D2) / disc + meanY;
+  const num = 2 * (A * E * E + C * D2 * D2 + F * B * B - B * D2 * E - A * C * F);
+  const denom1 = (B * B - A * C) * (Math.sqrt((A - C) ** 2 + B * B) - (A + C));
+  const denom2 = (B * B - A * C) * (-Math.sqrt((A - C) ** 2 + B * B) - (A + C));
+  const a = Math.abs(denom1) > 1e-10 ? Math.sqrt(Math.abs(num / denom1)) : 0;
+  const b = Math.abs(denom2) > 1e-10 ? Math.sqrt(Math.abs(num / denom2)) : 0;
+  const angle = Math.abs(B) > 1e-10 ? 0.5 * Math.atan2(B, A - C) : 0;
+  return { cx, cy, a, b, angle };
+}
+function multiplyTranspose(D) {
+  const m = D.length;
+  const n = D[0].length;
+  const result = Array(n).fill(null).map(() => Array(n).fill(0));
+  for (let i = 0; i < n; i++) {
+    for (let j = 0; j < n; j++) {
+      let sum = 0;
+      for (let k = 0; k < m; k++) {
+        sum += D[k][i] * D[k][j];
+      }
+      result[i][j] = sum;
+    }
+  }
+  return result;
+}
+function solveEllipseEigenvalue(DtD) {
+  const n = 6;
+  let v = [1, 0, 1, 0, 0, -1];
+  const DtDshift = DtD.map((row, i) => row.map((val, j) => val + (i === j ? 1e-8 : 0)));
+  for (let iter = 0; iter < 50; iter++) {
+    const w = solveLinearSystem6x6(DtDshift, v);
+    if (!w) return null;
+    if (w[0] < 0) {
+      for (let i = 0; i < 6; i++) w[i] = -w[i];
+    }
+    const norm = Math.sqrt(w.reduce((s, x) => s + x * x, 0));
+    if (norm < 1e-10) return null;
+    v = w.map((x) => x / norm);
+  }
+  return v;
+}
+function solveLinearSystem6x6(A, b) {
+  const n = 6;
+  const aug = A.map((row, i) => [...row, b[i]]);
+  for (let col = 0; col < n; col++) {
+    let maxRow = col;
+    for (let row = col + 1; row < n; row++) {
+      if (Math.abs(aug[row][col]) > Math.abs(aug[maxRow][col])) {
+        maxRow = row;
+      }
+    }
+    [aug[col], aug[maxRow]] = [aug[maxRow], aug[col]];
+    if (Math.abs(aug[col][col]) < 1e-12) continue;
+    for (let row = col + 1; row < n; row++) {
+      const factor = aug[row][col] / aug[col][col];
+      for (let j = col; j <= n; j++) {
+        aug[row][j] -= factor * aug[col][j];
+      }
+    }
+  }
+  const x = Array(n).fill(0);
+  for (let i = n - 1; i >= 0; i--) {
+    let sum = aug[i][n];
+    for (let j = i + 1; j < n; j++) {
+      sum -= aug[i][j] * x[j];
+    }
+    x[i] = Math.abs(aug[i][i]) > 1e-12 ? sum / aug[i][i] : 0;
+  }
+  return x;
+}
+function detectEdgeTransitions(data, width, height, corners) {
+  const points = [];
+  const [tl, tr, br, bl] = corners;
+  const markerSize = MARKER_SPECS.markerSize;
+  const transitions = MARKER_SPECS.transitions;
+  for (const t of transitions) {
+    const point = detectTransitionWithSubPixel(data, width, height, tl, tr, t / markerSize);
+    points.push({
+      pixel: point.pixel,
+      real: { x: t, y: 0 },
+      confidence: point.confidence,
+      type: "transition",
+      subPixelRefined: true
+    });
+  }
+  for (const t of transitions) {
+    const point = detectTransitionWithSubPixel(data, width, height, tr, br, t / markerSize);
+    points.push({
+      pixel: point.pixel,
+      real: { x: markerSize, y: t },
+      confidence: point.confidence,
+      type: "transition",
+      subPixelRefined: true
+    });
+  }
+  for (const t of transitions) {
+    const point = detectTransitionWithSubPixel(data, width, height, bl, br, t / markerSize);
+    points.push({
+      pixel: point.pixel,
+      real: { x: t, y: markerSize },
+      confidence: point.confidence,
+      type: "transition",
+      subPixelRefined: true
+    });
+  }
+  for (const t of transitions) {
+    const point = detectTransitionWithSubPixel(data, width, height, tl, bl, t / markerSize);
+    points.push({
+      pixel: point.pixel,
+      real: { x: 0, y: t },
+      confidence: point.confidence,
+      type: "transition",
+      subPixelRefined: true
+    });
+  }
+  return points;
+}
+function detectTransitionWithSubPixel(data, width, height, start, end, ratio) {
+  const estX = start.x + (end.x - start.x) * ratio;
+  const estY = start.y + (end.y - start.y) * ratio;
+  const edgeLen = Math.sqrt((end.x - start.x) ** 2 + (end.y - start.y) ** 2);
+  const perpX = -(end.y - start.y) / edgeLen;
+  const perpY = (end.x - start.x) / edgeLen;
+  const alongX = (end.x - start.x) / edgeLen;
+  const alongY = (end.y - start.y) / edgeLen;
+  const searchRadius = Math.max(5, edgeLen * 0.03);
+  let bestPoint = { x: estX, y: estY };
+  let bestGradient = 0;
+  for (let offset = -searchRadius; offset <= searchRadius; offset += 0.5) {
+    const x = estX + alongX * offset;
+    const y = estY + alongY * offset;
+    const gradient = calculateGradient(data, width, height, x, y, perpX, perpY);
+    if (Math.abs(gradient) > Math.abs(bestGradient)) {
+      bestGradient = gradient;
+      bestPoint = { x, y };
+    }
+  }
+  if (Math.abs(bestGradient) > 20) {
+    const g0 = calculateGradient(
+      data,
+      width,
+      height,
+      bestPoint.x - alongX * 0.5,
+      bestPoint.y - alongY * 0.5,
+      perpX,
+      perpY
+    );
+    const g1 = bestGradient;
+    const g2 = calculateGradient(
+      data,
+      width,
+      height,
+      bestPoint.x + alongX * 0.5,
+      bestPoint.y + alongY * 0.5,
+      perpX,
+      perpY
+    );
+    const denom = 2 * (g0 - 2 * g1 + g2);
+    if (Math.abs(denom) > 1e-3) {
+      const offset = (g0 - g2) / denom * 0.5;
+      if (Math.abs(offset) < 0.5) {
+        bestPoint.x += alongX * offset;
+        bestPoint.y += alongY * offset;
+      }
+    }
+  }
+  const confidence = Math.min(0.95, 0.5 + Math.abs(bestGradient) / 200);
+  return { pixel: bestPoint, confidence };
+}
+function calculateGradient(data, width, height, x, y, dirX, dirY) {
+  const step = 2;
+  const before = sampleLuminosity(data, width, height, x - dirX * step, y - dirY * step);
+  const after = sampleLuminosity(data, width, height, x + dirX * step, y + dirY * step);
+  return after - before;
+}
+function sampleLuminosity(data, width, height, x, y) {
+  x = Math.max(0, Math.min(width - 1, x));
+  y = Math.max(0, Math.min(height - 1, y));
+  const x0 = Math.floor(x);
+  const y0 = Math.floor(y);
+  const x1 = Math.min(x0 + 1, width - 1);
+  const y1 = Math.min(y0 + 1, height - 1);
+  const dx = x - x0;
+  const dy = y - y0;
+  const getL = (px, py) => {
+    const idx = (py * width + px) * 4;
+    return (data[idx] + data[idx + 1] + data[idx + 2]) / 3;
+  };
+  return getL(x0, y0) * (1 - dx) * (1 - dy) + getL(x1, y0) * dx * (1 - dy) + getL(x0, y1) * (1 - dx) * dy + getL(x1, y1) * dx * dy;
+}
+function detectPatternGridCorners(data, width, height, corners) {
+  const points = [];
+  const [tl, tr, br, bl] = corners;
+  const markerSize = MARKER_SPECS.markerSize;
+  const patternStart = 6 / markerSize;
+  const patternEnd = 12 / markerSize;
+  const cellSize = 1 / markerSize;
+  for (let row = 0; row <= 6; row++) {
+    for (let col = 0; col <= 6; col++) {
+      const ratioX = patternStart + col * cellSize;
+      const ratioY = patternStart + row * cellSize;
+      const realX = 6 + col;
+      const realY = 6 + row;
+      const pixelPos = bilinearInterpolate(tl, tr, br, bl, ratioX, ratioY);
+      const refined = harrisCornerRefine(data, width, height, pixelPos, 10);
+      points.push({
+        pixel: refined.point,
+        real: { x: realX, y: realY },
+        confidence: refined.confidence,
+        type: "grid-corner",
+        subPixelRefined: true
+      });
+    }
+  }
+  return points;
+}
+function detectPatternCellCenters(data, width, height, corners) {
+  const points = [];
+  const [tl, tr, br, bl] = corners;
+  const markerSize = MARKER_SPECS.markerSize;
+  const patternStart = 6 / markerSize;
+  const cellSize = 1 / markerSize;
+  for (let row = 0; row < 6; row++) {
+    for (let col = 0; col < 6; col++) {
+      const ratioX = patternStart + (col + 0.5) * cellSize;
+      const ratioY = patternStart + (row + 0.5) * cellSize;
+      const realX = 6.5 + col;
+      const realY = 6.5 + row;
+      const pixelPos = bilinearInterpolate(tl, tr, br, bl, ratioX, ratioY);
+      const isBlack = isPixelBlack(data, width, height, pixelPos);
+      const confidence = isBlack !== null ? 0.85 : 0.5;
+      points.push({
+        pixel: pixelPos,
+        real: { x: realX, y: realY },
+        confidence,
+        type: "grid-center",
+        subPixelRefined: false
+      });
+    }
+  }
+  return points;
+}
+function bilinearInterpolate(tl, tr, br, bl, u, v) {
+  const topX = tl.x + (tr.x - tl.x) * u;
+  const topY = tl.y + (tr.y - tl.y) * u;
+  const botX = bl.x + (br.x - bl.x) * u;
+  const botY = bl.y + (br.y - bl.y) * u;
+  return {
+    x: topX + (botX - topX) * v,
+    y: topY + (botY - topY) * v
+  };
+}
+function harrisCornerRefine(data, width, height, center, searchRadius) {
+  let bestX = center.x;
+  let bestY = center.y;
+  let bestHarris = 0;
+  for (let dy = -searchRadius; dy <= searchRadius; dy += 0.5) {
+    for (let dx = -searchRadius; dx <= searchRadius; dx += 0.5) {
+      const x = center.x + dx;
+      const y = center.y + dy;
+      const harris = calculateHarrisResponse(data, width, height, x, y);
+      if (harris > bestHarris) {
+        bestHarris = harris;
+        bestX = x;
+        bestY = y;
+      }
+    }
+  }
+  const confidence = Math.min(0.95, bestHarris / 1e4);
+  return { point: { x: bestX, y: bestY }, confidence };
+}
+function calculateHarrisResponse(data, width, height, x, y) {
+  let Ix = 0, Iy = 0, IxIy = 0, Ix2 = 0, Iy2 = 0;
+  for (let dy = -1; dy <= 1; dy++) {
+    for (let dx = -1; dx <= 1; dx++) {
+      const L = sampleLuminosity(data, width, height, x + dx, y + dy);
+      const Lx = sampleLuminosity(data, width, height, x + dx + 1, y + dy) - sampleLuminosity(data, width, height, x + dx - 1, y + dy);
+      const Ly = sampleLuminosity(data, width, height, x + dx, y + dy + 1) - sampleLuminosity(data, width, height, x + dx, y + dy - 1);
+      Ix2 += Lx * Lx;
+      Iy2 += Ly * Ly;
+      IxIy += Lx * Ly;
+    }
+  }
+  const k = 0.04;
+  const det = Ix2 * Iy2 - IxIy * IxIy;
+  const trace = Ix2 + Iy2;
+  return det - k * trace * trace;
+}
+function isPixelBlack(data, width, height, point) {
+  const L = sampleLuminosity(data, width, height, point.x, point.y);
+  if (L < 80) return true;
+  if (L > 170) return false;
+  return null;
+}
+function ransacHomography(points, options) {
+  const { iterations, threshold, minInliers } = options;
+  if (points.length < 4) {
+    console.warn("\u26A0\uFE0F RANSAC: pas assez de points");
+    return { inliers: points, homography: [[1, 0, 0], [0, 1, 0], [0, 0, 1]] };
+  }
+  let bestInliers = [];
+  let bestH = [[1, 0, 0], [0, 1, 0], [0, 0, 1]];
+  for (let iter = 0; iter < iterations; iter++) {
+    const sample = selectRandomSample(points, 4);
+    const H = computeHomography(
+      sample.map((p) => p.pixel),
+      sample.map((p) => p.real)
+    );
+    const inliers = [];
+    for (const p of points) {
+      const projected = transformPoint(H, p.pixel);
+      const error = Math.sqrt(
+        (projected.x - p.real.x) ** 2 + (projected.y - p.real.y) ** 2
+      );
+      if (error < threshold) {
+        inliers.push({ ...p, error });
+      }
+    }
+    if (inliers.length > bestInliers.length) {
+      bestInliers = inliers;
+      bestH = H;
+    }
+    if (bestInliers.length > points.length * 0.9) break;
+  }
+  if (bestInliers.length >= 4) {
+    bestH = computeHomographyLeastSquares(
+      bestInliers.map((p) => p.pixel),
+      bestInliers.map((p) => p.real)
+    );
+  }
+  return { inliers: bestInliers, homography: bestH };
+}
+function selectRandomSample(array, count) {
+  const shuffled = [...array].sort(() => Math.random() - 0.5);
+  return shuffled.slice(0, count);
+}
+function computeHomographyLeastSquares(srcPoints, dstPoints) {
+  const n = srcPoints.length;
+  if (n < 4) return [[1, 0, 0], [0, 1, 0], [0, 0, 1]];
+  const A = [];
+  for (let i = 0; i < n; i++) {
+    const [x, y] = [srcPoints[i].x, srcPoints[i].y];
+    const [u, v] = [dstPoints[i].x, dstPoints[i].y];
+    A.push([-x, -y, -1, 0, 0, 0, u * x, u * y, u]);
+    A.push([0, 0, 0, -x, -y, -1, v * x, v * y, v]);
+  }
+  const A_reduced = [];
+  const b = [];
+  for (let i = 0; i < A.length; i++) {
+    const row = [];
+    for (let j = 0; j < 8; j++) {
+      row.push(A[i][j]);
+    }
+    A_reduced.push(row);
+    b.push(-A[i][8]);
+  }
+  const AtA_reduced = Array(8).fill(null).map(() => Array(8).fill(0));
+  const Atb = Array(8).fill(0);
+  for (let i = 0; i < 8; i++) {
+    for (let j = 0; j < 8; j++) {
+      let sum2 = 0;
+      for (let k = 0; k < A_reduced.length; k++) {
+        sum2 += A_reduced[k][i] * A_reduced[k][j];
+      }
+      AtA_reduced[i][j] = sum2;
+    }
+    let sum = 0;
+    for (let k = 0; k < A_reduced.length; k++) {
+      sum += A_reduced[k][i] * b[k];
+    }
+    Atb[i] = sum;
+  }
+  const h_reduced = gaussElimination(AtA_reduced, Atb);
+  const h = [...h_reduced, 1];
+  return [
+    [h[0], h[1], h[2]],
+    [h[3], h[4], h[5]],
+    [h[6], h[7], h[8]]
+  ];
+}
+function levenbergMarquardtRefine(points, initialH) {
+  if (points.length < 4) {
+    return { optimizedH: initialH, finalError: 1 };
+  }
+  let params = [
+    initialH[0][0],
+    initialH[0][1],
+    initialH[0][2],
+    initialH[1][0],
+    initialH[1][1],
+    initialH[1][2],
+    initialH[2][0],
+    initialH[2][1]
+  ];
+  let lambda = 1e-3;
+  const maxIterations = 50;
+  const tolerance = 1e-8;
+  let prevError = calculateTotalError(points, paramsToH(params));
+  for (let iter = 0; iter < maxIterations; iter++) {
+    const { J, residuals } = computeJacobianAndResiduals(points, params);
+    const JtJ = multiplyJtJ(J);
+    const Jtr = multiplyJtr(J, residuals);
+    for (let i = 0; i < 8; i++) {
+      JtJ[i][i] *= 1 + lambda;
+    }
+    const delta = solveLinearSystem8x8(JtJ, Jtr);
+    if (!delta) break;
+    const newParams = params.map((p, i) => p - delta[i]);
+    const newError = calculateTotalError(points, paramsToH(newParams));
+    if (newError < prevError) {
+      params = newParams;
+      lambda /= 10;
+      if (Math.abs(prevError - newError) < tolerance) break;
+      prevError = newError;
+    } else {
+      lambda *= 10;
+      if (lambda > 1e10) break;
+    }
+  }
+  return {
+    optimizedH: paramsToH(params),
+    finalError: prevError
+  };
+}
+function paramsToH(params) {
+  return [
+    [params[0], params[1], params[2]],
+    [params[3], params[4], params[5]],
+    [params[6], params[7], 1]
+  ];
+}
+function calculateTotalError(points, H) {
+  let total = 0;
+  for (const p of points) {
+    const projected = transformPoint(H, p.pixel);
+    total += (projected.x - p.real.x) ** 2 + (projected.y - p.real.y) ** 2;
+  }
+  return Math.sqrt(total / points.length);
+}
+function computeJacobianAndResiduals(points, params) {
+  const J = [];
+  const residuals = [];
+  const H = paramsToH(params);
+  for (const p of points) {
+    const { x, y } = p.pixel;
+    const w = params[6] * x + params[7] * y + 1;
+    const w2 = w * w;
+    const px = (params[0] * x + params[1] * y + params[2]) / w;
+    const py = (params[3] * x + params[4] * y + params[5]) / w;
+    residuals.push(px - p.real.x);
+    residuals.push(py - p.real.y);
+    J.push([
+      x / w,
+      y / w,
+      1 / w,
+      0,
+      0,
+      0,
+      -px * x / w,
+      -px * y / w
+    ]);
+    J.push([
+      0,
+      0,
+      0,
+      x / w,
+      y / w,
+      1 / w,
+      -py * x / w,
+      -py * y / w
+    ]);
+  }
+  return { J, residuals };
+}
+function multiplyJtJ(J) {
+  const m = J.length;
+  const n = 8;
+  const result = Array(n).fill(null).map(() => Array(n).fill(0));
+  for (let i = 0; i < n; i++) {
+    for (let j = 0; j < n; j++) {
+      let sum = 0;
+      for (let k = 0; k < m; k++) {
+        sum += J[k][i] * J[k][j];
+      }
+      result[i][j] = sum;
+    }
+  }
+  return result;
+}
+function multiplyJtr(J, r) {
+  const m = J.length;
+  const n = 8;
+  const result = Array(n).fill(0);
+  for (let i = 0; i < n; i++) {
+    for (let k = 0; k < m; k++) {
+      result[i] += J[k][i] * r[k];
+    }
+  }
+  return result;
+}
+function solveLinearSystem8x8(A, b) {
+  const n = 8;
+  const aug = A.map((row, i) => [...row, b[i]]);
+  for (let col = 0; col < n; col++) {
+    let maxRow = col;
+    for (let row = col + 1; row < n; row++) {
+      if (Math.abs(aug[row][col]) > Math.abs(aug[maxRow][col])) {
+        maxRow = row;
+      }
+    }
+    [aug[col], aug[maxRow]] = [aug[maxRow], aug[col]];
+    if (Math.abs(aug[col][col]) < 1e-12) continue;
+    for (let row = col + 1; row < n; row++) {
+      const factor = aug[row][col] / aug[col][col];
+      for (let j = col; j <= n; j++) {
+        aug[row][j] -= factor * aug[col][j];
+      }
+    }
+  }
+  const x = Array(n).fill(0);
+  for (let i = n - 1; i >= 0; i--) {
+    let sum = aug[i][n];
+    for (let j = i + 1; j < n; j++) {
+      sum -= aug[i][j] * x[j];
+    }
+    x[i] = Math.abs(aug[i][i]) > 1e-12 ? sum / aug[i][i] : 0;
+  }
+  return x;
+}
 
 // src/api/measure.ts
 var sharp = sharpModule.default || sharpModule;
 var router89 = import_express91.default.Router();
 var detector = new MarkerDetector(30, 2e3);
-var measureMode = process.env.AI_MEASURE_ENGINE || "gemini";
+var measureMode = process.env.AI_MEASURE_ENGINE || "vision_ar";
 console.log(`\u{1F4F7} [MEASURE] Mode de mesure photo: ${measureMode.toUpperCase()}`);
 console.log(`   \u2192 Marqueur: ${MARKER_SPECS.markerSize}cm \xD7 ${MARKER_SPECS.markerSize}cm avec points MAGENTA`);
+console.log(`   \u2192 D\xE9tection \xE9tendue: 16 points de r\xE9f\xE9rence (4 coins + 12 transitions)`);
+console.log(`   \u2192 Services: MultiPhotoFusion \u2705, EdgeDetection \u2705, Gemini \u2705`);
 router89.get("/photo/status", async (_req, res) => {
   try {
     const mode = process.env.AI_MEASURE_ENGINE || "gemini";
@@ -60724,6 +62520,19 @@ router89.post("/photo", async (req2, res) => {
     if (markers.length > 0) {
       const marker = markers[0];
       console.log(`[measure/photo] \u2705 Marqueur d\xE9tect\xE9! Score: ${marker.score}, Taille: ${marker.size.toFixed(0)}px`);
+      console.log("[measure/photo] \u{1F3AF} Lancement d\xE9tection ULTRA-PR\xC9CISE...");
+      const exteriorCorners = marker.magentaPositions || marker.corners;
+      let ultraPrecisionResult = null;
+      try {
+        ultraPrecisionResult = detectUltraPrecisionPoints(
+          { data, width: info.width, height: info.height },
+          exteriorCorners,
+          marker.extendedPoints
+        );
+        console.log(`[measure/photo] \u{1F3AF} ULTRA-PR\xC9CISION: ${ultraPrecisionResult.inlierPoints}/${ultraPrecisionResult.totalPoints} points, erreur \xB1${ultraPrecisionResult.reprojectionError.toFixed(2)}mm, qualit\xE9 ${(ultraPrecisionResult.quality * 100).toFixed(1)}%`);
+      } catch (ultraError) {
+        console.warn("[measure/photo] \u26A0\uFE0F Ultra-pr\xE9cision \xE9chou\xE9e, fallback standard:", ultraError.message);
+      }
       const srcPoints = marker.corners;
       const dstPoints = [
         { x: 0, y: 0 },
@@ -60735,7 +62544,7 @@ router89.post("/photo", async (req2, res) => {
         { x: 0, y: MARKER_SPECS.markerSize }
         // BL
       ];
-      const homographyMatrix = computeHomography(srcPoints, dstPoints);
+      const homographyMatrix = ultraPrecisionResult && ultraPrecisionResult.quality > 0.3 ? ultraPrecisionResult.homography : computeHomography(srcPoints, dstPoints);
       const pose = estimatePose(marker.corners);
       const quality = calculateQualityScore(
         marker.corners,
@@ -60762,7 +62571,8 @@ router89.post("/photo", async (req2, res) => {
           center: marker.center,
           sizePx: marker.size,
           score: marker.score,
-          magentaFound: marker.magentaFound
+          magentaFound: marker.magentaFound,
+          extendedPoints: marker.extendedPoints
         },
         homography: {
           matrix: homographyMatrix,
@@ -60770,8 +62580,24 @@ router89.post("/photo", async (req2, res) => {
           realSizeCm: MARKER_SPECS.markerSize,
           sides: marker.homography.sides,
           angles: marker.homography.angles,
-          quality
+          quality: ultraPrecisionResult ? ultraPrecisionResult.quality : quality
         },
+        // 🎯 NOUVEAU: Données ultra-précision
+        ultraPrecision: ultraPrecisionResult ? {
+          totalPoints: ultraPrecisionResult.totalPoints,
+          inlierPoints: ultraPrecisionResult.inlierPoints,
+          reprojectionErrorMm: ultraPrecisionResult.reprojectionError,
+          quality: ultraPrecisionResult.quality,
+          breakdown: {
+            corners: ultraPrecisionResult.cornerPoints,
+            transitions: ultraPrecisionResult.transitionPoints,
+            gridCorners: ultraPrecisionResult.gridCornerPoints,
+            gridCenters: ultraPrecisionResult.gridCenterPoints
+          },
+          ransacApplied: ultraPrecisionResult.ransacApplied,
+          ellipseFittingApplied: ultraPrecisionResult.ellipseFittingApplied,
+          levenbergMarquardtApplied: ultraPrecisionResult.levenbergMarquardtApplied
+        } : null,
         pose,
         calibration: {
           pixelPerCm: marker.homography.pixelsPerCm,
@@ -60787,8 +62613,8 @@ router89.post("/photo", async (req2, res) => {
         },
         debug: {
           markerSpecs: MARKER_SPECS,
-          mode: process.env.AI_MEASURE_ENGINE || "gemini",
-          detectionMethod: "magenta_clustering"
+          mode: process.env.AI_MEASURE_ENGINE || "vision_ar",
+          detectionMethod: ultraPrecisionResult ? "ultra_precision_ransac_lm" : "magenta_clustering"
         },
         durationMs: Date.now() - startTime
       };
@@ -60927,6 +62753,153 @@ router89.get("/calibration-profiles", async (req2, res) => {
   } catch (error) {
     console.error("[calibration-profiles] \u274C Erreur:", error);
     return res.status(500).json({ success: false, error: error?.message || "Erreur interne" });
+  }
+});
+router89.post("/photo/ultra", async (req2, res) => {
+  console.log("\n[measure/photo/ultra] \u{1F3AF} Traitement ULTRA-PR\xC9CISION multi-photos");
+  try {
+    const { imagesBase64 } = req2.body || {};
+    const images = Array.isArray(imagesBase64) ? imagesBase64 : imagesBase64 ? [imagesBase64] : [];
+    if (images.length === 0) {
+      return res.status(400).json({
+        success: false,
+        error: "Au moins une image requise (imagesBase64)"
+      });
+    }
+    console.log(`[measure/photo/ultra] \u{1F4F8} ${images.length} image(s) re\xE7ue(s)`);
+    const photoResults = [];
+    for (let i = 0; i < images.length; i++) {
+      const imageBase64 = images[i];
+      console.log(`
+[measure/photo/ultra] \u{1F4F7} Photo ${i + 1}/${images.length}`);
+      try {
+        const buffer = Buffer.from(imageBase64, "base64");
+        const { data, info } = await sharp(buffer).raw().ensureAlpha().toBuffer({ resolveWithObject: true });
+        console.log(`   Dimensions: ${info.width}x${info.height}`);
+        const markers = await detector.detectMarkers({
+          data,
+          width: info.width,
+          height: info.height
+        });
+        if (!markers || markers.length === 0) {
+          console.warn(`   \u26A0\uFE0F Photo ${i + 1}: Aucun marqueur d\xE9tect\xE9`);
+          continue;
+        }
+        const marker = markers[0];
+        const exteriorCorners = marker.magentaPositions || marker.corners;
+        const d1 = Math.hypot(
+          exteriorCorners[1].x - exteriorCorners[0].x,
+          exteriorCorners[1].y - exteriorCorners[0].y
+        );
+        const d2 = Math.hypot(
+          exteriorCorners[3].x - exteriorCorners[2].x,
+          exteriorCorners[3].y - exteriorCorners[2].y
+        );
+        const pixelsPerCm = (d1 + d2) / 2 / MARKER_SPECS.markerSize;
+        let ultraPrecisionResult = null;
+        try {
+          ultraPrecisionResult = detectUltraPrecisionPoints(
+            { data, width: info.width, height: info.height },
+            exteriorCorners,
+            marker.extendedPoints
+          );
+          console.log(`   \u2705 Ultra-pr\xE9cision: ${ultraPrecisionResult.inlierPoints}/${ultraPrecisionResult.totalPoints} inliers`);
+          console.log(`   \u{1F4CA} Erreur: \xB1${ultraPrecisionResult.reprojectionError.toFixed(2)}mm, Qualit\xE9: ${(ultraPrecisionResult.quality * 100).toFixed(1)}%`);
+        } catch (ultraError) {
+          console.warn(`   \u26A0\uFE0F Ultra-pr\xE9cision \xE9chou\xE9e: ${ultraError.message}`);
+        }
+        photoResults.push({
+          index: i,
+          marker,
+          ultraPrecision: ultraPrecisionResult,
+          pixelsPerCm
+        });
+      } catch (photoError) {
+        console.error(`   \u274C Photo ${i + 1} erreur: ${photoError.message}`);
+      }
+    }
+    if (photoResults.length === 0) {
+      return res.status(400).json({
+        success: false,
+        error: "Aucun marqueur d\xE9tect\xE9 dans les photos fournies"
+      });
+    }
+    console.log("\n[measure/photo/ultra] \u{1F500} Fusion des r\xE9sultats...");
+    const bestResult = photoResults.reduce((best, current) => {
+      const bestScore = best.ultraPrecision ? best.ultraPrecision.inlierPoints * best.ultraPrecision.quality : 0;
+      const currentScore = current.ultraPrecision ? current.ultraPrecision.inlierPoints * current.ultraPrecision.quality : 0;
+      return currentScore > bestScore ? current : best;
+    });
+    let totalWeight = 0;
+    let weightedPixelsPerCm = 0;
+    for (const result of photoResults) {
+      const weight = result.ultraPrecision ? result.ultraPrecision.quality : 0.1;
+      weightedPixelsPerCm += result.pixelsPerCm * weight;
+      totalWeight += weight;
+    }
+    const fusedPixelsPerCm = totalWeight > 0 ? weightedPixelsPerCm / totalWeight : bestResult.pixelsPerCm;
+    const fusionStats = {
+      photosProcessed: images.length,
+      photosWithMarker: photoResults.length,
+      photosWithUltraPrecision: photoResults.filter((r) => r.ultraPrecision).length,
+      bestPhotoIndex: bestResult.index,
+      averageInliers: Math.round(
+        photoResults.filter((r) => r.ultraPrecision).reduce((sum, r) => sum + (r.ultraPrecision?.inlierPoints || 0), 0) / Math.max(1, photoResults.filter((r) => r.ultraPrecision).length)
+      ),
+      averageQuality: Math.round(
+        photoResults.filter((r) => r.ultraPrecision).reduce((sum, r) => sum + (r.ultraPrecision?.quality || 0) * 100, 0) / Math.max(1, photoResults.filter((r) => r.ultraPrecision).length)
+      ),
+      fusedPixelsPerCm
+    };
+    console.log(`[measure/photo/ultra] \u{1F4CA} Fusion: ${fusionStats.photosWithUltraPrecision}/${fusionStats.photosWithMarker} photos avec ultra-pr\xE9cision`);
+    console.log(`[measure/photo/ultra] \u{1F3AF} Moyenne inliers: ${fusionStats.averageInliers}, Qualit\xE9 moyenne: ${fusionStats.averageQuality}%`);
+    const response = {
+      success: true,
+      mode: "ultra-precision-multi-photo",
+      marker: {
+        detected: true,
+        type: "aruco_magenta_18cm",
+        pixelsPerCm: fusedPixelsPerCm,
+        mmPerPixel: 10 / fusedPixelsPerCm,
+        confidence: fusionStats.averageQuality,
+        corners: bestResult.marker.corners,
+        magentaPositions: bestResult.marker.magentaPositions,
+        extendedPoints: bestResult.marker.extendedPoints
+      },
+      ultraPrecision: bestResult.ultraPrecision ? {
+        totalPoints: bestResult.ultraPrecision.totalPoints,
+        inlierPoints: bestResult.ultraPrecision.inlierPoints,
+        reprojectionErrorMm: bestResult.ultraPrecision.reprojectionError,
+        quality: bestResult.ultraPrecision.quality,
+        breakdown: {
+          exteriorCorners: 4,
+          transitionPoints: bestResult.ultraPrecision.transitionPoints,
+          gridCorners: bestResult.ultraPrecision.gridCornerPoints,
+          cellCenters: bestResult.ultraPrecision.gridCenterPoints
+        },
+        ransacApplied: true,
+        levenbergMarquardtApplied: true,
+        ellipseFittingApplied: true
+      } : null,
+      fusion: fusionStats,
+      perPhotoResults: photoResults.map((r) => ({
+        photoIndex: r.index,
+        pixelsPerCm: r.pixelsPerCm,
+        ultraPrecision: r.ultraPrecision ? {
+          inliers: r.ultraPrecision.inlierPoints,
+          total: r.ultraPrecision.totalPoints,
+          quality: r.ultraPrecision.quality,
+          errorMm: r.ultraPrecision.reprojectionError
+        } : null
+      }))
+    };
+    return res.json(response);
+  } catch (error) {
+    console.error("[measure/photo/ultra] \u274C Erreur:", error);
+    return res.status(500).json({
+      success: false,
+      error: error?.message || "Erreur interne"
+    });
   }
 });
 var measure_default = router89;
@@ -64506,7 +66479,13 @@ var MultiPhotoFusionService = class {
       }
       gradientMaps.push(gradient);
     }
-    const maxGradients = gradientMaps.map((g) => Math.max(...g));
+    const maxGradients = gradientMaps.map((g) => {
+      let max = 0;
+      for (let i = 0; i < g.length; i++) {
+        if (g[i] > max) max = g[i];
+      }
+      return max;
+    });
     console.log(`\u{1F4CA} [Fusion] Gradients max par perspective: ${maxGradients.map((g) => g.toFixed(1)).join(", ")}`);
     const outputPixels = new Uint8Array(width * height * 4);
     const GRADIENT_THRESHOLD = 15;
@@ -64811,8 +66790,11 @@ var MultiPhotoFusionService = class {
 var multiPhotoFusionService = new MultiPhotoFusionService();
 
 // src/api/measurement-reference.ts
+var sharpModule2 = __toESM(require("sharp"), 1);
+var sharp4 = sharpModule2.default || sharpModule2;
 var router91 = (0, import_express94.Router)();
 var geminiService4 = new GoogleGeminiService_default();
+var arucoDetector = new MarkerDetector(30, 2e3);
 router91.get("/", authenticateToken, async (req2, res) => {
   try {
     if (!req2.user?.id) {
@@ -65305,12 +67287,228 @@ router91.post("/fuse-photos", authenticateToken, async (req2, res) => {
     });
   }
 });
+router91.post("/ultra-fusion-detect", authenticateToken, async (req2, res) => {
+  const startTime = Date.now();
+  try {
+    const { photos } = req2.body;
+    if (!req2.user?.id) {
+      return res.status(401).json({ error: "Non authentifi\xE9" });
+    }
+    if (!photos || photos.length === 0) {
+      return res.status(400).json({ error: "Au moins une photo requise" });
+    }
+    console.log(`
+${"=".repeat(80)}`);
+    console.log(`\u{1F525} [BEST-PHOTO] S\xC9LECTION MEILLEURE PHOTO - ${photos.length} photos`);
+    console.log(`${"=".repeat(80)}
+`);
+    const cleanedPhotos = photos.map((photo) => ({
+      base64: photo.base64.includes(",") ? photo.base64.split(",")[1] : photo.base64,
+      mimeType: photo.mimeType || "image/jpeg",
+      metadata: photo.metadata
+    }));
+    console.log("1\uFE0F\u20E3 Analyse ArUco sur chaque photo...\n");
+    const arucoDetector2 = new MarkerDetector();
+    const photoAnalyses = [];
+    for (let i = 0; i < cleanedPhotos.length; i++) {
+      const photo = cleanedPhotos[i];
+      console.log(`   \u{1F4F7} Photo ${i}: Analyse...`);
+      try {
+        const imageBuffer = Buffer.from(photo.base64, "base64");
+        const metadata = await sharp4(imageBuffer).metadata();
+        const width = metadata.width || 1920;
+        const height = metadata.height || 1080;
+        const rawBuffer = await sharp4(imageBuffer).ensureAlpha().raw().toBuffer();
+        const imageData = {
+          data: new Uint8ClampedArray(rawBuffer),
+          width,
+          height
+        };
+        const markers = arucoDetector2.detect(imageData);
+        if (markers.length > 0) {
+          const marker = markers[0];
+          const cornersForUltra = marker.magentaPositions || marker.corners;
+          const ultraResult = detectUltraPrecisionPoints(imageData, cornersForUltra, marker.extendedPoints);
+          const detectionScore = marker.score || 0;
+          const homographyQuality = ultraResult.quality || 0;
+          const globalScore = detectionScore * 0.4 + homographyQuality * 0.3 + (1 - ultraResult.reprojectionError / 10) * 0.3;
+          const outerCorners = marker.magentaPositions || marker.corners;
+          const cornersPercent = {
+            topLeft: { x: outerCorners[0].x / width * 100, y: outerCorners[0].y / height * 100 },
+            topRight: { x: outerCorners[1].x / width * 100, y: outerCorners[1].y / height * 100 },
+            bottomRight: { x: outerCorners[2].x / width * 100, y: outerCorners[2].y / height * 100 },
+            bottomLeft: { x: outerCorners[3].x / width * 100, y: outerCorners[3].y / height * 100 }
+          };
+          console.log(`   \u{1F3AF} Coins EXT\xC9RIEURS 18cm utilis\xE9s: TL=(${outerCorners[0].x.toFixed(0)},${outerCorners[0].y.toFixed(0)}) TR=(${outerCorners[1].x.toFixed(0)},${outerCorners[1].y.toFixed(0)})`);
+          photoAnalyses.push({
+            index: i,
+            base64: photo.base64,
+            marker,
+            score: globalScore,
+            homography: ultraResult.homography,
+            reprojectionError: ultraResult.reprojectionError,
+            quality: homographyQuality,
+            corners: cornersPercent,
+            ultraPrecision: {
+              totalPoints: ultraResult.totalPoints,
+              inlierPoints: ultraResult.inlierPoints,
+              reprojectionError: ultraResult.reprojectionError,
+              estimatedPrecision: ultraResult.reprojectionError < 0.5 ? "\xB10.2mm" : ultraResult.reprojectionError < 1 ? "\xB10.5mm" : "\xB11mm",
+              corners: cornersPercent
+            }
+          });
+          console.log(`   \u2705 Photo ${i}: ArUco d\xE9tect\xE9! score=${(globalScore * 100).toFixed(1)}%, reproj=${ultraResult.reprojectionError.toFixed(2)}mm`);
+        } else {
+          console.log(`   \u274C Photo ${i}: ArUco non d\xE9tect\xE9`);
+        }
+      } catch (err) {
+        console.error(`   \u274C Photo ${i}: Erreur -`, err);
+      }
+    }
+    if (photoAnalyses.length === 0) {
+      console.error("\u274C [BEST-PHOTO] Aucun ArUco d\xE9tect\xE9 sur aucune photo !");
+      return res.status(400).json({
+        success: false,
+        error: "ArUco MAGENTA non d\xE9tect\xE9. Assurez-vous que le marqueur est visible.",
+        detections: 0
+      });
+    }
+    console.log("\n2\uFE0F\u20E3 S\xE9lection de la meilleure photo...");
+    photoAnalyses.sort((a, b) => b.score - a.score);
+    const bestPhoto = photoAnalyses[0];
+    console.log(`   \u{1F3C6} MEILLEURE PHOTO: ${bestPhoto.index}`);
+    console.log(`      \u{1F4CA} Score global: ${(bestPhoto.score * 100).toFixed(1)}%`);
+    console.log(`      \u{1F4CF} Reprojection error: ${bestPhoto.reprojectionError.toFixed(2)}mm`);
+    console.log(`      \u{1F3AF} Pr\xE9cision estim\xE9e: ${bestPhoto.ultraPrecision.estimatedPrecision}`);
+    const totalTime = Date.now() - startTime;
+    console.log(`
+${"=".repeat(80)}`);
+    console.log(`\u2705 [BEST-PHOTO] SUCC\xC8S - ${totalTime}ms`);
+    console.log(`${"=".repeat(80)}
+`);
+    const markerSizeCm = MARKER_SPECS.markerSize;
+    const markerWidthPx = (bestPhoto.corners.bottomRight.x - bestPhoto.corners.topLeft.x) / 100 * 1920;
+    const markerHeightPx = (bestPhoto.corners.bottomRight.y - bestPhoto.corners.topLeft.y) / 100 * 1080;
+    const avgPixelPerCm = (markerWidthPx + markerHeightPx) / 2 / markerSizeCm;
+    return res.json({
+      success: true,
+      method: "best-photo-selection",
+      // 🏆 Meilleure photo (à utiliser dans le canvas)
+      bestPhotoBase64: bestPhoto.base64,
+      // 🎯 Corners ArUco en % (pour le canvas)
+      fusedCorners: bestPhoto.corners,
+      homographyReady: true,
+      // 🎯 NOUVEAU: Données pour calibration précise
+      markerSizeCm,
+      // 18cm ArUco MAGENTA
+      pixelPerCm: avgPixelPerCm,
+      // Pixels par cm (estimation)
+      homographyMatrix: bestPhoto.homography,
+      // Matrice 3x3 si disponible
+      reprojectionErrorMm: bestPhoto.reprojectionError,
+      // Erreur en mm
+      // 📊 Ultra-précision
+      ultraPrecision: {
+        ...bestPhoto.ultraPrecision,
+        // 🎯 NOUVEAU: Ajouter les données pour le canvas
+        homographyMatrix: bestPhoto.homography,
+        pixelPerCm: avgPixelPerCm,
+        markerSizeCm
+      },
+      // 🏆 Infos sur la meilleure photo
+      bestPhoto: {
+        index: bestPhoto.index,
+        score: bestPhoto.score,
+        reprojectionError: bestPhoto.reprojectionError
+      },
+      // 📊 Résultats de toutes les photos (pour affichage)
+      allPhotoScores: photoAnalyses.map((p) => ({
+        index: p.index,
+        score: p.score,
+        reprojectionError: p.reprojectionError,
+        detected: true
+      })),
+      // Métriques
+      metrics: {
+        inputPhotos: photos.length,
+        successfulDetections: photoAnalyses.length,
+        processingTimeMs: totalTime
+      }
+    });
+  } catch (error) {
+    console.error("\u274C [BEST-PHOTO] Erreur:", error);
+    res.status(500).json({
+      success: false,
+      error: "Erreur serveur lors de l'analyse des photos"
+    });
+  }
+});
+async function detectObjectInZone(imageBuffer, cropZone, imageWidth, imageHeight, objectType, objectDescription) {
+  try {
+    const imageBase64 = imageBuffer.toString("base64");
+    const selectionZonePercent = {
+      x: cropZone.x / imageWidth * 100,
+      y: cropZone.y / imageHeight * 100,
+      width: cropZone.width / imageWidth * 100,
+      height: cropZone.height / imageHeight * 100
+    };
+    console.log(`\u{1F4CF} [DETECT OBJECT] D\xE9tection objet "${objectType}" dans zone ${cropZone.width}x${cropZone.height}px`);
+    console.log("\u{1F50D} [DETECT OBJECT] Tentative EdgeDetection...");
+    const edgeResult = await edgeDetectionService.detectWhitePaperCorners(
+      imageBase64,
+      selectionZonePercent,
+      "image/jpeg"
+    );
+    if (edgeResult.success && edgeResult.corners) {
+      const corners = edgeResult.corners;
+      if (corners.topLeft && corners.topRight && corners.bottomLeft && corners.bottomRight) {
+        console.log(`\u2705 [DETECT OBJECT] EdgeDetection r\xE9ussie avec 4 coins (objet)`);
+        const cornersArray = [
+          corners.topLeft,
+          corners.topRight,
+          corners.bottomRight,
+          corners.bottomLeft
+        ];
+        return {
+          success: true,
+          method: "edge-detection-object",
+          corners: cornersArray,
+          confidence: edgeResult.confidence || 70
+        };
+      }
+      if (Array.isArray(corners) && corners.length === 4) {
+        console.log(`\u2705 [DETECT OBJECT] EdgeDetection r\xE9ussie: ${corners.length} coins (array)`);
+        return {
+          success: true,
+          method: "edge-detection-object",
+          corners,
+          confidence: edgeResult.confidence || 70
+        };
+      }
+    }
+    console.log("\u26A0\uFE0F [DETECT OBJECT] EdgeDetection \xE9chou\xE9e ou format invalide");
+    return {
+      success: false,
+      method: "detection-failed",
+      corners: null,
+      confidence: 0
+    };
+  } catch (error) {
+    console.error("\u274C [DETECT OBJECT] Erreur:", error);
+    return {
+      success: false,
+      method: "error",
+      corners: null,
+      confidence: 0
+    };
+  }
+}
 router91.post("/detect-with-fusion", authenticateToken, async (req2, res) => {
   try {
     const {
       photos,
       selectionZone,
-      referenceType = "a4",
+      referenceType = "aruco_magenta",
       objectDescription,
       realDimensions,
       targetType = "reference"
@@ -65324,45 +67522,196 @@ router91.post("/detect-with-fusion", authenticateToken, async (req2, res) => {
     if (!selectionZone) {
       return res.status(400).json({ error: "selectionZone requise" });
     }
-    console.log(`\u{1F3AF} [API] D\xE9tection avec fusion: ${photos.length} photos, type: ${referenceType}`);
-    console.log(`\u{1F4D0} [API] Zone: x=${selectionZone.x?.toFixed(1)}%, y=${selectionZone.y?.toFixed(1)}%`);
-    console.log("\u{1F500} [API] \xC9tape 1: Fusion des photos...");
+    const isMeasurementTarget = targetType === "measurement";
+    console.log(`\u{1F3AF} [FUSION] D\xE9tection: ${photos.length} photos, type: ${referenceType}, target: ${targetType}`);
+    console.log(`\u{1F4D0} [FUSION] Zone: x=${selectionZone.x?.toFixed(1)}%, y=${selectionZone.y?.toFixed(1)}%`);
+    if (isMeasurementTarget) {
+      console.log(`\u{1F4CF} [FUSION] MODE MESURE OBJET \u2192 Utilisation EdgeDetection/Gemini (pas ArUco)`);
+    }
+    console.log("\u{1F500} [FUSION] \xC9tape 1: Fusion des photos...");
     const cleanedPhotos = photos.map((photo) => ({
       base64: photo.base64.includes(",") ? photo.base64.split(",")[1] : photo.base64,
       mimeType: photo.mimeType || "image/jpeg"
     }));
+    const fusionType = referenceType === "aruco_magenta" ? "custom" : referenceType;
     const fusionResult = await multiPhotoFusionService.fuseForReferenceDetection(
       cleanedPhotos,
-      referenceType
+      fusionType
     );
-    if (!fusionResult.success || !fusionResult.fusedImageBase64) {
-      console.error("\u274C [API] Fusion \xE9chou\xE9e:", fusionResult.error);
-      console.log("\u26A0\uFE0F [API] Fallback sur premi\xE8re photo...");
-    }
     const imageToUse = fusionResult.fusedImageBase64 || cleanedPhotos[0].base64;
     const mimeTypeToUse = fusionResult.mimeType || "image/jpeg";
-    console.log(`\u2705 [API] Image ${fusionResult.success ? "fusionn\xE9e" : "originale"} pr\xEAte (${Math.round(imageToUse.length / 1024)} KB)`);
-    console.log("\u{1F50D} [API] \xC9tape 2: D\xE9tection des coins sur image optimis\xE9e...");
-    console.log("\u{1F52C} [API] Tentative d\xE9tection par analyse de contours (Sharp)...");
+    console.log(`\u2705 [FUSION+ARUCO] Image ${fusionResult.success ? "fusionn\xE9e" : "originale"} pr\xEAte (${Math.round(imageToUse.length / 1024)} KB)`);
+    console.log("\u{1F3AF} [FUSION+ARUCO] \xC9tape 2: D\xE9tection ArUco MAGENTA avec 105 points...");
+    const imageBuffer = Buffer.from(imageToUse, "base64");
+    const metadata = await sharp4(imageBuffer).metadata();
+    const imageWidth = metadata.width || 1920;
+    const imageHeight = metadata.height || 1080;
+    console.log(`\u{1F4F7} [FUSION+ARUCO] Dimensions image: ${imageWidth}x${imageHeight}`);
+    const cropZone = {
+      x: Math.round(selectionZone.x * imageWidth / 100),
+      y: Math.round(selectionZone.y * imageHeight / 100),
+      width: Math.round(selectionZone.width * imageWidth / 100),
+      height: Math.round(selectionZone.height * imageHeight / 100)
+    };
+    console.log(`\u{1F4D0} [FUSION] Zone crop: ${cropZone.x},${cropZone.y} -> ${cropZone.width}x${cropZone.height}`);
+    if (isMeasurementTarget) {
+      console.log("\u{1F4CF} [MESURE OBJET] Saut de la d\xE9tection ArUco \u2192 EdgeDetection/Gemini direct");
+      const objectDetectionResult = await detectObjectInZone(
+        imageBuffer,
+        cropZone,
+        imageWidth,
+        imageHeight,
+        referenceType,
+        // 'door', 'window', 'chassis', etc.
+        objectDescription
+      );
+      if (objectDetectionResult.success) {
+        return res.json({
+          success: true,
+          objectFound: true,
+          method: objectDetectionResult.method,
+          corners: objectDetectionResult.corners,
+          confidence: objectDetectionResult.confidence,
+          fusionMetrics: fusionResult.metrics,
+          debug: {
+            imageSize: { width: imageWidth, height: imageHeight },
+            cropZone,
+            mode: "measurement-object"
+          }
+        });
+      }
+      return res.json({
+        success: true,
+        objectFound: false,
+        corners: null,
+        confidence: 0,
+        message: `Impossible de d\xE9tecter les contours de l'objet (${referenceType})`,
+        fusionMetrics: fusionResult.metrics
+      });
+    }
+    console.log("\u{1F3AF} [REFERENCE] \xC9tape 2: D\xE9tection ArUco MAGENTA avec 105 points...");
+    try {
+      const extractWidth = Math.min(cropZone.width, imageWidth - cropZone.x);
+      const extractHeight = Math.min(cropZone.height, imageHeight - cropZone.y);
+      const croppedRaw = await sharp4(imageBuffer).extract({
+        left: Math.max(0, cropZone.x),
+        top: Math.max(0, cropZone.y),
+        width: extractWidth,
+        height: extractHeight
+      }).ensureAlpha().raw().toBuffer();
+      const imageDataForDetector = {
+        data: new Uint8ClampedArray(croppedRaw),
+        width: extractWidth,
+        height: extractHeight
+      };
+      console.log(`\u{1F50D} [FUSION+ARUCO] D\xE9tection ArUco sur zone ${extractWidth}x${extractHeight}...`);
+      const markers = arucoDetector.detect(imageDataForDetector);
+      if (markers.length > 0) {
+        const marker = markers[0];
+        const markerConfidence = Math.round(marker.score * 100);
+        console.log(`\u2705 [FUSION+ARUCO] ArUco d\xE9tect\xE9: ID=${marker.id}, Confidence=${markerConfidence}%`);
+        console.log("\u{1F52C} [FUSION+ARUCO] \xC9tape 3: D\xE9tection ULTRA-PR\xC9CISION 105 points...");
+        const cornersForUltra = marker.magentaPositions || marker.corners;
+        const ultraResult = detectUltraPrecisionPoints(
+          imageDataForDetector,
+          cornersForUltra,
+          marker.extendedPoints
+        );
+        console.log(`\u{1F3AF} [FUSION+ARUCO] Ultra-pr\xE9cision: ${ultraResult.totalPoints} points d\xE9tect\xE9s`);
+        console.log(`   \u{1F4CA} Coins: ${ultraResult.cornerPoints}`);
+        console.log(`   \u{1F4CA} Transitions: ${ultraResult.transitionPoints}`);
+        console.log(`   \u{1F4CA} Grille: ${ultraResult.gridCornerPoints}`);
+        console.log(`   \u{1F4CA} Centres: ${ultraResult.gridCenterPoints}`);
+        console.log(`   \u2705 RANSAC inliers: ${ultraResult.inlierPoints}/${ultraResult.totalPoints}`);
+        console.log(`   \u2705 Reprojection error: ${ultraResult.reprojectionError.toFixed(3)}mm`);
+        console.log(`   \u2705 Quality: ${(ultraResult.quality * 100).toFixed(1)}%`);
+        const outerCorners = marker.magentaPositions || marker.corners;
+        const adjustedCorners = outerCorners.map((corner) => ({
+          x: (cropZone.x + corner.x) / imageWidth * 100,
+          y: (cropZone.y + corner.y) / imageHeight * 100
+        }));
+        const adjustedUltraPoints = ultraResult.points.map((p) => ({
+          ...p,
+          pixel: {
+            x: (cropZone.x + p.pixel.x) / imageWidth * 100,
+            y: (cropZone.y + p.pixel.y) / imageHeight * 100
+          }
+        }));
+        return res.json({
+          success: true,
+          objectFound: true,
+          method: "aruco-ultra-precision-105-points",
+          // 4 coins du marqueur (pour compatibilité)
+          corners: adjustedCorners,
+          // 🎯 ULTRA-PRÉCISION: 105 points
+          ultraPrecision: {
+            enabled: true,
+            totalPoints: ultraResult.totalPoints,
+            inlierPoints: ultraResult.inlierPoints,
+            points: adjustedUltraPoints,
+            // Compteurs par source
+            cornerPoints: ultraResult.cornerPoints,
+            transitionPoints: ultraResult.transitionPoints,
+            gridCornerPoints: ultraResult.gridCornerPoints,
+            gridCenterPoints: ultraResult.gridCenterPoints,
+            // Homographie RANSAC + Levenberg-Marquardt
+            homography: {
+              matrix: ultraResult.homography,
+              inlierRatio: ultraResult.inlierPoints / ultraResult.totalPoints,
+              reprojectionError: ultraResult.reprojectionError,
+              method: "RANSAC-1000-iter + Levenberg-Marquardt-50-iter"
+            },
+            // Métriques de qualité
+            quality: ultraResult.quality,
+            ransacApplied: ultraResult.ransacApplied,
+            ellipseFittingApplied: ultraResult.ellipseFittingApplied,
+            levenbergMarquardtApplied: ultraResult.levenbergMarquardtApplied,
+            // Précision estimée
+            estimatedPrecision: ultraResult.reprojectionError < 0.5 ? "\xB10.2mm" : ultraResult.reprojectionError < 1 ? "\xB10.5mm" : "\xB11mm"
+          },
+          // Infos marqueur ArUco
+          marker: {
+            id: marker.id,
+            type: "MAGENTA",
+            physicalSize: MARKER_SPECS.markerSize,
+            unit: "mm",
+            confidence: markerConfidence
+          },
+          // Métriques de fusion
+          fusionMetrics: fusionResult.metrics,
+          // Confiance globale (basée sur inliers RANSAC + qualité)
+          confidence: Math.round(ultraResult.quality * 100),
+          debug: {
+            imageSize: { width: imageWidth, height: imageHeight },
+            cropZone,
+            extractSize: { width: extractWidth, height: extractHeight },
+            processingTime: Date.now()
+          }
+        });
+      }
+      console.log("\u26A0\uFE0F [FUSION+ARUCO] Aucun marqueur ArUco d\xE9tect\xE9, fallback d\xE9tection g\xE9n\xE9rique...");
+    } catch (arucoError) {
+      console.error("\u274C [FUSION+ARUCO] Erreur d\xE9tection ArUco:", arucoError);
+    }
+    console.log("\u{1F504} [FUSION+ARUCO] Fallback: D\xE9tection g\xE9n\xE9rique EdgeDetection...");
     const edgeResult = await edgeDetectionService.detectWhitePaperCorners(
       imageToUse,
       selectionZone,
       mimeTypeToUse
     );
     if (edgeResult.success && edgeResult.corners) {
-      console.log("\u2705 [API] D\xE9tection par contours R\xC9USSIE sur image fusionn\xE9e !");
+      console.log("\u2705 [FUSION+ARUCO] D\xE9tection EdgeDetection r\xE9ussie (fallback)");
       return res.json({
         success: true,
         objectFound: true,
         corners: edgeResult.corners,
-        confidence: Math.min(98, (edgeResult.confidence || 90) + 5),
-        // +5% bonus fusion
-        method: "edge-detection-with-fusion",
+        confidence: edgeResult.confidence || 80,
+        method: "edge-detection-fallback",
         fusionMetrics: fusionResult.metrics,
         debug: edgeResult.debug
       });
     }
-    console.log("\u26A0\uFE0F [API] D\xE9tection par contours \xE9chou\xE9e, fallback vers Gemini...");
+    console.log("\u{1F916} [FUSION+ARUCO] Dernier recours: Gemini IA...");
     const geminiResult = await geminiService4.detectCornersInZone(
       imageToUse,
       mimeTypeToUse,
@@ -65374,11 +67723,11 @@ router91.post("/detect-with-fusion", authenticateToken, async (req2, res) => {
     );
     res.json({
       ...geminiResult,
-      method: geminiResult.success ? "gemini-with-fusion" : "gemini-failed",
+      method: geminiResult.success ? "gemini-fallback" : "detection-failed",
       fusionMetrics: fusionResult.metrics
     });
   } catch (error) {
-    console.error("\u274C [API] Erreur d\xE9tection avec fusion:", error);
+    console.error("\u274C [FUSION+ARUCO] Erreur d\xE9tection avec fusion:", error);
     res.status(500).json({
       success: false,
       error: "Erreur serveur lors de la d\xE9tection avec fusion"
