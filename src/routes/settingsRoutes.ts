@@ -1334,10 +1334,9 @@ router.get('/ai-measure', async (req, res) => {
     
     console.log('[AI-MEASURE] Récupération config pour organisation:', organizationId);
     
-    // Chercher dans SystemConfig
+    // Chercher dans SystemConfig (pas de filtre organizationId car SystemConfig est global)
     const config = await prisma.systemConfig.findFirst({
       where: {
-        organizationId: organizationId,
         key: 'ai_measure_marker'
       }
     });
@@ -1391,26 +1390,24 @@ router.post('/ai-measure', async (req, res) => {
       });
     }
     
-    console.log('[AI-MEASURE] Sauvegarde config pour organisation:', organizationId);
+    console.log('[AI-MEASURE] Sauvegarde config (globale)');
     console.log('[AI-MEASURE] Nouvelles valeurs:', { markerSizeCm, boardSizeCm });
     
-    // Upsert dans SystemConfig
+    // Upsert dans SystemConfig (config globale, pas par organisation)
     const config = await prisma.systemConfig.upsert({
       where: {
-        organizationId_key: {
-          organizationId: organizationId,
-          key: 'ai_measure_marker'
-        }
+        key: 'ai_measure_marker'
       },
       update: {
-        value: { markerSizeCm, boardSizeCm },
+        value: JSON.stringify({ markerSizeCm, boardSizeCm }),
         updatedAt: new Date()
       },
       create: {
-        organizationId: organizationId,
+        id: `system-config-ai-measure-marker`,
         key: 'ai_measure_marker',
-        value: { markerSizeCm, boardSizeCm },
-        description: 'Configuration du marqueur ArUco pour IA Mesure'
+        value: JSON.stringify({ markerSizeCm, boardSizeCm }),
+        description: 'Configuration du marqueur ArUco pour IA Mesure',
+        updatedAt: new Date()
       }
     });
     

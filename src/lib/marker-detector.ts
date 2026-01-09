@@ -2,15 +2,22 @@
  * 🎯 MARKER DETECTOR v2 - Détection ULTRA-PRÉCISE de marqueurs ArUco
  * 
  * Port côté serveur du système de détection aruco-test.html
- * Détecte 16 points de référence sur un marqueur ArUco 18x18cm:
+ * Détecte 16 points de référence sur un marqueur ArUco:
  * - 4 coins MAGENTA (détection primaire)
  * - 12 transitions internes NOIR→BLANC→NOIR (précision sub-pixel)
  * 
- * Structure ArUco (cm):
- * ┌─────────────────────────────────────┐
- * │ NOIR 3cm │ BLANC 3cm │ NOIR 6cm │ BLANC 3cm │ NOIR 3cm │
- * │   (0-3)  │   (3-6)   │  (6-12)  │  (12-15)  │ (15-18)  │
- * └─────────────────────────────────────┘
+ * Structure ArUco (6 bandes égales, taille dynamique):
+ * ┌───────────────────────────────────────────────────────────────────┐
+ * │ NOIR (1/6) │ BLANC (1/6) │ NOIR (2/6=1/3) │ BLANC (1/6) │ NOIR (1/6) │
+ * │   bande 1  │   bande 2   │ bandes 3+4     │   bande 5   │  bande 6   │
+ * └───────────────────────────────────────────────────────────────────┘
+ * 
+ * Exemples avec différentes tailles:
+ * - 18cm → bande = 3cm,   transitions à: 3, 6, 12, 15 cm
+ * - 16.8cm → bande = 2.8cm, transitions à: 2.8, 5.6, 11.2, 14 cm  
+ * - 20cm → bande = 3.33cm, transitions à: 3.33, 6.67, 13.33, 16.67 cm
+ * 
+ * Formule: bande = tailleMarqueur / 6
  * 
  * @module lib/marker-detector
  * @author 2Thier CRM Team
@@ -142,17 +149,17 @@ export interface ExtendedReferencePoints {
   /** 4 coins magenta [TL, TR, BR, BL] */
   corners: Point2D[];
   
-  /** Transitions sur le bord HAUT (de TL vers TR) */
-  topTransitions: Point2D[];    // 4 points aux positions 3cm, 6cm, 12cm, 15cm
+  /** Transitions sur le bord HAUT (de TL vers TR) - 4 points aux ratios 1/6, 1/3, 2/3, 5/6 */
+  topTransitions: Point2D[];
   
   /** Transitions sur le bord DROIT (de TR vers BR) */
-  rightTransitions: Point2D[];  // 4 points
+  rightTransitions: Point2D[];
   
   /** Transitions sur le bord BAS (de BL vers BR) */
-  bottomTransitions: Point2D[]; // 4 points
+  bottomTransitions: Point2D[];
   
   /** Transitions sur le bord GAUCHE (de TL vers BL) */
-  leftTransitions: Point2D[];   // 4 points
+  leftTransitions: Point2D[];
   
   /** Tous les 16 points avec leurs coordonnées réelles en cm */
   allPoints: Array<{
@@ -307,8 +314,9 @@ export class MarkerDetector {
     // Ordonner les coins [TL, TR, BR, BL]
     const orderedCorners = this.orderCornersClockwise(finalCorners);
     
-    // Calculer les coins INTÉRIEURS (pattern 6cm/18cm = 1/3)
-    const innerOffset = 6 / 18;
+    // Calculer les coins INTÉRIEURS (carré central = 2 bandes sur 6 = 1/3 du total)
+    // Ce ratio est CONSTANT quelle que soit la taille du marqueur (16.8cm, 18cm, 20cm, etc.)
+    const innerOffset = MARKER_SPECS.ratios.innerToOuter; // = 1/3
     const [tl, tr, br, bl] = orderedCorners;
     const innerCorners: Point2D[] = [
       { x: tl.x + (tr.x - tl.x) * innerOffset + (bl.x - tl.x) * innerOffset,
@@ -676,8 +684,8 @@ export class MarkerDetector {
     corners: Point2D[]
   ): ExtendedReferencePoints {
     const [tl, tr, br, bl] = corners;
-    const transitions = MARKER_SPECS.transitions; // [3, 6, 12, 15] cm
-    const markerSize = MARKER_SPECS.markerSize;   // 18 cm
+    const transitions = MARKER_SPECS.transitions; // Dynamique: [size/6, size/3, size*2/3, size*5/6]
+    const markerSize = MARKER_SPECS.markerSize;   // Dynamique: 16.8, 18, 20, etc.
     
     // Initialiser les résultats
     const allPoints: ExtendedReferencePoints['allPoints'] = [];
@@ -928,21 +936,23 @@ export class MarkerDetector {
   /**
    * 🎯 DÉTECTION COMPLÈTE UTILISANT TOUS LES REPÈRES DE L'ARUCO
    * 
-   * L'ArUco 18cm a cette structure:
-   * - Bordure NOIRE extérieure (0-3cm et 15-18cm)
-   * - Bandes BLANCHES (3-6cm et 12-15cm)  
-   * - Pattern ARUCO central NOIR (6-12cm)
+   * Structure du marqueur (6 bandes égales, taille configurable):
+   * - Bordure NOIRE extérieure (bandes 1 et 6, de 0 à 1/6 et 5/6 à 1)
+   * - Bandes BLANCHES (bandes 2 et 5, de 1/6 à 1/3 et 2/3 à 5/6)  
+   * - Pattern ARUCO central NOIR (bandes 3+4, de 1/3 à 2/3)
    * - 4 coins MAGENTA aux extrémités (avec centre BLANC)
    * 
-   * Ratios clés: 1:2:3 (6cm:12cm:18cm)
+   * Ratios clés (CONSTANTS): 1/6, 1/3, 2/3, 5/6
    */
   private detectFromMagentaOnly(
     data: Uint8ClampedArray | Buffer,
     width: number,
     height: number
   ): MarkerDetectionResult[] {
+    const size = MARKER_SPECS.markerSize;
+    const band = (size / 6).toFixed(1);
     console.log('🎯 [ArUco] Détection COMPLÈTE avec tous les repères...');
-    console.log('   Structure: 18cm total = 3cm noir + 3cm blanc + 6cm pattern + 3cm blanc + 3cm noir');
+    console.log(`   Structure: ${size}cm = ${band}cm noir + ${band}cm blanc + ${(size/3).toFixed(1)}cm pattern + ${band}cm blanc + ${band}cm noir`);
     
     // ÉTAPE 1: Trouver les zones MAGENTA (coins du marqueur)
     const magentaPixels = this.findAllMagentaPixels(data, width, height);
@@ -987,7 +997,7 @@ export class MarkerDetector {
     }
     
     // ÉTAPE 3: Construire les coins MAGENTA (centres des ronds magenta extérieurs)
-    // Ces coins sont aux BORDS EXTÉRIEURS du marqueur 18cm - pour l'affichage visuel
+    // Ces coins sont aux BORDS EXTÉRIEURS du marqueur - pour l'affichage visuel
     const magentaCornersUnordered: Point2D[] = candidateCorners.map(c => c.magentaCenter);
     
     // ÉTAPE 4: Ordonner les coins magenta en [TL, TR, BR, BL]
@@ -997,16 +1007,16 @@ export class MarkerDetector {
       return [];
     }
     
-    console.log('🔍 [ArUco] Coins MAGENTA ordonnés (TL, TR, BR, BL) - EXTÉRIEURS 18cm:');
+    console.log(`🔍 [ArUco] Coins MAGENTA ordonnés (TL, TR, BR, BL) - EXTÉRIEURS ${MARKER_SPECS.markerSize}cm:`);
     orderedMagentaCorners.forEach((p, i) => console.log(`   [${['TL', 'TR', 'BR', 'BL'][i]}] x=${p.x.toFixed(1)}, y=${p.y.toFixed(1)}`));
     
     // ÉTAPE 5: Valider la géométrie avec les ratios 1:2:3
     const validation = this.validateArucoGeometry(data, width, height, orderedMagentaCorners);
     console.log(`📐 [ArUco] Validation géométrique: ${validation.valid ? '✅' : '❌'} (score: ${validation.score.toFixed(2)})`);
     
-    // ÉTAPE 6: Calculer les coins du pattern INTÉRIEUR (6cm×6cm au centre)
-    // Le pattern est à 6cm du bord = 1/3 de 18cm de chaque côté
-    const innerOffset = 6 / 18; // = 0.333...
+    // ÉTAPE 6: Calculer les coins du pattern INTÉRIEUR (carré central = 1/3 du total)
+    // Le pattern est à 2 bandes du bord = 1/3 de la taille totale de chaque côté
+    const innerOffset = MARKER_SPECS.ratios.innerToOuter; // = 1/3
     const [tl, tr, br, bl] = orderedMagentaCorners;
     
     // Interpoler vers l'intérieur pour trouver les coins du pattern central
@@ -1033,10 +1043,11 @@ export class MarkerDetector {
       }
     ];
     
-    console.log('🔍 [ArUco] Coins INTÉRIEURS calculés (pattern 6cm×6cm):');
+    const centerSize = (MARKER_SPECS.markerSize / 3).toFixed(1);
+    console.log(`🔍 [ArUco] Coins INTÉRIEURS calculés (pattern ${centerSize}cm × ${centerSize}cm):`);
     innerCorners.forEach((p, i) => console.log(`   [${['TL', 'TR', 'BR', 'BL'][i]}] x=${p.x.toFixed(1)}, y=${p.y.toFixed(1)}`));
     
-    // Les mesures sont basées sur les coins EXTÉRIEURS (18cm) pour l'homographie
+    // Les mesures sont basées sur les coins EXTÉRIEURS pour l'homographie
     const measurements = this.calculateMeasurements(orderedMagentaCorners);
     
     // Calculer le score final basé sur la validation
@@ -1044,8 +1055,8 @@ export class MarkerDetector {
     
     return [{
       id: 0,
-      corners: innerCorners, // Coins du pattern INTÉRIEUR 6cm pour l'homographie du pattern
-      magentaPositions: orderedMagentaCorners, // Coins EXTÉRIEURS 18cm pour l'affichage visuel!
+      corners: innerCorners, // Coins du pattern INTÉRIEUR (1/3) pour l'homographie du pattern
+      magentaPositions: orderedMagentaCorners, // Coins EXTÉRIEURS pour l'affichage visuel!
       size: measurements.avgSidePx,
       center: measurements.center,
       score: finalScore,
@@ -1246,8 +1257,8 @@ export class MarkerDetector {
       { x: minX, y: maxY }  // BL
     ];
     
-    // Calculer les coins INTÉRIEURS (pattern 6cm au centre du 18cm)
-    const innerOffset = 6 / 18;
+    // Calculer les coins INTÉRIEURS (pattern central = 1/3 du total)
+    const innerOffset = MARKER_SPECS.ratios.innerToOuter; // = 1/3
     const [tl, tr, br, bl] = outerCorners;
     const innerCorners: Point2D[] = [
       { x: tl.x + (tr.x - tl.x) * innerOffset + (bl.x - tl.x) * innerOffset,
@@ -2909,11 +2920,11 @@ function detectPatternGridCorners(
 ): UltraPrecisionPoint[] {
   const points: UltraPrecisionPoint[] = [];
   const [tl, tr, br, bl] = corners;
-  const markerSize = MARKER_SPECS.markerSize; // 18cm
+  const markerSize = MARKER_SPECS.markerSize; // Dynamique: 16.8, 18, 20, etc.
   
-  // Le pattern central est entre 6cm et 12cm
-  const patternStart = 6 / markerSize;  // 0.333...
-  const patternEnd = 12 / markerSize;   // 0.666...
+  // Le pattern central est entre 2 bandes et 4 bandes (1/3 et 2/3)
+  const patternStart = MARKER_SPECS.ratios.innerToOuter;   // 1/3
+  const patternEnd = MARKER_SPECS.ratios.whiteToOuter;     // 2/3
   const cellSize = 1 / markerSize;      // 1cm en ratio
   
   // Grille 7×7 de coins (6×6 cases)
@@ -3443,6 +3454,581 @@ function solveLinearSystem8x8(A: number[][], b: number[]): number[] | null {
   }
   
   return x;
+}
+
+// ============================================================================
+// 🔬 ANALYSE DES BANDES INTERNES DU MARQUEUR ARUCO
+// ============================================================================
+
+/**
+ * Interface pour l'analyse complète du marqueur ArUco
+ */
+export interface ArucoMarkerAnalysis {
+  // Infos de base
+  markerId: number;
+  markerSizeCm: number;
+  markerSizePx: number;
+  
+  // 📐 POSE - Orientation de la caméra
+  pose: {
+    rotX: number;  // Rotation haut/bas en degrés
+    rotY: number;  // Rotation gauche/droite en degrés
+    rotZ: number;  // Inclinaison en degrés
+  };
+  
+  // 📏 PROFONDEUR - Distance caméra ↔ marqueur
+  depth: {
+    estimatedCm: number;      // Distance en cm
+    estimatedM: number;       // Distance en mètres
+    confidence: number;       // Confiance 0-1
+    method: 'focal' | 'size'; // Méthode d'estimation
+  };
+  
+  // 📊 QUALITÉ
+  quality: {
+    overall: number;           // Score global 0-100
+    homographyQuality: number; // Qualité homographie 0-100
+    poseQuality: number;       // Qualité pose (basée sur angles) 0-100
+    detectionQuality: number;  // Qualité détection coins 0-100
+    rating: 'excellent' | 'good' | 'acceptable' | 'poor';
+  };
+  
+  // 🔬 ANALYSE DES BANDES INTERNES
+  bandAnalysis: {
+    enabled: boolean;
+    bandsDetected: number;    // Nombre de bandes détectées (max 4)
+    totalPoints: number;      // Points de transition détectés (max 16)
+    validPoints: number;      // Points avec bonne confiance
+    
+    // Ratios mesurés vs théoriques pour chaque transition
+    transitionRatios: Array<{
+      expectedRatio: number;   // Ratio théorique (ex: 0.167 pour 3cm sur 18cm)
+      measuredRatio: number;   // Ratio mesuré
+      error: number;           // Erreur en % (écart)
+      confidence: number;      // Confiance de cette mesure
+      edge: 'top' | 'right' | 'bottom' | 'left';
+      positionCm: number;      // Position en cm depuis le bord
+    }>;
+    
+    // Facteur de correction suggéré basé sur les ratios
+    suggestedCorrection: number;  // Ex: 1.02 = +2% sur les mesures
+    correctionConfidence: number; // Confiance dans la correction
+    
+    // Message de validation
+    validationMessage: string;
+    isValid: boolean;
+  };
+  
+  // 🎯 COINS DÉTECTÉS
+  corners: Point2D[];
+  extendedPoints?: ExtendedReferencePoints;
+}
+
+/**
+ * 🔬 Analyser complètement un marqueur ArUco détecté
+ * Retourne toutes les infos: pose, profondeur, qualité, analyse des bandes
+ * 
+ * @param marker - Résultat de détection du marqueur
+ * @param imageWidth - Largeur de l'image en pixels
+ * @param imageHeight - Hauteur de l'image en pixels
+ * @param focalLengthPx - Longueur focale estimée en pixels (default: 800)
+ */
+export function analyzeMarkerComplete(
+  marker: MarkerDetectionResult,
+  imageWidth: number,
+  imageHeight: number,
+  focalLengthPx: number = 800
+): ArucoMarkerAnalysis {
+  const markerSizeCm = getMarkerSize();
+  const corners = marker.magentaPositions?.length === 4 ? marker.magentaPositions : marker.corners;
+  
+  // Calculer la taille en pixels (moyenne des côtés)
+  const side1 = Math.sqrt((corners[1].x - corners[0].x) ** 2 + (corners[1].y - corners[0].y) ** 2);
+  const side2 = Math.sqrt((corners[2].x - corners[1].x) ** 2 + (corners[2].y - corners[1].y) ** 2);
+  const side3 = Math.sqrt((corners[3].x - corners[2].x) ** 2 + (corners[3].y - corners[2].y) ** 2);
+  const side4 = Math.sqrt((corners[0].x - corners[3].x) ** 2 + (corners[0].y - corners[3].y) ** 2);
+  const avgSizePx = (side1 + side2 + side3 + side4) / 4;
+  
+  // 📐 POSE - Estimer l'orientation
+  const pose = estimatePoseFromCorners(corners);
+  
+  // 📏 PROFONDEUR - Distance caméra ↔ marqueur
+  const depthCm = (markerSizeCm * focalLengthPx) / avgSizePx;
+  const depthConfidence = avgSizePx > 50 ? Math.min(0.95, avgSizePx / 200) : 0.5;
+  
+  // 📊 QUALITÉ
+  const poseQuality = calculatePoseQuality(pose);
+  const homographyQuality = (marker.homographyQuality || marker.score) * 100;
+  const detectionQuality = (marker.magentaFound / 4) * 100;
+  const overallQuality = (poseQuality + homographyQuality + detectionQuality) / 3;
+  
+  const qualityRating = overallQuality >= 85 ? 'excellent' :
+                        overallQuality >= 70 ? 'good' :
+                        overallQuality >= 50 ? 'acceptable' : 'poor';
+  
+  // 🔬 ANALYSE DES BANDES INTERNES
+  const bandAnalysis = analyzeMarkerBands(marker, markerSizeCm);
+  
+  return {
+    markerId: marker.id,
+    markerSizeCm,
+    markerSizePx: avgSizePx,
+    pose,
+    depth: {
+      estimatedCm: Math.round(depthCm),
+      estimatedM: parseFloat((depthCm / 100).toFixed(2)),
+      confidence: depthConfidence,
+      method: 'focal'
+    },
+    quality: {
+      overall: Math.round(overallQuality),
+      homographyQuality: Math.round(homographyQuality),
+      poseQuality: Math.round(poseQuality),
+      detectionQuality: Math.round(detectionQuality),
+      rating: qualityRating
+    },
+    bandAnalysis,
+    corners,
+    extendedPoints: marker.extendedPoints
+  };
+}
+
+/**
+ * Estimer la pose (orientation) depuis les 4 coins
+ */
+function estimatePoseFromCorners(corners: Point2D[]): { rotX: number; rotY: number; rotZ: number } {
+  const [tl, tr, br, bl] = corners;
+  
+  // Rotation X (basculement avant/arrière): ratio hauteur top/bottom
+  const topWidth = Math.sqrt((tr.x - tl.x) ** 2 + (tr.y - tl.y) ** 2);
+  const bottomWidth = Math.sqrt((br.x - bl.x) ** 2 + (br.y - bl.y) ** 2);
+  const ratioX = topWidth / (bottomWidth || 1);
+  const rotX = Math.round(Math.atan2(ratioX - 1, 0.5) * 180 / Math.PI);
+  
+  // Rotation Y (basculement gauche/droite): ratio hauteur left/right
+  const leftHeight = Math.sqrt((bl.x - tl.x) ** 2 + (bl.y - tl.y) ** 2);
+  const rightHeight = Math.sqrt((br.x - tr.x) ** 2 + (br.y - tr.y) ** 2);
+  const ratioY = leftHeight / (rightHeight || 1);
+  const rotY = Math.round(Math.atan2(ratioY - 1, 0.5) * 180 / Math.PI);
+  
+  // Rotation Z (inclinaison): angle du bord supérieur
+  const rotZ = Math.round(Math.atan2(tr.y - tl.y, tr.x - tl.x) * 180 / Math.PI);
+  
+  return { rotX, rotY, rotZ };
+}
+
+/**
+ * Calculer la qualité de la pose (angles proches de 0 = meilleur)
+ */
+function calculatePoseQuality(pose: { rotX: number; rotY: number; rotZ: number }): number {
+  const maxAcceptableAngle = 45;
+  const penaltyX = Math.min(100, Math.abs(pose.rotX) * 2);
+  const penaltyY = Math.min(100, Math.abs(pose.rotY) * 2);
+  const penaltyZ = Math.min(50, Math.abs(pose.rotZ));
+  
+  return Math.max(0, 100 - penaltyX - penaltyY - penaltyZ);
+}
+
+/**
+ * 🔬 Analyser les bandes internes du marqueur
+ * Compare les ratios mesurés aux ratios théoriques pour valider la calibration
+ */
+function analyzeMarkerBands(
+  marker: MarkerDetectionResult,
+  markerSizeCm: number
+): ArucoMarkerAnalysis['bandAnalysis'] {
+  
+  if (!marker.extendedPoints || marker.extendedPoints.detectedCount < 8) {
+    return {
+      enabled: false,
+      bandsDetected: 0,
+      totalPoints: 0,
+      validPoints: 0,
+      transitionRatios: [],
+      suggestedCorrection: 1.0,
+      correctionConfidence: 0,
+      validationMessage: 'Pas assez de points de transition détectés',
+      isValid: false
+    };
+  }
+  
+  const ext = marker.extendedPoints;
+  const corners = ext.corners;
+  const transitions = MARKER_SPECS.transitions; // [3, 6, 12, 15] relatif à markerSizeCm
+  
+  const transitionRatios: ArucoMarkerAnalysis['bandAnalysis']['transitionRatios'] = [];
+  const errors: number[] = [];
+  
+  // Analyser les transitions sur chaque bord
+  const edges: Array<{ name: 'top' | 'right' | 'bottom' | 'left'; transitions: Point2D[]; start: Point2D; end: Point2D }> = [
+    { name: 'top', transitions: ext.topTransitions, start: corners[0], end: corners[1] },
+    { name: 'right', transitions: ext.rightTransitions, start: corners[1], end: corners[2] },
+    { name: 'bottom', transitions: ext.bottomTransitions, start: corners[3], end: corners[2] },
+    { name: 'left', transitions: ext.leftTransitions, start: corners[0], end: corners[3] }
+  ];
+  
+  for (const edge of edges) {
+    const edgeLength = Math.sqrt(
+      (edge.end.x - edge.start.x) ** 2 + (edge.end.y - edge.start.y) ** 2
+    );
+    
+    for (let i = 0; i < edge.transitions.length && i < transitions.length; i++) {
+      const transitionPoint = edge.transitions[i];
+      const expectedPositionCm = transitions[i];
+      const expectedRatio = expectedPositionCm / markerSizeCm;
+      
+      // Calculer le ratio mesuré
+      const distToStart = Math.sqrt(
+        (transitionPoint.x - edge.start.x) ** 2 + (transitionPoint.y - edge.start.y) ** 2
+      );
+      const measuredRatio = distToStart / edgeLength;
+      
+      // Calculer l'erreur
+      const error = Math.abs((measuredRatio - expectedRatio) / expectedRatio) * 100;
+      errors.push(error);
+      
+      // Trouver la confiance du point
+      const pointData = ext.allPoints.find(p => 
+        p.type === 'transition' && 
+        Math.abs(p.pixel.x - transitionPoint.x) < 5 &&
+        Math.abs(p.pixel.y - transitionPoint.y) < 5
+      );
+      
+      transitionRatios.push({
+        expectedRatio,
+        measuredRatio,
+        error,
+        confidence: pointData?.confidence || 0.5,
+        edge: edge.name,
+        positionCm: expectedPositionCm
+      });
+    }
+  }
+  
+  // Calculer les statistiques
+  const validPoints = ext.allPoints.filter(p => p.confidence > 0.6).length;
+  const avgError = errors.length > 0 ? errors.reduce((a, b) => a + b, 0) / errors.length : 0;
+  
+  // 🔧 CORRECTION BASÉE SUR L'ERREUR SYSTÉMATIQUE DES BANDES
+  // =========================================================
+  // 
+  // L'erreur des bandes représente la DIFFÉRENCE entre:
+  //   - où la transition DEVRAIT être (basé sur la géométrie connue du marqueur)
+  //   - où elle EST MESURÉE
+  //
+  // Si measuredRatio > expectedRatio sur tous les bords:
+  //   → Le système "voit" le marqueur plus grand qu'il n'est
+  //   → Les mesures finales seront trop grandes
+  //   → Correction < 1.0 pour réduire
+  //
+  // Calcul: ratio moyen mesuré/attendu
+  // Si ratio = 1.05 → le système mesure 5% de trop → correction = 1/1.05 = 0.952
+  
+  let suggestedCorrection = 1.0;
+  let signedErrorPercent = 0;
+  
+  if (transitionRatios.length >= 4) {
+    // Calculer le ratio moyen (mesuré / attendu) pour chaque transition
+    const ratios = transitionRatios.map(tr => tr.measuredRatio / tr.expectedRatio);
+    const avgRatio = ratios.reduce((a, b) => a + b, 0) / ratios.length;
+    
+    // Le biais systématique en pourcentage
+    signedErrorPercent = (avgRatio - 1.0) * 100;
+    
+    // La correction est l'inverse du ratio
+    // Si avgRatio = 1.05 (on mesure 5% de trop), correction = 1/1.05 = 0.952
+    suggestedCorrection = 1.0 / avgRatio;
+    
+    console.log(`📊 [BANDS] Ratios individuels: ${ratios.map(r => r.toFixed(3)).join(', ')}`);
+    console.log(`📊 [BANDS] Ratio moyen mesuré/attendu: ${avgRatio.toFixed(4)}`);
+    console.log(`📊 [BANDS] Biais systématique: ${signedErrorPercent > 0 ? '+' : ''}${signedErrorPercent.toFixed(2)}%`);
+    console.log(`📊 [BANDS] Correction suggérée: ×${suggestedCorrection.toFixed(4)}`);
+  }
+  
+  const correctionConfidence = validPoints >= 12 ? 0.9 : validPoints >= 8 ? 0.7 : 0.4;
+  
+  // Validation
+  const isValid = avgError < 5 && validPoints >= 8;
+  let validationMessage = '';
+  
+  if (avgError < 2) {
+    validationMessage = '✅ Excellent ! Calibration très précise';
+  } else if (avgError < 5) {
+    validationMessage = '✅ Bon ! Calibration acceptable';
+  } else if (avgError < 10) {
+    validationMessage = '⚠️ Calibration approximative - correction suggérée';
+  } else {
+    validationMessage = '❌ Calibration incorrecte - vérifier le marqueur';
+  }
+  
+  return {
+    enabled: true,
+    bandsDetected: Math.min(4, Math.floor(transitionRatios.length / 4)),
+    totalPoints: ext.allPoints.length,
+    validPoints,
+    transitionRatios,
+    suggestedCorrection: parseFloat(suggestedCorrection.toFixed(4)),
+    correctionConfidence,
+    validationMessage,
+    isValid
+  };
+}
+
+// ============================================================================
+// 🎯 CALCUL DE LA CORRECTION OPTIMALE - COMBINE TOUTES LES DONNÉES
+// ============================================================================
+
+/**
+ * Résultat du calcul de correction optimale
+ */
+export interface OptimalCorrectionResult {
+  // Correction finale à appliquer
+  finalCorrection: number;
+  
+  // Corrections par axe (pour mesures directionnelles)
+  correctionX: number;  // Correction horizontale
+  correctionY: number;  // Correction verticale
+  
+  // Détail des contributions
+  contributions: {
+    bandAnalysis: { correction: number; weight: number; confidence: number };
+    ransacError: { correction: number; weight: number; confidence: number };
+    reprojection: { correction: number; weight: number; confidence: number };
+    poseCompensation: { correction: number; weight: number; confidence: number };
+  };
+  
+  // Confiance globale
+  globalConfidence: number;
+  
+  // Message explicatif
+  explanation: string;
+}
+
+/**
+ * 🎯 Calculer la correction OPTIMALE en combinant TOUTES les données disponibles
+ * 
+ * Sources de correction:
+ * 1. Analyse des bandes (ratios mesurés vs théoriques)
+ * 2. Erreur RANSAC (inliers vs outliers)
+ * 3. Erreur de reprojection moyenne
+ * 4. Compensation de pose (angles de vue)
+ * 5. Différences par axe (X vs Y)
+ * 
+ * @param analysis - Analyse complète du marqueur
+ * @param ultraPrecisionResult - Résultat des 105 points
+ */
+export function calculateOptimalCorrection(
+  analysis: ArucoMarkerAnalysis,
+  ultraPrecisionResult?: {
+    totalPoints: number;
+    inlierPoints: number;
+    reprojectionError: number;
+    quality: number;
+  }
+): OptimalCorrectionResult {
+  
+  console.log(`\n${'='.repeat(60)}`);
+  console.log(`🔬 CALCUL CORRECTION OPTIMALE`);
+  console.log(`${'='.repeat(60)}`);
+  console.log(`📊 bandAnalysis.enabled: ${analysis.bandAnalysis.enabled}`);
+  console.log(`📊 bandAnalysis.transitionRatios.length: ${analysis.bandAnalysis.transitionRatios.length}`);
+  console.log(`📊 bandAnalysis.suggestedCorrection: ${analysis.bandAnalysis.suggestedCorrection}`);
+  console.log(`📊 ultraPrecision: ${ultraPrecisionResult ? `${ultraPrecisionResult.totalPoints} points` : 'non fourni'}`);
+  
+  const contributions = {
+    bandAnalysis: { correction: 1.0, weight: 0, confidence: 0 },
+    ransacError: { correction: 1.0, weight: 0, confidence: 0 },
+    reprojection: { correction: 1.0, weight: 0, confidence: 0 },
+    poseCompensation: { correction: 1.0, weight: 0, confidence: 0 }
+  };
+  
+  // ═══════════════════════════════════════════════════════════════════════════
+  // 1️⃣ CORRECTION BASÉE SUR L'ANALYSE DES BANDES (la plus fiable)
+  // ═══════════════════════════════════════════════════════════════════════════
+  if (analysis.bandAnalysis.enabled && analysis.bandAnalysis.transitionRatios.length >= 4) {
+    const bandCorr = analysis.bandAnalysis.suggestedCorrection;
+    const bandConf = analysis.bandAnalysis.correctionConfidence;
+    
+    contributions.bandAnalysis = {
+      correction: bandCorr,
+      weight: 0.5,  // Poids élevé car très fiable
+      confidence: bandConf
+    };
+    
+    console.log(`📊 [CORRECTION] Bandes: ×${bandCorr.toFixed(4)} (confiance: ${(bandConf * 100).toFixed(0)}%)`);
+  }
+  
+  // ═══════════════════════════════════════════════════════════════════════════
+  // 2️⃣ CORRECTION BASÉE SUR RANSAC (ratio inliers)
+  // ═══════════════════════════════════════════════════════════════════════════
+  if (ultraPrecisionResult && ultraPrecisionResult.totalPoints > 0) {
+    const inlierRatio = ultraPrecisionResult.inlierPoints / ultraPrecisionResult.totalPoints;
+    
+    // Si peu d'inliers, les mesures sont probablement biaisées
+    // Un ratio de 0.9 = pas de correction, 0.7 = petite correction
+    const ransacCorr = 1.0 + (0.9 - inlierRatio) * 0.05;  // Max ±2.5% de correction
+    const ransacConf = Math.min(0.8, inlierRatio);
+    
+    contributions.ransacError = {
+      correction: ransacCorr,
+      weight: 0.2,
+      confidence: ransacConf
+    };
+    
+    console.log(`📊 [CORRECTION] RANSAC: ×${ransacCorr.toFixed(4)} (${ultraPrecisionResult.inlierPoints}/${ultraPrecisionResult.totalPoints} inliers)`);
+  }
+  
+  // ═══════════════════════════════════════════════════════════════════════════
+  // 3️⃣ CORRECTION BASÉE SUR L'ERREUR DE REPROJECTION
+  // ═══════════════════════════════════════════════════════════════════════════
+  if (ultraPrecisionResult && ultraPrecisionResult.reprojectionError > 0) {
+    const reprErr = ultraPrecisionResult.reprojectionError;
+    
+    // Erreur de reprojection en mm → correction proportionnelle
+    // 0mm = pas de correction, 5mm = ~0.5% correction
+    const reprCorr = 1.0 - (reprErr / 1000);  // reprErr en mm, correction en %
+    const reprConf = Math.max(0.3, 1.0 - reprErr / 10);
+    
+    contributions.reprojection = {
+      correction: Math.max(0.95, Math.min(1.05, reprCorr)),  // Limiter à ±5%
+      weight: 0.15,
+      confidence: reprConf
+    };
+    
+    console.log(`📊 [CORRECTION] Reprojection: ×${reprCorr.toFixed(4)} (erreur: ${reprErr.toFixed(2)}mm)`);
+  }
+  
+  // ═══════════════════════════════════════════════════════════════════════════
+  // 4️⃣ COMPENSATION DE POSE (angles de vue)
+  // ═══════════════════════════════════════════════════════════════════════════
+  const { rotX, rotY, rotZ } = analysis.pose;
+  
+  // La perspective déforme les mesures en fonction de l'angle
+  // cos(angle) approxime bien la correction nécessaire
+  const cosX = Math.cos(Math.abs(rotX) * Math.PI / 180);
+  const cosY = Math.cos(Math.abs(rotY) * Math.PI / 180);
+  
+  // Correction moyenne pour la perspective
+  const poseCorr = 1.0 / ((cosX + cosY) / 2);  // Compenser la perspective
+  const poseConf = Math.max(0.5, 1.0 - (Math.abs(rotX) + Math.abs(rotY)) / 60);
+  
+  contributions.poseCompensation = {
+    correction: Math.max(0.95, Math.min(1.1, poseCorr)),  // Limiter à -5% / +10%
+    weight: 0.15,
+    confidence: poseConf
+  };
+  
+  console.log(`📊 [CORRECTION] Pose: ×${poseCorr.toFixed(4)} (rotX=${rotX}°, rotY=${rotY}°)`);
+  
+  // ═══════════════════════════════════════════════════════════════════════════
+  // 5️⃣ CALCUL DE LA CORRECTION FINALE (moyenne pondérée)
+  // ═══════════════════════════════════════════════════════════════════════════
+  let totalWeight = 0;
+  let weightedSum = 0;
+  let confidenceSum = 0;
+  
+  for (const key of Object.keys(contributions) as Array<keyof typeof contributions>) {
+    const { correction, weight, confidence } = contributions[key];
+    if (weight > 0 && confidence > 0.3) {
+      const effectiveWeight = weight * confidence;
+      weightedSum += correction * effectiveWeight;
+      totalWeight += effectiveWeight;
+      confidenceSum += confidence * weight;
+    }
+  }
+  
+  const finalCorrection = totalWeight > 0 ? weightedSum / totalWeight : 1.0;
+  const globalConfidence = totalWeight > 0 ? confidenceSum / totalWeight : 0;
+  
+  // ═══════════════════════════════════════════════════════════════════════════
+  // 6️⃣ CORRECTIONS PAR AXE (X/Y séparément)
+  // ═══════════════════════════════════════════════════════════════════════════
+  let correctionX = finalCorrection;
+  let correctionY = finalCorrection;
+  
+  // Analyser les erreurs par axe depuis les bandes
+  if (analysis.bandAnalysis.transitionRatios.length >= 8) {
+    const ratios = analysis.bandAnalysis.transitionRatios;
+    
+    // Erreurs horizontales (top, bottom)
+    const horizontalErrors = ratios.filter(r => r.edge === 'top' || r.edge === 'bottom');
+    const avgHorizontalError = horizontalErrors.reduce((sum, r) => sum + r.error, 0) / (horizontalErrors.length || 1);
+    
+    // Erreurs verticales (left, right)
+    const verticalErrors = ratios.filter(r => r.edge === 'left' || r.edge === 'right');
+    const avgVerticalError = verticalErrors.reduce((sum, r) => sum + r.error, 0) / (verticalErrors.length || 1);
+    
+    // Ajuster les corrections par axe
+    if (avgHorizontalError > avgVerticalError + 2) {
+      correctionY = finalCorrection * (1 - (avgHorizontalError - avgVerticalError) / 200);
+    } else if (avgVerticalError > avgHorizontalError + 2) {
+      correctionX = finalCorrection * (1 - (avgVerticalError - avgHorizontalError) / 200);
+    }
+    
+    console.log(`📊 [CORRECTION] Axe X: ×${correctionX.toFixed(4)}, Axe Y: ×${correctionY.toFixed(4)}`);
+  }
+  
+  // ═══════════════════════════════════════════════════════════════════════════
+  // RÉSULTAT FINAL
+  // ═══════════════════════════════════════════════════════════════════════════
+  const explanation = `Correction optimale: ×${finalCorrection.toFixed(4)} (confiance ${(globalConfidence * 100).toFixed(0)}%)
+  - Bandes: ×${contributions.bandAnalysis.correction.toFixed(4)} (poids ${(contributions.bandAnalysis.weight * 100).toFixed(0)}%)
+  - RANSAC: ×${contributions.ransacError.correction.toFixed(4)} (poids ${(contributions.ransacError.weight * 100).toFixed(0)}%)
+  - Reprojection: ×${contributions.reprojection.correction.toFixed(4)} (poids ${(contributions.reprojection.weight * 100).toFixed(0)}%)
+  - Pose: ×${contributions.poseCompensation.correction.toFixed(4)} (poids ${(contributions.poseCompensation.weight * 100).toFixed(0)}%)`;
+  
+  console.log(`\n🎯 [CORRECTION OPTIMALE] ${explanation}\n`);
+  
+  return {
+    finalCorrection: parseFloat(finalCorrection.toFixed(6)),
+    correctionX: parseFloat(correctionX.toFixed(6)),
+    correctionY: parseFloat(correctionY.toFixed(6)),
+    contributions,
+    globalConfidence: parseFloat(globalConfidence.toFixed(4)),
+    explanation
+  };
+}
+
+/**
+ * 🎯 Mesurer une distance avec correction optimale appliquée
+ * 
+ * @param H - Matrice d'homographie
+ * @param p1Px - Point 1 en pixels
+ * @param p2Px - Point 2 en pixels
+ * @param correction - Correction à appliquer (défaut: 1.0)
+ */
+export function measureDistanceCmCorrected(
+  H: number[][],
+  p1Px: Point2D,
+  p2Px: Point2D,
+  correction: number | OptimalCorrectionResult = 1.0
+): number {
+  const p1Cm = transformPoint(H, p1Px);
+  const p2Cm = transformPoint(H, p2Px);
+  
+  // Distance brute
+  const rawDistance = Math.sqrt((p2Cm.x - p1Cm.x) ** 2 + (p2Cm.y - p1Cm.y) ** 2);
+  
+  // Appliquer la correction
+  let correctionFactor = 1.0;
+  
+  if (typeof correction === 'number') {
+    correctionFactor = correction;
+  } else {
+    // Utiliser correction par axe si disponible
+    const dx = Math.abs(p2Cm.x - p1Cm.x);
+    const dy = Math.abs(p2Cm.y - p1Cm.y);
+    const total = dx + dy;
+    
+    if (total > 0) {
+      // Moyenne pondérée des corrections par axe
+      correctionFactor = (dx / total) * correction.correctionX + (dy / total) * correction.correctionY;
+    } else {
+      correctionFactor = correction.finalCorrection;
+    }
+  }
+  
+  return rawDistance * correctionFactor;
 }
 
 export default MarkerDetector;

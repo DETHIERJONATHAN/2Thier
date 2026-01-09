@@ -74,7 +74,7 @@ import {
   type HomographyResult,
   type HomographyCorners
 } from '../../utils/homographyUtils';
-import { estimatePose, setMarkerSize, getMarkerSize } from '../../lib/marker-detector';
+import { estimatePose, setMarkerSize, getMarkerSize, analyzeMarkerComplete, type ArucoMarkerAnalysis } from '../../lib/marker-detector';
 import { useAuthenticatedApi } from '../../hooks/useAuthenticatedApi';
 
 const { Text } = Typography;
@@ -147,6 +147,18 @@ interface ImageMeasurementCanvasProps {
 
   // 📱 UX mobile: plein écran fixe + menu bas
   mobileFullscreen?: boolean;
+  
+  // 🔬 ANALYSE ARUCO COMPLÈTE (profondeur, pose, bandes internes)
+  arucoAnalysis?: ArucoMarkerAnalysis | null;
+  
+  // 🔧 CORRECTION OPTIMALE: Facteur calculé par RANSAC + bands + reprojection
+  optimalCorrection?: {
+    finalCorrection: number;
+    correctionX: number;
+    correctionY: number;
+    globalConfidence: number;
+    contributions?: Array<{ source: string; correction: number; weight: number; confidence: number }>;
+  } | null;
 }
 
 interface HistoryState {
@@ -186,7 +198,11 @@ export const ImageMeasurementCanvas: React.FC<ImageMeasurementCanvasProps> = ({
   measurementObjectConfig,
   // 🆕 MULTI-PHOTOS pour fusion avant détection
   allPhotos,
-  mobileFullscreen = false
+  mobileFullscreen = false,
+  // 🔬 ANALYSE ARUCO COMPLÈTE
+  arucoAnalysis = null,
+  // 🔧 CORRECTION OPTIMALE: Facteur à appliquer aux mesures finales
+  optimalCorrection = null
 }) => {
   // Refs
   const stageRef = useRef<any>(null);
@@ -601,14 +617,18 @@ export const ImageMeasurementCanvas: React.FC<ImageMeasurementCanvasProps> = ({
   // ============================================================================
   // 🎯 CHARGEMENT CONFIG MARQUEUR ARUCO
   // ============================================================================
-  const { api } = useAuthenticatedApi();
+  const { api: authenticatedApi } = useAuthenticatedApi();
   const [markerSizeCm, setMarkerSizeCmState] = useState(16.8); // Valeur par défaut
   
   useEffect(() => {
     // Charger la configuration du marqueur depuis l'API
     const loadMarkerConfig = async () => {
+      // Utiliser l'API passée en prop si disponible, sinon l'API authentifiée
+      const apiInstance = api || authenticatedApi;
+      if (!apiInstance) return;
+      
       try {
-        const response = await api.get('/api/settings/ai-measure');
+        const response = await apiInstance.get('/api/settings/ai-measure');
         if (response.success && response.data?.markerSizeCm) {
           const sizeCm = response.data.markerSizeCm;
           console.log(`🎯 [Canvas] Configuration marqueur chargée: ${sizeCm}cm`);
@@ -622,7 +642,7 @@ export const ImageMeasurementCanvas: React.FC<ImageMeasurementCanvasProps> = ({
       }
     };
     loadMarkerConfig();
-  }, [api]);
+  }, [api, authenticatedApi]);
 
   // ============================================================================
   // RESPONSIVE CONTAINER (Mobile-friendly)
@@ -1595,6 +1615,9 @@ export const ImageMeasurementCanvas: React.FC<ImageMeasurementCanvasProps> = ({
   } => {
     if (points.length < 2) return {};
     
+    // 🔧 DEBUG: Vérifier si optimalCorrection est reçu
+    console.log(`📏 [Canvas] optimalCorrection reçu:`, optimalCorrection ? `×${optimalCorrection.finalCorrection.toFixed(4)} (confiance: ${(optimalCorrection.globalConfidence * 100).toFixed(0)}%)` : 'null');
+    
     // 🔧 CRITICAL: Vérifier que les points sont dans des dimensions cohérentes avec l'image
     const maxPointX = Math.max(...points.map(p => p.x));
     const maxPointY = Math.max(...points.map(p => p.y));
@@ -1750,6 +1773,31 @@ export const ImageMeasurementCanvas: React.FC<ImageMeasurementCanvasProps> = ({
         console.log(`   📐 [FALLBACK] Hauteur: ${avgHeightPx.toFixed(0)}px ÷ ${effectivePixelPerCmY.toFixed(2)} (Y) = ${results.hauteur_cm.toFixed(2)} cm`);
       }
       
+      // 🔧 CORRECTION OPTIMALE: Appliquer le facteur de correction calculé par l'API
+      if (optimalCorrection && optimalCorrection.finalCorrection !== 1) {
+        const rawLargeur = results.largeur_cm;
+        const rawHauteur = results.hauteur_cm;
+        
+        // Appliquer correction différenciée X/Y si disponible, sinon correction globale
+        const corrX = optimalCorrection.correctionX || optimalCorrection.finalCorrection;
+        const corrY = optimalCorrection.correctionY || optimalCorrection.finalCorrection;
+        
+        results.largeur_cm = rawLargeur * corrX;
+        results.hauteur_cm = rawHauteur * corrY;
+        
+        console.log(`   🔧 [CORRECTION OPTIMALE] Application du facteur:`);
+        console.log(`      Confiance globale: ${(optimalCorrection.globalConfidence * 100).toFixed(0)}%`);
+        console.log(`      Correction X: ×${corrX.toFixed(4)} | Y: ×${corrY.toFixed(4)}`);
+        console.log(`      Largeur: ${rawLargeur.toFixed(2)} → ${results.largeur_cm.toFixed(2)} cm`);
+        console.log(`      Hauteur: ${rawHauteur.toFixed(2)} → ${results.hauteur_cm.toFixed(2)} cm`);
+        
+        // Stocker les valeurs brutes pour référence
+        (results as any).largeur_cm_brute = rawLargeur;
+        (results as any).hauteur_cm_brute = rawHauteur;
+        (results as any).correction_appliquee = optimalCorrection.finalCorrection;
+        (results as any).correction_confidence = optimalCorrection.globalConfidence;
+      }
+      
       // Surface = largeur_cm × hauteur_cm
       const coords: Array<[number, number]> = points.slice(0, 4).map(p => [p.x, p.y]);
       const areaCm2 = results.largeur_cm * results.hauteur_cm;
@@ -1779,7 +1827,7 @@ export const ImageMeasurementCanvas: React.FC<ImageMeasurementCanvasProps> = ({
     }
 
     return results;
-  }, [points, exclusionZones, pixelPerCm, pixelPerCmX, pixelPerCmY, imageDimensions, useHomography, homographyResult]);
+  }, [points, exclusionZones, pixelPerCm, pixelPerCmX, pixelPerCmY, imageDimensions, useHomography, homographyResult, optimalCorrection]);
 
   // Notify parent of measurement changes
   useEffect(() => {
@@ -3437,8 +3485,229 @@ export const ImageMeasurementCanvas: React.FC<ImageMeasurementCanvasProps> = ({
             </div>
           )}
           
-          {/* 📐 POSE (Orientation) - Affichage des angles de rotation */}
-          {pose && (
+          {/* � PANEL ARUCO COMPLET - Affiche toutes les infos si arucoAnalysis disponible */}
+          {arucoAnalysis && (
+            <div style={{ marginTop: 8 }}>
+              <div style={{ 
+                background: 'linear-gradient(135deg, #1a1a2e 0%, #16213e 100%)',
+                borderRadius: 12,
+                padding: '16px',
+                color: 'white',
+                border: '1px solid #333'
+              }}>
+                {/* HEADER */}
+                <div style={{ 
+                  display: 'flex', 
+                  alignItems: 'center', 
+                  justifyContent: 'space-between',
+                  marginBottom: 12,
+                  paddingBottom: 8,
+                  borderBottom: '1px solid rgba(255,255,255,0.1)'
+                }}>
+                  <div style={{ fontSize: 14, fontWeight: 'bold' }}>
+                    🎯 ArUco MAGENTA - ID {arucoAnalysis.markerId}
+                  </div>
+                  <Tag 
+                    color={
+                      arucoAnalysis.quality.rating === 'excellent' ? 'green' :
+                      arucoAnalysis.quality.rating === 'good' ? 'blue' :
+                      arucoAnalysis.quality.rating === 'acceptable' ? 'orange' : 'red'
+                    }
+                  >
+                    {arucoAnalysis.quality.overall}% - {arucoAnalysis.quality.rating.toUpperCase()}
+                  </Tag>
+                </div>
+                
+                {/* ROW 1: POSE (Rotations) */}
+                <div style={{ 
+                  display: 'flex', 
+                  gap: 12, 
+                  justifyContent: 'space-around',
+                  marginBottom: 12 
+                }}>
+                  <div style={{ textAlign: 'center', flex: 1 }}>
+                    <div style={{ 
+                      fontSize: 22, 
+                      fontWeight: 'bold',
+                      color: Math.abs(arucoAnalysis.pose.rotX) < 15 ? '#52c41a' : 
+                             Math.abs(arucoAnalysis.pose.rotX) < 30 ? '#faad14' : '#ff4d4f'
+                    }}>
+                      {arucoAnalysis.pose.rotX}°
+                    </div>
+                    <div style={{ fontSize: 10, opacity: 0.7 }}>Rot X (↕️)</div>
+                  </div>
+                  <div style={{ textAlign: 'center', flex: 1 }}>
+                    <div style={{ 
+                      fontSize: 22, 
+                      fontWeight: 'bold',
+                      color: Math.abs(arucoAnalysis.pose.rotY) < 15 ? '#52c41a' : 
+                             Math.abs(arucoAnalysis.pose.rotY) < 30 ? '#faad14' : '#ff4d4f'
+                    }}>
+                      {arucoAnalysis.pose.rotY}°
+                    </div>
+                    <div style={{ fontSize: 10, opacity: 0.7 }}>Rot Y (↔️)</div>
+                  </div>
+                  <div style={{ textAlign: 'center', flex: 1 }}>
+                    <div style={{ 
+                      fontSize: 22, 
+                      fontWeight: 'bold',
+                      color: Math.abs(arucoAnalysis.pose.rotZ) < 10 ? '#52c41a' : 
+                             Math.abs(arucoAnalysis.pose.rotZ) < 20 ? '#faad14' : '#ff4d4f'
+                    }}>
+                      {arucoAnalysis.pose.rotZ}°
+                    </div>
+                    <div style={{ fontSize: 10, opacity: 0.7 }}>Rot Z (🔄)</div>
+                  </div>
+                </div>
+                
+                {/* ROW 2: PROFONDEUR + TAILLE */}
+                <div style={{ 
+                  display: 'flex', 
+                  gap: 12, 
+                  marginBottom: 12,
+                  background: 'rgba(0,212,255,0.1)',
+                  borderRadius: 8,
+                  padding: '10px'
+                }}>
+                  <div style={{ flex: 1, textAlign: 'center' }}>
+                    <div style={{ fontSize: 10, opacity: 0.7 }}>📏 Distance</div>
+                    <div style={{ 
+                      fontSize: 18, 
+                      fontWeight: 'bold',
+                      color: arucoAnalysis.depth.estimatedCm < 50 ? '#52c41a' : 
+                             arucoAnalysis.depth.estimatedCm < 100 ? '#faad14' : '#ff7875'
+                    }}>
+                      ~{arucoAnalysis.depth.estimatedCm} cm
+                    </div>
+                    <div style={{ fontSize: 10, opacity: 0.5 }}>
+                      ({arucoAnalysis.depth.estimatedM} m)
+                    </div>
+                  </div>
+                  <div style={{ width: 1, background: 'rgba(255,255,255,0.2)' }} />
+                  <div style={{ flex: 1, textAlign: 'center' }}>
+                    <div style={{ fontSize: 10, opacity: 0.7 }}>📐 Marqueur</div>
+                    <div style={{ fontSize: 18, fontWeight: 'bold', color: '#00d4ff' }}>
+                      {arucoAnalysis.markerSizeCm} cm
+                    </div>
+                    <div style={{ fontSize: 10, opacity: 0.5 }}>
+                      ({Math.round(arucoAnalysis.markerSizePx)} px)
+                    </div>
+                  </div>
+                </div>
+                
+                {/* ROW 3: ANALYSE BANDES INTERNES */}
+                {arucoAnalysis.bandAnalysis.enabled && (
+                  <div style={{ 
+                    background: arucoAnalysis.bandAnalysis.isValid 
+                      ? 'rgba(82, 196, 26, 0.15)' 
+                      : 'rgba(255, 77, 79, 0.15)',
+                    borderRadius: 8,
+                    padding: '10px',
+                    marginBottom: 8
+                  }}>
+                    <div style={{ 
+                      display: 'flex', 
+                      alignItems: 'center', 
+                      justifyContent: 'space-between',
+                      marginBottom: 8
+                    }}>
+                      <span style={{ fontSize: 12, fontWeight: 'bold' }}>
+                        🔬 Validation Bandes Internes
+                      </span>
+                      <Tag color={arucoAnalysis.bandAnalysis.isValid ? 'success' : 'error'}>
+                        {arucoAnalysis.bandAnalysis.validPoints}/{arucoAnalysis.bandAnalysis.totalPoints} pts
+                      </Tag>
+                    </div>
+                    
+                    {/* Barres de progression pour chaque bord */}
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 4, fontSize: 10 }}>
+                      {['top', 'right', 'bottom', 'left'].map(edge => {
+                        const edgeRatios = arucoAnalysis.bandAnalysis.transitionRatios.filter(t => t.edge === edge);
+                        const avgError = edgeRatios.length > 0 
+                          ? edgeRatios.reduce((s, t) => s + t.error, 0) / edgeRatios.length 
+                          : 0;
+                        return (
+                          <div key={edge} style={{ 
+                            display: 'flex', 
+                            alignItems: 'center',
+                            gap: 4
+                          }}>
+                            <span style={{ width: 50, opacity: 0.7 }}>
+                              {edge === 'top' ? '⬆️' : edge === 'right' ? '➡️' : edge === 'bottom' ? '⬇️' : '⬅️'} {edge}
+                            </span>
+                            <div style={{ 
+                              flex: 1, 
+                              height: 6, 
+                              background: 'rgba(255,255,255,0.2)',
+                              borderRadius: 3,
+                              overflow: 'hidden'
+                            }}>
+                              <div style={{ 
+                                width: `${Math.max(0, 100 - avgError * 5)}%`,
+                                height: '100%',
+                                background: avgError < 2 ? '#52c41a' : avgError < 5 ? '#faad14' : '#ff4d4f',
+                                borderRadius: 3
+                              }} />
+                            </div>
+                            <span style={{ 
+                              color: avgError < 2 ? '#52c41a' : avgError < 5 ? '#faad14' : '#ff4d4f',
+                              fontWeight: 'bold',
+                              width: 35
+                            }}>
+                              {avgError.toFixed(1)}%
+                            </span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                    
+                    {/* Message de validation */}
+                    <div style={{ 
+                      marginTop: 8, 
+                      fontSize: 11,
+                      textAlign: 'center',
+                      padding: '4px 8px',
+                      background: 'rgba(0,0,0,0.2)',
+                      borderRadius: 4
+                    }}>
+                      {arucoAnalysis.bandAnalysis.validationMessage}
+                    </div>
+                    
+                    {/* Facteur de correction suggéré */}
+                    {!arucoAnalysis.bandAnalysis.isValid && arucoAnalysis.bandAnalysis.suggestedCorrection !== 1 && (
+                      <div style={{ 
+                        marginTop: 6, 
+                        fontSize: 10, 
+                        opacity: 0.8,
+                        textAlign: 'center'
+                      }}>
+                        💡 Correction suggérée: ×{arucoAnalysis.bandAnalysis.suggestedCorrection.toFixed(4)} 
+                        (confiance: {(arucoAnalysis.bandAnalysis.correctionConfidence * 100).toFixed(0)}%)
+                      </div>
+                    )}
+                  </div>
+                )}
+                
+                {/* ROW 4: Qualité détaillée */}
+                <div style={{ 
+                  display: 'flex', 
+                  gap: 8, 
+                  fontSize: 10,
+                  opacity: 0.7,
+                  justifyContent: 'center'
+                }}>
+                  <span>🎯 Détection: {arucoAnalysis.quality.detectionQuality}%</span>
+                  <span>|</span>
+                  <span>📐 Homographie: {arucoAnalysis.quality.homographyQuality}%</span>
+                  <span>|</span>
+                  <span>📷 Pose: {arucoAnalysis.quality.poseQuality}%</span>
+                </div>
+              </div>
+            </div>
+          )}
+          
+          {/* 📐 POSE (Orientation) - Fallback si pas d'arucoAnalysis mais pose calculée */}
+          {!arucoAnalysis && pose && (
             <div style={{ marginTop: 8 }}>
               <div style={{ 
                 background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',

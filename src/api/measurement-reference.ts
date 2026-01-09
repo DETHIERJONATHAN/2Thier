@@ -17,7 +17,11 @@ import {
   MarkerDetector, 
   MARKER_SPECS, 
   detectUltraPrecisionPoints,
-  type UltraPrecisionResult 
+  analyzeMarkerComplete,
+  calculateOptimalCorrection,
+  type UltraPrecisionResult,
+  type ArucoMarkerAnalysis,
+  type OptimalCorrectionResult
 } from '../lib/marker-detector';
 // 🔥 Import HomographyFusionService pour le vrai pipeline multi-photo
 import { homographyFusionService } from '../services/HomographyFusionService';
@@ -787,6 +791,9 @@ router.post('/ultra-fusion-detect', authenticateToken, async (req: Authenticated
       quality: number;
       corners: any;
       ultraPrecision: any;
+      arucoAnalysis: ArucoMarkerAnalysis | null; // 🔬 Analyse complète pour le Canvas
+      imageWidth: number;
+      imageHeight: number;
     }> = [];
     
     for (let i = 0; i < cleanedPhotos.length; i++) {
@@ -821,10 +828,35 @@ router.post('/ultra-fusion-detect', authenticateToken, async (req: Authenticated
           const cornersForUltra = marker.magentaPositions || marker.corners;
           const ultraResult = detectUltraPrecisionPoints(imageData, cornersForUltra, marker.extendedPoints);
           
-          // Calculer un score global (détection + homographie)
+          // 🔬 Analyse COMPLÈTE du marqueur (pose, profondeur, qualité, bandes) - AVANT le calcul du score!
+          let completeAnalysis: ArucoMarkerAnalysis | null = null;
+          let bandBiasScore = 0.5; // Score par défaut si pas d'analyse
+          try {
+            completeAnalysis = analyzeMarkerComplete(marker, width, height);
+            console.log(`   🔬 Analyse complète: rotX=${completeAnalysis.pose.rotX}°, rotY=${completeAnalysis.pose.rotY}°, profondeur=${completeAnalysis.depth.estimatedCm}cm`);
+            
+            // 🎯 Utiliser le biais des bandes pour le score !
+            if (completeAnalysis.bands && completeAnalysis.bands.avgBias !== undefined) {
+              const absBias = Math.abs(completeAnalysis.bands.avgBias);
+              // Score basé sur le biais : 0% = 1.0, 5% = 0.5, 10% = 0.0
+              bandBiasScore = Math.max(0, 1 - (absBias / 5));
+              console.log(`   📊 Biais bandes: ${(completeAnalysis.bands.avgBias * 100).toFixed(2)}% → score=${bandBiasScore.toFixed(2)}`);
+            }
+          } catch (analyzeErr) {
+            console.warn(`   ⚠️ Analyse complète échouée:`, analyzeErr);
+          }
+          
+          // Calculer un score global (détection + homographie + biais bandes)
           const detectionScore = marker.score || 0;
           const homographyQuality = ultraResult.quality || 0;
-          const globalScore = (detectionScore * 0.4) + (homographyQuality * 0.3) + ((1 - ultraResult.reprojectionError / 10) * 0.3);
+          const reprojScore = 1 - ultraResult.reprojectionError / 10;
+          // 🎯 NOUVEAU: Inclure le biais des bandes dans le score (25% du poids)
+          const globalScore = (detectionScore * 0.30) + 
+                              (homographyQuality * 0.25) + 
+                              (reprojScore * 0.20) + 
+                              (bandBiasScore * 0.25);
+          
+          console.log(`   📈 Score photo ${i}: détection=${(detectionScore*100).toFixed(0)}%, homographie=${(homographyQuality*100).toFixed(0)}%, reproj=${(reprojScore*100).toFixed(0)}%, bandes=${(bandBiasScore*100).toFixed(0)}% → TOTAL=${(globalScore*100).toFixed(1)}%`);
           
           // 🎯 CRITIQUE: Utiliser magentaPositions (coins EXTÉRIEURS 18cm) pas corners (6cm intérieur)!
           // marker.corners = coins du pattern central 6cm (pour homographie interne)
@@ -848,6 +880,9 @@ router.post('/ultra-fusion-detect', authenticateToken, async (req: Authenticated
             reprojectionError: ultraResult.reprojectionError,
             quality: homographyQuality,
             corners: cornersPercent,
+            arucoAnalysis: completeAnalysis, // 🔬 Stocké !
+            imageWidth: width,
+            imageHeight: height,
             ultraPrecision: {
               totalPoints: ultraResult.totalPoints,
               inlierPoints: ultraResult.inlierPoints,
@@ -891,6 +926,30 @@ router.post('/ultra-fusion-detect', authenticateToken, async (req: Authenticated
     console.log(`      🎯 Précision estimée: ${bestPhoto.ultraPrecision.estimatedPrecision}`);
     
     // ============================================
+    // 3️⃣ CALCUL DE LA CORRECTION OPTIMALE
+    // ============================================
+    console.log('\n3️⃣ Calcul de la correction optimale...');
+    
+    let optimalCorrection: OptimalCorrectionResult | null = null;
+    
+    if (bestPhoto.arucoAnalysis) {
+      optimalCorrection = calculateOptimalCorrection(
+        bestPhoto.arucoAnalysis,
+        {
+          totalPoints: bestPhoto.ultraPrecision.totalPoints,
+          inlierPoints: bestPhoto.ultraPrecision.inlierPoints,
+          reprojectionError: bestPhoto.reprojectionError,
+          quality: bestPhoto.quality
+        }
+      );
+      
+      console.log(`   🎯 CORRECTION FINALE: ×${optimalCorrection.finalCorrection.toFixed(4)}`);
+      console.log(`      📊 Confiance: ${(optimalCorrection.globalConfidence * 100).toFixed(0)}%`);
+      console.log(`      📏 Correction X: ×${optimalCorrection.correctionX.toFixed(4)}`);
+      console.log(`      📏 Correction Y: ×${optimalCorrection.correctionY.toFixed(4)}`);
+    }
+    
+    // ============================================
     // RÉSULTAT FINAL
     // ============================================
     const totalTime = Date.now() - startTime;
@@ -916,6 +975,12 @@ router.post('/ultra-fusion-detect', authenticateToken, async (req: Authenticated
       fusedCorners: bestPhoto.corners,
       homographyReady: true,
       
+      // 🔬 ANALYSE COMPLÈTE DU MARQUEUR - Nouveau pour le panel ArUco
+      arucoAnalysis: bestPhoto.arucoAnalysis,
+      
+      // 🎯 CORRECTION OPTIMALE - NOUVEAU !
+      optimalCorrection: optimalCorrection,
+      
       // 🎯 NOUVEAU: Données pour calibration précise
       markerSizeCm: markerSizeCm, // 18cm ArUco MAGENTA
       pixelPerCm: avgPixelPerCm,  // Pixels par cm (estimation)
@@ -928,7 +993,12 @@ router.post('/ultra-fusion-detect', authenticateToken, async (req: Authenticated
         // 🎯 NOUVEAU: Ajouter les données pour le canvas
         homographyMatrix: bestPhoto.homography,
         pixelPerCm: avgPixelPerCm,
-        markerSizeCm: markerSizeCm
+        markerSizeCm: markerSizeCm,
+        // 🎯 CORRECTION OPTIMALE dans ultraPrecision aussi
+        optimalCorrection: optimalCorrection?.finalCorrection || 1.0,
+        correctionX: optimalCorrection?.correctionX || 1.0,
+        correctionY: optimalCorrection?.correctionY || 1.0,
+        correctionConfidence: optimalCorrection?.globalConfidence || 0
       },
       
       // 🏆 Infos sur la meilleure photo

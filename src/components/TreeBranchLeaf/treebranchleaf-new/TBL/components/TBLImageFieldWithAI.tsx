@@ -113,6 +113,8 @@ const TBLImageFieldWithAI: React.FC<TBLImageFieldWithAIProps> = ({
   const [processedImageUrl, setProcessedImageUrl] = useState<string | null>(null);
   const [processedImageBase64, setProcessedImageBase64] = useState<string | null>(null);
   const [isFromSmartCapture, setIsFromSmartCapture] = useState(false);
+  // 🔬 Analyse complète ArUco pour le panel Canvas
+  const [arucoAnalysis, setArucoAnalysis] = useState<any>(null);
   
   // Refs pour les inputs file (galerie et caméra)
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -385,6 +387,13 @@ const TBLImageFieldWithAI: React.FC<TBLImageFieldWithAIProps> = ({
       if (result.ultraPrecision) {
         console.log(`   🔬 Ultra-précision: ${result.ultraPrecision.totalPoints} points`);
         console.log(`      ✅ Précision: ${result.ultraPrecision.estimatedPrecision}`);
+        
+        // 🔬 Stocker l'analyse complète ArUco pour le panel Canvas
+        if (result.arucoAnalysis) {
+          console.log(`   📊 Analyse ArUco: rotX=${result.arucoAnalysis.pose?.rotX}°, depth=${result.arucoAnalysis.depth?.estimatedCm}cm`);
+          setArucoAnalysis(result.arucoAnalysis);
+        }
+        
         message.success({ 
           content: `🎯 ArUco détecté! Photo ${result.bestPhoto?.index + 1} (${result.ultraPrecision.estimatedPrecision})`, 
           key: 'ultra-fusion' 
@@ -401,6 +410,12 @@ const TBLImageFieldWithAI: React.FC<TBLImageFieldWithAIProps> = ({
         
         // 🎯 Stocker les coins ArUco pour le canvas (il va les détecter via fusedCorners)
         if (result.fusedCorners) {
+          // 🔧 Extraire la correction optimale calculée par l'API
+          const optimalCorrection = result.optimalCorrection || null;
+          if (optimalCorrection) {
+            console.log(`   🎯 Correction optimale: ×${optimalCorrection.finalCorrection?.toFixed(4)} (confiance: ${(optimalCorrection.globalConfidence * 100).toFixed(0)}%)`);
+          }
+          
           const enrichedPhotos = photos.map((photo, idx) => ({
             imageBase64: idx === bestPhotoIndex && result.bestPhotoBase64 
               ? result.bestPhotoBase64 
@@ -414,6 +429,8 @@ const TBLImageFieldWithAI: React.FC<TBLImageFieldWithAIProps> = ({
               ultraPrecision: idx === bestPhotoIndex ? result.ultraPrecision : null,
               // 🎯 PASSER LES COINS ARUCO AU CANVAS
               fusedCorners: idx === bestPhotoIndex ? result.fusedCorners : null,
+              // 🔧 CORRECTION OPTIMALE pour appliquer aux mesures
+              optimalCorrection: idx === bestPhotoIndex ? optimalCorrection : null,
               homography: null
             }
           }));
@@ -679,7 +696,11 @@ const TBLImageFieldWithAI: React.FC<TBLImageFieldWithAIProps> = ({
                 // 🎯 ULTRA-PRECISION: Passer les données ArUco détectées !
                 arucoDetected: (photo.metadata as any)?.arucoDetected,
                 ultraPrecision: (photo.metadata as any)?.ultraPrecision,
-                homography: (photo.metadata as any)?.homography
+                homography: (photo.metadata as any)?.homography,
+                // 🔧 CORRECTION OPTIMALE - CRITIQUE: Passer pour application aux mesures !
+                optimalCorrection: (photo.metadata as any)?.optimalCorrection,
+                // 🎯 NOUVEAU: Passer aussi fusedCorners dans les metadata
+                fusedCorners: (photo.metadata as any)?.fusedCorners
               }
             }))}
             // 🎯 ULTRA-PRECISION: Passer les corners fusionnés si disponibles
@@ -699,6 +720,8 @@ const TBLImageFieldWithAI: React.FC<TBLImageFieldWithAIProps> = ({
             })()}
             // 🎯 Indiquer que l'homographie est prête si ArUco détecté
             homographyReady={capturedPhotos.some(p => (p.metadata as any)?.arucoDetected)}
+            // 🔬 Analyse complète ArUco pour le panel d'infos détaillé
+            arucoAnalysis={arucoAnalysis}
           />
         </>
       )}

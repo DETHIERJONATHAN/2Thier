@@ -7,6 +7,7 @@ import {
   computeHomography,
   transformPoint,
   measureDistanceCm,
+  measureDistanceCmCorrected,
   estimatePose,
   calculateQualityScore,
   detectUltraPrecisionPoints,
@@ -331,7 +332,7 @@ router.post('/photo', async (req, res) => {
 
 router.post('/photo/measure', async (req, res) => {
   try {
-    const { homographyMatrix, point1, point2 } = req.body || {};
+    const { homographyMatrix, point1, point2, correction } = req.body || {};
     
     if (!homographyMatrix || !point1 || !point2) {
       return res.status(400).json({
@@ -340,20 +341,27 @@ router.post('/photo/measure', async (req, res) => {
       });
     }
     
-    // Calculer la distance en cm
-    const distanceCm = measureDistanceCm(homographyMatrix, point1, point2);
+    // Calculer la distance en cm AVEC CORRECTION OPTIMALE si fournie
+    const correctionFactor = correction || 1.0;
+    const distanceCmRaw = measureDistanceCm(homographyMatrix, point1, point2);
+    const distanceCm = distanceCmRaw * correctionFactor;
     
     // Transformer les points en coordonnées réelles
     const point1Cm = transformPoint(homographyMatrix, point1);
     const point2Cm = transformPoint(homographyMatrix, point2);
     
+    console.log(`📏 [MEASURE] Distance: ${distanceCmRaw.toFixed(2)}cm → ${distanceCm.toFixed(2)}cm (×${correctionFactor.toFixed(4)})`);
+    
     return res.json({
       success: true,
       distanceCm,
+      distanceCmRaw,  // Distance brute sans correction
       distanceM: distanceCm / 100,
       point1Cm,
       point2Cm,
-      unit: 'cm'
+      unit: 'cm',
+      correctionApplied: correctionFactor,
+      correctionWasApplied: correctionFactor !== 1.0
     });
     
   } catch (error: any) {

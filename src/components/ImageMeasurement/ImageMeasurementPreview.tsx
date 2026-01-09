@@ -97,6 +97,7 @@ interface MobileFullscreenCanvasProps {
   };
   measurementObjectConfig?: any;
   allPhotos?: any[];
+  arucoAnalysis?: any; // 🔬 Analyse complète ArUco
 }
 
 const MobileFullscreenCanvas: React.FC<MobileFullscreenCanvasProps> = ({
@@ -115,7 +116,8 @@ const MobileFullscreenCanvas: React.FC<MobileFullscreenCanvasProps> = ({
   homographyReady,
   referenceConfig,
   measurementObjectConfig,
-  allPhotos
+  allPhotos,
+  arucoAnalysis // 🔬 Analyse complète ArUco
 }) => {
   const containerRef = React.useRef<HTMLDivElement>(null);
   const [viewportSize, setViewportSize] = React.useState({ width: 0, height: 0 });
@@ -221,6 +223,9 @@ const MobileFullscreenCanvas: React.FC<MobileFullscreenCanvasProps> = ({
         referenceConfig={referenceConfig}
         measurementObjectConfig={measurementObjectConfig}
         allPhotos={allPhotos}
+        arucoAnalysis={arucoAnalysis}
+        // 🔧 CORRECTION OPTIMALE: Facteur calculé par RANSAC + bands + reprojection
+        optimalCorrection={optimalCorrection}
         mobileFullscreen
       />
     </div>
@@ -253,6 +258,7 @@ interface ImageMeasurementPreviewProps {
       arucoDetected?: boolean;
       ultraPrecision?: any;
       homography?: any;
+      arucoAnalysis?: any; // 🔬 Analyse complète ArUco
     };
   }>;
   // 🎯 ULTRA-PRECISION: Corners ArUco pré-détectés (depuis TBLImageFieldWithAI)
@@ -263,6 +269,8 @@ interface ImageMeasurementPreviewProps {
     bottomLeft: { x: number; y: number };
   };
   homographyReady?: boolean;
+  // 🔬 Analyse complète ArUco pour le panel Canvas
+  arucoAnalysis?: any;
 }
 
 type WorkflowStep = 'loading' | 'calibrating' | 'measuring' | 'adjusting' | 'complete' | 'error';
@@ -283,7 +291,8 @@ export const ImageMeasurementPreview: React.FC<ImageMeasurementPreviewProps> = (
   measureKeys = ['largeur_cm', 'hauteur_cm'],
   allPhotos, // 🆕 Toutes les photos pour fusion
   fusedCorners, // 🎯 ULTRA-PRECISION: Corners ArUco pré-détectés
-  homographyReady // 🎯 Flag indiquant que l'homographie est prête
+  homographyReady, // 🎯 Flag indiquant que l'homographie est prête
+  arucoAnalysis // 🔬 Analyse complète ArUco pour le panel Canvas
 }) => {
   const { api } = useAuthenticatedApi();
   const isMobile = useIsMobile(); // 📱 Détection mobile
@@ -303,6 +312,15 @@ export const ImageMeasurementPreview: React.FC<ImageMeasurementPreviewProps> = (
   
   // 🆕 Dimensions réelles de la référence (pour recalibration)
   const [referenceRealSize, setReferenceRealSize] = useState<{ width: number; height: number }>({ width: 21, height: 29.7 });
+  
+  // 🔧 CORRECTION OPTIMALE: Facteur de correction calculé par l'API (RANSAC + bands + reprojection)
+  const [optimalCorrection, setOptimalCorrection] = useState<{
+    finalCorrection: number;
+    correctionX: number;
+    correctionY: number;
+    globalConfidence: number;
+    contributions?: Array<{ source: string; correction: number; weight: number; confidence: number }>;
+  } | null>(null);
   
   // 🆕 MULTI-PHOTOS: État pour l'analyse de qualité et la fusion
   const [multiPhotoAnalysis, setMultiPhotoAnalysis] = useState<{
@@ -341,6 +359,13 @@ export const ImageMeasurementPreview: React.FC<ImageMeasurementPreviewProps> = (
       const photoWithAruco = allPhotos?.find(p => (p.metadata as any)?.arucoDetected);
       const ultraPrecision = (photoWithAruco?.metadata as any)?.ultraPrecision;
       
+      // 🔧 CORRECTION OPTIMALE: Extraire la correction calculée par l'API
+      const correction = (photoWithAruco?.metadata as any)?.optimalCorrection;
+      if (correction) {
+        console.log(`   🔧 Correction optimale trouvée: ×${correction.finalCorrection?.toFixed(4)} (confiance: ${(correction.globalConfidence * 100).toFixed(0)}%)`);
+        setOptimalCorrection(correction);
+      }
+      
       setMultiPhotoAnalysis({
         usedMultiPhoto: true,
         totalPhotos: allPhotos?.length || 1,
@@ -368,7 +393,42 @@ export const ImageMeasurementPreview: React.FC<ImageMeasurementPreviewProps> = (
     }
   }, [fusedCorners, homographyReady, allPhotos, multiPhotoAnalysis?.fusedCorners]);
 
-  // �🆕 Callback quand l'utilisateur ajuste manuellement le rectangle de référence
+  // 🔧 EXTRACTION SÉPARÉE de optimalCorrection (se déclenche quand allPhotos change)
+  useEffect(() => {
+    console.log(`🔍 [Preview] useEffect optimalCorrection - allPhotos.length=${allPhotos?.length || 0}, optimalCorrection=${optimalCorrection ? 'SET' : 'null'}`);
+    
+    if (!allPhotos?.length) {
+      console.log(`   ⚠️ Pas de photos, skip`);
+      return;
+    }
+    
+    // Debug: Afficher les metadata de chaque photo
+    allPhotos.forEach((p, idx) => {
+      const meta = p.metadata as any;
+      console.log(`   📸 Photo ${idx}: optimalCorrection=${meta?.optimalCorrection ? '✅' : '❌'}, arucoDetected=${meta?.arucoDetected}`);
+    });
+    
+    // Chercher la photo avec optimalCorrection dans ses metadata
+    const photoWithCorrection = allPhotos.find(p => (p.metadata as any)?.optimalCorrection);
+    const correction = (photoWithCorrection?.metadata as any)?.optimalCorrection;
+    
+    if (correction) {
+      if (!optimalCorrection) {
+        console.log(`🔧 [Preview] optimalCorrection extraite des metadata:`);
+        console.log(`   📊 Correction finale: ×${correction.finalCorrection?.toFixed(4)}`);
+        console.log(`   📏 Correction X: ×${correction.correctionX?.toFixed(4)}`);
+        console.log(`   📏 Correction Y: ×${correction.correctionY?.toFixed(4)}`);
+        console.log(`   🎯 Confiance: ${(correction.globalConfidence * 100).toFixed(0)}%`);
+        setOptimalCorrection(correction);
+      } else {
+        console.log(`   ✅ optimalCorrection déjà set, pas de changement`);
+      }
+    } else {
+      console.log(`   ⚠️ Aucune photo n'a optimalCorrection dans ses metadata`);
+    }
+  }, [allPhotos, optimalCorrection]);
+
+  // 🆕 Callback quand l'utilisateur ajuste manuellement le rectangle de référence
   // Reçoit maintenant pixelPerCmX et pixelPerCmY séparés pour gérer la perspective
   const handleReferenceAdjusted = useCallback((
     newBoundingBox: { x: number; y: number; width: number; height: number }, 
@@ -943,6 +1003,10 @@ export const ImageMeasurementPreview: React.FC<ImageMeasurementPreviewProps> = (
           homographyReady={multiPhotoAnalysis?.homographyReady}
           // 🆕 MULTI-PHOTOS: Passer toutes les photos pour fusion avant détection
           allPhotos={allPhotos}
+          // 🔬 ANALYSE ARUCO: Pour le panel d'infos détaillé
+          arucoAnalysis={arucoAnalysis}
+          // 🔧 CORRECTION OPTIMALE: Facteur calculé par RANSAC + bands + reprojection
+          optimalCorrection={optimalCorrection}
           // 🆕 CONFIG DYNAMIQUE TBL: Passer les configurations pour les prompts IA
           referenceConfig={referenceConfig ? {
             referenceType: referenceConfig.referenceType as 'a4' | 'card' | 'meter' | 'custom',
