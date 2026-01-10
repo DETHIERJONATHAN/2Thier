@@ -156,8 +156,17 @@ interface ImageMeasurementCanvasProps {
     finalCorrection: number;
     correctionX: number;
     correctionY: number;
+    // 🆕 Corrections SANS bandes (pour mode homographie)
+    correctionXSansBandes?: number;
+    correctionYSansBandes?: number;
     globalConfidence: number;
-    contributions?: Array<{ source: string; correction: number; weight: number; confidence: number }>;
+    contributions?: {
+      bandAnalysis?: { correction: number; weight: number; confidence: number };
+      ransacError?: { correction: number; weight: number; confidence: number };
+      reprojection?: { correction: number; weight: number; confidence: number };
+      poseCompensation?: { correction: number; weight: number; confidence: number };
+      gyroscopeCompensation?: { correction: number; weight: number; confidence: number };
+    };
   } | null;
 }
 
@@ -776,10 +785,25 @@ export const ImageMeasurementCanvas: React.FC<ImageMeasurementCanvasProps> = ({
     img.src = imageUrl;
   }, [imageUrl, maxWidth, maxHeight, containerWidth, canvasViewportSize.width, canvasViewportSize.height, isMobileFullscreen]);
 
-  // � ULTRA-PRECISION: Auto-initialiser avec les fusedCorners si disponibles
+  // 🎯 ULTRA-PRECISION: Auto-initialiser avec les fusedCorners si disponibles
   // Cet effet permet de skip l'étape de sélection manuelle de la référence ArUco
   useEffect(() => {
-    if (!fusedCorners || !homographyReady || !imageDimensions.width || !imageDimensions.height) {
+    // 🔴 CRITIQUE: Attendre que l'image soit RÉELLEMENT chargée !
+    // imageDimensions par défaut = {800, 600, scale: 1}
+    // On vérifie que image existe ET que les dimensions correspondent à l'image chargée
+    if (!fusedCorners || !homographyReady || !image) {
+      return;
+    }
+    
+    // 🔴 Vérifier que imageDimensions reflète l'image CHARGÉE (pas les valeurs par défaut)
+    // L'image est chargée quand: width/height sont basés sur l'image réelle
+    const expectedWidth = image.width * imageDimensions.scale;
+    const expectedHeight = image.height * imageDimensions.scale;
+    const dimensionsMatch = Math.abs(imageDimensions.width - expectedWidth) < 1 && 
+                           Math.abs(imageDimensions.height - expectedHeight) < 1;
+    
+    if (!dimensionsMatch) {
+      console.log('⏳ [Canvas] Image chargée mais imageDimensions pas encore mises à jour, skip...');
       return;
     }
     
@@ -790,8 +814,11 @@ export const ImageMeasurementCanvas: React.FC<ImageMeasurementCanvasProps> = ({
     
     console.log('🎯 [Canvas] ULTRA-PRECISION: Initialisation automatique avec fusedCorners !');
     console.log('   📍 fusedCorners (% de l\'image):', fusedCorners);
+    console.log('   📐 imageDimensions pour conversion:', imageDimensions);
+    console.log('   📐 scale appliqué:', imageDimensions.scale);
+    console.log('   📐 Image réelle:', image.width, '×', image.height);
     
-    // Convertir les corners de % (0-100) vers pixels
+    // Convertir les corners de % (0-100) vers pixels (de l'image SCALÉE affichée sur le canvas)
     const cornersInPixels = {
       topLeft: { 
         x: (fusedCorners.topLeft.x / 100) * imageDimensions.width, 
@@ -811,7 +838,8 @@ export const ImageMeasurementCanvas: React.FC<ImageMeasurementCanvasProps> = ({
       }
     };
     
-    console.log('   📍 cornersInPixels:', cornersInPixels);
+    console.log('   📍 cornersInPixels (canvas scalé):', cornersInPixels);
+    console.log('   🔍 DEBUG: TL.x = fusedCorners.topLeft.x(', fusedCorners.topLeft.x, '%) / 100 * imageDimensions.width(', imageDimensions.width, ') =', cornersInPixels.topLeft.x);
     
     // Initialiser les coins de référence
     setReferenceCorners(cornersInPixels);
@@ -866,7 +894,7 @@ export const ImageMeasurementCanvas: React.FC<ImageMeasurementCanvasProps> = ({
     console.log('🚀 [Canvas] Passage automatique à l\'étape selectMeasureZone');
     setWorkflowStep('selectMeasureZone');
     
-  }, [fusedCorners, homographyReady, imageDimensions.width, imageDimensions.height, referenceCorners, quadrilateralMode]);
+  }, [fusedCorners, homographyReady, imageDimensions.width, imageDimensions.height, imageDimensions.scale, referenceCorners, quadrilateralMode, image, markerSizeCm]);
 
   // 🔄 Recalculer pixelPerCm quand le rectangle de référence est ajusté
   const recalculateCalibration = useCallback((box: { x: number; y: number; width: number; height: number }, skipSnap: boolean = false) => {
@@ -885,9 +913,9 @@ export const ImageMeasurementCanvas: React.FC<ImageMeasurementCanvasProps> = ({
     let refHeight: number;
     
     if (isArucoMode) {
-      // ArUco MAGENTA est toujours un carré (taille configurée)
-      refWidth = 18;
-      refHeight = 18;
+      // ArUco MAGENTA est toujours un carré (taille configurée dynamiquement)
+      refWidth = markerSizeCm;
+      refHeight = markerSizeCm;
       console.log(`🎯 [Canvas] Mode ARUCO: utilisation ${markerSizeCm}×${markerSizeCm}cm`);
     } else {
       // Ajuster les dimensions A4 selon l'orientation détectée
@@ -1350,21 +1378,33 @@ export const ImageMeasurementCanvas: React.FC<ImageMeasurementCanvasProps> = ({
     
     // Détecter l'orientation (paysage ou portrait)
     const isLandscape = avgWidthPx > avgHeightPx;
-    let refWidth = referenceRealSize?.width || 21;
-    let refHeight = referenceRealSize?.height || 29.7;
     
-    // Ajuster les dimensions réelles selon l'orientation détectée
-    const dimensionsArePortrait = refWidth < refHeight;
-    if (isLandscape && dimensionsArePortrait) {
-      const tmp = refWidth;
-      refWidth = refHeight;
-      refHeight = tmp;
-      console.log(`🔄 [Canvas] Rectangle PAYSAGE détecté, dimensions: ${refWidth}x${refHeight}cm`);
-    } else if (!isLandscape && !dimensionsArePortrait) {
-      const tmp = refWidth;
-      refWidth = refHeight;
-      refHeight = tmp;
-      console.log(`🔄 [Canvas] Rectangle PORTRAIT détecté, dimensions: ${refWidth}x${refHeight}cm`);
+    // 🎯 ARUCO MODE: Utiliser markerSizeCm au lieu de referenceRealSize
+    let refWidth: number;
+    let refHeight: number;
+    
+    if (isArucoMode) {
+      // ArUco est toujours carré
+      refWidth = markerSizeCm;
+      refHeight = markerSizeCm;
+      console.log(`🎯 [Canvas] Mode ARUCO actif: dimensions ${markerSizeCm}×${markerSizeCm}cm`);
+    } else {
+      refWidth = referenceRealSize?.width || 21;
+      refHeight = referenceRealSize?.height || 29.7;
+      
+      // Ajuster les dimensions réelles selon l'orientation détectée (A4 seulement)
+      const dimensionsArePortrait = refWidth < refHeight;
+      if (isLandscape && dimensionsArePortrait) {
+        const tmp = refWidth;
+        refWidth = refHeight;
+        refHeight = tmp;
+        console.log(`🔄 [Canvas] Rectangle PAYSAGE détecté, dimensions: ${refWidth}x${refHeight}cm`);
+      } else if (!isLandscape && !dimensionsArePortrait) {
+        const tmp = refWidth;
+        refWidth = refHeight;
+        refHeight = tmp;
+        console.log(`🔄 [Canvas] Rectangle PORTRAIT détecté, dimensions: ${refWidth}x${refHeight}cm`);
+      }
     }
     
     // 🎯 Calculer les facteurs X/Y basés sur les VRAIES longueurs des côtés
@@ -1469,7 +1509,7 @@ export const ImageMeasurementCanvas: React.FC<ImageMeasurementCanvasProps> = ({
       onReferenceAdjusted(boxBase1000, pixelPerCmX_base1000, pixelPerCmY_base1000);
     }
     
-  }, [referenceCorners, quadrilateralMode, imageDimensions.width, imageDimensions.height, referenceRealSize, onReferenceAdjusted]);
+  }, [referenceCorners, quadrilateralMode, imageDimensions.width, imageDimensions.height, referenceRealSize, onReferenceAdjusted, isArucoMode, markerSizeCm]);
 
   // Update pixelPerCm when calibration changes
   // ⚠️ IMPORTANT: calibration.pixelPerCm est en "base 1000" (pixels sur une image 1000x1000)
@@ -1774,18 +1814,53 @@ export const ImageMeasurementCanvas: React.FC<ImageMeasurementCanvasProps> = ({
       }
       
       // 🔧 CORRECTION OPTIMALE: Appliquer le facteur de correction calculé par l'API
+      // ⚠️ IMPORTANT: Quand l'homographie est utilisée, elle a DÉJÀ intégré le biais du marqueur (bandes).
+      // Le backend calcule SÉPARÉMENT correctionXSansBandes et correctionYSansBandes pour ce cas.
       if (optimalCorrection && optimalCorrection.finalCorrection !== 1) {
         const rawLargeur = results.largeur_cm;
         const rawHauteur = results.hauteur_cm;
         
-        // Appliquer correction différenciée X/Y si disponible, sinon correction globale
-        const corrX = optimalCorrection.correctionX || optimalCorrection.finalCorrection;
-        const corrY = optimalCorrection.correctionY || optimalCorrection.finalCorrection;
+        // 🆕 DÉTERMINER SI L'HOMOGRAPHIE A DÉJÀ CORRIGÉ
+        const homographyUsed = useHomography && homographyResult && homographyResult.quality > 50;
+        
+        let corrX: number;
+        let corrY: number;
+        let correctionMode: string;
+        
+        if (homographyUsed) {
+          // ✅ HOMOGRAPHIE DE QUALITÉ: Utiliser les corrections SANS BANDES calculées par le backend
+          // L'homographie utilise le marqueur comme référence → le biais des bandes est déjà intégré
+          // Le backend a calculé correctionXSansBandes et correctionYSansBandes SÉPARÉMENT
+          
+          if (optimalCorrection.correctionXSansBandes !== undefined && 
+              optimalCorrection.correctionYSansBandes !== undefined) {
+            // 🎯 UTILISER DIRECTEMENT les corrections X/Y séparées sans bandes
+            corrX = optimalCorrection.correctionXSansBandes;
+            corrY = optimalCorrection.correctionYSansBandes;
+            correctionMode = `HOMOGRAPHIE (${homographyResult.quality.toFixed(0)}%) - SANS BANDES X=×${corrX.toFixed(4)} Y=×${corrY.toFixed(4)}`;
+          } else {
+            // Fallback si le backend n'a pas calculé les corrections sans bandes
+            // (ne devrait pas arriver avec le nouveau code)
+            corrX = 1.0;
+            corrY = 1.0;
+            correctionMode = `HOMOGRAPHIE (${homographyResult.quality.toFixed(0)}%) - pas de correction (backend ancien)`;
+          }
+          
+          console.log(`   📊 [CORRECTION SANS BANDES] Backend: X=×${corrX.toFixed(4)}, Y=×${corrY.toFixed(4)}`);
+          console.log(`      (Bandes exclues car déjà intégrées dans l'homographie)`);
+          
+        } else {
+          // ❌ PAS D'HOMOGRAPHIE: Appliquer correction COMPLÈTE (bandes incluses)
+          // Les bandes détectent le biais du marqueur et le corrigent
+          corrX = optimalCorrection.correctionX || optimalCorrection.finalCorrection;
+          corrY = optimalCorrection.correctionY || optimalCorrection.finalCorrection;
+          correctionMode = `SANS HOMOGRAPHIE - correction complète X=×${corrX.toFixed(4)} Y=×${corrY.toFixed(4)}`;
+        }
         
         results.largeur_cm = rawLargeur * corrX;
         results.hauteur_cm = rawHauteur * corrY;
         
-        console.log(`   🔧 [CORRECTION OPTIMALE] Application du facteur:`);
+        console.log(`   🔧 [CORRECTION OPTIMALE] Mode: ${correctionMode}`);
         console.log(`      Confiance globale: ${(optimalCorrection.globalConfidence * 100).toFixed(0)}%`);
         console.log(`      Correction X: ×${corrX.toFixed(4)} | Y: ×${corrY.toFixed(4)}`);
         console.log(`      Largeur: ${rawLargeur.toFixed(2)} → ${results.largeur_cm.toFixed(2)} cm`);
@@ -1794,8 +1869,10 @@ export const ImageMeasurementCanvas: React.FC<ImageMeasurementCanvasProps> = ({
         // Stocker les valeurs brutes pour référence
         (results as any).largeur_cm_brute = rawLargeur;
         (results as any).hauteur_cm_brute = rawHauteur;
-        (results as any).correction_appliquee = optimalCorrection.finalCorrection;
+        (results as any).correction_appliquee_X = corrX;
+        (results as any).correction_appliquee_Y = corrY;
         (results as any).correction_confidence = optimalCorrection.globalConfidence;
+        (results as any).correction_mode = correctionMode;
       }
       
       // Surface = largeur_cm × hauteur_cm
@@ -2754,12 +2831,20 @@ export const ImageMeasurementCanvas: React.FC<ImageMeasurementCanvasProps> = ({
       },
       measurementPoints: points,
       exclusionZones,
-      measurements
+      measurements,
+      // 🎯 ARUCO: Inclure les corners de référence pour pouvoir les redessiner
+      referenceCorners: referenceCorners || undefined,
+      // 📐 Dimensions de l'image pour convertir % → pixels plus tard
+      imageDimensions: imageDimensions,
+      // 🎯 Taille du marqueur ArUco
+      markerSizeCm: markerSizeCm
     };
 
     console.log('✅ [Canvas] Validation avec image annotée:', annotatedImageBase64 ? 'OUI' : 'NON');
+    console.log('   📍 referenceCorners:', referenceCorners ? 'OUI' : 'NON');
+    console.log('   📐 imageDimensions:', imageDimensions);
     onValidate?.(annotations);
-  }, [imageUrl, calibration, pixelPerCm, points, exclusionZones, measurements, onValidate, exportAnnotatedImage]);
+  }, [imageUrl, calibration, pixelPerCm, points, exclusionZones, measurements, onValidate, exportAnnotatedImage, referenceCorners, imageDimensions, markerSizeCm]);
 
   // ============================================================================
   // RENDER
@@ -3673,8 +3758,106 @@ export const ImageMeasurementCanvas: React.FC<ImageMeasurementCanvasProps> = ({
                       {arucoAnalysis.bandAnalysis.validationMessage}
                     </div>
                     
-                    {/* Facteur de correction suggéré */}
-                    {!arucoAnalysis.bandAnalysis.isValid && arucoAnalysis.bandAnalysis.suggestedCorrection !== 1 && (
+                    {/* 🆕 Facteurs de correction X et Y séparés */}
+                    {optimalCorrection && (
+                      <div style={{ 
+                        marginTop: 8, 
+                        padding: '8px 12px',
+                        background: 'linear-gradient(135deg, rgba(82,196,26,0.2) 0%, rgba(24,144,255,0.2) 100%)',
+                        borderRadius: 6,
+                        border: '1px solid rgba(255,255,255,0.2)'
+                      }}>
+                        <div style={{ 
+                          fontSize: 11, 
+                          fontWeight: 'bold',
+                          marginBottom: 6,
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          alignItems: 'center'
+                        }}>
+                          <span>🔧 Corrections Calculées</span>
+                          <span style={{ 
+                            fontSize: 9, 
+                            opacity: 0.8,
+                            background: 'rgba(0,0,0,0.3)',
+                            padding: '2px 6px',
+                            borderRadius: 4
+                          }}>
+                            Confiance: {(optimalCorrection.globalConfidence * 100).toFixed(0)}%
+                          </span>
+                        </div>
+                        
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                          {/* Correction X (Largeur) */}
+                          <div style={{ 
+                            textAlign: 'center',
+                            padding: '6px 8px',
+                            background: 'rgba(24,144,255,0.3)',
+                            borderRadius: 4
+                          }}>
+                            <div style={{ fontSize: 9, opacity: 0.8, marginBottom: 2 }}>
+                              ↔️ Largeur (X)
+                            </div>
+                            <div style={{ 
+                              fontSize: 16, 
+                              fontWeight: 'bold',
+                              color: optimalCorrection.correctionX < 0.98 ? '#ff7875' : 
+                                     optimalCorrection.correctionX > 1.02 ? '#95de64' : '#ffffff'
+                            }}>
+                              ×{optimalCorrection.correctionX?.toFixed(4) || '1.0000'}
+                            </div>
+                            {optimalCorrection.correctionXSansBandes !== undefined && (
+                              <div style={{ fontSize: 8, opacity: 0.6, marginTop: 2 }}>
+                                Sans bandes: ×{optimalCorrection.correctionXSansBandes.toFixed(4)}
+                              </div>
+                            )}
+                          </div>
+                          
+                          {/* Correction Y (Hauteur) */}
+                          <div style={{ 
+                            textAlign: 'center',
+                            padding: '6px 8px',
+                            background: 'rgba(82,196,26,0.3)',
+                            borderRadius: 4
+                          }}>
+                            <div style={{ fontSize: 9, opacity: 0.8, marginBottom: 2 }}>
+                              ↕️ Hauteur (Y)
+                            </div>
+                            <div style={{ 
+                              fontSize: 16, 
+                              fontWeight: 'bold',
+                              color: optimalCorrection.correctionY < 0.98 ? '#ff7875' : 
+                                     optimalCorrection.correctionY > 1.02 ? '#95de64' : '#ffffff'
+                            }}>
+                              ×{optimalCorrection.correctionY?.toFixed(4) || '1.0000'}
+                            </div>
+                            {optimalCorrection.correctionYSansBandes !== undefined && (
+                              <div style={{ fontSize: 8, opacity: 0.6, marginTop: 2 }}>
+                                Sans bandes: ×{optimalCorrection.correctionYSansBandes.toFixed(4)}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                        
+                        {/* Info sur rotZ si significatif */}
+                        {arucoAnalysis.pose && Math.abs(arucoAnalysis.pose.rotZ) > 2 && (
+                          <div style={{ 
+                            marginTop: 6, 
+                            fontSize: 9, 
+                            opacity: 0.7,
+                            textAlign: 'center',
+                            padding: '4px',
+                            background: 'rgba(250,173,20,0.2)',
+                            borderRadius: 4
+                          }}>
+                            ⚠️ rotZ={arucoAnalysis.pose.rotZ}° → mélange X/Y corrigé (×{Math.cos(Math.abs(arucoAnalysis.pose.rotZ) * Math.PI / 180).toFixed(4)})
+                          </div>
+                        )}
+                      </div>
+                    )}
+                    
+                    {/* Ancien affichage simplifié (fallback si pas optimalCorrection) */}
+                    {!optimalCorrection && !arucoAnalysis.bandAnalysis.isValid && arucoAnalysis.bandAnalysis.suggestedCorrection !== 1 && (
                       <div style={{ 
                         marginTop: 6, 
                         fontSize: 10, 
@@ -4259,7 +4442,7 @@ export const ImageMeasurementCanvas: React.FC<ImageMeasurementCanvasProps> = ({
                   y={adjustableRefBox.y - 28}
                   text={isRefSelected 
                     ? `⚠️ AJUSTEZ ce rectangle sur la VRAIE ${isArucoMode ? 'référence ArUco' : 'feuille A4'} !`
-                    : `📐 ${isArucoMode ? 'ArUco MAGENTA' : 'Feuille A4'} (${referenceRealSize.width}×${referenceRealSize.height}cm) - CLIQUEZ pour ajuster`}
+                    : `📐 ${isArucoMode ? 'ArUco MAGENTA' : 'Feuille A4'} (${isArucoMode ? markerSizeCm : referenceRealSize.width}×${isArucoMode ? markerSizeCm : referenceRealSize.height}cm) - CLIQUEZ pour ajuster`}
                   fontSize={11}
                   fontStyle="bold"
                   fill={isRefSelected ? "#ff4d4f" : "#52c41a"}
@@ -4387,7 +4570,7 @@ export const ImageMeasurementCanvas: React.FC<ImageMeasurementCanvasProps> = ({
                 <KonvaText
                   x={referenceCorners.topLeft.x}
                   y={referenceCorners.topLeft.y - 40}
-                  text={`📐 ${isArucoMode ? 'ArUco MAGENTA' : 'Feuille A4'} (${referenceRealSize.width}×${referenceRealSize.height}cm)`}
+                  text={`📐 ${isArucoMode ? 'ArUco MAGENTA' : 'Feuille A4'} (${isArucoMode ? markerSizeCm : referenceRealSize.width}×${isArucoMode ? markerSizeCm : referenceRealSize.height}cm)`}
                   fontSize={12}
                   fontStyle="bold"
                   fill="#52c41a"

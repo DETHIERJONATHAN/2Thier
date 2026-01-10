@@ -181,6 +181,12 @@ const SmartCameraMobile: React.FC<SmartCameraMobileProps> = ({
     inputRef.current?.click();
   }, [isAvailable, hasPermission, requestPermission]);
 
+  // Ouvrir la galerie (sans capture="environment")
+  const galleryInputRef = useRef<HTMLInputElement>(null);
+  const openGallery = () => {
+    galleryInputRef.current?.click();
+  };
+
   const canValidate = photos.length >= minPhotos;
   const maxPhotosEffective = maxPhotos ?? Number.POSITIVE_INFINITY;
   const canAddMore = photos.length < maxPhotosEffective;
@@ -210,7 +216,7 @@ const SmartCameraMobile: React.FC<SmartCameraMobileProps> = ({
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <Title level={4} style={{ color: '#fff', margin: 0 }}>
-              📸 SmartCamera
+              🤖 IA Photo
             </Title>
             {/* 📱 Indicateur gyroscope discret - juste un petit point coloré */}
             {hasPermission && (
@@ -319,11 +325,11 @@ const SmartCameraMobile: React.FC<SmartCameraMobileProps> = ({
               alignItems: 'center',
               justifyContent: 'center'
             }}
-            onClick={openCamera}
+            onClick={openGallery}
           >
             <div style={{ textAlign: 'center', color: '#888' }}>
               <PlusOutlined style={{ fontSize: 32, marginBottom: 8 }} />
-              <div>Ajouter photo(s)</div>
+              <div>📁 Charger depuis galerie</div>
             </div>
           </Card>
         )}
@@ -335,6 +341,16 @@ const SmartCameraMobile: React.FC<SmartCameraMobileProps> = ({
         type="file"
         accept="image/*"
         capture="environment"
+        multiple
+        onChange={handleFileChange}
+        style={{ display: 'none' }}
+      />
+
+      {/* Input file caché - OUVRE LA GALERIE */}
+      <input
+        ref={galleryInputRef}
+        type="file"
+        accept="image/*"
         multiple
         onChange={handleFileChange}
         style={{ display: 'none' }}
@@ -368,7 +384,7 @@ const SmartCameraMobile: React.FC<SmartCameraMobileProps> = ({
             height: 50
           }}
         >
-          {isProcessing ? 'Traitement...' : 'Ajouter photo(s)'}
+          {isProcessing ? 'Traitement...' : '📷 Prendre une photo'}
         </Button>
 
         <Button
@@ -399,9 +415,12 @@ const SmartCameraMobile: React.FC<SmartCameraMobileProps> = ({
         }}>
           <CameraOutlined style={{ fontSize: 64, marginBottom: 16 }} />
           <div style={{ fontSize: 18 }}>
-            Appuyez sur "Ajouter photo(s)"
+            📷 "Prendre une photo" = Caméra
           </div>
-          <div style={{ fontSize: 14, marginTop: 8 }}>
+          <div style={{ fontSize: 16, marginTop: 8 }}>
+            📁 Carré en pointillés = Galerie
+          </div>
+          <div style={{ fontSize: 14, marginTop: 12, color: '#888' }}>
             Minimum {minPhotos} photo(s) requise(s)
           </div>
           {maxPhotos === undefined && (

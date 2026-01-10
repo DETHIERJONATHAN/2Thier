@@ -98,6 +98,7 @@ interface MobileFullscreenCanvasProps {
   measurementObjectConfig?: any;
   allPhotos?: any[];
   arucoAnalysis?: any; // 🔬 Analyse complète ArUco
+  optimalCorrection?: any; // 🔧 CORRECTION OPTIMALE: Facteur calculé par RANSAC
 }
 
 const MobileFullscreenCanvas: React.FC<MobileFullscreenCanvasProps> = ({
@@ -117,7 +118,8 @@ const MobileFullscreenCanvas: React.FC<MobileFullscreenCanvasProps> = ({
   referenceConfig,
   measurementObjectConfig,
   allPhotos,
-  arucoAnalysis // 🔬 Analyse complète ArUco
+  arucoAnalysis, // 🔬 Analyse complète ArUco
+  optimalCorrection // 🔧 CORRECTION OPTIMALE
 }) => {
   const containerRef = React.useRef<HTMLDivElement>(null);
   const [viewportSize, setViewportSize] = React.useState({ width: 0, height: 0 });
@@ -297,6 +299,9 @@ export const ImageMeasurementPreview: React.FC<ImageMeasurementPreviewProps> = (
   const { api } = useAuthenticatedApi();
   const isMobile = useIsMobile(); // 📱 Détection mobile
 
+  // 🔄 SESSION KEY: Clé unique qui change à chaque ouverture pour forcer le reset des états
+  const [sessionKey, setSessionKey] = useState(0);
+
   // State
   const [step, setStep] = useState<WorkflowStep>('loading');
   const [referenceConfig, setReferenceConfig] = useState<OrganizationMeasurementReferenceConfig | null>(null);
@@ -312,6 +317,9 @@ export const ImageMeasurementPreview: React.FC<ImageMeasurementPreviewProps> = (
   
   // 🆕 Dimensions réelles de la référence (pour recalibration)
   const [referenceRealSize, setReferenceRealSize] = useState<{ width: number; height: number }>({ width: 21, height: 29.7 });
+  
+  // 🎯 CONFIGURATION ARUCO: Taille du marqueur depuis les paramètres TreeBranchLeaf
+  const [markerSizeCm, setMarkerSizeCm] = useState<number>(16.8); // Valeur par défaut, sera mise à jour depuis l'API
   
   // 🔧 CORRECTION OPTIMALE: Facteur de correction calculé par l'API (RANSAC + bands + reprojection)
   const [optimalCorrection, setOptimalCorrection] = useState<{
@@ -344,16 +352,54 @@ export const ImageMeasurementPreview: React.FC<ImageMeasurementPreviewProps> = (
   // 🔒 Flag pour éviter de re-suggérer les points après l'initialisation
   const [hasInitialized, setHasInitialized] = useState(false);
 
+  // 🎯 CHARGEMENT CONFIG MARQUEUR: Charger la taille du marqueur ArUco depuis les paramètres
+  useEffect(() => {
+    const loadMarkerConfig = async () => {
+      if (!api) return;
+      try {
+        const response = await api.get('/api/settings/ai-measure');
+        if (response.success && response.data?.markerSizeCm) {
+          const sizeCm = response.data.markerSizeCm;
+          console.log(`🎯 [Preview] Configuration marqueur chargée depuis API: ${sizeCm}cm`);
+          setMarkerSizeCm(sizeCm);
+        } else {
+          console.log('🎯 [Preview] Pas de config marqueur, utilisation valeur par défaut: 16.8cm');
+        }
+      } catch (error) {
+        console.warn('[Preview] Erreur chargement config marqueur:', error);
+      }
+    };
+    loadMarkerConfig();
+  }, [api]);
+
+  // 🔄 RESET CRITICAL: Réinitialiser les états quand le composant redevient visible
+  // Ceci garantit que les données ArUco sont correctement réinitialisées à chaque ouverture
+  useEffect(() => {
+    if (visible) {
+      console.log('🔄 [Preview] RESET: Composant visible, réinitialisation des états ArUco');
+      // Reset des états pour forcer la réinitialisation avec les nouvelles données
+      setMultiPhotoAnalysis(null);
+      setOptimalCorrection(null);
+      setHasInitialized(false);
+      setStep('loading');
+      // 🔄 Incrémenter la clé de session pour forcer le re-render
+      setSessionKey(prev => prev + 1);
+    }
+  }, [visible]);
+
   // 🎯 ULTRA-PRECISION: Initialiser multiPhotoAnalysis avec les props fusedCorners si disponibles
   useEffect(() => {
+    // Skip si pas visible
+    if (!visible) return;
+    
     if (fusedCorners && homographyReady && !multiPhotoAnalysis?.fusedCorners) {
-      console.log('🎯 [Preview] Initialisation multiPhotoAnalysis avec fusedCorners pré-détectés !');
+      console.log(`🎯 [Preview] Initialisation multiPhotoAnalysis avec fusedCorners pré-détectés ! (session ${sessionKey})`);
       console.log('   📍 fusedCorners:', fusedCorners);
       
-      // 🎯 ARUCO MAGENTA: Forcer les dimensions 18×18cm au lieu de A4 (21×29.7cm)
-      // Le marqueur ArUco MAGENTA fait 18cm × 18cm (6cm carré + 3cm blanc + 3cm noir de chaque côté)
-      console.log('   📏 ARUCO détecté → referenceRealSize = 18×18cm');
-      setReferenceRealSize({ width: 18, height: 18 });
+      // 🎯 ARUCO MAGENTA: Utiliser la taille configurée dans les paramètres TreeBranchLeaf
+      // Valeur chargée depuis /api/settings/ai-measure (défaut: 16.8cm)
+      console.log(`   📏 ARUCO détecté → referenceRealSize = ${markerSizeCm}×${markerSizeCm}cm (depuis config)`);
+      setReferenceRealSize({ width: markerSizeCm, height: markerSizeCm });
       
       // Trouver les infos ultraPrecision dans allPhotos si disponibles
       const photoWithAruco = allPhotos?.find(p => (p.metadata as any)?.arucoDetected);
@@ -391,11 +437,14 @@ export const ImageMeasurementPreview: React.FC<ImageMeasurementPreviewProps> = (
       console.log('🚀 [Preview] Passage direct à l\'étape adjusting (ArUco pré-détecté)');
       setStep('adjusting');
     }
-  }, [fusedCorners, homographyReady, allPhotos, multiPhotoAnalysis?.fusedCorners]);
+  }, [visible, sessionKey, fusedCorners, homographyReady, allPhotos, multiPhotoAnalysis?.fusedCorners, markerSizeCm]);
 
-  // 🔧 EXTRACTION SÉPARÉE de optimalCorrection (se déclenche quand allPhotos change)
+  // 🔧 EXTRACTION SÉPARÉE de optimalCorrection (se déclenche quand allPhotos change ou visible change)
   useEffect(() => {
-    console.log(`🔍 [Preview] useEffect optimalCorrection - allPhotos.length=${allPhotos?.length || 0}, optimalCorrection=${optimalCorrection ? 'SET' : 'null'}`);
+    // Skip si pas visible
+    if (!visible) return;
+    
+    console.log(`🔍 [Preview] useEffect optimalCorrection (session ${sessionKey}) - allPhotos.length=${allPhotos?.length || 0}, optimalCorrection=${optimalCorrection ? 'SET' : 'null'}`);
     
     if (!allPhotos?.length) {
       console.log(`   ⚠️ Pas de photos, skip`);
@@ -426,7 +475,7 @@ export const ImageMeasurementPreview: React.FC<ImageMeasurementPreviewProps> = (
     } else {
       console.log(`   ⚠️ Aucune photo n'a optimalCorrection dans ses metadata`);
     }
-  }, [allPhotos, optimalCorrection]);
+  }, [visible, sessionKey, allPhotos, optimalCorrection]);
 
   // 🆕 Callback quand l'utilisateur ajuste manuellement le rectangle de référence
   // Reçoit maintenant pixelPerCmX et pixelPerCmY séparés pour gérer la perspective
@@ -580,19 +629,26 @@ export const ImageMeasurementPreview: React.FC<ImageMeasurementPreviewProps> = (
       
       console.log('🚀 [ImageMeasurementPreview] runWorkflow starting...');
 
-      // 1. Charger config de référence (pour connaître les dimensions de la référence A4)
-      const config = await loadReferenceConfig();
-      if (config) {
-        console.log('📐 [ImageMeasurementPreview] Config référence trouvée:', config.referenceType);
-        // Stocker les dimensions réelles
-        if (config.referenceType === 'a4') {
-          setReferenceRealSize({ width: 21, height: 29.7 });
-        } else if (config.referenceType === 'card') {
-          setReferenceRealSize({ width: 8.56, height: 5.398 });
-        }
+      // 🎯 ARUCO PRIORITY: Si ArUco est détecté (fusedCorners présent), NE PAS écraser avec A4
+      const hasArucoData = fusedCorners && homographyReady;
+      if (hasArucoData) {
+        console.log('🎯 [ImageMeasurementPreview] ArUco détecté, SKIP chargement config A4 (garder dimensions ArUco)');
+        console.log(`   📏 referenceRealSize conservé: ${markerSizeCm}×${markerSizeCm}cm`);
       } else {
-        console.log('📐 [ImageMeasurementPreview] Pas de config référence, mode par défaut (A4)');
-        setReferenceRealSize({ width: 21, height: 29.7 });
+        // 1. Charger config de référence (pour connaître les dimensions de la référence A4)
+        const config = await loadReferenceConfig();
+        if (config) {
+          console.log('📐 [ImageMeasurementPreview] Config référence trouvée:', config.referenceType);
+          // Stocker les dimensions réelles
+          if (config.referenceType === 'a4') {
+            setReferenceRealSize({ width: 21, height: 29.7 });
+          } else if (config.referenceType === 'card') {
+            setReferenceRealSize({ width: 8.56, height: 5.398 });
+          }
+        } else {
+          console.log('📐 [ImageMeasurementPreview] Pas de config référence, mode par défaut (A4)');
+          setReferenceRealSize({ width: 21, height: 29.7 });
+        }
       }
 
       // 2. Vérifier que l'image est disponible

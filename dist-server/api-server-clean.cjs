@@ -15243,7 +15243,6 @@ router19.get("/ai-measure", async (req2, res) => {
     console.log("[AI-MEASURE] R\xE9cup\xE9ration config pour organisation:", organizationId);
     const config = await db.systemConfig.findFirst({
       where: {
-        organizationId,
         key: "ai_measure_marker"
       }
     });
@@ -15286,24 +15285,22 @@ router19.post("/ai-measure", async (req2, res) => {
         error: "Taille du marqueur invalide (doit \xEAtre entre 5 et 50 cm)"
       });
     }
-    console.log("[AI-MEASURE] Sauvegarde config pour organisation:", organizationId);
+    console.log("[AI-MEASURE] Sauvegarde config (globale)");
     console.log("[AI-MEASURE] Nouvelles valeurs:", { markerSizeCm, boardSizeCm });
     const config = await db.systemConfig.upsert({
       where: {
-        organizationId_key: {
-          organizationId,
-          key: "ai_measure_marker"
-        }
+        key: "ai_measure_marker"
       },
       update: {
-        value: { markerSizeCm, boardSizeCm },
+        value: JSON.stringify({ markerSizeCm, boardSizeCm }),
         updatedAt: /* @__PURE__ */ new Date()
       },
       create: {
-        organizationId,
+        id: `system-config-ai-measure-marker`,
         key: "ai_measure_marker",
-        value: { markerSizeCm, boardSizeCm },
-        description: "Configuration du marqueur ArUco pour IA Mesure"
+        value: JSON.stringify({ markerSizeCm, boardSizeCm }),
+        description: "Configuration du marqueur ArUco pour IA Mesure",
+        updatedAt: /* @__PURE__ */ new Date()
       }
     });
     console.log("[AI-MEASURE] Config sauvegard\xE9e:", config.id);
@@ -60338,6 +60335,9 @@ var sharpModule = __toESM(require("sharp"), 1);
 
 // src/lib/marker-detector.ts
 var _markerSizeCm = 16.8;
+function getMarkerSize() {
+  return _markerSizeCm;
+}
 var MARKER_SPECS = {
   get markerSize() {
     return _markerSizeCm;
@@ -60470,7 +60470,7 @@ var MarkerDetector = class {
       }
     }
     const orderedCorners = this.orderCornersClockwise(finalCorners);
-    const innerOffset = 6 / 18;
+    const innerOffset = MARKER_SPECS.ratios.innerToOuter;
     const [tl, tr, br, bl] = orderedCorners;
     const innerCorners = [
       {
@@ -60902,17 +60902,19 @@ var MarkerDetector = class {
   /**
    * 🎯 DÉTECTION COMPLÈTE UTILISANT TOUS LES REPÈRES DE L'ARUCO
    * 
-   * L'ArUco 18cm a cette structure:
-   * - Bordure NOIRE extérieure (0-3cm et 15-18cm)
-   * - Bandes BLANCHES (3-6cm et 12-15cm)  
-   * - Pattern ARUCO central NOIR (6-12cm)
+   * Structure du marqueur (6 bandes égales, taille configurable):
+   * - Bordure NOIRE extérieure (bandes 1 et 6, de 0 à 1/6 et 5/6 à 1)
+   * - Bandes BLANCHES (bandes 2 et 5, de 1/6 à 1/3 et 2/3 à 5/6)  
+   * - Pattern ARUCO central NOIR (bandes 3+4, de 1/3 à 2/3)
    * - 4 coins MAGENTA aux extrémités (avec centre BLANC)
    * 
-   * Ratios clés: 1:2:3 (6cm:12cm:18cm)
+   * Ratios clés (CONSTANTS): 1/6, 1/3, 2/3, 5/6
    */
   detectFromMagentaOnly(data, width, height) {
+    const size = MARKER_SPECS.markerSize;
+    const band = (size / 6).toFixed(1);
     console.log("\u{1F3AF} [ArUco] D\xE9tection COMPL\xC8TE avec tous les rep\xE8res...");
-    console.log("   Structure: 18cm total = 3cm noir + 3cm blanc + 6cm pattern + 3cm blanc + 3cm noir");
+    console.log(`   Structure: ${size}cm = ${band}cm noir + ${band}cm blanc + ${(size / 3).toFixed(1)}cm pattern + ${band}cm blanc + ${band}cm noir`);
     const magentaPixels = this.findAllMagentaPixels(data, width, height);
     console.log(`\u{1F49C} ${magentaPixels.length} pixels magenta d\xE9tect\xE9s`);
     if (magentaPixels.length < 10) {
@@ -60944,11 +60946,11 @@ var MarkerDetector = class {
       console.log("\u274C Impossible d'ordonner les coins magenta");
       return [];
     }
-    console.log("\u{1F50D} [ArUco] Coins MAGENTA ordonn\xE9s (TL, TR, BR, BL) - EXT\xC9RIEURS 18cm:");
+    console.log(`\u{1F50D} [ArUco] Coins MAGENTA ordonn\xE9s (TL, TR, BR, BL) - EXT\xC9RIEURS ${MARKER_SPECS.markerSize}cm:`);
     orderedMagentaCorners.forEach((p, i) => console.log(`   [${["TL", "TR", "BR", "BL"][i]}] x=${p.x.toFixed(1)}, y=${p.y.toFixed(1)}`));
     const validation = this.validateArucoGeometry(data, width, height, orderedMagentaCorners);
     console.log(`\u{1F4D0} [ArUco] Validation g\xE9om\xE9trique: ${validation.valid ? "\u2705" : "\u274C"} (score: ${validation.score.toFixed(2)})`);
-    const innerOffset = 6 / 18;
+    const innerOffset = MARKER_SPECS.ratios.innerToOuter;
     const [tl, tr, br, bl] = orderedMagentaCorners;
     const innerCorners = [
       // TL intérieur = TL + 1/3 vers TR + 1/3 vers BL
@@ -60972,16 +60974,17 @@ var MarkerDetector = class {
         y: bl.y + (br.y - bl.y) * innerOffset + (tl.y - bl.y) * innerOffset
       }
     ];
-    console.log("\u{1F50D} [ArUco] Coins INT\xC9RIEURS calcul\xE9s (pattern 6cm\xD76cm):");
+    const centerSize = (MARKER_SPECS.markerSize / 3).toFixed(1);
+    console.log(`\u{1F50D} [ArUco] Coins INT\xC9RIEURS calcul\xE9s (pattern ${centerSize}cm \xD7 ${centerSize}cm):`);
     innerCorners.forEach((p, i) => console.log(`   [${["TL", "TR", "BR", "BL"][i]}] x=${p.x.toFixed(1)}, y=${p.y.toFixed(1)}`));
     const measurements = this.calculateMeasurements(orderedMagentaCorners);
     const finalScore = Math.min(0.95, 0.6 + validation.score * 0.35);
     return [{
       id: 0,
       corners: innerCorners,
-      // Coins du pattern INTÉRIEUR 6cm pour l'homographie du pattern
+      // Coins du pattern INTÉRIEUR (1/3) pour l'homographie du pattern
       magentaPositions: orderedMagentaCorners,
-      // Coins EXTÉRIEURS 18cm pour l'affichage visuel!
+      // Coins EXTÉRIEURS pour l'affichage visuel!
       size: measurements.avgSidePx,
       center: measurements.center,
       score: finalScore,
@@ -61124,7 +61127,7 @@ var MarkerDetector = class {
       { x: minX, y: maxY }
       // BL
     ];
-    const innerOffset = 6 / 18;
+    const innerOffset = MARKER_SPECS.ratios.innerToOuter;
     const [tl, tr, br, bl] = outerCorners;
     const innerCorners = [
       {
@@ -62119,8 +62122,8 @@ function detectPatternGridCorners(data, width, height, corners) {
   const points = [];
   const [tl, tr, br, bl] = corners;
   const markerSize = MARKER_SPECS.markerSize;
-  const patternStart = 6 / markerSize;
-  const patternEnd = 12 / markerSize;
+  const patternStart = MARKER_SPECS.ratios.innerToOuter;
+  const patternEnd = MARKER_SPECS.ratios.whiteToOuter;
   const cellSize = 1 / markerSize;
   for (let row = 0; row <= 6; row++) {
     for (let col = 0; col <= 6; col++) {
@@ -62454,6 +62457,306 @@ function solveLinearSystem8x8(A, b) {
   }
   return x;
 }
+function analyzeMarkerComplete(marker, imageWidth, imageHeight, focalLengthPx = 800) {
+  const markerSizeCm = getMarkerSize();
+  const corners = marker.magentaPositions?.length === 4 ? marker.magentaPositions : marker.corners;
+  const side1 = Math.sqrt((corners[1].x - corners[0].x) ** 2 + (corners[1].y - corners[0].y) ** 2);
+  const side2 = Math.sqrt((corners[2].x - corners[1].x) ** 2 + (corners[2].y - corners[1].y) ** 2);
+  const side3 = Math.sqrt((corners[3].x - corners[2].x) ** 2 + (corners[3].y - corners[2].y) ** 2);
+  const side4 = Math.sqrt((corners[0].x - corners[3].x) ** 2 + (corners[0].y - corners[3].y) ** 2);
+  const avgSizePx = (side1 + side2 + side3 + side4) / 4;
+  const pose = estimatePoseFromCorners(corners);
+  const depthCm = markerSizeCm * focalLengthPx / avgSizePx;
+  const depthConfidence = avgSizePx > 50 ? Math.min(0.95, avgSizePx / 200) : 0.5;
+  const poseQuality = calculatePoseQuality(pose);
+  const homographyQuality = (marker.homographyQuality || marker.score) * 100;
+  const detectionQuality = marker.magentaFound / 4 * 100;
+  const overallQuality = (poseQuality + homographyQuality + detectionQuality) / 3;
+  const qualityRating = overallQuality >= 85 ? "excellent" : overallQuality >= 70 ? "good" : overallQuality >= 50 ? "acceptable" : "poor";
+  const bandAnalysis = analyzeMarkerBands(marker, markerSizeCm);
+  return {
+    markerId: marker.id,
+    markerSizeCm,
+    markerSizePx: avgSizePx,
+    pose,
+    depth: {
+      estimatedCm: Math.round(depthCm),
+      estimatedM: parseFloat((depthCm / 100).toFixed(2)),
+      confidence: depthConfidence,
+      method: "focal"
+    },
+    quality: {
+      overall: Math.round(overallQuality),
+      homographyQuality: Math.round(homographyQuality),
+      poseQuality: Math.round(poseQuality),
+      detectionQuality: Math.round(detectionQuality),
+      rating: qualityRating
+    },
+    bandAnalysis,
+    corners,
+    extendedPoints: marker.extendedPoints
+  };
+}
+function estimatePoseFromCorners(corners) {
+  const [tl, tr, br, bl] = corners;
+  const topWidth = Math.sqrt((tr.x - tl.x) ** 2 + (tr.y - tl.y) ** 2);
+  const bottomWidth = Math.sqrt((br.x - bl.x) ** 2 + (br.y - bl.y) ** 2);
+  const ratioX = topWidth / (bottomWidth || 1);
+  const rotX = Math.round(Math.atan2(ratioX - 1, 0.5) * 180 / Math.PI);
+  const leftHeight = Math.sqrt((bl.x - tl.x) ** 2 + (bl.y - tl.y) ** 2);
+  const rightHeight = Math.sqrt((br.x - tr.x) ** 2 + (br.y - tr.y) ** 2);
+  const ratioY = leftHeight / (rightHeight || 1);
+  const rotY = Math.round(Math.atan2(ratioY - 1, 0.5) * 180 / Math.PI);
+  const rotZ = Math.round(Math.atan2(tr.y - tl.y, tr.x - tl.x) * 180 / Math.PI);
+  return { rotX, rotY, rotZ };
+}
+function calculatePoseQuality(pose) {
+  const maxAcceptableAngle = 45;
+  const penaltyX = Math.min(100, Math.abs(pose.rotX) * 2);
+  const penaltyY = Math.min(100, Math.abs(pose.rotY) * 2);
+  const penaltyZ = Math.min(50, Math.abs(pose.rotZ));
+  return Math.max(0, 100 - penaltyX - penaltyY - penaltyZ);
+}
+function analyzeMarkerBands(marker, markerSizeCm) {
+  if (!marker.extendedPoints || marker.extendedPoints.detectedCount < 8) {
+    return {
+      enabled: false,
+      bandsDetected: 0,
+      totalPoints: 0,
+      validPoints: 0,
+      transitionRatios: [],
+      suggestedCorrection: 1,
+      correctionConfidence: 0,
+      validationMessage: "Pas assez de points de transition d\xE9tect\xE9s",
+      isValid: false
+    };
+  }
+  const ext = marker.extendedPoints;
+  const corners = ext.corners;
+  const transitions = MARKER_SPECS.transitions;
+  const transitionRatios = [];
+  const errors = [];
+  const edges = [
+    { name: "top", transitions: ext.topTransitions, start: corners[0], end: corners[1] },
+    { name: "right", transitions: ext.rightTransitions, start: corners[1], end: corners[2] },
+    { name: "bottom", transitions: ext.bottomTransitions, start: corners[3], end: corners[2] },
+    { name: "left", transitions: ext.leftTransitions, start: corners[0], end: corners[3] }
+  ];
+  for (const edge of edges) {
+    const edgeLength = Math.sqrt(
+      (edge.end.x - edge.start.x) ** 2 + (edge.end.y - edge.start.y) ** 2
+    );
+    for (let i = 0; i < edge.transitions.length && i < transitions.length; i++) {
+      const transitionPoint = edge.transitions[i];
+      const expectedPositionCm = transitions[i];
+      const expectedRatio = expectedPositionCm / markerSizeCm;
+      const distToStart = Math.sqrt(
+        (transitionPoint.x - edge.start.x) ** 2 + (transitionPoint.y - edge.start.y) ** 2
+      );
+      const measuredRatio = distToStart / edgeLength;
+      const error = Math.abs((measuredRatio - expectedRatio) / expectedRatio) * 100;
+      errors.push(error);
+      const pointData = ext.allPoints.find(
+        (p) => p.type === "transition" && Math.abs(p.pixel.x - transitionPoint.x) < 5 && Math.abs(p.pixel.y - transitionPoint.y) < 5
+      );
+      transitionRatios.push({
+        expectedRatio,
+        measuredRatio,
+        error,
+        confidence: pointData?.confidence || 0.5,
+        edge: edge.name,
+        positionCm: expectedPositionCm
+      });
+    }
+  }
+  const validPoints = ext.allPoints.filter((p) => p.confidence > 0.6).length;
+  const avgError = errors.length > 0 ? errors.reduce((a, b) => a + b, 0) / errors.length : 0;
+  let suggestedCorrection = 1;
+  let signedErrorPercent = 0;
+  if (transitionRatios.length >= 4) {
+    const ratios = transitionRatios.map((tr) => tr.measuredRatio / tr.expectedRatio);
+    const avgRatio = ratios.reduce((a, b) => a + b, 0) / ratios.length;
+    signedErrorPercent = (avgRatio - 1) * 100;
+    suggestedCorrection = 1 / avgRatio;
+    console.log(`\u{1F4CA} [BANDS] Ratios individuels: ${ratios.map((r) => r.toFixed(3)).join(", ")}`);
+    console.log(`\u{1F4CA} [BANDS] Ratio moyen mesur\xE9/attendu: ${avgRatio.toFixed(4)}`);
+    console.log(`\u{1F4CA} [BANDS] Biais syst\xE9matique: ${signedErrorPercent > 0 ? "+" : ""}${signedErrorPercent.toFixed(2)}%`);
+    console.log(`\u{1F4CA} [BANDS] Correction sugg\xE9r\xE9e: \xD7${suggestedCorrection.toFixed(4)}`);
+  }
+  const correctionConfidence = validPoints >= 12 ? 0.9 : validPoints >= 8 ? 0.7 : 0.4;
+  const isValid = avgError < 5 && validPoints >= 8;
+  let validationMessage = "";
+  if (avgError < 2) {
+    validationMessage = "\u2705 Excellent ! Calibration tr\xE8s pr\xE9cise";
+  } else if (avgError < 5) {
+    validationMessage = "\u2705 Bon ! Calibration acceptable";
+  } else if (avgError < 10) {
+    validationMessage = "\u26A0\uFE0F Calibration approximative - correction sugg\xE9r\xE9e";
+  } else {
+    validationMessage = "\u274C Calibration incorrecte - v\xE9rifier le marqueur";
+  }
+  return {
+    enabled: true,
+    bandsDetected: Math.min(4, Math.floor(transitionRatios.length / 4)),
+    totalPoints: ext.allPoints.length,
+    validPoints,
+    transitionRatios,
+    suggestedCorrection: parseFloat(suggestedCorrection.toFixed(4)),
+    correctionConfidence,
+    validationMessage,
+    isValid
+  };
+}
+function calculateOptimalCorrection(analysis, ultraPrecisionResult, gyroscopeData) {
+  console.log(`
+${"=".repeat(60)}`);
+  console.log(`\u{1F52C} CALCUL CORRECTION OPTIMALE`);
+  console.log(`${"=".repeat(60)}`);
+  console.log(`\u{1F4CA} bandAnalysis.enabled: ${analysis.bandAnalysis.enabled}`);
+  console.log(`\u{1F4CA} bandAnalysis.transitionRatios.length: ${analysis.bandAnalysis.transitionRatios.length}`);
+  console.log(`\u{1F4CA} bandAnalysis.suggestedCorrection: ${analysis.bandAnalysis.suggestedCorrection}`);
+  console.log(`\u{1F4CA} ultraPrecision: ${ultraPrecisionResult ? `${ultraPrecisionResult.totalPoints} points` : "non fourni"}`);
+  console.log(`\u{1F4F1} gyroscope: ${gyroscopeData ? `beta=${gyroscopeData.beta.toFixed(1)}\xB0, gamma=${gyroscopeData.gamma.toFixed(1)}\xB0` : "non fourni"}`);
+  const contributions = {
+    bandAnalysis: { correction: 1, weight: 0, confidence: 0 },
+    ransacError: { correction: 1, weight: 0, confidence: 0 },
+    reprojection: { correction: 1, weight: 0, confidence: 0 },
+    poseCompensation: { correction: 1, weight: 0, confidence: 0 },
+    gyroscopeCompensation: { correction: 1, weight: 0, confidence: 0 }
+    // 🆕
+  };
+  if (analysis.bandAnalysis.enabled && analysis.bandAnalysis.transitionRatios.length >= 4) {
+    const bandCorr = analysis.bandAnalysis.suggestedCorrection;
+    const bandConf = analysis.bandAnalysis.correctionConfidence;
+    contributions.bandAnalysis = {
+      correction: bandCorr,
+      weight: 0.45,
+      // Légèrement réduit pour faire place au gyroscope
+      confidence: bandConf
+    };
+    console.log(`\u{1F4CA} [CORRECTION] Bandes: \xD7${bandCorr.toFixed(4)} (confiance: ${(bandConf * 100).toFixed(0)}%)`);
+  }
+  if (ultraPrecisionResult && ultraPrecisionResult.totalPoints > 0) {
+    const inlierRatio = ultraPrecisionResult.inlierPoints / ultraPrecisionResult.totalPoints;
+    const ransacCorr = 1 + (0.9 - inlierRatio) * 0.05;
+    const ransacConf = Math.min(0.8, inlierRatio);
+    contributions.ransacError = {
+      correction: ransacCorr,
+      weight: 0.2,
+      confidence: ransacConf
+    };
+    console.log(`\u{1F4CA} [CORRECTION] RANSAC: \xD7${ransacCorr.toFixed(4)} (${ultraPrecisionResult.inlierPoints}/${ultraPrecisionResult.totalPoints} inliers)`);
+  }
+  if (ultraPrecisionResult && ultraPrecisionResult.reprojectionError > 0) {
+    const reprErr = ultraPrecisionResult.reprojectionError;
+    const reprCorr = 1 - reprErr / 1e3;
+    const reprConf = Math.max(0.3, 1 - reprErr / 10);
+    contributions.reprojection = {
+      correction: Math.max(0.95, Math.min(1.05, reprCorr)),
+      // Limiter à ±5%
+      weight: 0.15,
+      confidence: reprConf
+    };
+    console.log(`\u{1F4CA} [CORRECTION] Reprojection: \xD7${reprCorr.toFixed(4)} (erreur: ${reprErr.toFixed(2)}mm)`);
+  }
+  const { rotX, rotY, rotZ } = analysis.pose;
+  const cosX = Math.cos(Math.abs(rotX) * Math.PI / 180);
+  const cosY = Math.cos(Math.abs(rotY) * Math.PI / 180);
+  const poseCorr = 1 / ((cosX + cosY) / 2);
+  const poseConf = Math.max(0.5, 1 - (Math.abs(rotX) + Math.abs(rotY)) / 60);
+  contributions.poseCompensation = {
+    correction: Math.max(0.95, Math.min(1.1, poseCorr)),
+    // Limiter à -5% / +10%
+    weight: gyroscopeData ? 0.1 : 0.15,
+    // Réduit si gyroscope disponible
+    confidence: poseConf
+  };
+  console.log(`\u{1F4CA} [CORRECTION] Pose: \xD7${poseCorr.toFixed(4)} (rotX=${rotX}\xB0, rotY=${rotY}\xB0)`);
+  if (gyroscopeData) {
+    const { beta, gamma, quality: gyroQuality } = gyroscopeData;
+    const IDEAL_BETA = 85;
+    const betaError = Math.abs(beta - IDEAL_BETA);
+    const gammaError = Math.abs(gamma);
+    const betaRad = betaError * Math.PI / 180;
+    const gammaRad = gammaError * Math.PI / 180;
+    const betaFactor = betaError < 60 ? 1 / Math.cos(betaRad) : 1.5;
+    const gammaFactor = gammaError < 60 ? 1 / Math.cos(gammaRad) : 1.5;
+    const gyroCorr = Math.sqrt(betaFactor * gammaFactor);
+    const angleScore = Math.max(0, 1 - (betaError + gammaError) / 60);
+    const gyroConf = (gyroQuality !== void 0 ? gyroQuality / 100 : 0.8) * angleScore;
+    contributions.gyroscopeCompensation = {
+      correction: Math.max(0.95, Math.min(1.15, gyroCorr)),
+      // Limiter à -5% / +15%
+      weight: 0.15,
+      // Poids significatif car données réelles
+      confidence: Math.max(0.4, gyroConf)
+    };
+    console.log(`\u{1F4F1} [CORRECTION] Gyroscope: \xD7${gyroCorr.toFixed(4)} (beta=${beta.toFixed(1)}\xB0, gamma=${gamma.toFixed(1)}\xB0, conf=${(gyroConf * 100).toFixed(0)}%)`);
+    const deltaRotX = Math.abs(rotX - (90 - beta));
+    const deltaRotY = Math.abs(rotY - gamma);
+    if (deltaRotX > 15 || deltaRotY > 15) {
+      console.warn(`\u26A0\uFE0F [VALIDATION] \xC9cart pose/gyro important: \u0394X=${deltaRotX.toFixed(1)}\xB0, \u0394Y=${deltaRotY.toFixed(1)}\xB0`);
+      contributions.poseCompensation.confidence *= 0.7;
+      contributions.gyroscopeCompensation.confidence *= 0.7;
+    } else {
+      console.log(`\u2705 [VALIDATION] Pose et gyroscope coh\xE9rents (\u0394X=${deltaRotX.toFixed(1)}\xB0, \u0394Y=${deltaRotY.toFixed(1)}\xB0)`);
+      contributions.gyroscopeCompensation.confidence = Math.min(1, contributions.gyroscopeCompensation.confidence * 1.2);
+    }
+  }
+  let totalWeight = 0;
+  let weightedSum = 0;
+  let confidenceSum = 0;
+  for (const key2 of Object.keys(contributions)) {
+    const { correction, weight, confidence } = contributions[key2];
+    if (weight > 0 && confidence > 0.3) {
+      const effectiveWeight = weight * confidence;
+      weightedSum += correction * effectiveWeight;
+      totalWeight += effectiveWeight;
+      confidenceSum += confidence * weight;
+    }
+  }
+  const finalCorrection = totalWeight > 0 ? weightedSum / totalWeight : 1;
+  const globalConfidence = totalWeight > 0 ? confidenceSum / totalWeight : 0;
+  let correctionX = finalCorrection;
+  let correctionY = finalCorrection;
+  if (analysis.bandAnalysis.transitionRatios.length >= 8) {
+    const ratios = analysis.bandAnalysis.transitionRatios;
+    const horizontalErrors = ratios.filter((r) => r.edge === "top" || r.edge === "bottom");
+    const avgHorizontalError = horizontalErrors.reduce((sum, r) => sum + r.error, 0) / (horizontalErrors.length || 1);
+    const verticalErrors = ratios.filter((r) => r.edge === "left" || r.edge === "right");
+    const avgVerticalError = verticalErrors.reduce((sum, r) => sum + r.error, 0) / (verticalErrors.length || 1);
+    if (avgHorizontalError > avgVerticalError + 2) {
+      correctionY = finalCorrection * (1 - (avgHorizontalError - avgVerticalError) / 200);
+    } else if (avgVerticalError > avgHorizontalError + 2) {
+      correctionX = finalCorrection * (1 - (avgVerticalError - avgHorizontalError) / 200);
+    }
+    console.log(`\u{1F4CA} [CORRECTION] Axe X: \xD7${correctionX.toFixed(4)}, Axe Y: \xD7${correctionY.toFixed(4)}`);
+  }
+  if (gyroscopeData && Math.abs(gyroscopeData.gamma) > 10) {
+    const gammaRad = Math.abs(gyroscopeData.gamma) * Math.PI / 180;
+    const lateralFactor = 1 / Math.cos(gammaRad);
+    correctionX *= Math.min(1.1, lateralFactor);
+    console.log(`\u{1F4F1} [CORRECTION] Ajustement lat\xE9ral X: \xD7${lateralFactor.toFixed(4)} (gamma=${gyroscopeData.gamma.toFixed(1)}\xB0)`);
+  }
+  const gyroStr = gyroscopeData ? `
+  - Gyroscope: \xD7${contributions.gyroscopeCompensation.correction.toFixed(4)} (poids ${(contributions.gyroscopeCompensation.weight * 100).toFixed(0)}%)` : "";
+  const explanation = `Correction optimale: \xD7${finalCorrection.toFixed(4)} (confiance ${(globalConfidence * 100).toFixed(0)}%)
+  - Bandes: \xD7${contributions.bandAnalysis.correction.toFixed(4)} (poids ${(contributions.bandAnalysis.weight * 100).toFixed(0)}%)
+  - RANSAC: \xD7${contributions.ransacError.correction.toFixed(4)} (poids ${(contributions.ransacError.weight * 100).toFixed(0)}%)
+  - Reprojection: \xD7${contributions.reprojection.correction.toFixed(4)} (poids ${(contributions.reprojection.weight * 100).toFixed(0)}%)
+  - Pose: \xD7${contributions.poseCompensation.correction.toFixed(4)} (poids ${(contributions.poseCompensation.weight * 100).toFixed(0)}%)${gyroStr}`;
+  console.log(`
+\u{1F3AF} [CORRECTION OPTIMALE] ${explanation}
+`);
+  return {
+    finalCorrection: parseFloat(finalCorrection.toFixed(6)),
+    correctionX: parseFloat(correctionX.toFixed(6)),
+    correctionY: parseFloat(correctionY.toFixed(6)),
+    contributions,
+    globalConfidence: parseFloat(globalConfidence.toFixed(4)),
+    explanation
+  };
+}
 
 // src/api/measure.ts
 var sharp = sharpModule.default || sharpModule;
@@ -62704,23 +63007,30 @@ router89.post("/photo", async (req2, res) => {
 });
 router89.post("/photo/measure", async (req2, res) => {
   try {
-    const { homographyMatrix, point1, point2 } = req2.body || {};
+    const { homographyMatrix, point1, point2, correction } = req2.body || {};
     if (!homographyMatrix || !point1 || !point2) {
       return res.status(400).json({
         success: false,
         error: "homographyMatrix, point1 et point2 sont requis"
       });
     }
-    const distanceCm = measureDistanceCm(homographyMatrix, point1, point2);
+    const correctionFactor = correction || 1;
+    const distanceCmRaw = measureDistanceCm(homographyMatrix, point1, point2);
+    const distanceCm = distanceCmRaw * correctionFactor;
     const point1Cm = transformPoint(homographyMatrix, point1);
     const point2Cm = transformPoint(homographyMatrix, point2);
+    console.log(`\u{1F4CF} [MEASURE] Distance: ${distanceCmRaw.toFixed(2)}cm \u2192 ${distanceCm.toFixed(2)}cm (\xD7${correctionFactor.toFixed(4)})`);
     return res.json({
       success: true,
       distanceCm,
+      distanceCmRaw,
+      // Distance brute sans correction
       distanceM: distanceCm / 100,
       point1Cm,
       point2Cm,
-      unit: "cm"
+      unit: "cm",
+      correctionApplied: correctionFactor,
+      correctionWasApplied: correctionFactor !== 1
     });
   } catch (error) {
     console.error("[measure/photo/measure] \u274C Erreur:", error);
@@ -67313,6 +67623,10 @@ ${"=".repeat(80)}`);
     for (let i = 0; i < cleanedPhotos.length; i++) {
       const photo = cleanedPhotos[i];
       console.log(`   \u{1F4F7} Photo ${i}: Analyse...`);
+      if (photo.metadata?.gyroscope) {
+        const gyro = photo.metadata.gyroscope;
+        console.log(`      \u{1F4F1} Gyroscope: beta=${gyro.beta?.toFixed(1)}\xB0, gamma=${gyro.gamma?.toFixed(1)}\xB0, qualit\xE9=${gyro.quality || "N/A"}%`);
+      }
       try {
         const imageBuffer = Buffer.from(photo.base64, "base64");
         const metadata = await sharp4(imageBuffer).metadata();
@@ -67329,9 +67643,24 @@ ${"=".repeat(80)}`);
           const marker = markers[0];
           const cornersForUltra = marker.magentaPositions || marker.corners;
           const ultraResult = detectUltraPrecisionPoints(imageData, cornersForUltra, marker.extendedPoints);
+          let completeAnalysis = null;
+          let bandBiasScore = 0.5;
+          try {
+            completeAnalysis = analyzeMarkerComplete(marker, width, height);
+            console.log(`   \u{1F52C} Analyse compl\xE8te: rotX=${completeAnalysis.pose.rotX}\xB0, rotY=${completeAnalysis.pose.rotY}\xB0, profondeur=${completeAnalysis.depth.estimatedCm}cm`);
+            if (completeAnalysis.bands && completeAnalysis.bands.avgBias !== void 0) {
+              const absBias = Math.abs(completeAnalysis.bands.avgBias);
+              bandBiasScore = Math.max(0, 1 - absBias / 5);
+              console.log(`   \u{1F4CA} Biais bandes: ${(completeAnalysis.bands.avgBias * 100).toFixed(2)}% \u2192 score=${bandBiasScore.toFixed(2)}`);
+            }
+          } catch (analyzeErr) {
+            console.warn(`   \u26A0\uFE0F Analyse compl\xE8te \xE9chou\xE9e:`, analyzeErr);
+          }
           const detectionScore = marker.score || 0;
           const homographyQuality = ultraResult.quality || 0;
-          const globalScore = detectionScore * 0.4 + homographyQuality * 0.3 + (1 - ultraResult.reprojectionError / 10) * 0.3;
+          const reprojScore = 1 - ultraResult.reprojectionError / 10;
+          const globalScore = detectionScore * 0.3 + homographyQuality * 0.25 + reprojScore * 0.2 + bandBiasScore * 0.25;
+          console.log(`   \u{1F4C8} Score photo ${i}: d\xE9tection=${(detectionScore * 100).toFixed(0)}%, homographie=${(homographyQuality * 100).toFixed(0)}%, reproj=${(reprojScore * 100).toFixed(0)}%, bandes=${(bandBiasScore * 100).toFixed(0)}% \u2192 TOTAL=${(globalScore * 100).toFixed(1)}%`);
           const outerCorners = marker.magentaPositions || marker.corners;
           const cornersPercent = {
             topLeft: { x: outerCorners[0].x / width * 100, y: outerCorners[0].y / height * 100 },
@@ -67349,13 +67678,19 @@ ${"=".repeat(80)}`);
             reprojectionError: ultraResult.reprojectionError,
             quality: homographyQuality,
             corners: cornersPercent,
+            arucoAnalysis: completeAnalysis,
+            // 🔬 Stocké !
+            imageWidth: width,
+            imageHeight: height,
             ultraPrecision: {
               totalPoints: ultraResult.totalPoints,
               inlierPoints: ultraResult.inlierPoints,
               reprojectionError: ultraResult.reprojectionError,
               estimatedPrecision: ultraResult.reprojectionError < 0.5 ? "\xB10.2mm" : ultraResult.reprojectionError < 1 ? "\xB10.5mm" : "\xB11mm",
               corners: cornersPercent
-            }
+            },
+            photoMetadata: photo.metadata
+            // 📱 Stocker les métadonnées (gyroscope)
           });
           console.log(`   \u2705 Photo ${i}: ArUco d\xE9tect\xE9! score=${(globalScore * 100).toFixed(1)}%, reproj=${ultraResult.reprojectionError.toFixed(2)}mm`);
         } else {
@@ -67380,6 +67715,42 @@ ${"=".repeat(80)}`);
     console.log(`      \u{1F4CA} Score global: ${(bestPhoto.score * 100).toFixed(1)}%`);
     console.log(`      \u{1F4CF} Reprojection error: ${bestPhoto.reprojectionError.toFixed(2)}mm`);
     console.log(`      \u{1F3AF} Pr\xE9cision estim\xE9e: ${bestPhoto.ultraPrecision.estimatedPrecision}`);
+    console.log("\n3\uFE0F\u20E3 Calcul de la correction optimale...");
+    let optimalCorrection = null;
+    let gyroscopeData;
+    if (bestPhoto.photoMetadata?.gyroscope) {
+      const gyro = bestPhoto.photoMetadata.gyroscope;
+      if (typeof gyro.beta === "number" && typeof gyro.gamma === "number") {
+        gyroscopeData = {
+          beta: gyro.beta,
+          gamma: gyro.gamma,
+          quality: gyro.quality
+        };
+        console.log(`   \u{1F4F1} Gyroscope disponible: beta=${gyro.beta.toFixed(1)}\xB0, gamma=${gyro.gamma.toFixed(1)}\xB0, qualit\xE9=${gyro.quality || "N/A"}%`);
+      }
+    } else {
+      console.log(`   \u{1F4F1} Gyroscope: non disponible`);
+    }
+    if (bestPhoto.arucoAnalysis) {
+      optimalCorrection = calculateOptimalCorrection(
+        bestPhoto.arucoAnalysis,
+        {
+          totalPoints: bestPhoto.ultraPrecision.totalPoints,
+          inlierPoints: bestPhoto.ultraPrecision.inlierPoints,
+          reprojectionError: bestPhoto.reprojectionError,
+          quality: bestPhoto.quality
+        },
+        gyroscopeData
+        // 📱 Passer les données gyroscope si disponibles
+      );
+      console.log(`   \u{1F3AF} CORRECTION FINALE: \xD7${optimalCorrection.finalCorrection.toFixed(4)}`);
+      console.log(`      \u{1F4CA} Confiance: ${(optimalCorrection.globalConfidence * 100).toFixed(0)}%`);
+      console.log(`      \u{1F4CF} Correction X: \xD7${optimalCorrection.correctionX.toFixed(4)}`);
+      console.log(`      \u{1F4CF} Correction Y: \xD7${optimalCorrection.correctionY.toFixed(4)}`);
+      if (gyroscopeData) {
+        console.log(`      \u{1F4F1} Gyroscope inclus dans le calcul !`);
+      }
+    }
     const totalTime = Date.now() - startTime;
     console.log(`
 ${"=".repeat(80)}`);
@@ -67398,6 +67769,10 @@ ${"=".repeat(80)}`);
       // 🎯 Corners ArUco en % (pour le canvas)
       fusedCorners: bestPhoto.corners,
       homographyReady: true,
+      // 🔬 ANALYSE COMPLÈTE DU MARQUEUR - Nouveau pour le panel ArUco
+      arucoAnalysis: bestPhoto.arucoAnalysis,
+      // 🎯 CORRECTION OPTIMALE - NOUVEAU !
+      optimalCorrection,
       // 🎯 NOUVEAU: Données pour calibration précise
       markerSizeCm,
       // 18cm ArUco MAGENTA
@@ -67413,7 +67788,12 @@ ${"=".repeat(80)}`);
         // 🎯 NOUVEAU: Ajouter les données pour le canvas
         homographyMatrix: bestPhoto.homography,
         pixelPerCm: avgPixelPerCm,
-        markerSizeCm
+        markerSizeCm,
+        // 🎯 CORRECTION OPTIMALE dans ultraPrecision aussi
+        optimalCorrection: optimalCorrection?.finalCorrection || 1,
+        correctionX: optimalCorrection?.correctionX || 1,
+        correctionY: optimalCorrection?.correctionY || 1,
+        correctionConfidence: optimalCorrection?.globalConfidence || 0
       },
       // 🏆 Infos sur la meilleure photo
       bestPhoto: {

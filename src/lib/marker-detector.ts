@@ -2347,14 +2347,19 @@ export function measureDistanceCmExtended(
 
 /**
  * Configuration du pattern ArUco 6×6 intérieur
- * Le pattern central fait 6cm × 6cm et contient une grille 6×6 de cases noir/blanc
+ * Le pattern central fait markerSize/3 × markerSize/3 et contient une grille 6×6 de cases noir/blanc
+ * 
+ * IMPORTANT: Toutes les valeurs sont DYNAMIQUES et dépendent de getMarkerSize()
+ * Pour 18cm: pattern 6×6cm, cellule 1cm, start 6cm, end 12cm
+ * Pour 16.8cm: pattern 5.6×5.6cm, cellule 0.933cm, start 5.6cm, end 11.2cm
  */
 const ARUCO_PATTERN = {
   gridSize: 6,           // Grille 6×6 cases
-  patternSizeCm: 6,      // Taille totale du pattern en cm
-  cellSizeCm: 1,         // Taille d'une cellule = 1cm
-  patternStartCm: 6,     // Le pattern commence à 6cm du bord externe
-  patternEndCm: 12,      // Le pattern finit à 12cm du bord externe
+  // ⚠️ Propriétés DYNAMIQUES - utiliser les getters !
+  get patternSizeCm() { return getMarkerSize() / 3; },        // 1/3 du marqueur (5.6cm pour 16.8cm)
+  get cellSizeCm() { return getMarkerSize() / 18; },          // 1/18 du marqueur (0.933cm pour 16.8cm)
+  get patternStartCm() { return getMarkerSize() / 3; },       // Début = 1/3 (5.6cm pour 16.8cm)
+  get patternEndCm() { return getMarkerSize() * 2 / 3; },     // Fin = 2/3 (11.2cm pour 16.8cm)
 };
 
 /**
@@ -2910,7 +2915,9 @@ function sampleLuminosity(
 
 /**
  * Détecter les 49 coins de la grille 7×7 du pattern central
- * Le pattern central fait 6cm × 6cm (de 6cm à 12cm depuis le bord)
+ * Le pattern central fait markerSize/3 × markerSize/3 (dynamique)
+ * Pour 16.8cm: de 5.6cm à 11.2cm
+ * Pour 18cm: de 6cm à 12cm
  */
 function detectPatternGridCorners(
   data: Uint8ClampedArray | Buffer,
@@ -2925,18 +2932,25 @@ function detectPatternGridCorners(
   // Le pattern central est entre 2 bandes et 4 bandes (1/3 et 2/3)
   const patternStart = MARKER_SPECS.ratios.innerToOuter;   // 1/3
   const patternEnd = MARKER_SPECS.ratios.whiteToOuter;     // 2/3
-  const cellSize = 1 / markerSize;      // 1cm en ratio
+  
+  // 🔧 CORRECTION: Taille de cellule DYNAMIQUE basée sur markerSize
+  const patternSizeCm = markerSize / 3;       // Pour 16.8cm → 5.6cm
+  const cellSizeCm = patternSizeCm / 6;       // Pour 16.8cm → 0.933cm
+  const cellSizeRatio = cellSizeCm / markerSize; // En ratio du marqueur total
+  
+  // Position de départ du pattern en cm
+  const patternStartCm = markerSize / 3;      // Pour 16.8cm → 5.6cm
   
   // Grille 7×7 de coins (6×6 cases)
   for (let row = 0; row <= 6; row++) {
     for (let col = 0; col <= 6; col++) {
       // Position en ratio (0-1) sur le marqueur complet
-      const ratioX = patternStart + col * cellSize;
-      const ratioY = patternStart + row * cellSize;
+      const ratioX = patternStart + col * cellSizeRatio;
+      const ratioY = patternStart + row * cellSizeRatio;
       
-      // Position en cm
-      const realX = 6 + col;  // 6 à 12 cm
-      const realY = 6 + row;  // 6 à 12 cm
+      // 🔧 CORRECTION: Position en cm DYNAMIQUE
+      const realX = patternStartCm + col * cellSizeCm;  // Pour 16.8cm: 5.6 à 11.2cm
+      const realY = patternStartCm + row * cellSizeCm;  // Pour 16.8cm: 5.6 à 11.2cm
       
       // Interpolation bilinéaire pour trouver la position pixel
       const pixelPos = bilinearInterpolate(tl, tr, br, bl, ratioX, ratioY);
@@ -2970,18 +2984,22 @@ function detectPatternCellCenters(
   const [tl, tr, br, bl] = corners;
   const markerSize = MARKER_SPECS.markerSize;
   
-  const patternStart = 6 / markerSize;
-  const cellSize = 1 / markerSize;
+  // 🔧 CORRECTION: Calculs DYNAMIQUES basés sur markerSize
+  const patternStartCm = markerSize / 3;        // Pour 16.8cm → 5.6cm
+  const cellSizeCm = markerSize / 18;           // Pour 16.8cm → 0.933cm
+  const patternStartRatio = 1/3;                // Ratio constant
+  const cellSizeRatio = cellSizeCm / markerSize; // Ratio dynamique
   
   // 6×6 centres de cases
   for (let row = 0; row < 6; row++) {
     for (let col = 0; col < 6; col++) {
-      // Centre de la case
-      const ratioX = patternStart + (col + 0.5) * cellSize;
-      const ratioY = patternStart + (row + 0.5) * cellSize;
+      // Centre de la case (en ratio)
+      const ratioX = patternStartRatio + (col + 0.5) * cellSizeRatio;
+      const ratioY = patternStartRatio + (row + 0.5) * cellSizeRatio;
       
-      const realX = 6.5 + col;  // 6.5 à 11.5 cm
-      const realY = 6.5 + row;
+      // 🔧 CORRECTION: Position DYNAMIQUE en cm
+      const realX = patternStartCm + (col + 0.5) * cellSizeCm;  // Pour 16.8cm: 5.6+0.467 à 11.2-0.467
+      const realY = patternStartCm + (row + 0.5) * cellSizeCm;
       
       const pixelPos = bilinearInterpolate(tl, tr, br, bl, ratioX, ratioY);
       
@@ -3659,6 +3677,21 @@ function analyzeMarkerBands(
   const transitionRatios: ArucoMarkerAnalysis['bandAnalysis']['transitionRatios'] = [];
   const errors: number[] = [];
   
+  // ═══════════════════════════════════════════════════════════════════════════
+  // 🔬 SUPER ANALYSE DES BANDES - LOGS DÉTAILLÉS
+  // ═══════════════════════════════════════════════════════════════════════════
+  console.log(`\n${'═'.repeat(70)}`);
+  console.log(`🔬 SUPER ANALYSE DES BANDES ArUco`);
+  console.log(`${'═'.repeat(70)}`);
+  console.log(`📐 Taille marqueur: ${markerSizeCm} cm`);
+  console.log(`📐 Transitions attendues (cm): [${transitions.map(t => t.toFixed(2)).join(', ')}]`);
+  console.log(`📐 Transitions attendues (ratio): [${transitions.map(t => (t/markerSizeCm).toFixed(4)).join(', ')}]`);
+  console.log(`📐 Coins détectés:`);
+  console.log(`   TL: (${corners[0].x.toFixed(1)}, ${corners[0].y.toFixed(1)})`);
+  console.log(`   TR: (${corners[1].x.toFixed(1)}, ${corners[1].y.toFixed(1)})`);
+  console.log(`   BR: (${corners[2].x.toFixed(1)}, ${corners[2].y.toFixed(1)})`);
+  console.log(`   BL: (${corners[3].x.toFixed(1)}, ${corners[3].y.toFixed(1)})`);
+  
   // Analyser les transitions sur chaque bord
   const edges: Array<{ name: 'top' | 'right' | 'bottom' | 'left'; transitions: Point2D[]; start: Point2D; end: Point2D }> = [
     { name: 'top', transitions: ext.topTransitions, start: corners[0], end: corners[1] },
@@ -3671,6 +3704,11 @@ function analyzeMarkerBands(
     const edgeLength = Math.sqrt(
       (edge.end.x - edge.start.x) ** 2 + (edge.end.y - edge.start.y) ** 2
     );
+    
+    console.log(`\n📍 BORD ${edge.name.toUpperCase()}:`);
+    console.log(`   Start: (${edge.start.x.toFixed(1)}, ${edge.start.y.toFixed(1)})`);
+    console.log(`   End: (${edge.end.x.toFixed(1)}, ${edge.end.y.toFixed(1)})`);
+    console.log(`   Longueur (px): ${edgeLength.toFixed(1)}`);
     
     for (let i = 0; i < edge.transitions.length && i < transitions.length; i++) {
       const transitionPoint = edge.transitions[i];
@@ -3686,6 +3724,20 @@ function analyzeMarkerBands(
       // Calculer l'erreur
       const error = Math.abs((measuredRatio - expectedRatio) / expectedRatio) * 100;
       errors.push(error);
+      
+      // Position attendue en pixels
+      const expectedPx = {
+        x: edge.start.x + expectedRatio * (edge.end.x - edge.start.x),
+        y: edge.start.y + expectedRatio * (edge.end.y - edge.start.y)
+      };
+      
+      // Log détaillé pour chaque transition
+      const transitionName = ['NOIR→BLANC', 'BLANC→NOIR', 'NOIR→BLANC', 'BLANC→NOIR'][i];
+      const signedError = ((measuredRatio - expectedRatio) / expectedRatio) * 100;
+      console.log(`   Transition ${i+1} (${expectedPositionCm.toFixed(1)}cm - ${transitionName}):`);
+      console.log(`      Attendu: ratio=${expectedRatio.toFixed(4)} → px=(${expectedPx.x.toFixed(1)}, ${expectedPx.y.toFixed(1)})`);
+      console.log(`      Mesuré:  ratio=${measuredRatio.toFixed(4)} → px=(${transitionPoint.x.toFixed(1)}, ${transitionPoint.y.toFixed(1)})`);
+      console.log(`      Erreur: ${signedError > 0 ? '+' : ''}${signedError.toFixed(2)}% (${signedError > 0 ? 'trop loin' : 'trop proche'} du start)`);
       
       // Trouver la confiance du point
       const pointData = ext.allPoints.find(p => 
@@ -3704,6 +3756,22 @@ function analyzeMarkerBands(
       });
     }
   }
+  
+  // Résumé par axe
+  const topBottomErrors = transitionRatios.filter(t => t.edge === 'top' || t.edge === 'bottom');
+  const leftRightErrors = transitionRatios.filter(t => t.edge === 'left' || t.edge === 'right');
+  
+  const avgXError = topBottomErrors.length > 0 
+    ? topBottomErrors.reduce((sum, t) => sum + ((t.measuredRatio - t.expectedRatio) / t.expectedRatio), 0) / topBottomErrors.length * 100
+    : 0;
+  const avgYError = leftRightErrors.length > 0 
+    ? leftRightErrors.reduce((sum, t) => sum + ((t.measuredRatio - t.expectedRatio) / t.expectedRatio), 0) / leftRightErrors.length * 100
+    : 0;
+    
+  console.log(`\n📊 RÉSUMÉ ERREURS PAR AXE:`);
+  console.log(`   Axe X (top+bottom): ${avgXError > 0 ? '+' : ''}${avgXError.toFixed(2)}%`);
+  console.log(`   Axe Y (left+right): ${avgYError > 0 ? '+' : ''}${avgYError.toFixed(2)}%`);
+  console.log(`${'═'.repeat(70)}\n`);
   
   // Calculer les statistiques
   const validPoints = ext.allPoints.filter(p => p.confidence > 0.6).length;
@@ -3789,12 +3857,18 @@ export interface OptimalCorrectionResult {
   correctionX: number;  // Correction horizontale
   correctionY: number;  // Correction verticale
   
+  // 🆕 Corrections par axe SANS les bandes (pour quand l'homographie est utilisée)
+  // L'homographie calibre sur le marqueur → le biais des bandes est déjà intégré
+  correctionXSansBandes: number;  // Correction X sans analyse des bandes
+  correctionYSansBandes: number;  // Correction Y sans analyse des bandes
+  
   // Détail des contributions
   contributions: {
     bandAnalysis: { correction: number; weight: number; confidence: number };
     ransacError: { correction: number; weight: number; confidence: number };
     reprojection: { correction: number; weight: number; confidence: number };
     poseCompensation: { correction: number; weight: number; confidence: number };
+    gyroscopeCompensation?: { correction: number; weight: number; confidence: number };
   };
   
   // Confiance globale
@@ -3921,12 +3995,13 @@ export function calculateOptimalCorrection(
   const { rotX, rotY, rotZ } = analysis.pose;
   
   // La perspective déforme les mesures en fonction de l'angle
-  // cos(angle) approxime bien la correction nécessaire
+  // 🎯 NOTE: Les corrections X/Y séparées sont calculées dans la section 7️⃣
+  // Ici on calcule juste une correction globale moyenne pour le weighting
   const cosX = Math.cos(Math.abs(rotX) * Math.PI / 180);
   const cosY = Math.cos(Math.abs(rotY) * Math.PI / 180);
   
-  // Correction moyenne pour la perspective
-  const poseCorr = 1.0 / ((cosX + cosY) / 2);  // Compenser la perspective
+  // Correction INDICATIVE pour la moyenne pondérée (la vraie séparation X/Y vient après)
+  const poseCorr = 1.0 / Math.sqrt(cosX * cosY);  // Moyenne géométrique (plus stable)
   const poseConf = Math.max(0.5, 1.0 - (Math.abs(rotX) + Math.abs(rotY)) / 60);
   
   contributions.poseCompensation = {
@@ -3935,7 +4010,7 @@ export function calculateOptimalCorrection(
     confidence: poseConf
   };
   
-  console.log(`📊 [CORRECTION] Pose: ×${poseCorr.toFixed(4)} (rotX=${rotX}°, rotY=${rotY}°)`);
+  console.log(`📊 [CORRECTION] Pose: ×${poseCorr.toFixed(4)} (rotX=${rotX}°, rotY=${rotY}°) → Séparation X/Y en section 7️⃣`);
   
   // ═══════════════════════════════════════════════════════════════════════════
   // 5️⃣ COMPENSATION GYROSCOPE (angles RÉELS du téléphone) 🆕
@@ -4013,41 +4088,202 @@ export function calculateOptimalCorrection(
   const globalConfidence = totalWeight > 0 ? confidenceSum / totalWeight : 0;
   
   // ═══════════════════════════════════════════════════════════════════════════
-  // 6️⃣ CORRECTIONS PAR AXE (X/Y séparément)
+  // 6️⃣ bis: CALCUL DE LA CORRECTION SANS BANDES NI POSE (pour homographie)
   // ═══════════════════════════════════════════════════════════════════════════
-  let correctionX = finalCorrection;
-  let correctionY = finalCorrection;
+  // Quand l'homographie est utilisée:
+  // 1. Elle calibre sur le marqueur ArUco → biais des bandes DÉJÀ intégré
+  // 2. Elle corrige la perspective → compensation de pose DÉJÀ intégrée
+  // → On exclut bandAnalysis ET poseCompensation pour éviter la double correction !
+  //
+  // On garde: RANSAC, reprojection (erreurs de l'homographie elle-même)
+  // Gyroscope: gardé avec prudence (téléphone pas forcément aligné avec le plan)
   
-  // Analyser les erreurs par axe depuis les bandes
+  let totalWeightSansBandes = 0;
+  let weightedSumSansBandes = 0;
+  
+  for (const key of Object.keys(contributions) as Array<keyof typeof contributions>) {
+    // EXCLURE: bandes (calibrées par homographie) ET pose (corrigée par homographie)
+    if (key === 'bandAnalysis' || key === 'poseCompensation') continue;
+    const { correction, weight, confidence } = contributions[key];
+    if (weight > 0 && confidence > 0.3) {
+      const effectiveWeight = weight * confidence;
+      weightedSumSansBandes += correction * effectiveWeight;
+      totalWeightSansBandes += effectiveWeight;
+    }
+  }
+  
+  const finalCorrectionSansBandes = totalWeightSansBandes > 0 ? weightedSumSansBandes / totalWeightSansBandes : 1.0;
+  console.log(`\n📊 [CORRECTION SANS BANDES NI POSE] Base: ×${finalCorrectionSansBandes.toFixed(4)} (pour mode homographie)`);
+  console.log(`   ℹ️ Exclut: bandAnalysis, poseCompensation (déjà intégrés dans l'homographie)`);
+  
+  // ═══════════════════════════════════════════════════════════════════════════
+  // 7️⃣ CORRECTIONS PAR AXE (X/Y VRAIMENT SÉPARÉES - BASÉES SUR LA GÉOMÉTRIE)
+  // ═══════════════════════════════════════════════════════════════════════════
+  // 
+  // 🎯 PRINCIPE FONDAMENTAL:
+  // - rotY (rotation gauche/droite autour axe vertical) → compresse l'axe X (largeur)
+  // - rotX (inclinaison haut/bas autour axe horizontal) → compresse l'axe Y (hauteur)
+  // - rotZ (rotation dans le plan) → mélange les axes X et Y (effet croisé)
+  // 
+  // La correction = 1/cos(angle) pour compenser la projection perspective
+  //
+  
+  const { rotX: poseRotX, rotY: poseRotY, rotZ: poseRotZ } = analysis.pose;
+  
+  // Correction géométrique par axe basée sur la POSE du marqueur
+  const cosRotY = Math.cos(Math.abs(poseRotY) * Math.PI / 180); // Pour l'axe X
+  const cosRotX = Math.cos(Math.abs(poseRotX) * Math.PI / 180); // Pour l'axe Y
+  const cosRotZ = Math.cos(Math.abs(poseRotZ) * Math.PI / 180); // Pour le mélange X/Y
+  const sinRotZ = Math.sin(Math.abs(poseRotZ) * Math.PI / 180); // Pour le mélange X/Y
+  
+  // Facteurs de correction bruts (limités pour éviter les aberrations)
+  const rawCorrX = 1.0 / Math.max(0.7, cosRotY); // rotY affecte X
+  const rawCorrY = 1.0 / Math.max(0.7, cosRotX); // rotX affecte Y
+  
+  // 🆕 Effet de rotZ: quand le marqueur est tourné dans le plan, les mesures X et Y sont mélangées
+  // Pour un rectangle allongé (ratio != 1), cela crée une erreur
+  // Formule: mesure_observée ≈ vraie_dim × cos(rotZ) + autre_dim × sin(rotZ)
+  // Correction approximative: on multiplie par cos(rotZ) pour "défaire" le mélange
+  const rotZCorrFactor = Math.abs(poseRotZ) > 2 ? cosRotZ : 1.0; // Seuil de 2° pour éviter le bruit
+  
+  console.log(`\n📐 [CORRECTION PAR AXE] Géométrie perspective:`);
+  console.log(`   rotX (haut/bas) = ${poseRotX.toFixed(1)}° → cos=${cosRotX.toFixed(4)} → correction Y = ×${rawCorrY.toFixed(4)}`);
+  console.log(`   rotY (gauche/droite) = ${poseRotY.toFixed(1)}° → cos=${cosRotY.toFixed(4)} → correction X = ×${rawCorrX.toFixed(4)}`);
+  console.log(`   rotZ (dans le plan) = ${poseRotZ.toFixed(1)}° → cos=${cosRotZ.toFixed(4)}, sin=${sinRotZ.toFixed(4)} → facteur mélange = ×${rotZCorrFactor.toFixed(4)}`);
+  
+  // Initialiser avec les corrections géométriques PURES
+  // rotZ applique un facteur de "démélange" aux deux axes
+  let correctionX = finalCorrection * rawCorrX * rotZCorrFactor;
+  let correctionY = finalCorrection * rawCorrY * rotZCorrFactor;
+  
+  // Renormaliser pour que la moyenne reste proche de finalCorrection
+  // (pour ne pas créer de drift global)
+  const avgCorr = (correctionX + correctionY) / 2;
+  if (avgCorr > 0) {
+    const normFactor = finalCorrection / avgCorr;
+    correctionX *= normFactor;
+    correctionY *= normFactor;
+  }
+  
+  console.log(`   Après normalisation: X = ×${correctionX.toFixed(4)}, Y = ×${correctionY.toFixed(4)}`);
+  
+  // Affiner avec les données des bandes si disponibles
+  // IMPORTANT - Géométrie correcte :
+  //   - Bandes TOP/BOTTOM = mesurent la LARGEUR → affectent X
+  //   - Bandes LEFT/RIGHT = mesurent la HAUTEUR → affectent Y
   if (analysis.bandAnalysis.transitionRatios.length >= 8) {
     const ratios = analysis.bandAnalysis.transitionRatios;
     
-    // Erreurs horizontales (top, bottom)
-    const horizontalErrors = ratios.filter(r => r.edge === 'top' || r.edge === 'bottom');
-    const avgHorizontalError = horizontalErrors.reduce((sum, r) => sum + r.error, 0) / (horizontalErrors.length || 1);
+    // Bandes TOP/BOTTOM mesurent la LARGEUR → erreur affecte X
+    const widthBands = ratios.filter(r => r.edge === 'top' || r.edge === 'bottom');
+    const avgWidthError = widthBands.reduce((sum, r) => sum + r.error, 0) / (widthBands.length || 1);
     
-    // Erreurs verticales (left, right)
-    const verticalErrors = ratios.filter(r => r.edge === 'left' || r.edge === 'right');
-    const avgVerticalError = verticalErrors.reduce((sum, r) => sum + r.error, 0) / (verticalErrors.length || 1);
+    // Bandes LEFT/RIGHT mesurent la HAUTEUR → erreur affecte Y
+    const heightBands = ratios.filter(r => r.edge === 'left' || r.edge === 'right');
+    const avgHeightError = heightBands.reduce((sum, r) => sum + r.error, 0) / (heightBands.length || 1);
     
-    // Ajuster les corrections par axe
-    if (avgHorizontalError > avgVerticalError + 2) {
-      correctionY = finalCorrection * (1 - (avgHorizontalError - avgVerticalError) / 200);
-    } else if (avgVerticalError > avgHorizontalError + 2) {
-      correctionX = finalCorrection * (1 - (avgVerticalError - avgHorizontalError) / 200);
-    }
+    // ⚠️ CORRECTION INTÉGRALE - l'erreur de bande est une erreur de calibration
+    // Si error > 0 (trop grand), réduire la mesure (×<1)
+    // Si error < 0 (trop petit), augmenter la mesure (×>1)
+    // PAS DE LIMITE - faire confiance à la mesure des bandes
+    const bandAdjustX = 1.0 - (avgWidthError / 100);
+    const bandAdjustY = 1.0 - (avgHeightError / 100);
     
-    console.log(`📊 [CORRECTION] Axe X: ×${correctionX.toFixed(4)}, Axe Y: ×${correctionY.toFixed(4)}`);
+    correctionX *= bandAdjustX;
+    correctionY *= bandAdjustY;
+    
+    console.log(`   Bandes: erreur largeur (X)=${avgWidthError.toFixed(2)}%, hauteur (Y)=${avgHeightError.toFixed(2)}%`);
+    console.log(`   Ajustement bandes: X = ×${bandAdjustX.toFixed(4)}, Y = ×${bandAdjustY.toFixed(4)}`);
   }
   
-  // Ajuster par axe avec gyroscope si disponible
-  if (gyroscopeData && Math.abs(gyroscopeData.gamma) > 10) {
-    // Si le téléphone est penché latéralement, l'axe horizontal est plus compressé
-    const gammaRad = (Math.abs(gyroscopeData.gamma) * Math.PI) / 180;
-    const lateralFactor = 1 / Math.cos(gammaRad);
-    correctionX *= Math.min(1.1, lateralFactor);
-    console.log(`📱 [CORRECTION] Ajustement latéral X: ×${lateralFactor.toFixed(4)} (gamma=${gyroscopeData.gamma.toFixed(1)}°)`);
+  // Ajuster par axe avec gyroscope si disponible (données RÉELLES du téléphone)
+  if (gyroscopeData) {
+    const { beta, gamma } = gyroscopeData;
+    const IDEAL_BETA = 85; // Téléphone quasi-perpendiculaire
+    
+    // Beta (inclinaison avant/arrière) → affecte Y
+    const betaError = Math.abs(beta - IDEAL_BETA);
+    if (betaError > 5) { // Seuil de 5°
+      const betaRad = (betaError * Math.PI) / 180;
+      const betaFactor = Math.min(1.15, 1.0 / Math.cos(betaRad));
+      correctionY *= betaFactor;
+      console.log(`   📱 Gyro beta (${beta.toFixed(1)}° vs idéal ${IDEAL_BETA}°): Y × ${betaFactor.toFixed(4)}`);
+    }
+    
+    // Gamma (inclinaison latérale) → affecte X
+    if (Math.abs(gamma) > 5) { // Seuil de 5°
+      const gammaRad = (Math.abs(gamma) * Math.PI) / 180;
+      const gammaFactor = Math.min(1.15, 1.0 / Math.cos(gammaRad));
+      correctionX *= gammaFactor;
+      console.log(`   📱 Gyro gamma (${gamma.toFixed(1)}°): X × ${gammaFactor.toFixed(4)}`);
+    }
   }
+  
+  // Limiter les corrections à des valeurs raisonnables
+  correctionX = Math.max(0.90, Math.min(1.15, correctionX));
+  correctionY = Math.max(0.90, Math.min(1.15, correctionY));
+  
+  console.log(`\n🎯 [CORRECTION FINALE PAR AXE] X = ×${correctionX.toFixed(4)}, Y = ×${correctionY.toFixed(4)}`);
+  console.log(`   Différence X/Y: ${((correctionX / correctionY - 1) * 100).toFixed(2)}%`)
+  
+  // ═══════════════════════════════════════════════════════════════════════════
+  // 8️⃣ CORRECTIONS PAR AXE SANS BANDES (pour mode homographie)
+  // ═══════════════════════════════════════════════════════════════════════════
+  // 🔴 IMPORTANT: Quand l'HOMOGRAPHIE est utilisée, elle CORRIGE DÉJÀ la perspective !
+  // L'homographie transforme les 4 coins en perspective vers un carré parfait.
+  // Donc on NE DOIT PAS appliquer rawCorrX/rawCorrY (1/cos) ici sinon = DOUBLE CORRECTION !
+  //
+  // On garde uniquement:
+  // - finalCorrectionSansBandes (RANSAC + reprojection, sans bandes)
+  // - Gyroscope si disponible (car l'homographie ne corrige pas le tangage/roulis du téléphone)
+  //   MAIS: le gyroscope aussi peut créer une double correction si homographie de qualité...
+  //   → On l'applique avec un facteur réduit
+  
+  // Initialiser avec la correction de base SANS bandes et SANS pose (homographie l'a fait)
+  let correctionXSansBandes = finalCorrectionSansBandes;
+  let correctionYSansBandes = finalCorrectionSansBandes;
+  
+  console.log(`📊 [CORRECTION SANS BANDES] Base: X=×${correctionXSansBandes.toFixed(4)}, Y=×${correctionYSansBandes.toFixed(4)}`);
+  
+  // ═══════════════════════════════════════════════════════════════════════════
+  // 🚫 PAS DE CORRECTION DES BANDES EN MODE HOMOGRAPHIE !
+  // ═══════════════════════════════════════════════════════════════════════════
+  // 
+  // EXPLICATION FONDAMENTALE :
+  // L'homographie est calculée à partir des 4 coins du marqueur (16.8cm × 16.8cm).
+  // Elle dit "ces 4 coins en pixels = ces 4 coins en cm réels".
+  // 
+  // Si le marqueur apparaît 6% plus grand en pixels (erreur de calibration),
+  // l'homographie l'intègre AUTOMATIQUEMENT dans sa matrice de transformation.
+  // Elle "sait" que ces pixels = 16.8cm, donc la transformation est correcte.
+  // 
+  // Appliquer ensuite la correction des bandes = DOUBLE CORRECTION = erreur !
+  // 
+  // L'analyse des bandes reste utile pour :
+  // - Le mode calibration simple (sans homographie)
+  // - Diagnostiquer la qualité de l'image
+  // - Détecter des problèmes optiques
+  // 
+  // Mais pour le MODE HOMOGRAPHIE, on ne l'applique PAS.
+  // ═══════════════════════════════════════════════════════════════════════════
+  
+  console.log(`   ✅ Mode homographie: PAS de correction bandes (déjà intégrée dans la matrice H)`);
+  
+  // Log informatif des erreurs de bandes (diagnostic uniquement)
+  if (analysis.bandAnalysis.transitionRatios.length >= 8) {
+    const ratios = analysis.bandAnalysis.transitionRatios;
+    const widthBands = ratios.filter(r => r.edge === 'top' || r.edge === 'bottom');
+    const avgWidthError = widthBands.reduce((sum, r) => sum + r.error, 0) / (widthBands.length || 1);
+    const heightBands = ratios.filter(r => r.edge === 'left' || r.edge === 'right');
+    const avgHeightError = heightBands.reduce((sum, r) => sum + r.error, 0) / (heightBands.length || 1);
+    console.log(`   📊 [INFO] Erreur bandes détectée: X=${avgWidthError.toFixed(2)}%, Y=${avgHeightError.toFixed(2)}% (non appliquée)`);
+  }
+  
+  // Pas de correction gyroscope non plus en mode homographie
+  // L'homographie corrige la perspective complètement
+  console.log(`   ✅ Mode homographie: PAS de correction gyroscope (perspective déjà corrigée)`);
+  
+  console.log(`🎯 [CORRECTION SANS BANDES PAR AXE] X = ×${correctionXSansBandes.toFixed(4)}, Y = ×${correctionYSansBandes.toFixed(4)}`);
   
   // ═══════════════════════════════════════════════════════════════════════════
   // RÉSULTAT FINAL
@@ -4060,7 +4296,8 @@ export function calculateOptimalCorrection(
   - Bandes: ×${contributions.bandAnalysis.correction.toFixed(4)} (poids ${(contributions.bandAnalysis.weight * 100).toFixed(0)}%)
   - RANSAC: ×${contributions.ransacError.correction.toFixed(4)} (poids ${(contributions.ransacError.weight * 100).toFixed(0)}%)
   - Reprojection: ×${contributions.reprojection.correction.toFixed(4)} (poids ${(contributions.reprojection.weight * 100).toFixed(0)}%)
-  - Pose: ×${contributions.poseCompensation.correction.toFixed(4)} (poids ${(contributions.poseCompensation.weight * 100).toFixed(0)}%)${gyroStr}`;
+  - Pose: ×${contributions.poseCompensation.correction.toFixed(4)} (poids ${(contributions.poseCompensation.weight * 100).toFixed(0)}%)${gyroStr}
+  📌 SANS BANDES (homographie): X=×${correctionXSansBandes.toFixed(4)}, Y=×${correctionYSansBandes.toFixed(4)}`;
   
   console.log(`\n🎯 [CORRECTION OPTIMALE] ${explanation}\n`);
   
@@ -4068,6 +4305,8 @@ export function calculateOptimalCorrection(
     finalCorrection: parseFloat(finalCorrection.toFixed(6)),
     correctionX: parseFloat(correctionX.toFixed(6)),
     correctionY: parseFloat(correctionY.toFixed(6)),
+    correctionXSansBandes: parseFloat(correctionXSansBandes.toFixed(6)),
+    correctionYSansBandes: parseFloat(correctionYSansBandes.toFixed(6)),
     contributions,
     globalConfidence: parseFloat(globalConfidence.toFixed(4)),
     explanation

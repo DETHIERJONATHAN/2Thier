@@ -12,7 +12,7 @@
  */
 
 import React, { useState, useCallback, useRef, useMemo } from 'react';
-import { Upload, Button, message, Spin, Space, Tag, Tooltip, Dropdown } from 'antd';
+import { Upload, Button, message, Spin, Space, Tag, Tooltip, Dropdown, Modal } from 'antd';
 import type { MenuProps } from 'antd';
 import { 
   UploadOutlined, 
@@ -24,16 +24,18 @@ import {
   PictureOutlined,
   VideoCameraOutlined,
   SettingOutlined,
-  ThunderboltOutlined
+  ThunderboltOutlined,
+  PrinterOutlined
 } from '@ant-design/icons';
 import { useAuth } from '../../../../../auth/useAuth';
 import { useAIMeasure, getAIMeasureConfig, type AIMeasureConfig, type AIMeasureResult } from '../../../../../hooks/useAIMeasure';
 import { useSmartCameraConfig } from '../../../../../hooks/useSmartCameraConfig';
-import SmartCaptureFlow from '../../../../SmartCamera/SmartCaptureFlow';
-import type { CapturedPhoto } from '../../../../SmartCamera/SmartCameraMobile';
+import SmartCameraMobile, { type CapturedPhoto } from '../../../../SmartCamera/SmartCameraMobile';
+import CalibrationMarker from '../../../../SmartCamera/CalibrationMarker';
 import type { MultiPhotoAnalysis } from '../../../../SmartCamera/PhotoAnalyzer';
 import { ReferenceObjectsConfig } from '../../../../SmartCamera/ReferenceObjectsConfig';
 import { ImageMeasurementPreview } from '../../../../ImageMeasurement/ImageMeasurementPreview';
+import ImageWithAnnotationsOverlay from '../../../../ImageMeasurement/ImageWithAnnotationsOverlay';
 import type { MeasurementResults, ImageAnnotations } from '../../../../../types/measurement';
 
 interface TBLImageFieldWithAIProps {
@@ -106,6 +108,7 @@ const TBLImageFieldWithAI: React.FC<TBLImageFieldWithAIProps> = ({
   // États pour les modaux SmartCamera
   const [showSmartCamera, setShowSmartCamera] = useState(false);
   const [showReferenceConfig, setShowReferenceConfig] = useState(false);
+  const [showArucoMarker, setShowArucoMarker] = useState(false);
   
   // 🆕 États pour ImageMeasurementPreview (canvas de sélection des lignes)
   const [showMeasurementCanvas, setShowMeasurementCanvas] = useState(false);
@@ -115,6 +118,15 @@ const TBLImageFieldWithAI: React.FC<TBLImageFieldWithAIProps> = ({
   const [isFromSmartCapture, setIsFromSmartCapture] = useState(false);
   // 🔬 Analyse complète ArUco pour le panel Canvas
   const [arucoAnalysis, setArucoAnalysis] = useState<any>(null);
+  
+  // 🆕 États pour stocker l'image avec annotations et les mesures
+  const [annotatedImageUrl, setAnnotatedImageUrl] = useState<string | null>(null);
+  const [savedAnnotations, setSavedAnnotations] = useState<ImageAnnotations | null>(null);
+  const [savedMeasurements, setSavedMeasurements] = useState<MeasurementResults | null>(null);
+  const [isAnalyzingAruco, setIsAnalyzingAruco] = useState(false);
+  
+  // 🆕 État pour le modal plein écran
+  const [showFullscreenImage, setShowFullscreenImage] = useState(false);
   
   // Refs pour les inputs file (galerie et caméra)
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -317,16 +329,15 @@ const TBLImageFieldWithAI: React.FC<TBLImageFieldWithAIProps> = ({
   }, []);
   
   /**
-   * 🔥 Handler pour le SmartCamera (capture multi-photos avec ULTRA-FUSION + ArUco 105 points)
+   * 🔥 Handler pour le SmartCamera (capture multi-photos avec ULTRA-FUSION + ArUco)
    * 
-   * WORKFLOW OPTIMISÉ:
+   * WORKFLOW PARFAIT:
    * 1. Capturer N photos
-   * 2. 🚀 OUVRIR LE CANVAS IMMÉDIATEMENT avec la première photo
-   * 3. En arrière-plan: appeler /ultra-fusion-detect → ArUco 105 points
-   * 4. Mettre à jour le canvas avec les coins ArUco quand l'analyse est prête
+   * 2. 🔬 ATTENDRE l'analyse ArUco (message "Analyse en cours...")
+   * 3. 🚀 OUVRIR LE CANVAS avec TOUT déjà calibré parfaitement
    */
-  const handleSmartCapture = useCallback(async (photos: CapturedPhoto[], analysis: MultiPhotoAnalysis) => {
-    console.log('[TBLImageFieldWithAI] 🔥 SmartCamera capture:', photos.length, 'photos');
+  const handleSmartCapture = useCallback(async (photos: CapturedPhoto[]) => {
+    console.log('[TBLImageFieldWithAI] 🔥 IA Photo capture:', photos.length, 'photos');
     
     if (photos.length === 0) {
       message.error('Aucune photo capturée');
@@ -334,23 +345,12 @@ const TBLImageFieldWithAI: React.FC<TBLImageFieldWithAIProps> = ({
       return;
     }
     
-    // 🚀 OUVRIR LE CANVAS IMMÉDIATEMENT avec la première photo
-    const firstPhoto = photos[0]?.imageBase64 || '';
-    const base64Part = firstPhoto.includes(',') ? firstPhoto.split(',')[1] : firstPhoto;
-    
-    setProcessedImageUrl(firstPhoto);
-    setProcessedImageBase64(base64Part);
-    setIsFromSmartCapture(true);
-    setCapturedPhotos(photos);
-    
-    // Fermer SmartCamera et ouvrir le canvas TOUT DE SUITE
+    // Fermer SmartCamera
     setShowSmartCamera(false);
-    setShowMeasurementCanvas(true);
     
-    console.log('[TBLImageFieldWithAI] 🚀 Canvas ouvert immédiatement!');
-    
-    // 🔬 Lancer l'analyse ArUco en arrière-plan (sans bloquer)
-    message.loading({ content: '🔬 Analyse ArUco en cours...', key: 'ultra-fusion', duration: 0 });
+    // 🔬 Montrer l'état d'attente
+    setIsAnalyzingAruco(true);
+    message.loading({ content: '🔬 Analyse ArUco en cours... Patientez', key: 'ultra-fusion', duration: 0 });
     
     try {
       console.log('[TBLImageFieldWithAI] 🎯 Appel /ultra-fusion-detect avec', photos.length, 'photos');
@@ -399,67 +399,113 @@ const TBLImageFieldWithAI: React.FC<TBLImageFieldWithAIProps> = ({
           key: 'ultra-fusion' 
         });
         
-        // 🏆 Mettre à jour avec la MEILLEURE photo si différente
-        const bestPhotoIndex = result.bestPhoto?.index || 0;
-        if (bestPhotoIndex > 0 && result.bestPhotoBase64) {
-          const bestImage = `data:image/jpeg;base64,${result.bestPhotoBase64}`;
-          setProcessedImageUrl(bestImage);
-          setProcessedImageBase64(result.bestPhotoBase64);
-          console.log(`[TBLImageFieldWithAI] 🔄 Mise à jour avec la meilleure photo (index ${bestPhotoIndex})`);
+        // 🔧 Extraire la correction optimale calculée par l'API
+        const optimalCorrection = result.optimalCorrection || null;
+        if (optimalCorrection) {
+          console.log(`   🎯 Correction optimale: ×${optimalCorrection.finalCorrection?.toFixed(4)} (confiance: ${(optimalCorrection.globalConfidence * 100).toFixed(0)}%)`);
         }
         
-        // 🎯 Stocker les coins ArUco pour le canvas (il va les détecter via fusedCorners)
-        if (result.fusedCorners) {
-          // 🔧 Extraire la correction optimale calculée par l'API
-          const optimalCorrection = result.optimalCorrection || null;
-          if (optimalCorrection) {
-            console.log(`   🎯 Correction optimale: ×${optimalCorrection.finalCorrection?.toFixed(4)} (confiance: ${(optimalCorrection.globalConfidence * 100).toFixed(0)}%)`);
+        // 🏆 Utiliser la MEILLEURE photo
+        const bestPhotoIndex = result.bestPhoto?.index || 0;
+        const bestImage = result.bestPhotoBase64 
+          ? `data:image/jpeg;base64,${result.bestPhotoBase64}`
+          : photos[0]?.imageBase64?.startsWith('data:') 
+            ? photos[0].imageBase64 
+            : `data:image/jpeg;base64,${photos[0]?.imageBase64}`;
+        
+        setProcessedImageUrl(bestImage);
+        setProcessedImageBase64(result.bestPhotoBase64 || photos[0]?.imageBase64?.split(',')[1] || photos[0]?.imageBase64 || '');
+        setIsFromSmartCapture(true);
+        
+        // 🎯 Créer les photos enrichies avec toutes les données ArUco
+        const enrichedPhotos = photos.map((photo, idx) => ({
+          imageBase64: idx === bestPhotoIndex && result.bestPhotoBase64 
+            ? result.bestPhotoBase64 
+            : photo.imageBase64?.includes(',') ? photo.imageBase64.split(',')[1] : photo.imageBase64 || '',
+          mimeType: 'image/jpeg',
+          metadata: {
+            ...photo.metadata,
+            qualityScore: result.allPhotoScores?.find((d: any) => d.index === idx)?.score || 85,
+            sharpness: 85,
+            arucoDetected: idx === bestPhotoIndex,
+            ultraPrecision: idx === bestPhotoIndex ? result.ultraPrecision : null,
+            fusedCorners: idx === bestPhotoIndex ? result.fusedCorners : null,
+            optimalCorrection: idx === bestPhotoIndex ? optimalCorrection : null,
+            homography: null
           }
-          
-          const enrichedPhotos = photos.map((photo, idx) => ({
-            imageBase64: idx === bestPhotoIndex && result.bestPhotoBase64 
-              ? result.bestPhotoBase64 
-              : photo.imageBase64?.includes(',') ? photo.imageBase64.split(',')[1] : photo.imageBase64 || '',
-            mimeType: 'image/jpeg',
-            metadata: {
-              ...photo.metadata,
-              qualityScore: result.allPhotoScores?.find((d: any) => d.index === idx)?.score || 85,
-              sharpness: 85,
-              arucoDetected: idx === bestPhotoIndex,
-              ultraPrecision: idx === bestPhotoIndex ? result.ultraPrecision : null,
-              // 🎯 PASSER LES COINS ARUCO AU CANVAS
-              fusedCorners: idx === bestPhotoIndex ? result.fusedCorners : null,
-              // 🔧 CORRECTION OPTIMALE pour appliquer aux mesures
-              optimalCorrection: idx === bestPhotoIndex ? optimalCorrection : null,
-              homography: null
-            }
-          }));
-          setCapturedPhotos(enrichedPhotos as any);
-        }
-      } else {
-        console.log('   ⚠️ ArUco non détecté');
-        message.warning({ 
-          content: '⚠️ ArUco non détecté, calibration manuelle nécessaire', 
+        }));
+        
+        setCapturedPhotos(enrichedPhotos as any);
+        
+        message.success({ 
+          content: `🎯 ArUco détecté! Ouverture du canvas...`, 
           key: 'ultra-fusion' 
         });
+        
+        // 🚀 MAINTENANT ouvrir le canvas avec TOUT déjà calibré
+        console.log('[TBLImageFieldWithAI] 🚀 Ouverture du canvas avec données ArUco complètes!');
+        setIsAnalyzingAruco(false);
+        setShowMeasurementCanvas(true);
+        
+      } else {
+        // ArUco non détecté - ouvrir le canvas quand même
+        console.log('   ⚠️ ArUco non détecté');
+        message.warning({ 
+          content: '⚠️ ArUco non détecté - Calibration manuelle', 
+          key: 'ultra-fusion' 
+        });
+        
+        // Préparer la première photo
+        const firstPhoto = photos[0]?.imageBase64 || '';
+        const base64Part = firstPhoto.includes(',') ? firstPhoto.split(',')[1] : firstPhoto;
+        setProcessedImageUrl(firstPhoto.startsWith('data:') ? firstPhoto : `data:image/jpeg;base64,${base64Part}`);
+        setProcessedImageBase64(base64Part);
+        setIsFromSmartCapture(true);
+        setCapturedPhotos(photos);
+        
+        setIsAnalyzingAruco(false);
+        setShowMeasurementCanvas(true);
       }
       
     } catch (error: any) {
       console.error('[TBLImageFieldWithAI] ❌ Erreur analyse ArUco:', error);
-      message.warning({ content: `Calibration manuelle requise: ${error.message}`, key: 'ultra-fusion' });
-      // Le canvas est déjà ouvert, l'utilisateur peut calibrer manuellement
+      message.warning({ content: `Erreur: ${error.message}`, key: 'ultra-fusion' });
+      
+      // En cas d'erreur, ouvrir le canvas quand même
+      const firstPhoto = photos[0]?.imageBase64 || '';
+      const base64Part = firstPhoto.includes(',') ? firstPhoto.split(',')[1] : firstPhoto;
+      setProcessedImageUrl(firstPhoto.startsWith('data:') ? firstPhoto : `data:image/jpeg;base64,${base64Part}`);
+      setProcessedImageBase64(base64Part);
+      setIsFromSmartCapture(true);
+      setCapturedPhotos(photos);
+      
+      setIsAnalyzingAruco(false);
+      setShowMeasurementCanvas(true);
     }
   }, []);
 
   /**
    * 🆕 Handler pour la validation des mesures depuis ImageMeasurementCanvas
+   * Sauvegarde l'image AVEC les annotations pour pouvoir la revoir
    */
   const handleMeasurementsComplete = useCallback((measurements: MeasurementResults, annotations?: ImageAnnotations) => {
-    console.log('[TBLImageFieldWithAI] Mesures extraites:', measurements, 'annotations:', annotations);
+    console.log('[TBLImageFieldWithAI] 📐 Mesures extraites:', measurements);
+    console.log('[TBLImageFieldWithAI] 🎯 Annotations reçues:', annotations ? {
+      hasReferenceCorners: !!annotations.referenceCorners,
+      hasImageDimensions: !!annotations.imageDimensions,
+      hasMeasurementPoints: annotations.measurementPoints?.length || 0,
+      markerSizeCm: annotations.markerSizeCm
+    } : 'null');
+    
+    // 🆕 Sauvegarder les annotations et mesures pour pouvoir les revoir
+    setSavedAnnotations(annotations || null);
+    setSavedMeasurements(measurements);
     
     // Sauvegarder l'image traitée dans le champ
     if (processedImageUrl) {
       onChange(processedImageUrl);
+      // Aussi sauvegarder comme image annotée (pour l'instant la même, mais pourrait être avec overlay)
+      setAnnotatedImageUrl(processedImageUrl);
     }
     
     // Appliquer les mesures aux champs mappés
@@ -467,10 +513,10 @@ const TBLImageFieldWithAI: React.FC<TBLImageFieldWithAIProps> = ({
       let appliedCount = 0;
       aiMeasure_keys.forEach(mapping => {
         // Accéder à la mesure par clé (string index)
-        const value = measurements[mapping.key as keyof MeasurementResults];
-        if (value !== undefined && mapping.targetRef) {
-          console.log(`[TBLImageFieldWithAI] Application: ${mapping.key} = ${value} → ${mapping.targetRef}`);
-          onFieldUpdate(mapping.targetRef, value);
+        const measureValue = measurements[mapping.key as keyof MeasurementResults];
+        if (measureValue !== undefined && mapping.targetRef) {
+          console.log(`[TBLImageFieldWithAI] Application: ${mapping.key} = ${measureValue} → ${mapping.targetRef}`);
+          onFieldUpdate(mapping.targetRef, measureValue);
           appliedCount++;
         }
       });
@@ -531,12 +577,12 @@ const TBLImageFieldWithAI: React.FC<TBLImageFieldWithAIProps> = ({
           style={{ display: 'none' }}
         />
         
-        {/* Boutons d'action - Simplifiés: uniquement multi-photo et mesure */}
+        {/* Boutons d'action - IA Photo + ArUco */}
         <Space wrap>
           {/* 🎯 SmartCamera IA (multi-photos) - Bouton principal */}
           {aiMeasure_enabled && (
             <>
-              <Tooltip title="📸 Multi-photos + Mesures ArUco">
+              <Tooltip title="📸 Capture IA avec mesures automatiques">
                 <Button
                   icon={<ThunderboltOutlined />}
                   onClick={() => setShowSmartCamera(true)}
@@ -545,30 +591,65 @@ const TBLImageFieldWithAI: React.FC<TBLImageFieldWithAIProps> = ({
                   type="primary"
                   style={{ background: '#722ed1', borderColor: '#722ed1' }}
                 >
-                  Multi-Photo
+                  IA Photo
                 </Button>
               </Tooltip>
               
-              {/* 🆕 Bouton pour rouvrir le canvas de mesure sur l'image existante */}
-              {value && (
-                <Tooltip title="📐 Mesurer l'image actuelle">
+              {/* 🖨️ Bouton ArUco - Impression du marqueur de calibration */}
+              <Tooltip title="🖨️ Imprimer le marqueur ArUco de calibration">
+                <Button
+                  icon={<PrinterOutlined />}
+                  onClick={() => setShowArucoMarker(true)}
+                  disabled={disabled}
+                  size={size}
+                  type="default"
+                  style={{ borderColor: '#fa8c16', color: '#fa8c16' }}
+                >
+                  ArUco
+                </Button>
+              </Tooltip>
+              
+              {/* 🆕 Bouton "Mesurer" - UNIQUEMENT si des photos ont été analysées avec ArUco */}
+              {capturedPhotos.length > 0 && capturedPhotos.some(p => (p.metadata as any)?.arucoDetected) && (
+                <Tooltip title="📐 Revoir l'analyse avec ArUco détecté">
                   <Button
                     icon={<RobotOutlined />}
                     onClick={() => {
-                      setProcessedImageUrl(typeof value === 'string' ? value : (value as any)?.original);
-                      setProcessedImageBase64(
-                        typeof value === 'string' 
-                          ? value.split(',')[1] || value 
-                          : (value as any)?.original?.split(',')[1] || (value as any)?.original
+                      // 🎯 Réutiliser les photos analysées avec ArUco
+                      const bestPhoto = capturedPhotos.find(p => (p.metadata as any)?.arucoDetected);
+                      const photoToUse = bestPhoto || capturedPhotos[0];
+                      
+                      const base64 = photoToUse.imageBase64?.includes(',') 
+                        ? photoToUse.imageBase64.split(',')[1] 
+                        : photoToUse.imageBase64 || '';
+                      
+                      setProcessedImageUrl(
+                        photoToUse.imageBase64?.startsWith('data:') 
+                          ? photoToUse.imageBase64 
+                          : `data:image/jpeg;base64,${base64}`
                       );
+                      setProcessedImageBase64(base64);
+                      setIsFromSmartCapture(true);
+                      
+                      console.log('[TBLImageFieldWithAI] 📐 Revoir analyse ArUco:', {
+                        totalPhotos: capturedPhotos.length,
+                        bestPhotoHasAruco: !!(bestPhoto?.metadata as any)?.arucoDetected,
+                        hasOptimalCorrection: !!(bestPhoto?.metadata as any)?.optimalCorrection,
+                        hasFusedCorners: !!(bestPhoto?.metadata as any)?.fusedCorners
+                      });
+                      
                       setShowMeasurementCanvas(true);
                     }}
                     disabled={disabled || isAnalyzingAI}
                     size={size}
                     type="default"
-                    style={{ borderColor: '#1890ff', color: '#1890ff' }}
+                    style={{ 
+                      borderColor: '#52c41a',
+                      color: '#52c41a',
+                      fontWeight: 'bold'
+                    }}
                   >
-                    Mesurer
+                    ✓ Mesurer
                   </Button>
                 </Tooltip>
               )}
@@ -576,21 +657,118 @@ const TBLImageFieldWithAI: React.FC<TBLImageFieldWithAIProps> = ({
           )}
         </Space>
         
-        {/* Aperçu de l'image */}
-        {value && (
-          <div style={{ position: 'relative', display: 'inline-block' }}>
-            <img 
-              src={typeof value === 'string' ? value : (value as any)?.original}
-              alt="preview" 
-              style={{ 
-                width: '150px', 
-                height: '150px', 
-                objectFit: 'cover', 
-                border: '1px solid #d9d9d9',
-                borderRadius: '6px',
-                opacity: isAnalyzingAI ? 0.5 : 1
-              }} 
-            />
+        {/* 🔬 Indicateur d'analyse ArUco en cours */}
+        {isAnalyzingAruco && (
+          <div style={{
+            padding: '12px 16px',
+            background: 'linear-gradient(90deg, #722ed1, #1890ff)',
+            borderRadius: '8px',
+            color: 'white',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 12
+          }}>
+            <Spin indicator={<LoadingOutlined style={{ fontSize: 20, color: 'white' }} spin />} />
+            <span>🔬 Analyse ArUco en cours... Patientez</span>
+          </div>
+        )}
+        
+        {/* Aperçu de l'image - CLIQUABLE pour plein écran */}
+        {(value || capturedPhotos.length > 0) && !isAnalyzingAruco && (
+          <div 
+            style={{ position: 'relative', display: 'inline-block', cursor: 'pointer' }}
+            onClick={() => setShowFullscreenImage(true)}
+            title="Cliquez pour voir en plein écran"
+          >
+            {/* 🎯 Afficher la meilleure photo (avec ArUco si disponible) */}
+            {(() => {
+              let imgSrc = typeof value === 'string' ? value : (value as any)?.original;
+              let hasAruco = false;
+              
+              // Si on a des photos capturées, utiliser celle avec ArUco
+              if (capturedPhotos.length > 0) {
+                const bestPhoto = capturedPhotos.find(p => (p.metadata as any)?.arucoDetected);
+                const photoToShow = bestPhoto || capturedPhotos[0];
+                hasAruco = !!(bestPhoto?.metadata as any)?.arucoDetected;
+                
+                const base64 = photoToShow.imageBase64;
+                imgSrc = base64?.startsWith('data:') 
+                  ? base64 
+                  : `data:image/jpeg;base64,${base64}`;
+              }
+              
+              return (
+                <>
+                  <img 
+                    src={imgSrc}
+                    alt="preview" 
+                    style={{ 
+                      width: '150px', 
+                      height: '150px', 
+                      objectFit: 'cover', 
+                      border: hasAruco ? '3px solid #52c41a' : '1px solid #d9d9d9',
+                      borderRadius: '8px',
+                      opacity: isAnalyzingAI ? 0.5 : 1,
+                      transition: 'transform 0.2s',
+                    }} 
+                    onMouseOver={(e) => e.currentTarget.style.transform = 'scale(1.05)'}
+                    onMouseOut={(e) => e.currentTarget.style.transform = 'scale(1)'}
+                  />
+                  
+                  {/* 🎯 Badge ArUco si détecté */}
+                  {hasAruco && (
+                    <div style={{
+                      position: 'absolute',
+                      top: -8,
+                      right: -8,
+                      background: '#52c41a',
+                      color: 'white',
+                      borderRadius: '50%',
+                      width: 28,
+                      height: 28,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      fontSize: 16,
+                      fontWeight: 'bold',
+                      boxShadow: '0 2px 6px rgba(0,0,0,0.3)'
+                    }}>
+                      ✓
+                    </div>
+                  )}
+                  
+                  {/* 🔍 Icône zoom */}
+                  <div style={{
+                    position: 'absolute',
+                    bottom: 4,
+                    left: 4,
+                    background: 'rgba(0,0,0,0.6)',
+                    color: 'white',
+                    borderRadius: '4px',
+                    padding: '2px 6px',
+                    fontSize: 11
+                  }}>
+                    🔍 Clic = Zoom
+                  </div>
+                  
+                  {/* 📸 Compteur de photos si plusieurs */}
+                  {capturedPhotos.length > 1 && (
+                    <div style={{
+                      position: 'absolute',
+                      bottom: 4,
+                      right: 4,
+                      background: 'rgba(0,0,0,0.7)',
+                      color: 'white',
+                      borderRadius: '4px',
+                      padding: '2px 6px',
+                      fontSize: 11
+                    }}>
+                      {capturedPhotos.length} photos
+                    </div>
+                  )}
+                </>
+              );
+            })()}
             
             {/* Indicateur d'analyse en cours */}
             {isAnalyzingAI && (
@@ -658,14 +836,35 @@ const TBLImageFieldWithAI: React.FC<TBLImageFieldWithAIProps> = ({
       {/* 🎯 NOUVEAU: Modaux SmartCamera - Visibles si capacité aiMeasure activée */}
       {aiMeasure_enabled && (
         <>
-          {/* Modal de capture SmartCamera multi-photos */}
-          <SmartCaptureFlow
-            visible={showSmartCamera}
-            onClose={() => setShowSmartCamera(false)}
-            onComplete={handleSmartCapture}
-            targetObject="custom"
-            objectLabel="panneau solaire"
-          />
+          {/* 📸 Modal IA Photo - SmartCamera direct */}
+          <Modal
+            open={showSmartCamera}
+            onCancel={() => setShowSmartCamera(false)}
+            footer={null}
+            width="100%"
+            style={{ top: 0, padding: 0, maxWidth: '100vw' }}
+            styles={{ body: { padding: 0, height: '100vh' } }}
+            destroyOnClose
+            closable={false}
+          >
+            <SmartCameraMobile
+              onCapture={handleSmartCapture}
+              onCancel={() => setShowSmartCamera(false)}
+              minPhotos={3}
+            />
+          </Modal>
+          
+          {/* 🖨️ Modal ArUco - Impression du marqueur */}
+          <Modal
+            open={showArucoMarker}
+            onCancel={() => setShowArucoMarker(false)}
+            footer={null}
+            width={800}
+            title="🎯 Marqueur ArUco de Calibration"
+            destroyOnClose
+          >
+            <CalibrationMarker />
+          </Modal>
           
           {/* Modal de configuration des objets de référence */}
           <ReferenceObjectsConfig
@@ -725,6 +924,141 @@ const TBLImageFieldWithAI: React.FC<TBLImageFieldWithAIProps> = ({
           />
         </>
       )}
+      
+      {/* 🆕 Modal plein écran pour voir l'image AVEC les annotations ArUco et mesures */}
+      <Modal
+        open={showFullscreenImage}
+        onCancel={() => setShowFullscreenImage(false)}
+        footer={null}
+        width="95vw"
+        style={{ top: 20 }}
+        styles={{ body: { padding: 0, background: '#000', height: '85vh', overflow: 'hidden' } }}
+        closable
+        destroyOnClose
+      >
+        {(() => {
+          let imgSrc = typeof value === 'string' ? value : (value as any)?.original;
+          
+          // Si on a des photos capturées, utiliser celle avec ArUco
+          if (capturedPhotos.length > 0) {
+            const bestPhoto = capturedPhotos.find(p => (p.metadata as any)?.arucoDetected);
+            const photoToShow = bestPhoto || capturedPhotos[0];
+            const base64 = photoToShow.imageBase64;
+            imgSrc = base64?.startsWith('data:') 
+              ? base64 
+              : `data:image/jpeg;base64,${base64}`;
+          }
+          
+          // 🎯 Si on a des annotations sauvegardées, utiliser le composant overlay
+          if (savedAnnotations && imgSrc) {
+            return (
+              <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+                {/* Image avec annotations dessinées */}
+                <div style={{ flex: 1, minHeight: 0 }}>
+                  <ImageWithAnnotationsOverlay
+                    imageUrl={imgSrc}
+                    annotations={savedAnnotations}
+                    markerSizeCm={savedAnnotations.markerSizeCm || 16.8}
+                    style={{ height: '100%' }}
+                  />
+                </div>
+                
+                {/* Barre d'infos en bas */}
+                <div style={{ 
+                  padding: '12px 16px', 
+                  background: 'rgba(0,0,0,0.8)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 16,
+                  flexWrap: 'wrap'
+                }}>
+                  {capturedPhotos.some(p => (p.metadata as any)?.arucoDetected) && (
+                    <div style={{ 
+                      padding: '4px 12px', 
+                      background: '#52c41a', 
+                      color: 'white',
+                      borderRadius: 4,
+                      fontSize: 12
+                    }}>
+                      ✓ ArUco détecté
+                    </div>
+                  )}
+                  
+                  {savedMeasurements && (
+                    <>
+                      {savedMeasurements.largeur_cm && (
+                        <div style={{ color: 'white', fontSize: 14 }}>
+                          <strong>L:</strong> {savedMeasurements.largeur_cm.toFixed(1)} cm
+                        </div>
+                      )}
+                      {savedMeasurements.hauteur_cm && (
+                        <div style={{ color: 'white', fontSize: 14 }}>
+                          <strong>H:</strong> {savedMeasurements.hauteur_cm.toFixed(1)} cm
+                        </div>
+                      )}
+                      {savedMeasurements.surface_brute_m2 && (
+                        <div style={{ color: 'white', fontSize: 14 }}>
+                          <strong>Surface:</strong> {savedMeasurements.surface_brute_m2.toFixed(3)} m²
+                        </div>
+                      )}
+                    </>
+                  )}
+                </div>
+              </div>
+            );
+          }
+          
+          // Fallback: image simple sans annotations
+          return (
+            <div style={{ textAlign: 'center', background: '#000', padding: 16, height: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+              <img 
+                src={imgSrc}
+                alt="Image plein écran" 
+                style={{ 
+                  maxWidth: '100%', 
+                  maxHeight: '75vh',
+                  objectFit: 'contain'
+                }} 
+              />
+              
+              {/* Infos sur l'image */}
+              {capturedPhotos.some(p => (p.metadata as any)?.arucoDetected) && (
+                <div style={{ 
+                  marginTop: 12, 
+                  padding: '8px 16px', 
+                  background: '#52c41a', 
+                  color: 'white',
+                  borderRadius: 4,
+                  display: 'inline-block'
+                }}>
+                  ✓ ArUco détecté - Calibration précise
+                </div>
+              )}
+              
+              {savedMeasurements && Object.keys(savedMeasurements).length > 0 && (
+                <div style={{ 
+                  marginTop: 12, 
+                  padding: '12px 16px', 
+                  background: 'rgba(255,255,255,0.1)', 
+                  color: 'white',
+                  borderRadius: 4,
+                  textAlign: 'left',
+                  maxWidth: 400,
+                  margin: '12px auto'
+                }}>
+                  <div style={{ fontWeight: 'bold', marginBottom: 8 }}>📐 Mesures enregistrées :</div>
+                  {Object.entries(savedMeasurements).map(([key, val]) => (
+                    <div key={key} style={{ marginLeft: 8 }}>
+                      • {key}: <strong>{val}</strong>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          );
+        })()}
+      </Modal>
     </div>
   );
 };

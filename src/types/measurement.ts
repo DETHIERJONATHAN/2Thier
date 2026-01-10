@@ -123,6 +123,21 @@ export interface ImageAnnotations {
   measurementPoints: MeasurementPoint[];
   exclusionZones?: ExclusionZone[];
   measurements: MeasurementResults;
+  // 🎯 ARUCO: Coins de référence pour dessiner le quadrilatère ArUco
+  referenceCorners?: {
+    topLeft: { x: number; y: number };
+    topRight: { x: number; y: number };
+    bottomLeft: { x: number; y: number };
+    bottomRight: { x: number; y: number };
+  };
+  // 📐 Dimensions de l'image (pour convertir % → pixels)
+  imageDimensions?: {
+    width: number;
+    height: number;
+    scale: number;
+  };
+  // 🎯 Taille du marqueur ArUco en cm
+  markerSizeCm?: number;
   createdAt?: Date;
   updatedAt?: Date;
 }
