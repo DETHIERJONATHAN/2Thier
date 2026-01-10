@@ -60853,12 +60853,29 @@ var MarkerDetector = class {
   }
   /**
    * Calculer le gradient de luminosité à une position donnée
+   * 🔧 AMÉLIORÉ: Multi-échelle + sharpening pour meilleure détection des bords flous
    */
   calculateGradientAt(data, width, height, x, y, dirX, dirY) {
-    const step = 2;
-    const before = this.sampleLuminosity(data, width, height, x - dirX * step, y - dirY * step);
-    const after = this.sampleLuminosity(data, width, height, x + dirX * step, y + dirY * step);
-    return after - before;
+    const getGradient = (step) => {
+      const before = this.sampleLuminositySharpened(data, width, height, x - dirX * step, y - dirY * step);
+      const after = this.sampleLuminositySharpened(data, width, height, x + dirX * step, y + dirY * step);
+      return after - before;
+    };
+    const g1 = getGradient(1);
+    const g2 = getGradient(2);
+    const g3 = getGradient(3);
+    return 0.25 * g1 + 0.5 * g2 + 0.25 * g3;
+  }
+  /**
+   * 🆕 Échantillonner la luminosité avec unsharp mask (accentuation des bords)
+   * Formule: sharpened = original + α × (original - blurred)
+   */
+  sampleLuminositySharpened(data, width, height, x, y) {
+    const original = this.sampleLuminosity(data, width, height, x, y);
+    const blurred = (this.sampleLuminosity(data, width, height, x - 1.5, y) + this.sampleLuminosity(data, width, height, x + 1.5, y) + this.sampleLuminosity(data, width, height, x, y - 1.5) + this.sampleLuminosity(data, width, height, x, y + 1.5)) / 4;
+    const alpha = 0.5;
+    const sharpened = original + alpha * (original - blurred);
+    return Math.max(0, Math.min(255, sharpened));
   }
   /**
    * Échantillonner la luminosité à une position (avec interpolation bilinéaire)
@@ -62124,13 +62141,16 @@ function detectPatternGridCorners(data, width, height, corners) {
   const markerSize = MARKER_SPECS.markerSize;
   const patternStart = MARKER_SPECS.ratios.innerToOuter;
   const patternEnd = MARKER_SPECS.ratios.whiteToOuter;
-  const cellSize = 1 / markerSize;
+  const patternSizeCm = markerSize / 3;
+  const cellSizeCm = patternSizeCm / 6;
+  const cellSizeRatio = cellSizeCm / markerSize;
+  const patternStartCm = markerSize / 3;
   for (let row = 0; row <= 6; row++) {
     for (let col = 0; col <= 6; col++) {
-      const ratioX = patternStart + col * cellSize;
-      const ratioY = patternStart + row * cellSize;
-      const realX = 6 + col;
-      const realY = 6 + row;
+      const ratioX = patternStart + col * cellSizeRatio;
+      const ratioY = patternStart + row * cellSizeRatio;
+      const realX = patternStartCm + col * cellSizeCm;
+      const realY = patternStartCm + row * cellSizeCm;
       const pixelPos = bilinearInterpolate(tl, tr, br, bl, ratioX, ratioY);
       const refined = harrisCornerRefine(data, width, height, pixelPos, 10);
       points.push({
@@ -62148,14 +62168,16 @@ function detectPatternCellCenters(data, width, height, corners) {
   const points = [];
   const [tl, tr, br, bl] = corners;
   const markerSize = MARKER_SPECS.markerSize;
-  const patternStart = 6 / markerSize;
-  const cellSize = 1 / markerSize;
+  const patternStartCm = markerSize / 3;
+  const cellSizeCm = markerSize / 18;
+  const patternStartRatio = 1 / 3;
+  const cellSizeRatio = cellSizeCm / markerSize;
   for (let row = 0; row < 6; row++) {
     for (let col = 0; col < 6; col++) {
-      const ratioX = patternStart + (col + 0.5) * cellSize;
-      const ratioY = patternStart + (row + 0.5) * cellSize;
-      const realX = 6.5 + col;
-      const realY = 6.5 + row;
+      const ratioX = patternStartRatio + (col + 0.5) * cellSizeRatio;
+      const ratioY = patternStartRatio + (row + 0.5) * cellSizeRatio;
+      const realX = patternStartCm + (col + 0.5) * cellSizeCm;
+      const realY = patternStartCm + (row + 0.5) * cellSizeCm;
       const pixelPos = bilinearInterpolate(tl, tr, br, bl, ratioX, ratioY);
       const isBlack = isPixelBlack(data, width, height, pixelPos);
       const confidence = isBlack !== null ? 0.85 : 0.5;
@@ -62536,6 +62558,18 @@ function analyzeMarkerBands(marker, markerSizeCm) {
   const transitions = MARKER_SPECS.transitions;
   const transitionRatios = [];
   const errors = [];
+  console.log(`
+${"\u2550".repeat(70)}`);
+  console.log(`\u{1F52C} SUPER ANALYSE DES BANDES ArUco`);
+  console.log(`${"\u2550".repeat(70)}`);
+  console.log(`\u{1F4D0} Taille marqueur: ${markerSizeCm} cm`);
+  console.log(`\u{1F4D0} Transitions attendues (cm): [${transitions.map((t) => t.toFixed(2)).join(", ")}]`);
+  console.log(`\u{1F4D0} Transitions attendues (ratio): [${transitions.map((t) => (t / markerSizeCm).toFixed(4)).join(", ")}]`);
+  console.log(`\u{1F4D0} Coins d\xE9tect\xE9s:`);
+  console.log(`   TL: (${corners[0].x.toFixed(1)}, ${corners[0].y.toFixed(1)})`);
+  console.log(`   TR: (${corners[1].x.toFixed(1)}, ${corners[1].y.toFixed(1)})`);
+  console.log(`   BR: (${corners[2].x.toFixed(1)}, ${corners[2].y.toFixed(1)})`);
+  console.log(`   BL: (${corners[3].x.toFixed(1)}, ${corners[3].y.toFixed(1)})`);
   const edges = [
     { name: "top", transitions: ext.topTransitions, start: corners[0], end: corners[1] },
     { name: "right", transitions: ext.rightTransitions, start: corners[1], end: corners[2] },
@@ -62546,6 +62580,11 @@ function analyzeMarkerBands(marker, markerSizeCm) {
     const edgeLength = Math.sqrt(
       (edge.end.x - edge.start.x) ** 2 + (edge.end.y - edge.start.y) ** 2
     );
+    console.log(`
+\u{1F4CD} BORD ${edge.name.toUpperCase()}:`);
+    console.log(`   Start: (${edge.start.x.toFixed(1)}, ${edge.start.y.toFixed(1)})`);
+    console.log(`   End: (${edge.end.x.toFixed(1)}, ${edge.end.y.toFixed(1)})`);
+    console.log(`   Longueur (px): ${edgeLength.toFixed(1)}`);
     for (let i = 0; i < edge.transitions.length && i < transitions.length; i++) {
       const transitionPoint = edge.transitions[i];
       const expectedPositionCm = transitions[i];
@@ -62555,20 +62594,45 @@ function analyzeMarkerBands(marker, markerSizeCm) {
       );
       const measuredRatio = distToStart / edgeLength;
       const error = Math.abs((measuredRatio - expectedRatio) / expectedRatio) * 100;
-      errors.push(error);
-      const pointData = ext.allPoints.find(
-        (p) => p.type === "transition" && Math.abs(p.pixel.x - transitionPoint.x) < 5 && Math.abs(p.pixel.y - transitionPoint.y) < 5
-      );
-      transitionRatios.push({
-        expectedRatio,
-        measuredRatio,
-        error,
-        confidence: pointData?.confidence || 0.5,
-        edge: edge.name,
-        positionCm: expectedPositionCm
-      });
+      const expectedPx = {
+        x: edge.start.x + expectedRatio * (edge.end.x - edge.start.x),
+        y: edge.start.y + expectedRatio * (edge.end.y - edge.start.y)
+      };
+      const transitionName = ["NOIR\u2192BLANC", "BLANC\u2192NOIR", "NOIR\u2192BLANC", "BLANC\u2192NOIR"][i];
+      const signedError = (measuredRatio - expectedRatio) / expectedRatio * 100;
+      const isReliableTransition = i === 1 || i === 2;
+      const reliabilityTag = isReliableTransition ? "\u{1F3AF} UTILIS\xC9" : "\u26A0\uFE0F IGNOR\xC9 (proche coins)";
+      console.log(`   Transition ${i + 1} (${expectedPositionCm.toFixed(1)}cm - ${transitionName}) ${reliabilityTag}:`);
+      console.log(`      Attendu: ratio=${expectedRatio.toFixed(4)} \u2192 px=(${expectedPx.x.toFixed(1)}, ${expectedPx.y.toFixed(1)})`);
+      console.log(`      Mesur\xE9:  ratio=${measuredRatio.toFixed(4)} \u2192 px=(${transitionPoint.x.toFixed(1)}, ${transitionPoint.y.toFixed(1)})`);
+      console.log(`      Erreur: ${signedError > 0 ? "+" : ""}${signedError.toFixed(2)}% (${signedError > 0 ? "trop loin" : "trop proche"} du start)`);
+      if (isReliableTransition) {
+        errors.push(error);
+        const pointData = ext.allPoints.find(
+          (p) => p.type === "transition" && Math.abs(p.pixel.x - transitionPoint.x) < 5 && Math.abs(p.pixel.y - transitionPoint.y) < 5
+        );
+        transitionRatios.push({
+          expectedRatio,
+          measuredRatio,
+          error,
+          confidence: pointData?.confidence || 0.5,
+          edge: edge.name,
+          positionCm: expectedPositionCm
+        });
+      }
     }
   }
+  const topBottomErrors = transitionRatios.filter((t) => t.edge === "top" || t.edge === "bottom");
+  const leftRightErrors = transitionRatios.filter((t) => t.edge === "left" || t.edge === "right");
+  const avgXError = topBottomErrors.length > 0 ? topBottomErrors.reduce((sum, t) => sum + (t.measuredRatio - t.expectedRatio) / t.expectedRatio, 0) / topBottomErrors.length * 100 : 0;
+  const avgYError = leftRightErrors.length > 0 ? leftRightErrors.reduce((sum, t) => sum + (t.measuredRatio - t.expectedRatio) / t.expectedRatio, 0) / leftRightErrors.length * 100 : 0;
+  console.log(`
+\u{1F4CA} R\xC9SUM\xC9 ERREURS PAR AXE (T2+T3 seulement - bords pattern central):`);
+  console.log(`   \u{1F3AF} Transitions utilis\xE9es: ${transitionRatios.length}/16 (T2 et T3 sur 4 bords)`);
+  console.log(`   Axe X (top+bottom): ${avgXError > 0 ? "+" : ""}${avgXError.toFixed(2)}%`);
+  console.log(`   Axe Y (left+right): ${avgYError > 0 ? "+" : ""}${avgYError.toFixed(2)}%`);
+  console.log(`${"\u2550".repeat(70)}
+`);
   const validPoints = ext.allPoints.filter((p) => p.confidence > 0.6).length;
   const avgError = errors.length > 0 ? errors.reduce((a, b) => a + b, 0) / errors.length : 0;
   let suggestedCorrection = 1;
@@ -62578,12 +62642,12 @@ function analyzeMarkerBands(marker, markerSizeCm) {
     const avgRatio = ratios.reduce((a, b) => a + b, 0) / ratios.length;
     signedErrorPercent = (avgRatio - 1) * 100;
     suggestedCorrection = 1 / avgRatio;
-    console.log(`\u{1F4CA} [BANDS] Ratios individuels: ${ratios.map((r) => r.toFixed(3)).join(", ")}`);
-    console.log(`\u{1F4CA} [BANDS] Ratio moyen mesur\xE9/attendu: ${avgRatio.toFixed(4)}`);
-    console.log(`\u{1F4CA} [BANDS] Biais syst\xE9matique: ${signedErrorPercent > 0 ? "+" : ""}${signedErrorPercent.toFixed(2)}%`);
-    console.log(`\u{1F4CA} [BANDS] Correction sugg\xE9r\xE9e: \xD7${suggestedCorrection.toFixed(4)}`);
+    console.log(`\u{1F4CA} [BANDS T2+T3] Ratios individuels: ${ratios.map((r) => r.toFixed(3)).join(", ")}`);
+    console.log(`\u{1F4CA} [BANDS T2+T3] Ratio moyen mesur\xE9/attendu: ${avgRatio.toFixed(4)}`);
+    console.log(`\u{1F4CA} [BANDS T2+T3] Biais syst\xE9matique: ${signedErrorPercent > 0 ? "+" : ""}${signedErrorPercent.toFixed(2)}%`);
+    console.log(`\u{1F4CA} [BANDS T2+T3] Correction sugg\xE9r\xE9e: \xD7${suggestedCorrection.toFixed(4)}`);
   }
-  const correctionConfidence = validPoints >= 12 ? 0.9 : validPoints >= 8 ? 0.7 : 0.4;
+  const correctionConfidence = transitionRatios.length >= 8 ? 0.95 : transitionRatios.length >= 6 ? 0.85 : transitionRatios.length >= 4 ? 0.7 : 0.4;
   const isValid = avgError < 5 && validPoints >= 8;
   let validationMessage = "";
   if (avgError < 2) {
@@ -62662,7 +62726,7 @@ ${"=".repeat(60)}`);
   const { rotX, rotY, rotZ } = analysis.pose;
   const cosX = Math.cos(Math.abs(rotX) * Math.PI / 180);
   const cosY = Math.cos(Math.abs(rotY) * Math.PI / 180);
-  const poseCorr = 1 / ((cosX + cosY) / 2);
+  const poseCorr = 1 / Math.sqrt(cosX * cosY);
   const poseConf = Math.max(0.5, 1 - (Math.abs(rotX) + Math.abs(rotY)) / 60);
   contributions.poseCompensation = {
     correction: Math.max(0.95, Math.min(1.1, poseCorr)),
@@ -62671,7 +62735,7 @@ ${"=".repeat(60)}`);
     // Réduit si gyroscope disponible
     confidence: poseConf
   };
-  console.log(`\u{1F4CA} [CORRECTION] Pose: \xD7${poseCorr.toFixed(4)} (rotX=${rotX}\xB0, rotY=${rotY}\xB0)`);
+  console.log(`\u{1F4CA} [CORRECTION] Pose: \xD7${poseCorr.toFixed(4)} (rotX=${rotX}\xB0, rotY=${rotY}\xB0) \u2192 S\xE9paration X/Y en section 7\uFE0F\u20E3`);
   if (gyroscopeData) {
     const { beta, gamma, quality: gyroQuality } = gyroscopeData;
     const IDEAL_BETA = 85;
@@ -62717,34 +62781,100 @@ ${"=".repeat(60)}`);
   }
   const finalCorrection = totalWeight > 0 ? weightedSum / totalWeight : 1;
   const globalConfidence = totalWeight > 0 ? confidenceSum / totalWeight : 0;
-  let correctionX = finalCorrection;
-  let correctionY = finalCorrection;
+  let totalWeightSansBandes = 0;
+  let weightedSumSansBandes = 0;
+  for (const key2 of Object.keys(contributions)) {
+    if (key2 === "bandAnalysis" || key2 === "poseCompensation") continue;
+    const { correction, weight, confidence } = contributions[key2];
+    if (weight > 0 && confidence > 0.3) {
+      const effectiveWeight = weight * confidence;
+      weightedSumSansBandes += correction * effectiveWeight;
+      totalWeightSansBandes += effectiveWeight;
+    }
+  }
+  const finalCorrectionSansBandes = totalWeightSansBandes > 0 ? weightedSumSansBandes / totalWeightSansBandes : 1;
+  console.log(`
+\u{1F4CA} [CORRECTION SANS BANDES NI POSE] Base: \xD7${finalCorrectionSansBandes.toFixed(4)} (pour mode homographie)`);
+  console.log(`   \u2139\uFE0F Exclut: bandAnalysis, poseCompensation (d\xE9j\xE0 int\xE9gr\xE9s dans l'homographie)`);
+  const { rotX: poseRotX, rotY: poseRotY, rotZ: poseRotZ } = analysis.pose;
+  const cosRotY = Math.cos(Math.abs(poseRotY) * Math.PI / 180);
+  const cosRotX = Math.cos(Math.abs(poseRotX) * Math.PI / 180);
+  const cosRotZ = Math.cos(Math.abs(poseRotZ) * Math.PI / 180);
+  const sinRotZ = Math.sin(Math.abs(poseRotZ) * Math.PI / 180);
+  const rawCorrX = 1 / Math.max(0.7, cosRotY);
+  const rawCorrY = 1 / Math.max(0.7, cosRotX);
+  const rotZCorrFactor = Math.abs(poseRotZ) > 2 ? cosRotZ : 1;
+  console.log(`
+\u{1F4D0} [CORRECTION PAR AXE] G\xE9om\xE9trie perspective:`);
+  console.log(`   rotX (haut/bas) = ${poseRotX.toFixed(1)}\xB0 \u2192 cos=${cosRotX.toFixed(4)} \u2192 correction Y = \xD7${rawCorrY.toFixed(4)}`);
+  console.log(`   rotY (gauche/droite) = ${poseRotY.toFixed(1)}\xB0 \u2192 cos=${cosRotY.toFixed(4)} \u2192 correction X = \xD7${rawCorrX.toFixed(4)}`);
+  console.log(`   rotZ (dans le plan) = ${poseRotZ.toFixed(1)}\xB0 \u2192 cos=${cosRotZ.toFixed(4)}, sin=${sinRotZ.toFixed(4)} \u2192 facteur m\xE9lange = \xD7${rotZCorrFactor.toFixed(4)}`);
+  let correctionX = finalCorrection * rawCorrX * rotZCorrFactor;
+  let correctionY = finalCorrection * rawCorrY * rotZCorrFactor;
+  const avgCorr = (correctionX + correctionY) / 2;
+  if (avgCorr > 0) {
+    const normFactor = finalCorrection / avgCorr;
+    correctionX *= normFactor;
+    correctionY *= normFactor;
+  }
+  console.log(`   Apr\xE8s normalisation: X = \xD7${correctionX.toFixed(4)}, Y = \xD7${correctionY.toFixed(4)}`);
   if (analysis.bandAnalysis.transitionRatios.length >= 8) {
     const ratios = analysis.bandAnalysis.transitionRatios;
-    const horizontalErrors = ratios.filter((r) => r.edge === "top" || r.edge === "bottom");
-    const avgHorizontalError = horizontalErrors.reduce((sum, r) => sum + r.error, 0) / (horizontalErrors.length || 1);
-    const verticalErrors = ratios.filter((r) => r.edge === "left" || r.edge === "right");
-    const avgVerticalError = verticalErrors.reduce((sum, r) => sum + r.error, 0) / (verticalErrors.length || 1);
-    if (avgHorizontalError > avgVerticalError + 2) {
-      correctionY = finalCorrection * (1 - (avgHorizontalError - avgVerticalError) / 200);
-    } else if (avgVerticalError > avgHorizontalError + 2) {
-      correctionX = finalCorrection * (1 - (avgVerticalError - avgHorizontalError) / 200);
+    const widthBands = ratios.filter((r) => r.edge === "top" || r.edge === "bottom");
+    const avgWidthError = widthBands.reduce((sum, r) => sum + r.error, 0) / (widthBands.length || 1);
+    const heightBands = ratios.filter((r) => r.edge === "left" || r.edge === "right");
+    const avgHeightError = heightBands.reduce((sum, r) => sum + r.error, 0) / (heightBands.length || 1);
+    const bandAdjustX = 1 - avgWidthError / 100;
+    const bandAdjustY = 1 - avgHeightError / 100;
+    correctionX *= bandAdjustX;
+    correctionY *= bandAdjustY;
+    console.log(`   Bandes: erreur largeur (X)=${avgWidthError.toFixed(2)}%, hauteur (Y)=${avgHeightError.toFixed(2)}%`);
+    console.log(`   Ajustement bandes: X = \xD7${bandAdjustX.toFixed(4)}, Y = \xD7${bandAdjustY.toFixed(4)}`);
+  }
+  if (gyroscopeData) {
+    const { beta, gamma } = gyroscopeData;
+    const IDEAL_BETA = 85;
+    const betaError = Math.abs(beta - IDEAL_BETA);
+    if (betaError > 5) {
+      const betaRad = betaError * Math.PI / 180;
+      const betaFactor = Math.min(1.15, 1 / Math.cos(betaRad));
+      correctionY *= betaFactor;
+      console.log(`   \u{1F4F1} Gyro beta (${beta.toFixed(1)}\xB0 vs id\xE9al ${IDEAL_BETA}\xB0): Y \xD7 ${betaFactor.toFixed(4)}`);
     }
-    console.log(`\u{1F4CA} [CORRECTION] Axe X: \xD7${correctionX.toFixed(4)}, Axe Y: \xD7${correctionY.toFixed(4)}`);
+    if (Math.abs(gamma) > 5) {
+      const gammaRad = Math.abs(gamma) * Math.PI / 180;
+      const gammaFactor = Math.min(1.15, 1 / Math.cos(gammaRad));
+      correctionX *= gammaFactor;
+      console.log(`   \u{1F4F1} Gyro gamma (${gamma.toFixed(1)}\xB0): X \xD7 ${gammaFactor.toFixed(4)}`);
+    }
   }
-  if (gyroscopeData && Math.abs(gyroscopeData.gamma) > 10) {
-    const gammaRad = Math.abs(gyroscopeData.gamma) * Math.PI / 180;
-    const lateralFactor = 1 / Math.cos(gammaRad);
-    correctionX *= Math.min(1.1, lateralFactor);
-    console.log(`\u{1F4F1} [CORRECTION] Ajustement lat\xE9ral X: \xD7${lateralFactor.toFixed(4)} (gamma=${gyroscopeData.gamma.toFixed(1)}\xB0)`);
+  correctionX = Math.max(0.9, Math.min(1.15, correctionX));
+  correctionY = Math.max(0.9, Math.min(1.15, correctionY));
+  console.log(`
+\u{1F3AF} [CORRECTION FINALE PAR AXE] X = \xD7${correctionX.toFixed(4)}, Y = \xD7${correctionY.toFixed(4)}`);
+  console.log(`   Diff\xE9rence X/Y: ${((correctionX / correctionY - 1) * 100).toFixed(2)}%`);
+  let correctionXSansBandes = finalCorrectionSansBandes;
+  let correctionYSansBandes = finalCorrectionSansBandes;
+  console.log(`\u{1F4CA} [CORRECTION SANS BANDES] Base: X=\xD7${correctionXSansBandes.toFixed(4)}, Y=\xD7${correctionYSansBandes.toFixed(4)}`);
+  console.log(`   \u2705 Mode homographie: PAS de correction bandes (d\xE9j\xE0 int\xE9gr\xE9e dans la matrice H)`);
+  if (analysis.bandAnalysis.transitionRatios.length >= 8) {
+    const ratios = analysis.bandAnalysis.transitionRatios;
+    const widthBands = ratios.filter((r) => r.edge === "top" || r.edge === "bottom");
+    const avgWidthError = widthBands.reduce((sum, r) => sum + r.error, 0) / (widthBands.length || 1);
+    const heightBands = ratios.filter((r) => r.edge === "left" || r.edge === "right");
+    const avgHeightError = heightBands.reduce((sum, r) => sum + r.error, 0) / (heightBands.length || 1);
+    console.log(`   \u{1F4CA} [INFO] Erreur bandes d\xE9tect\xE9e: X=${avgWidthError.toFixed(2)}%, Y=${avgHeightError.toFixed(2)}% (non appliqu\xE9e)`);
   }
+  console.log(`   \u2705 Mode homographie: PAS de correction gyroscope (perspective d\xE9j\xE0 corrig\xE9e)`);
+  console.log(`\u{1F3AF} [CORRECTION SANS BANDES PAR AXE] X = \xD7${correctionXSansBandes.toFixed(4)}, Y = \xD7${correctionYSansBandes.toFixed(4)}`);
   const gyroStr = gyroscopeData ? `
   - Gyroscope: \xD7${contributions.gyroscopeCompensation.correction.toFixed(4)} (poids ${(contributions.gyroscopeCompensation.weight * 100).toFixed(0)}%)` : "";
   const explanation = `Correction optimale: \xD7${finalCorrection.toFixed(4)} (confiance ${(globalConfidence * 100).toFixed(0)}%)
   - Bandes: \xD7${contributions.bandAnalysis.correction.toFixed(4)} (poids ${(contributions.bandAnalysis.weight * 100).toFixed(0)}%)
   - RANSAC: \xD7${contributions.ransacError.correction.toFixed(4)} (poids ${(contributions.ransacError.weight * 100).toFixed(0)}%)
   - Reprojection: \xD7${contributions.reprojection.correction.toFixed(4)} (poids ${(contributions.reprojection.weight * 100).toFixed(0)}%)
-  - Pose: \xD7${contributions.poseCompensation.correction.toFixed(4)} (poids ${(contributions.poseCompensation.weight * 100).toFixed(0)}%)${gyroStr}`;
+  - Pose: \xD7${contributions.poseCompensation.correction.toFixed(4)} (poids ${(contributions.poseCompensation.weight * 100).toFixed(0)}%)${gyroStr}
+  \u{1F4CC} SANS BANDES (homographie): X=\xD7${correctionXSansBandes.toFixed(4)}, Y=\xD7${correctionYSansBandes.toFixed(4)}`;
   console.log(`
 \u{1F3AF} [CORRECTION OPTIMALE] ${explanation}
 `);
@@ -62752,6 +62882,8 @@ ${"=".repeat(60)}`);
     finalCorrection: parseFloat(finalCorrection.toFixed(6)),
     correctionX: parseFloat(correctionX.toFixed(6)),
     correctionY: parseFloat(correctionY.toFixed(6)),
+    correctionXSansBandes: parseFloat(correctionXSansBandes.toFixed(6)),
+    correctionYSansBandes: parseFloat(correctionYSansBandes.toFixed(6)),
     contributions,
     globalConfidence: parseFloat(globalConfidence.toFixed(4)),
     explanation
