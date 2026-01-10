@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useAuthenticatedApi } from '../../hooks/useAuthenticatedApi';
 import { toast } from 'react-toastify';
+import { generateArucoMarkerSvg, downloadArucoMarkerSvg } from '../../utils/arucoMarkerSvg';
 import { 
   Card, 
   Button, 
@@ -94,59 +95,12 @@ const AIMeasureSettings: React.FC = () => {
   };
 
   // Générer le SVG du marqueur
-  const generateMarkerSVG = useCallback(() => {
-    const sizeMm = config.markerSizeCm * 10; // Convert to mm
-    const viewBox = `0 0 ${sizeMm} ${sizeMm}`;
-    
-    // Proportions du marqueur ArUco MAGENTA
-    // Bande noire externe: 0 → 1/6
-    // Bande blanche: 1/6 → 1/3
-    // Centre noir: 1/3 → 2/3
-    // Bande blanche: 2/3 → 5/6
-    // Bande noire interne: 5/6 → 1
-    
-    const band = sizeMm / 6; // Largeur d'une bande
-    const magentaRadius = sizeMm * 0.028; // ~5mm pour 18cm
-    const whiteRadius = sizeMm * 0.006; // ~1mm pour 18cm
-    
-    return `
-      <svg xmlns="http://www.w3.org/2000/svg" viewBox="${viewBox}" width="${sizeMm}mm" height="${sizeMm}mm">
-        <!-- Fond noir externe -->
-        <rect x="0" y="0" width="${sizeMm}" height="${sizeMm}" fill="#000000"/>
-        
-        <!-- Bande blanche (1/6 à 5/6) -->
-        <rect x="${band}" y="${band}" width="${sizeMm - 2*band}" height="${sizeMm - 2*band}" fill="#FFFFFF"/>
-        
-        <!-- Centre noir (1/3 à 2/3) -->
-        <rect x="${2*band}" y="${2*band}" width="${sizeMm - 4*band}" height="${sizeMm - 4*band}" fill="#000000"/>
-        
-        <!-- 4 cercles magenta aux coins -->
-        <circle cx="0" cy="0" r="${magentaRadius}" fill="#FF00FF"/>
-        <circle cx="${sizeMm}" cy="0" r="${magentaRadius}" fill="#FF00FF"/>
-        <circle cx="${sizeMm}" cy="${sizeMm}" r="${magentaRadius}" fill="#FF00FF"/>
-        <circle cx="0" cy="${sizeMm}" r="${magentaRadius}" fill="#FF00FF"/>
-        
-        <!-- 4 points blancs au centre des cercles magenta -->
-        <circle cx="0" cy="0" r="${whiteRadius}" fill="#FFFFFF"/>
-        <circle cx="${sizeMm}" cy="0" r="${whiteRadius}" fill="#FFFFFF"/>
-        <circle cx="${sizeMm}" cy="${sizeMm}" r="${whiteRadius}" fill="#FFFFFF"/>
-        <circle cx="0" cy="${sizeMm}" r="${whiteRadius}" fill="#FFFFFF"/>
-      </svg>
-    `;
-  }, [config.markerSizeCm]);
+  const generateMarkerSVG = useCallback(() => generateArucoMarkerSvg(config.markerSizeCm), [config.markerSizeCm]);
 
   // Télécharger le marqueur en SVG
   const downloadMarkerSVG = () => {
-    const svg = generateMarkerSVG();
-    const blob = new Blob([svg], { type: 'image/svg+xml' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `marqueur-aruco-${config.markerSizeCm}cm.svg`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+    // Utiliser la version partagée
+    downloadArucoMarkerSvg(config.markerSizeCm);
     toast.success(`📥 Marqueur ${config.markerSizeCm}cm téléchargé !`);
   };
 

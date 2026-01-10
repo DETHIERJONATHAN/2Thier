@@ -8,14 +8,21 @@
  */
 
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { Button, Card, Space, Typography, Progress, Image, message } from 'antd';
+import { Button, Card, Space, Typography, Progress, Image, message, Modal, InputNumber, Tooltip } from 'antd';
 import { 
   CameraOutlined, 
   CheckCircleOutlined, 
   DeleteOutlined,
-  PlusOutlined
+  PlusOutlined,
+  PrinterOutlined,
+  DownloadOutlined,
+  SaveOutlined,
+  InfoCircleOutlined
 } from '@ant-design/icons';
 import { useDeviceOrientation } from '../../hooks/useDeviceOrientation';
+import { useAuthenticatedApi } from '../../hooks/useAuthenticatedApi';
+import { downloadArucoMarkerSvg } from '../../utils/arucoMarkerSvg';
+import { setArucoMarkerSize } from '../../utils/homographyUtils';
 
 const { Text, Title } = Typography;
 
@@ -53,6 +60,14 @@ const SmartCameraMobile: React.FC<SmartCameraMobileProps> = ({
 }) => {
   const [photos, setPhotos] = useState<CapturedPhoto[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
+
+  // 🎯 ArUco settings (mêmes valeurs que Paramètres IA Mesure)
+  const { api } = useAuthenticatedApi();
+  const [showArucoSettings, setShowArucoSettings] = useState(false);
+  const [markerSizeCm, setMarkerSizeCm] = useState<number>(16.8);
+  const [boardSizeCm, setBoardSizeCm] = useState<number>(24);
+  const [arucoLoading, setArucoLoading] = useState(false);
+  const [arucoSaving, setArucoSaving] = useState(false);
   
   // 📱 Hook gyroscope pour capturer l'orientation réelle du téléphone
   const { orientation, analyze, isAvailable, hasPermission, requestPermission } = useDeviceOrientation(true);
@@ -65,6 +80,72 @@ const SmartCameraMobile: React.FC<SmartCameraMobileProps> = ({
     }
   }, [isAvailable, hasPermission]);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  // Charger la config ArUco au moment d'ouvrir la modale (évite appels inutiles)
+  useEffect(() => {
+    if (!showArucoSettings) return;
+    let cancelled = false;
+
+    const load = async () => {
+      setArucoLoading(true);
+      try {
+        const response = await api.get('/api/settings/ai-measure');
+        if (!cancelled && response?.success && response?.data) {
+          const nextMarkerSize = Number(response.data.markerSizeCm ?? 16.8);
+          const nextBoardSize = Number(response.data.boardSizeCm ?? 24);
+          if (Number.isFinite(nextMarkerSize)) setMarkerSizeCm(nextMarkerSize);
+          if (Number.isFinite(nextBoardSize)) setBoardSizeCm(nextBoardSize);
+        }
+      } catch (e) {
+        console.warn('[SmartCamera] Impossible de charger la config ArUco:', e);
+      } finally {
+        if (!cancelled) setArucoLoading(false);
+      }
+    };
+
+    load();
+    return () => {
+      cancelled = true;
+    };
+  }, [api, showArucoSettings]);
+
+  const handleSaveAruco = useCallback(async () => {
+    const size = Number(markerSizeCm);
+    if (!Number.isFinite(size) || size < 5 || size > 50) {
+      message.error('Taille ArUco invalide (5–50 cm)');
+      return;
+    }
+
+    setArucoSaving(true);
+    try {
+      const response = await api.post('/api/settings/ai-measure', {
+        markerSizeCm: size,
+        boardSizeCm: boardSizeCm
+      });
+      if (response?.success) {
+        message.success('Configuration ArUco sauvegardée');
+        // Mettre à jour les calculs côté front immédiatement
+        setArucoMarkerSize(size);
+      } else {
+        message.error(response?.message || 'Erreur de sauvegarde');
+      }
+    } catch (e) {
+      console.error(e);
+      message.error('Erreur lors de la sauvegarde');
+    } finally {
+      setArucoSaving(false);
+    }
+  }, [api, boardSizeCm, markerSizeCm]);
+
+  const handleDownloadAruco = useCallback(() => {
+    const size = Number(markerSizeCm);
+    if (!Number.isFinite(size) || size < 5 || size > 50) {
+      message.error('Taille ArUco invalide (5–50 cm)');
+      return;
+    }
+    downloadArucoMarkerSvg(size);
+    message.success(`Marqueur ArUco ${size}cm téléchargé`);
+  }, [markerSizeCm]);
 
   // Convertir fichier en base64
   const fileToBase64 = (file: File): Promise<string> => {
@@ -218,6 +299,29 @@ const SmartCameraMobile: React.FC<SmartCameraMobileProps> = ({
             <Title level={4} style={{ color: '#fff', margin: 0 }}>
               🤖 IA Photo
             </Title>
+
+            {/* 🟧 Bouton ArUco à côté du titre */}
+            <Tooltip title="Configurer/télécharger le marqueur ArUco">
+              <Button
+                size="small"
+                icon={<PrinterOutlined />}
+                onClick={() => setShowArucoSettings(true)}
+                style={{
+                  borderColor: '#fa8c16',
+                  color: '#fa8c16',
+                  background: 'transparent'
+                  ,
+                  width: 28,
+                  height: 28,
+                  padding: 0,
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  justifyContent: 'center'
+                }}
+                aria-label="ArUco"
+              />
+            </Tooltip>
+
             {/* 📱 Indicateur gyroscope discret - juste un petit point coloré */}
             {hasPermission && (
               <span 
@@ -245,6 +349,56 @@ const SmartCameraMobile: React.FC<SmartCameraMobileProps> = ({
           style={{ marginTop: 8 }}
         />
       </div>
+
+      {/* 🖨️ Modale ArUco (taille + téléchargement + sauvegarde) */}
+      <Modal
+        open={showArucoSettings}
+        onCancel={() => setShowArucoSettings(false)}
+        footer={null}
+        title="🎯 Marqueur ArUco"
+        destroyOnClose
+      >
+        <Space direction="vertical" style={{ width: '100%' }} size={12}>
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+              <span style={{ fontWeight: 600 }}>Taille du marqueur</span>
+              <Tooltip title="Distance entre les CENTRES des 4 cercles magenta">
+                <InfoCircleOutlined style={{ color: '#8c8c8c' }} />
+              </Tooltip>
+            </div>
+            <InputNumber
+              min={5}
+              max={50}
+              step={0.1}
+              precision={1}
+              value={markerSizeCm}
+              onChange={(v) => setMarkerSizeCm(Number(v ?? 16.8))}
+              addonAfter="cm"
+              style={{ width: '100%' }}
+              disabled={arucoLoading}
+            />
+          </div>
+
+          <Space style={{ width: '100%', justifyContent: 'space-between' }}>
+            <Button
+              icon={<DownloadOutlined />}
+              onClick={handleDownloadAruco}
+              disabled={arucoLoading}
+            >
+              Télécharger SVG ({markerSizeCm} cm)
+            </Button>
+            <Button
+              type="primary"
+              icon={<SaveOutlined />}
+              onClick={handleSaveAruco}
+              loading={arucoSaving}
+              disabled={arucoLoading}
+            >
+              Sauvegarder
+            </Button>
+          </Space>
+        </Space>
+      </Modal>
 
       {/* Zone photos */}
       <div style={{

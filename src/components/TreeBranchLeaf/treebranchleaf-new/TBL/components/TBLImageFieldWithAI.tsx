@@ -24,14 +24,12 @@ import {
   PictureOutlined,
   VideoCameraOutlined,
   SettingOutlined,
-  ThunderboltOutlined,
-  PrinterOutlined
+  ThunderboltOutlined
 } from '@ant-design/icons';
 import { useAuth } from '../../../../../auth/useAuth';
 import { useAIMeasure, getAIMeasureConfig, type AIMeasureConfig, type AIMeasureResult } from '../../../../../hooks/useAIMeasure';
 import { useSmartCameraConfig } from '../../../../../hooks/useSmartCameraConfig';
 import SmartCameraMobile, { type CapturedPhoto } from '../../../../SmartCamera/SmartCameraMobile';
-import CalibrationMarker from '../../../../SmartCamera/CalibrationMarker';
 import type { MultiPhotoAnalysis } from '../../../../SmartCamera/PhotoAnalyzer';
 import { ReferenceObjectsConfig } from '../../../../SmartCamera/ReferenceObjectsConfig';
 import { ImageMeasurementPreview } from '../../../../ImageMeasurement/ImageMeasurementPreview';
@@ -97,6 +95,8 @@ const TBLImageFieldWithAI: React.FC<TBLImageFieldWithAIProps> = ({
   style,
   onFieldUpdate
 }) => {
+  const iconButtonPx = size === 'small' ? 24 : size === 'large' ? 40 : 32;
+
   // Hook auth pour récupérer l'organizationId
   const { user } = useAuth();
   const organizationId = user?.organizationId || '';
@@ -108,7 +108,6 @@ const TBLImageFieldWithAI: React.FC<TBLImageFieldWithAIProps> = ({
   // États pour les modaux SmartCamera
   const [showSmartCamera, setShowSmartCamera] = useState(false);
   const [showReferenceConfig, setShowReferenceConfig] = useState(false);
-  const [showArucoMarker, setShowArucoMarker] = useState(false);
   
   // 🆕 États pour ImageMeasurementPreview (canvas de sélection des lignes)
   const [showMeasurementCanvas, setShowMeasurementCanvas] = useState(false);
@@ -559,26 +558,26 @@ const TBLImageFieldWithAI: React.FC<TBLImageFieldWithAIProps> = ({
 
   return (
     <div className="tbl-image-field-with-ai">
-      <Space direction="vertical" style={{ width: '100%' }}>
-        {/* Inputs file cachés */}
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept={imageAccept}
-          onChange={handleNativeFileChange}
-          style={{ display: 'none' }}
-        />
-        <input
-          ref={cameraInputRef}
-          type="file"
-          accept="image/*"
-          capture="environment"
-          onChange={handleNativeFileChange}
-          style={{ display: 'none' }}
-        />
-        
-        {/* Boutons d'action - IA Photo + ArUco */}
-        <Space wrap>
+      {/* Inputs file cachés (hors Space sinon ça ajoute un décalage vertical) */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept={imageAccept}
+        onChange={handleNativeFileChange}
+        style={{ display: 'none' }}
+      />
+      <input
+        ref={cameraInputRef}
+        type="file"
+        accept="image/*"
+        capture="environment"
+        onChange={handleNativeFileChange}
+        style={{ display: 'none' }}
+      />
+
+      <Space direction="vertical" style={{ width: '100%' }} size={8}>
+        {/* Boutons d'action - IA Photo + Mesure */}
+        <Space size={8} align="center">
           {/* 🎯 SmartCamera IA (multi-photos) - Bouton principal */}
           {aiMeasure_enabled && (
             <>
@@ -589,31 +588,25 @@ const TBLImageFieldWithAI: React.FC<TBLImageFieldWithAIProps> = ({
                   disabled={disabled || isAnalyzingAI}
                   size={size}
                   type="primary"
-                  style={{ background: '#722ed1', borderColor: '#722ed1' }}
-                >
-                  IA Photo
-                </Button>
-              </Tooltip>
-              
-              {/* 🖨️ Bouton ArUco - Impression du marqueur de calibration */}
-              <Tooltip title="🖨️ Imprimer le marqueur ArUco de calibration">
-                <Button
-                  icon={<PrinterOutlined />}
-                  onClick={() => setShowArucoMarker(true)}
-                  disabled={disabled}
-                  size={size}
-                  type="default"
-                  style={{ borderColor: '#fa8c16', color: '#fa8c16' }}
-                >
-                  ArUco
-                </Button>
+                  style={{
+                    background: '#722ed1',
+                    borderColor: '#722ed1',
+                    width: iconButtonPx,
+                    height: iconButtonPx,
+                    padding: 0,
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    justifyContent: 'center'
+                  }}
+                  aria-label="IA Photo"
+                />
               </Tooltip>
               
               {/* 🆕 Bouton "Mesurer" - UNIQUEMENT si des photos ont été analysées avec ArUco */}
               {capturedPhotos.length > 0 && capturedPhotos.some(p => (p.metadata as any)?.arucoDetected) && (
                 <Tooltip title="📐 Revoir l'analyse avec ArUco détecté">
                   <Button
-                    icon={<RobotOutlined />}
+                    icon={<CheckCircleOutlined />}
                     onClick={() => {
                       // 🎯 Réutiliser les photos analysées avec ArUco
                       const bestPhoto = capturedPhotos.find(p => (p.metadata as any)?.arucoDetected);
@@ -647,10 +640,16 @@ const TBLImageFieldWithAI: React.FC<TBLImageFieldWithAIProps> = ({
                       borderColor: '#52c41a',
                       color: '#52c41a',
                       fontWeight: 'bold'
+                      ,
+                      width: iconButtonPx,
+                      height: iconButtonPx,
+                      padding: 0,
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      justifyContent: 'center'
                     }}
-                  >
-                    ✓ Mesurer
-                  </Button>
+                    aria-label="Mesure"
+                  />
                 </Tooltip>
               )}
             </>
@@ -852,18 +851,6 @@ const TBLImageFieldWithAI: React.FC<TBLImageFieldWithAIProps> = ({
               onCancel={() => setShowSmartCamera(false)}
               minPhotos={3}
             />
-          </Modal>
-          
-          {/* 🖨️ Modal ArUco - Impression du marqueur */}
-          <Modal
-            open={showArucoMarker}
-            onCancel={() => setShowArucoMarker(false)}
-            footer={null}
-            width={800}
-            title="🎯 Marqueur ArUco de Calibration"
-            destroyOnClose
-          >
-            <CalibrationMarker />
           </Modal>
           
           {/* Modal de configuration des objets de référence */}
