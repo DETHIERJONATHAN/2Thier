@@ -846,6 +846,7 @@ export class MarkerDetector {
 
   /**
    * Calculer le gradient de luminosité à une position donnée
+   * 🔧 AMÉLIORÉ: Multi-échelle + sharpening pour meilleure détection des bords flous
    */
   private calculateGradientAt(
     data: Uint8ClampedArray | Buffer,
@@ -856,10 +857,53 @@ export class MarkerDetector {
     dirX: number,
     dirY: number
   ): number {
-    const step = 2;
-    const before = this.sampleLuminosity(data, width, height, x - dirX * step, y - dirY * step);
-    const after = this.sampleLuminosity(data, width, height, x + dirX * step, y + dirY * step);
-    return after - before;
+    // Multi-échelle: combiner gradients à différentes distances pour robustesse au flou
+    // Échelle fine (step=1): sensible aux détails mais bruité
+    // Échelle moyenne (step=2): bon compromis
+    // Échelle large (step=3): robuste au flou mais moins précis
+    
+    const getGradient = (step: number) => {
+      const before = this.sampleLuminositySharpened(data, width, height, x - dirX * step, y - dirY * step);
+      const after = this.sampleLuminositySharpened(data, width, height, x + dirX * step, y + dirY * step);
+      return after - before;
+    };
+    
+    // Pondération: privilégier l'échelle moyenne, mais utiliser les autres pour confirmation
+    const g1 = getGradient(1);
+    const g2 = getGradient(2);
+    const g3 = getGradient(3);
+    
+    // Combinaison pondérée (échelle 2 dominante)
+    return 0.25 * g1 + 0.50 * g2 + 0.25 * g3;
+  }
+
+  /**
+   * 🆕 Échantillonner la luminosité avec unsharp mask (accentuation des bords)
+   * Formule: sharpened = original + α × (original - blurred)
+   */
+  private sampleLuminositySharpened(
+    data: Uint8ClampedArray | Buffer,
+    width: number,
+    height: number,
+    x: number,
+    y: number
+  ): number {
+    const original = this.sampleLuminosity(data, width, height, x, y);
+    
+    // Moyenne des voisins (approximation du flou gaussien, rayon 1.5px)
+    const blurred = (
+      this.sampleLuminosity(data, width, height, x - 1.5, y) +
+      this.sampleLuminosity(data, width, height, x + 1.5, y) +
+      this.sampleLuminosity(data, width, height, x, y - 1.5) +
+      this.sampleLuminosity(data, width, height, x, y + 1.5)
+    ) / 4;
+    
+    // Unsharp mask avec α = 0.5 (modéré pour éviter les artefacts)
+    const alpha = 0.5;
+    const sharpened = original + alpha * (original - blurred);
+    
+    // Clamp pour éviter les valeurs hors limites
+    return Math.max(0, Math.min(255, sharpened));
   }
 
   /**
@@ -3723,7 +3767,6 @@ function analyzeMarkerBands(
       
       // Calculer l'erreur
       const error = Math.abs((measuredRatio - expectedRatio) / expectedRatio) * 100;
-      errors.push(error);
       
       // Position attendue en pixels
       const expectedPx = {
@@ -3734,30 +3777,41 @@ function analyzeMarkerBands(
       // Log détaillé pour chaque transition
       const transitionName = ['NOIR→BLANC', 'BLANC→NOIR', 'NOIR→BLANC', 'BLANC→NOIR'][i];
       const signedError = ((measuredRatio - expectedRatio) / expectedRatio) * 100;
-      console.log(`   Transition ${i+1} (${expectedPositionCm.toFixed(1)}cm - ${transitionName}):`);
+      
+      // 🎯 PRÉCISION: N'utiliser que T2 (5.6cm) et T3 (11.2cm) - les bords du pattern central
+      // T1 et T4 sont trop proches des coins magenta et ont des erreurs importantes
+      const isReliableTransition = (i === 1 || i === 2); // T2 (index 1) et T3 (index 2)
+      const reliabilityTag = isReliableTransition ? '🎯 UTILISÉ' : '⚠️ IGNORÉ (proche coins)';
+      
+      console.log(`   Transition ${i+1} (${expectedPositionCm.toFixed(1)}cm - ${transitionName}) ${reliabilityTag}:`);
       console.log(`      Attendu: ratio=${expectedRatio.toFixed(4)} → px=(${expectedPx.x.toFixed(1)}, ${expectedPx.y.toFixed(1)})`);
       console.log(`      Mesuré:  ratio=${measuredRatio.toFixed(4)} → px=(${transitionPoint.x.toFixed(1)}, ${transitionPoint.y.toFixed(1)})`);
       console.log(`      Erreur: ${signedError > 0 ? '+' : ''}${signedError.toFixed(2)}% (${signedError > 0 ? 'trop loin' : 'trop proche'} du start)`);
       
-      // Trouver la confiance du point
-      const pointData = ext.allPoints.find(p => 
-        p.type === 'transition' && 
-        Math.abs(p.pixel.x - transitionPoint.x) < 5 &&
-        Math.abs(p.pixel.y - transitionPoint.y) < 5
-      );
-      
-      transitionRatios.push({
-        expectedRatio,
-        measuredRatio,
-        error,
-        confidence: pointData?.confidence || 0.5,
-        edge: edge.name,
-        positionCm: expectedPositionCm
-      });
+      // 🎯 N'ajouter aux calculs que T2 et T3 (transitions fiables du pattern central)
+      if (isReliableTransition) {
+        errors.push(error);
+        
+        // Trouver la confiance du point
+        const pointData = ext.allPoints.find(p => 
+          p.type === 'transition' && 
+          Math.abs(p.pixel.x - transitionPoint.x) < 5 &&
+          Math.abs(p.pixel.y - transitionPoint.y) < 5
+        );
+        
+        transitionRatios.push({
+          expectedRatio,
+          measuredRatio,
+          error,
+          confidence: pointData?.confidence || 0.5,
+          edge: edge.name,
+          positionCm: expectedPositionCm
+        });
+      }
     }
   }
   
-  // Résumé par axe
+  // Résumé par axe (seulement T2 et T3 - les transitions fiables)
   const topBottomErrors = transitionRatios.filter(t => t.edge === 'top' || t.edge === 'bottom');
   const leftRightErrors = transitionRatios.filter(t => t.edge === 'left' || t.edge === 'right');
   
@@ -3768,7 +3822,8 @@ function analyzeMarkerBands(
     ? leftRightErrors.reduce((sum, t) => sum + ((t.measuredRatio - t.expectedRatio) / t.expectedRatio), 0) / leftRightErrors.length * 100
     : 0;
     
-  console.log(`\n📊 RÉSUMÉ ERREURS PAR AXE:`);
+  console.log(`\n📊 RÉSUMÉ ERREURS PAR AXE (T2+T3 seulement - bords pattern central):`);
+  console.log(`   🎯 Transitions utilisées: ${transitionRatios.length}/16 (T2 et T3 sur 4 bords)`);
   console.log(`   Axe X (top+bottom): ${avgXError > 0 ? '+' : ''}${avgXError.toFixed(2)}%`);
   console.log(`   Axe Y (left+right): ${avgYError > 0 ? '+' : ''}${avgYError.toFixed(2)}%`);
   console.log(`${'═'.repeat(70)}\n`);
@@ -3795,6 +3850,7 @@ function analyzeMarkerBands(
   let suggestedCorrection = 1.0;
   let signedErrorPercent = 0;
   
+  // 🎯 Avec T2+T3 seulement: 2 transitions × 4 bords = 8 points max
   if (transitionRatios.length >= 4) {
     // Calculer le ratio moyen (mesuré / attendu) pour chaque transition
     const ratios = transitionRatios.map(tr => tr.measuredRatio / tr.expectedRatio);
@@ -3807,13 +3863,14 @@ function analyzeMarkerBands(
     // Si avgRatio = 1.05 (on mesure 5% de trop), correction = 1/1.05 = 0.952
     suggestedCorrection = 1.0 / avgRatio;
     
-    console.log(`📊 [BANDS] Ratios individuels: ${ratios.map(r => r.toFixed(3)).join(', ')}`);
-    console.log(`📊 [BANDS] Ratio moyen mesuré/attendu: ${avgRatio.toFixed(4)}`);
-    console.log(`📊 [BANDS] Biais systématique: ${signedErrorPercent > 0 ? '+' : ''}${signedErrorPercent.toFixed(2)}%`);
-    console.log(`📊 [BANDS] Correction suggérée: ×${suggestedCorrection.toFixed(4)}`);
+    console.log(`📊 [BANDS T2+T3] Ratios individuels: ${ratios.map(r => r.toFixed(3)).join(', ')}`);
+    console.log(`📊 [BANDS T2+T3] Ratio moyen mesuré/attendu: ${avgRatio.toFixed(4)}`);
+    console.log(`📊 [BANDS T2+T3] Biais systématique: ${signedErrorPercent > 0 ? '+' : ''}${signedErrorPercent.toFixed(2)}%`);
+    console.log(`📊 [BANDS T2+T3] Correction suggérée: ×${suggestedCorrection.toFixed(4)}`);
   }
   
-  const correctionConfidence = validPoints >= 12 ? 0.9 : validPoints >= 8 ? 0.7 : 0.4;
+  // Confiance basée sur le nombre de transitions T2+T3 détectées (max 8)
+  const correctionConfidence = transitionRatios.length >= 8 ? 0.95 : transitionRatios.length >= 6 ? 0.85 : transitionRatios.length >= 4 ? 0.7 : 0.4;
   
   // Validation
   const isValid = avgError < 5 && validPoints >= 8;
