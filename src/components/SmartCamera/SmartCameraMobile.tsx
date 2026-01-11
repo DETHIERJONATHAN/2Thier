@@ -54,14 +54,52 @@ interface SmartCameraMobileProps {
   maxPhotos?: number;
 }
 
+// 🔒 Clé pour persister les photos en cours de capture (survit au background/foreground mobile)
+const PHOTOS_SESSION_KEY = 'smartcamera_photos_in_progress';
+
 const SmartCameraMobile: React.FC<SmartCameraMobileProps> = ({
   onCapture,
   onCancel,
   minPhotos = 1,
   maxPhotos
 }) => {
-  const [photos, setPhotos] = useState<CapturedPhoto[]>([]);
+  // 🔒 PERSISTANCE: Restaurer les photos depuis sessionStorage au montage
+  const [photos, setPhotos] = useState<CapturedPhoto[]>(() => {
+    try {
+      const saved = sessionStorage.getItem(PHOTOS_SESSION_KEY);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        console.log('📱 [SmartCamera] Restauration de', parsed.length, 'photos depuis sessionStorage');
+        return parsed;
+      }
+    } catch (e) {
+      console.warn('📱 [SmartCamera] Erreur restauration photos:', e);
+    }
+    return [];
+  });
   const [isProcessing, setIsProcessing] = useState(false);
+
+  // 🔒 PERSISTANCE: Sauvegarder les photos dans sessionStorage à chaque changement
+  useEffect(() => {
+    if (photos.length > 0) {
+      try {
+        sessionStorage.setItem(PHOTOS_SESSION_KEY, JSON.stringify(photos));
+        console.log('📱 [SmartCamera] Sauvegarde de', photos.length, 'photos dans sessionStorage');
+      } catch (e) {
+        console.warn('📱 [SmartCamera] Erreur sauvegarde photos:', e);
+      }
+    }
+  }, [photos]);
+
+  // 🔒 Nettoyer sessionStorage quand on quitte (annuler ou valider)
+  const clearPersistedPhotos = useCallback(() => {
+    try {
+      sessionStorage.removeItem(PHOTOS_SESSION_KEY);
+      console.log('📱 [SmartCamera] Photos supprimées de sessionStorage');
+    } catch (e) {
+      // Ignore
+    }
+  }, []);
 
   // 🎯 ArUco settings (mêmes valeurs que Paramètres IA Mesure)
   const { api } = useAuthenticatedApi();
@@ -254,17 +292,31 @@ const SmartCameraMobile: React.FC<SmartCameraMobileProps> = ({
 
   // Supprimer une photo
   const removePhoto = (index: number) => {
-    setPhotos(prev => prev.filter((_, i) => i !== index));
+    setPhotos(prev => {
+      const newPhotos = prev.filter((_, i) => i !== index);
+      // Mettre à jour sessionStorage immédiatement
+      if (newPhotos.length === 0) {
+        clearPersistedPhotos();
+      }
+      return newPhotos;
+    });
   };
 
   // Valider les photos
   const handleValidate = () => {
     if (photos.length >= minPhotos) {
+      clearPersistedPhotos(); // 🔒 Nettoyer avant de valider
       onCapture(photos);
     } else {
       message.warning(`Minimum ${minPhotos} photo(s) requise(s)`);
     }
   };
+  
+  // 🔒 Handler pour annuler avec nettoyage
+  const handleCancel = useCallback(() => {
+    clearPersistedPhotos();
+    onCancel();
+  }, [clearPersistedPhotos, onCancel]);
 
   // Ouvrir la caméra (avec permission gyroscope sur iOS)
   const openCamera = useCallback(async () => {
@@ -532,7 +584,7 @@ const SmartCameraMobile: React.FC<SmartCameraMobileProps> = ({
       }}>
         <Button 
           size="large"
-          onClick={onCancel}
+          onClick={handleCancel}
           style={{ flex: 1 }}
         >
           Annuler

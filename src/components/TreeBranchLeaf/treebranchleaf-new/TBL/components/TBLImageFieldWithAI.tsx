@@ -108,9 +108,34 @@ const TBLImageFieldWithAI: React.FC<TBLImageFieldWithAIProps> = ({
   const [isAnalyzingAI, setIsAnalyzingAI] = useState(false);
   const [lastAIResult, setLastAIResult] = useState<AIMeasureResult | null>(null);
   
-  // États pour les modaux SmartCamera
-  const [showSmartCamera, setShowSmartCamera] = useState(false);
+  // 🔒 PERSISTANCE MOBILE: Clé unique pour ce champ
+  const smartCameraSessionKey = `smartcamera_open_${nodeId}`;
+  
+  // États pour les modaux SmartCamera - avec restauration depuis sessionStorage
+  const [showSmartCamera, setShowSmartCamera] = useState(() => {
+    // 🔒 Restaurer l'état au montage (si l'utilisateur était en train de prendre des photos)
+    if (typeof window !== 'undefined') {
+      const wasOpen = sessionStorage.getItem(smartCameraSessionKey);
+      if (wasOpen === 'true') {
+        console.log('📱 [TBLImageFieldWithAI] Restauration SmartCamera ouvert depuis sessionStorage');
+        return true;
+      }
+    }
+    return false;
+  });
   const [showReferenceConfig, setShowReferenceConfig] = useState(false);
+  
+  // 🔒 Persister l'état showSmartCamera dans sessionStorage
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      if (showSmartCamera) {
+        sessionStorage.setItem(smartCameraSessionKey, 'true');
+        console.log('📱 [TBLImageFieldWithAI] SmartCamera ouvert - sauvegardé dans sessionStorage');
+      } else {
+        sessionStorage.removeItem(smartCameraSessionKey);
+      }
+    }
+  }, [showSmartCamera, smartCameraSessionKey]);
   
   // 🆕 États pour ImageMeasurementPreview (canvas de sélection des lignes)
   const [showMeasurementCanvas, setShowMeasurementCanvas] = useState(false);
