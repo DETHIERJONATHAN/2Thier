@@ -258,7 +258,7 @@ export class TableLookupDuplicationService {
                 console.log(`[TBL-DUP] Column ${idx}: "${col.name}" -> "${newName}" (columnIndex: ${col.columnIndex} -> ${idx})`);
                 return {
                   id: col.id ? `${col.id}${suffix}` : randomUUID(),
-                  tableId: copiedTableId,
+                  // ✅ FIX 11/01/2026: NE PAS inclure tableId dans nested create - Prisma le remplit automatiquement
                   columnIndex: idx,  // ✅ FIX: Réassigner en séquence au lieu de copier
                   name: newName,
                   type: col.type,
@@ -274,7 +274,7 @@ export class TableLookupDuplicationService {
             tableRows: {
               create: originalTable.tableRows.map((row, idx) => ({
                 id: row.id ? `${row.id}${suffix}` : randomUUID(),
-                tableId: copiedTableId,
+                // ✅ FIX 11/01/2026: NE PAS inclure tableId dans nested create - Prisma le remplit automatiquement
                 rowIndex: idx,  // ✅ FIX: Réassigner en séquence
                 cells: row.cells
               }))
