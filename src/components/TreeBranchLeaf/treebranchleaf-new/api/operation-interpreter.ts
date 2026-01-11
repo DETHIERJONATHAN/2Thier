@@ -272,12 +272,20 @@ async function enrichDataFromSubmission(
     
     
     // 2. Trouver l'arbre de cette soumission si pas fourni
+    // ✅ FIX 11/01/2026: TreeBranchLeafSubmissionData n'a pas de relation avec TreeBranchLeafNode
+    // On récupère le nodeId puis on cherche le treeId via TreeBranchLeafNode
     if (!treeId) {
-      const firstSubmissionNode = await prisma.treeBranchLeafSubmissionData.findFirst({
+      const firstSubmissionData = await prisma.treeBranchLeafSubmissionData.findFirst({
         where: { submissionId },
-        include: { TreeBranchLeafNode: { select: { treeId: true } } }
+        select: { nodeId: true }
       });
-      treeId = firstSubmissionNode?.TreeBranchLeafNode?.treeId;
+      if (firstSubmissionData?.nodeId) {
+        const node = await prisma.treeBranchLeafNode.findUnique({
+          where: { id: firstSubmissionData.nodeId },
+          select: { treeId: true }
+        });
+        treeId = node?.treeId;
+      }
     }
     
     

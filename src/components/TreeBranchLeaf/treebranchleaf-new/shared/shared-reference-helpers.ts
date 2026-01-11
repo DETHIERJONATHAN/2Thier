@@ -246,6 +246,17 @@ export async function applySharedReferencesFromOriginalInternal(
   let applied = 0;
   for (const orig of originals) {
     const copyId = originalToCopy.get(orig.id)!;
+    
+    // ✅ FIX 11/01/2026: Vérifier que le nœud copié existe avant de faire l'update
+    const copyExists = await prisma.treeBranchLeafNode.findUnique({
+      where: { id: copyId },
+      select: { id: true }
+    });
+    if (!copyExists) {
+      console.warn(`⚠️ Nœud ${copyId} introuvable pour MAJ linkedConditionIds`);
+      continue;
+    }
+    
     const origMultiple = Array.isArray(orig.sharedReferenceIds) ? orig.sharedReferenceIds.filter(Boolean) : [];
     const origSingle = orig.sharedReferenceId ?? null;
     const mappedMultiple = origMultiple.map(id => refCopyIdByOriginal.get(id) || `${id}-${chosenSuffix}`);

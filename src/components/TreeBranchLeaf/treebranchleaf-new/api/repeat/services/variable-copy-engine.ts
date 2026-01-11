@@ -1227,6 +1227,20 @@ export async function copyVariableWithCapacities(
         throw new Error(`Cannot create variable: finalNodeId is ${finalNodeId}. This indicates the display node was not created properly.`);
       }
 
+      // ✅ FIX 11/01/2026: Vérifier que le nœud existe réellement avant de créer la variable
+      const nodeExists = await prisma.treeBranchLeafNode.findUnique({
+        where: { id: finalNodeId },
+        select: { id: true }
+      });
+      if (!nodeExists) {
+        console.warn(`⚠️ Cannot create variable: node ${finalNodeId} does not exist in database. Skipping variable creation.`);
+        return {
+          success: false,
+          error: `Node ${finalNodeId} does not exist`,
+          originalVarId
+        };
+      }
+
       try {
         // Ajouter le mapping du nœud si nécessaire
         if (originalVar.nodeId && finalNodeId && !nodeIdMap.has(originalVar.nodeId)) {
