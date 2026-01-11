@@ -209,10 +209,16 @@ export class MarkerDetector {
     const { data, width, height } = imageData;
     
     console.log(`🔍 MarkerDetector.detect: ${width}x${height}`);
-    console.log('🎯 STRATÉGIE: Lignes noires PRIORITAIRES + validation magenta');
+    console.log('🎯 STRATÉGIE: Zone blanche carrée → Lignes noires → Magenta');
     
-    // ÉTAPE 1: Détecter les LIGNES NOIRES EXTÉRIEURES (PRIORITÉ!)
-    let markers = this.detectFromBlackLines(data, width, height);
+    // ÉTAPE 0 (NOUVEAU): Chercher les ZONES BLANCHES CARRÉES (le marqueur a un fond blanc!)
+    let markers = this.detectWhiteSquareRegions(data, width, height);
+    
+    // ÉTAPE 1: Si pas de zone blanche, détecter par LIGNES NOIRES
+    if (markers.length === 0) {
+      console.log('⚠️ Pas de zone blanche carrée, tentative lignes noires...');
+      markers = this.detectFromBlackLines(data, width, height);
+    }
     
     // ÉTAPE 2: Si échec lignes noires, fallback sur magenta
     if (markers.length === 0) {
@@ -258,7 +264,137 @@ export class MarkerDetector {
   }
 
   /**
-   * 🎯 NOUVELLE MÉTHODE PRINCIPALE: Détection par LIGNES NOIRES
+   * � DÉTECTION PAR ZONES BLANCHES CARRÉES
+   * 
+   * Le marqueur ArUco a un FOND BLANC visible sur un écran/surface sombre.
+   * Cette méthode cherche les zones blanches carrées dans l'image.
+   */
+  private detectWhiteSquareRegions(
+    data: Uint8ClampedArray | Buffer,
+    width: number,
+    height: number
+  ): MarkerDetectionResult[] {
+    console.log('⬜ [ArUco] Recherche zones BLANCHES CARRÉES...');
+    
+    // Sous-échantillonner pour performance
+    const step = Math.max(4, Math.floor(Math.min(width, height) / 300));
+    
+    // Trouver les pixels blancs/clairs (luminosité > 180)
+    const brightPixels: Point2D[] = [];
+    
+    for (let y = 0; y < height; y += step) {
+      for (let x = 0; x < width; x += step) {
+        const idx = (y * width + x) * 4;
+        const r = data[idx], g = data[idx + 1], b = data[idx + 2];
+        const brightness = (r + g + b) / 3;
+        
+        // Chercher pixels blancs/clairs
+        if (brightness > 150 && Math.max(r, g, b) - Math.min(r, g, b) < 60) {
+          brightPixels.push({ x, y });
+        }
+      }
+    }
+    
+    console.log(`   ⬜ ${brightPixels.length} pixels clairs trouvés`);
+    
+    if (brightPixels.length < 20) {
+      return [];
+    }
+    
+    // Limiter pour éviter les problèmes de mémoire
+    if (brightPixels.length > 10000) {
+      console.log(`   ⚠️ Trop de pixels clairs (${brightPixels.length}) - zone trop grande`);
+      return [];
+    }
+    
+    // Trouver la bounding box des pixels clairs
+    let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+    for (const p of brightPixels) {
+      if (p.x < minX) minX = p.x;
+      if (p.x > maxX) maxX = p.x;
+      if (p.y < minY) minY = p.y;
+      if (p.y > maxY) maxY = p.y;
+    }
+    
+    const regionWidth = maxX - minX;
+    const regionHeight = maxY - minY;
+    const ratio = Math.max(regionWidth, regionHeight) / Math.min(regionWidth, regionHeight);
+    
+    console.log(`   📐 Zone blanche: ${regionWidth}×${regionHeight}px (ratio: ${ratio.toFixed(2)})`);
+    
+    // Le marqueur doit être approximativement carré
+    if (ratio > 1.8) {
+      console.log(`   ⚠️ Zone blanche trop rectangulaire (ratio ${ratio.toFixed(2)} > 1.8)`);
+      return [];
+    }
+    
+    // Taille minimum pour être exploitable
+    if (Math.min(regionWidth, regionHeight) < 50) {
+      console.log(`   ⚠️ Zone blanche trop petite`);
+      return [];
+    }
+    
+    // Taille maximum - si c'est tout l'écran, ce n'est pas le marqueur
+    if (Math.max(regionWidth, regionHeight) > Math.min(width, height) * 0.6) {
+      console.log(`   ⚠️ Zone blanche trop grande (probablement pas le marqueur)`);
+      return [];
+    }
+    
+    // Vérifier la structure ArUco dans cette zone
+    const candidateCorners: Point2D[] = [
+      { x: minX, y: minY },     // TL
+      { x: maxX, y: minY },     // TR
+      { x: maxX, y: maxY },     // BR
+      { x: minX, y: maxY }      // BL
+    ];
+    
+    // Vérifier qu'on a bien un pattern noir→blanc→noir autour
+    const structureScore = this.validateArucoStructure(data, width, height, candidateCorners);
+    console.log(`   🔲 Score structure ArUco: ${(structureScore * 100).toFixed(0)}%`);
+    
+    if (structureScore < 0.4) {
+      console.log(`   ⚠️ Structure ArUco non confirmée (score ${(structureScore * 100).toFixed(0)}% < 40%)`);
+      return [];
+    }
+    
+    console.log(`   ✅ Zone blanche validée comme marqueur ArUco!`);
+    
+    // Calculer les coins intérieurs
+    const orderedCorners = this.orderCornersClockwise(candidateCorners);
+    const innerOffset = MARKER_SPECS.ratios.innerToOuter;
+    const [tl, tr, br, bl] = orderedCorners;
+    const innerCorners: Point2D[] = [
+      { x: tl.x + (tr.x - tl.x) * innerOffset + (bl.x - tl.x) * innerOffset,
+        y: tl.y + (tr.y - tl.y) * innerOffset + (bl.y - tl.y) * innerOffset },
+      { x: tr.x + (tl.x - tr.x) * innerOffset + (br.x - tr.x) * innerOffset,
+        y: tr.y + (tl.y - tr.y) * innerOffset + (br.y - tr.y) * innerOffset },
+      { x: br.x + (bl.x - br.x) * innerOffset + (tr.x - br.x) * innerOffset,
+        y: br.y + (bl.y - br.y) * innerOffset + (tr.y - br.y) * innerOffset },
+      { x: bl.x + (br.x - bl.x) * innerOffset + (tl.x - bl.x) * innerOffset,
+        y: bl.y + (br.y - bl.y) * innerOffset + (tl.y - bl.y) * innerOffset }
+    ];
+    
+    const measurements = this.calculateMeasurements(orderedCorners);
+    
+    return [{
+      id: 0,
+      corners: innerCorners,
+      magentaPositions: orderedCorners,
+      size: measurements.avgSidePx,
+      center: measurements.center,
+      score: 0.85,
+      magentaFound: 0,
+      homography: {
+        realSizeCm: MARKER_SPECS.markerSize,
+        pixelsPerCm: measurements.pixelsPerCm,
+        sides: measurements.sides,
+        angles: measurements.angles
+      }
+    }];
+  }
+
+  /**
+   * �🎯 NOUVELLE MÉTHODE PRINCIPALE: Détection par LIGNES NOIRES
    * 
    * Algorithme:
    * 1. Détecter les contours (gradients forts = transitions)
