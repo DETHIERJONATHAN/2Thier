@@ -178,7 +178,7 @@ app.use(advancedRateLimit);
 // 🛡️ SÉCURITÉ NIVEAU 4 - DÉTECTION D'ANOMALIES
 app.use(anomalyDetection);
 
-// ⚡ Configuration CORS sécurisée (Google Cloud Run + domaines 2thier.be)
+// ⚡ Configuration CORS sécurisée (Google Cloud Run + domaines 2thier.be + GitHub Codespaces)
 const FRONTEND_URL = process.env.FRONTEND_URL;
 const prodOrigins = [
   FRONTEND_URL || 'https://app.2thier.be',
@@ -187,9 +187,39 @@ const prodOrigins = [
   /\.run\.app$/,       // Google Cloud Run
   /\.appspot\.com$/    // Google App Engine
 ];
-const devOrigins = [FRONTEND_URL || 'http://localhost:5173', 'http://localhost:3000'];
+const devOrigins = [
+  FRONTEND_URL || 'http://localhost:5173', 
+  'http://localhost:3000',
+  /^https:\/\/.*\.app\.github\.dev$/,  // GitHub Codespaces (toutes URLs)
+  /^https:\/\/.*-\d+\.app\.github\.dev$/  // GitHub Codespaces avec port
+];
 app.use(cors({
-  origin: process.env.NODE_ENV === 'production' ? prodOrigins : devOrigins,
+  origin: (origin, callback) => {
+    // Permettre les requêtes sans origin (comme curl, Postman, ou requêtes serveur-à-serveur)
+    if (!origin) {
+      return callback(null, true);
+    }
+    
+    const allowedOrigins = process.env.NODE_ENV === 'production' ? prodOrigins : devOrigins;
+    
+    // Vérifier si l'origin correspond à une des origines autorisées
+    const isAllowed = allowedOrigins.some(allowed => {
+      if (typeof allowed === 'string') {
+        return origin === allowed;
+      }
+      if (allowed instanceof RegExp) {
+        return allowed.test(origin);
+      }
+      return false;
+    });
+    
+    if (isAllowed) {
+      callback(null, true);
+    } else {
+      console.warn(`🚫 [CORS] Origin bloqué: ${origin}`);
+      callback(null, false);
+    }
+  },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'x-organization-id'],

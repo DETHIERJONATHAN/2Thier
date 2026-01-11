@@ -8,8 +8,8 @@
 import { Router } from 'express';
 import { db } from '../../../../lib/database';
 import { authenticateToken } from '../../../../middleware/auth';
-import { getResolver } from '../../../services/TreeBranchLeafResolver';
-import { getBackgroundJobService } from '../../../services/TreeBranchLeafBackgroundJobService';
+import { getResolver } from '../../../../services/TreeBranchLeafResolver';
+import { getBackgroundJobService } from '../../../../services/TreeBranchLeafBackgroundJobService';
 
 const router = Router();
 const prisma = db;

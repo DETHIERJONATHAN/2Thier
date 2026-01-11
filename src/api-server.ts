@@ -54,8 +54,34 @@ const port = process.env.PORT || 8080;
 console.log(`🔧 [DEBUG] Port configuré: ${port}`);
 
 console.log('🔧 [DEBUG] Configuration CORS...');
+const allowedOrigins = [
+    'http://localhost:5173', 
+    'http://localhost:5174',
+    // GitHub Codespaces URLs
+    /https:\/\/.*-5173\.app\.github\.dev$/,
+    /https:\/\/.*-5174\.app\.github\.dev$/,
+    /https:\/\/.*\.preview\.app\.github\.dev$/,
+];
 app.use(cors({
-    origin: ['http://localhost:5173', 'http://localhost:5174'],
+    origin: (origin, callback) => {
+        // Allow requests with no origin (like mobile apps or curl)
+        if (!origin) return callback(null, true);
+        
+        // Check string origins
+        if (typeof origin === 'string') {
+            for (const allowed of allowedOrigins) {
+                if (typeof allowed === 'string' && origin === allowed) {
+                    return callback(null, true);
+                }
+                if (allowed instanceof RegExp && allowed.test(origin)) {
+                    return callback(null, true);
+                }
+            }
+        }
+        
+        console.log(`⚠️ CORS blocked origin: ${origin}`);
+        callback(new Error('Not allowed by CORS'));
+    },
     credentials: true,
 }));
 console.log('✅ [DEBUG] CORS configuré');
