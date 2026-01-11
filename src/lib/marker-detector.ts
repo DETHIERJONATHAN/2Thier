@@ -292,6 +292,33 @@ export class MarkerDetector {
       return [];
     }
     
+    // 🔲 VALIDATION FORME: Le marqueur ArUco doit être approximativement CARRÉ
+    // Calculer le ratio largeur/hauteur
+    const corners = quad.corners;
+    const widthPx = Math.sqrt(
+      Math.pow(corners[1].x - corners[0].x, 2) + Math.pow(corners[1].y - corners[0].y, 2)
+    );
+    const heightPx = Math.sqrt(
+      Math.pow(corners[3].x - corners[0].x, 2) + Math.pow(corners[3].y - corners[0].y, 2)
+    );
+    const aspectRatio = Math.max(widthPx, heightPx) / Math.min(widthPx, heightPx);
+    
+    console.log(`   📐 Dimensions: ${widthPx.toFixed(0)}px × ${heightPx.toFixed(0)}px (ratio: ${aspectRatio.toFixed(2)})`);
+    
+    // Un marqueur ArUco doit avoir un ratio proche de 1 (carré)
+    // Tolérance: jusqu'à 3:1 pour tenir compte de la perspective extrême
+    if (aspectRatio > 3.0) {
+      console.log(`   ⚠️ REJET: Ratio ${aspectRatio.toFixed(2)} trop éloigné d'un carré (max 3.0)`);
+      return [];
+    }
+    
+    // Taille minimale: au moins 50px de côté pour être exploitable
+    const minSide = Math.min(widthPx, heightPx);
+    if (minSide < 50) {
+      console.log(`   ⚠️ REJET: Côté ${minSide.toFixed(0)}px trop petit (min 50px)`);
+      return [];
+    }
+    
     console.log('   ✅ Quadrilatère trouvé via lignes noires');
     
     // ÉTAPE 4: Chercher les coins magenta pour validation/raffinement
