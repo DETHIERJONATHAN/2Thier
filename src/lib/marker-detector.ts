@@ -293,7 +293,6 @@ export class MarkerDetector {
     }
     
     // 🔲 VALIDATION FORME: Le marqueur ArUco doit être approximativement CARRÉ
-    // Calculer le ratio largeur/hauteur
     const corners = quad.corners;
     const widthPx = Math.sqrt(
       Math.pow(corners[1].x - corners[0].x, 2) + Math.pow(corners[1].y - corners[0].y, 2)
@@ -319,7 +318,16 @@ export class MarkerDetector {
       return [];
     }
     
-    console.log('   ✅ Quadrilatère trouvé via lignes noires');
+    // 🎯 VALIDATION STRUCTURE ARUCO: Vérifier les transitions noir→blanc→noir
+    const structureScore = this.validateArucoStructure(data, width, height, corners);
+    console.log(`   🔲 Score structure ArUco: ${(structureScore * 100).toFixed(0)}%`);
+    
+    if (structureScore < 0.3) {
+      console.log(`   ⚠️ REJET: Structure ArUco non détectée (score ${(structureScore * 100).toFixed(0)}% < 30%)`);
+      return [];
+    }
+    
+    console.log('   ✅ Quadrilatère validé comme marqueur ArUco');
     
     // ÉTAPE 4: Chercher les coins magenta pour validation/raffinement
     const magentaPixels = this.findAllMagentaPixels(data, width, height);
@@ -480,12 +488,13 @@ export class MarkerDetector {
 
   /**
    * Trouver le meilleur quadrilatère parmi les lignes
+   * 🎯 AMÉLIORÉ: Génère plusieurs candidats et les score par structure ArUco
    */
   private findBestQuadrilateral(
     lines: Array<{ rho: number; theta: number; votes: number }>,
     width: number,
     height: number
-  ): { corners: Point2D[] } | null {
+  ): { corners: Point2D[]; score: number } | null {
     if (lines.length < 4) return null;
     
     // Séparer les lignes quasi-horizontales et quasi-verticales
@@ -503,17 +512,8 @@ export class MarkerDetector {
     
     console.log(`   📐 ${horizontal.length} horizontales, ${vertical.length} verticales`);
     
-    if (horizontal.length < 2 || vertical.length < 2) {
-      // Essayer avec toutes les lignes
-      return this.findQuadFromAllLines(lines, width, height);
-    }
-    
-    // Prendre les 2 meilleures de chaque orientation
-    const h1 = horizontal[0], h2 = horizontal[1];
-    const v1 = vertical[0], v2 = vertical[1];
-    
-    // Calculer les 4 intersections
-    const corners: Point2D[] = [];
+    // 🎯 NOUVEAU: Générer PLUSIEURS candidats et les scorer
+    const candidates: Array<{ corners: Point2D[]; score: number }> = [];
     
     const intersect = (l1: typeof lines[0], l2: typeof lines[0]): Point2D | null => {
       const cos1 = Math.cos(l1.theta), sin1 = Math.sin(l1.theta);
@@ -528,24 +528,67 @@ export class MarkerDetector {
       return { x, y };
     };
     
-    const c1 = intersect(h1, v1);
-    const c2 = intersect(h1, v2);
-    const c3 = intersect(h2, v1);
-    const c4 = intersect(h2, v2);
-    
-    if (!c1 || !c2 || !c3 || !c4) return null;
-    
-    // Vérifier que les coins sont dans l'image (avec marge)
     const margin = -50;
     const inBounds = (p: Point2D) => 
       p.x >= margin && p.x < width - margin && 
       p.y >= margin && p.y < height - margin;
     
-    if (!inBounds(c1) || !inBounds(c2) || !inBounds(c3) || !inBounds(c4)) {
+    // Essayer toutes les combinaisons de 2 horizontales × 2 verticales
+    const maxH = Math.min(horizontal.length, 6);
+    const maxV = Math.min(vertical.length, 6);
+    
+    for (let hi = 0; hi < maxH; hi++) {
+      for (let hj = hi + 1; hj < maxH; hj++) {
+        for (let vi = 0; vi < maxV; vi++) {
+          for (let vj = vi + 1; vj < maxV; vj++) {
+            const h1 = horizontal[hi], h2 = horizontal[hj];
+            const v1 = vertical[vi], v2 = vertical[vj];
+            
+            const c1 = intersect(h1, v1);
+            const c2 = intersect(h1, v2);
+            const c3 = intersect(h2, v1);
+            const c4 = intersect(h2, v2);
+            
+            if (!c1 || !c2 || !c3 || !c4) continue;
+            if (!inBounds(c1) || !inBounds(c2) || !inBounds(c3) || !inBounds(c4)) continue;
+            
+            const corners = this.orderCornersClockwise([c1, c2, c3, c4]);
+            
+            // 📐 Vérifier le ratio (doit être proche de 1 pour un carré)
+            const w = Math.sqrt((corners[1].x - corners[0].x) ** 2 + (corners[1].y - corners[0].y) ** 2);
+            const h = Math.sqrt((corners[3].x - corners[0].x) ** 2 + (corners[3].y - corners[0].y) ** 2);
+            const ratio = Math.max(w, h) / Math.min(w, h);
+            
+            if (ratio > 3.0) continue; // Trop étiré
+            if (Math.min(w, h) < 50) continue; // Trop petit
+            
+            // 🎯 Score basé sur:
+            // 1. Ratio proche de 1 (carré) = bonus
+            // 2. Votes des lignes = bonus
+            // 3. Taille raisonnable = bonus
+            const ratioScore = Math.max(0, 1 - (ratio - 1) * 0.3); // 1.0 si carré parfait
+            const voteScore = (h1.votes + h2.votes + v1.votes + v2.votes) / 4000;
+            const sizeScore = Math.min(1, Math.min(w, h) / 200); // Préférer les grands
+            
+            const score = ratioScore * 0.5 + voteScore * 0.3 + sizeScore * 0.2;
+            
+            candidates.push({ corners, score });
+          }
+        }
+      }
+    }
+    
+    if (candidates.length === 0) {
+      // Fallback sur l'ancienne méthode
       return this.findQuadFromAllLines(lines, width, height);
     }
     
-    return { corners: [c1, c2, c3, c4] };
+    // Trier par score décroissant
+    candidates.sort((a, b) => b.score - a.score);
+    
+    console.log(`   🎯 ${candidates.length} candidats générés, meilleur score: ${candidates[0].score.toFixed(2)}`);
+    
+    return candidates[0];
   }
 
   /**
@@ -697,6 +740,121 @@ export class MarkerDetector {
       sorted[(tlIdx + 2) % 4],
       sorted[(tlIdx + 3) % 4]
     ];
+  }
+
+  /**
+   * 🔲 VALIDATION STRUCTURE ARUCO
+   * Vérifie que le quadrilatère contient bien la structure attendue:
+   * NOIR (1/6) → BLANC (1/6) → PATTERN (2/6) → BLANC (1/6) → NOIR (1/6)
+   * 
+   * Parcourt les bords et vérifie les transitions de luminosité
+   */
+  private validateArucoStructure(
+    data: Uint8ClampedArray | Buffer,
+    width: number,
+    height: number,
+    corners: Point2D[]
+  ): number {
+    const [tl, tr, br, bl] = corners;
+    
+    // Vérifier sur les 4 bords
+    const edges = [
+      { start: tl, end: tr, name: 'TOP' },
+      { start: tr, end: br, name: 'RIGHT' },
+      { start: br, end: bl, name: 'BOTTOM' },
+      { start: bl, end: tl, name: 'LEFT' }
+    ];
+    
+    let totalScore = 0;
+    let validEdges = 0;
+    
+    for (const edge of edges) {
+      const edgeScore = this.validateEdgeStructure(data, width, height, edge.start, edge.end);
+      if (edgeScore > 0.3) {
+        totalScore += edgeScore;
+        validEdges++;
+      }
+    }
+    
+    // Score global: moyenne des bords valides (besoin d'au moins 2 bords)
+    if (validEdges < 2) return 0;
+    
+    return totalScore / validEdges;
+  }
+
+  /**
+   * Valider la structure d'un bord du marqueur
+   * Attend: NOIR (16%) → BLANC (16%) → PATTERN (33%) → BLANC (16%) → NOIR (16%)
+   */
+  private validateEdgeStructure(
+    data: Uint8ClampedArray | Buffer,
+    width: number,
+    height: number,
+    start: Point2D,
+    end: Point2D
+  ): number {
+    const samples = 30; // Nombre d'échantillons le long du bord
+    const luminosities: number[] = [];
+    
+    // Échantillonner la luminosité le long du bord
+    for (let i = 0; i < samples; i++) {
+      const t = i / (samples - 1);
+      const x = Math.round(start.x + (end.x - start.x) * t);
+      const y = Math.round(start.y + (end.y - start.y) * t);
+      
+      // Vérifier les bornes
+      if (x < 0 || x >= width || y < 0 || y >= height) {
+        luminosities.push(128); // Valeur neutre
+        continue;
+      }
+      
+      const idx = (y * width + x) * 4;
+      const r = data[idx] || 0;
+      const g = data[idx + 1] || 0;
+      const b = data[idx + 2] || 0;
+      const lum = (r + g + b) / 3;
+      luminosities.push(lum);
+    }
+    
+    // Analyser les transitions
+    // Structure attendue sur 30 samples:
+    // 0-5: NOIR (sombre)
+    // 5-10: BLANC (clair)
+    // 10-20: PATTERN (variable)
+    // 20-25: BLANC (clair)
+    // 25-30: NOIR (sombre)
+    
+    const zone1 = luminosities.slice(0, 5); // Premier noir
+    const zone2 = luminosities.slice(5, 10); // Premier blanc
+    const zone4 = luminosities.slice(20, 25); // Deuxième blanc
+    const zone5 = luminosities.slice(25, 30); // Deuxième noir
+    
+    const avg = (arr: number[]) => arr.length ? arr.reduce((a, b) => a + b, 0) / arr.length : 128;
+    
+    const avgNoir1 = avg(zone1);
+    const avgBlanc1 = avg(zone2);
+    const avgBlanc2 = avg(zone4);
+    const avgNoir2 = avg(zone5);
+    
+    // Vérifier les contrastes
+    // Les zones noires doivent être plus sombres que les zones blanches
+    let score = 0;
+    
+    // Noir1 < Blanc1
+    if (avgBlanc1 - avgNoir1 > 30) score += 0.25;
+    else if (avgBlanc1 - avgNoir1 > 15) score += 0.15;
+    
+    // Noir2 < Blanc2
+    if (avgBlanc2 - avgNoir2 > 30) score += 0.25;
+    else if (avgBlanc2 - avgNoir2 > 15) score += 0.15;
+    
+    // Les deux zones noires doivent être similaires
+    if (Math.abs(avgNoir1 - avgNoir2) < 40) score += 0.25;
+    
+    // Les deux zones blanches doivent être similaires
+    if (Math.abs(avgBlanc1 - avgBlanc2) < 40) score += 0.25;
+    
+    return score;
   }
 
   /**
