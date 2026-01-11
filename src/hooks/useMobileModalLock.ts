@@ -9,6 +9,9 @@
  * 
  * La seule façon de fermer est de cliquer sur un bouton explicite (croix, annuler, valider)
  * 
+ * IMPORTANT: Ce hook est compatible avec l'ouverture de la caméra native mobile
+ * qui peut mettre le navigateur en arrière-plan temporairement.
+ * 
  * @author 2Thier CRM Team
  * @date 11/01/2026
  */
@@ -33,8 +36,14 @@ export function useMobileModalLock({
   onAttemptClose,
   disabled = false
 }: UseMobileModalLockOptions) {
-  const historyStateRef = useRef<any>(null);
+  const historyPushedRef = useRef<boolean>(false);
   const isMobileRef = useRef<boolean>(false);
+  const isOpenRef = useRef<boolean>(isOpen);
+  
+  // Garder une ref à jour de isOpen pour les event handlers
+  useEffect(() => {
+    isOpenRef.current = isOpen;
+  }, [isOpen]);
 
   // Détecter si on est sur mobile
   useEffect(() => {
@@ -49,11 +58,20 @@ export function useMobileModalLock({
     if (!isOpen || disabled || typeof window === 'undefined') return;
 
     // Ajouter une entrée dans l'historique pour capturer le "back"
-    const state = { modalLocked: true, timestamp: Date.now() };
-    historyStateRef.current = state;
-    window.history.pushState(state, '', window.location.href);
+    // Utiliser un ID unique pour cette instance
+    const lockId = `modal-lock-${Date.now()}`;
+    const state = { modalLocked: true, lockId };
+    
+    // Ne pas ajouter si déjà ajouté
+    if (!historyPushedRef.current) {
+      window.history.pushState(state, '', window.location.href);
+      historyPushedRef.current = true;
+    }
 
     const handlePopState = (event: PopStateEvent) => {
+      // Vérifier que le modal est toujours ouvert (utiliser la ref pour éviter les closures stale)
+      if (!isOpenRef.current) return;
+      
       // L'utilisateur a appuyé sur retour
       event.preventDefault();
       
@@ -70,10 +88,10 @@ export function useMobileModalLock({
 
     return () => {
       window.removeEventListener('popstate', handlePopState);
-      // Nettoyer l'entrée d'historique ajoutée
-      if (window.history.state?.modalLocked === true) {
-        window.history.back();
-      }
+      // IMPORTANT: NE PAS appeler history.back() ici !
+      // Cela cause des problèmes quand la caméra native s'ouvre
+      // L'entrée dans l'historique sera nettoyée naturellement
+      historyPushedRef.current = false;
     };
   }, [isOpen, disabled, onAttemptClose]);
 

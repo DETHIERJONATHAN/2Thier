@@ -828,6 +828,10 @@ export const ImageMeasurementPreview: React.FC<ImageMeasurementPreviewProps> = (
           objectDescription: `Objet rectangulaire à mesurer (${measureKeys.join(', ')})`
         }}
         allPhotos={allPhotos}
+        // 🔬 ANALYSE ARUCO: Pour afficher le contour magenta sur mobile aussi !
+        arucoAnalysis={arucoAnalysis}
+        // 🔧 CORRECTION OPTIMALE: Facteur calculé par RANSAC
+        optimalCorrection={optimalCorrection}
       />
     );
   }
