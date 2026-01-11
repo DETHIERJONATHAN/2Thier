@@ -291,8 +291,16 @@ export const ImageMeasurementCanvas: React.FC<ImageMeasurementCanvasProps> = ({
   const [estimatedDepth, setEstimatedDepth] = useState<number | null>(null);
 
   // 🆕 WORKFLOW GUIDÉ - Étapes: 1) Zone référence A4, 2) Zone objet à mesurer, 3) Ajustement
+  // 🎯 SI ArUco pré-détecté (fusedCorners), on SKIP la sélection de référence !
   type WorkflowStep = 'selectReferenceZone' | 'selectMeasureZone' | 'adjusting';
-  const [workflowStep, setWorkflowStep] = useState<WorkflowStep>('selectReferenceZone');
+  const [workflowStep, setWorkflowStep] = useState<WorkflowStep>(() => {
+    // Si ArUco est déjà détecté, passer directement à la sélection de l'objet à mesurer
+    if (fusedCorners && homographyReady) {
+      console.log('🚀 [Canvas] Initialisation: ArUco pré-détecté → workflowStep = selectMeasureZone');
+      return 'selectMeasureZone';
+    }
+    return 'selectReferenceZone';
+  });
   const [isDetectingCorners, setIsDetectingCorners] = useState(false);
   const [zoneSelectionType, setZoneSelectionType] = useState<'a4' | 'door' | 'window' | null>(null);
   const [isProcessingZone, setIsProcessingZone] = useState(false); // 🆕 Protection contre appels multiples
@@ -896,7 +904,15 @@ export const ImageMeasurementCanvas: React.FC<ImageMeasurementCanvasProps> = ({
     
   }, [fusedCorners, homographyReady, imageDimensions.width, imageDimensions.height, imageDimensions.scale, referenceCorners, quadrilateralMode, image, markerSizeCm]);
 
-  // 🔄 Recalculer pixelPerCm quand le rectangle de référence est ajusté
+  // � SECOURS: Si ArUco pré-détecté et qu'on est encore en selectReferenceZone, forcer le passage
+  useEffect(() => {
+    if (fusedCorners && homographyReady && workflowStep === 'selectReferenceZone') {
+      console.log('🔧 [Canvas] SECOURS: fusedCorners présent mais workflowStep=selectReferenceZone → Forcer selectMeasureZone');
+      setWorkflowStep('selectMeasureZone');
+    }
+  }, [fusedCorners, homographyReady, workflowStep]);
+
+  // �🔄 Recalculer pixelPerCm quand le rectangle de référence est ajusté
   const recalculateCalibration = useCallback((box: { x: number; y: number; width: number; height: number }, skipSnap: boolean = false) => {
     // 🆕 ÉTAPE 1: Snapper aux vrais bords de l'objet (détection de contours locale)
     let snappedBox = box;
