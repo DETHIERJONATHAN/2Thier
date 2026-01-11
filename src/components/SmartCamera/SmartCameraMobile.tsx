@@ -1,8 +1,8 @@
 /**
- * 📸 SmartCameraMobile - Version 100% Mobile avec caméra native
+ * 📸 SmartCameraMobile - Version 100% Mobile avec caméra IN-BROWSER
  * 
- * Utilise l'input file native pour une compatibilité maximale sur mobile
- * Pas de getUserMedia, pas de bugs WebView !
+ * 🔥 IMPORTANT: Utilise getUserMedia pour capturer dans le navigateur
+ * au lieu de l'app caméra native Android qui décharge la page !
  * 
  * 📱 Intègre le gyroscope pour améliorer les mesures ArUco
  * 🔒 Protection contre la sortie accidentelle sur mobile
@@ -18,7 +18,9 @@ import {
   PrinterOutlined,
   DownloadOutlined,
   SaveOutlined,
-  InfoCircleOutlined
+  InfoCircleOutlined,
+  VideoCameraOutlined,
+  StopOutlined
 } from '@ant-design/icons';
 import { useDeviceOrientation } from '../../hooks/useDeviceOrientation';
 import { useAuthenticatedApi } from '../../hooks/useAuthenticatedApi';
@@ -131,6 +133,122 @@ const SmartCameraMobile: React.FC<SmartCameraMobileProps> = ({
     }
   }, [isAvailable, hasPermission]);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  // 📹 CAMÉRA IN-BROWSER: Stream vidéo pour éviter l'app native Android
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const [cameraActive, setCameraActive] = useState(false);
+  const [cameraStream, setCameraStream] = useState<MediaStream | null>(null);
+  const [cameraError, setCameraError] = useState<string | null>(null);
+
+  // 📹 Démarrer la caméra in-browser
+  const startCamera = useCallback(async () => {
+    // Sur iOS, demander la permission gyroscope au premier clic
+    if (isAvailable && !hasPermission) {
+      await requestPermission();
+    }
+    
+    try {
+      setCameraError(null);
+      console.log('📹 [SmartCamera] Démarrage caméra in-browser...');
+      
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: {
+          facingMode: 'environment', // Caméra arrière
+          width: { ideal: 1920 },
+          height: { ideal: 1080 }
+        },
+        audio: false
+      });
+      
+      setCameraStream(stream);
+      setCameraActive(true);
+      
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        videoRef.current.play();
+      }
+      
+      console.log('📹 [SmartCamera] Caméra démarrée avec succès');
+    } catch (err: any) {
+      console.error('📹 [SmartCamera] Erreur caméra:', err);
+      setCameraError(err.message || 'Impossible d\'accéder à la caméra');
+      // Fallback vers l'input file natif si getUserMedia échoue
+      message.warning('Caméra in-browser non disponible, utilisation de la méthode native');
+      inputRef.current?.click();
+    }
+  }, [isAvailable, hasPermission, requestPermission]);
+  
+  // 📹 Arrêter la caméra
+  const stopCamera = useCallback(() => {
+    if (cameraStream) {
+      cameraStream.getTracks().forEach(track => track.stop());
+      setCameraStream(null);
+    }
+    setCameraActive(false);
+    console.log('📹 [SmartCamera] Caméra arrêtée');
+  }, [cameraStream]);
+  
+  // 📸 Capturer une photo depuis le stream vidéo
+  const captureFromStream = useCallback(() => {
+    if (!videoRef.current || !canvasRef.current) {
+      message.error('Caméra non prête');
+      return;
+    }
+    
+    const video = videoRef.current;
+    const canvas = canvasRef.current;
+    
+    // Définir la taille du canvas = taille de la vidéo
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    
+    // Dessiner la frame actuelle
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    
+    ctx.drawImage(video, 0, 0);
+    
+    // Convertir en base64
+    const base64 = canvas.toDataURL('image/jpeg', 0.9);
+    
+    // 📱 Capturer l'orientation actuelle du téléphone (gyroscope)
+    const currentOrientation = {
+      alpha: orientation.alpha,
+      beta: orientation.beta,
+      gamma: orientation.gamma,
+      quality: analyze().quality
+    };
+    
+    // Créer la photo
+    const newPhoto: CapturedPhoto = {
+      imageBase64: base64,
+      metadata: {
+        timestamp: Date.now(),
+        photoIndex: photos.length,
+        totalPhotosNeeded: minPhotos,
+        gyroscope: currentOrientation,
+        accelerometer: { x: 0, y: 0, z: 0 },
+        camera: { facingMode: 'environment', zoom: 1 },
+        lighting: { brightness: 128, contrast: 50, uniformity: 80 },
+        quality: { sharpness: 85, blur: 10, overallScore: 85 }
+      }
+    };
+    
+    setPhotos(prev => [...prev, newPhoto]);
+    message.success('📸 Photo capturée !');
+    
+    console.log(`📸 [SmartCamera] Photo capturée (${photos.length + 1}/${minPhotos})`);
+  }, [orientation, analyze, photos.length, minPhotos]);
+  
+  // Nettoyer le stream au démontage
+  useEffect(() => {
+    return () => {
+      if (cameraStream) {
+        cameraStream.getTracks().forEach(track => track.stop());
+      }
+    };
+  }, [cameraStream]);
 
   // Charger la config ArUco au moment d'ouvrir la modale (évite appels inutiles)
   useEffect(() => {
@@ -318,14 +436,11 @@ const SmartCameraMobile: React.FC<SmartCameraMobileProps> = ({
     onCancel();
   }, [clearPersistedPhotos, onCancel]);
 
-  // Ouvrir la caméra (avec permission gyroscope sur iOS)
+  // Ouvrir la caméra IN-BROWSER (plus de redirection vers l'app native!)
   const openCamera = useCallback(async () => {
-    // Sur iOS, demander la permission gyroscope au premier clic
-    if (isAvailable && !hasPermission) {
-      await requestPermission();
-    }
-    inputRef.current?.click();
-  }, [isAvailable, hasPermission, requestPermission]);
+    // Utiliser la caméra in-browser
+    startCamera();
+  }, [startCamera]);
 
   // Ouvrir la galerie (sans capture="environment")
   const galleryInputRef = useRef<HTMLInputElement>(null);
@@ -464,7 +579,139 @@ const SmartCameraMobile: React.FC<SmartCameraMobileProps> = ({
           </Space>
         </Space>
       </Modal>
+      {/* 📹 OVERLAY CAMÉRA IN-BROWSER - S'affiche quand on prend une photo */}
+      {cameraActive && (
+        <div style={{
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: '#000',
+          zIndex: 100000,
+          display: 'flex',
+          flexDirection: 'column'
+        }}>
+          {/* Header camera */}
+          <div style={{
+            padding: 16,
+            background: 'linear-gradient(to bottom, rgba(0,0,0,0.8), transparent)',
+            color: '#fff',
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            right: 0,
+            zIndex: 1
+          }}>
+            <Title level={4} style={{ color: '#fff', margin: 0 }}>
+              📹 Caméra
+            </Title>
+            <Button 
+              type="text" 
+              icon={<StopOutlined />}
+              onClick={stopCamera}
+              style={{ color: '#fff' }}
+            >
+              Fermer
+            </Button>
+          </div>
 
+          {/* Video stream */}
+          <video
+            ref={videoRef}
+            autoPlay
+            playsInline
+            muted
+            style={{
+              width: '100%',
+              height: '100%',
+              objectFit: 'cover'
+            }}
+          />
+
+          {/* Canvas caché pour la capture */}
+          <canvas ref={canvasRef} style={{ display: 'none' }} />
+
+          {/* Bouton capture */}
+          <div style={{
+            position: 'absolute',
+            bottom: 30,
+            left: 0,
+            right: 0,
+            display: 'flex',
+            justifyContent: 'center',
+            alignItems: 'center',
+            gap: 20
+          }}>
+            {/* Indicateur photos prises */}
+            <div style={{
+              background: 'rgba(0,0,0,0.7)',
+              color: '#fff',
+              padding: '8px 16px',
+              borderRadius: 20,
+              fontSize: 14
+            }}>
+              {photos.length} / {minPhotos} min
+            </div>
+
+            {/* Gros bouton capture */}
+            <Button
+              type="primary"
+              shape="circle"
+              size="large"
+              icon={<CameraOutlined style={{ fontSize: 32 }} />}
+              onClick={captureFromStream}
+              style={{
+                width: 80,
+                height: 80,
+                background: '#fff',
+                border: '4px solid #1890ff',
+                color: '#1890ff',
+                boxShadow: '0 4px 20px rgba(0,0,0,0.3)'
+              }}
+            />
+
+            {/* Bouton valider si assez de photos */}
+            {photos.length >= minPhotos && (
+              <Button
+                type="primary"
+                icon={<CheckCircleOutlined />}
+                onClick={() => {
+                  stopCamera();
+                }}
+                style={{
+                  background: '#52c41a',
+                  height: 48,
+                  borderRadius: 24
+                }}
+              >
+                Terminé
+              </Button>
+            )}
+          </div>
+
+          {/* Message erreur si problème caméra */}
+          {cameraError && (
+            <div style={{
+              position: 'absolute',
+              top: '50%',
+              left: '50%',
+              transform: 'translate(-50%, -50%)',
+              background: 'rgba(255,0,0,0.9)',
+              color: '#fff',
+              padding: 20,
+              borderRadius: 12,
+              textAlign: 'center'
+            }}>
+              <div style={{ fontSize: 18, marginBottom: 10 }}>❌ Erreur caméra</div>
+              <div>{cameraError}</div>
+            </div>
+          )}
+        </div>
+      )}
       {/* Zone photos */}
       <div style={{
         flex: 1,
