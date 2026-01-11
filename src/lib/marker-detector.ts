@@ -305,9 +305,10 @@ export class MarkerDetector {
     console.log(`   📐 Dimensions: ${widthPx.toFixed(0)}px × ${heightPx.toFixed(0)}px (ratio: ${aspectRatio.toFixed(2)})`);
     
     // Un marqueur ArUco doit avoir un ratio proche de 1 (carré)
-    // Tolérance: jusqu'à 3:1 pour tenir compte de la perspective extrême
-    if (aspectRatio > 3.0) {
-      console.log(`   ⚠️ REJET: Ratio ${aspectRatio.toFixed(2)} trop éloigné d'un carré (max 3.0)`);
+    // Tolérance: jusqu'à 1.8:1 pour tenir compte de la perspective modérée
+    // Un ratio de 2+ signifie que c'est un rectangle, PAS un carré!
+    if (aspectRatio > 1.8) {
+      console.log(`   ⚠️ REJET: Ratio ${aspectRatio.toFixed(2)} trop éloigné d'un carré (max 1.8)`);
       return [];
     }
     
@@ -322,8 +323,9 @@ export class MarkerDetector {
     const structureScore = this.validateArucoStructure(data, width, height, corners);
     console.log(`   🔲 Score structure ArUco: ${(structureScore * 100).toFixed(0)}%`);
     
-    if (structureScore < 0.3) {
-      console.log(`   ⚠️ REJET: Structure ArUco non détectée (score ${(structureScore * 100).toFixed(0)}% < 30%)`);
+    // Score minimum 50% - le vrai marqueur aura des transitions claires
+    if (structureScore < 0.5) {
+      console.log(`   ⚠️ REJET: Structure ArUco non détectée (score ${(structureScore * 100).toFixed(0)}% < 50%)`);
       return [];
     }
     
@@ -559,7 +561,7 @@ export class MarkerDetector {
             const h = Math.sqrt((corners[3].x - corners[0].x) ** 2 + (corners[3].y - corners[0].y) ** 2);
             const ratio = Math.max(w, h) / Math.min(w, h);
             
-            if (ratio > 3.0) continue; // Trop étiré
+            if (ratio > 1.8) continue; // Trop étiré - un carré a ratio ~1.0
             if (Math.min(w, h) < 50) continue; // Trop petit
             
             // 🎯 Score basé sur:
@@ -1472,11 +1474,20 @@ export class MarkerDetector {
       return [];
     }
     
-    // Trouver les bounds de la zone noire
-    const minX = Math.min(...blackPixels.map(p => p.x));
-    const maxX = Math.max(...blackPixels.map(p => p.x));
-    const minY = Math.min(...blackPixels.map(p => p.y));
-    const maxY = Math.max(...blackPixels.map(p => p.y));
+    // Limiter le nombre de pixels pour éviter stack overflow
+    if (blackPixels.length > 50000) {
+      console.log(`   ⚠️ Trop de pixels noirs (${blackPixels.length}) - probablement fond noir, pas de marqueur`);
+      return [];
+    }
+    
+    // Trouver les bounds de la zone noire (sans spread operator pour éviter stack overflow)
+    let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+    for (const p of blackPixels) {
+      if (p.x < minX) minX = p.x;
+      if (p.x > maxX) maxX = p.x;
+      if (p.y < minY) minY = p.y;
+      if (p.y > maxY) maxY = p.y;
+    }
     
     // Les coins du rectangle englobant (coins EXTÉRIEURS approximatifs)
     const outerCorners: Point2D[] = [
