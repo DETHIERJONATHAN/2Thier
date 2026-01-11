@@ -551,7 +551,7 @@ const SmartCameraMobile: React.FC<SmartCameraMobileProps> = ({
             height: 50
           }}
         >
-          {isProcessing ? 'Traitement...' : '📷 Prendre une photo'}
+          {isProcessing ? '...' : 'Photo'}
         </Button>
 
         <Button
@@ -569,7 +569,7 @@ const SmartCameraMobile: React.FC<SmartCameraMobileProps> = ({
         </Button>
       </div>
 
-      {/* Message d'aide */}
+{/* Message d'aide simplifié */}
       {photos.length === 0 && (
         <div style={{
           position: 'absolute',
@@ -581,20 +581,9 @@ const SmartCameraMobile: React.FC<SmartCameraMobileProps> = ({
           padding: 20
         }}>
           <CameraOutlined style={{ fontSize: 64, marginBottom: 16 }} />
-          <div style={{ fontSize: 18 }}>
-            📷 "Prendre une photo" = Caméra
+          <div style={{ fontSize: 14, color: '#888' }}>
+            Minimum {minPhotos} photo(s)
           </div>
-          <div style={{ fontSize: 16, marginTop: 8 }}>
-            📁 Carré en pointillés = Galerie
-          </div>
-          <div style={{ fontSize: 14, marginTop: 12, color: '#888' }}>
-            Minimum {minPhotos} photo(s) requise(s)
-          </div>
-          {maxPhotos === undefined && (
-            <div style={{ fontSize: 12, marginTop: 6 }}>
-              Vous pouvez en ajouter autant que vous voulez.
-            </div>
-          )}
         </div>
       )}
     </div>

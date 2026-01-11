@@ -11,7 +11,8 @@
  * @author 2Thier CRM Team
  */
 
-import React, { useState, useCallback, useRef, useMemo } from 'react';
+import React, { useState, useCallback, useRef, useMemo, useEffect } from 'react';
+import ReactDOM from 'react-dom';
 import { Upload, Button, message, Spin, Space, Tag, Tooltip, Dropdown, Modal } from 'antd';
 import type { MenuProps } from 'antd';
 import { 
@@ -136,6 +137,25 @@ const TBLImageFieldWithAI: React.FC<TBLImageFieldWithAIProps> = ({
   // 🔒 Hook pour verrouiller les modaux sur mobile (empêcher sortie accidentelle)
   const handleAttemptClose = useCallback(() => {
     message.warning('⚠️ Utilisez le bouton "Annuler" ou "✕" pour fermer', 2);
+  }, []);
+  
+  // 📱 Détection mobile pour rendu optimal
+  const [isMobile, setIsMobile] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    const hasTouch = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+    const isSmallScreen = window.innerWidth <= 768;
+    return hasTouch || isSmallScreen;
+  });
+
+  useEffect(() => {
+    const checkMobile = () => {
+      const hasTouch = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+      const isSmallScreen = window.innerWidth <= 768;
+      setIsMobile(hasTouch || isSmallScreen);
+    };
+    
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
   }, []);
   
   const smartCameraLock = useMobileModalLock({
@@ -852,35 +872,47 @@ const TBLImageFieldWithAI: React.FC<TBLImageFieldWithAIProps> = ({
       {/* 🎯 NOUVEAU: Modaux SmartCamera - Visibles si capacité aiMeasure activée */}
       {aiMeasure_enabled && (
         <>
-          {/* 📸 Modal IA Photo - SmartCamera direct */}
+          {/* 📸 SmartCamera - RENDU DIRECT via PORTAIL sur mobile pour éviter conflits avec caméra native */}
           {/* 🔒 PROTECTION MOBILE: Empêche sortie accidentelle (swipe, clic à côté, back button) */}
-          <Modal
-            open={showSmartCamera}
-            onCancel={() => setShowSmartCamera(false)}
-            footer={null}
-            width="100%"
-            style={{ top: 0, padding: 0, maxWidth: '100vw' }}
-            styles={{ body: { padding: 0, height: '100vh' } }}
-            destroyOnClose
-            {...smartCameraLock.modalProps}
-            title={
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 16px', background: '#1890ff', color: 'white', margin: '-24px -24px 0 -24px' }}>
-                <span>📸 Capture IA</span>
-                <Button 
-                  type="text" 
-                  icon={<CloseOutlined style={{ color: 'white', fontSize: 18 }} />}
-                  onClick={() => setShowSmartCamera(false)}
-                  style={{ color: 'white' }}
-                />
-              </div>
-            }
-          >
+          {showSmartCamera && isMobile && ReactDOM.createPortal(
             <SmartCameraMobile
               onCapture={handleSmartCapture}
               onCancel={() => setShowSmartCamera(false)}
               minPhotos={3}
-            />
-          </Modal>
+            />,
+            document.body
+          )}
+          
+          {/* 📸 Modal classique pour DESKTOP */}
+          {!isMobile && (
+            <Modal
+              open={showSmartCamera}
+              onCancel={() => setShowSmartCamera(false)}
+              footer={null}
+              width="100%"
+              style={{ top: 0, padding: 0, maxWidth: '100vw' }}
+              styles={{ body: { padding: 0, height: '100vh' } }}
+              destroyOnClose
+              {...smartCameraLock.modalProps}
+              title={
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 16px', background: '#1890ff', color: 'white', margin: '-24px -24px 0 -24px' }}>
+                  <span>📸 Capture IA</span>
+                  <Button 
+                    type="text" 
+                    icon={<CloseOutlined style={{ color: 'white', fontSize: 18 }} />}
+                    onClick={() => setShowSmartCamera(false)}
+                    style={{ color: 'white' }}
+                  />
+                </div>
+              }
+            >
+              <SmartCameraMobile
+                onCapture={handleSmartCapture}
+                onCancel={() => setShowSmartCamera(false)}
+                minPhotos={3}
+              />
+            </Modal>
+          )}
           
           {/* Modal de configuration des objets de référence */}
           <ReferenceObjectsConfig
