@@ -32,6 +32,7 @@ import {
   CloseOutlined
 } from '@ant-design/icons';
 import { useAuthenticatedApi } from '../../hooks/useAuthenticatedApi';
+import { useMobileModalLock } from '../../hooks/useMobileModalLock';
 import { ImageMeasurementCanvas } from './ImageMeasurementCanvas';
 import { ImageMeasurementCanvasMobile } from './ImageMeasurementCanvasMobile';
 import type {
@@ -299,7 +300,17 @@ export const ImageMeasurementPreview: React.FC<ImageMeasurementPreviewProps> = (
   const { api } = useAuthenticatedApi();
   const isMobile = useIsMobile(); // 📱 Détection mobile
 
-  // 🔄 SESSION KEY: Clé unique qui change à chaque ouverture pour forcer le reset des états
+  // � Hook pour verrouiller le modal sur mobile (empêcher sortie accidentelle)
+  const handleAttemptClose = useCallback(() => {
+    message.warning('⚠️ Utilisez le bouton "Annuler" ou "✕" pour fermer', 2);
+  }, []);
+  
+  const modalLock = useMobileModalLock({
+    isOpen: visible,
+    onAttemptClose: handleAttemptClose
+  });
+
+  // �🔄 SESSION KEY: Clé unique qui change à chaque ouverture pour forcer le reset des états
   const [sessionKey, setSessionKey] = useState(0);
 
   // State
@@ -824,10 +835,19 @@ export const ImageMeasurementPreview: React.FC<ImageMeasurementPreviewProps> = (
   return (
     <Modal
       title={
-        <Space>
-          <CameraOutlined style={{ color: '#1890FF' }} />
-          <span>📐 Mesures automatiques</span>
-        </Space>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
+          <Space>
+            <CameraOutlined style={{ color: '#1890FF' }} />
+            <span>📐 Mesures automatiques</span>
+          </Space>
+          {/* 🔒 Bouton explicite de fermeture pour mobile */}
+          <Button 
+            type="text" 
+            icon={<CloseOutlined />}
+            onClick={onCancel}
+            style={{ marginRight: -8 }}
+          />
+        </div>
       }
       open={visible}
       onCancel={onCancel}
@@ -836,6 +856,7 @@ export const ImageMeasurementPreview: React.FC<ImageMeasurementPreviewProps> = (
       destroyOnClose
       style={isMobile ? { top: 0, padding: 0 } : undefined}
       styles={isMobile ? { body: { padding: 12 } } : undefined}
+      {...(isMobile ? modalLock.modalProps : {})}
     >
       {/* Progress steps */}
       <Steps

@@ -24,10 +24,12 @@ import {
   PictureOutlined,
   VideoCameraOutlined,
   SettingOutlined,
-  ThunderboltOutlined
+  ThunderboltOutlined,
+  CloseOutlined
 } from '@ant-design/icons';
 import { useAuth } from '../../../../../auth/useAuth';
 import { useAIMeasure, getAIMeasureConfig, type AIMeasureConfig, type AIMeasureResult } from '../../../../../hooks/useAIMeasure';
+import { useMobileModalLock } from '../../../../../hooks/useMobileModalLock';
 import { useSmartCameraConfig } from '../../../../../hooks/useSmartCameraConfig';
 import SmartCameraMobile, { type CapturedPhoto } from '../../../../SmartCamera/SmartCameraMobile';
 import type { MultiPhotoAnalysis } from '../../../../SmartCamera/PhotoAnalyzer';
@@ -130,6 +132,21 @@ const TBLImageFieldWithAI: React.FC<TBLImageFieldWithAIProps> = ({
   // Refs pour les inputs file (galerie et caméra)
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
+  
+  // 🔒 Hook pour verrouiller les modaux sur mobile (empêcher sortie accidentelle)
+  const handleAttemptClose = useCallback(() => {
+    message.warning('⚠️ Utilisez le bouton "Annuler" ou "✕" pour fermer', 2);
+  }, []);
+  
+  const smartCameraLock = useMobileModalLock({
+    isOpen: showSmartCamera,
+    onAttemptClose: handleAttemptClose
+  });
+  
+  const measurementCanvasLock = useMobileModalLock({
+    isOpen: showMeasurementCanvas,
+    onAttemptClose: handleAttemptClose
+  });
   
   // Hook pour l'analyse IA
   const { analyzeImage, applyResults } = useAIMeasure({
@@ -836,6 +853,7 @@ const TBLImageFieldWithAI: React.FC<TBLImageFieldWithAIProps> = ({
       {aiMeasure_enabled && (
         <>
           {/* 📸 Modal IA Photo - SmartCamera direct */}
+          {/* 🔒 PROTECTION MOBILE: Empêche sortie accidentelle (swipe, clic à côté, back button) */}
           <Modal
             open={showSmartCamera}
             onCancel={() => setShowSmartCamera(false)}
@@ -844,7 +862,18 @@ const TBLImageFieldWithAI: React.FC<TBLImageFieldWithAIProps> = ({
             style={{ top: 0, padding: 0, maxWidth: '100vw' }}
             styles={{ body: { padding: 0, height: '100vh' } }}
             destroyOnClose
-            closable={false}
+            {...smartCameraLock.modalProps}
+            title={
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 16px', background: '#1890ff', color: 'white', margin: '-24px -24px 0 -24px' }}>
+                <span>📸 Capture IA</span>
+                <Button 
+                  type="text" 
+                  icon={<CloseOutlined style={{ color: 'white', fontSize: 18 }} />}
+                  onClick={() => setShowSmartCamera(false)}
+                  style={{ color: 'white' }}
+                />
+              </div>
+            }
           >
             <SmartCameraMobile
               onCapture={handleSmartCapture}

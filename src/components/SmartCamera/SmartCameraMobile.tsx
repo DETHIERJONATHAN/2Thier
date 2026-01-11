@@ -5,6 +5,7 @@
  * Pas de getUserMedia, pas de bugs WebView !
  * 
  * 📱 Intègre le gyroscope pour améliorer les mesures ArUco
+ * 🔒 Protection contre la sortie accidentelle sur mobile
  */
 
 import React, { useState, useRef, useEffect, useCallback } from 'react';
@@ -21,6 +22,7 @@ import {
 } from '@ant-design/icons';
 import { useDeviceOrientation } from '../../hooks/useDeviceOrientation';
 import { useAuthenticatedApi } from '../../hooks/useAuthenticatedApi';
+import { useMobileModalLock } from '../../hooks/useMobileModalLock';
 import { downloadArucoMarkerSvg } from '../../utils/arucoMarkerSvg';
 import { setArucoMarkerSize } from '../../utils/homographyUtils';
 
@@ -69,7 +71,18 @@ const SmartCameraMobile: React.FC<SmartCameraMobileProps> = ({
   const [arucoLoading, setArucoLoading] = useState(false);
   const [arucoSaving, setArucoSaving] = useState(false);
   
-  // 📱 Hook gyroscope pour capturer l'orientation réelle du téléphone
+  // � Protection mobile: Bloquer les gestes de sortie accidentelle (swipe, back button)
+  const handleAttemptClose = useCallback(() => {
+    message.warning('⚠️ Utilisez le bouton "Annuler" pour fermer', 2);
+  }, []);
+  
+  // Le composant est toujours "ouvert" quand il est monté
+  useMobileModalLock({
+    isOpen: true,
+    onAttemptClose: handleAttemptClose
+  });
+  
+  // �📱 Hook gyroscope pour capturer l'orientation réelle du téléphone
   const { orientation, analyze, isAvailable, hasPermission, requestPermission } = useDeviceOrientation(true);
   
   // Demander permission gyroscope au montage (iOS nécessite un geste utilisateur)
