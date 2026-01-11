@@ -163,11 +163,7 @@ const SmartCameraMobile: React.FC<SmartCameraMobileProps> = ({
       
       setCameraStream(stream);
       setCameraActive(true);
-      
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-        videoRef.current.play();
-      }
+      // NOTE: Le stream sera attaché au video element via useEffect ci-dessous
       
       console.log('📹 [SmartCamera] Caméra démarrée avec succès');
     } catch (err: any) {
@@ -178,6 +174,18 @@ const SmartCameraMobile: React.FC<SmartCameraMobileProps> = ({
       inputRef.current?.click();
     }
   }, [isAvailable, hasPermission, requestPermission]);
+  
+  // 📹 Attacher le stream au video element quand il est disponible
+  // (Le video element n'existe pas au moment où startCamera() est appelé car cameraActive=false)
+  useEffect(() => {
+    if (cameraStream && videoRef.current) {
+      console.log('📹 [SmartCamera] Attachement du stream au video element...');
+      videoRef.current.srcObject = cameraStream;
+      videoRef.current.play().catch(err => {
+        console.error('📹 [SmartCamera] Erreur play():', err);
+      });
+    }
+  }, [cameraStream, cameraActive]); // cameraActive déclenche le rendu du video element
   
   // 📹 Arrêter la caméra
   const stopCamera = useCallback(() => {
