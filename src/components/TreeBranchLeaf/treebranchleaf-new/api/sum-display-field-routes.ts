@@ -501,13 +501,20 @@ export async function updateSumDisplayFieldAfterCopyChange(
       return;
     }
 
-    // Mettre à jour ou créer la formule dans la table dédiée
+    // ✅ FIX 11/01/2026: Utiliser la contrainte unique (nodeId, name) au lieu de id
+    // La table TreeBranchLeafNodeFormula a @@unique([nodeId, name])
+    const formulaName = `Somme ${mainVariable.displayName}`;
     await db.treeBranchLeafNodeFormula.upsert({
-      where: { id: sumFormulaId },
+      where: { 
+        nodeId_name: { 
+          nodeId: sumFieldNodeId, 
+          name: formulaName 
+        } 
+      },
       update: { tokens: sumTokens, updatedAt: now },
       create: {
         id: sumFormulaId,
-        name: `Somme ${mainVariable.displayName}`,
+        name: formulaName,
         tokens: sumTokens,
         nodeId: sumFieldNodeId,
         createdAt: now,

@@ -328,7 +328,7 @@ export class TableLookupDuplicationService {
         // 🔥 FIX 07/01/2026: shouldSuffixColumns DOIT ÊTRE TOUJOURS TRUE pour les SelectConfigs
         // Parce que la PREMIÈRE COLONNE de la table copiée s'appelle maintenant "Orientation-1" pas "Orientation"
         const shouldSuffixColumns = true; // TOUJOURS suffixer les références pour la table copiée
-        const suffix = computedLabelSuffix;
+        // ✅ FIX 11/01/2026: Utiliser le paramètre 'suffix' déjà défini (computedLabelSuffix n'existe pas)
         
         await prisma.treeBranchLeafSelectConfig.create({
           data: {
