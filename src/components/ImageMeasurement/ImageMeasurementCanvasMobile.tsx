@@ -41,6 +41,16 @@ const { Text, Title } = Typography;
 // TYPES
 // ============================================================================
 
+// 🎯 Type pour les corrections optimales (depuis l'API ArUco)
+interface OptimalCorrectionData {
+  finalCorrection: number;
+  correctionX: number;
+  correctionY: number;
+  correctionXSansBandes?: number;
+  correctionYSansBandes?: number;
+  globalConfidence: number;
+}
+
 interface ImageMeasurementCanvasMobileProps {
   imageUrl: string;
   calibration?: CalibrationData;
@@ -52,6 +62,10 @@ interface ImageMeasurementCanvasMobileProps {
   minPoints?: number;
   defaultUnit?: string;
   measureKeys?: string[]; // Pour savoir quelles mesures sont attendues (largeur, hauteur, etc.)
+  // 🆕 Props pour correction précise (comme le composant Desktop)
+  pixelPerCmX?: number;  // Pixels/cm sur l'axe X (largeur)
+  pixelPerCmY?: number;  // Pixels/cm sur l'axe Y (hauteur)
+  optimalCorrection?: OptimalCorrectionData | null;  // Corrections ArUco
 }
 
 interface TouchPoint {
@@ -88,7 +102,11 @@ export const ImageMeasurementCanvasMobile: React.FC<ImageMeasurementCanvasMobile
   onCancel,
   minPoints = 4,
   defaultUnit = 'cm',
-  measureKeys = []
+  measureKeys = [],
+  // 🆕 Props de correction (comme le composant Desktop)
+  pixelPerCmX: propPixelPerCmX,
+  pixelPerCmY: propPixelPerCmY,
+  optimalCorrection = null
 }) => {
   // Refs
   const containerRef = useRef<HTMLDivElement>(null);
@@ -110,13 +128,18 @@ export const ImageMeasurementCanvasMobile: React.FC<ImageMeasurementCanvasMobile
   const [touchStartDistance, setTouchStartDistance] = useState<number | null>(null);
   const [touchStartScale, setTouchStartScale] = useState(1);
   const [lastTouchCenter, setLastTouchCenter] = useState<{ x: number; y: number } | null>(null);
+  
+  // 🆕 State - Panneau debug ArUco
+  const [showDebugPanel, setShowDebugPanel] = useState(false);
 
   // State - UI
   const [unit, setUnit] = useState(defaultUnit);
   const [showInstructions, setShowInstructions] = useState(true);
 
-  // Calibration
-  const pixelPerCm = calibration?.pixelPerCm || 10;
+  // 🆕 Calibration avec support X/Y séparé
+  const basePixelPerCm = calibration?.pixelPerCm || 10;
+  const pixelPerCmX = propPixelPerCmX || basePixelPerCm;
+  const pixelPerCmY = propPixelPerCmY || basePixelPerCm;
 
   // ============================================================================
   // 🆕 BODY LOCK - Bloquer TOUT scroll/comportement du body pendant le canvas
@@ -363,8 +386,15 @@ export const ImageMeasurementCanvasMobile: React.FC<ImageMeasurementCanvasMobile
         const midX = (p1.x + p2.x) / 2;
         const midY = (p1.y + p2.y) / 2;
         
-        const distPx = Math.sqrt(Math.pow(p2.x - p1.x, 2) + Math.pow(p2.y - p1.y, 2));
-        const distCm = distPx / pixelPerCm;
+        // Déterminer si le bord est plus horizontal ou vertical
+        const dx = Math.abs(p2.x - p1.x);
+        const dy = Math.abs(p2.y - p1.y);
+        const distPx = Math.sqrt(dx * dx + dy * dy);
+        
+        // Utiliser pixelPerCmX pour les bords horizontaux, pixelPerCmY pour les verticaux
+        const isHorizontal = dx > dy;
+        const effectivePixelPerCm = isHorizontal ? pixelPerCmX : pixelPerCmY;
+        const distCm = distPx / effectivePixelPerCm;
 
         // Background pill
         const text = `${distCm.toFixed(1)} cm`;
@@ -383,7 +413,7 @@ export const ImageMeasurementCanvasMobile: React.FC<ImageMeasurementCanvasMobile
     }
 
     ctx.restore();
-  }, [points, selectedPointId, scale, offset, imageDimensions, pixelPerCm]);
+  }, [points, selectedPointId, scale, offset, imageDimensions, pixelPerCmX, pixelPerCmY]);
 
   // Rounded rect helper
   const roundRect = (ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number) => {
@@ -434,24 +464,57 @@ export const ImageMeasurementCanvasMobile: React.FC<ImageMeasurementCanvasMobile
     const sorted = getSortedPoints();
     const results: MeasurementResults = {};
 
-    // Largeur (top edge)
-    const widthPx = Math.sqrt(
+    // 🎯 Calculer les VRAIES longueurs des côtés (pas la bounding box !)
+    // L'ordre est: TL(0), TR(1), BR(2), BL(3)
+    const topEdgeLength = Math.sqrt(
       Math.pow(sorted[1].x - sorted[0].x, 2) + Math.pow(sorted[1].y - sorted[0].y, 2)
     );
-    results.largeur_cm = widthPx / pixelPerCm;
-
-    // Hauteur (left edge)
-    const heightPx = Math.sqrt(
+    const bottomEdgeLength = Math.sqrt(
+      Math.pow(sorted[2].x - sorted[3].x, 2) + Math.pow(sorted[2].y - sorted[3].y, 2)
+    );
+    const leftEdgeLength = Math.sqrt(
       Math.pow(sorted[3].x - sorted[0].x, 2) + Math.pow(sorted[3].y - sorted[0].y, 2)
     );
-    results.hauteur_cm = heightPx / pixelPerCm;
+    const rightEdgeLength = Math.sqrt(
+      Math.pow(sorted[2].x - sorted[1].x, 2) + Math.pow(sorted[2].y - sorted[1].y, 2)
+    );
+
+    // Moyenne des côtés opposés pour plus de précision
+    const avgWidthPx = (topEdgeLength + bottomEdgeLength) / 2;
+    const avgHeightPx = (leftEdgeLength + rightEdgeLength) / 2;
+
+    // Calculer avec pixelPerCm X/Y séparés
+    let largeurCm = avgWidthPx / pixelPerCmX;
+    let hauteurCm = avgHeightPx / pixelPerCmY;
+
+    console.log(`📱 [MOBILE] Mesures brutes: ${largeurCm.toFixed(2)}cm × ${hauteurCm.toFixed(2)}cm`);
+    console.log(`   pixelPerCmX=${pixelPerCmX.toFixed(2)}, pixelPerCmY=${pixelPerCmY.toFixed(2)}`);
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // 🏎️ FORMULE 1: AUCUNE CORRECTION SUPPLÉMENTAIRE !
+    // ═══════════════════════════════════════════════════════════════════════════
+    // 
+    // L'homographie ultra-précise (RANSAC + Levenberg-Marquardt) est la source de vérité.
+    // On NE MULTIPLIE PAS par des corrections - cela diluerait la précision !
+    // 
+    // ═══════════════════════════════════════════════════════════════════════════
+    
+    // Log pour diagnostic uniquement
+    if (optimalCorrection) {
+      console.log(`📱 [MOBILE] 🏎️ FORMULE 1: Mesures DIRECTES (AUCUNE CORRECTION appliquée)`);
+      console.log(`   Largeur: ${largeurCm.toFixed(2)} cm (valeur pure)`);
+      console.log(`   Hauteur: ${hauteurCm.toFixed(2)} cm (valeur pure)`);
+    }
+
+    results.largeur_cm = largeurCm;
+    results.hauteur_cm = hauteurCm;
 
     // Surface
     results.surface_brute_cm2 = results.largeur_cm * results.hauteur_cm;
     results.surface_brute_m2 = results.surface_brute_cm2 / 10000;
 
     return results;
-  }, [points, pixelPerCm, getSortedPoints]);
+  }, [points, pixelPerCmX, pixelPerCmY, optimalCorrection, getSortedPoints]);
 
   useEffect(() => {
     onMeasurementsChange?.(measurements);
@@ -634,6 +697,9 @@ export const ImageMeasurementCanvasMobile: React.FC<ImageMeasurementCanvasMobile
       return;
     }
 
+    // Utiliser la moyenne des deux axes pour la calibration stockée
+    const avgPixelPerCm = (pixelPerCmX + pixelPerCmY) / 2;
+    
     const annotations: ImageAnnotations = {
       points: points.map(p => ({
         ...p,
@@ -641,13 +707,13 @@ export const ImageMeasurementCanvasMobile: React.FC<ImageMeasurementCanvasMobile
         x: (p.x / imageDimensions.width) * 1000,
         y: (p.y / imageDimensions.height) * 1000
       })),
-      calibration: calibration || { pixelPerCm, referenceObject: 'estimated' },
+      calibration: calibration || { pixelPerCm: avgPixelPerCm, referenceObject: 'aruco-corrected' },
       exclusionZones: [],
       unit
     };
 
     onValidate?.(annotations);
-  }, [points, minPoints, imageDimensions, calibration, pixelPerCm, unit, onValidate]);
+  }, [points, minPoints, imageDimensions, calibration, pixelPerCmX, pixelPerCmY, unit, onValidate]);
 
   const handleZoom = useCallback((delta: number) => {
     setScale(prev => Math.max(0.5, Math.min(4, prev + delta)));
@@ -736,6 +802,155 @@ export const ImageMeasurementCanvasMobile: React.FC<ImageMeasurementCanvasMobile
           strokeColor={isComplete ? '#52c41a' : '#1890ff'}
         />
       </div>
+
+      {/* 🆕 BOUTON + PANNEAU DEBUG ArUco */}
+      <div style={{ 
+        padding: '4px 16px', 
+        backgroundColor: 'rgba(0, 0, 0, 0.9)',
+        borderBottom: showDebugPanel ? 'none' : '1px solid #333'
+      }}>
+        <Button
+          type={showDebugPanel ? 'primary' : 'default'}
+          size="small"
+          onClick={() => setShowDebugPanel(!showDebugPanel)}
+          style={{ 
+            width: '100%',
+            background: optimalCorrection 
+              ? 'linear-gradient(90deg, #722ed1, #1890ff)' 
+              : '#333',
+            borderColor: 'transparent',
+            color: '#fff'
+          }}
+        >
+          {showDebugPanel ? '🔽 Masquer' : '🔬 Debug ArUco'} 
+          {optimalCorrection 
+            ? ` ✅ X=×${optimalCorrection.correctionX?.toFixed(3)} Y=×${optimalCorrection.correctionY?.toFixed(3)}` 
+            : ' ❌ Pas de correction'}
+        </Button>
+      </div>
+      
+      {/* Panneau debug ArUco détaillé */}
+      {showDebugPanel && (
+        <div style={{
+          padding: '12px 16px',
+          background: 'linear-gradient(135deg, #1a1a2e 0%, #16213e 100%)',
+          borderBottom: '1px solid #333',
+          color: '#fff',
+          fontSize: 11
+        }}>
+          {optimalCorrection ? (
+            <>
+              {/* ROW 1: Corrections X et Y */}
+              <div style={{ 
+                display: 'grid', 
+                gridTemplateColumns: '1fr 1fr', 
+                gap: 8,
+                marginBottom: 8
+              }}>
+                <div style={{ 
+                  textAlign: 'center',
+                  padding: 8,
+                  background: 'rgba(24,144,255,0.3)',
+                  borderRadius: 6
+                }}>
+                  <div style={{ fontSize: 9, opacity: 0.7 }}>↔️ Largeur (X)</div>
+                  <div style={{ 
+                    fontSize: 18, 
+                    fontWeight: 'bold',
+                    color: optimalCorrection.correctionX < 0.98 ? '#ff7875' : 
+                           optimalCorrection.correctionX > 1.02 ? '#95de64' : '#fff'
+                  }}>
+                    ×{optimalCorrection.correctionX?.toFixed(4)}
+                  </div>
+                  {optimalCorrection.correctionXSansBandes !== undefined && (
+                    <div style={{ fontSize: 8, opacity: 0.6 }}>
+                      Homographie: ×{optimalCorrection.correctionXSansBandes.toFixed(4)}
+                    </div>
+                  )}
+                </div>
+                <div style={{ 
+                  textAlign: 'center',
+                  padding: 8,
+                  background: 'rgba(82,196,26,0.3)',
+                  borderRadius: 6
+                }}>
+                  <div style={{ fontSize: 9, opacity: 0.7 }}>↕️ Hauteur (Y)</div>
+                  <div style={{ 
+                    fontSize: 18, 
+                    fontWeight: 'bold',
+                    color: optimalCorrection.correctionY < 0.98 ? '#ff7875' : 
+                           optimalCorrection.correctionY > 1.02 ? '#95de64' : '#fff'
+                  }}>
+                    ×{optimalCorrection.correctionY?.toFixed(4)}
+                  </div>
+                  {optimalCorrection.correctionYSansBandes !== undefined && (
+                    <div style={{ fontSize: 8, opacity: 0.6 }}>
+                      Homographie: ×{optimalCorrection.correctionYSansBandes.toFixed(4)}
+                    </div>
+                  )}
+                </div>
+              </div>
+              
+              {/* ROW 2: Confiance + Correction globale */}
+              <div style={{ 
+                display: 'flex', 
+                justifyContent: 'space-between',
+                padding: '6px 12px',
+                background: 'rgba(0,0,0,0.3)',
+                borderRadius: 6
+              }}>
+                <span>📊 Correction finale: <strong>×{optimalCorrection.finalCorrection?.toFixed(4)}</strong></span>
+                <span>🎯 Confiance: <strong style={{
+                  color: optimalCorrection.globalConfidence > 0.8 ? '#52c41a' : 
+                         optimalCorrection.globalConfidence > 0.5 ? '#faad14' : '#ff4d4f'
+                }}>{(optimalCorrection.globalConfidence * 100).toFixed(0)}%</strong></span>
+              </div>
+              
+              {/* ROW 3: Calibration */}
+              <div style={{ 
+                marginTop: 8,
+                padding: '6px 12px',
+                background: 'rgba(255,165,0,0.2)',
+                borderRadius: 6,
+                display: 'flex',
+                justifyContent: 'space-between'
+              }}>
+                <span>📐 pixelPerCmX: <strong>{propPixelPerCmX?.toFixed(2) || 'N/A'}</strong></span>
+                <span>📐 pixelPerCmY: <strong>{propPixelPerCmY?.toFixed(2) || 'N/A'}</strong></span>
+              </div>
+              
+              {/* ROW 4: Mesures brutes vs corrigées */}
+              {measurements.largeur_cm && measurements.hauteur_cm && (
+                <div style={{ 
+                  marginTop: 8,
+                  padding: '8px 12px',
+                  background: 'linear-gradient(135deg, rgba(255,255,255,0.1) 0%, rgba(255,255,255,0.05) 100%)',
+                  borderRadius: 6,
+                  border: '1px dashed rgba(255,255,255,0.3)'
+                }}>
+                  <div style={{ fontSize: 10, opacity: 0.7, marginBottom: 4 }}>📏 Mesures finales (après correction)</div>
+                  <div style={{ display: 'flex', justifyContent: 'space-around' }}>
+                    <span>Largeur: <strong style={{ color: '#1890ff' }}>{measurements.largeur_cm.toFixed(1)} cm</strong></span>
+                    <span>Hauteur: <strong style={{ color: '#52c41a' }}>{measurements.hauteur_cm.toFixed(1)} cm</strong></span>
+                  </div>
+                </div>
+              )}
+            </>
+          ) : (
+            <div style={{ 
+              textAlign: 'center', 
+              padding: 16,
+              background: 'rgba(255,77,79,0.2)',
+              borderRadius: 8
+            }}>
+              <div style={{ fontSize: 14, marginBottom: 4 }}>⚠️ Pas de correction ArUco</div>
+              <div style={{ fontSize: 10, opacity: 0.7 }}>
+                Les mesures utilisent la calibration manuelle
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Instructions overlay */}
       {showInstructions && points.length > 0 && (

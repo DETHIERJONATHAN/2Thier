@@ -25,7 +25,7 @@ function buildHierarchy(flat: TreeBranchLeafNode[]): TreeBranchLeafNode[] {
     } else {
       roots.push(node);
     }
-  }
+  });
   // tri par order
   const sortRec = (items: TreeBranchLeafNode[]) => {
     items.sort((a, b) => (a.order || 0) - (b.order || 0));
@@ -126,6 +126,7 @@ export default function MultiSectorPreview({ treeId, leadId }: MultiSectorPrevie
         data,
         status: progress === 100 ? 'completed' : 'draft',
         ...(leadId ? { leadId } : {}),
+      });
       message.success('Brouillon enregistré');
     } catch (e) {
       message.error("Échec de l'enregistrement");
@@ -159,6 +160,7 @@ export default function MultiSectorPreview({ treeId, leadId }: MultiSectorPrevie
         data,
         status: 'completed',
         ...(leadId ? { leadId } : {}),
+      });
       message.success('Soumission terminée');
     } catch (e) {
       message.error('Échec de la soumission');

@@ -256,7 +256,6 @@ export interface TBLOption {
   value: string;
   field?: TBLField; // Si option + champ (option_field)
   order: number;
-,
 }
 
 // ONGLET - Depuis une branche TreeBranchLeaf niveau 1

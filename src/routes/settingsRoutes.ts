@@ -1318,43 +1318,16 @@ router.post('/initialize-default-statuses', async (req, res) => {
 // GET /api/settings/ai-measure - Récupérer la configuration
 router.get('/ai-measure', async (req, res) => {
   try {
-    const authReq = req as AuthenticatedRequest;
-    const organizationId = authReq.user?.organizationId;
-    
-    if (!organizationId) {
-      // Pour les super admin sans organisation, utiliser les valeurs par défaut
-      return res.json({ 
-        success: true, 
-        data: { 
-          markerSizeCm: 16.8, 
-          boardSizeCm: 24 
-        } 
-      });
-    }
-    
-    console.log('[AI-MEASURE] Récupération config pour organisation:', organizationId);
-    
-    // Chercher dans SystemConfig (pas de filtre organizationId car SystemConfig est global)
-    const config = await prisma.systemConfig.findFirst({
-      where: {
-        key: 'ai_measure_marker'
+    // ✅ SYSTÈME UNIQUE: AprilTag Métré V1.2 uniquement (centres des 4 tags)
+    // On ne lit plus / n'écrit plus de config legacy (15×23.7 / 15cm) pour éviter toute dérive.
+    return res.json({
+      success: true,
+      data: {
+        markerWidthCm: 13.0,
+        markerHeightCm: 21.7,
+        markerSizeCm: 13.0, // Deprecated, gardé pour compatibilité frontend
+        boardSizeCm: 24
       }
-    });
-    
-    if (config && config.value) {
-      const value = typeof config.value === 'string' ? JSON.parse(config.value) : config.value;
-      console.log('[AI-MEASURE] Config trouvée:', value);
-      return res.json({ success: true, data: value });
-    }
-    
-    // Valeurs par défaut
-    console.log('[AI-MEASURE] Pas de config, utilisation des valeurs par défaut');
-    res.json({ 
-      success: true, 
-      data: { 
-        markerSizeCm: 16.8, 
-        boardSizeCm: 24 
-      } 
     });
     
   } catch (error) {
@@ -1370,52 +1343,11 @@ router.get('/ai-measure', async (req, res) => {
 // POST /api/settings/ai-measure - Sauvegarder la configuration
 router.post('/ai-measure', async (req, res) => {
   try {
-    const authReq = req as AuthenticatedRequest;
-    const organizationId = authReq.user?.organizationId;
-    
-    if (!organizationId) {
-      return res.status(400).json({ 
-        success: false,
-        error: 'Organisation non spécifiée' 
-      });
-    }
-    
-    const { markerSizeCm, boardSizeCm } = req.body;
-    
-    // Validation
-    if (!markerSizeCm || markerSizeCm < 5 || markerSizeCm > 50) {
-      return res.status(400).json({ 
-        success: false,
-        error: 'Taille du marqueur invalide (doit être entre 5 et 50 cm)' 
-      });
-    }
-    
-    console.log('[AI-MEASURE] Sauvegarde config (globale)');
-    console.log('[AI-MEASURE] Nouvelles valeurs:', { markerSizeCm, boardSizeCm });
-    
-    // Upsert dans SystemConfig (config globale, pas par organisation)
-    const config = await prisma.systemConfig.upsert({
-      where: {
-        key: 'ai_measure_marker'
-      },
-      update: {
-        value: JSON.stringify({ markerSizeCm, boardSizeCm }),
-        updatedAt: new Date()
-      },
-      create: {
-        id: `system-config-ai-measure-marker`,
-        key: 'ai_measure_marker',
-        value: JSON.stringify({ markerSizeCm, boardSizeCm }),
-        description: 'Configuration du marqueur ArUco pour IA Mesure',
-        updatedAt: new Date()
-      }
-    });
-    
-    console.log('[AI-MEASURE] Config sauvegardée:', config.id);
-    res.json({ 
-      success: true, 
-      message: 'Configuration sauvegardée',
-      data: { markerSizeCm, boardSizeCm }
+    // ✅ SYSTÈME UNIQUE: AprilTag Métré V1.2 a des dimensions fixes.
+    // On désactive la persistance pour éviter de réinjecter des valeurs legacy.
+    return res.status(400).json({
+      success: false,
+      error: 'Configuration désactivée: AprilTag Métré V1.2 est fixe (13×21.7cm).'
     });
     
   } catch (error) {

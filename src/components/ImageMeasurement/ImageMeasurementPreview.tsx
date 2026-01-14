@@ -32,7 +32,6 @@ import {
   CloseOutlined
 } from '@ant-design/icons';
 import { useAuthenticatedApi } from '../../hooks/useAuthenticatedApi';
-import { useMobileModalLock } from '../../hooks/useMobileModalLock';
 import { ImageMeasurementCanvas } from './ImageMeasurementCanvas';
 import { ImageMeasurementCanvasMobile } from './ImageMeasurementCanvasMobile';
 import type {
@@ -163,7 +162,8 @@ const MobileFullscreenCanvas: React.FC<MobileFullscreenCanvasProps> = ({
     };
   }, []);
 
-  // ===== RENDER - PLEIN ÉCRAN SIMPLE AVEC CROIX =====
+  // ===== RENDER - PLEIN ÉCRAN SIMPLE =====
+  // Note: Le bouton de fermeture est géré par ImageMeasurementCanvas (menu mobile)
   return (
     <div
       ref={containerRef}
@@ -183,28 +183,7 @@ const MobileFullscreenCanvas: React.FC<MobileFullscreenCanvasProps> = ({
         overflow: 'hidden'
       }}
     >
-      {/* Bouton fermer (croix) - en haut à droite */}
-      <Button
-        type="text"
-        icon={<CloseOutlined style={{ fontSize: 24, color: '#fff' }} />}
-        onClick={onCancel}
-        style={{
-          position: 'absolute',
-          top: 12,
-          right: 12,
-          zIndex: 10001,
-          width: 48,
-          height: 48,
-          borderRadius: '50%',
-          background: 'rgba(0,0,0,0.6)',
-          border: 'none',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center'
-        }}
-      />
-      
-      {/* Canvas en plein écran */}
+      {/* Canvas en plein écran - contient son propre menu de fermeture */}
       <ImageMeasurementCanvas
         imageUrl={imageUrl}
         calibration={calibration}
@@ -227,6 +206,9 @@ const MobileFullscreenCanvas: React.FC<MobileFullscreenCanvasProps> = ({
         measurementObjectConfig={measurementObjectConfig}
         allPhotos={allPhotos}
         arucoAnalysis={arucoAnalysis}
+        detectionMethod={detectionMethod} // 🎯 Transmettre le type de détection
+        // 🎨 VISUALISATION DEBUG: Données AprilTags pour dessin sur canvas
+        aprilTagsDebug={aprilTagsDebug}
         // 🔧 CORRECTION OPTIMALE: Facteur calculé par RANSAC + bands + reprojection
         optimalCorrection={optimalCorrection}
         mobileFullscreen
@@ -274,6 +256,8 @@ interface ImageMeasurementPreviewProps {
   homographyReady?: boolean;
   // 🔬 Analyse complète ArUco pour le panel Canvas
   arucoAnalysis?: any;
+  // 🎯 Type de détection (A4 ou ArUco)
+  detectionMethod?: string;
 }
 
 type WorkflowStep = 'loading' | 'calibrating' | 'measuring' | 'adjusting' | 'complete' | 'error';
@@ -295,22 +279,13 @@ export const ImageMeasurementPreview: React.FC<ImageMeasurementPreviewProps> = (
   allPhotos, // 🆕 Toutes les photos pour fusion
   fusedCorners, // 🎯 ULTRA-PRECISION: Corners ArUco pré-détectés
   homographyReady, // 🎯 Flag indiquant que l'homographie est prête
-  arucoAnalysis // 🔬 Analyse complète ArUco pour le panel Canvas
+  arucoAnalysis, // 🔬 Analyse complète ArUco pour le panel Canvas
+  detectionMethod // 🎯 Type de détection (A4 ou ArUco)
 }) => {
   const { api } = useAuthenticatedApi();
   const isMobile = useIsMobile(); // 📱 Détection mobile
 
-  // � Hook pour verrouiller le modal sur mobile (empêcher sortie accidentelle)
-  const handleAttemptClose = useCallback(() => {
-    message.warning('⚠️ Utilisez le bouton "Annuler" ou "✕" pour fermer', 2);
-  }, []);
-  
-  const modalLock = useMobileModalLock({
-    isOpen: visible,
-    onAttemptClose: handleAttemptClose
-  });
-
-  // �🔄 SESSION KEY: Clé unique qui change à chaque ouverture pour forcer le reset des états
+  // 🔄 SESSION KEY: Clé unique qui change à chaque ouverture pour forcer le reset des états
   const [sessionKey, setSessionKey] = useState(0);
 
   // State
@@ -337,11 +312,20 @@ export const ImageMeasurementPreview: React.FC<ImageMeasurementPreviewProps> = (
     finalCorrection: number;
     correctionX: number;
     correctionY: number;
+    correctionXSansBandes?: number;  // 🆕 Pour mode homographie
+    correctionYSansBandes?: number;  // 🆕 Pour mode homographie
     globalConfidence: number;
     contributions?: Array<{ source: string; correction: number; weight: number; confidence: number }>;
   } | null>(null);
   
-  // 🆕 MULTI-PHOTOS: État pour l'analyse de qualité et la fusion
+  // � VISUALISATION DEBUG APRILTAG - NOUVEAU !
+  const [aprilTagsDebug, setAprilTagsDebug] = useState<{
+    tagCenters: Array<{ id: number; center: { x: number; y: number }; label: string }>;
+    sheetContour: Array<{ x: number; y: number }>;
+    pixelsPerCm: { x: number; y: number; avg: number };
+  } | null>(null);
+  
+  // �🆕 MULTI-PHOTOS: État pour l'analyse de qualité et la fusion
   const [multiPhotoAnalysis, setMultiPhotoAnalysis] = useState<{
     usedMultiPhoto: boolean;
     totalPhotos: number;
@@ -374,7 +358,7 @@ export const ImageMeasurementPreview: React.FC<ImageMeasurementPreviewProps> = (
           console.log(`🎯 [Preview] Configuration marqueur chargée depuis API: ${sizeCm}cm`);
           setMarkerSizeCm(sizeCm);
         } else {
-          console.log('🎯 [Preview] Pas de config marqueur, utilisation valeur par défaut: 16.8cm');
+          console.log('🎯 [Preview] Pas de config marqueur, utilisation valeur par défaut: 13×21.7cm');
         }
       } catch (error) {
         console.warn('[Preview] Erreur chargement config marqueur:', error);
@@ -407,14 +391,30 @@ export const ImageMeasurementPreview: React.FC<ImageMeasurementPreviewProps> = (
       console.log(`🎯 [Preview] Initialisation multiPhotoAnalysis avec fusedCorners pré-détectés ! (session ${sessionKey})`);
       console.log('   📍 fusedCorners:', fusedCorners);
       
-      // 🎯 ARUCO MAGENTA: Utiliser la taille configurée dans les paramètres TreeBranchLeaf
-      // Valeur chargée depuis /api/settings/ai-measure (défaut: 16.8cm)
-      console.log(`   📏 ARUCO détecté → referenceRealSize = ${markerSizeCm}×${markerSizeCm}cm (depuis config)`);
-      setReferenceRealSize({ width: markerSizeCm, height: markerSizeCm });
+      // 🎯 Déterminer les dimensions selon le type de détection
+      if (detectionMethod === 'AprilTag-Metre-V1.2') {
+        // 📐 Métré V1.2: Dimensions rectangulaires entre centres de tags
+        const metreWidth = 13.0;  // distance TL↔TR entre centres (cm)
+        const metreHeight = 21.7; // distance TL↔BL entre centres (cm)
+        console.log(`   📏 AprilTag Métré V1.2 détecté → referenceRealSize = ${metreWidth}×${metreHeight}cm`);
+        setReferenceRealSize({ width: metreWidth, height: metreHeight });
+      } else {
+        // 🎯 ARUCO MAGENTA: Utiliser la taille configurée dans les paramètres TreeBranchLeaf
+        // Valeur chargée depuis /api/settings/ai-measure (défaut: 16.8cm)
+        console.log(`   📏 ARUCO détecté → referenceRealSize = ${markerSizeCm}×${markerSizeCm}cm (depuis config)`);
+        setReferenceRealSize({ width: markerSizeCm, height: markerSizeCm });
+      }
       
       // Trouver les infos ultraPrecision dans allPhotos si disponibles
       const photoWithAruco = allPhotos?.find(p => (p.metadata as any)?.arucoDetected);
       const ultraPrecision = (photoWithAruco?.metadata as any)?.ultraPrecision;
+      
+      // 🎨 VISUALISATION DEBUG: Extraire les données AprilTag pour affichage
+      const aprilTagsDebugData = (photoWithAruco?.metadata as any)?.aprilTagsDebug;
+      if (aprilTagsDebugData) {
+        console.log(`   🎨 Données visualisation AprilTag trouvées!`);
+        setAprilTagsDebug(aprilTagsDebugData);
+      }
       
       // 🔧 CORRECTION OPTIMALE: Extraire la correction calculée par l'API
       const correction = (photoWithAruco?.metadata as any)?.optimalCorrection;
@@ -640,11 +640,19 @@ export const ImageMeasurementPreview: React.FC<ImageMeasurementPreviewProps> = (
       
       console.log('🚀 [ImageMeasurementPreview] runWorkflow starting...');
 
-      // 🎯 ARUCO PRIORITY: Si ArUco est détecté (fusedCorners présent), NE PAS écraser avec A4
+      // 🎯 ARUCO PRIORITY: Si ArUco/AprilTag est détecté (fusedCorners présent), NE PAS écraser avec A4
       const hasArucoData = fusedCorners && homographyReady;
       if (hasArucoData) {
-        console.log('🎯 [ImageMeasurementPreview] ArUco détecté, SKIP chargement config A4 (garder dimensions ArUco)');
-        console.log(`   📏 referenceRealSize conservé: ${markerSizeCm}×${markerSizeCm}cm`);
+        console.log('🎯 [ImageMeasurementPreview] Marqueur détecté, SKIP chargement config A4');
+        if (detectionMethod === 'AprilTag-Metre-V1.2') {
+          const metreWidth = 13.0;
+          const metreHeight = 21.7;
+          console.log(`   📏 AprilTag Métré V1.2 → referenceRealSize: ${metreWidth}×${metreHeight}cm`);
+          setReferenceRealSize({ width: metreWidth, height: metreHeight });
+        } else {
+          console.log(`   📏 ArUco → referenceRealSize conservé: ${markerSizeCm}×${markerSizeCm}cm`);
+          setReferenceRealSize({ width: markerSizeCm, height: markerSizeCm });
+        }
       } else {
         // 1. Charger config de référence (pour connaître les dimensions de la référence A4)
         const config = await loadReferenceConfig();
@@ -857,10 +865,12 @@ export const ImageMeasurementPreview: React.FC<ImageMeasurementPreviewProps> = (
       onCancel={onCancel}
       width={isMobile ? '100%' : 900}
       footer={null}
+      closable={false}
       destroyOnClose
       style={isMobile ? { top: 0, padding: 0 } : undefined}
       styles={isMobile ? { body: { padding: 12 } } : undefined}
-      {...(isMobile ? modalLock.modalProps : {})}
+      maskClosable={!isMobile}
+      keyboard={!isMobile}
     >
       {/* Progress steps */}
       <Steps
@@ -917,10 +927,15 @@ export const ImageMeasurementPreview: React.FC<ImageMeasurementPreviewProps> = (
                   border: '1px solid #86efac'
                 }}>
                   <Text strong style={{ color: '#16a34a', fontSize: 13 }}>
-                    🎯 ArUco MAGENTA détecté - Calibration haute précision
+                    {detectionMethod === 'A4-aggressive-detection' 
+                      ? '📄 Feuille A4 détectée - Calibration automatique'
+                      : '🎯 ArUco MAGENTA détecté - Calibration haute précision'
+                    }
                   </Text>
                   <div style={{ marginTop: 4, fontSize: 12, color: '#166534' }}>
-                    <span style={{ marginRight: 12 }}>📏 Référence: 18×18cm</span>
+                    <span style={{ marginRight: 12 }}>
+                      📏 Référence: {detectionMethod === 'A4-aggressive-detection' ? '21×29.7cm (A4)' : '18×18cm'}
+                    </span>
                     {multiPhotoAnalysis.fusionConfidence && (
                       <span style={{ marginRight: 12 }}>✨ Qualité: {(multiPhotoAnalysis.fusionConfidence * 100).toFixed(0)}%</span>
                     )}
@@ -1086,6 +1101,8 @@ export const ImageMeasurementPreview: React.FC<ImageMeasurementPreviewProps> = (
           allPhotos={allPhotos}
           // 🔬 ANALYSE ARUCO: Pour le panel d'infos détaillé
           arucoAnalysis={arucoAnalysis}
+          // 🎯 TYPE DE DÉTECTION: Pour utiliser les bonnes dimensions
+          detectionMethod={detectionMethod}
           // 🔧 CORRECTION OPTIMALE: Facteur calculé par RANSAC + bands + reprojection
           optimalCorrection={optimalCorrection}
           // 🆕 CONFIG DYNAMIQUE TBL: Passer les configurations pour les prompts IA

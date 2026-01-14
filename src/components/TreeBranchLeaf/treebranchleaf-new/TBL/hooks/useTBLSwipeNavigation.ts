@@ -165,6 +165,13 @@ export function useTBLSwipeNavigation({
     if (!container) return;
 
     const onTouchStart = (e: TouchEvent) => {
+      // 🔒 BLOQUER le swipe si on touche un élément avec data-disable-tbl-swipe
+      const target = e.target as HTMLElement;
+      if (target.closest('[data-disable-tbl-swipe="true"]')) {
+        isSwipingRef.current = false;
+        return;
+      }
+      
       const touch = e.touches[0];
       startXRef.current = touch.clientX;
       startYRef.current = touch.clientY;
@@ -179,6 +186,12 @@ export function useTBLSwipeNavigation({
     const onTouchEnd = (e: TouchEvent) => {
       if (!isSwipingRef.current) return;
       isSwipingRef.current = false;
+      
+      // 🔒 Double vérification: bloquer si la cible est dans un élément protégé
+      const target = e.target as HTMLElement;
+      if (target.closest('[data-disable-tbl-swipe="true"]')) {
+        return;
+      }
       
       const touch = e.changedTouches[0];
       const deltaX = touch.clientX - startXRef.current;

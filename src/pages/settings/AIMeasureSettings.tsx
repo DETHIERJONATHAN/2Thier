@@ -26,19 +26,17 @@ import {
 const { Title, Text, Paragraph } = Typography;
 
 // ==========================================
-// 🎯 CONFIGURATION MARQUEUR ARUCO MAGENTA
+// 🎯 CONFIGURATION MARQUEUR MÉTRÉ A4 V1.2
 // ==========================================
 // Cette configuration est utilisée pour la mesure par photo
 // Le marqueur doit être imprimé à la taille exacte configurée ici
 
 interface MarkerConfig {
-  markerSizeCm: number;  // Taille du carré du marqueur (distance entre centres magenta)
-  boardSizeCm: number;   // Taille du support ALU (optionnel)
+  markerSizeCm: number;  // Largeur du marqueur Métré A4 V1.2 (AprilTag 13×21.7cm)
 }
 
 const DEFAULT_CONFIG: MarkerConfig = {
-  markerSizeCm: 16.8,  // Valeur par défaut corrigée !
-  boardSizeCm: 24
+  markerSizeCm: 13,  // 13cm largeur AprilTag
 };
 
 const AIMeasureSettings: React.FC = () => {
@@ -165,14 +163,14 @@ const AIMeasureSettings: React.FC = () => {
       )}
 
       {/* Configuration du marqueur */}
-      <Card title="📐 Dimensions du marqueur ArUco MAGENTA">
+      <Card title="📐 Dimensions du marqueur Métré A4 V1.2 (AprilTag)">
         <Row gutter={[24, 24]}>
           <Col xs={24} md={12}>
             <div className="space-y-4">
               <div>
                 <label className="block text-sm font-medium mb-2">
                   Taille du marqueur (cm)
-                  <Tooltip title="Distance entre les CENTRES des 4 cercles magenta. Mesurez cette distance sur votre marqueur imprimé.">
+                  <Tooltip title="Largeur du marqueur Métré A4 V1.2 (distance entre centres AprilTag gauche-droite). Mesurez cette distance sur votre marqueur imprimé.">
                     <InfoCircleOutlined className="ml-2 text-gray-400" />
                   </Tooltip>
                 </label>
@@ -187,7 +185,7 @@ const AIMeasureSettings: React.FC = () => {
                   precision={1}
                 />
                 <Text type="secondary" className="text-xs block mt-1">
-                  Valeur par défaut: 16.8 cm (marqueur standard 2Thier)
+                  Valeur par défaut: 13 cm (marqueur Métré A4 V1.2 largeur)
                 </Text>
               </div>
 
@@ -199,7 +197,8 @@ const AIMeasureSettings: React.FC = () => {
                   <li>Côté du carré: <strong>{config.markerSizeCm} cm</strong> ({config.markerSizeCm * 10} mm)</li>
                   <li>Centre noir: <strong>{(config.markerSizeCm / 3).toFixed(1)} cm</strong></li>
                   <li>Bande blanche: <strong>{(config.markerSizeCm / 6).toFixed(1)} cm</strong></li>
-                  <li>Cercles magenta: <strong>~{(config.markerSizeCm * 0.028).toFixed(1)} cm</strong> de rayon</li>
+                  <li>AprilTag largeur: <strong>13.0 cm</strong></li>
+                  <li>AprilTag hauteur: <strong>21.7 cm</strong></li>
                 </ul>
               </div>
             </div>
@@ -251,7 +250,7 @@ const AIMeasureSettings: React.FC = () => {
             <li>
               <strong>Imprimez</strong> le marqueur à l'échelle 100% (sans mise à l'échelle)
             </li>
-            <li>
+            <li>les dimensions du marqueur Métré A4 V1.2 (AprilTag 13×21.7cm)
               <strong>Vérifiez</strong> que la distance entre les centres des cercles magenta 
               correspond exactement à <strong>{config.markerSizeCm} cm</strong>
             </li>
@@ -272,7 +271,7 @@ const AIMeasureSettings: React.FC = () => {
               La précision des mesures dépend directement de la correspondance entre 
               la taille configurée ici et la taille réelle du marqueur imprimé.
               <br />
-              Une erreur de 1mm sur un marqueur de 16.8cm entraîne une erreur de ~0.6% sur toutes les mesures.
+              Une erreur de 1mm sur un marqueur de 13cm entraîne une erreur de ~0.77% sur toutes les mesures.
             </span>
           }
           type="info"

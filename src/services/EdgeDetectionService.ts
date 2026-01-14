@@ -62,11 +62,20 @@ export class EdgeDetectionService {
       
       console.log(`📷 [EdgeDetection V2] Image: ${imgWidth}x${imgHeight}px`);
 
-      // Convertir la zone de sélection en pixels
-      const zoneX = Math.round((selectionZone.x / 100) * imgWidth);
-      const zoneY = Math.round((selectionZone.y / 100) * imgHeight);
-      const zoneW = Math.round((selectionZone.width / 100) * imgWidth);
-      const zoneH = Math.round((selectionZone.height / 100) * imgHeight);
+      // Convertir la zone de sélection en pixels AVEC CLAMPING
+      let zoneX = Math.round((selectionZone.x / 100) * imgWidth);
+      let zoneY = Math.round((selectionZone.y / 100) * imgHeight);
+      let zoneW = Math.round((selectionZone.width / 100) * imgWidth);
+      let zoneH = Math.round((selectionZone.height / 100) * imgHeight);
+
+      // CLAMP pour éviter les valeurs négatives ou dépassements
+      if (zoneX < 0) { zoneW += zoneX; zoneX = 0; console.log(`⚠️ [EdgeDetection V2] zoneX corrigé à 0`); }
+      if (zoneY < 0) { zoneH += zoneY; zoneY = 0; console.log(`⚠️ [EdgeDetection V2] zoneY corrigé à 0`); }
+      if (zoneX + zoneW > imgWidth) { zoneW = imgWidth - zoneX; }
+      if (zoneY + zoneH > imgHeight) { zoneH = imgHeight - zoneY; }
+      if (zoneW < 10 || zoneH < 10) {
+        return { success: false, error: `Zone trop petite après correction: ${zoneW}x${zoneH}` };
+      }
 
       console.log(`📐 [EdgeDetection V2] Zone en pixels: x=${zoneX}, y=${zoneY}, w=${zoneW}, h=${zoneH}`);
 
@@ -490,6 +499,458 @@ export class EdgeDetectionService {
     );
 
     console.log(`📊 [EdgeDetection V2] Confiance: ${confidence}% (widthRatio=${widthRatio.toFixed(2)}, heightRatio=${heightRatio.toFixed(2)}, aspect=${aspectScore.toFixed(2)})`);
+
+    return Math.max(0, Math.min(100, confidence));
+  }
+
+  /**
+   * 🚪 Détecte les 4 coins d'un objet SOMBRE (porte, fenêtre) dans une zone de l'image
+   * APPROCHE PAR DÉTECTION DE BORDS (Sobel/Canny-like):
+   * 1. Calculer les gradients (transitions de luminosité)
+   * 2. Trouver les lignes verticales et horizontales fortes
+   * 3. Détecter les intersections pour trouver les coins
+   * 4. Valider le quadrilatère
+   */
+  async detectDarkObjectCorners(
+    imageBase64: string,
+    selectionZone: { x: number; y: number; width: number; height: number },
+    mimeType: string = 'image/jpeg'
+  ): Promise<EdgeDetectionResult> {
+    try {
+      console.log('🚪 [EdgeDetection DARK V2] Début détection objet SOMBRE (porte/fenêtre)...');
+      console.log(`📐 [EdgeDetection DARK V2] Zone: ${selectionZone.x.toFixed(1)}%, ${selectionZone.y.toFixed(1)}% - ${selectionZone.width.toFixed(1)}x${selectionZone.height.toFixed(1)}%`);
+
+      // Décoder l'image base64
+      const imageBuffer = Buffer.from(imageBase64, 'base64');
+      
+      // Obtenir les métadonnées de l'image
+      const metadata = await sharp(imageBuffer).metadata();
+      const imgWidth = metadata.width || 0;
+      const imgHeight = metadata.height || 0;
+      
+      console.log(`📷 [EdgeDetection DARK V2] Image: ${imgWidth}x${imgHeight}px`);
+
+      // Convertir la zone de sélection en pixels AVEC CLAMPING
+      let zoneX = Math.round((selectionZone.x / 100) * imgWidth);
+      let zoneY = Math.round((selectionZone.y / 100) * imgHeight);
+      let zoneW = Math.round((selectionZone.width / 100) * imgWidth);
+      let zoneH = Math.round((selectionZone.height / 100) * imgHeight);
+
+      // CLAMP pour éviter les valeurs négatives ou dépassements
+      if (zoneX < 0) { zoneW += zoneX; zoneX = 0; console.log(`⚠️ [EdgeDetection DARK V2] zoneX corrigé à 0`); }
+      if (zoneY < 0) { zoneH += zoneY; zoneY = 0; console.log(`⚠️ [EdgeDetection DARK V2] zoneY corrigé à 0`); }
+      if (zoneX + zoneW > imgWidth) { zoneW = imgWidth - zoneX; }
+      if (zoneY + zoneH > imgHeight) { zoneH = imgHeight - zoneY; }
+      if (zoneW < 10 || zoneH < 10) {
+        return { success: false, error: `Zone trop petite après correction: ${zoneW}x${zoneH}` };
+      }
+
+      console.log(`📐 [EdgeDetection DARK V2] Zone en pixels: x=${zoneX}, y=${zoneY}, w=${zoneW}, h=${zoneH}`);
+
+      // Extraire la zone et convertir en niveaux de gris
+      const { data: pixels, info } = await sharp(imageBuffer)
+        .extract({ left: zoneX, top: zoneY, width: zoneW, height: zoneH })
+        .grayscale()
+        .raw()
+        .toBuffer({ resolveWithObject: true });
+
+      console.log(`🖼️ [EdgeDetection DARK V2] Zone extraite: ${info.width}x${info.height}, niveaux de gris`);
+
+      // ÉTAPE 1: Calculer les gradients (détection de bords Sobel)
+      const { gradientX, gradientY, magnitude } = this.computeSobelGradients(pixels, info.width, info.height);
+      
+      // ÉTAPE 2: Trouver les lignes verticales et horizontales dominantes
+      const verticalLines = this.findDominantLines(gradientX, info.width, info.height, 'vertical');
+      const horizontalLines = this.findDominantLines(gradientY, info.width, info.height, 'horizontal');
+      
+      console.log(`📏 [EdgeDetection DARK V2] Lignes trouvées: ${verticalLines.length} verticales, ${horizontalLines.length} horizontales`);
+
+      // ÉTAPE 3: Trouver les 4 coins du rectangle (intersections des lignes extrêmes)
+      const corners = this.findRectangleFromLines(verticalLines, horizontalLines, info.width, info.height);
+      
+      if (!corners) {
+        console.log('⚠️ [EdgeDetection DARK V2] Impossible de trouver un rectangle valide, fallback vers gradient max...');
+        // Fallback: utiliser la méthode par contour sur les pixels à fort gradient
+        const fallbackCorners = await this.detectCornersFromGradient(magnitude, info.width, info.height);
+        if (!fallbackCorners) {
+          return { success: false, error: 'Impossible de détecter les coins de l\'objet' };
+        }
+        
+        // Convertir en coordonnées globales
+        return this.formatCornersResult(fallbackCorners, zoneX, zoneY, imgWidth, imgHeight, info.width, info.height, 60);
+      }
+
+      console.log(`🎯 [EdgeDetection DARK V2] Coins détectés dans zone:`);
+      console.log(`   TL: (${corners.topLeft.x}, ${corners.topLeft.y})`);
+      console.log(`   TR: (${corners.topRight.x}, ${corners.topRight.y})`);
+      console.log(`   BL: (${corners.bottomLeft.x}, ${corners.bottomLeft.y})`);
+      console.log(`   BR: (${corners.bottomRight.x}, ${corners.bottomRight.y})`);
+
+      // Vérifier que les coins ne sont pas au bord de l'image (marge de 10%)
+      const marginX = info.width * 0.05;
+      const marginY = info.height * 0.05;
+      const cornersArray = [corners.topLeft, corners.topRight, corners.bottomLeft, corners.bottomRight];
+      const atEdge = cornersArray.some(c => 
+        c.x <= marginX || c.x >= info.width - marginX ||
+        c.y <= marginY || c.y >= info.height - marginY
+      );
+      
+      // Calculer la confiance basée sur la qualité de la détection
+      let confidence = this.calculateConfidenceGeneric(corners, info.width, info.height);
+      
+      if (atEdge) {
+        confidence = Math.max(30, confidence - 20);
+        console.log(`⚠️ [EdgeDetection DARK V2] Coin proche du bord, confiance réduite à ${confidence}%`);
+      }
+
+      return this.formatCornersResult(corners, zoneX, zoneY, imgWidth, imgHeight, info.width, info.height, confidence);
+
+    } catch (error) {
+      console.error('❌ [EdgeDetection DARK V2] Erreur:', error);
+      return {
+        success: false,
+        error: (error as Error).message
+      };
+    }
+  }
+
+  /**
+   * 📊 Calcule les gradients Sobel (détection de bords)
+   */
+  private computeSobelGradients(
+    pixels: Buffer,
+    width: number,
+    height: number
+  ): { gradientX: Float32Array; gradientY: Float32Array; magnitude: Float32Array } {
+    const size = width * height;
+    const gradientX = new Float32Array(size);
+    const gradientY = new Float32Array(size);
+    const magnitude = new Float32Array(size);
+
+    // Kernels Sobel 3x3
+    const sobelX = [-1, 0, 1, -2, 0, 2, -1, 0, 1];
+    const sobelY = [-1, -2, -1, 0, 0, 0, 1, 2, 1];
+
+    for (let y = 1; y < height - 1; y++) {
+      for (let x = 1; x < width - 1; x++) {
+        let gx = 0, gy = 0;
+        
+        for (let ky = -1; ky <= 1; ky++) {
+          for (let kx = -1; kx <= 1; kx++) {
+            const idx = (y + ky) * width + (x + kx);
+            const kernelIdx = (ky + 1) * 3 + (kx + 1);
+            const pixel = pixels[idx];
+            gx += pixel * sobelX[kernelIdx];
+            gy += pixel * sobelY[kernelIdx];
+          }
+        }
+        
+        const idx = y * width + x;
+        gradientX[idx] = gx;
+        gradientY[idx] = gy;
+        magnitude[idx] = Math.sqrt(gx * gx + gy * gy);
+      }
+    }
+
+    return { gradientX, gradientY, magnitude };
+  }
+
+  /**
+   * 📏 Trouve les lignes dominantes (verticales ou horizontales) par projection
+   */
+  private findDominantLines(
+    gradient: Float32Array,
+    width: number,
+    height: number,
+    direction: 'vertical' | 'horizontal'
+  ): number[] {
+    const lines: number[] = [];
+    const threshold = 30; // Seuil de gradient minimum
+    
+    if (direction === 'vertical') {
+      // Projeter les gradients horizontaux sur l'axe X
+      const projection = new Float32Array(width).fill(0);
+      for (let y = 0; y < height; y++) {
+        for (let x = 0; x < width; x++) {
+          const val = Math.abs(gradient[y * width + x]);
+          if (val > threshold) {
+            projection[x] += val;
+          }
+        }
+      }
+      
+      // Trouver les pics (lignes verticales)
+      const avgProj = projection.reduce((a, b) => a + b, 0) / width;
+      for (let x = 5; x < width - 5; x++) {
+        if (projection[x] > avgProj * 2 && 
+            projection[x] > projection[x-1] && 
+            projection[x] > projection[x+1]) {
+          lines.push(x);
+        }
+      }
+    } else {
+      // Projeter les gradients verticaux sur l'axe Y
+      const projection = new Float32Array(height).fill(0);
+      for (let y = 0; y < height; y++) {
+        for (let x = 0; x < width; x++) {
+          const val = Math.abs(gradient[y * width + x]);
+          if (val > threshold) {
+            projection[y] += val;
+          }
+        }
+      }
+      
+      // Trouver les pics (lignes horizontales)
+      const avgProj = projection.reduce((a, b) => a + b, 0) / height;
+      for (let y = 5; y < height - 5; y++) {
+        if (projection[y] > avgProj * 2 && 
+            projection[y] > projection[y-1] && 
+            projection[y] > projection[y+1]) {
+          lines.push(y);
+        }
+      }
+    }
+
+    return lines;
+  }
+
+  /**
+   * 🎯 Trouve le rectangle à partir des lignes dominantes
+   */
+  private findRectangleFromLines(
+    verticalLines: number[],
+    horizontalLines: number[],
+    width: number,
+    height: number
+  ): DetectedCorners | null {
+    if (verticalLines.length < 2 || horizontalLines.length < 2) {
+      console.log(`⚠️ [EdgeDetection DARK V2] Pas assez de lignes: ${verticalLines.length}V, ${horizontalLines.length}H`);
+      return null;
+    }
+
+    // Trier les lignes
+    verticalLines.sort((a, b) => a - b);
+    horizontalLines.sort((a, b) => a - b);
+
+    // Trouver les paires de lignes qui forment un rectangle proportionnel à une porte
+    // (ratio hauteur/largeur entre 1.5 et 3.0 pour une porte typique)
+    let bestCorners: DetectedCorners | null = null;
+    let bestScore = 0;
+
+    for (let vi = 0; vi < verticalLines.length - 1; vi++) {
+      for (let vj = vi + 1; vj < verticalLines.length; vj++) {
+        const left = verticalLines[vi];
+        const right = verticalLines[vj];
+        const rectWidth = right - left;
+        
+        // Ignorer les rectangles trop petits ou trop grands
+        if (rectWidth < width * 0.2 || rectWidth > width * 0.95) continue;
+
+        for (let hi = 0; hi < horizontalLines.length - 1; hi++) {
+          for (let hj = hi + 1; hj < horizontalLines.length; hj++) {
+            const top = horizontalLines[hi];
+            const bottom = horizontalLines[hj];
+            const rectHeight = bottom - top;
+            
+            // Ignorer les rectangles trop petits ou trop grands
+            if (rectHeight < height * 0.3 || rectHeight > height * 0.95) continue;
+
+            const ratio = rectHeight / rectWidth;
+            
+            // Score basé sur:
+            // 1. Taille du rectangle (plus grand = mieux)
+            // 2. Ratio proche d'une porte (1.8-2.5 idéal)
+            // 3. Centrage dans l'image
+            const sizeScore = (rectWidth * rectHeight) / (width * height);
+            const ratioScore = (ratio >= 1.5 && ratio <= 3.0) ? 1 - Math.abs(ratio - 2.0) / 2.0 : 0.2;
+            const centerX = (left + right) / 2 / width;
+            const centerY = (top + bottom) / 2 / height;
+            const centerScore = 1 - Math.sqrt((centerX - 0.5) ** 2 + (centerY - 0.5) ** 2);
+            
+            const totalScore = sizeScore * 0.4 + ratioScore * 0.4 + centerScore * 0.2;
+            
+            if (totalScore > bestScore) {
+              bestScore = totalScore;
+              bestCorners = {
+                topLeft: { x: left, y: top },
+                topRight: { x: right, y: top },
+                bottomLeft: { x: left, y: bottom },
+                bottomRight: { x: right, y: bottom }
+              };
+            }
+          }
+        }
+      }
+    }
+
+    if (bestCorners) {
+      console.log(`✅ [EdgeDetection DARK V2] Meilleur rectangle trouvé (score: ${(bestScore * 100).toFixed(1)}%)`);
+    }
+
+    return bestCorners;
+  }
+
+  /**
+   * 🔄 Fallback: détection des coins à partir du gradient
+   */
+  private async detectCornersFromGradient(
+    magnitude: Float32Array,
+    width: number,
+    height: number
+  ): Promise<DetectedCorners | null> {
+    // Créer un masque des pixels à fort gradient (bords)
+    const threshold = 100;
+    const edgePixels: Array<{x: number, y: number}> = [];
+    
+    for (let y = 0; y < height; y++) {
+      for (let x = 0; x < width; x++) {
+        if (magnitude[y * width + x] > threshold) {
+          edgePixels.push({ x, y });
+        }
+      }
+    }
+
+    console.log(`📍 [EdgeDetection DARK V2 Fallback] ${edgePixels.length} pixels de bord détectés`);
+
+    if (edgePixels.length < 100) {
+      return null;
+    }
+
+    // Trouver les coins extrêmes parmi les pixels de bord
+    // En utilisant la méthode des 4 quadrants
+    const centerX = width / 2;
+    const centerY = height / 2;
+    
+    // Trouver le coin le plus proche de chaque angle
+    let topLeft = { x: width, y: height, dist: Infinity };
+    let topRight = { x: 0, y: height, dist: Infinity };
+    let bottomLeft = { x: width, y: 0, dist: Infinity };
+    let bottomRight = { x: 0, y: 0, dist: Infinity };
+
+    for (const p of edgePixels) {
+      // Top-Left: chercher le plus proche de (0,0)
+      const distTL = Math.sqrt(p.x ** 2 + p.y ** 2);
+      if (p.x < centerX && p.y < centerY && distTL < topLeft.dist) {
+        topLeft = { x: p.x, y: p.y, dist: distTL };
+      }
+      
+      // Top-Right: chercher le plus proche de (width,0)
+      const distTR = Math.sqrt((width - p.x) ** 2 + p.y ** 2);
+      if (p.x > centerX && p.y < centerY && distTR < topRight.dist) {
+        topRight = { x: p.x, y: p.y, dist: distTR };
+      }
+      
+      // Bottom-Left: chercher le plus proche de (0,height)
+      const distBL = Math.sqrt(p.x ** 2 + (height - p.y) ** 2);
+      if (p.x < centerX && p.y > centerY && distBL < bottomLeft.dist) {
+        bottomLeft = { x: p.x, y: p.y, dist: distBL };
+      }
+      
+      // Bottom-Right: chercher le plus proche de (width,height)
+      const distBR = Math.sqrt((width - p.x) ** 2 + (height - p.y) ** 2);
+      if (p.x > centerX && p.y > centerY && distBR < bottomRight.dist) {
+        bottomRight = { x: p.x, y: p.y, dist: distBR };
+      }
+    }
+
+    // Vérifier qu'on a trouvé tous les coins
+    if (topLeft.dist === Infinity || topRight.dist === Infinity || 
+        bottomLeft.dist === Infinity || bottomRight.dist === Infinity) {
+      return null;
+    }
+
+    return {
+      topLeft: { x: topLeft.x, y: topLeft.y },
+      topRight: { x: topRight.x, y: topRight.y },
+      bottomLeft: { x: bottomLeft.x, y: bottomLeft.y },
+      bottomRight: { x: bottomRight.x, y: bottomRight.y }
+    };
+  }
+
+  /**
+   * 📦 Formate le résultat avec conversion en coordonnées globales
+   */
+  private formatCornersResult(
+    corners: DetectedCorners,
+    zoneX: number,
+    zoneY: number,
+    imgWidth: number,
+    imgHeight: number,
+    zoneWidth: number,
+    zoneHeight: number,
+    confidence: number
+  ): EdgeDetectionResult {
+    const globalCorners: DetectedCorners = {
+      topLeft: {
+        x: ((zoneX + corners.topLeft.x) / imgWidth) * 100,
+        y: ((zoneY + corners.topLeft.y) / imgHeight) * 100
+      },
+      topRight: {
+        x: ((zoneX + corners.topRight.x) / imgWidth) * 100,
+        y: ((zoneY + corners.topRight.y) / imgHeight) * 100
+      },
+      bottomLeft: {
+        x: ((zoneX + corners.bottomLeft.x) / imgWidth) * 100,
+        y: ((zoneY + corners.bottomLeft.y) / imgHeight) * 100
+      },
+      bottomRight: {
+        x: ((zoneX + corners.bottomRight.x) / imgWidth) * 100,
+        y: ((zoneY + corners.bottomRight.y) / imgHeight) * 100
+      }
+    };
+
+    console.log('✅ [EdgeDetection DARK V2] Coins finaux (%):', JSON.stringify(globalCorners, null, 2));
+    console.log(`📊 [EdgeDetection DARK V2] Confiance: ${confidence}%`);
+
+    return {
+      success: true,
+      corners: globalCorners,
+      confidence,
+      debug: {
+        imageWidth: imgWidth,
+        imageHeight: imgHeight,
+        zoneWidth,
+        zoneHeight
+      }
+    };
+  }
+
+  /**
+   * 📊 Calcule un score de confiance générique (sans ratio A4)
+   */
+  private calculateConfidenceGeneric(
+    corners: DetectedCorners,
+    width: number,
+    height: number
+  ): number {
+    // Calculer les longueurs des côtés
+    const topWidth = Math.sqrt(
+      (corners.topRight.x - corners.topLeft.x) ** 2 +
+      (corners.topRight.y - corners.topLeft.y) ** 2
+    );
+    const bottomWidth = Math.sqrt(
+      (corners.bottomRight.x - corners.bottomLeft.x) ** 2 +
+      (corners.bottomRight.y - corners.bottomLeft.y) ** 2
+    );
+    const leftHeight = Math.sqrt(
+      (corners.bottomLeft.x - corners.topLeft.x) ** 2 +
+      (corners.bottomLeft.y - corners.topLeft.y) ** 2
+    );
+    const rightHeight = Math.sqrt(
+      (corners.bottomRight.x - corners.topRight.x) ** 2 +
+      (corners.bottomRight.y - corners.topRight.y) ** 2
+    );
+
+    // Les côtés opposés doivent avoir des longueurs similaires
+    const widthRatio = Math.min(topWidth, bottomWidth) / Math.max(topWidth, bottomWidth);
+    const heightRatio = Math.min(leftHeight, rightHeight) / Math.max(leftHeight, rightHeight);
+
+    // Score basé sur la régularité du quadrilatère (pas de ratio A4 spécifique)
+    const confidence = Math.round(
+      (widthRatio * 50 + heightRatio * 50)
+    );
+
+    console.log(`📊 [EdgeDetection DARK] Confiance: ${confidence}% (widthRatio=${widthRatio.toFixed(2)}, heightRatio=${heightRatio.toFixed(2)})`);
 
     return Math.max(0, Math.min(100, confidence));
   }

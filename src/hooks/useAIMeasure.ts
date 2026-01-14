@@ -52,11 +52,11 @@ export interface AIMeasureResult {
   marker?: {
     id: number;
     corners: Array<{ x: number; y: number }>;
-    magentaPositions: Array<{ x: number; y: number }>;
+    apriltagPositions: Array<{ x: number; y: number }>;
     center: { x: number; y: number };
     sizePx: number;
     score: number;
-    magentaFound: number;
+    apriltagsFound: number;
   };
   homography?: {
     matrix: number[][];

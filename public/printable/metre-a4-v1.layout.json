@@ -1,0 +1,69 @@
+{
+  "version": "A4-CALIB-V1",
+  "sheet": { "width_mm": 210, "height_mm": 297 },
+  "border": { "thickness_mm": 8 },
+  "orientation": { "label": "TOP", "x_mm": 105, "y_mm": 16 },
+  "logos": [
+    { "name": "2thier", "x_mm": 10, "y_mm": 32, "w_mm": 50, "h_mm": 30 },
+    { "name": "metre",  "x_mm": 157, "y_mm": 32, "w_mm": 45, "h_mm": 30 }
+  ],
+  "april_tags": [
+    { "id": 2,  "x_mm": 8,   "y_mm": 8,   "size_mm": 20, "position": "TL" },
+    { "id": 7,  "x_mm": 182, "y_mm": 8,   "size_mm": 20, "position": "TR" },
+    { "id": 14, "x_mm": 8,   "y_mm": 269, "size_mm": 20, "position": "BL" },
+    { "id": 21, "x_mm": 182, "y_mm": 269, "size_mm": 20, "position": "BR" }
+  ],
+  "charuco": {
+    "x_mm": 45,
+    "y_mm": 90,
+    "w_mm": 120,
+    "h_mm": 80,
+    "cols": 8,
+    "rows": 6,
+    "square_mm": 15,
+    "inner_tags": [
+      { "id": 30, "x_mm": 45,  "y_mm": 90,  "size_mm": 12, "position": "charuco_TL" },
+      { "id": 31, "x_mm": 153, "y_mm": 90,  "size_mm": 12, "position": "charuco_TR" },
+      { "id": 32, "x_mm": 45,  "y_mm": 158, "size_mm": 12, "position": "charuco_BL" },
+      { "id": 33, "x_mm": 153, "y_mm": 158, "size_mm": 12, "position": "charuco_BR" }
+    ]
+  },
+  "dots": [
+    { "x_mm": 35,  "y_mm": 75,  "r_mm": 1.4 },
+    { "x_mm": 60,  "y_mm": 70,  "r_mm": 1.4 },
+    { "x_mm": 175, "y_mm": 82,  "r_mm": 1.4 },
+    { "x_mm": 55,  "y_mm": 180, "r_mm": 1.4 },
+    { "x_mm": 155, "y_mm": 178, "r_mm": 1.4 },
+    { "x_mm": 95,  "y_mm": 185, "r_mm": 1.4 },
+    { "x_mm": 140, "y_mm": 160, "r_mm": 1.4 },
+    { "x_mm": 80,  "y_mm": 160, "r_mm": 1.4 },
+    { "x_mm": 125, "y_mm": 70,  "r_mm": 1.4 }
+  ],
+  "rule": {
+    "x_mm": 15,
+    "y_mm": 260,
+    "w_mm": 180,
+    "h_mm": 10,
+    "start_mm": 0,
+    "end_mm": 180,
+    "tick_mm": 1,
+    "tick5_mm": 5,
+    "tick10_mm": 10
+  },
+  "qr": {
+    "x_mm": 12,
+    "y_mm": 272,
+    "size_mm": 14,
+    "payload": {
+      "version": "A4-CALIB-V1",
+      "sheet": "210x297mm",
+      "url": "https://app.2thier.be/printables/metre-a4-v1",
+      "hash": "TODO"
+    }
+  },
+  "notes": {
+    "print_scale": "100%",
+    "colors": "Black 100% / White",
+    "dpi_min": 300
+  }
+}

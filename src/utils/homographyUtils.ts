@@ -189,32 +189,42 @@ export function createA4DestinationPoints(orientation: 'portrait' | 'paysage'): 
 }
 
 /**
- * 🎯 Variable pour stocker la taille du marqueur (synchronisée avec marker-detector)
- * Valeur par défaut: 16.8cm = 168mm
+ * 🎯 Variable pour stocker la taille du marqueur Métré A4 V1.2 (synchronisée avec marker-detector)
+ * Valeur par défaut: 13.0cm = 130mm (largeur AprilTag)
  */
-let _arucoMarkerSizeMm = 168; // 16.8cm par défaut
+let _arucoMarkerSizeMm = 130; // 13.0cm par défaut (Métré A4 V1.2)
 
 /**
- * Met à jour la taille du marqueur pour l'homographie
+ * 🎯 Dimensions AprilTag Métré V1.2 (distance entre centres de tags sur feuille A4)
+ * IMPORTANT: on utilise les CENTRES des 4 AprilTags comme points de calibration.
+ * Les distances de référence entre centres sont donc (V1.2):
+ * Largeur: 13.0cm = 130mm
+ * Hauteur: 21.7cm = 217mm
+ */
+const APRILTAG_METRE_WIDTH_MM = 130;
+const APRILTAG_METRE_HEIGHT_MM = 217;
+
+/**
+ * Met à jour la taille du marqueur Métré A4 V1.2 pour l'homographie
  * @param sizeCm - Taille en cm
  */
 export function setArucoMarkerSize(sizeCm: number): void {
   _arucoMarkerSizeMm = sizeCm * 10; // Convert cm to mm
-  console.log(`🎯 [HOMOGRAPHY] Taille marqueur mise à jour: ${sizeCm}cm = ${_arucoMarkerSizeMm}mm`);
+  console.log(`🎯 [HOMOGRAPHY] Taille marqueur Métré A4 V1.2 mise à jour: ${sizeCm}cm = ${_arucoMarkerSizeMm}mm`);
 }
 
 /**
- * Retourne la taille actuelle du marqueur en mm
+ * Retourne la taille actuelle du marqueur Métré A4 V1.2 en mm
  */
 export function getArucoMarkerSizeMm(): number {
   return _arucoMarkerSizeMm;
 }
 
 /**
- * 🎯 Crée les points destination pour un marqueur ArUco MAGENTA
+ * 🎯 Crée les points destination pour un marqueur Métré A4 V1.2 (rectangle)
  * 
- * Utilise la taille configurée dans Paramètres > IA Mesure
- * Par défaut: 16.8cm = 168mm
+ * Utilise la taille configurée (13cm largeur × 21.7cm hauteur)
+ * Par défaut: 13.0cm = 130mm (largeur AprilTag)
  */
 export function createArucoDestinationPoints(): Point2D[] {
   const markerSizeMm = _arucoMarkerSizeMm;
@@ -227,16 +237,35 @@ export function createArucoDestinationPoints(): Point2D[] {
 }
 
 /**
+ * 🎯 Crée les points destination pour AprilTag Métré V1.2 (rectangle)
+ * 
+ * Dimensions fixes: 13.0cm × 21.7cm (distance entre centres de tags)
+ * Coordonnées en mm pour l'homographie
+ */
+export function createAprilTagMetreDestinationPoints(): Point2D[] {
+  return [
+    [0, 0],                                      // topLeft
+    [APRILTAG_METRE_WIDTH_MM, 0],               // topRight (130mm)
+    [APRILTAG_METRE_WIDTH_MM, APRILTAG_METRE_HEIGHT_MM], // bottomRight (130×217mm)
+    [0, APRILTAG_METRE_HEIGHT_MM]               // bottomLeft (217mm)
+  ];
+}
+
+/**
  * 🔧 Crée les points destination selon le type de référence
- * @param refType - 'aruco' ou 'a4'
+ * @param refType - 'aruco', 'apriltag-metre' ou 'a4'
  * @param orientation - utilisé seulement pour A4: 'portrait' ou 'paysage'
  */
 export function createReferenceDestinationPoints(
-  refType: 'aruco' | 'a4', 
+  refType: 'metre_a4' | 'apriltag-metre' | 'a4', 
   orientation: 'portrait' | 'paysage' = 'portrait'
 ): Point2D[] {
-  if (refType === 'aruco') {
-    return createArucoDestinationPoints();
+  if (refType === 'metre_a4') {
+    // 🎯 CRITICAL: Métré A4 V1.2 = AprilTag rectangulaire 130×217mm (13×21.7cm)
+    return createAprilTagMetreDestinationPoints();
+  }
+  if (refType === 'apriltag-metre') {
+    return createAprilTagMetreDestinationPoints();
   }
   return createA4DestinationPoints(orientation);
 }

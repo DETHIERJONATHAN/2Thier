@@ -189,7 +189,7 @@ const ImageWithAnnotationsOverlay: React.FC<ImageWithAnnotationsOverlayProps> = 
         y: (scaledCorners.topLeft.y + scaledCorners.bottomRight.y) / 2
       };
       
-      const labelText = `ArUco MAGENTA (${annotations.markerSizeCm || markerSizeCm}×${annotations.markerSizeCm || markerSizeCm}cm)`;
+      const labelText = `Métré A4 V1.2 (13×21.7cm)`;
       
       // Fond du label
       ctx.font = 'bold 12px Arial';

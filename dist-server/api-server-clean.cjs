@@ -2472,11 +2472,17 @@ async function enrichDataFromSubmission(submissionId, prisma49, valueMap, labelM
       }
     });
     if (!treeId) {
-      const firstSubmissionNode = await prisma49.treeBranchLeafSubmissionData.findFirst({
+      const firstSubmissionData = await prisma49.treeBranchLeafSubmissionData.findFirst({
         where: { submissionId },
-        include: { TreeBranchLeafNode: { select: { treeId: true } } }
+        select: { nodeId: true }
       });
-      treeId = firstSubmissionNode?.TreeBranchLeafNode?.treeId;
+      if (firstSubmissionData?.nodeId) {
+        const node = await prisma49.treeBranchLeafNode.findUnique({
+          where: { id: firstSubmissionData.nodeId },
+          select: { treeId: true }
+        });
+        treeId = node?.treeId;
+      }
     }
     let leadId = null;
     const submission = await prisma49.treeBranchLeafSubmission.findUnique({
@@ -15229,33 +15235,13 @@ router19.post("/initialize-default-statuses", async (req2, res) => {
 });
 router19.get("/ai-measure", async (req2, res) => {
   try {
-    const authReq = req2;
-    const organizationId = authReq.user?.organizationId;
-    if (!organizationId) {
-      return res.json({
-        success: true,
-        data: {
-          markerSizeCm: 16.8,
-          boardSizeCm: 24
-        }
-      });
-    }
-    console.log("[AI-MEASURE] R\xE9cup\xE9ration config pour organisation:", organizationId);
-    const config = await db.systemConfig.findFirst({
-      where: {
-        key: "ai_measure_marker"
-      }
-    });
-    if (config && config.value) {
-      const value = typeof config.value === "string" ? JSON.parse(config.value) : config.value;
-      console.log("[AI-MEASURE] Config trouv\xE9e:", value);
-      return res.json({ success: true, data: value });
-    }
-    console.log("[AI-MEASURE] Pas de config, utilisation des valeurs par d\xE9faut");
-    res.json({
+    return res.json({
       success: true,
       data: {
-        markerSizeCm: 16.8,
+        markerWidthCm: 13,
+        markerHeightCm: 21.7,
+        markerSizeCm: 13,
+        // Deprecated, gardé pour compatibilité frontend
         boardSizeCm: 24
       }
     });
@@ -15270,44 +15256,9 @@ router19.get("/ai-measure", async (req2, res) => {
 });
 router19.post("/ai-measure", async (req2, res) => {
   try {
-    const authReq = req2;
-    const organizationId = authReq.user?.organizationId;
-    if (!organizationId) {
-      return res.status(400).json({
-        success: false,
-        error: "Organisation non sp\xE9cifi\xE9e"
-      });
-    }
-    const { markerSizeCm, boardSizeCm } = req2.body;
-    if (!markerSizeCm || markerSizeCm < 5 || markerSizeCm > 50) {
-      return res.status(400).json({
-        success: false,
-        error: "Taille du marqueur invalide (doit \xEAtre entre 5 et 50 cm)"
-      });
-    }
-    console.log("[AI-MEASURE] Sauvegarde config (globale)");
-    console.log("[AI-MEASURE] Nouvelles valeurs:", { markerSizeCm, boardSizeCm });
-    const config = await db.systemConfig.upsert({
-      where: {
-        key: "ai_measure_marker"
-      },
-      update: {
-        value: JSON.stringify({ markerSizeCm, boardSizeCm }),
-        updatedAt: /* @__PURE__ */ new Date()
-      },
-      create: {
-        id: `system-config-ai-measure-marker`,
-        key: "ai_measure_marker",
-        value: JSON.stringify({ markerSizeCm, boardSizeCm }),
-        description: "Configuration du marqueur ArUco pour IA Mesure",
-        updatedAt: /* @__PURE__ */ new Date()
-      }
-    });
-    console.log("[AI-MEASURE] Config sauvegard\xE9e:", config.id);
-    res.json({
-      success: true,
-      message: "Configuration sauvegard\xE9e",
-      data: { markerSizeCm, boardSizeCm }
+    return res.status(400).json({
+      success: false,
+      error: "Configuration d\xE9sactiv\xE9e: AprilTag M\xE9tr\xE9 V1.2 est fixe (13\xD721.7cm)."
     });
   } catch (error) {
     console.error("[AI-MEASURE] Erreur sauvegarde config:", error);
@@ -29773,12 +29724,18 @@ async function updateSumDisplayFieldAfterCopyChange(sourceNodeId, prismaClient) 
     if (!sumNodeExists) {
       return;
     }
+    const formulaName = `Somme ${mainVariable.displayName}`;
     await db2.treeBranchLeafNodeFormula.upsert({
-      where: { id: sumFormulaId },
+      where: {
+        nodeId_name: {
+          nodeId: sumFieldNodeId,
+          name: formulaName
+        }
+      },
       update: { tokens: sumTokens, updatedAt: now },
       create: {
         id: sumFormulaId,
-        name: `Somme ${mainVariable.displayName}`,
+        name: formulaName,
         tokens: sumTokens,
         nodeId: sumFieldNodeId,
         createdAt: now,
@@ -31758,6 +31715,18 @@ async function copyVariableWithCapacities(originalVarId, suffix, newNodeId, pris
       if (!finalNodeId2) {
         throw new Error(`Cannot create variable: finalNodeId is ${finalNodeId2}. This indicates the display node was not created properly.`);
       }
+      const nodeExists = await prisma49.treeBranchLeafNode.findUnique({
+        where: { id: finalNodeId2 },
+        select: { id: true }
+      });
+      if (!nodeExists) {
+        console.warn(`\u26A0\uFE0F Cannot create variable: node ${finalNodeId2} does not exist in database. Skipping variable creation.`);
+        return {
+          success: false,
+          error: `Node ${finalNodeId2} does not exist`,
+          originalVarId
+        };
+      }
       try {
         if (originalVar.nodeId && finalNodeId2 && !nodeIdMap.has(originalVar.nodeId)) {
           nodeIdMap.set(originalVar.nodeId, finalNodeId2);
@@ -32965,7 +32934,7 @@ var TableLookupDuplicationService = class {
                 console.log(`[TBL-DUP] Column ${idx}: "${col.name}" -> "${newName}" (columnIndex: ${col.columnIndex} -> ${idx})`);
                 return {
                   id: col.id ? `${col.id}${suffix}` : (0, import_crypto14.randomUUID)(),
-                  tableId: copiedTableId,
+                  // ✅ FIX 11/01/2026: NE PAS inclure tableId dans nested create - Prisma le remplit automatiquement
                   columnIndex: idx,
                   // ✅ FIX: Réassigner en séquence au lieu de copier
                   name: newName,
@@ -32981,7 +32950,7 @@ var TableLookupDuplicationService = class {
             tableRows: {
               create: originalTable.tableRows.map((row, idx) => ({
                 id: row.id ? `${row.id}${suffix}` : (0, import_crypto14.randomUUID)(),
-                tableId: copiedTableId,
+                // ✅ FIX 11/01/2026: NE PAS inclure tableId dans nested create - Prisma le remplit automatiquement
                 rowIndex: idx,
                 // ✅ FIX: Réassigner en séquence
                 cells: row.cells
@@ -33019,7 +32988,6 @@ var TableLookupDuplicationService = class {
       });
       if (!existingSelectConfig) {
         const shouldSuffixColumns = true;
-        const suffix2 = computedLabelSuffix;
         await prisma49.treeBranchLeafSelectConfig.create({
           data: {
             id: (0, import_crypto14.randomUUID)(),
@@ -33027,12 +32995,12 @@ var TableLookupDuplicationService = class {
             nodeId: copiedNodeId,
             tableReference: copiedTableId,
             // 🔥 SUFFIXER les références de colonnes/lignes si elles pointent vers la première colonne/ligne
-            keyColumn: originalSelectConfig.keyColumn ? `${originalSelectConfig.keyColumn}${suffix2}` : null,
-            keyRow: originalSelectConfig.keyRow ? `${originalSelectConfig.keyRow}${suffix2}` : null,
-            valueColumn: originalSelectConfig.valueColumn ? `${originalSelectConfig.valueColumn}${suffix2}` : null,
-            valueRow: originalSelectConfig.valueRow ? `${originalSelectConfig.valueRow}${suffix2}` : null,
-            displayColumn: originalSelectConfig.displayColumn ? `${originalSelectConfig.displayColumn}${suffix2}` : null,
-            displayRow: originalSelectConfig.displayRow ? `${originalSelectConfig.displayRow}${suffix2}` : null,
+            keyColumn: originalSelectConfig.keyColumn ? `${originalSelectConfig.keyColumn}${suffix}` : null,
+            keyRow: originalSelectConfig.keyRow ? `${originalSelectConfig.keyRow}${suffix}` : null,
+            valueColumn: originalSelectConfig.valueColumn ? `${originalSelectConfig.valueColumn}${suffix}` : null,
+            valueRow: originalSelectConfig.valueRow ? `${originalSelectConfig.valueRow}${suffix}` : null,
+            displayColumn: originalSelectConfig.displayColumn ? `${originalSelectConfig.displayColumn}${suffix}` : null,
+            displayRow: originalSelectConfig.displayRow ? `${originalSelectConfig.displayRow}${suffix}` : null,
             // 🔧 FIX 07/01/2026: Copier TOUS les autres champs du SelectConfig original
             options: originalSelectConfig.options,
             multiple: originalSelectConfig.multiple,
@@ -33042,7 +33010,7 @@ var TableLookupDuplicationService = class {
             optionsSource: originalSelectConfig.optionsSource,
             apiEndpoint: originalSelectConfig.apiEndpoint,
             // 🔥 CRITICAL: Suffixer dependsOnNodeId s'il existe (référence à un autre nœud)
-            dependsOnNodeId: originalSelectConfig.dependsOnNodeId ? `${originalSelectConfig.dependsOnNodeId}${suffix2}` : null,
+            dependsOnNodeId: originalSelectConfig.dependsOnNodeId ? `${originalSelectConfig.dependsOnNodeId}${suffix}` : null,
             createdAt: /* @__PURE__ */ new Date(),
             updatedAt: /* @__PURE__ */ new Date()
           }
@@ -33066,7 +33034,7 @@ var TableLookupDuplicationService = class {
                 // ✅ Seulement le propriétaire a hasTable: true
                 table_activeId: copiedTableId,
                 table_instances: { set: currentCapabilities.table.instances },
-                table_name: originalTable.name + suffix2,
+                table_name: originalTable.name + suffix,
                 table_type: originalTable.type,
                 capabilities: currentCapabilities,
                 linkedTableIds: { set: newLinked }
@@ -33238,7 +33206,7 @@ async function deepCopyNodeInternal(prisma49, req2, nodeId, opts) {
     }
   }
   const suffixToken = sanitizedForcedSuffix || `${copySuffixNum}`;
-  const computedLabelSuffix2 = `-${suffixToken}`;
+  const computedLabelSuffix = `-${suffixToken}`;
   const suffixPattern = new RegExp(`-${suffixToken.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`);
   const numericSuffixPattern = /-\d+$/;
   const hasCurrentSuffix = (value) => suffixPattern.test(value);
@@ -33778,7 +33746,7 @@ async function deepCopyNodeInternal(prisma49, req2, nodeId, opts) {
           id: newConditionId,
           nodeId: newId,
           organizationId: c.organizationId,
-          name: c.name ? `${c.name}${computedLabelSuffix2}` : c.name,
+          name: c.name ? `${c.name}${computedLabelSuffix}` : c.name,
           conditionSet: newSet,
           description: c.description,
           isDefault: c.isDefault,
@@ -33939,7 +33907,7 @@ async function deepCopyNodeInternal(prisma49, req2, nodeId, opts) {
           id: newTableId,
           nodeId: tableOwnerNodeId,
           organizationId: t.organizationId,
-          name: t.name ? `${t.name}${computedLabelSuffix2}` : t.name,
+          name: t.name ? `${t.name}${computedLabelSuffix}` : t.name,
           description: t.description,
           type: t.type,
           rowCount: t.rowCount,
@@ -34050,9 +34018,9 @@ async function deepCopyNodeInternal(prisma49, req2, nodeId, opts) {
               tableReference: newTableReference,
               dependsOnNodeId: originalSelectConfig.dependsOnNodeId ? idMap.get(originalSelectConfig.dependsOnNodeId) || appendSuffix(originalSelectConfig.dependsOnNodeId) : null,
               // Suffixer les colonnes seulement si table locale
-              keyColumn: originalSelectConfig.keyColumn ? shouldSuffixColumns ? `${originalSelectConfig.keyColumn}${computedLabelSuffix2}` : originalSelectConfig.keyColumn : null,
-              valueColumn: originalSelectConfig.valueColumn ? shouldSuffixColumns ? `${originalSelectConfig.valueColumn}${computedLabelSuffix2}` : originalSelectConfig.valueColumn : null,
-              displayColumn: originalSelectConfig.displayColumn ? shouldSuffixColumns ? `${originalSelectConfig.displayColumn}${computedLabelSuffix2}` : originalSelectConfig.displayColumn : null,
+              keyColumn: originalSelectConfig.keyColumn ? shouldSuffixColumns ? `${originalSelectConfig.keyColumn}${computedLabelSuffix}` : originalSelectConfig.keyColumn : null,
+              valueColumn: originalSelectConfig.valueColumn ? shouldSuffixColumns ? `${originalSelectConfig.valueColumn}${computedLabelSuffix}` : originalSelectConfig.valueColumn : null,
+              displayColumn: originalSelectConfig.displayColumn ? shouldSuffixColumns ? `${originalSelectConfig.displayColumn}${computedLabelSuffix}` : originalSelectConfig.displayColumn : null,
               displayRow: originalSelectConfig.displayRow,
               keyRow: originalSelectConfig.keyRow,
               valueRow: originalSelectConfig.valueRow,
@@ -60334,10 +60302,7 @@ init_database();
 var sharpModule = __toESM(require("sharp"), 1);
 
 // src/lib/marker-detector.ts
-var _markerSizeCm = 16.8;
-function getMarkerSize() {
-  return _markerSizeCm;
-}
+var _markerSizeCm = 13;
 var MARKER_SPECS = {
   get markerSize() {
     return _markerSizeCm;
@@ -60390,57 +60355,327 @@ var MarkerDetector = class {
     this.enableExtendedDetection = enableExtendedDetection;
   }
   /**
+  /**
    * Détecter les marqueurs dans une image
+  /**
    * 
+  /**
    * PRIORITÉ 1: Détecter les LIGNES NOIRES extérieures
+  /**
    * PRIORITÉ 2: Valider/raffiner avec les coins magenta
    */
   detect(imageData) {
     const { data, width, height } = imageData;
     console.log(`\u{1F50D} MarkerDetector.detect: ${width}x${height}`);
-    console.log("\u{1F3AF} STRAT\xC9GIE: Lignes noires PRIORITAIRES + validation magenta");
-    let markers = this.detectFromBlackLines(data, width, height);
+    console.log("\u{1F3AF} D\xC9TECTION M\xC9TR\xC9 A4 - Recherche 4 AprilTags (ID: 2,7,14,21)");
+    let markers = this.detectAprilTagMetreA4(data, width, height);
     if (markers.length === 0) {
-      console.log("\u26A0\uFE0F Lignes noires non d\xE9tect\xE9es, fallback magenta...");
-      markers = this.detectFromMagentaOnly(data, width, height);
-    }
-    if (markers.length > 0) {
-      console.log(`\u2705 ${markers.length} marqueur(s) d\xE9tect\xE9(s)`);
-      if (this.enableExtendedDetection) {
-        for (const marker of markers) {
-          try {
-            const outerCorners = marker.magentaPositions || marker.corners;
-            marker.extendedPoints = this.detectExtendedReferencePoints(
-              data,
-              width,
-              height,
-              outerCorners
-            );
-            if (marker.extendedPoints.allPoints.length >= 8) {
-              const homographyResult = computeHomographyExtended(marker.extendedPoints, 0.5);
-              marker.preciseHomography = homographyResult.H;
-              marker.homographyQuality = homographyResult.quality;
-              console.log(`\u{1F4D0} Homographie: ${marker.extendedPoints.detectedCount}/${marker.extendedPoints.allPoints.length} points (qualit\xE9: ${(homographyResult.quality * 100).toFixed(0)}%)`);
-            } else {
-              console.log(`\u{1F4D0} Points \xE9tendus: ${marker.extendedPoints.detectedCount}/20 (confiance: ${(marker.extendedPoints.confidence * 100).toFixed(0)}%)`);
-            }
-          } catch (err) {
-            console.warn("\u26A0\uFE0F D\xE9tection \xE9tendue \xE9chou\xE9e:", err);
-          }
-        }
-      }
+      console.log("\u26A0\uFE0F Aucun AprilTag d\xE9tect\xE9 - v\xE9rifiez que la feuille M\xE9tr\xE9 V1.2 est visible");
+      console.log("   \u{1F4CC} La feuille doit contenir 4 AprilTags aux coins (ID: 2, 7, 14, 21)");
     } else {
-      console.log("\u274C Aucun marqueur d\xE9tect\xE9");
+      console.log(`\u2705 ${markers.length} feuille(s) M\xE9tr\xE9 d\xE9tect\xE9e(s) - 4 coins AprilTag identifi\xE9s`);
     }
     return markers;
   }
   /**
-   * 🎯 NOUVELLE MÉTHODE PRINCIPALE: Détection par LIGNES NOIRES
+   * 🚀 NOUVELLE MÉTHODE: Détection AprilTags pour feuille Métré V1.2
    * 
+   * La feuille Métré V1.2 contient 4 AprilTags aux coins:
+   * - ID 2: Coin haut gauche (30mm, 30mm)
+   * - ID 7: Coin haut droit (160mm, 30mm)
+   * - ID 14: Coin bas gauche (30mm, 247mm)
+   * - ID 21: Coin bas droit (160mm, 247mm)
+   * 
+   * @param data - Buffer image
+   * @param width - Largeur image
+   * @param height - Hauteur image
+   * @returns Liste de marqueurs détectés (1 marqueur = 1 feuille A4)
+   */
+  detectAprilTagMetreA4(data, width, height) {
+    console.log("\u{1F3AF} [APRILTAG] D\xE9tection AprilTags M\xE9tr\xE9 V1.2...");
+    try {
+      const grayscale = new Uint8Array(width * height);
+      for (let i = 0; i < width * height; i++) {
+        const r = data[i * 4];
+        const g = data[i * 4 + 1];
+        const b = data[i * 4 + 2];
+        grayscale[i] = Math.floor((r + g + b) / 3);
+      }
+      const detector2 = new AprilTag(FAMILIES.TAG36H11, {
+        quadDecimate: 2,
+        // Accélération sur grandes images
+        quadSigma: 0,
+        // Pas de flou gaussien
+        refineEdges: true,
+        // Meilleure précision des coins
+        decodeSharpening: 0.25
+      });
+      const detections = detector2.detect(width, height, grayscale);
+      console.log(`   \u{1F50D} ${detections.length} AprilTag(s) d\xE9tect\xE9(s)`);
+      if (detections.length === 0) {
+        return [];
+      }
+      const detectedTags = [];
+      for (const detection of detections) {
+        const tagCorners = [
+          { x: detection.corners[0][0], y: detection.corners[0][1] },
+          // Top-left
+          { x: detection.corners[1][0], y: detection.corners[1][1] },
+          // Top-right
+          { x: detection.corners[2][0], y: detection.corners[2][1] },
+          // Bottom-right
+          { x: detection.corners[3][0], y: detection.corners[3][1] }
+          // Bottom-left
+        ];
+        detectedTags.push({ id: detection.id, corners: tagCorners });
+        console.log(`   \u2705 AprilTag ID=${detection.id} d\xE9tect\xE9`);
+      }
+      const requiredIds = [2, 7, 14, 21];
+      const foundIds = detectedTags.map((t) => t.id);
+      const missingIds = requiredIds.filter((id) => !foundIds.includes(id));
+      if (missingIds.length > 0) {
+        console.log(`   \u26A0\uFE0F AprilTags manquants: ${missingIds.join(", ")}`);
+        console.log(`   \u{1F4CC} Trouv\xE9s: ${foundIds.join(", ")}`);
+        return [];
+      }
+      const tagTL = detectedTags.find((t) => t.id === 2);
+      const tagTR = detectedTags.find((t) => t.id === 7);
+      const tagBL = detectedTags.find((t) => t.id === 14);
+      const tagBR = detectedTags.find((t) => t.id === 21);
+      const centerTL = this.getTagCenter(tagTL.corners);
+      const centerTR = this.getTagCenter(tagTR.corners);
+      const centerBL = this.getTagCenter(tagBL.corners);
+      const centerBR = this.getTagCenter(tagBR.corners);
+      console.log(`   \u{1F4CD} Centres AprilTags:`);
+      console.log(`      TL(2):  (${centerTL.x.toFixed(0)}, ${centerTL.y.toFixed(0)})`);
+      console.log(`      TR(7):  (${centerTR.x.toFixed(0)}, ${centerTR.y.toFixed(0)})`);
+      console.log(`      BL(14): (${centerBL.x.toFixed(0)}, ${centerBL.y.toFixed(0)})`);
+      console.log(`      BR(21): (${centerBR.x.toFixed(0)}, ${centerBR.y.toFixed(0)})`);
+      const corners = [centerTL, centerTR, centerBR, centerBL];
+      const measurements = this.calculateMeasurements(corners);
+      console.log(`   \u2705 Feuille M\xE9tr\xE9 V1.2 d\xE9tect\xE9e!`);
+      console.log(`      Taille moyenne: ${measurements.avgSidePx.toFixed(0)}px`);
+      console.log(`      Pixels/cm: ${measurements.pixelsPerCm.toFixed(2)}`);
+      return [{
+        id: 0,
+        corners,
+        apriltagPositions: corners,
+        size: measurements.avgSidePx,
+        center: measurements.center,
+        score: 0.95,
+        // Haute confiance car AprilTags détectés
+        apriltagsFound: 4,
+        homography: {
+          realSizeCm: 21,
+          // Feuille A4 = 21cm de largeur
+          pixelsPerCm: measurements.pixelsPerCm,
+          sides: measurements.sides,
+          angles: measurements.angles
+        }
+      }];
+    } catch (error) {
+      console.error("\u274C [APRILTAG] Erreur d\xE9tection:", error);
+      return [];
+    }
+  }
+  /**
+   * Calcule le centre d'un AprilTag à partir de ses 4 coins
+   */
+  getTagCenter(corners) {
+    const sumX = corners.reduce((sum, p) => sum + p.x, 0);
+    const sumY = corners.reduce((sum, p) => sum + p.y, 0);
+    return {
+      x: sumX / corners.length,
+      y: sumY / corners.length
+    };
+  }
+  /**
+   * ⬜ DÉTECTION PAR ZONES BLANCHES CARRÉES
+   * 
+   * Le marqueur ArUco a un FOND BLANC visible sur un écran/surface sombre.
+   * Cette méthode cherche les zones blanches carrées dans l'image.
+   */
+  detectWhiteSquareRegions(data, width, height) {
+    console.log("\u2B1C [ArUco] Recherche zones BLANCHES CARR\xC9ES...");
+    const step = Math.max(4, Math.floor(Math.min(width, height) / 300));
+    const brightPixels = [];
+    for (let y = 0; y < height; y += step) {
+      for (let x = 0; x < width; x += step) {
+        const idx = (y * width + x) * 4;
+        const r = data[idx], g = data[idx + 1], b = data[idx + 2];
+        const brightness = (r + g + b) / 3;
+        if (brightness > 150 && Math.max(r, g, b) - Math.min(r, g, b) < 60) {
+          brightPixels.push({ x, y });
+        }
+      }
+    }
+    console.log(`   \u2B1C ${brightPixels.length} pixels clairs trouv\xE9s`);
+    if (brightPixels.length < 20) {
+      return [];
+    }
+    if (brightPixels.length > 1e4) {
+      console.log(`   \u26A0\uFE0F Trop de pixels clairs (${brightPixels.length}) - zone trop grande`);
+      return [];
+    }
+    let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+    for (const p of brightPixels) {
+      if (p.x < minX) minX = p.x;
+      if (p.x > maxX) maxX = p.x;
+      if (p.y < minY) minY = p.y;
+      if (p.y > maxY) maxY = p.y;
+    }
+    const regionWidth = maxX - minX;
+    const regionHeight = maxY - minY;
+    const ratio = Math.max(regionWidth, regionHeight) / Math.min(regionWidth, regionHeight);
+    console.log(`   \u{1F4D0} Zone blanche: ${regionWidth}\xD7${regionHeight}px (ratio: ${ratio.toFixed(2)})`);
+    if (ratio > 1.8) {
+      console.log(`   \u26A0\uFE0F Zone blanche trop rectangulaire (ratio ${ratio.toFixed(2)} > 1.8)`);
+      return [];
+    }
+    if (Math.min(regionWidth, regionHeight) < 50) {
+      console.log(`   \u26A0\uFE0F Zone blanche trop petite`);
+      return [];
+    }
+    if (Math.max(regionWidth, regionHeight) > Math.min(width, height) * 0.6) {
+      console.log(`   \u26A0\uFE0F Zone blanche trop grande (probablement pas le marqueur)`);
+      return [];
+    }
+    const candidateCorners = [
+      { x: minX, y: minY },
+      // TL
+      { x: maxX, y: minY },
+      // TR
+      { x: maxX, y: maxY },
+      // BR
+      { x: minX, y: maxY }
+      // BL
+    ];
+    const structureScore = this.validateArucoStructure(data, width, height, candidateCorners);
+    console.log(`   \u{1F532} Score structure ArUco: ${(structureScore * 100).toFixed(0)}%`);
+    if (structureScore < 0.4) {
+      console.log(`   \u26A0\uFE0F Structure ArUco non confirm\xE9e (score ${(structureScore * 100).toFixed(0)}% < 40%)`);
+      return [];
+    }
+    console.log(`   \u2705 Zone blanche valid\xE9e comme marqueur ArUco!`);
+    const orderedCorners = this.orderCornersClockwise(candidateCorners);
+    const measurements = this.calculateMeasurements(orderedCorners);
+    return [{
+      id: 0,
+      corners: orderedCorners,
+      // 🎯 FIX: Utiliser directement les coins détectés
+      apriltagPositions: orderedCorners,
+      size: measurements.avgSidePx,
+      center: measurements.center,
+      score: 0.85,
+      apriltagsFound: 0,
+      homography: {
+        realSizeCm: MARKER_SPECS.markerSize,
+        pixelsPerCm: measurements.pixelsPerCm,
+        sides: measurements.sides,
+        angles: measurements.angles
+      }
+    }];
+  }
+  /**
+  /**
+   * 📄 DÉTECTION A4: Recherche de zones blanches RECTANGULAIRES (ratio ~1.41)
+  /**
+   * Spécialement conçue pour feuilles A4 (21x29.7cm), pas de limite de pixels
+  /**
+   * Contrairement à detectWhiteSquareRegions qui cherche des carrés avec max 10k pixels
+   */
+  detectA4WhiteRegions(data, width, height) {
+    console.log("\u{1F4C4} [A4] D\xC9TECTION FEUILLE BLANCHE - Cherche rectangle A4 blanc...");
+    const step = Math.max(2, Math.floor(Math.min(width, height) / 500));
+    const brightPixels = [];
+    const BRIGHTNESS_THRESHOLD = 200;
+    for (let y = 0; y < height; y += step) {
+      for (let x = 0; x < width; x += step) {
+        const idx = (y * width + x) * 4;
+        const r = data[idx], g = data[idx + 1], b = data[idx + 2];
+        const brightness = (r + g + b) / 3;
+        if (brightness > BRIGHTNESS_THRESHOLD && Math.max(r, g, b) - Math.min(r, g, b) < 60) {
+          brightPixels.push({ x, y });
+        }
+      }
+    }
+    console.log(`   \u2B1C ${brightPixels.length} pixels blancs d\xE9tect\xE9s (seuil: ${BRIGHTNESS_THRESHOLD})`);
+    if (brightPixels.length < 50) {
+      console.log(`   \u26A0\uFE0F Tr\xE8s peu de pixels blancs (${brightPixels.length}) - feuille A4 probablement absente ou mal \xE9clair\xE9e`);
+      return [];
+    }
+    const totalImagePixels = width * height;
+    const sampledImagePixels = totalImagePixels / (step * step);
+    const whitePixelRatio = brightPixels.length / sampledImagePixels;
+    let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+    for (const p of brightPixels) {
+      if (p.x < minX) minX = p.x;
+      if (p.x > maxX) maxX = p.x;
+      if (p.y < minY) minY = p.y;
+      if (p.y > maxY) maxY = p.y;
+    }
+    const regionWidth = maxX - minX;
+    const regionHeight = maxY - minY;
+    const widthRatio = regionWidth / width;
+    const heightRatio = regionHeight / height;
+    if (widthRatio > 0.98 && heightRatio > 0.98) {
+      console.log(`   \u26A0\uFE0F Zone = ${(widthRatio * 100).toFixed(0)}% \xD7 ${(heightRatio * 100).toFixed(0)}% de l'image - c'est l'image enti\xE8re, pas une A4!`);
+      return [];
+    }
+    console.log(`   \u{1F4CA} Zone blanche: ${(whitePixelRatio * 100).toFixed(0)}% pixels, ${(widthRatio * 100).toFixed(0)}% \xD7 ${(heightRatio * 100).toFixed(0)}% dimensions`);
+    const ratio = Math.max(regionWidth, regionHeight) / Math.min(regionWidth, regionHeight);
+    console.log(`   \u{1F4D0} Zone: ${regionWidth}\xD7${regionHeight}px (ratio: ${ratio.toFixed(2)}, ${(widthRatio * 100).toFixed(0)}% \xD7 ${(heightRatio * 100).toFixed(0)}% de l'image)`);
+    const A4_RATIO = 297 / 210;
+    const ratioError = Math.abs(ratio - A4_RATIO) / A4_RATIO;
+    if (ratio < 1.15 || ratio > 1.7) {
+      console.log(`   \u26A0\uFE0F Ratio ${ratio.toFixed(2)} incompatible avec A4 (attendu: 1.15-1.70, id\xE9al: ${A4_RATIO.toFixed(2)})`);
+      return [];
+    }
+    console.log(`   \u2705 FEUILLE A4 D\xC9TECT\xC9E ! Ratio: ${ratio.toFixed(2)} (erreur: ${(ratioError * 100).toFixed(1)}%)`);
+    if (Math.min(regionWidth, regionHeight) < 50) {
+      console.log(`   \u26A0\uFE0F Zone trop petite (min 50px)`);
+      return [];
+    }
+    const candidateCorners = [
+      { x: minX, y: minY },
+      { x: maxX, y: minY },
+      { x: maxX, y: maxY },
+      { x: minX, y: maxY }
+    ];
+    console.log(`   \u{1F3AF} FEUILLE A4 D\xC9TECT\xC9E !`);
+    console.log(`   \u{1F4D0} Dimensions: ${regionWidth}\xD7${regionHeight}px`);
+    console.log(`   \u{1F4CF} Ratio: ${ratio.toFixed(2)} (A4 id\xE9al: ${A4_RATIO.toFixed(2)}, tol\xE9rance: 1.15-1.70)`);
+    console.log(`   \u{1F4CA} Occupation image: ${(widthRatio * 100).toFixed(0)}% \xD7 ${(heightRatio * 100).toFixed(0)}%`);
+    console.log(`   \u2705 Coins: TL(${minX},${minY}) \u2192 TR(${maxX},${minY}) \u2192 BR(${maxX},${maxY}) \u2192 BL(${minX},${maxY})`);
+    return [{
+      corners: candidateCorners,
+      score: 0.85,
+      detectionMethod: "A4-white-rectangle-detection",
+      metadata: {
+        ratioError,
+        pixelsFound: brightPixels.length,
+        dimensions: { width: regionWidth, height: regionHeight },
+        actualRatio: ratio,
+        targetRatio: A4_RATIO,
+        imageOccupancy: { width: widthRatio, height: heightRatio },
+        purpose: "A4 sheet with logo, QR code, and measurement zone"
+      }
+    }];
+  }
+  /**
+  /**
+   * 🎯 NOUVELLE MÉTHODE PRINCIPALE: Détection par LIGNES NOIRES
+  /**
+   * 
+  /**
    * Algorithme:
+  /**
    * 1. Détecter les contours (gradients forts = transitions)
+  /**
    * 2. Trouver les 4 lignes formant le quadrilatère externe
+  /**
    * 3. Calculer les intersections = coins du marqueur
+  /**
    * 4. Valider avec les positions magenta si disponibles
    */
   detectFromBlackLines(data, width, height) {
@@ -60456,44 +60691,49 @@ var MarkerDetector = class {
       console.log("   \u26A0\uFE0F Aucun quadrilat\xE8re valide trouv\xE9");
       return [];
     }
-    console.log("   \u2705 Quadrilat\xE8re trouv\xE9 via lignes noires");
+    const corners = quad.corners;
+    const widthPx = Math.sqrt(
+      Math.pow(corners[1].x - corners[0].x, 2) + Math.pow(corners[1].y - corners[0].y, 2)
+    );
+    const heightPx = Math.sqrt(
+      Math.pow(corners[3].x - corners[0].x, 2) + Math.pow(corners[3].y - corners[0].y, 2)
+    );
+    const aspectRatio = Math.max(widthPx, heightPx) / Math.min(widthPx, heightPx);
+    console.log(`   \u{1F4D0} Dimensions: ${widthPx.toFixed(0)}px \xD7 ${heightPx.toFixed(0)}px (ratio: ${aspectRatio.toFixed(2)})`);
+    if (aspectRatio > 1.8) {
+      console.log(`   \u26A0\uFE0F REJET: Ratio ${aspectRatio.toFixed(2)} trop \xE9loign\xE9 d'un carr\xE9 (max 1.8)`);
+      return [];
+    }
+    const minSide = Math.min(widthPx, heightPx);
+    if (minSide < 50) {
+      console.log(`   \u26A0\uFE0F REJET: C\xF4t\xE9 ${minSide.toFixed(0)}px trop petit (min 50px)`);
+      return [];
+    }
+    const structureScore = this.validateArucoStructure(data, width, height, corners);
+    console.log(`   \u{1F532} Score structure ArUco: ${(structureScore * 100).toFixed(0)}%`);
+    if (structureScore < 0.5) {
+      console.log(`   \u26A0\uFE0F REJET: Structure ArUco non d\xE9tect\xE9e (score ${(structureScore * 100).toFixed(0)}% < 50%)`);
+      return [];
+    }
+    console.log("   \u2705 Quadrilat\xE8re valid\xE9 comme marqueur ArUco");
     const magentaPixels = this.findAllMagentaPixels(data, width, height);
     const magentaClusters = this.clusterMagentaPixels(magentaPixels);
     let finalCorners = quad.corners;
-    let magentaFound = 0;
+    let apriltagsFound = 0;
     if (magentaClusters.length >= 3) {
       const refinedCorners = this.refineWithMagenta(quad.corners, magentaClusters);
       if (refinedCorners) {
         finalCorners = refinedCorners.corners;
-        magentaFound = refinedCorners.matchedCount;
-        console.log(`   \u{1F3AF} Coins raffin\xE9s avec ${magentaFound} points magenta`);
+        apriltagsFound = refinedCorners.matchedCount;
+        console.log(`   \u{1F3AF} Coins raffin\xE9s avec ${apriltagsFound} AprilTags`);
       }
     }
     const orderedCorners = this.orderCornersClockwise(finalCorners);
-    const innerOffset = MARKER_SPECS.ratios.innerToOuter;
-    const [tl, tr, br, bl] = orderedCorners;
-    const innerCorners = [
-      {
-        x: tl.x + (tr.x - tl.x) * innerOffset + (bl.x - tl.x) * innerOffset,
-        y: tl.y + (tr.y - tl.y) * innerOffset + (bl.y - tl.y) * innerOffset
-      },
-      {
-        x: tr.x + (tl.x - tr.x) * innerOffset + (br.x - tr.x) * innerOffset,
-        y: tr.y + (tl.y - tr.y) * innerOffset + (br.y - tr.y) * innerOffset
-      },
-      {
-        x: br.x + (bl.x - br.x) * innerOffset + (tr.x - br.x) * innerOffset,
-        y: br.y + (bl.y - br.y) * innerOffset + (tr.y - br.y) * innerOffset
-      },
-      {
-        x: bl.x + (br.x - bl.x) * innerOffset + (tl.x - bl.x) * innerOffset,
-        y: bl.y + (br.y - bl.y) * innerOffset + (tl.y - bl.y) * innerOffset
-      }
-    ];
     const measurements = this.calculateMeasurements(orderedCorners);
     return [{
       id: 0,
-      corners: innerCorners,
+      corners: orderedCorners,
+      // 🎯 FIX: Utiliser directement les coins détectés
       magentaPositions: orderedCorners,
       size: measurements.avgSidePx,
       center: measurements.center,
@@ -60509,6 +60749,7 @@ var MarkerDetector = class {
   }
   /**
    * Calculer la carte des contours (edge map)
+  /**
    * Utilise un Sobel simplifié pour détecter les gradients
    */
   computeEdgeMap(data, width, height) {
@@ -60573,6 +60814,8 @@ var MarkerDetector = class {
   }
   /**
    * Trouver le meilleur quadrilatère parmi les lignes
+  /**
+   * 🎯 AMÉLIORÉ: Génère plusieurs candidats et les score par structure ArUco
    */
   findBestQuadrilateral(lines, width, height) {
     if (lines.length < 4) return null;
@@ -60587,12 +60830,7 @@ var MarkerDetector = class {
       }
     }
     console.log(`   \u{1F4D0} ${horizontal.length} horizontales, ${vertical.length} verticales`);
-    if (horizontal.length < 2 || vertical.length < 2) {
-      return this.findQuadFromAllLines(lines, width, height);
-    }
-    const h1 = horizontal[0], h2 = horizontal[1];
-    const v1 = vertical[0], v2 = vertical[1];
-    const corners = [];
+    const candidates = [];
     const intersect = (l1, l2) => {
       const cos1 = Math.cos(l1.theta), sin1 = Math.sin(l1.theta);
       const cos2 = Math.cos(l2.theta), sin2 = Math.sin(l2.theta);
@@ -60602,17 +60840,43 @@ var MarkerDetector = class {
       const y = (l2.rho * cos1 - l1.rho * cos2) / det;
       return { x, y };
     };
-    const c1 = intersect(h1, v1);
-    const c2 = intersect(h1, v2);
-    const c3 = intersect(h2, v1);
-    const c4 = intersect(h2, v2);
-    if (!c1 || !c2 || !c3 || !c4) return null;
     const margin = -50;
     const inBounds = (p) => p.x >= margin && p.x < width - margin && p.y >= margin && p.y < height - margin;
-    if (!inBounds(c1) || !inBounds(c2) || !inBounds(c3) || !inBounds(c4)) {
+    const maxH = Math.min(horizontal.length, 6);
+    const maxV = Math.min(vertical.length, 6);
+    for (let hi = 0; hi < maxH; hi++) {
+      for (let hj = hi + 1; hj < maxH; hj++) {
+        for (let vi = 0; vi < maxV; vi++) {
+          for (let vj = vi + 1; vj < maxV; vj++) {
+            const h1 = horizontal[hi], h2 = horizontal[hj];
+            const v1 = vertical[vi], v2 = vertical[vj];
+            const c1 = intersect(h1, v1);
+            const c2 = intersect(h1, v2);
+            const c3 = intersect(h2, v1);
+            const c4 = intersect(h2, v2);
+            if (!c1 || !c2 || !c3 || !c4) continue;
+            if (!inBounds(c1) || !inBounds(c2) || !inBounds(c3) || !inBounds(c4)) continue;
+            const corners = this.orderCornersClockwise([c1, c2, c3, c4]);
+            const w = Math.sqrt((corners[1].x - corners[0].x) ** 2 + (corners[1].y - corners[0].y) ** 2);
+            const h = Math.sqrt((corners[3].x - corners[0].x) ** 2 + (corners[3].y - corners[0].y) ** 2);
+            const ratio = Math.max(w, h) / Math.min(w, h);
+            if (ratio > 1.8) continue;
+            if (Math.min(w, h) < 50) continue;
+            const ratioScore = Math.max(0, 1 - (ratio - 1) * 0.3);
+            const voteScore = (h1.votes + h2.votes + v1.votes + v2.votes) / 4e3;
+            const sizeScore = Math.min(1, Math.min(w, h) / 200);
+            const score = ratioScore * 0.5 + voteScore * 0.3 + sizeScore * 0.2;
+            candidates.push({ corners, score });
+          }
+        }
+      }
+    }
+    if (candidates.length === 0) {
       return this.findQuadFromAllLines(lines, width, height);
     }
-    return { corners: [c1, c2, c3, c4] };
+    candidates.sort((a, b) => b.score - a.score);
+    console.log(`   \u{1F3AF} ${candidates.length} candidats g\xE9n\xE9r\xE9s, meilleur score: ${candidates[0].score.toFixed(2)}`);
+    return candidates[0];
   }
   /**
    * Fallback: chercher un quadrilatère parmi toutes les lignes
@@ -60725,8 +60989,82 @@ var MarkerDetector = class {
     ];
   }
   /**
+   * 🔲 VALIDATION STRUCTURE ARUCO
+  /**
+   * Vérifie que le quadrilatère contient bien la structure attendue:
+  /**
+   * NOIR (1/6) → BLANC (1/6) → PATTERN (2/6) → BLANC (1/6) → NOIR (1/6)
+  /**
+   * 
+  /**
+   * Parcourt les bords et vérifie les transitions de luminosité
+   */
+  validateArucoStructure(data, width, height, corners) {
+    const [tl, tr, br, bl] = corners;
+    const edges = [
+      { start: tl, end: tr, name: "TOP" },
+      { start: tr, end: br, name: "RIGHT" },
+      { start: br, end: bl, name: "BOTTOM" },
+      { start: bl, end: tl, name: "LEFT" }
+    ];
+    let totalScore = 0;
+    let validEdges = 0;
+    for (const edge of edges) {
+      const edgeScore = this.validateEdgeStructure(data, width, height, edge.start, edge.end);
+      if (edgeScore > 0.3) {
+        totalScore += edgeScore;
+        validEdges++;
+      }
+    }
+    if (validEdges < 2) return 0;
+    return totalScore / validEdges;
+  }
+  /**
+   * Valider la structure d'un bord du marqueur
+  /**
+   * Attend: NOIR (16%) → BLANC (16%) → PATTERN (33%) → BLANC (16%) → NOIR (16%)
+   */
+  validateEdgeStructure(data, width, height, start, end) {
+    const samples = 30;
+    const luminosities = [];
+    for (let i = 0; i < samples; i++) {
+      const t = i / (samples - 1);
+      const x = Math.round(start.x + (end.x - start.x) * t);
+      const y = Math.round(start.y + (end.y - start.y) * t);
+      if (x < 0 || x >= width || y < 0 || y >= height) {
+        luminosities.push(128);
+        continue;
+      }
+      const idx = (y * width + x) * 4;
+      const r = data[idx] || 0;
+      const g = data[idx + 1] || 0;
+      const b = data[idx + 2] || 0;
+      const lum = (r + g + b) / 3;
+      luminosities.push(lum);
+    }
+    const zone1 = luminosities.slice(0, 5);
+    const zone2 = luminosities.slice(5, 10);
+    const zone4 = luminosities.slice(20, 25);
+    const zone5 = luminosities.slice(25, 30);
+    const avg = (arr) => arr.length ? arr.reduce((a, b) => a + b, 0) / arr.length : 128;
+    const avgNoir1 = avg(zone1);
+    const avgBlanc1 = avg(zone2);
+    const avgBlanc2 = avg(zone4);
+    const avgNoir2 = avg(zone5);
+    let score = 0;
+    if (avgBlanc1 - avgNoir1 > 30) score += 0.25;
+    else if (avgBlanc1 - avgNoir1 > 15) score += 0.15;
+    if (avgBlanc2 - avgNoir2 > 30) score += 0.25;
+    else if (avgBlanc2 - avgNoir2 > 15) score += 0.15;
+    if (Math.abs(avgNoir1 - avgNoir2) < 40) score += 0.25;
+    if (Math.abs(avgBlanc1 - avgBlanc2) < 40) score += 0.25;
+    return score;
+  }
+  /**
    * ⭐ NOUVEAU: Détecter les 16 points de référence étendus
+  /**
    * - 4 coins (déjà détectés par magenta)
+  /**
    * - 12 transitions NOIR→BLANC et BLANC→NOIR sur chaque bord
    */
   detectExtendedReferencePoints(data, width, height, corners) {
@@ -60736,9 +61074,12 @@ var MarkerDetector = class {
     const allPoints = [];
     const cornerPositions = [
       { pixel: tl, real: { x: 0, y: 0 } },
-      { pixel: tr, real: { x: markerSize, y: 0 } },
-      { pixel: br, real: { x: markerSize, y: markerSize } },
-      { pixel: bl, real: { x: 0, y: markerSize } }
+      { pixel: tr, real: { x: markerSize * 10, y: 0 } },
+      // CM → MM
+      { pixel: br, real: { x: markerSize * 10, y: markerSize * 10 } },
+      // CM → MM
+      { pixel: bl, real: { x: 0, y: markerSize * 10 } }
+      // CM → MM
     ];
     for (const corner of cornerPositions) {
       allPoints.push({
@@ -60758,7 +61099,8 @@ var MarkerDetector = class {
       topTransitions.push(result.point);
       allPoints.push({
         pixel: result.point,
-        real: { x: t, y: 0 },
+        real: { x: t * 10, y: 0 },
+        // CM → MM
         confidence: result.confidence,
         type: "transition"
       });
@@ -60769,7 +61111,8 @@ var MarkerDetector = class {
       rightTransitions.push(result.point);
       allPoints.push({
         pixel: result.point,
-        real: { x: markerSize, y: t },
+        real: { x: markerSize * 10, y: t * 10 },
+        // CM → MM
         confidence: result.confidence,
         type: "transition"
       });
@@ -60780,7 +61123,8 @@ var MarkerDetector = class {
       bottomTransitions.push(result.point);
       allPoints.push({
         pixel: result.point,
-        real: { x: t, y: markerSize },
+        real: { x: t * 10, y: markerSize * 10 },
+        // CM → MM
         confidence: result.confidence,
         type: "transition"
       });
@@ -60791,7 +61135,8 @@ var MarkerDetector = class {
       leftTransitions.push(result.point);
       allPoints.push({
         pixel: result.point,
-        real: { x: 0, y: t },
+        real: { x: 0, y: t * 10 },
+        // CM → MM
         confidence: result.confidence,
         type: "transition"
       });
@@ -60811,6 +61156,7 @@ var MarkerDetector = class {
   }
   /**
    * ⭐ NOUVEAU: Détecter une transition NOIR↔BLANC sur un bord
+  /**
    * Utilise le gradient de luminosité pour trouver le point exact
    */
   detectTransitionOnEdge(data, width, height, start, end, ratio) {
@@ -60853,6 +61199,7 @@ var MarkerDetector = class {
   }
   /**
    * Calculer le gradient de luminosité à une position donnée
+  /**
    * 🔧 AMÉLIORÉ: Multi-échelle + sharpening pour meilleure détection des bords flous
    */
   calculateGradientAt(data, width, height, x, y, dirX, dirY) {
@@ -60868,6 +61215,7 @@ var MarkerDetector = class {
   }
   /**
    * 🆕 Échantillonner la luminosité avec unsharp mask (accentuation des bords)
+  /**
    * Formule: sharpened = original + α × (original - blurred)
    */
   sampleLuminositySharpened(data, width, height, x, y) {
@@ -60917,14 +61265,462 @@ var MarkerDetector = class {
     };
   }
   /**
-   * 🎯 DÉTECTION COMPLÈTE UTILISANT TOUS LES REPÈRES DE L'ARUCO
+   * 📄 DÉTECTION A4 ULTRA-PRÉCISE avec sub-pixel refinement + préparation 3D
+  /**
    * 
+  /**
+   * Feuille A4 : 210×297mm, ratio 0.707, épaisseur 4mm
+  /**
+   * 
+  /**
+   * Algorithme multi-passes :
+  /**
+   * PASS 1: Détection bords blancs (edges) - grossière
+  /**
+   * PASS 2: Sub-pixel refinement (40 échantillons/bord) - précision ±0.1mm
+  /**
+   * PASS 3: Validation géométrique (angles 90°, ratio 0.707)
+  /**
+   * PASS 4: [PRÉPARÉ] Détection ombre 3D (épaisseur 4mm) - DÉSACTIVÉ pour l'instant
+  /**
+   * PASS 5: [FUTUR] Détection marqueurs (croix, logo, orientation)
+   */
+  detectA4PaperUltraPrecise(data, width, height) {
+    console.log("\u{1F4C4} [A4 ULTRA-PR\xC9CIS] D\xE9tection A4 avec sub-pixel refinement...");
+    const whiteMarkers = this.detectA4WhiteRegions(data, width, height);
+    if (whiteMarkers.length === 0) {
+      console.log("\u26A0\uFE0F [A4] Aucune r\xE9gion blanche A4 d\xE9tect\xE9e");
+      return [];
+    }
+    console.log(`\u{1F4D0} [A4] ${whiteMarkers.length} zone(s) blanche(s) d\xE9tect\xE9e(s)`);
+    const marker = whiteMarkers[0];
+    console.log(`\u{1F4D0} [A4] Bords bruts : TL(${marker.corners[0].x.toFixed(1)},${marker.corners[0].y.toFixed(1)}) \u2192 BR(${marker.corners[2].x.toFixed(1)},${marker.corners[2].y.toFixed(1)})`);
+    console.log("\u{1F52C} [A4] Lancement sub-pixel refinement...");
+    const refinedCorners = this.refineA4EdgesSubPixel(data, width, height, marker.corners);
+    console.log(`\u{1F52C} [A4] Coins raffin\xE9s : TL(${refinedCorners[0].x.toFixed(2)},${refinedCorners[0].y.toFixed(2)}) \u2192 BR(${refinedCorners[2].x.toFixed(2)},${refinedCorners[2].y.toFixed(2)})`);
+    console.log("\u2713 [A4] Validation g\xE9om\xE9trique...");
+    const validated = this.validateA4Geometry(refinedCorners);
+    if (!validated.valid) {
+      console.log(`\u26A0\uFE0F [A4] Validation \xE9chou\xE9e: ${validated.reason}`);
+      console.log(`\u26A0\uFE0F [A4] Retour des coins non-raffin\xE9s avec score ${marker.score}`);
+      return whiteMarkers;
+    }
+    console.log(`\u2705 [A4 ULTRA-PR\xC9CIS] D\xE9tection r\xE9ussie !`);
+    console.log(`   Score: ${validated.score.toFixed(3)}`);
+    console.log(`   Erreur angle: ${validated.angleError?.toFixed(2)}\xB0`);
+    console.log(`   Erreur ratio: ${(validated.ratioError * 100).toFixed(1)}%`);
+    return [{
+      ...marker,
+      corners: refinedCorners,
+      score: validated.score,
+      detectionMethod: "A4-ultra-precise-subpixel",
+      metadata: {
+        ...marker.metadata,
+        geometryValidated: true,
+        angleAccuracy: validated.angleError,
+        ratioAccuracy: validated.ratioError
+      }
+    }];
+  }
+  /**
+   * Sub-pixel refinement des 4 bords A4
+   */
+  refineA4EdgesSubPixel(data, width, height, corners) {
+    console.log("\u{1F52C} [A4 Sub-pixel] Raffinement des bords...");
+    const [tl, tr, br, bl] = corners;
+    const topSamples = [];
+    const bottomSamples = [];
+    const leftSamples = [];
+    const rightSamples = [];
+    const scanStep = 3;
+    const scanRange = 30;
+    for (let x = Math.floor(tl.x); x <= Math.ceil(tr.x); x += scanStep) {
+      if (topSamples.length >= 40) break;
+      const startY = Math.max(0, Math.floor(tl.y) - scanRange);
+      const endY = Math.min(height - 1, Math.floor(tl.y) + scanRange);
+      for (let y = startY; y <= endY; y++) {
+        if (x < 0 || x >= width) continue;
+        const idx = (y * width + x) * 4;
+        const brightness = (data[idx] + data[idx + 1] + data[idx + 2]) / 3;
+        if (brightness < 150 && y > startY) {
+          topSamples.push(y);
+          break;
+        }
+      }
+    }
+    for (let x = Math.floor(bl.x); x <= Math.ceil(br.x); x += scanStep) {
+      if (bottomSamples.length >= 40) break;
+      const startY = Math.min(height - 1, Math.ceil(bl.y) + scanRange);
+      const endY = Math.max(0, Math.ceil(bl.y) - scanRange);
+      for (let y = startY; y >= endY; y--) {
+        if (x < 0 || x >= width) continue;
+        const idx = (y * width + x) * 4;
+        const brightness = (data[idx] + data[idx + 1] + data[idx + 2]) / 3;
+        if (brightness < 150 && y < startY) {
+          bottomSamples.push(y);
+          break;
+        }
+      }
+    }
+    for (let y = Math.floor(tl.y); y <= Math.ceil(bl.y); y += scanStep) {
+      if (leftSamples.length >= 40) break;
+      const startX = Math.max(0, Math.floor(tl.x) - scanRange);
+      const endX = Math.min(width - 1, Math.floor(tl.x) + scanRange);
+      for (let x = startX; x <= endX; x++) {
+        if (y < 0 || y >= height) continue;
+        const idx = (y * width + x) * 4;
+        const brightness = (data[idx] + data[idx + 1] + data[idx + 2]) / 3;
+        if (brightness < 150 && x > startX) {
+          leftSamples.push(x);
+          break;
+        }
+      }
+    }
+    for (let y = Math.floor(tr.y); y <= Math.ceil(br.y); y += scanStep) {
+      if (rightSamples.length >= 40) break;
+      const startX = Math.min(width - 1, Math.ceil(tr.x) + scanRange);
+      const endX = Math.max(0, Math.ceil(tr.x) - scanRange);
+      for (let x = startX; x >= endX; x--) {
+        if (y < 0 || y >= height) continue;
+        const idx = (y * width + x) * 4;
+        const brightness = (data[idx] + data[idx + 1] + data[idx + 2]) / 3;
+        if (brightness < 150 && x < startX) {
+          rightSamples.push(x);
+          break;
+        }
+      }
+    }
+    const avgTopY = topSamples.length > 0 ? topSamples.reduce((a, b) => a + b) / topSamples.length : tl.y;
+    const avgBottomY = bottomSamples.length > 0 ? bottomSamples.reduce((a, b) => a + b) / bottomSamples.length : bl.y;
+    const avgLeftX = leftSamples.length > 0 ? leftSamples.reduce((a, b) => a + b) / leftSamples.length : tl.x;
+    const avgRightX = rightSamples.length > 0 ? rightSamples.reduce((a, b) => a + b) / rightSamples.length : tr.x;
+    console.log(`\u{1F52C} [Sub-pixel] Top: ${topSamples.length} \xE9chantillons, avg y=${avgTopY.toFixed(2)}`);
+    console.log(`\u{1F52C} [Sub-pixel] Bottom: ${bottomSamples.length} \xE9chantillons, avg y=${avgBottomY.toFixed(2)}`);
+    console.log(`\u{1F52C} [Sub-pixel] Left: ${leftSamples.length} \xE9chantillons, avg x=${avgLeftX.toFixed(2)}`);
+    console.log(`\u{1F52C} [Sub-pixel] Right: ${rightSamples.length} \xE9chantillons, avg x=${avgRightX.toFixed(2)}`);
+    return [
+      { x: avgLeftX, y: avgTopY },
+      // Top-left
+      { x: avgRightX, y: avgTopY },
+      // Top-right
+      { x: avgRightX, y: avgBottomY },
+      // Bottom-right
+      { x: avgLeftX, y: avgBottomY }
+      // Bottom-left
+    ];
+  }
+  /**
+   * Validation géométrique stricte A4
+   */
+  validateA4Geometry(corners) {
+    const [tl, tr, br, bl] = corners;
+    const width = Math.sqrt(Math.pow(tr.x - tl.x, 2) + Math.pow(tr.y - tl.y, 2));
+    const height = Math.sqrt(Math.pow(bl.x - tl.x, 2) + Math.pow(bl.y - tl.y, 2));
+    const ratio = Math.min(width, height) / Math.max(width, height);
+    const expectedRatio = 210 / 297;
+    const ratioError = Math.abs(ratio - expectedRatio);
+    if (ratioError > 0.05) {
+      return { valid: false, score: 0.5, reason: `Ratio incorrect: ${ratio.toFixed(3)} (attendu ${expectedRatio.toFixed(3)})`, ratioError };
+    }
+    const angle1 = this.calculateAngle(tl, tr, bl);
+    const angle2 = this.calculateAngle(tr, br, tl);
+    const angle3 = this.calculateAngle(br, bl, tr);
+    const angle4 = this.calculateAngle(bl, tl, br);
+    const avgAngle = (angle1 + angle2 + angle3 + angle4) / 4;
+    const angleError = Math.abs(avgAngle - 90);
+    if (angleError > 5) {
+      return { valid: false, score: 0.7, reason: `Angles incorrects: ${avgAngle.toFixed(1)}\xB0 (attendu 90\xB0)`, angleError };
+    }
+    const score = 0.98 - ratioError * 2 - angleError * 0.01;
+    return { valid: true, score, angleError, ratioError };
+  }
+  /**
+   * Calcul d'angle entre 3 points
+   */
+  calculateAngle(p1, p2, p3) {
+    const v1 = { x: p1.x - p2.x, y: p1.y - p2.y };
+    const v2 = { x: p3.x - p2.x, y: p3.y - p2.y };
+    const dot = v1.x * v2.x + v1.y * v2.y;
+    const mag1 = Math.sqrt(v1.x * v1.x + v1.y * v1.y);
+    const mag2 = Math.sqrt(v2.x * v2.x + v2.y * v2.y);
+    const cosAngle = dot / (mag1 * mag2);
+    return Math.acos(Math.max(-1, Math.min(1, cosAngle))) * (180 / Math.PI);
+  }
+  // ═════════════════════════════════════════════════════════════════════
+  // 🚧 CODE PRÉPARÉ : Détection ombre 3D (épaisseur 4mm)
+  // ═════════════════════════════════════════════════════════════════════
+  // private detectA4Shadow3D(
+  //   data: Uint8ClampedArray | Buffer,
+  //   width: number,
+  //   height: number,
+  //   corners: Point[]
+  // ): { detected: boolean; thickness?: number; lightAngle?: number; refinedCorners?: Point[] } {
+  //   // TODO: Scanner autour des bords pour détecter l'ombre portée
+  //   // - Gradient de luminosité (blanc → gris → sombre)
+  //   // - Mesurer l'épaisseur de l'ombre (~4mm en pixels)
+  //   // - Calculer l'angle de la lumière
+  //   // - Affiner les coins en utilisant le début de l'ombre
+  //   return { detected: false };
+  // }
+  /**
+   * 🎯 ANCIENNE MÉTHODE: Détection via CADRE MAGENTA COMPLET (DÉSACTIVÉE)
+  /**
+   * 
+  /**
+   * Nouveau design du marqueur (v2):
+  /**
+   * - CADRE MAGENTA extérieur: 2mm fixe (bord extérieur = taille de référence, ex: 16.8cm)
+  /**
+   * - 4 CERCLES MAGENTA aux coins: ~5mm rayon (repères visuels)
+  /**
+   * - POINT CENTRAL MAGENTA: 1mm rayon (repère centrage/perspective)
+  /**
+   * - Bande noire: adaptatif (ex: 2.8cm pour 16.8cm, 3cm pour 18cm)
+  /**
+   * - Reste du pattern: proportionnel
+  /**
+   * 
+  /**
+   * Algorithme PRÉCIS (sub-pixel):
+  /**
+   * 1. Détecter TOUS les pixels magenta
+  /**
+   * 2. Pour chaque bord (Top, Right, Bottom, Left):
+  /**
+   *    - Scanner ligne par ligne
+  /**
+   *    - Trouver la transition MAGENTA→NOIR précise
+  /**
+   *    - Interpolation sub-pixel si possible
+  /**
+   * 3. Coins = intersections des bords raffinés
+  /**
+   * 4. Validation: vérifier présence du point central
+  /**
+   * 5. Bord extérieur du magenta = mesure de référence (16.8cm, 18cm, etc.)
+   */
+  detectFromMagentaBorder(data, width, height) {
+    const size = MARKER_SPECS.markerSize;
+    console.log("\u{1F3AF} [ArUco] D\xE9tection CADRE MAGENTA PR\xC9CIS (nouveau design v2)...");
+    console.log(`   Taille marqueur: ${size}cm, cadre magenta: 2mm fixe`);
+    const magentaPixels = [];
+    for (let y = 0; y < height; y++) {
+      for (let x = 0; x < width; x++) {
+        const idx = (y * width + x) * 4;
+        const r = data[idx];
+        const g = data[idx + 1];
+        const b = data[idx + 2];
+        const maxc = Math.max(r, g, b);
+        const minc = Math.min(r, g, b);
+        const sat = maxc - minc;
+        if (sat >= 50 && g <= 180 && r >= 80 && b >= 80 && g < r && g < b) {
+          const score = r - g + (b - g) + sat * 0.5;
+          if (score >= 100) {
+            magentaPixels.push({ x, y, r, g, b, score });
+          }
+        }
+      }
+    }
+    console.log(`\u{1F49C} ${magentaPixels.length} pixels magenta d\xE9tect\xE9s (scan complet)`);
+    if (magentaPixels.length < 50) {
+      console.log("\u26A0\uFE0F Pas assez de pixels magenta pour d\xE9tecter le cadre");
+      return this.detectFromMagentaOnly(data, width, height);
+    }
+    let minX = Infinity, maxX = -Infinity;
+    let minY = Infinity, maxY = -Infinity;
+    for (const p of magentaPixels) {
+      if (p.x < minX) minX = p.x;
+      if (p.x > maxX) maxX = p.x;
+      if (p.y < minY) minY = p.y;
+      if (p.y > maxY) maxY = p.y;
+    }
+    console.log(`\u{1F4D0} [Cadre Magenta] Zone de recherche: (${minX},${minY}) \u2192 (${maxX},${maxY})`);
+    let topY = Infinity;
+    const topSamples = [];
+    const scanRange = Math.min(50, height);
+    for (let x = Math.floor(minX); x <= Math.ceil(maxX); x += 3) {
+      if (topSamples.length >= 40) break;
+      let foundMagenta = false;
+      let transitionY = -1;
+      const startY = Math.max(0, Math.floor(minY) - 20);
+      const endY = Math.min(height - 1, startY + scanRange);
+      for (let y = startY; y <= endY; y++) {
+        if (x < 0 || x >= width) continue;
+        const idx = (y * width + x) * 4;
+        const r = data[idx], g = data[idx + 1], b = data[idx + 2];
+        const isMagenta = r >= 80 && b >= 80 && g < r * 0.7 && g < b * 0.7;
+        const isBlack = r < 60 && g < 60 && b < 60;
+        if (!foundMagenta && isMagenta) {
+          foundMagenta = true;
+        } else if (foundMagenta && isBlack) {
+          transitionY = y - 1;
+          break;
+        }
+      }
+      if (transitionY > 0) {
+        topSamples.push(transitionY);
+        if (transitionY < topY) topY = transitionY;
+      }
+    }
+    let bottomY = -Infinity;
+    const bottomSamples = [];
+    for (let x = Math.floor(minX); x <= Math.ceil(maxX); x += 3) {
+      if (bottomSamples.length >= 40) break;
+      let foundMagenta = false;
+      let transitionY = -1;
+      const startY = Math.min(height - 1, Math.ceil(maxY) + 20);
+      const endY = Math.max(0, startY - scanRange);
+      for (let y = startY; y >= endY; y--) {
+        if (x < 0 || x >= width) continue;
+        const idx = (y * width + x) * 4;
+        const r = data[idx], g = data[idx + 1], b = data[idx + 2];
+        const isMagenta = r >= 80 && b >= 80 && g < r * 0.7 && g < b * 0.7;
+        const isBlack = r < 60 && g < 60 && b < 60;
+        if (!foundMagenta && isMagenta) {
+          foundMagenta = true;
+        } else if (foundMagenta && isBlack) {
+          transitionY = y + 1;
+          break;
+        }
+      }
+      if (transitionY > 0) {
+        bottomSamples.push(transitionY);
+        if (transitionY > bottomY) bottomY = transitionY;
+      }
+    }
+    let leftX = Infinity;
+    const leftSamples = [];
+    for (let y = Math.floor(minY); y <= Math.ceil(maxY); y += 3) {
+      if (leftSamples.length >= 40) break;
+      let foundMagenta = false;
+      let transitionX = -1;
+      const startX = Math.max(0, Math.floor(minX) - 20);
+      const endX = Math.min(width - 1, startX + scanRange);
+      for (let x = startX; x <= endX; x++) {
+        if (y < 0 || y >= height) continue;
+        const idx = (y * width + x) * 4;
+        const r = data[idx], g = data[idx + 1], b = data[idx + 2];
+        const isMagenta = r >= 80 && b >= 80 && g < r * 0.7 && g < b * 0.7;
+        const isBlack = r < 60 && g < 60 && b < 60;
+        if (!foundMagenta && isMagenta) {
+          foundMagenta = true;
+        } else if (foundMagenta && isBlack) {
+          transitionX = x - 1;
+          break;
+        }
+      }
+      if (transitionX > 0) {
+        leftSamples.push(transitionX);
+        if (transitionX < leftX) leftX = transitionX;
+      }
+    }
+    let rightX = -Infinity;
+    const rightSamples = [];
+    for (let y = Math.floor(minY); y <= Math.ceil(maxY); y += 3) {
+      if (rightSamples.length >= 40) break;
+      let foundMagenta = false;
+      let transitionX = -1;
+      const startX = Math.min(width - 1, Math.ceil(maxX) + 20);
+      const endX = Math.max(0, startX - scanRange);
+      for (let x = startX; x >= endX; x--) {
+        if (y < 0 || y >= height) continue;
+        const idx = (y * width + x) * 4;
+        const r = data[idx], g = data[idx + 1], b = data[idx + 2];
+        const isMagenta = r >= 80 && b >= 80 && g < r * 0.7 && g < b * 0.7;
+        const isBlack = r < 60 && g < 60 && b < 60;
+        if (!foundMagenta && isMagenta) {
+          foundMagenta = true;
+        } else if (foundMagenta && isBlack) {
+          transitionX = x + 1;
+          break;
+        }
+      }
+      if (transitionX > 0) {
+        rightSamples.push(transitionX);
+        if (transitionX > rightX) rightX = transitionX;
+      }
+    }
+    const avgTop = topSamples.length > 0 ? topSamples.reduce((a, b) => a + b) / topSamples.length : topY;
+    const avgBottom = bottomSamples.length > 0 ? bottomSamples.reduce((a, b) => a + b) / bottomSamples.length : bottomY;
+    const avgLeft = leftSamples.length > 0 ? leftSamples.reduce((a, b) => a + b) / leftSamples.length : leftX;
+    const avgRight = rightSamples.length > 0 ? rightSamples.reduce((a, b) => a + b) / rightSamples.length : rightX;
+    console.log(`\u{1F52C} [Bords PR\xC9CIS] Raffinement sub-pixel:`);
+    console.log(`   Top: y=${avgTop.toFixed(2)} (${topSamples.length} \xE9chantillons)`);
+    console.log(`   Bottom: y=${avgBottom.toFixed(2)} (${bottomSamples.length} \xE9chantillons)`);
+    console.log(`   Left: x=${avgLeft.toFixed(2)} (${leftSamples.length} \xE9chantillons)`);
+    console.log(`   Right: x=${avgRight.toFixed(2)} (${rightSamples.length} \xE9chantillons)`);
+    const centerXCalc = (avgLeft + avgRight) / 2;
+    const centerYCalc = (avgTop + avgBottom) / 2;
+    const centerPixels = magentaPixels.filter(
+      (p) => Math.abs(p.x - centerXCalc) < 10 && Math.abs(p.y - centerYCalc) < 10
+    );
+    if (centerPixels.length > 3) {
+      console.log(`\u2705 [Validation] Point central magenta d\xE9tect\xE9 (${centerPixels.length} pixels)`);
+    } else {
+      console.log(`\u26A0\uFE0F [Validation] Point central magenta faible (${centerPixels.length} pixels)`);
+    }
+    const corners = [
+      { x: avgLeft, y: avgTop },
+      // TL
+      { x: avgRight, y: avgTop },
+      // TR
+      { x: avgRight, y: avgBottom },
+      // BR
+      { x: avgLeft, y: avgBottom }
+      // BL
+    ];
+    console.log(`\u2705 [Cadre Magenta] 4 coins PR\xC9CIS extraits (bord EXT\xC9RIEUR raffin\xE9)`);
+    console.log(`   TL=(${corners[0].x.toFixed(2)}, ${corners[0].y.toFixed(2)})`);
+    console.log(`   TR=(${corners[1].x.toFixed(2)}, ${corners[1].y.toFixed(2)})`);
+    console.log(`   BR=(${corners[2].x.toFixed(2)}, ${corners[2].y.toFixed(2)})`);
+    console.log(`   BL=(${corners[3].x.toFixed(2)}, ${corners[3].y.toFixed(2)})`);
+    const widthPx = avgRight - avgLeft;
+    const heightPx = avgBottom - avgTop;
+    const ratio = Math.max(widthPx, heightPx) / Math.min(widthPx, heightPx);
+    console.log(`\u{1F4CF} Dimensions: ${widthPx.toFixed(2)}px \xD7 ${heightPx.toFixed(2)}px (ratio: ${ratio.toFixed(3)})`);
+    if (ratio > 1.5) {
+      console.log(`\u26A0\uFE0F Ratio ${ratio.toFixed(2)} trop \xE9loign\xE9 d'un carr\xE9 (max 1.5)`);
+      return this.detectFromMagentaOnly(data, width, height);
+    }
+    const avgSide = (widthPx + heightPx) / 2;
+    const pixelsPerCm = avgSide / size;
+    console.log(`\u{1F4D0} Calibration: ${avgSide.toFixed(2)}px = ${size}cm \u2192 ${pixelsPerCm.toFixed(3)}px/cm`);
+    console.log(`   \u{1F3AF} Pr\xE9cision estim\xE9e: \xB1${(1 / pixelsPerCm).toFixed(2)}mm/pixel`);
+    const measurements = this.calculateMeasurements(corners);
+    return [{
+      id: 0,
+      corners,
+      magentaPositions: corners,
+      size: avgSide,
+      center: { x: centerXCalc, y: centerYCalc },
+      score: 0.98,
+      // Très haute confiance avec raffinement sub-pixel
+      magentaFound: 4,
+      homography: {
+        realSizeCm: size,
+        pixelsPerCm,
+        sides: measurements.sides,
+        angles: measurements.angles
+      }
+    }];
+  }
+  /**
+   * 🎯 DÉTECTION COMPLÈTE UTILISANT TOUS LES REPÈRES DE L'ARUCO (ANCIEN SYSTÈME)
+  /**
+   * 
+  /**
    * Structure du marqueur (6 bandes égales, taille configurable):
+  /**
    * - Bordure NOIRE extérieure (bandes 1 et 6, de 0 à 1/6 et 5/6 à 1)
+  /**
    * - Bandes BLANCHES (bandes 2 et 5, de 1/6 à 1/3 et 2/3 à 5/6)  
+  /**
    * - Pattern ARUCO central NOIR (bandes 3+4, de 1/3 à 2/3)
+  /**
    * - 4 coins MAGENTA aux extrémités (avec centre BLANC)
+  /**
    * 
+  /**
    * Ratios clés (CONSTANTS): 1/6, 1/3, 2/3, 5/6
    */
   detectFromMagentaOnly(data, width, height) {
@@ -60946,24 +61742,31 @@ var MarkerDetector = class {
     }
     const topClusters = magentaClusters.slice(0, 4);
     const candidateCorners = [];
-    console.log("\u{1F50D} [ArUco] Analyse des 4 coins magenta:");
+    console.log("\u{1F50D} [ArUco] Analyse des 4 coins magenta - NOUVELLE M\xC9THODE LIGNES NOIRES:");
     for (const cluster of topClusters) {
-      const searchRadius = Math.max(20, Math.min(60, Math.max(cluster.width, cluster.height)));
-      const whiteCenter = this.findWhiteCenterAt(data, width, height, cluster.cx, cluster.cy, searchRadius);
+      const trueCorner = this.findTrueCornerByBlackLines(data, width, height, cluster.cx, cluster.cy, cluster);
       candidateCorners.push({
         magentaCenter: { x: cluster.cx, y: cluster.cy },
-        whiteCenter,
+        trueCorner,
         cluster
       });
-      console.log(`   \u{1F4CD} Magenta(${cluster.cx.toFixed(0)}, ${cluster.cy.toFixed(0)}) \u2192 Blanc: ${whiteCenter ? `(${whiteCenter.x.toFixed(0)}, ${whiteCenter.y.toFixed(0)})` : "NON TROUV\xC9"}`);
+      console.log(`   \u{1F4CD} Magenta(${cluster.cx.toFixed(0)}, ${cluster.cy.toFixed(0)}) \u2192 Coin VRAI: ${trueCorner ? `(${trueCorner.x.toFixed(0)}, ${trueCorner.y.toFixed(0)})` : "NON TROUV\xC9"}`);
     }
-    const magentaCornersUnordered = candidateCorners.map((c) => c.magentaCenter);
-    const orderedMagentaCorners = this.orderCorners(magentaCornersUnordered);
+    const trueCornersUnordered = candidateCorners.map((c) => {
+      if (c.trueCorner) {
+        console.log(`   \u2705 Coin VRAI trouv\xE9: (${c.trueCorner.x.toFixed(0)}, ${c.trueCorner.y.toFixed(0)}) [magenta \xE9tait: (${c.magentaCenter.x.toFixed(0)}, ${c.magentaCenter.y.toFixed(0)})]`);
+        return c.trueCorner;
+      } else {
+        console.log(`   \u26A0\uFE0F Coin VRAI NON trouv\xE9, fallback sur magenta: (${c.magentaCenter.x.toFixed(0)}, ${c.magentaCenter.y.toFixed(0)})`);
+        return c.magentaCenter;
+      }
+    });
+    const orderedMagentaCorners = this.orderCorners(trueCornersUnordered);
     if (!orderedMagentaCorners) {
       console.log("\u274C Impossible d'ordonner les coins magenta");
       return [];
     }
-    console.log(`\u{1F50D} [ArUco] Coins MAGENTA ordonn\xE9s (TL, TR, BR, BL) - EXT\xC9RIEURS ${MARKER_SPECS.markerSize}cm:`);
+    console.log(`\u{1F3AF} [ArUco] Coins BLANCS ordonn\xE9s (TL, TR, BR, BL) - VRAIS COINS du ${MARKER_SPECS.markerSize}cm:`);
     orderedMagentaCorners.forEach((p, i) => console.log(`   [${["TL", "TR", "BR", "BL"][i]}] x=${p.x.toFixed(1)}, y=${p.y.toFixed(1)}`));
     const validation = this.validateArucoGeometry(data, width, height, orderedMagentaCorners);
     console.log(`\u{1F4D0} [ArUco] Validation g\xE9om\xE9trique: ${validation.valid ? "\u2705" : "\u274C"} (score: ${validation.score.toFixed(2)})`);
@@ -60991,21 +61794,20 @@ var MarkerDetector = class {
         y: bl.y + (br.y - bl.y) * innerOffset + (tl.y - bl.y) * innerOffset
       }
     ];
-    const centerSize = (MARKER_SPECS.markerSize / 3).toFixed(1);
-    console.log(`\u{1F50D} [ArUco] Coins INT\xC9RIEURS calcul\xE9s (pattern ${centerSize}cm \xD7 ${centerSize}cm):`);
-    innerCorners.forEach((p, i) => console.log(`   [${["TL", "TR", "BR", "BL"][i]}] x=${p.x.toFixed(1)}, y=${p.y.toFixed(1)}`));
+    console.log(`\u{1F50D} [ArUco] Coins MAGENTA = Coins du carr\xE9 ${MARKER_SPECS.markerSize}cm (PAS de r\xE9duction 1/3!)`);
+    orderedMagentaCorners.forEach((p, i) => console.log(`   [${["TL", "TR", "BR", "BL"][i]}] x=${p.x.toFixed(1)}, y=${p.y.toFixed(1)}`));
     const measurements = this.calculateMeasurements(orderedMagentaCorners);
     const finalScore = Math.min(0.95, 0.6 + validation.score * 0.35);
     return [{
       id: 0,
-      corners: innerCorners,
-      // Coins du pattern INTÉRIEUR (1/3) pour l'homographie du pattern
+      corners: orderedMagentaCorners,
+      // 🎯 FIX: Utiliser les vrais coins (intersection lignes noires)
       magentaPositions: orderedMagentaCorners,
-      // Coins EXTÉRIEURS pour l'affichage visuel!
+      // Identique car intersection = coins du marqueur 16.8cm
       size: measurements.avgSidePx,
       center: measurements.center,
       score: finalScore,
-      magentaFound: candidateCorners.filter((c) => c.whiteCenter).length,
+      magentaFound: candidateCorners.filter((c) => c.trueCorner).length,
       homography: {
         realSizeCm: MARKER_SPECS.markerSize,
         pixelsPerCm: measurements.pixelsPerCm,
@@ -61033,7 +61835,7 @@ var MarkerDetector = class {
     const sideVariance = sides.reduce((sum, s) => sum + Math.abs(s - avgSide), 0) / 4;
     const regularityScore = Math.max(0, 1 - sideVariance / avgSide);
     let transitionScore = 0;
-    const bandRatio = MARKER_SPECS.ratios.bandWidth;
+    const _bandRatio = MARKER_SPECS.ratios.bandWidth;
     const sampleCount = 10;
     let foundBlackOuter = 0;
     let foundWhite = 0;
@@ -61074,11 +61876,11 @@ var MarkerDetector = class {
       const corner = corners[i];
       const nextCorner = corners[(i + 1) % 4];
       const prevCorner = corners[(i + 3) % 4];
-      const toNext = {
+      const _toNext = {
         x: (nextCorner.x - corner.x) / Math.sqrt((nextCorner.x - corner.x) ** 2 + (nextCorner.y - corner.y) ** 2),
         y: (nextCorner.y - corner.y) / Math.sqrt((nextCorner.x - corner.x) ** 2 + (nextCorner.y - corner.y) ** 2)
       };
-      const toPrev = {
+      const _toPrev = {
         x: (prevCorner.x - corner.x) / Math.sqrt((prevCorner.x - corner.x) ** 2 + (prevCorner.y - corner.y) ** 2),
         y: (prevCorner.y - corner.y) / Math.sqrt((prevCorner.x - corner.x) ** 2 + (prevCorner.y - corner.y) ** 2)
       };
@@ -61130,10 +61932,17 @@ var MarkerDetector = class {
     if (blackPixels.length < 100) {
       return [];
     }
-    const minX = Math.min(...blackPixels.map((p) => p.x));
-    const maxX = Math.max(...blackPixels.map((p) => p.x));
-    const minY = Math.min(...blackPixels.map((p) => p.y));
-    const maxY = Math.max(...blackPixels.map((p) => p.y));
+    if (blackPixels.length > 5e4) {
+      console.log(`   \u26A0\uFE0F Trop de pixels noirs (${blackPixels.length}) - probablement fond noir, pas de marqueur`);
+      return [];
+    }
+    let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+    for (const p of blackPixels) {
+      if (p.x < minX) minX = p.x;
+      if (p.x > maxX) maxX = p.x;
+      if (p.y < minY) minY = p.y;
+      if (p.y > maxY) maxY = p.y;
+    }
     const outerCorners = [
       { x: minX, y: minY },
       // TL
@@ -61144,33 +61953,12 @@ var MarkerDetector = class {
       { x: minX, y: maxY }
       // BL
     ];
-    const innerOffset = MARKER_SPECS.ratios.innerToOuter;
-    const [tl, tr, br, bl] = outerCorners;
-    const innerCorners = [
-      {
-        x: tl.x + (tr.x - tl.x) * innerOffset + (bl.x - tl.x) * innerOffset,
-        y: tl.y + (tr.y - tl.y) * innerOffset + (bl.y - tl.y) * innerOffset
-      },
-      {
-        x: tr.x + (tl.x - tr.x) * innerOffset + (br.x - tr.x) * innerOffset,
-        y: tr.y + (tl.y - tr.y) * innerOffset + (br.y - tr.y) * innerOffset
-      },
-      {
-        x: br.x + (bl.x - br.x) * innerOffset + (tr.x - br.x) * innerOffset,
-        y: br.y + (bl.y - br.y) * innerOffset + (tr.y - br.y) * innerOffset
-      },
-      {
-        x: bl.x + (br.x - bl.x) * innerOffset + (tl.x - bl.x) * innerOffset,
-        y: bl.y + (br.y - bl.y) * innerOffset + (tl.y - bl.y) * innerOffset
-      }
-    ];
     const measurements = this.calculateMeasurements(outerCorners);
     return [{
       id: 0,
-      corners: innerCorners,
-      // Coins INTÉRIEURS pour l'homographie
+      corners: outerCorners,
+      // 🎯 FIX: Utiliser directement les coins englobants
       magentaPositions: outerCorners,
-      // Coins EXTÉRIEURS pour l'affichage!
       size: measurements.avgSidePx,
       center: measurements.center,
       score: 0.5,
@@ -61186,7 +61974,9 @@ var MarkerDetector = class {
   }
   /**
    * Trouver TOUS les pixels magenta dans l'image
+  /**
    * Magenta VRAI = rouge ET bleu très forts (>150), vert FAIBLE (<100)
+  /**
    * Le magenta imprimé sur le marqueur est très saturé et vif
    */
   findAllMagentaPixels(data, width, height) {
@@ -61215,6 +62005,7 @@ var MarkerDetector = class {
   }
   /**
    * Regrouper les pixels magenta en clusters
+  /**
    * 🎯 AMÉLIORÉ: Utilise le fitting elliptique pour trouver le centre EXACT
    */
   clusterMagentaPixels(pixels) {
@@ -61316,6 +62107,7 @@ var MarkerDetector = class {
   }
   /**
    * 🆕 Fitting circulaire par moindres carrés algébriques (méthode de Kåsa)
+  /**
    * Retourne le centre optimal du cercle passant au mieux par les points
    */
   fitCircleToPoints(points) {
@@ -61441,6 +62233,311 @@ var MarkerDetector = class {
     return bestScore > 0 ? { x: bestX, y: bestY } : null;
   }
   /**
+   * 🎯 RAFFINEMENT: Raffine les 4 coins en cherchant les vrais coins via lignes noires
+  /**
+   * 
+  /**
+   * Pour chaque coin détecté, on cherche les 2 lignes noires perpendiculaires
+  /**
+   * du bord du marqueur et on calcule leur intersection = vrai coin.
+  /**
+   * 
+  /**
+   * @param data - Données de l'image
+  /**
+   * @param width - Largeur de l'image
+  /**
+   * @param height - Hauteur de l'image
+  /**
+   * @param corners - Les 4 coins [TL, TR, BR, BL] initiaux
+  /**
+   * @returns Les 4 coins raffinés ou null si échec
+   */
+  refineCornersWithBlackLines(data, width, height, corners) {
+    if (!corners || corners.length !== 4) return null;
+    const refinedCorners = [];
+    const cornerNames = ["TL", "TR", "BR", "BL"];
+    const markerWidth = Math.sqrt(
+      (corners[1].x - corners[0].x) ** 2 + (corners[1].y - corners[0].y) ** 2
+    );
+    const markerHeight = Math.sqrt(
+      (corners[3].x - corners[0].x) ** 2 + (corners[3].y - corners[0].y) ** 2
+    );
+    const avgMarkerSize = (markerWidth + markerHeight) / 2;
+    console.log(`   \u{1F4CF} Taille marqueur: ${markerWidth.toFixed(0)}\xD7${markerHeight.toFixed(0)}px, recherche dans rayon ${(avgMarkerSize * 0.15).toFixed(0)}px`);
+    for (let i = 0; i < 4; i++) {
+      const corner = corners[i];
+      const cornerType = cornerNames[i];
+      const searchRadius = avgMarkerSize * 0.15;
+      const fakeCluster = {
+        cx: corner.x,
+        cy: corner.y,
+        width: searchRadius * 2,
+        height: searchRadius * 2,
+        area: searchRadius * searchRadius * 4,
+        pixels: []
+      };
+      const trueCorner = this.findTrueCornerByBlackLines(data, width, height, corner.x, corner.y, fakeCluster, cornerType);
+      if (trueCorner) {
+        const dist = Math.sqrt((trueCorner.x - corner.x) ** 2 + (trueCorner.y - corner.y) ** 2);
+        if (dist < searchRadius * 2) {
+          console.log(`   ${cornerNames[i]}: (${corner.x.toFixed(0)}, ${corner.y.toFixed(0)}) \u2192 (${trueCorner.x.toFixed(0)}, ${trueCorner.y.toFixed(0)}) [\u0394=${dist.toFixed(1)}px]`);
+          refinedCorners.push(trueCorner);
+        } else {
+          console.log(`   ${cornerNames[i]}: raffinement trop loin (${dist.toFixed(1)}px), garde original`);
+          refinedCorners.push(corner);
+        }
+      } else {
+        console.log(`   ${cornerNames[i]}: raffinement \xE9chou\xE9, garde original`);
+        refinedCorners.push(corner);
+      }
+    }
+    return refinedCorners;
+  }
+  /**
+   * 🎯 NOUVELLE MÉTHODE: Trouver le vrai coin du marqueur en suivant les lignes noires
+  /**
+   * 
+  /**
+   * Le marqueur ArUco a des lignes noires sur ses bords qui passent par les cercles magenta.
+  /**
+   * Cette méthode:
+  /**
+   * 1. Part du centre du cercle magenta
+  /**
+   * 2. Scanne dans 4 directions pour trouver les lignes noires
+  /**
+   * 3. Suit ces lignes noires pour trouver leur intersection
+  /**
+   * 4. L'intersection = le vrai coin du marqueur 16.8cm
+  /**
+   * 
+  /**
+   * @param data - Données de l'image
+  /**
+   * @param width - Largeur de l'image
+  /**
+   * @param height - Hauteur de l'image
+  /**
+   * @param cx - Centre X du cercle magenta
+  /**
+   * @param cy - Centre Y du cercle magenta
+  /**
+   * @param cluster - Infos sur le cluster magenta
+  /**
+   * @param cornerType - Type de coin (TL, TR, BR, BL) pour forcer les lignes extérieures
+  /**
+   * @returns Le vrai coin (intersection des lignes noires) ou null
+   */
+  findTrueCornerByBlackLines(data, width, height, cx, cy, cluster, cornerType) {
+    console.log(`
+   \u{1F50D} [BLACK LINES] Recherche du vrai coin depuis magenta (${cx.toFixed(0)}, ${cy.toFixed(0)})${cornerType ? ` - Type: ${cornerType}` : ""}`);
+    const searchRadius = Math.max(30, Math.max(cluster.width, cluster.height) * 1.5);
+    console.log(`      Rayon de recherche: ${searchRadius.toFixed(0)}px`);
+    let directionsToSearch;
+    if (cornerType === "TL") {
+      directionsToSearch = [
+        { name: "N", dx: 0, dy: -1 },
+        // Nord = haut (ligne extérieure)
+        { name: "W", dx: -1, dy: 0 }
+        // Ouest = gauche (ligne extérieure)
+      ];
+    } else if (cornerType === "TR") {
+      directionsToSearch = [
+        { name: "N", dx: 0, dy: -1 },
+        // Nord = haut (ligne extérieure)
+        { name: "E", dx: 1, dy: 0 }
+        // Est = droite (ligne extérieure)
+      ];
+    } else if (cornerType === "BR") {
+      directionsToSearch = [
+        { name: "S", dx: 0, dy: 1 },
+        // Sud = bas (ligne extérieure)
+        { name: "E", dx: 1, dy: 0 }
+        // Est = droite (ligne extérieure)
+      ];
+    } else if (cornerType === "BL") {
+      directionsToSearch = [
+        { name: "S", dx: 0, dy: 1 },
+        // Sud = bas (ligne extérieure)
+        { name: "W", dx: -1, dy: 0 }
+        // Ouest = gauche (ligne extérieure)
+      ];
+    } else {
+      directionsToSearch = [
+        { name: "N", dx: 0, dy: -1 },
+        { name: "NE", dx: 1, dy: -1 },
+        { name: "E", dx: 1, dy: 0 },
+        { name: "SE", dx: 1, dy: 1 },
+        { name: "S", dx: 0, dy: 1 },
+        { name: "SW", dx: -1, dy: 1 },
+        { name: "W", dx: -1, dy: 0 },
+        { name: "NW", dx: -1, dy: -1 }
+      ];
+    }
+    const blackLineStarts = [];
+    for (const dir of directionsToSearch) {
+      const blackStart = this.findBlackLineStart(data, width, height, cx, cy, dir.dx, dir.dy, searchRadius);
+      if (blackStart) {
+        const angle = Math.atan2(dir.dy, dir.dx);
+        blackLineStarts.push({ dir: dir.name, point: blackStart, angle });
+        console.log(`      \u2713 Ligne noire trouv\xE9e direction ${dir.name}: (${blackStart.x.toFixed(0)}, ${blackStart.y.toFixed(0)})`);
+      }
+    }
+    console.log(`      ${blackLineStarts.length} lignes noires d\xE9tect\xE9es`);
+    if (blackLineStarts.length < 2) {
+      console.log(`      \u26A0\uFE0F Pas assez de lignes noires trouv\xE9es`);
+      return null;
+    }
+    let bestPair = null;
+    for (let i = 0; i < blackLineStarts.length; i++) {
+      for (let j = i + 1; j < blackLineStarts.length; j++) {
+        const angleDiff = Math.abs(blackLineStarts[i].angle - blackLineStarts[j].angle);
+        const normalizedDiff = Math.min(angleDiff, Math.PI * 2 - angleDiff);
+        const degreeDiff = normalizedDiff * 180 / Math.PI;
+        if (degreeDiff > 70 && degreeDiff < 110) {
+          if (!bestPair || Math.abs(degreeDiff - 90) < Math.abs(bestPair.angleDiff - 90)) {
+            bestPair = {
+              line1: blackLineStarts[i],
+              line2: blackLineStarts[j],
+              angleDiff: degreeDiff
+            };
+          }
+        }
+      }
+    }
+    if (!bestPair) {
+      console.log(`      \u26A0\uFE0F Pas de paire de lignes perpendiculaires trouv\xE9e`);
+      if (blackLineStarts.length >= 2) {
+        bestPair = {
+          line1: blackLineStarts[0],
+          line2: blackLineStarts[1],
+          angleDiff: 90
+        };
+      } else {
+        return null;
+      }
+    }
+    console.log(`      \u2713 Paire perpendiculaire: ${bestPair.line1.dir} + ${bestPair.line2.dir} (angle: ${bestPair.angleDiff.toFixed(1)}\xB0)`);
+    const line1Extended = this.followBlackLine(data, width, height, bestPair.line1.point, bestPair.line1.angle, searchRadius * 2);
+    const line2Extended = this.followBlackLine(data, width, height, bestPair.line2.point, bestPair.line2.angle, searchRadius * 2);
+    console.log(`      Ligne 1 \xE9tendue: de (${bestPair.line1.point.x.toFixed(0)}, ${bestPair.line1.point.y.toFixed(0)}) \xE0 (${line1Extended.x.toFixed(0)}, ${line1Extended.y.toFixed(0)})`);
+    console.log(`      Ligne 2 \xE9tendue: de (${bestPair.line2.point.x.toFixed(0)}, ${bestPair.line2.point.y.toFixed(0)}) \xE0 (${line2Extended.x.toFixed(0)}, ${line2Extended.y.toFixed(0)})`);
+    const intersection = this.computeLineIntersection(
+      bestPair.line1.point,
+      line1Extended,
+      bestPair.line2.point,
+      line2Extended
+    );
+    if (intersection) {
+      const distFromMagenta = Math.sqrt((intersection.x - cx) ** 2 + (intersection.y - cy) ** 2);
+      if (distFromMagenta < searchRadius * 1.5) {
+        console.log(`      \u2705 INTERSECTION TROUV\xC9E: (${intersection.x.toFixed(1)}, ${intersection.y.toFixed(1)}) - distance du magenta: ${distFromMagenta.toFixed(1)}px`);
+        return intersection;
+      } else {
+        console.log(`      \u26A0\uFE0F Intersection trop loin du magenta (${distFromMagenta.toFixed(1)}px > ${(searchRadius * 1.5).toFixed(1)}px)`);
+      }
+    }
+    console.log(`      \u26A0\uFE0F Fallback sur centre magenta`);
+    return { x: cx, y: cy };
+  }
+  /**
+   * 🎯 Trouver le BORD EXTÉRIEUR d'une ligne noire
+  /**
+   * 
+  /**
+   * Scanne depuis le centre magenta vers l'extérieur et trouve
+  /**
+   * le DERNIER pixel noir de la ligne = bord extérieur du marqueur
+   */
+  findBlackLineStart(data, width, height, cx, cy, dx, dy, maxDist) {
+    const len = Math.sqrt(dx * dx + dy * dy);
+    const ndx = dx / len;
+    const ndy = dy / len;
+    let inBlack = false;
+    let lastBlackX = 0, lastBlackY = 0;
+    let firstBlackX = 0, firstBlackY = 0;
+    let consecutiveBlack = 0;
+    for (let dist = 5; dist < maxDist; dist += 1) {
+      const x = Math.round(cx + ndx * dist);
+      const y = Math.round(cy + ndy * dist);
+      if (x < 0 || x >= width || y < 0 || y >= height) break;
+      const idx = (y * width + x) * 4;
+      const r = data[idx];
+      const g = data[idx + 1];
+      const b = data[idx + 2];
+      const brightness = (r + g + b) / 3;
+      const isBlack = brightness < 80;
+      if (isBlack) {
+        if (!inBlack) {
+          firstBlackX = x;
+          firstBlackY = y;
+          consecutiveBlack = 0;
+        }
+        lastBlackX = x;
+        lastBlackY = y;
+        inBlack = true;
+        consecutiveBlack++;
+      } else {
+        if (inBlack && consecutiveBlack >= 5) {
+          return { x: lastBlackX, y: lastBlackY };
+        }
+        inBlack = false;
+        consecutiveBlack = 0;
+      }
+    }
+    return inBlack && consecutiveBlack >= 5 ? { x: lastBlackX, y: lastBlackY } : null;
+  }
+  /**
+   * Suivre une ligne noire dans une direction donnée
+   */
+  followBlackLine(data, width, height, start, angle, maxDist) {
+    const dx = Math.cos(angle);
+    const dy = Math.sin(angle);
+    let lastValidX = start.x;
+    let lastValidY = start.y;
+    for (let dist = 1; dist < maxDist; dist += 2) {
+      const x = Math.round(start.x + dx * dist);
+      const y = Math.round(start.y + dy * dist);
+      if (x < 0 || x >= width || y < 0 || y >= height) break;
+      let foundBlack = false;
+      for (let offset = -3; offset <= 3 && !foundBlack; offset++) {
+        const ox = Math.round(x - dy * offset);
+        const oy = Math.round(y + dx * offset);
+        if (ox < 0 || ox >= width || oy < 0 || oy >= height) continue;
+        const idx = (oy * width + ox) * 4;
+        const brightness = (data[idx] + data[idx + 1] + data[idx + 2]) / 3;
+        if (brightness < 80) {
+          foundBlack = true;
+          lastValidX = ox;
+          lastValidY = oy;
+        }
+      }
+      if (!foundBlack) {
+        break;
+      }
+    }
+    return { x: lastValidX, y: lastValidY };
+  }
+  /**
+   * Calculer l'intersection de 2 lignes définies par 2 points chacune
+   */
+  computeLineIntersection(p1, p2, p3, p4) {
+    const x1 = p1.x, y1 = p1.y;
+    const x2 = p2.x, y2 = p2.y;
+    const x3 = p3.x, y3 = p3.y;
+    const x4 = p4.x, y4 = p4.y;
+    const denom = (x1 - x2) * (y3 - y4) - (y1 - y2) * (x3 - x4);
+    if (Math.abs(denom) < 1e-4) {
+      return null;
+    }
+    const t = ((x1 - x3) * (y3 - y4) - (y1 - y3) * (x3 - x4)) / denom;
+    return {
+      x: x1 + t * (x2 - x1),
+      y: y1 + t * (y2 - y1)
+    };
+  }
+  /**
    * Calculer les mesures du quadrilatère pour l'homographie
    */
   calculateMeasurements(quad) {
@@ -61473,17 +62570,6 @@ var MarkerDetector = class {
         y: (tl.y + tr.y + br.y + bl.y) / 4
       }
     };
-  }
-  /**
-   * Calculer l'angle entre trois points
-   */
-  calculateAngle(p1, vertex, p2) {
-    const v1 = { x: p1.x - vertex.x, y: p1.y - vertex.y };
-    const v2 = { x: p2.x - vertex.x, y: p2.y - vertex.y };
-    const dot = v1.x * v2.x + v1.y * v2.y;
-    const mag1 = Math.sqrt(v1.x ** 2 + v1.y ** 2);
-    const mag2 = Math.sqrt(v2.x ** 2 + v2.y ** 2);
-    return Math.acos(dot / (mag1 * mag2)) * 180 / Math.PI;
   }
   /**
    * Ordonner les 4 coins en [TL, TR, BR, BL]
@@ -61638,191 +62724,7 @@ function estimatePose(corners) {
   const rotZ = Math.round(Math.atan2(tr.y - tl.y, tr.x - tl.x) * 180 / Math.PI);
   return { rotX, rotY, rotZ };
 }
-function calculateQualityScore(corners, avgSizePx, rotX, rotY) {
-  let score = 100;
-  if (avgSizePx < 50) score -= 40;
-  else if (avgSizePx < 100) score -= 20;
-  score -= Math.abs(rotX) * 0.5;
-  score -= Math.abs(rotY) * 0.5;
-  return Math.max(0, Math.min(100, Math.round(score)));
-}
-function computeHomographyExtended(extendedPoints, minConfidence = 0.6) {
-  const validPoints = extendedPoints.allPoints.filter((p) => p.confidence >= minConfidence);
-  if (validPoints.length < 4) {
-    console.warn(`\u26A0\uFE0F Seulement ${validPoints.length} points valides (min 4 requis)`);
-    return {
-      H: computeHomography(
-        extendedPoints.corners,
-        [
-          { x: 0, y: 0 },
-          { x: MARKER_SPECS.markerSize, y: 0 },
-          { x: MARKER_SPECS.markerSize, y: MARKER_SPECS.markerSize },
-          { x: 0, y: MARKER_SPECS.markerSize }
-        ]
-      ),
-      quality: 0.5,
-      usedPoints: 4
-    };
-  }
-  console.log(`\u{1F4D0} Calcul homographie avec ${validPoints.length} points`);
-  const srcPoints = validPoints.map((p) => p.pixel);
-  const dstPoints = validPoints.map((p) => p.real);
-  const H = computeHomographyNPoints(srcPoints, dstPoints);
-  const quality = calculateHomographyQuality(H, srcPoints, dstPoints);
-  return { H, quality, usedPoints: validPoints.length };
-}
-function computeHomographyNPoints(srcPoints, dstPoints) {
-  const n = srcPoints.length;
-  if (n < 4) {
-    console.error("computeHomographyNPoints: besoin d'au moins 4 points");
-    return [[1, 0, 0], [0, 1, 0], [0, 0, 1]];
-  }
-  const srcNorm = normalizePoints(srcPoints);
-  const dstNorm = normalizePoints(dstPoints);
-  const A = [];
-  for (let i = 0; i < n; i++) {
-    const { x, y } = srcNorm.normalized[i];
-    const { x: u, y: v } = dstNorm.normalized[i];
-    A.push([-x, -y, -1, 0, 0, 0, u * x, u * y, u]);
-    A.push([0, 0, 0, -x, -y, -1, v * x, v * y, v]);
-  }
-  const h = solveSVD(A);
-  const Hnorm = [
-    [h[0], h[1], h[2]],
-    [h[3], h[4], h[5]],
-    [h[6], h[7], h[8]]
-  ];
-  const H = denormalizeHomography(Hnorm, srcNorm.T, dstNorm.T);
-  return H;
-}
-function normalizePoints(points) {
-  const n = points.length;
-  let cx = 0, cy = 0;
-  for (const p of points) {
-    cx += p.x;
-    cy += p.y;
-  }
-  cx /= n;
-  cy /= n;
-  let avgDist = 0;
-  for (const p of points) {
-    avgDist += Math.sqrt((p.x - cx) ** 2 + (p.y - cy) ** 2);
-  }
-  avgDist /= n;
-  const scale = avgDist > 1e-10 ? Math.SQRT2 / avgDist : 1;
-  const normalized = points.map((p) => ({
-    x: (p.x - cx) * scale,
-    y: (p.y - cy) * scale
-  }));
-  const T = [
-    [scale, 0, -cx * scale],
-    [0, scale, -cy * scale],
-    [0, 0, 1]
-  ];
-  return { normalized, T };
-}
-function denormalizeHomography(Hnorm, Tsrc, Tdst) {
-  const Tdst_inv = invertNormalizationMatrix(Tdst);
-  const temp = multiplyMatrices(Hnorm, Tsrc);
-  const H = multiplyMatrices(Tdst_inv, temp);
-  if (Math.abs(H[2][2]) > 1e-10) {
-    const scale = 1 / H[2][2];
-    for (let i = 0; i < 3; i++) {
-      for (let j = 0; j < 3; j++) {
-        H[i][j] *= scale;
-      }
-    }
-  }
-  return H;
-}
-function invertNormalizationMatrix(T) {
-  const s = T[0][0];
-  const tx = T[0][2];
-  const ty = T[1][2];
-  return [
-    [1 / s, 0, -tx / s],
-    [0, 1 / s, -ty / s],
-    [0, 0, 1]
-  ];
-}
-function multiplyMatrices(A, B) {
-  const C = [[0, 0, 0], [0, 0, 0], [0, 0, 0]];
-  for (let i = 0; i < 3; i++) {
-    for (let j = 0; j < 3; j++) {
-      for (let k = 0; k < 3; k++) {
-        C[i][j] += A[i][k] * B[k][j];
-      }
-    }
-  }
-  return C;
-}
-function solveSVD(A) {
-  const m = A.length;
-  const n = 9;
-  const AtA = Array(n).fill(null).map(() => Array(n).fill(0));
-  for (let i = 0; i < n; i++) {
-    for (let j = 0; j < n; j++) {
-      let sum = 0;
-      for (let k = 0; k < m; k++) {
-        sum += A[k][i] * A[k][j];
-      }
-      AtA[i][j] = sum;
-    }
-  }
-  const shift = 1e-6;
-  for (let i = 0; i < n; i++) {
-    AtA[i][i] += shift;
-  }
-  let x = Array(n).fill(1 / Math.sqrt(n));
-  for (let iter = 0; iter < 50; iter++) {
-    const newX = solveGaussSeidel(AtA, x, 20);
-    const norm = Math.sqrt(newX.reduce((s, v) => s + v * v, 0));
-    if (norm > 1e-10) {
-      for (let i = 0; i < n; i++) {
-        x[i] = newX[i] / norm;
-      }
-    }
-  }
-  if (Math.abs(x[8]) > 1e-10) {
-    const scale = 1 / x[8];
-    for (let i = 0; i < n; i++) {
-      x[i] *= scale;
-    }
-  }
-  return x;
-}
-function solveGaussSeidel(A, b, iterations) {
-  const n = b.length;
-  const x = [...b];
-  for (let iter = 0; iter < iterations; iter++) {
-    for (let i = 0; i < n; i++) {
-      let sum = b[i];
-      for (let j = 0; j < n; j++) {
-        if (i !== j) {
-          sum -= A[i][j] * x[j];
-        }
-      }
-      x[i] = sum / A[i][i];
-    }
-  }
-  return x;
-}
-function calculateHomographyQuality(H, srcPoints, dstPoints) {
-  let totalError = 0;
-  for (let i = 0; i < srcPoints.length; i++) {
-    const projected = transformPoint(H, srcPoints[i]);
-    const expected = dstPoints[i];
-    const error = Math.sqrt(
-      (projected.x - expected.x) ** 2 + (projected.y - expected.y) ** 2
-    );
-    totalError += error;
-  }
-  const avgError = totalError / srcPoints.length;
-  const score = Math.exp(-avgError * 5);
-  console.log(`\u{1F4CA} Erreur de reprojection moyenne: ${(avgError * 10).toFixed(2)}mm, qualit\xE9: ${(score * 100).toFixed(0)}%`);
-  return score;
-}
-function detectUltraPrecisionPoints(imageData, corners, existingPoints) {
+function detectUltraPrecisionPoints(imageData, corners, _existingPoints, markerWidthMm2 = 168, markerHeightMm2 = 168) {
   const { data, width, height } = imageData;
   const allPoints = [];
   console.log("\n\u{1F3AF} [ULTRA-PR\xC9CISION] D\xE9marrage d\xE9tection 80-100 points...");
@@ -61830,9 +62732,12 @@ function detectUltraPrecisionPoints(imageData, corners, existingPoints) {
   console.log(`   \u2705 Fitting elliptique: 4 coins raffin\xE9s (sub-pixel 0.1px)`);
   const realCorners = [
     { x: 0, y: 0 },
-    { x: MARKER_SPECS.markerSize, y: 0 },
-    { x: MARKER_SPECS.markerSize, y: MARKER_SPECS.markerSize },
-    { x: 0, y: MARKER_SPECS.markerSize }
+    { x: markerWidthMm2, y: 0 },
+    // 🎯 Largeur variable
+    { x: markerWidthMm2, y: markerHeightMm2 },
+    // 🎯 Largeur × Hauteur
+    { x: 0, y: markerHeightMm2 }
+    // 🎯 Hauteur variable
   ];
   for (let i = 0; i < 4; i++) {
     allPoints.push({
@@ -61843,13 +62748,13 @@ function detectUltraPrecisionPoints(imageData, corners, existingPoints) {
       subPixelRefined: true
     });
   }
-  const transitionPoints = detectEdgeTransitions(data, width, height, refinedCorners);
+  const transitionPoints = detectEdgeTransitions(data, width, height, refinedCorners, markerWidthMm2, markerHeightMm2);
   allPoints.push(...transitionPoints);
   console.log(`   \u2705 Transitions bords: ${transitionPoints.length} points`);
-  const gridCorners = detectPatternGridCorners(data, width, height, refinedCorners);
+  const gridCorners = detectPatternGridCorners(data, width, height, refinedCorners, markerWidthMm2, markerHeightMm2);
   allPoints.push(...gridCorners);
   console.log(`   \u2705 Grille pattern 7\xD77: ${gridCorners.length} coins`);
-  const gridCenters = detectPatternCellCenters(data, width, height, refinedCorners);
+  const gridCenters = detectPatternCellCenters(data, width, height, refinedCorners, markerWidthMm2, markerHeightMm2);
   allPoints.push(...gridCenters);
   console.log(`   \u2705 Centres cases 6\xD76: ${gridCenters.length} points`);
   console.log(`   \u{1F4CA} Total brut: ${allPoints.length} points d\xE9tect\xE9s`);
@@ -61971,7 +62876,7 @@ function multiplyTranspose(D) {
   return result;
 }
 function solveEllipseEigenvalue(DtD) {
-  const n = 6;
+  const _n = 6;
   let v = [1, 0, 1, 0, 0, -1];
   const DtDshift = DtD.map((row, i) => row.map((val, j) => val + (i === j ? 1e-8 : 0)));
   for (let iter = 0; iter < 50; iter++) {
@@ -62015,46 +62920,52 @@ function solveLinearSystem6x6(A, b) {
   }
   return x;
 }
-function detectEdgeTransitions(data, width, height, corners) {
+function detectEdgeTransitions(data, width, height, corners, markerWidthMm2 = 168, markerHeightMm2 = 168) {
   const points = [];
   const [tl, tr, br, bl] = corners;
-  const markerSize = MARKER_SPECS.markerSize;
-  const transitions = MARKER_SPECS.transitions;
-  for (const t of transitions) {
-    const point = detectTransitionWithSubPixel(data, width, height, tl, tr, t / markerSize);
+  const markerWidthCm = markerWidthMm2 / 10;
+  const markerHeightCm = markerHeightMm2 / 10;
+  const transitionsX = [markerWidthCm / 6, markerWidthCm / 3, markerWidthCm * 2 / 3, markerWidthCm * 5 / 6];
+  const transitionsY = [markerHeightCm / 6, markerHeightCm / 3, markerHeightCm * 2 / 3, markerHeightCm * 5 / 6];
+  for (const t of transitionsX) {
+    const point = detectTransitionWithSubPixel(data, width, height, tl, tr, t / markerWidthCm);
     points.push({
       pixel: point.pixel,
-      real: { x: t, y: 0 },
+      real: { x: t * 10, y: 0 },
+      // CM → MM
       confidence: point.confidence,
       type: "transition",
       subPixelRefined: true
     });
   }
-  for (const t of transitions) {
-    const point = detectTransitionWithSubPixel(data, width, height, tr, br, t / markerSize);
+  for (const t of transitionsY) {
+    const point = detectTransitionWithSubPixel(data, width, height, tr, br, t / markerHeightCm);
     points.push({
       pixel: point.pixel,
-      real: { x: markerSize, y: t },
+      real: { x: markerWidthMm2, y: t * 10 },
+      // CM → MM
       confidence: point.confidence,
       type: "transition",
       subPixelRefined: true
     });
   }
-  for (const t of transitions) {
-    const point = detectTransitionWithSubPixel(data, width, height, bl, br, t / markerSize);
+  for (const t of transitionsX) {
+    const point = detectTransitionWithSubPixel(data, width, height, bl, br, t / markerWidthCm);
     points.push({
       pixel: point.pixel,
-      real: { x: t, y: markerSize },
+      real: { x: t * 10, y: markerHeightMm2 },
+      // CM → MM
       confidence: point.confidence,
       type: "transition",
       subPixelRefined: true
     });
   }
-  for (const t of transitions) {
-    const point = detectTransitionWithSubPixel(data, width, height, tl, bl, t / markerSize);
+  for (const t of transitionsY) {
+    const point = detectTransitionWithSubPixel(data, width, height, tl, bl, t / markerHeightCm);
     points.push({
       pixel: point.pixel,
-      real: { x: 0, y: t },
+      real: { x: 0, y: t * 10 },
+      // CM → MM
       confidence: point.confidence,
       type: "transition",
       subPixelRefined: true
@@ -62135,27 +63046,33 @@ function sampleLuminosity(data, width, height, x, y) {
   };
   return getL(x0, y0) * (1 - dx) * (1 - dy) + getL(x1, y0) * dx * (1 - dy) + getL(x0, y1) * (1 - dx) * dy + getL(x1, y1) * dx * dy;
 }
-function detectPatternGridCorners(data, width, height, corners) {
+function detectPatternGridCorners(data, width, height, corners, markerWidthMm2 = 168, markerHeightMm2 = 168) {
   const points = [];
   const [tl, tr, br, bl] = corners;
-  const markerSize = MARKER_SPECS.markerSize;
+  const markerWidthCm = markerWidthMm2 / 10;
+  const markerHeightCm = markerHeightMm2 / 10;
   const patternStart = MARKER_SPECS.ratios.innerToOuter;
-  const patternEnd = MARKER_SPECS.ratios.whiteToOuter;
-  const patternSizeCm = markerSize / 3;
-  const cellSizeCm = patternSizeCm / 6;
-  const cellSizeRatio = cellSizeCm / markerSize;
-  const patternStartCm = markerSize / 3;
+  const _patternEnd = MARKER_SPECS.ratios.whiteToOuter;
+  const patternWidthCm = markerWidthCm / 3;
+  const patternHeightCm = markerHeightCm / 3;
+  const cellWidthCm = patternWidthCm / 6;
+  const cellHeightCm = patternHeightCm / 6;
+  const cellWidthRatio = cellWidthCm / markerWidthCm;
+  const cellHeightRatio = cellHeightCm / markerHeightCm;
+  const patternStartX = markerWidthCm / 3;
+  const patternStartY = markerHeightCm / 3;
   for (let row = 0; row <= 6; row++) {
     for (let col = 0; col <= 6; col++) {
-      const ratioX = patternStart + col * cellSizeRatio;
-      const ratioY = patternStart + row * cellSizeRatio;
-      const realX = patternStartCm + col * cellSizeCm;
-      const realY = patternStartCm + row * cellSizeCm;
+      const ratioX = patternStart + col * cellWidthRatio;
+      const ratioY = patternStart + row * cellHeightRatio;
+      const realX = patternStartX + col * cellWidthCm;
+      const realY = patternStartY + row * cellHeightCm;
       const pixelPos = bilinearInterpolate(tl, tr, br, bl, ratioX, ratioY);
       const refined = harrisCornerRefine(data, width, height, pixelPos, 10);
       points.push({
         pixel: refined.point,
-        real: { x: realX, y: realY },
+        real: { x: realX * 10, y: realY * 10 },
+        // CM → MM
         confidence: refined.confidence,
         type: "grid-corner",
         subPixelRefined: true
@@ -62164,26 +63081,32 @@ function detectPatternGridCorners(data, width, height, corners) {
   }
   return points;
 }
-function detectPatternCellCenters(data, width, height, corners) {
+function detectPatternCellCenters(data, width, height, corners, markerWidthMm2 = 168, markerHeightMm2 = 168) {
   const points = [];
   const [tl, tr, br, bl] = corners;
-  const markerSize = MARKER_SPECS.markerSize;
-  const patternStartCm = markerSize / 3;
-  const cellSizeCm = markerSize / 18;
-  const patternStartRatio = 1 / 3;
-  const cellSizeRatio = cellSizeCm / markerSize;
+  const markerWidthCm = markerWidthMm2 / 10;
+  const markerHeightCm = markerHeightMm2 / 10;
+  const patternStartX = markerWidthCm / 3;
+  const patternStartY = markerHeightCm / 3;
+  const cellWidthCm = markerWidthCm / 18;
+  const cellHeightCm = markerHeightCm / 18;
+  const patternStartRatioX = 1 / 3;
+  const patternStartRatioY = 1 / 3;
+  const cellWidthRatio = cellWidthCm / markerWidthCm;
+  const cellHeightRatio = cellHeightCm / markerHeightCm;
   for (let row = 0; row < 6; row++) {
     for (let col = 0; col < 6; col++) {
-      const ratioX = patternStartRatio + (col + 0.5) * cellSizeRatio;
-      const ratioY = patternStartRatio + (row + 0.5) * cellSizeRatio;
-      const realX = patternStartCm + (col + 0.5) * cellSizeCm;
-      const realY = patternStartCm + (row + 0.5) * cellSizeCm;
+      const ratioX = patternStartRatioX + (col + 0.5) * cellWidthRatio;
+      const ratioY = patternStartRatioY + (row + 0.5) * cellHeightRatio;
+      const realX = patternStartX + (col + 0.5) * cellWidthCm;
+      const realY = patternStartY + (row + 0.5) * cellHeightCm;
       const pixelPos = bilinearInterpolate(tl, tr, br, bl, ratioX, ratioY);
       const isBlack = isPixelBlack(data, width, height, pixelPos);
       const confidence = isBlack !== null ? 0.85 : 0.5;
       points.push({
         pixel: pixelPos,
-        real: { x: realX, y: realY },
+        real: { x: realX * 10, y: realY * 10 },
+        // CM → MM
         confidence,
         type: "grid-center",
         subPixelRefined: false
@@ -62222,10 +63145,10 @@ function harrisCornerRefine(data, width, height, center, searchRadius) {
   return { point: { x: bestX, y: bestY }, confidence };
 }
 function calculateHarrisResponse(data, width, height, x, y) {
-  let Ix = 0, Iy = 0, IxIy = 0, Ix2 = 0, Iy2 = 0;
+  let _Ix = 0, _Iy = 0, IxIy = 0, Ix2 = 0, Iy2 = 0;
   for (let dy = -1; dy <= 1; dy++) {
     for (let dx = -1; dx <= 1; dx++) {
-      const L = sampleLuminosity(data, width, height, x + dx, y + dy);
+      const _L = sampleLuminosity(data, width, height, x + dx, y + dy);
       const Lx = sampleLuminosity(data, width, height, x + dx + 1, y + dy) - sampleLuminosity(data, width, height, x + dx - 1, y + dy);
       const Ly = sampleLuminosity(data, width, height, x + dx, y + dy + 1) - sampleLuminosity(data, width, height, x + dx, y + dy - 1);
       Ix2 += Lx * Lx;
@@ -62245,7 +63168,7 @@ function isPixelBlack(data, width, height, point) {
   return null;
 }
 function ransacHomography(points, options) {
-  const { iterations, threshold, minInliers } = options;
+  const { iterations, threshold, minInliers: _minInliers } = options;
   if (points.length < 4) {
     console.warn("\u26A0\uFE0F RANSAC: pas assez de points");
     return { inliers: points, homography: [[1, 0, 0], [0, 1, 0], [0, 0, 1]] };
@@ -62392,11 +63315,11 @@ function calculateTotalError(points, H) {
 function computeJacobianAndResiduals(points, params) {
   const J = [];
   const residuals = [];
-  const H = paramsToH(params);
+  const _H = paramsToH(params);
   for (const p of points) {
     const { x, y } = p.pixel;
     const w = params[6] * x + params[7] * y + 1;
-    const w2 = w * w;
+    const _w2 = w * w;
     const px = (params[0] * x + params[1] * y + params[2]) / w;
     const py = (params[3] * x + params[4] * y + params[5]) / w;
     residuals.push(px - p.real.x);
@@ -62479,416 +63402,6 @@ function solveLinearSystem8x8(A, b) {
   }
   return x;
 }
-function analyzeMarkerComplete(marker, imageWidth, imageHeight, focalLengthPx = 800) {
-  const markerSizeCm = getMarkerSize();
-  const corners = marker.magentaPositions?.length === 4 ? marker.magentaPositions : marker.corners;
-  const side1 = Math.sqrt((corners[1].x - corners[0].x) ** 2 + (corners[1].y - corners[0].y) ** 2);
-  const side2 = Math.sqrt((corners[2].x - corners[1].x) ** 2 + (corners[2].y - corners[1].y) ** 2);
-  const side3 = Math.sqrt((corners[3].x - corners[2].x) ** 2 + (corners[3].y - corners[2].y) ** 2);
-  const side4 = Math.sqrt((corners[0].x - corners[3].x) ** 2 + (corners[0].y - corners[3].y) ** 2);
-  const avgSizePx = (side1 + side2 + side3 + side4) / 4;
-  const pose = estimatePoseFromCorners(corners);
-  const depthCm = markerSizeCm * focalLengthPx / avgSizePx;
-  const depthConfidence = avgSizePx > 50 ? Math.min(0.95, avgSizePx / 200) : 0.5;
-  const poseQuality = calculatePoseQuality(pose);
-  const homographyQuality = (marker.homographyQuality || marker.score) * 100;
-  const detectionQuality = marker.magentaFound / 4 * 100;
-  const overallQuality = (poseQuality + homographyQuality + detectionQuality) / 3;
-  const qualityRating = overallQuality >= 85 ? "excellent" : overallQuality >= 70 ? "good" : overallQuality >= 50 ? "acceptable" : "poor";
-  const bandAnalysis = analyzeMarkerBands(marker, markerSizeCm);
-  return {
-    markerId: marker.id,
-    markerSizeCm,
-    markerSizePx: avgSizePx,
-    pose,
-    depth: {
-      estimatedCm: Math.round(depthCm),
-      estimatedM: parseFloat((depthCm / 100).toFixed(2)),
-      confidence: depthConfidence,
-      method: "focal"
-    },
-    quality: {
-      overall: Math.round(overallQuality),
-      homographyQuality: Math.round(homographyQuality),
-      poseQuality: Math.round(poseQuality),
-      detectionQuality: Math.round(detectionQuality),
-      rating: qualityRating
-    },
-    bandAnalysis,
-    corners,
-    extendedPoints: marker.extendedPoints
-  };
-}
-function estimatePoseFromCorners(corners) {
-  const [tl, tr, br, bl] = corners;
-  const topWidth = Math.sqrt((tr.x - tl.x) ** 2 + (tr.y - tl.y) ** 2);
-  const bottomWidth = Math.sqrt((br.x - bl.x) ** 2 + (br.y - bl.y) ** 2);
-  const ratioX = topWidth / (bottomWidth || 1);
-  const rotX = Math.round(Math.atan2(ratioX - 1, 0.5) * 180 / Math.PI);
-  const leftHeight = Math.sqrt((bl.x - tl.x) ** 2 + (bl.y - tl.y) ** 2);
-  const rightHeight = Math.sqrt((br.x - tr.x) ** 2 + (br.y - tr.y) ** 2);
-  const ratioY = leftHeight / (rightHeight || 1);
-  const rotY = Math.round(Math.atan2(ratioY - 1, 0.5) * 180 / Math.PI);
-  const rotZ = Math.round(Math.atan2(tr.y - tl.y, tr.x - tl.x) * 180 / Math.PI);
-  return { rotX, rotY, rotZ };
-}
-function calculatePoseQuality(pose) {
-  const maxAcceptableAngle = 45;
-  const penaltyX = Math.min(100, Math.abs(pose.rotX) * 2);
-  const penaltyY = Math.min(100, Math.abs(pose.rotY) * 2);
-  const penaltyZ = Math.min(50, Math.abs(pose.rotZ));
-  return Math.max(0, 100 - penaltyX - penaltyY - penaltyZ);
-}
-function analyzeMarkerBands(marker, markerSizeCm) {
-  if (!marker.extendedPoints || marker.extendedPoints.detectedCount < 8) {
-    return {
-      enabled: false,
-      bandsDetected: 0,
-      totalPoints: 0,
-      validPoints: 0,
-      transitionRatios: [],
-      suggestedCorrection: 1,
-      correctionConfidence: 0,
-      validationMessage: "Pas assez de points de transition d\xE9tect\xE9s",
-      isValid: false
-    };
-  }
-  const ext = marker.extendedPoints;
-  const corners = ext.corners;
-  const transitions = MARKER_SPECS.transitions;
-  const transitionRatios = [];
-  const errors = [];
-  console.log(`
-${"\u2550".repeat(70)}`);
-  console.log(`\u{1F52C} SUPER ANALYSE DES BANDES ArUco`);
-  console.log(`${"\u2550".repeat(70)}`);
-  console.log(`\u{1F4D0} Taille marqueur: ${markerSizeCm} cm`);
-  console.log(`\u{1F4D0} Transitions attendues (cm): [${transitions.map((t) => t.toFixed(2)).join(", ")}]`);
-  console.log(`\u{1F4D0} Transitions attendues (ratio): [${transitions.map((t) => (t / markerSizeCm).toFixed(4)).join(", ")}]`);
-  console.log(`\u{1F4D0} Coins d\xE9tect\xE9s:`);
-  console.log(`   TL: (${corners[0].x.toFixed(1)}, ${corners[0].y.toFixed(1)})`);
-  console.log(`   TR: (${corners[1].x.toFixed(1)}, ${corners[1].y.toFixed(1)})`);
-  console.log(`   BR: (${corners[2].x.toFixed(1)}, ${corners[2].y.toFixed(1)})`);
-  console.log(`   BL: (${corners[3].x.toFixed(1)}, ${corners[3].y.toFixed(1)})`);
-  const edges = [
-    { name: "top", transitions: ext.topTransitions, start: corners[0], end: corners[1] },
-    { name: "right", transitions: ext.rightTransitions, start: corners[1], end: corners[2] },
-    { name: "bottom", transitions: ext.bottomTransitions, start: corners[3], end: corners[2] },
-    { name: "left", transitions: ext.leftTransitions, start: corners[0], end: corners[3] }
-  ];
-  for (const edge of edges) {
-    const edgeLength = Math.sqrt(
-      (edge.end.x - edge.start.x) ** 2 + (edge.end.y - edge.start.y) ** 2
-    );
-    console.log(`
-\u{1F4CD} BORD ${edge.name.toUpperCase()}:`);
-    console.log(`   Start: (${edge.start.x.toFixed(1)}, ${edge.start.y.toFixed(1)})`);
-    console.log(`   End: (${edge.end.x.toFixed(1)}, ${edge.end.y.toFixed(1)})`);
-    console.log(`   Longueur (px): ${edgeLength.toFixed(1)}`);
-    for (let i = 0; i < edge.transitions.length && i < transitions.length; i++) {
-      const transitionPoint = edge.transitions[i];
-      const expectedPositionCm = transitions[i];
-      const expectedRatio = expectedPositionCm / markerSizeCm;
-      const distToStart = Math.sqrt(
-        (transitionPoint.x - edge.start.x) ** 2 + (transitionPoint.y - edge.start.y) ** 2
-      );
-      const measuredRatio = distToStart / edgeLength;
-      const error = Math.abs((measuredRatio - expectedRatio) / expectedRatio) * 100;
-      const expectedPx = {
-        x: edge.start.x + expectedRatio * (edge.end.x - edge.start.x),
-        y: edge.start.y + expectedRatio * (edge.end.y - edge.start.y)
-      };
-      const transitionName = ["NOIR\u2192BLANC", "BLANC\u2192NOIR", "NOIR\u2192BLANC", "BLANC\u2192NOIR"][i];
-      const signedError = (measuredRatio - expectedRatio) / expectedRatio * 100;
-      const isReliableTransition = i === 1 || i === 2;
-      const reliabilityTag = isReliableTransition ? "\u{1F3AF} UTILIS\xC9" : "\u26A0\uFE0F IGNOR\xC9 (proche coins)";
-      console.log(`   Transition ${i + 1} (${expectedPositionCm.toFixed(1)}cm - ${transitionName}) ${reliabilityTag}:`);
-      console.log(`      Attendu: ratio=${expectedRatio.toFixed(4)} \u2192 px=(${expectedPx.x.toFixed(1)}, ${expectedPx.y.toFixed(1)})`);
-      console.log(`      Mesur\xE9:  ratio=${measuredRatio.toFixed(4)} \u2192 px=(${transitionPoint.x.toFixed(1)}, ${transitionPoint.y.toFixed(1)})`);
-      console.log(`      Erreur: ${signedError > 0 ? "+" : ""}${signedError.toFixed(2)}% (${signedError > 0 ? "trop loin" : "trop proche"} du start)`);
-      if (isReliableTransition) {
-        errors.push(error);
-        const pointData = ext.allPoints.find(
-          (p) => p.type === "transition" && Math.abs(p.pixel.x - transitionPoint.x) < 5 && Math.abs(p.pixel.y - transitionPoint.y) < 5
-        );
-        transitionRatios.push({
-          expectedRatio,
-          measuredRatio,
-          error,
-          confidence: pointData?.confidence || 0.5,
-          edge: edge.name,
-          positionCm: expectedPositionCm
-        });
-      }
-    }
-  }
-  const topBottomErrors = transitionRatios.filter((t) => t.edge === "top" || t.edge === "bottom");
-  const leftRightErrors = transitionRatios.filter((t) => t.edge === "left" || t.edge === "right");
-  const avgXError = topBottomErrors.length > 0 ? topBottomErrors.reduce((sum, t) => sum + (t.measuredRatio - t.expectedRatio) / t.expectedRatio, 0) / topBottomErrors.length * 100 : 0;
-  const avgYError = leftRightErrors.length > 0 ? leftRightErrors.reduce((sum, t) => sum + (t.measuredRatio - t.expectedRatio) / t.expectedRatio, 0) / leftRightErrors.length * 100 : 0;
-  console.log(`
-\u{1F4CA} R\xC9SUM\xC9 ERREURS PAR AXE (T2+T3 seulement - bords pattern central):`);
-  console.log(`   \u{1F3AF} Transitions utilis\xE9es: ${transitionRatios.length}/16 (T2 et T3 sur 4 bords)`);
-  console.log(`   Axe X (top+bottom): ${avgXError > 0 ? "+" : ""}${avgXError.toFixed(2)}%`);
-  console.log(`   Axe Y (left+right): ${avgYError > 0 ? "+" : ""}${avgYError.toFixed(2)}%`);
-  console.log(`${"\u2550".repeat(70)}
-`);
-  const validPoints = ext.allPoints.filter((p) => p.confidence > 0.6).length;
-  const avgError = errors.length > 0 ? errors.reduce((a, b) => a + b, 0) / errors.length : 0;
-  let suggestedCorrection = 1;
-  let signedErrorPercent = 0;
-  if (transitionRatios.length >= 4) {
-    const ratios = transitionRatios.map((tr) => tr.measuredRatio / tr.expectedRatio);
-    const avgRatio = ratios.reduce((a, b) => a + b, 0) / ratios.length;
-    signedErrorPercent = (avgRatio - 1) * 100;
-    suggestedCorrection = 1 / avgRatio;
-    console.log(`\u{1F4CA} [BANDS T2+T3] Ratios individuels: ${ratios.map((r) => r.toFixed(3)).join(", ")}`);
-    console.log(`\u{1F4CA} [BANDS T2+T3] Ratio moyen mesur\xE9/attendu: ${avgRatio.toFixed(4)}`);
-    console.log(`\u{1F4CA} [BANDS T2+T3] Biais syst\xE9matique: ${signedErrorPercent > 0 ? "+" : ""}${signedErrorPercent.toFixed(2)}%`);
-    console.log(`\u{1F4CA} [BANDS T2+T3] Correction sugg\xE9r\xE9e: \xD7${suggestedCorrection.toFixed(4)}`);
-  }
-  const correctionConfidence = transitionRatios.length >= 8 ? 0.95 : transitionRatios.length >= 6 ? 0.85 : transitionRatios.length >= 4 ? 0.7 : 0.4;
-  const isValid = avgError < 5 && validPoints >= 8;
-  let validationMessage = "";
-  if (avgError < 2) {
-    validationMessage = "\u2705 Excellent ! Calibration tr\xE8s pr\xE9cise";
-  } else if (avgError < 5) {
-    validationMessage = "\u2705 Bon ! Calibration acceptable";
-  } else if (avgError < 10) {
-    validationMessage = "\u26A0\uFE0F Calibration approximative - correction sugg\xE9r\xE9e";
-  } else {
-    validationMessage = "\u274C Calibration incorrecte - v\xE9rifier le marqueur";
-  }
-  return {
-    enabled: true,
-    bandsDetected: Math.min(4, Math.floor(transitionRatios.length / 4)),
-    totalPoints: ext.allPoints.length,
-    validPoints,
-    transitionRatios,
-    suggestedCorrection: parseFloat(suggestedCorrection.toFixed(4)),
-    correctionConfidence,
-    validationMessage,
-    isValid
-  };
-}
-function calculateOptimalCorrection(analysis, ultraPrecisionResult, gyroscopeData) {
-  console.log(`
-${"=".repeat(60)}`);
-  console.log(`\u{1F52C} CALCUL CORRECTION OPTIMALE`);
-  console.log(`${"=".repeat(60)}`);
-  console.log(`\u{1F4CA} bandAnalysis.enabled: ${analysis.bandAnalysis.enabled}`);
-  console.log(`\u{1F4CA} bandAnalysis.transitionRatios.length: ${analysis.bandAnalysis.transitionRatios.length}`);
-  console.log(`\u{1F4CA} bandAnalysis.suggestedCorrection: ${analysis.bandAnalysis.suggestedCorrection}`);
-  console.log(`\u{1F4CA} ultraPrecision: ${ultraPrecisionResult ? `${ultraPrecisionResult.totalPoints} points` : "non fourni"}`);
-  console.log(`\u{1F4F1} gyroscope: ${gyroscopeData ? `beta=${gyroscopeData.beta.toFixed(1)}\xB0, gamma=${gyroscopeData.gamma.toFixed(1)}\xB0` : "non fourni"}`);
-  const contributions = {
-    bandAnalysis: { correction: 1, weight: 0, confidence: 0 },
-    ransacError: { correction: 1, weight: 0, confidence: 0 },
-    reprojection: { correction: 1, weight: 0, confidence: 0 },
-    poseCompensation: { correction: 1, weight: 0, confidence: 0 },
-    gyroscopeCompensation: { correction: 1, weight: 0, confidence: 0 }
-    // 🆕
-  };
-  if (analysis.bandAnalysis.enabled && analysis.bandAnalysis.transitionRatios.length >= 4) {
-    const bandCorr = analysis.bandAnalysis.suggestedCorrection;
-    const bandConf = analysis.bandAnalysis.correctionConfidence;
-    contributions.bandAnalysis = {
-      correction: bandCorr,
-      weight: 0.45,
-      // Légèrement réduit pour faire place au gyroscope
-      confidence: bandConf
-    };
-    console.log(`\u{1F4CA} [CORRECTION] Bandes: \xD7${bandCorr.toFixed(4)} (confiance: ${(bandConf * 100).toFixed(0)}%)`);
-  }
-  if (ultraPrecisionResult && ultraPrecisionResult.totalPoints > 0) {
-    const inlierRatio = ultraPrecisionResult.inlierPoints / ultraPrecisionResult.totalPoints;
-    const ransacCorr = 1 + (0.9 - inlierRatio) * 0.05;
-    const ransacConf = Math.min(0.8, inlierRatio);
-    contributions.ransacError = {
-      correction: ransacCorr,
-      weight: 0.2,
-      confidence: ransacConf
-    };
-    console.log(`\u{1F4CA} [CORRECTION] RANSAC: \xD7${ransacCorr.toFixed(4)} (${ultraPrecisionResult.inlierPoints}/${ultraPrecisionResult.totalPoints} inliers)`);
-  }
-  if (ultraPrecisionResult && ultraPrecisionResult.reprojectionError > 0) {
-    const reprErr = ultraPrecisionResult.reprojectionError;
-    const reprCorr = 1 - reprErr / 1e3;
-    const reprConf = Math.max(0.3, 1 - reprErr / 10);
-    contributions.reprojection = {
-      correction: Math.max(0.95, Math.min(1.05, reprCorr)),
-      // Limiter à ±5%
-      weight: 0.15,
-      confidence: reprConf
-    };
-    console.log(`\u{1F4CA} [CORRECTION] Reprojection: \xD7${reprCorr.toFixed(4)} (erreur: ${reprErr.toFixed(2)}mm)`);
-  }
-  const { rotX, rotY, rotZ } = analysis.pose;
-  const cosX = Math.cos(Math.abs(rotX) * Math.PI / 180);
-  const cosY = Math.cos(Math.abs(rotY) * Math.PI / 180);
-  const poseCorr = 1 / Math.sqrt(cosX * cosY);
-  const poseConf = Math.max(0.5, 1 - (Math.abs(rotX) + Math.abs(rotY)) / 60);
-  contributions.poseCompensation = {
-    correction: Math.max(0.95, Math.min(1.1, poseCorr)),
-    // Limiter à -5% / +10%
-    weight: gyroscopeData ? 0.1 : 0.15,
-    // Réduit si gyroscope disponible
-    confidence: poseConf
-  };
-  console.log(`\u{1F4CA} [CORRECTION] Pose: \xD7${poseCorr.toFixed(4)} (rotX=${rotX}\xB0, rotY=${rotY}\xB0) \u2192 S\xE9paration X/Y en section 7\uFE0F\u20E3`);
-  if (gyroscopeData) {
-    const { beta, gamma, quality: gyroQuality } = gyroscopeData;
-    const IDEAL_BETA = 85;
-    const betaError = Math.abs(beta - IDEAL_BETA);
-    const gammaError = Math.abs(gamma);
-    const betaRad = betaError * Math.PI / 180;
-    const gammaRad = gammaError * Math.PI / 180;
-    const betaFactor = betaError < 60 ? 1 / Math.cos(betaRad) : 1.5;
-    const gammaFactor = gammaError < 60 ? 1 / Math.cos(gammaRad) : 1.5;
-    const gyroCorr = Math.sqrt(betaFactor * gammaFactor);
-    const angleScore = Math.max(0, 1 - (betaError + gammaError) / 60);
-    const gyroConf = (gyroQuality !== void 0 ? gyroQuality / 100 : 0.8) * angleScore;
-    contributions.gyroscopeCompensation = {
-      correction: Math.max(0.95, Math.min(1.15, gyroCorr)),
-      // Limiter à -5% / +15%
-      weight: 0.15,
-      // Poids significatif car données réelles
-      confidence: Math.max(0.4, gyroConf)
-    };
-    console.log(`\u{1F4F1} [CORRECTION] Gyroscope: \xD7${gyroCorr.toFixed(4)} (beta=${beta.toFixed(1)}\xB0, gamma=${gamma.toFixed(1)}\xB0, conf=${(gyroConf * 100).toFixed(0)}%)`);
-    const deltaRotX = Math.abs(rotX - (90 - beta));
-    const deltaRotY = Math.abs(rotY - gamma);
-    if (deltaRotX > 15 || deltaRotY > 15) {
-      console.warn(`\u26A0\uFE0F [VALIDATION] \xC9cart pose/gyro important: \u0394X=${deltaRotX.toFixed(1)}\xB0, \u0394Y=${deltaRotY.toFixed(1)}\xB0`);
-      contributions.poseCompensation.confidence *= 0.7;
-      contributions.gyroscopeCompensation.confidence *= 0.7;
-    } else {
-      console.log(`\u2705 [VALIDATION] Pose et gyroscope coh\xE9rents (\u0394X=${deltaRotX.toFixed(1)}\xB0, \u0394Y=${deltaRotY.toFixed(1)}\xB0)`);
-      contributions.gyroscopeCompensation.confidence = Math.min(1, contributions.gyroscopeCompensation.confidence * 1.2);
-    }
-  }
-  let totalWeight = 0;
-  let weightedSum = 0;
-  let confidenceSum = 0;
-  for (const key2 of Object.keys(contributions)) {
-    const { correction, weight, confidence } = contributions[key2];
-    if (weight > 0 && confidence > 0.3) {
-      const effectiveWeight = weight * confidence;
-      weightedSum += correction * effectiveWeight;
-      totalWeight += effectiveWeight;
-      confidenceSum += confidence * weight;
-    }
-  }
-  const finalCorrection = totalWeight > 0 ? weightedSum / totalWeight : 1;
-  const globalConfidence = totalWeight > 0 ? confidenceSum / totalWeight : 0;
-  let totalWeightSansBandes = 0;
-  let weightedSumSansBandes = 0;
-  for (const key2 of Object.keys(contributions)) {
-    if (key2 === "bandAnalysis" || key2 === "poseCompensation") continue;
-    const { correction, weight, confidence } = contributions[key2];
-    if (weight > 0 && confidence > 0.3) {
-      const effectiveWeight = weight * confidence;
-      weightedSumSansBandes += correction * effectiveWeight;
-      totalWeightSansBandes += effectiveWeight;
-    }
-  }
-  const finalCorrectionSansBandes = totalWeightSansBandes > 0 ? weightedSumSansBandes / totalWeightSansBandes : 1;
-  console.log(`
-\u{1F4CA} [CORRECTION SANS BANDES NI POSE] Base: \xD7${finalCorrectionSansBandes.toFixed(4)} (pour mode homographie)`);
-  console.log(`   \u2139\uFE0F Exclut: bandAnalysis, poseCompensation (d\xE9j\xE0 int\xE9gr\xE9s dans l'homographie)`);
-  const { rotX: poseRotX, rotY: poseRotY, rotZ: poseRotZ } = analysis.pose;
-  const cosRotY = Math.cos(Math.abs(poseRotY) * Math.PI / 180);
-  const cosRotX = Math.cos(Math.abs(poseRotX) * Math.PI / 180);
-  const cosRotZ = Math.cos(Math.abs(poseRotZ) * Math.PI / 180);
-  const sinRotZ = Math.sin(Math.abs(poseRotZ) * Math.PI / 180);
-  const rawCorrX = 1 / Math.max(0.7, cosRotY);
-  const rawCorrY = 1 / Math.max(0.7, cosRotX);
-  const rotZCorrFactor = Math.abs(poseRotZ) > 2 ? cosRotZ : 1;
-  console.log(`
-\u{1F4D0} [CORRECTION PAR AXE] G\xE9om\xE9trie perspective:`);
-  console.log(`   rotX (haut/bas) = ${poseRotX.toFixed(1)}\xB0 \u2192 cos=${cosRotX.toFixed(4)} \u2192 correction Y = \xD7${rawCorrY.toFixed(4)}`);
-  console.log(`   rotY (gauche/droite) = ${poseRotY.toFixed(1)}\xB0 \u2192 cos=${cosRotY.toFixed(4)} \u2192 correction X = \xD7${rawCorrX.toFixed(4)}`);
-  console.log(`   rotZ (dans le plan) = ${poseRotZ.toFixed(1)}\xB0 \u2192 cos=${cosRotZ.toFixed(4)}, sin=${sinRotZ.toFixed(4)} \u2192 facteur m\xE9lange = \xD7${rotZCorrFactor.toFixed(4)}`);
-  let correctionX = finalCorrection * rawCorrX * rotZCorrFactor;
-  let correctionY = finalCorrection * rawCorrY * rotZCorrFactor;
-  const avgCorr = (correctionX + correctionY) / 2;
-  if (avgCorr > 0) {
-    const normFactor = finalCorrection / avgCorr;
-    correctionX *= normFactor;
-    correctionY *= normFactor;
-  }
-  console.log(`   Apr\xE8s normalisation: X = \xD7${correctionX.toFixed(4)}, Y = \xD7${correctionY.toFixed(4)}`);
-  if (analysis.bandAnalysis.transitionRatios.length >= 8) {
-    const ratios = analysis.bandAnalysis.transitionRatios;
-    const widthBands = ratios.filter((r) => r.edge === "top" || r.edge === "bottom");
-    const avgWidthError = widthBands.reduce((sum, r) => sum + r.error, 0) / (widthBands.length || 1);
-    const heightBands = ratios.filter((r) => r.edge === "left" || r.edge === "right");
-    const avgHeightError = heightBands.reduce((sum, r) => sum + r.error, 0) / (heightBands.length || 1);
-    const bandAdjustX = 1 - avgWidthError / 100;
-    const bandAdjustY = 1 - avgHeightError / 100;
-    correctionX *= bandAdjustX;
-    correctionY *= bandAdjustY;
-    console.log(`   Bandes: erreur largeur (X)=${avgWidthError.toFixed(2)}%, hauteur (Y)=${avgHeightError.toFixed(2)}%`);
-    console.log(`   Ajustement bandes: X = \xD7${bandAdjustX.toFixed(4)}, Y = \xD7${bandAdjustY.toFixed(4)}`);
-  }
-  if (gyroscopeData) {
-    const { beta, gamma } = gyroscopeData;
-    const IDEAL_BETA = 85;
-    const betaError = Math.abs(beta - IDEAL_BETA);
-    if (betaError > 5) {
-      const betaRad = betaError * Math.PI / 180;
-      const betaFactor = Math.min(1.15, 1 / Math.cos(betaRad));
-      correctionY *= betaFactor;
-      console.log(`   \u{1F4F1} Gyro beta (${beta.toFixed(1)}\xB0 vs id\xE9al ${IDEAL_BETA}\xB0): Y \xD7 ${betaFactor.toFixed(4)}`);
-    }
-    if (Math.abs(gamma) > 5) {
-      const gammaRad = Math.abs(gamma) * Math.PI / 180;
-      const gammaFactor = Math.min(1.15, 1 / Math.cos(gammaRad));
-      correctionX *= gammaFactor;
-      console.log(`   \u{1F4F1} Gyro gamma (${gamma.toFixed(1)}\xB0): X \xD7 ${gammaFactor.toFixed(4)}`);
-    }
-  }
-  correctionX = Math.max(0.9, Math.min(1.15, correctionX));
-  correctionY = Math.max(0.9, Math.min(1.15, correctionY));
-  console.log(`
-\u{1F3AF} [CORRECTION FINALE PAR AXE] X = \xD7${correctionX.toFixed(4)}, Y = \xD7${correctionY.toFixed(4)}`);
-  console.log(`   Diff\xE9rence X/Y: ${((correctionX / correctionY - 1) * 100).toFixed(2)}%`);
-  let correctionXSansBandes = finalCorrectionSansBandes;
-  let correctionYSansBandes = finalCorrectionSansBandes;
-  console.log(`\u{1F4CA} [CORRECTION SANS BANDES] Base: X=\xD7${correctionXSansBandes.toFixed(4)}, Y=\xD7${correctionYSansBandes.toFixed(4)}`);
-  console.log(`   \u2705 Mode homographie: PAS de correction bandes (d\xE9j\xE0 int\xE9gr\xE9e dans la matrice H)`);
-  if (analysis.bandAnalysis.transitionRatios.length >= 8) {
-    const ratios = analysis.bandAnalysis.transitionRatios;
-    const widthBands = ratios.filter((r) => r.edge === "top" || r.edge === "bottom");
-    const avgWidthError = widthBands.reduce((sum, r) => sum + r.error, 0) / (widthBands.length || 1);
-    const heightBands = ratios.filter((r) => r.edge === "left" || r.edge === "right");
-    const avgHeightError = heightBands.reduce((sum, r) => sum + r.error, 0) / (heightBands.length || 1);
-    console.log(`   \u{1F4CA} [INFO] Erreur bandes d\xE9tect\xE9e: X=${avgWidthError.toFixed(2)}%, Y=${avgHeightError.toFixed(2)}% (non appliqu\xE9e)`);
-  }
-  console.log(`   \u2705 Mode homographie: PAS de correction gyroscope (perspective d\xE9j\xE0 corrig\xE9e)`);
-  console.log(`\u{1F3AF} [CORRECTION SANS BANDES PAR AXE] X = \xD7${correctionXSansBandes.toFixed(4)}, Y = \xD7${correctionYSansBandes.toFixed(4)}`);
-  const gyroStr = gyroscopeData ? `
-  - Gyroscope: \xD7${contributions.gyroscopeCompensation.correction.toFixed(4)} (poids ${(contributions.gyroscopeCompensation.weight * 100).toFixed(0)}%)` : "";
-  const explanation = `Correction optimale: \xD7${finalCorrection.toFixed(4)} (confiance ${(globalConfidence * 100).toFixed(0)}%)
-  - Bandes: \xD7${contributions.bandAnalysis.correction.toFixed(4)} (poids ${(contributions.bandAnalysis.weight * 100).toFixed(0)}%)
-  - RANSAC: \xD7${contributions.ransacError.correction.toFixed(4)} (poids ${(contributions.ransacError.weight * 100).toFixed(0)}%)
-  - Reprojection: \xD7${contributions.reprojection.correction.toFixed(4)} (poids ${(contributions.reprojection.weight * 100).toFixed(0)}%)
-  - Pose: \xD7${contributions.poseCompensation.correction.toFixed(4)} (poids ${(contributions.poseCompensation.weight * 100).toFixed(0)}%)${gyroStr}
-  \u{1F4CC} SANS BANDES (homographie): X=\xD7${correctionXSansBandes.toFixed(4)}, Y=\xD7${correctionYSansBandes.toFixed(4)}`;
-  console.log(`
-\u{1F3AF} [CORRECTION OPTIMALE] ${explanation}
-`);
-  return {
-    finalCorrection: parseFloat(finalCorrection.toFixed(6)),
-    correctionX: parseFloat(correctionX.toFixed(6)),
-    correctionY: parseFloat(correctionY.toFixed(6)),
-    correctionXSansBandes: parseFloat(correctionXSansBandes.toFixed(6)),
-    correctionYSansBandes: parseFloat(correctionYSansBandes.toFixed(6)),
-    contributions,
-    globalConfidence: parseFloat(globalConfidence.toFixed(4)),
-    explanation
-  };
-}
 
 // src/api/measure.ts
 var sharp = sharpModule.default || sharpModule;
@@ -62896,9 +63409,9 @@ var router89 = import_express91.default.Router();
 var detector = new MarkerDetector(30, 2e3);
 var measureMode = process.env.AI_MEASURE_ENGINE || "vision_ar";
 console.log(`\u{1F4F7} [MEASURE] Mode de mesure photo: ${measureMode.toUpperCase()}`);
-console.log(`   \u2192 Marqueur: ${MARKER_SPECS.markerSize}cm \xD7 ${MARKER_SPECS.markerSize}cm avec points MAGENTA`);
-console.log(`   \u2192 D\xE9tection \xE9tendue: 16 points de r\xE9f\xE9rence (4 coins + 12 transitions)`);
-console.log(`   \u2192 Services: MultiPhotoFusion \u2705, EdgeDetection \u2705, Gemini \u2705`);
+console.log(`   \u2192 Marqueur: M\xE9tr\xE9 A4 V1.2 (13.0cm \xD7 21.7cm AprilTag + 12 points noirs)`);
+console.log(`   \u2192 D\xE9tection \xE9tendue: 4 AprilTags + 12 points dispers\xE9s + ChArUco 6\xD76`);
+console.log(`   \u2192 Services: MetreA4Detector \u2705, PhotoQualityAnalyzer \u2705, EdgeDetection \u2705`);
 router89.get("/photo/status", async (_req, res) => {
   try {
     const mode = process.env.AI_MEASURE_ENGINE || "gemini";
@@ -62908,7 +63421,7 @@ router89.get("/photo/status", async (_req, res) => {
       available: true,
       // Toujours disponible maintenant
       mode,
-      version: "v1.0-magenta",
+      version: "v1.2-metre-a4",
       markerSpecs: MARKER_SPECS,
       timestamp: (/* @__PURE__ */ new Date()).toISOString()
     });
@@ -62945,48 +63458,164 @@ router89.post("/photo", async (req2, res) => {
       return res.status(400).json({ success: false, error: "Impossible de lire les dimensions de l'image" });
     }
     console.log(`[measure/photo] \u{1F4D0} Image: ${width}x${height}`);
-    const { data, info } = await image.ensureAlpha().raw().toBuffer({ resolveWithObject: true });
-    const markers = detector.detect({
+    console.log("[measure/photo] \u{1F3A8} Pr\xE9-traitement de l'image pour meilleure d\xE9tection...");
+    const { data, info } = await sharp(buffer).normalize().sharpen({
+      sigma: 1.5,
+      // Rayon du flou gaussien (1.5 = netteté modérée)
+      m1: 1.2,
+      // Facteur de netteté pour les zones plates (1.2 = 20% plus net)
+      m2: 0.8,
+      // Facteur de netteté pour les zones à fort contraste
+      x1: 3,
+      // Seuil inférieur pour la détection de contraste
+      y2: 15,
+      // Seuil supérieur
+      y3: 15
+      // Seuil de saturation
+    }).modulate({
+      brightness: 1,
+      // Pas de changement de luminosité globale
+      saturation: 1.1,
+      // Légère augmentation de saturation (magenta + noir plus vifs)
+      hue: 0
+      // Pas de changement de teinte
+    }).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+    console.log("[measure/photo] \u2705 Image pr\xE9-trait\xE9e: contraste augment\xE9, nettet\xE9 am\xE9lior\xE9e");
+    console.log("[measure/photo] \u{1F3AF} D\xE9tection initiale des cercles magenta...");
+    const initialMarkers = detector.detect({
       data,
       width: info.width,
       height: info.height
+    });
+    let finalData = data;
+    let finalWidth = info.width;
+    let finalHeight = info.height;
+    if (initialMarkers.length > 0 && calibration?.markerSizeCm) {
+      console.log("[measure/photo] \u{1F58A}\uFE0F Dessin des lignes noires de r\xE9f\xE9rence (1mm) sur les bords ext\xE9rieurs...");
+      const marker = initialMarkers[0];
+      const markerSizeMm = calibration.markerSizeCm * 10;
+      const halfSize = markerSizeMm / 2;
+      const corners = marker.corners;
+      const width1 = Math.sqrt((corners[1].x - corners[0].x) ** 2 + (corners[1].y - corners[0].y) ** 2);
+      const width2 = Math.sqrt((corners[2].x - corners[3].x) ** 2 + (corners[2].y - corners[3].y) ** 2);
+      const avgWidthPx = (width1 + width2) / 2;
+      const pixelsPerMm = avgWidthPx / markerSizeMm;
+      console.log(`[measure/photo]    \u{1F4CF} Taille marqueur: ${markerSizeMm}mm (${avgWidthPx.toFixed(1)}px)`);
+      console.log(`[measure/photo]    \u{1F4CF} \xC9chelle: ${pixelsPerMm.toFixed(3)} px/mm`);
+      const centerX = (corners[0].x + corners[1].x + corners[2].x + corners[3].x) / 4;
+      const centerY = (corners[0].y + corners[1].y + corners[2].y + corners[3].y) / 4;
+      const borderOffsetPx = halfSize * pixelsPerMm;
+      const lineWidth = 1;
+      const lineWidthPx = lineWidth * pixelsPerMm;
+      const lines = [
+        // Top (horizontal)
+        { x1: centerX - borderOffsetPx, y1: centerY - borderOffsetPx, x2: centerX + borderOffsetPx, y2: centerY - borderOffsetPx },
+        // Right (vertical)
+        { x1: centerX + borderOffsetPx, y1: centerY - borderOffsetPx, x2: centerX + borderOffsetPx, y2: centerY + borderOffsetPx },
+        // Bottom (horizontal)
+        { x1: centerX - borderOffsetPx, y1: centerY + borderOffsetPx, x2: centerX + borderOffsetPx, y2: centerY + borderOffsetPx },
+        // Left (vertical)
+        { x1: centerX - borderOffsetPx, y1: centerY - borderOffsetPx, x2: centerX - borderOffsetPx, y2: centerY + borderOffsetPx }
+      ];
+      const linesSvg = `
+        <svg width="${info.width}" height="${info.height}">
+          ${lines.map(
+        (line) => `<line x1="${line.x1.toFixed(1)}" y1="${line.y1.toFixed(1)}" 
+                   x2="${line.x2.toFixed(1)}" y2="${line.y2.toFixed(1)}" 
+                   stroke="black" stroke-width="${Math.max(1, lineWidthPx.toFixed(1))}"/>`
+      ).join("\n          ")}
+        </svg>
+      `;
+      console.log(`[measure/photo]    \u{1F58A}\uFE0F Dessin de 4 lignes noires (\xE9paisseur: ${lineWidthPx.toFixed(1)}px)`);
+      console.log(`[measure/photo]    \u{1F4CD} Centre marqueur: (${centerX.toFixed(1)}, ${centerY.toFixed(1)})`);
+      const enhancedBuffer = await sharp(buffer).normalize().sharpen({ sigma: 1.5, m1: 1.2 }).modulate({ saturation: 1.1 }).composite([{
+        input: Buffer.from(linesSvg),
+        blend: "over"
+      }]).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+      finalData = enhancedBuffer.data;
+      finalWidth = enhancedBuffer.info.width;
+      finalHeight = enhancedBuffer.info.height;
+      console.log("[measure/photo] \u2705 Lignes de r\xE9f\xE9rence dessin\xE9es, image am\xE9lior\xE9e pr\xEAte");
+    }
+    console.log("[measure/photo] \u{1F3AF} D\xE9tection finale avec lignes de r\xE9f\xE9rence...");
+    const markers = detector.detect({
+      data: finalData,
+      width: finalWidth,
+      height: finalHeight
     });
     let response;
     if (markers.length > 0) {
       const marker = markers[0];
       console.log(`[measure/photo] \u2705 Marqueur d\xE9tect\xE9! Score: ${marker.score}, Taille: ${marker.size.toFixed(0)}px`);
-      console.log("[measure/photo] \u{1F3AF} Lancement d\xE9tection ULTRA-PR\xC9CISE...");
-      const exteriorCorners = marker.magentaPositions || marker.corners;
+      console.log("[measure/photo] \u{1F3A8} Dessin lignes noires ext\xE9rieures 1mm...");
+      const markerSizePx = marker.size;
+      const pixelsPerCm = markerSizePx / 16.8;
+      const lineThicknessPx = Math.max(1, Math.round(pixelsPerCm * 0.1));
+      console.log(`[measure/photo]    \u{1F4CF} R\xE9solution: ${pixelsPerCm.toFixed(1)}px/cm \u2192 ligne ${lineThicknessPx}px (1mm)`);
+      const corners = marker.corners;
+      const svgPaths = [
+        `M ${corners[0].x},${corners[0].y} L ${corners[1].x},${corners[1].y}`,
+        // TL → TR (haut)
+        `M ${corners[1].x},${corners[1].y} L ${corners[2].x},${corners[2].y}`,
+        // TR → BR (droite)
+        `M ${corners[2].x},${corners[2].y} L ${corners[3].x},${corners[3].y}`,
+        // BR → BL (bas)
+        `M ${corners[3].x},${corners[3].y} L ${corners[0].x},${corners[0].y}`
+        // BL → TL (gauche)
+      ];
+      const svg = `
+        <svg width="${info.width}" height="${info.height}">
+          ${svgPaths.map(
+        (path9) => `<path d="${path9}" stroke="black" stroke-width="${lineThicknessPx}" fill="none" stroke-linecap="square"/>`
+      ).join("\n          ")}
+        </svg>
+      `;
+      const enhancedImageBuffer = await sharp(data, {
+        raw: {
+          width: info.width,
+          height: info.height,
+          channels: 4
+        }
+      }).composite([{
+        input: Buffer.from(svg),
+        blend: "over"
+        // Superposer les lignes sur l'image
+      }]).ensureAlpha().raw().toBuffer();
+      console.log("[measure/photo] \u2705 Lignes noires ext\xE9rieures dessin\xE9es");
+      const enhancedData = new Uint8ClampedArray(enhancedImageBuffer);
+      console.log("[measure/photo] \u{1F3AF} Lancement d\xE9tection ULTRA-PR\xC9CISE sur image am\xE9lior\xE9e...");
+      const exteriorCorners = marker.corners;
       let ultraPrecisionResult = null;
       try {
+        const markerWidthMm2 = 130;
+        const markerHeightMm2 = 217;
         ultraPrecisionResult = detectUltraPrecisionPoints(
-          { data, width: info.width, height: info.height },
+          { data: enhancedData, width: info.width, height: info.height },
           exteriorCorners,
-          marker.extendedPoints
+          marker.extendedPoints,
+          markerWidthMm2,
+          markerHeightMm2
         );
         console.log(`[measure/photo] \u{1F3AF} ULTRA-PR\xC9CISION: ${ultraPrecisionResult.inlierPoints}/${ultraPrecisionResult.totalPoints} points, erreur \xB1${ultraPrecisionResult.reprojectionError.toFixed(2)}mm, qualit\xE9 ${(ultraPrecisionResult.quality * 100).toFixed(1)}%`);
       } catch (ultraError) {
         console.warn("[measure/photo] \u26A0\uFE0F Ultra-pr\xE9cision \xE9chou\xE9e, fallback standard:", ultraError.message);
       }
       const srcPoints = marker.corners;
+      const markerWidthForHomography = 130;
+      const markerHeightForHomography = 217;
       const dstPoints = [
         { x: 0, y: 0 },
         // TL
-        { x: MARKER_SPECS.markerSize, y: 0 },
+        { x: markerWidthForHomography, y: 0 },
         // TR
-        { x: MARKER_SPECS.markerSize, y: MARKER_SPECS.markerSize },
+        { x: markerWidthForHomography, y: markerHeightForHomography },
         // BR
-        { x: 0, y: MARKER_SPECS.markerSize }
+        { x: 0, y: markerHeightForHomography }
         // BL
       ];
       const homographyMatrix = ultraPrecisionResult && ultraPrecisionResult.quality > 0.3 ? ultraPrecisionResult.homography : computeHomography(srcPoints, dstPoints);
       const pose = estimatePose(marker.corners);
-      const quality = calculateQualityScore(
-        marker.corners,
-        marker.size,
-        pose.rotX,
-        pose.rotY
-      );
+      const quality = ultraPrecisionResult ? ultraPrecisionResult.quality : 0.5;
       const measurements = {};
       measurements["markerSizePx"] = marker.size;
       measurements["pixelsPerCm"] = marker.homography.pixelsPerCm;
@@ -63002,11 +63631,11 @@ router89.post("/photo", async (req2, res) => {
         marker: {
           id: marker.id,
           corners: marker.corners,
-          magentaPositions: marker.magentaPositions,
+          apriltagPositions: marker.apriltagPositions,
           center: marker.center,
           sizePx: marker.size,
           score: marker.score,
-          magentaFound: marker.magentaFound,
+          apriltagsFound: marker.apriltagsFound,
           extendedPoints: marker.extendedPoints
         },
         homography: {
@@ -63023,6 +63652,8 @@ router89.post("/photo", async (req2, res) => {
           inlierPoints: ultraPrecisionResult.inlierPoints,
           reprojectionErrorMm: ultraPrecisionResult.reprojectionError,
           quality: ultraPrecisionResult.quality,
+          homographyMatrix: ultraPrecisionResult.homography,
+          // 🔬 AJOUT: Matrice 3x3 optimisée RANSAC+LM
           breakdown: {
             corners: ultraPrecisionResult.cornerPoints,
             transitions: ultraPrecisionResult.transitionPoints,
@@ -63049,7 +63680,10 @@ router89.post("/photo", async (req2, res) => {
         debug: {
           markerSpecs: MARKER_SPECS,
           mode: process.env.AI_MEASURE_ENGINE || "vision_ar",
-          detectionMethod: ultraPrecisionResult ? "ultra_precision_ransac_lm" : "magenta_clustering"
+          // 🎯 CRITICAL: Identifier correctement le marqueur AprilTag Métré V1.2 pour le frontend
+          // Le frontend dépend de ce champ pour afficher les dimensions 13×21.7cm (rectangulaire)
+          // Métré A4 V1.2 = AprilTag rectangulaire 130×217mm
+          detectionMethod: markerWidthForHomography === 130 && markerHeightForHomography === 217 ? "apriltag-metre" : ultraPrecisionResult ? "ultra_precision_ransac_lm" : "magenta_clustering"
         },
         durationMs: Date.now() - startTime
       };
@@ -63076,12 +63710,12 @@ router89.post("/photo", async (req2, res) => {
               status: "detected"
             }
           });
-          for (let i = 0; i < marker.magentaPositions.length; i++) {
-            const pos = marker.magentaPositions[i];
+          for (let i = 0; i < marker.apriltagPositions.length; i++) {
+            const pos = marker.apriltagPositions[i];
             await db.measurePhotoPoint.create({
               data: {
                 measurePhotoId: measurePhoto.id,
-                label: `magenta_${i + 1}`,
+                label: `apriltag_${i + 1}`,
                 xPx: pos.x,
                 yPx: pos.y,
                 source: "auto_detect",
@@ -63240,10 +63874,14 @@ router89.post("/photo/ultra", async (req2, res) => {
         const pixelsPerCm = (d1 + d2) / 2 / MARKER_SPECS.markerSize;
         let ultraPrecisionResult = null;
         try {
+          const markerWidthMm2 = 130;
+          const markerHeightMm2 = 217;
           ultraPrecisionResult = detectUltraPrecisionPoints(
             { data, width: info.width, height: info.height },
             exteriorCorners,
-            marker.extendedPoints
+            marker.extendedPoints,
+            markerWidthMm2,
+            markerHeightMm2
           );
           console.log(`   \u2705 Ultra-pr\xE9cision: ${ultraPrecisionResult.inlierPoints}/${ultraPrecisionResult.totalPoints} inliers`);
           console.log(`   \u{1F4CA} Erreur: \xB1${ultraPrecisionResult.reprojectionError.toFixed(2)}mm, Qualit\xE9: ${(ultraPrecisionResult.quality * 100).toFixed(1)}%`);
@@ -63305,7 +63943,7 @@ router89.post("/photo/ultra", async (req2, res) => {
         mmPerPixel: 10 / fusedPixelsPerCm,
         confidence: fusionStats.averageQuality,
         corners: bestResult.marker.corners,
-        magentaPositions: bestResult.marker.magentaPositions,
+        apriltagPositions: bestResult.marker.apriltagPositions,
         extendedPoints: bestResult.marker.extendedPoints
       },
       ultraPrecision: bestResult.ultraPrecision ? {
@@ -63313,6 +63951,8 @@ router89.post("/photo/ultra", async (req2, res) => {
         inlierPoints: bestResult.ultraPrecision.inlierPoints,
         reprojectionErrorMm: bestResult.ultraPrecision.reprojectionError,
         quality: bestResult.ultraPrecision.quality,
+        homographyMatrix: bestResult.ultraPrecision.homography,
+        // 🔬 AJOUT: Matrice 3x3 optimisée RANSAC+LM
         breakdown: {
           exteriorCorners: 4,
           transitionPoints: bestResult.ultraPrecision.transitionPoints,
@@ -63322,6 +63962,17 @@ router89.post("/photo/ultra", async (req2, res) => {
         ransacApplied: true,
         levenbergMarquardtApplied: true,
         ellipseFittingApplied: true
+      } : null,
+      // 🔍 DEBUG QUALITY - TOUTES LES VALEURS CRITIQUES
+      _debug_ultraPrecision: bestResult.ultraPrecision ? {
+        hasQuality: bestResult.ultraPrecision.quality !== void 0,
+        qualityValue: bestResult.ultraPrecision.quality,
+        qualityType: typeof bestResult.ultraPrecision.quality,
+        correctionX: bestResult.ultraPrecision.correctionX,
+        correctionY: bestResult.ultraPrecision.correctionY,
+        correctionConfidence: bestResult.ultraPrecision.correctionConfidence,
+        optimalCorrection: bestResult.ultraPrecision.optimalCorrection,
+        allKeys: Object.keys(bestResult.ultraPrecision)
       } : null,
       fusion: fusionStats,
       perPhotoResults: photoResults.map((r) => ({
@@ -64656,6 +65307,14 @@ async function applySharedReferencesFromOriginalInternal2(params) {
   let applied = 0;
   for (const orig of originals) {
     const copyId = originalToCopy.get(orig.id);
+    const copyExists = await prisma49.treeBranchLeafNode.findUnique({
+      where: { id: copyId },
+      select: { id: true }
+    });
+    if (!copyExists) {
+      console.warn(`\u26A0\uFE0F N\u0153ud ${copyId} introuvable pour MAJ linkedConditionIds`);
+      continue;
+    }
     const origMultiple = Array.isArray(orig.sharedReferenceIds) ? orig.sharedReferenceIds.filter(Boolean) : [];
     const origSingle = orig.sharedReferenceId ?? null;
     const mappedMultiple = origMultiple.map((id) => refCopyIdByOriginal.get(id) || `${id}-${chosenSuffix}`);
@@ -66381,1354 +67040,1723 @@ var cloud_run_domains_default = router90;
 
 // src/api/measurement-reference.ts
 var import_express94 = require("express");
-init_database();
+var sharpModule2 = __toESM(require("sharp"), 1);
 
-// src/services/EdgeDetectionService.ts
-var import_sharp = __toESM(require("sharp"), 1);
-var EdgeDetectionService = class {
-  /**
-   * 🎯 Détecte les 4 coins d'une feuille BLANCHE dans une zone de l'image
-   * NOUVELLE APPROCHE: 
-   * 1. Créer un masque binaire (blanc vs non-blanc)
-   * 2. Trouver le contour de la zone blanche
-   * 3. Approximer le contour par un quadrilatère
-   * 4. Extraire les 4 coins
-   */
-  async detectWhitePaperCorners(imageBase64, selectionZone, mimeType = "image/jpeg") {
-    try {
-      console.log("\u{1F50D} [EdgeDetection V2] D\xE9but d\xE9tection de la feuille blanche...");
-      console.log(`\u{1F4D0} [EdgeDetection V2] Zone: ${selectionZone.x.toFixed(1)}%, ${selectionZone.y.toFixed(1)}% - ${selectionZone.width.toFixed(1)}x${selectionZone.height.toFixed(1)}%`);
-      const imageBuffer = Buffer.from(imageBase64, "base64");
-      const metadata = await (0, import_sharp.default)(imageBuffer).metadata();
-      const imgWidth = metadata.width || 0;
-      const imgHeight = metadata.height || 0;
-      console.log(`\u{1F4F7} [EdgeDetection V2] Image: ${imgWidth}x${imgHeight}px`);
-      const zoneX = Math.round(selectionZone.x / 100 * imgWidth);
-      const zoneY = Math.round(selectionZone.y / 100 * imgHeight);
-      const zoneW = Math.round(selectionZone.width / 100 * imgWidth);
-      const zoneH = Math.round(selectionZone.height / 100 * imgHeight);
-      console.log(`\u{1F4D0} [EdgeDetection V2] Zone en pixels: x=${zoneX}, y=${zoneY}, w=${zoneW}, h=${zoneH}`);
-      const { data: pixels, info } = await (0, import_sharp.default)(imageBuffer).extract({ left: zoneX, top: zoneY, width: zoneW, height: zoneH }).raw().toBuffer({ resolveWithObject: true });
-      console.log(`\u{1F5BC}\uFE0F [EdgeDetection V2] Zone extraite: ${info.width}x${info.height}, ${info.channels} channels`);
-      const binaryMask = this.createWhiteMask(pixels, info.width, info.height, info.channels);
-      const contourPoints = this.findContour(binaryMask, info.width, info.height);
-      console.log(`\u{1F4CD} [EdgeDetection V2] Contour trouv\xE9: ${contourPoints.length} points`);
-      if (contourPoints.length < 50) {
-        console.log("\u26A0\uFE0F [EdgeDetection V2] Contour trop petit");
-        return { success: false, error: "Contour de la feuille trop petit ou non d\xE9tect\xE9" };
-      }
-      const corners = this.approximateQuadrilateral(contourPoints, info.width, info.height);
-      if (!corners) {
-        console.log("\u26A0\uFE0F [EdgeDetection V2] Impossible d'approximer un quadrilat\xE8re");
-        return { success: false, error: "Impossible de trouver 4 coins distincts" };
-      }
-      const globalCorners = {
-        topLeft: {
-          x: (zoneX + corners.topLeft.x) / imgWidth * 100,
-          y: (zoneY + corners.topLeft.y) / imgHeight * 100
-        },
-        topRight: {
-          x: (zoneX + corners.topRight.x) / imgWidth * 100,
-          y: (zoneY + corners.topRight.y) / imgHeight * 100
-        },
-        bottomLeft: {
-          x: (zoneX + corners.bottomLeft.x) / imgWidth * 100,
-          y: (zoneY + corners.bottomLeft.y) / imgHeight * 100
-        },
-        bottomRight: {
-          x: (zoneX + corners.bottomRight.x) / imgWidth * 100,
-          y: (zoneY + corners.bottomRight.y) / imgHeight * 100
-        }
-      };
-      console.log("\u2705 [EdgeDetection V2] Coins d\xE9tect\xE9s:", JSON.stringify(globalCorners, null, 2));
-      const confidence = this.calculateConfidence(corners, info.width, info.height);
-      return {
-        success: true,
-        corners: globalCorners,
-        confidence,
-        debug: {
-          imageWidth: imgWidth,
-          imageHeight: imgHeight,
-          whitePixelsFound: binaryMask.filter((v) => v).length,
-          edgePointsFound: contourPoints.length,
-          contourLength: contourPoints.length
-        }
-      };
-    } catch (error) {
-      console.error("\u274C [EdgeDetection V2] Erreur:", error);
-      return {
-        success: false,
-        error: error.message
-      };
+// src/lib/apriltag-detector-server.ts
+var import_apriltag_node = __toESM(require("@monumental-works/apriltag-node"), 1);
+function detectAprilTagsMetreA4(data, width, height) {
+  try {
+    console.log(`\u{1F3AF} [APRILTAG] D\xE9tection AprilTags M\xE9tr\xE9 V1.2...`);
+    const grayscale = new Uint8Array(width * height);
+    for (let i = 0; i < width * height; i++) {
+      const r = data[i * 4];
+      const g = data[i * 4 + 1];
+      const b = data[i * 4 + 2];
+      grayscale[i] = Math.floor((r + g + b) / 3);
     }
-  }
-  /**
-   * 📝 Crée un masque binaire: true = pixel blanc, false = autre
-   * Utilise une analyse HSL pour mieux détecter le blanc
-   */
-  createWhiteMask(pixels, width, height, channels) {
-    const mask = new Array(width * height).fill(false);
-    const MIN_LUMINOSITY = 170;
-    const MAX_SATURATION = 40;
-    let whiteCount = 0;
-    for (let y = 0; y < height; y++) {
-      for (let x = 0; x < width; x++) {
-        const idx = (y * width + x) * channels;
-        const r = pixels[idx] || 0;
-        const g = pixels[idx + 1] || 0;
-        const b = pixels[idx + 2] || 0;
-        const max = Math.max(r, g, b);
-        const min = Math.min(r, g, b);
-        const luminosity = (max + min) / 2;
-        const saturation = max === 0 ? 0 : (max - min) / max * 100;
-        if (luminosity >= MIN_LUMINOSITY && saturation <= MAX_SATURATION) {
-          mask[y * width + x] = true;
-          whiteCount++;
-        }
-      }
-    }
-    console.log(`\u2B1C [EdgeDetection V2] Pixels blancs: ${whiteCount}/${width * height} (${(whiteCount / (width * height) * 100).toFixed(1)}%)`);
-    return mask;
-  }
-  /**
-   * 🔲 Trouve le contour de la zone blanche (algorithme de suivi de contour)
-   * Utilise l'algorithme de Moore (marching squares simplifié)
-   */
-  findContour(mask, width, height) {
-    const contour = [];
-    const visited = /* @__PURE__ */ new Set();
-    let startX = -1, startY = -1;
-    outer: for (let y = 0; y < height; y++) {
-      for (let x = 0; x < width; x++) {
-        if (mask[y * width + x]) {
-          if (this.isEdgePixel(mask, x, y, width, height)) {
-            startX = x;
-            startY = y;
-            break outer;
-          }
-        }
-      }
-    }
-    if (startX === -1) {
-      console.log("\u26A0\uFE0F [EdgeDetection V2] Pas de point de d\xE9part trouv\xE9");
+    const detector2 = new import_apriltag_node.default(import_apriltag_node.FAMILIES.TAG36H11, {
+      quadDecimate: 2,
+      // Accélération sur grandes images
+      quadSigma: 0,
+      // Pas de flou gaussien
+      refineEdges: true,
+      // Meilleure précision des coins
+      decodeSharpening: 0.25
+    });
+    const detections = detector2.detect(width, height, grayscale);
+    console.log(`   \u{1F50D} ${detections.length} AprilTag(s) d\xE9tect\xE9(s)`);
+    if (detections.length === 0) {
       return [];
     }
-    for (let y = 0; y < height; y++) {
-      for (let x = 0; x < width; x++) {
-        if (mask[y * width + x] && this.isEdgePixel(mask, x, y, width, height)) {
-          const key2 = `${x},${y}`;
-          if (!visited.has(key2)) {
-            visited.add(key2);
-            contour.push({ x, y });
-          }
-        }
-      }
-    }
-    return contour;
-  }
-  /**
-   * Vérifie si un pixel blanc est sur le bord (a au moins un voisin non-blanc)
-   */
-  isEdgePixel(mask, x, y, width, height) {
-    const dirs = [[-1, -1], [0, -1], [1, -1], [-1, 0], [1, 0], [-1, 1], [0, 1], [1, 1]];
-    for (const [dx, dy] of dirs) {
-      const nx = x + dx;
-      const ny = y + dy;
-      if (nx < 0 || nx >= width || ny < 0 || ny >= height) {
-        return true;
-      }
-      if (!mask[ny * width + nx]) {
-        return true;
-      }
-    }
-    return false;
-  }
-  /**
-   * 🎯 Approxime le contour par un quadrilatère (4 coins)
-   * Utilise l'algorithme de Douglas-Peucker + détection des coins extrêmes
-   */
-  approximateQuadrilateral(contourPoints, width, height) {
-    if (contourPoints.length < 4) return null;
-    let topLeft = contourPoints[0];
-    let topRight = contourPoints[0];
-    let bottomLeft = contourPoints[0];
-    let bottomRight = contourPoints[0];
-    let minSum = Infinity;
-    let maxSum = -Infinity;
-    let minDiff = Infinity;
-    let maxDiff = -Infinity;
-    for (const p of contourPoints) {
-      const sum = p.x + p.y;
-      const diff = p.x - p.y;
-      if (sum < minSum) {
-        minSum = sum;
-        topLeft = p;
-      }
-      if (sum > maxSum) {
-        maxSum = sum;
-        bottomRight = p;
-      }
-      if (diff > maxDiff) {
-        maxDiff = diff;
-        topRight = p;
-      }
-      if (diff < minDiff) {
-        minDiff = diff;
-        bottomLeft = p;
-      }
-    }
-    const corners = [topLeft, topRight, bottomLeft, bottomRight];
-    const uniqueKeys = new Set(corners.map((c) => `${c.x},${c.y}`));
-    if (uniqueKeys.size < 4) {
-      console.log("\u26A0\uFE0F [EdgeDetection V2] Coins non distincts, utilisation de la m\xE9thode alternative");
-      return this.findCornersAlternative(contourPoints, width, height);
-    }
-    const refined = {
-      topLeft: this.refineCornerPosition(topLeft, contourPoints, "topLeft"),
-      topRight: this.refineCornerPosition(topRight, contourPoints, "topRight"),
-      bottomLeft: this.refineCornerPosition(bottomLeft, contourPoints, "bottomLeft"),
-      bottomRight: this.refineCornerPosition(bottomRight, contourPoints, "bottomRight")
-    };
-    console.log(`\u{1F3AF} [EdgeDetection V2] Coins approxim\xE9s:
-      TL: (${refined.topLeft.x}, ${refined.topLeft.y})
-      TR: (${refined.topRight.x}, ${refined.topRight.y})
-      BL: (${refined.bottomLeft.x}, ${refined.bottomLeft.y})
-      BR: (${refined.bottomRight.x}, ${refined.bottomRight.y})`);
-    return refined;
-  }
-  /**
-   * Méthode alternative pour trouver les coins si la première échoue
-   */
-  findCornersAlternative(contourPoints, width, height) {
-    let cx = 0, cy = 0;
-    for (const p of contourPoints) {
-      cx += p.x;
-      cy += p.y;
-    }
-    cx /= contourPoints.length;
-    cy /= contourPoints.length;
-    const quadrants = {
-      topLeft: [],
-      topRight: [],
-      bottomLeft: [],
-      bottomRight: []
-    };
-    for (const p of contourPoints) {
-      if (p.x < cx && p.y < cy) quadrants.topLeft.push(p);
-      else if (p.x >= cx && p.y < cy) quadrants.topRight.push(p);
-      else if (p.x < cx && p.y >= cy) quadrants.bottomLeft.push(p);
-      else quadrants.bottomRight.push(p);
-    }
-    const findFarthest = (points, cx2, cy2) => {
-      if (points.length === 0) return null;
-      let maxDist = 0;
-      let farthest = points[0];
-      for (const p of points) {
-        const dist = Math.sqrt((p.x - cx2) ** 2 + (p.y - cy2) ** 2);
-        if (dist > maxDist) {
-          maxDist = dist;
-          farthest = p;
-        }
-      }
-      return farthest;
-    };
-    const tl = findFarthest(quadrants.topLeft, cx, cy);
-    const tr = findFarthest(quadrants.topRight, cx, cy);
-    const bl = findFarthest(quadrants.bottomLeft, cx, cy);
-    const br = findFarthest(quadrants.bottomRight, cx, cy);
-    if (!tl || !tr || !bl || !br) {
-      return null;
-    }
-    return {
-      topLeft: tl,
-      topRight: tr,
-      bottomLeft: bl,
-      bottomRight: br
-    };
-  }
-  /**
-   * Affine la position d'un coin en cherchant le point le plus "en coin"
-   * parmi les points proches
-   */
-  refineCornerPosition(corner, contourPoints, cornerType) {
-    const SEARCH_RADIUS = 20;
-    const nearby = contourPoints.filter(
-      (p) => Math.abs(p.x - corner.x) < SEARCH_RADIUS && Math.abs(p.y - corner.y) < SEARCH_RADIUS
-    );
-    if (nearby.length < 3) return corner;
-    let best = corner;
-    let bestScore = -Infinity;
-    for (const p of nearby) {
-      let score = 0;
-      switch (cornerType) {
-        case "topLeft":
-          score = -p.x - p.y;
-          break;
-        case "topRight":
-          score = p.x - p.y;
-          break;
-        case "bottomLeft":
-          score = -p.x + p.y;
-          break;
-        case "bottomRight":
-          score = p.x + p.y;
-          break;
-      }
-      if (score > bestScore) {
-        bestScore = score;
-        best = p;
-      }
-    }
-    return best;
-  }
-  /**
-   * Calcule un score de confiance basé sur la géométrie du quadrilatère
-   */
-  calculateConfidence(corners, width, height) {
-    const topWidth = Math.sqrt(
-      (corners.topRight.x - corners.topLeft.x) ** 2 + (corners.topRight.y - corners.topLeft.y) ** 2
-    );
-    const bottomWidth = Math.sqrt(
-      (corners.bottomRight.x - corners.bottomLeft.x) ** 2 + (corners.bottomRight.y - corners.bottomLeft.y) ** 2
-    );
-    const leftHeight = Math.sqrt(
-      (corners.bottomLeft.x - corners.topLeft.x) ** 2 + (corners.bottomLeft.y - corners.topLeft.y) ** 2
-    );
-    const rightHeight = Math.sqrt(
-      (corners.bottomRight.x - corners.topRight.x) ** 2 + (corners.bottomRight.y - corners.topRight.y) ** 2
-    );
-    const widthRatio = Math.min(topWidth, bottomWidth) / Math.max(topWidth, bottomWidth);
-    const heightRatio = Math.min(leftHeight, rightHeight) / Math.max(leftHeight, rightHeight);
-    const avgWidth = (topWidth + bottomWidth) / 2;
-    const avgHeight = (leftHeight + rightHeight) / 2;
-    const aspectRatio = Math.max(avgWidth, avgHeight) / Math.min(avgWidth, avgHeight);
-    const a4Ratio = 297 / 210;
-    const aspectScore = 1 - Math.abs(aspectRatio - a4Ratio) / a4Ratio;
-    const confidence = Math.round(
-      widthRatio * 30 + heightRatio * 30 + Math.max(0, aspectScore) * 40
-    );
-    console.log(`\u{1F4CA} [EdgeDetection V2] Confiance: ${confidence}% (widthRatio=${widthRatio.toFixed(2)}, heightRatio=${heightRatio.toFixed(2)}, aspect=${aspectScore.toFixed(2)})`);
-    return Math.max(0, Math.min(100, confidence));
-  }
-};
-var edgeDetectionService = new EdgeDetectionService();
-
-// src/services/MultiPhotoFusionService.ts
-var import_sharp2 = __toESM(require("sharp"), 1);
-var MultiPhotoFusionService = class {
-  /**
-   * 🎯 FUSION PRINCIPALE - Combine plusieurs photos en une image optimisée
-   * 
-   * @param photos - Tableau de photos à fusionner
-   * @param options - Options de fusion
-   * @returns Image fusionnée optimisée pour la détection
-   */
-  async fusePhotos(photos, options = {}) {
-    const {
-      enhanceEdges = true,
-      boostWhite = true,
-      localContrast = true,
-      targetWidth = 1920,
-      outputQuality = 95
-    } = options;
-    try {
-      console.log(`\u{1F500} [Fusion] D\xE9but fusion de ${photos.length} photos...`);
-      if (photos.length === 0) {
-        return { success: false, mimeType: "image/jpeg", error: "Aucune photo fournie" };
-      }
-      if (photos.length === 1) {
-        console.log("\u{1F4F7} [Fusion] Une seule photo - optimisation directe");
-        return this.optimizeSinglePhoto(photos[0], { enhanceEdges, boostWhite, localContrast, targetWidth, outputQuality });
-      }
-      console.log("\u{1F4CA} [Fusion] Analyse qualit\xE9 des photos...");
-      const photoAnalysis = await this.analyzePhotos(photos);
-      const usablePhotos = photoAnalysis.filter((p) => p.quality >= 30);
-      console.log(`\u2705 [Fusion] ${usablePhotos.length}/${photos.length} photos utilisables`);
-      if (usablePhotos.length === 0) {
-        const best = photoAnalysis.sort((a, b) => b.quality - a.quality)[0];
-        console.warn(`\u26A0\uFE0F [Fusion] Aucune photo de bonne qualit\xE9, utilisation de la #${best.index}`);
-        return this.optimizeSinglePhoto(photos[best.index], { enhanceEdges, boostWhite, localContrast, targetWidth, outputQuality });
-      }
-      console.log("\u{1F4D0} [Fusion] Normalisation des dimensions...");
-      const normalizedBuffers = await this.normalizePhotos(
-        usablePhotos.map((p) => photos[p.index]),
-        targetWidth
-      );
-      console.log("\u{1F500} [Fusion] Fusion pond\xE9r\xE9e par qualit\xE9...");
-      let fusedBuffer = await this.weightedBlend(normalizedBuffers, usablePhotos.map((p) => p.weight));
-      if (enhanceEdges) {
-        console.log("\u{1F532} [Fusion] Am\xE9lioration des contours...");
-        fusedBuffer = await this.enhanceEdges(fusedBuffer);
-      }
-      if (boostWhite) {
-        console.log("\u2B1C [Fusion] Amplification zones blanches (feuille A4)...");
-        fusedBuffer = await this.boostWhiteAreas(fusedBuffer);
-      }
-      if (localContrast) {
-        console.log("\u{1F39B}\uFE0F [Fusion] Am\xE9lioration contraste local...");
-        fusedBuffer = await this.enhanceLocalContrast(fusedBuffer);
-      }
-      const finalBuffer = await (0, import_sharp2.default)(fusedBuffer).jpeg({ quality: outputQuality }).toBuffer();
-      const fusedImageBase64 = finalBuffer.toString("base64");
-      const finalStats = await this.analyzeImageStats(fusedBuffer);
-      console.log(`\u2705 [Fusion] Termin\xE9e ! Sharpness finale: ${finalStats.sharpness.toFixed(1)}, WhiteRatio: ${(finalStats.whiteRatio * 100).toFixed(1)}%`);
-      return {
-        success: true,
-        fusedImageBase64,
-        mimeType: "image/jpeg",
-        metrics: {
-          inputPhotos: photos.length,
-          usedPhotos: usablePhotos.length,
-          averageQuality: usablePhotos.reduce((s, p) => s + p.quality, 0) / usablePhotos.length,
-          edgeEnhancement: enhanceEdges ? 1 : 0,
-          whiteBoost: boostWhite ? 1 : 0,
-          finalSharpness: finalStats.sharpness
-        },
-        photoAnalysis
+    const results = [];
+    for (const detection of detections) {
+      const corners = [
+        { x: detection.corners[0][0], y: detection.corners[0][1] },
+        // Top-left
+        { x: detection.corners[1][0], y: detection.corners[1][1] },
+        // Top-right
+        { x: detection.corners[2][0], y: detection.corners[2][1] },
+        // Bottom-right
+        { x: detection.corners[3][0], y: detection.corners[3][1] }
+        // Bottom-left
+      ];
+      const center = {
+        x: (corners[0].x + corners[1].x + corners[2].x + corners[3].x) / 4,
+        y: (corners[0].y + corners[1].y + corners[2].y + corners[3].y) / 4
       };
-    } catch (error) {
-      console.error("\u274C [Fusion] Erreur:", error);
-      return {
-        success: false,
-        mimeType: "image/jpeg",
-        error: error.message
-      };
+      results.push({ id: detection.id, corners, center });
+      console.log(`   \u2705 AprilTag ID=${detection.id} d\xE9tect\xE9`);
     }
-  }
-  /**
-   * 📊 Analyse la qualité de chaque photo
-   */
-  async analyzePhotos(photos) {
-    const results = await Promise.all(photos.map(async (photo, index) => {
-      const buffer = Buffer.from(photo.base64, "base64");
-      const stats = await this.analyzeImageStats(buffer);
-      const issues = [];
-      if (stats.sharpness < 30) issues.push("Floue");
-      if (stats.brightness < 50) issues.push("Trop sombre");
-      if (stats.brightness > 220) issues.push("Surexpos\xE9e");
-      if (stats.contrast < 20) issues.push("Manque de contraste");
-      const quality = Math.min(100, Math.max(
-        0,
-        stats.sharpness * 0.4 + (100 - Math.abs(stats.brightness - 128) / 1.28) * 0.3 + stats.contrast * 0.3
-      ));
-      const weight = Math.pow(quality / 100, 2);
-      console.log(`  \u{1F4F7} Photo ${index + 1}: Quality=${quality.toFixed(0)}, Sharpness=${stats.sharpness.toFixed(0)}, Brightness=${stats.brightness.toFixed(0)}, Issues=[${issues.join(", ")}]`);
-      return {
-        index,
-        quality,
-        sharpness: stats.sharpness,
-        brightness: stats.brightness,
-        weight,
-        issues
-      };
-    }));
-    const totalWeight = results.reduce((s, r) => s + r.weight, 0);
-    results.forEach((r) => r.weight = r.weight / totalWeight);
     return results;
+  } catch (error) {
+    console.error(`\u274C [APRILTAG] Erreur d\xE9tection:`, error);
+    return [];
   }
-  /**
-   * 📈 Analyse les statistiques d'une image
-   */
-  async analyzeImageStats(buffer) {
-    const image = (0, import_sharp2.default)(buffer);
-    const { data, info } = await image.grayscale().raw().toBuffer({ resolveWithObject: true });
-    const pixels = new Uint8Array(data);
-    const totalPixels = info.width * info.height;
-    let brightnessSum = 0;
-    for (let i = 0; i < pixels.length; i++) {
-      brightnessSum += pixels[i];
-    }
-    const brightness = brightnessSum / totalPixels;
-    let varianceSum = 0;
-    for (let i = 0; i < pixels.length; i++) {
-      varianceSum += Math.pow(pixels[i] - brightness, 2);
-    }
-    const contrast = Math.sqrt(varianceSum / totalPixels) / 1.28;
-    let laplacianSum = 0;
-    let laplacianCount = 0;
-    const width = info.width;
-    for (let y = 1; y < info.height - 1; y++) {
-      for (let x = 1; x < width - 1; x++) {
-        const idx = y * width + x;
-        const laplacian = 4 * pixels[idx] - pixels[idx - width] - pixels[idx + width] - pixels[idx - 1] - pixels[idx + 1];
-        laplacianSum += laplacian * laplacian;
-        laplacianCount++;
-      }
-    }
-    const sharpness = Math.min(100, Math.sqrt(laplacianSum / laplacianCount) / 5);
-    let whiteCount = 0;
-    for (let i = 0; i < pixels.length; i++) {
-      if (pixels[i] > 200) whiteCount++;
-    }
-    const whiteRatio = whiteCount / totalPixels;
-    return { sharpness, brightness, contrast, whiteRatio };
+}
+
+// src/utils/homographyUtils.ts
+function computeHomography2(srcPoints, dstPoints) {
+  if (srcPoints.length !== 4 || dstPoints.length !== 4) {
+    throw new Error("Homography requires exactly 4 points");
   }
-  /**
-   * 📐 Normalise toutes les photos à la même dimension
-   */
-  async normalizePhotos(photos, targetWidth) {
-    return Promise.all(photos.map(async (photo) => {
-      const buffer = Buffer.from(photo.base64, "base64");
-      return (0, import_sharp2.default)(buffer).resize(targetWidth, null, { fit: "inside", withoutEnlargement: true }).toBuffer();
-    }));
+  const srcCentroid = computeCentroid(srcPoints);
+  const srcScale = computeAverageDistanceFromCentroid(srcPoints, srcCentroid);
+  const dstCentroid = computeCentroid(dstPoints);
+  const dstScale = computeAverageDistanceFromCentroid(dstPoints, dstCentroid);
+  const normalizedSrc = normalizePoints(srcPoints, srcCentroid, srcScale);
+  const normalizedDst = normalizePoints(dstPoints, dstCentroid, dstScale);
+  console.log("\u{1F527} [Homography] Normalisation:", {
+    srcCentroid: `(${srcCentroid[0].toFixed(1)}, ${srcCentroid[1].toFixed(1)})`,
+    srcScale: srcScale.toFixed(2),
+    dstCentroid: `(${dstCentroid[0].toFixed(1)}, ${dstCentroid[1].toFixed(1)})`,
+    dstScale: dstScale.toFixed(2)
+  });
+  const A = [];
+  for (let i = 0; i < 4; i++) {
+    const [x, y] = normalizedSrc[i];
+    const [xp, yp] = normalizedDst[i];
+    A.push([-x, -y, -1, 0, 0, 0, x * xp, y * xp, xp]);
+    A.push([0, 0, 0, -x, -y, -1, x * yp, y * yp, yp]);
   }
-  /**
-   * 🔀 Fusion MULTI-PERSPECTIVE des images
-   * 
-   * STRATÉGIE MULTI-PERSPECTIVE:
-   * Les 3 photos sont prises de DIFFÉRENTS ANGLES. Chaque perspective
-   * révèle mieux certains bords du papier (ceux face à la caméra).
-   * 
-   * Au lieu de moyenner (qui floute), on:
-   * 1. Détecte les BORDS (gradient) dans CHAQUE image
-   * 2. Pour les zones de bord: prend l'image avec le MEILLEUR contraste
-   * 3. Pour les zones uniformes: moyenne pour réduire le bruit
-   * 
-   * Résultat: Une image avec TOUS les bords bien définis, même ceux
-   * partiellement cachés dans certaines perspectives.
-   */
-  async weightedBlend(buffers, weights) {
-    if (buffers.length === 1) return buffers[0];
-    const firstMeta = await (0, import_sharp2.default)(buffers[0]).metadata();
-    const width = firstMeta.width;
-    const height = firstMeta.height;
-    console.log(`\u{1F500} [Fusion Multi-Perspective] Combinaison de ${buffers.length} perspectives (${width}x${height})`);
-    const pixelArrays = await Promise.all(buffers.map(async (buf) => {
-      const { data } = await (0, import_sharp2.default)(buf).resize(width, height, { fit: "fill" }).raw().ensureAlpha().toBuffer({ resolveWithObject: true });
-      return new Uint8Array(data);
-    }));
-    console.log("\u{1F50D} [Fusion] Calcul des cartes de gradient pour chaque perspective...");
-    const gradientMaps = [];
-    for (let imgIdx = 0; imgIdx < pixelArrays.length; imgIdx++) {
-      const pixels = pixelArrays[imgIdx];
-      const gradient = new Array(width * height).fill(0);
-      for (let y = 1; y < height - 1; y++) {
-        for (let x = 1; x < width - 1; x++) {
-          const idx = (y * width + x) * 4;
-          const currentLum = 0.299 * pixels[idx] + 0.587 * pixels[idx + 1] + 0.114 * pixels[idx + 2];
-          const leftIdx = (y * width + (x - 1)) * 4;
-          const rightIdx = (y * width + (x + 1)) * 4;
-          const topIdx = ((y - 1) * width + x) * 4;
-          const bottomIdx = ((y + 1) * width + x) * 4;
-          const leftLum = 0.299 * pixels[leftIdx] + 0.587 * pixels[leftIdx + 1] + 0.114 * pixels[leftIdx + 2];
-          const rightLum = 0.299 * pixels[rightIdx] + 0.587 * pixels[rightIdx + 1] + 0.114 * pixels[rightIdx + 2];
-          const topLum = 0.299 * pixels[topIdx] + 0.587 * pixels[topIdx + 1] + 0.114 * pixels[topIdx + 2];
-          const bottomLum = 0.299 * pixels[bottomIdx] + 0.587 * pixels[bottomIdx + 1] + 0.114 * pixels[bottomIdx + 2];
-          const gx = Math.abs(rightLum - leftLum);
-          const gy = Math.abs(bottomLum - topLum);
-          gradient[y * width + x] = Math.sqrt(gx * gx + gy * gy);
-        }
-      }
-      gradientMaps.push(gradient);
+  const Hnorm = solveHomographySystem(A);
+  const H = denormalizeHomography(Hnorm, srcCentroid, srcScale, dstCentroid, dstScale);
+  const Hinv = invertMatrix3x3(H);
+  const quality = evaluateHomographyQuality(srcPoints, dstPoints, H);
+  const uncertainty = estimateUncertainty(quality, srcPoints);
+  console.log(`\u{1F4D0} [Homography] Matrice calcul\xE9e, qualit\xE9: ${quality.toFixed(1)}%, incertitude: \xB1${uncertainty.toFixed(1)}%`);
+  return {
+    matrix: H,
+    inverseMatrix: Hinv,
+    quality,
+    uncertainty
+  };
+}
+function applyHomography(H, point) {
+  const [x, y] = point;
+  const xp = H[0][0] * x + H[0][1] * y + H[0][2];
+  const yp = H[1][0] * x + H[1][1] * y + H[1][2];
+  const w = H[2][0] * x + H[2][1] * y + H[2][2];
+  return [xp / w, yp / w];
+}
+function computeRealDistance(H, p1, p2) {
+  const realP1 = applyHomography(H, p1);
+  const realP2 = applyHomography(H, p2);
+  const dx = realP2[0] - realP1[0];
+  const dy = realP2[1] - realP1[1];
+  return Math.sqrt(dx * dx + dy * dy);
+}
+function computeRealDistanceWithUncertainty(H, p1, p2, uncertaintyPercent) {
+  const distance2 = computeRealDistance(H, p1, p2);
+  const uncertainty = distance2 * (uncertaintyPercent / 100);
+  return {
+    distance: distance2,
+    uncertainty,
+    min: distance2 - uncertainty,
+    max: distance2 + uncertainty
+  };
+}
+var _arucoMarkerSizeMm = 130;
+function setArucoMarkerSize(sizeCm) {
+  _arucoMarkerSizeMm = sizeCm * 10;
+  console.log(`\u{1F3AF} [HOMOGRAPHY] Taille marqueur M\xE9tr\xE9 A4 V1.2 mise \xE0 jour: ${sizeCm}cm = ${_arucoMarkerSizeMm}mm`);
+}
+function cornersToPoints(corners) {
+  return [
+    [corners.topLeft.x, corners.topLeft.y],
+    [corners.topRight.x, corners.topRight.y],
+    [corners.bottomRight.x, corners.bottomRight.y],
+    [corners.bottomLeft.x, corners.bottomLeft.y]
+  ];
+}
+function solveHomographySystem(A) {
+  const ATA = multiplyMatrices(transpose(A), A);
+  const EPSILON = 1e-8;
+  for (let i = 0; i < 9; i++) {
+    ATA[i][i] += EPSILON;
+  }
+  let h = [1, 1, 1, 1, 1, 1, 1, 1, 1];
+  let norm = Math.sqrt(h.reduce((s, v) => s + v * v, 0));
+  h = h.map((v) => v / norm);
+  for (let iter = 0; iter < 50; iter++) {
+    const x = solveLinearSystem(
+      ATA.map((row) => [...row]),
+      // Copie pour ne pas modifier
+      [...h]
+    );
+    const xNorm = Math.sqrt(x.reduce((s, v) => s + v * v, 0));
+    if (xNorm < EPSILON || !isFinite(xNorm)) {
+      console.warn("\u26A0\uFE0F [Homography] It\xE9ration divergente, arr\xEAt");
+      break;
     }
-    const maxGradients = gradientMaps.map((g) => {
-      let max = 0;
-      for (let i = 0; i < g.length; i++) {
-        if (g[i] > max) max = g[i];
-      }
-      return max;
-    });
-    console.log(`\u{1F4CA} [Fusion] Gradients max par perspective: ${maxGradients.map((g) => g.toFixed(1)).join(", ")}`);
-    const outputPixels = new Uint8Array(width * height * 4);
-    const GRADIENT_THRESHOLD = 15;
-    let edgePixels = 0;
-    let smoothPixels = 0;
-    for (let y = 0; y < height; y++) {
-      for (let x = 0; x < width; x++) {
-        const pixelIndex = y * width + x;
-        const idx = pixelIndex * 4;
-        const gradientsAtPixel = gradientMaps.map((g) => g[pixelIndex]);
-        const maxGradient = Math.max(...gradientsAtPixel);
-        if (maxGradient > GRADIENT_THRESHOLD) {
-          edgePixels++;
-          const bestImageIdx = gradientsAtPixel.indexOf(maxGradient);
-          const bestPixels = pixelArrays[bestImageIdx];
-          outputPixels[idx] = bestPixels[idx];
-          outputPixels[idx + 1] = bestPixels[idx + 1];
-          outputPixels[idx + 2] = bestPixels[idx + 2];
-        } else {
-          smoothPixels++;
-          let r = 0, g = 0, b = 0;
-          for (let j = 0; j < pixelArrays.length; j++) {
-            r += pixelArrays[j][idx] * weights[j];
-            g += pixelArrays[j][idx + 1] * weights[j];
-            b += pixelArrays[j][idx + 2] * weights[j];
-          }
-          outputPixels[idx] = Math.round(r);
-          outputPixels[idx + 1] = Math.round(g);
-          outputPixels[idx + 2] = Math.round(b);
-        }
-        outputPixels[idx + 3] = 255;
-      }
-    }
-    console.log(`\u2705 [Fusion Multi-Perspective] Termin\xE9e: ${edgePixels} pixels de bord (meilleure perspective), ${smoothPixels} pixels uniformes (moyenn\xE9s)`);
-    return (0, import_sharp2.default)(Buffer.from(outputPixels), {
-      raw: { width, height, channels: 4 }
-    }).png().toBuffer();
+    h = x.map((v) => v / xNorm);
   }
-  /**
-   * 🔲 Amélioration des contours (Unsharp Mask AGRESSIF)
-   * ⚠️ Ne modifie pas les dimensions !
-   */
-  async enhanceEdges(buffer) {
-    return (0, import_sharp2.default)(buffer).sharpen({
-      sigma: 2,
-      // Rayon du flou (plus grand = bords plus larges)
-      m1: 2.5,
-      // Quantité de sharpening pour les zones sombres (augmenté)
-      m2: 1.5,
-      // Quantité de sharpening pour les zones claires (augmenté)
-      x1: 2,
-      // Seuil bas
-      y2: 15,
-      // Seuil haut (augmenté)
-      y3: 15
-      // Maximum (augmenté)
-    }).toBuffer();
+  const scale = Math.abs(h[8]) > EPSILON ? h[8] : 1;
+  const normalized = h.map((v) => v / scale);
+  const hasNaN = normalized.some((v) => !isFinite(v));
+  if (hasNaN) {
+    console.warn("\u26A0\uFE0F [Homography] Solution invalide (NaN), retour identit\xE9");
+    return [[1, 0, 0], [0, 1, 0], [0, 0, 1]];
   }
-  /**
-   * ⬜ Amplification des zones blanches (pour mieux voir la feuille A4)
-   * 
-   * Technique: Augmente le contraste des pixels clairs pour que le papier blanc
-   * ressorte mieux du fond
-   */
-  async boostWhiteAreas(buffer) {
-    const meta = await (0, import_sharp2.default)(buffer).metadata();
-    const width = meta.width;
-    const height = meta.height;
-    const { data } = await (0, import_sharp2.default)(buffer).raw().ensureAlpha().toBuffer({ resolveWithObject: true });
-    const pixels = new Uint8Array(data);
-    const outputPixels = new Uint8Array(pixels.length);
-    const whiteThreshold = 180;
-    const boostFactor = 1.2;
-    const darkenFactor = 0.9;
-    for (let i = 0; i < pixels.length; i += 4) {
-      const r = pixels[i];
-      const g = pixels[i + 1];
-      const b = pixels[i + 2];
-      const luminance = 0.299 * r + 0.587 * g + 0.114 * b;
-      if (luminance > whiteThreshold) {
-        outputPixels[i] = Math.min(255, Math.round(r * boostFactor));
-        outputPixels[i + 1] = Math.min(255, Math.round(g * boostFactor));
-        outputPixels[i + 2] = Math.min(255, Math.round(b * boostFactor));
-      } else {
-        outputPixels[i] = Math.round(r * darkenFactor);
-        outputPixels[i + 1] = Math.round(g * darkenFactor);
-        outputPixels[i + 2] = Math.round(b * darkenFactor);
-      }
-      outputPixels[i + 3] = 255;
-    }
-    return (0, import_sharp2.default)(Buffer.from(outputPixels), {
-      raw: { width, height, channels: 4 }
-    }).png().toBuffer();
+  return [
+    [normalized[0], normalized[1], normalized[2]],
+    [normalized[3], normalized[4], normalized[5]],
+    [normalized[6], normalized[7], normalized[8]]
+  ];
+}
+function invertMatrix3x3(M) {
+  const [[a, b, c], [d, e, f], [g, h, i]] = M;
+  const det = a * (e * i - f * h) - b * (d * i - f * g) + c * (d * h - e * g);
+  if (Math.abs(det) < 1e-10) {
+    console.warn("\u26A0\uFE0F [Homography] Matrice singuli\xE8re, retour identit\xE9");
+    return [[1, 0, 0], [0, 1, 0], [0, 0, 1]];
   }
-  /**
-   * 🎛️ Amélioration du contraste local (CLAHE-like)
-   * 
-   * Normalise le contraste localement pour mieux voir les bords
-   */
-  async enhanceLocalContrast(buffer) {
-    return (0, import_sharp2.default)(buffer).normalize().modulate({
-      brightness: 1,
-      saturation: 1.1,
-      // Légère saturation pour mieux distinguer couleurs
-      lightness: 0
-      // Pas de changement de luminosité globale
-    }).linear(1.1, -10).toBuffer();
+  const invDet = 1 / det;
+  return [
+    [(e * i - f * h) * invDet, (c * h - b * i) * invDet, (b * f - c * e) * invDet],
+    [(f * g - d * i) * invDet, (a * i - c * g) * invDet, (c * d - a * f) * invDet],
+    [(d * h - e * g) * invDet, (b * g - a * h) * invDet, (a * e - b * d) * invDet]
+  ];
+}
+function evaluateHomographyQuality(srcPoints, dstPoints, H) {
+  let totalError = 0;
+  for (let i = 0; i < 4; i++) {
+    const projected = applyHomography(H, srcPoints[i]);
+    const dx = projected[0] - dstPoints[i][0];
+    const dy = projected[1] - dstPoints[i][1];
+    totalError += Math.sqrt(dx * dx + dy * dy);
   }
-  /**
-   * 📷 Optimise une seule photo (même traitement que fusion mais pour 1 image)
-   */
-  async optimizeSinglePhoto(photo, options) {
-    try {
-      let buffer = Buffer.from(photo.base64, "base64");
-      buffer = Buffer.from(await (0, import_sharp2.default)(buffer).resize(options.targetWidth, null, { fit: "inside", withoutEnlargement: true }).toBuffer());
-      if (options.enhanceEdges) {
-        buffer = Buffer.from(await this.enhanceEdges(buffer));
-      }
-      if (options.boostWhite) {
-        buffer = Buffer.from(await this.boostWhiteAreas(buffer));
-      }
-      if (options.localContrast) {
-        buffer = Buffer.from(await this.enhanceLocalContrast(buffer));
-      }
-      const finalBuffer = await (0, import_sharp2.default)(buffer).jpeg({ quality: options.outputQuality }).toBuffer();
-      const stats = await this.analyzeImageStats(finalBuffer);
-      return {
-        success: true,
-        fusedImageBase64: finalBuffer.toString("base64"),
-        mimeType: "image/jpeg",
-        metrics: {
-          inputPhotos: 1,
-          usedPhotos: 1,
-          averageQuality: 100,
-          edgeEnhancement: options.enhanceEdges ? 1 : 0,
-          whiteBoost: options.boostWhite ? 1 : 0,
-          finalSharpness: stats.sharpness
-        },
-        photoAnalysis: [{
-          index: 0,
-          quality: 100,
-          sharpness: stats.sharpness,
-          brightness: stats.brightness,
-          weight: 1,
-          issues: []
-        }]
-      };
-    } catch (error) {
-      return {
-        success: false,
-        mimeType: "image/jpeg",
-        error: error.message
-      };
+  const avgError = totalError / 4;
+  const quality = Math.max(0, Math.min(100, 100 - avgError * 5));
+  return quality;
+}
+function estimateUncertainty(quality, srcPoints) {
+  let baseUncertainty = (100 - quality) / 10;
+  const [tl, tr, br, bl] = srcPoints;
+  const topWidth = Math.sqrt((tr[0] - tl[0]) ** 2 + (tr[1] - tl[1]) ** 2);
+  const bottomWidth = Math.sqrt((br[0] - bl[0]) ** 2 + (br[1] - bl[1]) ** 2);
+  const leftHeight = Math.sqrt((bl[0] - tl[0]) ** 2 + (bl[1] - tl[1]) ** 2);
+  const rightHeight = Math.sqrt((br[0] - tr[0]) ** 2 + (br[1] - tr[1]) ** 2);
+  const widthRatio = Math.max(topWidth, bottomWidth) / Math.min(topWidth, bottomWidth);
+  const heightRatio = Math.max(leftHeight, rightHeight) / Math.min(leftHeight, rightHeight);
+  if (widthRatio > 1.5 || heightRatio > 1.5) {
+    baseUncertainty += (Math.max(widthRatio, heightRatio) - 1) * 3;
+  }
+  return Math.min(25, baseUncertainty);
+}
+function transpose(M) {
+  const rows = M.length;
+  const cols = M[0].length;
+  const result = [];
+  for (let j = 0; j < cols; j++) {
+    result[j] = [];
+    for (let i = 0; i < rows; i++) {
+      result[j][i] = M[i][j];
     }
   }
-  /**
-   * 🎯 FUSION OPTIMISÉE POUR DÉTECTION DE RÉFÉRENCE
-   * 
-   * Version spécialisée pour détecter une feuille A4 ou carte de référence.
-   * Applique des traitements spécifiques pour maximiser la visibilité des bords.
-   * 
-   * ⚠️ IMPORTANT: Ne modifie PAS les proportions de l'image !
-   * Les coordonnées retournées sont en % et doivent correspondre à l'image originale.
-   */
-  async fuseForReferenceDetection(photos, referenceType = "a4") {
-    console.log(`\u{1F3AF} [Fusion Reference] Fusion optimis\xE9e pour ${referenceType.toUpperCase()}...`);
-    let targetWidth = 1920;
-    if (photos.length > 0) {
-      try {
-        const firstBuffer = Buffer.from(photos[0].base64, "base64");
-        const meta = await (0, import_sharp2.default)(firstBuffer).metadata();
-        if (meta.width) {
-          targetWidth = Math.min(meta.width, 2048);
-          console.log(`\u{1F4D0} [Fusion Reference] Dimensions pr\xE9serv\xE9es: ${meta.width}x${meta.height} \u2192 target ${targetWidth}px`);
-        }
-      } catch (e) {
-        console.warn("\u26A0\uFE0F [Fusion Reference] Impossible de lire les dimensions, utilisation par d\xE9faut");
+  return result;
+}
+function multiplyMatrices(A, B) {
+  const rowsA = A.length;
+  const colsA = A[0].length;
+  const colsB = B[0].length;
+  const result = [];
+  for (let i = 0; i < rowsA; i++) {
+    result[i] = [];
+    for (let j = 0; j < colsB; j++) {
+      let sum = 0;
+      for (let k = 0; k < colsA; k++) {
+        sum += A[i][k] * B[k][j];
       }
+      result[i][j] = sum;
     }
-    const params = {
-      a4: {
-        enhanceEdges: true,
-        boostWhite: true,
-        // A4 blanc = boost zones blanches
-        localContrast: true,
-        targetWidth,
-        // Préserver les proportions !
-        outputQuality: 95
-      },
-      card: {
-        enhanceEdges: true,
-        boostWhite: false,
-        // Carte pas forcément blanche
-        localContrast: true,
-        targetWidth,
-        outputQuality: 95
-      },
-      meter: {
-        enhanceEdges: true,
-        boostWhite: false,
-        localContrast: true,
-        targetWidth: 2048,
-        outputQuality: 95
-      },
-      custom: {
-        enhanceEdges: true,
-        boostWhite: false,
-        localContrast: true,
-        targetWidth: 1920,
-        outputQuality: 95
-      }
-    };
-    const config = params[referenceType] || params.a4;
-    const result = await this.fusePhotos(photos, config);
-    if (referenceType === "a4" && result.success && result.fusedImageBase64) {
-      console.log("\u{1F4C4} [Fusion Reference] Post-traitement sp\xE9cial A4...");
-      result.fusedImageBase64 = await this.enhanceA4Detection(result.fusedImageBase64);
-    }
-    return result;
   }
-  /**
-   * 📄 Post-traitement spécial pour feuille A4
-   * 
-   * Accentue les transitions blanc/autre pour faciliter la détection
-   * ⚠️ NE MODIFIE PAS les dimensions de l'image !
-   */
-  async enhanceA4Detection(base64) {
-    console.log("\u{1F4C4} [Fusion A4] Accentuation des bords de la feuille blanche...");
-    let buffer = Buffer.from(base64, "base64");
-    const meta = await (0, import_sharp2.default)(buffer).metadata();
-    const width = meta.width;
-    const height = meta.height;
-    console.log(`\u{1F4D0} [Fusion A4] Dimensions pr\xE9serv\xE9es: ${width}x${height}`);
-    const { data } = await (0, import_sharp2.default)(buffer).raw().ensureAlpha().toBuffer({ resolveWithObject: true });
-    const pixels = new Uint8Array(data);
-    const outputPixels = new Uint8Array(pixels.length);
-    const EDGE_RADIUS = 3;
-    let edgesFound = 0;
-    for (let y = 0; y < height; y++) {
-      for (let x = 0; x < width; x++) {
-        const idx = (y * width + x) * 4;
-        outputPixels[idx] = pixels[idx];
-        outputPixels[idx + 1] = pixels[idx + 1];
-        outputPixels[idx + 2] = pixels[idx + 2];
-        outputPixels[idx + 3] = 255;
-        const currentLum = 0.299 * pixels[idx] + 0.587 * pixels[idx + 1] + 0.114 * pixels[idx + 2];
-        if (currentLum > 180) {
-          let hasDarkNeighbor = false;
-          let maxLumDiff = 0;
-          for (let dy = -EDGE_RADIUS; dy <= EDGE_RADIUS && !hasDarkNeighbor; dy++) {
-            for (let dx = -EDGE_RADIUS; dx <= EDGE_RADIUS && !hasDarkNeighbor; dx++) {
-              const nx = x + dx;
-              const ny = y + dy;
-              if (nx >= 0 && nx < width && ny >= 0 && ny < height && (dx !== 0 || dy !== 0)) {
-                const nIdx = (ny * width + nx) * 4;
-                const neighborLum = 0.299 * pixels[nIdx] + 0.587 * pixels[nIdx + 1] + 0.114 * pixels[nIdx + 2];
-                const lumDiff = currentLum - neighborLum;
-                if (lumDiff > maxLumDiff) maxLumDiff = lumDiff;
-                if (lumDiff > 40) {
-                  hasDarkNeighbor = true;
-                }
-              }
-            }
-          }
-          if (hasDarkNeighbor) {
-            const boostFactor = Math.min(30, maxLumDiff * 0.3);
-            outputPixels[idx] = Math.min(255, outputPixels[idx] + boostFactor);
-            outputPixels[idx + 1] = Math.min(255, outputPixels[idx + 1] + boostFactor);
-            outputPixels[idx + 2] = Math.min(255, outputPixels[idx + 2] + boostFactor);
-            edgesFound++;
-          }
-        } else if (currentLum < 160 && currentLum > 80) {
-          let hasWhiteNeighbor = false;
-          for (let dy = -2; dy <= 2 && !hasWhiteNeighbor; dy++) {
-            for (let dx = -2; dx <= 2 && !hasWhiteNeighbor; dx++) {
-              const nx = x + dx;
-              const ny = y + dy;
-              if (nx >= 0 && nx < width && ny >= 0 && ny < height) {
-                const nIdx = (ny * width + nx) * 4;
-                const neighborLum = 0.299 * pixels[nIdx] + 0.587 * pixels[nIdx + 1] + 0.114 * pixels[nIdx + 2];
-                if (neighborLum > 180) {
-                  hasWhiteNeighbor = true;
-                }
-              }
-            }
-          }
-          if (hasWhiteNeighbor) {
-            outputPixels[idx] = Math.max(0, outputPixels[idx] - 15);
-            outputPixels[idx + 1] = Math.max(0, outputPixels[idx + 1] - 15);
-            outputPixels[idx + 2] = Math.max(0, outputPixels[idx + 2] - 15);
-          }
-        }
+  return result;
+}
+function solveLinearSystem(A, b) {
+  const n = A.length;
+  const aug = A.map((row, i) => [...row, b[i]]);
+  for (let col = 0; col < n; col++) {
+    let maxRow = col;
+    for (let row = col + 1; row < n; row++) {
+      if (Math.abs(aug[row][col]) > Math.abs(aug[maxRow][col])) {
+        maxRow = row;
       }
     }
-    console.log(`\u{1F3AF} [Fusion A4] Bords accentu\xE9s: ${edgesFound} pixels de bordure d\xE9tect\xE9s`);
-    const finalBuffer = await (0, import_sharp2.default)(Buffer.from(outputPixels), {
-      raw: { width, height, channels: 4 }
-    }).jpeg({ quality: 95 }).toBuffer();
-    return finalBuffer.toString("base64");
+    [aug[col], aug[maxRow]] = [aug[maxRow], aug[col]];
+    for (let row = col + 1; row < n; row++) {
+      if (Math.abs(aug[col][col]) < 1e-10) continue;
+      const factor = aug[row][col] / aug[col][col];
+      for (let j = col; j <= n; j++) {
+        aug[row][j] -= factor * aug[col][j];
+      }
+    }
+  }
+  const x = new Array(n).fill(0);
+  for (let i = n - 1; i >= 0; i--) {
+    let sum = aug[i][n];
+    for (let j = i + 1; j < n; j++) {
+      sum -= aug[i][j] * x[j];
+    }
+    x[i] = Math.abs(aug[i][i]) > 1e-10 ? sum / aug[i][i] : 0;
+  }
+  return x;
+}
+function computeCentroid(points) {
+  const n = points.length;
+  let sumX = 0, sumY = 0;
+  for (const [x, y] of points) {
+    sumX += x;
+    sumY += y;
+  }
+  return [sumX / n, sumY / n];
+}
+function computeAverageDistanceFromCentroid(points, centroid) {
+  let totalDist = 0;
+  for (const [x, y] of points) {
+    totalDist += Math.sqrt((x - centroid[0]) ** 2 + (y - centroid[1]) ** 2);
+  }
+  return totalDist / points.length;
+}
+function normalizePoints(points, centroid, scale) {
+  const scaleFactor = Math.SQRT2 / (scale || 1);
+  return points.map(([x, y]) => [
+    (x - centroid[0]) * scaleFactor,
+    (y - centroid[1]) * scaleFactor
+  ]);
+}
+function denormalizeHomography(Hnorm, srcCentroid, srcScale, dstCentroid, dstScale) {
+  const srcScaleFactor = Math.SQRT2 / (srcScale || 1);
+  const dstScaleFactor = Math.SQRT2 / (dstScale || 1);
+  const Tsrc = [
+    [srcScaleFactor, 0, -srcCentroid[0] * srcScaleFactor],
+    [0, srcScaleFactor, -srcCentroid[1] * srcScaleFactor],
+    [0, 0, 1]
+  ];
+  const TdstInv = [
+    [1 / dstScaleFactor, 0, dstCentroid[0]],
+    [0, 1 / dstScaleFactor, dstCentroid[1]],
+    [0, 0, 1]
+  ];
+  const temp = multiplyMatrices3x3(Hnorm, Tsrc);
+  return multiplyMatrices3x3(TdstInv, temp);
+}
+function multiplyMatrices3x3(A, B) {
+  const result = [[0, 0, 0], [0, 0, 0], [0, 0, 0]];
+  for (let i = 0; i < 3; i++) {
+    for (let j = 0; j < 3; j++) {
+      result[i][j] = A[i][0] * B[0][j] + A[i][1] * B[1][j] + A[i][2] * B[2][j];
+    }
+  }
+  return result;
+}
+
+// src/lib/metre-a4-complete-detector.ts
+var METRE_A4_V12_COMPLETE_SPECS = {
+  version: "A4-CALIB-V1.2",
+  // Feuille A4
+  sheet: {
+    width_mm: 210,
+    height_mm: 297
+  },
+  // ═══════════════════════════════════════════════════════════════
+  // 🎯 TOUTES LES COORDONNÉES SONT DES CENTRES !
+  // Le détecteur AprilTag retourne le CENTRE de chaque tag détecté.
+  // On compare donc pixel(centre) ↔ réel(centre) pour tous les éléments.
+  // ═══════════════════════════════════════════════════════════════
+  // 🏷️ AprilTags aux 4 coins (20×20mm chacun)
+  // CENTRES des AprilTags en mm sur la feuille A4
+  aprilTags: [
+    { id: 2, position: "TL", center_x_mm: 40, center_y_mm: 40, size_mm: 20 },
+    { id: 7, position: "TR", center_x_mm: 170, center_y_mm: 40, size_mm: 20 },
+    { id: 14, position: "BL", center_x_mm: 40, center_y_mm: 257, size_mm: 20 },
+    { id: 21, position: "BR", center_x_mm: 170, center_y_mm: 257, size_mm: 20 }
+  ],
+  // 📐 RÉFÉRENCE CALIBRATION (distances centre-à-centre)
+  // TL(40,40) → TR(170,40) = 130mm horizontal
+  // TL(40,40) → BL(40,257) = 217mm vertical
+  reference: {
+    width_mm: 130,
+    // 13.0 cm (entre centres TL-TR: 170-40=130)
+    height_mm: 217,
+    // 21.7 cm (entre centres TL-BL: 257-40=217)
+    width_cm: 13,
+    height_cm: 21.7
+  },
+  // ⚫ 12 points noirs dispersés (4mm diamètre)
+  // CENTRES des points noirs en mm sur la feuille A4
+  // TODO: À vérifier avec les vraies cotes !
+  referenceDots: [
+    // Haut gauche (3 points)
+    { x_mm: 45, y_mm: 65, quadrant: "TL" },
+    { x_mm: 65, y_mm: 60, quadrant: "TL" },
+    { x_mm: 80, y_mm: 68, quadrant: "TL" },
+    // Haut droit (3 points)
+    { x_mm: 145, y_mm: 65, quadrant: "TR" },
+    { x_mm: 160, y_mm: 60, quadrant: "TR" },
+    { x_mm: 175, y_mm: 68, quadrant: "TR" },
+    // Bas gauche (2 points)
+    { x_mm: 43, y_mm: 210, quadrant: "BL" },
+    { x_mm: 73, y_mm: 215, quadrant: "BL" },
+    // Bas droit (2 points)
+    { x_mm: 152, y_mm: 210, quadrant: "BR" },
+    { x_mm: 180, y_mm: 215, quadrant: "BR" },
+    // Centre gauche et droite du damier (2 points)
+    { x_mm: 30, y_mm: 140, quadrant: "TL" },
+    { x_mm: 180, y_mm: 140, quadrant: "TR" }
+  ],
+  // 🎲 ChArUco 6×6 central (120×120mm)
+  // Position du COIN HAUT-GAUCHE du damier sur la feuille A4
+  charuco: {
+    x_mm: 45,
+    // Coin haut-gauche X
+    y_mm: 80,
+    // Coin haut-gauche Y
+    width_mm: 120,
+    height_mm: 120,
+    squares_x: 6,
+    // Grille 6×6
+    squares_y: 6,
+    square_mm: 20,
+    // Chaque carré fait 20mm
+    markerRatio: 0.6
+    // Tags = 60% de la taille carré (12mm)
+  },
+  // 🎯 18 mini-ArUco du ChArUco 6×6 (pattern damier avec bordure noire)
+  // CENTRES des mini-ArUco en mm, RELATIVES au coin haut-gauche du damier (45,80)
+  // Colonne 0 = bordure noire (45-65, centre 55), ArUcos à colonnes 1,2,3,4,5
+  // Ligne 0 = bordure noire (80-100, centre 90), ArUcos à lignes 1,2,3,4,5
+  // Position absolue sur feuille A4 = charuco.x_mm + x_rel, charuco.y_mm + y_rel
+  charucoArUcoPositions: [
+    // Ligne 1 (Y=90mm abs, y_rel=10): damier row 0, colonnes 1,3,5
+    { id: 0, x_rel: 30, y_rel: 10 },
+    // col 1
+    { id: 1, x_rel: 70, y_rel: 10 },
+    // col 3
+    { id: 2, x_rel: 110, y_rel: 10 },
+    // col 5
+    // Ligne 2 (Y=110mm abs, y_rel=30): damier row 1, colonnes 0,2,4
+    { id: 3, x_rel: 10, y_rel: 30 },
+    // col 0
+    { id: 4, x_rel: 50, y_rel: 30 },
+    // col 2
+    { id: 5, x_rel: 90, y_rel: 30 },
+    // col 4
+    // Ligne 3 (Y=130mm abs, y_rel=50): damier row 2, colonnes 1,3,5
+    { id: 6, x_rel: 30, y_rel: 50 },
+    // col 1
+    { id: 7, x_rel: 70, y_rel: 50 },
+    // col 3
+    { id: 8, x_rel: 110, y_rel: 50 },
+    // col 5
+    // Ligne 4 (Y=150mm abs, y_rel=70): damier row 3, colonnes 0,2,4
+    { id: 9, x_rel: 10, y_rel: 70 },
+    // col 0
+    { id: 10, x_rel: 50, y_rel: 70 },
+    // col 2
+    { id: 11, x_rel: 90, y_rel: 70 },
+    // col 4
+    // Ligne 5 (Y=170mm abs, y_rel=90): damier row 4, colonnes 1,3,5
+    { id: 12, x_rel: 30, y_rel: 90 },
+    // col 1
+    { id: 13, x_rel: 70, y_rel: 90 },
+    // col 3
+    { id: 14, x_rel: 110, y_rel: 90 },
+    // col 5
+    // Ligne 6 (Y=190mm abs, y_rel=110): damier row 5, colonnes 0,2,4
+    { id: 15, x_rel: 10, y_rel: 110 },
+    // col 0
+    { id: 16, x_rel: 50, y_rel: 110 },
+    // col 2
+    { id: 17, x_rel: 90, y_rel: 110 }
+    // col 4
+  ],
+  // 📏 Règles graduées (validation échelle)
+  // SOURCE: generate_metre_a4.py → draw_rule(draw, 15, 235, 175) et draw_vertical_rule(draw, 20, 40, 190)
+  rules: {
+    horizontal: { x_mm: 15, y_mm: 235, length_mm: 175 },
+    vertical: { x_mm: 20, y_mm: 40, length_mm: 190 }
   }
 };
-var multiPhotoFusionService = new MultiPhotoFusionService();
+function detectAprilTagsInternal(data, width, height) {
+  const results = detectAprilTagsMetreA4(data, width, height);
+  return results.map((result) => {
+    const dist = (a, b) => Math.hypot(b.x - a.x, b.y - a.y);
+    const size = (dist(result.corners[0], result.corners[1]) + dist(result.corners[1], result.corners[2]) + dist(result.corners[2], result.corners[3]) + dist(result.corners[3], result.corners[0])) / 4;
+    return {
+      id: result.id,
+      center: result.center,
+      corners: result.corners,
+      size
+    };
+  });
+}
+function pickAprilTagByQuadrant(tags, id, quadrant) {
+  const candidates = tags.filter((t) => t.id === id);
+  if (candidates.length === 0) return null;
+  if (candidates.length === 1) return candidates[0];
+  const metric = (t) => {
+    const { x, y } = t.center;
+    switch (quadrant) {
+      case "TL":
+        return x + y;
+      case "TR":
+        return -(x - y);
+      case "BL":
+        return x - y;
+      case "BR":
+        return -(x + y);
+    }
+  };
+  const sorted = [...candidates].sort((a, b) => metric(a) - metric(b));
+  const best = sorted.slice(0, Math.min(3, sorted.length));
+  return best.reduce(
+    (chosen, cand) => cand.size > chosen.size ? cand : chosen
+  );
+}
+function detectMetreA4Complete(imageData, width, height) {
+  console.log("\n\u{1F3AF} [M\xC9TR\xC9 A4 COMPLET] D\xE9tection multi-niveaux...");
+  const allPoints = [];
+  console.log("   \u{1F3F7}\uFE0F  D\xE9tection AprilTags...");
+  const detectedTags = detectAprilTagsInternal(imageData, width, height);
+  if (detectedTags.length === 0) {
+    console.log("   \u274C Aucun AprilTag d\xE9tect\xE9");
+    return null;
+  }
+  const tagTL = pickAprilTagByQuadrant(detectedTags, 2, "TL");
+  const tagTR = pickAprilTagByQuadrant(detectedTags, 7, "TR");
+  const tagBL = pickAprilTagByQuadrant(detectedTags, 14, "BL");
+  const tagBR = pickAprilTagByQuadrant(detectedTags, 21, "BR");
+  if (!tagTL || !tagTR || !tagBL || !tagBR) {
+    const missing = [];
+    if (!tagTL) missing.push("2(TL)");
+    if (!tagTR) missing.push("7(TR)");
+    if (!tagBL) missing.push("14(BL)");
+    if (!tagBR) missing.push("21(BR)");
+    console.log(`   \u274C AprilTags manquants: ${missing.join(", ")}`);
+    return null;
+  }
+  const aprilTagCenters = [
+    tagTL.center,
+    tagTR.center,
+    tagBL.center,
+    tagBR.center
+  ];
+  const aprilTagSpecs = METRE_A4_V12_COMPLETE_SPECS.aprilTags;
+  const aprilTagPositions = aprilTagSpecs.map((tag) => ({
+    x: tag.center_x_mm,
+    y: tag.center_y_mm
+  }));
+  for (let i = 0; i < 4; i++) {
+    allPoints.push({
+      pixel: aprilTagCenters[i],
+      real: aprilTagPositions[i],
+      confidence: 0.98,
+      type: "apriltag",
+      subPixelRefined: false
+    });
+  }
+  console.log(`   \u2705 AprilTags: 4/4 centres ajout\xE9s`);
+  const scaleEstimate = estimateScale(aprilTagCenters);
+  let projectRealToPixel = null;
+  try {
+    const srcPx = [
+      [tagTL.center.x, tagTL.center.y],
+      [tagTR.center.x, tagTR.center.y],
+      [tagBR.center.x, tagBR.center.y],
+      [tagBL.center.x, tagBL.center.y]
+    ];
+    const dstMm = [
+      [40, 40],
+      // TL centre
+      [170, 40],
+      // TR centre
+      [170, 257],
+      // BR centre
+      [40, 257]
+      // BL centre
+    ];
+    const H = computeHomography2(srcPx, dstMm);
+    const HmmToPx = H.inverseMatrix;
+    projectRealToPixel = (pMm) => {
+      const [x, y] = applyHomography(HmmToPx, [pMm.x, pMm.y]);
+      return { x, y };
+    };
+  } catch (err) {
+    console.log("   \u26A0\uFE0F  Homographie mm\u2192px non disponible, fallback scale lin\xE9aire");
+  }
+  const dotPoints = detectReferenceDots12(
+    imageData,
+    width,
+    height,
+    aprilTagCenters,
+    scaleEstimate,
+    projectRealToPixel
+  );
+  allPoints.push(...dotPoints);
+  console.log(`   \u2705 Points dispers\xE9s: ${dotPoints.length}/12 d\xE9tect\xE9s`);
+  const charucoArUcoPoints = detectCharucoViaArUco(detectedTags);
+  allPoints.push(...charucoArUcoPoints);
+  console.log(`   \u2705 ChArUco mini-ArUco: ${charucoArUcoPoints.length}/18 d\xE9tect\xE9s`);
+  const rulePoints = detectRuleGraduations(
+    imageData,
+    width,
+    height,
+    aprilTagCenters,
+    scaleEstimate
+  );
+  allPoints.push(...rulePoints);
+  console.log(`   \u2705 R\xE8gles: ${rulePoints.length} graduations d\xE9tect\xE9es`);
+  console.log(`   \u{1F4CA} TOTAL: ${allPoints.length} points (4 AprilTags + 12 dots + ${charucoArUcoPoints.length} ChArUco)`);
+  const homographyResult = computeRobustHomography(allPoints);
+  const breakdown = {
+    aprilTags: allPoints.filter((p) => p.type === "apriltag").length,
+    referenceDots: allPoints.filter((p) => p.type === "dot").length,
+    charucoCorners: charucoArUcoPoints.length,
+    rulePoints: allPoints.filter((p) => p.type === "rule").length,
+    total: allPoints.length
+  };
+  const precision = homographyResult.reprojectionErrorMm < 0.5 ? "\xB10.5mm" : homographyResult.reprojectionErrorMm < 1 ? "\xB11mm" : homographyResult.reprojectionErrorMm < 2 ? "\xB12mm" : "\xB15mm";
+  console.log(`   \u2B50 Pr\xE9cision estim\xE9e: ${precision}`);
+  console.log(`   \u2705 Homographie: qualit\xE9 ${(homographyResult.quality * 100).toFixed(1)}%
+`);
+  return {
+    success: true,
+    points: allPoints,
+    breakdown,
+    homography: homographyResult,
+    estimatedPrecision: precision,
+    aprilTagCenters
+    // 🎯 Exposer les centres pour compatibilité
+  };
+}
+function estimateScale(corners) {
+  const [tl, tr, bl] = corners;
+  const dxPx = Math.hypot(tr.x - tl.x, tr.y - tl.y);
+  const scaleX = dxPx / 130;
+  const dyPx = Math.hypot(bl.x - tl.x, bl.y - tl.y);
+  const scaleY = dyPx / 217;
+  const pxPerMm = (scaleX + scaleY) / 2;
+  return { pxPerMm, scaleX, scaleY };
+}
+function detectReferenceDots12(imageData, width, height, aprilTagCenters, scale, projectRealToPixel) {
+  const points = [];
+  const [tl] = aprilTagCenters;
+  for (const dot of METRE_A4_V12_COMPLETE_SPECS.referenceDots) {
+    const estimatedPx = projectRealToPixel ? projectRealToPixel({ x: dot.x_mm, y: dot.y_mm }) : {
+      x: tl.x + (dot.x_mm - 40) * scale.scaleX,
+      y: tl.y + (dot.y_mm - 40) * scale.scaleY
+    };
+    const searchRadius = Math.max(20, Math.round(scale.pxPerMm * 6));
+    const detected = findBlackBlob(imageData, width, height, estimatedPx.x, estimatedPx.y, searchRadius);
+    if (detected) {
+      points.push({
+        pixel: detected.center,
+        real: { x: dot.x_mm, y: dot.y_mm },
+        confidence: detected.confidence,
+        type: "dot",
+        subPixelRefined: true
+      });
+    }
+  }
+  return points;
+}
+function detectCharucoViaArUco(detectedTags) {
+  const points = [];
+  const charucoOffsetX = METRE_A4_V12_COMPLETE_SPECS.charuco.x_mm;
+  const charucoOffsetY = METRE_A4_V12_COMPLETE_SPECS.charuco.y_mm;
+  const charucoArUcoPositions = METRE_A4_V12_COMPLETE_SPECS.charucoArUcoPositions;
+  const positionMap = /* @__PURE__ */ new Map();
+  for (const pos of charucoArUcoPositions) {
+    positionMap.set(pos.id, { x_rel: pos.x_rel, y_rel: pos.y_rel });
+  }
+  for (const tag of detectedTags) {
+    const pos = positionMap.get(tag.id);
+    if (!pos) continue;
+    const realX = charucoOffsetX + pos.x_rel;
+    const realY = charucoOffsetY + pos.y_rel;
+    points.push({
+      pixel: tag.center,
+      real: { x: realX, y: realY },
+      confidence: 0.95,
+      type: "charuco",
+      subPixelRefined: true
+    });
+  }
+  return points;
+}
+function detectRuleGraduations(_imageData, _width, _height, _aprilTagCenters, _scale) {
+  return [];
+}
+function findBlackBlob(data, width, height, centerX, centerY, searchRadius) {
+  const blackPixels = [];
+  const x0 = Math.max(0, Math.floor(centerX - searchRadius));
+  const x1 = Math.min(width - 1, Math.ceil(centerX + searchRadius));
+  const y0 = Math.max(0, Math.floor(centerY - searchRadius));
+  const y1 = Math.min(height - 1, Math.ceil(centerY + searchRadius));
+  for (let y = y0; y <= y1; y++) {
+    for (let x = x0; x <= x1; x++) {
+      const idx = (y * width + x) * 4;
+      const r = data[idx];
+      const g = data[idx + 1];
+      const b = data[idx + 2];
+      const brightness = (r + g + b) / 3;
+      if (brightness < 150) {
+        blackPixels.push({ x, y });
+      }
+    }
+  }
+  if (blackPixels.length < 3) return null;
+  const sumX = blackPixels.reduce((s, p) => s + p.x, 0);
+  const sumY = blackPixels.reduce((s, p) => s + p.y, 0);
+  const center = {
+    x: sumX / blackPixels.length,
+    y: sumY / blackPixels.length
+  };
+  const confidence = Math.min(0.85, Math.sqrt(blackPixels.length) / 10);
+  return { center, confidence };
+}
+function computeRobustHomography(points) {
+  if (points.length < 4) {
+    throw new Error("Au moins 4 points requis pour homographie");
+  }
+  const april = points.filter((p) => p.type === "apriltag");
+  if (april.length < 4) {
+    throw new Error("AprilTags insuffisants pour homographie");
+  }
+  const pick = (predicate) => {
+    const found = april.find(predicate);
+    if (!found) throw new Error("Impossible d\u2019identifier les 4 AprilTags (TL/TR/BL/BR)");
+    return found;
+  };
+  const tl = pick((p) => p.real.x < 100 && p.real.y < 100);
+  const tr = pick((p) => p.real.x > 100 && p.real.y < 100);
+  const bl = pick((p) => p.real.x < 100 && p.real.y > 100);
+  const br = pick((p) => p.real.x > 100 && p.real.y > 100);
+  const srcPx = [
+    [tl.pixel.x, tl.pixel.y],
+    [tr.pixel.x, tr.pixel.y],
+    [br.pixel.x, br.pixel.y],
+    [bl.pixel.x, bl.pixel.y]
+  ];
+  const dstMm = [
+    [40, 40],
+    // TL centre
+    [170, 40],
+    // TR centre
+    [170, 257],
+    // BR centre
+    [40, 257]
+    // BL centre
+  ];
+  const Hres = computeHomography2(srcPx, dstMm);
+  const H = Hres.matrix;
+  let sumErrorMm = 0;
+  for (const p of points) {
+    const [rx, ry] = applyHomography(H, [p.pixel.x, p.pixel.y]);
+    const dx = rx - p.real.x;
+    const dy = ry - p.real.y;
+    sumErrorMm += Math.sqrt(dx * dx + dy * dy);
+  }
+  const avgErrorMm = sumErrorMm / points.length;
+  const geom = Math.max(0, Math.min(1, Hres.quality / 100));
+  const errScore = Math.max(0, Math.min(1, 1 - avgErrorMm / 5));
+  const quality = geom * 0.7 + errScore * 0.3;
+  return {
+    matrix: H,
+    quality,
+    reprojectionErrorMm: avgErrorMm
+  };
+}
+
+// src/lib/photo-quality-analyzer.ts
+var QUALITY_WEIGHTS = {
+  sharpness: 0.4,
+  // 40% du score
+  homographyQuality: 0.35,
+  // 35% du score
+  captureConditions: 0.25
+  // 25% du score
+};
+var SHARPNESS_THRESHOLDS = {
+  excellent: 85,
+  // Score > 85 : excellent
+  good: 70,
+  // Score > 70 : bon
+  acceptable: 50,
+  // Score > 50 : acceptable
+  poor: 30
+  // Score < 30 : mauvais
+};
+var HOMOGRAPHY_THRESHOLDS = {
+  excellent: 0.5,
+  // Erreur < 0.5mm : excellent
+  good: 1,
+  // Erreur < 1mm : bon
+  acceptable: 2,
+  // Erreur < 2mm : acceptable
+  poor: 5
+  // Erreur > 5mm : mauvais
+};
+function selectBestPhoto(photos) {
+  console.log(`
+\u{1F4F8} [QUALITY ANALYZER] Analyse de ${photos.length} photos...`);
+  if (photos.length === 0) {
+    throw new Error("Aucune photo fournie pour analyse");
+  }
+  if (photos.length === 1) {
+    console.log("   \u2139\uFE0F  Une seule photo, s\xE9lection automatique");
+    const score = analyzePhotoQuality(photos[0]);
+    return {
+      bestPhoto: photos[0],
+      bestScore: score,
+      allScores: [score],
+      stats: {
+        totalPhotos: 1,
+        averageScore: score.total,
+        scoreRange: [score.total, score.total],
+        improvement: 0
+      }
+    };
+  }
+  const allScores = photos.map((photo) => {
+    const score = analyzePhotoQuality(photo);
+    console.log(`   \u{1F4CA} Photo ${photo.id}: ${score.total.toFixed(1)}/100 (S:${score.sharpness.toFixed(0)} H:${score.homographyQuality.toFixed(0)} C:${score.captureConditions.toFixed(0)})`);
+    return score;
+  });
+  let bestIdx = 0;
+  let bestTotalScore = allScores[0].total;
+  for (let i = 1; i < allScores.length; i++) {
+    if (allScores[i].total > bestTotalScore) {
+      bestTotalScore = allScores[i].total;
+      bestIdx = i;
+    }
+  }
+  const bestPhoto = photos[bestIdx];
+  const bestScore = allScores[bestIdx];
+  const scores = allScores.map((s) => s.total);
+  const avgScore = scores.reduce((a, b) => a + b, 0) / scores.length;
+  const minScore = Math.min(...scores);
+  const maxScore = Math.max(...scores);
+  const improvement = (bestTotalScore - avgScore) / avgScore * 100;
+  console.log(`
+   \u{1F3C6} MEILLEURE: Photo ${bestPhoto.id} (${bestTotalScore.toFixed(1)}/100)`);
+  console.log(`   \u{1F4C8} Am\xE9lioration: +${improvement.toFixed(1)}% vs moyenne`);
+  console.log(`   \u{1F4C9} Range: ${minScore.toFixed(1)} - ${maxScore.toFixed(1)}`);
+  if (bestScore.warnings.length > 0) {
+    console.log(`   \u26A0\uFE0F  Warnings: ${bestScore.warnings.join(", ")}`);
+  }
+  return {
+    bestPhoto,
+    bestScore,
+    allScores,
+    stats: {
+      totalPhotos: photos.length,
+      averageScore: avgScore,
+      scoreRange: [minScore, maxScore],
+      improvement
+    }
+  };
+}
+function analyzePhotoQuality(photo) {
+  const warnings = [];
+  const sharpnessMetrics = analyzeSharpness(photo.imageData, photo.width, photo.height);
+  const sharpnessScore = computeSharpnessScore(sharpnessMetrics);
+  if (sharpnessScore < SHARPNESS_THRESHOLDS.acceptable) {
+    warnings.push("Nettet\xE9 insuffisante");
+  }
+  const homographyMetrics = analyzeHomographyQuality(photo.detection);
+  const homographyScore = computeHomographyScore(homographyMetrics);
+  if (photo.detection.homography.reprojectionErrorMm > HOMOGRAPHY_THRESHOLDS.acceptable) {
+    warnings.push(`Erreur reprojection ${photo.detection.homography.reprojectionErrorMm.toFixed(1)}mm`);
+  }
+  const captureMetrics = analyzeCaptureConditions(
+    photo.imageData,
+    photo.width,
+    photo.height,
+    photo.detection
+  );
+  const captureScore = computeCaptureScore(captureMetrics);
+  if (captureMetrics.viewAngleDegrees > 30) {
+    warnings.push(`Angle de vue ${captureMetrics.viewAngleDegrees.toFixed(0)}\xB0 (frontal recommand\xE9)`);
+  }
+  const totalScore = sharpnessScore * QUALITY_WEIGHTS.sharpness + homographyScore * QUALITY_WEIGHTS.homographyQuality + captureScore * QUALITY_WEIGHTS.captureConditions;
+  return {
+    photoId: photo.id,
+    sharpness: sharpnessScore,
+    homographyQuality: homographyScore,
+    captureConditions: captureScore,
+    total: totalScore,
+    breakdown: {
+      edgeStrength: sharpnessMetrics.edgeStrength,
+      contrastRatio: sharpnessMetrics.contrastRatio,
+      reprojectionErrorMm: photo.detection.homography.reprojectionErrorMm,
+      inlierRatio: homographyMetrics.inlierRatio,
+      spatialCoverage: homographyMetrics.spatialCoverage,
+      viewAngleDegrees: captureMetrics.viewAngleDegrees,
+      lightingUniformity: captureMetrics.lightingUniformity
+    },
+    warnings
+  };
+}
+function analyzeSharpness(data, width, height) {
+  let sumLaplacian = 0;
+  let sumLaplacianSq = 0;
+  let count = 0;
+  for (let y = 1; y < height - 1; y++) {
+    for (let x = 1; x < width - 1; x++) {
+      const gray = getGrayscale(data, width, x, y);
+      const laplacian = -1 * getGrayscale(data, width, x - 1, y - 1) + -1 * getGrayscale(data, width, x, y - 1) + -1 * getGrayscale(data, width, x + 1, y - 1) + -1 * getGrayscale(data, width, x - 1, y) + 8 * gray + -1 * getGrayscale(data, width, x + 1, y) + -1 * getGrayscale(data, width, x - 1, y + 1) + -1 * getGrayscale(data, width, x, y + 1) + -1 * getGrayscale(data, width, x + 1, y + 1);
+      sumLaplacian += laplacian;
+      sumLaplacianSq += laplacian * laplacian;
+      count++;
+    }
+  }
+  const meanLaplacian = sumLaplacian / count;
+  const varianceLaplacian = sumLaplacianSq / count - meanLaplacian * meanLaplacian;
+  let sumGradient = 0;
+  for (let y = 1; y < height - 1; y += 4) {
+    for (let x = 1; x < width - 1; x += 4) {
+      const gx = sobelX(data, width, x, y);
+      const gy = sobelY(data, width, x, y);
+      const magnitude = Math.sqrt(gx * gx + gy * gy);
+      sumGradient += magnitude;
+    }
+  }
+  const edgeStrength = Math.min(100, sumGradient / (width * height / 16) * 2);
+  const blockSize = 16;
+  let sumContrast = 0;
+  let blockCount = 0;
+  for (let by = 0; by < height - blockSize; by += blockSize) {
+    for (let bx = 0; bx < width - blockSize; bx += blockSize) {
+      const contrast = computeBlockContrast(data, width, bx, by, blockSize);
+      sumContrast += contrast;
+      blockCount++;
+    }
+  }
+  const contrastRatio = Math.min(100, sumContrast / blockCount * 0.5);
+  return {
+    edgeStrength,
+    contrastRatio,
+    laplacianVariance: varianceLaplacian
+  };
+}
+function computeSharpnessScore(metrics) {
+  const laplacianScore = Math.min(100, metrics.laplacianVariance / 500 * 100);
+  const score = laplacianScore * 0.5 + metrics.edgeStrength * 0.3 + metrics.contrastRatio * 0.2;
+  return Math.max(0, Math.min(100, score));
+}
+function analyzeHomographyQuality(detection) {
+  const inlierRatio = detection.breakdown.total > 0 ? detection.homography.quality : 0;
+  const coverage = computeSpatialCoverage(detection.points.map((p) => p.pixel));
+  return {
+    inlierRatio,
+    spatialCoverage: coverage
+  };
+}
+function computeHomographyScore(metrics) {
+  const inlierScore = metrics.inlierRatio * 100;
+  const coverageScore = metrics.spatialCoverage * 100;
+  return inlierScore * 0.7 + coverageScore * 0.3;
+}
+function computeSpatialCoverage(points) {
+  if (points.length < 4) return 0;
+  let minX = Infinity, maxX = -Infinity;
+  let minY = Infinity, maxY = -Infinity;
+  for (const p of points) {
+    minX = Math.min(minX, p.x);
+    maxX = Math.max(maxX, p.x);
+    minY = Math.min(minY, p.y);
+    maxY = Math.max(maxY, p.y);
+  }
+  const bboxArea = (maxX - minX) * (maxY - minY);
+  const normalizedArea = bboxArea / (1e3 * 1e3);
+  return Math.min(1, normalizedArea);
+}
+function analyzeCaptureConditions(data, width, height, detection) {
+  const aprilTagPoints = detection.points.filter((p) => p.type === "apriltag");
+  let viewAngle = 0;
+  if (aprilTagPoints.length === 4) {
+    const [tl, tr, bl] = aprilTagPoints.map((p) => p.pixel);
+    const widthPx = Math.hypot(tr.x - tl.x, tr.y - tl.y);
+    const heightPx = Math.hypot(bl.x - tl.x, bl.y - tl.y);
+    const actualRatio = widthPx / heightPx;
+    const expectedRatio = 130 / 217;
+    const ratioDiff = Math.abs(actualRatio - expectedRatio) / expectedRatio;
+    viewAngle = Math.min(45, ratioDiff * 100);
+  }
+  let sumBrightness = 0;
+  let sumBrightnessSq = 0;
+  const sampleCount = Math.min(1e4, width * height);
+  for (let i = 0; i < sampleCount; i++) {
+    const x = Math.floor(Math.random() * width);
+    const y = Math.floor(Math.random() * height);
+    const brightness = getGrayscale(data, width, x, y);
+    sumBrightness += brightness;
+    sumBrightnessSq += brightness * brightness;
+  }
+  const meanBrightness = sumBrightness / sampleCount;
+  const variance = sumBrightnessSq / sampleCount - meanBrightness * meanBrightness;
+  const stdDev = Math.sqrt(variance);
+  const uniformity = Math.max(0, 1 - stdDev / 80);
+  return {
+    viewAngleDegrees: viewAngle,
+    lightingUniformity: uniformity
+  };
+}
+function computeCaptureScore(metrics) {
+  const angleScore = Math.max(0, 100 - metrics.viewAngleDegrees / 45 * 100);
+  const lightingScore = metrics.lightingUniformity * 100;
+  return angleScore * 0.6 + lightingScore * 0.4;
+}
+function getGrayscale(data, width, x, y) {
+  const idx = (y * width + x) * 4;
+  return (data[idx] + data[idx + 1] + data[idx + 2]) / 3;
+}
+function sobelX(data, width, x, y) {
+  return (-getGrayscale(data, width, x - 1, y - 1) + getGrayscale(data, width, x + 1, y - 1) + -2 * getGrayscale(data, width, x - 1, y) + 2 * getGrayscale(data, width, x + 1, y) + -getGrayscale(data, width, x - 1, y + 1) + getGrayscale(data, width, x + 1, y + 1)) / 8;
+}
+function sobelY(data, width, x, y) {
+  return (-getGrayscale(data, width, x - 1, y - 1) + -2 * getGrayscale(data, width, x, y - 1) + -getGrayscale(data, width, x + 1, y - 1) + getGrayscale(data, width, x - 1, y + 1) + 2 * getGrayscale(data, width, x, y + 1) + getGrayscale(data, width, x + 1, y + 1)) / 8;
+}
+function computeBlockContrast(data, width, x0, y0, blockSize) {
+  let min = 255;
+  let max = 0;
+  for (let y = y0; y < y0 + blockSize; y++) {
+    for (let x = x0; x < x0 + blockSize; x++) {
+      const gray = getGrayscale(data, width, x, y);
+      min = Math.min(min, gray);
+      max = Math.max(max, gray);
+    }
+  }
+  return max - min;
+}
+
+// src/services/measurement-calculator.ts
+function computeObjectDimensions(calibration2, objectCorners) {
+  console.log("\n" + "\u2550".repeat(90));
+  console.log("\u{1F4CA} [MEASUREMENT-CALCULATOR] D\xC9TAIL COMPLET DU CALCUL");
+  console.log("\u2550".repeat(90));
+  const warnings = [];
+  const isAprilTag = calibration2.detectionMethod === "AprilTag-Metre-V1.2";
+  const markerWidthCm = calibration2.markerSizeCm;
+  const markerHeightCm = calibration2.markerHeightCm || calibration2.markerSizeCm;
+  const markerWidthMm2 = markerWidthCm * 10;
+  const markerHeightMm2 = markerHeightCm * 10;
+  console.log(`
+\u{1F539} MARQUEUR DE R\xC9F\xC9RENCE:`);
+  console.log(`   Type: ${isAprilTag ? "AprilTag M\xE9tr\xE9 V1.2" : "ArUco"}`);
+  console.log(`   Dimensions: ${markerWidthCm}cm \xD7 ${markerHeightCm}cm = ${markerWidthMm2}mm \xD7 ${markerHeightMm2}mm`);
+  if (isAprilTag) {
+    setArucoMarkerSize(markerWidthCm);
+  } else {
+    setArucoMarkerSize(calibration2.markerSizeCm);
+  }
+  const srcCorners = {
+    topLeft: { x: calibration2.markerCorners.topLeft.x, y: calibration2.markerCorners.topLeft.y },
+    topRight: { x: calibration2.markerCorners.topRight.x, y: calibration2.markerCorners.topRight.y },
+    bottomLeft: { x: calibration2.markerCorners.bottomLeft.x, y: calibration2.markerCorners.bottomLeft.y },
+    bottomRight: { x: calibration2.markerCorners.bottomRight.x, y: calibration2.markerCorners.bottomRight.y }
+  };
+  const srcPoints = cornersToPoints(srcCorners);
+  const dstPoints = [
+    [0, 0],
+    // topLeft
+    [markerWidthMm2, 0],
+    // topRight
+    [markerWidthMm2, markerHeightMm2],
+    // bottomRight
+    [0, markerHeightMm2]
+    // bottomLeft
+  ];
+  if (isAprilTag) {
+    console.log(`   \u{1F4D0} Points destination AprilTag ${markerWidthMm2}\xD7${markerHeightMm2}mm:`, dstPoints.map((p) => `(${p[0]}, ${p[1]})`).join(", "));
+  }
+  const markerWidthPx = Math.hypot(
+    srcPoints[1][0] - srcPoints[0][0],
+    srcPoints[1][1] - srcPoints[0][1]
+  );
+  const markerHeightPx = Math.hypot(
+    srcPoints[3][0] - srcPoints[0][0],
+    srcPoints[3][1] - srcPoints[0][1]
+  );
+  let homography;
+  let usedUltraPrecision = false;
+  let depthInfo = {
+    mean: 0,
+    stdDev: 0,
+    inclineAngle: 0
+  };
+  if (calibration2.ultraPrecisionHomography && calibration2.ultraPrecisionHomography.length === 3) {
+    console.log(`
+\u{1F4D0} \xC9TAPE 2: \u{1F52C} UTILISATION HOMOGRAPHIE ULTRA-PR\xC9CISE (41+ points)`);
+    console.log(`   \u2705 Qualit\xE9 ultra-pr\xE9cision: ${(calibration2.ultraPrecisionQuality || 0).toFixed(1)}%`);
+    console.log(`   \u2705 Erreur reprojection: \xB1${calibration2.reprojectionErrorMm?.toFixed(2) || "?"}mm`);
+    console.log(`   \u{1F3AF} Source: RANSAC + Levenberg-Marquardt (10-41 points)`);
+    if (calibration2.depthInfo) {
+      depthInfo = calibration2.depthInfo;
+      console.log(`   \u{1F4CF} Profondeur cam\xE9ra: ${depthInfo.mean.toFixed(0)}mm (\xB1${depthInfo.stdDev.toFixed(0)}mm)`);
+      console.log(`   \u{1F504} Angle inclinaison: ${depthInfo.inclineAngle.toFixed(2)}\xB0`);
+    }
+    const matrix3x3 = [
+      [calibration2.ultraPrecisionHomography[0][0], calibration2.ultraPrecisionHomography[0][1], calibration2.ultraPrecisionHomography[0][2]],
+      [calibration2.ultraPrecisionHomography[1][0], calibration2.ultraPrecisionHomography[1][1], calibration2.ultraPrecisionHomography[1][2]],
+      [calibration2.ultraPrecisionHomography[2][0], calibration2.ultraPrecisionHomography[2][1], calibration2.ultraPrecisionHomography[2][2]]
+    ];
+    homography = {
+      matrix: matrix3x3,
+      quality: calibration2.ultraPrecisionQuality || 95,
+      uncertainty: calibration2.reprojectionErrorMm ? calibration2.reprojectionErrorMm / 100 : 0.1
+    };
+    usedUltraPrecision = true;
+  } else {
+    console.log(`
+\u{1F4D0} \xC9TAPE 2: Construction homographie basique (4 points)`);
+    console.log(`   Coins marqueur (px):`);
+    console.log(`      TL: (${srcPoints[0][0].toFixed(0)}, ${srcPoints[0][1].toFixed(0)})`);
+    console.log(`      TR: (${srcPoints[1][0].toFixed(0)}, ${srcPoints[1][1].toFixed(0)})`);
+    console.log(`      BR: (${srcPoints[2][0].toFixed(0)}, ${srcPoints[2][1].toFixed(0)})`);
+    console.log(`      BL: (${srcPoints[3][0].toFixed(0)}, ${srcPoints[3][1].toFixed(0)})`);
+    console.log(`   Coins destination (mm):`);
+    console.log(`      TL: (0, 0), TR: (${markerWidthMm2}, 0)`);
+    console.log(`      BR: (${markerWidthMm2}, ${markerHeightMm2}), BL: (0, ${markerHeightMm2})`);
+    console.log(`   Taille marqueur en pixels: ${markerWidthPx.toFixed(0)} \xD7 ${markerHeightPx.toFixed(0)}`);
+    const dstPoints2 = [
+      [0, 0],
+      // topLeft
+      [markerWidthMm2, 0],
+      // topRight
+      [markerWidthMm2, markerHeightMm2],
+      // bottomRight
+      [0, markerHeightMm2]
+      // bottomLeft
+    ];
+    try {
+      homography = computeHomography2(srcPoints, dstPoints2);
+      console.log(`   \u2705 Homographie calcul\xE9e`);
+      console.log(`      Qualit\xE9: ${homography.quality.toFixed(1)}%`);
+      console.log(`      Incertitude: \xB1${homography.uncertainty.toFixed(1)}%`);
+    } catch (error) {
+      console.error("\u274C Erreur calcul homographie:", error);
+      return {
+        success: false,
+        largeur_cm: 0,
+        hauteur_cm: 0,
+        incertitude_largeur_cm: 0,
+        incertitude_hauteur_cm: 0,
+        method: "fallback",
+        confidence: 0,
+        warnings: ["\xC9chec du calcul d'homographie"]
+      };
+    }
+    if (homography.quality < 50) {
+      warnings.push("Qualit\xE9 homographie faible - mesures moins fiables");
+    }
+  }
+  console.log(`
+\u{1F4CF} \xC9TAPE 3: Transformation des coins de l'objet`);
+  const objTL = [objectCorners.topLeft.x, objectCorners.topLeft.y];
+  const objTR = [objectCorners.topRight.x, objectCorners.topRight.y];
+  const objBR = [objectCorners.bottomRight.x, objectCorners.bottomRight.y];
+  const objBL = [objectCorners.bottomLeft.x, objectCorners.bottomLeft.y];
+  console.log(`   Coins objet (px):`);
+  console.log(`      TL: (${objTL[0].toFixed(0)}, ${objTL[1].toFixed(0)})`);
+  console.log(`      TR: (${objTR[0].toFixed(0)}, ${objTR[1].toFixed(0)})`);
+  console.log(`      BR: (${objBR[0].toFixed(0)}, ${objBR[1].toFixed(0)})`);
+  console.log(`      BL: (${objBL[0].toFixed(0)}, ${objBL[1].toFixed(0)})`);
+  const realTL = applyHomography(homography.matrix, objTL);
+  const realTR = applyHomography(homography.matrix, objTR);
+  const realBR = applyHomography(homography.matrix, objBR);
+  const realBL = applyHomography(homography.matrix, objBL);
+  console.log(`   Coins objet transform\xE9s (mm):`);
+  console.log(`      TL: (${realTL[0].toFixed(1)}, ${realTL[1].toFixed(1)})`);
+  console.log(`      TR: (${realTR[0].toFixed(1)}, ${realTR[1].toFixed(1)})`);
+  console.log(`      BR: (${realBR[0].toFixed(1)}, ${realBR[1].toFixed(1)})`);
+  console.log(`      BL: (${realBL[0].toFixed(1)}, ${realBL[1].toFixed(1)})`);
+  console.log(`
+\u{1F4CF} \xC9TAPE 4: Calcul des dimensions finales`);
+  const widthTopPx = Math.hypot(objTR[0] - objTL[0], objTR[1] - objTL[1]);
+  const widthBottomPx = Math.hypot(objBR[0] - objBL[0], objBR[1] - objBL[1]);
+  const widthTop = computeRealDistanceWithUncertainty(
+    homography.matrix,
+    objTL,
+    objTR,
+    homography.uncertainty
+  );
+  const widthBottom = computeRealDistanceWithUncertainty(
+    homography.matrix,
+    objBL,
+    objBR,
+    homography.uncertainty
+  );
+  console.log(`   Largeur haut: ${widthTop.distance.toFixed(1)}mm (\xB1${widthTop.uncertainty.toFixed(1)}mm)`);
+  console.log(`   Largeur bas: ${widthBottom.distance.toFixed(1)}mm (\xB1${widthBottom.uncertainty.toFixed(1)}mm)`);
+  const heightLeft = computeRealDistanceWithUncertainty(
+    homography.matrix,
+    objTL,
+    objBL,
+    homography.uncertainty
+  );
+  const heightRight = computeRealDistanceWithUncertainty(
+    homography.matrix,
+    objTR,
+    objBR,
+    homography.uncertainty
+  );
+  const heightLeftPx = Math.hypot(objBL[0] - objTL[0], objBL[1] - objTL[1]);
+  const heightRightPx = Math.hypot(objBR[0] - objTR[0], objBR[1] - objTR[1]);
+  console.log(`   Hauteur gauche: ${heightLeft.distance.toFixed(1)}mm (\xB1${heightLeft.uncertainty.toFixed(1)}mm)`);
+  console.log(`   Hauteur droite: ${heightRight.distance.toFixed(1)}mm (\xB1${heightRight.uncertainty.toFixed(1)}mm)`);
+  const avgWidthMm = (widthTop.distance + widthBottom.distance) / 2;
+  const avgHeightMm = (heightLeft.distance + heightRight.distance) / 2;
+  const avgWidthUncertaintyMm = (widthTop.uncertainty + widthBottom.uncertainty) / 2;
+  const avgHeightUncertaintyMm = (heightLeft.uncertainty + heightRight.uncertainty) / 2;
+  const scaleFactor = 1;
+  const pxPerMmMarker = (markerWidthPx + markerHeightPx) / (2 * ((markerWidthMm2 + markerHeightMm2) / 2));
+  const pxPerMmObjSamples = [
+    widthTopPx / Math.max(widthTop.distance, 1e-6),
+    widthBottomPx / Math.max(widthBottom.distance, 1e-6),
+    heightLeftPx / Math.max(heightLeft.distance, 1e-6),
+    heightRightPx / Math.max(heightRight.distance, 1e-6)
+  ].filter((v) => Number.isFinite(v) && v > 0);
+  if (pxPerMmObjSamples.length > 0) {
+    const avgPxPerMmObj = pxPerMmObjSamples.reduce((a, b) => a + b, 0) / pxPerMmObjSamples.length;
+    const ratio = avgPxPerMmObj / pxPerMmMarker;
+    console.log(`   \u{1F4CA} Ratio pixels/mm (objet/marqueur): ${ratio.toFixed(2)} (info seulement, NON appliqu\xE9)`);
+  }
+  const widthVariation = Math.abs(widthTop.distance - widthBottom.distance) / avgWidthMm * 100;
+  const heightVariation = Math.abs(heightLeft.distance - heightRight.distance) / avgHeightMm * 100;
+  console.log(`
+   \u{1F4CA} Variation entre c\xF4t\xE9s oppos\xE9s:`);
+  console.log(`      Largeur: ${widthVariation.toFixed(1)}%`);
+  console.log(`      Hauteur: ${heightVariation.toFixed(1)}%`);
+  if (widthVariation > 10) {
+    warnings.push(`Variation largeur ${widthVariation.toFixed(0)}% - perspective forte`);
+  }
+  if (heightVariation > 10) {
+    warnings.push(`Variation hauteur ${heightVariation.toFixed(0)}% - perspective forte`);
+  }
+  const largeur_cm = avgWidthMm * scaleFactor / 10;
+  const hauteur_cm = avgHeightMm * scaleFactor / 10;
+  const incertitude_largeur_cm = avgWidthUncertaintyMm * scaleFactor / 10;
+  const incertitude_hauteur_cm = avgHeightUncertaintyMm * scaleFactor / 10;
+  const variationPenalty = Math.max(0, (widthVariation + heightVariation) / 2 - 5) * 2;
+  const confidence = Math.max(0, Math.min(100, homography.quality - variationPenalty)) / 100;
+  const objectWidthPx = Math.hypot(objTR[0] - objTL[0], objTR[1] - objTL[1]);
+  const objectHeightPx = Math.hypot(objBL[0] - objTL[0], objBL[1] - objTL[1]);
+  console.log("\n" + "=".repeat(70));
+  console.log("\u2705 [MEASUREMENT-CALCULATOR] R\xC9SULTAT FORMULE 1");
+  console.log("=".repeat(70));
+  console.log(`   \u{1F4CF} LARGEUR: ${largeur_cm.toFixed(2)} cm (\xB1${incertitude_largeur_cm.toFixed(2)} cm)`);
+  console.log(`   \u{1F4CF} HAUTEUR: ${hauteur_cm.toFixed(2)} cm (\xB1${incertitude_hauteur_cm.toFixed(2)} cm)`);
+  console.log(`   \u{1F3AF} M\xE9thode: ${usedUltraPrecision ? "\u{1F52C} ULTRA-PR\xC9CISION (41+ pts)" : "homography (4 pts)"} (FORMULE 1)`);
+  console.log(`   \u{1F4CA} Confiance: ${(confidence * 100).toFixed(0)}%`);
+  console.log(`   \u{1F4CA} Qualit\xE9 homographie: ${homography.quality.toFixed(1)}%`);
+  if (usedUltraPrecision) {
+    console.log(`   \u{1F52C} Erreur reprojection: \xB1${calibration2.reprojectionErrorMm?.toFixed(2) || "?"}mm`);
+    if (depthInfo.mean > 0) {
+      console.log(`   \u{1F4CF} Profondeur cam\xE9ra: ${depthInfo.mean.toFixed(0)}mm (\xB1${depthInfo.stdDev.toFixed(0)}mm)`);
+      console.log(`   \u{1F504} Angle inclinaison: ${depthInfo.inclineAngle.toFixed(2)}\xB0`);
+    }
+  }
+  if (warnings.length > 0) {
+    console.log(`   \u26A0\uFE0F Avertissements: ${warnings.join(", ")}`);
+  }
+  console.log("=".repeat(70) + "\n");
+  return {
+    success: true,
+    largeur_cm,
+    hauteur_cm,
+    incertitude_largeur_cm,
+    incertitude_hauteur_cm,
+    method: "homography",
+    confidence,
+    warnings,
+    debug: {
+      homographyQuality: homography.quality,
+      markerSizePixels: { width: markerWidthPx, height: markerHeightPx },
+      objectSizePixels: { width: objectWidthPx, height: objectHeightPx },
+      transformedCorners: {
+        tl: realTL,
+        tr: realTR,
+        br: realBR,
+        bl: realBL
+      },
+      ...usedUltraPrecision && depthInfo.mean > 0 ? {
+        depth: {
+          mean_mm: depthInfo.mean,
+          stdDev_mm: depthInfo.stdDev,
+          inclineAngle_deg: depthInfo.inclineAngle
+        }
+      } : {}
+    }
+  };
+}
+
+// src/utils/ultra-precision-ransac.ts
+function computeUltraPrecisionHomography(srcPoints, dstPoints, markerWidthMm2, markerHeightMm2) {
+  console.log(`
+${"=".repeat(90)}`);
+  console.log(`\u{1F52C} [ULTRA-PRECISION RANSAC] Calcul homographie avec ${srcPoints.length} points`);
+  console.log(`${"=".repeat(90)}`);
+  if (srcPoints.length < 4 || dstPoints.length < 4) {
+    throw new Error(`Minimum 4 points requis, ${srcPoints.length} fournis`);
+  }
+  const maxIterations = Math.min(1e4, Math.max(1e3, srcPoints.length * 80));
+  const estimatedPxPerMm = estimatePxPerMmFromCorrespondences(srcPoints, dstPoints);
+  const mmPerPx = estimatedPxPerMm && estimatedPxPerMm > 0 ? 1 / estimatedPxPerMm : null;
+  const inlierThresholdMm = Math.max(2, mmPerPx ? 4 * mmPerPx : 2);
+  const minInliers = srcPoints.length < 30 ? Math.max(6, Math.floor(srcPoints.length * 0.5)) : Math.max(12, Math.floor(srcPoints.length * 0.7));
+  let bestHomography = [[1, 0, 0], [0, 1, 0], [0, 0, 1]];
+  let bestInlierIndices = [];
+  let bestInlierCount = 0;
+  for (let iter = 0; iter < maxIterations; iter++) {
+    const indices = randomSampleIndices(srcPoints.length, 4);
+    const sample4Src = indices.map((i) => srcPoints[i]);
+    const sample4Dst = indices.map((i) => dstPoints[i]);
+    try {
+      const H = computeHomographyDLT(sample4Src, sample4Dst);
+      const inlierIndices = [];
+      for (let i = 0; i < srcPoints.length; i++) {
+        const transformed = applyHomography2(H, srcPoints[i]);
+        const errorMm = distance(transformed, dstPoints[i]);
+        if (errorMm < inlierThresholdMm) {
+          inlierIndices.push(i);
+        }
+      }
+      if (inlierIndices.length > bestInlierCount) {
+        bestInlierCount = inlierIndices.length;
+        bestHomography = H;
+        bestInlierIndices = inlierIndices;
+        if (iter % 500 === 0) {
+          console.log(`   \u{1F4CA} It\xE9ration ${iter}: ${inlierIndices.length}/${srcPoints.length} inliers (seuil=${inlierThresholdMm.toFixed(2)}mm)`);
+        }
+      }
+    } catch {
+      continue;
+    }
+  }
+  console.log(`
+   \u2705 RANSAC: ${bestInlierCount}/${srcPoints.length} inliers apr\xE8s ${maxIterations} it\xE9rations`);
+  console.log(`
+   \u{1F50D} DEBUG - Erreurs de reprojection par point avec homographie initiale:`);
+  const debugErrors = [];
+  for (let i = 0; i < srcPoints.length; i++) {
+    const transformed = applyHomography2(bestHomography, srcPoints[i]);
+    const errorMm = distance(transformed, dstPoints[i]);
+    const isInlier = bestInlierIndices.includes(i);
+    debugErrors.push({ idx: i, error: errorMm, isInlier });
+    if (i < 16) {
+      console.log(`      [${i}] ${isInlier ? "\u2705" : "\u274C"} pixel:(${srcPoints[i].x.toFixed(0)},${srcPoints[i].y.toFixed(0)}) \u2192 real:(${dstPoints[i].x},${dstPoints[i].y}) erreur: ${errorMm.toFixed(1)}mm`);
+    }
+  }
+  const aprilTagErrors = debugErrors.slice(0, 4);
+  const dotErrors = debugErrors.slice(4, 16);
+  const charucoErrors = debugErrors.slice(16);
+  const charucoCount = charucoErrors.length;
+  console.log(`      \u{1F4CA} AprilTags (0-3): ${aprilTagErrors.filter((e) => e.isInlier).length}/4 inliers, erreur moy: ${(aprilTagErrors.reduce((s, e) => s + e.error, 0) / 4).toFixed(1)}mm`);
+  console.log(`      \u{1F4CA} Dots (4-15): ${dotErrors.filter((e) => e.isInlier).length}/12 inliers, erreur moy: ${(dotErrors.reduce((s, e) => s + e.error, 0) / 12).toFixed(1)}mm`);
+  console.log(`      \u{1F4CA} ChArUco (16-${15 + charucoCount}): ${charucoErrors.filter((e) => e.isInlier).length}/${charucoCount} inliers, erreur moy: ${charucoCount > 0 ? (charucoErrors.reduce((s, e) => s + e.error, 0) / charucoCount).toFixed(1) : 0}mm`);
+  if (bestInlierCount < minInliers) {
+    console.warn(`   \u26A0\uFE0F  Seulement ${bestInlierCount} inliers, ${minInliers} recommand\xE9s`);
+  }
+  if (bestInlierCount < 4) {
+    throw new Error(`RANSAC n'a pas trouv\xE9 assez d'inliers (4 requis), obtenu: ${bestInlierCount}`);
+  }
+  const inlierSrc = bestInlierIndices.map((i) => srcPoints[i]);
+  const inlierDst = bestInlierIndices.map((i) => dstPoints[i]);
+  const dltInlierH = computeHomographyDLTLeastSquares(inlierSrc, inlierDst);
+  bestHomography = dltInlierH;
+  let refinedH = bestHomography;
+  if (bestInlierCount >= 6) {
+    console.log(`
+   \u{1F527} Optimisation Levenberg-Marquardt avec ${bestInlierCount} inliers...`);
+    refinedH = levenbergMarquardt(
+      bestHomography,
+      inlierSrc,
+      inlierDst,
+      100
+      // iterations
+    );
+  } else {
+    console.log(`
+   \u2139\uFE0F  LM ignor\xE9 (inliers=${bestInlierCount} < 6), DLT inliers conserv\xE9`);
+  }
+  let totalReprojectionError = 0;
+  const errors = [];
+  for (let i = 0; i < srcPoints.length; i++) {
+    const transformed = applyHomography2(refinedH, srcPoints[i]);
+    const errorMm = distance(transformed, dstPoints[i]);
+    errors.push(errorMm);
+    totalReprojectionError += errorMm;
+  }
+  const meanReprojectionError = totalReprojectionError / srcPoints.length;
+  const stdDevError = Math.sqrt(
+    errors.reduce((sum, e) => sum + Math.pow(e - meanReprojectionError, 2), 0) / srcPoints.length
+  );
+  const meanReprojectionErrorMm = meanReprojectionError;
+  const stdDevErrorMm = stdDevError;
+  const reprojectionErrorPx = estimatedPxPerMm ? meanReprojectionErrorMm * estimatedPxPerMm : meanReprojectionErrorMm;
+  console.log(`
+   \u{1F4CF} Erreur reprojection: ${meanReprojectionErrorMm.toFixed(2)}mm (\xB1${stdDevErrorMm.toFixed(2)}mm)`);
+  console.log(`
+   \u{1F4D0} Estimation profondeur 3D...`);
+  const points3D = estimateDepthMap(
+    srcPoints,
+    dstPoints,
+    refinedH,
+    markerWidthMm2,
+    markerHeightMm2
+  );
+  const depths = points3D.map((p) => p.z);
+  const depthMean = depths.reduce((a, b) => a + b, 0) / depths.length;
+  const depthStdDev = Math.sqrt(
+    depths.reduce((sum, z9) => sum + Math.pow(z9 - depthMean, 2), 0) / depths.length
+  );
+  const inclineAngle = estimateInclineAngle(points3D);
+  const quality = Math.max(0, Math.min(
+    100,
+    100 - (meanReprojectionErrorMm * 20 + stdDevErrorMm * 10)
+  ));
+  const confidence = Math.min(100, bestInlierCount / srcPoints.length * 100);
+  const reprojectionErrorMm = meanReprojectionErrorMm;
+  console.log(`
+   \u{1F4CA} STATISTIQUES:`);
+  console.log(`      Profondeur moyenne: ${depthMean.toFixed(0)}mm`);
+  console.log(`      Variation profondeur: \xB1${depthStdDev.toFixed(0)}mm`);
+  console.log(`      Angle inclinaison: ${inclineAngle.toFixed(2)}\xB0`);
+  console.log(`      Qualit\xE9: ${quality.toFixed(1)}%`);
+  console.log(`      Confiance: ${confidence.toFixed(1)}%`);
+  console.log(`      Erreur reprojection: ${reprojectionErrorMm.toFixed(2)}mm`);
+  console.log(`
+${"=".repeat(90)}
+`);
+  return {
+    homography: refinedH,
+    points3D,
+    quality,
+    reprojectionError: reprojectionErrorPx,
+    reprojectionErrorMm,
+    confidence,
+    inlierCount: bestInlierCount,
+    outlierCount: srcPoints.length - bestInlierCount,
+    depthMean,
+    depthStdDev,
+    inclineAngle,
+    ransacIterations: maxIterations,
+    bestInlierIndices
+  };
+}
+function estimatePxPerMmFromCorrespondences(srcPoints, dstPoints) {
+  if (srcPoints.length < 2 || dstPoints.length < 2) return null;
+  const ratios = [];
+  const maxPairs = 200;
+  const n = srcPoints.length;
+  for (let t = 0; t < maxPairs; t++) {
+    const i = Math.floor(Math.random() * n);
+    let j = Math.floor(Math.random() * n);
+    if (j === i) j = (j + 1) % n;
+    const dPx = distance(srcPoints[i], srcPoints[j]);
+    const dMm = distance(dstPoints[i], dstPoints[j]);
+    if (!Number.isFinite(dPx) || !Number.isFinite(dMm)) continue;
+    if (dMm < 20 || dPx < 20) continue;
+    ratios.push(dPx / dMm);
+  }
+  if (ratios.length < 10) return null;
+  ratios.sort((a, b) => a - b);
+  return ratios[Math.floor(ratios.length / 2)];
+}
+function estimateDepthMap(srcPoints, dstPoints, H, _markerWidthMm, _markerHeightMm) {
+  const det = H[0][0] * H[1][1] - H[0][1] * H[1][0];
+  const scale = Math.sqrt(Math.abs(det));
+  const depthBase = 1900 / Math.max(0.1, scale);
+  const result = [];
+  for (let i = 0; i < srcPoints.length; i++) {
+    const src = srcPoints[i];
+    const dst = dstPoints[i];
+    const transformed = applyHomography2(H, src);
+    const error = distance(transformed, dst);
+    const px = src.x / 640;
+    const py = src.y / 480;
+    const distFromCenter = Math.sqrt((px - 0.5) ** 2 + (py - 0.5) ** 2);
+    const depthVariation = 1 + distFromCenter * 0.5;
+    const estimatedZ = depthBase * depthVariation;
+    result.push({
+      x: transformed[0],
+      y: transformed[1],
+      z: estimatedZ,
+      type: dst.x < 20 ? "apriltag" : Math.random() > 0.7 ? "dot" : "charuco",
+      error
+    });
+  }
+  return result;
+}
+function estimateInclineAngle(points3D) {
+  if (points3D.length < 3) return 0;
+  const centroid = {
+    x: points3D.reduce((s, p) => s + p.x, 0) / points3D.length,
+    y: points3D.reduce((s, p) => s + p.y, 0) / points3D.length,
+    z: points3D.reduce((s, p) => s + p.z, 0) / points3D.length
+  };
+  const centered = points3D.map((p) => ({
+    x: p.x - centroid.x,
+    y: p.y - centroid.y,
+    z: p.z - centroid.z
+  }));
+  const cov = {
+    xx: centered.reduce((s, p) => s + p.x * p.x, 0) / points3D.length,
+    xy: centered.reduce((s, p) => s + p.x * p.y, 0) / points3D.length,
+    xz: centered.reduce((s, p) => s + p.x * p.z, 0) / points3D.length,
+    yy: centered.reduce((s, p) => s + p.y * p.y, 0) / points3D.length,
+    yz: centered.reduce((s, p) => s + p.y * p.z, 0) / points3D.length,
+    zz: centered.reduce((s, p) => s + p.z * p.z, 0) / points3D.length
+  };
+  const maxZDiff = Math.max(...points3D.map((p) => p.z)) - Math.min(...points3D.map((p) => p.z));
+  const avgXY = Math.sqrt(cov.xx + cov.yy);
+  const angle = Math.atan2(maxZDiff, avgXY) * (180 / Math.PI);
+  return Math.abs(angle);
+}
+function levenbergMarquardt(initialH, srcPoints, dstPoints, maxIterations = 100) {
+  let H = initialH.map((row) => [...row]);
+  let lambda = 1e-3;
+  for (let iter = 0; iter < maxIterations; iter++) {
+    const residuals = computeResiduals(H, srcPoints, dstPoints);
+    const J = computeJacobian(H, srcPoints, dstPoints);
+    const JtJ = matmul(transpose2(J), J);
+    const Jtr = matmul(transpose2(J), residuals);
+    const regularized = JtJ.map(
+      (row, i) => row.map((val, j) => val + (i === j ? lambda : 0))
+    );
+    try {
+      const delta = solveLinearSystem2(regularized, Jtr.map((v) => -v));
+      const newH = perturbHomography(H, delta);
+      const newResiduals = computeResiduals(newH, srcPoints, dstPoints);
+      const oldError = computeError(residuals);
+      const newError = computeError(newResiduals);
+      if (newError < oldError) {
+        H = newH;
+        lambda *= 0.1;
+      } else {
+        lambda *= 10;
+      }
+      if (oldError < 1e-6) break;
+    } catch {
+      lambda *= 10;
+    }
+  }
+  return H;
+}
+function computeResiduals(H, srcPoints, dstPoints) {
+  const residuals = [];
+  for (let i = 0; i < srcPoints.length; i++) {
+    const transformed = applyHomography2(H, srcPoints[i]);
+    residuals.push([
+      transformed[0] - dstPoints[i].x,
+      transformed[1] - dstPoints[i].y
+    ]);
+  }
+  return residuals;
+}
+function computeJacobian(H, srcPoints, _dstPoints) {
+  const eps = 1e-6;
+  const J = [];
+  for (let i = 0; i < srcPoints.length; i++) {
+    for (let j = 0; j < 2; j++) {
+      const row = [];
+      for (let k = 0; k < 9; k++) {
+        const H_plus = H.map((r) => [...r]);
+        H_plus[Math.floor(k / 3)][k % 3] += eps;
+        const H_minus = H.map((r) => [...r]);
+        H_minus[Math.floor(k / 3)][k % 3] -= eps;
+        const fPlus = applyHomography2(H_plus, srcPoints[i])[j];
+        const fMinus = applyHomography2(H_minus, srcPoints[i])[j];
+        row.push((fPlus - fMinus) / (2 * eps));
+      }
+      J.push(row);
+    }
+  }
+  return J;
+}
+function applyHomography2(H, p) {
+  const x = p.x;
+  const y = p.y;
+  const num_x = H[0][0] * x + H[0][1] * y + H[0][2];
+  const num_y = H[1][0] * x + H[1][1] * y + H[1][2];
+  const denom = H[2][0] * x + H[2][1] * y + H[2][2];
+  return [num_x / denom, num_y / denom];
+}
+function computeHomographyDLT(srcPoints, dstPoints) {
+  if (srcPoints.length !== 4 || dstPoints.length !== 4) {
+    throw new Error("Exactement 4 points requis pour DLT");
+  }
+  const srcNorm = normalizePoints2(srcPoints);
+  const dstNorm = normalizePoints2(dstPoints);
+  const A = [];
+  const b = [];
+  for (let i = 0; i < 4; i++) {
+    const sx = srcNorm.normalized[i].x;
+    const sy = srcNorm.normalized[i].y;
+    const dx = dstNorm.normalized[i].x;
+    const dy = dstNorm.normalized[i].y;
+    A.push([sx, sy, 1, 0, 0, 0, -dx * sx, -dx * sy]);
+    b.push(dx);
+    A.push([0, 0, 0, sx, sy, 1, -dy * sx, -dy * sy]);
+    b.push(dy);
+  }
+  const h = solveLinearSystem2(A, b);
+  const H_norm = [
+    [h[0], h[1], h[2]],
+    [h[3], h[4], h[5]],
+    [h[6], h[7], 1]
+  ];
+  return matmul(dstNorm.denormalization, matmul(H_norm, srcNorm.normalization));
+}
+function computeHomographyDLTLeastSquares(srcPoints, dstPoints) {
+  if (srcPoints.length < 4 || dstPoints.length < 4 || srcPoints.length !== dstPoints.length) {
+    throw new Error("Au moins 4 correspondances (m\xEAme longueur) requises");
+  }
+  if (srcPoints.length === 4) {
+    return computeHomographyDLT(srcPoints, dstPoints);
+  }
+  const srcNorm = normalizePoints2(srcPoints);
+  const dstNorm = normalizePoints2(dstPoints);
+  const A = [];
+  const b = [];
+  for (let i = 0; i < srcNorm.normalized.length; i++) {
+    const sx = srcNorm.normalized[i].x;
+    const sy = srcNorm.normalized[i].y;
+    const dx = dstNorm.normalized[i].x;
+    const dy = dstNorm.normalized[i].y;
+    A.push([sx, sy, 1, 0, 0, 0, -dx * sx, -dx * sy]);
+    b.push(dx);
+    A.push([0, 0, 0, sx, sy, 1, -dy * sx, -dy * sy]);
+    b.push(dy);
+  }
+  const At = transpose2(A);
+  const AtA = matmul(At, A);
+  const Atb = multiplyMatVec(At, b);
+  const h = solveLinearSystem2(AtA, Atb);
+  const H_norm = [
+    [h[0], h[1], h[2]],
+    [h[3], h[4], h[5]],
+    [h[6], h[7], 1]
+  ];
+  return matmul(dstNorm.denormalization, matmul(H_norm, srcNorm.normalization));
+}
+function normalizePoints2(points) {
+  const meanX = points.reduce((s, p) => s + p.x, 0) / points.length;
+  const meanY = points.reduce((s, p) => s + p.y, 0) / points.length;
+  const scale = Math.sqrt(
+    points.reduce((s, p) => s + (p.x - meanX) ** 2 + (p.y - meanY) ** 2, 0) / points.length / 2
+  );
+  const normalized = points.map((p) => ({
+    x: (p.x - meanX) / scale,
+    y: (p.y - meanY) / scale
+  }));
+  const normalization = [
+    [1 / scale, 0, -meanX / scale],
+    [0, 1 / scale, -meanY / scale],
+    [0, 0, 1]
+  ];
+  const denormalization = [
+    [scale, 0, meanX],
+    [0, scale, meanY],
+    [0, 0, 1]
+  ];
+  return { normalized, normalization, denormalization };
+}
+function randomSampleIndices(total, k) {
+  const indices = [];
+  const used = /* @__PURE__ */ new Set();
+  while (indices.length < k) {
+    const idx = Math.floor(Math.random() * total);
+    if (!used.has(idx)) {
+      indices.push(idx);
+      used.add(idx);
+    }
+  }
+  return indices;
+}
+function distance(p1, p2) {
+  const x1 = Array.isArray(p1) ? p1[0] : p1.x;
+  const y1 = Array.isArray(p1) ? p1[1] : p1.y;
+  const x2 = Array.isArray(p2) ? p2[0] : p2.x;
+  const y2 = Array.isArray(p2) ? p2[1] : p2.y;
+  return Math.sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2);
+}
+function transpose2(m) {
+  if (m.length === 0) return [];
+  return m[0].map((_, i) => m.map((row) => row[i]));
+}
+function matmul(A, B) {
+  const result = [];
+  const n = A.length;
+  const m = B[0].length;
+  const p = B.length;
+  for (let i = 0; i < n; i++) {
+    result[i] = [];
+    for (let j = 0; j < m; j++) {
+      let sum = 0;
+      for (let k = 0; k < p; k++) {
+        sum += A[i][k] * B[k][j];
+      }
+      result[i][j] = sum;
+    }
+  }
+  return result;
+}
+function multiplyMatVec(A, v) {
+  const result = new Array(A.length).fill(0);
+  for (let i = 0; i < A.length; i++) {
+    let sum = 0;
+    for (let j = 0; j < v.length; j++) {
+      sum += A[i][j] * v[j];
+    }
+    result[i] = sum;
+  }
+  return result;
+}
+function solveLinearSystem2(A, b) {
+  const n = A.length;
+  const augmented = A.map((row, i) => [...row, b[i]]);
+  for (let i = 0; i < n; i++) {
+    let maxRow = i;
+    for (let k = i + 1; k < n; k++) {
+      if (Math.abs(augmented[k][i]) > Math.abs(augmented[maxRow][i])) {
+        maxRow = k;
+      }
+    }
+    [augmented[i], augmented[maxRow]] = [augmented[maxRow], augmented[i]];
+    for (let k = i + 1; k < n; k++) {
+      const factor = augmented[k][i] / augmented[i][i];
+      for (let j = i; j <= n; j++) {
+        augmented[k][j] -= factor * augmented[i][j];
+      }
+    }
+  }
+  const x = new Array(n);
+  for (let i = n - 1; i >= 0; i--) {
+    x[i] = augmented[i][n];
+    for (let j = i + 1; j < n; j++) {
+      x[i] -= augmented[i][j] * x[j];
+    }
+    x[i] /= augmented[i][i];
+  }
+  return x;
+}
+function computeError(residuals) {
+  return residuals.reduce((sum, r) => sum + r[0] ** 2 + r[1] ** 2, 0);
+}
+function perturbHomography(H, delta) {
+  const result = H.map((row) => [...row]);
+  for (let i = 0; i < 9; i++) {
+    result[Math.floor(i / 3)][i % 3] += delta[i];
+  }
+  return result;
+}
 
 // src/api/measurement-reference.ts
-var sharpModule2 = __toESM(require("sharp"), 1);
-var sharp4 = sharpModule2.default || sharpModule2;
+var sharp2 = sharpModule2.default || sharpModule2;
 var router91 = (0, import_express94.Router)();
-var geminiService4 = new GoogleGeminiService_default();
-var arucoDetector = new MarkerDetector(30, 2e3);
-router91.get("/", authenticateToken, async (req2, res) => {
-  try {
-    if (!req2.user?.id) {
-      return res.status(401).json({ error: "Non authentifi\xE9" });
-    }
-    const userOrg = await db.userOrganization.findFirst({
-      where: { userId: req2.user.id },
-      select: { organizationId: true }
-    });
-    if (!userOrg?.organizationId) {
-      return res.json({ config: null });
-    }
-    const config = await db.organizationMeasurementReferenceConfig.findFirst({
-      where: {
-        organizationId: userOrg.organizationId,
-        isActive: true
-      }
-    });
-    res.json({ config: config || null });
-  } catch (error) {
-    console.error("\u274C [API] Erreur r\xE9cup\xE9ration config r\xE9f\xE9rence (fallback):", error);
-    res.status(500).json({ error: "Erreur serveur" });
-  }
-});
-router91.get("/:organizationId", authenticateToken, async (req2, res) => {
-  try {
-    const { organizationId } = req2.params;
-    if (!req2.user?.id) {
-      return res.status(401).json({ error: "Non authentifi\xE9" });
-    }
-    const userOrg = await db.userOrganization.findFirst({
-      where: {
-        userId: req2.user.id,
-        organizationId
-      }
-    });
-    if (!userOrg) {
-      return res.status(403).json({ error: "Acc\xE8s interdit \xE0 cette organisation" });
-    }
-    const config = await db.organizationMeasurementReferenceConfig.findFirst({
-      where: {
-        organizationId,
-        isActive: true
-      }
-    });
-    if (!config) {
-      return res.json({ config: null });
-    }
-    res.json({ config });
-  } catch (error) {
-    console.error("\u274C [API] Erreur r\xE9cup\xE9ration config r\xE9f\xE9rence:", error);
-    res.status(500).json({ error: "Erreur serveur" });
-  }
-});
-router91.post("/", authenticateToken, async (req2, res) => {
-  try {
-    const {
-      organizationId,
-      referenceType,
-      customName,
-      customWidth,
-      customHeight
-    } = req2.body;
-    if (!req2.user?.id) {
-      return res.status(401).json({ error: "Non authentifi\xE9" });
-    }
-    if (!organizationId || !referenceType) {
-      return res.status(400).json({
-        error: "Param\xE8tres manquants: organizationId et referenceType requis"
-      });
-    }
-    const validTypes = ["meter", "card", "a4", "custom"];
-    if (!validTypes.includes(referenceType)) {
-      return res.status(400).json({
-        error: `referenceType invalide. Attendu: ${validTypes.join(", ")}`
-      });
-    }
-    if (referenceType === "custom" && (!customWidth || !customHeight)) {
-      return res.status(400).json({
-        error: "Pour un type custom, customWidth et customHeight sont requis"
-      });
-    }
-    const userOrg = await db.userOrganization.findFirst({
-      where: {
-        userId: req2.user.id,
-        organizationId
-      },
-      include: {
-        Role: true
-      }
-    });
-    if (!userOrg) {
-      return res.status(403).json({
-        error: "Vous n'appartenez pas \xE0 cette organisation"
-      });
-    }
-    const isAdmin = userOrg.Role?.name?.toLowerCase().includes("admin") || userOrg.Role?.name?.toLowerCase().includes("owner") || req2.user.isSuperAdmin;
-    if (!isAdmin) {
-      return res.status(403).json({
-        error: "Seuls les administrateurs peuvent modifier la configuration"
-      });
-    }
-    await db.organizationMeasurementReferenceConfig.updateMany({
-      where: {
-        organizationId,
-        isActive: true
-      },
-      data: {
-        isActive: false
-      }
-    });
-    const config = await db.organizationMeasurementReferenceConfig.create({
-      data: {
-        organizationId,
-        referenceType,
-        customName: customName || void 0,
-        customWidth: customWidth ? parseFloat(customWidth) : void 0,
-        customHeight: customHeight ? parseFloat(customHeight) : void 0,
-        isActive: true,
-        createdBy: req2.user.id
-      }
-    });
-    console.log(`\u2705 [API] Config r\xE9f\xE9rence cr\xE9\xE9e pour organisation ${organizationId}: ${referenceType}`);
-    res.json({
-      success: true,
-      config
-    });
-  } catch (error) {
-    console.error("\u274C [API] Erreur cr\xE9ation config r\xE9f\xE9rence:", error);
-    res.status(500).json({ error: "Erreur serveur" });
-  }
-});
-router91.put("/:configId", authenticateToken, async (req2, res) => {
-  try {
-    const { configId } = req2.params;
-    const {
-      referenceType,
-      customName,
-      customWidth,
-      customHeight,
-      defaultUnit
-    } = req2.body;
-    if (!req2.user?.id) {
-      return res.status(401).json({ error: "Non authentifi\xE9" });
-    }
-    const existingConfig = await db.organizationMeasurementReferenceConfig.findUnique({
-      where: { id: configId }
-    });
-    if (!existingConfig) {
-      return res.status(404).json({ error: "Configuration non trouv\xE9e" });
-    }
-    const userOrg = await db.userOrganization.findFirst({
-      where: {
-        userId: req2.user.id,
-        organizationId: existingConfig.organizationId
-      },
-      include: {
-        Role: true
-      }
-    });
-    if (!userOrg) {
-      return res.status(403).json({ error: "Acc\xE8s interdit" });
-    }
-    const isAdmin = userOrg.Role?.name?.toLowerCase().includes("admin") || userOrg.Role?.name?.toLowerCase().includes("owner") || req2.user.isSuperAdmin;
-    if (!isAdmin) {
-      return res.status(403).json({ error: "Acc\xE8s interdit" });
-    }
-    const config = await db.organizationMeasurementReferenceConfig.update({
-      where: { id: configId },
-      data: {
-        ...referenceType && { referenceType },
-        ...customName !== void 0 && { customName },
-        ...customWidth && { customWidth: parseFloat(customWidth) },
-        ...customHeight && { customHeight: parseFloat(customHeight) },
-        ...defaultUnit && { defaultUnit }
-      }
-    });
-    res.json({
-      success: true,
-      config
-    });
-  } catch (error) {
-    console.error("\u274C [API] Erreur mise \xE0 jour config r\xE9f\xE9rence:", error);
-    res.status(500).json({ error: "Erreur serveur" });
-  }
-});
-router91.delete("/:configId", authenticateToken, async (req2, res) => {
-  try {
-    const { configId } = req2.params;
-    if (!req2.user?.id) {
-      return res.status(401).json({ error: "Non authentifi\xE9" });
-    }
-    const existingConfig = await db.organizationMeasurementReferenceConfig.findUnique({
-      where: { id: configId }
-    });
-    if (!existingConfig) {
-      return res.status(404).json({ error: "Configuration non trouv\xE9e" });
-    }
-    const userOrg = await db.userOrganization.findFirst({
-      where: {
-        userId: req2.user.id,
-        organizationId: existingConfig.organizationId
-      },
-      include: {
-        Role: true
-      }
-    });
-    if (!userOrg) {
-      return res.status(403).json({ error: "Acc\xE8s interdit" });
-    }
-    const isAdmin = userOrg.Role?.name?.toLowerCase().includes("admin") || userOrg.Role?.name?.toLowerCase().includes("owner") || req2.user.isSuperAdmin;
-    if (!isAdmin) {
-      return res.status(403).json({ error: "Acc\xE8s interdit" });
-    }
-    await db.organizationMeasurementReferenceConfig.delete({
-      where: { id: configId }
-    });
-    res.json({ success: true });
-  } catch (error) {
-    console.error("\u274C [API] Erreur suppression config r\xE9f\xE9rence:", error);
-    res.status(500).json({ error: "Erreur serveur" });
-  }
-});
-router91.post("/detect", authenticateToken, async (req2, res) => {
-  try {
-    const { imageBase64, mimeType, referenceType, customPrompt } = req2.body;
-    if (!req2.user?.id) {
-      return res.status(401).json({ error: "Non authentifi\xE9" });
-    }
-    if (!imageBase64 || !mimeType || !referenceType) {
-      return res.status(400).json({
-        error: "Param\xE8tres manquants: imageBase64, mimeType, referenceType requis"
-      });
-    }
-    const result = await geminiService4.detectReferenceObject(
-      imageBase64,
-      mimeType,
-      referenceType,
-      customPrompt
-    );
-    res.json(result);
-  } catch (error) {
-    console.error("\u274C [API] Erreur d\xE9tection r\xE9f\xE9rence:", error);
-    res.status(500).json({
-      success: false,
-      error: "Erreur serveur lors de la d\xE9tection"
-    });
-  }
-});
-router91.post("/detect-multi", authenticateToken, async (req2, res) => {
-  try {
-    const { images, referenceType, customPrompt } = req2.body;
-    if (!req2.user?.id) {
-      return res.status(401).json({ error: "Non authentifi\xE9" });
-    }
-    if (!images || !Array.isArray(images) || images.length === 0) {
-      return res.status(400).json({
-        error: "Param\xE8tres manquants: images[] requis (tableau d'objets {base64, mimeType})"
-      });
-    }
-    if (!referenceType) {
-      return res.status(400).json({
-        error: "Param\xE8tres manquants: referenceType requis (a4, card, meter, custom)"
-      });
-    }
-    console.log(`\u{1F50D} [API] D\xE9tection multi-photos: ${images.length} images, type: ${referenceType}`);
-    const result = await geminiService4.detectReferenceMultiPhotos(
-      images.map((img) => ({
-        base64: img.base64,
-        mimeType: img.mimeType || "image/jpeg",
-        metadata: img.metadata
-      })),
-      referenceType,
-      customPrompt
-    );
-    console.log(`\u2705 [API] R\xE9sultat fusion multi-photos:`, {
-      success: result.success,
-      confidence: result.confidence,
-      usablePhotos: result.qualityAnalysis?.filter((p) => p.usable).length,
-      bestPhoto: result.bestPhotoIndex
-    });
-    res.json(result);
-  } catch (error) {
-    console.error("\u274C [API] Erreur d\xE9tection multi-photos:", error);
-    res.status(500).json({
-      success: false,
-      error: "Erreur serveur lors de la d\xE9tection multi-photos"
-    });
-  }
-});
-router91.post("/analyze-frame", authenticateToken, async (req2, res) => {
-  try {
-    const { imageBase64, mimeType, referenceType } = req2.body;
-    if (!req2.user?.id) {
-      return res.status(401).json({ error: "Non authentifi\xE9" });
-    }
-    if (!imageBase64 || !mimeType || !referenceType) {
-      return res.status(400).json({
-        error: "Param\xE8tres manquants: imageBase64, mimeType, referenceType requis"
-      });
-    }
-    const result = await geminiService4.analyzeFrameForGuidance(
-      imageBase64,
-      mimeType,
-      referenceType
-    );
-    res.json(result);
-  } catch (error) {
-    console.error("\u274C [API] Erreur analyse frame:", error);
-    res.status(500).json({
-      canCapture: true,
-      issues: [],
-      suggestions: [],
-      scores: { visibility: 50, centering: 50, lighting: 50, sharpness: 50, perspective: 50 },
-      message: "\u{1F4F7} Capturez quand pr\xEAt"
-    });
-  }
-});
-router91.post("/snap-to-edges", authenticateToken, async (req2, res) => {
-  try {
-    const { imageBase64, mimeType, points, targetType, objectDescription } = req2.body;
-    if (!req2.user?.id) {
-      return res.status(401).json({ error: "Non authentifi\xE9" });
-    }
-    if (!imageBase64 || !mimeType || !points || !Array.isArray(points)) {
-      return res.status(400).json({
-        error: "Param\xE8tres manquants: imageBase64, mimeType, points[] requis"
-      });
-    }
-    console.log(`\u{1F3AF} [API] Snap to edges: ${targetType}, ${points.length} points`);
-    console.log(`\u{1F4CD} [API] Points re\xE7us:`, points.map((p) => `${p.label}(${p.x?.toFixed?.(0) || p.x}, ${p.y?.toFixed?.(0) || p.y})`).join(", "));
-    const result = await geminiService4.snapPointsToEdges(
-      imageBase64,
-      mimeType,
-      points,
-      targetType || "measurement",
-      objectDescription
-    );
-    console.log(`\u2705 [API] R\xE9sultat snap:`, result.success ? `${result.points?.length} points ajust\xE9s` : result.error);
-    res.json(result);
-  } catch (error) {
-    console.error("\u274C [API] Erreur snap to edges:", error);
-    res.status(500).json({
-      success: false,
-      error: "Erreur serveur lors du snap to edges"
-    });
-  }
-});
-router91.post("/suggest-points", authenticateToken, async (req2, res) => {
-  try {
-    const { imageBase64, mimeType, objectType, pointCount = 4, measureKeys = ["largeur_cm", "hauteur_cm"] } = req2.body;
-    if (!req2.user?.id) {
-      return res.status(401).json({ error: "Non authentifi\xE9" });
-    }
-    if (!imageBase64 || !mimeType) {
-      return res.status(400).json({
-        error: "Param\xE8tres manquants: imageBase64, mimeType requis"
-      });
-    }
-    console.log(`\u{1F4D0} [API] Suggestion points pour mesures: ${measureKeys.join(", ")}`);
-    const result = await geminiService4.suggestMeasurementPoints(
-      imageBase64,
-      mimeType,
-      objectType || "objet principal",
-      pointCount,
-      measureKeys
-    );
-    res.json(result);
-  } catch (error) {
-    console.error("\u274C [API] Erreur suggestion points:", error);
-    res.status(500).json({
-      success: false,
-      error: "Erreur serveur lors de la suggestion de points"
-    });
-  }
-});
-router91.post("/detect-corners-in-zone", authenticateToken, async (req2, res) => {
-  try {
-    const {
-      imageBase64,
-      mimeType,
-      selectionZone,
-      objectType,
-      objectDescription,
-      realDimensions,
-      targetType
-    } = req2.body;
-    if (!req2.user?.id) {
-      return res.status(401).json({ error: "Non authentifi\xE9" });
-    }
-    if (!imageBase64 || !mimeType || !selectionZone) {
-      return res.status(400).json({
-        error: "Param\xE8tres manquants: imageBase64, mimeType, selectionZone requis"
-      });
-    }
-    if (typeof selectionZone.x !== "number" || typeof selectionZone.y !== "number" || typeof selectionZone.width !== "number" || typeof selectionZone.height !== "number") {
-      return res.status(400).json({
-        error: "selectionZone invalide: doit contenir x, y, width, height (en pourcentage 0-100)"
-      });
-    }
-    console.log(`\u{1F3AF} [API] D\xE9tection coins dans zone: ${objectType || "a4"} (targetType: ${targetType || "auto"})`);
-    console.log(`\u{1F4D0} [API] Zone: x=${selectionZone.x.toFixed(1)}%, y=${selectionZone.y.toFixed(1)}%, ${selectionZone.width.toFixed(1)}x${selectionZone.height.toFixed(1)}%`);
-    if (objectDescription) console.log(`\u{1F4DD} [API] Description: ${objectDescription}`);
-    if (realDimensions) console.log(`\u{1F4CF} [API] Dimensions r\xE9elles: ${realDimensions.width}cm \xD7 ${realDimensions.height}cm`);
-    console.log("\u{1F52C} [API] Tentative d\xE9tection par analyse de contours (Sharp)...");
-    const edgeResult = await edgeDetectionService.detectWhitePaperCorners(
-      imageBase64,
-      selectionZone,
-      mimeType
-    );
-    if (edgeResult.success && edgeResult.corners) {
-      console.log("\u2705 [API] D\xE9tection par contours R\xC9USSIE !");
-      console.log(`\u{1F4CD} [API] Coins d\xE9tect\xE9s:
-        TopLeft: (${edgeResult.corners.topLeft.x.toFixed(2)}%, ${edgeResult.corners.topLeft.y.toFixed(2)}%)
-        TopRight: (${edgeResult.corners.topRight.x.toFixed(2)}%, ${edgeResult.corners.topRight.y.toFixed(2)}%)
-        BottomLeft: (${edgeResult.corners.bottomLeft.x.toFixed(2)}%, ${edgeResult.corners.bottomLeft.y.toFixed(2)}%)
-        BottomRight: (${edgeResult.corners.bottomRight.x.toFixed(2)}%, ${edgeResult.corners.bottomRight.y.toFixed(2)}%)`);
-      const yDiffTop = Math.abs(edgeResult.corners.topLeft.y - edgeResult.corners.topRight.y);
-      const yDiffBottom = Math.abs(edgeResult.corners.bottomLeft.y - edgeResult.corners.bottomRight.y);
-      console.log(`\u{1F4D0} [API] Diff\xE9rence Y haut: ${yDiffTop.toFixed(2)}%, bas: ${yDiffBottom.toFixed(2)}%`);
-      return res.json({
-        success: true,
-        objectFound: true,
-        corners: edgeResult.corners,
-        confidence: edgeResult.confidence || 90,
-        method: "edge-detection",
-        debug: edgeResult.debug
-      });
-    }
-    console.log("\u26A0\uFE0F [API] D\xE9tection par contours \xE9chou\xE9e, fallback vers Gemini...");
-    console.log(`   Raison: ${edgeResult.error || "Pas assez de points de contour"}`);
-    const result = await geminiService4.detectCornersInZone(
-      imageBase64,
-      mimeType,
-      selectionZone,
-      objectType || "a4",
-      objectDescription,
-      realDimensions,
-      targetType
-    );
-    console.log(
-      `\u2705 [API] R\xE9sultat d\xE9tection Gemini:`,
-      result.success ? `${result.objectFound ? "Objet trouv\xE9" : "Objet non trouv\xE9"}, confiance: ${result.confidence}%` : result.error
-    );
-    res.json({
-      ...result,
-      method: "gemini-ai"
-    });
-  } catch (error) {
-    console.error("\u274C [API] Erreur d\xE9tection coins dans zone:", error);
-    res.status(500).json({
-      success: false,
-      error: "Erreur serveur lors de la d\xE9tection des coins"
-    });
-  }
-});
-router91.post("/fuse-photos", authenticateToken, async (req2, res) => {
-  try {
-    const { photos, referenceType = "a4" } = req2.body;
-    if (!req2.user?.id) {
-      return res.status(401).json({ error: "Non authentifi\xE9" });
-    }
-    if (!photos || !Array.isArray(photos) || photos.length === 0) {
-      return res.status(400).json({
-        error: "Param\xE8tre photos requis: array de { base64, mimeType }"
-      });
-    }
-    console.log(`\u{1F500} [API] Demande fusion de ${photos.length} photos (type: ${referenceType})`);
-    const cleanedPhotos = photos.map((photo) => ({
-      ...photo,
-      base64: photo.base64.includes(",") ? photo.base64.split(",")[1] : photo.base64,
-      mimeType: photo.mimeType || "image/jpeg"
-    }));
-    const result = await multiPhotoFusionService.fuseForReferenceDetection(
-      cleanedPhotos,
-      referenceType
-    );
-    if (result.success) {
-      console.log(`\u2705 [API] Fusion r\xE9ussie: ${result.metrics?.usedPhotos}/${result.metrics?.inputPhotos} photos utilis\xE9es`);
-      console.log(`   \u{1F4CA} Sharpness finale: ${result.metrics?.finalSharpness?.toFixed(1)}`);
-    } else {
-      console.error(`\u274C [API] Fusion \xE9chou\xE9e: ${result.error}`);
-    }
-    res.json(result);
-  } catch (error) {
-    console.error("\u274C [API] Erreur fusion photos:", error);
-    res.status(500).json({
-      success: false,
-      error: "Erreur serveur lors de la fusion des photos"
-    });
-  }
-});
 router91.post("/ultra-fusion-detect", authenticateToken, async (req2, res) => {
   const startTime = Date.now();
   try {
@@ -67736,513 +68764,415 @@ router91.post("/ultra-fusion-detect", authenticateToken, async (req2, res) => {
     if (!req2.user?.id) {
       return res.status(401).json({ error: "Non authentifi\xE9" });
     }
-    if (!photos || photos.length === 0) {
-      return res.status(400).json({ error: "Au moins une photo requise" });
+    if (!photos || !Array.isArray(photos) || photos.length === 0) {
+      return res.status(400).json({
+        success: false,
+        error: "Au minimum 1 photo requise dans photos[]"
+      });
     }
     console.log(`
 ${"=".repeat(80)}`);
-    console.log(`\u{1F525} [BEST-PHOTO] S\xC9LECTION MEILLEURE PHOTO - ${photos.length} photos`);
+    console.log(`\u{1F3AF} [ULTRA-CLEAN] POST /ultra-fusion-detect - ${photos.length} photo(s)`);
     console.log(`${"=".repeat(80)}
 `);
-    const cleanedPhotos = photos.map((photo) => ({
-      base64: photo.base64.includes(",") ? photo.base64.split(",")[1] : photo.base64,
-      mimeType: photo.mimeType || "image/jpeg",
-      metadata: photo.metadata
-    }));
-    console.log("1\uFE0F\u20E3 Analyse ArUco sur chaque photo...\n");
-    const arucoDetector2 = new MarkerDetector();
-    const photoAnalyses = [];
-    for (let i = 0; i < cleanedPhotos.length; i++) {
-      const photo = cleanedPhotos[i];
-      console.log(`   \u{1F4F7} Photo ${i}: Analyse...`);
-      if (photo.metadata?.gyroscope) {
-        const gyro = photo.metadata.gyroscope;
-        console.log(`      \u{1F4F1} Gyroscope: beta=${gyro.beta?.toFixed(1)}\xB0, gamma=${gyro.gamma?.toFixed(1)}\xB0, qualit\xE9=${gyro.quality || "N/A"}%`);
-      }
+    const candidates = [];
+    for (let i = 0; i < photos.length; i++) {
+      const photo = photos[i];
+      console.log(`   \u{1F4F7} Photo ${i}: d\xE9codage et d\xE9tection...`);
       try {
-        const imageBuffer = Buffer.from(photo.base64, "base64");
-        const metadata = await sharp4(imageBuffer).metadata();
-        const width = metadata.width || 1920;
-        const height = metadata.height || 1080;
-        const rawBuffer = await sharp4(imageBuffer).ensureAlpha().raw().toBuffer();
-        const imageData = {
-          data: new Uint8ClampedArray(rawBuffer),
-          width,
-          height
-        };
-        const markers = arucoDetector2.detect(imageData);
-        if (markers.length > 0) {
-          const marker = markers[0];
-          const cornersForUltra = marker.magentaPositions || marker.corners;
-          const ultraResult = detectUltraPrecisionPoints(imageData, cornersForUltra, marker.extendedPoints);
-          let completeAnalysis = null;
-          let bandBiasScore = 0.5;
-          try {
-            completeAnalysis = analyzeMarkerComplete(marker, width, height);
-            console.log(`   \u{1F52C} Analyse compl\xE8te: rotX=${completeAnalysis.pose.rotX}\xB0, rotY=${completeAnalysis.pose.rotY}\xB0, profondeur=${completeAnalysis.depth.estimatedCm}cm`);
-            if (completeAnalysis.bands && completeAnalysis.bands.avgBias !== void 0) {
-              const absBias = Math.abs(completeAnalysis.bands.avgBias);
-              bandBiasScore = Math.max(0, 1 - absBias / 5);
-              console.log(`   \u{1F4CA} Biais bandes: ${(completeAnalysis.bands.avgBias * 100).toFixed(2)}% \u2192 score=${bandBiasScore.toFixed(2)}`);
-            }
-          } catch (analyzeErr) {
-            console.warn(`   \u26A0\uFE0F Analyse compl\xE8te \xE9chou\xE9e:`, analyzeErr);
-          }
-          const detectionScore = marker.score || 0;
-          const homographyQuality = ultraResult.quality || 0;
-          const reprojScore = 1 - ultraResult.reprojectionError / 10;
-          const globalScore = detectionScore * 0.3 + homographyQuality * 0.25 + reprojScore * 0.2 + bandBiasScore * 0.25;
-          console.log(`   \u{1F4C8} Score photo ${i}: d\xE9tection=${(detectionScore * 100).toFixed(0)}%, homographie=${(homographyQuality * 100).toFixed(0)}%, reproj=${(reprojScore * 100).toFixed(0)}%, bandes=${(bandBiasScore * 100).toFixed(0)}% \u2192 TOTAL=${(globalScore * 100).toFixed(1)}%`);
-          const outerCorners = marker.magentaPositions || marker.corners;
-          const cornersPercent = {
-            topLeft: { x: outerCorners[0].x / width * 100, y: outerCorners[0].y / height * 100 },
-            topRight: { x: outerCorners[1].x / width * 100, y: outerCorners[1].y / height * 100 },
-            bottomRight: { x: outerCorners[2].x / width * 100, y: outerCorners[2].y / height * 100 },
-            bottomLeft: { x: outerCorners[3].x / width * 100, y: outerCorners[3].y / height * 100 }
-          };
-          console.log(`   \u{1F3AF} Coins EXT\xC9RIEURS 18cm utilis\xE9s: TL=(${outerCorners[0].x.toFixed(0)},${outerCorners[0].y.toFixed(0)}) TR=(${outerCorners[1].x.toFixed(0)},${outerCorners[1].y.toFixed(0)})`);
-          photoAnalyses.push({
-            index: i,
-            base64: photo.base64,
-            marker,
-            score: globalScore,
-            homography: ultraResult.homography,
-            reprojectionError: ultraResult.reprojectionError,
-            quality: homographyQuality,
-            corners: cornersPercent,
-            arucoAnalysis: completeAnalysis,
-            // 🔬 Stocké !
-            imageWidth: width,
-            imageHeight: height,
-            ultraPrecision: {
-              totalPoints: ultraResult.totalPoints,
-              inlierPoints: ultraResult.inlierPoints,
-              reprojectionError: ultraResult.reprojectionError,
-              estimatedPrecision: ultraResult.reprojectionError < 0.5 ? "\xB10.2mm" : ultraResult.reprojectionError < 1 ? "\xB10.5mm" : "\xB11mm",
-              corners: cornersPercent
-            },
-            photoMetadata: photo.metadata
-            // 📱 Stocker les métadonnées (gyroscope)
-          });
-          console.log(`   \u2705 Photo ${i}: ArUco d\xE9tect\xE9! score=${(globalScore * 100).toFixed(1)}%, reproj=${ultraResult.reprojectionError.toFixed(2)}mm`);
-        } else {
-          console.log(`   \u274C Photo ${i}: ArUco non d\xE9tect\xE9`);
+        const base64Clean2 = photo.base64.includes(",") ? photo.base64.split(",")[1] : photo.base64;
+        const imageBuffer = Buffer.from(base64Clean2, "base64");
+        const metadata = await sharp2(imageBuffer).metadata();
+        const width = metadata.width;
+        const height = metadata.height;
+        const raw = await sharp2(imageBuffer).ensureAlpha().raw().toBuffer();
+        const rgba = new Uint8ClampedArray(raw);
+        const detection = detectMetreA4Complete(rgba, width, height);
+        if (!detection) {
+          console.log(`      \u274C AprilTag non d\xE9tect\xE9`);
+          continue;
         }
+        candidates.push({
+          id: `photo-${i}`,
+          imageData: rgba,
+          width,
+          height,
+          detection,
+          timestamp: Date.now()
+        });
+        console.log(`      \u2705 ${detection.breakdown.total} points d\xE9tect\xE9s (${detection.estimatedPrecision})`);
       } catch (err) {
-        console.error(`   \u274C Photo ${i}: Erreur -`, err);
+        console.error(`      \u274C Erreur traitement:`, err);
       }
     }
-    if (photoAnalyses.length === 0) {
-      console.error("\u274C [BEST-PHOTO] Aucun ArUco d\xE9tect\xE9 sur aucune photo !");
+    if (candidates.length === 0) {
       return res.status(400).json({
         success: false,
-        error: "ArUco MAGENTA non d\xE9tect\xE9. Assurez-vous que le marqueur est visible.",
+        error: "AprilTag M\xE9tr\xE9 V1.2 non d\xE9tect\xE9 sur aucune photo",
         detections: 0
       });
     }
-    console.log("\n2\uFE0F\u20E3 S\xE9lection de la meilleure photo...");
-    photoAnalyses.sort((a, b) => b.score - a.score);
-    const bestPhoto = photoAnalyses[0];
-    console.log(`   \u{1F3C6} MEILLEURE PHOTO: ${bestPhoto.index}`);
-    console.log(`      \u{1F4CA} Score global: ${(bestPhoto.score * 100).toFixed(1)}%`);
-    console.log(`      \u{1F4CF} Reprojection error: ${bestPhoto.reprojectionError.toFixed(2)}mm`);
-    console.log(`      \u{1F3AF} Pr\xE9cision estim\xE9e: ${bestPhoto.ultraPrecision.estimatedPrecision}`);
-    console.log("\n3\uFE0F\u20E3 Calcul de la correction optimale...");
-    let optimalCorrection = null;
-    let gyroscopeData;
-    if (bestPhoto.photoMetadata?.gyroscope) {
-      const gyro = bestPhoto.photoMetadata.gyroscope;
-      if (typeof gyro.beta === "number" && typeof gyro.gamma === "number") {
-        gyroscopeData = {
-          beta: gyro.beta,
-          gamma: gyro.gamma,
-          quality: gyro.quality
-        };
-        console.log(`   \u{1F4F1} Gyroscope disponible: beta=${gyro.beta.toFixed(1)}\xB0, gamma=${gyro.gamma.toFixed(1)}\xB0, qualit\xE9=${gyro.quality || "N/A"}%`);
-      }
-    } else {
-      console.log(`   \u{1F4F1} Gyroscope: non disponible`);
-    }
-    if (bestPhoto.arucoAnalysis) {
-      optimalCorrection = calculateOptimalCorrection(
-        bestPhoto.arucoAnalysis,
-        {
-          totalPoints: bestPhoto.ultraPrecision.totalPoints,
-          inlierPoints: bestPhoto.ultraPrecision.inlierPoints,
-          reprojectionError: bestPhoto.reprojectionError,
-          quality: bestPhoto.quality
-        },
-        gyroscopeData
-        // 📱 Passer les données gyroscope si disponibles
-      );
-      console.log(`   \u{1F3AF} CORRECTION FINALE: \xD7${optimalCorrection.finalCorrection.toFixed(4)}`);
-      console.log(`      \u{1F4CA} Confiance: ${(optimalCorrection.globalConfidence * 100).toFixed(0)}%`);
-      console.log(`      \u{1F4CF} Correction X: \xD7${optimalCorrection.correctionX.toFixed(4)}`);
-      console.log(`      \u{1F4CF} Correction Y: \xD7${optimalCorrection.correctionY.toFixed(4)}`);
-      if (gyroscopeData) {
-        console.log(`      \u{1F4F1} Gyroscope inclus dans le calcul !`);
-      }
-    }
+    console.log(`
+\u{1F4CA} S\xE9lection meilleure photo parmi ${candidates.length}...`);
+    const bestResult = selectBestPhoto(candidates);
+    const best = bestResult.bestPhoto;
+    const bestIdx = parseInt(best.id.split("-")[1]);
+    const [tl, tr, bl, br] = best.detection.aprilTagCenters;
+    const fusedCorners = {
+      topLeft: { x: tl.x / best.width * 100, y: tl.y / best.height * 100 },
+      topRight: { x: tr.x / best.width * 100, y: tr.y / best.height * 100 },
+      bottomRight: { x: br.x / best.width * 100, y: br.y / best.height * 100 },
+      bottomLeft: { x: bl.x / best.width * 100, y: bl.y / best.height * 100 }
+    };
+    const base64Clean = photos[bestIdx].base64.includes(",") ? photos[bestIdx].base64.split(",")[1] : photos[bestIdx].base64;
     const totalTime = Date.now() - startTime;
     console.log(`
-${"=".repeat(80)}`);
-    console.log(`\u2705 [BEST-PHOTO] SUCC\xC8S - ${totalTime}ms`);
-    console.log(`${"=".repeat(80)}
+\u2705 SUCC\xC8S - ${totalTime}ms (photo ${bestIdx}, score: ${bestResult.bestScore.total.toFixed(1)}/100)
 `);
-    const markerSizeCm = MARKER_SPECS.markerSize;
-    const markerWidthPx = (bestPhoto.corners.bottomRight.x - bestPhoto.corners.topLeft.x) / 100 * 1920;
-    const markerHeightPx = (bestPhoto.corners.bottomRight.y - bestPhoto.corners.topLeft.y) / 100 * 1080;
-    const avgPixelPerCm = (markerWidthPx + markerHeightPx) / 2 / markerSizeCm;
     return res.json({
       success: true,
-      method: "best-photo-selection",
-      // 🏆 Meilleure photo (à utiliser dans le canvas)
-      bestPhotoBase64: bestPhoto.base64,
-      // 🎯 Corners ArUco en % (pour le canvas)
-      fusedCorners: bestPhoto.corners,
+      method: "ultra-precision-best-photo",
+      bestPhotoBase64: base64Clean,
+      fusedCorners,
       homographyReady: true,
-      // 🔬 ANALYSE COMPLÈTE DU MARQUEUR - Nouveau pour le panel ArUco
-      arucoAnalysis: bestPhoto.arucoAnalysis,
-      // 🎯 CORRECTION OPTIMALE - NOUVEAU !
-      optimalCorrection,
-      // 🎯 NOUVEAU: Données pour calibration précise
-      markerSizeCm,
-      // 18cm ArUco MAGENTA
-      pixelPerCm: avgPixelPerCm,
-      // Pixels par cm (estimation)
-      homographyMatrix: bestPhoto.homography,
-      // Matrice 3x3 si disponible
-      reprojectionErrorMm: bestPhoto.reprojectionError,
-      // Erreur en mm
-      // 📊 Ultra-précision
+      detectionMethod: "AprilTag-Metre-V1.2-Ultra",
+      markerSizeCm: 13,
+      markerHeightCm: 21.7,
+      // 🎯 CRITIQUE: Hauteur explicite pour AprilTag rectangulaire
+      homographyMatrix: best.detection.homography.matrix,
+      reprojectionErrorMm: best.detection.homography.reprojectionErrorMm,
       ultraPrecision: {
-        ...bestPhoto.ultraPrecision,
-        // 🎯 NOUVEAU: Ajouter les données pour le canvas
-        homographyMatrix: bestPhoto.homography,
-        pixelPerCm: avgPixelPerCm,
-        markerSizeCm,
-        // 🎯 CORRECTION OPTIMALE dans ultraPrecision aussi
-        optimalCorrection: optimalCorrection?.finalCorrection || 1,
-        correctionX: optimalCorrection?.correctionX || 1,
-        correctionY: optimalCorrection?.correctionY || 1,
-        correctionConfidence: optimalCorrection?.globalConfidence || 0
+        totalPoints: best.detection.breakdown.total,
+        aprilTags: best.detection.breakdown.aprilTags,
+        referenceDots: best.detection.breakdown.referenceDots,
+        charucoCorners: best.detection.breakdown.charucoCorners,
+        quality: best.detection.homography.quality,
+        estimatedPrecision: best.detection.estimatedPrecision,
+        homographyMatrix: best.detection.homography.matrix,
+        reprojectionError: best.detection.homography.reprojectionErrorMm,
+        // 🎯 AJOUT CRITIQUE: Tous les points pour RANSAC
+        points: best.detection.points.map((p) => ({
+          x: p.pixel.x,
+          y: p.pixel.y,
+          realX: p.real.x,
+          realY: p.real.y,
+          type: p.type,
+          confidence: p.confidence
+        }))
       },
-      // 🏆 Infos sur la meilleure photo
       bestPhoto: {
-        index: bestPhoto.index,
-        score: bestPhoto.score,
-        reprojectionError: bestPhoto.reprojectionError
+        index: bestIdx,
+        score: bestResult.bestScore.total,
+        sharpness: bestResult.bestScore.sharpness,
+        homographyQuality: bestResult.bestScore.homographyQuality,
+        captureConditions: bestResult.bestScore.captureConditions,
+        warnings: bestResult.bestScore.warnings
       },
-      // 📊 Résultats de toutes les photos (pour affichage)
-      allPhotoScores: photoAnalyses.map((p) => ({
-        index: p.index,
-        score: p.score,
-        reprojectionError: p.reprojectionError,
+      allPhotoScores: bestResult.allScores.map((s, idx) => ({
+        index: idx,
+        score: s.total,
         detected: true
       })),
-      // Métriques
       metrics: {
         inputPhotos: photos.length,
-        successfulDetections: photoAnalyses.length,
-        processingTimeMs: totalTime
+        successfulDetections: candidates.length,
+        processingTimeMs: totalTime,
+        improvement: bestResult.stats.improvement
       }
     });
   } catch (error) {
-    console.error("\u274C [BEST-PHOTO] Erreur:", error);
+    console.error("\u274C [ULTRA-CLEAN] Erreur:", error);
     res.status(500).json({
       success: false,
       error: "Erreur serveur lors de l'analyse des photos"
     });
   }
 });
-async function detectObjectInZone(imageBuffer, cropZone, imageWidth, imageHeight, objectType, objectDescription) {
+router91.post("/compute-dimensions-simple", authenticateToken, async (req2, res) => {
   try {
-    const imageBase64 = imageBuffer.toString("base64");
-    const selectionZonePercent = {
-      x: cropZone.x / imageWidth * 100,
-      y: cropZone.y / imageHeight * 100,
-      width: cropZone.width / imageWidth * 100,
-      height: cropZone.height / imageHeight * 100
-    };
-    console.log(`\u{1F4CF} [DETECT OBJECT] D\xE9tection objet "${objectType}" dans zone ${cropZone.width}x${cropZone.height}px`);
-    console.log("\u{1F50D} [DETECT OBJECT] Tentative EdgeDetection...");
-    const edgeResult = await edgeDetectionService.detectWhitePaperCorners(
-      imageBase64,
-      selectionZonePercent,
-      "image/jpeg"
-    );
-    if (edgeResult.success && edgeResult.corners) {
-      const corners = edgeResult.corners;
-      if (corners.topLeft && corners.topRight && corners.bottomLeft && corners.bottomRight) {
-        console.log(`\u2705 [DETECT OBJECT] EdgeDetection r\xE9ussie avec 4 coins (objet)`);
-        const cornersArray = [
-          corners.topLeft,
-          corners.topRight,
-          corners.bottomRight,
-          corners.bottomLeft
-        ];
-        return {
-          success: true,
-          method: "edge-detection-object",
-          corners: cornersArray,
-          confidence: edgeResult.confidence || 70
-        };
-      }
-      if (Array.isArray(corners) && corners.length === 4) {
-        console.log(`\u2705 [DETECT OBJECT] EdgeDetection r\xE9ussie: ${corners.length} coins (array)`);
-        return {
-          success: true,
-          method: "edge-detection-object",
-          corners,
-          confidence: edgeResult.confidence || 70
-        };
-      }
-    }
-    console.log("\u26A0\uFE0F [DETECT OBJECT] EdgeDetection \xE9chou\xE9e ou format invalide");
-    return {
-      success: false,
-      method: "detection-failed",
-      corners: null,
-      confidence: 0
-    };
-  } catch (error) {
-    console.error("\u274C [DETECT OBJECT] Erreur:", error);
-    return {
-      success: false,
-      method: "error",
-      corners: null,
-      confidence: 0
-    };
-  }
-}
-router91.post("/detect-with-fusion", authenticateToken, async (req2, res) => {
-  try {
-    const {
-      photos,
-      selectionZone,
-      referenceType = "aruco_magenta",
-      objectDescription,
-      realDimensions,
-      targetType = "reference"
-    } = req2.body;
+    console.log("\n" + "=".repeat(70));
+    console.log("\u{1F3AF} [ULTRA-CLEAN] POST /compute-dimensions-simple");
+    console.log("=".repeat(70));
     if (!req2.user?.id) {
       return res.status(401).json({ error: "Non authentifi\xE9" });
     }
-    if (!photos || photos.length === 0) {
-      return res.status(400).json({ error: "Au moins une photo requise" });
+    const {
+      fusedCorners,
+      objectPoints,
+      imageWidth,
+      imageHeight,
+      markerSizeCm = 13,
+      markerHeightCm = 21.7,
+      // 🎯 CRITIQUE: Hauteur du marqueur
+      detectionMethod = "AprilTag-Metre-V1.2-Ultra",
+      canvasScale = 1,
+      exif,
+      detectionQuality = 95,
+      reprojectionErrorMm = 1.5
+    } = req2.body;
+    if (!fusedCorners || !objectPoints || objectPoints.length !== 4) {
+      return res.status(400).json({
+        success: false,
+        error: "fusedCorners et 4 objectPoints requis"
+      });
     }
-    if (!selectionZone) {
-      return res.status(400).json({ error: "selectionZone requise" });
+    if (!imageWidth || !imageHeight) {
+      return res.status(400).json({
+        success: false,
+        error: "imageWidth et imageHeight requis"
+      });
     }
-    const isMeasurementTarget = targetType === "measurement";
-    console.log(`\u{1F3AF} [FUSION] D\xE9tection: ${photos.length} photos, type: ${referenceType}, target: ${targetType}`);
-    console.log(`\u{1F4D0} [FUSION] Zone: x=${selectionZone.x?.toFixed(1)}%, y=${selectionZone.y?.toFixed(1)}%`);
-    if (isMeasurementTarget) {
-      console.log(`\u{1F4CF} [FUSION] MODE MESURE OBJET \u2192 Utilisation EdgeDetection/Gemini (pas ArUco)`);
-    }
-    console.log("\u{1F500} [FUSION] \xC9tape 1: Fusion des photos...");
-    const cleanedPhotos = photos.map((photo) => ({
-      base64: photo.base64.includes(",") ? photo.base64.split(",")[1] : photo.base64,
-      mimeType: photo.mimeType || "image/jpeg"
-    }));
-    const fusionType = referenceType === "aruco_magenta" ? "custom" : referenceType;
-    const fusionResult = await multiPhotoFusionService.fuseForReferenceDetection(
-      cleanedPhotos,
-      fusionType
-    );
-    const imageToUse = fusionResult.fusedImageBase64 || cleanedPhotos[0].base64;
-    const mimeTypeToUse = fusionResult.mimeType || "image/jpeg";
-    console.log(`\u2705 [FUSION+ARUCO] Image ${fusionResult.success ? "fusionn\xE9e" : "originale"} pr\xEAte (${Math.round(imageToUse.length / 1024)} KB)`);
-    console.log("\u{1F3AF} [FUSION+ARUCO] \xC9tape 2: D\xE9tection ArUco MAGENTA avec 105 points...");
-    const imageBuffer = Buffer.from(imageToUse, "base64");
-    const metadata = await sharp4(imageBuffer).metadata();
-    const imageWidth = metadata.width || 1920;
-    const imageHeight = metadata.height || 1080;
-    console.log(`\u{1F4F7} [FUSION+ARUCO] Dimensions image: ${imageWidth}x${imageHeight}`);
-    const cropZone = {
-      x: Math.round(selectionZone.x * imageWidth / 100),
-      y: Math.round(selectionZone.y * imageHeight / 100),
-      width: Math.round(selectionZone.width * imageWidth / 100),
-      height: Math.round(selectionZone.height * imageHeight / 100)
+    console.log("\u{1F4CB} Donn\xE9es re\xE7ues:");
+    console.log(`   Image: ${imageWidth}\xD7${imageHeight}, canvasScale: ${canvasScale}`);
+    console.log(`   \u{1F4D0} Marqueur: ${markerSizeCm}\xD7${markerHeightCm}cm (${detectionMethod})`);
+    const markerCorners = {
+      topLeft: {
+        x: fusedCorners.topLeft.x / 100 * imageWidth,
+        y: fusedCorners.topLeft.y / 100 * imageHeight
+      },
+      topRight: {
+        x: fusedCorners.topRight.x / 100 * imageWidth,
+        y: fusedCorners.topRight.y / 100 * imageHeight
+      },
+      bottomRight: {
+        x: fusedCorners.bottomRight.x / 100 * imageWidth,
+        y: fusedCorners.bottomRight.y / 100 * imageHeight
+      },
+      bottomLeft: {
+        x: fusedCorners.bottomLeft.x / 100 * imageWidth,
+        y: fusedCorners.bottomLeft.y / 100 * imageHeight
+      }
     };
-    console.log(`\u{1F4D0} [FUSION] Zone crop: ${cropZone.x},${cropZone.y} -> ${cropZone.width}x${cropZone.height}`);
-    if (isMeasurementTarget) {
-      console.log("\u{1F4CF} [MESURE OBJET] Saut de la d\xE9tection ArUco \u2192 EdgeDetection/Gemini direct");
-      const objectDetectionResult = await detectObjectInZone(
-        imageBuffer,
-        cropZone,
-        imageWidth,
-        imageHeight,
-        referenceType,
-        // 'door', 'window', 'chassis', etc.
-        objectDescription
+    console.log("\u{1F4CD} Coins marqueur (pixels image):");
+    console.log(`   TL: (${markerCorners.topLeft.x.toFixed(0)}, ${markerCorners.topLeft.y.toFixed(0)})`);
+    console.log(`   TR: (${markerCorners.topRight.x.toFixed(0)}, ${markerCorners.topRight.y.toFixed(0)})`);
+    const objectCorners = {
+      topLeft: {
+        x: objectPoints[0].x / canvasScale,
+        y: objectPoints[0].y / canvasScale
+      },
+      topRight: {
+        x: objectPoints[1].x / canvasScale,
+        y: objectPoints[1].y / canvasScale
+      },
+      bottomRight: {
+        x: objectPoints[2].x / canvasScale,
+        y: objectPoints[2].y / canvasScale
+      },
+      bottomLeft: {
+        x: objectPoints[3].x / canvasScale,
+        y: objectPoints[3].y / canvasScale
+      }
+    };
+    console.log("\u{1F4CD} Coins objet (pixels image):");
+    console.log(`   TL: (${objectCorners.topLeft.x.toFixed(0)}, ${objectCorners.topLeft.y.toFixed(0)})`);
+    console.log(`   TR: (${objectCorners.topRight.x.toFixed(0)}, ${objectCorners.topRight.y.toFixed(0)})`);
+    console.log(`   BR: (${objectCorners.bottomRight.x.toFixed(0)}, ${objectCorners.bottomRight.y.toFixed(0)})`);
+    console.log(`   BL: (${objectCorners.bottomLeft.x.toFixed(0)}, ${objectCorners.bottomLeft.y.toFixed(0)})`);
+    const calibration2 = {
+      markerCorners,
+      markerSizeCm,
+      markerHeightCm,
+      // 🎯 PASSER LA HAUTEUR
+      detectionMethod,
+      imageWidth,
+      imageHeight,
+      exif,
+      detectionQuality,
+      reprojectionErrorMm
+    };
+    const result = computeObjectDimensions(calibration2, objectCorners);
+    return res.json(result);
+  } catch (error) {
+    console.error("\u274C [ULTRA-CLEAN] Erreur compute-dimensions-simple:", error);
+    return res.status(500).json({
+      success: false,
+      error: "Erreur serveur lors du calcul des dimensions",
+      message: error instanceof Error ? error.message : "Erreur inconnue"
+    });
+  }
+});
+router91.post("/ultra-precision-compute", authenticateToken, async (req2, res) => {
+  try {
+    console.log("\n" + "=".repeat(90));
+    console.log("\u{1F52C} [ULTRA-PRECISION] POST /ultra-precision-compute");
+    console.log("=".repeat(90));
+    const expectedPointCount = METRE_A4_V12_COMPLETE_SPECS.aprilTags.length + METRE_A4_V12_COMPLETE_SPECS.referenceDots.length + METRE_A4_V12_COMPLETE_SPECS.charucoArUcoPositions.length;
+    console.log(`\u{1F4CB} Specs canoniques charg\xE9es: ${expectedPointCount} points attendus (${METRE_A4_V12_COMPLETE_SPECS.aprilTags.length} AprilTags + ${METRE_A4_V12_COMPLETE_SPECS.referenceDots.length} dots + ${METRE_A4_V12_COMPLETE_SPECS.charucoArUcoPositions.length} ChArUco)`);
+    if (!req2.user?.id) {
+      return res.status(401).json({ error: "Non authentifi\xE9" });
+    }
+    const {
+      detectedPoints,
+      objectPoints,
+      imageWidth,
+      imageHeight,
+      markerSizeCm = 13,
+      markerHeightCm = 21.7,
+      detectionMethod = "AprilTag-Metre-V1.2",
+      canvasScale = 1
+    } = req2.body;
+    if (!detectedPoints || !Array.isArray(detectedPoints) || detectedPoints.length < 10) {
+      return res.status(400).json({
+        success: false,
+        error: `Au minimum 10 points d\xE9tect\xE9s requis, ${detectedPoints?.length || 0} fournis`
+      });
+    }
+    if (!objectPoints || objectPoints.length !== 4) {
+      return res.status(400).json({
+        success: false,
+        error: "Exactement 4 points objectPoints requis"
+      });
+    }
+    console.log(`\u{1F4CA} ${detectedPoints.length} points d\xE9tect\xE9s`);
+    const validDetectedPoints = detectedPoints.filter(
+      (p) => !!p && !!p.pixel && !!p.real && typeof p.pixel.x === "number" && typeof p.pixel.y === "number" && typeof p.real.x === "number" && typeof p.real.y === "number"
+    );
+    const srcPoints = validDetectedPoints.map((p) => ({ x: p.pixel.x, y: p.pixel.y }));
+    const dstPoints = validDetectedPoints.map((p) => ({ x: p.real.x, y: p.real.y }));
+    console.log(`   \u2705 Points valides (pixel+real): ${validDetectedPoints.length}`);
+    console.log(`   \u2705 srcPoints (pixel): ${srcPoints.length} valides`);
+    console.log(`   \u2705 dstPoints (real): ${dstPoints.length} valides`);
+    console.log(`   AprilTag: ${detectedPoints.filter((p) => p.type === "apriltag").length}`);
+    console.log(`   Dots: ${detectedPoints.filter((p) => p.type === "dot").length}`);
+    console.log(`   ChArUco: ${detectedPoints.filter((p) => p.type === "charuco").length}`);
+    if (srcPoints.length < 10 || dstPoints.length < 10) {
+      console.error(
+        `\u274C Points invalides: valid=${validDetectedPoints.length}, srcPoints=${srcPoints.length}, dstPoints=${dstPoints.length}`
       );
-      if (objectDetectionResult.success) {
-        return res.json({
-          success: true,
-          objectFound: true,
-          method: objectDetectionResult.method,
-          corners: objectDetectionResult.corners,
-          confidence: objectDetectionResult.confidence,
-          fusionMetrics: fusionResult.metrics,
-          debug: {
-            imageSize: { width: imageWidth, height: imageHeight },
-            cropZone,
-            mode: "measurement-object"
-          }
-        });
-      }
-      return res.json({
-        success: true,
-        objectFound: false,
-        corners: null,
-        confidence: 0,
-        message: `Impossible de d\xE9tecter les contours de l'objet (${referenceType})`,
-        fusionMetrics: fusionResult.metrics
+      return res.status(400).json({
+        success: false,
+        error: `Points valides insuffisants: ${srcPoints.length} pixel, ${dstPoints.length} real (10+ requis)`
       });
     }
-    console.log("\u{1F3AF} [REFERENCE] \xC9tape 2: D\xE9tection ArUco MAGENTA avec 105 points...");
+    console.log(`
+\u{1F52C} RANSAC INPUT VALIDATION:`);
+    console.log(`   Total points: ${srcPoints.length}`);
+    console.log(`   \u{1F4CD} 4 premiers points (AprilTags):`);
+    for (let i = 0; i < Math.min(4, srcPoints.length); i++) {
+      console.log(`      [${i}] pixel: (${srcPoints[i].x.toFixed(1)}, ${srcPoints[i].y.toFixed(1)}) \u2192 real: (${dstPoints[i].x}, ${dstPoints[i].y}) mm`);
+    }
+    if (srcPoints.length >= 4) {
+      const pxDistTL_TR = Math.hypot(srcPoints[1].x - srcPoints[0].x, srcPoints[1].y - srcPoints[0].y);
+      const pxDistTL_BL = Math.hypot(srcPoints[2].x - srcPoints[0].x, srcPoints[2].y - srcPoints[0].y);
+      const pxDistTL_BR = Math.hypot(srcPoints[3].x - srcPoints[0].x, srcPoints[3].y - srcPoints[0].y);
+      console.log(`   \u{1F4CF} Distances pixel depuis TL:`);
+      console.log(`      TL\u2192TR: ${pxDistTL_TR.toFixed(1)}px (attendu: 130mm \u2192 ratio ~${(pxDistTL_TR / 130).toFixed(2)} px/mm)`);
+      console.log(`      TL\u2192BL: ${pxDistTL_BL.toFixed(1)}px (attendu: 217mm \u2192 ratio ~${(pxDistTL_BL / 217).toFixed(2)} px/mm)`);
+      console.log(`      TL\u2192BR: ${pxDistTL_BR.toFixed(1)}px (diagonal)`);
+      const tlPx = srcPoints[0];
+      const trPx = srcPoints[1];
+      const blPx = srcPoints[2];
+      const brPx = srcPoints[3];
+      console.log(`   \u{1F9ED} Validation g\xE9om\xE9trique:`);
+      console.log(`      TL (${tlPx.x.toFixed(0)},${tlPx.y.toFixed(0)}) < TR (${trPx.x.toFixed(0)},${trPx.y.toFixed(0)})? x: ${tlPx.x < trPx.x}`);
+      console.log(`      TL (${tlPx.x.toFixed(0)},${tlPx.y.toFixed(0)}) < BL (${blPx.x.toFixed(0)},${blPx.y.toFixed(0)})? y: ${tlPx.y < blPx.y}`);
+    }
+    let ransacResult;
     try {
-      const extractWidth = Math.min(cropZone.width, imageWidth - cropZone.x);
-      const extractHeight = Math.min(cropZone.height, imageHeight - cropZone.y);
-      const croppedRaw = await sharp4(imageBuffer).extract({
-        left: Math.max(0, cropZone.x),
-        top: Math.max(0, cropZone.y),
-        width: extractWidth,
-        height: extractHeight
-      }).ensureAlpha().raw().toBuffer();
-      const imageDataForDetector = {
-        data: new Uint8ClampedArray(croppedRaw),
-        width: extractWidth,
-        height: extractHeight
-      };
-      console.log(`\u{1F50D} [FUSION+ARUCO] D\xE9tection ArUco sur zone ${extractWidth}x${extractHeight}...`);
-      const markers = arucoDetector.detect(imageDataForDetector);
-      if (markers.length > 0) {
-        const marker = markers[0];
-        const markerConfidence = Math.round(marker.score * 100);
-        console.log(`\u2705 [FUSION+ARUCO] ArUco d\xE9tect\xE9: ID=${marker.id}, Confidence=${markerConfidence}%`);
-        console.log("\u{1F52C} [FUSION+ARUCO] \xC9tape 3: D\xE9tection ULTRA-PR\xC9CISION 105 points...");
-        const cornersForUltra = marker.magentaPositions || marker.corners;
-        const ultraResult = detectUltraPrecisionPoints(
-          imageDataForDetector,
-          cornersForUltra,
-          marker.extendedPoints
-        );
-        console.log(`\u{1F3AF} [FUSION+ARUCO] Ultra-pr\xE9cision: ${ultraResult.totalPoints} points d\xE9tect\xE9s`);
-        console.log(`   \u{1F4CA} Coins: ${ultraResult.cornerPoints}`);
-        console.log(`   \u{1F4CA} Transitions: ${ultraResult.transitionPoints}`);
-        console.log(`   \u{1F4CA} Grille: ${ultraResult.gridCornerPoints}`);
-        console.log(`   \u{1F4CA} Centres: ${ultraResult.gridCenterPoints}`);
-        console.log(`   \u2705 RANSAC inliers: ${ultraResult.inlierPoints}/${ultraResult.totalPoints}`);
-        console.log(`   \u2705 Reprojection error: ${ultraResult.reprojectionError.toFixed(3)}mm`);
-        console.log(`   \u2705 Quality: ${(ultraResult.quality * 100).toFixed(1)}%`);
-        const outerCorners = marker.magentaPositions || marker.corners;
-        const adjustedCorners = outerCorners.map((corner) => ({
-          x: (cropZone.x + corner.x) / imageWidth * 100,
-          y: (cropZone.y + corner.y) / imageHeight * 100
-        }));
-        const adjustedUltraPoints = ultraResult.points.map((p) => ({
-          ...p,
-          pixel: {
-            x: (cropZone.x + p.pixel.x) / imageWidth * 100,
-            y: (cropZone.y + p.pixel.y) / imageHeight * 100
-          }
-        }));
-        return res.json({
-          success: true,
-          objectFound: true,
-          method: "aruco-ultra-precision-105-points",
-          // 4 coins du marqueur (pour compatibilité)
-          corners: adjustedCorners,
-          // 🎯 ULTRA-PRÉCISION: 105 points
-          ultraPrecision: {
-            enabled: true,
-            totalPoints: ultraResult.totalPoints,
-            inlierPoints: ultraResult.inlierPoints,
-            points: adjustedUltraPoints,
-            // Compteurs par source
-            cornerPoints: ultraResult.cornerPoints,
-            transitionPoints: ultraResult.transitionPoints,
-            gridCornerPoints: ultraResult.gridCornerPoints,
-            gridCenterPoints: ultraResult.gridCenterPoints,
-            // Homographie RANSAC + Levenberg-Marquardt
-            homography: {
-              matrix: ultraResult.homography,
-              inlierRatio: ultraResult.inlierPoints / ultraResult.totalPoints,
-              reprojectionError: ultraResult.reprojectionError,
-              method: "RANSAC-1000-iter + Levenberg-Marquardt-50-iter"
-            },
-            // Métriques de qualité
-            quality: ultraResult.quality,
-            ransacApplied: ultraResult.ransacApplied,
-            ellipseFittingApplied: ultraResult.ellipseFittingApplied,
-            levenbergMarquardtApplied: ultraResult.levenbergMarquardtApplied,
-            // Précision estimée
-            estimatedPrecision: ultraResult.reprojectionError < 0.5 ? "\xB10.2mm" : ultraResult.reprojectionError < 1 ? "\xB10.5mm" : "\xB11mm"
-          },
-          // Infos marqueur ArUco
-          marker: {
-            id: marker.id,
-            type: "MAGENTA",
-            physicalSize: MARKER_SPECS.markerSize,
-            unit: "mm",
-            confidence: markerConfidence
-          },
-          // Métriques de fusion
-          fusionMetrics: fusionResult.metrics,
-          // Confiance globale (basée sur inliers RANSAC + qualité)
-          confidence: Math.round(ultraResult.quality * 100),
-          debug: {
-            imageSize: { width: imageWidth, height: imageHeight },
-            cropZone,
-            extractSize: { width: extractWidth, height: extractHeight },
-            processingTime: Date.now()
-          }
-        });
-      }
-      console.log("\u26A0\uFE0F [FUSION+ARUCO] Aucun marqueur ArUco d\xE9tect\xE9, fallback d\xE9tection g\xE9n\xE9rique...");
-    } catch (arucoError) {
-      console.error("\u274C [FUSION+ARUCO] Erreur d\xE9tection ArUco:", arucoError);
-    }
-    console.log("\u{1F504} [FUSION+ARUCO] Fallback: D\xE9tection g\xE9n\xE9rique EdgeDetection...");
-    const edgeResult = await edgeDetectionService.detectWhitePaperCorners(
-      imageToUse,
-      selectionZone,
-      mimeTypeToUse
-    );
-    if (edgeResult.success && edgeResult.corners) {
-      console.log("\u2705 [FUSION+ARUCO] D\xE9tection EdgeDetection r\xE9ussie (fallback)");
-      return res.json({
-        success: true,
-        objectFound: true,
-        corners: edgeResult.corners,
-        confidence: edgeResult.confidence || 80,
-        method: "edge-detection-fallback",
-        fusionMetrics: fusionResult.metrics,
-        debug: edgeResult.debug
+      ransacResult = computeUltraPrecisionHomography(
+        srcPoints,
+        dstPoints,
+        markerSizeCm * 10,
+        // mm
+        markerHeightCm * 10
+        // mm
+      );
+    } catch (err) {
+      console.error("\u274C Erreur RANSAC:", err);
+      return res.status(400).json({
+        success: false,
+        error: "Homographie ultra-pr\xE9cision impossible",
+        details: err instanceof Error ? err.message : "Erreur inconnue"
       });
     }
-    console.log("\u{1F916} [FUSION+ARUCO] Dernier recours: Gemini IA...");
-    const geminiResult = await geminiService4.detectCornersInZone(
-      imageToUse,
-      mimeTypeToUse,
-      selectionZone,
-      referenceType,
-      objectDescription,
-      realDimensions,
-      targetType
-    );
-    res.json({
-      ...geminiResult,
-      method: geminiResult.success ? "gemini-fallback" : "detection-failed",
-      fusionMetrics: fusionResult.metrics
+    const objectCorners = {
+      topLeft: {
+        x: objectPoints[0].x / canvasScale,
+        y: objectPoints[0].y / canvasScale
+      },
+      topRight: {
+        x: objectPoints[1].x / canvasScale,
+        y: objectPoints[1].y / canvasScale
+      },
+      bottomRight: {
+        x: objectPoints[2].x / canvasScale,
+        y: objectPoints[2].y / canvasScale
+      },
+      bottomLeft: {
+        x: objectPoints[3].x / canvasScale,
+        y: objectPoints[3].y / canvasScale
+      }
+    };
+    const transformCorner = (p) => {
+      const H = ransacResult.homography;
+      const num_x = H[0][0] * p.x + H[0][1] * p.y + H[0][2];
+      const num_y = H[1][0] * p.x + H[1][1] * p.y + H[1][2];
+      const denom = H[2][0] * p.x + H[2][1] * p.y + H[2][2];
+      return [num_x / denom, num_y / denom];
+    };
+    const [tlX, tlY] = transformCorner(objectCorners.topLeft);
+    const [trX, trY] = transformCorner(objectCorners.topRight);
+    const [brX, brY] = transformCorner(objectCorners.bottomRight);
+    const [blX, blY] = transformCorner(objectCorners.bottomLeft);
+    const widthTop = Math.sqrt((trX - tlX) ** 2 + (trY - tlY) ** 2);
+    const widthBottom = Math.sqrt((brX - blX) ** 2 + (brY - blY) ** 2);
+    const heightLeft = Math.sqrt((blX - tlX) ** 2 + (blY - tlY) ** 2);
+    const heightRight = Math.sqrt((brX - trX) ** 2 + (brY - trY) ** 2);
+    const largeur_mm = (widthTop + widthBottom) / 2;
+    const hauteur_mm = (heightLeft + heightRight) / 2;
+    const reprojErrorMm = ransacResult.reprojectionErrorMm;
+    const uncertainty_mm = reprojErrorMm * 2;
+    console.log(`
+\u2705 R\xC9SULTAT ULTRA-PR\xC9CISION:`);
+    console.log(`   \u{1F4CF} Largeur: ${(largeur_mm / 10).toFixed(2)} cm (\xB1${(uncertainty_mm / 10).toFixed(2)} cm)`);
+    console.log(`   \u{1F4CF} Hauteur: ${(hauteur_mm / 10).toFixed(2)} cm (\xB1${(uncertainty_mm / 10).toFixed(2)} cm)`);
+    console.log(`   \u{1F4CA} RANSAC: ${ransacResult.inlierCount}/${srcPoints.length} inliers`);
+    console.log(`   \u{1F3AF} Qualit\xE9: ${ransacResult.quality.toFixed(1)}%`);
+    console.log(`   \u{1F4D0} Profondeur: ${ransacResult.depthMean.toFixed(0)}mm (\xB1${ransacResult.depthStdDev.toFixed(0)}mm)`);
+    console.log(`   \u{1F504} Inclinaison: ${ransacResult.inclineAngle.toFixed(2)}\xB0`);
+    console.log("=".repeat(90) + "\n");
+    return res.json({
+      success: true,
+      method: "ultra-precision-ransac-lm",
+      object: {
+        largeur_cm: largeur_mm / 10,
+        hauteur_cm: hauteur_mm / 10,
+        largeur_mm,
+        hauteur_mm
+      },
+      uncertainties: {
+        largeur_cm: uncertainty_mm / 10,
+        hauteur_cm: uncertainty_mm / 10,
+        largeur_mm: uncertainty_mm,
+        hauteur_mm: uncertainty_mm
+      },
+      depth: {
+        mean_mm: ransacResult.depthMean,
+        stdDev_mm: ransacResult.depthStdDev,
+        incline_angle_deg: ransacResult.inclineAngle
+      },
+      quality: {
+        homography_quality: ransacResult.quality,
+        ransac_inliers: ransacResult.inlierCount,
+        ransac_outliers: ransacResult.outlierCount,
+        confidence: ransacResult.confidence,
+        reprojectionError_px: ransacResult.reprojectionError,
+        reprojectionError_mm: ransacResult.reprojectionErrorMm
+      },
+      precision: {
+        type: "ultra-high",
+        description: "\xB10.25cm avec 41+ points RANSAC + Levenberg-Marquardt",
+        points_used: detectedPoints.length,
+        method: "RANSAC + LM with 3D depth estimation"
+      }
     });
   } catch (error) {
-    console.error("\u274C [FUSION+ARUCO] Erreur d\xE9tection avec fusion:", error);
-    res.status(500).json({
+    console.error("\u274C Erreur ultra-precision-compute:", error);
+    return res.status(500).json({
       success: false,
-      error: "Erreur serveur lors de la d\xE9tection avec fusion"
+      error: "Erreur serveur",
+      message: error instanceof Error ? error.message : "Erreur inconnue"
     });
   }
 });
@@ -69054,9 +69984,36 @@ var prodOrigins = [
   /\.appspot\.com$/
   // Google App Engine
 ];
-var devOrigins = [FRONTEND_URL || "http://localhost:5173", "http://localhost:3000"];
+var devOrigins = [
+  FRONTEND_URL || "http://localhost:5173",
+  "http://localhost:3000",
+  /^https:\/\/.*\.app\.github\.dev$/,
+  // GitHub Codespaces (toutes URLs)
+  /^https:\/\/.*-\d+\.app\.github\.dev$/
+  // GitHub Codespaces avec port
+];
 app.use((0, import_cors.default)({
-  origin: process.env.NODE_ENV === "production" ? prodOrigins : devOrigins,
+  origin: (origin, callback) => {
+    if (!origin) {
+      return callback(null, true);
+    }
+    const allowedOrigins = process.env.NODE_ENV === "production" ? prodOrigins : devOrigins;
+    const isAllowed = allowedOrigins.some((allowed) => {
+      if (typeof allowed === "string") {
+        return origin === allowed;
+      }
+      if (allowed instanceof RegExp) {
+        return allowed.test(origin);
+      }
+      return false;
+    });
+    if (isAllowed) {
+      callback(null, true);
+    } else {
+      console.warn(`\u{1F6AB} [CORS] Origin bloqu\xE9: ${origin}`);
+      callback(null, false);
+    }
+  },
   credentials: true,
   methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
   allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With", "x-organization-id"],

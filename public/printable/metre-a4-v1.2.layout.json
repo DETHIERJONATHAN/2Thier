@@ -1,0 +1,90 @@
+{
+  "version": "A4-CALIB-V1.2-LIGHT",
+  "changelog": "V1.2-LIGHT: Synchronisé avec generate_metre_a4.py (source de vérité). PAS DE BORDURE NOIRE (version papier blanc)",
+  "source": "scripts/generate_metre_a4.py → metre-a4-v1.2-light.png",
+  "sheet": {
+    "width_mm": 210,
+    "height_mm": 297,
+    "dpi": 300,
+    "export_formats": ["PDF", "PNG 300 DPI"],
+    "color_mode": "noir sur blanc (version LIGHT)"
+  },
+  "border": {
+    "thickness_mm": 0,
+    "color": "none",
+    "note": "VERSION LIGHT = pas de bordure noire (compatible imprimantes avec marges)"
+  },
+  "april_tags": [
+    { "id": 2, "position": "TL", "x_mm": 30, "y_mm": 30, "size_mm": 20, "center_x_mm": 40, "center_y_mm": 40 },
+    { "id": 7, "position": "TR", "x_mm": 160, "y_mm": 30, "size_mm": 20, "center_x_mm": 170, "center_y_mm": 40 },
+    { "id": 14, "position": "BL", "x_mm": 30, "y_mm": 247, "size_mm": 20, "center_x_mm": 40, "center_y_mm": 257 },
+    { "id": 21, "position": "BR", "x_mm": 160, "y_mm": 247, "size_mm": 20, "center_x_mm": 170, "center_y_mm": 257 }
+  ],
+  "reference_calibration": {
+    "comment": "Distance entre CENTRES des AprilTags",
+    "width_mm": 130,
+    "width_cm": 13.0,
+    "height_mm": 217,
+    "height_cm": 21.7,
+    "calculation": "TL(40,40) → TR(170,40) = 130mm | TL(40,40) → BL(40,257) = 217mm"
+  },
+  "charuco": {
+    "x_mm": 45,
+    "y_mm": 80,
+    "width_mm": 120,
+    "height_mm": 120,
+    "squares_x": 6,
+    "squares_y": 6,
+    "square_mm": 20,
+    "marker_length_ratio": 0.6,
+    "internal_corners": 25,
+    "internal_corners_note": "5×5 = 25 coins internes détectables"
+  },
+  "reference_dots": {
+    "count": 12,
+    "diameter_mm": 4,
+    "positions": [
+      {"x_mm": 45, "y_mm": 65, "quadrant": "TL", "note": "Haut gauche 1"},
+      {"x_mm": 65, "y_mm": 60, "quadrant": "TL", "note": "Haut gauche 2"},
+      {"x_mm": 80, "y_mm": 68, "quadrant": "TL", "note": "Haut gauche 3"},
+      {"x_mm": 145, "y_mm": 65, "quadrant": "TR", "note": "Haut droit 1"},
+      {"x_mm": 160, "y_mm": 60, "quadrant": "TR", "note": "Haut droit 2"},
+      {"x_mm": 175, "y_mm": 68, "quadrant": "TR", "note": "Haut droit 3"},
+      {"x_mm": 43, "y_mm": 210, "quadrant": "BL", "note": "Bas gauche 1"},
+      {"x_mm": 73, "y_mm": 215, "quadrant": "BL", "note": "Bas gauche 2"},
+      {"x_mm": 152, "y_mm": 210, "quadrant": "BR", "note": "Bas droit 1"},
+      {"x_mm": 180, "y_mm": 215, "quadrant": "BR", "note": "Bas droit 2"},
+      {"x_mm": 30, "y_mm": 140, "quadrant": "CL", "note": "Centre gauche"},
+      {"x_mm": 180, "y_mm": 140, "quadrant": "CR", "note": "Centre droit"}
+    ]
+  },
+  "rules": {
+    "horizontal": { "x_mm": 15, "y_mm": 235, "length_mm": 175, "graduation_mm": 1, "labels_every_mm": 10, "range": "0-175mm" },
+    "vertical": { "x_mm": 20, "y_mm": 40, "length_mm": 190, "graduation_mm": 1, "labels_every_mm": 10, "range": "0-190mm" }
+  },
+  "qr_code": {
+    "x_mm": 90,
+    "y_mm": 32,
+    "size_mm": 30,
+    "payload": {
+      "id": "A4-CALIB-V1.2-LIGHT",
+      "size_mm": "210x297",
+      "scale": "100%",
+      "url": "https://2thier.be/calibration"
+    }
+  },
+  "text_zones": {
+    "orientation": {"text": "TOP ↑", "y_mm": 16},
+    "warning_primary": {"text": "⚠ NE PAS AJUSTER À LA PAGE ⚠", "y_mm": 23},
+    "warning_secondary": {"text": "Imprimer à 100% - Version PAPIER BLANC", "y_mm": 29},
+    "rules_info": {"text": "Règles : Horizontal 0–175mm | Vertical 0–190mm", "y_mm": 228},
+    "metadata": {"text": "ID : A4-CALIB-V1.2-LIGHT — 210×297 mm", "y_mm": 232}
+  },
+  "total_detection_points": {
+    "apriltag_centers": 4,
+    "reference_dots": 12,
+    "charuco_internal_corners": 25,
+    "total_minimum": 41,
+    "note": "4 + 12 + 25 = 41 points minimum pour RANSAC ultra-précision"
+  }
+}

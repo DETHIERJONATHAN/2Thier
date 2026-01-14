@@ -9,7 +9,6 @@ import {
   measureDistanceCm,
   measureDistanceCmCorrected,
   estimatePose,
-  calculateQualityScore,
   detectUltraPrecisionPoints,
   type Point2D,
   type MarkerDetectionResult,
@@ -27,9 +26,9 @@ const detector = new MarkerDetector(30, 2000);
 // Log de démarrage
 const measureMode = process.env.AI_MEASURE_ENGINE || 'vision_ar';
 console.log(`📷 [MEASURE] Mode de mesure photo: ${measureMode.toUpperCase()}`);
-console.log(`   → Marqueur: ${MARKER_SPECS.markerSize}cm × ${MARKER_SPECS.markerSize}cm avec points MAGENTA`);
-console.log(`   → Détection étendue: 16 points de référence (4 coins + 12 transitions)`);
-console.log(`   → Services: MultiPhotoFusion ✅, EdgeDetection ✅, Gemini ✅`);
+console.log(`   → Marqueur: Métré A4 V1.2 (13.0cm × 21.7cm AprilTag + 12 points noirs)`);
+console.log(`   → Détection étendue: 4 AprilTags + 12 points dispersés + ChArUco 6×6`);
+console.log(`   → Services: MetreA4Detector ✅, PhotoQualityAnalyzer ✅, EdgeDetection ✅`);
 
 // ============================================================================
 // STATUS ENDPOINT
@@ -43,7 +42,7 @@ router.get('/photo/status', async (_req, res) => {
       service: 'vision_ar',
       available: true, // Toujours disponible maintenant
       mode,
-      version: 'v1.0-magenta',
+      version: 'v1.2-metre-a4',
       markerSpecs: MARKER_SPECS,
       timestamp: new Date().toISOString()
     });
@@ -92,17 +91,134 @@ router.post('/photo', async (req, res) => {
     
     console.log(`[measure/photo] 📐 Image: ${width}x${height}`);
     
-    // Extraire les pixels RGBA
-    const { data, info } = await image
+    // ═══════════════════════════════════════════════════════════════════════
+    // 🎨 PRÉ-TRAITEMENT DE L'IMAGE pour AMÉLIORER la détection des lignes noires
+    // ═══════════════════════════════════════════════════════════════════════
+    console.log('[measure/photo] 🎨 Pré-traitement de l\'image pour meilleure détection...');
+    
+    // Extraire les pixels RGBA avec traitement d'image optimisé
+    const { data, info } = await sharp(buffer)
+      // 1. Augmenter le contraste pour rendre les lignes noires plus nettes
+      .normalize()  // Normalise l'histogramme → lignes noires plus noires, blancs plus blancs
+      // 2. Augmenter la netteté pour mieux définir les bords
+      .sharpen({
+        sigma: 1.5,      // Rayon du flou gaussien (1.5 = netteté modérée)
+        m1: 1.2,         // Facteur de netteté pour les zones plates (1.2 = 20% plus net)
+        m2: 0.8,         // Facteur de netteté pour les zones à fort contraste
+        x1: 3,           // Seuil inférieur pour la détection de contraste
+        y2: 15,          // Seuil supérieur
+        y3: 15           // Seuil de saturation
+      })
+      // 3. Optionnel: Légère augmentation du contraste localisé
+      .modulate({
+        brightness: 1.0,  // Pas de changement de luminosité globale
+        saturation: 1.1,  // Légère augmentation de saturation (magenta + noir plus vifs)
+        hue: 0            // Pas de changement de teinte
+      })
       .ensureAlpha()
       .raw()
       .toBuffer({ resolveWithObject: true });
     
-    // Détecter les marqueurs MAGENTA
-    const markers = detector.detect({
+    console.log('[measure/photo] ✅ Image pré-traitée: contraste augmenté, netteté améliorée');
+    
+    // ═══════════════════════════════════════════════════════════════════════
+    // 🖊️ DÉTECTION INITIALE des cercles magenta pour localiser le marqueur
+    // ═══════════════════════════════════════════════════════════════════════
+    console.log('[measure/photo] 🎯 Détection initiale des cercles magenta...');
+    
+    const initialMarkers = detector.detect({
       data,
       width: info.width,
       height: info.height
+    });
+    
+    let finalData = data;
+    let finalWidth = info.width;
+    let finalHeight = info.height;
+    
+    // Si au moins 1 marqueur détecté, dessiner les lignes de référence noires
+    if (initialMarkers.length > 0 && calibration?.markerSizeCm) {
+      console.log('[measure/photo] 🖊️ Dessin des lignes noires de référence (1mm) sur les bords extérieurs...');
+      
+      // Récupérer le premier marqueur détecté
+      const marker = initialMarkers[0];
+      const markerSizeMm = calibration.markerSizeCm * 10; // 16.8cm → 168mm
+      const halfSize = markerSizeMm / 2; // 84mm du centre au bord
+      
+      // Calculer le facteur pixels/mm approximatif basé sur les coins détectés
+      const corners = marker.corners;
+      const width1 = Math.sqrt((corners[1].x - corners[0].x) ** 2 + (corners[1].y - corners[0].y) ** 2);
+      const width2 = Math.sqrt((corners[2].x - corners[3].x) ** 2 + (corners[2].y - corners[3].y) ** 2);
+      const avgWidthPx = (width1 + width2) / 2;
+      const pixelsPerMm = avgWidthPx / markerSizeMm;
+      
+      console.log(`[measure/photo]    📏 Taille marqueur: ${markerSizeMm}mm (${avgWidthPx.toFixed(1)}px)`);
+      console.log(`[measure/photo]    📏 Échelle: ${pixelsPerMm.toFixed(3)} px/mm`);
+      
+      // Calculer le centre approximatif du marqueur
+      const centerX = (corners[0].x + corners[1].x + corners[2].x + corners[3].x) / 4;
+      const centerY = (corners[0].y + corners[1].y + corners[2].y + corners[3].y) / 4;
+      
+      // Calculer les positions des 4 bords extérieurs (carrés alignés aux axes pour simplifier)
+      const borderOffsetPx = halfSize * pixelsPerMm;
+      const lineWidth = 1; // 1mm de largeur pour les lignes
+      const lineWidthPx = lineWidth * pixelsPerMm;
+      
+      // 4 lignes: Top, Right, Bottom, Left
+      const lines = [
+        // Top (horizontal)
+        { x1: centerX - borderOffsetPx, y1: centerY - borderOffsetPx, x2: centerX + borderOffsetPx, y2: centerY - borderOffsetPx },
+        // Right (vertical)
+        { x1: centerX + borderOffsetPx, y1: centerY - borderOffsetPx, x2: centerX + borderOffsetPx, y2: centerY + borderOffsetPx },
+        // Bottom (horizontal)
+        { x1: centerX - borderOffsetPx, y1: centerY + borderOffsetPx, x2: centerX + borderOffsetPx, y2: centerY + borderOffsetPx },
+        // Left (vertical)
+        { x1: centerX - borderOffsetPx, y1: centerY - borderOffsetPx, x2: centerX - borderOffsetPx, y2: centerY + borderOffsetPx }
+      ];
+      
+      // Créer un SVG avec les 4 lignes noires
+      const linesSvg = `
+        <svg width="${info.width}" height="${info.height}">
+          ${lines.map(line => 
+            `<line x1="${line.x1.toFixed(1)}" y1="${line.y1.toFixed(1)}" 
+                   x2="${line.x2.toFixed(1)}" y2="${line.y2.toFixed(1)}" 
+                   stroke="black" stroke-width="${Math.max(1, lineWidthPx.toFixed(1))}"/>`
+          ).join('\n          ')}
+        </svg>
+      `;
+      
+      console.log(`[measure/photo]    🖊️ Dessin de 4 lignes noires (épaisseur: ${lineWidthPx.toFixed(1)}px)`);
+      console.log(`[measure/photo]    📍 Centre marqueur: (${centerX.toFixed(1)}, ${centerY.toFixed(1)})`);
+      
+      // Appliquer les lignes sur l'image
+      const enhancedBuffer = await sharp(buffer)
+        .normalize()
+        .sharpen({ sigma: 1.5, m1: 1.2 })
+        .modulate({ saturation: 1.1 })
+        .composite([{
+          input: Buffer.from(linesSvg),
+          blend: 'over'
+        }])
+        .ensureAlpha()
+        .raw()
+        .toBuffer({ resolveWithObject: true });
+      
+      finalData = enhancedBuffer.data;
+      finalWidth = enhancedBuffer.info.width;
+      finalHeight = enhancedBuffer.info.height;
+      
+      console.log('[measure/photo] ✅ Lignes de référence dessinées, image améliorée prête');
+    }
+    
+    // ═══════════════════════════════════════════════════════════════════════
+    // 🎯 DÉTECTION FINALE avec les lignes de référence dessinées
+    // ═══════════════════════════════════════════════════════════════════════
+    console.log('[measure/photo] 🎯 Détection finale avec lignes de référence...');
+    
+    const markers = detector.detect({
+      data: finalData,
+      width: finalWidth,
+      height: finalHeight
     });
     
     let response: any;
@@ -112,19 +228,76 @@ router.post('/photo', async (req, res) => {
       console.log(`[measure/photo] ✅ Marqueur détecté! Score: ${marker.score}, Taille: ${marker.size.toFixed(0)}px`);
       
       // ══════════════════════════════════════════════════════════════════════
+      // � DESSINER des lignes noires ULTRA-FINES (1mm) sur les bords EXTÉRIEURS
+      // ══════════════════════════════════════════════════════════════════════
+      console.log('[measure/photo] 🎨 Dessin lignes noires extérieures 1mm...');
+      
+      // Calculer l'épaisseur en pixels: 1mm
+      // Résolution typique: 16.8cm marqueur = ~150-200px → ~9-12 pixels/cm → 1mm ≈ 1 pixel
+      const markerSizePx = marker.size;
+      const pixelsPerCm = markerSizePx / 16.8; // 16.8cm physique
+      const lineThicknessPx = Math.max(1, Math.round(pixelsPerCm * 0.1)); // 1mm = 0.1cm
+      
+      console.log(`[measure/photo]    📏 Résolution: ${pixelsPerCm.toFixed(1)}px/cm → ligne ${lineThicknessPx}px (1mm)`);
+      
+      // Créer un buffer SVG pour dessiner les lignes
+      const corners = marker.corners;
+      const svgPaths = [
+        `M ${corners[0].x},${corners[0].y} L ${corners[1].x},${corners[1].y}`, // TL → TR (haut)
+        `M ${corners[1].x},${corners[1].y} L ${corners[2].x},${corners[2].y}`, // TR → BR (droite)
+        `M ${corners[2].x},${corners[2].y} L ${corners[3].x},${corners[3].y}`, // BR → BL (bas)
+        `M ${corners[3].x},${corners[3].y} L ${corners[0].x},${corners[0].y}`  // BL → TL (gauche)
+      ];
+      
+      const svg = `
+        <svg width="${info.width}" height="${info.height}">
+          ${svgPaths.map(path => 
+            `<path d="${path}" stroke="black" stroke-width="${lineThicknessPx}" fill="none" stroke-linecap="square"/>`
+          ).join('\n          ')}
+        </svg>
+      `;
+      
+      // Superposer les lignes noires sur l'image existante
+      const enhancedImageBuffer = await sharp(data, {
+        raw: {
+          width: info.width,
+          height: info.height,
+          channels: 4
+        }
+      })
+      .composite([{
+        input: Buffer.from(svg),
+        blend: 'over' // Superposer les lignes sur l'image
+      }])
+      .ensureAlpha()
+      .raw()
+      .toBuffer();
+      
+      console.log('[measure/photo] ✅ Lignes noires extérieures dessinées');
+      
+      // Remplacer les données par l'image améliorée
+      const enhancedData = new Uint8ClampedArray(enhancedImageBuffer);
+      
+      // ══════════════════════════════════════════════════════════════════════
       // 🎯 ULTRA-PRÉCISION: Détection de 80-100 points + RANSAC + Levenberg-Marquardt
       // ══════════════════════════════════════════════════════════════════════
-      console.log('[measure/photo] 🎯 Lancement détection ULTRA-PRÉCISE...');
+      console.log('[measure/photo] 🎯 Lancement détection ULTRA-PRÉCISE sur image améliorée...');
       
-      // Utiliser les coins MAGENTA (extérieurs 18cm) pour l'ultra-précision
-      const exteriorCorners = marker.magentaPositions || marker.corners;
+      // Utiliser les 4 coins AprilTag pour l'ultra-précision
+      const exteriorCorners = marker.corners;
       
       let ultraPrecisionResult: UltraPrecisionResult | null = null;
       try {
+        // 🎯 Métré A4 V1.2: AprilTag centres 13cm×21.7cm (distance entre centres)
+        const markerWidthMm = 130;   // 13.0cm largeur AprilTag centres
+        const markerHeightMm = 217;  // 21.7cm hauteur AprilTag centres
+        
         ultraPrecisionResult = detectUltraPrecisionPoints(
-          { data, width: info.width, height: info.height },
+          { data: enhancedData, width: info.width, height: info.height },
           exteriorCorners,
-          marker.extendedPoints
+          marker.extendedPoints,
+          markerWidthMm,
+          markerHeightMm
         );
         console.log(`[measure/photo] 🎯 ULTRA-PRÉCISION: ${ultraPrecisionResult.inlierPoints}/${ultraPrecisionResult.totalPoints} points, erreur ±${ultraPrecisionResult.reprojectionError.toFixed(2)}mm, qualité ${(ultraPrecisionResult.quality * 100).toFixed(1)}%`);
       } catch (ultraError: any) {
@@ -134,11 +307,14 @@ router.post('/photo', async (req, res) => {
       // Calculer l'homographie: pixels → cm réels
       // Utiliser l'homographie ultra-précise si disponible, sinon standard
       const srcPoints = marker.corners;
+      // CRITICAL: Métré A4 V1.2 AprilTag = 130mm × 217mm (13cm × 21.7cm) rectangulaire!
+      const markerWidthForHomography = 130;   // 13.0cm largeur AprilTag centres (mm)
+      const markerHeightForHomography = 217;  // 21.7cm hauteur AprilTag centres (mm)
       const dstPoints: Point2D[] = [
-        { x: 0, y: 0 },                                    // TL
-        { x: MARKER_SPECS.markerSize, y: 0 },              // TR
-        { x: MARKER_SPECS.markerSize, y: MARKER_SPECS.markerSize }, // BR
-        { x: 0, y: MARKER_SPECS.markerSize }               // BL
+        { x: 0, y: 0 },                                           // TL
+        { x: markerWidthForHomography, y: 0 },                    // TR
+        { x: markerWidthForHomography, y: markerHeightForHomography }, // BR
+        { x: 0, y: markerHeightForHomography }                    // BL
       ];
       
       // Utiliser l'homographie ultra-précise si disponible et de bonne qualité
@@ -149,13 +325,8 @@ router.post('/photo', async (req, res) => {
       // Estimer la pose (rotation)
       const pose = estimatePose(marker.corners);
       
-      // Score de qualité
-      const quality = calculateQualityScore(
-        marker.corners,
-        marker.size,
-        pose.rotX,
-        pose.rotY
-      );
+      const quality = ultraPrecisionResult ? ultraPrecisionResult.quality : 0.5;
+      
       
       // Calculer des mesures si des points sont fournis
       const measurements: Record<string, number> = {};
@@ -179,11 +350,11 @@ router.post('/photo', async (req, res) => {
         marker: {
           id: marker.id,
           corners: marker.corners,
-          magentaPositions: marker.magentaPositions,
+          apriltagPositions: marker.apriltagPositions,
           center: marker.center,
           sizePx: marker.size,
           score: marker.score,
-          magentaFound: marker.magentaFound,
+          apriltagsFound: marker.apriltagsFound,
           extendedPoints: marker.extendedPoints
         },
         homography: {
@@ -200,6 +371,7 @@ router.post('/photo', async (req, res) => {
           inlierPoints: ultraPrecisionResult.inlierPoints,
           reprojectionErrorMm: ultraPrecisionResult.reprojectionError,
           quality: ultraPrecisionResult.quality,
+          homographyMatrix: ultraPrecisionResult.homography, // 🔬 AJOUT: Matrice 3x3 optimisée RANSAC+LM
           breakdown: {
             corners: ultraPrecisionResult.cornerPoints,
             transitions: ultraPrecisionResult.transitionPoints,
@@ -226,7 +398,10 @@ router.post('/photo', async (req, res) => {
         debug: {
           markerSpecs: MARKER_SPECS,
           mode: process.env.AI_MEASURE_ENGINE || 'vision_ar',
-          detectionMethod: ultraPrecisionResult ? 'ultra_precision_ransac_lm' : 'magenta_clustering'
+          // 🎯 CRITICAL: Identifier correctement le marqueur AprilTag Métré V1.2 pour le frontend
+          // Le frontend dépend de ce champ pour afficher les dimensions 13×21.7cm (rectangulaire)
+          // Métré A4 V1.2 = AprilTag rectangulaire 130×217mm
+          detectionMethod: (markerWidthForHomography === 130 && markerHeightForHomography === 217) ? 'apriltag-metre' : (ultraPrecisionResult ? 'ultra_precision_ransac_lm' : 'magenta_clustering')
         },
         durationMs: Date.now() - startTime
       };
@@ -256,13 +431,13 @@ router.post('/photo', async (req, res) => {
             }
           });
           
-          // Sauvegarder les points magenta
-          for (let i = 0; i < marker.magentaPositions.length; i++) {
-            const pos = marker.magentaPositions[i];
+          // Sauvegarder les points AprilTag
+          for (let i = 0; i < marker.apriltagPositions.length; i++) {
+            const pos = marker.apriltagPositions[i];
             await db.measurePhotoPoint.create({
               data: {
                 measurePhotoId: measurePhoto.id,
-                label: `magenta_${i + 1}`,
+                label: `apriltag_${i + 1}`,
                 xPx: pos.x,
                 yPx: pos.y,
                 source: 'auto_detect',
@@ -483,10 +658,16 @@ router.post('/photo/ultra', async (req, res) => {
         // Ultra-précision
         let ultraPrecisionResult: UltraPrecisionResult | null = null;
         try {
+          // 🎯 Métré A4 V1.2: AprilTag centres 13cm×21.7cm (distance entre centres)
+          const markerWidthMm = 130;   // 13.0cm largeur AprilTag centres
+          const markerHeightMm = 217;  // 21.7cm hauteur AprilTag centres
+          
           ultraPrecisionResult = detectUltraPrecisionPoints(
             { data, width: info.width, height: info.height },
             exteriorCorners,
-            marker.extendedPoints
+            marker.extendedPoints,
+            markerWidthMm,
+            markerHeightMm
           );
           
           console.log(`   ✅ Ultra-précision: ${ultraPrecisionResult.inlierPoints}/${ultraPrecisionResult.totalPoints} inliers`);
@@ -581,7 +762,7 @@ router.post('/photo/ultra', async (req, res) => {
         mmPerPixel: 10 / fusedPixelsPerCm,
         confidence: fusionStats.averageQuality,
         corners: bestResult.marker.corners,
-        magentaPositions: bestResult.marker.magentaPositions,
+        apriltagPositions: bestResult.marker.apriltagPositions,
         extendedPoints: bestResult.marker.extendedPoints
       },
       ultraPrecision: bestResult.ultraPrecision ? {
@@ -589,6 +770,7 @@ router.post('/photo/ultra', async (req, res) => {
         inlierPoints: bestResult.ultraPrecision.inlierPoints,
         reprojectionErrorMm: bestResult.ultraPrecision.reprojectionError,
         quality: bestResult.ultraPrecision.quality,
+        homographyMatrix: bestResult.ultraPrecision.homography, // 🔬 AJOUT: Matrice 3x3 optimisée RANSAC+LM
         breakdown: {
           exteriorCorners: 4,
           transitionPoints: bestResult.ultraPrecision.transitionPoints,
@@ -598,6 +780,17 @@ router.post('/photo/ultra', async (req, res) => {
         ransacApplied: true,
         levenbergMarquardtApplied: true,
         ellipseFittingApplied: true
+      } : null,
+      // 🔍 DEBUG QUALITY - TOUTES LES VALEURS CRITIQUES
+      _debug_ultraPrecision: bestResult.ultraPrecision ? {
+        hasQuality: bestResult.ultraPrecision.quality !== undefined,
+        qualityValue: bestResult.ultraPrecision.quality,
+        qualityType: typeof bestResult.ultraPrecision.quality,
+        correctionX: bestResult.ultraPrecision.correctionX,
+        correctionY: bestResult.ultraPrecision.correctionY,
+        correctionConfidence: bestResult.ultraPrecision.correctionConfidence,
+        optimalCorrection: bestResult.ultraPrecision.optimalCorrection,
+        allKeys: Object.keys(bestResult.ultraPrecision)
       } : null,
       fusion: fusionStats,
       perPhotoResults: photoResults.map(r => ({

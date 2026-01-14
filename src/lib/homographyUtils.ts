@@ -2,7 +2,7 @@
  * 🎯 HOMOGRAPHY UTILS - Utilitaires d'homographie côté client
  * 
  * Fonctions pour transformer des points via une matrice d'homographie 3x3,
- * calculer des distances en cm, et gérer la calibration via ArUco/MAGENTA.
+ * calculer des distances en cm, et gérer la calibration via Métré A4 V1.2.
  * 
  * Compatible avec l'API /api/measure/photo qui retourne:
  * - homography.matrix: Matrice 3x3 pixels → cm
@@ -27,7 +27,7 @@ export interface Point2D {
 export type HomographyMatrix = number[][];
 
 /**
- * Résultat de détection ArUco/MAGENTA
+ * Résultat de détection Métré A4 V1.2
  */
 export interface VisionARResponse {
   success: boolean;
@@ -35,11 +35,11 @@ export interface VisionARResponse {
   marker?: {
     id: number;
     corners: Point2D[];
-    magentaPositions: Point2D[];
+    apriltagPositions: Point2D[];  // 4 coins AprilTag détectés
     center: Point2D;
     sizePx: number;
     score: number;
-    magentaFound: number;
+    apriltagsFound: number;  // Nombre d'AprilTags détectés
   };
   homography: {
     matrix: HomographyMatrix;
@@ -272,7 +272,7 @@ export function visionARToCalibration(response: VisionARResponse): {
     homography: isValidHomography(response.homography.matrix) 
       ? response.homography.matrix 
       : undefined,
-    referenceType: response.calibration?.referenceType || 'aruco_magenta',
+    referenceType: response.calibration?.referenceType || 'metre_a4_v1_2',
     detectedAutomatically: true,
     markerCorners: response.marker?.corners,
     quality: response.homography.quality

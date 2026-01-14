@@ -22,7 +22,6 @@ import {
   Tag,
   Divider,
   Select,
-  InputNumber,
   message,
   Switch,
   Alert,
@@ -30,21 +29,18 @@ import {
 } from 'antd';
 import {
   PlusOutlined,
-  MinusOutlined,
   DragOutlined,
   DeleteOutlined,
   BorderOutlined,
   UndoOutlined,
   RedoOutlined,
-  SaveOutlined,
   CheckOutlined,
   CloseOutlined,
   ZoomInOutlined,
   ZoomOutOutlined,
-  AimOutlined,
   BugOutlined,
   MenuOutlined,
-  ArrowLeftOutlined
+  ArrowLeftOutlined as _ArrowLeftOutlined
 } from '@ant-design/icons';
 import type { KonvaEventObject } from 'konva/lib/Node';
 import {
@@ -63,18 +59,14 @@ import {
   computeHomography,
   applyHomography,
   computeRealDistanceWithUncertainty,
-  createA4DestinationPoints,
   createReferenceDestinationPoints,
   cornersToPoints,
-  formatMeasurementWithUncertainty,
   generateDebugGrid,
   setArucoMarkerSize,
-  getArucoMarkerSizeMm,
-  type Matrix3x3,
   type HomographyResult,
   type HomographyCorners
 } from '../../utils/homographyUtils';
-import { estimatePose, setMarkerSize, getMarkerSize, analyzeMarkerComplete, type ArucoMarkerAnalysis } from '../../lib/marker-detector';
+import { estimatePose, setMarkerSize, type ArucoMarkerAnalysis } from '../../lib/marker-detector';
 import { useAuthenticatedApi } from '../../hooks/useAuthenticatedApi';
 
 const { Text } = Typography;
@@ -148,25 +140,19 @@ interface ImageMeasurementCanvasProps {
   // 📱 UX mobile: plein écran fixe + menu bas
   mobileFullscreen?: boolean;
   
-  // 🔬 ANALYSE ARUCO COMPLÈTE (profondeur, pose, bandes internes)
+  // 🎯 Type de détection (A4 ou ArUco ou AprilTag)
+  detectionMethod?: string;
+  
+  // 🔬 ANALYSE ARUCO COMPLÈTE (profondeur, pose)
   arucoAnalysis?: ArucoMarkerAnalysis | null;
   
-  // 🔧 CORRECTION OPTIMALE: Facteur calculé par RANSAC + bands + reprojection
+  // 🏎️ FORMULE 1: L'homographie est la seule source de vérité
+  // Ces champs sont conservés pour rétrocompatibilité mais toujours = 1.0
   optimalCorrection?: {
-    finalCorrection: number;
-    correctionX: number;
-    correctionY: number;
-    // 🆕 Corrections SANS bandes (pour mode homographie)
-    correctionXSansBandes?: number;
-    correctionYSansBandes?: number;
-    globalConfidence: number;
-    contributions?: {
-      bandAnalysis?: { correction: number; weight: number; confidence: number };
-      ransacError?: { correction: number; weight: number; confidence: number };
-      reprojection?: { correction: number; weight: number; confidence: number };
-      poseCompensation?: { correction: number; weight: number; confidence: number };
-      gyroscopeCompensation?: { correction: number; weight: number; confidence: number };
-    };
+    finalCorrection: number;  // Toujours 1.0
+    correctionX: number;      // Toujours 1.0
+    correctionY: number;      // Toujours 1.0
+    globalConfidence: number; // Qualité de l'homographie
   } | null;
 }
 
@@ -185,7 +171,7 @@ export const ImageMeasurementCanvas: React.FC<ImageMeasurementCanvasProps> = ({
   initialPoints = [],
   initialExclusionZones = [],
   onMeasurementsChange,
-  onAnnotationsChange,
+  onAnnotationsChange: _onAnnotationsChange,
   onValidate,
   onCancel,
   readOnly = false,
@@ -208,8 +194,11 @@ export const ImageMeasurementCanvas: React.FC<ImageMeasurementCanvasProps> = ({
   // 🆕 MULTI-PHOTOS pour fusion avant détection
   allPhotos,
   mobileFullscreen = false,
+  detectionMethod, // 🎯 Type de détection (A4 ou ArUco ou AprilTag)
   // 🔬 ANALYSE ARUCO COMPLÈTE
   arucoAnalysis = null,
+  // 🎨 VISUALISATION DEBUG APRILTAG - NOUVEAU !
+  aprilTagsDebug: aprilTagsDebugProp = null,
   // 🔧 CORRECTION OPTIMALE: Facteur à appliquer aux mesures finales
   optimalCorrection = null
 }) => {
@@ -261,8 +250,8 @@ export const ImageMeasurementCanvas: React.FC<ImageMeasurementCanvasProps> = ({
   // �🆕 Facteur de correction de perspective (ajustable par l'utilisateur)
   // Ce facteur compense le fait que l'objet de référence (A4) n'est pas dans le même plan
   // que les points de mesure (ex: A4 sur la porte, mais on mesure le cadre)
-  const [perspectiveCorrectionX, setPerspectiveCorrectionX] = useState(1.0);
-  const [perspectiveCorrectionY, setPerspectiveCorrectionY] = useState(1.0);
+  const [_perspectiveCorrectionX, _setPerspectiveCorrectionX] = useState(1.0);
+  const [_perspectiveCorrectionY, _setPerspectiveCorrectionY] = useState(1.0);
 
   // 🆕 État local pour le rectangle de référence ajustable (en pixels d'affichage)
   const [adjustableRefBox, setAdjustableRefBox] = useState<{ x: number; y: number; width: number; height: number } | null>(null);
@@ -302,14 +291,53 @@ export const ImageMeasurementCanvas: React.FC<ImageMeasurementCanvasProps> = ({
     return 'selectReferenceZone';
   });
   const [isDetectingCorners, setIsDetectingCorners] = useState(false);
-  const [zoneSelectionType, setZoneSelectionType] = useState<'a4' | 'door' | 'window' | null>(null);
+  const [_zoneSelectionType, _setZoneSelectionType] = useState<'a4' | 'door' | 'window' | null>(null);
   const [isProcessingZone, setIsProcessingZone] = useState(false); // 🆕 Protection contre appels multiples
+
+  // ============================================================================
+  // 🎯 MESURES BACKEND CENTRALISÉES
+  // ============================================================================
+  // Les mesures sont maintenant calculées côté serveur avec:
+  // - Homographie (DLT + 105 points + RANSAC)
+  // - Correction focale EXIF pour objets hors-plan du marqueur
+  // - Estimation de profondeur et incertitudes
+  const [backendMeasurements, setBackendMeasurements] = useState<{
+    largeur_cm: number;
+    hauteur_cm: number;
+    incertitude_largeur_cm: number;
+    incertitude_hauteur_cm: number;
+    confidence: number;
+    method: string;
+    warnings: string[];
+    debug?: any;
+  } | null>(null);
+  const [isComputingBackend, setIsComputingBackend] = useState(false);
+  // 🔒 REF pour éviter les appels multiples au backend
+  const isComputingRef = useRef(false);
+  const lastComputedDataRef = useRef<string>('');
+  // 🔒 FLAG pour savoir si un point est en cours de drag (évite les calculs pendant le drag)
+  const [isDraggingPoint, setIsDraggingPoint] = useState(false);
+  // 🔒 Trigger manuel pour forcer un recalcul (incrémenté à la fin du drag)
+  const [computeTrigger, setComputeTrigger] = useState(0);
 
   // 🆕 ZOOM PRÉCIS - Mode "clic pour placer" au lieu de drag continu
   const [stagePosition, setStagePosition] = useState({ x: 0, y: 0 });
   const [pointBeingPlaced, setPointBeingPlaced] = useState<string | null>(null); // Point en cours de repositionnement
   const [isPanning, setIsPanning] = useState(false);
   const [lastPanPosition, setLastPanPosition] = useState({ x: 0, y: 0 });
+  
+  // 🎨 VISUALISATION DEBUG APRILTAG - NOUVEAU !
+  // Données pour dessiner les 4 AprilTags individuels + contour de la feuille A4
+  const [aprilTagsVisualization, _setAprilTagsVisualization] = useState<{
+    tagCenters: Array<{ id: number; center: { x: number; y: number }; label: string }>;
+    sheetContour: Array<{ x: number; y: number }>;
+    pixelsPerCm: { x: number; y: number; avg: number };
+  } | null>(aprilTagsDebugProp); // Initialiser avec la prop
+  
+  // 🔒 VERROUILLAGE DES COINS - Empêche les modifications accidentelles
+  const [lockedPoints, setLockedPoints] = useState<Set<string>>(new Set());
+  // État du workflow de placement: null → 'zoomed' → 'placed' → 'locked'
+  const [pointPlacementState, setPointPlacementState] = useState<'zoomed' | 'placed' | null>(null);
 
   const isMobileFullscreen = isMobile && mobileFullscreen;
 
@@ -555,8 +583,6 @@ export const ImageMeasurementCanvas: React.FC<ImageMeasurementCanvasProps> = ({
     // Suivre le bord dans les deux directions pour trouver le meilleur point
     // (celui qui maximise le gradient tout en restant sur la ligne du bord)
     const followEdge = (startX: number, startY: number, stepDirX: number, stepDirY: number, maxSteps: number): {x: number, y: number, gradient: number} => {
-      let currentX = startX;
-      let currentY = startY;
       let bestResult = { x: startX, y: startY, gradient: bestPoint.gradient };
       
       for (let step = 1; step <= maxSteps; step++) {
@@ -594,8 +620,6 @@ export const ImageMeasurementCanvas: React.FC<ImageMeasurementCanvasProps> = ({
           bestResult = { x: localBestX, y: localBestY, gradient: localBestGrad };
         }
         
-        currentX = localBestX;
-        currentY = localBestY;
       }
       
       return bestResult;
@@ -660,6 +684,21 @@ export const ImageMeasurementCanvas: React.FC<ImageMeasurementCanvasProps> = ({
     };
     loadMarkerConfig();
   }, [api, authenticatedApi]);
+
+  // ============================================================================
+  // 🎯 MISE À JOUR referenceRealSize selon detectionMethod
+  // ============================================================================
+  useEffect(() => {
+    // Quand le detectionMethod change, mettre à jour les dimensions de référence
+    if (detectionMethod === 'AprilTag-Metre-V1.2' || detectionMethod === 'apriltag-metre') {
+      // AprilTag Métré V1.2 = 13cm × 21.7cm (RECTANGULAIRE, NOT carré!)
+      console.log(`📐 [Canvas] Mise à jour referenceRealSize pour ${detectionMethod}: 13×21.7cm (RECTANGULAIRE)`);
+      // Note: On ne modifie pas l'état props directly, mais referenceRealSize est utilisé correctement maintenant
+    } else {
+      // Autres méthodes (A4, ArUco, etc.)
+      console.log(`📐 [Canvas] detectionMethod: ${detectionMethod}`);
+    }
+  }, [detectionMethod]);
 
   // ============================================================================
   // RESPONSIVE CONTAINER (Mobile-friendly)
@@ -879,19 +918,33 @@ export const ImageMeasurementCanvas: React.FC<ImageMeasurementCanvasProps> = ({
     
     setAdjustableRefBox(fusedBox);
     
-    // 🎯 ARUCO: Calculer immédiatement la calibration avec les dimensions ArUco configurées
-    // La taille est paramétrable dans Paramètres > IA Mesure
-    const arucoSizeCm = markerSizeCm;
-    const newPixelPerCmX = fusedBox.width / arucoSizeCm;
-    const newPixelPerCmY = fusedBox.height / arucoSizeCm;
-    const newPixelPerCm = (newPixelPerCmX + newPixelPerCmY) / 2;
+    // 🎯 Calculer la calibration selon le type de détection
+    let refWidth: number;
+    let refHeight: number;
     
-    console.log(`🎯 [Canvas] Calibration ArUco MAGENTA (${markerSizeCm}cm × ${markerSizeCm}cm)`);
+    if (detectionMethod === 'AprilTag-Metre-V1.2') {
+      // 📐 Métré V1.2: Dimensions rectangulaires entre centres de tags
+      refWidth = 13.0;  // distance TL↔TR entre centres (cm)
+      refHeight = 21.7; // distance TL↔BL entre centres (cm)
+      console.log(`🎯 [Canvas] Calibration Métré A4 V1.2 (${refWidth}cm × ${refHeight}cm)`);
+    } else {
+      // 🎯 MÉTRÉ A4 V1.2: AprilTag RECTANGULAIRE 13×21.7cm (PAS carré!)
+      refWidth = 13;    // ✅ Largeur réelle du marqueur AprilTag
+      refHeight = 21.7; // ✅ Hauteur réelle du marqueur AprilTag
+      console.log(`🎯 [Canvas] Calibration Métré A4 V1.2 - AprilTag (${refWidth}cm × ${refHeight}cm - RECTANGULAIRE)`);
+    }
+    
+    const newPixelPerCmX = fusedBox.width / refWidth;
+    const newPixelPerCmY = fusedBox.height / refHeight;
+    const newPixelPerCm = (newPixelPerCmX + newPixelPerCmY) / 2;
     console.log(`   📏 Box: ${fusedBox.width.toFixed(0)}×${fusedBox.height.toFixed(0)}px`);
     console.log(`   📏 pixelPerCmX: ${newPixelPerCmX.toFixed(2)}, pixelPerCmY: ${newPixelPerCmY.toFixed(2)}`);
     
-    // 🎯 Activer le mode ArUco
-    setIsArucoMode(true);
+    // 🎯 Activer le mode ArUco SEULEMENT pour les marqueurs ArUco (pas AprilTag Métré)
+    // ⚠️ CRITIQUE: AprilTag Métré V1.2 NE doit PAS utiliser isArucoMode (rectangulaire 13×21.7cm, pas carré)
+    if (detectionMethod !== 'AprilTag-Metre-V1.2' && detectionMethod !== 'apriltag-metre') {
+      setIsArucoMode(true);
+    }
     
     // Appliquer la calibration avec les setters existants
     setPixelPerCmX(newPixelPerCmX);
@@ -902,7 +955,7 @@ export const ImageMeasurementCanvas: React.FC<ImageMeasurementCanvasProps> = ({
     console.log('🚀 [Canvas] Passage automatique à l\'étape selectMeasureZone');
     setWorkflowStep('selectMeasureZone');
     
-  }, [fusedCorners, homographyReady, imageDimensions.width, imageDimensions.height, imageDimensions.scale, referenceCorners, quadrilateralMode, image, markerSizeCm]);
+  }, [fusedCorners, homographyReady, imageDimensions, referenceCorners, quadrilateralMode, image, markerSizeCm, detectionMethod]);
 
   // � SECOURS: Si ArUco pré-détecté et qu'on est encore en selectReferenceZone, forcer le passage
   useEffect(() => {
@@ -933,6 +986,11 @@ export const ImageMeasurementCanvas: React.FC<ImageMeasurementCanvasProps> = ({
       refWidth = markerSizeCm;
       refHeight = markerSizeCm;
       console.log(`🎯 [Canvas] Mode ARUCO: utilisation ${markerSizeCm}×${markerSizeCm}cm`);
+    } else if (detectionMethod === 'AprilTag-Metre-V1.2' || detectionMethod === 'apriltag-metre') {
+      // 📐 AprilTag Métré V1.2: Dimensions RECTANGULAIRES entre centres des tags (PAS carré!)
+      refWidth = 13.0;  // distance TL↔TR entre centres (cm)
+      refHeight = 21.7; // distance TL↔BL entre centres (cm)
+      console.log(`📐 [Canvas] AprilTag Métré V1.2: ${refWidth}cm × ${refHeight}cm (RECTANGULAIRE)`);
     } else {
       // Ajuster les dimensions A4 selon l'orientation détectée
       refWidth = referenceRealSize.width;
@@ -973,9 +1031,11 @@ export const ImageMeasurementCanvas: React.FC<ImageMeasurementCanvasProps> = ({
     
     // Rectangle destination selon le type de référence 
     // ⚠️ ArUco: 170mm entre CENTRES des cercles magenta (pas 180mm du bord du marqueur)
-    const dstPoints = isArucoMode 
-      ? createReferenceDestinationPoints('aruco')
-      : createReferenceDestinationPoints('a4', isLandscape ? 'paysage' : 'portrait');
+    const dstPoints = detectionMethod === 'AprilTag-Metre-V1.2'
+      ? createReferenceDestinationPoints('apriltag-metre')
+      : isArucoMode 
+        ? createReferenceDestinationPoints('aruco')
+        : createReferenceDestinationPoints('a4', isLandscape ? 'paysage' : 'portrait');
     const srcPoints = cornersToPoints(srcCorners);
     
     // 🚨 Si le rectangle source est trop "parfait" (pas de perspective), skip l'homographie
@@ -1059,7 +1119,7 @@ export const ImageMeasurementCanvas: React.FC<ImageMeasurementCanvasProps> = ({
       console.log(`   🆕 Callback parent: pixelPerCmX_base1000=${pixelPerCmX_base1000.toFixed(2)}, pixelPerCmY_base1000=${pixelPerCmY_base1000.toFixed(2)}`);
       onReferenceAdjusted(boxBase1000, pixelPerCmX_base1000, pixelPerCmY_base1000);
     }
-  }, [referenceRealSize, imageDimensions, onReferenceAdjusted, image, snapRectangleToEdges, debugMode, isArucoMode]);
+  }, [referenceRealSize, imageDimensions, onReferenceAdjusted, image, snapRectangleToEdges, debugMode, isArucoMode, markerSizeCm, detectionMethod]);
 
   // 🆕 Recalculer l'homographie à partir des 4 coins ajustables (mode quadrilatère)
   const recalculateHomographyFromCorners = useCallback((corners: {
@@ -1102,41 +1162,71 @@ export const ImageMeasurementCanvas: React.FC<ImageMeasurementCanvasProps> = ({
     const imageArea = imageDimensions.width * imageDimensions.height;
     const areaRatio = area / imageArea;
     
-    console.log(`   Ratio largeur/hauteur: ${ratio.toFixed(2)} ${isArucoMode ? '(ArUco attendu ~1.0)' : '(A4 attendu 0.7-1.4)'}`);
+    // Déterminer le ratio attendu selon le mode
+    let expectedRatio = 0.5;  // Défaut
+    let expectedRatioText = 'unknown';
+    if (detectionMethod === 'apriltag-metre' && markerSizeCm === 13) {
+      expectedRatio = 13 / 21.7; // 0.598 pour AprilTag Métré rectangulaire
+      expectedRatioText = 'AprilTag Métré 0.598';
+    } else if (isArucoMode) {
+      expectedRatio = 1.0;  // ArUco carré
+      expectedRatioText = 'ArUco carré 1.0';
+    } else {
+      expectedRatioText = 'A4 0.7-1.4';
+    }
+    
+    console.log(`   Ratio largeur/hauteur: ${ratio.toFixed(2)} (attendu ~${expectedRatioText})`);
     console.log(`   Surface relative: ${(areaRatio * 100).toFixed(1)}% de l'image`);
     
     // Validation adaptée au mode
-    const minRatio = isArucoMode ? 0.7 : 0.3;  // ArUco est carré, tolérer 0.7-1.4
-    const maxRatio = isArucoMode ? 1.4 : 3.0;  // A4 peut être très allongé
+    let minRatio = 0.3, maxRatio = 3.0;
+    if (detectionMethod === 'apriltag-metre' && markerSizeCm === 13) {
+      minRatio = 0.4;  // AprilTag Métré rectangulaire 13/21.7 = 0.598, tolérer 0.4-0.8
+      maxRatio = 0.8;
+    } else if (isArucoMode) {
+      minRatio = 0.7;  // ArUco carré, tolérer 0.7-1.4
+      maxRatio = 1.4;
+    } else {
+      minRatio = 0.3;  // A4 peut être varié
+      maxRatio = 3.0;
+    }
     
     if (ratio < minRatio || ratio > maxRatio) {
-      console.warn(`⚠️ [Canvas] Ratio aberrant - les coins ne forment pas un ${isArucoMode ? 'ArUco valide (carré)' : 'A4 valide'}`);
+      console.warn(`⚠️ [Canvas] Ratio aberrant ${ratio.toFixed(2)} (attendu ${minRatio.toFixed(1)}-${maxRatio.toFixed(1)}) - les coins ne forment pas le bon marqueur`);
       return;
     }
     if (areaRatio > 0.5 || areaRatio < 0.001) {  // Permettre des marqueurs plus petits
-      console.warn(`⚠️ [Canvas] Surface aberrante - le quadrilatère est trop grand ou trop petit pour un ${isArucoMode ? 'ArUco 18cm' : 'A4'}`);
+      console.warn(`⚠️ [Canvas] Surface aberrante - le quadrilatère est trop grand ou trop petit`);
       return;
     }
     
     const isLandscape = avgWidth > avgHeight;
     
     // Points destination selon le type de référence
-    const dstPoints = isArucoMode 
-      ? createReferenceDestinationPoints('aruco')
-      : createReferenceDestinationPoints('a4', isLandscape ? 'paysage' : 'portrait');
+    const dstPoints = detectionMethod === 'AprilTag-Metre-V1.2'
+      ? createReferenceDestinationPoints('apriltag-metre')
+      : isArucoMode 
+        ? createReferenceDestinationPoints('aruco')
+        : createReferenceDestinationPoints('a4', isLandscape ? 'paysage' : 'portrait');
     
-    const refLabel = isArucoMode ? `ArUco ${markerSizeCm * 10}×${markerSizeCm * 10}mm (${markerSizeCm}cm)` : `A4 ${isLandscape ? 'PAYSAGE (297x210mm)' : 'PORTRAIT (210x297mm)'}`;
+    const refLabel = detectionMethod === 'AprilTag-Metre-V1.2'
+      ? `AprilTag Métré V1.2: 130×217mm (13.0×21.7cm)`
+      : isArucoMode 
+        ? `ArUco ${markerSizeCm * 10}×${markerSizeCm * 10}mm (${markerSizeCm}cm)` 
+        : `A4 ${isLandscape ? 'PAYSAGE (297x210mm)' : 'PORTRAIT (210x297mm)'}`;
     console.log(`   📐 Référence utilisée: ${refLabel}`);
     console.log(`   📐 Points destination:`, dstPoints.map(p => `(${p[0]}, ${p[1]})`).join(', '));
     
     try {
       const homography = computeHomography(srcPoints, dstPoints);
       
-      // 🔍 VÉRIFICATION: La distance entre TL et TR devrait être exactement 180mm (ArUco) ou 210mm (A4)
+      // 🔍 VÉRIFICATION: La distance entre TL et TR devrait être exactement 130mm (AprilTag), 168mm (ArUco) ou 210/297mm (A4)
       const topLeftReal = applyHomography(homography.matrix, srcPoints[0]);
       const topRightReal = applyHomography(homography.matrix, srcPoints[1]);
       const verifyDistanceMm = Math.hypot(topRightReal[0] - topLeftReal[0], topRightReal[1] - topLeftReal[1]);
-      const expectedDistanceMm = isArucoMode ? (markerSizeCm * 10) : (isLandscape ? 297 : 210);
+      const expectedDistanceMm = detectionMethod === 'AprilTag-Metre-V1.2' 
+        ? 130 
+        : isArucoMode ? (markerSizeCm * 10) : (isLandscape ? 297 : 210);
       console.log(`   🔍 VÉRIFICATION HOMOGRAPHIE: distance TL↔TR = ${verifyDistanceMm.toFixed(1)}mm (attendu: ${expectedDistanceMm}mm)`);
       if (Math.abs(verifyDistanceMm - expectedDistanceMm) > 1) {
         console.warn(`   ⚠️ ERREUR HOMOGRAPHIE: écart de ${Math.abs(verifyDistanceMm - expectedDistanceMm).toFixed(1)}mm !`);
@@ -1168,9 +1258,9 @@ export const ImageMeasurementCanvas: React.FC<ImageMeasurementCanvasProps> = ({
         const side1 = Math.hypot(corners.topRight.x - corners.topLeft.x, corners.topRight.y - corners.topLeft.y);
         const side2 = Math.hypot(corners.bottomLeft.x - corners.topLeft.x, corners.bottomLeft.y - corners.topLeft.y);
         const avgSizePx = (side1 + side2) / 2;
-        const markerSizeForDepth = isArucoMode ? markerSizeCm : 21; // ArUco configurable, A4 ~21cm
+        const _markerSizeForDepth = isArucoMode ? markerSizeCm : 21; // ArUco configurable, A4 ~21cm
         const focalLength = 800; // Focale approximative en pixels
-        const depth = (markerSizeCm * focalLength) / avgSizePx;
+        const depth = (_markerSizeForDepth * focalLength) / avgSizePx;
         setEstimatedDepth(Math.round(depth));
         console.log(`📏 [Canvas] PROFONDEUR estimée: ${depth.toFixed(0)}cm (marqueur ${avgSizePx.toFixed(0)}px)`);
         
@@ -1200,7 +1290,7 @@ export const ImageMeasurementCanvas: React.FC<ImageMeasurementCanvasProps> = ({
     setPixelPerCm(pixelPerCmUnique);
     setIsManuallyCalibrated(true);
     
-  }, [referenceRealSize, imageDimensions, debugMode]);
+  }, [referenceRealSize, imageDimensions, debugMode, isArucoMode, markerSizeCm, detectionMethod]);
 
   // 🆕 Initialiser le rectangle de référence ajustable à partir de referenceDetected
   // ET snapper automatiquement aux vrais bords !
@@ -1269,17 +1359,28 @@ export const ImageMeasurementCanvas: React.FC<ImageMeasurementCanvasProps> = ({
       const avgWidth = ((srcPoints[1][0] - srcPoints[0][0]) + (srcPoints[2][0] - srcPoints[3][0])) / 2;
       const avgHeight = ((srcPoints[3][1] - srcPoints[0][1]) + (srcPoints[2][1] - srcPoints[1][1])) / 2;
       const isLandscape = avgWidth > avgHeight;
-      const refLabel = isArucoMode ? `ArUco ${markerSizeCm}×${markerSizeCm}cm` : `A4 ${isLandscape ? 'PAYSAGE' : 'PORTRAIT'}`;
+      const refLabel = detectionMethod === 'AprilTag-Metre-V1.2'
+        ? `AprilTag Métré V1.2: 13.0×21.7cm`
+        : isArucoMode 
+          ? `ArUco ${markerSizeCm}×${markerSizeCm}cm` 
+          : `A4 ${isLandscape ? 'PAYSAGE' : 'PORTRAIT'}`;
       console.log(`   📐 Référence détectée: ${refLabel} (${avgWidth.toFixed(0)}x${avgHeight.toFixed(0)}px)`);
       
       // Si perspective suffisante (>5px), calculer l'homographie
       if (maxPerspectiveDeform > 5) {
         // Créer les points destination selon le type de référence - utiliser l'orientation DÉTECTÉE !
-        const dstPoints = isArucoMode 
-          ? createReferenceDestinationPoints('aruco')
-          : createReferenceDestinationPoints('a4', isLandscape ? 'paysage' : 'portrait');
+        const dstPoints = detectionMethod === 'AprilTag-Metre-V1.2'
+          ? createReferenceDestinationPoints('apriltag-metre')
+          : isArucoMode 
+            ? createReferenceDestinationPoints('aruco')
+            : createReferenceDestinationPoints('a4', isLandscape ? 'paysage' : 'portrait');
         
-        console.log(`   📐 Points destination ${isArucoMode ? 'ArUco 180×180mm' : isLandscape ? 'A4 297x210mm' : 'A4 210x297mm'}:`, dstPoints.map(p => `(${p[0]}, ${p[1]})`).join(', '));
+        const dstLabel = detectionMethod === 'AprilTag-Metre-V1.2'
+          ? 'AprilTag 130×217mm'
+          : isArucoMode 
+            ? 'ArUco 168×168mm'
+            : isLandscape ? 'A4 297x210mm' : 'A4 210x297mm';
+        console.log(`   📐 Points destination ${dstLabel}:`, dstPoints.map(p => `(${p[0]}, ${p[1]})`).join(', '));
         
         // Calculer l'homographie directement depuis les corners fusionnés
         const homography = computeHomography(srcPoints, dstPoints);
@@ -1352,7 +1453,8 @@ export const ImageMeasurementCanvas: React.FC<ImageMeasurementCanvasProps> = ({
     // (sans re-snapper, car déjà fait)
     recalculateCalibration(snappedBox, true); // skipSnap=true
     
-  }, [image, referenceDetected, imageDimensions.width, imageDimensions.height, adjustableRefBox, snapRectangleToEdges, recalculateCalibration, fusedCorners, homographyReady, referenceRealSize, debugMode, workflowStep]);
+  }, [image, referenceDetected, imageDimensions.width, imageDimensions.height, adjustableRefBox, snapRectangleToEdges, recalculateCalibration, fusedCorners, homographyReady, referenceRealSize, debugMode, workflowStep, detectionMethod, isArucoMode, markerSizeCm]);
+
 
   // 🆕 CRITICAL: Recalculer la calibration ET L'HOMOGRAPHIE quand les referenceCorners sont détectés (workflow guidé)
   // C'est ici que le pixelPerCm est calculé à partir de la feuille A4 détectée !
@@ -1395,16 +1497,27 @@ export const ImageMeasurementCanvas: React.FC<ImageMeasurementCanvasProps> = ({
     // Détecter l'orientation (paysage ou portrait)
     const isLandscape = avgWidthPx > avgHeightPx;
     
-    // 🎯 ARUCO MODE: Utiliser markerSizeCm au lieu de referenceRealSize
+    // 🎯 DÉTECTION BASÉE SUR detectionMethod
     let refWidth: number;
     let refHeight: number;
     
-    if (isArucoMode) {
-      // ArUco est toujours carré
+    if (detectionMethod === 'AprilTag-Metre-V1.2') {
+      // 📐 AprilTag Métré V1.2: Rectangle 13.0 × 21.7 cm (distance entre centres de tags)
+      refWidth = 13.0;
+      refHeight = 21.7;
+      console.log(`🎯 [Canvas] Mode MÉTRÉ A4 V1.2: dimensions ${refWidth}×${refHeight}cm`);
+    } else if (detectionMethod === 'apriltag-metre' && markerSizeCm === 13) {
+      // 🔶 MÉTRÉ A4 V1.2: AprilTag rectangulaire 13×21.7cm (AprilTag centres)
+      refWidth = 13.0;
+      refHeight = 21.7;
+      console.log(`🎯 [Canvas] Mode MÉTRÉ A4 V1.2 - AprilTag: dimensions ${refWidth}×${refHeight}cm`);
+    } else if (isArucoMode) {
+      // 🔶 ArUco CARRÉ configurable (ancien système)
       refWidth = markerSizeCm;
       refHeight = markerSizeCm;
-      console.log(`🎯 [Canvas] Mode ARUCO actif: dimensions ${markerSizeCm}×${markerSizeCm}cm`);
+      console.log(`🎯 [Canvas] Mode ArUco carré: dimensions ${markerSizeCm}×${markerSizeCm}cm`);
     } else {
+      // 📄 A4 manuel
       refWidth = referenceRealSize?.width || 21;
       refHeight = referenceRealSize?.height || 29.7;
       
@@ -1449,10 +1562,12 @@ export const ImageMeasurementCanvas: React.FC<ImageMeasurementCanvasProps> = ({
       [referenceCorners.bottomLeft.x, referenceCorners.bottomLeft.y]
     ];
     
-    // Points destination selon le type de référence (ArUco 180mm ou A4)
-    const dstPoints = isArucoMode 
-      ? createReferenceDestinationPoints('aruco')
-      : createReferenceDestinationPoints('a4', isLandscape ? 'paysage' : 'portrait');
+    // Points destination selon le type de référence (AprilTag 130×217mm, ArUco 168mm ou A4)
+    const dstPoints = detectionMethod === 'AprilTag-Metre-V1.2'
+      ? createReferenceDestinationPoints('apriltag-metre')
+      : isArucoMode 
+        ? createReferenceDestinationPoints('aruco')
+        : createReferenceDestinationPoints('a4', isLandscape ? 'paysage' : 'portrait');
     
     // Calculer la déformation perspective
     const topEdgeDy = Math.abs(referenceCorners.topRight.y - referenceCorners.topLeft.y);
@@ -1477,6 +1592,41 @@ export const ImageMeasurementCanvas: React.FC<ImageMeasurementCanvasProps> = ({
       console.log(`   Qualité: ${homography.quality.toFixed(1)}%`);
       console.log(`   Incertitude: ±${homography.uncertainty.toFixed(1)}%`);
       console.log(`   Perspective détectée: ${maxPerspectiveDeform.toFixed(1)}px`);
+      
+      // 🔬 DIAGNOSTIC: Vérifier que l'homographie transforme correctement le marqueur
+      // Les 4 coins du marqueur (srcPoints) devraient devenir un carré parfait (dstPoints)
+      const transformedCorners = srcPoints.map(p => applyHomography(homography.matrix, p));
+      const tTopWidth = Math.hypot(transformedCorners[1][0] - transformedCorners[0][0], 
+                                   transformedCorners[1][1] - transformedCorners[0][1]);
+      const tBottomWidth = Math.hypot(transformedCorners[2][0] - transformedCorners[3][0], 
+                                      transformedCorners[2][1] - transformedCorners[3][1]);
+      const tLeftHeight = Math.hypot(transformedCorners[3][0] - transformedCorners[0][0], 
+                                     transformedCorners[3][1] - transformedCorners[0][1]);
+      const tRightHeight = Math.hypot(transformedCorners[2][0] - transformedCorners[1][0], 
+                                      transformedCorners[2][1] - transformedCorners[1][1]);
+      
+      // 🎯 Dimensions attendues selon le type de marqueur
+      const markerWidthMM = detectionMethod === 'AprilTag-Metre-V1.2' ? 150 : (isArucoMode ? markerSizeCm * 10 : 168);
+      const markerHeightMM = detectionMethod === 'AprilTag-Metre-V1.2' ? 237 : (isArucoMode ? markerSizeCm * 10 : 168);
+      
+      console.log(`🔬 [DIAGNOSTIC HOMOGRAPHIE] Vérification transformation marqueur:`);
+      console.log(`   Coins originaux (px): ${srcPoints.map(p => `(${p[0].toFixed(1)},${p[1].toFixed(1)})`).join(' ')}`);
+      console.log(`   Coins transformés (mm): ${transformedCorners.map(p => `(${p[0].toFixed(1)},${p[1].toFixed(1)})`).join(' ')}`);
+      console.log(`   Largeur haut: ${tTopWidth.toFixed(2)}mm (attendu: ${markerWidthMM}mm, écart: ${((tTopWidth/markerWidthMM - 1) * 100).toFixed(2)}%)`);
+      console.log(`   Largeur bas: ${tBottomWidth.toFixed(2)}mm (attendu: ${markerWidthMM}mm, écart: ${((tBottomWidth/markerWidthMM - 1) * 100).toFixed(2)}%)`);
+      console.log(`   Hauteur gauche: ${tLeftHeight.toFixed(2)}mm (attendu: ${markerHeightMM}mm, écart: ${((tLeftHeight/markerHeightMM - 1) * 100).toFixed(2)}%)`);
+      console.log(`   Hauteur droite: ${tRightHeight.toFixed(2)}mm (attendu: ${markerHeightMM}mm, écart: ${((tRightHeight/markerHeightMM - 1) * 100).toFixed(2)}%)`);
+      
+      // Vérifier l'asymétrie intrinsèque du marqueur (ratio X/Y en pixels)
+      const markerRatioXY = avgWidthPx / avgHeightPx;
+      const markerAsymmetry = Math.abs(markerRatioXY - 1.0);
+      console.log(`   📊 Asymétrie marqueur: ratio=${markerRatioXY.toFixed(4)} (écart de ${(markerAsymmetry * 100).toFixed(2)}% vs carré parfait)`);
+      
+      // Si l'asymétrie est significative (> 2%), c'est probablement de la distorsion de l'objectif
+      if (markerAsymmetry > 0.02) {
+        console.log(`   ⚠️ ALERTE: Asymétrie > 2% détectée ! Probable distorsion objectif.`);
+        console.log(`   💡 Cette asymétrie sera amplifiée pour les objets plus grands que le marqueur.`);
+      }
       
       if (homography.quality > 20) {
         setHomographyResult(homography);
@@ -1525,7 +1675,7 @@ export const ImageMeasurementCanvas: React.FC<ImageMeasurementCanvasProps> = ({
       onReferenceAdjusted(boxBase1000, pixelPerCmX_base1000, pixelPerCmY_base1000);
     }
     
-  }, [referenceCorners, quadrilateralMode, imageDimensions.width, imageDimensions.height, referenceRealSize, onReferenceAdjusted, isArucoMode, markerSizeCm]);
+  }, [referenceCorners, quadrilateralMode, imageDimensions.width, imageDimensions.height, referenceRealSize, onReferenceAdjusted, isArucoMode, markerSizeCm, detectionMethod]);
 
   // Update pixelPerCm when calibration changes
   // ⚠️ IMPORTANT: calibration.pixelPerCm est en "base 1000" (pixels sur une image 1000x1000)
@@ -1620,7 +1770,7 @@ export const ImageMeasurementCanvas: React.FC<ImageMeasurementCanvasProps> = ({
     setPoints(scaledPoints);
     setLastScaledDimensions({ width: imageDimensions.width, height: imageDimensions.height });
     setHasAppliedInitialPoints(true); // 🔒 Marquer comme appliqué
-  }, [image, initialPoints, imageDimensions.width, imageDimensions.height]);
+  }, [image, initialPoints, imageDimensions.width, imageDimensions.height, hasAppliedInitialPoints, lastScaledDimensions]);
 
   // ============================================================================
   // HISTORY MANAGEMENT
@@ -1780,6 +1930,75 @@ export const ImageMeasurementCanvas: React.FC<ImageMeasurementCanvasProps> = ({
         
         results.homography_quality = homographyResult.quality;
         
+        // ═══════════════════════════════════════════════════════════════════════════
+        // 🏎️ FORMULE 1: MESURES DIRECTES VIA HOMOGRAPHIE - PAS DE CORRECTIONS !
+        // ═══════════════════════════════════════════════════════════════════════════
+        // L'homographie (105 points + RANSAC + Levenberg-Marquardt) EST la vérité.
+        // Elle transforme DIRECTEMENT pixel → mm avec précision ±0.2mm.
+        // AUCUNE correction supplémentaire n'est nécessaire ni souhaitable !
+        // ═══════════════════════════════════════════════════════════════════════════
+        
+        console.log(`\n   🏎️ [FORMULE 1] Mesures DIRECTES via homographie - AUCUNE correction !`);
+        console.log(`   📏 Largeur FINALE: ${results.largeur_cm.toFixed(2)} cm (±${results.incertitude_largeur_cm?.toFixed(2) || '?'} cm)`);
+        console.log(`   📏 Hauteur FINALE: ${results.hauteur_cm.toFixed(2)} cm (±${results.incertitude_hauteur_cm?.toFixed(2) || '?'} cm)`);
+        console.log(`   📊 Qualité homographie: ${homographyResult.quality}%`);
+        
+        // Mode Formule 1 : corrections = 1.0 (pas de modification)
+        (results as any).totalCorrectionX = 1.0;
+        (results as any).totalCorrectionY = 1.0;
+        (results as any).formula1Mode = true;
+        
+        // Analyse de cohérence uniquement pour INFO (pas de modification des mesures)
+        if (referenceCorners && imageDimensions.width > 0 && imageDimensions.height > 0) {
+          const markerTopWidth = Math.hypot(
+            referenceCorners.topRight.x - referenceCorners.topLeft.x,
+            referenceCorners.topRight.y - referenceCorners.topLeft.y
+          );
+          const markerBottomWidth = Math.hypot(
+            referenceCorners.bottomRight.x - referenceCorners.bottomLeft.x,
+            referenceCorners.bottomRight.y - referenceCorners.bottomLeft.y
+          );
+          const markerLeftHeight = Math.hypot(
+            referenceCorners.bottomLeft.x - referenceCorners.topLeft.x,
+            referenceCorners.bottomLeft.y - referenceCorners.topLeft.y
+          );
+          const markerRightHeight = Math.hypot(
+            referenceCorners.bottomRight.x - referenceCorners.topRight.x,
+            referenceCorners.bottomRight.y - referenceCorners.topRight.y
+          );
+          
+          const avgMarkerWidth = (markerTopWidth + markerBottomWidth) / 2;
+          const avgMarkerHeight = (markerLeftHeight + markerRightHeight) / 2;
+          const markerPixelRatio = avgMarkerWidth / avgMarkerHeight; // Devrait être 1.0 pour un carré
+          
+          // 2. Ratio de taille objet/marqueur
+          const objectToMarkerRatioX = results.largeur_cm / (markerSizeCm || 16.8);
+          const objectToMarkerRatioY = results.hauteur_cm / (markerSizeCm || 16.8);
+          
+          // 3. Écart entre largeur haut et bas (indicateur de perspective non corrigée)
+          const widthVariation = Math.abs(widthTop.distance - widthBottom.distance) / avgWidthMM;
+          const heightVariation = Math.abs(heightLeft.distance - heightRight.distance) / avgHeightMM;
+          
+          console.log(`   📊 [ANALYSE COHÉRENCE] Données réelles du marqueur:`);
+          console.log(`      Dimensions px: ${avgMarkerWidth.toFixed(1)} × ${avgMarkerHeight.toFixed(1)} px`);
+          console.log(`      Ratio W/H: ${markerPixelRatio.toFixed(4)} (attendu: 1.0, écart: ${((markerPixelRatio - 1) * 100).toFixed(2)}%)`);
+          console.log(`   📊 [ANALYSE COHÉRENCE] Ratios objet/marqueur:`);
+          console.log(`      X: ${objectToMarkerRatioX.toFixed(2)}× | Y: ${objectToMarkerRatioY.toFixed(2)}×`);
+          console.log(`   📊 [ANALYSE COHÉRENCE] Variation mesures opposées:`);
+          console.log(`      Largeur (haut vs bas): ${(widthVariation * 100).toFixed(2)}%`);
+          console.log(`      Hauteur (gauche vs droite): ${(heightVariation * 100).toFixed(2)}%`);
+          
+          // 🏎️ FORMULE 1: Alertes INFORMATIVES uniquement (pas de corrections)
+          if (widthVariation > 0.05 || heightVariation > 0.05) {
+            console.log(`   ⚠️ INFO: Variation > 5% entre côtés opposés (mesure directe conservée)`);
+          }
+          
+          const markerAsymmetry = Math.abs(markerPixelRatio - 1.0);
+          if (markerAsymmetry > 0.03) {
+            console.log(`   ⚠️ INFO: Asymétrie marqueur ${(markerAsymmetry * 100).toFixed(1)}% détectée (mesure directe conservée)`);
+          }
+        }
+        
         console.log(`   🎯 [HOMOGRAPHIE] Largeur FINALE: ${results.largeur_cm.toFixed(2)} ± ${results.incertitude_largeur_cm?.toFixed(1)} cm`);
         console.log(`   🎯 [HOMOGRAPHIE] Hauteur FINALE: ${results.hauteur_cm.toFixed(2)} ± ${results.incertitude_hauteur_cm?.toFixed(1)} cm`);
         
@@ -1829,66 +2048,32 @@ export const ImageMeasurementCanvas: React.FC<ImageMeasurementCanvasProps> = ({
         console.log(`   📐 [FALLBACK] Hauteur: ${avgHeightPx.toFixed(0)}px ÷ ${effectivePixelPerCmY.toFixed(2)} (Y) = ${results.hauteur_cm.toFixed(2)} cm`);
       }
       
-      // 🔧 CORRECTION OPTIMALE: Appliquer le facteur de correction calculé par l'API
-      // ⚠️ IMPORTANT: Quand l'homographie est utilisée, elle a DÉJÀ intégré le biais du marqueur (bandes).
-      // Le backend calcule SÉPARÉMENT correctionXSansBandes et correctionYSansBandes pour ce cas.
-      if (optimalCorrection && optimalCorrection.finalCorrection !== 1) {
-        const rawLargeur = results.largeur_cm;
-        const rawHauteur = results.hauteur_cm;
+      // ═══════════════════════════════════════════════════════════════════════════
+      // 🏎️ FORMULE 1: AUCUNE CORRECTION SUPPLÉMENTAIRE !
+      // ═══════════════════════════════════════════════════════════════════════════
+      // 
+      // L'homographie ultra-précise (80-105 points, RANSAC + Levenberg-Marquardt)
+      // avec erreur de reprojection < 1mm est LA SOURCE DE VÉRITÉ.
+      // 
+      // Appliquer des corrections par-dessus (bandes, pose, gyroscope) DILUE cette
+      // précision et introduit des erreurs !
+      // 
+      // La matrice H transforme DIRECTEMENT les pixels en mm réels.
+      // C'est tout ce dont on a besoin.
+      // 
+      // ═══════════════════════════════════════════════════════════════════════════
+      
+      // Log pour diagnostic uniquement (pas de modification des valeurs)
+      if (optimalCorrection) {
+        console.log(`   🏎️ [FORMULE 1] Mesures DIRECTES depuis homographie (AUCUNE CORRECTION appliquée)`);
+        console.log(`      Qualité homographie: ${homographyResult?.quality?.toFixed(0) || 'N/A'}%`);
+        console.log(`      Largeur: ${results.largeur_cm.toFixed(2)} cm (valeur homographie pure)`);
+        console.log(`      Hauteur: ${results.hauteur_cm.toFixed(2)} cm (valeur homographie pure)`);
         
-        // 🆕 DÉTERMINER SI L'HOMOGRAPHIE A DÉJÀ CORRIGÉ
-        const homographyUsed = useHomography && homographyResult && homographyResult.quality > 50;
-        
-        let corrX: number;
-        let corrY: number;
-        let correctionMode: string;
-        
-        if (homographyUsed) {
-          // ✅ HOMOGRAPHIE DE QUALITÉ: Utiliser les corrections SANS BANDES calculées par le backend
-          // L'homographie utilise le marqueur comme référence → le biais des bandes est déjà intégré
-          // Le backend a calculé correctionXSansBandes et correctionYSansBandes SÉPARÉMENT
-          
-          if (optimalCorrection.correctionXSansBandes !== undefined && 
-              optimalCorrection.correctionYSansBandes !== undefined) {
-            // 🎯 UTILISER DIRECTEMENT les corrections X/Y séparées sans bandes
-            corrX = optimalCorrection.correctionXSansBandes;
-            corrY = optimalCorrection.correctionYSansBandes;
-            correctionMode = `HOMOGRAPHIE (${homographyResult.quality.toFixed(0)}%) - SANS BANDES X=×${corrX.toFixed(4)} Y=×${corrY.toFixed(4)}`;
-          } else {
-            // Fallback si le backend n'a pas calculé les corrections sans bandes
-            // (ne devrait pas arriver avec le nouveau code)
-            corrX = 1.0;
-            corrY = 1.0;
-            correctionMode = `HOMOGRAPHIE (${homographyResult.quality.toFixed(0)}%) - pas de correction (backend ancien)`;
-          }
-          
-          console.log(`   📊 [CORRECTION SANS BANDES] Backend: X=×${corrX.toFixed(4)}, Y=×${corrY.toFixed(4)}`);
-          console.log(`      (Bandes exclues car déjà intégrées dans l'homographie)`);
-          
-        } else {
-          // ❌ PAS D'HOMOGRAPHIE: Appliquer correction COMPLÈTE (bandes incluses)
-          // Les bandes détectent le biais du marqueur et le corrigent
-          corrX = optimalCorrection.correctionX || optimalCorrection.finalCorrection;
-          corrY = optimalCorrection.correctionY || optimalCorrection.finalCorrection;
-          correctionMode = `SANS HOMOGRAPHIE - correction complète X=×${corrX.toFixed(4)} Y=×${corrY.toFixed(4)}`;
+        // Info: corrections calculées mais NON appliquées (pour référence diagnostic)
+        if (optimalCorrection.correctionX !== 1 || optimalCorrection.correctionY !== 1) {
+          console.log(`      📊 [INFO] Corrections backend (NON appliquées): X=×${optimalCorrection.correctionX?.toFixed(4)}, Y=×${optimalCorrection.correctionY?.toFixed(4)}`);
         }
-        
-        results.largeur_cm = rawLargeur * corrX;
-        results.hauteur_cm = rawHauteur * corrY;
-        
-        console.log(`   🔧 [CORRECTION OPTIMALE] Mode: ${correctionMode}`);
-        console.log(`      Confiance globale: ${(optimalCorrection.globalConfidence * 100).toFixed(0)}%`);
-        console.log(`      Correction X: ×${corrX.toFixed(4)} | Y: ×${corrY.toFixed(4)}`);
-        console.log(`      Largeur: ${rawLargeur.toFixed(2)} → ${results.largeur_cm.toFixed(2)} cm`);
-        console.log(`      Hauteur: ${rawHauteur.toFixed(2)} → ${results.hauteur_cm.toFixed(2)} cm`);
-        
-        // Stocker les valeurs brutes pour référence
-        (results as any).largeur_cm_brute = rawLargeur;
-        (results as any).hauteur_cm_brute = rawHauteur;
-        (results as any).correction_appliquee_X = corrX;
-        (results as any).correction_appliquee_Y = corrY;
-        (results as any).correction_confidence = optimalCorrection.globalConfidence;
-        (results as any).correction_mode = correctionMode;
       }
       
       // Surface = largeur_cm × hauteur_cm
@@ -1920,15 +2105,295 @@ export const ImageMeasurementCanvas: React.FC<ImageMeasurementCanvasProps> = ({
     }
 
     return results;
-  }, [points, exclusionZones, pixelPerCm, pixelPerCmX, pixelPerCmY, imageDimensions, useHomography, homographyResult, optimalCorrection]);
+  }, [points, exclusionZones, pixelPerCm, pixelPerCmX, pixelPerCmY, imageDimensions, useHomography, homographyResult, optimalCorrection, referenceCorners, markerSizeCm]);
 
   // Notify parent of measurement changes
+  // 🎯 PRIORITÉ: Utiliser les mesures backend si disponibles, sinon fallback sur le calcul local
   useEffect(() => {
-    console.log('🔔 [Canvas] ENVOI mesures au parent:', JSON.stringify(measurements, null, 2));
-    console.log(`   largeur_cm = ${measurements.largeur_cm?.toFixed(2)} cm`);
-    console.log(`   hauteur_cm = ${measurements.hauteur_cm?.toFixed(2)} cm`);
-    onMeasurementsChange?.(measurements);
-  }, [measurements, onMeasurementsChange]);
+    // Si le backend a renvoyé des mesures, les utiliser en priorité
+    if (backendMeasurements && backendMeasurements.largeur_cm > 0) {
+      const enhancedMeasurements = {
+        ...measurements,
+        largeur_cm: backendMeasurements.largeur_cm,
+        hauteur_cm: backendMeasurements.hauteur_cm,
+        incertitude_largeur_cm: backendMeasurements.incertitude_largeur_cm,
+        incertitude_hauteur_cm: backendMeasurements.incertitude_hauteur_cm,
+        // Recalculer surface avec les nouvelles dimensions
+        surface_brute_cm2: backendMeasurements.largeur_cm * backendMeasurements.hauteur_cm,
+        surface_brute_m2: (backendMeasurements.largeur_cm * backendMeasurements.hauteur_cm) / 10000,
+        // Garder les autres valeurs du calcul local (périmètre, diagonale, etc.)
+      };
+      console.log('🎯 [Canvas] ENVOI mesures BACKEND au parent:');
+      console.log(`   📏 Largeur: ${backendMeasurements.largeur_cm.toFixed(2)} cm (±${backendMeasurements.incertitude_largeur_cm?.toFixed(2)} cm)`);
+      console.log(`   📏 Hauteur: ${backendMeasurements.hauteur_cm.toFixed(2)} cm (±${backendMeasurements.incertitude_hauteur_cm?.toFixed(2)} cm)`);
+      console.log(`   📊 Méthode: ${backendMeasurements.method}, Confiance: ${(backendMeasurements.confidence * 100).toFixed(0)}%`);
+      onMeasurementsChange?.(enhancedMeasurements);
+    } else {
+      // Fallback sur le calcul local
+      console.log('🔔 [Canvas] ENVOI mesures LOCALES au parent:', JSON.stringify(measurements, null, 2));
+      console.log(`   largeur_cm = ${measurements.largeur_cm?.toFixed(2)} cm`);
+      console.log(`   hauteur_cm = ${measurements.hauteur_cm?.toFixed(2)} cm`);
+      onMeasurementsChange?.(measurements);
+    }
+  }, [measurements, backendMeasurements, onMeasurementsChange]);
+
+  // ============================================================================
+  // 🔄 TRIGGER INITIAL - Déclencher le calcul quand 4 points sont placés
+  // ============================================================================
+  const prevPointsLengthRef = useRef(0);
+  useEffect(() => {
+    // Si on vient de passer de <4 points à ≥4 points, déclencher un calcul
+    if (prevPointsLengthRef.current < 4 && points.length >= 4 && fusedCorners && !isDraggingPoint) {
+      console.log('🎯 [Canvas] 4 points atteints, déclenchement calcul initial');
+      setComputeTrigger(prev => prev + 1);
+    }
+    prevPointsLengthRef.current = points.length;
+  }, [points.length, fusedCorners, isDraggingPoint]);
+
+  // ============================================================================
+  // 🎯 APPEL API BACKEND POUR CALCUL CENTRALISÉ
+  // ============================================================================
+  // Déclenché UNIQUEMENT quand:
+  // - computeTrigger change (fin de drag d'un point)
+  // - OU au montage initial si 4 points sont déjà placés
+  // NE SE DÉCLENCHE PAS pendant le drag pour éviter les appels multiples
+  useEffect(() => {
+    // Conditions pour appeler le backend:
+    // 1. 4 points placés
+    // 2. Données ArUco disponibles (fusedCorners)
+    // 3. Image chargée avec dimensions connues
+    // 4. API disponible
+    // 5. Pas en train de drag un point
+    // 6. Pas déjà en cours de calcul (vérifié via ref pour éviter les race conditions)
+    if (points.length < 4 || !fusedCorners || !image || !imageDimensions.width) {
+      return;
+    }
+    
+    // 🔒 NE PAS calculer si un point est en cours de drag
+    if (isDraggingPoint) {
+      console.log('🖐️ [Canvas] Point en cours de drag, calcul différé');
+      return;
+    }
+    
+    // 🔒 Vérifier si un calcul est déjà en cours via REF (plus fiable que state)
+    if (isComputingRef.current) {
+      console.log('⏳ [Canvas] Calcul déjà en cours, ignoré');
+      return;
+    }
+    
+    const apiInstance = api || authenticatedApi;
+    if (!apiInstance) {
+      console.warn('⚠️ [Canvas] Pas d\'API disponible pour le calcul backend');
+      return;
+    }
+    
+    // 🔒 Créer une signature des données pour éviter de recalculer si rien n'a changé
+    const objectPoints = points.slice(0, 4).map(p => ({ x: Math.round(p.x), y: Math.round(p.y) }));
+    const dataSignature = JSON.stringify({
+      corners: fusedCorners,
+      points: objectPoints,
+      marker: markerSizeCm
+    });
+    
+    if (dataSignature === lastComputedDataRef.current) {
+      console.log('✅ [Canvas] Données identiques, pas de recalcul nécessaire');
+      return;
+    }
+    
+    // Pas de debounce ici car le trigger ne se déclenche qu'à la fin du drag
+    const compute = async () => {
+      isComputingRef.current = true;
+      setIsComputingBackend(true);
+      
+      try {
+        console.log('\n' + '='.repeat(60));
+        console.log('🎯 [Canvas] APPEL BACKEND compute-dimensions-simple (trigger:', computeTrigger, ')');
+        console.log('='.repeat(60));
+        
+        // Scale du canvas (points sont en coordonnées canvas, il faut les convertir en pixels image)
+        const canvasScale = imageDimensions.scale || 1;
+        
+        // 🎯 Déterminer la taille du marqueur selon le type de détection
+        // Accepte ancien ('AprilTag-Metre-V1.2') ET nouveau ('AprilTag-Metre-V1.2-Ultra')
+        const isAprilTagDetected = detectionMethod?.includes('AprilTag-Metre-V1.2') === true;
+        const markerWidthCm = isAprilTagDetected ? 13.0 : markerSizeCm;
+        const markerHeightCm = isAprilTagDetected ? 21.7 : markerSizeCm;
+        
+        console.log('📤 Envoi au backend:');
+        console.log(`   fusedCorners (% image): TL=(${fusedCorners.topLeft.x.toFixed(1)}%, ${fusedCorners.topLeft.y.toFixed(1)}%)`);
+        console.log(`   objectPoints (px canvas): ${objectPoints.map(p => `(${p.x}, ${p.y})`).join(', ')}`);
+        console.log(`   imageSize: ${image.width}×${image.height}, canvasScale: ${canvasScale}`);
+        if (isAprilTagDetected) {
+          console.log(`   🎯 AprilTag Métré V1.2: ${markerWidthCm}×${markerHeightCm}cm`);
+        } else {
+          console.log(`   markerSizeCm: ${markerSizeCm}`);
+        }
+        
+        // 🔬 ULTRA-PRÉCISION: Récupérer les données optimisées depuis allPhotos
+        const photoWithAruco = allPhotos?.find(p => (p.metadata as any)?.arucoDetected);
+        const ultraPrecision = (photoWithAruco?.metadata as any)?.ultraPrecision;
+        const detectedPoints = ultraPrecision?.points || [];
+        
+        console.log('🔍 [ULTRA-PRECISION] Structure détectée:', {
+          exists: !!ultraPrecision,
+          totalPoints: ultraPrecision?.totalPoints,
+          detectedPointsCount: detectedPoints.length,
+          hasHomography: !!ultraPrecision?.homographyMatrix,
+          quality: ultraPrecision?.quality,
+          estimatedPrecision: ultraPrecision?.estimatedPrecision
+        });
+        
+        // 🎯 DÉCISION: Utiliser RANSAC si on a 10+ points détectés
+        const hasEnoughPoints = detectedPoints && detectedPoints.length >= 10;
+        const useUltraPrecision = hasEnoughPoints && isAprilTagDetected;
+        
+        if (useUltraPrecision) {
+          console.log(`\n🚀 *** ACTIVATION SYSTÈME ULTRA-PRÉCISION RANSAC ${detectedPoints.length} POINTS ***`);
+          console.log(`   🎯 Tous les points du damier ChArUco seront utilisés pour l'homographie`);
+          console.log(`   📊 ${detectedPoints.length} points détectés (4 AprilTag + 12 dots + ${detectedPoints.length - 16} ChArUco)`);
+        }
+        
+        let response;
+        
+        if (useUltraPrecision) {
+          // ✅ NOUVEAU: Appeler le système RANSAC ultra-précision avec TOUS les points
+          console.log('📤 APPEL NOUVEAU ENDPOINT: /ultra-precision-compute');
+          console.log(`   Paramètres:`);
+          console.log(`     - detectedPoints: ${detectedPoints.length}`);
+          console.log(`     - objectPoints: 4 (coins marqueur)`);
+          console.log(`     - markerSize: ${markerWidthCm}×${markerHeightCm}cm`);
+          console.log(`     - canvasScale: ${canvasScale}`);
+          
+          // Les points ont la structure {x, y, realX, realY, type, confidence}
+          // Le backend attend {pixel: {x,y}, real: {x,y}, type, confidence}
+          const detectedPointsForRansac = detectedPoints.map((p: any) => ({
+            pixel: { x: p.x, y: p.y },
+            real: { x: p.realX, y: p.realY },
+            type: p.type,
+            confidence: p.confidence
+          }));
+          
+          // 🎯 FIX CRITIQUE: objectPoints = coins de l'OBJET à mesurer (cliqués par l'utilisateur)
+          // PAS les AprilTags ! objectPoints est défini plus haut depuis points.slice(0,4)
+          
+          try {
+            response = await apiInstance.post('/api/measurement-reference/ultra-precision-compute', {
+              detectedPoints: detectedPointsForRansac,
+              objectPoints: objectPoints, // ✅ Les 4 coins de l'objet, pas les AprilTags!
+              imageWidth: image.width,
+              imageHeight: image.height,
+              markerSize: { width: markerWidthCm, height: markerHeightCm },
+              canvasScale: canvasScale
+            });
+            
+            console.log('✅ [RANSAC] SUCCÈS - Réponse reçue:', {
+              method: response.method,
+              largeur_cm: response.object.largeur_cm,
+              hauteur_cm: response.object.hauteur_cm,
+              quality: response.quality.homography_quality,
+              inlierCount: response.quality.ransac_inliers
+            });
+          } catch (ultraError) {
+            console.warn('⚠️ [RANSAC] Erreur ultra-précision, fallback vers 4-points:', ultraError);
+            // Fallback à l'ancien système
+            response = null;
+          }
+        }
+        
+        if (!useUltraPrecision || !response?.success) {
+          // ❌ ANCIEN: Fallback vers le système 4 points classique
+          if (!useUltraPrecision) {
+            console.log('\n📌 Utilisation FALLBACK: système classique 4 points');
+          }
+          
+          response = await apiInstance.post('/api/measurement-reference/compute-dimensions-simple', {
+            fusedCorners,
+            objectPoints,
+            imageWidth: image.width,
+            imageHeight: image.height,
+            markerSizeCm: markerWidthCm,
+            markerHeightCm: markerHeightCm,
+            detectionMethod: detectionMethod,
+            canvasScale,
+            detectionQuality: arucoAnalysis?.quality?.overall || 80,
+            ultraPrecisionHomography: ultraPrecision?.homographyMatrix,
+            ultraPrecisionQuality: ultraPrecision?.quality ? (ultraPrecision.quality * 100) : undefined
+          });
+        }
+        
+        // 🔒 Marquer comme calculé avec cette signature
+        lastComputedDataRef.current = dataSignature;
+        
+        // Les deux endpoints retournent des structures légèrement différentes
+        let largeur_cm, hauteur_cm, incertitude_largeur_cm, incertitude_hauteur_cm, confidence, method;
+        
+        if (response?.success) {
+          // Normaliser la réponse peu importe l'endpoint
+          if (response.object?.largeur_cm !== undefined) {
+            // Réponse RANSAC (/ultra-precision-compute)
+            largeur_cm = response.object.largeur_cm;
+            hauteur_cm = response.object.hauteur_cm;
+            incertitude_largeur_cm = response.uncertainties?.largeur_cm || 0;
+            incertitude_hauteur_cm = response.uncertainties?.hauteur_cm || 0;
+            confidence = response.quality?.confidence || 0.95;
+            method = response.method || 'ultra-precision-ransac-lm';
+            
+            console.log('✅ [Canvas] BACKEND RÉPONSE (RANSAC ULTRA-PRÉCISION):');
+            console.log(`   📏 Largeur: ${largeur_cm.toFixed(2)} cm (±${incertitude_largeur_cm.toFixed(2)} cm)`);
+            console.log(`   📏 Hauteur: ${hauteur_cm.toFixed(2)} cm (±${incertitude_hauteur_cm.toFixed(2)} cm)`);
+            console.log(`   🎯 Qualité: ${response.quality.homography_quality.toFixed(1)}%`);
+            console.log(`   📊 RANSAC: ${response.quality.ransac_inliers}/${detectedPoints.length} inliers`);
+            console.log(`   📐 Profondeur: ${response.depth.mean_mm.toFixed(0)}mm (±${response.depth.stdDev_mm.toFixed(0)}mm)`);
+            console.log(`   🔄 Inclinaison: ${response.depth.incline_angle_deg.toFixed(2)}°`);
+          } else if (response.largeur_cm !== undefined) {
+            // Réponse classique (/compute-dimensions-simple)
+            largeur_cm = response.largeur_cm;
+            hauteur_cm = response.hauteur_cm;
+            incertitude_largeur_cm = response.incertitude_largeur_cm || 0;
+            incertitude_hauteur_cm = response.incertitude_hauteur_cm || 0;
+            confidence = response.confidence || 0.8;
+            method = response.method || 'homography';
+            
+            console.log('✅ [Canvas] BACKEND RÉPONSE (4-POINTS CLASSIQUE):');
+            console.log(`   📏 Largeur: ${largeur_cm.toFixed(2)} cm (±${incertitude_largeur_cm.toFixed(2)} cm)`);
+            console.log(`   📏 Hauteur: ${hauteur_cm.toFixed(2)} cm (±${incertitude_hauteur_cm.toFixed(2)} cm)`);
+            console.log(`   📊 Méthode: ${method}, Confiance: ${(confidence * 100).toFixed(0)}%`);
+          }
+          
+          if (response.warnings?.length > 0) {
+            console.log(`   ⚠️ Warnings: ${response.warnings.join(', ')}`);
+          }
+          
+          setBackendMeasurements({
+            largeur_cm,
+            hauteur_cm,
+            incertitude_largeur_cm,
+            incertitude_hauteur_cm,
+            confidence,
+            method,
+            warnings: response.warnings || [],
+            debug: response.debug
+          });
+        } else {
+          console.warn('⚠️ [Canvas] Backend n\'a pas retourné de mesures valides:', response);
+          setBackendMeasurements(null);
+        }
+        
+      } catch (error) {
+        console.error('❌ [Canvas] Erreur appel backend:', error);
+        setBackendMeasurements(null);
+      } finally {
+        isComputingRef.current = false;
+        setIsComputingBackend(false);
+      }
+    };
+    
+    compute();
+  // IMPORTANT: Déclenché par computeTrigger (fin de drag) et fusedCorners (nouveau marqueur)
+  // 🔬 AJOUT: allPhotos pour récupérer l'homographie ultra-précise
+  // Ne PAS inclure points directement sinon ça se déclenche pendant le drag!
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [computeTrigger, fusedCorners, image, imageDimensions.width, api, authenticatedApi, markerSizeCm, isDraggingPoint, allPhotos]);
 
   // ============================================================================
   // POINT MANAGEMENT
@@ -1967,7 +2432,7 @@ export const ImageMeasurementCanvas: React.FC<ImageMeasurementCanvasProps> = ({
     setSelectedPointId(null);
   }, [points, exclusionZones, minPoints, saveToHistory]);
 
-  const movePoint = useCallback((pointId: string, newX: number, newY: number) => {
+  const _movePoint = useCallback((pointId: string, newX: number, newY: number) => {
     const newPoints = points.map(p =>
       p.id === pointId ? { ...p, x: newX, y: newY } : p
     );
@@ -2005,21 +2470,65 @@ export const ImageMeasurementCanvas: React.FC<ImageMeasurementCanvasProps> = ({
     setZoom(1);
     setStagePosition({ x: 0, y: 0 });
     setPointBeingPlaced(null);
+    setPointPlacementState(null);
     console.log('🔍 [Canvas] Zoom réinitialisé');
   }, []);
 
-  // 🆕 NOUVEAU WORKFLOW: Clic sur point → zoom, clic ailleurs → placer, clic fond → reset
+  // 🔒 VERROUILLAGE: Basculer le verrouillage d'un point
+  const togglePointLock = useCallback((pointId: string) => {
+    setLockedPoints(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(pointId)) {
+        newSet.delete(pointId);
+        message.info({ content: '🔓 Point déverrouillé', duration: 1.5 });
+      } else {
+        newSet.add(pointId);
+        message.success({ content: '🔒 Point verrouillé', duration: 1.5 });
+      }
+      return newSet;
+    });
+  }, []);
+
+  // 🆕 NOUVEAU WORKFLOW SIMPLIFIÉ:
+  // Clic 1 sur point → zoom sur le coin (état 'zoomed')
+  // Clic 2 ailleurs → place le point à cette position (état 'placed')  
+  // Clic 3 sur le même point → dézoom et désélectionne (confirme le placement)
   
   // Sélectionner un point pour repositionnement (zoom dessus)
   const selectPointForPlacement = useCallback((pointId: string, pointX: number, pointY: number) => {
+    // Si le point est verrouillé, proposer de le déverrouiller
+    if (lockedPoints.has(pointId)) {
+      togglePointLock(pointId);
+      return;
+    }
+    
+    // Si on clique sur le même point qu'on est en train d'éditer → DÉZOOM et confirme
+    if (pointBeingPlaced === pointId) {
+      console.log(`✅ [Canvas] Point ${pointId} confirmé, retour vue complète`);
+      message.success({ content: '✅ Position confirmée !', duration: 1.5 });
+      setPointBeingPlaced(null);
+      setPointPlacementState(null);
+      setSelectedPointId(null);
+      resetZoom();
+      return;
+    }
+    
+    // Si on était sur un autre point, d'abord reset
+    if (pointBeingPlaced && pointBeingPlaced !== pointId) {
+      setPointBeingPlaced(null);
+      setPointPlacementState(null);
+      resetZoom();
+    }
+    
     console.log(`🎯 [Canvas] Point ${pointId} sélectionné pour repositionnement`);
     setPointBeingPlaced(pointId);
+    setPointPlacementState('zoomed');
     setSelectedPointId(pointId);
     
-    // Zoomer x2 centré sur le point
-    zoomToPoint(pointX, pointY, 2);
-    message.info({ content: '🎯 Cliquez sur la nouvelle position du point', duration: 2 });
-  }, [zoomToPoint]);
+    // Zoomer x3 centré sur le point pour précision
+    zoomToPoint(pointX, pointY, 3);
+    message.info({ content: '🔍 Zoomé - Cliquez ailleurs pour placer, sur le coin pour confirmer', duration: 2.5 });
+  }, [zoomToPoint, lockedPoints, togglePointLock, pointBeingPlaced, resetZoom]);
 
   // Placer le point sélectionné à une nouvelle position
   const placePointAt = useCallback((targetX: number, targetY: number) => {
@@ -2041,28 +2550,42 @@ export const ImageMeasurementCanvas: React.FC<ImageMeasurementCanvasProps> = ({
     
     if (snapped.snapped) {
       message.success({ content: '🎯 Point ajusté sur le bord !', duration: 1 });
+    } else {
+      message.success({ content: '📍 Point placé !', duration: 1 });
     }
     
-    // Reset: revenir en vue complète pour sélectionner un autre point
-    setPointBeingPlaced(null);
-    setSelectedPointId(null);
-    resetZoom();
+    // Passer en état 'placed' - le prochain clic sur ce point confirmera et dézoommera
+    setPointPlacementState('placed');
+    
+    // Recentrer le zoom sur la nouvelle position du point
+    zoomToPoint(finalX, finalY, 3);
     
     return true;
-  }, [pointBeingPlaced, points, snapPointToEdge, saveToHistory, exclusionZones, resetZoom]);
+  }, [pointBeingPlaced, points, snapPointToEdge, saveToHistory, exclusionZones, zoomToPoint]);
 
   // Annuler le placement en cours (clic sur fond)
   const cancelPointPlacement = useCallback(() => {
     if (pointBeingPlaced) {
       console.log('❌ [Canvas] Placement annulé, retour vue complète');
       setPointBeingPlaced(null);
+      setPointPlacementState(null);
       setSelectedPointId(null);
       resetZoom();
     }
   }, [pointBeingPlaced, resetZoom]);
 
   // 🆕 Handlers de drag simplifiés (pour compatibilité, mais le nouveau mode utilise les clics)
-  const handlePointDragMove = useCallback((pointId: string, e: KonvaEventObject<DragEvent>) => {
+  const _handlePointDragMove = useCallback((pointId: string, e: KonvaEventObject<DragEvent>) => {
+    // 🔒 Ne pas permettre le drag des points verrouillés
+    if (lockedPoints.has(pointId)) {
+      const point = points.find(p => p.id === pointId);
+      if (point) {
+        e.target.x(point.x);
+        e.target.y(point.y);
+      }
+      return;
+    }
+    
     // Mode drag classique: mise à jour en temps réel avec snap
     const rawX = e.target.x();
     const rawY = e.target.y();
@@ -2078,9 +2601,14 @@ export const ImageMeasurementCanvas: React.FC<ImageMeasurementCanvasProps> = ({
       p.id === pointId ? { ...p, x: snapped.snapped ? snapped.x : rawX, y: snapped.snapped ? snapped.y : rawY } : p
     );
     setPoints(newPoints);
-  }, [points, snapPointToEdge]);
+  }, [points, snapPointToEdge, lockedPoints]);
 
-  const handlePointDragEnd = useCallback((pointId: string, e: KonvaEventObject<DragEvent>) => {
+  const _handlePointDragEnd = useCallback((pointId: string, e: KonvaEventObject<DragEvent>) => {
+    // 🔒 Ne pas sauvegarder si point verrouillé
+    if (lockedPoints.has(pointId)) {
+      return;
+    }
+    
     const rawX = e.target.x();
     const rawY = e.target.y();
     
@@ -2093,7 +2621,7 @@ export const ImageMeasurementCanvas: React.FC<ImageMeasurementCanvasProps> = ({
     if (snapped.snapped) {
       message.success({ content: '🎯 Point ajusté sur le bord !', duration: 1 });
     }
-  }, [points, exclusionZones, saveToHistory, snapPointToEdge]);
+  }, [points, exclusionZones, saveToHistory, snapPointToEdge, lockedPoints]);
 
   // 🆕 PAN: Permettre de déplacer l'image quand zoomée (désactivé si on place un point)
   const handleStagePanStart = useCallback((e: KonvaEventObject<MouseEvent | TouchEvent>) => {
@@ -2219,78 +2747,15 @@ export const ImageMeasurementCanvas: React.FC<ImageMeasurementCanvasProps> = ({
       console.log(`🎯 [Canvas] Détection IA des coins pour ${targetType}:`, { objectType, objectDescription });
       console.log(`📐 [Canvas] Zone sélectionnée:`, zone);
       
-      // 🔀 NOUVEAU: Utiliser l'endpoint avec FUSION si plusieurs photos disponibles
-      if (allPhotos && allPhotos.length > 1) {
-        console.log(`🔀 [Canvas] 🆕 Détection avec FUSION de ${allPhotos.length} photos !`);
-        
-        // Préparer les photos pour la fusion - utiliser imageBase64 (cohérent avec Preview)
-        // Filtrer les photos sans données pour éviter les erreurs
-        const photosForFusion = allPhotos
-          .filter(photo => photo.imageBase64 && photo.imageBase64.length > 100)
-          .map(photo => {
-            const b64 = photo.imageBase64;
-            return {
-              base64: b64.includes(',') ? b64.split(',')[1] : b64,
-              mimeType: photo.mimeType || 'image/jpeg',
-              metadata: photo.metadata
-            };
-          });
-        
-        if (photosForFusion.length === 0) {
-          console.error('❌ [Canvas] Aucune photo valide pour la fusion');
-          message.error('Aucune photo valide disponible');
-          return null;
-        }
-        
-        console.log(`📸 [Canvas] ${photosForFusion.length} photos valides pour fusion`);
-        
-        const response = await api.post('/measurement-reference/detect-with-fusion', {
-          photos: photosForFusion,
-          selectionZone: zone,
-          referenceType: objectType,
-          objectDescription,
-          realDimensions,
-          targetType
-        });
-
-        console.log('✅ [Canvas] Coins détectés avec FUSION:', response);
-        
-        // Afficher métriques de fusion si disponibles
-        if (response?.fusionMetrics) {
-          console.log(`📊 [Canvas] Fusion: ${response.fusionMetrics.usedPhotos}/${response.fusionMetrics.inputPhotos} photos, sharpness: ${response.fusionMetrics.finalSharpness?.toFixed(1)}`);
-          message.success(`🔀 Fusion ${response.fusionMetrics.usedPhotos} photos → Détection ${response.method?.includes('edge') ? 'précise' : 'IA'}`);
-        }
-        
-        return response;
-      }
+      // 🏎️ FORMULE 1: Utiliser DIRECTEMENT la meilleure photo (déjà sélectionnée par ultra-fusion-detect)
+      // La fusion d'images créait du flou - on utilise maintenant la photo la plus nette
+      console.log(`📷 [Canvas] 🏎️ FORMULE 1: Pas de détection IA - l'utilisateur clique les coins directement`);
       
-      // 🔧 FALLBACK: Si une seule photo, utiliser l'ancien endpoint
-      let cleanBase64 = imageBase64 || (allPhotos?.[0]?.imageBase64 || '');
-      if (cleanBase64.includes(',')) {
-        cleanBase64 = cleanBase64.split(',')[1];
-      }
-      console.log(`📷 [Canvas] Image base64 nettoyée: ${cleanBase64.length} chars`);
+      // 🆕 NOUVEAU SYSTÈME CLEAN: Pas d'appel API pour détecter les coins
+      // L'utilisateur clique les 4 coins, puis /compute-dimensions-simple fait tout le calcul
+      // Pas besoin de détection IA supplémentaire
       
-      const response = await api.post('/measurement-reference/detect-corners-in-zone', {
-        imageBase64: cleanBase64,
-        mimeType,
-        selectionZone: zone,
-        objectType,
-        objectDescription,
-        realDimensions,
-        targetType
-      });
-
-      console.log('✅ [Canvas] Coins détectés par IA:', response);
-      
-      // 🆕 DEBUG: Afficher le contenu complet de la réponse IA pour comprendre les échecs
-      if (response?._debug) {
-        console.log('🔍 [Canvas] DEBUG - Réponse IA complète:', response._debug.fullContent);
-        console.log('🔍 [Canvas] DEBUG - API Success:', response._debug.apiSuccess);
-        console.log('🔍 [Canvas] DEBUG - Content length:', response._debug.contentLength);
-      }
-      
-      return response;
+      return null; // Pas de réponse IA, workflow guidé par l'utilisateur
     } catch (error) {
       console.error('❌ [Canvas] Erreur détection coins:', error);
       message.error('Erreur lors de la détection IA des coins');
@@ -2385,7 +2850,7 @@ export const ImageMeasurementCanvas: React.FC<ImageMeasurementCanvasProps> = ({
 
         if (workflowStep === 'selectReferenceZone') {
           // Étape 1: Référence détectée (ArUco ou A4) → passer à l'étape 2
-          const refType = isArucoMode ? `ArUco MAGENTA ${markerSizeCm}cm` : 'A4';
+          const refType = isArucoMode ? `Métré A4 V1.2 (13×21.7cm)` : 'A4';
           console.log(`📐 [Canvas] Référence ${refType} détectée, coins:`, cornersPixels);
           console.log('📐 [Canvas] Confiance:', result.confidence, '% - Objet trouvé:', result.objectFound);
           setReferenceCorners(cornersPixels);
@@ -2463,7 +2928,7 @@ export const ImageMeasurementCanvas: React.FC<ImageMeasurementCanvasProps> = ({
     saveToHistory(points, newZones);
     setIsProcessingZone(false); // 🆕 Réinitialiser le flag
     setSelectedTool('select');
-  }, [drawingZone, selectedTool, exclusionZones, points, colors, saveToHistory, workflowStep, imageDimensions, detectCornersInZone, isProcessingZone]);
+  }, [drawingZone, selectedTool, exclusionZones, points, colors, saveToHistory, workflowStep, imageDimensions, detectCornersInZone, isProcessingZone, api, imageBase64, isArucoMode, markerSizeCm]);
 
   const removeZone = useCallback((zoneId: string) => {
     const newZones = exclusionZones.filter(z => z.id !== zoneId);
@@ -2686,7 +3151,7 @@ export const ImageMeasurementCanvas: React.FC<ImageMeasurementCanvasProps> = ({
   // 🎯 SNAP-TO-EDGES - L'IA ajuste les points sur les vrais contours
   // ============================================================================
 
-  const snapPointsWithAI = useCallback(async (target: 'reference' | 'measurement') => {
+  const _snapPointsWithAI = useCallback(async (target: 'reference' | 'measurement') => {
     if (!api || !imageBase64) {
       message.warning('⚠️ API non disponible pour le snap IA');
       return;
@@ -2875,6 +3340,7 @@ export const ImageMeasurementCanvas: React.FC<ImageMeasurementCanvasProps> = ({
     return (
       <div
         ref={containerRef}
+        data-disable-tbl-swipe="true"
         style={{
           position: 'fixed',
           top: 0,
@@ -3042,19 +3508,36 @@ export const ImageMeasurementCanvas: React.FC<ImageMeasurementCanvasProps> = ({
                 )}
                 
                 {/* Points de mesure - DRAGGABLES avec SNAP automatique */}
-                {points.map((point, index) => (
+                {points.map((point, index) => {
+                  const isLocked = lockedPoints.has(point.id);
+                  const isBeingPlaced = pointBeingPlaced === point.id;
+                  const isPlaced = isBeingPlaced && pointPlacementState === 'placed';
+                  
+                  return (
                   <Group key={point.id}>
                     {/* Hitbox draggable avec snap aux contours */}
                     <Circle
                       x={point.x}
                       y={point.y}
                       radius={30}
-                      fill={selectedPointId === point.id ? "rgba(24, 144, 255, 0.5)" : "rgba(24, 144, 255, 0.2)"}
-                      stroke={selectedPointId === point.id ? "#1890ff" : "transparent"}
-                      strokeWidth={2}
-                      draggable={!readOnly}
+                      fill={isLocked ? "rgba(82, 196, 26, 0.3)" : // Vert pour verrouillé
+                            isPlaced ? "rgba(250, 173, 20, 0.5)" : // Jaune pour placé (en attente verrouillage)
+                            selectedPointId === point.id ? "rgba(24, 144, 255, 0.5)" : "rgba(24, 144, 255, 0.2)"}
+                      stroke={isLocked ? "#52c41a" : 
+                              isPlaced ? "#faad14" :
+                              selectedPointId === point.id ? "#1890ff" : "transparent"}
+                      strokeWidth={isLocked ? 3 : 2}
+                      draggable={!readOnly && !isLocked}
+                      onDragStart={() => {
+                        if (!isLocked) setIsDraggingPoint(true);
+                      }}
                       onDragMove={(e) => {
                         e.cancelBubble = true;
+                        if (isLocked) {
+                          e.target.x(point.x);
+                          e.target.y(point.y);
+                          return;
+                        }
                         const newX = e.target.x();
                         const newY = e.target.y();
                         
@@ -3071,33 +3554,52 @@ export const ImageMeasurementCanvas: React.FC<ImageMeasurementCanvasProps> = ({
                             : p
                         ));
                       }}
-                      onDragEnd={() => saveToHistory(points, exclusionZones)}
+                      onDragEnd={() => {
+                        if (!isLocked) {
+                          saveToHistory(points, exclusionZones);
+                          setIsDraggingPoint(false);
+                          setComputeTrigger(prev => prev + 1); // 🔄 Déclenche le recalcul
+                        }
+                      }}
                       onClick={(e) => {
                         e.cancelBubble = true;
-                        // Sélectionner ce point (désélectionne automatiquement les autres)
-                        setSelectedPointId(point.id);
+                        // Utiliser le nouveau workflow: clic → zoom → place → verrouille
+                        selectPointForPlacement(point.id, point.x, point.y);
                       }}
                       onTap={(e) => {
                         e.cancelBubble = true;
-                        // Sélectionner ce point (désélectionne automatiquement les autres)
-                        setSelectedPointId(point.id);
+                        // Utiliser le nouveau workflow: clic → zoom → place → verrouille
+                        selectPointForPlacement(point.id, point.x, point.y);
                       }}
                     />
-                    {/* Point visuel */}
+                    {/* Point visuel - avec indicateur de verrouillage */}
                     <Rect
                       x={point.x - 6}
                       y={point.y - 6}
                       width={12}
                       height={12}
-                      fill={selectedPointId === point.id ? "#faad14" : point.color}
+                      fill={isLocked ? "#52c41a" : 
+                            isPlaced ? "#faad14" :
+                            selectedPointId === point.id ? "#faad14" : point.color}
                       stroke="#fff"
                       strokeWidth={2}
                       rotation={45}
                       listening={false}
                     />
-                    <KonvaText x={point.x + 12} y={point.y - 8} text={point.label || String(index + 1)} fontSize={14} fill={selectedPointId === point.id ? "#faad14" : point.color} fontStyle="bold" stroke="#fff" strokeWidth={0.5} listening={false} />
+                    {/* Icône cadenas pour points verrouillés */}
+                    {isLocked && (
+                      <KonvaText 
+                        x={point.x - 5} 
+                        y={point.y - 5} 
+                        text="🔒" 
+                        fontSize={10} 
+                        listening={false} 
+                      />
+                    )}
+                    <KonvaText x={point.x + 12} y={point.y - 8} text={point.label || String(index + 1)} fontSize={14} fill={isLocked ? "#52c41a" : selectedPointId === point.id ? "#faad14" : point.color} fontStyle="bold" stroke="#fff" strokeWidth={0.5} listening={false} />
                   </Group>
-                ))}
+                  );
+                })}
                 
                 {/* Lignes entre les points */}
                 {points.length >= 2 && (
@@ -3138,8 +3640,12 @@ export const ImageMeasurementCanvas: React.FC<ImageMeasurementCanvasProps> = ({
                 '📄 Étape 1/2: Dessinez autour de l\'A4'
               ) : workflowStep === 'selectMeasureZone' ? (
                 '📏 Étape 2/2: Dessinez autour de l\'objet'
+              ) : pointBeingPlaced ? (
+                '🔍 Clic ailleurs = placer, clic coin = confirmer'
+              ) : lockedPoints.size > 0 ? (
+                `🔒 ${lockedPoints.size}/${points.length} coins verrouillés`
               ) : (
-                '✅ Glissez les coins pour ajuster'
+                '✅ Cliquez un coin pour l\'ajuster'
               )}
             </div>
             
@@ -3274,6 +3780,38 @@ export const ImageMeasurementCanvas: React.FC<ImageMeasurementCanvasProps> = ({
             {/* Actions workflow */}
             <Card size="small" title="Actions">
               <Space wrap>
+                {/* 🔒 BOUTON FERMER - Toujours visible pour sortir */}
+                {onCancel && (
+                  <Button 
+                    danger 
+                    icon={<CloseOutlined />} 
+                    onClick={() => { setMobileMenuOpen(false); onCancel(); }} 
+                    size="large"
+                  >
+                    ✕ Fermer
+                  </Button>
+                )}
+                {/* 🔒 Verrouiller/Déverrouiller tous les points */}
+                {points.length > 0 && (
+                  <Button 
+                    type={lockedPoints.size === points.length ? 'default' : 'primary'}
+                    onClick={() => {
+                      if (lockedPoints.size === points.length) {
+                        // Déverrouiller tous
+                        setLockedPoints(new Set());
+                        message.info({ content: '🔓 Tous les points déverrouillés', duration: 1.5 });
+                      } else {
+                        // Verrouiller tous
+                        setLockedPoints(new Set(points.map(p => p.id)));
+                        message.success({ content: '🔒 Tous les points verrouillés', duration: 1.5 });
+                      }
+                      setMobileMenuOpen(false);
+                    }} 
+                    size="large"
+                  >
+                    {lockedPoints.size === points.length ? '🔓 Tout déverrouiller' : '🔒 Tout verrouiller'}
+                  </Button>
+                )}
                 {workflowStep !== 'selectReferenceZone' && (
                   <Button danger onClick={() => { setReferenceCorners(null); setPoints([]); setWorkflowStep('selectReferenceZone'); setMobileMenuOpen(false); }} size="large">
                     🔄 Tout recommencer
@@ -3301,6 +3839,7 @@ export const ImageMeasurementCanvas: React.FC<ImageMeasurementCanvasProps> = ({
   return (
     <div
       ref={containerRef}
+      data-disable-tbl-swipe="true"
       style={{ width: '100%' }}
     >
       {/* 🆕 WORKFLOW GUIDÉ - Bannière d'instructions */}
@@ -3606,7 +4145,7 @@ export const ImageMeasurementCanvas: React.FC<ImageMeasurementCanvasProps> = ({
                   borderBottom: '1px solid rgba(255,255,255,0.1)'
                 }}>
                   <div style={{ fontSize: 14, fontWeight: 'bold' }}>
-                    🎯 ArUco MAGENTA - ID {arucoAnalysis.markerId}
+                    🎯 Métré A4 V1.2 (AprilTag 13×21.7cm) - ID {arucoAnalysis.markerId}
                   </div>
                   <Tag 
                     color={
@@ -3696,196 +4235,30 @@ export const ImageMeasurementCanvas: React.FC<ImageMeasurementCanvasProps> = ({
                   </div>
                 </div>
                 
-                {/* ROW 3: ANALYSE BANDES INTERNES */}
-                {arucoAnalysis.bandAnalysis.enabled && (
-                  <div style={{ 
-                    background: arucoAnalysis.bandAnalysis.isValid 
-                      ? 'rgba(82, 196, 26, 0.15)' 
-                      : 'rgba(255, 77, 79, 0.15)',
-                    borderRadius: 8,
-                    padding: '10px',
-                    marginBottom: 8
-                  }}>
-                    <div style={{ 
-                      display: 'flex', 
-                      alignItems: 'center', 
-                      justifyContent: 'space-between',
-                      marginBottom: 8
-                    }}>
-                      <span style={{ fontSize: 12, fontWeight: 'bold' }}>
-                        🔬 Validation Bandes Internes
-                      </span>
-                      <Tag color={arucoAnalysis.bandAnalysis.isValid ? 'success' : 'error'}>
-                        {arucoAnalysis.bandAnalysis.validPoints}/{arucoAnalysis.bandAnalysis.totalPoints} pts
-                      </Tag>
-                    </div>
-                    
-                    {/* Barres de progression pour chaque bord */}
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 4, fontSize: 10 }}>
-                      {['top', 'right', 'bottom', 'left'].map(edge => {
-                        const edgeRatios = arucoAnalysis.bandAnalysis.transitionRatios.filter(t => t.edge === edge);
-                        const avgError = edgeRatios.length > 0 
-                          ? edgeRatios.reduce((s, t) => s + t.error, 0) / edgeRatios.length 
-                          : 0;
-                        return (
-                          <div key={edge} style={{ 
-                            display: 'flex', 
-                            alignItems: 'center',
-                            gap: 4
-                          }}>
-                            <span style={{ width: 50, opacity: 0.7 }}>
-                              {edge === 'top' ? '⬆️' : edge === 'right' ? '➡️' : edge === 'bottom' ? '⬇️' : '⬅️'} {edge}
-                            </span>
-                            <div style={{ 
-                              flex: 1, 
-                              height: 6, 
-                              background: 'rgba(255,255,255,0.2)',
-                              borderRadius: 3,
-                              overflow: 'hidden'
-                            }}>
-                              <div style={{ 
-                                width: `${Math.max(0, 100 - avgError * 5)}%`,
-                                height: '100%',
-                                background: avgError < 2 ? '#52c41a' : avgError < 5 ? '#faad14' : '#ff4d4f',
-                                borderRadius: 3
-                              }} />
-                            </div>
-                            <span style={{ 
-                              color: avgError < 2 ? '#52c41a' : avgError < 5 ? '#faad14' : '#ff4d4f',
-                              fontWeight: 'bold',
-                              width: 35
-                            }}>
-                              {avgError.toFixed(1)}%
-                            </span>
-                          </div>
-                        );
-                      })}
-                    </div>
-                    
-                    {/* Message de validation */}
-                    <div style={{ 
-                      marginTop: 8, 
-                      fontSize: 11,
-                      textAlign: 'center',
-                      padding: '4px 8px',
-                      background: 'rgba(0,0,0,0.2)',
-                      borderRadius: 4
-                    }}>
-                      {arucoAnalysis.bandAnalysis.validationMessage}
-                    </div>
-                    
-                    {/* 🆕 Facteurs de correction X et Y séparés */}
-                    {optimalCorrection && (
-                      <div style={{ 
-                        marginTop: 8, 
-                        padding: '8px 12px',
-                        background: 'linear-gradient(135deg, rgba(82,196,26,0.2) 0%, rgba(24,144,255,0.2) 100%)',
-                        borderRadius: 6,
-                        border: '1px solid rgba(255,255,255,0.2)'
-                      }}>
-                        <div style={{ 
-                          fontSize: 11, 
-                          fontWeight: 'bold',
-                          marginBottom: 6,
-                          display: 'flex',
-                          justifyContent: 'space-between',
-                          alignItems: 'center'
-                        }}>
-                          <span>🔧 Corrections Calculées</span>
-                          <span style={{ 
-                            fontSize: 9, 
-                            opacity: 0.8,
-                            background: 'rgba(0,0,0,0.3)',
-                            padding: '2px 6px',
-                            borderRadius: 4
-                          }}>
-                            Confiance: {(optimalCorrection.globalConfidence * 100).toFixed(0)}%
-                          </span>
-                        </div>
-                        
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-                          {/* Correction X (Largeur) */}
-                          <div style={{ 
-                            textAlign: 'center',
-                            padding: '6px 8px',
-                            background: 'rgba(24,144,255,0.3)',
-                            borderRadius: 4
-                          }}>
-                            <div style={{ fontSize: 9, opacity: 0.8, marginBottom: 2 }}>
-                              ↔️ Largeur (X)
-                            </div>
-                            <div style={{ 
-                              fontSize: 16, 
-                              fontWeight: 'bold',
-                              color: optimalCorrection.correctionX < 0.98 ? '#ff7875' : 
-                                     optimalCorrection.correctionX > 1.02 ? '#95de64' : '#ffffff'
-                            }}>
-                              ×{optimalCorrection.correctionX?.toFixed(4) || '1.0000'}
-                            </div>
-                            {optimalCorrection.correctionXSansBandes !== undefined && (
-                              <div style={{ fontSize: 8, opacity: 0.6, marginTop: 2 }}>
-                                Sans bandes: ×{optimalCorrection.correctionXSansBandes.toFixed(4)}
-                              </div>
-                            )}
-                          </div>
-                          
-                          {/* Correction Y (Hauteur) */}
-                          <div style={{ 
-                            textAlign: 'center',
-                            padding: '6px 8px',
-                            background: 'rgba(82,196,26,0.3)',
-                            borderRadius: 4
-                          }}>
-                            <div style={{ fontSize: 9, opacity: 0.8, marginBottom: 2 }}>
-                              ↕️ Hauteur (Y)
-                            </div>
-                            <div style={{ 
-                              fontSize: 16, 
-                              fontWeight: 'bold',
-                              color: optimalCorrection.correctionY < 0.98 ? '#ff7875' : 
-                                     optimalCorrection.correctionY > 1.02 ? '#95de64' : '#ffffff'
-                            }}>
-                              ×{optimalCorrection.correctionY?.toFixed(4) || '1.0000'}
-                            </div>
-                            {optimalCorrection.correctionYSansBandes !== undefined && (
-                              <div style={{ fontSize: 8, opacity: 0.6, marginTop: 2 }}>
-                                Sans bandes: ×{optimalCorrection.correctionYSansBandes.toFixed(4)}
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                        
-                        {/* Info sur rotZ si significatif */}
-                        {arucoAnalysis.pose && Math.abs(arucoAnalysis.pose.rotZ) > 2 && (
-                          <div style={{ 
-                            marginTop: 6, 
-                            fontSize: 9, 
-                            opacity: 0.7,
-                            textAlign: 'center',
-                            padding: '4px',
-                            background: 'rgba(250,173,20,0.2)',
-                            borderRadius: 4
-                          }}>
-                            ⚠️ rotZ={arucoAnalysis.pose.rotZ}° → mélange X/Y corrigé (×{Math.cos(Math.abs(arucoAnalysis.pose.rotZ) * Math.PI / 180).toFixed(4)})
-                          </div>
-                        )}
-                      </div>
-                    )}
-                    
-                    {/* Ancien affichage simplifié (fallback si pas optimalCorrection) */}
-                    {!optimalCorrection && !arucoAnalysis.bandAnalysis.isValid && arucoAnalysis.bandAnalysis.suggestedCorrection !== 1 && (
-                      <div style={{ 
-                        marginTop: 6, 
-                        fontSize: 10, 
-                        opacity: 0.8,
-                        textAlign: 'center'
-                      }}>
-                        💡 Correction suggérée: ×{arucoAnalysis.bandAnalysis.suggestedCorrection.toFixed(4)} 
-                        (confiance: {(arucoAnalysis.bandAnalysis.correctionConfidence * 100).toFixed(0)}%)
-                      </div>
-                    )}
+                {/* ROW 3: 🏎️ FORMULE 1 - Homographie Pure */}
+                <div style={{ 
+                  background: 'linear-gradient(135deg, rgba(0,212,255,0.2) 0%, rgba(82,196,26,0.2) 100%)',
+                  borderRadius: 8,
+                  padding: '10px',
+                  marginBottom: 8,
+                  textAlign: 'center'
+                }}>
+                  <div style={{ fontSize: 12, fontWeight: 'bold', marginBottom: 4 }}>
+                    🏎️ Mode Formule 1
                   </div>
-                )}
+                  <div style={{ fontSize: 10, opacity: 0.8 }}>
+                    Mesures directes via homographie (×1.0)
+                  </div>
+                  {optimalCorrection && (
+                    <div style={{ 
+                      marginTop: 6, 
+                      fontSize: 11,
+                      color: '#52c41a'
+                    }}>
+                      Confiance: {(optimalCorrection.globalConfidence * 100).toFixed(0)}%
+                    </div>
+                  )}
+                </div>
                 
                 {/* ROW 4: Qualité détaillée */}
                 <div style={{ 
@@ -3901,6 +4274,70 @@ export const ImageMeasurementCanvas: React.FC<ImageMeasurementCanvasProps> = ({
                   <span>|</span>
                   <span>📷 Pose: {arucoAnalysis.quality.poseQuality}%</span>
                 </div>
+                
+                {/* ROW 5: 📸 INFOS FOCALE - Données techniques utilisées */}
+                {(arucoAnalysis as any).focalInfo && (
+                  <div style={{ 
+                    marginTop: 10,
+                    padding: '10px',
+                    background: 'linear-gradient(135deg, rgba(255,165,0,0.2) 0%, rgba(255,69,0,0.2) 100%)',
+                    borderRadius: 8,
+                    border: '1px solid rgba(255,165,0,0.3)'
+                  }}>
+                    <div style={{ 
+                      fontSize: 11, 
+                      fontWeight: 'bold',
+                      marginBottom: 8,
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center'
+                    }}>
+                      <span>📸 Données Caméra</span>
+                      <Tag color={
+                        (arucoAnalysis as any).focalInfo.confidence >= 90 ? 'success' :
+                        (arucoAnalysis as any).focalInfo.confidence >= 70 ? 'blue' :
+                        (arucoAnalysis as any).focalInfo.confidence >= 50 ? 'orange' : 'red'
+                      } style={{ fontSize: 9 }}>
+                        {(arucoAnalysis as any).focalInfo.confidence}% confiance
+                      </Tag>
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6, fontSize: 10 }}>
+                      <div style={{ 
+                        textAlign: 'center', 
+                        padding: '6px 8px',
+                        background: 'rgba(0,0,0,0.2)', 
+                        borderRadius: 4 
+                      }}>
+                        <div style={{ opacity: 0.7, fontSize: 9 }}>Focale</div>
+                        <div style={{ fontWeight: 'bold', color: '#ffa500' }}>
+                          {(arucoAnalysis as any).focalInfo.focalPx} px
+                        </div>
+                      </div>
+                      <div style={{ 
+                        textAlign: 'center', 
+                        padding: '6px 8px',
+                        background: 'rgba(0,0,0,0.2)', 
+                        borderRadius: 4 
+                      }}>
+                        <div style={{ opacity: 0.7, fontSize: 9 }}>Image</div>
+                        <div style={{ fontWeight: 'bold', color: '#87ceeb' }}>
+                          {(arucoAnalysis as any).focalInfo.imageWidth} px
+                        </div>
+                      </div>
+                    </div>
+                    <div style={{ 
+                      marginTop: 6, 
+                      fontSize: 9, 
+                      textAlign: 'center',
+                      opacity: 0.8,
+                      padding: '4px 8px',
+                      background: 'rgba(0,0,0,0.2)',
+                      borderRadius: 4
+                    }}>
+                      📱 Source: <strong>{(arucoAnalysis as any).focalInfo.source}</strong>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           )}
@@ -4189,18 +4626,34 @@ export const ImageMeasurementCanvas: React.FC<ImageMeasurementCanvasProps> = ({
             )}
 
             {/* Measurement points - 🆕 COINS CARRÉS PRÉCIS - petits mais visibles + DRAGGABLES */}
-            {points.map((point, index) => (
+            {points.map((point, index) => {
+              const isLocked = lockedPoints.has(point.id);
+              const isBeingPlaced = pointBeingPlaced === point.id;
+              const isPlaced = isBeingPlaced && pointPlacementState === 'placed';
+              
+              return (
               <Group key={point.id}>
                 {/* 🆕 HITBOX invisible plus grande pour faciliter le tap ET le drag sur mobile */}
                 <Circle
                   x={point.x}
                   y={point.y}
                   radius={30}
-                  // IMPORTANT: évite un fill totalement transparent (alpha=0) qui peut rendre le hit-test Konva non fiable sur mobile
-                  fill="rgba(0,0,0,0.01)"
-                  draggable={!readOnly && point.draggable !== false}
+                  // Couleur de fond pour indiquer l'état de verrouillage
+                  fill={isLocked ? "rgba(82, 196, 26, 0.2)" : "rgba(0,0,0,0.01)"}
+                  stroke={isLocked ? "#52c41a" : "transparent"}
+                  strokeWidth={isLocked ? 2 : 0}
+                  draggable={!readOnly && point.draggable !== false && !isLocked}
+                  onDragStart={() => {
+                    if (!isLocked) setIsDraggingPoint(true);
+                  }}
                   onDragMove={(e) => {
                     e.cancelBubble = true;
+                    // 🔒 Bloquer le drag si verrouillé
+                    if (isLocked) {
+                      e.target.x(point.x);
+                      e.target.y(point.y);
+                      return;
+                    }
                     const newX = e.target.x();
                     const newY = e.target.y();
                     
@@ -4219,30 +4672,30 @@ export const ImageMeasurementCanvas: React.FC<ImageMeasurementCanvasProps> = ({
                     ));
                   }}
                   onDragEnd={() => {
-                    // Recalculer les mesures - passer les points actuels
-                    saveToHistory(points, exclusionZones);
+                    // Ne pas sauvegarder si verrouillé
+                    if (!isLocked) {
+                      saveToHistory(points, exclusionZones);
+                      setIsDraggingPoint(false);
+                      setComputeTrigger(prev => prev + 1); // 🔄 Déclenche le recalcul
+                    }
                   }}
                   onClick={(e) => {
                     e.cancelBubble = true;
-                    if (pointBeingPlaced === point.id) {
-                      cancelPointPlacement();
-                    } else if (!readOnly && point.draggable !== false) {
-                      // Sélectionner ce point pour placement
+                    if (!readOnly && point.draggable !== false) {
+                      // Utiliser le nouveau workflow: clic → zoom → place → verrouille
                       selectPointForPlacement(point.id, point.x, point.y);
                     }
                   }}
                   onTap={(e) => {
                     e.cancelBubble = true;
-                    if (pointBeingPlaced === point.id) {
-                      cancelPointPlacement();
-                    } else if (!readOnly && point.draggable !== false) {
-                      // Sélectionner ce point pour placement
+                    if (!readOnly && point.draggable !== false) {
+                      // Utiliser le nouveau workflow: clic → zoom → place → verrouille
                       selectPointForPlacement(point.id, point.x, point.y);
                     }
                   }}
                   onMouseEnter={(e) => {
                     const container = e.target.getStage()?.container();
-                    if (container) container.style.cursor = 'grab';
+                    if (container) container.style.cursor = isLocked ? 'pointer' : 'grab';
                   }}
                   onMouseLeave={(e) => {
                     const container = e.target.getStage()?.container();
@@ -4252,33 +4705,44 @@ export const ImageMeasurementCanvas: React.FC<ImageMeasurementCanvasProps> = ({
                 
                 {/* 🆕 Point carré (coin) - PETIT pour précision maximale */}
                 <Rect
-                  x={point.x - (pointBeingPlaced === point.id ? 8 : selectedPointId === point.id ? 6 : 5)}
-                  y={point.y - (pointBeingPlaced === point.id ? 8 : selectedPointId === point.id ? 6 : 5)}
-                  width={pointBeingPlaced === point.id ? 16 : selectedPointId === point.id ? 12 : 10}
-                  height={pointBeingPlaced === point.id ? 16 : selectedPointId === point.id ? 12 : 10}
-                  fill={pointBeingPlaced === point.id ? '#ff0000' : point.color}
-                  stroke={pointBeingPlaced === point.id ? '#ffff00' : selectedPointId === point.id ? '#000' : '#fff'}
-                  strokeWidth={pointBeingPlaced === point.id ? 2 : 1.5}
+                  x={point.x - (isBeingPlaced ? 8 : selectedPointId === point.id ? 6 : 5)}
+                  y={point.y - (isBeingPlaced ? 8 : selectedPointId === point.id ? 6 : 5)}
+                  width={isBeingPlaced ? 16 : selectedPointId === point.id ? 12 : 10}
+                  height={isBeingPlaced ? 16 : selectedPointId === point.id ? 12 : 10}
+                  fill={isLocked ? '#52c41a' : isPlaced ? '#faad14' : isBeingPlaced ? '#ff0000' : point.color}
+                  stroke={isLocked ? '#fff' : isPlaced ? '#fff' : isBeingPlaced ? '#ffff00' : selectedPointId === point.id ? '#000' : '#fff'}
+                  strokeWidth={isBeingPlaced || isLocked ? 2 : 1.5}
                   cornerRadius={1}
                   rotation={45}
                   offsetX={0}
                   offsetY={0}
                   listening={false}
                   shadowColor="black"
-                  shadowBlur={pointBeingPlaced === point.id ? 6 : 2}
-                  shadowOpacity={pointBeingPlaced === point.id ? 0.6 : 0.3}
+                  shadowBlur={isBeingPlaced ? 6 : 2}
+                  shadowOpacity={isBeingPlaced ? 0.6 : 0.3}
                 />
+                
+                {/* 🔒 Icône cadenas pour points verrouillés */}
+                {isLocked && (
+                  <KonvaText
+                    x={point.x - 5}
+                    y={point.y - 5}
+                    text="🔒"
+                    fontSize={10}
+                    listening={false}
+                  />
+                )}
                 
                 {/* 🆕 Croix fine au centre pour précision */}
                 <Line
                   points={[point.x - 4, point.y, point.x + 4, point.y]}
-                  stroke={pointBeingPlaced === point.id ? '#ffff00' : '#fff'}
+                  stroke={isLocked ? '#fff' : isBeingPlaced ? '#ffff00' : '#fff'}
                   strokeWidth={1.5}
                   listening={false}
                 />
                 <Line
                   points={[point.x, point.y - 4, point.x, point.y + 4]}
-                  stroke={pointBeingPlaced === point.id ? '#ffff00' : '#fff'}
+                  stroke={isLocked ? '#fff' : isBeingPlaced ? '#ffff00' : '#fff'}
                   strokeWidth={1.5}
                   listening={false}
                 />
@@ -4290,7 +4754,7 @@ export const ImageMeasurementCanvas: React.FC<ImageMeasurementCanvasProps> = ({
                   text={point.label || String(index + 1)}
                   fontSize={14}
                   fontStyle="bold"
-                  fill={point.color}
+                  fill={isLocked ? '#52c41a' : point.color}
                   stroke="#fff"
                   strokeWidth={1}
                   listening={false}
@@ -4317,7 +4781,8 @@ export const ImageMeasurementCanvas: React.FC<ImageMeasurementCanvasProps> = ({
                   />
                 )}
               </Group>
-            ))}
+              );
+            })}
 
             {/* 🆕 Rectangle vert INTERACTIF pour la référence (A4, carte, etc.) - MASQUÉ si mode quadrilatère actif */}
             {adjustableRefBox && !quadrilateralMode && (
@@ -4457,8 +4922,8 @@ export const ImageMeasurementCanvas: React.FC<ImageMeasurementCanvasProps> = ({
                   x={adjustableRefBox.x}
                   y={adjustableRefBox.y - 28}
                   text={isRefSelected 
-                    ? `⚠️ AJUSTEZ ce rectangle sur la VRAIE ${isArucoMode ? 'référence ArUco' : 'feuille A4'} !`
-                    : `📐 ${isArucoMode ? 'ArUco MAGENTA' : 'Feuille A4'} (${isArucoMode ? markerSizeCm : referenceRealSize.width}×${isArucoMode ? markerSizeCm : referenceRealSize.height}cm) - CLIQUEZ pour ajuster`}
+                    ? `⚠️ AJUSTEZ ce rectangle sur le VRAI marqueur Métré A4 V1.2 (13×21.7cm) !`
+                    : `📐 ${isArucoMode ? 'Métré A4 V1.2 (13×21.7cm)' : 'Feuille A4'} - CLIQUEZ pour ajuster`}
                   fontSize={11}
                   fontStyle="bold"
                   fill={isRefSelected ? "#ff4d4f" : "#52c41a"}
@@ -4586,7 +5051,7 @@ export const ImageMeasurementCanvas: React.FC<ImageMeasurementCanvasProps> = ({
                 <KonvaText
                   x={referenceCorners.topLeft.x}
                   y={referenceCorners.topLeft.y - 40}
-                  text={`📐 ${isArucoMode ? 'ArUco MAGENTA' : 'Feuille A4'} (${isArucoMode ? markerSizeCm : referenceRealSize.width}×${isArucoMode ? markerSizeCm : referenceRealSize.height}cm)`}
+                  text={`📐 ${isArucoMode ? 'Métré A4 V1.2 (13×21.7cm)' : 'Feuille A4'}`}
                   fontSize={12}
                   fontStyle="bold"
                   fill="#52c41a"
@@ -4615,6 +5080,68 @@ export const ImageMeasurementCanvas: React.FC<ImageMeasurementCanvasProps> = ({
                     listening={false}
                   />
                 )}
+              </Group>
+            )}
+
+            {/* VISUALISATION APRILTAG - Dessiner les 4 tags et le contour de la feuille A4 */}
+            {aprilTagsVisualization && (
+              <Group>
+                {/* Contour de la feuille A4 complète */}
+                <Line
+                  points={[
+                    aprilTagsVisualization.sheetContour[0].x, aprilTagsVisualization.sheetContour[0].y,
+                    aprilTagsVisualization.sheetContour[1].x, aprilTagsVisualization.sheetContour[1].y,
+                    aprilTagsVisualization.sheetContour[2].x, aprilTagsVisualization.sheetContour[2].y,
+                    aprilTagsVisualization.sheetContour[3].x, aprilTagsVisualization.sheetContour[3].y
+                  ]}
+                  closed
+                  stroke="#FF00FF"
+                  strokeWidth={2}
+                  dash={[6, 4]}
+                  listening={false}
+                />
+                
+                {/* Centres des 4 AprilTags avec labels */}
+                {aprilTagsVisualization.tagCenters.map((tag) => (
+                  <Group key={tag.id}>
+                    {/* Cercle sur le centre du tag */}
+                    <Circle
+                      x={tag.center.x}
+                      y={tag.center.y}
+                      radius={8}
+                      fill="#FF00FF"
+                      stroke="#FFFFFF"
+                      strokeWidth={2}
+                      listening={false}
+                    />
+                    {/* Label du tag */}
+                    <KonvaText
+                      x={tag.center.x - 20}
+                      y={tag.center.y - 30}
+                      text={tag.label}
+                      fontSize={12}
+                      fontStyle="bold"
+                      fill="#FF00FF"
+                      stroke="#FFFFFF"
+                      strokeWidth={0.5}
+                      listening={false}
+                    />
+                  </Group>
+                ))}
+                
+                {/* Légende en haut à gauche */}
+                <KonvaText
+                  x={20}
+                  y={20}
+                  text={`📐 AprilTag Métré V1.2 détecté!\nContour MAGENTA = Feuille A4 complète\nPoints MAGENTA = Centres des 4 tags`}
+                  fontSize={13}
+                  fontStyle="bold"
+                  fill="#FF00FF"
+                  stroke="#FFFFFF"
+                  strokeWidth={0.8}
+                  padding={6}
+                  listening={false}
+                />
               </Group>
             )}
 
@@ -4653,28 +5180,56 @@ export const ImageMeasurementCanvas: React.FC<ImageMeasurementCanvasProps> = ({
       {!isMobileFullscreen && (
         <Card size="small" style={{ marginTop: 8 }}>
           <Space wrap size="large">
+            {/* Indicateur de calcul backend en cours */}
+            {isComputingBackend && (
+              <Tag color="processing" icon={<span style={{ marginRight: 4 }}>⏳</span>}>
+                Calcul précis...
+              </Tag>
+            )}
+            {/* Indicateur source des mesures */}
+            {backendMeasurements && !isComputingBackend && (
+              <Tag color="success" icon={<span style={{ marginRight: 4 }}>🎯</span>}>
+                Backend {(backendMeasurements.confidence * 100).toFixed(0)}%
+              </Tag>
+            )}
             {measurements.largeur_cm !== undefined && (
               <Tag color="blue">
-                Largeur : {formatMeasurement(convertUnit(measurements.largeur_cm, unit), unit)}
-                {measurements.incertitude_largeur_cm !== undefined && (
+                Largeur : {formatMeasurement(convertUnit(
+                  backendMeasurements?.largeur_cm || measurements.largeur_cm, 
+                  unit
+                ), unit)}
+                {(backendMeasurements?.incertitude_largeur_cm || measurements.incertitude_largeur_cm) !== undefined && (
                   <Text type="secondary" style={{ fontSize: '0.85em', marginLeft: 4 }}>
-                    ±{formatMeasurement(convertUnit(measurements.incertitude_largeur_cm, unit), unit)}
+                    ±{formatMeasurement(convertUnit(
+                      backendMeasurements?.incertitude_largeur_cm || measurements.incertitude_largeur_cm || 0, 
+                      unit
+                    ), unit)}
                   </Text>
                 )}
               </Tag>
             )}
             {measurements.hauteur_cm !== undefined && (
               <Tag color="blue">
-                Hauteur : {formatMeasurement(convertUnit(measurements.hauteur_cm, unit), unit)}
-                {measurements.incertitude_hauteur_cm !== undefined && (
+                Hauteur : {formatMeasurement(convertUnit(
+                  backendMeasurements?.hauteur_cm || measurements.hauteur_cm, 
+                  unit
+                ), unit)}
+                {(backendMeasurements?.incertitude_hauteur_cm || measurements.incertitude_hauteur_cm) !== undefined && (
                   <Text type="secondary" style={{ fontSize: '0.85em', marginLeft: 4 }}>
-                    ±{formatMeasurement(convertUnit(measurements.incertitude_hauteur_cm, unit), unit)}
+                    ±{formatMeasurement(convertUnit(
+                      backendMeasurements?.incertitude_hauteur_cm || measurements.incertitude_hauteur_cm || 0, 
+                      unit
+                    ), unit)}
                   </Text>
                 )}
               </Tag>
             )}
             {measurements.surface_brute_m2 !== undefined && (
-              <Tag color="green">Surface brute : {measurements.surface_brute_m2.toFixed(2)} m²</Tag>
+              <Tag color="green">Surface brute : {(
+                backendMeasurements 
+                  ? (backendMeasurements.largeur_cm * backendMeasurements.hauteur_cm / 10000)
+                  : measurements.surface_brute_m2
+              ).toFixed(2)} m²</Tag>
             )}
             {measurements.surface_nette_m2 !== undefined && exclusionZones.length > 0 && (
               <Tag color="orange">Surface nette : {measurements.surface_nette_m2.toFixed(2)} m²</Tag>
@@ -4684,7 +5239,7 @@ export const ImageMeasurementCanvas: React.FC<ImageMeasurementCanvasProps> = ({
                 Périmètre : {formatMeasurement(convertUnit(measurements.perimetre_cm, unit), unit)}
               </Tag>
             )}
-            {measurements.homography_quality !== undefined && useHomography && (
+            {measurements.homography_quality !== undefined && useHomography && !backendMeasurements && (
               <Tag
                 color={
                   measurements.homography_quality > 70

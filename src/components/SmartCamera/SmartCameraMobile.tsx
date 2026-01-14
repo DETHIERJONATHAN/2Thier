@@ -46,6 +46,17 @@ export interface CapturedPhoto {
     camera: { facingMode: 'environment'; zoom: number };
     lighting: { brightness: number; contrast: number; uniformity: number };
     quality: { sharpness: number; blur: number; overallScore: number };
+    // 📸 NOUVEAU: Capacités de la caméra pour calcul de focale précis
+    cameraCapabilities?: {
+      width?: number;           // Résolution réelle
+      height?: number;
+      focalLength?: number;     // Focale en mm (si disponible)
+      focalLengthRange?: { min: number; max: number };  // Range de focale
+      zoom?: number;            // Niveau de zoom actuel
+      zoomRange?: { min: number; max: number };
+      deviceId?: string;        // ID unique de la caméra
+      label?: string;           // Nom de la caméra (ex: "Back Camera")
+    };
   };
 }
 
@@ -140,6 +151,8 @@ const SmartCameraMobile: React.FC<SmartCameraMobileProps> = ({
   const [cameraActive, setCameraActive] = useState(false);
   const [cameraStream, setCameraStream] = useState<MediaStream | null>(null);
   const [cameraError, setCameraError] = useState<string | null>(null);
+  // 📸 NOUVEAU: Capacités de la caméra extraites automatiquement
+  const [cameraCapabilities, setCameraCapabilities] = useState<CapturedPhoto['metadata']['cameraCapabilities']>(undefined);
 
   // 📹 Démarrer la caméra in-browser
   const startCamera = useCallback(async () => {
@@ -152,14 +165,66 @@ const SmartCameraMobile: React.FC<SmartCameraMobileProps> = ({
       setCameraError(null);
       console.log('📹 [SmartCamera] Démarrage caméra in-browser...');
       
+      // 📱 IMPORTANT: Sur mobile portrait, demander la PLUS HAUTE résolution possible
+      // Le navigateur adaptera automatiquement selon l'orientation
       const stream = await navigator.mediaDevices.getUserMedia({
         video: {
-          facingMode: 'environment', // Caméra arrière
-          width: { ideal: 1920 },
-          height: { ideal: 1080 }
+          facingMode: { exact: 'environment' }, // Forcer caméra arrière
+          width: { ideal: 4032, min: 1920 },    // 📸 Haute résolution!
+          height: { ideal: 3024, min: 1080 },   // 📸 4K si possible
+          frameRate: { ideal: 30 },
+          // Activer l'autofocus continu si supporté
+          advanced: [{
+            focusMode: 'continuous'
+          }] as any
         },
         audio: false
       });
+      
+      // Log des capacités réelles obtenues
+      const videoTrack = stream.getVideoTracks()[0];
+      const settings = videoTrack.getSettings();
+      console.log('📹 [SmartCamera] Résolution obtenue:', settings.width, 'x', settings.height);
+      
+      // 📸 NOUVEAU: Extraire TOUTES les capacités de la caméra pour calcul de focale
+      try {
+        const caps: CapturedPhoto['metadata']['cameraCapabilities'] = {
+          width: settings.width,
+          height: settings.height,
+          zoom: settings.zoom,
+          deviceId: settings.deviceId,
+          label: videoTrack.label // Ex: "Back Camera" ou "Rear Triple Camera"
+        };
+        
+        // getCapabilities() contient les ranges (focal, zoom) - pas supporté partout
+        if ('getCapabilities' in videoTrack) {
+          const fullCaps = (videoTrack as any).getCapabilities();
+          console.log('📸 [SmartCamera] Capacités caméra complètes:', fullCaps);
+          
+          // Extraire focale si disponible (Android Chrome principalement)
+          if (fullCaps.focusDistance) {
+            // focusDistance en dioptries, conversion approximative vers focal mm
+            // Note: ce n'est pas la focale exacte mais un proxy
+            console.log('📸 [SmartCamera] Focus distance range:', fullCaps.focusDistance);
+          }
+          
+          // Zoom range
+          if (fullCaps.zoom) {
+            caps.zoomRange = { min: fullCaps.zoom.min, max: fullCaps.zoom.max };
+            console.log('📸 [SmartCamera] Zoom range:', caps.zoomRange);
+          }
+          
+          // Résolution max
+          if (fullCaps.width && fullCaps.height) {
+            console.log(`📸 [SmartCamera] Résolution max: ${fullCaps.width.max}x${fullCaps.height.max}`);
+          }
+        }
+        
+        setCameraCapabilities(caps);
+        console.log('📸 [SmartCamera] Capacités stockées:', caps);
+      } catch (capErr) {
+        console.warn('📸 [SmartCamera] Impossible d\'extraire les capacités:', capErr);
+      }
       
       setCameraStream(stream);
       setCameraActive(true);
@@ -168,6 +233,26 @@ const SmartCameraMobile: React.FC<SmartCameraMobileProps> = ({
       console.log('📹 [SmartCamera] Caméra démarrée avec succès');
     } catch (err: any) {
       console.error('📹 [SmartCamera] Erreur caméra:', err);
+      
+      // 🔄 Fallback si exact: 'environment' échoue (certains navigateurs)
+      try {
+        console.log('📹 [SmartCamera] Tentative fallback sans exact...');
+        const fallbackStream = await navigator.mediaDevices.getUserMedia({
+          video: {
+            facingMode: 'environment',
+            width: { ideal: 1920 },
+            height: { ideal: 1080 }
+          },
+          audio: false
+        });
+        setCameraStream(fallbackStream);
+        setCameraActive(true);
+        console.log('📹 [SmartCamera] Fallback réussi');
+        return;
+      } catch (fallbackErr) {
+        console.error('📹 [SmartCamera] Fallback échoué aussi:', fallbackErr);
+      }
+      
       setCameraError(err.message || 'Impossible d\'accéder à la caméra');
       // Fallback vers l'input file natif si getUserMedia échoue
       message.warning('Caméra in-browser non disponible, utilisation de la méthode native');
@@ -197,57 +282,190 @@ const SmartCameraMobile: React.FC<SmartCameraMobileProps> = ({
     console.log('📹 [SmartCamera] Caméra arrêtée');
   }, [cameraStream]);
   
-  // 📸 Capturer une photo depuis le stream vidéo
-  const captureFromStream = useCallback(() => {
+  // 📸 État pour le compte à rebours et la capture
+  const [isCapturing, setIsCapturing] = useState(false);
+  const [countdown, setCountdown] = useState<number | null>(null);
+  const [focusStatus, setFocusStatus] = useState<'waiting' | 'focusing' | 'ready'>('waiting');
+  
+  // 📸 Calculer la netteté d'une frame vidéo (Laplacian variance)
+  // ⚠️ IMPORTANT: Utilise un canvas temporaire pour ne PAS modifier le canvas principal!
+  const calculateSharpness = useCallback((video: HTMLVideoElement, _canvas: HTMLCanvasElement): number => {
+    // Créer un canvas TEMPORAIRE pour l'analyse (ne pas modifier le canvas principal!)
+    const tempCanvas = document.createElement('canvas');
+    const ctx = tempCanvas.getContext('2d', { willReadFrequently: true });
+    if (!ctx) return 0;
+    
+    // Utiliser une zone centrale pour l'analyse (plus rapide)
+    const sampleSize = 200;
+    const sx = Math.max(0, (video.videoWidth - sampleSize) / 2);
+    const sy = Math.max(0, (video.videoHeight - sampleSize) / 2);
+    
+    tempCanvas.width = sampleSize;
+    tempCanvas.height = sampleSize;
+    ctx.drawImage(video, sx, sy, sampleSize, sampleSize, 0, 0, sampleSize, sampleSize);
+    
+    const imageData = ctx.getImageData(0, 0, sampleSize, sampleSize);
+    const data = imageData.data;
+    
+    // Convertir en niveaux de gris et calculer le Laplacien
+    let laplacianSum = 0;
+    let count = 0;
+    
+    for (let y = 1; y < sampleSize - 1; y++) {
+      for (let x = 1; x < sampleSize - 1; x++) {
+        const i = (y * sampleSize + x) * 4;
+        const gray = data[i] * 0.299 + data[i + 1] * 0.587 + data[i + 2] * 0.114;
+        
+        // Laplacien simplifié: différence avec les voisins
+        const top = ((y - 1) * sampleSize + x) * 4;
+        const bottom = ((y + 1) * sampleSize + x) * 4;
+        const left = (y * sampleSize + (x - 1)) * 4;
+        const right = (y * sampleSize + (x + 1)) * 4;
+        
+        const grayTop = data[top] * 0.299 + data[top + 1] * 0.587 + data[top + 2] * 0.114;
+        const grayBottom = data[bottom] * 0.299 + data[bottom + 1] * 0.587 + data[bottom + 2] * 0.114;
+        const grayLeft = data[left] * 0.299 + data[left + 1] * 0.587 + data[left + 2] * 0.114;
+        const grayRight = data[right] * 0.299 + data[right + 1] * 0.587 + data[right + 2] * 0.114;
+        
+        const laplacian = Math.abs(4 * gray - grayTop - grayBottom - grayLeft - grayRight);
+        laplacianSum += laplacian;
+        count++;
+      }
+    }
+    
+    return count > 0 ? laplacianSum / count : 0;
+  }, []);
+  
+  // 📸 Capturer une photo depuis le stream vidéo avec HAUTE QUALITÉ
+  const captureFromStream = useCallback(async () => {
     if (!videoRef.current || !canvasRef.current) {
       message.error('Caméra non prête');
       return;
     }
     
-    const video = videoRef.current;
-    const canvas = canvasRef.current;
+    // 🔒 Éviter double capture
+    if (isCapturing) return;
+    setIsCapturing(true);
+    setFocusStatus('focusing');
     
-    // Définir la taille du canvas = taille de la vidéo
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
-    
-    // Dessiner la frame actuelle
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-    
-    ctx.drawImage(video, 0, 0);
-    
-    // Convertir en base64
-    const base64 = canvas.toDataURL('image/jpeg', 0.9);
-    
-    // 📱 Capturer l'orientation actuelle du téléphone (gyroscope)
-    const currentOrientation = {
-      alpha: orientation.alpha,
-      beta: orientation.beta,
-      gamma: orientation.gamma,
-      quality: analyze().quality
-    };
-    
-    // Créer la photo
-    const newPhoto: CapturedPhoto = {
-      imageBase64: base64,
-      metadata: {
-        timestamp: Date.now(),
-        photoIndex: photos.length,
-        totalPhotosNeeded: minPhotos,
-        gyroscope: currentOrientation,
-        accelerometer: { x: 0, y: 0, z: 0 },
-        camera: { facingMode: 'environment', zoom: 1 },
-        lighting: { brightness: 128, contrast: 50, uniformity: 80 },
-        quality: { sharpness: 85, blur: 10, overallScore: 85 }
+    try {
+      const video = videoRef.current;
+      const canvas = canvasRef.current;
+      
+      // ⏱️ Compte à rebours avec vérification de netteté (3 secondes max)
+      // Attendre que l'autofocus se stabilise
+      setCountdown(3);
+      
+      let bestSharpness = 0;
+      let attempts = 0;
+      const maxAttempts = 6; // 6 x 500ms = 3 secondes max
+      
+      while (attempts < maxAttempts) {
+        await new Promise(r => setTimeout(r, 500));
+        attempts++;
+        setCountdown(Math.max(1, 3 - Math.floor(attempts / 2)));
+        
+        const currentSharpness = calculateSharpness(video, canvas);
+        console.log(`🔍 [SmartCamera] Netteté: ${currentSharpness.toFixed(1)} (essai ${attempts})`);
+        
+        // Si la netteté est bonne (>15) ou stable, on capture
+        if (currentSharpness > 15) {
+          console.log(`✅ [SmartCamera] Netteté suffisante: ${currentSharpness.toFixed(1)}`);
+          setFocusStatus('ready');
+          break;
+        }
+        
+        // Si la netteté se stabilise (variation < 10%), on capture
+        if (attempts > 2 && Math.abs(currentSharpness - bestSharpness) < bestSharpness * 0.1) {
+          console.log(`✅ [SmartCamera] Netteté stabilisée: ${currentSharpness.toFixed(1)}`);
+          setFocusStatus('ready');
+          break;
+        }
+        
+        bestSharpness = Math.max(bestSharpness, currentSharpness);
       }
-    };
-    
-    setPhotos(prev => [...prev, newPhoto]);
-    message.success('📸 Photo capturée !');
-    
-    console.log(`📸 [SmartCamera] Photo capturée (${photos.length + 1}/${minPhotos})`);
-  }, [orientation, analyze, photos.length, minPhotos]);
+      
+      setCountdown(null);
+      
+      // 📐 Définir la taille du canvas = taille RÉELLE de la vidéo (haute résolution)
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      
+      console.log(`📸 [SmartCamera] Capture à ${canvas.width}x${canvas.height}px`);
+      
+      // 🎨 Dessiner la frame actuelle avec qualité maximale
+      const ctx = canvas.getContext('2d', { 
+        alpha: false,           // Pas de transparence = plus rapide
+        desynchronized: true    // Réduit la latence
+      });
+      if (!ctx) {
+        throw new Error('Canvas context non disponible');
+      }
+      
+      // Qualité de rendu maximale
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = 'high';
+      
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      
+      // 📏 Calculer la netteté finale
+      const finalSharpness = calculateSharpness(video, canvas);
+      
+      // 📸 Convertir en base64 avec QUALITÉ MAXIMALE (0.95 au lieu de 0.9)
+      const base64 = canvas.toDataURL('image/jpeg', 0.95);
+      
+      // Log de la taille pour debug
+      const sizeKB = Math.round(base64.length * 0.75 / 1024);
+      console.log(`📸 [SmartCamera] Image: ${canvas.width}x${canvas.height}, ${sizeKB}KB, netteté=${finalSharpness.toFixed(1)}`);
+      
+      // ⚠️ Avertir si la photo est floue
+      if (finalSharpness < 10) {
+        message.warning('⚠️ Photo peut-être floue - essayez de stabiliser le téléphone');
+      }
+      
+      // 📱 Capturer l'orientation actuelle du téléphone (gyroscope)
+      const currentOrientation = {
+        alpha: orientation.alpha,
+        beta: orientation.beta,
+        gamma: orientation.gamma,
+        quality: analyze().quality
+      };
+      
+      // Créer la photo
+      const newPhoto: CapturedPhoto = {
+        imageBase64: base64,
+        metadata: {
+          timestamp: Date.now(),
+          photoIndex: photos.length,
+          totalPhotosNeeded: minPhotos,
+          gyroscope: currentOrientation,
+          accelerometer: { x: 0, y: 0, z: 0 },
+          camera: { facingMode: 'environment', zoom: cameraCapabilities?.zoom || 1 },
+          lighting: { brightness: 128, contrast: 50, uniformity: 80 },
+          quality: { 
+            sharpness: Math.round(finalSharpness), 
+            blur: Math.round(100 - finalSharpness * 5), 
+            overallScore: Math.min(100, Math.round(finalSharpness * 5)),
+            resolution: `${canvas.width}x${canvas.height}`,
+            sizeKB
+          } as any,
+          // 📸 NOUVEAU: Capacités de la caméra pour calcul de focale précis
+          cameraCapabilities
+        }
+      };
+      
+      setPhotos(prev => [...prev, newPhoto]);
+      message.success(`📸 Photo ${photos.length + 1}/${minPhotos} (netteté: ${finalSharpness.toFixed(0)})`);
+      
+      console.log(`📸 [SmartCamera] Photo capturée (${photos.length + 1}/${minPhotos})`);
+    } catch (err) {
+      console.error('📸 [SmartCamera] Erreur capture:', err);
+      message.error('Erreur lors de la capture');
+    } finally {
+      setIsCapturing(false);
+      setFocusStatus('waiting'); // Reset pour la prochaine capture
+    }
+  }, [orientation, analyze, photos.length, minPhotos, isCapturing]);
   
   // Nettoyer le stream au démontage
   useEffect(() => {
@@ -334,10 +552,15 @@ const SmartCameraMobile: React.FC<SmartCameraMobileProps> = ({
     });
   };
 
-  // Gérer la capture photo
+  // 📸 Gérer la capture photo - SÉCURISÉ avec caméra native Android
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = Array.from(e.target.files || []);
-    if (files.length === 0) return;
+    // 🔒 SÉCURITÉ: Wrapper global try/catch pour éviter tout crash
+    try {
+      const files = Array.from(e.target.files || []);
+      if (files.length === 0) {
+        console.log('📸 [SmartCamera] Aucun fichier (utilisateur a annulé)');
+        return;
+      }
 
     const maxPhotosEffective = maxPhotos ?? Number.POSITIVE_INFINITY;
     const remainingSlots = Math.max(0, maxPhotosEffective - photos.length);
@@ -348,25 +571,71 @@ const SmartCameraMobile: React.FC<SmartCameraMobileProps> = ({
     }
 
     const filesToProcess = files.slice(0, remainingSlots);
+    
+    // 🔒 Validation des fichiers
+    for (const file of filesToProcess) {
+      if (!file.type.startsWith('image/')) {
+        message.error('Fichier non supporté. Utilisez une image.');
+        if (inputRef.current) inputRef.current.value = '';
+        return;
+      }
+      // Limite de taille: 50MB max
+      if (file.size > 50 * 1024 * 1024) {
+        message.error('Image trop volumineuse (max 50MB)');
+        if (inputRef.current) inputRef.current.value = '';
+        return;
+      }
+    }
 
     setIsProcessing(true);
+    console.log(`📸 [SmartCamera] Traitement de ${filesToProcess.length} fichier(s) via caméra native...`);
     
     // 📱 Capturer l'orientation actuelle du téléphone (gyroscope)
-    const currentOrientation = {
-      alpha: orientation.alpha,
-      beta: orientation.beta,
-      gamma: orientation.gamma,
-      quality: analyze().quality  // 0-100, qualité de l'orientation
+    let currentOrientation = {
+      alpha: 0,
+      beta: 90,  // Par défaut: téléphone vertical
+      gamma: 0,
+      quality: 50
     };
     
-    console.log(`📱 [SmartCamera] Gyroscope au moment de la capture: beta=${currentOrientation.beta.toFixed(1)}°, gamma=${currentOrientation.gamma.toFixed(1)}°, qualité=${currentOrientation.quality}%`);
-    
     try {
-      const base64s = await Promise.all(filesToProcess.map(fileToBase64));
+      currentOrientation = {
+        alpha: orientation.alpha,
+        beta: orientation.beta,
+        gamma: orientation.gamma,
+        quality: analyze().quality
+      };
+      console.log(`📱 [SmartCamera] Gyroscope: beta=${currentOrientation.beta.toFixed(1)}°`);
+    } catch (gyroErr) {
+      console.warn('📱 [SmartCamera] Gyroscope non dispo, valeurs par défaut');
+    }
+    
+    // 🔒 Conversion en base64 avec timeout de sécurité
+    let base64s: string[] = [];
+    try {
+      const conversionPromises = filesToProcess.map(file => {
+        return Promise.race([
+          fileToBase64(file),
+          new Promise<string>((_, reject) => 
+            setTimeout(() => reject(new Error('Timeout')), 30000)
+          )
+        ]);
+      });
+      base64s = await Promise.all(conversionPromises);
+      console.log(`📸 [SmartCamera] ${base64s.length} image(s) converties`);
+    } catch (convErr) {
+      console.error('📸 [SmartCamera] Erreur conversion:', convErr);
+      message.error('Erreur traitement image. Réessayez.');
+      setIsProcessing(false);
+      if (inputRef.current) inputRef.current.value = '';
+      return;
+    }
 
-      const expectedNewCount = photos.length + base64s.length;
+    const expectedNewCount = photos.length + base64s.length;
 
-      setPhotos((prev) => {
+    // 🔒 Mise à jour state sécurisée
+    setPhotos((prev) => {
+      try {
         const startIndex = prev.length;
         const newPhotos: CapturedPhoto[] = base64s.map((base64, i) => ({
           imageBase64: base64,
@@ -374,48 +643,39 @@ const SmartCameraMobile: React.FC<SmartCameraMobileProps> = ({
             timestamp: Date.now(),
             photoIndex: startIndex + i,
             totalPhotosNeeded: minPhotos,
-            // 📱 Utiliser les vraies données du gyroscope !
             gyroscope: currentOrientation,
             accelerometer: { x: 0, y: 0, z: 0 },
             camera: { facingMode: 'environment', zoom: 1 },
             lighting: { brightness: 128, contrast: 50, uniformity: 80 },
-            quality: { sharpness: 85, blur: 10, overallScore: 85 }
+            quality: { sharpness: 85, blur: 10, overallScore: 85 },
+            // 📸 Capacités (limitées pour input file natif car pas d'accès au stream)
+            cameraCapabilities: cameraCapabilities || undefined
           }
         }));
-
+        console.log(`📸 Total photos: ${prev.length + newPhotos.length}`);
         return [...prev, ...newPhotos];
-      });
-
-      if (base64s.length === 1) {
-        message.success('Photo ajoutée !');
-      } else {
-        message.success(`${base64s.length} photos ajoutées !`);
+      } catch (e) {
+        console.error('📸 Erreur state:', e);
+        return prev;
       }
+    });
 
-      // 🎯 Flux mobile “sans arrêt”: relancer la capture jusqu'au minimum requis
-      // (sur desktop, ré-ouvrir le picker automatiquement est gênant)
-      const isLikelyMobile =
-        typeof window !== 'undefined' &&
-        typeof window.matchMedia === 'function' &&
-        window.matchMedia('(pointer: coarse)').matches;
-
-      if (isLikelyMobile && expectedNewCount < minPhotos && (maxPhotos ?? Number.POSITIVE_INFINITY) > expectedNewCount) {
-        setTimeout(() => {
-          inputRef.current?.click();
-        }, 250);
-      }
-    } catch (err) {
-      console.error('Erreur capture:', err);
-      message.error('Erreur lors de la capture');
-    } finally {
-      setIsProcessing(false);
-      // Reset input pour permettre de reprendre les mêmes fichiers
-      if (inputRef.current) {
-        inputRef.current.value = '';
-      }
+    // � Message simple après chaque photo
+    if (expectedNewCount < minPhotos) {
+      message.info(`📸 Photo ${expectedNewCount}/${minPhotos} - Encore ${minPhotos - expectedNewCount} photo(s)`);
+    } else {
+      message.success(`📸 ${expectedNewCount} photo(s) capturée(s) ! Vous pouvez valider.`);
     }
-  };
 
+  } catch (globalErr) {
+    console.error('📸 ERREUR GLOBALE:', globalErr);
+    message.error('Erreur inattendue. Réessayez.');
+  } finally {
+    setIsProcessing(false);
+    // 🔄 Ne reset l'input que si on ne va pas réouvrir (sinon le setTimeout s'en charge)
+    // try { if (inputRef.current) inputRef.current.value = ''; } catch (e) {}
+  }
+  };
   // Supprimer une photo
   const removePhoto = (index: number) => {
     setPhotos(prev => {
@@ -444,11 +704,28 @@ const SmartCameraMobile: React.FC<SmartCameraMobileProps> = ({
     onCancel();
   }, [clearPersistedPhotos, onCancel]);
 
-  // Ouvrir la caméra IN-BROWSER (plus de redirection vers l'app native!)
-  const openCamera = useCallback(async () => {
-    // Utiliser la caméra in-browser
-    startCamera();
-  }, [startCamera]);
+  // 📸 Ouvrir la caméra NATIVE Android (meilleure qualité!)
+  // 🔒 SÉCURISÉ: Utilise l'input file avec capture="environment"
+  const openCamera = useCallback(() => {
+    try {
+      // Sur iOS, demander la permission gyroscope au premier clic
+      if (isAvailable && !hasPermission) {
+        requestPermission();
+      }
+      
+      console.log('📸 [SmartCamera] Ouverture caméra native Android...');
+      
+      // Utiliser l'input file avec capture="environment" (caméra native)
+      if (inputRef.current) {
+        inputRef.current.click();
+      } else {
+        message.error('Erreur: input caméra non disponible');
+      }
+    } catch (err) {
+      console.error('📸 [SmartCamera] Erreur ouverture caméra:', err);
+      message.error('Erreur lors de l\'ouverture de la caméra');
+    }
+  }, [isAvailable, hasPermission, requestPermission]);
 
   // Ouvrir la galerie (sans capture="environment")
   const galleryInputRef = useRef<HTMLInputElement>(null);
@@ -488,8 +765,8 @@ const SmartCameraMobile: React.FC<SmartCameraMobileProps> = ({
               🤖 IA Photo
             </Title>
 
-            {/* 🟧 Bouton ArUco à côté du titre */}
-            <Tooltip title="Configurer/télécharger le marqueur ArUco">
+            {/* � Bouton Métré à côté du titre */}
+            <Tooltip title="Télécharger feuille de calibration Métré A4">
               <Button
                 size="small"
                 icon={<PrinterOutlined />}
@@ -506,7 +783,7 @@ const SmartCameraMobile: React.FC<SmartCameraMobileProps> = ({
                   alignItems: 'center',
                   justifyContent: 'center'
                 }}
-                aria-label="ArUco"
+                aria-label="Métré"
               />
             </Tooltip>
 
@@ -538,53 +815,133 @@ const SmartCameraMobile: React.FC<SmartCameraMobileProps> = ({
         />
       </div>
 
-      {/* 🖨️ Modale ArUco (taille + téléchargement + sauvegarde) */}
+      {/* 🖨️ Modale Métré (téléchargement A4 V1.2) */}
       <Modal
         open={showArucoSettings}
         onCancel={() => setShowArucoSettings(false)}
         footer={null}
-        title="🎯 Marqueur ArUco"
+        title={
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <img 
+              src="/printable/metre-logo.svg" 
+              alt="Métré" 
+              style={{ height: 28, objectFit: 'contain' }}
+              onError={(e) => {
+                // Fallback: juste afficher le texte sans logo
+                (e.target as HTMLImageElement).style.display = 'none';
+              }}
+            />
+            <span>📐 Métré - Calibration A4</span>
+          </div>
+        }
         destroyOnClose
       >
-        <Space direction="vertical" style={{ width: '100%' }} size={12}>
-          <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
-              <span style={{ fontWeight: 600 }}>Taille du marqueur</span>
-              <Tooltip title="Distance entre les CENTRES des 4 cercles magenta">
-                <InfoCircleOutlined style={{ color: '#8c8c8c' }} />
-              </Tooltip>
-            </div>
-            <InputNumber
-              min={5}
-              max={50}
-              step={0.1}
-              precision={1}
-              value={markerSizeCm}
-              onChange={(v) => setMarkerSizeCm(Number(v ?? 16.8))}
-              addonAfter="cm"
-              style={{ width: '100%' }}
-              disabled={arucoLoading}
-            />
+        <Space direction="vertical" style={{ width: '100%' }} size={16}>
+          {/* Description */}
+          <div style={{ 
+            background: '#f0f2f5', 
+            padding: 12, 
+            borderRadius: 8,
+            fontSize: 13,
+            lineHeight: '1.5'
+          }}>
+            <strong>Feuille de calibration A4 V1.2</strong>
+            <ul style={{ margin: '8px 0', paddingLeft: 20 }}>
+              <li>Imprimer à <strong>100%</strong> (ne pas ajuster à la page)</li>
+              <li>Photographier à 20-50% du cadre</li>
+              <li>Contient: AprilTags, ChArUco, règles, points de référence</li>
+            </ul>
           </div>
 
-          <Space style={{ width: '100%', justifyContent: 'space-between' }}>
-            <Button
-              icon={<DownloadOutlined />}
-              onClick={handleDownloadAruco}
-              disabled={arucoLoading}
-            >
-              Télécharger SVG ({markerSizeCm} cm)
-            </Button>
-            <Button
-              type="primary"
-              icon={<SaveOutlined />}
-              onClick={handleSaveAruco}
-              loading={arucoSaving}
-              disabled={arucoLoading}
-            >
-              Sauvegarder
-            </Button>
+          {/* Boutons de téléchargement */}
+          <Space direction="vertical" style={{ width: '100%' }} size={8}>
+            {/* Version LIGHT - Fond blanc */}
+            <div style={{ borderRadius: 8, overflow: 'hidden', border: '1px solid #f0f0f0' }}>
+              <div style={{ background: '#fafafa', padding: '8px 12px', fontSize: 12, fontWeight: 500 }}>📄 Version LIGHT (Papier Blanc)</div>
+              <Space style={{ width: '100%', padding: 8 }} size={6}>
+                <Button
+                  style={{ flex: 1 }}
+                  type="primary"
+                  size="small"
+                  onClick={() => {
+                    const link = document.createElement('a');
+                    link.href = '/printable/metre-a4-v1.2-light.pdf';
+                    link.download = 'metre-a4-v1.2-light.pdf';
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                    message.success('📥 PDF LIGHT téléchargé !');
+                  }}
+                >
+                  PDF
+                </Button>
+                <Button
+                  style={{ flex: 1 }}
+                  size="small"
+                  onClick={() => {
+                    const link = document.createElement('a');
+                    link.href = '/printable/metre-a4-v1.2-light.png';
+                    link.download = 'metre-a4-v1.2-light.png';
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                    message.success('📥 PNG LIGHT téléchargé !');
+                  }}
+                >
+                  PNG
+                </Button>
+              </Space>
+            </div>
+
+            {/* Version DARK - Fond noir */}
+            <div style={{ borderRadius: 8, overflow: 'hidden', border: '1px solid #f0f0f0' }}>
+              <div style={{ background: '#fafafa', padding: '8px 12px', fontSize: 12, fontWeight: 500 }}>⚫ Version DARK (Projection Mur Blanc)</div>
+              <Space style={{ width: '100%', padding: 8 }} size={6}>
+                <Button
+                  style={{ flex: 1 }}
+                  size="small"
+                  onClick={() => {
+                    const link = document.createElement('a');
+                    link.href = '/printable/metre-a4-v1.2-dark.pdf';
+                    link.download = 'metre-a4-v1.2-dark.pdf';
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                    message.success('📥 PDF DARK téléchargé !');
+                  }}
+                >
+                  PDF
+                </Button>
+                <Button
+                  style={{ flex: 1 }}
+                  size="small"
+                  onClick={() => {
+                    const link = document.createElement('a');
+                    link.href = '/printable/metre-a4-v1.2-dark.png';
+                    link.download = 'metre-a4-v1.2-dark.png';
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                    message.success('📥 PNG DARK téléchargé !');
+                  }}
+                >
+                  PNG
+                </Button>
+              </Space>
+            </div>
           </Space>
+
+          {/* Avertissement */}
+          <div style={{ 
+            background: '#fff7e6', 
+            border: '1px solid #ffd591',
+            padding: 10, 
+            borderRadius: 6,
+            fontSize: 12,
+            color: '#ad6800'
+          }}>
+            ⚠️ <strong>Attention :</strong> Imprimez à 100% (échelle réelle). Ne cochez PAS "Ajuster à la page" dans les paramètres d'impression.
+          </div>
         </Space>
       </Modal>
       {/* 📹 OVERLAY CAMÉRA IN-BROWSER - S'affiche quand on prend une photo */}
@@ -617,6 +974,12 @@ const SmartCameraMobile: React.FC<SmartCameraMobileProps> = ({
             <Title level={4} style={{ color: '#fff', margin: 0 }}>
               📹 Caméra
             </Title>
+            {/* Afficher la résolution réelle */}
+            {videoRef.current && (
+              <Text style={{ color: '#fff', fontSize: 12 }}>
+                {videoRef.current.videoWidth}×{videoRef.current.videoHeight}
+              </Text>
+            )}
             <Button 
               type="text" 
               icon={<StopOutlined />}
@@ -665,22 +1028,50 @@ const SmartCameraMobile: React.FC<SmartCameraMobileProps> = ({
               {photos.length} / {minPhotos} min
             </div>
 
-            {/* Gros bouton capture */}
-            <Button
-              type="primary"
-              shape="circle"
-              size="large"
-              icon={<CameraOutlined style={{ fontSize: 32 }} />}
-              onClick={captureFromStream}
-              style={{
-                width: 80,
-                height: 80,
-                background: '#fff',
-                border: '4px solid #1890ff',
-                color: '#1890ff',
-                boxShadow: '0 4px 20px rgba(0,0,0,0.3)'
-              }}
-            />
+            {/* Gros bouton capture avec indicateur de compte à rebours et focus */}
+            <div style={{ position: 'relative' }}>
+              <Button
+                type="primary"
+                shape="circle"
+                size="large"
+                icon={countdown ? null : <CameraOutlined style={{ fontSize: 32 }} />}
+                onClick={captureFromStream}
+                disabled={isCapturing}
+                style={{
+                  width: 80,
+                  height: 80,
+                  background: focusStatus === 'ready' ? '#52c41a' : (isCapturing ? '#faad14' : '#fff'),
+                  border: `4px solid ${focusStatus === 'ready' ? '#52c41a' : (isCapturing ? '#faad14' : '#1890ff')}`,
+                  color: isCapturing ? '#fff' : '#1890ff',
+                  boxShadow: '0 4px 20px rgba(0,0,0,0.3)',
+                  fontSize: countdown ? 32 : undefined,
+                  fontWeight: countdown ? 'bold' : undefined,
+                  transition: 'all 0.2s ease',
+                  animation: focusStatus === 'focusing' ? 'pulse 1s infinite' : undefined
+                }}
+              >
+                {countdown && countdown}
+              </Button>
+              {isCapturing && (
+                <div style={{
+                  position: 'absolute',
+                  bottom: -30,
+                  left: '50%',
+                  transform: 'translateX(-50%)',
+                  color: '#fff',
+                  fontSize: 12,
+                  whiteSpace: 'nowrap',
+                  textShadow: '0 1px 3px rgba(0,0,0,0.8)',
+                  background: 'rgba(0,0,0,0.6)',
+                  padding: '4px 12px',
+                  borderRadius: 12
+                }}>
+                  {focusStatus === 'focusing' ? '🔍 Mise au point...' : 
+                   focusStatus === 'ready' ? '✅ Net!' : 
+                   '⏳ Stabilisation...'}
+                </div>
+              )}
+            </div>
 
             {/* Bouton valider si assez de photos */}
             {photos.length >= minPhotos && (
@@ -689,6 +1080,8 @@ const SmartCameraMobile: React.FC<SmartCameraMobileProps> = ({
                 icon={<CheckCircleOutlined />}
                 onClick={() => {
                   stopCamera();
+                  // 🔥 FIX: Valider les photos après avoir arrêté la caméra !
+                  handleValidate();
                 }}
                 style={{
                   background: '#52c41a',
@@ -696,7 +1089,7 @@ const SmartCameraMobile: React.FC<SmartCameraMobileProps> = ({
                   borderRadius: 24
                 }}
               >
-                Terminé
+                ✅ Valider {photos.length} photos
               </Button>
             )}
           </div>

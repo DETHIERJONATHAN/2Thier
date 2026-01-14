@@ -110,9 +110,9 @@ const AIMeasurePanel: React.FC<AIMeasurePanelProps> = ({
   // État pour l'ajout de nouvelle clé
   const [newKeyInput, setNewKeyInput] = useState('');
 
-  // 🎯 État pour la configuration du marqueur ArUco
+  // 🎯 État pour la configuration du marqueur Métré A4 V1.2
   const [markerConfig, setMarkerConfig] = useState({
-    sizeCm: 16.8, // Taille par défaut
+    sizeCm: 13, // Largeur Métré A4 V1.2
     loading: false
   });
 
@@ -629,7 +629,7 @@ const AIMeasurePanel: React.FC<AIMeasurePanelProps> = ({
               children: (
                 <div style={{ padding: '8px 0' }}>
                   <Alert
-                    message="Marqueur ArUco MAGENTA"
+                    message="Marqueur Métré A4 V1.2 (AprilTag 13×21.7cm)"
                     description="Ce marqueur doit être imprimé et placé à côté de l'objet à mesurer. La taille configurée doit correspondre EXACTEMENT à la taille imprimée."
                     type="info"
                     showIcon
@@ -646,7 +646,7 @@ const AIMeasurePanel: React.FC<AIMeasurePanelProps> = ({
                           max={50}
                           step={0.1}
                           value={markerConfig.sizeCm}
-                          onChange={(val) => setMarkerConfig(prev => ({ ...prev, sizeCm: val || 16.8 }))}
+                          onChange={(val) => setMarkerConfig(prev => ({ ...prev, sizeCm: val || 13 }))}
                           addonAfter="cm"
                           style={{ width: 150 }}
                           precision={1}
@@ -663,7 +663,7 @@ const AIMeasurePanel: React.FC<AIMeasurePanelProps> = ({
                         </Button>
                       </div>
                       <Text type="secondary" style={{ fontSize: 11 }}>
-                        Mesurez la distance entre les centres des cercles magenta sur votre marqueur imprimé.
+                        Largeur du marqueur Métré A4 V1.2 (AprilTag 13×21.7cm).
                       </Text>
                     </div>
 

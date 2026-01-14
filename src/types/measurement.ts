@@ -13,7 +13,7 @@
 // 📏 CONFIGURATION RÉFÉRENCE ORGANISATION
 // =============================================================================
 
-export type ReferenceType = 'meter' | 'card' | 'a4' | 'aruco_magenta' | 'custom';
+export type ReferenceType = 'meter' | 'card' | 'a4' | 'metre_a4_v1_2' | 'custom';
 
 export interface OrganizationMeasurementReferenceConfig {
   id: string;
@@ -123,7 +123,7 @@ export interface ImageAnnotations {
   measurementPoints: MeasurementPoint[];
   exclusionZones?: ExclusionZone[];
   measurements: MeasurementResults;
-  // 🎯 ARUCO: Coins de référence pour dessiner le quadrilatère ArUco
+  // 🎯 MÉTRÉ A4: Coins de référence pour dessiner le quadrilatère AprilTag
   referenceCorners?: {
     topLeft: { x: number; y: number };
     topRight: { x: number; y: number };
@@ -136,7 +136,7 @@ export interface ImageAnnotations {
     height: number;
     scale: number;
   };
-  // 🎯 Taille du marqueur ArUco en cm
+  // 🎯 Taille du marqueur Métré A4 V1.2 en cm (largeur AprilTag)
   markerSizeCm?: number;
   createdAt?: Date;
   updatedAt?: Date;

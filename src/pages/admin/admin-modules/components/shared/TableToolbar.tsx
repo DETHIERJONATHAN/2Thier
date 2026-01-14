@@ -76,7 +76,7 @@ const TableToolbar: React.FC<TableToolbarProps> = ({
           </Dropdown>
         </Space>
       </div>
-    </div>
+    </Card>
   );
 };
 

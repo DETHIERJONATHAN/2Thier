@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 50" width="200" height="50">
+  <defs>
+    <style>
+      .text { font-family: Arial, sans-serif; font-weight: bold; }
+      .m2 { fill: #000; font-size: 36px; }
+      .tre { fill: #1e6b7f; font-size: 36px; }
+      .accent { fill: #d97834; }
+    </style>
+  </defs>
+  
+  <!-- M2 en noir -->
+  <text x="10" y="38" class="text m2">M2</text>
+  
+  <!-- TR en noir -->
+  <text x="58" y="38" class="text m2">TR</text>
+  
+  <!-- É en bleu canard avec accent orange -->
+  <text x="110" y="38" class="text tre">É</text>
+  <path d="M 120 8 L 125 15 L 115 15 Z" class="accent"/>
+</svg>

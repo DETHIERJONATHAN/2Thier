@@ -92,21 +92,10 @@ export function useDragAndDrop({
         // console.warn('❌ Nœud parent introuvable:', target.nodeId); // ✨ Log réduit
         return false; // Sécurité : refuser si on ne connaît pas le parent
       }
-
-      // console.log(...) // ✨ Log réduit - objet de debug
-
-      if (newNode) {
-        // console.log('✅ Nœud créé avec succès:', newNode); // ✨ Log réduit
-        message.success(`${nodeType.label} créé avec succès !`);
-      } else {
-        console.error('❌ Échec de la création du nœud');
-        message.error(`Échec de la création du ${nodeType.label}`);
-      }
-    } catch (error) {
-      console.error('💥 Erreur lors de la création:', error);
-      message.error('Erreur lors de la création : ' + (error instanceof Error ? error.message : 'Erreur inconnue'));
-    }
-  }, [onNodeCreate, registry]);
+      
+      return true;
+    };
+  }, [nodes]);
 
   const handleNodeDrop = useCallback(async (source: DragItem, target: DropTargetData) => {
     // console.log('📦 Node Drop:', { source, target }); // ✨ Log réduit
