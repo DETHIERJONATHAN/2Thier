@@ -115,13 +115,23 @@ npm run dev &
 
 Le déploiement se fait automatiquement via GitHub Actions lors d'un push sur `main`.
 
-**Fichier**: `.github/workflows/deploy.yml`
+**Fichier**: `.github/workflows/deploy-cloud-run.yml`
 
-### Déploiement manuel
+### Déploiement manuel (pro)
+
+**Étape 1 — Build + push image (Artifact Registry)**
+
+```bash
+gcloud builds submit \
+  --project thiernew \
+  --tag europe-west1-docker.pkg.dev/thiernew/crm-api/crm-api
+```
+
+**Étape 2 — Déploiement Cloud Run depuis l'image**
 
 ```bash
 gcloud run deploy crm-api \
-  --source . \
+  --image europe-west1-docker.pkg.dev/thiernew/crm-api/crm-api \
   --region europe-west1 \
   --project thiernew \
   --platform managed \
@@ -159,7 +169,7 @@ web: node dist-server/api-server-clean.cjs
 
 ---
 
-### Problème 5: Build échoue avec Buildpacks - Timeout pendant npm ci
+### Problème 5: Build échoue avec Buildpacks ou push GCR refusé
 
 **Erreur:**
 ```
@@ -168,9 +178,11 @@ Building Container... failed
 ERROR: Build failed; check build logs for details
 ```
 
-**Cause:** Les Buildpacks automatiques génèrent un Dockerfile qui timeout pendant `npm ci` à cause de la taille des dépendances (749KB de package-lock.json, 104MB de contexte).
+**Causes fréquentes:**
+- Buildpacks timeout pendant `npm ci`
+- Push GCR refusé (gcr.io) faute de permission de création automatique
 
-**Solution:** Créer un Dockerfile multi-stage optimisé et un `.dockerignore` pour réduire le contexte.
+**Solution (pro):** Utiliser Artifact Registry + Dockerfile multi-stage.
 
 **Fichiers créés:**
 
@@ -212,12 +224,11 @@ steps:
     args: ['run', 'deploy', 'crm-api', '--image', '...']
 ```
 
-**Déploiement:**
+**Déploiement pro (image):**
 ```bash
-gcloud run deploy crm-api --source . --clear-base-image [...]
+gcloud builds submit --project thiernew --tag europe-west1-docker.pkg.dev/thiernew/crm-api/crm-api
+gcloud run deploy crm-api --image europe-west1-docker.pkg.dev/thiernew/crm-api/crm-api [...]
 ```
-
-Le flag `--clear-base-image` est **nécessaire** pour passer de Buildpacks à Dockerfile.
 
 ---
 
