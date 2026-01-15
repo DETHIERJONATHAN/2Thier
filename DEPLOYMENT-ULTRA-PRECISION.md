@@ -47,14 +47,14 @@ $ npm run start
 
 ## 🔗 Nouvelles Routes API
 
-### Route Ultra-Précision (41+ points)
+### Route Ultra-Précision (37+ points)
 ```
 POST /api/measurement-reference/ultra-precision-compute
 ```
 
 **Authentification**: ✅ JWT Token requis  
 **Précision**: **±0.25cm**  
-**Points utilisés**: 41+ (4 AprilTag + 12 dots + 25 ChArUco)  
+**Points utilisés**: 37+ (5 AprilTag + 12 dots + 20 coins AprilTag)  
 **Algorithme**: RANSAC + Levenberg-Marquardt + Estimation 3D  
 
 **Exemple d'appel**:
@@ -66,7 +66,7 @@ const response = await fetch('/api/measurement-reference/ultra-precision-compute
     'Content-Type': 'application/json'
   },
   body: JSON.stringify({
-    detectedPoints: [41+ points...],
+    detectedPoints: [37+ points...],
     objectPoints: [4 coins cliqués...],
     imageWidth: 1080,
     imageHeight: 1920,
@@ -302,7 +302,7 @@ gcloud run services update crm-api --region europe-west1  # Redéployer
 **Symptôme**: "Matrice singulière"  
 **Cause**: Points trop mal alignés  
 **Solution**:
-- Vérifier positions réelles des dots et ChArUco
+- Vérifier positions réelles des dots et des coins AprilTag
 - Augmenter threshold RANSAC (actuellement 2.0px)
 
 ### Problème: Erreur reprojection élevée

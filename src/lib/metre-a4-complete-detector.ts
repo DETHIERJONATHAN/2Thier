@@ -12,11 +12,11 @@
  *    - 3×3 points par quadrant (TL, TR, BL, BR)
  *    - Correction distorsion radiale
  * 
- * 🎯 NIVEAU 3 : ChArUco 6×6 (25 coins internes)
- *    - Sub-pixel precision
- *    - Homographie optimale
+ * 🎯 NIVEAU 3 : grille legacy 6×6 (désactivée)
+ *    - Sub-pixel precision (héritage)
+ *    - Homographie optimale (héritage)
  * 
- * 🎯 RÉSULTAT : 4 + 12 + 25 = 41 points minimum
+ * 🎯 RÉSULTAT : AprilTags + dots (+ coins AprilTag) selon disponibilité
  *              Jusqu'à 105 points avec interpolations + règles
  * 
  * Précision attendue: ±0.5-2mm sur 2-5m
@@ -42,7 +42,7 @@ type ProjectRealToPixel = (pMm: Point2D) => Point2D;
 // ═══════════════════════════════════════════════════════════════
 
 export const METRE_A4_V12_COMPLETE_SPECS = {
-  version: 'A4-CALIB-V1.2',
+  version: 'A4-CALIB-V1.3',
   
   // Feuille A4
   sheet: {
@@ -64,6 +64,14 @@ export const METRE_A4_V12_COMPLETE_SPECS = {
     { id: 14, position: 'BL' as const, center_x_mm: 40, center_y_mm: 257, size_mm: 20 },
     { id: 21, position: 'BR' as const, center_x_mm: 170, center_y_mm: 257, size_mm: 20 }
   ],
+
+  // 🏷️ AprilTag central (120×120mm) pour détection à distance
+  centerApriltag: {
+    id: 33,
+    center_x_mm: 105,
+    center_y_mm: 140,
+    size_mm: 120
+  },
   
   // 📐 RÉFÉRENCE CALIBRATION (distances centre-à-centre)
   // TL(40,40) → TR(170,40) = 130mm horizontal
@@ -77,75 +85,29 @@ export const METRE_A4_V12_COMPLETE_SPECS = {
   
   // ⚫ 12 points noirs dispersés (4mm diamètre)
   // CENTRES des points noirs en mm sur la feuille A4
-  // TODO: À vérifier avec les vraies cotes !
   referenceDots: [
     // Haut gauche (3 points)
     { x_mm: 45, y_mm: 65, quadrant: 'TL' as const },
     { x_mm: 65, y_mm: 60, quadrant: 'TL' as const },
     { x_mm: 80, y_mm: 68, quadrant: 'TL' as const },
-    
+
     // Haut droit (3 points)
     { x_mm: 145, y_mm: 65, quadrant: 'TR' as const },
     { x_mm: 160, y_mm: 60, quadrant: 'TR' as const },
     { x_mm: 175, y_mm: 68, quadrant: 'TR' as const },
-    
+
     // Bas gauche (2 points)
     { x_mm: 43, y_mm: 210, quadrant: 'BL' as const },
     { x_mm: 73, y_mm: 215, quadrant: 'BL' as const },
-    
+
     // Bas droit (2 points)
     { x_mm: 152, y_mm: 210, quadrant: 'BR' as const },
     { x_mm: 180, y_mm: 215, quadrant: 'BR' as const },
-    
+
     // Centre gauche et droite du damier (2 points)
     { x_mm: 30, y_mm: 140, quadrant: 'TL' as const },
     { x_mm: 180, y_mm: 140, quadrant: 'TR' as const }
-  ],
-  
-  // 🎲 ChArUco 6×6 central (120×120mm)
-  // Position du COIN HAUT-GAUCHE du damier sur la feuille A4
-  charuco: {
-    x_mm: 45,           // Coin haut-gauche X
-    y_mm: 80,           // Coin haut-gauche Y
-    width_mm: 120,
-    height_mm: 120,
-    squares_x: 6,       // Grille 6×6
-    squares_y: 6,
-    square_mm: 20,      // Chaque carré fait 20mm
-    markerRatio: 0.6    // Tags = 60% de la taille carré (12mm)
-  },
-
-  // 🎯 18 mini-ArUco du ChArUco 6×6 (pattern damier avec bordure noire)
-  // CENTRES des mini-ArUco en mm, RELATIVES au coin haut-gauche du damier (45,80)
-  // Colonne 0 = bordure noire (45-65, centre 55), ArUcos à colonnes 1,2,3,4,5
-  // Ligne 0 = bordure noire (80-100, centre 90), ArUcos à lignes 1,2,3,4,5
-  // Position absolue sur feuille A4 = charuco.x_mm + x_rel, charuco.y_mm + y_rel
-  charucoArUcoPositions: [
-    // Ligne 1 (Y=90mm abs, y_rel=10): damier row 0, colonnes 1,3,5
-    { id: 0, x_rel: 30, y_rel: 10 },   // col 1
-    { id: 1, x_rel: 70, y_rel: 10 },   // col 3
-    { id: 2, x_rel: 110, y_rel: 10 },  // col 5
-    // Ligne 2 (Y=110mm abs, y_rel=30): damier row 1, colonnes 0,2,4
-    { id: 3, x_rel: 10, y_rel: 30 },   // col 0
-    { id: 4, x_rel: 50, y_rel: 30 },   // col 2
-    { id: 5, x_rel: 90, y_rel: 30 },   // col 4
-    // Ligne 3 (Y=130mm abs, y_rel=50): damier row 2, colonnes 1,3,5
-    { id: 6, x_rel: 30, y_rel: 50 },   // col 1
-    { id: 7, x_rel: 70, y_rel: 50 },   // col 3
-    { id: 8, x_rel: 110, y_rel: 50 },  // col 5
-    // Ligne 4 (Y=150mm abs, y_rel=70): damier row 3, colonnes 0,2,4
-    { id: 9, x_rel: 10, y_rel: 70 },   // col 0
-    { id: 10, x_rel: 50, y_rel: 70 },  // col 2
-    { id: 11, x_rel: 90, y_rel: 70 },  // col 4
-    // Ligne 5 (Y=170mm abs, y_rel=90): damier row 4, colonnes 1,3,5
-    { id: 12, x_rel: 30, y_rel: 90 },  // col 1
-    { id: 13, x_rel: 70, y_rel: 90 },  // col 3
-    { id: 14, x_rel: 110, y_rel: 90 }, // col 5
-    // Ligne 6 (Y=190mm abs, y_rel=110): damier row 5, colonnes 0,2,4
-    { id: 15, x_rel: 10, y_rel: 110 }, // col 0
-    { id: 16, x_rel: 50, y_rel: 110 }, // col 2
-    { id: 17, x_rel: 90, y_rel: 110 }  // col 4
-  ],
+    ],
   
   // 📏 Règles graduées (validation échelle)
   // SOURCE: generate_metre_a4.py → draw_rule(draw, 15, 235, 175) et draw_vertical_rule(draw, 20, 40, 190)
@@ -166,7 +128,7 @@ export interface UltraPrecisionPoint {
   pixel: Point2D;           // Position en pixels dans l'image
   real: Point2D;            // Position réelle en mm sur la feuille A4
   confidence: number;       // 0-1, confiance de la détection
-  type: 'apriltag' | 'dot' | 'charuco' | 'rule';
+  type: 'apriltag' | 'apriltag-corner' | 'dot' | 'rule';
   subPixelRefined: boolean; // Si oui, précision sub-pixel
 }
 
@@ -177,9 +139,9 @@ export interface MetreA4CompleteDetectionResult {
   success: boolean;
   points: UltraPrecisionPoint[];
   breakdown: {
-    aprilTags: number;      // 4 attendus
+    aprilTags: number;      // 5 attendus
     referenceDots: number;  // 12 attendus
-    charucoCorners: number; // 25 attendus (5×5 coins internes)
+    extraPoints: number;    // Coins AprilTag, règles, etc.
     rulePoints: number;     // Variable selon détection
     total: number;
   };
@@ -203,6 +165,31 @@ interface AprilTagDetectionInternal {
   size: number; // Taille moyenne en pixels
 }
 
+function addAprilTagCornerPoints(
+  points: UltraPrecisionPoint[],
+  tag: AprilTagDetectionInternal,
+  centerMm: Point2D,
+  sizeMm: number
+): void {
+  const half = sizeMm / 2;
+  const realCorners: Point2D[] = [
+    { x: centerMm.x - half, y: centerMm.y - half }, // TL
+    { x: centerMm.x + half, y: centerMm.y - half }, // TR
+    { x: centerMm.x + half, y: centerMm.y + half }, // BR
+    { x: centerMm.x - half, y: centerMm.y + half }  // BL
+  ];
+
+  for (let i = 0; i < 4; i++) {
+    points.push({
+      pixel: tag.corners[i],
+      real: realCorners[i],
+      confidence: 0.9,
+      type: 'apriltag-corner',
+      subPixelRefined: false
+    });
+  }
+}
+
 /**
  * Adapter la détection AprilTag serveur-only en format interne
  */
@@ -212,10 +199,25 @@ function detectAprilTagsInternal(
   height: number
 ): AprilTagDetectionInternal[] {
   
-  // Utiliser la détection serveur dédiée
+  // Utiliser la détection serveur dédiée (1ère passe rapide)
   const results = detectAprilTagsMetreA4(data, width, height);
+
+  // 2ème passe plus fine pour les mini-tags (legacy)
+  const resultsFine = detectAprilTagsMetreA4(data, width, height, {
+    quadDecimate: 1.0,
+    decodeSharpening: 0.35
+  });
+
+  const merged: AprilTagDetectionResult[] = [...results];
+  for (const tag of resultsFine) {
+    const duplicate = merged.find(
+      existing => existing.id === tag.id &&
+        Math.hypot(existing.center.x - tag.center.x, existing.center.y - tag.center.y) < 6
+    );
+    if (!duplicate) merged.push(tag);
+  }
   
-  return results.map(result => {
+  return merged.map(result => {
     const dist = (a: Point2D, b: Point2D) => Math.hypot(b.x - a.x, b.y - a.y);
     const size = (
       dist(result.corners[0], result.corners[1]) +
@@ -232,6 +234,24 @@ function detectAprilTagsInternal(
     };
   });
 }
+
+function mergeAprilTagDetections(
+  base: AprilTagDetectionInternal[],
+  extra: AprilTagDetectionInternal[],
+  maxDistPx = 6
+): AprilTagDetectionInternal[] {
+  if (!extra.length) return base;
+  const merged = [...base];
+  for (const tag of extra) {
+    const duplicate = merged.find(
+      existing => existing.id === tag.id &&
+        Math.hypot(existing.center.x - tag.center.x, existing.center.y - tag.center.y) < maxDistPx
+    );
+    if (!duplicate) merged.push(tag);
+  }
+  return merged;
+}
+
 
 /**
  * Sélectionne le bon AprilTag par quadrant (robuste aux doublons)
@@ -294,7 +314,7 @@ export function detectMetreA4Complete(
   // NIVEAU 1 : AprilTags (4 coins) - DÉTECTION AUTONOME
   // ═══════════════════════════════════════════════════════════════
   console.log('   🏷️  Détection AprilTags...');
-  const detectedTags = detectAprilTagsInternal(imageData, width, height);
+  let detectedTags = detectAprilTagsInternal(imageData, width, height);
   
   if (detectedTags.length === 0) {
     console.log('   ❌ Aucun AprilTag détecté');
@@ -342,13 +362,46 @@ export function detectMetreA4Complete(
       subPixelRefined: false
     });
   }
+  // Ajouter les 4 coins réels des AprilTags (meilleure contrainte géométrique)
+  addAprilTagCornerPoints(allPoints, tagTL, { x: 40, y: 40 }, 20);
+  addAprilTagCornerPoints(allPoints, tagTR, { x: 170, y: 40 }, 20);
+  addAprilTagCornerPoints(allPoints, tagBL, { x: 40, y: 257 }, 20);
+  addAprilTagCornerPoints(allPoints, tagBR, { x: 170, y: 257 }, 20);
   console.log(`   ✅ AprilTags: 4/4 centres ajoutés`);
+
+  // AprilTag central (optionnel, pour repérage à distance)
+  const centerTagId = METRE_A4_V12_COMPLETE_SPECS.centerApriltag.id;
+  const centerTag = detectedTags.find(t => t.id === centerTagId) || null;
+  if (centerTag) {
+    allPoints.push({
+      pixel: centerTag.center,
+      real: {
+        x: METRE_A4_V12_COMPLETE_SPECS.centerApriltag.center_x_mm,
+        y: METRE_A4_V12_COMPLETE_SPECS.centerApriltag.center_y_mm
+      },
+      confidence: 0.98,
+      type: 'apriltag',
+      subPixelRefined: false
+    });
+    addAprilTagCornerPoints(
+      allPoints,
+      centerTag,
+      {
+        x: METRE_A4_V12_COMPLETE_SPECS.centerApriltag.center_x_mm,
+        y: METRE_A4_V12_COMPLETE_SPECS.centerApriltag.center_y_mm
+      },
+      METRE_A4_V12_COMPLETE_SPECS.centerApriltag.size_mm
+    );
+    console.log(`   ✅ AprilTag central: ID=${centerTagId} détecté`);
+  } else {
+    console.log(`   ⚠️ AprilTag central ID=${centerTagId} non détecté`);
+  }
   
   // Estimation échelle initiale (pour guider détections suivantes)
   const scaleEstimate = estimateScale(aprilTagCenters);
 
   // Homographie (mm -> pixels) basée sur les 4 centres AprilTags.
-  // Objectif: projeter précisément les positions attendues (dots / ChArUco) même avec perspective.
+  // Objectif: projeter précisément les positions attendues (dots / points optionnels) même avec perspective.
   let projectRealToPixel: ProjectRealToPixel | null = null;
   try {
     // computeHomography: src (pixels) -> dst (mm), on utilise l'inverse pour mm -> pixels
@@ -392,15 +445,8 @@ export function detectMetreA4Complete(
   );
   allPoints.push(...dotPoints);
   console.log(`   ✅ Points dispersés: ${dotPoints.length}/12 détectés`);
-  
-  // ═══════════════════════════════════════════════════════════════
-  // NIVEAU 3 : ChArUco 6×6 - Détection via mini-ArUco
-  // Les ArUco 12mm sont dans les carrés BLANCS du damier, centrés.
-  // IDs 0-17 = 18 mini-ArUco dans les carrés blancs
-  // ═══════════════════════════════════════════════════════════════
-  const charucoArUcoPoints = detectCharucoViaArUco(detectedTags);
-  allPoints.push(...charucoArUcoPoints);
-  console.log(`   ✅ ChArUco mini-ArUco: ${charucoArUcoPoints.length}/18 détectés`);
+
+  const extraPoints = allPoints.filter(p => p.type === 'apriltag-corner').length;
   
   // ═══════════════════════════════════════════════════════════════
   // NIVEAU 4 : Règles graduées (optionnel, si besoin de + de points)
@@ -415,7 +461,7 @@ export function detectMetreA4Complete(
   allPoints.push(...rulePoints);
   console.log(`   ✅ Règles: ${rulePoints.length} graduations détectées`);
   
-  console.log(`   📊 TOTAL: ${allPoints.length} points (4 AprilTags + 12 dots + ${charucoArUcoPoints.length} ChArUco)`);
+  console.log(`   📊 TOTAL: ${allPoints.length} points (5 AprilTags + 12 dots + ${extraPoints} coins AprilTag)`);
   
   // ═══════════════════════════════════════════════════════════════
   // HOMOGRAPHIE ROBUSTE : RANSAC + DLT normalisé
@@ -425,7 +471,7 @@ export function detectMetreA4Complete(
   const breakdown = {
     aprilTags: allPoints.filter(p => p.type === 'apriltag').length,
     referenceDots: allPoints.filter(p => p.type === 'dot').length,
-    charucoCorners: charucoArUcoPoints.length,
+    extraPoints,
     rulePoints: allPoints.filter(p => p.type === 'rule').length,
     total: allPoints.length
   };
@@ -516,118 +562,6 @@ function detectReferenceDots12(
 }
 
 /**
- * 🎯 Détecte les mini-ArUco du ChArUco via la détection AprilTag
- * 
- * Le ChArUco 6×6 contient 18 mini-ArUco (12mm) dans les carrés BLANCS.
- * Les carrés blancs sont aux positions où (row + col) est IMPAIR.
- * 
- * Layout du damier (⬛=noir, ⬜=blanc avec ArUco):
- *   col:  0   1   2   3   4   5
- * row 0: ⬛  ⬜0  ⬛  ⬜1  ⬛  ⬜2
- * row 1: ⬜3  ⬛  ⬜4  ⬛  ⬜5  ⬛
- * row 2: ⬛  ⬜6  ⬛  ⬜7  ⬛  ⬜8
- * row 3: ⬜9  ⬛  ⬜10 ⬛  ⬜11 ⬛
- * row 4: ⬛  ⬜12 ⬛  ⬜13 ⬛  ⬜14
- * row 5: ⬜15 ⬛  ⬜16 ⬛  ⬜17 ⬛
- * 
- * Position du centre d'un ArUco ID dans le carré (row, col):
- *   x_mm = 45 + col * 20 + 10 (centre du carré 20mm)
- *   y_mm = 80 + row * 20 + 10
- */
-function detectCharucoViaArUco(
-  detectedTags: AprilTagDetectionInternal[]
-): UltraPrecisionPoint[] {
-  const points: UltraPrecisionPoint[] = [];
-  
-  // Offset du ChArUco sur la feuille A4
-  const charucoOffsetX = METRE_A4_V12_COMPLETE_SPECS.charuco.x_mm; // 45mm
-  const charucoOffsetY = METRE_A4_V12_COMPLETE_SPECS.charuco.y_mm; // 80mm
-  const charucoArUcoPositions = METRE_A4_V12_COMPLETE_SPECS.charucoArUcoPositions;
-  
-  // Créer un mapping ID → position relative (centre ArUco dans le ChArUco)
-  const positionMap = new Map<number, { x_rel: number; y_rel: number }>();
-  for (const pos of charucoArUcoPositions) {
-    positionMap.set(pos.id, { x_rel: pos.x_rel, y_rel: pos.y_rel });
-  }
-  
-  // Pour chaque tag détecté, vérifier si c'est un mini-ArUco du ChArUco (IDs 0-17)
-  for (const tag of detectedTags) {
-    const pos = positionMap.get(tag.id);
-    if (!pos) continue; // Pas un mini-ArUco du ChArUco (c'est un grand AprilTag ou hors range)
-    
-    // Position ABSOLUE sur la feuille A4 = offset ChArUco + position relative
-    const realX = charucoOffsetX + pos.x_rel;
-    const realY = charucoOffsetY + pos.y_rel;
-    
-    points.push({
-      pixel: tag.center,
-      real: { x: realX, y: realY },
-      confidence: 0.95,
-      type: 'charuco',
-      subPixelRefined: true
-    });
-  }
-  
-  return points;
-}
-
-/**
- * Détecte les 25 coins internes du ChArUco 6×6 (ANCIENNE MÉTHODE - DÉSACTIVÉE)
- */
-function detectCharucoCorners6x6(
-  imageData: Uint8ClampedArray | Buffer,
-  width: number,
-  height: number,
-  aprilTagCenters: [Point2D, Point2D, Point2D, Point2D],
-  scale: { pxPerMm: number; scaleX: number; scaleY: number },
-  projectRealToPixel: ProjectRealToPixel | null
-): UltraPrecisionPoint[] {
-  const points: UltraPrecisionPoint[] = [];
-  const [tl] = aprilTagCenters;
-  
-  const { x_mm, y_mm, square_mm } = METRE_A4_V12_COMPLETE_SPECS.charuco;
-  
-  // Grille 6×6 → 5×5 coins internes
-  for (let row = 1; row <= 5; row++) {
-    for (let col = 1; col <= 5; col++) {
-      const realX = x_mm + col * square_mm;
-      const realY = y_mm + row * square_mm;
-
-      // Le centre TL AprilTag est à (40, 40) mm
-      const estimatedPx = projectRealToPixel
-        ? projectRealToPixel({ x: realX, y: realY })
-        : {
-            x: tl.x + (realX - 40) * scale.scaleX,
-            y: tl.y + (realY - 40) * scale.scaleY
-          };
-
-      // Détection coin Harris (sub-pixel) - rayon plus large car perspective
-      const searchRadius = Math.max(18, Math.round(scale.pxPerMm * 10));
-      const corner = detectCornerHarris(
-        imageData,
-        width,
-        height,
-        estimatedPx.x,
-        estimatedPx.y,
-        searchRadius
-      );
-      
-      if (corner) {
-        points.push({
-          pixel: corner.point,
-          real: { x: realX, y: realY },
-          confidence: corner.confidence,
-          type: 'charuco',
-          subPixelRefined: true
-        });
-      }
-    }
-  }
-  
-  return points;
-}
-
-/**
  * Détecte les graduations des règles (optionnel)
  */
 function detectRuleGraduations(
@@ -638,7 +572,7 @@ function detectRuleGraduations(
   _scale: { scaleX: number; scaleY: number }
 ): UltraPrecisionPoint[] {
   // TODO: Implémenter si besoin de points supplémentaires
-  // Pour l'instant, 4 + 12 + 25 = 41 points suffisent largement
+  // Pour l'instant, 5 + 12 + coins AprilTag suffisent largement
   return [];
 }
 
@@ -696,7 +630,7 @@ function findBlackBlob(
 }
 
 /**
- * Détecte un coin (ChArUco corner) via détecteur Harris simplifié
+ * Détecte un coin via détecteur Harris simplifié
  */
 function detectCornerHarris(
   data: Uint8ClampedArray | Buffer,

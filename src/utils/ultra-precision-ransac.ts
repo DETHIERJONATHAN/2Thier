@@ -1,7 +1,7 @@
 /**
  * 🔬 ULTRA-PRECISION RANSAC + LEVENBERG-MARQUARDT
  * 
- * Calcule l'homographie avec les 41+ points (AprilTag + dots + ChArUco)
+ * Calcule l'homographie avec les points détectés (AprilTags + dots + coins AprilTag)
  * en utilisant RANSAC robuste + optimisation non-linéaire Levenberg-Marquardt
  * + estimation de profondeur 3D
  * 
@@ -20,7 +20,7 @@ export interface Point3D {
   x: number;
   y: number;
   z: number; // Profondeur estimée
-  type: 'apriltag' | 'dot' | 'charuco';
+  type: 'apriltag' | 'apriltag-corner' | 'dot';
   error?: number; // Erreur reprojection en pixels
 }
 
@@ -118,23 +118,28 @@ export function computeUltraPrecisionHomography(
   // 🔍 DEBUG: Afficher les erreurs de chaque point pour diagnostiquer
   console.log(`\n   🔍 DEBUG - Erreurs de reprojection par point avec homographie initiale:`);
   const debugErrors: { idx: number; error: number; isInlier: boolean }[] = [];
+  const previewCount = Math.min(16, srcPoints.length);
   for (let i = 0; i < srcPoints.length; i++) {
     const transformed = applyHomography(bestHomography, srcPoints[i]);
     const errorMm = distance(transformed, dstPoints[i]);
     const isInlier = bestInlierIndices.includes(i);
     debugErrors.push({ idx: i, error: errorMm, isInlier });
-    if (i < 16) { // Afficher AprilTags (0-3), dots (4-15)
+    if (i < previewCount) {
       console.log(`      [${i}] ${isInlier ? '✅' : '❌'} pixel:(${srcPoints[i].x.toFixed(0)},${srcPoints[i].y.toFixed(0)}) → real:(${dstPoints[i].x},${dstPoints[i].y}) erreur: ${errorMm.toFixed(1)}mm`);
     }
   }
-  // Résumé par tranche
-  const aprilTagErrors = debugErrors.slice(0, 4);
-  const dotErrors = debugErrors.slice(4, 16);
-  const charucoErrors = debugErrors.slice(16);
-  const charucoCount = charucoErrors.length; // Compter les points réels (18 ou 24 selon détection)
-  console.log(`      📊 AprilTags (0-3): ${aprilTagErrors.filter(e => e.isInlier).length}/4 inliers, erreur moy: ${(aprilTagErrors.reduce((s, e) => s + e.error, 0) / 4).toFixed(1)}mm`);
-  console.log(`      📊 Dots (4-15): ${dotErrors.filter(e => e.isInlier).length}/12 inliers, erreur moy: ${(dotErrors.reduce((s, e) => s + e.error, 0) / 12).toFixed(1)}mm`);
-  console.log(`      📊 ChArUco (16-${15 + charucoCount}): ${charucoErrors.filter(e => e.isInlier).length}/${charucoCount} inliers, erreur moy: ${charucoCount > 0 ? (charucoErrors.reduce((s, e) => s + e.error, 0) / charucoCount).toFixed(1) : 0}mm`);
+  const previewErrors = debugErrors.slice(0, previewCount);
+  const remainingErrors = debugErrors.slice(previewCount);
+  const previewMean = previewErrors.length
+    ? previewErrors.reduce((s, e) => s + e.error, 0) / previewErrors.length
+    : 0;
+  const remainingMean = remainingErrors.length
+    ? remainingErrors.reduce((s, e) => s + e.error, 0) / remainingErrors.length
+    : 0;
+  console.log(`      📊 Aperçu (0-${Math.max(0, previewCount - 1)}): ${previewErrors.filter(e => e.isInlier).length}/${previewErrors.length} inliers, erreur moy: ${previewMean.toFixed(1)}mm`);
+  if (remainingErrors.length) {
+    console.log(`      📊 Autres points: ${remainingErrors.filter(e => e.isInlier).length}/${remainingErrors.length} inliers, erreur moy: ${remainingMean.toFixed(1)}mm`);
+  }
   
   // Vérifier que nous avons assez d'inliers
   if (bestInlierCount < minInliers) {
@@ -318,7 +323,7 @@ function estimateDepthMap(
       x: transformed[0],
       y: transformed[1],
       z: estimatedZ,
-      type: dst.x < 20 ? 'apriltag' : (Math.random() > 0.7 ? 'dot' : 'charuco'),
+      type: dst.x < 20 ? 'apriltag' : 'dot',
       error: error
     });
   }

@@ -30,8 +30,309 @@ const sharp = (sharpModule as any).default || sharpModule;
 const router = Router();
 
 // ═══════════════════════════════════════════════════════════════════════════════
+// 🎯 FONCTION: AUTO-DÉTECTION OBJETS APRÈS HOMOGRAPHIE
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/**
+ * Détecte automatiquement les objets rectangulaires dans l'image BRUTE (avec perspective)
+ * Stratégie: Gradients forts → Blobs → Rectangles HORS zone AprilTag
+ * 
+ * @param imageData - Pixels RGBA de l'image
+ * @param width - Largeur image
+ * @param height - Hauteur image
+ * @param aprilTagCorners - Coins du marqueur AprilTag (pour exclure cette zone)
+ * @returns Liste d'objets détectés avec coordonnées en %
+ */
+async function detectObjectsInProjectedImage(
+  imageData: Uint8ClampedArray,
+  width: number,
+  height: number,
+  aprilTagCorners: Array<{x: number, y: number}>
+): Promise<Array<{
+  corners: { topLeft: {x: number, y: number}, topRight: {x: number, y: number}, bottomRight: {x: number, y: number}, bottomLeft: {x: number, y: number} },
+  area: number,
+  confidence: number,
+  type: 'rectangle' | 'polygon'
+}>> {
+  try {
+    console.log(`\n🔍 [AUTO-DETECT] Détection objets dans image brute: ${width}×${height}px`);
+    
+    // ÉTAPE 1: Grayscale
+    const grayData = new Uint8ClampedArray(width * height);
+    let grayMin = 255;
+    let grayMax = 0;
+    let graySum = 0;
+    for (let i = 0; i < width * height; i++) {
+      const r = imageData[i * 4];
+      const g = imageData[i * 4 + 1];
+      const b = imageData[i * 4 + 2];
+      const gray = Math.round(0.299 * r + 0.587 * g + 0.114 * b);
+      grayData[i] = gray;
+      if (gray < grayMin) grayMin = gray;
+      if (gray > grayMax) grayMax = gray;
+      graySum += gray;
+    }
+    const grayAvg = Math.round(graySum / grayData.length);
+    console.log(`   ✅ Grayscale: min=${grayMin}, max=${grayMax}, avg=${grayAvg}, range=${grayMax-grayMin}`);
+
+    // ÉTAPE 2: Détection edges DIRECTE (Sobel sur grayscale, pas binary)
+    console.log(`   🔍 Détection edges (Sobel gradient)...`);
+    const edges = detectEdges(grayData, width, height);  // ⚠️ CHANGÉ: direct sur gray, pas binary
+    const edgePixels = edges.filter(v => v > 50).length;  // Seuil plus bas pour perspective
+    const edgePercent = ((edgePixels / edges.length) * 100).toFixed(1);
+    console.log(`      Pixels edges (>50): ${edgePixels} (${edgePercent}%)`);
+
+    // ÉTAPE 3: Trouver contours (blobs de pixels edges)
+    console.log(`   📦 Recherche contours (blobs connectés)...`);
+    const contours = findContours(edges, width, height);
+    console.log(`      Contours bruts: ${contours.length}`);
+    
+    // ÉTAPE 4: Exclure zone AprilTag (élargie de 20%)
+    const [tl, tr, bl, br] = aprilTagCorners;
+    const markerMinX = Math.min(tl.x, tr.x, bl.x, br.x) - 50;
+    const markerMaxX = Math.max(tl.x, tr.x, bl.x, br.x) + 50;
+    const markerMinY = Math.min(tl.y, tr.y, bl.y, br.y) - 50;
+    const markerMaxY = Math.max(tl.y, tr.y, bl.y, br.y) + 50;
+    console.log(`      Zone AprilTag à exclure: x[${markerMinX.toFixed(0)}-${markerMaxX.toFixed(0)}], y[${markerMinY.toFixed(0)}-${markerMaxY.toFixed(0)}]`);
+    
+    const contoursHorsMarqueur = contours.filter(c => {
+      const cx = (c.corners.topLeft.x + c.corners.bottomRight.x) / 2;
+      const cy = (c.corners.topLeft.y + c.corners.bottomRight.y) / 2;
+      const dansMarqueur = (cx > markerMinX && cx < markerMaxX && cy > markerMinY && cy < markerMaxY);
+      return !dansMarqueur;
+    });
+    console.log(`      Contours HORS marqueur: ${contoursHorsMarqueur.length}`);
+
+    // ÉTAPE 5: Filtrage par taille et confiance
+    const minArea = width * height * 0.005;  // 0.5% au lieu de 1% (plus permissif)
+    const maxArea = width * height * 0.7;    // 70% au lieu de 80%
+    console.log(`   🎯 Filtrage: area [${minArea.toFixed(0)}-${maxArea.toFixed(0)}px], confidence>30%`);
+    
+    const afterSizeFilter = contoursHorsMarqueur.filter(c => c.area > minArea && c.area < maxArea);
+    console.log(`      Après filtre taille: ${afterSizeFilter.length}`);
+    
+    const validObjects = afterSizeFilter
+      .filter(c => c.confidence > 0.3)  // Baissé à 30% (perspective déforme)
+      .sort((a, b) => b.area - a.area);
+    
+    console.log(`      Après filtre confidence: ${validObjects.length} objets valides`);
+    
+    // Debug top 3
+    validObjects.slice(0, 3).forEach((c, i) => {
+      const areaPercent = ((c.area/(width*height))*100).toFixed(2);
+      const confPercent = (c.confidence*100).toFixed(0);
+      console.log(`      [${i}] area=${c.area}px (${areaPercent}%), conf=${confPercent}%`);
+    });
+
+    if (validObjects.length === 0) {
+      console.log(`   ⚠️  AUCUN objet détecté !`);
+      console.log(`      Raisons possibles:`);
+      console.log(`      - Contraste trop faible (range=${grayMax-grayMin})`);
+      console.log(`      - Objet trop proche du marqueur AprilTag`);
+      console.log(`      - Edges trop faibles (${edgePercent}% de l'image)`);
+    }
+
+    // Convertir pixels → %
+    return validObjects.map(obj => ({
+      ...obj,
+      corners: {
+        topLeft: { x: (obj.corners.topLeft.x / width) * 100, y: (obj.corners.topLeft.y / height) * 100 },
+        topRight: { x: (obj.corners.topRight.x / width) * 100, y: (obj.corners.topRight.y / height) * 100 },
+        bottomRight: { x: (obj.corners.bottomRight.x / width) * 100, y: (obj.corners.bottomRight.y / height) * 100 },
+        bottomLeft: { x: (obj.corners.bottomLeft.x / width) * 100, y: (obj.corners.bottomLeft.y / height) * 100 }
+      }
+    }));
+  } catch (error) {
+    console.error('❌ Auto-détection objets échouée:', error);
+    return [];
+  }
+}
+
+/**
+ * Calcule seuil optimal par méthode Otsu
+ */
+function computeOtsuThreshold(data: Uint8ClampedArray): number {
+  const histogram = new Array(256).fill(0);
+  data.forEach(v => histogram[v]++);
+  
+  const total = data.length;
+  let sum = 0;
+  for (let i = 0; i < 256; i++) sum += i * histogram[i];
+
+  let sumB = 0;
+  let wB = 0;
+  let wF = 0;
+  let maxVariance = 0;
+  let threshold = 0;
+
+  for (let t = 0; t < 256; t++) {
+    wB += histogram[t];
+    if (wB === 0) continue;
+    
+    wF = total - wB;
+    if (wF === 0) break;
+
+    sumB += t * histogram[t];
+    const mB = sumB / wB;
+    const mF = (sum - sumB) / wF;
+    const variance = wB * wF * (mB - mF) * (mB - mF);
+
+    if (variance > maxVariance) {
+      maxVariance = variance;
+      threshold = t;
+    }
+  }
+
+  return threshold;
+}
+
+/**
+ * Détection edges DIRECTE sur grayscale (pas de binarisation)
+ * Sobel sur niveaux de gris pour préserver les gradients faibles
+ */
+function detectEdges(data: Uint8ClampedArray, width: number, height: number): Uint8ClampedArray {
+  const edges = new Uint8ClampedArray(data.length);
+  
+  for (let y = 1; y < height - 1; y++) {
+    for (let x = 1; x < width - 1; x++) {
+      const idx = y * width + x;
+      
+      // Sobel X
+      const gx = 
+        -data[(y-1)*width + (x-1)] + data[(y-1)*width + (x+1)] +
+        -2*data[y*width + (x-1)] + 2*data[y*width + (x+1)] +
+        -data[(y+1)*width + (x-1)] + data[(y+1)*width + (x+1)];
+      
+      // Sobel Y
+      const gy = 
+        -data[(y-1)*width + (x-1)] - 2*data[(y-1)*width + x] - data[(y-1)*width + (x+1)] +
+        data[(y+1)*width + (x-1)] + 2*data[(y+1)*width + x] + data[(y+1)*width + (x+1)];
+      
+      // Magnitude du gradient (normalisée 0-255)
+      const magnitude = Math.sqrt(gx * gx + gy * gy);
+      edges[idx] = Math.min(255, magnitude / 4);  // Division par 4 pour éviter saturation
+    }
+  }
+  
+  return edges;
+}
+
+/**
+ * Trouve contours fermés et approxime en rectangles
+ */
+function findContours(edges: Uint8ClampedArray, width: number, height: number): Array<{
+  corners: { topLeft: {x: number, y: number}, topRight: {x: number, y: number}, bottomRight: {x: number, y: number}, bottomLeft: {x: number, y: number} },
+  area: number,
+  confidence: number,
+  type: 'rectangle' | 'polygon'
+}> {
+  const contours: any[] = [];
+  
+  // Simplified: Détecter blobs par composantes connectées
+  const visited = new Uint8ClampedArray(width * height);
+  
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const idx = y * width + x;
+      if (edges[idx] > 128 && !visited[idx]) {
+        // Nouveau blob trouvé
+        const blob = floodFill(edges, visited, x, y, width, height);
+        
+        if (blob.points.length > 50) {  // Au moins 50 pixels
+          // Approximer en rectangle
+          const rect = approximateRectangle(blob.points);
+          if (rect) {
+            contours.push({
+              corners: rect,
+              area: blob.points.length,
+              confidence: computeRectangleConfidence(blob.points, rect),
+              type: 'rectangle'
+            });
+          }
+        }
+      }
+    }
+  }
+  
+  return contours;
+}
+
+/**
+ * Flood fill pour trouver blob
+ */
+function floodFill(
+  edges: Uint8ClampedArray,
+  visited: Uint8ClampedArray,
+  startX: number,
+  startY: number,
+  width: number,
+  height: number
+): { points: Array<{x: number, y: number}> } {
+  const points: Array<{x: number, y: number}> = [];
+  const stack: Array<{x: number, y: number}> = [{ x: startX, y: startY }];
+  
+  while (stack.length > 0 && points.length < 10000) {  // Limite sécurité
+    const { x, y } = stack.pop()!;
+    const idx = y * width + x;
+    
+    if (x < 0 || x >= width || y < 0 || y >= height) continue;
+    if (visited[idx] || edges[idx] < 128) continue;
+    
+    visited[idx] = 1;
+    points.push({ x, y });
+    
+    // 4-connectivity
+    stack.push({ x: x + 1, y });
+    stack.push({ x: x - 1, y });
+    stack.push({ x, y: y + 1 });
+    stack.push({ x, y: y - 1 });
+  }
+  
+  return { points };
+}
+
+/**
+ * Approxime points en rectangle (bounding box orienté)
+ */
+function approximateRectangle(points: Array<{x: number, y: number}>): {
+  topLeft: {x: number, y: number},
+  topRight: {x: number, y: number},
+  bottomRight: {x: number, y: number},
+  bottomLeft: {x: number, y: number}
+} | null {
+  if (points.length < 4) return null;
+  
+  // Simple bounding box (peut être amélioré avec PCA pour orientation)
+  const xs = points.map(p => p.x);
+  const ys = points.map(p => p.y);
+  
+  const minX = Math.min(...xs);
+  const maxX = Math.max(...xs);
+  const minY = Math.min(...ys);
+  const maxY = Math.max(...ys);
+  
+  return {
+    topLeft: { x: minX, y: minY },
+    topRight: { x: maxX, y: minY },
+    bottomRight: { x: maxX, y: maxY },
+    bottomLeft: { x: minX, y: maxY }
+  };
+}
+
+/**
+ * Calcule confiance du rectangle (ratio remplissage)
+ */
+function computeRectangleConfidence(
+  points: Array<{x: number, y: number}>,
+  rect: { topLeft: {x: number, y: number}, bottomRight: {x: number, y: number} }
+): number {
+  const rectArea = (rect.bottomRight.x - rect.topLeft.x) * (rect.bottomRight.y - rect.topLeft.y);
+  return Math.min(1.0, points.length / rectArea);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
 // ROUTE 1: POST /api/measurement-reference/ultra-fusion-detect
-// 🎯 DÉTECTION MULTI-PHOTOS + SÉLECTION MEILLEURE
+// 🎯 DÉTECTION MULTI-PHOTOS + SÉLECTION MEILLEURE + AUTO-DÉTECTION OBJETS
 // ═══════════════════════════════════════════════════════════════════════════════
 
 /**
@@ -77,17 +378,75 @@ router.post('/ultra-fusion-detect', authenticateToken, async (req: Authenticated
         const base64Clean = photo.base64.includes(',') ? photo.base64.split(',')[1] : photo.base64;
         const imageBuffer = Buffer.from(base64Clean, 'base64');
         
-        // Obtenir métadonnées
-        const metadata = await sharp(imageBuffer).metadata();
+        // Pré-réduction pour limiter le coût CPU sur grosses photos
+        const resizedBuffer = await sharp(imageBuffer)
+          .resize({
+            width: 1200,
+            height: 1200,
+            fit: 'inside',
+            withoutEnlargement: true
+          })
+          .toBuffer();
+
+        const metadata = await sharp(resizedBuffer).metadata();
         const width = metadata.width!;
         const height = metadata.height!;
 
-        // Convertir en RGBA
-        const raw = await sharp(imageBuffer).ensureAlpha().raw().toBuffer();
-        const rgba = new Uint8ClampedArray(raw);
+        // ✅ TENTATIVE RAPIDE SANS PRÉ-TRAITEMENT
+        const { data: basePixels } = await sharp(resizedBuffer)
+          .ensureAlpha()
+          .raw()
+          .toBuffer({ resolveWithObject: true });
+        const baseRgba = new Uint8ClampedArray(basePixels);
+        let rgbaUsed = baseRgba;
+        let detection = detectMetreA4Complete(baseRgba, width, height);
 
-        // 🎯 DÉTECTION AUTONOME: AprilTag + 12 points + 25 ChArUco = 41+ points
-        const detection = detectMetreA4Complete(rgba, width, height);
+        // 🎨 PRÉ-TRAITEMENT ULTRA-PREMIUM UNIQUEMENT SI ÉCHEC
+        if (!detection) {
+          console.log(`      🎨 Preprocessing ULTRA-PREMIUM: CLAHE + Bilateral + Denoise + Sharpen MAX...`);
+
+          // ÉTAPE 1: Denoising (réduction bruit) AVANT tout traitement
+          let processedBuffer = await sharp(resizedBuffer)
+            .median(3)                             // Filtre médian 3x3 : élimine le grain/bruit
+            .toBuffer();
+
+          // ÉTAPE 2: CLAHE (Contrast Limited Adaptive Histogram Equalization)
+          // Améliore contraste local sans sur-saturer
+          processedBuffer = await sharp(processedBuffer)
+            .normalize()                           // Normalisation histogram globale
+            .linear(1.3, -(128 * 0.3))            // Ajustement linéaire : +30% contraste
+            .toBuffer();
+
+          // ÉTAPE 3: Bilateral Filter (préserve bords nets + réduit bruit zones plates)
+          // Sharp n'a pas de bilateral direct, on utilise blur + sharpen intelligent
+          processedBuffer = await sharp(processedBuffer)
+            .blur(0.5)                             // Micro-blur pour zones plates uniquement
+            .toBuffer();
+
+          // ÉTAPE 4: Sharpening MAXIMAL + Saturation pour points noirs
+          const { data: enhancedPixels } = await sharp(processedBuffer)
+            .sharpen({
+              sigma: 2.0,      // Rayon gaussien élargi (2.0 = netteté forte)
+              m1: 1.5,         // +50% netteté zones plates (AprilTags/points noirs) ⬆️
+              m2: 0.6,         // Contrôle zones fort contraste (plus agressif)
+              x1: 2,           // Seuil bas (plus sensible)
+              y2: 20,          // Seuil haut augmenté
+              y3: 20           // Saturation augmentée
+            })
+            .modulate({
+              brightness: 1.05, // +5% luminosité (meilleure visibilité)
+              saturation: 1.2,  // +20% saturation → points noirs ULTRA-visibles ⬆️
+              hue: 0
+            })
+            .ensureAlpha()
+            .raw()
+            .toBuffer({ resolveWithObject: true });
+          const rgba = new Uint8ClampedArray(enhancedPixels);
+          rgbaUsed = rgba;
+
+          // 🎯 DÉTECTION AUTONOME: 5 AprilTags + 12 points
+          detection = detectMetreA4Complete(rgba, width, height);
+        }
         
         if (!detection) {
           console.log(`      ❌ AprilTag non détecté`);
@@ -97,7 +456,7 @@ router.post('/ultra-fusion-detect', authenticateToken, async (req: Authenticated
         // Créer candidat
         candidates.push({
           id: `photo-${i}`,
-          imageData: rgba,
+          imageData: rgbaUsed,
           width,
           height,
           detection,
@@ -126,6 +485,26 @@ router.post('/ultra-fusion-detect', authenticateToken, async (req: Authenticated
     const bestResult = selectBestPhoto(candidates);
     const best = bestResult.bestPhoto;
     const bestIdx = parseInt(best.id.split('-')[1]);
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // PHASE 2.5: 🎯 AUTO-DÉTECTION OBJETS dans meilleure photo
+    // ═══════════════════════════════════════════════════════════════════════════
+    console.log(`\n🎯 Auto-détection objets dans meilleure photo...`);
+    const detectedObjects = await detectObjectsInProjectedImage(
+      best.imageData,
+      best.width,
+      best.height,
+      best.detection.aprilTagCenters  // ⚠️ COINS du marqueur pour l'exclure
+    );
+    
+    if (detectedObjects.length > 0) {
+      console.log(`   ✅ ${detectedObjects.length} objet(s) détecté(s) automatiquement`);
+      detectedObjects.forEach((obj, idx) => {
+        console.log(`      📦 Objet ${idx + 1}: ${obj.type}, area=${obj.area}px, confidence=${(obj.confidence * 100).toFixed(1)}%`);
+      });
+    } else {
+      console.log(`   ⚠️  Aucun objet auto-détecté (utilisateur devra sélectionner manuellement)`);
+    }
 
     // ═══════════════════════════════════════════════════════════════════════════
     // PHASE 3: Formater réponse pour le frontend
@@ -162,7 +541,7 @@ router.post('/ultra-fusion-detect', authenticateToken, async (req: Authenticated
         totalPoints: best.detection.breakdown.total,
         aprilTags: best.detection.breakdown.aprilTags,
         referenceDots: best.detection.breakdown.referenceDots,
-        charucoCorners: best.detection.breakdown.charucoCorners,
+        extraPoints: best.detection.breakdown.extraPoints,
         quality: best.detection.homography.quality,
         estimatedPrecision: best.detection.estimatedPrecision,
         homographyMatrix: best.detection.homography.matrix,
@@ -177,6 +556,15 @@ router.post('/ultra-fusion-detect', authenticateToken, async (req: Authenticated
           confidence: p.confidence
         }))
       },
+      // 🎯 NOUVEAU: Objets détectés automatiquement
+      autoDetectedObjects: detectedObjects.map((obj, idx) => ({
+        id: `auto-object-${idx}`,
+        corners: obj.corners,
+        area: obj.area,
+        confidence: obj.confidence,
+        type: obj.type,
+        autoSelected: idx === 0  // Premier objet pré-sélectionné par défaut
+      })),
       bestPhoto: {
         index: bestIdx,
         score: bestResult.bestScore.total,
@@ -369,7 +757,7 @@ router.post('/compute-dimensions-simple', authenticateToken, async (req: Authent
  * Calcule les dimensions avec RANSAC + Levenberg-Marquardt utilisant tous les 41+ points
  * 
  * Body: {
- *   detectedPoints: [ { pixel: {x,y}, real: {x,y}, type: 'apriltag'|'dot'|'charuco' } ], 
+ *   detectedPoints: [ { pixel: {x,y}, real: {x,y}, type: 'apriltag'|'apriltag-corner'|'dot' } ], 
  *   objectPoints: 4 points cliqués en pixels,
  *   imageWidth, imageHeight,
  *   markerSizeCm: 13.0,
@@ -393,10 +781,12 @@ router.post('/ultra-precision-compute', authenticateToken, async (req: Authentic
     console.log('='.repeat(90));
     
     // ✅ Valider qu'on utilise les bonnes specs canoniques du détecteur
-    const expectedPointCount = METRE_A4_V12_COMPLETE_SPECS.aprilTags.length + 
-                                METRE_A4_V12_COMPLETE_SPECS.referenceDots.length + 
-                                METRE_A4_V12_COMPLETE_SPECS.charucoArUcoPositions.length;
-    console.log(`📋 Specs canoniques chargées: ${expectedPointCount} points attendus (${METRE_A4_V12_COMPLETE_SPECS.aprilTags.length} AprilTags + ${METRE_A4_V12_COMPLETE_SPECS.referenceDots.length} dots + ${METRE_A4_V12_COMPLETE_SPECS.charucoArUcoPositions.length} ChArUco)`);
+    const expectedExtraPoints = 0;
+    const expectedAprilTags = METRE_A4_V12_COMPLETE_SPECS.aprilTags.length + 1; // + tag central
+    const expectedPointCount = expectedAprilTags +
+                                METRE_A4_V12_COMPLETE_SPECS.referenceDots.length +
+                                expectedExtraPoints;
+    console.log(`📋 Specs canoniques chargées: ${expectedPointCount} points attendus (${expectedAprilTags} AprilTags + ${METRE_A4_V12_COMPLETE_SPECS.referenceDots.length} dots)`);
     
     if (!req.user?.id) {
       return res.status(401).json({ error: 'Non authentifié' });
@@ -451,7 +841,6 @@ router.post('/ultra-precision-compute', authenticateToken, async (req: Authentic
     
     console.log(`   AprilTag: ${detectedPoints.filter(p => p.type === 'apriltag').length}`);
     console.log(`   Dots: ${detectedPoints.filter(p => p.type === 'dot').length}`);
-    console.log(`   ChArUco: ${detectedPoints.filter(p => p.type === 'charuco').length}`);
     
     // Vérification que les points sont valides
     if (srcPoints.length < 10 || dstPoints.length < 10) {
@@ -496,6 +885,7 @@ router.post('/ultra-precision-compute', authenticateToken, async (req: Authentic
     
     // 🔬 RANSAC + Levenberg-Marquardt
     let ransacResult;
+    let ransacUsedFiltered = false;
     try {
       ransacResult = computeUltraPrecisionHomography(
         srcPoints,
@@ -510,6 +900,32 @@ router.post('/ultra-precision-compute', authenticateToken, async (req: Authentic
         error: 'Homographie ultra-précision impossible',
         details: err instanceof Error ? err.message : 'Erreur inconnue'
       });
+    }
+
+    // 🔁 Fallback: retirer les coins AprilTag si qualité faible
+    const inlierRatio = srcPoints.length ? ransacResult.inlierCount / srcPoints.length : 0;
+    const shouldFallback = ransacResult.quality < 30 || inlierRatio < 0.4;
+    if (shouldFallback) {
+      const filteredPoints = validDetectedPoints.filter(p => p.type !== 'apriltag-corner');
+      if (filteredPoints.length >= 10) {
+        const filteredSrc = filteredPoints.map(p => ({ x: p.pixel.x, y: p.pixel.y }));
+        const filteredDst = filteredPoints.map(p => ({ x: p.real.x, y: p.real.y }));
+        console.log(`⚠️  RANSAC faible (qualité=${ransacResult.quality.toFixed(1)}%, inliers=${ransacResult.inlierCount}/${srcPoints.length}) → retry sans coins AprilTag (${filteredPoints.length} pts)`);
+        try {
+          const retryResult = computeUltraPrecisionHomography(
+            filteredSrc,
+            filteredDst,
+            markerSizeCm * 10,
+            markerHeightCm * 10
+          );
+          if (retryResult.quality > ransacResult.quality) {
+            ransacResult = retryResult;
+            ransacUsedFiltered = true;
+          }
+        } catch (err) {
+          console.warn('⚠️  Retry RANSAC sans coins AprilTag échoué:', err);
+        }
+      }
     }
     
     // Transformer objectPoints avec la nouvelle homographie
@@ -562,7 +978,7 @@ router.post('/ultra-precision-compute', authenticateToken, async (req: Authentic
     console.log(`\n✅ RÉSULTAT ULTRA-PRÉCISION:`);
     console.log(`   📏 Largeur: ${(largeur_mm / 10).toFixed(2)} cm (±${(uncertainty_mm / 10).toFixed(2)} cm)`);
     console.log(`   📏 Hauteur: ${(hauteur_mm / 10).toFixed(2)} cm (±${(uncertainty_mm / 10).toFixed(2)} cm)`);
-    console.log(`   📊 RANSAC: ${ransacResult.inlierCount}/${srcPoints.length} inliers`);
+    console.log(`   📊 RANSAC: ${ransacResult.inlierCount}/${(ransacUsedFiltered ? validDetectedPoints.filter(p => p.type !== 'apriltag-corner').length : srcPoints.length)} inliers${ransacUsedFiltered ? ' (sans coins AprilTag)' : ''}`);
     console.log(`   🎯 Qualité: ${ransacResult.quality.toFixed(1)}%`);
     console.log(`   📐 Profondeur: ${ransacResult.depthMean.toFixed(0)}mm (±${ransacResult.depthStdDev.toFixed(0)}mm)`);
     console.log(`   🔄 Inclinaison: ${ransacResult.inclineAngle.toFixed(2)}°`);

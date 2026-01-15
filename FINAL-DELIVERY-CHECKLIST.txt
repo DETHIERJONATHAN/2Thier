@@ -4,7 +4,7 @@
 ║                                                                                ║
 ║  Date: Janvier 14, 2026                                                        ║
 ║  Précision: ±0.25cm (4× mieux que l'ancien ±1cm)                              ║
-║  Points utilisés: 41+ (AprilTag + dots + ChArUco)                             ║
+║  Points utilisés: 37+ (AprilTag + dots + coins AprilTag)                      ║
 ║  Algorithme: RANSAC + Levenberg-Marquardt + Estimation 3D                     ║
 ║  Status: ✅ PRODUCTION READY                                                   ║
 ║                                                                                ║
@@ -199,7 +199,7 @@ Performance:
 
 Ta question: "Je ne prends pas en compte la distortion due à X Y Z et 
             profondeur dans tes calculs non? Tu ne prends pas en 
-            compte les CharUco les 12 points?"
+            compte les coins AprilTag + les 12 points?"
 
 Réponse avant: ❌
   • Seuls 4 coins utilisés (ignorait les 37 autres points)

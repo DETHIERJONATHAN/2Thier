@@ -1,7 +1,7 @@
 # 🔬 SYSTÈME ULTRA-PRÉCISION ACTIVÉ - Janvier 14, 2026
 
 ## 🎯 Objectif Atteint
-**Passage de ±1cm à ±0.25cm de précision** en utilisant les **41+ points** détectés (4 AprilTag + 12 dots + 25 ChArUco) au lieu de seulement 4 coins.
+**Passage de ±1cm à ±0.25cm de précision** en utilisant les **37+ points** détectés (5 AprilTag + 12 dots + 20 coins AprilTag) au lieu de seulement 4 coins.
 
 ---
 
@@ -16,7 +16,7 @@ _Note_: `src/utils/ransac-ultra-precision.ts` existe toujours mais n'est plus l'
 - 🎲 **RANSAC** : Teste 1000+ sous-ensembles aléatoires de 4 points pour trouver le meilleur modèle
 - 🔧 **Levenberg-Marquardt** : Affine l'homographie trouvée avec optimisation non-linéaire
 - 📏 **Estimation 3D** : Calcule la profondeur caméra, variation de profondeur, angle d'inclinaison
-- 🎯 **Gestion des outliers** : Détecte et ignore les points mal détectés (ChArUco bruit, etc.)
+- 🎯 **Gestion des outliers** : Détecte et ignore les points mal détectés (coins AprilTag bruit, etc.)
 
 **Résultat**: 
 ```
@@ -38,20 +38,20 @@ UltraPrecisionResult {
 **Fichier**: `src/lib/metre-a4-complete-detector.ts`
 
 **Déjà fait** ✅
-- Détecte les 4 AprilTags (coins de référence)
+- Détecte les 5 AprilTags (coins + central)
 - Détecte les 12 points noirs dispersés (repères)
-- Détecte les 25 ChArUco corners (grille 6×6)
+- Détecte les 20 coins AprilTag (4 coins × 5 tags)
 - Retourne un `MetreA4CompleteDetectionResult` avec tous les `UltraPrecisionPoint`
 
 **Sortie**:
 ```
 MetreA4CompleteDetectionResult {
-  points: UltraPrecisionPoint[41];  // 41+ points détectés
+  points: UltraPrecisionPoint[37];  // 37+ points détectés
   breakdown: {
-    aprilTags: 4,
+    aprilTags: 5,
     referenceDots: 12,
-    charucoCorners: 25,
-    total: 41
+    extraPoints: 20,
+    total: 37
   },
   estimatedPrecision: "±0.25mm"
 }
@@ -68,8 +68,8 @@ MetreA4CompleteDetectionResult {
 ```javascript
 {
   detectedPoints: [
-    { pixel: {x,y}, real: {x,y}, type: 'apriltag'|'dot'|'charuco', confidence: 0.95 },
-    ... // 41+ points détectés
+    { pixel: {x,y}, real: {x,y}, type: 'apriltag'|'dot'|'apriltag-corner', confidence: 0.95 },
+    ... // 37+ points détectés
   ],
   objectPoints: [
     { x: 150, y: 200 },  // TL cliqué par l'utilisateur
@@ -155,7 +155,7 @@ interface CalibrationData {
 
 | Aspect | Ancien | Nouveau |
 |--------|--------|---------|
-| **Points utilisés** | 4 coins seulement | 41+ (AprilTag + dots + ChArUco) |
+| **Points utilisés** | 4 coins seulement | 37+ (AprilTag + dots + coins AprilTag) |
 | **Algorithme** | Homographie simple (DLT) | RANSAC + Levenberg-Marquardt |
 | **Précision** | ±1cm | **±0.25cm** |
 | **Outliers** | Non géré | Automatiquement rejeté (RANSAC) |

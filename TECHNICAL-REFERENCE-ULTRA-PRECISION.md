@@ -2,7 +2,7 @@
 
 **Implemented**: January 14, 2026  
 **Precision Target**: From ±1cm to **±0.25cm** (4× improvement)  
-**Points Used**: From 4 corners to **41+ detection points**  
+**Points Used**: From 4 corners to **37+ detection points**  
 **Method**: RANSAC + Levenberg-Marquardt + 3D Depth Estimation  
 
 ---
@@ -18,18 +18,18 @@
                  │
                  ▼
 ┌─────────────────────────────────────────┐
-│  Phase 1: Detect 41+ Points             │
+│  Phase 1: Detect 37+ Points             │
 │  File: metre-a4-complete-detector.ts   │
-│  - 4 AprilTag corners                   │
+│  - 5 AprilTag centers                   │
+│  - 20 AprilTag corners                  │
 │  - 12 reference dots                    │
-│  - 25 ChArUco board corners (6×6)       │
 │  - Detection confidence per point       │
 └────────────────┬────────────────────────┘
                  │
      ┌───────────┴───────────┐
      ▼                       ▼
 [Simple Route]        [Ultra-Precision Route]
-±1cm (4 points)       ±0.25cm (41+ points)
+±1cm (4 points)       ±0.25cm (37+ points)
 compute-dimensions    ultra-precision-compute
      │                       │
      └───────────┬───────────┘
@@ -222,7 +222,7 @@ Content-Type: application/json
   detectedPoints: Array<{
     pixel: { x: number, y: number },        // Image coordinates
     real: { x: number, y: number },         // Real mm on A4
-    type: 'apriltag' | 'dot' | 'charuco',
+    type: 'apriltag' | 'dot' | 'apriltag-corner',
     confidence: number                      // 0-1
   }>,
   objectPoints: Array<{ x: number, y: number }>,  // 4 corners clicked
@@ -333,14 +333,14 @@ Problems:
 - Perspective distortion not fully corrected
 - Bad detections included in calculation
 - No 3D error analysis
-- ChArUco and dots completely ignored
+- Coins AprilTag et points noirs ignorés
 ```
 
 ### New System (±0.25cm) ✨
 ```
-- Points used: 41 (100% leveraged)
+- Points used: 37 (100% leveraged)
 - Algorithm: RANSAC + Levenberg-Marquardt
-- Inliers: ~38/41 (92% good points)
+- Inliers: ~32/37 (86% good points)
 - Depth: ~1500mm ±87mm
 - Incline: ~0.45° detected
 - Reprojection error: 0.42mm
@@ -450,7 +450,7 @@ TOTAL ADDITIONS: ~850 lines of code + documentation
 ## Known Limitations
 
 1. **Planar assumption**: Works best with flat objects (0.5° incline OK)
-2. **Lighting**: Needs good contrast for ChArUco detection
+2. **Lighting**: Needs good contrast for AprilTag corner detection
 3. **Distance**: 1-3 meters optimal (depth estimation less reliable <30cm)
 4. **Lens distortion**: Assumes no extreme barrel/pincushion
 5. **Occlusion**: If >3 points occluded, precision drops

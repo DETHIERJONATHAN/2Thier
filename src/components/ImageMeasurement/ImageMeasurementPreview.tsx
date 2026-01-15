@@ -98,6 +98,8 @@ interface MobileFullscreenCanvasProps {
   measurementObjectConfig?: any;
   allPhotos?: any[];
   arucoAnalysis?: any; // 🔬 Analyse complète ArUco
+  detectionMethod?: string; // 🎯 Type de détection
+  aprilTagsDebug?: any; // 🎨 VISUALISATION DEBUG: Données AprilTags
   optimalCorrection?: any; // 🔧 CORRECTION OPTIMALE: Facteur calculé par RANSAC
 }
 
@@ -119,6 +121,8 @@ const MobileFullscreenCanvas: React.FC<MobileFullscreenCanvasProps> = ({
   measurementObjectConfig,
   allPhotos,
   arucoAnalysis, // 🔬 Analyse complète ArUco
+  detectionMethod, // 🎯 Type de détection
+  aprilTagsDebug, // 🎨 VISUALISATION DEBUG: Données AprilTags
   optimalCorrection // 🔧 CORRECTION OPTIMALE
 }) => {
   const containerRef = React.useRef<HTMLDivElement>(null);
@@ -392,7 +396,8 @@ export const ImageMeasurementPreview: React.FC<ImageMeasurementPreviewProps> = (
       console.log('   📍 fusedCorners:', fusedCorners);
       
       // 🎯 Déterminer les dimensions selon le type de détection
-      if (detectionMethod === 'AprilTag-Metre-V1.2') {
+      const isAprilTagMetre = detectionMethod?.includes('AprilTag-Metre-V1.2') === true || detectionMethod === 'apriltag-metre';
+      if (isAprilTagMetre) {
         // 📐 Métré V1.2: Dimensions rectangulaires entre centres de tags
         const metreWidth = 13.0;  // distance TL↔TR entre centres (cm)
         const metreHeight = 21.7; // distance TL↔BL entre centres (cm)
@@ -644,7 +649,8 @@ export const ImageMeasurementPreview: React.FC<ImageMeasurementPreviewProps> = (
       const hasArucoData = fusedCorners && homographyReady;
       if (hasArucoData) {
         console.log('🎯 [ImageMeasurementPreview] Marqueur détecté, SKIP chargement config A4');
-        if (detectionMethod === 'AprilTag-Metre-V1.2') {
+        const isAprilTagMetre = detectionMethod?.includes('AprilTag-Metre-V1.2') === true || detectionMethod === 'apriltag-metre';
+        if (isAprilTagMetre) {
           const metreWidth = 13.0;
           const metreHeight = 21.7;
           console.log(`   📏 AprilTag Métré V1.2 → referenceRealSize: ${metreWidth}×${metreHeight}cm`);
@@ -838,6 +844,8 @@ export const ImageMeasurementPreview: React.FC<ImageMeasurementPreviewProps> = (
         allPhotos={allPhotos}
         // 🔬 ANALYSE ARUCO: Pour afficher le contour magenta sur mobile aussi !
         arucoAnalysis={arucoAnalysis}
+        detectionMethod={detectionMethod}
+        aprilTagsDebug={aprilTagsDebug}
         // 🔧 CORRECTION OPTIMALE: Facteur calculé par RANSAC
         optimalCorrection={optimalCorrection}
       />
@@ -880,78 +888,7 @@ export const ImageMeasurementPreview: React.FC<ImageMeasurementPreviewProps> = (
         style={{ marginBottom: isMobile ? 12 : 24 }}
       />
 
-      {/* 🆕 MULTI-PHOTOS: Affichage de l'analyse de fusion */}
-      {multiPhotoAnalysis && (
-        <Alert
-          type={multiPhotoAnalysis.usablePhotos === multiPhotoAnalysis.totalPhotos ? 'success' : 
-                multiPhotoAnalysis.usablePhotos >= 2 ? 'info' : 'warning'}
-          showIcon
-          style={{ marginBottom: 16 }}
-          message={
-            <Space direction="vertical" size={4} style={{ width: '100%' }}>
-              <Text strong>
-                📷 Fusion {multiPhotoAnalysis.totalPhotos} photos → Vue corrigée "de face"
-              </Text>
-              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                {multiPhotoAnalysis.qualityScores.map((photo, idx) => (
-                  <Tag
-                    key={idx}
-                    color={photo.usable ? (photo.score >= 70 ? 'green' : 'orange') : 'red'}
-                  >
-                    Photo {idx + 1}: {photo.score}%
-                    {idx === multiPhotoAnalysis.bestPhotoIndex && ' ⭐'}
-                  </Tag>
-                ))}
-              </div>
-              {multiPhotoAnalysis.perspectiveCorrection && multiPhotoAnalysis.perspectiveCorrection.type !== 'none' ? (
-                <Text type="secondary" style={{ fontSize: 12 }}>
-                  🎯 Perspective corrigée: {multiPhotoAnalysis.perspectiveCorrection.angle.toFixed(1)}° {multiPhotoAnalysis.perspectiveCorrection.type === 'horizontal' ? '(gauche/droite)' : multiPhotoAnalysis.perspectiveCorrection.type === 'vertical' ? '(haut/bas)' : '(2 axes)'}
-                  {' → '}Rectangle A4 redressé pour calibration précise
-                </Text>
-              ) : multiPhotoAnalysis.perspectiveCorrection?.type === 'aruco-ultra-precision' ? (
-                <Text type="secondary" style={{ fontSize: 12 }}>
-                  🎯 <strong>ArUco ULTRA-PRÉCISION</strong>: Marqueur 18×18cm détecté avec précision ±0.2mm
-                </Text>
-              ) : (
-                <Text type="secondary" style={{ fontSize: 12 }}>
-                  ✅ Photos bien de face - pas de correction nécessaire
-                </Text>
-              )}
-              {/* 🎯 NOUVEAU: Affichage infos précision ArUco */}
-              {multiPhotoAnalysis.homographyReady && (
-                <div style={{ 
-                  marginTop: 8, 
-                  padding: '8px 12px', 
-                  background: '#f0fdf4', 
-                  borderRadius: 6,
-                  border: '1px solid #86efac'
-                }}>
-                  <Text strong style={{ color: '#16a34a', fontSize: 13 }}>
-                    {detectionMethod === 'A4-aggressive-detection' 
-                      ? '📄 Feuille A4 détectée - Calibration automatique'
-                      : '🎯 ArUco MAGENTA détecté - Calibration haute précision'
-                    }
-                  </Text>
-                  <div style={{ marginTop: 4, fontSize: 12, color: '#166534' }}>
-                    <span style={{ marginRight: 12 }}>
-                      📏 Référence: {detectionMethod === 'A4-aggressive-detection' ? '21×29.7cm (A4)' : '18×18cm'}
-                    </span>
-                    {multiPhotoAnalysis.fusionConfidence && (
-                      <span style={{ marginRight: 12 }}>✨ Qualité: {(multiPhotoAnalysis.fusionConfidence * 100).toFixed(0)}%</span>
-                    )}
-                    <span>🎯 Précision estimée: ±0.5mm</span>
-                  </div>
-                </div>
-              )}
-              <Text type="secondary" style={{ fontSize: 12 }}>
-                Confiance fusion: {typeof multiPhotoAnalysis.fusionConfidence === 'number' 
-                  ? (multiPhotoAnalysis.fusionConfidence > 1 ? multiPhotoAnalysis.fusionConfidence : (multiPhotoAnalysis.fusionConfidence * 100).toFixed(0)) 
-                  : multiPhotoAnalysis.fusionConfidence}%
-              </Text>
-            </Space>
-          }
-        />
-      )}
+      {/* Dashboard unique affiché dans le canvas */}
 
       {/* Loading state */}
       {(step === 'loading' || step === 'calibrating' || step === 'measuring') && (

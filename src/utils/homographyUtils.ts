@@ -223,16 +223,15 @@ export function getArucoMarkerSizeMm(): number {
 /**
  * 🎯 Crée les points destination pour un marqueur Métré A4 V1.2 (rectangle)
  * 
- * Utilise la taille configurée (13cm largeur × 21.7cm hauteur)
- * Par défaut: 13.0cm = 130mm (largeur AprilTag)
+ * Dimensions: 13.0cm × 21.7cm (130mm × 217mm) - AprilTag rectangulaire
+ * Identique à createAprilTagMetreDestinationPoints()
  */
 export function createArucoDestinationPoints(): Point2D[] {
-  const markerSizeMm = _arucoMarkerSizeMm;
   return [
-    [0, 0],                     // topLeft
-    [markerSizeMm, 0],          // topRight
-    [markerSizeMm, markerSizeMm], // bottomRight
-    [0, markerSizeMm]           // bottomLeft
+    [0, 0],                                      // topLeft
+    [APRILTAG_METRE_WIDTH_MM, 0],               // topRight (130mm)
+    [APRILTAG_METRE_WIDTH_MM, APRILTAG_METRE_HEIGHT_MM], // bottomRight (130×217mm)
+    [0, APRILTAG_METRE_HEIGHT_MM]               // bottomLeft (217mm)
   ];
 }
 

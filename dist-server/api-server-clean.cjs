@@ -67845,6 +67845,16 @@ function selectBestPhoto(photos) {
   if (bestScore.warnings.length > 0) {
     console.log(`   \u26A0\uFE0F  Warnings: ${bestScore.warnings.join(", ")}`);
   }
+  if (bestTotalScore < 45) {
+    console.log(`
+   \u274C REJET: Score ${bestTotalScore.toFixed(1)}/100 insuffisant (seuil: 45)`);
+    throw new Error(
+      `QUALIT\xC9_INSUFFISANTE: Meilleur score ${bestTotalScore.toFixed(1)}/100. Reprendre les photos avec meilleur \xE9clairage et stabilit\xE9. Points d\xE9tect\xE9s: ${bestPhoto.detection.breakdown.total} (4 AprilTags + ${bestPhoto.detection.breakdown.referenceDots} dots + ${bestPhoto.detection.breakdown.charucoCorners} ChArUco). Probl\xE8mes: ${bestScore.warnings.join(", ") || "Nettet\xE9/\xE9clairage insuffisants"}`
+    );
+  }
+  if (bestTotalScore < 60) {
+    console.log(`   \u26A0\uFE0F  QUALIT\xC9 LIMITE: Score ${bestTotalScore.toFixed(1)}/100 (recommandation: reprendre)`);
+  }
   return {
     bestPhoto,
     bestScore,
@@ -67865,7 +67875,19 @@ function analyzePhotoQuality(photo) {
     warnings.push("Nettet\xE9 insuffisante");
   }
   const homographyMetrics = analyzeHomographyQuality(photo.detection);
-  const homographyScore = computeHomographyScore(homographyMetrics);
+  let homographyScore = computeHomographyScore(homographyMetrics);
+  const pointDensity = {
+    aprilTags: photo.detection.breakdown.aprilTags / 4 * 100,
+    // Max 100 (4/4)
+    dots: photo.detection.breakdown.referenceDots / 12 * 100,
+    // Max 100 (12/12)
+    charuco: photo.detection.breakdown.charucoCorners / 18 * 100
+    // Max 100 (18/18)
+  };
+  const densityBonus = pointDensity.aprilTags * 0.3 + // AprilTags moins critiques (toujours 4/4)
+  pointDensity.dots * 0.2 + // Dots variables
+  pointDensity.charuco * 0.5;
+  homographyScore = homographyScore * 0.7 + densityBonus * 0.3;
   if (photo.detection.homography.reprojectionErrorMm > HOMOGRAPHY_THRESHOLDS.acceptable) {
     warnings.push(`Erreur reprojection ${photo.detection.homography.reprojectionErrorMm.toFixed(1)}mm`);
   }
@@ -67941,7 +67963,7 @@ function analyzeSharpness(data, width, height) {
   };
 }
 function computeSharpnessScore(metrics) {
-  const laplacianScore = Math.min(100, metrics.laplacianVariance / 500 * 100);
+  const laplacianScore = Math.min(100, metrics.laplacianVariance / 200 * 100);
   const score = laplacianScore * 0.5 + metrics.edgeStrength * 0.3 + metrics.contrastRatio * 0.2;
   return Math.max(0, Math.min(100, score));
 }
@@ -67968,9 +67990,18 @@ function computeSpatialCoverage(points) {
     minY = Math.min(minY, p.y);
     maxY = Math.max(maxY, p.y);
   }
-  const bboxArea = (maxX - minX) * (maxY - minY);
-  const normalizedArea = bboxArea / (1e3 * 1e3);
-  return Math.min(1, normalizedArea);
+  const width = maxX - minX;
+  const height = maxY - minY;
+  if (width < 10 || height < 10) return 0;
+  const grid = Array(4).fill(null).map(() => Array(4).fill(0));
+  for (const p of points) {
+    const gridX = Math.min(3, Math.floor((p.x - minX) / width * 4));
+    const gridY = Math.min(3, Math.floor((p.y - minY) / height * 4));
+    grid[gridY][gridX]++;
+  }
+  const filledCells = grid.flat().filter((count) => count > 0).length;
+  const spatialCoverage = filledCells / 16;
+  return spatialCoverage;
 }
 function analyzeCaptureConditions(data, width, height, detection) {
   const aprilTagPoints = detection.points.filter((p) => p.type === "apriltag");
@@ -68757,6 +68788,133 @@ function perturbHomography(H, delta) {
 // src/api/measurement-reference.ts
 var sharp2 = sharpModule2.default || sharpModule2;
 var router91 = (0, import_express94.Router)();
+async function detectObjectsInProjectedImage(imageData, width, height, homographyMatrix) {
+  try {
+    const grayData = new Uint8ClampedArray(width * height);
+    for (let i = 0; i < width * height; i++) {
+      const r = imageData[i * 4];
+      const g = imageData[i * 4 + 1];
+      const b = imageData[i * 4 + 2];
+      grayData[i] = Math.round(0.299 * r + 0.587 * g + 0.114 * b);
+    }
+    const threshold = computeOtsuThreshold(grayData);
+    const binaryData = grayData.map((v) => v > threshold ? 255 : 0);
+    const edges = detectEdges(binaryData, width, height);
+    const contours = findContours(edges, width, height);
+    const validObjects = contours.filter((c) => c.area > width * height * 0.01).filter((c) => c.area < width * height * 0.8).filter((c) => c.confidence > 0.5).sort((a, b) => b.area - a.area);
+    return validObjects.map((obj) => ({
+      ...obj,
+      corners: {
+        topLeft: { x: obj.corners.topLeft.x / width * 100, y: obj.corners.topLeft.y / height * 100 },
+        topRight: { x: obj.corners.topRight.x / width * 100, y: obj.corners.topRight.y / height * 100 },
+        bottomRight: { x: obj.corners.bottomRight.x / width * 100, y: obj.corners.bottomRight.y / height * 100 },
+        bottomLeft: { x: obj.corners.bottomLeft.x / width * 100, y: obj.corners.bottomLeft.y / height * 100 }
+      }
+    }));
+  } catch (error) {
+    console.error("\u274C Auto-d\xE9tection objets \xE9chou\xE9e:", error);
+    return [];
+  }
+}
+function computeOtsuThreshold(data) {
+  const histogram = new Array(256).fill(0);
+  data.forEach((v) => histogram[v]++);
+  const total = data.length;
+  let sum = 0;
+  for (let i = 0; i < 256; i++) sum += i * histogram[i];
+  let sumB = 0;
+  let wB = 0;
+  let wF = 0;
+  let maxVariance = 0;
+  let threshold = 0;
+  for (let t = 0; t < 256; t++) {
+    wB += histogram[t];
+    if (wB === 0) continue;
+    wF = total - wB;
+    if (wF === 0) break;
+    sumB += t * histogram[t];
+    const mB = sumB / wB;
+    const mF = (sum - sumB) / wF;
+    const variance = wB * wF * (mB - mF) * (mB - mF);
+    if (variance > maxVariance) {
+      maxVariance = variance;
+      threshold = t;
+    }
+  }
+  return threshold;
+}
+function detectEdges(data, width, height) {
+  const edges = new Uint8ClampedArray(data.length);
+  for (let y = 1; y < height - 1; y++) {
+    for (let x = 1; x < width - 1; x++) {
+      const idx = y * width + x;
+      const gx = -data[(y - 1) * width + (x - 1)] + data[(y - 1) * width + (x + 1)] + -2 * data[y * width + (x - 1)] + 2 * data[y * width + (x + 1)] + -data[(y + 1) * width + (x - 1)] + data[(y + 1) * width + (x + 1)];
+      const gy = -data[(y - 1) * width + (x - 1)] - 2 * data[(y - 1) * width + x] - data[(y - 1) * width + (x + 1)] + data[(y + 1) * width + (x - 1)] + 2 * data[(y + 1) * width + x] + data[(y + 1) * width + (x + 1)];
+      edges[idx] = Math.min(255, Math.sqrt(gx * gx + gy * gy));
+    }
+  }
+  return edges;
+}
+function findContours(edges, width, height) {
+  const contours = [];
+  const visited = new Uint8ClampedArray(width * height);
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const idx = y * width + x;
+      if (edges[idx] > 128 && !visited[idx]) {
+        const blob = floodFill(edges, visited, x, y, width, height);
+        if (blob.points.length > 50) {
+          const rect = approximateRectangle(blob.points);
+          if (rect) {
+            contours.push({
+              corners: rect,
+              area: blob.points.length,
+              confidence: computeRectangleConfidence(blob.points, rect),
+              type: "rectangle"
+            });
+          }
+        }
+      }
+    }
+  }
+  return contours;
+}
+function floodFill(edges, visited, startX, startY, width, height) {
+  const points = [];
+  const stack = [{ x: startX, y: startY }];
+  while (stack.length > 0 && points.length < 1e4) {
+    const { x, y } = stack.pop();
+    const idx = y * width + x;
+    if (x < 0 || x >= width || y < 0 || y >= height) continue;
+    if (visited[idx] || edges[idx] < 128) continue;
+    visited[idx] = 1;
+    points.push({ x, y });
+    stack.push({ x: x + 1, y });
+    stack.push({ x: x - 1, y });
+    stack.push({ x, y: y + 1 });
+    stack.push({ x, y: y - 1 });
+  }
+  return { points };
+}
+function approximateRectangle(points) {
+  if (points.length < 4) return null;
+  const xs = points.map((p) => p.x);
+  const ys = points.map((p) => p.y);
+  const minX = Math.min(...xs);
+  const maxX = Math.max(...xs);
+  const minY = Math.min(...ys);
+  const maxY = Math.max(...ys);
+  return {
+    topLeft: { x: minX, y: minY },
+    topRight: { x: maxX, y: minY },
+    bottomRight: { x: maxX, y: maxY },
+    bottomLeft: { x: minX, y: maxY }
+  };
+}
+function computeRectangleConfidence(points, rect) {
+  const rectArea = (rect.bottomRight.x - rect.topLeft.x) * (rect.bottomRight.y - rect.topLeft.y);
+  return Math.min(1, points.length / rectArea);
+}
 router91.post("/ultra-fusion-detect", authenticateToken, async (req2, res) => {
   const startTime = Date.now();
   try {
@@ -68785,7 +68943,31 @@ ${"=".repeat(80)}`);
         const metadata = await sharp2(imageBuffer).metadata();
         const width = metadata.width;
         const height = metadata.height;
-        const raw = await sharp2(imageBuffer).ensureAlpha().raw().toBuffer();
+        console.log(`      \u{1F3A8} Preprocessing ULTRA-PREMIUM: CLAHE + Bilateral + Denoise + Sharpen MAX...`);
+        let processedBuffer = await sharp2(imageBuffer).median(3).toBuffer();
+        processedBuffer = await sharp2(processedBuffer).normalize().linear(1.3, -(128 * 0.3)).toBuffer();
+        processedBuffer = await sharp2(processedBuffer).blur(0.5).toBuffer();
+        const { data: enhancedPixels } = await sharp2(processedBuffer).sharpen({
+          sigma: 2,
+          // Rayon gaussien élargi (2.0 = netteté forte)
+          m1: 1.5,
+          // +50% netteté zones plates (AprilTags/ChArUco) ⬆️
+          m2: 0.6,
+          // Contrôle zones fort contraste (plus agressif)
+          x1: 2,
+          // Seuil bas (plus sensible)
+          y2: 20,
+          // Seuil haut augmenté
+          y3: 20
+          // Saturation augmentée
+        }).modulate({
+          brightness: 1.05,
+          // +5% luminosité (meilleure visibilité)
+          saturation: 1.2,
+          // +20% saturation → points noirs ULTRA-visibles ⬆️
+          hue: 0
+        }).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+        const raw = enhancedPixels;
         const rgba = new Uint8ClampedArray(raw);
         const detection = detectMetreA4Complete(rgba, width, height);
         if (!detection) {
@@ -68817,6 +68999,22 @@ ${"=".repeat(80)}`);
     const bestResult = selectBestPhoto(candidates);
     const best = bestResult.bestPhoto;
     const bestIdx = parseInt(best.id.split("-")[1]);
+    console.log(`
+\u{1F3AF} Auto-d\xE9tection objets dans meilleure photo...`);
+    const detectedObjects = await detectObjectsInProjectedImage(
+      best.imageData,
+      best.width,
+      best.height,
+      best.detection.homography.matrix
+    );
+    if (detectedObjects.length > 0) {
+      console.log(`   \u2705 ${detectedObjects.length} objet(s) d\xE9tect\xE9(s) automatiquement`);
+      detectedObjects.forEach((obj, idx) => {
+        console.log(`      \u{1F4E6} Objet ${idx + 1}: ${obj.type}, area=${obj.area}px, confidence=${(obj.confidence * 100).toFixed(1)}%`);
+      });
+    } else {
+      console.log(`   \u26A0\uFE0F  Aucun objet auto-d\xE9tect\xE9 (utilisateur devra s\xE9lectionner manuellement)`);
+    }
     const [tl, tr, bl, br] = best.detection.aprilTagCenters;
     const fusedCorners = {
       topLeft: { x: tl.x / best.width * 100, y: tl.y / best.height * 100 },
@@ -68860,6 +69058,16 @@ ${"=".repeat(80)}`);
           confidence: p.confidence
         }))
       },
+      // 🎯 NOUVEAU: Objets détectés automatiquement
+      autoDetectedObjects: detectedObjects.map((obj, idx) => ({
+        id: `auto-object-${idx}`,
+        corners: obj.corners,
+        area: obj.area,
+        confidence: obj.confidence,
+        type: obj.type,
+        autoSelected: idx === 0
+        // Premier objet pré-sélectionné par défaut
+      })),
       bestPhoto: {
         index: bestIdx,
         score: bestResult.bestScore.total,

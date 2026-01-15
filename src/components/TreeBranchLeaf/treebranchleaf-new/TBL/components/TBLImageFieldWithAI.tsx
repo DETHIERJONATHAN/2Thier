@@ -154,6 +154,10 @@ const TBLImageFieldWithAI: React.FC<TBLImageFieldWithAIProps> = ({
   
   // 🆕 État pour le modal plein écran
   const [showFullscreenImage, setShowFullscreenImage] = useState(false);
+
+  // 🔒 Cache anti-doublons pour limiter les updates backend inutiles
+  const lastAppliedMeasurementsRef = useRef<Record<string, number | string> | null>(null);
+  const lastAppliedImageRef = useRef<string | null>(null);
   
   // Refs pour les inputs file (galerie et caméra)
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -564,9 +568,73 @@ const TBLImageFieldWithAI: React.FC<TBLImageFieldWithAIProps> = ({
         throw new Error(result.error || 'Fusion échouée');
       }
       
-      console.log('[TBLImageFieldWithAI] ✅ Analyse ArUco terminée!');
-      console.log(`   🏆 Meilleure photo: ${result.bestPhoto?.index} (score: ${(result.bestPhoto?.score * 100).toFixed(1)}%)`);
-      console.log(`   📊 Détections: ${result.metrics?.successfulDetections}/${result.metrics?.inputPhotos}`);
+      console.log('\n' + '='.repeat(80));
+      console.log('📸 [ULTRA-FUSION] RÉSULTATS DÉTAILLÉS');
+      console.log('='.repeat(80));
+      
+      console.log('\n🎯 MEILLEURE PHOTO SÉLECTIONNÉE:');
+      console.log(`   Index: ${result.bestPhoto?.index}`);
+      console.log(`   Score total: ${result.bestPhoto?.score?.toFixed(1)}/100`);
+      console.log(`   Netteté: ${result.bestPhoto?.sharpness?.toFixed(1)}/100`);
+      console.log(`   Homographie: ${result.bestPhoto?.homographyQuality?.toFixed(1)}/100`);
+      console.log(`   Conditions: ${result.bestPhoto?.captureConditions?.toFixed(1)}/100`);
+      if (result.bestPhoto?.warnings?.length > 0) {
+        console.log(`   ⚠️ Warnings: ${result.bestPhoto.warnings.join(', ')}`);
+      }
+      
+      console.log('\n📊 TOUTES LES PHOTOS:');
+      result.allPhotoScores?.forEach((photo: any, idx: number) => {
+        const marker = idx === result.bestPhoto?.index ? '🏆' : '  ';
+        console.log(`   ${marker} Photo ${idx}: ${photo.score?.toFixed(1) || 'N/A'}/100 ${photo.detected ? '✅' : '❌'}`);
+      });
+      
+      console.log('\n🔬 ULTRA-PRÉCISION (Photo sélectionnée):');
+      if (result.ultraPrecision) {
+        const extraPoints = Math.max(
+          0,
+          (result.ultraPrecision.totalPoints || 0) -
+            (result.ultraPrecision.aprilTags || 0) -
+            (result.ultraPrecision.referenceDots || 0)
+        );
+        console.log(`   Points total: ${result.ultraPrecision.totalPoints}`);
+        console.log(`   - AprilTags: ${result.ultraPrecision.aprilTags}/5`);
+        console.log(`   - Points noirs: ${result.ultraPrecision.referenceDots}/12`);
+        console.log(`   - Points extra: ${extraPoints}`);
+        console.log(`   Précision estimée: ${result.ultraPrecision.estimatedPrecision}`);
+        console.log(`   Erreur reprojection: ${result.ultraPrecision.reprojectionError?.toFixed(2)}mm`);
+        console.log(`   Qualité homographie: ${(result.ultraPrecision.quality * 100).toFixed(1)}%`);
+      }
+      
+      console.log('\n📈 MÉTRIQUES GLOBALES:');
+      console.log(`   Photos analysées: ${result.metrics?.inputPhotos}`);
+      console.log(`   Détections réussies: ${result.metrics?.successfulDetections}`);
+      console.log(`   Amélioration: +${result.metrics?.improvement?.toFixed(1)}% vs moyenne`);
+      console.log(`   Temps traitement: ${result.metrics?.processingTimeMs}ms`);
+      
+      console.log('\n' + '='.repeat(80) + '\n');
+      
+      // 📊 Afficher le score de qualité au commercial
+      const bestScore = result.bestPhoto?.score || 0;
+      const scoreType = bestScore >= 60 ? 'success' : bestScore >= 45 ? 'warning' : 'error';
+      const extraPointsForMsg = result.ultraPrecision
+        ? Math.max(
+            0,
+            (result.ultraPrecision.totalPoints || 0) -
+              (result.ultraPrecision.aprilTags || 0) -
+              (result.ultraPrecision.referenceDots || 0)
+          )
+        : 0;
+      const scoreMessage = bestScore >= 60 
+        ? `✅ Qualité excellente (${bestScore.toFixed(0)}/100) - ${extraPointsForMsg} points extra détectés` 
+        : bestScore >= 45
+        ? `⚠️ Qualité limite (${bestScore.toFixed(0)}/100) - Recommandation : reprendre (${extraPointsForMsg} points extra)`
+        : `❌ Qualité insuffisante (${bestScore.toFixed(0)}/100) - Reprendre avec meilleur éclairage`;
+      
+      message[scoreType]({ 
+        content: scoreMessage, 
+        key: 'photo-quality',
+        duration: 8 
+      });
       
       if (result.ultraPrecision) {
         console.log(`   🔬 Ultra-précision: ${result.ultraPrecision.totalPoints} points`);
@@ -689,7 +757,10 @@ const TBLImageFieldWithAI: React.FC<TBLImageFieldWithAIProps> = ({
     
     // Sauvegarder l'image traitée dans le champ
     if (processedImageUrl) {
-      onChange(processedImageUrl);
+      if (lastAppliedImageRef.current !== processedImageUrl) {
+        onChange(processedImageUrl);
+        lastAppliedImageRef.current = processedImageUrl;
+      }
       // Aussi sauvegarder comme image annotée (pour l'instant la même, mais pourrait être avec overlay)
       setAnnotatedImageUrl(processedImageUrl);
     }
@@ -697,15 +768,31 @@ const TBLImageFieldWithAI: React.FC<TBLImageFieldWithAIProps> = ({
     // Appliquer les mesures aux champs mappés
     if (aiMeasure_keys && onFieldUpdate) {
       let appliedCount = 0;
+      const nextApplied: Record<string, number | string> = {
+        ...(lastAppliedMeasurementsRef.current || {})
+      };
+
       aiMeasure_keys.forEach(mapping => {
         // Accéder à la mesure par clé (string index)
         const measureValue = measurements[mapping.key as keyof MeasurementResults];
         if (measureValue !== undefined && mapping.targetRef) {
-          console.log(`[TBLImageFieldWithAI] Application: ${mapping.key} = ${measureValue} → ${mapping.targetRef}`);
-          onFieldUpdate(mapping.targetRef, measureValue);
-          appliedCount++;
+          const prevValue = lastAppliedMeasurementsRef.current?.[mapping.targetRef];
+          const hasChanged = typeof measureValue === 'number'
+            ? (typeof prevValue !== 'number' || Math.abs(prevValue - measureValue) > 0.01)
+            : prevValue !== measureValue;
+
+          if (hasChanged) {
+            console.log(`[TBLImageFieldWithAI] Application: ${mapping.key} = ${measureValue} → ${mapping.targetRef}`);
+            onFieldUpdate(mapping.targetRef, measureValue);
+            nextApplied[mapping.targetRef] = measureValue as number | string;
+            appliedCount++;
+          }
         }
       });
+
+      if (appliedCount > 0) {
+        lastAppliedMeasurementsRef.current = nextApplied;
+      }
       
       if (appliedCount > 0) {
         message.success(`📐 ${appliedCount} mesure(s) appliquée(s) aux champs !`);

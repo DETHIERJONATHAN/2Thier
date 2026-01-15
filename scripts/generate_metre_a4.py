@@ -158,7 +158,7 @@ def main() -> None:
     draw_text_center(draw, (page_px[0] // 2, mm_to_px(29)), "Imprimer à 100% - Version PAPIER BLANC", size_px=mm_to_px(3))
 
     # QR Code 30×30mm centré sous warnings (lisibilité accrue)
-    qr_img = generate_qr_code(30, "A4-CALIB-V1.2-LIGHT")
+    qr_img = generate_qr_code(30, "A4-CALIB-V1.3-LIGHT")
     canvas.paste(qr_img, (mm_to_px((210 - 30) / 2), mm_to_px(32)))
 
     # AprilTag corners (30mm du bord pour éviter zone non-imprimable ~5mm)
@@ -172,22 +172,22 @@ def main() -> None:
         tag_img = generate_apriltag(id_, 20)
         place_image(canvas, tag_img, x_mm, y_mm, 20, 20)
 
-    # ChArUco 6×6 centre
-    charuco_img = generate_charuco(120, 120, squares_x=6, squares_y=6, square_mm=20)
-    place_image(canvas, charuco_img, 45, 80, 120, 120)
+    # AprilTag central 120×120mm (repérage à distance) — même position que le damier
+    center_tag = generate_apriltag(33, 120)
+    place_image(canvas, center_tag, 45, 80, 120, 120)
 
-    # 14 points référence dispersés (ajustés pour zone imprimable)
+    # 12 points référence dispersés (positions originales)
     dots = [
         # Haut gauche (3)
         (45, 65), (65, 60), (80, 68),
         # Haut droit (3)
         (145, 65), (160, 60), (175, 68),
-        # Bas gauche (2) - bien au-dessus des textes et règles
+        # Bas gauche (2)
         (43, 210), (73, 215),
-        # Bas droit (2) - bien au-dessus aussi
+        # Bas droit (2)
         (152, 210), (180, 215),
-        # Centre à gauche et droite du damier (2)
-        (30, 140), (180, 140),
+        # Centre gauche et droite du damier (2)
+        (30, 140), (180, 140)
     ]
     draw_dots(draw, dots, r_mm=2.0)
 
@@ -197,7 +197,7 @@ def main() -> None:
     
     # Zone d'information
     draw_text_center(draw, (page_px[0] // 2, mm_to_px(228)), "Règles : Horizontal 0–175mm | Vertical 0–190mm", size_px=mm_to_px(2.8))
-    draw_text_center(draw, (page_px[0] // 2, mm_to_px(232)), "ID : A4-CALIB-V1.2-LIGHT — 210×297 mm", size_px=mm_to_px(3))
+    draw_text_center(draw, (page_px[0] // 2, mm_to_px(232)), "ID : A4-CALIB-V1.3-LIGHT — 210×297 mm", size_px=mm_to_px(3))
 
     # Logos (remontés pour éviter zone grise)
     try:
@@ -254,7 +254,7 @@ def main() -> None:
     draw_dark.text((page_px[0] // 2 - w // 2, mm_to_px(29)), "Imprimer à 100% - Version MUR BLANC (projection)", fill="white", font=font_small)
 
     # QR Code DARK (inverted)
-    qr_img_dark = generate_qr_code(30, "A4-CALIB-V1.2-DARK")
+    qr_img_dark = generate_qr_code(30, "A4-CALIB-V1.3-DARK")
     qr_inverted = ImageOps.invert(qr_img_dark.convert("L")).convert("RGB")
     canvas_dark.paste(qr_inverted, (mm_to_px((210 - 30) / 2), mm_to_px(32)))
 
@@ -265,10 +265,10 @@ def main() -> None:
         tag_array = np.array(tag_inverted)
         place_image(canvas_dark, tag_array, x_mm, y_mm, 20, 20)
 
-    # ChArUco DARK (inverted)
-    charuco_img = generate_charuco(120, 120, squares_x=6, squares_y=6, square_mm=20)
-    charuco_inverted = ImageOps.invert(Image.fromarray(charuco_img).convert("L")).convert("RGB")
-    place_image(canvas_dark, np.array(charuco_inverted), 45, 80, 120, 120)
+    # AprilTag central 120×120mm (repérage à distance) - inversé
+    center_tag_dark = generate_apriltag(33, 120)
+    center_tag_dark_inv = ImageOps.invert(Image.fromarray(center_tag_dark).convert("L")).convert("RGB")
+    place_image(canvas_dark, np.array(center_tag_dark_inv), 45, 80, 120, 120)
 
     # Points de référence BLANCS au lieu de NOIRS
     r_px = mm_to_px(2.0)
@@ -318,9 +318,9 @@ def main() -> None:
     draw_dark.text((page_px[0] // 2 - w // 2, mm_to_px(228)), "Règles : Horizontal 0–175mm | Vertical 0–190mm", fill="white", font=font_info)
     
     font_id = load_font(mm_to_px(3))
-    bbox = draw_dark.textbbox((0, 0), "ID : A4-CALIB-V1.2-DARK — 210×297 mm", font=font_id)
+    bbox = draw_dark.textbbox((0, 0), "ID : A4-CALIB-V1.3-DARK — 210×297 mm", font=font_id)
     w = bbox[2] - bbox[0]
-    draw_dark.text((page_px[0] // 2 - w // 2, mm_to_px(232)), "ID : A4-CALIB-V1.2-DARK — 210×297 mm", fill="white", font=font_id)
+    draw_dark.text((page_px[0] // 2 - w // 2, mm_to_px(232)), "ID : A4-CALIB-V1.3-DARK — 210×297 mm", fill="white", font=font_id)
 
     # Logos DARK (remontés aussi)
     try:

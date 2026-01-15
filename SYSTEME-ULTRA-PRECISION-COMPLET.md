@@ -17,10 +17,10 @@ Le système combine **4 types de points de référence** pour créer une homogra
 │     (20×20mm)        ● ● ●       (20×20mm)             │
 │                     ●  ●  ●                            │
 │                                                         │
-│         📐 CHARUCO 6×6 (120×120mm)                     │
-│         ┌─┬─┬─┬─┬─┬─┐  ← 25 coins internes            │
+│         🏷️  APRILTAG CENTRAL (120×120mm)             │
+│         ┌───────────────┐  ← coins AprilTag          │
 │         ├─┼─┼─┼─┼─┼─┤                                  │
-│         ├─┼─┼─┼─┼─┼─┤  + 14 points noirs 4mm          │
+│         ├─┼─┼─┼─┼─┼─┤  + 12 points noirs 4mm          │
 │         ├─┼─┼─┼─┼─┼─┤                                  │
 │         ├─┼─┼─┼─┼─┤  ●●                               │
 │         └─┴─┴─┴─┴─┘   ●●                              │
@@ -37,11 +37,11 @@ Le système combine **4 types de points de référence** pour créer une homogra
 
 | Type | Quantité | Précision | Contribution |
 |------|----------|-----------|--------------|
-| **AprilTags** (centres) | 4 | ±0.5mm | 🟢 Structure globale |
-| **Points noirs** 4mm | 14 | ±0.3mm | 🟢 Calibration fine |
-| **ChArUco** coins 6×6 | ~25 | ±0.2mm | 🟢🟢 Ultra-précision |
+| **AprilTags** (centres) | 5 | ±0.5mm | 🟢 Structure globale |
+| **Points noirs** 4mm | 12 | ±0.3mm | 🟢 Calibration fine |
+| **Coins AprilTag** | 20 | ±0.2mm | 🟢🟢 Ultra-précision |
 | **Règles graduées** | ~8 | ±1mm | 🟡 Validation axes |
-| **TOTAL** | **~50** | **±0.5mm** | ⭐⭐⭐ |
+| **TOTAL** | **~37** | **±0.5mm** | ⭐⭐⭐ |
 
 ## 📐 Spécifications Techniques
 
@@ -141,58 +141,11 @@ function detectReferenceDots(imageData, aprilTagCenters) {
 
 **Contribution** : Calibration fine inter-quadrants, correction distorsion
 
-### 3️⃣ ChArUco 6×6 Central
+### 3️⃣ AprilTag Central 120×120mm
 
-**Position** : Grille 120×120mm au centre gauche du document
+**Position** : Tag 120×120mm au centre du document
 
-```typescript
-const charuco = {
-  x_mm: 45,
-  y_mm: 80,
-  width_mm: 120,
-  height_mm: 120,
-  squares_x: 6,
-  squares_y: 6,
-  square_mm: 20,
-  marker_ratio: 0.6
-};
-
-// Coins internes : grille 5×5 = 25 points
-const corners = [];
-for (let row = 1; row <= 5; row++) {
-  for (let col = 1; col <= 5; col++) {
-    corners.push({
-      x: 45 + col * 20,
-      y: 80 + row * 20
-    });
-  }
-}
-```
-
-**Détection** : Harris corner detector + raffinement sub-pixel
-
-```typescript
-function detectCharucoCorners(imageData, aprilTagCenters) {
-  for (let row = 1; row <= 5; row++) {
-    for (let col = 1; col <= 5; col++) {
-      const realX = 45 + col * 20;
-      const realY = 80 + row * 20;
-      
-      // 1. Estimation position
-      const estimated = roughHomography({x: realX, y: realY}, aprilTagCenters);
-      
-      // 2. Détection coin Harris
-      const corner = detectCornerHarris(estimated, searchRadius: 10);
-      
-      // 3. Raffinement sub-pixel
-      if (corner.response > threshold) {
-        const refined = subPixelRefinement(corner);
-        points.push({ pixel: refined, real: {realX, realY} });
-      }
-    }
-  }
-}
-```
+**Points utilisés** : 4 coins du tag central + 4 coins de chaque AprilTag périphérique (20 points)
 
 **Contribution** : Ultra-précision locale (±0.2mm), correction lentille optique
 
@@ -248,8 +201,8 @@ function detectRuleTransitions(imageData, aprilTagCenters) {
 graph TD
     A[Image RGBA] --> B[Détection 4 AprilTags]
     B --> C[Homographie Grossière]
-    C --> D[Blob Detection: 14 Points Noirs]
-    C --> E[Harris Corners: ChArUco 6×6]
+    C --> D[Blob Detection: 12 Points Noirs]
+    C --> E[Coins AprilTag]
     C --> F[Gradient: Règles Graduées]
     D --> G[Pool: ~50 Points]
     E --> G
@@ -277,9 +230,9 @@ const ultraResult = detectAprilTagMetreV12UltraPrecision(
 
 console.log(`
 🎯 Détection ultra-précision :
-   ✅ AprilTags: ${ultraResult.breakdown.aprilTags}
-   ✅ Points noirs: ${ultraResult.breakdown.referenceDots}/14
-   ✅ ChArUco: ${ultraResult.breakdown.charucoCorners}/25
+  ✅ AprilTags: ${ultraResult.breakdown.aprilTags}
+  ✅ Points noirs: ${ultraResult.breakdown.referenceDots}/12
+  ✅ Coins AprilTag: ${ultraResult.breakdown.extraPoints}/20
    ✅ Règles: ${ultraResult.breakdown.ruleTransitions}
    📊 Total: ${ultraResult.totalPoints} points
    🎯 Inliers RANSAC: ${ultraResult.inlierPoints}
@@ -301,14 +254,14 @@ const measurements = calculateMeasurements(targets, homography);
 |------|---------------------|------------------|------------|
 | AprilTags | ±0.5mm | ±0.8mm | ⭐⭐⭐⭐⭐ |
 | Points noirs | ±0.3mm | ±0.5mm | ⭐⭐⭐⭐ |
-| ChArUco | ±0.2mm | ±0.3mm | ⭐⭐⭐⭐⭐ |
+| Coins AprilTag | ±0.2mm | ±0.3mm | ⭐⭐⭐⭐⭐ |
 | Règles | ±1mm | ±1.5mm | ⭐⭐⭐ |
 
 ### Qualité Homographie
 
 ```
-Points utilisés : 40-50
-Inliers RANSAC : 35-45 (>85%)
+Points utilisés : 35-40
+Inliers RANSAC : 30-36 (>85%)
 Erreur reprojection : 0.3-0.8mm
 Précision finale : ±0.5mm sur TV 123×70cm
 ```
@@ -365,12 +318,12 @@ const result = detectAprilTagMetreV12UltraPrecision(
 // Résultat attendu
 /*
 🎯 Détection ultra-précision :
-   ✅ AprilTags: 4
-   ✅ Points noirs: 14/14
-   ✅ ChArUco: 25/25
+  ✅ AprilTags: 5
+  ✅ Points noirs: 12/12
+  ✅ Coins AprilTag: 20/20
    ✅ Règles: 7
-   📊 Total: 50 points
-   🎯 Inliers RANSAC: 46
+  📊 Total: 37 points
+  🎯 Inliers RANSAC: 32
    📏 Erreur reprojection: 0.42mm
    ⭐ Qualité: 91.6%
    🎯 Précision estimée: ±0.5mm
@@ -427,12 +380,12 @@ console.log(`TV: ${tvWidth}×${tvHeight}cm`);
 
 Le système ultra-précision AprilTag Métré V1.2 atteint une précision de **±0.5mm** en combinant :
 
-✅ **4 AprilTags** - Structure globale  
-✅ **14 Points noirs** - Calibration fine  
-✅ **25 ChArUco corners** - Ultra-précision locale  
+✅ **5 AprilTags** - Structure globale  
+✅ **12 Points noirs** - Calibration fine  
+✅ **20 Coins AprilTag** - Ultra-précision locale  
 ✅ **~7 Règles graduées** - Validation axes  
 
-➡️ **~50 points** pour homographie ultra-robuste  
+➡️ **~37 points** pour homographie ultra-robuste  
 ➡️ **RANSAC** pour éliminer outliers  
 ➡️ **Levenberg-Marquardt** pour optimisation finale  
 

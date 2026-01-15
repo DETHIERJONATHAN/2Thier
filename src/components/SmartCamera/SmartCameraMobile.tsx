@@ -845,11 +845,11 @@ const SmartCameraMobile: React.FC<SmartCameraMobileProps> = ({
             fontSize: 13,
             lineHeight: '1.5'
           }}>
-            <strong>Feuille de calibration A4 V1.2</strong>
+            <strong>Feuille de calibration A4 V1.3</strong>
             <ul style={{ margin: '8px 0', paddingLeft: 20 }}>
               <li>Imprimer à <strong>100%</strong> (ne pas ajuster à la page)</li>
               <li>Photographier à 20-50% du cadre</li>
-              <li>Contient: AprilTags, ChArUco, règles, points de référence</li>
+              <li>Contient: 5 AprilTags, règles, points de référence</li>
             </ul>
           </div>
 

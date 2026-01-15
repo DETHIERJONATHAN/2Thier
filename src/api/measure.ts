@@ -27,7 +27,7 @@ const detector = new MarkerDetector(30, 2000);
 const measureMode = process.env.AI_MEASURE_ENGINE || 'vision_ar';
 console.log(`📷 [MEASURE] Mode de mesure photo: ${measureMode.toUpperCase()}`);
 console.log(`   → Marqueur: Métré A4 V1.2 (13.0cm × 21.7cm AprilTag + 12 points noirs)`);
-console.log(`   → Détection étendue: 4 AprilTags + 12 points dispersés + ChArUco 6×6`);
+console.log(`   → Détection étendue: 5 AprilTags + 12 points dispersés`);
 console.log(`   → Services: MetreA4Detector ✅, PhotoQualityAnalyzer ✅, EdgeDetection ✅`);
 
 // ============================================================================

@@ -41,12 +41,12 @@ height: number                           // Hauteur pixels
 ```typescript
 {
   success: boolean;
-  points: UltraPrecisionPoint[];  // 4 AprilTags + 12 dots + 25 ChArUco = 41+ points
+  points: UltraPrecisionPoint[];  // 5 AprilTags + 12 dots + 20 coins AprilTag = 37+ points
   breakdown: {
-    aprilTags: 4,
+    aprilTags: 5,
     referenceDots: 12,
-    charucoCorners: 25,
-    total: 41
+    extraPoints: 20,
+    total: 37
   };
   aprilTagCenters: [TL, TR, BL, BR];  // 4 coins en pixels
   homography: {
@@ -59,10 +59,10 @@ height: number                           // Hauteur pixels
 ```
 
 **Flux interne** :
-1. Détecte AprilTags TAG36H11 aux 4 coins (IDs: 2, 7, 14, 21)
+1. Détecte 5 AprilTags TAG36H11 (4 coins + central)
 2. Détecte 12 points noirs dispersés (4mm diamètre)
-3. Détecte 25 coins internes ChArUco 6×6
-4. Calcule homographie robuste (105+ points possibles)
+3. Détecte 20 coins AprilTag (4 coins × 5 tags)
+4. Calcule homographie robuste (37+ points possibles)
 5. Retourne résultat avec qualité
 
 **Dimensions hardcodées** :
@@ -160,10 +160,10 @@ photos: PhotoCandidate[] = [{
   homographyMatrix: number[][];
   reprojectionErrorMm: number;
   ultraPrecision: {
-    totalPoints: 41+;
-    aprilTags: 4;
+    totalPoints: 37+;
+    aprilTags: 5;
     referenceDots: 12;
-    charucoCorners: 25;
+    extraPoints: 20;
     quality: 0-100;
     estimatedPrecision: "±0.5mm";
   };
@@ -300,7 +300,7 @@ aprilTags: [
 
 ### Détails points de référence
 - **12 points noirs** : 4mm diamètre, dispersés
-- **25 coins ChArUco** : Grille 6×6 (5×5 coins internes)
+- **20 coins AprilTag** : 4 coins × 5 tags
 - **Total minimum** : 4 + 12 + 25 = **41 points**
 - **Possible max** : 105+ avec interpolations + règles
 
@@ -360,7 +360,7 @@ tail -f /tmp/dev.log 2>&1 | grep -i "MÉTRÉ\|AprilTag\|qualité\|dimension"
 
 | Aspect | Détail |
 |--------|--------|
-| **Détection** | AprilTag TAG36H11 + 12 dots + 25 ChArUco = 41+ points |
+| **Détection** | AprilTag TAG36H11 + 12 dots + 20 coins AprilTag = 37+ points |
 | **Calibration** | Homographie 3×3 ultra-robuste, 105+ points possibles |
 | **Dimensions** | 13.0cm × 21.7cm (ratio 0.598) |
 | **Précision** | ±0.5-2mm sur 2-5m selon qualité |

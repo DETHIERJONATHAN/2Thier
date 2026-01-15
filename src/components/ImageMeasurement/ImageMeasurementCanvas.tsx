@@ -23,7 +23,6 @@ import {
   Divider,
   Select,
   message,
-  Switch,
   Alert,
   Drawer
 } from 'antd';
@@ -31,14 +30,12 @@ import {
   PlusOutlined,
   DragOutlined,
   DeleteOutlined,
-  BorderOutlined,
   UndoOutlined,
   RedoOutlined,
   CheckOutlined,
   CloseOutlined,
   ZoomInOutlined,
   ZoomOutOutlined,
-  BugOutlined,
   MenuOutlined,
   ArrowLeftOutlined as _ArrowLeftOutlined
 } from '@ant-design/icons';
@@ -310,6 +307,11 @@ export const ImageMeasurementCanvas: React.FC<ImageMeasurementCanvasProps> = ({
     method: string;
     warnings: string[];
     debug?: any;
+    depth?: {
+      mean_mm: number;
+      stdDev_mm: number;
+      incline_angle_deg: number;
+    };
   } | null>(null);
   const [isComputingBackend, setIsComputingBackend] = useState(false);
   // 🔒 REF pour éviter les appels multiples au backend
@@ -338,6 +340,100 @@ export const ImageMeasurementCanvas: React.FC<ImageMeasurementCanvasProps> = ({
   const [lockedPoints, setLockedPoints] = useState<Set<string>>(new Set());
   // État du workflow de placement: null → 'zoomed' → 'placed' → 'locked'
   const [pointPlacementState, setPointPlacementState] = useState<'zoomed' | 'placed' | null>(null);
+
+  // ============================================================================
+  // 🎯 CHARGEMENT CONFIG MARQUEUR ARUCO
+  // ============================================================================
+  const { api: authenticatedApi } = useAuthenticatedApi();
+  const [markerSizeCm, setMarkerSizeCmState] = useState(16.8); // Valeur par défaut
+
+  const ultraPrecisionMeta = useMemo(() => {
+    if (!allPhotos?.length) return null;
+    const photoWithMeta = allPhotos.find(p => (p.metadata as any)?.ultraPrecision);
+    return (photoWithMeta?.metadata as any)?.ultraPrecision || null;
+  }, [allPhotos]);
+
+  const dashboardData = useMemo(() => {
+    const totalPhotos = allPhotos?.length || 1;
+    const scores = (allPhotos || []).map((photo, idx) => ({
+      index: idx,
+      score: (photo.metadata as any)?.qualityScore ?? null
+    }));
+    const bestIndex = scores.reduce((best, current) => {
+      if (current.score == null) return best;
+      if (best.score == null || current.score > best.score) return current;
+      return best;
+    }, scores[0] || { index: 0, score: null }).index;
+
+    const fusionQuality = ultraPrecisionMeta?.quality;
+    const fusionQualityPct = typeof fusionQuality === 'number' ? Math.round(fusionQuality * 100) : null;
+    const precisionMm = ultraPrecisionMeta?.estimatedPrecision ?? null;
+    const precisionLabel = precisionMm == null
+      ? '—'
+      : typeof precisionMm === 'number'
+        ? `±${precisionMm}mm`
+        : precisionMm.toString().includes('mm')
+          ? precisionMm.toString()
+          : `±${precisionMm}mm`;
+
+    const isAprilTagDetected = detectionMethod?.includes('AprilTag-Metre-V1.2') === true || detectionMethod === 'apriltag-metre';
+    const refLabel = isAprilTagDetected
+      ? 'AprilTag 13×21.7cm'
+      : isArucoMode
+        ? `ArUco ${markerSizeCm}×${markerSizeCm}cm`
+        : 'A4 21×29.7cm';
+
+    const expectedApril = 5;
+    const expectedDots = 12;
+    const aprilDetected = ultraPrecisionMeta?.aprilTags ?? null;
+    const dotsDetected = ultraPrecisionMeta?.referenceDots ?? null;
+    const totalPoints =
+      typeof ultraPrecisionMeta?.totalPoints === 'number'
+        ? ultraPrecisionMeta?.totalPoints
+        : Array.isArray(ultraPrecisionMeta?.points)
+          ? ultraPrecisionMeta.points.length
+          : null;
+    const extraPoints =
+      totalPoints != null
+        ? Math.max(0, totalPoints - (aprilDetected ?? 0) - (dotsDetected ?? 0))
+        : null;
+    const pct = (detected: number | null, expected: number) =>
+      detected == null || expected === 0 ? '—' : `${Math.round((detected / expected) * 100)}%`;
+
+    const poseInfo = arucoAnalysis?.pose || pose;
+    const depthFromBackend = backendMeasurements?.depth?.mean_mm ? Math.round(backendMeasurements.depth.mean_mm / 10) : null;
+    const depthInfo = arucoAnalysis?.depth?.estimatedCm ?? depthFromBackend ?? estimatedDepth;
+    const inclineInfo = backendMeasurements?.depth?.incline_angle_deg ?? null;
+
+    const stepLabel = pointBeingPlaced
+      ? `Placement coin ${points.find(p => p.id === pointBeingPlaced)?.label || ''}`
+      : isDetectingCorners
+        ? 'Détection IA en cours'
+        : workflowStep === 'selectReferenceZone'
+          ? 'Étape 1/2: Référence'
+          : workflowStep === 'selectMeasureZone'
+            ? 'Étape 2/2: Objet'
+            : 'Ajustez les coins';
+
+    return {
+      totalPhotos,
+      scores,
+      bestIndex,
+      fusionQualityPct,
+      precisionLabel,
+      refLabel,
+      aprilDetected,
+      dotsDetected,
+      extraPoints,
+      expectedApril,
+      expectedDots,
+      pct,
+      poseInfo,
+      depthInfo,
+      inclineInfo,
+      stepLabel
+    };
+  }, [allPhotos, ultraPrecisionMeta, detectionMethod, isArucoMode, markerSizeCm, arucoAnalysis, pose, backendMeasurements, estimatedDepth, pointBeingPlaced, workflowStep, isDetectingCorners, points]);
 
   const isMobileFullscreen = isMobile && mobileFullscreen;
 
@@ -658,8 +754,10 @@ export const ImageMeasurementCanvas: React.FC<ImageMeasurementCanvasProps> = ({
   // ============================================================================
   // 🎯 CHARGEMENT CONFIG MARQUEUR ARUCO
   // ============================================================================
-  const { api: authenticatedApi } = useAuthenticatedApi();
-  const [markerSizeCm, setMarkerSizeCmState] = useState(16.8); // Valeur par défaut
+  const isAprilTagMetre = useMemo(
+    () => detectionMethod?.includes('AprilTag-Metre-V1.2') === true || detectionMethod === 'apriltag-metre',
+    [detectionMethod]
+  );
   
   useEffect(() => {
     // Charger la configuration du marqueur depuis l'API
@@ -690,7 +788,7 @@ export const ImageMeasurementCanvas: React.FC<ImageMeasurementCanvasProps> = ({
   // ============================================================================
   useEffect(() => {
     // Quand le detectionMethod change, mettre à jour les dimensions de référence
-    if (detectionMethod === 'AprilTag-Metre-V1.2' || detectionMethod === 'apriltag-metre') {
+    if (isAprilTagMetre) {
       // AprilTag Métré V1.2 = 13cm × 21.7cm (RECTANGULAIRE, NOT carré!)
       console.log(`📐 [Canvas] Mise à jour referenceRealSize pour ${detectionMethod}: 13×21.7cm (RECTANGULAIRE)`);
       // Note: On ne modifie pas l'état props directly, mais referenceRealSize est utilisé correctement maintenant
@@ -922,7 +1020,7 @@ export const ImageMeasurementCanvas: React.FC<ImageMeasurementCanvasProps> = ({
     let refWidth: number;
     let refHeight: number;
     
-    if (detectionMethod === 'AprilTag-Metre-V1.2') {
+    if (isAprilTagMetre) {
       // 📐 Métré V1.2: Dimensions rectangulaires entre centres de tags
       refWidth = 13.0;  // distance TL↔TR entre centres (cm)
       refHeight = 21.7; // distance TL↔BL entre centres (cm)
@@ -942,14 +1040,28 @@ export const ImageMeasurementCanvas: React.FC<ImageMeasurementCanvasProps> = ({
     
     // 🎯 Activer le mode ArUco SEULEMENT pour les marqueurs ArUco (pas AprilTag Métré)
     // ⚠️ CRITIQUE: AprilTag Métré V1.2 NE doit PAS utiliser isArucoMode (rectangulaire 13×21.7cm, pas carré)
-    if (detectionMethod !== 'AprilTag-Metre-V1.2' && detectionMethod !== 'apriltag-metre') {
-      setIsArucoMode(true);
-    }
+    setIsArucoMode(!isAprilTagMetre);
     
     // Appliquer la calibration avec les setters existants
     setPixelPerCmX(newPixelPerCmX);
     setPixelPerCmY(newPixelPerCmY);
     setPixelPerCm(newPixelPerCm);
+
+    // 📏 PROFONDEUR: estimer dès l'init auto (fusedCorners)
+    const side1 = Math.hypot(
+      cornersInPixels.topRight.x - cornersInPixels.topLeft.x,
+      cornersInPixels.topRight.y - cornersInPixels.topLeft.y
+    );
+    const side2 = Math.hypot(
+      cornersInPixels.bottomLeft.x - cornersInPixels.topLeft.x,
+      cornersInPixels.bottomLeft.y - cornersInPixels.topLeft.y
+    );
+    const avgSizePx = (side1 + side2) / 2;
+    const markerSizeForDepth = isAprilTagMetre ? 21.7 : (markerSizeCm || 21);
+    const focalLength = 800;
+    const depth = (markerSizeForDepth * focalLength) / avgSizePx;
+    setEstimatedDepth(Math.round(depth));
+    console.log(`📏 [Canvas] PROFONDEUR initiale: ${depth.toFixed(0)}cm (marqueur ${avgSizePx.toFixed(0)}px)`);
     
     // 🚀 PASSER DIRECTEMENT À L'ÉTAPE DE MESURE (skip la sélection de référence)
     console.log('🚀 [Canvas] Passage automatique à l\'étape selectMeasureZone');
@@ -986,7 +1098,7 @@ export const ImageMeasurementCanvas: React.FC<ImageMeasurementCanvasProps> = ({
       refWidth = markerSizeCm;
       refHeight = markerSizeCm;
       console.log(`🎯 [Canvas] Mode ARUCO: utilisation ${markerSizeCm}×${markerSizeCm}cm`);
-    } else if (detectionMethod === 'AprilTag-Metre-V1.2' || detectionMethod === 'apriltag-metre') {
+    } else if (isAprilTagMetre) {
       // 📐 AprilTag Métré V1.2: Dimensions RECTANGULAIRES entre centres des tags (PAS carré!)
       refWidth = 13.0;  // distance TL↔TR entre centres (cm)
       refHeight = 21.7; // distance TL↔BL entre centres (cm)
@@ -1031,7 +1143,7 @@ export const ImageMeasurementCanvas: React.FC<ImageMeasurementCanvasProps> = ({
     
     // Rectangle destination selon le type de référence 
     // ⚠️ ArUco: 170mm entre CENTRES des cercles magenta (pas 180mm du bord du marqueur)
-    const dstPoints = detectionMethod === 'AprilTag-Metre-V1.2'
+    const dstPoints = isAprilTagMetre
       ? createReferenceDestinationPoints('apriltag-metre')
       : isArucoMode 
         ? createReferenceDestinationPoints('aruco')
@@ -1165,7 +1277,7 @@ export const ImageMeasurementCanvas: React.FC<ImageMeasurementCanvasProps> = ({
     // Déterminer le ratio attendu selon le mode
     let expectedRatio = 0.5;  // Défaut
     let expectedRatioText = 'unknown';
-    if (detectionMethod === 'apriltag-metre' && markerSizeCm === 13) {
+    if (isAprilTagMetre && markerSizeCm === 13) {
       expectedRatio = 13 / 21.7; // 0.598 pour AprilTag Métré rectangulaire
       expectedRatioText = 'AprilTag Métré 0.598';
     } else if (isArucoMode) {
@@ -1180,7 +1292,7 @@ export const ImageMeasurementCanvas: React.FC<ImageMeasurementCanvasProps> = ({
     
     // Validation adaptée au mode
     let minRatio = 0.3, maxRatio = 3.0;
-    if (detectionMethod === 'apriltag-metre' && markerSizeCm === 13) {
+    if (isAprilTagMetre && markerSizeCm === 13) {
       minRatio = 0.4;  // AprilTag Métré rectangulaire 13/21.7 = 0.598, tolérer 0.4-0.8
       maxRatio = 0.8;
     } else if (isArucoMode) {
@@ -1203,13 +1315,13 @@ export const ImageMeasurementCanvas: React.FC<ImageMeasurementCanvasProps> = ({
     const isLandscape = avgWidth > avgHeight;
     
     // Points destination selon le type de référence
-    const dstPoints = detectionMethod === 'AprilTag-Metre-V1.2'
+    const dstPoints = isAprilTagMetre
       ? createReferenceDestinationPoints('apriltag-metre')
       : isArucoMode 
         ? createReferenceDestinationPoints('aruco')
         : createReferenceDestinationPoints('a4', isLandscape ? 'paysage' : 'portrait');
     
-    const refLabel = detectionMethod === 'AprilTag-Metre-V1.2'
+    const refLabel = isAprilTagMetre
       ? `AprilTag Métré V1.2: 130×217mm (13.0×21.7cm)`
       : isArucoMode 
         ? `ArUco ${markerSizeCm * 10}×${markerSizeCm * 10}mm (${markerSizeCm}cm)` 
@@ -1224,7 +1336,7 @@ export const ImageMeasurementCanvas: React.FC<ImageMeasurementCanvasProps> = ({
       const topLeftReal = applyHomography(homography.matrix, srcPoints[0]);
       const topRightReal = applyHomography(homography.matrix, srcPoints[1]);
       const verifyDistanceMm = Math.hypot(topRightReal[0] - topLeftReal[0], topRightReal[1] - topLeftReal[1]);
-      const expectedDistanceMm = detectionMethod === 'AprilTag-Metre-V1.2' 
+      const expectedDistanceMm = isAprilTagMetre 
         ? 130 
         : isArucoMode ? (markerSizeCm * 10) : (isLandscape ? 297 : 210);
       console.log(`   🔍 VÉRIFICATION HOMOGRAPHIE: distance TL↔TR = ${verifyDistanceMm.toFixed(1)}mm (attendu: ${expectedDistanceMm}mm)`);
@@ -1258,7 +1370,7 @@ export const ImageMeasurementCanvas: React.FC<ImageMeasurementCanvasProps> = ({
         const side1 = Math.hypot(corners.topRight.x - corners.topLeft.x, corners.topRight.y - corners.topLeft.y);
         const side2 = Math.hypot(corners.bottomLeft.x - corners.topLeft.x, corners.bottomLeft.y - corners.topLeft.y);
         const avgSizePx = (side1 + side2) / 2;
-        const _markerSizeForDepth = isArucoMode ? markerSizeCm : 21; // ArUco configurable, A4 ~21cm
+        const _markerSizeForDepth = isAprilTagMetre ? 21.7 : isArucoMode ? markerSizeCm : 21; // AprilTag 21.7cm, ArUco configurable, A4 ~21cm
         const focalLength = 800; // Focale approximative en pixels
         const depth = (_markerSizeForDepth * focalLength) / avgSizePx;
         setEstimatedDepth(Math.round(depth));
@@ -1359,7 +1471,7 @@ export const ImageMeasurementCanvas: React.FC<ImageMeasurementCanvasProps> = ({
       const avgWidth = ((srcPoints[1][0] - srcPoints[0][0]) + (srcPoints[2][0] - srcPoints[3][0])) / 2;
       const avgHeight = ((srcPoints[3][1] - srcPoints[0][1]) + (srcPoints[2][1] - srcPoints[1][1])) / 2;
       const isLandscape = avgWidth > avgHeight;
-      const refLabel = detectionMethod === 'AprilTag-Metre-V1.2'
+      const refLabel = isAprilTagMetre
         ? `AprilTag Métré V1.2: 13.0×21.7cm`
         : isArucoMode 
           ? `ArUco ${markerSizeCm}×${markerSizeCm}cm` 
@@ -1369,13 +1481,13 @@ export const ImageMeasurementCanvas: React.FC<ImageMeasurementCanvasProps> = ({
       // Si perspective suffisante (>5px), calculer l'homographie
       if (maxPerspectiveDeform > 5) {
         // Créer les points destination selon le type de référence - utiliser l'orientation DÉTECTÉE !
-        const dstPoints = detectionMethod === 'AprilTag-Metre-V1.2'
+        const dstPoints = isAprilTagMetre
           ? createReferenceDestinationPoints('apriltag-metre')
           : isArucoMode 
             ? createReferenceDestinationPoints('aruco')
             : createReferenceDestinationPoints('a4', isLandscape ? 'paysage' : 'portrait');
         
-        const dstLabel = detectionMethod === 'AprilTag-Metre-V1.2'
+        const dstLabel = isAprilTagMetre
           ? 'AprilTag 130×217mm'
           : isArucoMode 
             ? 'ArUco 168×168mm'
@@ -1501,13 +1613,8 @@ export const ImageMeasurementCanvas: React.FC<ImageMeasurementCanvasProps> = ({
     let refWidth: number;
     let refHeight: number;
     
-    if (detectionMethod === 'AprilTag-Metre-V1.2') {
+    if (isAprilTagMetre) {
       // 📐 AprilTag Métré V1.2: Rectangle 13.0 × 21.7 cm (distance entre centres de tags)
-      refWidth = 13.0;
-      refHeight = 21.7;
-      console.log(`🎯 [Canvas] Mode MÉTRÉ A4 V1.2: dimensions ${refWidth}×${refHeight}cm`);
-    } else if (detectionMethod === 'apriltag-metre' && markerSizeCm === 13) {
-      // 🔶 MÉTRÉ A4 V1.2: AprilTag rectangulaire 13×21.7cm (AprilTag centres)
       refWidth = 13.0;
       refHeight = 21.7;
       console.log(`🎯 [Canvas] Mode MÉTRÉ A4 V1.2 - AprilTag: dimensions ${refWidth}×${refHeight}cm`);
@@ -1563,7 +1670,7 @@ export const ImageMeasurementCanvas: React.FC<ImageMeasurementCanvasProps> = ({
     ];
     
     // Points destination selon le type de référence (AprilTag 130×217mm, ArUco 168mm ou A4)
-    const dstPoints = detectionMethod === 'AprilTag-Metre-V1.2'
+    const dstPoints = isAprilTagMetre
       ? createReferenceDestinationPoints('apriltag-metre')
       : isArucoMode 
         ? createReferenceDestinationPoints('aruco')
@@ -1576,7 +1683,7 @@ export const ImageMeasurementCanvas: React.FC<ImageMeasurementCanvasProps> = ({
     const rightEdgeDx = Math.abs(referenceCorners.bottomRight.x - referenceCorners.topRight.x);
     const maxPerspectiveDeform = Math.max(topEdgeDy, bottomEdgeDy, leftEdgeDx, rightEdgeDx);
     
-    const refLabel = isArucoMode ? `ArUco ${markerSizeCm}cm` : 'A4';
+    const refLabel = isAprilTagMetre ? 'AprilTag Métré 13×21.7cm' : (isArucoMode ? `ArUco ${markerSizeCm}cm` : 'A4');
     console.log(`📐 [Canvas] Analyse PERSPECTIVE ${refLabel}:`);
     console.log(`   Déformation haut: ${topEdgeDy.toFixed(1)}px, bas: ${bottomEdgeDy.toFixed(1)}px`);
     console.log(`   Déformation gauche: ${leftEdgeDx.toFixed(1)}px, droite: ${rightEdgeDx.toFixed(1)}px`);
@@ -1606,8 +1713,8 @@ export const ImageMeasurementCanvas: React.FC<ImageMeasurementCanvasProps> = ({
                                       transformedCorners[2][1] - transformedCorners[1][1]);
       
       // 🎯 Dimensions attendues selon le type de marqueur
-      const markerWidthMM = detectionMethod === 'AprilTag-Metre-V1.2' ? 150 : (isArucoMode ? markerSizeCm * 10 : 168);
-      const markerHeightMM = detectionMethod === 'AprilTag-Metre-V1.2' ? 237 : (isArucoMode ? markerSizeCm * 10 : 168);
+      const markerWidthMM = isAprilTagMetre ? 130 : (isArucoMode ? markerSizeCm * 10 : 168);
+      const markerHeightMM = isAprilTagMetre ? 217 : (isArucoMode ? markerSizeCm * 10 : 168);
       
       console.log(`🔬 [DIAGNOSTIC HOMOGRAPHIE] Vérification transformation marqueur:`);
       console.log(`   Coins originaux (px): ${srcPoints.map(p => `(${p[0].toFixed(1)},${p[1].toFixed(1)})`).join(' ')}`);
@@ -2249,8 +2356,8 @@ export const ImageMeasurementCanvas: React.FC<ImageMeasurementCanvasProps> = ({
         
         if (useUltraPrecision) {
           console.log(`\n🚀 *** ACTIVATION SYSTÈME ULTRA-PRÉCISION RANSAC ${detectedPoints.length} POINTS ***`);
-          console.log(`   🎯 Tous les points du damier ChArUco seront utilisés pour l'homographie`);
-          console.log(`   📊 ${detectedPoints.length} points détectés (4 AprilTag + 12 dots + ${detectedPoints.length - 16} ChArUco)`);
+          console.log(`   🎯 Tous les points détectés seront utilisés pour l'homographie`);
+          console.log(`   📊 ${detectedPoints.length} points détectés (AprilTags + coins + dots)`);
         }
         
         let response;
@@ -2285,14 +2392,29 @@ export const ImageMeasurementCanvas: React.FC<ImageMeasurementCanvasProps> = ({
               markerSize: { width: markerWidthCm, height: markerHeightCm },
               canvasScale: canvasScale
             });
-            
+
+            const ransacQuality = response?.quality?.homography_quality ?? 0;
+            const ransacInliers = response?.quality?.ransac_inliers ?? 0;
+            const ransacErrorMm = response?.quality?.reprojectionError_mm ?? null;
+
             console.log('✅ [RANSAC] SUCCÈS - Réponse reçue:', {
               method: response.method,
               largeur_cm: response.object.largeur_cm,
               hauteur_cm: response.object.hauteur_cm,
-              quality: response.quality.homography_quality,
-              inlierCount: response.quality.ransac_inliers
+              quality: ransacQuality,
+              inlierCount: ransacInliers,
+              reprojectionErrorMm: ransacErrorMm
             });
+
+            const hasReliableRansac = ransacQuality >= 40 && ransacInliers >= 9 && (ransacErrorMm === null || ransacErrorMm <= 8);
+            if (!hasReliableRansac) {
+              console.warn('⚠️ [RANSAC] Qualité insuffisante, fallback vers 4-points:', {
+                ransacQuality,
+                ransacInliers,
+                ransacErrorMm
+              });
+              response = null;
+            }
           } catch (ultraError) {
             console.warn('⚠️ [RANSAC] Erreur ultra-précision, fallback vers 4-points:', ultraError);
             // Fallback à l'ancien système
@@ -2372,7 +2494,8 @@ export const ImageMeasurementCanvas: React.FC<ImageMeasurementCanvasProps> = ({
             confidence,
             method,
             warnings: response.warnings || [],
-            debug: response.debug
+            debug: response.debug,
+            depth: response.depth
           });
         } else {
           console.warn('⚠️ [Canvas] Backend n\'a pas retourné de mesures valides:', response);
@@ -3619,34 +3742,44 @@ export const ImageMeasurementCanvas: React.FC<ImageMeasurementCanvasProps> = ({
         {/* 📱 UI FLOTTANTE MOBILE */}
         {!readOnly && (
           <>
-            {/* Indicateur d'étape en haut */}
+            {/* Tableau de bord mobile */}
             <div
               style={{
                 position: 'absolute',
                 top: 60,
-                left: '50%',
-                transform: 'translateX(-50%)',
+                left: 12,
+                right: 12,
                 zIndex: 10002,
-                background: 'rgba(0,0,0,0.8)',
+                background: 'rgba(9, 18, 28, 0.92)',
                 color: '#fff',
-                padding: '10px 20px',
-                borderRadius: 25,
-                fontSize: 15,
-                fontWeight: 'bold',
-                pointerEvents: 'none'
+                padding: '12px 12px',
+                borderRadius: 14,
+                boxShadow: '0 10px 30px rgba(0,0,0,0.25)',
+                backdropFilter: 'blur(6px)'
               }}
             >
-              {workflowStep === 'selectReferenceZone' ? (
-                '📄 Étape 1/2: Dessinez autour de l\'A4'
-              ) : workflowStep === 'selectMeasureZone' ? (
-                '📏 Étape 2/2: Dessinez autour de l\'objet'
-              ) : pointBeingPlaced ? (
-                '🔍 Clic ailleurs = placer, clic coin = confirmer'
-              ) : lockedPoints.size > 0 ? (
-                `🔒 ${lockedPoints.size}/${points.length} coins verrouillés`
-              ) : (
-                '✅ Cliquez un coin pour l\'ajuster'
-              )}
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                <strong style={{ fontSize: 13 }}>Tableau de bord</strong>
+                <Tag color={isDetectingCorners ? 'orange' : workflowStep === 'selectReferenceZone' ? 'blue' : workflowStep === 'selectMeasureZone' ? 'gold' : 'green'}>
+                  {dashboardData.stepLabel}
+                </Tag>
+              </div>
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                <Tag color="geekblue">Fusion {dashboardData.totalPhotos}</Tag>
+                <Tag color="cyan">Scores {dashboardData.scores.map((p) => p.score == null ? `${p.index + 1}=—` : `${p.index + 1}=${p.score}%${p.index === dashboardData.bestIndex ? '★' : ''}`).join(' ')}</Tag>
+                <Tag color="blue">Réf {dashboardData.refLabel}</Tag>
+                <Tag color="purple">Qualité {dashboardData.fusionQualityPct ?? '—'}%</Tag>
+                <Tag color="green">Précision {dashboardData.precisionLabel}</Tag>
+                <Tag color="geekblue">AprilTag {dashboardData.aprilDetected ?? '—'}/{dashboardData.expectedApril}</Tag>
+                <Tag color="geekblue">Points {dashboardData.dotsDetected ?? '—'}/{dashboardData.expectedDots}</Tag>
+                <Tag color="geekblue">Points extra {dashboardData.extraPoints ?? '—'}</Tag>
+                <Tag color="default">H {homographyResult ? `${homographyResult.quality.toFixed(0)}%` : '—'}</Tag>
+                <Tag color="default">Rot {dashboardData.poseInfo?.rotX ?? '—'}°/{dashboardData.poseInfo?.rotY ?? '—'}°/{dashboardData.poseInfo?.rotZ ?? '—'}°</Tag>
+                <Tag color="default">Prof {dashboardData.depthInfo != null ? `~${dashboardData.depthInfo}cm` : '—'}</Tag>
+                {dashboardData.inclineInfo != null && (
+                  <Tag color="default">Inclinaison {dashboardData.inclineInfo.toFixed(1)}°</Tag>
+                )}
+              </div>
             </div>
             
             {/* Bouton Menu hamburger */}
@@ -3753,29 +3886,7 @@ export const ImageMeasurementCanvas: React.FC<ImageMeasurementCanvasProps> = ({
               </Select>
             </Card>
             
-            {/* Options avancées */}
-            <Card size="small" title="Options avancées">
-              <Space direction="vertical" style={{ width: '100%' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <span>Homographie (correction perspective)</span>
-                  <Switch checked={useHomography} onChange={setUseHomography} />
-                </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <span>Mode quadrilatère</span>
-                  <Switch checked={quadrilateralMode} onChange={(checked) => {
-                    if (checked && adjustableRefBox) {
-                      setReferenceCorners({
-                        topLeft: { x: adjustableRefBox.x, y: adjustableRefBox.y },
-                        topRight: { x: adjustableRefBox.x + adjustableRefBox.width, y: adjustableRefBox.y },
-                        bottomRight: { x: adjustableRefBox.x + adjustableRefBox.width, y: adjustableRefBox.y + adjustableRefBox.height },
-                        bottomLeft: { x: adjustableRefBox.x, y: adjustableRefBox.y + adjustableRefBox.height }
-                      });
-                    }
-                    setQuadrilateralMode(checked);
-                  }} />
-                </div>
-              </Space>
-            </Card>
+            {/* Options avancées supprimées (homographie toujours active) */}
             
             {/* Actions workflow */}
             <Card size="small" title="Actions">
@@ -3844,104 +3955,89 @@ export const ImageMeasurementCanvas: React.FC<ImageMeasurementCanvasProps> = ({
     >
       {/* 🆕 WORKFLOW GUIDÉ - Bannière d'instructions */}
       {!readOnly && !isMobileFullscreen && (
-        <Alert
-          type={
-            pointBeingPlaced ? 'error' :
-            isDetectingCorners ? 'warning' :
-            workflowStep === 'selectReferenceZone' ? 'info' : 
-            workflowStep === 'selectMeasureZone' ? 'warning' : 
-            'success'
-          }
-          showIcon
-          style={{ marginBottom: 8, fontSize: '16px' }}
-          message={
-            pointBeingPlaced ? (
-              <span style={{ fontSize: '16px' }}>
-                🎯 <strong>PLACEMENT DU COIN {points.find(p => p.id === pointBeingPlaced)?.label}</strong> 
-                <br/>
-                <span style={{ fontSize: '14px' }}>
-                  👆 <strong>Tapez sur l'image</strong> pour placer le coin exactement où vous voulez.
-                  <Button 
-                    size="small" 
-                    type="primary"
-                    danger
-                    onClick={cancelPointPlacement}
-                    style={{ marginLeft: 12 }}
-                  >
-                    ✕ Annuler
-                  </Button>
-                </span>
-              </span>
-            ) : isDetectingCorners ? (
-              <span>⏳ <strong>Détection IA en cours...</strong> Analyse des contours pour trouver les 4 coins précis.</span>
-            ) : workflowStep === 'selectReferenceZone' ? (
-              <span>
-                <strong>📄 Étape 1/2:</strong> Dessinez un rectangle autour de la <strong>feuille A4</strong>
-              </span>
-            ) : workflowStep === 'selectMeasureZone' ? (
-              <span>
-                <strong>📏 Étape 2/2:</strong> Dessinez un rectangle autour de l'<strong>objet à mesurer</strong>
-                {referenceCorners && (
-                  <Button 
-                    size="small" 
-                    type="link" 
-                    danger 
-                    onClick={() => {
-                      setReferenceCorners(null);
-                      setQuadrilateralMode(false);
-                      setWorkflowStep('selectReferenceZone');
-                      message.info(isArucoMode ? 'Référence ArUco effacée.' : 'Référence A4 effacée. Redessinez autour de la feuille A4.');
-                    }}
-                    style={{ marginLeft: 8 }}
-                  >
-                    ✕ Effacer la référence
-                  </Button>
-                )}
-              </span>
-            ) : (
-              <span>
-                ✅ <strong>Ajustez les coins !</strong> 
-                <span style={{ marginLeft: 8 }}>👆 Tapez sur un coin ◇ pour le déplacer</span>
-                <Button 
-                  size="small" 
-                  type="link" 
-                  danger 
-                  onClick={() => {
-                    setPoints([]);
-                    setWorkflowStep('selectMeasureZone');
-                    message.info('Mesure effacée. Redessinez autour de l\'objet à mesurer.');
-                  }}
-                  style={{ marginLeft: 8 }}
-                >
-                  ✕ Refaire
-                </Button>
-                <Button 
-                  size="small" 
-                  type="link" 
+        <Card
+          size="small"
+          style={{ marginBottom: 8, borderRadius: 12, border: '1px solid #e6f0ff', background: '#f7f9fc' }}
+          styles={{ body: { padding: 12 } }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <Text strong>Tableau de bord</Text>
+              <Tag color={isDetectingCorners ? 'orange' : workflowStep === 'selectReferenceZone' ? 'blue' : workflowStep === 'selectMeasureZone' ? 'gold' : 'green'}>
+                {dashboardData.stepLabel}
+              </Tag>
+            </div>
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+              {referenceCorners && (
+                <Button
+                  size="small"
+                  type="link"
+                  danger
                   onClick={() => {
                     setReferenceCorners(null);
                     setQuadrilateralMode(false);
-                    setPoints([]);
-                    setHomographyResult(null);
                     setWorkflowStep('selectReferenceZone');
-                    message.info(isArucoMode ? 'Tout effacé.' : 'Tout effacé. Recommencez depuis la référence A4.');
+                    message.info(isArucoMode ? 'Référence ArUco effacée.' : 'Référence A4 effacée. Redessinez autour de la feuille A4.');
                   }}
-                  style={{ marginLeft: 4 }}
                 >
-                  🔄 Tout recommencer
+                  Effacer référence
                 </Button>
-              </span>
-            )
-          }
-          description={
-            isDetectingCorners ? null : 
-            workflowStep === 'adjusting' ? null : (
-              <span style={{ fontSize: 12, opacity: 0.8 }}>
-                👆 Cliquez et glissez pour encadrer l'objet. L'IA détectera les 4 coins avec précision.
-              </span>
-            )
-          }
-        />
+              )}
+              <Button
+                size="small"
+                type="link"
+                danger
+                onClick={() => {
+                  setPoints([]);
+                  setWorkflowStep('selectMeasureZone');
+                  message.info('Mesure effacée. Redessinez autour de l\'objet à mesurer.');
+                }}
+              >
+                Refaire mesure
+              </Button>
+              <Button
+                size="small"
+                type="link"
+                onClick={() => {
+                  setReferenceCorners(null);
+                  setQuadrilateralMode(false);
+                  setPoints([]);
+                  setHomographyResult(null);
+                  setWorkflowStep('selectReferenceZone');
+                  message.info(isArucoMode ? 'Tout effacé.' : 'Tout effacé. Recommencez depuis la référence A4.');
+                }}
+              >
+                Tout recommencer
+              </Button>
+              {pointBeingPlaced && (
+                <Button
+                  size="small"
+                  type="primary"
+                  danger
+                  onClick={cancelPointPlacement}
+                >
+                  Annuler placement
+                </Button>
+              )}
+            </div>
+          </div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+            <Tag color="geekblue">Fusion {dashboardData.totalPhotos} photo(s)</Tag>
+            <Tag color="cyan">Scores {dashboardData.scores.map((p) => p.score == null ? `${p.index + 1}=—` : `${p.index + 1}=${p.score}%${p.index === dashboardData.bestIndex ? '★' : ''}`).join(' ')}</Tag>
+            <Tag color="blue">Réf {dashboardData.refLabel}</Tag>
+            <Tag color="purple">Qualité {dashboardData.fusionQualityPct ?? '—'}%</Tag>
+            <Tag color="green">Précision {dashboardData.precisionLabel}</Tag>
+            <Tag color="geekblue">AprilTag {dashboardData.aprilDetected ?? '—'}/{dashboardData.expectedApril} ({dashboardData.pct(dashboardData.aprilDetected, dashboardData.expectedApril)})</Tag>
+            <Tag color="geekblue">Points {dashboardData.dotsDetected ?? '—'}/{dashboardData.expectedDots} ({dashboardData.pct(dashboardData.dotsDetected, dashboardData.expectedDots)})</Tag>
+            <Tag color="geekblue">Points extra {dashboardData.extraPoints ?? '—'}</Tag>
+            <Tag color="default">Homographie {homographyResult ? `${homographyResult.quality.toFixed(0)}%` : '—'}</Tag>
+            <Tag color="default">Rot {dashboardData.poseInfo?.rotX ?? '—'}° / {dashboardData.poseInfo?.rotY ?? '—'}° / {dashboardData.poseInfo?.rotZ ?? '—'}°</Tag>
+            <Tag color="default">Profondeur {dashboardData.depthInfo != null ? `~${dashboardData.depthInfo} cm` : '—'}</Tag>
+            {dashboardData.inclineInfo != null && (
+              <Tag color="default">Inclinaison {dashboardData.inclineInfo.toFixed(1)}°</Tag>
+            )}
+          </div>
+        </Card>
       )}
 
       {/* Toolbar */}
@@ -3963,15 +4059,6 @@ export const ImageMeasurementCanvas: React.FC<ImageMeasurementCanvasProps> = ({
                 icon={<PlusOutlined />}
                 onClick={() => setSelectedTool('addPoint')}
                 style={{ color: selectedTool === 'addPoint' ? undefined : colors.customPoint }}
-              />
-            </Tooltip>
-
-            <Tooltip title="Zone exclusion (rectangle)">
-              <Button
-                type={selectedTool === 'addRectZone' ? 'primary' : 'default'}
-                icon={<BorderOutlined />}
-                onClick={() => setSelectedTool('addRectZone')}
-                danger={selectedTool === 'addRectZone'}
               />
             </Tooltip>
 
@@ -4053,387 +4140,8 @@ export const ImageMeasurementCanvas: React.FC<ImageMeasurementCanvasProps> = ({
             </Select>
 
             <Divider type="vertical" />
-
-            {/* Homography toggle */}
-            <Tooltip title="Utiliser l'homographie mathématique pour corriger la perspective">
-              <Space>
-                <Text>Homographie :</Text>
-                <Switch 
-                  checked={useHomography} 
-                  onChange={setUseHomography}
-                  size="small"
-                />
-              </Space>
-            </Tooltip>
-
-            {/* Debug mode */}
-            <Tooltip title="Afficher la grille de debug pour visualiser la correction de perspective">
-              <Button
-                type={debugMode ? 'primary' : 'default'}
-                icon={<BugOutlined />}
-                onClick={() => setDebugMode(!debugMode)}
-                size="small"
-              />
-            </Tooltip>
-            
-            {/* 🆕 Mode quadrilatère - 4 coins ajustables */}
-            <Tooltip title="Mode quadrilatère : ajuster les 4 coins de l'A4 individuellement pour capturer la perspective">
-              <Button
-                type={quadrilateralMode ? 'primary' : 'default'}
-                danger={quadrilateralMode}
-                onClick={() => {
-                  if (!quadrilateralMode && adjustableRefBox) {
-                    // Activer le mode : convertir le rectangle en 4 coins
-                    setReferenceCorners({
-                      topLeft: { x: adjustableRefBox.x, y: adjustableRefBox.y },
-                      topRight: { x: adjustableRefBox.x + adjustableRefBox.width, y: adjustableRefBox.y },
-                      bottomRight: { x: adjustableRefBox.x + adjustableRefBox.width, y: adjustableRefBox.y + adjustableRefBox.height },
-                      bottomLeft: { x: adjustableRefBox.x, y: adjustableRefBox.y + adjustableRefBox.height }
-                    });
-                    setQuadrilateralMode(true);
-                    message.info('Mode quadrilatère activé ! Ajustez les 4 coins rouges sur les vrais bords de l\'A4');
-                  } else {
-                    // Désactiver le mode
-                    setQuadrilateralMode(false);
-                    message.info('Mode rectangle standard restauré');
-                  }
-                }}
-                size="small"
-              >
-                {quadrilateralMode ? '⬛ Rectangle' : '◇ Quadrilatère'}
-              </Button>
-            </Tooltip>
           </Space>
 
-          {/* Homography status */}
-          {useHomography && homographyResult && (
-            <div style={{ marginTop: 8 }}>
-              <Alert
-                type={homographyResult.quality > 70 ? 'success' : homographyResult.quality > 50 ? 'warning' : 'error'}
-                message={
-                  <Space>
-                    <Text strong>Qualité homographie :</Text>
-                    <Text>{homographyResult.quality.toFixed(0)}%</Text>
-                    <Text type="secondary">
-                      (Incertitude: ±{(homographyResult.uncertainty * 100).toFixed(1)}%)
-                    </Text>
-                  </Space>
-                }
-                showIcon
-                style={{ padding: '4px 12px' }}
-              />
-            </div>
-          )}
-          
-          {/* � PANEL ARUCO COMPLET - Affiche toutes les infos si arucoAnalysis disponible */}
-          {arucoAnalysis && (
-            <div style={{ marginTop: 8 }}>
-              <div style={{ 
-                background: 'linear-gradient(135deg, #1a1a2e 0%, #16213e 100%)',
-                borderRadius: 12,
-                padding: '16px',
-                color: 'white',
-                border: '1px solid #333'
-              }}>
-                {/* HEADER */}
-                <div style={{ 
-                  display: 'flex', 
-                  alignItems: 'center', 
-                  justifyContent: 'space-between',
-                  marginBottom: 12,
-                  paddingBottom: 8,
-                  borderBottom: '1px solid rgba(255,255,255,0.1)'
-                }}>
-                  <div style={{ fontSize: 14, fontWeight: 'bold' }}>
-                    🎯 Métré A4 V1.2 (AprilTag 13×21.7cm) - ID {arucoAnalysis.markerId}
-                  </div>
-                  <Tag 
-                    color={
-                      arucoAnalysis.quality.rating === 'excellent' ? 'green' :
-                      arucoAnalysis.quality.rating === 'good' ? 'blue' :
-                      arucoAnalysis.quality.rating === 'acceptable' ? 'orange' : 'red'
-                    }
-                  >
-                    {arucoAnalysis.quality.overall}% - {arucoAnalysis.quality.rating.toUpperCase()}
-                  </Tag>
-                </div>
-                
-                {/* ROW 1: POSE (Rotations) */}
-                <div style={{ 
-                  display: 'flex', 
-                  gap: 12, 
-                  justifyContent: 'space-around',
-                  marginBottom: 12 
-                }}>
-                  <div style={{ textAlign: 'center', flex: 1 }}>
-                    <div style={{ 
-                      fontSize: 22, 
-                      fontWeight: 'bold',
-                      color: Math.abs(arucoAnalysis.pose.rotX) < 15 ? '#52c41a' : 
-                             Math.abs(arucoAnalysis.pose.rotX) < 30 ? '#faad14' : '#ff4d4f'
-                    }}>
-                      {arucoAnalysis.pose.rotX}°
-                    </div>
-                    <div style={{ fontSize: 10, opacity: 0.7 }}>Rot X (↕️)</div>
-                  </div>
-                  <div style={{ textAlign: 'center', flex: 1 }}>
-                    <div style={{ 
-                      fontSize: 22, 
-                      fontWeight: 'bold',
-                      color: Math.abs(arucoAnalysis.pose.rotY) < 15 ? '#52c41a' : 
-                             Math.abs(arucoAnalysis.pose.rotY) < 30 ? '#faad14' : '#ff4d4f'
-                    }}>
-                      {arucoAnalysis.pose.rotY}°
-                    </div>
-                    <div style={{ fontSize: 10, opacity: 0.7 }}>Rot Y (↔️)</div>
-                  </div>
-                  <div style={{ textAlign: 'center', flex: 1 }}>
-                    <div style={{ 
-                      fontSize: 22, 
-                      fontWeight: 'bold',
-                      color: Math.abs(arucoAnalysis.pose.rotZ) < 10 ? '#52c41a' : 
-                             Math.abs(arucoAnalysis.pose.rotZ) < 20 ? '#faad14' : '#ff4d4f'
-                    }}>
-                      {arucoAnalysis.pose.rotZ}°
-                    </div>
-                    <div style={{ fontSize: 10, opacity: 0.7 }}>Rot Z (🔄)</div>
-                  </div>
-                </div>
-                
-                {/* ROW 2: PROFONDEUR + TAILLE */}
-                <div style={{ 
-                  display: 'flex', 
-                  gap: 12, 
-                  marginBottom: 12,
-                  background: 'rgba(0,212,255,0.1)',
-                  borderRadius: 8,
-                  padding: '10px'
-                }}>
-                  <div style={{ flex: 1, textAlign: 'center' }}>
-                    <div style={{ fontSize: 10, opacity: 0.7 }}>📏 Distance</div>
-                    <div style={{ 
-                      fontSize: 18, 
-                      fontWeight: 'bold',
-                      color: arucoAnalysis.depth.estimatedCm < 50 ? '#52c41a' : 
-                             arucoAnalysis.depth.estimatedCm < 100 ? '#faad14' : '#ff7875'
-                    }}>
-                      ~{arucoAnalysis.depth.estimatedCm} cm
-                    </div>
-                    <div style={{ fontSize: 10, opacity: 0.5 }}>
-                      ({arucoAnalysis.depth.estimatedM} m)
-                    </div>
-                  </div>
-                  <div style={{ width: 1, background: 'rgba(255,255,255,0.2)' }} />
-                  <div style={{ flex: 1, textAlign: 'center' }}>
-                    <div style={{ fontSize: 10, opacity: 0.7 }}>📐 Marqueur</div>
-                    <div style={{ fontSize: 18, fontWeight: 'bold', color: '#00d4ff' }}>
-                      {arucoAnalysis.markerSizeCm} cm
-                    </div>
-                    <div style={{ fontSize: 10, opacity: 0.5 }}>
-                      ({Math.round(arucoAnalysis.markerSizePx)} px)
-                    </div>
-                  </div>
-                </div>
-                
-                {/* ROW 3: 🏎️ FORMULE 1 - Homographie Pure */}
-                <div style={{ 
-                  background: 'linear-gradient(135deg, rgba(0,212,255,0.2) 0%, rgba(82,196,26,0.2) 100%)',
-                  borderRadius: 8,
-                  padding: '10px',
-                  marginBottom: 8,
-                  textAlign: 'center'
-                }}>
-                  <div style={{ fontSize: 12, fontWeight: 'bold', marginBottom: 4 }}>
-                    🏎️ Mode Formule 1
-                  </div>
-                  <div style={{ fontSize: 10, opacity: 0.8 }}>
-                    Mesures directes via homographie (×1.0)
-                  </div>
-                  {optimalCorrection && (
-                    <div style={{ 
-                      marginTop: 6, 
-                      fontSize: 11,
-                      color: '#52c41a'
-                    }}>
-                      Confiance: {(optimalCorrection.globalConfidence * 100).toFixed(0)}%
-                    </div>
-                  )}
-                </div>
-                
-                {/* ROW 4: Qualité détaillée */}
-                <div style={{ 
-                  display: 'flex', 
-                  gap: 8, 
-                  fontSize: 10,
-                  opacity: 0.7,
-                  justifyContent: 'center'
-                }}>
-                  <span>🎯 Détection: {arucoAnalysis.quality.detectionQuality}%</span>
-                  <span>|</span>
-                  <span>📐 Homographie: {arucoAnalysis.quality.homographyQuality}%</span>
-                  <span>|</span>
-                  <span>📷 Pose: {arucoAnalysis.quality.poseQuality}%</span>
-                </div>
-                
-                {/* ROW 5: 📸 INFOS FOCALE - Données techniques utilisées */}
-                {(arucoAnalysis as any).focalInfo && (
-                  <div style={{ 
-                    marginTop: 10,
-                    padding: '10px',
-                    background: 'linear-gradient(135deg, rgba(255,165,0,0.2) 0%, rgba(255,69,0,0.2) 100%)',
-                    borderRadius: 8,
-                    border: '1px solid rgba(255,165,0,0.3)'
-                  }}>
-                    <div style={{ 
-                      fontSize: 11, 
-                      fontWeight: 'bold',
-                      marginBottom: 8,
-                      display: 'flex',
-                      justifyContent: 'space-between',
-                      alignItems: 'center'
-                    }}>
-                      <span>📸 Données Caméra</span>
-                      <Tag color={
-                        (arucoAnalysis as any).focalInfo.confidence >= 90 ? 'success' :
-                        (arucoAnalysis as any).focalInfo.confidence >= 70 ? 'blue' :
-                        (arucoAnalysis as any).focalInfo.confidence >= 50 ? 'orange' : 'red'
-                      } style={{ fontSize: 9 }}>
-                        {(arucoAnalysis as any).focalInfo.confidence}% confiance
-                      </Tag>
-                    </div>
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6, fontSize: 10 }}>
-                      <div style={{ 
-                        textAlign: 'center', 
-                        padding: '6px 8px',
-                        background: 'rgba(0,0,0,0.2)', 
-                        borderRadius: 4 
-                      }}>
-                        <div style={{ opacity: 0.7, fontSize: 9 }}>Focale</div>
-                        <div style={{ fontWeight: 'bold', color: '#ffa500' }}>
-                          {(arucoAnalysis as any).focalInfo.focalPx} px
-                        </div>
-                      </div>
-                      <div style={{ 
-                        textAlign: 'center', 
-                        padding: '6px 8px',
-                        background: 'rgba(0,0,0,0.2)', 
-                        borderRadius: 4 
-                      }}>
-                        <div style={{ opacity: 0.7, fontSize: 9 }}>Image</div>
-                        <div style={{ fontWeight: 'bold', color: '#87ceeb' }}>
-                          {(arucoAnalysis as any).focalInfo.imageWidth} px
-                        </div>
-                      </div>
-                    </div>
-                    <div style={{ 
-                      marginTop: 6, 
-                      fontSize: 9, 
-                      textAlign: 'center',
-                      opacity: 0.8,
-                      padding: '4px 8px',
-                      background: 'rgba(0,0,0,0.2)',
-                      borderRadius: 4
-                    }}>
-                      📱 Source: <strong>{(arucoAnalysis as any).focalInfo.source}</strong>
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-          
-          {/* 📐 POSE (Orientation) - Fallback si pas d'arucoAnalysis mais pose calculée */}
-          {!arucoAnalysis && pose && (
-            <div style={{ marginTop: 8 }}>
-              <div style={{ 
-                background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-                borderRadius: 8,
-                padding: '12px 16px',
-                color: 'white'
-              }}>
-                <div style={{ fontSize: 14, fontWeight: 'bold', marginBottom: 8 }}>
-                  📐 Pose (Orientation de la caméra)
-                </div>
-                <div style={{ display: 'flex', gap: 16, justifyContent: 'space-around' }}>
-                  <div style={{ textAlign: 'center' }}>
-                    <div style={{ 
-                      fontSize: 24, 
-                      fontWeight: 'bold',
-                      color: Math.abs(pose.rotX) < 15 ? '#52c41a' : Math.abs(pose.rotX) < 30 ? '#faad14' : '#ff4d4f'
-                    }}>
-                      {pose.rotX}°
-                    </div>
-                    <div style={{ fontSize: 11, opacity: 0.8 }}>Rotation X</div>
-                    <div style={{ fontSize: 10, opacity: 0.6 }}>haut/bas</div>
-                  </div>
-                  <div style={{ textAlign: 'center' }}>
-                    <div style={{ 
-                      fontSize: 24, 
-                      fontWeight: 'bold',
-                      color: Math.abs(pose.rotY) < 15 ? '#52c41a' : Math.abs(pose.rotY) < 30 ? '#faad14' : '#ff4d4f'
-                    }}>
-                      {pose.rotY}°
-                    </div>
-                    <div style={{ fontSize: 11, opacity: 0.8 }}>Rotation Y</div>
-                    <div style={{ fontSize: 10, opacity: 0.6 }}>gauche/droite</div>
-                  </div>
-                  <div style={{ textAlign: 'center' }}>
-                    <div style={{ 
-                      fontSize: 24, 
-                      fontWeight: 'bold',
-                      color: Math.abs(pose.rotZ) < 10 ? '#52c41a' : Math.abs(pose.rotZ) < 20 ? '#faad14' : '#ff4d4f'
-                    }}>
-                      {pose.rotZ}°
-                    </div>
-                    <div style={{ fontSize: 11, opacity: 0.8 }}>Rotation Z</div>
-                    <div style={{ fontSize: 10, opacity: 0.6 }}>inclinaison</div>
-                  </div>
-                </div>
-                
-                {/* 📏 PROFONDEUR (Distance caméra ↔ marqueur) */}
-                {estimatedDepth && (
-                  <div style={{ 
-                    marginTop: 12, 
-                    padding: '8px 12px',
-                    background: 'rgba(255,255,255,0.15)',
-                    borderRadius: 6,
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: 8
-                  }}>
-                    <span style={{ fontSize: 18 }}>📏</span>
-                    <div>
-                      <div style={{ fontSize: 11, opacity: 0.8 }}>Distance caméra ↔ marqueur</div>
-                      <div style={{ 
-                        fontSize: 20, 
-                        fontWeight: 'bold',
-                        color: estimatedDepth < 50 ? '#52c41a' : estimatedDepth < 100 ? '#faad14' : '#ff7875'
-                      }}>
-                        ~{estimatedDepth} cm
-                        <span style={{ fontSize: 12, fontWeight: 'normal', opacity: 0.7, marginLeft: 4 }}>
-                          ({(estimatedDepth / 100).toFixed(2)} m)
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                )}
-                
-                <div style={{ 
-                  marginTop: 8, 
-                  fontSize: 11, 
-                  opacity: 0.7,
-                  textAlign: 'center'
-                }}>
-                  {Math.abs(pose.rotX) < 15 && Math.abs(pose.rotY) < 15 
-                    ? '✅ Angles idéaux pour une mesure précise' 
-                    : Math.abs(pose.rotX) < 30 && Math.abs(pose.rotY) < 30
-                      ? '⚠️ Angles acceptables - correction homographie appliquée'
-                      : '⚠️ Photo très inclinée - précision réduite'}
-                </div>
-              </div>
-            </div>
-          )}
         </Card>
       )}
 

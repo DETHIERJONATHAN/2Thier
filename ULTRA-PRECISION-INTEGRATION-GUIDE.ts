@@ -34,7 +34,7 @@ export function useMeasurementUltraPrecision() {
       detectedPoints: Array<{
         pixel: { x: number; y: number };
         real: { x: number; y: number };
-        type: 'apriltag' | 'dot' | 'charuco';
+        type: 'apriltag' | 'dot' | 'apriltag-corner';
         confidence: number;
       }>,
       objectPoints: Array<{ x: number; y: number }>,
@@ -324,9 +324,9 @@ async function measureWithUltraPrecision() {
     { pixel: { x: 150, y: 150 }, real: { x: 30, y: 30 }, type: 'dot', confidence: 0.85 },
     // ... 11 autres dots
 
-    // 25 ChArUco corners (grille 6×6)
-    { pixel: { x: 120, y: 120 }, real: { x: 25, y: 25 }, type: 'charuco', confidence: 0.80 },
-    // ... 24 autres ChArUco corners
+    // 20 coins AprilTag (4 coins × 5 tags)
+    { pixel: { x: 120, y: 120 }, real: { x: 25, y: 25 }, type: 'apriltag-corner', confidence: 0.80 },
+    // ... 19 autres coins AprilTag
   ];
 
   const objectPoints = [

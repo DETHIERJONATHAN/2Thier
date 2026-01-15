@@ -22,7 +22,7 @@ export interface Point2D {
 export interface UltraPrecisionPoint {
   pixelPos: Point2D;
   realPos: Point2D;
-  type: 'apriltag' | 'dot' | 'charuco';
+  type: 'apriltag' | 'apriltag-corner' | 'dot';
   confidence: number;
 }
 

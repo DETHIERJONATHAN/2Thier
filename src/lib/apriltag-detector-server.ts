@@ -29,10 +29,18 @@ export interface AprilTagDetectionResult {
  * @param height Hauteur de l'image
  * @returns Liste des AprilTags détectés avec leurs coins
  */
+export interface AprilTagDetectorOptions {
+  quadDecimate?: number;
+  quadSigma?: number;
+  refineEdges?: boolean;
+  decodeSharpening?: number;
+}
+
 export function detectAprilTagsMetreA4(
   data: Uint8ClampedArray | Buffer,
   width: number,
-  height: number
+  height: number,
+  options: AprilTagDetectorOptions = {}
 ): AprilTagDetectionResult[] {
   try {
     console.log(`🎯 [APRILTAG] Détection AprilTags Métré V1.2...`);
@@ -48,10 +56,10 @@ export function detectAprilTagsMetreA4(
     
     // Créer détecteur AprilTag (famille 36h11 pour Métré V1.2)
     const detector = new AprilTag(FAMILIES.TAG36H11, {
-      quadDecimate: 2.0,    // Accélération sur grandes images
-      quadSigma: 0.0,       // Pas de flou gaussien
-      refineEdges: true,    // Meilleure précision des coins
-      decodeSharpening: 0.25
+      quadDecimate: options.quadDecimate ?? 2.0,    // Accélération sur grandes images
+      quadSigma: options.quadSigma ?? 0.0,         // Pas de flou gaussien
+      refineEdges: options.refineEdges ?? true,    // Meilleure précision des coins
+      decodeSharpening: options.decodeSharpening ?? 0.25
     });
     
     // Détecter les tags (synchrone)

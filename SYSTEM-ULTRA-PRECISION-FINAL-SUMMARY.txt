@@ -24,7 +24,7 @@ AMÉLIORATION: 4× MEILLEURE PRÉCISION ! 🚀
 
 ### 2. API Route Ultra-Précision
    ✅ POST /api/measurement-reference/ultra-precision-compute
-   ✅ Accepte 41+ points (AprilTag + dots + ChArUco)
+   ✅ Accepte 37+ points (AprilTag + dots + coins AprilTag)
    ✅ Retourne ±0.25cm + profondeur + angle
    ✅ 158 lignes ajoutées au measurement-reference.ts
 

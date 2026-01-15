@@ -2,7 +2,7 @@
 
 **Implémenté**: Janvier 14, 2026  
 **Précision**: ±0.25cm (4× mieux que l'ancien ±1cm)  
-**Points utilisés**: 41+ (4 AprilTag + 12 dots + 25 ChArUco)  
+**Points utilisés**: 37+ (5 AprilTag + 12 dots + 20 coins AprilTag)  
 **Algorithme**: RANSAC + Levenberg-Marquardt + Estimation 3D  
 **Status**: ✅ PRODUCTION READY  
 

@@ -192,6 +192,24 @@ export function selectBestPhoto(photos: PhotoCandidate[]): BestPhotoResult {
     console.log(`   ⚠️  Warnings: ${bestScore.warnings.join(', ')}`);
   }
   
+  // ═══════════════════════════════════════════════════════════════
+  // SEUIL DE REJET : Refuser photos de qualité insuffisante
+  // ═══════════════════════════════════════════════════════════════
+  if (bestTotalScore < 45) {
+    console.log(`\n   ❌ REJET: Score ${bestTotalScore.toFixed(1)}/100 insuffisant (seuil: 45)`);
+    throw new Error(
+      `QUALITÉ_INSUFFISANTE: Meilleur score ${bestTotalScore.toFixed(1)}/100. ` +
+      `Reprendre les photos avec meilleur éclairage et stabilité. ` +
+      `Points détectés: ${bestPhoto.detection.breakdown.total} (5 AprilTags + ` +
+      `${bestPhoto.detection.breakdown.referenceDots} dots). ` +
+      `Problèmes: ${bestScore.warnings.join(', ') || 'Netteté/éclairage insuffisants'}`
+    );
+  }
+  
+  if (bestTotalScore < 60) {
+    console.log(`   ⚠️  QUALITÉ LIMITE: Score ${bestTotalScore.toFixed(1)}/100 (recommandation: reprendre)`);
+  }
+  
   return {
     bestPhoto,
     bestScore,
@@ -229,7 +247,20 @@ function analyzePhotoQuality(photo: PhotoCandidate): PhotoQualityScore {
   // 2️⃣ QUALITÉ HOMOGRAPHIE — 35%
   // ═══════════════════════════════════════════════════════════════
   const homographyMetrics = analyzeHomographyQuality(photo.detection);
-  const homographyScore = computeHomographyScore(homographyMetrics);
+  let homographyScore = computeHomographyScore(homographyMetrics);
+  
+  // 🎯 BONUS DENSITÉ POINTS: AprilTags + dots
+  const pointDensity = {
+    aprilTags: (photo.detection.breakdown.aprilTags / 5) * 100,      // Max 100 (5/5)
+    dots: (photo.detection.breakdown.referenceDots / 12) * 100        // Max 100 (12/12)
+  };
+  const densityBonus = (
+    pointDensity.aprilTags * 0.6 +   // AprilTags dominants (5/5)
+    pointDensity.dots * 0.4          // Dots variables
+  );
+  
+  // Intégrer densité dans score homographie (30% du score homographie)
+  homographyScore = (homographyScore * 0.7) + (densityBonus * 0.3);
   
   if (photo.detection.homography.reprojectionErrorMm > HOMOGRAPHY_THRESHOLDS.acceptable) {
     warnings.push(`Erreur reprojection ${photo.detection.homography.reprojectionErrorMm.toFixed(1)}mm`);
@@ -372,9 +403,11 @@ function analyzeSharpness(
  * Convertit netteté en score 0-100
  */
 function computeSharpnessScore(metrics: SharpnessMetrics): number {
-  // Variance Laplacian typique pour image nette : 100-1000
-  // Floue : < 50
-  const laplacianScore = Math.min(100, (metrics.laplacianVariance / 500) * 100);
+  // Variance Laplacian réaliste:
+  // - Image floue : 50-100 → Score 25-50
+  // - Image nette : 200-400 → Score 100
+  // - Image ultra-nette : 1000+ → Score 100 (cap)
+  const laplacianScore = Math.min(100, (metrics.laplacianVariance / 200) * 100);
   
   // Moyenne pondérée
   const score = 
@@ -422,16 +455,18 @@ function computeHomographyScore(metrics: HomographyMetrics): number {
   // Couverture spatiale importante pour robustesse
   const coverageScore = metrics.spatialCoverage * 100;
   
+  // Score de base
   return (inlierScore * 0.7) + (coverageScore * 0.3);
 }
 
 /**
  * Calcule la couverture spatiale des points (0-1)
+ * Utilise une grille 4×4 pour mieux détecter points mal distribués
  */
 function computeSpatialCoverage(points: Point2D[]): number {
   if (points.length < 4) return 0;
   
-  // Convex hull simplifié : bbox
+  // Bbox pour normalisation
   let minX = Infinity, maxX = -Infinity;
   let minY = Infinity, maxY = -Infinity;
   
@@ -442,12 +477,25 @@ function computeSpatialCoverage(points: Point2D[]): number {
     maxY = Math.max(maxY, p.y);
   }
   
-  const bboxArea = (maxX - minX) * (maxY - minY);
+  const width = maxX - minX;
+  const height = maxY - minY;
   
-  // Normaliser par rapport à une image typique 1000×1000px
-  const normalizedArea = bboxArea / (1000 * 1000);
+  if (width < 10 || height < 10) return 0; // Trop petit
   
-  return Math.min(1, normalizedArea);
+  // Grille 4×4 pour détecter distribution
+  const grid = Array(4).fill(null).map(() => Array(4).fill(0));
+  
+  for (const p of points) {
+    const gridX = Math.min(3, Math.floor(((p.x - minX) / width) * 4));
+    const gridY = Math.min(3, Math.floor(((p.y - minY) / height) * 4));
+    grid[gridY][gridX]++;
+  }
+  
+  // Couverture = % de cellules avec au moins 1 point
+  const filledCells = grid.flat().filter(count => count > 0).length;
+  const spatialCoverage = filledCells / 16; // 0-1
+  
+  return spatialCoverage;
 }
 
 // ═══════════════════════════════════════════════════════════════

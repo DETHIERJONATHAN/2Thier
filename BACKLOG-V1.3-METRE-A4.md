@@ -23,7 +23,7 @@ Feuille A4 ondulée/courbée sur mur crépi = homographie fausse → erreur mesu
    ```
 
 2. **Triangulation 3D simplifiée**
-   - Utiliser les 14 points dispersés + ChArUco coins
+  - Utiliser les 12 points dispersés + coins AprilTag
    - Calculer déviations Z (profondeur) relatives
    - Si déviation >3mm sur 210mm → feuille courbée
 
@@ -74,7 +74,7 @@ const enhancedBuffer = await sharp(imageBuffer)
 ## 🟢 PRIORITÉ 3 : UI Guidage distance
 
 **Problème :**
-Utilisateur prend photo trop loin → résolution ChArUco insuffisante
+Utilisateur prend photo trop loin → résolution coins AprilTag insuffisante
 
 **Solution frontend :**
 ```typescript
@@ -97,7 +97,7 @@ if (coveragePercent < 15) {
 ```
 
 **Seuils optimaux :**
-- 20-50% frame = zone idéale (ChArUco résolution suffisante)
+- 20-50% frame = zone idéale (coins AprilTag résolution suffisante)
 - <15% = trop loin (risque flou, pixels insuffisants)
 - >60% = trop proche (coins coupés)
 

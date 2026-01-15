@@ -27,19 +27,17 @@ Système de calibration photogrammétrique pour mesures précises via feuille A4
 - **Position :** 14mm des bords (8mm bordure + 6mm marge sécurité)
 - **Dictionnaire :** DICT_APRILTAG_36h11
 
-#### 3. ChArUco centre
-- **Grille :** 6×6 (120×120mm)
-- **Taille carrés :** 20mm
+#### 3. AprilTag central
+- **Tag :** 120×120mm
 - **Position :** x=45mm, y=80mm
-- **Markers ratio :** 0.6 (60% de la taille carrés)
-- **Densité tags :** ~50% cases (optimal calibration)
+- **Fonction :** Détection à distance + coins AprilTag
 
-#### 4. Points de référence (14×)
+#### 4. Points de référence (12×)
 - **Diamètre :** 4mm
 - **Répartition :**
   - 3 haut gauche, 3 haut droit
-  - 3 bas gauche, 3 bas droit
-  - 2 centre (hors ChArUco)
+  - 2 bas gauche, 2 bas droit
+  - 2 centre
 - **Dispersion :** Non-alignés (correction distorsion radiale)
 
 #### 5. Règles graduées
@@ -94,12 +92,12 @@ const enhancedBuffer = await sharp(imageBuffer)
 ### Étape 3 : Extraction AprilTags
 - **Détecteur :** cv2.aruco (DICT_APRILTAG_36h11)
 - **Validation :** 4 tags coins détectés avec IDs corrects
-- **Fallback :** Si <4 tags → pipeline ChArUco seul
+- **Fallback :** Si <4 tags → utiliser coins AprilTag + dots disponibles
 
-### Étape 4 : Calibration ChArUco
-- **Détection coins :** Sub-pixel (précision accrue vs AprilTags)
+### Étape 4 : Calibration multi‑points
+- **Détection coins :** Sub-pixel (coins AprilTag)
 - **Homographie initiale :** 4 tags coins → plan projectif
-- **Affinage :** ChArUco corners → transformation perspective optimale
+- **Affinage :** Coins AprilTag + points noirs → transformation perspective optimale
 
 ### Étape 5 : Validation échelle
 ```typescript
@@ -133,14 +131,14 @@ if (scaleError > 5%) {
 ### Conditions dégradées (tolérance)
 - **Distance :** jusqu'à 5m (résolution limite)
 - **Angle :** jusqu'à 45° (homographie encore valide)
-- **Lumière :** Néon/flash OK si pas reflet direct ChArUco
+- **Lumière :** Néon/flash OK si pas reflet direct sur AprilTag
 - **Support :** Papier scotché (ondulations <5mm)
 - **Précision :** ±5-10mm sur 3-5m
 
 ### Cas de rejet automatique
 - ❌ Bordure coupée (impression rognée)
 - ❌ Échelle erreur >5% (ajusté à la page)
-- ❌ <2 AprilTags détectés + ChArUco masqué
+- ❌ <2 AprilTags détectés + tag central masqué
 - ❌ Feuille >98% image (fond blanc confondu)
 - ❌ Distorsion excessive (>10% variance points)
 
@@ -149,8 +147,8 @@ if (scaleError > 5%) {
 ## 🔄 Pipeline fallback (détection dégradée)
 
 ### Cascade hiérarchique
-1. **Optimal :** 4 AprilTags + ChArUco + 14 points → homographie complète
-2. **Niveau 1 :** ChArUco seul → homographie partielle (coins damier)
+1. **Optimal :** 5 AprilTags + 12 points noirs + coins AprilTag → homographie complète
+2. **Niveau 1 :** AprilTag central seul → homographie partielle
 3. **Niveau 2 :** Bordure noire → extraction contours → estimation plan
 4. **Niveau 3 :** Règles graduées → fréquence spatiale barres → déduction échelle
 5. **Niveau 4 :** Points dispersés → triangulation minimale (≥3 points)
@@ -159,9 +157,9 @@ if (scaleError > 5%) {
 ### Logs diagnostics
 ```typescript
 console.log('[DETECTION] Cascade fallback :');
-console.log('  ✅ AprilTags: 4/4 détectés');
-console.log('  ✅ ChArUco: 24/36 coins trouvés');
-console.log('  ⚠️ Points: 12/14 (2 masqués)');
+console.log('  ✅ AprilTags: 5/5 détectés');
+console.log('  ✅ Coins AprilTag: 20/20 trouvés');
+console.log('  ⚠️ Points: 12/12 (0 masqué)');
 console.log('  ✅ Échelle: 0.8% erreur (OK)');
 console.log('  → Mode: OPTIMAL (homographie complète)');
 ```
@@ -182,10 +180,9 @@ console.log('  → Mode: OPTIMAL (homographie complète)');
   "april_tags": [
     {"id": 2, "x_mm": 14, "y_mm": 14, "size_mm": 20}
   ],
-  "charuco": {
+  "center_apriltag": {
     "x_mm": 45, "y_mm": 80,
-    "squares_x": 6, "squares_y": 6,
-    "square_mm": 20
+    "size_mm": 120
   },
   "reference_dots": [
     {"x_mm": 30, "y_mm": 75, "diameter_mm": 4}
@@ -213,7 +210,7 @@ console.log('  → Mode: OPTIMAL (homographie complète)');
 3. Reculer jusqu'à voir toute la feuille dans cadre
 4. **Guidage :** Feuille = 20-50% de l'écran (optimal)
 5. Prendre photo perpendiculaire (angle <30°)
-6. Éviter flash/reflets directs sur ChArUco
+6. Éviter flash/reflets directs sur l'AprilTag
 
 ### Validation système
 - ✅ Bordure détectée → crop automatique
@@ -230,7 +227,7 @@ console.log('  → Mode: OPTIMAL (homographie complète)');
 - Détection non-planéité feuille (variance 3D points)
 - CLAHE adaptatif (reflets néons)
 - UI guidage distance temps réel
-- Optimisation densité ChArUco (35% vs 50%)
+- Optimisation densité coins AprilTag
 
 ### V2.0 (roadmap)
 - Support plaque rigide 4mm (marquage tranche)
@@ -243,7 +240,7 @@ console.log('  → Mode: OPTIMAL (homographie complète)');
 ## 📚 Références techniques
 
 ### Standards calibration
-- OpenCV ChArUco Board : [docs.opencv.org/charuco](https://docs.opencv.org/4.x/df/d4a/tutorial_charuco_detection.html)
+- AprilTag : [github.com/AprilRobotics/apriltag](https://github.com/AprilRobotics/apriltag)
 - AprilTag 36h11 : [april.eecs.umich.edu](https://april.eecs.umich.edu/software/apriltag)
 - Homographie robuste : Zhang 2000 + RANSAC
 
@@ -253,7 +250,7 @@ console.log('  → Mode: OPTIMAL (homographie complète)');
 - **Génération :** Python 3.13, Pillow, qrcode
 
 ### Précision théorique
-- **ChArUco corners :** ±0.1 pixel (sub-pixel refinement)
+- **Coins AprilTag :** ±0.1 pixel (sub-pixel refinement)
 - **AprilTags :** ±0.5 pixel (coins binaires)
 - **Points dispersés :** ±1 pixel (ellipse fitting)
 - **Homographie :** Erreur reprojection <2 pixels (RANSAC)
