@@ -111,11 +111,28 @@ npm run dev &
 
 ## 🚀 Déploiement Cloud Run (Production)
 
-### Déploiement via GitHub Actions (Recommandé)
+### Déploiement via GitHub Actions (Recommandé) ✅
 
-Le déploiement se fait automatiquement via GitHub Actions lors d'un push sur `main`.
+**Le déploiement est 100% automatique** lors d'un push sur `main` :
 
-**Fichier**: `.github/workflows/deploy-cloud-run.yml`
+1. 🔨 Build de l'application (frontend + backend)
+2. 🐳 Build & push de l'image Docker vers Artifact Registry
+3. 🚀 Déploiement automatique sur Cloud Run
+4. ✅ Application en production sur `https://app.2thier.be`
+
+**Fichier de workflow**: `.github/workflows/deploy-cloud-run.yml`
+
+**Pour déployer en production :**
+```bash
+git add .
+git commit -m "Votre message"
+git push origin main
+# → GitHub Actions fait le reste automatiquement !
+```
+
+**Suivre le déploiement :**
+- GitHub : https://github.com/DETHIERJONATHAN/2Thier/actions
+- Cloud Build : https://console.cloud.google.com/cloud-build/builds?project=thiernew
 
 ### Déploiement manuel (pro)
 
@@ -387,6 +404,55 @@ These values are automatically set by the system.
 **Cause:** Tentative de définir `PORT=8080` dans `--set-env-vars`.
 
 **Solution:** Ne jamais inclure PORT dans les variables d'environnement. Utiliser `--port 8080` à la place.
+
+---
+
+### Problème 7: Erreur VPC-SC log streaming dans GitHub Actions
+
+**Erreur:**
+```
+ERROR: (gcloud.builds.submit) 
+The build is running, and logs are being written to the default logs bucket.
+This tool can only stream logs if you are Viewer/Owner of the project and, if applicable, 
+allowed by your VPC-SC security policy.
+```
+
+**Cause:** Le projet `thiernew` a une politique de sécurité VPC-SC qui bloque l'accès au bucket de logs par défaut. La commande `gcloud builds submit` essaie de streamer les logs en temps réel et échoue avec `exit code 1`, même si le build réussit en arrière-plan.
+
+**Impact:** Le workflow GitHub Actions s'arrête avant le déploiement Cloud Run, même si l'image Docker a été buildée et poussée avec succès.
+
+**Solution:** Utiliser le mode asynchrone avec `--async` puis attendre la complétion avec `gcloud builds wait`.
+
+**Fichier modifié:** `.github/workflows/deploy-cloud-run.yml`
+
+```yaml
+- name: 🧱 Build & Push Docker Image
+  run: |
+    IMAGE_URL="europe-west1-docker.pkg.dev/${{ env.PROJECT_ID }}/crm-api/crm-api"
+    BUILD_ID=$(gcloud builds submit \
+      --project ${{ env.PROJECT_ID }} \
+      --tag "$IMAGE_URL" \
+      --async \
+      --format='value(id)')
+    echo "Build ID: $BUILD_ID"
+    gcloud builds wait "$BUILD_ID" --project ${{ env.PROJECT_ID }}
+    echo "IMAGE_URL=$IMAGE_URL" >> $GITHUB_ENV
+```
+
+**Avantages:**
+- ✅ Évite le streaming des logs (contourne la restriction VPC-SC)
+- ✅ Attend quand même la fin du build avant de continuer
+- ✅ Retourne le bon exit code si le build échoue
+- ✅ Permet au workflow de continuer jusqu'au déploiement Cloud Run
+
+**Vérification manuelle du build:**
+```bash
+# Si le workflow échoue avant le fix, vérifier si le build a réussi
+gcloud builds describe <BUILD_ID> --project thiernew --format='value(status)'
+
+# Si SUCCESS, déployer manuellement l'image
+gcloud run deploy crm-api --image europe-west1-docker.pkg.dev/thiernew/crm-api/crm-api [...]
+```
 
 ---
 
