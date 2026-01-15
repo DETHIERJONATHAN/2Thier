@@ -1,7 +1,28 @@
 # 🔌 Guide de Connexion Générale - CRM 2Thier
 
 > **Document de référence** pour la connexion locale et le déploiement Cloud Run.  
-> Dernière mise à jour : 28 décembre 2025
+> **Dernière mise à jour : 15 janvier 2026** ✅  
+> **Fix VPC-SC appliqué : Déploiement automatique 100% fonctionnel**
+
+---
+
+## ✅ RÉSUMÉ RAPIDE
+
+### Développement Local
+```bash
+bash scripts/start-local.sh
+# → Frontend: http://localhost:5173
+# → Backend: http://localhost:4000
+```
+
+### Déploiement Production
+```bash
+git add .
+git commit -m "Votre message"
+git push origin main
+# → Déploiement automatique vers https://app.2thier.be
+# → Suivre : https://github.com/DETHIERJONATHAN/2Thier/actions
+```
 
 ---
 
