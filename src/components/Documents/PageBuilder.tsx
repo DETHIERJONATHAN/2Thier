@@ -27,6 +27,8 @@ import ModuleConfigPanel from './ModuleConfigPanel';
 import PagePreview from './PagePreview';
 import GridPagePreview from './GridPagePreview';
 import DocumentGlobalThemeEditor from './DocumentGlobalThemeEditor';
+import { TemplateSelector } from './TemplateSelector';
+import { DocumentTemplate, instantiateTemplate } from './DocumentTemplates';
 import { DocumentPage, ModuleInstance, DocumentTemplateConfig, EditorState } from './types';
 import { getModuleById } from './ModuleRegistry';
 import { useAuthenticatedApi } from '../../hooks/useAuthenticatedApi';
@@ -102,6 +104,7 @@ const PageBuilder = ({ templateId, initialConfig, onSave, onClose }: PageBuilder
   const [rightPanelWidth, setRightPanelWidth] = useState(380); // Largeur du panneau de droite (redimensionnable)
   const [isResizingPanel, setIsResizingPanel] = useState(false); // État du redimensionnement
   const [mobileActiveTab, setMobileActiveTab] = useState<'preview' | 'modules' | 'config'>('preview'); // Onglet mobile actif
+  const [templateSelectorOpen, setTemplateSelectorOpen] = useState(false); // Sélecteur de templates pré-faits
 
   // Données de test pour le mode preview et l'évaluation des conditions
   const previewDocumentData = useMemo(() => ({
@@ -393,6 +396,62 @@ const PageBuilder = ({ templateId, initialConfig, onSave, onClose }: PageBuilder
     }));
 
     message.success(`${moduleDef.name} ajouté`);
+  }, [activePage]);
+
+  // Fonction pour appliquer un template pré-construit à la page active
+  const handleApplyTemplate = useCallback((selectedTemplate: DocumentTemplate | null) => {
+    setTemplateSelectorOpen(false);
+    
+    if (!selectedTemplate || !activePage) return;
+    
+    // Demander confirmation si la page a déjà des modules
+    if (activePage.modules.length > 0) {
+      Modal.confirm({
+        title: 'Remplacer le contenu existant ?',
+        content: 'Cette action va remplacer tous les modules de la page actuelle par ceux du template sélectionné.',
+        okText: 'Remplacer',
+        cancelText: 'Annuler',
+        okButtonProps: { danger: true },
+        onOk: () => applyTemplateToPage(selectedTemplate),
+      });
+    } else {
+      applyTemplateToPage(selectedTemplate);
+    }
+  }, [activePage]);
+
+  // Appliquer effectivement le template à la page
+  const applyTemplateToPage = useCallback((template: DocumentTemplate) => {
+    if (!activePage) return;
+    
+    // Convertir les modules du template en instances
+    const moduleInstances = instantiateTemplate(template);
+    
+    // Assigner des positions automatiques à chaque module
+    const modulesWithPositions: ModuleInstance[] = moduleInstances.map((module, index) => {
+      const yPosition = 40 + (index * 120); // Espacement vertical de 120px
+      return {
+        ...module,
+        id: uuidv4(), // Regénérer un ID unique
+        position: {
+          x: 40,
+          y: yPosition,
+          width: 714, // Largeur standard (page - marges)
+          height: 100, // Hauteur par défaut
+        },
+      };
+    });
+    
+    // Mettre à jour la page avec les nouveaux modules
+    setConfig(prev => ({
+      ...prev,
+      pages: prev.pages.map(p => 
+        p.id === activePage.id 
+          ? { ...p, modules: modulesWithPositions }
+          : p
+      ),
+    }));
+    
+    message.success(`Template "${template.name}" appliqué avec ${modulesWithPositions.length} modules !`);
   }, [activePage]);
 
   // Fonction pour configurer le fond de page
@@ -937,6 +996,7 @@ const PageBuilder = ({ templateId, initialConfig, onSave, onClose }: PageBuilder
                   addModule(moduleId);
                   setMobileActiveTab('preview');
                 }}
+                onApplyTemplate={() => setTemplateSelectorOpen(true)}
               />
             )}
 
@@ -970,6 +1030,7 @@ const PageBuilder = ({ templateId, initialConfig, onSave, onClose }: PageBuilder
               onModuleDragStart={handleModuleDragStart}
               onModuleDragEnd={handleModuleDragEnd}
               onModuleClick={addModule}
+              onApplyTemplate={() => setTemplateSelectorOpen(true)}
             />
           </div>
 
@@ -1187,6 +1248,13 @@ const PageBuilder = ({ templateId, initialConfig, onSave, onClose }: PageBuilder
           ))}
         </div>
       </Modal>
+
+      {/* Template Selector Modal */}
+      <TemplateSelector
+        visible={templateSelectorOpen}
+        onClose={() => setTemplateSelectorOpen(false)}
+        onSelectTemplate={handleApplyTemplate}
+      />
     </div>
   );
 };

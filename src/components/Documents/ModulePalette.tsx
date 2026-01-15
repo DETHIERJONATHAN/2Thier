@@ -4,20 +4,22 @@
  */
 
 import { useState } from 'react';
-import { Input, Collapse, Tooltip, Badge } from 'antd';
-import { SearchOutlined } from '@ant-design/icons';
+import { Input, Collapse, Tooltip, Badge, Button, Divider } from 'antd';
+import { SearchOutlined, FileAddOutlined } from '@ant-design/icons';
 import { MODULE_REGISTRY, MODULE_CATEGORIES, ModuleDefinition, ModuleCategory } from './ModuleRegistry';
 
 interface ModulePaletteProps {
   onModuleDragStart: (moduleId: string) => void;
   onModuleDragEnd: () => void;
   onModuleClick: (moduleId: string) => void; // Pour ajouter directement au clic
+  onApplyTemplate?: () => void; // Nouveau: pour appliquer un template pré-fait
 }
 
 const ModulePalette = ({
   onModuleDragStart,
   onModuleDragEnd,
   onModuleClick,
+  onApplyTemplate,
 }: ModulePaletteProps) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [expandedCategories, setExpandedCategories] = useState<string[]>(['content', 'media', 'data']);
@@ -168,6 +170,27 @@ const ModulePalette = ({
           <span style={{ fontSize: '18px' }}>🧩</span>
           Modules disponibles
         </div>
+
+        {/* Bouton Appliquer un template */}
+        {onApplyTemplate && (
+          <>
+            <Button
+              type="primary"
+              icon={<FileAddOutlined />}
+              onClick={onApplyTemplate}
+              block
+              style={{
+                marginBottom: '12px',
+                background: 'linear-gradient(135deg, #722ed1 0%, #1890ff 100%)',
+                border: 'none',
+                fontWeight: 600,
+              }}
+            >
+              📋 Appliquer un template
+            </Button>
+            <Divider style={{ margin: '8px 0', borderColor: '#333' }} />
+          </>
+        )}
 
         {/* Recherche */}
         <Input
