@@ -177,7 +177,10 @@ const ModulePalette = ({
             <Button
               type="primary"
               icon={<FileAddOutlined />}
-              onClick={onApplyTemplate}
+              onClick={() => {
+                console.log('🎯 [ModulePalette] Bouton template cliqué !');
+                onApplyTemplate();
+              }}
               block
               style={{
                 marginBottom: '12px',

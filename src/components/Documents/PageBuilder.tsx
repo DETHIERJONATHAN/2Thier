@@ -105,6 +105,8 @@ const PageBuilder = ({ templateId, initialConfig, onSave, onClose }: PageBuilder
   const [isResizingPanel, setIsResizingPanel] = useState(false); // État du redimensionnement
   const [mobileActiveTab, setMobileActiveTab] = useState<'preview' | 'modules' | 'config'>('preview'); // Onglet mobile actif
   const [templateSelectorOpen, setTemplateSelectorOpen] = useState(false); // Sélecteur de templates pré-faits
+  const [templateConfirmModalOpen, setTemplateConfirmModalOpen] = useState(false); // Modal de confirmation pour remplacer modules
+  const [pendingTemplateToApply, setPendingTemplateToApply] = useState<DocumentTemplate | null>(null); // Template en attente de confirmation
 
   // Données de test pour le mode preview et l'évaluation des conditions
   const previewDocumentData = useMemo(() => ({
@@ -400,36 +402,42 @@ const PageBuilder = ({ templateId, initialConfig, onSave, onClose }: PageBuilder
 
   // Fonction pour appliquer un template pré-construit à la page active
   const handleApplyTemplate = useCallback((selectedTemplate: DocumentTemplate | null) => {
+    console.log('🎯 [PageBuilder] handleApplyTemplate appelé avec:', selectedTemplate?.name);
+    console.log('📄 [PageBuilder] activePage:', activePage?.id, 'modules count:', activePage?.modules.length);
     setTemplateSelectorOpen(false);
     
-    if (!selectedTemplate || !activePage) return;
+    if (!selectedTemplate || !activePage) {
+      console.warn('⚠️ [PageBuilder] Template ou page active manquant');
+      return;
+    }
     
-    // Demander confirmation si la page a déjà des modules
+    // Si la page a des modules, demander confirmation
     if (activePage.modules.length > 0) {
-      Modal.confirm({
-        title: 'Remplacer le contenu existant ?',
-        content: 'Cette action va remplacer tous les modules de la page actuelle par ceux du template sélectionné.',
-        okText: 'Remplacer',
-        cancelText: 'Annuler',
-        okButtonProps: { danger: true },
-        onOk: () => applyTemplateToPage(selectedTemplate),
-      });
+      console.log('⚠️ [PageBuilder] Page has', activePage.modules.length, 'existing modules - asking for confirmation');
+      setPendingTemplateToApply(selectedTemplate);
+      setTemplateConfirmModalOpen(true);
     } else {
+      console.log('✅ [PageBuilder] Page is empty, applying template directly');
       applyTemplateToPage(selectedTemplate);
     }
   }, [activePage]);
 
   // Appliquer effectivement le template à la page
   const applyTemplateToPage = useCallback((template: DocumentTemplate) => {
-    if (!activePage) return;
+    console.log('📋 [PageBuilder] applyTemplateToPage - Applying template:', template.name);
+    if (!activePage) {
+      console.warn('⚠️ [PageBuilder] No active page');
+      return;
+    }
     
     // Convertir les modules du template en instances
     const moduleInstances = instantiateTemplate(template);
+    console.log('📦 [PageBuilder] Instantiated modules:', moduleInstances.length, 'modules');
     
     // Assigner des positions automatiques à chaque module
     const modulesWithPositions: ModuleInstance[] = moduleInstances.map((module, index) => {
       const yPosition = 40 + (index * 120); // Espacement vertical de 120px
-      return {
+      const positioned = {
         ...module,
         id: uuidv4(), // Regénérer un ID unique
         position: {
@@ -439,17 +447,38 @@ const PageBuilder = ({ templateId, initialConfig, onSave, onClose }: PageBuilder
           height: 100, // Hauteur par défaut
         },
       };
+      console.log(`📍 [PageBuilder] Module ${index}:`, {
+        id: positioned.id,
+        moduleId: positioned.moduleId,
+        name: positioned.moduleId,
+        position: positioned.position,
+      });
+      return positioned;
     });
     
+    console.log('✨ [PageBuilder] Total modules to add:', modulesWithPositions.length);
+    console.log('📄 [PageBuilder] Active page ID:', activePage.id);
+    
     // Mettre à jour la page avec les nouveaux modules
-    setConfig(prev => ({
-      ...prev,
-      pages: prev.pages.map(p => 
-        p.id === activePage.id 
-          ? { ...p, modules: modulesWithPositions }
-          : p
-      ),
-    }));
+    setConfig(prev => {
+      console.log('🔄 [PageBuilder] setConfig called - Current pages:', prev.pages.length);
+      const newConfig = {
+        ...prev,
+        pages: prev.pages.map(p => {
+          console.log(`  Checking page ${p.id} === ${activePage.id} ?`, p.id === activePage.id);
+          return p.id === activePage.id 
+            ? { 
+                ...p, 
+                modules: modulesWithPositions,
+                // Log the updated page
+              }
+            : p;
+        }),
+      };
+      console.log('✅ [PageBuilder] setConfig updated, new page modules:', 
+        newConfig.pages.find(p => p.id === activePage.id)?.modules.length || 0);
+      return newConfig;
+    });
     
     message.success(`Template "${template.name}" appliqué avec ${modulesWithPositions.length} modules !`);
   }, [activePage]);
@@ -996,7 +1025,10 @@ const PageBuilder = ({ templateId, initialConfig, onSave, onClose }: PageBuilder
                   addModule(moduleId);
                   setMobileActiveTab('preview');
                 }}
-                onApplyTemplate={() => setTemplateSelectorOpen(true)}
+                onApplyTemplate={() => {
+                  console.log('📋 [PageBuilder] Opening TemplateSelector via mobile ModulePalette');
+                  setTemplateSelectorOpen(true);
+                }}
               />
             )}
 
@@ -1030,7 +1062,10 @@ const PageBuilder = ({ templateId, initialConfig, onSave, onClose }: PageBuilder
               onModuleDragStart={handleModuleDragStart}
               onModuleDragEnd={handleModuleDragEnd}
               onModuleClick={addModule}
-              onApplyTemplate={() => setTemplateSelectorOpen(true)}
+              onApplyTemplate={() => {
+                console.log('📋 [PageBuilder] Opening TemplateSelector via desktop ModulePalette');
+                setTemplateSelectorOpen(true);
+              }}
             />
           </div>
 
@@ -1250,11 +1285,40 @@ const PageBuilder = ({ templateId, initialConfig, onSave, onClose }: PageBuilder
       </Modal>
 
       {/* Template Selector Modal */}
+      {templateSelectorOpen && console.log('🎨 [PageBuilder] TemplateSelector modal is now VISIBLE')}
       <TemplateSelector
         visible={templateSelectorOpen}
-        onClose={() => setTemplateSelectorOpen(false)}
+        onClose={() => {
+          console.log('❌ [PageBuilder] TemplateSelector closed');
+          setTemplateSelectorOpen(false);
+        }}
         onSelectTemplate={handleApplyTemplate}
       />
+
+      {/* Confirmation Modal - Remplacer modules existants */}
+      <Modal
+        title="Remplacer le contenu existant ?"
+        open={templateConfirmModalOpen}
+        onOk={() => {
+          console.log('✅ [PageBuilder] User confirmed replacement - proceeding');
+          if (pendingTemplateToApply) {
+            applyTemplateToPage(pendingTemplateToApply);
+            setPendingTemplateToApply(null);
+          }
+          setTemplateConfirmModalOpen(false);
+        }}
+        onCancel={() => {
+          console.log('❌ [PageBuilder] User cancelled template replacement');
+          setPendingTemplateToApply(null);
+          setTemplateConfirmModalOpen(false);
+        }}
+        okText="Remplacer"
+        cancelText="Annuler"
+        okButtonProps={{ danger: true }}
+      >
+        <p>Cette action va remplacer tous les modules de la page actuelle par ceux du template sélectionné.</p>
+        <p><strong>Cette action ne peut pas être annulée.</strong></p>
+      </Modal>
     </div>
   );
 };
