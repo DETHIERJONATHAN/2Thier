@@ -101,7 +101,22 @@ jobs:
             --async \
             --format='value(id)')
           echo "Build ID: $BUILD_ID"
-          gcloud builds wait "$BUILD_ID" --project ${{ env.PROJECT_ID }}
+          
+          # Attendre la fin du build (VPC-SC bloque le streaming)
+          echo "⏳ Attente de la fin du build..."
+          while true; do
+            STATUS=$(gcloud builds describe "$BUILD_ID" --project ${{ env.PROJECT_ID }} --format='value(status)')
+            echo "Status: $STATUS"
+            if [[ "$STATUS" == "SUCCESS" ]]; then
+              echo "✅ Build réussi !"
+              break
+            elif [[ "$STATUS" == "FAILURE" ]] || [[ "$STATUS" == "TIMEOUT" ]] || [[ "$STATUS" == "CANCELLED" ]]; then
+              echo "❌ Build échoué avec status: $STATUS"
+              exit 1
+            fi
+            sleep 10
+          done
+          
           echo "IMAGE_URL=$IMAGE_URL" >> $GITHUB_ENV
 
       # ============================================
