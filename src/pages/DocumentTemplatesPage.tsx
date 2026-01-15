@@ -31,6 +31,8 @@ import { useAuthenticatedApi } from '../hooks/useAuthenticatedApi';
 import DocumentTemplateEditor from '../components/Documents/DocumentTemplateEditor';
 import PageBuilder from '../components/Documents/PageBuilder';
 import ThemeEditorModal from '../components/Documents/ThemeEditorModal';
+import { TemplateSelector } from '../components/Documents/TemplateSelector';
+import { DocumentTemplate as PrebuiltTemplate, instantiateTemplate } from '../components/Documents/DocumentTemplates';
 
 const { TabPane } = Tabs;
 const { TextArea } = Input;
@@ -76,6 +78,9 @@ const DocumentTemplatesPage = () => {
   const [editorVisible, setEditorVisible] = useState(false);
   const [pageBuilderVisible, setPageBuilderVisible] = useState(false);
   const [editingTemplateId, setEditingTemplateId] = useState<string | null>(null);
+  const [templateSelectorVisible, setTemplateSelectorVisible] = useState(false);
+  const [pendingTemplateId, setPendingTemplateId] = useState<string | null>(null);
+  const [initialPageBuilderConfig, setInitialPageBuilderConfig] = useState<any>(null);
   
   const [form] = Form.useForm();
 
@@ -139,24 +144,71 @@ const DocumentTemplatesPage = () => {
       if (editingTemplate) {
         await api.put(`/api/documents/templates/${editingTemplate.id}`, values);
         message.success('Template mis à jour');
+        setModalVisible(false);
+        form.resetFields();
+        loadTemplates();
       } else {
         const response = await api.post('/api/documents/templates', values);
         message.success('Template créé');
         
-        // Ouvrir l'éditeur pour configurer les sections
+        // Ouvrir le sélecteur de templates pré-construits
         if (response.id) {
-          setEditingTemplateId(response.id);
-          setEditorVisible(true);
+          setPendingTemplateId(response.id);
+          setTemplateSelectorVisible(true);
         }
+        
+        setModalVisible(false);
+        form.resetFields();
+        loadTemplates();
       }
-      
-      setModalVisible(false);
-      form.resetFields();
-      loadTemplates();
     } catch (error) {
       message.error('Erreur lors de la sauvegarde');
       console.error(error);
     }
+  };
+
+  // Gérer la sélection d'un template pré-construit
+  const handleSelectPrebuiltTemplate = (prebuiltTemplate: PrebuiltTemplate | null) => {
+    setTemplateSelectorVisible(false);
+    
+    if (pendingTemplateId) {
+      setEditingTemplateId(pendingTemplateId);
+      
+      if (prebuiltTemplate) {
+        // Convertir le template pré-construit en config pour le PageBuilder
+        const modules = instantiateTemplate(prebuiltTemplate);
+        const initialConfig = {
+          id: pendingTemplateId,
+          name: prebuiltTemplate.name,
+          type: 'QUOTE',
+          pages: [{
+            id: `page-${Date.now()}`,
+            name: 'Page 1',
+            order: 0,
+            modules: modules.map((m, index) => ({
+              ...m,
+              position: { x: 0, y: index * 100 },
+              size: { width: 12, height: 2 },
+            })),
+            padding: prebuiltTemplate.defaultPageSettings?.margins || { top: 40, right: 40, bottom: 40, left: 40 },
+          }],
+          globalTheme: {
+            primaryColor: '#1890ff',
+            secondaryColor: '#52c41a',
+            fontFamily: 'Inter, sans-serif',
+            fontSize: 14,
+          }
+        };
+        setInitialPageBuilderConfig(initialConfig);
+      } else {
+        // Document vierge
+        setInitialPageBuilderConfig(null);
+      }
+      
+      setPageBuilderVisible(true);
+    }
+    
+    setPendingTemplateId(null);
   };
 
   // Ouvrir l'éditeur de template (ancien)
@@ -591,6 +643,7 @@ const DocumentTemplatesPage = () => {
         onClose={() => {
           setPageBuilderVisible(false);
           setEditingTemplateId(null);
+          setInitialPageBuilderConfig(null);
           loadTemplates();
         }}
         destroyOnClose
@@ -599,16 +652,28 @@ const DocumentTemplatesPage = () => {
         {editingTemplateId && (
           <PageBuilder
             templateId={editingTemplateId}
+            initialConfig={initialPageBuilderConfig}
             onSave={() => {
               loadTemplates();
             }}
             onClose={() => {
               setPageBuilderVisible(false);
               setEditingTemplateId(null);
+              setInitialPageBuilderConfig(null);
             }}
           />
         )}
       </Drawer>
+
+      {/* Template Selector Modal (nouveaux documents) */}
+      <TemplateSelector
+        visible={templateSelectorVisible}
+        onClose={() => {
+          setTemplateSelectorVisible(false);
+          setPendingTemplateId(null);
+        }}
+        onSelectTemplate={handleSelectPrebuiltTemplate}
+      />
     </div>
   );
 };

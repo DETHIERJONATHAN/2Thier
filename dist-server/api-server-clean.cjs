@@ -63410,7 +63410,7 @@ var detector = new MarkerDetector(30, 2e3);
 var measureMode = process.env.AI_MEASURE_ENGINE || "vision_ar";
 console.log(`\u{1F4F7} [MEASURE] Mode de mesure photo: ${measureMode.toUpperCase()}`);
 console.log(`   \u2192 Marqueur: M\xE9tr\xE9 A4 V1.2 (13.0cm \xD7 21.7cm AprilTag + 12 points noirs)`);
-console.log(`   \u2192 D\xE9tection \xE9tendue: 4 AprilTags + 12 points dispers\xE9s + ChArUco 6\xD76`);
+console.log(`   \u2192 D\xE9tection \xE9tendue: 5 AprilTags + 12 points dispers\xE9s`);
 console.log(`   \u2192 Services: MetreA4Detector \u2705, PhotoQualityAnalyzer \u2705, EdgeDetection \u2705`);
 router89.get("/photo/status", async (_req, res) => {
   try {
@@ -67043,10 +67043,17 @@ var import_express94 = require("express");
 var sharpModule2 = __toESM(require("sharp"), 1);
 
 // src/lib/apriltag-detector-server.ts
-var import_apriltag_node = __toESM(require("@monumental-works/apriltag-node"), 1);
-function detectAprilTagsMetreA4(data, width, height) {
+var apriltagModulePromise = null;
+async function loadApriltagModule() {
+  if (!apriltagModulePromise) {
+    apriltagModulePromise = import("@monumental-works/apriltag-node");
+  }
+  return apriltagModulePromise;
+}
+async function detectAprilTagsMetreA4(data, width, height, options = {}) {
   try {
     console.log(`\u{1F3AF} [APRILTAG] D\xE9tection AprilTags M\xE9tr\xE9 V1.2...`);
+    const { default: AprilTag2, FAMILIES: FAMILIES2 } = await loadApriltagModule();
     const grayscale = new Uint8Array(width * height);
     for (let i = 0; i < width * height; i++) {
       const r = data[i * 4];
@@ -67054,14 +67061,14 @@ function detectAprilTagsMetreA4(data, width, height) {
       const b = data[i * 4 + 2];
       grayscale[i] = Math.floor((r + g + b) / 3);
     }
-    const detector2 = new import_apriltag_node.default(import_apriltag_node.FAMILIES.TAG36H11, {
-      quadDecimate: 2,
+    const detector2 = new AprilTag2(FAMILIES2.TAG36H11, {
+      quadDecimate: options.quadDecimate ?? 2,
       // Accélération sur grandes images
-      quadSigma: 0,
+      quadSigma: options.quadSigma ?? 0,
       // Pas de flou gaussien
-      refineEdges: true,
+      refineEdges: options.refineEdges ?? true,
       // Meilleure précision des coins
-      decodeSharpening: 0.25
+      decodeSharpening: options.decodeSharpening ?? 0.25
     });
     const detections = detector2.detect(width, height, grayscale);
     console.log(`   \u{1F50D} ${detections.length} AprilTag(s) d\xE9tect\xE9(s)`);
@@ -67352,7 +67359,7 @@ function multiplyMatrices3x3(A, B) {
 
 // src/lib/metre-a4-complete-detector.ts
 var METRE_A4_V12_COMPLETE_SPECS = {
-  version: "A4-CALIB-V1.2",
+  version: "A4-CALIB-V1.3",
   // Feuille A4
   sheet: {
     width_mm: 210,
@@ -67371,6 +67378,13 @@ var METRE_A4_V12_COMPLETE_SPECS = {
     { id: 14, position: "BL", center_x_mm: 40, center_y_mm: 257, size_mm: 20 },
     { id: 21, position: "BR", center_x_mm: 170, center_y_mm: 257, size_mm: 20 }
   ],
+  // 🏷️ AprilTag central (120×120mm) pour détection à distance
+  centerApriltag: {
+    id: 33,
+    center_x_mm: 105,
+    center_y_mm: 140,
+    size_mm: 120
+  },
   // 📐 RÉFÉRENCE CALIBRATION (distances centre-à-centre)
   // TL(40,40) → TR(170,40) = 130mm horizontal
   // TL(40,40) → BL(40,257) = 217mm vertical
@@ -67384,7 +67398,6 @@ var METRE_A4_V12_COMPLETE_SPECS = {
   },
   // ⚫ 12 points noirs dispersés (4mm diamètre)
   // CENTRES des points noirs en mm sur la feuille A4
-  // TODO: À vérifier avec les vraies cotes !
   referenceDots: [
     // Haut gauche (3 points)
     { x_mm: 45, y_mm: 65, quadrant: "TL" },
@@ -67404,72 +67417,6 @@ var METRE_A4_V12_COMPLETE_SPECS = {
     { x_mm: 30, y_mm: 140, quadrant: "TL" },
     { x_mm: 180, y_mm: 140, quadrant: "TR" }
   ],
-  // 🎲 ChArUco 6×6 central (120×120mm)
-  // Position du COIN HAUT-GAUCHE du damier sur la feuille A4
-  charuco: {
-    x_mm: 45,
-    // Coin haut-gauche X
-    y_mm: 80,
-    // Coin haut-gauche Y
-    width_mm: 120,
-    height_mm: 120,
-    squares_x: 6,
-    // Grille 6×6
-    squares_y: 6,
-    square_mm: 20,
-    // Chaque carré fait 20mm
-    markerRatio: 0.6
-    // Tags = 60% de la taille carré (12mm)
-  },
-  // 🎯 18 mini-ArUco du ChArUco 6×6 (pattern damier avec bordure noire)
-  // CENTRES des mini-ArUco en mm, RELATIVES au coin haut-gauche du damier (45,80)
-  // Colonne 0 = bordure noire (45-65, centre 55), ArUcos à colonnes 1,2,3,4,5
-  // Ligne 0 = bordure noire (80-100, centre 90), ArUcos à lignes 1,2,3,4,5
-  // Position absolue sur feuille A4 = charuco.x_mm + x_rel, charuco.y_mm + y_rel
-  charucoArUcoPositions: [
-    // Ligne 1 (Y=90mm abs, y_rel=10): damier row 0, colonnes 1,3,5
-    { id: 0, x_rel: 30, y_rel: 10 },
-    // col 1
-    { id: 1, x_rel: 70, y_rel: 10 },
-    // col 3
-    { id: 2, x_rel: 110, y_rel: 10 },
-    // col 5
-    // Ligne 2 (Y=110mm abs, y_rel=30): damier row 1, colonnes 0,2,4
-    { id: 3, x_rel: 10, y_rel: 30 },
-    // col 0
-    { id: 4, x_rel: 50, y_rel: 30 },
-    // col 2
-    { id: 5, x_rel: 90, y_rel: 30 },
-    // col 4
-    // Ligne 3 (Y=130mm abs, y_rel=50): damier row 2, colonnes 1,3,5
-    { id: 6, x_rel: 30, y_rel: 50 },
-    // col 1
-    { id: 7, x_rel: 70, y_rel: 50 },
-    // col 3
-    { id: 8, x_rel: 110, y_rel: 50 },
-    // col 5
-    // Ligne 4 (Y=150mm abs, y_rel=70): damier row 3, colonnes 0,2,4
-    { id: 9, x_rel: 10, y_rel: 70 },
-    // col 0
-    { id: 10, x_rel: 50, y_rel: 70 },
-    // col 2
-    { id: 11, x_rel: 90, y_rel: 70 },
-    // col 4
-    // Ligne 5 (Y=170mm abs, y_rel=90): damier row 4, colonnes 1,3,5
-    { id: 12, x_rel: 30, y_rel: 90 },
-    // col 1
-    { id: 13, x_rel: 70, y_rel: 90 },
-    // col 3
-    { id: 14, x_rel: 110, y_rel: 90 },
-    // col 5
-    // Ligne 6 (Y=190mm abs, y_rel=110): damier row 5, colonnes 0,2,4
-    { id: 15, x_rel: 10, y_rel: 110 },
-    // col 0
-    { id: 16, x_rel: 50, y_rel: 110 },
-    // col 2
-    { id: 17, x_rel: 90, y_rel: 110 }
-    // col 4
-  ],
   // 📏 Règles graduées (validation échelle)
   // SOURCE: generate_metre_a4.py → draw_rule(draw, 15, 235, 175) et draw_vertical_rule(draw, 20, 40, 190)
   rules: {
@@ -67477,9 +67424,42 @@ var METRE_A4_V12_COMPLETE_SPECS = {
     vertical: { x_mm: 20, y_mm: 40, length_mm: 190 }
   }
 };
-function detectAprilTagsInternal(data, width, height) {
-  const results = detectAprilTagsMetreA4(data, width, height);
-  return results.map((result) => {
+function addAprilTagCornerPoints(points, tag, centerMm, sizeMm) {
+  const half = sizeMm / 2;
+  const realCorners = [
+    { x: centerMm.x - half, y: centerMm.y - half },
+    // TL
+    { x: centerMm.x + half, y: centerMm.y - half },
+    // TR
+    { x: centerMm.x + half, y: centerMm.y + half },
+    // BR
+    { x: centerMm.x - half, y: centerMm.y + half }
+    // BL
+  ];
+  for (let i = 0; i < 4; i++) {
+    points.push({
+      pixel: tag.corners[i],
+      real: realCorners[i],
+      confidence: 0.9,
+      type: "apriltag-corner",
+      subPixelRefined: false
+    });
+  }
+}
+async function detectAprilTagsInternal(data, width, height) {
+  const results = await detectAprilTagsMetreA4(data, width, height);
+  const resultsFine = await detectAprilTagsMetreA4(data, width, height, {
+    quadDecimate: 1,
+    decodeSharpening: 0.35
+  });
+  const merged = [...results];
+  for (const tag of resultsFine) {
+    const duplicate = merged.find(
+      (existing) => existing.id === tag.id && Math.hypot(existing.center.x - tag.center.x, existing.center.y - tag.center.y) < 6
+    );
+    if (!duplicate) merged.push(tag);
+  }
+  return merged.map((result) => {
     const dist = (a, b) => Math.hypot(b.x - a.x, b.y - a.y);
     const size = (dist(result.corners[0], result.corners[1]) + dist(result.corners[1], result.corners[2]) + dist(result.corners[2], result.corners[3]) + dist(result.corners[3], result.corners[0])) / 4;
     return {
@@ -67513,11 +67493,11 @@ function pickAprilTagByQuadrant(tags, id, quadrant) {
     (chosen, cand) => cand.size > chosen.size ? cand : chosen
   );
 }
-function detectMetreA4Complete(imageData, width, height) {
+async function detectMetreA4Complete(imageData, width, height) {
   console.log("\n\u{1F3AF} [M\xC9TR\xC9 A4 COMPLET] D\xE9tection multi-niveaux...");
   const allPoints = [];
   console.log("   \u{1F3F7}\uFE0F  D\xE9tection AprilTags...");
-  const detectedTags = detectAprilTagsInternal(imageData, width, height);
+  let detectedTags = await detectAprilTagsInternal(imageData, width, height);
   if (detectedTags.length === 0) {
     console.log("   \u274C Aucun AprilTag d\xE9tect\xE9");
     return null;
@@ -67555,7 +67535,37 @@ function detectMetreA4Complete(imageData, width, height) {
       subPixelRefined: false
     });
   }
+  addAprilTagCornerPoints(allPoints, tagTL, { x: 40, y: 40 }, 20);
+  addAprilTagCornerPoints(allPoints, tagTR, { x: 170, y: 40 }, 20);
+  addAprilTagCornerPoints(allPoints, tagBL, { x: 40, y: 257 }, 20);
+  addAprilTagCornerPoints(allPoints, tagBR, { x: 170, y: 257 }, 20);
   console.log(`   \u2705 AprilTags: 4/4 centres ajout\xE9s`);
+  const centerTagId = METRE_A4_V12_COMPLETE_SPECS.centerApriltag.id;
+  const centerTag = detectedTags.find((t) => t.id === centerTagId) || null;
+  if (centerTag) {
+    allPoints.push({
+      pixel: centerTag.center,
+      real: {
+        x: METRE_A4_V12_COMPLETE_SPECS.centerApriltag.center_x_mm,
+        y: METRE_A4_V12_COMPLETE_SPECS.centerApriltag.center_y_mm
+      },
+      confidence: 0.98,
+      type: "apriltag",
+      subPixelRefined: false
+    });
+    addAprilTagCornerPoints(
+      allPoints,
+      centerTag,
+      {
+        x: METRE_A4_V12_COMPLETE_SPECS.centerApriltag.center_x_mm,
+        y: METRE_A4_V12_COMPLETE_SPECS.centerApriltag.center_y_mm
+      },
+      METRE_A4_V12_COMPLETE_SPECS.centerApriltag.size_mm
+    );
+    console.log(`   \u2705 AprilTag central: ID=${centerTagId} d\xE9tect\xE9`);
+  } else {
+    console.log(`   \u26A0\uFE0F AprilTag central ID=${centerTagId} non d\xE9tect\xE9`);
+  }
   const scaleEstimate = estimateScale(aprilTagCenters);
   let projectRealToPixel = null;
   try {
@@ -67594,9 +67604,7 @@ function detectMetreA4Complete(imageData, width, height) {
   );
   allPoints.push(...dotPoints);
   console.log(`   \u2705 Points dispers\xE9s: ${dotPoints.length}/12 d\xE9tect\xE9s`);
-  const charucoArUcoPoints = detectCharucoViaArUco(detectedTags);
-  allPoints.push(...charucoArUcoPoints);
-  console.log(`   \u2705 ChArUco mini-ArUco: ${charucoArUcoPoints.length}/18 d\xE9tect\xE9s`);
+  const extraPoints = allPoints.filter((p) => p.type === "apriltag-corner").length;
   const rulePoints = detectRuleGraduations(
     imageData,
     width,
@@ -67606,12 +67614,12 @@ function detectMetreA4Complete(imageData, width, height) {
   );
   allPoints.push(...rulePoints);
   console.log(`   \u2705 R\xE8gles: ${rulePoints.length} graduations d\xE9tect\xE9es`);
-  console.log(`   \u{1F4CA} TOTAL: ${allPoints.length} points (4 AprilTags + 12 dots + ${charucoArUcoPoints.length} ChArUco)`);
+  console.log(`   \u{1F4CA} TOTAL: ${allPoints.length} points (5 AprilTags + 12 dots + ${extraPoints} coins AprilTag)`);
   const homographyResult = computeRobustHomography(allPoints);
   const breakdown = {
     aprilTags: allPoints.filter((p) => p.type === "apriltag").length,
     referenceDots: allPoints.filter((p) => p.type === "dot").length,
-    charucoCorners: charucoArUcoPoints.length,
+    extraPoints,
     rulePoints: allPoints.filter((p) => p.type === "rule").length,
     total: allPoints.length
   };
@@ -67657,30 +67665,6 @@ function detectReferenceDots12(imageData, width, height, aprilTagCenters, scale,
         subPixelRefined: true
       });
     }
-  }
-  return points;
-}
-function detectCharucoViaArUco(detectedTags) {
-  const points = [];
-  const charucoOffsetX = METRE_A4_V12_COMPLETE_SPECS.charuco.x_mm;
-  const charucoOffsetY = METRE_A4_V12_COMPLETE_SPECS.charuco.y_mm;
-  const charucoArUcoPositions = METRE_A4_V12_COMPLETE_SPECS.charucoArUcoPositions;
-  const positionMap = /* @__PURE__ */ new Map();
-  for (const pos of charucoArUcoPositions) {
-    positionMap.set(pos.id, { x_rel: pos.x_rel, y_rel: pos.y_rel });
-  }
-  for (const tag of detectedTags) {
-    const pos = positionMap.get(tag.id);
-    if (!pos) continue;
-    const realX = charucoOffsetX + pos.x_rel;
-    const realY = charucoOffsetY + pos.y_rel;
-    points.push({
-      pixel: tag.center,
-      real: { x: realX, y: realY },
-      confidence: 0.95,
-      type: "charuco",
-      subPixelRefined: true
-    });
   }
   return points;
 }
@@ -67849,7 +67833,7 @@ function selectBestPhoto(photos) {
     console.log(`
    \u274C REJET: Score ${bestTotalScore.toFixed(1)}/100 insuffisant (seuil: 45)`);
     throw new Error(
-      `QUALIT\xC9_INSUFFISANTE: Meilleur score ${bestTotalScore.toFixed(1)}/100. Reprendre les photos avec meilleur \xE9clairage et stabilit\xE9. Points d\xE9tect\xE9s: ${bestPhoto.detection.breakdown.total} (4 AprilTags + ${bestPhoto.detection.breakdown.referenceDots} dots + ${bestPhoto.detection.breakdown.charucoCorners} ChArUco). Probl\xE8mes: ${bestScore.warnings.join(", ") || "Nettet\xE9/\xE9clairage insuffisants"}`
+      `QUALIT\xC9_INSUFFISANTE: Meilleur score ${bestTotalScore.toFixed(1)}/100. Reprendre les photos avec meilleur \xE9clairage et stabilit\xE9. Points d\xE9tect\xE9s: ${bestPhoto.detection.breakdown.total} (5 AprilTags + ${bestPhoto.detection.breakdown.referenceDots} dots). Probl\xE8mes: ${bestScore.warnings.join(", ") || "Nettet\xE9/\xE9clairage insuffisants"}`
     );
   }
   if (bestTotalScore < 60) {
@@ -67877,16 +67861,13 @@ function analyzePhotoQuality(photo) {
   const homographyMetrics = analyzeHomographyQuality(photo.detection);
   let homographyScore = computeHomographyScore(homographyMetrics);
   const pointDensity = {
-    aprilTags: photo.detection.breakdown.aprilTags / 4 * 100,
-    // Max 100 (4/4)
-    dots: photo.detection.breakdown.referenceDots / 12 * 100,
+    aprilTags: photo.detection.breakdown.aprilTags / 5 * 100,
+    // Max 100 (5/5)
+    dots: photo.detection.breakdown.referenceDots / 12 * 100
     // Max 100 (12/12)
-    charuco: photo.detection.breakdown.charucoCorners / 18 * 100
-    // Max 100 (18/18)
   };
-  const densityBonus = pointDensity.aprilTags * 0.3 + // AprilTags moins critiques (toujours 4/4)
-  pointDensity.dots * 0.2 + // Dots variables
-  pointDensity.charuco * 0.5;
+  const densityBonus = pointDensity.aprilTags * 0.6 + // AprilTags dominants (5/5)
+  pointDensity.dots * 0.4;
   homographyScore = homographyScore * 0.7 + densityBonus * 0.3;
   if (photo.detection.homography.reprojectionErrorMm > HOMOGRAPHY_THRESHOLDS.acceptable) {
     warnings.push(`Erreur reprojection ${photo.detection.homography.reprojectionErrorMm.toFixed(1)}mm`);
@@ -68371,22 +68352,24 @@ ${"=".repeat(90)}`);
   console.log(`
    \u{1F50D} DEBUG - Erreurs de reprojection par point avec homographie initiale:`);
   const debugErrors = [];
+  const previewCount = Math.min(16, srcPoints.length);
   for (let i = 0; i < srcPoints.length; i++) {
     const transformed = applyHomography2(bestHomography, srcPoints[i]);
     const errorMm = distance(transformed, dstPoints[i]);
     const isInlier = bestInlierIndices.includes(i);
     debugErrors.push({ idx: i, error: errorMm, isInlier });
-    if (i < 16) {
+    if (i < previewCount) {
       console.log(`      [${i}] ${isInlier ? "\u2705" : "\u274C"} pixel:(${srcPoints[i].x.toFixed(0)},${srcPoints[i].y.toFixed(0)}) \u2192 real:(${dstPoints[i].x},${dstPoints[i].y}) erreur: ${errorMm.toFixed(1)}mm`);
     }
   }
-  const aprilTagErrors = debugErrors.slice(0, 4);
-  const dotErrors = debugErrors.slice(4, 16);
-  const charucoErrors = debugErrors.slice(16);
-  const charucoCount = charucoErrors.length;
-  console.log(`      \u{1F4CA} AprilTags (0-3): ${aprilTagErrors.filter((e) => e.isInlier).length}/4 inliers, erreur moy: ${(aprilTagErrors.reduce((s, e) => s + e.error, 0) / 4).toFixed(1)}mm`);
-  console.log(`      \u{1F4CA} Dots (4-15): ${dotErrors.filter((e) => e.isInlier).length}/12 inliers, erreur moy: ${(dotErrors.reduce((s, e) => s + e.error, 0) / 12).toFixed(1)}mm`);
-  console.log(`      \u{1F4CA} ChArUco (16-${15 + charucoCount}): ${charucoErrors.filter((e) => e.isInlier).length}/${charucoCount} inliers, erreur moy: ${charucoCount > 0 ? (charucoErrors.reduce((s, e) => s + e.error, 0) / charucoCount).toFixed(1) : 0}mm`);
+  const previewErrors = debugErrors.slice(0, previewCount);
+  const remainingErrors = debugErrors.slice(previewCount);
+  const previewMean = previewErrors.length ? previewErrors.reduce((s, e) => s + e.error, 0) / previewErrors.length : 0;
+  const remainingMean = remainingErrors.length ? remainingErrors.reduce((s, e) => s + e.error, 0) / remainingErrors.length : 0;
+  console.log(`      \u{1F4CA} Aper\xE7u (0-${Math.max(0, previewCount - 1)}): ${previewErrors.filter((e) => e.isInlier).length}/${previewErrors.length} inliers, erreur moy: ${previewMean.toFixed(1)}mm`);
+  if (remainingErrors.length) {
+    console.log(`      \u{1F4CA} Autres points: ${remainingErrors.filter((e) => e.isInlier).length}/${remainingErrors.length} inliers, erreur moy: ${remainingMean.toFixed(1)}mm`);
+  }
   if (bestInlierCount < minInliers) {
     console.warn(`   \u26A0\uFE0F  Seulement ${bestInlierCount} inliers, ${minInliers} recommand\xE9s`);
   }
@@ -68515,7 +68498,7 @@ function estimateDepthMap(srcPoints, dstPoints, H, _markerWidthMm, _markerHeight
       x: transformed[0],
       y: transformed[1],
       z: estimatedZ,
-      type: dst.x < 20 ? "apriltag" : Math.random() > 0.7 ? "dot" : "charuco",
+      type: dst.x < 20 ? "apriltag" : "dot",
       error
     });
   }
@@ -68788,20 +68771,66 @@ function perturbHomography(H, delta) {
 // src/api/measurement-reference.ts
 var sharp2 = sharpModule2.default || sharpModule2;
 var router91 = (0, import_express94.Router)();
-async function detectObjectsInProjectedImage(imageData, width, height, homographyMatrix) {
+async function detectObjectsInProjectedImage(imageData, width, height, aprilTagCorners) {
   try {
+    console.log(`
+\u{1F50D} [AUTO-DETECT] D\xE9tection objets dans image brute: ${width}\xD7${height}px`);
     const grayData = new Uint8ClampedArray(width * height);
+    let grayMin = 255;
+    let grayMax = 0;
+    let graySum = 0;
     for (let i = 0; i < width * height; i++) {
       const r = imageData[i * 4];
       const g = imageData[i * 4 + 1];
       const b = imageData[i * 4 + 2];
-      grayData[i] = Math.round(0.299 * r + 0.587 * g + 0.114 * b);
+      const gray = Math.round(0.299 * r + 0.587 * g + 0.114 * b);
+      grayData[i] = gray;
+      if (gray < grayMin) grayMin = gray;
+      if (gray > grayMax) grayMax = gray;
+      graySum += gray;
     }
-    const threshold = computeOtsuThreshold(grayData);
-    const binaryData = grayData.map((v) => v > threshold ? 255 : 0);
-    const edges = detectEdges(binaryData, width, height);
+    const grayAvg = Math.round(graySum / grayData.length);
+    console.log(`   \u2705 Grayscale: min=${grayMin}, max=${grayMax}, avg=${grayAvg}, range=${grayMax - grayMin}`);
+    console.log(`   \u{1F50D} D\xE9tection edges (Sobel gradient)...`);
+    const edges = detectEdges(grayData, width, height);
+    const edgePixels = edges.filter((v) => v > 50).length;
+    const edgePercent = (edgePixels / edges.length * 100).toFixed(1);
+    console.log(`      Pixels edges (>50): ${edgePixels} (${edgePercent}%)`);
+    console.log(`   \u{1F4E6} Recherche contours (blobs connect\xE9s)...`);
     const contours = findContours(edges, width, height);
-    const validObjects = contours.filter((c) => c.area > width * height * 0.01).filter((c) => c.area < width * height * 0.8).filter((c) => c.confidence > 0.5).sort((a, b) => b.area - a.area);
+    console.log(`      Contours bruts: ${contours.length}`);
+    const [tl, tr, bl, br] = aprilTagCorners;
+    const markerMinX = Math.min(tl.x, tr.x, bl.x, br.x) - 50;
+    const markerMaxX = Math.max(tl.x, tr.x, bl.x, br.x) + 50;
+    const markerMinY = Math.min(tl.y, tr.y, bl.y, br.y) - 50;
+    const markerMaxY = Math.max(tl.y, tr.y, bl.y, br.y) + 50;
+    console.log(`      Zone AprilTag \xE0 exclure: x[${markerMinX.toFixed(0)}-${markerMaxX.toFixed(0)}], y[${markerMinY.toFixed(0)}-${markerMaxY.toFixed(0)}]`);
+    const contoursHorsMarqueur = contours.filter((c) => {
+      const cx = (c.corners.topLeft.x + c.corners.bottomRight.x) / 2;
+      const cy = (c.corners.topLeft.y + c.corners.bottomRight.y) / 2;
+      const dansMarqueur = cx > markerMinX && cx < markerMaxX && cy > markerMinY && cy < markerMaxY;
+      return !dansMarqueur;
+    });
+    console.log(`      Contours HORS marqueur: ${contoursHorsMarqueur.length}`);
+    const minArea = width * height * 5e-3;
+    const maxArea = width * height * 0.7;
+    console.log(`   \u{1F3AF} Filtrage: area [${minArea.toFixed(0)}-${maxArea.toFixed(0)}px], confidence>30%`);
+    const afterSizeFilter = contoursHorsMarqueur.filter((c) => c.area > minArea && c.area < maxArea);
+    console.log(`      Apr\xE8s filtre taille: ${afterSizeFilter.length}`);
+    const validObjects = afterSizeFilter.filter((c) => c.confidence > 0.3).sort((a, b) => b.area - a.area);
+    console.log(`      Apr\xE8s filtre confidence: ${validObjects.length} objets valides`);
+    validObjects.slice(0, 3).forEach((c, i) => {
+      const areaPercent = (c.area / (width * height) * 100).toFixed(2);
+      const confPercent = (c.confidence * 100).toFixed(0);
+      console.log(`      [${i}] area=${c.area}px (${areaPercent}%), conf=${confPercent}%`);
+    });
+    if (validObjects.length === 0) {
+      console.log(`   \u26A0\uFE0F  AUCUN objet d\xE9tect\xE9 !`);
+      console.log(`      Raisons possibles:`);
+      console.log(`      - Contraste trop faible (range=${grayMax - grayMin})`);
+      console.log(`      - Objet trop proche du marqueur AprilTag`);
+      console.log(`      - Edges trop faibles (${edgePercent}% de l'image)`);
+    }
     return validObjects.map((obj) => ({
       ...obj,
       corners: {
@@ -68816,33 +68845,6 @@ async function detectObjectsInProjectedImage(imageData, width, height, homograph
     return [];
   }
 }
-function computeOtsuThreshold(data) {
-  const histogram = new Array(256).fill(0);
-  data.forEach((v) => histogram[v]++);
-  const total = data.length;
-  let sum = 0;
-  for (let i = 0; i < 256; i++) sum += i * histogram[i];
-  let sumB = 0;
-  let wB = 0;
-  let wF = 0;
-  let maxVariance = 0;
-  let threshold = 0;
-  for (let t = 0; t < 256; t++) {
-    wB += histogram[t];
-    if (wB === 0) continue;
-    wF = total - wB;
-    if (wF === 0) break;
-    sumB += t * histogram[t];
-    const mB = sumB / wB;
-    const mF = (sum - sumB) / wF;
-    const variance = wB * wF * (mB - mF) * (mB - mF);
-    if (variance > maxVariance) {
-      maxVariance = variance;
-      threshold = t;
-    }
-  }
-  return threshold;
-}
 function detectEdges(data, width, height) {
   const edges = new Uint8ClampedArray(data.length);
   for (let y = 1; y < height - 1; y++) {
@@ -68850,7 +68852,8 @@ function detectEdges(data, width, height) {
       const idx = y * width + x;
       const gx = -data[(y - 1) * width + (x - 1)] + data[(y - 1) * width + (x + 1)] + -2 * data[y * width + (x - 1)] + 2 * data[y * width + (x + 1)] + -data[(y + 1) * width + (x - 1)] + data[(y + 1) * width + (x + 1)];
       const gy = -data[(y - 1) * width + (x - 1)] - 2 * data[(y - 1) * width + x] - data[(y - 1) * width + (x + 1)] + data[(y + 1) * width + (x - 1)] + 2 * data[(y + 1) * width + x] + data[(y + 1) * width + (x + 1)];
-      edges[idx] = Math.min(255, Math.sqrt(gx * gx + gy * gy));
+      const magnitude = Math.sqrt(gx * gx + gy * gy);
+      edges[idx] = Math.min(255, magnitude / 4);
     }
   }
   return edges;
@@ -68940,43 +68943,55 @@ ${"=".repeat(80)}`);
       try {
         const base64Clean2 = photo.base64.includes(",") ? photo.base64.split(",")[1] : photo.base64;
         const imageBuffer = Buffer.from(base64Clean2, "base64");
-        const metadata = await sharp2(imageBuffer).metadata();
+        const resizedBuffer = await sharp2(imageBuffer).resize({
+          width: 1200,
+          height: 1200,
+          fit: "inside",
+          withoutEnlargement: true
+        }).toBuffer();
+        const metadata = await sharp2(resizedBuffer).metadata();
         const width = metadata.width;
         const height = metadata.height;
-        console.log(`      \u{1F3A8} Preprocessing ULTRA-PREMIUM: CLAHE + Bilateral + Denoise + Sharpen MAX...`);
-        let processedBuffer = await sharp2(imageBuffer).median(3).toBuffer();
-        processedBuffer = await sharp2(processedBuffer).normalize().linear(1.3, -(128 * 0.3)).toBuffer();
-        processedBuffer = await sharp2(processedBuffer).blur(0.5).toBuffer();
-        const { data: enhancedPixels } = await sharp2(processedBuffer).sharpen({
-          sigma: 2,
-          // Rayon gaussien élargi (2.0 = netteté forte)
-          m1: 1.5,
-          // +50% netteté zones plates (AprilTags/ChArUco) ⬆️
-          m2: 0.6,
-          // Contrôle zones fort contraste (plus agressif)
-          x1: 2,
-          // Seuil bas (plus sensible)
-          y2: 20,
-          // Seuil haut augmenté
-          y3: 20
-          // Saturation augmentée
-        }).modulate({
-          brightness: 1.05,
-          // +5% luminosité (meilleure visibilité)
-          saturation: 1.2,
-          // +20% saturation → points noirs ULTRA-visibles ⬆️
-          hue: 0
-        }).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
-        const raw = enhancedPixels;
-        const rgba = new Uint8ClampedArray(raw);
-        const detection = detectMetreA4Complete(rgba, width, height);
+        const { data: basePixels } = await sharp2(resizedBuffer).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+        const baseRgba = new Uint8ClampedArray(basePixels);
+        let rgbaUsed = baseRgba;
+        let detection = await detectMetreA4Complete(baseRgba, width, height);
+        if (!detection) {
+          console.log(`      \u{1F3A8} Preprocessing ULTRA-PREMIUM: CLAHE + Bilateral + Denoise + Sharpen MAX...`);
+          let processedBuffer = await sharp2(resizedBuffer).median(3).toBuffer();
+          processedBuffer = await sharp2(processedBuffer).normalize().linear(1.3, -(128 * 0.3)).toBuffer();
+          processedBuffer = await sharp2(processedBuffer).blur(0.5).toBuffer();
+          const { data: enhancedPixels } = await sharp2(processedBuffer).sharpen({
+            sigma: 2,
+            // Rayon gaussien élargi (2.0 = netteté forte)
+            m1: 1.5,
+            // +50% netteté zones plates (AprilTags/points noirs) ⬆️
+            m2: 0.6,
+            // Contrôle zones fort contraste (plus agressif)
+            x1: 2,
+            // Seuil bas (plus sensible)
+            y2: 20,
+            // Seuil haut augmenté
+            y3: 20
+            // Saturation augmentée
+          }).modulate({
+            brightness: 1.05,
+            // +5% luminosité (meilleure visibilité)
+            saturation: 1.2,
+            // +20% saturation → points noirs ULTRA-visibles ⬆️
+            hue: 0
+          }).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+          const rgba = new Uint8ClampedArray(enhancedPixels);
+          rgbaUsed = rgba;
+          detection = await detectMetreA4Complete(rgba, width, height);
+        }
         if (!detection) {
           console.log(`      \u274C AprilTag non d\xE9tect\xE9`);
           continue;
         }
         candidates.push({
           id: `photo-${i}`,
-          imageData: rgba,
+          imageData: rgbaUsed,
           width,
           height,
           detection,
@@ -69005,7 +69020,8 @@ ${"=".repeat(80)}`);
       best.imageData,
       best.width,
       best.height,
-      best.detection.homography.matrix
+      best.detection.aprilTagCenters
+      // ⚠️ COINS du marqueur pour l'exclure
     );
     if (detectedObjects.length > 0) {
       console.log(`   \u2705 ${detectedObjects.length} objet(s) d\xE9tect\xE9(s) automatiquement`);
@@ -69043,7 +69059,7 @@ ${"=".repeat(80)}`);
         totalPoints: best.detection.breakdown.total,
         aprilTags: best.detection.breakdown.aprilTags,
         referenceDots: best.detection.breakdown.referenceDots,
-        charucoCorners: best.detection.breakdown.charucoCorners,
+        extraPoints: best.detection.breakdown.extraPoints,
         quality: best.detection.homography.quality,
         estimatedPrecision: best.detection.estimatedPrecision,
         homographyMatrix: best.detection.homography.matrix,
@@ -69205,8 +69221,10 @@ router91.post("/ultra-precision-compute", authenticateToken, async (req2, res) =
     console.log("\n" + "=".repeat(90));
     console.log("\u{1F52C} [ULTRA-PRECISION] POST /ultra-precision-compute");
     console.log("=".repeat(90));
-    const expectedPointCount = METRE_A4_V12_COMPLETE_SPECS.aprilTags.length + METRE_A4_V12_COMPLETE_SPECS.referenceDots.length + METRE_A4_V12_COMPLETE_SPECS.charucoArUcoPositions.length;
-    console.log(`\u{1F4CB} Specs canoniques charg\xE9es: ${expectedPointCount} points attendus (${METRE_A4_V12_COMPLETE_SPECS.aprilTags.length} AprilTags + ${METRE_A4_V12_COMPLETE_SPECS.referenceDots.length} dots + ${METRE_A4_V12_COMPLETE_SPECS.charucoArUcoPositions.length} ChArUco)`);
+    const expectedExtraPoints = 0;
+    const expectedAprilTags = METRE_A4_V12_COMPLETE_SPECS.aprilTags.length + 1;
+    const expectedPointCount = expectedAprilTags + METRE_A4_V12_COMPLETE_SPECS.referenceDots.length + expectedExtraPoints;
+    console.log(`\u{1F4CB} Specs canoniques charg\xE9es: ${expectedPointCount} points attendus (${expectedAprilTags} AprilTags + ${METRE_A4_V12_COMPLETE_SPECS.referenceDots.length} dots)`);
     if (!req2.user?.id) {
       return res.status(401).json({ error: "Non authentifi\xE9" });
     }
@@ -69243,7 +69261,6 @@ router91.post("/ultra-precision-compute", authenticateToken, async (req2, res) =
     console.log(`   \u2705 dstPoints (real): ${dstPoints.length} valides`);
     console.log(`   AprilTag: ${detectedPoints.filter((p) => p.type === "apriltag").length}`);
     console.log(`   Dots: ${detectedPoints.filter((p) => p.type === "dot").length}`);
-    console.log(`   ChArUco: ${detectedPoints.filter((p) => p.type === "charuco").length}`);
     if (srcPoints.length < 10 || dstPoints.length < 10) {
       console.error(
         `\u274C Points invalides: valid=${validDetectedPoints.length}, srcPoints=${srcPoints.length}, dstPoints=${dstPoints.length}`
@@ -69277,6 +69294,7 @@ router91.post("/ultra-precision-compute", authenticateToken, async (req2, res) =
       console.log(`      TL (${tlPx.x.toFixed(0)},${tlPx.y.toFixed(0)}) < BL (${blPx.x.toFixed(0)},${blPx.y.toFixed(0)})? y: ${tlPx.y < blPx.y}`);
     }
     let ransacResult;
+    let ransacUsedFiltered = false;
     try {
       ransacResult = computeUltraPrecisionHomography(
         srcPoints,
@@ -69293,6 +69311,30 @@ router91.post("/ultra-precision-compute", authenticateToken, async (req2, res) =
         error: "Homographie ultra-pr\xE9cision impossible",
         details: err instanceof Error ? err.message : "Erreur inconnue"
       });
+    }
+    const inlierRatio = srcPoints.length ? ransacResult.inlierCount / srcPoints.length : 0;
+    const shouldFallback = ransacResult.quality < 30 || inlierRatio < 0.4;
+    if (shouldFallback) {
+      const filteredPoints = validDetectedPoints.filter((p) => p.type !== "apriltag-corner");
+      if (filteredPoints.length >= 10) {
+        const filteredSrc = filteredPoints.map((p) => ({ x: p.pixel.x, y: p.pixel.y }));
+        const filteredDst = filteredPoints.map((p) => ({ x: p.real.x, y: p.real.y }));
+        console.log(`\u26A0\uFE0F  RANSAC faible (qualit\xE9=${ransacResult.quality.toFixed(1)}%, inliers=${ransacResult.inlierCount}/${srcPoints.length}) \u2192 retry sans coins AprilTag (${filteredPoints.length} pts)`);
+        try {
+          const retryResult = computeUltraPrecisionHomography(
+            filteredSrc,
+            filteredDst,
+            markerSizeCm * 10,
+            markerHeightCm * 10
+          );
+          if (retryResult.quality > ransacResult.quality) {
+            ransacResult = retryResult;
+            ransacUsedFiltered = true;
+          }
+        } catch (err) {
+          console.warn("\u26A0\uFE0F  Retry RANSAC sans coins AprilTag \xE9chou\xE9:", err);
+        }
+      }
     }
     const objectCorners = {
       topLeft: {
@@ -69335,7 +69377,7 @@ router91.post("/ultra-precision-compute", authenticateToken, async (req2, res) =
 \u2705 R\xC9SULTAT ULTRA-PR\xC9CISION:`);
     console.log(`   \u{1F4CF} Largeur: ${(largeur_mm / 10).toFixed(2)} cm (\xB1${(uncertainty_mm / 10).toFixed(2)} cm)`);
     console.log(`   \u{1F4CF} Hauteur: ${(hauteur_mm / 10).toFixed(2)} cm (\xB1${(uncertainty_mm / 10).toFixed(2)} cm)`);
-    console.log(`   \u{1F4CA} RANSAC: ${ransacResult.inlierCount}/${srcPoints.length} inliers`);
+    console.log(`   \u{1F4CA} RANSAC: ${ransacResult.inlierCount}/${ransacUsedFiltered ? validDetectedPoints.filter((p) => p.type !== "apriltag-corner").length : srcPoints.length} inliers${ransacUsedFiltered ? " (sans coins AprilTag)" : ""}`);
     console.log(`   \u{1F3AF} Qualit\xE9: ${ransacResult.quality.toFixed(1)}%`);
     console.log(`   \u{1F4D0} Profondeur: ${ransacResult.depthMean.toFixed(0)}mm (\xB1${ransacResult.depthStdDev.toFixed(0)}mm)`);
     console.log(`   \u{1F504} Inclinaison: ${ransacResult.inclineAngle.toFixed(2)}\xB0`);

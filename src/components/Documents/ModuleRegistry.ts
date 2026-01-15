@@ -611,6 +611,404 @@ export const MODULE_REGISTRY: ModuleDefinition[] = [
       { key: 'title', label: 'Titre', type: 'text' },
     ]
   },
+
+  // ============== MODULES PROFESSIONNELS (HEADERS/FOOTERS) ==============
+  
+  /**
+   * 🏢 EN-TÊTE ENTREPRISE
+   * Logo + coordonnées de l'entreprise (haut gauche des documents)
+   */
+  {
+    id: 'COMPANY_HEADER',
+    name: 'En-tête Entreprise',
+    icon: '🏢',
+    category: 'layout',
+    description: 'Logo et coordonnées de votre entreprise',
+    resizable: true,
+    defaultSize: { width: 50, height: 20 },
+    defaultConfig: {
+      showLogo: true,
+      logoPosition: 'left',
+      showName: true,
+      showAddress: true,
+      showPhone: true,
+      showEmail: true,
+      showTVA: true,
+      showWebsite: false,
+      layout: 'horizontal', // horizontal | vertical | compact
+    },
+    themes: [
+      { id: 'modern', name: 'Moderne', description: 'Style épuré avec accent de couleur', styles: { borderLeft: '4px solid', paddingLeft: '16px' } },
+      { id: 'classic', name: 'Classique', description: 'Style traditionnel', styles: {} },
+      { id: 'minimal', name: 'Minimaliste', description: 'Logo + nom seulement', styles: { opacity: 0.9 } },
+      { id: 'boxed', name: 'Encadré', description: 'Dans un cadre', styles: { border: '1px solid #e8e8e8', padding: '16px', borderRadius: '8px' } },
+    ],
+    configFields: [
+      { key: 'logo', label: 'Logo', type: 'image', group: 'logo' },
+      { key: 'logoSize', label: 'Taille logo (px)', type: 'number', defaultValue: 80, group: 'logo' },
+      { key: 'logoPosition', label: 'Position logo', type: 'select', options: [
+        { value: 'left', label: 'À gauche' },
+        { value: 'top', label: 'Au-dessus' },
+        { value: 'right', label: 'À droite' },
+      ], group: 'logo' },
+      { key: 'companyName', label: 'Nom entreprise', type: 'text', placeholder: '{org.name}', allowManualInput: true },
+      { key: 'companyNameBinding', label: '🔗 Lier le nom', type: 'data-binding', group: 'data' },
+      { key: 'address', label: 'Adresse', type: 'textarea', placeholder: '{org.address}', allowManualInput: true },
+      { key: 'addressBinding', label: '🔗 Lier l\'adresse', type: 'data-binding', group: 'data' },
+      { key: 'phone', label: 'Téléphone', type: 'text', placeholder: '{org.phone}' },
+      { key: 'email', label: 'Email', type: 'text', placeholder: '{org.email}' },
+      { key: 'tva', label: 'N° TVA', type: 'text', placeholder: '{org.tva}' },
+      { key: 'website', label: 'Site web', type: 'text', placeholder: '{org.website}' },
+      { key: 'showLogo', label: 'Afficher logo', type: 'toggle', defaultValue: true },
+      { key: 'showName', label: 'Afficher nom', type: 'toggle', defaultValue: true },
+      { key: 'showAddress', label: 'Afficher adresse', type: 'toggle', defaultValue: true },
+      { key: 'showPhone', label: 'Afficher téléphone', type: 'toggle', defaultValue: true },
+      { key: 'showEmail', label: 'Afficher email', type: 'toggle', defaultValue: true },
+      { key: 'showTVA', label: 'Afficher TVA', type: 'toggle', defaultValue: true },
+      { key: 'showWebsite', label: 'Afficher site web', type: 'toggle', defaultValue: false },
+      { key: 'layout', label: 'Disposition', type: 'select', options: [
+        { value: 'horizontal', label: 'Horizontale' },
+        { value: 'vertical', label: 'Verticale' },
+        { value: 'compact', label: 'Compacte' },
+      ]},
+    ]
+  },
+
+  /**
+   * 👤 EN-TÊTE CLIENT
+   * Coordonnées du client/destinataire (haut droite des documents)
+   */
+  {
+    id: 'CLIENT_HEADER',
+    name: 'En-tête Client',
+    icon: '👤',
+    category: 'layout',
+    description: 'Coordonnées du client destinataire',
+    resizable: true,
+    defaultSize: { width: 50, height: 20 },
+    defaultConfig: {
+      title: 'À l\'attention de:',
+      showTitle: true,
+      showName: true,
+      showCompany: true,
+      showAddress: true,
+      showEmail: true,
+      showPhone: true,
+      showTVA: false,
+    },
+    themes: [
+      { id: 'standard', name: 'Standard', description: 'Style classique', styles: {} },
+      { id: 'boxed', name: 'Encadré', description: 'Dans un cadre', styles: { border: '1px solid #e8e8e8', padding: '16px', borderRadius: '8px' } },
+      { id: 'highlighted', name: 'Mis en avant', description: 'Fond coloré', styles: { backgroundColor: '#f9f9f9', padding: '16px', borderRadius: '8px' } },
+      { id: 'minimal', name: 'Minimaliste', description: 'Sans cadre', styles: {} },
+    ],
+    configFields: [
+      { key: 'title', label: 'Titre', type: 'text', defaultValue: 'À l\'attention de:' },
+      { key: 'clientName', label: 'Nom client', type: 'text', placeholder: '{lead.firstName} {lead.lastName}', allowManualInput: true },
+      { key: 'clientNameBinding', label: '🔗 Lier le nom', type: 'data-binding', group: 'data' },
+      { key: 'clientCompany', label: 'Société', type: 'text', placeholder: '{lead.company}', allowManualInput: true },
+      { key: 'clientCompanyBinding', label: '🔗 Lier la société', type: 'data-binding', group: 'data' },
+      { key: 'clientAddress', label: 'Adresse', type: 'textarea', placeholder: '{lead.address}', allowManualInput: true },
+      { key: 'clientAddressBinding', label: '🔗 Lier l\'adresse', type: 'data-binding', group: 'data' },
+      { key: 'clientEmail', label: 'Email', type: 'text', placeholder: '{lead.email}' },
+      { key: 'clientPhone', label: 'Téléphone', type: 'text', placeholder: '{lead.phone}' },
+      { key: 'clientTVA', label: 'N° TVA', type: 'text', placeholder: '{lead.tva}' },
+      { key: 'showTitle', label: 'Afficher titre', type: 'toggle', defaultValue: true },
+      { key: 'showName', label: 'Afficher nom', type: 'toggle', defaultValue: true },
+      { key: 'showCompany', label: 'Afficher société', type: 'toggle', defaultValue: true },
+      { key: 'showAddress', label: 'Afficher adresse', type: 'toggle', defaultValue: true },
+      { key: 'showEmail', label: 'Afficher email', type: 'toggle', defaultValue: true },
+      { key: 'showPhone', label: 'Afficher téléphone', type: 'toggle', defaultValue: false },
+      { key: 'showTVA', label: 'Afficher TVA', type: 'toggle', defaultValue: false },
+    ]
+  },
+
+  /**
+   * 📋 EN-TÊTE DOCUMENT COMBINÉ
+   * Entreprise à gauche + Client à droite sur une même ligne
+   */
+  {
+    id: 'DOCUMENT_HEADER',
+    name: 'En-tête Document',
+    icon: '📋',
+    category: 'layout',
+    description: 'Entreprise + Client côte à côte',
+    resizable: true,
+    defaultSize: { width: 100, height: 25 },
+    defaultConfig: {
+      showLogo: true,
+      showCompanyInfo: true,
+      showClientInfo: true,
+      layout: 'side-by-side', // side-by-side | stacked
+    },
+    themes: [
+      { id: 'modern', name: 'Moderne', description: 'Style épuré avec séparation', styles: {} },
+      { id: 'classic', name: 'Classique', description: 'Style traditionnel', styles: {} },
+      { id: 'bordered', name: 'Bordé', description: 'Avec bordure inférieure', styles: { borderBottom: '2px solid #e8e8e8', paddingBottom: '20px' } },
+    ],
+    configFields: [
+      { key: 'logo', label: 'Logo entreprise', type: 'image' },
+      { key: 'logoSize', label: 'Taille logo (px)', type: 'number', defaultValue: 60 },
+      { key: 'companyName', label: 'Nom entreprise', type: 'text', placeholder: '{org.name}' },
+      { key: 'companyAddress', label: 'Adresse entreprise', type: 'textarea', placeholder: '{org.address}' },
+      { key: 'companyPhone', label: 'Tél. entreprise', type: 'text', placeholder: '{org.phone}' },
+      { key: 'companyEmail', label: 'Email entreprise', type: 'text', placeholder: '{org.email}' },
+      { key: 'companyTVA', label: 'TVA entreprise', type: 'text', placeholder: '{org.tva}' },
+      { key: 'clientTitle', label: 'Titre client', type: 'text', defaultValue: 'Client:' },
+      { key: 'clientName', label: 'Nom client', type: 'text', placeholder: '{lead.firstName} {lead.lastName}' },
+      { key: 'clientCompany', label: 'Société client', type: 'text', placeholder: '{lead.company}' },
+      { key: 'clientAddress', label: 'Adresse client', type: 'textarea', placeholder: '{lead.address}' },
+      { key: 'clientEmail', label: 'Email client', type: 'text', placeholder: '{lead.email}' },
+      { key: 'showLogo', label: 'Afficher logo', type: 'toggle', defaultValue: true },
+      { key: 'showCompanyInfo', label: 'Afficher infos entreprise', type: 'toggle', defaultValue: true },
+      { key: 'showClientInfo', label: 'Afficher infos client', type: 'toggle', defaultValue: true },
+      { key: 'layout', label: 'Disposition', type: 'select', options: [
+        { value: 'side-by-side', label: 'Côte à côte' },
+        { value: 'stacked', label: 'Empilé' },
+      ]},
+    ]
+  },
+
+  /**
+   * 📄 INFORMATIONS DOCUMENT
+   * Référence, date, validité, objet
+   */
+  {
+    id: 'DOCUMENT_INFO',
+    name: 'Infos Document',
+    icon: '📄',
+    category: 'data',
+    description: 'Référence, date et informations du document',
+    resizable: true,
+    defaultSize: { width: 100, height: 15 },
+    defaultConfig: {
+      showReference: true,
+      showDate: true,
+      showValidUntil: true,
+      showObject: true,
+      referencePrefix: 'Réf:',
+      datePrefix: 'Date:',
+      validUntilPrefix: 'Valide jusqu\'au:',
+      objectPrefix: 'Objet:',
+      layout: 'inline', // inline | stacked | table
+    },
+    themes: [
+      { id: 'inline', name: 'En ligne', description: 'Informations sur une ligne', styles: {} },
+      { id: 'badge', name: 'Badges', description: 'Dans des badges', styles: {} },
+      { id: 'table', name: 'Tableau', description: 'Format tableau', styles: {} },
+      { id: 'header', name: 'Titre', description: 'Gros titre centré', styles: { textAlign: 'center', fontSize: '24px', fontWeight: 'bold' } },
+    ],
+    configFields: [
+      { key: 'reference', label: 'Référence', type: 'text', placeholder: '{quote.reference}', allowManualInput: true },
+      { key: 'referenceBinding', label: '🔗 Lier la référence', type: 'data-binding', group: 'data' },
+      { key: 'referencePrefix', label: 'Préfixe référence', type: 'text', defaultValue: 'Réf:' },
+      { key: 'date', label: 'Date', type: 'text', placeholder: '{quote.date}', allowManualInput: true },
+      { key: 'dateBinding', label: '🔗 Lier la date', type: 'data-binding', group: 'data' },
+      { key: 'datePrefix', label: 'Préfixe date', type: 'text', defaultValue: 'Date:' },
+      { key: 'validUntil', label: 'Valide jusqu\'au', type: 'text', placeholder: '{quote.validUntil}', allowManualInput: true },
+      { key: 'validUntilBinding', label: '🔗 Lier la validité', type: 'data-binding', group: 'data' },
+      { key: 'validUntilPrefix', label: 'Préfixe validité', type: 'text', defaultValue: 'Valide jusqu\'au:' },
+      { key: 'object', label: 'Objet', type: 'text', placeholder: 'Objet du document...', allowManualInput: true },
+      { key: 'objectBinding', label: '🔗 Lier l\'objet', type: 'data-binding', group: 'data' },
+      { key: 'objectPrefix', label: 'Préfixe objet', type: 'text', defaultValue: 'Objet:' },
+      { key: 'documentType', label: 'Type document', type: 'select', options: [
+        { value: 'DEVIS', label: 'DEVIS' },
+        { value: 'FACTURE', label: 'FACTURE' },
+        { value: 'BON DE COMMANDE', label: 'BON DE COMMANDE' },
+        { value: 'CONTRAT', label: 'CONTRAT' },
+        { value: 'custom', label: 'Personnalisé' },
+      ]},
+      { key: 'showReference', label: 'Afficher référence', type: 'toggle', defaultValue: true },
+      { key: 'showDate', label: 'Afficher date', type: 'toggle', defaultValue: true },
+      { key: 'showValidUntil', label: 'Afficher validité', type: 'toggle', defaultValue: true },
+      { key: 'showObject', label: 'Afficher objet', type: 'toggle', defaultValue: true },
+      { key: 'layout', label: 'Disposition', type: 'select', options: [
+        { value: 'inline', label: 'En ligne' },
+        { value: 'stacked', label: 'Empilé' },
+        { value: 'table', label: 'Tableau' },
+      ]},
+    ]
+  },
+
+  /**
+   * 🦶 PIED DE PAGE DOCUMENT
+   * Coordonnées entreprise + mentions légales + pagination
+   */
+  {
+    id: 'DOCUMENT_FOOTER',
+    name: 'Pied de page',
+    icon: '🦶',
+    category: 'layout',
+    description: 'Pied de page avec infos entreprise',
+    resizable: true,
+    defaultSize: { width: 100, height: 10 },
+    defaultConfig: {
+      showCompanyInfo: true,
+      showBankInfo: true,
+      showPageNumber: true,
+      showLegalMention: true,
+      layout: 'centered', // centered | spread | minimal
+    },
+    themes: [
+      { id: 'modern', name: 'Moderne', description: 'Style épuré', styles: { borderTop: '2px solid #e8e8e8', paddingTop: '16px' } },
+      { id: 'classic', name: 'Classique', description: 'Style traditionnel', styles: { borderTop: '1px solid #000' } },
+      { id: 'minimal', name: 'Minimaliste', description: 'Discret', styles: { opacity: 0.7, fontSize: '10px' } },
+      { id: 'boxed', name: 'Encadré', description: 'Dans un cadre', styles: { backgroundColor: '#f5f5f5', padding: '12px', borderRadius: '4px' } },
+    ],
+    configFields: [
+      { key: 'companyName', label: 'Nom entreprise', type: 'text', placeholder: '{org.name}' },
+      { key: 'companyPhone', label: 'Téléphone', type: 'text', placeholder: '{org.phone}' },
+      { key: 'companyEmail', label: 'Email', type: 'text', placeholder: '{org.email}' },
+      { key: 'companyWebsite', label: 'Site web', type: 'text', placeholder: '{org.website}' },
+      { key: 'companyTVA', label: 'N° TVA', type: 'text', placeholder: '{org.tva}' },
+      { key: 'bankIBAN', label: 'IBAN', type: 'text', placeholder: '{org.iban}' },
+      { key: 'bankBIC', label: 'BIC', type: 'text', placeholder: '{org.bic}' },
+      { key: 'legalMention', label: 'Mention légale', type: 'textarea', defaultValue: '' },
+      { key: 'showCompanyInfo', label: 'Afficher infos entreprise', type: 'toggle', defaultValue: true },
+      { key: 'showBankInfo', label: 'Afficher infos bancaires', type: 'toggle', defaultValue: true },
+      { key: 'showPageNumber', label: 'Afficher n° de page', type: 'toggle', defaultValue: true },
+      { key: 'showLegalMention', label: 'Afficher mention légale', type: 'toggle', defaultValue: false },
+      { key: 'layout', label: 'Disposition', type: 'select', options: [
+        { value: 'centered', label: 'Centré' },
+        { value: 'spread', label: 'Étalé' },
+        { value: 'minimal', label: 'Minimal' },
+      ]},
+      { key: 'fontSize', label: 'Taille texte (px)', type: 'number', defaultValue: 10 },
+    ]
+  },
+
+  /**
+   * 💳 INFORMATIONS DE PAIEMENT
+   * IBAN, BIC, conditions de paiement
+   */
+  {
+    id: 'PAYMENT_INFO',
+    name: 'Infos Paiement',
+    icon: '💳',
+    category: 'data',
+    description: 'Coordonnées bancaires et conditions',
+    resizable: true,
+    defaultSize: { width: 100, height: 15 },
+    defaultConfig: {
+      title: 'Modalités de paiement',
+      showIBAN: true,
+      showBIC: true,
+      showCommunication: true,
+      showPaymentTerms: true,
+      paymentTerms: '30 jours date de facture',
+    },
+    themes: [
+      { id: 'standard', name: 'Standard', description: 'Style simple', styles: {} },
+      { id: 'boxed', name: 'Encadré', description: 'Dans un cadre', styles: { border: '1px solid #e8e8e8', padding: '16px', borderRadius: '8px' } },
+      { id: 'highlighted', name: 'Mis en avant', description: 'Fond coloré', styles: { backgroundColor: '#f0f9ff', padding: '16px', borderRadius: '8px', border: '1px solid #bae6fd' } },
+      { id: 'minimal', name: 'Minimaliste', description: 'Compact', styles: { fontSize: '12px' } },
+    ],
+    configFields: [
+      { key: 'title', label: 'Titre', type: 'text', defaultValue: 'Modalités de paiement' },
+      { key: 'iban', label: 'IBAN', type: 'text', placeholder: '{org.iban}' },
+      { key: 'bic', label: 'BIC', type: 'text', placeholder: '{org.bic}' },
+      { key: 'bankName', label: 'Nom de la banque', type: 'text', placeholder: '{org.bankName}' },
+      { key: 'communication', label: 'Communication', type: 'text', placeholder: '{quote.reference}' },
+      { key: 'paymentTerms', label: 'Conditions de paiement', type: 'textarea', defaultValue: '30 jours date de facture' },
+      { key: 'showTitle', label: 'Afficher titre', type: 'toggle', defaultValue: true },
+      { key: 'showIBAN', label: 'Afficher IBAN', type: 'toggle', defaultValue: true },
+      { key: 'showBIC', label: 'Afficher BIC', type: 'toggle', defaultValue: true },
+      { key: 'showBankName', label: 'Afficher banque', type: 'toggle', defaultValue: false },
+      { key: 'showCommunication', label: 'Afficher communication', type: 'toggle', defaultValue: true },
+      { key: 'showPaymentTerms', label: 'Afficher conditions', type: 'toggle', defaultValue: true },
+    ]
+  },
+
+  /**
+   * ⚠️ MENTION DE VALIDITÉ
+   * Validité du devis avec date limite
+   */
+  {
+    id: 'VALIDITY_NOTICE',
+    name: 'Mention Validité',
+    icon: '⚠️',
+    category: 'legal',
+    description: 'Validité du document avec date limite',
+    resizable: true,
+    defaultSize: { width: 100, height: 8 },
+    defaultConfig: {
+      template: 'standard',
+      customText: '',
+      showIcon: true,
+      validityDays: 30,
+    },
+    themes: [
+      { id: 'warning', name: 'Avertissement', description: 'Style alerte', styles: { backgroundColor: '#fff7e6', border: '1px solid #ffd591', padding: '12px', borderRadius: '8px' } },
+      { id: 'info', name: 'Information', description: 'Style info', styles: { backgroundColor: '#e6f7ff', border: '1px solid #91d5ff', padding: '12px', borderRadius: '8px' } },
+      { id: 'subtle', name: 'Discret', description: 'Style léger', styles: { fontStyle: 'italic', color: '#666' } },
+      { id: 'bold', name: 'Important', description: 'Style fort', styles: { fontWeight: 'bold', backgroundColor: '#fff1f0', border: '1px solid #ffa39e', padding: '12px', borderRadius: '8px' } },
+    ],
+    configFields: [
+      { key: 'template', label: 'Modèle', type: 'select', options: [
+        { value: 'standard', label: 'Ce devis est valable 30 jours' },
+        { value: 'date', label: 'Valable jusqu\'au [date]' },
+        { value: 'custom', label: 'Texte personnalisé' },
+      ]},
+      { key: 'validUntilDate', label: 'Date limite', type: 'text', placeholder: '{quote.validUntil}' },
+      { key: 'validityDays', label: 'Nombre de jours', type: 'number', defaultValue: 30 },
+      { key: 'customText', label: 'Texte personnalisé', type: 'textarea' },
+      { key: 'showIcon', label: 'Afficher icône', type: 'toggle', defaultValue: true },
+      { key: 'additionalNote', label: 'Note additionnelle', type: 'textarea', placeholder: 'Passé ce délai, les prix pourront être révisés.' },
+    ]
+  },
+
+  /**
+   * ✅ RÉCAPITULATIF TOTAUX
+   * Bloc de totaux HT/TVA/TTC
+   */
+  {
+    id: 'TOTALS_SUMMARY',
+    name: 'Récapitulatif Totaux',
+    icon: '✅',
+    category: 'data',
+    description: 'Total HT, TVA et TTC',
+    resizable: true,
+    defaultSize: { width: 40, height: 15 },
+    defaultConfig: {
+      showTotalHT: true,
+      showTVA: true,
+      showTotalTTC: true,
+      showDiscount: false,
+      tvaRate: 21,
+      currency: '€',
+      alignment: 'right',
+    },
+    themes: [
+      { id: 'standard', name: 'Standard', description: 'Style simple', styles: {} },
+      { id: 'boxed', name: 'Encadré', description: 'Dans un cadre', styles: { border: '2px solid #e8e8e8', padding: '16px', borderRadius: '8px' } },
+      { id: 'highlighted', name: 'Total mis en avant', description: 'TTC en gras', styles: {} },
+      { id: 'minimal', name: 'Minimaliste', description: 'Compact', styles: {} },
+    ],
+    configFields: [
+      { key: 'totalHT', label: 'Total HT', type: 'text', placeholder: '{quote.totalHT}', allowManualInput: true },
+      { key: 'totalHTBinding', label: '🔗 Lier Total HT', type: 'data-binding', group: 'data' },
+      { key: 'tvaAmount', label: 'Montant TVA', type: 'text', placeholder: '{quote.tva}', allowManualInput: true },
+      { key: 'tvaBinding', label: '🔗 Lier TVA', type: 'data-binding', group: 'data' },
+      { key: 'totalTTC', label: 'Total TTC', type: 'text', placeholder: '{quote.total}', allowManualInput: true },
+      { key: 'totalTTCBinding', label: '🔗 Lier Total TTC', type: 'data-binding', group: 'data' },
+      { key: 'discount', label: 'Remise', type: 'text', placeholder: '{quote.discount}' },
+      { key: 'tvaRate', label: 'Taux TVA (%)', type: 'number', defaultValue: 21 },
+      { key: 'currency', label: 'Devise', type: 'select', options: [
+        { value: '€', label: 'Euro (€)' },
+        { value: '$', label: 'Dollar ($)' },
+        { value: '£', label: 'Livre (£)' },
+      ]},
+      { key: 'showTotalHT', label: 'Afficher Total HT', type: 'toggle', defaultValue: true },
+      { key: 'showTVA', label: 'Afficher TVA', type: 'toggle', defaultValue: true },
+      { key: 'showTotalTTC', label: 'Afficher Total TTC', type: 'toggle', defaultValue: true },
+      { key: 'showDiscount', label: 'Afficher remise', type: 'toggle', defaultValue: false },
+      { key: 'alignment', label: 'Alignement', type: 'select', options: [
+        { value: 'left', label: 'Gauche' },
+        { value: 'center', label: 'Centré' },
+        { value: 'right', label: 'Droite' },
+      ]},
+    ]
+  },
 ];
 
 /**
