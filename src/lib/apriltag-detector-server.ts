@@ -8,7 +8,16 @@
  * @author 2Thier CRM Team
  */
 
-import AprilTag, { FAMILIES } from '@monumental-works/apriltag-node';
+type AprilTagModule = typeof import('@monumental-works/apriltag-node');
+
+let apriltagModulePromise: Promise<AprilTagModule> | null = null;
+
+async function loadApriltagModule(): Promise<AprilTagModule> {
+  if (!apriltagModulePromise) {
+    apriltagModulePromise = import('@monumental-works/apriltag-node');
+  }
+  return apriltagModulePromise;
+}
 
 export interface Point2D {
   x: number;
@@ -36,14 +45,16 @@ export interface AprilTagDetectorOptions {
   decodeSharpening?: number;
 }
 
-export function detectAprilTagsMetreA4(
+export async function detectAprilTagsMetreA4(
   data: Uint8ClampedArray | Buffer,
   width: number,
   height: number,
   options: AprilTagDetectorOptions = {}
-): AprilTagDetectionResult[] {
+): Promise<AprilTagDetectionResult[]> {
   try {
     console.log(`🎯 [APRILTAG] Détection AprilTags Métré V1.2...`);
+
+    const { default: AprilTag, FAMILIES } = await loadApriltagModule();
     
     // Convertir RGBA en niveaux de gris (grayscale)
     const grayscale = new Uint8Array(width * height);
@@ -109,13 +120,13 @@ export function detectAprilTagsMetreA4(
  * @param height Hauteur de l'image
  * @returns Coins A4 détectés (TL, TR, BR, BL) ou null si incomplet
  */
-export function detectMetreA4Corners(
+export async function detectMetreA4Corners(
   data: Uint8ClampedArray | Buffer,
   width: number,
   height: number
-): { topLeft: Point2D; topRight: Point2D; bottomRight: Point2D; bottomLeft: Point2D } | null {
+): Promise<{ topLeft: Point2D; topRight: Point2D; bottomRight: Point2D; bottomLeft: Point2D } | null> {
   
-  const detectedTags = detectAprilTagsMetreA4(data, width, height);
+  const detectedTags = await detectAprilTagsMetreA4(data, width, height);
   
   // Vérifier qu'on a les 4 tags nécessaires (2, 7, 14, 21)
   const requiredIds = [2, 7, 14, 21];

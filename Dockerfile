@@ -12,6 +12,9 @@ WORKDIR /app
 
 # Installer les dépendances système nécessaires pour Prisma et autres packages natifs
 RUN apk add --no-cache \
+    python3 \
+    make \
+    g++ \
     openssl \
     libc6-compat
 

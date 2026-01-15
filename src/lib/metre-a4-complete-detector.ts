@@ -193,17 +193,17 @@ function addAprilTagCornerPoints(
 /**
  * Adapter la détection AprilTag serveur-only en format interne
  */
-function detectAprilTagsInternal(
+async function detectAprilTagsInternal(
   data: Uint8ClampedArray | Buffer,
   width: number,
   height: number
-): AprilTagDetectionInternal[] {
+): Promise<AprilTagDetectionInternal[]> {
   
   // Utiliser la détection serveur dédiée (1ère passe rapide)
-  const results = detectAprilTagsMetreA4(data, width, height);
+  const results = await detectAprilTagsMetreA4(data, width, height);
 
   // 2ème passe plus fine pour les mini-tags (legacy)
-  const resultsFine = detectAprilTagsMetreA4(data, width, height, {
+  const resultsFine = await detectAprilTagsMetreA4(data, width, height, {
     quadDecimate: 1.0,
     decodeSharpening: 0.35
   });
@@ -300,11 +300,11 @@ function pickAprilTagByQuadrant(
  * @param height - Hauteur image en pixels
  * @returns Résultat avec tous les points détectés + homographie optimisée, ou null si AprilTags manquants
  */
-export function detectMetreA4Complete(
+export async function detectMetreA4Complete(
   imageData: Uint8ClampedArray | Buffer,
   width: number,
   height: number
-): MetreA4CompleteDetectionResult | null {
+): Promise<MetreA4CompleteDetectionResult | null> {
   
   console.log('\n🎯 [MÉTRÉ A4 COMPLET] Détection multi-niveaux...');
   
@@ -314,7 +314,7 @@ export function detectMetreA4Complete(
   // NIVEAU 1 : AprilTags (4 coins) - DÉTECTION AUTONOME
   // ═══════════════════════════════════════════════════════════════
   console.log('   🏷️  Détection AprilTags...');
-  let detectedTags = detectAprilTagsInternal(imageData, width, height);
+  let detectedTags = await detectAprilTagsInternal(imageData, width, height);
   
   if (detectedTags.length === 0) {
     console.log('   ❌ Aucun AprilTag détecté');

@@ -90,12 +90,23 @@ jobs:
           project_id: ${{ env.PROJECT_ID }}
 
       # ============================================
-      # 8. DÉPLOIEMENT CLOUD RUN (AVEC DOCKERFILE)
+      # 8. BUILD & PUSH IMAGE (ARTIFACT REGISTRY)
+      # ============================================
+      - name: 🧱 Build & Push Docker Image
+        run: |
+          IMAGE_URL="europe-west1-docker.pkg.dev/${{ env.PROJECT_ID }}/crm-api/crm-api"
+          gcloud builds submit \
+            --project ${{ env.PROJECT_ID }} \
+            --tag "$IMAGE_URL"
+          echo "IMAGE_URL=$IMAGE_URL" >> $GITHUB_ENV
+
+      # ============================================
+      # 9. DÉPLOIEMENT CLOUD RUN (IMAGE)
       # ============================================
       - name: 🚀 Deploy to Cloud Run
         run: |
           gcloud run deploy ${{ env.SERVICE_NAME }} \
-            --source . \
+            --image "$IMAGE_URL" \
             --region ${{ env.REGION }} \
             --platform managed \
             --allow-unauthenticated \
@@ -107,13 +118,12 @@ jobs:
             --concurrency 80 \
             --cpu-boost \
             --port 8080 \
-            --clear-base-image \
             --add-cloudsql-instances thiernew:europe-west1:crm-postgres-prod \
             --set-env-vars "NODE_ENV=production,PGHOST=/cloudsql/thiernew:europe-west1:crm-postgres-prod,PGDATABASE=2thier,PGUSER=postgres,FRONTEND_URL=https://app.2thier.be,BACKEND_URL=https://app.2thier.be" \
             --update-secrets "PGPASSWORD=crm-postgres-password:latest,JWT_SECRET=JWT_SECRET:latest,SESSION_SECRET=SESSION_SECRET:latest,ENCRYPTION_KEY=ENCRYPTION_KEY:latest,CRYPTO_SECRET_KEY=CRYPTO_SECRET_KEY:latest,GOOGLE_AI_API_KEY=GOOGLE_AI_API_KEY:latest,GOOGLE_CLIENT_ID=GOOGLE_CLIENT_ID:latest,GOOGLE_CLIENT_SECRET=GOOGLE_CLIENT_SECRET:latest"
 
       # ============================================
-      # 9. AFFICHER L'URL DU SERVICE
+      # 10. AFFICHER L'URL DU SERVICE
       # ============================================
       - name: 🌐 Get Service URL
         run: |
@@ -122,7 +132,7 @@ jobs:
           echo "SERVICE_URL=$URL" >> $GITHUB_ENV
 
       # ============================================
-      # 10. VÉRIFICATION DE SANTÉ
+      # 11. VÉRIFICATION DE SANTÉ
       # ============================================
       - name: 🏥 Health Check
         run: |

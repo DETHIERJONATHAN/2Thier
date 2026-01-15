@@ -399,7 +399,7 @@ router.post('/ultra-fusion-detect', authenticateToken, async (req: Authenticated
           .toBuffer({ resolveWithObject: true });
         const baseRgba = new Uint8ClampedArray(basePixels);
         let rgbaUsed = baseRgba;
-        let detection = detectMetreA4Complete(baseRgba, width, height);
+        let detection = await detectMetreA4Complete(baseRgba, width, height);
 
         // 🎨 PRÉ-TRAITEMENT ULTRA-PREMIUM UNIQUEMENT SI ÉCHEC
         if (!detection) {
@@ -445,7 +445,7 @@ router.post('/ultra-fusion-detect', authenticateToken, async (req: Authenticated
           rgbaUsed = rgba;
 
           // 🎯 DÉTECTION AUTONOME: 5 AprilTags + 12 points
-          detection = detectMetreA4Complete(rgba, width, height);
+          detection = await detectMetreA4Complete(rgba, width, height);
         }
         
         if (!detection) {
