@@ -116,7 +116,7 @@ const GridPagePreview = ({
       }
     } else {
       backgroundImage = bgImageValue;
-      backgroundSize = isGradient ? '100% 100%' : (bgImageValue ? 'cover' : undefined);
+      backgroundSize = isGradient ? '100% 100%' : (bgImageValue ? '100% 100%' : undefined);
     }
 
     return {
@@ -126,6 +126,7 @@ const GridPagePreview = ({
       backgroundImage,
       backgroundSize,
       backgroundPosition: 'center',
+      backgroundRepeat: 'no-repeat',
       padding: page.padding 
         ? `${page.padding.top}px ${page.padding.right}px ${page.padding.bottom}px ${page.padding.left}px`
         : '40px',
