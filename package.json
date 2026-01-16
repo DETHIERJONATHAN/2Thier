@@ -199,6 +199,7 @@
     "globals": "^16.0.0",
     "node-fetch": "^2.7.0",
     "prisma": "^6.9.0",
+    "qrcode": "^1.5.4",
     "rollup-plugin-visualizer": "^6.0.3",
     "ts-node": "^10.9.2",
     "tsx": "^4.20.3",

@@ -260,11 +260,11 @@ const SectionRendererV2: React.FC<SectionRendererProps> = ({ section, previewMod
         className="gradient-animated" // 🎨 Animation gradient
         style={{
           background: content.backgroundGradient || 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
-          minHeight: content.minHeight || '600px',
+          minHeight: content.minHeight || '500px',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          padding: '60px 24px',
+          padding: '32px 24px',
           position: 'relative',
           overflow: 'hidden'
         }}
@@ -320,7 +320,7 @@ const SectionRendererV2: React.FC<SectionRendererProps> = ({ section, previewMod
             </Space>
 
             {badge.text && (
-              <div style={{ marginTop: '40px' }}>
+              <div style={{ marginTop: '20px' }}>
                 <Text
                   style={{
                     color: badge.color || 'rgba(255,255,255,0.9)',
@@ -359,7 +359,7 @@ const SectionRendererV2: React.FC<SectionRendererProps> = ({ section, previewMod
     return renderWithEnhancements(
 
 
-      <div style={{ background: content.backgroundColor || '#f9fafb', padding: style.padding || content.padding || '60px 24px' }}>
+      <div style={{ background: content.backgroundColor || '#f9fafb', padding: style.padding || content.padding || '32px 24px' }}>
         <div style={{ maxWidth: '1400px', margin: '0 auto' }}>
           <Row gutter={gutter} justify={layout.alignment || 'center'}>
             {stats.map((stat: any, idx: number) => (
@@ -460,9 +460,9 @@ const SectionRendererV2: React.FC<SectionRendererProps> = ({ section, previewMod
     return renderWithEnhancements(
 
 
-      <div style={{ background: content.backgroundColor || '#ffffff', padding: content.padding || '80px 24px' }}>
+      <div style={{ background: content.backgroundColor || '#ffffff', padding: content.padding || '40px 24px' }}>
         <div style={{ maxWidth: '1400px', margin: '0 auto' }}>
-          <div style={{ textAlign: heading.textAlign || 'center', marginBottom: '60px' }}>
+          <div style={{ textAlign: heading.textAlign || 'center', marginBottom: '32px' }}>
             <Title level={2} style={{ fontSize: heading.titleSize || 'clamp(28px, 6vw, 42px)', color: heading.titleColor }}>
               {getIcon(heading.emoji, '32px', heading.titleColor) || heading.emoji} {heading.title}
             </Title>
@@ -570,9 +570,9 @@ const SectionRendererV2: React.FC<SectionRendererProps> = ({ section, previewMod
     return renderWithEnhancements(
 
 
-      <div style={{ background: content.backgroundColor || '#f9fafb', padding: content.padding || '80px 24px' }}>
+      <div style={{ background: content.backgroundColor || '#f9fafb', padding: content.padding || '40px 24px' }}>
         <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
-          <div style={{ textAlign: heading.textAlign || 'center', marginBottom: '60px' }}>
+          <div style={{ textAlign: heading.textAlign || 'center', marginBottom: '32px' }}>
             <Title level={2} style={{ fontSize: heading.titleSize, color: heading.titleColor }}>
               {getIcon(heading.emoji, '32px', heading.titleColor) || heading.emoji} {heading.title}
             </Title>
@@ -695,11 +695,11 @@ const SectionRendererV2: React.FC<SectionRendererProps> = ({ section, previewMod
 
       <div style={{ 
         background: content.backgroundColor || '#ffffff',
-        padding: content.padding || '80px 24px'
+        padding: content.padding || '40px 24px'
       }}>
         <div style={{ maxWidth: '1400px', margin: '0 auto' }}>
           {content.sectionTitle && (
-            <div style={{ textAlign: cardStyle.textAlign || 'center', marginBottom: '60px' }}>
+            <div style={{ textAlign: cardStyle.textAlign || 'center', marginBottom: '32px' }}>
               <Title level={2}>{content.sectionTitle}</Title>
             </div>
           )}
@@ -856,9 +856,9 @@ const SectionRendererV2: React.FC<SectionRendererProps> = ({ section, previewMod
     return renderWithEnhancements(
 
 
-      <div style={{ background: content.backgroundColor || '#f9fafb', padding: content.padding || '80px 24px' }}>
+      <div style={{ background: content.backgroundColor || '#f9fafb', padding: content.padding || '40px 24px' }}>
         <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
-          <div style={{ textAlign: heading.textAlign || 'center', marginBottom: '60px' }}>
+          <div style={{ textAlign: heading.textAlign || 'center', marginBottom: '32px' }}>
             <Title level={2} style={{ fontSize: heading.titleSize, color: heading.titleColor }}>
               {getIcon(heading.emoji, '32px', heading.titleColor) || heading.emoji} {heading.title}
             </Title>
@@ -928,8 +928,8 @@ const SectionRendererV2: React.FC<SectionRendererProps> = ({ section, previewMod
     return renderWithEnhancements(
 
 
-      <div style={{ padding: content.padding || '80px 24px', maxWidth: '1200px', margin: '0 auto' }}>
-        <div style={{ textAlign: heading.textAlign || 'center', marginBottom: '60px' }}>
+      <div style={{ padding: content.padding || '40px 24px', maxWidth: '1200px', margin: '0 auto' }}>
+        <div style={{ textAlign: heading.textAlign || 'center', marginBottom: '32px' }}>
           <Title level={2} style={{ fontSize: heading.titleSize, color: heading.titleColor }}>
             {getIcon(heading.emoji, '32px', heading.titleColor) || heading.emoji} {heading.title}
           </Title>
@@ -965,7 +965,7 @@ const SectionRendererV2: React.FC<SectionRendererProps> = ({ section, previewMod
       <div
         style={{
           background: content.backgroundGradient || 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
-          padding: content.padding || '80px 24px',
+          padding: content.padding || '40px 24px',
           textAlign: content.textAlign || 'center'
         }}
       >
@@ -1082,9 +1082,9 @@ const SectionRendererV2: React.FC<SectionRendererProps> = ({ section, previewMod
     return renderWithEnhancements(
 
 
-      <div style={{ background: content.backgroundColor || '#1f2937', color: content.color || 'white', padding: content.padding || '60px 24px 24px' }}>
+      <div style={{ background: content.backgroundColor || '#1f2937', color: content.color || 'white', padding: content.padding || '32px 24px 16px' }}>
         <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
-          <Row gutter={[32, 32]}>
+          <Row gutter={[32, 24]}>
             {columns.map((col: any, idx: number) => (
               <Col xs={24} sm={12} md={6} key={idx}>
                 <Title level={col.type === 'text' ? 4 : 5} style={{ color: col.titleColor || 'white' }}>
