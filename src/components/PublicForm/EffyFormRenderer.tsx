@@ -474,24 +474,43 @@ const EffyFormRenderer: React.FC = () => {
 
     setSubmitting(true);
     try {
+      // 🔥 Transformer les réponses au format attendu par l'API
+      // L'API attend: { formData, contact, metadata }
+      const contact = {
+        firstName: finalAnswers.prenom || '',
+        lastName: finalAnswers.nom || '',
+        email: finalAnswers.email || '',
+        phone: finalAnswers.telephone || '',
+        civility: finalAnswers.civilite || ''
+      };
+
+      // Exclure les champs de contact des formData (préfixés _ car extraits mais non utilisés directement)
+      const { prenom: _prenom, nom: _nom, email: _email, telephone: _telephone, civilite: _civilite, ...otherAnswers } = finalAnswers;
+      
       const response = await fetch(`/api/public/forms/${slug}/submit`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          formId: formData.id,
-          data: finalAnswers
+          formData: otherAnswers, // Réponses du simulateur
+          contact,               // Informations de contact
+          metadata: {
+            referrer: document.referrer || null,
+            userAgent: navigator.userAgent
+          }
         })
       });
 
       if (!response.ok) {
-        throw new Error('Erreur lors de la soumission');
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || 'Erreur lors de la soumission');
       }
 
+      const result = await response.json();
       setSubmitted(true);
-      message.success('Formulaire envoyé avec succès !');
+      message.success(result.message || 'Formulaire envoyé avec succès !');
     } catch (err) {
       console.error('Erreur soumission:', err);
-      message.error('Une erreur est survenue. Veuillez réessayer.');
+      message.error(err instanceof Error ? err.message : 'Une erreur est survenue. Veuillez réessayer.');
     } finally {
       setSubmitting(false);
     }
@@ -508,6 +527,9 @@ const EffyFormRenderer: React.FC = () => {
         return;
       }
     }
+
+    // Log de debug pour le multi-branches
+    console.log(`📍 [Nav] Question: ${currentQuestion.questionKey}, pendingBranches: [${pendingBranches.join(', ')}], returnTo: ${returnToQuestion}`);
 
     // Sauvegarder la réponse
     const newAnswers = { ...answers, [currentQuestion.questionKey]: currentAnswer };
@@ -544,14 +566,19 @@ const EffyFormRenderer: React.FC = () => {
     }
 
     // 🔥 Vérifier s'il y a des branches en attente à parcourir
+    // La fin de branche est détectée quand nextKey pointe vers returnToQuestion (ex: motif_simulation)
     if (pendingBranches.length > 0) {
-      // On est peut-être à la fin d'une branche - vérifier si on atteint une question "terminale" de branche
       const nextKey = getNextQuestionKey(currentQuestion.questionKey, currentAnswer);
       
+      // Si la prochaine question est la question de retour (fin de branche commune)
+      // OU si c'est une question sans suite (null)
+      // → Passer à la branche suivante au lieu d'aller à la question commune
       if (!nextKey || nextKey === returnToQuestion) {
         // Fin de cette branche, passer à la branche suivante
         const [nextBranch, ...remainingBranches] = pendingBranches;
         setPendingBranches(remainingBranches);
+        
+        console.log(`🌿 [MultiBranch] Fin de branche, passage à: ${nextBranch}, restantes: ${remainingBranches.length}`);
         
         setHistory(prev => [...prev, currentQuestionKey]);
         setCurrentQuestionKey(nextBranch);
@@ -562,6 +589,13 @@ const EffyFormRenderer: React.FC = () => {
 
     // Trouver la question suivante (navigation standard)
     let nextKey = getNextQuestionKey(currentQuestion.questionKey, currentAnswer);
+
+    // Si la prochaine question est la question de retour ET qu'il n'y a plus de branches pendantes
+    // → On peut maintenant aller à la question de retour
+    if (nextKey === returnToQuestion && pendingBranches.length === 0) {
+      console.log(`🏁 [MultiBranch] Toutes les branches terminées, retour à: ${returnToQuestion}`);
+      setReturnToQuestion(null); // Reset car on y va maintenant
+    }
 
     // Si pas de question suivante et qu'on a terminé toutes les branches, retourner à la question de retour
     if (!nextKey && pendingBranches.length === 0 && returnToQuestion) {
