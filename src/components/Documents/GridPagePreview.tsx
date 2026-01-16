@@ -4,7 +4,7 @@
  */
 
 import { useState, useRef, useCallback, useMemo, useEffect } from 'react';
-import { Tooltip, Empty } from 'antd';
+import { Tooltip } from 'antd';
 import { DeleteOutlined, DragOutlined, SettingOutlined, EyeInvisibleOutlined, CopyOutlined } from '@ant-design/icons';
 import { DocumentPage, ModuleInstance } from './types';
 import { getModuleById } from './ModuleRegistry';
@@ -109,7 +109,7 @@ const GridPagePreview = ({
       `;
       if (bgImageValue) {
         backgroundImage = `${gridPattern}, ${bgImageValue}`;
-        backgroundSize = `${GRID_SIZE}px ${GRID_SIZE}px, ${GRID_SIZE}px ${GRID_SIZE}px, ${isGradient ? '100% 100%' : 'cover'}`;
+        backgroundSize = `${GRID_SIZE}px ${GRID_SIZE}px, ${GRID_SIZE}px ${GRID_SIZE}px, 100% 100%`;
       } else {
         backgroundImage = gridPattern;
         backgroundSize = `${GRID_SIZE}px ${GRID_SIZE}px`;
@@ -119,7 +119,7 @@ const GridPagePreview = ({
       backgroundSize = isGradient ? '100% 100%' : (bgImageValue ? '100% 100%' : undefined);
     }
 
-    return {
+    const finalStyle = {
       width: `${PAGE_WIDTH}px`,
       height: `${PAGE_HEIGHT}px`,
       backgroundColor: page.backgroundColor || '#ffffff',
@@ -137,7 +137,20 @@ const GridPagePreview = ({
       fontSize: `${globalTheme.fontSize}px`,
       overflow: 'hidden',
     };
+    
+    return finalStyle;
   }, [page, globalTheme, showGrid, previewMode]);
+
+  const rawBackgroundImage = page.backgroundImage;
+  const isGradientBackground = !!rawBackgroundImage && (
+    rawBackgroundImage.startsWith('linear-gradient') ||
+    rawBackgroundImage.startsWith('radial-gradient')
+  );
+  const isImageBackground = !!rawBackgroundImage && !isGradientBackground;
+  const gridPattern = `
+    linear-gradient(to right, rgba(0,0,0,0.03) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(0,0,0,0.03) 1px, transparent 1px)
+  `;
 
   // Calculer la position dans la page
   const getPositionInPage = useCallback((clientX: number, clientY: number) => {
@@ -502,9 +515,77 @@ const GridPagePreview = ({
   return (
     <div 
       ref={containerRef}
-      style={pageStyle}
+      style={{
+        ...pageStyle,
+        backgroundColor: '#ffffff', // Couleur par défaut pour le conteneur
+        backgroundImage: undefined,  // IMPORTANT: Pas de background ici!
+        backgroundSize: undefined,
+      }}
       onClick={() => onModuleSelect?.(null as any)}
     >
+      {/* Élément de background qui s'affiche DERRIÈRE les modules */}
+      {(pageStyle.backgroundImage || pageStyle.backgroundColor) && (
+        <div
+          style={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            width: '100%',
+            height: '100%',
+            backgroundColor: pageStyle.backgroundColor,
+            pointerEvents: 'none',
+            zIndex: 0,
+            overflow: 'hidden',
+          }}
+        >
+          {isImageBackground ? (
+            <img
+              src={rawBackgroundImage}
+              alt="Background"
+              style={{
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                width: '100%',
+                height: '100%',
+                objectFit: 'fill',
+                objectPosition: 'center',
+              }}
+            />
+          ) : (
+            <div
+              style={{
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                width: '100%',
+                height: '100%',
+                backgroundImage: pageStyle.backgroundImage,
+                backgroundSize: pageStyle.backgroundSize,
+                backgroundPosition: pageStyle.backgroundPosition,
+                backgroundRepeat: pageStyle.backgroundRepeat,
+              }}
+            />
+          )}
+
+          {!previewMode && showGrid && (
+            <div
+              style={{
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                width: '100%',
+                height: '100%',
+                backgroundImage: gridPattern,
+                backgroundSize: `${GRID_SIZE}px ${GRID_SIZE}px, ${GRID_SIZE}px ${GRID_SIZE}px`,
+                backgroundPosition: 'center',
+                backgroundRepeat: 'repeat',
+              }}
+            />
+          )}
+        </div>
+      )}
+
       {/* Label de la page */}
       {!previewMode && (
         <div style={{
@@ -517,7 +598,7 @@ const GridPagePreview = ({
           borderRadius: '6px 6px 0 0',
           fontSize: '12px',
           fontWeight: 600,
-          zIndex: 10,
+          zIndex: 11,
         }}>
           📄 {page.name}
         </div>
@@ -534,41 +615,16 @@ const GridPagePreview = ({
           padding: '2px 8px',
           borderRadius: '4px',
           fontSize: '10px',
-          zIndex: 10,
+          zIndex: 11,
         }}>
           Grille: {GRID_SIZE}px | {PAGE_WIDTH}×{PAGE_HEIGHT}
         </div>
       )}
 
-      {/* Modules ou Empty state */}
-      {page.modules.length === 0 ? (
-        <Empty
-          image={Empty.PRESENTED_IMAGE_SIMPLE}
-          description={
-            <span style={{ color: '#999' }}>
-              {externalDragging 
-                ? '📥 Déposez un module ici' 
-                : 'Glissez des modules depuis la palette ou cliquez pour ajouter'
-              }
-            </span>
-          }
-          style={{
-            position: 'absolute',
-            top: '50%',
-            left: '50%',
-            transform: 'translate(-50%, -50%)',
-            padding: '60px 20px',
-            border: externalDragging ? '2px dashed #1890ff' : '2px dashed #d9d9d9',
-            borderRadius: '8px',
-            backgroundColor: externalDragging ? 'rgba(24, 144, 255, 0.05)' : 'rgba(255,255,255,0.8)',
-            transition: 'all 0.3s',
-          }}
-        />
-      ) : (
-        page.modules
-          .sort((a, b) => a.order - b.order)
-          .map(module => renderModule(module))
-      )}
+      {/* Modules */}
+      {page.modules
+        .sort((a, b) => a.order - b.order)
+        .map(module => renderModule(module))}
 
       {/* Guide lignes centrales */}
       {!previewMode && showGrid && (
@@ -582,6 +638,7 @@ const GridPagePreview = ({
             width: '1px',
             backgroundColor: 'rgba(24, 144, 255, 0.2)',
             pointerEvents: 'none',
+            zIndex: 10,
           }} />
           {/* Ligne horizontale centrale */}
           <div style={{
@@ -592,6 +649,7 @@ const GridPagePreview = ({
             height: '1px',
             backgroundColor: 'rgba(24, 144, 255, 0.2)',
             pointerEvents: 'none',
+            zIndex: 10,
           }} />
         </>
       )}

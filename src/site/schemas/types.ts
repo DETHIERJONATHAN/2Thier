@@ -24,6 +24,7 @@ export type FieldType =
   | 'select'         // Menu déroulant
   | 'contact-form-selector' // Sélecteur de formulaire public
   | 'section-anchor-selector' // Sélecteur de section (ancre dynamique)
+  | 'simulator-form-selector' // Sélecteur de simulateur/formulaire avancé
   | 'boolean'        // Switch on/off
   | 'slider'         // Curseur pour valeurs numériques
   | 'size'           // Taille CSS (px, rem, %)

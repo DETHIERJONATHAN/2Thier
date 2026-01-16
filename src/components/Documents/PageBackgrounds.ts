@@ -1,13 +1,17 @@
 /**
- * 🎨 PAGE BACKGROUNDS - Fonds visuels magnifiques qui réagissent aux thèmes
- * Chaque fond utilise les couleurs du thème sélectionné
+ * 🎨 PAGE BACKGROUNDS - SVG IMPORTÉS
+ * Les SVG sont chargés et recolorés dynamiquement selon le thème.
  */
+
+import invoiceA from '../../../Depot/vecteezy_business-company-invoice-template_6314850.svg?raw';
+import invoiceB from '../../../Depot/vecteezy_corporate-business-invoice-template_6314448.svg?raw';
+import invoiceC from '../../../Depot/vecteezy_business-company-invoice-template_6315045.svg?raw';
 
 export interface PageBackground {
   id: string;
   name: string;
   description: string;
-  category: 'vintage' | 'pro' | 'modern' | 'geometric' | 'abstract' | 'minimal';
+  category: 'premium' | 'corporate' | 'creative' | 'minimal' | 'luxury' | 'tech' | 'custom';
   svgGenerator: (colors: {
     primary: string;
     secondary: string;
@@ -17,303 +21,484 @@ export interface PageBackground {
   }) => string;
 }
 
-// Générateur SVG - toutes les couleurs sont dynamiques
-const createSVG = (content: string) =>
-  `data:image/svg+xml;utf8,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 1600">${content}</svg>`)}`;
+const toDataUri = (rawSvg: string) =>
+  `data:image/svg+xml;utf8,${encodeURIComponent(rawSvg)}`;
+
+const getViewBox = (rawSvg: string) => {
+  const match = rawSvg.match(/viewBox="([^"]+)"/i);
+  if (!match) {
+    return { x: 0, y: 0, w: 1200, h: 1600 };
+  }
+  const parts = match[1].trim().split(/\s+/).map(Number);
+  if (parts.length !== 4 || parts.some(Number.isNaN)) {
+    return { x: 0, y: 0, w: 1200, h: 1600 };
+  }
+  const [x, y, w, h] = parts;
+  return { x, y, w, h };
+};
+
+const extractPageBounds = (rawSvg: string) => {
+  const bounds: Array<{ x: number; y: number; width: number; height: number }> = [];
+  const whiteFillRegex = /fill="rgb\(100%,\s*100%,\s*100%\)"[\s\S]*?d="([^"]+)"/gi;
+  const matches = rawSvg.matchAll(whiteFillRegex);
+
+  for (const match of matches) {
+    const d = match[1];
+    const nums = d.match(/-?\d*\.?\d+/g)?.map(Number) || [];
+    if (nums.length < 4) {
+      continue;
+    }
+    const xs: number[] = [];
+    const ys: number[] = [];
+    for (let i = 0; i < nums.length - 1; i += 2) {
+      xs.push(nums[i]);
+      ys.push(nums[i + 1]);
+    }
+    const xMin = Math.min(...xs);
+    const xMax = Math.max(...xs);
+    const yMin = Math.min(...ys);
+    const yMax = Math.max(...ys);
+    const width = xMax - xMin;
+    const height = yMax - yMin;
+    if (width > 500 && height > 500) {
+      bounds.push({ x: xMin, y: yMin, width, height });
+    }
+  }
+
+  const uniqueBounds = bounds
+    .sort((a, b) => a.x - b.x)
+    .filter((rect, idx, arr) => idx === 0 || Math.abs(rect.x - arr[idx - 1].x) > 10);
+
+  return uniqueBounds;
+};
+
+const buildSinglePageViewBox = (rawSvg: string, pages: number, pageIndex: number) => {
+  const vb = getViewBox(rawSvg);
+  const bounds = extractPageBounds(rawSvg);
+  
+  if (bounds.length > 0) {
+    const safeIndex = Math.max(0, Math.min(pageIndex, bounds.length - 1));
+    const rect = bounds[safeIndex];
+    // Utiliser exactement les dimensions de la page détectée
+    // Les courbes décoratives seront visibles grâce à overflow="visible"
+    return `${rect.x} ${rect.y} ${rect.width} ${rect.height}`;
+  }
+
+  const safePages = Math.max(1, pages);
+  const pageW = vb.w / safePages;
+  const x = vb.x + Math.max(0, Math.min(pageIndex, safePages - 1)) * pageW;
+  return `${x} ${vb.y} ${pageW} ${vb.h}`;
+};
+
+const applyThemeToSvg = (
+  rawSvg: string,
+  colors: { primary: string; secondary: string; accent: string; text: string }
+) => {
+  const hexToRgb = (hex: string) => {
+    const normalized = hex.replace('#', '');
+    if (normalized.length === 3) {
+      const r = parseInt(normalized[0] + normalized[0], 16);
+      const g = parseInt(normalized[1] + normalized[1], 16);
+      const b = parseInt(normalized[2] + normalized[2], 16);
+      return { r, g, b };
+    }
+    if (normalized.length === 6) {
+      const r = parseInt(normalized.slice(0, 2), 16);
+      const g = parseInt(normalized.slice(2, 4), 16);
+      const b = parseInt(normalized.slice(4, 6), 16);
+      return { r, g, b };
+    }
+    return null;
+  };
+
+  const isGray = (r: number, g: number, b: number) =>
+    Math.abs(r - g) < 6 && Math.abs(g - b) < 6 && Math.abs(r - b) < 6;
+
+  const chooseThemeColor = (r: number, g: number, b: number) => {
+    const luminance = (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
+    if (luminance < 0.35) return colors.secondary;
+    if (luminance < 0.7) return colors.primary;
+    return colors.accent;
+  };
+
+  const mapRgbToTheme = (r: number, g: number, b: number) => {
+    const luminance = (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
+    if (isGray(r, g, b)) {
+      if (luminance > 0.94) return null;
+    }
+    return chooseThemeColor(r, g, b);
+  };
+
+  const replaceHexInString = (value: string) =>
+    value.replace(/#([0-9a-f]{3}|[0-9a-f]{6})/gi, (match, code, offset, str) => {
+      const context = str.slice(Math.max(0, offset - 4), offset).toLowerCase();
+      if (context.includes('url(')) return match;
+      const rgb = hexToRgb(`#${code}`);
+      if (!rgb) return match;
+      const mapped = mapRgbToTheme(rgb.r, rgb.g, rgb.b);
+      return mapped || match;
+    });
+
+  const parseRgbParts = (inner: string) => {
+    const parts = inner.split(',').map((v) => v.trim());
+    if (parts.length < 3) return null;
+    const toChannel = (value: string) => {
+      if (value.endsWith('%')) {
+        const pct = parseFloat(value.slice(0, -1));
+        return Number.isNaN(pct) ? null : (pct / 100) * 255;
+      }
+      const num = parseFloat(value);
+      return Number.isNaN(num) ? null : num;
+    };
+    const r = toChannel(parts[0]);
+    const g = toChannel(parts[1]);
+    const b = toChannel(parts[2]);
+    if (r === null || g === null || b === null) return null;
+    return { r, g, b };
+  };
+
+  const replaceRgbInString = (value: string) =>
+    value.replace(/rgb\(([^)]+)\)/gi, (match, inner) => {
+      const parsed = parseRgbParts(inner);
+      if (!parsed) return match;
+      const mapped = mapRgbToTheme(parsed.r, parsed.g, parsed.b);
+      return mapped || match;
+    });
+
+  const replaceRgbaInString = (value: string) =>
+    value.replace(/rgba\(([^)]+)\)/gi, (match, inner) => {
+      const parts = inner.split(',').map((v) => v.trim());
+      if (parts.length < 4) return match;
+      const parsed = parseRgbParts(parts.slice(0, 3).join(','));
+      if (!parsed) return match;
+      const alpha = parts[3];
+      const mapped = mapRgbToTheme(parsed.r, parsed.g, parsed.b);
+      if (!mapped) return match;
+      const mappedRgb = hexToRgb(mapped);
+      if (!mappedRgb) return match;
+      return `rgba(${Math.round(mappedRgb.r)}, ${Math.round(mappedRgb.g)}, ${Math.round(mappedRgb.b)}, ${alpha})`;
+    });
+
+  const applyPaletteMapping = (input: string) => {
+    const palette = [colors.primary, colors.secondary, colors.accent];
+    const entries = new Map<string, { count: number; rgb: { r: number; g: number; b: number } }>();
+
+    const addEntry = (token: string, rgb: { r: number; g: number; b: number }) => {
+      const key = token.toLowerCase();
+      const current = entries.get(key);
+      if (current) {
+        current.count += 1;
+      } else {
+        entries.set(key, { count: 1, rgb });
+      }
+    };
+
+    input.replace(/#([0-9a-f]{3}|[0-9a-f]{6})/gi, (match, code, offset, str) => {
+      const context = str.slice(Math.max(0, offset - 4), offset).toLowerCase();
+      if (context.includes('url(')) return match;
+      const rgb = hexToRgb(`#${code}`);
+      if (!rgb) return match;
+      if (isGray(rgb.r, rgb.g, rgb.b)) return match;
+      const luminance = (0.2126 * rgb.r + 0.7152 * rgb.g + 0.0722 * rgb.b) / 255;
+      if (luminance > 0.95) return match;
+      addEntry(match, rgb);
+      return match;
+    });
+
+    input.replace(/rgb\(([^)]+)\)/gi, (match, inner) => {
+      const parsed = parseRgbParts(inner);
+      if (!parsed) return match;
+      const r = parsed.r;
+      const g = parsed.g;
+      const b = parsed.b;
+      if (isGray(r, g, b)) return match;
+      const luminance = (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
+      if (luminance > 0.95) return match;
+      addEntry(match, { r, g, b });
+      return match;
+    });
+
+    const sorted = [...entries.entries()]
+      .filter(([, meta]) => !isGray(meta.rgb.r, meta.rgb.g, meta.rgb.b))
+      .sort((a, b) => b[1].count - a[1].count);
+
+    if (sorted.length === 0) return input;
+
+    let output = input;
+    sorted.forEach(([token], index) => {
+      const color = palette[index % palette.length];
+      const escaped = token.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      output = output.replace(new RegExp(escaped, 'gi'), color);
+    });
+
+    return output;
+  };
+
+  const map = [
+    { from: /#ff0055/gi, to: colors.primary },
+    { from: /#ff3b30/gi, to: colors.primary },
+    { from: /#ff6a00/gi, to: colors.primary },
+    { from: /#ff7a00/gi, to: colors.primary },
+    { from: /#0044ff/gi, to: colors.secondary },
+    { from: /#0066ff/gi, to: colors.secondary },
+    { from: /#1e3a8a/gi, to: colors.secondary },
+  ];
+
+  const withHex = map.reduce((svg, rule) => svg.replace(rule.from, rule.to), rawSvg);
+
+  const recolorRgb = (input: string) => {
+    const parseChannel = (value: string) => {
+      const raw = String(value).trim();
+      if (raw.endsWith('%')) {
+        const pct = parseFloat(raw.slice(0, -1));
+        if (Number.isNaN(pct)) return null;
+        return (pct / 100) * 255;
+      }
+      const num = parseFloat(raw);
+      return Number.isNaN(num) ? null : num;
+    };
+
+    const mapColor = (r: number, g: number, b: number) => {
+      const gray = isGray(r, g, b);
+      const luminance = (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
+      if (gray && luminance > 0.92) return null;
+      return chooseThemeColor(r, g, b);
+    };
+
+    const replaceAttr = (attr: 'fill' | 'stop-color' | 'stroke') =>
+      new RegExp(`${attr}="rgb\\(([^,]+),\\s*([^,]+),\\s*([^\\)]+)\\)"`, 'gi');
+
+    const applyReplace = (attr: 'fill' | 'stop-color' | 'stroke', source: string) =>
+      source.replace(replaceAttr(attr), (_m, rRaw, gRaw, bRaw) => {
+        const r = parseChannel(rRaw);
+        const g = parseChannel(gRaw);
+        const b = parseChannel(bRaw);
+        if (r === null || g === null || b === null) return _m;
+        const target = mapColor(r, g, b);
+        if (!target) return _m;
+        return `${attr}="${target}"`;
+      });
+
+    let output = input;
+    output = applyReplace('stop-color', output);
+    output = applyReplace('fill', output);
+    output = applyReplace('stroke', output);
+    return output;
+  };
+
+  // Appliquer recolorRgb en premier pour les attributs stop-color/fill/stroke
+  const withRgb = recolorRgb(withHex);
+  
+  // Remplacer les couleurs dans les blocs <style>
+  const replaceColorsInCss = (css: string) => replaceRgbaInString(replaceRgbInString(replaceHexInString(css)));
+  const withStyleBlocks = withRgb.replace(
+    /<style([^>]*)>([\s\S]*?)<\/style>/gi,
+    (_m, attrs, css) => `<style${attrs}>${replaceColorsInCss(css)}</style>`
+  );
+  
+  // Dernier passage pour les attributs fill/stroke/stop-color restants
+  return withStyleBlocks
+    .replace(/(fill|stroke|stop-color)="([^"]+)"/gi, (_m, attr, value) => {
+      if (value.includes('url(')) return `${attr}="${value}"`;
+      // Si c'est déjà un hex provenant du thème, ne pas retraiter
+      if (value.startsWith('#') && (value === colors.primary || value === colors.secondary || value === colors.accent || value === colors.text)) {
+        return `${attr}="${value}"`;
+      }
+      const next = replaceRgbaInString(replaceRgbInString(replaceHexInString(value)));
+      return `${attr}="${next}"`;
+    })
+    .replace(/style="([^"]+)"/gi, (_m, styleValue) => {
+      const next = replaceRgbaInString(replaceRgbInString(replaceHexInString(styleValue)));
+      return `style="${next}"`;
+    });
+};
+
+const extractInnerSvg = (rawSvg: string) =>
+  rawSvg
+    .replace(/^[\s\S]*?<svg[^>]*>/i, '')
+    .replace(/<\/svg>\s*$/i, '');
+
+const removeTextNodes = (rawSvg: string) => {
+  const withoutTextTags = rawSvg
+    .replace(/<text[\s\S]*?<\/text>/gi, '')
+    .replace(/<tspan[\s\S]*?<\/tspan>/gi, '');
+
+  const isDarkGray = (r: number, g: number, b: number) => {
+    const max = Math.max(r, g, b);
+    const min = Math.min(r, g, b);
+    const isGray = Math.abs(r - g) < 1 && Math.abs(g - b) < 1 && Math.abs(r - b) < 1;
+    return isGray && max <= 70 && min >= 0;
+  };
+
+  const getNumbers = (value?: string) => {
+    if (!value) return [] as number[];
+    return value.match(/-?\d*\.?\d+/g)?.map(Number) || [];
+  };
+
+  const getPathBounds = (d?: string) => {
+    const nums = getNumbers(d);
+    if (nums.length < 4) return null;
+    const xs: number[] = [];
+    const ys: number[] = [];
+    for (let i = 0; i < nums.length - 1; i += 2) {
+      xs.push(nums[i]);
+      ys.push(nums[i + 1]);
+    }
+    const xMin = Math.min(...xs);
+    const xMax = Math.max(...xs);
+    const yMin = Math.min(...ys);
+    const yMax = Math.max(...ys);
+    return { width: xMax - xMin, height: yMax - yMin };
+  };
+
+  const getAttr = (attr: string, input: string) => {
+    const match = input.match(new RegExp(`${attr}=\"([^\"]+)\"`, 'i'));
+    return match?.[1];
+  };
+
+  const shouldRemoveByBounds = (width?: number, height?: number) => {
+    if (!width || !height) return false;
+    if (width >= 500 || height >= 500) return false;
+    return width <= 420 && height <= 200;
+  };
+
+  const removeGrayShapes = (input: string) =>
+    input
+      .replace(
+        /<(path|rect|polygon|circle|ellipse)([^>]*?)fill=\"rgb\(\s*([0-9.]+)%\s*,\s*([0-9.]+)%\s*,\s*([0-9.]+)%\s*\)\"([^>]*)\s*\/>/gi,
+        (match, _tag, _pre, rRaw, gRaw, bRaw) => {
+          const r = parseFloat(rRaw);
+          const g = parseFloat(gRaw);
+          const b = parseFloat(bRaw);
+          if (Number.isNaN(r) || Number.isNaN(g) || Number.isNaN(b)) return match;
+          return isDarkGray(r, g, b) ? '' : match;
+        }
+      )
+      .replace(
+        /<(path|rect|polygon|circle|ellipse)([^>]*?)fill=\"rgb\(\s*([0-9.]+)%\s*,\s*([0-9.]+)%\s*,\s*([0-9.]+)%\s*\)\"([^>]*)>([\s\S]*?)<\/(path|rect|polygon|circle|ellipse)>/gi,
+        (match, _tag, _pre, rRaw, gRaw, bRaw) => {
+          const r = parseFloat(rRaw);
+          const g = parseFloat(gRaw);
+          const b = parseFloat(bRaw);
+          if (Number.isNaN(r) || Number.isNaN(g) || Number.isNaN(b)) return match;
+          return isDarkGray(r, g, b) ? '' : match;
+        }
+      );
+
+  const removeSmallShapes = (input: string) =>
+    input.replace(/<(path|rect|polygon|circle|ellipse)([^>]*)>/gi, (match, tag) => {
+      if (/fill=\"none\"/i.test(match)) return match;
+      const d = getAttr('d', match);
+      const points = getAttr('points', match);
+      const width = parseFloat(getAttr('width', match) || '');
+      const height = parseFloat(getAttr('height', match) || '');
+      const rx = parseFloat(getAttr('rx', match) || '');
+      const ry = parseFloat(getAttr('ry', match) || '');
+      const r = parseFloat(getAttr('r', match) || '');
+
+      let bounds: { width: number; height: number } | null = null;
+
+      if (tag === 'rect' && Number.isFinite(width) && Number.isFinite(height)) {
+        bounds = { width, height };
+      } else if (tag === 'circle' && Number.isFinite(r)) {
+        bounds = { width: r * 2, height: r * 2 };
+      } else if (tag === 'ellipse' && Number.isFinite(rx) && Number.isFinite(ry)) {
+        bounds = { width: rx * 2, height: ry * 2 };
+      } else if (tag === 'polygon' && points) {
+        const nums = getNumbers(points);
+        if (nums.length >= 4) {
+          const xs: number[] = [];
+          const ys: number[] = [];
+          for (let i = 0; i < nums.length - 1; i += 2) {
+            xs.push(nums[i]);
+            ys.push(nums[i + 1]);
+          }
+          bounds = { width: Math.max(...xs) - Math.min(...xs), height: Math.max(...ys) - Math.min(...ys) };
+        }
+      } else if (tag === 'path' && d) {
+        bounds = getPathBounds(d);
+      }
+
+      if (bounds && shouldRemoveByBounds(bounds.width, bounds.height)) {
+        return '';
+      }
+
+      return match;
+    });
+
+  return removeSmallShapes(removeGrayShapes(withoutTextTags));
+};
+
+const buildThemedSvgDataUri = (
+  rawSvg: string,
+  colors: { primary: string; secondary: string; accent: string; text: string },
+  pages: number,
+  pageIndex: number
+) => {
+  const themed = applyThemeToSvg(rawSvg, colors);
+  const withoutText = removeTextNodes(themed);
+  const inner = extractInnerSvg(withoutText);
+  const viewBox = buildSinglePageViewBox(rawSvg, pages, pageIndex);
+  const [vbX, vbY, vbW, vbH] = viewBox.split(' ').map(Number);
+  
+  // Clipper le contenu pour ne pas voir les pages adjacentes
+  const clipId = `clip-page-${Date.now()}`;
+  const wrapped = `<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="${viewBox}" preserveAspectRatio="xMidYMid slice">
+    <defs>
+      <clipPath id="${clipId}">
+        <rect x="${vbX}" y="${vbY}" width="${vbW}" height="${vbH}"/>
+      </clipPath>
+    </defs>
+    <g clip-path="url(#${clipId})">${inner}</g>
+  </svg>`;
+  return toDataUri(wrapped);
+};
 
 export const PAGE_BACKGROUNDS: PageBackground[] = [
-  // ==================== VINTAGE ====================
   {
-    id: 'bg_vintage_lines',
-    name: 'Vintage Lignes',
-    description: 'Motif vintage avec lignes parallèles',
-    category: 'vintage',
-    svgGenerator: (c) => createSVG(`
-      <defs>
-        <pattern id="lines" patternUnits="userSpaceOnUse" width="20" height="20">
-          <line x1="0" y1="0" x2="0" y2="20" stroke="${c.secondary}" stroke-width="1" opacity="0.3"/>
-        </pattern>
-      </defs>
-      <rect width="1200" height="1600" fill="${c.bg}"/>
-      <rect width="1200" height="1600" fill="url(#lines)"/>
-      <circle cx="100" cy="100" r="80" fill="${c.primary}" opacity="0.1"/>
-      <circle cx="1100" cy="1500" r="100" fill="${c.secondary}" opacity="0.08"/>
-    `),
+    id: 'bg_invoice_vecteezy_6314850',
+    name: 'Invoice Vecteezy 6314850',
+    description: 'Template importé (colors dynamiques).',
+    category: 'premium',
+    svgGenerator: (c) => buildThemedSvgDataUri(invoiceA, c, 3, 1),
   },
   {
-    id: 'bg_vintage_dots',
-    name: 'Vintage Pointillé',
-    description: 'Motif classique avec points',
-    category: 'vintage',
-    svgGenerator: (c) => createSVG(`
-      <defs>
-        <pattern id="dots" patternUnits="userSpaceOnUse" width="30" height="30">
-          <circle cx="15" cy="15" r="3" fill="${c.secondary}" opacity="0.25"/>
-        </pattern>
-      </defs>
-      <rect width="1200" height="1600" fill="${c.bg}"/>
-      <rect width="1200" height="1600" fill="url(#dots)"/>
-      <rect x="50" y="50" width="200" height="200" fill="none" stroke="${c.primary}" stroke-width="2" opacity="0.15"/>
-      <rect x="950" y="1350" width="200" height="200" fill="none" stroke="${c.secondary}" stroke-width="2" opacity="0.1"/>
-    `),
+    id: 'bg_invoice_vecteezy_6314448',
+    name: 'Invoice Vecteezy 6314448',
+    description: 'Template importé (colors dynamiques).',
+    category: 'corporate',
+    svgGenerator: (c) => buildThemedSvgDataUri(invoiceB, c, 3, 1),
   },
   {
-    id: 'bg_vintage_paper',
-    name: 'Papier Ancien',
-    description: 'Texture papier avec filigrane',
-    category: 'vintage',
-    svgGenerator: (c) => createSVG(`
-      <rect width="1200" height="1600" fill="${c.bg}"/>
-      <defs>
-        <filter id="noise">
-          <feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="4" seed="2"/>
-          <feColorMatrix type="saturate" values="0.3"/>
-        </filter>
-      </defs>
-      <rect width="1200" height="1600" fill="${c.primary}" opacity="0.05" filter="url(#noise)"/>
-      <path d="M 0 100 Q 300 50 600 100 T 1200 100" stroke="${c.secondary}" stroke-width="2" fill="none" opacity="0.15"/>
-      <path d="M 0 1500 Q 300 1550 600 1500 T 1200 1500" stroke="${c.primary}" stroke-width="2" fill="none" opacity="0.12"/>
-    `),
-  },
-
-  // ==================== PROFESSIONNEL ====================
-  {
-    id: 'bg_pro_gradient_diagonal',
-    name: 'Gradient Diagonal Pro',
-    description: 'Dégradé diagonal professionnel',
-    category: 'pro',
-    svgGenerator: (c) => createSVG(`
-      <defs>
-        <linearGradient id="grad" x1="0%" y1="0%" x2="100%" y2="100%">
-          <stop offset="0%" style="stop-color:${c.bg};stop-opacity:1" />
-          <stop offset="50%" style="stop-color:${c.primary};stop-opacity:0.05" />
-          <stop offset="100%" style="stop-color:${c.secondary};stop-opacity:0.08" />
-        </linearGradient>
-      </defs>
-      <rect width="1200" height="1600" fill="url(#grad)"/>
-      <rect x="0" y="0" width="1200" height="4" fill="${c.primary}" opacity="0.6"/>
-      <rect x="0" y="1596" width="1200" height="4" fill="${c.secondary}" opacity="0.4"/>
-    `),
-  },
-  {
-    id: 'bg_pro_minimal',
-    name: 'Minimal Pro',
-    description: 'Design minimaliste épuré',
-    category: 'pro',
-    svgGenerator: (c) => createSVG(`
-      <rect width="1200" height="1600" fill="${c.bg}"/>
-      <circle cx="150" cy="150" r="60" fill="${c.primary}" opacity="0.08"/>
-      <circle cx="1050" cy="1450" r="80" fill="${c.secondary}" opacity="0.06"/>
-      <line x1="100" y1="100" x2="1100" y2="100" stroke="${c.primary}" stroke-width="2" opacity="0.15"/>
-      <line x1="100" y1="1500" x2="1100" y2="1500" stroke="${c.secondary}" stroke-width="2" opacity="0.12"/>
-    `),
-  },
-  {
-    id: 'bg_pro_waves',
-    name: 'Vagues Pro',
-    description: 'Motif de vagues subtiles',
-    category: 'pro',
-    svgGenerator: (c) => createSVG(`
-      <defs>
-        <path id="wave" d="M0,100 Q50,50 100,100 T200,100" stroke="${c.primary}" fill="none" stroke-width="2" opacity="0.2"/>
-      </defs>
-      <rect width="1200" height="1600" fill="${c.bg}"/>
-      <use href="#wave" x="0" y="200"/>
-      <use href="#wave" x="0" y="400"/>
-      <use href="#wave" x="0" y="800"/>
-      <use href="#wave" x="0" y="1200"/>
-      <rect x="0" y="0" width="1200" height="1600" fill="${c.primary}" opacity="0.02"/>
-    `),
-  },
-
-  // ==================== MODERNE ====================
-  {
-    id: 'bg_modern_grid',
-    name: 'Grille Moderne',
-    description: 'Grille géométrique contemporaine',
-    category: 'modern',
-    svgGenerator: (c) => createSVG(`
-      <defs>
-        <pattern id="grid" patternUnits="userSpaceOnUse" width="60" height="60">
-          <path d="M 60 0 L 0 0 0 60" fill="none" stroke="${c.secondary}" stroke-width="1" opacity="0.2"/>
-        </pattern>
-      </defs>
-      <rect width="1200" height="1600" fill="${c.bg}"/>
-      <rect width="1200" height="1600" fill="url(#grid)"/>
-      <rect x="100" y="100" width="400" height="400" fill="${c.primary}" opacity="0.08"/>
-      <rect x="700" y="1100" width="300" height="300" fill="${c.accent}" opacity="0.07"/>
-    `),
-  },
-  {
-    id: 'bg_modern_gradient_blur',
-    name: 'Gradient Flou Moderne',
-    description: 'Dégradé avec effet de flou',
-    category: 'modern',
-    svgGenerator: (c) => createSVG(`
-      <defs>
-        <radialGradient id="blur" cx="50%" cy="50%">
-          <stop offset="0%" style="stop-color:${c.primary};stop-opacity:0.1" />
-          <stop offset="100%" style="stop-color:${c.secondary};stop-opacity:0.05" />
-        </radialGradient>
-        <filter id="soften">
-          <feGaussianBlur in="SourceGraphic" stdDeviation="3"/>
-        </filter>
-      </defs>
-      <rect width="1200" height="1600" fill="${c.bg}"/>
-      <rect width="1200" height="1600" fill="url(#blur)"/>
-      <circle cx="300" cy="300" r="200" fill="${c.primary}" opacity="0.15" filter="url(#soften)"/>
-      <circle cx="900" cy="1300" r="250" fill="${c.secondary}" opacity="0.12" filter="url(#soften)"/>
-    `),
-  },
-  {
-    id: 'bg_modern_abstract',
-    name: 'Formes Abstraites',
-    description: 'Composition abstraite dynamique',
-    category: 'modern',
-    svgGenerator: (c) => createSVG(`
-      <rect width="1200" height="1600" fill="${c.bg}"/>
-      <rect x="0" y="0" width="400" height="400" fill="${c.primary}" opacity="0.08" transform="rotate(15 200 200)"/>
-      <circle cx="600" cy="400" r="150" fill="${c.accent}" opacity="0.07"/>
-      <polygon points="1000,800 1100,1000 900,1000" fill="${c.secondary}" opacity="0.09"/>
-      <path d="M 200 1200 Q 400 1100 600 1200 T 1000 1200" stroke="${c.primary}" fill="none" stroke-width="3" opacity="0.15"/>
-    `),
-  },
-
-  // ==================== GÉOMÉTRIQUE ====================
-  {
-    id: 'bg_geometric_triangles',
-    name: 'Triangles Géométriques',
-    description: 'Motif de triangles répétés',
-    category: 'geometric',
-    svgGenerator: (c) => createSVG(`
-      <rect width="1200" height="1600" fill="${c.bg}"/>
-      <defs>
-        <pattern id="triangles" patternUnits="userSpaceOnUse" width="100" height="100">
-          <polygon points="50,10 90,90 10,90" fill="${c.primary}" opacity="0.1"/>
-          <polygon points="10,10 50,90 10,90" fill="${c.secondary}" opacity="0.08"/>
-        </pattern>
-      </defs>
-      <rect width="1200" height="1600" fill="url(#triangles)"/>
-      <rect x="50" y="50" width="1100" height="1500" fill="none" stroke="${c.primary}" stroke-width="2" opacity="0.2"/>
-    `),
-  },
-  {
-    id: 'bg_geometric_hexagons',
-    name: 'Hexagones',
-    description: 'Motif hexagonal futuriste',
-    category: 'geometric',
-    svgGenerator: (c) => createSVG(`
-      <rect width="1200" height="1600" fill="${c.bg}"/>
-      <defs>
-        <pattern id="hex" patternUnits="userSpaceOnUse" width="120" height="104">
-          <polygon points="60,10 110,40 110,90 60,120 10,90 10,40" fill="none" stroke="${c.primary}" stroke-width="1.5" opacity="0.2"/>
-          <circle cx="60" cy="65" r="5" fill="${c.accent}" opacity="0.3"/>
-        </pattern>
-      </defs>
-      <rect width="1200" height="1600" fill="url(#hex)"/>
-    `),
-  },
-  {
-    id: 'bg_geometric_circles',
-    name: 'Cercles Concentriques',
-    description: 'Motif de cercles imbriqués',
-    category: 'geometric',
-    svgGenerator: (c) => createSVG(`
-      <rect width="1200" height="1600" fill="${c.bg}"/>
-      <circle cx="200" cy="200" r="100" fill="none" stroke="${c.primary}" stroke-width="2" opacity="0.15"/>
-      <circle cx="200" cy="200" r="70" fill="none" stroke="${c.primary}" stroke-width="2" opacity="0.2"/>
-      <circle cx="200" cy="200" r="40" fill="none" stroke="${c.primary}" stroke-width="2" opacity="0.25"/>
-      <circle cx="1000" cy="1400" r="120" fill="none" stroke="${c.secondary}" stroke-width="2" opacity="0.12"/>
-      <circle cx="1000" cy="1400" r="80" fill="none" stroke="${c.secondary}" stroke-width="2" opacity="0.15"/>
-    `),
-  },
-
-  // ==================== ABSTRAIT ====================
-  {
-    id: 'bg_abstract_splatter',
-    name: 'Éclaboussure Abstraite',
-    description: 'Style éclaboussure artistique',
-    category: 'abstract',
-    svgGenerator: (c) => createSVG(`
-      <rect width="1200" height="1600" fill="${c.bg}"/>
-      <circle cx="250" cy="300" r="80" fill="${c.primary}" opacity="0.12"/>
-      <circle cx="280" cy="280" r="50" fill="${c.accent}" opacity="0.15"/>
-      <circle cx="200" cy="350" r="40" fill="${c.secondary}" opacity="0.1"/>
-      <circle cx="850" cy="1200" r="100" fill="${c.secondary}" opacity="0.1"/>
-      <circle cx="900" cy="1150" r="60" fill="${c.primary}" opacity="0.13"/>
-      <path d="M 400 400 Q 500 300 600 400 T 800 400" stroke="${c.primary}" fill="none" stroke-width="4" opacity="0.08"/>
-    `),
-  },
-  {
-    id: 'bg_abstract_watercolor',
-    name: 'Aquarelle Abstraite',
-    description: 'Effet aquarelle doux',
-    category: 'abstract',
-    svgGenerator: (c) => createSVG(`
-      <defs>
-        <filter id="watercolor">
-          <feTurbulence type="fractalNoise" baseFrequency="0.05" numOctaves="3" seed="1"/>
-          <feDisplacementMap in="SourceGraphic" scale="30"/>
-        </filter>
-      </defs>
-      <rect width="1200" height="1600" fill="${c.bg}"/>
-      <circle cx="300" cy="400" r="200" fill="${c.primary}" opacity="0.15" filter="url(#watercolor)"/>
-      <circle cx="900" cy="1100" r="250" fill="${c.secondary}" opacity="0.12" filter="url(#watercolor)"/>
-      <circle cx="600" cy="800" r="180" fill="${c.accent}" opacity="0.1" filter="url(#watercolor)"/>
-    `),
-  },
-  {
-    id: 'bg_abstract_flowing',
-    name: 'Fluidité Abstraite',
-    description: 'Courbes fluides et organiques',
-    category: 'abstract',
-    svgGenerator: (c) => createSVG(`
-      <rect width="1200" height="1600" fill="${c.bg}"/>
-      <path d="M 0 300 Q 300 200 600 300 T 1200 300" stroke="${c.primary}" stroke-width="3" fill="none" opacity="0.15"/>
-      <path d="M 0 600 Q 300 700 600 600 T 1200 600" stroke="${c.secondary}" stroke-width="3" fill="none" opacity="0.12"/>
-      <path d="M 0 1000 Q 300 900 600 1000 T 1200 1000" stroke="${c.accent}" stroke-width="3" fill="none" opacity="0.1"/>
-      <path d="M 0 1400 Q 300 1500 600 1400 T 1200 1400" stroke="${c.primary}" stroke-width="3" fill="none" opacity="0.08"/>
-    `),
-  },
-
-  // ==================== MINIMAL ====================
-  {
-    id: 'bg_minimal_blank',
-    name: 'Blanc Pur',
-    description: 'Fond blanc minimaliste',
-    category: 'minimal',
-    svgGenerator: (c) => createSVG(`
-      <rect width="1200" height="1600" fill="${c.bg}"/>
-    `),
-  },
-  {
-    id: 'bg_minimal_accents',
-    name: 'Accents Minimalistes',
-    description: 'Touches de couleur discrètes',
-    category: 'minimal',
-    svgGenerator: (c) => createSVG(`
-      <rect width="1200" height="1600" fill="${c.bg}"/>
-      <rect x="0" y="0" width="10" height="1600" fill="${c.primary}" opacity="0.5"/>
-      <rect x="1190" y="0" width="10" height="1600" fill="${c.secondary}" opacity="0.4"/>
-      <rect x="0" y="0" width="1200" height="10" fill="${c.primary}" opacity="0.3"/>
-      <rect x="0" y="1590" width="1200" height="10" fill="${c.secondary}" opacity="0.25"/>
-    `),
+    id: 'bg_invoice_vecteezy_6315045',
+    name: 'Invoice Vecteezy 6315045',
+    description: 'Template importé (colors dynamiques).',
+    category: 'premium',
+    svgGenerator: (c) => buildThemedSvgDataUri(invoiceC, c, 2, 0),
   },
 ];
 
-// Fonction utilitaire pour obtenir le fond par ID
-export function getBackgroundById(id: string): PageBackground | undefined {
-  return PAGE_BACKGROUNDS.find(bg => bg.id === id);
-}
-
-// Regrouper les fonds par catégorie
-export function getBackgroundsByCategory(category: PageBackground['category']): PageBackground[] {
+export const getBackgroundsByCategory = (category: PageBackground['category']) => {
   return PAGE_BACKGROUNDS.filter(bg => bg.category === category);
-}
+};
 
-// Obtenir tous les fonds pour la UI
-export function getAllBackgrounds(): PageBackground[] {
-  return PAGE_BACKGROUNDS;
-}
-
-export default PAGE_BACKGROUNDS;
+export const buildCustomBackgroundDataUri = (
+  rawSvg: string,
+  colors: { primary: string; secondary: string; accent: string; text: string; bg: string }
+) => {
+  console.log('🎨 [buildCustomBackgroundDataUri] Applying theme colors:', colors.primary, colors.secondary, colors.accent);
+  
+  // Appliquer le thème au SVG
+  const themed = applyThemeToSvg(rawSvg, colors);
+  const withoutText = removeTextNodes(themed);
+  
+  // Extraire le viewBox original ou utiliser un défaut
+  const vb = getViewBox(rawSvg);
+  const viewBox = `${vb.x} ${vb.y} ${vb.w} ${vb.h}`;
+  
+  // Extraire le contenu interne
+  const inner = extractInnerSvg(withoutText);
+  
+  const wrapped = `<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="${viewBox}" preserveAspectRatio="xMidYMid slice" overflow="visible">${inner}</svg>`;
+  return toDataUri(wrapped);
+};

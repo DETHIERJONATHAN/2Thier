@@ -31,6 +31,8 @@ export interface DocumentPage {
   order: number;
   backgroundColor?: string;
   backgroundImage?: string;
+  backgroundId?: string;
+  backgroundCustomSvg?: string;
   modules: ModuleInstance[];
   // Marges de la page
   padding?: {

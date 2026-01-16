@@ -51,6 +51,10 @@ import measurementReferenceRouter from './api/measurement-reference'; // 📐 CO
 // 👤 ROUTES UTILISATEURS
 import userFavoritesRouter from './routes/userFavoritesRoutes'; // ⭐ FAVORIS MODULES UTILISATEUR
 
+// 📋 ROUTES FORMULAIRES SITES WEB (style Effy)
+import websiteFormsRouter from './routes/website-forms'; // 📋 CRUD FORMULAIRES ADMIN
+import publicFormsRouter from './routes/public-forms'; // 📋 SOUMISSION PUBLIQUE FORMULAIRES
+
 // 🌐 MIDDLEWARE DÉTECTION SITES VITRINES AUTOMATIQUE
 import { detectWebsite, websiteInterceptor } from './middleware/websiteDetection';
 import { renderWebsite } from './middleware/websiteRenderer';
@@ -314,6 +318,8 @@ app.use('/api/tbl/batch', tblBatchRoutes); // 🚀 BATCH LOADING TBL (réduit ~1
 app.use('/api/batch', batchRoutes); // 🚀 BATCH GLOBAL (Gmail, Leads, Analytics)
 app.use('/api/tree-nodes', calculatedValueController); // 🎯 VALEURS CALCULÉES STOCKÉES DANS PRISMA
 app.use('/api/user/favorites', userFavoritesRouter); // ⭐ FAVORIS MODULES UTILISATEUR
+app.use('/api/website-forms', websiteFormsRouter); // 📋 FORMULAIRES SITES WEB (style Effy) - CRUD ADMIN
+app.use('/api/public/forms', publicFormsRouter); // 📋 SOUMISSION PUBLIQUE FORMULAIRES (sans auth)
 // ⚠️ SUPPRIMÉ - Déjà monté via apiRouter ligne 249: app.use('/api/treebranchleaf', tableRoutesNewRouter);
 const repeatRouter = createRepeatRouter(prisma);
 app.use('/api/treebranchleaf/repeat', repeatRouter); // 🔁 Compatibilité historique

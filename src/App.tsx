@@ -29,6 +29,11 @@ const LandingRenderer = lazy(() => import('./pages/public/LandingRenderer'));
 const SiteVitrine2Thier = lazy(() => import('./pages/SiteVitrine2Thier'));
 const SiteVitrine2ThierDynamic = lazy(() => import('./pages/SiteVitrine2ThierDynamic'));
 
+// Formulaires publics (style Effy)
+const PublicFormRenderer = lazy(() => import('./components/PublicForm/PublicFormRenderer'));
+const EffyFormRenderer = lazy(() => import('./components/PublicForm/EffyFormRenderer'));
+
+
 // Composant Loading
 const LoadingSpinner = () => (
   <div className="flex h-screen w-screen items-center justify-center bg-gray-50">
@@ -184,6 +189,27 @@ const App: React.FC = () => {
           </Suspense>
         } 
       />
+      
+      {/* Formulaires publics style Effy */}
+      <Route 
+        path="/form/:slug" 
+        element={
+          <Suspense fallback={<LoadingSpinner />}>
+            <PublicFormRenderer />
+          </Suspense>
+        } 
+      />
+      
+      {/* 🎯 Simulateur EFFY - 1 question = 1 écran pleine page */}
+      <Route 
+        path="/simulateur/:slug" 
+        element={
+          <Suspense fallback={<LoadingSpinner />}>
+            <EffyFormRenderer />
+          </Suspense>
+        } 
+      />
+      
       <Route 
         path="/devis1minute/merci" 
         element={

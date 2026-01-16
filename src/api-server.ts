@@ -30,6 +30,8 @@ import calculatedValueController from './controllers/calculatedValueController';
 import websitesRouter from './api/websites'; // 🌐 GESTION DES SITES WEB
 import imageUploadRouter from './api/image-upload'; // 📸 UPLOAD D'IMAGES
 import documentsRouter from './routes/documents'; // 📄 GESTION DES TEMPLATES DE DOCUMENTS
+import websiteFormsRouter from './routes/website-forms'; // 📝 FORMULAIRES WEBSITE (Admin)
+import publicFormsRouter from './routes/public-forms'; // 📝 FORMULAIRES WEBSITE (Public)
 console.log('✅ [DEBUG] Router minimal importé');
 // import analyticsRouter from './routes/analytics.ts'; // 📊 ANALYTICS - FUTUR
 import { setupSecurity } from './middlewares/security';
@@ -459,6 +461,8 @@ app.use('/api/tbl', tblConfigRouter); // 🔧 TBL CONFIG ROUTES (/variables, /ca
 app.use('/api/tbl', tblSubmissionEvaluatorRouter); // 🔥 TBL PRISMA EVALUATOR
 app.use('/api/image-upload', imageUploadRouter); // 📸 UPLOAD D'IMAGES
 app.use('/api/documents', documentsRouter); // 📄 TEMPLATES DE DOCUMENTS (ADMIN + GÉNÉRATION)
+app.use('/api/website-forms', websiteFormsRouter); // 📝 FORMULAIRES WEBSITE (CRUD Admin)
+console.log('✅ Routes Formulaires Website montées sur /api/website-forms');
 console.log('✅ Routes TreeBranchLeaf NOUVEAU système montées sur /treebranchleaf');
 console.log('✅ Routes TreeBranchLeaf Opérations Centralisées montées sur /treebranchleaf-ops');
 console.log('✅ Routes IA Génération de Contenu montées sur /api/ai');

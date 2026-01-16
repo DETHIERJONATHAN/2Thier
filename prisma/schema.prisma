@@ -1076,6 +1076,7 @@ model Organization {
   websites                   websites[]
   MeasurementReferenceConfig OrganizationMeasurementReferenceConfig[]
   GoogleTokenRefreshHistory  GoogleTokenRefreshHistory[]
+  website_forms              website_forms[]
 }
 
 model OrganizationModuleStatus {
@@ -2423,6 +2424,7 @@ model websites {
   website_services          website_services[]
   website_testimonials      website_testimonials[]
   website_themes            website_themes?
+  website_form_website      website_form_website[]
   Organization              Organization           @relation(fields: [organizationId], references: [id], onDelete: NoAction, onUpdate: NoAction)
 
   @@unique([organizationId, slug])
@@ -2640,4 +2642,274 @@ model CalibrationProfile {
 
   @@unique([organizationId, name])
   @@index([organizationId])
+}
+
+// ============================================================================
+// 📋 MODULE FORMULAIRES - Style Effy
+// Formulaires publics avec mapping TBL pour création de leads
+// ============================================================================
+
+/// Définition d'un formulaire (peut être lié à plusieurs sites)
+model website_forms {
+  id              Int       @id @default(autoincrement())
+  organizationId  String
+  name            String    // "Simulateur Isolation"
+  slug            String    // "simulateur-isolation" 
+  description     String?
+  treeId          String?   // ID de l'arbre TBL pour le mapping des champs
+  isActive        Boolean   @default(true)
+  
+  // Configuration globale du formulaire
+  settings        Json      @default("{}")  // {primaryColor, logo, trustpilotUrl, ...}
+  
+  // 🧭 Question de départ (pour le nouveau système 1 question = 1 écran)
+  startQuestionKey String?  // Clé de la première question à afficher
+  
+  // Textes de fin de formulaire
+  successTitle    String?   @default("Merci pour votre demande !")
+  successMessage  String?   @default("Nous vous recontacterons dans les plus brefs délais.")
+  
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  
+  // Relations
+  Organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  steps           website_form_steps[]
+  questions       website_form_questions[]  // Nouveau système 1 question = 1 écran
+  websites        website_form_website[]
+  submissions     website_form_submissions[]
+  
+  @@unique([organizationId, slug])
+  @@index([organizationId])
+  @@index([slug])
+  @@index([isActive])
+}
+
+/// Étape du formulaire (une question par écran style Effy)
+model website_form_steps {
+  id              Int       @id @default(autoincrement())
+  formId          Int
+  
+  // Contenu de l'étape
+  title           String    // "Votre projet concerne :"
+  subtitle        String?   // "Cela permet de nous assurer de votre éligibilité..."
+  helpText        String?   // Texte d'aide affiché en tooltip ou sous le titre
+  
+  // Type d'étape
+  stepType        String    @default("single_choice") // single_choice, multiple_choice, text, number, email, phone, address, date
+  
+  // Configuration
+  order           Int       @default(0)
+  isRequired      Boolean   @default(true)
+  
+  // Logique conditionnelle (JSON)
+  // Ex: {"showIf": [{"stepId": 1, "fieldValue": "maison"}]}
+  condition       Json?
+  
+  // Configuration spécifique au type d'étape
+  settings        Json      @default("{}") // {layout: 'grid', columns: 2, ...}
+  
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  
+  // Relations
+  form            website_forms @relation(fields: [formId], references: [id], onDelete: Cascade)
+  fields          website_form_fields[]
+  
+  @@index([formId])
+  @@index([formId, order])
+}
+
+/// Champs/Options d'une étape
+model website_form_fields {
+  id              Int       @id @default(autoincrement())
+  stepId          Int
+  
+  // 🔗 Champ parent pour sous-questions imbriquées
+  parentFieldId   Int?      // Si défini, ce champ est une sous-question
+  
+  // Contenu du champ
+  label           String    // "Une maison", "Surface habitable (m²)"
+  name            String?   // Nom technique du champ (ex: "housing_type")
+  value           String?   // Valeur par défaut ou valeur unique pour les options
+  
+  // Type de champ
+  fieldType       String    @default("option") // option, card_select, text, number, email, phone, textarea, select, radio, checkbox, date, address
+  
+  // Visuel
+  icon            String?   // Emoji "🏠" ou nom d'icône
+  imageUrl        String?   // URL image illustrative (style Effy)
+  
+  // Configuration input
+  placeholder     String?
+  helpText        String?
+  defaultValue    String?
+  
+  // Options pour select/radio/checkbox/card_select (JSON array)
+  // Ex: [{"value": "maison", "label": "Maison", "icon": "🏠"}, ...]
+  options         Json?
+  
+  // Validation (JSON)
+  // Ex: {"min": 10, "max": 500, "pattern": "^[0-9]+$", "required": true, "errorMessage": "..."}
+  validation      Json?
+  
+  // 🔥 MAPPING TBL - Lien vers un nœud TreeBranchLeaf
+  tblNodeId       String?   // ID du nœud TBL où sauvegarder la valeur
+  tblNodeLabel    String?   // Label du nœud pour affichage admin
+  
+  // Configuration
+  order           Int       @default(0)
+  isRequired      Boolean   @default(false) // Champ obligatoire
+  isDefault       Boolean   @default(false) // Option pré-sélectionnée
+  allowMultiple   Boolean   @default(false) // Permet choix multiples (checkbox)
+  
+  // 🎯 Logique conditionnelle avancée
+  // Format: {"showIf": {"field": "heating_type", "operator": "equals", "value": "fioul"}}
+  // Opérateurs: equals, notEquals, in, notIn, greaterThan, lessThan, contains
+  condition       Json?
+  
+  // Métadonnées additionnelles
+  metadata        Json      @default("{}")
+  
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  
+  // Relations
+  step            website_form_steps @relation(fields: [stepId], references: [id], onDelete: Cascade)
+  parentField     website_form_fields? @relation("FieldChildren", fields: [parentFieldId], references: [id], onDelete: Cascade)
+  childFields     website_form_fields[] @relation("FieldChildren")
+  
+  @@index([stepId])
+  @@index([stepId, order])
+  @@index([tblNodeId])
+  @@index([parentFieldId])
+}
+
+/// 🎯 QUESTIONS - Style Effy : 1 question = 1 écran pleine page
+/// Chaque question a sa propre navigation conditionnelle
+model website_form_questions {
+  id              Int       @id @default(autoincrement())
+  formId          Int
+  
+  // Identification
+  questionKey     String    // Clé unique: "type_logement", "chauffage_fioul_type"
+  
+  // Contenu affiché
+  title           String    // "Votre projet concerne :"
+  subtitle        String?   // "Sélectionnez votre type de logement"
+  helpText        String?   // Texte d'aide optionnel
+  icon            String?   // Emoji ou icône pour le header
+  
+  // Type de question
+  questionType    String    @default("single_choice") 
+  // single_choice: une seule réponse (cartes cliquables)
+  // multiple_choice: plusieurs réponses (checkboxes)
+  // number: champ numérique
+  // text: champ texte
+  // email: champ email
+  // phone: champ téléphone
+  // address: champ adresse
+  // select: dropdown
+  
+  // Configuration input (pour number, text, etc.)
+  placeholder     String?
+  inputSuffix     String?   // "m²", "€", "kW"
+  minValue        Int?
+  maxValue        Int?
+  
+  // 🎨 Options de réponse (pour single_choice / multiple_choice)
+  // Format: [{"value": "maison", "label": "Une maison", "icon": "🏡", "description": "Individuelle", "imageUrl": "/img/maison.png"}]
+  options         Json?
+  
+  // 🧭 NAVIGATION CONDITIONNELLE
+  // Question suivante par défaut (si pas de condition spécifique)
+  defaultNextQuestionKey  String?
+  
+  // Navigation conditionnelle basée sur la réponse
+  // Format: [{"answerValue": "maison", "nextQuestionKey": "annee_construction"}, 
+  //          {"answerValue": "appartement", "nextQuestionKey": "annee_construction"}]
+  // Ou avec conditions complexes:
+  // [{"condition": {"field": "type_logement", "operator": "equals", "value": "maison"}, "nextQuestionKey": "isolation_etat"}]
+  navigation      Json?
+  
+  // Question finale ? (déclenche soumission)
+  isEndQuestion   Boolean   @default(false)
+  
+  // 🔥 MAPPING TBL
+  tblNodeId       String?
+  tblNodeLabel    String?
+  
+  // Ordre d'affichage dans l'admin
+  order           Int       @default(0)
+  isRequired      Boolean   @default(true)
+  
+  // Métadonnées
+  metadata        Json      @default("{}")
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  
+  // Relations
+  form            website_forms @relation(fields: [formId], references: [id], onDelete: Cascade)
+  
+  @@unique([formId, questionKey])
+  @@index([formId])
+  @@index([formId, order])
+  @@index([questionKey])
+}
+
+/// Table de liaison formulaire <-> sites (N-N)
+model website_form_website {
+  id              Int       @id @default(autoincrement())
+  formId          Int
+  websiteId       Int
+  
+  // Configuration par site
+  isDefault       Boolean   @default(false) // Formulaire principal du site
+  urlPath         String?   @default("/simulateur") // Chemin URL sur le site
+  
+  createdAt       DateTime  @default(now())
+  
+  // Relations
+  form            website_forms @relation(fields: [formId], references: [id], onDelete: Cascade)
+  website         websites @relation(fields: [websiteId], references: [id], onDelete: Cascade)
+  
+  @@unique([formId, websiteId])
+  @@index([websiteId])
+  @@index([formId])
+}
+
+/// Soumissions de formulaires (tracking des leads créés)
+model website_form_submissions {
+  id              Int       @id @default(autoincrement())
+  formId          Int
+  
+  // Lien vers les entités créées
+  leadId          String?   // ID du lead créé
+  submissionId    String?   // ID de la TreeBranchLeafSubmission créée
+  
+  // Données brutes soumises
+  formData        Json      // Toutes les réponses du formulaire
+  
+  // Métadonnées
+  ipAddress       String?
+  userAgent       String?
+  referrer        String?
+  utmSource       String?
+  utmMedium       String?
+  utmCampaign     String?
+  
+  // Statut
+  status          String    @default("completed") // completed, partial, error
+  errorMessage    String?
+  
+  createdAt       DateTime  @default(now())
+  
+  // Relations
+  form            website_forms @relation(fields: [formId], references: [id], onDelete: Cascade)
+  
+  @@index([formId])
+  @@index([leadId])
+  @@index([submissionId])
+  @@index([createdAt])
+  @@index([status])
 }

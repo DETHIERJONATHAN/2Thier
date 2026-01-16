@@ -3,7 +3,7 @@
  */
 
 import { useMemo } from 'react';
-import { Button, Tooltip, Empty } from 'antd';
+import { Button, Tooltip } from 'antd';
 import { DeleteOutlined, DragOutlined, SettingOutlined, EyeInvisibleOutlined } from '@ant-design/icons';
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
 import { DocumentPage, ModuleInstance } from './types';
@@ -48,22 +48,24 @@ const PagePreview = ({
     // Déterminer le backgroundImage - peut être une URL ou un gradient
     let backgroundImageValue: string | undefined = undefined;
     if (page.backgroundImage) {
-      // Si c'est déjà un gradient ou une URL base64, l'utiliser tel quel
+      // Si c'est un gradient, l'utiliser tel quel
       if (page.backgroundImage.startsWith('linear-gradient') || 
-          page.backgroundImage.startsWith('radial-gradient') ||
-          page.backgroundImage.startsWith('data:')) {
+          page.backgroundImage.startsWith('radial-gradient')) {
         backgroundImageValue = page.backgroundImage;
       } else {
+        // Pour data URI et URLs, wrapper dans url()
         backgroundImageValue = `url(${page.backgroundImage})`;
       }
     }
+
+    const isGradient = backgroundImageValue?.startsWith('linear-gradient') || backgroundImageValue?.startsWith('radial-gradient');
 
     return {
       width: '210mm',
       minHeight: '297mm',
       backgroundColor: page.backgroundColor || '#ffffff',
       backgroundImage: backgroundImageValue,
-      backgroundSize: 'cover',
+      backgroundSize: isGradient ? '100% 100%' : (backgroundImageValue ? '100% 100%' : undefined),
       backgroundPosition: 'center',
       padding: page.padding 
         ? `${page.padding.top}px ${page.padding.right}px ${page.padding.bottom}px ${page.padding.left}px`
@@ -246,58 +248,37 @@ const PagePreview = ({
       )}
 
       {/* Modules */}
-      {page.modules.length === 0 ? (
-        <Empty
-          image={Empty.PRESENTED_IMAGE_SIMPLE}
-          description={
-            <span style={{ color: '#999' }}>
-              {isDragging 
-                ? '📥 Déposez un module ici' 
-                : 'Glissez des modules depuis la palette ou cliquez pour ajouter'
-              }
-            </span>
-          }
-          style={{
-            padding: '60px 20px',
-            border: isDragging ? '2px dashed #1890ff' : '2px dashed #d9d9d9',
-            borderRadius: '8px',
-            backgroundColor: isDragging ? 'rgba(24, 144, 255, 0.05)' : 'transparent',
-            transition: 'all 0.3s',
-          }}
-        />
-      ) : (
-        <DragDropContext onDragEnd={handleDragEnd}>
-          <Droppable 
-            droppableId="page-modules" 
-            isDropDisabled={previewMode} 
-            mode="standard"
-            ignoreContainerClipping={true}
-          >
-            {(provided) => (
-              <div
-                ref={provided.innerRef}
-                {...provided.droppableProps}
-                style={{ minHeight: '100px' }}
-              >
-                {page.modules
-                  .sort((a, b) => a.order - b.order)
-                  .map((module, index) => (
-                    previewMode ? (
-                      <div key={module.id}>
-                        {renderModule(module, index)}
-                      </div>
-                    ) : (
-                      <Draggable key={module.id} draggableId={module.id} index={index}>
-                        {(provided, snapshot) => renderModule(module, index, provided, snapshot)}
-                      </Draggable>
-                    )
-                  ))}
-                {provided.placeholder}
-              </div>
-            )}
-          </Droppable>
-        </DragDropContext>
-      )}
+      <DragDropContext onDragEnd={handleDragEnd}>
+        <Droppable 
+          droppableId="page-modules" 
+          isDropDisabled={previewMode} 
+          mode="standard"
+          ignoreContainerClipping={true}
+        >
+          {(provided) => (
+            <div
+              ref={provided.innerRef}
+              {...provided.droppableProps}
+              style={{ minHeight: '100px' }}
+            >
+              {page.modules
+                .sort((a, b) => a.order - b.order)
+                .map((module, index) => (
+                  previewMode ? (
+                    <div key={module.id}>
+                      {renderModule(module, index)}
+                    </div>
+                  ) : (
+                    <Draggable key={module.id} draggableId={module.id} index={index}>
+                      {(provided, snapshot) => renderModule(module, index, provided, snapshot)}
+                    </Draggable>
+                  )
+                ))}
+              {provided.placeholder}
+            </div>
+          )}
+        </Droppable>
+      </DragDropContext>
     </div>
   );
 };

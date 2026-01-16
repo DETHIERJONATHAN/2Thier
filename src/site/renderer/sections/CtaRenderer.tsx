@@ -23,6 +23,7 @@ type ActionType =
   | 'external-url'
   | 'phone'
   | 'email'
+  | 'simulator-form'
   | 'none';
 
 interface CTAButtonConfig {
@@ -37,6 +38,7 @@ interface CTAButtonConfig {
   pageSlug?: string | string[];
   phoneNumber?: string;
   emailAddress?: string;
+  simulatorSlug?: string;
   openInNewTab?: boolean;
   size?: 'large' | 'middle' | 'small';
   href?: string;
@@ -110,6 +112,9 @@ const normalizeRawActionType = (action?: string): ActionType => {
     case 'email':
     case 'mailto':
       return 'email';
+    case 'simulator-form':
+    case 'simulator':
+      return 'simulator-form';
     case 'none':
       return 'none';
     default:
@@ -249,6 +254,13 @@ export const CtaRenderer: React.FC<CtaRendererProps> = ({ content, mode = 'previ
         href = email ? `mailto:${email}` : undefined;
         break;
       }
+      case 'simulator-form': {
+        // Le simulateur est géré via JavaScript dans handleButtonClick
+        if (draft.simulatorSlug) {
+          href = `/simulateur/${draft.simulatorSlug}`;
+        }
+        break;
+      }
       case 'none':
         return null;
       default:
@@ -310,6 +322,14 @@ export const CtaRenderer: React.FC<CtaRendererProps> = ({ content, mode = 'previ
           }
         }
       }
+
+      // 🆕 Gestion des simulateurs / formulaires avancés
+      if (actionType === 'simulator-form') {
+        if (button.simulatorSlug) {
+          event.preventDefault();
+          window.location.href = `/simulateur/${button.simulatorSlug}`;
+        }
+      }
     },
     [openFormModal]
   );
@@ -354,6 +374,13 @@ export const CtaRenderer: React.FC<CtaRendererProps> = ({ content, mode = 'previ
       case 'email': {
         const email = sanitizeEmail(button.emailAddress) || sanitizeEmail(button.href);
         return { href: email ? `mailto:${email}` : undefined };
+      }
+      case 'simulator-form': {
+        // Le onClick sera géré par handleButtonClick
+        return {
+          href: button.simulatorSlug ? `/simulateur/${button.simulatorSlug}` : '#',
+          onClick: (event: React.MouseEvent<HTMLElement>) => handleButtonClick(event, button)
+        };
       }
       case 'internal-page':
       default: {

@@ -311,6 +311,7 @@ export const headerSchema: SectionSchema = {
               choices: [
                 { label: 'Aucun bouton', value: 'none' },
                 { label: 'Formulaire de contact', value: 'contact-form' },
+                { label: '📋 Simulateur / Formulaire avancé', value: 'simulator-form' },
                 { label: 'Section de la page', value: 'scroll-to-section' },
                 { label: 'Page interne', value: 'internal-page' },
                 { label: 'Lien externe', value: 'external-url' },
@@ -349,6 +350,19 @@ export const headerSchema: SectionSchema = {
               // 🔥 Dans le contexte du group 'cta', values contient directement { actionType, text, ... }
               const action = values?.actionType;
               return action === 'contact-form';
+            }
+          },
+          {
+            id: 'simulatorSlug',
+            type: 'simulator-form-selector',
+            label: 'Simulateur / Formulaire avancé',
+            description: 'Sélectionnez un formulaire créé dans "Formulaires de capture"',
+            options: {
+              placeholder: 'Sélectionnez un simulateur...'
+            },
+            condition: (values) => {
+              const action = values?.actionType;
+              return action === 'simulator-form';
             }
           },
           {

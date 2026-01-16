@@ -19,6 +19,7 @@ type HeroActionType =
   | 'external-url'
   | 'phone'
   | 'email'
+  | 'simulator-form'
   | 'none';
 
 interface HeroButtonConfig {
@@ -32,6 +33,7 @@ interface HeroButtonConfig {
   openInNewTab?: boolean;
   phoneNumber?: string;
   emailAddress?: string;
+  simulatorSlug?: string;
   href?: string;
   icon?: any;
   style?: Record<string, any> | null;
@@ -47,6 +49,7 @@ interface NormalizedHeroButton {
   style?: Record<string, any> | null;
   formId?: string;
   anchor?: string;
+  simulatorSlug?: string;
 }
 
 interface HeroRendererProps {
@@ -132,6 +135,7 @@ const normalizeHeroButton = (button: any): NormalizedHeroButton | null => {
     openInNewTab: typeof button.openInNewTab === 'boolean' ? button.openInNewTab : undefined,
     phoneNumber: button.phoneNumber,
     emailAddress: button.emailAddress,
+    simulatorSlug: button.simulatorSlug,
     href: legacyHref,
     icon: button.icon,
     style: resolvedStyle || null
@@ -176,6 +180,14 @@ const normalizeHeroButton = (button: any): NormalizedHeroButton | null => {
       if (email) href = `mailto:${email}`;
       break;
     }
+    case 'simulator-form': {
+      // Le simulateur est géré via JavaScript dans handleButtonClick
+      // On met un href fallback au cas où
+      if (baseConfig.simulatorSlug) {
+        href = `/simulateur/${baseConfig.simulatorSlug}`;
+      }
+      break;
+    }
     case 'none':
       return null;
     default:
@@ -192,7 +204,8 @@ const normalizeHeroButton = (button: any): NormalizedHeroButton | null => {
     icon: baseConfig.icon,
     style: baseConfig.style || undefined,
     formId,
-    anchor: anchor || pickFirst(baseConfig.formAnchor)
+    anchor: anchor || pickFirst(baseConfig.formAnchor),
+    simulatorSlug: baseConfig.simulatorSlug
   };
 };
 
@@ -249,6 +262,14 @@ export const HeroRenderer: React.FC<HeroRendererProps> = ({ content }) => {
           if (targetElement instanceof HTMLElement) {
             targetElement.scrollIntoView({ behavior: 'smooth', block: 'start' });
           }
+        }
+      }
+
+      // 🆕 Gestion des simulateurs / formulaires avancés
+      if (button.actionType === 'simulator-form') {
+        if (button.simulatorSlug) {
+          event.preventDefault();
+          window.location.href = `/simulateur/${button.simulatorSlug}`;
         }
       }
     },

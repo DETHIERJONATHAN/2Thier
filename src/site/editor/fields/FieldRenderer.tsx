@@ -47,6 +47,7 @@ import RichTextEditor from './RichTextEditor';
 import GridConfigEditor from './GridConfigEditor';
 import ContactFormSelector from './ContactFormSelector';
 import SectionAnchorSelector from './SectionAnchorSelector';
+import SimulatorFormSelector from './SimulatorFormSelector';
 import AIAssistButton from '../../ai/AIAssistButton';
 
 const { TextArea } = Input;
@@ -420,6 +421,22 @@ export const FieldRenderer: React.FC<FieldRendererProps> = ({
           </Form.Item>
         );
       
+      // ==================== SIMULATOR FORM SELECTOR ====================
+      case 'simulator-form-selector':
+        console.log('📋 [FieldRenderer] SIMULATOR FORM SELECTOR:', { fieldId: field.id, name });
+        return (
+          <Form.Item
+            name={name}
+            label={labelWithTooltip}
+            required={field.required}
+          >
+            <SimulatorFormSelector
+              placeholder={opts.placeholder || 'Sélectionnez un simulateur/formulaire'}
+              websiteId={aiContext?.websiteId}
+            />
+          </Form.Item>
+        );
+
       // ==================== SECTION ANCHOR SELECTOR ====================
       case 'section-anchor-selector':
         const resolvedWebsiteId = opts.websiteId || aiContext?.websiteId;

@@ -16,6 +16,7 @@ import { SectionRenderer } from '../renderer/SectionRenderer';
 import type { SectionInstance } from '../schemas/types';
 import ThemeManager from '../../components/websites/ThemeManager';
 import TestimonialsManager from '../../components/websites/TestimonialsManager';
+import FormsManager from '../../components/websites/FormsManager';
 import AIContentAssistant from '../../components/AIContentAssistant';
 import CloudRunDomainSelector from '../../components/websites/CloudRunDomainSelector';
 
@@ -58,7 +59,7 @@ const NoCodeBuilder: React.FC<NoCodeBuilderProps> = ({ websiteId, siteName }) =>
   const [editorVisible, setEditorVisible] = useState(false);
   const [previewMode, setPreviewMode] = useState(false);
   const [showLibrary, setShowLibrary] = useState(true);
-  const [activeTab, setActiveTab] = useState<'builder' | 'preview' | 'theme' | 'testimonials' | 'seo' | 'settings'>('builder');
+  const [activeTab, setActiveTab] = useState<'builder' | 'preview' | 'forms' | 'theme' | 'testimonials' | 'seo' | 'settings'>('builder');
   const [websiteData, setWebsiteData] = useState<any>(null);
   const [savingSettings, setSavingSettings] = useState(false);
 
@@ -434,7 +435,7 @@ const NoCodeBuilder: React.FC<NoCodeBuilderProps> = ({ websiteId, siteName }) =>
         {/* Onglets Builder / Preview / Thème / SEO / Paramètres */}
         <Tabs
           activeKey={activeTab}
-          onChange={(key) => setActiveTab(key as 'builder' | 'preview' | 'theme' | 'seo' | 'settings')}
+          onChange={(key) => setActiveTab(key as 'builder' | 'preview' | 'forms' | 'theme' | 'seo' | 'settings')}
           style={{ marginTop: '16px', marginBottom: 0 }}
           items={[
             {
@@ -450,6 +451,14 @@ const NoCodeBuilder: React.FC<NoCodeBuilderProps> = ({ websiteId, siteName }) =>
               label: (
                 <span>
                   <EyeOutlined /> Aperçu
+                </span>
+              )
+            },
+            {
+              key: 'forms',
+              label: (
+                <span>
+                  📋 Formulaires
                 </span>
               )
             },
@@ -547,6 +556,18 @@ const NoCodeBuilder: React.FC<NoCodeBuilderProps> = ({ websiteId, siteName }) =>
                 </Text>
               </div>
             )}
+          </div>
+        ) : activeTab === 'forms' ? (
+          /* 📋 FORMULAIRES MODE - Style Effy */
+          <div style={{ 
+            flex: 1, 
+            overflow: 'auto', 
+            background: '#f0f2f5',
+            padding: '24px'
+          }}>
+            <div style={{ maxWidth: '1400px', margin: '0 auto' }}>
+              <FormsManager websiteId={websiteId} />
+            </div>
           </div>
         ) : activeTab === 'theme' ? (
           /* 🖌️ THÈME MODE */

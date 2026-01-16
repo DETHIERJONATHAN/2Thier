@@ -29,6 +29,7 @@ import GridPagePreview from './GridPagePreview';
 import DocumentGlobalThemeEditor from './DocumentGlobalThemeEditor';
 import ThemeSelectorModal from './ThemeSelectorModal';
 import BackgroundSelector from './BackgroundSelector';
+import { PAGE_BACKGROUNDS, buildCustomBackgroundDataUri } from './PageBackgrounds';
 import { TemplateSelector } from './TemplateSelector';
 import { DocumentTemplate, instantiateTemplate } from './DocumentTemplates';
 import { DocumentPage, ModuleInstance, DocumentTemplateConfig, EditorState } from './types';
@@ -175,6 +176,8 @@ const PageBuilder = ({ templateId, initialConfig, onSave, onClose }: PageBuilder
               padding: section.config?.padding || { top: 40, right: 40, bottom: 40, left: 40 },
               backgroundColor: section.config?.backgroundColor,
               backgroundImage: section.config?.backgroundImage,
+              backgroundId: section.config?.backgroundId,
+              backgroundCustomSvg: section.config?.backgroundCustomSvg,
             }));
           
           console.log('📥 [PageBuilder] Pages construites:', pages.length);
@@ -233,6 +236,71 @@ const PageBuilder = ({ templateId, initialConfig, onSave, onClose }: PageBuilder
   const activePage = useMemo(() => {
     return config.pages.find(p => p.id === editorState.activePageId) || config.pages[0];
   }, [config.pages, editorState.activePageId]);
+
+  const themeColors = useMemo(() => {
+    const theme = config.globalTheme as any;
+    return {
+      primary: theme?.primaryColor || '#1890ff',
+      secondary: theme?.secondaryColor || '#722ed1',
+      accent: theme?.accentColor || '#fa8c16',
+      text: theme?.textColor || '#000000',
+      bg: theme?.backgroundColor || '#ffffff',
+    };
+  }, [config.globalTheme]);
+
+  useEffect(() => {
+    setSelectedBackgroundId(activePage?.backgroundId);
+  }, [activePage?.backgroundId]);
+
+  useEffect(() => {
+    console.log('🔄 [PageBuilder] useEffect themeColors triggered:', themeColors);
+    
+    setConfig(prev => {
+      let changed = false;
+      const updatedPages = prev.pages.map(p => {
+        if (!p.backgroundId && !p.backgroundCustomSvg) return p;
+        console.log('🔄 [PageBuilder] Regenerating background for page:', p.id, 'backgroundId:', p.backgroundId);
+        
+        let rawSvg = p.backgroundCustomSvg;
+        if (!rawSvg && p.backgroundId?.startsWith('bg_custom_') && typeof window !== 'undefined') {
+          try {
+            const stored = window.localStorage.getItem('customBackgrounds');
+            const list = stored ? JSON.parse(stored) : [];
+            const match = Array.isArray(list)
+              ? list.find((item) => item?.id === p.backgroundId && item?.rawSvg)
+              : null;
+            if (match?.rawSvg) {
+              rawSvg = match.rawSvg;
+            }
+          } catch {
+            // ignore
+          }
+        }
+
+        let nextSvg: string | null = null;
+        if (rawSvg) {
+          nextSvg = buildCustomBackgroundDataUri(rawSvg, themeColors);
+        } else if (p.backgroundId) {
+          const bg = PAGE_BACKGROUNDS.find(b => b.id === p.backgroundId);
+          if (bg) {
+            nextSvg = bg.svgGenerator(themeColors);
+          }
+        }
+        if (!nextSvg) return p;
+        
+        // Toujours mettre à jour pour refléter les nouvelles couleurs
+        changed = true;
+        return {
+          ...p,
+          backgroundImage: nextSvg,
+          backgroundColor: 'transparent',
+          ...(rawSvg && !p.backgroundCustomSvg ? { backgroundCustomSvg: rawSvg } : {}),
+        };
+      });
+      if (!changed) return prev;
+      return { ...prev, pages: updatedPages };
+    });
+  }, [themeColors]);
 
   // Module sélectionné
   const selectedModule = useMemo(() => {
@@ -658,6 +726,9 @@ const PageBuilder = ({ templateId, initialConfig, onSave, onClose }: PageBuilder
                 ...p,
                 // Appliquer les mises à jour du fond de page si c'est un module BACKGROUND
                 ...pageBackgroundUpdates,
+                ...(isBackground && (pageBackgroundUpdates.backgroundImage !== undefined || pageBackgroundUpdates.backgroundColor !== undefined)
+                  ? { backgroundId: undefined, backgroundCustomSvg: undefined }
+                  : {}),
                 modules: p.modules.map(m => 
                   m.id === instanceId ? { ...m, ...updates } : m
                 )
@@ -731,6 +802,8 @@ const PageBuilder = ({ templateId, initialConfig, onSave, onClose }: PageBuilder
             padding: page.padding,
             backgroundColor: page.backgroundColor,
             backgroundImage: page.backgroundImage,
+            backgroundId: page.backgroundId,
+            backgroundCustomSvg: page.backgroundCustomSvg,
           },
         };
 
@@ -1280,7 +1353,7 @@ const PageBuilder = ({ templateId, initialConfig, onSave, onClose }: PageBuilder
       <BackgroundSelector
         open={backgroundSelectorOpen}
         onClose={() => setBackgroundSelectorOpen(false)}
-        onSelect={(backgroundId, backgroundSvg) => {
+        onSelect={(backgroundId, backgroundSvg, rawSvg) => {
           console.log('🖼️ [PageBuilder] Background selected:', backgroundId);
           console.log('🖼️ [PageBuilder] SVG length:', backgroundSvg?.length || 0);
           
@@ -1295,6 +1368,10 @@ const PageBuilder = ({ templateId, initialConfig, onSave, onClose }: PageBuilder
                     ? {
                         ...p,
                         backgroundImage: backgroundSvg,
+                        backgroundId,
+                        backgroundCustomSvg: rawSvg,
+                        // FIX: Set backgroundColor to transparent when SVG is applied
+                        backgroundColor: 'transparent',
                       }
                     : p
                 ),

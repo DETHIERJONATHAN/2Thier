@@ -37,6 +37,7 @@ type HeaderActionType =
   | 'external-url'
   | 'phone'
   | 'email'
+  | 'simulator-form'
   | 'none';
 
 interface HeaderCtaConfig {
@@ -50,6 +51,7 @@ interface HeaderCtaConfig {
   openInNewTab?: boolean;
   phoneNumber?: string;
   emailAddress?: string;
+  simulatorSlug?: string;
   href?: string;
   buttonType?: string;
   buttonSize?: string;
@@ -67,6 +69,7 @@ interface NormalizedHeaderCta {
   style?: Record<string, any> | undefined;
   formId?: string;
   anchor?: string;
+  simulatorSlug?: string;
 }
 
 const pickFirst = (value: string | string[] | undefined): string | undefined => {
@@ -145,6 +148,7 @@ const normalizeHeaderCta = (cta: any): NormalizedHeaderCta | null => {
     openInNewTab: typeof cta.openInNewTab === 'boolean' ? cta.openInNewTab : undefined,
     phoneNumber: cta.phoneNumber,
     emailAddress: cta.emailAddress,
+    simulatorSlug: cta.simulatorSlug,
     href: legacyHref,
     buttonType: cta.buttonType,
     buttonSize: cta.buttonSize,
@@ -190,6 +194,13 @@ const normalizeHeaderCta = (cta: any): NormalizedHeaderCta | null => {
       if (email) href = `mailto:${email}`;
       break;
     }
+    case 'simulator-form': {
+      // Le simulateur est géré via JavaScript dans handleCtaClick
+      if (baseConfig.simulatorSlug) {
+        href = `/simulateur/${baseConfig.simulatorSlug}`;
+      }
+      break;
+    }
     case 'none':
       return null;
     default:
@@ -207,7 +218,8 @@ const normalizeHeaderCta = (cta: any): NormalizedHeaderCta | null => {
     buttonSize: baseConfig.buttonSize,
     style: baseConfig.style,
     formId,
-    anchor: anchor || pickFirst(baseConfig.formAnchor)
+    anchor: anchor || pickFirst(baseConfig.formAnchor),
+    simulatorSlug: baseConfig.simulatorSlug
   };
 };
 
@@ -259,6 +271,14 @@ export const HeaderRenderer: React.FC<HeaderRendererProps> = ({ content }) => {
           if (targetElement instanceof HTMLElement) {
             targetElement.scrollIntoView({ behavior: 'smooth', block: 'start' });
           }
+        }
+      }
+
+      // 🆕 Gestion des simulateurs / formulaires avancés
+      if (cta.actionType === 'simulator-form') {
+        if (cta.simulatorSlug) {
+          event.preventDefault();
+          window.location.href = `/simulateur/${cta.simulatorSlug}`;
         }
       }
     },
