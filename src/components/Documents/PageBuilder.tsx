@@ -1282,19 +1282,28 @@ const PageBuilder = ({ templateId, initialConfig, onSave, onClose }: PageBuilder
         onClose={() => setBackgroundSelectorOpen(false)}
         onSelect={(backgroundId, backgroundSvg) => {
           console.log('🖼️ [PageBuilder] Background selected:', backgroundId);
+          console.log('🖼️ [PageBuilder] SVG length:', backgroundSvg?.length || 0);
           
-          // Stocker le background sélectionné dans la config
-          setConfig(prev => ({
-            ...prev,
-            globalTheme: {
-              ...prev.globalTheme,
-              backgroundImageId: backgroundId,
-              backgroundImageSvg: backgroundSvg,
-            } as any
-          }));
+          // Appliquer le background à la page active, pas au globalTheme
+          if (activePage) {
+            setConfig(prev => {
+              console.log('🖼️ [PageBuilder] Applying background to active page:', activePage.id);
+              return {
+                ...prev,
+                pages: prev.pages.map(p => 
+                  p.id === activePage.id 
+                    ? {
+                        ...p,
+                        backgroundImage: backgroundSvg,
+                      }
+                    : p
+                ),
+              };
+            });
+          }
           
           setSelectedBackgroundId(backgroundId);
-          message.success(`🖼️ Fond "${backgroundId}" appliqué au document`);
+          message.success(`🖼️ Fond appliqué au document !`);
         }}
         globalTheme={config.globalTheme}
         selectedBackgroundId={selectedBackgroundId}
