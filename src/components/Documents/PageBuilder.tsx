@@ -27,6 +27,7 @@ import ModuleConfigPanel from './ModuleConfigPanel';
 import PagePreview from './PagePreview';
 import GridPagePreview from './GridPagePreview';
 import DocumentGlobalThemeEditor from './DocumentGlobalThemeEditor';
+import ThemeSelectorModal from './ThemeSelectorModal';
 import { TemplateSelector } from './TemplateSelector';
 import { DocumentTemplate, instantiateTemplate } from './DocumentTemplates';
 import { DocumentPage, ModuleInstance, DocumentTemplateConfig, EditorState } from './types';
@@ -97,6 +98,8 @@ const PageBuilder = ({ templateId, initialConfig, onSave, onClose }: PageBuilder
   // UI States
   const [saving, setSaving] = useState(false);
   const [themeEditorOpen, setThemeEditorOpen] = useState(false);
+  const [themeSelectorOpen, setThemeSelectorOpen] = useState(false);
+  const [selectedThemeId, setSelectedThemeId] = useState<string | undefined>(undefined);
   const [previewMode, setPreviewMode] = useState(false);
   const [gridMode, setGridMode] = useState(true); // Mode grille par défaut
   const [showGrid, setShowGrid] = useState(true); // Afficher la grille
@@ -868,7 +871,7 @@ const PageBuilder = ({ templateId, initialConfig, onSave, onClose }: PageBuilder
 
               <Button 
                 icon={<BgColorsOutlined />} 
-                onClick={() => setThemeEditorOpen(true)}
+                onClick={() => setThemeSelectorOpen(true)}
               >
                 Thème
               </Button>
@@ -1235,6 +1238,19 @@ const PageBuilder = ({ templateId, initialConfig, onSave, onClose }: PageBuilder
           message.success('Thème mis à jour');
         }}
         initialTheme={config.globalTheme as any}
+      />
+
+      {/* Theme Selector Modal - 8 Professional Themes */}
+      <ThemeSelectorModal
+        visible={themeSelectorOpen}
+        currentThemeId={selectedThemeId}
+        onThemeSelected={(theme) => {
+          setSelectedThemeId(theme.id);
+          setThemeSelectorOpen(false);
+          message.success(`✨ Thème "${theme.name}" appliqué`);
+        }}
+        onCancel={() => setThemeSelectorOpen(false)}
+        title="🎨 Sélectionner un thème pour votre document"
       />
 
       {/* Preview Mode Modal */}
