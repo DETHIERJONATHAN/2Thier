@@ -1245,9 +1245,29 @@ const PageBuilder = ({ templateId, initialConfig, onSave, onClose }: PageBuilder
         visible={themeSelectorOpen}
         currentThemeId={selectedThemeId}
         onThemeSelected={(theme) => {
+          console.log('🎨 [PageBuilder] Theme selected:', theme);
+          
+          // Appliquer le thème sélectionné au globalTheme du config
+          setConfig(prev => {
+            const updated = {
+              ...prev,
+              globalTheme: {
+                primaryColor: theme.primaryColor,
+                secondaryColor: theme.secondaryColor,
+                accentColor: theme.accentColor,
+                textColor: theme.textColor,
+                backgroundColor: theme.backgroundColor,
+                fontFamily: theme.fontFamily,
+                fontSize: theme.fontSize,
+              }
+            };
+            console.log('✨ [PageBuilder] Theme applied to config:', updated.globalTheme);
+            return updated;
+          });
+          
           setSelectedThemeId(theme.id);
           setThemeSelectorOpen(false);
-          message.success(`✨ Thème "${theme.name}" appliqué`);
+          message.success(`✨ Thème "${theme.name}" appliqué au document`);
         }}
         onCancel={() => setThemeSelectorOpen(false)}
         title="🎨 Sélectionner un thème pour votre document"
