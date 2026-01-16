@@ -146,11 +146,16 @@ async function main() {
     console.log('🆕 Statut par défaut existant');
   }
 
-  // 5. Purger les leads de l'organisation
+  // 5. Purger les documents générés d'abord (pour éviter les contraintes FK)
+  await prisma.generatedDocument.deleteMany({
+    where: { Lead: { organizationId: org.id } },
+  });
+  
+  // 6. Purger les leads de l'organisation
   await prisma.lead.deleteMany({ where: { organizationId: org.id } });
   console.log('🧹 Leads existants supprimés pour cette organisation');
 
-  // 6. Créer 2 leads complets
+  // 7. Créer 2 leads complets
   const assignUser1 = ensuredUsers[0];
   const assignUser2 = ensuredUsers[1] || ensuredUsers[0];
 
@@ -233,6 +238,120 @@ async function main() {
 
   console.log('✅ Leads créés:', { leadA: leadA.id, leadB: leadB.id });
   console.log('🎉 Seed terminé avec succès');
+
+  // 7. 🎨 SEED DOCUMENT THEMES
+  const themes = [
+    {
+      id: 'theme_professional_orange',
+      name: 'Professional Orange',
+      primaryColor: '#FF8C00',
+      secondaryColor: '#1C3A4F',
+      accentColor: '#FFA500',
+      textColor: '#1C3A4F',
+      backgroundColor: '#FFFFFF',
+      fontFamily: '"Poppins", "Segoe UI", sans-serif',
+      fontSize: 12,
+    },
+    {
+      id: 'theme_fresh_green',
+      name: 'Fresh Green',
+      primaryColor: '#10B981',
+      secondaryColor: '#059669',
+      accentColor: '#34D399',
+      textColor: '#047857',
+      backgroundColor: '#FFFFFF',
+      fontFamily: '"Inter", "Helvetica Neue", sans-serif',
+      fontSize: 12,
+    },
+    {
+      id: 'theme_corporate_blue',
+      name: 'Corporate Blue',
+      primaryColor: '#2563EB',
+      secondaryColor: '#1E40AF',
+      accentColor: '#3B82F6',
+      textColor: '#1F2937',
+      backgroundColor: '#FFFFFF',
+      fontFamily: '"Roboto", "Arial", sans-serif',
+      fontSize: 11,
+    },
+    {
+      id: 'theme_elegant_red',
+      name: 'Elegant Red',
+      primaryColor: '#DC2626',
+      secondaryColor: '#111827',
+      accentColor: '#F59E0B',
+      textColor: '#1F2937',
+      backgroundColor: '#FFFFFF',
+      fontFamily: '"Georgia", "Garamond", serif',
+      fontSize: 12,
+    },
+    {
+      id: 'theme_modern_purple',
+      name: 'Modern Purple',
+      primaryColor: '#7C3AED',
+      secondaryColor: '#5B21B6',
+      accentColor: '#A78BFA',
+      textColor: '#1F2937',
+      backgroundColor: '#FFFFFF',
+      fontFamily: '"Quicksand", "Nunito", sans-serif',
+      fontSize: 12,
+    },
+    {
+      id: 'theme_minimal_yellow',
+      name: 'Minimal Yellow',
+      primaryColor: '#F59E0B',
+      secondaryColor: '#1F2937',
+      accentColor: '#FBBF24',
+      textColor: '#111827',
+      backgroundColor: '#FFFFFF',
+      fontFamily: '"Montserrat", "Lato", sans-serif',
+      fontSize: 11,
+    },
+    {
+      id: 'theme_luxury_dark',
+      name: 'Luxury Dark',
+      primaryColor: '#0F0F0F',
+      secondaryColor: '#1A1A1A',
+      accentColor: '#D4AF37',
+      textColor: '#FFFFFF',
+      backgroundColor: '#FAFAF8',
+      fontFamily: '"Playfair Display", "Serif", serif',
+      fontSize: 13,
+    },
+    {
+      id: 'theme_tech_cyan',
+      name: 'Tech Cyan',
+      primaryColor: '#06B6D4',
+      secondaryColor: '#0C4A6E',
+      accentColor: '#22D3EE',
+      textColor: '#0F172A',
+      backgroundColor: '#FFFFFF',
+      fontFamily: '"JetBrains Mono", "Courier New", monospace',
+      fontSize: 11,
+    },
+  ];
+
+  for (const themeData of themes) {
+    const existing = await prisma.documentTheme.findUnique({
+      where: { id: themeData.id },
+    });
+
+    if (!existing) {
+      await prisma.documentTheme.create({
+        data: {
+          ...themeData,
+          organizationId: org.id,
+          isActive: true,
+          isDefault: themeData.id === 'theme_professional_orange',
+          isPublic: true,
+        },
+      });
+      console.log(`✨ Thème créé: ${themeData.name}`);
+    } else {
+      console.log(`✅ Thème existant: ${themeData.name}`);
+    }
+  }
+
 }
 
 main()

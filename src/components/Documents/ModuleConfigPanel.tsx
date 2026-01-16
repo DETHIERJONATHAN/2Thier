@@ -3,7 +3,7 @@
  */
 
 import { useEffect, useState, useRef } from 'react';
-import { Form, Input, InputNumber, Select, Switch, ColorPicker, Button, Collapse, Space, Upload, message, Badge, Tooltip, Tabs, Tag, Divider } from 'antd';
+import { Form, Input, InputNumber, Select, Switch, ColorPicker, Button, Collapse, Space, Upload, message, Badge, Tooltip, Tabs, Tag, Divider, ConfigProvider } from 'antd';
 import { DeleteOutlined, CopyOutlined, UploadOutlined, LinkOutlined, LoadingOutlined, ThunderboltOutlined, ApiOutlined, UserOutlined, FileTextOutlined, HomeOutlined } from '@ant-design/icons';
 import { ModuleInstance } from './types';
 import { getModuleById, ConfigField } from './ModuleRegistry';
@@ -607,12 +607,59 @@ const ModuleConfigPanel = ({
   };
 
   return (
-    <div style={{ 
-      height: '100%',
-      display: 'flex',
-      flexDirection: 'column',
-      color: '#fff',
-    }}>
+    <ConfigProvider
+      theme={{
+        token: {
+          colorBgBase: '#1f1f1f',
+          colorTextBase: '#fff',
+          colorText: '#fff',
+          colorTextSecondary: '#aaa',
+          colorTextTertiary: '#666',
+          colorBorder: '#333',
+          colorBgContainer: '#2d2d2d',
+          colorBgElevated: '#3d3d3d',
+          colorBgLayout: '#1f1f1f',
+          colorPrimary: '#1890ff',
+          colorPrimaryBorder: '#0050b3',
+          colorTextPlaceholder: '#666',
+        },
+        components: {
+          Input: {
+            colorTextPlaceholder: '#666',
+            colorBgContainer: '#2d2d2d',
+            colorText: '#fff', // Texte BLANC dans les inputs pour visibilité
+            colorBorder: '#444',
+          },
+          InputNumber: {
+            colorTextPlaceholder: '#666',
+            colorBgContainer: '#2d2d2d',
+            colorText: '#fff',
+            colorBorder: '#444',
+          },
+          Select: {
+            colorBgContainer: '#2d2d2d',
+            colorText: '#fff',
+            colorBorder: '#444',
+            colorTextPlaceholder: '#666',
+          },
+          Form: {
+            labelColor: '#fff',
+          },
+          Collapse: {
+            colorBgContainer: '#2d2d2d',
+            colorText: '#fff',
+            colorBorder: '#444',
+          },
+        },
+      }}
+    >
+      <div style={{ 
+        height: '100%',
+        display: 'flex',
+        flexDirection: 'column',
+        color: '#fff',
+        backgroundColor: '#1f1f1f',
+      }}>
       {/* Header du module */}
       <div style={{
         padding: '16px',
@@ -828,7 +875,8 @@ const ModuleConfigPanel = ({
         initialConfig={moduleCondition}
         nodeId={selectedNodeId || undefined}
       />
-    </div>
+      </div>
+    </ConfigProvider>
   );
 };
 
