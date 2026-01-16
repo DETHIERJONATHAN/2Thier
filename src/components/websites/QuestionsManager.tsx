@@ -44,7 +44,8 @@ import {
   EyeOutlined,
   MinusCircleOutlined,
   UploadOutlined,
-  LinkOutlined
+  LinkOutlined,
+  InfoCircleOutlined
 } from '@ant-design/icons';
 import NodeTreeSelector, { NodeTreeSelectorValue } from '../TreeBranchLeaf/treebranchleaf-new/components/Parameters/shared/NodeTreeSelector';
 import type { ColumnsType } from 'antd/es/table';
@@ -317,7 +318,7 @@ const OptionsEditor: React.FC<OptionsEditorProps> = ({ value = [], onChange, for
                   </Space>
                 </Col>
                 <Col span={12}>
-                  {tblRootNodeId && (
+                  {tblRootNodeId ? (
                     <Space size="small">
                       <Text type="secondary" style={{ fontSize: '12px' }}>Mapping TBL:</Text>
                       {option.tblNodeId ? (
@@ -346,6 +347,12 @@ const OptionsEditor: React.FC<OptionsEditorProps> = ({ value = [], onChange, for
                         </Button>
                       )}
                     </Space>
+                  ) : (
+                    <Tooltip title="Configurez d'abord un arbre TBL dans les paramètres du formulaire">
+                      <Text type="secondary" style={{ fontSize: '11px', color: '#999' }}>
+                        <InfoCircleOutlined /> Pas de TBL
+                      </Text>
+                    </Tooltip>
                   )}
                 </Col>
               </Row>

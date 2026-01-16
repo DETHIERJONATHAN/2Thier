@@ -60,6 +60,12 @@ const { Title: _Title, Text, Paragraph } = Typography;
 const { TextArea } = Input;
 
 // ==================== TYPES ====================
+interface TBLTree {
+  id: string;
+  name: string;
+  description?: string;
+}
+
 interface WebsiteForm {
   id: number;
   organizationId: number;
@@ -70,6 +76,7 @@ interface WebsiteForm {
   successMessage: string;
   isActive: boolean;
   startQuestionKey?: string;
+  treeId?: string; // ID de l'arbre TBL pour le mapping des champs
   settings?: {
     phoneNumber?: string;
     primaryColor?: string;
@@ -135,10 +142,22 @@ const FormsManager: React.FC<FormsManagerProps> = ({ websiteId }) => {
   const [stepsModalVisible, setStepsModalVisible] = useState(false);
   const [questionsModalVisible, setQuestionsModalVisible] = useState(false);
   const [selectedForm, setSelectedForm] = useState<WebsiteForm | null>(null);
+  const [tblTrees, setTblTrees] = useState<TBLTree[]>([]);
 
   const [form] = Form.useForm();
 
   // ==================== CHARGEMENT DES DONNÉES ====================
+  // Charger les arbres TBL disponibles
+  const fetchTblTrees = useCallback(async () => {
+    try {
+      const trees = await api.get('/api/treebranchleaf/trees');
+      setTblTrees(trees || []);
+    } catch (err) {
+      console.error('Erreur chargement arbres TBL:', err);
+      setTblTrees([]);
+    }
+  }, [api]);
+
   const fetchForms = useCallback(async () => {
     setLoading(true);
     try {
@@ -156,7 +175,8 @@ const FormsManager: React.FC<FormsManagerProps> = ({ websiteId }) => {
 
   useEffect(() => {
     fetchForms();
-  }, [fetchForms]);
+    fetchTblTrees();
+  }, [fetchForms, fetchTblTrees]);
 
   // ==================== HANDLERS ====================
   const handleCreateForm = () => {
@@ -184,7 +204,8 @@ const FormsManager: React.FC<FormsManagerProps> = ({ websiteId }) => {
       submitButtonText: record.submitButtonText,
       successMessage: record.successMessage,
       isActive: record.isActive,
-      phoneNumber: settings.phoneNumber || ''
+      phoneNumber: settings.phoneNumber || '',
+      treeId: record.treeId || null
     });
     setFormModalVisible(true);
   };
@@ -201,8 +222,8 @@ const FormsManager: React.FC<FormsManagerProps> = ({ websiteId }) => {
 
   const handleSaveForm = async (values: any) => {
     try {
-      // Extraire le phoneNumber et le mettre dans settings
-      const { phoneNumber, ...formValues } = values;
+      // Extraire le phoneNumber et treeId
+      const { phoneNumber, treeId, ...formValues } = values;
       
       // Préparer les settings en préservant les valeurs existantes
       const existingSettings = editingForm?.settings 
@@ -213,6 +234,7 @@ const FormsManager: React.FC<FormsManagerProps> = ({ websiteId }) => {
       
       const dataToSave = {
         ...formValues,
+        treeId: treeId || null, // Sauvegarder le treeId pour le mapping TBL
         settings: {
           ...existingSettings,
           phoneNumber: phoneNumber || null
@@ -549,6 +571,29 @@ const FormsManager: React.FC<FormsManagerProps> = ({ websiteId }) => {
               maxLength={20}
               style={{ maxWidth: 300 }}
             />
+          </Form.Item>
+
+          <Divider orientation="left">🌳 Mapping TBL (Devis)</Divider>
+          
+          <Form.Item
+            name="treeId"
+            label="Arbre TBL pour le mapping"
+            tooltip="Sélectionnez l'arbre TBL (ex: Devis Simulation) pour pouvoir lier les options de réponse aux champs TBL. Quand un lead est créé, les données seront pré-remplies dans le devis."
+            extra="Permet de pré-remplir automatiquement les champs du devis avec les réponses du formulaire"
+          >
+            <Select
+              placeholder="Sélectionner un arbre TBL"
+              allowClear
+              showSearch
+              optionFilterProp="children"
+              style={{ maxWidth: 400 }}
+            >
+              {tblTrees.map(tree => (
+                <Select.Option key={tree.id} value={tree.id}>
+                  🌳 {tree.name}
+                </Select.Option>
+              ))}
+            </Select>
           </Form.Item>
 
           <div style={{ textAlign: 'right', marginTop: '16px' }}>
