@@ -28,6 +28,7 @@ import PagePreview from './PagePreview';
 import GridPagePreview from './GridPagePreview';
 import DocumentGlobalThemeEditor from './DocumentGlobalThemeEditor';
 import ThemeSelectorModal from './ThemeSelectorModal';
+import BackgroundSelector from './BackgroundSelector';
 import { TemplateSelector } from './TemplateSelector';
 import { DocumentTemplate, instantiateTemplate } from './DocumentTemplates';
 import { DocumentPage, ModuleInstance, DocumentTemplateConfig, EditorState } from './types';
@@ -100,6 +101,8 @@ const PageBuilder = ({ templateId, initialConfig, onSave, onClose }: PageBuilder
   const [themeEditorOpen, setThemeEditorOpen] = useState(false);
   const [themeSelectorOpen, setThemeSelectorOpen] = useState(false);
   const [selectedThemeId, setSelectedThemeId] = useState<string | undefined>(undefined);
+  const [backgroundSelectorOpen, setBackgroundSelectorOpen] = useState(false);
+  const [selectedBackgroundId, setSelectedBackgroundId] = useState<string | undefined>(undefined);
   const [previewMode, setPreviewMode] = useState(false);
   const [gridMode, setGridMode] = useState(true); // Mode grille par défaut
   const [showGrid, setShowGrid] = useState(true); // Afficher la grille
@@ -864,7 +867,7 @@ const PageBuilder = ({ templateId, initialConfig, onSave, onClose }: PageBuilder
 
               <Button 
                 icon={<span style={{ fontSize: '14px' }}>🎨</span>} 
-                onClick={configurePageBackground}
+                onClick={() => setBackgroundSelectorOpen(true)}
               >
                 Fond
               </Button>
@@ -1271,6 +1274,30 @@ const PageBuilder = ({ templateId, initialConfig, onSave, onClose }: PageBuilder
         }}
         onCancel={() => setThemeSelectorOpen(false)}
         title="🎨 Sélectionner un thème pour votre document"
+      />
+
+      {/* Background Selector Modal - Backgrounds adaptatifs aux thèmes */}
+      <BackgroundSelector
+        open={backgroundSelectorOpen}
+        onClose={() => setBackgroundSelectorOpen(false)}
+        onSelect={(backgroundId, backgroundSvg) => {
+          console.log('🖼️ [PageBuilder] Background selected:', backgroundId);
+          
+          // Stocker le background sélectionné dans la config
+          setConfig(prev => ({
+            ...prev,
+            globalTheme: {
+              ...prev.globalTheme,
+              backgroundImageId: backgroundId,
+              backgroundImageSvg: backgroundSvg,
+            } as any
+          }));
+          
+          setSelectedBackgroundId(backgroundId);
+          message.success(`🖼️ Fond "${backgroundId}" appliqué au document`);
+        }}
+        globalTheme={config.globalTheme}
+        selectedBackgroundId={selectedBackgroundId}
       />
 
       {/* Preview Mode Modal */}
