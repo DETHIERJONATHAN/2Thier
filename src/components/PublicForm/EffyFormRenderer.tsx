@@ -29,7 +29,8 @@ import {
   ArrowLeftOutlined,
   CheckCircleOutlined,
   LoadingOutlined,
-  PhoneOutlined
+  PhoneOutlined,
+  CloseOutlined
 } from '@ant-design/icons';
 
 // ==================== TYPES ====================
@@ -103,7 +104,22 @@ const styles = {
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'space-between',
-    gap: '16px'
+    gap: '12px'
+  },
+
+  closeButton: {
+    background: 'transparent',
+    border: 'none',
+    padding: '8px',
+    cursor: 'pointer',
+    borderRadius: '8px',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    color: '#6b7280',
+    fontSize: '18px',
+    transition: 'all 0.2s',
+    flexShrink: 0
   },
 
   backButton: {
@@ -730,13 +746,33 @@ const EffyFormRenderer: React.FC = () => {
     <div style={styles.container}>
       {/* Header avec progression */}
       <header style={styles.header}>
+        {/* Bouton fermer - retour à la page d'origine */}
+        <button
+          style={styles.closeButton}
+          onClick={() => {
+            // Si on a un historique de navigation, on retourne en arrière
+            // Sinon on va à la page d'accueil
+            if (window.history.length > 1) {
+              window.history.back();
+            } else {
+              window.location.href = '/';
+            }
+          }}
+          aria-label="Fermer et retourner"
+          title="Quitter le formulaire"
+        >
+          <CloseOutlined />
+        </button>
+
+        {/* Bouton retour question précédente */}
         <button
           style={{
             ...styles.backButton,
             visibility: history.length > 0 ? 'visible' : 'hidden'
           }}
           onClick={handleBack}
-          aria-label="Retour"
+          aria-label="Question précédente"
+          title="Question précédente"
         >
           <ArrowLeftOutlined />
         </button>
