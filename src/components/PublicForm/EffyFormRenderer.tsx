@@ -318,6 +318,12 @@ const EffyFormRenderer: React.FC = () => {
   const [answers, setAnswers] = useState<Record<string, any>>({});
   const [history, setHistory] = useState<string[]>([]); // Pour le bouton retour
   const [currentAnswer, setCurrentAnswer] = useState<any>(null);
+  
+  // 🔥 GESTION MULTI-BRANCHES: File d'attente des branches à parcourir
+  // Quand l'utilisateur sélectionne plusieurs travaux, on stocke les branches restantes
+  const [pendingBranches, setPendingBranches] = useState<string[]>([]);
+  // Question de retour après avoir terminé toutes les branches
+  const [returnToQuestion, setReturnToQuestion] = useState<string | null>(null);
 
   // Chargement du formulaire
   useEffect(() => {
@@ -362,6 +368,25 @@ const EffyFormRenderer: React.FC = () => {
     return Math.round((answeredCount / totalQuestions) * 100);
   }, [formData, answers]);
 
+  // 🔥 NOUVELLE LOGIQUE: Trouver toutes les branches pour un choix multiple
+  const getAllBranchesForMultipleChoice = useCallback((questionKey: string, selectedValues: string[]): string[] => {
+    if (!formData) return [];
+    
+    const question = formData.questions.find(q => q.questionKey === questionKey);
+    if (!question?.navigation) return [];
+    
+    const branches: string[] = [];
+    
+    for (const value of selectedValues) {
+      const rule = question.navigation.find((r: NavigationRule) => r.answerValue === value);
+      if (rule?.nextQuestionKey) {
+        branches.push(rule.nextQuestionKey);
+      }
+    }
+    
+    return branches;
+  }, [formData]);
+
   // Trouver la question suivante basée sur la navigation conditionnelle
   const getNextQuestionKey = useCallback((questionKey: string, answerValue: any): string | null => {
     if (!formData) return null;
@@ -377,6 +402,8 @@ const EffyFormRenderer: React.FC = () => {
       for (const rule of question.navigation) {
         // Navigation simple basée sur la valeur de réponse
         if (rule.answerValue !== undefined) {
+          // Pour les choix multiples, on retourne la PREMIÈRE branche
+          // Les autres seront mises dans pendingBranches
           if (Array.isArray(answerValue)) {
             if (answerValue.includes(rule.answerValue)) {
               return rule.nextQuestionKey;
@@ -486,19 +513,72 @@ const EffyFormRenderer: React.FC = () => {
     const newAnswers = { ...answers, [currentQuestion.questionKey]: currentAnswer };
     setAnswers(newAnswers);
 
-    // Trouver la question suivante
-    const nextKey = getNextQuestionKey(currentQuestion.questionKey, currentAnswer);
+    // 🔥 GESTION MULTI-BRANCHES pour les choix multiples
+    if (currentQuestion.questionType === 'multiple_choice' && Array.isArray(currentAnswer) && currentAnswer.length > 0) {
+      // Récupérer toutes les branches correspondant aux choix
+      const allBranches = getAllBranchesForMultipleChoice(currentQuestion.questionKey, currentAnswer);
+      
+      if (allBranches.length > 0) {
+        // Première branche = question suivante immédiate
+        const [firstBranch, ...newRemainingBranches] = allBranches;
+        
+        // 🔥 IMPORTANT: Combiner les nouvelles branches avec les branches pendantes existantes
+        // (ne pas écraser les branches de niveau supérieur)
+        if (newRemainingBranches.length > 0 || pendingBranches.length > 0) {
+          // Ajouter les nouvelles branches AVANT les branches existantes
+          // Les nouvelles sont prioritaires car elles sont plus "profondes" dans l'arbre
+          setPendingBranches([...newRemainingBranches, ...pendingBranches]);
+          
+          // Stocker la question de retour SEULEMENT si on n'en a pas déjà une
+          if (returnToQuestion === null) {
+            setReturnToQuestion(currentQuestion.defaultNextQuestionKey || null);
+          }
+        }
+        
+        // Aller à la première branche
+        setHistory(prev => [...prev, currentQuestionKey]);
+        setCurrentQuestionKey(firstBranch);
+        setCurrentAnswer(newAnswers[firstBranch] || null);
+        return;
+      }
+    }
+
+    // 🔥 Vérifier s'il y a des branches en attente à parcourir
+    if (pendingBranches.length > 0) {
+      // On est peut-être à la fin d'une branche - vérifier si on atteint une question "terminale" de branche
+      const nextKey = getNextQuestionKey(currentQuestion.questionKey, currentAnswer);
+      
+      if (!nextKey || nextKey === returnToQuestion) {
+        // Fin de cette branche, passer à la branche suivante
+        const [nextBranch, ...remainingBranches] = pendingBranches;
+        setPendingBranches(remainingBranches);
+        
+        setHistory(prev => [...prev, currentQuestionKey]);
+        setCurrentQuestionKey(nextBranch);
+        setCurrentAnswer(newAnswers[nextBranch] || null);
+        return;
+      }
+    }
+
+    // Trouver la question suivante (navigation standard)
+    let nextKey = getNextQuestionKey(currentQuestion.questionKey, currentAnswer);
+
+    // Si pas de question suivante et qu'on a terminé toutes les branches, retourner à la question de retour
+    if (!nextKey && pendingBranches.length === 0 && returnToQuestion) {
+      nextKey = returnToQuestion;
+      setReturnToQuestion(null); // Reset
+    }
 
     if (nextKey) {
       // Ajouter à l'historique pour le retour
       setHistory(prev => [...prev, currentQuestionKey]);
       setCurrentQuestionKey(nextKey);
-      setCurrentAnswer(answers[nextKey] || null); // Restaurer la réponse si déjà répondue
+      setCurrentAnswer(newAnswers[nextKey] || null); // Restaurer la réponse si déjà répondue
     } else {
       // Fin du formulaire - soumettre
       await handleSubmit(newAnswers);
     }
-  }, [currentQuestion, currentAnswer, answers, currentQuestionKey, getNextQuestionKey, handleSubmit]);
+  }, [currentQuestion, currentAnswer, answers, currentQuestionKey, getNextQuestionKey, handleSubmit, getAllBranchesForMultipleChoice, pendingBranches, returnToQuestion]);
 
   // Retour à la question précédente
   const handleBack = useCallback(() => {
