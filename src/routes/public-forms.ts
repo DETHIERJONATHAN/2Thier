@@ -12,6 +12,9 @@
 import { Router, Request, Response } from 'express';
 import { db } from '../lib/database';
 import { v4 as uuidv4 } from 'uuid';
+import { generateFormResponsePdf } from '../services/formResponsePdfGenerator';
+import * as fs from 'fs';
+import * as path from 'path';
 
 const router = Router();
 
@@ -344,7 +347,8 @@ router.post('/:slug/submit', async (req: Request, res: Response) => {
           include: {
             fields: true
           }
-        }
+        },
+        questions: true  // 🔥 Inclure les questions (nouveau système 1 écran = 1 question)
       }
     });
     
@@ -489,6 +493,45 @@ router.post('/:slug/submit', async (req: Request, res: Response) => {
         }
       }
       
+      // 🔥 6bis. Traiter les questions (nouveau système 1 écran = 1 question)
+      // Les options peuvent avoir un tblNodeId pour le mapping
+      for (const question of (form as any).questions || []) {
+        const answerValue = formData?.[question.questionKey];
+        
+        if (answerValue !== undefined && answerValue !== null) {
+          // Si la question a un tblNodeId direct, l'utiliser
+          if (question.tblNodeId) {
+            submissionDataEntries.push({
+              id: uuidv4(),
+              submissionId: tblSubmissionId,
+              nodeId: question.tblNodeId,
+              value: Array.isArray(answerValue) ? answerValue.join(', ') : String(answerValue),
+              fieldLabel: question.title,
+              createdAt: new Date()
+            });
+          }
+          
+          // Si les options ont un mapping TBL, les traiter
+          if (question.options && Array.isArray(question.options)) {
+            const selectedValues = Array.isArray(answerValue) ? answerValue : [answerValue];
+            
+            for (const option of question.options as Array<{ value: string; label: string; tblNodeId?: string }>) {
+              // Si cette option est sélectionnée ET qu'elle a un mapping TBL
+              if (selectedValues.includes(option.value) && option.tblNodeId) {
+                submissionDataEntries.push({
+                  id: uuidv4(),
+                  submissionId: tblSubmissionId,
+                  nodeId: option.tblNodeId,
+                  value: option.label || option.value,
+                  fieldLabel: `${question.title} - ${option.label}`,
+                  createdAt: new Date()
+                });
+              }
+            }
+          }
+        }
+      }
+      
       // Insérer toutes les données de soumission
       if (submissionDataEntries.length > 0) {
         await db.treeBranchLeafSubmissionData.createMany({
@@ -517,14 +560,76 @@ router.post('/:slug/submit', async (req: Request, res: Response) => {
     
     console.log('✅ [PublicForms] Form submission recorded:', formSubmission.id);
     
-    // 8. Retourner le résultat
+    // 🔥 8. Générer le PDF récapitulatif et l'attacher au Lead
+    let pdfUrl: string | null = null;
+    try {
+      const pdfData = {
+        formName: form.name,
+        formSlug: slug,
+        submittedAt: new Date(),
+        contact: {
+          firstName: contact.firstName,
+          lastName: contact.lastName,
+          email: contact.email,
+          phone: contact.phone,
+          civility: contact.civility
+        },
+        answers: formData || {},
+        questions: ((form as any).questions || []).map((q: any) => ({
+          questionKey: q.questionKey,
+          title: q.title,
+          subtitle: q.subtitle,
+          icon: q.icon,
+          questionType: q.questionType,
+          options: q.options
+        })),
+        leadNumber: existingLead ? undefined : `LEAD-${(await db.lead.count({ where: { organizationId: form.organizationId } })).toString().padStart(5, '0')}`
+      };
+      
+      const pdfBuffer = await generateFormResponsePdf(pdfData);
+      
+      // Sauvegarder le PDF dans le dossier uploads
+      const uploadsDir = path.join(process.cwd(), 'uploads', 'form-responses');
+      if (!fs.existsSync(uploadsDir)) {
+        fs.mkdirSync(uploadsDir, { recursive: true });
+      }
+      
+      const pdfFileName = `formulaire-${slug}-${leadId.substring(0, 8)}-${Date.now()}.pdf`;
+      const pdfPath = path.join(uploadsDir, pdfFileName);
+      fs.writeFileSync(pdfPath, pdfBuffer);
+      
+      pdfUrl = `/uploads/form-responses/${pdfFileName}`;
+      
+      // Mettre à jour le Lead avec le lien vers le PDF
+      await db.lead.update({
+        where: { id: leadId },
+        data: {
+          data: {
+            ...(typeof (await db.lead.findUnique({ where: { id: leadId } }))?.data === 'object' 
+              ? (await db.lead.findUnique({ where: { id: leadId } }))?.data as object 
+              : {}),
+            formPdfUrl: pdfUrl,
+            formSlug: slug,
+            formName: form.name
+          }
+        }
+      });
+      
+      console.log('✅ [PublicForms] PDF generated and attached to Lead:', pdfUrl);
+    } catch (pdfError) {
+      console.error('⚠️ [PublicForms] PDF generation failed (non-blocking):', pdfError);
+      // Ne pas bloquer la soumission si le PDF échoue
+    }
+    
+    // 9. Retourner le résultat
     res.status(201).json({
       success: true,
       message: form.successMessage || 'Merci pour votre demande !',
       title: form.successTitle || 'Formulaire envoyé',
       leadId,
       submissionId: tblSubmissionId,
-      formSubmissionId: formSubmission.id
+      formSubmissionId: formSubmission.id,
+      pdfUrl
     });
     
   } catch (error) {

@@ -29,7 +29,9 @@ import {
   Badge,
   InputNumber,
   Alert,
-  Card
+  Card,
+  Upload,
+  Image
 } from 'antd';
 import {
   PlusOutlined,
@@ -40,8 +42,11 @@ import {
   PictureOutlined,
   BranchesOutlined,
   EyeOutlined,
-  MinusCircleOutlined
+  MinusCircleOutlined,
+  UploadOutlined,
+  LinkOutlined
 } from '@ant-design/icons';
+import NodeTreeSelector, { NodeTreeSelectorValue } from '../TreeBranchLeaf/treebranchleaf-new/components/Parameters/shared/NodeTreeSelector';
 import type { ColumnsType } from 'antd/es/table';
 
 const { Text } = Typography;
@@ -72,6 +77,8 @@ interface QuestionOption {
   icon?: string;
   imageUrl?: string;
   description?: string;
+  tblNodeId?: string;    // ID du nœud TBL pour mapper cette réponse
+  tblNodeLabel?: string; // Label du nœud TBL (pour affichage)
 }
 
 interface NavigationRule {
@@ -84,6 +91,7 @@ interface WebsiteForm {
   name: string;
   slug: string;
   startQuestionKey?: string;
+  treeId?: string;  // ID de l'arbre TBL pour le mapping
   _count?: {
     questions: number;
     steps: number;
@@ -120,9 +128,15 @@ const SUGGESTED_ICONS = ['🏠', '🏢', '🔥', '⚡', '🛢️', '🌡️', '�
 interface OptionsEditorProps {
   value?: QuestionOption[];
   onChange?: (options: QuestionOption[]) => void;
+  formId?: number; // Pour l'upload d'images
+  tblRootNodeId?: string; // Pour le NodeTreeSelector
 }
 
-const OptionsEditor: React.FC<OptionsEditorProps> = ({ value = [], onChange }) => {
+const OptionsEditor: React.FC<OptionsEditorProps> = ({ value = [], onChange, formId: _formId, tblRootNodeId }) => {
+  const [uploadingIndex, setUploadingIndex] = useState<number | null>(null);
+  const [nodeTreeSelectorOpen, setNodeTreeSelectorOpen] = useState(false);
+  const [selectedOptionIndex, setSelectedOptionIndex] = useState<number | null>(null);
+  
   const handleAdd = () => {
     const newOption: QuestionOption = {
       value: `option_${value.length + 1}`,
@@ -137,10 +151,55 @@ const OptionsEditor: React.FC<OptionsEditorProps> = ({ value = [], onChange }) =
     onChange?.(newOptions);
   };
 
-  const handleChange = (index: number, field: keyof QuestionOption, fieldValue: string) => {
+  const handleChange = (index: number, field: keyof QuestionOption, fieldValue: string | undefined) => {
     const newOptions = [...value];
     newOptions[index] = { ...newOptions[index], [field]: fieldValue };
     onChange?.(newOptions);
+  };
+
+  // Upload d'image pour une option
+  const handleImageUpload = async (file: File, index: number) => {
+    try {
+      setUploadingIndex(index);
+      const formData = new FormData();
+      formData.append('image', file);
+      formData.append('category', 'general');
+      
+      const response = await fetch('/api/upload-image', {
+        method: 'POST',
+        body: formData,
+        credentials: 'include',
+      });
+
+      if (!response.ok) {
+        throw new Error('Erreur lors de l\'upload');
+      }
+
+      const data = await response.json();
+      handleChange(index, 'imageUrl', data.file?.fileUrl || data.url);
+      message.success('Image uploadée !');
+    } catch (error) {
+      console.error('Erreur upload:', error);
+      message.error('Échec de l\'upload');
+    } finally {
+      setUploadingIndex(null);
+    }
+  };
+
+  // Sélection d'un nœud TBL pour le mapping
+  const handleTblNodeSelect = (selection: NodeTreeSelectorValue) => {
+    if (selectedOptionIndex !== null) {
+      const newOptions = [...value];
+      newOptions[selectedOptionIndex] = {
+        ...newOptions[selectedOptionIndex],
+        tblNodeId: selection.ref,
+        tblNodeLabel: selection.ref // Le label sera affiché depuis la ref
+      };
+      onChange?.(newOptions);
+      setNodeTreeSelectorOpen(false);
+      setSelectedOptionIndex(null);
+      message.success('Mapping TBL configuré !');
+    }
   };
 
   return (
@@ -159,15 +218,16 @@ const OptionsEditor: React.FC<OptionsEditorProps> = ({ value = [], onChange }) =
           style={{ margin: '8px 0' }}
         />
       ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
           {value.map((option, index) => (
             <Card 
               key={index} 
               size="small" 
               style={{ background: 'white' }}
-              bodyStyle={{ padding: '8px 12px' }}
+              bodyStyle={{ padding: '12px' }}
             >
-              <Row gutter={8} align="middle">
+              {/* Ligne 1: Icône, Label, Valeur */}
+              <Row gutter={8} align="middle" style={{ marginBottom: '8px' }}>
                 <Col span={3}>
                   <Select
                     value={option.icon}
@@ -181,14 +241,14 @@ const OptionsEditor: React.FC<OptionsEditorProps> = ({ value = [], onChange }) =
                     ))}
                   </Select>
                 </Col>
-                <Col span={8}>
+                <Col span={10}>
                   <Input
                     value={option.label}
                     onChange={(e) => handleChange(index, 'label', e.target.value)}
                     placeholder="Texte affiché (ex: Chaudière gaz)"
                   />
                 </Col>
-                <Col span={6}>
+                <Col span={7}>
                   <Input
                     value={option.value}
                     onChange={(e) => handleChange(index, 'value', e.target.value)}
@@ -196,15 +256,7 @@ const OptionsEditor: React.FC<OptionsEditorProps> = ({ value = [], onChange }) =
                     style={{ fontFamily: 'monospace', fontSize: '12px' }}
                   />
                 </Col>
-                <Col span={5}>
-                  <Input
-                    value={option.imageUrl || ''}
-                    onChange={(e) => handleChange(index, 'imageUrl', e.target.value)}
-                    placeholder="URL image (optionnel)"
-                    prefix={<PictureOutlined style={{ color: '#999' }} />}
-                  />
-                </Col>
-                <Col span={2} style={{ textAlign: 'right' }}>
+                <Col span={4} style={{ textAlign: 'right' }}>
                   <Button 
                     type="text" 
                     danger 
@@ -213,13 +265,112 @@ const OptionsEditor: React.FC<OptionsEditorProps> = ({ value = [], onChange }) =
                   />
                 </Col>
               </Row>
+              
+              {/* Ligne 2: Image + Mapping TBL */}
+              <Row gutter={8} align="middle">
+                <Col span={12}>
+                  <Space size="small">
+                    {option.imageUrl ? (
+                      <Space>
+                        <Image
+                          src={option.imageUrl}
+                          alt={option.label}
+                          width={32}
+                          height={32}
+                          style={{ objectFit: 'cover', borderRadius: '4px' }}
+                        />
+                        <Button 
+                          size="small" 
+                          danger 
+                          type="text"
+                          onClick={() => handleChange(index, 'imageUrl', undefined)}
+                        >
+                          ✕
+                        </Button>
+                      </Space>
+                    ) : (
+                      <Upload
+                        accept="image/*"
+                        showUploadList={false}
+                        beforeUpload={(file) => {
+                          handleImageUpload(file, index);
+                          return false;
+                        }}
+                      >
+                        <Button 
+                          size="small" 
+                          icon={<UploadOutlined />}
+                          loading={uploadingIndex === index}
+                        >
+                          Image
+                        </Button>
+                      </Upload>
+                    )}
+                    <Input
+                      size="small"
+                      value={option.imageUrl || ''}
+                      onChange={(e) => handleChange(index, 'imageUrl', e.target.value)}
+                      placeholder="ou coller URL"
+                      style={{ width: '150px' }}
+                      prefix={<PictureOutlined style={{ color: '#999' }} />}
+                    />
+                  </Space>
+                </Col>
+                <Col span={12}>
+                  {tblRootNodeId && (
+                    <Space size="small">
+                      <Text type="secondary" style={{ fontSize: '12px' }}>Mapping TBL:</Text>
+                      {option.tblNodeId ? (
+                        <Tag 
+                          color="blue" 
+                          closable 
+                          onClose={() => {
+                            handleChange(index, 'tblNodeId', undefined);
+                            handleChange(index, 'tblNodeLabel', undefined);
+                          }}
+                          style={{ fontSize: '11px' }}
+                        >
+                          <LinkOutlined /> {option.tblNodeId.substring(0, 20)}...
+                        </Tag>
+                      ) : (
+                        <Button 
+                          size="small" 
+                          type="dashed"
+                          icon={<LinkOutlined />}
+                          onClick={() => {
+                            setSelectedOptionIndex(index);
+                            setNodeTreeSelectorOpen(true);
+                          }}
+                        >
+                          Lier TBL
+                        </Button>
+                      )}
+                    </Space>
+                  )}
+                </Col>
+              </Row>
             </Card>
           ))}
         </div>
       )}
+      
+      {/* NodeTreeSelector Modal */}
+      {tblRootNodeId && (
+        <NodeTreeSelector
+          nodeId={tblRootNodeId}
+          open={nodeTreeSelectorOpen}
+          onClose={() => {
+            setNodeTreeSelectorOpen(false);
+            setSelectedOptionIndex(null);
+          }}
+          onSelect={handleTblNodeSelect}
+          selectionContext="token"
+        />
+      )}
     </div>
   );
 };
+
 
 // ==================== COMPOSANT ÉDITEUR DE NAVIGATION ====================
 interface NavigationEditorProps {
@@ -363,8 +514,39 @@ const QuestionsManagerModal: React.FC<QuestionsManagerModalProps> = ({
   const [editingQuestion, setEditingQuestion] = useState<FormQuestion | null>(null);
   const [navigationModalVisible, setNavigationModalVisible] = useState(false);
   const [selectedQuestion, setSelectedQuestion] = useState<FormQuestion | null>(null);
+  const [imageUploading, setImageUploading] = useState(false);
   
   const [questionForm] = Form.useForm();
+
+  // Upload d'image pour la question
+  const handleQuestionImageUpload = async (file: File) => {
+    try {
+      setImageUploading(true);
+      const formData = new FormData();
+      formData.append('image', file);
+      formData.append('category', 'general');
+      
+      const response = await fetch('/api/upload-image', {
+        method: 'POST',
+        body: formData,
+        credentials: 'include',
+      });
+
+      if (!response.ok) {
+        throw new Error('Erreur lors de l\'upload');
+      }
+
+      const data = await response.json();
+      const imageUrl = data.file?.fileUrl || data.url;
+      questionForm.setFieldValue('imageUrl', imageUrl);
+      message.success('Image uploadée !');
+    } catch (error) {
+      console.error('Erreur upload:', error);
+      message.error('Échec de l\'upload');
+    } finally {
+      setImageUploading(false);
+    }
+  };
 
   // Charger les questions
   const fetchQuestions = useCallback(async () => {
@@ -739,8 +921,52 @@ const QuestionsManagerModal: React.FC<QuestionsManagerModalProps> = ({
 
           <Row gutter={16}>
             <Col span={12}>
-              <Form.Item name="imageUrl" label="Image d'illustration (URL)">
-                <Input placeholder="https://..." prefix={<PictureOutlined />} />
+              <Form.Item name="imageUrl" label="Image d'illustration">
+                <Space direction="vertical" style={{ width: '100%' }}>
+                  <Form.Item noStyle shouldUpdate={(prev, cur) => prev.imageUrl !== cur.imageUrl}>
+                    {({ getFieldValue }) => {
+                      const imageUrl = getFieldValue('imageUrl');
+                      return imageUrl ? (
+                        <Space>
+                          <Image
+                            src={imageUrl}
+                            alt="Illustration"
+                            width={60}
+                            height={60}
+                            style={{ objectFit: 'cover', borderRadius: '8px' }}
+                          />
+                          <Button 
+                            size="small" 
+                            danger 
+                            onClick={() => questionForm.setFieldValue('imageUrl', '')}
+                          >
+                            Supprimer
+                          </Button>
+                        </Space>
+                      ) : null;
+                    }}
+                  </Form.Item>
+                  <Space>
+                    <Upload
+                      accept="image/*"
+                      showUploadList={false}
+                      beforeUpload={(file) => {
+                        handleQuestionImageUpload(file);
+                        return false;
+                      }}
+                    >
+                      <Button icon={<UploadOutlined />} loading={imageUploading}>
+                        Uploader
+                      </Button>
+                    </Upload>
+                    <Input
+                      placeholder="ou coller une URL"
+                      prefix={<PictureOutlined />}
+                      style={{ width: '200px' }}
+                      onChange={(e) => questionForm.setFieldValue('imageUrl', e.target.value)}
+                    />
+                  </Space>
+                </Space>
               </Form.Item>
             </Col>
             <Col span={6}>
@@ -758,7 +984,10 @@ const QuestionsManagerModal: React.FC<QuestionsManagerModalProps> = ({
           <Divider>Options de réponse (pour choix unique/multiple)</Divider>
 
           <Form.Item name="options">
-            <OptionsEditor />
+            <OptionsEditor 
+              formId={websiteForm?.id}
+              tblRootNodeId={websiteForm?.treeId}
+            />
           </Form.Item>
 
           <Form.Item name="placeholder" label="Placeholder (pour champs texte/nombre)">
