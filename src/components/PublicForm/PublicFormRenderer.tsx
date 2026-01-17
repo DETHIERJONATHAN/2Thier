@@ -276,7 +276,7 @@ const PublicFormRenderer: React.FC = () => {
   useEffect(() => {
     const fetchForm = async () => {
       try {
-        const response = await fetch(`/api/public/forms/${slug}`);
+        const response = await fetch(`/api/public-forms/${slug}`);
         if (!response.ok) {
           if (response.status === 404) {
             setError('Formulaire introuvable');
@@ -413,7 +413,7 @@ const PublicFormRenderer: React.FC = () => {
 
     setSubmitting(true);
     try {
-      const response = await fetch(`/api/public/forms/${slug}/submit`, {
+      const response = await fetch(`/api/public-forms/${slug}/submit`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
