@@ -4135,7 +4135,7 @@ __export(api_server_clean_exports, {
 });
 module.exports = __toCommonJS(api_server_clean_exports);
 var import_dotenv = __toESM(require("dotenv"), 1);
-var import_express98 = __toESM(require("express"), 1);
+var import_express97 = __toESM(require("express"), 1);
 var import_path7 = __toESM(require("path"), 1);
 var import_fs7 = __toESM(require("fs"), 1);
 var import_cors = __toESM(require("cors"), 1);
@@ -15244,10 +15244,8 @@ router19.get("/ai-measure", async (req2, res) => {
       success: true,
       data: {
         markerWidthCm: 13,
-        markerHeightCm: 21.7,
-        markerSizeCm: 13,
-        // Deprecated, gardé pour compatibilité frontend
-        boardSizeCm: 24
+        markerHeightCm: 20.5,
+        boardSizeCm: 29.7
       }
     });
   } catch (error) {
@@ -15263,7 +15261,7 @@ router19.post("/ai-measure", async (req2, res) => {
   try {
     return res.status(400).json({
       success: false,
-      error: "Configuration d\xE9sactiv\xE9e: AprilTag M\xE9tr\xE9 V1.2 est fixe (13\xD721.7cm)."
+      error: "Configuration d\xE9sactiv\xE9e: M\xE9tr\xE9 A4 V10 est fixe (13\xD720.5cm)."
     });
   } catch (error) {
     console.error("[AI-MEASURE] Erreur sauvegarde config:", error);
@@ -29356,8 +29354,8 @@ function getOrgId(req2) {
   const headerOrg = req2.headers?.["x-organization-id"] || req2.headers?.["x-organization"] || req2.headers?.["organization-id"];
   return user.organizationId || headerOrg || null;
 }
-function registerSumDisplayFieldRoutes(router95) {
-  router95.post("/trees/:treeId/nodes/:nodeId/sum-display-field", async (req2, res) => {
+function registerSumDisplayFieldRoutes(router94) {
+  router94.post("/trees/:treeId/nodes/:nodeId/sum-display-field", async (req2, res) => {
     try {
       const { treeId, nodeId } = req2.params;
       const organizationId = getOrgId(req2);
@@ -29614,7 +29612,7 @@ function registerSumDisplayFieldRoutes(router95) {
       res.status(500).json({ error: "Erreur lors de la cr\xC3\u0192\xC2\xA9ation du champ Total", details: errMsg });
     }
   });
-  router95.delete("/trees/:treeId/nodes/:nodeId/sum-display-field", async (req2, res) => {
+  router94.delete("/trees/:treeId/nodes/:nodeId/sum-display-field", async (req2, res) => {
     try {
       const { treeId, nodeId } = req2.params;
       const organizationId = getOrgId(req2);
@@ -60301,4048 +60299,8 @@ router88.get("/status", async (_req, res) => {
 });
 var ai_field_generator_default = router88;
 
-// src/api/measure.ts
-var import_express91 = __toESM(require("express"), 1);
-init_database();
-var sharpModule = __toESM(require("sharp"), 1);
-
-// src/lib/marker-detector.ts
-var _markerSizeCm = 13;
-var MARKER_SPECS = {
-  get markerSize() {
-    return _markerSizeCm;
-  },
-  // Getter dynamique !
-  boardSize: 24,
-  // Taille du tableau ALU support en cm
-  magentaRadius: 0.5,
-  // Rayon des cercles magenta en cm
-  whiteRadius: 0.1,
-  // Rayon du point blanc central en cm
-  // Structure des bandes (ratios relatifs au markerSize)
-  get bands() {
-    const size = _markerSizeCm;
-    return {
-      blackOuter: size / 6,
-      // Bande noire externe: 0 → 1/6
-      whiteOuter: size / 3,
-      // Bande blanche: 1/6 → 1/3
-      blackCenter: size * 2 / 3,
-      // Centre noir: 1/3 → 2/3
-      whiteInner: size * 5 / 6,
-      // Bande blanche: 2/3 → 5/6
-      blackInner: size
-      // Bande noire interne: 5/6 → 1
-    };
-  },
-  // Points de transition (en cm depuis le bord)
-  get transitions() {
-    const size = _markerSizeCm;
-    return [size / 6, size / 3, size * 2 / 3, size * 5 / 6];
-  },
-  // Ratios géométriques clés pour validation (constants)
-  ratios: {
-    innerToOuter: 1 / 3,
-    // Pattern central / total = 1/3
-    whiteToOuter: 2 / 3,
-    // Zone blanche / total = 2/3
-    bandWidth: 1 / 6
-    // Largeur bande / total = 1/6
-  }
-};
-var MarkerDetector = class {
-  minSize;
-  maxSize;
-  enableExtendedDetection;
-  constructor(minSize = 30, maxSize = 2e3, enableExtendedDetection = true) {
-    this.minSize = minSize;
-    this.maxSize = maxSize;
-    this.enableExtendedDetection = enableExtendedDetection;
-  }
-  /**
-  /**
-   * Détecter les marqueurs dans une image
-  /**
-   * 
-  /**
-   * PRIORITÉ 1: Détecter les LIGNES NOIRES extérieures
-  /**
-   * PRIORITÉ 2: Valider/raffiner avec les coins magenta
-   */
-  detect(imageData) {
-    const { data, width, height } = imageData;
-    console.log(`\u{1F50D} MarkerDetector.detect: ${width}x${height}`);
-    console.log("\u{1F3AF} D\xC9TECTION M\xC9TR\xC9 A4 - Recherche 4 AprilTags (ID: 2,7,14,21)");
-    let markers = this.detectAprilTagMetreA4(data, width, height);
-    if (markers.length === 0) {
-      console.log("\u26A0\uFE0F Aucun AprilTag d\xE9tect\xE9 - v\xE9rifiez que la feuille M\xE9tr\xE9 V1.2 est visible");
-      console.log("   \u{1F4CC} La feuille doit contenir 4 AprilTags aux coins (ID: 2, 7, 14, 21)");
-    } else {
-      console.log(`\u2705 ${markers.length} feuille(s) M\xE9tr\xE9 d\xE9tect\xE9e(s) - 4 coins AprilTag identifi\xE9s`);
-    }
-    return markers;
-  }
-  /**
-   * 🚀 NOUVELLE MÉTHODE: Détection AprilTags pour feuille Métré V1.2
-   * 
-   * La feuille Métré V1.2 contient 4 AprilTags aux coins:
-   * - ID 2: Coin haut gauche (30mm, 30mm)
-   * - ID 7: Coin haut droit (160mm, 30mm)
-   * - ID 14: Coin bas gauche (30mm, 247mm)
-   * - ID 21: Coin bas droit (160mm, 247mm)
-   * 
-   * @param data - Buffer image
-   * @param width - Largeur image
-   * @param height - Hauteur image
-   * @returns Liste de marqueurs détectés (1 marqueur = 1 feuille A4)
-   */
-  detectAprilTagMetreA4(data, width, height) {
-    console.log("\u{1F3AF} [APRILTAG] D\xE9tection AprilTags M\xE9tr\xE9 V1.2...");
-    try {
-      const grayscale = new Uint8Array(width * height);
-      for (let i = 0; i < width * height; i++) {
-        const r = data[i * 4];
-        const g = data[i * 4 + 1];
-        const b = data[i * 4 + 2];
-        grayscale[i] = Math.floor((r + g + b) / 3);
-      }
-      const detector2 = new AprilTag(FAMILIES.TAG36H11, {
-        quadDecimate: 2,
-        // Accélération sur grandes images
-        quadSigma: 0,
-        // Pas de flou gaussien
-        refineEdges: true,
-        // Meilleure précision des coins
-        decodeSharpening: 0.25
-      });
-      const detections = detector2.detect(width, height, grayscale);
-      console.log(`   \u{1F50D} ${detections.length} AprilTag(s) d\xE9tect\xE9(s)`);
-      if (detections.length === 0) {
-        return [];
-      }
-      const detectedTags = [];
-      for (const detection of detections) {
-        const tagCorners = [
-          { x: detection.corners[0][0], y: detection.corners[0][1] },
-          // Top-left
-          { x: detection.corners[1][0], y: detection.corners[1][1] },
-          // Top-right
-          { x: detection.corners[2][0], y: detection.corners[2][1] },
-          // Bottom-right
-          { x: detection.corners[3][0], y: detection.corners[3][1] }
-          // Bottom-left
-        ];
-        detectedTags.push({ id: detection.id, corners: tagCorners });
-        console.log(`   \u2705 AprilTag ID=${detection.id} d\xE9tect\xE9`);
-      }
-      const requiredIds = [2, 7, 14, 21];
-      const foundIds = detectedTags.map((t) => t.id);
-      const missingIds = requiredIds.filter((id) => !foundIds.includes(id));
-      if (missingIds.length > 0) {
-        console.log(`   \u26A0\uFE0F AprilTags manquants: ${missingIds.join(", ")}`);
-        console.log(`   \u{1F4CC} Trouv\xE9s: ${foundIds.join(", ")}`);
-        return [];
-      }
-      const tagTL = detectedTags.find((t) => t.id === 2);
-      const tagTR = detectedTags.find((t) => t.id === 7);
-      const tagBL = detectedTags.find((t) => t.id === 14);
-      const tagBR = detectedTags.find((t) => t.id === 21);
-      const centerTL = this.getTagCenter(tagTL.corners);
-      const centerTR = this.getTagCenter(tagTR.corners);
-      const centerBL = this.getTagCenter(tagBL.corners);
-      const centerBR = this.getTagCenter(tagBR.corners);
-      console.log(`   \u{1F4CD} Centres AprilTags:`);
-      console.log(`      TL(2):  (${centerTL.x.toFixed(0)}, ${centerTL.y.toFixed(0)})`);
-      console.log(`      TR(7):  (${centerTR.x.toFixed(0)}, ${centerTR.y.toFixed(0)})`);
-      console.log(`      BL(14): (${centerBL.x.toFixed(0)}, ${centerBL.y.toFixed(0)})`);
-      console.log(`      BR(21): (${centerBR.x.toFixed(0)}, ${centerBR.y.toFixed(0)})`);
-      const corners = [centerTL, centerTR, centerBR, centerBL];
-      const measurements = this.calculateMeasurements(corners);
-      console.log(`   \u2705 Feuille M\xE9tr\xE9 V1.2 d\xE9tect\xE9e!`);
-      console.log(`      Taille moyenne: ${measurements.avgSidePx.toFixed(0)}px`);
-      console.log(`      Pixels/cm: ${measurements.pixelsPerCm.toFixed(2)}`);
-      return [{
-        id: 0,
-        corners,
-        apriltagPositions: corners,
-        size: measurements.avgSidePx,
-        center: measurements.center,
-        score: 0.95,
-        // Haute confiance car AprilTags détectés
-        apriltagsFound: 4,
-        homography: {
-          realSizeCm: 21,
-          // Feuille A4 = 21cm de largeur
-          pixelsPerCm: measurements.pixelsPerCm,
-          sides: measurements.sides,
-          angles: measurements.angles
-        }
-      }];
-    } catch (error) {
-      console.error("\u274C [APRILTAG] Erreur d\xE9tection:", error);
-      return [];
-    }
-  }
-  /**
-   * Calcule le centre d'un AprilTag à partir de ses 4 coins
-   */
-  getTagCenter(corners) {
-    const sumX = corners.reduce((sum, p) => sum + p.x, 0);
-    const sumY = corners.reduce((sum, p) => sum + p.y, 0);
-    return {
-      x: sumX / corners.length,
-      y: sumY / corners.length
-    };
-  }
-  /**
-   * ⬜ DÉTECTION PAR ZONES BLANCHES CARRÉES
-   * 
-   * Le marqueur ArUco a un FOND BLANC visible sur un écran/surface sombre.
-   * Cette méthode cherche les zones blanches carrées dans l'image.
-   */
-  detectWhiteSquareRegions(data, width, height) {
-    console.log("\u2B1C [ArUco] Recherche zones BLANCHES CARR\xC9ES...");
-    const step = Math.max(4, Math.floor(Math.min(width, height) / 300));
-    const brightPixels = [];
-    for (let y = 0; y < height; y += step) {
-      for (let x = 0; x < width; x += step) {
-        const idx = (y * width + x) * 4;
-        const r = data[idx], g = data[idx + 1], b = data[idx + 2];
-        const brightness = (r + g + b) / 3;
-        if (brightness > 150 && Math.max(r, g, b) - Math.min(r, g, b) < 60) {
-          brightPixels.push({ x, y });
-        }
-      }
-    }
-    console.log(`   \u2B1C ${brightPixels.length} pixels clairs trouv\xE9s`);
-    if (brightPixels.length < 20) {
-      return [];
-    }
-    if (brightPixels.length > 1e4) {
-      console.log(`   \u26A0\uFE0F Trop de pixels clairs (${brightPixels.length}) - zone trop grande`);
-      return [];
-    }
-    let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
-    for (const p of brightPixels) {
-      if (p.x < minX) minX = p.x;
-      if (p.x > maxX) maxX = p.x;
-      if (p.y < minY) minY = p.y;
-      if (p.y > maxY) maxY = p.y;
-    }
-    const regionWidth = maxX - minX;
-    const regionHeight = maxY - minY;
-    const ratio = Math.max(regionWidth, regionHeight) / Math.min(regionWidth, regionHeight);
-    console.log(`   \u{1F4D0} Zone blanche: ${regionWidth}\xD7${regionHeight}px (ratio: ${ratio.toFixed(2)})`);
-    if (ratio > 1.8) {
-      console.log(`   \u26A0\uFE0F Zone blanche trop rectangulaire (ratio ${ratio.toFixed(2)} > 1.8)`);
-      return [];
-    }
-    if (Math.min(regionWidth, regionHeight) < 50) {
-      console.log(`   \u26A0\uFE0F Zone blanche trop petite`);
-      return [];
-    }
-    if (Math.max(regionWidth, regionHeight) > Math.min(width, height) * 0.6) {
-      console.log(`   \u26A0\uFE0F Zone blanche trop grande (probablement pas le marqueur)`);
-      return [];
-    }
-    const candidateCorners = [
-      { x: minX, y: minY },
-      // TL
-      { x: maxX, y: minY },
-      // TR
-      { x: maxX, y: maxY },
-      // BR
-      { x: minX, y: maxY }
-      // BL
-    ];
-    const structureScore = this.validateArucoStructure(data, width, height, candidateCorners);
-    console.log(`   \u{1F532} Score structure ArUco: ${(structureScore * 100).toFixed(0)}%`);
-    if (structureScore < 0.4) {
-      console.log(`   \u26A0\uFE0F Structure ArUco non confirm\xE9e (score ${(structureScore * 100).toFixed(0)}% < 40%)`);
-      return [];
-    }
-    console.log(`   \u2705 Zone blanche valid\xE9e comme marqueur ArUco!`);
-    const orderedCorners = this.orderCornersClockwise(candidateCorners);
-    const measurements = this.calculateMeasurements(orderedCorners);
-    return [{
-      id: 0,
-      corners: orderedCorners,
-      // 🎯 FIX: Utiliser directement les coins détectés
-      apriltagPositions: orderedCorners,
-      size: measurements.avgSidePx,
-      center: measurements.center,
-      score: 0.85,
-      apriltagsFound: 0,
-      homography: {
-        realSizeCm: MARKER_SPECS.markerSize,
-        pixelsPerCm: measurements.pixelsPerCm,
-        sides: measurements.sides,
-        angles: measurements.angles
-      }
-    }];
-  }
-  /**
-  /**
-   * 📄 DÉTECTION A4: Recherche de zones blanches RECTANGULAIRES (ratio ~1.41)
-  /**
-   * Spécialement conçue pour feuilles A4 (21x29.7cm), pas de limite de pixels
-  /**
-   * Contrairement à detectWhiteSquareRegions qui cherche des carrés avec max 10k pixels
-   */
-  detectA4WhiteRegions(data, width, height) {
-    console.log("\u{1F4C4} [A4] D\xC9TECTION FEUILLE BLANCHE - Cherche rectangle A4 blanc...");
-    const step = Math.max(2, Math.floor(Math.min(width, height) / 500));
-    const brightPixels = [];
-    const BRIGHTNESS_THRESHOLD = 200;
-    for (let y = 0; y < height; y += step) {
-      for (let x = 0; x < width; x += step) {
-        const idx = (y * width + x) * 4;
-        const r = data[idx], g = data[idx + 1], b = data[idx + 2];
-        const brightness = (r + g + b) / 3;
-        if (brightness > BRIGHTNESS_THRESHOLD && Math.max(r, g, b) - Math.min(r, g, b) < 60) {
-          brightPixels.push({ x, y });
-        }
-      }
-    }
-    console.log(`   \u2B1C ${brightPixels.length} pixels blancs d\xE9tect\xE9s (seuil: ${BRIGHTNESS_THRESHOLD})`);
-    if (brightPixels.length < 50) {
-      console.log(`   \u26A0\uFE0F Tr\xE8s peu de pixels blancs (${brightPixels.length}) - feuille A4 probablement absente ou mal \xE9clair\xE9e`);
-      return [];
-    }
-    const totalImagePixels = width * height;
-    const sampledImagePixels = totalImagePixels / (step * step);
-    const whitePixelRatio = brightPixels.length / sampledImagePixels;
-    let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
-    for (const p of brightPixels) {
-      if (p.x < minX) minX = p.x;
-      if (p.x > maxX) maxX = p.x;
-      if (p.y < minY) minY = p.y;
-      if (p.y > maxY) maxY = p.y;
-    }
-    const regionWidth = maxX - minX;
-    const regionHeight = maxY - minY;
-    const widthRatio = regionWidth / width;
-    const heightRatio = regionHeight / height;
-    if (widthRatio > 0.98 && heightRatio > 0.98) {
-      console.log(`   \u26A0\uFE0F Zone = ${(widthRatio * 100).toFixed(0)}% \xD7 ${(heightRatio * 100).toFixed(0)}% de l'image - c'est l'image enti\xE8re, pas une A4!`);
-      return [];
-    }
-    console.log(`   \u{1F4CA} Zone blanche: ${(whitePixelRatio * 100).toFixed(0)}% pixels, ${(widthRatio * 100).toFixed(0)}% \xD7 ${(heightRatio * 100).toFixed(0)}% dimensions`);
-    const ratio = Math.max(regionWidth, regionHeight) / Math.min(regionWidth, regionHeight);
-    console.log(`   \u{1F4D0} Zone: ${regionWidth}\xD7${regionHeight}px (ratio: ${ratio.toFixed(2)}, ${(widthRatio * 100).toFixed(0)}% \xD7 ${(heightRatio * 100).toFixed(0)}% de l'image)`);
-    const A4_RATIO = 297 / 210;
-    const ratioError = Math.abs(ratio - A4_RATIO) / A4_RATIO;
-    if (ratio < 1.15 || ratio > 1.7) {
-      console.log(`   \u26A0\uFE0F Ratio ${ratio.toFixed(2)} incompatible avec A4 (attendu: 1.15-1.70, id\xE9al: ${A4_RATIO.toFixed(2)})`);
-      return [];
-    }
-    console.log(`   \u2705 FEUILLE A4 D\xC9TECT\xC9E ! Ratio: ${ratio.toFixed(2)} (erreur: ${(ratioError * 100).toFixed(1)}%)`);
-    if (Math.min(regionWidth, regionHeight) < 50) {
-      console.log(`   \u26A0\uFE0F Zone trop petite (min 50px)`);
-      return [];
-    }
-    const candidateCorners = [
-      { x: minX, y: minY },
-      { x: maxX, y: minY },
-      { x: maxX, y: maxY },
-      { x: minX, y: maxY }
-    ];
-    console.log(`   \u{1F3AF} FEUILLE A4 D\xC9TECT\xC9E !`);
-    console.log(`   \u{1F4D0} Dimensions: ${regionWidth}\xD7${regionHeight}px`);
-    console.log(`   \u{1F4CF} Ratio: ${ratio.toFixed(2)} (A4 id\xE9al: ${A4_RATIO.toFixed(2)}, tol\xE9rance: 1.15-1.70)`);
-    console.log(`   \u{1F4CA} Occupation image: ${(widthRatio * 100).toFixed(0)}% \xD7 ${(heightRatio * 100).toFixed(0)}%`);
-    console.log(`   \u2705 Coins: TL(${minX},${minY}) \u2192 TR(${maxX},${minY}) \u2192 BR(${maxX},${maxY}) \u2192 BL(${minX},${maxY})`);
-    return [{
-      corners: candidateCorners,
-      score: 0.85,
-      detectionMethod: "A4-white-rectangle-detection",
-      metadata: {
-        ratioError,
-        pixelsFound: brightPixels.length,
-        dimensions: { width: regionWidth, height: regionHeight },
-        actualRatio: ratio,
-        targetRatio: A4_RATIO,
-        imageOccupancy: { width: widthRatio, height: heightRatio },
-        purpose: "A4 sheet with logo, QR code, and measurement zone"
-      }
-    }];
-  }
-  /**
-  /**
-   * 🎯 NOUVELLE MÉTHODE PRINCIPALE: Détection par LIGNES NOIRES
-  /**
-   * 
-  /**
-   * Algorithme:
-  /**
-   * 1. Détecter les contours (gradients forts = transitions)
-  /**
-   * 2. Trouver les 4 lignes formant le quadrilatère externe
-  /**
-   * 3. Calculer les intersections = coins du marqueur
-  /**
-   * 4. Valider avec les positions magenta si disponibles
-   */
-  detectFromBlackLines(data, width, height) {
-    console.log("\u{1F532} [ArUco] D\xE9tection par LIGNES NOIRES EXT\xC9RIEURES...");
-    const edgeMap = this.computeEdgeMap(data, width, height);
-    const lines = this.findDominantLines(edgeMap, width, height);
-    if (lines.length < 4) {
-      console.log(`   \u26A0\uFE0F Seulement ${lines.length} lignes trouv\xE9es (besoin de 4)`);
-      return [];
-    }
-    const quad = this.findBestQuadrilateral(lines, width, height);
-    if (!quad) {
-      console.log("   \u26A0\uFE0F Aucun quadrilat\xE8re valide trouv\xE9");
-      return [];
-    }
-    const corners = quad.corners;
-    const widthPx = Math.sqrt(
-      Math.pow(corners[1].x - corners[0].x, 2) + Math.pow(corners[1].y - corners[0].y, 2)
-    );
-    const heightPx = Math.sqrt(
-      Math.pow(corners[3].x - corners[0].x, 2) + Math.pow(corners[3].y - corners[0].y, 2)
-    );
-    const aspectRatio = Math.max(widthPx, heightPx) / Math.min(widthPx, heightPx);
-    console.log(`   \u{1F4D0} Dimensions: ${widthPx.toFixed(0)}px \xD7 ${heightPx.toFixed(0)}px (ratio: ${aspectRatio.toFixed(2)})`);
-    if (aspectRatio > 1.8) {
-      console.log(`   \u26A0\uFE0F REJET: Ratio ${aspectRatio.toFixed(2)} trop \xE9loign\xE9 d'un carr\xE9 (max 1.8)`);
-      return [];
-    }
-    const minSide = Math.min(widthPx, heightPx);
-    if (minSide < 50) {
-      console.log(`   \u26A0\uFE0F REJET: C\xF4t\xE9 ${minSide.toFixed(0)}px trop petit (min 50px)`);
-      return [];
-    }
-    const structureScore = this.validateArucoStructure(data, width, height, corners);
-    console.log(`   \u{1F532} Score structure ArUco: ${(structureScore * 100).toFixed(0)}%`);
-    if (structureScore < 0.5) {
-      console.log(`   \u26A0\uFE0F REJET: Structure ArUco non d\xE9tect\xE9e (score ${(structureScore * 100).toFixed(0)}% < 50%)`);
-      return [];
-    }
-    console.log("   \u2705 Quadrilat\xE8re valid\xE9 comme marqueur ArUco");
-    const magentaPixels = this.findAllMagentaPixels(data, width, height);
-    const magentaClusters = this.clusterMagentaPixels(magentaPixels);
-    let finalCorners = quad.corners;
-    let apriltagsFound = 0;
-    if (magentaClusters.length >= 3) {
-      const refinedCorners = this.refineWithMagenta(quad.corners, magentaClusters);
-      if (refinedCorners) {
-        finalCorners = refinedCorners.corners;
-        apriltagsFound = refinedCorners.matchedCount;
-        console.log(`   \u{1F3AF} Coins raffin\xE9s avec ${apriltagsFound} AprilTags`);
-      }
-    }
-    const orderedCorners = this.orderCornersClockwise(finalCorners);
-    const measurements = this.calculateMeasurements(orderedCorners);
-    return [{
-      id: 0,
-      corners: orderedCorners,
-      // 🎯 FIX: Utiliser directement les coins détectés
-      magentaPositions: orderedCorners,
-      size: measurements.avgSidePx,
-      center: measurements.center,
-      score: 0.8 + magentaFound / 4 * 0.15,
-      magentaFound,
-      homography: {
-        realSizeCm: MARKER_SPECS.markerSize,
-        pixelsPerCm: measurements.pixelsPerCm,
-        sides: measurements.sides,
-        angles: measurements.angles
-      }
-    }];
-  }
-  /**
-   * Calculer la carte des contours (edge map)
-  /**
-   * Utilise un Sobel simplifié pour détecter les gradients
-   */
-  computeEdgeMap(data, width, height) {
-    const edgeMap = new Float32Array(width * height);
-    for (let y = 1; y < height - 1; y++) {
-      for (let x = 1; x < width - 1; x++) {
-        const getL = (px, py) => {
-          const idx = (py * width + px) * 4;
-          return (data[idx] + data[idx + 1] + data[idx + 2]) / 3;
-        };
-        const gx = -getL(x - 1, y - 1) + getL(x + 1, y - 1) - 2 * getL(x - 1, y) + 2 * getL(x + 1, y) - getL(x - 1, y + 1) + getL(x + 1, y + 1);
-        const gy = -getL(x - 1, y - 1) - 2 * getL(x, y - 1) - getL(x + 1, y - 1) + getL(x - 1, y + 1) + 2 * getL(x, y + 1) + getL(x + 1, y + 1);
-        edgeMap[y * width + x] = Math.sqrt(gx * gx + gy * gy);
-      }
-    }
-    return edgeMap;
-  }
-  /**
-   * Trouver les lignes dominantes via une transformation de Hough simplifiée
-   */
-  findDominantLines(edgeMap, width, height) {
-    const thetaSteps = 180;
-    const rhoMax = Math.sqrt(width * width + height * height);
-    const rhoSteps = Math.ceil(rhoMax * 2);
-    const accumulator = new Uint32Array(thetaSteps * rhoSteps);
-    const edgeThreshold = 50;
-    const step = 2;
-    for (let y = 0; y < height; y += step) {
-      for (let x = 0; x < width; x += step) {
-        const edge = edgeMap[y * width + x];
-        if (edge < edgeThreshold) continue;
-        for (let thetaIdx = 0; thetaIdx < thetaSteps; thetaIdx++) {
-          const theta = thetaIdx / thetaSteps * Math.PI;
-          const rho = x * Math.cos(theta) + y * Math.sin(theta);
-          const rhoIdx = Math.round(rho + rhoMax);
-          if (rhoIdx >= 0 && rhoIdx < rhoSteps) {
-            accumulator[thetaIdx * rhoSteps + rhoIdx]++;
-          }
-        }
-      }
-    }
-    const lines = [];
-    const minVotes = Math.max(30, width * height * 1e-4);
-    for (let thetaIdx = 0; thetaIdx < thetaSteps; thetaIdx++) {
-      for (let rhoIdx = 0; rhoIdx < rhoSteps; rhoIdx++) {
-        const votes = accumulator[thetaIdx * rhoSteps + rhoIdx];
-        if (votes > minVotes) {
-          const theta = thetaIdx / thetaSteps * Math.PI;
-          const rho = rhoIdx - rhoMax;
-          const tooClose = lines.some(
-            (l) => Math.abs(l.theta - theta) < 0.1 && Math.abs(l.rho - rho) < 20
-          );
-          if (!tooClose) {
-            lines.push({ rho, theta, votes });
-          }
-        }
-      }
-    }
-    lines.sort((a, b) => b.votes - a.votes);
-    console.log(`   \u{1F4CF} ${lines.length} lignes dominantes trouv\xE9es`);
-    return lines.slice(0, 20);
-  }
-  /**
-   * Trouver le meilleur quadrilatère parmi les lignes
-  /**
-   * 🎯 AMÉLIORÉ: Génère plusieurs candidats et les score par structure ArUco
-   */
-  findBestQuadrilateral(lines, width, height) {
-    if (lines.length < 4) return null;
-    const horizontal = [];
-    const vertical = [];
-    for (const line of lines) {
-      const angleDeg = line.theta * 180 / Math.PI % 180;
-      if (angleDeg < 45 || angleDeg > 135) {
-        vertical.push(line);
-      } else {
-        horizontal.push(line);
-      }
-    }
-    console.log(`   \u{1F4D0} ${horizontal.length} horizontales, ${vertical.length} verticales`);
-    const candidates = [];
-    const intersect = (l1, l2) => {
-      const cos1 = Math.cos(l1.theta), sin1 = Math.sin(l1.theta);
-      const cos2 = Math.cos(l2.theta), sin2 = Math.sin(l2.theta);
-      const det = cos1 * sin2 - sin1 * cos2;
-      if (Math.abs(det) < 1e-3) return null;
-      const x = (l1.rho * sin2 - l2.rho * sin1) / det;
-      const y = (l2.rho * cos1 - l1.rho * cos2) / det;
-      return { x, y };
-    };
-    const margin = -50;
-    const inBounds = (p) => p.x >= margin && p.x < width - margin && p.y >= margin && p.y < height - margin;
-    const maxH = Math.min(horizontal.length, 6);
-    const maxV = Math.min(vertical.length, 6);
-    for (let hi = 0; hi < maxH; hi++) {
-      for (let hj = hi + 1; hj < maxH; hj++) {
-        for (let vi = 0; vi < maxV; vi++) {
-          for (let vj = vi + 1; vj < maxV; vj++) {
-            const h1 = horizontal[hi], h2 = horizontal[hj];
-            const v1 = vertical[vi], v2 = vertical[vj];
-            const c1 = intersect(h1, v1);
-            const c2 = intersect(h1, v2);
-            const c3 = intersect(h2, v1);
-            const c4 = intersect(h2, v2);
-            if (!c1 || !c2 || !c3 || !c4) continue;
-            if (!inBounds(c1) || !inBounds(c2) || !inBounds(c3) || !inBounds(c4)) continue;
-            const corners = this.orderCornersClockwise([c1, c2, c3, c4]);
-            const w = Math.sqrt((corners[1].x - corners[0].x) ** 2 + (corners[1].y - corners[0].y) ** 2);
-            const h = Math.sqrt((corners[3].x - corners[0].x) ** 2 + (corners[3].y - corners[0].y) ** 2);
-            const ratio = Math.max(w, h) / Math.min(w, h);
-            if (ratio > 1.8) continue;
-            if (Math.min(w, h) < 50) continue;
-            const ratioScore = Math.max(0, 1 - (ratio - 1) * 0.3);
-            const voteScore = (h1.votes + h2.votes + v1.votes + v2.votes) / 4e3;
-            const sizeScore = Math.min(1, Math.min(w, h) / 200);
-            const score = ratioScore * 0.5 + voteScore * 0.3 + sizeScore * 0.2;
-            candidates.push({ corners, score });
-          }
-        }
-      }
-    }
-    if (candidates.length === 0) {
-      return this.findQuadFromAllLines(lines, width, height);
-    }
-    candidates.sort((a, b) => b.score - a.score);
-    console.log(`   \u{1F3AF} ${candidates.length} candidats g\xE9n\xE9r\xE9s, meilleur score: ${candidates[0].score.toFixed(2)}`);
-    return candidates[0];
-  }
-  /**
-   * Fallback: chercher un quadrilatère parmi toutes les lignes
-   */
-  findQuadFromAllLines(lines, width, height) {
-    for (let i = 0; i < Math.min(lines.length, 8); i++) {
-      for (let j = i + 1; j < Math.min(lines.length, 8); j++) {
-        for (let k = j + 1; k < Math.min(lines.length, 8); k++) {
-          for (let l = k + 1; l < Math.min(lines.length, 8); l++) {
-            const quad = this.tryMakeQuad([lines[i], lines[j], lines[k], lines[l]], width, height);
-            if (quad) return quad;
-          }
-        }
-      }
-    }
-    return null;
-  }
-  /**
-   * Essayer de former un quadrilatère avec 4 lignes
-   */
-  tryMakeQuad(lines, width, height) {
-    const corners = [];
-    for (let i = 0; i < 4; i++) {
-      for (let j = i + 1; j < 4; j++) {
-        const l1 = lines[i], l2 = lines[j];
-        const cos1 = Math.cos(l1.theta), sin1 = Math.sin(l1.theta);
-        const cos2 = Math.cos(l2.theta), sin2 = Math.sin(l2.theta);
-        const det = cos1 * sin2 - sin1 * cos2;
-        if (Math.abs(det) < 0.1) continue;
-        const x = (l1.rho * sin2 - l2.rho * sin1) / det;
-        const y = (l2.rho * cos1 - l1.rho * cos2) / det;
-        if (x >= -50 && x < width + 50 && y >= -50 && y < height + 50) {
-          corners.push({ x, y });
-        }
-      }
-    }
-    if (corners.length !== 4) return null;
-    const ordered = this.orderCornersClockwise(corners);
-    const area = this.calculateQuadArea(ordered);
-    const minArea = width * height * 0.01;
-    const maxArea = width * height * 0.9;
-    if (area < minArea || area > maxArea) return null;
-    return { corners: ordered };
-  }
-  /**
-   * Calculer l'aire d'un quadrilatère
-   */
-  calculateQuadArea(corners) {
-    let area = 0;
-    for (let i = 0; i < 4; i++) {
-      const j = (i + 1) % 4;
-      area += corners[i].x * corners[j].y;
-      area -= corners[j].x * corners[i].y;
-    }
-    return Math.abs(area) / 2;
-  }
-  /**
-   * Raffiner les coins du quadrilatère avec les positions magenta
-   */
-  refineWithMagenta(corners, clusters) {
-    const refined = [];
-    let matchedCount = 0;
-    for (const corner of corners) {
-      let bestCluster = null;
-      let bestDist = 100;
-      for (const cluster of clusters) {
-        const dist = Math.sqrt(
-          (cluster.cx - corner.x) ** 2 + (cluster.cy - corner.y) ** 2
-        );
-        if (dist < bestDist) {
-          bestDist = dist;
-          bestCluster = cluster;
-        }
-      }
-      if (bestCluster) {
-        refined.push({ x: bestCluster.cx, y: bestCluster.cy });
-        matchedCount++;
-      } else {
-        refined.push(corner);
-      }
-    }
-    if (matchedCount < 3) return null;
-    return { corners: refined, matchedCount };
-  }
-  /**
-   * Ordonner les coins en sens horaire: [TL, TR, BR, BL]
-   */
-  orderCornersClockwise(corners) {
-    const cx = corners.reduce((s, p) => s + p.x, 0) / 4;
-    const cy = corners.reduce((s, p) => s + p.y, 0) / 4;
-    const sorted = [...corners].sort((a, b) => {
-      const angleA = Math.atan2(a.y - cy, a.x - cx);
-      const angleB = Math.atan2(b.y - cy, b.x - cx);
-      return angleA - angleB;
-    });
-    let tlIdx = 0;
-    let minSum = Infinity;
-    for (let i = 0; i < 4; i++) {
-      const sum = sorted[i].x + sorted[i].y;
-      if (sum < minSum) {
-        minSum = sum;
-        tlIdx = i;
-      }
-    }
-    return [
-      sorted[tlIdx],
-      sorted[(tlIdx + 1) % 4],
-      sorted[(tlIdx + 2) % 4],
-      sorted[(tlIdx + 3) % 4]
-    ];
-  }
-  /**
-   * 🔲 VALIDATION STRUCTURE ARUCO
-  /**
-   * Vérifie que le quadrilatère contient bien la structure attendue:
-  /**
-   * NOIR (1/6) → BLANC (1/6) → PATTERN (2/6) → BLANC (1/6) → NOIR (1/6)
-  /**
-   * 
-  /**
-   * Parcourt les bords et vérifie les transitions de luminosité
-   */
-  validateArucoStructure(data, width, height, corners) {
-    const [tl, tr, br, bl] = corners;
-    const edges = [
-      { start: tl, end: tr, name: "TOP" },
-      { start: tr, end: br, name: "RIGHT" },
-      { start: br, end: bl, name: "BOTTOM" },
-      { start: bl, end: tl, name: "LEFT" }
-    ];
-    let totalScore = 0;
-    let validEdges = 0;
-    for (const edge of edges) {
-      const edgeScore = this.validateEdgeStructure(data, width, height, edge.start, edge.end);
-      if (edgeScore > 0.3) {
-        totalScore += edgeScore;
-        validEdges++;
-      }
-    }
-    if (validEdges < 2) return 0;
-    return totalScore / validEdges;
-  }
-  /**
-   * Valider la structure d'un bord du marqueur
-  /**
-   * Attend: NOIR (16%) → BLANC (16%) → PATTERN (33%) → BLANC (16%) → NOIR (16%)
-   */
-  validateEdgeStructure(data, width, height, start, end) {
-    const samples = 30;
-    const luminosities = [];
-    for (let i = 0; i < samples; i++) {
-      const t = i / (samples - 1);
-      const x = Math.round(start.x + (end.x - start.x) * t);
-      const y = Math.round(start.y + (end.y - start.y) * t);
-      if (x < 0 || x >= width || y < 0 || y >= height) {
-        luminosities.push(128);
-        continue;
-      }
-      const idx = (y * width + x) * 4;
-      const r = data[idx] || 0;
-      const g = data[idx + 1] || 0;
-      const b = data[idx + 2] || 0;
-      const lum = (r + g + b) / 3;
-      luminosities.push(lum);
-    }
-    const zone1 = luminosities.slice(0, 5);
-    const zone2 = luminosities.slice(5, 10);
-    const zone4 = luminosities.slice(20, 25);
-    const zone5 = luminosities.slice(25, 30);
-    const avg = (arr) => arr.length ? arr.reduce((a, b) => a + b, 0) / arr.length : 128;
-    const avgNoir1 = avg(zone1);
-    const avgBlanc1 = avg(zone2);
-    const avgBlanc2 = avg(zone4);
-    const avgNoir2 = avg(zone5);
-    let score = 0;
-    if (avgBlanc1 - avgNoir1 > 30) score += 0.25;
-    else if (avgBlanc1 - avgNoir1 > 15) score += 0.15;
-    if (avgBlanc2 - avgNoir2 > 30) score += 0.25;
-    else if (avgBlanc2 - avgNoir2 > 15) score += 0.15;
-    if (Math.abs(avgNoir1 - avgNoir2) < 40) score += 0.25;
-    if (Math.abs(avgBlanc1 - avgBlanc2) < 40) score += 0.25;
-    return score;
-  }
-  /**
-   * ⭐ NOUVEAU: Détecter les 16 points de référence étendus
-  /**
-   * - 4 coins (déjà détectés par magenta)
-  /**
-   * - 12 transitions NOIR→BLANC et BLANC→NOIR sur chaque bord
-   */
-  detectExtendedReferencePoints(data, width, height, corners) {
-    const [tl, tr, br, bl] = corners;
-    const transitions = MARKER_SPECS.transitions;
-    const markerSize = MARKER_SPECS.markerSize;
-    const allPoints = [];
-    const cornerPositions = [
-      { pixel: tl, real: { x: 0, y: 0 } },
-      { pixel: tr, real: { x: markerSize * 10, y: 0 } },
-      // CM → MM
-      { pixel: br, real: { x: markerSize * 10, y: markerSize * 10 } },
-      // CM → MM
-      { pixel: bl, real: { x: 0, y: markerSize * 10 } }
-      // CM → MM
-    ];
-    for (const corner of cornerPositions) {
-      allPoints.push({
-        pixel: corner.pixel,
-        real: corner.real,
-        confidence: 0.95,
-        type: "corner"
-      });
-    }
-    const topTransitions = [];
-    const rightTransitions = [];
-    const bottomTransitions = [];
-    const leftTransitions = [];
-    for (const t of transitions) {
-      const ratio = t / markerSize;
-      const result = this.detectTransitionOnEdge(data, width, height, tl, tr, ratio);
-      topTransitions.push(result.point);
-      allPoints.push({
-        pixel: result.point,
-        real: { x: t * 10, y: 0 },
-        // CM → MM
-        confidence: result.confidence,
-        type: "transition"
-      });
-    }
-    for (const t of transitions) {
-      const ratio = t / markerSize;
-      const result = this.detectTransitionOnEdge(data, width, height, tr, br, ratio);
-      rightTransitions.push(result.point);
-      allPoints.push({
-        pixel: result.point,
-        real: { x: markerSize * 10, y: t * 10 },
-        // CM → MM
-        confidence: result.confidence,
-        type: "transition"
-      });
-    }
-    for (const t of transitions) {
-      const ratio = t / markerSize;
-      const result = this.detectTransitionOnEdge(data, width, height, bl, br, ratio);
-      bottomTransitions.push(result.point);
-      allPoints.push({
-        pixel: result.point,
-        real: { x: t * 10, y: markerSize * 10 },
-        // CM → MM
-        confidence: result.confidence,
-        type: "transition"
-      });
-    }
-    for (const t of transitions) {
-      const ratio = t / markerSize;
-      const result = this.detectTransitionOnEdge(data, width, height, tl, bl, ratio);
-      leftTransitions.push(result.point);
-      allPoints.push({
-        pixel: result.point,
-        real: { x: 0, y: t * 10 },
-        // CM → MM
-        confidence: result.confidence,
-        type: "transition"
-      });
-    }
-    const detectedCount = allPoints.filter((p) => p.confidence > 0.5).length;
-    const avgConfidence = allPoints.reduce((sum, p) => sum + p.confidence, 0) / allPoints.length;
-    return {
-      corners,
-      topTransitions,
-      rightTransitions,
-      bottomTransitions,
-      leftTransitions,
-      allPoints,
-      confidence: avgConfidence,
-      detectedCount
-    };
-  }
-  /**
-   * ⭐ NOUVEAU: Détecter une transition NOIR↔BLANC sur un bord
-  /**
-   * Utilise le gradient de luminosité pour trouver le point exact
-   */
-  detectTransitionOnEdge(data, width, height, start, end, ratio) {
-    const estimatedX = start.x + (end.x - start.x) * ratio;
-    const estimatedY = start.y + (end.y - start.y) * ratio;
-    const searchRadius = Math.max(5, Math.abs(end.x - start.x + end.y - start.y) * 0.03);
-    const edgeLength = Math.sqrt((end.x - start.x) ** 2 + (end.y - start.y) ** 2);
-    const perpX = -(end.y - start.y) / edgeLength;
-    const perpY = (end.x - start.x) / edgeLength;
-    const alongX = (end.x - start.x) / edgeLength;
-    const alongY = (end.y - start.y) / edgeLength;
-    let bestPoint = { x: estimatedX, y: estimatedY };
-    let bestGradient = 0;
-    let confidence = 0.5;
-    for (let offset = -searchRadius; offset <= searchRadius; offset += 0.5) {
-      const scanX = estimatedX + alongX * offset;
-      const scanY = estimatedY + alongY * offset;
-      const gradient = this.calculateGradientAt(data, width, height, scanX, scanY, perpX, perpY);
-      if (Math.abs(gradient) > Math.abs(bestGradient)) {
-        bestGradient = gradient;
-        bestPoint = { x: scanX, y: scanY };
-      }
-    }
-    if (Math.abs(bestGradient) > 30) {
-      confidence = Math.min(0.95, 0.5 + Math.abs(bestGradient) / 200);
-      const refined = this.refineTransitionSubPixel(
-        data,
-        width,
-        height,
-        bestPoint,
-        alongX,
-        alongY
-      );
-      if (refined) {
-        bestPoint = refined;
-        confidence = Math.min(0.98, confidence + 0.1);
-      }
-    }
-    return { point: bestPoint, confidence };
-  }
-  /**
-   * Calculer le gradient de luminosité à une position donnée
-  /**
-   * 🔧 AMÉLIORÉ: Multi-échelle + sharpening pour meilleure détection des bords flous
-   */
-  calculateGradientAt(data, width, height, x, y, dirX, dirY) {
-    const getGradient = (step) => {
-      const before = this.sampleLuminositySharpened(data, width, height, x - dirX * step, y - dirY * step);
-      const after = this.sampleLuminositySharpened(data, width, height, x + dirX * step, y + dirY * step);
-      return after - before;
-    };
-    const g1 = getGradient(1);
-    const g2 = getGradient(2);
-    const g3 = getGradient(3);
-    return 0.25 * g1 + 0.5 * g2 + 0.25 * g3;
-  }
-  /**
-   * 🆕 Échantillonner la luminosité avec unsharp mask (accentuation des bords)
-  /**
-   * Formule: sharpened = original + α × (original - blurred)
-   */
-  sampleLuminositySharpened(data, width, height, x, y) {
-    const original = this.sampleLuminosity(data, width, height, x, y);
-    const blurred = (this.sampleLuminosity(data, width, height, x - 1.5, y) + this.sampleLuminosity(data, width, height, x + 1.5, y) + this.sampleLuminosity(data, width, height, x, y - 1.5) + this.sampleLuminosity(data, width, height, x, y + 1.5)) / 4;
-    const alpha = 0.5;
-    const sharpened = original + alpha * (original - blurred);
-    return Math.max(0, Math.min(255, sharpened));
-  }
-  /**
-   * Échantillonner la luminosité à une position (avec interpolation bilinéaire)
-   */
-  sampleLuminosity(data, width, height, x, y) {
-    x = Math.max(0, Math.min(width - 1, x));
-    y = Math.max(0, Math.min(height - 1, y));
-    const x0 = Math.floor(x);
-    const y0 = Math.floor(y);
-    const x1 = Math.min(x0 + 1, width - 1);
-    const y1 = Math.min(y0 + 1, height - 1);
-    const dx = x - x0;
-    const dy = y - y0;
-    const getL = (px, py) => {
-      const idx = (py * width + px) * 4;
-      return (data[idx] + data[idx + 1] + data[idx + 2]) / 3;
-    };
-    const l00 = getL(x0, y0);
-    const l10 = getL(x1, y0);
-    const l01 = getL(x0, y1);
-    const l11 = getL(x1, y1);
-    return l00 * (1 - dx) * (1 - dy) + l10 * dx * (1 - dy) + l01 * (1 - dx) * dy + l11 * dx * dy;
-  }
-  /**
-   * Raffiner la position de transition au sub-pixel
-   */
-  refineTransitionSubPixel(data, width, height, point, dirX, dirY) {
-    const step = 0.5;
-    const g0 = this.calculateGradientAt(data, width, height, point.x - dirX * step, point.y - dirY * step, dirX, dirY);
-    const g1 = this.calculateGradientAt(data, width, height, point.x, point.y, dirX, dirY);
-    const g2 = this.calculateGradientAt(data, width, height, point.x + dirX * step, point.y + dirY * step, dirX, dirY);
-    const denom = 2 * (g0 - 2 * g1 + g2);
-    if (Math.abs(denom) < 1e-3) return null;
-    const offset = (g0 - g2) / denom * step;
-    if (Math.abs(offset) > step) return null;
-    return {
-      x: point.x + dirX * offset,
-      y: point.y + dirY * offset
-    };
-  }
-  /**
-   * 📄 DÉTECTION A4 ULTRA-PRÉCISE avec sub-pixel refinement + préparation 3D
-  /**
-   * 
-  /**
-   * Feuille A4 : 210×297mm, ratio 0.707, épaisseur 4mm
-  /**
-   * 
-  /**
-   * Algorithme multi-passes :
-  /**
-   * PASS 1: Détection bords blancs (edges) - grossière
-  /**
-   * PASS 2: Sub-pixel refinement (40 échantillons/bord) - précision ±0.1mm
-  /**
-   * PASS 3: Validation géométrique (angles 90°, ratio 0.707)
-  /**
-   * PASS 4: [PRÉPARÉ] Détection ombre 3D (épaisseur 4mm) - DÉSACTIVÉ pour l'instant
-  /**
-   * PASS 5: [FUTUR] Détection marqueurs (croix, logo, orientation)
-   */
-  detectA4PaperUltraPrecise(data, width, height) {
-    console.log("\u{1F4C4} [A4 ULTRA-PR\xC9CIS] D\xE9tection A4 avec sub-pixel refinement...");
-    const whiteMarkers = this.detectA4WhiteRegions(data, width, height);
-    if (whiteMarkers.length === 0) {
-      console.log("\u26A0\uFE0F [A4] Aucune r\xE9gion blanche A4 d\xE9tect\xE9e");
-      return [];
-    }
-    console.log(`\u{1F4D0} [A4] ${whiteMarkers.length} zone(s) blanche(s) d\xE9tect\xE9e(s)`);
-    const marker = whiteMarkers[0];
-    console.log(`\u{1F4D0} [A4] Bords bruts : TL(${marker.corners[0].x.toFixed(1)},${marker.corners[0].y.toFixed(1)}) \u2192 BR(${marker.corners[2].x.toFixed(1)},${marker.corners[2].y.toFixed(1)})`);
-    console.log("\u{1F52C} [A4] Lancement sub-pixel refinement...");
-    const refinedCorners = this.refineA4EdgesSubPixel(data, width, height, marker.corners);
-    console.log(`\u{1F52C} [A4] Coins raffin\xE9s : TL(${refinedCorners[0].x.toFixed(2)},${refinedCorners[0].y.toFixed(2)}) \u2192 BR(${refinedCorners[2].x.toFixed(2)},${refinedCorners[2].y.toFixed(2)})`);
-    console.log("\u2713 [A4] Validation g\xE9om\xE9trique...");
-    const validated = this.validateA4Geometry(refinedCorners);
-    if (!validated.valid) {
-      console.log(`\u26A0\uFE0F [A4] Validation \xE9chou\xE9e: ${validated.reason}`);
-      console.log(`\u26A0\uFE0F [A4] Retour des coins non-raffin\xE9s avec score ${marker.score}`);
-      return whiteMarkers;
-    }
-    console.log(`\u2705 [A4 ULTRA-PR\xC9CIS] D\xE9tection r\xE9ussie !`);
-    console.log(`   Score: ${validated.score.toFixed(3)}`);
-    console.log(`   Erreur angle: ${validated.angleError?.toFixed(2)}\xB0`);
-    console.log(`   Erreur ratio: ${(validated.ratioError * 100).toFixed(1)}%`);
-    return [{
-      ...marker,
-      corners: refinedCorners,
-      score: validated.score,
-      detectionMethod: "A4-ultra-precise-subpixel",
-      metadata: {
-        ...marker.metadata,
-        geometryValidated: true,
-        angleAccuracy: validated.angleError,
-        ratioAccuracy: validated.ratioError
-      }
-    }];
-  }
-  /**
-   * Sub-pixel refinement des 4 bords A4
-   */
-  refineA4EdgesSubPixel(data, width, height, corners) {
-    console.log("\u{1F52C} [A4 Sub-pixel] Raffinement des bords...");
-    const [tl, tr, br, bl] = corners;
-    const topSamples = [];
-    const bottomSamples = [];
-    const leftSamples = [];
-    const rightSamples = [];
-    const scanStep = 3;
-    const scanRange = 30;
-    for (let x = Math.floor(tl.x); x <= Math.ceil(tr.x); x += scanStep) {
-      if (topSamples.length >= 40) break;
-      const startY = Math.max(0, Math.floor(tl.y) - scanRange);
-      const endY = Math.min(height - 1, Math.floor(tl.y) + scanRange);
-      for (let y = startY; y <= endY; y++) {
-        if (x < 0 || x >= width) continue;
-        const idx = (y * width + x) * 4;
-        const brightness = (data[idx] + data[idx + 1] + data[idx + 2]) / 3;
-        if (brightness < 150 && y > startY) {
-          topSamples.push(y);
-          break;
-        }
-      }
-    }
-    for (let x = Math.floor(bl.x); x <= Math.ceil(br.x); x += scanStep) {
-      if (bottomSamples.length >= 40) break;
-      const startY = Math.min(height - 1, Math.ceil(bl.y) + scanRange);
-      const endY = Math.max(0, Math.ceil(bl.y) - scanRange);
-      for (let y = startY; y >= endY; y--) {
-        if (x < 0 || x >= width) continue;
-        const idx = (y * width + x) * 4;
-        const brightness = (data[idx] + data[idx + 1] + data[idx + 2]) / 3;
-        if (brightness < 150 && y < startY) {
-          bottomSamples.push(y);
-          break;
-        }
-      }
-    }
-    for (let y = Math.floor(tl.y); y <= Math.ceil(bl.y); y += scanStep) {
-      if (leftSamples.length >= 40) break;
-      const startX = Math.max(0, Math.floor(tl.x) - scanRange);
-      const endX = Math.min(width - 1, Math.floor(tl.x) + scanRange);
-      for (let x = startX; x <= endX; x++) {
-        if (y < 0 || y >= height) continue;
-        const idx = (y * width + x) * 4;
-        const brightness = (data[idx] + data[idx + 1] + data[idx + 2]) / 3;
-        if (brightness < 150 && x > startX) {
-          leftSamples.push(x);
-          break;
-        }
-      }
-    }
-    for (let y = Math.floor(tr.y); y <= Math.ceil(br.y); y += scanStep) {
-      if (rightSamples.length >= 40) break;
-      const startX = Math.min(width - 1, Math.ceil(tr.x) + scanRange);
-      const endX = Math.max(0, Math.ceil(tr.x) - scanRange);
-      for (let x = startX; x >= endX; x--) {
-        if (y < 0 || y >= height) continue;
-        const idx = (y * width + x) * 4;
-        const brightness = (data[idx] + data[idx + 1] + data[idx + 2]) / 3;
-        if (brightness < 150 && x < startX) {
-          rightSamples.push(x);
-          break;
-        }
-      }
-    }
-    const avgTopY = topSamples.length > 0 ? topSamples.reduce((a, b) => a + b) / topSamples.length : tl.y;
-    const avgBottomY = bottomSamples.length > 0 ? bottomSamples.reduce((a, b) => a + b) / bottomSamples.length : bl.y;
-    const avgLeftX = leftSamples.length > 0 ? leftSamples.reduce((a, b) => a + b) / leftSamples.length : tl.x;
-    const avgRightX = rightSamples.length > 0 ? rightSamples.reduce((a, b) => a + b) / rightSamples.length : tr.x;
-    console.log(`\u{1F52C} [Sub-pixel] Top: ${topSamples.length} \xE9chantillons, avg y=${avgTopY.toFixed(2)}`);
-    console.log(`\u{1F52C} [Sub-pixel] Bottom: ${bottomSamples.length} \xE9chantillons, avg y=${avgBottomY.toFixed(2)}`);
-    console.log(`\u{1F52C} [Sub-pixel] Left: ${leftSamples.length} \xE9chantillons, avg x=${avgLeftX.toFixed(2)}`);
-    console.log(`\u{1F52C} [Sub-pixel] Right: ${rightSamples.length} \xE9chantillons, avg x=${avgRightX.toFixed(2)}`);
-    return [
-      { x: avgLeftX, y: avgTopY },
-      // Top-left
-      { x: avgRightX, y: avgTopY },
-      // Top-right
-      { x: avgRightX, y: avgBottomY },
-      // Bottom-right
-      { x: avgLeftX, y: avgBottomY }
-      // Bottom-left
-    ];
-  }
-  /**
-   * Validation géométrique stricte A4
-   */
-  validateA4Geometry(corners) {
-    const [tl, tr, br, bl] = corners;
-    const width = Math.sqrt(Math.pow(tr.x - tl.x, 2) + Math.pow(tr.y - tl.y, 2));
-    const height = Math.sqrt(Math.pow(bl.x - tl.x, 2) + Math.pow(bl.y - tl.y, 2));
-    const ratio = Math.min(width, height) / Math.max(width, height);
-    const expectedRatio = 210 / 297;
-    const ratioError = Math.abs(ratio - expectedRatio);
-    if (ratioError > 0.05) {
-      return { valid: false, score: 0.5, reason: `Ratio incorrect: ${ratio.toFixed(3)} (attendu ${expectedRatio.toFixed(3)})`, ratioError };
-    }
-    const angle1 = this.calculateAngle(tl, tr, bl);
-    const angle2 = this.calculateAngle(tr, br, tl);
-    const angle3 = this.calculateAngle(br, bl, tr);
-    const angle4 = this.calculateAngle(bl, tl, br);
-    const avgAngle = (angle1 + angle2 + angle3 + angle4) / 4;
-    const angleError = Math.abs(avgAngle - 90);
-    if (angleError > 5) {
-      return { valid: false, score: 0.7, reason: `Angles incorrects: ${avgAngle.toFixed(1)}\xB0 (attendu 90\xB0)`, angleError };
-    }
-    const score = 0.98 - ratioError * 2 - angleError * 0.01;
-    return { valid: true, score, angleError, ratioError };
-  }
-  /**
-   * Calcul d'angle entre 3 points
-   */
-  calculateAngle(p1, p2, p3) {
-    const v1 = { x: p1.x - p2.x, y: p1.y - p2.y };
-    const v2 = { x: p3.x - p2.x, y: p3.y - p2.y };
-    const dot = v1.x * v2.x + v1.y * v2.y;
-    const mag1 = Math.sqrt(v1.x * v1.x + v1.y * v1.y);
-    const mag2 = Math.sqrt(v2.x * v2.x + v2.y * v2.y);
-    const cosAngle = dot / (mag1 * mag2);
-    return Math.acos(Math.max(-1, Math.min(1, cosAngle))) * (180 / Math.PI);
-  }
-  // ═════════════════════════════════════════════════════════════════════
-  // 🚧 CODE PRÉPARÉ : Détection ombre 3D (épaisseur 4mm)
-  // ═════════════════════════════════════════════════════════════════════
-  // private detectA4Shadow3D(
-  //   data: Uint8ClampedArray | Buffer,
-  //   width: number,
-  //   height: number,
-  //   corners: Point[]
-  // ): { detected: boolean; thickness?: number; lightAngle?: number; refinedCorners?: Point[] } {
-  //   // TODO: Scanner autour des bords pour détecter l'ombre portée
-  //   // - Gradient de luminosité (blanc → gris → sombre)
-  //   // - Mesurer l'épaisseur de l'ombre (~4mm en pixels)
-  //   // - Calculer l'angle de la lumière
-  //   // - Affiner les coins en utilisant le début de l'ombre
-  //   return { detected: false };
-  // }
-  /**
-   * 🎯 ANCIENNE MÉTHODE: Détection via CADRE MAGENTA COMPLET (DÉSACTIVÉE)
-  /**
-   * 
-  /**
-   * Nouveau design du marqueur (v2):
-  /**
-   * - CADRE MAGENTA extérieur: 2mm fixe (bord extérieur = taille de référence, ex: 16.8cm)
-  /**
-   * - 4 CERCLES MAGENTA aux coins: ~5mm rayon (repères visuels)
-  /**
-   * - POINT CENTRAL MAGENTA: 1mm rayon (repère centrage/perspective)
-  /**
-   * - Bande noire: adaptatif (ex: 2.8cm pour 16.8cm, 3cm pour 18cm)
-  /**
-   * - Reste du pattern: proportionnel
-  /**
-   * 
-  /**
-   * Algorithme PRÉCIS (sub-pixel):
-  /**
-   * 1. Détecter TOUS les pixels magenta
-  /**
-   * 2. Pour chaque bord (Top, Right, Bottom, Left):
-  /**
-   *    - Scanner ligne par ligne
-  /**
-   *    - Trouver la transition MAGENTA→NOIR précise
-  /**
-   *    - Interpolation sub-pixel si possible
-  /**
-   * 3. Coins = intersections des bords raffinés
-  /**
-   * 4. Validation: vérifier présence du point central
-  /**
-   * 5. Bord extérieur du magenta = mesure de référence (16.8cm, 18cm, etc.)
-   */
-  detectFromMagentaBorder(data, width, height) {
-    const size = MARKER_SPECS.markerSize;
-    console.log("\u{1F3AF} [ArUco] D\xE9tection CADRE MAGENTA PR\xC9CIS (nouveau design v2)...");
-    console.log(`   Taille marqueur: ${size}cm, cadre magenta: 2mm fixe`);
-    const magentaPixels = [];
-    for (let y = 0; y < height; y++) {
-      for (let x = 0; x < width; x++) {
-        const idx = (y * width + x) * 4;
-        const r = data[idx];
-        const g = data[idx + 1];
-        const b = data[idx + 2];
-        const maxc = Math.max(r, g, b);
-        const minc = Math.min(r, g, b);
-        const sat = maxc - minc;
-        if (sat >= 50 && g <= 180 && r >= 80 && b >= 80 && g < r && g < b) {
-          const score = r - g + (b - g) + sat * 0.5;
-          if (score >= 100) {
-            magentaPixels.push({ x, y, r, g, b, score });
-          }
-        }
-      }
-    }
-    console.log(`\u{1F49C} ${magentaPixels.length} pixels magenta d\xE9tect\xE9s (scan complet)`);
-    if (magentaPixels.length < 50) {
-      console.log("\u26A0\uFE0F Pas assez de pixels magenta pour d\xE9tecter le cadre");
-      return this.detectFromMagentaOnly(data, width, height);
-    }
-    let minX = Infinity, maxX = -Infinity;
-    let minY = Infinity, maxY = -Infinity;
-    for (const p of magentaPixels) {
-      if (p.x < minX) minX = p.x;
-      if (p.x > maxX) maxX = p.x;
-      if (p.y < minY) minY = p.y;
-      if (p.y > maxY) maxY = p.y;
-    }
-    console.log(`\u{1F4D0} [Cadre Magenta] Zone de recherche: (${minX},${minY}) \u2192 (${maxX},${maxY})`);
-    let topY = Infinity;
-    const topSamples = [];
-    const scanRange = Math.min(50, height);
-    for (let x = Math.floor(minX); x <= Math.ceil(maxX); x += 3) {
-      if (topSamples.length >= 40) break;
-      let foundMagenta = false;
-      let transitionY = -1;
-      const startY = Math.max(0, Math.floor(minY) - 20);
-      const endY = Math.min(height - 1, startY + scanRange);
-      for (let y = startY; y <= endY; y++) {
-        if (x < 0 || x >= width) continue;
-        const idx = (y * width + x) * 4;
-        const r = data[idx], g = data[idx + 1], b = data[idx + 2];
-        const isMagenta = r >= 80 && b >= 80 && g < r * 0.7 && g < b * 0.7;
-        const isBlack = r < 60 && g < 60 && b < 60;
-        if (!foundMagenta && isMagenta) {
-          foundMagenta = true;
-        } else if (foundMagenta && isBlack) {
-          transitionY = y - 1;
-          break;
-        }
-      }
-      if (transitionY > 0) {
-        topSamples.push(transitionY);
-        if (transitionY < topY) topY = transitionY;
-      }
-    }
-    let bottomY = -Infinity;
-    const bottomSamples = [];
-    for (let x = Math.floor(minX); x <= Math.ceil(maxX); x += 3) {
-      if (bottomSamples.length >= 40) break;
-      let foundMagenta = false;
-      let transitionY = -1;
-      const startY = Math.min(height - 1, Math.ceil(maxY) + 20);
-      const endY = Math.max(0, startY - scanRange);
-      for (let y = startY; y >= endY; y--) {
-        if (x < 0 || x >= width) continue;
-        const idx = (y * width + x) * 4;
-        const r = data[idx], g = data[idx + 1], b = data[idx + 2];
-        const isMagenta = r >= 80 && b >= 80 && g < r * 0.7 && g < b * 0.7;
-        const isBlack = r < 60 && g < 60 && b < 60;
-        if (!foundMagenta && isMagenta) {
-          foundMagenta = true;
-        } else if (foundMagenta && isBlack) {
-          transitionY = y + 1;
-          break;
-        }
-      }
-      if (transitionY > 0) {
-        bottomSamples.push(transitionY);
-        if (transitionY > bottomY) bottomY = transitionY;
-      }
-    }
-    let leftX = Infinity;
-    const leftSamples = [];
-    for (let y = Math.floor(minY); y <= Math.ceil(maxY); y += 3) {
-      if (leftSamples.length >= 40) break;
-      let foundMagenta = false;
-      let transitionX = -1;
-      const startX = Math.max(0, Math.floor(minX) - 20);
-      const endX = Math.min(width - 1, startX + scanRange);
-      for (let x = startX; x <= endX; x++) {
-        if (y < 0 || y >= height) continue;
-        const idx = (y * width + x) * 4;
-        const r = data[idx], g = data[idx + 1], b = data[idx + 2];
-        const isMagenta = r >= 80 && b >= 80 && g < r * 0.7 && g < b * 0.7;
-        const isBlack = r < 60 && g < 60 && b < 60;
-        if (!foundMagenta && isMagenta) {
-          foundMagenta = true;
-        } else if (foundMagenta && isBlack) {
-          transitionX = x - 1;
-          break;
-        }
-      }
-      if (transitionX > 0) {
-        leftSamples.push(transitionX);
-        if (transitionX < leftX) leftX = transitionX;
-      }
-    }
-    let rightX = -Infinity;
-    const rightSamples = [];
-    for (let y = Math.floor(minY); y <= Math.ceil(maxY); y += 3) {
-      if (rightSamples.length >= 40) break;
-      let foundMagenta = false;
-      let transitionX = -1;
-      const startX = Math.min(width - 1, Math.ceil(maxX) + 20);
-      const endX = Math.max(0, startX - scanRange);
-      for (let x = startX; x >= endX; x--) {
-        if (y < 0 || y >= height) continue;
-        const idx = (y * width + x) * 4;
-        const r = data[idx], g = data[idx + 1], b = data[idx + 2];
-        const isMagenta = r >= 80 && b >= 80 && g < r * 0.7 && g < b * 0.7;
-        const isBlack = r < 60 && g < 60 && b < 60;
-        if (!foundMagenta && isMagenta) {
-          foundMagenta = true;
-        } else if (foundMagenta && isBlack) {
-          transitionX = x + 1;
-          break;
-        }
-      }
-      if (transitionX > 0) {
-        rightSamples.push(transitionX);
-        if (transitionX > rightX) rightX = transitionX;
-      }
-    }
-    const avgTop = topSamples.length > 0 ? topSamples.reduce((a, b) => a + b) / topSamples.length : topY;
-    const avgBottom = bottomSamples.length > 0 ? bottomSamples.reduce((a, b) => a + b) / bottomSamples.length : bottomY;
-    const avgLeft = leftSamples.length > 0 ? leftSamples.reduce((a, b) => a + b) / leftSamples.length : leftX;
-    const avgRight = rightSamples.length > 0 ? rightSamples.reduce((a, b) => a + b) / rightSamples.length : rightX;
-    console.log(`\u{1F52C} [Bords PR\xC9CIS] Raffinement sub-pixel:`);
-    console.log(`   Top: y=${avgTop.toFixed(2)} (${topSamples.length} \xE9chantillons)`);
-    console.log(`   Bottom: y=${avgBottom.toFixed(2)} (${bottomSamples.length} \xE9chantillons)`);
-    console.log(`   Left: x=${avgLeft.toFixed(2)} (${leftSamples.length} \xE9chantillons)`);
-    console.log(`   Right: x=${avgRight.toFixed(2)} (${rightSamples.length} \xE9chantillons)`);
-    const centerXCalc = (avgLeft + avgRight) / 2;
-    const centerYCalc = (avgTop + avgBottom) / 2;
-    const centerPixels = magentaPixels.filter(
-      (p) => Math.abs(p.x - centerXCalc) < 10 && Math.abs(p.y - centerYCalc) < 10
-    );
-    if (centerPixels.length > 3) {
-      console.log(`\u2705 [Validation] Point central magenta d\xE9tect\xE9 (${centerPixels.length} pixels)`);
-    } else {
-      console.log(`\u26A0\uFE0F [Validation] Point central magenta faible (${centerPixels.length} pixels)`);
-    }
-    const corners = [
-      { x: avgLeft, y: avgTop },
-      // TL
-      { x: avgRight, y: avgTop },
-      // TR
-      { x: avgRight, y: avgBottom },
-      // BR
-      { x: avgLeft, y: avgBottom }
-      // BL
-    ];
-    console.log(`\u2705 [Cadre Magenta] 4 coins PR\xC9CIS extraits (bord EXT\xC9RIEUR raffin\xE9)`);
-    console.log(`   TL=(${corners[0].x.toFixed(2)}, ${corners[0].y.toFixed(2)})`);
-    console.log(`   TR=(${corners[1].x.toFixed(2)}, ${corners[1].y.toFixed(2)})`);
-    console.log(`   BR=(${corners[2].x.toFixed(2)}, ${corners[2].y.toFixed(2)})`);
-    console.log(`   BL=(${corners[3].x.toFixed(2)}, ${corners[3].y.toFixed(2)})`);
-    const widthPx = avgRight - avgLeft;
-    const heightPx = avgBottom - avgTop;
-    const ratio = Math.max(widthPx, heightPx) / Math.min(widthPx, heightPx);
-    console.log(`\u{1F4CF} Dimensions: ${widthPx.toFixed(2)}px \xD7 ${heightPx.toFixed(2)}px (ratio: ${ratio.toFixed(3)})`);
-    if (ratio > 1.5) {
-      console.log(`\u26A0\uFE0F Ratio ${ratio.toFixed(2)} trop \xE9loign\xE9 d'un carr\xE9 (max 1.5)`);
-      return this.detectFromMagentaOnly(data, width, height);
-    }
-    const avgSide = (widthPx + heightPx) / 2;
-    const pixelsPerCm = avgSide / size;
-    console.log(`\u{1F4D0} Calibration: ${avgSide.toFixed(2)}px = ${size}cm \u2192 ${pixelsPerCm.toFixed(3)}px/cm`);
-    console.log(`   \u{1F3AF} Pr\xE9cision estim\xE9e: \xB1${(1 / pixelsPerCm).toFixed(2)}mm/pixel`);
-    const measurements = this.calculateMeasurements(corners);
-    return [{
-      id: 0,
-      corners,
-      magentaPositions: corners,
-      size: avgSide,
-      center: { x: centerXCalc, y: centerYCalc },
-      score: 0.98,
-      // Très haute confiance avec raffinement sub-pixel
-      magentaFound: 4,
-      homography: {
-        realSizeCm: size,
-        pixelsPerCm,
-        sides: measurements.sides,
-        angles: measurements.angles
-      }
-    }];
-  }
-  /**
-   * 🎯 DÉTECTION COMPLÈTE UTILISANT TOUS LES REPÈRES DE L'ARUCO (ANCIEN SYSTÈME)
-  /**
-   * 
-  /**
-   * Structure du marqueur (6 bandes égales, taille configurable):
-  /**
-   * - Bordure NOIRE extérieure (bandes 1 et 6, de 0 à 1/6 et 5/6 à 1)
-  /**
-   * - Bandes BLANCHES (bandes 2 et 5, de 1/6 à 1/3 et 2/3 à 5/6)  
-  /**
-   * - Pattern ARUCO central NOIR (bandes 3+4, de 1/3 à 2/3)
-  /**
-   * - 4 coins MAGENTA aux extrémités (avec centre BLANC)
-  /**
-   * 
-  /**
-   * Ratios clés (CONSTANTS): 1/6, 1/3, 2/3, 5/6
-   */
-  detectFromMagentaOnly(data, width, height) {
-    const size = MARKER_SPECS.markerSize;
-    const band = (size / 6).toFixed(1);
-    console.log("\u{1F3AF} [ArUco] D\xE9tection COMPL\xC8TE avec tous les rep\xE8res...");
-    console.log(`   Structure: ${size}cm = ${band}cm noir + ${band}cm blanc + ${(size / 3).toFixed(1)}cm pattern + ${band}cm blanc + ${band}cm noir`);
-    const magentaPixels = this.findAllMagentaPixels(data, width, height);
-    console.log(`\u{1F49C} ${magentaPixels.length} pixels magenta d\xE9tect\xE9s`);
-    if (magentaPixels.length < 10) {
-      console.log("\u26A0\uFE0F Peu de magenta, tentative de d\xE9tection par contours...");
-      return this.detectFromBlackBorders(data, width, height);
-    }
-    const magentaClusters = this.clusterMagentaPixels(magentaPixels);
-    console.log(`\u{1F3AF} ${magentaClusters.length} zones magenta identifi\xE9es`);
-    if (magentaClusters.length < 4) {
-      console.log(`\u274C Seulement ${magentaClusters.length} coins magenta (besoin de 4)`);
-      return [];
-    }
-    const topClusters = magentaClusters.slice(0, 4);
-    const candidateCorners = [];
-    console.log("\u{1F50D} [ArUco] Analyse des 4 coins magenta - NOUVELLE M\xC9THODE LIGNES NOIRES:");
-    for (const cluster of topClusters) {
-      const trueCorner = this.findTrueCornerByBlackLines(data, width, height, cluster.cx, cluster.cy, cluster);
-      candidateCorners.push({
-        magentaCenter: { x: cluster.cx, y: cluster.cy },
-        trueCorner,
-        cluster
-      });
-      console.log(`   \u{1F4CD} Magenta(${cluster.cx.toFixed(0)}, ${cluster.cy.toFixed(0)}) \u2192 Coin VRAI: ${trueCorner ? `(${trueCorner.x.toFixed(0)}, ${trueCorner.y.toFixed(0)})` : "NON TROUV\xC9"}`);
-    }
-    const trueCornersUnordered = candidateCorners.map((c) => {
-      if (c.trueCorner) {
-        console.log(`   \u2705 Coin VRAI trouv\xE9: (${c.trueCorner.x.toFixed(0)}, ${c.trueCorner.y.toFixed(0)}) [magenta \xE9tait: (${c.magentaCenter.x.toFixed(0)}, ${c.magentaCenter.y.toFixed(0)})]`);
-        return c.trueCorner;
-      } else {
-        console.log(`   \u26A0\uFE0F Coin VRAI NON trouv\xE9, fallback sur magenta: (${c.magentaCenter.x.toFixed(0)}, ${c.magentaCenter.y.toFixed(0)})`);
-        return c.magentaCenter;
-      }
-    });
-    const orderedMagentaCorners = this.orderCorners(trueCornersUnordered);
-    if (!orderedMagentaCorners) {
-      console.log("\u274C Impossible d'ordonner les coins magenta");
-      return [];
-    }
-    console.log(`\u{1F3AF} [ArUco] Coins BLANCS ordonn\xE9s (TL, TR, BR, BL) - VRAIS COINS du ${MARKER_SPECS.markerSize}cm:`);
-    orderedMagentaCorners.forEach((p, i) => console.log(`   [${["TL", "TR", "BR", "BL"][i]}] x=${p.x.toFixed(1)}, y=${p.y.toFixed(1)}`));
-    const validation = this.validateArucoGeometry(data, width, height, orderedMagentaCorners);
-    console.log(`\u{1F4D0} [ArUco] Validation g\xE9om\xE9trique: ${validation.valid ? "\u2705" : "\u274C"} (score: ${validation.score.toFixed(2)})`);
-    const innerOffset = MARKER_SPECS.ratios.innerToOuter;
-    const [tl, tr, br, bl] = orderedMagentaCorners;
-    const innerCorners = [
-      // TL intérieur = TL + 1/3 vers TR + 1/3 vers BL
-      {
-        x: tl.x + (tr.x - tl.x) * innerOffset + (bl.x - tl.x) * innerOffset,
-        y: tl.y + (tr.y - tl.y) * innerOffset + (bl.y - tl.y) * innerOffset
-      },
-      // TR intérieur = TR + 1/3 vers TL + 1/3 vers BR
-      {
-        x: tr.x + (tl.x - tr.x) * innerOffset + (br.x - tr.x) * innerOffset,
-        y: tr.y + (tl.y - tr.y) * innerOffset + (br.y - tr.y) * innerOffset
-      },
-      // BR intérieur = BR + 1/3 vers BL + 1/3 vers TR
-      {
-        x: br.x + (bl.x - br.x) * innerOffset + (tr.x - br.x) * innerOffset,
-        y: br.y + (bl.y - br.y) * innerOffset + (tr.y - br.y) * innerOffset
-      },
-      // BL intérieur = BL + 1/3 vers BR + 1/3 vers TL
-      {
-        x: bl.x + (br.x - bl.x) * innerOffset + (tl.x - bl.x) * innerOffset,
-        y: bl.y + (br.y - bl.y) * innerOffset + (tl.y - bl.y) * innerOffset
-      }
-    ];
-    console.log(`\u{1F50D} [ArUco] Coins MAGENTA = Coins du carr\xE9 ${MARKER_SPECS.markerSize}cm (PAS de r\xE9duction 1/3!)`);
-    orderedMagentaCorners.forEach((p, i) => console.log(`   [${["TL", "TR", "BR", "BL"][i]}] x=${p.x.toFixed(1)}, y=${p.y.toFixed(1)}`));
-    const measurements = this.calculateMeasurements(orderedMagentaCorners);
-    const finalScore = Math.min(0.95, 0.6 + validation.score * 0.35);
-    return [{
-      id: 0,
-      corners: orderedMagentaCorners,
-      // 🎯 FIX: Utiliser les vrais coins (intersection lignes noires)
-      magentaPositions: orderedMagentaCorners,
-      // Identique car intersection = coins du marqueur 16.8cm
-      size: measurements.avgSidePx,
-      center: measurements.center,
-      score: finalScore,
-      magentaFound: candidateCorners.filter((c) => c.trueCorner).length,
-      homography: {
-        realSizeCm: MARKER_SPECS.markerSize,
-        pixelsPerCm: measurements.pixelsPerCm,
-        sides: measurements.sides,
-        angles: measurements.angles
-      }
-    }];
-  }
-  /**
-   * 🆕 Valider la géométrie de l'ArUco avec les ratios connus
-   */
-  validateArucoGeometry(data, width, height, corners) {
-    const [tl, tr, br, bl] = corners;
-    const sides = [
-      Math.sqrt((tr.x - tl.x) ** 2 + (tr.y - tl.y) ** 2),
-      // Haut
-      Math.sqrt((br.x - tr.x) ** 2 + (br.y - tr.y) ** 2),
-      // Droite
-      Math.sqrt((br.x - bl.x) ** 2 + (br.y - bl.y) ** 2),
-      // Bas
-      Math.sqrt((bl.x - tl.x) ** 2 + (bl.y - tl.y) ** 2)
-      // Gauche
-    ];
-    const avgSide = sides.reduce((a, b) => a + b, 0) / 4;
-    const sideVariance = sides.reduce((sum, s) => sum + Math.abs(s - avgSide), 0) / 4;
-    const regularityScore = Math.max(0, 1 - sideVariance / avgSide);
-    let transitionScore = 0;
-    const _bandRatio = MARKER_SPECS.ratios.bandWidth;
-    const sampleCount = 10;
-    let foundBlackOuter = 0;
-    let foundWhite = 0;
-    let foundBlackCenter = 0;
-    for (let i = 0; i < sampleCount; i++) {
-      const t = i / (sampleCount - 1);
-      const x = Math.round(tl.x + (tr.x - tl.x) * t);
-      const y = Math.round(tl.y + (tr.y - tl.y) * t);
-      const perpX = -(br.y - tr.y) / sides[1];
-      const perpY = (br.x - tr.x) / sides[1];
-      for (const depth of [0.05, 0.17, 0.33, 0.5]) {
-        const sampleX = Math.round(x + perpX * avgSide * depth);
-        const sampleY = Math.round(y + perpY * avgSide * depth);
-        if (sampleX >= 0 && sampleX < width && sampleY >= 0 && sampleY < height) {
-          const idx = (sampleY * width + sampleX) * 4;
-          const brightness = (data[idx] + data[idx + 1] + data[idx + 2]) / 3;
-          if (depth < 0.17 && brightness < 80) foundBlackOuter++;
-          else if (depth >= 0.17 && depth < 0.33 && brightness > 150) foundWhite++;
-          else if (depth >= 0.33 && brightness < 100) foundBlackCenter++;
-        }
-      }
-    }
-    transitionScore = (foundBlackOuter + foundWhite + foundBlackCenter) / (sampleCount * 3);
-    const finalScore = regularityScore * 0.4 + transitionScore * 0.6;
-    console.log(`   \u{1F4CA} R\xE9gularit\xE9: ${(regularityScore * 100).toFixed(0)}%, Transitions: ${(transitionScore * 100).toFixed(0)}%`);
-    return {
-      valid: finalScore > 0.5,
-      score: finalScore
-    };
-  }
-  /**
-   * 🆕 Affiner les coins en détectant les bords noir→blanc
-   */
-  refineCornersByEdgeDetection(data, width, height, corners) {
-    const refined = [];
-    const searchRadius = 15;
-    for (let i = 0; i < corners.length; i++) {
-      const corner = corners[i];
-      const nextCorner = corners[(i + 1) % 4];
-      const prevCorner = corners[(i + 3) % 4];
-      const _toNext = {
-        x: (nextCorner.x - corner.x) / Math.sqrt((nextCorner.x - corner.x) ** 2 + (nextCorner.y - corner.y) ** 2),
-        y: (nextCorner.y - corner.y) / Math.sqrt((nextCorner.x - corner.x) ** 2 + (nextCorner.y - corner.y) ** 2)
-      };
-      const _toPrev = {
-        x: (prevCorner.x - corner.x) / Math.sqrt((prevCorner.x - corner.x) ** 2 + (prevCorner.y - corner.y) ** 2),
-        y: (prevCorner.y - corner.y) / Math.sqrt((prevCorner.x - corner.x) ** 2 + (prevCorner.y - corner.y) ** 2)
-      };
-      let bestCorner = corner;
-      let bestScore = 0;
-      for (let dx = -searchRadius; dx <= searchRadius; dx++) {
-        for (let dy = -searchRadius; dy <= searchRadius; dy++) {
-          const testX = Math.round(corner.x + dx);
-          const testY = Math.round(corner.y + dy);
-          if (testX < 1 || testX >= width - 1 || testY < 1 || testY >= height - 1) continue;
-          const idx = (testY * width + testX) * 4;
-          const idxRight = (testY * width + testX + 1) * 4;
-          const idxDown = ((testY + 1) * width + testX) * 4;
-          const brightness = (data[idx] + data[idx + 1] + data[idx + 2]) / 3;
-          const brightnessRight = (data[idxRight] + data[idxRight + 1] + data[idxRight + 2]) / 3;
-          const brightnessDown = (data[idxDown] + data[idxDown + 1] + data[idxDown + 2]) / 3;
-          const gradientX = Math.abs(brightnessRight - brightness);
-          const gradientY = Math.abs(brightnessDown - brightness);
-          const gradient = gradientX + gradientY;
-          const whiteBonus = brightness > 180 ? 0.5 : 0;
-          const score = gradient + whiteBonus * 50;
-          if (score > bestScore) {
-            bestScore = score;
-            bestCorner = { x: testX, y: testY };
-          }
-        }
-      }
-      refined.push(bestCorner);
-    }
-    return refined;
-  }
-  /**
-   * 🆕 Fallback: Détecter via les bordures noires si pas assez de magenta
-   */
-  detectFromBlackBorders(data, width, height) {
-    console.log("\u{1F532} Tentative de d\xE9tection par bordures noires...");
-    const blackPixels = [];
-    const step = Math.max(2, Math.floor(Math.min(width, height) / 500));
-    for (let y = 0; y < height; y += step) {
-      for (let x = 0; x < width; x += step) {
-        const idx = (y * width + x) * 4;
-        const brightness = (data[idx] + data[idx + 1] + data[idx + 2]) / 3;
-        if (brightness < 60) {
-          blackPixels.push({ x, y });
-        }
-      }
-    }
-    console.log(`   \u2B1B ${blackPixels.length} pixels noirs trouv\xE9s`);
-    if (blackPixels.length < 100) {
-      return [];
-    }
-    if (blackPixels.length > 5e4) {
-      console.log(`   \u26A0\uFE0F Trop de pixels noirs (${blackPixels.length}) - probablement fond noir, pas de marqueur`);
-      return [];
-    }
-    let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
-    for (const p of blackPixels) {
-      if (p.x < minX) minX = p.x;
-      if (p.x > maxX) maxX = p.x;
-      if (p.y < minY) minY = p.y;
-      if (p.y > maxY) maxY = p.y;
-    }
-    const outerCorners = [
-      { x: minX, y: minY },
-      // TL
-      { x: maxX, y: minY },
-      // TR
-      { x: maxX, y: maxY },
-      // BR
-      { x: minX, y: maxY }
-      // BL
-    ];
-    const measurements = this.calculateMeasurements(outerCorners);
-    return [{
-      id: 0,
-      corners: outerCorners,
-      // 🎯 FIX: Utiliser directement les coins englobants
-      magentaPositions: outerCorners,
-      size: measurements.avgSidePx,
-      center: measurements.center,
-      score: 0.5,
-      // Score plus bas car détection moins fiable
-      magentaFound: 0,
-      homography: {
-        realSizeCm: MARKER_SPECS.markerSize,
-        pixelsPerCm: measurements.pixelsPerCm,
-        sides: measurements.sides,
-        angles: measurements.angles
-      }
-    }];
-  }
-  /**
-   * Trouver TOUS les pixels magenta dans l'image
-  /**
-   * Magenta VRAI = rouge ET bleu très forts (>150), vert FAIBLE (<100)
-  /**
-   * Le magenta imprimé sur le marqueur est très saturé et vif
-   */
-  findAllMagentaPixels(data, width, height) {
-    const pixels = [];
-    const step = Math.max(1, Math.floor(Math.min(width, height) / 900));
-    for (let y = 0; y < height; y += step) {
-      for (let x = 0; x < width; x += step) {
-        const idx = (y * width + x) * 4;
-        const r = data[idx];
-        const g = data[idx + 1];
-        const b = data[idx + 2];
-        const maxc = Math.max(r, g, b);
-        const minc = Math.min(r, g, b);
-        const sat = maxc - minc;
-        if (sat < 50) continue;
-        if (g > 180) continue;
-        if (r < 80 || b < 80) continue;
-        if (g >= r || g >= b) continue;
-        const score = r - g + (b - g) + sat * 0.5;
-        if (score < 100) continue;
-        pixels.push({ x, y, r, g, b, score });
-      }
-    }
-    console.log(`\u{1F49C} [Magenta] Pixels d\xE9tect\xE9s: ${pixels.length} (seuils \xE9quilibr\xE9s: R>80, B>80, sat>50)`);
-    return pixels;
-  }
-  /**
-   * Regrouper les pixels magenta en clusters
-  /**
-   * 🎯 AMÉLIORÉ: Utilise le fitting elliptique pour trouver le centre EXACT
-   */
-  clusterMagentaPixels(pixels) {
-    if (pixels.length === 0) return [];
-    const cellSize = 12;
-    const grid = /* @__PURE__ */ new Map();
-    for (const p of pixels) {
-      const key2 = `${Math.floor(p.x / cellSize)},${Math.floor(p.y / cellSize)}`;
-      if (!grid.has(key2)) grid.set(key2, []);
-      grid.get(key2).push(p);
-    }
-    const clusters = [];
-    const usedCells = /* @__PURE__ */ new Set();
-    const gridEntries = Array.from(grid.entries());
-    for (const [key2, cellPixels] of gridEntries) {
-      if (usedCells.has(key2)) continue;
-      const cluster = [...cellPixels];
-      const queue = [key2];
-      usedCells.add(key2);
-      while (queue.length > 0) {
-        const currentKey = queue.shift();
-        const [cx, cy] = currentKey.split(",").map(Number);
-        for (let dx = -1; dx <= 1; dx++) {
-          for (let dy = -1; dy <= 1; dy++) {
-            if (dx === 0 && dy === 0) continue;
-            const neighborKey = `${cx + dx},${cy + dy}`;
-            if (grid.has(neighborKey) && !usedCells.has(neighborKey)) {
-              cluster.push(...grid.get(neighborKey));
-              usedCells.add(neighborKey);
-              queue.push(neighborKey);
-            }
-          }
-        }
-      }
-      if (cluster.length >= 6) {
-        let sumX = 0, sumY = 0;
-        let minX = Infinity, maxX = -Infinity;
-        let minY = Infinity, maxY = -Infinity;
-        for (const p of cluster) {
-          sumX += p.x;
-          sumY += p.y;
-          minX = Math.min(minX, p.x);
-          maxX = Math.max(maxX, p.x);
-          minY = Math.min(minY, p.y);
-          maxY = Math.max(maxY, p.y);
-        }
-        const clusterWidth = maxX - minX;
-        const clusterHeight = maxY - minY;
-        const geoCenter = {
-          x: (minX + maxX) / 2,
-          y: (minY + maxY) / 2
-        };
-        const borderPixels = this.findBorderPixels(cluster, geoCenter);
-        let finalCx, finalCy;
-        if (borderPixels.length >= 8) {
-          const fitResult = this.fitCircleToPoints(borderPixels);
-          finalCx = fitResult.cx;
-          finalCy = fitResult.cy;
-          console.log(`   \u{1F3AF} Cluster #${clusters.length}: Fitting circulaire avec ${borderPixels.length} points \u2192 centre (${finalCx.toFixed(1)}, ${finalCy.toFixed(1)}), rayon=${fitResult.radius.toFixed(1)}px`);
-        } else {
-          finalCx = sumX / cluster.length;
-          finalCy = sumY / cluster.length;
-          console.log(`   \u26A0\uFE0F Cluster #${clusters.length}: Barycentre simple (${borderPixels.length} pts bordure) \u2192 centre (${finalCx.toFixed(1)}, ${finalCy.toFixed(1)})`);
-        }
-        const ratio = Math.max(clusterWidth, clusterHeight) / Math.max(1, Math.min(clusterWidth, clusterHeight));
-        if (ratio < 2.5) {
-          clusters.push({
-            cx: finalCx,
-            cy: finalCy,
-            size: cluster.length,
-            width: clusterWidth,
-            height: clusterHeight
-          });
-        }
-      }
-    }
-    clusters.sort((a, b) => b.size - a.size);
-    if (clusters.length > 4) {
-      return this.selectBest4Corners(clusters);
-    }
-    return clusters;
-  }
-  /**
-   * 🆕 Trouver les pixels de bordure d'un cluster (pour fitting circulaire)
-   */
-  findBorderPixels(cluster, center) {
-    const sectors = new Array(16).fill(null);
-    for (const p of cluster) {
-      const dx = p.x - center.x;
-      const dy = p.y - center.y;
-      const angle = Math.atan2(dy, dx);
-      const sector = Math.floor((angle + Math.PI) / (2 * Math.PI) * 16) % 16;
-      const dist = dx * dx + dy * dy;
-      if (!sectors[sector] || dist > sectors[sector].dist) {
-        sectors[sector] = { pixel: p, dist };
-      }
-    }
-    return sectors.filter((s) => s !== null).map((s) => ({ x: s.pixel.x, y: s.pixel.y }));
-  }
-  /**
-   * 🆕 Fitting circulaire par moindres carrés algébriques (méthode de Kåsa)
-  /**
-   * Retourne le centre optimal du cercle passant au mieux par les points
-   */
-  fitCircleToPoints(points) {
-    const n = points.length;
-    if (n < 3) {
-      const cx2 = points.reduce((s, p) => s + p.x, 0) / n;
-      const cy2 = points.reduce((s, p) => s + p.y, 0) / n;
-      return { cx: cx2, cy: cy2, radius: 0 };
-    }
-    let sumX = 0, sumY = 0, sumX2 = 0, sumY2 = 0, sumXY = 0;
-    let sumX3 = 0, sumY3 = 0, sumX2Y = 0, sumXY2 = 0;
-    for (const p of points) {
-      const x = p.x, y = p.y;
-      const x2 = x * x, y2 = y * y;
-      sumX += x;
-      sumY += y;
-      sumX2 += x2;
-      sumY2 += y2;
-      sumXY += x * y;
-      sumX3 += x2 * x;
-      sumY3 += y2 * y;
-      sumX2Y += x2 * y;
-      sumXY2 += x * y2;
-    }
-    const C1 = sumX3 + sumXY2;
-    const C2 = sumX2Y + sumY3;
-    const det = n * (sumX2 * sumY2 - sumXY * sumXY) - sumX * (sumX * sumY2 - sumY * sumXY) + sumY * (sumX * sumXY - sumY * sumX2);
-    if (Math.abs(det) < 1e-10) {
-      return {
-        cx: sumX / n,
-        cy: sumY / n,
-        radius: 0
-      };
-    }
-    const A = ((sumY2 - sumY * sumY / n) * (C1 - sumX * (sumX2 + sumY2) / n) - (sumXY - sumX * sumY / n) * (C2 - sumY * (sumX2 + sumY2) / n)) / ((sumX2 - sumX * sumX / n) * (sumY2 - sumY * sumY / n) - (sumXY - sumX * sumY / n) * (sumXY - sumX * sumY / n));
-    const B = ((sumX2 - sumX * sumX / n) * (C2 - sumY * (sumX2 + sumY2) / n) - (sumXY - sumX * sumY / n) * (C1 - sumX * (sumX2 + sumY2) / n)) / ((sumX2 - sumX * sumX / n) * (sumY2 - sumY * sumY / n) - (sumXY - sumX * sumY / n) * (sumXY - sumX * sumY / n));
-    const cx = A / 2;
-    const cy = B / 2;
-    let sumR2 = 0;
-    for (const p of points) {
-      sumR2 += (p.x - cx) * (p.x - cx) + (p.y - cy) * (p.y - cy);
-    }
-    const radius = Math.sqrt(sumR2 / n);
-    return { cx, cy, radius };
-  }
-  /**
-   * Sélectionner les 4 clusters qui forment le meilleur quadrilatère
-   */
-  selectBest4Corners(clusters) {
-    if (clusters.length <= 4) return clusters;
-    const candidates = clusters.slice(0, Math.min(8, clusters.length));
-    let bestCombo = candidates.slice(0, 4);
-    let bestScore = -Infinity;
-    for (let i = 0; i < candidates.length; i++) {
-      for (let j = i + 1; j < candidates.length; j++) {
-        for (let k = j + 1; k < candidates.length; k++) {
-          for (let l = k + 1; l < candidates.length; l++) {
-            const combo = [candidates[i], candidates[j], candidates[k], candidates[l]];
-            const score = this.scoreQuadrilateral(combo);
-            if (score > bestScore) {
-              bestScore = score;
-              bestCombo = combo;
-            }
-          }
-        }
-      }
-    }
-    console.log(`\u2705 Meilleur quadrilat\xE8re s\xE9lectionn\xE9 (score: ${bestScore.toFixed(0)})`);
-    console.log(`   \u{1F4CD} 4 centres magenta finaux:`);
-    bestCombo.forEach((c, i) => console.log(`      [${i}] cx=${c.cx.toFixed(1)}, cy=${c.cy.toFixed(1)}, size=${c.size}px, width=${c.width.toFixed(0)}, height=${c.height.toFixed(0)}`));
-    return bestCombo;
-  }
-  /**
-   * Score un ensemble de 4 points selon la qualité du quadrilatère
-   */
-  scoreQuadrilateral(points) {
-    const ordered = this.orderCorners(points.map((p) => ({ x: p.cx, y: p.cy })));
-    if (!ordered) return -Infinity;
-    const sides = [];
-    for (let i = 0; i < 4; i++) {
-      const p1 = ordered[i];
-      const p2 = ordered[(i + 1) % 4];
-      sides.push(Math.sqrt((p2.x - p1.x) ** 2 + (p2.y - p1.y) ** 2));
-    }
-    const avgSide = sides.reduce((a, b) => a + b, 0) / 4;
-    const variance = sides.reduce((sum, s) => sum + Math.abs(s - avgSide), 0) / 4;
-    return avgSide - variance * 2;
-  }
-  /**
-   * Trouver le centre blanc à proximité d'un point magenta
-   */
-  findWhiteCenterAt(data, width, height, cx, cy, radius) {
-    let sumX = 0, sumY = 0, sumW = 0;
-    let bestX = 0, bestY = 0, bestScore = 0;
-    for (let dy = -radius; dy <= radius; dy++) {
-      for (let dx = -radius; dx <= radius; dx++) {
-        const x = Math.round(cx + dx);
-        const y = Math.round(cy + dy);
-        if (x < 0 || x >= width || y < 0 || y >= height) continue;
-        const idx = (y * width + x) * 4;
-        const r = data[idx];
-        const g = data[idx + 1];
-        const b = data[idx + 2];
-        const brightness = (r + g + b) / 3;
-        const variance = Math.abs(r - brightness) + Math.abs(g - brightness) + Math.abs(b - brightness);
-        if (brightness > 175 && variance < 70) {
-          const distFromCenter = Math.sqrt(dx * dx + dy * dy);
-          const w = brightness / (1 + distFromCenter * 0.6);
-          sumX += x * w;
-          sumY += y * w;
-          sumW += w;
-          if (w > bestScore) {
-            bestScore = w;
-            bestX = x;
-            bestY = y;
-          }
-        }
-      }
-    }
-    if (sumW > 0) {
-      return { x: sumX / sumW, y: sumY / sumW };
-    }
-    return bestScore > 0 ? { x: bestX, y: bestY } : null;
-  }
-  /**
-   * 🎯 RAFFINEMENT: Raffine les 4 coins en cherchant les vrais coins via lignes noires
-  /**
-   * 
-  /**
-   * Pour chaque coin détecté, on cherche les 2 lignes noires perpendiculaires
-  /**
-   * du bord du marqueur et on calcule leur intersection = vrai coin.
-  /**
-   * 
-  /**
-   * @param data - Données de l'image
-  /**
-   * @param width - Largeur de l'image
-  /**
-   * @param height - Hauteur de l'image
-  /**
-   * @param corners - Les 4 coins [TL, TR, BR, BL] initiaux
-  /**
-   * @returns Les 4 coins raffinés ou null si échec
-   */
-  refineCornersWithBlackLines(data, width, height, corners) {
-    if (!corners || corners.length !== 4) return null;
-    const refinedCorners = [];
-    const cornerNames = ["TL", "TR", "BR", "BL"];
-    const markerWidth = Math.sqrt(
-      (corners[1].x - corners[0].x) ** 2 + (corners[1].y - corners[0].y) ** 2
-    );
-    const markerHeight = Math.sqrt(
-      (corners[3].x - corners[0].x) ** 2 + (corners[3].y - corners[0].y) ** 2
-    );
-    const avgMarkerSize = (markerWidth + markerHeight) / 2;
-    console.log(`   \u{1F4CF} Taille marqueur: ${markerWidth.toFixed(0)}\xD7${markerHeight.toFixed(0)}px, recherche dans rayon ${(avgMarkerSize * 0.15).toFixed(0)}px`);
-    for (let i = 0; i < 4; i++) {
-      const corner = corners[i];
-      const cornerType = cornerNames[i];
-      const searchRadius = avgMarkerSize * 0.15;
-      const fakeCluster = {
-        cx: corner.x,
-        cy: corner.y,
-        width: searchRadius * 2,
-        height: searchRadius * 2,
-        area: searchRadius * searchRadius * 4,
-        pixels: []
-      };
-      const trueCorner = this.findTrueCornerByBlackLines(data, width, height, corner.x, corner.y, fakeCluster, cornerType);
-      if (trueCorner) {
-        const dist = Math.sqrt((trueCorner.x - corner.x) ** 2 + (trueCorner.y - corner.y) ** 2);
-        if (dist < searchRadius * 2) {
-          console.log(`   ${cornerNames[i]}: (${corner.x.toFixed(0)}, ${corner.y.toFixed(0)}) \u2192 (${trueCorner.x.toFixed(0)}, ${trueCorner.y.toFixed(0)}) [\u0394=${dist.toFixed(1)}px]`);
-          refinedCorners.push(trueCorner);
-        } else {
-          console.log(`   ${cornerNames[i]}: raffinement trop loin (${dist.toFixed(1)}px), garde original`);
-          refinedCorners.push(corner);
-        }
-      } else {
-        console.log(`   ${cornerNames[i]}: raffinement \xE9chou\xE9, garde original`);
-        refinedCorners.push(corner);
-      }
-    }
-    return refinedCorners;
-  }
-  /**
-   * 🎯 NOUVELLE MÉTHODE: Trouver le vrai coin du marqueur en suivant les lignes noires
-  /**
-   * 
-  /**
-   * Le marqueur ArUco a des lignes noires sur ses bords qui passent par les cercles magenta.
-  /**
-   * Cette méthode:
-  /**
-   * 1. Part du centre du cercle magenta
-  /**
-   * 2. Scanne dans 4 directions pour trouver les lignes noires
-  /**
-   * 3. Suit ces lignes noires pour trouver leur intersection
-  /**
-   * 4. L'intersection = le vrai coin du marqueur 16.8cm
-  /**
-   * 
-  /**
-   * @param data - Données de l'image
-  /**
-   * @param width - Largeur de l'image
-  /**
-   * @param height - Hauteur de l'image
-  /**
-   * @param cx - Centre X du cercle magenta
-  /**
-   * @param cy - Centre Y du cercle magenta
-  /**
-   * @param cluster - Infos sur le cluster magenta
-  /**
-   * @param cornerType - Type de coin (TL, TR, BR, BL) pour forcer les lignes extérieures
-  /**
-   * @returns Le vrai coin (intersection des lignes noires) ou null
-   */
-  findTrueCornerByBlackLines(data, width, height, cx, cy, cluster, cornerType) {
-    console.log(`
-   \u{1F50D} [BLACK LINES] Recherche du vrai coin depuis magenta (${cx.toFixed(0)}, ${cy.toFixed(0)})${cornerType ? ` - Type: ${cornerType}` : ""}`);
-    const searchRadius = Math.max(30, Math.max(cluster.width, cluster.height) * 1.5);
-    console.log(`      Rayon de recherche: ${searchRadius.toFixed(0)}px`);
-    let directionsToSearch;
-    if (cornerType === "TL") {
-      directionsToSearch = [
-        { name: "N", dx: 0, dy: -1 },
-        // Nord = haut (ligne extérieure)
-        { name: "W", dx: -1, dy: 0 }
-        // Ouest = gauche (ligne extérieure)
-      ];
-    } else if (cornerType === "TR") {
-      directionsToSearch = [
-        { name: "N", dx: 0, dy: -1 },
-        // Nord = haut (ligne extérieure)
-        { name: "E", dx: 1, dy: 0 }
-        // Est = droite (ligne extérieure)
-      ];
-    } else if (cornerType === "BR") {
-      directionsToSearch = [
-        { name: "S", dx: 0, dy: 1 },
-        // Sud = bas (ligne extérieure)
-        { name: "E", dx: 1, dy: 0 }
-        // Est = droite (ligne extérieure)
-      ];
-    } else if (cornerType === "BL") {
-      directionsToSearch = [
-        { name: "S", dx: 0, dy: 1 },
-        // Sud = bas (ligne extérieure)
-        { name: "W", dx: -1, dy: 0 }
-        // Ouest = gauche (ligne extérieure)
-      ];
-    } else {
-      directionsToSearch = [
-        { name: "N", dx: 0, dy: -1 },
-        { name: "NE", dx: 1, dy: -1 },
-        { name: "E", dx: 1, dy: 0 },
-        { name: "SE", dx: 1, dy: 1 },
-        { name: "S", dx: 0, dy: 1 },
-        { name: "SW", dx: -1, dy: 1 },
-        { name: "W", dx: -1, dy: 0 },
-        { name: "NW", dx: -1, dy: -1 }
-      ];
-    }
-    const blackLineStarts = [];
-    for (const dir of directionsToSearch) {
-      const blackStart = this.findBlackLineStart(data, width, height, cx, cy, dir.dx, dir.dy, searchRadius);
-      if (blackStart) {
-        const angle = Math.atan2(dir.dy, dir.dx);
-        blackLineStarts.push({ dir: dir.name, point: blackStart, angle });
-        console.log(`      \u2713 Ligne noire trouv\xE9e direction ${dir.name}: (${blackStart.x.toFixed(0)}, ${blackStart.y.toFixed(0)})`);
-      }
-    }
-    console.log(`      ${blackLineStarts.length} lignes noires d\xE9tect\xE9es`);
-    if (blackLineStarts.length < 2) {
-      console.log(`      \u26A0\uFE0F Pas assez de lignes noires trouv\xE9es`);
-      return null;
-    }
-    let bestPair = null;
-    for (let i = 0; i < blackLineStarts.length; i++) {
-      for (let j = i + 1; j < blackLineStarts.length; j++) {
-        const angleDiff = Math.abs(blackLineStarts[i].angle - blackLineStarts[j].angle);
-        const normalizedDiff = Math.min(angleDiff, Math.PI * 2 - angleDiff);
-        const degreeDiff = normalizedDiff * 180 / Math.PI;
-        if (degreeDiff > 70 && degreeDiff < 110) {
-          if (!bestPair || Math.abs(degreeDiff - 90) < Math.abs(bestPair.angleDiff - 90)) {
-            bestPair = {
-              line1: blackLineStarts[i],
-              line2: blackLineStarts[j],
-              angleDiff: degreeDiff
-            };
-          }
-        }
-      }
-    }
-    if (!bestPair) {
-      console.log(`      \u26A0\uFE0F Pas de paire de lignes perpendiculaires trouv\xE9e`);
-      if (blackLineStarts.length >= 2) {
-        bestPair = {
-          line1: blackLineStarts[0],
-          line2: blackLineStarts[1],
-          angleDiff: 90
-        };
-      } else {
-        return null;
-      }
-    }
-    console.log(`      \u2713 Paire perpendiculaire: ${bestPair.line1.dir} + ${bestPair.line2.dir} (angle: ${bestPair.angleDiff.toFixed(1)}\xB0)`);
-    const line1Extended = this.followBlackLine(data, width, height, bestPair.line1.point, bestPair.line1.angle, searchRadius * 2);
-    const line2Extended = this.followBlackLine(data, width, height, bestPair.line2.point, bestPair.line2.angle, searchRadius * 2);
-    console.log(`      Ligne 1 \xE9tendue: de (${bestPair.line1.point.x.toFixed(0)}, ${bestPair.line1.point.y.toFixed(0)}) \xE0 (${line1Extended.x.toFixed(0)}, ${line1Extended.y.toFixed(0)})`);
-    console.log(`      Ligne 2 \xE9tendue: de (${bestPair.line2.point.x.toFixed(0)}, ${bestPair.line2.point.y.toFixed(0)}) \xE0 (${line2Extended.x.toFixed(0)}, ${line2Extended.y.toFixed(0)})`);
-    const intersection = this.computeLineIntersection(
-      bestPair.line1.point,
-      line1Extended,
-      bestPair.line2.point,
-      line2Extended
-    );
-    if (intersection) {
-      const distFromMagenta = Math.sqrt((intersection.x - cx) ** 2 + (intersection.y - cy) ** 2);
-      if (distFromMagenta < searchRadius * 1.5) {
-        console.log(`      \u2705 INTERSECTION TROUV\xC9E: (${intersection.x.toFixed(1)}, ${intersection.y.toFixed(1)}) - distance du magenta: ${distFromMagenta.toFixed(1)}px`);
-        return intersection;
-      } else {
-        console.log(`      \u26A0\uFE0F Intersection trop loin du magenta (${distFromMagenta.toFixed(1)}px > ${(searchRadius * 1.5).toFixed(1)}px)`);
-      }
-    }
-    console.log(`      \u26A0\uFE0F Fallback sur centre magenta`);
-    return { x: cx, y: cy };
-  }
-  /**
-   * 🎯 Trouver le BORD EXTÉRIEUR d'une ligne noire
-  /**
-   * 
-  /**
-   * Scanne depuis le centre magenta vers l'extérieur et trouve
-  /**
-   * le DERNIER pixel noir de la ligne = bord extérieur du marqueur
-   */
-  findBlackLineStart(data, width, height, cx, cy, dx, dy, maxDist) {
-    const len = Math.sqrt(dx * dx + dy * dy);
-    const ndx = dx / len;
-    const ndy = dy / len;
-    let inBlack = false;
-    let lastBlackX = 0, lastBlackY = 0;
-    let firstBlackX = 0, firstBlackY = 0;
-    let consecutiveBlack = 0;
-    for (let dist = 5; dist < maxDist; dist += 1) {
-      const x = Math.round(cx + ndx * dist);
-      const y = Math.round(cy + ndy * dist);
-      if (x < 0 || x >= width || y < 0 || y >= height) break;
-      const idx = (y * width + x) * 4;
-      const r = data[idx];
-      const g = data[idx + 1];
-      const b = data[idx + 2];
-      const brightness = (r + g + b) / 3;
-      const isBlack = brightness < 80;
-      if (isBlack) {
-        if (!inBlack) {
-          firstBlackX = x;
-          firstBlackY = y;
-          consecutiveBlack = 0;
-        }
-        lastBlackX = x;
-        lastBlackY = y;
-        inBlack = true;
-        consecutiveBlack++;
-      } else {
-        if (inBlack && consecutiveBlack >= 5) {
-          return { x: lastBlackX, y: lastBlackY };
-        }
-        inBlack = false;
-        consecutiveBlack = 0;
-      }
-    }
-    return inBlack && consecutiveBlack >= 5 ? { x: lastBlackX, y: lastBlackY } : null;
-  }
-  /**
-   * Suivre une ligne noire dans une direction donnée
-   */
-  followBlackLine(data, width, height, start, angle, maxDist) {
-    const dx = Math.cos(angle);
-    const dy = Math.sin(angle);
-    let lastValidX = start.x;
-    let lastValidY = start.y;
-    for (let dist = 1; dist < maxDist; dist += 2) {
-      const x = Math.round(start.x + dx * dist);
-      const y = Math.round(start.y + dy * dist);
-      if (x < 0 || x >= width || y < 0 || y >= height) break;
-      let foundBlack = false;
-      for (let offset = -3; offset <= 3 && !foundBlack; offset++) {
-        const ox = Math.round(x - dy * offset);
-        const oy = Math.round(y + dx * offset);
-        if (ox < 0 || ox >= width || oy < 0 || oy >= height) continue;
-        const idx = (oy * width + ox) * 4;
-        const brightness = (data[idx] + data[idx + 1] + data[idx + 2]) / 3;
-        if (brightness < 80) {
-          foundBlack = true;
-          lastValidX = ox;
-          lastValidY = oy;
-        }
-      }
-      if (!foundBlack) {
-        break;
-      }
-    }
-    return { x: lastValidX, y: lastValidY };
-  }
-  /**
-   * Calculer l'intersection de 2 lignes définies par 2 points chacune
-   */
-  computeLineIntersection(p1, p2, p3, p4) {
-    const x1 = p1.x, y1 = p1.y;
-    const x2 = p2.x, y2 = p2.y;
-    const x3 = p3.x, y3 = p3.y;
-    const x4 = p4.x, y4 = p4.y;
-    const denom = (x1 - x2) * (y3 - y4) - (y1 - y2) * (x3 - x4);
-    if (Math.abs(denom) < 1e-4) {
-      return null;
-    }
-    const t = ((x1 - x3) * (y3 - y4) - (y1 - y3) * (x3 - x4)) / denom;
-    return {
-      x: x1 + t * (x2 - x1),
-      y: y1 + t * (y2 - y1)
-    };
-  }
-  /**
-   * Calculer les mesures du quadrilatère pour l'homographie
-   */
-  calculateMeasurements(quad) {
-    const [tl, tr, br, bl] = quad;
-    const sides = [
-      Math.sqrt((tr.x - tl.x) ** 2 + (tr.y - tl.y) ** 2),
-      // Haut
-      Math.sqrt((br.x - tr.x) ** 2 + (br.y - tr.y) ** 2),
-      // Droit
-      Math.sqrt((bl.x - br.x) ** 2 + (bl.y - br.y) ** 2),
-      // Bas
-      Math.sqrt((tl.x - bl.x) ** 2 + (tl.y - bl.y) ** 2)
-      // Gauche
-    ];
-    const avgSidePx = sides.reduce((a, b) => a + b, 0) / 4;
-    const pixelsPerCm = avgSidePx / MARKER_SPECS.markerSize;
-    const angles = [
-      this.calculateAngle(bl, tl, tr),
-      this.calculateAngle(tl, tr, br),
-      this.calculateAngle(tr, br, bl),
-      this.calculateAngle(br, bl, tl)
-    ];
-    return {
-      sides,
-      avgSidePx,
-      pixelsPerCm,
-      angles,
-      center: {
-        x: (tl.x + tr.x + br.x + bl.x) / 4,
-        y: (tl.y + tr.y + br.y + bl.y) / 4
-      }
-    };
-  }
-  /**
-   * Ordonner les 4 coins en [TL, TR, BR, BL]
-   */
-  orderCorners(corners) {
-    if (corners.length !== 4) return null;
-    const cx = corners.reduce((s, c) => s + c.x, 0) / 4;
-    const cy = corners.reduce((s, c) => s + c.y, 0) / 4;
-    const topLeft = corners.find((c) => c.x < cx && c.y < cy);
-    const topRight = corners.find((c) => c.x >= cx && c.y < cy);
-    const bottomRight = corners.find((c) => c.x >= cx && c.y >= cy);
-    const bottomLeft = corners.find((c) => c.x < cx && c.y >= cy);
-    if (!topLeft || !topRight || !bottomRight || !bottomLeft) return null;
-    return [topLeft, topRight, bottomRight, bottomLeft];
-  }
-  /**
-   * Vérifier si un quadrilatère est valide
-   */
-  isValidQuad(quad) {
-    if (quad.length !== 4) return false;
-    const [tl, tr, br, bl] = quad;
-    if (tl.y > bl.y || tr.y > br.y) return false;
-    if (tl.x > tr.x || bl.x > br.x) return false;
-    const width = Math.max(tr.x - tl.x, br.x - bl.x);
-    const height = Math.max(bl.y - tl.y, br.y - tr.y);
-    return width >= this.minSize && height >= this.minSize && width <= this.maxSize && height <= this.maxSize;
-  }
-};
-function computeHomography(srcPoints, dstPoints) {
-  if (srcPoints.length !== 4 || dstPoints.length !== 4) {
-    console.error("computeHomography: besoin de 4 points source et 4 points destination");
-    return [[1, 0, 0], [0, 1, 0], [0, 0, 1]];
-  }
-  const A = [];
-  for (let i = 0; i < 4; i++) {
-    const [x, y] = [srcPoints[i].x, srcPoints[i].y];
-    const [u, v] = [dstPoints[i].x, dstPoints[i].y];
-    A.push([-x, -y, -1, 0, 0, 0, u * x, u * y, u]);
-    A.push([0, 0, 0, -x, -y, -1, v * x, v * y, v]);
-  }
-  const h = solveHomographyDLT(A);
-  return [
-    [h[0], h[1], h[2]],
-    [h[3], h[4], h[5]],
-    [h[6], h[7], h[8]]
-  ];
-}
-function solveHomographyDLT(A) {
-  const n = 9;
-  const AtA = Array(n).fill(null).map(() => Array(n).fill(0));
-  for (let i = 0; i < n; i++) {
-    for (let j = 0; j < n; j++) {
-      let sum = 0;
-      for (let k = 0; k < A.length; k++) {
-        sum += A[k][i] * A[k][j];
-      }
-      AtA[i][j] = sum;
-    }
-  }
-  const A_reduced = [];
-  const b = [];
-  for (let i = 0; i < A.length; i++) {
-    const row = [];
-    for (let j = 0; j < 8; j++) {
-      row.push(A[i][j]);
-    }
-    A_reduced.push(row);
-    b.push(-A[i][8]);
-  }
-  const AtA_reduced = Array(8).fill(null).map(() => Array(8).fill(0));
-  const Atb = Array(8).fill(0);
-  for (let i = 0; i < 8; i++) {
-    for (let j = 0; j < 8; j++) {
-      let sum2 = 0;
-      for (let k = 0; k < A_reduced.length; k++) {
-        sum2 += A_reduced[k][i] * A_reduced[k][j];
-      }
-      AtA_reduced[i][j] = sum2;
-    }
-    let sum = 0;
-    for (let k = 0; k < A_reduced.length; k++) {
-      sum += A_reduced[k][i] * b[k];
-    }
-    Atb[i] = sum;
-  }
-  const h_reduced = gaussElimination(AtA_reduced, Atb);
-  const h = [...h_reduced, 1];
-  return h;
-}
-function gaussElimination(A, b) {
-  const n = A.length;
-  const augmented = A.map((row, i) => [...row, b[i]]);
-  for (let col = 0; col < n; col++) {
-    let maxRow = col;
-    let maxVal = Math.abs(augmented[col][col]);
-    for (let row = col + 1; row < n; row++) {
-      if (Math.abs(augmented[row][col]) > maxVal) {
-        maxVal = Math.abs(augmented[row][col]);
-        maxRow = row;
-      }
-    }
-    if (maxRow !== col) {
-      [augmented[col], augmented[maxRow]] = [augmented[maxRow], augmented[col]];
-    }
-    if (Math.abs(augmented[col][col]) < 1e-12) {
-      augmented[col][col] = 1e-12;
-    }
-    for (let row = col + 1; row < n; row++) {
-      const factor = augmented[row][col] / augmented[col][col];
-      for (let j = col; j <= n; j++) {
-        augmented[row][j] -= factor * augmented[col][j];
-      }
-    }
-  }
-  const x = Array(n).fill(0);
-  for (let i = n - 1; i >= 0; i--) {
-    let sum = augmented[i][n];
-    for (let j = i + 1; j < n; j++) {
-      sum -= augmented[i][j] * x[j];
-    }
-    x[i] = sum / augmented[i][i];
-  }
-  return x;
-}
-function transformPoint(H, p) {
-  const x = H[0][0] * p.x + H[0][1] * p.y + H[0][2];
-  const y = H[1][0] * p.x + H[1][1] * p.y + H[1][2];
-  const w = H[2][0] * p.x + H[2][1] * p.y + H[2][2];
-  return {
-    x: x / w,
-    y: y / w
-  };
-}
-function measureDistanceCm(H, p1Px, p2Px) {
-  const p1Cm = transformPoint(H, p1Px);
-  const p2Cm = transformPoint(H, p2Px);
-  return Math.sqrt((p2Cm.x - p1Cm.x) ** 2 + (p2Cm.y - p1Cm.y) ** 2);
-}
-function estimatePose(corners) {
-  if (corners.length !== 4) {
-    return { rotX: 0, rotY: 0, rotZ: 0 };
-  }
-  const [tl, tr, br, bl] = corners;
-  const topWidth = Math.sqrt((tr.x - tl.x) ** 2 + (tr.y - tl.y) ** 2);
-  const bottomWidth = Math.sqrt((br.x - bl.x) ** 2 + (br.y - bl.y) ** 2);
-  const ratioX = topWidth / bottomWidth;
-  const rotX = Math.round(Math.atan2(ratioX - 1, 0.5) * 180 / Math.PI);
-  const leftHeight = Math.sqrt((bl.x - tl.x) ** 2 + (bl.y - tl.y) ** 2);
-  const rightHeight = Math.sqrt((br.x - tr.x) ** 2 + (br.y - tr.y) ** 2);
-  const ratioY = leftHeight / rightHeight;
-  const rotY = Math.round(Math.atan2(ratioY - 1, 0.5) * 180 / Math.PI);
-  const rotZ = Math.round(Math.atan2(tr.y - tl.y, tr.x - tl.x) * 180 / Math.PI);
-  return { rotX, rotY, rotZ };
-}
-function detectUltraPrecisionPoints(imageData, corners, _existingPoints, markerWidthMm2 = 168, markerHeightMm2 = 168) {
-  const { data, width, height } = imageData;
-  const allPoints = [];
-  console.log("\n\u{1F3AF} [ULTRA-PR\xC9CISION] D\xE9marrage d\xE9tection 80-100 points...");
-  const refinedCorners = fitEllipsesToMagentaCircles(data, width, height, corners);
-  console.log(`   \u2705 Fitting elliptique: 4 coins raffin\xE9s (sub-pixel 0.1px)`);
-  const realCorners = [
-    { x: 0, y: 0 },
-    { x: markerWidthMm2, y: 0 },
-    // 🎯 Largeur variable
-    { x: markerWidthMm2, y: markerHeightMm2 },
-    // 🎯 Largeur × Hauteur
-    { x: 0, y: markerHeightMm2 }
-    // 🎯 Hauteur variable
-  ];
-  for (let i = 0; i < 4; i++) {
-    allPoints.push({
-      pixel: refinedCorners[i],
-      real: realCorners[i],
-      confidence: 0.98,
-      type: "ellipse-center",
-      subPixelRefined: true
-    });
-  }
-  const transitionPoints = detectEdgeTransitions(data, width, height, refinedCorners, markerWidthMm2, markerHeightMm2);
-  allPoints.push(...transitionPoints);
-  console.log(`   \u2705 Transitions bords: ${transitionPoints.length} points`);
-  const gridCorners = detectPatternGridCorners(data, width, height, refinedCorners, markerWidthMm2, markerHeightMm2);
-  allPoints.push(...gridCorners);
-  console.log(`   \u2705 Grille pattern 7\xD77: ${gridCorners.length} coins`);
-  const gridCenters = detectPatternCellCenters(data, width, height, refinedCorners, markerWidthMm2, markerHeightMm2);
-  allPoints.push(...gridCenters);
-  console.log(`   \u2705 Centres cases 6\xD76: ${gridCenters.length} points`);
-  console.log(`   \u{1F4CA} Total brut: ${allPoints.length} points d\xE9tect\xE9s`);
-  console.log(`   \u{1F50D} DEBUG - Premiers points:`);
-  allPoints.slice(0, 6).forEach((p, i) => {
-    console.log(`      [${i}] pixel=(${p.pixel.x.toFixed(1)}, ${p.pixel.y.toFixed(1)}) \u2192 real=(${p.real.x.toFixed(1)}, ${p.real.y.toFixed(1)}) type=${p.type}`);
-  });
-  const { inliers, homography: ransacH } = ransacHomography(allPoints, {
-    iterations: 1e3,
-    threshold: 1,
-    // 1cm = 10mm de tolérance (plus permissif pour démarrer)
-    minInliers: 20
-  });
-  console.log(`   \u2705 RANSAC: ${inliers.length}/${allPoints.length} inliers (${(inliers.length / allPoints.length * 100).toFixed(1)}%)`);
-  const { optimizedH, finalError } = levenbergMarquardtRefine(inliers, ransacH);
-  console.log(`   \u2705 Levenberg-Marquardt: erreur ${(finalError * 10).toFixed(2)}mm`);
-  const quality = Math.exp(-finalError * 10);
-  const result = {
-    points: inliers,
-    totalPoints: allPoints.length,
-    inlierPoints: inliers.length,
-    homography: optimizedH,
-    reprojectionError: finalError * 10,
-    // En mm
-    quality,
-    cornerPoints: 4,
-    transitionPoints: transitionPoints.length,
-    gridCornerPoints: gridCorners.length,
-    gridCenterPoints: gridCenters.length,
-    ransacApplied: true,
-    ellipseFittingApplied: true,
-    levenbergMarquardtApplied: true
-  };
-  console.log(`
-\u{1F3AF} [ULTRA-PR\xC9CISION] TERMIN\xC9:`);
-  console.log(`   \u{1F4CA} Points: ${result.inlierPoints}/${result.totalPoints}`);
-  console.log(`   \u{1F4CF} Erreur: \xB1${result.reprojectionError.toFixed(2)}mm`);
-  console.log(`   \u2B50 Qualit\xE9: ${(result.quality * 100).toFixed(1)}%`);
-  return result;
-}
-function fitEllipsesToMagentaCircles(data, width, height, corners) {
-  const refinedCorners = [];
-  for (const corner of corners) {
-    const magentaPixels = extractMagentaPixelsAround(data, width, height, corner, 30);
-    if (magentaPixels.length < 8) {
-      refinedCorners.push(corner);
-      continue;
-    }
-    const ellipse = fitEllipseDirect(magentaPixels);
-    if (ellipse) {
-      refinedCorners.push({ x: ellipse.cx, y: ellipse.cy });
-    } else {
-      const avgX = magentaPixels.reduce((s, p) => s + p.x, 0) / magentaPixels.length;
-      const avgY = magentaPixels.reduce((s, p) => s + p.y, 0) / magentaPixels.length;
-      refinedCorners.push({ x: avgX, y: avgY });
-    }
-  }
-  return refinedCorners;
-}
-function extractMagentaPixelsAround(data, width, height, center, radius) {
-  const pixels = [];
-  const startX = Math.max(0, Math.floor(center.x - radius));
-  const endX = Math.min(width - 1, Math.ceil(center.x + radius));
-  const startY = Math.max(0, Math.floor(center.y - radius));
-  const endY = Math.min(height - 1, Math.ceil(center.y + radius));
-  for (let y = startY; y <= endY; y++) {
-    for (let x = startX; x <= endX; x++) {
-      const idx = (y * width + x) * 4;
-      const r = data[idx];
-      const g = data[idx + 1];
-      const b = data[idx + 2];
-      if (r > 100 && g < 150 && b > 100 && r > g + 30 && b > g + 30) {
-        pixels.push({ x, y });
-      }
-    }
-  }
-  return pixels;
-}
-function fitEllipseDirect(points) {
-  if (points.length < 6) return null;
-  const n = points.length;
-  const meanX = points.reduce((s, p) => s + p.x, 0) / n;
-  const meanY = points.reduce((s, p) => s + p.y, 0) / n;
-  const D = [];
-  for (const p of points) {
-    const x = p.x - meanX;
-    const y = p.y - meanY;
-    D.push([x * x, x * y, y * y, x, y, 1]);
-  }
-  const DtD = multiplyTranspose(D);
-  const coeffs = solveEllipseEigenvalue(DtD);
-  if (!coeffs) return null;
-  const [A, B, C, D2, E, F] = coeffs;
-  const disc = B * B - 4 * A * C;
-  if (disc >= 0) return null;
-  const cx = (2 * C * D2 - B * E) / disc + meanX;
-  const cy = (2 * A * E - B * D2) / disc + meanY;
-  const num = 2 * (A * E * E + C * D2 * D2 + F * B * B - B * D2 * E - A * C * F);
-  const denom1 = (B * B - A * C) * (Math.sqrt((A - C) ** 2 + B * B) - (A + C));
-  const denom2 = (B * B - A * C) * (-Math.sqrt((A - C) ** 2 + B * B) - (A + C));
-  const a = Math.abs(denom1) > 1e-10 ? Math.sqrt(Math.abs(num / denom1)) : 0;
-  const b = Math.abs(denom2) > 1e-10 ? Math.sqrt(Math.abs(num / denom2)) : 0;
-  const angle = Math.abs(B) > 1e-10 ? 0.5 * Math.atan2(B, A - C) : 0;
-  return { cx, cy, a, b, angle };
-}
-function multiplyTranspose(D) {
-  const m = D.length;
-  const n = D[0].length;
-  const result = Array(n).fill(null).map(() => Array(n).fill(0));
-  for (let i = 0; i < n; i++) {
-    for (let j = 0; j < n; j++) {
-      let sum = 0;
-      for (let k = 0; k < m; k++) {
-        sum += D[k][i] * D[k][j];
-      }
-      result[i][j] = sum;
-    }
-  }
-  return result;
-}
-function solveEllipseEigenvalue(DtD) {
-  const _n = 6;
-  let v = [1, 0, 1, 0, 0, -1];
-  const DtDshift = DtD.map((row, i) => row.map((val, j) => val + (i === j ? 1e-8 : 0)));
-  for (let iter = 0; iter < 50; iter++) {
-    const w = solveLinearSystem6x6(DtDshift, v);
-    if (!w) return null;
-    if (w[0] < 0) {
-      for (let i = 0; i < 6; i++) w[i] = -w[i];
-    }
-    const norm = Math.sqrt(w.reduce((s, x) => s + x * x, 0));
-    if (norm < 1e-10) return null;
-    v = w.map((x) => x / norm);
-  }
-  return v;
-}
-function solveLinearSystem6x6(A, b) {
-  const n = 6;
-  const aug = A.map((row, i) => [...row, b[i]]);
-  for (let col = 0; col < n; col++) {
-    let maxRow = col;
-    for (let row = col + 1; row < n; row++) {
-      if (Math.abs(aug[row][col]) > Math.abs(aug[maxRow][col])) {
-        maxRow = row;
-      }
-    }
-    [aug[col], aug[maxRow]] = [aug[maxRow], aug[col]];
-    if (Math.abs(aug[col][col]) < 1e-12) continue;
-    for (let row = col + 1; row < n; row++) {
-      const factor = aug[row][col] / aug[col][col];
-      for (let j = col; j <= n; j++) {
-        aug[row][j] -= factor * aug[col][j];
-      }
-    }
-  }
-  const x = Array(n).fill(0);
-  for (let i = n - 1; i >= 0; i--) {
-    let sum = aug[i][n];
-    for (let j = i + 1; j < n; j++) {
-      sum -= aug[i][j] * x[j];
-    }
-    x[i] = Math.abs(aug[i][i]) > 1e-12 ? sum / aug[i][i] : 0;
-  }
-  return x;
-}
-function detectEdgeTransitions(data, width, height, corners, markerWidthMm2 = 168, markerHeightMm2 = 168) {
-  const points = [];
-  const [tl, tr, br, bl] = corners;
-  const markerWidthCm = markerWidthMm2 / 10;
-  const markerHeightCm = markerHeightMm2 / 10;
-  const transitionsX = [markerWidthCm / 6, markerWidthCm / 3, markerWidthCm * 2 / 3, markerWidthCm * 5 / 6];
-  const transitionsY = [markerHeightCm / 6, markerHeightCm / 3, markerHeightCm * 2 / 3, markerHeightCm * 5 / 6];
-  for (const t of transitionsX) {
-    const point = detectTransitionWithSubPixel(data, width, height, tl, tr, t / markerWidthCm);
-    points.push({
-      pixel: point.pixel,
-      real: { x: t * 10, y: 0 },
-      // CM → MM
-      confidence: point.confidence,
-      type: "transition",
-      subPixelRefined: true
-    });
-  }
-  for (const t of transitionsY) {
-    const point = detectTransitionWithSubPixel(data, width, height, tr, br, t / markerHeightCm);
-    points.push({
-      pixel: point.pixel,
-      real: { x: markerWidthMm2, y: t * 10 },
-      // CM → MM
-      confidence: point.confidence,
-      type: "transition",
-      subPixelRefined: true
-    });
-  }
-  for (const t of transitionsX) {
-    const point = detectTransitionWithSubPixel(data, width, height, bl, br, t / markerWidthCm);
-    points.push({
-      pixel: point.pixel,
-      real: { x: t * 10, y: markerHeightMm2 },
-      // CM → MM
-      confidence: point.confidence,
-      type: "transition",
-      subPixelRefined: true
-    });
-  }
-  for (const t of transitionsY) {
-    const point = detectTransitionWithSubPixel(data, width, height, tl, bl, t / markerHeightCm);
-    points.push({
-      pixel: point.pixel,
-      real: { x: 0, y: t * 10 },
-      // CM → MM
-      confidence: point.confidence,
-      type: "transition",
-      subPixelRefined: true
-    });
-  }
-  return points;
-}
-function detectTransitionWithSubPixel(data, width, height, start, end, ratio) {
-  const estX = start.x + (end.x - start.x) * ratio;
-  const estY = start.y + (end.y - start.y) * ratio;
-  const edgeLen = Math.sqrt((end.x - start.x) ** 2 + (end.y - start.y) ** 2);
-  const perpX = -(end.y - start.y) / edgeLen;
-  const perpY = (end.x - start.x) / edgeLen;
-  const alongX = (end.x - start.x) / edgeLen;
-  const alongY = (end.y - start.y) / edgeLen;
-  const searchRadius = Math.max(5, edgeLen * 0.03);
-  let bestPoint = { x: estX, y: estY };
-  let bestGradient = 0;
-  for (let offset = -searchRadius; offset <= searchRadius; offset += 0.5) {
-    const x = estX + alongX * offset;
-    const y = estY + alongY * offset;
-    const gradient = calculateGradient(data, width, height, x, y, perpX, perpY);
-    if (Math.abs(gradient) > Math.abs(bestGradient)) {
-      bestGradient = gradient;
-      bestPoint = { x, y };
-    }
-  }
-  if (Math.abs(bestGradient) > 20) {
-    const g0 = calculateGradient(
-      data,
-      width,
-      height,
-      bestPoint.x - alongX * 0.5,
-      bestPoint.y - alongY * 0.5,
-      perpX,
-      perpY
-    );
-    const g1 = bestGradient;
-    const g2 = calculateGradient(
-      data,
-      width,
-      height,
-      bestPoint.x + alongX * 0.5,
-      bestPoint.y + alongY * 0.5,
-      perpX,
-      perpY
-    );
-    const denom = 2 * (g0 - 2 * g1 + g2);
-    if (Math.abs(denom) > 1e-3) {
-      const offset = (g0 - g2) / denom * 0.5;
-      if (Math.abs(offset) < 0.5) {
-        bestPoint.x += alongX * offset;
-        bestPoint.y += alongY * offset;
-      }
-    }
-  }
-  const confidence = Math.min(0.95, 0.5 + Math.abs(bestGradient) / 200);
-  return { pixel: bestPoint, confidence };
-}
-function calculateGradient(data, width, height, x, y, dirX, dirY) {
-  const step = 2;
-  const before = sampleLuminosity(data, width, height, x - dirX * step, y - dirY * step);
-  const after = sampleLuminosity(data, width, height, x + dirX * step, y + dirY * step);
-  return after - before;
-}
-function sampleLuminosity(data, width, height, x, y) {
-  x = Math.max(0, Math.min(width - 1, x));
-  y = Math.max(0, Math.min(height - 1, y));
-  const x0 = Math.floor(x);
-  const y0 = Math.floor(y);
-  const x1 = Math.min(x0 + 1, width - 1);
-  const y1 = Math.min(y0 + 1, height - 1);
-  const dx = x - x0;
-  const dy = y - y0;
-  const getL = (px, py) => {
-    const idx = (py * width + px) * 4;
-    return (data[idx] + data[idx + 1] + data[idx + 2]) / 3;
-  };
-  return getL(x0, y0) * (1 - dx) * (1 - dy) + getL(x1, y0) * dx * (1 - dy) + getL(x0, y1) * (1 - dx) * dy + getL(x1, y1) * dx * dy;
-}
-function detectPatternGridCorners(data, width, height, corners, markerWidthMm2 = 168, markerHeightMm2 = 168) {
-  const points = [];
-  const [tl, tr, br, bl] = corners;
-  const markerWidthCm = markerWidthMm2 / 10;
-  const markerHeightCm = markerHeightMm2 / 10;
-  const patternStart = MARKER_SPECS.ratios.innerToOuter;
-  const _patternEnd = MARKER_SPECS.ratios.whiteToOuter;
-  const patternWidthCm = markerWidthCm / 3;
-  const patternHeightCm = markerHeightCm / 3;
-  const cellWidthCm = patternWidthCm / 6;
-  const cellHeightCm = patternHeightCm / 6;
-  const cellWidthRatio = cellWidthCm / markerWidthCm;
-  const cellHeightRatio = cellHeightCm / markerHeightCm;
-  const patternStartX = markerWidthCm / 3;
-  const patternStartY = markerHeightCm / 3;
-  for (let row = 0; row <= 6; row++) {
-    for (let col = 0; col <= 6; col++) {
-      const ratioX = patternStart + col * cellWidthRatio;
-      const ratioY = patternStart + row * cellHeightRatio;
-      const realX = patternStartX + col * cellWidthCm;
-      const realY = patternStartY + row * cellHeightCm;
-      const pixelPos = bilinearInterpolate(tl, tr, br, bl, ratioX, ratioY);
-      const refined = harrisCornerRefine(data, width, height, pixelPos, 10);
-      points.push({
-        pixel: refined.point,
-        real: { x: realX * 10, y: realY * 10 },
-        // CM → MM
-        confidence: refined.confidence,
-        type: "grid-corner",
-        subPixelRefined: true
-      });
-    }
-  }
-  return points;
-}
-function detectPatternCellCenters(data, width, height, corners, markerWidthMm2 = 168, markerHeightMm2 = 168) {
-  const points = [];
-  const [tl, tr, br, bl] = corners;
-  const markerWidthCm = markerWidthMm2 / 10;
-  const markerHeightCm = markerHeightMm2 / 10;
-  const patternStartX = markerWidthCm / 3;
-  const patternStartY = markerHeightCm / 3;
-  const cellWidthCm = markerWidthCm / 18;
-  const cellHeightCm = markerHeightCm / 18;
-  const patternStartRatioX = 1 / 3;
-  const patternStartRatioY = 1 / 3;
-  const cellWidthRatio = cellWidthCm / markerWidthCm;
-  const cellHeightRatio = cellHeightCm / markerHeightCm;
-  for (let row = 0; row < 6; row++) {
-    for (let col = 0; col < 6; col++) {
-      const ratioX = patternStartRatioX + (col + 0.5) * cellWidthRatio;
-      const ratioY = patternStartRatioY + (row + 0.5) * cellHeightRatio;
-      const realX = patternStartX + (col + 0.5) * cellWidthCm;
-      const realY = patternStartY + (row + 0.5) * cellHeightCm;
-      const pixelPos = bilinearInterpolate(tl, tr, br, bl, ratioX, ratioY);
-      const isBlack = isPixelBlack(data, width, height, pixelPos);
-      const confidence = isBlack !== null ? 0.85 : 0.5;
-      points.push({
-        pixel: pixelPos,
-        real: { x: realX * 10, y: realY * 10 },
-        // CM → MM
-        confidence,
-        type: "grid-center",
-        subPixelRefined: false
-      });
-    }
-  }
-  return points;
-}
-function bilinearInterpolate(tl, tr, br, bl, u, v) {
-  const topX = tl.x + (tr.x - tl.x) * u;
-  const topY = tl.y + (tr.y - tl.y) * u;
-  const botX = bl.x + (br.x - bl.x) * u;
-  const botY = bl.y + (br.y - bl.y) * u;
-  return {
-    x: topX + (botX - topX) * v,
-    y: topY + (botY - topY) * v
-  };
-}
-function harrisCornerRefine(data, width, height, center, searchRadius) {
-  let bestX = center.x;
-  let bestY = center.y;
-  let bestHarris = 0;
-  for (let dy = -searchRadius; dy <= searchRadius; dy += 0.5) {
-    for (let dx = -searchRadius; dx <= searchRadius; dx += 0.5) {
-      const x = center.x + dx;
-      const y = center.y + dy;
-      const harris = calculateHarrisResponse(data, width, height, x, y);
-      if (harris > bestHarris) {
-        bestHarris = harris;
-        bestX = x;
-        bestY = y;
-      }
-    }
-  }
-  const confidence = Math.min(0.95, bestHarris / 1e4);
-  return { point: { x: bestX, y: bestY }, confidence };
-}
-function calculateHarrisResponse(data, width, height, x, y) {
-  let _Ix = 0, _Iy = 0, IxIy = 0, Ix2 = 0, Iy2 = 0;
-  for (let dy = -1; dy <= 1; dy++) {
-    for (let dx = -1; dx <= 1; dx++) {
-      const _L = sampleLuminosity(data, width, height, x + dx, y + dy);
-      const Lx = sampleLuminosity(data, width, height, x + dx + 1, y + dy) - sampleLuminosity(data, width, height, x + dx - 1, y + dy);
-      const Ly = sampleLuminosity(data, width, height, x + dx, y + dy + 1) - sampleLuminosity(data, width, height, x + dx, y + dy - 1);
-      Ix2 += Lx * Lx;
-      Iy2 += Ly * Ly;
-      IxIy += Lx * Ly;
-    }
-  }
-  const k = 0.04;
-  const det = Ix2 * Iy2 - IxIy * IxIy;
-  const trace = Ix2 + Iy2;
-  return det - k * trace * trace;
-}
-function isPixelBlack(data, width, height, point) {
-  const L = sampleLuminosity(data, width, height, point.x, point.y);
-  if (L < 80) return true;
-  if (L > 170) return false;
-  return null;
-}
-function ransacHomography(points, options) {
-  const { iterations, threshold, minInliers: _minInliers } = options;
-  if (points.length < 4) {
-    console.warn("\u26A0\uFE0F RANSAC: pas assez de points");
-    return { inliers: points, homography: [[1, 0, 0], [0, 1, 0], [0, 0, 1]] };
-  }
-  let bestInliers = [];
-  let bestH = [[1, 0, 0], [0, 1, 0], [0, 0, 1]];
-  for (let iter = 0; iter < iterations; iter++) {
-    const sample = selectRandomSample(points, 4);
-    const H = computeHomography(
-      sample.map((p) => p.pixel),
-      sample.map((p) => p.real)
-    );
-    const inliers = [];
-    for (const p of points) {
-      const projected = transformPoint(H, p.pixel);
-      const error = Math.sqrt(
-        (projected.x - p.real.x) ** 2 + (projected.y - p.real.y) ** 2
-      );
-      if (error < threshold) {
-        inliers.push({ ...p, error });
-      }
-    }
-    if (inliers.length > bestInliers.length) {
-      bestInliers = inliers;
-      bestH = H;
-    }
-    if (bestInliers.length > points.length * 0.9) break;
-  }
-  if (bestInliers.length >= 4) {
-    bestH = computeHomographyLeastSquares(
-      bestInliers.map((p) => p.pixel),
-      bestInliers.map((p) => p.real)
-    );
-  }
-  return { inliers: bestInliers, homography: bestH };
-}
-function selectRandomSample(array, count) {
-  const shuffled = [...array].sort(() => Math.random() - 0.5);
-  return shuffled.slice(0, count);
-}
-function computeHomographyLeastSquares(srcPoints, dstPoints) {
-  const n = srcPoints.length;
-  if (n < 4) return [[1, 0, 0], [0, 1, 0], [0, 0, 1]];
-  const A = [];
-  for (let i = 0; i < n; i++) {
-    const [x, y] = [srcPoints[i].x, srcPoints[i].y];
-    const [u, v] = [dstPoints[i].x, dstPoints[i].y];
-    A.push([-x, -y, -1, 0, 0, 0, u * x, u * y, u]);
-    A.push([0, 0, 0, -x, -y, -1, v * x, v * y, v]);
-  }
-  const A_reduced = [];
-  const b = [];
-  for (let i = 0; i < A.length; i++) {
-    const row = [];
-    for (let j = 0; j < 8; j++) {
-      row.push(A[i][j]);
-    }
-    A_reduced.push(row);
-    b.push(-A[i][8]);
-  }
-  const AtA_reduced = Array(8).fill(null).map(() => Array(8).fill(0));
-  const Atb = Array(8).fill(0);
-  for (let i = 0; i < 8; i++) {
-    for (let j = 0; j < 8; j++) {
-      let sum2 = 0;
-      for (let k = 0; k < A_reduced.length; k++) {
-        sum2 += A_reduced[k][i] * A_reduced[k][j];
-      }
-      AtA_reduced[i][j] = sum2;
-    }
-    let sum = 0;
-    for (let k = 0; k < A_reduced.length; k++) {
-      sum += A_reduced[k][i] * b[k];
-    }
-    Atb[i] = sum;
-  }
-  const h_reduced = gaussElimination(AtA_reduced, Atb);
-  const h = [...h_reduced, 1];
-  return [
-    [h[0], h[1], h[2]],
-    [h[3], h[4], h[5]],
-    [h[6], h[7], h[8]]
-  ];
-}
-function levenbergMarquardtRefine(points, initialH) {
-  if (points.length < 4) {
-    return { optimizedH: initialH, finalError: 1 };
-  }
-  let params = [
-    initialH[0][0],
-    initialH[0][1],
-    initialH[0][2],
-    initialH[1][0],
-    initialH[1][1],
-    initialH[1][2],
-    initialH[2][0],
-    initialH[2][1]
-  ];
-  let lambda = 1e-3;
-  const maxIterations = 50;
-  const tolerance = 1e-8;
-  let prevError = calculateTotalError(points, paramsToH(params));
-  for (let iter = 0; iter < maxIterations; iter++) {
-    const { J, residuals } = computeJacobianAndResiduals(points, params);
-    const JtJ = multiplyJtJ(J);
-    const Jtr = multiplyJtr(J, residuals);
-    for (let i = 0; i < 8; i++) {
-      JtJ[i][i] *= 1 + lambda;
-    }
-    const delta = solveLinearSystem8x8(JtJ, Jtr);
-    if (!delta) break;
-    const newParams = params.map((p, i) => p - delta[i]);
-    const newError = calculateTotalError(points, paramsToH(newParams));
-    if (newError < prevError) {
-      params = newParams;
-      lambda /= 10;
-      if (Math.abs(prevError - newError) < tolerance) break;
-      prevError = newError;
-    } else {
-      lambda *= 10;
-      if (lambda > 1e10) break;
-    }
-  }
-  return {
-    optimizedH: paramsToH(params),
-    finalError: prevError
-  };
-}
-function paramsToH(params) {
-  return [
-    [params[0], params[1], params[2]],
-    [params[3], params[4], params[5]],
-    [params[6], params[7], 1]
-  ];
-}
-function calculateTotalError(points, H) {
-  let total = 0;
-  for (const p of points) {
-    const projected = transformPoint(H, p.pixel);
-    total += (projected.x - p.real.x) ** 2 + (projected.y - p.real.y) ** 2;
-  }
-  return Math.sqrt(total / points.length);
-}
-function computeJacobianAndResiduals(points, params) {
-  const J = [];
-  const residuals = [];
-  const _H = paramsToH(params);
-  for (const p of points) {
-    const { x, y } = p.pixel;
-    const w = params[6] * x + params[7] * y + 1;
-    const _w2 = w * w;
-    const px = (params[0] * x + params[1] * y + params[2]) / w;
-    const py = (params[3] * x + params[4] * y + params[5]) / w;
-    residuals.push(px - p.real.x);
-    residuals.push(py - p.real.y);
-    J.push([
-      x / w,
-      y / w,
-      1 / w,
-      0,
-      0,
-      0,
-      -px * x / w,
-      -px * y / w
-    ]);
-    J.push([
-      0,
-      0,
-      0,
-      x / w,
-      y / w,
-      1 / w,
-      -py * x / w,
-      -py * y / w
-    ]);
-  }
-  return { J, residuals };
-}
-function multiplyJtJ(J) {
-  const m = J.length;
-  const n = 8;
-  const result = Array(n).fill(null).map(() => Array(n).fill(0));
-  for (let i = 0; i < n; i++) {
-    for (let j = 0; j < n; j++) {
-      let sum = 0;
-      for (let k = 0; k < m; k++) {
-        sum += J[k][i] * J[k][j];
-      }
-      result[i][j] = sum;
-    }
-  }
-  return result;
-}
-function multiplyJtr(J, r) {
-  const m = J.length;
-  const n = 8;
-  const result = Array(n).fill(0);
-  for (let i = 0; i < n; i++) {
-    for (let k = 0; k < m; k++) {
-      result[i] += J[k][i] * r[k];
-    }
-  }
-  return result;
-}
-function solveLinearSystem8x8(A, b) {
-  const n = 8;
-  const aug = A.map((row, i) => [...row, b[i]]);
-  for (let col = 0; col < n; col++) {
-    let maxRow = col;
-    for (let row = col + 1; row < n; row++) {
-      if (Math.abs(aug[row][col]) > Math.abs(aug[maxRow][col])) {
-        maxRow = row;
-      }
-    }
-    [aug[col], aug[maxRow]] = [aug[maxRow], aug[col]];
-    if (Math.abs(aug[col][col]) < 1e-12) continue;
-    for (let row = col + 1; row < n; row++) {
-      const factor = aug[row][col] / aug[col][col];
-      for (let j = col; j <= n; j++) {
-        aug[row][j] -= factor * aug[col][j];
-      }
-    }
-  }
-  const x = Array(n).fill(0);
-  for (let i = n - 1; i >= 0; i--) {
-    let sum = aug[i][n];
-    for (let j = i + 1; j < n; j++) {
-      sum -= aug[i][j] * x[j];
-    }
-    x[i] = Math.abs(aug[i][i]) > 1e-12 ? sum / aug[i][i] : 0;
-  }
-  return x;
-}
-
-// src/api/measure.ts
-var sharp = sharpModule.default || sharpModule;
-var router89 = import_express91.default.Router();
-var detector = new MarkerDetector(30, 2e3);
-var measureMode = process.env.AI_MEASURE_ENGINE || "vision_ar";
-console.log(`\u{1F4F7} [MEASURE] Mode de mesure photo: ${measureMode.toUpperCase()}`);
-console.log(`   \u2192 Marqueur: M\xE9tr\xE9 A4 V1.2 (13.0cm \xD7 21.7cm AprilTag + 12 points noirs)`);
-console.log(`   \u2192 D\xE9tection \xE9tendue: 5 AprilTags + 12 points dispers\xE9s`);
-console.log(`   \u2192 Services: MetreA4Detector \u2705, PhotoQualityAnalyzer \u2705, EdgeDetection \u2705`);
-router89.get("/photo/status", async (_req, res) => {
-  try {
-    const mode = process.env.AI_MEASURE_ENGINE || "gemini";
-    res.json({
-      success: true,
-      service: "vision_ar",
-      available: true,
-      // Toujours disponible maintenant
-      mode,
-      version: "v1.2-metre-a4",
-      markerSpecs: MARKER_SPECS,
-      timestamp: (/* @__PURE__ */ new Date()).toISOString()
-    });
-  } catch (error) {
-    res.status(500).json({ success: false, available: false, error: error?.message || "Unknown error" });
-  }
-});
-router89.post("/photo", async (req2, res) => {
-  const startTime = Date.now();
-  try {
-    const {
-      imageBase64,
-      mimeType,
-      nodeId,
-      treeId,
-      fieldId,
-      organizationId,
-      referenceHint,
-      deviceInfo,
-      exif,
-      persist,
-      measureKeys,
-      mappings
-    } = req2.body || {};
-    if (!imageBase64) {
-      return res.status(400).json({ success: false, error: "imageBase64 requis" });
-    }
-    console.log("[measure/photo] \u{1F50D} Analyse image...");
-    const buffer = Buffer.from(imageBase64, "base64");
-    const image = sharp(buffer);
-    const metadata = await image.metadata();
-    const { width, height } = metadata;
-    if (!width || !height) {
-      return res.status(400).json({ success: false, error: "Impossible de lire les dimensions de l'image" });
-    }
-    console.log(`[measure/photo] \u{1F4D0} Image: ${width}x${height}`);
-    console.log("[measure/photo] \u{1F3A8} Pr\xE9-traitement de l'image pour meilleure d\xE9tection...");
-    const { data, info } = await sharp(buffer).normalize().sharpen({
-      sigma: 1.5,
-      // Rayon du flou gaussien (1.5 = netteté modérée)
-      m1: 1.2,
-      // Facteur de netteté pour les zones plates (1.2 = 20% plus net)
-      m2: 0.8,
-      // Facteur de netteté pour les zones à fort contraste
-      x1: 3,
-      // Seuil inférieur pour la détection de contraste
-      y2: 15,
-      // Seuil supérieur
-      y3: 15
-      // Seuil de saturation
-    }).modulate({
-      brightness: 1,
-      // Pas de changement de luminosité globale
-      saturation: 1.1,
-      // Légère augmentation de saturation (magenta + noir plus vifs)
-      hue: 0
-      // Pas de changement de teinte
-    }).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
-    console.log("[measure/photo] \u2705 Image pr\xE9-trait\xE9e: contraste augment\xE9, nettet\xE9 am\xE9lior\xE9e");
-    console.log("[measure/photo] \u{1F3AF} D\xE9tection initiale des cercles magenta...");
-    const initialMarkers = detector.detect({
-      data,
-      width: info.width,
-      height: info.height
-    });
-    let finalData = data;
-    let finalWidth = info.width;
-    let finalHeight = info.height;
-    if (initialMarkers.length > 0 && calibration?.markerSizeCm) {
-      console.log("[measure/photo] \u{1F58A}\uFE0F Dessin des lignes noires de r\xE9f\xE9rence (1mm) sur les bords ext\xE9rieurs...");
-      const marker = initialMarkers[0];
-      const markerSizeMm = calibration.markerSizeCm * 10;
-      const halfSize = markerSizeMm / 2;
-      const corners = marker.corners;
-      const width1 = Math.sqrt((corners[1].x - corners[0].x) ** 2 + (corners[1].y - corners[0].y) ** 2);
-      const width2 = Math.sqrt((corners[2].x - corners[3].x) ** 2 + (corners[2].y - corners[3].y) ** 2);
-      const avgWidthPx = (width1 + width2) / 2;
-      const pixelsPerMm = avgWidthPx / markerSizeMm;
-      console.log(`[measure/photo]    \u{1F4CF} Taille marqueur: ${markerSizeMm}mm (${avgWidthPx.toFixed(1)}px)`);
-      console.log(`[measure/photo]    \u{1F4CF} \xC9chelle: ${pixelsPerMm.toFixed(3)} px/mm`);
-      const centerX = (corners[0].x + corners[1].x + corners[2].x + corners[3].x) / 4;
-      const centerY = (corners[0].y + corners[1].y + corners[2].y + corners[3].y) / 4;
-      const borderOffsetPx = halfSize * pixelsPerMm;
-      const lineWidth = 1;
-      const lineWidthPx = lineWidth * pixelsPerMm;
-      const lines = [
-        // Top (horizontal)
-        { x1: centerX - borderOffsetPx, y1: centerY - borderOffsetPx, x2: centerX + borderOffsetPx, y2: centerY - borderOffsetPx },
-        // Right (vertical)
-        { x1: centerX + borderOffsetPx, y1: centerY - borderOffsetPx, x2: centerX + borderOffsetPx, y2: centerY + borderOffsetPx },
-        // Bottom (horizontal)
-        { x1: centerX - borderOffsetPx, y1: centerY + borderOffsetPx, x2: centerX + borderOffsetPx, y2: centerY + borderOffsetPx },
-        // Left (vertical)
-        { x1: centerX - borderOffsetPx, y1: centerY - borderOffsetPx, x2: centerX - borderOffsetPx, y2: centerY + borderOffsetPx }
-      ];
-      const linesSvg = `
-        <svg width="${info.width}" height="${info.height}">
-          ${lines.map(
-        (line) => `<line x1="${line.x1.toFixed(1)}" y1="${line.y1.toFixed(1)}" 
-                   x2="${line.x2.toFixed(1)}" y2="${line.y2.toFixed(1)}" 
-                   stroke="black" stroke-width="${Math.max(1, lineWidthPx.toFixed(1))}"/>`
-      ).join("\n          ")}
-        </svg>
-      `;
-      console.log(`[measure/photo]    \u{1F58A}\uFE0F Dessin de 4 lignes noires (\xE9paisseur: ${lineWidthPx.toFixed(1)}px)`);
-      console.log(`[measure/photo]    \u{1F4CD} Centre marqueur: (${centerX.toFixed(1)}, ${centerY.toFixed(1)})`);
-      const enhancedBuffer = await sharp(buffer).normalize().sharpen({ sigma: 1.5, m1: 1.2 }).modulate({ saturation: 1.1 }).composite([{
-        input: Buffer.from(linesSvg),
-        blend: "over"
-      }]).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
-      finalData = enhancedBuffer.data;
-      finalWidth = enhancedBuffer.info.width;
-      finalHeight = enhancedBuffer.info.height;
-      console.log("[measure/photo] \u2705 Lignes de r\xE9f\xE9rence dessin\xE9es, image am\xE9lior\xE9e pr\xEAte");
-    }
-    console.log("[measure/photo] \u{1F3AF} D\xE9tection finale avec lignes de r\xE9f\xE9rence...");
-    const markers = detector.detect({
-      data: finalData,
-      width: finalWidth,
-      height: finalHeight
-    });
-    let response;
-    if (markers.length > 0) {
-      const marker = markers[0];
-      console.log(`[measure/photo] \u2705 Marqueur d\xE9tect\xE9! Score: ${marker.score}, Taille: ${marker.size.toFixed(0)}px`);
-      console.log("[measure/photo] \u{1F3A8} Dessin lignes noires ext\xE9rieures 1mm...");
-      const markerSizePx = marker.size;
-      const pixelsPerCm = markerSizePx / 16.8;
-      const lineThicknessPx = Math.max(1, Math.round(pixelsPerCm * 0.1));
-      console.log(`[measure/photo]    \u{1F4CF} R\xE9solution: ${pixelsPerCm.toFixed(1)}px/cm \u2192 ligne ${lineThicknessPx}px (1mm)`);
-      const corners = marker.corners;
-      const svgPaths = [
-        `M ${corners[0].x},${corners[0].y} L ${corners[1].x},${corners[1].y}`,
-        // TL → TR (haut)
-        `M ${corners[1].x},${corners[1].y} L ${corners[2].x},${corners[2].y}`,
-        // TR → BR (droite)
-        `M ${corners[2].x},${corners[2].y} L ${corners[3].x},${corners[3].y}`,
-        // BR → BL (bas)
-        `M ${corners[3].x},${corners[3].y} L ${corners[0].x},${corners[0].y}`
-        // BL → TL (gauche)
-      ];
-      const svg = `
-        <svg width="${info.width}" height="${info.height}">
-          ${svgPaths.map(
-        (path10) => `<path d="${path10}" stroke="black" stroke-width="${lineThicknessPx}" fill="none" stroke-linecap="square"/>`
-      ).join("\n          ")}
-        </svg>
-      `;
-      const enhancedImageBuffer = await sharp(data, {
-        raw: {
-          width: info.width,
-          height: info.height,
-          channels: 4
-        }
-      }).composite([{
-        input: Buffer.from(svg),
-        blend: "over"
-        // Superposer les lignes sur l'image
-      }]).ensureAlpha().raw().toBuffer();
-      console.log("[measure/photo] \u2705 Lignes noires ext\xE9rieures dessin\xE9es");
-      const enhancedData = new Uint8ClampedArray(enhancedImageBuffer);
-      console.log("[measure/photo] \u{1F3AF} Lancement d\xE9tection ULTRA-PR\xC9CISE sur image am\xE9lior\xE9e...");
-      const exteriorCorners = marker.corners;
-      let ultraPrecisionResult = null;
-      try {
-        const markerWidthMm2 = 130;
-        const markerHeightMm2 = 217;
-        ultraPrecisionResult = detectUltraPrecisionPoints(
-          { data: enhancedData, width: info.width, height: info.height },
-          exteriorCorners,
-          marker.extendedPoints,
-          markerWidthMm2,
-          markerHeightMm2
-        );
-        console.log(`[measure/photo] \u{1F3AF} ULTRA-PR\xC9CISION: ${ultraPrecisionResult.inlierPoints}/${ultraPrecisionResult.totalPoints} points, erreur \xB1${ultraPrecisionResult.reprojectionError.toFixed(2)}mm, qualit\xE9 ${(ultraPrecisionResult.quality * 100).toFixed(1)}%`);
-      } catch (ultraError) {
-        console.warn("[measure/photo] \u26A0\uFE0F Ultra-pr\xE9cision \xE9chou\xE9e, fallback standard:", ultraError.message);
-      }
-      const srcPoints = marker.corners;
-      const markerWidthForHomography = 130;
-      const markerHeightForHomography = 217;
-      const dstPoints = [
-        { x: 0, y: 0 },
-        // TL
-        { x: markerWidthForHomography, y: 0 },
-        // TR
-        { x: markerWidthForHomography, y: markerHeightForHomography },
-        // BR
-        { x: 0, y: markerHeightForHomography }
-        // BL
-      ];
-      const homographyMatrix = ultraPrecisionResult && ultraPrecisionResult.quality > 0.3 ? ultraPrecisionResult.homography : computeHomography(srcPoints, dstPoints);
-      const pose = estimatePose(marker.corners);
-      const quality = ultraPrecisionResult ? ultraPrecisionResult.quality : 0.5;
-      const measurements = {};
-      measurements["markerSizePx"] = marker.size;
-      measurements["pixelsPerCm"] = marker.homography.pixelsPerCm;
-      if (measureKeys && Array.isArray(measureKeys)) {
-        for (const key2 of measureKeys) {
-          measurements[key2] = 0;
-        }
-      }
-      response = {
-        success: true,
-        detected: true,
-        measurements,
-        marker: {
-          id: marker.id,
-          corners: marker.corners,
-          apriltagPositions: marker.apriltagPositions,
-          center: marker.center,
-          sizePx: marker.size,
-          score: marker.score,
-          apriltagsFound: marker.apriltagsFound,
-          extendedPoints: marker.extendedPoints
-        },
-        homography: {
-          matrix: homographyMatrix,
-          pixelsPerCm: marker.homography.pixelsPerCm,
-          realSizeCm: MARKER_SPECS.markerSize,
-          sides: marker.homography.sides,
-          angles: marker.homography.angles,
-          quality: ultraPrecisionResult ? ultraPrecisionResult.quality : quality
-        },
-        // 🎯 NOUVEAU: Données ultra-précision
-        ultraPrecision: ultraPrecisionResult ? {
-          totalPoints: ultraPrecisionResult.totalPoints,
-          inlierPoints: ultraPrecisionResult.inlierPoints,
-          reprojectionErrorMm: ultraPrecisionResult.reprojectionError,
-          quality: ultraPrecisionResult.quality,
-          homographyMatrix: ultraPrecisionResult.homography,
-          // 🔬 AJOUT: Matrice 3x3 optimisée RANSAC+LM
-          breakdown: {
-            corners: ultraPrecisionResult.cornerPoints,
-            transitions: ultraPrecisionResult.transitionPoints,
-            gridCorners: ultraPrecisionResult.gridCornerPoints,
-            gridCenters: ultraPrecisionResult.gridCenterPoints
-          },
-          ransacApplied: ultraPrecisionResult.ransacApplied,
-          ellipseFittingApplied: ultraPrecisionResult.ellipseFittingApplied,
-          levenbergMarquardtApplied: ultraPrecisionResult.levenbergMarquardtApplied
-        } : null,
-        pose,
-        calibration: {
-          pixelPerCm: marker.homography.pixelsPerCm,
-          referenceType: "aruco_magenta",
-          referenceSize: { width: MARKER_SPECS.markerSize, height: MARKER_SPECS.markerSize }
-        },
-        referenceUsed: referenceHint || "aruco_magenta_18cm",
-        imageMeta: {
-          mimeType: mimeType || "image/jpeg",
-          width,
-          height,
-          exif: exif || null
-        },
-        debug: {
-          markerSpecs: MARKER_SPECS,
-          mode: process.env.AI_MEASURE_ENGINE || "vision_ar",
-          // 🎯 CRITICAL: Identifier correctement le marqueur AprilTag Métré V1.2 pour le frontend
-          // Le frontend dépend de ce champ pour afficher les dimensions 13×21.7cm (rectangulaire)
-          // Métré A4 V1.2 = AprilTag rectangulaire 130×217mm
-          detectionMethod: markerWidthForHomography === 130 && markerHeightForHomography === 217 ? "apriltag-metre" : ultraPrecisionResult ? "ultra_precision_ransac_lm" : "magenta_clustering"
-        },
-        durationMs: Date.now() - startTime
-      };
-      if (persist && nodeId && organizationId) {
-        try {
-          const measurePhoto = await db.measurePhoto.create({
-            data: {
-              organizationId,
-              treeId: treeId || null,
-              nodeId,
-              fieldId: fieldId || null,
-              mimeType: mimeType || "image/jpeg",
-              widthPx: width,
-              heightPx: height,
-              exif: exif ? JSON.stringify(exif) : null,
-              deviceInfo: deviceInfo ? JSON.stringify(deviceInfo) : null,
-              referenceType: "aruco_magenta",
-              referenceSizeMm: JSON.stringify({ width: MARKER_SPECS.markerSize * 10, height: MARKER_SPECS.markerSize * 10 }),
-              arucoId: marker.id,
-              arucoCornersPx: JSON.stringify(marker.corners),
-              homography: JSON.stringify({ matrix: homographyMatrix, quality }),
-              pose: JSON.stringify(pose),
-              measurements: JSON.stringify(measurements),
-              status: "detected"
-            }
-          });
-          for (let i = 0; i < marker.apriltagPositions.length; i++) {
-            const pos = marker.apriltagPositions[i];
-            await db.measurePhotoPoint.create({
-              data: {
-                measurePhotoId: measurePhoto.id,
-                label: `apriltag_${i + 1}`,
-                xPx: pos.x,
-                yPx: pos.y,
-                source: "auto_detect",
-                confidence: marker.score
-              }
-            });
-          }
-          console.log(`[measure/photo] \u{1F4BE} Sauvegard\xE9: MeasurePhoto #${measurePhoto.id}`);
-          response.persistedId = measurePhoto.id;
-        } catch (dbError) {
-          console.error("[measure/photo] \u26A0\uFE0F Erreur persistance:", dbError.message);
-        }
-      }
-    } else {
-      console.log("[measure/photo] \u274C Aucun marqueur d\xE9tect\xE9");
-      response = {
-        success: true,
-        detected: false,
-        measurements: {},
-        marker: null,
-        homography: {
-          matrix: [[1, 0, 0], [0, 1, 0], [0, 0, 1]],
-          pixelsPerCm: null,
-          quality: 0
-        },
-        pose: null,
-        calibration: null,
-        referenceUsed: null,
-        imageMeta: {
-          mimeType: mimeType || "image/jpeg",
-          width,
-          height,
-          exif: exif || null
-        },
-        error: "Aucun marqueur MAGENTA d\xE9tect\xE9. Assurez-vous que le marqueur 18cm avec les 4 points magenta est visible.",
-        debug: {
-          markerSpecs: MARKER_SPECS,
-          mode: process.env.AI_MEASURE_ENGINE || "gemini",
-          tip: "Le marqueur doit avoir 4 cercles magenta aux coins avec un centre blanc"
-        },
-        durationMs: Date.now() - startTime
-      };
-    }
-    return res.json(response);
-  } catch (error) {
-    const durationMs = Date.now() - startTime;
-    console.error("[measure/photo] \u274C Erreur:", error);
-    return res.status(500).json({
-      success: false,
-      detected: false,
-      error: error?.message || "Erreur interne",
-      durationMs
-    });
-  }
-});
-router89.post("/photo/measure", async (req2, res) => {
-  try {
-    const { homographyMatrix, point1, point2, correction } = req2.body || {};
-    if (!homographyMatrix || !point1 || !point2) {
-      return res.status(400).json({
-        success: false,
-        error: "homographyMatrix, point1 et point2 sont requis"
-      });
-    }
-    const correctionFactor = correction || 1;
-    const distanceCmRaw = measureDistanceCm(homographyMatrix, point1, point2);
-    const distanceCm = distanceCmRaw * correctionFactor;
-    const point1Cm = transformPoint(homographyMatrix, point1);
-    const point2Cm = transformPoint(homographyMatrix, point2);
-    console.log(`\u{1F4CF} [MEASURE] Distance: ${distanceCmRaw.toFixed(2)}cm \u2192 ${distanceCm.toFixed(2)}cm (\xD7${correctionFactor.toFixed(4)})`);
-    return res.json({
-      success: true,
-      distanceCm,
-      distanceCmRaw,
-      // Distance brute sans correction
-      distanceM: distanceCm / 100,
-      point1Cm,
-      point2Cm,
-      unit: "cm",
-      correctionApplied: correctionFactor,
-      correctionWasApplied: correctionFactor !== 1
-    });
-  } catch (error) {
-    console.error("[measure/photo/measure] \u274C Erreur:", error);
-    return res.status(500).json({
-      success: false,
-      error: error?.message || "Erreur interne"
-    });
-  }
-});
-router89.get("/calibration-profiles", async (req2, res) => {
-  try {
-    const organizationId = req2.query.organizationId;
-    if (!organizationId) {
-      return res.status(400).json({ success: false, error: "organizationId requis" });
-    }
-    const profiles = await db.calibrationProfile.findMany({
-      where: { organizationId },
-      orderBy: { createdAt: "desc" }
-    });
-    return res.json({
-      success: true,
-      profiles,
-      defaultProfile: {
-        name: "Marqueur MAGENTA 18cm",
-        referenceType: "aruco_magenta",
-        referenceSizeMm: MARKER_SPECS.markerSize * 10,
-        description: "Marqueur carr\xE9 18x18cm avec 4 cercles magenta aux coins"
-      }
-    });
-  } catch (error) {
-    console.error("[calibration-profiles] \u274C Erreur:", error);
-    return res.status(500).json({ success: false, error: error?.message || "Erreur interne" });
-  }
-});
-router89.post("/photo/ultra", async (req2, res) => {
-  console.log("\n[measure/photo/ultra] \u{1F3AF} Traitement ULTRA-PR\xC9CISION multi-photos");
-  try {
-    const { imagesBase64 } = req2.body || {};
-    const images = Array.isArray(imagesBase64) ? imagesBase64 : imagesBase64 ? [imagesBase64] : [];
-    if (images.length === 0) {
-      return res.status(400).json({
-        success: false,
-        error: "Au moins une image requise (imagesBase64)"
-      });
-    }
-    console.log(`[measure/photo/ultra] \u{1F4F8} ${images.length} image(s) re\xE7ue(s)`);
-    const photoResults = [];
-    for (let i = 0; i < images.length; i++) {
-      const imageBase64 = images[i];
-      console.log(`
-[measure/photo/ultra] \u{1F4F7} Photo ${i + 1}/${images.length}`);
-      try {
-        const buffer = Buffer.from(imageBase64, "base64");
-        const { data, info } = await sharp(buffer).raw().ensureAlpha().toBuffer({ resolveWithObject: true });
-        console.log(`   Dimensions: ${info.width}x${info.height}`);
-        const markers = await detector.detectMarkers({
-          data,
-          width: info.width,
-          height: info.height
-        });
-        if (!markers || markers.length === 0) {
-          console.warn(`   \u26A0\uFE0F Photo ${i + 1}: Aucun marqueur d\xE9tect\xE9`);
-          continue;
-        }
-        const marker = markers[0];
-        const exteriorCorners = marker.magentaPositions || marker.corners;
-        const d1 = Math.hypot(
-          exteriorCorners[1].x - exteriorCorners[0].x,
-          exteriorCorners[1].y - exteriorCorners[0].y
-        );
-        const d2 = Math.hypot(
-          exteriorCorners[3].x - exteriorCorners[2].x,
-          exteriorCorners[3].y - exteriorCorners[2].y
-        );
-        const pixelsPerCm = (d1 + d2) / 2 / MARKER_SPECS.markerSize;
-        let ultraPrecisionResult = null;
-        try {
-          const markerWidthMm2 = 130;
-          const markerHeightMm2 = 217;
-          ultraPrecisionResult = detectUltraPrecisionPoints(
-            { data, width: info.width, height: info.height },
-            exteriorCorners,
-            marker.extendedPoints,
-            markerWidthMm2,
-            markerHeightMm2
-          );
-          console.log(`   \u2705 Ultra-pr\xE9cision: ${ultraPrecisionResult.inlierPoints}/${ultraPrecisionResult.totalPoints} inliers`);
-          console.log(`   \u{1F4CA} Erreur: \xB1${ultraPrecisionResult.reprojectionError.toFixed(2)}mm, Qualit\xE9: ${(ultraPrecisionResult.quality * 100).toFixed(1)}%`);
-        } catch (ultraError) {
-          console.warn(`   \u26A0\uFE0F Ultra-pr\xE9cision \xE9chou\xE9e: ${ultraError.message}`);
-        }
-        photoResults.push({
-          index: i,
-          marker,
-          ultraPrecision: ultraPrecisionResult,
-          pixelsPerCm
-        });
-      } catch (photoError) {
-        console.error(`   \u274C Photo ${i + 1} erreur: ${photoError.message}`);
-      }
-    }
-    if (photoResults.length === 0) {
-      return res.status(400).json({
-        success: false,
-        error: "Aucun marqueur d\xE9tect\xE9 dans les photos fournies"
-      });
-    }
-    console.log("\n[measure/photo/ultra] \u{1F500} Fusion des r\xE9sultats...");
-    const bestResult = photoResults.reduce((best, current) => {
-      const bestScore = best.ultraPrecision ? best.ultraPrecision.inlierPoints * best.ultraPrecision.quality : 0;
-      const currentScore = current.ultraPrecision ? current.ultraPrecision.inlierPoints * current.ultraPrecision.quality : 0;
-      return currentScore > bestScore ? current : best;
-    });
-    let totalWeight = 0;
-    let weightedPixelsPerCm = 0;
-    for (const result of photoResults) {
-      const weight = result.ultraPrecision ? result.ultraPrecision.quality : 0.1;
-      weightedPixelsPerCm += result.pixelsPerCm * weight;
-      totalWeight += weight;
-    }
-    const fusedPixelsPerCm = totalWeight > 0 ? weightedPixelsPerCm / totalWeight : bestResult.pixelsPerCm;
-    const fusionStats = {
-      photosProcessed: images.length,
-      photosWithMarker: photoResults.length,
-      photosWithUltraPrecision: photoResults.filter((r) => r.ultraPrecision).length,
-      bestPhotoIndex: bestResult.index,
-      averageInliers: Math.round(
-        photoResults.filter((r) => r.ultraPrecision).reduce((sum, r) => sum + (r.ultraPrecision?.inlierPoints || 0), 0) / Math.max(1, photoResults.filter((r) => r.ultraPrecision).length)
-      ),
-      averageQuality: Math.round(
-        photoResults.filter((r) => r.ultraPrecision).reduce((sum, r) => sum + (r.ultraPrecision?.quality || 0) * 100, 0) / Math.max(1, photoResults.filter((r) => r.ultraPrecision).length)
-      ),
-      fusedPixelsPerCm
-    };
-    console.log(`[measure/photo/ultra] \u{1F4CA} Fusion: ${fusionStats.photosWithUltraPrecision}/${fusionStats.photosWithMarker} photos avec ultra-pr\xE9cision`);
-    console.log(`[measure/photo/ultra] \u{1F3AF} Moyenne inliers: ${fusionStats.averageInliers}, Qualit\xE9 moyenne: ${fusionStats.averageQuality}%`);
-    const response = {
-      success: true,
-      mode: "ultra-precision-multi-photo",
-      marker: {
-        detected: true,
-        type: "aruco_magenta_18cm",
-        pixelsPerCm: fusedPixelsPerCm,
-        mmPerPixel: 10 / fusedPixelsPerCm,
-        confidence: fusionStats.averageQuality,
-        corners: bestResult.marker.corners,
-        apriltagPositions: bestResult.marker.apriltagPositions,
-        extendedPoints: bestResult.marker.extendedPoints
-      },
-      ultraPrecision: bestResult.ultraPrecision ? {
-        totalPoints: bestResult.ultraPrecision.totalPoints,
-        inlierPoints: bestResult.ultraPrecision.inlierPoints,
-        reprojectionErrorMm: bestResult.ultraPrecision.reprojectionError,
-        quality: bestResult.ultraPrecision.quality,
-        homographyMatrix: bestResult.ultraPrecision.homography,
-        // 🔬 AJOUT: Matrice 3x3 optimisée RANSAC+LM
-        breakdown: {
-          exteriorCorners: 4,
-          transitionPoints: bestResult.ultraPrecision.transitionPoints,
-          gridCorners: bestResult.ultraPrecision.gridCornerPoints,
-          cellCenters: bestResult.ultraPrecision.gridCenterPoints
-        },
-        ransacApplied: true,
-        levenbergMarquardtApplied: true,
-        ellipseFittingApplied: true
-      } : null,
-      // 🔍 DEBUG QUALITY - TOUTES LES VALEURS CRITIQUES
-      _debug_ultraPrecision: bestResult.ultraPrecision ? {
-        hasQuality: bestResult.ultraPrecision.quality !== void 0,
-        qualityValue: bestResult.ultraPrecision.quality,
-        qualityType: typeof bestResult.ultraPrecision.quality,
-        correctionX: bestResult.ultraPrecision.correctionX,
-        correctionY: bestResult.ultraPrecision.correctionY,
-        correctionConfidence: bestResult.ultraPrecision.correctionConfidence,
-        optimalCorrection: bestResult.ultraPrecision.optimalCorrection,
-        allKeys: Object.keys(bestResult.ultraPrecision)
-      } : null,
-      fusion: fusionStats,
-      perPhotoResults: photoResults.map((r) => ({
-        photoIndex: r.index,
-        pixelsPerCm: r.pixelsPerCm,
-        ultraPrecision: r.ultraPrecision ? {
-          inliers: r.ultraPrecision.inlierPoints,
-          total: r.ultraPrecision.totalPoints,
-          quality: r.ultraPrecision.quality,
-          errorMm: r.ultraPrecision.reprojectionError
-        } : null
-      }))
-    };
-    return res.json(response);
-  } catch (error) {
-    console.error("[measure/photo/ultra] \u274C Erreur:", error);
-    return res.status(500).json({
-      success: false,
-      error: error?.message || "Erreur interne"
-    });
-  }
-});
-router89.post("/photo/detect-corners", async (req2, res) => {
-  const startTime = Date.now();
-  try {
-    const {
-      imageBase64,
-      mimeType,
-      zone,
-      // { x, y, width, height } en pourcentages (0-100)
-      objectType
-      // 'door', 'window', 'chassis', etc.
-    } = req2.body || {};
-    if (!imageBase64 || !zone) {
-      return res.status(400).json({
-        success: false,
-        error: "imageBase64 et zone requis",
-        example: { imageBase64: "base64...", zone: { x: 10, y: 10, width: 80, height: 80 }, objectType: "door" }
-      });
-    }
-    console.log(`[measure/detect-corners] \u{1F3AF} D\xE9tection coins pour ${objectType || "objet"}...`);
-    const buffer = Buffer.from(imageBase64, "base64");
-    const image = sharp(buffer);
-    const metadata = await image.metadata();
-    const { width: imgWidth, height: imgHeight } = metadata;
-    if (!imgWidth || !imgHeight) {
-      return res.status(400).json({ success: false, error: "Impossible de lire les dimensions de l'image" });
-    }
-    console.log(`[measure/detect-corners] \u{1F4D0} Image: ${imgWidth}x${imgHeight}`);
-    const zonePixels = {
-      x: Math.round(zone.x / 100 * imgWidth),
-      y: Math.round(zone.y / 100 * imgHeight),
-      width: Math.round(zone.width / 100 * imgWidth),
-      height: Math.round(zone.height / 100 * imgHeight)
-    };
-    console.log(`[measure/detect-corners] \u{1F4CD} Zone en pixels:`, zonePixels);
-    try {
-      const { data: pixels, info } = await sharp(buffer).extract({
-        left: Math.max(0, zonePixels.x),
-        top: Math.max(0, zonePixels.y),
-        width: Math.min(zonePixels.width, imgWidth - zonePixels.x),
-        height: Math.min(zonePixels.height, imgHeight - zonePixels.y)
-      }).raw().toBuffer({ resolveWithObject: true });
-      const gray = await detectEdges(pixels, info.width, info.height);
-      const lines = detectLines(gray, info.width, info.height);
-      const corners = findCorners(lines, info.width, info.height);
-      if (!corners || corners.length < 4) {
-        console.log("[measure/detect-corners] \u26A0\uFE0F Impossible de d\xE9tecter 4 coins, retour fallback");
-        return res.json({
-          success: true,
-          detected: false,
-          confidence: 0,
-          message: "Impossible de d\xE9tecter les coins automatiquement",
-          corners: null,
-          fallbackCorners: {
-            topLeft: { x: 0, y: 0 },
-            topRight: { x: info.width, y: 0 },
-            bottomLeft: { x: 0, y: info.height },
-            bottomRight: { x: info.width, y: info.height }
-          }
-        });
-      }
-      const sortedCorners = sortCorners(corners);
-      console.log(`[measure/detect-corners] \u2705 ${corners.length} coins d\xE9tect\xE9s`);
-      const detectedCorners = {
-        topLeft: {
-          x: Math.round(sortedCorners[0].x + zonePixels.x),
-          y: Math.round(sortedCorners[0].y + zonePixels.y)
-        },
-        topRight: {
-          x: Math.round(sortedCorners[1].x + zonePixels.x),
-          y: Math.round(sortedCorners[1].y + zonePixels.y)
-        },
-        bottomRight: {
-          x: Math.round(sortedCorners[2].x + zonePixels.x),
-          y: Math.round(sortedCorners[2].y + zonePixels.y)
-        },
-        bottomLeft: {
-          x: Math.round(sortedCorners[3].x + zonePixels.x),
-          y: Math.round(sortedCorners[3].y + zonePixels.y)
-        }
-      };
-      const duration = Date.now() - startTime;
-      return res.json({
-        success: true,
-        detected: true,
-        confidence: 0.85,
-        // Confiance empirique pour détection par edges
-        corners: detectedCorners,
-        duration_ms: duration,
-        message: `Coins d\xE9tect\xE9s avec confiance ${(0.85 * 100).toFixed(0)}%`,
-        edges_detected: gray.length,
-        lines_detected: lines.length
-      });
-    } catch (edgeError) {
-      console.error("[measure/detect-corners] \u274C Erreur edge detection:", edgeError);
-      return res.json({
-        success: true,
-        detected: false,
-        confidence: 0,
-        message: "Edge detection \xE9chou\xE9e, utiliser les coins par d\xE9faut",
-        corners: null
-      });
-    }
-  } catch (error) {
-    console.error("[measure/detect-corners] \u274C Erreur:", error);
-    return res.status(500).json({
-      success: false,
-      error: error?.message || "Erreur interne"
-    });
-  }
-});
-function detectEdges(pixels, width, height) {
-  const edges = [];
-  for (let i = 0; i < pixels.length; i += 4) {
-    const r = pixels[i];
-    const g = pixels[i + 1];
-    const b = pixels[i + 2];
-    const luminance = r * 0.299 + g * 0.587 + b * 0.114;
-    edges.push(luminance);
-  }
-  return edges;
-}
-function detectLines(gray, width, height) {
-  const lines = [];
-  for (let y = 0; y < height - 1; y++) {
-    for (let x = 0; x < width - 1; x++) {
-      const current = gray[y * width + x];
-      const right = gray[y * width + (x + 1)];
-      const below = gray[(y + 1) * width + x];
-      if (Math.abs(below - current) > 50) {
-        if (lines.filter((l) => Math.abs(l.x1 - x) < 5 && l.x1 === l.x2).length === 0) {
-          lines.push({ x1: x, y1: 0, x2: x, y2: height });
-        }
-      }
-      if (Math.abs(right - current) > 50) {
-        if (lines.filter((l) => Math.abs(l.y1 - y) < 5 && l.y1 === l.y2).length === 0) {
-          lines.push({ x1: 0, y1: y, x2: width, y2: y });
-        }
-      }
-    }
-  }
-  return lines;
-}
-function findCorners(lines, width, height) {
-  const corners = [];
-  for (let i = 0; i < lines.length; i++) {
-    for (let j = i + 1; j < lines.length; j++) {
-      const l1 = lines[i];
-      const l2 = lines[j];
-      const isL1Vertical = l1.x1 === l1.x2;
-      const isL2Vertical = l2.x1 === l2.x2;
-      if (isL1Vertical !== isL2Vertical) {
-        const vertLine = isL1Vertical ? l1 : l2;
-        const horizLine = isL1Vertical ? l2 : l1;
-        const x = vertLine.x1;
-        const y = horizLine.y1;
-        if (x > 0 && x < width && y > 0 && y < height) {
-          if (!corners.some((c) => Math.abs(c.x - x) < 10 && Math.abs(c.y - y) < 10)) {
-            corners.push({ x, y });
-          }
-        }
-      }
-    }
-  }
-  if (corners.length < 4) {
-    console.log(`[findCorners] Seulement ${corners.length} coins trouv\xE9s, utiliser les bords`);
-    corners.push(
-      { x: 0, y: 0 },
-      { x: width, y: 0 },
-      { x: width, y: height },
-      { x: 0, y: height }
-    );
-  }
-  return corners.slice(0, 4);
-}
-function sortCorners(corners) {
-  if (corners.length < 4) {
-    return corners;
-  }
-  const centerX = corners.reduce((sum, c) => sum + c.x, 0) / corners.length;
-  const centerY = corners.reduce((sum, c) => sum + c.y, 0) / corners.length;
-  const sorted = corners.sort((a, b) => {
-    const angleA = Math.atan2(a.y - centerY, a.x - centerX);
-    const angleB = Math.atan2(b.y - centerY, b.x - centerX);
-    return angleA - angleB;
-  });
-  const angles = sorted.map((c) => Math.atan2(c.y - centerY, c.x - centerX));
-  const topLeftIdx = angles.reduce((minIdx, angle, idx) => {
-    const distToTL = Math.abs(angle - (-Math.PI + Math.PI / 4));
-    const minDist = Math.abs(angles[minIdx] - (-Math.PI + Math.PI / 4));
-    return distToTL < minDist ? idx : minIdx;
-  }, 0);
-  return [
-    sorted[topLeftIdx],
-    // TL
-    sorted[(topLeftIdx + 1) % 4],
-    // TR
-    sorted[(topLeftIdx + 2) % 4],
-    // BR
-    sorted[(topLeftIdx + 3) % 4]
-    // BL
-  ];
-}
-router89.post("/detect-corners", async (req2, res) => {
-  const startTime = Date.now();
-  try {
-    const { imageBase64, zone, objectType, mimeType } = req2.body || {};
-    if (!imageBase64) {
-      return res.status(400).json({ success: false, error: "imageBase64 requis" });
-    }
-    if (!zone) {
-      return res.status(400).json({ success: false, error: "zone requis (x, y, width, height en %)" });
-    }
-    console.log("[detect-corners] \u{1F6AA} D\xE9tection des coins:", { objectType, zone });
-    const buffer = Buffer.from(imageBase64, "base64");
-    const metadata = await sharp(buffer).metadata();
-    const { width, height } = metadata;
-    if (!width || !height) {
-      return res.status(400).json({ success: false, error: "Impossible de lire les dimensions" });
-    }
-    console.log(`[detect-corners] \u{1F4D0} Image: ${width}x${height}`);
-    const zonePixels = {
-      minX: Math.max(0, Math.floor(zone.x / 100 * width)),
-      minY: Math.max(0, Math.floor(zone.y / 100 * height)),
-      maxX: Math.min(width, Math.ceil((zone.x + zone.width) / 100 * width)),
-      maxY: Math.min(height, Math.ceil((zone.y + zone.height) / 100 * height))
-    };
-    console.log(`[detect-corners] \u{1F3AF} Zone pixels: (${zonePixels.minX}, ${zonePixels.minY}) \u2192 (${zonePixels.maxX}, ${zonePixels.maxY})`);
-    const { data, info } = await sharp(buffer).raw().toBuffer({ resolveWithObject: true });
-    const { channels } = info;
-    const edges = detectEdgesInZone(data, width, height, channels, zonePixels);
-    console.log(`[detect-corners] \u{1F50D} Bordures d\xE9tect\xE9es: ${edges.length} pixels`);
-    const lines = detectDoorLines(edges, width, height, zonePixels);
-    console.log(`[detect-corners] \u{1F4CF} Lignes: ${lines.filter((l) => l.type === "h").length} H + ${lines.filter((l) => l.type === "v").length} V`);
-    let corners = findCornerIntersections(lines, zonePixels);
-    console.log(`[detect-corners] \u{1F532} Coins d\xE9tect\xE9s: ${corners.length}`);
-    if (corners.length < 4) {
-      console.log(`[detect-corners] \u26A0\uFE0F  Fallback: utiliser les bords de la zone`);
-      corners = [
-        { x: zonePixels.minX, y: zonePixels.minY },
-        { x: zonePixels.maxX, y: zonePixels.minY },
-        { x: zonePixels.maxX, y: zonePixels.maxY },
-        { x: zonePixels.minX, y: zonePixels.maxY }
-      ];
-    }
-    const sortedCorners = sortCorners(corners.slice(0, 4));
-    const result = {
-      success: true,
-      detected: true,
-      corners: {
-        topLeft: { x: Math.round(sortedCorners[0].x), y: Math.round(sortedCorners[0].y) },
-        topRight: { x: Math.round(sortedCorners[1].x), y: Math.round(sortedCorners[1].y) },
-        bottomRight: { x: Math.round(sortedCorners[2].x), y: Math.round(sortedCorners[2].y) },
-        bottomLeft: { x: Math.round(sortedCorners[3].x), y: Math.round(sortedCorners[3].y) }
-      },
-      confidence: Math.min(100, 75 + (edges.length > 500 ? 20 : edges.length / 25)),
-      // 75-95% confiance
-      method: "canny_edge_detection",
-      processingTime: Date.now() - startTime
-    };
-    console.log(`[detect-corners] \u2705 D\xE9tection r\xE9ussie en ${result.processingTime}ms`);
-    res.json(result);
-  } catch (error) {
-    console.error("[detect-corners] \u274C Erreur:", error);
-    res.status(500).json({
-      success: false,
-      detected: false,
-      error: error?.message || "Erreur lors de la d\xE9tection",
-      corners: null
-    });
-  }
-});
-function detectEdgesInZone(pixelData, width, height, channels, zone) {
-  const edges = [];
-  for (let y = zone.minY + 1; y < zone.maxY - 1; y++) {
-    for (let x = zone.minX + 1; x < zone.maxX - 1; x++) {
-      const lum = (x2, y2) => {
-        const idx = (y2 * width + x2) * channels;
-        const r = pixelData[idx];
-        const g = pixelData[idx + 1];
-        const b = pixelData[idx + 2];
-        return 0.299 * r + 0.587 * g + 0.114 * b;
-      };
-      const gx = -lum(x - 1, y - 1) - 2 * lum(x - 1, y) - lum(x - 1, y + 1) + lum(x + 1, y - 1) + 2 * lum(x + 1, y) + lum(x + 1, y + 1);
-      const gy = -lum(x - 1, y - 1) - 2 * lum(x, y - 1) - lum(x + 1, y - 1) + lum(x - 1, y + 1) + 2 * lum(x, y + 1) + lum(x + 1, y + 1);
-      const mag = Math.sqrt(gx * gx + gy * gy);
-      if (mag > 50 && lum(x, y) < 100) {
-        edges.push({ x, y });
-      }
-    }
-  }
-  return edges;
-}
-function detectDoorLines(edges, width, height, zone) {
-  const lines = [];
-  const hLineCount = new Array(height).fill(0);
-  const vLineCount = new Array(width).fill(0);
-  for (const edge of edges) {
-    hLineCount[edge.y]++;
-    vLineCount[edge.x]++;
-  }
-  const threshold = edges.length / 20;
-  for (let y = zone.minY; y < zone.maxY; y++) {
-    if (hLineCount[y] > threshold) {
-      lines.push({ type: "h", position: y });
-    }
-  }
-  for (let x = zone.minX; x < zone.maxX; x++) {
-    if (vLineCount[x] > threshold) {
-      lines.push({ type: "v", position: x });
-    }
-  }
-  console.log(`[detectDoorLines] H-lines: ${lines.filter((l) => l.type === "h").length}, V-lines: ${lines.filter((l) => l.type === "v").length}`);
-  return lines;
-}
-function findCornerIntersections(lines, zone) {
-  const corners = [];
-  const hLines = lines.filter((l) => l.type === "h").map((l) => l.position);
-  const vLines = lines.filter((l) => l.type === "v").map((l) => l.position);
-  if (hLines.length < 2 || vLines.length < 2) {
-    return corners;
-  }
-  hLines.sort((a, b) => a - b);
-  vLines.sort((a, b) => a - b);
-  const topH = hLines[0];
-  const bottomH = hLines[hLines.length - 1];
-  const leftV = vLines[0];
-  const rightV = vLines[vLines.length - 1];
-  corners.push(
-    { x: leftV, y: topH },
-    // TL
-    { x: rightV, y: topH },
-    // TR
-    { x: rightV, y: bottomH },
-    // BR
-    { x: leftV, y: bottomH }
-    // BL
-  );
-  return corners;
-}
-var measure_default = router89;
-
 // src/components/TreeBranchLeaf/treebranchleaf-new/api/repeat/repeat-routes.ts
-var import_express92 = require("express");
+var import_express91 = require("express");
 
 // src/components/TreeBranchLeaf/treebranchleaf-new/api/repeat/repeat-blueprint-builder.ts
 var parseJsonArray = (value) => {
@@ -67192,10 +63150,10 @@ function normalizeMetadata(metadata) {
 
 // src/components/TreeBranchLeaf/treebranchleaf-new/api/repeat/repeat-routes.ts
 function createRepeatRouter(prisma49) {
-  const router95 = (0, import_express92.Router)();
+  const router94 = (0, import_express91.Router)();
   const inFlightExecuteByRepeater = /* @__PURE__ */ new Set();
-  router95.use(authenticateToken);
-  router95.post("/:repeaterNodeId/instances", async (req2, res) => {
+  router94.use(authenticateToken);
+  router94.post("/:repeaterNodeId/instances", async (req2, res) => {
     const { repeaterNodeId } = req2.params;
     const body2 = req2.body || {};
     try {
@@ -67227,7 +63185,7 @@ function createRepeatRouter(prisma49) {
       });
     }
   });
-  router95.post("/:repeaterNodeId/instances/execute", async (req2, res) => {
+  router94.post("/:repeaterNodeId/instances/execute", async (req2, res) => {
     const { repeaterNodeId } = req2.params;
     const body2 = req2.body || {};
     if (inFlightExecuteByRepeater.has(repeaterNodeId)) {
@@ -67279,13 +63237,13 @@ function createRepeatRouter(prisma49) {
       inFlightExecuteByRepeater.delete(repeaterNodeId);
     }
   });
-  return router95;
+  return router94;
 }
 
 // src/api/cloud-run-domains.ts
-var import_express93 = require("express");
-var router90 = (0, import_express93.Router)();
-router90.get("/cloud-run-domains", authenticateToken, async (req2, res) => {
+var import_express92 = require("express");
+var router89 = (0, import_express92.Router)();
+router89.get("/cloud-run-domains", authenticateToken, async (req2, res) => {
   try {
     const user = req2.user;
     if (!user.isSuperAdmin) {
@@ -67327,7 +63285,7 @@ router90.get("/cloud-run-domains", authenticateToken, async (req2, res) => {
     });
   }
 });
-router90.post("/cloud-run-domains/verify", authenticateToken, async (req2, res) => {
+router89.post("/cloud-run-domains/verify", authenticateToken, async (req2, res) => {
   try {
     const user = req2.user;
     const { domain } = req2.body;
@@ -67380,11 +63338,11 @@ async function checkDomainReachability(domain) {
     return false;
   }
 }
-var cloud_run_domains_default = router90;
+var cloud_run_domains_default = router89;
 
 // src/api/measurement-reference.ts
-var import_express94 = require("express");
-var sharpModule2 = __toESM(require("sharp"), 1);
+var import_express93 = require("express");
+var sharpModule = __toESM(require("sharp"), 1);
 
 // src/lib/apriltag-detector-server.ts
 var apriltagModulePromise = null;
@@ -67396,8 +63354,8 @@ async function loadApriltagModule() {
 }
 async function detectAprilTagsMetreA4(data, width, height, options = {}) {
   try {
-    console.log(`\u{1F3AF} [APRILTAG] D\xE9tection AprilTags M\xE9tr\xE9 V1.2...`);
-    const { default: AprilTag2, FAMILIES: FAMILIES2 } = await loadApriltagModule();
+    console.log(`\u{1F3AF} [APRILTAG] D\xE9tection AprilTags M\xE9tr\xE9 A4 V10...`);
+    const { default: AprilTag, FAMILIES } = await loadApriltagModule();
     const grayscale = new Uint8Array(width * height);
     for (let i = 0; i < width * height; i++) {
       const r = data[i * 4];
@@ -67405,7 +63363,7 @@ async function detectAprilTagsMetreA4(data, width, height, options = {}) {
       const b = data[i * 4 + 2];
       grayscale[i] = Math.floor((r + g + b) / 3);
     }
-    const detector2 = new AprilTag2(FAMILIES2.TAG36H11, {
+    const detector = new AprilTag(FAMILIES.TAG36H11, {
       quadDecimate: options.quadDecimate ?? 2,
       // Accélération sur grandes images
       quadSigma: options.quadSigma ?? 0,
@@ -67414,7 +63372,7 @@ async function detectAprilTagsMetreA4(data, width, height, options = {}) {
       // Meilleure précision des coins
       decodeSharpening: options.decodeSharpening ?? 0.25
     });
-    const detections = detector2.detect(width, height, grayscale);
+    const detections = detector.detect(width, height, grayscale);
     console.log(`   \u{1F50D} ${detections.length} AprilTag(s) d\xE9tect\xE9(s)`);
     if (detections.length === 0) {
       return [];
@@ -67465,7 +63423,7 @@ async function detectAprilTagsMetreA4(data, width, height, options = {}) {
 }
 
 // src/utils/homographyUtils.ts
-function computeHomography2(srcPoints, dstPoints) {
+function computeHomography(srcPoints, dstPoints) {
   if (srcPoints.length !== 4 || dstPoints.length !== 4) {
     throw new Error("Homography requires exactly 4 points");
   }
@@ -67516,19 +63474,14 @@ function computeRealDistance(H, p1, p2) {
   return Math.sqrt(dx * dx + dy * dy);
 }
 function computeRealDistanceWithUncertainty(H, p1, p2, uncertaintyPercent) {
-  const distance2 = computeRealDistance(H, p1, p2);
-  const uncertainty = distance2 * (uncertaintyPercent / 100);
+  const distance = computeRealDistance(H, p1, p2);
+  const uncertainty = distance * (uncertaintyPercent / 100);
   return {
-    distance: distance2,
+    distance,
     uncertainty,
-    min: distance2 - uncertainty,
-    max: distance2 + uncertainty
+    min: distance - uncertainty,
+    max: distance + uncertainty
   };
-}
-var _arucoMarkerSizeMm = 130;
-function setArucoMarkerSize(sizeCm) {
-  _arucoMarkerSizeMm = sizeCm * 10;
-  console.log(`\u{1F3AF} [HOMOGRAPHY] Taille marqueur M\xE9tr\xE9 A4 V1.2 mise \xE0 jour: ${sizeCm}cm = ${_arucoMarkerSizeMm}mm`);
 }
 function cornersToPoints(corners) {
   return [
@@ -67720,1031 +63673,384 @@ function multiplyMatrices3x3(A, B) {
   return result;
 }
 
-// src/lib/metre-a4-v2-detector.ts
-var METRE_A4_V2_SPECS = {
-  version: "A4-CALIB-V2.0",
-  // Feuille A4
+// src/lib/metre-a4-v10-detector.ts
+var METRE_A4_V10_SPECS = {
+  version: "A4-CALIB-V10",
   sheet: {
     width_mm: 210,
     height_mm: 297
   },
-  // Marges impression (zones sûres)
-  printMargins: {
-    top_mm: 30,
-    bottom_mm: 30
+  margins_mm: {
+    top: 10,
+    left: 15,
+    right: 15,
+    bottom: 30
   },
-  // 🎯 Carré de calibration 18×18cm
-  calibrationSquare: {
-    size_mm: 180,
-    x_mm: 15,
-    // (210 - 180) / 2
-    y_mm: 30,
-    // Marge top
-    // Coins du carré (pour référence)
-    corners: {
-      topLeft: { x: 15, y: 30 },
-      topRight: { x: 195, y: 30 },
-      bottomRight: { x: 195, y: 210 },
-      bottomLeft: { x: 15, y: 210 }
+  smallTag: {
+    size_mm: 50,
+    centers_mm: {
+      topLeft: { x: 40, y: 35 },
+      topCenter: { x: 105, y: 35 },
+      topRight: { x: 170, y: 35 },
+      bottomLeft: { x: 40, y: 240 },
+      bottomCenter: { x: 105, y: 240 },
+      bottomRight: { x: 170, y: 240 }
     }
   },
-  // 🎯 AprilTag CENTRAL UNIQUE (16cm)
-  centralAprilTag: {
-    id: 33,
-    size_mm: 160,
-    // 16cm de côté
-    center_x_mm: 105,
-    // Centre de la feuille A4
-    center_y_mm: 120,
-    // Centre du carré calibration (30 + 180/2 = 120)
-    // Coins du tag (Définis depuis (0,0) en haut-gauche, 160×160mm carrés)
-    corners: {
-      topLeft: { x: 0, y: 0 },
-      // Origine en haut-gauche
-      topRight: { x: 160, y: 0 },
-      // Coin droit haut
-      bottomRight: { x: 160, y: 160 },
-      // Coin droit bas
-      bottomLeft: { x: 0, y: 160 }
-      // Coin gauche bas
-    }
+  largeTag: {
+    size_mm: 100,
+    center_mm: { x: 105, y: 150 }
   },
-  // 📏 Règles graduées (4 côtés × 19 marques = 76 points)
-  rulers: {
-    interval_mm: 10,
-    // Tous les 1cm
-    marks_per_side: 19,
-    // 0 à 18cm
-    total_marks: 76,
-    // 19 × 4 côtés
-    offset_from_edge_mm: 5,
-    // 5mm du bord du carré
-    // Positions des marques (centres en mm)
-    getMarks: function() {
-      const marks = [];
-      const calib = { x: 15, y: 30, size: 180 };
-      const offset = 5;
-      for (let i = 0; i <= 18; i++) {
-        marks.push({ x: calib.x + i * 10, y: calib.y + offset, side: "top" });
-      }
-      for (let i = 0; i <= 18; i++) {
-        marks.push({ x: calib.x + i * 10, y: calib.y + calib.size - offset, side: "bottom" });
-      }
-      for (let i = 0; i <= 18; i++) {
-        marks.push({ x: calib.x + offset, y: calib.y + i * 10, side: "left" });
-      }
-      for (let i = 0; i <= 18; i++) {
-        marks.push({ x: calib.x + calib.size - offset, y: calib.y + i * 10, side: "right" });
-      }
-      return marks;
-    }
-  },
-  // ⚫ Points bordure pointillée (72 points)
-  dottedBorder: {
-    margin_from_edge_mm: 10,
-    // 1cm du bord du carré
-    dot_spacing_mm: 10,
-    // ~10mm entre points
-    total_dots: 72,
-    // ~18 × 4 côtés
-    // Carré intérieur 16×16cm
-    inner_square: {
-      x: 25,
-      // 15 + 10
-      y: 40,
-      // 30 + 10
-      size: 160
-    }
-  },
-  // ✚ Croix aux 4 coins (4 points)
-  cornerCrosses: {
-    count: 4,
-    size_mm: 5,
-    positions: [
-      { x: 0, y: 0 },
-      // TL du carré (origine)
-      { x: 160, y: 0 },
-      // TR
-      { x: 160, y: 160 },
-      // BR
-      { x: 0, y: 160 }
-      // BL
-    ]
-  },
-  // 📐 Référence de calibration
   reference: {
-    // AprilTag 16×16cm
-    tagSize_mm: 160,
-    tagSize_cm: 16,
-    // Carré complet 18×18cm
-    squareSize_mm: 180,
-    squareSize_cm: 18
-  },
-  // 📊 TOTAL POINTS CALIBRATION
-  totalPoints: {
-    aprilTagCenter: 1,
-    aprilTagCorners: 4,
-    aprilTagModules: 81,
-    // Grille 9×9 interne
-    rulerMarks: 76,
-    // 19 × 4 côtés
-    dottedBorderPoints: 72,
-    cornerCrosses: 4,
-    TOTAL: 192
-    // ~192 points de calibration !
+    width_mm: 130,
+    height_mm: 205,
+    width_cm: 13,
+    height_cm: 20.5
   }
 };
-function reorderAprilTagCorners(corners) {
-  if (corners.length !== 4) {
-    console.warn("\u26A0\uFE0F [REORDER] Attendu 4 coins, re\xE7u:", corners.length);
-    return null;
+var avgSidePx = (tag) => {
+  const [c0, c1, c2, c3] = tag.corners;
+  const d = (a, b) => Math.hypot(b.x - a.x, b.y - a.y);
+  const sides = [d(c0, c1), d(c1, c2), d(c2, c3), d(c3, c0)];
+  return sides.reduce((sum, v) => sum + v, 0) / sides.length;
+};
+var sortByY = (a, b) => a.center.y - b.center.y;
+var sortByX = (a, b) => a.center.x - b.center.x;
+function fitLine(points) {
+  if (points.length === 2) {
+    const [p1, p2] = points;
+    const dx = p2.x - p1.x;
+    const dy = p2.y - p1.y;
+    const length = Math.hypot(dx, dy) || 1;
+    const a2 = -dy / length;
+    const b2 = dx / length;
+    const c2 = -(a2 * p1.x + b2 * p1.y);
+    return { a: a2, b: b2, c: c2 };
   }
-  const distinctPoints = /* @__PURE__ */ new Set();
-  for (const c of corners) {
-    distinctPoints.add(`${c.x.toFixed(2)},${c.y.toFixed(2)}`);
+  const meanX = points.reduce((s, p) => s + p.x, 0) / points.length;
+  const meanY = points.reduce((s, p) => s + p.y, 0) / points.length;
+  let sxx = 0;
+  let syy = 0;
+  let sxy = 0;
+  for (const p of points) {
+    const dx = p.x - meanX;
+    const dy = p.y - meanY;
+    sxx += dx * dx;
+    syy += dy * dy;
+    sxy += dx * dy;
   }
-  if (distinctPoints.size < 4) {
-    console.error(`\u274C [REORDER] D\xC9G\xC9N\xC9RESCENCE: Re\xE7u ${distinctPoints.size}/4 coins distincts!`);
-    corners.forEach((c, i) => console.error(`   Corner ${i}: (${c.x.toFixed(1)}, ${c.y.toFixed(1)})`));
-    console.error("   \u26A0\uFE0F  La d\xE9tection AprilTag a \xE9chou\xE9 (mauvais focus? Perspective extr\xEAme? Tag d\xE9grad\xE9?)");
-    return null;
+  const theta = 0.5 * Math.atan2(2 * sxy, sxx - syy);
+  const vx = Math.cos(theta);
+  const vy = Math.sin(theta);
+  const a = -vy;
+  const b = vx;
+  const norm = Math.hypot(a, b) || 1;
+  const na = a / norm;
+  const nb = b / norm;
+  const c = -(na * meanX + nb * meanY);
+  return { a: na, b: nb, c };
+}
+function intersectLines(l1, l2) {
+  const det = l1.a * l2.b - l2.a * l1.b;
+  if (Math.abs(det) < 1e-6) {
+    return { x: 0, y: 0 };
   }
-  const sums = corners.map((c) => c.x + c.y);
-  const diffs = corners.map((c) => c.x - c.y);
-  const tl = corners[sums.indexOf(Math.min(...sums))];
-  const br = corners[sums.indexOf(Math.max(...sums))];
-  const tr = corners[diffs.indexOf(Math.max(...diffs))];
-  const bl = corners[diffs.indexOf(Math.min(...diffs))];
-  let ordered = [tl, tr, br, bl];
-  const orderedKeys = new Set(ordered.map((c) => `${c.x.toFixed(2)},${c.y.toFixed(2)}`));
-  if (orderedKeys.size < 4) {
-    console.warn("\u26A0\uFE0F [REORDER] Coins ambigus via sommes/diffs, fallback g\xE9om\xE9trique par angle");
-    const centerX = corners.reduce((s, c) => s + c.x, 0) / 4;
-    const centerY = corners.reduce((s, c) => s + c.y, 0) / 4;
-    const cornersWithAngle = corners.map((c, idx) => {
-      const angle = Math.atan2(c.y - centerY, c.x - centerX);
-      const normalizedAngle = angle < 0 ? angle + 2 * Math.PI : angle;
-      return {
-        point: c,
-        angle: normalizedAngle,
-        idx
-      };
-    });
-    cornersWithAngle.sort((a, b) => a.angle - b.angle);
-    let tlIdx = 0;
-    let minTopLeft = Infinity;
-    for (let i = 0; i < 4; i++) {
-      const c = cornersWithAngle[i].point;
-      const score = c.y * 1.2 + c.x;
-      if (score < minTopLeft) {
-        minTopLeft = score;
-        tlIdx = i;
+  const x = (l2.b * -l1.c - l1.b * -l2.c) / det;
+  const y = (l1.a * -l2.c - l2.a * -l1.c) / det;
+  return { x, y };
+}
+function computeReprojectionErrorMm(homography, points) {
+  if (points.length === 0) return 0;
+  const errors = points.map((p) => {
+    const [rx, ry] = applyHomography(homography, [p.pixel.x, p.pixel.y]);
+    const dx = rx - p.real.x;
+    const dy = ry - p.real.y;
+    return Math.hypot(dx, dy);
+  });
+  const mean = errors.reduce((s, v) => s + v, 0) / errors.length;
+  return mean;
+}
+function buildCornerPairs(tag, centerMm, sizeMm) {
+  const half = sizeMm / 2;
+  const realCorners = [
+    { x: centerMm.x - half, y: centerMm.y - half },
+    { x: centerMm.x + half, y: centerMm.y - half },
+    { x: centerMm.x + half, y: centerMm.y + half },
+    { x: centerMm.x - half, y: centerMm.y + half }
+  ];
+  return tag.corners.map((corner, idx) => ({
+    pixel: { x: corner.x, y: corner.y },
+    real: realCorners[idx] || realCorners[0]
+  }));
+}
+function buildCenterPair(tag, centerMm) {
+  return { pixel: { x: tag.center.x, y: tag.center.y }, real: centerMm };
+}
+function ransacHomography(points, iterations = 200, thresholdMm = 3) {
+  if (points.length < 4) return null;
+  let bestInliers = [];
+  let bestMatrix = null;
+  for (let i = 0; i < iterations; i++) {
+    const sample = [];
+    const used = /* @__PURE__ */ new Set();
+    while (sample.length < 4) {
+      const idx = Math.floor(Math.random() * points.length);
+      if (!used.has(idx)) {
+        used.add(idx);
+        sample.push(points[idx]);
       }
     }
-    ordered = [
-      cornersWithAngle[tlIdx].point,
-      cornersWithAngle[(tlIdx + 1) % 4].point,
-      cornersWithAngle[(tlIdx + 2) % 4].point,
-      cornersWithAngle[(tlIdx + 3) % 4].point
-    ];
-  }
-  const orderedTl = ordered[0];
-  const orderedTr = ordered[1];
-  const orderedBr = ordered[2];
-  const orderedBl = ordered[3];
-  const topSide = Math.hypot(orderedTr.x - orderedTl.x, orderedTr.y - orderedTl.y);
-  const rightSide = Math.hypot(orderedBr.x - orderedTr.x, orderedBr.y - orderedTr.y);
-  const bottomSide = Math.hypot(orderedBl.x - orderedBr.x, orderedBl.y - orderedBr.y);
-  const leftSide = Math.hypot(orderedTl.x - orderedBl.x, orderedTl.y - orderedBl.y);
-  const widthRatio = Math.max(topSide, bottomSide) / Math.min(topSide, bottomSide);
-  const heightRatio = Math.max(leftSide, rightSide) / Math.min(leftSide, rightSide);
-  console.log(`   \u{1F504} [REORDER-G\xC9OM\xC9TRIQUE] Validation rectangle:`);
-  console.log(`      Haut: ${topSide.toFixed(0)}px, Bas: ${bottomSide.toFixed(0)}px (ratio: ${widthRatio.toFixed(2)})`);
-  console.log(`      Gauche: ${leftSide.toFixed(0)}px, Droite: ${rightSide.toFixed(0)}px (ratio: ${heightRatio.toFixed(2)})`);
-  if (widthRatio > 1.3 || heightRatio > 1.3) {
-    console.warn(`   \u26A0\uFE0F [REORDER] ATTENTION: Rectangle tr\xE8s d\xE9form\xE9 (ratio haut/bas: ${widthRatio.toFixed(2)}, ratio gauche/droite: ${heightRatio.toFixed(2)})`);
-    console.warn(`      Cela peut indiquer une mauvaise classification des coins (perspective extr\xEAme ou tag d\xE9grad\xE9)`);
-  }
-  console.log(`   \u{1F504} [REORDER-G\xC9OM\xC9TRIQUE] Coins r\xE9ordonn\xE9s: TL(${orderedTl.x.toFixed(0)},${orderedTl.y.toFixed(0)}) TR(${orderedTr.x.toFixed(0)},${orderedTr.y.toFixed(0)}) BR(${orderedBr.x.toFixed(0)},${orderedBr.y.toFixed(0)}) BL(${orderedBl.x.toFixed(0)},${orderedBl.y.toFixed(0)})`);
-  return [orderedTl, orderedTr, orderedBr, orderedBl];
-}
-async function detectAprilTagsInternal(data, width, height) {
-  const results = await detectAprilTagsMetreA4(data, width, height, {
-    quadDecimate: 1.5,
-    // Moins agressif pour garder la précision
-    quadSigma: 0,
-    refineEdges: true,
-    decodeSharpening: 0.25
-  });
-  return results.map((result) => {
-    const dist = (a, b) => Math.hypot(b.x - a.x, b.y - a.y);
-    const size = (dist(result.corners[0], result.corners[1]) + dist(result.corners[1], result.corners[2]) + dist(result.corners[2], result.corners[3]) + dist(result.corners[3], result.corners[0])) / 4;
-    return {
-      id: result.id,
-      center: result.center,
-      corners: result.corners,
-      size
-    };
-  });
-}
-async function detectMetreA4V2(imageData, width, height) {
-  console.log("\n\u{1F3AF} [M\xC9TR\xC9 V2.0] D\xE9tection AprilTag central 16cm...");
-  const allPoints = [];
-  const detectedTags = await detectAprilTagsInternal(imageData, width, height);
-  console.log(`   \u{1F50D} ${detectedTags.length} AprilTag(s) d\xE9tect\xE9(s): [${detectedTags.map((t) => t.id).join(", ")}]`);
-  const centralTag = detectedTags.find((t) => t.id === METRE_A4_V2_SPECS.centralAprilTag.id);
-  if (!centralTag) {
-    console.log(`   \u274C AprilTag M\xE9tr\xE9 V2.0 non d\xE9tect\xE9 (ID 33 attendu)`);
-    console.log(`   \u{1F4A1} Assurez-vous d'utiliser la feuille M\xE9tr\xE9 V2.0 avec le grand AprilTag 16cm`);
-    return null;
-  }
-  console.log(`   \u2705 AprilTag ID 33 d\xE9tect\xE9 ! Taille: ${centralTag.size.toFixed(0)}px`);
-  if (centralTag.size < 50) {
-    console.log(`   \u26A0\uFE0F AprilTag trop petit (${centralTag.size.toFixed(0)}px) - rapprochez-vous ou utilisez meilleure r\xE9solution`);
-  }
-  const specs = METRE_A4_V2_SPECS;
-  const tagHalf = specs.centralAprilTag.size_mm / 2;
-  const tagCenter = {
-    x: specs.centralAprilTag.center_x_mm,
-    y: specs.centralAprilTag.center_y_mm
-  };
-  allPoints.push({
-    pixel: centralTag.center,
-    real: tagCenter,
-    confidence: 0.99,
-    type: "apriltag",
-    subPixelRefined: false
-  });
-  const orderedCorners = reorderAprilTagCorners(centralTag.corners);
-  if (!orderedCorners) {
-    console.error(`\u274C [M\xC9TR\xC9 V2.0] Coins AprilTag d\xE9g\xE9n\xE9r\xE9s - impossible de continuer avec cette image`);
-    console.error(`   L'image n'a pas assez de contraste ou le tag n'est pas visible correctement.`);
-    console.error(`   Tentez de rapprocher, am\xE9liorer l'\xE9clairage, ou utiliser meilleure r\xE9solution.`);
-    return null;
-  }
-  const realCorners = [
-    specs.centralAprilTag.corners.topLeft,
-    // TL (0, 0)
-    specs.centralAprilTag.corners.topRight,
-    // TR (160, 0)
-    specs.centralAprilTag.corners.bottomRight,
-    // BR (160, 160)
-    specs.centralAprilTag.corners.bottomLeft
-    // BL (0, 160)
-  ];
-  const cornerPixelKeys = /* @__PURE__ */ new Set();
-  for (let i = 0; i < 4; i++) {
-    const key2 = `${orderedCorners[i].x.toFixed(2)},${orderedCorners[i].y.toFixed(2)}`;
-    cornerPixelKeys.add(key2);
-  }
-  if (cornerPixelKeys.size < 4) {
-    console.error(`\u274C [M\xC9TR\xC9 V2.0] ALERTE CRITIQUE: Les 4 coins AprilTag cr\xE9\xE9s ne sont PAS distincts!`);
-    console.error(`   ${cornerPixelKeys.size} pixels distincts au lieu de 4`);
-    for (let i = 0; i < 4; i++) {
-      console.error(`   Coin ${i}: pixel(${orderedCorners[i].x.toFixed(1)}, ${orderedCorners[i].y.toFixed(1)})`);
+    try {
+      const src = sample.map((p) => [p.pixel.x, p.pixel.y]);
+      const dst = sample.map((p) => [p.real.x, p.real.y]);
+      const homography = computeHomography(src, dst);
+      const inliers = points.filter((p) => {
+        const [rx, ry] = applyHomography(homography.matrix, [p.pixel.x, p.pixel.y]);
+        const err = Math.hypot(rx - p.real.x, ry - p.real.y);
+        return err <= thresholdMm;
+      });
+      if (inliers.length > bestInliers.length) {
+        bestInliers = inliers;
+        bestMatrix = homography.matrix;
+      }
+    } catch {
     }
-    console.error(`   \u274C D\xE9tection compl\xE8tement corrompue - retour null`);
+  }
+  if (!bestMatrix) return null;
+  return {
+    matrix: bestMatrix,
+    inliers: bestInliers.length,
+    total: points.length
+  };
+}
+function buildFallbackFromLargeTag(largeTag, largeSizePx) {
+  try {
+    console.log("\u26A0\uFE0F [V10] Fallback: grand tag seul (pr\xE9diction des petits tags)");
+    const halfLarge = METRE_A4_V10_SPECS.largeTag.size_mm / 2;
+    const largeCenterMm = METRE_A4_V10_SPECS.largeTag.center_mm;
+    const largeRealCorners = [
+      [largeCenterMm.x - halfLarge, largeCenterMm.y - halfLarge],
+      [largeCenterMm.x + halfLarge, largeCenterMm.y - halfLarge],
+      [largeCenterMm.x + halfLarge, largeCenterMm.y + halfLarge],
+      [largeCenterMm.x - halfLarge, largeCenterMm.y + halfLarge]
+    ];
+    const largePixelCorners = largeTag.corners.map((c) => [c.x, c.y]);
+    const realToPixel = computeHomography(largeRealCorners, largePixelCorners);
+    const predict = (p) => {
+      const [x, y] = applyHomography(realToPixel.matrix, [p.x, p.y]);
+      return { x, y };
+    };
+    const predictedCenters = {
+      topLeft: predict(METRE_A4_V10_SPECS.smallTag.centers_mm.topLeft),
+      topCenter: predict(METRE_A4_V10_SPECS.smallTag.centers_mm.topCenter),
+      topRight: predict(METRE_A4_V10_SPECS.smallTag.centers_mm.topRight),
+      bottomLeft: predict(METRE_A4_V10_SPECS.smallTag.centers_mm.bottomLeft),
+      bottomCenter: predict(METRE_A4_V10_SPECS.smallTag.centers_mm.bottomCenter),
+      bottomRight: predict(METRE_A4_V10_SPECS.smallTag.centers_mm.bottomRight)
+    };
+    const topLine = fitLine([predictedCenters.topLeft, predictedCenters.topCenter, predictedCenters.topRight]);
+    const bottomLine = fitLine([predictedCenters.bottomLeft, predictedCenters.bottomCenter, predictedCenters.bottomRight]);
+    const leftLine = fitLine([predictedCenters.topLeft, predictedCenters.bottomLeft]);
+    const rightLine = fitLine([predictedCenters.topRight, predictedCenters.bottomRight]);
+    const fusedCorners = {
+      topLeft: intersectLines(topLine, leftLine),
+      topRight: intersectLines(topLine, rightLine),
+      bottomRight: intersectLines(bottomLine, rightLine),
+      bottomLeft: intersectLines(bottomLine, leftLine)
+    };
+    const dstPoints = [
+      [0, 0],
+      [METRE_A4_V10_SPECS.reference.width_mm, 0],
+      [METRE_A4_V10_SPECS.reference.width_mm, METRE_A4_V10_SPECS.reference.height_mm],
+      [0, METRE_A4_V10_SPECS.reference.height_mm]
+    ];
+    const srcPoints = [
+      [fusedCorners.topLeft.x, fusedCorners.topLeft.y],
+      [fusedCorners.topRight.x, fusedCorners.topRight.y],
+      [fusedCorners.bottomRight.x, fusedCorners.bottomRight.y],
+      [fusedCorners.bottomLeft.x, fusedCorners.bottomLeft.y]
+    ];
+    const homography = computeHomography(srcPoints, dstPoints);
+    const reprojectionPoints = [
+      { pixel: predictedCenters.topLeft, real: METRE_A4_V10_SPECS.smallTag.centers_mm.topLeft },
+      { pixel: predictedCenters.topCenter, real: METRE_A4_V10_SPECS.smallTag.centers_mm.topCenter },
+      { pixel: predictedCenters.topRight, real: METRE_A4_V10_SPECS.smallTag.centers_mm.topRight },
+      { pixel: predictedCenters.bottomLeft, real: METRE_A4_V10_SPECS.smallTag.centers_mm.bottomLeft },
+      { pixel: predictedCenters.bottomCenter, real: METRE_A4_V10_SPECS.smallTag.centers_mm.bottomCenter },
+      { pixel: predictedCenters.bottomRight, real: METRE_A4_V10_SPECS.smallTag.centers_mm.bottomRight },
+      { pixel: largeTag.center, real: METRE_A4_V10_SPECS.largeTag.center_mm }
+    ];
+    const reprojectionErrorMm = Math.max(5, computeReprojectionErrorMm(homography.matrix, reprojectionPoints));
+    const quality = Math.min(60, homography.quality * 0.6);
+    return {
+      success: true,
+      detectionMethod: "Metre-A4-V10",
+      fallbackMode: "largeTagOnly",
+      warnings: ["Grand tag seul d\xE9tect\xE9 - pr\xE9cision d\xE9grad\xE9e"],
+      fusedCorners,
+      largeTagCorners: largeTag.corners,
+      tagCenters: {
+        topLeft: predictedCenters.topLeft,
+        topCenter: predictedCenters.topCenter,
+        topRight: predictedCenters.topRight,
+        bottomLeft: predictedCenters.bottomLeft,
+        bottomCenter: predictedCenters.bottomCenter,
+        bottomRight: predictedCenters.bottomRight,
+        center: largeTag.center
+      },
+      homography: {
+        matrix: homography.matrix,
+        quality,
+        reprojectionErrorMm
+      },
+      sizesPx: {
+        largeTag: largeSizePx,
+        smallTags: Array(6).fill(largeSizePx * 0.5)
+      }
+    };
+  } catch (error) {
+    console.error("\u274C [V10] Fallback grand tag \xE9chou\xE9:", error);
     return null;
   }
-  for (let i = 0; i < 4; i++) {
-    allPoints.push({
-      pixel: orderedCorners[i],
-      real: realCorners[i],
-      confidence: 0.95,
-      type: "apriltag-corner",
-      subPixelRefined: false
-    });
+}
+async function detectMetreA4V10(data, width, height) {
+  const detectedTags = await detectAprilTagsMetreA4(data, width, height);
+  if (!detectedTags.length) {
+    console.log("   \u274C [V10] Aucun AprilTag d\xE9tect\xE9");
+    return null;
   }
-  centralTag.corners = orderedCorners;
-  const modulePoints = estimateAprilTagModulePoints(centralTag, tagCenter, specs.centralAprilTag.size_mm);
-  allPoints.push(...modulePoints);
-  console.log(`   \u{1F4CA} AprilTag: 1 centre + 4 coins + ${modulePoints.length} modules`);
-  const rulerPoints = projectRulerMarks(centralTag, tagCenter, specs.centralAprilTag.size_mm, imageData, width, height);
-  allPoints.push(...rulerPoints);
-  console.log(`   \u{1F4CF} R\xE8gles: ${rulerPoints.length}/76 marques d\xE9tect\xE9es`);
-  const dottedPoints = projectDottedBorder(centralTag, tagCenter, specs.centralAprilTag.size_mm, imageData, width, height);
-  allPoints.push(...dottedPoints);
-  console.log(`   \u26AB Bordure pointill\xE9e: ${dottedPoints.length}/72 points d\xE9tect\xE9s`);
-  const crossPoints = projectCornerCrosses(centralTag, tagCenter, specs.centralAprilTag.size_mm);
-  allPoints.push(...crossPoints);
-  console.log(`   \u271A Croix coins: ${crossPoints.length}/4 d\xE9tect\xE9es`);
-  console.log(`   \u{1F4CA} TOTAL: ${allPoints.length}/192 points de calibration`);
-  const homographyResult = computeRobustHomography(allPoints);
-  const breakdown = {
-    aprilTagCenter: 1,
-    aprilTagCorners: 4,
-    aprilTagModules: modulePoints.length,
-    rulerMarks: rulerPoints.length,
-    dottedBorderPoints: dottedPoints.length,
-    cornerCrosses: crossPoints.length,
-    total: allPoints.length
+  const tagsWithSize = detectedTags.map((tag) => ({ tag, size: avgSidePx(tag) }));
+  const sortedBySize = [...tagsWithSize].sort((a, b) => b.size - a.size);
+  const largest = sortedBySize[0];
+  if (!largest) return null;
+  const largeTag = largest.tag;
+  const largeSize = largest.size;
+  const smallTarget = largeSize * 0.5;
+  const smallCandidates = sortedBySize.slice(1).filter(({ size }) => size >= largeSize * 0.35 && size <= largeSize * 0.7).sort((a, b) => Math.abs(a.size - smallTarget) - Math.abs(b.size - smallTarget)).slice(0, 6);
+  if (smallCandidates.length < 6) {
+    console.log(`   \u26A0\uFE0F [V10] Seulement ${smallCandidates.length}/6 petits tags d\xE9tect\xE9s`);
+    const fallback = buildFallbackFromLargeTag(largeTag, largeSize);
+    return fallback;
+  }
+  const smallTags = smallCandidates.map(({ tag }) => tag);
+  const sortedByRow = [...smallTags].sort(sortByY);
+  const topRow = sortedByRow.slice(0, 3).sort(sortByX);
+  const bottomRow = sortedByRow.slice(3, 6).sort(sortByX);
+  const [topLeft, topCenter, topRight] = topRow;
+  const [bottomLeft, bottomCenter, bottomRight] = bottomRow;
+  if (!topLeft || !topCenter || !topRight || !bottomLeft || !bottomCenter || !bottomRight) {
+    console.log("   \u274C [V10] Impossible de classer les 6 tags en lignes");
+    return null;
+  }
+  const topLine = fitLine([topLeft.center, topCenter.center, topRight.center]);
+  const bottomLine = fitLine([bottomLeft.center, bottomCenter.center, bottomRight.center]);
+  const leftLine = fitLine([topLeft.center, bottomLeft.center]);
+  const rightLine = fitLine([topRight.center, bottomRight.center]);
+  const fusedCorners = {
+    topLeft: intersectLines(topLine, leftLine),
+    topRight: intersectLines(topLine, rightLine),
+    bottomRight: intersectLines(bottomLine, rightLine),
+    bottomLeft: intersectLines(bottomLine, leftLine)
   };
-  const precision = homographyResult.reprojectionErrorMm < 0.3 ? "\xB10.3mm" : homographyResult.reprojectionErrorMm < 0.5 ? "\xB10.5mm" : homographyResult.reprojectionErrorMm < 1 ? "\xB11mm" : homographyResult.reprojectionErrorMm < 2 ? "\xB12mm" : "\xB15mm";
-  console.log(`   \u2B50 Pr\xE9cision estim\xE9e: ${precision}`);
-  console.log(`   \u2705 Homographie: qualit\xE9 ${(homographyResult.quality * 100).toFixed(1)}%
-`);
+  const dstPoints = [
+    [0, 0],
+    [METRE_A4_V10_SPECS.reference.width_mm, 0],
+    [METRE_A4_V10_SPECS.reference.width_mm, METRE_A4_V10_SPECS.reference.height_mm],
+    [0, METRE_A4_V10_SPECS.reference.height_mm]
+  ];
+  const srcPoints = [
+    [fusedCorners.topLeft.x, fusedCorners.topLeft.y],
+    [fusedCorners.topRight.x, fusedCorners.topRight.y],
+    [fusedCorners.bottomRight.x, fusedCorners.bottomRight.y],
+    [fusedCorners.bottomLeft.x, fusedCorners.bottomLeft.y]
+  ];
+  const pointPairs = [
+    buildCenterPair(topLeft, METRE_A4_V10_SPECS.smallTag.centers_mm.topLeft),
+    buildCenterPair(topCenter, METRE_A4_V10_SPECS.smallTag.centers_mm.topCenter),
+    buildCenterPair(topRight, METRE_A4_V10_SPECS.smallTag.centers_mm.topRight),
+    buildCenterPair(bottomLeft, METRE_A4_V10_SPECS.smallTag.centers_mm.bottomLeft),
+    buildCenterPair(bottomCenter, METRE_A4_V10_SPECS.smallTag.centers_mm.bottomCenter),
+    buildCenterPair(bottomRight, METRE_A4_V10_SPECS.smallTag.centers_mm.bottomRight),
+    buildCenterPair(largeTag, METRE_A4_V10_SPECS.largeTag.center_mm),
+    ...buildCornerPairs(topLeft, METRE_A4_V10_SPECS.smallTag.centers_mm.topLeft, METRE_A4_V10_SPECS.smallTag.size_mm),
+    ...buildCornerPairs(topCenter, METRE_A4_V10_SPECS.smallTag.centers_mm.topCenter, METRE_A4_V10_SPECS.smallTag.size_mm),
+    ...buildCornerPairs(topRight, METRE_A4_V10_SPECS.smallTag.centers_mm.topRight, METRE_A4_V10_SPECS.smallTag.size_mm),
+    ...buildCornerPairs(bottomLeft, METRE_A4_V10_SPECS.smallTag.centers_mm.bottomLeft, METRE_A4_V10_SPECS.smallTag.size_mm),
+    ...buildCornerPairs(bottomCenter, METRE_A4_V10_SPECS.smallTag.centers_mm.bottomCenter, METRE_A4_V10_SPECS.smallTag.size_mm),
+    ...buildCornerPairs(bottomRight, METRE_A4_V10_SPECS.smallTag.centers_mm.bottomRight, METRE_A4_V10_SPECS.smallTag.size_mm),
+    ...buildCornerPairs(largeTag, METRE_A4_V10_SPECS.largeTag.center_mm, METRE_A4_V10_SPECS.largeTag.size_mm)
+  ];
+  const ransac = ransacHomography(pointPairs, 200, 3);
+  const homography = ransac ? { matrix: ransac.matrix, quality: ransac.inliers / ransac.total * 100 } : computeHomography(srcPoints, dstPoints);
+  const reprojectionPoints = [
+    { pixel: topLeft.center, real: METRE_A4_V10_SPECS.smallTag.centers_mm.topLeft },
+    { pixel: topCenter.center, real: METRE_A4_V10_SPECS.smallTag.centers_mm.topCenter },
+    { pixel: topRight.center, real: METRE_A4_V10_SPECS.smallTag.centers_mm.topRight },
+    { pixel: bottomLeft.center, real: METRE_A4_V10_SPECS.smallTag.centers_mm.bottomLeft },
+    { pixel: bottomCenter.center, real: METRE_A4_V10_SPECS.smallTag.centers_mm.bottomCenter },
+    { pixel: bottomRight.center, real: METRE_A4_V10_SPECS.smallTag.centers_mm.bottomRight },
+    { pixel: largeTag.center, real: METRE_A4_V10_SPECS.largeTag.center_mm }
+  ];
+  const reprojectionErrorMm = computeReprojectionErrorMm(homography.matrix, reprojectionPoints);
   return {
     success: true,
-    points: allPoints,
-    breakdown,
-    homography: homographyResult,
-    estimatedPrecision: precision,
-    aprilTagCorners: [
-      centralTag.corners[0],
-      centralTag.corners[1],
-      centralTag.corners[2],
-      centralTag.corners[3]
-    ],
-    tagSizePixels: centralTag.size
-  };
-}
-function estimateAprilTagModulePoints(tag, centerMm, sizeMm) {
-  const points = [];
-  const gridSize = 10;
-  const moduleSize = sizeMm / gridSize;
-  const [tlPx, trPx, brPx, blPx] = tag.corners;
-  const halfMm = sizeMm / 2;
-  const srcPx = [
-    [tlPx.x, tlPx.y],
-    [trPx.x, trPx.y],
-    [brPx.x, brPx.y],
-    [blPx.x, blPx.y]
-  ];
-  const dstMm = [
-    [centerMm.x - halfMm, centerMm.y - halfMm],
-    [centerMm.x + halfMm, centerMm.y - halfMm],
-    [centerMm.x + halfMm, centerMm.y + halfMm],
-    [centerMm.x - halfMm, centerMm.y + halfMm]
-  ];
-  try {
-    const H = computeHomography2(dstMm, srcPx);
-    for (let i = 1; i < gridSize; i++) {
-      for (let j = 1; j < gridSize; j++) {
-        const xMm = centerMm.x - halfMm + i * moduleSize;
-        const yMm = centerMm.y - halfMm + j * moduleSize;
-        const [xPx, yPx] = applyHomography(H.matrix, [xMm, yMm]);
-        points.push({
-          pixel: { x: xPx, y: yPx },
-          real: { x: xMm, y: yMm },
-          confidence: 0.85,
-          type: "dot",
-          subPixelRefined: false
-        });
-      }
-    }
-  } catch {
-    console.log("   \u26A0\uFE0F Impossible de calculer les points modules");
-  }
-  return points;
-}
-function projectRulerMarks(tag, tagCenterMm, tagSizeMm, imageData, width, height) {
-  const points = [];
-  const specs = METRE_A4_V2_SPECS;
-  const [tlPx, trPx, brPx, blPx] = tag.corners;
-  const tagTL_mm = { x: tagCenterMm.x - tagSizeMm / 2, y: tagCenterMm.y - tagSizeMm / 2 };
-  const tagTR_mm = { x: tagCenterMm.x + tagSizeMm / 2, y: tagCenterMm.y - tagSizeMm / 2 };
-  const tagBR_mm = { x: tagCenterMm.x + tagSizeMm / 2, y: tagCenterMm.y + tagSizeMm / 2 };
-  const tagBL_mm = { x: tagCenterMm.x - tagSizeMm / 2, y: tagCenterMm.y + tagSizeMm / 2 };
-  const topVec = { x: trPx.x - tlPx.x, y: trPx.y - tlPx.y };
-  const leftVec = { x: blPx.x - tlPx.x, y: blPx.y - tlPx.y };
-  const extensionRatio = specs.calibrationSquare.size_mm / 2 / (tagSizeMm / 2);
-  const calibTL_px = {
-    x: tlPx.x - topVec.x * 0.125 - leftVec.x * 0.125,
-    y: tlPx.y - topVec.y * 0.125 - leftVec.y * 0.125
-  };
-  const calibTR_px = {
-    x: trPx.x + topVec.x * 0.125 - leftVec.x * 0.125,
-    y: trPx.y + topVec.y * 0.125 - leftVec.y * 0.125
-  };
-  const calibBR_px = {
-    x: brPx.x + topVec.x * 0.125 + leftVec.x * 0.125,
-    y: brPx.y + topVec.y * 0.125 + leftVec.y * 0.125
-  };
-  const calibBL_px = {
-    x: blPx.x - topVec.x * 0.125 + leftVec.x * 0.125,
-    y: blPx.y - topVec.y * 0.125 + leftVec.y * 0.125
-  };
-  const srcMm = [
-    [specs.calibrationSquare.x_mm, specs.calibrationSquare.y_mm],
-    // (15, 30)
-    [specs.calibrationSquare.x_mm + specs.calibrationSquare.size_mm, specs.calibrationSquare.y_mm],
-    // (195, 30)
-    [specs.calibrationSquare.x_mm + specs.calibrationSquare.size_mm, specs.calibrationSquare.y_mm + specs.calibrationSquare.size_mm],
-    // (195, 210)
-    [specs.calibrationSquare.x_mm, specs.calibrationSquare.y_mm + specs.calibrationSquare.size_mm]
-    // (15, 210)
-  ];
-  const dstPx = [
-    [calibTL_px.x, calibTL_px.y],
-    [calibTR_px.x, calibTR_px.y],
-    [calibBR_px.x, calibBR_px.y],
-    [calibBL_px.x, calibBL_px.y]
-  ];
-  try {
-    const H = computeHomography2(srcMm, dstPx);
-    const calib = { x: specs.calibrationSquare.x_mm, y: specs.calibrationSquare.y_mm, size: specs.calibrationSquare.size_mm };
-    const offset = 5;
-    const rulerPositions = [];
-    for (let i = 0; i <= 18; i++) {
-      rulerPositions.push({ x: calib.x + i * 10, y: calib.y + offset, side: "top" });
-    }
-    for (let i = 0; i <= 18; i++) {
-      rulerPositions.push({ x: calib.x + i * 10, y: calib.y + calib.size - offset, side: "bottom" });
-    }
-    for (let i = 0; i <= 18; i++) {
-      rulerPositions.push({ x: calib.x + offset, y: calib.y + i * 10, side: "left" });
-    }
-    for (let i = 0; i <= 18; i++) {
-      rulerPositions.push({ x: calib.x + calib.size - offset, y: calib.y + i * 10, side: "right" });
-    }
-    for (const pos of rulerPositions) {
-      const [xPx, yPx] = applyHomography(H.matrix, [pos.x, pos.y]);
-      if (xPx >= 0 && xPx < width && yPx >= 0 && yPx < height) {
-        const refined = refinePointPosition(imageData, width, height, xPx, yPx, 10);
-        points.push({
-          pixel: refined || { x: xPx, y: yPx },
-          real: { x: pos.x, y: pos.y },
-          confidence: refined ? 0.9 : 0.7,
-          type: "rule",
-          subPixelRefined: !!refined
-        });
-      }
-    }
-  } catch {
-    console.log("   \u26A0\uFE0F Erreur projection r\xE8gles");
-  }
-  return points;
-}
-function projectDottedBorder(tag, tagCenterMm, tagSizeMm, imageData, width, height) {
-  const points = [];
-  const specs = METRE_A4_V2_SPECS;
-  const [tlPx, trPx, brPx, blPx] = tag.corners;
-  const topVec = { x: trPx.x - tlPx.x, y: trPx.y - tlPx.y };
-  const leftVec = { x: blPx.x - tlPx.x, y: blPx.y - tlPx.y };
-  const calibTL_px = {
-    x: tlPx.x - topVec.x * 0.125 - leftVec.x * 0.125,
-    y: tlPx.y - topVec.y * 0.125 - leftVec.y * 0.125
-  };
-  const calibTR_px = {
-    x: trPx.x + topVec.x * 0.125 - leftVec.x * 0.125,
-    y: trPx.y + topVec.y * 0.125 - leftVec.y * 0.125
-  };
-  const calibBR_px = {
-    x: brPx.x + topVec.x * 0.125 + leftVec.x * 0.125,
-    y: brPx.y + topVec.y * 0.125 + leftVec.y * 0.125
-  };
-  const calibBL_px = {
-    x: blPx.x - topVec.x * 0.125 + leftVec.x * 0.125,
-    y: blPx.y - topVec.y * 0.125 + leftVec.y * 0.125
-  };
-  const srcMm = [
-    [specs.calibrationSquare.x_mm, specs.calibrationSquare.y_mm],
-    [specs.calibrationSquare.x_mm + specs.calibrationSquare.size_mm, specs.calibrationSquare.y_mm],
-    [specs.calibrationSquare.x_mm + specs.calibrationSquare.size_mm, specs.calibrationSquare.y_mm + specs.calibrationSquare.size_mm],
-    [specs.calibrationSquare.x_mm, specs.calibrationSquare.y_mm + specs.calibrationSquare.size_mm]
-  ];
-  const dstPx = [
-    [calibTL_px.x, calibTL_px.y],
-    [calibTR_px.x, calibTR_px.y],
-    [calibBR_px.x, calibBR_px.y],
-    [calibBL_px.x, calibBL_px.y]
-  ];
-  try {
-    const H = computeHomography2(srcMm, dstPx);
-    const inner = specs.dottedBorder.inner_square;
-    const spacing = specs.dottedBorder.dot_spacing_mm;
-    const numDots = Math.floor(inner.size / spacing);
-    const dottedPositions = [];
-    for (let i = 0; i <= numDots; i++) {
-      dottedPositions.push({ x: inner.x + i * spacing, y: inner.y, side: "top" });
-    }
-    for (let i = 0; i <= numDots; i++) {
-      dottedPositions.push({ x: inner.x + i * spacing, y: inner.y + inner.size, side: "bottom" });
-    }
-    for (let i = 1; i < numDots; i++) {
-      dottedPositions.push({ x: inner.x, y: inner.y + i * spacing, side: "left" });
-    }
-    for (let i = 1; i < numDots; i++) {
-      dottedPositions.push({ x: inner.x + inner.size, y: inner.y + i * spacing, side: "right" });
-    }
-    for (const pos of dottedPositions) {
-      const [xPx, yPx] = applyHomography(H.matrix, [pos.x, pos.y]);
-      if (xPx >= 0 && xPx < width && yPx >= 0 && yPx < height) {
-        const refined = findBlackBlob(imageData, width, height, xPx, yPx, 8);
-        points.push({
-          pixel: refined || { x: xPx, y: yPx },
-          real: { x: pos.x, y: pos.y },
-          confidence: refined ? 0.9 : 0.65,
-          type: "dot",
-          subPixelRefined: !!refined
-        });
-      }
-    }
-  } catch {
-    console.log("   \u26A0\uFE0F Erreur projection bordure pointill\xE9e");
-  }
-  return points;
-}
-function projectCornerCrosses(tag, tagCenterMm, tagSizeMm) {
-  const points = [];
-  const specs = METRE_A4_V2_SPECS;
-  const [tlPx, trPx, brPx, blPx] = tag.corners;
-  const topVec = { x: trPx.x - tlPx.x, y: trPx.y - tlPx.y };
-  const leftVec = { x: blPx.x - tlPx.x, y: blPx.y - tlPx.y };
-  const calibTL_px = {
-    x: tlPx.x - topVec.x * 0.125 - leftVec.x * 0.125,
-    y: tlPx.y - topVec.y * 0.125 - leftVec.y * 0.125
-  };
-  const calibTR_px = {
-    x: trPx.x + topVec.x * 0.125 - leftVec.x * 0.125,
-    y: trPx.y + topVec.y * 0.125 - leftVec.y * 0.125
-  };
-  const calibBR_px = {
-    x: brPx.x + topVec.x * 0.125 + leftVec.x * 0.125,
-    y: brPx.y + topVec.y * 0.125 + leftVec.y * 0.125
-  };
-  const calibBL_px = {
-    x: blPx.x - topVec.x * 0.125 + leftVec.x * 0.125,
-    y: blPx.y - topVec.y * 0.125 + leftVec.y * 0.125
-  };
-  const srcMm = [
-    [specs.calibrationSquare.x_mm, specs.calibrationSquare.y_mm],
-    [specs.calibrationSquare.x_mm + specs.calibrationSquare.size_mm, specs.calibrationSquare.y_mm],
-    [specs.calibrationSquare.x_mm + specs.calibrationSquare.size_mm, specs.calibrationSquare.y_mm + specs.calibrationSquare.size_mm],
-    [specs.calibrationSquare.x_mm, specs.calibrationSquare.y_mm + specs.calibrationSquare.size_mm]
-  ];
-  const dstPx = [
-    [calibTL_px.x, calibTL_px.y],
-    [calibTR_px.x, calibTR_px.y],
-    [calibBR_px.x, calibBR_px.y],
-    [calibBL_px.x, calibBL_px.y]
-  ];
-  try {
-    const H = computeHomography2(srcMm, dstPx);
-    for (const crossPos of specs.cornerCrosses.positions) {
-      const [xPx, yPx] = applyHomography(H.matrix, [crossPos.x, crossPos.y]);
-      points.push({
-        pixel: { x: xPx, y: yPx },
-        real: { x: crossPos.x, y: crossPos.y },
-        confidence: 0.8,
-        type: "dot",
-        subPixelRefined: false
-      });
-    }
-  } catch {
-    console.log("   \u26A0\uFE0F Erreur projection croix coins");
-  }
-  return points;
-}
-function refinePointPosition(imageData, width, height, x, y, radius) {
-  let minBrightness = 255;
-  let bestX = x, bestY = y;
-  const startX = Math.max(0, Math.floor(x - radius));
-  const endX = Math.min(width - 1, Math.floor(x + radius));
-  const startY = Math.max(0, Math.floor(y - radius));
-  const endY = Math.min(height - 1, Math.floor(y + radius));
-  for (let py = startY; py <= endY; py++) {
-    for (let px = startX; px <= endX; px++) {
-      const idx = (py * width + px) * 4;
-      const brightness = (imageData[idx] + imageData[idx + 1] + imageData[idx + 2]) / 3;
-      if (brightness < minBrightness) {
-        minBrightness = brightness;
-        bestX = px;
-        bestY = py;
-      }
-    }
-  }
-  if (minBrightness < 100) {
-    return { x: bestX, y: bestY };
-  }
-  return null;
-}
-function findBlackBlob(imageData, width, height, x, y, radius) {
-  let sumX = 0, sumY = 0, count = 0;
-  const startX = Math.max(0, Math.floor(x - radius));
-  const endX = Math.min(width - 1, Math.floor(x + radius));
-  const startY = Math.max(0, Math.floor(y - radius));
-  const endY = Math.min(height - 1, Math.floor(y + radius));
-  for (let py = startY; py <= endY; py++) {
-    for (let px = startX; px <= endX; px++) {
-      const idx = (py * width + px) * 4;
-      const brightness = (imageData[idx] + imageData[idx + 1] + imageData[idx + 2]) / 3;
-      if (brightness < 80) {
-        sumX += px;
-        sumY += py;
-        count++;
-      }
-    }
-  }
-  if (count >= 3) {
-    return { x: sumX / count, y: sumY / count };
-  }
-  return null;
-}
-function computeRobustHomography(points) {
-  const goodPoints = points.filter((p) => p.confidence >= 0.6);
-  if (goodPoints.length < 4) {
-    console.log(`   \u26A0\uFE0F Pas assez de points pour homographie (${goodPoints.length}/${points.length} avec confidence >= 0.6)`);
-    return {
-      matrix: [[1, 0, 0], [0, 1, 0], [0, 0, 1]],
-      quality: 0,
-      reprojectionErrorMm: 999
-    };
-  }
-  console.log(`   \u{1F4CA} Points utilis\xE9s pour homographie: ${goodPoints.length}/${points.length}`);
-  const srcPx = goodPoints.map((p) => [p.pixel.x, p.pixel.y]);
-  const dstMm = goodPoints.map((p) => [p.real.x, p.real.y]);
-  try {
-    const H = computeHomography2(srcPx, dstMm);
-    console.log(`
-   \u{1F52C} MATRICE HOMOGRAPHIE (pixel \u2192 mm):`);
-    console.log(`      [${H.matrix[0][0].toFixed(6)}, ${H.matrix[0][1].toFixed(6)}, ${H.matrix[0][2].toFixed(2)}]`);
-    console.log(`      [${H.matrix[1][0].toFixed(6)}, ${H.matrix[1][1].toFixed(6)}, ${H.matrix[1][2].toFixed(2)}]`);
-    console.log(`      [${H.matrix[2][0].toFixed(9)}, ${H.matrix[2][1].toFixed(9)}, ${H.matrix[2][2].toFixed(6)}]`);
-    let totalError = 0;
-    let minError = Infinity;
-    let maxError = 0;
-    const errors = [];
-    for (let i = 0; i < goodPoints.length; i++) {
-      const [projX, projY] = applyHomography(H.matrix, [goodPoints[i].pixel.x, goodPoints[i].pixel.y]);
-      const error = Math.hypot(projX - goodPoints[i].real.x, projY - goodPoints[i].real.y);
-      totalError += error;
-      minError = Math.min(minError, error);
-      maxError = Math.max(maxError, error);
-      errors.push(error);
-    }
-    const avgError = totalError / goodPoints.length;
-    console.log(`   \u{1F4C8} Erreurs de reprojection:`);
-    console.log(`      Min: ${minError.toFixed(2)}mm, Max: ${maxError.toFixed(2)}mm`);
-    console.log(`      Moyenne: ${avgError.toFixed(2)}mm, StdDev: ${Math.sqrt(errors.reduce((s, e) => s + (e - avgError) ** 2, 0) / errors.length).toFixed(2)}mm`);
-    const worstPoints = errors.map((e, i) => ({ error: e, idx: i })).sort((a, b) => b.error - a.error).slice(0, 5);
-    console.log(`   \u26A0\uFE0F Top 5 pires points:`);
-    worstPoints.forEach((w) => {
-      const p = goodPoints[w.idx];
-      console.log(`      Point ${w.idx} (${p.type}): px(${p.pixel.x.toFixed(0)},${p.pixel.y.toFixed(0)}) \u2192 r\xE9el(${p.real.x.toFixed(1)},${p.real.y.toFixed(1)}) [erreur: ${w.error.toFixed(2)}mm]`);
-    });
-    const quality = Math.max(0, Math.min(1, 1 - avgError / 5)) * Math.min(1, goodPoints.length / 20);
-    return {
-      matrix: H.matrix,
-      quality,
-      reprojectionErrorMm: avgError
-    };
-  } catch {
-    console.log("   \u26A0\uFE0F Erreur calcul homographie");
-    return {
-      matrix: [[1, 0, 0], [0, 1, 0], [0, 0, 1]],
-      quality: 0,
-      reprojectionErrorMm: 999
-    };
-  }
-}
-
-// src/lib/photo-quality-analyzer.ts
-var QUALITY_WEIGHTS = {
-  sharpness: 0.4,
-  // 40% du score
-  homographyQuality: 0.35,
-  // 35% du score
-  captureConditions: 0.25
-  // 25% du score
-};
-var SHARPNESS_THRESHOLDS = {
-  excellent: 85,
-  // Score > 85 : excellent
-  good: 70,
-  // Score > 70 : bon
-  acceptable: 50,
-  // Score > 50 : acceptable
-  poor: 30
-  // Score < 30 : mauvais
-};
-var HOMOGRAPHY_THRESHOLDS = {
-  excellent: 0.5,
-  // Erreur < 0.5mm : excellent
-  good: 1,
-  // Erreur < 1mm : bon
-  acceptable: 2,
-  // Erreur < 2mm : acceptable
-  poor: 5
-  // Erreur > 5mm : mauvais
-};
-function selectBestPhoto(photos) {
-  console.log(`
-\u{1F4F8} [QUALITY ANALYZER] Analyse de ${photos.length} photos...`);
-  if (photos.length === 0) {
-    throw new Error("Aucune photo fournie pour analyse");
-  }
-  if (photos.length === 1) {
-    console.log("   \u2139\uFE0F  Une seule photo, s\xE9lection automatique");
-    const score = analyzePhotoQuality(photos[0]);
-    return {
-      bestPhoto: photos[0],
-      bestScore: score,
-      allScores: [score],
-      stats: {
-        totalPhotos: 1,
-        averageScore: score.total,
-        scoreRange: [score.total, score.total],
-        improvement: 0
-      }
-    };
-  }
-  const allScores = photos.map((photo) => {
-    const score = analyzePhotoQuality(photo);
-    console.log(`   \u{1F4CA} Photo ${photo.id}: ${score.total.toFixed(1)}/100 (S:${score.sharpness.toFixed(0)} H:${score.homographyQuality.toFixed(0)} C:${score.captureConditions.toFixed(0)})`);
-    return score;
-  });
-  let bestIdx = 0;
-  let bestTotalScore = allScores[0].total;
-  for (let i = 1; i < allScores.length; i++) {
-    if (allScores[i].total > bestTotalScore) {
-      bestTotalScore = allScores[i].total;
-      bestIdx = i;
-    }
-  }
-  const bestPhoto = photos[bestIdx];
-  const bestScore = allScores[bestIdx];
-  const scores = allScores.map((s) => s.total);
-  const avgScore = scores.reduce((a, b) => a + b, 0) / scores.length;
-  const minScore = Math.min(...scores);
-  const maxScore = Math.max(...scores);
-  const improvement = (bestTotalScore - avgScore) / avgScore * 100;
-  console.log(`
-   \u{1F3C6} MEILLEURE: Photo ${bestPhoto.id} (${bestTotalScore.toFixed(1)}/100)`);
-  console.log(`   \u{1F4C8} Am\xE9lioration: +${improvement.toFixed(1)}% vs moyenne`);
-  console.log(`   \u{1F4C9} Range: ${minScore.toFixed(1)} - ${maxScore.toFixed(1)}`);
-  if (bestScore.warnings.length > 0) {
-    console.log(`   \u26A0\uFE0F  Warnings: ${bestScore.warnings.join(", ")}`);
-  }
-  if (bestTotalScore < 45) {
-    console.log(`
-   \u274C REJET: Score ${bestTotalScore.toFixed(1)}/100 insuffisant (seuil: 45)`);
-    throw new Error(
-      `QUALIT\xC9_INSUFFISANTE: Meilleur score ${bestTotalScore.toFixed(1)}/100. Reprendre les photos avec meilleur \xE9clairage et stabilit\xE9. Points d\xE9tect\xE9s: ${bestPhoto.detection.breakdown.total} (1 AprilTag central + ${bestPhoto.detection.breakdown.aprilTagCorners} coins). Probl\xE8mes: ${bestScore.warnings.join(", ") || "Nettet\xE9/\xE9clairage insuffisants"}`
-    );
-  }
-  if (bestTotalScore < 60) {
-    console.log(`   \u26A0\uFE0F  QUALIT\xC9 LIMITE: Score ${bestTotalScore.toFixed(1)}/100 (recommandation: reprendre)`);
-  }
-  return {
-    bestPhoto,
-    bestScore,
-    allScores,
-    stats: {
-      totalPhotos: photos.length,
-      averageScore: avgScore,
-      scoreRange: [minScore, maxScore],
-      improvement
-    }
-  };
-}
-function analyzePhotoQuality(photo) {
-  const warnings = [];
-  const sharpnessMetrics = analyzeSharpness(photo.imageData, photo.width, photo.height);
-  const sharpnessScore = computeSharpnessScore(sharpnessMetrics);
-  if (sharpnessScore < SHARPNESS_THRESHOLDS.acceptable) {
-    warnings.push("Nettet\xE9 insuffisante");
-  }
-  const homographyMetrics = analyzeHomographyQuality(photo.detection);
-  let homographyScore = computeHomographyScore(homographyMetrics);
-  const bd = photo.detection.breakdown;
-  const pointDensity = {
-    aprilTagCenter: bd.aprilTagCenter * 100,
-    // 0 ou 100
-    corners: bd.aprilTagCorners / 4 * 100,
-    // Max 100 (4/4)
-    modules: Math.min(100, bd.aprilTagModules / 81 * 100),
-    // Max 81 modules
-    rulers: Math.min(100, bd.rulerMarks / 76 * 100),
-    // 76 marques
-    dots: Math.min(100, bd.dottedBorderPoints / 72 * 100),
-    // 72 points bordure
-    crosses: bd.cornerCrosses / 4 * 100
-    // 4 croix
-  };
-  const densityBonus = pointDensity.aprilTagCenter * 0.25 + // Centre détecté = essentiel
-  pointDensity.corners * 0.2 + // 4 coins AprilTag
-  pointDensity.modules * 0.15 + // Grille interne
-  pointDensity.rulers * 0.2 + // Règles graduées
-  pointDensity.dots * 0.15 + // Bordure pointillée
-  pointDensity.crosses * 0.05;
-  homographyScore = homographyScore * 0.7 + densityBonus * 0.3;
-  if (photo.detection.homography.reprojectionErrorMm > HOMOGRAPHY_THRESHOLDS.acceptable) {
-    warnings.push(`Erreur reprojection ${photo.detection.homography.reprojectionErrorMm.toFixed(1)}mm`);
-  }
-  const captureMetrics = analyzeCaptureConditions(
-    photo.imageData,
-    photo.width,
-    photo.height,
-    photo.detection
-  );
-  const captureScore = computeCaptureScore(captureMetrics);
-  if (captureMetrics.viewAngleDegrees > 30) {
-    warnings.push(`Angle de vue ${captureMetrics.viewAngleDegrees.toFixed(0)}\xB0 (frontal recommand\xE9)`);
-  }
-  const totalScore = sharpnessScore * QUALITY_WEIGHTS.sharpness + homographyScore * QUALITY_WEIGHTS.homographyQuality + captureScore * QUALITY_WEIGHTS.captureConditions;
-  return {
-    photoId: photo.id,
-    sharpness: sharpnessScore,
-    homographyQuality: homographyScore,
-    captureConditions: captureScore,
-    total: totalScore,
-    breakdown: {
-      edgeStrength: sharpnessMetrics.edgeStrength,
-      contrastRatio: sharpnessMetrics.contrastRatio,
-      reprojectionErrorMm: photo.detection.homography.reprojectionErrorMm,
-      inlierRatio: homographyMetrics.inlierRatio,
-      spatialCoverage: homographyMetrics.spatialCoverage,
-      viewAngleDegrees: captureMetrics.viewAngleDegrees,
-      lightingUniformity: captureMetrics.lightingUniformity
+    detectionMethod: "Metre-A4-V10",
+    warnings: [],
+    fusedCorners,
+    largeTagCorners: largeTag.corners,
+    tagCenters: {
+      topLeft: topLeft.center,
+      topCenter: topCenter.center,
+      topRight: topRight.center,
+      bottomLeft: bottomLeft.center,
+      bottomCenter: bottomCenter.center,
+      bottomRight: bottomRight.center,
+      center: largeTag.center
     },
-    warnings
-  };
-}
-function analyzeSharpness(data, width, height) {
-  let sumLaplacian = 0;
-  let sumLaplacianSq = 0;
-  let count = 0;
-  for (let y = 1; y < height - 1; y++) {
-    for (let x = 1; x < width - 1; x++) {
-      const gray = getGrayscale(data, width, x, y);
-      const laplacian = -1 * getGrayscale(data, width, x - 1, y - 1) + -1 * getGrayscale(data, width, x, y - 1) + -1 * getGrayscale(data, width, x + 1, y - 1) + -1 * getGrayscale(data, width, x - 1, y) + 8 * gray + -1 * getGrayscale(data, width, x + 1, y) + -1 * getGrayscale(data, width, x - 1, y + 1) + -1 * getGrayscale(data, width, x, y + 1) + -1 * getGrayscale(data, width, x + 1, y + 1);
-      sumLaplacian += laplacian;
-      sumLaplacianSq += laplacian * laplacian;
-      count++;
+    homography: {
+      matrix: homography.matrix,
+      quality: homography.quality,
+      reprojectionErrorMm
+    },
+    sizesPx: {
+      largeTag: largeSize,
+      smallTags: smallCandidates.map(({ size }) => size)
     }
-  }
-  const meanLaplacian = sumLaplacian / count;
-  const varianceLaplacian = sumLaplacianSq / count - meanLaplacian * meanLaplacian;
-  let sumGradient = 0;
-  for (let y = 1; y < height - 1; y += 4) {
-    for (let x = 1; x < width - 1; x += 4) {
-      const gx = sobelX(data, width, x, y);
-      const gy = sobelY(data, width, x, y);
-      const magnitude = Math.sqrt(gx * gx + gy * gy);
-      sumGradient += magnitude;
-    }
-  }
-  const edgeStrength = Math.min(100, sumGradient / (width * height / 16) * 2);
-  const blockSize = 16;
-  let sumContrast = 0;
-  let blockCount = 0;
-  for (let by = 0; by < height - blockSize; by += blockSize) {
-    for (let bx = 0; bx < width - blockSize; bx += blockSize) {
-      const contrast = computeBlockContrast(data, width, bx, by, blockSize);
-      sumContrast += contrast;
-      blockCount++;
-    }
-  }
-  const contrastRatio = Math.min(100, sumContrast / blockCount * 0.5);
-  return {
-    edgeStrength,
-    contrastRatio,
-    laplacianVariance: varianceLaplacian
   };
-}
-function computeSharpnessScore(metrics) {
-  const laplacianScore = Math.min(100, metrics.laplacianVariance / 200 * 100);
-  const score = laplacianScore * 0.5 + metrics.edgeStrength * 0.3 + metrics.contrastRatio * 0.2;
-  return Math.max(0, Math.min(100, score));
-}
-function analyzeHomographyQuality(detection) {
-  const inlierRatio = detection.breakdown.total > 0 ? detection.homography.quality : 0;
-  const coverage = computeSpatialCoverage(detection.points.map((p) => p.pixel));
-  return {
-    inlierRatio,
-    spatialCoverage: coverage
-  };
-}
-function computeHomographyScore(metrics) {
-  const inlierScore = metrics.inlierRatio * 100;
-  const coverageScore = metrics.spatialCoverage * 100;
-  return inlierScore * 0.7 + coverageScore * 0.3;
-}
-function computeSpatialCoverage(points) {
-  if (points.length < 4) return 0;
-  let minX = Infinity, maxX = -Infinity;
-  let minY = Infinity, maxY = -Infinity;
-  for (const p of points) {
-    minX = Math.min(minX, p.x);
-    maxX = Math.max(maxX, p.x);
-    minY = Math.min(minY, p.y);
-    maxY = Math.max(maxY, p.y);
-  }
-  const width = maxX - minX;
-  const height = maxY - minY;
-  if (width < 10 || height < 10) return 0;
-  const grid = Array(4).fill(null).map(() => Array(4).fill(0));
-  for (const p of points) {
-    const gridX = Math.min(3, Math.floor((p.x - minX) / width * 4));
-    const gridY = Math.min(3, Math.floor((p.y - minY) / height * 4));
-    grid[gridY][gridX]++;
-  }
-  const filledCells = grid.flat().filter((count) => count > 0).length;
-  const spatialCoverage = filledCells / 16;
-  return spatialCoverage;
-}
-function analyzeCaptureConditions(data, width, height, detection) {
-  const aprilTagPoints = detection.points.filter((p) => p.type === "apriltag");
-  let viewAngle = 0;
-  if (aprilTagPoints.length === 4) {
-    const [tl, tr, bl] = aprilTagPoints.map((p) => p.pixel);
-    const widthPx = Math.hypot(tr.x - tl.x, tr.y - tl.y);
-    const heightPx = Math.hypot(bl.x - tl.x, bl.y - tl.y);
-    const actualRatio = widthPx / heightPx;
-    const expectedRatio = 130 / 217;
-    const ratioDiff = Math.abs(actualRatio - expectedRatio) / expectedRatio;
-    viewAngle = Math.min(45, ratioDiff * 100);
-  }
-  let sumBrightness = 0;
-  let sumBrightnessSq = 0;
-  const sampleCount = Math.min(1e4, width * height);
-  for (let i = 0; i < sampleCount; i++) {
-    const x = Math.floor(Math.random() * width);
-    const y = Math.floor(Math.random() * height);
-    const brightness = getGrayscale(data, width, x, y);
-    sumBrightness += brightness;
-    sumBrightnessSq += brightness * brightness;
-  }
-  const meanBrightness = sumBrightness / sampleCount;
-  const variance = sumBrightnessSq / sampleCount - meanBrightness * meanBrightness;
-  const stdDev = Math.sqrt(variance);
-  const uniformity = Math.max(0, 1 - stdDev / 80);
-  return {
-    viewAngleDegrees: viewAngle,
-    lightingUniformity: uniformity
-  };
-}
-function computeCaptureScore(metrics) {
-  const angleScore = Math.max(0, 100 - metrics.viewAngleDegrees / 45 * 100);
-  const lightingScore = metrics.lightingUniformity * 100;
-  return angleScore * 0.6 + lightingScore * 0.4;
-}
-function getGrayscale(data, width, x, y) {
-  const idx = (y * width + x) * 4;
-  return (data[idx] + data[idx + 1] + data[idx + 2]) / 3;
-}
-function sobelX(data, width, x, y) {
-  return (-getGrayscale(data, width, x - 1, y - 1) + getGrayscale(data, width, x + 1, y - 1) + -2 * getGrayscale(data, width, x - 1, y) + 2 * getGrayscale(data, width, x + 1, y) + -getGrayscale(data, width, x - 1, y + 1) + getGrayscale(data, width, x + 1, y + 1)) / 8;
-}
-function sobelY(data, width, x, y) {
-  return (-getGrayscale(data, width, x - 1, y - 1) + -2 * getGrayscale(data, width, x, y - 1) + -getGrayscale(data, width, x + 1, y - 1) + getGrayscale(data, width, x - 1, y + 1) + 2 * getGrayscale(data, width, x, y + 1) + getGrayscale(data, width, x + 1, y + 1)) / 8;
-}
-function computeBlockContrast(data, width, x0, y0, blockSize) {
-  let min = 255;
-  let max = 0;
-  for (let y = y0; y < y0 + blockSize; y++) {
-    for (let x = x0; x < x0 + blockSize; x++) {
-      const gray = getGrayscale(data, width, x, y);
-      min = Math.min(min, gray);
-      max = Math.max(max, gray);
-    }
-  }
-  return max - min;
 }
 
 // src/services/measurement-calculator.ts
-function computeObjectDimensions(calibration2, objectCorners) {
+function computeObjectDimensions(calibration, objectCorners) {
   console.log("\n" + "\u2550".repeat(90));
   console.log("\u{1F4CA} [MEASUREMENT-CALCULATOR] D\xC9TAIL COMPLET DU CALCUL");
   console.log("\u2550".repeat(90));
   const warnings = [];
-  const isAprilTagV2 = calibration2.detectionMethod === "AprilTag-Metre-V2.0";
-  const isAprilTagV1 = calibration2.detectionMethod === "AprilTag-Metre-V1.2" || calibration2.detectionMethod === "AprilTag-Metre-V1.2-Ultra";
-  const isAprilTag = isAprilTagV1 || isAprilTagV2;
-  const markerWidthCm = calibration2.markerSizeCm;
-  const markerHeightCm = calibration2.markerHeightCm || calibration2.markerSizeCm;
-  const markerWidthMm2 = markerWidthCm * 10;
-  const markerHeightMm2 = markerHeightCm * 10;
+  const markerWidthCm = 13;
+  const markerHeightCm = 20.5;
+  const markerWidthMm = markerWidthCm * 10;
+  const markerHeightMm = markerHeightCm * 10;
   console.log(`
 \u{1F539} MARQUEUR DE R\xC9F\xC9RENCE:`);
-  console.log(`   Type: ${isAprilTagV2 ? "AprilTag M\xE9tr\xE9 V2.0 (16cm)" : isAprilTagV1 ? "AprilTag M\xE9tr\xE9 V1.2" : "ArUco"}`);
-  console.log(`   Dimensions: ${markerWidthCm}cm \xD7 ${markerHeightCm}cm = ${markerWidthMm2}mm \xD7 ${markerHeightMm2}mm`);
-  if (isAprilTag) {
-    setArucoMarkerSize(markerWidthCm);
-  } else {
-    setArucoMarkerSize(calibration2.markerSizeCm);
-  }
+  console.log(`   Type: M\xE9tr\xE9 A4 V10`);
+  console.log(`   Dimensions: ${markerWidthCm}cm \xD7 ${markerHeightCm}cm = ${markerWidthMm}mm \xD7 ${markerHeightMm}mm`);
   const srcCorners = {
-    topLeft: { x: calibration2.markerCorners.topLeft.x, y: calibration2.markerCorners.topLeft.y },
-    topRight: { x: calibration2.markerCorners.topRight.x, y: calibration2.markerCorners.topRight.y },
-    bottomLeft: { x: calibration2.markerCorners.bottomLeft.x, y: calibration2.markerCorners.bottomLeft.y },
-    bottomRight: { x: calibration2.markerCorners.bottomRight.x, y: calibration2.markerCorners.bottomRight.y }
+    topLeft: { x: calibration.markerCorners.topLeft.x, y: calibration.markerCorners.topLeft.y },
+    topRight: { x: calibration.markerCorners.topRight.x, y: calibration.markerCorners.topRight.y },
+    bottomLeft: { x: calibration.markerCorners.bottomLeft.x, y: calibration.markerCorners.bottomLeft.y },
+    bottomRight: { x: calibration.markerCorners.bottomRight.x, y: calibration.markerCorners.bottomRight.y }
   };
   const srcPoints = cornersToPoints(srcCorners);
   const dstPoints = [
     [0, 0],
     // topLeft
-    [markerWidthMm2, 0],
+    [markerWidthMm, 0],
     // topRight
-    [markerWidthMm2, markerHeightMm2],
+    [markerWidthMm, markerHeightMm],
     // bottomRight
-    [0, markerHeightMm2]
+    [0, markerHeightMm]
     // bottomLeft
   ];
-  if (isAprilTag) {
-    console.log(`   \u{1F4D0} Points destination AprilTag ${markerWidthMm2}\xD7${markerHeightMm2}mm:`, dstPoints.map((p) => `(${p[0]}, ${p[1]})`).join(", "));
-  }
+  console.log(`   \u{1F4D0} Points destination V10 ${markerWidthMm}\xD7${markerHeightMm}mm:`, dstPoints.map((p) => `(${p[0]}, ${p[1]})`).join(", "));
   const markerWidthPx = Math.hypot(
     srcPoints[1][0] - srcPoints[0][0],
     srcPoints[1][1] - srcPoints[0][1]
@@ -68754,77 +64060,37 @@ function computeObjectDimensions(calibration2, objectCorners) {
     srcPoints[3][1] - srcPoints[0][1]
   );
   let homography;
-  let usedUltraPrecision = false;
-  let depthInfo = {
-    mean: 0,
-    stdDev: 0,
-    inclineAngle: 0
-  };
-  if (calibration2.ultraPrecisionHomography && calibration2.ultraPrecisionHomography.length === 3) {
-    console.log(`
-\u{1F4D0} \xC9TAPE 2: \u{1F52C} UTILISATION HOMOGRAPHIE ULTRA-PR\xC9CISE (41+ points)`);
-    console.log(`   \u2705 Qualit\xE9 ultra-pr\xE9cision: ${(calibration2.ultraPrecisionQuality || 0).toFixed(1)}%`);
-    console.log(`   \u2705 Erreur reprojection: \xB1${calibration2.reprojectionErrorMm?.toFixed(2) || "?"}mm`);
-    console.log(`   \u{1F3AF} Source: RANSAC + Levenberg-Marquardt (10-41 points)`);
-    if (calibration2.depthInfo) {
-      depthInfo = calibration2.depthInfo;
-      console.log(`   \u{1F4CF} Profondeur cam\xE9ra: ${depthInfo.mean.toFixed(0)}mm (\xB1${depthInfo.stdDev.toFixed(0)}mm)`);
-      console.log(`   \u{1F504} Angle inclinaison: ${depthInfo.inclineAngle.toFixed(2)}\xB0`);
-    }
-    const matrix3x3 = [
-      [calibration2.ultraPrecisionHomography[0][0], calibration2.ultraPrecisionHomography[0][1], calibration2.ultraPrecisionHomography[0][2]],
-      [calibration2.ultraPrecisionHomography[1][0], calibration2.ultraPrecisionHomography[1][1], calibration2.ultraPrecisionHomography[1][2]],
-      [calibration2.ultraPrecisionHomography[2][0], calibration2.ultraPrecisionHomography[2][1], calibration2.ultraPrecisionHomography[2][2]]
-    ];
-    homography = {
-      matrix: matrix3x3,
-      quality: calibration2.ultraPrecisionQuality || 95,
-      uncertainty: calibration2.reprojectionErrorMm ? calibration2.reprojectionErrorMm / 100 : 0.1
-    };
-    usedUltraPrecision = true;
-  } else {
-    console.log(`
+  console.log(`
 \u{1F4D0} \xC9TAPE 2: Construction homographie basique (4 points)`);
-    console.log(`   Coins marqueur (px):`);
-    console.log(`      TL: (${srcPoints[0][0].toFixed(0)}, ${srcPoints[0][1].toFixed(0)})`);
-    console.log(`      TR: (${srcPoints[1][0].toFixed(0)}, ${srcPoints[1][1].toFixed(0)})`);
-    console.log(`      BR: (${srcPoints[2][0].toFixed(0)}, ${srcPoints[2][1].toFixed(0)})`);
-    console.log(`      BL: (${srcPoints[3][0].toFixed(0)}, ${srcPoints[3][1].toFixed(0)})`);
-    console.log(`   Coins destination (mm):`);
-    console.log(`      TL: (0, 0), TR: (${markerWidthMm2}, 0)`);
-    console.log(`      BR: (${markerWidthMm2}, ${markerHeightMm2}), BL: (0, ${markerHeightMm2})`);
-    console.log(`   Taille marqueur en pixels: ${markerWidthPx.toFixed(0)} \xD7 ${markerHeightPx.toFixed(0)}`);
-    const dstPoints2 = [
-      [0, 0],
-      // topLeft
-      [markerWidthMm2, 0],
-      // topRight
-      [markerWidthMm2, markerHeightMm2],
-      // bottomRight
-      [0, markerHeightMm2]
-      // bottomLeft
-    ];
-    try {
-      homography = computeHomography2(srcPoints, dstPoints2);
-      console.log(`   \u2705 Homographie calcul\xE9e`);
-      console.log(`      Qualit\xE9: ${homography.quality.toFixed(1)}%`);
-      console.log(`      Incertitude: \xB1${homography.uncertainty.toFixed(1)}%`);
-    } catch (error) {
-      console.error("\u274C Erreur calcul homographie:", error);
-      return {
-        success: false,
-        largeur_cm: 0,
-        hauteur_cm: 0,
-        incertitude_largeur_cm: 0,
-        incertitude_hauteur_cm: 0,
-        method: "fallback",
-        confidence: 0,
-        warnings: ["\xC9chec du calcul d'homographie"]
-      };
-    }
-    if (homography.quality < 50) {
-      warnings.push("Qualit\xE9 homographie faible - mesures moins fiables");
-    }
+  console.log(`   Coins marqueur (px):`);
+  console.log(`      TL: (${srcPoints[0][0].toFixed(0)}, ${srcPoints[0][1].toFixed(0)})`);
+  console.log(`      TR: (${srcPoints[1][0].toFixed(0)}, ${srcPoints[1][1].toFixed(0)})`);
+  console.log(`      BR: (${srcPoints[2][0].toFixed(0)}, ${srcPoints[2][1].toFixed(0)})`);
+  console.log(`      BL: (${srcPoints[3][0].toFixed(0)}, ${srcPoints[3][1].toFixed(0)})`);
+  console.log(`   Coins destination (mm):`);
+  console.log(`      TL: (0, 0), TR: (${markerWidthMm}, 0)`);
+  console.log(`      BR: (${markerWidthMm}, ${markerHeightMm}), BL: (0, ${markerHeightMm})`);
+  console.log(`   Taille marqueur en pixels: ${markerWidthPx.toFixed(0)} \xD7 ${markerHeightPx.toFixed(0)}`);
+  try {
+    homography = computeHomography(srcPoints, dstPoints);
+    console.log(`   \u2705 Homographie calcul\xE9e`);
+    console.log(`      Qualit\xE9: ${homography.quality.toFixed(1)}%`);
+    console.log(`      Incertitude: \xB1${homography.uncertainty.toFixed(1)}%`);
+  } catch (error) {
+    console.error("\u274C Erreur calcul homographie:", error);
+    return {
+      success: false,
+      largeur_cm: 0,
+      hauteur_cm: 0,
+      incertitude_largeur_cm: 0,
+      incertitude_hauteur_cm: 0,
+      method: "fallback",
+      confidence: 0,
+      warnings: ["\xC9chec du calcul d'homographie"]
+    };
+  }
+  if (homography.quality < 50) {
+    warnings.push("Qualit\xE9 homographie faible - mesures moins fiables");
   }
   console.log(`
 \u{1F4CF} \xC9TAPE 3: Transformation des coins de l'objet`);
@@ -68885,7 +64151,7 @@ function computeObjectDimensions(calibration2, objectCorners) {
   const avgWidthUncertaintyMm = (widthTop.uncertainty + widthBottom.uncertainty) / 2;
   const avgHeightUncertaintyMm = (heightLeft.uncertainty + heightRight.uncertainty) / 2;
   const scaleFactor = 1;
-  const pxPerMmMarker = (markerWidthPx + markerHeightPx) / (2 * ((markerWidthMm2 + markerHeightMm2) / 2));
+  const pxPerMmMarker = (markerWidthPx + markerHeightPx) / (2 * ((markerWidthMm + markerHeightMm) / 2));
   const pxPerMmObjSamples = [
     widthTopPx / Math.max(widthTop.distance, 1e-6),
     widthBottomPx / Math.max(widthBottom.distance, 1e-6),
@@ -68922,16 +64188,9 @@ function computeObjectDimensions(calibration2, objectCorners) {
   console.log("=".repeat(70));
   console.log(`   \u{1F4CF} LARGEUR: ${largeur_cm.toFixed(2)} cm (\xB1${incertitude_largeur_cm.toFixed(2)} cm)`);
   console.log(`   \u{1F4CF} HAUTEUR: ${hauteur_cm.toFixed(2)} cm (\xB1${incertitude_hauteur_cm.toFixed(2)} cm)`);
-  console.log(`   \u{1F3AF} M\xE9thode: ${usedUltraPrecision ? "\u{1F52C} ULTRA-PR\xC9CISION (41+ pts)" : "homography (4 pts)"} (FORMULE 1)`);
+  console.log(`   \u{1F3AF} M\xE9thode: homography (4 pts) (FORMULE 1)`);
   console.log(`   \u{1F4CA} Confiance: ${(confidence * 100).toFixed(0)}%`);
   console.log(`   \u{1F4CA} Qualit\xE9 homographie: ${homography.quality.toFixed(1)}%`);
-  if (usedUltraPrecision) {
-    console.log(`   \u{1F52C} Erreur reprojection: \xB1${calibration2.reprojectionErrorMm?.toFixed(2) || "?"}mm`);
-    if (depthInfo.mean > 0) {
-      console.log(`   \u{1F4CF} Profondeur cam\xE9ra: ${depthInfo.mean.toFixed(0)}mm (\xB1${depthInfo.stdDev.toFixed(0)}mm)`);
-      console.log(`   \u{1F504} Angle inclinaison: ${depthInfo.inclineAngle.toFixed(2)}\xB0`);
-    }
-  }
   if (warnings.length > 0) {
     console.log(`   \u26A0\uFE0F Avertissements: ${warnings.join(", ")}`);
   }
@@ -68956,703 +64215,15 @@ function computeObjectDimensions(calibration2, objectCorners) {
         tr: realTR,
         br: realBR,
         bl: realBL
-      },
-      ...usedUltraPrecision && depthInfo.mean > 0 ? {
-        depth: {
-          mean_mm: depthInfo.mean,
-          stdDev_mm: depthInfo.stdDev,
-          inclineAngle_deg: depthInfo.inclineAngle
-        }
-      } : {}
+      }
     }
   };
-}
-
-// src/utils/ultra-precision-ransac.ts
-var import_crypto20 = __toESM(require("crypto"), 1);
-function createSeededPrng(seed) {
-  return () => {
-    seed = seed + 1831565813 | 0;
-    let t = Math.imul(seed ^ seed >>> 15, 1 | seed);
-    t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
-    return ((t ^ t >>> 14) >>> 0) / 4294967296;
-  };
-}
-function hashSourcePoints(points) {
-  try {
-    const combined = points.map((p) => `${p.x.toFixed(2)},${p.y.toFixed(2)}`).join("|");
-    const hash = import_crypto20.default.createHash("sha256").update(combined).digest("hex");
-    return parseInt(hash.slice(0, 8), 16);
-  } catch (err) {
-    console.warn("\u26A0\uFE0F  Erreur hash SHA256, utiliser hash simple:", err);
-    let hash = 5381;
-    for (let i = 0; i < points.length; i++) {
-      hash = (hash << 5) + hash ^ Math.floor(points[i].x * 1e3);
-      hash = (hash << 5) + hash ^ Math.floor(points[i].y * 1e3);
-    }
-    return Math.abs(hash);
-  }
-}
-function computeUltraPrecisionHomography(srcPoints, dstPoints, markerWidthMm2, markerHeightMm2) {
-  console.log(`
-${"=".repeat(90)}`);
-  console.log(`\u{1F52C} [ULTRA-PRECISION RANSAC] Calcul homographie avec ${srcPoints.length} points`);
-  console.log(`${"=".repeat(90)}`);
-  if (srcPoints.length < 4 || dstPoints.length < 4) {
-    throw new Error(`Minimum 4 points requis, ${srcPoints.length} fournis`);
-  }
-  const maxIterations = Math.min(1e4, Math.max(1e3, srcPoints.length * 80));
-  const estimatedPxPerMm = estimatePxPerMmFromCorrespondences(srcPoints, dstPoints);
-  const mmPerPx = estimatedPxPerMm && estimatedPxPerMm > 0 ? 1 / estimatedPxPerMm : null;
-  const inlierThresholdMm = mmPerPx ? 15 * mmPerPx : 15;
-  const minInlierRatio = 0.4;
-  const minInliers = Math.max(6, Math.floor(srcPoints.length * minInlierRatio));
-  console.log(`   \u{1F4D0} Seuil inlier: 15.0mm (${inlierThresholdMm.toFixed(1)}px) - STABLE`);
-  console.log(`   \u{1F3AF} Minimum inliers: ${minInliers} (40% de ${srcPoints.length} points)`);
-  let bestHomography = [[1, 0, 0], [0, 1, 0], [0, 0, 1]];
-  let bestInlierIndices = [];
-  let bestInlierCount = 0;
-  const seed = hashSourcePoints(srcPoints);
-  const prng = createSeededPrng(seed);
-  console.log(`   \u{1F331} RANSAC seed: ${seed} (donn\xE9es ${srcPoints.length} points)`);
-  for (let iter = 0; iter < maxIterations; iter++) {
-    const idx1 = Math.floor(prng() * srcPoints.length);
-    const idx2 = Math.floor(prng() * srcPoints.length);
-    const idx3 = Math.floor(prng() * srcPoints.length);
-    const idx4 = Math.floor(prng() * srcPoints.length);
-    const indices = [idx1, idx2, idx3, idx4];
-    const sample4Src = indices.map((i) => srcPoints[i]);
-    const sample4Dst = indices.map((i) => dstPoints[i]);
-    try {
-      const H = computeHomographyDLT(sample4Src, sample4Dst);
-      const inlierIndices = [];
-      for (let i = 0; i < srcPoints.length; i++) {
-        const transformed = applyHomography2(H, srcPoints[i]);
-        const errorMm = distance(transformed, dstPoints[i]);
-        if (errorMm < inlierThresholdMm) {
-          inlierIndices.push(i);
-        }
-      }
-      if (inlierIndices.length > bestInlierCount) {
-        bestInlierCount = inlierIndices.length;
-        bestHomography = H;
-        bestInlierIndices = inlierIndices;
-        if (iter % 500 === 0) {
-          console.log(`   \u{1F4CA} It\xE9ration ${iter}: ${inlierIndices.length}/${srcPoints.length} inliers (seuil=${inlierThresholdMm.toFixed(2)}mm)`);
-        }
-      }
-    } catch {
-      continue;
-    }
-  }
-  console.log(`
-   \u2705 RANSAC: ${bestInlierCount}/${srcPoints.length} inliers apr\xE8s ${maxIterations} it\xE9rations`);
-  console.log(`
-   \u{1F50D} DEBUG - Erreurs de reprojection par point avec homographie initiale:`);
-  const debugErrors = [];
-  const previewCount = Math.min(16, srcPoints.length);
-  for (let i = 0; i < srcPoints.length; i++) {
-    const transformed = applyHomography2(bestHomography, srcPoints[i]);
-    const errorMm = distance(transformed, dstPoints[i]);
-    const isInlier = bestInlierIndices.includes(i);
-    debugErrors.push({ idx: i, error: errorMm, isInlier });
-    if (i < previewCount) {
-      console.log(`      [${i}] ${isInlier ? "\u2705" : "\u274C"} pixel:(${srcPoints[i].x.toFixed(0)},${srcPoints[i].y.toFixed(0)}) \u2192 real:(${dstPoints[i].x},${dstPoints[i].y}) erreur: ${errorMm.toFixed(1)}mm`);
-    }
-  }
-  const previewErrors = debugErrors.slice(0, previewCount);
-  const remainingErrors = debugErrors.slice(previewCount);
-  const previewMean = previewErrors.length ? previewErrors.reduce((s, e) => s + e.error, 0) / previewErrors.length : 0;
-  const remainingMean = remainingErrors.length ? remainingErrors.reduce((s, e) => s + e.error, 0) / remainingErrors.length : 0;
-  console.log(`      \u{1F4CA} Aper\xE7u (0-${Math.max(0, previewCount - 1)}): ${previewErrors.filter((e) => e.isInlier).length}/${previewErrors.length} inliers, erreur moy: ${previewMean.toFixed(1)}mm`);
-  if (remainingErrors.length) {
-    console.log(`      \u{1F4CA} Autres points: ${remainingErrors.filter((e) => e.isInlier).length}/${remainingErrors.length} inliers, erreur moy: ${remainingMean.toFixed(1)}mm`);
-  }
-  if (bestInlierCount < minInliers) {
-    console.warn(`   \u26A0\uFE0F  Seulement ${bestInlierCount} inliers, ${minInliers} recommand\xE9s`);
-  }
-  if (bestInlierCount < 4) {
-    throw new Error(`RANSAC n'a pas trouv\xE9 assez d'inliers (4 requis), obtenu: ${bestInlierCount}`);
-  }
-  const inlierSrc = bestInlierIndices.map((i) => srcPoints[i]);
-  const inlierDst = bestInlierIndices.map((i) => dstPoints[i]);
-  const dltInlierH = computeHomographyDLTLeastSquares(inlierSrc, inlierDst);
-  bestHomography = dltInlierH;
-  let refinedH = bestHomography;
-  if (bestInlierCount >= 6) {
-    console.log(`
-   \u{1F527} Optimisation Levenberg-Marquardt avec ${bestInlierCount} inliers...`);
-    refinedH = levenbergMarquardt(
-      bestHomography,
-      inlierSrc,
-      inlierDst,
-      100
-      // iterations
-    );
-  } else {
-    console.log(`
-   \u2139\uFE0F  LM ignor\xE9 (inliers=${bestInlierCount} < 6), DLT inliers conserv\xE9`);
-  }
-  let totalReprojectionError = 0;
-  const errors = [];
-  for (let i = 0; i < srcPoints.length; i++) {
-    const transformed = applyHomography2(refinedH, srcPoints[i]);
-    const errorMm = distance(transformed, dstPoints[i]);
-    errors.push(errorMm);
-    totalReprojectionError += errorMm;
-  }
-  const meanReprojectionError = totalReprojectionError / srcPoints.length;
-  const stdDevError = Math.sqrt(
-    errors.reduce((sum, e) => sum + Math.pow(e - meanReprojectionError, 2), 0) / srcPoints.length
-  );
-  const meanReprojectionErrorMm = meanReprojectionError;
-  const stdDevErrorMm = stdDevError;
-  const reprojectionErrorPx = estimatedPxPerMm ? meanReprojectionErrorMm * estimatedPxPerMm : meanReprojectionErrorMm;
-  console.log(`
-   \u{1F4CF} Erreur reprojection: ${meanReprojectionErrorMm.toFixed(2)}mm (\xB1${stdDevErrorMm.toFixed(2)}mm)`);
-  console.log(`
-   \u{1F4D0} Estimation profondeur 3D...`);
-  const points3D = estimateDepthMap(
-    srcPoints,
-    dstPoints,
-    refinedH,
-    markerWidthMm2,
-    markerHeightMm2
-  );
-  const depths = points3D.map((p) => p.z);
-  const depthMean = depths.reduce((a, b) => a + b, 0) / depths.length;
-  const depthStdDev = Math.sqrt(
-    depths.reduce((sum, z9) => sum + Math.pow(z9 - depthMean, 2), 0) / depths.length
-  );
-  const inclineAngle = estimateInclineAngle(points3D);
-  const inlierRatio = bestInlierCount / srcPoints.length;
-  const errorPenalty = meanReprojectionErrorMm < 10 ? meanReprojectionErrorMm * 5 : meanReprojectionErrorMm * 15;
-  const stdDevPenalty = stdDevErrorMm * 3;
-  const inlierBonus = inlierRatio * 30;
-  const quality = Math.max(0, Math.min(
-    100,
-    100 - errorPenalty - stdDevPenalty + inlierBonus
-  ));
-  console.log(`   \u{1F4CA} [QUALITY] Calcul: 100 - ${errorPenalty.toFixed(1)} (err) - ${stdDevPenalty.toFixed(1)} (std) + ${inlierBonus.toFixed(1)} (inliers) = ${quality.toFixed(1)}%`);
-  const confidence = Math.min(100, bestInlierCount / srcPoints.length * 100);
-  const reprojectionErrorMm = meanReprojectionErrorMm;
-  console.log(`
-   \u{1F4CA} STATISTIQUES:`);
-  console.log(`      Profondeur moyenne: ${depthMean.toFixed(0)}mm`);
-  console.log(`      Variation profondeur: \xB1${depthStdDev.toFixed(0)}mm`);
-  console.log(`      Angle inclinaison: ${inclineAngle.toFixed(2)}\xB0`);
-  console.log(`      Qualit\xE9: ${quality.toFixed(1)}%`);
-  console.log(`      Confiance: ${confidence.toFixed(1)}%`);
-  console.log(`      Erreur reprojection: ${reprojectionErrorMm.toFixed(2)}mm`);
-  const inlierCountPercentage = bestInlierCount / srcPoints.length * 100;
-  if (bestInlierCount < 50) {
-    console.warn(`
-   \u26A0\uFE0F  CONFIANCE FAIBLE - Surface lisse d\xE9tect\xE9e (${bestInlierCount}/${srcPoints.length} inliers = ${inlierCountPercentage.toFixed(1)}%)`);
-    console.warn(`      \u2192 Seulement ${bestInlierCount} points fiables sur ${srcPoints.length} (22% minimum attendu)`);
-    console.warn(`      \u2192 R\xE9sultats UNRELIABLE - Augmenter incertitude \xE0 \xB13cm minimum`);
-  } else if (inlierCountPercentage < 40) {
-    console.warn(`
-   \u26A0\uFE0F  Ratio d'inliers bas: ${inlierCountPercentage.toFixed(1)}% (${bestInlierCount}/${srcPoints.length}) - qualit\xE9 r\xE9duite`);
-  }
-  console.log(`
-${"=".repeat(90)}
-`);
-  return {
-    homography: refinedH,
-    points3D,
-    quality,
-    reprojectionError: reprojectionErrorPx,
-    reprojectionErrorMm,
-    confidence,
-    inlierCount: bestInlierCount,
-    outlierCount: srcPoints.length - bestInlierCount,
-    depthMean,
-    depthStdDev,
-    inclineAngle,
-    ransacIterations: maxIterations,
-    bestInlierIndices
-  };
-}
-function estimatePxPerMmFromCorrespondences(srcPoints, dstPoints) {
-  if (srcPoints.length < 2 || dstPoints.length < 2) return null;
-  const ratios = [];
-  const maxPairs = 200;
-  const n = srcPoints.length;
-  for (let t = 0; t < maxPairs; t++) {
-    const i = Math.floor(Math.random() * n);
-    let j = Math.floor(Math.random() * n);
-    if (j === i) j = (j + 1) % n;
-    const dPx = distance(srcPoints[i], srcPoints[j]);
-    const dMm = distance(dstPoints[i], dstPoints[j]);
-    if (!Number.isFinite(dPx) || !Number.isFinite(dMm)) continue;
-    if (dMm < 20 || dPx < 20) continue;
-    ratios.push(dPx / dMm);
-  }
-  if (ratios.length < 10) return null;
-  ratios.sort((a, b) => a - b);
-  return ratios[Math.floor(ratios.length / 2)];
-}
-function estimateDepthMap(srcPoints, dstPoints, H, _markerWidthMm, _markerHeightMm) {
-  const det = H[0][0] * H[1][1] - H[0][1] * H[1][0];
-  const scale = Math.sqrt(Math.abs(det));
-  const depthBase = 1900 / Math.max(0.1, scale);
-  const result = [];
-  for (let i = 0; i < srcPoints.length; i++) {
-    const src = srcPoints[i];
-    const dst = dstPoints[i];
-    const transformed = applyHomography2(H, src);
-    const error = distance(transformed, dst);
-    const px = src.x / 640;
-    const py = src.y / 480;
-    const distFromCenter = Math.sqrt((px - 0.5) ** 2 + (py - 0.5) ** 2);
-    const depthVariation = 1 + distFromCenter * 0.5;
-    const estimatedZ = depthBase * depthVariation;
-    result.push({
-      x: transformed[0],
-      y: transformed[1],
-      z: estimatedZ,
-      type: dst.x < 20 ? "apriltag" : "dot",
-      error
-    });
-  }
-  return result;
-}
-function estimateInclineAngle(points3D) {
-  if (points3D.length < 3) return 0;
-  const centroid = {
-    x: points3D.reduce((s, p) => s + p.x, 0) / points3D.length,
-    y: points3D.reduce((s, p) => s + p.y, 0) / points3D.length,
-    z: points3D.reduce((s, p) => s + p.z, 0) / points3D.length
-  };
-  const centered = points3D.map((p) => ({
-    x: p.x - centroid.x,
-    y: p.y - centroid.y,
-    z: p.z - centroid.z
-  }));
-  const cov = {
-    xx: centered.reduce((s, p) => s + p.x * p.x, 0) / points3D.length,
-    xy: centered.reduce((s, p) => s + p.x * p.y, 0) / points3D.length,
-    xz: centered.reduce((s, p) => s + p.x * p.z, 0) / points3D.length,
-    yy: centered.reduce((s, p) => s + p.y * p.y, 0) / points3D.length,
-    yz: centered.reduce((s, p) => s + p.y * p.z, 0) / points3D.length,
-    zz: centered.reduce((s, p) => s + p.z * p.z, 0) / points3D.length
-  };
-  const maxZDiff = Math.max(...points3D.map((p) => p.z)) - Math.min(...points3D.map((p) => p.z));
-  const avgXY = Math.sqrt(cov.xx + cov.yy);
-  const angle = Math.atan2(maxZDiff, avgXY) * (180 / Math.PI);
-  return Math.abs(angle);
-}
-function levenbergMarquardt(initialH, srcPoints, dstPoints, maxIterations = 100) {
-  let H = initialH.map((row) => [...row]);
-  let lambda = 1e-3;
-  for (let iter = 0; iter < maxIterations; iter++) {
-    const residuals = computeResiduals(H, srcPoints, dstPoints);
-    const J = computeJacobian(H, srcPoints, dstPoints);
-    const JtJ = matmul(transpose2(J), J);
-    const Jtr = matmul(transpose2(J), residuals);
-    const regularized = JtJ.map(
-      (row, i) => row.map((val, j) => val + (i === j ? lambda : 0))
-    );
-    try {
-      const delta = solveLinearSystem2(regularized, Jtr.map((v) => -v));
-      const newH = perturbHomography(H, delta);
-      const newResiduals = computeResiduals(newH, srcPoints, dstPoints);
-      const oldError = computeError(residuals);
-      const newError = computeError(newResiduals);
-      if (newError < oldError) {
-        H = newH;
-        lambda *= 0.1;
-      } else {
-        lambda *= 10;
-      }
-      if (oldError < 1e-6) break;
-    } catch {
-      lambda *= 10;
-    }
-  }
-  return H;
-}
-function computeResiduals(H, srcPoints, dstPoints) {
-  const residuals = [];
-  for (let i = 0; i < srcPoints.length; i++) {
-    const transformed = applyHomography2(H, srcPoints[i]);
-    residuals.push([
-      transformed[0] - dstPoints[i].x,
-      transformed[1] - dstPoints[i].y
-    ]);
-  }
-  return residuals;
-}
-function computeJacobian(H, srcPoints, _dstPoints) {
-  const eps = 1e-6;
-  const J = [];
-  for (let i = 0; i < srcPoints.length; i++) {
-    for (let j = 0; j < 2; j++) {
-      const row = [];
-      for (let k = 0; k < 9; k++) {
-        const H_plus = H.map((r) => [...r]);
-        H_plus[Math.floor(k / 3)][k % 3] += eps;
-        const H_minus = H.map((r) => [...r]);
-        H_minus[Math.floor(k / 3)][k % 3] -= eps;
-        const fPlus = applyHomography2(H_plus, srcPoints[i])[j];
-        const fMinus = applyHomography2(H_minus, srcPoints[i])[j];
-        row.push((fPlus - fMinus) / (2 * eps));
-      }
-      J.push(row);
-    }
-  }
-  return J;
-}
-function applyHomography2(H, p) {
-  const x = p.x;
-  const y = p.y;
-  const num_x = H[0][0] * x + H[0][1] * y + H[0][2];
-  const num_y = H[1][0] * x + H[1][1] * y + H[1][2];
-  const denom = H[2][0] * x + H[2][1] * y + H[2][2];
-  return [num_x / denom, num_y / denom];
-}
-function computeHomographyDLT(srcPoints, dstPoints) {
-  if (srcPoints.length !== 4 || dstPoints.length !== 4) {
-    throw new Error("Exactement 4 points requis pour DLT");
-  }
-  const srcNorm = normalizePoints2(srcPoints);
-  const dstNorm = normalizePoints2(dstPoints);
-  const A = [];
-  const b = [];
-  for (let i = 0; i < 4; i++) {
-    const sx = srcNorm.normalized[i].x;
-    const sy = srcNorm.normalized[i].y;
-    const dx = dstNorm.normalized[i].x;
-    const dy = dstNorm.normalized[i].y;
-    A.push([sx, sy, 1, 0, 0, 0, -dx * sx, -dx * sy]);
-    b.push(dx);
-    A.push([0, 0, 0, sx, sy, 1, -dy * sx, -dy * sy]);
-    b.push(dy);
-  }
-  const h = solveLinearSystem2(A, b);
-  const H_norm = [
-    [h[0], h[1], h[2]],
-    [h[3], h[4], h[5]],
-    [h[6], h[7], 1]
-  ];
-  return matmul(dstNorm.denormalization, matmul(H_norm, srcNorm.normalization));
-}
-function computeHomographyDLTLeastSquares(srcPoints, dstPoints) {
-  if (srcPoints.length < 4 || dstPoints.length < 4 || srcPoints.length !== dstPoints.length) {
-    throw new Error("Au moins 4 correspondances (m\xEAme longueur) requises");
-  }
-  if (srcPoints.length === 4) {
-    return computeHomographyDLT(srcPoints, dstPoints);
-  }
-  const srcNorm = normalizePoints2(srcPoints);
-  const dstNorm = normalizePoints2(dstPoints);
-  const A = [];
-  const b = [];
-  for (let i = 0; i < srcNorm.normalized.length; i++) {
-    const sx = srcNorm.normalized[i].x;
-    const sy = srcNorm.normalized[i].y;
-    const dx = dstNorm.normalized[i].x;
-    const dy = dstNorm.normalized[i].y;
-    A.push([sx, sy, 1, 0, 0, 0, -dx * sx, -dx * sy]);
-    b.push(dx);
-    A.push([0, 0, 0, sx, sy, 1, -dy * sx, -dy * sy]);
-    b.push(dy);
-  }
-  const At = transpose2(A);
-  const AtA = matmul(At, A);
-  const Atb = multiplyMatVec(At, b);
-  const h = solveLinearSystem2(AtA, Atb);
-  const H_norm = [
-    [h[0], h[1], h[2]],
-    [h[3], h[4], h[5]],
-    [h[6], h[7], 1]
-  ];
-  return matmul(dstNorm.denormalization, matmul(H_norm, srcNorm.normalization));
-}
-function normalizePoints2(points) {
-  const meanX = points.reduce((s, p) => s + p.x, 0) / points.length;
-  const meanY = points.reduce((s, p) => s + p.y, 0) / points.length;
-  const scale = Math.sqrt(
-    points.reduce((s, p) => s + (p.x - meanX) ** 2 + (p.y - meanY) ** 2, 0) / points.length / 2
-  );
-  const normalized = points.map((p) => ({
-    x: (p.x - meanX) / scale,
-    y: (p.y - meanY) / scale
-  }));
-  const normalization = [
-    [1 / scale, 0, -meanX / scale],
-    [0, 1 / scale, -meanY / scale],
-    [0, 0, 1]
-  ];
-  const denormalization = [
-    [scale, 0, meanX],
-    [0, scale, meanY],
-    [0, 0, 1]
-  ];
-  return { normalized, normalization, denormalization };
-}
-function distance(p1, p2) {
-  const x1 = Array.isArray(p1) ? p1[0] : p1.x;
-  const y1 = Array.isArray(p1) ? p1[1] : p1.y;
-  const x2 = Array.isArray(p2) ? p2[0] : p2.x;
-  const y2 = Array.isArray(p2) ? p2[1] : p2.y;
-  return Math.sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2);
-}
-function transpose2(m) {
-  if (m.length === 0) return [];
-  return m[0].map((_, i) => m.map((row) => row[i]));
-}
-function matmul(A, B) {
-  const result = [];
-  const n = A.length;
-  const m = B[0].length;
-  const p = B.length;
-  for (let i = 0; i < n; i++) {
-    result[i] = [];
-    for (let j = 0; j < m; j++) {
-      let sum = 0;
-      for (let k = 0; k < p; k++) {
-        sum += A[i][k] * B[k][j];
-      }
-      result[i][j] = sum;
-    }
-  }
-  return result;
-}
-function multiplyMatVec(A, v) {
-  const result = new Array(A.length).fill(0);
-  for (let i = 0; i < A.length; i++) {
-    let sum = 0;
-    for (let j = 0; j < v.length; j++) {
-      sum += A[i][j] * v[j];
-    }
-    result[i] = sum;
-  }
-  return result;
-}
-function solveLinearSystem2(A, b) {
-  const n = A.length;
-  const augmented = A.map((row, i) => [...row, b[i]]);
-  for (let i = 0; i < n; i++) {
-    let maxRow = i;
-    for (let k = i + 1; k < n; k++) {
-      if (Math.abs(augmented[k][i]) > Math.abs(augmented[maxRow][i])) {
-        maxRow = k;
-      }
-    }
-    [augmented[i], augmented[maxRow]] = [augmented[maxRow], augmented[i]];
-    for (let k = i + 1; k < n; k++) {
-      const factor = augmented[k][i] / augmented[i][i];
-      for (let j = i; j <= n; j++) {
-        augmented[k][j] -= factor * augmented[i][j];
-      }
-    }
-  }
-  const x = new Array(n);
-  for (let i = n - 1; i >= 0; i--) {
-    x[i] = augmented[i][n];
-    for (let j = i + 1; j < n; j++) {
-      x[i] -= augmented[i][j] * x[j];
-    }
-    x[i] /= augmented[i][i];
-  }
-  return x;
-}
-function computeError(residuals) {
-  return residuals.reduce((sum, r) => sum + r[0] ** 2 + r[1] ** 2, 0);
-}
-function perturbHomography(H, delta) {
-  const result = H.map((row) => [...row]);
-  for (let i = 0; i < 9; i++) {
-    result[Math.floor(i / 3)][i % 3] += delta[i];
-  }
-  return result;
 }
 
 // src/api/measurement-reference.ts
-var sharp2 = sharpModule2.default || sharpModule2;
-var router91 = (0, import_express94.Router)();
-var measurementHistoryByUser = /* @__PURE__ */ new Map();
-var MAX_HISTORY_SIZE = 5;
-var HISTORY_TTL_MS = 5 * 60 * 1e3;
-function getMovingAverage(userId, newWidth, newHeight) {
-  const now = Date.now();
-  if (measurementHistoryByUser.has(userId)) {
-    const history2 = measurementHistoryByUser.get(userId);
-    const filtered = history2.filter((m) => now - m.timestamp < HISTORY_TTL_MS);
-    if (filtered.length > 0) {
-      measurementHistoryByUser.set(userId, filtered);
-    } else {
-      measurementHistoryByUser.delete(userId);
-    }
-  }
-  if (!measurementHistoryByUser.has(userId)) {
-    measurementHistoryByUser.set(userId, []);
-  }
-  const history = measurementHistoryByUser.get(userId);
-  history.push({ timestamp: now, width_mm: newWidth, height_mm: newHeight });
-  if (history.length > MAX_HISTORY_SIZE) {
-    history.shift();
-  }
-  console.log(`[MOVING AVG DEBUG] userId=${userId}, cacheSize=${history.length}, lastMeasure=${newWidth.toFixed(0)}mm \xD7 ${newHeight.toFixed(0)}mm`);
-  const widths = history.map((m) => m.width_mm).sort((a, b) => a - b);
-  const heights = history.map((m) => m.height_mm).sort((a, b) => a - b);
-  const medianWidth = widths[Math.floor(widths.length / 2)];
-  const medianHeight = heights[Math.floor(heights.length / 2)];
-  return {
-    avgWidth: medianWidth,
-    avgHeight: medianHeight,
-    count: history.length
-  };
-}
-async function detectObjectsInProjectedImage(imageData, width, height, aprilTagCorners) {
-  try {
-    console.log(`
-\u{1F50D} [AUTO-DETECT] D\xE9tection objets dans image brute: ${width}\xD7${height}px`);
-    const grayData = new Uint8ClampedArray(width * height);
-    let grayMin = 255;
-    let grayMax = 0;
-    let graySum = 0;
-    for (let i = 0; i < width * height; i++) {
-      const r = imageData[i * 4];
-      const g = imageData[i * 4 + 1];
-      const b = imageData[i * 4 + 2];
-      const gray = Math.round(0.299 * r + 0.587 * g + 0.114 * b);
-      grayData[i] = gray;
-      if (gray < grayMin) grayMin = gray;
-      if (gray > grayMax) grayMax = gray;
-      graySum += gray;
-    }
-    const grayAvg = Math.round(graySum / grayData.length);
-    console.log(`   \u2705 Grayscale: min=${grayMin}, max=${grayMax}, avg=${grayAvg}, range=${grayMax - grayMin}`);
-    console.log(`   \u{1F50D} D\xE9tection edges (Sobel gradient)...`);
-    const edges = detectEdges2(grayData, width, height);
-    const edgePixels = edges.filter((v) => v > 50).length;
-    const edgePercent = (edgePixels / edges.length * 100).toFixed(1);
-    console.log(`      Pixels edges (>50): ${edgePixels} (${edgePercent}%)`);
-    console.log(`   \u{1F4E6} Recherche contours (blobs connect\xE9s)...`);
-    const contours = findContours(edges, width, height);
-    console.log(`      Contours bruts: ${contours.length}`);
-    const [tl, tr, bl, br] = aprilTagCorners;
-    const markerMinX = Math.min(tl.x, tr.x, bl.x, br.x) - 50;
-    const markerMaxX = Math.max(tl.x, tr.x, bl.x, br.x) + 50;
-    const markerMinY = Math.min(tl.y, tr.y, bl.y, br.y) - 50;
-    const markerMaxY = Math.max(tl.y, tr.y, bl.y, br.y) + 50;
-    console.log(`      Zone AprilTag \xE0 exclure: x[${markerMinX.toFixed(0)}-${markerMaxX.toFixed(0)}], y[${markerMinY.toFixed(0)}-${markerMaxY.toFixed(0)}]`);
-    const contoursHorsMarqueur = contours.filter((c) => {
-      const cx = (c.corners.topLeft.x + c.corners.bottomRight.x) / 2;
-      const cy = (c.corners.topLeft.y + c.corners.bottomRight.y) / 2;
-      const dansMarqueur = cx > markerMinX && cx < markerMaxX && cy > markerMinY && cy < markerMaxY;
-      return !dansMarqueur;
-    });
-    console.log(`      Contours HORS marqueur: ${contoursHorsMarqueur.length}`);
-    const minArea = width * height * 5e-3;
-    const maxArea = width * height * 0.7;
-    console.log(`   \u{1F3AF} Filtrage: area [${minArea.toFixed(0)}-${maxArea.toFixed(0)}px], confidence>30%`);
-    const afterSizeFilter = contoursHorsMarqueur.filter((c) => c.area > minArea && c.area < maxArea);
-    console.log(`      Apr\xE8s filtre taille: ${afterSizeFilter.length}`);
-    const validObjects = afterSizeFilter.filter((c) => c.confidence > 0.3).sort((a, b) => b.area - a.area);
-    console.log(`      Apr\xE8s filtre confidence: ${validObjects.length} objets valides`);
-    validObjects.slice(0, 3).forEach((c, i) => {
-      const areaPercent = (c.area / (width * height) * 100).toFixed(2);
-      const confPercent = (c.confidence * 100).toFixed(0);
-      console.log(`      [${i}] area=${c.area}px (${areaPercent}%), conf=${confPercent}%`);
-    });
-    if (validObjects.length === 0) {
-      console.log(`   \u26A0\uFE0F  AUCUN objet d\xE9tect\xE9 !`);
-      console.log(`      Raisons possibles:`);
-      console.log(`      - Contraste trop faible (range=${grayMax - grayMin})`);
-      console.log(`      - Objet trop proche du marqueur AprilTag`);
-      console.log(`      - Edges trop faibles (${edgePercent}% de l'image)`);
-    }
-    return validObjects.map((obj) => ({
-      ...obj,
-      corners: {
-        topLeft: { x: obj.corners.topLeft.x / width * 100, y: obj.corners.topLeft.y / height * 100 },
-        topRight: { x: obj.corners.topRight.x / width * 100, y: obj.corners.topRight.y / height * 100 },
-        bottomRight: { x: obj.corners.bottomRight.x / width * 100, y: obj.corners.bottomRight.y / height * 100 },
-        bottomLeft: { x: obj.corners.bottomLeft.x / width * 100, y: obj.corners.bottomLeft.y / height * 100 }
-      }
-    }));
-  } catch (error) {
-    console.error("\u274C Auto-d\xE9tection objets \xE9chou\xE9e:", error);
-    return [];
-  }
-}
-function detectEdges2(data, width, height) {
-  const edges = new Uint8ClampedArray(data.length);
-  for (let y = 1; y < height - 1; y++) {
-    for (let x = 1; x < width - 1; x++) {
-      const idx = y * width + x;
-      const gx = -data[(y - 1) * width + (x - 1)] + data[(y - 1) * width + (x + 1)] + -2 * data[y * width + (x - 1)] + 2 * data[y * width + (x + 1)] + -data[(y + 1) * width + (x - 1)] + data[(y + 1) * width + (x + 1)];
-      const gy = -data[(y - 1) * width + (x - 1)] - 2 * data[(y - 1) * width + x] - data[(y - 1) * width + (x + 1)] + data[(y + 1) * width + (x - 1)] + 2 * data[(y + 1) * width + x] + data[(y + 1) * width + (x + 1)];
-      const magnitude = Math.sqrt(gx * gx + gy * gy);
-      edges[idx] = Math.min(255, magnitude / 4);
-    }
-  }
-  return edges;
-}
-function findContours(edges, width, height) {
-  const contours = [];
-  const visited = new Uint8ClampedArray(width * height);
-  for (let y = 0; y < height; y++) {
-    for (let x = 0; x < width; x++) {
-      const idx = y * width + x;
-      if (edges[idx] > 128 && !visited[idx]) {
-        const blob = floodFill(edges, visited, x, y, width, height);
-        if (blob.points.length > 50) {
-          const rect = approximateRectangle(blob.points);
-          if (rect) {
-            contours.push({
-              corners: rect,
-              area: blob.points.length,
-              confidence: computeRectangleConfidence(blob.points, rect),
-              type: "rectangle"
-            });
-          }
-        }
-      }
-    }
-  }
-  return contours;
-}
-function floodFill(edges, visited, startX, startY, width, height) {
-  const points = [];
-  const stack = [{ x: startX, y: startY }];
-  while (stack.length > 0 && points.length < 1e4) {
-    const { x, y } = stack.pop();
-    const idx = y * width + x;
-    if (x < 0 || x >= width || y < 0 || y >= height) continue;
-    if (visited[idx] || edges[idx] < 128) continue;
-    visited[idx] = 1;
-    points.push({ x, y });
-    stack.push({ x: x + 1, y });
-    stack.push({ x: x - 1, y });
-    stack.push({ x, y: y + 1 });
-    stack.push({ x, y: y - 1 });
-  }
-  return { points };
-}
-function approximateRectangle(points) {
-  if (points.length < 4) return null;
-  const xs = points.map((p) => p.x);
-  const ys = points.map((p) => p.y);
-  const minX = Math.min(...xs);
-  const maxX = Math.max(...xs);
-  const minY = Math.min(...ys);
-  const maxY = Math.max(...ys);
-  return {
-    topLeft: { x: minX, y: minY },
-    topRight: { x: maxX, y: minY },
-    bottomRight: { x: maxX, y: maxY },
-    bottomLeft: { x: minX, y: maxY }
-  };
-}
-function computeRectangleConfidence(points, rect) {
-  const rectArea = (rect.bottomRight.x - rect.topLeft.x) * (rect.bottomRight.y - rect.topLeft.y);
-  return Math.min(1, points.length / rectArea);
-}
-router91.post("/ultra-fusion-detect", authenticateToken, async (req2, res) => {
+var sharp = sharpModule.default || sharpModule;
+var router90 = (0, import_express93.Router)();
+router90.post("/ultra-fusion-detect", authenticateToken, async (req2, res) => {
   const startTime = Date.now();
   try {
     const { photos } = req2.body;
@@ -69665,129 +64236,52 @@ router91.post("/ultra-fusion-detect", authenticateToken, async (req2, res) => {
         error: "Au minimum 1 photo requise dans photos[]"
       });
     }
+    if (photos.length > 1) {
+      console.log(`\u26A0\uFE0F [V10] ${photos.length} photos re\xE7ues \u2192 seule la premi\xE8re est analys\xE9e`);
+    }
     console.log(`
 ${"=".repeat(80)}`);
-    console.log(`\u{1F3AF} [ULTRA-CLEAN] POST /ultra-fusion-detect - ${photos.length} photo(s)`);
+    console.log(`\u{1F3AF} [M\xC9TR\xC9 A4 V10] POST /ultra-fusion-detect - 1 photo`);
     console.log(`${"=".repeat(80)}
 `);
-    const candidates = [];
-    for (let i = 0; i < photos.length; i++) {
-      const photo = photos[i];
-      console.log(`   \u{1F4F7} Photo ${i}: d\xE9codage et d\xE9tection...`);
-      try {
-        const base64Clean2 = photo.base64.includes(",") ? photo.base64.split(",")[1] : photo.base64;
-        const imageBuffer = Buffer.from(base64Clean2, "base64");
-        const originalMetadata = await sharp2(imageBuffer).metadata();
-        const originalWidth = originalMetadata.width;
-        const originalHeight = originalMetadata.height;
-        const resizedBuffer = await sharp2(imageBuffer).resize({
-          width: 1200,
-          height: 1200,
-          fit: "inside",
-          withoutEnlargement: true
-        }).toBuffer();
-        const metadata = await sharp2(resizedBuffer).metadata();
-        const width = metadata.width;
-        const height = metadata.height;
-        const scaleX2 = originalWidth / width;
-        const scaleY2 = originalHeight / height;
-        const { data: basePixels } = await sharp2(resizedBuffer).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
-        const baseRgba = new Uint8ClampedArray(basePixels);
-        let rgbaUsed = baseRgba;
-        let detection = await detectMetreA4V2(baseRgba, width, height);
-        if (!detection) {
-          console.log(`      \u{1F3A8} Preprocessing ULTRA-PREMIUM: CLAHE + Bilateral + Denoise + Sharpen MAX...`);
-          let processedBuffer = await sharp2(resizedBuffer).median(3).toBuffer();
-          processedBuffer = await sharp2(processedBuffer).normalize().linear(1.3, -(128 * 0.3)).toBuffer();
-          processedBuffer = await sharp2(processedBuffer).blur(0.5).toBuffer();
-          const { data: enhancedPixels } = await sharp2(processedBuffer).sharpen({
-            sigma: 2,
-            // Rayon gaussien élargi (2.0 = netteté forte)
-            m1: 1.5,
-            // +50% netteté zones plates (AprilTags/points noirs) ⬆️
-            m2: 0.6,
-            // Contrôle zones fort contraste (plus agressif)
-            x1: 2,
-            // Seuil bas (plus sensible)
-            y2: 20,
-            // Seuil haut augmenté
-            y3: 20
-            // Saturation augmentée
-          }).modulate({
-            brightness: 1.05,
-            // +5% luminosité (meilleure visibilité)
-            saturation: 1.2,
-            // +20% saturation → points noirs ULTRA-visibles ⬆️
-            hue: 0
-          }).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
-          const rgba = new Uint8ClampedArray(enhancedPixels);
-          rgbaUsed = rgba;
-          detection = await detectMetreA4V2(rgba, width, height);
-        }
-        if (!detection) {
-          console.log(`      \u274C AprilTag non d\xE9tect\xE9`);
-          continue;
-        }
-        candidates.push({
-          id: `photo-${i}`,
-          imageData: rgbaUsed,
-          width,
-          height,
-          originalWidth,
-          originalHeight,
-          scaleX: scaleX2,
-          scaleY: scaleY2,
-          detection,
-          timestamp: Date.now()
-        });
-        console.log(`      \u2705 ${detection.breakdown.total} points d\xE9tect\xE9s (${detection.estimatedPrecision})`);
-      } catch (err) {
-        console.error(`      \u274C Erreur traitement:`, err);
-      }
+    const photo = photos[0];
+    const base64Clean = photo.base64.includes(",") ? photo.base64.split(",")[1] : photo.base64;
+    const imageBuffer = Buffer.from(base64Clean, "base64");
+    const originalMetadata = await sharp(imageBuffer).metadata();
+    const originalWidth = originalMetadata.width;
+    const originalHeight = originalMetadata.height;
+    const resizedBuffer = await sharp(imageBuffer).resize({
+      width: 1200,
+      height: 1200,
+      fit: "inside",
+      withoutEnlargement: true
+    }).toBuffer();
+    const metadata = await sharp(resizedBuffer).metadata();
+    const width = metadata.width;
+    const height = metadata.height;
+    const scaleX = originalWidth / width;
+    const scaleY = originalHeight / height;
+    const { data: basePixels } = await sharp(resizedBuffer).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+    let rgbaUsed = new Uint8ClampedArray(basePixels);
+    let detection = await detectMetreA4V10(rgbaUsed, width, height);
+    if (!detection) {
+      console.log(`      \u{1F3A8} Preprocessing l\xE9ger (normalize + sharpen) ...`);
+      const { data: enhancedPixels } = await sharp(resizedBuffer).normalize().sharpen(1.2).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+      rgbaUsed = new Uint8ClampedArray(enhancedPixels);
+      detection = await detectMetreA4V10(rgbaUsed, width, height);
     }
-    if (candidates.length === 0) {
+    if (!detection) {
       return res.status(400).json({
         success: false,
-        error: "AprilTag M\xE9tr\xE9 V2.0 non d\xE9tect\xE9 (grand tag 16cm ID 33). Utilisez la feuille V2.0.",
-        detections: 0
+        error: "M\xE9tr\xE9 A4 V10 non d\xE9tect\xE9 (6 petits tags + 1 grand). V\xE9rifiez l\u2019impression et l\u2019\xE9clairage."
       });
     }
-    console.log(`
-\u{1F4CA} S\xE9lection meilleure photo parmi ${candidates.length}...`);
-    const bestResult = selectBestPhoto(candidates);
-    const best = bestResult.bestPhoto;
-    const bestIdx = parseInt(best.id.split("-")[1]);
-    console.log(`
-\u{1F3AF} Auto-d\xE9tection objets dans meilleure photo...`);
-    const detectedObjects = await detectObjectsInProjectedImage(
-      best.imageData,
-      best.width,
-      best.height,
-      best.detection.aprilTagCorners
-      // V2.0: Coins du grand AprilTag pour l'exclure
-    );
-    if (detectedObjects.length > 0) {
-      console.log(`   \u2705 ${detectedObjects.length} objet(s) d\xE9tect\xE9(s) automatiquement`);
-      detectedObjects.forEach((obj, idx) => {
-        console.log(`      \u{1F4E6} Objet ${idx + 1}: ${obj.type}, area=${obj.area}px, confidence=${(obj.confidence * 100).toFixed(1)}%`);
-      });
-    } else {
-      console.log(`   \u26A0\uFE0F  Aucun objet auto-d\xE9tect\xE9 (utilisateur devra s\xE9lectionner manuellement)`);
-    }
-    const [tl, tr, br, bl] = best.detection.aprilTagCorners;
     const fusedCorners = {
-      topLeft: { x: tl.x / best.width * 100, y: tl.y / best.height * 100 },
-      topRight: { x: tr.x / best.width * 100, y: tr.y / best.height * 100 },
-      bottomRight: { x: br.x / best.width * 100, y: br.y / best.height * 100 },
-      bottomLeft: { x: bl.x / best.width * 100, y: bl.y / best.height * 100 }
+      topLeft: { x: detection.fusedCorners.topLeft.x * scaleX / originalWidth * 100, y: detection.fusedCorners.topLeft.y * scaleY / originalHeight * 100 },
+      topRight: { x: detection.fusedCorners.topRight.x * scaleX / originalWidth * 100, y: detection.fusedCorners.topRight.y * scaleY / originalHeight * 100 },
+      bottomRight: { x: detection.fusedCorners.bottomRight.x * scaleX / originalWidth * 100, y: detection.fusedCorners.bottomRight.y * scaleY / originalHeight * 100 },
+      bottomLeft: { x: detection.fusedCorners.bottomLeft.x * scaleX / originalWidth * 100, y: detection.fusedCorners.bottomLeft.y * scaleY / originalHeight * 100 }
     };
-    const base64Clean = photos[bestIdx].base64.includes(",") ? photos[bestIdx].base64.split(",")[1] : photos[bestIdx].base64;
-    const totalTime = Date.now() - startTime;
-    console.log(`
-\u2705 SUCC\xC8S - ${totalTime}ms (photo ${bestIdx}, score: ${bestResult.bestScore.total.toFixed(1)}/100)
-`);
-    const scaleX = Number.isFinite(best.scaleX) && best.scaleX > 0 ? best.scaleX : 1;
-    const scaleY = Number.isFinite(best.scaleY) && best.scaleY > 0 ? best.scaleY : 1;
     const scaleMatrix = [
       [1 / scaleX, 0, 0],
       [0, 1 / scaleY, 0],
@@ -69806,88 +64300,58 @@ ${"=".repeat(80)}`);
       }
       return result;
     };
-    const homographyOriginal = multiply3x3(best.detection.homography.matrix, scaleMatrix);
+    const homographyOriginal = multiply3x3(detection.homography.matrix, scaleMatrix);
+    const totalTime = Date.now() - startTime;
+    console.log(`
+\u2705 SUCC\xC8S - ${totalTime}ms (M\xE9tr\xE9 A4 V10)
+`);
     return res.json({
       success: true,
-      method: "ultra-precision-v2",
+      method: "metre-a4-v10-homography",
+      fallbackMode: detection.fallbackMode,
+      warnings: detection.warnings || [],
       bestPhotoBase64: base64Clean,
       fusedCorners,
       homographyReady: true,
-      detectionMethod: "AprilTag-Metre-V2.0",
-      markerSizeCm: 16,
-      // 🎯 V2.0: AprilTag carré 16×16cm
-      markerHeightCm: 16,
-      // 🎯 V2.0: Carré (pas rectangulaire)
+      sheetSizeMm: {
+        width: METRE_A4_V10_SPECS.sheet.width_mm,
+        height: METRE_A4_V10_SPECS.sheet.height_mm
+      },
+      referenceCentersMm: {
+        width: METRE_A4_V10_SPECS.reference.width_mm,
+        height: METRE_A4_V10_SPECS.reference.height_mm
+      },
       homographyMatrix: homographyOriginal,
-      reprojectionErrorMm: best.detection.homography.reprojectionErrorMm,
-      ultraPrecision: {
-        totalPoints: best.detection.breakdown.total,
-        // 🎯 V2.0: ~192 points de calibration !
-        aprilTagCenter: best.detection.breakdown.aprilTagCenter,
-        aprilTagCorners: best.detection.breakdown.aprilTagCorners,
-        aprilTagModules: best.detection.breakdown.aprilTagModules,
-        rulerMarks: best.detection.breakdown.rulerMarks,
-        dottedBorderPoints: best.detection.breakdown.dottedBorderPoints,
-        cornerCrosses: best.detection.breakdown.cornerCrosses,
-        quality: best.detection.homography.quality,
-        estimatedPrecision: best.detection.estimatedPrecision,
-        homographyMatrix: homographyOriginal,
-        reprojectionError: best.detection.homography.reprojectionErrorMm,
-        tagSizePixels: best.detection.tagSizePixels * ((scaleX + scaleY) / 2),
-        // 🎯 AJOUT CRITIQUE: Tous les points pour RANSAC
-        points: best.detection.points.map((p) => ({
-          x: p.pixel.x * scaleX,
-          y: p.pixel.y * scaleY,
-          realX: p.real.x,
-          realY: p.real.y,
-          type: p.type,
-          confidence: p.confidence,
-          subPixelRefined: p.subPixelRefined
-        }))
-      },
-      // 🎯 NOUVEAU: Objets détectés automatiquement
-      autoDetectedObjects: detectedObjects.map((obj, idx) => ({
-        id: `auto-object-${idx}`,
-        corners: obj.corners,
-        area: obj.area,
-        confidence: obj.confidence,
-        type: obj.type,
-        autoSelected: idx === 0
-        // Premier objet pré-sélectionné par défaut
-      })),
       bestPhoto: {
-        index: bestIdx,
-        score: bestResult.bestScore.total,
-        sharpness: bestResult.bestScore.sharpness,
-        homographyQuality: bestResult.bestScore.homographyQuality,
-        captureConditions: bestResult.bestScore.captureConditions,
-        warnings: bestResult.bestScore.warnings
+        index: 0,
+        score: detection.homography.quality,
+        sharpness: 0,
+        homographyQuality: detection.homography.quality,
+        captureConditions: 0,
+        warnings: []
       },
-      allPhotoScores: bestResult.allScores.map((s, idx) => ({
-        index: idx,
-        score: s.total,
+      allPhotoScores: [{
+        index: 0,
+        score: detection.homography.quality,
         detected: true
-      })),
+      }],
       metrics: {
         inputPhotos: photos.length,
-        successfulDetections: candidates.length,
+        successfulDetections: 1,
         processingTimeMs: totalTime,
-        improvement: bestResult.stats.improvement
+        improvement: 0
       }
     });
   } catch (error) {
-    console.error("\u274C [ULTRA-CLEAN] Erreur:", error);
-    res.status(500).json({
+    console.error("\u274C [V10] Erreur ultra-fusion-detect:", error);
+    return res.status(500).json({
       success: false,
-      error: "Erreur serveur lors de l'analyse des photos"
+      error: "Erreur serveur lors de l\u2019analyse M\xE9tr\xE9 A4 V10"
     });
   }
 });
-router91.post("/compute-dimensions-simple", authenticateToken, async (req2, res) => {
+router90.post("/compute-dimensions-simple", authenticateToken, async (req2, res) => {
   try {
-    console.log("\n" + "=".repeat(70));
-    console.log("\u{1F3AF} [ULTRA-CLEAN] POST /compute-dimensions-simple");
-    console.log("=".repeat(70));
     if (!req2.user?.id) {
       return res.status(401).json({ error: "Non authentifi\xE9" });
     }
@@ -69896,15 +64360,9 @@ router91.post("/compute-dimensions-simple", authenticateToken, async (req2, res)
       objectPoints,
       imageWidth,
       imageHeight,
-      markerSizeCm = 16,
-      // V2.0: 16cm carré
-      markerHeightCm = 16,
-      // V2.0: Carré
-      detectionMethod = "AprilTag-Metre-V2.0",
       canvasScale = 1,
       exif,
-      detectionQuality = 95,
-      reprojectionErrorMm = 1.5
+      detectionQuality = 95
     } = req2.body;
     if (!fusedCorners || !objectPoints || objectPoints.length !== 4) {
       return res.status(400).json({
@@ -69918,9 +64376,6 @@ router91.post("/compute-dimensions-simple", authenticateToken, async (req2, res)
         error: "imageWidth et imageHeight requis"
       });
     }
-    console.log("\u{1F4CB} Donn\xE9es re\xE7ues:");
-    console.log(`   Image: ${imageWidth}\xD7${imageHeight}, canvasScale: ${canvasScale}`);
-    console.log(`   \u{1F4D0} Marqueur: ${markerSizeCm}\xD7${markerHeightCm}cm (${detectionMethod})`);
     const markerCorners = {
       topLeft: {
         x: fusedCorners.topLeft.x / 100 * imageWidth,
@@ -69939,9 +64394,6 @@ router91.post("/compute-dimensions-simple", authenticateToken, async (req2, res)
         y: fusedCorners.bottomLeft.y / 100 * imageHeight
       }
     };
-    console.log("\u{1F4CD} Coins marqueur (pixels image):");
-    console.log(`   TL: (${markerCorners.topLeft.x.toFixed(0)}, ${markerCorners.topLeft.y.toFixed(0)})`);
-    console.log(`   TR: (${markerCorners.topRight.x.toFixed(0)}, ${markerCorners.topRight.y.toFixed(0)})`);
     const objectCorners = {
       topLeft: {
         x: objectPoints[0].x / canvasScale,
@@ -69960,27 +64412,27 @@ router91.post("/compute-dimensions-simple", authenticateToken, async (req2, res)
         y: objectPoints[3].y / canvasScale
       }
     };
-    console.log("\u{1F4CD} Coins objet (pixels image):");
-    console.log(`   TL: (${objectCorners.topLeft.x.toFixed(0)}, ${objectCorners.topLeft.y.toFixed(0)})`);
-    console.log(`   TR: (${objectCorners.topRight.x.toFixed(0)}, ${objectCorners.topRight.y.toFixed(0)})`);
-    console.log(`   BR: (${objectCorners.bottomRight.x.toFixed(0)}, ${objectCorners.bottomRight.y.toFixed(0)})`);
-    console.log(`   BL: (${objectCorners.bottomLeft.x.toFixed(0)}, ${objectCorners.bottomLeft.y.toFixed(0)})`);
-    const calibration2 = {
+    const calibration = {
       markerCorners,
-      markerSizeCm,
-      markerHeightCm,
-      // 🎯 PASSER LA HAUTEUR
-      detectionMethod,
       imageWidth,
       imageHeight,
       exif,
-      detectionQuality,
-      reprojectionErrorMm
+      detectionQuality
     };
-    const result = computeObjectDimensions(calibration2, objectCorners);
-    return res.json(result);
+    const result = computeObjectDimensions(calibration, objectCorners);
+    return res.json({
+      ...result,
+      sheetSizeMm: {
+        width: METRE_A4_V10_SPECS.sheet.width_mm,
+        height: METRE_A4_V10_SPECS.sheet.height_mm
+      },
+      referenceCentersMm: {
+        width: METRE_A4_V10_SPECS.reference.width_mm,
+        height: METRE_A4_V10_SPECS.reference.height_mm
+      }
+    });
   } catch (error) {
-    console.error("\u274C [ULTRA-CLEAN] Erreur compute-dimensions-simple:", error);
+    console.error("\u274C [V10] Erreur compute-dimensions-simple:", error);
     return res.status(500).json({
       success: false,
       error: "Erreur serveur lors du calcul des dimensions",
@@ -69988,550 +64440,13 @@ router91.post("/compute-dimensions-simple", authenticateToken, async (req2, res)
     });
   }
 });
-router91.post("/ultra-precision-compute", authenticateToken, async (req2, res) => {
-  try {
-    let detectObjectType = function(ratio2, width_cm, height_cm) {
-      if (ratio2 >= 1.5) {
-        return {
-          type: "door",
-          ratioMin: 1.5,
-          ratioMax: 3,
-          widthMin: 40,
-          widthMax: 120,
-          heightMin: 150,
-          heightMax: 250,
-          description: "Porte (hauteur >> largeur)"
-        };
-      } else if (ratio2 < 1 && width_cm > 40) {
-        return {
-          type: "tv",
-          ratioMin: 0.5,
-          ratioMax: 1.2,
-          widthMin: 30,
-          widthMax: 200,
-          heightMin: 25,
-          heightMax: 120,
-          description: "TV/Moniteur (largeur \u2248 hauteur)"
-        };
-      } else {
-        return {
-          type: "generic",
-          ratioMin: 0.5,
-          ratioMax: 2.5,
-          widthMin: 30,
-          widthMax: 200,
-          heightMin: 25,
-          heightMax: 250,
-          description: "Objet g\xE9n\xE9rique"
-        };
-      }
-    };
-    console.log("\n" + "=".repeat(90));
-    console.log("\u{1F52C} [ULTRA-PRECISION V2.0] POST /ultra-precision-compute");
-    console.log("=".repeat(90));
-    const expectedPoints = 1 + 4 + 81;
-    console.log(`\u{1F4CB} Specs V2.0: ~${expectedPoints} points attendus (1 centre + 4 coins + ~81 modules)`);
-    if (!req2.user?.id) {
-      return res.status(401).json({ error: "Non authentifi\xE9" });
-    }
-    const {
-      detectedPoints,
-      objectPoints,
-      imageWidth,
-      imageHeight,
-      markerSizeCm = 16,
-      // V2.0: 16cm carré
-      markerHeightCm = 16,
-      // V2.0: Carré
-      detectionMethod = "AprilTag-Metre-V2.0",
-      canvasScale = 1
-    } = req2.body;
-    if (!detectedPoints || !Array.isArray(detectedPoints) || detectedPoints.length < 10) {
-      return res.status(400).json({
-        success: false,
-        error: `Au minimum 10 points d\xE9tect\xE9s requis, ${detectedPoints?.length || 0} fournis`
-      });
-    }
-    if (!objectPoints || objectPoints.length !== 4) {
-      return res.status(400).json({
-        success: false,
-        error: "Exactement 4 points objectPoints requis"
-      });
-    }
-    console.log(`\u{1F4CA} ${detectedPoints.length} points d\xE9tect\xE9s`);
-    const validDetectedPoints = detectedPoints.filter(
-      (p) => !!p && !!p.pixel && !!p.real && typeof p.pixel.x === "number" && typeof p.pixel.y === "number" && typeof p.real.x === "number" && typeof p.real.y === "number"
-    );
-    const sizeMmX = (typeof markerSizeCm === "number" ? markerSizeCm : 16) * 10;
-    const sizeMmY = (typeof markerHeightCm === "number" ? markerHeightCm : markerSizeCm || 16) * 10;
-    const apriltagCorners = validDetectedPoints.filter((p) => p.type === "apriltag-corner");
-    if (apriltagCorners.length === 4) {
-      const sums = apriltagCorners.map((p) => p.pixel.x + p.pixel.y);
-      const diffs = apriltagCorners.map((p) => p.pixel.x - p.pixel.y);
-      const tl = apriltagCorners[sums.indexOf(Math.min(...sums))];
-      const br = apriltagCorners[sums.indexOf(Math.max(...sums))];
-      const tr = apriltagCorners[diffs.indexOf(Math.max(...diffs))];
-      const bl = apriltagCorners[diffs.indexOf(Math.min(...diffs))];
-      const corrected = [
-        { ...tl, real: { x: 0, y: 0 } },
-        { ...tr, real: { x: sizeMmX, y: 0 } },
-        { ...br, real: { x: sizeMmX, y: sizeMmY } },
-        { ...bl, real: { x: 0, y: sizeMmY } }
-      ];
-      const remaining = validDetectedPoints.filter((p) => p.type !== "apriltag-corner");
-      validDetectedPoints.splice(0, validDetectedPoints.length, ...remaining, ...corrected);
-    }
-    const sortedDetectedPoints = [...validDetectedPoints].sort((a, b) => {
-      const typeA = a.type || "";
-      const typeB = b.type || "";
-      if (typeA !== typeB) return typeA.localeCompare(typeB);
-      if (a.real.x !== b.real.x) return a.real.x - b.real.x;
-      if (a.real.y !== b.real.y) return a.real.y - b.real.y;
-      if (a.pixel.x !== b.pixel.x) return a.pixel.x - b.pixel.x;
-      return a.pixel.y - b.pixel.y;
-    });
-    const trustedDetectedPoints = sortedDetectedPoints.filter(
-      (p) => p.type === "apriltag" || p.type === "apriltag-corner" || p.subPixelRefined === true || typeof p.confidence === "number" && p.confidence >= 0.9
-    );
-    const pointsForRansac = trustedDetectedPoints.length >= 10 ? trustedDetectedPoints : sortedDetectedPoints;
-    let baselineMatrix = null;
-    const apriltagCornersForBaseline = validDetectedPoints.filter((p) => p.type === "apriltag-corner");
-    if (apriltagCornersForBaseline.length >= 4) {
-      const sorted = [...apriltagCornersForBaseline].sort((a, b) => a.real.y - b.real.y || a.real.x - b.real.x);
-      const top = sorted.slice(0, 2).sort((a, b) => a.real.x - b.real.x);
-      const bottom = sorted.slice(2, 4).sort((a, b) => a.real.x - b.real.x);
-      const srcPx = [
-        [top[0].pixel.x, top[0].pixel.y],
-        [top[1].pixel.x, top[1].pixel.y],
-        [bottom[1].pixel.x, bottom[1].pixel.y],
-        [bottom[0].pixel.x, bottom[0].pixel.y]
-      ];
-      const dstMm = [
-        [top[0].real.x, top[0].real.y],
-        [top[1].real.x, top[1].real.y],
-        [bottom[1].real.x, bottom[1].real.y],
-        [bottom[0].real.x, bottom[0].real.y]
-      ];
-      try {
-        baselineMatrix = computeHomography2(srcPx, dstMm).matrix;
-      } catch (err) {
-        console.warn("\u26A0\uFE0F  Homographie de base impossible, pr\xE9-filtrage ignor\xE9:", err);
-      }
-    }
-    const apriltagCornersDebug = pointsForRansac.filter((p) => p.type === "apriltag-corner");
-    if (apriltagCornersDebug.length >= 4) {
-      const sums = apriltagCornersDebug.map((p) => p.pixel.x + p.pixel.y);
-      const diffs = apriltagCornersDebug.map((p) => p.pixel.x - p.pixel.y);
-      const tl = apriltagCornersDebug[sums.indexOf(Math.min(...sums))];
-      const br = apriltagCornersDebug[sums.indexOf(Math.max(...sums))];
-      const tr = apriltagCornersDebug[diffs.indexOf(Math.max(...diffs))];
-      const bl = apriltagCornersDebug[diffs.indexOf(Math.min(...diffs))];
-      const orderedApriltag = [tl, tr, br, bl];
-      console.log(`
-\u{1F50E} [DIAGNOSTIC] COINS APRILTAG RE\xC7US DU FRONTEND (AVANT FILTRAGE):`);
-      orderedApriltag.forEach((p, i) => {
-        const label = i === 0 ? "TL" : i === 1 ? "TR" : i === 2 ? "BR" : "BL";
-        console.log(`   [${i}] ${label} pixel: (${p.pixel.x.toFixed(1)}, ${p.pixel.y.toFixed(1)}) \u2192 real: (${p.real.x}, ${p.real.y}) mm`);
-      });
-      const pixelKeys = new Set(orderedApriltag.map((p) => `${p.pixel.x.toFixed(1)},${p.pixel.y.toFixed(1)}`));
-      console.log(`   Pixels distincts: ${pixelKeys.size}/4 ${pixelKeys.size < 4 ? "\u274C CORRUPTION D\xC9TECT\xC9E!" : "\u2705"}`);
-      const expectedReals = [[0, 0], [160, 0], [160, 160], [0, 160]];
-      const realsMatch = orderedApriltag.every(
-        (p, i) => Math.abs(p.real.x - expectedReals[i][0]) < 5 && Math.abs(p.real.y - expectedReals[i][1]) < 5
-      );
-      console.log(`   Coordonn\xE9es r\xE9elles: ${realsMatch ? "\u2705 Correctes (0,0)-(160,160) CARR\xC9" : "\u274C INCORRECTES!"}`);
-      if (!realsMatch) {
-        console.log(`      Attendu: TL(0,0), TR(160,0), BR(160,160), BL(0,160) - CARR\xC9 PARFAIT 160\xD7160mm`);
-        console.log(`      Re\xE7u: TL(${orderedApriltag[0].real.x},${orderedApriltag[0].real.y}), TR(${orderedApriltag[1].real.x},${orderedApriltag[1].real.y}), BR(${orderedApriltag[2].real.x},${orderedApriltag[2].real.y}), BL(${orderedApriltag[3].real.x},${orderedApriltag[3].real.y})`);
-      }
-    }
-    const pointsForRansacFinal = pointsForRansac.filter((p) => p.type !== "apriltag-corner");
-    const srcPoints = pointsForRansacFinal.map((p) => ({ x: p.pixel.x, y: p.pixel.y }));
-    const dstPoints = pointsForRansacFinal.map((p) => ({ x: p.real.x, y: p.real.y }));
-    console.log(`   \u2705 Points valides (pixel+real): ${validDetectedPoints.length}`);
-    console.log(`   \u2705 Points retenus RANSAC: ${pointsForRansac.length} (trusted=${trustedDetectedPoints.length})`);
-    console.log(`   \u2705 srcPoints (pixel): ${srcPoints.length} valides`);
-    console.log(`   \u2705 dstPoints (real): ${dstPoints.length} valides`);
-    console.log(`   AprilTag: ${detectedPoints.filter((p) => p.type === "apriltag").length}`);
-    console.log(`   Dots: ${detectedPoints.filter((p) => p.type === "dot").length}`);
-    if (srcPoints.length < 10 || dstPoints.length < 10) {
-      console.error(
-        `\u274C Points invalides: valid=${validDetectedPoints.length}, srcPoints=${srcPoints.length}, dstPoints=${dstPoints.length}`
-      );
-      return res.status(400).json({
-        success: false,
-        error: `Points valides insuffisants: ${srcPoints.length} pixel, ${dstPoints.length} real (10+ requis)`
-      });
-    }
-    console.log(`
-\u{1F52C} RANSAC INPUT VALIDATION:`);
-    console.log(`   Total points: ${srcPoints.length}`);
-    console.log(`   \u{1F4CD} 5 premiers points APR\xC8S filtrage (SANS coins AprilTag):`);
-    for (let i = 0; i < Math.min(5, srcPoints.length); i++) {
-      const origPoint = pointsForRansacFinal[i];
-      const typeLabel = origPoint.type === "apriltag" ? "CENTER" : origPoint.type;
-      console.log(`      [${i}] ${typeLabel} pixel: (${srcPoints[i].x.toFixed(1)}, ${srcPoints[i].y.toFixed(1)}) \u2192 real: (${dstPoints[i].x}, ${dstPoints[i].y}) mm`);
-    }
-    let ratioWidth = 1;
-    let ratioWidthValid = false;
-    let ratioHeight = 1;
-    let ratioHeightValid = false;
-    if (apriltagCornersDebug.length >= 4) {
-      const sums = apriltagCornersDebug.map((p) => p.pixel.x + p.pixel.y);
-      const diffs = apriltagCornersDebug.map((p) => p.pixel.x - p.pixel.y);
-      const tl = apriltagCornersDebug[sums.indexOf(Math.min(...sums))];
-      const br = apriltagCornersDebug[sums.indexOf(Math.max(...sums))];
-      const tr = apriltagCornersDebug[diffs.indexOf(Math.max(...diffs))];
-      const bl = apriltagCornersDebug[diffs.indexOf(Math.min(...diffs))];
-      const tlPx = { x: tl.pixel.x, y: tl.pixel.y };
-      const trPx = { x: tr.pixel.x, y: tr.pixel.y };
-      const brPx = { x: br.pixel.x, y: br.pixel.y };
-      const blPx = { x: bl.pixel.x, y: bl.pixel.y };
-      const pxDistTL_TR = Math.hypot(trPx.x - tlPx.x, trPx.y - tlPx.y);
-      const pxDistTL_BL = Math.hypot(blPx.x - tlPx.x, blPx.y - tlPx.y);
-      const pxDistTL_BR = Math.hypot(brPx.x - tlPx.x, brPx.y - tlPx.y);
-      const expectedWidthMm = markerSizeCm * 10;
-      const expectedHeightMm = markerHeightCm * 10;
-      console.log(`   \u{1F4CF} Distances pixel depuis TL[1]:`);
-      console.log(`      TL\u2192TR: ${pxDistTL_TR.toFixed(1)}px (attendu: ${expectedWidthMm}mm \u2192 ratio ~${(pxDistTL_TR / expectedWidthMm).toFixed(2)} px/mm)`);
-      console.log(`      TL\u2192BL: ${pxDistTL_BL.toFixed(1)}px (attendu: ${expectedHeightMm}mm \u2192 ratio ~${(pxDistTL_BL / expectedHeightMm).toFixed(2)} px/mm)`);
-      console.log(`      TL\u2192BR: ${pxDistTL_BR.toFixed(1)}px (diagonal)`);
-      console.log(`   \u{1F9ED} Validation g\xE9om\xE9trique (coins [1-4]):`);
-      console.log(`      TL (${tlPx.x.toFixed(0)},${tlPx.y.toFixed(0)}) < TR (${trPx.x.toFixed(0)},${trPx.y.toFixed(0)})? x: ${tlPx.x < trPx.x}`);
-      console.log(`      TL (${tlPx.x.toFixed(0)},${tlPx.y.toFixed(0)}) < BL (${blPx.x.toFixed(0)},${blPx.y.toFixed(0)})? y: ${tlPx.y < blPx.y}`);
-      const pxDistTR_BR = Math.hypot(brPx.x - trPx.x, brPx.y - trPx.y);
-      const pxDistBL_BR = Math.hypot(brPx.x - blPx.x, brPx.y - blPx.y);
-      const avgWidthPx = (pxDistTL_TR + pxDistBL_BR) / 2;
-      const avgHeightPx = (pxDistTL_BL + pxDistTR_BR) / 2;
-      const scaleX = expectedWidthMm > 0 && Number.isFinite(avgWidthPx) ? avgWidthPx / expectedWidthMm : null;
-      const scaleY = expectedHeightMm > 0 && Number.isFinite(avgHeightPx) ? avgHeightPx / expectedHeightMm : null;
-      if (Number.isFinite(scaleX) && scaleX > 0) {
-        ratioWidth = scaleX;
-        ratioWidthValid = true;
-      } else {
-        ratioWidth = 1;
-        ratioWidthValid = false;
-      }
-      if (Number.isFinite(scaleY) && scaleY > 0) {
-        ratioHeight = scaleY;
-        ratioHeightValid = true;
-      } else {
-        ratioHeight = 1;
-        ratioHeightValid = false;
-      }
-      console.log(`   \u{1F4D0} \xC9chelles d\xE9tect\xE9es (px/mm):`);
-      console.log(`      \xC9chelle X: ${ratioWidthValid ? ratioWidth.toFixed(4) : "\u274C INVALIDE"} (avgWidthPx=${avgWidthPx.toFixed(1)})`);
-      console.log(`      \xC9chelle Y: ${ratioHeightValid ? ratioHeight.toFixed(4) : "\u274C INVALIDE"} (avgHeightPx=${avgHeightPx.toFixed(1)})`);
-      if (ratioWidthValid && ratioHeightValid && Math.abs(ratioWidth - ratioHeight) / Math.max(ratioWidth, ratioHeight) > 0.02) {
-        console.log(`      \u26A0\uFE0F Asym\xE9trie d'\xE9chelle > 2% d\xE9tect\xE9e`);
-      }
-    }
-    const objectCorners = {
-      topLeft: {
-        x: objectPoints[0].x / canvasScale,
-        y: objectPoints[0].y / canvasScale
-      },
-      topRight: {
-        x: objectPoints[1].x / canvasScale,
-        y: objectPoints[1].y / canvasScale
-      },
-      bottomRight: {
-        x: objectPoints[2].x / canvasScale,
-        y: objectPoints[2].y / canvasScale
-      },
-      bottomLeft: {
-        x: objectPoints[3].x / canvasScale,
-        y: objectPoints[3].y / canvasScale
-      }
-    };
-    let ransacResult;
-    let ransacUsedFiltered = false;
-    try {
-      ransacResult = computeUltraPrecisionHomography(
-        srcPoints,
-        dstPoints,
-        markerSizeCm * 10,
-        // mm
-        markerHeightCm * 10
-        // mm
-      );
-    } catch (err) {
-      console.error("\u274C Erreur RANSAC:", err);
-      return res.status(400).json({
-        success: false,
-        error: "Homographie ultra-pr\xE9cision impossible",
-        details: err instanceof Error ? err.message : "Erreur inconnue"
-      });
-    }
-    const inlierRatio = srcPoints.length ? ransacResult.inlierCount / srcPoints.length : 0;
-    const shouldFallback = ransacResult.quality < 30 || inlierRatio < 0.4;
-    if (shouldFallback) {
-      const filteredPoints = validDetectedPoints.filter((p) => p.type !== "apriltag-corner");
-      if (filteredPoints.length >= 10) {
-        const filteredSrc = filteredPoints.map((p) => ({ x: p.pixel.x, y: p.pixel.y }));
-        const filteredDst = filteredPoints.map((p) => ({ x: p.real.x, y: p.real.y }));
-        console.log(`\u26A0\uFE0F  RANSAC faible (qualit\xE9=${ransacResult.quality.toFixed(1)}%, inliers=${ransacResult.inlierCount}/${srcPoints.length}) \u2192 retry sans coins AprilTag (${filteredPoints.length} pts)`);
-        try {
-          const retryResult = computeUltraPrecisionHomography(
-            filteredSrc,
-            filteredDst,
-            markerSizeCm * 10,
-            markerHeightCm * 10
-          );
-          if (retryResult.quality > ransacResult.quality) {
-            ransacResult = retryResult;
-            ransacUsedFiltered = true;
-          }
-        } catch (err) {
-          console.warn("\u26A0\uFE0F  Retry RANSAC sans coins AprilTag \xE9chou\xE9:", err);
-        }
-      }
-    }
-    const transformCorner = (p) => {
-      const H = ransacResult.homography;
-      const num_x = H[0][0] * p.x + H[0][1] * p.y + H[0][2];
-      const num_y = H[1][0] * p.x + H[1][1] * p.y + H[1][2];
-      const denom = H[2][0] * p.x + H[2][1] * p.y + H[2][2];
-      return [num_x / denom, num_y / denom];
-    };
-    const [tlX, tlY] = transformCorner(objectCorners.topLeft);
-    const [trX, trY] = transformCorner(objectCorners.topRight);
-    const [brX, brY] = transformCorner(objectCorners.bottomRight);
-    const [blX, blY] = transformCorner(objectCorners.bottomLeft);
-    const widthTop = Math.sqrt((trX - tlX) ** 2 + (trY - tlY) ** 2);
-    const widthBottom = Math.sqrt((brX - blX) ** 2 + (brY - blY) ** 2);
-    const heightLeft = Math.sqrt((blX - tlX) ** 2 + (blY - tlY) ** 2);
-    const heightRight = Math.sqrt((brX - trX) ** 2 + (brY - trY) ** 2);
-    let largeur_mm = (widthTop + widthBottom) / 2;
-    let hauteur_mm = (heightLeft + heightRight) / 2;
-    let correctionFactorX = 1;
-    let correctionFactorY = 1;
-    if (ratioWidthValid && ratioHeightValid && ratioWidth > 0 && ratioHeight > 0) {
-      const rawFactorY = ratioHeight / ratioWidth;
-      const deviation = Math.abs(rawFactorY - 1);
-      const maxDeviation = 0.01;
-      const maxAdjust = 0.01;
-      if (deviation <= maxDeviation) {
-        const adjust = Math.min(deviation * 0.5, maxAdjust);
-        correctionFactorX = 1;
-        correctionFactorY = rawFactorY >= 1 ? 1 - adjust : 1 + adjust;
-        console.log(`   \u{1F527} [CORRECTION \xC9CHELLE] scaleX=${ratioWidth.toFixed(4)}, scaleY=${ratioHeight.toFixed(4)} \u2192 facteurY=${correctionFactorY.toFixed(4)} (ajust ${(adjust * 100).toFixed(2)}%)`);
-      } else {
-        console.log(`   \u26A0\uFE0F  [CORRECTION \xC9CHELLE] Asym\xE9trie ${(deviation * 100).toFixed(2)}% > 1% \u2192 correction ignor\xE9e`);
-      }
-    } else {
-      console.log(`   \u26A0\uFE0F  [CORRECTION \xC9CHELLE] Ratios invalides \u2192 pas de correction`);
-    }
-    const largeur_avant = largeur_mm;
-    const hauteur_avant = hauteur_mm;
-    largeur_mm = largeur_mm * correctionFactorX;
-    hauteur_mm = hauteur_mm * correctionFactorY;
-    console.log(`   \u2705 [CORRECTION ASYM\xC9TRIE S\xC9PAR\xC9E X/Y] - ULTRA-PR\xC9CISION`);
-    console.log(`      Largeur: ${largeur_avant.toFixed(2)}mm \u2192 ${largeur_mm.toFixed(2)}mm (\xD7 ${correctionFactorX.toFixed(4)})`);
-    console.log(`      Hauteur: ${hauteur_avant.toFixed(2)}mm \u2192 ${hauteur_mm.toFixed(2)}mm (\xD7 ${correctionFactorY.toFixed(4)})`);
-    console.log(`      \u{1F4CA} Rapport final H/L: ${(hauteur_mm / largeur_mm).toFixed(3)}`);
-    const largeur_cm = largeur_mm / 10;
-    const hauteur_cm = hauteur_mm / 10;
-    console.log(`
-\u{1F50D} [VALIDATION] V\xE9rification plausibilit\xE9:`);
-    const warnings = [];
-    const ratio = hauteur_cm / largeur_cm;
-    const objectType = detectObjectType(ratio, largeur_cm, hauteur_cm);
-    console.log(`   \u{1F4CA} Type d\xE9tect\xE9: ${objectType.description} (ratio=${ratio.toFixed(2)})`);
-    console.log(`   \u{1F4CA} Plages de validation: Ratio [${objectType.ratioMin}-${objectType.ratioMax}], Largeur [${objectType.widthMin}-${objectType.widthMax}cm], Hauteur [${objectType.heightMin}-${objectType.heightMax}cm]`);
-    if (ratio < objectType.ratioMin || ratio > objectType.ratioMax) {
-      console.warn(`\u26A0\uFE0F  Ratio suspect: ${ratio.toFixed(2)} hors plage [${objectType.ratioMin}-${objectType.ratioMax}]`);
-      warnings.push(`Ratio H/L ${ratio.toFixed(2)} - Attendu ${objectType.type === "door" ? ">1.5" : objectType.type === "tv" ? "<1.0" : "0.5-2.5"}`);
-    }
-    console.log(`   \u{1F4CF} Largeur: ${largeur_cm.toFixed(2)}cm (plausible: ${objectType.widthMin}-${objectType.widthMax}cm pour ${objectType.type})`);
-    if (largeur_cm < objectType.widthMin || largeur_cm > objectType.widthMax) {
-      console.warn(`\u26A0\uFE0F  Largeur implausible pour ${objectType.type}: ${largeur_cm.toFixed(2)}cm`);
-      warnings.push(`Largeur ${largeur_cm.toFixed(2)}cm hors plage (${objectType.widthMin}-${objectType.widthMax}cm)`);
-    }
-    console.log(`   \u{1F4CF} Hauteur: ${hauteur_cm.toFixed(2)}cm (plausible: ${objectType.heightMin}-${objectType.heightMax}cm pour ${objectType.type})`);
-    if (hauteur_cm < objectType.heightMin || hauteur_cm > objectType.heightMax) {
-      console.warn(`\u26A0\uFE0F  Hauteur implausible pour ${objectType.type}: ${hauteur_cm.toFixed(2)}cm`);
-      warnings.push(`Hauteur ${hauteur_cm.toFixed(2)}cm hors plage (${objectType.heightMin}-${objectType.heightMax}cm)`);
-    }
-    const reprojErrorMm = ransacResult.reprojectionErrorMm;
-    let uncertainty_mm = reprojErrorMm * 2;
-    const inlierRatioPercent = ransacResult.inlierCount / srcPoints.length * 100;
-    if (ransacResult.inlierCount < 50) {
-      console.warn(`
-   \u{1F6A8} [IMM\xC9DIAT] Surface LISSE d\xE9tect\xE9e - CONFIANCE FAIBLE`);
-      console.warn(`      Inliers: ${ransacResult.inlierCount}/${srcPoints.length} (${inlierRatioPercent.toFixed(1)}% - SEUIL: 22%)`);
-      console.warn(`      R\xE9sultats sont UNRELIABLE`);
-      uncertainty_mm = Math.max(uncertainty_mm, 30);
-      warnings.push(`\u26A0\uFE0F Surface lisse - Confiance faible (${ransacResult.inlierCount} inliers)`);
-      warnings.push(`\u{1F4A1} Incertitude augment\xE9e \xE0 \xB1${(uncertainty_mm / 10).toFixed(1)}cm`);
-    } else if (inlierRatioPercent < 40) {
-      console.warn(`
-   \u26A0\uFE0F  Ratio d'inliers r\xE9duit: ${inlierRatioPercent.toFixed(1)}%`);
-      uncertainty_mm = Math.max(uncertainty_mm, 20);
-    }
-    const uncertainty_cm = uncertainty_mm / 10;
-    console.log(`   \xB1\u26A0\uFE0F  Incertitude: \xB1${uncertainty_cm.toFixed(2)}cm (acceptable si < 5cm)`);
-    if (uncertainty_cm > 5) {
-      console.warn(`\u26A0\uFE0F  Incertitude \xE9lev\xE9e: \xB1${uncertainty_cm.toFixed(2)}cm`);
-      warnings.push(`Incertitude \xE9lev\xE9e: \xB1${uncertainty_cm.toFixed(2)}cm`);
-    }
-    if (warnings.length === 0) {
-      console.log(`   \u2705 Toutes les validations r\xE9ussies!
-`);
-    } else {
-      console.log(`   \u26A0\uFE0F Validations avec avertissements: ${warnings.join(" | ")}
-`);
-    }
-    const apriltagCornersForValidation = validDetectedPoints.filter((p) => p.type === "apriltag-corner");
-    if (apriltagCornersForValidation.length >= 4) {
-      const sorted = [...apriltagCornersForValidation].sort((a, b) => a.real.y - b.real.y || a.real.x - b.real.x);
-      const top = sorted.slice(0, 2).sort((a, b) => a.real.x - b.real.x);
-      const bottom = sorted.slice(2, 4).sort((a, b) => a.real.x - b.real.x);
-      const markerCorners = {
-        topLeft: { x: top[0].pixel.x, y: top[0].pixel.y },
-        topRight: { x: top[1].pixel.x, y: top[1].pixel.y },
-        bottomRight: { x: bottom[1].pixel.x, y: bottom[1].pixel.y },
-        bottomLeft: { x: bottom[0].pixel.x, y: bottom[0].pixel.y }
-      };
-      const baselineCalibration = {
-        markerCorners,
-        markerSizeCm,
-        markerHeightCm,
-        detectionMethod: "AprilTag-Metre-V2.0",
-        imageWidth,
-        imageHeight,
-        detectionQuality: 100,
-        reprojectionErrorMm: ransacResult.reprojectionErrorMm
-      };
-      const baselineResult = computeObjectDimensions(baselineCalibration, objectCorners);
-      if (baselineResult.success && baselineResult.largeur_cm > 0 && baselineResult.hauteur_cm > 0) {
-        const widthDiff = Math.abs(largeur_cm - baselineResult.largeur_cm) / baselineResult.largeur_cm;
-        const heightDiff = Math.abs(hauteur_cm - baselineResult.hauteur_cm) / baselineResult.hauteur_cm;
-        console.log(`
-\u{1F500} [FUSION RANSAC + FORMULE 1] Combinaison intelligente des deux m\xE9thodes:`);
-        console.log(`   \u{1F4CA} RANSAC seul: ${largeur_cm.toFixed(2)} \xD7 ${hauteur_cm.toFixed(2)} cm (${ransacResult.inlierCount} inliers)`);
-        console.log(`   \u{1F4CA} FORMULE 1 seul: ${baselineResult.largeur_cm.toFixed(2)} \xD7 ${baselineResult.hauteur_cm.toFixed(2)} cm (4 coins stables)`);
-        const qualityF1Base = baselineResult.debug?.homographyQuality ?? baselineResult.confidence * 100;
-        const widthVar = baselineResult.debug?.widthVariationPercent ?? 0;
-        const heightVar = baselineResult.debug?.heightVariationPercent ?? 0;
-        const variationMax = Math.max(widthVar, heightVar);
-        let weightF1;
-        let weightRANSAC;
-        let fusionStrategy;
-        let surfaceType;
-        if (ransacResult.inlierCount < 30) {
-          surfaceType = "LISSE";
-          const inlierQuality = ransacResult.inlierCount / srcPoints.length;
-          weightF1 = 0.7;
-          weightRANSAC = 0.3;
-          fusionStrategy = `${surfaceType} (${ransacResult.inlierCount} inliers, tr\xE8s peu de d\xE9tails)`;
-        } else if (ransacResult.inlierCount < 60) {
-          surfaceType = "MOYENNE";
-          const inlierQuality = ransacResult.inlierCount / srcPoints.length;
-          weightF1 = Math.max(0.3, 0.6 - inlierQuality * 0.5);
-          weightRANSAC = 1 - weightF1;
-          fusionStrategy = `${surfaceType} (${ransacResult.inlierCount} inliers, \xE9quilibre adaptatif)`;
-        } else {
-          surfaceType = "TEXTUR\xC9E";
-          weightF1 = 0.15;
-          weightRANSAC = 0.85;
-          fusionStrategy = `${surfaceType} (${ransacResult.inlierCount} inliers, beaucoup de d\xE9tails)`;
-        }
-        if (variationMax > 15) {
-          weightRANSAC = Math.min(1, weightRANSAC + 0.15);
-          weightF1 = 1 - weightRANSAC;
-          fusionStrategy += ` + RANSAC boost (variation=${variationMax.toFixed(1)}%)`;
-        }
-        const fusedLargeur = baselineResult.largeur_cm * weightF1 + largeur_cm * weightRANSAC;
-        const fusedHauteur = baselineResult.hauteur_cm * weightF1 + hauteur_cm * weightRANSAC;
-        console.log(`   \u{1F3AF} FUSION INTELLIGENT (${(weightF1 * 100).toFixed(0)}%F1 + ${(weightRANSAC * 100).toFixed(0)}%RANSAC): ${fusedLargeur.toFixed(2)} \xD7 ${fusedHauteur.toFixed(2)} cm`);
-        console.log(`   \u{1F4CD} Type surface: ${fusionStrategy}`);
-        largeur_mm = fusedLargeur * 10;
-        hauteur_mm = fusedHauteur * 10;
-        const diffWidthMm = Math.abs(largeur_mm - baselineResult.largeur_cm * 10);
-        const diffHeightMm = Math.abs(hauteur_mm - baselineResult.hauteur_cm * 10);
-        if (diffWidthMm > 30 || diffHeightMm > 30) {
-          console.warn(`\u26A0\uFE0F  \xC9cart RANSAC vs F1: \u0394W=${diffWidthMm.toFixed(1)}mm, \u0394H=${diffHeightMm.toFixed(1)}mm (fusion appliqu\xE9e)`);
-        }
-      }
-    }
-    const userId = req2.user?.id || "unknown";
-    const movingAvg = getMovingAverage(userId, largeur_mm, hauteur_mm);
-    console.log(`
-\u2705 R\xC9SULTAT ULTRA-PR\xC9CISION (BRUT):`);
-    console.log(`   \u{1F4CF} Largeur: ${(largeur_mm / 10).toFixed(2)} cm (\xB1${(uncertainty_mm / 10).toFixed(2)} cm)`);
-    console.log(`   \u{1F4CF} Hauteur: ${(hauteur_mm / 10).toFixed(2)} cm (\xB1${(uncertainty_mm / 10).toFixed(2)} cm)`);
-    console.log(`   \u{1F4CA} RANSAC: ${ransacResult.inlierCount}/${ransacUsedFiltered ? validDetectedPoints.filter((p) => p.type !== "apriltag-corner").length : srcPoints.length} inliers${ransacUsedFiltered ? " (sans coins AprilTag)" : ""}`);
-    console.log(`   \u{1F3AF} Qualit\xE9: ${ransacResult.quality.toFixed(1)}%`);
-    console.log(`   \u{1F4D0} Profondeur: ${ransacResult.depthMean.toFixed(0)}mm (\xB1${ransacResult.depthStdDev.toFixed(0)}mm)`);
-    console.log(`   \u{1F504} Inclinaison: ${ransacResult.inclineAngle.toFixed(2)}\xB0`);
-    console.log(`
-\u{1F4CA} MOYENNE MOBILE (${movingAvg.count} mesures):`);
-    console.log(`   \u{1F4CF} Largeur liss\xE9e: ${(movingAvg.avgWidth / 10).toFixed(2)} cm`);
-    console.log(`   \u{1F4CF} Hauteur liss\xE9e: ${(movingAvg.avgHeight / 10).toFixed(2)} cm`);
-    console.log("=".repeat(90) + "\n");
-    return res.json({
-      success: true,
-      method: "ultra-precision-ransac-lm",
-      warnings,
-      // ✅ MESURE BRUTE (fusion simple)
-      object: {
-        largeur_cm: largeur_mm / 10,
-        hauteur_cm: hauteur_mm / 10,
-        largeur_mm,
-        hauteur_mm
-      },
-      // ✅ MESURE LISSÉE (moyenne mobile sur 5 dernières)
-      smoothed: {
-        largeur_cm: movingAvg.avgWidth / 10,
-        hauteur_cm: movingAvg.avgHeight / 10,
-        largeur_mm: movingAvg.avgWidth,
-        hauteur_mm: movingAvg.avgHeight,
-        sampleCount: movingAvg.count,
-        note: `M\xE9diane de ${movingAvg.count} derni\xE8re${movingAvg.count > 1 ? "s" : ""} mesure${movingAvg.count > 1 ? "s" : ""} (5 min)`
-      },
-      uncertainties: {
-        largeur_cm: uncertainty_mm / 10,
-        hauteur_cm: uncertainty_mm / 10,
-        largeur_mm: uncertainty_mm,
-        hauteur_mm: uncertainty_mm
-      },
-      depth: {
-        mean_mm: ransacResult.depthMean,
-        stdDev_mm: ransacResult.depthStdDev,
-        incline_angle_deg: ransacResult.inclineAngle
-      },
-      quality: {
-        homography_quality: ransacResult.quality,
-        ransac_inliers: ransacResult.inlierCount,
-        ransac_outliers: ransacResult.outlierCount,
-        confidence: ransacResult.confidence,
-        reprojectionError_px: ransacResult.reprojectionError,
-        reprojectionError_mm: ransacResult.reprojectionErrorMm
-      },
-      precision: {
-        type: "ultra-high",
-        description: "\xB10.25cm avec 41+ points RANSAC + Levenberg-Marquardt",
-        points_used: detectedPoints.length,
-        method: "RANSAC + LM with 3D depth estimation"
-      }
-    });
-  } catch (error) {
-    console.error("\u274C Erreur ultra-precision-compute:", error);
-    return res.status(500).json({
-      success: false,
-      error: "Erreur serveur",
-      message: error instanceof Error ? error.message : "Erreur inconnue"
-    });
-  }
-});
-var measurement_reference_default = router91;
+var measurement_reference_default = router90;
 
 // src/routes/userFavoritesRoutes.ts
-var import_express95 = require("express");
+var import_express94 = require("express");
 init_database();
-var router92 = (0, import_express95.Router)();
-router92.get("/", authMiddleware, async (req2, res) => {
+var router91 = (0, import_express94.Router)();
+router91.get("/", authMiddleware, async (req2, res) => {
   try {
     const userId = req2.user?.userId;
     const organizationId = req2.user?.organizationId;
@@ -70563,7 +64478,7 @@ router92.get("/", authMiddleware, async (req2, res) => {
     });
   }
 });
-router92.post("/", authMiddleware, async (req2, res) => {
+router91.post("/", authMiddleware, async (req2, res) => {
   try {
     const userId = req2.user?.userId;
     const organizationId = req2.user?.organizationId;
@@ -70605,7 +64520,7 @@ router92.post("/", authMiddleware, async (req2, res) => {
     });
   }
 });
-router92.delete("/:moduleKey", authMiddleware, async (req2, res) => {
+router91.delete("/:moduleKey", authMiddleware, async (req2, res) => {
   try {
     const userId = req2.user?.userId;
     const organizationId = req2.user?.organizationId;
@@ -70638,18 +64553,18 @@ router92.delete("/:moduleKey", authMiddleware, async (req2, res) => {
     });
   }
 });
-var userFavoritesRoutes_default = router92;
+var userFavoritesRoutes_default = router91;
 
 // src/routes/website-forms.ts
-var import_express96 = require("express");
+var import_express95 = require("express");
 init_database();
-var router93 = (0, import_express96.Router)();
+var router92 = (0, import_express95.Router)();
 var getOrgId2 = (req2) => {
   const orgId = req2.organizationId || req2.headers["x-organization-id"];
   if (!orgId) throw new Error("Organization ID manquant");
   return orgId;
 };
-router93.get("/", async (req2, res) => {
+router92.get("/", async (req2, res) => {
   try {
     const organizationId = getOrgId2(req2);
     const { websiteId } = req2.query;
@@ -70695,7 +64610,7 @@ router93.get("/", async (req2, res) => {
     });
   }
 });
-router93.get("/by-website/:websiteId", async (req2, res) => {
+router92.get("/by-website/:websiteId", async (req2, res) => {
   try {
     const organizationId = getOrgId2(req2);
     const { websiteId } = req2.params;
@@ -70739,7 +64654,7 @@ router93.get("/by-website/:websiteId", async (req2, res) => {
     });
   }
 });
-router93.get("/:id", async (req2, res) => {
+router92.get("/:id", async (req2, res) => {
   try {
     const organizationId = getOrgId2(req2);
     const { id } = req2.params;
@@ -70783,7 +64698,7 @@ router93.get("/:id", async (req2, res) => {
     });
   }
 });
-router93.post("/", async (req2, res) => {
+router92.post("/", async (req2, res) => {
   try {
     const organizationId = getOrgId2(req2);
     const { name, slug, description, treeId, settings, successTitle, successMessage } = req2.body;
@@ -70821,7 +64736,7 @@ router93.post("/", async (req2, res) => {
     });
   }
 });
-router93.put("/:id", async (req2, res) => {
+router92.put("/:id", async (req2, res) => {
   try {
     const organizationId = getOrgId2(req2);
     const { id } = req2.params;
@@ -70873,7 +64788,7 @@ router93.put("/:id", async (req2, res) => {
     });
   }
 });
-router93.delete("/:id", async (req2, res) => {
+router92.delete("/:id", async (req2, res) => {
   try {
     const organizationId = getOrgId2(req2);
     const { id } = req2.params;
@@ -70897,7 +64812,7 @@ router93.delete("/:id", async (req2, res) => {
     });
   }
 });
-router93.post("/:id/steps", async (req2, res) => {
+router92.post("/:id/steps", async (req2, res) => {
   try {
     const organizationId = getOrgId2(req2);
     const { id } = req2.params;
@@ -70935,7 +64850,7 @@ router93.post("/:id/steps", async (req2, res) => {
     });
   }
 });
-router93.put("/steps/:stepId", async (req2, res) => {
+router92.put("/steps/:stepId", async (req2, res) => {
   try {
     const { stepId } = req2.params;
     const { title, subtitle, helpText, stepType, order, isRequired, condition, settings } = req2.body;
@@ -70964,7 +64879,7 @@ router93.put("/steps/:stepId", async (req2, res) => {
     });
   }
 });
-router93.delete("/steps/:stepId", async (req2, res) => {
+router92.delete("/steps/:stepId", async (req2, res) => {
   try {
     const { stepId } = req2.params;
     console.log("\u{1F4CB} [WebsiteForms] DELETE step:", stepId);
@@ -70981,7 +64896,7 @@ router93.delete("/steps/:stepId", async (req2, res) => {
     });
   }
 });
-router93.put("/:id/steps/reorder", async (req2, res) => {
+router92.put("/:id/steps/reorder", async (req2, res) => {
   try {
     const { id } = req2.params;
     const { stepIds } = req2.body;
@@ -71003,7 +64918,7 @@ router93.put("/:id/steps/reorder", async (req2, res) => {
     });
   }
 });
-router93.post("/steps/:stepId/fields", async (req2, res) => {
+router92.post("/steps/:stepId/fields", async (req2, res) => {
   try {
     const { stepId } = req2.params;
     const {
@@ -71061,7 +64976,7 @@ router93.post("/steps/:stepId/fields", async (req2, res) => {
     });
   }
 });
-router93.put("/fields/:fieldId", async (req2, res) => {
+router92.put("/fields/:fieldId", async (req2, res) => {
   try {
     const { fieldId } = req2.params;
     const {
@@ -71112,7 +65027,7 @@ router93.put("/fields/:fieldId", async (req2, res) => {
     });
   }
 });
-router93.delete("/fields/:fieldId", async (req2, res) => {
+router92.delete("/fields/:fieldId", async (req2, res) => {
   try {
     const { fieldId } = req2.params;
     console.log("\u{1F4CB} [WebsiteForms] DELETE field:", fieldId);
@@ -71129,7 +65044,7 @@ router93.delete("/fields/:fieldId", async (req2, res) => {
     });
   }
 });
-router93.put("/steps/:stepId/fields/reorder", async (req2, res) => {
+router92.put("/steps/:stepId/fields/reorder", async (req2, res) => {
   try {
     const { stepId } = req2.params;
     const { fieldIds } = req2.body;
@@ -71151,7 +65066,7 @@ router93.put("/steps/:stepId/fields/reorder", async (req2, res) => {
     });
   }
 });
-router93.post("/:id/link-website", async (req2, res) => {
+router92.post("/:id/link-website", async (req2, res) => {
   try {
     const { id } = req2.params;
     const { websiteId, isDefault, urlPath } = req2.body;
@@ -71184,7 +65099,7 @@ router93.post("/:id/link-website", async (req2, res) => {
     });
   }
 });
-router93.delete("/:id/unlink-website/:websiteId", async (req2, res) => {
+router92.delete("/:id/unlink-website/:websiteId", async (req2, res) => {
   try {
     const { id, websiteId } = req2.params;
     console.log("\u{1F4CB} [WebsiteForms] UNLINK form", id, "from website", websiteId);
@@ -71204,7 +65119,7 @@ router93.delete("/:id/unlink-website/:websiteId", async (req2, res) => {
     });
   }
 });
-router93.get("/:id/stats", async (req2, res) => {
+router92.get("/:id/stats", async (req2, res) => {
   try {
     const _organizationId = getOrgId2(req2);
     const { id } = req2.params;
@@ -71242,7 +65157,7 @@ router93.get("/:id/stats", async (req2, res) => {
     });
   }
 });
-router93.get("/:id/questions", async (req2, res) => {
+router92.get("/:id/questions", async (req2, res) => {
   try {
     const organizationId = getOrgId2(req2);
     const { id } = req2.params;
@@ -71267,7 +65182,7 @@ router93.get("/:id/questions", async (req2, res) => {
     });
   }
 });
-router93.post("/:id/questions", async (req2, res) => {
+router92.post("/:id/questions", async (req2, res) => {
   try {
     const organizationId = getOrgId2(req2);
     const { id } = req2.params;
@@ -71325,7 +65240,7 @@ router93.post("/:id/questions", async (req2, res) => {
     });
   }
 });
-router93.put("/questions/:questionId", async (req2, res) => {
+router92.put("/questions/:questionId", async (req2, res) => {
   try {
     const organizationId = getOrgId2(req2);
     const { questionId } = req2.params;
@@ -71376,7 +65291,7 @@ router93.put("/questions/:questionId", async (req2, res) => {
     });
   }
 });
-router93.delete("/questions/:questionId", async (req2, res) => {
+router92.delete("/questions/:questionId", async (req2, res) => {
   try {
     const organizationId = getOrgId2(req2);
     const { questionId } = req2.params;
@@ -71401,10 +65316,10 @@ router93.delete("/questions/:questionId", async (req2, res) => {
     });
   }
 });
-var website_forms_default = router93;
+var website_forms_default = router92;
 
 // src/routes/public-forms.ts
-var import_express97 = require("express");
+var import_express96 = require("express");
 init_database();
 var import_uuid6 = require("uuid");
 
@@ -71508,8 +65423,8 @@ async function generateFormResponsePdf(data) {
 // src/routes/public-forms.ts
 var fs9 = __toESM(require("fs"), 1);
 var path8 = __toESM(require("path"), 1);
-var router94 = (0, import_express97.Router)();
-router94.get("/:slug", async (req2, res) => {
+var router93 = (0, import_express96.Router)();
+router93.get("/:slug", async (req2, res) => {
   try {
     const { slug } = req2.params;
     const { websiteSlug: _websiteSlug } = req2.query;
@@ -71619,7 +65534,7 @@ router94.get("/:slug", async (req2, res) => {
     });
   }
 });
-router94.get("/:slug/questions", async (req2, res) => {
+router93.get("/:slug/questions", async (req2, res) => {
   try {
     const { slug } = req2.params;
     console.log("\u{1F3AF} [PublicForms] GET form questions (Effy mode) by slug:", slug);
@@ -71682,7 +65597,7 @@ router94.get("/:slug/questions", async (req2, res) => {
     });
   }
 });
-router94.get("/by-website/:websiteSlug", async (req2, res) => {
+router93.get("/by-website/:websiteSlug", async (req2, res) => {
   try {
     const { websiteSlug } = req2.params;
     console.log("\u{1F4CB} [PublicForms] GET form for website:", websiteSlug);
@@ -71757,7 +65672,7 @@ router94.get("/by-website/:websiteSlug", async (req2, res) => {
     });
   }
 });
-router94.post("/:slug/submit", async (req2, res) => {
+router93.post("/:slug/submit", async (req2, res) => {
   try {
     const { slug } = req2.params;
     const {
@@ -71961,7 +65876,7 @@ router94.post("/:slug/submit", async (req2, res) => {
         leadNumber: existingLead ? void 0 : `LEAD-${(await db.lead.count({ where: { organizationId: form.organizationId } })).toString().padStart(5, "0")}`
       };
       const pdfBuffer = await generateFormResponsePdf(pdfData);
-      const uploadsDir2 = path8.join(process.cwd(), "uploads", "form-responses");
+      const uploadsDir2 = path8.join(process.cwd(), "public", "uploads", "form-responses");
       if (!fs9.existsSync(uploadsDir2)) {
         fs9.mkdirSync(uploadsDir2, { recursive: true });
       }
@@ -72018,7 +65933,7 @@ router94.post("/:slug/submit", async (req2, res) => {
     });
   }
 });
-router94.post("/:slug/partial", async (req2, res) => {
+router93.post("/:slug/partial", async (req2, res) => {
   try {
     const { slug } = req2.params;
     const { formData, currentStep, metadata } = req2.body;
@@ -72047,7 +65962,7 @@ router94.post("/:slug/partial", async (req2, res) => {
     res.status(500).json({ error: "Erreur" });
   }
 });
-var public_forms_default = router94;
+var public_forms_default = router93;
 
 // src/middleware/websiteDetection.ts
 init_prisma();
@@ -72388,10 +66303,10 @@ function websiteInterceptor(req2, res, next) {
 
 // src/security/securityMiddleware.ts
 var import_express_rate_limit15 = __toESM(require("express-rate-limit"), 1);
-var import_crypto21 = __toESM(require("crypto"), 1);
+var import_crypto20 = __toESM(require("crypto"), 1);
 var securityMonitoring = (req2, res, next) => {
   const startTime = Date.now();
-  const requestId = import_crypto21.default.randomUUID();
+  const requestId = import_crypto20.default.randomUUID();
   req2.requestId = requestId;
   const suspiciousPatterns = [
     /(\<script\>)/gi,
@@ -72659,7 +66574,7 @@ logSecurityEvent("SERVER_STARTUP", {
   environment: process.env.NODE_ENV || "development",
   securityLevel: "ENTERPRISE"
 }, "info");
-var app = (0, import_express98.default)();
+var app = (0, import_express97.default)();
 app.set("trust proxy", 1);
 var port = Number(process.env.PORT || 8080);
 console.log("\u{1F3AF} [BOOTSTRAP] Server will listen on port:", port);
@@ -72779,7 +66694,7 @@ app.use((0, import_cors.default)({
   exposedHeaders: ["X-Total-Count", "X-Rate-Limit-Remaining", "x-organization-id"]
 }));
 app.use(inputSanitization);
-app.use(import_express98.default.json({
+app.use(import_express97.default.json({
   limit: "50mb",
   verify: (req2, res, buf) => {
     try {
@@ -72793,7 +66708,7 @@ app.use(import_express98.default.json({
     }
   }
 }));
-app.use(import_express98.default.urlencoded({ extended: true, limit: "50mb" }));
+app.use(import_express97.default.urlencoded({ extended: true, limit: "50mb" }));
 app.use((0, import_cookie_parser.default)());
 app.use((0, import_express_session.default)({
   secret: process.env.SESSION_SECRET || "crm-dev-secret-2024",
@@ -72819,7 +66734,7 @@ app.use("/uploads", (req2, res, next) => {
   res.setHeader("Access-Control-Allow-Headers", "Content-Type");
   res.setHeader("Cross-Origin-Resource-Policy", "cross-origin");
   next();
-}, import_express98.default.static(uploadsDir, {
+}, import_express97.default.static(uploadsDir, {
   maxAge: "1h",
   // Cache 1 heure
   etag: true,
@@ -72843,7 +66758,6 @@ app.use("/api/ai-content", ai_content_default);
 app.use("/api", cloud_run_domains_default);
 app.use("/api/ai", ai_field_generator_default);
 app.use("/api/ai", ai_default2);
-app.use("/api/measure", measure_default);
 app.use("/api", contact_form_default);
 app.use("/api/image-upload", image_upload_default);
 app.use("/api/documents", documents_default);
@@ -72884,7 +66798,7 @@ if (process.env.NODE_ENV === "production") {
   if (import_fs7.default.existsSync(indexHtml)) {
     console.log("\u{1F5C2}\uFE0F [STATIC] Distribution front d\xE9tect\xE9e, activation du serveur statique");
     const assetsDir = import_path7.default.join(distDir, "assets");
-    app.use("/assets", import_express98.default.static(assetsDir, {
+    app.use("/assets", import_express97.default.static(assetsDir, {
       setHeaders: (res) => {
         res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
       }

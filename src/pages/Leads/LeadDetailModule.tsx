@@ -33,7 +33,9 @@ import {
   // MessageOutlined,
   ClockCircleOutlined,
   FileTextOutlined,
-  FolderOpenOutlined
+  FolderOpenOutlined,
+  EyeOutlined,
+  DownloadOutlined
 } from '@ant-design/icons';
 import { useAuthenticatedApi } from '../../hooks/useAuthenticatedApi';
 import { useAuth } from '../../auth/useAuth';
@@ -634,41 +636,81 @@ export default function LeadDetailModule({ leadId: propLeadId, onClose }: LeadDe
               </span>
             ),
             children: (
-              <Card 
-                title="📄 Documents attachés" 
-                bodyStyle={{ padding: isMobile ? '16px' : '24px' }}
-                extra={
-                  <Upload 
-                    beforeUpload={handleDocumentUpload}
-                    showUploadList={false}
+              <div className="space-y-4">
+                {/* Section PDF du formulaire public */}
+                {lead?.data && typeof lead.data === 'object' && 'formPdfUrl' in lead.data && (lead.data as any).formPdfUrl && (
+                  <Card 
+                    title="📋 Récapitulatif du Formulaire" 
+                    type="inner"
+                    extra={
+                      <Button 
+                        type="primary" 
+                        size="small"
+                        onClick={() => window.open((lead.data as any).formPdfUrl, '_blank')}
+                        icon={<DownloadOutlined />}
+                      >
+                        Télécharger PDF
+                      </Button>
+                    }
                   >
-                    <Button type="primary" icon={<PlusOutlined />}>
-                      Uploader un document
-                    </Button>
-                  </Upload>
-                }
-              >
-                {documents.length > 0 ? (
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {documents.map((doc: { name: string; type: string }, index: number) => (
-                      <Card key={index} size="small" className="cursor-pointer hover:shadow-md">
-                        <div className="flex items-center space-x-3">
-                          <FileTextOutlined className="text-blue-500 text-xl" />
-                          <div>
-                            <div className="font-medium">{doc.name}</div>
-                            <div className="text-sm text-gray-500">{doc.type}</div>
-                          </div>
-                        </div>
-                      </Card>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="text-center py-8 text-gray-500">
-                    <FileOutlined className="text-4xl mb-2" />
-                    <p>Aucun document attaché</p>
-                  </div>
+                    <div className="space-y-2 text-sm">
+                      <p>
+                        <strong>Formulaire:</strong> {(lead.data as any).formName || 'N/A'}
+                      </p>
+                      <p>
+                        <strong>Soumis le:</strong> {lead.createdAt ? new Date(lead.createdAt).toLocaleString('fr-FR') : 'N/A'}
+                      </p>
+                      <p className="text-gray-600">
+                        PDF contenant toutes les questions et réponses du formulaire
+                      </p>
+                      <Button 
+                        type="default"
+                        block
+                        onClick={() => window.open((lead.data as any).formPdfUrl, '_blank')}
+                        icon={<EyeOutlined />}
+                      >
+                        Voir le PDF
+                      </Button>
+                    </div>
+                  </Card>
                 )}
-              </Card>
+
+                <Card 
+                  title="📄 Documents attachés" 
+                  bodyStyle={{ padding: isMobile ? '16px' : '24px' }}
+                  extra={
+                    <Upload 
+                      beforeUpload={handleDocumentUpload}
+                      showUploadList={false}
+                    >
+                      <Button type="primary" icon={<PlusOutlined />}>
+                        Uploader un document
+                      </Button>
+                    </Upload>
+                  }
+                >
+                  {documents.length > 0 ? (
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                      {documents.map((doc: { name: string; type: string }, index: number) => (
+                        <Card key={index} size="small" className="cursor-pointer hover:shadow-md">
+                          <div className="flex items-center space-x-3">
+                            <FileTextOutlined className="text-blue-500 text-xl" />
+                            <div>
+                              <div className="font-medium">{doc.name}</div>
+                              <div className="text-sm text-gray-500">{doc.type}</div>
+                            </div>
+                          </div>
+                        </Card>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="text-center py-8 text-gray-500">
+                      <FileOutlined className="text-4xl mb-2" />
+                      <p>Aucun document attaché</p>
+                    </div>
+                  )}
+                </Card>
+              </div>
             ),
           },
           {

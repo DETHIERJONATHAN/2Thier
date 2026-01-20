@@ -588,8 +588,8 @@ router.post('/:slug/submit', async (req: Request, res: Response) => {
       
       const pdfBuffer = await generateFormResponsePdf(pdfData);
       
-      // Sauvegarder le PDF dans le dossier uploads
-      const uploadsDir = path.join(process.cwd(), 'uploads', 'form-responses');
+      // Sauvegarder le PDF dans le dossier public/uploads/form-responses
+      const uploadsDir = path.join(process.cwd(), 'public', 'uploads', 'form-responses');
       if (!fs.existsSync(uploadsDir)) {
         fs.mkdirSync(uploadsDir, { recursive: true });
       }

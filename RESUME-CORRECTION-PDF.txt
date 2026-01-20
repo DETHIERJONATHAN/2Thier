@@ -1,0 +1,62 @@
+📋 RÉSUMÉ DES MODIFICATIONS - GÉNÉRATION PDF FORMULAIRES
+═══════════════════════════════════════════════════════════
+
+🔴 PROBLÈME IDENTIFIÉ
+───────────────────
+Heloise Despontin s'est inscrit au formulaire "Simulateur Aides Rénovation",
+mais le PDF récapitulatif avec ses réponses n'a jamais été créé.
+
+Cause: Le code tentait d'écrire dans `./uploads/` au lieu de `./public/uploads/`
+
+───────────────────
+
+✅ CORRECTIONS APPORTÉES
+───────────────────
+
+1️⃣ CORRECTION DU CHEMIN (src/routes/public-forms.ts)
+   ❌ const uploadsDir = path.join(process.cwd(), 'uploads', 'form-responses');
+   ✅ const uploadsDir = path.join(process.cwd(), 'public', 'uploads', 'form-responses');
+
+2️⃣ CRÉATION SCRIPT DE RÉGÉNÉRATION (scripts/regenerate-missing-pdfs.ts)
+   ✅ Régénère les PDFs manquants pour tous les leads
+   ✅ Met à jour les références dans la base de données
+
+3️⃣ RÉGÉNÉRATION DES PDFs MANQUANTS
+   ✅ 2 leads corrigés
+   ✅ 2 PDFs générés avec succès
+
+───────────────────
+
+📊 RÉSULTATS
+───────────────────
+
+Lead: Heloise Despontin (LEAD-00004)
+📧 despontin.heloise@hotmail.com
+📞 0494430341
+📅 Soumis le: 2026-01-17 13:51:55
+
+PDF GÉNÉRÉ:
+📄 /uploads/form-responses/formulaire-simulateur-aides-505c6bf7-1768657915200.pdf
+📁 Fichier: /workspaces/2Thier/public/uploads/form-responses/
+💾 Taille: 2.2 KB
+✓ Format: PDF 1.3, 1 page
+
+───────────────────
+
+🔧 POUR L'AVENIR
+───────────────────
+
+✓ Tous les nouveaux formulaires génèreront automatiquement un PDF
+✓ Le PDF contient toutes les questions et réponses
+✓ Accessible via: lead.data.formPdfUrl
+✓ Téléchargeable pour imprimer ou partager
+
+───────────────────
+
+📝 FICHIERS MODIFIÉS
+───────────────────
+✅ src/routes/public-forms.ts (ligne 592)
+✅ scripts/regenerate-missing-pdfs.ts (nouveau)
+✅ DOCUMENTATION-PDF-FORMULAIRES.md (nouveau)
+
+═══════════════════════════════════════════════════════════
