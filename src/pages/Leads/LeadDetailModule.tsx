@@ -670,7 +670,7 @@ export default function LeadDetailModule({ leadId: propLeadId, onClose }: LeadDe
             children: (
               <div className="space-y-4">
                 {/* Section PDF du formulaire public */}
-                {(lead?.source === 'website_form' || (lead?.data && typeof lead.data === 'object' && ((lead.data as any).formName || (lead.data as any).formSlug || (lead.data as any).formPdfUrl))) && (
+                {lead && (
                   <Card 
                     title="📋 Récapitulatif du Formulaire" 
                     type="inner"
@@ -698,7 +698,7 @@ export default function LeadDetailModule({ leadId: propLeadId, onClose }: LeadDe
                   >
                     <div className="space-y-2 text-sm">
                       <p>
-                        <strong>Formulaire:</strong> {(lead?.data && typeof lead.data === 'object' ? (lead.data as any).formName : undefined) || 'N/A'}
+                        <strong>Formulaire:</strong> {(lead?.data && typeof lead.data === 'object' ? (lead.data as any).formName : undefined) || 'Formulaire en ligne'}
                       </p>
                       <p>
                         <strong>Soumis le:</strong> {lead?.createdAt ? new Date(lead.createdAt).toLocaleString('fr-FR') : 'N/A'}
