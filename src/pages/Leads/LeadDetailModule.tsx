@@ -284,6 +284,12 @@ export default function LeadDetailModule({ leadId: propLeadId, onClose }: LeadDe
     lead?.isCompany ? lead?.name : '',
     lead?.data?.company
   );
+  const displaySource = (() => {
+    const raw = pickFirst(lead?.source, lead?.data?.source, lead?.data?.formSource);
+    if (!raw) return 'N/A';
+    if (raw === 'website_form') return 'Formulaire en ligne';
+    return String(raw);
+  })();
   const formatAddress = (addr: LeadAddress | string | null | undefined): string => {
     if (!addr) return '';
     if (typeof addr === 'string') return addr;
@@ -585,7 +591,7 @@ export default function LeadDetailModule({ leadId: propLeadId, onClose }: LeadDe
                       <Descriptions.Item label="Société">{displayCompany || 'Particulier'}</Descriptions.Item>
                       <Descriptions.Item label="Adresse">{displayAddress || 'N/A'}</Descriptions.Item>
                       <Descriptions.Item label="Source">
-                        <Tag color="blue">{lead.source}</Tag>
+                        <Tag color="blue">{displaySource}</Tag>
                       </Descriptions.Item>
                     </Descriptions>
                   </Card>
