@@ -335,9 +335,44 @@ router.post('/:slug/submit', async (req: Request, res: Response) => {
       contact,  // { firstName, lastName, email, phone }
       metadata  // { utmSource, utmMedium, utmCampaign, referrer }
     } = req.body;
+
+    const normalizeString = (value: unknown): string => {
+      if (value === null || value === undefined) return '';
+      if (Array.isArray(value)) return value.map(v => String(v)).join(' ').trim();
+      return String(value).trim();
+    };
+
+    const extractFromFormData = (keys: string[]): string => {
+      if (!formData) return '';
+      const direct = formData as Record<string, unknown>;
+      for (const key of keys) {
+        const directValue = normalizeString(direct[key]);
+        if (directValue) return directValue;
+      }
+
+      const formDataObj = formData as Record<string, Record<string, unknown> | unknown>;
+      for (const stepValue of Object.values(formDataObj)) {
+        if (stepValue && typeof stepValue === 'object' && !Array.isArray(stepValue)) {
+          for (const key of keys) {
+            const nestedValue = normalizeString((stepValue as Record<string, unknown>)[key]);
+            if (nestedValue) return nestedValue;
+          }
+        }
+      }
+      return '';
+    };
+
+    const normalizedContact = {
+      firstName: normalizeString(contact?.firstName) || extractFromFormData(['firstName', 'prenom', 'prénom']),
+      lastName: normalizeString(contact?.lastName) || extractFromFormData(['lastName', 'nom']),
+      email: normalizeString(contact?.email) || extractFromFormData(['email', 'mail', 'e-mail']),
+      phone: normalizeString(contact?.phone) || extractFromFormData(['phone', 'telephone', 'téléphone', 'gsm', 'mobile']),
+      address: extractFromFormData(['address', 'adresse', 'street', 'rue']),
+      civility: normalizeString(contact?.civility) || extractFromFormData(['civilite', 'civility'])
+    };
     
     console.log('📋 [PublicForms] SUBMIT form:', slug);
-    console.log('📋 [PublicForms] Contact:', contact?.email);
+    console.log('📋 [PublicForms] Contact:', normalizedContact.email);
     
     // 1. Récupérer le formulaire avec tous ses champs pour le mapping TBL
     const form = await db.website_forms.findFirst({
@@ -359,7 +394,7 @@ router.post('/:slug/submit', async (req: Request, res: Response) => {
     console.log('📋 [PublicForms] Form found:', form.name);
     
     // 2. Valider les données de contact
-    if (!contact?.email) {
+    if (!normalizedContact.email) {
       return res.status(400).json({ error: 'L\'email est requis' });
     }
     
@@ -369,7 +404,7 @@ router.post('/:slug/submit', async (req: Request, res: Response) => {
     
     const existingLead = await db.lead.findFirst({
       where: {
-        email: contact.email,
+        email: normalizedContact.email,
         organizationId: form.organizationId,
         createdAt: { gte: today }
       }
@@ -385,9 +420,11 @@ router.post('/:slug/submit', async (req: Request, res: Response) => {
       await db.lead.update({
         where: { id: leadId },
         data: {
-          firstName: contact.firstName || existingLead.firstName,
-          lastName: contact.lastName || existingLead.lastName,
-          phone: contact.phone || existingLead.phone,
+          firstName: normalizedContact.firstName || existingLead.firstName,
+          lastName: normalizedContact.lastName || existingLead.lastName,
+          phone: normalizedContact.phone || existingLead.phone,
+          email: normalizedContact.email || existingLead.email,
+          address: normalizedContact.address || existingLead.address,
           updatedAt: new Date()
         }
       });
@@ -411,17 +448,27 @@ router.post('/:slug/submit', async (req: Request, res: Response) => {
         data: {
           id: leadId,
           organizationId: form.organizationId,
-          firstName: contact.firstName || '',
-          lastName: contact.lastName || '',
-          email: contact.email,
-          phone: contact.phone || null,
+          firstName: normalizedContact.firstName || '',
+          lastName: normalizedContact.lastName || '',
+          email: normalizedContact.email,
+          phone: normalizedContact.phone || null,
           company: contact.company || null,
+          address: normalizedContact.address || null,
           source: 'website_form',
           status: 'nouveau',
           statusId: defaultStatus?.id || null,
           leadNumber,
           notes: `Lead créé depuis le formulaire "${form.name}"`,
-          data: { formSlug: slug, formName: form.name },
+          data: {
+            formSlug: slug,
+            formName: form.name,
+            email: normalizedContact.email || undefined,
+            phone: normalizedContact.phone || undefined,
+            firstName: normalizedContact.firstName || undefined,
+            lastName: normalizedContact.lastName || undefined,
+            address: normalizedContact.address || undefined,
+            civility: normalizedContact.civility || undefined
+          },
           createdAt: now,
           updatedAt: now
         }
@@ -568,11 +615,11 @@ router.post('/:slug/submit', async (req: Request, res: Response) => {
         formSlug: slug,
         submittedAt: new Date(),
         contact: {
-          firstName: contact.firstName,
-          lastName: contact.lastName,
-          email: contact.email,
-          phone: contact.phone,
-          civility: contact.civility
+          firstName: normalizedContact.firstName,
+          lastName: normalizedContact.lastName,
+          email: normalizedContact.email,
+          phone: normalizedContact.phone,
+          civility: normalizedContact.civility
         },
         answers: formData || {},
         questions: ((form as any).questions || []).map((q: any) => ({
