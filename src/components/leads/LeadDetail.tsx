@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Card, Descriptions, Tag, Avatar, Space, Button, Timeline, Spin, Row, Col } from 'antd';
+import { Card, Descriptions, Tag, Avatar, Space, Button, Timeline, Spin, Row, Col, Tabs, Upload, message, Tooltip, Grid } from 'antd';
 import { 
   UserOutlined, 
   MailOutlined, 
@@ -7,11 +7,20 @@ import {
   GlobalOutlined, 
   LinkedinOutlined,
   EditOutlined,
-  CalendarOutlined
+  CalendarOutlined,
+  FileOutlined,
+  FileTextOutlined,
+  PlusOutlined,
+  BellOutlined,
+  RobotOutlined,
+  DownloadOutlined,
+  EyeOutlined,
+  FolderOpenOutlined
 } from '@ant-design/icons';
 import { useAuthenticatedApi } from '../../hooks/useAuthenticatedApi';
 import type { Lead } from '../../types/leads';
 import dayjs from 'dayjs';
+import { useNavigate } from 'react-router-dom';
 
 interface LeadDetailProps {
   leadId: string;
@@ -25,11 +34,35 @@ interface LeadDetailProps {
  * 📋 Composant de détail complet d'un lead
  */
 export default function LeadDetail({ leadId, onEdit, onCall, onEmail, onSchedule }: LeadDetailProps) {
+  type LeadDocument = {
+    id: string;
+    name: string;
+    type?: string;
+    url?: string | null;
+    createdAt?: string;
+    meta?: { treeId?: string } | null;
+  };
+  type TblSubmission = {
+    id: string;
+    name?: string;
+    status?: string;
+    createdAt?: string;
+    treeName?: string;
+  };
+
   const [lead, setLead] = useState<Lead | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [documents, setDocuments] = useState<LeadDocument[]>([]);
+  const [loadingDocs, setLoadingDocs] = useState(false);
+  const [tblSubmissions, setTblSubmissions] = useState<TblSubmission[]>([]);
+  const [loadingTblSubmissions, setLoadingTblSubmissions] = useState(false);
   
   const { api } = useAuthenticatedApi();
+  const navigate = useNavigate();
+  const { useBreakpoint } = Grid;
+  const screens = useBreakpoint();
+  const isMobile = !screens.md;
   
   // Récupérer les détails du lead
   useEffect(() => {
@@ -56,6 +89,64 @@ export default function LeadDetail({ leadId, onEdit, onCall, onEmail, onSchedule
       fetchLeadDetails();
     }
   }, [leadId, api]);
+
+  // Charger les documents
+  useEffect(() => {
+    const fetchDocuments = async () => {
+      try {
+        setLoadingDocs(true);
+        const docs = await api.get<Array<LeadDocument> | { success?: boolean; data?: LeadDocument[] }>(`/api/leads/${leadId}/documents`);
+        if (Array.isArray(docs)) {
+          setDocuments(docs);
+        } else if (docs && typeof docs === 'object' && 'data' in docs) {
+          setDocuments(Array.isArray(docs.data) ? docs.data : []);
+        } else {
+          setDocuments([]);
+        }
+      } catch {
+        setDocuments([]);
+      } finally {
+        setLoadingDocs(false);
+      }
+    };
+    if (leadId) fetchDocuments();
+  }, [leadId, api]);
+
+  useEffect(() => {
+    const fetchTblSubmissions = async () => {
+      if (!leadId) {
+        setTblSubmissions([]);
+        return;
+      }
+      try {
+        setLoadingTblSubmissions(true);
+        const effectiveTreeId = lead?.data?.treeId || 'cmf1mwoz10005gooked1j6orn';
+        const allLeadsWithSubmissions = await api.get(`/api/treebranchleaf/submissions/by-leads?treeId=${effectiveTreeId}`);
+        const list = Array.isArray(allLeadsWithSubmissions) ? allLeadsWithSubmissions : [];
+        const thisLeadData = list.find((item: { id?: string }) => item?.id === leadId);
+        const submissions = Array.isArray(thisLeadData?.submissions) ? thisLeadData.submissions : [];
+        setTblSubmissions(submissions);
+      } catch {
+        setTblSubmissions([]);
+      } finally {
+        setLoadingTblSubmissions(false);
+      }
+    };
+    fetchTblSubmissions();
+  }, [leadId, api, lead?.data?.treeId]);
+
+  // Générer le PDF du formulaire
+  const handleGeneratePdf = async () => {
+    try {
+      message.loading('Génération du PDF...', 0);
+      await api.post(`/api/leads/${leadId}/generate-pdf`);
+      message.destroy();
+      message.success('PDF généré avec succès !');
+    } catch {
+      message.destroy();
+      message.error('Erreur lors de la génération du PDF');
+    }
+  };
   
   if (loading) {
     return (
@@ -140,247 +231,434 @@ export default function LeadDetail({ leadId, onEdit, onCall, onEmail, onSchedule
     lead.isCompany ? lead.name : '',
     lead.data?.company
   );
+
+  const openTblDevis = (doc?: { id?: string }) => {
+    const base = `/tbl/${lead.id}`;
+    if (doc?.id) {
+      navigate(`${base}?devisId=${encodeURIComponent(doc.id)}`);
+      return;
+    }
+    navigate(base);
+  };
+
+  const renderTableRow = (label: string, content: React.ReactNode, index: number) => (
+    <div
+      style={{
+        display: 'flex',
+        borderBottom: '1px solid #e5e7eb',
+        backgroundColor: index % 2 === 0 ? '#f9fafb' : '#ffffff',
+      }}
+    >
+      <div style={{
+        width: '120px',
+        flexShrink: 0,
+        padding: '8px 12px',
+        fontSize: '14px',
+        color: '#6b7280',
+        borderRight: '1px solid #e5e7eb',
+      }}>
+        {label}
+      </div>
+      <div style={{
+        flex: 1,
+        padding: '8px 12px',
+        fontSize: '14px',
+        color: '#111827',
+      }}>
+        {content}
+      </div>
+    </div>
+  );
   
   return (
-    <div className="space-y-6">
+    <div className="space-y-4" style={{ padding: isMobile ? '4px' : undefined }}>
       {/* Header avec informations principales */}
-      <Card>
-        <Row gutter={16} align="middle">
+      <Card size="small" styles={{ body: { padding: isMobile ? '10px 12px' : '12px 16px' } }}>
+        <Row gutter={[12, 12]} align="middle" wrap>
           <Col>
             <Avatar 
-              size={64} 
+              size={48} 
               icon={<UserOutlined />}
               style={{ backgroundColor: '#1890ff' }}
             />
           </Col>
           <Col flex={1}>
             <div>
-              <h2 className="text-xl font-semibold mb-1">{displayName}</h2>
-              <div className="text-gray-600">
-                {(displayCompany || lead.company) && <p className="mb-1">{displayCompany || lead.company}</p>}
-                <Space>
-                  {lead.leadStatus && (
-                    <Tag color={lead.leadStatus.color}>{lead.leadStatus.name}</Tag>
-                  )}
-                  {lead.source && (
-                    <Tag>{lead.source}</Tag>
-                  )}
-                </Space>
-              </div>
+              <h2 className="text-lg font-semibold mb-0">{displayName}</h2>
+              <Space size={4} wrap>
+                {lead.leadStatus && (
+                  <Tag color={lead.leadStatus.color} className="m-0">{lead.leadStatus.name}</Tag>
+                )}
+                {lead.source && (
+                  <Tag className="m-0">{lead.source}</Tag>
+                )}
+              </Space>
             </div>
           </Col>
           <Col>
-            <Space>
-              {onEdit && (
-                <Button 
-                  icon={<EditOutlined />} 
-                  onClick={() => onEdit(lead)}
-                >
-                  Modifier
-                </Button>
-              )}
-              <Button 
-                type="primary" 
-                icon={<PhoneOutlined />} 
-                onClick={() => onCall?.(lead.id)}
-                disabled={!onCall}
-              >
-                Appeler avec Telnyx
-              </Button>
-            </Space>
+            <Button 
+              type="primary" 
+              icon={<PhoneOutlined />} 
+              onClick={() => onCall?.(lead.id)}
+              disabled={!onCall}
+              size="small"
+            >
+              Appeler
+            </Button>
           </Col>
         </Row>
       </Card>
 
-      {/* Informations de contact */}
-      <Card title="📞 Informations de contact" size="small">
-        <Descriptions column={2} bordered size="small">
-          <Descriptions.Item label="Email" span={1}>
-            {displayEmail ? (
-              <Space>
-                <MailOutlined />
-                <a href={`mailto:${displayEmail}`}>{displayEmail}</a>
-                <Button 
-                  size="small" 
-                  type="link" 
-                  onClick={() => onEmail?.(lead.id)}
-                  disabled={!onEmail}
+      {/* Onglets */}
+      <Tabs
+        defaultActiveKey="info"
+        size="small"
+        items={[
+          {
+            key: 'info',
+            label: <span><UserOutlined /> Informations</span>,
+            children: (
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                {/* Coordonnées */}
+                <div>
+                  <div className="flex items-center gap-2 mb-3">
+                    <UserOutlined style={{ color: '#3b82f6' }} />
+                    <span style={{ fontWeight: 600, color: '#374151' }}>Coordonnées</span>
+                  </div>
+                  <div style={{ border: '1px solid #e5e7eb', borderRadius: '6px', overflow: 'hidden' }}>
+                    {renderTableRow('Nom', displayName, 0)}
+                    {renderTableRow(
+                      'Email',
+                      displayEmail || 'Non renseigné',
+                      1
+                    )}
+                    {renderTableRow(
+                      'Téléphone',
+                      displayPhone || 'Non renseigné',
+                      2
+                    )}
+                    {renderTableRow('Société', displayCompany || 'Particulier', 3)}
+                    {renderTableRow('Adresse', lead.address || 'Non renseignée', 4)}
+                    {renderTableRow('Source', lead.source ? <Tag>{lead.source}</Tag> : <Tag>N/A</Tag>, 5)}
+                  </div>
+                </div>
+
+                {/* Statut & Suivi */}
+                <div>
+                  <div className="flex items-center gap-2 mb-3">
+                    <CalendarOutlined style={{ color: '#8b5cf6' }} />
+                    <span style={{ fontWeight: 600, color: '#374151' }}>Statut & Suivi</span>
+                  </div>
+                  <div style={{ border: '1px solid #e5e7eb', borderRadius: '6px', overflow: 'hidden' }}>
+                    {renderTableRow(
+                      'Statut actuel',
+                      lead.leadStatus ? (
+                        <Tag color={lead.leadStatus.color}>{lead.leadStatus.name}</Tag>
+                      ) : (
+                        '•'
+                      ),
+                      0
+                    )}
+                    {renderTableRow(
+                      'Commercial assigné',
+                      lead.assignedTo
+                        ? `${lead.assignedTo.firstName} ${lead.assignedTo.lastName}`
+                        : 'Non assigné',
+                      1
+                    )}
+                    {renderTableRow(
+                      "Date d'entrée",
+                      dayjs(lead.createdAt).format('DD/MM/YYYY HH:mm'),
+                      2
+                    )}
+                    {renderTableRow(
+                      'Dernière action',
+                      lead.lastContactDate
+                        ? dayjs(lead.lastContactDate).format('DD/MM/YYYY HH:mm')
+                        : 'Aucune',
+                      3
+                    )}
+                    {renderTableRow(
+                      'Prochain suivi',
+                      lead.nextFollowUpDate
+                        ? dayjs(lead.nextFollowUpDate).format('DD/MM/YYYY HH:mm')
+                        : 'À définir',
+                      4
+                    )}
+                  </div>
+                </div>
+              </div>
+            ),
+          },
+          {
+            key: 'history',
+            label: <span><CalendarOutlined /> Historique</span>,
+            children: (
+              <div>
+                <div className="flex items-center gap-2 mb-3">
+                  <CalendarOutlined className="text-blue-500" />
+                  <span className="font-semibold text-gray-700">Historique des actions</span>
+                </div>
+                <div className="border border-gray-200 rounded overflow-hidden">
+                  {renderTableRow('Lead créé', dayjs(lead.createdAt).format('DD/MM/YYYY HH:mm'), 0)}
+                  {lead.updatedAt && lead.updatedAt !== lead.createdAt && 
+                    renderTableRow('Dernière modification', dayjs(lead.updatedAt).format('DD/MM/YYYY HH:mm'), 1)
+                  }
+                  {lead.lastContactDate && 
+                    renderTableRow('Dernier contact', dayjs(lead.lastContactDate).format('DD/MM/YYYY HH:mm'), 2)
+                  }
+                  {lead.nextFollowUpDate && 
+                    renderTableRow('Prochain suivi', dayjs(lead.nextFollowUpDate).format('DD/MM/YYYY HH:mm'), 3)
+                  }
+                </div>
+              </div>
+            ),
+          },
+          {
+            key: 'documents',
+            label: <span><FileOutlined /> Documents</span>,
+            children: (
+              <div className="space-y-4">
+                {/* Récapitulatif formulaire */}
+                <Card 
+                  title="📄 Récapitulatif du Formulaire" 
+                  size="small"
+                  extra={
+                    <Button 
+                      type="primary" 
+                      icon={<DownloadOutlined />}
+                      onClick={handleGeneratePdf}
+                      size="small"
+                    >
+                      Télécharger PDF
+                    </Button>
+                  }
                 >
-                  📧 Envoyer via Gmail
-                </Button>
-              </Space>
-            ) : (
-              <span className="text-gray-400">Non renseigné</span>
-            )}
-          </Descriptions.Item>
-          
-          <Descriptions.Item label="Téléphone" span={1}>
-            {displayPhone ? (
-              <Space>
-                <PhoneOutlined />
-                <a href={`tel:${displayPhone}`}>{displayPhone}</a>
-              </Space>
-            ) : (
-              <span className="text-gray-400">Non renseigné</span>
-            )}
-          </Descriptions.Item>
-          
-          <Descriptions.Item label="Site web" span={1}>
-            {lead.website ? (
-              <Space>
-                <GlobalOutlined />
-                <a href={lead.website} target="_blank" rel="noopener noreferrer">
-                  {lead.website}
-                </a>
-              </Space>
-            ) : (
-              <span className="text-gray-400">Non renseigné</span>
-            )}
-          </Descriptions.Item>
-          
-          <Descriptions.Item label="LinkedIn" span={1}>
-            {lead.linkedin ? (
-              <Space>
-                <LinkedinOutlined />
-                <a href={lead.linkedin} target="_blank" rel="noopener noreferrer">
-                  Profil LinkedIn
-                </a>
-              </Space>
-            ) : (
-              <span className="text-gray-400">Non renseigné</span>
-            )}
-          </Descriptions.Item>
-        </Descriptions>
-      </Card>
+                  <div className="border border-gray-200 rounded overflow-hidden">
+                    {renderTableRow('Formulaire', lead.data?.formName || 'Formulaire Web', 0)}
+                    {renderTableRow('Soumis le', dayjs(lead.createdAt).format('DD/MM/YYYY HH:mm'), 1)}
+                    {renderTableRow('Description', 'PDF contenant toutes les questions et réponses', 2)}
+                  </div>
+                  <Button 
+                    icon={<EyeOutlined />} 
+                    block 
+                    className="mt-2"
+                    onClick={() => message.info('Aperçu PDF à venir')}
+                  >
+                    Voir le PDF
+                  </Button>
+                </Card>
 
-      {/* Informations business */}
-      <Card title="🏢 Informations business" size="small">
-        <Descriptions column={2} bordered size="small">
-          <Descriptions.Item label="Société" span={1}>
-            {lead.company || <span className="text-gray-400">Non renseignée</span>}
-          </Descriptions.Item>
-          
-          <Descriptions.Item label="Source" span={1}>
-            {lead.source ? (
-              <Tag color="blue">{lead.source}</Tag>
-            ) : (
-              <span className="text-gray-400">Non renseignée</span>
-            )}
-          </Descriptions.Item>
-          
-          <Descriptions.Item label="Statut" span={1}>
-            {lead.leadStatus ? (
-              <Tag color={lead.leadStatus.color}>{lead.leadStatus.name}</Tag>
-            ) : (
-              <span className="text-gray-400">Non défini</span>
-            )}
-          </Descriptions.Item>
-          
-          <Descriptions.Item label="Commercial assigné" span={1}>
-            {lead.assignedTo ? (
-              <Space>
-                <Avatar size="small" icon={<UserOutlined />} />
-                {lead.assignedTo.firstName} {lead.assignedTo.lastName}
-              </Space>
-            ) : (
-              <span className="text-gray-400">Non assigné</span>
-            )}
-          </Descriptions.Item>
-        </Descriptions>
-      </Card>
-
-      {/* Notes */}
-      {lead.notes && (
-        <Card title="📝 Notes" size="small">
-          <p className="whitespace-pre-wrap">{lead.notes}</p>
-        </Card>
-      )}
-
-      {/* Timeline/Historique */}
-      <Card title="📅 Historique" size="small">
-        <Timeline>
-          <Timeline.Item color="green">
-            <div>
-              <strong>Lead créé</strong>
-              <div className="text-gray-500 text-sm">
-                {dayjs(lead.createdAt).format('DD/MM/YYYY HH:mm')}
-              </div>
-            </div>
-          </Timeline.Item>
-          
-          {lead.updatedAt && lead.updatedAt !== lead.createdAt && (
-            <Timeline.Item color="blue">
-              <div>
-                <strong>Dernière modification</strong>
-                <div className="text-gray-500 text-sm">
-                  {dayjs(lead.updatedAt).format('DD/MM/YYYY HH:mm')}
-                </div>
-              </div>
-            </Timeline.Item>
-          )}
-          
-          {lead.lastContactDate && (
-            <Timeline.Item color="orange">
-              <div>
-                <strong>Dernier contact</strong>
-                <div className="text-gray-500 text-sm">
-                  {dayjs(lead.lastContactDate).format('DD/MM/YYYY HH:mm')}
-                </div>
-              </div>
-            </Timeline.Item>
-          )}
-          
-          {lead.nextFollowUpDate && (
-            <Timeline.Item color="red">
-              <div>
-                <strong>Prochain suivi programmé</strong>
-                <div className="text-gray-500 text-sm">
-                  {dayjs(lead.nextFollowUpDate).format('DD/MM/YYYY HH:mm')}
-                </div>
-                <Button 
-                  size="small" 
-                  type="link" 
-                  icon={<CalendarOutlined />}
-                  onClick={() => onSchedule?.(lead.id)}
-                  disabled={!onSchedule}
+                {/* Documents attachés */}
+                <Card 
+                  title="📁 Documents attachés" 
+                  size="small"
+                  extra={
+                    <Upload
+                      beforeUpload={() => {
+                        message.info('Upload de documents à venir');
+                        return false;
+                      }}
+                      showUploadList={false}
+                    >
+                      <Button icon={<PlusOutlined />} size="small">
+                        Uploader
+                      </Button>
+                    </Upload>
+                  }
                 >
-                  📅 Reprogrammer
-                </Button>
+                  {loadingDocs ? (
+                    <div className="text-center py-4">
+                      <Spin />
+                    </div>
+                  ) : documents.length > 0 ? (
+                    <div className="space-y-2">
+                      {documents.map((doc, index) => (
+                        <div
+                          key={index}
+                          className={`flex items-center justify-between p-2 rounded ${index % 2 === 0 ? 'bg-blue-50/60' : 'bg-white border border-gray-100'}`}
+                        >
+                          <Space>
+                            <FileTextOutlined className="text-blue-500" />
+                            <span>{doc.name}</span>
+                            <Tag>{doc.type}</Tag>
+                          </Space>
+                          <Button size="small" icon={<EyeOutlined />} type="text" />
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="text-center py-6 text-gray-400">
+                      <FileOutlined className="text-3xl mb-2" />
+                      <p>Aucun document attaché</p>
+                    </div>
+                  )}
+                </Card>
               </div>
-            </Timeline.Item>
-          )}
-        </Timeline>
-      </Card>
+            ),
+          },
+          {
+            key: 'tbl',
+            label: <span><FolderOpenOutlined /> TBL</span>,
+            children: (
+              <div className="space-y-4">
+                <Card
+                  title="📄 Devis TBL"
+                  size="small"
+                >
+                  {loadingTblSubmissions ? (
+                    <div className="text-center py-4">
+                      <Spin />
+                    </div>
+                  ) : tblSubmissions.length > 0 ? (
+                    <div className="space-y-2">
+                      {tblSubmissions.map((doc, index) => (
+                        <div
+                          key={doc.id}
+                          className={`flex items-center justify-between p-2 rounded ${index % 2 === 0 ? 'bg-blue-50/60' : 'bg-white border border-gray-100'}`}
+                        >
+                          <Space>
+                            <FileTextOutlined className="text-blue-500" />
+                            <div>
+                              <div className="font-medium">{doc.name || 'Devis TBL'}</div>
+                              <div className="text-xs text-gray-500">
+                                {doc.createdAt ? dayjs(doc.createdAt).format('DD/MM/YYYY HH:mm') : '—'}
+                              </div>
+                            </div>
+                          </Space>
+                          <Button size="small" onClick={() => openTblDevis(doc)}>
+                            Ouvrir
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="text-center py-6 text-gray-400">
+                      <FileOutlined className="text-3xl mb-2" />
+                      <p>Aucun devis TBL lié</p>
+                    </div>
+                  )}
+                </Card>
+              </div>
+            ),
+          },
+          {
+            key: 'ai',
+            label: <span><RobotOutlined /> IA & Suggestions</span>,
+            children: (
+              <Row gutter={[12, 12]}>
+                <Col xs={24} lg={12}>
+                  <Card title="🤖 Analyse IA du Lead" size="small">
+                    <div className="space-y-3">
+                      <div className="bg-blue-50 p-3 rounded">
+                        <strong>💡 Opportunité détectée :</strong>
+                        <p className="mb-0 mt-1 text-sm">Ce prospect montre des signaux d'achat élevés. Recommandation : Planifier un RDV dans les 24h.</p>
+                      </div>
+                      <div className="bg-green-50 p-3 rounded">
+                        <strong>📈 Score de qualification :</strong>
+                        <p className="mb-0 mt-1 text-sm">85/100 - Lead très qualifié</p>
+                      </div>
+                      <div className="bg-yellow-50 p-3 rounded">
+                        <strong>⚠️ Point d'attention :</strong>
+                        <p className="mb-0 mt-1 text-sm">Dernier contact il y a plus de 48h. Risque de refroidissement.</p>
+                      </div>
+                    </div>
+                  </Card>
+                </Col>
+                <Col xs={24} lg={12}>
+                  <Card title="🎯 Prochaines actions suggérées" size="small">
+                    <div className="space-y-2">
+                      <Button 
+                        block 
+                        type="dashed" 
+                        icon={<PhoneOutlined />}
+                        onClick={() => onCall?.(lead.id)}
+                      >
+                        📞 Appeler avant 18h aujourd'hui
+                      </Button>
+                      <Button 
+                        block 
+                        type="dashed" 
+                        icon={<MailOutlined />}
+                        onClick={() => onEmail?.(lead.id)}
+                      >
+                        ✉️ Envoyer documentation produit
+                      </Button>
+                      <Button 
+                        block 
+                        type="dashed" 
+                        icon={<CalendarOutlined />}
+                        onClick={() => onSchedule?.(lead.id)}
+                      >
+                        📅 Proposer RDV démonstration
+                      </Button>
+                    </div>
+                  </Card>
+                  
+                  <Card title="🔔 Notifications IA" size="small" className="mt-3">
+                    <div className="space-y-2">
+                      <div className="flex items-start gap-2 p-2 bg-orange-50 rounded">
+                        <BellOutlined className="text-orange-500 mt-1" />
+                        <div>
+                          <p className="font-medium text-sm mb-0">Relance recommandée</p>
+                          <p className="text-xs text-gray-500 mb-0">Ce lead n'a pas été contacté depuis 3 jours</p>
+                        </div>
+                      </div>
+                      <div className="flex items-start gap-2 p-2 bg-green-50 rounded">
+                        <BellOutlined className="text-green-500 mt-1" />
+                        <div>
+                          <p className="font-medium text-sm mb-0">Bon timing</p>
+                          <p className="text-xs text-gray-500 mb-0">Ce lead est généralement disponible entre 14h-16h</p>
+                        </div>
+                      </div>
+                    </div>
+                  </Card>
+                </Col>
+              </Row>
+            ),
+          },
+        ]}
+      />
 
       {/* Actions rapides */}
       <Card title="⚡ Actions rapides" size="small">
-        <Space wrap>
-          <Button 
-            icon={<PhoneOutlined />} 
-            onClick={() => onCall?.(lead.id)}
-            type="primary"
-            disabled={!onCall}
-          >
-            📞 Appeler avec Telnyx
-          </Button>
-          <Button 
-            icon={<MailOutlined />} 
-            onClick={() => onEmail?.(lead.id)}
-            disabled={!onEmail}
-          >
-            ✉️ Gmail Google
-          </Button>
-          <Button 
-            icon={<CalendarOutlined />} 
-            onClick={() => onSchedule?.(lead.id)}
-            disabled={!onSchedule}
-          >
-            📅 Agenda Google
-          </Button>
+        <Space
+          wrap
+          size={isMobile ? 6 : 10}
+          style={{ width: '100%', justifyContent: isMobile ? 'space-between' : 'flex-start' }}
+        >
+          <Tooltip title="Appeler avec Telnyx">
+            <Button
+              icon={<PhoneOutlined />}
+              onClick={() => onCall?.(lead.id)}
+              type="primary"
+              disabled={!onCall}
+            />
+          </Tooltip>
+          <Tooltip title="Gmail Google">
+            <Button
+              icon={<MailOutlined />}
+              onClick={() => onEmail?.(lead.id)}
+              disabled={!onEmail}
+            />
+          </Tooltip>
+          <Tooltip title="Agenda Google">
+            <Button
+              icon={<CalendarOutlined />}
+              onClick={() => onSchedule?.(lead.id)}
+              disabled={!onSchedule}
+            />
+          </Tooltip>
+          <Tooltip title="Ouvrir TBL">
+            <Button
+              icon={<FolderOpenOutlined />}
+              onClick={() => openTblDevis()}
+            />
+          </Tooltip>
           {onEdit && (
-            <Button icon={<EditOutlined />} onClick={() => onEdit(lead)}>
-              Modifier les informations
-            </Button>
+            <Tooltip title="Modifier">
+              <Button icon={<EditOutlined />} onClick={() => onEdit(lead)} />
+            </Tooltip>
           )}
         </Space>
       </Card>

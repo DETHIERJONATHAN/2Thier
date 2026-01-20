@@ -4136,8 +4136,8 @@ __export(api_server_clean_exports, {
 module.exports = __toCommonJS(api_server_clean_exports);
 var import_dotenv = __toESM(require("dotenv"), 1);
 var import_express97 = __toESM(require("express"), 1);
-var import_path7 = __toESM(require("path"), 1);
-var import_fs7 = __toESM(require("fs"), 1);
+var import_path8 = __toESM(require("path"), 1);
+var import_fs8 = __toESM(require("fs"), 1);
 var import_cors = __toESM(require("cors"), 1);
 var import_express_session = __toESM(require("express-session"), 1);
 var import_cookie_parser = __toESM(require("cookie-parser"), 1);
@@ -15276,7 +15276,113 @@ var settingsRoutes_default = router19;
 
 // src/routes/leadsRoutes.ts
 var import_express21 = require("express");
+var import_fs5 = __toESM(require("fs"), 1);
+var import_path4 = __toESM(require("path"), 1);
 init_prisma();
+
+// src/services/formResponsePdfGenerator.ts
+var import_pdfkit = __toESM(require("pdfkit"), 1);
+async function generateFormResponsePdf(data) {
+  return new Promise((resolve, reject) => {
+    try {
+      const sanitizeText2 = (input) => {
+        if (input === null || input === void 0) return "";
+        const raw = String(input);
+        return raw.normalize("NFKD").replace(new RegExp("\\p{Extended_Pictographic}", "gu"), "").replace(/[^\x09\x0A\x0D\x20-\x7E\u00A0-\u017F]/g, "").replace(/\s+/g, " ").trim();
+      };
+      const doc = new import_pdfkit.default({
+        size: "A4",
+        margin: 50,
+        info: {
+          Title: `R\xE9capitulatif - ${data.formName}`,
+          Author: "2Thier CRM",
+          Subject: `R\xE9ponses formulaire ${data.contact.email || "N/A"}`,
+          CreationDate: /* @__PURE__ */ new Date()
+        }
+      });
+      const chunks = [];
+      doc.on("data", (chunk) => chunks.push(chunk));
+      doc.on("end", () => resolve(Buffer.concat(chunks)));
+      doc.on("error", reject);
+      doc.fontSize(24).fillColor("#1890ff").text("R\xE9capitulatif du Formulaire", { align: "center" });
+      doc.moveDown(0.5);
+      doc.fontSize(14).fillColor("#333").text(sanitizeText2(data.formName), { align: "center" });
+      doc.moveDown(0.3);
+      doc.fontSize(10).fillColor("#888").text(`Soumis le ${data.submittedAt.toLocaleDateString("fr-BE", {
+        day: "2-digit",
+        month: "long",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit"
+      })}`, { align: "center" });
+      if (data.leadNumber) {
+        doc.text(`R\xE9f\xE9rence: ${data.leadNumber}`, { align: "center" });
+      }
+      doc.moveDown(1);
+      doc.fillColor("#1890ff").fontSize(14).text("Informations de Contact");
+      doc.moveDown(0.5);
+      doc.strokeColor("#e8e8e8").lineWidth(1).moveTo(50, doc.y).lineTo(545, doc.y).stroke();
+      doc.moveDown(0.5);
+      doc.fontSize(11).fillColor("#333");
+      const contact = data.contact;
+      const contactLines = [
+        contact.civility && `Civilit\xE9: ${contact.civility === "mme" ? "Madame" : "Monsieur"}`,
+        contact.firstName && contact.lastName && `Nom: ${contact.firstName} ${contact.lastName}`,
+        contact.email && `Email: ${contact.email}`,
+        contact.phone && `T\xE9l\xE9phone: ${contact.phone}`
+      ].filter(Boolean).map(sanitizeText2);
+      contactLines.forEach((line) => {
+        doc.text(line);
+        doc.moveDown(0.3);
+      });
+      doc.moveDown(1);
+      doc.fillColor("#1890ff").fontSize(14).text("R\xE9ponses au Questionnaire");
+      doc.moveDown(0.5);
+      doc.strokeColor("#e8e8e8").lineWidth(1).moveTo(50, doc.y).lineTo(545, doc.y).stroke();
+      doc.moveDown(0.5);
+      const sortedQuestions = [...data.questions].sort((a, b) => {
+        const keys = Object.keys(data.answers);
+        return keys.indexOf(a.questionKey) - keys.indexOf(b.questionKey);
+      });
+      for (const question of sortedQuestions) {
+        const answer = data.answers[question.questionKey];
+        if (answer === void 0 || answer === null || answer === "") continue;
+        if (["prenom", "nom", "email", "telephone", "civilite"].includes(question.questionKey)) continue;
+        if (doc.y > 700) {
+          doc.addPage();
+        }
+        const icon = sanitizeText2(question.icon || "") || "\u2022";
+        doc.fontSize(11).fillColor("#1890ff").text(`${icon} ${sanitizeText2(question.title)}`, { continued: false });
+        doc.moveDown(0.2);
+        let displayValue = "";
+        if (Array.isArray(answer)) {
+          const selectedLabels = answer.map((val) => {
+            const option = question.options?.find((o) => o.value === val);
+            return option ? `${sanitizeText2(option.icon || "")} ${sanitizeText2(option.label)}`.trim() : sanitizeText2(val);
+          });
+          displayValue = selectedLabels.join(", ");
+        } else if (question.options && question.questionType.includes("choice")) {
+          const option = question.options.find((o) => o.value === answer);
+          displayValue = option ? `${sanitizeText2(option.icon || "")} ${sanitizeText2(option.label)}`.trim() : sanitizeText2(answer);
+        } else {
+          displayValue = sanitizeText2(answer);
+        }
+        doc.fontSize(10).fillColor("#333").text(`   \u2192 ${displayValue}`);
+        doc.moveDown(0.5);
+      }
+      doc.moveDown(2);
+      doc.strokeColor("#e8e8e8").lineWidth(1).moveTo(50, doc.y).lineTo(545, doc.y).stroke();
+      doc.moveDown(0.5);
+      doc.fontSize(9).fillColor("#888").text("Document g\xE9n\xE9r\xE9 automatiquement par 2Thier CRM", { align: "center" });
+      doc.text(`${(/* @__PURE__ */ new Date()).toLocaleDateString("fr-BE")} - ${sanitizeText2(data.formSlug)}`, { align: "center" });
+      doc.end();
+    } catch (error) {
+      reject(error);
+    }
+  });
+}
+
+// src/routes/leadsRoutes.ts
 var router20 = (0, import_express21.Router)();
 router20.use(authMiddleware);
 router20.get("/", async (req2, res) => {
@@ -15607,6 +15713,100 @@ router20.get("/:id", async (req2, res) => {
     console.error("[LEADS] Erreur lors de la r\xE9cup\xE9ration du lead:", error);
     res.status(500).json({
       error: "Erreur lors de la r\xE9cup\xE9ration du lead",
+      message: error instanceof Error ? error.message : "Erreur inconnue"
+    });
+  }
+});
+router20.post("/:id/form-pdf/regenerate", async (req2, res) => {
+  try {
+    const authReq = req2;
+    const { id } = req2.params;
+    const organizationId = authReq.user?.organizationId;
+    const isSuperAdmin2 = authReq.user?.role === "super_admin" || authReq.user?.isSuperAdmin === true || authReq.user?.role?.toLowerCase().includes("super");
+    let whereCondition;
+    if (isSuperAdmin2) {
+      whereCondition = { id };
+    } else {
+      if (!organizationId) {
+        return res.status(400).json({ error: "Organisation non sp\xE9cifi\xE9e" });
+      }
+      whereCondition = { id, organizationId };
+    }
+    const lead = await db.lead.findFirst({ where: whereCondition });
+    if (!lead) {
+      return res.status(404).json({ error: "Lead non trouv\xE9 ou non autoris\xE9" });
+    }
+    const latestSubmission = await db.website_form_submissions.findFirst({
+      where: { leadId: lead.id },
+      orderBy: { createdAt: "desc" },
+      include: {
+        form: {
+          include: {
+            questions: {
+              orderBy: { order: "asc" }
+            }
+          }
+        }
+      }
+    });
+    if (!latestSubmission || !latestSubmission.form) {
+      return res.status(404).json({ error: "Aucune soumission de formulaire trouv\xE9e pour ce lead" });
+    }
+    const form = latestSubmission.form;
+    const pdfData = {
+      formName: form.name,
+      formSlug: form.slug,
+      submittedAt: latestSubmission.createdAt,
+      contact: {
+        firstName: lead.firstName || void 0,
+        lastName: lead.lastName || void 0,
+        email: lead.email || void 0,
+        phone: lead.phone || void 0,
+        civility: lead.data?.civility
+      },
+      answers: latestSubmission.formData || {},
+      questions: (form.questions || []).map((q) => ({
+        questionKey: q.questionKey,
+        title: q.title,
+        subtitle: q.subtitle || void 0,
+        icon: q.icon || void 0,
+        questionType: q.questionType,
+        options: q.options || void 0
+      })),
+      leadNumber: lead.leadNumber || void 0
+    };
+    const pdfBuffer = await generateFormResponsePdf(pdfData);
+    const uploadsDir2 = import_path4.default.join(process.cwd(), "public", "uploads", "form-responses");
+    if (!import_fs5.default.existsSync(uploadsDir2)) {
+      import_fs5.default.mkdirSync(uploadsDir2, { recursive: true });
+    }
+    const pdfFileName = `formulaire-${form.slug}-${lead.id.substring(0, 8)}-${Date.now()}.pdf`;
+    const pdfPath = import_path4.default.join(uploadsDir2, pdfFileName);
+    import_fs5.default.writeFileSync(pdfPath, pdfBuffer);
+    const pdfUrl = `/uploads/form-responses/${pdfFileName}`;
+    const existingData = typeof lead.data === "object" && lead.data ? lead.data : {};
+    const updatedLead = await db.lead.update({
+      where: { id: lead.id },
+      data: {
+        data: {
+          ...existingData,
+          formPdfUrl: pdfUrl,
+          formSlug: form.slug,
+          formName: form.name
+        }
+      }
+    });
+    return res.json({
+      success: true,
+      pdfUrl,
+      formName: form.name,
+      formSlug: form.slug,
+      leadId: updatedLead.id
+    });
+  } catch (error) {
+    console.error("[LEADS] Erreur r\xE9g\xE9n\xE9ration PDF formulaire:", error);
+    return res.status(500).json({
+      error: "Erreur lors de la r\xE9g\xE9n\xE9ration du PDF",
       message: error instanceof Error ? error.message : "Erreur inconnue"
     });
   }
@@ -21788,8 +21988,8 @@ var analytics_default = router38;
 
 // src/routes/ai.ts
 var import_express40 = __toESM(require("express"), 1);
-var import_fs5 = __toESM(require("fs"), 1);
-var import_path4 = __toESM(require("path"), 1);
+var import_fs6 = __toESM(require("fs"), 1);
+var import_path5 = __toESM(require("path"), 1);
 init_prisma();
 var import_crypto12 = require("crypto");
 var geminiSingleton = new GoogleGeminiService_default();
@@ -22510,22 +22710,22 @@ var __AI_FILE_SUMMARY_CACHE = {};
 var __AI_FILE_SUMMARY_TTL = 9e4;
 function __aiBuildCodeIndex() {
   if (__AI_CODE_INDEX) return __AI_CODE_INDEX;
-  const base = import_path4.default.join(process.cwd(), "src");
+  const base = import_path5.default.join(process.cwd(), "src");
   const acc = [];
   function walk(dir, depth = 0) {
     if (depth > 6) return;
     let entries = [];
     try {
-      entries = import_fs5.default.readdirSync(dir);
+      entries = import_fs6.default.readdirSync(dir);
     } catch {
       return;
     }
     for (const e of entries) {
-      const full = import_path4.default.join(dir, e);
+      const full = import_path5.default.join(dir, e);
       if (/node_modules|\.git|dist|build/.test(full)) continue;
       let st;
       try {
-        st = import_fs5.default.statSync(full);
+        st = import_fs6.default.statSync(full);
       } catch {
         continue;
       }
@@ -22543,8 +22743,8 @@ function __aiBuildSymbolIndex() {
   const m = {};
   for (const rel of idx.slice(0, 1200)) {
     try {
-      const abs2 = import_path4.default.join(process.cwd(), "src", rel);
-      const content = import_fs5.default.readFileSync(abs2, "utf8");
+      const abs2 = import_path5.default.join(process.cwd(), "src", rel);
+      const content = import_fs6.default.readFileSync(abs2, "utf8");
       const regexes = [
         /export\s+class\s+([A-Za-z0-9_]+)/g,
         /export\s+(?:async\s+)?function\s+([A-Za-z0-9_]+)/g,
@@ -22600,9 +22800,9 @@ function __aiSummarizeFile(rel) {
     const now = Date.now();
     const cached = __AI_FILE_SUMMARY_CACHE[rel];
     if (cached && now - cached.ts < __AI_FILE_SUMMARY_TTL) return cached.summary;
-    const abs2 = import_path4.default.join(process.cwd(), "src", rel);
-    if (!import_fs5.default.existsSync(abs2)) return null;
-    const content = import_fs5.default.readFileSync(abs2, "utf8");
+    const abs2 = import_path5.default.join(process.cwd(), "src", rel);
+    if (!import_fs6.default.existsSync(abs2)) return null;
+    const content = import_fs6.default.readFileSync(abs2, "utf8");
     const lines = content.split(/\r?\n/);
     const first = lines.slice(0, 80).join("\n");
     const importMatches = Array.from(content.matchAll(/import\s+[^;]+from\s+['"]([^'".][^'"/]*)['"]/g)).map((m) => m[1]).slice(0, 8);
@@ -22714,12 +22914,12 @@ Restitue: Points forts, Probl\xE8mes, Am\xE9liorations, Ajouts \xE0 envisager, \
     try {
       let resolvePageFile = function(name) {
         if (!name) return null;
-        const base = import_path4.default.join(process.cwd(), "src", "pages");
-        if (name.endsWith(".tsx") && import_fs5.default.existsSync(import_path4.default.join(process.cwd(), "src", name))) return name;
-        const candidate = import_path4.default.join(base, name.endsWith(".tsx") ? name : name + ".tsx");
-        if (import_fs5.default.existsSync(candidate)) return "pages/" + import_path4.default.basename(candidate);
+        const base = import_path5.default.join(process.cwd(), "src", "pages");
+        if (name.endsWith(".tsx") && import_fs6.default.existsSync(import_path5.default.join(process.cwd(), "src", name))) return name;
+        const candidate = import_path5.default.join(base, name.endsWith(".tsx") ? name : name + ".tsx");
+        if (import_fs6.default.existsSync(candidate)) return "pages/" + import_path5.default.basename(candidate);
         try {
-          const entries = import_fs5.default.readdirSync(base);
+          const entries = import_fs6.default.readdirSync(base);
           const hit = entries.find((e) => e.toLowerCase() === (name.toLowerCase().endsWith(".tsx") ? name.toLowerCase() : name.toLowerCase() + ".tsx"));
           if (hit) return "pages/" + hit;
         } catch {
@@ -22732,11 +22932,11 @@ Restitue: Points forts, Probl\xE8mes, Am\xE9liorations, Ajouts \xE0 envisager, \
       const lowerMsg = message.toLowerCase();
       const wantAnalysis = /(analyse|audite|qualité|amélior|refactor|optimis|structure|complexité|lisibilité|accessibilité|ux|ui)/i.test(message);
       let featureKey = null;
-      const featureMapPath = import_path4.default.join(process.cwd(), "src", "feature-map.json");
+      const featureMapPath = import_path5.default.join(process.cwd(), "src", "feature-map.json");
       let featureMap = null;
-      if (import_fs5.default.existsSync(featureMapPath)) {
+      if (import_fs6.default.existsSync(featureMapPath)) {
         try {
-          featureMap = JSON.parse(import_fs5.default.readFileSync(featureMapPath, "utf8"));
+          featureMap = JSON.parse(import_fs6.default.readFileSync(featureMapPath, "utf8"));
         } catch {
         }
       }
@@ -22757,14 +22957,14 @@ Restitue: Points forts, Probl\xE8mes, Am\xE9liorations, Ajouts \xE0 envisager, \
       if (maybePage) pagePath = resolvePageFile(maybePage);
       if (!pagePath && /(page|mailpage|googlemailpage|inbox)/i.test(message)) {
         const guess = ["pages/GoogleMailPageFixed_New.tsx", "pages/GoogleMailPageFixed.tsx", "pages/GoogleMailPage.tsx", "pages/MailPage.tsx"];
-        pagePath = guess.find((g) => import_fs5.default.existsSync(import_path4.default.join(process.cwd(), "src", g))) || null;
+        pagePath = guess.find((g) => import_fs6.default.existsSync(import_path5.default.join(process.cwd(), "src", g))) || null;
       }
       if ((wantAnalysis || featureKey || pagePath) && (featureKey || pagePath)) {
         autoAnalysis = {};
-        if (pagePath && import_fs5.default.existsSync(import_path4.default.join(process.cwd(), "src", pagePath))) {
+        if (pagePath && import_fs6.default.existsSync(import_path5.default.join(process.cwd(), "src", pagePath))) {
           try {
-            const absPage = import_path4.default.join(process.cwd(), "src", pagePath);
-            const content = import_fs5.default.readFileSync(absPage, "utf8");
+            const absPage = import_path5.default.join(process.cwd(), "src", pagePath);
+            const content = import_fs6.default.readFileSync(absPage, "utf8");
             const linesArr = content.split(/\r?\n/);
             const hooksCount = (content.match(/\buse(State|Effect|Memo|Callback|Ref|Context|Reducer)\b/g) || []).length;
             const useEffectCount = (content.match(/\buseEffect\b/g) || []).length;
@@ -22803,10 +23003,10 @@ Restitue: Points forts, Probl\xE8mes, Am\xE9liorations, Ajouts \xE0 envisager, \
             const files = [...def.primaryPages || [], ...def.relatedServices || []].filter(Boolean).slice(0, 30);
             let totalLines = 0, totalHooks = 0, i18nYes = 0, antdYes = 0, tailwindYes = 0, count = 0;
             for (const f of files) {
-              const absF = import_path4.default.join(process.cwd(), f);
-              if (!import_fs5.default.existsSync(absF)) continue;
+              const absF = import_path5.default.join(process.cwd(), f);
+              if (!import_fs6.default.existsSync(absF)) continue;
               count++;
-              const content = import_fs5.default.readFileSync(absF, "utf8");
+              const content = import_fs6.default.readFileSync(absF, "utf8");
               const linesArr = content.split(/\r?\n/);
               totalLines += linesArr.length;
               const hooksCount = (content.match(/\buse(State|Effect|Memo|Callback|Ref|Context|Reducer)\b/g) || []).length;
@@ -23543,8 +23743,8 @@ var ai_default = router39;
 
 // src/routes/ai-code.ts
 var import_express41 = __toESM(require("express"), 1);
-var import_fs6 = __toESM(require("fs"), 1);
-var import_path5 = __toESM(require("path"), 1);
+var import_fs7 = __toESM(require("fs"), 1);
+var import_path6 = __toESM(require("path"), 1);
 var import_crypto13 = __toESM(require("crypto"), 1);
 var router40 = import_express41.default.Router();
 router40.use(authenticateToken);
@@ -23579,13 +23779,13 @@ function ensureSuper(req2, res) {
 }
 function sanitizeRelative(p) {
   if (!p) return null;
-  const norm = import_path5.default.posix.normalize(p.replace(/\\/g, "/")).replace(/^\/+/, "");
+  const norm = import_path6.default.posix.normalize(p.replace(/\\/g, "/")).replace(/^\/+/, "");
   const base = norm.split("/")[0];
   if (!ALLOWED_ROOTS.includes(base)) return null;
   return norm;
 }
 function abs(rel) {
-  return import_path5.default.join(REPO_ROOT, rel);
+  return import_path6.default.join(REPO_ROOT, rel);
 }
 router40.get("/code/tree", (req2, res) => {
   if (!ensureSuper(req2, res)) return;
@@ -23593,16 +23793,16 @@ router40.get("/code/tree", (req2, res) => {
   if (!rel) return res.status(400).json({ success: false, error: "Chemin non autoris\xE9" });
   const depth = Math.min(4, Math.max(0, parseInt(String(req2.query.depth || "2"), 10) || 0));
   const target = abs(rel);
-  if (!import_fs6.default.existsSync(target)) return res.status(404).json({ success: false, error: "Chemin introuvable" });
+  if (!import_fs7.default.existsSync(target)) return res.status(404).json({ success: false, error: "Chemin introuvable" });
   function build(p, d) {
-    const stat = import_fs6.default.statSync(p);
-    const name = import_path5.default.basename(p);
+    const stat = import_fs7.default.statSync(p);
+    const name = import_path6.default.basename(p);
     const relPath = p.substring(REPO_ROOT.length + 1).replace(/\\/g, "/");
     if (stat.isDirectory()) {
       if (d >= depth) return { type: "dir", name, path: relPath };
       let children = [];
       try {
-        children = import_fs6.default.readdirSync(p).slice(0, 200).map((f) => build(import_path5.default.join(p, f), d + 1));
+        children = import_fs7.default.readdirSync(p).slice(0, 200).map((f) => build(import_path6.default.join(p, f), d + 1));
       } catch {
         children = [];
       }
@@ -23622,11 +23822,11 @@ router40.get("/code/file", (req2, res) => {
   const rel = sanitizeRelative(String(req2.query.path || ""));
   if (!rel) return res.status(400).json({ success: false, error: "Chemin non autoris\xE9" });
   const target = abs(rel);
-  if (!import_fs6.default.existsSync(target) || !import_fs6.default.statSync(target).isFile()) return res.status(404).json({ success: false, error: "Fichier introuvable" });
+  if (!import_fs7.default.existsSync(target) || !import_fs7.default.statSync(target).isFile()) return res.status(404).json({ success: false, error: "Fichier introuvable" });
   const offset = Math.max(0, parseInt(String(req2.query.offset || "0"), 10) || 0);
   const limit = Math.min(800, Math.max(50, parseInt(String(req2.query.limit || "400"), 10) || 400));
   try {
-    const content = import_fs6.default.readFileSync(target, "utf8");
+    const content = import_fs7.default.readFileSync(target, "utf8");
     const totalBytes = Buffer.byteLength(content, "utf8");
     const lines = content.split(/\r?\n/);
     const etag = 'W/"' + import_crypto13.default.createHash("sha256").update(content).digest("hex").slice(0, 16) + '"';
@@ -23650,10 +23850,10 @@ function buildFileIndex() {
   const acc = [];
   function walk(rel) {
     const full = abs(rel);
-    if (!import_fs6.default.existsSync(full)) return;
-    const stat = import_fs6.default.statSync(full);
+    if (!import_fs7.default.existsSync(full)) return;
+    const stat = import_fs7.default.statSync(full);
     if (stat.isDirectory()) {
-      const entries = import_fs6.default.readdirSync(full).slice(0, 500);
+      const entries = import_fs7.default.readdirSync(full).slice(0, 500);
       for (const e of entries) {
         const childRel = rel + "/" + e;
         if (/node_modules|\.git|dist|build/.test(childRel)) continue;
@@ -23679,7 +23879,7 @@ router40.get("/code/search", (req2, res) => {
   for (const f of files) {
     if (results.length >= max) break;
     try {
-      const content = import_fs6.default.readFileSync(abs(f), "utf8");
+      const content = import_fs7.default.readFileSync(abs(f), "utf8");
       const lines = content.split(/\r?\n/);
       for (let idx = 0; idx < lines.length && results.length < max; idx++) {
         const line = lines[idx];
@@ -23695,9 +23895,9 @@ router40.get("/code/summary", (req2, res) => {
   const rel = sanitizeRelative(String(req2.query.path || ""));
   if (!rel) return res.status(400).json({ success: false, error: "Chemin non autoris\xE9" });
   const target = abs(rel);
-  if (!import_fs6.default.existsSync(target) || !import_fs6.default.statSync(target).isFile()) return res.status(404).json({ success: false, error: "Fichier introuvable" });
+  if (!import_fs7.default.existsSync(target) || !import_fs7.default.statSync(target).isFile()) return res.status(404).json({ success: false, error: "Fichier introuvable" });
   try {
-    const content = import_fs6.default.readFileSync(target, "utf8");
+    const content = import_fs7.default.readFileSync(target, "utf8");
     const lines = content.split(/\r?\n/);
     const totalBytes = Buffer.byteLength(content, "utf8");
     const importRegex = /import\s+[^;]*?from\s+['"]([^'";]+)['"]/g;
@@ -23730,7 +23930,7 @@ router40.get("/code/summary", (req2, res) => {
       exports: named.slice(0, 50),
       dependencies: deps.slice(0, 100),
       sizeCategory: totalBytes > MAX_FILE_SIZE_BYTES ? "large" : "normal",
-      lastModified: import_fs6.default.statSync(target).mtime
+      lastModified: import_fs7.default.statSync(target).mtime
     };
     recordRecent({ path: rel, at: Date.now(), lines: lines.length });
     res.json({ success: true, data: summary });
@@ -23745,11 +23945,11 @@ router40.get("/code/diff", (req2, res) => {
   if (!oldRel || !newRel) return res.status(400).json({ success: false, error: "Param\xE8tres old et new requis" });
   const oldPath = abs(oldRel);
   const newPath = abs(newRel);
-  if (!import_fs6.default.existsSync(oldPath) || !import_fs6.default.statSync(oldPath).isFile()) return res.status(404).json({ success: false, error: "Ancien fichier introuvable" });
-  if (!import_fs6.default.existsSync(newPath) || !import_fs6.default.statSync(newPath).isFile()) return res.status(404).json({ success: false, error: "Nouveau fichier introuvable" });
+  if (!import_fs7.default.existsSync(oldPath) || !import_fs7.default.statSync(oldPath).isFile()) return res.status(404).json({ success: false, error: "Ancien fichier introuvable" });
+  if (!import_fs7.default.existsSync(newPath) || !import_fs7.default.statSync(newPath).isFile()) return res.status(404).json({ success: false, error: "Nouveau fichier introuvable" });
   try {
-    const oldLines = import_fs6.default.readFileSync(oldPath, "utf8").split(/\r?\n/);
-    const newLines = import_fs6.default.readFileSync(newPath, "utf8").split(/\r?\n/);
+    const oldLines = import_fs7.default.readFileSync(oldPath, "utf8").split(/\r?\n/);
+    const newLines = import_fs7.default.readFileSync(newPath, "utf8").split(/\r?\n/);
     const diffs = [];
     const max = Math.max(oldLines.length, newLines.length);
     const maxOutput = 800;
@@ -23781,14 +23981,14 @@ router40.get("/code/analyze", (req2, res) => {
   const rel = sanitizeRelative(String(req2.query.path || ""));
   if (!rel) return res.status(400).json({ success: false, error: "Chemin non autoris\xE9" });
   const target = abs(rel);
-  if (!import_fs6.default.existsSync(target) || !import_fs6.default.statSync(target).isFile()) return res.status(404).json({ success: false, error: "Fichier introuvable" });
+  if (!import_fs7.default.existsSync(target) || !import_fs7.default.statSync(target).isFile()) return res.status(404).json({ success: false, error: "Fichier introuvable" });
   try {
     const cached = ANALYZE_CACHE[rel];
     const now = Date.now();
     if (cached && now - cached.ts < ANALYZE_TTL_MS) {
       return res.json({ success: true, data: cached.data, meta: { cached: true, ageMs: now - cached.ts } });
     }
-    const content = import_fs6.default.readFileSync(target, "utf8");
+    const content = import_fs7.default.readFileSync(target, "utf8");
     const lines = content.split(/\r?\n/);
     const size = lines.length;
     const jsx = /<[^>]+>/g.test(content) || rel.endsWith(".tsx");
@@ -23895,15 +24095,15 @@ router40.get("/code/feature/analyze", (req2, res) => {
   const feature = String(req2.query.feature || "").trim();
   if (!feature) return res.status(400).json({ success: false, error: "Param\xE8tre feature requis" });
   const fmapPath = abs("src/feature-map.json");
-  if (!import_fs6.default.existsSync(fmapPath)) return res.status(500).json({ success: false, error: "feature-map.json manquant" });
+  if (!import_fs7.default.existsSync(fmapPath)) return res.status(500).json({ success: false, error: "feature-map.json manquant" });
   try {
     let analyzeFile = function(rel) {
       const target = abs(rel);
-      if (!import_fs6.default.existsSync(target) || !import_fs6.default.statSync(target).isFile()) {
+      if (!import_fs7.default.existsSync(target) || !import_fs7.default.statSync(target).isFile()) {
         errors.push({ path: rel, error: "introuvable" });
         return;
       }
-      const content = import_fs6.default.readFileSync(target, "utf8");
+      const content = import_fs7.default.readFileSync(target, "utf8");
       const lines = content.split(/\r?\n/);
       const jsx = /<[^>]+>/g.test(content) || rel.endsWith(".tsx");
       const hooksCount = (content.match(/\buse(State|Effect|Memo|Callback|Ref|Context|Reducer)\b/g) || []).length;
@@ -23927,7 +24127,7 @@ router40.get("/code/feature/analyze", (req2, res) => {
         importAntd
       });
     };
-    const fmap = JSON.parse(import_fs6.default.readFileSync(fmapPath, "utf8"));
+    const fmap = JSON.parse(import_fs7.default.readFileSync(fmapPath, "utf8"));
     const def = fmap[feature];
     if (!def) return res.status(404).json({ success: false, error: "Feature inconnue" });
     const files = [...def.primaryPages || [], ...def.relatedServices || []].filter(Boolean);
@@ -23971,7 +24171,7 @@ router40.post("/code/analyze/batch", (req2, res) => {
       return;
     }
     const full = abs(safe);
-    if (!import_fs6.default.existsSync(full) || !import_fs6.default.statSync(full).isFile()) {
+    if (!import_fs7.default.existsSync(full) || !import_fs7.default.statSync(full).isFile()) {
       errors.push({ path: rel, error: "introuvable" });
       return;
     }
@@ -23981,7 +24181,7 @@ router40.post("/code/analyze/batch", (req2, res) => {
       return;
     }
     try {
-      const content = import_fs6.default.readFileSync(full, "utf8");
+      const content = import_fs7.default.readFileSync(full, "utf8");
       const lines = content.split(/\r?\n/);
       const hooksCount = (content.match(/\buse(State|Effect|Memo|Callback|Ref|Context|Reducer)\b/g) || []).length;
       const useEffectCount = (content.match(/\buseEffect\b/g) || []).length;
@@ -51583,10 +51783,10 @@ init_database();
 var import_nanoid2 = require("nanoid");
 
 // src/services/documentPdfRenderer.ts
-var import_pdfkit = __toESM(require("pdfkit"), 1);
+var import_pdfkit2 = __toESM(require("pdfkit"), 1);
 var import_stream = require("stream");
-var path6 = __toESM(require("path"), 1);
-var fs7 = __toESM(require("fs"), 1);
+var path7 = __toESM(require("path"), 1);
+var fs8 = __toESM(require("fs"), 1);
 
 // src/services/textAlignmentUtils.ts
 function calculateVerticalCenterOffset(actualHeight, textHeight) {
@@ -51639,7 +51839,7 @@ var DocumentPdfRenderer = class {
     this.theme = { ...DEFAULT_THEME, ...context.template.theme };
     this.contentWidth = this.pageWidth - this.margin * 2;
     this.currentY = this.margin;
-    this.doc = new import_pdfkit.default({
+    this.doc = new import_pdfkit2.default({
       size: "A4",
       margins: {
         top: this.margin,
@@ -52188,8 +52388,8 @@ var DocumentPdfRenderer = class {
           this.renderImagePlaceholder(x, y, width, height, "Base64 vide");
         }
       } else if (imageUrl.startsWith("/uploads/") || imageUrl.startsWith("uploads/")) {
-        const localPath = path6.join(process.cwd(), "public", imageUrl);
-        if (fs7.existsSync(localPath)) {
+        const localPath = path7.join(process.cwd(), "public", imageUrl);
+        if (fs8.existsSync(localPath)) {
           this.doc.image(localPath, x, y, imageOptions);
         } else {
           console.warn(`\u{1F4C4} [PDF] Image locale non trouv\xE9e: ${localPath}`);
@@ -52243,9 +52443,9 @@ var DocumentPdfRenderer = class {
           }
           console.warn(`\u{1F4C4} [PDF] BACKGROUND: \u26A0\uFE0F pas de donn\xE9es base64`);
         } else if (imageUrl.startsWith("/uploads/") || imageUrl.startsWith("uploads/")) {
-          const localPath = path6.join(process.cwd(), "public", imageUrl);
-          if (fs7.existsSync(localPath)) {
-            this.drawBackgroundImage(fs7.readFileSync(localPath), x, y, width, height);
+          const localPath = path7.join(process.cwd(), "public", imageUrl);
+          if (fs8.existsSync(localPath)) {
+            this.drawBackgroundImage(fs8.readFileSync(localPath), x, y, width, height);
             return;
           }
           console.warn(`\u{1F4C4} [PDF] Image locale non trouv\xE9e: ${localPath}`);
@@ -58503,14 +58703,14 @@ var contact_form_default = router84;
 // src/api/image-upload.ts
 var import_express87 = require("express");
 var import_multer2 = __toESM(require("multer"), 1);
-var import_path6 = __toESM(require("path"), 1);
+var import_path7 = __toESM(require("path"), 1);
 var import_promises = __toESM(require("fs/promises"), 1);
 init_database();
 var router85 = (0, import_express87.Router)();
 var prisma47 = db;
 var storage2 = import_multer2.default.diskStorage({
   destination: async (req2, file, cb) => {
-    const uploadDir = import_path6.default.join(process.cwd(), "public", "uploads", "websites");
+    const uploadDir = import_path7.default.join(process.cwd(), "public", "uploads", "websites");
     await import_promises.default.mkdir(uploadDir, { recursive: true });
     cb(null, uploadDir);
   },
@@ -65322,107 +65522,8 @@ var website_forms_default = router92;
 var import_express96 = require("express");
 init_database();
 var import_uuid6 = require("uuid");
-
-// src/services/formResponsePdfGenerator.ts
-var import_pdfkit2 = __toESM(require("pdfkit"), 1);
-async function generateFormResponsePdf(data) {
-  return new Promise((resolve, reject) => {
-    try {
-      const doc = new import_pdfkit2.default({
-        size: "A4",
-        margin: 50,
-        info: {
-          Title: `R\xE9capitulatif - ${data.formName}`,
-          Author: "2Thier CRM",
-          Subject: `R\xE9ponses formulaire ${data.contact.email || "N/A"}`,
-          CreationDate: /* @__PURE__ */ new Date()
-        }
-      });
-      const chunks = [];
-      doc.on("data", (chunk) => chunks.push(chunk));
-      doc.on("end", () => resolve(Buffer.concat(chunks)));
-      doc.on("error", reject);
-      doc.fontSize(24).fillColor("#1890ff").text("\u{1F4CB} R\xE9capitulatif du Formulaire", { align: "center" });
-      doc.moveDown(0.5);
-      doc.fontSize(14).fillColor("#333").text(data.formName, { align: "center" });
-      doc.moveDown(0.3);
-      doc.fontSize(10).fillColor("#888").text(`Soumis le ${data.submittedAt.toLocaleDateString("fr-BE", {
-        day: "2-digit",
-        month: "long",
-        year: "numeric",
-        hour: "2-digit",
-        minute: "2-digit"
-      })}`, { align: "center" });
-      if (data.leadNumber) {
-        doc.text(`R\xE9f\xE9rence: ${data.leadNumber}`, { align: "center" });
-      }
-      doc.moveDown(1);
-      doc.fillColor("#1890ff").fontSize(14).text("\u{1F464} Informations de Contact");
-      doc.moveDown(0.5);
-      doc.strokeColor("#e8e8e8").lineWidth(1).moveTo(50, doc.y).lineTo(545, doc.y).stroke();
-      doc.moveDown(0.5);
-      doc.fontSize(11).fillColor("#333");
-      const contact = data.contact;
-      const contactLines = [
-        contact.civility && `Civilit\xE9: ${contact.civility === "mme" ? "Madame" : "Monsieur"}`,
-        contact.firstName && contact.lastName && `Nom: ${contact.firstName} ${contact.lastName}`,
-        contact.email && `Email: ${contact.email}`,
-        contact.phone && `T\xE9l\xE9phone: ${contact.phone}`
-      ].filter(Boolean);
-      contactLines.forEach((line) => {
-        doc.text(line);
-        doc.moveDown(0.3);
-      });
-      doc.moveDown(1);
-      doc.fillColor("#1890ff").fontSize(14).text("\u{1F4DD} R\xE9ponses au Questionnaire");
-      doc.moveDown(0.5);
-      doc.strokeColor("#e8e8e8").lineWidth(1).moveTo(50, doc.y).lineTo(545, doc.y).stroke();
-      doc.moveDown(0.5);
-      const sortedQuestions = [...data.questions].sort((a, b) => {
-        const keys = Object.keys(data.answers);
-        return keys.indexOf(a.questionKey) - keys.indexOf(b.questionKey);
-      });
-      for (const question of sortedQuestions) {
-        const answer = data.answers[question.questionKey];
-        if (answer === void 0 || answer === null || answer === "") continue;
-        if (["prenom", "nom", "email", "telephone", "civilite"].includes(question.questionKey)) continue;
-        if (doc.y > 700) {
-          doc.addPage();
-        }
-        const icon = question.icon || "\u2022";
-        doc.fontSize(11).fillColor("#1890ff").text(`${icon} ${question.title}`, { continued: false });
-        doc.moveDown(0.2);
-        let displayValue = "";
-        if (Array.isArray(answer)) {
-          const selectedLabels = answer.map((val) => {
-            const option = question.options?.find((o) => o.value === val);
-            return option ? `${option.icon || ""} ${option.label}`.trim() : val;
-          });
-          displayValue = selectedLabels.join(", ");
-        } else if (question.options && question.questionType.includes("choice")) {
-          const option = question.options.find((o) => o.value === answer);
-          displayValue = option ? `${option.icon || ""} ${option.label}`.trim() : String(answer);
-        } else {
-          displayValue = String(answer);
-        }
-        doc.fontSize(10).fillColor("#333").text(`   \u2192 ${displayValue}`);
-        doc.moveDown(0.5);
-      }
-      doc.moveDown(2);
-      doc.strokeColor("#e8e8e8").lineWidth(1).moveTo(50, doc.y).lineTo(545, doc.y).stroke();
-      doc.moveDown(0.5);
-      doc.fontSize(9).fillColor("#888").text("Document g\xE9n\xE9r\xE9 automatiquement par 2Thier CRM", { align: "center" });
-      doc.text(`${(/* @__PURE__ */ new Date()).toLocaleDateString("fr-BE")} - ${data.formSlug}`, { align: "center" });
-      doc.end();
-    } catch (error) {
-      reject(error);
-    }
-  });
-}
-
-// src/routes/public-forms.ts
-var fs9 = __toESM(require("fs"), 1);
-var path8 = __toESM(require("path"), 1);
+var fs10 = __toESM(require("fs"), 1);
+var path9 = __toESM(require("path"), 1);
 var router93 = (0, import_express96.Router)();
 router93.get("/:slug", async (req2, res) => {
   try {
@@ -65683,8 +65784,39 @@ router93.post("/:slug/submit", async (req2, res) => {
       metadata
       // { utmSource, utmMedium, utmCampaign, referrer }
     } = req2.body;
+    const normalizeString = (value) => {
+      if (value === null || value === void 0) return "";
+      if (Array.isArray(value)) return value.map((v) => String(v)).join(" ").trim();
+      return String(value).trim();
+    };
+    const extractFromFormData = (keys) => {
+      if (!formData) return "";
+      const direct = formData;
+      for (const key2 of keys) {
+        const directValue = normalizeString(direct[key2]);
+        if (directValue) return directValue;
+      }
+      const formDataObj = formData;
+      for (const stepValue of Object.values(formDataObj)) {
+        if (stepValue && typeof stepValue === "object" && !Array.isArray(stepValue)) {
+          for (const key2 of keys) {
+            const nestedValue = normalizeString(stepValue[key2]);
+            if (nestedValue) return nestedValue;
+          }
+        }
+      }
+      return "";
+    };
+    const normalizedContact = {
+      firstName: normalizeString(contact?.firstName) || extractFromFormData(["firstName", "prenom", "pr\xE9nom"]),
+      lastName: normalizeString(contact?.lastName) || extractFromFormData(["lastName", "nom"]),
+      email: normalizeString(contact?.email) || extractFromFormData(["email", "mail", "e-mail"]),
+      phone: normalizeString(contact?.phone) || extractFromFormData(["phone", "telephone", "t\xE9l\xE9phone", "gsm", "mobile"]),
+      address: extractFromFormData(["address", "adresse", "street", "rue"]),
+      civility: normalizeString(contact?.civility) || extractFromFormData(["civilite", "civility"])
+    };
     console.log("\u{1F4CB} [PublicForms] SUBMIT form:", slug);
-    console.log("\u{1F4CB} [PublicForms] Contact:", contact?.email);
+    console.log("\u{1F4CB} [PublicForms] Contact:", normalizedContact.email);
     const form = await db.website_forms.findFirst({
       where: { slug, isActive: true },
       include: {
@@ -65701,14 +65833,14 @@ router93.post("/:slug/submit", async (req2, res) => {
       return res.status(404).json({ error: "Formulaire non trouv\xE9 ou inactif" });
     }
     console.log("\u{1F4CB} [PublicForms] Form found:", form.name);
-    if (!contact?.email) {
+    if (!normalizedContact.email) {
       return res.status(400).json({ error: "L'email est requis" });
     }
     const today = /* @__PURE__ */ new Date();
     today.setHours(0, 0, 0, 0);
     const existingLead = await db.lead.findFirst({
       where: {
-        email: contact.email,
+        email: normalizedContact.email,
         organizationId: form.organizationId,
         createdAt: { gte: today }
       }
@@ -65720,9 +65852,19 @@ router93.post("/:slug/submit", async (req2, res) => {
       await db.lead.update({
         where: { id: leadId },
         data: {
-          firstName: contact.firstName || existingLead.firstName,
-          lastName: contact.lastName || existingLead.lastName,
-          phone: contact.phone || existingLead.phone,
+          firstName: normalizedContact.firstName || existingLead.firstName,
+          lastName: normalizedContact.lastName || existingLead.lastName,
+          phone: normalizedContact.phone || existingLead.phone,
+          email: normalizedContact.email || existingLead.email,
+          data: {
+            ...existingLead.data && typeof existingLead.data === "object" ? existingLead.data : {},
+            email: normalizedContact.email || void 0,
+            phone: normalizedContact.phone || void 0,
+            firstName: normalizedContact.firstName || void 0,
+            lastName: normalizedContact.lastName || void 0,
+            address: normalizedContact.address || void 0,
+            civility: normalizedContact.civility || void 0
+          },
           updatedAt: /* @__PURE__ */ new Date()
         }
       });
@@ -65740,17 +65882,27 @@ router93.post("/:slug/submit", async (req2, res) => {
         data: {
           id: leadId,
           organizationId: form.organizationId,
-          firstName: contact.firstName || "",
-          lastName: contact.lastName || "",
-          email: contact.email,
-          phone: contact.phone || null,
+          firstName: normalizedContact.firstName || "",
+          lastName: normalizedContact.lastName || "",
+          email: normalizedContact.email,
+          phone: normalizedContact.phone || null,
           company: contact.company || null,
+          // Pas de colonne address dédiée, stocker dans data uniquement
           source: "website_form",
           status: "nouveau",
           statusId: defaultStatus?.id || null,
           leadNumber,
           notes: `Lead cr\xE9\xE9 depuis le formulaire "${form.name}"`,
-          data: { formSlug: slug, formName: form.name },
+          data: {
+            formSlug: slug,
+            formName: form.name,
+            email: normalizedContact.email || void 0,
+            phone: normalizedContact.phone || void 0,
+            firstName: normalizedContact.firstName || void 0,
+            lastName: normalizedContact.lastName || void 0,
+            address: normalizedContact.address || void 0,
+            civility: normalizedContact.civility || void 0
+          },
           createdAt: now,
           updatedAt: now
         }
@@ -65858,11 +66010,11 @@ router93.post("/:slug/submit", async (req2, res) => {
         formSlug: slug,
         submittedAt: /* @__PURE__ */ new Date(),
         contact: {
-          firstName: contact.firstName,
-          lastName: contact.lastName,
-          email: contact.email,
-          phone: contact.phone,
-          civility: contact.civility
+          firstName: normalizedContact.firstName,
+          lastName: normalizedContact.lastName,
+          email: normalizedContact.email,
+          phone: normalizedContact.phone,
+          civility: normalizedContact.civility
         },
         answers: formData || {},
         questions: (form.questions || []).map((q) => ({
@@ -65876,13 +66028,13 @@ router93.post("/:slug/submit", async (req2, res) => {
         leadNumber: existingLead ? void 0 : `LEAD-${(await db.lead.count({ where: { organizationId: form.organizationId } })).toString().padStart(5, "0")}`
       };
       const pdfBuffer = await generateFormResponsePdf(pdfData);
-      const uploadsDir2 = path8.join(process.cwd(), "public", "uploads", "form-responses");
-      if (!fs9.existsSync(uploadsDir2)) {
-        fs9.mkdirSync(uploadsDir2, { recursive: true });
+      const uploadsDir2 = path9.join(process.cwd(), "public", "uploads", "form-responses");
+      if (!fs10.existsSync(uploadsDir2)) {
+        fs10.mkdirSync(uploadsDir2, { recursive: true });
       }
       const pdfFileName = `formulaire-${slug}-${leadId.substring(0, 8)}-${Date.now()}.pdf`;
-      const pdfPath = path8.join(uploadsDir2, pdfFileName);
-      fs9.writeFileSync(pdfPath, pdfBuffer);
+      const pdfPath = path9.join(uploadsDir2, pdfFileName);
+      fs10.writeFileSync(pdfPath, pdfBuffer);
       pdfUrl = `/uploads/form-responses/${pdfFileName}`;
       await db.lead.update({
         where: { id: leadId },
@@ -66727,7 +66879,7 @@ app.use((0, import_express_session.default)({
   // TODO: Ajouter un store persistant en production
 }));
 console.log("\u2705 [ENTERPRISE-SECURITY] Configuration s\xE9curit\xE9 niveau Enterprise activ\xE9e");
-var uploadsDir = import_path7.default.resolve(process.cwd(), "public", "uploads");
+var uploadsDir = import_path8.default.resolve(process.cwd(), "public", "uploads");
 app.use("/uploads", (req2, res, next) => {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "GET, OPTIONS");
@@ -66793,20 +66945,20 @@ app.get("/api/health/db", async (_req, res) => {
 app.use(detectWebsite);
 app.use(websiteInterceptor);
 if (process.env.NODE_ENV === "production") {
-  const distDir = import_path7.default.resolve(process.cwd(), "dist");
-  const indexHtml = import_path7.default.join(distDir, "index.html");
-  if (import_fs7.default.existsSync(indexHtml)) {
+  const distDir = import_path8.default.resolve(process.cwd(), "dist");
+  const indexHtml = import_path8.default.join(distDir, "index.html");
+  if (import_fs8.default.existsSync(indexHtml)) {
     console.log("\u{1F5C2}\uFE0F [STATIC] Distribution front d\xE9tect\xE9e, activation du serveur statique");
-    const assetsDir = import_path7.default.join(distDir, "assets");
+    const assetsDir = import_path8.default.join(distDir, "assets");
     app.use("/assets", import_express97.default.static(assetsDir, {
       setHeaders: (res) => {
         res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
       }
     }));
     app.get(/^\/[^/]+\.(png|jpg|jpeg|gif|svg|ico|webp|js|css|woff|woff2|ttf|eot|json|webmanifest|html|txt|xml)$/i, (req2, res, next) => {
-      const filePath = import_path7.default.join(distDir, req2.path);
-      if (import_fs7.default.existsSync(filePath)) {
-        const ext = import_path7.default.extname(req2.path).toLowerCase();
+      const filePath = import_path8.default.join(distDir, req2.path);
+      if (import_fs8.default.existsSync(filePath)) {
+        const ext = import_path8.default.extname(req2.path).toLowerCase();
         const mimeTypes = {
           ".png": "image/png",
           ".jpg": "image/jpeg",
@@ -66837,19 +66989,19 @@ if (process.env.NODE_ENV === "production") {
       next();
     });
     app.get(/^\/pwa-.*/, (req2, res) => {
-      const filePath = import_path7.default.join(distDir, req2.path);
-      if (import_fs7.default.existsSync(filePath)) {
+      const filePath = import_path8.default.join(distDir, req2.path);
+      if (import_fs8.default.existsSync(filePath)) {
         res.sendFile(filePath);
       } else {
         res.status(404).end();
       }
     });
-    app.get("/favicon.ico", (req2, res) => res.sendFile(import_path7.default.join(distDir, "favicon.ico")));
-    app.get("/manifest.json", (req2, res) => res.sendFile(import_path7.default.join(distDir, "manifest.json")));
-    app.get("/manifest.webmanifest", (req2, res) => res.sendFile(import_path7.default.join(distDir, "manifest.webmanifest")));
+    app.get("/favicon.ico", (req2, res) => res.sendFile(import_path8.default.join(distDir, "favicon.ico")));
+    app.get("/manifest.json", (req2, res) => res.sendFile(import_path8.default.join(distDir, "manifest.json")));
+    app.get("/manifest.webmanifest", (req2, res) => res.sendFile(import_path8.default.join(distDir, "manifest.webmanifest")));
     app.get("/registerSW.js", (req2, res) => {
-      const swPath = import_path7.default.join(distDir, "registerSW.js");
-      if (import_fs7.default.existsSync(swPath)) {
+      const swPath = import_path8.default.join(distDir, "registerSW.js");
+      if (import_fs8.default.existsSync(swPath)) {
         res.setHeader("Content-Type", "application/javascript");
         res.sendFile(swPath);
       } else {
@@ -66857,8 +67009,8 @@ if (process.env.NODE_ENV === "production") {
       }
     });
     app.get("/sw.js", (req2, res) => {
-      const swPath = import_path7.default.join(distDir, "sw.js");
-      if (import_fs7.default.existsSync(swPath)) {
+      const swPath = import_path8.default.join(distDir, "sw.js");
+      if (import_fs8.default.existsSync(swPath)) {
         res.setHeader("Content-Type", "application/javascript");
         res.sendFile(swPath);
       } else {
@@ -66866,8 +67018,8 @@ if (process.env.NODE_ENV === "production") {
       }
     });
     app.get(/^\/workbox-.*\.js$/, (req2, res) => {
-      const filePath = import_path7.default.join(distDir, req2.path);
-      if (import_fs7.default.existsSync(filePath)) {
+      const filePath = import_path8.default.join(distDir, req2.path);
+      if (import_fs8.default.existsSync(filePath)) {
         res.setHeader("Content-Type", "application/javascript");
         res.sendFile(filePath);
       } else {
@@ -66875,8 +67027,8 @@ if (process.env.NODE_ENV === "production") {
       }
     });
     app.get("/env-config.js", (req2, res) => {
-      const envPath = import_path7.default.join(distDir, "env-config.js");
-      if (import_fs7.default.existsSync(envPath)) {
+      const envPath = import_path8.default.join(distDir, "env-config.js");
+      if (import_fs8.default.existsSync(envPath)) {
         res.setHeader("Content-Type", "application/javascript");
         res.sendFile(envPath);
       } else {
@@ -66917,13 +67069,13 @@ app.get("/api/root-info", (_req, res) => {
   });
 });
 app.get("/api/debug/static-status", (_req, res) => {
-  const distDir = import_path7.default.resolve(process.cwd(), "dist");
-  const indexHtml = import_path7.default.join(distDir, "index.html");
+  const distDir = import_path8.default.resolve(process.cwd(), "dist");
+  const indexHtml = import_path8.default.join(distDir, "index.html");
   res.json({
     env: process.env.NODE_ENV,
-    distExists: import_fs7.default.existsSync(distDir),
-    indexExists: import_fs7.default.existsSync(indexHtml),
-    served: process.env.NODE_ENV === "production" && import_fs7.default.existsSync(indexHtml)
+    distExists: import_fs8.default.existsSync(distDir),
+    indexExists: import_fs8.default.existsSync(indexHtml),
+    served: process.env.NODE_ENV === "production" && import_fs8.default.existsSync(indexHtml)
   });
 });
 var errorHandler = (err, req2, res, next) => {

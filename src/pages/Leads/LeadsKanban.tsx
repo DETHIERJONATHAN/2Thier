@@ -1,33 +1,74 @@
 ﻿import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { Card, Tag, Button, Typography, Row, Col, Badge, Spin, message, Alert } from 'antd';
+import { Button, Spin, message, Alert, Avatar, Popconfirm, Tooltip, Grid, Modal, Select, App } from 'antd';
+import * as XLSX from 'xlsx';
 import { 
-  PhoneOutlined, 
-  MailOutlined, 
-  CalendarOutlined,
   ClockCircleOutlined,
+  MoreOutlined,
+  PlusOutlined,
+  EditOutlined,
+  DeleteOutlined,
+  GlobalOutlined,
   UserOutlined,
-  FireOutlined,
-  ExclamationCircleOutlined,
+  LinkOutlined,
+  FilterOutlined,
+  RobotOutlined,
+  WarningOutlined,
   CheckCircleOutlined,
-  EyeOutlined
+  DownloadOutlined
 } from '@ant-design/icons';
-import { DndProvider, useDrag, useDrop } from 'react-dnd';
+import { DndProvider, useDrag, useDrop, useDragLayer } from 'react-dnd';
 import { HTML5Backend } from 'react-dnd-html5-backend';
+import { TouchBackend } from 'react-dnd-touch-backend';
+import { MultiBackend, TouchTransition, MouseTransition } from 'react-dnd-multi-backend';
 import { useAuthenticatedApi } from '../../hooks/useAuthenticatedApi';
 import { useAuth } from '../../auth/useAuth';
 import { useLeadStatuses } from '../../hooks/useLeadStatuses';
+import CreateLeadModal from '../../components/leads/CreateLeadModal';
 import { 
   calculateLeadTimeline, 
   getLeadPriority, 
   getTimelineColor
 } from '../../utils/leadTimeline';
+
+// 🎯 Configuration MultiBackend pour Desktop (HTML5) + Mobile (Touch)
+const HTML5toTouch = {
+  backends: [
+    {
+      id: 'html5',
+      backend: HTML5Backend,
+      transition: MouseTransition,
+    },
+    {
+      id: 'touch',
+      backend: TouchBackend,
+      options: {
+        enableMouseEvents: false, // Désactivé car HTML5Backend gère la souris
+        delayTouchStart: 150, // Délai court pour mobile
+      },
+      preview: true,
+      transition: TouchTransition,
+    },
+  ],
+};
 import type { Lead } from '../../types/leads';
 import { getErrorMessage, getErrorResponseDetails } from '../../utils/errorHandling';
 
-const { Title, Text } = Typography;
 
 // Types pour le drag & drop
 const ITEM_TYPE = 'LEAD_CARD';
+
+const hexToRgba = (hex: string, alpha: number) => {
+  const normalizedHex = hex.replace('#', '');
+  if (normalizedHex.length !== 6) return `rgba(24, 144, 255, ${alpha})`;
+  const r = parseInt(normalizedHex.slice(0, 2), 16);
+  const g = parseInt(normalizedHex.slice(2, 4), 16);
+  const b = parseInt(normalizedHex.slice(4, 6), 16);
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+};
+
+const getColumnHeaderBackground = (color: string) => (
+  `linear-gradient(135deg, ${hexToRgba(color, 0.16)}, ${hexToRgba(color, 0.04)})`
+);
 
 interface DragItem {
   id: string;
@@ -40,8 +81,10 @@ interface LeadsKanbanProps {
   onCallLead: (leadId: string) => void;
   onEmailLead: (leadId: string) => void;
   onScheduleLead: (leadId: string) => void;
+  onEditLead?: (leadId: string) => void;
+  onDeleteLead?: (leadId: string) => void;
   refreshTrigger?: number;
-  onLeadUpdated?: () => void; // 🔄 Nouveau callback pour notifier les mises à jour
+  onLeadUpdated?: () => void;
 }
 
 
@@ -54,326 +97,394 @@ interface LeadCardProps {
   onCall: () => void;
   onEmail: () => void;
   onSchedule: () => void;
+  onEdit?: () => void;
+  onDelete?: () => void;
+  onDragStart?: () => void;
+  onDragEnd?: () => void;
 }
 
-const LeadCard: React.FC<LeadCardProps> = ({ lead, onView, onCall, onEmail, onSchedule }) => {
-  // Utilisation des utilitaires pour les couleurs et priorités
+// 🎯 Custom Drag Layer pour afficher la carte pendant le drag sur mobile
+const CustomDragLayer: React.FC = () => {
+  const { isDragging, item, currentOffset } = useDragLayer((monitor) => ({
+    item: monitor.getItem(),
+    currentOffset: monitor.getSourceClientOffset(),
+    isDragging: monitor.isDragging(),
+  }));
+
+  if (!isDragging || !currentOffset) {
+    return null;
+  }
+
+  return (
+    <div
+      style={{
+        position: 'fixed',
+        pointerEvents: 'none',
+        zIndex: 9999,
+        left: currentOffset.x,
+        top: currentOffset.y,
+        transform: 'rotate(5deg)',
+        opacity: 0.9,
+      }}
+    >
+      <div
+        style={{
+          backgroundColor: '#FFFFFF',
+          borderRadius: '8px',
+          boxShadow: '0 8px 24px rgba(9,30,66,.35)',
+          padding: '12px 16px',
+          minWidth: '180px',
+          border: '2px solid #0079BF',
+        }}
+      >
+        <span style={{ fontSize: '14px', fontWeight: 500, color: '#172B4D' }}>
+          🚚 En déplacement...
+        </span>
+      </div>
+    </div>
+  );
+};
+
+// 🎯 Auto-scroll basé sur la position du drag layer (doit être dans le DndProvider)
+const AutoScrollDragTracker: React.FC<{ boardRef: React.RefObject<HTMLDivElement> }> = ({ boardRef }) => {
+  const dragXRef = useRef<number | null>(null);
+  const dragActiveRef = useRef(false);
+  const { isDragging, clientOffset } = useDragLayer((monitor) => ({
+    isDragging: monitor.isDragging(),
+    clientOffset: monitor.getClientOffset(),
+  }));
+
+  useEffect(() => {
+    dragActiveRef.current = isDragging;
+    dragXRef.current = clientOffset?.x ?? null;
+  }, [isDragging, clientOffset]);
+
+  useEffect(() => {
+    if (!boardRef.current) return;
+
+    const boardEl = boardRef.current;
+    let rafId: number | null = null;
+    let lastScrollTime = 0;
+
+    const tick = () => {
+      if (!dragActiveRef.current || dragXRef.current === null) {
+        rafId = requestAnimationFrame(tick);
+        return;
+      }
+
+      const now = Date.now();
+      if (now - lastScrollTime < 16) {
+        rafId = requestAnimationFrame(tick);
+        return;
+      }
+      lastScrollTime = now;
+
+      const rect = boardEl.getBoundingClientRect();
+      const x = dragXRef.current;
+      const distFromLeft = x - rect.left;
+      const distFromRight = rect.right - x;
+      const edgeSize = 160;
+      const maxSpeed = 40;
+
+      if (distFromLeft >= 0 && distFromLeft < edgeSize) {
+        const ratio = 1 - (distFromLeft / edgeSize);
+        const speed = Math.pow(ratio, 1.6) * maxSpeed;
+        boardEl.scrollLeft = Math.max(0, boardEl.scrollLeft - speed);
+        console.log(`⬅️ SCROLL LEFT x=${x.toFixed(0)} speed=${speed.toFixed(1)}`);
+      } else if (distFromRight >= 0 && distFromRight < edgeSize) {
+        const ratio = 1 - (distFromRight / edgeSize);
+        const speed = Math.pow(ratio, 1.6) * maxSpeed;
+        const maxScrollLeft = boardEl.scrollWidth - boardEl.clientWidth;
+        boardEl.scrollLeft = Math.min(maxScrollLeft, boardEl.scrollLeft + speed);
+        console.log(`➡️ SCROLL RIGHT x=${x.toFixed(0)} speed=${speed.toFixed(1)}`);
+      }
+
+      rafId = requestAnimationFrame(tick);
+    };
+
+    rafId = requestAnimationFrame(tick);
+
+    return () => {
+      if (rafId) cancelAnimationFrame(rafId);
+    };
+  }, [boardRef]);
+
+  return null;
+};
+
+const LeadCard: React.FC<LeadCardProps> = ({ lead, onView, onCall, onEmail, onSchedule, onEdit, onDelete, onDragStart, onDragEnd }) => {
   const timeline = calculateLeadTimeline(lead.createdAt, lead.source);
   const priority = getLeadPriority(lead.createdAt, lead.source, lead.lastContactDate);
   const timelineColor = getTimelineColor(timeline.status);
+  
+  // 🎯 Refs pour distinguer tap vs drag sur mobile
+  const touchStartTime = useRef<number>(0);
+  const touchStartPos = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
+  const hasMoved = useRef(false);
 
-  const getBorderColor = () => timelineColor;
-
-  const getPriorityIcon = () => {
+  // Couleurs labels Trello
+  const getLabelColor = () => {
     switch (priority) {
-      case 'critical': return <ExclamationCircleOutlined style={{ color: '#722ed1' }} />;
-      case 'high': return <FireOutlined style={{ color: '#ff4d4f' }} />;
-      case 'medium': return <ClockCircleOutlined style={{ color: '#fa8c16' }} />;
-      default: return <CheckCircleOutlined style={{ color: '#52c41a' }} />;
+      case 'critical': return '#EB5A46'; // Rouge
+      case 'high': return '#FF9F1A'; // Orange  
+      case 'medium': return '#F2D600'; // Jaune
+      default: return '#61BD4F'; // Vert
     }
   };
 
-  console.log(`🎯 [LeadCard] Création carte drag & drop pour lead ${lead.id}`, {
-    leadId: lead.id,
-    leadName: lead.firstName + ' ' + lead.lastName,
-    currentStatus: lead.status,
-    canDrag: true
-  });
-
-  const [{ isDragging, canDrag }, drag, dragPreview] = useDrag({
-    type: ITEM_TYPE,
-    item: () => {
-      console.log(`🟢 [LeadCard] ITEM function ${lead.id}:`, {
-        leadId: lead.id,
-        fromColumn: lead.status,
-        leadName: lead.firstName + ' ' + lead.lastName
-      });
-      return { id: lead.id, type: ITEM_TYPE, fromColumn: lead.status };
-    },
-    canDrag: () => {
-      const canDragResult = true; // Toujours permettre le drag pour les tests
-      console.log(`🎯 [LeadCard] Can drag ${lead.id}:`, canDragResult);
-      return canDragResult;
-    },
-    collect: (monitor) => {
-      const isDragging = monitor.isDragging();
-      const canDrag = monitor.canDrag();
-      const item = monitor.getItem();
-      
-      console.log(`🚀 [LeadCard] Drag collect ${lead.id}:`, {
-        isDragging,
-        canDrag,
-        didDrop: monitor.didDrop(),
-        item,
-        monitor: monitor.getItemType()
-      });
-      
-      return {
-        isDragging,
-        canDrag,
-      };
-    },
-    end: (item, monitor) => {
-      console.log(`🔴 [LeadCard] END drag ${lead.id}:`, {
-        didDrop: monitor.didDrop(),
-        dropResult: monitor.getDropResult(),
-        item: monitor.getItem()
-      });
-    }
-  });
-
-  console.log(`🔍 [LeadCard] État drag ${lead.id}:`, {
-    isDragging,
-    hasRef: !!drag,
-    leadStatus: lead.status
-  });
+  const getSecondaryLabelColor = () => {
+    const source = lead.source?.toLowerCase() || '';
+    if (source.includes('site') || source.includes('web')) return '#0079BF'; // Bleu
+    if (source.includes('partner')) return '#C377E0'; // Violet
+    return '#00C2E0'; // Cyan
+  };
 
   const displayName = lead.firstName && lead.lastName 
     ? `${lead.firstName} ${lead.lastName}` 
     : lead.data?.name || `Lead ${lead.id.slice(0, 8)}`;
 
-  // Utiliser le dragPreview pour une image personnalisée
-  React.useEffect(() => {
-    const previewElement = document.createElement('div');
-    previewElement.innerHTML = `
-      <div style="
-        background: linear-gradient(135deg, #1890ff, #40a9ff);
-        color: white;
-        padding: 12px 16px;
-        border-radius: 8px;
-        box-shadow: 0 4px 12px rgba(0,0,0,0.3);
-        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-        font-size: 14px;
-        font-weight: 500;
-        white-space: nowrap;
-        transform: rotate(3deg);
-      ">
-        🚀 ${displayName}
-      </div>
-    `;
-    previewElement.style.position = 'absolute';
-    previewElement.style.top = '-1000px';
-    previewElement.style.left = '-1000px';
-    document.body.appendChild(previewElement);
-    
-    dragPreview(previewElement);
-    
-    return () => {
-      if (document.body.contains(previewElement)) {
-        document.body.removeChild(previewElement);
-      }
-    };
-  }, [dragPreview, displayName]);
+  const [{ isDragging }, drag] = useDrag({
+    type: ITEM_TYPE,
+    item: () => {
+      onDragStart?.();
+      console.log('🎯 [DRAG ITEM] Début du drag pour lead:', lead.id);
+      return { id: lead.id, type: ITEM_TYPE, fromColumn: lead.status };
+    },
+    end: () => {
+      onDragEnd?.();
+      console.log('🛑 [DRAG END] Fin du drag pour lead:', lead.id);
+    },
+    collect: (monitor) => ({
+      isDragging: monitor.isDragging(),
+    }),
+  });
+
+  // Date formatée style Trello
+  const formatDate = (date: string) => {
+    const d = new Date(date);
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    return `${months[d.getMonth()]} ${d.getDate()}`;
+  };
+
+  const createdDate = formatDate(lead.createdAt);
+
+  // 🎯 Handlers pour distinguer tap vs drag
+  const handleTouchStart = (e: React.TouchEvent) => {
+    touchStartTime.current = Date.now();
+    touchStartPos.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+    hasMoved.current = false;
+    console.log('👆 [TOUCH START] Position:', touchStartPos.current);
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    const dx = Math.abs(e.touches[0].clientX - touchStartPos.current.x);
+    const dy = Math.abs(e.touches[0].clientY - touchStartPos.current.y);
+    if (dx > 10 || dy > 10) {
+      hasMoved.current = true;
+    }
+  };
+
+  const handleTouchEnd = () => {
+    const duration = Date.now() - touchStartTime.current;
+    console.log('👆 [TOUCH END] Duration:', duration, 'hasMoved:', hasMoved.current);
+    // C'est un TAP si < 200ms et pas de mouvement significatif
+    if (duration < 200 && !hasMoved.current) {
+      console.log('✅ [TAP DETECTED] Ouverture du lead');
+      onView();
+    }
+  };
 
   return (
     <div 
       ref={drag} 
       style={{ 
         opacity: isDragging ? 0.5 : 1,
-        cursor: canDrag ? (isDragging ? 'grabbing' : 'grab') : 'default',
-        transform: isDragging ? 'rotate(5deg)' : 'none',
-        transition: 'all 0.2s ease'
+        cursor: isDragging ? 'grabbing' : 'grab',
+        transform: isDragging ? 'rotate(3deg)' : 'none',
+        touchAction: 'none', // 🔴 CRITIQUE: Désactive le scroll natif pour permettre le drag
+        userSelect: 'none', // 🔴 Empêche la sélection de texte
+        WebkitUserSelect: 'none', // 🔴 Pour Safari/iOS
+        WebkitTouchCallout: 'none', // 🔴 Empêche le menu contextuel iOS
       }}
-      draggable={true}
-      className="select-none"
-      onDragStart={(e) => {
-        console.log(`🚀 [LeadCard] HTML5 dragStart ${lead.id}`, e);
-        e.dataTransfer.effectAllowed = 'move';
-        
-        // Créer une image de drag personnalisée
-        const dragImage = e.currentTarget.cloneNode(true) as HTMLElement;
-        dragImage.style.transform = 'rotate(5deg)';
-        dragImage.style.opacity = '0.8';
-        dragImage.style.width = e.currentTarget.offsetWidth + 'px';
-        dragImage.style.backgroundColor = '#f0f8ff';
-        dragImage.style.border = '2px dashed #1890ff';
-        dragImage.style.borderRadius = '8px';
-        
-        // Ajouter temporairement au DOM
-        document.body.appendChild(dragImage);
-        dragImage.style.position = 'absolute';
-        dragImage.style.top = '-1000px';
-        dragImage.style.left = '-1000px';
-        
-        // Utiliser comme image de drag
-        e.dataTransfer.setDragImage(dragImage, e.nativeEvent.offsetX, e.nativeEvent.offsetY);
-        
-        // Nettoyer après un délai
-        setTimeout(() => {
-          if (document.body.contains(dragImage)) {
-            document.body.removeChild(dragImage);
-          }
-        }, 100);
-      }}
-      onDrag={(e) => {
-        console.log(`🔄 [LeadCard] HTML5 drag ${lead.id}`, e.clientX, e.clientY);
-      }}
-      onDragEnd={(e) => {
-        console.log(`🔴 [LeadCard] HTML5 dragEnd ${lead.id}`, e);
-      }}
+      onTouchStart={handleTouchStart}
+      onTouchMove={handleTouchMove}
+      onTouchEnd={handleTouchEnd}
     >
-      <Card
-        size="small"
-        className={`
-          transition-all duration-300 ease-in-out
-          ${isDragging ? 'shadow-2xl border-dashed rotate-2 scale-105' : 'hover:shadow-lg hover:-translate-y-1'}
-          cursor-grab active:cursor-grabbing
-        `}
-        style={{ 
-          borderLeft: `4px solid ${getBorderColor()}`,
-          borderRadius: '12px',
-          backgroundColor: isDragging ? '#e6f7ff' : (timeline.isOverdue ? '#fef7f7' : 'white'),
-          cursor: canDrag ? (isDragging ? 'grabbing' : 'grab') : 'default',
-          pointerEvents: isDragging ? 'none' : 'auto',
-          border: isDragging ? '2px dashed #1890ff' : '1px solid #e5e5e5',
-          transform: isDragging ? 'scale(1.05) rotate(2deg)' : 'scale(1)',
-          boxShadow: isDragging 
-            ? '0 8px 25px rgba(24, 144, 255, 0.3)' 
-            : timeline.isOverdue 
-              ? '0 2px 8px rgba(255, 77, 79, 0.1)'
-              : '0 2px 8px rgba(0, 0, 0, 0.06)',
+      <div
+        style={{
+          backgroundColor: '#FFFFFF',
+          borderRadius: '8px',
+          boxShadow: '0 1px 0 rgba(9,30,66,.25)',
+          padding: '8px',
+          cursor: 'pointer',
+          transition: 'background-color 0.1s ease',
+          width: '100%',
+          maxWidth: '100%',
+          boxSizing: 'border-box',
+          userSelect: 'none', // 🔴 Double protection
+          WebkitUserSelect: 'none',
         }}
-        styles={{ body: { padding: '16px' } }}
+        className="hover:bg-[#F4F5F7]"
       >
-        {/* Header avec nom et priorité */}
-        <div className="flex justify-between items-start mb-3">
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center space-x-2">
-              <Text strong className="text-sm text-gray-800 truncate">
-                {displayName}
-              </Text>
-              {getPriorityIcon()}
-            </div>
-            
-            {/* Société en sous-titre */}
-            {(lead.company || lead.data?.company) && (
-              <Text type="secondary" className="text-xs mt-1 block truncate">
-                🏢 {lead.company || lead.data?.company}
-              </Text>
-            )}
-          </div>
-          
-          <Badge 
-            count={timeline.isOverdue ? 'Retard' : `${timeline.remainingHours}h`}
-            style={{ 
-              backgroundColor: getBorderColor(),
-              fontSize: '10px',
-              fontWeight: 'bold',
-              minWidth: '45px',
-              height: '20px',
-              lineHeight: '20px'
+        {/* Labels colorés Trello */}
+        <div style={{ display: 'flex', gap: '4px', marginBottom: '8px', flexWrap: 'wrap' }}>
+          <span 
+            style={{
+              display: 'inline-block',
+              width: '40px',
+              height: '8px',
+              borderRadius: '4px',
+              backgroundColor: getLabelColor(),
             }}
-            className="ml-2 flex-shrink-0"
+          />
+          <span 
+            style={{
+              display: 'inline-block',
+              width: '40px',
+              height: '8px',
+              borderRadius: '4px',
+              backgroundColor: getSecondaryLabelColor(),
+            }}
           />
         </div>
 
-        {/* Informations détaillées */}
-        <div className="space-y-2 mb-3">
-          {/* Source et timeline */}
-          <div className="flex items-center justify-between">
-            <Tag 
-              color={timeline.status === 'critical' ? 'purple' : timeline.status === 'urgent' ? 'red' : timeline.status === 'important' ? 'orange' : 'green'} 
-              className="text-xs font-medium"
+        {/* Titre */}
+        <div style={{ 
+          fontSize: '14px', 
+          color: '#172B4D', 
+          marginBottom: '8px',
+          lineHeight: '1.4',
+          fontWeight: 400,
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+          whiteSpace: 'nowrap',
+          width: '100%',
+        }}>
+          {displayName}
+        </div>
+
+        {/* Footer avec date, source et actions */}
+        <div style={{ 
+          display: 'flex', 
+          alignItems: 'center', 
+          justifyContent: 'space-between',
+          gap: '4px',
+        }}>
+          {/* Badges (date + source) */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+            {/* Badge date */}
+            <div 
+              style={{ 
+                display: 'flex', 
+                alignItems: 'center', 
+                gap: '4px',
+                backgroundColor: timeline.isOverdue ? '#EB5A46' : '#F4F5F7',
+                color: timeline.isOverdue ? '#FFFFFF' : '#5E6C84',
+                padding: '2px 6px',
+                borderRadius: '3px',
+                fontSize: '11px',
+              }}
             >
-              {lead.source || 'direct'}
-            </Tag>
-            <Text className="text-xs text-gray-500 truncate max-w-[120px]">
-              {timeline.description}
-            </Text>
-          </div>
-          
-          {/* Commercial assigné */}
-          {lead.assignedTo && (
-            <div className="flex items-center space-x-1 text-xs text-gray-500">
-              <UserOutlined className="text-gray-400" />
-              <span className="truncate">
-                {lead.assignedTo.firstName} {lead.assignedTo.lastName}
-              </span>
+              <ClockCircleOutlined style={{ fontSize: '11px' }} />
+              <span>{createdDate}</span>
             </div>
-          )}
 
-          {/* Contact info */}
-          <div className="flex items-center space-x-3 text-xs text-gray-500">
-            {lead.email && (
-              <div className="flex items-center space-x-1">
-                <MailOutlined className="text-gray-400" />
-                <span className="truncate max-w-[100px]">{lead.email}</span>
+            {/* Badge source avec tooltip */}
+            <Tooltip title={`Source: ${lead.source || 'Direct'}`}>
+              <div 
+                style={{ 
+                  display: 'flex', 
+                  alignItems: 'center', 
+                  gap: '3px',
+                  backgroundColor: getSecondaryLabelColor(),
+                  color: '#FFFFFF',
+                  padding: '2px 6px',
+                  borderRadius: '3px',
+                  fontSize: '11px',
+                  cursor: 'help',
+                }}
+              >
+                {lead.source?.toLowerCase().includes('web') || lead.source?.toLowerCase().includes('site') ? (
+                  <GlobalOutlined style={{ fontSize: '10px' }} />
+                ) : lead.source?.toLowerCase().includes('partner') ? (
+                  <LinkOutlined style={{ fontSize: '10px' }} />
+                ) : (
+                  <UserOutlined style={{ fontSize: '10px' }} />
+                )}
+                <span style={{ maxWidth: '50px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {lead.source || 'Direct'}
+                </span>
               </div>
-            )}
-            {lead.phone && (
-              <div className="flex items-center space-x-1">
-                <PhoneOutlined className="text-gray-400" />
-                <span>{lead.phone}</span>
-              </div>
-            )}
+            </Tooltip>
           </div>
 
-          {/* Recommandation IA */}
-          {priority !== 'low' && (
-            <div className="bg-gradient-to-r from-purple-50 to-blue-50 rounded-lg p-2 text-xs">
-              <Text className="text-xs" style={{ 
-                color: priority === 'critical' ? '#722ed1' : '#666',
-                fontStyle: 'italic'
-              }}>
-                🤖 Priorité {priority} - Action recommandée
-              </Text>
+          {/* Actions + Avatar */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+            {/* Icônes Éditer / Supprimer */}
+            <div 
+              style={{ 
+                display: 'flex', 
+                alignItems: 'center',
+              }}
+            >
+              <Tooltip title="Éditer">
+                <Button
+                  size="small"
+                  type="text"
+                  icon={<EditOutlined style={{ fontSize: '12px' }} />}
+                  onClick={(e) => { e.stopPropagation(); onEdit?.(); }}
+                  style={{ 
+                    color: '#5E6C84',
+                    width: '24px',
+                    height: '24px',
+                    minWidth: '24px',
+                    padding: 0,
+                  }}
+                />
+              </Tooltip>
+              <Popconfirm
+                title="Supprimer ce lead ?"
+                description="Cette action est irréversible."
+                onConfirm={(e) => { e?.stopPropagation(); onDelete?.(); }}
+                onCancel={(e) => e?.stopPropagation()}
+                okText="Supprimer"
+                cancelText="Annuler"
+                okButtonProps={{ danger: true }}
+              >
+                <Tooltip title="Supprimer">
+                  <Button
+                    size="small"
+                    type="text"
+                    icon={<DeleteOutlined style={{ fontSize: '12px' }} />}
+                    onClick={(e) => e.stopPropagation()}
+                    style={{ 
+                      color: '#EB5A46',
+                      width: '24px',
+                      height: '24px',
+                      minWidth: '24px',
+                      padding: 0,
+                    }}
+                  />
+                </Tooltip>
+              </Popconfirm>
             </div>
-          )}
-        </div>
 
-        {/* Actions améliorées */}
-        <div className="flex justify-between items-center pt-2 border-t border-gray-100">
-          <div className="flex space-x-2">
-            {priority === 'critical' ? (
-              <Button 
-                size="small" 
-                type="primary" 
-                danger
-                icon={<PhoneOutlined />} 
-                onClick={(e) => { e.stopPropagation(); onCall(); }}
-                title="URGENT - Appeler"
-                className="text-xs font-medium"
-              />
-            ) : (
-              <>
-                <Button 
-                  size="small" 
-                  type="text" 
-                  icon={<PhoneOutlined />} 
-                  onClick={(e) => { e.stopPropagation(); onCall(); }}
-                  title="Appeler"
-                  className="hover:bg-blue-50 hover:text-blue-600 transition-colors"
-                />
-                <Button 
-                  size="small" 
-                  type="text" 
-                  icon={<MailOutlined />} 
-                  onClick={(e) => { e.stopPropagation(); onEmail(); }}
-                  title="Email"
-                  className="hover:bg-green-50 hover:text-green-600 transition-colors"
-                />
-                <Button 
-                  size="small" 
-                  type="text" 
-                  icon={<CalendarOutlined />} 
-                  onClick={(e) => { e.stopPropagation(); onSchedule(); }}
-                  title="RDV"
-                  className="hover:bg-purple-50 hover:text-purple-600 transition-colors"
-                />
-              </>
-            )}
+            {/* Avatar */}
+            <Avatar 
+              size={24} 
+              style={{ 
+                backgroundColor: priority === 'critical' ? '#EB5A46' : 
+                                priority === 'high' ? '#FF9F1A' : 
+                                priority === 'medium' ? '#61BD4F' : '#0079BF',
+                fontSize: '11px',
+                fontWeight: 600,
+              }}
+            >
+              {displayName.charAt(0).toUpperCase()}
+            </Avatar>
           </div>
-          
-          <Button 
-            size="small" 
-            type="text" 
-            icon={<EyeOutlined />} 
-            onClick={(e) => { e.stopPropagation(); onView(); }}
-            title="Voir détails"
-            className="hover:bg-gray-50 hover:text-gray-700 transition-colors"
-          />
         </div>
-      </Card>
+      </div>
     </div>
   );
 };
@@ -392,6 +503,11 @@ interface KanbanColumnProps {
   onCallLead: (leadId: string) => void;
   onEmailLead: (leadId: string) => void;
   onScheduleLead: (leadId: string) => void;
+  onEditLead?: (leadId: string) => void;
+  onDeleteLead?: (leadId: string) => void;
+  isMobile?: boolean;
+  onCardDragStart?: () => void;
+  onCardDragEnd?: () => void;
 }
 
 const KanbanColumn: React.FC<KanbanColumnProps> = ({
@@ -401,159 +517,74 @@ const KanbanColumn: React.FC<KanbanColumnProps> = ({
   onViewLead,
   onCallLead,
   onEmailLead,
-  onScheduleLead
+  onScheduleLead,
+  onEditLead,
+  onDeleteLead,
+  isMobile = false,
+  onCardDragStart,
+  onCardDragEnd
 }) => {
-  console.log(`🏗️ [KanbanColumn] Initialisation colonne ${column.id}`, {
-    columnId: column.id,
-    columnName: column.name,
-    leadsCount: leads.length,
-    leadsIds: leads.map(l => l.id)
-  });
-
   const [{ isOver }, drop] = useDrop({
     accept: ITEM_TYPE,
     drop: (item: DragItem) => {
-      console.log(`🎯 [KanbanColumn] DROP dans colonne ${column.id}:`, {
-        leadId: item.id,
-        fromColumn: item.fromColumn,
-        toColumn: column.id,
-        willUpdate: item.fromColumn !== column.id
-      });
-      
       if (item.fromColumn !== column.id) {
-        console.log(`✅ [KanbanColumn] Déclenchement onDropLead`, {
-          leadId: item.id,
-          newStatus: column.id
-        });
         onDropLead(item.id, column.id);
-      } else {
-        console.log(`⏭️ [KanbanColumn] Pas de changement - même colonne`);
       }
     },
     collect: (monitor) => {
-      const isOver = monitor.isOver();
-      const canDrop = monitor.canDrop();
-      const item = monitor.getItem();
-      
-      if (item) {
-        console.log(`👀 [KanbanColumn] Monitor colonne ${column.id}:`, {
-          isOver,
-          canDrop,
-          draggedItemId: item.id,
-          draggedFromColumn: item.fromColumn
-        });
-      }
-      
       return {
-        isOver,
+        isOver: monitor.isOver(),
       };
     },
   });
 
-  console.log(`🔍 [KanbanColumn] État drop ${column.id}:`, {
-    isOver,
-    hasRef: !!drop,
-    leadsInColumn: leads.length
-  });
-
-  // Calcul des métriques de la colonne avec la nouvelle logique
-  const columnMetrics = useMemo(() => {
-    const overdueCount = leads.filter(lead => {
-      const timeline = calculateLeadTimeline(lead.createdAt, lead.source);
-      return timeline.isOverdue || timeline.status === 'critical';
-    }).length;
-
-    const criticalCount = leads.filter(lead => {
-      const timeline = calculateLeadTimeline(lead.createdAt, lead.source);
-      return timeline.status === 'critical';
-    }).length;
-
-    const urgentCount = leads.filter(lead => {
-      const priority = getLeadPriority(lead.createdAt, lead.source, lead.lastContactDate);
-      return priority === 'high' || priority === 'critical';
-    }).length;
-
-    return { overdueCount, criticalCount, urgentCount };
-  }, [leads]);
-
   return (
     <div 
       ref={drop}
-      className={`
-        bg-white rounded-xl border border-gray-200 shadow-sm
-        min-h-[70vh] transition-all duration-300 ease-in-out
-        ${isOver ? 'bg-blue-50 border-2 border-blue-400 border-dashed shadow-lg transform scale-[1.02]' : 'hover:shadow-md'}
-        flex flex-col
-      `}
-      style={{ minHeight: '600px' }}
+      style={{
+        backgroundColor: '#EBECF0',
+        borderRadius: '12px',
+        display: 'flex',
+        flexDirection: 'column',
+        maxHeight: 'calc(100vh - 100px)',
+        transition: 'background-color 0.2s ease',
+        width: '100%',
+        maxWidth: '100%',
+        boxSizing: 'border-box',
+        border: isMobile ? '2px solid #DFE1E6' : 'none',
+        ...(isOver && { backgroundColor: '#E1E4E9' }),
+      }}
     >
-      {/* Header de la colonne amélioré */}
-      <div className="p-4 border-b border-gray-100 bg-gray-50 rounded-t-xl">
-        <div className="flex justify-between items-center mb-2">
-          <div className="flex items-center space-x-2">
-            <div 
-              className="w-3 h-3 rounded-full"
-              style={{ backgroundColor: column.color }}
-            />
-            <Title 
-              level={5} 
-              className="mb-0 text-sm sm:text-base font-semibold" 
-              style={{ color: column.color }}
-            >
-              {column.name}
-            </Title>
-          </div>
-          
-          <Badge 
-            count={leads.length} 
-            style={{ 
-              backgroundColor: column.color,
-              fontSize: '11px',
-              minWidth: '20px',
-              height: '20px',
-              lineHeight: '20px'
-            }}
-            className="font-medium"
+      {/* Header de la colonne */}
+      <div style={{ padding: '10px 12px 8px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <span style={{ 
+            fontSize: '14px', 
+            fontWeight: 600, 
+            color: '#172B4D',
+          }}>
+            {column.name}
+          </span>
+          <Button
+            size="small"
+            type="text"
+            icon={<MoreOutlined />}
+            style={{ color: '#6B778C' }}
           />
         </div>
-
-        {/* Indicateurs d'urgence compacts */}
-        {(columnMetrics.overdueCount > 0 || columnMetrics.urgentCount > 0 || columnMetrics.criticalCount > 0) && (
-          <div className="flex flex-wrap gap-1 mt-2">
-            {columnMetrics.criticalCount > 0 && (
-              <span 
-                className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-purple-100 text-purple-800"
-                title={`${columnMetrics.criticalCount} leads critiques`}
-              >
-                <ExclamationCircleOutlined className="mr-1" />
-                {columnMetrics.criticalCount} critique{columnMetrics.criticalCount > 1 ? 's' : ''}
-              </span>
-            )}
-            {columnMetrics.overdueCount > 0 && (
-              <span 
-                className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800"
-                title={`${columnMetrics.overdueCount} leads en retard`}
-              >
-                <ExclamationCircleOutlined className="mr-1" />
-                {columnMetrics.overdueCount} retard{columnMetrics.overdueCount > 1 ? 's' : ''}
-              </span>
-            )}
-            {columnMetrics.urgentCount > 0 && (
-              <span 
-                className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-orange-100 text-orange-800"
-                title={`${columnMetrics.urgentCount} leads urgents`}
-              >
-                <FireOutlined className="mr-1" />
-                {columnMetrics.urgentCount} urgent{columnMetrics.urgentCount > 1 ? 's' : ''}
-              </span>
-            )}
-          </div>
-        )}
       </div>
 
-      {/* Contenu de la colonne - scrollable */}
-      <div className="flex-1 p-3 overflow-y-auto">
-        <div className="space-y-3">
+      {/* Contenu scrollable */}
+      <div 
+        style={{ 
+          flex: 1,
+          overflowY: 'auto',
+          padding: '0 8px 8px',
+          minHeight: '50px',
+        }}
+      >
+        {/* Cartes */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
           {leads.map(lead => (
             <LeadCard
               key={lead.id}
@@ -562,30 +593,59 @@ const KanbanColumn: React.FC<KanbanColumnProps> = ({
               onCall={() => onCallLead(lead.id)}
               onEmail={() => onEmailLead(lead.id)}
               onSchedule={() => onScheduleLead(lead.id)}
+              onEdit={() => onEditLead?.(lead.id)}
+              onDelete={() => onDeleteLead?.(lead.id)}
+              onDragStart={onCardDragStart}
+              onDragEnd={onCardDragEnd}
             />
           ))}
-          
-          {/* Message si aucun lead */}
-          {leads.length === 0 && (
-            <div className="text-center py-8 text-gray-400">
-              <div className="text-4xl mb-2">📭</div>
-              <Text type="secondary" className="text-sm">
-                Aucun lead dans "{column.name}"
-              </Text>
-            </div>
-          )}
         </div>
+        
+        {/* Message si aucun lead */}
+        {leads.length === 0 && (
+          <div style={{ 
+            textAlign: 'center', 
+            padding: '20px 8px',
+            color: '#5E6C84',
+            fontSize: '13px',
+          }}>
+            —
+          </div>
+        )}
       </div>
 
-      {/* Zone de drop active améliorée */}
+      {/* Footer - Ajouter une carte */}
+      <div style={{ padding: '8px' }}>
+        <Button
+          type="text"
+          icon={<PlusOutlined />}
+          style={{
+            width: '100%',
+            textAlign: 'left',
+            color: '#5E6C84',
+            fontSize: '14px',
+            height: '32px',
+            borderRadius: '8px',
+          }}
+          className="hover:bg-[#DFE1E6]"
+        >
+          Add a card
+        </Button>
+      </div>
+
+      {/* Zone de drop visuelle */}
       {isOver && (
-        <div className="mx-3 mb-3 p-4 border-2 border-blue-400 border-dashed rounded-lg text-center bg-blue-50 animate-pulse">
-          <div className="text-blue-600 font-medium text-sm">
-            💫 Déposer le lead ici
-          </div>
-          <Text type="secondary" className="text-xs">
-            pour le déplacer vers "{column.name}"
-          </Text>
+        <div style={{
+          margin: '0 8px 8px',
+          padding: '16px',
+          border: '2px dashed #0079BF',
+          borderRadius: '8px',
+          backgroundColor: 'rgba(0, 121, 191, 0.1)',
+          textAlign: 'center',
+        }}>
+          <span style={{ color: '#0079BF', fontSize: '13px', fontWeight: 500 }}>
+            Drop here
+          </span>
         </div>
       )}
     </div>
@@ -600,31 +660,94 @@ const LeadsKanban: React.FC<LeadsKanbanProps> = ({
   onCallLead,
   onEmailLead,
   onScheduleLead,
+  onEditLead,
+  onDeleteLead,
   refreshTrigger = 0,
-  onLeadUpdated // 🔄 Nouveau prop
+  onLeadUpdated
 }) => {
-  console.log('🏗️ [LeadsKanban] Composant monté');
-  
+  const { useBreakpoint } = Grid;
+  const screens = useBreakpoint();
+  const isMobile = !screens.md;
+  const isTablet = !screens.lg && screens.md;
+  const columnWidth = isMobile ? '48vw' : isTablet ? '300px' : '272px';
+  const headerPadding = isMobile ? '10px 12px' : '12px 16px';
+  const boardPadding = isMobile ? '8px' : '12px 8px';
+  const boardHeight = isMobile ? 'calc(100vh - 56px)' : 'calc(100vh - 60px)';
   const { api } = useAuthenticatedApi();
   const { currentOrganization, isSuperAdmin, user } = useAuth();
   const { leadStatuses, isLoading: statusesLoading } = useLeadStatuses();
+  const { notification } = App.useApp(); // 🎯 Hook pour notifications React 19
   
   const [leads, setLeads] = useState<Lead[]>([]);
   const [loading, setLoading] = useState(false);
   const [isUpdatingLead, setIsUpdatingLead] = useState(false); // Track internal updates
   const lastUpdateByKanban = useRef(false); // 🚩 Flag pour éviter le refresh après nos modifications
+  const boardRef = useRef<HTMLDivElement>(null); // Ref pour auto-scroll
+  const isDraggingRef = useRef(false);
+  const [isBoardDragging, setIsBoardDragging] = useState(false);
+  const dragLastXRef = useRef<number | null>(null);
 
-  // 📊 Récupération des leads
+  // États pour les filtres
+  const [filterModalVisible, setFilterModalVisible] = useState(false);
+  const [filterSource, setFilterSource] = useState<string | undefined>(undefined);
+  const [filterPriority, setFilterPriority] = useState<string | undefined>(undefined);
+  const [filterAssignee, setFilterAssignee] = useState<string | undefined>(undefined);
+  const [isAddLeadModalOpen, setIsAddLeadModalOpen] = useState(false);
+
+  const [activeAlertsCount, setActiveAlertsCount] = useState(0); // Badge dynamique IA
+  // � Système de gestion des notifications IA (snooze)
+  const NOTIFICATION_STORAGE_KEY = 'ai_notifications_snoozed';
+  const SNOOZE_DURATIONS = {
+    critical: 2 * 60 * 60 * 1000, // 2 heures pour les critiques
+    urgent: 4 * 60 * 60 * 1000,   // 4 heures pour les urgents
+    overdue: 6 * 60 * 60 * 1000,  // 6 heures pour les retards
+    default: 24 * 60 * 60 * 1000, // 24 heures pour les autres
+  };
+
+  // Vérifier si une notification est en snooze
+  const isNotificationSnoozed = useCallback((type: string): boolean => {
+    try {
+      const snoozed = localStorage.getItem(NOTIFICATION_STORAGE_KEY);
+      if (!snoozed) return false;
+      
+      const snoozedData = JSON.parse(snoozed);
+      const notif = snoozedData[type];
+      
+      if (!notif) return false;
+      
+      // Vérifier si le snooze est encore actif
+      const now = Date.now();
+      return now < notif.until;
+    } catch {
+      return false;
+    }
+  }, []);
+
+  // Mettre en snooze une notification
+  const snoozeNotification = useCallback((type: string, duration: number) => {
+    try {
+      const snoozed = localStorage.getItem(NOTIFICATION_STORAGE_KEY);
+      const snoozedData = snoozed ? JSON.parse(snoozed) : {};
+      
+      snoozedData[type] = {
+        snoozedAt: Date.now(),
+        until: Date.now() + duration,
+      };
+      
+      localStorage.setItem(NOTIFICATION_STORAGE_KEY, JSON.stringify(snoozedData));
+    } catch (error) {
+      console.error('Erreur snooze notification:', error);
+    }
+  }, []);
+
+  // �📊 Récupération des leads
   const fetchLeads = useCallback(async () => {
     if (!currentOrganization && !isSuperAdmin) {
-      console.log('[LeadsKanban] ⏳ En attente de la définition de l\'organisation...');
       return;
     }
     
     setLoading(true);
     try {
-      console.log('[LeadsKanban] 📊 Récupération des leads pour Kanban...');
-      
       const response = await api.get('/api/leads');
       let leadsData: Lead[] = [];
       
@@ -633,8 +756,6 @@ const LeadsKanban: React.FC<LeadsKanbanProps> = ({
       } else if (response?.data && Array.isArray(response.data)) {
         leadsData = response.data;
       }
-      
-      console.log('[LeadsKanban] 📊 Leads reçus pour Kanban:', leadsData.length);
       
       // Transformer les données pour le Kanban avec normalisation des statuts
       const transformedLeads = leadsData.map(lead => ({
@@ -662,62 +783,25 @@ const LeadsKanban: React.FC<LeadsKanbanProps> = ({
 
   // 🔄 Chargement initial
   useEffect(() => {
-    console.log('[LeadsKanban] 🔄 useEffect déclenché:', { 
-      isUpdatingLead, 
-      refreshTrigger, 
-      user: user?.email,
-      hasCurrentOrg: !!currentOrganization,
-      isSuperAdmin 
-    });
-    
     // Ne pas recharger si c'est le kanban qui vient de faire une modification
     if (isUpdatingLead) {
-      console.log('[LeadsKanban] ⏭️ Skip refresh - modification interne en cours');
       return;
     }
 
     // Éviter le refresh si c'est notre propre modification qui a déclenché le refreshTrigger
     if (lastUpdateByKanban.current && refreshTrigger > 0) {
-      console.log('[LeadsKanban] ⏭️ Skip refresh - notre propre modification, pas de rechargement');
       lastUpdateByKanban.current = false; // Reset le flag
       return;
     }
     
     if (user && (currentOrganization || isSuperAdmin)) {
-      console.log('[LeadsKanban] 🚀 Chargement des leads pour Kanban...', { 
-        user: user.email, 
-        org: currentOrganization?.name || 'Vue globale',
-        isSuperAdmin,
-        refreshTrigger
-      });
       fetchLeads();
-    } else {
-      console.log('[LeadsKanban] ❌ Conditions non remplies pour charger les leads:', {
-        hasUser: !!user,
-        hasOrg: !!currentOrganization,
-        isSuperAdmin
-      });
     }
   }, [user, currentOrganization, isSuperAdmin, fetchLeads, refreshTrigger, isUpdatingLead]);
 
   // 🎯 Gestion du drag & drop
   const handleDropLead = useCallback(async (leadId: string, newStatusId: string) => {
-    console.log(`🚀 [handleDropLead] DÉBUT - Tentative de déplacement:`, {
-      leadId,
-      newStatusId,
-      timestamp: new Date().toISOString(),
-      hasApi: !!api,
-      userEmail: user?.email,
-      orgName: currentOrganization?.name,
-      isSuperAdmin
-    });
-
     try {
-      console.log('[LeadsKanban] 🎯 Déplacement lead:', leadId, 'vers statusId:', newStatusId);
-      console.log('[LeadsKanban] 🔧 API instance:', !!api);
-      console.log('[LeadsKanban] 🔧 User:', user?.email);
-      console.log('[LeadsKanban] 🔧 Organization:', currentOrganization?.name);
-      
       // Mise à jour optimiste
       setLeads(prevLeads => 
         prevLeads.map(lead => 
@@ -726,30 +810,22 @@ const LeadsKanban: React.FC<LeadsKanbanProps> = ({
       );
 
       // Appel API pour mise à jour
-      console.log('[LeadsKanban] 📡 Appel API PUT /api/leads/' + leadId);
-      const response = await api.put(`/api/leads/${leadId}`, { statusId: newStatusId });
-      console.log('[LeadsKanban] ✅ Réponse API:', response);
+      await api.put(`/api/leads/${leadId}`, { statusId: newStatusId });
       
       message.success('Lead déplacé avec succès !');
       
       // 🔄 NOUVEAU: Déclencher un refresh des autres vues (mais pas du kanban)
       if (onLeadUpdated) {
-        console.log('[LeadsKanban] 🔄 Déclenchement refresh des autres vues...');
-        
         // 🚩 Marquer que c'est nous qui faisons la modification
         lastUpdateByKanban.current = true;
         
         setIsUpdatingLead(true); // Flag pour éviter le refresh du kanban
-        console.log('[LeadsKanban] 🔧 setIsUpdatingLead(true) appelé');
         onLeadUpdated();
-        console.log('[LeadsKanban] 🔧 onLeadUpdated() appelé');
         
         // Reset le flag après que les autres vues aient été mises à jour
         setTimeout(() => {
-          console.log('[LeadsKanban] 🔧 Début du timeout - reset du flag...');
           setIsUpdatingLead(false);
-          console.log('[LeadsKanban] 🔄 Flag isUpdatingLead reset - refresh possible à nouveau');
-        }, 2000); // 2 secondes pour laisser le temps à toutes les vues de se mettre à jour
+        }, 600);
       }
       
     } catch (error: unknown) {
@@ -768,29 +844,39 @@ const LeadsKanban: React.FC<LeadsKanbanProps> = ({
     }
   }, [api, fetchLeads, user, currentOrganization, isSuperAdmin, onLeadUpdated]);
 
+  // 📋 Filtrage des leads
+  const filteredLeads = useMemo(() => {
+    return leads.filter(lead => {
+      // Filtre par source
+      if (filterSource && lead.source !== filterSource) return false;
+      
+      // Filtre par priorité
+      if (filterPriority) {
+        const priority = getLeadPriority(lead.createdAt, lead.source, lead.lastContactDate);
+        if (priority !== filterPriority) return false;
+      }
+      
+      // Filtre par commercial assigné
+      if (filterAssignee) {
+        if (!lead.assignedToId || lead.assignedToId !== filterAssignee) return false;
+      }
+      
+      return true;
+    });
+  }, [leads, filterSource, filterPriority, filterAssignee]);
+
   // 📋 Groupement des leads par statut dynamique
   const leadsByStatus = useMemo(() => {
-    console.log(`📋 [leadsByStatus] Début regroupement des leads:`, {
-      totalLeads: leads.length,
-      leadsData: leads.map(l => ({ id: l.id, name: l.firstName + ' ' + l.lastName, statusId: l.statusId }))
-    });
-
     const grouped: Record<string, Lead[]> = {};
     
     // Initialiser toutes les colonnes avec les statuts dynamiques
     leadStatuses.forEach(status => {
       grouped[status.id] = [];
-      console.log(`📋 [leadsByStatus] Colonne initialisée: ${status.id} (${status.name})`);
     });
     
-    // Grouper les leads directement par statusId (pas de normalisation, utilisation directe des IDs Prisma)
-    leads.forEach(lead => {
+    // Grouper les leads FILTRÉS directement par statusId
+    filteredLeads.forEach(lead => {
       const statusId = lead.statusId;
-      console.log(`📋 [leadsByStatus] Lead ${lead.id}:`, {
-        leadName: lead.firstName + ' ' + lead.lastName,
-        statusId,
-        willAddToColumn: statusId
-      });
       
       // Ajouter le lead dans la colonne correspondante (ou dans une colonne par défaut)
       if (statusId && grouped[statusId]) {
@@ -799,50 +885,38 @@ const LeadsKanban: React.FC<LeadsKanbanProps> = ({
         // Fallback: mettre dans le premier statut disponible ou créer une colonne "Autre"
         const firstStatus = leadStatuses[0];
         if (firstStatus) {
-          console.log(`📋 [leadsByStatus] ⚠️ Lead sans statut valide, ajouté à: ${firstStatus.id}`);
           grouped[firstStatus.id].push(lead);
         }
       }
     });
-    
-    console.log(`📋 [leadsByStatus] Résultat final du regroupement:`, {
-      columnsCount: Object.keys(grouped).length,
-      distribution: Object.keys(grouped).map(key => ({
-        column: key,
-        count: grouped[key].length,
-        leadIds: grouped[key].map(l => l.id)
-      }))
-    });
-    
     return grouped;
-  }, [leads, leadStatuses]);
+  }, [filteredLeads, leadStatuses]);
 
   // 📊 Métriques globales avec IA et système de délais
   const metrics = useMemo(() => {
     const total = leads.length;
-    
+
     const overdueLeads = leads.filter(lead => {
       const timeline = calculateLeadTimeline(lead.createdAt, lead.source);
       return timeline.isOverdue || timeline.status === 'critical';
     });
-    
+
     const criticalLeads = leads.filter(lead => {
       const timeline = calculateLeadTimeline(lead.createdAt, lead.source);
       return timeline.status === 'critical';
     });
-    
+
     const urgentLeads = leads.filter(lead => {
       const priority = getLeadPriority(lead.createdAt, lead.source, lead.lastContactDate);
       return priority === 'high' || priority === 'critical';
     });
-    
+
     const won = leadsByStatus['won']?.length || 0;
     const conversionRate = total > 0 ? (won / total * 100).toFixed(1) : '0';
-    
-    // Score commercial global (basé sur les délais et statuts)
+
     const commercialScore = leads.reduce((score, lead) => {
       const timeline = calculateLeadTimeline(lead.createdAt, lead.source);
-      
+
       if (timeline.status === 'critical') return score - 10;
       if (timeline.isOverdue) return score - 5;
       if (timeline.status === 'urgent') return score - 1;
@@ -850,28 +924,243 @@ const LeadsKanban: React.FC<LeadsKanbanProps> = ({
       return score;
     }, 0);
 
-    return { 
-      total, 
-      overdue: overdueLeads.length, 
+    return {
+      total,
+      overdue: overdueLeads.length,
       critical: criticalLeads.length,
-      urgent: urgentLeads.length, 
-      won, 
+      urgent: urgentLeads.length,
+      won,
       conversionRate,
-      commercialScore
+      commercialScore,
     };
   }, [leads, leadsByStatus]);
 
-  console.log(`🎨 [LeadsKanban] RENDU PRINCIPAL:`, {
-    loading,
-    statusesLoading,
-    leadsCount: leads.length,
-    leadsByStatusKeys: Object.keys(leadsByStatus),
-    hasAPI: !!api,
-    hasUser: !!user,
-    hasOrg: !!currentOrganization,
-    dndBackend: 'HTML5Backend',
-    statusesCount: leadStatuses.length
-  });
+  // 🎯 Mettre à jour le badge au chargement et quand les metrics changent
+  useEffect(() => {
+    let count = 0;
+    if (metrics.critical > 0 && !isNotificationSnoozed('critical')) count++;
+    if (metrics.urgent > 0 && metrics.critical === 0 && !isNotificationSnoozed('urgent')) count++;
+    if (metrics.overdue > 0 && !isNotificationSnoozed('overdue')) count++;
+    setActiveAlertsCount(count);
+  }, [metrics, isNotificationSnoozed]);
+
+  // 🤖 Fonction pour afficher les alertes IA sous forme de notifications
+  const showAIAlerts = useCallback(() => {
+    console.log('🤖 showAIAlerts appelée !', metrics);
+    
+    const { critical, urgent, overdue, total, conversionRate, commercialScore } = metrics;
+
+    // Calculer le nombre d'alertes actives (non snoozées)
+    let alertsCount = 0;
+    if (critical > 0 && !isNotificationSnoozed('critical')) alertsCount++;
+    if (urgent > 0 && critical === 0 && !isNotificationSnoozed('urgent')) alertsCount++;
+    if (overdue > 0 && !isNotificationSnoozed('overdue')) alertsCount++;
+    
+    // Mettre à jour le badge
+    setActiveAlertsCount(alertsCount);
+
+    // Notification critique - Cliquer pour filtrer les leads critiques
+    if (critical > 0 && !isNotificationSnoozed('critical')) {
+      notification.error({
+        message: <span style={{ fontWeight: 600 }}>🚨 Leads critiques détectés !</span>,
+        description: (
+          <div>
+            <p style={{ margin: 0 }}>{critical} lead(s) nécessitent une action immédiate</p>
+            <small style={{ color: '#888' }}>Plus de 48h sans contact · <strong>Cliquer pour filtrer</strong></small>
+          </div>
+        ),
+        placement: 'topRight',
+        duration: 0, // Ne disparaît pas automatiquement
+        style: {
+          width: 380,
+          borderLeft: '4px solid #ff4d4f',
+          cursor: 'pointer',
+        },
+        onClick: () => {
+          // Appliquer le filtre "critical"
+          setFilterPriority('critical');
+          message.success('Filtre appliqué : Leads critiques');
+        },
+        onClose: () => {
+          // Mettre en snooze pour 2 heures quand l'utilisateur ferme
+          snoozeNotification('critical', SNOOZE_DURATIONS.critical);
+          setActiveAlertsCount(prev => Math.max(0, prev - 1)); // Décrémenter le badge
+          message.info('Alerte masquée pour 2 heures. Elle réapparaîtra si le problème persiste.');
+        },
+      });
+    }
+
+    // Notification urgente - Cliquer pour filtrer les leads urgents
+    if (urgent > 0 && critical === 0 && !isNotificationSnoozed('urgent')) {
+      notification.warning({
+        message: <span style={{ fontWeight: 600 }}>⚠️ Leads urgents</span>,
+        description: (
+          <div>
+            <p style={{ margin: 0 }}>{urgent} lead(s) nécessitent un suivi rapide</p>
+            <small style={{ color: '#888' }}><strong>Cliquer pour filtrer</strong></small>
+          </div>
+        ),
+        placement: 'topRight',
+        duration: 10,
+        style: {
+          width: 380,
+          borderLeft: '4px solid #faad14',
+          cursor: 'pointer',
+        },
+        onClick: () => {
+          setFilterPriority('high');
+          message.success('Filtre appliqué : Leads urgents');
+        },
+        onClose: () => {
+          snoozeNotification('urgent', SNOOZE_DURATIONS.urgent);
+          setActiveAlertsCount(prev => Math.max(0, prev - 1)); // Décrémenter le badge
+          message.info('Alerte masquée pour 4 heures.');
+        },
+      });
+    }
+
+    // Notification sur les retards - Cliquer pour voir tous les leads
+    if (overdue > 0 && !isNotificationSnoozed('overdue')) {
+      notification.info({
+        message: <span style={{ fontWeight: 600 }}>📅 Leads en retard</span>,
+        description: (
+          <div>
+            <p style={{ margin: 0 }}>{overdue} lead(s) ont dépassé le délai recommandé</p>
+            <small style={{ color: '#888' }}><strong>Cliquer pour filtrer</strong></small>
+          </div>
+        ),
+        placement: 'topRight',
+        duration: 8,
+        style: {
+          width: 380,
+          borderLeft: '4px solid #1890ff',
+          cursor: 'pointer',
+        },
+        onClick: () => {
+          // Réinitialiser tous les filtres pour voir tous les leads en retard
+          setFilterPriority(undefined);
+          setFilterSource(undefined);
+          setFilterAssignee(undefined);
+          message.info('Affichage de tous les leads');
+        },
+        onClose: () => {
+          snoozeNotification('overdue', SNOOZE_DURATIONS.overdue);
+          setActiveAlertsCount(prev => Math.max(0, prev - 1)); // Décrémenter le badge
+          message.info('Alerte masquée pour 6 heures.');
+        },
+      });
+    }
+
+    // Score commercial positif - Cliquer pour réinitialiser les filtres
+    if (commercialScore > 50 && total > 5) {
+      notification.success({
+        message: <span style={{ fontWeight: 600 }}>✅ Excellente performance !</span>,
+        description: (
+          <div>
+            <p style={{ margin: 0 }}>Pipeline en bonne santé</p>
+            <small style={{ color: '#888' }}>Taux de conversion: {conversionRate}% · <strong>Cliquer pour tout voir</strong></small>
+          </div>
+        ),
+        placement: 'topRight',
+        duration: 6,
+        style: {
+          width: 380,
+          borderLeft: '4px solid #52c41a',
+          cursor: 'pointer',
+        },
+        onClick: () => {
+          // Réinitialiser tous les filtres
+          setFilterPriority(undefined);
+          setFilterSource(undefined);
+          setFilterAssignee(undefined);
+          message.success('Filtres réinitialisés');
+        },
+      });
+    }
+
+    // Score commercial négatif - Cliquer pour filtrer les leads qui nécessitent attention
+    if (commercialScore < -20) {
+      notification.warning({
+        message: <span style={{ fontWeight: 600 }}>📉 Attention au pipeline</span>,
+        description: (
+          <div>
+            <p style={{ margin: 0 }}>Plusieurs leads nécessitent votre attention</p>
+            <small style={{ color: '#888' }}>Score commercial: {commercialScore} · <strong>Cliquer pour filtrer</strong></small>
+          </div>
+        ),
+        placement: 'topRight',
+        duration: 12,
+        style: {
+          width: 380,
+          borderLeft: '4px solid #faad14',
+          cursor: 'pointer',
+        },
+        onClick: () => {
+          // Filtrer les leads critiques et urgents
+          setFilterPriority('critical');
+          message.warning('Filtre appliqué : Leads critiques');
+        },
+      });
+    }
+
+    // Notification générale si tout va bien - Cliquer pour réinitialiser
+    if (critical === 0 && urgent === 0 && overdue === 0 && total > 0) {
+      notification.success({
+        message: <span style={{ fontWeight: 600 }}>🎯 Pipeline à jour !</span>,
+        description: (
+          <div>
+            <p style={{ margin: 0 }}>{total} lead(s) actifs - Aucune action urgente requise</p>
+            <small style={{ color: '#888' }}><strong>Cliquer pour réinitialiser les filtres</strong></small>
+          </div>
+        ),
+        placement: 'topRight',
+        duration: 5,
+        style: {
+          width: 380,
+          borderLeft: '4px solid #52c41a',
+          cursor: 'pointer',
+        },
+        onClick: () => {
+          setFilterPriority(undefined);
+          setFilterSource(undefined);
+          setFilterAssignee(undefined);
+          message.success('Filtres réinitialisés');
+        },
+      });
+    }
+
+    // Si aucun lead
+    if (total === 0 && !isNotificationSnoozed('empty')) {
+      notification.info({
+        message: <span style={{ fontWeight: 600 }}>📊 Pipeline vide</span>,
+        description: 'Aucun lead actif pour le moment',
+        placement: 'topRight',
+        duration: 4,
+        style: {
+          width: 380,
+          borderLeft: '4px solid #1890ff',
+        },
+        onClose: () => {
+          snoozeNotification('empty', SNOOZE_DURATIONS.default);
+        },
+      });
+    }
+  }, [metrics, notification, setFilterPriority, setFilterSource, setFilterAssignee, isNotificationSnoozed, snoozeNotification, SNOOZE_DURATIONS]);
+
+  const handleCardDragStart = useCallback(() => {
+    isDraggingRef.current = true;
+    setIsBoardDragging(true);
+    dragLastXRef.current = null;
+    console.log('🎯 [DRAG START] isDraggingRef = true, RAF loop va démarrer');
+  }, []);
+
+  const handleCardDragEnd = useCallback(() => {
+    isDraggingRef.current = false;
+    setIsBoardDragging(false);
+    dragLastXRef.current = null;
+    console.log('🛑 [DRAG END] isDraggingRef = false');
+  }, []);
+
 
   if (loading || statusesLoading) {
     return (
@@ -892,112 +1181,294 @@ const LeadsKanban: React.FC<LeadsKanbanProps> = ({
     );
   }
 
-  // 📏 Calcul des spans responsifs pour utiliser tout l'espace
-  const getResponsiveSpan = () => {
-    const statusCount = leadStatuses.length;
-    if (statusCount <= 3) return 8; // 3 colonnes max par ligne
-    if (statusCount <= 4) return 6; // 4 colonnes
-    if (statusCount <= 6) return 4; // 6 colonnes
-    return 3; // 8 colonnes max
-  };
-
-  const responsiveSpan = getResponsiveSpan();
-
   return (
-    <DndProvider backend={HTML5Backend}>
-      <div className="w-full max-w-full">
-        {/* 📊 Header avec métriques - Responsive */}
-        <div className="px-4 sm:px-6 lg:px-8 py-4">
-          <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 mb-6">
-            <div>
-              <Title level={2} className="mb-0 text-xl sm:text-2xl lg:text-3xl">
-                🏗️ Pipeline Commercial
-              </Title>
+    <DndProvider backend={MultiBackend} options={HTML5toTouch}>
+      {/* 🎯 Layer de drag personnalisé pour mobile */}
+      <CustomDragLayer />
+      {/* 🎯 Auto-scroll pendant le drag */}
+      <AutoScrollDragTracker boardRef={boardRef} />
+      {/* Container principal - FOND BLANC */}
+      <div 
+        style={{
+          backgroundColor: '#FFFFFF',
+          minHeight: '100vh',
+          width: '100%',
+        }}
+      >
+        {/* Header */}
+        <div style={{ padding: headerPadding, borderBottom: '1px solid #E5E7EB' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+              <span style={{ color: '#172B4D', fontWeight: 700, fontSize: '18px' }}>Pipeline commercial</span>
+              <span style={{ color: '#6B778C', fontSize: '14px' }}>Board</span>
+              
+              {/* Boutons Nouveau Lead et Export */}
+              <div style={{ display: 'flex', gap: '8px', marginLeft: '16px' }}>
+                <Button 
+                  type="primary" 
+                  size="small" 
+                  icon={<PlusOutlined />}
+                  onClick={() => {
+                    console.log('🆕 Bouton Nouveau Lead cliqué');
+                    setIsAddLeadModalOpen(true);
+                  }}
+                >
+                  Nouveau Lead
+                </Button>
+                <Button 
+                  size="small" 
+                  icon={<DownloadOutlined />}
+                  onClick={() => {
+                    console.log('📥 Bouton Export cliqué, nombre de leads:', leads.length);
+                    
+                    try {
+                      if (leads.length === 0) {
+                        message.warning('Aucun lead à exporter');
+                        return;
+                      }
+                      
+                      // Export Excel complet avec toutes les informations
+                      const excelData = leads.map(lead => {
+                        const priority = getLeadPriority(
+                          lead.createdAt, 
+                          lead.source, 
+                          lead.lastContactDate
+                        );
+                        const assignedName = lead.assignedTo 
+                          ? `${lead.assignedTo.firstName || ''} ${lead.assignedTo.lastName || ''}`.trim()
+                          : '';
+
+                        return {
+                          'Nom': lead.data?.name || '',
+                          'Email': lead.data?.email || '',
+                          'Téléphone': lead.data?.phone || '',
+                          'Entreprise': lead.data?.company || '',
+                          'Statut': lead.status || '',
+                          'Source': lead.source || '',
+                          'Commercial assigné': assignedName,
+                          'Priorité': priority,
+                          'Dernier contact': lead.lastContactDate 
+                            ? new Date(lead.lastContactDate).toLocaleDateString('fr-FR')
+                            : '',
+                          'Date de création': new Date(lead.createdAt).toLocaleDateString('fr-FR'),
+                          'Valeur estimée': lead.data?.estimatedValue || '',
+                          'Notes': lead.data?.notes || ''
+                        };
+                      });
+                      
+                      // Création du fichier Excel
+                      const ws = XLSX.utils.json_to_sheet(excelData);
+                      const wb = XLSX.utils.book_new();
+                      XLSX.utils.book_append_sheet(wb, ws, 'Leads');
+                      
+                      // Téléchargement du fichier
+                      XLSX.writeFile(wb, `leads-export-${new Date().toISOString().split('T')[0]}.xlsx`);
+                      
+                      message.success(`${leads.length} lead(s) exporté(s) en Excel !`);
+                      console.log('✅ Export Excel réussi');
+                    } catch (error) {
+                      console.error('❌ Erreur export:', error);
+                      message.error('Erreur lors de l\'export');
+                    }
+                  }}
+                >
+                  Export
+                </Button>
+              </div>
             </div>
-            
-            {/* Métriques responsives */}
-            <div className="grid grid-cols-3 sm:grid-cols-6 gap-2 sm:gap-4 w-full lg:w-auto">
-              <div className="text-center bg-white p-2 sm:p-3 rounded-lg shadow-sm border">
-                <div className="text-lg sm:text-xl lg:text-2xl font-bold text-blue-600">{metrics.total}</div>
-                <div className="text-xs text-gray-500">Total</div>
-              </div>
-              <div className="text-center bg-white p-2 sm:p-3 rounded-lg shadow-sm border">
-                <div className="text-lg sm:text-xl lg:text-2xl font-bold text-purple-600">{metrics.critical}</div>
-                <div className="text-xs text-gray-500">Critiques</div>
-              </div>
-              <div className="text-center bg-white p-2 sm:p-3 rounded-lg shadow-sm border">
-                <div className="text-lg sm:text-xl lg:text-2xl font-bold text-red-600">{metrics.overdue}</div>
-                <div className="text-xs text-gray-500">Retard</div>
-              </div>
-              <div className="text-center bg-white p-2 sm:p-3 rounded-lg shadow-sm border">
-                <div className="text-lg sm:text-xl lg:text-2xl font-bold text-orange-600">{metrics.urgent}</div>
-                <div className="text-xs text-gray-500">Urgents</div>
-              </div>
-              <div className="text-center bg-white p-2 sm:p-3 rounded-lg shadow-sm border">
-                <div className="text-lg sm:text-xl lg:text-2xl font-bold text-green-600">{metrics.conversionRate}%</div>
-                <div className="text-xs text-gray-500">Conversion</div>
-              </div>
-              <div className="text-center bg-white p-2 sm:p-3 rounded-lg shadow-sm border">
-                <div className={`text-lg sm:text-xl lg:text-2xl font-bold ${metrics.commercialScore >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                  {metrics.commercialScore > 0 ? '+' : ''}{metrics.commercialScore}
-                </div>
-                <div className="text-xs text-gray-500">Score IA</div>
-              </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <Button 
+                size="small" 
+                icon={<RobotOutlined />}
+                onClick={showAIAlerts}
+                style={{ color: '#5E6C84' }}
+                type="text"
+              >
+                IA
+                {activeAlertsCount > 0 && (
+                  <span style={{ 
+                    marginLeft: '4px', 
+                    backgroundColor: metrics.critical > 0 && !isNotificationSnoozed('critical') ? '#ff4d4f' : '#faad14',
+                    color: 'white',
+                    borderRadius: '10px',
+                    padding: '0 6px',
+                    fontSize: '12px',
+                    fontWeight: 600
+                  }}>
+                    {activeAlertsCount}
+                  </span>
+                )}
+              </Button>
+              <Button 
+                size="small" 
+                icon={<FilterOutlined />}
+                onClick={() => setFilterModalVisible(true)}
+                style={{ color: '#5E6C84' }}
+                type={filterSource || filterPriority || filterAssignee ? 'primary' : 'text'}
+              >
+                Filter
+                {(filterSource || filterPriority || filterAssignee) && ' (active)'}
+              </Button>
+              <Avatar size={28} style={{ backgroundColor: '#1890ff' }}>
+                {user?.firstName?.[0] || 'U'}
+              </Avatar>
             </div>
           </div>
+        </div>
 
-          {/* 🏗️ Colonnes Kanban Responsives - Utilisation de toute la largeur */}
-          <div className="w-full overflow-x-auto">
-            <Row 
-              gutter={[12, 16]} 
-              className="min-w-full"
-              style={{ margin: 0 }}
-            >
-              {leadStatuses.map(status => {
-                const columnLeads = leadsByStatus[status.id] || [];
-                console.log(`🏗️ [Rendu] Colonne ${status.id}:`, {
-                  columnName: status.name,
-                  leadsCount: columnLeads.length,
-                  leadIds: columnLeads.map(l => l.id),
-                  hasHandleDropLead: !!handleDropLead,
-                  responsiveSpan
-                });
-                
-                // Transformer le statut Prisma en format compatible avec KanbanColumn
-                const columnData = {
-                  id: status.id,
-                  name: status.name,
-                  color: status.color,
-                  description: `Statut: ${status.name}`
-                };
-                
-                return (
-                  <Col 
-                    key={status.id} 
-                    xs={24} // Mobile: 1 colonne
-                    sm={12} // Tablette: 2 colonnes
-                    md={responsiveSpan} // Desktop: colonnes adaptives
-                    lg={responsiveSpan}
-                    xl={responsiveSpan}
-                    className="flex-1"
-                    style={{ minWidth: '280px' }} // Largeur minimale pour lisibilité
-                  >
-                    <KanbanColumn
-                      column={columnData}
-                      leads={columnLeads}
-                      onDropLead={handleDropLead}
-                      onViewLead={onViewLead}
-                      onCallLead={onCallLead}
-                      onEmailLead={onEmailLead}
-                      onScheduleLead={onScheduleLead}
-                    />
-                  </Col>
-                );
-              })}
-            </Row>
+        {/* Board container - SCROLL HORIZONTAL - RESPONSIVE */}
+        <div 
+          ref={boardRef}
+          style={{
+            padding: boardPadding,
+            overflowX: 'auto',
+            overflowY: 'hidden',
+            height: boardHeight,
+            WebkitOverflowScrolling: 'touch',
+            scrollSnapType: isMobile && !isBoardDragging ? 'x mandatory' : undefined,
+          }}
+        >
+          {/* Flex container pour les colonnes - HORIZONTAL */}
+          <div 
+            style={{
+              display: 'flex',
+              flexDirection: 'row',
+              alignItems: 'flex-start',
+              gap: isMobile ? '12px' : '12px',
+              height: '100%',
+              paddingBottom: '12px',
+            }}
+          >
+            {leadStatuses.map(status => {
+              const columnLeads = leadsByStatus[status.id] || [];
+
+              const columnData = {
+                id: status.id,
+                name: status.name,
+                color: status.color,
+                description: `Statut: ${status.name}`
+              };
+
+              return (
+                <div 
+                  key={status.id}
+                  style={{
+                    flex: `0 0 ${columnWidth}`,
+                    width: columnWidth,
+                    minWidth: columnWidth,
+                    maxWidth: columnWidth,
+                    scrollSnapAlign: isMobile ? 'start' : undefined,
+                  }}
+                >
+                  <KanbanColumn
+                    column={columnData}
+                    leads={columnLeads}
+                    onDropLead={handleDropLead}
+                    onViewLead={onViewLead}
+                    onCallLead={onCallLead}
+                    onEmailLead={onEmailLead}
+                    onScheduleLead={onScheduleLead}
+                    onEditLead={onEditLead}
+                    onDeleteLead={onDeleteLead}
+                    isMobile={isMobile}
+                    onCardDragStart={handleCardDragStart}
+                    onCardDragEnd={handleCardDragEnd}
+                  />
+                </div>
+              );
+            })}
           </div>
         </div>
       </div>
+
+      {/* Modal de filtres */}
+      <Modal
+        title="Filtrer les leads"
+        open={filterModalVisible}
+        onCancel={() => setFilterModalVisible(false)}
+        onOk={() => setFilterModalVisible(false)}
+        width={500}
+      >
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+          <div>
+            <label style={{ display: 'block', marginBottom: '8px', fontWeight: 500 }}>
+              Source
+            </label>
+            <Select
+              allowClear
+              placeholder="Toutes les sources"
+              style={{ width: '100%' }}
+              value={filterSource}
+              onChange={setFilterSource}
+              options={[
+                { label: 'Site Web', value: 'Site Web' },
+                { label: 'website_form', value: 'website_form' },
+                { label: 'Referral', value: 'Referral' },
+                { label: 'Partner', value: 'Partner' },
+                { label: 'Direct', value: 'Direct' },
+              ]}
+            />
+          </div>
+
+          <div>
+            <label style={{ display: 'block', marginBottom: '8px', fontWeight: 500 }}>
+              Priorité
+            </label>
+            <Select
+              allowClear
+              placeholder="Toutes les priorités"
+              style={{ width: '100%' }}
+              value={filterPriority}
+              onChange={setFilterPriority}
+              options={[
+                { label: '🔴 Critique', value: 'critical' },
+                { label: '🟠 Haute', value: 'high' },
+                { label: '🟡 Moyenne', value: 'medium' },
+                { label: '🟢 Basse', value: 'low' },
+              ]}
+            />
+          </div>
+
+          <div>
+            <label style={{ display: 'block', marginBottom: '8px', fontWeight: 500 }}>
+              Commercial assigné
+            </label>
+            <Select
+              allowClear
+              placeholder="Tous les commerciaux"
+              style={{ width: '100%' }}
+              value={filterAssignee}
+              onChange={setFilterAssignee}
+              options={[
+                { label: 'Non assigné', value: 'unassigned' },
+                { label: 'Moi', value: user?.id },
+              ]}
+            />
+          </div>
+
+          {(filterSource || filterPriority || filterAssignee) && (
+            <Button
+              danger
+              onClick={() => {
+                setFilterSource(undefined);
+                setFilterPriority(undefined);
+                setFilterAssignee(undefined);
+              }}
+            >
+              Réinitialiser tous les filtres
+            </Button>
+          )}
+        </div>
+      </Modal>
+
+      <CreateLeadModal 
+        open={isAddLeadModalOpen}
+        onClose={() => setIsAddLeadModalOpen(false)}
+        onLeadCreated={() => {
+          setIsAddLeadModalOpen(false);
+          fetchLeads();
+        }}
+      />
     </DndProvider>
   );
 };

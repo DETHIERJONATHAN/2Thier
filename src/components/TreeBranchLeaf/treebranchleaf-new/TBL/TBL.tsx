@@ -32,7 +32,7 @@ import {
 } from 'antd';
 import { FileTextOutlined, DownloadOutlined, ClockCircleOutlined, FolderOpenOutlined, PlusOutlined, UserOutlined, FileAddOutlined, SearchOutlined, MailOutlined, PhoneOutlined, HomeOutlined, SwapOutlined, LeftOutlined, RightOutlined, SaveOutlined } from '@ant-design/icons';
 import { useAuth } from '../../../../auth/useAuth';
-import { useParams } from 'react-router-dom';
+import { useParams, useSearchParams } from 'react-router-dom';
 import { useTreeBranchLeafConfig } from '../../hooks/useTreeBranchLeafConfig';
 import { useAuthenticatedApi } from '../../../../hooks/useAuthenticatedApi';
 import { ClientSidebar } from './components/ClientSidebar';
@@ -77,6 +77,8 @@ const TBL: React.FC<TBLProps> = ({
   
   // Récupérer leadId depuis l'URL
   const { leadId: urlLeadId } = useParams<{ leadId?: string }>();
+  const [searchParams] = useSearchParams();
+  const requestedDevisId = searchParams.get('devisId');
   const { api } = useAuthenticatedApi();
   const screens = useBreakpoint();
   const isMobile = !screens.lg;
@@ -2304,6 +2306,12 @@ const TBL: React.FC<TBLProps> = ({
       message.error('Erreur lors du chargement du devis. Vérifiez la console pour plus de détails.');
     }
   }, [api, normalizePayload, computeSignature]);
+
+  useEffect(() => {
+    if (!requestedDevisId) return;
+    if (requestedDevisId === submissionId) return;
+    handleSelectDevis(requestedDevisId);
+  }, [requestedDevisId, submissionId, handleSelectDevis]);
 
   // (Ancienne fonction calcul kWh supprimée: sera réintroduite si UI dédiée)
 
