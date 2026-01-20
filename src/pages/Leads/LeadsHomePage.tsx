@@ -119,6 +119,7 @@ export default function LeadsHomePage({
   const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
   const [isAgendaModalOpen, setIsAgendaModalOpen] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [isAlertsOpen, setIsAlertsOpen] = useState(false);
 
   // 🔔 Fonction pour déterminer la couleur de notification IA
   const getNotificationColor = useCallback((lead: Lead) => {
@@ -711,57 +712,59 @@ export default function LeadsHomePage({
       }}
     >
       {/* ⚡ CENTRE DE NOTIFICATIONS IA */}
-      <Card
-        className="mb-6 border-l-4 border-l-blue-500"
-        styles={{ body: { padding: isMobile ? '16px' : '24px' } }}
-      >
-        <Row
-          align="middle"
-          justify="space-between"
-          className="mb-4"
-          gutter={[12, 12]}
+      {isAlertsOpen && (
+        <Card
+          className="mb-6 border-l-4 border-l-blue-500"
+          styles={{ body: { padding: isMobile ? '16px' : '24px' } }}
         >
-          <Col flex="auto">
-            <Title level={4} className="mb-0 flex items-center">
-              ⚡ Alertes IA
-              <Badge count={aiAnalysis.alerts.length} className="ml-2" />
-            </Title>
-          </Col>
-          <Col flex="none">
-            <BellOutlined className="text-xl text-blue-600" />
-          </Col>
-        </Row>
-        <Space direction="vertical" size="small" className="w-full">
-          {aiAnalysis.alerts.length > 0 ? (
-            aiAnalysis.alerts.map((alert) => (
-              <div 
-                key={alert.id} 
-                className={`bg-${alert.color}-50 border-l-4 border-l-${alert.color}-500 p-3 rounded hover:shadow-md transition-shadow cursor-pointer`}
-                onClick={() => alert.leadId && handleViewDetails(leads.find(l => l.id === alert.leadId)!)}
-              >
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center space-x-2">
-                    {alert.icon}
-                    <span className={`font-medium text-${alert.color}-800`}>
-                      {alert.message}
-                    </span>
+          <Row
+            align="middle"
+            justify="space-between"
+            className="mb-4"
+            gutter={[12, 12]}
+          >
+            <Col flex="auto">
+              <Title level={4} className="mb-0 flex items-center">
+                ⚡ Alertes IA
+                <Badge count={aiAnalysis.alerts.length} className="ml-2" />
+              </Title>
+            </Col>
+            <Col flex="none">
+              <BellOutlined className="text-xl text-blue-600" />
+            </Col>
+          </Row>
+          <Space direction="vertical" size="small" className="w-full">
+            {aiAnalysis.alerts.length > 0 ? (
+              aiAnalysis.alerts.map((alert) => (
+                <div 
+                  key={alert.id} 
+                  className={`bg-${alert.color}-50 border-l-4 border-l-${alert.color}-500 p-3 rounded hover:shadow-md transition-shadow cursor-pointer`}
+                  onClick={() => alert.leadId && handleViewDetails(leads.find(l => l.id === alert.leadId)!)}
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center space-x-2">
+                      {alert.icon}
+                      <span className={`font-medium text-${alert.color}-800`}>
+                        {alert.message}
+                      </span>
+                    </div>
+                    {alert.action && (
+                      <Badge 
+                        status={alert.type === 'critical' ? 'error' : alert.type === 'warning' ? 'warning' : 'processing'} 
+                        text={alert.action} 
+                      />
+                    )}
                   </div>
-                  {alert.action && (
-                    <Badge 
-                      status={alert.type === 'critical' ? 'error' : alert.type === 'warning' ? 'warning' : 'processing'} 
-                      text={alert.action} 
-                    />
-                  )}
                 </div>
+              ))
+            ) : (
+              <div className="text-green-600 text-center p-4 bg-green-50 rounded">
+                ✅ Aucune alerte - Tous vos leads sont sous contrôle !
               </div>
-            ))
-          ) : (
-            <div className="text-green-600 text-center p-4 bg-green-50 rounded">
-              ✅ Aucune alerte - Tous vos leads sont sous contrôle !
-            </div>
-          )}
-        </Space>
-      </Card>
+            )}
+          </Space>
+        </Card>
+      )}
 
       {/*  Barre de recherche et filtres */}
       <Card
@@ -954,6 +957,8 @@ export default function LeadsHomePage({
           <Badge count={aiAnalysis.alerts.length} showZero={false}>
             <Button
               icon={<BellOutlined />}
+              type={isAlertsOpen ? 'primary' : 'default'}
+              onClick={() => setIsAlertsOpen(prev => !prev)}
               title="Notifications IA"
               block={isMobile}
             >
