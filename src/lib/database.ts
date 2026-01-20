@@ -146,20 +146,38 @@ function createPrismaInstance(): PrismaClient {
     globalForDb.__db_instance = instance;
   }
 
-  // Connexion asynchrone non bloquante
-  if (!globalForDb.__db_initialized) {
-    globalForDb.__db_initialized = true;
-    void (async () => {
-      try {
-        await instance.$connect();
-        console.log('[Database] ✅ Connexion établie avec succès');
-      } catch (err) {
-        console.error('[Database] ❌ Échec de connexion:', (err as Error)?.message);
-      }
-    })();
+  return instance;
+}
+
+/**
+ * 🔌 CONNEXION SYNCHRONE
+ * 
+ * Fonction utilitaire pour établir la connexion à la base de données
+ * AVANT de démarrer le serveur HTTP.
+ * 
+ * @example
+ * ```typescript
+ * // Dans api-server-clean.ts
+ * await connectDatabase();
+ * app.listen(port, () => { ... });
+ * ```
+ */
+export async function connectDatabase(): Promise<void> {
+  if (globalForDb.__db_initialized) {
+    console.log('[Database] ⚡ Connexion déjà établie (singleton)');
+    return;
   }
 
-  return instance;
+  globalForDb.__db_initialized = true;
+  
+  try {
+    console.log('[Database] 🔌 Connexion en cours...');
+    await db.$connect();
+    console.log('[Database] ✅ Connexion établie avec succès');
+  } catch (err) {
+    console.error('[Database] ❌ Échec de connexion:', (err as Error)?.message);
+    throw err; // Propager l'erreur pour arrêter le démarrage du serveur
+  }
 }
 
 // ============================================================================

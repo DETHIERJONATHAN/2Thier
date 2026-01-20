@@ -24,16 +24,14 @@ import {
   ExclamationCircleOutlined,
   PictureOutlined,
   VideoCameraOutlined,
-  SettingOutlined,
-  ThunderboltOutlined,
   CloseOutlined
 } from '@ant-design/icons';
 import { useAuth } from '../../../../../auth/useAuth';
 import { useAIMeasure, getAIMeasureConfig, type AIMeasureConfig, type AIMeasureResult } from '../../../../../hooks/useAIMeasure';
 import { useMobileModalLock } from '../../../../../hooks/useMobileModalLock';
 import { useSmartCameraConfig } from '../../../../../hooks/useSmartCameraConfig';
+import { useAuthenticatedApi } from '../../../../../hooks/useAuthenticatedApi';
 import SmartCameraMobile, { type CapturedPhoto } from '../../../../SmartCamera/SmartCameraMobile';
-import type { MultiPhotoAnalysis } from '../../../../SmartCamera/PhotoAnalyzer';
 import { ReferenceObjectsConfig } from '../../../../SmartCamera/ReferenceObjectsConfig';
 import { ImageMeasurementPreview } from '../../../../ImageMeasurement/ImageMeasurementPreview';
 import ImageWithAnnotationsOverlay from '../../../../ImageMeasurement/ImageWithAnnotationsOverlay';
@@ -103,6 +101,9 @@ const TBLImageFieldWithAI: React.FC<TBLImageFieldWithAIProps> = ({
   // Hook auth pour récupérer l'organizationId
   const { user } = useAuth();
   const organizationId = user?.organizationId || '';
+
+  const { api } = useAuthenticatedApi();
+  const apiInstance = useMemo(() => api, [api]);
   
   // État local pour l'analyse IA
   const [isAnalyzingAI, setIsAnalyzingAI] = useState(false);
@@ -143,14 +144,12 @@ const TBLImageFieldWithAI: React.FC<TBLImageFieldWithAIProps> = ({
   const [processedImageUrl, setProcessedImageUrl] = useState<string | null>(null);
   const [processedImageBase64, setProcessedImageBase64] = useState<string | null>(null);
   const [isFromSmartCapture, setIsFromSmartCapture] = useState(false);
-  // 🔬 Analyse complète ArUco pour le panel Canvas
-  const [arucoAnalysis, setArucoAnalysis] = useState<any>(null);
   
   // 🆕 États pour stocker l'image avec annotations et les mesures
   const [annotatedImageUrl, setAnnotatedImageUrl] = useState<string | null>(null);
   const [savedAnnotations, setSavedAnnotations] = useState<ImageAnnotations | null>(null);
   const [savedMeasurements, setSavedMeasurements] = useState<MeasurementResults | null>(null);
-  const [isAnalyzingAruco, setIsAnalyzingAruco] = useState(false);
+  const [isAnalyzingReference, setIsAnalyzingReference] = useState(false);
   
   // 🆕 État pour le modal plein écran
   const [showFullscreenImage, setShowFullscreenImage] = useState(false);
@@ -339,7 +338,7 @@ const TBLImageFieldWithAI: React.FC<TBLImageFieldWithAIProps> = ({
 
   /**
    * Handler pour les fichiers depuis input natif (caméra ou galerie)
-   * 🔥 NOUVEAU: Utilise le même traitement ArUco que SmartCamera pour les mesures
+   * 🔥 NOUVEAU: Utilise le même traitement Métré A4 V10 que SmartCamera pour les mesures
    */
   const handleNativeFileChange = useCallback(async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -358,7 +357,13 @@ const TBLImageFieldWithAI: React.FC<TBLImageFieldWithAIProps> = ({
       
       // 🔥 NOUVEAU: Si on a des clés de mesure (aiMeasure_keys), utiliser le même traitement que SmartCamera
       if (aiMeasure_keys && aiMeasure_keys.length > 0) {
-        console.log('[TBLImageFieldWithAI] 🔥 Upload avec traitement ArUco (même que SmartCamera)');
+        console.log('[TBLImageFieldWithAI] 🔥 Upload avec traitement Métré A4 V10 (même que SmartCamera)');
+
+        // ✅ Sauvegarder tout de suite la photo dans le brouillon/lead
+        if (lastAppliedImageRef.current !== imageDataUrl) {
+          onChange(imageDataUrl);
+          lastAppliedImageRef.current = imageDataUrl;
+        }
         
         // Simuler un CapturedPhoto pour réutiliser handleSmartCapture
         const fakePhoto: CapturedPhoto = {
@@ -372,8 +377,8 @@ const TBLImageFieldWithAI: React.FC<TBLImageFieldWithAIProps> = ({
         };
         
         // Utiliser le même flux que SmartCamera
-        setIsAnalyzingAruco(true);
-        message.loading({ content: '🔬 Analyse ArUco en cours... Patientez', key: 'ultra-fusion', duration: 0 });
+        setIsAnalyzingReference(true);
+        message.loading({ content: '🔬 Analyse Métré A4 V10 en cours... Patientez', key: 'ultra-fusion', duration: 0 });
         
         try {
           const base64Part = imageDataUrl.includes(',') ? imageDataUrl.split(',')[1] : imageDataUrl;
@@ -384,34 +389,31 @@ const TBLImageFieldWithAI: React.FC<TBLImageFieldWithAIProps> = ({
             metadata: fakePhoto.metadata
           }];
           
-          const response = await fetch('/api/measurement-reference/ultra-fusion-detect', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ 
-              photos: photosForFusion,
-              // 📸 Envoyer userAgent pour calcul précis de la focale
-              userAgent: navigator.userAgent
-            }),
-            credentials: 'include'
+          if (!apiInstance) {
+            throw new Error('API authentifiée indisponible');
+          }
+
+          const result = await apiInstance.post('/api/measurement-reference/ultra-fusion-detect', {
+            photos: photosForFusion,
+            // 📸 Envoyer userAgent pour calcul précis de la focale
+            userAgent: navigator.userAgent
           });
           
-          const result = await response.json();
-          
-          if (result.success && result.ultraPrecision) {
-            console.log('[TBLImageFieldWithAI] ✅ Analyse ArUco terminée (upload)!');
-            console.log(`   🔬 Ultra-précision: ${result.ultraPrecision.totalPoints} points`);
-            
-            if (result.arucoAnalysis) {
-              setArucoAnalysis(result.arucoAnalysis);
+          if (result.success && result.fusedCorners) {
+            console.log('[TBLImageFieldWithAI] ✅ Analyse Métré A4 V10 terminée (upload)!');
+
+            if (result.fallbackMode === 'largeTagOnly') {
+              message.warning({
+                content: '⚠️ Grand tag seul détecté - précision dégradée',
+                key: 'ultra-fusion'
+              });
+            } else {
+              message.success({ 
+                content: '🎯 Métré A4 V10 détecté!', 
+                key: 'ultra-fusion' 
+              });
             }
-            
-            message.success({ 
-              content: `🎯 ArUco détecté! (${result.ultraPrecision.estimatedPrecision})`, 
-              key: 'ultra-fusion' 
-            });
-            
-            const optimalCorrection = result.optimalCorrection || null;
-            
+
             // Utiliser l'image d'origine (pas la fusionnée car une seule photo)
             setProcessedImageUrl(imageDataUrl);
             setProcessedImageBase64(base64Part);
@@ -425,23 +427,22 @@ const TBLImageFieldWithAI: React.FC<TBLImageFieldWithAIProps> = ({
                 ...fakePhoto.metadata,
                 qualityScore: result.bestPhoto?.score * 100 || 80,
                 sharpness: 80,
-                arucoDetected: true,
-                ultraPrecision: result.ultraPrecision,
+                referenceDetected: true,
                 fusedCorners: result.fusedCorners,
-                optimalCorrection: optimalCorrection,
+                fallbackMode: result.fallbackMode || null,
                 homography: null
               }
             }];
             
             setCapturedPhotos(enrichedPhotos as any);
-            setIsAnalyzingAruco(false);
+            setIsAnalyzingReference(false);
             setShowMeasurementCanvas(true);
             
           } else {
-            // ArUco non détecté - ouvrir le canvas quand même
-            console.log('[TBLImageFieldWithAI] ⚠️ ArUco non détecté (upload)');
+            // Référence non détectée - ouvrir le canvas quand même
+            console.log('[TBLImageFieldWithAI] ⚠️ Métré A4 V10 non détecté (upload)');
             message.warning({ 
-              content: '⚠️ ArUco non détecté - Calibration manuelle', 
+              content: '⚠️ Métré A4 V10 non détecté - Calibration manuelle', 
               key: 'ultra-fusion' 
             });
             
@@ -451,12 +452,12 @@ const TBLImageFieldWithAI: React.FC<TBLImageFieldWithAIProps> = ({
             setIsFromSmartCapture(true);
             setCapturedPhotos([fakePhoto]);
             
-            setIsAnalyzingAruco(false);
+            setIsAnalyzingReference(false);
             setShowMeasurementCanvas(true);
           }
           
         } catch (error: any) {
-          console.error('[TBLImageFieldWithAI] ❌ Erreur analyse ArUco (upload):', error);
+          console.error('[TBLImageFieldWithAI] ❌ Erreur analyse Métré A4 V10 (upload):', error);
           message.warning({ content: `Erreur: ${error.message}`, key: 'ultra-fusion' });
           
           const base64Part = imageDataUrl.includes(',') ? imageDataUrl.split(',')[1] : imageDataUrl;
@@ -465,7 +466,7 @@ const TBLImageFieldWithAI: React.FC<TBLImageFieldWithAIProps> = ({
           setIsFromSmartCapture(true);
           setCapturedPhotos([fakePhoto]);
           
-          setIsAnalyzingAruco(false);
+          setIsAnalyzingReference(false);
           setShowMeasurementCanvas(true);
         }
         
@@ -496,7 +497,7 @@ const TBLImageFieldWithAI: React.FC<TBLImageFieldWithAIProps> = ({
     
     // Reset l'input pour permettre de rechoisir le même fichier
     event.target.value = '';
-  }, [onChange, imageThumbnails, isAIEnabled, autoTrigger, triggerAIAnalysis, maxImageSizeBytes, imageConfig.maxSize, aiMeasure_keys]);
+  }, [onChange, imageThumbnails, isAIEnabled, autoTrigger, triggerAIAnalysis, maxImageSizeBytes, imageConfig.maxSize, aiMeasure_keys, apiInstance]);
 
   /**
    * Ouvrir la galerie
@@ -513,32 +514,25 @@ const TBLImageFieldWithAI: React.FC<TBLImageFieldWithAIProps> = ({
   }, []);
   
   /**
-   * 🔥 Handler pour le SmartCamera (capture multi-photos avec ULTRA-FUSION + ArUco)
-   * 
-   * WORKFLOW PARFAIT:
-   * 1. Capturer N photos
-   * 2. 🔬 ATTENDRE l'analyse ArUco (message "Analyse en cours...")
-   * 3. 🚀 OUVRIR LE CANVAS avec TOUT déjà calibré parfaitement
+   * 🔥 Handler pour le SmartCamera (capture multi-photos)
    */
   const handleSmartCapture = useCallback(async (photos: CapturedPhoto[]) => {
-    console.log('[TBLImageFieldWithAI] 🔥 IA Photo capture:', photos.length, 'photos');
-    
+    console.log('[TBLImageFieldWithAI] 📸 Capture IA:', photos.length, 'photos');
+
     if (photos.length === 0) {
       message.error('Aucune photo capturée');
       setShowSmartCamera(false);
       return;
     }
-    
+
     // Fermer SmartCamera
     setShowSmartCamera(false);
-    
-    // 🔬 Montrer l'état d'attente
-    setIsAnalyzingAruco(true);
-    message.loading({ content: '🔬 Analyse ArUco en cours... Patientez', key: 'ultra-fusion', duration: 0 });
-    
+
+    // Montrer l'état d'attente
+    setIsAnalyzingReference(true);
+    message.loading({ content: '🔬 Analyse Métré A4 V10 en cours... Patientez', key: 'ultra-fusion', duration: 0 });
+
     try {
-      console.log('[TBLImageFieldWithAI] 🎯 Appel /ultra-fusion-detect avec', photos.length, 'photos');
-      
       const photosForFusion = photos
         .filter(p => p.imageBase64 && p.imageBase64.length > 100)
         .map(p => ({
@@ -546,185 +540,93 @@ const TBLImageFieldWithAI: React.FC<TBLImageFieldWithAIProps> = ({
           mimeType: 'image/jpeg',
           metadata: p.metadata
         }));
-      
+
       if (photosForFusion.length === 0) {
         throw new Error('Aucune photo valide');
       }
-      
-      const response = await fetch('/api/measurement-reference/ultra-fusion-detect', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          photos: photosForFusion,
-          // 📸 Envoyer userAgent pour calcul précis de la focale par modèle de téléphone
-          userAgent: navigator.userAgent
-        }),
-        credentials: 'include'
-      });
-      
-      const result = await response.json();
-      
-      if (!result.success) {
-        throw new Error(result.error || 'Fusion échouée');
+
+      if (!apiInstance) {
+        throw new Error('API authentifiée indisponible');
       }
-      
-      console.log('\n' + '='.repeat(80));
-      console.log('📸 [ULTRA-FUSION] RÉSULTATS DÉTAILLÉS');
-      console.log('='.repeat(80));
-      
-      console.log('\n🎯 MEILLEURE PHOTO SÉLECTIONNÉE:');
-      console.log(`   Index: ${result.bestPhoto?.index}`);
-      console.log(`   Score total: ${result.bestPhoto?.score?.toFixed(1)}/100`);
-      console.log(`   Netteté: ${result.bestPhoto?.sharpness?.toFixed(1)}/100`);
-      console.log(`   Homographie: ${result.bestPhoto?.homographyQuality?.toFixed(1)}/100`);
-      console.log(`   Conditions: ${result.bestPhoto?.captureConditions?.toFixed(1)}/100`);
-      if (result.bestPhoto?.warnings?.length > 0) {
-        console.log(`   ⚠️ Warnings: ${result.bestPhoto.warnings.join(', ')}`);
-      }
-      
-      console.log('\n📊 TOUTES LES PHOTOS:');
-      result.allPhotoScores?.forEach((photo: any, idx: number) => {
-        const marker = idx === result.bestPhoto?.index ? '🏆' : '  ';
-        console.log(`   ${marker} Photo ${idx}: ${photo.score?.toFixed(1) || 'N/A'}/100 ${photo.detected ? '✅' : '❌'}`);
+
+      const result = await apiInstance.post('/api/measurement-reference/ultra-fusion-detect', {
+        photos: photosForFusion,
+        // 📸 Envoyer userAgent pour calcul précis de la focale par modèle de téléphone
+        userAgent: navigator.userAgent
       });
-      
-      console.log('\n🔬 ULTRA-PRÉCISION (Photo sélectionnée):');
-      if (result.ultraPrecision) {
-        const extraPoints = Math.max(
-          0,
-          (result.ultraPrecision.totalPoints || 0) -
-            (result.ultraPrecision.aprilTags || 0) -
-            (result.ultraPrecision.referenceDots || 0)
-        );
-        console.log(`   Points total: ${result.ultraPrecision.totalPoints}`);
-        console.log(`   - AprilTags: ${result.ultraPrecision.aprilTags}/5`);
-        console.log(`   - Points noirs: ${result.ultraPrecision.referenceDots}/12`);
-        console.log(`   - Points extra: ${extraPoints}`);
-        console.log(`   Précision estimée: ${result.ultraPrecision.estimatedPrecision}`);
-        console.log(`   Erreur reprojection: ${result.ultraPrecision.reprojectionError?.toFixed(2)}mm`);
-        console.log(`   Qualité homographie: ${(result.ultraPrecision.quality * 100).toFixed(1)}%`);
+
+      if (!result?.success) {
+        throw new Error(result?.error || 'Analyse échouée');
       }
-      
-      console.log('\n📈 MÉTRIQUES GLOBALES:');
-      console.log(`   Photos analysées: ${result.metrics?.inputPhotos}`);
-      console.log(`   Détections réussies: ${result.metrics?.successfulDetections}`);
-      console.log(`   Amélioration: +${result.metrics?.improvement?.toFixed(1)}% vs moyenne`);
-      console.log(`   Temps traitement: ${result.metrics?.processingTimeMs}ms`);
-      
-      console.log('\n' + '='.repeat(80) + '\n');
-      
-      // 📊 Afficher le score de qualité au commercial
-      const bestScore = result.bestPhoto?.score || 0;
-      const scoreType = bestScore >= 60 ? 'success' : bestScore >= 45 ? 'warning' : 'error';
-      const extraPointsForMsg = result.ultraPrecision
-        ? Math.max(
-            0,
-            (result.ultraPrecision.totalPoints || 0) -
-              (result.ultraPrecision.aprilTags || 0) -
-              (result.ultraPrecision.referenceDots || 0)
-          )
-        : 0;
-      const scoreMessage = bestScore >= 60 
-        ? `✅ Qualité excellente (${bestScore.toFixed(0)}/100) - ${extraPointsForMsg} points extra détectés` 
-        : bestScore >= 45
-        ? `⚠️ Qualité limite (${bestScore.toFixed(0)}/100) - Recommandation : reprendre (${extraPointsForMsg} points extra)`
-        : `❌ Qualité insuffisante (${bestScore.toFixed(0)}/100) - Reprendre avec meilleur éclairage`;
-      
-      message[scoreType]({ 
-        content: scoreMessage, 
-        key: 'photo-quality',
-        duration: 8 
-      });
-      
-      if (result.ultraPrecision) {
-        console.log(`   🔬 Ultra-précision: ${result.ultraPrecision.totalPoints} points`);
-        console.log(`      ✅ Précision: ${result.ultraPrecision.estimatedPrecision}`);
-        
-        // 🔬 Stocker l'analyse complète ArUco pour le panel Canvas
-        if (result.arucoAnalysis) {
-          console.log(`   📊 Analyse ArUco: rotX=${result.arucoAnalysis.pose?.rotX}°, depth=${result.arucoAnalysis.depth?.estimatedCm}cm`);
-          setArucoAnalysis(result.arucoAnalysis);
-        }
-        
-        message.success({ 
-          content: `🎯 ArUco détecté! Photo ${result.bestPhoto?.index + 1} (${result.ultraPrecision.estimatedPrecision})`, 
-          key: 'ultra-fusion' 
-        });
-        
-        // 🔧 Extraire la correction optimale calculée par l'API
-        const optimalCorrection = result.optimalCorrection || null;
-        if (optimalCorrection) {
-          console.log(`   🎯 Correction optimale: ×${optimalCorrection.finalCorrection?.toFixed(4)} (confiance: ${(optimalCorrection.globalConfidence * 100).toFixed(0)}%)`);
-        }
-        
-        // 🏆 Utiliser la MEILLEURE photo
-        const bestPhotoIndex = result.bestPhoto?.index || 0;
-        const bestImage = result.bestPhotoBase64 
-          ? `data:image/jpeg;base64,${result.bestPhotoBase64}`
-          : photos[0]?.imageBase64?.startsWith('data:') 
-            ? photos[0].imageBase64 
-            : `data:image/jpeg;base64,${photos[0]?.imageBase64}`;
-        
-        setProcessedImageUrl(bestImage);
-        setProcessedImageBase64(result.bestPhotoBase64 || photos[0]?.imageBase64?.split(',')[1] || photos[0]?.imageBase64 || '');
-        setIsFromSmartCapture(true);
-        
-        // 🎯 Créer les photos enrichies avec toutes les données ArUco
-        const enrichedPhotos = photos.map((photo, idx) => ({
-          imageBase64: idx === bestPhotoIndex && result.bestPhotoBase64 
-            ? result.bestPhotoBase64 
-            : photo.imageBase64?.includes(',') ? photo.imageBase64.split(',')[1] : photo.imageBase64 || '',
+
+      const bestPhotoIndex = result.bestPhoto?.index ?? 0;
+      const bestPhotoBase64 = result.bestPhotoBase64
+        || (photos[bestPhotoIndex]?.imageBase64?.includes(',')
+          ? photos[bestPhotoIndex].imageBase64.split(',')[1]
+          : photos[bestPhotoIndex]?.imageBase64)
+        || '';
+      const bestImage = bestPhotoBase64.startsWith('data:')
+        ? bestPhotoBase64
+        : `data:image/jpeg;base64,${bestPhotoBase64}`;
+
+      setProcessedImageUrl(bestImage);
+      setProcessedImageBase64(bestPhotoBase64);
+      setIsFromSmartCapture(true);
+
+      // ✅ Sauvegarder tout de suite la meilleure photo dans le brouillon/lead
+      if (lastAppliedImageRef.current !== bestImage) {
+        onChange(bestImage);
+        lastAppliedImageRef.current = bestImage;
+      }
+
+      const enrichedPhotos = photos.map((photo, idx) => {
+        const base64 = idx === bestPhotoIndex && result.bestPhotoBase64
+          ? result.bestPhotoBase64
+          : photo.imageBase64?.includes(',')
+            ? photo.imageBase64.split(',')[1]
+            : photo.imageBase64 || '';
+
+        return {
+          imageBase64: base64,
           mimeType: 'image/jpeg',
           metadata: {
             ...photo.metadata,
-            qualityScore: result.allPhotoScores?.find((d: any) => d.index === idx)?.score || 85,
-            sharpness: 85,
-            arucoDetected: idx === bestPhotoIndex,
-            ultraPrecision: idx === bestPhotoIndex ? result.ultraPrecision : null,
+            qualityScore: result.allPhotoScores?.find((d: any) => d.index === idx)?.score || photo.metadata?.qualityScore || 85,
+            sharpness: photo.metadata?.sharpness || 85,
+            referenceDetected: idx === bestPhotoIndex && !!result.fusedCorners,
             fusedCorners: idx === bestPhotoIndex ? result.fusedCorners : null,
-            aprilTagsDebug: idx === bestPhotoIndex ? result.aprilTagsDebug : null, // 🎨 NOUVEAU: Visualisation AprilTags
-            optimalCorrection: idx === bestPhotoIndex ? optimalCorrection : null,
-            detectionMethod: idx === bestPhotoIndex ? result.detectionMethod : null, // 🎯 A4 ou ArUco
             homography: null
           }
-        }));
-        
-        setCapturedPhotos(enrichedPhotos as any);
-        
-        message.success({ 
-          content: `🎯 ArUco détecté! Ouverture du canvas...`, 
-          key: 'ultra-fusion' 
-        });
-        
-        // 🚀 MAINTENANT ouvrir le canvas avec TOUT déjà calibré
-        console.log('[TBLImageFieldWithAI] 🚀 Ouverture du canvas avec données ArUco complètes!');
-        setIsAnalyzingAruco(false);
-        setShowMeasurementCanvas(true);
-        
+        };
+      });
+
+      setCapturedPhotos(enrichedPhotos as any);
+
+      if (result.fusedCorners) {
+        if (result.fallbackMode === 'largeTagOnly') {
+          message.warning({
+            content: '⚠️ Grand tag seul détecté - précision dégradée (ouverture du canvas)',
+            key: 'ultra-fusion'
+          });
+        } else {
+          message.success({
+            content: '🎯 Métré A4 V10 détecté! Ouverture du canvas...',
+            key: 'ultra-fusion'
+          });
+        }
       } else {
-        // ArUco non détecté - ouvrir le canvas quand même
-        console.log('   ⚠️ ArUco non détecté');
-        message.warning({ 
-          content: '⚠️ ArUco non détecté - Calibration manuelle', 
-          key: 'ultra-fusion' 
+        message.warning({
+          content: '⚠️ Métré A4 V10 non détecté - Calibration manuelle',
+          key: 'ultra-fusion'
         });
-        
-        // Préparer la première photo
-        const firstPhoto = photos[0]?.imageBase64 || '';
-        const base64Part = firstPhoto.includes(',') ? firstPhoto.split(',')[1] : firstPhoto;
-        setProcessedImageUrl(firstPhoto.startsWith('data:') ? firstPhoto : `data:image/jpeg;base64,${base64Part}`);
-        setProcessedImageBase64(base64Part);
-        setIsFromSmartCapture(true);
-        setCapturedPhotos(photos);
-        
-        setIsAnalyzingAruco(false);
-        setShowMeasurementCanvas(true);
       }
-      
+
+      setIsAnalyzingReference(false);
+      setShowMeasurementCanvas(true);
     } catch (error: any) {
-      console.error('[TBLImageFieldWithAI] ❌ Erreur analyse ArUco:', error);
+      console.error('[TBLImageFieldWithAI] ❌ Erreur analyse Métré A4 V10:', error);
       message.warning({ content: `Erreur: ${error.message}`, key: 'ultra-fusion' });
-      
+
       // En cas d'erreur, ouvrir le canvas quand même
       const firstPhoto = photos[0]?.imageBase64 || '';
       const base64Part = firstPhoto.includes(',') ? firstPhoto.split(',')[1] : firstPhoto;
@@ -732,11 +634,11 @@ const TBLImageFieldWithAI: React.FC<TBLImageFieldWithAIProps> = ({
       setProcessedImageBase64(base64Part);
       setIsFromSmartCapture(true);
       setCapturedPhotos(photos);
-      
-      setIsAnalyzingAruco(false);
+
+      setIsAnalyzingReference(false);
       setShowMeasurementCanvas(true);
     }
-  }, []);
+  }, [apiInstance, onChange]);
 
   /**
    * 🆕 Handler pour la validation des mesures depuis ImageMeasurementCanvas
@@ -747,22 +649,23 @@ const TBLImageFieldWithAI: React.FC<TBLImageFieldWithAIProps> = ({
     console.log('[TBLImageFieldWithAI] 🎯 Annotations reçues:', annotations ? {
       hasReferenceCorners: !!annotations.referenceCorners,
       hasImageDimensions: !!annotations.imageDimensions,
-      hasMeasurementPoints: annotations.measurementPoints?.length || 0,
-      markerSizeCm: annotations.markerSizeCm
+      hasMeasurementPoints: annotations.measurementPoints?.length || 0
     } : 'null');
     
     // 🆕 Sauvegarder les annotations et mesures pour pouvoir les revoir
     setSavedAnnotations(annotations || null);
     setSavedMeasurements(measurements);
     
-    // Sauvegarder l'image traitée dans le champ
-    if (processedImageUrl) {
-      if (lastAppliedImageRef.current !== processedImageUrl) {
-        onChange(processedImageUrl);
-        lastAppliedImageRef.current = processedImageUrl;
+    // ✅ Remplacer l'image par la version annotée si disponible
+    const nextAnnotatedImageUrl = annotations?.annotatedImageUrl || null;
+    const nextImageValue = nextAnnotatedImageUrl || processedImageUrl;
+
+    if (nextImageValue) {
+      if (lastAppliedImageRef.current !== nextImageValue) {
+        onChange(nextImageValue);
+        lastAppliedImageRef.current = nextImageValue;
       }
-      // Aussi sauvegarder comme image annotée (pour l'instant la même, mais pourrait être avec overlay)
-      setAnnotatedImageUrl(processedImageUrl);
+      setAnnotatedImageUrl(nextAnnotatedImageUrl || processedImageUrl);
     }
     
     // Appliquer les mesures aux champs mappés
@@ -855,16 +758,16 @@ const TBLImageFieldWithAI: React.FC<TBLImageFieldWithAIProps> = ({
           {/* 🎯 SmartCamera IA (multi-photos) - Bouton principal */}
           {aiMeasure_enabled && (
             <>
-              <Tooltip title="📸 Capture IA avec mesures automatiques">
+              <Tooltip title="📷 Ouvrir l'appareil photo">
                 <Button
-                  icon={<ThunderboltOutlined />}
-                  onClick={() => setShowSmartCamera(true)}
+                  icon={<CameraOutlined />}
+                  onClick={openCamera}
                   disabled={disabled || isAnalyzingAI}
                   size={size}
                   type="primary"
                   style={{
-                    background: '#722ed1',
-                    borderColor: '#722ed1',
+                    background: '#1677ff',
+                    borderColor: '#1677ff',
                     width: iconButtonPx,
                     height: iconButtonPx,
                     padding: 0,
@@ -872,18 +775,18 @@ const TBLImageFieldWithAI: React.FC<TBLImageFieldWithAIProps> = ({
                     alignItems: 'center',
                     justifyContent: 'center'
                   }}
-                  aria-label="IA Photo"
+                  aria-label="Appareil photo"
                 />
               </Tooltip>
               
-              {/* 🆕 Bouton "Mesurer" - UNIQUEMENT si des photos ont été analysées avec ArUco */}
-              {capturedPhotos.length > 0 && capturedPhotos.some(p => (p.metadata as any)?.arucoDetected) && (
-                <Tooltip title="📐 Revoir l'analyse avec ArUco détecté">
+              {/* 🆕 Bouton "Mesurer" - Réutiliser les photos capturées */}
+              {capturedPhotos.length > 0 && (
+                <Tooltip title="📐 Revoir l'analyse Métré A4 V10">
                   <Button
                     icon={<CheckCircleOutlined />}
                     onClick={() => {
-                      // 🎯 Réutiliser les photos analysées avec ArUco
-                      const bestPhoto = capturedPhotos.find(p => (p.metadata as any)?.arucoDetected);
+                      // 🎯 Réutiliser les photos avec référence détectée si possible
+                      const bestPhoto = capturedPhotos.find(p => (p.metadata as any)?.referenceDetected || (p.metadata as any)?.fusedCorners);
                       const photoToUse = bestPhoto || capturedPhotos[0];
                       
                       const base64 = photoToUse.imageBase64?.includes(',') 
@@ -898,10 +801,9 @@ const TBLImageFieldWithAI: React.FC<TBLImageFieldWithAIProps> = ({
                       setProcessedImageBase64(base64);
                       setIsFromSmartCapture(true);
                       
-                      console.log('[TBLImageFieldWithAI] 📐 Revoir analyse ArUco:', {
+                      console.log('[TBLImageFieldWithAI] 📐 Revoir analyse Métré A4 V10:', {
                         totalPhotos: capturedPhotos.length,
-                        bestPhotoHasAruco: !!(bestPhoto?.metadata as any)?.arucoDetected,
-                        hasOptimalCorrection: !!(bestPhoto?.metadata as any)?.optimalCorrection,
+                        bestPhotoHasReference: !!(bestPhoto?.metadata as any)?.referenceDetected,
                         hasFusedCorners: !!(bestPhoto?.metadata as any)?.fusedCorners
                       });
                       
@@ -930,8 +832,8 @@ const TBLImageFieldWithAI: React.FC<TBLImageFieldWithAIProps> = ({
           )}
         </Space>
         
-        {/* 🔬 Indicateur d'analyse ArUco en cours */}
-        {isAnalyzingAruco && (
+        {/* 🔬 Indicateur d'analyse Métré A4 V10 en cours */}
+        {isAnalyzingReference && (
           <div style={{
             padding: '12px 16px',
             background: 'linear-gradient(90deg, #722ed1, #1890ff)',
@@ -942,27 +844,27 @@ const TBLImageFieldWithAI: React.FC<TBLImageFieldWithAIProps> = ({
             gap: 12
           }}>
             <Spin indicator={<LoadingOutlined style={{ fontSize: 20, color: 'white' }} spin />} />
-            <span>🔬 Analyse ArUco en cours... Patientez</span>
+            <span>🔬 Analyse Métré A4 V10 en cours... Patientez</span>
           </div>
         )}
         
         {/* Aperçu de l'image - CLIQUABLE pour plein écran */}
-        {(value || capturedPhotos.length > 0) && !isAnalyzingAruco && (
+        {(value || capturedPhotos.length > 0) && !isAnalyzingReference && (
           <div 
             style={{ position: 'relative', display: 'inline-block', cursor: 'pointer' }}
             onClick={() => setShowFullscreenImage(true)}
             title="Cliquez pour voir en plein écran"
           >
-            {/* 🎯 Afficher la meilleure photo (avec ArUco si disponible) */}
+            {/* 🎯 Afficher la meilleure photo (avec référence si disponible) */}
             {(() => {
               let imgSrc = typeof value === 'string' ? value : (value as any)?.original;
-              let hasAruco = false;
+              let hasReference = false;
               
-              // Si on a des photos capturées, utiliser celle avec ArUco
+              // Si on a des photos capturées, utiliser celle avec référence
               if (capturedPhotos.length > 0) {
-                const bestPhoto = capturedPhotos.find(p => (p.metadata as any)?.arucoDetected);
+                const bestPhoto = capturedPhotos.find(p => (p.metadata as any)?.referenceDetected || (p.metadata as any)?.fusedCorners);
                 const photoToShow = bestPhoto || capturedPhotos[0];
-                hasAruco = !!(bestPhoto?.metadata as any)?.arucoDetected;
+                hasReference = !!(bestPhoto?.metadata as any)?.referenceDetected || !!(bestPhoto?.metadata as any)?.fusedCorners;
                 
                 const base64 = photoToShow.imageBase64;
                 imgSrc = base64?.startsWith('data:') 
@@ -979,7 +881,7 @@ const TBLImageFieldWithAI: React.FC<TBLImageFieldWithAIProps> = ({
                       width: '150px', 
                       height: '150px', 
                       objectFit: 'cover', 
-                      border: hasAruco ? '3px solid #52c41a' : '1px solid #d9d9d9',
+                      border: hasReference ? '3px solid #52c41a' : '1px solid #d9d9d9',
                       borderRadius: '8px',
                       opacity: isAnalyzingAI ? 0.5 : 1,
                       transition: 'transform 0.2s',
@@ -988,8 +890,8 @@ const TBLImageFieldWithAI: React.FC<TBLImageFieldWithAIProps> = ({
                     onMouseOut={(e) => e.currentTarget.style.transform = 'scale(1)'}
                   />
                   
-                  {/* 🎯 Badge ArUco si détecté */}
-                  {hasAruco && (
+                  {/* 🎯 Badge V10 si détecté */}
+                  {hasReference && (
                     <div style={{
                       position: 'absolute',
                       top: -8,
@@ -1006,7 +908,7 @@ const TBLImageFieldWithAI: React.FC<TBLImageFieldWithAIProps> = ({
                       fontWeight: 'bold',
                       boxShadow: '0 2px 6px rgba(0,0,0,0.3)'
                     }}>
-                      ✓
+                      V10
                     </div>
                   )}
                   
@@ -1168,30 +1070,9 @@ const TBLImageFieldWithAI: React.FC<TBLImageFieldWithAIProps> = ({
             onComplete={handleMeasurementsComplete}
             onCancel={handleMeasurementCancel}
             measureKeys={aiMeasure_keys?.map(k => k.key) || ['largeur_cm', 'hauteur_cm']}
-            allPhotos={capturedPhotos.map(photo => ({
-              imageBase64: photo.imageBase64?.includes(',') 
-                ? photo.imageBase64.split(',')[1] 
-                : photo.imageBase64 || '',
-              mimeType: 'image/jpeg',
-              metadata: {
-                qualityScore: (photo.metadata as any)?.qualityScore || photo.metadata?.quality?.overallScore || 85,
-                sharpness: (photo.metadata as any)?.sharpness || photo.metadata?.quality?.sharpness || 85,
-                brightness: photo.metadata?.lighting?.brightness || 128,
-                // 🎯 ULTRA-PRECISION: Passer les données ArUco détectées !
-                arucoDetected: (photo.metadata as any)?.arucoDetected,
-                ultraPrecision: (photo.metadata as any)?.ultraPrecision,
-                homography: (photo.metadata as any)?.homography,
-                // 🔧 CORRECTION OPTIMALE - CRITIQUE: Passer pour application aux mesures !
-                optimalCorrection: (photo.metadata as any)?.optimalCorrection,
-                // 🎯 NOUVEAU: Passer aussi fusedCorners dans les metadata
-                fusedCorners: (photo.metadata as any)?.fusedCorners,
-                // 🎨 VISUALISATION DEBUG: Passer les données AprilTag pour affichage
-                aprilTagsDebug: (photo.metadata as any)?.aprilTagsDebug
-              }
-            }))}
-            // 🎯 ULTRA-PRECISION: Passer les corners fusionnés si disponibles
+            // 🎯 Passer les corners fusionnés si disponibles
             fusedCorners={(() => {
-              const bestPhoto = capturedPhotos.find(p => (p.metadata as any)?.arucoDetected);
+              const bestPhoto = capturedPhotos.find(p => (p.metadata as any)?.referenceDetected || (p.metadata as any)?.fusedCorners) || capturedPhotos[0];
               const fusedCornersFromMetadata = (bestPhoto?.metadata as any)?.fusedCorners;
               // fusedCorners est déjà au format { topLeft, topRight, bottomLeft, bottomRight }
               // avec valeurs en % depuis l'API
@@ -1201,20 +1082,12 @@ const TBLImageFieldWithAI: React.FC<TBLImageFieldWithAIProps> = ({
               }
               return undefined;
             })()}
-            // 🎯 Indiquer que l'homographie est prête si ArUco détecté
-            homographyReady={capturedPhotos.some(p => (p.metadata as any)?.arucoDetected)}
-            // 🔬 Analyse complète ArUco pour le panel d'infos détaillé
-            arucoAnalysis={arucoAnalysis}
-            // 🎯 Type de détection (A4 ou ArUco)
-            detectionMethod={(() => {
-              const bestPhoto = capturedPhotos.find(p => (p.metadata as any)?.arucoDetected);
-              return (bestPhoto?.metadata as any)?.detectionMethod;
-            })()}
+            homographyReady={!!capturedPhotos.find(p => (p.metadata as any)?.fusedCorners)}
           />
         </>
       )}
       
-      {/* 🆕 Modal plein écran pour voir l'image AVEC les annotations ArUco et mesures */}
+      {/* 🆕 Modal plein écran pour voir l'image AVEC les annotations et mesures */}
       <Modal
         open={showFullscreenImage}
         onCancel={() => setShowFullscreenImage(false)}
@@ -1226,13 +1099,11 @@ const TBLImageFieldWithAI: React.FC<TBLImageFieldWithAIProps> = ({
         destroyOnClose
       >
         {(() => {
-          let imgSrc = typeof value === 'string' ? value : (value as any)?.original;
+          let imgSrc = annotatedImageUrl || (typeof value === 'string' ? value : (value as any)?.original);
           
-          // Si on a des photos capturées, utiliser celle avec ArUco
-          if (capturedPhotos.length > 0) {
-            const bestPhoto = capturedPhotos.find(p => (p.metadata as any)?.arucoDetected);
-            const photoToShow = bestPhoto || capturedPhotos[0];
-            const base64 = photoToShow.imageBase64;
+          // Si on a des photos capturées, utiliser la première
+          if (!annotatedImageUrl && capturedPhotos.length > 0) {
+            const base64 = capturedPhotos[0].imageBase64;
             imgSrc = base64?.startsWith('data:') 
               ? base64 
               : `data:image/jpeg;base64,${base64}`;
@@ -1247,7 +1118,6 @@ const TBLImageFieldWithAI: React.FC<TBLImageFieldWithAIProps> = ({
                   <ImageWithAnnotationsOverlay
                     imageUrl={imgSrc}
                     annotations={savedAnnotations}
-                    markerSizeCm={savedAnnotations.markerSizeCm || 16.8}
                     style={{ height: '100%' }}
                   />
                 </div>
@@ -1262,18 +1132,6 @@ const TBLImageFieldWithAI: React.FC<TBLImageFieldWithAIProps> = ({
                   gap: 16,
                   flexWrap: 'wrap'
                 }}>
-                  {capturedPhotos.some(p => (p.metadata as any)?.arucoDetected) && (
-                    <div style={{ 
-                      padding: '4px 12px', 
-                      background: '#52c41a', 
-                      color: 'white',
-                      borderRadius: 4,
-                      fontSize: 12
-                    }}>
-                      ✓ ArUco détecté
-                    </div>
-                  )}
-                  
                   {savedMeasurements && (
                     <>
                       {savedMeasurements.largeur_cm && (
@@ -1312,7 +1170,7 @@ const TBLImageFieldWithAI: React.FC<TBLImageFieldWithAIProps> = ({
               />
               
               {/* Infos sur l'image */}
-              {capturedPhotos.some(p => (p.metadata as any)?.arucoDetected) && (
+              {capturedPhotos.some(p => (p.metadata as any)?.referenceDetected || (p.metadata as any)?.fusedCorners) && (
                 <div style={{ 
                   marginTop: 12, 
                   padding: '8px 16px', 
@@ -1321,7 +1179,7 @@ const TBLImageFieldWithAI: React.FC<TBLImageFieldWithAIProps> = ({
                   borderRadius: 4,
                   display: 'inline-block'
                 }}>
-                  ✓ ArUco détecté - Calibration précise
+                  ✓ Référence Métré A4 V10 détectée
                 </div>
               )}
               

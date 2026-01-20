@@ -47,16 +47,11 @@ export interface AIMeasureResult {
   rawResponse?: string;
   error?: string;
   timestamp: number;
-  // 🆕 Données Vision AR (marqueur MAGENTA)
+  // 🆕 Données Vision AR (Métré A4 V10)
   detected?: boolean;
   marker?: {
-    id: number;
-    corners: Array<{ x: number; y: number }>;
-    apriltagPositions: Array<{ x: number; y: number }>;
-    center: { x: number; y: number };
-    sizePx: number;
-    score: number;
-    apriltagsFound: number;
+    referenceCentersMm?: { width: number; height: number };
+    sheetSizeMm?: { width: number; height: number };
   };
   homography?: {
     matrix: number[][];
@@ -189,7 +184,18 @@ export function useAIMeasure(options: UseAIMeasureOptions = {}) {
       };
 
       const response = measureEngine === 'vision_ar'
-        ? await api.post('/api/measure/photo', visionPayload)
+        ? await api.post('/api/measurement-reference/ultra-fusion-detect', {
+            photos: [
+              {
+                base64: cleanBase64,
+                mimeType,
+                metadata: {
+                  deviceInfo: options.visionOptions?.deviceInfo,
+                  exif: options.visionOptions?.exif
+                }
+              }
+            ]
+          })
         : await api.post('/api/ai/measure-image', requestBody);
       
       if (!response || !response.success) {
@@ -198,21 +204,37 @@ export function useAIMeasure(options: UseAIMeasureOptions = {}) {
 
       // Pour vision_ar, on peut avoir une détection sans mesures (l'utilisateur les fera manuellement)
       const isVisionAR = measureEngine === 'vision_ar';
-      const detected = isVisionAR ? response.detected : true;
+      const detected = isVisionAR ? response?.success === true : true;
+
+      const normalizedVisionResponse = isVisionAR
+        ? {
+            ...response,
+            detected,
+            marker: {
+              referenceCentersMm: response?.referenceCentersMm,
+              sheetSizeMm: response?.sheetSizeMm
+            },
+            homography: response?.homographyMatrix
+              ? { matrix: response.homographyMatrix, quality: response?.bestPhoto?.score ?? 0 }
+              : null,
+            calibration: { pixelPerCm: null },
+            pose: null
+          }
+        : response;
 
       const result: AIMeasureResult = {
         success: true,
-        measures: response.measurements || response.measures || {},
-        confidence: response.confidence ?? response?.homography?.quality ?? (detected ? 80 : 0),
-        rawResponse: response.rawResponse || JSON.stringify(response),
+        measures: normalizedVisionResponse.measurements || normalizedVisionResponse.measures || {},
+        confidence: normalizedVisionResponse.confidence ?? normalizedVisionResponse?.homography?.quality ?? (detected ? 80 : 0),
+        rawResponse: normalizedVisionResponse.rawResponse || JSON.stringify(normalizedVisionResponse),
         timestamp: Date.now(),
         // 🆕 Données supplémentaires pour vision_ar
         ...(isVisionAR && {
           detected,
-          marker: response.marker,
-          homography: response.homography,
-          calibration: response.calibration,
-          pose: response.pose
+          marker: normalizedVisionResponse.marker,
+          homography: normalizedVisionResponse.homography,
+          calibration: normalizedVisionResponse.calibration,
+          pose: normalizedVisionResponse.pose
         })
       };
 
@@ -221,9 +243,9 @@ export function useAIMeasure(options: UseAIMeasureOptions = {}) {
 
       // Notification de succès adaptée
       const notifMessage = isVisionAR && detected
-        ? `Marqueur détecté! Calibration: ${response.calibration?.pixelPerCm?.toFixed(1) || '?'} px/cm`
+        ? `Métré A4 V10 détecté!`
         : isVisionAR && !detected
-        ? 'Aucun marqueur détecté - calibration manuelle requise'
+        ? 'Métré A4 V10 non détecté - calibration manuelle requise'
         : `${Object.keys(result.measures).length} mesure(s) extraite(s)`;
 
       notification[detected ? 'success' : 'warning']({

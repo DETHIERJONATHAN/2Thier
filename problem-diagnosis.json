@@ -1,0 +1,20 @@
+{
+  "timestamp": "2026-01-17T20:12:31.336Z",
+  "problemType": "COORDINATE_REFERENCE_FRAME_ERROR",
+  "confidence": "95%",
+  "observed_facts": {
+    "apriltag_corners_offset": "(25, 40)mm from expected (0, 0)",
+    "duplicate_pixel": "Pixel (759.5, 582.0) maps to 2 real coordinates",
+    "ransac_quality": "70.8% (below 75% target)",
+    "ransac_inliers": "101/226 (below 113 target)",
+    "reprojection_error": "5.36mm (above 3mm target)"
+  },
+  "root_cause": "The real-world coordinates (mm) are generated incorrectly",
+  "probable_issue": "AprilTag corners detected are offset by (25, 40)mm from the expected origin",
+  "files_to_check": [
+    "src/lib/metre-a4-v2-detector.ts",
+    "src/lib/homography-utils.ts",
+    "src/api-routes/measurement-routes.ts"
+  ],
+  "solution_approach": "Find where coordinate offset (25, 40) is introduced and remove it"
+}

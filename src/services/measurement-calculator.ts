@@ -4,10 +4,9 @@
  * 🏎️ FORMULE 1 - ARCHITECTURE CENTRALISÉE BACKEND
  * 
  * Le frontend envoie UNIQUEMENT les données brutes:
- * - fusedCorners: coins ArUco détectés (en % de l'image)
+ * - fusedCorners: coins Métré A4 V10 détectés (en % de l'image)
  * - objectPoints: 4 coins cliqués par l'utilisateur (en pixels)
  * - dimensions de l'image
- * - taille du marqueur
  * 
  * Le backend fait TOUS les calculs avec la précision maximale:
  * - Homographie (DLT + normalisation + conditionnement)
@@ -26,9 +25,7 @@ import {
   applyHomography,
   computeRealDistanceWithUncertainty,
   cornersToPoints,
-  setArucoMarkerSize,
   type Point2D,
-  type Matrix3x3,
   type HomographyCorners,
   type HomographyResult
 } from '../utils/homographyUtils';
@@ -49,9 +46,6 @@ export interface CalibrationData {
     bottomRight: PixelPoint;
     bottomLeft: PixelPoint;
   };
-  markerSizeCm: number;
-  markerHeightCm?: number;     // 🎯 NOUVEAU: Hauteur du marqueur (pour AprilTag rectangulaire)
-  detectionMethod?: string;    // 🎯 NOUVEAU: Type de détection (AprilTag-Metre-V1.2, ArUco-MAGENTA, etc.)
   imageWidth: number;
   imageHeight: number;
   exif?: {
@@ -61,16 +55,6 @@ export interface CalibrationData {
     model?: string;
   };
   detectionQuality: number;
-  reprojectionErrorMm?: number;
-  // 🔬 ULTRA-PRÉCISION: Homographie 3×3 optimisée avec 41+ points RANSAC + Levenberg-Marquardt
-  ultraPrecisionHomography?: number[][];
-  ultraPrecisionQuality?: number;
-  // 📏 DONNÉES 3D: Profondeur et inclinaison
-  depthInfo?: {
-    mean: number;           // mm
-    stdDev: number;         // mm
-    inclineAngle: number;   // degrés
-  };
 }
 
 export interface ObjectCorners {
@@ -106,7 +90,7 @@ export interface MeasurementResult {
  * 
  * Utilise l'homographie ultra-précise de homographyUtils.ts
  * 
- * @param calibration - Données de calibration ArUco
+ * @param calibration - Données de calibration Métré A4 V10
  * @param objectCorners - 4 coins de l'objet en pixels image
  * @returns Dimensions en cm avec incertitudes
  */
@@ -121,22 +105,15 @@ export function computeObjectDimensions(
   
   const warnings: string[] = [];
   
-  // 🎯 Déterminer les dimensions du marqueur
-  const isAprilTag = calibration.detectionMethod === 'AprilTag-Metre-V1.2';
-  const markerWidthCm = calibration.markerSizeCm;
-  const markerHeightCm = calibration.markerHeightCm || calibration.markerSizeCm;
+  // 🎯 Dimensions du Métré A4 V10 (cm)
+  const markerWidthCm = 13.0;
+  const markerHeightCm = 20.5;
   const markerWidthMm = markerWidthCm * 10;
   const markerHeightMm = markerHeightCm * 10;
   
   console.log(`\n🔹 MARQUEUR DE RÉFÉRENCE:`);
-  console.log(`   Type: ${isAprilTag ? 'AprilTag Métré V1.2' : 'ArUco'}`);
+  console.log(`   Type: Métré A4 V10`);
   console.log(`   Dimensions: ${markerWidthCm}cm × ${markerHeightCm}cm = ${markerWidthMm}mm × ${markerHeightMm}mm`);
-  
-  if (isAprilTag) {
-    setArucoMarkerSize(markerWidthCm);
-  } else {
-    setArucoMarkerSize(calibration.markerSizeCm);
-  }
   
   // 2️⃣ Convertir les corners en format Point2D pour homographyUtils
   const srcCorners: HomographyCorners = {
@@ -148,8 +125,7 @@ export function computeObjectDimensions(
   
   const srcPoints: Point2D[] = cornersToPoints(srcCorners);
   
-  // 🎯 Points destination: rectangle avec les bonnes dimensions
-  // Pour AprilTag: 130×217mm (centres), pour ArUco: 168×168mm
+  // 🎯 Points destination: rectangle V10 (centres 13×20.5cm)
   const dstPoints: Point2D[] = [
     [0, 0],                          // topLeft
     [markerWidthMm, 0],              // topRight
@@ -157,9 +133,7 @@ export function computeObjectDimensions(
     [0, markerHeightMm]              // bottomLeft
   ];
   
-  if (isAprilTag) {
-    console.log(`   📐 Points destination AprilTag ${markerWidthMm}×${markerHeightMm}mm:`, dstPoints.map(p => `(${p[0]}, ${p[1]})`).join(', '));
-  }
+  console.log(`   📐 Points destination V10 ${markerWidthMm}×${markerHeightMm}mm:`, dstPoints.map(p => `(${p[0]}, ${p[1]})`).join(', '));
   
   // Calculer dimensions du marqueur en pixels (pour debug et fallback)
   const markerWidthPx = Math.hypot(
@@ -171,86 +145,41 @@ export function computeObjectDimensions(
     srcPoints[3][1] - srcPoints[0][1]
   );
   
-  // 2️⃣ UTILISER L'HOMOGRAPHIE ULTRA-PRÉCISE SI DISPONIBLE !
+  // 2️⃣ HOMOGRAPHIE 4 POINTS (V10)
   let homography: HomographyResult;
-  let usedUltraPrecision = false;
-  let depthInfo = {
-    mean: 0,
-    stdDev: 0,
-    inclineAngle: 0
-  };
-  
-  if (calibration.ultraPrecisionHomography && calibration.ultraPrecisionHomography.length === 3) {
-    console.log(`\n📐 ÉTAPE 2: 🔬 UTILISATION HOMOGRAPHIE ULTRA-PRÉCISE (41+ points)`);
-    console.log(`   ✅ Qualité ultra-précision: ${(calibration.ultraPrecisionQuality || 0).toFixed(1)}%`);
-    console.log(`   ✅ Erreur reprojection: ±${calibration.reprojectionErrorMm?.toFixed(2) || '?'}mm`);
-    console.log(`   🎯 Source: RANSAC + Levenberg-Marquardt (10-41 points)`);
-    
-    // Extraire infos de profondeur si disponibles
-    if ((calibration as any).depthInfo) {
-      depthInfo = (calibration as any).depthInfo;
-      console.log(`   📏 Profondeur caméra: ${depthInfo.mean.toFixed(0)}mm (±${depthInfo.stdDev.toFixed(0)}mm)`);
-      console.log(`   🔄 Angle inclinaison: ${depthInfo.inclineAngle.toFixed(2)}°`);
-    }
-    
-    // Convertir number[][] en Matrix3x3
-    const matrix3x3: Matrix3x3 = [
-      [calibration.ultraPrecisionHomography[0][0], calibration.ultraPrecisionHomography[0][1], calibration.ultraPrecisionHomography[0][2]],
-      [calibration.ultraPrecisionHomography[1][0], calibration.ultraPrecisionHomography[1][1], calibration.ultraPrecisionHomography[1][2]],
-      [calibration.ultraPrecisionHomography[2][0], calibration.ultraPrecisionHomography[2][1], calibration.ultraPrecisionHomography[2][2]]
-    ];
-    
-    homography = {
-      matrix: matrix3x3,
-      quality: calibration.ultraPrecisionQuality || 95,
-      uncertainty: calibration.reprojectionErrorMm ? (calibration.reprojectionErrorMm / 100) : 0.1
+
+  console.log(`\n📐 ÉTAPE 2: Construction homographie basique (4 points)`);
+  console.log(`   Coins marqueur (px):`);
+  console.log(`      TL: (${srcPoints[0][0].toFixed(0)}, ${srcPoints[0][1].toFixed(0)})`);
+  console.log(`      TR: (${srcPoints[1][0].toFixed(0)}, ${srcPoints[1][1].toFixed(0)})`);
+  console.log(`      BR: (${srcPoints[2][0].toFixed(0)}, ${srcPoints[2][1].toFixed(0)})`);
+  console.log(`      BL: (${srcPoints[3][0].toFixed(0)}, ${srcPoints[3][1].toFixed(0)})`);
+  console.log(`   Coins destination (mm):`);
+  console.log(`      TL: (0, 0), TR: (${markerWidthMm}, 0)`);
+  console.log(`      BR: (${markerWidthMm}, ${markerHeightMm}), BL: (0, ${markerHeightMm})`);
+  console.log(`   Taille marqueur en pixels: ${markerWidthPx.toFixed(0)} × ${markerHeightPx.toFixed(0)}`);
+
+  try {
+    homography = computeHomography(srcPoints, dstPoints);
+    console.log(`   ✅ Homographie calculée`);
+    console.log(`      Qualité: ${homography.quality.toFixed(1)}%`);
+    console.log(`      Incertitude: ±${homography.uncertainty.toFixed(1)}%`);
+  } catch (error) {
+    console.error('❌ Erreur calcul homographie:', error);
+    return {
+      success: false,
+      largeur_cm: 0,
+      hauteur_cm: 0,
+      incertitude_largeur_cm: 0,
+      incertitude_hauteur_cm: 0,
+      method: 'fallback',
+      confidence: 0,
+      warnings: ['Échec du calcul d\'homographie']
     };
-    
-    usedUltraPrecision = true;
-    
-  } else {
-    console.log(`\n📐 ÉTAPE 2: Construction homographie basique (4 points)`);
-    console.log(`   Coins marqueur (px):`);
-    console.log(`      TL: (${srcPoints[0][0].toFixed(0)}, ${srcPoints[0][1].toFixed(0)})`);
-    console.log(`      TR: (${srcPoints[1][0].toFixed(0)}, ${srcPoints[1][1].toFixed(0)})`);
-    console.log(`      BR: (${srcPoints[2][0].toFixed(0)}, ${srcPoints[2][1].toFixed(0)})`);
-    console.log(`      BL: (${srcPoints[3][0].toFixed(0)}, ${srcPoints[3][1].toFixed(0)})`);
-    console.log(`   Coins destination (mm):`);
-    console.log(`      TL: (0, 0), TR: (${markerWidthMm}, 0)`);
-    console.log(`      BR: (${markerWidthMm}, ${markerHeightMm}), BL: (0, ${markerHeightMm})`);
-    console.log(`   Taille marqueur en pixels: ${markerWidthPx.toFixed(0)} × ${markerHeightPx.toFixed(0)}`);
-    
-    // Points destination: rectangle de markerWidthMm × markerHeightMm
-    const dstPoints: Point2D[] = [
-      [0, 0],                         // topLeft
-      [markerWidthMm, 0],             // topRight
-      [markerWidthMm, markerHeightMm], // bottomRight
-      [0, markerHeightMm]             // bottomLeft
-    ];
-    
-    // 3️⃣ Calculer l'homographie avec le code éprouvé
-    try {
-      homography = computeHomography(srcPoints, dstPoints);
-      console.log(`   ✅ Homographie calculée`);
-      console.log(`      Qualité: ${homography.quality.toFixed(1)}%`);
-      console.log(`      Incertitude: ±${homography.uncertainty.toFixed(1)}%`);
-    } catch (error) {
-      console.error('❌ Erreur calcul homographie:', error);
-      return {
-        success: false,
-        largeur_cm: 0,
-        hauteur_cm: 0,
-        incertitude_largeur_cm: 0,
-        incertitude_hauteur_cm: 0,
-        method: 'fallback',
-        confidence: 0,
-        warnings: ['Échec du calcul d\'homographie']
-      };
-    }
-    
-    if (homography.quality < 50) {
-      warnings.push('Qualité homographie faible - mesures moins fiables');
-    }
+  }
+
+  if (homography.quality < 50) {
+    warnings.push('Qualité homographie faible - mesures moins fiables');
   }
   
   // 4️⃣ Transformer les 4 coins de l'objet vers l'espace réel (mm)
@@ -372,16 +301,9 @@ export function computeObjectDimensions(
   console.log('='.repeat(70));
   console.log(`   📏 LARGEUR: ${largeur_cm.toFixed(2)} cm (±${incertitude_largeur_cm.toFixed(2)} cm)`);
   console.log(`   📏 HAUTEUR: ${hauteur_cm.toFixed(2)} cm (±${incertitude_hauteur_cm.toFixed(2)} cm)`);
-  console.log(`   🎯 Méthode: ${usedUltraPrecision ? '🔬 ULTRA-PRÉCISION (41+ pts)' : 'homography (4 pts)'} (FORMULE 1)`);
+  console.log(`   🎯 Méthode: homography (4 pts) (FORMULE 1)`);
   console.log(`   📊 Confiance: ${(confidence * 100).toFixed(0)}%`);
   console.log(`   📊 Qualité homographie: ${homography.quality.toFixed(1)}%`);
-  if (usedUltraPrecision) {
-    console.log(`   🔬 Erreur reprojection: ±${calibration.reprojectionErrorMm?.toFixed(2) || '?'}mm`);
-    if (depthInfo.mean > 0) {
-      console.log(`   📏 Profondeur caméra: ${depthInfo.mean.toFixed(0)}mm (±${depthInfo.stdDev.toFixed(0)}mm)`);
-      console.log(`   🔄 Angle inclinaison: ${depthInfo.inclineAngle.toFixed(2)}°`);
-    }
-  }
   if (warnings.length > 0) {
     console.log(`   ⚠️ Avertissements: ${warnings.join(', ')}`);
   }
@@ -398,6 +320,8 @@ export function computeObjectDimensions(
     warnings,
     debug: {
       homographyQuality: homography.quality,
+      widthVariationPercent: widthVariation,
+      heightVariationPercent: heightVariation,
       markerSizePixels: { width: markerWidthPx, height: markerHeightPx },
       objectSizePixels: { width: objectWidthPx, height: objectHeightPx },
       transformedCorners: {
@@ -405,14 +329,7 @@ export function computeObjectDimensions(
         tr: realTR,
         br: realBR,
         bl: realBL
-      },
-      ...(usedUltraPrecision && depthInfo.mean > 0 ? {
-        depth: {
-          mean_mm: depthInfo.mean,
-          stdDev_mm: depthInfo.stdDev,
-          inclineAngle_deg: depthInfo.inclineAngle
-        }
-      } : {})
+      }
     }
   };
 }

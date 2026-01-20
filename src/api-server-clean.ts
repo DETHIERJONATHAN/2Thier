@@ -40,7 +40,6 @@ import imageUploadRouter from './api/image-upload';
 import aiContentRouter from './api/ai-content';
 import aiRouter from './api/ai'; // 🤖 GEMINI AI (optimisation, suggestions)
 import aiFieldGeneratorRouter from './routes/ai-field-generator'; // 🤖 IA GÉNÉRATION INTELLIGENTE DE CONTENU
-import measureRouter from './api/measure'; // 📷 Vision AR / mesure photo
 import createRepeatRouter from './components/TreeBranchLeaf/treebranchleaf-new/api/repeat/repeat-routes';
 import cloudRunDomainsRouter from './api/cloud-run-domains'; // ☁️ GESTION DOMAINES CLOUD RUN
 
@@ -306,7 +305,6 @@ app.use('/api/ai-content', aiContentRouter); // 🤖 GÉNÉRATION CONTENU IA (Ge
 app.use('/api', cloudRunDomainsRouter); // ☁️ MAPPING DOMAINES CLOUD RUN
 app.use('/api/ai', aiFieldGeneratorRouter); // 🤖 IA GÉNÉRATION INTELLIGENTE (generate-field, status)
 app.use('/api/ai', aiRouter); // 🤖 GEMINI AI (suggestions, optimisations)
-app.use('/api/measure', measureRouter); // 📷 Vision AR (ArUco / homographie) - stub
 app.use('/api', contactFormRouter); // 📧 FORMULAIRE DE CONTACT SITE VITRINE
 app.use('/api/image-upload', imageUploadRouter); // 📸 UPLOAD D'IMAGES (LOGOS, PHOTOS)
 app.use('/api/documents', documentsRouter); // 📄 TEMPLATES DE DOCUMENTS (ADMIN + GÉNÉRATION)
@@ -542,45 +540,68 @@ app.use(errorHandler);
 
 // Import du hook de synchronisation TreeBranchLeaf
 import { initializeTreeBranchLeafSync } from './components/TreeBranchLeaf/treebranchleaf-new/api/sync-variable-hook';
+import { connectDatabase } from './lib/database';
 
-// Démarrage du serveur
-const server = app.listen(port, '0.0.0.0', () => {
-  logSecurityEvent('SERVER_READY', {
-    port,
-    securityLevel: 'ENTERPRISE',
-    features: [
-      'Advanced Rate Limiting',
-      'Anomaly Detection', 
-      'Input Sanitization',
-      'Security Monitoring',
-      'Comprehensive Logging',
-      'Helmet Protection',
-      'Timing Attack Protection'
-    ]
-  }, 'info');
+// 🎯 FONCTION PRINCIPALE DE DÉMARRAGE
+async function startServer() {
+  try {
+    // 🔌 ÉTAPE 1: Connexion à la base de données AVANT le serveur HTTP
+    console.log('🔌 [STARTUP] Connexion à la base de données...');
+    await connectDatabase();
+    console.log('✅ [STARTUP] Base de données connectée');
 
-  console.log(`🎉 [API-SERVER-CLEAN] Serveur CRM démarré avec succès sur http://0.0.0.0:${port}`);
-  console.log(`🛡️ [ENTERPRISE-SECURITY] Sécurité niveau 100% activée`);
-  
-  // 🔄 Synchronisation automatique des sourceRef TreeBranchLeaf
-  // ⚠️ DÉSACTIVÉ EN PRODUCTION pour éviter les crashes mémoire
-  // Cette synchronisation charge tous les nodes en mémoire
-  if (process.env.NODE_ENV !== 'production') {
-    console.log('🔄 [TREEBRANCHLEAF] Synchronisation des sourceRef...');
-    initializeTreeBranchLeafSync().catch(err => {
-      console.error('⚠️  [TREEBRANCHLEAF] Erreur lors de la synchronisation:', err);
+    // 🚀 ÉTAPE 2: Démarrage du serveur HTTP
+    const server = app.listen(port, '0.0.0.0', () => {
+      logSecurityEvent('SERVER_READY', {
+        port,
+        securityLevel: 'ENTERPRISE',
+        features: [
+          'Advanced Rate Limiting',
+          'Anomaly Detection', 
+          'Input Sanitization',
+          'Security Monitoring',
+          'Comprehensive Logging',
+          'Helmet Protection',
+          'Timing Attack Protection'
+        ]
+      }, 'info');
+
+      console.log(`🎉 [API-SERVER-CLEAN] Serveur CRM démarré avec succès sur http://0.0.0.0:${port}`);
+      console.log(`🛡️ [ENTERPRISE-SECURITY] Sécurité niveau 100% activée`);
+      
+      // 🔄 Synchronisation automatique des sourceRef TreeBranchLeaf
+      // ⚠️ DÉSACTIVÉ EN PRODUCTION pour éviter les crashes mémoire
+      // Cette synchronisation charge tous les nodes en mémoire
+      if (process.env.NODE_ENV !== 'production') {
+        console.log('🔄 [TREEBRANCHLEAF] Synchronisation des sourceRef...');
+        initializeTreeBranchLeafSync().catch(err => {
+          console.error('⚠️  [TREEBRANCHLEAF] Erreur lors de la synchronisation:', err);
+        });
+      } else {
+        console.log('⏭️ [TREEBRANCHLEAF] Synchronisation désactivée en production (optimisation mémoire)');
+      }
+      console.log(`📋 [API-SERVER-CLEAN] Endpoints disponibles:`);
+      console.log(`   - Health: http://localhost:${port}/api/health`);
+      console.log(`   - Auth Me: http://localhost:${port}/api/auth/me`);
+      console.log(`   - Auth Login: http://localhost:${port}/api/auth/login`);
+      console.log(`   - Notifications: http://localhost:${port}/api/notifications`);
+      console.log(`   - Modules: http://localhost:${port}/api/modules/all`);
+      console.log(`   - Blocks: http://localhost:${port}/api/blocks`);
+      console.log(`   - Auto Google Auth (POST): http://localhost:${port}/api/auto-google-auth/connect`);
+      console.log(`   - Auto Google Status (GET): http://localhost:${port}/api/auto-google-auth/status`);
     });
-  } else {
-    console.log('⏭️ [TREEBRANCHLEAF] Synchronisation désactivée en production (optimisation mémoire)');
+
+    return server;
+  } catch (error) {
+    console.error('❌ [STARTUP] Erreur fatale au démarrage:', error);
+    process.exit(1);
   }
-  console.log(`📋 [API-SERVER-CLEAN] Endpoints disponibles:`);
-  console.log(`   - Health: http://localhost:${port}/api/health`);
-  console.log(`   - Auth Me: http://localhost:${port}/api/auth/me`);
-  console.log(`   - Auth Login: http://localhost:${port}/api/auth/login`);
-  console.log(`   - Notifications: http://localhost:${port}/api/notifications`);
-  console.log(`   - Modules: http://localhost:${port}/api/modules/all`);
-  console.log(`   - Blocks: http://localhost:${port}/api/blocks`);
-  console.log(`   - Auto Google Auth (POST): http://localhost:${port}/api/auto-google-auth/connect`);
-  console.log(`   - Auto Google Status (GET): http://localhost:${port}/api/auto-google-auth/status`);
+}
+
+// 🚀 Lancement du serveur
+startServer().catch(err => {
+  console.error('❌ [FATAL] Impossible de démarrer le serveur:', err);
+  process.exit(1);
 });
+
 export { app };

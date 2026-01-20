@@ -39,10 +39,10 @@ git push origin main
 ## 🏠 Connexion Locale (Développement)
 
 ### Script de démarrage rapide
-bash scripts/start-local.sh
+
 ```bash
 # Démarrer tout l'environnement de développement (proxy + serveur)
-
+bash scripts/start-local.sh
 ```
 
 ⚠️ **IMPORTANT** : Le script tue automatiquement tous les processus existants avant de relancer. Si vous avez des problèmes de port déjà utilisé, vous pouvez aussi les tuer manuellement :

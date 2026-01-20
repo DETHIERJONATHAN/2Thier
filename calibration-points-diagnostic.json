@@ -1,0 +1,13 @@
+{
+  "timestamp": "2026-01-17T20:12:24.964Z",
+  "duplicatePixels": 1,
+  "totalPointsAnalyzed": 5,
+  "issues": [
+    "Pixel (759.5, 582.0) maps to multiple real coordinates",
+    "Corners offset by (25, 40)mm from expected (0, 0)",
+    "Homography matrix calculation is incorrect due to corner offset",
+    "Real coordinate generation is broken"
+  ],
+  "diagnosis": "COORDINATES_GENERATION_BROKEN",
+  "severity": "CRITICAL"
+}

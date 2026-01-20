@@ -13,7 +13,7 @@
 // 📏 CONFIGURATION RÉFÉRENCE ORGANISATION
 // =============================================================================
 
-export type ReferenceType = 'meter' | 'card' | 'a4' | 'metre_a4_v1_2' | 'custom';
+export type ReferenceType = 'meter' | 'card' | 'a4' | 'custom';
 
 export interface OrganizationMeasurementReferenceConfig {
   id: string;
@@ -57,12 +57,6 @@ export const REFERENCE_PRESETS: Record<ReferenceType, { label: string; size: num
     size: 21,
     unit: 'cm',
     description: 'Largeur A4 (21×29.7cm)'
-  },
-  aruco_magenta: {
-    label: 'Marqueur MAGENTA 18cm',
-    size: 18,
-    unit: 'cm',
-    description: 'Marqueur 18×18cm avec 4 points magenta (détection auto)'
   },
   custom: {
     label: 'Personnalisé',
@@ -123,7 +117,7 @@ export interface ImageAnnotations {
   measurementPoints: MeasurementPoint[];
   exclusionZones?: ExclusionZone[];
   measurements: MeasurementResults;
-  // 🎯 MÉTRÉ A4: Coins de référence pour dessiner le quadrilatère AprilTag
+  // 🎯 MÉTRÉ A4 V10: Coins de référence pour dessiner le quadrilatère
   referenceCorners?: {
     topLeft: { x: number; y: number };
     topRight: { x: number; y: number };
@@ -136,8 +130,6 @@ export interface ImageAnnotations {
     height: number;
     scale: number;
   };
-  // 🎯 Taille du marqueur Métré A4 V1.2 en cm (largeur AprilTag)
-  markerSizeCm?: number;
   createdAt?: Date;
   updatedAt?: Date;
 }

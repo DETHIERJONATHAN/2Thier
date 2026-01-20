@@ -21,7 +21,6 @@ console.log('✅ [DEBUG] Prisma centralisé importé');
 import mainApiRouter from './routes/index'; // ✅ Router principal complet
 import aiInternalRouter from './routes/ai-internal';
 import aiFieldGeneratorRouter from './routes/ai-field-generator'; // 🤖 IA GÉNÉRATION DE CONTENU
-import measureRouter from './api/measure'; // 📷 Vision AR / mesure photo (stub)
 import treebranchleafRouter from './components/TreeBranchLeaf/treebranchleaf-new/api/treebranchleaf-routes';
 import centralizedOperationsRouter from './components/TreeBranchLeaf/treebranchleaf-new/api/centralized-operations-routes';
 import tblSubmissionEvaluatorRouter from './components/TreeBranchLeaf/tbl-bridge/routes/tbl-submission-evaluator';
@@ -454,7 +453,6 @@ app.post('/update-services-temp', async (req, res) => {
 app.use('/api', mainApiRouter);
 app.use('/api/ai/internal', aiInternalRouter);
 app.use('/api/ai', aiFieldGeneratorRouter); // 🤖 IA GÉNÉRATION INTELLIGENTE DE CONTENU
-app.use('/api/measure', measureRouter); // 📷 Vision AR (ArUco / homographie) - stub
 app.use('/api/treebranchleaf', treebranchleafRouter);
 app.use('/api/treebranchleaf-ops', centralizedOperationsRouter);
 app.use('/api/tbl', tblConfigRouter); // 🔧 TBL CONFIG ROUTES (/variables, /calculation-modes, /fields)

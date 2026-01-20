@@ -11,7 +11,7 @@ const SettingsPage = () => {
     { name: 'Rôles', to: '/settings/roles', requiredPermission: 'role:read' },
     { name: 'Organisation', to: '/settings/organization', requiredPermission: 'organization:read' },
     { name: 'Emails', to: '/settings/emails', requiredPermission: 'user:read' }, // Accessible aux admins
-    { name: 'IA Mesure', to: '/settings/ai-measure', requiredPermission: 'organization:read' }, // Config marqueur ArUco
+    { name: 'IA Mesure', to: '/settings/ai-measure', requiredPermission: 'organization:read' }, // Métré A4 V10
   ].filter(tab => {
     if (!tab.requiredPermission) return true;
     return can(tab.requiredPermission);

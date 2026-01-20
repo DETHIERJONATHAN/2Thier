@@ -33,7 +33,6 @@ import {
 } from '@ant-design/icons';
 import { useAuthenticatedApi } from '../../hooks/useAuthenticatedApi';
 import { ImageMeasurementCanvas } from './ImageMeasurementCanvas';
-import { ImageMeasurementCanvasMobile } from './ImageMeasurementCanvasMobile';
 import type {
   CalibrationData,
   MeasurementPoint,
@@ -96,11 +95,6 @@ interface MobileFullscreenCanvasProps {
     customHeight?: number;
   };
   measurementObjectConfig?: any;
-  allPhotos?: any[];
-  arucoAnalysis?: any; // 🔬 Analyse complète ArUco
-  detectionMethod?: string; // 🎯 Type de détection
-  aprilTagsDebug?: any; // 🎨 VISUALISATION DEBUG: Données AprilTags
-  optimalCorrection?: any; // 🔧 CORRECTION OPTIMALE: Facteur calculé par RANSAC
 }
 
 const MobileFullscreenCanvas: React.FC<MobileFullscreenCanvasProps> = ({
@@ -118,12 +112,7 @@ const MobileFullscreenCanvas: React.FC<MobileFullscreenCanvasProps> = ({
   fusedCorners,
   homographyReady,
   referenceConfig,
-  measurementObjectConfig,
-  allPhotos,
-  arucoAnalysis, // 🔬 Analyse complète ArUco
-  detectionMethod, // 🎯 Type de détection
-  aprilTagsDebug, // 🎨 VISUALISATION DEBUG: Données AprilTags
-  optimalCorrection // 🔧 CORRECTION OPTIMALE
+  measurementObjectConfig
 }) => {
   const containerRef = React.useRef<HTMLDivElement>(null);
   const [viewportSize, setViewportSize] = React.useState({ width: 0, height: 0 });
@@ -208,13 +197,7 @@ const MobileFullscreenCanvas: React.FC<MobileFullscreenCanvasProps> = ({
         homographyReady={homographyReady}
         referenceConfig={referenceConfig}
         measurementObjectConfig={measurementObjectConfig}
-        allPhotos={allPhotos}
-        arucoAnalysis={arucoAnalysis}
-        detectionMethod={detectionMethod} // 🎯 Transmettre le type de détection
-        // 🎨 VISUALISATION DEBUG: Données AprilTags pour dessin sur canvas
-        aprilTagsDebug={aprilTagsDebug}
-        // 🔧 CORRECTION OPTIMALE: Facteur calculé par RANSAC + bands + reprojection
-        optimalCorrection={optimalCorrection}
+        // V10 only
         mobileFullscreen
       />
     </div>
@@ -235,22 +218,7 @@ interface ImageMeasurementPreviewProps {
   onComplete: (measurements: MeasurementResults, annotations?: ImageAnnotations) => void;
   onCancel: () => void;
   measureKeys?: string[]; // Mesures configurées dans le champ
-  // 🆕 Support multi-photos pour fusion IA
-  allPhotos?: Array<{
-    imageBase64: string;
-    mimeType?: string;
-    metadata?: {
-      qualityScore?: number;
-      sharpness?: number;
-      brightness?: number;
-      // 🎯 ULTRA-PRECISION: Données ArUco pré-détectées
-      arucoDetected?: boolean;
-      ultraPrecision?: any;
-      homography?: any;
-      arucoAnalysis?: any; // 🔬 Analyse complète ArUco
-    };
-  }>;
-  // 🎯 ULTRA-PRECISION: Corners ArUco pré-détectés (depuis TBLImageFieldWithAI)
+  // 🎯 Corners pré-détectés (V10)
   fusedCorners?: {
     topLeft: { x: number; y: number };
     topRight: { x: number; y: number };
@@ -258,10 +226,6 @@ interface ImageMeasurementPreviewProps {
     bottomLeft: { x: number; y: number };
   };
   homographyReady?: boolean;
-  // 🔬 Analyse complète ArUco pour le panel Canvas
-  arucoAnalysis?: any;
-  // 🎯 Type de détection (A4 ou ArUco)
-  detectionMethod?: string;
 }
 
 type WorkflowStep = 'loading' | 'calibrating' | 'measuring' | 'adjusting' | 'complete' | 'error';
@@ -280,11 +244,8 @@ export const ImageMeasurementPreview: React.FC<ImageMeasurementPreviewProps> = (
   onComplete,
   onCancel,
   measureKeys = ['largeur_cm', 'hauteur_cm'],
-  allPhotos, // 🆕 Toutes les photos pour fusion
-  fusedCorners, // 🎯 ULTRA-PRECISION: Corners ArUco pré-détectés
-  homographyReady, // 🎯 Flag indiquant que l'homographie est prête
-  arucoAnalysis, // 🔬 Analyse complète ArUco pour le panel Canvas
-  detectionMethod // 🎯 Type de détection (A4 ou ArUco)
+  fusedCorners,
+  homographyReady
 }) => {
   const { api } = useAuthenticatedApi();
   const isMobile = useIsMobile(); // 📱 Détection mobile
@@ -305,193 +266,22 @@ export const ImageMeasurementPreview: React.FC<ImageMeasurementPreviewProps> = (
     boundingBox?: { x: number; y: number; width: number; height: number };
   } | null>(null); // 🆕 State pour la référence détectée
   
-  // 🆕 Dimensions réelles de la référence (pour recalibration)
-  const [referenceRealSize, setReferenceRealSize] = useState<{ width: number; height: number }>({ width: 21, height: 29.7 });
-  
-  // 🎯 CONFIGURATION ARUCO: Taille du marqueur depuis les paramètres TreeBranchLeaf
-  const [markerSizeCm, setMarkerSizeCm] = useState<number>(16.8); // Valeur par défaut, sera mise à jour depuis l'API
-  
-  // 🔧 CORRECTION OPTIMALE: Facteur de correction calculé par l'API (RANSAC + bands + reprojection)
-  const [optimalCorrection, setOptimalCorrection] = useState<{
-    finalCorrection: number;
-    correctionX: number;
-    correctionY: number;
-    correctionXSansBandes?: number;  // 🆕 Pour mode homographie
-    correctionYSansBandes?: number;  // 🆕 Pour mode homographie
-    globalConfidence: number;
-    contributions?: Array<{ source: string; correction: number; weight: number; confidence: number }>;
-  } | null>(null);
-  
-  // � VISUALISATION DEBUG APRILTAG - NOUVEAU !
-  const [aprilTagsDebug, setAprilTagsDebug] = useState<{
-    tagCenters: Array<{ id: number; center: { x: number; y: number }; label: string }>;
-    sheetContour: Array<{ x: number; y: number }>;
-    pixelsPerCm: { x: number; y: number; avg: number };
-  } | null>(null);
-  
-  // �🆕 MULTI-PHOTOS: État pour l'analyse de qualité et la fusion
-  const [multiPhotoAnalysis, setMultiPhotoAnalysis] = useState<{
-    usedMultiPhoto: boolean;
-    totalPhotos: number;
-    usablePhotos: number;
-    bestPhotoIndex: number;
-    qualityScores: Array<{ index: number; usable: boolean; score: number; issues: string[] }>;
-    perspectiveCorrection?: { angle: number; factor: number; type: string };
-    fusionConfidence: number;
-    // 🆕 Coins fusionnés pour l'homographie
-    fusedCorners?: {
-      topLeft: { x: number; y: number };
-      topRight: { x: number; y: number };
-      bottomLeft: { x: number; y: number };
-      bottomRight: { x: number; y: number };
-    };
-    homographyReady?: boolean;
-  } | null>(null);
+  // 🆕 Dimensions réelles de la référence (Métré A4 V10)
+  const [referenceRealSize, setReferenceRealSize] = useState<{ width: number; height: number }>({ width: 13, height: 20.5 });
   
   // 🔒 Flag pour éviter de re-suggérer les points après l'initialisation
   const [hasInitialized, setHasInitialized] = useState(false);
 
-  // 🎯 CHARGEMENT CONFIG MARQUEUR: Charger la taille du marqueur ArUco depuis les paramètres
-  useEffect(() => {
-    const loadMarkerConfig = async () => {
-      if (!api) return;
-      try {
-        const response = await api.get('/api/settings/ai-measure');
-        if (response.success && response.data?.markerSizeCm) {
-          const sizeCm = response.data.markerSizeCm;
-          console.log(`🎯 [Preview] Configuration marqueur chargée depuis API: ${sizeCm}cm`);
-          setMarkerSizeCm(sizeCm);
-        } else {
-          console.log('🎯 [Preview] Pas de config marqueur, utilisation valeur par défaut: 13×21.7cm');
-        }
-      } catch (error) {
-        console.warn('[Preview] Erreur chargement config marqueur:', error);
-      }
-    };
-    loadMarkerConfig();
-  }, [api]);
-
   // 🔄 RESET CRITICAL: Réinitialiser les états quand le composant redevient visible
-  // Ceci garantit que les données ArUco sont correctement réinitialisées à chaque ouverture
   useEffect(() => {
     if (visible) {
-      console.log('🔄 [Preview] RESET: Composant visible, réinitialisation des états ArUco');
-      // Reset des états pour forcer la réinitialisation avec les nouvelles données
-      setMultiPhotoAnalysis(null);
-      setOptimalCorrection(null);
+      console.log('🔄 [Preview] RESET: Composant visible, réinitialisation des états');
       setHasInitialized(false);
       setStep('loading');
       // 🔄 Incrémenter la clé de session pour forcer le re-render
       setSessionKey(prev => prev + 1);
     }
   }, [visible]);
-
-  // 🎯 ULTRA-PRECISION: Initialiser multiPhotoAnalysis avec les props fusedCorners si disponibles
-  useEffect(() => {
-    // Skip si pas visible
-    if (!visible) return;
-    
-    if (fusedCorners && homographyReady && !multiPhotoAnalysis?.fusedCorners) {
-      console.log(`🎯 [Preview] Initialisation multiPhotoAnalysis avec fusedCorners pré-détectés ! (session ${sessionKey})`);
-      console.log('   📍 fusedCorners:', fusedCorners);
-      
-      // 🎯 Déterminer les dimensions selon le type de détection
-      const isAprilTagMetre = detectionMethod?.includes('AprilTag-Metre-V1.2') === true || detectionMethod === 'apriltag-metre';
-      if (isAprilTagMetre) {
-        // 📐 Métré V1.2: Dimensions rectangulaires entre centres de tags
-        const metreWidth = 13.0;  // distance TL↔TR entre centres (cm)
-        const metreHeight = 21.7; // distance TL↔BL entre centres (cm)
-        console.log(`   📏 AprilTag Métré V1.2 détecté → referenceRealSize = ${metreWidth}×${metreHeight}cm`);
-        setReferenceRealSize({ width: metreWidth, height: metreHeight });
-      } else {
-        // 🎯 ARUCO MAGENTA: Utiliser la taille configurée dans les paramètres TreeBranchLeaf
-        // Valeur chargée depuis /api/settings/ai-measure (défaut: 16.8cm)
-        console.log(`   📏 ARUCO détecté → referenceRealSize = ${markerSizeCm}×${markerSizeCm}cm (depuis config)`);
-        setReferenceRealSize({ width: markerSizeCm, height: markerSizeCm });
-      }
-      
-      // Trouver les infos ultraPrecision dans allPhotos si disponibles
-      const photoWithAruco = allPhotos?.find(p => (p.metadata as any)?.arucoDetected);
-      const ultraPrecision = (photoWithAruco?.metadata as any)?.ultraPrecision;
-      
-      // 🎨 VISUALISATION DEBUG: Extraire les données AprilTag pour affichage
-      const aprilTagsDebugData = (photoWithAruco?.metadata as any)?.aprilTagsDebug;
-      if (aprilTagsDebugData) {
-        console.log(`   🎨 Données visualisation AprilTag trouvées!`);
-        setAprilTagsDebug(aprilTagsDebugData);
-      }
-      
-      // 🔧 CORRECTION OPTIMALE: Extraire la correction calculée par l'API
-      const correction = (photoWithAruco?.metadata as any)?.optimalCorrection;
-      if (correction) {
-        console.log(`   🔧 Correction optimale trouvée: ×${correction.finalCorrection?.toFixed(4)} (confiance: ${(correction.globalConfidence * 100).toFixed(0)}%)`);
-        setOptimalCorrection(correction);
-      }
-      
-      setMultiPhotoAnalysis({
-        usedMultiPhoto: true,
-        totalPhotos: allPhotos?.length || 1,
-        usablePhotos: allPhotos?.length || 1,
-        bestPhotoIndex: 0,
-        qualityScores: allPhotos?.map((p, idx) => ({
-          index: idx,
-          usable: true,
-          score: (p.metadata as any)?.qualityScore || 85,
-          issues: []
-        })) || [{ index: 0, usable: true, score: 85, issues: [] }],
-        fusionConfidence: ultraPrecision?.quality || 0.9,
-        fusedCorners: fusedCorners,
-        homographyReady: true,
-        perspectiveCorrection: ultraPrecision ? {
-          angle: 0,
-          factor: 1,
-          type: 'aruco-ultra-precision'
-        } : undefined
-      });
-      
-      // Passer directement à l'étape adjusting avec le canvas
-      console.log('🚀 [Preview] Passage direct à l\'étape adjusting (ArUco pré-détecté)');
-      setStep('adjusting');
-    }
-  }, [visible, sessionKey, fusedCorners, homographyReady, allPhotos, multiPhotoAnalysis?.fusedCorners, markerSizeCm]);
-
-  // 🔧 EXTRACTION SÉPARÉE de optimalCorrection (se déclenche quand allPhotos change ou visible change)
-  useEffect(() => {
-    // Skip si pas visible
-    if (!visible) return;
-    
-    console.log(`🔍 [Preview] useEffect optimalCorrection (session ${sessionKey}) - allPhotos.length=${allPhotos?.length || 0}, optimalCorrection=${optimalCorrection ? 'SET' : 'null'}`);
-    
-    if (!allPhotos?.length) {
-      console.log(`   ⚠️ Pas de photos, skip`);
-      return;
-    }
-    
-    // Debug: Afficher les metadata de chaque photo
-    allPhotos.forEach((p, idx) => {
-      const meta = p.metadata as any;
-      console.log(`   📸 Photo ${idx}: optimalCorrection=${meta?.optimalCorrection ? '✅' : '❌'}, arucoDetected=${meta?.arucoDetected}`);
-    });
-    
-    // Chercher la photo avec optimalCorrection dans ses metadata
-    const photoWithCorrection = allPhotos.find(p => (p.metadata as any)?.optimalCorrection);
-    const correction = (photoWithCorrection?.metadata as any)?.optimalCorrection;
-    
-    if (correction) {
-      if (!optimalCorrection) {
-        console.log(`🔧 [Preview] optimalCorrection extraite des metadata:`);
-        console.log(`   📊 Correction finale: ×${correction.finalCorrection?.toFixed(4)}`);
-        console.log(`   📏 Correction X: ×${correction.correctionX?.toFixed(4)}`);
-        console.log(`   📏 Correction Y: ×${correction.correctionY?.toFixed(4)}`);
-        console.log(`   🎯 Confiance: ${(correction.globalConfidence * 100).toFixed(0)}%`);
-        setOptimalCorrection(correction);
-      } else {
-        console.log(`   ✅ optimalCorrection déjà set, pas de changement`);
-      }
-    } else {
-      console.log(`   ⚠️ Aucune photo n'a optimalCorrection dans ses metadata`);
-    }
-  }, [visible, sessionKey, allPhotos, optimalCorrection]);
 
   // 🆕 Callback quand l'utilisateur ajuste manuellement le rectangle de référence
   // Reçoit maintenant pixelPerCmX et pixelPerCmY séparés pour gérer la perspective
@@ -532,21 +322,9 @@ export const ImageMeasurementPreview: React.FC<ImageMeasurementPreviewProps> = (
 
   // Étape 1 : Charger la config de référence (optionnelle)
   const loadReferenceConfig = useCallback(async () => {
-    try {
-      const response = await api.get(`/api/measurement-reference/${organizationId}`);
-      
-      if (response?.config) {
-        setReferenceConfig(response.config);
-        return response.config;
-      }
-      // Config optionnelle - on continue sans
-      return null;
-    } catch (err) {
-      console.error('Erreur chargement config référence:', err);
-      // Config optionnelle - on continue sans
-      return null;
-    }
-  }, [api, organizationId]);
+    // V10 uniquement: pas de config distante nécessaire
+    return null;
+  }, []);
 
   // Étape 2 : Suggérer les points de mesure via IA (la détection de référence est faite dans runWorkflow)
   const suggestMeasurementPointsCallback = useCallback(async () => {
@@ -645,36 +423,10 @@ export const ImageMeasurementPreview: React.FC<ImageMeasurementPreviewProps> = (
       
       console.log('🚀 [ImageMeasurementPreview] runWorkflow starting...');
 
-      // 🎯 ARUCO PRIORITY: Si ArUco/AprilTag est détecté (fusedCorners présent), NE PAS écraser avec A4
-      const hasArucoData = fusedCorners && homographyReady;
-      if (hasArucoData) {
-        console.log('🎯 [ImageMeasurementPreview] Marqueur détecté, SKIP chargement config A4');
-        const isAprilTagMetre = detectionMethod?.includes('AprilTag-Metre-V1.2') === true || detectionMethod === 'apriltag-metre';
-        if (isAprilTagMetre) {
-          const metreWidth = 13.0;
-          const metreHeight = 21.7;
-          console.log(`   📏 AprilTag Métré V1.2 → referenceRealSize: ${metreWidth}×${metreHeight}cm`);
-          setReferenceRealSize({ width: metreWidth, height: metreHeight });
-        } else {
-          console.log(`   📏 ArUco → referenceRealSize conservé: ${markerSizeCm}×${markerSizeCm}cm`);
-          setReferenceRealSize({ width: markerSizeCm, height: markerSizeCm });
-        }
-      } else {
-        // 1. Charger config de référence (pour connaître les dimensions de la référence A4)
-        const config = await loadReferenceConfig();
-        if (config) {
-          console.log('📐 [ImageMeasurementPreview] Config référence trouvée:', config.referenceType);
-          // Stocker les dimensions réelles
-          if (config.referenceType === 'a4') {
-            setReferenceRealSize({ width: 21, height: 29.7 });
-          } else if (config.referenceType === 'card') {
-            setReferenceRealSize({ width: 8.56, height: 5.398 });
-          }
-        } else {
-          console.log('📐 [ImageMeasurementPreview] Pas de config référence, mode par défaut (A4)');
-          setReferenceRealSize({ width: 21, height: 29.7 });
-        }
-      }
+      // 1. Charger config de référence (optionnelle)
+      await loadReferenceConfig();
+      // Métré A4 V10 = 13×20.5cm (centres des 6 tags)
+      setReferenceRealSize({ width: 13.0, height: 20.5 });
 
       // 2. Vérifier que l'image est disponible
       if (!imageBase64) {
@@ -729,15 +481,14 @@ export const ImageMeasurementPreview: React.FC<ImageMeasurementPreviewProps> = (
       console.log('📡 [ImageMeasurementPreview] Analyse via', measureEngine, 'avec referenceConfig:', referenceConfig);
 
       const response = measureEngine === 'vision_ar'
-        ? await api.post('/api/measure/photo', {
-            imageBase64: cleanBase64,
-            mimeType,
-            measureKeys: aiConfig.measureKeys,
-            prompt: aiConfig.prompt,
-            referenceHint: referenceConfig,
-            deviceInfo: undefined,
-            exif: undefined,
-            persist: false
+        ? await api.post('/api/measurement-reference/ultra-fusion-detect', {
+            photos: [
+              {
+                base64: cleanBase64,
+                mimeType,
+                metadata: {}
+              }
+            ]
           })
         : await api.post('/api/ai/measure-image', {
             imageBase64: cleanBase64,
@@ -749,9 +500,10 @@ export const ImageMeasurementPreview: React.FC<ImageMeasurementPreviewProps> = (
       
       console.log('📩 [ImageMeasurementPreview] Résultat analyse:', response);
       
-      if (response?.success && response.measurements) {
-        const finalMeasurements = response.measurements;
-        const referenceDetected = response.referenceDetected;
+      const isVisionAR = measureEngine === 'vision_ar';
+      if (response?.success && (isVisionAR || response.measurements)) {
+        const finalMeasurements = isVisionAR ? (response.measurements || {}) : response.measurements;
+        const referenceDetected = isVisionAR ? { found: true } : response.referenceDetected;
         
         console.log('✅ [ImageMeasurementPreview] Mesures obtenues:', finalMeasurements);
         console.log('📐 [ImageMeasurementPreview] Référence détectée:', referenceDetected);
@@ -820,8 +572,8 @@ export const ImageMeasurementPreview: React.FC<ImageMeasurementPreviewProps> = (
         imageBase64={imageBase64}
         mimeType={mimeType}
         api={api}
-        fusedCorners={multiPhotoAnalysis?.fusedCorners}
-        homographyReady={multiPhotoAnalysis?.homographyReady}
+        fusedCorners={fusedCorners}
+        homographyReady={homographyReady}
         referenceConfig={referenceConfig ? {
           referenceType: referenceConfig.referenceType as 'a4' | 'card' | 'meter' | 'custom',
           customName: referenceConfig.customName,
@@ -841,13 +593,7 @@ export const ImageMeasurementPreview: React.FC<ImageMeasurementPreviewProps> = (
                       measureKeys.some(k => k.includes('chassis')) ? 'Châssis' : 'Objet à mesurer',
           objectDescription: `Objet rectangulaire à mesurer (${measureKeys.join(', ')})`
         }}
-        allPhotos={allPhotos}
-        // 🔬 ANALYSE ARUCO: Pour afficher le contour magenta sur mobile aussi !
-        arucoAnalysis={arucoAnalysis}
-        detectionMethod={detectionMethod}
-        aprilTagsDebug={aprilTagsDebug}
-        // 🔧 CORRECTION OPTIMALE: Facteur calculé par RANSAC
-        optimalCorrection={optimalCorrection}
+        // V10 only
       />
     );
   }
@@ -897,15 +643,11 @@ export const ImageMeasurementPreview: React.FC<ImageMeasurementPreviewProps> = (
           <div style={{ marginTop: 24 }}>
             <Title level={4}>
               {step === 'loading' && 'Chargement de la configuration...'}
-              {step === 'calibrating' && (allPhotos && allPhotos.length > 1 
-                ? `🔀 Fusion de ${allPhotos.length} photos pour calibration parfaite...` 
-                : '🔍 Détection de l\'objet de référence...')}
+              {step === 'calibrating' && '🔍 Détection de l\'objet de référence...'}
               {step === 'measuring' && '📍 Placement des points de mesure...'}
             </Title>
             <Text type="secondary">
-              {allPhotos && allPhotos.length > 1 
-                ? 'L\'IA combine vos photos pour une calibration ultra-précise'
-                : 'L\'IA analyse votre image pour extraire les mesures automatiquement'}
+              L'IA analyse votre image pour extraire les mesures automatiquement
             </Text>
           </div>
         </div>
@@ -1032,16 +774,9 @@ export const ImageMeasurementPreview: React.FC<ImageMeasurementPreviewProps> = (
           mimeType={mimeType}
           api={api}
           // 🆕 HOMOGRAPHIE: Passer les coins fusionnés de l'IA multi-photos
-          fusedCorners={multiPhotoAnalysis?.fusedCorners}
-          homographyReady={multiPhotoAnalysis?.homographyReady}
-          // 🆕 MULTI-PHOTOS: Passer toutes les photos pour fusion avant détection
-          allPhotos={allPhotos}
-          // 🔬 ANALYSE ARUCO: Pour le panel d'infos détaillé
-          arucoAnalysis={arucoAnalysis}
-          // 🎯 TYPE DE DÉTECTION: Pour utiliser les bonnes dimensions
-          detectionMethod={detectionMethod}
-          // 🔧 CORRECTION OPTIMALE: Facteur calculé par RANSAC + bands + reprojection
-          optimalCorrection={optimalCorrection}
+          fusedCorners={fusedCorners}
+          homographyReady={homographyReady}
+          // V10 only
           // 🆕 CONFIG DYNAMIQUE TBL: Passer les configurations pour les prompts IA
           referenceConfig={referenceConfig ? {
             referenceType: referenceConfig.referenceType as 'a4' | 'card' | 'meter' | 'custom',

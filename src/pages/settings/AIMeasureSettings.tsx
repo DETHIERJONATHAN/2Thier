@@ -1,63 +1,33 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuthenticatedApi } from '../../hooks/useAuthenticatedApi';
-import { toast } from 'react-toastify';
-import { generateArucoMarkerSvg, downloadArucoMarkerSvg } from '../../utils/arucoMarkerSvg';
 import { 
   Card, 
   Button, 
-  InputNumber, 
   Space, 
   Spin, 
   Typography, 
   Divider, 
   Alert,
   Row,
-  Col,
-  Tooltip
+  Col
 } from 'antd';
 import { 
   DownloadOutlined, 
-  SaveOutlined, 
-  InfoCircleOutlined,
   CameraOutlined,
   PrinterOutlined
 } from '@ant-design/icons';
 
 const { Title, Text, Paragraph } = Typography;
 
-// ==========================================
-// 🎯 CONFIGURATION MARQUEUR MÉTRÉ A4 V1.2
-// ==========================================
-// Cette configuration est utilisée pour la mesure par photo
-// Le marqueur doit être imprimé à la taille exacte configurée ici
-
-interface MarkerConfig {
-  markerSizeCm: number;  // Largeur du marqueur Métré A4 V1.2 (AprilTag 13×21.7cm)
-}
-
-const DEFAULT_CONFIG: MarkerConfig = {
-  markerSizeCm: 13,  // 13cm largeur AprilTag
-};
-
 const AIMeasureSettings: React.FC = () => {
   const { api } = useAuthenticatedApi();
-  
-  const [config, setConfig] = useState<MarkerConfig>(DEFAULT_CONFIG);
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [hasChanges, setHasChanges] = useState(false);
 
   // Charger la config depuis le serveur
   useEffect(() => {
     const fetchConfig = async () => {
       try {
-        const response = await api.get('/api/settings/ai-measure');
-        if (response.success && response.data) {
-          setConfig({
-            markerSizeCm: response.data.markerSizeCm || DEFAULT_CONFIG.markerSizeCm,
-            boardSizeCm: response.data.boardSizeCm || DEFAULT_CONFIG.boardSizeCm
-          });
-        }
+        await api.get('/api/settings/ai-measure');
       } catch (error) {
         console.error('Erreur chargement config IA Mesure:', error);
         // Utiliser les valeurs par défaut en cas d'erreur
@@ -68,61 +38,8 @@ const AIMeasureSettings: React.FC = () => {
     fetchConfig();
   }, [api]);
 
-  // Sauvegarder la config
-  const handleSave = async () => {
-    setSaving(true);
-    try {
-      const response = await api.post('/api/settings/ai-measure', config);
-      if (response.success) {
-        toast.success('✅ Configuration IA Mesure sauvegardée !');
-        setHasChanges(false);
-      } else {
-        toast.error(`❌ ${response.message || 'Erreur de sauvegarde'}`);
-      }
-    } catch {
-      toast.error('Erreur lors de la sauvegarde');
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  // Mettre à jour une valeur
-  const updateConfig = (key: keyof MarkerConfig, value: number) => {
-    setConfig(prev => ({ ...prev, [key]: value }));
-    setHasChanges(true);
-  };
-
-  // Générer le SVG du marqueur
-  const generateMarkerSVG = useCallback(() => generateArucoMarkerSvg(config.markerSizeCm), [config.markerSizeCm]);
-
-  // Télécharger le marqueur en SVG
-  const downloadMarkerSVG = () => {
-    // Utiliser la version partagée
-    downloadArucoMarkerSvg(config.markerSizeCm);
-    toast.success(`📥 Marqueur ${config.markerSizeCm}cm téléchargé !`);
-  };
-
-  // Télécharger en PDF pour impression
-  const downloadMarkerPDF = async () => {
-    try {
-      const response = await api.get(`/api/settings/ai-measure/marker-pdf?size=${config.markerSizeCm}`, {
-        responseType: 'blob'
-      });
-      
-      const blob = new Blob([response], { type: 'application/pdf' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `marqueur-aruco-${config.markerSizeCm}cm.pdf`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-      toast.success(`📥 PDF marqueur ${config.markerSizeCm}cm téléchargé !`);
-    } catch {
-      // Fallback: télécharger le SVG
-      downloadMarkerSVG();
-    }
+  const downloadMarkerPDF = () => {
+    window.open('/printable/metre-a4-v10.pdf', '_blank');
   };
 
   if (loading) {
@@ -140,53 +57,22 @@ const AIMeasureSettings: React.FC = () => {
           <CameraOutlined className="mr-2" />
           Configuration IA Mesure
         </Title>
-        <Space>
-          <Button
-            type="primary"
-            icon={<SaveOutlined />}
-            onClick={handleSave}
-            loading={saving}
-            disabled={!hasChanges}
-          >
-            Sauvegarder
-          </Button>
-        </Space>
+        <Space />
       </div>
 
-      {hasChanges && (
-        <Alert
-          message="Modifications non sauvegardées"
-          description="Cliquez sur Sauvegarder pour appliquer les changements."
-          type="warning"
-          showIcon
-        />
-      )}
-
       {/* Configuration du marqueur */}
-      <Card title="📐 Dimensions du marqueur Métré A4 V1.2 (AprilTag)">
+      <Card title="📐 Métré A4 V10 (référence unique)">
         <Row gutter={[24, 24]}>
           <Col xs={24} md={12}>
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium mb-2">
-                  Taille du marqueur (cm)
-                  <Tooltip title="Largeur du marqueur Métré A4 V1.2 (distance entre centres AprilTag gauche-droite). Mesurez cette distance sur votre marqueur imprimé.">
-                    <InfoCircleOutlined className="ml-2 text-gray-400" />
-                  </Tooltip>
-                </label>
-                <InputNumber
-                  min={5}
-                  max={50}
-                  step={0.1}
-                  value={config.markerSizeCm}
-                  onChange={(value) => updateConfig('markerSizeCm', value || DEFAULT_CONFIG.markerSizeCm)}
-                  addonAfter="cm"
-                  style={{ width: '100%' }}
-                  precision={1}
-                />
-                <Text type="secondary" className="text-xs block mt-1">
-                  Valeur par défaut: 13 cm (marqueur Métré A4 V1.2 largeur)
-                </Text>
+                <Text strong>Référence unique :</Text>
+                <div className="text-sm text-gray-600 mt-2">
+                  Largeur centres: <strong>13.0 cm</strong> · Hauteur centres: <strong>20.5 cm</strong>
+                </div>
+                <div className="text-sm text-gray-600">
+                  Vérifiez la distance centre‑à‑centre haut/bas: <strong>20.5 cm</strong>
+                </div>
               </div>
 
               <Divider />
@@ -194,45 +80,30 @@ const AIMeasureSettings: React.FC = () => {
               <div>
                 <Text strong>Dimensions calculées:</Text>
                 <ul className="list-disc list-inside text-sm text-gray-600 mt-2">
-                  <li>Côté du carré: <strong>{config.markerSizeCm} cm</strong> ({config.markerSizeCm * 10} mm)</li>
-                  <li>Centre noir: <strong>{(config.markerSizeCm / 3).toFixed(1)} cm</strong></li>
-                  <li>Bande blanche: <strong>{(config.markerSizeCm / 6).toFixed(1)} cm</strong></li>
-                  <li>AprilTag largeur: <strong>13.0 cm</strong></li>
-                  <li>AprilTag hauteur: <strong>21.7 cm</strong></li>
+                  <li>Rectangle centres: <strong>13.0 × 20.5 cm</strong></li>
+                  <li>Feuille A4: <strong>21.0 × 29.7 cm</strong></li>
+                  <li>6 tags 5cm + 1 tag 10cm</li>
                 </ul>
               </div>
             </div>
           </Col>
 
           <Col xs={24} md={12}>
-            {/* Aperçu du marqueur */}
             <div className="border rounded-lg p-4 bg-gray-50">
-              <Text strong className="block mb-3">Aperçu du marqueur:</Text>
-              <div 
-                className="flex justify-center items-center bg-white p-4 rounded border"
-                style={{ minHeight: 200 }}
-              >
-                <div
-                  dangerouslySetInnerHTML={{ __html: generateMarkerSVG() }}
-                  style={{ 
-                    width: Math.min(180, config.markerSizeCm * 10),
-                    height: Math.min(180, config.markerSizeCm * 10)
-                  }}
-                />
-              </div>
+              <Text strong className="block mb-3">Téléchargement:</Text>
               <div className="flex gap-2 mt-4 justify-center">
                 <Button 
                   icon={<DownloadOutlined />} 
-                  onClick={downloadMarkerSVG}
+                  onClick={downloadMarkerPDF}
+                  type="primary"
                 >
-                  SVG
+                  PDF Métré A4 V10
                 </Button>
                 <Button 
                   icon={<PrinterOutlined />} 
                   onClick={downloadMarkerPDF}
-                  type="primary"
                 >
-                  PDF (impression)
+                  Imprimer
                 </Button>
               </div>
             </div>
@@ -245,18 +116,17 @@ const AIMeasureSettings: React.FC = () => {
         <Paragraph>
           <ol className="list-decimal list-inside space-y-2">
             <li>
-              <strong>Téléchargez</strong> le marqueur au format PDF ou SVG
+              <strong>Téléchargez</strong> le PDF Métré A4 V10
             </li>
             <li>
               <strong>Imprimez</strong> le marqueur à l'échelle 100% (sans mise à l'échelle)
             </li>
-            <li>les dimensions du marqueur Métré A4 V1.2 (AprilTag 13×21.7cm)
-              <strong>Vérifiez</strong> que la distance entre les centres des cercles magenta 
-              correspond exactement à <strong>{config.markerSizeCm} cm</strong>
+            <li>
+              <strong>Vérifiez</strong> que la distance centre‑à‑centre haut/bas est bien <strong>20.5 cm</strong>
             </li>
             <li>
               Si la taille ne correspond pas, <strong>mesurez</strong> la distance réelle et 
-              ajustez la valeur ci-dessus
+              réimprimez sans ajustement
             </li>
             <li>
               <strong>Collez</strong> le marqueur sur un support rigide (carton, aluminium...)

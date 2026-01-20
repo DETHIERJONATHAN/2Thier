@@ -2,7 +2,7 @@
  * 📐 IMAGE WITH ANNOTATIONS OVERLAY
  * 
  * Composant qui affiche une image avec les annotations de mesure dessinées par-dessus :
- * - Quadrilatère ArUco (référence verte)
+ * - Quadrilatère de référence (référence verte)
  * - Lignes de mesure avec labels
  * - Points A, B, C, D
  * 
@@ -25,8 +25,6 @@ interface ImageWithAnnotationsOverlayProps {
   className?: string;
   /** Callback quand l'image est chargée */
   onLoad?: () => void;
-  /** Taille du marqueur ArUco en cm (pour le label) */
-  markerSizeCm?: number;
 }
 
 /**
@@ -49,8 +47,7 @@ const ImageWithAnnotationsOverlay: React.FC<ImageWithAnnotationsOverlayProps> = 
   annotations,
   style,
   className,
-  onLoad,
-  markerSizeCm = 16.8
+  onLoad
 }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -135,7 +132,7 @@ const ImageWithAnnotationsOverlay: React.FC<ImageWithAnnotationsOverlayProps> = 
       ratioY = canvasHeight / savedDims.height;
     }
 
-    // 🎯 DESSINER LE QUADRILATÈRE ARUCO (référence)
+    // 🎯 DESSINER LE QUADRILATÈRE DE RÉFÉRENCE
     if (annotations.referenceCorners) {
       const corners = annotations.referenceCorners;
       
@@ -147,7 +144,7 @@ const ImageWithAnnotationsOverlay: React.FC<ImageWithAnnotationsOverlayProps> = 
         bottomLeft: { x: corners.bottomLeft.x * ratioX, y: corners.bottomLeft.y * ratioY }
       };
 
-      // Dessiner le quadrilatère ArUco (vert)
+      // Dessiner le quadrilatère (vert)
       ctx.strokeStyle = '#52c41a';
       ctx.lineWidth = 3;
       ctx.setLineDash([]);
@@ -183,13 +180,13 @@ const ImageWithAnnotationsOverlay: React.FC<ImageWithAnnotationsOverlayProps> = 
         ctx.fillText(cornerLabels[idx], point.x, point.y);
       });
 
-      // Label ArUco au centre
+      // Label référence au centre
       const center = {
         x: (scaledCorners.topLeft.x + scaledCorners.bottomRight.x) / 2,
         y: (scaledCorners.topLeft.y + scaledCorners.bottomRight.y) / 2
       };
       
-      const labelText = `Métré A4 V1.2 (13×21.7cm)`;
+      const labelText = 'Métré A4 V10 (13×20.5cm)';
       
       // Fond du label
       ctx.font = 'bold 12px Arial';
@@ -324,7 +321,7 @@ const ImageWithAnnotationsOverlay: React.FC<ImageWithAnnotationsOverlayProps> = 
       }
     }
 
-  }, [imageLoaded, annotations, scale, displaySize, markerSizeCm]);
+  }, [imageLoaded, annotations, scale, displaySize]);
 
   return (
     <div 

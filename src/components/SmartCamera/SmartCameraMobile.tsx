@@ -4,29 +4,23 @@
  * 🔥 IMPORTANT: Utilise getUserMedia pour capturer dans le navigateur
  * au lieu de l'app caméra native Android qui décharge la page !
  * 
- * 📱 Intègre le gyroscope pour améliorer les mesures ArUco
+ * 📱 Intègre le gyroscope pour améliorer la capture Métré A4 V10
  * 🔒 Protection contre la sortie accidentelle sur mobile
  */
 
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { Button, Card, Space, Typography, Progress, Image, message, Modal, InputNumber, Tooltip } from 'antd';
+import { Button, Card, Space, Typography, Progress, Image, message, Tooltip } from 'antd';
 import { 
   CameraOutlined, 
   CheckCircleOutlined, 
   DeleteOutlined,
   PlusOutlined,
   PrinterOutlined,
-  DownloadOutlined,
-  SaveOutlined,
-  InfoCircleOutlined,
   VideoCameraOutlined,
   StopOutlined
 } from '@ant-design/icons';
 import { useDeviceOrientation } from '../../hooks/useDeviceOrientation';
-import { useAuthenticatedApi } from '../../hooks/useAuthenticatedApi';
 import { useMobileModalLock } from '../../hooks/useMobileModalLock';
-import { downloadArucoMarkerSvg } from '../../utils/arucoMarkerSvg';
-import { setArucoMarkerSize } from '../../utils/homographyUtils';
 
 const { Text, Title } = Typography;
 
@@ -114,13 +108,6 @@ const SmartCameraMobile: React.FC<SmartCameraMobileProps> = ({
     }
   }, []);
 
-  // 🎯 ArUco settings (mêmes valeurs que Paramètres IA Mesure)
-  const { api } = useAuthenticatedApi();
-  const [showArucoSettings, setShowArucoSettings] = useState(false);
-  const [markerSizeCm, setMarkerSizeCm] = useState<number>(16.8);
-  const [boardSizeCm, setBoardSizeCm] = useState<number>(24);
-  const [arucoLoading, setArucoLoading] = useState(false);
-  const [arucoSaving, setArucoSaving] = useState(false);
   
   // � Protection mobile: Bloquer les gestes de sortie accidentelle (swipe, back button)
   const handleAttemptClose = useCallback(() => {
@@ -476,72 +463,6 @@ const SmartCameraMobile: React.FC<SmartCameraMobileProps> = ({
     };
   }, [cameraStream]);
 
-  // Charger la config ArUco au moment d'ouvrir la modale (évite appels inutiles)
-  useEffect(() => {
-    if (!showArucoSettings) return;
-    let cancelled = false;
-
-    const load = async () => {
-      setArucoLoading(true);
-      try {
-        const response = await api.get('/api/settings/ai-measure');
-        if (!cancelled && response?.success && response?.data) {
-          const nextMarkerSize = Number(response.data.markerSizeCm ?? 16.8);
-          const nextBoardSize = Number(response.data.boardSizeCm ?? 24);
-          if (Number.isFinite(nextMarkerSize)) setMarkerSizeCm(nextMarkerSize);
-          if (Number.isFinite(nextBoardSize)) setBoardSizeCm(nextBoardSize);
-        }
-      } catch (e) {
-        console.warn('[SmartCamera] Impossible de charger la config ArUco:', e);
-      } finally {
-        if (!cancelled) setArucoLoading(false);
-      }
-    };
-
-    load();
-    return () => {
-      cancelled = true;
-    };
-  }, [api, showArucoSettings]);
-
-  const handleSaveAruco = useCallback(async () => {
-    const size = Number(markerSizeCm);
-    if (!Number.isFinite(size) || size < 5 || size > 50) {
-      message.error('Taille ArUco invalide (5–50 cm)');
-      return;
-    }
-
-    setArucoSaving(true);
-    try {
-      const response = await api.post('/api/settings/ai-measure', {
-        markerSizeCm: size,
-        boardSizeCm: boardSizeCm
-      });
-      if (response?.success) {
-        message.success('Configuration ArUco sauvegardée');
-        // Mettre à jour les calculs côté front immédiatement
-        setArucoMarkerSize(size);
-      } else {
-        message.error(response?.message || 'Erreur de sauvegarde');
-      }
-    } catch (e) {
-      console.error(e);
-      message.error('Erreur lors de la sauvegarde');
-    } finally {
-      setArucoSaving(false);
-    }
-  }, [api, boardSizeCm, markerSizeCm]);
-
-  const handleDownloadAruco = useCallback(() => {
-    const size = Number(markerSizeCm);
-    if (!Number.isFinite(size) || size < 5 || size > 50) {
-      message.error('Taille ArUco invalide (5–50 cm)');
-      return;
-    }
-    downloadArucoMarkerSvg(size);
-    message.success(`Marqueur ArUco ${size}cm téléchargé`);
-  }, [markerSizeCm]);
-
   // Convertir fichier en base64
   const fileToBase64 = (file: File): Promise<string> => {
     return new Promise((resolve, reject) => {
@@ -765,12 +686,12 @@ const SmartCameraMobile: React.FC<SmartCameraMobileProps> = ({
               🤖 IA Photo
             </Title>
 
-            {/* � Bouton Métré à côté du titre */}
-            <Tooltip title="Télécharger feuille de calibration Métré A4">
+            {/* 📐 Bouton Métré A4 V10 */}
+            <Tooltip title="Télécharger Métré A4 V10">
               <Button
                 size="small"
                 icon={<PrinterOutlined />}
-                onClick={() => setShowArucoSettings(true)}
+                onClick={() => window.open('/printable/metre-a4-v10.pdf', '_blank')}
                 style={{
                   borderColor: '#fa8c16',
                   color: '#fa8c16',
@@ -815,135 +736,6 @@ const SmartCameraMobile: React.FC<SmartCameraMobileProps> = ({
         />
       </div>
 
-      {/* 🖨️ Modale Métré (téléchargement A4 V1.2) */}
-      <Modal
-        open={showArucoSettings}
-        onCancel={() => setShowArucoSettings(false)}
-        footer={null}
-        title={
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-            <img 
-              src="/printable/metre-logo.svg" 
-              alt="Métré" 
-              style={{ height: 28, objectFit: 'contain' }}
-              onError={(e) => {
-                // Fallback: juste afficher le texte sans logo
-                (e.target as HTMLImageElement).style.display = 'none';
-              }}
-            />
-            <span>📐 Métré - Calibration A4</span>
-          </div>
-        }
-        destroyOnClose
-      >
-        <Space direction="vertical" style={{ width: '100%' }} size={16}>
-          {/* Description */}
-          <div style={{ 
-            background: '#f0f2f5', 
-            padding: 12, 
-            borderRadius: 8,
-            fontSize: 13,
-            lineHeight: '1.5'
-          }}>
-            <strong>Feuille de calibration A4 V1.3</strong>
-            <ul style={{ margin: '8px 0', paddingLeft: 20 }}>
-              <li>Imprimer à <strong>100%</strong> (ne pas ajuster à la page)</li>
-              <li>Photographier à 20-50% du cadre</li>
-              <li>Contient: 5 AprilTags, règles, points de référence</li>
-            </ul>
-          </div>
-
-          {/* Boutons de téléchargement */}
-          <Space direction="vertical" style={{ width: '100%' }} size={8}>
-            {/* Version LIGHT - Fond blanc */}
-            <div style={{ borderRadius: 8, overflow: 'hidden', border: '1px solid #f0f0f0' }}>
-              <div style={{ background: '#fafafa', padding: '8px 12px', fontSize: 12, fontWeight: 500 }}>📄 Version LIGHT (Papier Blanc)</div>
-              <Space style={{ width: '100%', padding: 8 }} size={6}>
-                <Button
-                  style={{ flex: 1 }}
-                  type="primary"
-                  size="small"
-                  onClick={() => {
-                    const link = document.createElement('a');
-                    link.href = '/printable/metre-a4-v1.2-light.pdf';
-                    link.download = 'metre-a4-v1.2-light.pdf';
-                    document.body.appendChild(link);
-                    link.click();
-                    document.body.removeChild(link);
-                    message.success('📥 PDF LIGHT téléchargé !');
-                  }}
-                >
-                  PDF
-                </Button>
-                <Button
-                  style={{ flex: 1 }}
-                  size="small"
-                  onClick={() => {
-                    const link = document.createElement('a');
-                    link.href = '/printable/metre-a4-v1.2-light.png';
-                    link.download = 'metre-a4-v1.2-light.png';
-                    document.body.appendChild(link);
-                    link.click();
-                    document.body.removeChild(link);
-                    message.success('📥 PNG LIGHT téléchargé !');
-                  }}
-                >
-                  PNG
-                </Button>
-              </Space>
-            </div>
-
-            {/* Version DARK - Fond noir */}
-            <div style={{ borderRadius: 8, overflow: 'hidden', border: '1px solid #f0f0f0' }}>
-              <div style={{ background: '#fafafa', padding: '8px 12px', fontSize: 12, fontWeight: 500 }}>⚫ Version DARK (Projection Mur Blanc)</div>
-              <Space style={{ width: '100%', padding: 8 }} size={6}>
-                <Button
-                  style={{ flex: 1 }}
-                  size="small"
-                  onClick={() => {
-                    const link = document.createElement('a');
-                    link.href = '/printable/metre-a4-v1.2-dark.pdf';
-                    link.download = 'metre-a4-v1.2-dark.pdf';
-                    document.body.appendChild(link);
-                    link.click();
-                    document.body.removeChild(link);
-                    message.success('📥 PDF DARK téléchargé !');
-                  }}
-                >
-                  PDF
-                </Button>
-                <Button
-                  style={{ flex: 1 }}
-                  size="small"
-                  onClick={() => {
-                    const link = document.createElement('a');
-                    link.href = '/printable/metre-a4-v1.2-dark.png';
-                    link.download = 'metre-a4-v1.2-dark.png';
-                    document.body.appendChild(link);
-                    link.click();
-                    document.body.removeChild(link);
-                    message.success('📥 PNG DARK téléchargé !');
-                  }}
-                >
-                  PNG
-                </Button>
-              </Space>
-            </div>
-          </Space>
-
-          {/* Avertissement */}
-          <div style={{ 
-            background: '#fff7e6', 
-            border: '1px solid #ffd591',
-            padding: 10, 
-            borderRadius: 6,
-            fontSize: 12,
-            color: '#ad6800'
-          }}>
-            ⚠️ <strong>Attention :</strong> Imprimez à 100% (échelle réelle). Ne cochez PAS "Ajuster à la page" dans les paramètres d'impression.
-          </div>
-        </Space>
-      </Modal>
       {/* 📹 OVERLAY CAMÉRA IN-BROWSER - S'affiche quand on prend une photo */}
       {cameraActive && (
         <div style={{

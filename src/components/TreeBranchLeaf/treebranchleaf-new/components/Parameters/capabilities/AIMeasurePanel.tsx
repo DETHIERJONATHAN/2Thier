@@ -34,14 +34,11 @@ import {
   PlayCircleOutlined,
   CheckCircleOutlined,
   ExclamationCircleOutlined,
-  InfoCircleOutlined,
-  DownloadOutlined,
-  SettingOutlined
+  InfoCircleOutlined
 } from '@ant-design/icons';
 import { useAuthenticatedApi } from '../../../../../../hooks/useAuthenticatedApi';
 import { useDebouncedCallback } from '../../../hooks/useDebouncedCallback';
 import NodeTreeSelector, { NodeTreeSelectorValue } from '../shared/NodeTreeSelector';
-import { InputNumber, Collapse } from 'antd';
 
 const { Title, Text, Paragraph } = Typography;
 const { TextArea } = Input;
@@ -75,9 +72,13 @@ interface AIMeasurePanelProps {
   readOnly?: boolean;
 }
 
-// =============================================================================
-// 🎯 COMPOSANT PRINCIPAL
-// =============================================================================
+const DEFAULT_CONFIG: AIMeasureConfig = {
+  enabled: false,
+  prompt: '',
+  measureKeys: [],
+  mappings: [],
+  autoTrigger: true
+};
 
 const AIMeasurePanel: React.FC<AIMeasurePanelProps> = ({
   treeId,
@@ -89,36 +90,15 @@ const AIMeasurePanel: React.FC<AIMeasurePanelProps> = ({
   const { api } = useAuthenticatedApi();
   const [messageApi, contextHolder] = message.useMessage();
   const mountedRef = useRef(true);
-  const [loading, setLoading] = useState(false);
+
+  const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
+  const [config, setConfig] = useState<AIMeasureConfig>(value ?? DEFAULT_CONFIG);
   const [aiStatus, setAiStatus] = useState<{ available: boolean; mode: string } | null>(null);
-
-  // État local du formulaire
-  const [config, setConfig] = useState<AIMeasureConfig>({
-    enabled: false,
-    prompt: '',
-    measureKeys: [],
-    mappings: [],
-    autoTrigger: true
-  });
-
-  // État pour le NodeTreeSelector
+  const [newKeyInput, setNewKeyInput] = useState('');
   const [selectorOpen, setSelectorOpen] = useState(false);
   const [editingMappingId, setEditingMappingId] = useState<string | null>(null);
-
-  // État pour l'ajout de nouvelle clé
-  const [newKeyInput, setNewKeyInput] = useState('');
-
-  // 🎯 État pour la configuration du marqueur Métré A4 V1.2
-  const [markerConfig, setMarkerConfig] = useState({
-    sizeCm: 13, // Largeur Métré A4 V1.2
-    loading: false
-  });
-
-  // =============================================================================
-  // 🔄 CHARGEMENT INITIAL
-  // =============================================================================
 
   useEffect(() => {
     mountedRef.current = true;
@@ -126,27 +106,11 @@ const AIMeasurePanel: React.FC<AIMeasurePanelProps> = ({
     const loadConfig = async () => {
       try {
         setLoading(true);
-        
-        // Charger la config depuis les colonnes dédiées du nœud
-        const node = await api.get(`/api/treebranchleaf/nodes/${nodeId}`) as {
-          // Colonnes dédiées pour aiMeasure
-          aiMeasure_enabled?: boolean;
-          aiMeasure_autoTrigger?: boolean;
-          aiMeasure_prompt?: string;
-          aiMeasure_keys?: Array<{
-            id: string;
-            key: string;
-            label: string;
-            type: string;
-            targetRef?: string;
-            targetLabel?: string;
-          }>;
-          // Fallback legacy metadata
-          metadata?: { aiMeasure?: AIMeasureConfig }
-        };
-        
-        // 🔧 NOUVEAU: Lire depuis les colonnes dédiées d'abord
-        if (node?.aiMeasure_enabled !== undefined) {
+
+        const response = await api.get(`/api/treebranchleaf/nodes/${nodeId}/full`);
+        const node = response?.node || response?.data || response;
+
+        if (node?.aiMeasure_keys || node?.aiMeasure_prompt || node?.aiMeasure_enabled !== undefined) {
           const loadedConfig: AIMeasureConfig = {
             enabled: node.aiMeasure_enabled ?? false,
             autoTrigger: node.aiMeasure_autoTrigger ?? true,
@@ -169,6 +133,8 @@ const AIMeasurePanel: React.FC<AIMeasurePanelProps> = ({
           setConfig(node.metadata.aiMeasure);
         } else if (value) {
           setConfig(value);
+        } else {
+          setConfig(DEFAULT_CONFIG);
         }
 
         // Vérifier le statut du service IA
@@ -242,96 +208,24 @@ const AIMeasurePanel: React.FC<AIMeasurePanelProps> = ({
     }
   }, 800);
 
-  // =============================================================================
-  // 🎛️ HANDLERS
-  // =============================================================================
-
-  const handleToggleEnabled = useCallback((checked: boolean) => {
-    const newConfig = { ...config, enabled: checked };
+  const handleToggleEnabled = useCallback((enabled: boolean) => {
+    const newConfig = { ...config, enabled };
     setConfig(newConfig);
     saveConfig(newConfig);
   }, [config, saveConfig]);
 
-  const handlePromptChange = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    const newConfig = { ...config, prompt: e.target.value };
+  const handlePromptChange = useCallback((event: React.ChangeEvent<HTMLTextAreaElement>) => {
+    const prompt = event.target.value;
+    const newConfig = { ...config, prompt };
     setConfig(newConfig);
     saveConfig(newConfig);
   }, [config, saveConfig]);
 
-  const handleAutoTriggerChange = useCallback((checked: boolean) => {
-    const newConfig = { ...config, autoTrigger: checked };
+  const handleAutoTriggerChange = useCallback((autoTrigger: boolean) => {
+    const newConfig = { ...config, autoTrigger };
     setConfig(newConfig);
     saveConfig(newConfig);
   }, [config, saveConfig]);
-
-  // =============================================================================
-  // � GESTION DU MARQUEUR ARUCO
-  // =============================================================================
-
-  // Charger la config du marqueur au démarrage
-  useEffect(() => {
-    const loadMarkerConfig = async () => {
-      try {
-        const response = await api.get('/api/settings/ai-measure') as { success: boolean; data?: { markerSizeCm: number } };
-        if (response.success && response.data?.markerSizeCm) {
-          setMarkerConfig(prev => ({ ...prev, sizeCm: response.data!.markerSizeCm }));
-        }
-      } catch (e) {
-        console.warn('[AIMeasurePanel] Config marqueur non trouvée, utilisation par défaut');
-      }
-    };
-    loadMarkerConfig();
-  }, [api]);
-
-  // Sauvegarder la taille du marqueur
-  const handleSaveMarkerSize = useCallback(async (sizeCm: number) => {
-    setMarkerConfig(prev => ({ ...prev, loading: true }));
-    try {
-      await api.post('/api/settings/ai-measure', { markerSizeCm: sizeCm });
-      setMarkerConfig(prev => ({ ...prev, sizeCm, loading: false }));
-      messageApi.success(`✅ Taille du marqueur sauvegardée: ${sizeCm} cm`);
-    } catch (e) {
-      messageApi.error('Erreur lors de la sauvegarde');
-      setMarkerConfig(prev => ({ ...prev, loading: false }));
-    }
-  }, [api, messageApi]);
-
-  // Générer le SVG du marqueur
-  const generateMarkerSVG = useCallback((sizeCm: number) => {
-    const sizeMm = sizeCm * 10;
-    const band = sizeMm / 6;
-    const magentaRadius = sizeMm * 0.028;
-    const whiteRadius = sizeMm * 0.006;
-    
-    return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${sizeMm} ${sizeMm}" width="${sizeMm}mm" height="${sizeMm}mm">
-      <rect x="0" y="0" width="${sizeMm}" height="${sizeMm}" fill="#000000"/>
-      <rect x="${band}" y="${band}" width="${sizeMm - 2*band}" height="${sizeMm - 2*band}" fill="#FFFFFF"/>
-      <rect x="${2*band}" y="${2*band}" width="${sizeMm - 4*band}" height="${sizeMm - 4*band}" fill="#000000"/>
-      <circle cx="0" cy="0" r="${magentaRadius}" fill="#FF00FF"/>
-      <circle cx="${sizeMm}" cy="0" r="${magentaRadius}" fill="#FF00FF"/>
-      <circle cx="${sizeMm}" cy="${sizeMm}" r="${magentaRadius}" fill="#FF00FF"/>
-      <circle cx="0" cy="${sizeMm}" r="${magentaRadius}" fill="#FF00FF"/>
-      <circle cx="0" cy="0" r="${whiteRadius}" fill="#FFFFFF"/>
-      <circle cx="${sizeMm}" cy="0" r="${whiteRadius}" fill="#FFFFFF"/>
-      <circle cx="${sizeMm}" cy="${sizeMm}" r="${whiteRadius}" fill="#FFFFFF"/>
-      <circle cx="0" cy="${sizeMm}" r="${whiteRadius}" fill="#FFFFFF"/>
-    </svg>`;
-  }, []);
-
-  // Télécharger le marqueur
-  const handleDownloadMarker = useCallback(() => {
-    const svg = generateMarkerSVG(markerConfig.sizeCm);
-    const blob = new Blob([svg], { type: 'image/svg+xml' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `marqueur-aruco-${markerConfig.sizeCm}cm.svg`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-    messageApi.success(`📥 Marqueur ${markerConfig.sizeCm}cm téléchargé !`);
-  }, [generateMarkerSVG, markerConfig.sizeCm, messageApi]);
 
   // =============================================================================
   // �🔑 GESTION DES CLÉS DE MESURE
@@ -614,99 +508,6 @@ const AIMeasurePanel: React.FC<AIMeasurePanelProps> = ({
               ))}
             </Space>
           </Card>
-
-          {/* 📐 Configuration du marqueur ArUco */}
-          <Collapse 
-            size="small"
-            items={[{
-              key: 'marker-config',
-              label: (
-                <Space>
-                  <SettingOutlined />
-                  <span>📐 Configuration du marqueur de référence</span>
-                </Space>
-              ),
-              children: (
-                <div style={{ padding: '8px 0' }}>
-                  <Alert
-                    message="Marqueur Métré A4 V1.2 (AprilTag 13×21.7cm)"
-                    description="Ce marqueur doit être imprimé et placé à côté de l'objet à mesurer. La taille configurée doit correspondre EXACTEMENT à la taille imprimée."
-                    type="info"
-                    showIcon
-                    style={{ marginBottom: 16 }}
-                  />
-                  
-                  <Space direction="vertical" style={{ width: '100%' }}>
-                    {/* Taille du marqueur */}
-                    <div>
-                      <Text strong>Taille du marqueur :</Text>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4 }}>
-                        <InputNumber
-                          min={5}
-                          max={50}
-                          step={0.1}
-                          value={markerConfig.sizeCm}
-                          onChange={(val) => setMarkerConfig(prev => ({ ...prev, sizeCm: val || 13 }))}
-                          addonAfter="cm"
-                          style={{ width: 150 }}
-                          precision={1}
-                          disabled={readOnly}
-                        />
-                        <Button 
-                          type="primary" 
-                          size="small"
-                          onClick={() => handleSaveMarkerSize(markerConfig.sizeCm)}
-                          loading={markerConfig.loading}
-                          disabled={readOnly}
-                        >
-                          Sauvegarder
-                        </Button>
-                      </div>
-                      <Text type="secondary" style={{ fontSize: 11 }}>
-                        Largeur du marqueur Métré A4 V1.2 (AprilTag 13×21.7cm).
-                      </Text>
-                    </div>
-
-                    <Divider style={{ margin: '12px 0' }} />
-
-                    {/* Aperçu et téléchargement */}
-                    <div style={{ display: 'flex', gap: 16, alignItems: 'flex-start' }}>
-                      {/* Aperçu */}
-                      <div 
-                        style={{ 
-                          width: 100, 
-                          height: 100, 
-                          border: '1px solid #d9d9d9', 
-                          borderRadius: 4,
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          background: '#fafafa'
-                        }}
-                        dangerouslySetInnerHTML={{ __html: generateMarkerSVG(markerConfig.sizeCm) }}
-                      />
-                      
-                      <div style={{ flex: 1 }}>
-                        <Text strong>Télécharger le marqueur :</Text>
-                        <div style={{ marginTop: 8 }}>
-                          <Button 
-                            icon={<DownloadOutlined />}
-                            onClick={handleDownloadMarker}
-                            type="primary"
-                          >
-                            Télécharger SVG ({markerConfig.sizeCm} cm)
-                          </Button>
-                        </div>
-                        <Text type="secondary" style={{ fontSize: 11, display: 'block', marginTop: 8 }}>
-                          Imprimez à 100% (sans mise à l'échelle) puis vérifiez avec une règle.
-                        </Text>
-                      </div>
-                    </div>
-                  </Space>
-                </div>
-              )
-            }]}
-          />
 
           {/* Prompt */}
           <Card size="small" title="🎯 Prompt d'analyse">

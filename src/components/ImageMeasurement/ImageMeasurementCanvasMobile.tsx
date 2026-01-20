@@ -41,16 +41,6 @@ const { Text, Title } = Typography;
 // TYPES
 // ============================================================================
 
-// 🎯 Type pour les corrections optimales (depuis l'API ArUco)
-interface OptimalCorrectionData {
-  finalCorrection: number;
-  correctionX: number;
-  correctionY: number;
-  correctionXSansBandes?: number;
-  correctionYSansBandes?: number;
-  globalConfidence: number;
-}
-
 interface ImageMeasurementCanvasMobileProps {
   imageUrl: string;
   calibration?: CalibrationData;
@@ -65,7 +55,6 @@ interface ImageMeasurementCanvasMobileProps {
   // 🆕 Props pour correction précise (comme le composant Desktop)
   pixelPerCmX?: number;  // Pixels/cm sur l'axe X (largeur)
   pixelPerCmY?: number;  // Pixels/cm sur l'axe Y (hauteur)
-  optimalCorrection?: OptimalCorrectionData | null;  // Corrections ArUco
 }
 
 interface TouchPoint {
@@ -105,8 +94,7 @@ export const ImageMeasurementCanvasMobile: React.FC<ImageMeasurementCanvasMobile
   measureKeys = [],
   // 🆕 Props de correction (comme le composant Desktop)
   pixelPerCmX: propPixelPerCmX,
-  pixelPerCmY: propPixelPerCmY,
-  optimalCorrection = null
+  pixelPerCmY: propPixelPerCmY
 }) => {
   // Refs
   const containerRef = useRef<HTMLDivElement>(null);
@@ -129,9 +117,6 @@ export const ImageMeasurementCanvasMobile: React.FC<ImageMeasurementCanvasMobile
   const [touchStartScale, setTouchStartScale] = useState(1);
   const [lastTouchCenter, setLastTouchCenter] = useState<{ x: number; y: number } | null>(null);
   
-  // 🆕 State - Panneau debug ArUco
-  const [showDebugPanel, setShowDebugPanel] = useState(false);
-
   // State - UI
   const [unit, setUnit] = useState(defaultUnit);
   const [showInstructions, setShowInstructions] = useState(true);
@@ -490,22 +475,6 @@ export const ImageMeasurementCanvasMobile: React.FC<ImageMeasurementCanvasMobile
     console.log(`📱 [MOBILE] Mesures brutes: ${largeurCm.toFixed(2)}cm × ${hauteurCm.toFixed(2)}cm`);
     console.log(`   pixelPerCmX=${pixelPerCmX.toFixed(2)}, pixelPerCmY=${pixelPerCmY.toFixed(2)}`);
 
-    // ═══════════════════════════════════════════════════════════════════════════
-    // 🏎️ FORMULE 1: AUCUNE CORRECTION SUPPLÉMENTAIRE !
-    // ═══════════════════════════════════════════════════════════════════════════
-    // 
-    // L'homographie ultra-précise (RANSAC + Levenberg-Marquardt) est la source de vérité.
-    // On NE MULTIPLIE PAS par des corrections - cela diluerait la précision !
-    // 
-    // ═══════════════════════════════════════════════════════════════════════════
-    
-    // Log pour diagnostic uniquement
-    if (optimalCorrection) {
-      console.log(`📱 [MOBILE] 🏎️ FORMULE 1: Mesures DIRECTES (AUCUNE CORRECTION appliquée)`);
-      console.log(`   Largeur: ${largeurCm.toFixed(2)} cm (valeur pure)`);
-      console.log(`   Hauteur: ${hauteurCm.toFixed(2)} cm (valeur pure)`);
-    }
-
     results.largeur_cm = largeurCm;
     results.hauteur_cm = hauteurCm;
 
@@ -514,7 +483,7 @@ export const ImageMeasurementCanvasMobile: React.FC<ImageMeasurementCanvasMobile
     results.surface_brute_m2 = results.surface_brute_cm2 / 10000;
 
     return results;
-  }, [points, pixelPerCmX, pixelPerCmY, optimalCorrection, getSortedPoints]);
+  }, [points, pixelPerCmX, pixelPerCmY, getSortedPoints]);
 
   useEffect(() => {
     onMeasurementsChange?.(measurements);
@@ -707,7 +676,7 @@ export const ImageMeasurementCanvasMobile: React.FC<ImageMeasurementCanvasMobile
         x: (p.x / imageDimensions.width) * 1000,
         y: (p.y / imageDimensions.height) * 1000
       })),
-      calibration: calibration || { pixelPerCm: avgPixelPerCm, referenceObject: 'aruco-corrected' },
+      calibration: calibration || { pixelPerCm: avgPixelPerCm, referenceObject: 'metre-a4-v10' },
       exclusionZones: [],
       unit
     };
@@ -802,155 +771,6 @@ export const ImageMeasurementCanvasMobile: React.FC<ImageMeasurementCanvasMobile
           strokeColor={isComplete ? '#52c41a' : '#1890ff'}
         />
       </div>
-
-      {/* 🆕 BOUTON + PANNEAU DEBUG ArUco */}
-      <div style={{ 
-        padding: '4px 16px', 
-        backgroundColor: 'rgba(0, 0, 0, 0.9)',
-        borderBottom: showDebugPanel ? 'none' : '1px solid #333'
-      }}>
-        <Button
-          type={showDebugPanel ? 'primary' : 'default'}
-          size="small"
-          onClick={() => setShowDebugPanel(!showDebugPanel)}
-          style={{ 
-            width: '100%',
-            background: optimalCorrection 
-              ? 'linear-gradient(90deg, #722ed1, #1890ff)' 
-              : '#333',
-            borderColor: 'transparent',
-            color: '#fff'
-          }}
-        >
-          {showDebugPanel ? '🔽 Masquer' : '🔬 Debug ArUco'} 
-          {optimalCorrection 
-            ? ` ✅ X=×${optimalCorrection.correctionX?.toFixed(3)} Y=×${optimalCorrection.correctionY?.toFixed(3)}` 
-            : ' ❌ Pas de correction'}
-        </Button>
-      </div>
-      
-      {/* Panneau debug ArUco détaillé */}
-      {showDebugPanel && (
-        <div style={{
-          padding: '12px 16px',
-          background: 'linear-gradient(135deg, #1a1a2e 0%, #16213e 100%)',
-          borderBottom: '1px solid #333',
-          color: '#fff',
-          fontSize: 11
-        }}>
-          {optimalCorrection ? (
-            <>
-              {/* ROW 1: Corrections X et Y */}
-              <div style={{ 
-                display: 'grid', 
-                gridTemplateColumns: '1fr 1fr', 
-                gap: 8,
-                marginBottom: 8
-              }}>
-                <div style={{ 
-                  textAlign: 'center',
-                  padding: 8,
-                  background: 'rgba(24,144,255,0.3)',
-                  borderRadius: 6
-                }}>
-                  <div style={{ fontSize: 9, opacity: 0.7 }}>↔️ Largeur (X)</div>
-                  <div style={{ 
-                    fontSize: 18, 
-                    fontWeight: 'bold',
-                    color: optimalCorrection.correctionX < 0.98 ? '#ff7875' : 
-                           optimalCorrection.correctionX > 1.02 ? '#95de64' : '#fff'
-                  }}>
-                    ×{optimalCorrection.correctionX?.toFixed(4)}
-                  </div>
-                  {optimalCorrection.correctionXSansBandes !== undefined && (
-                    <div style={{ fontSize: 8, opacity: 0.6 }}>
-                      Homographie: ×{optimalCorrection.correctionXSansBandes.toFixed(4)}
-                    </div>
-                  )}
-                </div>
-                <div style={{ 
-                  textAlign: 'center',
-                  padding: 8,
-                  background: 'rgba(82,196,26,0.3)',
-                  borderRadius: 6
-                }}>
-                  <div style={{ fontSize: 9, opacity: 0.7 }}>↕️ Hauteur (Y)</div>
-                  <div style={{ 
-                    fontSize: 18, 
-                    fontWeight: 'bold',
-                    color: optimalCorrection.correctionY < 0.98 ? '#ff7875' : 
-                           optimalCorrection.correctionY > 1.02 ? '#95de64' : '#fff'
-                  }}>
-                    ×{optimalCorrection.correctionY?.toFixed(4)}
-                  </div>
-                  {optimalCorrection.correctionYSansBandes !== undefined && (
-                    <div style={{ fontSize: 8, opacity: 0.6 }}>
-                      Homographie: ×{optimalCorrection.correctionYSansBandes.toFixed(4)}
-                    </div>
-                  )}
-                </div>
-              </div>
-              
-              {/* ROW 2: Confiance + Correction globale */}
-              <div style={{ 
-                display: 'flex', 
-                justifyContent: 'space-between',
-                padding: '6px 12px',
-                background: 'rgba(0,0,0,0.3)',
-                borderRadius: 6
-              }}>
-                <span>📊 Correction finale: <strong>×{optimalCorrection.finalCorrection?.toFixed(4)}</strong></span>
-                <span>🎯 Confiance: <strong style={{
-                  color: optimalCorrection.globalConfidence > 0.8 ? '#52c41a' : 
-                         optimalCorrection.globalConfidence > 0.5 ? '#faad14' : '#ff4d4f'
-                }}>{(optimalCorrection.globalConfidence * 100).toFixed(0)}%</strong></span>
-              </div>
-              
-              {/* ROW 3: Calibration */}
-              <div style={{ 
-                marginTop: 8,
-                padding: '6px 12px',
-                background: 'rgba(255,165,0,0.2)',
-                borderRadius: 6,
-                display: 'flex',
-                justifyContent: 'space-between'
-              }}>
-                <span>📐 pixelPerCmX: <strong>{propPixelPerCmX?.toFixed(2) || 'N/A'}</strong></span>
-                <span>📐 pixelPerCmY: <strong>{propPixelPerCmY?.toFixed(2) || 'N/A'}</strong></span>
-              </div>
-              
-              {/* ROW 4: Mesures brutes vs corrigées */}
-              {measurements.largeur_cm && measurements.hauteur_cm && (
-                <div style={{ 
-                  marginTop: 8,
-                  padding: '8px 12px',
-                  background: 'linear-gradient(135deg, rgba(255,255,255,0.1) 0%, rgba(255,255,255,0.05) 100%)',
-                  borderRadius: 6,
-                  border: '1px dashed rgba(255,255,255,0.3)'
-                }}>
-                  <div style={{ fontSize: 10, opacity: 0.7, marginBottom: 4 }}>📏 Mesures finales (après correction)</div>
-                  <div style={{ display: 'flex', justifyContent: 'space-around' }}>
-                    <span>Largeur: <strong style={{ color: '#1890ff' }}>{measurements.largeur_cm.toFixed(1)} cm</strong></span>
-                    <span>Hauteur: <strong style={{ color: '#52c41a' }}>{measurements.hauteur_cm.toFixed(1)} cm</strong></span>
-                  </div>
-                </div>
-              )}
-            </>
-          ) : (
-            <div style={{ 
-              textAlign: 'center', 
-              padding: 16,
-              background: 'rgba(255,77,79,0.2)',
-              borderRadius: 8
-            }}>
-              <div style={{ fontSize: 14, marginBottom: 4 }}>⚠️ Pas de correction ArUco</div>
-              <div style={{ fontSize: 10, opacity: 0.7 }}>
-                Les mesures utilisent la calibration manuelle
-              </div>
-            </div>
-          )}
-        </div>
-      )}
 
       {/* Instructions overlay */}
       {showInstructions && points.length > 0 && (

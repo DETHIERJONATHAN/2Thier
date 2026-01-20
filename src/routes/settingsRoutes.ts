@@ -1312,21 +1312,19 @@ router.post('/initialize-default-statuses', async (req, res) => {
 });
 
 // ============================================================================
-// 🎯 IA MESURE - Configuration du marqueur ArUco
+// 🎯 IA MESURE - Configuration Métré A4 V10
 // ============================================================================
 
 // GET /api/settings/ai-measure - Récupérer la configuration
 router.get('/ai-measure', async (req, res) => {
   try {
-    // ✅ SYSTÈME UNIQUE: AprilTag Métré V1.2 uniquement (centres des 4 tags)
-    // On ne lit plus / n'écrit plus de config legacy (15×23.7 / 15cm) pour éviter toute dérive.
+    // ✅ SYSTÈME UNIQUE: Métré A4 V10 (centres des 6 petits tags)
     return res.json({
       success: true,
       data: {
         markerWidthCm: 13.0,
-        markerHeightCm: 21.7,
-        markerSizeCm: 13.0, // Deprecated, gardé pour compatibilité frontend
-        boardSizeCm: 24
+        markerHeightCm: 20.5,
+        boardSizeCm: 29.7
       }
     });
     
@@ -1343,11 +1341,10 @@ router.get('/ai-measure', async (req, res) => {
 // POST /api/settings/ai-measure - Sauvegarder la configuration
 router.post('/ai-measure', async (req, res) => {
   try {
-    // ✅ SYSTÈME UNIQUE: AprilTag Métré V1.2 a des dimensions fixes.
-    // On désactive la persistance pour éviter de réinjecter des valeurs legacy.
+    // ✅ SYSTÈME UNIQUE: Métré A4 V10 a des dimensions fixes.
     return res.status(400).json({
       success: false,
-      error: 'Configuration désactivée: AprilTag Métré V1.2 est fixe (13×21.7cm).'
+      error: 'Configuration désactivée: Métré A4 V10 est fixe (13×20.5cm).'
     });
     
   } catch (error) {

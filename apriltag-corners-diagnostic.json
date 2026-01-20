@@ -1,0 +1,73 @@
+{
+  "timestamp": "2026-01-17T20:12:17.208Z",
+  "apriltag_expected": {
+    "tl": [
+      0,
+      0
+    ],
+    "tr": [
+      160,
+      0
+    ],
+    "br": [
+      160,
+      160
+    ],
+    "bl": [
+      0,
+      160
+    ],
+    "description": "Carré parfait 160×160mm"
+  },
+  "apriltag_received": {
+    "tl": [
+      25,
+      40
+    ],
+    "tr": [
+      185,
+      40
+    ],
+    "br": [
+      185,
+      200
+    ],
+    "bl": [
+      25,
+      200
+    ],
+    "description": "Région décalée/intérieure"
+  },
+  "apriltag_pixels": {
+    "tl": [
+      745.9,
+      580.3
+    ],
+    "tr": [
+      908.9,
+      578.1
+    ],
+    "br": [
+      909.1,
+      745.3
+    ],
+    "bl": [
+      749.2,
+      749
+    ],
+    "description": "Coins en pixels détectés par vision"
+  },
+  "offset": {
+    "x": 25,
+    "y": 40
+  },
+  "dimensions": {
+    "width": 160,
+    "height": 160
+  },
+  "ratio": 1,
+  "hasOffset": true,
+  "hasSkew": false,
+  "hasCorrectSize": true,
+  "diagnosis": "CORNERS_OFFSET_DETECTED"
+}

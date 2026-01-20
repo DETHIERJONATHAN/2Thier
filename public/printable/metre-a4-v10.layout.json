@@ -1,0 +1,87 @@
+{
+  "version": "A4-CALIB-V10",
+  "sheet": {
+    "width_mm": 210,
+    "height_mm": 297,
+    "dpi": 300
+  },
+  "margins_mm": {
+    "top": 10,
+    "left": 15,
+    "right": 15,
+    "bottom": 30
+  },
+  "april_tags": {
+    "small": {
+      "size_mm": 50,
+      "count": 6,
+      "positions": [
+        { "id": 0, "label": "TL", "center_mm": { "x": 40, "y": 35 }, "top_left_mm": { "x": 15, "y": 10 } },
+        { "id": 1, "label": "TC", "center_mm": { "x": 105, "y": 35 }, "top_left_mm": { "x": 80, "y": 10 } },
+        { "id": 2, "label": "TR", "center_mm": { "x": 170, "y": 35 }, "top_left_mm": { "x": 145, "y": 10 } },
+        { "id": 3, "label": "BL", "center_mm": { "x": 40, "y": 240 }, "top_left_mm": { "x": 15, "y": 215 } },
+        { "id": 4, "label": "BC", "center_mm": { "x": 105, "y": 240 }, "top_left_mm": { "x": 80, "y": 215 } },
+        { "id": 5, "label": "BR", "center_mm": { "x": 170, "y": 240 }, "top_left_mm": { "x": 145, "y": 215 } }
+      ]
+    },
+    "large": {
+      "id": 33,
+      "size_mm": 100,
+      "center_mm": { "x": 105, "y": 150 },
+      "top_left_mm": { "x": 55, "y": 100 }
+    }
+  },
+  "rules": {
+    "vertical": {
+      "x_mm": 163,
+      "y_mm": 100,
+      "length_mm": 100,
+      "range": "0-100mm"
+    },
+    "horizontal": {
+      "x_mm": 55,
+      "y_mm": 208,
+      "length_mm": 100,
+      "range": "0-100mm"
+    }
+  },
+  "reference": {
+    "centers_width_mm": 130,
+    "centers_height_mm": 205,
+    "a4_width_mm": 210,
+    "a4_height_mm": 297
+  },
+  "logos": [
+    {
+      "label": "2Thier",
+      "x_mm": 15,
+      "y_mm": 65,
+      "width_mm": 30,
+      "height_mm": 12
+    },
+    {
+      "label": "M2TRÉ",
+      "x_mm": 90,
+      "y_mm": 62,
+      "width_mm": 30,
+      "height_mm": 12
+    },
+    {
+      "label": "2Thier CRM",
+      "x_mm": 165,
+      "y_mm": 65,
+      "width_mm": 30,
+      "height_mm": 12
+    }
+  ],
+  "labels": {
+    "top": "TOP ↑",
+    "warning_primary": "⚠ NE PAS AJUSTER À LA PAGE ⚠",
+    "warning_secondary": "Imprimer à 100% (taille réelle)",
+    "placement": {
+      "top_mm": 80,
+      "warning_primary_mm": 88,
+      "warning_secondary_mm": 94
+    }
+  }
+}

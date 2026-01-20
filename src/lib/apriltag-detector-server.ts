@@ -31,7 +31,7 @@ export interface AprilTagDetectionResult {
 }
 
 /**
- * Détecte les AprilTags dans une image pour la feuille Métré V1.2
+ * Détecte les AprilTags dans une image pour Métré A4 V10
  * 
  * @param data Buffer RGBA de l'image
  * @param width Largeur de l'image
@@ -52,7 +52,7 @@ export async function detectAprilTagsMetreA4(
   options: AprilTagDetectorOptions = {}
 ): Promise<AprilTagDetectionResult[]> {
   try {
-    console.log(`🎯 [APRILTAG] Détection AprilTags Métré V1.2...`);
+    console.log(`🎯 [APRILTAG] Détection AprilTags Métré A4 V10...`);
 
     const { default: AprilTag, FAMILIES } = await loadApriltagModule();
     
@@ -65,7 +65,7 @@ export async function detectAprilTagsMetreA4(
       grayscale[i] = Math.floor((r + g + b) / 3);
     }
     
-    // Créer détecteur AprilTag (famille 36h11 pour Métré V1.2)
+    // Créer détecteur AprilTag (famille 36h11 pour Métré A4 V10)
     const detector = new AprilTag(FAMILIES.TAG36H11, {
       quadDecimate: options.quadDecimate ?? 2.0,    // Accélération sur grandes images
       quadSigma: options.quadSigma ?? 0.0,         // Pas de flou gaussien
@@ -93,6 +93,34 @@ export async function detectAprilTagsMetreA4(
         { x: detection.corners[3][0], y: detection.corners[3][1] }  // Bottom-left
       ];
       
+      // 🔴 VALIDATION CRITIQUE: Rejeter les détections dégénérées
+      // (coins identiques = géométrie impossible = détection corrompue)
+      const distinctPixels = new Set<string>();
+      for (let i = 0; i < 4; i++) {
+        const key = `${corners[i].x.toFixed(1)},${corners[i].y.toFixed(1)}`;
+        distinctPixels.add(key);
+      }
+      
+      if (distinctPixels.size < 4) {
+        console.warn(`   ❌ [APRILTAG ID=${detection.id}] Détection DÉGÉNÉRÉE: ${distinctPixels.size} coins distincts au lieu de 4`);
+        corners.forEach((c, i) => console.warn(`      Corner ${i}: (${c.x.toFixed(1)}, ${c.y.toFixed(1)})`));
+        console.warn(`   ⏭️  REJET DE CETTE DÉTECTION`);
+        continue; // Skip cette détection
+      }
+      
+      // Vérifier que les coins forment un quadrilatère valide (distances raisonnables)
+      const dist = (a: Point2D, b: Point2D) => Math.hypot(b.x - a.x, b.y - a.y);
+      const diag1 = dist(corners[0], corners[2]); // TL to BR
+      const diag2 = dist(corners[1], corners[3]); // TR to BL
+      const perimeter = dist(corners[0], corners[1]) + dist(corners[1], corners[2]) + 
+                        dist(corners[2], corners[3]) + dist(corners[3], corners[0]);
+      
+      // Les diagonales doivent être similaires (~ratio 0.9-1.1) et le périmètre > 100px
+      const diagRatio = Math.min(diag1, diag2) / Math.max(diag1, diag2);
+      if (diagRatio < 0.8 || diagRatio > 1.2 || perimeter < 100) {
+        console.warn(`   ⚠️  [APRILTAG ID=${detection.id}] Géométrie suspecte: diagRatio=${diagRatio.toFixed(2)}, perimeter=${perimeter.toFixed(0)}px`);
+      }
+      
       // Calculer le centre du tag (moyenne des 4 coins)
       const center: Point2D = {
         x: (corners[0].x + corners[1].x + corners[2].x + corners[3].x) / 4,
@@ -100,7 +128,7 @@ export async function detectAprilTagsMetreA4(
       };
       
       results.push({ id: detection.id, corners, center });
-      console.log(`   ✅ AprilTag ID=${detection.id} détecté`);
+      console.log(`   ✅ AprilTag ID=${detection.id} détecté (diag: ${diag1.toFixed(0)}px/${diag2.toFixed(0)}px)`);
     }
     
     return results;
@@ -112,7 +140,7 @@ export async function detectAprilTagsMetreA4(
 }
 
 /**
- * Détecte les 4 AprilTags de la feuille Métré V1.2 (IDs: 2, 7, 14, 21)
+ * Détecte les AprilTags pour Métré A4 V10
  * et retourne les centres comme coins de calibration A4
  * 
  * @param data Buffer RGBA de l'image

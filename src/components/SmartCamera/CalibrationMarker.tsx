@@ -3,7 +3,7 @@
  * 
  * Ce composant génère un marqueur de calibration imprimable qui contient:
  * - Un cadre de référence de taille connue (A4 ou personnalisé)
- * - Des motifs de détection automatique (coins ArUco-style)
+ * - Des motifs de détection automatique (coins repères)
  * - Une grille de points pour mesure de distorsion
  * - Un QR code avec les métadonnées
  * - Des règles graduées sur les bords
@@ -31,7 +31,7 @@ interface CalibrationMarkerProps {
   includeQRCode?: boolean;
 }
 
-// Génère un pattern de coin unique (style ArUco simplifié)
+// Génère un pattern de coin unique (style repère simplifié)
 const CornerPattern: React.FC<{ 
   position: 'topLeft' | 'topRight' | 'bottomLeft' | 'bottomRight';
   size: number;
