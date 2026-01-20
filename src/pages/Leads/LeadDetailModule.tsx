@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { 
   Card, 
@@ -107,6 +107,7 @@ export default function LeadDetailModule({ leadId: propLeadId, onClose }: LeadDe
   const [history, setHistory] = useState<LeadHistoryItem[]>([]);
   const [documents, setDocuments] = useState<LeadDocument[]>([]);
   const [regeneratingFormPdf, setRegeneratingFormPdf] = useState(false);
+  const formPdfAutoRequested = useRef(false);
 
   // 📊 Récupération des détails du lead
   const fetchLeadDetail = useCallback(async () => {
@@ -192,6 +193,16 @@ export default function LeadDetailModule({ leadId: propLeadId, onClose }: LeadDe
   useEffect(() => {
     fetchLeadDetail();
   }, [fetchLeadDetail]);
+
+  // ✅ Auto-génération du PDF si manquant (1 seule fois)
+  useEffect(() => {
+    if (!lead || !leadId) return;
+    const hasPdf = typeof lead.data === 'object' && lead.data && (lead.data as any).formPdfUrl;
+    if (!hasPdf && !formPdfAutoRequested.current) {
+      formPdfAutoRequested.current = true;
+      handleRegenerateFormPdf();
+    }
+  }, [lead, leadId, handleRegenerateFormPdf]);
 
   // Helpers de normalisation (priorité aux champs top-level, fallback sur data pour compatibilité)
   const asString = (v: unknown): string => (v == null ? '' : String(v));
