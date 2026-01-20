@@ -6,7 +6,7 @@ import LeadDetailModule from './LeadDetailModule';
 import CallModule from './CallModule';
 import EmailModule from './EmailModule';
 import LeadsKanbanWrapper from './LeadsKanbanWrapper';
-import LeadsDashboard from './LeadsDashboard';
+// LeadsDashboard supprimé - Utilisez /dashboard à la place
 import LeadsSettingsPage from './LeadsSettingsPage';
 import { useAuth } from '../../auth/useAuth';
 
@@ -79,12 +79,7 @@ export default function LeadsPage() {
             />
           </>
         } />
-        <Route path="dashboard" element={
-          <>
-            {console.log('[LeadsPage] 📊 Route DASHBOARD déclenchée!')}
-            <LeadsDashboard />
-          </>
-        } />
+        {/* Route dashboard supprimée - Redirection vers /dashboard principal */}
         <Route path="list" element={
           <>
             {console.log('[LeadsPage] 📋 Route LIST déclenchée!')}

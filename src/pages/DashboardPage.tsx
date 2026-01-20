@@ -1,3 +1,8 @@
+// ⚠️ Ce fichier a été remplacé par DashboardPageUnified.tsx
+// Redirection pour compatibilité
+export { default } from './DashboardPageUnified';
+
+/* ANCIEN CODE - CONSERVÉ POUR RÉFÉRENCE
 import React, { useEffect, useState } from "react";
 import { useAuthenticatedApi } from "../hooks/useAuthenticatedApi";
 import { useAuth } from "../auth/useAuth";
@@ -117,7 +122,7 @@ const CreateOrganizationPrompt = () => {
   );
 };
 
-export default function DashboardPage() {
+function DashboardPageOLD() {
   const { api } = useAuthenticatedApi();
   const { user, currentOrganization, isSuperAdmin } = useAuth();
   const [stats, setStats] = useState<DashboardStats>({

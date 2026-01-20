@@ -24,15 +24,7 @@ const LeadsSubSidebar = () => {
 
   // Configuration des liens avec un design moderne
   const navigationItems = [
-    { 
-      to: '/leads/dashboard', 
-      icon: <HomeOutlined />, 
-      label: 'Tableau de bord',
-      description: 'Vue d\'ensemble et KPIs', 
-      condition: canViewDashboard,
-      color: '#1890ff',
-      gradient: 'from-blue-400 to-blue-600'
-    },
+    // Dashboard supprimé - Utilisez /dashboard à la place
     { 
       to: '/leads/list', 
       icon: <UnorderedListOutlined />, 

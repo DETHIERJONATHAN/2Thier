@@ -21,13 +21,7 @@ const LeadsCompactNavigation = () => {
 
   // Configuration des éléments de navigation compacts
   const navigationItems = [
-    {
-      to: '/leads/dashboard',
-      icon: <HomeOutlined />,
-      label: 'Tableau de bord',
-      color: '#1890ff',
-      condition: canViewDashboard
-    },
+    // Dashboard supprimé - Utilisez /dashboard à la place
     {
       to: '/leads/list',
       icon: <UnorderedListOutlined />,

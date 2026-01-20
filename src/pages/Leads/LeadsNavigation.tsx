@@ -27,15 +27,7 @@ export default function LeadsNavigation() {
 
   // Configuration des éléments du menu avec style moderne
   const navigationItems = [
-    canViewDashboard && {
-      key: '/leads/dashboard',
-      icon: <DashboardOutlined />,
-      title: 'Tableau de bord',
-      description: 'Vue d\'ensemble et métriques',
-      color: '#1890ff',
-      badge: null,
-      path: '/leads/dashboard'
-    },
+    // Dashboard central supprimé - Utilisez /dashboard à la place
     {
       key: '/leads/list',
       icon: <UnorderedListOutlined />,

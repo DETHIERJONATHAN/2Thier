@@ -22,16 +22,7 @@ const LeadsHorizontalNavigation = () => {
 
   // Configuration des éléments de navigation avec couleurs et descriptions
   const navigationItems = [
-    {
-      to: '/leads/dashboard',
-      icon: <HomeOutlined className="text-2xl" />,
-      label: 'Tableau de bord',
-      description: 'Vue d\'ensemble & KPIs',
-      color: '#1890ff',
-      bgGradient: 'from-blue-50 to-blue-100',
-      borderColor: 'border-blue-200',
-      condition: canViewDashboard
-    },
+    // Dashboard supprimé - Utilisez /dashboard à la place
     {
       to: '/leads/list',
       icon: <ContactsOutlined className="text-2xl" />,
