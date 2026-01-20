@@ -1,6 +1,9 @@
 import { Router } from 'express';
+import fs from 'fs';
+import path from 'path';
 import { authMiddleware, AuthenticatedRequest } from '../middlewares/auth.js';
 import { prisma } from '../lib/prisma';
+import { generateFormResponsePdf } from '../services/formResponsePdfGenerator';
 
 const router = Router();
 
@@ -392,6 +395,116 @@ router.get('/:id', async (req, res) => {
     console.error('[LEADS] Erreur lors de la récupération du lead:', error);
     res.status(500).json({ 
       error: 'Erreur lors de la récupération du lead',
+      message: error instanceof Error ? error.message : 'Erreur inconnue'
+    });
+  }
+});
+
+// POST /api/leads/:id/form-pdf/regenerate - Régénérer le PDF du formulaire pour un lead
+router.post('/:id/form-pdf/regenerate', async (req, res) => {
+  try {
+    const authReq = req as AuthenticatedRequest;
+    const { id } = req.params;
+    const organizationId = authReq.user?.organizationId;
+
+    const isSuperAdmin = authReq.user?.role === 'super_admin' ||
+      authReq.user?.isSuperAdmin === true ||
+      authReq.user?.role?.toLowerCase().includes('super');
+
+    let whereCondition;
+    if (isSuperAdmin) {
+      whereCondition = { id };
+    } else {
+      if (!organizationId) {
+        return res.status(400).json({ error: 'Organisation non spécifiée' });
+      }
+      whereCondition = { id, organizationId };
+    }
+
+    const lead = await prisma.lead.findFirst({ where: whereCondition });
+    if (!lead) {
+      return res.status(404).json({ error: 'Lead non trouvé ou non autorisé' });
+    }
+
+    const latestSubmission = await prisma.website_form_submissions.findFirst({
+      where: { leadId: lead.id },
+      orderBy: { createdAt: 'desc' },
+      include: {
+        form: {
+          include: {
+            questions: {
+              orderBy: { order: 'asc' }
+            }
+          }
+        }
+      }
+    });
+
+    if (!latestSubmission || !latestSubmission.form) {
+      return res.status(404).json({ error: 'Aucune soumission de formulaire trouvée pour ce lead' });
+    }
+
+    const form = latestSubmission.form;
+    const pdfData = {
+      formName: form.name,
+      formSlug: form.slug,
+      submittedAt: latestSubmission.createdAt,
+      contact: {
+        firstName: lead.firstName || undefined,
+        lastName: lead.lastName || undefined,
+        email: lead.email || undefined,
+        phone: lead.phone || undefined,
+        civility: (lead.data as any)?.civility
+      },
+      answers: (latestSubmission.formData as Record<string, unknown>) || {},
+      questions: (form.questions || []).map((q) => ({
+        questionKey: q.questionKey,
+        title: q.title,
+        subtitle: q.subtitle || undefined,
+        icon: q.icon || undefined,
+        questionType: q.questionType,
+        options: q.options || undefined
+      })),
+      leadNumber: lead.leadNumber || undefined
+    };
+
+    const pdfBuffer = await generateFormResponsePdf(pdfData);
+
+    const uploadsDir = path.join(process.cwd(), 'public', 'uploads', 'form-responses');
+    if (!fs.existsSync(uploadsDir)) {
+      fs.mkdirSync(uploadsDir, { recursive: true });
+    }
+
+    const pdfFileName = `formulaire-${form.slug}-${lead.id.substring(0, 8)}-${Date.now()}.pdf`;
+    const pdfPath = path.join(uploadsDir, pdfFileName);
+    fs.writeFileSync(pdfPath, pdfBuffer);
+
+    const pdfUrl = `/uploads/form-responses/${pdfFileName}`;
+
+    const existingData = (typeof lead.data === 'object' && lead.data) ? (lead.data as Record<string, unknown>) : {};
+    const updatedLead = await prisma.lead.update({
+      where: { id: lead.id },
+      data: {
+        data: {
+          ...existingData,
+          formPdfUrl: pdfUrl,
+          formSlug: form.slug,
+          formName: form.name
+        }
+      }
+    });
+
+    return res.json({
+      success: true,
+      pdfUrl,
+      formName: form.name,
+      formSlug: form.slug,
+      leadId: updatedLead.id
+    });
+  } catch (error) {
+    console.error('[LEADS] Erreur régénération PDF formulaire:', error);
+    return res.status(500).json({
+      error: 'Erreur lors de la régénération du PDF',
       message: error instanceof Error ? error.message : 'Erreur inconnue'
     });
   }

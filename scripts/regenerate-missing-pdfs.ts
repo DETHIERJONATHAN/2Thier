@@ -48,45 +48,69 @@ async function main() {
 
   for (const lead of leads) {
     try {
-      const formName = (lead.data as any)?.formName || 'Formulaire';
-      const formSlug = (lead.data as any)?.formSlug || 'formulaire';
-
       console.log(`\n📄 Génération PDF pour ${lead.firstName} ${lead.lastName}...`);
 
-      // Créer les données du PDF
+      const latestSubmission = await db.website_form_submissions.findFirst({
+        where: { leadId: lead.id },
+        orderBy: { createdAt: 'desc' },
+        include: {
+          form: {
+            include: {
+              questions: {
+                orderBy: { order: 'asc' }
+              }
+            }
+          }
+        }
+      });
+
+      if (!latestSubmission || !latestSubmission.form) {
+        console.warn('   ⚠️ Aucune soumission trouvée, PDF ignoré.');
+        errorCount++;
+        continue;
+      }
+
+      const form = latestSubmission.form;
+
       const pdfData = {
-        formName,
-        formSlug,
-        submittedAt: lead.createdAt,
+        formName: form.name,
+        formSlug: form.slug,
+        submittedAt: latestSubmission.createdAt,
         contact: {
           firstName: lead.firstName || undefined,
           lastName: lead.lastName || undefined,
           email: lead.email || undefined,
           phone: lead.phone || undefined,
-          civility: undefined
+          civility: (lead.data as any)?.civility
         },
-        answers: ((lead.data as any) || {}),
-        questions: [], // Récupérer les questions du formulaire si possible
+        answers: (latestSubmission.formData as Record<string, unknown>) || {},
+        questions: (form.questions || []).map((q) => ({
+          questionKey: q.questionKey,
+          title: q.title,
+          subtitle: q.subtitle || undefined,
+          icon: q.icon || undefined,
+          questionType: q.questionType,
+          options: q.options || undefined
+        })),
         leadNumber: lead.leadNumber || undefined
       };
 
-      // Générer le PDF
       const pdfBuffer = await generateFormResponsePdf(pdfData);
 
-      // Sauvegarder le fichier
-      const pdfFileName = `formulaire-${formSlug}-${lead.id.substring(0, 8)}-${lead.createdAt.getTime()}.pdf`;
+      const pdfFileName = `formulaire-${form.slug}-${lead.id.substring(0, 8)}-${Date.now()}.pdf`;
       const pdfPath = path.join(uploadsDir, pdfFileName);
       fs.writeFileSync(pdfPath, pdfBuffer);
 
       const pdfUrl = `/uploads/form-responses/${pdfFileName}`;
 
-      // Mettre à jour le lead
       await db.lead.update({
         where: { id: lead.id },
         data: {
           data: {
             ...((lead.data as any) || {}),
-            formPdfUrl: pdfUrl
+            formPdfUrl: pdfUrl,
+            formSlug: form.slug,
+            formName: form.name
           }
         }
       });

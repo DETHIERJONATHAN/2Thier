@@ -106,6 +106,7 @@ export default function LeadDetailModule({ leadId: propLeadId, onClose }: LeadDe
   // États pour l'historique
   const [history, setHistory] = useState<LeadHistoryItem[]>([]);
   const [documents, setDocuments] = useState<LeadDocument[]>([]);
+  const [regeneratingFormPdf, setRegeneratingFormPdf] = useState(false);
 
   // 📊 Récupération des détails du lead
   const fetchLeadDetail = useCallback(async () => {
@@ -153,6 +154,37 @@ export default function LeadDetailModule({ leadId: propLeadId, onClose }: LeadDe
       NotificationManager.error(errorMessage);
     } finally {
       setLoading(false);
+    }
+  }, [leadId, api]);
+
+  const handleRegenerateFormPdf = useCallback(async () => {
+    if (!leadId) return;
+    setRegeneratingFormPdf(true);
+    try {
+      const response = await api.post<{ pdfUrl: string; formName: string; formSlug: string }>(`/api/leads/${leadId}/form-pdf/regenerate`);
+      if (response?.pdfUrl) {
+        setLead((prev) => {
+          if (!prev) return prev;
+          const prevData = (prev.data && typeof prev.data === 'object') ? prev.data : {};
+          return {
+            ...prev,
+            data: {
+              ...prevData,
+              formPdfUrl: response.pdfUrl,
+              formName: response.formName,
+              formSlug: response.formSlug
+            }
+          } as Lead;
+        });
+        NotificationManager.success('PDF généré avec succès');
+      } else {
+        NotificationManager.error('PDF non généré');
+      }
+    } catch (error) {
+      console.error('Erreur régénération PDF:', error);
+      NotificationManager.error('Erreur lors de la génération du PDF');
+    } finally {
+      setRegeneratingFormPdf(false);
     }
   }, [leadId, api]);
 
@@ -638,39 +670,56 @@ export default function LeadDetailModule({ leadId: propLeadId, onClose }: LeadDe
             children: (
               <div className="space-y-4">
                 {/* Section PDF du formulaire public */}
-                {lead?.data && typeof lead.data === 'object' && 'formPdfUrl' in lead.data && (lead.data as any).formPdfUrl && (
+                {(lead?.source === 'website_form' || (lead?.data && typeof lead.data === 'object' && ((lead.data as any).formName || (lead.data as any).formSlug || (lead.data as any).formPdfUrl))) && (
                   <Card 
                     title="📋 Récapitulatif du Formulaire" 
                     type="inner"
                     extra={
-                      <Button 
-                        type="primary" 
-                        size="small"
-                        onClick={() => window.open((lead.data as any).formPdfUrl, '_blank')}
-                        icon={<DownloadOutlined />}
-                      >
-                        Télécharger PDF
-                      </Button>
+                      (lead?.data && typeof lead.data === 'object' && (lead.data as any).formPdfUrl) ? (
+                        <Button 
+                          type="primary" 
+                          size="small"
+                          onClick={() => window.open((lead.data as any).formPdfUrl, '_blank')}
+                          icon={<DownloadOutlined />}
+                        >
+                          Télécharger PDF
+                        </Button>
+                      ) : (
+                        <Button 
+                          type="primary" 
+                          size="small"
+                          loading={regeneratingFormPdf}
+                          onClick={handleRegenerateFormPdf}
+                        >
+                          Générer le PDF
+                        </Button>
+                      )
                     }
                   >
                     <div className="space-y-2 text-sm">
                       <p>
-                        <strong>Formulaire:</strong> {(lead.data as any).formName || 'N/A'}
+                        <strong>Formulaire:</strong> {(lead?.data && typeof lead.data === 'object' ? (lead.data as any).formName : undefined) || 'N/A'}
                       </p>
                       <p>
-                        <strong>Soumis le:</strong> {lead.createdAt ? new Date(lead.createdAt).toLocaleString('fr-FR') : 'N/A'}
+                        <strong>Soumis le:</strong> {lead?.createdAt ? new Date(lead.createdAt).toLocaleString('fr-FR') : 'N/A'}
                       </p>
                       <p className="text-gray-600">
                         PDF contenant toutes les questions et réponses du formulaire
                       </p>
-                      <Button 
-                        type="default"
-                        block
-                        onClick={() => window.open((lead.data as any).formPdfUrl, '_blank')}
-                        icon={<EyeOutlined />}
-                      >
-                        Voir le PDF
-                      </Button>
+                      {(lead?.data && typeof lead.data === 'object' && (lead.data as any).formPdfUrl) ? (
+                        <Button 
+                          type="default"
+                          block
+                          onClick={() => window.open((lead.data as any).formPdfUrl, '_blank')}
+                          icon={<EyeOutlined />}
+                        >
+                          Voir le PDF
+                        </Button>
+                      ) : (
+                        <div className="text-gray-500">
+                          Aucun PDF trouvé pour ce lead. Cliquez sur "Générer le PDF".
+                        </div>
+                      )}
                     </div>
                   </Card>
                 )}
