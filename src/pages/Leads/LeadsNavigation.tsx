@@ -37,41 +37,14 @@ export default function LeadsNavigation() {
       badge: null,
       path: '/leads/list'
     },
-    {
-      key: '/leads/kanban',
-      icon: <ProjectOutlined />,
-      title: 'Vue Kanban',
-      description: 'Pipeline visuel des ventes',
-      color: '#722ed1',
-      badge: null,
-      path: '/leads/kanban'
-    },
-    canViewContacts && {
-      key: '/leads/contacts',
-      icon: <TeamOutlined />,
-      title: 'Contacts',
-      description: 'Base de contacts clients',
-      color: '#fa8c16',
-      badge: null,
-      path: '/leads/contacts'
-    },
-    canViewIntegrations && {
-      key: '/leads/integrations',
-      icon: <ApiOutlined />,
-      title: 'Intégrations',
-      description: 'Connexions externes',
-      color: '#13c2c2',
-      badge: 'New',
-      path: '/leads/integrations'
-    },
     canViewSettings && {
-      key: '/leads/settings',
+      key: '/leads/kanban',
       icon: <SettingOutlined />,
       title: 'Paramètres',
       description: 'Configuration du module',
       color: '#8c8c8c',
       badge: null,
-      path: '/leads/settings'
+      path: '/leads/kanban'
     },
   ].filter(Boolean);
 

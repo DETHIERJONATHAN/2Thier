@@ -31,27 +31,6 @@ const LeadsCompactNavigation = () => {
     },
     {
       to: '/leads/kanban',
-      icon: <AppstoreOutlined />,
-      label: 'Vue Kanban',
-      color: '#722ed1',
-      condition: canViewLeads
-    },
-    {
-      to: '/leads/contacts',
-      icon: <ContactsOutlined />,
-      label: 'Contacts',
-      color: '#fa8c16',
-      condition: true
-    },
-    {
-      to: '/leads/integrations',
-      icon: <ApiOutlined />,
-      label: 'Intégrations',
-      color: '#13c2c2',
-      condition: true
-    },
-    {
-      to: '/leads/settings',
       icon: <SettingOutlined />,
       label: 'Paramètres',
       color: '#8c8c8c',

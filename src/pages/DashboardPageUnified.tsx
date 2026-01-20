@@ -539,40 +539,15 @@ export default function DashboardPageUnified() {
     <div className="min-h-screen bg-gray-50">
       {/* En-tête global */}
       <div className="bg-white border-b border-gray-200 p-6 mb-6">
-        <div className="max-w-7xl mx-auto">
-          <Row justify="space-between" align="middle">
-            <Col>
-              <Title level={2} className="!mb-2">
-                <BarChartOutlined className="text-blue-500 mr-2" />
-                Dashboard Central
-              </Title>
-              <Paragraph className="!mb-0 text-gray-600">
-                Vue d'ensemble complète de votre CRM avec données en temps réel
-              </Paragraph>
-            </Col>
-            <Col>
-              <Space size="middle">
-                <AntTooltip title="Actualiser">
-                  <Button 
-                    type="primary" 
-                    icon={<ReloadOutlined />}
-                    loading={refreshing}
-                    onClick={handleRefresh}
-                  >
-                    Actualiser
-                  </Button>
-                </AntTooltip>
-                <Button icon={<FilterOutlined />}>Filtres</Button>
-                <Button icon={<ExportOutlined />}>Export</Button>
-              </Space>
-            </Col>
-          </Row>
+        <div className="max-w-7xl mx-auto text-center">
+          <Title level={2} className="!mb-2">
+            <BarChartOutlined className="text-blue-500 mr-2" />
+            Dashboard Central
+          </Title>
+          <Paragraph className="!mb-0 text-gray-600">
+            Vue d'ensemble complète de votre CRM avec données en temps réel
+          </Paragraph>
         </div>
-      </div>
-
-      {/* Notifications IA */}
-      <div className="max-w-7xl mx-auto px-6 mb-6">
-        <SmartNotifications context="dashboard" />
       </div>
 
       {/* Contenu principal avec onglets */}

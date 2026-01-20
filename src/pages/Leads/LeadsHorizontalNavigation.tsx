@@ -26,8 +26,8 @@ const LeadsHorizontalNavigation = () => {
     {
       to: '/leads/list',
       icon: <ContactsOutlined className="text-2xl" />,
-      label: 'Contacts',
-      description: 'Base de données',
+      label: 'Liste',
+      description: 'Tous les leads',
       color: '#52c41a',
       bgGradient: 'from-green-50 to-green-100',
       borderColor: 'border-green-200',
@@ -35,27 +35,6 @@ const LeadsHorizontalNavigation = () => {
     },
     {
       to: '/leads/kanban',
-      icon: <AppstoreOutlined className="text-2xl" />,
-      label: 'Vue Kanban',
-      description: 'Pipeline visuel',
-      color: '#722ed1',
-      bgGradient: 'from-purple-50 to-purple-100',
-      borderColor: 'border-purple-200',
-      condition: canViewLeads
-    },
-
-    {
-      to: '/leads/integrations',
-      icon: <ApiOutlined className="text-2xl" />,
-      label: 'Intégrations',
-      description: 'Connexions externes',
-      color: '#13c2c2',
-      bgGradient: 'from-cyan-50 to-cyan-100',
-      borderColor: 'border-cyan-200',
-      condition: true
-    },
-    {
-      to: '/leads/settings',
       icon: <SettingOutlined className="text-2xl" />,
       label: 'Paramètres',
       description: 'Configuration',

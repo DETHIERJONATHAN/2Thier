@@ -36,34 +36,6 @@ const LeadsSubSidebar = () => {
     },
     { 
       to: '/leads/kanban', 
-      icon: <AppstoreOutlined />, 
-      label: 'Vue Kanban',
-      description: 'Pipeline visuel des ventes', 
-      condition: canViewLeads,
-      color: '#722ed1',
-      gradient: 'from-purple-400 to-purple-600'
-    },
-    { 
-      to: '/leads/contacts', 
-      icon: <ContactsOutlined />, 
-      label: 'Contacts',
-      description: 'Base de données contacts', 
-      condition: true,
-      color: '#fa8c16',
-      gradient: 'from-orange-400 to-orange-600'
-    },
-    { 
-      to: '/leads/integrations', 
-      icon: <ApiOutlined />, 
-      label: 'Intégrations',
-      description: 'Connexions externes', 
-      condition: true,
-      color: '#13c2c2',
-      gradient: 'from-cyan-400 to-cyan-600',
-      badge: 'New'
-    },
-    { 
-      to: '/leads/settings', 
       icon: <SettingOutlined />, 
       label: 'Paramètres',
       description: 'Configuration du module', 
