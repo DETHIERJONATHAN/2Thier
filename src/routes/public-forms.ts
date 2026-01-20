@@ -424,7 +424,15 @@ router.post('/:slug/submit', async (req: Request, res: Response) => {
           lastName: normalizedContact.lastName || existingLead.lastName,
           phone: normalizedContact.phone || existingLead.phone,
           email: normalizedContact.email || existingLead.email,
-          address: normalizedContact.address || existingLead.address,
+          data: {
+            ...((existingLead.data && typeof existingLead.data === 'object') ? existingLead.data as object : {}),
+            email: normalizedContact.email || undefined,
+            phone: normalizedContact.phone || undefined,
+            firstName: normalizedContact.firstName || undefined,
+            lastName: normalizedContact.lastName || undefined,
+            address: normalizedContact.address || undefined,
+            civility: normalizedContact.civility || undefined
+          },
           updatedAt: new Date()
         }
       });
@@ -453,7 +461,7 @@ router.post('/:slug/submit', async (req: Request, res: Response) => {
           email: normalizedContact.email,
           phone: normalizedContact.phone || null,
           company: contact.company || null,
-          address: normalizedContact.address || null,
+          // Pas de colonne address dédiée, stocker dans data uniquement
           source: 'website_form',
           status: 'nouveau',
           statusId: defaultStatus?.id || null,
