@@ -1155,24 +1155,26 @@ router.post('/initialize-default-statuses', async (req, res) => {
 
     console.log('🚀 [INIT] Initialisation des statuts par défaut pour l\'organisation:', organizationId);
 
-    // 1) Statuts d'appel par défaut (13 statuts selon cahier des charges)
+    // 1) Statuts d'appel par défaut (15 statuts selon cahier des charges)
     const defaultCallStatuses = [
       { name: "📞 Pas de réponse", description: "Le client n'a pas décroché", color: "#f39c12", icon: "📞", order: 1 },
       { name: "📞 Numéro incorrect / injoignable", description: "Numéro invalide ou injoignable", color: "#e74c3c", icon: "📞", order: 2 },
       { name: "📞 Rappel programmé", description: "Rappel planifié avec le client", color: "#3498db", icon: "📞", order: 3 },
       { name: "📞 Contacté – Pas intéressé", description: "Client contacté mais pas intéressé", color: "#e67e22", icon: "📞", order: 4 },
-      { name: "📞 Contacté – À rappeler plus tard", description: "Client demande à être rappelé plus tard", color: "#f1c40f", icon: "📞", order: 5 },
-      { name: "📞 Contacté – Information envoyée (mail/sms)", description: "Informations envoyées au client", color: "#9b59b6", icon: "📞", order: 6 },
-      { name: "📞 Contacté – Rendez-vous fixé", description: "RDV fixé avec le client", color: "#2ecc71", icon: "📞", order: 7 },
-      { name: "📞 Contacté – Refus (non direct à l'appel)", description: "Refus lors de l'appel", color: "#c0392b", icon: "📞", order: 8 },
-      { name: "📞 Contacté – Refus ferme (après devis/visite)", description: "Refus définitif après devis/visite", color: "#8e44ad", icon: "📞", order: 9 },
-      { name: "📞 Contacté – Devis demandé", description: "Client demande un devis", color: "#16a085", icon: "📞", order: 10 },
-      { name: "📞 Contacté – Devis envoyé", description: "Devis envoyé au client", color: "#27ae60", icon: "📞", order: 11 },
-      { name: "📞 Contacté – En négociation", description: "Négociation en cours", color: "#f39c12", icon: "📞", order: 12 },
-      { name: "📞 Contacté – Gagné (vente conclue)", description: "Vente finalisée", color: "#2ecc71", icon: "📞", order: 13 }
+      { name: "📞 Contacté – Non qualifié", description: "Lead ne correspond pas à nos critères", color: "#95a5a6", icon: "⚠️", order: 5 },
+      { name: "📞 Contacté – À rappeler plus tard", description: "Client demande à être rappelé plus tard", color: "#f1c40f", icon: "📞", order: 6 },
+      { name: "📞 Contacté – Information envoyée (mail/sms)", description: "Informations envoyées au client", color: "#9b59b6", icon: "📞", order: 7 },
+      { name: "📞 Contacté – Rendez-vous fixé", description: "RDV fixé avec le client", color: "#2ecc71", icon: "📞", order: 8 },
+      { name: "📞 Contacté – Refus (non direct à l'appel)", description: "Refus lors de l'appel", color: "#c0392b", icon: "📞", order: 9 },
+      { name: "📞 Contacté – Refus ferme (après devis/visite)", description: "Refus définitif après devis/visite", color: "#8e44ad", icon: "📞", order: 10 },
+      { name: "📞 Contacté – Refus définitif", description: "Refus définitif du prospect", color: "#a93226", icon: "❌", order: 11 },
+      { name: "📞 Contacté – Devis demandé", description: "Client demande un devis", color: "#16a085", icon: "📞", order: 12 },
+      { name: "📞 Contacté – Devis envoyé", description: "Devis envoyé au client", color: "#27ae60", icon: "📞", order: 13 },
+      { name: "📞 Contacté – En négociation", description: "Négociation en cours", color: "#f39c12", icon: "📞", order: 14 },
+      { name: "📞 Contacté – Gagné (vente conclue)", description: "Vente finalisée", color: "#2ecc71", icon: "📞", order: 15 }
     ];
 
-    // 2) Statuts de leads par défaut (13 statuts selon cahier des charges)
+    // 2) Statuts de leads par défaut (14 statuts selon cahier des charges)
     const defaultLeadStatuses = [
       { name: "🟢 Nouveau lead", description: "Lead nouvellement créé", color: "#2ecc71", order: 1 },
       { name: "🟡 Contacter (dès le 1er appel tenté)", description: "À contacter dès le premier appel", color: "#f1c40f", order: 2 },
@@ -1183,10 +1185,11 @@ router.post('/initialize-default-statuses', async (req, res) => {
       { name: "🟠 En négociation", description: "Négociation en cours", color: "#e74c3c", order: 7 },
       { name: "🎯 Ciblé (objectif client)", description: "Client ciblé comme objectif", color: "#9b59b6", order: 8 },
       { name: "🟣 Non traité dans le délai (auto)", description: "Non traité automatiquement", color: "#8e44ad", order: 9 },
-      { name: "🔴 Perdu (après visite/devis non signé, ou auto via SLA)", description: "Lead perdu", color: "#c0392b", order: 10 },
-      { name: "❌ Refusé (non direct / pas intéressé)", description: "Refus direct", color: "#e74c3c", order: 11 },
-      { name: "🟢 Gagné", description: "Lead gagné", color: "#27ae60", order: 12 },
-      { name: "⚫ Injoignable / Archivé", description: "Lead injoignable ou archivé", color: "#34495e", order: 13 }
+      { name: "⚠️ Non qualifié", description: "Lead ne correspond pas aux critères", color: "#95a5a6", order: 10 },
+      { name: "🔴 Perdu (après visite/devis non signé, ou auto via SLA)", description: "Lead perdu", color: "#c0392b", order: 11 },
+      { name: "❌ Refusé (non direct / pas intéressé)", description: "Refus direct", color: "#e74c3c", order: 12 },
+      { name: "🟢 Gagné", description: "Lead gagné", color: "#27ae60", order: 13 },
+      { name: "⚫ Injoignable / Archivé", description: "Lead injoignable ou archivé", color: "#34495e", order: 14 }
     ];
 
     // Créer les statuts d'appel
@@ -1242,8 +1245,10 @@ router.post('/initialize-default-statuses', async (req, res) => {
       { callStatusName: "📞 Numéro incorrect / injoignable", leadStatusName: "⚫ Injoignable / Archivé" },
       { callStatusName: "📞 Rappel programmé", leadStatusName: "🟡 En attente de rappel (si convenu avec le client)" },
       { callStatusName: "📞 Contacté – Pas intéressé", leadStatusName: "❌ Refusé (non direct / pas intéressé)" },
+      { callStatusName: "📞 Contacté – Non qualifié", leadStatusName: "⚠️ Non qualifié" },
       { callStatusName: "📞 Contacté – Refus (non direct à l'appel)", leadStatusName: "❌ Refusé (non direct / pas intéressé)" },
       { callStatusName: "📞 Contacté – Refus ferme (après devis/visite)", leadStatusName: "🔴 Perdu (après visite/devis non signé, ou auto via SLA)" },
+      { callStatusName: "📞 Contacté – Refus définitif", leadStatusName: "❌ Refusé (non direct / pas intéressé)" },
       { callStatusName: "📞 Contacté – À rappeler plus tard", leadStatusName: "🟡 En attente de rappel (si convenu avec le client)" },
       { callStatusName: "📞 Contacté – Information envoyée (mail/sms)", leadStatusName: "🟡 Information envoyée" },
       { callStatusName: "📞 Contacté – Rendez-vous fixé", leadStatusName: "🎯 Ciblé (objectif client)" },

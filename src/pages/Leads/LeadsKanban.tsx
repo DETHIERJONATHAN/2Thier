@@ -1,12 +1,10 @@
 ﻿import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { Button, Spin, message, Alert, Avatar, Popconfirm, Tooltip, Grid, Modal, Select, App } from 'antd';
+import { Button, Spin, message, Alert, Avatar, Tooltip, Grid, Modal, Select, App } from 'antd';
 import * as XLSX from 'xlsx';
 import { 
   ClockCircleOutlined,
   MoreOutlined,
   PlusOutlined,
-  EditOutlined,
-  DeleteOutlined,
   GlobalOutlined,
   UserOutlined,
   LinkOutlined,
@@ -285,12 +283,22 @@ const LeadCard: React.FC<LeadCardProps> = ({ lead, onView, onCall, onEmail, onSc
     }
   };
 
-  const handleTouchEnd = () => {
+  const handleTouchEnd = (e: React.TouchEvent) => {
     const duration = Date.now() - touchStartTime.current;
     console.log('👆 [TOUCH END] Duration:', duration, 'hasMoved:', hasMoved.current);
-    // C'est un TAP si < 200ms et pas de mouvement significatif
-    if (duration < 200 && !hasMoved.current) {
+    // C'est un TAP si < 300ms et pas de mouvement significatif (augmenté à 300ms pour plus de fiabilité)
+    if (duration < 300 && !hasMoved.current) {
+      e.preventDefault();
+      e.stopPropagation();
       console.log('✅ [TAP DETECTED] Ouverture du lead');
+      setTimeout(() => onView(), 0);
+    }
+  };
+
+  const handleClick = (e: React.MouseEvent) => {
+    // Pour desktop - on vérifie qu'on n'est pas en train de dragger
+    if (!isDragging) {
+      console.log('🖱️ [CLICK DETECTED] Ouverture du lead');
       onView();
     }
   };
@@ -307,6 +315,7 @@ const LeadCard: React.FC<LeadCardProps> = ({ lead, onView, onCall, onEmail, onSc
         WebkitUserSelect: 'none', // 🔴 Pour Safari/iOS
         WebkitTouchCallout: 'none', // 🔴 Empêche le menu contextuel iOS
       }}
+      onClick={handleClick}
       onTouchStart={handleTouchStart}
       onTouchMove={handleTouchMove}
       onTouchEnd={handleTouchEnd}
@@ -419,58 +428,8 @@ const LeadCard: React.FC<LeadCardProps> = ({ lead, onView, onCall, onEmail, onSc
             </Tooltip>
           </div>
 
-          {/* Actions + Avatar */}
+          {/* Avatar */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-            {/* Icônes Éditer / Supprimer */}
-            <div 
-              style={{ 
-                display: 'flex', 
-                alignItems: 'center',
-              }}
-            >
-              <Tooltip title="Éditer">
-                <Button
-                  size="small"
-                  type="text"
-                  icon={<EditOutlined style={{ fontSize: '12px' }} />}
-                  onClick={(e) => { e.stopPropagation(); onEdit?.(); }}
-                  style={{ 
-                    color: '#5E6C84',
-                    width: '24px',
-                    height: '24px',
-                    minWidth: '24px',
-                    padding: 0,
-                  }}
-                />
-              </Tooltip>
-              <Popconfirm
-                title="Supprimer ce lead ?"
-                description="Cette action est irréversible."
-                onConfirm={(e) => { e?.stopPropagation(); onDelete?.(); }}
-                onCancel={(e) => e?.stopPropagation()}
-                okText="Supprimer"
-                cancelText="Annuler"
-                okButtonProps={{ danger: true }}
-              >
-                <Tooltip title="Supprimer">
-                  <Button
-                    size="small"
-                    type="text"
-                    icon={<DeleteOutlined style={{ fontSize: '12px' }} />}
-                    onClick={(e) => e.stopPropagation()}
-                    style={{ 
-                      color: '#EB5A46',
-                      width: '24px',
-                      height: '24px',
-                      minWidth: '24px',
-                      padding: 0,
-                    }}
-                  />
-                </Tooltip>
-              </Popconfirm>
-            </div>
-
-            {/* Avatar */}
             <Avatar 
               size={24} 
               style={{ 

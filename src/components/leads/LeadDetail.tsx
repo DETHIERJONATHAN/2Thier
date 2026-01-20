@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Card, Descriptions, Tag, Avatar, Space, Button, Timeline, Spin, Row, Col, Tabs, Upload, message, Tooltip, Grid } from 'antd';
+import { Card, Descriptions, Tag, Avatar, Space, Button, Timeline, Spin, Row, Col, Tabs, Upload, message, Tooltip, Grid, Popconfirm } from 'antd';
 import { 
   UserOutlined, 
   MailOutlined, 
@@ -15,7 +15,8 @@ import {
   RobotOutlined,
   DownloadOutlined,
   EyeOutlined,
-  FolderOpenOutlined
+  FolderOpenOutlined,
+  DeleteOutlined
 } from '@ant-design/icons';
 import { useAuthenticatedApi } from '../../hooks/useAuthenticatedApi';
 import type { Lead } from '../../types/leads';
@@ -25,6 +26,7 @@ import { useNavigate } from 'react-router-dom';
 interface LeadDetailProps {
   leadId: string;
   onEdit?: (lead: Lead) => void;
+  onDelete?: (leadId: string) => void;
   onCall?: (leadId: string) => void;
   onEmail?: (leadId: string) => void; 
   onSchedule?: (leadId: string) => void;
@@ -33,7 +35,7 @@ interface LeadDetailProps {
 /**
  * 📋 Composant de détail complet d'un lead
  */
-export default function LeadDetail({ leadId, onEdit, onCall, onEmail, onSchedule }: LeadDetailProps) {
+export default function LeadDetail({ leadId, onEdit, onDelete, onCall, onEmail, onSchedule }: LeadDetailProps) {
   type LeadDocument = {
     id: string;
     name: string;
@@ -659,6 +661,19 @@ export default function LeadDetail({ leadId, onEdit, onCall, onEmail, onSchedule
             <Tooltip title="Modifier">
               <Button icon={<EditOutlined />} onClick={() => onEdit(lead)} />
             </Tooltip>
+          )}
+          {onDelete && (
+            <Popconfirm
+              title="Supprimer le lead"
+              description="Êtes-vous sûr de vouloir supprimer ce lead ?"
+              okText="Supprimer"
+              cancelText="Annuler"
+              onConfirm={() => onDelete(lead.id)}
+            >
+              <Tooltip title="Supprimer">
+                <Button danger icon={<DeleteOutlined />} />
+              </Tooltip>
+            </Popconfirm>
           )}
         </Space>
       </Card>

@@ -25,12 +25,14 @@ export const useCallStatuses = () => {
 
   // � Récupération des statuts depuis l'API uniquement
   const fetchCallStatuses = useCallback(async () => {
+    console.log('🔍 [DEBUG] useCallStatuses - fetchCallStatuses called');
     try {
       setLoading(true);
       setError(null);
       
       // Récupération depuis les paramètres UNIQUEMENT
       const response = await api.get('/api/settings/call-statuses');
+      console.log('🔍 [DEBUG] useCallStatuses - API response:', response);
       
       if (response && Array.isArray(response)) {
         // Transformer les statuts pour compatibilité avec le Select
@@ -41,7 +43,7 @@ export const useCallStatuses = () => {
         }));
         
         setCallStatuses(transformedStatuses);
-        console.log(`✅ ${transformedStatuses.length} statuts d'appels chargés depuis les paramètres`);
+        console.log(`✅ ${transformedStatuses.length} statuts d'appels chargés depuis les paramètres`, transformedStatuses);
       } else {
         // Aucun statut trouvé
         console.warn('⚠️ Aucun statut d\'appel configuré dans les paramètres');
@@ -62,6 +64,17 @@ export const useCallStatuses = () => {
     return callStatuses.find(status => status.value === value);
   }, [callStatuses]);
 
+  // 🎯 Récupérer un statut par son NOM (important pour les comparaisons)
+  const getStatusByName = useCallback((name: string): CallStatus | undefined => {
+    return callStatuses.find(status => status.name === name);
+  }, [callStatuses]);
+
+  // 🎯 Vérifier si un status est de type RDV (pour afficher le calendrier)
+  const isRDVStatus = useCallback((statusValue: string): boolean => {
+    const status = getStatusByValue(statusValue);
+    return status?.name?.includes('Rendez-vous') || status?.name?.includes('RDV') || false;
+  }, [getStatusByValue]);
+
   // 🎯 Récupérer le statut de lead mappé
   const getMappedLeadStatus = useCallback((callStatusValue: string): string => {
     const status = getStatusByValue(callStatusValue);
@@ -78,10 +91,12 @@ export const useCallStatuses = () => {
     }));
   }, [callStatuses]);
 
-  // 🎬 Chargement initial
+  // 🎬 Chargement initial - NE SE DÉCLENCHE QU'UNE FOIS
   useEffect(() => {
+    console.log('🔍 [DEBUG] useCallStatuses - useEffect mount, fetching statuses');
     fetchCallStatuses();
-  }, [fetchCallStatuses]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Dépendances vides volontairement pour ne charger qu'une fois
 
   return {
     callStatuses,
@@ -89,6 +104,8 @@ export const useCallStatuses = () => {
     error,
     refetch: fetchCallStatuses,
     getStatusByValue,
+    getStatusByName,
+    isRDVStatus,
     getMappedLeadStatus,
     getSelectOptions,
     hasStatuses: callStatuses.length > 0

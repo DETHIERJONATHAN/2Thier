@@ -731,57 +731,198 @@ interface PromptContext { currentModule?: string; currentPage?: string; userRole
 interface HistoryMsg { type?: string; role?: string; message?: string; content?: string }
 interface ChatPromptInput { message: string; context?: PromptContext; conversationHistory?: HistoryMsg[]; analysis?: unknown; memory?: string }
 function buildChatPrompt({ message, context, conversationHistory, analysis, memory }: ChatPromptInput): string {
-  // Lead/context summarization (kept concise to preserve tokens)
+  // Lead/context summarization with more details for deeper analysis
   function summarizeLeadFromContext(ctx?: PromptContext): string {
     try {
       if (!ctx) return '';
       const ctxUnknown = ctx as unknown as Record<string, unknown>;
       const leadBasic = (ctxUnknown?.lead as unknown) || null;
-      const lc = (ctxUnknown?.leadContext as unknown as { lead?: unknown; calls?: unknown[]; messages?: unknown[]; upcomingEvents?: unknown[] }) || null;
+      const lc = (ctxUnknown?.leadContext as unknown as { lead?: unknown; calls?: unknown[]; messages?: unknown[]; upcomingEvents?: unknown[]; formSubmissions?: Array<{data?: unknown; formTitle?: string; createdAt?: unknown}> }) || null;
       const lead = (lc && (lc as { lead?: unknown }).lead) || leadBasic || null;
       if (!lead && !lc) return '';
+      
       const name = [lead?.firstName || lead?.data?.firstName, lead?.lastName || lead?.data?.lastName, lead?.name].filter(Boolean).join(' ').trim();
       const company = lead?.company || lead?.data?.company || '';
-      const status = lead?.status || lead?.data?.status || '';
+      const status = lead?.status || lead?.data?.status || 'N/A';
+      const source = lead?.source || lead?.data?.source || '';
+      const email = lead?.email || lead?.data?.email || '';
+      const phone = lead?.phone || lead?.data?.phone || '';
       const notes: string = (lead?.notes || lead?.data?.notes || '').toString();
+      const nextFollowUp = lead?.nextFollowUpDate || lead?.data?.nextFollowUpDate || null;
+      const createdAt = lead?.createdAt || lead?.data?.createdAt || null;
+      
       const calls = lc?.calls || [];
       const messages = lc?.messages || [];
       const events = lc?.upcomingEvents || [];
-  // const timeline = lc?.timeline || [];
+      const formSubmissions = lc?.formSubmissions || [];
+      
       const lastCall = Array.isArray(calls) && calls.length ? calls[0] : null;
       const lastMsg = Array.isArray(messages) && messages.length ? messages[0] : null;
       const nextEvent = Array.isArray(events) && events.length ? events[0] : null;
+      
       const parts: string[] = [];
-      if (name) parts.push(`Nom: ${name}${company ? ' • '+company : ''}`);
-      if (status) parts.push(`Statut: ${status}`);
+      
+      // Identité du client
+      if (name) parts.push(`👤 Nom: ${name}${company ? ' • '+company : ''}`);
+      if (email) parts.push(`📧 Email: ${email}`);
+      if (phone) parts.push(`📞 Téléphone: ${phone}`);
+      
+      // Informations commerciales clés
+      if (status) parts.push(`📊 Statut: ${status}`);
+      if (source) parts.push(`📍 Source: ${source}`);
+      if (createdAt) parts.push(`🕐 Contact depuis: ${new Date(createdAt).toLocaleDateString('fr-FR')}`);
+      
+      // 🎯 FORMULAIRES REMPLIS - CRUCIAL POUR L'ANALYSE SPÉCIFIQUE!
+      if (Array.isArray(formSubmissions) && formSubmissions.length > 0) {
+        const formData = formSubmissions.map((fs: any) => {
+          const formTitle = fs.formTitle || 'Formulaire';
+          const data = fs.data;
+          if (!data || typeof data !== 'object') return `${formTitle} (${new Date(fs.createdAt).toLocaleDateString('fr-FR')})`;
+          
+          // Extraire TOUS les champs du formulaire de manière lisible
+          const dataObj = data as Record<string, unknown>;
+          const allFields = Object.entries(dataObj)
+            .map(([k, v]) => {
+              // Nettoyer les noms de champs (camelCase -> lisible)
+              const cleanKey = k
+                .replace(/([A-Z])/g, ' $1')
+                .toLowerCase()
+                .trim()
+                .split(' ')
+                .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+                .join(' ');
+              
+              // Formater la valeur (si c'est un array, joindre avec virgules)
+              let val = typeof v === 'string' 
+                ? v 
+                : Array.isArray(v) 
+                  ? v.join(', ')
+                  : typeof v === 'object'
+                    ? JSON.stringify(v).slice(0, 40)
+                    : String(v);
+              
+              val = val.slice(0, 80); // Limiter la longueur
+              return `${cleanKey}: ${val}`;
+            })
+            .join(' | ');
+          
+          return `${formTitle} (${new Date(fs.createdAt).toLocaleDateString('fr-FR')}): ${allFields}`;
+        }).join('\n');
+        
+        parts.push(`📋 FORMULAIRES REMPLIS (À UTILISER SPÉCIFIQUEMENT!):\n${formData}`);
+      }
+      
+      // Activité récente
       const counts: string[] = [];
-      if (Array.isArray(calls)) counts.push(`${calls.length} appels récents`);
-      if (Array.isArray(messages)) counts.push(`${messages.length} messages`);
-      if (Array.isArray(events)) counts.push(`${events.length} RDV à venir`);
-      if (counts.length) parts.push(`Activité: ${counts.join(', ')}`);
-      if (lastCall) parts.push(`Dernier appel: ${lastCall.status || 'n/a'}${lastCall.duration ? ` (${lastCall.duration}s)` : ''}`);
-      if (lastMsg) parts.push(`Dernier message: ${lastMsg.type || 'n/a'} ${lastMsg.sentAt ? `(${new Date(lastMsg.sentAt).toLocaleDateString('fr-FR')})` : ''}`);
-      if (nextEvent) parts.push(`Prochain évènement: ${nextEvent.title || 'RDV'} le ${nextEvent.startDate ? new Date(nextEvent.startDate).toLocaleString('fr-FR') : 'bientôt'}`);
-      if (notes) parts.push(`Notes: ${(notes.replace(/\s+/g,' ').slice(0,140))}${notes.length>140?'…':''}`);
-      return parts.length ? ('\nLEAD_CONTEXT:\n' + parts.join('\n')) : '';
+      if (Array.isArray(calls)) counts.push(`${calls.length} appels`);
+      if (Array.isArray(messages)) counts.push(`${messages.length} SMS/messages`);
+      if (Array.isArray(events)) counts.push(`${events.length} RDV`);
+      if (counts.length) parts.push(`📈 Activité: ${counts.join(', ')}`);
+      
+      // Détails sur dernière interaction
+      if (lastCall) {
+        const duration = lastCall.duration ? ` • ${lastCall.duration}s` : '';
+        parts.push(`☎️ Dernier appel: ${lastCall.status || 'n/a'}${duration}`);
+      }
+      if (lastMsg) {
+        const date = lastMsg.sentAt ? `(${new Date(lastMsg.sentAt).toLocaleDateString('fr-FR')})` : '';
+        parts.push(`💬 Dernier message: ${lastMsg.type || 'n/a'} ${date}`);
+      }
+      
+      // Prochaine action prévue
+      if (nextFollowUp) parts.push(`⏰ Suivi prévu: ${new Date(nextFollowUp).toLocaleString('fr-FR')}`);
+      if (nextEvent) parts.push(`📅 Prochain RDV: "${nextEvent.title || 'RDV'}" le ${nextEvent.startDate ? new Date(nextEvent.startDate).toLocaleString('fr-FR') : 'bientôt'}`);
+      
+      // Notes du formulaire/CRM (très important pour l'analyse!)
+      if (notes && notes.trim()) {
+        const notesPreview = notes.replace(/\s+/g,' ').slice(0,250);
+        parts.push(`📝 Notes/Observations: ${notesPreview}${notes.length>250?'…':''}`);
+      }
+      
+      return parts.length ? ('\n📋 FICHE CLIENT:\n' + parts.join('\n')) : '';
     } catch { return ''; }
   }
   const hist = (conversationHistory || []).slice(-8).map((m, i) => `#${i+1} ${m.type || m.role || 'user'}: ${(m.message || m.content || '').slice(0,400)}`).join('\n');
   const analysisBlock = analysis ? `\nANALYSE_PRECEDENTE:\n${JSON.stringify(analysis).slice(0,800)}` : '';
   const memoryBlock = memory ? `\nMEMOIRE_SYSTEME_RECENTE:\n${memory}` : '';
   const leadBlock = summarizeLeadFromContext(context as PromptContext);
-  return `Tu es un assistant commercial CRM francophone spécialisé en prospection, qualification et planification de RDV.
-ContexteModule: ${context?.currentModule || 'inconnu'}
+  return `🎯 RÔLE: Tu es un SUPER PRO COMMERCIAL expérimenté qui connais CHAQUE CLIENT par cœur.
+Tu analyses en PROFONDEUR et donnes des conseils DIRECTIFS, basés sur LES DONNÉES RÉELLES du client.
+Tu utilises TOUT: formulaire, champs, notes, observations, délais, budgets - RIEN ne t'échappe!
+
+📋 CONTEXTE:
+Module: ${context?.currentModule || 'inconnu'}
 Page: ${context?.currentPage || 'n/a'}
-RôleUtilisateur: ${context?.userRole || 'commercial'}
-Objectif: aider rapidement avec pertinence, proposer des actions concrètes.
+Utilisateur: ${context?.userRole || 'commercial'}
 ${leadBlock}
-Historique:
+
+📞 HISTORIQUE:
 ${hist || 'Aucun'}
-MessageUtilisateur: ${message}
+
+💬 MESSAGE UTILISATEUR: ${message}
 ${analysisBlock}
 ${memoryBlock}
-Règles de réponse: commence par saluer en citant le prénom/nom du lead si disponibles. Fais 1 phrase d'état (appels/messages/RDV). Puis propose: 1) une phrase d'ouverture d'appel adaptée, 2) deux questions de qualification courtes, 3) la prochaine action claire. Si aucune activité, encourage à appeler et propose un angle. Réponds en français, concis, structuré, ≤140 mots.`;
+
+🚀 TES INSTRUCTIONS (CRUCIALES - LIS ATTENTIVEMENT):
+
+1. **EXTRACTION COMPLÈTE** des données du formulaire:
+   - Quels champs le client a remplis ? (type de projet, budget, délai, besoin, urgence)
+   - Qu'est-ce que ça dit VRAIMENT sur son projet ?
+   - Qu'est-ce qu'il demande SPÉCIFIQUEMENT ? (pas ce qu'il dit vaguement, mais SES DONNÉES)
+   - Quels sont les INDICES COMMERCIAUX ? (budget=sérieux, délai court=urgence, etc.)
+
+2. **HOOK D'APPEL ULTRA-SPÉCIFIQUE** (C'EST LE PLUS IMPORTANT!):
+   - NE JAMAIS générique: "j'appelle pour comprendre votre projet"
+   - TOUJOURS spécifique: cite les DONNÉES du formulaire qu'il a rempli
+   - Exemple BON: "Bonjour Heloise, je suis Jonathan. Vous avez simulé une rénovation de salle de bain avec un budget de 15 000€. Je vous appelle pour les aides dont vous êtes éligible et confirmer votre timeline. Vous avez 2 min?"
+   - Exemple MAUVAIS: "Vous avez rempli le formulaire. Je vous appelle pour..."
+   - Le hook doit PROUVER que tu as lu son formulaire spécifiquement
+
+3. **DIAGNOSTIC COMMERCIAL**:
+   - Ce client est QUEL TYPE ? (petit projet, gros projet, pressé, tranquille)
+   - Le risque ? (il appelle un concurrent, il abandonne, il se fait avoir)
+   - L'opportunité ? (vente rapide, upsell, fidélisation)
+
+4. **STRATÉGIE DIRECTE** (sois affirmé!):
+   - Que ferait un VRAI pro à ta place avec CES DONNÉES SPÉCIFIQUES ?
+   - Quel est le bon angle d'attaque ?
+   - Comment créer urgence/curiosité avec ses données ?
+
+5. **POINTS DE VENTE SPÉCIFIQUES**:
+   - 2-3 arguments basés SUR SES DONNÉES (pas génériques)
+   - Exemple: "Vous envisagez Q2? Vous pouvez être operationnel Q1 avec les aides..."
+   - Exemple: "Vous avez budget 15k? Les aides ajoutent 5k minimum..."
+
+6. **PROCHAINE ACTION DÉCISIVE**:
+   - QUAND l'appeler ? (timing optimal selon urgence)
+   - QUOI lui dire EN PREMIER ? (le hook ultra-spécifique)
+   - Comment qualifier: besoin → délai → budget → RDV
+
+📝 FORMAT DE RÉPONSE:
+
+**[Client Name] - Analyse + Hook d'Appel:**
+
+Formulaire rempli: [Type de projet, champs clés mentionnés]
+Budget déclaré: [montant si présent]
+Délai: [si présent]
+Signaux clés: [urgence, type de client, niveau de sérieux]
+
+Mon diagnostic: [Type de lead, ce que ça signifie commercialement, opportunité]
+
+🎯 HOOK D'APPEL (super spécifique):
+"[Reprendre élément 1 du formulaire], [reprendre élément 2], [reprendre urgence/délai], [appel à action]"
+
+💡 Points clés à utiliser:
+1. [Basé sur ses données - pas générique]
+2. [Basé sur ses données - pas générique]
+
+📞 Prochaine action:
+[Timing précis, quoi dire exactement en reprenant le formulaire, comment qualifier]
+
+⚠️ RÈGLE ABSOLUE: Chaque conseil, chaque point, chaque action doit être basé sur LES DONNÉES DU FORMULAIRE. 
+Pas de générique. Pas de script standard. Du SUR-MESURE basé sur ce qu'il a rempli.
+
+Limite à 250 mots MAX. Sois DIRECT, ASSERTIF, et 100% SPÉCIFIQUE aux données du client.`;
 }
 
 function buildMockResponse(message: string, context?: PromptContext): string {
@@ -1584,7 +1725,7 @@ router.get('/context/lead/:id', async (req: AuthenticatedRequest, res) => {
     // Utiliser l'organizationId du lead pour les requêtes liées
     const leadOrgId = lead.organizationId;
 
-    const [calls, messages, upcomingEvents, timeline] = await Promise.all([
+    const [calls, messages, upcomingEvents, timeline, formSubmissions] = await Promise.all([
       wanted.has('calls') ? prisma.telnyxCall.findMany({
         where: { leadId, organizationId: leadOrgId },
         orderBy: { startedAt: 'desc' },
@@ -1608,11 +1749,18 @@ router.get('/context/lead/:id', async (req: AuthenticatedRequest, res) => {
         orderBy: { createdAt: 'desc' },
         take: 8,
         select: { id: true, eventType: true, createdAt: true }
+      }) : Promise.resolve([]),
+      // 🎯 NOUVEAU: Charger les formulaires publics remplis par le lead (CRUCIAL pour l'analyse IA!)
+      wanted.has('forms') || !fieldsParam ? prisma.publicFormSubmission.findMany({
+        where: { leadId, organizationId: leadOrgId },
+        orderBy: { createdAt: 'desc' },
+        take: 5,
+        include: { PublicForm: { select: { id: true, title: true, name: true } } }
       }) : Promise.resolve([])
     ]);
 
     // Score heuristique (simplifié) pour priorisation IA
-    const activityScore = calls.length * 2 + messages.length + (upcomingEvents.length * 3);
+    const activityScore = calls.length * 2 + messages.length + (upcomingEvents.length * 3) + (formSubmissions.length * 5);
 
   const latency = Date.now() - t0;
   res.json({
@@ -1623,7 +1771,14 @@ router.get('/context/lead/:id', async (req: AuthenticatedRequest, res) => {
         messages: wanted.has('messages') ? messages : undefined,
         upcomingEvents: wanted.has('events') ? upcomingEvents : undefined,
         timeline: wanted.has('timeline') ? timeline : undefined,
-        metrics: { activityScore },
+        formSubmissions: formSubmissions.length > 0 ? formSubmissions.map(fs => ({
+          id: fs.id,
+          formTitle: fs.PublicForm?.title || fs.PublicForm?.name || 'Formulaire',
+          data: fs.data,
+          createdAt: fs.createdAt,
+          status: fs.status
+        })) : undefined,
+        metrics: { activityScore, formCount: formSubmissions.length },
         meta: { generatedAt: new Date().toISOString(), version: 1, filtered: Array.from(wanted) }
       }
     });

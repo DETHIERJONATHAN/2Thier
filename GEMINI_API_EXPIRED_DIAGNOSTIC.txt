@@ -1,0 +1,65 @@
+#!/usr/bin/env node
+/**
+ * 🚨 DIAGNOSTIC: POURQUOI GEMINI NE FONCTIONNE PAS
+ * 
+ * PROBLÈME TROUVÉ: Clé API Google Gemini expirée!
+ */
+
+console.log(`
+╔════════════════════════════════════════════════════════════════════╗
+║ 🚨 GEMINI API KEY EXPIRÉE                                          ║
+╚════════════════════════════════════════════════════════════════════╝
+
+ERREUR DÉTECTÉE:
+❌ "API key expired. Please renew the API key."
+
+CAUSE:
+La clé GOOGLE_AI_API_KEY dans .env a expiré et n'est plus valide.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+📋 SOLUTION (30 sec):
+
+1️⃣ Aller sur: https://aistudio.google.com/app/apikey
+2️⃣ Créer une nouvelle clé API (si besoin)
+3️⃣ Copier la clé (AIzaSy...)
+4️⃣ Mettre à jour .env:
+   
+   GOOGLE_AI_API_KEY=AIzaSyXXXXXXXXXXXXXXXXXXXXXXXXXX
+   
+5️⃣ Redémarrer le serveur:
+   npm run dev
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+✅ APRÈS LA FIX:
+
+Le système fonctionnera 100% avec Gemini:
+
+  Frontend (Appels)
+    └─ Message: "tu penses quoi du lead"
+    └─ /api/ai/chat
+    └─ GoogleGeminiService.chat()
+    └─ API Gemini réelle ✅
+    └─ Réponse commerciale intelligente
+
+Ce qui se passe MAINTENANT (avec clé expirée):
+
+  Route détecte: API key expired
+    └─ Fallback: mode = "mock"
+    └─ Retourne buildMockResponse()
+    └─ Réponse générique (pas Gemini)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+RÉSUMÉ:
+
+❌ Clé API: Expirée
+✅ Architecture: OK (100% en place)
+✅ Code: OK (appelle bien Gemini)
+✅ Fallback: Actif (mock mode)
+
+Action requise: Renouveler la clé API Google
+
+═══════════════════════════════════════════════════════════════════════
+`);

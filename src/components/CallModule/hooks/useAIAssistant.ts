@@ -37,9 +37,15 @@ declare global {
 
 type ChatGenResult = { aiResponse: string; meta: Record<string, unknown>; raw: unknown } | null;
 
+type AIAssistantExtraContext = {
+  callNotes?: string;
+};
+
 export const useAIAssistant = (
-  lead: Lead | null
+  lead: Lead | null,
+  options?: AIAssistantExtraContext | boolean
 ): UseAIAssistantReturn => {
+  const extraContext = typeof options === 'object' ? options : undefined;
   
   const { api } = useAuthenticatedApi();
   // Détection simple de la page / module courant côté frontend (heuristique URL + chemin)
@@ -63,6 +69,62 @@ export const useAIAssistant = (
 
   // � Contexte détaillé du lead (appels, messages, événements, timeline)
   const leadContextRef = useRef<unknown | null>(null);
+
+  const buildLeadSummary = useCallback(() => {
+    if (!lead) return null;
+    const pick = (...vals: Array<unknown>) => {
+      for (const v of vals) {
+        if (Array.isArray(v) && v.length > 0 && v[0]) return v[0];
+        if (typeof v === 'string' && v.trim()) return v.trim();
+        if (v != null) return v;
+      }
+      return null;
+    };
+    return {
+      id: lead.id,
+      name: pick(lead.name, `${lead.firstName || ''} ${lead.lastName || ''}`.trim(), lead.data?.name),
+      email: pick(lead.email, lead.contactEmail, lead.contact?.email, lead.data?.email),
+      phone: pick(lead.phone, lead.mobile, lead.telephone, lead.contact?.phone, lead.data?.phone),
+      company: pick(lead.company, lead.companyName, lead.organization?.name, lead.data?.company),
+      source: pick(lead.source, lead.data?.source),
+      status: pick(lead.leadStatus?.name, lead.status, lead.data?.status),
+      lastContact: lead.lastContact,
+      notes: pick((lead as { notes?: unknown }).notes, (lead.data as { notes?: unknown } | undefined)?.notes, extraContext?.callNotes),
+    };
+  }, [lead, extraContext?.callNotes]);
+
+  const buildLeadContextDigest = useCallback(() => {
+    const ctx = leadContextRef.current;
+    if (!ctx || typeof ctx !== 'object') return null;
+
+    const obj = ctx as Record<string, unknown>;
+    const pickArray = (key: string) => (Array.isArray(obj[key]) ? (obj[key] as Array<unknown>) : []);
+    const pickString = (key: string) => (typeof obj[key] === 'string' ? (obj[key] as string) : undefined);
+
+    const submissions = pickArray('submissions')
+      .concat(pickArray('formSubmissions'))
+      .concat(pickArray('forms'));
+
+    const calls = pickArray('calls').concat(pickArray('callHistory'));
+    const notes = pickArray('notes').concat(pickArray('activityNotes'));
+    const timeline = pickArray('timeline').concat(pickArray('events'));
+
+    const firstSubmission = submissions[0] as Record<string, unknown> | undefined;
+    const submissionName = firstSubmission?.name || firstSubmission?.title || firstSubmission?.formName;
+    const submissionFields = firstSubmission?.fields || firstSubmission?.data || firstSubmission?.answers;
+
+    return {
+      hasSubmissions: submissions.length > 0,
+      submissionCount: submissions.length,
+      submissionName,
+      submissionFields,
+      callsCount: calls.length,
+      notesCount: notes.length,
+      timelineCount: timeline.length,
+      raw: ctx,
+      freeText: pickString('summary') || pickString('context')
+    };
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -98,6 +160,8 @@ export const useAIAssistant = (
           currentPage: routeInfoRef.current.currentPage,
           lead: lead,
           leadContext: leadContextRef.current,
+          leadSummary: buildLeadSummary(),
+          callNotes: extraContext?.callNotes,
         },
         conversationHistory: messages.slice(-5),
         analysis: currentAnalysis || undefined
@@ -138,6 +202,34 @@ export const useAIAssistant = (
       }
       
       if (aiResponse && aiResponse.trim()) {
+        const summary = buildLeadSummary();
+        const name = (summary?.name as string) || 'Ce lead';
+        const status = summary?.status ? `Statut: ${summary.status}. ` : '';
+        const source = summary?.source ? `Source: ${summary.source}. ` : '';
+        const lastContact = summary?.lastContact ? `Dernier contact: ${new Date(summary.lastContact as string).toLocaleDateString('fr-BE')}. ` : '';
+        const email = summary?.email ? `Email: ${summary.email}. ` : '';
+        const phone = summary?.phone ? `Téléphone: ${summary.phone}. ` : '';
+        const company = summary?.company ? `Société: ${summary.company}. ` : '';
+        const notes = summary?.notes ? `Notes: ${String(summary.notes).slice(0, 220)}.` : '';
+
+        // ✅ Éviter les réponses fallback génériques
+        const isGenericFallback = /Je comprends:.*Besoin d'aide pour:/i.test(aiResponse);
+        const wantsOpinion = /tu penses quoi|tu en penses|ton avis|qu['’]est-ce que tu penses|analyse ce lead|analyse du lead/i.test(userMessage);
+
+        if (isGenericFallback || wantsOpinion) {
+          const ctxDigest = buildLeadContextDigest();
+          const callScript = `Bonjour ${name}, je suis ${summary?.company ? 'de 2Thier' : 'Jonathan de 2Thier'}. ` +
+            `Vous avez rempli le formulaire « ${summary?.notes ? 'Simulateur Aides Rénovation' : 'votre demande'} ». ` +
+            `Je vous appelle pour comprendre votre projet et voir comment vous aider. Vous avez 2 minutes ?`;
+
+          const resume = `${name}${company ? ` (${company})` : ''}. ${status}${source}`.trim();
+          const intention = summary?.notes ? 'Il vient du simulateur aides rénovation.' : 'Il vient d’un formulaire web.';
+
+          aiResponse = `${resume} ${intention}
+
+Mon avis: appelle-le maintenant. L’objectif est de qualifier le besoin, le délai et le budget, puis proposer un RDV si c’est sérieux. Tu peux ouvrir avec: « ${callScript} »`;
+        }
+
         console.log('[useAIAssistant] ✅ Réponse IA reçue mode=', meta.mode, 'endpoint=', meta.endpoint);
         if (apiData.analysis) {
           try { setCodeAnalysis(apiData.analysis as CodeAutoAnalysis); } catch {/* ignore */}
@@ -195,7 +287,7 @@ export const useAIAssistant = (
     
   setIsAnalyzing(false);
   setAnalysisLoading(false);
-  }, [api, lead, messages, currentAnalysis]);
+  }, [api, lead, messages, currentAnalysis, buildLeadSummary, extraContext?.callNotes]);
 
   // 💬 Envoyer un message à l'IA
   const sendMessage = useCallback(async (userMessage: string): Promise<void> => {
@@ -350,6 +442,8 @@ export const useAIAssistant = (
           callContext: context,
           lead: lead,
           leadContext: leadContextRef.current,
+          leadSummary: buildLeadSummary(),
+          callNotes: extraContext?.callNotes,
           currentAnalysis: currentAnalysis
         },
         conversationHistory: messages.slice(-5)
@@ -378,7 +472,7 @@ export const useAIAssistant = (
         'Planifier le suivi commercial'
       ];
     }
-  }, [api, lead, currentAnalysis, messages]);
+  }, [api, lead, currentAnalysis, messages, buildLeadSummary, extraContext?.callNotes]);
 
   // ================== AUDITS PILOTÉS PAR IA COACH ==================
   // Analyse de la page courante (si connue)

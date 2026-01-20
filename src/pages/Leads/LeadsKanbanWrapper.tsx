@@ -6,7 +6,7 @@ import LeadsKanban from './LeadsKanban';
 import LeadDetail from '../../components/leads/LeadDetail';
 import EditLeadModal from '../../components/leads/EditLeadModal';
 import { EmailComposer } from '../../components/EmailComposer';
-import { CallInterface } from '../../modules/call/components/CallInterface';
+import CallModule from './CallModule';
 import CalendarWidget from '../../components/leads/CalendarWidget';
 import { useAuthenticatedApi } from '../../hooks/useAuthenticatedApi';
 
@@ -48,6 +48,12 @@ const LeadsKanbanWrapper: React.FC = () => {
   const handleScheduleLead = (leadId: string) => {
     setSelectedLeadId(leadId);
     setIsCalendarOpen(true);
+  };
+
+  const openCallModuleFromDetail = (leadId: string) => {
+    setSelectedLeadId(leadId);
+    setIsCallModuleOpen(true);
+    setTimeout(() => setIsLeadDetailOpen(false), 0);
   };
 
   // Handler pour éditer un lead - ouvre le modal d'édition
@@ -92,34 +98,71 @@ const LeadsKanbanWrapper: React.FC = () => {
         }}
       />
 
-      {/* 📋 MODULE LEAD DETAIL - Drawer latéral */}
-      <Drawer
-        title="📋 Fiche Lead Détaillée"
-        placement="right"
-        width={isMobile ? '100%' : isTablet ? 760 : 700}
-        open={isLeadDetailOpen}
-        onClose={() => setIsLeadDetailOpen(false)}
-        destroyOnHidden
-      >
-        {selectedLeadId && (
-          <LeadDetail 
-            leadId={selectedLeadId}
-            onClose={() => setIsLeadDetailOpen(false)}
-            onCall={() => {
-              setIsLeadDetailOpen(false);
-              handleCallLead(selectedLeadId);
-            }}
-            onEmail={() => {
-              setIsLeadDetailOpen(false);
-              handleEmailLead(selectedLeadId);
-            }}
-            onSchedule={() => {
-              setIsLeadDetailOpen(false);
-              handleScheduleLead(selectedLeadId);
-            }}
-          />
-        )}
-      </Drawer>
+      {/* 📋 MODULE LEAD DETAIL - Mobile = Modal plein écran, Desktop = Drawer */}
+      {isMobile ? (
+        <Modal
+          title="📋 Fiche Lead Détaillée"
+          open={isLeadDetailOpen}
+          onCancel={() => setIsLeadDetailOpen(false)}
+          footer={null}
+          destroyOnHidden
+          maskClosable={false}
+          closable
+          centered={false}
+          width="100%"
+          style={{ top: 0, maxWidth: '100vw', margin: 0 }}
+          styles={{ body: { padding: 12, maxHeight: '100vh', overflow: 'auto' } }}
+          closeIcon={<span style={{ fontSize: 20 }}>✕</span>}
+          zIndex={10000}
+        >
+          {selectedLeadId && (
+            <LeadDetail
+              leadId={selectedLeadId}
+              onEdit={(lead) => handleEditLead(lead.id)}
+              onDelete={(leadId) => handleDeleteLead(leadId)}
+              onCall={(leadId) => {
+                openCallModuleFromDetail(leadId);
+              }}
+              onEmail={() => {
+                setIsLeadDetailOpen(false);
+                handleEmailLead(selectedLeadId);
+              }}
+              onSchedule={() => {
+                setIsLeadDetailOpen(false);
+                handleScheduleLead(selectedLeadId);
+              }}
+            />
+          )}
+        </Modal>
+      ) : (
+        <Drawer
+          title="📋 Fiche Lead Détaillée"
+          placement="right"
+          width={isTablet ? 760 : 700}
+          open={isLeadDetailOpen}
+          onClose={() => setIsLeadDetailOpen(false)}
+          destroyOnHidden
+        >
+          {selectedLeadId && (
+            <LeadDetail
+              leadId={selectedLeadId}
+              onEdit={(lead) => handleEditLead(lead.id)}
+              onDelete={(leadId) => handleDeleteLead(leadId)}
+              onCall={(leadId) => {
+                openCallModuleFromDetail(leadId);
+              }}
+              onEmail={() => {
+                setIsLeadDetailOpen(false);
+                handleEmailLead(selectedLeadId);
+              }}
+              onSchedule={() => {
+                setIsLeadDetailOpen(false);
+                handleScheduleLead(selectedLeadId);
+              }}
+            />
+          )}
+        </Drawer>
+      )}
 
       {/* 📞 MODULE D'APPEL - Modal avec Telnyx */}
       <Modal
@@ -129,12 +172,14 @@ const LeadsKanbanWrapper: React.FC = () => {
         width={isMobile ? '100%' : 1000}
         footer={null}
         destroyOnHidden
+        zIndex={10001}
         centered
         style={isMobile ? { maxWidth: '100vw', margin: 0, paddingBottom: 0 } : undefined}
       >
         {selectedLeadId && (
-          <CallInterface 
+          <CallModule
             leadId={selectedLeadId}
+            onClose={() => setIsCallModuleOpen(false)}
           />
         )}
       </Modal>

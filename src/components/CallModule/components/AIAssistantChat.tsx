@@ -81,12 +81,13 @@ export const AIAssistantChat: React.FC<AIAssistantChatProps> = ({
     isLoading: aiLoading,
     isListening,
   startListening
-  } = useAIAssistant(lead);
+  } = useAIAssistant(lead, { callNotes });
   
   // 📝 États du chat
   const [currentInput, setCurrentInput] = useState('');
   const [isTyping, setIsTyping] = useState(false);
   const [suggestions, setSuggestions] = useState<string[]>([]);
+  const hasSeededContextRef = useRef(false);
   
   console.log('[AIAssistantChat] 📨 Messages de useAIAssistant:', aiMessages.length, aiMessages);
   
@@ -252,6 +253,7 @@ export const AIAssistantChat: React.FC<AIAssistantChatProps> = ({
       setIsTyping(false);
     }
   }, [sendAIMessage, generateContextualSuggestions]);
+
   
   // 🎙️ Toggle reconnaissance vocale
   const toggleVoiceRecognition = useCallback(() => {
