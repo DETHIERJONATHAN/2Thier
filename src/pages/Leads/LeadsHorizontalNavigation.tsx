@@ -22,27 +22,7 @@ const LeadsHorizontalNavigation = () => {
 
   // Configuration des éléments de navigation avec couleurs et descriptions
   const navigationItems = [
-    // Dashboard supprimé - Utilisez /dashboard à la place
-    {
-      to: '/leads/list',
-      icon: <ContactsOutlined className="text-2xl" />,
-      label: 'Liste',
-      description: 'Tous les leads',
-      color: '#52c41a',
-      bgGradient: 'from-green-50 to-green-100',
-      borderColor: 'border-green-200',
-      condition: canViewLeads
-    },
-    {
-      to: '/leads/kanban',
-      icon: <SettingOutlined className="text-2xl" />,
-      label: 'Paramètres',
-      description: 'Configuration',
-      color: '#8c8c8c',
-      bgGradient: 'from-gray-50 to-gray-100',
-      borderColor: 'border-gray-200',
-      condition: true
-    }
+    // Navigation supprimée - Accès direct via /leads/home (Kanban)
   ];
 
   // Filtrer selon les permissions

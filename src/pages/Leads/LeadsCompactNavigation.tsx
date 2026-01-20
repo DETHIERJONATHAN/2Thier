@@ -21,21 +21,7 @@ const LeadsCompactNavigation = () => {
 
   // Configuration des éléments de navigation compacts
   const navigationItems = [
-    // Dashboard supprimé - Utilisez /dashboard à la place
-    {
-      to: '/leads/list',
-      icon: <UnorderedListOutlined />,
-      label: 'Liste des leads',
-      color: '#52c41a',
-      condition: canViewLeads
-    },
-    {
-      to: '/leads/kanban',
-      icon: <SettingOutlined />,
-      label: 'Paramètres',
-      color: '#8c8c8c',
-      condition: true
-    }
+    // Navigation supprimée - Accès direct via /leads/home (Kanban)
   ];
 
   // Filtrer selon les permissions

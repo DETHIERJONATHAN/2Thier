@@ -14,7 +14,8 @@ import {
   RobotOutlined,
   WarningOutlined,
   CheckCircleOutlined,
-  DownloadOutlined
+  DownloadOutlined,
+  SettingOutlined
 } from '@ant-design/icons';
 import { DndProvider, useDrag, useDrop, useDragLayer } from 'react-dnd';
 import { HTML5Backend } from 'react-dnd-html5-backend';
@@ -1277,6 +1278,15 @@ const LeadsKanban: React.FC<LeadsKanbanProps> = ({
               </div>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <Button 
+                size="small" 
+                icon={<SettingOutlined />}
+                onClick={() => window.location.href = '/leads/settings'}
+                style={{ color: '#ff4d4f' }}
+                type="text"
+              >
+                Paramètres
+              </Button>
               <Button 
                 size="small" 
                 icon={<RobotOutlined />}

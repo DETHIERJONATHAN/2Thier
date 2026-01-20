@@ -70,13 +70,8 @@ export default function LeadsPage() {
       <Route path="/" element={<LeadsLayout />}>
         <Route path="home" element={
           <>
-            {console.log('[LeadsPage] 🏠 Route HOME déclenchée!')}
-            <LeadsHomePage 
-              onViewLead={handleViewLead}
-              onCallLead={handleCallLead}
-              onEmailLead={handleEmailLead}
-              onScheduleLead={handleScheduleLead}
-            />
+            {console.log('[LeadsPage] 🏠 Route HOME déclenchée - Affichage Kanban!')}
+            <LeadsKanbanWrapper />
           </>
         } />
         {/* Route dashboard supprimée - Redirection vers /dashboard principal */}

@@ -24,25 +24,7 @@ const LeadsSubSidebar = () => {
 
   // Configuration des liens avec un design moderne
   const navigationItems = [
-    // Dashboard supprimé - Utilisez /dashboard à la place
-    { 
-      to: '/leads/list', 
-      icon: <UnorderedListOutlined />, 
-      label: 'Liste des leads',
-      description: 'Gestion complète des leads', 
-      condition: canViewLeads,
-      color: '#52c41a',
-      gradient: 'from-green-400 to-green-600'
-    },
-    { 
-      to: '/leads/kanban', 
-      icon: <SettingOutlined />, 
-      label: 'Paramètres',
-      description: 'Configuration du module', 
-      condition: true,
-      color: '#8c8c8c',
-      gradient: 'from-gray-400 to-gray-600'
-    },
+    // Navigation supprimée - Accès direct via /leads/home (Kanban)
   ];
 
   const filteredLinks = navigationItems.filter(link => link.condition);

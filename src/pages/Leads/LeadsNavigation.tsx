@@ -27,25 +27,7 @@ export default function LeadsNavigation() {
 
   // Configuration des éléments du menu avec style moderne
   const navigationItems = [
-    // Dashboard central supprimé - Utilisez /dashboard à la place
-    {
-      key: '/leads/list',
-      icon: <UnorderedListOutlined />,
-      title: 'Liste des leads',
-      description: 'Gestion complète des leads',
-      color: '#52c41a',
-      badge: null,
-      path: '/leads/list'
-    },
-    canViewSettings && {
-      key: '/leads/kanban',
-      icon: <SettingOutlined />,
-      title: 'Paramètres',
-      description: 'Configuration du module',
-      color: '#8c8c8c',
-      badge: null,
-      path: '/leads/kanban'
-    },
+    // Navigation supprimée - Accès direct via /leads/home (Kanban) et bouton Paramètres dans le Kanban
   ].filter(Boolean);
 
   const isActive = (path: string) => location.pathname === path;
