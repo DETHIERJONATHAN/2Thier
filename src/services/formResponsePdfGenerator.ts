@@ -43,6 +43,17 @@ interface FormResponsePdfData {
 export async function generateFormResponsePdf(data: FormResponsePdfData): Promise<Buffer> {
   return new Promise((resolve, reject) => {
     try {
+      const sanitizeText = (input: unknown): string => {
+        if (input === null || input === undefined) return '';
+        const raw = String(input);
+        return raw
+          .normalize('NFKD')
+          .replace(/\p{Extended_Pictographic}/gu, '')
+          .replace(/[^\x09\x0A\x0D\x20-\x7E\u00A0-\u017F]/g, '')
+          .replace(/\s+/g, ' ')
+          .trim();
+      };
+
       const doc = new PDFDocument({
         size: 'A4',
         margin: 50,
@@ -61,14 +72,14 @@ export async function generateFormResponsePdf(data: FormResponsePdfData): Promis
 
       // ============== EN-TÊTE ==============
       doc.fontSize(24)
-         .fillColor('#1890ff')
-         .text('📋 Récapitulatif du Formulaire', { align: 'center' });
+        .fillColor('#1890ff')
+        .text('Récapitulatif du Formulaire', { align: 'center' });
       
       doc.moveDown(0.5);
       
       doc.fontSize(14)
-         .fillColor('#333')
-         .text(data.formName, { align: 'center' });
+        .fillColor('#333')
+        .text(sanitizeText(data.formName), { align: 'center' });
       
       doc.moveDown(0.3);
       
@@ -90,8 +101,8 @@ export async function generateFormResponsePdf(data: FormResponsePdfData): Promis
 
       // ============== INFORMATIONS DE CONTACT ==============
       doc.fillColor('#1890ff')
-         .fontSize(14)
-         .text('👤 Informations de Contact');
+        .fontSize(14)
+        .text('Informations de Contact');
       
       doc.moveDown(0.5);
       
@@ -111,7 +122,7 @@ export async function generateFormResponsePdf(data: FormResponsePdfData): Promis
         contact.firstName && contact.lastName && `Nom: ${contact.firstName} ${contact.lastName}`,
         contact.email && `Email: ${contact.email}`,
         contact.phone && `Téléphone: ${contact.phone}`
-      ].filter(Boolean);
+      ].filter(Boolean).map(sanitizeText);
 
       contactLines.forEach(line => {
         doc.text(line as string);
@@ -122,8 +133,8 @@ export async function generateFormResponsePdf(data: FormResponsePdfData): Promis
 
       // ============== RÉPONSES AU FORMULAIRE ==============
       doc.fillColor('#1890ff')
-         .fontSize(14)
-         .text('📝 Réponses au Questionnaire');
+        .fontSize(14)
+        .text('Réponses au Questionnaire');
       
       doc.moveDown(0.5);
       
@@ -157,10 +168,10 @@ export async function generateFormResponsePdf(data: FormResponsePdfData): Promis
         }
 
         // Afficher la question avec icône
-        const icon = question.icon || '•';
+          const icon = sanitizeText(question.icon || '') || '•';
         doc.fontSize(11)
            .fillColor('#1890ff')
-           .text(`${icon} ${question.title}`, { continued: false });
+            .text(`${icon} ${sanitizeText(question.title)}`, { continued: false });
         
         doc.moveDown(0.2);
 
@@ -171,16 +182,16 @@ export async function generateFormResponsePdf(data: FormResponsePdfData): Promis
           // Choix multiple - afficher les labels des options sélectionnées
           const selectedLabels = answer.map(val => {
             const option = question.options?.find(o => o.value === val);
-            return option ? `${option.icon || ''} ${option.label}`.trim() : val;
+            return option ? `${sanitizeText(option.icon || '')} ${sanitizeText(option.label)}`.trim() : sanitizeText(val);
           });
           displayValue = selectedLabels.join(', ');
         } else if (question.options && question.questionType.includes('choice')) {
           // Choix unique - trouver le label
           const option = question.options.find(o => o.value === answer);
-          displayValue = option ? `${option.icon || ''} ${option.label}`.trim() : String(answer);
+          displayValue = option ? `${sanitizeText(option.icon || '')} ${sanitizeText(option.label)}`.trim() : sanitizeText(answer);
         } else {
           // Valeur brute
-          displayValue = String(answer);
+          displayValue = sanitizeText(answer);
         }
 
         doc.fontSize(10)
@@ -202,10 +213,10 @@ export async function generateFormResponsePdf(data: FormResponsePdfData): Promis
       doc.moveDown(0.5);
       
       doc.fontSize(9)
-         .fillColor('#888')
-         .text('Document généré automatiquement par 2Thier CRM', { align: 'center' });
+        .fillColor('#888')
+        .text('Document généré automatiquement par 2Thier CRM', { align: 'center' });
       
-      doc.text(`${new Date().toLocaleDateString('fr-BE')} - ${data.formSlug}`, { align: 'center' });
+      doc.text(`${new Date().toLocaleDateString('fr-BE')} - ${sanitizeText(data.formSlug)}`, { align: 'center' });
 
       // Finaliser le document
       doc.end();
