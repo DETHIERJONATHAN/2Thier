@@ -14,7 +14,7 @@
  */
 
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import {
   Card,
   Button,
@@ -261,6 +261,7 @@ const styles = {
 const PublicFormRenderer: React.FC = () => {
   const { slug } = useParams<{ slug: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
   const [form] = Form.useForm();
   
   // États
@@ -271,6 +272,12 @@ const PublicFormRenderer: React.FC = () => {
   const [values, setValues] = useState<Record<string, any>>({});
   const [submitted, setSubmitted] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  
+  // Capturer le paramètre ref de l'URL pour le tracking commercial
+  const commercialRef = useMemo(() => {
+    const params = new URLSearchParams(location.search);
+    return params.get('ref');
+  }, [location.search]);
 
   // Chargement du formulaire
   useEffect(() => {
@@ -418,7 +425,8 @@ const PublicFormRenderer: React.FC = () => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           formId: formData.id,
-          data: values
+          data: values,
+          ref: commercialRef // Ajouter le tracking commercial
         })
       });
 

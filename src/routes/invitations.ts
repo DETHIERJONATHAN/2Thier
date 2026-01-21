@@ -314,6 +314,40 @@ router.post('/accept', async (req: Request, res: Response): Promise<void> => {
                 return;
             }
 
+            // 🎯 Générer le slug commercial si l'utilisateur n'en a pas
+            if (!user.commercialSlug && user.firstName && user.lastName) {
+                const normalizeString = (str: string) => {
+                    return str
+                        .toLowerCase()
+                        .normalize('NFD')
+                        .replace(/[\u0300-\u036f]/g, '')
+                        .replace(/[^a-z0-9]+/g, '-')
+                        .replace(/^-+|-+$/g, '');
+                };
+
+                const baseSlug = `${normalizeString(user.firstName)}-${normalizeString(user.lastName)}`;
+                let commercialSlug = baseSlug;
+                let counter = 2;
+                while (await prisma.user.findFirst({ 
+                    where: { 
+                        organizationId: invitation.organizationId,
+                        commercialSlug,
+                        id: { not: user.id }
+                    } 
+                })) {
+                    commercialSlug = `${baseSlug}-${counter}`;
+                    counter++;
+                }
+
+                await prisma.user.update({
+                    where: { id: user.id },
+                    data: { 
+                        commercialSlug,
+                        organizationId: invitation.organizationId
+                    }
+                });
+            }
+
             await prisma.$transaction(async (tx) => {
                 // Ajouter l'utilisateur à la nouvelle organisation
                 await tx.userOrganization.create({
@@ -376,6 +410,31 @@ router.post('/accept', async (req: Request, res: Response): Promise<void> => {
 
         const passwordHash = await bcrypt.hash(password, 10);
 
+        // 🎯 Générer le slug commercial automatiquement
+        const normalizeString = (str: string) => {
+            return str
+                .toLowerCase()
+                .normalize('NFD')
+                .replace(/[\u0300-\u036f]/g, '')
+                .replace(/[^a-z0-9]+/g, '-')
+                .replace(/^-+|-+$/g, '');
+        };
+
+        const baseSlug = `${normalizeString(firstName)}-${normalizeString(lastName)}`;
+        
+        // Vérifier si le slug existe déjà et ajouter un numéro si nécessaire
+        let commercialSlug = baseSlug;
+        let counter = 2;
+        while (await prisma.user.findFirst({ 
+            where: { 
+                organizationId: invitation.organizationId,
+                commercialSlug 
+            } 
+        })) {
+            commercialSlug = `${baseSlug}-${counter}`;
+            counter++;
+        }
+
         const newUser = await prisma.$transaction(async (tx) => {
             const createdUser = await tx.user.create({
                 data: {
@@ -385,6 +444,8 @@ router.post('/accept', async (req: Request, res: Response): Promise<void> => {
                     passwordHash: passwordHash,
                     status: 'active',
                     role: 'user',
+                    organizationId: invitation.organizationId,
+                    commercialSlug: commercialSlug,  // 🎯 Slug commercial automatique
                 }
             });
 

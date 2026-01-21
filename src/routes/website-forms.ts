@@ -24,6 +24,7 @@
 
 import { Router, Request, Response } from 'express';
 import { db } from '../lib/database';
+import { authMiddleware, AuthenticatedRequest as AuthReq } from '../middlewares/auth';
 
 const router = Router();
 
@@ -151,6 +152,101 @@ router.get('/by-website/:websiteId', async (req: AuthenticatedRequest, res: Resp
 });
 
 /**
+ * GET /api/website-forms/my-commercial-links
+ * Retourne les liens commerciaux personnalisés de l'utilisateur connecté
+ * IMPORTANT: Cette route DOIT être avant /:id pour éviter qu'Express ne la matche comme /:id
+ */
+router.get('/my-commercial-links', authMiddleware, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const organizationId = getOrgId(req);
+    const userId = req.user!.userId; // Avec authMiddleware, req.user est garanti
+
+    console.log('🎯 [WebsiteForms] GET my-commercial-links for user:', userId);
+
+    const user = await db.user.findUnique({
+      where: { id: userId },
+      select: { firstName: true, lastName: true }
+    });
+
+    if (!user) {
+      return res.status(404).json({ error: 'Utilisateur introuvable' });
+    }
+
+    // Générer le slug utilisateur unique
+    const userSlug = await generateUserSlug(user.firstName, user.lastName, organizationId);
+
+    // Récupérer tous les formulaires nominatifs actifs de l'organisation
+    const forms = await db.website_forms.findMany({
+      where: {
+        organizationId,
+        requiresCommercialTracking: true,
+        isActive: true
+      },
+      select: {
+        id: true,
+        name: true,
+        description: true,
+        slug: true,
+        isActive: true,
+        websites: {
+          select: {
+            website: {
+              select: {
+                cloudRunDomain: true,
+                domain: true,
+                siteName: true
+              }
+            },
+            urlPath: true,
+            isDefault: true
+          }
+        },
+        _count: {
+          select: { submissions: true }
+        }
+      },
+      orderBy: { createdAt: 'desc' }
+    });
+
+    const formattedForms = forms.map(form => {
+      // Prendre le premier site lié (ou celui par défaut)
+      const defaultWebsite = form.websites.find(w => w.isDefault) || form.websites[0];
+      const websiteUrl = defaultWebsite?.website.cloudRunDomain 
+        ? `https://${defaultWebsite.website.cloudRunDomain}`
+        : defaultWebsite?.website.domain 
+        ? `https://${defaultWebsite.website.domain}`
+        : null;
+
+      return {
+        id: form.id.toString(),
+        name: form.name,
+        description: form.description,
+        slug: form.slug,
+        isActive: form.isActive,
+        submissionCount: form._count.submissions,
+        websiteUrl, // URL du site associé
+        websiteName: defaultWebsite?.website.siteName,
+        urlPath: defaultWebsite?.urlPath || '/simulateur'
+      };
+    });
+
+    console.log('✅ [WebsiteForms] Found', formattedForms.length, 'nominative forms');
+
+    res.json({
+      success: true,
+      userSlug,
+      forms: formattedForms
+    });
+  } catch (error) {
+    console.error('❌ [WebsiteForms] Error getting commercial links:', error);
+    res.status(500).json({ 
+      error: 'Erreur lors de la récupération des liens commerciaux',
+      message: error instanceof Error ? error.message : 'Erreur inconnue'
+    });
+  }
+});
+
+/**
  * GET /api/website-forms/:id
  * Détail d'un formulaire avec toutes ses étapes et champs
  */
@@ -210,7 +306,7 @@ router.get('/:id', async (req: AuthenticatedRequest, res: Response) => {
 router.post('/', async (req: AuthenticatedRequest, res: Response) => {
   try {
     const organizationId = getOrgId(req);
-    const { name, slug, description, treeId, settings, successTitle, successMessage } = req.body;
+    const { name, slug, description, treeId, settings, successTitle, successMessage, requiresCommercialTracking } = req.body;
     
     console.log('📋 [WebsiteForms] CREATE form:', name);
     
@@ -233,7 +329,8 @@ router.post('/', async (req: AuthenticatedRequest, res: Response) => {
         settings: settings || {},
         successTitle,
         successMessage,
-        isActive: true
+        isActive: true,
+        requiresCommercialTracking: requiresCommercialTracking || false  // 🎯 Tracking commercial
       },
       include: {
         steps: true,
@@ -260,7 +357,7 @@ router.put('/:id', async (req: AuthenticatedRequest, res: Response) => {
   try {
     const organizationId = getOrgId(req);
     const { id } = req.params;
-    const { name, slug, description, treeId, settings, successTitle, successMessage, isActive } = req.body;
+    const { name, slug, description, treeId, settings, successTitle, successMessage, isActive, requiresCommercialTracking } = req.body;
     
     console.log('📋 [WebsiteForms] UPDATE form:', id);
     
@@ -293,7 +390,8 @@ router.put('/:id', async (req: AuthenticatedRequest, res: Response) => {
         settings,
         successTitle,
         successMessage,
-        isActive
+        isActive,
+        requiresCommercialTracking: requiresCommercialTracking || false  // 🎯 Tracking commercial
       },
       include: {
         steps: {
@@ -1003,4 +1101,60 @@ router.delete('/questions/:questionId', async (req: AuthenticatedRequest, res: R
   }
 });
 
+// ============================================================================
+// 🎯 TRACKING COMMERCIAL NOMINATIF
+// ============================================================================
+
+// Helper pour générer un slug utilisateur unique (prénom-nom)
+const generateUserSlug = async (firstName: string, lastName: string, organizationId: string): Promise<string> => {
+  const slugify = (text: string) => {
+    return text
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '') // Retirer les accents
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '');
+  };
+
+  const baseSlug = `${slugify(firstName)}-${slugify(lastName)}`;
+  
+  // Vérifier si ce slug existe déjà
+  const existingUsers = await db.user.findMany({
+    where: {
+      organizationId,
+      OR: [
+        { firstName, lastName },
+        {
+          firstName: { startsWith: firstName },
+          lastName: { startsWith: lastName }
+        }
+      ]
+    }
+  });
+
+  // Si c'est le seul, pas de suffixe
+  if (existingUsers.length === 0 || existingUsers.length === 1) {
+    return baseSlug;
+  }
+
+  // Sinon, ajouter un numéro
+  let counter = 2;
+  let slug = `${baseSlug}-${counter}`;
+  
+  // Trouver le prochain numéro disponible
+  while (counter < 100) {
+    const exists = existingUsers.some(u => {
+      const userSlug = `${slugify(u.firstName)}-${slugify(u.lastName)}`;
+      return userSlug === slug;
+    });
+    
+    if (!exists) break;
+    counter++;
+    slug = `${baseSlug}-${counter}`;
+  }
+
+  return slug;
+};
+
 export default router;
+

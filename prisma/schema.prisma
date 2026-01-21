@@ -1166,12 +1166,13 @@ model PublicForm {
   submissionCount      Int                    @default(0)
   conversionRate       Float                  @default(0)
   lastSubmissionAt     DateTime?
-  isActive             Boolean                @default(true)
-  isPublic             Boolean                @default(true)
-  deletedAt            DateTime?
-  createdAt            DateTime               @default(now())
-  updatedAt            DateTime
-  Organization         Organization           @relation(fields: [organizationId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  isActive                  Boolean                @default(true)
+  isPublic                  Boolean                @default(true)
+  requiresCommercialTracking Boolean               @default(false)
+  deletedAt                 DateTime?
+  createdAt                 DateTime               @default(now())
+  updatedAt                 DateTime
+  Organization              Organization           @relation(fields: [organizationId], references: [id], onDelete: NoAction, onUpdate: NoAction)
   PublicFormSubmission PublicFormSubmission[]
 
   @@unique([organizationId, slug], map: "PublicForm_organization_slug_unique")
@@ -1188,6 +1189,7 @@ model PublicFormSubmission {
   ipAddress        String?
   userAgent        String?
   leadId           String?
+  referredBy       String?
   privacyConsent   Boolean      @default(false)
   marketingConsent Boolean      @default(false)
   createdAt        DateTime     @default(now())
@@ -2082,6 +2084,8 @@ model User {
   phoneNumber                                         String?
   vatNumber                                           String?
   role                                                String                                   @default("user")
+  organizationId                                      String?                                  // Organisation principale
+  commercialSlug                                      String?                                  // 🎯 Slug commercial (ex: "jean-dupont")
   CalendarEvent                                       CalendarEvent[]
   CalendarParticipant                                 CalendarParticipant[]
   DeletedEmail                                        DeletedEmail[]
@@ -2111,6 +2115,8 @@ model User {
   website_blog_posts                                  website_blog_posts[]
   website_media_files                                 website_media_files[]
   MeasurementReferenceConfig                          OrganizationMeasurementReferenceConfig[] @relation("MeasurementConfigCreator")
+  
+  @@index([organizationId, commercialSlug])  // 🎯 Index pour optimiser les recherches de slug
 }
 
 model UserOrganization {
@@ -2659,6 +2665,9 @@ model website_forms {
   treeId          String?   // ID de l'arbre TBL pour le mapping des champs
   isActive        Boolean   @default(true)
   
+  // 🎯 Tracking commercial nominatif
+  requiresCommercialTracking Boolean @default(false) // Active le système de liens par commercial
+  
   // Configuration globale du formulaire
   settings        Json      @default("{}")  // {primaryColor, logo, trustpilotUrl, ...}
   
@@ -2886,6 +2895,9 @@ model website_form_submissions {
   // Lien vers les entités créées
   leadId          String?   // ID du lead créé
   submissionId    String?   // ID de la TreeBranchLeafSubmission créée
+  
+  // 🎯 Tracking commercial nominatif
+  referredBy      String?   // Slug du commercial référent (ex: "jean-dupont")
   
   // Données brutes soumises
   formData        Json      // Toutes les réponses du formulaire

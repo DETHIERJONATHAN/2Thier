@@ -154,6 +154,7 @@ const Sidebar = ({ modules }: { modules: Array<ModuleNav> }) => {
       '/public-forms',
       '/forms',
       '/landing-pages',
+      '/mes-liens-commerciaux',  // 🎯 Liens commerciaux pour tracking
     ]);
   const filtered = list.filter((m: ModuleNav) => !!m.route && allowedRoutes.has(m.route as string));
     // Dédupliquer par feature puis route

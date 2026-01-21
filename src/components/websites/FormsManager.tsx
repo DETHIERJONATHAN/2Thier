@@ -185,7 +185,8 @@ const FormsManager: React.FC<FormsManagerProps> = ({ websiteId }) => {
     form.setFieldsValue({
       submitButtonText: 'Obtenir mon devis',
       successMessage: 'Merci ! Nous vous recontactons sous 24h.',
-      isActive: true
+      isActive: true,
+      requiresCommercialTracking: false  // 🎯 Désactivé par défaut
     });
     setFormModalVisible(true);
   };
@@ -204,6 +205,7 @@ const FormsManager: React.FC<FormsManagerProps> = ({ websiteId }) => {
       submitButtonText: record.submitButtonText,
       successMessage: record.successMessage,
       isActive: record.isActive,
+      requiresCommercialTracking: (record as any).requiresCommercialTracking || false,  // 🎯 Tracking commercial
       phoneNumber: settings.phoneNumber || '',
       treeId: record.treeId || null
     });
@@ -222,8 +224,8 @@ const FormsManager: React.FC<FormsManagerProps> = ({ websiteId }) => {
 
   const handleSaveForm = async (values: any) => {
     try {
-      // Extraire le phoneNumber et treeId
-      const { phoneNumber, treeId, ...formValues } = values;
+      // Extraire le phoneNumber, treeId et requiresCommercialTracking
+      const { phoneNumber, treeId, requiresCommercialTracking, ...formValues } = values;
       
       // Préparer les settings en préservant les valeurs existantes
       const existingSettings = editingForm?.settings 
@@ -234,6 +236,7 @@ const FormsManager: React.FC<FormsManagerProps> = ({ websiteId }) => {
       
       const dataToSave = {
         ...formValues,
+        requiresCommercialTracking: requiresCommercialTracking || false,  // 🎯 Tracking commercial
         treeId: treeId || null, // Sauvegarder le treeId pour le mapping TBL
         settings: {
           ...existingSettings,
@@ -539,11 +542,21 @@ const FormsManager: React.FC<FormsManagerProps> = ({ websiteId }) => {
                 <Input placeholder="Ex: Obtenir mon devis gratuit" />
               </Form.Item>
             </Col>
-            <Col span={12}>
+            <Col span={6}>
               <Form.Item
                 name="isActive"
                 label="Actif"
                 valuePropName="checked"
+              >
+                <Switch />
+              </Form.Item>
+            </Col>
+            <Col span={6}>
+              <Form.Item
+                name="requiresCommercialTracking"
+                label={<span>🎯 Suivi commercial</span>}
+                valuePropName="checked"
+                tooltip="Activer le suivi commercial pour générer des liens nominatifs. Chaque commercial pourra obtenir son lien personnel et les leads seront automatiquement attribués."
               >
                 <Switch />
               </Form.Item>

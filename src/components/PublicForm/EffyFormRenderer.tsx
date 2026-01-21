@@ -14,7 +14,7 @@
  */
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import {
   Button,
   Input,
@@ -305,6 +305,13 @@ const styles = {
 const EffyFormRenderer: React.FC = () => {
   const { slug } = useParams<{ slug: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
+  
+  // 🎯 Extraire le paramètre ref (commercial tracking)
+  const referredBy = useMemo(() => {
+    const params = new URLSearchParams(location.search);
+    return params.get('ref') || null;
+  }, [location.search]);
 
   // États
   const [formData, setFormData] = useState<FormData | null>(null);
@@ -475,7 +482,7 @@ const EffyFormRenderer: React.FC = () => {
     setSubmitting(true);
     try {
       // 🔥 Transformer les réponses au format attendu par l'API
-      // L'API attend: { formData, contact, metadata }
+      // L'API attend: { formData, contact, metadata, referredBy }
       const contact = {
         firstName: finalAnswers.prenom || '',
         lastName: finalAnswers.nom || '',
@@ -493,6 +500,7 @@ const EffyFormRenderer: React.FC = () => {
         body: JSON.stringify({
           formData: otherAnswers, // Réponses du simulateur
           contact,               // Informations de contact
+          referredBy,            // 🎯 Slug du commercial (tracking)
           metadata: {
             referrer: document.referrer || null,
             userAgent: navigator.userAgent
@@ -514,7 +522,7 @@ const EffyFormRenderer: React.FC = () => {
     } finally {
       setSubmitting(false);
     }
-  }, [formData, slug]);
+  }, [formData, slug, referredBy]);
 
   // Continuer vers la question suivante
   const handleContinue = useCallback(async () => {

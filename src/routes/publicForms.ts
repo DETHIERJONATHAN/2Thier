@@ -125,6 +125,7 @@ const mapFormToResponse = (form: PrismaPublicForm) => {
     isActive: form.isActive && form.deletedAt === null,
     collectsRgpdConsent: form.collectsRgpdConsent,
     autoPublishLeads: form.autoPublishLeads,
+    requiresCommercialTracking: form.requiresCommercialTracking ?? false,
     maxSubmissionsPerDay: form.maxSubmissionsPerDay ?? undefined,
     customCss: form.customCss ?? undefined,
     thankYouMessage: form.thankYouMessage,
@@ -184,6 +185,7 @@ const baseFormSchema = z.object({
   redirectUrl: z.string().max(500).optional(),
   collectsRgpdConsent: z.boolean().optional(),
   autoPublishLeads: z.boolean().optional(),
+  requiresCommercialTracking: z.boolean().optional(),
   maxSubmissionsPerDay: optionalPositiveInt,
   customCss: z.string().optional(),
   campaigns: z.array(z.string().min(1)).optional(),
@@ -194,6 +196,58 @@ const baseFormSchema = z.object({
 const createFormSchema = baseFormSchema;
 const updateFormSchema = baseFormSchema.partial();
 const toggleSchema = z.object({ isActive: z.boolean() });
+
+// Helper pour générer un slug utilisateur unique (prénom-nom)
+const generateUserSlug = async (firstName: string, lastName: string, organizationId: string): Promise<string> => {
+  const slugify = (text: string) => {
+    return text
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '') // Retirer les accents
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '');
+  };
+
+  const baseSlug = `${slugify(firstName)}-${slugify(lastName)}`;
+  
+  // Vérifier si ce slug existe déjà
+  const existingUsers = await prisma.user.findMany({
+    where: {
+      organizationId,
+      OR: [
+        { firstName, lastName },
+        // Chercher aussi les variantes avec suffixe
+        {
+          firstName: { startsWith: firstName },
+          lastName: { startsWith: lastName }
+        }
+      ]
+    }
+  });
+
+  // Si c'est le seul, pas de suffixe
+  if (existingUsers.length === 0 || existingUsers.length === 1) {
+    return baseSlug;
+  }
+
+  // Sinon, ajouter un numéro
+  let counter = 2;
+  let slug = `${baseSlug}-${counter}`;
+  
+  // Trouver le prochain numéro disponible
+  while (counter < 100) {
+    const exists = existingUsers.some(u => {
+      const userSlug = `${slugify(u.firstName)}-${slugify(u.lastName)}`;
+      return userSlug === slug;
+    });
+    
+    if (!exists) break;
+    counter++;
+    slug = `${baseSlug}-${counter}`;
+  }
+
+  return slug;
+};
 
 const submissionSchema = z
   .object({
@@ -368,6 +422,7 @@ const createFormHandler = async (req: AuthenticatedRequest, res: Response) => {
         redirectUrl: payload.redirectUrl?.trim() || null,
         collectsRgpdConsent: payload.collectsRgpdConsent ?? true,
         autoPublishLeads: payload.autoPublishLeads ?? false,
+        requiresCommercialTracking: payload.requiresCommercialTracking ?? false,
         maxSubmissionsPerDay: payload.maxSubmissionsPerDay ?? null,
         customCss: payload.customCss ?? null,
         campaigns: payload.campaigns ?? [],
@@ -438,6 +493,7 @@ const updateFormHandler = async (req: AuthenticatedRequest, res: Response) => {
     if (payload.redirectUrl !== undefined) data.redirectUrl = payload.redirectUrl?.trim() || null;
     if (payload.collectsRgpdConsent !== undefined) data.collectsRgpdConsent = payload.collectsRgpdConsent;
     if (payload.autoPublishLeads !== undefined) data.autoPublishLeads = payload.autoPublishLeads;
+    if (payload.requiresCommercialTracking !== undefined) data.requiresCommercialTracking = payload.requiresCommercialTracking;
     if (payload.maxSubmissionsPerDay !== undefined) data.maxSubmissionsPerDay = payload.maxSubmissionsPerDay ?? null;
     if (payload.customCss !== undefined) data.customCss = payload.customCss ?? null;
     if (payload.campaigns !== undefined) data.campaigns = payload.campaigns;
@@ -635,6 +691,59 @@ router.use(
   adminRouter
 );
 
+// Route pour obtenir les liens commerciaux d'un utilisateur (accessible à tous les utilisateurs authentifiés)
+router.get('/my-commercial-links', authMiddleware, async (req: AuthenticatedRequest, res: Response) => {
+  const userId = req.user?.id;
+  const organizationId = req.user?.organizationId;
+
+  if (!userId || !organizationId) {
+    res.status(401).json({ success: false, message: 'Non authentifié' });
+    return;
+  }
+
+  try {
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { firstName: true, lastName: true }
+    });
+
+    if (!user) {
+      res.status(404).json({ success: false, message: 'Utilisateur introuvable' });
+      return;
+    }
+
+    // Générer le slug utilisateur unique
+    const userSlug = await generateUserSlug(user.firstName, user.lastName, organizationId);
+
+    // Récupérer tous les formulaires nominatifs actifs de l'organisation
+    const forms = await prisma.publicForm.findMany({
+      where: {
+        organizationId,
+        requiresCommercialTracking: true,
+        deletedAt: null
+      },
+      select: {
+        id: true,
+        name: true,
+        description: true,
+        slug: true,
+        isActive: true,
+        submissionCount: true
+      },
+      orderBy: { createdAt: 'desc' }
+    });
+
+    res.json({
+      success: true,
+      userSlug,
+      forms
+    });
+  } catch (error) {
+    console.error('[PUBLIC-FORMS] Erreur récupération liens commerciaux:', error);
+    res.status(500).json({ success: false, message: 'Erreur lors de la récupération' });
+  }
+});
+
 router.get('/public/:identifier/config', async (req, res) => {
   try {
     const { identifier } = req.params;
@@ -684,10 +793,11 @@ router.post('/submit', submissionRateLimit, async (req, res) => {
     return;
   }
 
-  const { formId, privacyConsent, marketingConsent = false, ...payload } = parsed.data as {
+  const { formId, privacyConsent, marketingConsent = false, ref, ...payload } = parsed.data as {
     formId: string;
     privacyConsent: boolean;
     marketingConsent?: boolean;
+    ref?: string;
     [key: string]: unknown;
   };
 
@@ -734,6 +844,9 @@ router.post('/submit', submissionRateLimit, async (req, res) => {
       'unknown';
     const userAgent = req.headers['user-agent'] ?? 'unknown';
 
+    // Extraire le commercial référent depuis le paramètre 'ref'
+    const referredBy = ref || null;
+
     const submission = await prisma.publicFormSubmission.create({
       data: {
         formId: form.id,
@@ -743,7 +856,8 @@ router.post('/submit', submissionRateLimit, async (req, res) => {
         ipAddress,
         userAgent,
         privacyConsent,
-        marketingConsent
+        marketingConsent,
+        referredBy
       }
     });
 
@@ -754,6 +868,71 @@ router.post('/submit', submissionRateLimit, async (req, res) => {
         lastSubmissionAt: new Date()
       }
     });
+
+    // 🎯 Si autoPublishLeads est activé, créer automatiquement un lead
+    if (form.autoPublishLeads) {
+      try {
+        const leadData: Record<string, unknown> = {
+          organizationId: form.organizationId,
+          source: 'public-form',
+          status: 'nouveau',
+          notes: `Lead créé automatiquement depuis le formulaire "${form.name}"`,
+          data: payload
+        };
+
+        // Extraire les champs standards si présents dans payload
+        if (payload.firstName) leadData.firstName = payload.firstName;
+        if (payload.lastName) leadData.lastName = payload.lastName;
+        if (payload.email) leadData.email = payload.email;
+        if (payload.phone) leadData.phone = payload.phone;
+        if (payload.company) leadData.company = payload.company;
+
+        // 🔥 Si un commercial est référent (tracking nominatif), attribuer le lead
+        if (referredBy) {
+          // Le referredBy est maintenant au format "prenom-nom" ou "prenom-nom-2"
+          // On doit retrouver l'utilisateur correspondant
+          const slugParts = referredBy.split('-');
+          
+          // Chercher l'utilisateur par firstName et lastName
+          const users = await prisma.user.findMany({
+            where: {
+              organizationId: form.organizationId
+            }
+          });
+
+          // Trouver l'utilisateur dont le slug correspond
+          let referrer = null;
+          for (const u of users) {
+            const userSlug = await generateUserSlug(u.firstName, u.lastName, form.organizationId);
+            if (userSlug === referredBy) {
+              referrer = u;
+              break;
+            }
+          }
+
+          if (referrer) {
+            leadData.assignedUserId = referrer.id;
+            leadData.notes = `Lead créé depuis le formulaire "${form.name}" via le lien de ${referrer.firstName} ${referrer.lastName}`;
+            console.log(`✅ [PUBLIC-FORMS] Lead attribué automatiquement à ${referrer.firstName} ${referrer.lastName}`);
+          } else {
+            console.warn(`⚠️ [PUBLIC-FORMS] Utilisateur référent introuvable pour le slug: ${referredBy}`);
+          }
+        }
+
+        const lead = await prisma.lead.create({ data: leadData as any });
+
+        // Mettre à jour la soumission avec le leadId
+        await prisma.publicFormSubmission.update({
+          where: { id: submission.id },
+          data: { leadId: lead.id }
+        });
+
+        console.log(`✅ [PUBLIC-FORMS] Lead créé automatiquement: ${lead.id}`);
+      } catch (leadError) {
+        console.error('[PUBLIC-FORMS] Erreur lors de la création du lead:', leadError);
+        // Ne pas bloquer la soumission si la création du lead échoue
+      }
+    }
 
     res.json({
       success: true,

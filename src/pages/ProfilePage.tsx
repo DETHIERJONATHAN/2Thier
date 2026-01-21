@@ -4,6 +4,7 @@ import { useAuthenticatedApi } from '../hooks/useAuthenticatedApi';
 import { Link } from 'react-router-dom';
 import { GoogleAutoConnectionStatus } from '../components/GoogleAutoConnectionStatus';
 import { GoogleConnectionCard } from '../components/GoogleConnectionCard';
+import MyCommercialLinks from './MyCommercialLinks';
 
 const OrganizationDetails = () => {
     const { currentOrganization, can, isSuperAdmin, organizations, selectOrganization } = useAuth();
@@ -292,6 +293,8 @@ const ProfilePage = () => {
             return <RoleAndPermissions />;
         case 'google':
             return <GoogleIntegration />;
+        case 'commercial':
+            return <MyCommercialLinks />;
         default:
             return null;
     }
@@ -305,6 +308,9 @@ const ProfilePage = () => {
         <nav className="-mb-px flex space-x-8" aria-label="Tabs">
           <button onClick={() => setActiveTab('profile')} className={`whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm ${activeTab === 'profile' ? 'border-indigo-500 text-indigo-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-200'}`}>
             Profil
+          </button>
+          <button onClick={() => setActiveTab('commercial')} className={`whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm ${activeTab === 'commercial' ? 'border-indigo-500 text-indigo-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-200'}`}>
+            🎯 Mes Liens Commerciaux
           </button>
           <button onClick={() => setActiveTab('organization')} className={`whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm ${activeTab === 'organization' ? 'border-indigo-500 text-indigo-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-200'}`}>
             Organisation

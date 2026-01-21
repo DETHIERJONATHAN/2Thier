@@ -333,7 +333,8 @@ router.post('/:slug/submit', async (req: Request, res: Response) => {
     const { 
       formData, // Les réponses du formulaire { stepId: { fieldId: value } }
       contact,  // { firstName, lastName, email, phone }
-      metadata  // { utmSource, utmMedium, utmCampaign, referrer }
+      metadata,  // { utmSource, utmMedium, utmCampaign, referrer }
+      referredBy // Slug du commercial (ex: "jean-dupont")
     } = req.body;
 
     const normalizeString = (value: unknown): string => {
@@ -452,6 +453,24 @@ router.post('/:slug/submit', async (req: Request, res: Response) => {
         where: { organizationId: form.organizationId, isDefault: true }
       });
       
+      // 🎯 TRACKING COMMERCIAL : Si un referredBy existe, trouver l'utilisateur correspondant
+      let assignedToId: string | null = null;
+      if (referredBy) {
+        const referringUser = await db.user.findFirst({
+          where: {
+            organizationId: form.organizationId,
+            commercialSlug: referredBy
+          }
+        });
+        
+        if (referringUser) {
+          assignedToId = referringUser.id;
+          console.log(`🎯 [PublicForms] Lead auto-assigné à ${referredBy} (${referringUser.email})`);
+        } else {
+          console.warn(`⚠️ [PublicForms] Commercial non trouvé pour le slug: ${referredBy}`);
+        }
+      }
+      
       await db.lead.create({
         data: {
           id: leadId,
@@ -461,15 +480,17 @@ router.post('/:slug/submit', async (req: Request, res: Response) => {
           email: normalizedContact.email,
           phone: normalizedContact.phone || null,
           company: contact.company || null,
+          assignedToId,  // 🎯 Lead attribué au commercial si referredBy existe
           // Pas de colonne address dédiée, stocker dans data uniquement
           source: 'website_form',
           status: 'nouveau',
           statusId: defaultStatus?.id || null,
           leadNumber,
-          notes: `Lead créé depuis le formulaire "${form.name}"`,
+          notes: `Lead créé depuis le formulaire "${form.name}"` + (assignedToId ? ` (via ${referredBy})` : ''),
           data: {
             formSlug: slug,
             formName: form.name,
+            referredBy: referredBy || undefined,  // 🎯 Stocker aussi dans data pour historique
             email: normalizedContact.email || undefined,
             phone: normalizedContact.phone || undefined,
             firstName: normalizedContact.firstName || undefined,
@@ -602,6 +623,7 @@ router.post('/:slug/submit', async (req: Request, res: Response) => {
         formId: form.id,
         leadId,
         submissionId: tblSubmissionId,
+        referredBy: referredBy || null,  // 🎯 Enregistrer le slug du commercial
         formData: formData || {},
         ipAddress: req.ip || req.headers['x-forwarded-for']?.toString().split(',')[0],
         userAgent: req.headers['user-agent'] || null,

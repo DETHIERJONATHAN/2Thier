@@ -92,6 +92,9 @@ export const renderIconNode = (
   value: IconFieldValue,
   options?: RenderIconOptions
 ): React.ReactNode => {
+  // Protection contre les valeurs undefined/null
+  if (!value) return null;
+  
   const resolved = resolveIconValue(value);
   const size = toSize(options?.size);
 
@@ -113,6 +116,7 @@ export const renderIconNode = (
         />
       );
     case 'emoji':
+      if (!resolved.emoji) return null; // Protection contre emoji undefined
       return (
         <span
           className={options?.className}
@@ -139,14 +143,9 @@ export const renderIconNode = (
           />
         );
       }
-      return (
-        <span
-          className={options?.className}
-          style={{ fontSize: size, color: options?.color, ...options?.style }}
-        >
-          {resolved.iconName}
-        </span>
-      );
+      // Si l'icône n'existe pas, ne pas rendre de fallback
+      console.warn(`[Icon] Icône Ant Design introuvable: ${resolved.iconName}`);
+      return null;
     }
     default:
       return null;

@@ -32,6 +32,7 @@ const SiteVitrine2ThierDynamic = lazy(() => import('./pages/SiteVitrine2ThierDyn
 // Formulaires publics (style Effy)
 const PublicFormRenderer = lazy(() => import('./components/PublicForm/PublicFormRenderer'));
 const EffyFormRenderer = lazy(() => import('./components/PublicForm/EffyFormRenderer'));
+const MyCommercialLinks = lazy(() => import('./pages/MyCommercialLinks'));
 
 
 // Composant Loading
@@ -297,6 +298,17 @@ const App: React.FC = () => {
       />
 
       {/* Routes protégées CRM - AVEC SIDEBAR ET HEADER */}
+      <Route 
+        path="/mes-liens-commerciaux" 
+        element={
+          <ProtectedRoute>
+            <Suspense fallback={<LoadingSpinner />}>
+              <MyCommercialLinks />
+            </Suspense>
+          </ProtectedRoute>
+        } 
+      />
+      
       <Route 
         path="/*" 
         element={

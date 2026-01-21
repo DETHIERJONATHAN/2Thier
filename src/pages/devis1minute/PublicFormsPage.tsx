@@ -45,6 +45,7 @@ import {
   BugOutlined
 } from '@ant-design/icons';
 import { useAuthenticatedApi } from '../../hooks/useAuthenticatedApi';
+import { useAuth } from '../../auth/useAuth';
 import dayjs from 'dayjs';
 import 'dayjs/locale/fr';
 
@@ -65,6 +66,7 @@ interface PublicForm {
   isActive: boolean;
   collectsRgpdConsent: boolean;
   autoPublishLeads: boolean;
+  requiresCommercialTracking?: boolean;
   maxSubmissionsPerDay?: number;
   customCss?: string;
   thankYouMessage: string;
@@ -300,18 +302,28 @@ const FormBuilderModal: React.FC<FormBuilderModalProps> = ({
             </Row>
 
             <Row gutter={16}>
-              <Col span={8}>
+              <Col span={6}>
                 <Form.Item name="isActive" label="Actif" valuePropName="checked">
                   <Switch checkedChildren="Oui" unCheckedChildren="Non" />
                 </Form.Item>
               </Col>
-              <Col span={8}>
+              <Col span={6}>
                 <Form.Item name="collectsRgpdConsent" label="Consentement RGPD" valuePropName="checked">
                   <Switch checkedChildren="Oui" unCheckedChildren="Non" />
                 </Form.Item>
               </Col>
-              <Col span={8}>
+              <Col span={6}>
                 <Form.Item name="autoPublishLeads" label="Publication auto" valuePropName="checked">
+                  <Switch checkedChildren="Oui" unCheckedChildren="Non" />
+                </Form.Item>
+              </Col>
+              <Col span={6}>
+                <Form.Item 
+                  name="requiresCommercialTracking" 
+                  label="Formulaire nominatif" 
+                  valuePropName="checked"
+                  tooltip="Chaque commercial pourra générer son propre lien de tracking. Les leads seront automatiquement attribués au commercial qui a partagé le lien."
+                >
                   <Switch checkedChildren="Oui" unCheckedChildren="Non" />
                 </Form.Item>
               </Col>
@@ -414,6 +426,7 @@ const FormBuilderModal: React.FC<FormBuilderModalProps> = ({
 
 export default function PublicFormsPage() {
   const { api } = useAuthenticatedApi();
+  const { user } = useAuth();
   
   const [forms, setForms] = useState<PublicForm[]>([]);
   const [stats, setStats] = useState<FormStats>({
@@ -432,6 +445,7 @@ export default function PublicFormsPage() {
   const [isEditMode, setIsEditMode] = useState(false);
   const [submissionsDrawerVisible, setSubmissionsDrawerVisible] = useState(false);
   const [previewModalVisible, setPreviewModalVisible] = useState(false);
+  const [trackingLinkModalVisible, setTrackingLinkModalVisible] = useState(false);
 
   // Chargement des données
   const loadData = useCallback(async () => {
@@ -658,7 +672,7 @@ export default function PublicFormsPage() {
     {
       title: 'Actions',
       key: 'actions',
-      width: 200,
+      width: 250,
       render: (_: unknown, record: PublicForm) => (
         <Space>
           <Tooltip title="Voir les soumissions">
@@ -679,6 +693,19 @@ export default function PublicFormsPage() {
               }}
             />
           </Tooltip>
+          {record.requiresCommercialTracking && (
+            <Tooltip title="Générer un lien commercial">
+              <Button
+                size="small"
+                type="primary"
+                icon={<UserOutlined />}
+                onClick={() => {
+                  setSelectedForm(record);
+                  setTrackingLinkModalVisible(true);
+                }}
+              />
+            </Tooltip>
+          )}
           <Tooltip title="Code d'intégration">
             <Button
               size="small"
@@ -901,6 +928,74 @@ export default function PublicFormsPage() {
         form={selectedForm || undefined}
         isEdit={isEditMode}
       />
+
+      {/* Modal de génération de lien de tracking */}
+      <Modal
+        title={
+          <Space>
+            <UserOutlined />
+            Générer un lien de tracking commercial
+          </Space>
+        }
+        open={trackingLinkModalVisible}
+        onCancel={() => {
+          setTrackingLinkModalVisible(false);
+          setSelectedForm(null);
+        }}
+        footer={null}
+        width={700}
+      >
+        {selectedForm && user && (
+          <div className="space-y-4">
+            <Alert
+              message="Lien personnalisé pour le suivi commercial"
+              description={`Ce lien unique permet de tracker tous les leads générés par ${user.firstName} ${user.lastName}. Les soumissions seront automatiquement attribuées dans le CRM.`}
+              type="info"
+              showIcon
+            />
+            
+            <div className="p-4 bg-gray-50 rounded">
+              <Text strong className="block mb-2">Votre lien personnalisé :</Text>
+              <div className="flex items-center gap-2">
+                <Input
+                  value={`${window.location.origin}/form/${selectedForm.slug}?ref=${user.id}`}
+                  readOnly
+                  className="flex-1"
+                />
+                <Button
+                  type="primary"
+                  icon={<CopyOutlined />}
+                  onClick={() => {
+                    navigator.clipboard.writeText(`${window.location.origin}/form/${selectedForm.slug}?ref=${user.id}`);
+                    message.success('Lien copié ! Vous pouvez maintenant le partager avec vos prospects.');
+                  }}
+                >
+                  Copier
+                </Button>
+              </div>
+            </div>
+
+            <Divider />
+
+            <div className="space-y-2">
+              <Text strong>Comment ça fonctionne ?</Text>
+              <ul className="list-disc pl-6 space-y-1">
+                <li>Partagez ce lien avec vos prospects (email, réseaux sociaux, WhatsApp, etc.)</li>
+                <li>Chaque personne qui remplit le formulaire via ce lien sera automatiquement identifiée comme votre lead</li>
+                <li>Le lead apparaîtra dans votre CRM avec votre nom comme source</li>
+                <li>Suivez vos performances et vos conversions en temps réel</li>
+              </ul>
+            </div>
+
+            <Alert
+              message="💡 Astuce"
+              description="Utilisez un raccourcisseur de lien (bit.ly, tinyurl.com) pour rendre votre lien plus facile à partager sur les réseaux sociaux !"
+              type="success"
+              showIcon
+            />
+          </div>
+        )}
+      </Modal>
 
       {/* Drawer des soumissions */}
       <Drawer
