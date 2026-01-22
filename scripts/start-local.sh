@@ -70,6 +70,7 @@ echo "💻 Lancement de 'npm run dev'..."
 echo "💡 Le serveur s'exécute en ARRIÈRE-PLAN. La conversation reste libre."
 echo "📋 Pour voir les logs, utilisez: get_terminal_output avec l'ID du terminal."
 echo ""
+export TELNYX_DEBUG_WEBHOOKS=${TELNYX_DEBUG_WEBHOOKS:-1}
 npm run dev &
 
 echo "✅ Environnement de développement prêt!"

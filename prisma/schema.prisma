@@ -668,21 +668,21 @@ model GoogleMailWatch {
 }
 
 model GoogleToken {
-  id                        String                      @id
-  accessToken               String
-  refreshToken              String?
-  tokenType                 String                      @default("Bearer")
-  expiresAt                 DateTime?
-  scope                     String?
-  createdAt                 DateTime                    @default(now())
-  updatedAt                 DateTime
-  organizationId            String
-  userId                    String // Chaque utilisateur a son propre token
-  googleEmail               String? // Email du compte Google connecté
-  lastRefreshAt             DateTime?
-  refreshCount              Int                         @default(0)
-  Organization              Organization                @relation(fields: [organizationId], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  User                      User                        @relation(fields: [userId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  id             String       @id
+  accessToken    String
+  refreshToken   String?
+  tokenType      String       @default("Bearer")
+  expiresAt      DateTime?
+  scope          String?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime
+  organizationId String
+  userId         String // Chaque utilisateur a son propre token
+  googleEmail    String? // Email du compte Google connecté
+  lastRefreshAt  DateTime?
+  refreshCount   Int          @default(0)
+  Organization   Organization @relation(fields: [organizationId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  User           User         @relation(fields: [userId], references: [id], onDelete: NoAction, onUpdate: NoAction)
 
   @@unique([userId, organizationId])
 }
@@ -1068,6 +1068,8 @@ model Organization {
   TelnyxMessage              TelnyxMessage[]
   TelnyxPhoneNumber          TelnyxPhoneNumber[]
   TelnyxUserConfig           TelnyxUserConfig[]
+  TelnyxConfig               TelnyxConfig? // 🆕 Config API Telnyx
+  TelnyxSipEndpoint          TelnyxSipEndpoint[] // 🆕 Endpoints SIP
   TimelineEvent              TimelineEvent[]
   UserOrganization           UserOrganization[]
   UserFavoriteModule         UserFavoriteModule[]
@@ -1149,31 +1151,31 @@ model Product {
 }
 
 model PublicForm {
-  id                   String                 @id
-  organizationId       String
-  name                 String
-  description          String?
-  category             String                 @default("contact")
-  slug                 String
-  fields               Json
-  thankYouMessage      String                 @default("Merci pour votre soumission !")
-  redirectUrl          String?
-  collectsRgpdConsent  Boolean                @default(true)
-  autoPublishLeads     Boolean                @default(false)
-  maxSubmissionsPerDay Int?
-  customCss            String?
-  campaigns            String[]               @default([])
-  submissionCount      Int                    @default(0)
-  conversionRate       Float                  @default(0)
-  lastSubmissionAt     DateTime?
-  isActive                  Boolean                @default(true)
-  isPublic                  Boolean                @default(true)
-  requiresCommercialTracking Boolean               @default(false)
-  deletedAt                 DateTime?
-  createdAt                 DateTime               @default(now())
-  updatedAt                 DateTime
-  Organization              Organization           @relation(fields: [organizationId], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  PublicFormSubmission PublicFormSubmission[]
+  id                         String                 @id
+  organizationId             String
+  name                       String
+  description                String?
+  category                   String                 @default("contact")
+  slug                       String
+  fields                     Json
+  thankYouMessage            String                 @default("Merci pour votre soumission !")
+  redirectUrl                String?
+  collectsRgpdConsent        Boolean                @default(true)
+  autoPublishLeads           Boolean                @default(false)
+  maxSubmissionsPerDay       Int?
+  customCss                  String?
+  campaigns                  String[]               @default([])
+  submissionCount            Int                    @default(0)
+  conversionRate             Float                  @default(0)
+  lastSubmissionAt           DateTime?
+  isActive                   Boolean                @default(true)
+  isPublic                   Boolean                @default(true)
+  requiresCommercialTracking Boolean                @default(false)
+  deletedAt                  DateTime?
+  createdAt                  DateTime               @default(now())
+  updatedAt                  DateTime
+  Organization               Organization           @relation(fields: [organizationId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  PublicFormSubmission       PublicFormSubmission[]
 
   @@unique([organizationId, slug], map: "PublicForm_organization_slug_unique")
   @@index([organizationId, deletedAt])
@@ -1319,8 +1321,8 @@ model TechnicalData {
 }
 
 model TelnyxCall {
-  id             String       @id
-  callId         String       @unique
+  id             String          @id
+  callId         String          @unique
   fromNumber     String
   toNumber       String
   direction      String
@@ -1330,12 +1332,14 @@ model TelnyxCall {
   recordingUrl   String?
   organizationId String
   leadId         String?
+  answeredBy     String? // 🆕 Qui a répondu: "sip:username" | "pstn:+32477..." | null
   startedAt      DateTime
   endedAt        DateTime?
-  createdAt      DateTime     @default(now())
+  createdAt      DateTime        @default(now())
   updatedAt      DateTime
-  Lead           Lead?        @relation(fields: [leadId], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  Organization   Organization @relation(fields: [organizationId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  Lead           Lead?           @relation(fields: [leadId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  Organization   Organization    @relation(fields: [organizationId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  TelnyxCallLeg  TelnyxCallLeg[] // 🆕 Relation vers les legs
 
   @@index([callId])
   @@index([fromNumber])
@@ -1346,15 +1350,17 @@ model TelnyxCall {
 }
 
 model TelnyxConnection {
-  id             String       @id
-  name           String
-  status         String
-  type           String
-  webhookUrl     String?
-  organizationId String
-  createdAt      DateTime     @default(now())
-  updatedAt      DateTime
-  Organization   Organization @relation(fields: [organizationId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  id               String       @id
+  name             String
+  status           String
+  type             String
+  webhookUrl       String?
+  organizationId   String
+  sipDomain        String? // ex: votre-org.sip.telnyx.com
+  callControlAppId String? // ID de l'application Call Control Telnyx
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime
+  Organization     Organization @relation(fields: [organizationId], references: [id], onDelete: NoAction, onUpdate: NoAction)
 
   @@index([organizationId])
   @@index([status])
@@ -1437,6 +1443,73 @@ model TelnyxUserConfig {
   @@index([assignedNumber])
   @@index([organizationId])
   @@index([userId])
+}
+
+// 🆕 NOUVEAUX MODÈLES POUR ARCHITECTURE "TELNYX COMME CERVEAU"
+
+// Configuration API Telnyx par organisation (sécurisée)
+model TelnyxConfig {
+  id                   String       @id
+  organizationId       String       @unique
+  encryptedApiKey      String // Clé API chiffrée avec ENCRYPTION_KEY
+  webhookSigningSecret String? // Pour valider l'authenticité des webhooks
+  webhookUrl           String       @default("__AUTO__")
+  defaultConnectionId  String? // Connexion par défaut pour les appels
+  callControlAppId     String? // ID de l'application Call Control Telnyx
+  fallbackPstnNumber   String? // 🆕 Fallback GSM/PSTN (ex: +32477123456)
+  createdAt            DateTime     @default(now())
+  updatedAt            DateTime
+  Organization         Organization @relation(fields: [organizationId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([organizationId])
+}
+
+// Endpoints SIP (CRM + Softphones utilisateurs)
+model TelnyxSipEndpoint {
+  id             String          @id
+  organizationId String
+  userId         String? // null = endpoint CRM principal
+  name           String // "CRM Principal", "Softphone Jonathan"
+  sipUsername    String          @unique
+  sipPassword    String // Chiffré avec ENCRYPTION_KEY
+  sipDomain      String // votre-org.sip.telnyx.com
+  status         String          @default("active") // active, inactive
+  priority       Int             @default(1) // Ordre cascade: 1=CRM, 2=softphones, 3=PSTN
+  timeout        Int             @default(10) // Timeout en secondes
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime
+  User           User?           @relation(fields: [userId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  Organization   Organization    @relation(fields: [organizationId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  TelnyxCallLeg  TelnyxCallLeg[]
+
+  @@index([organizationId])
+  @@index([userId])
+  @@index([priority])
+  @@index([status])
+}
+
+// Tracking détaillé des legs d'appel (multi-étapes SIP + PSTN)
+model TelnyxCallLeg {
+  id          String             @id
+  callId      String // Référence TelnyxCall.callId
+  legType     String // "sip" | "pstn"
+  endpointId  String? // ID TelnyxSipEndpoint si SIP
+  destination String // SIP username ou numéro PSTN (+32477...)
+  status      String // "no-answer" | "answered" | "busy" | "failed" | "timeout"
+  dialedAt    DateTime           @default(now())
+  answeredAt  DateTime?
+  endedAt     DateTime?
+  duration    Int? // Durée en secondes
+  priority    Int // Position dans la cascade (1, 2, 3...)
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime
+  Call        TelnyxCall         @relation(fields: [callId], references: [callId], onDelete: NoAction, onUpdate: NoAction)
+  Endpoint    TelnyxSipEndpoint? @relation(fields: [endpointId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([callId])
+  @@index([endpointId])
+  @@index([status])
+  @@index([dialedAt])
 }
 
 model TimelineEvent {
@@ -2084,8 +2157,8 @@ model User {
   phoneNumber                                         String?
   vatNumber                                           String?
   role                                                String                                   @default("user")
-  organizationId                                      String?                                  // Organisation principale
-  commercialSlug                                      String?                                  // 🎯 Slug commercial (ex: "jean-dupont")
+  organizationId                                      String? // Organisation principale
+  commercialSlug                                      String? // 🎯 Slug commercial (ex: "jean-dupont")
   CalendarEvent                                       CalendarEvent[]
   CalendarParticipant                                 CalendarParticipant[]
   DeletedEmail                                        DeletedEmail[]
@@ -2108,6 +2181,7 @@ model User {
   TelnyxPhoneNumber                                   TelnyxPhoneNumber[]
   TelnyxSettings                                      TelnyxSettings?
   TelnyxUserConfig                                    TelnyxUserConfig?
+  TelnyxSipEndpoint                                   TelnyxSipEndpoint[] // 🆕 Endpoints SIP utilisateur
   UserOrganization                                    UserOrganization[]
   UserService                                         UserService[]
   UserFavoriteModule                                  UserFavoriteModule[]
@@ -2115,8 +2189,8 @@ model User {
   website_blog_posts                                  website_blog_posts[]
   website_media_files                                 website_media_files[]
   MeasurementReferenceConfig                          OrganizationMeasurementReferenceConfig[] @relation("MeasurementConfigCreator")
-  
-  @@index([organizationId, commercialSlug])  // 🎯 Index pour optimiser les recherches de slug
+
+  @@index([organizationId, commercialSlug]) // 🎯 Index pour optimiser les recherches de slug
 }
 
 model UserOrganization {
@@ -2657,37 +2731,37 @@ model CalibrationProfile {
 
 /// Définition d'un formulaire (peut être lié à plusieurs sites)
 model website_forms {
-  id              Int       @id @default(autoincrement())
-  organizationId  String
-  name            String    // "Simulateur Isolation"
-  slug            String    // "simulateur-isolation" 
-  description     String?
-  treeId          String?   // ID de l'arbre TBL pour le mapping des champs
-  isActive        Boolean   @default(true)
-  
+  id             Int     @id @default(autoincrement())
+  organizationId String
+  name           String // "Simulateur Isolation"
+  slug           String // "simulateur-isolation" 
+  description    String?
+  treeId         String? // ID de l'arbre TBL pour le mapping des champs
+  isActive       Boolean @default(true)
+
   // 🎯 Tracking commercial nominatif
   requiresCommercialTracking Boolean @default(false) // Active le système de liens par commercial
-  
+
   // Configuration globale du formulaire
-  settings        Json      @default("{}")  // {primaryColor, logo, trustpilotUrl, ...}
-  
+  settings Json @default("{}") // {primaryColor, logo, trustpilotUrl, ...}
+
   // 🧭 Question de départ (pour le nouveau système 1 question = 1 écran)
-  startQuestionKey String?  // Clé de la première question à afficher
-  
+  startQuestionKey String? // Clé de la première question à afficher
+
   // Textes de fin de formulaire
-  successTitle    String?   @default("Merci pour votre demande !")
-  successMessage  String?   @default("Nous vous recontacterons dans les plus brefs délais.")
-  
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
-  
+  successTitle   String? @default("Merci pour votre demande !")
+  successMessage String? @default("Nous vous recontacterons dans les plus brefs délais.")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
   // Relations
-  Organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  steps           website_form_steps[]
-  questions       website_form_questions[]  // Nouveau système 1 question = 1 écran
-  websites        website_form_website[]
-  submissions     website_form_submissions[]
-  
+  Organization Organization               @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  steps        website_form_steps[]
+  questions    website_form_questions[] // Nouveau système 1 question = 1 écran
+  websites     website_form_website[]
+  submissions  website_form_submissions[]
+
   @@unique([organizationId, slug])
   @@index([organizationId])
   @@index([slug])
@@ -2696,98 +2770,98 @@ model website_forms {
 
 /// Étape du formulaire (une question par écran style Effy)
 model website_form_steps {
-  id              Int       @id @default(autoincrement())
-  formId          Int
-  
+  id     Int @id @default(autoincrement())
+  formId Int
+
   // Contenu de l'étape
-  title           String    // "Votre projet concerne :"
-  subtitle        String?   // "Cela permet de nous assurer de votre éligibilité..."
-  helpText        String?   // Texte d'aide affiché en tooltip ou sous le titre
-  
+  title    String // "Votre projet concerne :"
+  subtitle String? // "Cela permet de nous assurer de votre éligibilité..."
+  helpText String? // Texte d'aide affiché en tooltip ou sous le titre
+
   // Type d'étape
-  stepType        String    @default("single_choice") // single_choice, multiple_choice, text, number, email, phone, address, date
-  
+  stepType String @default("single_choice") // single_choice, multiple_choice, text, number, email, phone, address, date
+
   // Configuration
-  order           Int       @default(0)
-  isRequired      Boolean   @default(true)
-  
+  order      Int     @default(0)
+  isRequired Boolean @default(true)
+
   // Logique conditionnelle (JSON)
   // Ex: {"showIf": [{"stepId": 1, "fieldValue": "maison"}]}
-  condition       Json?
-  
+  condition Json?
+
   // Configuration spécifique au type d'étape
-  settings        Json      @default("{}") // {layout: 'grid', columns: 2, ...}
-  
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
-  
+  settings Json @default("{}") // {layout: 'grid', columns: 2, ...}
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
   // Relations
-  form            website_forms @relation(fields: [formId], references: [id], onDelete: Cascade)
-  fields          website_form_fields[]
-  
+  form   website_forms         @relation(fields: [formId], references: [id], onDelete: Cascade)
+  fields website_form_fields[]
+
   @@index([formId])
   @@index([formId, order])
 }
 
 /// Champs/Options d'une étape
 model website_form_fields {
-  id              Int       @id @default(autoincrement())
-  stepId          Int
-  
+  id     Int @id @default(autoincrement())
+  stepId Int
+
   // 🔗 Champ parent pour sous-questions imbriquées
-  parentFieldId   Int?      // Si défini, ce champ est une sous-question
-  
+  parentFieldId Int? // Si défini, ce champ est une sous-question
+
   // Contenu du champ
-  label           String    // "Une maison", "Surface habitable (m²)"
-  name            String?   // Nom technique du champ (ex: "housing_type")
-  value           String?   // Valeur par défaut ou valeur unique pour les options
-  
+  label String // "Une maison", "Surface habitable (m²)"
+  name  String? // Nom technique du champ (ex: "housing_type")
+  value String? // Valeur par défaut ou valeur unique pour les options
+
   // Type de champ
-  fieldType       String    @default("option") // option, card_select, text, number, email, phone, textarea, select, radio, checkbox, date, address
-  
+  fieldType String @default("option") // option, card_select, text, number, email, phone, textarea, select, radio, checkbox, date, address
+
   // Visuel
-  icon            String?   // Emoji "🏠" ou nom d'icône
-  imageUrl        String?   // URL image illustrative (style Effy)
-  
+  icon     String? // Emoji "🏠" ou nom d'icône
+  imageUrl String? // URL image illustrative (style Effy)
+
   // Configuration input
-  placeholder     String?
-  helpText        String?
-  defaultValue    String?
-  
+  placeholder  String?
+  helpText     String?
+  defaultValue String?
+
   // Options pour select/radio/checkbox/card_select (JSON array)
   // Ex: [{"value": "maison", "label": "Maison", "icon": "🏠"}, ...]
-  options         Json?
-  
+  options Json?
+
   // Validation (JSON)
   // Ex: {"min": 10, "max": 500, "pattern": "^[0-9]+$", "required": true, "errorMessage": "..."}
-  validation      Json?
-  
+  validation Json?
+
   // 🔥 MAPPING TBL - Lien vers un nœud TreeBranchLeaf
-  tblNodeId       String?   // ID du nœud TBL où sauvegarder la valeur
-  tblNodeLabel    String?   // Label du nœud pour affichage admin
-  
+  tblNodeId    String? // ID du nœud TBL où sauvegarder la valeur
+  tblNodeLabel String? // Label du nœud pour affichage admin
+
   // Configuration
-  order           Int       @default(0)
-  isRequired      Boolean   @default(false) // Champ obligatoire
-  isDefault       Boolean   @default(false) // Option pré-sélectionnée
-  allowMultiple   Boolean   @default(false) // Permet choix multiples (checkbox)
-  
+  order         Int     @default(0)
+  isRequired    Boolean @default(false) // Champ obligatoire
+  isDefault     Boolean @default(false) // Option pré-sélectionnée
+  allowMultiple Boolean @default(false) // Permet choix multiples (checkbox)
+
   // 🎯 Logique conditionnelle avancée
   // Format: {"showIf": {"field": "heating_type", "operator": "equals", "value": "fioul"}}
   // Opérateurs: equals, notEquals, in, notIn, greaterThan, lessThan, contains
-  condition       Json?
-  
+  condition Json?
+
   // Métadonnées additionnelles
-  metadata        Json      @default("{}")
-  
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
-  
+  metadata Json @default("{}")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
   // Relations
-  step            website_form_steps @relation(fields: [stepId], references: [id], onDelete: Cascade)
-  parentField     website_form_fields? @relation("FieldChildren", fields: [parentFieldId], references: [id], onDelete: Cascade)
-  childFields     website_form_fields[] @relation("FieldChildren")
-  
+  step        website_form_steps    @relation(fields: [stepId], references: [id], onDelete: Cascade)
+  parentField website_form_fields?  @relation("FieldChildren", fields: [parentFieldId], references: [id], onDelete: Cascade)
+  childFields website_form_fields[] @relation("FieldChildren")
+
   @@index([stepId])
   @@index([stepId, order])
   @@index([tblNodeId])
@@ -2797,20 +2871,20 @@ model website_form_fields {
 /// 🎯 QUESTIONS - Style Effy : 1 question = 1 écran pleine page
 /// Chaque question a sa propre navigation conditionnelle
 model website_form_questions {
-  id              Int       @id @default(autoincrement())
-  formId          Int
-  
+  id     Int @id @default(autoincrement())
+  formId Int
+
   // Identification
-  questionKey     String    // Clé unique: "type_logement", "chauffage_fioul_type"
-  
+  questionKey String // Clé unique: "type_logement", "chauffage_fioul_type"
+
   // Contenu affiché
-  title           String    // "Votre projet concerne :"
-  subtitle        String?   // "Sélectionnez votre type de logement"
-  helpText        String?   // Texte d'aide optionnel
-  icon            String?   // Emoji ou icône pour le header
-  
+  title    String // "Votre projet concerne :"
+  subtitle String? // "Sélectionnez votre type de logement"
+  helpText String? // Texte d'aide optionnel
+  icon     String? // Emoji ou icône pour le header
+
   // Type de question
-  questionType    String    @default("single_choice") 
+  questionType String @default("single_choice")
   // single_choice: une seule réponse (cartes cliquables)
   // multiple_choice: plusieurs réponses (checkboxes)
   // number: champ numérique
@@ -2819,47 +2893,47 @@ model website_form_questions {
   // phone: champ téléphone
   // address: champ adresse
   // select: dropdown
-  
+
   // Configuration input (pour number, text, etc.)
-  placeholder     String?
-  inputSuffix     String?   // "m²", "€", "kW"
-  minValue        Int?
-  maxValue        Int?
-  
+  placeholder String?
+  inputSuffix String? // "m²", "€", "kW"
+  minValue    Int?
+  maxValue    Int?
+
   // 🎨 Options de réponse (pour single_choice / multiple_choice)
   // Format: [{"value": "maison", "label": "Une maison", "icon": "🏡", "description": "Individuelle", "imageUrl": "/img/maison.png"}]
-  options         Json?
-  
+  options Json?
+
   // 🧭 NAVIGATION CONDITIONNELLE
   // Question suivante par défaut (si pas de condition spécifique)
-  defaultNextQuestionKey  String?
-  
+  defaultNextQuestionKey String?
+
   // Navigation conditionnelle basée sur la réponse
   // Format: [{"answerValue": "maison", "nextQuestionKey": "annee_construction"}, 
   //          {"answerValue": "appartement", "nextQuestionKey": "annee_construction"}]
   // Ou avec conditions complexes:
   // [{"condition": {"field": "type_logement", "operator": "equals", "value": "maison"}, "nextQuestionKey": "isolation_etat"}]
-  navigation      Json?
-  
+  navigation Json?
+
   // Question finale ? (déclenche soumission)
-  isEndQuestion   Boolean   @default(false)
-  
+  isEndQuestion Boolean @default(false)
+
   // 🔥 MAPPING TBL
-  tblNodeId       String?
-  tblNodeLabel    String?
-  
+  tblNodeId    String?
+  tblNodeLabel String?
+
   // Ordre d'affichage dans l'admin
-  order           Int       @default(0)
-  isRequired      Boolean   @default(true)
-  
+  order      Int     @default(0)
+  isRequired Boolean @default(true)
+
   // Métadonnées
-  metadata        Json      @default("{}")
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
-  
+  metadata  Json     @default("{}")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
   // Relations
-  form            website_forms @relation(fields: [formId], references: [id], onDelete: Cascade)
-  
+  form website_forms @relation(fields: [formId], references: [id], onDelete: Cascade)
+
   @@unique([formId, questionKey])
   @@index([formId])
   @@index([formId, order])
@@ -2868,20 +2942,20 @@ model website_form_questions {
 
 /// Table de liaison formulaire <-> sites (N-N)
 model website_form_website {
-  id              Int       @id @default(autoincrement())
-  formId          Int
-  websiteId       Int
-  
+  id        Int @id @default(autoincrement())
+  formId    Int
+  websiteId Int
+
   // Configuration par site
-  isDefault       Boolean   @default(false) // Formulaire principal du site
-  urlPath         String?   @default("/simulateur") // Chemin URL sur le site
-  
-  createdAt       DateTime  @default(now())
-  
+  isDefault Boolean @default(false) // Formulaire principal du site
+  urlPath   String? @default("/simulateur") // Chemin URL sur le site
+
+  createdAt DateTime @default(now())
+
   // Relations
-  form            website_forms @relation(fields: [formId], references: [id], onDelete: Cascade)
-  website         websites @relation(fields: [websiteId], references: [id], onDelete: Cascade)
-  
+  form    website_forms @relation(fields: [formId], references: [id], onDelete: Cascade)
+  website websites      @relation(fields: [websiteId], references: [id], onDelete: Cascade)
+
   @@unique([formId, websiteId])
   @@index([websiteId])
   @@index([formId])
@@ -2889,36 +2963,36 @@ model website_form_website {
 
 /// Soumissions de formulaires (tracking des leads créés)
 model website_form_submissions {
-  id              Int       @id @default(autoincrement())
-  formId          Int
-  
+  id     Int @id @default(autoincrement())
+  formId Int
+
   // Lien vers les entités créées
-  leadId          String?   // ID du lead créé
-  submissionId    String?   // ID de la TreeBranchLeafSubmission créée
-  
+  leadId       String? // ID du lead créé
+  submissionId String? // ID de la TreeBranchLeafSubmission créée
+
   // 🎯 Tracking commercial nominatif
-  referredBy      String?   // Slug du commercial référent (ex: "jean-dupont")
-  
+  referredBy String? // Slug du commercial référent (ex: "jean-dupont")
+
   // Données brutes soumises
-  formData        Json      // Toutes les réponses du formulaire
-  
+  formData Json // Toutes les réponses du formulaire
+
   // Métadonnées
-  ipAddress       String?
-  userAgent       String?
-  referrer        String?
-  utmSource       String?
-  utmMedium       String?
-  utmCampaign     String?
-  
+  ipAddress   String?
+  userAgent   String?
+  referrer    String?
+  utmSource   String?
+  utmMedium   String?
+  utmCampaign String?
+
   // Statut
-  status          String    @default("completed") // completed, partial, error
-  errorMessage    String?
-  
-  createdAt       DateTime  @default(now())
-  
+  status       String  @default("completed") // completed, partial, error
+  errorMessage String?
+
+  createdAt DateTime @default(now())
+
   // Relations
-  form            website_forms @relation(fields: [formId], references: [id], onDelete: Cascade)
-  
+  form website_forms @relation(fields: [formId], references: [id], onDelete: Cascade)
+
   @@index([formId])
   @@index([leadId])
   @@index([submissionId])
