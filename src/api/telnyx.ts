@@ -726,19 +726,37 @@ async function patchTelnyxConnectionWebhook(params: {
   id: string;
   desiredWebhookUrl: string;
   headers: Record<string, string>;
+  outboundVoiceProfileId?: string | null;
 }): Promise<
-  | { ok: true; before: any; after: any }
+  | { ok: true; before: any; after: any; skippedOutboundProfile?: boolean }
   | { ok: false; status?: number | null; detail?: string | null }
 > {
-  const { id, desiredWebhookUrl, headers } = params;
+  const { id, desiredWebhookUrl, headers, outboundVoiceProfileId } = params;
   try {
     const beforeRes = await axios.get(`${TELNYX_API_URL}/connections/${id}`, { headers });
     const before = beforeRes?.data?.data;
 
     // Telnyx peut basculer sur un URL failover; on force les deux vers le CRM.
+    const currentOutboundProfileId =
+      (typeof before?.outbound_voice_profile_id === 'string' ? before.outbound_voice_profile_id : null)
+      || (typeof before?.outbound?.outbound_voice_profile_id === 'string' ? before.outbound.outbound_voice_profile_id : null);
+
+    const shouldSetOutboundProfile = Boolean(
+      outboundVoiceProfileId && outboundVoiceProfileId.trim() && outboundVoiceProfileId !== currentOutboundProfileId
+    );
+
+    const basePayload: Record<string, any> = {
+      webhook_event_url: desiredWebhookUrl,
+      webhook_event_failover_url: desiredWebhookUrl,
+    };
+
+    if (shouldSetOutboundProfile) {
+      basePayload.outbound_voice_profile_id = outboundVoiceProfileId;
+    }
+
     const payloads = [
-      { webhook_event_url: desiredWebhookUrl, webhook_event_failover_url: desiredWebhookUrl },
-      { data: { webhook_event_url: desiredWebhookUrl, webhook_event_failover_url: desiredWebhookUrl } },
+      basePayload,
+      { data: basePayload },
     ];
 
     let patched = false;
@@ -762,7 +780,7 @@ async function patchTelnyxConnectionWebhook(params: {
 
     const afterRes = await axios.get(`${TELNYX_API_URL}/connections/${id}`, { headers });
     const after = afterRes?.data?.data;
-    return { ok: true, before, after };
+    return { ok: true, before, after, skippedOutboundProfile: !shouldSetOutboundProfile };
   } catch (e) {
     const status = axios.isAxiosError(e) ? (e.response?.status ?? null) : null;
     const data: any = axios.isAxiosError(e) ? e.response?.data : null;
@@ -801,6 +819,7 @@ interface TelnyxConnectionResponse {
   connection_name?: string;
   active: boolean;
   outbound?: { type: string };
+  outbound_voice_profile_id?: string;
   webhook_event_url?: string;
   created_at: string;
   updated_at: string;
@@ -1883,6 +1902,48 @@ router.post('/provision', async (req: AuthenticatedRequest, res: Response) => {
 
     const actions: Array<Record<string, any>> = [];
 
+    // --- OUTBOUND VOICE PROFILE (sortant) ---
+    let desiredOutboundVoiceProfileId: string | null = null;
+    const envOutboundVoiceProfileId = String(process.env.TELNYX_OUTBOUND_VOICE_PROFILE_ID || '').trim();
+    if (envOutboundVoiceProfileId) {
+      desiredOutboundVoiceProfileId = envOutboundVoiceProfileId;
+    }
+
+    try {
+      const outboundProfilesRes = await axios.get(`${TELNYX_API_URL}/outbound_voice_profiles`, {
+        headers: auth.headers,
+        params: { 'page[size]': 250 },
+      });
+
+      const outboundProfiles = Array.isArray(outboundProfilesRes?.data?.data) ? outboundProfilesRes.data.data : [];
+      const enabledProfiles = outboundProfiles.filter((p: any) => p?.enabled !== false);
+
+      if (!desiredOutboundVoiceProfileId) {
+        desiredOutboundVoiceProfileId = (enabledProfiles[0]?.id || outboundProfiles[0]?.id || null) as string | null;
+      }
+
+      if (!desiredOutboundVoiceProfileId) {
+        warnings.push('OUTBOUND_VOICE_PROFILE_MISSING');
+      } else if (outboundProfiles.length > 1 && !envOutboundVoiceProfileId) {
+        warnings.push('OUTBOUND_VOICE_PROFILE_MULTIPLE');
+      }
+
+      actions.push({
+        type: 'outbound_voice_profiles',
+        ok: true,
+        selectedId: desiredOutboundVoiceProfileId,
+        total: outboundProfiles.length,
+        enabled: enabledProfiles.length,
+      });
+    } catch (err) {
+      warnings.push('OUTBOUND_VOICE_PROFILE_FETCH_FAILED');
+      actions.push({
+        type: 'outbound_voice_profiles',
+        ok: false,
+        error: 'OUTBOUND_VOICE_PROFILE_FETCH_FAILED',
+      });
+    }
+
     // 1) Mettre à jour l’URL webhook de la/les Call Control App(s)
     // Auto: inclure aussi les connection_id des numéros (souvent l'ID réellement utilisé) + env.
     const numberConnectionIds = await prisma.telnyxPhoneNumber.findMany({
@@ -1935,7 +1996,12 @@ router.post('/provision', async (req: AuthenticatedRequest, res: Response) => {
           }
         } catch {
           // Cet ID n'est peut-être pas une Call Control App. On tente une Connection.
-          const patchedConn = await patchTelnyxConnectionWebhook({ id: appId, desiredWebhookUrl, headers: auth.headers });
+          const patchedConn = await patchTelnyxConnectionWebhook({
+            id: appId,
+            desiredWebhookUrl,
+            headers: auth.headers,
+            outboundVoiceProfileId: desiredOutboundVoiceProfileId,
+          });
           if (patchedConn.ok) {
             const connectionName = String(patchedConn.after?.connection_name || patchedConn.before?.connection_name || '').trim() || null;
             callControlUpdated += 1;
@@ -1945,6 +2011,8 @@ router.post('/provision', async (req: AuthenticatedRequest, res: Response) => {
               id: appId,
               ok: true,
               connection_name: connectionName,
+              outbound_voice_profile_id: patchedConn.after?.outbound_voice_profile_id || patchedConn.before?.outbound_voice_profile_id || null,
+              outbound_voice_profile_updated: patchedConn.skippedOutboundProfile === false,
               before: pickTelnyxWebhookFields(patchedConn.before),
               after: pickTelnyxWebhookFields(patchedConn.after),
             });
