@@ -16,6 +16,7 @@ import {
   FunctionOutlined,
   FilterOutlined,
   TableOutlined,
+  CameraOutlined,
   ApiOutlined,
   LinkOutlined,
   TagsOutlined,
@@ -2411,6 +2412,8 @@ const Parameters: React.FC<ParametersProps> = (props) => {
                     return !!selectedNode?.hasCondition;
                   case 'data':
                     return !!selectedNode?.hasData;
+                  case 'aiMeasure':
+                    return !!selectedNode?.aiMeasure_enabled;
                   case 'api':
                     return !!selectedNode?.hasAPI;
                   case 'link':
@@ -2429,6 +2432,7 @@ const Parameters: React.FC<ParametersProps> = (props) => {
                   case 'condition': return <FilterOutlined />;
                   case 'conditions': return <FilterOutlined />;
                   case 'table': return <TableOutlined />;
+                  case 'aiMeasure': return <CameraOutlined />;
                   case 'api': return <ApiOutlined />;
                   case 'link': return <LinkOutlined />;
                   case 'markers': return <TagsOutlined />;
