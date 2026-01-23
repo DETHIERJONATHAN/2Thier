@@ -947,16 +947,24 @@ const TBL: React.FC<TBLProps> = ({
   }, [doAutosave]);
 
   // Auto-sauvegarde toutes les 30 secondes (après scheduleAutosave pour éviter la TDZ)
+  // 🔧 FIX: Utiliser une ref pour formData afin d'éviter de recréer l'intervalle à chaque changement
+  const formDataRef = useRef<TBLFormData>(formData);
   useEffect(() => {
-    if (!autoSaveEnabled || !tree || Object.keys(formData).length === 0) return;
+    formDataRef.current = formData;
+  }, [formData]);
+  
+  useEffect(() => {
+    if (!autoSaveEnabled || !tree) return;
 
     const interval = setInterval(() => {
+      // Vérifier que formData a des données avant de sauvegarder
+      if (Object.keys(formDataRef.current).length === 0) return;
       // Réutiliser la même voie débouncée + garde-fous pour éviter les doublons
-      scheduleAutosave(formData);
+      scheduleAutosave(formDataRef.current);
     }, 30000);
 
     return () => clearInterval(interval);
-  }, [formData, autoSaveEnabled, tree, scheduleAutosave]);
+  }, [autoSaveEnabled, tree, scheduleAutosave]);
 
   const previewEvaluateAndStore = useCallback(async (data: TBLFormData) => {
     if (!api || !tree?.id) return;
