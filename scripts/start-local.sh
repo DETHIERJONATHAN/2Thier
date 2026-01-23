@@ -66,16 +66,28 @@ fi
 echo "✅ Proxy connecté à thiernew:europe-west1:crm-postgres-prod sur le port 5432"
 
 # 4. Lancement de l'application
-echo "💻 Lancement de 'npm run dev'..."
-echo "💡 Le serveur s'exécute en ARRIÈRE-PLAN. La conversation reste libre."
-echo "📋 Pour voir les logs, utilisez: get_terminal_output avec l'ID du terminal."
-echo ""
 export TELNYX_DEBUG_WEBHOOKS=${TELNYX_DEBUG_WEBHOOKS:-1}
+
+echo "💻 Lancement de 'npm run dev'..."
+echo "💡 Le serveur s'exécute en ARRIÈRE-PLAN."
+echo ""
 npm run dev &
 
+sleep 3
+echo ""
 echo "✅ Environnement de développement prêt!"
 echo "   🌐 Frontend: http://localhost:5173"
 echo "   🔧 Backend API: http://localhost:4000"
 echo "   💾 DB: Proxy Cloud SQL sur localhost:5432"
+
+# Si Codespaces, afficher aussi les URLs tunnelisées
+if [ -n "$CODESPACES" ] || [ -n "$GITHUB_CODESPACES_PORT_FORWARDING_DOMAIN" ]; then
+    echo ""
+    echo "🌐 URLs Codespaces:"
+    echo "   Frontend: https://${CODESPACE_NAME}-5173.${GITHUB_CODESPACES_PORT_FORWARDING_DOMAIN}"
+    echo "   Backend:  https://${CODESPACE_NAME}-4000.${GITHUB_CODESPACES_PORT_FORWARDING_DOMAIN}"
+    echo ""
+    echo "⚠️  Rendez les ports 5173 ET 4000 PUBLIC dans l'onglet Ports!"
+fi
 echo ""
 echo "Pour fermer tout: pkill -f 'npm run dev' && pkill -f 'cloud-sql-proxy'"

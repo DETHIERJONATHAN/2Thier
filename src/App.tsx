@@ -5,11 +5,14 @@ import { useAuth } from './auth/useAuth';
 import { useFormulasVersionWatcher, onFormulasVersionChange } from './hooks/useFormulasVersionWatcher';
 import { DomainRouter } from './hooks/useDomainRouter';
 
-// Lazy imports
-const Connexion = lazy(() => import('./components/Connexion'));
+// 🔧 CODESPACES FIX: Imports directs pour les composants critiques
+// Le lazy loading échoue dans GitHub Codespaces à cause du tunnel HTTPS
+import AppLayout from './AppLayout';
+import Connexion from './components/Connexion';
+
+// Lazy imports (pour les pages moins critiques)
 const RegisterPage = lazy(() => import('./components/RegisterPage'));
 const InscriptionMultiEtapes = lazy(() => import('./components/InscriptionMultiEtapes'));
-const AppLayout = lazy(() => import('./AppLayout'));
 const GoogleAuthCallback = lazy(() => import('./pages/GoogleAuthCallback'));
 const TestPage = lazy(() => import('./pages/TestPage'));
 const TestPage2Thier = lazy(() => import('./pages/page2thier/TestPage'));

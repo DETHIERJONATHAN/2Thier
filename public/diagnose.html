@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <title>Diagnostic Frontend CRM</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { font-family: system-ui, sans-serif; padding: 20px; background: #1a1a1a; color: #f0f0f0; }
+    h1 { color: #4ade80; }
+    .test { margin: 10px 0; padding: 10px; background: #2a2a2a; border-radius: 8px; }
+    .test.running { border-left: 4px solid #fbbf24; }
+    .test.passed { border-left: 4px solid #4ade80; }
+    .test.failed { border-left: 4px solid #ef4444; }
+    .test-name { font-weight: bold; }
+    .test-details { font-size: 12px; color: #9ca3af; margin-top: 5px; white-space: pre-wrap; }
+    .log-section { background: #111; padding: 10px; border-radius: 8px; max-height: 300px; overflow: auto; margin-top: 20px; }
+    .log-entry { font-size: 11px; font-family: monospace; margin: 2px 0; }
+    .log-info { color: #60a5fa; }
+    .log-error { color: #ef4444; }
+    .log-warn { color: #fbbf24; }
+    button { padding: 10px 20px; background: #3b82f6; color: white; border: none; border-radius: 6px; cursor: pointer; margin: 5px; }
+    button:hover { background: #2563eb; }
+    .summary { margin-top: 20px; padding: 15px; background: #2a2a2a; border-radius: 8px; }
+  </style>
+</head>
+<body>
+  <h1>🔍 Diagnostic Frontend - CRM 2Thier</h1>
+  
+  <div>
+    <button onclick="runAllTests()">▶️ Lancer tous les tests</button>
+    <button onclick="location.reload()">🔄 Recommencer</button>
+    <button onclick="location.href='/connexion'">↗️ Aller à /connexion</button>
+  </div>
+  
+  <div id="tests"></div>
+  <div id="summary" class="summary" style="display:none"></div>
+  
+  <h3>📋 Logs Console</h3>
+  <div id="logs" class="log-section"></div>
+
+  <script>
+    const testsContainer = document.getElementById('tests');
+    const logsContainer = document.getElementById('logs');
+    const results = [];
+    
+    // Capture console logs
+    const originalLog = console.log;
+    const originalWarn = console.warn;
+    const originalError = console.error;
+    
+    function addLog(type, ...args) {
+      const entry = document.createElement('div');
+      entry.className = `log-entry log-${type}`;
+      entry.textContent = `[${type}] ${args.map(a => typeof a === 'object' ? JSON.stringify(a) : a).join(' ')}`;
+      logsContainer.appendChild(entry);
+      logsContainer.scrollTop = logsContainer.scrollHeight;
+    }
+    
+    console.log = (...args) => { originalLog(...args); addLog('info', ...args); };
+    console.warn = (...args) => { originalWarn(...args); addLog('warn', ...args); };
+    console.error = (...args) => { originalError(...args); addLog('error', ...args); };
+
+    function createTest(name) {
+      const div = document.createElement('div');
+      div.className = 'test running';
+      div.innerHTML = `<div class="test-name">⏳ ${name}</div><div class="test-details"></div>`;
+      testsContainer.appendChild(div);
+      return {
+        pass: (details) => {
+          div.className = 'test passed';
+          div.querySelector('.test-name').textContent = `✅ ${name}`;
+          div.querySelector('.test-details').textContent = details || '';
+          results.push({ name, passed: true });
+        },
+        fail: (details) => {
+          div.className = 'test failed';
+          div.querySelector('.test-name').textContent = `❌ ${name}`;
+          div.querySelector('.test-details').textContent = details || '';
+          results.push({ name, passed: false, details });
+        }
+      };
+    }
+    
+    async function runAllTests() {
+      testsContainer.innerHTML = '';
+      results.length = 0;
+      
+      // Test 1: API /auth/me accessible
+      const t1 = createTest('API /auth/me accessible via proxy');
+      try {
+        const res = await fetch('/api/auth/me', { credentials: 'include' });
+        if (res.status === 401) {
+          t1.pass(`Status: 401 (non connecté - normal)`);
+        } else if (res.ok) {
+          const data = await res.json();
+          t1.pass(`Status: 200 - Utilisateur: ${data.currentUser?.email || 'OK'}`);
+        } else {
+          t1.fail(`Status: ${res.status} - Erreur inattendue`);
+        }
+      } catch (err) {
+        t1.fail(`Erreur: ${err.message}`);
+      }
+      
+      // Test 2: Vite HMR WebSocket
+      const t2 = createTest('Vite HMR WebSocket');
+      try {
+        const wsUrl = `${location.protocol === 'https:' ? 'wss:' : 'ws:'}//${location.host}/@vite/client`;
+        const ws = new WebSocket(wsUrl);
+        await new Promise((resolve, reject) => {
+          ws.onopen = () => { ws.close(); resolve(); };
+          ws.onerror = reject;
+          setTimeout(() => reject(new Error('Timeout')), 3000);
+        });
+        t2.pass('WebSocket Vite connecté');
+      } catch (err) {
+        t2.fail(`WebSocket Vite échoué: ${err.message}`);
+      }
+      
+      // Test 3: Import dynamique simple (React)
+      const t3 = createTest('Import dynamique React');
+      try {
+        const React = await import('/node_modules/.vite/deps/react.js?v=f405f7dc');
+        t3.pass(`React version: ${React.version || 'chargé'}`);
+      } catch (err) {
+        t3.fail(`Erreur: ${err.message}`);
+      }
+      
+      // Test 4: Import App.tsx
+      const t4 = createTest('Import dynamique /src/App.tsx');
+      try {
+        const App = await import('/src/App.tsx');
+        t4.pass(`Module App chargé, exports: ${Object.keys(App).join(', ')}`);
+      } catch (err) {
+        t4.fail(`Erreur: ${err.message}\n${err.stack}`);
+      }
+      
+      // Test 5: Import AppLayout.tsx
+      const t5 = createTest('Import dynamique /src/AppLayout.tsx');
+      try {
+        const AppLayout = await import('/src/AppLayout.tsx');
+        t5.pass(`Module AppLayout chargé, exports: ${Object.keys(AppLayout).join(', ')}`);
+      } catch (err) {
+        t5.fail(`Erreur: ${err.message}\n${err.stack}`);
+      }
+      
+      // Test 6: Import Connexion.tsx
+      const t6 = createTest('Import dynamique /src/components/Connexion.tsx');
+      try {
+        const Connexion = await import('/src/components/Connexion.tsx');
+        t6.pass(`Module Connexion chargé, exports: ${Object.keys(Connexion).join(', ')}`);
+      } catch (err) {
+        t6.fail(`Erreur: ${err.message}\n${err.stack}`);
+      }
+      
+      // Test 7: Import AuthProvider.tsx
+      const t7 = createTest('Import dynamique /src/auth/AuthProvider.tsx');
+      try {
+        const Auth = await import('/src/auth/AuthProvider.tsx');
+        t7.pass(`Module AuthProvider chargé, exports: ${Object.keys(Auth).join(', ')}`);
+      } catch (err) {
+        t7.fail(`Erreur: ${err.message}\n${err.stack}`);
+      }
+      
+      // Test 8: Cookies
+      const t8 = createTest('Cookies accessibles');
+      try {
+        const cookies = document.cookie;
+        t8.pass(`Cookies: ${cookies || '(vide - normal si non connecté)'}`);
+      } catch (err) {
+        t8.fail(`Erreur: ${err.message}`);
+      }
+      
+      // Test 9: localStorage
+      const t9 = createTest('localStorage accessible');
+      try {
+        localStorage.setItem('__test_diag', 'ok');
+        localStorage.removeItem('__test_diag');
+        t9.pass('localStorage fonctionne');
+      } catch (err) {
+        t9.fail(`Erreur: ${err.message}`);
+      }
+      
+      // Test 10: Import chaîné (simuler ce que fait main.tsx)
+      const t10 = createTest('Chaîne d\'imports comme main.tsx');
+      try {
+        const ReactDOM = await import('/node_modules/.vite/deps/react-dom_client.js?v=f405f7dc');
+        const { BrowserRouter } = await import('/node_modules/.vite/deps/react-router-dom.js?v=f405f7dc');
+        const App = await import('/src/App.tsx');
+        const Auth = await import('/src/auth/AuthProvider.tsx');
+        const EB = await import('/src/components/ErrorBoundary.tsx');
+        t10.pass('Tous les imports critiques réussis');
+      } catch (err) {
+        t10.fail(`Erreur dans la chaîne: ${err.message}\n${err.stack}`);
+      }
+      
+      // Résumé
+      const passed = results.filter(r => r.passed).length;
+      const failed = results.filter(r => !r.passed).length;
+      const summary = document.getElementById('summary');
+      summary.style.display = 'block';
+      summary.innerHTML = `
+        <h3>${failed === 0 ? '✅ Tous les tests passent!' : '⚠️ Certains tests échouent'}</h3>
+        <p>Réussis: ${passed}/${results.length}</p>
+        <p>Échoués: ${failed}/${results.length}</p>
+        ${failed > 0 ? `<p style="color:#ef4444"><strong>Tests échoués:</strong> ${results.filter(r => !r.passed).map(r => r.name).join(', ')}</p>` : ''}
+        <p><strong>Prochaine étape:</strong> ${failed === 0 
+          ? 'Si la page /connexion est toujours blanche, le problème est probablement dans le rendu React lui-même ou les styles CSS.'
+          : 'Corriger les tests échoués ci-dessus.'}</p>
+      `;
+    }
+    
+    // Auto-run
+    setTimeout(runAllTests, 500);
+  </script>
+</body>
+</html>

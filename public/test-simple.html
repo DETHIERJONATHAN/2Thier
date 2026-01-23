@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Simple - CRM</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 600px;
+            margin: 100px auto;
+            padding: 20px;
+            text-align: center;
+        }
+        .success {
+            background: #d4edda;
+            color: #155724;
+            padding: 20px;
+            border-radius: 8px;
+            border: 2px solid #28a745;
+        }
+    </style>
+</head>
+<body>
+    <div class="success">
+        <h1>✅ Page de Test OK</h1>
+        <p>Si tu vois ce message, le serveur Vite fonctionne parfaitement !</p>
+        <p><strong>Hostname:</strong> <span id="host"></span></p>
+        <p><strong>API Status:</strong> <span id="api"></span></p>
+        <hr>
+        <p><a href="/">← Retour à l'application principale</a></p>
+    </div>
+
+    <script>
+        document.getElementById('host').textContent = window.location.hostname;
+        
+        fetch('/api/health')
+            .then(r => r.json())
+            .then(data => {
+                document.getElementById('api').textContent = '✅ API OK';
+                document.getElementById('api').style.color = 'green';
+            })
+            .catch(err => {
+                document.getElementById('api').textContent = '❌ Erreur: ' + err.message;
+                document.getElementById('api').style.color = 'red';
+            });
+    </script>
+</body>
+</html>

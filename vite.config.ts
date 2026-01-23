@@ -104,6 +104,24 @@ export default defineConfig({
     port: 5173,
     host: true, // Exposer sur le réseau (requis pour Codespaces)
     strictPort: true, // Forcer l'utilisation du port 5173, échouer si occupé
+    
+    // 🔧 CODESPACES FIX: Configuration HMR pour le tunnel HTTPS
+    hmr: {
+      // Utiliser le protocole WebSocket sécurisé dans Codespaces
+      protocol: 'wss',
+      // Le client détectera automatiquement l'host depuis l'URL du navigateur
+      clientPort: 443,
+      // Timeout plus long pour le tunnel Codespaces
+      timeout: 30000,
+    },
+    
+    // 🔧 CODESPACES FIX: Headers pour permettre les imports cross-origin
+    headers: {
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+      'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+    },
+    
     proxy: {
       '/api': {
         target: 'http://localhost:4000',

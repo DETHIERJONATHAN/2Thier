@@ -14,6 +14,39 @@ import initConsoleFilter from './utils/consoleFilter'
 import { ConfigProvider, theme as antdTheme, App as AntdApp } from 'antd'
 import frFR from 'antd/locale/fr_FR'
 
+// ✅ Aide au diagnostic: afficher les erreurs JS critiques en DEV
+if (import.meta.env.DEV) {
+  const renderFatalError = (title: string, detail: string) => {
+    let overlay = document.getElementById('fatal-error-overlay');
+    if (!overlay) {
+      overlay = document.createElement('div');
+      overlay.id = 'fatal-error-overlay';
+      overlay.style.position = 'fixed';
+      overlay.style.inset = '0';
+      overlay.style.zIndex = '999999';
+      overlay.style.background = 'rgba(255, 255, 255, 0.98)';
+      overlay.style.color = '#111827';
+      overlay.style.padding = '24px';
+      overlay.style.fontFamily = 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace';
+      overlay.style.fontSize = '12px';
+      overlay.style.whiteSpace = 'pre-wrap';
+      overlay.style.overflow = 'auto';
+      document.body.appendChild(overlay);
+    }
+    overlay.textContent = `❌ ${title}\n\n${detail}`;
+  };
+
+  window.addEventListener('error', (event) => {
+    const message = event.error?.stack || event.message || 'Erreur JavaScript inconnue';
+    renderFatalError('Erreur JavaScript', message);
+  });
+
+  window.addEventListener('unhandledrejection', (event) => {
+    const reason = event.reason instanceof Error ? event.reason.stack || event.reason.message : String(event.reason);
+    renderFatalError('Promise non gérée', reason);
+  });
+}
+
 // Supprimer les avertissements Ant Design en mode développement
 suppressAntdWarnings();
 

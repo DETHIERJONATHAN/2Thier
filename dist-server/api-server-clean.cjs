@@ -35920,6 +35920,11 @@ async function deepCopyNodeInternal(prisma50, req2, nodeId, opts) {
         return oldNode.image_thumbnails;
       }
     })() : oldNode.image_thumbnails,
+    // 📸 AI MEASURE: Copier la configuration IA Mesure Photo
+    aiMeasure_enabled: oldNode.aiMeasure_enabled,
+    aiMeasure_autoTrigger: oldNode.aiMeasure_autoTrigger,
+    aiMeasure_prompt: oldNode.aiMeasure_prompt,
+    aiMeasure_keys: oldNode.aiMeasure_keys,
     link_activeId: oldNode.link_activeId,
     link_carryContext: oldNode.link_carryContext,
     link_mode: oldNode.link_mode,
