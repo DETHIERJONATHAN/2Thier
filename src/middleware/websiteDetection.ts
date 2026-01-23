@@ -100,7 +100,8 @@ export async function detectWebsite(
     }
 
     // Chercher le site dans la base de données
-    const website = await prisma.webSite.findFirst({
+    // Note: Le modèle Prisma s'appelle "websites" (minuscule pluriel)
+    const website = await prisma.websites.findFirst({
       where: {
         OR: [
           { domain: cleanDomain },
@@ -110,8 +111,8 @@ export async function detectWebsite(
         isActive: true
       },
       include: {
-        config: true,
-        sections: {
+        website_configs: true,
+        website_sections: {
           where: { isActive: true },
           orderBy: { displayOrder: 'asc' }
         }
@@ -128,8 +129,8 @@ export async function detectWebsite(
         slug: website.slug,
         domain: website.domain || cleanDomain,
         name: website.siteName, // ← Correction: utiliser siteName au lieu de name
-        config: website.config,
-        sections: website.sections
+        config: website.website_configs,
+        sections: website.website_sections
       };
       
       // 🚀 METTRE EN CACHE
