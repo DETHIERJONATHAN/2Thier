@@ -323,6 +323,15 @@ const OptimizedStructureNodeComponent: React.FC<OptimizedStructureNodeProps> = (
       );
     }
     
+    // 📸 AI Measure capability icon
+    if ((node as any).aiMeasure_enabled) {
+      icons.push(
+        <span key="aiMeasure" title="Mesure IA" style={{ color: '#eb2f96', fontSize: '9px', marginLeft: '1px', opacity: 0.7 }}>
+          📸
+        </span>
+      );
+    }
+    
     if (node.markers && node.markers.length > 0) {
       icons.push(
         <span key="markers" title="Marqueurs" style={{ color: '#eb2f96', fontSize: '9px', marginLeft: '1px', opacity: 0.7 }}>

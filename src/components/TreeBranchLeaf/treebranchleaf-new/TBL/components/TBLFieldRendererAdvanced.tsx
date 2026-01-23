@@ -2940,6 +2940,26 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
             }
           };
           
+          // 🔍 DEBUG: Log complet de la valeur reçue
+          const valueSummary = (() => {
+            if (finalValue === null) return 'NULL';
+            if (finalValue === undefined) return 'UNDEFINED';
+            if (typeof finalValue === 'string') {
+              if (finalValue.startsWith('data:')) return `data:URL (${(finalValue.length / 1024).toFixed(2)}KB)`;
+              return `string (${finalValue.length}chars)`;
+            }
+            if (typeof finalValue === 'object') {
+              const keys = Object.keys(finalValue as any);
+              return `object {${keys.join(', ')}}`;
+            }
+            return typeof finalValue;
+          })();
+          
+          console.log(`🖼️ [TBLImageFieldWithAI] RENDER (nodeId=${field.id})`);
+          console.log(`   finalValue type: ${valueSummary}`);
+          console.log(`   useCalculatedValue: ${useCalculatedValue}`);
+          console.log(`   localValue: ${typeof localValue === 'string' ? localValue.substring(0, 50) : localValue}`);
+          
           return (
             <TBLImageFieldWithAI
               nodeId={field.id}

@@ -7,7 +7,7 @@
 
 import React from 'react';
 import { Card, Tag, Tooltip } from 'antd';
-import { CalculatorOutlined, EyeOutlined, FormulaOutlined, TableOutlined, BranchesOutlined } from '@ant-design/icons';
+import { CalculatorOutlined, EyeOutlined, FormulaOutlined, TableOutlined, BranchesOutlined, CameraOutlined } from '@ant-design/icons';
 import type { TreeBranchLeafNode } from '../types';
 
 interface SectionFieldRendererProps {
@@ -26,6 +26,7 @@ const SectionFieldRenderer: React.FC<SectionFieldRendererProps> = ({
     if (node.hasFormula) return <FormulaOutlined style={{ color: '#1890ff' }} />;
     if (node.hasTable) return <TableOutlined style={{ color: '#52c41a' }} />;
     if (node.hasCondition) return <BranchesOutlined style={{ color: '#722ed1' }} />;
+    if ((node as any).aiMeasure_enabled) return <CameraOutlined style={{ color: '#eb2f96' }} />;
     return <CalculatorOutlined style={{ color: '#fa8c16' }} />;
   };
 

@@ -20195,9 +20195,19 @@ function getBaseUrlFromRequest(req2) {
   }
   return `${proto}://${host}`;
 }
+function isLocalhostBaseUrl(value) {
+  const trimmed = value.trim();
+  if (!trimmed) return false;
+  try {
+    const parsed = new URL(trimmed);
+    return ["localhost", "127.0.0.1", "0.0.0.0"].includes(parsed.hostname);
+  } catch {
+    return /localhost|127\.0\.0\.1|0\.0\.0\.0/.test(trimmed);
+  }
+}
 function getBackendBaseUrl(options = {}) {
   const envBase = (process.env.BACKEND_URL || process.env.APP_URL || process.env.API_URL || "").trim();
-  if (envBase) return envBase;
+  if (envBase && (!options.req || !isLocalhostBaseUrl(envBase))) return envBase;
   if (options.req) return getBaseUrlFromRequest(options.req);
   if (process.env.NODE_ENV !== "production") {
     const portEnv = options.devPortEnvVar || "PORT";
@@ -20743,7 +20753,22 @@ async function transferCallToLeg(params) {
     body2.sip_auth_username = leg.sipAuthUsername;
     body2.sip_auth_password = leg.sipAuthPassword;
   }
-  await import_axios2.default.post(`${TELNYX_API_URL2}/calls/${callControlId}/actions/transfer`, body2, { headers: auth.headers });
+  try {
+    await import_axios2.default.post(`${TELNYX_API_URL2}/calls/${callControlId}/actions/transfer`, body2, { headers: auth.headers });
+  } catch (error) {
+    const status = error?.response?.status;
+    const details = error?.response?.data;
+    const errors = Array.isArray(details?.errors) ? details.errors : void 0;
+    console.warn("\u26A0\uFE0F [Telnyx Transfer] \xE9chec", {
+      status,
+      callControlId,
+      legType: leg.type,
+      destination: leg.destination,
+      errors,
+      details
+    });
+    throw error;
+  }
 }
 router33.get("/diagnostic", async (req2, res) => {
   const organizationId = getOrganizationIdFromRequest(req2);
@@ -20987,13 +21012,24 @@ async function patchTelnyxCallControlApplicationWebhook(params) {
   }
 }
 async function patchTelnyxConnectionWebhook(params) {
-  const { id, desiredWebhookUrl, headers } = params;
+  const { id, desiredWebhookUrl, headers, outboundVoiceProfileId } = params;
   try {
     const beforeRes = await import_axios2.default.get(`${TELNYX_API_URL2}/connections/${id}`, { headers });
     const before = beforeRes?.data?.data;
+    const currentOutboundProfileId = (typeof before?.outbound_voice_profile_id === "string" ? before.outbound_voice_profile_id : null) || (typeof before?.outbound?.outbound_voice_profile_id === "string" ? before.outbound.outbound_voice_profile_id : null);
+    const shouldSetOutboundProfile = Boolean(
+      outboundVoiceProfileId && outboundVoiceProfileId.trim() && outboundVoiceProfileId !== currentOutboundProfileId
+    );
+    const basePayload = {
+      webhook_event_url: desiredWebhookUrl,
+      webhook_event_failover_url: desiredWebhookUrl
+    };
+    if (shouldSetOutboundProfile) {
+      basePayload.outbound_voice_profile_id = outboundVoiceProfileId;
+    }
     const payloads = [
-      { webhook_event_url: desiredWebhookUrl, webhook_event_failover_url: desiredWebhookUrl },
-      { data: { webhook_event_url: desiredWebhookUrl, webhook_event_failover_url: desiredWebhookUrl } }
+      basePayload,
+      { data: basePayload }
     ];
     let patched = false;
     let lastErr = null;
@@ -21014,7 +21050,7 @@ async function patchTelnyxConnectionWebhook(params) {
     }
     const afterRes = await import_axios2.default.get(`${TELNYX_API_URL2}/connections/${id}`, { headers });
     const after = afterRes?.data?.data;
-    return { ok: true, before, after };
+    return { ok: true, before, after, skippedOutboundProfile: !shouldSetOutboundProfile };
   } catch (e) {
     const status = import_axios2.default.isAxiosError(e) ? e.response?.status ?? null : null;
     const data = import_axios2.default.isAxiosError(e) ? e.response?.data : null;
@@ -21928,6 +21964,41 @@ router33.post("/provision", async (req2, res) => {
     if (!config.callControlAppId) warnings.push("CALL_CONTROL_APP_ID_MISSING");
     if (!config.defaultConnectionId) warnings.push("DEFAULT_CONNECTION_MISSING");
     const actions = [];
+    let desiredOutboundVoiceProfileId = null;
+    const envOutboundVoiceProfileId = String(process.env.TELNYX_OUTBOUND_VOICE_PROFILE_ID || "").trim();
+    if (envOutboundVoiceProfileId) {
+      desiredOutboundVoiceProfileId = envOutboundVoiceProfileId;
+    }
+    try {
+      const outboundProfilesRes = await import_axios2.default.get(`${TELNYX_API_URL2}/outbound_voice_profiles`, {
+        headers: auth.headers,
+        params: { "page[size]": 250 }
+      });
+      const outboundProfiles = Array.isArray(outboundProfilesRes?.data?.data) ? outboundProfilesRes.data.data : [];
+      const enabledProfiles = outboundProfiles.filter((p) => p?.enabled !== false);
+      if (!desiredOutboundVoiceProfileId) {
+        desiredOutboundVoiceProfileId = enabledProfiles[0]?.id || outboundProfiles[0]?.id || null;
+      }
+      if (!desiredOutboundVoiceProfileId) {
+        warnings.push("OUTBOUND_VOICE_PROFILE_MISSING");
+      } else if (outboundProfiles.length > 1 && !envOutboundVoiceProfileId) {
+        warnings.push("OUTBOUND_VOICE_PROFILE_MULTIPLE");
+      }
+      actions.push({
+        type: "outbound_voice_profiles",
+        ok: true,
+        selectedId: desiredOutboundVoiceProfileId,
+        total: outboundProfiles.length,
+        enabled: enabledProfiles.length
+      });
+    } catch (err) {
+      warnings.push("OUTBOUND_VOICE_PROFILE_FETCH_FAILED");
+      actions.push({
+        type: "outbound_voice_profiles",
+        ok: false,
+        error: "OUTBOUND_VOICE_PROFILE_FETCH_FAILED"
+      });
+    }
     const numberConnectionIds = await prisma17.telnyxPhoneNumber.findMany({
       where: { organizationId: targetOrgId },
       select: { connectionId: true }
@@ -21972,7 +22043,12 @@ router33.post("/provision", async (req2, res) => {
             applicationName = nameFromApi.trim();
           }
         } catch {
-          const patchedConn = await patchTelnyxConnectionWebhook({ id: appId, desiredWebhookUrl, headers: auth.headers });
+          const patchedConn = await patchTelnyxConnectionWebhook({
+            id: appId,
+            desiredWebhookUrl,
+            headers: auth.headers,
+            outboundVoiceProfileId: desiredOutboundVoiceProfileId
+          });
           if (patchedConn.ok) {
             const connectionName = String(patchedConn.after?.connection_name || patchedConn.before?.connection_name || "").trim() || null;
             callControlUpdated += 1;
@@ -21982,6 +22058,8 @@ router33.post("/provision", async (req2, res) => {
               id: appId,
               ok: true,
               connection_name: connectionName,
+              outbound_voice_profile_id: patchedConn.after?.outbound_voice_profile_id || patchedConn.before?.outbound_voice_profile_id || null,
+              outbound_voice_profile_updated: patchedConn.skippedOutboundProfile === false,
               before: pickTelnyxWebhookFields(patchedConn.before),
               after: pickTelnyxWebhookFields(patchedConn.after)
             });
@@ -22268,10 +22346,22 @@ router33.get("/stats", async (req2, res) => {
   }
 });
 router33.post("/webhooks", async (req2, res) => {
+  const debug = process.env.TELNYX_DEBUG_WEBHOOKS === "1";
+  const webhook = req2.body;
+  const eventType = webhook?.data?.event_type;
+  const payload = webhook?.data?.payload;
+  if (debug) {
+    console.log("\u{1F9F7} [Telnyx Webhook Debug] inbound", {
+      path: req2.path,
+      originalUrl: req2.originalUrl,
+      method: req2.method,
+      userAgent: req2.headers["user-agent"],
+      hasBody: Boolean(webhook && Object.keys(webhook || {}).length > 0),
+      eventType,
+      callControlId: payload?.call_control_id || payload?.id || null
+    });
+  }
   try {
-    const webhook = req2.body;
-    const eventType = webhook.data?.event_type;
-    const payload = webhook.data?.payload;
     console.log("\u{1FA9D} [Telnyx Webhook]", eventType, payload?.call_control_id || payload?.id);
     if (eventType?.startsWith("call.")) {
       await handleCallWebhook(eventType, payload, req2);
@@ -22280,11 +22370,16 @@ router33.post("/webhooks", async (req2, res) => {
     } else {
       console.log("\u{1FA9D} [Telnyx Webhook] \xC9v\xE9nement non g\xE9r\xE9:", eventType);
     }
-    res.json({ received: true });
   } catch (error) {
     console.error("\u274C [Telnyx Webhook] Erreur:", error);
-    res.status(500).json({ error: "Erreur webhook" });
+    if (debug) {
+      console.error("\u{1F9F7} [Telnyx Webhook Debug] failed", {
+        eventType,
+        callControlId: payload?.call_control_id || payload?.id || null
+      });
+    }
   }
+  return res.status(200).json({ received: true });
 });
 async function handleCallWebhook(eventType, callData, req2) {
   if (!callData || !callData.call_control_id) {
@@ -22292,7 +22387,24 @@ async function handleCallWebhook(eventType, callData, req2) {
   }
   const callControlId = callData.call_control_id;
   const state = callData.state;
+  let isLegEvent = false;
   let call = await prisma17.telnyxCall.findFirst({ where: { callId: callControlId } });
+  if (!call) {
+    const possibleDid = typeof callData.from === "string" ? callData.from.trim() : "";
+    if (possibleDid) {
+      const byDid = await prisma17.telnyxCall.findFirst({
+        where: {
+          toNumber: possibleDid,
+          status: { not: "completed" }
+        },
+        orderBy: [{ startedAt: "desc" }]
+      }).catch(() => null);
+      if (byDid) {
+        call = byDid;
+        isLegEvent = true;
+      }
+    }
+  }
   if (!call) {
     const directionRaw = typeof callData.direction === "string" ? callData.direction : "incoming";
     const isInbound = directionRaw === "incoming" || directionRaw === "inbound";
@@ -22321,11 +22433,23 @@ async function handleCallWebhook(eventType, callData, req2) {
     });
   }
   console.log(`\u{1FA9D} [Telnyx Webhook] ${eventType} pour call ${call.id} -> state: ${state}`);
+  const mainCallControlId = call.callId;
   const updateData = {
     updatedAt: /* @__PURE__ */ new Date()
   };
   switch (eventType) {
     case "call.initiated":
+      if (isLegEvent) {
+        try {
+          const destination = String(callData.to || callData.destination || "").trim();
+          if (destination) {
+            await TelnyxCascadeService.updateCallLegStatus(call.callId, destination, "dialing", /* @__PURE__ */ new Date());
+          }
+        } catch (e) {
+          console.warn("\u26A0\uFE0F [Telnyx Webhook] call.initiated (leg): tracking leg failed:", e);
+        }
+        break;
+      }
       updateData.status = "initiated";
       try {
         const existingLegs = await prisma17.telnyxCallLeg.findMany({ where: { callId: call.callId } });
@@ -22417,6 +22541,17 @@ async function handleCallWebhook(eventType, callData, req2) {
       }
       break;
     case "call.ringing":
+      if (isLegEvent) {
+        try {
+          const destination = String(callData.to || callData.destination || "").trim();
+          if (destination) {
+            await TelnyxCascadeService.updateCallLegStatus(call.callId, destination, "dialing", /* @__PURE__ */ new Date());
+          }
+        } catch (e) {
+          console.warn("\u26A0\uFE0F [Telnyx Webhook] call.ringing (leg): tracking leg failed:", e);
+        }
+        break;
+      }
       updateData.status = "ringing";
       try {
         const destRaw = (typeof callData?.to === "string" ? callData.to : null) || (typeof callData?.destination === "string" ? callData.destination : null) || (typeof callData?.to?.phone_number === "string" ? callData.to.phone_number : null) || (Array.isArray(callData?.to) && typeof callData?.to?.[0]?.phone_number === "string" ? callData.to[0].phone_number : null);
@@ -22477,22 +22612,20 @@ async function handleCallWebhook(eventType, callData, req2) {
       break;
     case "call.hangup":
     case "call.completed":
-      updateData.status = "completed";
-      updateData.endedAt = /* @__PURE__ */ new Date();
-      if (callData.hangup_duration_millis) {
-        updateData.duration = Math.floor(callData.hangup_duration_millis / 1e3);
+      if (!isLegEvent) {
+        updateData.status = "completed";
+        updateData.endedAt = /* @__PURE__ */ new Date();
       }
-      if (!call.answeredBy && callData.to) {
-        await TelnyxCascadeService.updateCallLegStatus(
-          call.callId,
-          callData.to,
-          "no-answer",
-          void 0,
-          /* @__PURE__ */ new Date()
-        );
+      if (callData.hangup_duration_millis) {
+        if (!isLegEvent) {
+          updateData.duration = Math.floor(callData.hangup_duration_millis / 1e3);
+        }
       }
       try {
-        if (!call.answeredBy) {
+        if (isLegEvent && !call.answeredBy) {
+          if (call.status === "completed" || call.endedAt) {
+            break;
+          }
           const cause = String(callData.hangup_cause || "").toLowerCase();
           const failedDest = String(callData.to || callData.destination || "").trim();
           const failureStatus = cause === "timeout" ? "timeout" : cause === "busy" ? "busy" : "failed";
@@ -22510,7 +22643,7 @@ async function handleCallWebhook(eventType, callData, req2) {
             if (next.legType === "pstn") {
               await prisma17.telnyxCallLeg.update({ where: { id: next.id }, data: { status: "dialing", updatedAt: /* @__PURE__ */ new Date() } });
               await transferCallToLeg({
-                callControlId,
+                callControlId: mainCallControlId,
                 organizationId: call.organizationId,
                 webhookUrl,
                 leg: { type: "pstn", destination: next.destination, priority: next.priority, timeout: 30 }
@@ -22523,7 +22656,7 @@ async function handleCallWebhook(eventType, callData, req2) {
               const sipAuthUsername = match ? match.sipUsername : next.destination.replace(/^sip:/, "").split("@")[0];
               await prisma17.telnyxCallLeg.update({ where: { id: next.id }, data: { status: "dialing", updatedAt: /* @__PURE__ */ new Date() } });
               await transferCallToLeg({
-                callControlId,
+                callControlId: mainCallControlId,
                 organizationId: call.organizationId,
                 webhookUrl,
                 leg: {
@@ -22952,7 +23085,13 @@ var telnyx_default = router33;
 // src/routes/telnyx.ts
 var router34 = (0, import_express35.Router)();
 router34.use((req2, res, next) => {
-  if (req2.path === "/webhooks" || req2.path.startsWith("/webhooks/")) {
+  const path11 = req2.path || "";
+  const originalUrl = req2.originalUrl || "";
+  const isWebhook = path11 === "/webhooks" || path11.startsWith("/webhooks/") || originalUrl.includes("/api/telnyx/webhooks");
+  if (isWebhook) {
+    if (process.env.TELNYX_DEBUG_WEBHOOKS === "1") {
+      console.log("\u{1F9F7} [Telnyx Webhook Debug] bypass auth", { path: path11, originalUrl });
+    }
     return next();
   }
   return authMiddleware(req2, res, (err) => {
@@ -34902,6 +35041,11 @@ function buildResponseFromColumns(node) {
     text_helpTooltipType: node.text_helpTooltipType,
     text_helpTooltipText: node.text_helpTooltipText,
     text_helpTooltipImage: node.text_helpTooltipImage,
+    // 🎯 AI Measure columns - MUST be included in API responses
+    aiMeasure_enabled: node.aiMeasure_enabled ?? false,
+    aiMeasure_autoTrigger: node.aiMeasure_autoTrigger ?? true,
+    aiMeasure_prompt: node.aiMeasure_prompt || null,
+    aiMeasure_keys: node.aiMeasure_keys || null,
     tables: node.TreeBranchLeafNodeTable || [],
     sharedReferenceIds: node.sharedReferenceIds || void 0
   };
@@ -38931,11 +39075,23 @@ var updateOrMoveNode = async (req2, res) => {
         console.warn("[updateOrMoveNode] \u{1F5D1}\uFE0F Suppression explicite de metadata.repeater car repeater_templateNodeIds = NULL");
       }
     }
+    console.log("\u{1F50D} [updateOrMoveNode] Sauvegarde AI Measure - donn\xE9es envoy\xE9es:", {
+      aiMeasure_enabled: updateObj.aiMeasure_enabled,
+      aiMeasure_autoTrigger: updateObj.aiMeasure_autoTrigger,
+      aiMeasure_prompt: updateObj.aiMeasure_prompt,
+      aiMeasure_keys: updateObj.aiMeasure_keys
+    });
     await prisma31.treeBranchLeafNode.update({
       where: { id: nodeId },
       data: { ...updateObj, updatedAt: /* @__PURE__ */ new Date() }
     });
     const updatedNode = await prisma31.treeBranchLeafNode.findFirst({ where: { id: nodeId, treeId } });
+    console.log("\u{1F50D} [updateOrMoveNode] Sauvegarde AI Measure - donn\xE9es relues:", {
+      aiMeasure_enabled: updatedNode?.aiMeasure_enabled,
+      aiMeasure_autoTrigger: updatedNode?.aiMeasure_autoTrigger,
+      aiMeasure_prompt: updatedNode?.aiMeasure_prompt,
+      aiMeasure_keys: updatedNode?.aiMeasure_keys
+    });
     const responseData = updatedNode ? buildResponseFromColumns2(updatedNode) : updatedNode;
     return res.json(responseData);
   } catch (error) {

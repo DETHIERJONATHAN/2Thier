@@ -111,6 +111,7 @@ const TBLImageFieldWithAI: React.FC<TBLImageFieldWithAIProps> = ({
   
   // 🔒 PERSISTANCE MOBILE: Clé unique pour ce champ
   const smartCameraSessionKey = `smartcamera_open_${nodeId}`;
+  const annotatedImageStorageKey = `tbl_image_annot_${nodeId}`;
   
   // États pour les modaux SmartCamera - avec restauration depuis sessionStorage
   const [showSmartCamera, setShowSmartCamera] = useState(() => {
@@ -150,6 +151,7 @@ const TBLImageFieldWithAI: React.FC<TBLImageFieldWithAIProps> = ({
   const [savedAnnotations, setSavedAnnotations] = useState<ImageAnnotations | null>(null);
   const [savedMeasurements, setSavedMeasurements] = useState<MeasurementResults | null>(null);
   const [isAnalyzingReference, setIsAnalyzingReference] = useState(false);
+  const [forceRenderKey, setForceRenderKey] = useState(0); // Force re-render when restoring image
   
   // 🆕 État pour le modal plein écran
   const [showFullscreenImage, setShowFullscreenImage] = useState(false);
@@ -157,6 +159,25 @@ const TBLImageFieldWithAI: React.FC<TBLImageFieldWithAIProps> = ({
   // 🔒 Cache anti-doublons pour limiter les updates backend inutiles
   const lastAppliedMeasurementsRef = useRef<Record<string, number | string> | null>(null);
   const lastAppliedImageRef = useRef<string | null>(null);
+  
+  // 🔍 LOG ENTRÉE COMPOSANT
+  useEffect(() => {
+    const valueSummary = (() => {
+      if (value === null) return 'NULL';
+      if (value === undefined) return 'UNDEFINED';
+      if (typeof value === 'string') {
+        if (value.startsWith('data:')) return `data:URL (${(value.length / 1024).toFixed(2)}KB)`;
+        return `string (${value.length}chars)`;
+      }
+      if (typeof value === 'object') {
+        const keys = Object.keys(value as any);
+        return `object {${keys.join(', ')}}`;
+      }
+      return typeof value;
+    })();
+    console.log(`📸 [TBLImageFieldWithAI] MOUNTED (nodeId=${nodeId})`);
+    console.log(`   value: ${valueSummary}`);
+  }, [nodeId]);
   
   // Refs pour les inputs file (galerie et caméra)
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -645,6 +666,9 @@ const TBLImageFieldWithAI: React.FC<TBLImageFieldWithAIProps> = ({
    * Sauvegarde l'image AVEC les annotations pour pouvoir la revoir
    */
   const handleMeasurementsComplete = useCallback((measurements: MeasurementResults, annotations?: ImageAnnotations) => {
+    console.log('═══════════════════════════════════════════════════════════');
+    console.log('[TBLImageFieldWithAI] 🎯 HANDLER MEASUREMENTS COMPLETE APPELÉ');
+    console.log('═══════════════════════════════════════════════════════════');
     console.log('[TBLImageFieldWithAI] 📐 Mesures extraites:', measurements);
     console.log('[TBLImageFieldWithAI] 🎯 Annotations reçues:', annotations ? {
       hasReferenceCorners: !!annotations.referenceCorners,
@@ -661,11 +685,54 @@ const TBLImageFieldWithAI: React.FC<TBLImageFieldWithAIProps> = ({
     const nextImageValue = nextAnnotatedImageUrl || processedImageUrl;
 
     if (nextImageValue) {
-      if (lastAppliedImageRef.current !== nextImageValue) {
-        onChange(nextImageValue);
-        lastAppliedImageRef.current = nextImageValue;
-      }
       setAnnotatedImageUrl(nextAnnotatedImageUrl || processedImageUrl);
+      
+      // 🔒 ESSENTIEL: Persister l'image annotée dans sessionStorage (backend ne persiste pas l'objet {annotated, original})
+      // 🔄 IMPORTANT: Sauvegarder dans TOUS les nœuds (original + dupliqués) pour que l'image persiste partout
+      const imageToStore = nextAnnotatedImageUrl || nextImageValue;
+      try {
+        const storageKey = annotatedImageStorageKey;
+        const imageSize = imageToStore?.length || 0;
+        console.log('[TBLImageFieldWithAI] 💾 SAVE sessionStorage');
+        console.log(`   Clé: ${storageKey}`);
+        console.log(`   Taille image: ${(imageSize / 1024).toFixed(2)}KB`);
+        
+        // Sauvegarder dans la clé courante
+        sessionStorage.setItem(storageKey, imageToStore);
+        const verify = sessionStorage.getItem(storageKey);
+        console.log(`   ✅ Vérification: ${verify ? 'SAUVEGARDÉE' : 'ÉCHEC SAUVEGARDE'}`);
+        
+        // 🔄 NOUVEAU: Si ce nœud est dupliqué (suffixe -1, -2, etc.), sauvegarder AUSSI dans le nœud original
+        // Cela fait que quand on recharge, TOUS les nœuds (original + duplicata) ont l'image annotée
+        if (nodeId.match(/-\d+$/)) {
+          // C'est un nœud dupliqué, extraire l'ID original
+          const originalNodeId = nodeId.replace(/-\d+$/, '');
+          const originalStorageKey = `tbl_image_annot_${originalNodeId}`;
+          
+          try {
+            sessionStorage.setItem(originalStorageKey, imageToStore);
+            const verifyOriginal = sessionStorage.getItem(originalStorageKey);
+            console.log(`   🔄 SYNC ORIGINAL: ${originalStorageKey}`);
+            console.log(`      ✅ ${verifyOriginal ? 'SAUVEGARDÉE' : 'ÉCHEC'}`);
+          } catch (syncErr) {
+            console.warn('[TBLImageFieldWithAI] ⚠️ Erreur sync sessionStorage original:', syncErr);
+          }
+        }
+      } catch (err) {
+        console.error('[TBLImageFieldWithAI] ❌ ERREUR sessionStorage.setItem:', err);
+      }
+      
+      // 🔧 Envoyer au backend (sera rejeté/converti en string, mais on s'en fout)
+      const persistedValue = {
+        annotated: nextAnnotatedImageUrl || nextImageValue,
+        original: processedImageUrl || nextImageValue
+      };
+      const serializedKey = JSON.stringify(persistedValue);
+
+      if (lastAppliedImageRef.current !== serializedKey) {
+        onChange(persistedValue);
+        lastAppliedImageRef.current = serializedKey;
+      }
     }
     
     // Appliquer les mesures aux champs mappés
@@ -705,6 +772,131 @@ const TBLImageFieldWithAI: React.FC<TBLImageFieldWithAIProps> = ({
     // Fermer le canvas
     setShowMeasurementCanvas(false);
   }, [processedImageUrl, onChange, aiMeasure_keys, onFieldUpdate]);
+
+  // � AVANT TOUT: Copier l'image annotée si ce nœud a été dupliqué (mais pas sa clé sessionStorage)
+  // Cela arrive quand on duplique un nœud : le nouveau nodeId a une clé sessionStorage vide
+  useEffect(() => {
+    console.log(`[TBLImageFieldWithAI] 🔍 CHECK duplication (nodeId=${nodeId})`);
+    
+    // Ne chercher que SI la clé courante est vide
+    try {
+      const existing = sessionStorage.getItem(annotatedImageStorageKey);
+      if (existing) {
+        console.log('[TBLImageFieldWithAI] ✅ Image déjà présente pour ce nodeId, skip');
+        return;
+      }
+    } catch (err) {
+      console.warn('[TBLImageFieldWithAI] ⚠️ Erreur sessionStorage check:', err);
+      return;
+    }
+
+    // Chercher toutes les clés tbl_image_annot_* et trouver la plus grande (probablement l'originale)
+    const imageKeys: Array<{ key: string; size: number }> = [];
+    try {
+      for (let i = 0; i < sessionStorage.length; i++) {
+        const key = sessionStorage.key(i);
+        if (key?.startsWith('tbl_image_annot_')) {
+          const value = sessionStorage.getItem(key);
+          if (value) {
+            imageKeys.push({ key, size: value.length });
+          }
+        }
+      }
+    } catch (err) {
+      console.warn('[TBLImageFieldWithAI] ⚠️ Erreur énumération sessionStorage:', err);
+      return;
+    }
+
+    // Si on trouve UNE SEULE autre image (probable nœud original), la copier
+    if (imageKeys.length === 1) {
+      const sourceKey = imageKeys[0].key;
+      const sourceValue = sessionStorage.getItem(sourceKey);
+      
+      if (sourceValue && sourceValue.length > 10000) { // Au moins 10KB (c'est une vrai image)
+        console.log(`[TBLImageFieldWithAI] 🔄 DUPLICATION DÉTECTÉE!`);
+        console.log(`   Source: ${sourceKey} (${(sourceValue.length / 1024).toFixed(2)}KB)`);
+        console.log(`   Destination: ${annotatedImageStorageKey}`);
+        
+        try {
+          sessionStorage.setItem(annotatedImageStorageKey, sourceValue);
+          const verify = sessionStorage.getItem(annotatedImageStorageKey);
+          if (verify) {
+            console.log(`   ✅ Image copiée avec succès!`);
+            setAnnotatedImageUrl(sourceValue);
+            setForceRenderKey(k => k + 1); // Force re-render
+          }
+        } catch (err) {
+          console.error('[TBLImageFieldWithAI] ❌ ERREUR copie sessionStorage:', err);
+        }
+      }
+    }
+  }, [nodeId, annotatedImageStorageKey]); // Ran une seule fois au mount
+
+  // �📥 Hydrater l'image annotée depuis sessionStorage dès que value change (backend ne persiste que original)
+  useEffect(() => {
+    console.log('[TBLImageFieldWithAI] 📥 Hydrate effect START');
+    console.log(`   value type: ${typeof value}`);
+    console.log(`   annotatedImageStorageKey: ${annotatedImageStorageKey}`);
+
+    // Priority: sessionStorage (persiste depuis handleMeasurementsComplete) > value.annotated > value.original > value string
+    let nextAnnotated: string | null = null;
+    
+    try {
+      console.log('[TBLImageFieldWithAI] 📥 Tentative lecture sessionStorage...');
+      const fromSession = sessionStorage.getItem(annotatedImageStorageKey);
+      if (fromSession) {
+        nextAnnotated = fromSession;
+        console.log('[TBLImageFieldWithAI] ✅ Image annotée restaurée depuis sessionStorage');
+        console.log(`   Taille: ${(fromSession.length / 1024).toFixed(2)}KB`);
+      } else {
+        console.log('[TBLImageFieldWithAI] ⚠️ sessionStorage vide pour cette clé');
+      }
+    } catch (err) {
+      console.error('[TBLImageFieldWithAI] ❌ Erreur sessionStorage.getItem:', err);
+    }
+
+    // Si pas en sessionStorage, fallback sur value (objet ou string)
+    if (!nextAnnotated) {
+      console.log('[TBLImageFieldWithAI] 📥 Fallback sur value...');
+      const annotatedFromValue = typeof value === 'object' ? (value as any)?.annotated : undefined;
+      const originalFromValue = typeof value === 'object' ? (value as any)?.original : undefined;
+      nextAnnotated = annotatedFromValue || (typeof value === 'string' ? value : originalFromValue);
+      if (annotatedFromValue) console.log('[TBLImageFieldWithAI] ✅ Utilise value.annotated');
+      else if (typeof value === 'string') console.log('[TBLImageFieldWithAI] ✅ Utilise value (string)');
+      else if (originalFromValue) console.log('[TBLImageFieldWithAI] ✅ Utilise value.original');
+    }
+
+    if (nextAnnotated) {
+      console.log('[TBLImageFieldWithAI] 📥 setAnnotatedImageUrl appelé avec image restaurée');
+      console.log(`   Current state: ${annotatedImageUrl?.substring(0, 50)}`);
+      console.log(`   New value: ${nextAnnotated.substring(0, 50)}`);
+      
+      // FORCE update même si c'est la même référence
+      setAnnotatedImageUrl(prev => {
+        if (prev === nextAnnotated) {
+          console.log('[TBLImageFieldWithAI] 🔄 Image identique, forçage du re-render via key');
+          setForceRenderKey(k => k + 1); // Force re-render
+        }
+        return nextAnnotated;
+      });
+    } else {
+      console.log(`[TBLImageFieldWithAI] ⚠️ Pas d'image à restaurer`);
+    }
+  }, [value, annotatedImageStorageKey]);
+
+  // Restaurer l'image annotée après reload si le backend ne la renvoie pas (ex: champ dupliqué non persisté)
+  useEffect(() => {
+    if (annotatedImageUrl || value) return; // déjà présent
+    try {
+      const stored = sessionStorage.getItem(annotatedImageStorageKey);
+      if (stored) {
+        setAnnotatedImageUrl(stored);
+        // Ne pas forcer onChange ici pour éviter des updates silencieuses : affichage uniquement
+      }
+    } catch (err) {
+      console.warn('⚠️ [TBLImageFieldWithAI] Impossible de restaurer l\'image annotée', err);
+    }
+  }, [annotatedImageUrl, value, annotatedImageStorageKey]);
 
   /**
    * 🆕 Handler pour l'annulation du canvas de mesure
@@ -849,15 +1041,18 @@ const TBLImageFieldWithAI: React.FC<TBLImageFieldWithAIProps> = ({
         )}
         
         {/* Aperçu de l'image - CLIQUABLE pour plein écran */}
-        {(value || capturedPhotos.length > 0) && !isAnalyzingReference && (
+        {(value || capturedPhotos.length > 0 || annotatedImageUrl) && !isAnalyzingReference && (
           <div 
             style={{ position: 'relative', display: 'inline-block', cursor: 'pointer' }}
             onClick={() => setShowFullscreenImage(true)}
             title="Cliquez pour voir en plein écran"
           >
-            {/* 🎯 Afficher la meilleure photo (avec référence si disponible) */}
+            {/* 🎯 Afficher la meilleure photo (avec tracés si dispo) */}
             {(() => {
-              let imgSrc = typeof value === 'string' ? value : (value as any)?.original;
+              // Priorité: image annotée (tracés référence/mesure) quand disponible
+              const annotatedFromValue = typeof value === 'object' ? (value as any)?.annotated : undefined;
+              const originalFromValue = typeof value === 'object' ? (value as any)?.original : undefined;
+              let imgSrc = annotatedImageUrl || annotatedFromValue || (typeof value === 'string' ? value : originalFromValue);
               let hasReference = false;
               
               // Si on a des photos capturées, utiliser celle avec référence
@@ -867,14 +1062,15 @@ const TBLImageFieldWithAI: React.FC<TBLImageFieldWithAIProps> = ({
                 hasReference = !!(bestPhoto?.metadata as any)?.referenceDetected || !!(bestPhoto?.metadata as any)?.fusedCorners;
                 
                 const base64 = photoToShow.imageBase64;
-                imgSrc = base64?.startsWith('data:') 
+                imgSrc = imgSrc || (base64?.startsWith('data:') 
                   ? base64 
-                  : `data:image/jpeg;base64,${base64}`;
+                  : `data:image/jpeg;base64,${base64}`);
               }
               
               return (
                 <>
                   <img 
+                    key={`${imgSrc}-${forceRenderKey}`}
                     src={imgSrc}
                     alt="preview" 
                     style={{ 
@@ -1060,7 +1256,8 @@ const TBLImageFieldWithAI: React.FC<TBLImageFieldWithAIProps> = ({
             nodeId={nodeId}
           />
           
-          {/* 🆕 Modal de mesure interactive (canvas avec sélection de lignes) */}
+          {/* 🆕 Modal de mesure interactive (canvas avec sélection de lignes)
+              Positionné immédiatement sous le bouton "IA photo + mesure" (ordre DOM) */}
           <ImageMeasurementPreview
             visible={showMeasurementCanvas && !!processedImageUrl}
             imageUrl={processedImageUrl || ''}
@@ -1074,8 +1271,6 @@ const TBLImageFieldWithAI: React.FC<TBLImageFieldWithAIProps> = ({
             fusedCorners={(() => {
               const bestPhoto = capturedPhotos.find(p => (p.metadata as any)?.referenceDetected || (p.metadata as any)?.fusedCorners) || capturedPhotos[0];
               const fusedCornersFromMetadata = (bestPhoto?.metadata as any)?.fusedCorners;
-              // fusedCorners est déjà au format { topLeft, topRight, bottomLeft, bottomRight }
-              // avec valeurs en % depuis l'API
               if (fusedCornersFromMetadata) {
                 console.log('🎯 [TBLImageFieldWithAI] fusedCorners trouvés et passés à ImageMeasurementPreview:', fusedCornersFromMetadata);
                 return fusedCornersFromMetadata;
@@ -1099,7 +1294,9 @@ const TBLImageFieldWithAI: React.FC<TBLImageFieldWithAIProps> = ({
         destroyOnClose
       >
         {(() => {
-          let imgSrc = annotatedImageUrl || (typeof value === 'string' ? value : (value as any)?.original);
+          const annotatedFromValue = typeof value === 'object' ? (value as any)?.annotated : undefined;
+          const originalFromValue = typeof value === 'object' ? (value as any)?.original : undefined;
+          let imgSrc = annotatedImageUrl || annotatedFromValue || (typeof value === 'string' ? value : originalFromValue);
           
           // Si on a des photos capturées, utiliser la première
           if (!annotatedImageUrl && capturedPhotos.length > 0) {

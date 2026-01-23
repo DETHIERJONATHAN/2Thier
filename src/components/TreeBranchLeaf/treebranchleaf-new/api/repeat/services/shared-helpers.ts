@@ -384,6 +384,11 @@ export function buildResponseFromColumns(node: any): Record<string, unknown> {
     text_helpTooltipType: node.text_helpTooltipType,
     text_helpTooltipText: node.text_helpTooltipText,
     text_helpTooltipImage: node.text_helpTooltipImage,
+    // 🎯 AI Measure columns - MUST be included in API responses
+    aiMeasure_enabled: node.aiMeasure_enabled ?? false,
+    aiMeasure_autoTrigger: node.aiMeasure_autoTrigger ?? true,
+    aiMeasure_prompt: node.aiMeasure_prompt || null,
+    aiMeasure_keys: node.aiMeasure_keys || null,
     tables: node.TreeBranchLeafNodeTable || [],
     sharedReferenceIds: node.sharedReferenceIds || undefined
   } as Record<string, unknown>;

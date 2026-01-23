@@ -3516,12 +3516,28 @@ const updateOrMoveNode = async (req, res) => {
       }
     }
     
+    // 🔍 DEBUG AI MEASURE: Log avant sauvegarde
+    console.log('🔍 [updateOrMoveNode] Sauvegarde AI Measure - données envoyées:', {
+      aiMeasure_enabled: updateObj.aiMeasure_enabled,
+      aiMeasure_autoTrigger: updateObj.aiMeasure_autoTrigger,
+      aiMeasure_prompt: updateObj.aiMeasure_prompt,
+      aiMeasure_keys: updateObj.aiMeasure_keys
+    });
+
     await prisma.treeBranchLeafNode.update({
       where: { id: nodeId },
       data: { ...(updateObj as Prisma.TreeBranchLeafNodeUpdateInput), updatedAt: new Date() }
     });
 
     const updatedNode = await prisma.treeBranchLeafNode.findFirst({ where: { id: nodeId, treeId } });
+    
+    // 🔍 DEBUG AI MEASURE: Log après lecture
+    console.log('🔍 [updateOrMoveNode] Sauvegarde AI Measure - données relues:', {
+      aiMeasure_enabled: updatedNode?.aiMeasure_enabled,
+      aiMeasure_autoTrigger: updatedNode?.aiMeasure_autoTrigger,
+      aiMeasure_prompt: updatedNode?.aiMeasure_prompt,
+      aiMeasure_keys: updatedNode?.aiMeasure_keys
+    });
     
     
     const responseData = updatedNode ? buildResponseFromColumns(updatedNode) : updatedNode;

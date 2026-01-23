@@ -259,6 +259,7 @@ export const ImageMeasurementPreview: React.FC<ImageMeasurementPreviewProps> = (
   const [calibration, setCalibration] = useState<CalibrationData | null>(null);
   const [suggestedPoints, setSuggestedPoints] = useState<MeasurementPoint[]>([]);
   const [measurements, setMeasurements] = useState<MeasurementResults>({});
+  const [finalAnnotations, setFinalAnnotations] = useState<ImageAnnotations | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [referenceDetected, setReferenceDetected] = useState<{
     found: boolean;
@@ -278,6 +279,7 @@ export const ImageMeasurementPreview: React.FC<ImageMeasurementPreviewProps> = (
       console.log('🔄 [Preview] RESET: Composant visible, réinitialisation des états');
       setHasInitialized(false);
       setStep('loading');
+      setFinalAnnotations(null);
       // 🔄 Incrémenter la clé de session pour forcer le re-render
       setSessionKey(prev => prev + 1);
     }
@@ -452,6 +454,29 @@ export const ImageMeasurementPreview: React.FC<ImageMeasurementPreviewProps> = (
   // HANDLERS
   // ============================================================================
 
+  const orderPointsForPolygon = useCallback((pts: MeasurementPoint[]) => {
+    if (pts.length === 0) return [] as MeasurementPoint[];
+    if (pts.length <= 2) return [...pts];
+
+    const centroidX = pts.reduce((sum, p) => sum + p.x, 0) / pts.length;
+    const centroidY = pts.reduce((sum, p) => sum + p.y, 0) / pts.length;
+
+    const sortedByAngle = [...pts].sort((a, b) => {
+      const angleA = Math.atan2(a.y - centroidY, a.x - centroidX);
+      const angleB = Math.atan2(b.y - centroidY, b.x - centroidX);
+      return angleA - angleB;
+    });
+
+    const startIndex = sortedByAngle.reduce((bestIdx, point, idx, arr) => {
+      const best = arr[bestIdx];
+      if (point.y < best.y) return idx;
+      if (point.y === best.y && point.x < best.x) return idx;
+      return bestIdx;
+    }, 0);
+
+    return [...sortedByAngle.slice(startIndex), ...sortedByAngle.slice(0, startIndex)];
+  }, []);
+
   const handleValidate = useCallback(async () => {
     try {
       setStep('measuring');
@@ -510,6 +535,8 @@ export const ImageMeasurementPreview: React.FC<ImageMeasurementPreviewProps> = (
         
         // Mettre à jour les mesures
         setMeasurements(finalMeasurements);
+        setFinalAnnotations(null);
+        setStep('complete');
         
         onComplete(finalMeasurements, {
           nodeId,
@@ -530,6 +557,7 @@ export const ImageMeasurementPreview: React.FC<ImageMeasurementPreviewProps> = (
   }, [measurements, calibration, nodeId, imageUrl, suggestedPoints, onComplete, measureKeys, imageBase64, mimeType, api, referenceConfig]);
 
   const handleAdjust = useCallback(() => {
+    setFinalAnnotations(null);
     setStep('adjusting');
   }, []);
 
@@ -538,6 +566,8 @@ export const ImageMeasurementPreview: React.FC<ImageMeasurementPreviewProps> = (
     console.log(`   largeur_cm = ${annotations.measurements.largeur_cm}`);
     console.log(`   hauteur_cm = ${annotations.measurements.hauteur_cm}`);
     setMeasurements(annotations.measurements);
+    setFinalAnnotations(annotations);
+    setStep('complete');
     onComplete(annotations.measurements, annotations);
   }, [onComplete]);
 
@@ -555,6 +585,15 @@ export const ImageMeasurementPreview: React.FC<ImageMeasurementPreviewProps> = (
   const currentStepIndex = 
     step === 'loading' || step === 'calibrating' ? 0 :
     step === 'measuring' ? 1 : 2;
+
+  const overlayPoints = orderPointsForPolygon(finalAnnotations?.measurementPoints || []);
+  const overlayPolyline = overlayPoints.map(p => `${p.x},${p.y}`).join(' ');
+  const overlayWidth = finalAnnotations?.imageDimensions?.width ?? (overlayPoints.length ? Math.max(...overlayPoints.map(p => p.x)) + 20 : undefined);
+  const overlayHeight = finalAnnotations?.imageDimensions?.height ?? (overlayPoints.length ? Math.max(...overlayPoints.map(p => p.y)) + 20 : undefined);
+  const viewBoxWidth = overlayWidth || 1000;
+  const viewBoxHeight = overlayHeight || 1000;
+  const annotatedImageSrc = finalAnnotations?.annotatedImageUrl || imageUrl;
+  const showSvgOverlay = overlayPoints.length >= 2 && !finalAnnotations?.annotatedImageUrl;
 
   // 📱 MOBILE FULLSCREEN MODE - Version améliorée avec pinch-to-zoom et menu flottant
   // IMPORTANT: Cette version utilise le canvas complet pour supporter la sélection de référence
@@ -682,14 +721,32 @@ export const ImageMeasurementPreview: React.FC<ImageMeasurementPreviewProps> = (
           <Card size="small" style={{ marginBottom: 16 }}>
             <div style={{ position: 'relative', display: 'inline-block' }}>
               <img
-                src={imageUrl}
+                src={annotatedImageSrc}
                 alt="Preview"
                 style={{
                   maxWidth: '100%',
                   maxHeight: 400,
+                  width: '100%',
                   borderRadius: 8
                 }}
               />
+              {showSvgOverlay && (
+                <svg
+                  viewBox={`0 0 ${viewBoxWidth} ${viewBoxHeight}`}
+                  style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', pointerEvents: 'none' }}
+                  preserveAspectRatio="xMidYMid meet"
+                >
+                  <polyline
+                    points={overlayPolyline}
+                    fill="none"
+                    stroke="#1890ff"
+                    strokeWidth={2}
+                  />
+                  {overlayPoints.map(p => (
+                    <circle key={`overlay-${p.id}`} cx={p.x} cy={p.y} r={5} fill="#faad14" stroke="#fff" strokeWidth={1.5} />
+                  ))}
+                </svg>
+              )}
               {/* Indicateur de calibration */}
               {calibration?.detectedAutomatically && (
                 <Tag

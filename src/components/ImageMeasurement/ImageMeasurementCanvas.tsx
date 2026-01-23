@@ -310,6 +310,31 @@ export const ImageMeasurementCanvas: React.FC<ImageMeasurementCanvasProps> = ({
 
   // Colors from config
   const colors = DEFAULT_CANVAS_CONFIG.colors;
+  
+  // 🔄 Garder un ordre cohérent pour relier tous les points (évite les points orphelins)
+  const orderedPoints = useMemo(() => {
+    if (points.length === 0) return [] as MeasurementPoint[];
+    if (points.length <= 2) return [...points];
+
+    const centroidX = points.reduce((sum, p) => sum + p.x, 0) / points.length;
+    const centroidY = points.reduce((sum, p) => sum + p.y, 0) / points.length;
+
+    const sortedByAngle = [...points].sort((a, b) => {
+      const angleA = Math.atan2(a.y - centroidY, a.x - centroidX);
+      const angleB = Math.atan2(b.y - centroidY, b.x - centroidX);
+      return angleA - angleB;
+    });
+
+    // Démarrer par le point le plus en haut à gauche pour limiter les sauts visuels
+    const startIndex = sortedByAngle.reduce((bestIdx, point, idx, arr) => {
+      const best = arr[bestIdx];
+      if (point.y < best.y) return idx;
+      if (point.y === best.y && point.x < best.x) return idx;
+      return bestIdx;
+    }, 0);
+
+    return [...sortedByAngle.slice(startIndex), ...sortedByAngle.slice(0, startIndex)];
+  }, [points]);
 
   // ============================================================================
   // 🆕 EDGE DETECTION - Détection de contours locale pour snapper aux vrais bords
@@ -1592,12 +1617,17 @@ export const ImageMeasurementCanvas: React.FC<ImageMeasurementCanvasProps> = ({
     incertitude_largeur_cm?: number;
     incertitude_hauteur_cm?: number;
     homography_quality?: number;
+    _poly_surface_cm2?: number;
+    _poly_perimetre_cm?: number;
   } => {
     if (points.length < 2) return {};
+
+    // Utiliser un ordre cohérent pour tous les calculs (évite les croisements)
+    const polygonPoints = orderedPoints.length ? orderedPoints : points;
     
     // 🔧 CRITICAL: Vérifier que les points sont dans des dimensions cohérentes avec l'image
-    const maxPointX = Math.max(...points.map(p => p.x));
-    const maxPointY = Math.max(...points.map(p => p.y));
+    const maxPointX = Math.max(...polygonPoints.map(p => p.x));
+    const maxPointY = Math.max(...polygonPoints.map(p => p.y));
     
     if (maxPointX > imageDimensions.width * 1.1 || maxPointY > imageDimensions.height * 1.1) {
       console.warn(`⚠️ [Canvas] Points pas encore scalés ! maxX=${maxPointX.toFixed(0)} > width=${imageDimensions.width}, maxY=${maxPointY.toFixed(0)} > height=${imageDimensions.height}`);
@@ -1626,12 +1656,17 @@ export const ImageMeasurementCanvas: React.FC<ImageMeasurementCanvasProps> = ({
     if (homographyResult && !FORCE_NO_HOMOGRAPHY) {
       console.log(`   Qualité homographie: ${homographyResult.quality.toFixed(1)}%, Incertitude: ±${homographyResult.uncertainty.toFixed(1)}%`);
     }
-    console.log(`   Points: ${points.map(p => `${p.label || p.id}(${p.x.toFixed(1)}, ${p.y.toFixed(1)})`).join(', ')}`);
+    console.log(`   Points: ${polygonPoints.map(p => `${p.label || p.id}(${p.x.toFixed(1)}, ${p.y.toFixed(1)})`).join(', ')}`);
 
-    // Pour 4 points, trouver les vrais coins
-    if (points.length >= 4) {
-      const allX = points.slice(0, 4).map(p => p.x);
-      const allY = points.slice(0, 4).map(p => p.y);
+    // Base d'échelle locale (calibration A4)
+    const effectivePixelPerCmAvg = pixelPerCmX && pixelPerCmY
+      ? (pixelPerCmX + pixelPerCmY) / 2
+      : pixelPerCm;
+
+    // Pour 4 points ou plus, trouver les coins à partir des 4 premiers (workflow actuel)
+    if (polygonPoints.length >= 4) {
+      const allX = polygonPoints.slice(0, 4).map(p => p.x);
+      const allY = polygonPoints.slice(0, 4).map(p => p.y);
       
       const minX = Math.min(...allX);
       const maxX = Math.max(...allX);
@@ -1650,7 +1685,7 @@ export const ImageMeasurementCanvas: React.FC<ImageMeasurementCanvasProps> = ({
         // Trier les 4 points pour identifier les coins :
         // - Top = les 2 points avec les plus petits Y
         // - Left = parmi top et bottom, celui avec le plus petit X
-        const sortedByY = [...points.slice(0, 4)].sort((a, b) => a.y - b.y);
+        const sortedByY = [...polygonPoints.slice(0, 4)].sort((a, b) => a.y - b.y);
         const topPoints = sortedByY.slice(0, 2).sort((a, b) => a.x - b.x); // Triés par X
         const bottomPoints = sortedByY.slice(2, 4).sort((a, b) => a.x - b.x); // Triés par X
         
@@ -1814,21 +1849,22 @@ export const ImageMeasurementCanvas: React.FC<ImageMeasurementCanvasProps> = ({
       }
       
       // Surface = largeur_cm × hauteur_cm
-      const coords: Array<[number, number]> = points.slice(0, 4).map(p => [p.x, p.y]);
+      const coords: Array<[number, number]> = polygonPoints.slice(0, 4).map(p => [p.x, p.y]);
       const areaCm2 = results.largeur_cm * results.hauteur_cm;
       results.surface_brute_cm2 = areaCm2;
       results.surface_brute_m2 = areaCm2 / 10000;
 
-      // Zones d'exclusion (utiliser pixelPerCm pour compatibilité)
-      const effectivePixelPerCm = pixelPerCm;
+      // Zones d'exclusion (utiliser pixelPerCm moyen pour compatibilité)
+      const effectivePixelPerCm = effectivePixelPerCmAvg;
       let excludedArea = 0;
       for (const zone of exclusionZones) {
+        // Approximation: zones converties avec échelle moyenne
         excludedArea += calculatePolygonArea(zone.points, effectivePixelPerCm);
       }
       results.surface_nette_cm2 = areaCm2 - excludedArea;
       results.surface_nette_m2 = (areaCm2 - excludedArea) / 10000;
 
-      // Perimeter
+      // Perimeter sur les 4 coins actuels
       let perimeter = 0;
       for (let i = 0; i < coords.length; i++) {
         const j = (i + 1) % coords.length;
@@ -1841,29 +1877,95 @@ export const ImageMeasurementCanvas: React.FC<ImageMeasurementCanvasProps> = ({
       results.diagonale_cm = calculateDistance(coords[0], coords[2], effectivePixelPerCm);
     }
 
+    // 🔄 Si plus de 4 points (ou polygone libre), recalculer surface/périmètre sur TOUT le polygone
+    if (polygonPoints.length >= 3) {
+      const polyCoords: Array<[number, number]> = polygonPoints.map(p => [p.x, p.y]);
+
+      // BBox du polygone (utile uniquement si backend L/H absent)
+      const minPx = Math.min(...polygonPoints.map(p => p.x));
+      const maxPx = Math.max(...polygonPoints.map(p => p.x));
+      const minPy = Math.min(...polygonPoints.map(p => p.y));
+      const maxPy = Math.max(...polygonPoints.map(p => p.y));
+      const widthPx = maxPx - minPx;
+      const heightPx = maxPy - minPy;
+
+      // Échelle: ne pas la ré-inférer depuis la bbox quand le backend fournit L/H
+      const inferredPixelPerCmX = pixelPerCmX || effectivePixelPerCmAvg;
+      const inferredPixelPerCmY = pixelPerCmY || effectivePixelPerCmAvg;
+      const effectivePixelPerCm = (inferredPixelPerCmX + inferredPixelPerCmY) / 2;
+
+      // Largeur/hauteur: prioriser backend si présent, sinon bbox/echelle locale
+      results.largeur_cm = backendMeasurements?.largeur_cm ?? (widthPx / inferredPixelPerCmX);
+      results.hauteur_cm = backendMeasurements?.hauteur_cm ?? (heightPx / inferredPixelPerCmY);
+      results.incertitude_largeur_cm = results.largeur_cm ? results.largeur_cm * 0.05 : undefined;
+      results.incertitude_hauteur_cm = results.hauteur_cm ? results.hauteur_cm * 0.05 : undefined;
+
+      // Aire anisotrope: utiliser px/cm séparés X/Y pour éviter l'erreur d'échelle
+      let areaPx = 0;
+      for (let i = 0; i < polyCoords.length; i++) {
+        const j = (i + 1) % polyCoords.length;
+        areaPx += polyCoords[i][0] * polyCoords[j][1];
+        areaPx -= polyCoords[j][0] * polyCoords[i][1];
+      }
+      areaPx = Math.abs(areaPx) / 2;
+      const areaCm2 = areaPx / (inferredPixelPerCmX * inferredPixelPerCmY);
+      results.surface_brute_cm2 = areaCm2;
+      results.surface_brute_m2 = areaCm2 / 10000;
+      results._poly_surface_cm2 = areaCm2;
+
+      let excludedArea = 0;
+      for (const zone of exclusionZones) {
+        excludedArea += calculatePolygonArea(zone.points, effectivePixelPerCm);
+      }
+      results.surface_nette_cm2 = areaCm2 - excludedArea;
+      results.surface_nette_m2 = (areaCm2 - excludedArea) / 10000;
+
+      // Périmètre anisotrope: convertir séparément en cm sur X/Y avant hypot
+      let perimeter = 0;
+      for (let i = 0; i < polyCoords.length; i++) {
+        const j = (i + 1) % polyCoords.length;
+        const dxCm = (polyCoords[j][0] - polyCoords[i][0]) / inferredPixelPerCmX;
+        const dyCm = (polyCoords[j][1] - polyCoords[i][1]) / inferredPixelPerCmY;
+        perimeter += Math.hypot(dxCm, dyCm);
+      }
+      results.perimetre_cm = perimeter;
+      results.perimetre_m = perimeter / 100;
+      results._poly_perimetre_cm = perimeter;
+    }
+
     return results;
-  }, [points, exclusionZones, pixelPerCm, pixelPerCmX, pixelPerCmY, imageDimensions, useHomography, homographyResult, referenceCorners]);
+  }, [points, orderedPoints, exclusionZones, pixelPerCm, pixelPerCmX, pixelPerCmY, imageDimensions, useHomography, homographyResult, referenceCorners, backendMeasurements]);
 
   // Notify parent of measurement changes
   // 🎯 PRIORITÉ ABSOLUE: UNIQUEMENT les mesures BACKEND (RANSAC + FORMULE 1 fusionnées)
   useEffect(() => {
     // 🚀 MODE BACKEND ONLY: Attendre les mesures du backend
     if (backendMeasurements && backendMeasurements.largeur_cm > 0) {
-      // ✅ UTILISER UNIQUEMENT LE BACKEND
+      // ✅ UTILISER LE BACKEND pour L/H mais garder les surfaces/périmètres réels du polygone si dispo
       const backendResults: MeasurementResults = {
         ...measurements,
         largeur_cm: backendMeasurements.largeur_cm,
         hauteur_cm: backendMeasurements.hauteur_cm,
         incertitude_largeur_cm: backendMeasurements.incertitude_largeur_cm,
         incertitude_hauteur_cm: backendMeasurements.incertitude_hauteur_cm,
-        surface_m2: (backendMeasurements.largeur_cm * backendMeasurements.hauteur_cm) / 10000,
-        perimetre_cm: 2 * (backendMeasurements.largeur_cm + backendMeasurements.hauteur_cm),
-        perimetre_m: 2 * (backendMeasurements.largeur_cm + backendMeasurements.hauteur_cm) / 100,
+        // Surface: préférer la surface polygone si calculée, sinon rectangle backend
+        surface_brute_cm2: measurements._poly_surface_cm2 || (backendMeasurements.largeur_cm * backendMeasurements.hauteur_cm),
+        surface_brute_m2: measurements._poly_surface_cm2 ? measurements._poly_surface_cm2 / 10000 : (backendMeasurements.largeur_cm * backendMeasurements.hauteur_cm) / 10000,
+        surface_nette_cm2: measurements.surface_nette_cm2,
+        surface_nette_m2: measurements.surface_nette_m2,
+        perimetre_cm: measurements._poly_perimetre_cm || 2 * (backendMeasurements.largeur_cm + backendMeasurements.hauteur_cm),
+        perimetre_m: measurements._poly_perimetre_cm ? measurements._poly_perimetre_cm / 100 : 2 * (backendMeasurements.largeur_cm + backendMeasurements.hauteur_cm) / 100,
       };
       
-      console.log('🔔 [Canvas] ENVOI mesures BACKEND UNIQUEMENT au parent:');
+      console.log('🔔 [Canvas] ENVOI mesures BACKEND + SURFACE POLYGONE au parent:');
       console.log(`   ✅ Largeur: ${backendResults.largeur_cm?.toFixed(2)} cm`);
       console.log(`   ✅ Hauteur: ${backendResults.hauteur_cm?.toFixed(2)} cm`);
+      if (backendResults.surface_brute_m2 !== undefined) {
+        console.log(`   🟦 Surface: ${backendResults.surface_brute_m2.toFixed(3)} m²`);
+      }
+      if (backendResults.perimetre_cm !== undefined) {
+        console.log(`   📏 Périmètre: ${backendResults.perimetre_cm.toFixed(1)} cm`);
+      }
       console.log(`   📊 Méthode: ${backendMeasurements.method}`);
       
       onMeasurementsChange?.(backendResults);
@@ -3236,15 +3338,20 @@ export const ImageMeasurementCanvas: React.FC<ImageMeasurementCanvasProps> = ({
                 })}
                 
                 {/* Lignes entre les points */}
-                {points.length >= 2 && (
-                  <Line
-                    points={points.flatMap(p => [p.x, p.y])}
-                    stroke={colors.measurementLine}
-                    strokeWidth={2}
-                    closed={points.length >= 3}
-                    listening={false}
-                  />
-                )}
+                {(() => {
+                  const polygonPoints = orderedPoints;
+                  if (polygonPoints.length < 2) return null;
+
+                  return (
+                    <Line
+                      points={polygonPoints.flatMap(p => [p.x, p.y])}
+                      stroke={colors.measurementLine}
+                      strokeWidth={2}
+                      closed={polygonPoints.length >= 3}
+                      listening={false}
+                    />
+                  );
+                })()}
               </Layer>
             </Stage>
           </div>
@@ -3794,53 +3901,19 @@ export const ImageMeasurementCanvas: React.FC<ImageMeasurementCanvasProps> = ({
 
             {/* Le rectangle de référence est maintenant rendu à la fin pour être au-dessus */}
 
-            {/* Measurement lines between points - ORDRE CORRECT: A→B→D→C→A pour rectangle */}
-            {points.length >= 4 && (() => {
-              // Réorganiser les points pour éviter les croisements
-              // On veut: haut-gauche → haut-droit → bas-droit → bas-gauche
-              const sortedPoints = [...points].slice(0, 4);
-              
-              // Trier par Y d'abord (haut vs bas), puis par X (gauche vs droite)
-              const topPoints = sortedPoints
-                .map((p, i) => ({ ...p, originalIndex: i }))
-                .sort((a, b) => a.y - b.y)
-                .slice(0, 2)
-                .sort((a, b) => a.x - b.x);
-              const bottomPoints = sortedPoints
-                .map((p, i) => ({ ...p, originalIndex: i }))
-                .sort((a, b) => a.y - b.y)
-                .slice(2, 4)
-                .sort((a, b) => a.x - b.x);
-              
-              // Ordre: haut-gauche, haut-droit, bas-droit, bas-gauche (sens horaire)
-              const orderedPoints = [
-                topPoints[0],     // A - haut gauche
-                topPoints[1],     // B - haut droit
-                bottomPoints[1],  // D - bas droit
-                bottomPoints[0]   // C - bas gauche
-              ];
-              
+            {/* Lignes entre tous les points (ordre cohérent par angle) */}
+            {(() => {
+              if (orderedPoints.length < 2) return null;
               return (
                 <Line
-                  points={orderedPoints.flatMap(p => [p.x, p.y]).concat([orderedPoints[0].x, orderedPoints[0].y])}
+                  points={orderedPoints.flatMap(p => [p.x, p.y])}
                   stroke={colors.measurementLine}
                   strokeWidth={1}
                   dash={[3, 3]}
-                  closed
+                  closed={orderedPoints.length >= 3}
                 />
               );
             })()}
-            
-            {/* Lignes pour 2-3 points */}
-            {points.length >= 2 && points.length < 4 && (
-              <Line
-                points={points.flatMap(p => [p.x, p.y]).concat([points[0].x, points[0].y])}
-                stroke={colors.measurementLine}
-                strokeWidth={1}
-                dash={[3, 3]}
-                closed
-              />
-            )}
 
             {/* Exclusion zones */}
             {exclusionZones.map(zone => (
@@ -4480,9 +4553,11 @@ export const ImageMeasurementCanvas: React.FC<ImageMeasurementCanvasProps> = ({
             )}
             {measurements.surface_brute_m2 !== undefined && (
               <Tag color="green">Surface brute : {(
-                backendMeasurements 
+                measurements.surface_brute_m2 !== undefined
+                  ? measurements.surface_brute_m2
+                  : backendMeasurements
                   ? (backendMeasurements.largeur_cm * backendMeasurements.hauteur_cm / 10000)
-                  : measurements.surface_brute_m2
+                  : 0
               ).toFixed(2)} m²</Tag>
             )}
             {measurements.surface_nette_m2 !== undefined && exclusionZones.length > 0 && (

@@ -107,10 +107,23 @@ const AIMeasurePanel: React.FC<AIMeasurePanelProps> = ({
       try {
         setLoading(true);
 
-        const response = await api.get(`/api/treebranchleaf/nodes/${nodeId}/full`);
-        const node = response?.node || response?.data || response;
+        // 🔧 FIX: Utiliser GET /nodes/:nodeId (simple) au lieu de /full
+        // Le endpoint /full retourne { nodes: [...] } alors qu'on veut juste 1 nœud
+        const response = await api.get(`/api/treebranchleaf/nodes/${nodeId}`);
+        const node = response?.data || response;
+        
+        // 🔍 DEBUG: Voir ce que le backend retourne vraiment
+        console.log('📊 [AIMeasurePanel] Réponse backend simple GET:', {
+          nodeKeys: node ? Object.keys(node).filter(k => k.startsWith('aiMeasure_')) : [],
+          aiMeasure_enabled: node?.aiMeasure_enabled,
+          aiMeasure_autoTrigger: node?.aiMeasure_autoTrigger,
+          aiMeasure_prompt: node?.aiMeasure_prompt,
+          aiMeasure_keys: node?.aiMeasure_keys
+        });
 
-        if (node?.aiMeasure_keys || node?.aiMeasure_prompt || node?.aiMeasure_enabled !== undefined) {
+        // 🔧 IMPORTANT: Charger depuis les colonnes dédiées EN PRIORITÉ
+        // Contrairement au metadata.aiMeasure, les colonnes dédiées sont toujours là après save
+        if (node?.aiMeasure_enabled !== undefined || node?.aiMeasure_prompt !== undefined || node?.aiMeasure_keys !== undefined || node?.aiMeasure_autoTrigger !== undefined) {
           const loadedConfig: AIMeasureConfig = {
             enabled: node.aiMeasure_enabled ?? false,
             autoTrigger: node.aiMeasure_autoTrigger ?? true,
