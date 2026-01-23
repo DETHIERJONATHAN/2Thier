@@ -7,12 +7,12 @@ import express from 'express';
 import fs from 'fs';
 import path from 'path';
 import { authMiddleware, type AuthenticatedRequest } from '../middlewares/auth';
-import GoogleGeminiService from '../services/GoogleGeminiService';
+import { getGeminiService } from '../services/GoogleGeminiService';
 import { prisma } from '../lib/prisma';
 import { randomUUID } from 'crypto';
 
-// Instance unique réutilisable (évite recréations coûteuses)
-const geminiSingleton = new GoogleGeminiService();
+// Instance unique réutilisable via singleton global
+const geminiSingleton = getGeminiService();
 
 const router = express.Router();
 

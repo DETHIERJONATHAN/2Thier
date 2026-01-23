@@ -7,11 +7,11 @@ import { Router } from 'express';
 import { rateLimit } from 'express-rate-limit';
 import { body, validationResult } from 'express-validator';
 import { db } from '../lib/database';
-import { GoogleGeminiService } from '../services/GoogleGeminiService.js';
+import { getGeminiService } from '../services/GoogleGeminiService.js';
 
 const router = Router();
 const prisma = db;
-const geminiService = new GoogleGeminiService();
+const geminiService = getGeminiService();
 
 // Configuration rate limiting pour l'API publique
 const publicRateLimit = rateLimit({

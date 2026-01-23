@@ -187,12 +187,16 @@ const prodOrigins = [
   FRONTEND_URL || 'https://app.2thier.be',
   'https://www.2thier.be',
   'https://crm.2thier.be',
+  'http://localhost:4000',  // Mode production local
   /\.run\.app$/,       // Google Cloud Run
-  /\.appspot\.com$/    // Google App Engine
+  /\.appspot\.com$/,   // Google App Engine
+  /^https:\/\/.*\.app\.github\.dev$/,  // GitHub Codespaces (toutes URLs)
+  /^https:\/\/.*-\d+\.app\.github\.dev$/  // GitHub Codespaces avec port
 ];
 const devOrigins = [
   FRONTEND_URL || 'http://localhost:5173', 
   'http://localhost:3000',
+  'http://localhost:4000',  // Mode production local
   /^https:\/\/.*\.app\.github\.dev$/,  // GitHub Codespaces (toutes URLs)
   /^https:\/\/.*-\d+\.app\.github\.dev$/  // GitHub Codespaces avec port
 ];

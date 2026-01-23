@@ -736,9 +736,9 @@ function generateFallbackPalettes(baseColor: string): any[] {
 // 📐 ANALYSE D'IMAGE AVEC IA - MESURES ET EXTRACTION
 // =============================================================================
 
-import GoogleGeminiService from '../services/GoogleGeminiService';
+import { getGeminiService } from '../services/GoogleGeminiService';
 
-const geminiMeasureService = new GoogleGeminiService();
+const geminiMeasureService = getGeminiService();
 
 /**
  * POST /api/ai/measure-image

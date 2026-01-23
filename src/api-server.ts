@@ -773,4 +773,40 @@ app.delete('/api/treebranchleaf/nodes/:nodeId/formulas/:formulaId', async (req, 
   }
 });
 
+// =============================================================================
+// 🌐 SERVIR LE FRONTEND EN MODE PRODUCTION
+// =============================================================================
+const isProduction = process.env.NODE_ENV === 'production';
+const distPath = path.resolve(process.cwd(), 'dist');
+
+if (fs.existsSync(distPath)) {
+  console.log('📦 [STATIC] Serving frontend from:', distPath);
+  
+  // Servir les fichiers statiques (JS, CSS, images)
+  app.use(express.static(distPath));
+  
+  // 🎯 FALLBACK SPA: Toutes les routes non-API renvoient index.html
+  // Cela permet à React Router de gérer les routes côté client
+  app.get('*', (req, res, next) => {
+    // Ne pas intercepter les routes API
+    if (req.path.startsWith('/api/') || 
+        req.path.startsWith('/health') || 
+        req.path.startsWith('/uploads/')) {
+      return next();
+    }
+    
+    const indexPath = path.join(distPath, 'index.html');
+    if (fs.existsSync(indexPath)) {
+      console.log(`🔀 [SPA] Fallback to index.html for: ${req.path}`);
+      res.sendFile(indexPath);
+    } else {
+      next();
+    }
+  });
+  
+  console.log('✅ [STATIC] SPA fallback configuré');
+} else {
+  console.log('⚠️ [STATIC] Dossier dist/ non trouvé - frontend non servi');
+}
+
 console.log('✅ [DEBUG] Fin du script principal');

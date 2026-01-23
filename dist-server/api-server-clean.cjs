@@ -4357,34 +4357,8 @@ init_database();
 var prisma_default = db;
 
 // src/config.prod.ts
-var config_prod_exports = {};
-__export(config_prod_exports, {
-  API_URL: () => API_URL,
-  DISABLE_DEV_FEATURES: () => DISABLE_DEV_FEATURES,
-  DISABLE_MOCK_DATA: () => DISABLE_MOCK_DATA,
-  ENABLE_API_LOGS: () => ENABLE_API_LOGS,
-  FORCE_REAL_DATA: () => FORCE_REAL_DATA,
-  IS_PRODUCTION: () => IS_PRODUCTION,
-  JWT_SECRET: () => JWT_SECRET,
-  SECURITY: () => SECURITY,
-  TOKEN_EXPIRY: () => TOKEN_EXPIRY
-});
-var IS_PRODUCTION = true;
 var JWT_SECRET = process.env.JWT_SECRET || "prod_secret_key_change_me";
-var TOKEN_EXPIRY = "24h";
 var API_URL = process.env.API_URL || "https://api.crmpro.com";
-var ENABLE_API_LOGS = false;
-var DISABLE_DEV_FEATURES = true;
-var DISABLE_MOCK_DATA = true;
-var FORCE_REAL_DATA = true;
-var SECURITY = {
-  REQUIRE_AUTH: true,
-  // Toujours exiger une authentification
-  VALIDATE_TOKENS: true,
-  // Valider les tokens JWT
-  ENFORCE_PERMISSIONS: true
-  // Appliquer strictement les permissions
-};
 
 // src/config.ts
 var import_fs2 = __toESM(require("fs"), 1);
@@ -4417,7 +4391,6 @@ var JWT_SECRET2 = getJWTSecretFromConfig();
 var API_URL2 = process.env.API_URL || (isProduction ? "https://api.crmpro.com" : "");
 if (isProduction) {
   console.log("Application en mode PRODUCTION");
-  Object.assign(exports, config_prod_exports);
 } else {
   console.log("Application en mode D\xC9VELOPPEMENT");
 }
@@ -19932,11 +19905,17 @@ L'email doit \xEAtre en fran\xE7ais et adapt\xE9 au march\xE9 belge.`;
     return match ? match[1] : defaultValue;
   }
 };
-var GoogleGeminiService_default = GoogleGeminiService;
+var _geminiInstance = null;
+function getGeminiService() {
+  if (!_geminiInstance) {
+    _geminiInstance = new GoogleGeminiService();
+  }
+  return _geminiInstance;
+}
 
 // src/routes/gemini.ts
 var router32 = import_express33.default.Router();
-var geminiService = new GoogleGeminiService_default();
+var geminiService = getGeminiService();
 router32.use(authenticateToken);
 router32.post("/generate-email", async (req2, res) => {
   try {
@@ -24142,7 +24121,7 @@ var import_fs6 = __toESM(require("fs"), 1);
 var import_path5 = __toESM(require("path"), 1);
 init_prisma();
 var import_crypto15 = require("crypto");
-var geminiSingleton = new GoogleGeminiService_default();
+var geminiSingleton = getGeminiService();
 var router39 = import_express40.default.Router();
 router39.use(authMiddleware);
 var aiUsageTableEnsured = null;
@@ -53882,7 +53861,7 @@ var import_express_validator = require("express-validator");
 init_database();
 var router69 = (0, import_express70.Router)();
 var prisma40 = db;
-var geminiService2 = new GoogleGeminiService();
+var geminiService2 = getGeminiService();
 var publicRateLimit = (0, import_express_rate_limit14.rateLimit)({
   windowMs: 15 * 60 * 1e3,
   // 15 minutes
@@ -61318,7 +61297,7 @@ var import_express88 = require("express");
 var AIContentService = class {
   geminiService;
   constructor() {
-    this.geminiService = new GoogleGeminiService();
+    this.geminiService = getGeminiService();
   }
   /**
    * Option A : Génère le contenu d'un service
@@ -62262,7 +62241,7 @@ function generateFallbackPalettes(baseColor) {
     }
   ];
 }
-var geminiMeasureService = new GoogleGeminiService_default();
+var geminiMeasureService = getGeminiService();
 router87.post("/measure-image", async (req2, res) => {
   const startTime = Date.now();
   try {
@@ -62427,7 +62406,7 @@ var ai_default2 = router87;
 // src/routes/ai-field-generator.ts
 var import_express90 = __toESM(require("express"), 1);
 var router88 = import_express90.default.Router();
-var geminiService3 = new GoogleGeminiService();
+var geminiService3 = getGeminiService();
 router88.use(authMiddleware);
 var SmartPromptBuilder = class {
   /**
@@ -68947,7 +68926,7 @@ async function detectWebsite(req2, res, next) {
     if (!isProduction3) {
       console.log(`\u{1F310} [WEBSITE-DETECTION] Recherche site pour: ${cleanDomain}`);
     }
-    const website = await db.webSite.findFirst({
+    const website = await db.websites.findFirst({
       where: {
         OR: [
           { domain: cleanDomain },
@@ -68957,8 +68936,8 @@ async function detectWebsite(req2, res, next) {
         isActive: true
       },
       include: {
-        config: true,
-        sections: {
+        website_configs: true,
+        website_sections: {
           where: { isActive: true },
           orderBy: { displayOrder: "asc" }
         }
@@ -68974,8 +68953,8 @@ async function detectWebsite(req2, res, next) {
         domain: website.domain || cleanDomain,
         name: website.siteName,
         // ← Correction: utiliser siteName au lieu de name
-        config: website.config,
-        sections: website.sections
+        config: website.website_configs,
+        sections: website.website_sections
       };
       websiteCache.set(cacheKey, { data: websiteData, timestamp: Date.now() });
       req2.websiteData = websiteData;
@@ -69357,14 +69336,22 @@ var prodOrigins = [
   FRONTEND_URL || "https://app.2thier.be",
   "https://www.2thier.be",
   "https://crm.2thier.be",
+  "http://localhost:4000",
+  // Mode production local
   /\.run\.app$/,
   // Google Cloud Run
-  /\.appspot\.com$/
+  /\.appspot\.com$/,
   // Google App Engine
+  /^https:\/\/.*\.app\.github\.dev$/,
+  // GitHub Codespaces (toutes URLs)
+  /^https:\/\/.*-\d+\.app\.github\.dev$/
+  // GitHub Codespaces avec port
 ];
 var devOrigins = [
   FRONTEND_URL || "http://localhost:5173",
   "http://localhost:3000",
+  "http://localhost:4000",
+  // Mode production local
   /^https:\/\/.*\.app\.github\.dev$/,
   // GitHub Codespaces (toutes URLs)
   /^https:\/\/.*-\d+\.app\.github\.dev$/

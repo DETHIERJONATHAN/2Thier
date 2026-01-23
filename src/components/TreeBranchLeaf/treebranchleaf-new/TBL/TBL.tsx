@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef, lazy, Suspense } from 'react';
 
 // 🎯 CSS pour astérisques verts par défaut
 import '../../../../styles/tbl-green-asterisk.css';
@@ -36,7 +36,6 @@ import { useParams, useSearchParams } from 'react-router-dom';
 import { useTreeBranchLeafConfig } from '../../hooks/useTreeBranchLeafConfig';
 import { useAuthenticatedApi } from '../../../../hooks/useAuthenticatedApi';
 import { ClientSidebar } from './components/ClientSidebar';
-import DocumentsSection from '../../../Documents/DocumentsSection';
 import TBLSectionRenderer from './components/TBLSectionRenderer';
 import { useTBLDataPrismaComplete, type TBLField, type TBLSection } from './hooks/useTBLDataPrismaComplete';
 import { useTBLDataHierarchicalFixed } from './hooks/useTBLData-hierarchical-fixed';
@@ -44,14 +43,17 @@ import { useTBLValidation } from './hooks/useTBLValidation';
 import { TBLValidationProvider, useTBLValidationContext } from './contexts/TBLValidationContext';
 import { TBLBatchProvider } from './contexts/TBLBatchContext'; // 🚀 BATCH LOADING
 import { useTBLCapabilitiesPreload } from './hooks/useTBLCapabilitiesPreload';
-import TBLDevCapabilitiesPanel from './components/Dev/TBLDevCapabilitiesPanel';
 import { dlog, isVerbose } from '../../../../utils/debug';
 import { useTBLSave, type TBLFormData } from './hooks/useTBLSave';
 import { buildMirrorKeys } from './utils/mirrorNormalization';
-import LeadSelectorModal from '../../lead-integration/LeadSelectorModal';
-import LeadCreatorModalAdvanced from '../../lead-integration/LeadCreatorModalAdvanced';
 import type { TBLLead } from '../../lead-integration/types/lead-types';
 import { useTBLSwipeNavigation } from './hooks/useTBLSwipeNavigation';
+
+// 🚀 LAZY IMPORTS - Composants chargés uniquement quand nécessaires (modals, panels dev)
+const DocumentsSection = lazy(() => import('../../../Documents/DocumentsSection'));
+const TBLDevCapabilitiesPanel = lazy(() => import('./components/Dev/TBLDevCapabilitiesPanel'));
+const LeadSelectorModal = lazy(() => import('../../lead-integration/LeadSelectorModal'));
+const LeadCreatorModalAdvanced = lazy(() => import('../../lead-integration/LeadCreatorModalAdvanced'));
 
 // Déclaration étendue pour éviter usage de any lors de l'injection diag
 declare global { interface Window { TBL_DEP_GRAPH?: Map<string, Set<string>>; TBL_FORM_DATA?: Record<string, unknown>; } }
@@ -2416,7 +2418,9 @@ const TBL: React.FC<TBLProps> = ({
                 <div className="mb-4">
                   {/* Exposer le dependencyGraph globalement pour SmartCalculatedField (lecture seule) */}
                   {(() => { try { if (typeof window !== 'undefined') { window.TBL_DEP_GRAPH = devPreload.dependencyGraph; } } catch {/* noop */} })()}
-                  <TBLDevCapabilitiesPanel preload={devPreload} />
+                  <Suspense fallback={<Skeleton active />}>
+                    <TBLDevCapabilitiesPanel preload={devPreload} />
+                  </Suspense>
                 </div>
               )}
               {/* En-tête compact avec Lead - Devis - Date */}
@@ -2618,26 +2622,28 @@ const TBL: React.FC<TBLProps> = ({
                         </Card>
                         
                         {/* Ligne 2 : Documents - horizontalement */}
-                        <DocumentsSection 
-                          submissionId={submissionId}
-                          leadId={leadId}
-                          treeId={treeId}
-                          onLoadDevis={(devisId) => handleSelectDevis(devisId)}
-                          onDeleteDevis={async (devisId, devisName) => {
-                            try {
-                              console.log('🗑️ [TBL][DELETE-DOC] Suppression du devis depuis Documents:', devisId);
-                              await api.delete(`/api/treebranchleaf/submissions/${devisId}`);
-                              console.log('✅ [TBL][DELETE-DOC] Devis supprimé avec succès');
-                              message.success(`Devis "${devisName}" supprimé avec succès`);
-                              // Recharger la liste des devis dans le modal "Charger"
-                              await handleLoadDevis();
-                            } catch (error) {
-                              console.error('❌ [TBL][DELETE-DOC] Erreur lors de la suppression:', error);
-                              message.error('Erreur lors de la suppression du devis');
-                              // Ne pas throw - laisser le modal se fermer
-                            }
-                          }}
-                        />
+                        <Suspense fallback={<Skeleton active />}>
+                          <DocumentsSection 
+                            submissionId={submissionId}
+                            leadId={leadId}
+                            treeId={treeId}
+                            onLoadDevis={(devisId) => handleSelectDevis(devisId)}
+                            onDeleteDevis={async (devisId, devisName) => {
+                              try {
+                                console.log('🗑️ [TBL][DELETE-DOC] Suppression du devis depuis Documents:', devisId);
+                                await api.delete(`/api/treebranchleaf/submissions/${devisId}`);
+                                console.log('✅ [TBL][DELETE-DOC] Devis supprimé avec succès');
+                                message.success(`Devis "${devisName}" supprimé avec succès`);
+                                // Recharger la liste des devis dans le modal "Charger"
+                                await handleLoadDevis();
+                              } catch (error) {
+                                console.error('❌ [TBL][DELETE-DOC] Erreur lors de la suppression:', error);
+                                message.error('Erreur lors de la suppression du devis');
+                                // Ne pas throw - laisser le modal se fermer
+                              }
+                            }}
+                          />
+                        </Suspense>
                       </div>
                     )
                   },
@@ -2878,38 +2884,46 @@ const TBL: React.FC<TBLProps> = ({
         </Form>
       </Modal>
 
-      {/* Modal de sélection de lead */}
-      <LeadSelectorModal
-        open={leadSelectorVisible}
-        onClose={() => {
-          // console.log('🔍 [TBL] Fermeture LeadSelectorModal');
-          setLeadSelectorVisible(false);
-        }}
-        onSelectLead={handleSelectLead}
-      />
+      {/* Modal de sélection de lead - Lazy loaded */}
+      {leadSelectorVisible && (
+        <Suspense fallback={<Spin />}>
+          <LeadSelectorModal
+            open={leadSelectorVisible}
+            onClose={() => {
+              // console.log('🔍 [TBL] Fermeture LeadSelectorModal');
+              setLeadSelectorVisible(false);
+            }}
+            onSelectLead={handleSelectLead}
+          />
+        </Suspense>
+      )}
 
-      {/* Modal de création de lead */}
-      <LeadCreatorModalAdvanced
-        open={leadCreatorVisible}
-        onClose={() => {
-          // console.log('➕ [TBL] Fermeture LeadCreatorModal');
-          setLeadCreatorVisible(false);
-        }}
-        onCreateLead={handleCreateLead}
-        onLeadCreated={(lead) => {
-          // console.log('✅ Lead créé:', lead);
-          setLeadCreatorVisible(false);
-          
-          // Si le modal de création de devis est ouvert, on met à jour le lead sélectionné
-          if (devisCreatorVisible) {
-            setSelectedLeadForDevis(lead as TBLLead);
-            message.success(`Lead créé et sélectionné : ${lead.firstName} ${lead.lastName}`);
-          } else {
-            // Sinon, comportement normal : naviguer vers le nouveau lead dans TBL
-            window.location.href = `/tbl/${lead.id}`;
-          }
-        }}
-      />
+      {/* Modal de création de lead - Lazy loaded */}
+      {leadCreatorVisible && (
+        <Suspense fallback={<Spin />}>
+          <LeadCreatorModalAdvanced
+            open={leadCreatorVisible}
+            onClose={() => {
+              // console.log('➕ [TBL] Fermeture LeadCreatorModal');
+              setLeadCreatorVisible(false);
+            }}
+            onCreateLead={handleCreateLead}
+            onLeadCreated={(lead) => {
+              // console.log('✅ Lead créé:', lead);
+              setLeadCreatorVisible(false);
+              
+              // Si le modal de création de devis est ouvert, on met à jour le lead sélectionné
+              if (devisCreatorVisible) {
+                setSelectedLeadForDevis(lead as TBLLead);
+                message.success(`Lead créé et sélectionné : ${lead.firstName} ${lead.lastName}`);
+              } else {
+                // Sinon, comportement normal : naviguer vers le nouveau lead dans TBL
+                window.location.href = `/tbl/${lead.id}`;
+              }
+            }}
+          />
+        </Suspense>
+      )}
 
       {/* Modal de sélection de devis */}
       <Modal

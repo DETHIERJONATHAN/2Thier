@@ -61,10 +61,12 @@ export const SECURITY = {
   ENFORCE_PERMISSIONS: isProduction // Toujours appliquer les permissions en production
 };
 
-// En production, utiliser la configuration de production
+// Log du mode
 if (isProduction) {
   console.log('Application en mode PRODUCTION');
-  Object.assign(exports, prodConfig);
 } else {
   console.log('Application en mode DÉVELOPPEMENT');
 }
+
+// Re-export la config prod pour usage externe si nécessaire
+export { prodConfig };

@@ -12,10 +12,10 @@
 import express from 'express';
 import { authMiddleware } from '../middlewares/auth';
 import type { AuthenticatedRequest } from '../middlewares/auth';
-import { GoogleGeminiService } from '../services/GoogleGeminiService';
+import { getGeminiService } from '../services/GoogleGeminiService';
 
 const router = express.Router();
-const geminiService = new GoogleGeminiService();
+const geminiService = getGeminiService();
 
 // Protection par authentification
 router.use(authMiddleware);

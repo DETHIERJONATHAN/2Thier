@@ -997,4 +997,15 @@ L'email doit être en français et adapté au marché belge.`;
   }
 }
 
+// 🚀 SINGLETON - Évite les multiples initialisations (6x → 1x)
+let _geminiInstance: GoogleGeminiService | null = null;
+
+export function getGeminiService(): GoogleGeminiService {
+  if (!_geminiInstance) {
+    _geminiInstance = new GoogleGeminiService();
+  }
+  return _geminiInstance;
+}
+
+// Export par défaut pour compatibilité (utiliser getGeminiService() de préférence)
 export default GoogleGeminiService;

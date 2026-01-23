@@ -4,11 +4,11 @@
  */
 
 import express from 'express';
-import GoogleGeminiService from '../services/GoogleGeminiService';
+import { getGeminiService } from '../services/GoogleGeminiService';
 import { authenticateToken } from '../middleware/auth';
 
 const router = express.Router();
-const geminiService = new GoogleGeminiService();
+const geminiService = getGeminiService();
 
 // Middleware d'authentification pour toutes les routes Gemini
 router.use(authenticateToken);

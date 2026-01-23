@@ -3,7 +3,7 @@
  * Utilise Google Gemini pour créer du contenu optimisé
  */
 
-import { GoogleGeminiService } from './GoogleGeminiService';
+import { getGeminiService, GoogleGeminiService } from './GoogleGeminiService';
 
 export interface ServiceContent {
   key: string;
@@ -51,7 +51,7 @@ export class AIContentService {
   private geminiService: GoogleGeminiService;
 
   constructor() {
-    this.geminiService = new GoogleGeminiService();
+    this.geminiService = getGeminiService();
   }
 
   /**
