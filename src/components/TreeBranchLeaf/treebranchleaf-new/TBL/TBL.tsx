@@ -3,6 +3,15 @@ import React, { useState, useEffect, useCallback, useMemo, useRef, lazy, Suspens
 // 🎯 CSS pour astérisques verts par défaut
 import '../../../../styles/tbl-green-asterisk.css';
 
+// 🚀 PERF: Debounce utility
+function debounce<T extends (...args: any[]) => any>(func: T, wait: number): (...args: Parameters<T>) => void {
+  let timeout: NodeJS.Timeout | null = null;
+  return (...args: Parameters<T>) => {
+    if (timeout) clearTimeout(timeout);
+    timeout = setTimeout(() => func(...args), wait);
+  };
+}
+
 // 🔄 Déclaration TypeScript pour la fonction de refresh
 declare global {
   interface Window {
@@ -1295,6 +1304,9 @@ const TBL: React.FC<TBLProps> = ({
     }
   }, [originalDevisName, leadId, api, effectiveTreeId, formData, normalizePayload, computeSignature, generateCopySuffix]);
 
+  // 🚀 PERF: Debounce pour éviter trop de requêtes lors de saisie rapide
+  const debouncedEvaluateRef = useRef<(...args: any[]) => void>();
+
   const handleFieldChange = useCallback((fieldId: string, value: string | number | boolean | string[] | null | undefined) => {
     console.log(`🔄🔄🔄 [TBL] handleFieldChange appelé: fieldId=${fieldId}, value=${value}`);
     
@@ -1536,13 +1548,21 @@ const TBL: React.FC<TBLProps> = ({
         }
       } catch {/* noop */}
       
-      // Planifier une autosauvegarde débouncée avec l'état "next"
-      try {
-        scheduleAutosave(next as TBLFormData);
-      } catch {/* noop */}
-      try {
-        scheduleCapabilityPreview(next as TBLFormData);
-      } catch {/* noop */}
+      // 🚀 PERF: Debounce pour scheduleAutosave et scheduleCapabilityPreview (300ms)
+      // Annuler le timer précédent si l'utilisateur tape vite
+      if (!debouncedEvaluateRef.current) {
+        debouncedEvaluateRef.current = debounce((nextData: TBLFormData) => {
+          try {
+            scheduleAutosave(nextData);
+          } catch {/* noop */}
+          try {
+            scheduleCapabilityPreview(nextData);
+          } catch {/* noop */}
+        }, 300);
+      }
+      
+      // Appeler la version debouncée
+      debouncedEvaluateRef.current(next as TBLFormData);
       
       // 🔄 NOUVEAU: Dispatch événement pour refresh automatique des display fields
       try {

@@ -20,6 +20,9 @@ import { useAuthenticatedApi } from '../../../../../hooks/useAuthenticatedApi';
 import { tblLog, tblWarn, isTBLDebugEnabled } from '../../../../../utils/tblDebug';
 import { useTBLBatch } from '../contexts/TBLBatchContext';
 
+// 🚀 PERF: Cache global pour les SelectConfig
+const selectConfigCache = new Map<string, TreeBranchLeafSelectConfig>();
+
 export interface TableLookupOption {
   value: string | number;
   label: string;
@@ -187,16 +190,38 @@ export function useTBLTableLookup(
             { suppressErrorLogForStatuses: [404] }
           );
           
+          }
+          
           console.log(`[useTBLTableLookup] 📥 Réponse PRIMARY:`, selectConfig ? `TROUVÉ - nodeId=${selectConfig.nodeId}` : 'NULL (pas trouvé ou erreur)');
           
           // Si pas trouvé et qu'on a un suffixe, essayer avec l'ID de base (l'original)
           if (!selectConfig && hasSuffix) {
             console.log(`[useTBLTableLookup] ⚠️ PRIMARY ÉCHOUÉ - Tentative fallback...`);
-            console.log(`[useTBLTableLookup] ➡️ GET /api/treebranchleaf/nodes/${baseFieldId}/select-config (fallback to base ID)`);
-            selectConfig = await api.get<TreeBranchLeafSelectConfig>(
-              `/api/treebranchleaf/nodes/${baseFieldId}/select-config`,
-              { suppressErrorLogForStatuses: [404] }
-            );
+            
+            // 🚀 PERF: Vérifier cache pour baseFieldId
+            if (selectConfigCache.has(baseFieldId)) {
+              selectConfig = selectConfigCache.get(baseFieldId)!;
+              console.log(`[useTBLTableLookup] 💾 CACHE HIT (fallback) pour ${baseFieldId}`);
+            } else {
+              console.log(`[useTBLTableLookup] ➡️ GET /api/treebranchleaf/nodes/${baseFieldId}/select-config (fallback to base ID)`);
+              selectConfig = await api.get<TreeBranchLeafSelectConfig>(
+                `/api/treebranchleaf/nodes/${baseFieldId}/select-config`,
+                { suppressErrorLogForStatuses: [404] }
+              );
+              
+              // 🚀 PERF: Cache aussi le fallback
+              if (selectConfig) {
+                selectConfigCache.set(baseFieldId, selectConfig);
+                // Cache aussi pour le fieldId suffixé pour éviter re-lookup
+                selectConfigCache.set(fieldId, selectConfig);
+                console.log(`[useTBLTableLookup] 💾 CACHE MISS (fallback) → ajouté pour ${baseFieldId} et ${fieldId}`);
+              }
+            }
+            console.log(`[useTBLTableLookup] 📥 Réponse FALLBACK:`, selectConfig ? `TROUVÉ - nodeId=${selectConfig.nodeId}` : 'NULL');
+                selectConfigCache.set(fieldId, selectConfig);
+                console.log(`[useTBLTableLookup] 💾 CACHE MISS (fallback) → ajouté pour ${baseFieldId} et ${fieldId}`);
+              }
+            }
             console.log(`[useTBLTableLookup] 📥 Réponse FALLBACK:`, selectConfig ? `TROUVÉ - nodeId=${selectConfig.nodeId}` : 'NULL');
             
             if (selectConfig) {
