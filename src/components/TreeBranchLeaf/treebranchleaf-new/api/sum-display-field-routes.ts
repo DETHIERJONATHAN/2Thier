@@ -111,7 +111,9 @@ export function registerSumDisplayFieldRoutes(router: Router): void {
         where: { id: sumFieldNodeId },
         select: { id: true, metadata: true }
       });
-
+      // 🎨 HÉRITAGE AUTOMATIQUE DE L'ICÔNE du champ source
+      const sourceNodeIcon = node.metadata?.icon || null;
+      console.log(`[SUM-DISPLAY] 🎨 Icône héritée du champ source "${node.label}": ${sourceNodeIcon || '(aucune)'}`);
       // Construire la formule de somme : @value.var1 + @value.var1-1 + @value.var1-2 ...
       const sumTokens: string[] = [];
       allCopies.forEach((copy, index) => {
@@ -162,13 +164,14 @@ export function registerSumDisplayFieldRoutes(router: Router): void {
         data_precision: mainVariable.precision,
         metadata: {
           ...(existingSumNode?.metadata as Record<string, unknown> || {}),
+          icon: sourceNodeIcon, // 🎨 HÉRITAGE: même icône que le champ source
           isSumDisplayField: true,
           sourceVariableId: mainVariable.id,
           sourceNodeId: nodeId,
           sumTokens,
           copiesCount: allCopies.length,
-          // Ã°Å¸Å¡Â« PAS de capabilities.datas ici - le frontend utilise formula_instances directement
-          // C'est le chemin qui fonctionne pour MÃ‚Â² toiture - Total
+          // 🚫 PAS de capabilities.datas ici - le frontend utilise formula_instances directement
+          // C'est le chemin qui fonctionne pour M² toiture - Total
           updatedAt: now.toISOString()
         },
         updatedAt: now
