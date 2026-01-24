@@ -170,6 +170,17 @@ export function registerSumDisplayFieldRoutes(router: Router): void {
           sourceNodeId: nodeId,
           sumTokens,
           copiesCount: allCopies.length,
+          // 🎨 HÉRITAGE ICÔNE: Ajouter l'icône dans capabilities.datas pour le frontend
+          capabilities: {
+            ...(existingSumNode?.metadata?.capabilities || {}),
+            datas: [{
+              id: `data_${sumFieldNodeId}`,
+              config: {
+                icon: sourceNodeIcon, // 🎨 L'icône doit aussi être ici pour l'affichage frontend
+                sourceRef: `node-variable:${sumFieldVariableId}`
+              }
+            }]
+          },
           // 🚫 PAS de capabilities.datas ici - le frontend utilise formula_instances directement
           // C'est le chemin qui fonctionne pour M² toiture - Total
           updatedAt: now.toISOString()

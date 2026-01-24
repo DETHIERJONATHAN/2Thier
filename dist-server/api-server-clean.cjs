@@ -4046,8 +4046,10 @@ async function evaluateVariableOperation(variableNodeId, submissionId, prisma50,
     }
   });
   if (!variable) {
+    console.error(`\u274C [VARIABLE MANQUANTE] nodeId: ${variableNodeId}`);
     throw new Error(`Variable introuvable: ${variableNodeId}`);
   }
+  console.log(`\u2705 [VARIABLE TROUV\xC9E] ${variableNodeId} \u2192 sourceRef: ${variable.sourceRef}`);
   if (variable.sourceType === "fixed" && variable.fixedValue) {
     return {
       value: variable.fixedValue,
@@ -31863,6 +31865,8 @@ function registerSumDisplayFieldRoutes(router94) {
         where: { id: sumFieldNodeId },
         select: { id: true, metadata: true }
       });
+      const sourceNodeIcon = node.metadata?.icon || null;
+      console.log(`[SUM-DISPLAY] \u{1F3A8} Ic\xF4ne h\xE9rit\xE9e du champ source "${node.label}": ${sourceNodeIcon || "(aucune)"}`);
       const sumTokens = [];
       allCopies.forEach((copy, index) => {
         if (index > 0) {
@@ -31902,13 +31906,27 @@ function registerSumDisplayFieldRoutes(router94) {
         data_precision: mainVariable.precision,
         metadata: {
           ...existingSumNode?.metadata || {},
+          icon: sourceNodeIcon,
+          // 🎨 HÉRITAGE: même icône que le champ source
           isSumDisplayField: true,
           sourceVariableId: mainVariable.id,
           sourceNodeId: nodeId,
           sumTokens,
           copiesCount: allCopies.length,
-          // Ã°Å¸Å¡Â« PAS de capabilities.datas ici - le frontend utilise formula_instances directement
-          // C'est le chemin qui fonctionne pour MÃ‚Â² toiture - Total
+          // 🎨 HÉRITAGE ICÔNE: Ajouter l'icône dans capabilities.datas pour le frontend
+          capabilities: {
+            ...existingSumNode?.metadata?.capabilities || {},
+            datas: [{
+              id: `data_${sumFieldNodeId}`,
+              config: {
+                icon: sourceNodeIcon,
+                // 🎨 L'icône doit aussi être ici pour l'affichage frontend
+                sourceRef: `node-variable:${sumFieldVariableId}`
+              }
+            }]
+          },
+          // 🚫 PAS de capabilities.datas ici - le frontend utilise formula_instances directement
+          // C'est le chemin qui fonctionne pour M² toiture - Total
           updatedAt: now.toISOString()
         },
         updatedAt: now
@@ -35234,15 +35252,15 @@ var TableLookupDuplicationService = class {
           });
           const firstColName = copiedTable?.tableColumns[0]?.name || null;
           if (firstColName) {
-            const suffixedDisplayColumn = `${firstColName}${suffixToken}`;
-            console.log(`[TBL-DUP] Creating NEW SelectConfig with displayColumn="${suffixedDisplayColumn}"`);
+            const displayCol = firstColName;
+            console.log(`[TBL-DUP] Creating NEW SelectConfig with displayColumn="${displayCol}"`);
             await prisma50.treeBranchLeafSelectConfig.create({
               data: {
                 id: (0, import_crypto17.randomUUID)(),
                 nodeId: copiedNodeId,
                 tableReference: copiedTableId,
                 // 🔥 CRITICAL: Remplir TOUS les champs nécessaires (pas juste displayColumn)
-                displayColumn: suffixedDisplayColumn,
+                displayColumn: displayCol,
                 optionsSource: "table",
                 // Type de source
                 multiple: false,
@@ -35265,7 +35283,7 @@ var TableLookupDuplicationService = class {
                 updatedAt: /* @__PURE__ */ new Date()
               }
             });
-            console.log(`[TBL-DUP] \u2705 NEW SelectConfig created with displayColumn="${suffixedDisplayColumn}"`);
+            console.log(`[TBL-DUP] \u2705 NEW SelectConfig created with displayColumn="${displayCol}"`);
             return;
           }
         }
@@ -35379,6 +35397,14 @@ var TableLookupDuplicationService = class {
                 }
                 if (metaObj?.lookup?.columnSourceOption?.sourceField && !metaObj.lookup.columnSourceOption.sourceField.endsWith(`-${suffixNum}`)) {
                   metaObj.lookup.columnSourceOption.sourceField = `${metaObj.lookup.columnSourceOption.sourceField}-${suffixNum}`;
+                }
+                if (metaObj?.lookup?.rowSourceOption?.comparisonColumn && !metaObj.lookup.rowSourceOption.operator) {
+                  metaObj.lookup.rowSourceOption.operator = "=";
+                  console.log(`[TBL-DUP] \u2705 Ajout operator '=' pour rowSourceOption`);
+                }
+                if (metaObj?.lookup?.columnSourceOption?.comparisonColumn && !metaObj.lookup.columnSourceOption.operator) {
+                  metaObj.lookup.columnSourceOption.operator = "=";
+                  console.log(`[TBL-DUP] \u2705 Ajout operator '=' pour columnSourceOption`);
                 }
                 if (metaObj?.lookup?.rowSourceOption?.comparisonColumn) {
                   const val = metaObj.lookup.rowSourceOption.comparisonColumn;
@@ -35501,6 +35527,37 @@ var TableLookupDuplicationService = class {
           })
         );
         console.log(`[TBL-DUP] \u2705 ${newColumns.length} colonnes cr\xE9\xE9es avec suffixe`);
+        const updatedMeta = (() => {
+          if (!originalTable.meta) return originalTable.meta;
+          try {
+            const metaObj = typeof originalTable.meta === "string" ? JSON.parse(originalTable.meta) : JSON.parse(JSON.stringify(originalTable.meta));
+            console.log(`[TBL-DUP] Mise \xE0 jour meta.lookup.displayColumn: "${metaObj?.lookup?.displayColumn}"`);
+            if (metaObj?.lookup?.displayColumn) {
+              if (Array.isArray(metaObj.lookup.displayColumn)) {
+                metaObj.lookup.displayColumn = metaObj.lookup.displayColumn.map((col) => {
+                  if (col && !/^-?\d+(\.\d+)?$/.test(col.trim()) && !col.endsWith(suffix)) {
+                    return `${col}${suffix}`;
+                  }
+                  return col;
+                });
+              } else if (typeof metaObj.lookup.displayColumn === "string") {
+                const val = metaObj.lookup.displayColumn;
+                if (!/^-?\d+(\.\d+)?$/.test(val.trim()) && !val.endsWith(suffix)) {
+                  metaObj.lookup.displayColumn = `${val}${suffix}`;
+                }
+              }
+              console.log(`[TBL-DUP] \u2705 meta.lookup.displayColumn suffix\xE9 = "${metaObj.lookup.displayColumn}"`);
+            }
+            return metaObj;
+          } catch {
+            return originalTable.meta;
+          }
+        })();
+        await prisma50.treeBranchLeafNodeTable.update({
+          where: { id: copiedTableId },
+          data: { meta: updatedMeta }
+        });
+        console.log(`[TBL-DUP] \u2705 Meta de la table mise \xE0 jour avec displayColumn suffix\xE9`);
       }
       const existingSelectConfig = await prisma50.treeBranchLeafSelectConfig.findUnique({
         where: { nodeId: copiedNodeId }
@@ -36690,9 +36747,10 @@ async function deepCopyNodeInternal(prisma50, req2, nodeId, opts) {
           }
         }
         try {
+          const copiedSelectConfigId = appendSuffix(originalSelectConfig.id);
           await prisma50.treeBranchLeafSelectConfig.create({
             data: {
-              id: appendSuffix(originalSelectConfig.id),
+              id: copiedSelectConfigId,
               nodeId: newId,
               options: originalSelectConfig.options,
               multiple: originalSelectConfig.multiple,
@@ -36708,11 +36766,8 @@ async function deepCopyNodeInternal(prisma50, req2, nodeId, opts) {
               valueColumn: originalSelectConfig.valueColumn ? shouldSuffixColumns ? `${originalSelectConfig.valueColumn}${computedLabelSuffix}` : originalSelectConfig.valueColumn : null,
               displayColumn: (() => {
                 if (originalSelectConfig.displayColumn) {
-                  return shouldSuffixColumns ? `${originalSelectConfig.displayColumn}${computedLabelSuffix}` : originalSelectConfig.displayColumn;
-                }
-                if (newTableReference && tableWasCopied) {
-                  const copiedTableId = newTableReference;
-                  console.log(`[DEEP-COPY] \u26A0\uFE0F displayColumn null for node ${oldId}, table reference: ${copiedTableId}`);
+                  const computed = shouldSuffixColumns ? `${originalSelectConfig.displayColumn}${computedLabelSuffix}` : originalSelectConfig.displayColumn;
+                  return computed;
                 }
                 return null;
               })(),
@@ -36723,6 +36778,32 @@ async function deepCopyNodeInternal(prisma50, req2, nodeId, opts) {
               updatedAt: /* @__PURE__ */ new Date()
             }
           });
+          try {
+            if (tableWasCopied && newTableReference) {
+              const copiedSelectConfig = await prisma50.treeBranchLeafSelectConfig.findUnique({
+                where: { id: copiedSelectConfigId },
+                select: { displayColumn: true }
+              });
+              if (!copiedSelectConfig?.displayColumn) {
+                const copiedColumns = await prisma50.treeBranchLeafTableColumn.findMany({
+                  where: { tableId: newTableReference },
+                  orderBy: { columnIndex: "asc" },
+                  select: { name: true }
+                });
+                const firstColumnName = copiedColumns?.[0]?.name || null;
+                if (firstColumnName) {
+                  await prisma50.treeBranchLeafSelectConfig.update({
+                    where: { id: copiedSelectConfigId },
+                    data: { displayColumn: firstColumnName }
+                  });
+                }
+              } else {
+                console.log(`[DEEP-COPY SelectConfig] \u2705 displayColumn d\xE9j\xE0 rempli, pas de remplacement`);
+              }
+            }
+          } catch (initDisplayErr) {
+            console.warn("[DEEP-COPY SelectConfig] Erreur initialisation displayColumn:", initDisplayErr.message);
+          }
         } catch (selectConfigErr) {
         }
       } else {
@@ -37511,6 +37592,28 @@ router55.put("/nodes/:nodeId/tables/:tableId", async (req2, res) => {
   const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx2(req2);
   try {
     if (meta && !columns && !rows) {
+      try {
+        const metaObj = typeof meta === "string" ? JSON.parse(meta) : meta;
+        const lookup = metaObj?.lookup || {};
+        const selectors = lookup?.selectors || {};
+        console.log("[MANUAL-SAVE][TABLE META] \u27A1\uFE0F PUT /nodes/:nodeId/tables/:tableId", {
+          tableId,
+          name,
+          description,
+          type,
+          lookupSelectors: {
+            columnFieldId: selectors.columnFieldId || null,
+            rowFieldId: selectors.rowFieldId || null,
+            comparisonColumn: lookup?.comparisonColumn || null,
+            displayColumn: lookup?.displayColumn || null,
+            displayRow: lookup?.displayRow || null
+          },
+          rawMetaKeys: Object.keys(metaObj || {})
+        });
+      } catch (e) {
+        console.log("[MANUAL-SAVE][TABLE META] \u26A0\uFE0F Impossible de parser meta pour logging, envoi brut");
+        console.log("[MANUAL-SAVE][TABLE META] RAW:", typeof meta === "string" ? meta : JSON.stringify(meta));
+      }
       const table2 = await prisma30.treeBranchLeafNodeTable.findUnique({
         where: { id: tableId },
         include: {
@@ -37533,6 +37636,23 @@ router55.put("/nodes/:nodeId/tables/:tableId", async (req2, res) => {
           updatedAt: /* @__PURE__ */ new Date()
         }
       });
+      try {
+        const persistedMeta = typeof updatedTable2.meta === "string" ? JSON.parse(updatedTable2.meta) : updatedTable2.meta;
+        const lookup = persistedMeta?.lookup || {};
+        const selectors = lookup?.selectors || {};
+        console.log("[MANUAL-SAVE][TABLE META] \u2705 Persist\xE9", {
+          tableId,
+          lookupSelectors: {
+            columnFieldId: selectors.columnFieldId || null,
+            rowFieldId: selectors.rowFieldId || null,
+            comparisonColumn: lookup?.comparisonColumn || null,
+            displayColumn: lookup?.displayColumn || null,
+            displayRow: lookup?.displayRow || null
+          }
+        });
+      } catch (e) {
+        console.log("[MANUAL-SAVE][TABLE META] \u26A0\uFE0F Persist\xE9 (meta non pars\xE9)");
+      }
       return res.json(updatedTable2);
     }
     const updatedTable = await prisma30.$transaction(async (tx) => {
@@ -38496,6 +38616,42 @@ router56.post("/nodes/:nodeId/deep-copy", async (req2, res) => {
     const { nodeId } = req2.params;
     const { targetParentId, labelSuffix } = req2.body || {};
     const result = await deepCopyNodeInternal(prisma31, req2, nodeId, { targetParentId });
+    const allCopiedNodeIds = [result.root.newId, ...result.displayNodeIds || []];
+    console.log(`\u{1F504} [DEEP-COPY] D\xE9clenchement \xE9valuation pour ${allCopiedNodeIds.length} n\u0153uds copi\xE9s:`, allCopiedNodeIds);
+    for (const copiedNodeId of allCopiedNodeIds) {
+      try {
+        const copiedNode = await prisma31.treeBranchLeafNode.findUnique({
+          where: { id: copiedNodeId },
+          select: {
+            id: true,
+            label: true,
+            treeId: true,
+            formulaId: true,
+            tableConfig: true,
+            data_activeId: true
+          }
+        });
+        if (!copiedNode) continue;
+        const needsEvaluation = copiedNode.formulaId || copiedNode.tableConfig && typeof copiedNode.tableConfig === "object";
+        if (needsEvaluation) {
+          console.log(`\u{1F3AF} [DEEP-COPY] \xC9valuation du n\u0153ud ${copiedNodeId} (${copiedNode.label})`);
+          const submissionId = copiedNodeId;
+          const evalResult = await evaluateVariableOperation(
+            copiedNodeId,
+            submissionId,
+            prisma31
+          );
+          if (evalResult.success) {
+            console.log(`\u2705 [DEEP-COPY] \xC9valuation r\xE9ussie pour ${copiedNodeId}:`, evalResult.result);
+          } else {
+            console.warn(`\u26A0\uFE0F [DEEP-COPY] \xC9valuation \xE9chou\xE9e pour ${copiedNodeId}:`, evalResult.error);
+          }
+        }
+      } catch (evalError) {
+        console.error(`\u274C [DEEP-COPY] Erreur \xE9valuation n\u0153ud ${copiedNodeId}:`, evalError);
+      }
+    }
+    console.log(`\u2705 [DEEP-COPY] \xC9valuation initiale termin\xE9e pour ${allCopiedNodeIds.length} n\u0153uds`);
     res.json(result);
   } catch (error) {
     console.error("\xC3\u0192\xC2\xA2\xC3\u201A\xC2\x9D\xC3\u2026\xE2\u20AC\u2122 [/nodes/:nodeId/deep-copy] Erreur:", error);
@@ -43864,6 +44020,18 @@ router56.post("/nodes/:fieldId/select-config", async (req2, res) => {
       displayRow,
       dependsOnNodeId
     } = req2.body;
+    console.log("[MANUAL-SAVE][SELECT-CONFIG] \u27A1\uFE0F POST /nodes/:fieldId/select-config", {
+      fieldId,
+      optionsSource,
+      tableReference,
+      keyColumn,
+      keyRow,
+      valueColumn,
+      valueRow,
+      displayColumn,
+      displayRow,
+      dependsOnNodeId
+    });
     const access = await ensureNodeOrgAccess(prisma31, fieldId, { organizationId, isSuperAdmin: isSuperAdmin2 });
     if (!access.ok) {
       return res.status(access.status).json({ error: access.error });
@@ -43902,10 +44070,120 @@ router56.post("/nodes/:fieldId/select-config", async (req2, res) => {
         updatedAt: /* @__PURE__ */ new Date()
       }
     });
+    console.log("[MANUAL-SAVE][SELECT-CONFIG] \u2705 Persist\xE9", {
+      fieldId,
+      id: selectConfig.id,
+      tableReference: selectConfig.tableReference,
+      keyColumn: selectConfig.keyColumn,
+      keyRow: selectConfig.keyRow,
+      valueColumn: selectConfig.valueColumn,
+      valueRow: selectConfig.valueRow,
+      displayColumn: selectConfig.displayColumn,
+      displayRow: selectConfig.displayRow,
+      dependsOnNodeId: selectConfig.dependsOnNodeId
+    });
     return res.json(selectConfig);
   } catch (error) {
     console.error("[TreeBranchLeaf API] Error creating select config:", error);
     res.status(500).json({ error: "Erreur lors de la cr\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9ation de la configuration SELECT" });
+  }
+});
+router56.post("/nodes/:nodeId/normalize-step4", async (req2, res) => {
+  try {
+    const { nodeId } = req2.params;
+    const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx3(req2);
+    const { tableId: bodyTableId, displayColumn: bodyDisplayColumn } = req2.body || {};
+    console.log("[STEP4-AUTO] \u27A1\uFE0F START normalize-step4", { nodeId, bodyTableId, bodyDisplayColumn });
+    const access = await ensureNodeOrgAccess(prisma31, nodeId, { organizationId, isSuperAdmin: isSuperAdmin2 });
+    if (!access.ok) {
+      return res.status(access.status).json({ error: access.error });
+    }
+    const node = await prisma31.treeBranchLeafNode.findUnique({
+      where: { id: nodeId },
+      select: { table_activeId: true, hasTable: true }
+    });
+    let tableId = bodyTableId || node?.table_activeId || null;
+    if (!tableId) {
+      const sc2 = await prisma31.treeBranchLeafSelectConfig.findFirst({ where: { nodeId } });
+      tableId = sc2?.tableReference || null;
+    }
+    if (!tableId) {
+      console.warn("[STEP4-AUTO] \u274C No tableId found for node", { nodeId });
+      return res.status(404).json({ error: "Aucune table active pour ce champ" });
+    }
+    const table = await prisma31.treeBranchLeafNodeTable.findUnique({
+      where: { id: tableId },
+      include: { tableColumns: { orderBy: { columnIndex: "asc" } } }
+    });
+    if (!table) {
+      return res.status(404).json({ error: "Table introuvable" });
+    }
+    const firstColName = table.tableColumns[0]?.name || null;
+    const chosenDisplayColumn = bodyDisplayColumn || firstColName || null;
+    if (!chosenDisplayColumn) {
+      console.warn("[STEP4-AUTO] \u274C No displayColumn candidate", { tableId });
+      return res.status(400).json({ error: "Impossible de d\xE9terminer displayColumn" });
+    }
+    console.log("[STEP4-AUTO] \u{1F3AF} Selected displayColumn", { tableId, displayColumn: chosenDisplayColumn });
+    try {
+      const metaObj = table.meta ? typeof table.meta === "string" ? JSON.parse(table.meta) : JSON.parse(JSON.stringify(table.meta)) : {};
+      const nextMeta = {
+        ...metaObj,
+        lookup: {
+          ...metaObj?.lookup || {},
+          displayColumn: chosenDisplayColumn
+        }
+      };
+      await prisma31.treeBranchLeafNodeTable.update({
+        where: { id: tableId },
+        data: { meta: nextMeta, updatedAt: /* @__PURE__ */ new Date() }
+      });
+      console.log("[STEP4-AUTO] \u2705 META updated", { tableId, displayColumn: chosenDisplayColumn });
+    } catch (e) {
+      console.warn("[STEP4-AUTO] \u26A0\uFE0F META update failed (non-bloquant):", e.message);
+    }
+    const sc = await prisma31.treeBranchLeafSelectConfig.upsert({
+      where: { nodeId },
+      create: {
+        id: (0, import_crypto19.randomUUID)(),
+        nodeId,
+        options: [],
+        multiple: false,
+        searchable: true,
+        allowCustom: false,
+        optionsSource: "table",
+        tableReference: tableId,
+        keyColumn: null,
+        keyRow: null,
+        valueColumn: null,
+        valueRow: null,
+        displayColumn: chosenDisplayColumn,
+        displayRow: null,
+        dependsOnNodeId: null,
+        createdAt: /* @__PURE__ */ new Date(),
+        updatedAt: /* @__PURE__ */ new Date()
+      },
+      update: {
+        optionsSource: "table",
+        tableReference: tableId,
+        displayColumn: chosenDisplayColumn,
+        updatedAt: /* @__PURE__ */ new Date()
+      }
+    });
+    console.log("[STEP4-AUTO] \u2705 SelectConfig upserted", {
+      nodeId,
+      tableReference: sc.tableReference,
+      displayColumn: sc.displayColumn
+    });
+    return res.json({
+      success: true,
+      nodeId,
+      tableId,
+      displayColumn: chosenDisplayColumn
+    });
+  } catch (error) {
+    console.error("[STEP4-AUTO] Error normalize-step4:", error);
+    res.status(500).json({ error: "Erreur lors de la normalisation \xC9tape 4" });
   }
 });
 router56.get("/nodes/:nodeId/table/lookup", async (req2, res) => {
@@ -46102,6 +46380,17 @@ router56.post("/nodes/:nodeId/copy-linked-variable", async (req2, res) => {
       const candidateId = `${ownerNode.id}-${newSuffix}`;
       const exists = await prisma31.treeBranchLeafNode.findUnique({ where: { id: candidateId } });
       targetNodeId = exists ? `${candidateId}-${Date.now()}` : candidateId;
+      const rewriter = (json) => {
+        if (!json) return json ?? {};
+        const str = JSON.stringify(json);
+        const rewritten = rewriteReferences(str, {
+          nodeIdMap: /* @__PURE__ */ new Map(),
+          formulaIdMap: /* @__PURE__ */ new Map(),
+          conditionIdMap: /* @__PURE__ */ new Map(),
+          tableIdMap: /* @__PURE__ */ new Map()
+        }, newSuffix);
+        return JSON.parse(rewritten);
+      };
       await prisma31.treeBranchLeafNode.create({
         data: {
           id: targetNodeId,
@@ -46111,14 +46400,20 @@ router56.post("/nodes/:nodeId/copy-linked-variable", async (req2, res) => {
           subType: ownerNode.subType,
           label: `${ownerNode.label || "Node"}-${newSuffix}`,
           description: ownerNode.description,
-          value: null,
+          value: ownerNode.value,
+          calculatedValue: ownerNode.calculatedValue,
           order: (ownerNode.order ?? 0) + 1,
           isRequired: ownerNode.isRequired ?? false,
           isVisible: ownerNode.isVisible ?? true,
           isActive: ownerNode.isActive ?? true,
           isMultiple: ownerNode.isMultiple ?? false,
           hasData: ownerNode.hasData ?? false,
-          metadata: ownerNode.metadata,
+          metadata: rewriter(ownerNode.metadata),
+          tableConfig: rewriter(ownerNode.tableConfig),
+          formulaConfig: rewriter(ownerNode.formulaConfig),
+          conditionConfig: rewriter(ownerNode.conditionConfig),
+          apiConfig: rewriter(ownerNode.apiConfig),
+          linkConfig: rewriter(ownerNode.linkConfig),
           createdAt: /* @__PURE__ */ new Date(),
           updatedAt: /* @__PURE__ */ new Date()
         }
@@ -46149,6 +46444,42 @@ router56.post("/nodes/:nodeId/copy-linked-variable", async (req2, res) => {
       await addToNodeLinkedField7(prisma31, targetNodeId, "linkedVariableIds", [result.variableId]);
     } catch (e) {
       console.warn("?? [COPY-LINKED-VAR] \xC3\u0192\xC2\xAF\xC3\u201A\xC2\xBF\xC3\u201A\xC2\xBDchec MAJ linkedVariableIds:", e.message);
+    }
+    try {
+      console.log(`\u{1F504} [COPY-LINKED-VAR] D\xE9clenchement \xE9valuation initiale pour ${targetNodeId}...`);
+      const copiedNode = await prisma31.treeBranchLeafNode.findUnique({
+        where: { id: targetNodeId },
+        select: { treeId: true, calculatedValue: true }
+      });
+      if (copiedNode?.treeId) {
+        const activeSubmission = await prisma31.treeBranchLeafSubmission.findFirst({
+          where: {
+            treeId: copiedNode.treeId,
+            status: { not: "archived" }
+          },
+          orderBy: { updatedAt: "desc" },
+          select: { id: true }
+        });
+        if (activeSubmission) {
+          const evaluationResult = await evaluateVariableOperation(
+            targetNodeId,
+            activeSubmission.id,
+            prisma31
+          );
+          await prisma31.treeBranchLeafNode.update({
+            where: { id: targetNodeId },
+            data: {
+              calculatedValue: evaluationResult.value,
+              updatedAt: /* @__PURE__ */ new Date()
+            }
+          });
+          console.log(`\u2705 [COPY-LINKED-VAR] \xC9valuation initiale termin\xE9e: ${targetNodeId} = ${evaluationResult.value}`);
+        } else {
+          console.warn(`\u26A0\uFE0F [COPY-LINKED-VAR] Pas de submission active trouv\xE9e pour \xE9valuation de ${targetNodeId}`);
+        }
+      }
+    } catch (evalError) {
+      console.error("\u26A0\uFE0F [COPY-LINKED-VAR] Erreur lors de l'\xE9valuation initiale:", evalError);
     }
     res.status(201).json({ ...result, targetNodeId });
   } catch (error) {
@@ -57844,10 +58175,36 @@ async function evaluateCapacitiesForSubmission(submissionId, organizationId, use
     await applySharedReferenceValues(valueMap, entries, treeId);
     console.log(`\u{1F511} [EVALUATE] valueMap initialis\xE9 avec ${valueMap.size} entr\xE9es depuis formData`);
   }
-  const capacitiesRaw = await prisma43.treeBranchLeafNodeVariable.findMany({
-    where: { TreeBranchLeafNode: { treeId }, sourceRef: { not: null } },
-    include: { TreeBranchLeafNode: { select: { id: true, label: true, fieldType: true, type: true } } }
+  const [variablesRaw, formulasRaw] = await Promise.all([
+    prisma43.treeBranchLeafNodeVariable.findMany({
+      where: { TreeBranchLeafNode: { treeId }, sourceRef: { not: null } },
+      include: { TreeBranchLeafNode: { select: { id: true, label: true, fieldType: true, type: true } } }
+    }),
+    prisma43.treeBranchLeafNodeFormula.findMany({
+      where: {
+        nodeId: {
+          in: (await prisma43.treeBranchLeafNode.findMany({
+            where: { treeId, hasFormula: true },
+            select: { id: true }
+          })).map((n) => n.id)
+        }
+      }
+    })
+  ]);
+  const formulaNodeIds = formulasRaw.map((f) => f.nodeId);
+  const formulaNodes = await prisma43.treeBranchLeafNode.findMany({
+    where: { id: { in: formulaNodeIds } },
+    select: { id: true, label: true, fieldType: true, type: true, hasFormula: true }
   });
+  const nodeMap = new Map(formulaNodes.map((n) => [n.id, n]));
+  const capacitiesRaw = [
+    ...variablesRaw,
+    ...formulasRaw.map((f) => ({
+      ...f,
+      sourceRef: `formula:${f.id}`,
+      TreeBranchLeafNode: nodeMap.get(f.nodeId)
+    }))
+  ];
   const capacities = capacitiesRaw.sort((a, b) => {
     const aIsSumFormula = a.sourceRef?.includes("sum-formula") || a.sourceRef?.includes("sum-total") ? 1 : 0;
     const bIsSumFormula = b.sourceRef?.includes("sum-formula") || b.sourceRef?.includes("sum-total") ? 1 : 0;
@@ -58563,10 +58920,36 @@ router73.post("/submissions/preview-evaluate", async (req2, res) => {
         }
       }
     }
-    const capacitiesRaw = await prisma43.treeBranchLeafNodeVariable.findMany({
-      where: { TreeBranchLeafNode: { treeId: effectiveTreeId }, sourceRef: { not: null } },
-      include: { TreeBranchLeafNode: { select: { id: true, label: true } } }
+    const [variablesRaw, formulasRaw] = await Promise.all([
+      prisma43.treeBranchLeafNodeVariable.findMany({
+        where: { TreeBranchLeafNode: { treeId: effectiveTreeId }, sourceRef: { not: null } },
+        include: { TreeBranchLeafNode: { select: { id: true, label: true } } }
+      }),
+      prisma43.treeBranchLeafNodeFormula.findMany({
+        where: {
+          nodeId: {
+            in: (await prisma43.treeBranchLeafNode.findMany({
+              where: { treeId: effectiveTreeId, hasFormula: true },
+              select: { id: true }
+            })).map((n) => n.id)
+          }
+        }
+      })
+    ]);
+    const formulaNodeIds = formulasRaw.map((f) => f.nodeId);
+    const formulaNodes = await prisma43.treeBranchLeafNode.findMany({
+      where: { id: { in: formulaNodeIds } },
+      select: { id: true, label: true }
     });
+    const nodeMapForFormulas = new Map(formulaNodes.map((n) => [n.id, n]));
+    const capacitiesRaw = [
+      ...variablesRaw,
+      ...formulasRaw.map((f) => ({
+        ...f,
+        sourceRef: `formula:${f.id}`,
+        TreeBranchLeafNode: nodeMapForFormulas.get(f.nodeId)
+      }))
+    ];
     const capacities = capacitiesRaw.sort((a, b) => {
       const aIsSumFormula = a.sourceRef?.includes("sum-formula") || a.sourceRef?.includes("sum-total") ? 1 : 0;
       const bIsSumFormula = b.sourceRef?.includes("sum-formula") || b.sourceRef?.includes("sum-total") ? 1 : 0;
@@ -59697,6 +60080,13 @@ router76.get("/trees/:treeId/all", async (req2, res) => {
       const isSelectType = ["select", "radio", "checkbox", "multi-select"].includes(node.fieldType || "") || (node.fieldType || "").includes("select");
       if (isSelectType) {
         const selectConfig = node.TreeBranchLeafSelectConfig;
+        if (node.id.match(/-\d{1,3}$/)) {
+          console.log(`[TBL Batch] \u{1F50D} Champ suffix\xE9 d\xE9tect\xE9: ${node.id}`);
+          console.log(`[TBL Batch]    - TreeBranchLeafSelectConfig pr\xE9sente: ${!!selectConfig}`);
+          if (selectConfig) {
+            console.log(`[TBL Batch]    - displayColumn: ${selectConfig.displayColumn}`);
+          }
+        }
         configsByNode[node.id] = {
           fieldType: node.fieldType,
           options: node.select_options,
