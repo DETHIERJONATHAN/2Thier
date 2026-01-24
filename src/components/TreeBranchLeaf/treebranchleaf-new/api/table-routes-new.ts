@@ -731,6 +731,29 @@ router.put('/nodes/:nodeId/tables/:tableId', async (req, res) => {
     // Si le body contient seulement meta (mise ÃƒÂ  jour de configuration lookup)
     // On ne touche PAS aux colonnes/lignes, juste les mÃƒÂ©tadonnÃƒÂ©es
     if (meta && !columns && !rows) {
+      // 🔎 LOG MANUEL: Sauvegarde META de la table (flux TablePanel Étape 4)
+      try {
+        const metaObj = typeof meta === 'string' ? JSON.parse(meta) : meta;
+        const lookup = metaObj?.lookup || {};
+        const selectors = lookup?.selectors || {};
+        console.log('[MANUAL-SAVE][TABLE META] ➡️ PUT /nodes/:nodeId/tables/:tableId', {
+          tableId,
+          name,
+          description,
+          type,
+          lookupSelectors: {
+            columnFieldId: selectors.columnFieldId || null,
+            rowFieldId: selectors.rowFieldId || null,
+            comparisonColumn: lookup?.comparisonColumn || null,
+            displayColumn: lookup?.displayColumn || null,
+            displayRow: lookup?.displayRow || null,
+          },
+          rawMetaKeys: Object.keys(metaObj || {})
+        });
+      } catch (e) {
+        console.log('[MANUAL-SAVE][TABLE META] ⚠️ Impossible de parser meta pour logging, envoi brut');
+        console.log('[MANUAL-SAVE][TABLE META] RAW:', typeof meta === 'string' ? meta : JSON.stringify(meta));
+      }
       
       const table = await prisma.treeBranchLeafNodeTable.findUnique({
         where: { id: tableId },
@@ -758,6 +781,25 @@ router.put('/nodes/:nodeId/tables/:tableId', async (req, res) => {
           updatedAt: new Date(),
         },
       });
+
+      // 🔎 LOG MANUEL: Confirmation de persistance META
+      try {
+        const persistedMeta = typeof updatedTable.meta === 'string' ? JSON.parse(updatedTable.meta) : updatedTable.meta;
+        const lookup = (persistedMeta as any)?.lookup || {};
+        const selectors = lookup?.selectors || {};
+        console.log('[MANUAL-SAVE][TABLE META] ✅ Persisté', {
+          tableId,
+          lookupSelectors: {
+            columnFieldId: selectors.columnFieldId || null,
+            rowFieldId: selectors.rowFieldId || null,
+            comparisonColumn: lookup?.comparisonColumn || null,
+            displayColumn: lookup?.displayColumn || null,
+            displayRow: lookup?.displayRow || null,
+          }
+        });
+      } catch (e) {
+        console.log('[MANUAL-SAVE][TABLE META] ⚠️ Persisté (meta non parsé)');
+      }
 
       return res.json(updatedTable);
     }
@@ -842,7 +884,21 @@ router.put('/nodes/:nodeId/tables/:tableId', async (req, res) => {
 
       return tableUpdated;
     });
-
+    // 🎯 Mettre à jour hasTable et table_activeId du nœud
+    const table = await prisma.treeBranchLeafNodeTable.findUnique({
+      where: { id: tableId },
+      select: { nodeId: true }
+    });
+    
+    if (table?.nodeId) {
+      await prisma.treeBranchLeafNode.update({
+        where: { id: table.nodeId },
+        data: { 
+          hasTable: true,
+          table_activeId: tableId
+        }
+      });
+    }
     res.json(updatedTable);
 
   } catch (error) {
@@ -892,8 +948,33 @@ router.get('/nodes/:nodeId/tables', async (req, res) => {
     });
 
 
-    // Reformater la rÃƒÂ©ponse pour correspondre au format attendu par le frontend
-    const formattedTables = tables.map(table => ({
+    // 🔧 FIX: AUSSI charger la table ACTIVE pointée par table_activeId
+    // Cas typique: nœud LOOKUP qui référence une table via table_activeId
+    let activeTable = null;
+    console.log(`[GET /nodes/:nodeId/tables] nodeId: ${nodeId}, table_activeId: ${node.table_activeId}`);
+    
+    if (node.table_activeId) {
+      activeTable = await prisma.treeBranchLeafNodeTable.findUnique({
+        where: { id: node.table_activeId },
+        include: {
+          tableColumns: {
+            orderBy: { columnIndex: 'asc' },
+          },
+          tableRows: {
+            orderBy: { rowIndex: 'asc' },
+          },
+        },
+      });
+    }
+
+    // Combiner les tables: d'abord celle du nœud, puis la table active si elle existe ET n'est pas déjà incluse
+    const allTables = [...tables];
+    if (activeTable && !allTables.some(t => t.id === activeTable.id)) {
+      allTables.push(activeTable);
+    }
+
+    // Reformater la réponse pour correspondre au format attendu par le frontend
+    const formattedTables = allTables.map(table => ({
       id: table.id,
       name: table.name,
       description: table.description,
@@ -926,6 +1007,7 @@ router.get('/nodes/:nodeId/tables', async (req, res) => {
       updatedAt: table.updatedAt,
     }));
 
+    console.log(`[GET /nodes/:nodeId/tables] Returning ${formattedTables.length} tables. First table columns: ${formattedTables[0]?.columns?.slice(0, 3).join(', ')}`);
     res.json(formattedTables);
 
   } catch (error) {

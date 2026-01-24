@@ -3383,20 +3383,20 @@ export const ImageMeasurementCanvas: React.FC<ImageMeasurementCanvasProps> = ({
                     <div style={{ textAlign: 'center' }}>
                       <div style={{ fontSize: 10, opacity: 0.7 }}>Largeur</div>
                       <div style={{ fontSize: 18, fontWeight: 'bold', color: '#52c41a' }}>
-                        {backendMeasurements.largeur_cm.toFixed(1)} cm
+                        {(backendMeasurements.largeur_cm / 100).toFixed(2)} m
                       </div>
                     </div>
                     <div style={{ fontSize: 20, opacity: 0.5 }}>×</div>
                     <div style={{ textAlign: 'center' }}>
                       <div style={{ fontSize: 10, opacity: 0.7 }}>Hauteur</div>
                       <div style={{ fontSize: 18, fontWeight: 'bold', color: '#1890ff' }}>
-                        {backendMeasurements.hauteur_cm.toFixed(1)} cm
+                        {(backendMeasurements.hauteur_cm / 100).toFixed(2)} m
                       </div>
                     </div>
                     <div style={{ marginLeft: 8, textAlign: 'center', borderLeft: '1px solid rgba(255,255,255,0.2)', paddingLeft: 12 }}>
                       <div style={{ fontSize: 10, opacity: 0.7 }}>Surface</div>
                       <div style={{ fontSize: 14, fontWeight: 'bold', color: '#faad14' }}>
-                        {(backendMeasurements.largeur_cm * backendMeasurements.hauteur_cm / 10000).toFixed(3)} m²
+                        {(backendMeasurements.largeur_cm * backendMeasurements.hauteur_cm / 10000).toFixed(2)} m²
                       </div>
                     </div>
                   </>

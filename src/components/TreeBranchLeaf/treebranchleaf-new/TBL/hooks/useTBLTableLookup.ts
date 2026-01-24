@@ -187,16 +187,27 @@ export function useTBLTableLookup(
             { suppressErrorLogForStatuses: [404] }
           );
           
+          console.log(`[useTBLTableLookup] 📥 Réponse PRIMARY:`, selectConfig ? `TROUVÉ - nodeId=${selectConfig.nodeId}` : 'NULL (pas trouvé ou erreur)');
+          
           // Si pas trouvé et qu'on a un suffixe, essayer avec l'ID de base (l'original)
           if (!selectConfig && hasSuffix) {
+            console.log(`[useTBLTableLookup] ⚠️ PRIMARY ÉCHOUÉ - Tentative fallback...`);
             console.log(`[useTBLTableLookup] ➡️ GET /api/treebranchleaf/nodes/${baseFieldId}/select-config (fallback to base ID)`);
             selectConfig = await api.get<TreeBranchLeafSelectConfig>(
               `/api/treebranchleaf/nodes/${baseFieldId}/select-config`,
               { suppressErrorLogForStatuses: [404] }
             );
+            console.log(`[useTBLTableLookup] 📥 Réponse FALLBACK:`, selectConfig ? `TROUVÉ - nodeId=${selectConfig.nodeId}` : 'NULL');
+            
+            if (selectConfig) {
+              console.warn(`[useTBLTableLookup] ⚠️ ⚠️ ⚠️ BUG DÉTECTÉ ⚠️ ⚠️ ⚠️`);
+              console.warn(`[useTBLTableLookup] Le SelectConfig -${suffixMatch[1]} n'existe PAS, fallback sur l'original!`);
+              console.warn(`[useTBLTableLookup] Demandé: ${fieldId}`);
+              console.warn(`[useTBLTableLookup] Reçu: ${selectConfig.nodeId}`);
+            }
           }
           
-          console.log(`[useTBLTableLookup] ⬅️ SelectConfig trouvée:`, selectConfig ? `nodeId=${selectConfig.nodeId}, tableRef=${selectConfig.tableReference}` : 'null');
+          console.log(`[useTBLTableLookup] ⬅️ SelectConfig FINALE:`, selectConfig ? `nodeId=${selectConfig.nodeId}, tableRef=${selectConfig.tableReference}` : 'null');
         }
 
         if (isTargetField) console.log(`[DEBUG][Test - liste] ⬅️ Réponse select-config:`, selectConfig);

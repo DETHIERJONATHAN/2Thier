@@ -35,6 +35,7 @@ import { gunzipSync } from 'zlib'; // GardÃƒÆ’Ã‚Â© uniquement pour dec
 import { evaluateVariableOperation } from './operation-interpreter.js';
 // Use the repeat service implementation ÃƒÂ¯Ã‚Â¿Ã‚Â½ central source of truth for variable copying
 import { copyVariableWithCapacities, copyLinkedVariablesFromNode, createDisplayNodeForExistingVariable } from './repeat/services/variable-copy-engine.js';
+import { rewriteReferences } from './repeat/utils/universal-reference-rewriter.js';
 import { copySelectorTablesAfterNodeCopy } from './copy-selector-tables.js';
 import { copyFormulaCapacity } from './copy-capacity-formula.js';
 import { getNodeIdForLookup } from '../../../../utils/node-helpers.js';
@@ -2409,6 +2410,60 @@ async function deepCopyNodeInternal(
           const { nodeId } = req.params;
           const { targetParentId, labelSuffix } = (req.body || {}) as { targetParentId?: string | null; labelSuffix?: string };
           const result = await deepCopyNodeInternalService(prisma, req as unknown as MinimalReq, nodeId, { targetParentId });
+          
+          // 🔄 ÉVALUATION AUTOMATIQUE après duplication
+          // Récupérer tous les nœuds créés (displayNodeIds + le nœud racine)
+          const allCopiedNodeIds = [result.root.newId, ...(result.displayNodeIds || [])];
+          
+          console.log(`🔄 [DEEP-COPY] Déclenchement évaluation pour ${allCopiedNodeIds.length} nœuds copiés:`, allCopiedNodeIds);
+          
+          // Évaluer chaque nœud copié qui a une configuration de calcul
+          for (const copiedNodeId of allCopiedNodeIds) {
+            try {
+              const copiedNode = await prisma.treeBranchLeafNode.findUnique({
+                where: { id: copiedNodeId },
+                select: { 
+                  id: true, 
+                  label: true,
+                  treeId: true,
+                  formulaId: true,
+                  tableConfig: true,
+                  data_activeId: true
+                }
+              });
+              
+              if (!copiedNode) continue;
+              
+              // Vérifier si le nœud a besoin d'évaluation (formule OU table lookup)
+              const needsEvaluation = copiedNode.formulaId || (copiedNode.tableConfig && typeof copiedNode.tableConfig === 'object');
+              
+              if (needsEvaluation) {
+                console.log(`🎯 [DEEP-COPY] Évaluation du nœud ${copiedNodeId} (${copiedNode.label})`);
+                
+                // Utiliser evaluateVariableOperation pour déclencher le calcul
+                // Utiliser la signature standard: (variableNodeId, submissionId, prisma)
+                // Pour l'initialisation, on passe un submissionId neutre basé sur le nœud
+                const submissionId = copiedNodeId; // fallback sûr pour enrichDataFromSubmission
+                const evalResult = await evaluateVariableOperation(
+                  copiedNodeId,
+                  submissionId,
+                  prisma
+                );
+                
+                if (evalResult.success) {
+                  console.log(`✅ [DEEP-COPY] Évaluation réussie pour ${copiedNodeId}:`, evalResult.result);
+                } else {
+                  console.warn(`⚠️ [DEEP-COPY] Évaluation échouée pour ${copiedNodeId}:`, evalResult.error);
+                }
+              }
+            } catch (evalError) {
+              console.error(`❌ [DEEP-COPY] Erreur évaluation nœud ${copiedNodeId}:`, evalError);
+              // Continuer même si une évaluation échoue
+            }
+          }
+          
+          console.log(`✅ [DEEP-COPY] Évaluation initiale terminée pour ${allCopiedNodeIds.length} nœuds`);
+          
           res.json(result);
         } catch (error) {
           console.error('ÃƒÂ¢Ã‚ÂÃ…â€™ [/nodes/:nodeId/deep-copy] Erreur:', error);
@@ -10103,6 +10158,20 @@ router.post('/nodes/:fieldId/select-config', async (req, res) => {
       dependsOnNodeId,
     } = req.body;
 
+    // 🔎 LOG MANUEL: Sauvegarde SelectConfig (flux TablePanel Étape 4)
+    console.log('[MANUAL-SAVE][SELECT-CONFIG] ➡️ POST /nodes/:fieldId/select-config', {
+      fieldId,
+      optionsSource,
+      tableReference,
+      keyColumn,
+      keyRow,
+      valueColumn,
+      valueRow,
+      displayColumn,
+      displayRow,
+      dependsOnNodeId
+    });
+
 
     // VÃƒÆ’Ã‚Â©rifier l'accÃƒÆ’Ã‚Â¨s au nÃƒâ€¦Ã¢â‚¬Å“ud
     const access = await ensureNodeOrgAccess(prisma, fieldId, { organizationId, isSuperAdmin });
@@ -10146,11 +10215,151 @@ router.post('/nodes/:fieldId/select-config', async (req, res) => {
       },
     });
 
+    // 🔎 LOG MANUEL: Confirmation SelectConfig persisté
+    console.log('[MANUAL-SAVE][SELECT-CONFIG] ✅ Persisté', {
+      fieldId,
+      id: selectConfig.id,
+      tableReference: selectConfig.tableReference,
+      keyColumn: selectConfig.keyColumn,
+      keyRow: selectConfig.keyRow,
+      valueColumn: selectConfig.valueColumn,
+      valueRow: selectConfig.valueRow,
+      displayColumn: selectConfig.displayColumn,
+      displayRow: selectConfig.displayRow,
+      dependsOnNodeId: selectConfig.dependsOnNodeId
+    });
+
     return res.json(selectConfig);
 
   } catch (error) {
     console.error('[TreeBranchLeaf API] Error creating select config:', error);
     res.status(500).json({ error: 'Erreur lors de la crÃƒÆ’Ã‚Â©ation de la configuration SELECT' });
+  }
+});
+
+// POST /api/treebranchleaf/nodes/:nodeId/normalize-step4
+// Normalise automatiquement la configuration lookup (Étape 4):
+// - Choisit une colonne d'affichage (displayColumn)
+// - Met à jour la META de la table
+// - Upsert la TreeBranchLeafSelectConfig
+router.post('/nodes/:nodeId/normalize-step4', async (req, res) => {
+  try {
+    const { nodeId } = req.params;
+    const { organizationId, isSuperAdmin } = getAuthCtx(req as unknown as MinimalReq);
+    const { tableId: bodyTableId, displayColumn: bodyDisplayColumn } = req.body || {};
+
+    console.log('[STEP4-AUTO] ➡️ START normalize-step4', { nodeId, bodyTableId, bodyDisplayColumn });
+
+    // Vérifier accès
+    const access = await ensureNodeOrgAccess(prisma, nodeId, { organizationId, isSuperAdmin });
+    if (!access.ok) {
+      return res.status(access.status).json({ error: access.error });
+    }
+
+    // Charger node et config existante
+    const node = await prisma.treeBranchLeafNode.findUnique({
+      where: { id: nodeId },
+      select: { table_activeId: true, hasTable: true }
+    });
+
+    // Déterminer la table cible
+    let tableId = bodyTableId || node?.table_activeId || null;
+    if (!tableId) {
+      // Essayer via SelectConfig
+      const sc = await prisma.treeBranchLeafSelectConfig.findFirst({ where: { nodeId } });
+      tableId = sc?.tableReference || null;
+    }
+    if (!tableId) {
+      console.warn('[STEP4-AUTO] ❌ No tableId found for node', { nodeId });
+      return res.status(404).json({ error: 'Aucune table active pour ce champ' });
+    }
+
+    // Charger colonnes de la table
+    const table = await prisma.treeBranchLeafNodeTable.findUnique({
+      where: { id: tableId },
+      include: { tableColumns: { orderBy: { columnIndex: 'asc' } } }
+    });
+    if (!table) {
+      return res.status(404).json({ error: 'Table introuvable' });
+    }
+
+    // Choisir displayColumn
+    const firstColName = table.tableColumns[0]?.name || null;
+    const chosenDisplayColumn = bodyDisplayColumn || firstColName || null;
+    if (!chosenDisplayColumn) {
+      console.warn('[STEP4-AUTO] ❌ No displayColumn candidate', { tableId });
+      return res.status(400).json({ error: 'Impossible de déterminer displayColumn' });
+    }
+
+    console.log('[STEP4-AUTO] 🎯 Selected displayColumn', { tableId, displayColumn: chosenDisplayColumn });
+
+    // Mettre à jour META.lookup.displayColumn
+    try {
+      const metaObj = table.meta
+        ? (typeof table.meta === 'string' ? JSON.parse(table.meta as unknown as string) : JSON.parse(JSON.stringify(table.meta)))
+        : {};
+      const nextMeta = {
+        ...metaObj,
+        lookup: {
+          ...(metaObj?.lookup || {}),
+          displayColumn: chosenDisplayColumn
+        }
+      };
+      await prisma.treeBranchLeafNodeTable.update({
+        where: { id: tableId },
+        data: { meta: nextMeta, updatedAt: new Date() }
+      });
+      console.log('[STEP4-AUTO] ✅ META updated', { tableId, displayColumn: chosenDisplayColumn });
+    } catch (e) {
+      console.warn('[STEP4-AUTO] ⚠️ META update failed (non-bloquant):', (e as Error).message);
+    }
+
+    // Upsert SelectConfig avec tableReference + displayColumn
+    const sc = await prisma.treeBranchLeafSelectConfig.upsert({
+      where: { nodeId },
+      create: {
+        id: randomUUID(),
+        nodeId,
+        options: [] as Prisma.InputJsonValue,
+        multiple: false,
+        searchable: true,
+        allowCustom: false,
+        optionsSource: 'table',
+        tableReference: tableId,
+        keyColumn: null,
+        keyRow: null,
+        valueColumn: null,
+        valueRow: null,
+        displayColumn: chosenDisplayColumn,
+        displayRow: null,
+        dependsOnNodeId: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      },
+      update: {
+        optionsSource: 'table',
+        tableReference: tableId,
+        displayColumn: chosenDisplayColumn,
+        updatedAt: new Date(),
+      },
+    });
+
+    console.log('[STEP4-AUTO] ✅ SelectConfig upserted', {
+      nodeId,
+      tableReference: sc.tableReference,
+      displayColumn: sc.displayColumn,
+    });
+
+    return res.json({
+      success: true,
+      nodeId,
+      tableId,
+      displayColumn: chosenDisplayColumn,
+    });
+
+  } catch (error) {
+    console.error('[STEP4-AUTO] Error normalize-step4:', error);
+    res.status(500).json({ error: 'Erreur lors de la normalisation Étape 4' });
   }
 });
 
@@ -12986,6 +13195,9 @@ router.post('/nodes/:nodeId/convert-to-reference', async (req, res) => {
  */
 // (revert) suppression des routes utilitaires ajoutÃƒÂ¯Ã‚Â¿Ã‚Â½es au niveau supÃƒÂ¯Ã‚Â¿Ã‚Â½rieur
 
+type JsonValue = string | number | boolean | { [key: string]: JsonValue } | JsonArray | null;
+interface JsonArray extends Array<JsonValue> {}
+
 router.post('/nodes/:nodeId/copy-linked-variable', async (req, res) => {
   try {
     const { nodeId } = req.params;
@@ -13071,6 +13283,19 @@ router.post('/nodes/:nodeId/copy-linked-variable', async (req, res) => {
       const exists = await prisma.treeBranchLeafNode.findUnique({ where: { id: candidateId } });
       targetNodeId = exists ? `${candidateId}-${Date.now()}` : candidateId;
 
+      // Gérer proprement la réécriture des références dans les configs
+      const rewriter = (json: any): any => {
+         if (!json) return json ?? {};
+         const str = JSON.stringify(json);
+         const rewritten = rewriteReferences(str, {
+           nodeIdMap: new Map(),
+           formulaIdMap: new Map(),
+           conditionIdMap: new Map(),
+           tableIdMap: new Map()
+         }, newSuffix);
+         return JSON.parse(rewritten);
+      };
+
       await prisma.treeBranchLeafNode.create({
         data: {
           id: targetNodeId,
@@ -13080,14 +13305,20 @@ router.post('/nodes/:nodeId/copy-linked-variable', async (req, res) => {
           subType: ownerNode.subType,
           label: `${ownerNode.label || 'Node'}-${newSuffix}`,
           description: ownerNode.description,
-          value: null,
+          value: ownerNode.value,
+          calculatedValue: ownerNode.calculatedValue,
           order: (ownerNode.order ?? 0) + 1,
           isRequired: ownerNode.isRequired ?? false,
           isVisible: ownerNode.isVisible ?? true,
           isActive: ownerNode.isActive ?? true,
           isMultiple: ownerNode.isMultiple ?? false,
           hasData: ownerNode.hasData ?? false,
-          metadata: ownerNode.metadata as any,
+          metadata: rewriter(ownerNode.metadata) as any,
+          tableConfig: rewriter(ownerNode.tableConfig) as any,
+          formulaConfig: rewriter(ownerNode.formulaConfig) as any,
+          conditionConfig: rewriter(ownerNode.conditionConfig) as any,
+          apiConfig: rewriter(ownerNode.apiConfig) as any,
+          linkConfig: rewriter(ownerNode.linkConfig) as any,
           createdAt: new Date(),
           updatedAt: new Date(),
         }
@@ -13125,6 +13356,55 @@ router.post('/nodes/:nodeId/copy-linked-variable', async (req, res) => {
       await addToNodeLinkedField(prisma, targetNodeId, 'linkedVariableIds', [result.variableId]);
     } catch (e) {
       console.warn('?? [COPY-LINKED-VAR] ÃƒÂ¯Ã‚Â¿Ã‚Â½chec MAJ linkedVariableIds:', (e as Error).message);
+    }
+
+    // 🔥 CRITIQUE: Déclencher l'évaluation immédiate après la copie
+    // Sans cela, le nœud copié reste "muet" jusqu'à une interaction manuelle
+    try {
+      console.log(`🔄 [COPY-LINKED-VAR] Déclenchement évaluation initiale pour ${targetNodeId}...`);
+      
+      // Récupérer le treeId pour l'évaluation
+      const copiedNode = await prisma.treeBranchLeafNode.findUnique({
+        where: { id: targetNodeId },
+        select: { treeId: true, calculatedValue: true }
+      });
+
+      if (copiedNode?.treeId) {
+        // Chercher une submission active pour ce tree (nécessaire pour l'évaluation)
+        const activeSubmission = await prisma.treeBranchLeafSubmission.findFirst({
+          where: { 
+            treeId: copiedNode.treeId,
+            status: { not: 'archived' }
+          },
+          orderBy: { updatedAt: 'desc' },
+          select: { id: true }
+        });
+
+        if (activeSubmission) {
+          // Appeler evaluateVariableOperation pour calculer la valeur
+          const evaluationResult = await evaluateVariableOperation(
+            targetNodeId,
+            activeSubmission.id,
+            prisma
+          );
+
+          // Mettre à jour calculatedValue du nœud
+          await prisma.treeBranchLeafNode.update({
+            where: { id: targetNodeId },
+            data: { 
+              calculatedValue: evaluationResult.value,
+              updatedAt: new Date()
+            }
+          });
+
+          console.log(`✅ [COPY-LINKED-VAR] Évaluation initiale terminée: ${targetNodeId} = ${evaluationResult.value}`);
+        } else {
+          console.warn(`⚠️ [COPY-LINKED-VAR] Pas de submission active trouvée pour évaluation de ${targetNodeId}`);
+        }
+      }
+    } catch (evalError) {
+      // Ne pas bloquer la copie si l'évaluation échoue
+      console.error('⚠️ [COPY-LINKED-VAR] Erreur lors de l\'évaluation initiale:', evalError);
     }
 
     res.status(201).json({ ...result, targetNodeId });

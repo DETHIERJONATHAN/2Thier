@@ -742,19 +742,39 @@ const TBLImageFieldWithAI: React.FC<TBLImageFieldWithAIProps> = ({
         ...(lastAppliedMeasurementsRef.current || {})
       };
 
+      // 🔄 DÉTECTION DU SUFFIXE DE DUPLICATION
+      // Si le champ source (Photo du mur) est dupliqué (Photo du mur-1, Photo du mur-2...),
+      // on doit appliquer les mesures aux champs cibles avec le même suffixe
+      const suffixMatch = nodeId.match(/-(\d+)$/);
+      const duplicateSuffix = suffixMatch ? suffixMatch[0] : ''; // "-1", "-2", etc. ou ""
+      
+      console.log(`[TBLImageFieldWithAI] 🔄 Détection duplication: nodeId="${nodeId}", suffixe="${duplicateSuffix}"`);
+
       aiMeasure_keys.forEach(mapping => {
         // Accéder à la mesure par clé (string index)
-        const measureValue = measurements[mapping.key as keyof MeasurementResults];
+        let measureValue = measurements[mapping.key as keyof MeasurementResults];
         if (measureValue !== undefined && mapping.targetRef) {
-          const prevValue = lastAppliedMeasurementsRef.current?.[mapping.targetRef];
+          // 📏 CONVERSION CM → MÈTRES pour les dimensions
+          // Les mesures sont stockées en cm dans measurements, mais on les applique en mètres
+          if (typeof measureValue === 'number' && (mapping.key.includes('largeur') || mapping.key.includes('hauteur'))) {
+            measureValue = measureValue / 100; // Convertir cm en mètres
+          }
+          
+          // 🎯 AJOUT DU SUFFIXE AU CHAMP CIBLE
+          // Si ce champ est dupliqué (-1, -2...), ajouter le même suffixe au targetRef
+          const actualTargetRef = duplicateSuffix 
+            ? `${mapping.targetRef}${duplicateSuffix}` 
+            : mapping.targetRef;
+          
+          const prevValue = lastAppliedMeasurementsRef.current?.[actualTargetRef];
           const hasChanged = typeof measureValue === 'number'
-            ? (typeof prevValue !== 'number' || Math.abs(prevValue - measureValue) > 0.01)
+            ? (typeof prevValue !== 'number' || Math.abs(prevValue - measureValue) > 0.001)
             : prevValue !== measureValue;
 
           if (hasChanged) {
-            console.log(`[TBLImageFieldWithAI] Application: ${mapping.key} = ${measureValue} → ${mapping.targetRef}`);
-            onFieldUpdate(mapping.targetRef, measureValue);
-            nextApplied[mapping.targetRef] = measureValue as number | string;
+            console.log(`[TBLImageFieldWithAI] Application: ${mapping.key} = ${measureValue} → ${actualTargetRef}${duplicateSuffix ? ` (original: ${mapping.targetRef})` : ''}`);
+            onFieldUpdate(actualTargetRef, measureValue);
+            nextApplied[actualTargetRef] = measureValue as number | string;
             appliedCount++;
           }
         }
@@ -765,7 +785,7 @@ const TBLImageFieldWithAI: React.FC<TBLImageFieldWithAIProps> = ({
       }
       
       if (appliedCount > 0) {
-        message.success(`📐 ${appliedCount} mesure(s) appliquée(s) aux champs !`);
+        message.success(`📐 ${appliedCount} mesure(s) appliquée(s) aux champs${duplicateSuffix ? ` ${duplicateSuffix}` : ''} !`);
       }
     }
     
@@ -1333,17 +1353,17 @@ const TBLImageFieldWithAI: React.FC<TBLImageFieldWithAIProps> = ({
                     <>
                       {savedMeasurements.largeur_cm && (
                         <div style={{ color: 'white', fontSize: 14 }}>
-                          <strong>L:</strong> {savedMeasurements.largeur_cm.toFixed(1)} cm
+                          <strong>L:</strong> {(savedMeasurements.largeur_cm / 100).toFixed(2)} m
                         </div>
                       )}
                       {savedMeasurements.hauteur_cm && (
                         <div style={{ color: 'white', fontSize: 14 }}>
-                          <strong>H:</strong> {savedMeasurements.hauteur_cm.toFixed(1)} cm
+                          <strong>H:</strong> {(savedMeasurements.hauteur_cm / 100).toFixed(2)} m
                         </div>
                       )}
                       {savedMeasurements.surface_brute_m2 && (
                         <div style={{ color: 'white', fontSize: 14 }}>
-                          <strong>Surface:</strong> {savedMeasurements.surface_brute_m2.toFixed(3)} m²
+                          <strong>Surface:</strong> {savedMeasurements.surface_brute_m2.toFixed(2)} m²
                         </div>
                       )}
                     </>

@@ -32023,7 +32023,15 @@ function registerSumDisplayFieldRoutes(router94) {
           });
         } catch (err) {
           if (err instanceof import_client4.Prisma.PrismaClientKnownRequestError && err.code === "P2002") {
-            await prisma29.treeBranchLeafNodeFormula.update({ where: { id: sumFormulaId }, data: sumFormulaData });
+            await prisma29.treeBranchLeafNodeFormula.update({
+              where: {
+                nodeId_name: {
+                  nodeId: sumFieldNodeId,
+                  name: `Somme ${mainVariable.displayName}`
+                }
+              },
+              data: sumFormulaData
+            });
             console.warn(`\xC3\xA2\xC5\xA1\xC2\xA0\xC3\xAF\xC2\xB8\xC2\x8F [SUM DISPLAY] Formule Total d\xC3\u0192\xC2\xA9j\xC3\u0192\xC2\xA0 existante, mise \xC3\u0192\xC2\xA0 jour forc\xC3\u0192\xC2\xA9e: ${sumFormulaId}`);
           } else {
             throw err;
@@ -35213,7 +35221,55 @@ var TableLookupDuplicationService = class {
       });
       console.log(`[TBL-DUP] Found ${originalSelectConfigs.length} SelectConfigs for node=${originalNodeId}`);
       if (originalSelectConfigs.length === 0) {
-        console.log(`[TBL-DUP] No SelectConfigs, returning`);
+        console.log(`[TBL-DUP] \u26A0\uFE0F No SelectConfigs on original, creating NEW one for copy`);
+        const originalNode = await prisma50.treeBranchLeafNode.findUnique({
+          where: { id: originalNodeId },
+          select: { table_activeId: true }
+        });
+        if (originalNode?.table_activeId) {
+          const copiedTableId = `${originalNode.table_activeId}${suffixToken}`;
+          const copiedTable = await prisma50.treeBranchLeafNodeTable.findUnique({
+            where: { id: copiedTableId },
+            include: { tableColumns: { take: 1, orderBy: { columnIndex: "asc" } } }
+          });
+          const firstColName = copiedTable?.tableColumns[0]?.name || null;
+          if (firstColName) {
+            const suffixedDisplayColumn = `${firstColName}${suffixToken}`;
+            console.log(`[TBL-DUP] Creating NEW SelectConfig with displayColumn="${suffixedDisplayColumn}"`);
+            await prisma50.treeBranchLeafSelectConfig.create({
+              data: {
+                id: (0, import_crypto17.randomUUID)(),
+                nodeId: copiedNodeId,
+                tableReference: copiedTableId,
+                // 🔥 CRITICAL: Remplir TOUS les champs nécessaires (pas juste displayColumn)
+                displayColumn: suffixedDisplayColumn,
+                optionsSource: "table",
+                // Type de source
+                multiple: false,
+                // Single select par défaut
+                searchable: true,
+                // Searchable par défaut
+                allowCustom: false,
+                // No custom values
+                options: [],
+                // Empty options (used only for 'fixed' source)
+                maxSelections: null,
+                apiEndpoint: null,
+                keyColumn: null,
+                keyRow: null,
+                valueColumn: null,
+                valueRow: null,
+                displayRow: null,
+                dependsOnNodeId: null,
+                createdAt: /* @__PURE__ */ new Date(),
+                updatedAt: /* @__PURE__ */ new Date()
+              }
+            });
+            console.log(`[TBL-DUP] \u2705 NEW SelectConfig created with displayColumn="${suffixedDisplayColumn}"`);
+            return;
+          }
+        }
+        console.log(`[TBL-DUP] No table or columns found, skipping`);
         return;
       }
       for (const selectConfig of originalSelectConfigs) {
@@ -35336,6 +35392,7 @@ var TableLookupDuplicationService = class {
                     metaObj.lookup.columnSourceOption.comparisonColumn = `${val}${suffix}`;
                   }
                 }
+                console.log(`[TBL-DUP] DEBUG: displayColumn original = "${metaObj?.lookup?.displayColumn}"`);
                 if (metaObj?.lookup?.displayColumn) {
                   if (Array.isArray(metaObj.lookup.displayColumn)) {
                     metaObj.lookup.displayColumn = metaObj.lookup.displayColumn.map((col) => {
@@ -35350,6 +35407,9 @@ var TableLookupDuplicationService = class {
                       metaObj.lookup.displayColumn = `${val}${suffix}`;
                     }
                   }
+                  console.log(`[TBL-DUP] \u2705 displayColumn suffix\xE9 = "${metaObj.lookup.displayColumn}"`);
+                } else {
+                  console.log(`[TBL-DUP] \u274C displayColumn non d\xE9fini!`);
                 }
                 if (metaObj?.lookup?.displayRow) {
                   if (Array.isArray(metaObj.lookup.displayRow)) {
@@ -35383,7 +35443,10 @@ var TableLookupDuplicationService = class {
             // ð ˆâ€  FIX 07/01/2026: RÃ©assigner les columnIndex en sÃ©quence (0, 1, 2, ...) pour prÃ©server l'ordre
             tableColumns: {
               create: originalTable.tableColumns.map((col, idx) => {
-                const newName = idx === 0 ? `${col.name}${suffix}` : col.name;
+                const baseName = String(col.name ?? "");
+                const isNumericName = /^-?\d+(\.\d+)?$/.test(baseName.trim());
+                const shouldSuffix = baseName.length > 0 && !isNumericName && !baseName.endsWith(suffix);
+                const newName = shouldSuffix ? `${baseName}${suffix}` : baseName;
                 console.log(`[TBL-DUP] Column ${idx}: "${col.name}" -> "${newName}" (columnIndex: ${col.columnIndex} -> ${idx})`);
                 return {
                   id: col.id ? `${col.id}${suffix}` : (0, import_crypto17.randomUUID)(),
@@ -35418,7 +35481,10 @@ var TableLookupDuplicationService = class {
         });
         const newColumns = await Promise.all(
           originalTable.tableColumns.map((col, idx) => {
-            const newName = idx === 0 ? `${col.name}${suffix}` : col.name;
+            const baseName = String(col.name ?? "");
+            const isNumericName = /^-?\d+(\.\d+)?$/.test(baseName.trim());
+            const shouldSuffix = baseName.length > 0 && !isNumericName && !baseName.endsWith(suffix);
+            const newName = shouldSuffix ? `${baseName}${suffix}` : baseName;
             console.log(`[TBL-DUP] Update Column ${idx}: "${col.name}" -> "${newName}"`);
             return prisma50.treeBranchLeafNodeTableColumn.create({
               data: {
@@ -35441,6 +35507,7 @@ var TableLookupDuplicationService = class {
       });
       if (!existingSelectConfig) {
         const shouldSuffixColumns = true;
+        console.log(`[TBL-DUP] Cr\xE9ation SelectConfig: nodeId=${copiedNodeId}, tableRef=${copiedTableId}, displayColumn=${originalSelectConfig.displayColumn || "(null)"}`);
         await prisma50.treeBranchLeafSelectConfig.create({
           data: {
             id: (0, import_crypto17.randomUUID)(),
@@ -35452,7 +35519,22 @@ var TableLookupDuplicationService = class {
             keyRow: originalSelectConfig.keyRow ? `${originalSelectConfig.keyRow}${suffix}` : null,
             valueColumn: originalSelectConfig.valueColumn ? `${originalSelectConfig.valueColumn}${suffix}` : null,
             valueRow: originalSelectConfig.valueRow ? `${originalSelectConfig.valueRow}${suffix}` : null,
-            displayColumn: originalSelectConfig.displayColumn ? `${originalSelectConfig.displayColumn}${suffix}` : null,
+            displayColumn: (() => {
+              if (originalSelectConfig.displayColumn) {
+                return `${originalSelectConfig.displayColumn}${suffix}`;
+              }
+              const firstCol = originalTable.tableColumns && originalTable.tableColumns.length > 0 ? originalTable.tableColumns[0] : null;
+              if (firstCol && firstCol.name) {
+                const baseName = String(firstCol.name);
+                const isNumericName = /^-?\d+(\.\d+)?$/.test(baseName.trim());
+                const shouldSuffix = baseName.length > 0 && !isNumericName && !baseName.endsWith(suffix);
+                const result = shouldSuffix ? `${baseName}${suffix}` : baseName;
+                console.log(`[TBL-DUP] displayColumn init: firstCol="${firstCol.name}" \u2192 "${result}"`);
+                return result;
+              }
+              console.log(`[TBL-DUP] displayColumn: AUCUNE COLONNE TROUV\xC9E`);
+              return null;
+            })(),
             displayRow: originalSelectConfig.displayRow ? `${originalSelectConfig.displayRow}${suffix}` : null,
             // 🔧 FIX 07/01/2026: Copier TOUS les autres champs du SelectConfig original
             options: originalSelectConfig.options,
@@ -35468,12 +35550,31 @@ var TableLookupDuplicationService = class {
             updatedAt: /* @__PURE__ */ new Date()
           }
         });
+        console.log(`[TBL-DUP] \u2705 SelectConfig cr\xE9\xE9 avec displayColumn SAUVEGARD\xC9 en DB`);
         try {
-          const node = await prisma50.treeBranchLeafNode.findUnique({ where: { id: copiedNodeId }, select: { capabilities: true, linkedTableIds: true, fieldType: true } });
+          const node = await prisma50.treeBranchLeafNode.findUnique({ where: { id: copiedNodeId }, select: { capabilities: true, linkedTableIds: true, fieldType: true, metadata: true } });
           const currentCapabilities = node?.capabilities && typeof node.capabilities === "object" ? node.capabilities : {};
           const isInputField = node?.fieldType === null || node?.fieldType === "" || node?.fieldType === void 0;
           const currentLinked = node?.linkedTableIds || [];
           const newLinked = isInputField ? [] : Array.from(/* @__PURE__ */ new Set([...currentLinked, copiedTableId]));
+          const currentMetadata = node?.metadata && typeof node.metadata === "object" ? JSON.parse(JSON.stringify(node.metadata)) : {};
+          if (currentMetadata.lookup) {
+            if (currentMetadata.lookup.tableRef) {
+              currentMetadata.lookup.tableRef = copiedTableId;
+            }
+            if (currentMetadata.lookup.displayColumn) {
+              if (Array.isArray(currentMetadata.lookup.displayColumn)) {
+                currentMetadata.lookup.displayColumn = currentMetadata.lookup.displayColumn.map(
+                  (col) => col && !col.endsWith(suffix) ? `${col}${suffix}` : col
+                );
+              } else if (typeof currentMetadata.lookup.displayColumn === "string") {
+                const val = currentMetadata.lookup.displayColumn;
+                if (!val.endsWith(suffix)) {
+                  currentMetadata.lookup.displayColumn = `${val}${suffix}`;
+                }
+              }
+            }
+          }
           if (isTableOwnedByThisNode) {
             currentCapabilities.table = currentCapabilities.table || {};
             currentCapabilities.table.enabled = true;
@@ -35490,7 +35591,9 @@ var TableLookupDuplicationService = class {
                 table_name: originalTable.name + suffix,
                 table_type: originalTable.type,
                 capabilities: currentCapabilities,
-                linkedTableIds: { set: newLinked }
+                linkedTableIds: { set: newLinked },
+                metadata: currentMetadata
+                // 🔥 FIX: Sauvegarder le metadata mis à jour
               }
             });
           } else {
@@ -35499,7 +35602,9 @@ var TableLookupDuplicationService = class {
               data: {
                 hasTable: false,
                 // ✅ IMPORTANT: Les non-propriétaires NE doivent PAS avoir hasTable: true!
-                linkedTableIds: { set: newLinked }
+                linkedTableIds: { set: newLinked },
+                metadata: currentMetadata
+                // 🔥 FIX: Sauvegarder le metadata mis à jour
               }
             });
           }
@@ -35975,6 +36080,17 @@ async function deepCopyNodeInternal(prisma50, req2, nodeId, opts) {
     metadata: (() => {
       const origMeta = typeof oldNode.metadata === "object" ? oldNode.metadata : {};
       const newMeta = { ...origMeta, copiedFromNodeId: oldNode.id, copySuffix: metadataCopySuffix };
+      if (newMeta.lookup?.displayColumn) {
+        const col = newMeta.lookup.displayColumn;
+        const suf = `-${suffixNum}`;
+        if (Array.isArray(col)) {
+          newMeta.lookup.displayColumn = col.map(
+            (c) => c && !/^\d+$/.test(c) && !c.endsWith(suf) ? `${c}${suf}` : c
+          );
+        } else if (typeof col === "string" && !/^\d+$/.test(col) && !col.endsWith(suf)) {
+          newMeta.lookup.displayColumn = `${col}${suf}`;
+        }
+      }
       if (normalizedRepeatContext && newMeta.repeater) {
         delete newMeta.repeater;
       }
@@ -36102,6 +36218,89 @@ async function deepCopyNodeInternal(prisma50, req2, nodeId, opts) {
       });
     } catch (lookupError) {
       console.warn(`[DEEP-COPY] Warning duplicating table lookup for ${oldId} -> ${newId}:`, lookupError.message);
+    }
+    if (oldNode.aiMeasure_keys && Array.isArray(oldNode.aiMeasure_keys) && oldNode.aiMeasure_keys.length > 0) {
+      try {
+        console.log(`[DEEP-COPY] \u{1F4D0} Duplication des champs AI Measure pour ${newId}`);
+        const mappings = oldNode.aiMeasure_keys;
+        for (const mapping of mappings) {
+          if (!mapping.targetRef) continue;
+          const originalTargetField = await prisma50.treeBranchLeafNode.findUnique({
+            where: { id: mapping.targetRef }
+          });
+          if (!originalTargetField) {
+            console.warn(`[DEEP-COPY] \u26A0\uFE0F Champ cible ${mapping.targetRef} introuvable pour ${mapping.key}`);
+            continue;
+          }
+          const duplicatedTargetId = `${mapping.targetRef}${suffixToken}`;
+          const existingDuplicatedField = await prisma50.treeBranchLeafNode.findUnique({
+            where: { id: duplicatedTargetId }
+          });
+          if (existingDuplicatedField) {
+            console.log(`[DEEP-COPY] \u2713 Champ cible ${duplicatedTargetId} existe d\xE9j\xE0`);
+            continue;
+          }
+          const duplicatedFieldData = {
+            id: duplicatedTargetId,
+            treeId: originalTargetField.treeId,
+            type: originalTargetField.type,
+            subType: originalTargetField.subType,
+            fieldType: originalTargetField.fieldType,
+            label: `${originalTargetField.label}${suffixToken}`,
+            description: originalTargetField.description,
+            parentId: originalTargetField.parentId,
+            order: originalTargetField.order,
+            isVisible: originalTargetField.isVisible,
+            isActive: originalTargetField.isActive,
+            isRequired: originalTargetField.isRequired,
+            isMultiple: originalTargetField.isMultiple,
+            hasData: originalTargetField.hasData,
+            hasFormula: originalTargetField.hasFormula,
+            hasCondition: originalTargetField.hasCondition,
+            hasTable: originalTargetField.hasTable,
+            hasAPI: originalTargetField.hasAPI,
+            hasLink: originalTargetField.hasLink,
+            hasMarkers: originalTargetField.hasMarkers,
+            // 📏 CRITIQUE: Copier TOUTES les propriétés de données (unité, précision, format, etc.)
+            data_unit: originalTargetField.data_unit,
+            data_precision: originalTargetField.data_precision,
+            data_displayFormat: originalTargetField.data_displayFormat,
+            data_exposedKey: originalTargetField.data_exposedKey,
+            data_visibleToUser: originalTargetField.data_visibleToUser,
+            defaultValue: originalTargetField.defaultValue,
+            calculatedValue: null,
+            appearance_size: originalTargetField.appearance_size,
+            appearance_variant: originalTargetField.appearance_variant,
+            appearance_width: originalTargetField.appearance_width,
+            text_placeholder: originalTargetField.text_placeholder,
+            text_maxLength: originalTargetField.text_maxLength,
+            text_minLength: originalTargetField.text_minLength,
+            text_mask: originalTargetField.text_mask,
+            text_regex: originalTargetField.text_regex,
+            text_rows: originalTargetField.text_rows,
+            text_helpTooltipType: originalTargetField.text_helpTooltipType,
+            text_helpTooltipText: originalTargetField.text_helpTooltipText,
+            text_helpTooltipImage: originalTargetField.text_helpTooltipImage,
+            number_min: originalTargetField.number_min,
+            number_max: originalTargetField.number_max,
+            number_step: originalTargetField.number_step,
+            number_decimals: originalTargetField.number_decimals,
+            number_prefix: originalTargetField.number_prefix,
+            number_suffix: originalTargetField.number_suffix,
+            number_unit: originalTargetField.number_unit,
+            number_defaultValue: originalTargetField.number_defaultValue,
+            metadata: {
+              copiedFromNodeId: originalTargetField.id,
+              copySuffix: metadataCopySuffix,
+              duplicatedFromAIMeasure: true
+            }
+          };
+          await prisma50.treeBranchLeafNode.create({ data: duplicatedFieldData });
+          console.log(`[DEEP-COPY] \u2705 Champ AI Measure cr\xE9\xE9: ${duplicatedTargetId} (${mapping.key})`);
+        }
+      } catch (aiMeasureError) {
+        console.error(`[DEEP-COPY] \u274C Erreur duplication champs AI Measure:`, aiMeasureError);
+      }
     }
     if (Array.isArray(cloneData.linkedTableIds) && cloneData.linkedTableIds.length > 0) {
       displayNodeIds.push(newId);
@@ -36389,6 +36588,34 @@ async function deepCopyNodeInternal(prisma50, req2, nodeId, opts) {
               if (metaObj?.lookup?.columnSourceOption?.sourceField && !metaObj.lookup.columnSourceOption.sourceField.endsWith(`-${copySuffixNum}`)) {
                 metaObj.lookup.columnSourceOption.sourceField = `${metaObj.lookup.columnSourceOption.sourceField}-${copySuffixNum}`;
               }
+              if (metaObj?.lookup?.displayColumn) {
+                const originalDisplay = JSON.stringify(metaObj.lookup.displayColumn);
+                if (Array.isArray(metaObj.lookup.displayColumn)) {
+                  metaObj.lookup.displayColumn = metaObj.lookup.displayColumn.map((col) => {
+                    if (typeof col === "string" && !col.endsWith(`-${copySuffixNum}`)) {
+                      return `${col}-${copySuffixNum}`;
+                    }
+                    return col;
+                  });
+                } else if (typeof metaObj.lookup.displayColumn === "string" && !metaObj.lookup.displayColumn.endsWith(`-${copySuffixNum}`)) {
+                  metaObj.lookup.displayColumn = `${metaObj.lookup.displayColumn}-${copySuffixNum}`;
+                }
+                console.log(`\u{1F527} [DEEP-COPY] displayColumn: ${originalDisplay} \u2192 ${JSON.stringify(metaObj.lookup.displayColumn)}`);
+              }
+              if (metaObj?.lookup?.columnSourceOption?.comparisonColumn && !metaObj.lookup.columnSourceOption.comparisonColumn.endsWith(`-${copySuffixNum}`)) {
+                metaObj.lookup.columnSourceOption.comparisonColumn = `${metaObj.lookup.columnSourceOption.comparisonColumn}-${copySuffixNum}`;
+              }
+              if (metaObj?.lookup?.displayRow && typeof metaObj.lookup.displayRow === "string" && !metaObj.lookup.displayRow.endsWith(`-${copySuffixNum}`)) {
+                metaObj.lookup.displayRow = `${metaObj.lookup.displayRow}-${copySuffixNum}`;
+              }
+              if (metaObj?.data?.columns && Array.isArray(metaObj.data.columns)) {
+                metaObj.data.columns = metaObj.data.columns.map((col) => {
+                  if (typeof col === "string" && !col.endsWith(`-${copySuffixNum}`)) {
+                    return `${col}-${copySuffixNum}`;
+                  }
+                  return col;
+                });
+              }
               return metaObj;
             } catch (err) {
               console.warn("[table.meta] Erreur traitement meta, copie tel quel:", err);
@@ -36405,9 +36632,10 @@ async function deepCopyNodeInternal(prisma50, req2, nodeId, opts) {
             create: t.tableColumns.map((col) => ({
               id: appendSuffix(col.id),
               columnIndex: col.columnIndex,
-              // 🐛 FIX 06/01/2026: NE JAMAIS suffixer les noms de colonnes !
-              // Les cells gardent "Orientation" (jamais suffixé), donc colonnes aussi
-              name: col.name,
+              // 🎯 FIX 24/01/2026: SUFFIXER les noms de colonnes !
+              // Quand on duplique une table avec des champs, les colonnes prennent aussi le suffix
+              // Ex: "Puissance" devient "Puissance-1" dans la table dupliquée
+              name: `${col.name}-${copySuffixNum}`,
               type: col.type,
               width: col.width,
               format: col.format,
@@ -36451,9 +36679,9 @@ async function deepCopyNodeInternal(prisma50, req2, nodeId, opts) {
         let newTableReference = null;
         const shouldSuffixColumns = true;
         if (originalSelectConfig.tableReference) {
-          const tableWasCopied = tableIdMap2.has(originalSelectConfig.tableReference);
-          console.log(`[DEEP-COPY SelectConfig] nodeId=${oldId} \u2192 tableReference=${originalSelectConfig.tableReference}, tableWasCopied=${tableWasCopied}, tableIdMap.size=${tableIdMap2.size}`);
-          if (tableWasCopied) {
+          const tableWasCopied2 = tableIdMap2.has(originalSelectConfig.tableReference);
+          console.log(`[DEEP-COPY SelectConfig] nodeId=${oldId} \u2192 tableReference=${originalSelectConfig.tableReference}, tableWasCopied=${tableWasCopied2}, tableIdMap.size=${tableIdMap2.size}`);
+          if (tableWasCopied2) {
             newTableReference = tableIdMap2.get(originalSelectConfig.tableReference);
             console.log(`[DEEP-COPY SelectConfig] \u2705 Table copi\xE9e, utilisation de newTableReference=${newTableReference}`);
           } else {
@@ -36478,7 +36706,16 @@ async function deepCopyNodeInternal(prisma50, req2, nodeId, opts) {
               // Suffixer les colonnes seulement si table locale
               keyColumn: originalSelectConfig.keyColumn ? shouldSuffixColumns ? `${originalSelectConfig.keyColumn}${computedLabelSuffix}` : originalSelectConfig.keyColumn : null,
               valueColumn: originalSelectConfig.valueColumn ? shouldSuffixColumns ? `${originalSelectConfig.valueColumn}${computedLabelSuffix}` : originalSelectConfig.valueColumn : null,
-              displayColumn: originalSelectConfig.displayColumn ? shouldSuffixColumns ? `${originalSelectConfig.displayColumn}${computedLabelSuffix}` : originalSelectConfig.displayColumn : null,
+              displayColumn: (() => {
+                if (originalSelectConfig.displayColumn) {
+                  return shouldSuffixColumns ? `${originalSelectConfig.displayColumn}${computedLabelSuffix}` : originalSelectConfig.displayColumn;
+                }
+                if (newTableReference && tableWasCopied) {
+                  const copiedTableId = newTableReference;
+                  console.log(`[DEEP-COPY] \u26A0\uFE0F displayColumn null for node ${oldId}, table reference: ${copiedTableId}`);
+                }
+                return null;
+              })(),
               displayRow: originalSelectConfig.displayRow,
               keyRow: originalSelectConfig.keyRow,
               valueRow: originalSelectConfig.valueRow,
@@ -37274,7 +37511,7 @@ router55.put("/nodes/:nodeId/tables/:tableId", async (req2, res) => {
   const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx2(req2);
   try {
     if (meta && !columns && !rows) {
-      const table = await prisma30.treeBranchLeafNodeTable.findUnique({
+      const table2 = await prisma30.treeBranchLeafNodeTable.findUnique({
         where: { id: tableId },
         include: {
           TreeBranchLeafNode: {
@@ -37282,10 +37519,10 @@ router55.put("/nodes/:nodeId/tables/:tableId", async (req2, res) => {
           }
         }
       });
-      if (!table) {
+      if (!table2) {
         return res.status(404).json({ error: "Table non trouv\xC3\u0192\xC2\xA9e" });
       }
-      const tableOrgId = table.TreeBranchLeafNode?.TreeBranchLeafTree?.organizationId;
+      const tableOrgId = table2.TreeBranchLeafNode?.TreeBranchLeafTree?.organizationId;
       if (!isSuperAdmin2 && organizationId && tableOrgId !== organizationId) {
         return res.status(403).json({ error: "Acc\xC3\u0192\xC2\xA8s non autoris\xC3\u0192\xC2\xA9" });
       }
@@ -37299,7 +37536,7 @@ router55.put("/nodes/:nodeId/tables/:tableId", async (req2, res) => {
       return res.json(updatedTable2);
     }
     const updatedTable = await prisma30.$transaction(async (tx) => {
-      const table = await tx.treeBranchLeafNodeTable.findUnique({
+      const table2 = await tx.treeBranchLeafNodeTable.findUnique({
         where: { id: tableId },
         include: {
           TreeBranchLeafNode: {
@@ -37307,10 +37544,10 @@ router55.put("/nodes/:nodeId/tables/:tableId", async (req2, res) => {
           }
         }
       });
-      if (!table) {
+      if (!table2) {
         throw new Error("Table non trouv\xC3\u0192\xC2\xA9e");
       }
-      const tableOrgId = table.TreeBranchLeafNode?.TreeBranchLeafTree?.organizationId;
+      const tableOrgId = table2.TreeBranchLeafNode?.TreeBranchLeafTree?.organizationId;
       if (!isSuperAdmin2 && organizationId && tableOrgId !== organizationId) {
         throw new Error("Acc\xC3\u0192\xC2\xA8s non autoris\xC3\u0192\xC2\xA9");
       }
@@ -37359,6 +37596,19 @@ router55.put("/nodes/:nodeId/tables/:tableId", async (req2, res) => {
       }
       return tableUpdated;
     });
+    const table = await prisma30.treeBranchLeafNodeTable.findUnique({
+      where: { id: tableId },
+      select: { nodeId: true }
+    });
+    if (table?.nodeId) {
+      await prisma30.treeBranchLeafNode.update({
+        where: { id: table.nodeId },
+        data: {
+          hasTable: true,
+          table_activeId: tableId
+        }
+      });
+    }
     res.json(updatedTable);
   } catch (error) {
     console.error(`\xC3\xA2\xC2\x9D\xC5\u2019 [NEW PUT /nodes/:nodeId/tables/:tableId] Erreur:`, error);
@@ -37395,7 +37645,26 @@ router55.get("/nodes/:nodeId/tables", async (req2, res) => {
       },
       orderBy: { createdAt: "asc" }
     });
-    const formattedTables = tables.map((table) => ({
+    let activeTable = null;
+    console.log(`[GET /nodes/:nodeId/tables] nodeId: ${nodeId}, table_activeId: ${node.table_activeId}`);
+    if (node.table_activeId) {
+      activeTable = await prisma30.treeBranchLeafNodeTable.findUnique({
+        where: { id: node.table_activeId },
+        include: {
+          tableColumns: {
+            orderBy: { columnIndex: "asc" }
+          },
+          tableRows: {
+            orderBy: { rowIndex: "asc" }
+          }
+        }
+      });
+    }
+    const allTables = [...tables];
+    if (activeTable && !allTables.some((t) => t.id === activeTable.id)) {
+      allTables.push(activeTable);
+    }
+    const formattedTables = allTables.map((table) => ({
       id: table.id,
       name: table.name,
       description: table.description,
@@ -37424,6 +37693,7 @@ router55.get("/nodes/:nodeId/tables", async (req2, res) => {
       createdAt: table.createdAt,
       updatedAt: table.updatedAt
     }));
+    console.log(`[GET /nodes/:nodeId/tables] Returning ${formattedTables.length} tables. First table columns: ${formattedTables[0]?.columns?.slice(0, 3).join(", ")}`);
     res.json(formattedTables);
   } catch (error) {
     console.error(`\xC3\xA2\xC2\x9D\xC5\u2019 [NEW GET /nodes/:nodeId/tables] Erreur:`, error);
@@ -57425,13 +57695,15 @@ function sanitizeFormData(input) {
   return input;
 }
 var UUID_NODE_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+var UUID_WITH_SUFFIX_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}-\d+$/i;
 var GENERATED_NODE_REGEX = /^node_[0-9]+_[a-z0-9]+$/i;
 var SHARED_REFERENCE_REGEX = /^shared-ref-[a-z0-9-]+$/i;
 function isSharedReferenceId(nodeId) {
   return SHARED_REFERENCE_REGEX.test(nodeId);
 }
 function isAcceptedNodeId(nodeId) {
-  return UUID_NODE_REGEX.test(nodeId) || GENERATED_NODE_REGEX.test(nodeId) || isSharedReferenceId(nodeId);
+  return UUID_NODE_REGEX.test(nodeId) || UUID_WITH_SUFFIX_REGEX.test(nodeId) || // 🔥 NOUVEAU: Accepter UUID avec suffixe -1, -2, etc.
+  GENERATED_NODE_REGEX.test(nodeId) || isSharedReferenceId(nodeId);
 }
 async function resolveSharedReferenceAliases(sharedRefs, treeId) {
   if (!sharedRefs.length) {

@@ -163,6 +163,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Button, Card, Divider, Input, Select, Space, Switch, Table, Tooltip, Typography, message, Progress, Spin, Timeline, Statistic, Row, Col } from 'antd';
 import { useAuthenticatedApi } from '../../../../../../hooks/useAuthenticatedApi';
+import { useTBLBatch } from '../../../TBL/contexts/TBLBatchContext';
 import { useDebouncedCallback } from '../../../hooks/useDebouncedCallback';
 import * as XLSX from 'xlsx';
 import { DeleteOutlined, PlusOutlined, InfoCircleOutlined, DownloadOutlined, FilterOutlined, PlayCircleOutlined, BulbOutlined, CheckCircleOutlined, CloseCircleOutlined, ThunderboltOutlined } from '@ant-design/icons';
@@ -450,6 +451,7 @@ const instanceToConfig = (instance?: TableInstance | null): TableConfig => {
 
 const TablePanel: React.FC<TablePanelProps> = ({ treeId: initialTreeId, nodeId, value: _value, onChange: _onChange, readOnly }) => {
   const { api } = useAuthenticatedApi();
+  const tblBatch = useTBLBatch();
   const [cfg, setCfg] = useState<TableConfig>({ type: 'matrix', columns: [], rows: [] });
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [testCol, setTestCol] = useState<string | undefined>(undefined);
@@ -543,6 +545,19 @@ const TablePanel: React.FC<TablePanelProps> = ({ treeId: initialTreeId, nodeId, 
       message.error('Erreur lors de la sauvegarde du tableau');
     }
   }, 1000);
+
+  const debouncedSaveSelectConfig = useDebouncedCallback(async (payload: Record<string, unknown>) => {
+    if (!activeId || activeId.startsWith('temp_')) {
+      return;
+    }
+
+    try {
+      await api.post(`/api/treebranchleaf/nodes/${nodeId}/select-config`, payload);
+      tblBatch.refresh();
+    } catch (error) {
+      console.error('ðŸ—‚ï¸ TablePanel: Erreur sauvegarde select-config:', error);
+    }
+  }, 800);
 
   // Fonction utilitaire pour assurer la largeur des donnÃ©es
   const ensureDataWidth = useCallback((data: (number | string | null)[][] | undefined, width: number): (number | string | null)[][] | undefined => {
@@ -752,7 +767,7 @@ const TablePanel: React.FC<TablePanelProps> = ({ treeId: initialTreeId, nodeId, 
       return { value: label, label: label };
     });
   }, [cfg]);
-  
+
   const fieldSelectOptions = useMemo(
     () =>
       fieldOptions.map((option) => ({
@@ -804,8 +819,6 @@ const TablePanel: React.FC<TablePanelProps> = ({ treeId: initialTreeId, nodeId, 
     return {
       ...raw,
       extractFrom: raw.extractFrom || 'column', // Par défaut: colonne
-      displayColumn: Array.isArray(raw.displayColumn) ? raw.displayColumn : (typeof raw.displayColumn === 'string' ? raw.displayColumn : undefined),
-      displayRow: Array.isArray(raw.displayRow) ? raw.displayRow : (typeof raw.displayRow === 'string' ? raw.displayRow : undefined),
       exposeColumns,
       columnLookupEnabled: raw.columnLookupEnabled ?? (!!raw.selectors?.columnFieldId),
       rowLookupEnabled: raw.rowLookupEnabled ?? (!!raw.selectors?.rowFieldId),
@@ -831,6 +844,106 @@ const TablePanel: React.FC<TablePanelProps> = ({ treeId: initialTreeId, nodeId, 
     },
     [debouncedSave]
   );
+
+  const normalizedDisplayColumns = useMemo(() => {
+    const rawDisplayColumns = Array.isArray(lookupConfig.displayColumn)
+      ? lookupConfig.displayColumn
+      : (lookupConfig.displayColumn ? [lookupConfig.displayColumn] : []);
+
+    const normalized = rawDisplayColumns.map((col) => {
+      const exists = columnOptions.some((opt) => opt.value === col);
+      if (!exists && !col.endsWith('-1')) {
+        const suffixedCol = `${col}-1`;
+        const suffixedExists = columnOptions.some((opt) => opt.value === suffixedCol);
+        if (suffixedExists) {
+          console.log(`[ÉTAPE 4] Normalisation: "${col}" → "${suffixedCol}"`);
+          return suffixedCol;
+        }
+      }
+      return col;
+    });
+
+    const hasDiff =
+      normalized.length !== rawDisplayColumns.length ||
+      normalized.some((value, index) => value !== rawDisplayColumns[index]);
+
+    return { raw: rawDisplayColumns, normalized, hasDiff };
+  }, [lookupConfig.displayColumn, columnOptions]);
+
+  useEffect(() => {
+    if (readOnly || !normalizedDisplayColumns.hasDiff) return;
+    
+    // 🔥 FIX 24/01/2026: Sauvegarde IMMÉDIATE de meta.lookup.displayColumn après normalisation
+    // Le debounce peut être écrasé par d'autres sauvegardes, donc on fait un PUT direct
+    const saveNormalizedDisplayColumn = async () => {
+      if (!activeId || activeId.startsWith('temp_')) return;
+      
+      try {
+        // Construire la meta mise à jour avec le displayColumn normalisé
+        const updatedMeta = {
+          ...(cfg.meta || {}),
+          lookup: {
+            ...((cfg.meta?.lookup as TableLookupConfig) || {}),
+            displayColumn: normalizedDisplayColumns.normalized,
+          },
+        };
+        
+        console.log(`[ÉTAPE 4] 🔥 Sauvegarde IMMÉDIATE displayColumn="${normalizedDisplayColumns.normalized[0]}"`);
+        
+        // PUT direct pour sauvegarder SEULEMENT la meta (pas les colonnes/lignes)
+        await api.put(`/api/treebranchleaf/nodes/${nodeId}/tables/${activeId}`, {
+          meta: updatedMeta,
+        });
+        
+        console.log('[ÉTAPE 4] ✅ Meta sauvegardée avec displayColumn normalisé');
+        
+        // Rafraîchir le cache batch après sauvegarde
+        tblBatch.refresh();
+      } catch (error) {
+        console.error('[ÉTAPE 4] ❌ Erreur sauvegarde meta:', error);
+      }
+    };
+    
+    // Mettre à jour le state local ET sauvegarder immédiatement
+    updateLookupConfig((prev) => ({
+      ...prev,
+      displayColumn: normalizedDisplayColumns.normalized,
+    }));
+    
+    // Sauvegarde immédiate (pas debounced)
+    saveNormalizedDisplayColumn();
+  }, [normalizedDisplayColumns.hasDiff, normalizedDisplayColumns.normalized, readOnly, updateLookupConfig, activeId, api, nodeId, cfg.meta, tblBatch]);
+
+  useEffect(() => {
+    if (readOnly) return;
+    if (!activeId || activeId.startsWith('temp_')) return;
+    if (!normalizedDisplayColumns.normalized.length) return;
+
+    const selectConfigDisplayColumn = normalizedDisplayColumns.normalized[0] || null;
+
+    debouncedSaveSelectConfig({
+      optionsSource: 'table',
+      tableReference: activeId,
+      keyColumn: lookupConfig.keyColumn || null,
+      keyRow: lookupConfig.keyRow || null,
+      valueColumn: lookupConfig.valueColumn || null,
+      valueRow: lookupConfig.valueRow || null,
+      // TreeBranchLeafSelectConfig.displayColumn est une string (pas un array)
+      displayColumn: selectConfigDisplayColumn,
+      displayRow: lookupConfig.displayRow || null,
+    });
+  }, [
+    activeId,
+    debouncedSaveSelectConfig,
+    lookupConfig.displayColumn,
+    lookupConfig.displayRow,
+    lookupConfig.keyColumn,
+    lookupConfig.keyRow,
+    lookupConfig.valueColumn,
+    lookupConfig.valueRow,
+    normalizedDisplayColumns.normalized,
+    readOnly,
+  ]);
 
   // ⚡ ULTRA-NOUVEAU: Évaluation temps réel des conditions
   const evaluateFilterConditionsRealtime = useCallback(async () => {
@@ -2239,7 +2352,7 @@ const TablePanel: React.FC<TablePanelProps> = ({ treeId: initialTreeId, nodeId, 
                             size="small"
                             mode="multiple"
                             placeholder="Sélectionner colonne(s)..."
-                            value={Array.isArray(lookupConfig.displayColumn) ? lookupConfig.displayColumn : (lookupConfig.displayColumn ? [lookupConfig.displayColumn] : [])}
+                            value={normalizedDisplayColumns.normalized}
                             options={columnOptions}
                             allowClear
                             onChange={(values) => {

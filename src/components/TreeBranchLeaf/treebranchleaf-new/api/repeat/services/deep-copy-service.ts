@@ -561,6 +561,19 @@ export async function deepCopyNodeInternal(
     metadata: (() => {
       const origMeta = (typeof oldNode.metadata === 'object' ? (oldNode.metadata as Record<string, unknown>) : {});
       const newMeta = { ...origMeta, copiedFromNodeId: oldNode.id, copySuffix: metadataCopySuffix } as Record<string, unknown>;
+
+      // FIX: Suffixer displayColumn dans lookup
+      if ((newMeta as any).lookup?.displayColumn) {
+        const col = (newMeta as any).lookup.displayColumn;
+        const suf = `-${suffixNum}`;
+        if (Array.isArray(col)) {
+          (newMeta as any).lookup.displayColumn = col.map((c: string) => 
+            c && !/^\d+$/.test(c) && !c.endsWith(suf) ? `${c}${suf}` : c
+          );
+        } else if (typeof col === 'string' && !/^\d+$/.test(col) && !col.endsWith(suf)) {
+          (newMeta as any).lookup.displayColumn = `${col}${suf}`;
+        }
+      }
       // Ã°Å¸â€Â´ Ne pas copier la configuration de repeater dans les clones crÃƒÂ©ÃƒÂ©s via un repeater
       if (normalizedRepeatContext && newMeta.repeater) {
         delete newMeta.repeater;
@@ -723,6 +736,106 @@ export async function deepCopyNodeInternal(
     } catch (lookupError) {
       console.warn(`[DEEP-COPY] Warning duplicating table lookup for ${oldId} -> ${newId}:`, (lookupError as Error).message);
     }
+
+    // 📐 CRITICAL: Si ce nœud a des configurations AI Measure, dupliquer les champs cibles
+    // Exemple: si "Photo du mur" est dupliqué en "Photo du mur-1" et a des mappings vers
+    // "Longueur" et "Hauteur", on doit créer "Longueur-1" et "Hauteur-1" avec les mêmes propriétés
+    if (oldNode.aiMeasure_keys && Array.isArray(oldNode.aiMeasure_keys) && (oldNode.aiMeasure_keys as any[]).length > 0) {
+      try {
+        console.log(`[DEEP-COPY] 📐 Duplication des champs AI Measure pour ${newId}`);
+        const mappings = oldNode.aiMeasure_keys as Array<{ key: string; targetRef: string }>;
+        
+        for (const mapping of mappings) {
+          if (!mapping.targetRef) continue;
+          
+          // Récupérer le champ cible original
+          const originalTargetField = await prisma.treeBranchLeafNode.findUnique({
+            where: { id: mapping.targetRef }
+          });
+          
+          if (!originalTargetField) {
+            console.warn(`[DEEP-COPY] ⚠️ Champ cible ${mapping.targetRef} introuvable pour ${mapping.key}`);
+            continue;
+          }
+          
+          // Construire l'ID du champ cible dupliqué
+          const duplicatedTargetId = `${mapping.targetRef}${suffixToken}`;
+          
+          // Vérifier si le champ dupliqué existe déjà
+          const existingDuplicatedField = await prisma.treeBranchLeafNode.findUnique({
+            where: { id: duplicatedTargetId }
+          });
+          
+          if (existingDuplicatedField) {
+            console.log(`[DEEP-COPY] ✓ Champ cible ${duplicatedTargetId} existe déjà`);
+            continue;
+          }
+          
+          // Créer le champ cible dupliqué avec les MÊMES propriétés
+          const duplicatedFieldData: Prisma.TreeBranchLeafNodeCreateInput = {
+            id: duplicatedTargetId,
+            treeId: originalTargetField.treeId,
+            type: originalTargetField.type,
+            subType: originalTargetField.subType,
+            fieldType: originalTargetField.fieldType,
+            label: `${originalTargetField.label}${suffixToken}`,
+            description: originalTargetField.description,
+            parentId: originalTargetField.parentId,
+            order: originalTargetField.order,
+            isVisible: originalTargetField.isVisible,
+            isActive: originalTargetField.isActive,
+            isRequired: originalTargetField.isRequired,
+            isMultiple: originalTargetField.isMultiple,
+            hasData: originalTargetField.hasData,
+            hasFormula: originalTargetField.hasFormula,
+            hasCondition: originalTargetField.hasCondition,
+            hasTable: originalTargetField.hasTable,
+            hasAPI: originalTargetField.hasAPI,
+            hasLink: originalTargetField.hasLink,
+            hasMarkers: originalTargetField.hasMarkers,
+            // 📏 CRITIQUE: Copier TOUTES les propriétés de données (unité, précision, format, etc.)
+            data_unit: originalTargetField.data_unit,
+            data_precision: originalTargetField.data_precision,
+            data_displayFormat: originalTargetField.data_displayFormat,
+            data_exposedKey: originalTargetField.data_exposedKey,
+            data_visibleToUser: originalTargetField.data_visibleToUser,
+            defaultValue: originalTargetField.defaultValue,
+            calculatedValue: null,
+            appearance_size: originalTargetField.appearance_size,
+            appearance_variant: originalTargetField.appearance_variant,
+            appearance_width: originalTargetField.appearance_width,
+            text_placeholder: originalTargetField.text_placeholder,
+            text_maxLength: originalTargetField.text_maxLength,
+            text_minLength: originalTargetField.text_minLength,
+            text_mask: originalTargetField.text_mask,
+            text_regex: originalTargetField.text_regex,
+            text_rows: originalTargetField.text_rows,
+            text_helpTooltipType: originalTargetField.text_helpTooltipType,
+            text_helpTooltipText: originalTargetField.text_helpTooltipText,
+            text_helpTooltipImage: originalTargetField.text_helpTooltipImage,
+            number_min: originalTargetField.number_min as unknown as number | undefined,
+            number_max: originalTargetField.number_max as unknown as number | undefined,
+            number_step: originalTargetField.number_step as unknown as number | undefined,
+            number_decimals: originalTargetField.number_decimals,
+            number_prefix: originalTargetField.number_prefix,
+            number_suffix: originalTargetField.number_suffix,
+            number_unit: originalTargetField.number_unit,
+            number_defaultValue: originalTargetField.number_defaultValue as unknown as number | undefined,
+            metadata: {
+              copiedFromNodeId: originalTargetField.id,
+              copySuffix: metadataCopySuffix,
+              duplicatedFromAIMeasure: true
+            } as Prisma.InputJsonValue
+          };
+          
+          await prisma.treeBranchLeafNode.create({ data: duplicatedFieldData });
+          console.log(`[DEEP-COPY] ✅ Champ AI Measure créé: ${duplicatedTargetId} (${mapping.key})`);
+        }
+      } catch (aiMeasureError) {
+        console.error(`[DEEP-COPY] ❌ Erreur duplication champs AI Measure:`, aiMeasureError);
+      }
+    }
+
 
     // Ã°Å¸â€ â€¢ Si ce node a des tables liÃƒÂ©es (linkedTableIds), l'ajouter ÃƒÂ  displayNodeIds
     // pour que le post-processing crÃƒÂ©e les variables pour afficher les donnÃƒÂ©es
@@ -1123,10 +1236,48 @@ export async function deepCopyNodeInternal(
               if (metaObj?.lookup?.columnSourceOption?.sourceField && !metaObj.lookup.columnSourceOption.sourceField.endsWith(`-${copySuffixNum}`)) {
                 metaObj.lookup.columnSourceOption.sourceField = `${metaObj.lookup.columnSourceOption.sourceField}-${copySuffixNum}`;
               }
-              // 🐛 FIX 06/01/2026: NE PAS suffixer comparisonColumn, displayColumn, displayRow
-              // Ce sont des noms de colonnes/lignes dans la table, et les cells ne sont JAMAIS suffixées
-              // Donc ces références doivent rester "Orientation", pas "Orientation-1"
               
+              // 🎯 FIX 24/01/2026: SUFFIXER displayColumn, comparisonColumn, displayRow
+              // Contrairement au commentaire précédent, les noms de colonnes SONT suffixés
+              // quand on duplique une table contenant des références à des champs
+              // Ex: "Puissance" devient "Puissance-1" dans la table dupliquée
+              
+              // Suffixer displayColumn (peut être string ou array)
+              if (metaObj?.lookup?.displayColumn) {
+                const originalDisplay = JSON.stringify(metaObj.lookup.displayColumn);
+                if (Array.isArray(metaObj.lookup.displayColumn)) {
+                  metaObj.lookup.displayColumn = metaObj.lookup.displayColumn.map(col => {
+                    if (typeof col === 'string' && !col.endsWith(`-${copySuffixNum}`)) {
+                      return `${col}-${copySuffixNum}`;
+                    }
+                    return col;
+                  });
+                } else if (typeof metaObj.lookup.displayColumn === 'string' && !metaObj.lookup.displayColumn.endsWith(`-${copySuffixNum}`)) {
+                  metaObj.lookup.displayColumn = `${metaObj.lookup.displayColumn}-${copySuffixNum}`;
+                }
+                console.log(`🔧 [DEEP-COPY] displayColumn: ${originalDisplay} → ${JSON.stringify(metaObj.lookup.displayColumn)}`);
+              }
+              
+              // Suffixer comparisonColumn
+              if (metaObj?.lookup?.columnSourceOption?.comparisonColumn && !metaObj.lookup.columnSourceOption.comparisonColumn.endsWith(`-${copySuffixNum}`)) {
+                metaObj.lookup.columnSourceOption.comparisonColumn = `${metaObj.lookup.columnSourceOption.comparisonColumn}-${copySuffixNum}`;
+              }
+              
+              // Suffixer displayRow
+              if (metaObj?.lookup?.displayRow && typeof metaObj.lookup.displayRow === 'string' && !metaObj.lookup.displayRow.endsWith(`-${copySuffixNum}`)) {
+                metaObj.lookup.displayRow = `${metaObj.lookup.displayRow}-${copySuffixNum}`;
+              }
+              
+              // 🎯 FIX 24/01/2026: SUFFIXER les noms de colonnes dans meta.data.columns
+              // Les colonnes de la table qui référencent des champs doivent aussi prendre le suffix
+              if (metaObj?.data?.columns && Array.isArray(metaObj.data.columns)) {
+                metaObj.data.columns = metaObj.data.columns.map((col: string) => {
+                  if (typeof col === 'string' && !col.endsWith(`-${copySuffixNum}`)) {
+                    return `${col}-${copySuffixNum}`;
+                  }
+                  return col;
+                });
+              }
               
               return metaObj as Prisma.InputJsonValue;
             } catch (err) {
@@ -1144,9 +1295,10 @@ export async function deepCopyNodeInternal(
             create: t.tableColumns.map(col => ({
               id: appendSuffix(col.id),
               columnIndex: col.columnIndex,
-              // 🐛 FIX 06/01/2026: NE JAMAIS suffixer les noms de colonnes !
-              // Les cells gardent "Orientation" (jamais suffixé), donc colonnes aussi
-              name: col.name,
+              // 🎯 FIX 24/01/2026: SUFFIXER les noms de colonnes !
+              // Quand on duplique une table avec des champs, les colonnes prennent aussi le suffix
+              // Ex: "Puissance" devient "Puissance-1" dans la table dupliquée
+              name: `${col.name}-${copySuffixNum}`,
               type: col.type,
               width: col.width,
               format: col.format,
@@ -1227,9 +1379,12 @@ export async function deepCopyNodeInternal(
 
 
         try {
+          // ID de la SelectConfig copiée (déterministe via suffixe)
+          const copiedSelectConfigId = appendSuffix(originalSelectConfig.id);
+
           await prisma.treeBranchLeafSelectConfig.create({
             data: {
-              id: appendSuffix(originalSelectConfig.id),
+              id: copiedSelectConfigId,
               nodeId: newId,
               options: originalSelectConfig.options as any,
               multiple: originalSelectConfig.multiple,
@@ -1249,9 +1404,13 @@ export async function deepCopyNodeInternal(
               valueColumn: originalSelectConfig.valueColumn
                 ? (shouldSuffixColumns ? `${originalSelectConfig.valueColumn}${computedLabelSuffix}` : originalSelectConfig.valueColumn)
                 : null,
-              displayColumn: originalSelectConfig.displayColumn
-                ? (shouldSuffixColumns ? `${originalSelectConfig.displayColumn}${computedLabelSuffix}` : originalSelectConfig.displayColumn)
-                : null,
+              displayColumn: (() => {
+                if (originalSelectConfig.displayColumn) {
+                  const computed = shouldSuffixColumns ? `${originalSelectConfig.displayColumn}${computedLabelSuffix}` : originalSelectConfig.displayColumn;
+                  return computed;
+                }
+                return null;
+              })(),
               displayRow: originalSelectConfig.displayRow,
               keyRow: originalSelectConfig.keyRow,
               valueRow: originalSelectConfig.valueRow,
@@ -1259,6 +1418,38 @@ export async function deepCopyNodeInternal(
               updatedAt: new Date()
             }
           });
+
+          // ✅ Post-création: si displayColumn est null et la table a été copiée,
+          // initialiser automatiquement avec la première colonne de la table copiée
+          try {
+            if (tableWasCopied && newTableReference) {
+              // Relire la config copiée pour vérifier displayColumn
+              const copiedSelectConfig = await prisma.treeBranchLeafSelectConfig.findUnique({
+                where: { id: copiedSelectConfigId },
+                select: { displayColumn: true }
+              });
+
+              if (!copiedSelectConfig?.displayColumn) {
+                const copiedColumns = await prisma.treeBranchLeafTableColumn.findMany({
+                  where: { tableId: newTableReference },
+                  orderBy: { columnIndex: 'asc' },
+                  select: { name: true }
+                });
+
+                const firstColumnName = copiedColumns?.[0]?.name || null;
+                if (firstColumnName) {
+                  await prisma.treeBranchLeafSelectConfig.update({
+                    where: { id: copiedSelectConfigId },
+                    data: { displayColumn: firstColumnName }
+                  });
+                }
+              } else {
+                console.log(`[DEEP-COPY SelectConfig] ✅ displayColumn déjà rempli, pas de remplacement`);
+              }
+            }
+          } catch (initDisplayErr) {
+            console.warn('[DEEP-COPY SelectConfig] Erreur initialisation displayColumn:', (initDisplayErr as Error).message);
+          }
         } catch (selectConfigErr) {
           
         }

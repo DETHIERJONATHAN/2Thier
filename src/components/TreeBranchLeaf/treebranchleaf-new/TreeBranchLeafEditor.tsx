@@ -558,13 +558,14 @@ const TreeBranchLeafEditor: React.FC<TreeBranchLeafEditorProps> = ({
       return prev;
     });
     try {
-      const optimistic = (propNodes || []).map(n => n.id === nodeId ? { ...n, [flag]: false, ...clearConfig } : n);
+      // 🔥 FIX: Activer la capacité (true) au lieu de la désactiver (false)
+      const optimistic = (propNodes || []).map(n => n.id === nodeId ? { ...n, [flag]: true } : n);
       onNodesUpdate(optimistic);
     } catch {
       // no-op: mise à jour optimiste facultative
     }
-    // Utiliser PUT directement pour éviter les 404 côté API sur PATCH
-    await api.put(`/api/treebranchleaf/trees/${selectedTree.id}/nodes/${nodeId}`, { [flag]: false, ...clearConfig });
+    // 🔥 FIX: Activer la capacité avec true et ne pas clear la config
+    await api.put(`/api/treebranchleaf/trees/${selectedTree.id}/nodes/${nodeId}`, { [flag]: true });
     const updatedNodes = await api.get(`/api/treebranchleaf/trees/${selectedTree.id}/nodes`);
     onNodesUpdate(updatedNodes || []);
     // Re-synchroniser l'objet du nœud sélectionné avec la version rafraîchie

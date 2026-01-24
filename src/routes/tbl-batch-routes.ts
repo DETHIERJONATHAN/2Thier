@@ -391,6 +391,16 @@ router.get('/trees/:treeId/all', async (req: Request, res: Response) => {
       
       if (isSelectType) {
         const selectConfig = node.TreeBranchLeafSelectConfig;
+        
+        // 🔍 DEBUG LOG: Vérifier si les SelectConfigs des champs suffixés sont chargés
+        if (node.id.match(/-\d{1,3}$/)) {
+          console.log(`[TBL Batch] 🔍 Champ suffixé détecté: ${node.id}`);
+          console.log(`[TBL Batch]    - TreeBranchLeafSelectConfig présente: ${!!selectConfig}`);
+          if (selectConfig) {
+            console.log(`[TBL Batch]    - displayColumn: ${selectConfig.displayColumn}`);
+          }
+        }
+        
         configsByNode[node.id] = {
           fieldType: node.fieldType,
           options: node.select_options,

@@ -51,8 +51,63 @@ export class TableLookupDuplicationService {
       
       console.log(`[TBL-DUP] Found ${originalSelectConfigs.length} SelectConfigs for node=${originalNodeId}`);
       
+      // 🔥 FIX: Si aucun SelectConfig n'existe sur l'original, créer un NOUVEAU pour la copie
+      // Cas typique: nœud LOOKUP qui n'a jamais eu ÉTAPE 4 configuré
       if (originalSelectConfigs.length === 0) {
-        console.log(`[TBL-DUP] No SelectConfigs, returning`);
+        console.log(`[TBL-DUP] ⚠️ No SelectConfigs on original, creating NEW one for copy`);
+        
+        // Chercher la table active du nœud original
+        const originalNode = await prisma.treeBranchLeafNode.findUnique({
+          where: { id: originalNodeId },
+          select: { table_activeId: true }
+        });
+        
+        if (originalNode?.table_activeId) {
+          const copiedTableId = `${originalNode.table_activeId}${suffixToken}`;
+          
+          // Charger la table copiée pour obtenir la première colonne
+          const copiedTable = await prisma.treeBranchLeafNodeTable.findUnique({
+            where: { id: copiedTableId },
+            include: { tableColumns: { take: 1, orderBy: { columnIndex: 'asc' } } }
+          });
+          
+          const firstColName = copiedTable?.tableColumns[0]?.name || null;
+          
+          if (firstColName) {
+            // 🔥 CRITICAL FIX: Suffixer la première colonne avec le suffixe du nœud
+            // ✅ IMPORTANT: Les colonnes de la table copiée sont DÉJÀ suffixées.
+            // Ne pas re-suffixer displayColumn ici (évite Puissance-1-1)
+            const displayCol = firstColName;
+            console.log(`[TBL-DUP] Creating NEW SelectConfig with displayColumn="${displayCol}"`);
+            await prisma.treeBranchLeafSelectConfig.create({
+              data: {
+                id: randomUUID(),
+                nodeId: copiedNodeId,
+                tableReference: copiedTableId,
+                // 🔥 CRITICAL: Remplir TOUS les champs nécessaires (pas juste displayColumn)
+                displayColumn: displayCol,
+                optionsSource: 'table',  // Type de source
+                multiple: false,  // Single select par défaut
+                searchable: true,  // Searchable par défaut
+                allowCustom: false,  // No custom values
+                options: [] as any,  // Empty options (used only for 'fixed' source)
+                maxSelections: null,
+                apiEndpoint: null,
+                keyColumn: null,
+                keyRow: null,
+                valueColumn: null,
+                valueRow: null,
+                displayRow: null,
+                dependsOnNodeId: null,
+                createdAt: new Date(),
+                updatedAt: new Date()
+              }
+            });
+            console.log(`[TBL-DUP] ✅ NEW SelectConfig created with displayColumn="${displayCol}"`);
+            return;  // On a créé le SelectConfig, on termine
+          }
+        }
+        console.log(`[TBL-DUP] No table or columns found, skipping`);
         return;
       }
       
@@ -193,6 +248,16 @@ export class TableLookupDuplicationService {
                 if (metaObj?.lookup?.columnSourceOption?.sourceField && !metaObj.lookup.columnSourceOption.sourceField.endsWith(`-${suffixNum}`)) {
                   metaObj.lookup.columnSourceOption.sourceField = `${metaObj.lookup.columnSourceOption.sourceField}-${suffixNum}`;
                 }
+                // 🔥 FIX 24/01/2026: Ajouter operator '=' si comparisonColumn est défini mais operator manquant
+                // Cela assure une correspondance EXACTE au lieu d'une recherche numérique approximative
+                if (metaObj?.lookup?.rowSourceOption?.comparisonColumn && !metaObj.lookup.rowSourceOption.operator) {
+                  metaObj.lookup.rowSourceOption.operator = '=';
+                  console.log(`[TBL-DUP] ✅ Ajout operator '=' pour rowSourceOption`);
+                }
+                if (metaObj?.lookup?.columnSourceOption?.comparisonColumn && !metaObj.lookup.columnSourceOption.operator) {
+                  metaObj.lookup.columnSourceOption.operator = '=';
+                  console.log(`[TBL-DUP] ✅ Ajout operator '=' pour columnSourceOption`);
+                }
                 // Suffixer comparisonColumn si c'est du texte
                 if (metaObj?.lookup?.rowSourceOption?.comparisonColumn) {
                   const val = metaObj.lookup.rowSourceOption.comparisonColumn;
@@ -207,6 +272,7 @@ export class TableLookupDuplicationService {
                   }
                 }
                 // Ã°Å¸â€Â¥ FIX: Suffixer displayColumn (peut ÃƒÂªtre string ou array)
+                console.log(`[TBL-DUP] DEBUG: displayColumn original = "${metaObj?.lookup?.displayColumn}"`);
                 if (metaObj?.lookup?.displayColumn) {
                   if (Array.isArray(metaObj.lookup.displayColumn)) {
                     metaObj.lookup.displayColumn = metaObj.lookup.displayColumn.map((col: string) => {
@@ -221,6 +287,9 @@ export class TableLookupDuplicationService {
                       metaObj.lookup.displayColumn = `${val}${suffix}`;
                     }
                   }
+                  console.log(`[TBL-DUP] ✅ displayColumn suffixé = "${metaObj.lookup.displayColumn}"`);
+                } else {
+                  console.log(`[TBL-DUP] ❌ displayColumn non défini!`);
                 }
                 // Ã°Å¸â€Â¥ FIX: Suffixer displayRow (peut ÃƒÂªtre string ou array)
                 if (metaObj?.lookup?.displayRow) {
@@ -254,7 +323,10 @@ export class TableLookupDuplicationService {
             // ð ˆâ€  FIX 07/01/2026: RÃ©assigner les columnIndex en sÃ©quence (0, 1, 2, ...) pour prÃ©server l'ordre
             tableColumns: {
               create: originalTable.tableColumns.map((col, idx) => {
-                const newName = idx === 0 ? `${col.name}${suffix}` : col.name;
+                const baseName = String(col.name ?? '');
+                const isNumericName = /^-?\d+(\.\d+)?$/.test(baseName.trim());
+                const shouldSuffix = baseName.length > 0 && !isNumericName && !baseName.endsWith(suffix);
+                const newName = shouldSuffix ? `${baseName}${suffix}` : baseName;
                 console.log(`[TBL-DUP] Column ${idx}: "${col.name}" -> "${newName}" (columnIndex: ${col.columnIndex} -> ${idx})`);
                 return {
                   id: col.id ? `${col.id}${suffix}` : randomUUID(),
@@ -295,7 +367,10 @@ export class TableLookupDuplicationService {
         // Créer les nouvelles colonnes avec le suffixe correct
         const newColumns = await Promise.all(
           originalTable.tableColumns.map((col, idx) => {
-            const newName = idx === 0 ? `${col.name}${suffix}` : col.name;
+            const baseName = String(col.name ?? '');
+            const isNumericName = /^-?\d+(\.\d+)?$/.test(baseName.trim());
+            const shouldSuffix = baseName.length > 0 && !isNumericName && !baseName.endsWith(suffix);
+            const newName = shouldSuffix ? `${baseName}${suffix}` : baseName;
             console.log(`[TBL-DUP] Update Column ${idx}: "${col.name}" -> "${newName}"`);
             return prisma.treeBranchLeafNodeTableColumn.create({
               data: {
@@ -313,6 +388,44 @@ export class TableLookupDuplicationService {
         );
         
         console.log(`[TBL-DUP] ✅ ${newColumns.length} colonnes créées avec suffixe`);
+        
+        // 🔥 CRITICAL FIX: Mettre à jour le META de la table existante pour suffixer displayColumn
+        const updatedMeta = (() => {
+          if (!originalTable.meta) return originalTable.meta;
+          try {
+            const metaObj = typeof originalTable.meta === 'string' ? JSON.parse(originalTable.meta) : JSON.parse(JSON.stringify(originalTable.meta));
+            
+            // Suffixer displayColumn (peut être string ou array)
+            console.log(`[TBL-DUP] Mise à jour meta.lookup.displayColumn: "${metaObj?.lookup?.displayColumn}"`);
+            if (metaObj?.lookup?.displayColumn) {
+              if (Array.isArray(metaObj.lookup.displayColumn)) {
+                metaObj.lookup.displayColumn = metaObj.lookup.displayColumn.map((col: string) => {
+                  if (col && !/^-?\d+(\.\d+)?$/.test(col.trim()) && !col.endsWith(suffix)) {
+                    return `${col}${suffix}`;
+                  }
+                  return col;
+                });
+              } else if (typeof metaObj.lookup.displayColumn === 'string') {
+                const val = metaObj.lookup.displayColumn;
+                if (!/^-?\d+(\.\d+)?$/.test(val.trim()) && !val.endsWith(suffix)) {
+                  metaObj.lookup.displayColumn = `${val}${suffix}`;
+                }
+              }
+              console.log(`[TBL-DUP] ✅ meta.lookup.displayColumn suffixé = "${metaObj.lookup.displayColumn}"`);
+            }
+            
+            return metaObj;
+          } catch {
+            return originalTable.meta;
+          }
+        })();
+        
+        await prisma.treeBranchLeafNodeTable.update({
+          where: { id: copiedTableId },
+          data: { meta: updatedMeta }
+        });
+        
+        console.log(`[TBL-DUP] ✅ Meta de la table mise à jour avec displayColumn suffixé`);
       }
       
       // 3. CrÃƒÂ©er la configuration SELECT pour le nÃ…â€œud copiÃƒÂ©
@@ -329,6 +442,8 @@ export class TableLookupDuplicationService {
         // Parce que la PREMIÈRE COLONNE de la table copiée s'appelle maintenant "Orientation-1" pas "Orientation"
         const shouldSuffixColumns = true; // TOUJOURS suffixer les références pour la table copiée
         // ✅ FIX 11/01/2026: Utiliser le paramètre 'suffix' déjà défini (computedLabelSuffix n'existe pas)
+        
+        console.log(`[TBL-DUP] Création SelectConfig: nodeId=${copiedNodeId}, tableRef=${copiedTableId}, displayColumn=${originalSelectConfig.displayColumn || '(null)'}`);
         
         await prisma.treeBranchLeafSelectConfig.create({
           data: {
@@ -348,9 +463,26 @@ export class TableLookupDuplicationService {
             valueRow: originalSelectConfig.valueRow
               ? `${originalSelectConfig.valueRow}${suffix}` 
               : null,
-            displayColumn: originalSelectConfig.displayColumn
-              ? `${originalSelectConfig.displayColumn}${suffix}` 
-              : null,
+            displayColumn: (() => {
+              // 🔥 FIX: Si displayColumn est vide, initialiser avec la 1ère colonne suffixée
+              if (originalSelectConfig.displayColumn) {
+                return `${originalSelectConfig.displayColumn}${suffix}`;
+              }
+              // Chercher la première colonne de la table originale (elle sera suffixée)
+              const firstCol = originalTable.tableColumns && originalTable.tableColumns.length > 0 
+                ? originalTable.tableColumns[0] 
+                : null;
+              if (firstCol && firstCol.name) {
+                const baseName = String(firstCol.name);
+                const isNumericName = /^-?\d+(\.\d+)?$/.test(baseName.trim());
+                const shouldSuffix = baseName.length > 0 && !isNumericName && !baseName.endsWith(suffix);
+                const result = shouldSuffix ? `${baseName}${suffix}` : baseName;
+                console.log(`[TBL-DUP] displayColumn init: firstCol="${firstCol.name}" → "${result}"`);
+                return result;
+              }
+              console.log(`[TBL-DUP] displayColumn: AUCUNE COLONNE TROUVÉE`);
+              return null;
+            })(),
             displayRow: originalSelectConfig.displayRow
               ? `${originalSelectConfig.displayRow}${suffix}` 
               : null,
@@ -371,11 +503,12 @@ export class TableLookupDuplicationService {
           }
         });
         
+        console.log(`[TBL-DUP] ✅ SelectConfig créé avec displayColumn SAUVEGARDÉ en DB`);
         
         // 🔧 FIX: Mise à jour du nœud - SEULEMENT si c'est le VRAI propriétaire
         // 🔥 CRITICAL FIX 08/01/2026: Ne PAS ajouter linkedTableIds pour les INPUT fields (fieldType = null)
         try {
-          const node = await prisma.treeBranchLeafNode.findUnique({ where: { id: copiedNodeId }, select: { capabilities: true, linkedTableIds: true, fieldType: true } });
+          const node = await prisma.treeBranchLeafNode.findUnique({ where: { id: copiedNodeId }, select: { capabilities: true, linkedTableIds: true, fieldType: true, metadata: true } });
           const currentCapabilities = (node?.capabilities && typeof node.capabilities === 'object') ? (node.capabilities as Record<string, any>) : {};
           
           // 🔥 CRITICAL: Vérifier le fieldType - ne PAS lier les tables aux INPUT fields
@@ -384,6 +517,28 @@ export class TableLookupDuplicationService {
           const currentLinked = node?.linkedTableIds || [];
           // 🔥 ONLY add linkedTableIds if this is NOT an INPUT field
           const newLinked = isInputField ? [] : Array.from(new Set([...currentLinked, copiedTableId]));
+
+          // 🔥 FIX 24/01/2026: Mettre à jour meta.lookup.displayColumn avec le suffixe
+          const currentMetadata = (node?.metadata && typeof node.metadata === 'object') ? JSON.parse(JSON.stringify(node.metadata)) : {};
+          if (currentMetadata.lookup) {
+            // Suffixer tableRef
+            if (currentMetadata.lookup.tableRef) {
+              currentMetadata.lookup.tableRef = copiedTableId;
+            }
+            // Suffixer displayColumn (peut être string ou array)
+            if (currentMetadata.lookup.displayColumn) {
+              if (Array.isArray(currentMetadata.lookup.displayColumn)) {
+                currentMetadata.lookup.displayColumn = currentMetadata.lookup.displayColumn.map((col: string) => 
+                  col && !col.endsWith(suffix) ? `${col}${suffix}` : col
+                );
+              } else if (typeof currentMetadata.lookup.displayColumn === 'string') {
+                const val = currentMetadata.lookup.displayColumn;
+                if (!val.endsWith(suffix)) {
+                  currentMetadata.lookup.displayColumn = `${val}${suffix}`;
+                }
+              }
+            }
+          }
 
           if (isTableOwnedByThisNode) {
             // ✅ Ce nœud est le VRAI propriétaire de la table
@@ -402,7 +557,8 @@ export class TableLookupDuplicationService {
                 table_name: originalTable.name + suffix,
                 table_type: originalTable.type,
                 capabilities: currentCapabilities,
-                linkedTableIds: { set: newLinked }
+                linkedTableIds: { set: newLinked },
+                metadata: currentMetadata  // 🔥 FIX: Sauvegarder le metadata mis à jour
               }
             });
           } else {
@@ -413,7 +569,8 @@ export class TableLookupDuplicationService {
               where: { id: copiedNodeId },
               data: {
                 hasTable: false,  // ✅ IMPORTANT: Les non-propriétaires NE doivent PAS avoir hasTable: true!
-                linkedTableIds: { set: newLinked }
+                linkedTableIds: { set: newLinked },
+                metadata: currentMetadata  // 🔥 FIX: Sauvegarder le metadata mis à jour
               }
             });
           }

@@ -294,7 +294,16 @@ export function registerSumDisplayFieldRoutes(router: Router): void {
           });
         } catch (err) {
           if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
-            await prisma.treeBranchLeafNodeFormula.update({ where: { id: sumFormulaId }, data: sumFormulaData });
+            // La contrainte unique (nodeId, name) a échoué, on update via cette combinaison
+            await prisma.treeBranchLeafNodeFormula.update({
+              where: {
+                nodeId_name: {
+                  nodeId: sumFieldNodeId,
+                  name: `Somme ${mainVariable.displayName}`
+                }
+              },
+              data: sumFormulaData
+            });
             console.warn(`Ã¢Å¡Â Ã¯Â¸Â [SUM DISPLAY] Formule Total dÃƒÂ©jÃƒÂ  existante, mise ÃƒÂ  jour forcÃƒÂ©e: ${sumFormulaId}`);
           } else {
             throw err;

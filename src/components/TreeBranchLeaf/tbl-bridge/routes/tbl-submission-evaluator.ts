@@ -83,6 +83,8 @@ function sanitizeFormData(input: unknown): unknown {
 }
 
 const UUID_NODE_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+// 🔥 NOUVEAU: Regex pour UUID avec suffixe de duplication (-1, -2, -3, etc.)
+const UUID_WITH_SUFFIX_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}-\d+$/i;
 const GENERATED_NODE_REGEX = /^node_[0-9]+_[a-z0-9]+$/i;
 const SHARED_REFERENCE_REGEX = /^shared-ref-[a-z0-9-]+$/i;
 
@@ -91,7 +93,12 @@ function isSharedReferenceId(nodeId: string): boolean {
 }
 
 function isAcceptedNodeId(nodeId: string): boolean {
-  return UUID_NODE_REGEX.test(nodeId) || GENERATED_NODE_REGEX.test(nodeId) || isSharedReferenceId(nodeId);
+  return (
+    UUID_NODE_REGEX.test(nodeId) || 
+    UUID_WITH_SUFFIX_REGEX.test(nodeId) ||  // 🔥 NOUVEAU: Accepter UUID avec suffixe -1, -2, etc.
+    GENERATED_NODE_REGEX.test(nodeId) || 
+    isSharedReferenceId(nodeId)
+  );
 }
 
 async function resolveSharedReferenceAliases(sharedRefs: string[], treeId?: string) {
@@ -313,11 +320,41 @@ async function evaluateCapacitiesForSubmission(
     console.log(`🔑 [EVALUATE] valueMap initialisé avec ${valueMap.size} entrées depuis formData`);
   }
   
-  // Capacités pour l'arbre (triées: formules simples d'abord, sum-total ensuite)
-  const capacitiesRaw = await prisma.treeBranchLeafNodeVariable.findMany({
-    where: { TreeBranchLeafNode: { treeId }, sourceRef: { not: null } },
-    include: { TreeBranchLeafNode: { select: { id: true, label: true, fieldType: true, type: true } } }
+  // 🔥 RÉCUPÉRER LES VARIABLES ET LES FORMULES
+  const [variablesRaw, formulasRaw] = await Promise.all([
+    prisma.treeBranchLeafNodeVariable.findMany({
+      where: { TreeBranchLeafNode: { treeId }, sourceRef: { not: null } },
+      include: { TreeBranchLeafNode: { select: { id: true, label: true, fieldType: true, type: true } } }
+    }),
+    prisma.treeBranchLeafNodeFormula.findMany({
+      where: { 
+        nodeId: {
+          in: (await prisma.treeBranchLeafNode.findMany({
+            where: { treeId, hasFormula: true },
+            select: { id: true }
+          })).map(n => n.id)
+        }
+      }
+    })
+  ]);
+  
+  // 🔑 Récupérer les infos des nodes pour les formules
+  const formulaNodeIds = formulasRaw.map(f => f.nodeId);
+  const formulaNodes = await prisma.treeBranchLeafNode.findMany({
+    where: { id: { in: formulaNodeIds } },
+    select: { id: true, label: true, fieldType: true, type: true, hasFormula: true }
   });
+  const nodeMap = new Map(formulaNodes.map(n => [n.id, n]));
+  
+  // 🔑 COMBINER Variables + Formulas en un seul tableau avec sourceRef unifié
+  const capacitiesRaw = [
+    ...variablesRaw,
+    ...formulasRaw.map(f => ({
+      ...f,
+      sourceRef: `formula:${f.id}`,
+      TreeBranchLeafNode: nodeMap.get(f.nodeId)
+    }))
+  ];
   
   // 🔑 TRIER: formules simples d'abord, sum-total ensuite
   const capacities = capacitiesRaw.sort((a, b) => {
@@ -1258,11 +1295,41 @@ router.post('/submissions/preview-evaluate', async (req, res) => {
       }
     }
 
-    // 4) Récupérer les capacités de l'arbre
-    const capacitiesRaw = await prisma.treeBranchLeafNodeVariable.findMany({
-      where: { TreeBranchLeafNode: { treeId: effectiveTreeId }, sourceRef: { not: null } },
-      include: { TreeBranchLeafNode: { select: { id: true, label: true } } }
+    // 4) Récupérer les capacités de l'arbre (VARIABLES + FORMULES)
+    const [variablesRaw, formulasRaw] = await Promise.all([
+      prisma.treeBranchLeafNodeVariable.findMany({
+        where: { TreeBranchLeafNode: { treeId: effectiveTreeId }, sourceRef: { not: null } },
+        include: { TreeBranchLeafNode: { select: { id: true, label: true } } }
+      }),
+      prisma.treeBranchLeafNodeFormula.findMany({
+        where: { 
+          nodeId: {
+            in: (await prisma.treeBranchLeafNode.findMany({
+              where: { treeId: effectiveTreeId, hasFormula: true },
+              select: { id: true }
+            })).map(n => n.id)
+          }
+        }
+      })
+    ]);
+    
+    // Récupérer les infos des nodes pour les formules
+    const formulaNodeIds = formulasRaw.map(f => f.nodeId);
+    const formulaNodes = await prisma.treeBranchLeafNode.findMany({
+      where: { id: { in: formulaNodeIds } },
+      select: { id: true, label: true }
     });
+    const nodeMapForFormulas = new Map(formulaNodes.map(n => [n.id, n]));
+    
+    // Combiner Variables + Formulas
+    const capacitiesRaw = [
+      ...variablesRaw,
+      ...formulasRaw.map(f => ({
+        ...f,
+        sourceRef: `formula:${f.id}`,
+        TreeBranchLeafNode: nodeMapForFormulas.get(f.nodeId)
+      }))
+    ];
     
     // 🔑 TRIER les capacités: formules simples d'abord, formules composées (sum-total) ensuite
     // Cela garantit que les valeurs des formules simples sont dans le valueMap avant d'évaluer les sommes
