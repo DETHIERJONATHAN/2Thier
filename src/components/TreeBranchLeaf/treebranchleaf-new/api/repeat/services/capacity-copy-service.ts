@@ -48,17 +48,19 @@ export async function copyMissingCapacities(
 ): Promise<CapacityCopyResult> {
 
   // 1. Récupérer le nœud original avec les tables
-  const originalNode = await prisma.treeBranchLeafNode.findUnique({
-    where: { id: originalNodeId },
-    include: {
-      TreeBranchLeafNodeTable: {
-        include: {
-          tableColumns: true,
-          tableRows: true
+    const originalNode = await prisma.treeBranchLeafNode.findUnique({
+      where: { id: originalNodeId },
+      include: {
+        TreeBranchLeafNodeFormula: true,
+        TreeBranchLeafNodeCondition: true,
+        TreeBranchLeafNodeTable: {
+          include: {
+            tableColumns: true,
+            tableRows: true
+          }
         }
       }
-    }
-  });
+    });
 
   if (!originalNode) {
     throw new Error(`NÃ…â€œud original ${originalNodeId} non trouvÃƒÂ©`);
@@ -335,23 +337,104 @@ export async function copyMissingCapacities(
     }
   }
 
-  // 6. Mettre à jour les flags du nœud copié
-  // 🔧 FIX 06/01/2026: Vérifier que les tables sont vraiment assignées à ce node
-  // avant de mettre hasTable: true. Sinon un node comme Inclinaison-1 qui affiche
-  // une valeur de table mais ne possède pas la table aura incorrectement hasTable: true
-  const copiedNodeTables = await prisma.treeBranchLeafNodeTable.count({
-    where: { nodeId: copiedNodeId }
-  });
+  // 6. Mettre à jour les flags ET le metadata du nœud copié
+  // FIX 24/01/2026: Traiter le metadata du nœud lui-même (pas seulement des tables)
+  // pour suffixer sourceField et comparisonColumn aux ÉTAPES 2 et 2.5
   
-  const newFlags = {
-    hasFormula: originalNode.TreeBranchLeafNodeFormula.length > 0,
-    hasCondition: originalNode.TreeBranchLeafNodeCondition.length > 0,
-    hasTable: copiedNodeTables > 0  // Vérifier les tables du node COPIÉ, pas de l'original
-  };
+  // Récupérer le metadata du nœud copié
+  let updatedMetadata = copiedNode.metadata;
+  
+  // Traiter le metadata pour suffixer les champs lookup
+  if (copiedNode.metadata && typeof copiedNode.metadata === 'object') {
+    try {
+      const metaObj = JSON.parse(JSON.stringify(copiedNode.metadata));
+      
+      if (metaObj?.lookup) {
+        const suf = suffix;
+        
+        // ETAPE 2: Suffixer sourceField (champ source arborescence)
+        if (metaObj.lookup.rowSourceOption?.sourceField) {
+          const sf = metaObj.lookup.rowSourceOption.sourceField;
+          if (typeof sf === 'string' && !/^\d+$/.test(sf) && !sf.endsWith(suf)) {
+            metaObj.lookup.rowSourceOption.sourceField = `${sf}${suf}`;
+          }
+        }
+        if (metaObj.lookup.columnSourceOption?.sourceField) {
+          const sf = metaObj.lookup.columnSourceOption.sourceField;
+          if (typeof sf === 'string' && !/^\d+$/.test(sf) && !sf.endsWith(suf)) {
+            metaObj.lookup.columnSourceOption.sourceField = `${sf}${suf}`;
+          }
+        }
+        
+        // ETAPE 2.5: Suffixer comparisonColumn (colonne comparaison)
+        if (metaObj.lookup.rowSourceOption?.comparisonColumn) {
+          const cc = metaObj.lookup.rowSourceOption.comparisonColumn;
+          if (typeof cc === 'string' && !/^\d+$/.test(cc) && !cc.endsWith(suf)) {
+            metaObj.lookup.rowSourceOption.comparisonColumn = `${cc}${suf}`;
+          }
+        }
+        if (metaObj.lookup.columnSourceOption?.comparisonColumn) {
+          const cc = metaObj.lookup.columnSourceOption.comparisonColumn;
+          if (typeof cc === 'string' && !/^\d+$/.test(cc) && !cc.endsWith(suf)) {
+            metaObj.lookup.columnSourceOption.comparisonColumn = `${cc}${suf}`;
+          }
+        }
+        
+        // ETAPE 2.5 suite: Suffixer displayRow
+        if (metaObj.lookup.displayRow) {
+          if (Array.isArray(metaObj.lookup.displayRow)) {
+            metaObj.lookup.displayRow = metaObj.lookup.displayRow.map((r: string) =>
+              r && !/^\d+$/.test(r) && !r.endsWith(suf) ? `${r}${suf}` : r
+            );
+          } else if (typeof metaObj.lookup.displayRow === 'string') {
+            const dr = metaObj.lookup.displayRow;
+            if (!/^\d+$/.test(dr) && !dr.endsWith(suf)) {
+              metaObj.lookup.displayRow = `${dr}${suf}`;
+            }
+          }
+        }
+        
+        // ETAPE 4: Suffixer displayColumn (colonnes affichage)
+        if (metaObj.lookup.displayColumn) {
+          const col = metaObj.lookup.displayColumn;
+          if (Array.isArray(col)) {
+            metaObj.lookup.displayColumn = col.map((c: string) => 
+              c && !/^\d+$/.test(c) && !c.endsWith(suf) ? `${c}${suf}` : c
+            );
+          } else if (typeof col === 'string' && !/^\d+$/.test(col) && !col.endsWith(suf)) {
+            metaObj.lookup.displayColumn = `${col}${suf}`;
+          }
+        }
+      }
+      
+      updatedMetadata = metaObj as Prisma.InputJsonValue;
+    } catch (error) {
+      console.warn('[CAPACITY-COPY] Erreur traitement metadata nœud:', error);
+    }
+  }
+  
+  // Vérifier que les tables sont vraiment assignées à ce node
+    // Vérifier les capacités réellement présentes sur le node copié
+    const [copiedNodeTables, copiedNodeFormulas, copiedNodeConditions, copiedNodeState] = await Promise.all([
+      prisma.treeBranchLeafNodeTable.count({ where: { nodeId: copiedNodeId } }),
+      prisma.treeBranchLeafNodeFormula.count({ where: { nodeId: copiedNodeId } }),
+      prisma.treeBranchLeafNodeCondition.count({ where: { nodeId: copiedNodeId } }),
+      prisma.treeBranchLeafNode.findUnique({
+        where: { id: copiedNodeId },
+        select: { formula_activeId: true, condition_activeId: true, table_activeId: true }
+      })
+    ]);
+
+    const newFlags = {
+      hasFormula: copiedNodeFormulas > 0 || !!copiedNodeState?.formula_activeId,
+      hasCondition: copiedNodeConditions > 0 || !!copiedNodeState?.condition_activeId,
+      hasTable: copiedNodeTables > 0 || !!copiedNodeState?.table_activeId
+    };
 
   await prisma.treeBranchLeafNode.update({
     where: { id: copiedNodeId },
     data: {
+      metadata: updatedMetadata,
       hasFormula: newFlags.hasFormula,
       hasCondition: newFlags.hasCondition,
       hasTable: newFlags.hasTable,

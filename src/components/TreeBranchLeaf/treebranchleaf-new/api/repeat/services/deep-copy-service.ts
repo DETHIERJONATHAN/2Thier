@@ -562,16 +562,62 @@ export async function deepCopyNodeInternal(
       const origMeta = (typeof oldNode.metadata === 'object' ? (oldNode.metadata as Record<string, unknown>) : {});
       const newMeta = { ...origMeta, copiedFromNodeId: oldNode.id, copySuffix: metadataCopySuffix } as Record<string, unknown>;
 
-      // FIX: Suffixer displayColumn dans lookup
-      if ((newMeta as any).lookup?.displayColumn) {
-        const col = (newMeta as any).lookup.displayColumn;
+      // FIX 24/01/2026: Suffixer TOUS les champs lookup (sourceField, comparisonColumn, displayColumn, displayRow)
+      if ((newMeta as any).lookup) {
         const suf = `-${suffixNum}`;
-        if (Array.isArray(col)) {
-          (newMeta as any).lookup.displayColumn = col.map((c: string) => 
-            c && !/^\d+$/.test(c) && !c.endsWith(suf) ? `${c}${suf}` : c
-          );
-        } else if (typeof col === 'string' && !/^\d+$/.test(col) && !col.endsWith(suf)) {
-          (newMeta as any).lookup.displayColumn = `${col}${suf}`;
+        
+        // ETAPE 2: Suffixer sourceField (champ source arborescence)
+        if ((newMeta as any).lookup.rowSourceOption?.sourceField) {
+          const sf = (newMeta as any).lookup.rowSourceOption.sourceField;
+          if (typeof sf === 'string' && !/^\d+$/.test(sf) && !sf.endsWith(suf)) {
+            (newMeta as any).lookup.rowSourceOption.sourceField = `${sf}${suf}`;
+          }
+        }
+        if ((newMeta as any).lookup.columnSourceOption?.sourceField) {
+          const sf = (newMeta as any).lookup.columnSourceOption.sourceField;
+          if (typeof sf === 'string' && !/^\d+$/.test(sf) && !sf.endsWith(suf)) {
+            (newMeta as any).lookup.columnSourceOption.sourceField = `${sf}${suf}`;
+          }
+        }
+        
+        // ETAPE 2.5: Suffixer comparisonColumn (colonne comparaison)
+        if ((newMeta as any).lookup.rowSourceOption?.comparisonColumn) {
+          const cc = (newMeta as any).lookup.rowSourceOption.comparisonColumn;
+          if (typeof cc === 'string' && !/^\d+$/.test(cc) && !cc.endsWith(suf)) {
+            (newMeta as any).lookup.rowSourceOption.comparisonColumn = `${cc}${suf}`;
+          }
+        }
+        if ((newMeta as any).lookup.columnSourceOption?.comparisonColumn) {
+          const cc = (newMeta as any).lookup.columnSourceOption.comparisonColumn;
+          if (typeof cc === 'string' && !/^\d+$/.test(cc) && !cc.endsWith(suf)) {
+            (newMeta as any).lookup.columnSourceOption.comparisonColumn = `${cc}${suf}`;
+          }
+        }
+        
+        // ETAPE 2.5 suite: Suffixer displayRow
+        if ((newMeta as any).lookup.displayRow) {
+          if (Array.isArray((newMeta as any).lookup.displayRow)) {
+            (newMeta as any).lookup.displayRow = ((newMeta as any).lookup.displayRow as string[]).map((r: string) =>
+              r && !/^\d+$/.test(r) && !r.endsWith(suf) ? `${r}${suf}` : r
+            );
+          } else if (typeof (newMeta as any).lookup.displayRow === 'string') {
+            const dr = (newMeta as any).lookup.displayRow;
+            if (!/^\d+$/.test(dr) && !dr.endsWith(suf)) {
+              (newMeta as any).lookup.displayRow = `${dr}${suf}`;
+            }
+          }
+        }
+        
+        // ETAPE 4: Suffixer displayColumn (colonnes affichage)
+        if ((newMeta as any).lookup.displayColumn) {
+          const col = (newMeta as any).lookup.displayColumn;
+          if (Array.isArray(col)) {
+            (newMeta as any).lookup.displayColumn = col.map((c: string) => 
+              c && !/^\d+$/.test(c) && !c.endsWith(suf) ? `${c}${suf}` : c
+            );
+          } else if (typeof col === 'string' && !/^\d+$/.test(col) && !col.endsWith(suf)) {
+            (newMeta as any).lookup.displayColumn = `${col}${suf}`;
+          }
         }
       }
       // Ã°Å¸â€Â´ Ne pas copier la configuration de repeater dans les clones crÃƒÂ©ÃƒÂ©s via un repeater

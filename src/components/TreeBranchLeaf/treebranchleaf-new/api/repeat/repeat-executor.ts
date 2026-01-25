@@ -212,6 +212,8 @@ export async function runRepeatExecution(
       const effectiveSuffix = resolvedSuffix ?? plannedSuffix ?? 1;
 
 
+      // FIX 25/01/2026: PRESERVER le lookup suffixé qui a été créé par buildCloneData
+      // Ne pas écraser les champs lookup.sourceField, lookup.comparisonColumn, etc.
       const updatedMetadata = {
         ...createdMetadata,
         sourceTemplateId: template.id,
@@ -219,7 +221,9 @@ export async function runRepeatExecution(
         duplicatedFromRepeater: repeaterNodeId,
         copiedFromNodeId: template.id,
         copySuffix: effectiveSuffix,
-        repeatScopeId: scopeId
+        repeatScopeId: scopeId,
+        // IMPORTANT: Préserver le lookup s'il existe déjà (avec suffixes appliqués)
+        ...(createdMetadata.lookup ? { lookup: createdMetadata.lookup } : {})
       };
 
       await prisma.treeBranchLeafNode.update({

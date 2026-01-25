@@ -218,6 +218,89 @@ export class TableLookupDuplicationService {
       const existingCopiedTable = await prisma.treeBranchLeafNodeTable.findUnique({
         where: { id: copiedTableId }
       });
+
+      const rewrittenMeta = (() => {
+        if (!originalTable.meta) return originalTable.meta;
+        try {
+          const metaObj = typeof originalTable.meta === 'string' ? JSON.parse(originalTable.meta) : JSON.parse(JSON.stringify(originalTable.meta));
+          const suffixNum = parseInt(suffix.replace('-', '')) || 1;
+          // Suffixer les UUIDs dans selectors
+          if (metaObj?.lookup?.selectors?.columnFieldId && !metaObj.lookup.selectors.columnFieldId.endsWith(`-${suffixNum}`)) {
+            metaObj.lookup.selectors.columnFieldId = `${metaObj.lookup.selectors.columnFieldId}-${suffixNum}`;
+          }
+          if (metaObj?.lookup?.selectors?.rowFieldId && !metaObj.lookup.selectors.rowFieldId.endsWith(`-${suffixNum}`)) {
+            metaObj.lookup.selectors.rowFieldId = `${metaObj.lookup.selectors.rowFieldId}-${suffixNum}`;
+          }
+          // Suffixer sourceField
+          if (metaObj?.lookup?.rowSourceOption?.sourceField && !metaObj.lookup.rowSourceOption.sourceField.endsWith(`-${suffixNum}`)) {
+            metaObj.lookup.rowSourceOption.sourceField = `${metaObj.lookup.rowSourceOption.sourceField}-${suffixNum}`;
+          }
+          if (metaObj?.lookup?.columnSourceOption?.sourceField && !metaObj.lookup.columnSourceOption.sourceField.endsWith(`-${suffixNum}`)) {
+            metaObj.lookup.columnSourceOption.sourceField = `${metaObj.lookup.columnSourceOption.sourceField}-${suffixNum}`;
+          }
+          // Ajouter operator '=' si comparisonColumn défini
+          if (metaObj?.lookup?.rowSourceOption?.comparisonColumn && !metaObj.lookup.rowSourceOption.operator) {
+            metaObj.lookup.rowSourceOption.operator = '=';
+            console.log(`[TBL-DUP] ✅ Ajout operator '=' pour rowSourceOption`);
+          }
+          if (metaObj?.lookup?.columnSourceOption?.comparisonColumn && !metaObj.lookup.columnSourceOption.operator) {
+            metaObj.lookup.columnSourceOption.operator = '=';
+            console.log(`[TBL-DUP] ✅ Ajout operator '=' pour columnSourceOption`);
+          }
+          // Suffixer comparisonColumn
+          if (metaObj?.lookup?.rowSourceOption?.comparisonColumn) {
+            const val = metaObj.lookup.rowSourceOption.comparisonColumn;
+            if (!/^-?\d+(\.\d+)?$/.test(val.trim()) && !val.endsWith(suffix)) {
+              metaObj.lookup.rowSourceOption.comparisonColumn = `${val}${suffix}`;
+            }
+          }
+          if (metaObj?.lookup?.columnSourceOption?.comparisonColumn) {
+            const val = metaObj.lookup.columnSourceOption.comparisonColumn;
+            if (!/^-?\d+(\.\d+)?$/.test(val.trim()) && !val.endsWith(suffix)) {
+              metaObj.lookup.columnSourceOption.comparisonColumn = `${val}${suffix}`;
+            }
+          }
+          // Suffixer displayColumn
+          console.log(`[TBL-DUP] DEBUG: displayColumn original = "${metaObj?.lookup?.displayColumn}"`);
+          if (metaObj?.lookup?.displayColumn) {
+            if (Array.isArray(metaObj.lookup.displayColumn)) {
+              metaObj.lookup.displayColumn = metaObj.lookup.displayColumn.map((col: string) => {
+                if (col && !/^-?\d+(\.\d+)?$/.test(col.trim()) && !col.endsWith(suffix)) {
+                  return `${col}${suffix}`;
+                }
+                return col;
+              });
+            } else if (typeof metaObj.lookup.displayColumn === 'string') {
+              const val = metaObj.lookup.displayColumn;
+              if (!/^-?\d+(\.\d+)?$/.test(val.trim()) && !val.endsWith(suffix)) {
+                metaObj.lookup.displayColumn = `${val}${suffix}`;
+              }
+            }
+            console.log(`[TBL-DUP] ✅ displayColumn suffixé = "${metaObj.lookup.displayColumn}"`);
+          } else {
+            console.log(`[TBL-DUP] ❌ displayColumn non défini!`);
+          }
+          // Suffixer displayRow
+          if (metaObj?.lookup?.displayRow) {
+            if (Array.isArray(metaObj.lookup.displayRow)) {
+              metaObj.lookup.displayRow = metaObj.lookup.displayRow.map((row: string) => {
+                if (row && !/^-?\d+(\.\d+)?$/.test(row.trim()) && !row.endsWith(suffix)) {
+                  return `${row}${suffix}`;
+                }
+                return row;
+              });
+            } else if (typeof metaObj.lookup.displayRow === 'string') {
+              const val = metaObj.lookup.displayRow;
+              if (!/^-?\d+(\.\d+)?$/.test(val.trim()) && !val.endsWith(suffix)) {
+                metaObj.lookup.displayRow = `${val}${suffix}`;
+              }
+            }
+          }
+          return metaObj;
+        } catch {
+          return originalTable.meta;
+        }
+      })();
       
       if (!existingCopiedTable) {
         
@@ -229,89 +312,7 @@ export class TableLookupDuplicationService {
             type: originalTable.type,
             description: originalTable.description,
             // Ã°Å¸â€Â¢ COPIE TABLE META: suffixer UUIDs et comparisonColumn
-            meta: (() => {
-              if (!originalTable.meta) return originalTable.meta;
-              try {
-                const metaObj = typeof originalTable.meta === 'string' ? JSON.parse(originalTable.meta) : JSON.parse(JSON.stringify(originalTable.meta));
-                const suffixNum = parseInt(suffix.replace('-', '')) || 1;
-                // Suffixer les UUIDs dans selectors
-                if (metaObj?.lookup?.selectors?.columnFieldId && !metaObj.lookup.selectors.columnFieldId.endsWith(`-${suffixNum}`)) {
-                  metaObj.lookup.selectors.columnFieldId = `${metaObj.lookup.selectors.columnFieldId}-${suffixNum}`;
-                }
-                if (metaObj?.lookup?.selectors?.rowFieldId && !metaObj.lookup.selectors.rowFieldId.endsWith(`-${suffixNum}`)) {
-                  metaObj.lookup.selectors.rowFieldId = `${metaObj.lookup.selectors.rowFieldId}-${suffixNum}`;
-                }
-                // Suffixer sourceField
-                if (metaObj?.lookup?.rowSourceOption?.sourceField && !metaObj.lookup.rowSourceOption.sourceField.endsWith(`-${suffixNum}`)) {
-                  metaObj.lookup.rowSourceOption.sourceField = `${metaObj.lookup.rowSourceOption.sourceField}-${suffixNum}`;
-                }
-                if (metaObj?.lookup?.columnSourceOption?.sourceField && !metaObj.lookup.columnSourceOption.sourceField.endsWith(`-${suffixNum}`)) {
-                  metaObj.lookup.columnSourceOption.sourceField = `${metaObj.lookup.columnSourceOption.sourceField}-${suffixNum}`;
-                }
-                // 🔥 FIX 24/01/2026: Ajouter operator '=' si comparisonColumn est défini mais operator manquant
-                // Cela assure une correspondance EXACTE au lieu d'une recherche numérique approximative
-                if (metaObj?.lookup?.rowSourceOption?.comparisonColumn && !metaObj.lookup.rowSourceOption.operator) {
-                  metaObj.lookup.rowSourceOption.operator = '=';
-                  console.log(`[TBL-DUP] ✅ Ajout operator '=' pour rowSourceOption`);
-                }
-                if (metaObj?.lookup?.columnSourceOption?.comparisonColumn && !metaObj.lookup.columnSourceOption.operator) {
-                  metaObj.lookup.columnSourceOption.operator = '=';
-                  console.log(`[TBL-DUP] ✅ Ajout operator '=' pour columnSourceOption`);
-                }
-                // Suffixer comparisonColumn si c'est du texte
-                if (metaObj?.lookup?.rowSourceOption?.comparisonColumn) {
-                  const val = metaObj.lookup.rowSourceOption.comparisonColumn;
-                  if (!/^-?\d+(\.\d+)?$/.test(val.trim()) && !val.endsWith(suffix)) {
-                    metaObj.lookup.rowSourceOption.comparisonColumn = `${val}${suffix}`;
-                  }
-                }
-                if (metaObj?.lookup?.columnSourceOption?.comparisonColumn) {
-                  const val = metaObj.lookup.columnSourceOption.comparisonColumn;
-                  if (!/^-?\d+(\.\d+)?$/.test(val.trim()) && !val.endsWith(suffix)) {
-                    metaObj.lookup.columnSourceOption.comparisonColumn = `${val}${suffix}`;
-                  }
-                }
-                // Ã°Å¸â€Â¥ FIX: Suffixer displayColumn (peut ÃƒÂªtre string ou array)
-                console.log(`[TBL-DUP] DEBUG: displayColumn original = "${metaObj?.lookup?.displayColumn}"`);
-                if (metaObj?.lookup?.displayColumn) {
-                  if (Array.isArray(metaObj.lookup.displayColumn)) {
-                    metaObj.lookup.displayColumn = metaObj.lookup.displayColumn.map((col: string) => {
-                      if (col && !/^-?\d+(\.\d+)?$/.test(col.trim()) && !col.endsWith(suffix)) {
-                        return `${col}${suffix}`;
-                      }
-                      return col;
-                    });
-                  } else if (typeof metaObj.lookup.displayColumn === 'string') {
-                    const val = metaObj.lookup.displayColumn;
-                    if (!/^-?\d+(\.\d+)?$/.test(val.trim()) && !val.endsWith(suffix)) {
-                      metaObj.lookup.displayColumn = `${val}${suffix}`;
-                    }
-                  }
-                  console.log(`[TBL-DUP] ✅ displayColumn suffixé = "${metaObj.lookup.displayColumn}"`);
-                } else {
-                  console.log(`[TBL-DUP] ❌ displayColumn non défini!`);
-                }
-                // Ã°Å¸â€Â¥ FIX: Suffixer displayRow (peut ÃƒÂªtre string ou array)
-                if (metaObj?.lookup?.displayRow) {
-                  if (Array.isArray(metaObj.lookup.displayRow)) {
-                    metaObj.lookup.displayRow = metaObj.lookup.displayRow.map((row: string) => {
-                      if (row && !/^-?\d+(\.\d+)?$/.test(row.trim()) && !row.endsWith(suffix)) {
-                        return `${row}${suffix}`;
-                      }
-                      return row;
-                    });
-                  } else if (typeof metaObj.lookup.displayRow === 'string') {
-                    const val = metaObj.lookup.displayRow;
-                    if (!/^-?\d+(\.\d+)?$/.test(val.trim()) && !val.endsWith(suffix)) {
-                      metaObj.lookup.displayRow = `${val}${suffix}`;
-                    }
-                  }
-                }
-                return metaObj;
-              } catch {
-                return originalTable.meta;
-              }
-            })(),
+            meta: rewrittenMeta,
             organizationId: originalTable.organizationId,
             rowCount: originalTable.rowCount,
             columnCount: originalTable.columnCount,
@@ -389,43 +390,11 @@ export class TableLookupDuplicationService {
         
         console.log(`[TBL-DUP] ✅ ${newColumns.length} colonnes créées avec suffixe`);
         
-        // 🔥 CRITICAL FIX: Mettre à jour le META de la table existante pour suffixer displayColumn
-        const updatedMeta = (() => {
-          if (!originalTable.meta) return originalTable.meta;
-          try {
-            const metaObj = typeof originalTable.meta === 'string' ? JSON.parse(originalTable.meta) : JSON.parse(JSON.stringify(originalTable.meta));
-            
-            // Suffixer displayColumn (peut être string ou array)
-            console.log(`[TBL-DUP] Mise à jour meta.lookup.displayColumn: "${metaObj?.lookup?.displayColumn}"`);
-            if (metaObj?.lookup?.displayColumn) {
-              if (Array.isArray(metaObj.lookup.displayColumn)) {
-                metaObj.lookup.displayColumn = metaObj.lookup.displayColumn.map((col: string) => {
-                  if (col && !/^-?\d+(\.\d+)?$/.test(col.trim()) && !col.endsWith(suffix)) {
-                    return `${col}${suffix}`;
-                  }
-                  return col;
-                });
-              } else if (typeof metaObj.lookup.displayColumn === 'string') {
-                const val = metaObj.lookup.displayColumn;
-                if (!/^-?\d+(\.\d+)?$/.test(val.trim()) && !val.endsWith(suffix)) {
-                  metaObj.lookup.displayColumn = `${val}${suffix}`;
-                }
-              }
-              console.log(`[TBL-DUP] ✅ meta.lookup.displayColumn suffixé = "${metaObj.lookup.displayColumn}"`);
-            }
-            
-            return metaObj;
-          } catch {
-            return originalTable.meta;
-          }
-        })();
-        
         await prisma.treeBranchLeafNodeTable.update({
           where: { id: copiedTableId },
-          data: { meta: updatedMeta }
+          data: { meta: rewrittenMeta, updatedAt: new Date() }
         });
-        
-        console.log(`[TBL-DUP] ✅ Meta de la table mise à jour avec displayColumn suffixé`);
+        console.log(`[TBL-DUP] ✅ Meta de la table mise à jour avec suffixes`);
       }
       
       // 3. CrÃƒÂ©er la configuration SELECT pour le nÃ…â€œud copiÃƒÂ©

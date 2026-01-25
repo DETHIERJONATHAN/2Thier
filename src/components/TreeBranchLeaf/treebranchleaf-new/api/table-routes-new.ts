@@ -973,6 +973,96 @@ router.get('/nodes/:nodeId/tables', async (req, res) => {
       allTables.push(activeTable);
     }
 
+    // 🔧 FIX 25/01/2026: Corriger en DB les lookup des tables copiées (ÉTAPE 2 & 2.5)
+    const suffixMatch = String(nodeId).match(/-(\d+)$/);
+    const lookupSuffix = suffixMatch ? `-${suffixMatch[1]}` : null;
+
+    if (lookupSuffix) {
+      const isNumeric = (val: string) => /^-?\d+(\.\d+)?$/.test(val.trim());
+      const ensureSuffix = (val: string) => (val.endsWith(lookupSuffix) ? val : '') + (val.endsWith(lookupSuffix) ? '' : lookupSuffix);
+
+      for (const table of allTables) {
+        if (!table.meta || typeof table.meta !== 'object') continue;
+        const metaObj = JSON.parse(JSON.stringify(table.meta));
+        if (!metaObj.lookup) continue;
+
+        let changed = false;
+
+        if (metaObj.lookup.tableRef && typeof metaObj.lookup.tableRef === 'string' && !metaObj.lookup.tableRef.endsWith(lookupSuffix)) {
+          metaObj.lookup.tableRef = `${metaObj.lookup.tableRef}${lookupSuffix}`;
+          changed = true;
+        }
+
+        const selectors = metaObj.lookup.selectors || {};
+        if (selectors.columnFieldId && typeof selectors.columnFieldId === 'string' && !selectors.columnFieldId.endsWith(lookupSuffix)) {
+          selectors.columnFieldId = `${selectors.columnFieldId}${lookupSuffix}`;
+          changed = true;
+        }
+        if (selectors.rowFieldId && typeof selectors.rowFieldId === 'string' && !selectors.rowFieldId.endsWith(lookupSuffix)) {
+          selectors.rowFieldId = `${selectors.rowFieldId}${lookupSuffix}`;
+          changed = true;
+        }
+        metaObj.lookup.selectors = selectors;
+
+        const rowSource = metaObj.lookup.rowSourceOption || {};
+        if (rowSource.sourceField && typeof rowSource.sourceField === 'string' && !rowSource.sourceField.endsWith(lookupSuffix)) {
+          rowSource.sourceField = `${rowSource.sourceField}${lookupSuffix}`;
+          changed = true;
+        }
+        if (rowSource.comparisonColumn && typeof rowSource.comparisonColumn === 'string' && !isNumeric(rowSource.comparisonColumn) && !rowSource.comparisonColumn.endsWith(lookupSuffix)) {
+          rowSource.comparisonColumn = `${rowSource.comparisonColumn}${lookupSuffix}`;
+          changed = true;
+        }
+        metaObj.lookup.rowSourceOption = rowSource;
+
+        const colSource = metaObj.lookup.columnSourceOption || {};
+        if (colSource.sourceField && typeof colSource.sourceField === 'string' && !colSource.sourceField.endsWith(lookupSuffix)) {
+          colSource.sourceField = `${colSource.sourceField}${lookupSuffix}`;
+          changed = true;
+        }
+        if (colSource.comparisonColumn && typeof colSource.comparisonColumn === 'string' && !isNumeric(colSource.comparisonColumn) && !colSource.comparisonColumn.endsWith(lookupSuffix)) {
+          colSource.comparisonColumn = `${colSource.comparisonColumn}${lookupSuffix}`;
+          changed = true;
+        }
+        metaObj.lookup.columnSourceOption = colSource;
+
+        if (metaObj.lookup.displayColumn) {
+          if (Array.isArray(metaObj.lookup.displayColumn)) {
+            metaObj.lookup.displayColumn = metaObj.lookup.displayColumn.map((col: string) => {
+              if (!col || isNumeric(col) || col.endsWith(lookupSuffix)) return col;
+              changed = true;
+              return `${col}${lookupSuffix}`;
+            });
+          } else if (typeof metaObj.lookup.displayColumn === 'string' && !isNumeric(metaObj.lookup.displayColumn) && !metaObj.lookup.displayColumn.endsWith(lookupSuffix)) {
+            metaObj.lookup.displayColumn = `${metaObj.lookup.displayColumn}${lookupSuffix}`;
+            changed = true;
+          }
+        }
+
+        if (metaObj.lookup.displayRow) {
+          if (Array.isArray(metaObj.lookup.displayRow)) {
+            metaObj.lookup.displayRow = metaObj.lookup.displayRow.map((row: string) => {
+              if (!row || isNumeric(row) || row.endsWith(lookupSuffix)) return row;
+              changed = true;
+              return `${row}${lookupSuffix}`;
+            });
+          } else if (typeof metaObj.lookup.displayRow === 'string' && !isNumeric(metaObj.lookup.displayRow) && !metaObj.lookup.displayRow.endsWith(lookupSuffix)) {
+            metaObj.lookup.displayRow = `${metaObj.lookup.displayRow}${lookupSuffix}`;
+            changed = true;
+          }
+        }
+
+        if (!changed) continue;
+
+        await prisma.treeBranchLeafNodeTable.update({
+          where: { id: table.id },
+          data: { meta: metaObj, updatedAt: new Date() }
+        });
+
+        table.meta = metaObj;
+      }
+    }
+
     // Reformater la réponse pour correspondre au format attendu par le frontend
     const formattedTables = allTables.map(table => ({
       id: table.id,
