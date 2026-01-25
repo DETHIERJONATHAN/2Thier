@@ -288,6 +288,36 @@ const parseAlignPreference = (value: unknown, fallback: DisplayAppearanceTokens[
   return fallback;
 };
 
+const normalizeUiValue = (value: unknown): string | number | boolean | null | undefined => {
+  if (value === null || value === undefined) return value as null | undefined;
+  if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') return value;
+  if (Array.isArray(value)) {
+    const parts = value.map((entry) => normalizeUiValue(entry)).filter((entry) => entry !== undefined && entry !== null);
+    return parts.join(', ');
+  }
+  if (typeof value === 'object') {
+    const obj = value as Record<string, unknown>;
+    const direct = obj.value ?? obj.label ?? obj.text ?? obj.display ?? obj.name ?? obj.title;
+    if (direct !== undefined && direct !== null) {
+      return normalizeUiValue(direct) as string | number | boolean | null | undefined;
+    }
+    const street = obj.street ?? obj.address ?? obj.line1 ?? obj.route;
+    const city = obj.city ?? obj.locality;
+    const zip = obj.zipCode ?? obj.postalCode ?? obj.zip;
+    const country = obj.country ?? obj.pays;
+    const parts = [street, zip, city, country]
+      .map((part) => (part !== undefined && part !== null ? String(part).trim() : ''))
+      .filter(Boolean);
+    if (parts.length > 0) return parts.join(', ');
+    try {
+      return JSON.stringify(obj);
+    } catch {
+      return String(obj);
+    }
+  }
+  return String(value);
+};
+
 const safeColor = (value: unknown, fallback: string): string => {
   if (typeof value === 'string' && value.trim()) {
     return value.trim();
@@ -4356,9 +4386,11 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
                 );
               }
 
+              const normalizedValue = normalizeUiValue(displayValue);
+
               return (
                 <span style={valueTextStyle}>
-                  {displayValue ?? '---'}
+                  {normalizedValue ?? '---'}
                 </span>
               );
             })()}
