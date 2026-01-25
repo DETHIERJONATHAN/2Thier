@@ -70,6 +70,44 @@ interface TableLookupCondition {
   description?: string; // Description lisible de la condition
 }
 
+// 🛡️ Normalisation des valeurs pour l'UI (évite le rendu d'objets React)
+const normalizeValueForUi = (value: unknown): unknown => {
+  if (value === null || value === undefined) return value;
+
+  if (Array.isArray(value)) {
+    return value.map((entry) => normalizeValueForUi(entry))
+      .filter((entry) => entry !== undefined && entry !== null);
+  }
+
+  if (typeof value === 'object') {
+    const obj = value as Record<string, unknown>;
+    const direct = obj.value ?? obj.label ?? obj.text ?? obj.display ?? obj.name ?? obj.title;
+    if (direct !== undefined && direct !== null) {
+      return normalizeValueForUi(direct);
+    }
+
+    // Cas spécifique adresse: { street, city, country, zipCode/postalCode }
+    const street = obj.street ?? obj.address ?? obj.line1 ?? obj.route;
+    const city = obj.city ?? obj.locality;
+    const zip = obj.zipCode ?? obj.postalCode ?? obj.zip;
+    const country = obj.country ?? obj.pays;
+    const parts = [street, zip, city, country]
+      .map((part) => (part !== undefined && part !== null ? String(part).trim() : ''))
+      .filter(Boolean);
+    if (parts.length > 0) {
+      return parts.join(', ');
+    }
+
+    try {
+      return JSON.stringify(obj);
+    } catch {
+      return String(obj);
+    }
+  }
+
+  return value;
+};
+
 // 🔥 NOUVEAU: Fonction pour évaluer si une option de lookup passe les conditions de filtrage
 const evaluateFilterConditions = (
   option: any, // Option courante {value, label}
@@ -2277,7 +2315,8 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
     
     // ✨ FALLBACK: Logique traditionnelle pour les champs sans capacités TreeBranchLeaf
     const useCalculatedValue = fieldConfig.hasFormula && !manualOverrideAllowed && !formulaIsConstraint;
-    const finalValue = useCalculatedValue ? calculatedValue : localValue;
+    const finalValueRaw = useCalculatedValue ? calculatedValue : localValue;
+    const finalValue = normalizeValueForUi(finalValueRaw);
     const isReadOnly = useCalculatedValue;
     const isDisabled = disabled || isReadOnly;
     
