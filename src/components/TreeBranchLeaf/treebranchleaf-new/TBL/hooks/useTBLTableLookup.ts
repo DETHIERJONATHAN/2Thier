@@ -190,8 +190,6 @@ export function useTBLTableLookup(
             { suppressErrorLogForStatuses: [404] }
           );
           
-          }
-          
           console.log(`[useTBLTableLookup] 📥 Réponse PRIMARY:`, selectConfig ? `TROUVÉ - nodeId=${selectConfig.nodeId}` : 'NULL (pas trouvé ou erreur)');
           
           // Si pas trouvé et qu'on a un suffixe, essayer avec l'ID de base (l'original)
@@ -218,12 +216,7 @@ export function useTBLTableLookup(
               }
             }
             console.log(`[useTBLTableLookup] 📥 Réponse FALLBACK:`, selectConfig ? `TROUVÉ - nodeId=${selectConfig.nodeId}` : 'NULL');
-                selectConfigCache.set(fieldId, selectConfig);
-                console.log(`[useTBLTableLookup] 💾 CACHE MISS (fallback) → ajouté pour ${baseFieldId} et ${fieldId}`);
-              }
-            }
-            console.log(`[useTBLTableLookup] 📥 Réponse FALLBACK:`, selectConfig ? `TROUVÉ - nodeId=${selectConfig.nodeId}` : 'NULL');
-            
+
             if (selectConfig) {
               console.warn(`[useTBLTableLookup] ⚠️ ⚠️ ⚠️ BUG DÉTECTÉ ⚠️ ⚠️ ⚠️`);
               console.warn(`[useTBLTableLookup] Le SelectConfig -${suffixMatch[1]} n'existe PAS, fallback sur l'original!`);
