@@ -85,6 +85,32 @@ interface TBLProps {
 const TBL: React.FC<TBLProps> = ({ 
   treeId
 }) => {
+  const formatAddressValue = useCallback((value: unknown): string => {
+    if (!value) return '';
+    if (typeof value === 'string') return value;
+    if (Array.isArray(value)) {
+      return value.map(entry => formatAddressValue(entry)).filter(Boolean).join(', ');
+    }
+    if (typeof value === 'object') {
+      const obj = value as Record<string, unknown>;
+      const direct = obj.value ?? obj.label ?? obj.text ?? obj.display ?? obj.name;
+      if (direct) return String(direct);
+      const street = obj.street ?? obj.address ?? obj.line1 ?? obj.route;
+      const city = obj.city ?? obj.locality;
+      const zip = obj.zipCode ?? obj.postalCode ?? obj.zip;
+      const country = obj.country ?? obj.pays;
+      const parts = [street, zip, city, country]
+        .map((part) => (part !== undefined && part !== null ? String(part).trim() : ''))
+        .filter(Boolean);
+      if (parts.length > 0) return parts.join(', ');
+      try {
+        return JSON.stringify(obj);
+      } catch {
+        return String(obj);
+      }
+    }
+    return String(value);
+  }, []);
   
   // Récupérer leadId depuis l'URL
   const { leadId: urlLeadId } = useParams<{ leadId?: string }>();
@@ -186,7 +212,7 @@ const TBL: React.FC<TBLProps> = ({
             name: lead.name || `${lead.firstName || ''} ${lead.lastName || ''}`.trim() || lead.company || 'Lead sans nom',
             email: lead.email || '',
             phone: lead.phone || lead.phoneNumber || lead.phoneHome || '',
-            address: lead.address || lead.data?.address || ''
+            address: formatAddressValue(lead.address ?? lead.data?.address ?? '')
           };
           setClientData(newClientData);
           setFormData(prev => ({
