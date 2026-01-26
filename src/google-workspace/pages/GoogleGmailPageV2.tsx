@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { 
   Typography, Spin, Button, Input, Modal, Form, 
   message, Tooltip, Empty, List, Grid, Dropdown, Tag,
-  Avatar, Checkbox, Drawer, Upload, Popconfirm, Divider, Card
+  Avatar, Checkbox, Drawer, Upload, Popconfirm, Divider, Card, Segmented, Result
 } from 'antd';
 import type { UploadFile } from 'antd';
 import { 
@@ -11,7 +11,7 @@ import {
   MoreOutlined, EyeOutlined, ArrowLeftOutlined, PaperClipOutlined,
   TagOutlined, FolderOutlined, UserOutlined, DownloadOutlined, ForwardOutlined, UndoOutlined,
   MenuFoldOutlined, MenuUnfoldOutlined, WarningOutlined,
-  EditOutlined, CloseOutlined, MenuOutlined
+  EditOutlined, CloseOutlined, MenuOutlined, GoogleOutlined, SearchOutlined
 } from '@ant-design/icons';
 import { useAuthenticatedApi } from '../../hooks/useAuthenticatedApi';
 
@@ -72,6 +72,8 @@ interface ComposeEmail {
 
 type MailboxType = 'inbox' | 'sent' | 'drafts' | 'starred' | 'spam' | 'trash' | 'all' | string;
 
+type MailSource = 'gmail' | 'one-com';
+
 // ============ COMPOSANT PRINCIPAL ============
 
 const GoogleGmailPageV2: React.FC = () => {
@@ -79,6 +81,9 @@ const GoogleGmailPageV2: React.FC = () => {
   const stableApi = useMemo(() => api, [api]);
   const screens = useBreakpoint();
   const isMobile = !screens.md;
+  
+  // Sélecteur de source mail
+  const [mailSource, setMailSource] = useState<MailSource>('gmail');
   
   // États principaux
   const [messages, setMessages] = useState<EmailMessage[]>([]);
@@ -95,7 +100,7 @@ const GoogleGmailPageV2: React.FC = () => {
   // États pour les modals et drawers
   const [composeVisible, setComposeVisible] = useState(false);
   const [messageDrawerVisible, setMessageDrawerVisible] = useState(false);
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(isMobile);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(true); // Toujours collapsed par défaut
   const [labelModalVisible, setLabelModalVisible] = useState(false);
   
   // États pour composer un email
@@ -133,34 +138,76 @@ const GoogleGmailPageV2: React.FC = () => {
   const loadMessages = useCallback(async (mailbox: MailboxType = 'inbox', query?: string, token?: string) => {
     try {
       setLoading(true);
-      console.log('[Gmail] 📬 Chargement messages:', { mailbox, query, token });
+      console.log('[Mail] 📬 Chargement messages:', { mailSource, mailbox, query, token });
       
-      const params = new URLSearchParams();
-      params.append('maxResults', '50');
-      params.append('mailbox', mailbox);
-      if (query) params.append('q', query);
-      if (token) params.append('pageToken', token);
-      
-      const response = await stableApi.get(`/api/gmail/messages?${params.toString()}`);
-      console.log('[Gmail] ✅ Réponse:', response);
-      
-      const newMessages = response.messages || response.data?.messages || [];
-      
-      if (token) {
-        setMessages(prev => [...prev, ...newMessages]);
+      if (mailSource === 'gmail') {
+        // Charger depuis Gmail API
+        const params = new URLSearchParams();
+        params.append('maxResults', '50');
+        params.append('mailbox', mailbox);
+        if (query) params.append('q', query);
+        if (token) params.append('pageToken', token);
+        
+        const response = await stableApi.get(`/api/gmail/messages?${params.toString()}`);
+        console.log('[Gmail] ✅ Réponse:', response);
+        
+        const newMessages = response.messages || response.data?.messages || [];
+        
+        if (token) {
+          setMessages(prev => [...prev, ...newMessages]);
+        } else {
+          setMessages(newMessages);
+        }
+        
+        setPageToken(response.nextPageToken || null);
+        setHasMore(!!response.nextPageToken);
       } else {
-        setMessages(newMessages);
+        // Charger depuis One.com API
+        const folderMap: Record<string, string> = {
+          'inbox': 'inbox',
+          'sent': 'sent',
+          'drafts': 'drafts',
+          'starred': 'starred',
+          'spam': 'spam',
+          'trash': 'trash',
+          'all': 'inbox' // Pour l'instant, charger inbox
+        };
+        
+        const folder = folderMap[mailbox] || 'inbox';
+        const response = await stableApi.get(`/emails?folder=${folder}`);
+        console.log('[One.com] ✅ Réponse:', response);
+        
+        // Convertir le format One.com vers le format Gmail
+        const oneComMessages = (response || []).map((email: any) => ({
+          id: email.id,
+          threadId: email.id,
+          snippet: email.body?.substring(0, 150) || '',
+          subject: email.subject || '(Aucun objet)',
+          from: email.from || '',
+          fromEmail: email.from || '',
+          to: email.to || '',
+          toEmail: email.to || '',
+          date: email.createdAt || new Date().toISOString(),
+          body: email.body || '',
+          htmlBody: email.body || '',
+          isRead: email.isRead || false,
+          isStarred: email.isStarred || false,
+          labels: [folder],
+          attachments: [],
+          hasAttachments: false
+        }));
+        
+        setMessages(oneComMessages);
+        setPageToken(null);
+        setHasMore(false);
       }
-      
-      setPageToken(response.nextPageToken || null);
-      setHasMore(!!response.nextPageToken);
     } catch (error) {
-      console.error('[Gmail] ❌ Erreur chargement messages:', error);
+      console.error('[Mail] ❌ Erreur chargement messages:', error);
       message.error('Erreur lors du chargement des messages');
     } finally {
       setLoading(false);
     }
-  }, [stableApi]);
+  }, [stableApi, mailSource]);
 
   const loadLabels = useCallback(async () => {
     try {
@@ -193,12 +240,18 @@ const GoogleGmailPageV2: React.FC = () => {
   // ============ EFFETS ============
 
   useEffect(() => {
-    loadMessages(currentMailbox);
-    loadLabels();
-  }, [currentMailbox, loadMessages, loadLabels]);
+    if (mailSource === 'gmail') {
+      loadMessages(currentMailbox);
+      loadLabels();
+    } else {
+      // Pour One.com, charger directement les messages
+      loadMessages(currentMailbox);
+    }
+  }, [currentMailbox, loadMessages, loadLabels, mailSource]);
 
+  // Sidebar toujours collapsed par défaut (mode mobile)
   useEffect(() => {
-    setSidebarCollapsed(isMobile);
+    setSidebarCollapsed(true);
   }, [isMobile]);
 
   // ============ ACTIONS SUR LES MESSAGES ============
@@ -511,26 +564,35 @@ const GoogleGmailPageV2: React.FC = () => {
     
     try {
       setSendingEmail(true);
-      console.log('[Gmail] ✉️ Envoi email:', composeEmail);
+      console.log('[Mail] ✉️ Envoi email:', { mailSource, composeEmail });
       
       // Combiner body + quotedContent - GARDER LE HTML (comme Gmail !)
       const fullBody = composeEmail.quotedContent 
         ? `<div>${composeEmail.body}</div><br/><br/>${composeEmail.quotedContent}`
         : composeEmail.body;
       
-      // Envoyer en HTML (comme Gmail fait pour garder le formatage)
-      const emailData = {
-        to: composeEmail.to,
-        cc: composeEmail.cc || undefined,
-        bcc: composeEmail.bcc || undefined,
-        subject: composeEmail.subject,
-        body: fullBody,
-        isHtml: true, // HTML pour garder le formatage !
-        replyToMessageId: composeEmail.replyToMessageId || undefined,
-        threadId: composeEmail.threadId || undefined
-      };
-      
-      await stableApi.post('/api/gmail/messages/send', emailData);
+      if (mailSource === 'gmail') {
+        // Envoyer via Gmail API
+        const emailData = {
+          to: composeEmail.to,
+          cc: composeEmail.cc || undefined,
+          bcc: composeEmail.bcc || undefined,
+          subject: composeEmail.subject,
+          body: fullBody,
+          isHtml: true,
+          replyToMessageId: composeEmail.replyToMessageId || undefined,
+          threadId: composeEmail.threadId || undefined
+        };
+        
+        await stableApi.post('/api/gmail/messages/send', emailData);
+      } else {
+        // Envoyer via One.com API (Yandex)
+        await stableApi.post('/yandex/send', { 
+          to: composeEmail.to,
+          subject: composeEmail.subject,
+          html: fullBody
+        });
+      }
       
       message.success('Email envoyé avec succès !');
       setComposeVisible(false);
@@ -542,12 +604,12 @@ const GoogleGmailPageV2: React.FC = () => {
         handleRefresh();
       }
     } catch (error) {
-      console.error('[Gmail] ❌ Erreur envoi:', error);
+      console.error('[Mail] ❌ Erreur envoi:', error);
       message.error('Erreur lors de l\'envoi de l\'email');
     } finally {
       setSendingEmail(false);
     }
-  }, [composeEmail, uploadFileList, stableApi, currentMailbox, handleRefresh]);
+  }, [composeEmail, uploadFileList, stableApi, currentMailbox, handleRefresh, mailSource]);
 
   // ============ GESTION DES LABELS ============
 
@@ -643,208 +705,165 @@ const GoogleGmailPageV2: React.FC = () => {
   // ============ RENDU SIDEBAR ============
 
   const renderSidebar = () => {
-    // Sur mobile, utiliser un Drawer
-    if (isMobile) {
-      return (
-        <Drawer
-          title={
-            <div className="flex items-center gap-3">
-              <div className="w-9 h-9 rounded-full bg-gradient-to-br from-red-500 to-red-600 flex items-center justify-center shadow-sm">
-                <MailOutlined className="text-white text-lg" />
-              </div>
-              <span className="font-semibold text-gray-800">Gmail</span>
-            </div>
-          }
-          placement="left"
-          onClose={() => setSidebarCollapsed(true)}
-          open={!sidebarCollapsed}
-          width={300}
-          styles={{ body: { padding: '8px 0' } }}
-        >
-          {/* Labels système */}
-          <div className="space-y-1 px-2">
-            {SYSTEM_LABELS.map(item => (
-              <div
-                key={item.key}
-                className={`flex items-center px-4 py-3 rounded-lg cursor-pointer transition-all duration-200 ${
-                  currentMailbox === item.key 
-                    ? 'bg-blue-50 text-blue-600 border-l-4 border-blue-500' 
-                    : 'hover:bg-gray-50 active:bg-gray-100'
-                }`}
-                onClick={() => { handleMailboxChange(item.key); setSidebarCollapsed(true); }}
-              >
-                <span className="text-xl w-8" style={{ color: currentMailbox === item.key ? '#1890ff' : item.color }}>
-                  {item.icon}
-                </span>
-                <span className={`flex-1 ${currentMailbox === item.key ? 'font-semibold' : 'text-gray-700'}`}>
-                  {item.label}
-                </span>
-              </div>
-            ))}
-          </div>
-          
-          {/* Séparateur avec titre Dossiers */}
-          <div className="mt-4 mb-2 px-4 flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <div className="w-6 h-px bg-gray-200"></div>
-              <Text className="text-xs uppercase font-bold tracking-wider text-gray-400">Dossiers</Text>
-              <div className="flex-1 h-px bg-gray-200"></div>
-            </div>
-            <Button
-              type="text"
-              size="small"
-              icon={<PlusOutlined />}
-              onClick={() => { setLabelModalVisible(true); setSidebarCollapsed(true); }}
-              className="hover:bg-blue-50 hover:text-blue-500 rounded-full"
-            />
-          </div>
-          
-          {/* Liste des dossiers */}
-          <div className="space-y-1 px-2">
-            {labels.filter(l => l.type === 'user').length === 0 ? (
-              <div className="text-center py-4 text-gray-400 text-sm">
-                Aucun dossier personnalisé
-              </div>
-            ) : (
-              labels.filter(l => l.type === 'user').map(label => (
-                <div
-                  key={label.id}
-                  className={`flex items-center px-4 py-3 rounded-lg cursor-pointer transition-all duration-200 group ${
-                    currentMailbox === label.id 
-                      ? 'bg-blue-50 text-blue-600 border-l-4 border-blue-500' 
-                      : 'hover:bg-gray-50 active:bg-gray-100'
-                  }`}
-                  onClick={() => { handleMailboxChange(label.id); setSidebarCollapsed(true); }}
-                >
-                  <TagOutlined className="text-lg w-8" style={{ color: label.color?.backgroundColor || '#8c8c8c' }} />
-                  <span className={`flex-1 truncate ${currentMailbox === label.id ? 'font-semibold' : 'text-gray-700'}`}>
-                    {label.name}
-                  </span>
-                  <Popconfirm
-                    title="Supprimer ce dossier ?"
-                    onConfirm={(e) => { e?.stopPropagation(); handleDeleteLabel(label.id); }}
-                    okText="Supprimer"
-                    cancelText="Annuler"
-                  >
-                    <Button
-                      type="text"
-                      size="small"
-                      icon={<DeleteOutlined />}
-                      className="opacity-0 group-hover:opacity-100 hover:text-red-500"
-                      onClick={(e) => e.stopPropagation()}
-                    />
-                  </Popconfirm>
-                </div>
-              ))
-            )}
-          </div>
-        </Drawer>
-      );
-    }
-    
-    // Sur desktop, sidebar classique
+    // Toujours utiliser un Drawer (mobile et desktop)
     return (
-      <div className={`bg-gradient-to-b from-gray-50 to-white border-r flex flex-col shadow-lg transition-all duration-300 ${sidebarCollapsed ? 'w-16' : 'w-64'}`}>
-        {/* Bouton Nouveau message */}
-        <div className="p-3">
+      <Drawer
+        title={null}
+        placement="left"
+        onClose={() => setSidebarCollapsed(true)}
+        open={!sidebarCollapsed}
+        width={280}
+        styles={{ 
+          body: { padding: '12px 10px 14px', background: 'white' },
+          header: { display: 'none' },
+          wrapper: { boxShadow: '0 8px 10px 1px rgba(0,0,0,0.14), 0 3px 14px 2px rgba(0,0,0,0.12), 0 5px 5px -3px rgba(0,0,0,0.2)' }
+        }}
+        closeIcon={null}
+      >
+        {/* En-tête Gmail style */}
+        <div style={{ padding: '16px 12px 12px', background: 'white', borderBottom: '1px solid #e0e0e0', borderRadius: 12 }}>
+          <div className="flex items-center gap-2 mb-3" style={{ paddingLeft: 4 }}>
+            <MailOutlined className="text-red-600 text-xl" />
+            <span className="font-normal text-lg text-gray-800">Gmail</span>
+          </div>
+          
+          {/* Bouton Nouveau message */}
           <Button
-            type="primary"
+            type="default"
             icon={<EditOutlined />}
             size="large"
-            onClick={() => handleCompose()}
-            className={`${sidebarCollapsed ? 'w-10 h-10 p-0' : 'w-full'} shadow-md hover:shadow-lg transition-shadow`}
+            onClick={() => { handleCompose(); setSidebarCollapsed(true); }}
+            className="w-full mb-4"
             style={{ 
-              background: 'linear-gradient(135deg, #1890ff 0%, #096dd9 100%)',
-              border: 'none',
-              borderRadius: '24px'
+              background: 'white',
+              border: '1px solid #dadce0',
+              borderRadius: '24px',
+              height: '48px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '12px',
+              boxShadow: '0 1px 2px 0 rgba(60,64,67,0.3), 0 1px 3px 1px rgba(60,64,67,0.15)',
+              fontSize: '14px',
+              fontWeight: 500,
+              color: '#202124'
             }}
           >
-            {!sidebarCollapsed && 'Nouveau message'}
+            Nouveau message
           </Button>
+          
+          {/* Recherche style Gmail */}
+          <Input
+            prefix={<SearchOutlined className="text-gray-400" />}
+            placeholder="Rechercher..."
+            onPressEnter={(e) => { handleSearch(e.currentTarget.value); setSidebarCollapsed(true); }}
+            allowClear
+            size="middle"
+            className="w-full"
+            style={{ 
+              background: '#f1f3f4',
+              border: 'none',
+              borderRadius: '8px'
+            }}
+          />
         </div>
         
-        {/* Labels système */}
-        <div className="flex-1 overflow-y-auto py-2">
+        {/* Labels système - style Gmail */}
+        <div style={{ background: 'white', paddingBottom: '8px', paddingTop: 6 }}>
           {SYSTEM_LABELS.map(item => (
             <div
               key={item.key}
-              className={`flex items-center px-4 py-3 mx-2 rounded-xl cursor-pointer transition-all duration-200 ${
+              className={`flex items-center justify-between px-4 py-2.5 mx-2 rounded-full cursor-pointer transition-all ${
                 currentMailbox === item.key 
-                  ? 'bg-blue-100 text-blue-700 shadow-sm' 
-                  : 'hover:bg-gray-100 active:bg-gray-200'
+                  ? 'bg-blue-50 font-medium' 
+                  : 'hover:bg-gray-100'
               }`}
-              onClick={() => handleMailboxChange(item.key)}
+              onClick={() => { handleMailboxChange(item.key); setSidebarCollapsed(true); }}
+              style={{ color: currentMailbox === item.key ? '#1967d2' : '#202124' }}
             >
-              <span className="text-lg" style={{ color: currentMailbox === item.key ? '#1890ff' : item.color }}>{item.icon}</span>
-              {!sidebarCollapsed && (
-                <span className={`ml-3 flex-1 truncate ${currentMailbox === item.key ? 'font-medium' : ''}`}>
+              <div className="flex items-center gap-3">
+                <span className="text-base" style={{ color: currentMailbox === item.key ? '#1967d2' : '#5f6368' }}>
+                  {item.icon}
+                </span>
+                <span className="text-sm">
                   {item.label}
+                </span>
+              </div>
+              {item.key === 'inbox' && messages.length > 0 && (
+                <span
+                  className="text-xs font-semibold"
+                  style={{
+                    color: currentMailbox === item.key ? '#1967d2' : '#5f6368',
+                    background: currentMailbox === item.key ? '#e8f0fe' : '#f1f3f4',
+                    padding: '2px 6px',
+                    borderRadius: 999
+                  }}
+                >
+                  {messages.length}
                 </span>
               )}
             </div>
           ))}
-          
-          {/* Séparateur et dossiers personnalisés */}
-          {!sidebarCollapsed && (
-            <>
-              <Divider className="my-3" />
-              <div className="px-4 py-2 flex items-center justify-between">
-                <Text type="secondary" className="text-xs uppercase font-semibold tracking-wider">Dossiers</Text>
-                <Tooltip title="Créer un dossier">
+        </div>
+        
+        {/* Section Dossiers */}
+        <div style={{ background: 'white', padding: '10px 12px 8px', borderTop: '1px solid #e0e0e0' }}>
+          <div className="flex items-center justify-between mb-2">
+            <Text style={{ color: '#5f6368', fontSize: '11px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.8px' }}>
+              Libellés
+            </Text>
+            <Button
+              type="text"
+              size="small"
+              icon={<PlusOutlined style={{ fontSize: '11px', color: '#5f6368' }} />}
+              onClick={() => { setLabelModalVisible(true); setSidebarCollapsed(true); }}
+              className="hover:bg-gray-100 h-5 w-5 flex items-center justify-center p-0"
+            />
+          </div>
+        </div>
+        
+        {/* Liste des dossiers style Gmail */}
+        <div style={{ background: 'white', paddingBottom: '16px' }}>
+          {labels.filter(l => l.type === 'user').length === 0 ? (
+            <div className="text-center py-6 px-4">
+              <p className="text-xs text-gray-400">Aucun libellé</p>
+            </div>
+          ) : (
+            labels.filter(l => l.type === 'user').map(label => (
+              <div
+                key={label.id}
+                className={`flex items-center justify-between px-4 py-2.5 mx-2 rounded-full cursor-pointer transition-all group ${
+                  currentMailbox === label.id 
+                    ? 'bg-blue-50' 
+                    : 'hover:bg-gray-100'
+                }`}
+                onClick={() => { handleMailboxChange(label.id); setSidebarCollapsed(true); }}
+                style={{ color: currentMailbox === label.id ? '#1967d2' : '#202124' }}
+              >
+                <div className="flex items-center gap-3 flex-1 min-w-0">
+                  <TagOutlined className="text-sm" style={{ color: currentMailbox === label.id ? '#1967d2' : '#5f6368' }} />
+                  <span className="text-sm truncate">
+                    {label.name}
+                  </span>
+                </div>
+                <Popconfirm
+                  title="Supprimer ?"
+                  onConfirm={(e) => { e?.stopPropagation(); handleDeleteLabel(label.id); }}
+                  okText="Oui"
+                  cancelText="Non"
+                >
                   <Button
                     type="text"
                     size="small"
-                    icon={<PlusOutlined />}
-                    onClick={() => setLabelModalVisible(true)}
-                    className="hover:bg-blue-50 hover:text-blue-500"
+                    icon={<DeleteOutlined style={{ fontSize: '11px', color: '#5f6368' }} />}
+                    className="opacity-0 group-hover:opacity-100 hover:bg-gray-200 h-5 w-5 flex items-center justify-center p-0"
+                    onClick={(e) => e.stopPropagation()}
                   />
-                </Tooltip>
+                </Popconfirm>
               </div>
-              
-              {labels.filter(l => l.type === 'user').map(label => (
-                <div
-                  key={label.id}
-                  className={`flex items-center px-4 py-3 mx-2 rounded-xl cursor-pointer transition-all duration-200 group ${
-                    currentMailbox === label.id 
-                      ? 'bg-blue-100 text-blue-700 shadow-sm' 
-                      : 'hover:bg-gray-100 active:bg-gray-200'
-                  }`}
-                  onClick={() => handleMailboxChange(label.id)}
-                >
-                  <TagOutlined style={{ color: label.color?.backgroundColor || '#8c8c8c' }} />
-                  <span className={`ml-3 flex-1 truncate ${currentMailbox === label.id ? 'font-medium' : ''}`}>
-                    {label.name}
-                  </span>
-                  <Popconfirm
-                    title="Supprimer ce dossier ?"
-                    onConfirm={(e) => { e?.stopPropagation(); handleDeleteLabel(label.id); }}
-                    okText="Supprimer"
-                    cancelText="Annuler"
-                  >
-                    <Button
-                      type="text"
-                      size="small"
-                      icon={<DeleteOutlined />}
-                      className="opacity-0 group-hover:opacity-100 hover:text-red-500"
-                      onClick={(e) => e.stopPropagation()}
-                    />
-                  </Popconfirm>
-                </div>
-              ))}
-            </>
+            ))
           )}
         </div>
-        
-        {/* Toggle sidebar */}
-        <div className="p-2 border-t">
-          <Button
-            type="text"
-            icon={sidebarCollapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
-            onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
-            className="w-full"
-          />
-        </div>
-      </div>
+      </Drawer>
     );
   };
 
@@ -867,17 +886,6 @@ const GoogleGmailPageV2: React.FC = () => {
                 }
               }}
             />
-          )}
-          
-          {!isMobile && (
-            <Tooltip title="Actualiser">
-              <Button 
-                icon={<ReloadOutlined />} 
-                onClick={handleRefresh} 
-                loading={loading}
-                size="middle"
-              />
-            </Tooltip>
           )}
           
         {selectedMessages.length > 0 && (
@@ -917,18 +925,6 @@ const GoogleGmailPageV2: React.FC = () => {
         )}
         
         <div className="flex-1 min-w-0" />
-        
-        {/* Search - responsive */}
-        {!isMobile && (
-          <Search
-            placeholder="Rechercher..."
-            allowClear
-            onSearch={handleSearch}
-            style={{ width: 200, flexShrink: 0 }}
-            loading={_searchLoading}
-            size="middle"
-          />
-        )}
         </div>
       )}
       
@@ -1530,45 +1526,60 @@ const GoogleGmailPageV2: React.FC = () => {
 
   return (
     <div className="h-screen flex flex-col bg-gray-50 overflow-hidden">
-      {/* Header Mobile - UNE SEULE LIGNE */}
-      {isMobile ? (
-        <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: '8px 12px', backgroundColor: 'white', borderBottom: '1px solid #e5e7eb' }}>
-          <Button
-            type="text"
-            icon={<MenuOutlined />}
-            onClick={() => setSidebarCollapsed(false)}
-          />
+      {/* Header avec sélecteur - Desktop */}
+      {/* Header identique mobile et desktop */}
+      <div style={{ display: 'flex', flexDirection: 'column', backgroundColor: 'white', borderBottom: '1px solid #e5e7eb' }}>
+        <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: '8px 12px' }}>
+          {mailSource === 'gmail' && (
+            <Button
+              type="text"
+              icon={<MenuOutlined />}
+              onClick={() => setSidebarCollapsed(false)}
+            />
+          )}
           <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', gap: 8 }}>
             <MailOutlined style={{ fontSize: 18 }} />
-            <span style={{ fontWeight: 600 }}>{getMailboxTitle()}</span>
+            <span style={{ fontWeight: 600 }}>Boîte de réception</span>
           </div>
-          <Button
-            type="text"
-            icon={<ReloadOutlined spin={loading} />}
-            onClick={handleRefresh}
+          {mailSource === 'gmail' && (
+            <Button
+              type="text"
+              icon={<ReloadOutlined spin={loading} />}
+              onClick={handleRefresh}
+            />
+          )}
+        </div>
+        {/* Sélecteur */}
+        <div style={{ padding: '8px 12px', borderTop: '1px solid #f0f0f0' }}>
+          <Segmented
+            value={mailSource}
+            onChange={(value) => setMailSource(value as MailSource)}
+            block
+            options={[
+              {
+                label: (
+                  <div style={{ padding: '4px 8px' }}>
+                    <GoogleOutlined style={{ marginRight: 6 }} />
+                    Gmail
+                  </div>
+                ),
+                value: 'gmail',
+              },
+              {
+                label: (
+                  <div style={{ padding: '4px 8px' }}>
+                    <MailOutlined style={{ marginRight: 6 }} />
+                    Mail Pro
+                  </div>
+                ),
+                value: 'one-com',
+              },
+            ]}
           />
         </div>
-      ) : (
-        <div className="bg-white border-b px-4 py-3 flex items-center gap-4 shadow-sm">
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-red-400 to-red-600 flex items-center justify-center shadow-md">
-            <MailOutlined className="text-xl text-white" />
-          </div>
-          <div className="flex-1">
-            <Title level={4} className="m-0" style={{ lineHeight: 1.2 }}>Gmail</Title>
-            <Text type="secondary" className="text-xs">Gérez vos emails</Text>
-          </div>
-          <Button
-            type="primary"
-            icon={<EditOutlined />}
-            onClick={() => handleCompose()}
-            style={{ borderRadius: 8, background: 'linear-gradient(135deg, #1890ff 0%, #096dd9 100%)' }}
-          >
-            Nouveau
-          </Button>
-        </div>
-      )}
+      </div>
       
-      {/* Contenu principal */}
+      {/* Contenu principal - MÊME INTERFACE pour Gmail et One.com */}
       <div className="flex-1 flex overflow-hidden relative w-full max-w-full">
         {/* Sidebar */}
         {renderSidebar()}
@@ -1577,7 +1588,7 @@ const GoogleGmailPageV2: React.FC = () => {
         {renderMessageList()}
       </div>
       
-      {/* Modals et Drawers */}
+      {/* Modals et Drawers - pour Gmail et One.com */}
       {renderMessageDrawer()}
       {renderComposeModal()}
       {renderLabelModal()}

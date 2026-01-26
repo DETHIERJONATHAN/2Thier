@@ -2,23 +2,28 @@ import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { 
   Layout, Row, Col, List, Button, Space, Input, Avatar, Divider, 
   Modal, Form, Select, message, Spin, Badge, Tooltip, Dropdown, Menu,
-  Upload, Drawer, Typography, Popconfirm, Checkbox, Empty
+  Upload, Drawer, Typography, Popconfirm, Checkbox, Empty, Segmented, Result
 } from 'antd';
 import { 
   StarOutlined, SendOutlined, PlusOutlined, 
-  ReloadOutlined, PaperClipOutlined, DeleteOutlined, ReplyOutlined,
+  ReloadOutlined, PaperClipOutlined, DeleteOutlined, RollbackOutlined,
   ForwardOutlined, MoreOutlined, EyeOutlined, DownloadOutlined,
   FolderOutlined, CloseOutlined,
   CheckOutlined, ExclamationCircleOutlined, InboxOutlined,
-  FileTextOutlined, StarFilled
+  FileTextOutlined, StarFilled, GoogleOutlined, MailOutlined
 } from '@ant-design/icons';
 import { useGmailService, GmailMessage, GmailLabel, SendEmailRequest } from '../hooks/useGmailService';
 import PageHeader from '../components/PageHeader';
+import { useAuth } from '../auth/useAuth';
+import { useAuthenticatedApi } from '../hooks/useAuthenticatedApi';
+import GmailLayout from '../mail-system/components/shared/GmailLayout';
 
 const { Content, Sider } = Layout;
 const { TextArea } = Input;
 const { Title, Text } = Typography;
 const { Dragger } = Upload;
+
+type MailSource = 'gmail' | 'one-com';
 
 interface ComposeFormData {
   to: string[];
@@ -29,10 +34,30 @@ interface ComposeFormData {
   attachments?: File[];
 }
 
+interface EmailAccount {
+  id: string;
+  emailAddress: string;
+  createdAt: string;
+  updatedAt: string;
+  organization?: {
+    id: string;
+    name: string;
+  };
+}
+
 const GoogleMailPage: React.FC = () => {
+  // Sélecteur de source mail
+  const [mailSource, setMailSource] = useState<MailSource>('gmail');
+  
   // Services et contexte
   const gmailService = useGmailService();
   const [msgApi, msgCtx] = message.useMessage();
+  const { user } = useAuth();
+  const { api } = useAuthenticatedApi();
+  
+  // États pour Mail One.com
+  const [emailAccount, setEmailAccount] = useState<EmailAccount | null>(null);
+  const [isLoadingAccount, setIsLoadingAccount] = useState(false);
 
   // États principaux
   const [messages, setMessages] = useState<GmailMessage[]>([]);
@@ -83,6 +108,30 @@ const GoogleMailPage: React.FC = () => {
     }
   }, [gmailService, msgApi]);
 
+  // Charger le compte email One.com
+  const checkOneComAccount = useCallback(async () => {
+    if (!user || mailSource !== 'one-com') return;
+    
+    setIsLoadingAccount(true);
+    try {
+      const response = await api.get('/api/email-accounts/me');
+      if (response.success && response.hasAccount) {
+        setEmailAccount(response.emailAccount);
+      } else {
+        setEmailAccount(null);
+      }
+    } catch (error: unknown) {
+      const err = error as { response?: { status?: number } };
+      if (err.response && err.response.status === 404) {
+        setEmailAccount(null);
+      } else {
+        console.error("Erreur lors de la vérification du compte One.com:", error);
+      }
+    } finally {
+      setIsLoadingAccount(false);
+    }
+  }, [api, user, mailSource]);
+
   const loadMessages = useCallback(async (token?: string) => {
     setIsLoading(true);
     try {
@@ -128,15 +177,24 @@ const GoogleMailPage: React.FC = () => {
 
   // Charger les données initiales
   useEffect(() => {
-    loadInitialData();
-  }, [loadInitialData]);
+    if (mailSource === 'gmail') {
+      loadInitialData();
+    }
+  }, [loadInitialData, mailSource]);
 
-  // Charger les messages quand le label change
+  // Charger les messages quand le label change (uniquement pour Gmail)
   useEffect(() => {
-    if (currentLabel) {
+    if (currentLabel && mailSource === 'gmail') {
       loadMessages();
     }
-  }, [currentLabel, searchQuery, loadMessages]);
+  }, [currentLabel, searchQuery, loadMessages, mailSource]);
+
+  // Charger le compte One.com quand on bascule
+  useEffect(() => {
+    if (mailSource === 'one-com') {
+      checkOneComAccount();
+    }
+  }, [checkOneComAccount, mailSource]);
 
   // Fonctions utilitaires pour les emails
   const getHeader = (message: GmailMessage, headerName: string): string => {
@@ -277,7 +335,7 @@ const GoogleMailPage: React.FC = () => {
   // Menu actions
   const getActionsMenu = (message: GmailMessage) => (
     <Menu>
-      <Menu.Item key="reply" icon={<ReplyOutlined />} onClick={() => openCompose(message)}>
+      <Menu.Item key="reply" icon={<RollbackOutlined />} onClick={() => openCompose(message)}>
         Répondre
       </Menu.Item>
       <Menu.Item key="forward" icon={<ForwardOutlined />}>
@@ -358,22 +416,60 @@ const GoogleMailPage: React.FC = () => {
   );
 
   return (
-    <div className="google-mail-page h-screen">
+    <div className="google-mail-page h-screen flex flex-col">
       {msgCtx}
-      <PageHeader 
-        title="Gmail" 
-        description="Interface Gmail complète intégrée à votre CRM"
-        extra={[
-          <Button key="compose" type="primary" icon={<PlusOutlined />} onClick={() => openCompose()}>
-            Nouveau message
-          </Button>,
-          <Button key="refresh" icon={<ReloadOutlined />} onClick={() => loadMessages()}>
-            Actualiser
-          </Button>
-        ]}
-      />
       
-      <Layout className="h-full bg-white">
+      {/* Header avec sélecteur de source */}
+      <div style={{ background: '#fff', borderBottom: '1px solid #f0f0f0' }}>
+        <PageHeader 
+          title="Messagerie" 
+          description="Gérez vos emails Gmail et professionnels"
+          extra={[
+            <Segmented
+              key="source-selector"
+              value={mailSource}
+              onChange={(value) => setMailSource(value as MailSource)}
+              size="large"
+              options={[
+                {
+                  label: (
+                    <div style={{ padding: '4px 12px' }}>
+                      <GoogleOutlined style={{ marginRight: 8 }} />
+                      Gmail
+                    </div>
+                  ),
+                  value: 'gmail',
+                },
+                {
+                  label: (
+                    <div style={{ padding: '4px 12px' }}>
+                      <MailOutlined style={{ marginRight: 8 }} />
+                      Mail Pro
+                    </div>
+                  ),
+                  value: 'one-com',
+                },
+              ]}
+            />,
+            mailSource === 'gmail' && (
+              <Button key="compose" type="primary" icon={<PlusOutlined />} onClick={() => openCompose()}>
+                Nouveau message
+              </Button>
+            ),
+            mailSource === 'gmail' && (
+              <Button key="refresh" icon={<ReloadOutlined />} onClick={() => loadMessages()}>
+                Actualiser
+              </Button>
+            )
+          ].filter(Boolean)}
+        />
+      </div>
+      
+      {/* Contenu conditionnel selon la source */}
+      <div style={{ flex: 1, overflow: 'hidden' }}>
+        {mailSource === 'gmail' ? (
+          // Interface Gmail originale
+          <Layout className="h-full bg-white">
         {/* Sidebar avec labels */}
         <Sider width={280} className="bg-white border-r border-gray-200 overflow-y-auto">
           <div className="p-4">
@@ -549,8 +645,91 @@ const GoogleMailPage: React.FC = () => {
           )}
         </Content>
       </Layout>
+        ) : (
+          // Interface Mail One.com
+          <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+            {isLoadingAccount ? (
+              <div className="flex justify-center items-center h-full">
+                <Spin size="large" tip="Chargement de votre boîte mail professionnelle...">
+                  <div style={{ width: 1, height: 1 }} />
+                </Spin>
+              </div>
+            ) : emailAccount ? (
+              <>
+                <div style={{ 
+                  background: '#001529', 
+                  color: 'white', 
+                  padding: '8px 16px',
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center'
+                }}>
+                  <Text style={{ color: 'white', fontWeight: 'bold' }}>
+                    📧 {emailAccount.emailAddress}
+                  </Text>
+                  {emailAccount.organization && (
+                    <Text style={{ color: '#87d068', fontSize: '12px' }}>
+                      {emailAccount.organization.name}
+                    </Text>
+                  )}
+                </div>
+                
+                <div style={{ flex: 1 }}>
+                  <GmailLayout />
+                </div>
+              </>
+            ) : (
+              <div className="flex items-center justify-center h-full bg-gray-50">
+                <div style={{ maxWidth: '600px', width: '100%', padding: '20px' }}>
+                  <Result
+                    status="info"
+                    title="🚀 Votre Boîte Mail Professionnelle"
+                    subTitle="Activez votre compte pour commencer à envoyer et recevoir des emails directement depuis le CRM avec votre adresse professionnelle."
+                    extra={[
+                      <Button 
+                        type="primary" 
+                        key="activate" 
+                        onClick={async () => {
+                          try {
+                            const response = await api.post('/api/email-accounts', {});
+                            if (response.success) {
+                              setEmailAccount(response.emailAccount);
+                              msgApi.success('Votre boîte mail a été activée avec succès !');
+                            }
+                          } catch (error: unknown) {
+                            console.error("Erreur lors de l'activation:", error);
+                            msgApi.error("Une erreur est survenue lors de l'activation.");
+                          }
+                        }}
+                        size="large"
+                        style={{ 
+                          height: '48px',
+                          paddingLeft: '32px',
+                          paddingRight: '32px',
+                          fontSize: '16px'
+                        }}
+                      >
+                        Activer ma boîte mail
+                      </Button>,
+                    ]}
+                  />
+                  
+                  <div style={{ marginTop: '32px', textAlign: 'center' }}>
+                    <Text type="secondary" style={{ fontSize: '14px' }}>
+                      Un compte email professionnel sera créé automatiquement avec votre nom et prénom.
+                    </Text>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
 
-      {/* Modal de composition */}
+      {/* Modals Gmail (uniquement si source Gmail) */}
+      {mailSource === 'gmail' && (
+        <>
+          {/* Modal de composition */}
       <Modal
         title="Nouveau message"
         open={composeVisible}
@@ -656,7 +835,7 @@ const GoogleMailPage: React.FC = () => {
         extra={
           selectedMessage && (
             <Space>
-              <Button icon={<ReplyOutlined />} onClick={() => {
+              <Button icon={<RollbackOutlined />} onClick={() => {
                 setMessageDetailVisible(false);
                 openCompose(selectedMessage);
               }}>
@@ -741,6 +920,8 @@ const GoogleMailPage: React.FC = () => {
           </div>
         )}
       </Drawer>
+        </>
+      )}
     </div>
   );
 };

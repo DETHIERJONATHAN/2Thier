@@ -14,7 +14,7 @@ const DashboardPage = React.lazy(() => import('../pages/DashboardPage'));
 const CRMPage = React.lazy(() => import('../pages/CRMPage'));
 const GestionSAVPage = React.lazy(() => import('../pages/GestionSAVPage'));
 const LeadsPage = React.lazy(() => import('../pages/Leads/LeadsPage'));
-const MailPage = React.lazy(() => import('../pages/MailPage'));
+// MailPage remplacée par l’interface Gmail unifiée
 const PremiumTestPage = React.lazy(() => import('../pages/PremiumTestPage'));
 const DiagnosticCompletPage = React.lazy(() => import('../pages/DiagnosticCompletPage'));
 
@@ -110,7 +110,7 @@ export const AppLayout: React.FC = () => {
                   {hasFeature('clients_access') && <Route path="/clients" element={<CRMPage />} />}
                   {hasFeature('gestion_sav') && <Route path="/gestion_sav" element={<GestionSAVPage />} />}
                   {hasFeature('leads_access') && <Route path="/leads" element={<LeadsPage />} />}
-                  {hasFeature('MAIL') && <Route path="/mail" element={<MailPage />} />}
+                  {hasFeature('MAIL') && <Route path="/mail" element={<GoogleGmailPageV2 />} />}
 
                   {/* Routes modules métier */}
                   {hasFeature('facture') && <Route path="/facture" element={<FacturePage />} />}

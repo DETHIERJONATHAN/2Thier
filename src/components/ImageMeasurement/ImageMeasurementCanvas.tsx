@@ -2029,7 +2029,24 @@ export const ImageMeasurementCanvas: React.FC<ImageMeasurementCanvasProps> = ({
     }
     
     // 🔒 Créer une signature des données pour éviter de recalculer si rien n'a changé
-    const objectPoints = points.slice(0, 4).map(p => ({ x: Math.round(p.x), y: Math.round(p.y) }));
+    const primaryPoints = points.filter(p => p.type === 'primary').slice(0, 4);
+    if (primaryPoints.length < 4) {
+      return;
+    }
+
+    const sortedByY = [...primaryPoints].sort((a, b) => a.y - b.y);
+    const topPts = sortedByY.slice(0, 2).sort((a, b) => a.x - b.x);
+    const bottomPts = sortedByY.slice(2, 4).sort((a, b) => a.x - b.x);
+
+    const topLeft = topPts[0];
+    const topRight = topPts[1];
+    const bottomLeft = bottomPts[0];
+    const bottomRight = bottomPts[1];
+
+    const objectPoints = [topLeft, topRight, bottomRight, bottomLeft].map(p => ({
+      x: Math.round(p.x),
+      y: Math.round(p.y)
+    }));
     const dataSignature = JSON.stringify({
       corners: fusedCorners,
       points: objectPoints

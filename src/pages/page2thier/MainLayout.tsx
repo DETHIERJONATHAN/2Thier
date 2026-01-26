@@ -94,12 +94,6 @@ const MODULE_ROUTES: Record<string, string> = {
   formulaire: '/formulaire',
   google_agenda: '/google-agenda',
   google_drive: '/google-drive',
-  google_calendar: '/google-calendar',
-  google_docs: '/google-docs',
-  google_sheets: '/google-sheets',
-  google_voice: '/google-voice',
-  google_chat: '/google-chat',
-  google_keep: '/google-keep',
 };
 
 const getModuleRoute = (mod: { key?: string; id?: string; route?: string; name?: string; label?: string }) => {
