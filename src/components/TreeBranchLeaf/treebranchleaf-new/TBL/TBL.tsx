@@ -988,6 +988,35 @@ const TBL: React.FC<TBLProps> = ({
     debounceRef.current = window.setTimeout(() => { void doAutosave(data, changedField); }, 800);
   }, [doAutosave]);
 
+  // 🎯 FIX: Refs pour éviter les closures stale dans debouncedEvaluateRef
+  const scheduleAutosaveRef = useRef(scheduleAutosave);
+  const scheduleCapabilityPreviewRef = useRef(scheduleCapabilityPreview);
+
+  // 🎯 FIX: Créer la fonction debounced UNE SEULE FOIS pour éviter changedFieldId="NULL" au 1er changement
+  useEffect(() => {
+    if (!debouncedEvaluateRef.current) {
+      debouncedEvaluateRef.current = debounce((nextData: TBLFormData, changedField?: string) => {
+        try {
+          // ✅ Utiliser les refs qui pointent toujours vers les dernières versions
+          scheduleAutosaveRef.current(nextData, changedField);
+        } catch {/* noop */}
+        try {
+          scheduleCapabilityPreviewRef.current(nextData);
+        } catch {/* noop */}
+      }, 300);
+      console.log('🎯 [TBL] debouncedEvaluateRef créé avec succès (refs stables)');
+    }
+  }, []); // ✅ Deps vides = créé UNE SEULE FOIS
+
+  // 🎯 FIX: Mettre à jour les refs quand les fonctions changent (toujours la dernière version)
+  useEffect(() => {
+    scheduleAutosaveRef.current = scheduleAutosave;
+  }, [scheduleAutosave]);
+
+  useEffect(() => {
+    scheduleCapabilityPreviewRef.current = scheduleCapabilityPreview;
+  }, [scheduleCapabilityPreview]);
+
   // Auto-sauvegarde toutes les 30 secondes (après scheduleAutosave pour éviter la TDZ)
   // 🔧 FIX: Utiliser une ref pour formData afin d'éviter de recréer l'intervalle à chaque changement
   const formDataRef = useRef<TBLFormData>(formData);
@@ -1546,26 +1575,17 @@ const TBL: React.FC<TBLProps> = ({
       } catch { /* noop */ }
       // Système de miroirs legacy SUPPRIMÉ - causait des problèmes avec le changedFieldId
       
-      // 🚀 PERF: Debounce pour scheduleAutosave et scheduleCapabilityPreview (300ms)
-      // Annuler le timer précédent si l'utilisateur tape vite
-      if (!debouncedEvaluateRef.current) {
-        debouncedEvaluateRef.current = debounce((nextData: TBLFormData, changedField?: string) => {
-          try {
-            scheduleAutosave(nextData, changedField);
-          } catch {/* noop */}
-          try {
-            scheduleCapabilityPreview(nextData);
-          } catch {/* noop */}
-        }, 300);
-      }
-      
       // ⚡ FILTRE: Ne JAMAIS envoyer les miroirs comme changedFieldId au backend
       const realFieldId = fieldId?.startsWith('__mirror_data_') ? undefined : fieldId;
       console.log(`🎯🎯🎯 [TBL] AVANT debounce: fieldId="${fieldId}", realFieldId="${realFieldId}"`);
       
-      // Appeler la version debouncée avec le fieldId RÉEL (pas les miroirs)
-      debouncedEvaluateRef.current(next as TBLFormData, realFieldId);
-      console.log(`✅✅✅ [TBL] APRÈS debounce appelé avec realFieldId="${realFieldId}"`);
+      // 🎯 FIX: Appeler la version debouncée (créée une seule fois avec refs stables)
+      if (debouncedEvaluateRef.current) {
+        debouncedEvaluateRef.current(next as TBLFormData, realFieldId);
+        console.log(`✅✅✅ [TBL] APRÈS debounce appelé avec realFieldId="${realFieldId}"`);
+      } else {
+        console.warn('⚠️ [TBL] debouncedEvaluateRef pas encore initialisé');
+      }
       
       // 🔄 NOUVEAU: Dispatch événement pour refresh automatique des display fields
       try {
