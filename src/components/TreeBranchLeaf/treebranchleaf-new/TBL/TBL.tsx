@@ -988,10 +988,6 @@ const TBL: React.FC<TBLProps> = ({
     debounceRef.current = window.setTimeout(() => { void doAutosave(data, changedField); }, 800);
   }, [doAutosave]);
 
-  // 🎯 FIX: Refs pour éviter les closures stale dans debouncedEvaluateRef
-  const scheduleAutosaveRef = useRef(scheduleAutosave);
-  const scheduleCapabilityPreviewRef = useRef(scheduleCapabilityPreview);
-
   // 🎯 FIX: Créer la fonction debounced UNE SEULE FOIS pour éviter changedFieldId="NULL" au 1er changement
   useEffect(() => {
     if (!debouncedEvaluateRef.current) {
@@ -1086,6 +1082,19 @@ const TBL: React.FC<TBLProps> = ({
     }
     previewDebounceRef.current = window.setTimeout(() => { void previewEvaluateAndStore(data); }, 600);
   }, [tree?.id, previewEvaluateAndStore]);
+
+  // 🎯 FIX: Créer les refs APRÈS les déclarations (éviter TDZ - Temporal Dead Zone)
+  const scheduleAutosaveRef = useRef(scheduleAutosave);
+  const scheduleCapabilityPreviewRef = useRef(scheduleCapabilityPreview);
+
+  // 🎯 FIX: Mettre à jour les refs quand les fonctions changent (toujours la dernière version)
+  useEffect(() => {
+    scheduleAutosaveRef.current = scheduleAutosave;
+  }, [scheduleAutosave]);
+
+  useEffect(() => {
+    scheduleCapabilityPreviewRef.current = scheduleCapabilityPreview;
+  }, [scheduleCapabilityPreview]);
 
   useEffect(() => {
     return () => {
