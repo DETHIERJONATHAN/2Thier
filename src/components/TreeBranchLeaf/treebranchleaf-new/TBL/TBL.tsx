@@ -1004,15 +1004,6 @@ const TBL: React.FC<TBLProps> = ({
     }
   }, []); // ✅ Deps vides = créé UNE SEULE FOIS
 
-  // 🎯 FIX: Mettre à jour les refs quand les fonctions changent (toujours la dernière version)
-  useEffect(() => {
-    scheduleAutosaveRef.current = scheduleAutosave;
-  }, [scheduleAutosave]);
-
-  useEffect(() => {
-    scheduleCapabilityPreviewRef.current = scheduleCapabilityPreview;
-  }, [scheduleCapabilityPreview]);
-
   // Auto-sauvegarde toutes les 30 secondes (après scheduleAutosave pour éviter la TDZ)
   // 🔧 FIX: Utiliser une ref pour formData afin d'éviter de recréer l'intervalle à chaque changement
   const formDataRef = useRef<TBLFormData>(formData);
