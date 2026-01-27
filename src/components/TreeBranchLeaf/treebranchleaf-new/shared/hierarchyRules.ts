@@ -263,7 +263,7 @@ function validateLeafElement(
 ): ValidationResult {
   
   // ÔØî NIVEAU 3+ OBLIGATOIRE : Pas directement sous l'arbre !
-  if (parentType === 'tree') {
+  if (false && parentType === 'tree') { // 🎯 FIX: Autoriser les leaf_ au niveau ROOT
     return {
       isValid: false,
       reason: `Les ${elementName} ne peuvent pas ├¬tre cr├®├®s directement sous l'arbre`,
@@ -273,8 +273,9 @@ function validateLeafElement(
     };
   }
   
-  // Ô£à NIVEAU 2+ : Sous des branches, sections ou autres leaf_* 
-  if (parentType === 'branch' || parentType === 'section' || parentType.startsWith('leaf_')) {
+  // Ô£à NIVEAU 2+ : Sous des branches, sections, tree (ROOT) ou autres leaf_* 
+  // 🎯 FIX: Autoriser aussi sous tree (ROOT) pour les champs DISPLAY
+  if (parentType === 'tree' || parentType === 'branch' || parentType === 'section' || parentType.startsWith('leaf_')) {
     return {
       isValid: true,
       level: childLevel,

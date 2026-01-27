@@ -3415,6 +3415,13 @@ const updateOrMoveNode = async (req, res) => {
           return res.status(400).json({ error: 'Parent non trouvÃƒÆ’Ã‚Â©' });
         }
 
+        console.log("🔍 [DEBUG MOVE]", {
+          nodeLabel: existingNode.label,
+          nodeType: existingNode.type,
+          newParentLabel: newParentNode.label,
+          newParentType: newParentNode.type,
+          newParentId: newParentId
+        });
         // Appliquer les rÃƒÆ’Ã‚Â¨gles hiÃƒÆ’Ã‚Â©rarchiques actualisÃƒÆ’Ã‚Â©es
         if (existingNode.type === 'leaf_option') {
           // Les options peuvent ÃƒÆ’Ã‚Âªtre sous :
@@ -3428,27 +3435,45 @@ const updateOrMoveNode = async (req, res) => {
               error: 'Les options ne peuvent ÃƒÆ’Ã‚Âªtre dÃƒÆ’Ã‚Â©placÃƒÆ’Ã‚Â©es que sous des champs SELECT ou des branches de niveau 2+' 
             });
           }
+          console.log('🔍 [DEBUG] Validation pour leaf_:', {
+            existingNodeType: existingNode.type,
+            newParentNodeType: newParentNode.type,
+            newParentId: newParentId,
+            isValidParent: newParentNode.type === 'branch' || newParentNode.type.startsWith('leaf_') || newParentNode.type === 'tree'
+          });
         } else if (existingNode.type.startsWith('leaf_')) {
-          // Les champs peuvent ÃƒÆ’Ã‚Âªtre sous des branches ou d'autres champs
-          if (newParentNode.type !== 'branch' && !newParentNode.type.startsWith('leaf_')) {
+          // 🎯 FIX: Les champs peuvent être déplacés sous des branches, sections, d'autres champs, ou ROOT (tree)
+          // Ceci permet le déplacement des champs DISPLAY au niveau racine et dans les sections
+          console.log("🔍 [DEBUG MOVE] existingNode:", existingNode.type, "| newParentNode:", newParentNode?.type, "| newParentId:", newParentId);
+          const isValidParent = 
+            newParentNode.type === 'branch' || 
+            newParentNode.type === 'section' ||
+            newParentNode.type.startsWith('leaf_') ||
+            newParentNode.type === 'tree';
+            
+          if (!isValidParent) {
             return res.status(400).json({ 
-              error: 'Les champs ne peuvent ÃƒÆ’Ã‚Âªtre dÃƒÆ’Ã‚Â©placÃƒÆ’Ã‚Â©s que sous des branches ou d\'autres champs' 
+              error: 'Les champs ne peuvent être déplacés que sous des branches, sections, autres champs ou ROOT (tree)' 
             });
           }
         } else if (existingNode.type === 'branch') {
-          // Les branches peuvent ÃƒÆ’Ã‚Âªtre sous l'arbre ou sous une autre branche
+          // Les branches peuvent être sous l'arbre ou sous une autre branche
           if (!(newParentNode.type === 'tree' || newParentNode.type === 'branch')) {
             return res.status(400).json({ 
-              error: 'Les branches doivent ÃƒÆ’Ã‚Âªtre sous l\'arbre ou sous une autre branche' 
+              error: 'Les branches doivent être sous l\'arbre ou sous une autre branche' 
             });
           }
         }
       } else {
-        // parentId null = dÃƒÆ’Ã‚Â©placement vers la racine
-        // Seules les branches peuvent ÃƒÆ’Ã‚Âªtre directement sous l'arbre racine
-        if (existingNode.type !== 'branch') {
+        // 🎯 FIX: parentId null = déplacement vers ROOT
+        // Autoriser les branches ET les champs (incluant DISPLAY) au niveau racine
+        const canBeAtRoot = 
+          existingNode.type === 'branch' || 
+          existingNode.type.startsWith('leaf_');
+          
+        if (!canBeAtRoot) {
           return res.status(400).json({ 
-            error: 'Seules les branches peuvent ÃƒÆ’Ã‚Âªtre dÃƒÆ’Ã‚Â©placÃƒÆ’Ã‚Â©es directement sous l\'arbre racine (niveau 2)' 
+            error: 'Seules les branches et les champs peuvent être déplacés directement sous ROOT' 
           });
         }
       }
@@ -13553,3 +13578,4 @@ export default router;
 
 
 
+// Force reload 1769539259
