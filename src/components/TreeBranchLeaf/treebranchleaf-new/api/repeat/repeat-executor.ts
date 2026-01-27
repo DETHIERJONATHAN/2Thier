@@ -28,6 +28,15 @@ export interface RepeatExecutionSummary {
     templateCount: number;
     nodesToDuplicateCount: number;
     sectionCount: number;
+    // 🎯 NOUVEAU: Infos sur les triggers et subType pour debug frontend
+    triggersFix?: Array<{
+      nodeId: string;
+      label: string;
+      originalSubType: string | null;
+      appliedSubType: string | null;
+      originalTriggers: unknown;
+      suffixedTriggers: unknown;
+    }>;
   };
 }
 
@@ -131,7 +140,17 @@ export async function runRepeatExecution(
   const duplicatedNodeIds = new Set<string>();
   const originalNodeIdByCopyId = new Map<string, string>();
   
-  // Ã°Å¸â€Â§ MAP: Associer les IDs supposÃƒÂ©s du plan aux vrais IDs crÃƒÂ©ÃƒÂ©s
+  // 🎯 DEBUG FRONTEND: Collecter les infos sur les triggers pour affichage dans la console frontend
+  const triggersFixDebug: Array<{
+    nodeId: string;
+    label: string;
+    originalSubType: string | null;
+    appliedSubType: string | null;
+    originalTriggers: unknown;
+    suffixedTriggers: unknown;
+  }> = [];
+  
+  // Mapping: Associer les IDs supposés du plan aux vrais IDs créés
   // Cela est nÃƒÂ©cessaire car repeat-instantiator.ts crÃƒÂ©e des targetNodeId supposÃƒÂ©s
   // mais deepCopyNodeInternal peut crÃƒÂ©er des IDs rÃƒÂ©els diffÃƒÂ©rents
   const plannedNodeIdToRealNodeId = new Map<string, string>();
@@ -192,6 +211,12 @@ export async function runRepeatExecution(
 
       const newRootId = copyResult.root.newId;
 
+      // 🎯 CRITIQUE: Récupérer le template ORIGINAL pour préserver subType
+      const originalTemplate = await prisma.treeBranchLeafNode.findUnique({
+        where: { id: template.id },
+        select: { subType: true, metadata: true }
+      });
+
       const created = await prisma.treeBranchLeafNode.findUnique({
         where: { id: newRootId }
       });
@@ -199,6 +224,14 @@ export async function runRepeatExecution(
       if (!created) {
         throw new RepeatOperationError(`Node copy failed to materialize for template ${template.id}.`, 500);
       }
+      
+      // 🎯 FIX: Récupérer les triggerNodeIds de l'ORIGINAL, pas de la copie
+      const originalMetadata = (originalTemplate?.metadata && typeof originalTemplate.metadata === 'object')
+        ? (originalTemplate.metadata as Record<string, unknown>)
+        : {};
+      const originalTriggerNodeIds = originalMetadata.triggerNodeIds;
+      
+
 
       const createdMetadata = (created.metadata && typeof created.metadata === 'object')
         ? (created.metadata as Record<string, unknown>)
@@ -212,6 +245,41 @@ export async function runRepeatExecution(
       const effectiveSuffix = resolvedSuffix ?? plannedSuffix ?? 1;
 
 
+      // 🎯 CRITIQUE: Fonction helper pour suffixer les triggerNodeIds
+      const suffixTriggers = (triggerNodeIds: unknown, label: string) => {
+        if (!Array.isArray(triggerNodeIds) || triggerNodeIds.length === 0) {
+          return null;
+        }
+        
+        const oldTriggers = [...triggerNodeIds];
+        const suffixedTriggerNodeIds = triggerNodeIds.map((triggerId: unknown) => {
+          if (typeof triggerId !== 'string') return triggerId;
+          
+          // Nettoyer l'ID (retirer @value. et {})
+          const cleanId = triggerId.replace(/^@value\./, '').replace(/^{/, '').replace(/}$/, '');
+          
+          // Vérifier si une copie existe déjà dans l'idMap
+          if (copyResult.idMap && copyResult.idMap[cleanId]) {
+            const newTriggerId = copyResult.idMap[cleanId];
+            // Restaurer le format original
+            if (triggerId.startsWith('@value.')) return `@value.${newTriggerId}`;
+            else if (triggerId.startsWith('{')) return `{${newTriggerId}}`;
+            return newTriggerId;
+          }
+          
+          // Sinon, ajouter le suffixe
+          const suffixedId = `${cleanId}-${effectiveSuffix}`;
+          if (triggerId.startsWith('@value.')) return `@value.${suffixedId}`;
+          else if (triggerId.startsWith('{')) return `{${suffixedId}}`;
+          return suffixedId;
+        });
+        
+        return suffixedTriggerNodeIds;
+      };
+
+      // 🎯 TRAITER LE NŒUD RACINE - Utiliser les triggers ORIGINAUX
+      const rootSuffixedTriggers = suffixTriggers(originalTriggerNodeIds, created.label || 'root');
+
       // FIX 25/01/2026: PRESERVER le lookup suffixé qui a été créé par buildCloneData
       // Ne pas écraser les champs lookup.sourceField, lookup.comparisonColumn, etc.
       const updatedMetadata = {
@@ -223,15 +291,111 @@ export async function runRepeatExecution(
         copySuffix: effectiveSuffix,
         repeatScopeId: scopeId,
         // IMPORTANT: Préserver le lookup s'il existe déjà (avec suffixes appliqués)
-        ...(createdMetadata.lookup ? { lookup: createdMetadata.lookup } : {})
+        ...(createdMetadata.lookup ? { lookup: createdMetadata.lookup } : {}),
+        // 🎯 IMPORTANT: Ajouter les triggerNodeIds suffixés depuis l'ORIGINAL
+        ...(rootSuffixedTriggers ? { triggerNodeIds: rootSuffixedTriggers } : {})
       };
 
-      await prisma.treeBranchLeafNode.update({
+      // 🎯🎯🎯 FIX CRITIQUE: Mettre à jour AUSSI le subType depuis l'original
+      console.log('🔴🔴🔴 [AVANT UPDATE] newRootId:', newRootId);
+      console.log('🔴🔴🔴 [AVANT UPDATE] subType à appliquer:', originalTemplate?.subType);
+      console.log('🔴🔴🔴 [AVANT UPDATE] triggers suffixés:', rootSuffixedTriggers);
+      
+      const updateResult = await prisma.treeBranchLeafNode.update({
         where: { id: newRootId },
         data: {
+          subType: originalTemplate?.subType || null,
           metadata: updatedMetadata
         }
       });
+      
+      console.log('🟢🟢🟢 [APRÈS UPDATE] Résultat:', updateResult.id, 'subType:', updateResult.subType);
+      
+      // 🎯 DEBUG FRONTEND: Collecter les infos pour affichage dans console navigateur
+      triggersFixDebug.push({
+        nodeId: newRootId,
+        label: created.label || 'root',
+        originalSubType: originalTemplate?.subType || null,
+        appliedSubType: originalTemplate?.subType || null,
+        originalTriggers: originalTriggerNodeIds,
+        suffixedTriggers: rootSuffixedTriggers
+      });
+      
+      // 🔴🔴🔴 DEBUG: Voir tous les IDs de l'idMap
+      const allIdMapEntries = Object.entries(copyResult.idMap || {}).map(([oldId, newId]) => ({
+        oldId,
+        newId,
+      }));
+      triggersFixDebug.push({
+        nodeId: 'DEBUG_IDMAP',
+        label: `TOTAL ${allIdMapEntries.length} entrées dans idMap`,
+        allIds: allIdMapEntries,
+        lookingFor: 'd371c32e-f69e-46b0-9846-f3f60f7b4ec8'
+      });
+
+      // 🎯🎯🎯 NOUVEAU: TRAITER TOUS LES NŒUDS ENFANTS (sections, champs, etc.)
+      // Les champs dans des sections peuvent aussi avoir des triggers qui doivent être suffixés
+      if (copyResult.idMap && Object.keys(copyResult.idMap).length > 0) {
+        const childNodeIds = Object.values(copyResult.idMap).filter(id => id !== newRootId);
+        
+        for (const childId of childNodeIds) {
+          try {
+            // 🎯 Récupérer l'ID original depuis idMap inversé
+            const originalChildId = Object.entries(copyResult.idMap).find(([_, newId]) => newId === childId)?.[0];
+            
+            // 🎯 Récupérer le nœud ORIGINAL pour préserver subType et triggers
+            const originalChildNode = originalChildId ? await prisma.treeBranchLeafNode.findUnique({
+              where: { id: originalChildId },
+              select: { id: true, label: true, metadata: true, subType: true }
+            }) : null;
+            
+            const childNode = await prisma.treeBranchLeafNode.findUnique({
+              where: { id: childId },
+              select: { id: true, label: true, metadata: true, subType: true }
+            });
+            
+            if (!childNode) continue;
+            
+            const childMetadata = (childNode.metadata && typeof childNode.metadata === 'object')
+              ? (childNode.metadata as Record<string, unknown>)
+              : {};
+            
+            // 🎯 Récupérer les triggers de l'ORIGINAL
+            const originalChildMetadata = (originalChildNode?.metadata && typeof originalChildNode.metadata === 'object')
+              ? (originalChildNode.metadata as Record<string, unknown>)
+              : {};
+            const originalChildTriggers = originalChildMetadata.triggerNodeIds;
+            
+            // Suffixer les triggers de l'enfant depuis l'ORIGINAL
+            // 🎯 Suffixer les triggers depuis l'ORIGINAL, pas depuis la copie
+            const childSuffixedTriggers = suffixTriggers(
+              originalChildTriggers, 
+              childNode.label || childId
+            );
+            
+            // 🎯 Mettre à jour si triggers OU subType doit être restauré
+            const needsSubTypeUpdate = originalChildNode?.subType && !childNode.subType;
+            const needsTriggersUpdate = childSuffixedTriggers && childSuffixedTriggers.length > 0;
+            
+            if (needsTriggersUpdate || needsSubTypeUpdate) {
+              const updatedChildMetadata = {
+                ...childMetadata,
+                ...(needsTriggersUpdate ? { triggerNodeIds: childSuffixedTriggers } : {})
+              };
+              
+              await prisma.treeBranchLeafNode.update({
+                where: { id: childId },
+                data: {
+                  ...(needsSubTypeUpdate ? { subType: originalChildNode?.subType } : {}),
+                  metadata: updatedChildMetadata
+                }
+              });
+            }
+          } catch (childErr) {
+            console.error(`❌ [REPEAT-EXECUTOR] Erreur traitement triggers pour enfant ${childId}:`, childErr);
+          }
+        }
+      }
 
       duplicatedSummaries.push({
         id: created.id,
@@ -516,7 +680,9 @@ export async function runRepeatExecution(
       sectionIds: sectionNodes.map(n => n.id),
       templateCount: templateNodeIds.length,
       nodesToDuplicateCount: nodesToDuplicate.length,
-      sectionCount: sectionNodes.length
+      sectionCount: sectionNodes.length,
+      // 🎯 INFOS TRIGGERS POUR DEBUG FRONTEND
+      triggersFix: triggersFixDebug
     }
   };
 }

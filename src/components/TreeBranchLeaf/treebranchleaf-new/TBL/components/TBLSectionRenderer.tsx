@@ -1350,6 +1350,7 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
   
   // ✅ CRITIQUE: Mémoiser le handleFieldChange pour éviter les re-rendus
   const handleFieldChange = useCallback((fieldId: string, value: any, fieldLabel?: string) => {
+    console.log(`🟦🟦🟦 [TBLSectionRenderer] handleFieldChange LOCAL appelé: fieldId=${fieldId}, value=${value}, label=${fieldLabel}`);
     onChange(fieldId, value);
     
     // Synchronisation miroir
@@ -4763,6 +4764,17 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
                                   `/api/repeat/${repeaterParentId}/instances/execute`,
                                   repeatRequestBody
                                 );
+                                
+                                // 🎯🎯🎯 DEBUG: Afficher les infos de triggers dans la console frontend
+                                if (response?.debug?.triggersFix) {
+                                  console.log('🎯🎯🎯 [REPEAT-EXECUTOR DEBUG] Infos triggers/subType:');
+                                  response.debug.triggersFix.forEach((item: any, idx: number) => {
+                                    console.log(`  [${idx}] ${item.label} (${item.nodeId})`);
+                                    console.log(`      originalSubType: "${item.originalSubType}" → appliedSubType: "${item.appliedSubType}"`);
+                                    console.log(`      originalTriggers:`, item.originalTriggers);
+                                    console.log(`      suffixedTriggers:`, item.suffixedTriggers);
+                                  });
+                                }
                                 
                                 if (isTBLDebugEnabled()) tblLog(`✅ [COPY-API] Repeat execute terminé:`, response);
                                 

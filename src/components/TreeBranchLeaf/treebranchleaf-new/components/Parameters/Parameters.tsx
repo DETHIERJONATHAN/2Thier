@@ -21,7 +21,8 @@ import {
   LinkOutlined,
   TagsOutlined,
   DeleteOutlined,
-  HolderOutlined
+  HolderOutlined,
+  NodeIndexOutlined
 } from '@ant-design/icons';
 import { 
   DndContext, 
@@ -47,6 +48,7 @@ import { useAuthenticatedApi } from '../../../../../hooks/useAuthenticatedApi';
 import { CapabilityPanels, FieldAppearancePanels, TreeBranchLeafRegistry } from '../../core/registry';
 import { normalizeSubTabValues } from '../../utils/subTabNormalization';
 import SharedReferencePanel from './capabilities/SharedReferencePanel';
+import NodeTreeSelector, { NodeTreeSelectorValue } from './shared/NodeTreeSelector';
 import type { 
   TreeBranchLeafTree, 
   TreeBranchLeafNode, 
@@ -366,6 +368,59 @@ const Parameters: React.FC<ParametersProps> = (props) => {
   // Mémorise l'état précédent des capacités pour détecter les activations externes
   const prevCapsRef = useRef<Record<string, boolean>>({});
   const lastNodeIdRef = useRef<string | null>(null);
+  
+  // État local pour les trigger fields (optimistic update)
+  const [localTriggerNodeIds, setLocalTriggerNodeIds] = useState<string[]>([]);
+  const [isLoadingTriggerIds, setIsLoadingTriggerIds] = useState(false);
+  
+  // 🔥 FETCH INDÉPENDANT: Charger triggerNodeIds directement depuis l'API
+  useEffect(() => {
+    if (!selectedNode?.id) {
+      setLocalTriggerNodeIds([]);
+      return;
+    }
+    
+    // Reset à chaque changement de node
+    if (lastNodeIdRef.current !== selectedNode.id) {
+      lastNodeIdRef.current = selectedNode.id;
+      setLocalTriggerNodeIds([]);
+      setIsLoadingTriggerIds(true);
+      
+      console.log('🔄 [TriggerField] Chargement des triggerNodeIds pour:', selectedNode.id);
+      
+      // Fetch indépendant des metadata - ESSAYER /full d'abord
+      api.get(`/api/treebranchleaf/nodes/${selectedNode.id}/full`)
+        .then((response: any) => {
+          console.log('📦 [TriggerField] Réponse /full complète:', response);
+          // L'endpoint /full retourne {nodes: [nodeData]} - extraire le premier
+          const nodeData = response?.nodes?.[0];
+          console.log('📦 [TriggerField] Node extrait:', nodeData);
+          console.log('📦 [TriggerField] Metadata:', nodeData?.metadata);
+          const triggerIds = nodeData?.metadata?.triggerNodeIds || [];
+          console.log('✅ [TriggerField] Chargés depuis API:', triggerIds);
+          setLocalTriggerNodeIds(triggerIds);
+          setIsLoadingTriggerIds(false);
+        })
+        .catch((error) => {
+          console.error('❌ [TriggerField] Erreur chargement /full, essai avec /nodes:', error);
+          // Fallback sur l'endpoint normal
+          api.get(`/api/treebranchleaf/nodes/${selectedNode.id}`)
+            .then((nodeData: TreeBranchLeafNode) => {
+              console.log('📦 [TriggerField] Réponse de /nodes:', nodeData);
+              console.log('📦 [TriggerField] Metadata:', nodeData?.metadata);
+              const triggerIds = nodeData?.metadata?.triggerNodeIds || [];
+              console.log('✅ [TriggerField] Chargés depuis API (fallback):', triggerIds);
+              setLocalTriggerNodeIds(triggerIds);
+              setIsLoadingTriggerIds(false);
+            })
+            .catch((err2) => {
+              console.error('❌ [TriggerField] Erreur chargement (fallback):', err2);
+              setLocalTriggerNodeIds([]);
+              setIsLoadingTriggerIds(false);
+            });
+        });
+    }
+  }, [selectedNode?.id, api]);
   const panelStateOpenCapabilities = panelState.openCapabilities;
   const selectedNodeId = selectedNode?.id ?? null;
 
@@ -378,6 +433,9 @@ const Parameters: React.FC<ParametersProps> = (props) => {
   // 🆕 Bloquer l'hydratation temporairement après une modification utilisateur
   const skipNextHydrationRef = useRef(false);
   const hydrationTimeoutRef = useRef<number | null>(null);
+  
+  // 🆕 État pour le sélecteur de champs déclencheurs
+  const [triggerNodeSelectorOpen, setTriggerNodeSelectorOpen] = useState(false);
 
   const emitMetadataUpdate = useCallback((nextMetadata: Record<string, unknown>) => {
     if (!selectedNode || typeof onNodeMetadataUpdated !== 'function') return;
@@ -627,10 +685,25 @@ const Parameters: React.FC<ParametersProps> = (props) => {
           ...payloadMeta
         };
         console.log('🎯 [Parameters] Metadata complet après fusion:', apiData.metadata);
+        console.log('🔍 [Parameters] triggerNodeIds dans metadata:', (apiData.metadata as any)?.triggerNodeIds);
       }
+      
+      // 🔍 LOG FINAL DU PAYLOAD AVANT ENVOI API
+      console.log('📤 [Parameters] PAYLOAD FINAL ENVOYÉ À L\'API:', {
+        id: selectedNodeId,
+        metadata: apiData.metadata,
+        payloadComplet: apiData
+      });
       
       // ✅ Utiliser la ref pour toujours avoir la dernière version
       const _updated = await onNodeUpdateRef.current({ ...apiData, id: selectedNodeId });
+      
+      // 🔍 LOG DE LA RÉPONSE API
+      console.log('📥 [Parameters] RÉPONSE DE L\'API:', {
+        id: _updated?.id,
+        metadata: _updated?.metadata,
+        triggerNodeIds: (_updated?.metadata as any)?.triggerNodeIds
+      });
 
       // Emit generic event for other listeners; include returned updated node for local merges
       try {
@@ -1603,6 +1676,7 @@ const Parameters: React.FC<ParametersProps> = (props) => {
                     <Select.Option value="date">📅 Date/Heure (DATE)</Select.Option>
                     <Select.Option value="image">🖼️ Image (IMAGE)</Select.Option>
                     <Select.Option value="file">📎 Fichier (FILE)</Select.Option>
+                    <Select.Option value="display">💡 Affichage (DISPLAY)</Select.Option>
                   </Select>
                 )}
               </div>
@@ -1717,6 +1791,112 @@ const Parameters: React.FC<ParametersProps> = (props) => {
               </div>
             );
           })()
+        )}
+
+        {/* Section Champs déclencheurs pour les champs d'affichage */}
+        {!isContainerNode && (fieldType === 'display' || fieldType === 'DISPLAY') && (
+          <div style={{ marginTop: 12 }}>
+            <strong style={{ fontSize: 12 }}>⚡ Champs déclencheurs (recalcul)</strong>
+            <div style={{ marginTop: 6, marginBottom: 6, fontSize: 11, color: '#666', lineHeight: 1.4 }}>
+              Sélectionnez les champs qui, lorsqu'ils changent, déclencheront le recalcul de ce champ d'affichage.
+              Si aucun champ n'est sélectionné, le calcul se fera à chaque modification (comportement par défaut).
+            </div>
+            
+            {/* Liste des champs déclencheurs sélectionnés */}
+            <div style={{ marginBottom: 8 }}>
+              {(() => {
+                console.log('🔍 [TriggerField] État:', {
+                  isLoading: isLoadingTriggerIds,
+                  count: localTriggerNodeIds.length,
+                  ids: localTriggerNodeIds
+                });
+                
+                if (isLoadingTriggerIds) {
+                  console.log('⏳ [TriggerField] Chargement en cours...');
+                  return (
+                    <div style={{ padding: '8px 12px', backgroundColor: '#f0f5ff', border: '1px solid #d6e4ff', borderRadius: 4, fontSize: 11, color: '#1890ff' }}>
+                      Chargement...
+                    </div>
+                  );
+                }
+                
+                if (localTriggerNodeIds.length === 0) {
+                  console.log('⚠️ [TriggerField] Aucun champ sélectionné - affichage du message par défaut');
+                  return (
+                    <div style={{ padding: '8px 12px', backgroundColor: '#fafafa', border: '1px dashed #d9d9d9', borderRadius: 4, fontSize: 11, color: '#999' }}>
+                      Aucun champ sélectionné - Recalcul à chaque modification
+                    </div>
+                  );
+                }
+                
+                console.log('✅ [TriggerField] Affichage de', localTriggerNodeIds.length, 'tag(s)');
+                return (
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                    {localTriggerNodeIds.map(idOrRef => {
+                      console.log('🏷️ [TriggerField] Affichage tag pour:', idOrRef);
+                      
+                      // Si ça commence par @value., extraire le nodeId
+                      let displayLabel = idOrRef;
+                      let isTreeNode = false;
+                      
+                      if (idOrRef.startsWith('@value.')) {
+                        const nodeId = idOrRef.replace('@value.', '');
+                        const node = nodesMap.get(nodeId);
+                        displayLabel = node?.label || nodeId;
+                        isTreeNode = true;
+                        console.log('🏷️ [TriggerField] Format @value - label:', displayLabel);
+                      } else if (idOrRef.startsWith('{') && idOrRef.endsWith('}')) {
+                        // Variable lead ou autre : afficher tel quel
+                        displayLabel = idOrRef;
+                        isTreeNode = false;
+                        console.log('🏷️ [TriggerField] Format variable - label:', displayLabel);
+                      } else {
+                        // C'est juste un nodeId direct
+                        const node = nodesMap.get(idOrRef);
+                        displayLabel = node?.label || idOrRef;
+                        isTreeNode = !!node;
+                        console.log('🏷️ [TriggerField] Format nodeId - label:', displayLabel, 'found:', !!node);
+                      }
+                      
+                      return (
+                        <Tag
+                          key={idOrRef}
+                          closable
+                          onClose={() => {
+                            console.log('🗑️ [TriggerField] Suppression tag:', idOrRef);
+                            const newIds = localTriggerNodeIds.filter(id => id !== idOrRef);
+                            setLocalTriggerNodeIds(newIds);
+                            
+                            const nextMeta = { ...(selectedNode?.metadata || {}) } as Record<string, unknown>;
+                            if (newIds.length === 0) {
+                              delete nextMeta.triggerNodeIds;
+                            } else {
+                              nextMeta.triggerNodeIds = newIds;
+                            }
+                            patchNode({ metadata: nextMeta });
+                            emitMetadataUpdate(nextMeta);
+                          }}
+                          color={isTreeNode ? "blue" : "purple"}
+                        >
+                          {displayLabel}
+                        </Tag>
+                      );
+                    })}
+                  </div>
+                );
+              })()}
+            </div>
+            
+            {/* Bouton pour ouvrir le sélecteur */}
+            <Button
+              icon={<NodeIndexOutlined />}
+              onClick={() => setTriggerNodeSelectorOpen(true)}
+              block
+              size="small"
+            >
+              Sélectionner des champs déclencheurs
+            </Button>
+          </div>
         )}
 
         {/* Section Sous-onglets (visuel) */}
@@ -2533,6 +2713,73 @@ const Parameters: React.FC<ParametersProps> = (props) => {
           </div>
         </div>
       </div>
+      
+      {/* Sélecteur de champs déclencheurs pour les champs d'affichage */}
+      {selectedNode && triggerNodeSelectorOpen && (
+        <NodeTreeSelector
+          nodeId={selectedNode.id}
+          open={triggerNodeSelectorOpen}
+          onClose={() => {
+            console.log('🔍 [TriggerNodeSelector] Modal fermé');
+            setTriggerNodeSelectorOpen(false);
+          }}
+          onSelect={(val: NodeTreeSelectorValue) => {
+            console.log('🔍 [TriggerNodeSelector] onSelect appelé:', val);
+            console.log('🔍 [TriggerNodeSelector] val.ref:', val.ref);
+            console.log('🔍 [TriggerNodeSelector] val.kind:', val.kind);
+            
+            let nodeId: string | null = null;
+            
+            // Extraire le nodeId selon le format du ref
+            // Format 1: @value.xxx (champs de l'arbre)
+            const matchValue = val.ref.match(/@value\.(.+)/);
+            if (matchValue) {
+              nodeId = matchValue[1];
+              console.log('🔍 [TriggerNodeSelector] nodeId extrait (format @value):', nodeId);
+            } else {
+              // Format 2: {lead.xxx} ou autres variables
+              // On stocke le ref complet sans transformation
+              nodeId = val.ref;
+              console.log('🔍 [TriggerNodeSelector] Ref complet conservé:', nodeId);
+            }
+            
+            if (nodeId) {
+              const nextMeta = { ...(selectedNode?.metadata || {}) } as Record<string, unknown>;
+              
+              // 🔥 FIX MULTI-SÉLECTION : Utiliser l'état local au lieu de metadata (car API ne retourne pas triggerNodeIds !)
+              const currentIds = localTriggerNodeIds.length > 0 ? localTriggerNodeIds : 
+                                 (Array.isArray(nextMeta.triggerNodeIds) ? nextMeta.triggerNodeIds as string[] : []);
+              
+              console.log('🔍 [TriggerNodeSelector] currentIds (depuis état local):', currentIds);
+              console.log('🔍 [TriggerNodeSelector] localTriggerNodeIds:', localTriggerNodeIds);
+              
+              // Ajouter le nodeId s'il n'est pas déjà présent
+              if (!currentIds.includes(nodeId)) {
+                const newIds = [...currentIds, nodeId];
+                nextMeta.triggerNodeIds = newIds;
+                console.log('🔍 [TriggerNodeSelector] nextMeta.triggerNodeIds:', nextMeta.triggerNodeIds);
+                
+                // Update local state immediately (optimistic)
+                setLocalTriggerNodeIds(newIds);
+                console.log('🎯 [TriggerNodeSelector] État local mis à jour avec TOUS les champs:', newIds);
+                
+                patchNode({ metadata: nextMeta });
+                emitMetadataUpdate(nextMeta);
+                console.log('✅ [TriggerNodeSelector] Champ ajouté avec succès!');
+              } else {
+                console.log('⚠️ [TriggerNodeSelector] Le champ est déjà dans la liste');
+              }
+            } else {
+              console.warn('❌ [TriggerNodeSelector] Impossible d\'extraire le nodeId depuis:', val.ref);
+            }
+            
+            // Ne pas fermer le modal pour permettre plusieurs sélections
+            // setTriggerNodeSelectorOpen(false);
+          }}
+          selectionContext="nodeId"
+          allowMulti={true}
+        />
+      )}
     </Card>
   );
 };

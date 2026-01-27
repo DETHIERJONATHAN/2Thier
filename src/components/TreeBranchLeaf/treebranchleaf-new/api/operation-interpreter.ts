@@ -425,14 +425,28 @@ async function enrichDataFromSubmission(
     }
     
     // 5. ENRICHIR VALUEMAP avec SubmissionData (prioritÃƒÂ© sur calculatedValue)
+    // 🔥 FIX 26/01/2026: NE PAS ÉCRASER les valeurs déjà présentes dans valueMap (qui viennent du formData frais)
     for (const data of submissionData) {
       if (data.nodeId && data.value !== null) {
+        // ⚡ SKIP si la valeur existe déjà dans valueMap (formData a priorité sur DB)
+        if (valueMap.has(data.nodeId)) {
+          // 🔍 DEBUG: Log quand on skip un champ
+          if (data.nodeId === 'd6212e5e-3fe9-4cce-b380-e6745524d011') {
+            console.log(`🔍 [enrichDataFromSubmission] SKIP Facture annuelle - valueMap a déjà: ${valueMap.get(data.nodeId)}, DB a: ${data.value}`);
+          }
+          continue;
+        }
+        
         // Ãƒâ€°craser calculatedValue avec la valeur soumise si prÃƒÂ©sente
         let parsedValue: unknown;
         try {
           parsedValue = typeof data.value === 'string' ? JSON.parse(data.value) : data.value;
         } catch {
           parsedValue = data.value;
+        }
+        // 🔍 DEBUG: Log quand on SET un champ
+        if (data.nodeId === 'd6212e5e-3fe9-4cce-b380-e6745524d011') {
+          console.log(`🔍 [enrichDataFromSubmission] SET Facture annuelle depuis DB: ${parsedValue}`);
         }
         valueMap.set(data.nodeId, parsedValue);
       }
@@ -2886,8 +2900,22 @@ export async function evaluateVariableOperation(
   const localValueMap = valueMap || new Map<string, unknown>();
   const labelMap = new Map<string, string>();
   
-  // Enrichir automatiquement les donnÃƒÂ©es depuis la base AVEC le treeId
+  // 🔍 DEBUG 26/01: Afficher valueMap AVANT enrichissement
+  console.log(`🔍 [evaluateVariableOperation] AVANT enrichissement pour ${variableNodeId}:`);
+  console.log(`   - valueMap.size = ${localValueMap.size}`);
+  if (localValueMap.has('d6212e5e-3fe9-4cce-b380-e6745524d011')) {
+    console.log(`   - Facture annuelle = ${localValueMap.get('d6212e5e-3fe9-4cce-b380-e6745524d011')}`);
+  }
+  
+  // Enrichir automatiquement les données depuis la base AVEC le treeId
   await enrichDataFromSubmission(submissionId, prisma, localValueMap, labelMap, treeId);
+  
+  // 🔍 DEBUG 26/01: Afficher valueMap APRÈS enrichissement
+  console.log(`🔍 [evaluateVariableOperation] APRÈS enrichissement pour ${variableNodeId}:`);
+  console.log(`   - valueMap.size = ${localValueMap.size}`);
+  if (localValueMap.has('d6212e5e-3fe9-4cce-b380-e6745524d011')) {
+    console.log(`   - Facture annuelle = ${localValueMap.get('d6212e5e-3fe9-4cce-b380-e6745524d011')}`);
+  }
   
   
   // Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â

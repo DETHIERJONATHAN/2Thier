@@ -2975,6 +2975,11 @@ function buildResponseFromColumns(node: any): Record<string, unknown> {
     appearance
   };
   
+  
+  // ✅ FIX: Préserver triggerNodeIds depuis node.metadata si présent
+  if (node.metadata && node.metadata.triggerNodeIds) {
+    cleanedMetadata.triggerNodeIds = node.metadata.triggerNodeIds;
+  }
   // ÃƒÂ°Ã…Â¸Ã¢â‚¬ÂÃ‚Â DEBUG: Log metadata pour "Test - liste"
   if (node.id === '131a7b51-97d5-4f40-8a5a-9359f38939e8') {
   }
@@ -3221,6 +3226,10 @@ function removeJSONFromUpdate(updateData: Record<string, unknown>): Record<strin
     if ('repeater' in metaObj) {
       preservedMeta.repeater = metaObj.repeater;
     }
+    // ✅ AJOUT: Préserver triggerNodeIds pour les champs d'affichage
+    if ('triggerNodeIds' in metaObj) {
+      preservedMeta.triggerNodeIds = metaObj.triggerNodeIds;
+    }
     
     if (Object.keys(preservedMeta).length > 0) {
       return {
@@ -3285,6 +3294,13 @@ const updateOrMoveNode = async (req, res) => {
     const updateData = req.body || {};
     
     
+    // 🔍 DEBUG triggerNodeIds
+    console.log('🔍 [updateOrMoveNode] Payload reçu:', {
+      nodeId,
+      hasTriggerNodeIds: !!updateData.metadata?.triggerNodeIds,
+      triggerNodeIds: updateData.metadata?.triggerNodeIds
+    });
+    
     // ÃƒÂ°Ã…Â¸Ã¢â‚¬ÂÃ¢â‚¬Å¾ ÃƒÆ’Ã¢â‚¬Â°TAPE 1 : Convertir JSON vers colonnes dÃƒÆ’Ã‚Â©diÃƒÆ’Ã‚Â©es
     const columnData = mapJSONToColumns(updateData);
     
@@ -3294,6 +3310,12 @@ const updateOrMoveNode = async (req, res) => {
     // ÃƒÂ°Ã…Â¸Ã…Â½Ã‚Â¯ ÃƒÆ’Ã¢â‚¬Â°TAPE 3 : Fusionner donnÃƒÆ’Ã‚Â©es nettoyÃƒÆ’Ã‚Â©es + colonnes dÃƒÆ’Ã‚Â©diÃƒÆ’Ã‚Â©es
     const updateObj: Record<string, unknown> = { ...cleanUpdateData, ...columnData };
     
+    
+    // 🔍 DEBUG triggerNodeIds après nettoyage
+    console.log('🔍 [updateOrMoveNode] Après removeJSONFromUpdate:', {
+      hasTriggerNodeIds: !!cleanUpdateData.metadata?.triggerNodeIds,
+      triggerNodeIds: cleanUpdateData.metadata?.triggerNodeIds
+    });
 
   // ÃƒÂ°Ã…Â¸Ã‚Â§Ã‚Â© IMPORTANT: Normaliser les rÃƒÆ’Ã‚Â©fÃƒÆ’Ã‚Â©rences partagÃƒÆ’Ã‚Â©es si le nÃƒâ€¦Ã¢â‚¬Å“ud est une COPIE (ID avec suffixe "-N")
   // Concerne les ÃƒÆ’Ã‚Â©critures directes envoyÃƒÆ’Ã‚Â©es par le frontend (single/array)

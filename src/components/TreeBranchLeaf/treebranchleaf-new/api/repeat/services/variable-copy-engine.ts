@@ -472,6 +472,7 @@ export async function copyVariableWithCapacities(
             parentId: true,
             treeId: true,
             order: true,
+            subType: true, // 🎯 FIX: Récupérer le subType pour le préserver (ex: 'display')
             linkedTableIds: true,
             linkedVariableIds: true,
             hasTable: true,
@@ -520,6 +521,7 @@ export async function copyVariableWithCapacities(
           parentId: true,
           order: true,
           metadata: true,
+          subType: true, // 🎯 FIX: Récupérer le subType pour le préserver (ex: 'display')
           subtab: true,
           subtabs: true,
           linkedTableIds: true,
@@ -741,9 +743,23 @@ export async function copyVariableWithCapacities(
           const ownerMetadata = cloneJson(originalOwnerNode.metadata);
           const inheritedMetadata = cloneJson(originalDisplayNode?.metadata);
 
+          // 🎯 DEBUG: Afficher les metadata originaux pour tracer les triggerNodeIds
+          console.log('🟣🟣🟣 [VARIABLE-COPY-ENGINE] Metadata originaux:', {
+            ownerMetadata: JSON.stringify(ownerMetadata),
+            inheritedMetadata: JSON.stringify(inheritedMetadata),
+            originalVarId: originalVar.id,
+            ownerSubType: originalOwnerNode.subType,
+            inheritedSubType: originalDisplayNode?.subType
+          });
+
+          // 🎯 FIX: Extraire les triggerNodeIds AVANT de créer le metadata
+          // On les supprime du spread pour les traiter séparément
+          const { triggerNodeIds: _ownerTriggers, ...ownerMetadataWithoutTriggers } = ownerMetadata ?? {};
+          const { triggerNodeIds: _inheritedTriggers, ...inheritedMetadataWithoutTriggers } = inheritedMetadata ?? {};
+
           const metadataForDisplay: Record<string, unknown> = {
-            ...ownerMetadata,
-            ...inheritedMetadata,
+            ...ownerMetadataWithoutTriggers,
+            ...inheritedMetadataWithoutTriggers,
             fromVariableId: forceSingleSuffix(originalVar.id),
             autoCreatedDisplayNode: true,
             ...(isFromRepeaterDuplication && { duplicatedFromRepeater: true }),
@@ -853,12 +869,75 @@ export async function copyVariableWithCapacities(
             return resolved?.length ? JSON.stringify(resolved) : null;
           })();
 
+          // 🎯 FIX: Récupérer le subType depuis le nœud original (pas null!)
+          // Cela permet de préserver le type 'display' pour les champs d'affichage
+          const inheritedSubType = originalDisplayNode?.subType ?? originalOwnerNode.subType ?? null;
+          
+          // 🎯 FIX: Suffixer les triggerNodeIds depuis les variables extraites plus haut
+          // On utilise _inheritedTriggers et _ownerTriggers (extraits lors de la création du metadata)
+          const originalTriggers = (_inheritedTriggers ?? _ownerTriggers) as string[] | undefined;
+          
+          console.log('🟢🟢🟢 [VARIABLE-COPY-ENGINE] Traitement des triggers:', {
+            _inheritedTriggers,
+            _ownerTriggers,
+            originalTriggers,
+            nodeIdMapSize: nodeIdMap.size,
+            nodeIdMapEntries: Array.from(nodeIdMap.entries()).slice(0, 10), // Premiers 10 mappings
+          });
+          
+          let suffixedTriggerNodeIds: string[] | null = null;
+          if (Array.isArray(originalTriggers) && originalTriggers.length > 0) {
+            suffixedTriggerNodeIds = originalTriggers.map((triggerId: string) => {
+              if (typeof triggerId !== 'string') return triggerId;
+              // Nettoyer l'ID (retirer @value. et {})
+              const cleanId = triggerId.replace(/^@value\./, '').replace(/^{/, '').replace(/}$/, '');
+              // Chercher dans nodeIdMap si une copie existe
+              const mappedId = nodeIdMap.get(cleanId);
+              
+              console.log('🔵🔵🔵 [VARIABLE-COPY-ENGINE] Mapping trigger:', {
+                original: triggerId,
+                cleanId,
+                mappedId,
+                suffix,
+              });
+              
+              if (mappedId) {
+                // Restaurer le format original
+                if (triggerId.startsWith('@value.')) return `@value.${mappedId}`;
+                if (triggerId.startsWith('{')) return `{${mappedId}}`;
+                return mappedId;
+              }
+              // Sinon, ajouter le suffixe manuellement
+              const suffixedId = appendSuffixOnce(cleanId);
+              if (triggerId.startsWith('@value.')) return `@value.${suffixedId}`;
+              if (triggerId.startsWith('{')) return `{${suffixedId}}`;
+              return suffixedId;
+            });
+            console.log('🟢🟢🟢 [VARIABLE-COPY-ENGINE] Triggers suffixés FINAL:', {
+              originalTriggers,
+              suffixedTriggerNodeIds,
+              displayNodeId,
+              inheritedSubType
+            });
+          } else {
+            console.log('⚠️⚠️⚠️ [VARIABLE-COPY-ENGINE] PAS DE TRIGGERS TROUVÉS:', {
+              originalTriggers,
+              type: typeof originalTriggers,
+              isArray: Array.isArray(originalTriggers),
+            });
+          }
+          
+          // 🎯 Ajouter les triggerNodeIds suffixés au metadata
+          if (suffixedTriggerNodeIds && suffixedTriggerNodeIds.length > 0) {
+            metadataForDisplay.triggerNodeIds = suffixedTriggerNodeIds;
+          }
+
           const displayNodeData = {
             id: displayNodeId,
             treeId: originalOwnerNode.treeId,
             parentId: resolvedParentId,
             type: 'leaf_field' as const,
-            subType: null as any,
+            subType: inheritedSubType as any, // 🎯 FIX: Utiliser le subType hérité (ex: 'display')
             label: displayLabel,
             description: null as string | null,
             value: null as string | null,

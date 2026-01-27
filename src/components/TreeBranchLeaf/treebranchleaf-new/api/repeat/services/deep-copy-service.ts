@@ -624,6 +624,42 @@ export async function deepCopyNodeInternal(
       if (normalizedRepeatContext && newMeta.repeater) {
         delete newMeta.repeater;
       }
+      
+      // 🎯 CRITIQUE: Suffixer les triggerNodeIds pour les display fields
+      // Les triggers doivent pointer vers les champs suffixés dans la copie
+      if (newMeta.triggerNodeIds && Array.isArray(newMeta.triggerNodeIds)) {
+        const oldTriggers = [...newMeta.triggerNodeIds];
+        newMeta.triggerNodeIds = (newMeta.triggerNodeIds as string[]).map((triggerId: string) => {
+          // Extraire l'ID pur si le trigger est au format @value.xxx ou {xxx}
+          const cleanId = triggerId.replace(/^@value\./, '').replace(/^{/, '').replace(/}$/, '');
+          
+          // Si l'ID est dans l'idMap (copié dans cette opération), utiliser le nouvel ID
+          if (idMap.has(cleanId)) {
+            const newTriggerId = idMap.get(cleanId)!;
+            // Restaurer le format original
+            if (triggerId.startsWith('@value.')) {
+              return `@value.${newTriggerId}`;
+            } else if (triggerId.startsWith('{')) {
+              return `{${newTriggerId}}`;
+            }
+            return newTriggerId;
+          }
+          
+          // Si l'ID n'est pas dans idMap, c'est une référence externe → suffixer
+          const suffixedId = appendSuffix(cleanId);
+          if (triggerId.startsWith('@value.')) {
+            return `@value.${suffixedId}`;
+          } else if (triggerId.startsWith('{')) {
+            return `{${suffixedId}}`;
+          }
+          return suffixedId;
+        });
+        console.log(`🎯 [DEEP-COPY] Suffixe triggers pour ${oldNode.label} (${newId}):`, {
+          oldTriggers,
+          newTriggers: newMeta.triggerNodeIds
+        });
+      }
+      
       return newMeta as Prisma.InputJsonValue;
     })(),
     // Ã°Å¸â€Â§ TRAITER LE fieldConfig: suffix les rÃƒÂ©fÃƒÂ©rences aux nodes

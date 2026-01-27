@@ -382,6 +382,9 @@ const TBL: React.FC<TBLProps> = ({
   // 🔄 État centralisé pour les sous-onglets actifs (pour navigation swipe)
   const [activeSubTabs, setActiveSubTabs] = useState<Record<string, string | undefined>>({});
   const tblSwipeContainerRef = useRef<HTMLDivElement>(null);
+  
+  // 🎯 RÉFÉRENCE STABLE: Ref pour handleFieldChange (utilisée par le wrapper stable)
+  const handleFieldChangeRef = useRef<(fieldId: string, value: string | number | boolean | string[] | null | undefined) => void>();
 
   // LOGS AUTOMATIQUES pour analyser l'état des mirrors et cartes
   // 🔥 DÉSACTIVÉ: Effet de debug qui causait des re-renders excessifs
@@ -928,7 +931,7 @@ const TBL: React.FC<TBLProps> = ({
   }, [api, tree]);
 
   // Helper: exécution de l'autosave (PUT)
-  const doAutosave = useCallback(async (data: TBLFormData) => {
+  const doAutosave = useCallback(async (data: TBLFormData, changedField?: string) => {
     if (!api || !tree) return;
     try {
       setIsAutosaving(true);
@@ -956,8 +959,12 @@ const TBL: React.FC<TBLProps> = ({
           submissionId,
           formData,
           clientId: effectiveClientId,
-          status: effectiveStatus
+          status: effectiveStatus,
+          changedFieldId: changedField // 🎯 Utiliser le paramètre direct au lieu de l'état React
         });
+        
+        console.log(`🎯 [TBL] changedFieldId envoyé au backend: "${changedField || 'NULL'}"`);
+        
         lastSavedSignatureRef.current = sig;
         setAutosaveLast(new Date());
         broadcastCalculatedRefresh({
@@ -976,9 +983,9 @@ const TBL: React.FC<TBLProps> = ({
   }, [api, tree, normalizePayload, computeSignature, submissionId, leadId, isDefaultDraft, previewNoSave, broadcastCalculatedRefresh]);
 
   // Déclencheur débouncé
-  const scheduleAutosave = useCallback((data: TBLFormData) => {
+  const scheduleAutosave = useCallback((data: TBLFormData, changedField?: string) => {
     if (debounceRef.current) window.clearTimeout(debounceRef.current);
-    debounceRef.current = window.setTimeout(() => { void doAutosave(data); }, 800);
+    debounceRef.current = window.setTimeout(() => { void doAutosave(data, changedField); }, 800);
   }, [doAutosave]);
 
   // Auto-sauvegarde toutes les 30 secondes (après scheduleAutosave pour éviter la TDZ)
@@ -1333,10 +1340,17 @@ const TBL: React.FC<TBLProps> = ({
   // 🚀 PERF: Debounce pour éviter trop de requêtes lors de saisie rapide
   const debouncedEvaluateRef = useRef<(...args: any[]) => void>();
 
-  const handleFieldChange = useCallback((fieldId: string, value: string | number | boolean | string[] | null | undefined) => {
-    console.log(`🔄🔄🔄 [TBL] handleFieldChange appelé: fieldId=${fieldId}, value=${value}`);
+  // 🎯 Implémentation complète de handleFieldChange avec toutes les dépendances
+  const handleFieldChangeImpl = useCallback((fieldId: string, value: string | number | boolean | string[] | null | undefined) => {
+    console.log(`🔄🔄🔄 [TBL] handleFieldChangeImpl appelé: fieldId=${fieldId}, value=${value}, type=${typeof fieldId}`);
     
-    // 🆕 COPIE AUTOMATIQUE: Si c'est un devis chargé et première modification → créer copie
+    // ⚡ IGNORER COMPLÈTEMENT les champs miroirs - ils sont gérés automatiquement par le système
+    if (fieldId?.startsWith('__mirror_data_')) {
+      console.log(`🚫 [TBL] Champ miroir ignoré: ${fieldId}`);
+      return; // Ne pas traiter les miroirs, éviter d'appeler debounce avec undefined
+    }
+    
+    //  COPIE AUTOMATIQUE: Si c'est un devis chargé et première modification → créer copie
     if (isLoadedDevis && !hasCopiedDevis && originalDevisId) {
       console.log('📋 [TBL] Première modification d\'un devis chargé → création copie...');
       // Déclencher la création de copie (async, mais on continue)
@@ -1530,56 +1544,14 @@ const TBL: React.FC<TBLProps> = ({
           }
         }
       } catch { /* noop */ }
-      try {
-        // Log ciblé pour debug champs Prix Kw/h
-        const dynamicLabel = fieldConfig?.label || fieldId;
-        // Log générique (diagnostic) au lieu de filtre métier
-        if (localStorage.getItem('TBL_DIAG') === '1') {
-          // console.log('[TBL][FIELD][CHANGE]', { fieldId, label: dynamicLabel, value });
-        }
-        // Miroir automatique: si le label se termine par ' - Champ' on alimente __mirror_data_<BaseLabel>
-        if (typeof dynamicLabel === 'string' && / - Champ$/i.test(dynamicLabel)) {
-          const baseLabel = dynamicLabel.replace(/ - Champ$/i, '');
-          const mirrorKey = `__mirror_data_${baseLabel}`;
-          if (!(mirrorKey in next)) {
-            // console.log('[TBL][MIRROR][SET]', { mirrorKey, from: fieldId, value });
-          }
-          next[mirrorKey] = value;
-          try {
-            const variants = buildMirrorKeys(baseLabel).map(k => k.replace(/^__mirror_data_/, ''));
-            variants.forEach(v => {
-              const k = `__mirror_data_${v}`;
-              if (!(k in next)) {
-                next[k] = value;
-                // console.log('[TBL][MIRROR][SET_VARIANT]', { variantKey: k, base: baseLabel, from: fieldId });
-              }
-            });
-          } catch (e) {
-            console.warn('[TBL][MIRROR][VARIANT][ERROR]', e);
-          }
-        } else if (fieldId.startsWith('__mirror_data_')) {
-          try {
-            const base = dynamicLabel;
-            const variants = buildMirrorKeys(base).map(k => k.replace(/^__mirror_data_/, ''));
-            variants.forEach(v => {
-              const k = `__mirror_data_${v}`;
-              if (!(k in next)) {
-                next[k] = value;
-                // console.log('[TBL][MIRROR][SET_VARIANT_FROM_MIRROR]', { variantKey: k, from: fieldId });
-              }
-            });
-          } catch (e) {
-            console.warn('[TBL][MIRROR][VARIANT_FROM_MIRROR][ERROR]', e);
-          }
-        }
-      } catch {/* noop */}
+      // Système de miroirs legacy SUPPRIMÉ - causait des problèmes avec le changedFieldId
       
       // 🚀 PERF: Debounce pour scheduleAutosave et scheduleCapabilityPreview (300ms)
       // Annuler le timer précédent si l'utilisateur tape vite
       if (!debouncedEvaluateRef.current) {
-        debouncedEvaluateRef.current = debounce((nextData: TBLFormData) => {
+        debouncedEvaluateRef.current = debounce((nextData: TBLFormData, changedField?: string) => {
           try {
-            scheduleAutosave(nextData);
+            scheduleAutosave(nextData, changedField);
           } catch {/* noop */}
           try {
             scheduleCapabilityPreview(nextData);
@@ -1587,8 +1559,13 @@ const TBL: React.FC<TBLProps> = ({
         }, 300);
       }
       
-      // Appeler la version debouncée
-      debouncedEvaluateRef.current(next as TBLFormData);
+      // ⚡ FILTRE: Ne JAMAIS envoyer les miroirs comme changedFieldId au backend
+      const realFieldId = fieldId?.startsWith('__mirror_data_') ? undefined : fieldId;
+      console.log(`🎯🎯🎯 [TBL] AVANT debounce: fieldId="${fieldId}", realFieldId="${realFieldId}"`);
+      
+      // Appeler la version debouncée avec le fieldId RÉEL (pas les miroirs)
+      debouncedEvaluateRef.current(next as TBLFormData, realFieldId);
+      console.log(`✅✅✅ [TBL] APRÈS debounce appelé avec realFieldId="${realFieldId}"`);
       
       // 🔄 NOUVEAU: Dispatch événement pour refresh automatique des display fields
       try {
@@ -1608,6 +1585,14 @@ const TBL: React.FC<TBLProps> = ({
       return next as typeof prev;
     });
   }, [tblConfig, tabs, scheduleAutosave, scheduleCapabilityPreview, isLoadedDevis, hasCopiedDevis, originalDevisId, createDevisCopy]);
+  
+  // 🔄 Assigner la ref IMMÉDIATEMENT dans le corps du composant
+  handleFieldChangeRef.current = handleFieldChangeImpl;
+
+  // 🎯 WRAPPER DIRECT: Utiliser directement handleFieldChangeImpl au lieu d'un wrapper useCallback
+  // Problème identifié: useCallback avec deps vides crée la fonction au 1er render quand ref est undefined
+  // Solution: Passer directement handleFieldChangeImpl qui se met à jour à chaque render
+  const handleFieldChange = handleFieldChangeImpl;
 
 
   // Sauvegarder comme devis
@@ -3562,7 +3547,18 @@ const TBLTabContentWithSections: React.FC<TBLTabContentWithSectionsProps> = Reac
   }, [sections, fields, formData]);
 
   // ✅ STABILISER onChange pour éviter les re-rendus en cascade !
-  const stableOnChange = useCallback(onChange, [onChange]);
+  const stableOnChange = useCallback((fieldId: string, value: unknown) => {
+    console.log(`🟨🟨🟨 [TBLTabContentWithSections] stableOnChange appelé: fieldId=${fieldId}, value=${value}`);
+    console.log(`🟨🟨🟨 [TBLTabContentWithSections] onChange.name="${onChange.name}", typeof="${typeof onChange}"`);
+    console.log(`🟨🟨🟨 [TBLTabContentWithSections] onChange toString:`, onChange.toString().substring(0, 200));
+    try {
+      onChange(fieldId, value);
+      console.log(`🟨🟨🟨 [TBLTabContentWithSections] onChange APPELÉ - fin (succès)`);
+    } catch (error) {
+      console.error(`❌❌❌ [TBLTabContentWithSections] ERREUR dans onChange:`, error);
+      throw error;
+    }
+  }, [onChange]);
 
   const getFieldSubTabs = (item: any): string[] => {
     if (!item) return [];

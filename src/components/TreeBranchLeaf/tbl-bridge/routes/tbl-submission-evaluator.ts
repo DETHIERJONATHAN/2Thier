@@ -308,7 +308,8 @@ async function evaluateCapacitiesForSubmission(
   organizationId: string,
   userId: string | null,
   treeId: string,
-  formData?: Record<string, unknown>
+  formData?: Record<string, unknown>,
+  changedFieldId?: string
 ) {
   // 🔑 ÉTAPE 1: Construire le valueMap avec les données fraîches du formulaire
   const valueMap = new Map<string, unknown>();
@@ -377,6 +378,48 @@ async function evaluateCapacitiesForSubmission(
     const isDisplayField = capacity.TreeBranchLeafNode?.fieldType === 'DISPLAY' 
       || capacity.TreeBranchLeafNode?.type === 'DISPLAY'
       || capacity.TreeBranchLeafNode?.type === 'leaf_field';
+    
+    // 🎯 OPTIMISATION: Filtrage par triggerNodeIds pour les display fields
+    if (isDisplayField && changedFieldId && changedFieldId !== 'NULL') {
+      // Récupérer les triggerNodeIds depuis le node
+      const node = await prisma.treeBranchLeafNode.findUnique({
+        where: { id: capacity.nodeId },
+        select: { metadata: true }
+      });
+      
+      const triggerNodeIds = (node?.metadata as { triggerNodeIds?: string[] })?.triggerNodeIds;
+      
+      // 🔑 LOGIQUE CORRECTE: 
+      // - Chargement initial (changedFieldId=NULL) → Calculer TOUT
+      // - Changement d'un champ (changedFieldId existe) :
+      //   → Champ AVEC triggers qui match → Recalculer
+      //   → Champ AVEC triggers sans match → SKIP
+      //   → Champ SANS triggers → SKIP (calculé seulement au chargement initial)
+      if (triggerNodeIds && Array.isArray(triggerNodeIds) && triggerNodeIds.length > 0) {
+        // Des triggers sont définis, vérifier le match
+        const fieldIdWithValue = `@value.${changedFieldId}`;
+        const fieldIdWithBraces = `{${changedFieldId}}`;
+        
+        const matchesTrigger = triggerNodeIds.some(trigger => 
+          trigger === changedFieldId || 
+          trigger === fieldIdWithValue || 
+          trigger === fieldIdWithBraces ||
+          trigger.replace('@value.', '') === changedFieldId
+        );
+        
+        if (!matchesTrigger) {
+          // Le champ modifié n'est PAS un trigger pour ce display field → SKIP
+          console.log(`⏸️ [TRIGGER FILTER] Display field ${capacity.nodeId} (${capacity.TreeBranchLeafNode?.label}) skippé - changedFieldId "${changedFieldId}" pas dans triggers [${triggerNodeIds.length} triggers définis]`);
+          continue; // ✅ SKIP
+        } else {
+          console.log(`✅ [TRIGGER MATCH] Display field ${capacity.nodeId} (${capacity.TreeBranchLeafNode?.label}) recalculé - changedFieldId "${changedFieldId}" dans triggers`);
+        }
+      } else {
+        // ❌ AUCUN trigger configuré → SKIP lors des changements (calculé uniquement au chargement initial)
+        console.log(`⏸️ [NO TRIGGERS] Display field ${capacity.nodeId} (${capacity.TreeBranchLeafNode?.label}) skippé - aucun trigger défini, calculé uniquement au chargement initial`);
+        continue; // ✅ SKIP - ne calculer que si changedFieldId=NULL
+      }
+    }
     
     try {
       // ✨ ÉVALUATION avec le valueMap contenant les données FRAÎCHES
@@ -744,8 +787,13 @@ router.get('/submissions/:submissionId/verification', async (req, res) => {
  */
 router.post('/submissions/create-and-evaluate', async (req, res) => {
   try {
-    const { treeId, clientId, formData, status = 'draft', providedName, reuseSubmissionId } = req.body;
+    const { treeId, clientId, formData, status = 'draft', providedName, reuseSubmissionId, changedFieldId } = req.body;
     const cleanFormData = formData && typeof formData === 'object' ? (sanitizeFormData(formData) as Record<string, unknown>) : undefined;
+    
+    // 🎯 Récupérer le champ modifié pour filtrer les triggers (nouveau paramètre optionnel)
+    const triggerFieldId = changedFieldId as string | undefined;
+    
+    console.log(`🎯 [TRIGGER DEBUG] changedFieldId reçu du frontend: "${triggerFieldId || 'NULL'}"`);
     
     // Récupérer l'organisation de l'utilisateur authentifié (endpoint POST)
     const organizationId = req.headers['x-organization-id'] as string || (req as AuthenticatedRequest).user?.organizationId;
@@ -983,7 +1031,7 @@ router.post('/submissions/create-and-evaluate', async (req, res) => {
       console.log(`🎯 [TBL CREATE-AND-EVALUATE] ${capacities.length} capacités trouvées`);
       
       // C. Évaluer et persister les capacités avec NO-OP - 🔑 PASSER LE FORMDATA pour réactivité !
-      const evalStats = await evaluateCapacitiesForSubmission(submissionId!, organizationId!, userId || null, effectiveTreeId, cleanFormData);
+      const evalStats = await evaluateCapacitiesForSubmission(submissionId!, organizationId!, userId || null, effectiveTreeId, cleanFormData, triggerFieldId);
       console.log(`✅ [TBL CREATE-AND-EVALUATE] Capacités: ${evalStats.updated} mises à jour, ${evalStats.created} créées, ${evalStats.displayFieldsUpdated} display fields réactifs`);
     }
     

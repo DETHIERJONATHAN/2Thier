@@ -1,0 +1,19 @@
+                       id                       |           label           |                           sourceRef                           
+------------------------------------------------+---------------------------+---------------------------------------------------------------
+ 08f6769a-d8f3-4467-9c40-49089c478ca4           | Puissance WC              | node-formula:0d86e720-3947-43cf-9d22-480e6d578aed
+ 2da70286-0bb5-4d38-9a3e-19af6ae6d6cc-sum-total | Mur - Total               | node-formula:2da70286-0bb5-4d38-9a3e-19af6ae6d6cc-sum-formula
+ 040891fa-737a-4ca1-a8e3-78ac495887b5           | N° de panneau max         | condition:7b555182-bfa1-41cc-9cf3-8af62542407e
+ 5e7ba67a-9e05-4687-9093-e369962e5982           | Orienation-inclinaison    | @table.ff48e5ec-1628-4d46-8e7b-0d74130e3012
+ ada2dac8-1381-4651-bcd2-98ec60fdd6af           | GRD                       | @table.8ad7aeda-998f-41db-bf87-a1ae828aa8d5
+ 08f6769a-d8f3-4467-9c40-49089c478ca4-sum-total | Puissance WC - Total      | node-formula:08f6769a-d8f3-4467-9c40-49089c478ca4-sum-formula
+ 040891fa-737a-4ca1-a8e3-78ac495887b5-sum-total | N° de panneau max - Total | node-formula:040891fa-737a-4ca1-a8e3-78ac495887b5-sum-formula
+ f953dc79-bb6c-445e-8218-46bc09787d21-sum-total | M² toiture - Total        | node-formula:f953dc79-bb6c-445e-8218-46bc09787d21-sum-formula
+ ee407d1b-51d4-4970-81a3-e2bde77f8834           | Prix Kwh                  | condition:b2dd2c37-26be-4c26-90c5-975a8ab7bc43
+ 2da70286-0bb5-4d38-9a3e-19af6ae6d6cc           | Mur                       | node-formula:3b8820f3-bd33-45f0-b93a-0f411118062d
+ 2da70286-0bb5-4d38-9a3e-19af6ae6d6cc-2         | Mur-2                     | node-formula:3b8820f3-bd33-45f0-b93a-0f411118062d-2
+ d58f2c5d-206d-4c48-ae7c-8c9addb2f5ab           | Longueur toiture          | node-formula:5c3385f1-1256-402d-a017-2d4fa2691e90
+ f953dc79-bb6c-445e-8218-46bc09787d21           | M² toiture                | node-formula:26f2da31-e652-4b9b-b039-548c0bbae9b9
+ dd078cf2-12ef-4111-a337-3cd5db467b4e           | Coefficient primes        | @table.d52dc342-2a0e-4831-9a64-868252bd7218
+ feba442a-44f9-4a9f-a776-707017e9cf72           | Rampant toiture           | condition:b0e9def0-ab4d-4e28-9cba-1c0632bf646e
+(15 rows)
+
