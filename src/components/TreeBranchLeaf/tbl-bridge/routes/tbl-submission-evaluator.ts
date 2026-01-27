@@ -379,6 +379,13 @@ async function evaluateCapacitiesForSubmission(
       || capacity.TreeBranchLeafNode?.type === 'DISPLAY'
       || capacity.TreeBranchLeafNode?.type === 'leaf_field';
     
+    // 🎯 AUTOSAVE PÉRIODIQUE: Si changedFieldId="NULL" et submission existe déjà → SKIP tous les display fields
+    // (ils sont déjà à jour, pas besoin de recalculer lors d'une sauvegarde automatique)
+    if (isDisplayField && (!changedFieldId || changedFieldId === 'NULL')) {
+      console.log(`⏸️ [AUTOSAVE] Display field ${capacity.nodeId} (${capacity.TreeBranchLeafNode?.label}) skippé - autosave périodique, pas de recalcul nécessaire`);
+      continue; // ✅ SKIP - les display fields sont déjà calculés
+    }
+    
     // 🎯 OPTIMISATION: Filtrage par triggerNodeIds pour les display fields
     if (isDisplayField && changedFieldId && changedFieldId !== 'NULL') {
       // Récupérer les triggerNodeIds depuis le node

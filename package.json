@@ -57,7 +57,11 @@
     "test:duplication": "npx tsx test-duplication.mjs",
     "perf:lighthouse": "npx lighthouse http://localhost:5173/devis1minute --output=json --only-categories=performance",
     "perf:lighthouse:full": "npx lighthouse http://localhost:5173/devis1minute --output=html --output-path=lighthouse-report.html",
-    "perf:analyze": "npm run build:analyze && open dist/stats.html"
+    "perf:analyze": "npm run build:analyze && open dist/stats.html",
+    "monitor:perf": "node scripts/performance-monitor.mjs",
+    "analyze:triggers": "node scripts/analyze-triggers.mjs",
+    "analyze:logs": "node scripts/analyze-logs.mjs",
+    "benchmark": "node scripts/benchmark-guide.mjs"
   },
   "dependencies": {
     "@ant-design/icons": "^6.0.0",
