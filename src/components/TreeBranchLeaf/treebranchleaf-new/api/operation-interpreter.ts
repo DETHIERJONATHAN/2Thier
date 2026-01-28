@@ -31,10 +31,11 @@
 import { PrismaClient } from '@prisma/client';
 import { evaluateExpression } from './formulaEngine.js';
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 function formatDebugValue(value: unknown): string {
   if (value === null || value === undefined) return '∅';
   if (typeof value === 'string') {
-    return value.length > 120 ? `${value.slice(0, 117)}...` : value;
+     return value.length > 120 ? `${value.slice(0, 117)}...` : value;
   }
   if (typeof value === 'number' || typeof value === 'boolean') {
     return String(value);
@@ -223,12 +224,12 @@ async function identifyReferenceTypeFromDB(id: string, prisma: PrismaClient): Pr
  */
 function normalizeRef(ref: string): string {
   return ref
-    .replace('@value.', '')
-    .replace('@table.', '')
-    .replace('node-formula:', '')
-    .replace('node-table:', '')
-    .replace('node-condition:', '')
-    .replace('condition:', '')
+     .replace('@value.', '')
+     .replace('@table.', '')
+     .replace('node-formula:', '')
+     .replace('node-table:', '')
+     .replace('node-condition:', '')
+     .replace('condition:', '')
     .trim();
 }
 
@@ -1194,7 +1195,14 @@ function compareValuesByOperator(op: string | undefined | null, cellValue: any, 
 // Ã°Å¸Â§Â° UTILITAIRES COMMUNS POUR LES LOOKUP (normalisation + recherche numÃƒÂ©rique)
 // Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
 
-const normalizeLookupValue = (value: unknown): string => String(value ?? '').trim().toLowerCase();
+const normalizeLookupValue = (value: unknown): string => {
+  const raw = String(value ?? '').trim().toLowerCase();
+  if (!raw) return '';
+  // Tolérer accents + symboles ("0°" vs "0") + séparateurs ("Nord-Est" vs "Nord Est")
+  const withoutDiacritics = raw.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  const lettersNumbersOnly = withoutDiacritics.replace(/[^a-z0-9]+/g, ' ');
+  return lettersNumbersOnly.replace(/\s+/g, ' ').trim();
+};
 
 const parseNumericLookupValue = (value: unknown): number => {
   if (typeof value === 'number') return value;
@@ -1212,10 +1220,12 @@ function findClosestIndexInLabels(
 ): { index: number; matchType: 'text' | 'numeric'; matchedValue?: unknown } | null {
   const indices = allowedIndices && allowedIndices.length ? allowedIndices : labels.map((_, idx) => idx);
   const normalizedTarget = normalizeLookupValue(targetValue);
+  const strictTarget = String(targetValue ?? '').trim().toLowerCase();
 
   for (const idx of indices) {
     const label = labels[idx];
-    if (normalizeLookupValue(label) === normalizedTarget || label === targetValue) {
+    const strictLabel = String(label ?? '').trim().toLowerCase();
+    if (label === targetValue || strictLabel === strictTarget || normalizeLookupValue(label) === normalizedTarget) {
       return { index: idx, matchType: 'text', matchedValue: label };
     }
   }
@@ -1882,7 +1892,6 @@ async function interpretTable(
       });
       if (byNode) {
         table = byNode;
-      } else {
       }
     } catch (e) {
       console.warn('[TABLE] Ã¢Å¡Â Ã¯Â¸Â RÃƒÂ©solution implicite ÃƒÂ©chouÃƒÂ©e:', e instanceof Error ? e.message : e);
@@ -1972,12 +1981,46 @@ async function interpretTable(
   // Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
   // Ã°Å¸â€œÅ  Ãƒâ€°TAPE 3 : RÃƒÂ©cupÃƒÂ©rer les selectors (champs de sÃƒÂ©lection) et les toggles
   // Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
-  const rowFieldId = lookup.selectors?.rowFieldId;
-  const colFieldId = lookup.selectors?.columnFieldId;
+  let rowFieldId: string | null = (lookup.selectors?.rowFieldId ?? (lookup as any)?.rowFieldId ?? (lookup as any)?.rowField ?? null) as any;
+  let colFieldId: string | null = (lookup.selectors?.columnFieldId ?? (lookup as any)?.columnFieldId ?? (lookup as any)?.colFieldId ?? (lookup as any)?.columnField ?? null) as any;
+  if (typeof rowFieldId === 'string' && rowFieldId.trim() === '') rowFieldId = null;
+  if (typeof colFieldId === 'string' && colFieldId.trim() === '') colFieldId = null;
   const rowEnabled = lookup.rowLookupEnabled === true;
   const colEnabled = lookup.columnLookupEnabled === true;
   const rowSourceOption = lookup.rowSourceOption;
   const colSourceOption = lookup.columnSourceOption;
+
+  // 🔧 INFÉRENCE SÛRE (runtime) : certaines tables existantes ont selectors vides.
+  // Si on est en mode SELECT (ou non défini) et qu'un selector manque, on tente de le déduire
+  // via les SelectConfig qui pointent vers cette table (tableReference = table.id).
+  try {
+    const rowNeedsFieldId = rowEnabled && (!rowSourceOption || rowSourceOption.type === 'select') && !rowFieldId;
+    const colNeedsFieldId = colEnabled && (!colSourceOption || colSourceOption.type === 'select') && !colFieldId;
+
+    if (rowNeedsFieldId || colNeedsFieldId) {
+      const cfgs = await prisma.treeBranchLeafSelectConfig.findMany({
+        where: { tableReference: table.id },
+        select: { nodeId: true },
+      });
+      const candidateNodeIds = cfgs.map(c => c.nodeId).filter(Boolean);
+
+      if (rowNeedsFieldId) {
+        rowFieldId =
+          (table.nodeId && table.nodeId !== colFieldId && candidateNodeIds.includes(table.nodeId) ? table.nodeId : null) ||
+          candidateNodeIds.find(id => id !== colFieldId) ||
+          null;
+      }
+
+      if (colNeedsFieldId) {
+        colFieldId =
+          candidateNodeIds.find(id => id !== rowFieldId) ||
+          null;
+      }
+    }
+  } catch (e) {
+    // Ne jamais casser l'interprétation si l'inférence échoue.
+    console.warn('[TABLE] ⚠️ Inférence selectors lookup échouée:', e instanceof Error ? e.message : e);
+  }
 
   const hasRowSelector = Boolean(rowFieldId || (rowSourceOption && rowSourceOption.type && rowSourceOption.type !== 'select'));
   const hasColSelector = Boolean(colFieldId || (colSourceOption && colSourceOption.type && colSourceOption.type !== 'select'));
@@ -2058,11 +2101,7 @@ async function interpretTable(
           
           // Appliquer l'opÃƒÂ©rateur de comparaison
           const matches = compareValuesByOperator(colSourceOption.filterOperator, cellValue, filterComparisonValue);
-          
-          if (matches) {
-          } else {
-          }
-          
+
           return matches;
         });
         
@@ -2083,11 +2122,10 @@ async function interpretTable(
       const refResult = await interpretReference(lookup.extractValueRef, submissionId, prisma, valuesCache, depth + 1, valueMap, labelMap);
       const targetValue = refResult.result;
       // DÃƒÂ©terminer la colonne cible (colIndex) ÃƒÂ  partir du colSelectorValue
-      const normalizedColSelector = String(colSelectorValue || '').trim().toLowerCase();
-      const colSelectorInCols = columns.findIndex(c => String(c).trim().toLowerCase() === normalizedColSelector);
-      const colSelectorInRows = rows.findIndex(r => String(r).trim().toLowerCase() === normalizedColSelector);
-      let finalColIndex = -1;
-      if (colSelectorInCols !== -1) finalColIndex = colSelectorInCols; else finalColIndex = colSelectorInRows;
+      const columnIndices = columns.map((_, idx) => idx).filter(idx => idx > 0);
+      const colMatchInCols = findClosestIndexInLabels(colSelectorValue, columns, columnIndices);
+      const colMatchInRows = findClosestIndexInLabels(colSelectorValue, rows);
+      let finalColIndex = colMatchInCols?.index ?? colMatchInRows?.index ?? -1;
       if (finalColIndex === -1) {
         console.warn(`[TABLE] Ã¢Å¡Â Ã¯Â¸Â MODE 1 extract - colonne non trouvÃƒÂ©e pour selector ${colSelectorValue}`);
       } else {
@@ -2232,14 +2270,14 @@ async function interpretTable(
           // Normalisation pour matching robuste
           // Ã°Å¸â€Â§ FIX: Enlever le suffixe (-1, -2, etc.) pour les champs copiÃƒÂ©s dans les repeaters
           const colSelectorWithoutSuffix = String(colSelectorValue).replace(/-\d+$/, '');
-          const normalizedColSelector = colSelectorWithoutSuffix.trim().toLowerCase();
-          const normalizedFixedRow = String(fixedRowValue).trim().toLowerCase();
+          const normalizedColSelector = normalizeLookupValue(colSelectorWithoutSuffix);
+          const normalizedFixedRow = normalizeLookupValue(fixedRowValue);
           
           // Chercher dans colonnes ET lignes (auto-dÃƒÂ©tection)
-          const colSelectorInCols = columns.findIndex(c => String(c).trim().toLowerCase() === normalizedColSelector);
-          const colSelectorInRows = rows.findIndex(r => String(r).trim().toLowerCase() === normalizedColSelector);
-          const fixedRowInRows = rows.findIndex(r => String(r).trim().toLowerCase() === normalizedFixedRow);
-          const fixedRowInCols = columns.findIndex(c => String(c).trim().toLowerCase() === normalizedFixedRow);
+          const colSelectorInCols = columns.findIndex(c => normalizeLookupValue(c) === normalizedColSelector);
+          const colSelectorInRows = rows.findIndex(r => normalizeLookupValue(r) === normalizedColSelector);
+          const fixedRowInRows = rows.findIndex(r => normalizeLookupValue(r) === normalizedFixedRow);
+          const fixedRowInCols = columns.findIndex(c => normalizeLookupValue(c) === normalizedFixedRow);
           
           // DÃƒÂ©terminer les index finaux (privilÃƒÂ©gier le matching naturel)
           let colIndex = -1;
@@ -2334,11 +2372,10 @@ async function interpretTable(
       const refResult = await interpretReference(lookup.extractValueRef, submissionId, prisma, valuesCache, depth + 1, valueMap, labelMap);
       const targetValue = refResult.result;
       // Determining row index from rowSelectorValue
-      const normalizedRowSelector = String(rowSelectorValue || '').trim().toLowerCase();
-      const rowSelectorInRows = rows.findIndex(r => String(r).trim().toLowerCase() === normalizedRowSelector);
-      const rowSelectorInCols = columns.findIndex(c => String(c).trim().toLowerCase() === normalizedRowSelector);
-      let finalRowIndex = -1;
-      if (rowSelectorInRows !== -1) finalRowIndex = rowSelectorInRows; else finalRowIndex = rowSelectorInCols;
+      const columnIndices = columns.map((_, idx) => idx).filter(idx => idx > 0);
+      const rowMatchInRows = findClosestIndexInLabels(rowSelectorValue, rows);
+      const rowMatchInCols = findClosestIndexInLabels(rowSelectorValue, columns, columnIndices);
+      let finalRowIndex = rowMatchInRows?.index ?? rowMatchInCols?.index ?? -1;
       if (finalRowIndex === -1) {
         console.warn(`[TABLE] Ã¢Å¡Â Ã¯Â¸Â MODE 2 extract - ligne non trouvÃƒÂ©e pour selector ${rowSelectorValue}`);
       } else {
@@ -2355,9 +2392,9 @@ async function interpretTable(
         if (foundColIndex !== -1) {
           // now build results: for each fixedColValue, get value from data[dataRowIndex][foundColIndex-1]
           for (const fixedColValue of displayRows) {
-            const normalizedFixedCol = String(fixedColValue).trim().toLowerCase();
-            const fixedColInCols = columns.findIndex(c => String(c).trim().toLowerCase() === normalizedFixedCol);
-            const fixedColInRows = rows.findIndex(r => String(r).trim().toLowerCase() === normalizedFixedCol);
+            const normalizedFixedCol = normalizeLookupValue(fixedColValue);
+            const fixedColInCols = columns.findIndex(c => normalizeLookupValue(c) === normalizedFixedCol);
+            const fixedColInRows = rows.findIndex(r => normalizeLookupValue(r) === normalizedFixedCol);
             let colIndex = -1;
             if (fixedColInCols !== -1) colIndex = fixedColInCols;
             else if (fixedColInRows !== -1) colIndex = fixedColInRows; // fallback if reversed
@@ -2495,14 +2532,14 @@ async function interpretTable(
 
       for (const fixedColValue of displayRows) {
         // Normalisation
-        const normalizedRowSelector = String(rowSelectorValue).trim().toLowerCase();
-        const normalizedFixedCol = String(fixedColValue).trim().toLowerCase();
+        const normalizedRowSelector = normalizeLookupValue(rowSelectorValue);
+        const normalizedFixedCol = normalizeLookupValue(fixedColValue);
         
         // Chercher dans colonnes ET lignes (auto-dÃƒÂ©tection)
-        const rowSelectorInRows = rows.findIndex(r => String(r).trim().toLowerCase() === normalizedRowSelector);
-        const rowSelectorInCols = columns.findIndex(c => String(c).trim().toLowerCase() === normalizedRowSelector);
-        const fixedColInCols = columns.findIndex(c => String(c).trim().toLowerCase() === normalizedFixedCol);
-        const fixedColInRows = rows.findIndex(r => String(r).trim().toLowerCase() === normalizedFixedCol);
+        const rowSelectorInRows = rows.findIndex(r => normalizeLookupValue(r) === normalizedRowSelector);
+        const rowSelectorInCols = columns.findIndex(c => normalizeLookupValue(c) === normalizedRowSelector);
+        const fixedColInCols = columns.findIndex(c => normalizeLookupValue(c) === normalizedFixedCol);
+        const fixedColInRows = rows.findIndex(r => normalizeLookupValue(r) === normalizedFixedCol);
         
         // DÃƒÂ©terminer les index finaux (privilÃƒÂ©gier le matching naturel)
         let rowIndex = -1;
@@ -2600,8 +2637,6 @@ async function interpretTable(
   );
   const rowLabel = await getSourceLabel(rowSourceOption, lookup, rowFieldId, prisma, labelMap);
   const colLabel = await getSourceLabel(colSourceOption, lookup, colFieldId, prisma, labelMap);
-  const rowSourceType = rowSourceOption?.type || (rowFieldId ? 'select' : undefined);
-  const colSourceType = colSourceOption?.type || (colFieldId ? 'select' : undefined);
   
   
   if (!rowSelectorValue || !colSelectorValue) {
@@ -2621,47 +2656,28 @@ async function interpretTable(
   
   // Ã¯Â¿Â½Ã°Å¸Ââ€º DEBUG : Afficher toutes les valeurs AVANT la normalisation
   
-  // Ã°Å¸Â§Â¹ NORMALISATION : Trim + lowercase pour matching robuste
-  const normalizedRowSelector = String(rowSelectorValue).trim().toLowerCase();
-  const normalizedColSelector = String(colSelectorValue).trim().toLowerCase();
-  
-  
-  // Ã°Å¸â€Â Chercher rowSelectorValue dans rows ET columns
-  let rowSelectorInRows = rows.findIndex(r => String(r).trim().toLowerCase() === normalizedRowSelector);
-  let rowSelectorInCols = columns.findIndex(c => String(c).trim().toLowerCase() === normalizedRowSelector);
-  
-  // Ã°Å¸â€Â Chercher colSelectorValue dans rows ET columns
-  let colSelectorInRows = rows.findIndex(r => String(r).trim().toLowerCase() === normalizedColSelector);
-  let colSelectorInCols = columns.findIndex(c => String(c).trim().toLowerCase() === normalizedColSelector);
+  const columnIndices = columns.map((_, idx) => idx).filter(idx => idx > 0);
 
-  if (rowSelectorInRows === -1 && rowSelectorInCols === -1 && (rowSourceType === 'field' || rowSourceType === 'capacity')) {
-    const rowMatch = findClosestIndexInLabels(rowSelectorValue, rows);
-    if (rowMatch) {
-      rowSelectorInRows = rowMatch.index;
-      rowSelectorValue = String(rows[rowMatch.index]);
-    } else {
-      const columnIndices = columns.map((_, idx) => idx).filter(idx => idx > 0);
-      const colMatch = findClosestIndexInLabels(rowSelectorValue, columns, columnIndices);
-      if (colMatch) {
-        rowSelectorInCols = colMatch.index;
-        rowSelectorValue = String(columns[colMatch.index]);
-      }
-    }
+  // Ã°Å¸â€Â Chercher rowSelectorValue dans rows ET columns (strict/fuzzy + numeric)
+  const rowMatchInRows = findClosestIndexInLabels(rowSelectorValue, rows);
+  const rowMatchInCols = findClosestIndexInLabels(rowSelectorValue, columns, columnIndices);
+  let rowSelectorInRows = rowMatchInRows?.index ?? -1;
+  let rowSelectorInCols = rowMatchInCols?.index ?? -1;
+  if (rowMatchInRows?.matchedValue !== undefined) {
+    rowSelectorValue = String(rowMatchInRows.matchedValue);
+  } else if (rowMatchInCols?.matchedValue !== undefined) {
+    rowSelectorValue = String(rowMatchInCols.matchedValue);
   }
 
-  if (colSelectorInCols === -1 && colSelectorInRows === -1 && (colSourceType === 'field' || colSourceType === 'capacity')) {
-    const columnIndices = columns.map((_, idx) => idx).filter(idx => idx > 0);
-    const colMatch = findClosestIndexInLabels(colSelectorValue, columns, columnIndices);
-    if (colMatch) {
-      colSelectorInCols = colMatch.index;
-      colSelectorValue = String(columns[colMatch.index]);
-    } else {
-      const rowMatch = findClosestIndexInLabels(colSelectorValue, rows);
-      if (rowMatch) {
-        colSelectorInRows = rowMatch.index;
-        colSelectorValue = String(rows[rowMatch.index]);
-      }
-    }
+  // Ã°Å¸â€Â Chercher colSelectorValue dans rows ET columns (strict/fuzzy + numeric)
+  const colMatchInCols = findClosestIndexInLabels(colSelectorValue, columns, columnIndices);
+  const colMatchInRows = findClosestIndexInLabels(colSelectorValue, rows);
+  let colSelectorInRows = colMatchInRows?.index ?? -1;
+  let colSelectorInCols = colMatchInCols?.index ?? -1;
+  if (colMatchInCols?.matchedValue !== undefined) {
+    colSelectorValue = String(colMatchInCols.matchedValue);
+  } else if (colMatchInRows?.matchedValue !== undefined) {
+    colSelectorValue = String(colMatchInRows.matchedValue);
   }
   
   

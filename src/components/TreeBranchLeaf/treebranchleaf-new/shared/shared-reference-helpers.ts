@@ -157,6 +157,8 @@ export async function applySharedReferencesFromOriginalInternal(
         isActive: orig.isActive ?? true,
         isRequired: orig.isRequired ?? false,
         isMultiple: orig.isMultiple ?? false,
+        // 🔧 IMPORTANT: préserver la table active lors d'une copie (sinon les lookups tombent à 0/∅)
+        table_activeId: (orig as any).table_activeId ? `${(orig as any).table_activeId}-${chosenSuffix}` : null,
         hasData: false,
         hasFormula: false,
         hasCondition: false,

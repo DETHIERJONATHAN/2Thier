@@ -13,7 +13,6 @@ import { Router } from 'express';
 import { Prisma } from '@prisma/client';
 import { db } from '../../../../lib/database';
 import { randomUUID } from 'crypto';
-import { addToNodeLinkedField } from './repeat/services/shared-helpers';
 
 const router = Router();
 const prisma = db;
@@ -73,7 +72,7 @@ function getAuthCtx(req: MinimalReq): { organizationId: string | null; isSuperAd
 // =============================================================================
 router.post('/nodes/:nodeId/tables', async (req, res) => {
   const { nodeId } = req.params;
-  const { name, description, columns, rows, type = 'static' } = req.body;
+  const { name, description, columns, rows, type = 'static', meta: incomingMeta } = req.body;
   const { organizationId, isSuperAdmin } = getAuthCtx(req as unknown as MinimalReq);
 
 
@@ -117,6 +116,34 @@ router.post('/nodes/:nodeId/tables', async (req, res) => {
 
     const tableId = randomUUID();
 
+    // ✅ INITIALISER META AVEC LES DEFAULTS POUR LE LOOKUP
+    // Ceci corrige le problème où les tables créées retournaient ∅ au lieu des valeurs lookup
+    const defaultMeta = {
+      lookup: {
+        enabled: true,
+        columnLookupEnabled: true,
+        rowLookupEnabled: true,
+        selectors: {},
+      },
+    };
+
+    // Fusionner avec les meta fournis dans la requête (s'il y en a)
+    const finalMeta = incomingMeta 
+      ? (() => {
+          const incoming = typeof incomingMeta === 'string' 
+            ? JSON.parse(incomingMeta) 
+            : incomingMeta;
+          return {
+            ...defaultMeta,
+            ...incoming,
+            lookup: {
+              ...defaultMeta.lookup,
+              ...(incoming.lookup || {}),
+            },
+          };
+        })()
+      : defaultMeta;
+
     // PrÃƒÂ©parer les donnÃƒÂ©es pour la transaction
     const tableData = {
       id: tableId,
@@ -125,6 +152,7 @@ router.post('/nodes/:nodeId/tables', async (req, res) => {
       name: finalName,
       description: description || null,
       type,
+      meta: toJsonSafe(finalMeta),
       rowCount: rows.length,
       columnCount: columns.length,
       createdAt: new Date(),
@@ -160,14 +188,6 @@ router.post('/nodes/:nodeId/tables', async (req, res) => {
       cells: toJsonSafe(row),
     }));
 
-    if (rows.length > 0) {
-      if (rows.length > 1) {
-      }
-      if (tableRowsData.length > 1) {
-      }
-    } else {
-    }
-
     // ExÃƒÂ©cuter la crÃƒÂ©ation dans une transaction atomique
     // Ã¢Å¡Â Ã¯Â¸Â TIMEOUT AUGMENTÃƒâ€° pour les gros fichiers (43k+ lignes)
     const result = await prisma.$transaction(async (tx) => {
@@ -191,21 +211,6 @@ router.post('/nodes/:nodeId/tables', async (req, res) => {
           });
         }
         
-        // VÃƒÂ©rifier les 3 premiÃƒÂ¨res lignes insÃƒÂ©rÃƒÂ©es
-        const verif = await tx.treeBranchLeafNodeTableRow.findMany({
-          where: { tableId },
-          orderBy: { rowIndex: 'asc' },
-          take: 3
-        });
-        verif.forEach((row, idx) => {
-          if (typeof row.cells === 'string') {
-            try {
-              const parsed = JSON.parse(row.cells);
-            } catch (e) {
-            }
-          } else if (Array.isArray(row.cells)) {
-          }
-        });
       }
 
       return newTable;
@@ -226,8 +231,8 @@ router.post('/nodes/:nodeId/tables', async (req, res) => {
       const current = node?.linkedTableIds ?? [];
       const next = Array.from(new Set([...(current || []), result.id]));
       await prisma.treeBranchLeafNode.update({ where: { id: nodeId }, data: { linkedTableIds: { set: next } } });
-    } catch (e) {
-      console.warn('[NEW POST /tables] Warning updating linkedTableIds:', (e as Error).message);
+    } catch {
+      // best-effort
     }
 
     // Ã¯Â¿Â½Ã°Å¸â€â€ž MISE Ãƒâ‚¬ JOUR AUTOMATIQUE DES SELECT CONFIGS
@@ -262,7 +267,7 @@ router.post('/nodes/:nodeId/tables', async (req, res) => {
           if (otherConfigs.length > 0) {
             
             // Mettre ÃƒÂ  jour tous les autres
-            const updateResult = await prisma.treeBranchLeafSelectConfig.updateMany({
+            await prisma.treeBranchLeafSelectConfig.updateMany({
               where: { 
                 tableReference: oldTableRef,
                 nodeId: { not: nodeId }
@@ -270,11 +275,136 @@ router.post('/nodes/:nodeId/tables', async (req, res) => {
               data: { tableReference: result.id }
             });
             
-            otherConfigs.forEach(cfg => {
-            });
+            // best-effort bulk update, no further action
           }
         }
       } else {
+        // CREATION AUTOMATIQUE DES SELECTCONFIGS POUR LES LOOKUPS
+        // Aucun SelectConfig n'existe encore pour ce noeud
+        // Si la table a une configuration de lookup, creer les SelectConfigs correspondants
+        try {
+          const lookupMeta = (finalMeta as any)?.lookup;
+          
+          if (lookupMeta && (lookupMeta.enabled || lookupMeta.rowLookupEnabled || lookupMeta.columnLookupEnabled)) {
+            
+            // ETAPE 1: Creer SelectConfig pour la source ROW
+            const rowSourceField = lookupMeta.rowSourceOption?.sourceField || lookupMeta.selectors?.rowFieldId;
+            if (rowSourceField) {
+              const existingRowConfig = await prisma.treeBranchLeafSelectConfig.findFirst({
+                where: { nodeId: rowSourceField }
+              });
+              
+              if (!existingRowConfig) {
+                await prisma.treeBranchLeafSelectConfig.create({
+                  data: {
+                    id: randomUUID(),
+                    nodeId: rowSourceField,
+                    options: [] as any,
+                    multiple: false,
+                    searchable: true,
+                    allowCustom: false,
+                    optionsSource: 'table',
+                    tableReference: result.id,
+                    keyColumn: null,
+                    valueColumn: null,
+                    displayColumn: lookupMeta.displayRow ? (Array.isArray(lookupMeta.displayRow) ? lookupMeta.displayRow[0] : lookupMeta.displayRow) : null,
+                    dependsOnNodeId: null,
+                    createdAt: new Date(),
+                    updatedAt: new Date(),
+                  }
+                });
+                console.log(`[LOOKUP] SelectConfig cree pour ROW source: ${rowSourceField}`);
+              }
+              
+              // METTRE A JOUR les selectors si vides
+              if (!lookupMeta.selectors) {
+                lookupMeta.selectors = {};
+              }
+              if (!lookupMeta.selectors.rowFieldId) {
+                lookupMeta.selectors.rowFieldId = rowSourceField;
+              }
+            }
+            
+            // ETAPE 2: Creer SelectConfig pour la source COLUMN
+            const colSourceField = lookupMeta.columnSourceOption?.sourceField || lookupMeta.selectors?.columnFieldId;
+            if (colSourceField) {
+              const existingColConfig = await prisma.treeBranchLeafSelectConfig.findFirst({
+                where: { nodeId: colSourceField }
+              });
+              
+              if (!existingColConfig) {
+                await prisma.treeBranchLeafSelectConfig.create({
+                  data: {
+                    id: randomUUID(),
+                    nodeId: colSourceField,
+                    options: [] as any,
+                    multiple: false,
+                    searchable: true,
+                    allowCustom: false,
+                    optionsSource: 'table',
+                    tableReference: result.id,
+                    keyColumn: null,
+                    valueColumn: null,
+                    displayColumn: lookupMeta.displayColumn ? (Array.isArray(lookupMeta.displayColumn) ? lookupMeta.displayColumn[0] : lookupMeta.displayColumn) : null,
+                    dependsOnNodeId: null,
+                    createdAt: new Date(),
+                    updatedAt: new Date(),
+                  }
+                });
+                console.log(`[LOOKUP] SelectConfig cree pour COLUMN source: ${colSourceField}`);
+              }
+              
+              // METTRE A JOUR les selectors si vides
+              if (!lookupMeta.selectors) {
+                lookupMeta.selectors = {};
+              }
+              if (!lookupMeta.selectors.columnFieldId) {
+                lookupMeta.selectors.columnFieldId = colSourceField;
+              }
+            }
+            
+            // ETAPE 3: Creer SelectConfig pour le champ composite lui-meme
+            const existingCompositeConfig = await prisma.treeBranchLeafSelectConfig.findFirst({
+              where: { nodeId }
+            });
+            
+            if (!existingCompositeConfig) {
+              await prisma.treeBranchLeafSelectConfig.create({
+                data: {
+                  id: randomUUID(),
+                  nodeId: nodeId,
+                  options: [] as any,
+                  multiple: false,
+                  searchable: true,
+                  allowCustom: false,
+                  optionsSource: 'table',
+                  tableReference: result.id,
+                  keyColumn: null,
+                  valueColumn: null,
+                  displayColumn: null,
+                  dependsOnNodeId: null,
+                  createdAt: new Date(),
+                  updatedAt: new Date(),
+                }
+              });
+              console.log(`[LOOKUP] SelectConfig cree pour champ composite: ${nodeId}`);
+            }
+            
+            // ETAPE 4: METTRE A JOUR la table avec les selectors remplis
+            await prisma.treeBranchLeafNodeTable.update({
+              where: { id: result.id },
+              // IMPORTANT: ne pas ecraser le meta complet avec lookupMeta.
+              // finalMeta contient deja lookupMeta (modifie ci-dessus) + toutes les autres cles meta.
+              data: { meta: toJsonSafe(finalMeta) }
+            });
+            
+            console.log(`[LOOKUP] Configuration de lookup complete pour table: ${result.id}`);
+            console.log(`[LOOKUP] Selectors remplis: rowFieldId=${lookupMeta.selectors?.rowFieldId}, columnFieldId=${lookupMeta.selectors?.columnFieldId}`);
+          }
+        } catch (lookupError) {
+          console.error(`[NEW POST /tables] Erreur lors de la creation des SelectConfigs lookup:`, lookupError);
+          // Ne pas bloquer la reponse meme si la creation echoue
+        }
       }
     } catch (updateError) {
       console.error(`[NEW POST /tables] Ã¢Å¡Â Ã¯Â¸Â Erreur lors de la mise ÃƒÂ  jour des SelectConfigs:`, updateError);
@@ -451,7 +581,7 @@ router.put('/tables/:id', async (req, res) => {
 
 
   try {
-    const updatedTable = await prisma.$transaction(async (tx) => {
+    await prisma.$transaction(async (tx) => {
       // VÃƒÂ©rifier l'existence et les permissions
       const table = await tx.treeBranchLeafNodeTable.findUnique({
         where: { id },
@@ -750,7 +880,7 @@ router.put('/nodes/:nodeId/tables/:tableId', async (req, res) => {
           },
           rawMetaKeys: Object.keys(metaObj || {})
         });
-      } catch (e) {
+      } catch {
         console.log('[MANUAL-SAVE][TABLE META] ⚠️ Impossible de parser meta pour logging, envoi brut');
         console.log('[MANUAL-SAVE][TABLE META] RAW:', typeof meta === 'string' ? meta : JSON.stringify(meta));
       }
@@ -797,7 +927,7 @@ router.put('/nodes/:nodeId/tables/:tableId', async (req, res) => {
             displayRow: lookup?.displayRow || null,
           }
         });
-      } catch (e) {
+      } catch {
         console.log('[MANUAL-SAVE][TABLE META] ⚠️ Persisté (meta non parsé)');
       }
 
@@ -861,9 +991,6 @@ router.put('/nodes/:nodeId/tables/:tableId', async (req, res) => {
       // Ã¢Å¡Â Ã¯Â¸Â IMPORTANT: Ne remplacer les lignes QUE si l'array n'est PAS vide
       // Un array vide signifie gÃƒÂ©nÃƒÂ©ralement que le frontend ne veut pas modifier les lignes
       if (Array.isArray(rows) && rows.length > 0) {
-        if (rows.length > 1) {
-        }
-        
         await tx.treeBranchLeafNodeTableRow.deleteMany({ where: { tableId } });
         
         // Ã¢Å¡Â Ã¯Â¸Â CRITIQUE: Utiliser create() en boucle au lieu de createMany()
@@ -979,7 +1106,6 @@ router.get('/nodes/:nodeId/tables', async (req, res) => {
 
     if (lookupSuffix) {
       const isNumeric = (val: string) => /^-?\d+(\.\d+)?$/.test(val.trim());
-      const ensureSuffix = (val: string) => (val.endsWith(lookupSuffix) ? val : '') + (val.endsWith(lookupSuffix) ? '' : lookupSuffix);
 
       for (const table of allTables) {
         if (!table.meta || typeof table.meta !== 'object') continue;

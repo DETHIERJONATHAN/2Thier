@@ -215,6 +215,26 @@ export const authMiddleware = async (req: AuthenticatedRequest, res: Response, n
         return next();
         
     } catch (error) {
+        const anyErr = error as { code?: string; message?: string };
+        const code = anyErr?.code;
+        const message = anyErr?.message || '';
+
+        // ⚠️ IMPORTANT: si la DB/Prisma est indisponible (ex: P1001), ne pas répondre 401.
+        // Une 401 déclenche un logout côté frontend, alors qu'il s'agit d'une panne transitoire.
+        const isDbUnavailable =
+          code === 'P1001' ||
+          code === 'P1000' ||
+          code === 'P1017' ||
+          /P1001|P1000|P1017|ECONNREFUSED|Connection refused|Can't reach database server/i.test(message);
+
+        if (isDbUnavailable) {
+          console.error('[AUTH] DB indisponible pendant authMiddleware:', error);
+          return res.status(503).json({
+            error: 'Service indisponible',
+            message: 'Base de données indisponible. Réessayez dans quelques secondes.'
+          });
+        }
+
         console.error('[AUTH] Erreur de vérification du token:', error);
         return res.status(401).json({ error: 'Token d\'authentification invalide' });
     }

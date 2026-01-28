@@ -54,8 +54,8 @@ pkill -f 'cloud-sql-proxy' ; pkill -f 'npm run dev' ; pkill -f 'vite' ; pkill -f
 
 Ce script fait automatiquement :
 1. ✅ **Tue tous les processus existants** (proxy, vite, tsx, npm)
-2. ✅ Vérifie/récupère un token Google Cloud valide
-3. ✅ Démarre le Cloud SQL Proxy sur le port 5432
+2. ✅ **Sélectionne une auth stable** pour Cloud SQL Proxy (service account ou ADC)
+3. ✅ **Démarre le Cloud SQL Proxy** sur le port 5432 (sans token expirant)
 4. ✅ Lance `npm run dev` (frontend + backend)
 
 ### Résultat attendu
@@ -73,60 +73,37 @@ Ce script fait automatiquement :
 pkill -f 'npm run dev' && pkill -f 'cloud-sql-proxy'
 ```
 
-### Script complet (scripts/start-local.sh)
+### Script (scripts/start-local.sh)
 
+Le script est la source de vérité. Il gère maintenant :
+- l'arrêt des process,
+- le démarrage du Cloud SQL Proxy **sans `--token`** (pour éviter les sessions qui cassent au bout d'1h),
+- un check de readiness Postgres,
+- un fallback vers ADC si le service account n'est pas valide.
+
+Options utiles :
 ```bash
-#!/bin/bash
+# recommandé si `gcloud auth list` montre un compte actif
+CLOUD_SQL_AUTH_MODE=gcloud bash scripts/start-local.sh
 
-# -----------------------------------------------------------------------------
-# SCRIPT DE DÉMARRAGE LOCAL AVEC PROXY CLOUD SQL
-# -----------------------------------------------------------------------------
+# forcer l'auth via ADC (gcloud)
+CLOUD_SQL_AUTH_MODE=adc bash scripts/start-local.sh
 
-echo "🚀 Initialisation de l'environnement de développement..."
+# forcer l'auth via service account (si tu as une clé valide)
+CLOUD_SQL_AUTH_MODE=service-account bash scripts/start-local.sh
 
-# 1. Arrêt de TOUS les processus existants (proxy, serveur, vite)
-echo "🛑 Arrêt des processus existants..."
-pkill -f "cloud-sql-proxy" 2>/dev/null
-pkill -f "npm run dev" 2>/dev/null
-pkill -f "vite" 2>/dev/null
-pkill -f "tsx" 2>/dev/null
-pkill -f "node.*api-server" 2>/dev/null
-sleep 2
-echo "✅ Processus arrêtés"
-
-# 2. Vérification de l'authentification gcloud
-echo "🔑 Vérification du token Google Cloud..."
-TOKEN=$(gcloud auth print-access-token 2>/dev/null)
-
-if [ -z "$TOKEN" ]; then
-    echo "⚠️  Pas de token valide trouvé. Tentative de connexion..."
-    gcloud auth login --no-launch-browser
-    TOKEN=$(gcloud auth print-access-token)
-fi
-
-if [ -z "$TOKEN" ]; then
-    echo "❌ Impossible de récupérer un token."
-    exit 1
-fi
-
-# 3. Démarrage du proxy
-echo "🔌 Démarrage du Cloud SQL Proxy..."
-./cloud-sql-proxy thiernew:europe-west1:crm-postgres-prod --port 5432 --token "$TOKEN" > /dev/null 2>&1 &
-PROXY_PID=$!
-
-echo "⏳ Attente du démarrage du proxy (5s)..."
-sleep 5
-
-if ! ps -p $PROXY_PID > /dev/null; then
-    echo "❌ Le proxy a échoué au démarrage."
-    exit 1
-fi
-
-echo "✅ Proxy connecté sur localhost:5432"
-
-# 4. Lancement de l'application
-npm run dev &
+# désactiver l'ouverture auto / prisma studio (optionnel)
+AUTO_OPEN_TOOLS=0 PRISMA_STUDIO_ENABLED=0 bash scripts/start-local.sh
 ```
+
+### Dépannage: `invalid_grant` / "account not found"
+
+Si tu vois dans les logs du proxy :
+`invalid_grant` + `account not found`, c'est **presque toujours** une clé service account invalide (compte supprimé, clé révoquée, mauvais projet).
+
+Solutions :
+1) Utiliser une clé service account à jour (rôle Cloud SQL Client) ou
+2) Forcer le mode ADC : `CLOUD_SQL_AUTH_MODE=adc bash scripts/start-local.sh` puis suivre le lien Google et coller le **code d'autorisation** (ce n'est pas un mot de passe).
 
 ---
 

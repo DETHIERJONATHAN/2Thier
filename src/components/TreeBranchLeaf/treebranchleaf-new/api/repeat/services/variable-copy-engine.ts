@@ -932,6 +932,18 @@ export async function copyVariableWithCapacities(
             metadataForDisplay.triggerNodeIds = suffixedTriggerNodeIds;
           }
 
+          // 🧮 Certains display nodes (subType='display') portent des formules même si la variable
+          // courante n'est pas une capacité "formula" (ex: panels calculés composites).
+          // Si on ne les recopie pas, les copies suffixées perdent hasFormula et l'UI n'affiche
+          // plus l’icône/onglet formule.
+          const isDisplaySubType = String(inheritedSubType ?? '').toLowerCase() === 'display';
+          const sourceLooksLikeFormulaNode = Boolean(
+            tableSourceNode.hasFormula ||
+            tableSourceNode.formula_activeId ||
+            (Array.isArray(tableSourceNode.linkedFormulaIds) && tableSourceNode.linkedFormulaIds.length > 0)
+          );
+          const shouldCopyFormulaCapability = capacityType === 'formula' || (isDisplaySubType && sourceLooksLikeFormulaNode);
+
           const displayNodeData = {
             id: displayNodeId,
             treeId: originalOwnerNode.treeId,
@@ -965,7 +977,7 @@ export async function copyVariableWithCapacities(
             // Sinon un simple champ de saisie (variable simple) se transforme en cellule de calcul !
             hasCondition: capacityType === 'condition' ? (tableSourceNode.hasCondition ?? true) : false,
             hasData: tableSourceNode.hasData ?? false,
-            hasFormula: capacityType === 'formula' ? (tableSourceNode.hasFormula ?? true) : false,
+            hasFormula: shouldCopyFormulaCapability ? (tableSourceNode.hasFormula ?? true) : false,
             hasLink: tableSourceNode.hasLink ?? false,
             hasMarkers: tableSourceNode.hasMarkers ?? false,
             // 🔧 FIX 06/01/2026: SEULEMENT mettre hasTable: true si:
@@ -988,7 +1000,7 @@ export async function copyVariableWithCapacities(
               : [] as any,
             // 🔧 FIX 24/12/2025: Explicitement mettre à null/[] les IDs de capacités non pertinentes
             // pour éviter qu'un champ simple hérite des formules/conditions du nœud source
-            formula_activeId: capacityType === 'formula' && tableSourceNode.formula_activeId 
+            formula_activeId: shouldCopyFormulaCapability && tableSourceNode.formula_activeId 
               ? appendSuffix(String(tableSourceNode.formula_activeId)) 
               : null,
             condition_activeId: capacityType === 'condition' && tableSourceNode.condition_activeId 
@@ -1037,8 +1049,10 @@ export async function copyVariableWithCapacities(
           const copiedConditionIds: string[] = [];
 
           try {
-            // Copier les formules depuis tableSourceNode UNIQUEMENT si la variable a une capacité formule
-            if (capacityType === 'formula') {
+            // Copier les formules depuis tableSourceNode si:
+            // - la variable a une capacité formule, OU
+            // - on est sur un display node (subType='display') qui porte déjà une formule côté source.
+            if (shouldCopyFormulaCapability) {
               const originalFormulas = await prisma.treeBranchLeafNodeFormula.findMany({
                 where: { nodeId: tableSourceNode.id }
               });

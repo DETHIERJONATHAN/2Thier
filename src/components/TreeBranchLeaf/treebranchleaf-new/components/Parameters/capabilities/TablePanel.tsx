@@ -1959,7 +1959,7 @@ const TablePanel: React.FC<TablePanelProps> = ({ treeId: initialTreeId, nodeId, 
                       </Text>
                       
                       {/* OPTION 1: SELECT */}
-                      {lookupConfig.columnSourceOption?.type === 'select' && (
+                      {(!lookupConfig.columnSourceOption || lookupConfig.columnSourceOption.type === 'select') && (
                         <div>
                           <Text type="secondary" style={{ fontSize: 11, marginBottom: 4, display: 'block' }}>
                             Champ colonne à transformer en liste:
@@ -1979,6 +1979,7 @@ const TablePanel: React.FC<TablePanelProps> = ({ treeId: initialTreeId, nodeId, 
                                 enabled: true,
                                 columnLookupEnabled: true,
                                 rowLookupEnabled: prev.rowLookupEnabled ?? false,
+                                columnSourceOption: { ...(prev.columnSourceOption || {}), type: 'select', description: (prev.columnSourceOption as any)?.description || 'Colonne de la table' },
                                 selectors: { ...(prev.selectors || {}), columnFieldId: value || null },
                               }));
 
@@ -2022,7 +2023,7 @@ const TablePanel: React.FC<TablePanelProps> = ({ treeId: initialTreeId, nodeId, 
                       )}
 
                       {/* 🔥 ÉTAPE 2.5: Filtrage pour SELECT - Mode unifié avec filtres multiples */}
-                      {lookupConfig.columnSourceOption?.type === 'select' && lookupConfig.selectors?.columnFieldId && (
+                      {(!lookupConfig.columnSourceOption || lookupConfig.columnSourceOption.type === 'select') && lookupConfig.selectors?.columnFieldId && (
                         <div style={{ paddingTop: 12, borderTop: '1px solid #91d5ff', marginBottom: 12, background: '#f6f8fa', padding: '12px', borderRadius: '4px' }}>
                           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
                             <Text type="secondary" strong style={{ fontSize: 12 }}>
@@ -2465,7 +2466,7 @@ const TablePanel: React.FC<TablePanelProps> = ({ treeId: initialTreeId, nodeId, 
                       </Text>
                       
                       {/* OPTION 1: SELECT */}
-                      {lookupConfig.rowSourceOption?.type === 'select' && (
+                      {(!lookupConfig.rowSourceOption || lookupConfig.rowSourceOption.type === 'select') && (
                         <div>
                           <Text type="secondary" style={{ fontSize: 11, marginBottom: 4, display: 'block' }}>
                             Champ ligne à transformer en liste:
@@ -2481,6 +2482,7 @@ const TablePanel: React.FC<TablePanelProps> = ({ treeId: initialTreeId, nodeId, 
                               onChange={(value) => {
                                 updateLookupConfig((prev) => ({
                                   ...prev,
+                                  rowSourceOption: { ...(prev.rowSourceOption || {}), type: 'select', description: (prev.rowSourceOption as any)?.description || 'Ligne de la table' },
                                   selectors: { ...(prev.selectors || {}), rowFieldId: value || null },
                                 }));
 

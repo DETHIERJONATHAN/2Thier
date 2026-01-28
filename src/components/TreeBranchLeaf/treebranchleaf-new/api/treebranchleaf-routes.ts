@@ -4576,6 +4576,8 @@ async function applySharedReferencesFromOriginalInternal(req: MinimalReq, nodeId
         isActive: orig.isActive ?? true,
         isRequired: orig.isRequired ?? false,
         isMultiple: orig.isMultiple ?? false,
+        // 🔧 IMPORTANT: préserver la table active lors d'une copie (sinon les lookups tombent à 0/∅)
+        table_activeId: (orig as any).table_activeId ? `${(orig as any).table_activeId}-${chosenSuffix}` : null,
         hasData: false,
         hasFormula: false,
         hasCondition: false,
@@ -13299,6 +13301,24 @@ router.post('/nodes/:nodeId/copy-linked-variable', async (req, res) => {
   // Mapping minimal pour rÃƒÂ¯Ã‚Â¿Ã‚Â½ÃƒÂ¯Ã‚Â¿Ã‚Â½crire les rÃƒÂ¯Ã‚Â¿Ã‚Â½fÃƒÂ¯Ã‚Â¿Ã‚Â½rences dans les capacitÃƒÂ¯Ã‚Â¿Ã‚Â½s (ownerNode ? targetNode)
   let ownerNodeIdForMap: string | null = null;
 
+  // Si on crÃƒÂ¯Ã‚Â¿Ã‚Â½e un nouveau nÃƒÂ¯Ã‚Â¿Ã‚Â½ud (duplication), on doit aussi restaurer les *activeId*
+  // (table_activeId / formula_activeId / condition_activeId), sinon la copie peut rester avec table_activeId=NULL.
+  let didCreateTargetNode = false;
+  let ownerNodeForDuplication:
+    | {
+        id: string;
+        table_activeId: string | null;
+        formula_activeId: string | null;
+        condition_activeId: string | null;
+        variable_activeId: string | null;
+      }
+    | null = null;
+
+  const ensureSuffixLocal = (id: string): string => {
+    // Remplace un suffixe -N existant, sinon l'ajoute
+    return /-\d+$/.test(id) ? id.replace(/-\d+$/, `-${newSuffix}`) : `${id}-${newSuffix}`;
+  };
+
   // Si un targetNodeId explicite est fourni et qu'on ne duplique pas, l'utiliser comme cible
   if (!shouldDuplicateNode && bodyTargetNodeId) {
       const targetNode = await prisma.treeBranchLeafNode.findUnique({ where: { id: bodyTargetNodeId } });
@@ -13325,6 +13345,14 @@ router.post('/nodes/:nodeId/copy-linked-variable', async (req, res) => {
       if (!ownerNode) {
         return res.status(404).json({ error: 'NÃƒÂ¯Ã‚Â¿Ã‚Â½ud propriÃƒÂ¯Ã‚Â¿Ã‚Â½taire introuvable' });
       }
+
+      ownerNodeForDuplication = {
+        id: ownerNode.id,
+        table_activeId: ownerNode.table_activeId,
+        formula_activeId: ownerNode.formula_activeId,
+        condition_activeId: ownerNode.condition_activeId,
+        variable_activeId: ownerNode.variable_activeId
+      };
       ownerNodeIdForMap = ownerNode.id;
       const candidateId = `${ownerNode.id}-${newSuffix}`;
       const exists = await prisma.treeBranchLeafNode.findUnique({ where: { id: candidateId } });
@@ -13370,6 +13398,8 @@ router.post('/nodes/:nodeId/copy-linked-variable', async (req, res) => {
           updatedAt: new Date(),
         }
       });
+
+      didCreateTargetNode = true;
   }
 
     // Copier la variable avec ses capacitÃƒÂ¯Ã‚Â¿Ã‚Â½s vers le nÃƒÂ¯Ã‚Â¿Ã‚Â½ud cible
@@ -13396,6 +13426,42 @@ router.post('/nodes/:nodeId/copy-linked-variable', async (req, res) => {
 
     if (!result.success) {
       return res.status(400).json({ error: result.error || 'Erreur lors de la copie' });
+    }
+
+    // IMPORTANT: si on a dupliquÃƒÂ¯Ã‚Â¿Ã‚Â½ le nÃƒÂ¯Ã‚Â¿Ã‚Â½ud propriÃƒÂ¯Ã‚Â¿Ã‚Â½taire, il faut aussi dupliquer les *activeId*
+    // (table_activeId / formula_activeId / condition_activeId) vers les IDs copiÃƒÂ¯Ã‚Â¿Ã‚Â½s.
+    // Sinon, la copie peut se retrouver avec table_activeId=NULL => lookup retombe souvent ÃƒÂ¯Ã‚Â¿Ã‚Â½ 0.
+    if (didCreateTargetNode && ownerNodeForDuplication) {
+      const newTableActiveId = ownerNodeForDuplication.table_activeId
+        ? tableIdMap.get(ownerNodeForDuplication.table_activeId) ?? ensureSuffixLocal(ownerNodeForDuplication.table_activeId)
+        : null;
+
+      const newFormulaActiveId = ownerNodeForDuplication.formula_activeId
+        ? formulaIdMap.get(ownerNodeForDuplication.formula_activeId) ?? ensureSuffixLocal(ownerNodeForDuplication.formula_activeId)
+        : null;
+
+      const newConditionActiveId = ownerNodeForDuplication.condition_activeId
+        ? conditionIdMap.get(ownerNodeForDuplication.condition_activeId) ?? ensureSuffixLocal(ownerNodeForDuplication.condition_activeId)
+        : null;
+
+      const shouldUpdateVariableActiveId =
+        !ownerNodeForDuplication.variable_activeId || ownerNodeForDuplication.variable_activeId === variableId;
+
+      const updateData: any = {
+        table_activeId: newTableActiveId,
+        formula_activeId: newFormulaActiveId,
+        condition_activeId: newConditionActiveId,
+        updatedAt: new Date()
+      };
+
+      if (shouldUpdateVariableActiveId) {
+        updateData.variable_activeId = result.variableId;
+      }
+
+      await prisma.treeBranchLeafNode.update({
+        where: { id: targetNodeId },
+        data: updateData
+      });
     }
 
     // Ajouter la variable copiÃƒÂ¯Ã‚Â¿Ã‚Â½e aux linkedVariableIds du nÃƒÂ¯Ã‚Â¿Ã‚Â½ud cible

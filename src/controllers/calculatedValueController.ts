@@ -137,6 +137,8 @@ router.get('/:nodeId/calculated-value', async (req: Request, res: Response) => {
         calculatedBy: true,
         type: true,
         fieldType: true,
+        table_activeId: true,
+        linkedTableIds: true,
         treeId: true // ✨ Ajouté pour operation-interpreter
       }
     });
@@ -148,18 +150,44 @@ router.get('/:nodeId/calculated-value', async (req: Request, res: Response) => {
     // 🎯 RÈGLE CRITIQUE: Les champs d'AFFICHAGE ne doivent JAMAIS utiliser les submissions
     // Ils lisent UNIQUEMENT depuis TreeBranchLeafNode.calculatedValue
     const isDisplayField = node.fieldType === 'DISPLAY' || node.type === 'DISPLAY' || node.type === 'leaf_field';
+
+    const nodeMetadata = (node.metadata && typeof node.metadata === 'object'
+      ? (node.metadata as Record<string, unknown>)
+      : null);
+
+    const forceFlag =
+      pickQueryString('force') ||
+      pickQueryString('forceRefresh') ||
+      pickQueryString('refresh') ||
+      pickQueryString('forceRecompute');
+    const forceRecompute = Boolean(
+      forceFlag && ['1', 'true', 'yes', 'force'].includes(forceFlag.toLowerCase())
+    );
+
+    const requiresFreshCalculation = (() => {
+      if (!nodeMetadata) return false;
+      const metaAny = nodeMetadata as any;
+      return Boolean(
+        metaAny?.mustRecalculate ||
+          metaAny?.requiresFreshCalculation ||
+          metaAny?.calculationInvalidated ||
+          metaAny?.calculatedValueReset ||
+          metaAny?.forceIndependentCalc ||
+          metaAny?.independentCalculation
+      );
+    })();
     
-    // 🔥 FIX: Pour les display fields, TOUJOURS retourner calculatedValue directement
-    if (isDisplayField && node.calculatedValue) {
-      const existingValue = node.calculatedValue;
-      const hasValidExistingValue = existingValue && 
-        existingValue !== '' && 
-        existingValue !== '0' && 
+    // 🔥 FIX: Pour les display fields, TOUJOURS retourner calculatedValue directement (y compris "0")
+    if (isDisplayField && node.calculatedValue !== null && node.calculatedValue !== undefined) {
+      const existingValue = String(node.calculatedValue);
+      const hasValidExistingValue =
+        existingValue !== '' &&
         existingValue !== '[]' &&
         existingValue !== 'null' &&
         existingValue !== 'undefined';
-      
-      if (hasValidExistingValue) {
+
+      // ⚠️ Ne pas court-circuiter si un recalcul est explicitement requis
+      if (hasValidExistingValue && !requiresFreshCalculation && !forceRecompute) {
         console.log(`✅ [CalculatedValueController] Display field "${node.label}" - retour direct du calculatedValue:`, existingValue);
         return res.json({
           success: true,
@@ -177,14 +205,6 @@ router.get('/:nodeId/calculated-value', async (req: Request, res: Response) => {
     }
 
     const preferSubmissionData = Boolean(submissionId) && !isDisplayField; // 🔥 Ne PAS préférer submission pour display fields
-    const forceFlag =
-      pickQueryString('force') ||
-      pickQueryString('forceRefresh') ||
-      pickQueryString('refresh') ||
-      pickQueryString('forceRecompute');
-    const forceRecompute = Boolean(
-      forceFlag && ['1', 'true', 'yes', 'force'].includes(forceFlag.toLowerCase())
-    );
 
     let submissionDataEntry: SubmissionDataSnapshot | null = null;
     let submissionResolvedValue: string | number | boolean | null = null;
@@ -309,7 +329,7 @@ router.get('/:nodeId/calculated-value', async (req: Request, res: Response) => {
 
     // 🔥 NOUVEAU: Si c'est un champ TBL avec une table lookup, invoquer operation-interpreter
     const isTBLField = (node.type === 'field' || node.type === 'leaf_field') && node.metadata && typeof node.metadata === 'object';
-    const nodeMetadata = node.metadata as Record<string, unknown> | null;
+    // nodeMetadata est déjà normalisé plus haut
     
     // 🆕 D'abord récupérer les métadonnées de la variable (déplacé ici AVANT utilisation)
     const variableMeta2 = await prisma.treeBranchLeafNodeVariable.findUnique({
@@ -340,14 +360,94 @@ router.get('/:nodeId/calculated-value', async (req: Request, res: Response) => {
     const hasTreeSourceVariable = variableMeta2?.sourceType === 'tree' && (hasFormulaVariable || hasConditionVariable);
 
     // 🔥 IMPORTANT: Ne PAS recalculer si une valeur calculée VALIDE existe déjà
-    // Une valeur est "valide" si elle n'est pas vide, "0", ou "[]"
+    // Une valeur est "valide" si elle n'est pas vide ou "[]" ("0" est une valeur légitime)
     const existingValue = node.calculatedValue;
     const hasValidExistingValue = existingValue && 
       existingValue !== '' && 
-      existingValue !== '0' && 
       existingValue !== '[]' &&
       existingValue !== 'null' &&
-      existingValue !== 'undefined';
+      existingValue !== 'undefined' &&
+      !requiresFreshCalculation;
+
+    // 🔥 CRITIQUE: Si le node exige une recalculation (ex: duplication repeater), recalculer via operation-interpreter
+    // même si une valeur existe déjà (souvent "0" suite à une copie incomplète).
+    // Objectif: éviter les copies bloquées à 0 quand table_activeId n'est pas encore correctement fixé.
+    const isRealSubmissionForRecompute = submissionId && !submissionId.startsWith('preview-');
+    if (requiresFreshCalculation && node.treeId) {
+      try {
+        // Résoudre un submissionId si absent (fallback sur la dernière submission active)
+        const resolvedSubmissionId = isRealSubmissionForRecompute
+          ? submissionId!
+          : (
+              await prisma.treeBranchLeafSubmission.findFirst({
+                where: {
+                  treeId: node.treeId,
+                  status: { not: 'archived' }
+                },
+                orderBy: { updatedAt: 'desc' },
+                select: { id: true }
+              })
+            )?.id;
+
+        if (resolvedSubmissionId) {
+          const metaAny = (nodeMetadata as any) || {};
+          const looksLikeDuplicatedCopy = Boolean(
+            metaAny?.duplicatedFromRepeater || metaAny?.autoCreatedDisplayNode || metaAny?.copiedFromNodeId
+          );
+
+          // Auto-réparer table_activeId manquant sur les copies dupliquées (état incohérent)
+          // Choix: prendre la dernière table liée (souvent la "principale"), mais uniquement si elle existe.
+          if (!node.table_activeId && looksLikeDuplicatedCopy && Array.isArray(node.linkedTableIds) && node.linkedTableIds.length > 0) {
+            const candidateTableId = node.linkedTableIds[node.linkedTableIds.length - 1];
+            if (candidateTableId) {
+              const candidateExists = await prisma.treeBranchLeafNodeTable.findUnique({
+                where: { id: candidateTableId },
+                select: { id: true }
+              });
+              if (candidateExists) {
+                await prisma.treeBranchLeafNode.update({
+                  where: { id: nodeId },
+                  data: { table_activeId: candidateTableId }
+                });
+              }
+            }
+          }
+
+          const { evaluateVariableOperation } = await import('../components/TreeBranchLeaf/treebranchleaf-new/api/operation-interpreter.js');
+          const evaluation = await evaluateVariableOperation(nodeId, resolvedSubmissionId, prisma);
+          const recomputedValue = evaluation.value ?? evaluation.operationResult ?? null;
+          const resolvedAt = new Date();
+
+          // Mettre à jour la valeur calculée du node (évite de recalculer en boucle)
+          await prisma.treeBranchLeafNode.update({
+            where: { id: nodeId },
+            data: {
+              calculatedValue:
+                recomputedValue === null || recomputedValue === undefined ? null : String(recomputedValue),
+              calculatedAt: resolvedAt,
+              calculatedBy: evaluation.operationSource || 'operation-interpreter-auto'
+            }
+          });
+
+          return res.json({
+            success: true,
+            nodeId: node.id,
+            label: node.label,
+            value: recomputedValue,
+            calculatedAt: resolvedAt.toISOString(),
+            calculatedBy: evaluation.operationSource || 'operation-interpreter-auto',
+            type: node.type,
+            fieldType: node.fieldType,
+            submissionId: resolvedSubmissionId,
+            sourceRef: evaluation.sourceRef,
+            operationDetail: evaluation.operationDetail,
+            freshCalculation: true
+          });
+        }
+      } catch (recomputeErr) {
+        console.error('❌ [CalculatedValueController] Recompute (requiresFreshCalculation) error:', recomputeErr);
+      }
+    }
     
     // Si on a déjà une valeur valide (et ce n'est pas une copie repeater), la retourner directement sans recalculer
     if (hasValidExistingValue) {

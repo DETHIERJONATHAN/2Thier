@@ -44,6 +44,6 @@
   },
 
   "remoteEnv": {
-    "GOOGLE_APPLICATION_CREDENTIALS": "/tmp/gcloud-key.json"
+    "GOOGLE_APPLICATION_CREDENTIALS": "/tmp/gcloud-key.json" 
   }
 }

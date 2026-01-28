@@ -500,15 +500,26 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const seconds = Math.round(retryAfterMs / 1000);
         console.warn(`[AuthProvider] Cooldown activé suite à un 429: ${seconds}s`);
         msgApi.warning(`Trop de tentatives. Réessayez dans ${seconds > 60 ? `${Math.ceil(seconds / 60)} minutes` : `${seconds} secondes`}.`, seconds > 60 ? 5 : 3);
+        // ✅ IMPORTANT: ne pas déconnecter l'utilisateur sur 429 (limite/anti-spam)
+        return;
       }
       console.error("Erreur fetchMe:", e);
-      setUser(null);
-      setOriginalUser(null);
-      setOrganizations([]);
-      setCurrentOrganization(null);
-      setPermissions([]);
-      setModules([]);
-      // Plus besoin de localStorage car on utilise les cookies
+      // ✅ Ne déconnecter que sur une vraie erreur d'auth
+      if (apiError?.status === 401 || apiError?.status === 403) {
+        setUser(null);
+        setOriginalUser(null);
+        setOrganizations([]);
+        setCurrentOrganization(null);
+        setPermissions([]);
+        setModules([]);
+        // Plus besoin de localStorage car on utilise les cookies
+      } else {
+        // Erreur transitoire (DB down, proxy, reboot serveur, réseau, 5xx): garder la session locale
+        // et laisser la reconnexion se faire au prochain fetch.
+        const status = apiError?.status;
+        const suffix = typeof status === 'number' ? ` (HTTP ${status})` : '';
+        msgApi.warning(`Serveur momentanément indisponible${suffix}. On réessaie automatiquement.`, 3);
+      }
     } finally {
       setLoading(false);
       window.__authFetchMeInFlight = false;

@@ -396,9 +396,7 @@ export async function deepCopyNodeInternal(
     data_exposedKey: oldNode.data_exposedKey,
     data_visibleToUser: oldNode.data_visibleToUser,
     defaultValue: oldNode.defaultValue,
-    calculatedValue: (oldNode.hasFormula || oldNode.hasCondition || oldNode.hasTable)
-      ? null
-      : oldNode.calculatedValue,
+    calculatedValue: oldNode.calculatedValue,
     appearance_size: oldNode.appearance_size,
     appearance_variant: oldNode.appearance_variant,
     appearance_width: oldNode.appearance_width,
@@ -496,7 +494,9 @@ export async function deepCopyNodeInternal(
         ? idMap.get(oldNode.link_targetNodeId)!
         : oldNode.link_targetNodeId,
     link_targetTreeId: oldNode.link_targetTreeId,
-    table_activeId: oldNode.table_activeId ? ensureSuffix(oldNode.table_activeId) : null,
+    // IMPORTANT: table_activeId doit être mappé via tableIdMap (créé lors de la copie des tables),
+    // pas via un simple suffixe. On le synchronise plus bas après la copie des tables.
+    table_activeId: null,
     table_instances: (() => {
       if (!oldNode.table_instances) {
         return oldNode.table_instances as Prisma.InputJsonValue;
@@ -958,6 +958,7 @@ export async function deepCopyNodeInternal(
     const allFormulas = [...sortedFormulas, ...unlinkedFormulas];
     
     const newLinkedFormulaIds: string[] = [];
+    let firstNewFormulaId: string | null = null;
     
     for (const f of allFormulas) {
       try {
@@ -976,6 +977,8 @@ export async function deepCopyNodeInternal(
         if (formulaResult.success) {
           const newFormulaId = formulaResult.newFormulaId;
           formulaIdMap.set(f.id, newFormulaId);
+
+          if (!firstNewFormulaId) firstNewFormulaId = newFormulaId;
           
           // Ã°Å¸â€â€˜ Ajouter au linkedFormulaIds seulement si c'ÃƒÂ©tait liÃƒÂ© ÃƒÂ  l'original
           if (validLinkedIds.includes(f.id)) {
@@ -1036,9 +1039,11 @@ export async function deepCopyNodeInternal(
     const allConditions = [...sortedConditions, ...unlinkedConditions];
     
     const newLinkedConditionIds: string[] = [];
+    let firstNewConditionId: string | null = null;
     
     for (const c of allConditions) {
       const newConditionId = appendSuffix(c.id);
+      if (!firstNewConditionId) firstNewConditionId = newConditionId;
       conditionIdMap.set(c.id, newConditionId);
       const newSet = replaceIdsInConditionSet(c.conditionSet, idMap, formulaIdMap, conditionIdMap) as Prisma.InputJsonValue;
       
@@ -1114,38 +1119,39 @@ export async function deepCopyNodeInternal(
       }
     }
 
-    // Ã°Å¸â€Â§ FIX: Mettre ÃƒÂ  jour condition_activeId et formula_activeId avec les IDs remappÃƒÂ©s
-    // APRÃƒË†S la copie des conditions et formules pour que les maps soient complÃƒÂ¨tes
-    const updateActiveIds: { condition_activeId?: string | null; formula_activeId?: string | null } = {};
-    
-    if (oldNode.condition_activeId) {
-      // 🔧 FIX 24/12/2025: Seulement mettre à jour si hasCondition est true
-      if (oldNode.hasCondition) {
-        const newConditionActiveId = conditionIdMap.get(oldNode.condition_activeId);
-        if (newConditionActiveId) {
-          updateActiveIds.condition_activeId = newConditionActiveId;
-        }
-      }
+    //  FIX: Synchroniser les flags de capacités et les activeIds
+    // Problème rencontré: des formules/conditions peuvent exister en DB alors que hasFormula/hasCondition est faux
+    // => l'UI n'affiche pas l'onglet bleu / l'icône. Ici on aligne le nœud copié avec le contenu réellement copié.
+    const shouldHaveFormula = (oldNode.hasFormula === true) || formulas.length > 0;
+    const shouldHaveCondition = (oldNode.hasCondition === true) || conditions.length > 0;
+
+    const updateCaps: {
+      hasFormula?: boolean;
+      formula_activeId?: string | null;
+      hasCondition?: boolean;
+      condition_activeId?: string | null;
+    } = {};
+
+    if (shouldHaveFormula) {
+      updateCaps.hasFormula = true;
+      const mappedActive = oldNode.formula_activeId ? (formulaIdMap.get(oldNode.formula_activeId) || null) : null;
+      updateCaps.formula_activeId = mappedActive || firstNewFormulaId || null;
     }
-    
-    if (oldNode.formula_activeId) {
-      // 🔧 FIX 24/12/2025: Seulement mettre à jour si hasFormula est true
-      if (oldNode.hasFormula) {
-        const newFormulaActiveId = formulaIdMap.get(oldNode.formula_activeId);
-        if (newFormulaActiveId) {
-          updateActiveIds.formula_activeId = newFormulaActiveId;
-        }
-      }
+
+    if (shouldHaveCondition) {
+      updateCaps.hasCondition = true;
+      const mappedActive = oldNode.condition_activeId ? (conditionIdMap.get(oldNode.condition_activeId) || null) : null;
+      updateCaps.condition_activeId = mappedActive || firstNewConditionId || null;
     }
-    
-    if (Object.keys(updateActiveIds).length > 0) {
+
+    if (Object.keys(updateCaps).length > 0) {
       try {
         await prisma.treeBranchLeafNode.update({
           where: { id: newId },
-          data: updateActiveIds
+          data: updateCaps
         });
       } catch (e) {
-        console.warn('[DEEP-COPY] Ã¢Å¡Â Ã¯Â¸Â Erreur mise ÃƒÂ  jour activeIds:', (e as Error).message);
+        console.warn('[DEEP-COPY]  Erreur mise  jour flags/activeIds:', (e as Error).message);
       }
     }
 
@@ -1413,6 +1419,28 @@ export async function deepCopyNodeInternal(
         await addToNodeLinkedField(prisma, newId, 'linkedTableIds', newLinkedTableIds);
       } catch (e) {
         console.warn('[TreeBranchLeaf API] Warning updating linkedTableIds for node:', (e as Error).message);
+      }
+    }
+
+    // FIX: Synchroniser hasTable + table_activeId (comme formule/condition)
+    // Problème rencontré: tables copiées en DB mais table_activeId reste NULL => lookup retombe à 0.
+    const shouldHaveTable = (oldNode.hasTable === true) || allTablesToCopy.length > 0;
+    if (shouldHaveTable) {
+      const mappedActiveTableId = oldNode.table_activeId
+        ? (tableIdMap.get(oldNode.table_activeId) || null)
+        : null;
+      const firstNewTableId = allTablesToCopy.length > 0 ? (tableIdMap.get(allTablesToCopy[0].id) || null) : null;
+
+      try {
+        await prisma.treeBranchLeafNode.update({
+          where: { id: newId },
+          data: {
+            hasTable: true,
+            table_activeId: mappedActiveTableId || firstNewTableId || (newLinkedTableIds[0] ?? null)
+          }
+        });
+      } catch (e) {
+        console.warn('[DEEP-COPY] Erreur mise à jour hasTable/table_activeId:', (e as Error).message);
       }
     }
 
