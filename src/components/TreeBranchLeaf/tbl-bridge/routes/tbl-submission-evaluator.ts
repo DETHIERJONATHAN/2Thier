@@ -88,6 +88,47 @@ const UUID_WITH_SUFFIX_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}
 const GENERATED_NODE_REGEX = /^node_[0-9]+_[a-z0-9]+$/i;
 const SHARED_REFERENCE_REGEX = /^shared-ref-[a-z0-9-]+$/i;
 
+function normalizeTriggerCandidate(trigger: string): string {
+  const trimmed = String(trigger || '').trim();
+  if (!trimmed) return '';
+  if (trimmed.startsWith('@value.')) return trimmed.substring(7);
+  if (trimmed.startsWith('{') && trimmed.endsWith('}')) return trimmed.slice(1, -1);
+  return trimmed;
+}
+
+function extractNumericSuffix(nodeId: string): string | null {
+  const m = String(nodeId || '').match(/-(\d+)$/);
+  return m ? m[1] : null;
+}
+
+function expandTriggersForCopy(displayNodeId: string, triggerIds: string[]): string[] {
+  const suffix = extractNumericSuffix(displayNodeId);
+  if (!suffix) return triggerIds;
+  const suffixToken = `-${suffix}`;
+  const out = new Set<string>();
+  for (const raw of triggerIds || []) {
+    const normalized = normalizeTriggerCandidate(raw);
+    if (!normalized) continue;
+    out.add(normalized);
+    // Si trigger = UUID sans suffixe, ajouter version suffixée
+    if (UUID_NODE_REGEX.test(normalized)) {
+      out.add(`${normalized}${suffixToken}`);
+    }
+  }
+  return Array.from(out);
+}
+
+function matchesChangedField(triggers: string[], changedFieldId: string): boolean {
+  const normalizedChanged = normalizeTriggerCandidate(changedFieldId);
+  if (!normalizedChanged) return false;
+  for (const t of triggers || []) {
+    const normalized = normalizeTriggerCandidate(t);
+    if (!normalized) continue;
+    if (normalized === normalizedChanged) return true;
+  }
+  return false;
+}
+
 function isSharedReferenceId(nodeId: string): boolean {
   return SHARED_REFERENCE_REGEX.test(nodeId);
 }
@@ -379,10 +420,10 @@ async function evaluateCapacitiesForSubmission(
       || capacity.TreeBranchLeafNode?.type === 'DISPLAY'
       || capacity.TreeBranchLeafNode?.type === 'leaf_field';
     
-    // 🎯 AUTOSAVE PÉRIODIQUE: Si changedFieldId="NULL" et submission existe déjà → SKIP tous les display fields
-    // (ils sont déjà à jour, pas besoin de recalculer lors d'une sauvegarde automatique)
-    if (isDisplayField && (!changedFieldId || changedFieldId === 'NULL')) {
-      console.log(`⏸️ [AUTOSAVE] Display field ${capacity.nodeId} (${capacity.TreeBranchLeafNode?.label}) skippé - autosave périodique, pas de recalcul nécessaire`);
+    // 🎯 AUTOSAVE PÉRIODIQUE: changedFieldId="NULL" → SKIP tous les display fields
+    // IMPORTANT: changedFieldId absent/undefined = évaluation initiale (on calcule tout)
+    if (isDisplayField && changedFieldId === 'NULL') {
+      console.log(`⏸️ [AUTOSAVE] Display field ${capacity.nodeId} (${capacity.TreeBranchLeafNode?.label}) skippé - autosave périodique`);
       continue; // ✅ SKIP - les display fields sont déjà calculés
     }
     
@@ -403,16 +444,9 @@ async function evaluateCapacitiesForSubmission(
       //   → Champ AVEC triggers sans match → SKIP
       //   → Champ SANS triggers → SKIP (calculé seulement au chargement initial)
       if (triggerNodeIds && Array.isArray(triggerNodeIds) && triggerNodeIds.length > 0) {
-        // Des triggers sont définis, vérifier le match
-        const fieldIdWithValue = `@value.${changedFieldId}`;
-        const fieldIdWithBraces = `{${changedFieldId}}`;
-        
-        const matchesTrigger = triggerNodeIds.some(trigger => 
-          trigger === changedFieldId || 
-          trigger === fieldIdWithValue || 
-          trigger === fieldIdWithBraces ||
-          trigger.replace('@value.', '') === changedFieldId
-        );
+        // Des triggers sont définis, vérifier le match (compatible copies: on suffixe les triggers base)
+        const expanded = expandTriggersForCopy(capacity.nodeId, triggerNodeIds);
+        const matchesTrigger = matchesChangedField(expanded, changedFieldId);
         
         if (!matchesTrigger) {
           // Le champ modifié n'est PAS un trigger pour ce display field → SKIP

@@ -1040,7 +1040,7 @@ const TBL: React.FC<TBLProps> = ({
       // Vérifier que formData a des données avant de sauvegarder
       if (Object.keys(formDataRef.current).length === 0) return;
       // Réutiliser la même voie débouncée + garde-fous pour éviter les doublons
-      scheduleAutosave(formDataRef.current);
+      scheduleAutosave(formDataRef.current, 'NULL');
     }, 30000);
 
     return () => clearInterval(interval);

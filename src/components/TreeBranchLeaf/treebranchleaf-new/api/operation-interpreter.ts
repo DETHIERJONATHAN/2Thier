@@ -906,6 +906,11 @@ async function interpretCondition(
       return { value: null, label: 'Inconnu' };
     }
 
+    const stripUuidNumericSuffix = (id: string): string => {
+      const m = id.match(/^([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})-\d+$/i);
+      return m ? m[1] : id;
+    };
+
     // Ã°Å¸â€ â€¢ GESTION SPÃƒâ€°CIALE pour @select.xxx
     // Pour les options de select, on veut rÃƒÂ©cupÃƒÂ©rer le LABEL de l'option (ex: "Portrait")
     // pas sa valeur (qui est souvent null ou l'ID)
@@ -913,10 +918,22 @@ async function interpretCondition(
       const optionNodeId = ref.slice('@select.'.length).split('.')[0];
       
       // RÃƒÂ©cupÃƒÂ©rer le noeud d'option pour obtenir son label
-      const optionNode = await prisma.treeBranchLeafNode.findUnique({
+      let optionNode = await prisma.treeBranchLeafNode.findUnique({
         where: { id: optionNodeId },
         select: { id: true, label: true, parentId: true }
       });
+
+      // 🔁 Les options de select ne sont pas toujours dupliquées: si on a un suffixe (-1) mais pas de node en base,
+      // retomber sur l'UUID de base (sans suffixe) pour récupérer label + comparer correctement.
+      if (!optionNode) {
+        const baseOptionId = stripUuidNumericSuffix(optionNodeId);
+        if (baseOptionId !== optionNodeId) {
+          optionNode = await prisma.treeBranchLeafNode.findUnique({
+            where: { id: baseOptionId },
+            select: { id: true, label: true, parentId: true }
+          });
+        }
+      }
       
       if (optionNode) {
         // Pour une option, la "valeur" ÃƒÂ  comparer est son ID (car c'est ce qui est stockÃƒÂ© dans la soumission)
@@ -1111,6 +1128,42 @@ async function interpretCondition(
  * @returns true si condition vraie, false sinon
  */
 function evaluateOperator(op: string, left: any, right: any): boolean {
+  const normalizeUuidWithNumericSuffix = (value: unknown): unknown => {
+    if (typeof value !== 'string') return value;
+    const m = value.match(/^([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})(-\d+)?$/i);
+    if (!m) return value;
+    return m[1];
+  };
+
+  const isUuidLike = (value: unknown): boolean => {
+    if (typeof value !== 'string') return false;
+    const normalized = normalizeUuidWithNumericSuffix(value);
+    if (typeof normalized !== 'string') return false;
+    return /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(normalized);
+  };
+
+  const normalizeComparable = (value: any): any => {
+    if (Array.isArray(value)) return value.map(normalizeComparable);
+    return normalizeUuidWithNumericSuffix(value);
+  };
+
+  const equalsWithCopySuffixSupport = (a: any, b: any): boolean => {
+    const na = normalizeComparable(a);
+    const nb = normalizeComparable(b);
+
+    if (Array.isArray(na) && Array.isArray(nb)) {
+      if (na.length !== nb.length) return false;
+      for (let i = 0; i < na.length; i++) {
+        if (na[i] !== nb[i]) return false;
+      }
+      return true;
+    }
+
+    if (Array.isArray(na)) return na.includes(nb);
+    if (Array.isArray(nb)) return nb.includes(na);
+    return na === nb;
+  };
+
   switch (op) {
     case 'isEmpty':
       return left === null || left === undefined || left === '';
@@ -1120,17 +1173,41 @@ function evaluateOperator(op: string, left: any, right: any): boolean {
     
     case 'eq':
     case '==':
-      return left === right;
+      return equalsWithCopySuffixSupport(left, right);
     
     case 'ne':
     case '!=':
-      return left !== right;
+      return !equalsWithCopySuffixSupport(left, right);
     
     // Ã°Å¸â€Â¥ NOUVEAU: OpÃƒÂ©rateur 'contains' pour vÃƒÂ©rifier si une chaÃƒÂ®ne contient une autre
     case 'contains':
       if (left === null || left === undefined) return false;
       if (right === null || right === undefined) return false;
-      return String(left).toLowerCase().includes(String(right).toLowerCase());
+
+      {
+        const nl = normalizeComparable(left);
+        const nr = normalizeComparable(right);
+
+        // Multi-select: la valeur peut être un tableau d'IDs
+        if (Array.isArray(nl) && Array.isArray(nr)) {
+          // "left contient right" => right est un sous-ensemble de left
+          return nr.every((v) => nl.includes(v));
+        }
+        if (Array.isArray(nl) && !Array.isArray(nr)) {
+          return nl.includes(nr);
+        }
+        if (!Array.isArray(nl) && Array.isArray(nr)) {
+          return nr.includes(nl);
+        }
+
+        // Select simple (UUID): "contains" = "est cette option" (avec tolérance au suffixe -1)
+        if (isUuidLike(nl) || isUuidLike(nr)) {
+          return equalsWithCopySuffixSupport(nl, nr);
+        }
+
+        // Texte libre: substring case-insensitive
+        return String(nl).toLowerCase().includes(String(nr).toLowerCase());
+      }
     
     // Ã°Å¸â€Â¥ NOUVEAU: OpÃƒÂ©rateur 'startsWith' pour vÃƒÂ©rifier si une chaÃƒÂ®ne commence par une autre
     case 'startsWith':
@@ -1163,13 +1240,24 @@ function evaluateOperator(op: string, left: any, right: any): boolean {
 
 function compareValuesByOperator(op: string | undefined | null, cellValue: any, targetValue: any): boolean {
   if (!op) return false;
+
+  const normalizeUuidWithNumericSuffix = (value: unknown): unknown => {
+    if (typeof value !== 'string') return value;
+    const m = value.match(/^([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})(-\d+)?$/i);
+    if (!m) return value;
+    return m[1];
+  };
+
+  const normalizedCell = normalizeUuidWithNumericSuffix(cellValue);
+  const normalizedTarget = normalizeUuidWithNumericSuffix(targetValue);
+
   switch (op) {
     case 'equals':
     case '==':
-      return String(cellValue) === String(targetValue);
+      return String(normalizedCell) === String(normalizedTarget);
     case 'notEquals':
     case '!=':
-      return String(cellValue) !== String(targetValue);
+      return String(normalizedCell) !== String(normalizedTarget);
     case 'greaterThan':
     case '>':
       return Number(cellValue) > Number(targetValue);
@@ -1832,6 +1920,19 @@ async function interpretTable(
   // Ã°Å¸â€œÂ¥ Ãƒâ€°TAPE 1 : RÃƒÂ©cupÃƒÂ©rer la table depuis la base de donnÃƒÂ©es
   // Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
   const cleanId = tableId.replace('@table.', '').replace('node-table:', '');
+
+  const stripUuidNumericSuffix = (id: string): string => {
+    const m = id.match(/^([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})-\d+$/i);
+    return m ? m[1] : id;
+  };
+
+  // Pour les repeaters/copies : les libellés configurés peuvent être suffixés (ex: "Largeur-1")
+  // alors que les labels dans la table sont "Largeur". On normalise donc en retirant le suffixe.
+  const stripCopySuffix = (value: unknown): string => {
+    return String(value ?? '').replace(/-\d+$/, '');
+  };
+
+  const baseId = stripUuidNumericSuffix(cleanId);
   
   let table = await prisma.treeBranchLeafNodeTable.findUnique({
     where: { id: cleanId },
@@ -1865,6 +1966,30 @@ async function interpretTable(
       }
     }
   });
+
+  // 🔁 Si pas trouvÃƒÂ© et qu'on a un suffixe de copie (-1/-2...), essayer l'ID de base.
+  if (!table && baseId !== cleanId) {
+    table = await prisma.treeBranchLeafNodeTable.findUnique({
+      where: { id: baseId },
+      select: {
+        id: true,
+        name: true,
+        type: true,
+        rowCount: true,
+        columnCount: true,
+        meta: true,
+        nodeId: true,
+        tableColumns: {
+          orderBy: { columnIndex: 'asc' },
+          select: { id: true, columnIndex: true, name: true, type: true, width: true, format: true, metadata: true }
+        },
+        tableRows: {
+          orderBy: { rowIndex: 'asc' },
+          select: { id: true, rowIndex: true, cells: true }
+        }
+      }
+    });
+  }
   
   // Ã°Å¸â€Â RÃƒâ€°SOLUTION IMPLICITE : Si pas trouvÃƒÂ© par ID, chercher par nodeId (table par dÃƒÂ©faut)
   if (!table) {
@@ -1895,6 +2020,38 @@ async function interpretTable(
       }
     } catch (e) {
       console.warn('[TABLE] Ã¢Å¡Â Ã¯Â¸Â RÃƒÂ©solution implicite ÃƒÂ©chouÃƒÂ©e:', e instanceof Error ? e.message : e);
+    }
+  }
+
+  // 🔁 Idem via nodeId si on a un suffixe
+  if (!table && baseId !== cleanId) {
+    try {
+      const byNode = await prisma.treeBranchLeafNodeTable.findFirst({
+        where: { nodeId: baseId },
+        select: {
+          id: true,
+          name: true,
+          type: true,
+          rowCount: true,
+          columnCount: true,
+          meta: true,
+          nodeId: true,
+          tableColumns: {
+            orderBy: { columnIndex: 'asc' },
+            select: { id: true, columnIndex: true, name: true, type: true, width: true, format: true, metadata: true }
+          },
+          tableRows: {
+            orderBy: { rowIndex: 'asc' },
+            select: { id: true, rowIndex: true, cells: true }
+          }
+        },
+        orderBy: [{ isDefault: 'desc' }, { updatedAt: 'desc' }]
+      });
+      if (byNode) {
+        table = byNode;
+      }
+    } catch (e) {
+      console.warn('[TABLE] Ã¢Å¡Â Ã¯Â¸Â RÃƒÂ©solution implicite (baseId) ÃƒÂ©chouÃƒÂ©e:', e instanceof Error ? e.message : e);
     }
   }
   
@@ -2144,7 +2301,7 @@ async function interpretTable(
         if (foundRowIndex !== -1) {
           // Construire results ÃƒÂ  partir de displayColumns pour la ligne trouvÃƒÂ©e
           for (const fixedRowValue of displayColumns) {
-            const normalizedFixedRow = String(fixedRowValue).trim().toLowerCase();
+            const normalizedFixedRow = stripCopySuffix(fixedRowValue).trim().toLowerCase();
             const fixedRowInRows = rows.findIndex(r => String(r).trim().toLowerCase() === normalizedFixedRow);
             const fixedRowInCols = columns.findIndex(c => String(c).trim().toLowerCase() === normalizedFixedRow);
             let rowIndex = -1;
@@ -2211,7 +2368,7 @@ async function interpretTable(
         if (foundRowIndex !== -1) {
           // On a trouvÃƒÂ© la ligne avec l'opÃƒÂ©rateur, rÃƒÂ©cupÃƒÂ©rer la valeur depuis cette ligne pour chaque colonne ÃƒÂ  afficher
           for (const fixedColValue of displayColumns) {
-            const normalizedFixedCol = String(fixedColValue).trim().toLowerCase();
+            const normalizedFixedCol = stripCopySuffix(fixedColValue).trim().toLowerCase();
             const fixedColInCols = columns.findIndex(c => String(c).trim().toLowerCase() === normalizedFixedCol);
             const fixedColInRows = rows.findIndex(r => String(r).trim().toLowerCase() === normalizedFixedCol);
             let colIndexForDisplay = -1;
@@ -2245,9 +2402,9 @@ async function interpretTable(
           const foundRowIndex = match.index;
 
           for (const fixedColValue of displayColumns) {
-            const normalizedFixedCol = normalizeLookupValue(fixedColValue);
-            const fixedColInCols = columns.findIndex(c => normalizeLookupValue(c) === normalizedFixedCol);
-            const fixedColInRows = rows.findIndex(r => normalizeLookupValue(r) === normalizedFixedCol);
+            const normalizedFixedCol = normalizeLookupValue(stripCopySuffix(fixedColValue));
+            const fixedColInCols = columns.findIndex(c => normalizeLookupValue(stripCopySuffix(c)) === normalizedFixedCol);
+            const fixedColInRows = rows.findIndex(r => normalizeLookupValue(stripCopySuffix(r)) === normalizedFixedCol);
             let colIndexForDisplay = -1;
             if (fixedColInCols !== -1) colIndexForDisplay = fixedColInCols;
             else if (fixedColInRows !== -1) colIndexForDisplay = fixedColInRows;
@@ -2271,13 +2428,13 @@ async function interpretTable(
           // Ã°Å¸â€Â§ FIX: Enlever le suffixe (-1, -2, etc.) pour les champs copiÃƒÂ©s dans les repeaters
           const colSelectorWithoutSuffix = String(colSelectorValue).replace(/-\d+$/, '');
           const normalizedColSelector = normalizeLookupValue(colSelectorWithoutSuffix);
-          const normalizedFixedRow = normalizeLookupValue(fixedRowValue);
+          const normalizedFixedRow = normalizeLookupValue(stripCopySuffix(fixedRowValue));
           
           // Chercher dans colonnes ET lignes (auto-dÃƒÂ©tection)
-          const colSelectorInCols = columns.findIndex(c => normalizeLookupValue(c) === normalizedColSelector);
-          const colSelectorInRows = rows.findIndex(r => normalizeLookupValue(r) === normalizedColSelector);
-          const fixedRowInRows = rows.findIndex(r => normalizeLookupValue(r) === normalizedFixedRow);
-          const fixedRowInCols = columns.findIndex(c => normalizeLookupValue(c) === normalizedFixedRow);
+          const colSelectorInCols = columns.findIndex(c => normalizeLookupValue(stripCopySuffix(c)) === normalizedColSelector);
+          const colSelectorInRows = rows.findIndex(r => normalizeLookupValue(stripCopySuffix(r)) === normalizedColSelector);
+          const fixedRowInRows = rows.findIndex(r => normalizeLookupValue(stripCopySuffix(r)) === normalizedFixedRow);
+          const fixedRowInCols = columns.findIndex(c => normalizeLookupValue(stripCopySuffix(c)) === normalizedFixedRow);
           
           // DÃƒÂ©terminer les index finaux (privilÃƒÂ©gier le matching naturel)
           let colIndex = -1;
