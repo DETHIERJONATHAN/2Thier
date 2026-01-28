@@ -54,13 +54,27 @@ export function registerSumDisplayFieldRoutes(router: Router): void {
           order: true,
           subtab: true,
           linkedVariableIds: true,
-          metadata: true
+          metadata: true,
+          subType: true, // 🎯 FIX: Récupérer le subType de l'original
+          fieldType: true
         }
       });
 
       if (!node) {
-        return res.status(404).json({ error: 'NÃ…â€œud non trouvÃƒÂ©' });
+        return res.status(404).json({ error: 'Nœud non trouvé' });
       }
+
+      // 🎯 FIX: Extraire les triggerNodeIds du nœud original (comme variable-copy-engine.ts ligne 758)
+      const originalMetadata = (node.metadata as Record<string, unknown>) || {};
+      const originalTriggerNodeIds = originalMetadata.triggerNodeIds as string[] | undefined;
+      const originalSubType = node.subType; // 'display' si c'est un champ display
+
+      console.log('🎯 [SUM-DISPLAY] Nœud original:', {
+        nodeId,
+        subType: originalSubType,
+        triggerNodeIds: originalTriggerNodeIds,
+        metadata: JSON.stringify(originalMetadata)
+      });
 
       // RÃƒÂ©cupÃƒÂ©rer la variable principale du nÃ…â€œud
       const mainVariable = await prisma.treeBranchLeafNodeVariable.findUnique({
@@ -141,15 +155,19 @@ export function registerSumDisplayFieldRoutes(router: Router): void {
         description: `Somme automatique de toutes les copies de ${mainVariable.displayName}`
       };
 
-      // Ã°Å¸Å½Â¯ UNIFIÃƒâ€°: Structure identique ÃƒÂ  MÃ‚Â² toiture - Total qui fonctionne
-      // - fieldType: null (pas NUMBER)
+      // 🎯 FIX: Hériter le subType de l'original (ex: 'display') - comme variable-copy-engine.ts ligne 867
+      const inheritedSubType = originalSubType || null;
+      const inheritedFieldType = node.fieldType || null;
+
+      // 🎯 UNIFIÉE: Structure identique à M² toiture - Total qui fonctionne
+      // - fieldType: hérité de l'original
       // - data_visibleToUser: false
       // - Pas de capabilities.datas dans metadata
       const sumNodeData = {
         label: sumDisplayName,
         field_label: sumDisplayName,
-        fieldType: null,  // Ã°Å¸â€Â§ UNIFIÃƒâ€°: null comme MÃ‚Â² toiture - Total
-        subType: null,
+        fieldType: inheritedFieldType,  // 🎯 FIX: Hériter le fieldType de l'original
+        subType: inheritedSubType,  // 🎯 FIX: Hériter le subType ('display' si c'est un champ display)
         fieldSubType: null,
         hasData: true,
         hasFormula: true,
@@ -170,7 +188,10 @@ export function registerSumDisplayFieldRoutes(router: Router): void {
           sourceNodeId: nodeId,
           sumTokens,
           copiesCount: allCopies.length,
-          // 🎨 HÉRITAGE ICÔNE: Ajouter l'icône dans capabilities.datas pour le frontend
+          // � FIX: Copier les triggerNodeIds de l'original pour que le Total se recalcule
+          // Le Total doit se recalculer quand les mêmes champs que l'original changent
+          ...(originalTriggerNodeIds && originalTriggerNodeIds.length > 0 ? { triggerNodeIds: originalTriggerNodeIds } : {}),
+          // �🎨 HÉRITAGE ICÔNE: Ajouter l'icône dans capabilities.datas pour le frontend
           capabilities: {
             ...(existingSumNode?.metadata?.capabilities || {}),
             datas: [{
@@ -493,6 +514,31 @@ export async function updateSumDisplayFieldAfterCopyChange(
       select: { nodeId: true }
     });
 
+    // 🎯 FIX: Récupérer les triggerNodeIds de TOUTES les copies (original + duplications)
+    const copyNodeIds = allCopies.map(c => c.nodeId);
+    const allCopyNodes = await db.treeBranchLeafNode.findMany({
+      where: { id: { in: copyNodeIds } },
+      select: { id: true, metadata: true, calculatedValue: true }
+    });
+
+    // 🎯 FIX: Agréger les triggerNodeIds de toutes les copies
+    const aggregatedTriggers = new Set<string>();
+    allCopyNodes.forEach(copyNode => {
+      const copyMetadata = (copyNode.metadata as Record<string, unknown>) || {};
+      const copyTriggers = copyMetadata.triggerNodeIds as string[] | undefined;
+      if (Array.isArray(copyTriggers)) {
+        copyTriggers.forEach(t => aggregatedTriggers.add(t));
+      }
+    });
+
+    const allTriggerNodeIds = Array.from(aggregatedTriggers);
+
+    console.log('🎯 [SUM UPDATE] Triggers agrégés:', {
+      copiesCount: allCopies.length,
+      copyNodeIds,
+      aggregatedTriggers: allTriggerNodeIds
+    });
+
     // Reconstruire les tokens de somme
     const sumTokens: string[] = [];
     allCopies.forEach((copy, index) => {
@@ -545,15 +591,9 @@ export async function updateSumDisplayFieldAfterCopyChange(
       }
     });
 
-    // Ã°Å¸â€Â¥ NOUVEAU: Recalculer la valeur en rÃƒÂ©cupÃƒÂ©rant les calculatedValue des nÃ…â€œuds sources
-    const copyNodeIds = allCopies.map(c => c.nodeId);
-    const copyNodes = await db.treeBranchLeafNode.findMany({
-      where: { id: { in: copyNodeIds } },
-      select: { id: true, calculatedValue: true }
-    });
-    
+    // Ã°Å¸â€Â¥ NOUVEAU: Recalculer la valeur avec allCopyNodes (déjà récupéré ligne 519)
     let newCalculatedValue = 0;
-    for (const node of copyNodes) {
+    for (const node of allCopyNodes) {
       newCalculatedValue += parseFloat(String(node.calculatedValue)) || 0;
     }
 
@@ -575,6 +615,8 @@ export async function updateSumDisplayFieldAfterCopyChange(
             ...(sumNode.metadata as Record<string, unknown> || {}),
             sumTokens,
             copiesCount: allCopies.length,
+            // 🎯 FIX: Ajouter les triggerNodeIds agrégés de TOUTES les copies
+            ...(allTriggerNodeIds.length > 0 ? { triggerNodeIds: allTriggerNodeIds } : {}),
             updatedAt: now.toISOString()
           }
         }

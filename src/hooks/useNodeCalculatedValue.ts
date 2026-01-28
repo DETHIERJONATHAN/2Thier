@@ -15,16 +15,6 @@ import { tblLog, isTBLDebugEnabled } from '../utils/tblDebug';
 const inFlightByKey = new Map<string, Promise<void>>();
 const lastFetchAtByKey = new Map<string, number>();
 
-const hashString = (input: string): number => {
-  let h = 0;
-  for (let i = 0; i < input.length; i++) {
-    h = ((h << 5) - h) + input.charCodeAt(i);
-    h |= 0;
-  }
-  return Math.abs(h);
-};
-
-
 interface CalculatedValueResult {
   value: string | number | boolean | null;
   loading: boolean;
@@ -231,6 +221,9 @@ export function useNodeCalculatedValue(
   useEffect(() => {
     if (typeof window === 'undefined') return;
     if (!nodeId || !treeId) return;
+    // Quand un devis existe (submissionId), on laisse l'évaluation serveur piloter le refresh
+    // via `tbl-force-retransform`/`tbl-node-updated` pour éviter un refetch trop tôt (valeurs non encore recalculées).
+    if (submissionId) return;
     
     const handleEvaluationComplete = () => {
       if (pendingEvaluationsRef.current > 0) {
@@ -256,8 +249,6 @@ export function useNodeCalculatedValue(
     if (!nodeId || !treeId) {
       return;
     }
-    
-    let debounceTimer: ReturnType<typeof setTimeout> | null = null;
     
     const handler = (event: Event) => {
       const detail = (event as CustomEvent<{ nodeId?: string; submissionId?: string; treeId?: string | number; reason?: string; signature?: string; timestamp?: number; debugId?: string }>).detail;
@@ -289,26 +280,15 @@ export function useNodeCalculatedValue(
 
         lastGlobalRefreshKeyRef.current = refreshKey;
         lastGlobalRefreshAtRef.current = now;
-        
-        // 🔥 DEBOUNCE/STAGGER: étaler les refresh globaux
-        if (debounceTimer) {
-          clearTimeout(debounceTimer);
-        }
-        const delay = isGlobal
-          ? 220 + (hashString(nodeId) % 420) // 220..639ms
-          : 180;
-        debounceTimer = setTimeout(() => {
-          fetchCalculatedValue();
-        }, delay);
+
+        // 🚀 Triggers au centre: rafraîchissement immédiat (throttle 450ms déjà appliqué dans fetchCalculatedValue)
+        fetchCalculatedValue();
       }
     };
     
     window.addEventListener('tbl-force-retransform', handler);
     return () => {
       window.removeEventListener('tbl-force-retransform', handler);
-      if (debounceTimer) {
-        clearTimeout(debounceTimer);
-      }
     };
   }, [fetchCalculatedValue, nodeId, submissionId, treeId]);
 
@@ -318,38 +298,23 @@ export function useNodeCalculatedValue(
     if (typeof window === 'undefined') return;
     if (!nodeId || !treeId) return;
     
-    let debounceTimer: ReturnType<typeof setTimeout> | null = null;
-    
     const handler = () => {
-      // 🔥 DEBOUNCE: Attendre 800ms après le dernier changement pour éviter les appels multiples
-      // Silencieux - pas de console.log pour ne pas polluer
-      if (debounceTimer) {
-        clearTimeout(debounceTimer);
-      }
-      // Si un refresh global vient d'arriver, ne pas doubler.
-      if (Date.now() - lastGlobalRefreshAtRef.current < 1200) {
-        return;
-      }
-      debounceTimer = setTimeout(() => {
-        fetchCalculatedValue();
-      }, 900);
+      // 🚀 Triggers au centre: rafraîchissement immédiat au changement de champ
+      // (Garde-fou léger anti-doublon, le throttle 450ms est le principal)
+      if (Date.now() - lastGlobalRefreshAtRef.current < 120) return;
+      fetchCalculatedValue();
     };
     
     window.addEventListener('tbl-field-changed', handler);
     return () => {
       window.removeEventListener('tbl-field-changed', handler);
-      if (debounceTimer) {
-        clearTimeout(debounceTimer);
-      }
     };
-  }, [fetchCalculatedValue, nodeId, treeId]);
+  }, [fetchCalculatedValue, nodeId, treeId, submissionId]);
 
   // �🔔 Rafraîchir aussi quand un événement tbl-node-updated est dispatché avec notre nodeId
   useEffect(() => {
     if (typeof window === 'undefined') return;
     if (!nodeId || !treeId) return;
-    
-    let debounceTimer: ReturnType<typeof setTimeout> | null = null;
     
     const handler = (event: Event) => {
       try {
@@ -361,14 +326,9 @@ export function useNodeCalculatedValue(
           console.log(`⬆️ [GRD nodeId=${nodeId}] Update signalé (${pendingEvaluationsRef.current} en cours)`);
 
           lastGlobalRefreshAtRef.current = Date.now();
-          
-          // 🔥 DEBOUNCE: Attendre 500ms avant de rafraîchir pour éviter les clignotements
-          if (debounceTimer) {
-            clearTimeout(debounceTimer);
-          }
-          debounceTimer = setTimeout(() => {
-            fetchCalculatedValue();
-          }, 500);
+
+          // 🚀 Triggers au centre: rafraîchissement immédiat (throttle 450ms déjà appliqué)
+          fetchCalculatedValue();
         }
       } catch {
         // noop
@@ -378,9 +338,6 @@ export function useNodeCalculatedValue(
     window.addEventListener('tbl-node-updated', handler);
     return () => {
       window.removeEventListener('tbl-node-updated', handler);
-      if (debounceTimer) {
-        clearTimeout(debounceTimer);
-      }
     };
   }, [fetchCalculatedValue, nodeId, treeId]);
 

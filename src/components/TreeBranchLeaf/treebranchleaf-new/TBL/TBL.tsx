@@ -930,10 +930,22 @@ const TBL: React.FC<TBLProps> = ({
     }
   }, [api, tree]);
 
+  // Empêche les POST create-and-evaluate concurrents (ordre / charge).
+  // On garde uniquement le dernier état à envoyer si une requête est déjà en vol.
+  const autosaveInFlightRef = useRef(false);
+  const pendingAutosaveRef = useRef<{ data: TBLFormData; changedField?: string } | null>(null);
+
   // Helper: exécution de l'autosave (PUT)
   const doAutosave = useCallback(async (data: TBLFormData, changedField?: string) => {
     if (!api || !tree) return;
+
+    if (autosaveInFlightRef.current) {
+      pendingAutosaveRef.current = { data, changedField };
+      return;
+    }
+
     try {
+      autosaveInFlightRef.current = true;
       setIsAutosaving(true);
       // Normaliser et calculer signature
       const formData = normalizePayload(data);
@@ -979,30 +991,40 @@ const TBL: React.FC<TBLProps> = ({
     } finally {
       lastQueuedSignatureRef.current = null;
       setIsAutosaving(false);
+      autosaveInFlightRef.current = false;
+
+      const pending = pendingAutosaveRef.current;
+      if (pending) {
+        pendingAutosaveRef.current = null;
+        // Micro-coalescing: exécuter juste après la fin de la requête courante.
+        setTimeout(() => {
+          void doAutosave(pending.data, pending.changedField);
+        }, 0);
+      }
     }
   }, [api, tree, normalizePayload, computeSignature, submissionId, leadId, isDefaultDraft, previewNoSave, broadcastCalculatedRefresh]);
 
-  // Déclencheur débouncé
+  // Déclencheur INSTANTANÉ - appel direct sans délai artificiel
   const scheduleAutosave = useCallback((data: TBLFormData, changedField?: string) => {
-    if (debounceRef.current) window.clearTimeout(debounceRef.current);
-    debounceRef.current = window.setTimeout(() => { void doAutosave(data, changedField); }, 800);
+    void doAutosave(data, changedField);
   }, [doAutosave]);
 
-  // 🎯 FIX: Créer la fonction debounced UNE SEULE FOIS pour éviter changedFieldId="NULL" au 1er changement
+  // 🎯 Évaluation IMMÉDIATE sans aucun debounce
   useEffect(() => {
-    if (!debouncedEvaluateRef.current) {
-      debouncedEvaluateRef.current = debounce((nextData: TBLFormData, changedField?: string) => {
+    if (!immediateEvaluateRef.current) {
+      immediateEvaluateRef.current = (nextData: TBLFormData, changedField?: string) => {
         try {
-          // ✅ Utiliser les refs qui pointent toujours vers les dernières versions
           scheduleAutosaveRef.current(nextData, changedField);
         } catch {/* noop */}
         try {
           scheduleCapabilityPreviewRef.current(nextData);
         } catch {/* noop */}
-      }, 300);
-      console.log('🎯 [TBL] debouncedEvaluateRef créé avec succès (refs stables)');
+      };
+      console.log('🎯 [TBL] immediateEvaluateRef créé (ZERO debounce)');
     }
   }, []); // ✅ Deps vides = créé UNE SEULE FOIS
+
+  // ⚡ Plus besoin de flush car évaluation déjà immédiate (pas de debounce à flusher)
 
   // Auto-sauvegarde toutes les 30 secondes (après scheduleAutosave pour éviter la TDZ)
   // 🔧 FIX: Utiliser une ref pour formData afin d'éviter de recréer l'intervalle à chaque changement
@@ -1366,8 +1388,9 @@ const TBL: React.FC<TBLProps> = ({
     }
   }, [originalDevisName, leadId, api, effectiveTreeId, formData, normalizePayload, computeSignature, generateCopySuffix]);
 
-  // 🚀 PERF: Debounce pour éviter trop de requêtes lors de saisie rapide
-  const debouncedEvaluateRef = useRef<(...args: any[]) => void>();
+  // ⚡ Debounce pour éviter les requêtes multiples (200ms)
+  const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const immediateEvaluateRef = useRef<(...args: any[]) => void>();
 
   // 🎯 Implémentation complète de handleFieldChange avec toutes les dépendances
   const handleFieldChangeImpl = useCallback((fieldId: string, value: string | number | boolean | string[] | null | undefined) => {
@@ -1513,9 +1536,9 @@ const TBL: React.FC<TBLProps> = ({
       console.log(`📦 [TBL] formData COMPLET après mise à jour:`, next);
       
       // 🔗 NOUVEAU : Si le champ est une référence partagée (alias), ajouter aussi la clé shared-ref-*
+      let fieldDef: any = null;
       try {
         // Chercher le champ dans la configuration pour voir s'il a un sharedReferenceId
-        let fieldDef: any = null;
         for (const tab of tabs) {
           for (const section of tab.sections) {
             const match = section.fields.find((sf: any) => sf.id === fieldId);
@@ -1576,16 +1599,35 @@ const TBL: React.FC<TBLProps> = ({
       // Système de miroirs legacy SUPPRIMÉ - causait des problèmes avec le changedFieldId
       
       // ⚡ FILTRE: Ne JAMAIS envoyer les miroirs comme changedFieldId au backend
-      const realFieldId = fieldId?.startsWith('__mirror_data_') ? undefined : fieldId;
-      console.log(`🎯🎯🎯 [TBL] AVANT debounce: fieldId="${fieldId}", realFieldId="${realFieldId}"`);
-      
-      // 🎯 FIX: Appeler la version debouncée (créée une seule fois avec refs stables)
-      if (debouncedEvaluateRef.current) {
-        debouncedEvaluateRef.current(next as TBLFormData, realFieldId);
-        console.log(`✅✅✅ [TBL] APRÈS debounce appelé avec realFieldId="${realFieldId}"`);
-      } else {
-        console.warn('⚠️ [TBL] debouncedEvaluateRef pas encore initialisé');
+      let realFieldId = fieldId?.startsWith('__mirror_data_') ? undefined : fieldId;
+      if (realFieldId && realFieldId.startsWith('shared-ref-')) {
+        const aliasId = (() => {
+          for (const tab of tabs) {
+            for (const section of tab.sections) {
+              const alias = section.fields.find((sf: any) => sf.sharedReferenceId === realFieldId);
+              if (alias?.id) return alias.id;
+            }
+          }
+          return null;
+        })();
+        if (aliasId) realFieldId = aliasId;
       }
+      const fieldType = String((fieldConfig as any)?.type || '').toLowerCase();
+      console.log(`🎯🎯🎯 [TBL] AVANT eval(DEBOUNCED 80ms): fieldId="${fieldId}", realFieldId="${realFieldId}", type="${fieldType || 'unknown'}"`);
+
+      // ⚡ Évaluation avec debounce de 80ms - équilibre réactivité/groupage
+      if (debounceTimerRef.current) {
+        clearTimeout(debounceTimerRef.current);
+      }
+      
+      debounceTimerRef.current = setTimeout(() => {
+        if (immediateEvaluateRef.current) {
+          immediateEvaluateRef.current(next as TBLFormData, realFieldId);
+          console.log(`✅✅✅ [TBL] APRÈS eval DEBOUNCED appelé avec realFieldId="${realFieldId}"`);
+        } else {
+          console.warn('⚠️ [TBL] immediateEvaluateRef pas encore initialisé');
+        }
+      }, 80);
       
       // 🔄 NOUVEAU: Dispatch événement pour refresh automatique des display fields
       try {
