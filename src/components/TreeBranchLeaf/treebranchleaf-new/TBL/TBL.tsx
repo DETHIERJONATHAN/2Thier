@@ -37,7 +37,8 @@ import {
   Form,
   Grid,
   Skeleton,
-  Tooltip
+  Tooltip,
+  Tag
 } from 'antd';
 import { FileTextOutlined, DownloadOutlined, ClockCircleOutlined, FolderOpenOutlined, PlusOutlined, UserOutlined, FileAddOutlined, SearchOutlined, MailOutlined, PhoneOutlined, HomeOutlined, SwapOutlined, LeftOutlined, RightOutlined, SaveOutlined } from '@ant-design/icons';
 import { useAuth } from '../../../../auth/useAuth';
@@ -133,219 +134,284 @@ const TBL: React.FC<TBLProps> = ({
     () => `mb-6 pb-4 border-b border-gray-200 flex ${isMobile ? 'flex-col gap-4 items-start' : 'items-center justify-between'}`,
     [isMobile]
   );
-  const headerActionsDirection = 'horizontal'; // Toujours horizontal, même sur mobile
+  const headerActionsDirection = 'horizontal';
   const headerActionsAlign = isMobile ? 'start' : 'center';
   const headerActionsClassName = isMobile ? 'w-full' : undefined;
-  const actionButtonBlock = false; // Désactivé pour garder les boutons compacts
-  
-  // État pour les données Lead dynamiques
+  const actionButtonBlock = false;
+
   const [clientData, setClientData] = useState({
-    id: '', 
-    name: "", // Valeur vide par défaut
-    email: "", 
-    phone: "",
-    address: ""
+    id: '',
+    name: '',
+    email: '',
+    phone: '',
+    address: ''
   });
-  const [leadId, setLeadId] = useState<string | undefined>(urlLeadId); // État local pour leadId
-  const [isLoadingLead, setIsLoadingLead] = useState<boolean>(!!urlLeadId); // Loading si on a un leadId
-  
-  // États pour les modals de lead
+  const [leadId, setLeadId] = useState<string | undefined>(urlLeadId);
+  const [isLoadingLead, setIsLoadingLead] = useState<boolean>(!!urlLeadId);
+
   const [leadSelectorVisible, setLeadSelectorVisible] = useState(false);
   const [leadCreatorVisible, setLeadCreatorVisible] = useState(false);
   const [devisSelectorVisible, setDevisSelectorVisible] = useState(false);
   const [availableDevis, setAvailableDevis] = useState<Array<{id: string, firstName: string, lastName: string, email: string, company?: string, submissions: Array<{id: string, name: string, status: string, createdAt: string, treeName?: string}>}>>([]);
   const [devisSearchTerm, setDevisSearchTerm] = useState('');
-  
-  // États pour le modal de génération PDF
+
   const [pdfModalVisible, setPdfModalVisible] = useState(false);
   const [availableTemplates, setAvailableTemplates] = useState<Array<{id: string, name: string, type: string, description?: string}>>([]);
   const [loadingTemplates, setLoadingTemplates] = useState(false);
   const [generatingPdf, setGeneratingPdf] = useState(false);
-  
-  // États pour le modal de création de devis
+
   const [devisCreatorVisible, setDevisCreatorVisible] = useState(false);
   const [devisName, setDevisName] = useState('');
   const [selectedLeadForDevis, setSelectedLeadForDevis] = useState<TBLLead | null>(null);
   const [form] = Form.useForm();
 
-  // Autosave (ancienne UI): état local
   const [submissionId, setSubmissionId] = useState<string | null>(null);
   const [isAutosaving, setIsAutosaving] = useState(false);
   const [autosaveLast, setAutosaveLast] = useState<Date | null>(null);
   const [devisCreatedAt, setDevisCreatedAt] = useState<Date | null>(null);
   const debounceRef = useRef<number | null>(null);
-  // Garde-fous autosave: éviter les envois identiques
   const lastSavedSignatureRef = useRef<string | null>(null);
   const lastQueuedSignatureRef = useRef<string | null>(null);
   const previewDebounceRef = useRef<number | null>(null);
   const lastPreviewSignatureRef = useRef<string | null>(null);
-  
-  // 🆕 SYSTÈME DEVIS PAR DÉFAUT + COPIE AUTOMATIQUE
-  const [isDefaultDraft, setIsDefaultDraft] = useState<boolean>(!urlLeadId); // Mode simulation si pas de lead
-  const [isLoadedDevis, setIsLoadedDevis] = useState<boolean>(false); // True si on a chargé un devis existant
-  const [originalDevisId, setOriginalDevisId] = useState<string | null>(null); // ID du devis original (pour copie)
-  const [originalDevisName, setOriginalDevisName] = useState<string | null>(null); // Nom du devis original
-  const [hasCopiedDevis, setHasCopiedDevis] = useState<boolean>(false); // True si copie déjà créée
-  const [isDevisSaved, setIsDevisSaved] = useState<boolean>(false); // True si devis enregistré (pas draft)
-  
-  // 🆕 Modal d'enregistrement avec nom personnalisé
+
+  const [isDefaultDraft, setIsDefaultDraft] = useState<boolean>(!urlLeadId);
+  const [isLoadedDevis, setIsLoadedDevis] = useState<boolean>(false);
+  const [originalDevisId, setOriginalDevisId] = useState<string | null>(null);
+  const [originalDevisName, setOriginalDevisName] = useState<string | null>(null);
+  const [hasCopiedDevis, setHasCopiedDevis] = useState<boolean>(false);
+  const [isDevisSaved, setIsDevisSaved] = useState<boolean>(false);
+
+  const [isCompletedDirty, setIsCompletedDirty] = useState<boolean>(false);
+  const [revisionRootName, setRevisionRootName] = useState<string | null>(null);
+  const [pendingRevisionName, setPendingRevisionName] = useState<string | null>(null);
+  const pendingRevisionForSubmissionIdRef = useRef<string | null>(null);
+  const revisionCreateInFlightRef = useRef(false);
+  const revisionCreatedFromSubmissionIdRef = useRef<string | null>(null);
+
   const [saveDevisModalVisible, setSaveDevisModalVisible] = useState<boolean>(false);
   const [saveDevisName, setSaveDevisName] = useState<string>('');
   const [isSavingDevis, setIsSavingDevis] = useState<boolean>(false);
 
-  // Charger les données Lead si leadId fourni
-  useEffect(() => {
-    if (!leadId || !api) {
-      setIsLoadingLead(false);
-      return;
-    }
-
-    setIsLoadingLead(true);
-    const loadLead = async () => {
-      try {
-        const response = await api.get(`/api/leads/${leadId}`);
-        const lead = response.success ? response.data : response;
-
-        if (lead && lead.id) {
-          const newClientData = {
-            id: lead.id,
-            name: lead.name || `${lead.firstName || ''} ${lead.lastName || ''}`.trim() || lead.company || 'Lead sans nom',
-            email: lead.email || '',
-            phone: lead.phone || lead.phoneNumber || lead.phoneHome || '',
-            address: formatAddressValue(lead.address ?? lead.data?.address ?? '')
-          };
-          setClientData(newClientData);
-          setFormData(prev => ({
-            ...prev,
-            __leadId: lead.id
-          }));
-        }
-      } catch (error) {
-        console.error('❌ [TBL] Erreur chargement lead:', error);
-        message.error('Erreur lors du chargement des données du lead');
-      } finally {
-        setIsLoadingLead(false);
-      }
-    };
-
-    loadLead();
-  }, [leadId, api]);
-
-  // Fonctions pour gérer les leads
-  const handleLoadLead = useCallback(() => {
-    // console.log('🔍 [TBL] handleLoadLead appelé');
-    setLeadSelectorVisible(true);
-  }, []);
-
-  const handleNewLead = useCallback(() => {
-    // console.log('➕ [TBL] handleNewLead appelé');
-    setLeadCreatorVisible(true);
-  }, []);
-
-  // 🆕 RESET TBL - Vide tous les champs sauf les métadonnées et calculatedValues
-  const resetTBLForm = useCallback(() => {
-    console.log('🔄 [TBL] RESET du formulaire');
-    setFormData(prev => {
-      const newData: TBLFormData = {};
-      // Garder uniquement les clés système (commencent par __)
-      Object.keys(prev).forEach(key => {
-        if (key.startsWith('__')) {
-          newData[key] = prev[key];
-        }
-      });
-      return newData;
-    });
-    // Reset des états liés au devis
-    setSubmissionId(null);
-    setDevisName('');
-    setDevisCreatedAt(null);
-    setIsLoadedDevis(false);
-    setOriginalDevisId(null);
-    setOriginalDevisName(null);
-    setHasCopiedDevis(false);
-    setIsDevisSaved(false);
-    // Reset signatures autosave
-    lastSavedSignatureRef.current = null;
-    lastQueuedSignatureRef.current = null;
-    lastPreviewSignatureRef.current = null;
-  }, []);
-
-  // 🆕 Générer un suffixe de copie (2), (3), etc.
-  const generateCopySuffix = useCallback(async (baseName: string, currentLeadId: string): Promise<string> => {
+  // 🆕 NOUVEAU DEVIS
+  // Règle: en brouillon (global ou lead) => on vide seulement les données et on reste en mode brouillon.
+  // Si on quitte un devis enregistré modifié => on crée d'abord une version -N.
+  const handleNewDevis = async () => {
     try {
-      if (!api) return `${baseName} (2)`;
-      
-      // Récupérer tous les devis du lead actuel
-      const response = await api.get(`/api/treebranchleaf/submissions?leadId=${currentLeadId}`);
-      const existingSubmissions = response.data || response || [];
-      
-      // Extraire les noms existants
-      const existingNames = (Array.isArray(existingSubmissions) ? existingSubmissions : []).map(
-        (submission: { summary?: { name?: string }, name?: string }) => 
-          submission.summary?.name || submission.name || ''
-      ).filter((name: string) => name.trim() !== '');
-      
-      // Extraire le nom de base sans suffixe existant
-      const baseNameWithoutSuffix = baseName.replace(/\s*\(\d+\)\s*$/, '').trim();
-      
-      // Chercher le prochain numéro disponible
-      let counter = 2;
-      let uniqueName = `${baseNameWithoutSuffix} (${counter})`;
-      
-      while (existingNames.includes(uniqueName) && counter < 1000) {
-        counter++;
-        uniqueName = `${baseNameWithoutSuffix} (${counter})`;
+      try {
+        await persistCompletedRevisionIfDirty('new-devis');
+      } catch (e) {
+        console.warn('⚠️ [TBL] Persist revision avant Nouveau devis échoué (on continue):', e);
       }
-      
-      console.log('🔢 [TBL] Suffixe copie généré:', uniqueName);
-      return uniqueName;
-    } catch (error) {
-      console.error('❌ [TBL] Erreur génération suffixe:', error);
-      return `${baseName} (2)`;
-    }
-  }, [api]);
 
-  // Gestion de sélection d'un lead existant
-  const handleSelectLead = useCallback(async (selectedLead: TBLLead) => {
-    // Si le modal de création de devis est ouvert, on met à jour le lead sélectionné pour le devis
-    if (devisCreatorVisible) {
-      setSelectedLeadForDevis(selectedLead);
-      setLeadSelectorVisible(false);
-      message.success(`Lead sélectionné : ${selectedLead.firstName} ${selectedLead.lastName}`);
-    } else {
-      // 🆕 NOUVEAU COMPORTEMENT: Ajouter le lead SANS réinitialiser les données
-      console.log('👤 [TBL] Sélection lead - PRÉSERVATION des données du formulaire');
-      
-      // Mettre à jour le lead local sans réinitialiser
+      if (debounceTimerRef.current) {
+        clearTimeout(debounceTimerRef.current);
+        debounceTimerRef.current = null;
+      }
+      try {
+        const flushField = lastRealChangedFieldIdRef.current || 'NULL';
+        await doAutosave(formData, flushField);
+        await waitForAutosaveIdle(3000);
+      } catch { /* noop */ }
+
+      autosaveSuspendedRef.current = true;
+      pendingAutosaveRef.current = null;
+
+      const currentTreeId = effectiveTreeId;
+      const currentUserId = user?.id;
+      const isDraftModeNow = !isDevisSaved;
+      const isLeadDraftNow = isDraftModeNow && !!leadId;
+      const isGlobalDraftNow = isDraftModeNow && !leadId;
+
+      let draftIdToClear: string | null = submissionId;
+
+      if (!draftIdToClear && api && currentTreeId) {
+        if (isLeadDraftNow && leadId) {
+          const existing = await api.get(`/api/treebranchleaf/submissions?treeId=${currentTreeId}&leadId=${leadId}&status=draft`);
+          const draftsArray = Array.isArray(existing) ? existing : (existing as any)?.data || [];
+          draftIdToClear = (draftsArray as Array<{ id?: string }>)[0]?.id || null;
+        } else if (isGlobalDraftNow && currentUserId) {
+          const existing = await api.get(`/api/treebranchleaf/submissions?treeId=${currentTreeId}&userId=${currentUserId}&status=default-draft`);
+          const draftsArray = Array.isArray(existing) ? existing : (existing as any)?.data || [];
+          draftIdToClear = (draftsArray as Array<{ id?: string; status?: string }>).find((d) => d.status === 'default-draft')?.id || null;
+        }
+      }
+
+      if (api && draftIdToClear) {
+        try {
+          await api.post(`/api/treebranchleaf/submissions/${draftIdToClear}/reset-data`, {});
+        } catch (e) {
+          console.warn('⚠️ [TBL] Impossible de vider le brouillon en DB:', e);
+        }
+      }
+
+      setFormData((prev) => {
+        const kept: TBLFormData = {};
+        Object.keys(prev || {}).forEach((k) => {
+          if (k.startsWith('__')) kept[k] = prev[k];
+        });
+        if (isLeadDraftNow && leadId) {
+          kept.__leadId = leadId;
+        }
+        return kept;
+      });
+
+      setIsDevisSaved(false);
+      setIsLoadedDevis(false);
+      setOriginalDevisId(null);
+      setOriginalDevisName(null);
+      setHasCopiedDevis(false);
+      setIsCompletedDirty(false);
+      setRevisionRootName(null);
+      setDevisName('Brouillon');
+
+      if (isLeadDraftNow) {
+        setIsDefaultDraft(false);
+        setSubmissionId(draftIdToClear);
+      } else {
+        setLeadId(undefined);
+        setClientData({ id: '', name: '', email: '', phone: '', address: '' });
+        setIsDefaultDraft(true);
+        setSubmissionId(draftIdToClear);
+      }
+
+      lastSavedSignatureRef.current = null;
+      lastQueuedSignatureRef.current = null;
+      message.success('Brouillon réinitialisé');
+    } catch (error) {
+      console.error('❌ [TBL] Erreur Nouveau devis:', error);
+      message.error('Erreur lors de la réinitialisation');
+    } finally {
+      setTimeout(() => {
+        autosaveSuspendedRef.current = false;
+      }, 0);
+    }
+  };
+
+  // Sélection d'un lead depuis le sélecteur
+  // - Si on est dans le brouillon global avec des données: transférer -> brouillon du lead, puis vider le global
+  // - Sinon: charger/créer le brouillon du lead sans l'écraser
+  const handleSelectLead = async (selectedLead: TBLLead) => {
+    if (devisCreatorVisible) return;
+    if (!api || !effectiveTreeId) return;
+
+    autosaveSuspendedRef.current = true;
+    pendingAutosaveRef.current = null;
+
+    try {
+      await persistCompletedRevisionIfDirty('select-lead');
+
+      const isDraftModeNow = !isDevisSaved;
+      const isGlobalDraftNow = isDraftModeNow && !leadId;
+      const shouldTransfer = isGlobalDraftNow && hasMeaningfulUserEntries(formData);
+      const oldGlobalDraftId = isGlobalDraftNow ? submissionId : null;
+
+      let leadDraftId: string | null = null;
+
+      if (shouldTransfer) {
+        if (debounceTimerRef.current) {
+          clearTimeout(debounceTimerRef.current);
+          debounceTimerRef.current = null;
+        }
+        try {
+          const flushField = lastRealChangedFieldIdRef.current || 'NULL';
+          await doAutosave(formData, flushField);
+          await waitForAutosaveIdle(3000);
+        } catch { /* noop */ }
+
+        const resp = await api.post('/api/tbl/submissions/create-and-evaluate', {
+          treeId: effectiveTreeId,
+          clientId: selectedLead.id,
+          formData: normalizePayload(formData),
+          status: 'draft',
+          providedName: 'Brouillon',
+          changedFieldId: 'NULL'
+        });
+        leadDraftId = (resp as any)?.submission?.id || null;
+      } else {
+        const existing = await api.get(`/api/treebranchleaf/submissions?treeId=${effectiveTreeId}&leadId=${selectedLead.id}&status=draft`);
+        const draftsArray = Array.isArray(existing) ? existing : (existing as any)?.data || [];
+        leadDraftId = (draftsArray as Array<{ id?: string }>)[0]?.id || null;
+        if (!leadDraftId) {
+          const created = await api.post('/api/tbl/submissions/create-and-evaluate', {
+            treeId: effectiveTreeId,
+            clientId: selectedLead.id,
+            formData: {},
+            status: 'draft',
+            providedName: 'Brouillon',
+            changedFieldId: 'NULL'
+          });
+          leadDraftId = (created as any)?.submission?.id || null;
+        }
+      }
+
       setLeadId(selectedLead.id);
       setClientData({
         id: selectedLead.id,
         name: `${selectedLead.firstName || ''} ${selectedLead.lastName || ''}`.trim() || selectedLead.company || 'Lead sans nom',
         email: selectedLead.email || '',
         phone: selectedLead.phone || '',
-        address: selectedLead.address || ''
+        address: formatAddressValue((selectedLead as unknown as { address?: unknown; data?: { address?: unknown } })?.address ?? (selectedLead as unknown as { data?: { address?: unknown } })?.data?.address ?? '')
       });
-      
-      // 🔄 Mettre à jour le clientId du default-draft existant en DB (si on est en mode default-draft)
-      if (isDefaultDraft && submissionId && api) {
+      setIsDevisSaved(false);
+      setIsLoadedDevis(false);
+      setOriginalDevisId(null);
+      setOriginalDevisName(null);
+      setHasCopiedDevis(false);
+      setIsDefaultDraft(false);
+      setDevisName('Brouillon');
+      setSubmissionId(leadDraftId);
+      setIsCompletedDirty(false);
+      setRevisionRootName(null);
+
+      if (api && leadDraftId) {
         try {
-          console.log('🔄 [TBL] Mise à jour du clientId dans le default-draft:', submissionId);
-          await api.patch(`/api/treebranchleaf/submissions/${submissionId}`, {
-            clientId: selectedLead.id
+          const submissionDataResponse = await api.get(`/api/treebranchleaf/submissions/${leadDraftId}/fields`);
+          const fieldsMap = (submissionDataResponse as any)?.fields || {};
+          const restoredData: Record<string, string> = {};
+
+          Object.entries(fieldsMap).forEach(([nodeId, fieldData]: [string, any]) => {
+            const src = typeof fieldData?.calculatedBy === 'string' ? fieldData.calculatedBy.toLowerCase() : null;
+            const isUserInput = !src || src === 'neutral' || src === 'field' || src === 'fixed';
+            if (isUserInput && fieldData?.rawValue !== undefined && fieldData?.rawValue !== null) {
+              restoredData[nodeId] = String(fieldData.rawValue);
+            }
           });
-          console.log('✅ [TBL] ClientId mis à jour dans le default-draft');
-        } catch (error) {
-          console.warn('⚠️ [TBL] Impossible de mettre à jour le clientId du default-draft:', error);
+
+          setFormData((prev) => {
+            const kept: TBLFormData = {};
+            Object.keys(prev || {}).forEach((k) => {
+              if (k.startsWith('__')) kept[k] = prev[k];
+            });
+            return { ...kept, ...restoredData, __leadId: selectedLead.id };
+          });
+        } catch (e) {
+          console.warn('⚠️ [TBL] Impossible de charger le brouillon du lead:', e);
         }
       }
-      
-      // On reste en mode default-draft mais avec un lead maintenant associé
-      // isDefaultDraft reste true jusqu'à ce qu'on clique sur "Sauvegarder"
-      
+
+      if (api && oldGlobalDraftId && shouldTransfer) {
+        try {
+          await api.post(`/api/treebranchleaf/submissions/${oldGlobalDraftId}/reset-data`, {});
+        } catch (e) {
+          console.warn('⚠️ [TBL] Impossible de vider le brouillon global après transfert:', e);
+        }
+      }
+
+      lastSavedSignatureRef.current = null;
+      lastQueuedSignatureRef.current = null;
+
       setLeadSelectorVisible(false);
-      message.success(`Lead "${selectedLead.firstName} ${selectedLead.lastName}" associé au devis`);
+      message.success(`Brouillon chargé pour "${selectedLead.firstName} ${selectedLead.lastName}"`);
+    } catch (e) {
+      console.error('❌ [TBL] Erreur sélection lead:', e);
+      message.error('Erreur lors de la sélection du lead');
+    } finally {
+      setTimeout(() => {
+        autosaveSuspendedRef.current = false;
+      }, 0);
     }
-  }, [devisCreatorVisible, isDefaultDraft, submissionId, api]);
+  };
 
   // Orchestrateur post-création (le modal crée déjà le lead via l'API)
   // Ici: pas de re-post API pour éviter les doublons; on peut éventuellement préparer une soumission TBL.
@@ -546,6 +612,189 @@ const TBL: React.FC<TBLProps> = ({
   const rawNodes = useMemo(() => (useFixed ? (newData.rawNodes || []) : (oldData.rawNodes || [])), [useFixed, newData.rawNodes, oldData.rawNodes]); // 🔥 NOUVEAU: Nœuds bruts pour Cascader
   const effectiveTreeId = tree?.id || requestedTreeId;
 
+  const isDraftMode = !isDevisSaved;
+  const isGlobalDraftMode = isDraftMode && !leadId;
+  const isLeadDraftMode = isDraftMode && !!leadId;
+
+  // Helpers: normaliser payload (exclure mirrors) et calculer signature stable
+  // ⚠️ Doit être déclaré AVANT tout useCallback qui le référence (évite TDZ).
+  const normalizePayload = useCallback((data: TBLFormData) => {
+    const out: Record<string, string | null> = {};
+    Object.keys(data || {}).forEach((nodeId) => {
+      if (nodeId.startsWith('__mirror_')) return; // exclure tous les miroirs
+      const raw = (data as Record<string, unknown>)[nodeId];
+      out[nodeId] = raw == null ? null : String(raw);
+    });
+    return out;
+  }, []);
+
+  const computeSignature = useCallback((obj: Record<string, unknown>) => {
+    // Stringify stable: tri des clés pour éviter les différences d'ordre
+    const keys = Object.keys(obj).sort();
+    const parts: string[] = [];
+    for (const k of keys) {
+      const v = (obj as Record<string, unknown>)[k];
+      parts.push(`${k}:${v === null ? 'null' : String(v)}`);
+    }
+    return parts.join('|');
+  }, []);
+
+  const hasMeaningfulUserEntries = useCallback((data: TBLFormData) => {
+    const entries = Object.entries(data || {});
+    for (const [key, value] of entries) {
+      // Ignorer les clés techniques
+      if (!key || key.startsWith('__')) continue;
+      // Ignorer les vides
+      if (value === null || value === undefined) continue;
+      if (typeof value === 'string' && value.trim() === '') continue;
+      if (Array.isArray(value) && value.length === 0) continue;
+      return true;
+    }
+    return false;
+  }, []);
+
+  const stripRevisionSuffix = useCallback((name: string) => {
+    return String(name || '').replace(/\s*-\s*\d+\s*$/g, '').trim();
+  }, []);
+
+  const generateNextRevisionName = useCallback(async (rootName: string, currentLeadId: string) => {
+    if (!api) return `${rootName} -1`;
+    const normalizedRoot = stripRevisionSuffix(rootName) || 'Devis';
+
+    const response = await api.get(`/api/treebranchleaf/submissions?leadId=${currentLeadId}&status=completed`);
+    const existingSubmissions = (response as any)?.data || response || [];
+    const existingNames = (Array.isArray(existingSubmissions) ? existingSubmissions : [])
+      .map((s: any) => s?.summary?.name || s?.name || '')
+      .filter((n: string) => typeof n === 'string' && n.trim());
+
+    const escapedRoot = normalizedRoot.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const re = new RegExp(`^${escapedRoot}\\s*-\\s*(\\d+)$`);
+    let max = 0;
+    for (const name of existingNames) {
+      const m = String(name).match(re);
+      if (m?.[1]) {
+        const n = Number(m[1]);
+        if (Number.isFinite(n) && n > max) max = n;
+      }
+    }
+    return `${normalizedRoot} -${max + 1}`;
+  }, [api, stripRevisionSuffix]);
+
+  // Dès la 1ère modification d'un devis enregistré: préparer un nom -N (UI seulement, pas de persistance).
+  const planPendingRevisionName = useCallback(async (root: string, currentLeadId: string, currentSubmissionId: string | null) => {
+    if (!root || !currentLeadId) return;
+    // Éviter de recalculer si déjà planifié pour ce devis
+    if (pendingRevisionForSubmissionIdRef.current && pendingRevisionForSubmissionIdRef.current === currentSubmissionId && pendingRevisionName) {
+      return;
+    }
+    try {
+      const next = await generateNextRevisionName(root, currentLeadId);
+      // Gardes: si on a changé de devis entre-temps, ne pas écraser.
+      if (pendingRevisionForSubmissionIdRef.current && pendingRevisionForSubmissionIdRef.current !== currentSubmissionId) {
+        return;
+      }
+      pendingRevisionForSubmissionIdRef.current = currentSubmissionId;
+      setPendingRevisionName(next);
+      setDevisName(next);
+    } catch (e) {
+      if (isVerbose()) console.warn('⚠️ [TBL] Impossible de préparer le nom de révision:', e);
+    }
+  }, [generateNextRevisionName, pendingRevisionName]);
+
+  // Dès la 1ère modification d'un devis enregistré: créer la révision en base (status=completed)
+  // puis continuer à écraser cette révision au fil de l'eau (autosave).
+  const ensureCompletedRevisionExists = useCallback(async (nextData: TBLFormData) => {
+    if (!api || !effectiveTreeId) return;
+    if (!isDevisSaved) return;
+    if (!leadId) return;
+    if (!submissionId) return;
+    // Ne créer une copie que si on édite un devis enregistré "original".
+    if (hasCopiedDevis) return;
+
+    if (revisionCreateInFlightRef.current) return;
+    if (revisionCreatedFromSubmissionIdRef.current === submissionId) return;
+
+    revisionCreateInFlightRef.current = true;
+    try {
+      const root = revisionRootName || stripRevisionSuffix(originalDevisName || devisName || 'Devis');
+      const planned = pendingRevisionName || await generateNextRevisionName(root, leadId);
+
+      const resp = await api.post('/api/tbl/submissions/create-and-evaluate', {
+        treeId: effectiveTreeId,
+        clientId: leadId,
+        formData: normalizePayload(nextData),
+        status: 'completed',
+        providedName: planned,
+        forceNewSubmission: true,
+        changedFieldId: lastRealChangedFieldIdRef.current || 'NULL'
+      });
+
+      const newId = (resp as any)?.submission?.id;
+      if (!newId) return;
+
+      // Basculer l'éditeur sur la révision (on n'écrase plus jamais l'original)
+      revisionCreatedFromSubmissionIdRef.current = submissionId;
+      setSubmissionId(newId);
+      setHasCopiedDevis(true);
+      setIsLoadedDevis(true);
+      setIsDefaultDraft(false);
+      setIsDevisSaved(true);
+      setDevisName(planned);
+
+      // Signature: cette révision est désormais la version "sauvegardée" courante
+      try {
+        const sig = computeSignature(normalizePayload(nextData));
+        lastSavedSignatureRef.current = sig;
+      } catch { /* noop */ }
+    } catch (e) {
+      console.warn('⚠️ [TBL] Échec création révision -1 en base:', e);
+    } finally {
+      revisionCreateInFlightRef.current = false;
+    }
+  }, [api, effectiveTreeId, isDevisSaved, leadId, submissionId, hasCopiedDevis, revisionRootName, originalDevisName, devisName, pendingRevisionName, stripRevisionSuffix, generateNextRevisionName, normalizePayload, computeSignature]);
+
+  const persistCompletedRevisionIfDirty = useCallback(async (reason: string) => {
+    if (!api || !effectiveTreeId) return;
+    if (!isDevisSaved || !isCompletedDirty) return;
+    if (!leadId) {
+      console.warn('⚠️ [TBL] Revision impossible (leadId manquant)');
+      return;
+    }
+
+    const root = revisionRootName || stripRevisionSuffix(originalDevisName || devisName || 'Devis');
+    const nextName = pendingRevisionName || await generateNextRevisionName(root, leadId);
+
+    console.log(`💾 [TBL] Versioning: création '${nextName}' (${reason})`);
+    const resp = await api.post('/api/tbl/submissions/create-and-evaluate', {
+      treeId: effectiveTreeId,
+      clientId: leadId,
+      formData: normalizePayload(formData),
+      status: 'completed',
+      providedName: nextName,
+      forceNewSubmission: true,
+      changedFieldId: 'NULL'
+    });
+
+    const newId = (resp as any)?.submission?.id;
+    if (newId) {
+      setSubmissionId(newId);
+      setDevisName(nextName);
+      setOriginalDevisId(newId);
+      setOriginalDevisName(root);
+      setRevisionRootName(root);
+      setIsCompletedDirty(false);
+      setPendingRevisionName(null);
+      pendingRevisionForSubmissionIdRef.current = null;
+      setIsLoadedDevis(true);
+      setIsDevisSaved(true);
+      setIsDefaultDraft(false);
+      try {
+        const sig = computeSignature(normalizePayload(formData));
+        lastSavedSignatureRef.current = sig;
+      } catch { /* noop */ }
+    }
+  }, [api, effectiveTreeId, isDevisSaved, isCompletedDirty, leadId, revisionRootName, stripRevisionSuffix, originalDevisName, devisName, generateNextRevisionName, pendingRevisionName, normalizePayload, formData, computeSignature]);
+
   useEffect(() => {
     if (!effectiveTreeId) return;
     try {
@@ -603,7 +852,7 @@ const TBL: React.FC<TBLProps> = ({
     saving,
     saveAsDevis
   } = useTBLSave();
-  const { isSuperAdmin, user, organization } = useAuth();
+  const { isSuperAdmin, userRole, user, organization } = useAuth();
   // const { enqueue } = useEvalBridge(); // (actuellement non utilisé dans cette version de l'écran)
 
   // 🆕 SYSTÈME DEVIS PAR DÉFAUT
@@ -616,12 +865,16 @@ const TBL: React.FC<TBLProps> = ({
   // 🆕 Initialiser ou charger le devis par défaut au montage (si pas de lead)
   useEffect(() => {
     const initDefaultDraft = async () => {
-      console.log('🔍 [TBL] initDefaultDraft check:', { leadId, api: !!api, effectiveTreeId, defaultDraftId, isDefaultDraft, userId: user?.id });
+      console.log('🔍 [TBL] initDefaultDraft check:', { leadId, api: !!api, effectiveTreeId, defaultDraftId, isGlobalDraftMode, userId: user?.id });
       
       // Ne pas initialiser si on a un lead ou si pas d'API
-      if (leadId || !api || !effectiveTreeId || !defaultDraftId || !isDefaultDraft) {
+      if (!api || !effectiveTreeId || !defaultDraftId || !isGlobalDraftMode) {
         console.log('⏭️ [TBL] initDefaultDraft skip - conditions not met');
         return;
+      }
+
+      if (!isDefaultDraft) {
+        setIsDefaultDraft(true);
       }
       
       console.log('📋 [TBL] Mode simulation - Recherche/création du devis par défaut');
@@ -642,7 +895,7 @@ const TBL: React.FC<TBLProps> = ({
         if (defaultDraft && defaultDraft.id) {
           console.log('✅ [TBL] Devis par défaut trouvé:', defaultDraft.id);
           setSubmissionId(defaultDraft.id);
-          setDevisName('Simulation (non enregistré)');
+          setDevisName('Brouillon');
           
           // Charger les données du draft depuis TreeBranchLeafSubmissionData
           try {
@@ -651,19 +904,18 @@ const TBL: React.FC<TBLProps> = ({
             const fieldsMap = submissionDataResponse?.fields || {};
             console.log('📥 [TBL] fieldsMap keys:', Object.keys(fieldsMap));
 
-            // Réhydrater le lead associé si présent dans le draft
+            // ⚠️ Sécurité: le brouillon GLOBAL (default-draft) ne doit jamais être associé à un lead.
+            // Si on détecte un leadId, c'est un reliquat d'un ancien comportement -> on détache côté DB.
             if (submissionDataResponse?.leadId) {
-              const lead = submissionDataResponse.lead;
-              const leadName = lead ? (`${lead.firstName || ''} ${lead.lastName || ''}`.trim() || lead.company || 'Lead sans nom') : 'Lead associé';
-              setLeadId(submissionDataResponse.leadId);
-              setClientData({
-                id: submissionDataResponse.leadId,
-                name: leadName,
-                email: lead?.email || '',
-                phone: lead?.phone || '',
-                address: lead?.fullAddress || ''
+              console.warn('⚠️ [TBL] default-draft était associé à un lead; détachement automatique', {
+                draftId: defaultDraft.id,
+                leadId: submissionDataResponse.leadId
               });
-              setFormData(prev => ({ ...prev, __leadId: submissionDataResponse.leadId }));
+              try {
+                await api.patch(`/api/treebranchleaf/submissions/${defaultDraft.id}`, { clientId: null });
+              } catch (e) {
+                console.warn('⚠️ [TBL] Impossible de détacher le default-draft du lead:', e);
+              }
             }
             
             if (Object.keys(fieldsMap).length > 0) {
@@ -672,8 +924,11 @@ const TBL: React.FC<TBLProps> = ({
               Object.entries(fieldsMap).forEach(([nodeId, fieldData]: [string, unknown]) => {
                 const field = fieldData as { value?: unknown; rawValue?: string; calculatedBy?: string };
                 console.log(`📥 [TBL] Field ${nodeId}:`, { calculatedBy: field.calculatedBy, rawValue: field.rawValue, value: field.value });
-                // Ne restaurer que les valeurs entrées par l'utilisateur (neutral)
-                if (field.calculatedBy === 'neutral' && field.rawValue !== undefined && field.rawValue !== null) {
+                // Ne restaurer que les valeurs entrées par l'utilisateur.
+                // Selon les versions, la saisie peut être taggée 'neutral' (legacy) ou 'field'/'fixed'.
+                const src = typeof field.calculatedBy === 'string' ? field.calculatedBy.toLowerCase() : null;
+                const isUserInput = !src || src === 'neutral' || src === 'field' || src === 'fixed';
+                if (isUserInput && field.rawValue !== undefined && field.rawValue !== null) {
                   restoredData[nodeId] = String(field.rawValue);
                 }
               });
@@ -703,19 +958,119 @@ const TBL: React.FC<TBLProps> = ({
           
           if (response?.submission?.id) {
             setSubmissionId(response.submission.id);
-            setDevisName('Simulation (non enregistré)');
+            setDevisName('Brouillon');
             console.log('✅ [TBL] Devis par défaut créé:', response.submission.id);
           }
         }
       } catch (error) {
         console.warn('⚠️ [TBL] Impossible d\'initialiser le devis par défaut:', error);
         // Mode fallback: on continue sans draft persistant
-        setDevisName('Simulation (non sauvegardé)');
+        setDevisName('Brouillon');
       }
     };
     
     initDefaultDraft();
-  }, [leadId, api, effectiveTreeId, defaultDraftId, isDefaultDraft, user?.id]);
+  }, [leadId, api, effectiveTreeId, defaultDraftId, isGlobalDraftMode, user?.id]);
+
+  // 🧷 Initialiser le brouillon du lead quand on ouvre /tbl/:leadId
+  // Règle: chaque lead a son propre brouillon persistant (status=draft) même si on ne "enregistre" pas.
+  useEffect(() => {
+    const initLeadDraftFromUrl = async () => {
+      if (!api || !effectiveTreeId) return;
+      if (!urlLeadId) {
+        if (isLoadingLead) setIsLoadingLead(false);
+        return;
+      }
+      if (!isLoadingLead) return;
+
+      const effectiveLeadId = urlLeadId;
+      try {
+        // 1) Charger les infos du lead (header)
+        try {
+          const response = await api.get(`/api/leads/${effectiveLeadId}`);
+          const lead = (response as any)?.success ? (response as any)?.data : response;
+          if (lead && (lead as any).id) {
+            setClientData({
+              id: (lead as any).id,
+              name: `${(lead as any).firstName || ''} ${(lead as any).lastName || ''}`.trim() || (lead as any).company || 'Lead sans nom',
+              email: (lead as any).email || '',
+              phone: (lead as any).phone || (lead as any).phoneNumber || (lead as any).phoneHome || '',
+              address: formatAddressValue((lead as any).fullAddress ?? (lead as any).address ?? (lead as any).data?.address ?? '')
+            });
+          }
+        } catch (e) {
+          console.warn('⚠️ [TBL] Impossible de charger le lead (header):', e);
+        }
+
+        // 2) Récupérer/créer le brouillon du lead
+        let leadDraftId: string | null = null;
+        try {
+          const existing = await api.get(`/api/treebranchleaf/submissions?treeId=${effectiveTreeId}&leadId=${effectiveLeadId}&status=draft`);
+          const draftsArray = Array.isArray(existing) ? existing : (existing as any)?.data || [];
+          leadDraftId = (draftsArray as Array<{ id?: string }>)[0]?.id || null;
+        } catch (e) {
+          console.warn('⚠️ [TBL] Impossible de lister les brouillons du lead:', e);
+        }
+
+        if (!leadDraftId) {
+          const created = await api.post('/api/tbl/submissions/create-and-evaluate', {
+            treeId: effectiveTreeId,
+            clientId: effectiveLeadId,
+            formData: {},
+            status: 'draft',
+            providedName: 'Brouillon',
+            changedFieldId: 'NULL'
+          });
+          leadDraftId = (created as any)?.submission?.id || null;
+        }
+
+        // 3) Mettre TBL en mode brouillon lead + restaurer les champs
+        setLeadId(effectiveLeadId);
+        setIsDefaultDraft(false);
+        setIsDevisSaved(false);
+        setIsLoadedDevis(false);
+        setOriginalDevisId(null);
+        setOriginalDevisName(null);
+        setHasCopiedDevis(false);
+        setIsCompletedDirty(false);
+        setRevisionRootName(null);
+        setDevisName('Brouillon');
+        setSubmissionId(leadDraftId);
+
+        if (leadDraftId) {
+          try {
+            const submissionDataResponse = await api.get(`/api/treebranchleaf/submissions/${leadDraftId}/fields`);
+            const fieldsMap = (submissionDataResponse as any)?.fields || {};
+            const restoredData: Record<string, string> = {};
+            Object.entries(fieldsMap).forEach(([nodeId, fieldData]: [string, any]) => {
+              const src = typeof fieldData?.calculatedBy === 'string' ? fieldData.calculatedBy.toLowerCase() : null;
+              const isUserInput = !src || src === 'neutral' || src === 'field' || src === 'fixed';
+              if (isUserInput && fieldData?.rawValue !== undefined && fieldData?.rawValue !== null) {
+                restoredData[nodeId] = String(fieldData.rawValue);
+              }
+            });
+
+            setFormData((prev) => {
+              const kept: TBLFormData = {};
+              Object.keys(prev || {}).forEach((k) => {
+                if (k.startsWith('__')) kept[k] = prev[k];
+              });
+              return { ...kept, ...restoredData, __leadId: effectiveLeadId };
+            });
+          } catch (e) {
+            console.warn('⚠️ [TBL] Impossible de restaurer le brouillon du lead:', e);
+          }
+        }
+
+        lastSavedSignatureRef.current = null;
+        lastQueuedSignatureRef.current = null;
+      } finally {
+        setIsLoadingLead(false);
+      }
+    };
+
+    initLeadDraftFromUrl();
+  }, [api, effectiveTreeId, urlLeadId, isLoadingLead]);
 
   // SYNCHRONISATION: Initialiser formData avec les mirrors créés par useTBLDataPrismaComplete
   useEffect(() => {
@@ -864,17 +1219,6 @@ const TBL: React.FC<TBLProps> = ({
 
   // (plus de création automatique de brouillon ici — la création est explicite via "Créer le devis")
 
-  // Helpers: normaliser payload (exclure mirrors) et calculer signature stable
-  const normalizePayload = useCallback((data: TBLFormData) => {
-    const out: Record<string, string | null> = {};
-    Object.keys(data || {}).forEach((nodeId) => {
-      if (nodeId.startsWith('__mirror_')) return; // exclure tous les miroirs
-      const raw = (data as Record<string, unknown>)[nodeId];
-      out[nodeId] = raw == null ? null : String(raw);
-    });
-    return out;
-  }, []);
-
   const buildPreviewPayload = useCallback((data: TBLFormData) => {
     const clean: Record<string, unknown> = {};
     Object.entries(data || {}).forEach(([key, value]) => {
@@ -882,17 +1226,6 @@ const TBL: React.FC<TBLProps> = ({
       clean[key] = value;
     });
     return clean;
-  }, []);
-
-  const computeSignature = useCallback((obj: Record<string, unknown>) => {
-    // Stringify stable: tri des clés pour éviter les différences d'ordre
-    const keys = Object.keys(obj).sort();
-    const parts: string[] = [];
-    for (const k of keys) {
-      const v = (obj as Record<string, unknown>)[k];
-      parts.push(`${k}:${v === null ? 'null' : String(v)}`);
-    }
-    return parts.join('|');
   }, []);
 
   const broadcastCalculatedRefresh = useCallback((detail?: Record<string, unknown>) => {
@@ -934,10 +1267,35 @@ const TBL: React.FC<TBLProps> = ({
   // On garde uniquement le dernier état à envoyer si une requête est déjà en vol.
   const autosaveInFlightRef = useRef(false);
   const pendingAutosaveRef = useRef<{ data: TBLFormData; changedField?: string } | null>(null);
+  const autosaveSuspendedRef = useRef(false);
+  const lastRealChangedFieldIdRef = useRef<string | undefined>(undefined);
+
+  const waitForAutosaveIdle = useCallback(async (timeoutMs: number = 5000) => {
+    const start = Date.now();
+    while (autosaveInFlightRef.current) {
+      if (Date.now() - start > timeoutMs) {
+        break;
+      }
+      await new Promise((r) => setTimeout(r, 25));
+    }
+  }, []);
 
   // Helper: exécution de l'autosave (PUT)
   const doAutosave = useCallback(async (data: TBLFormData, changedField?: string) => {
     if (!api || !tree) return;
+
+    // ✅ Devis enregistrés: on n'écrit PAS au fil de l'eau, SAUF si on est en train d'éditer une révision (-N)
+    // déjà créée (hasCopiedDevis=true). Dans ce cas, on écrase la révision au fil de l'eau.
+    if (isDevisSaved && !hasCopiedDevis) {
+      return;
+    }
+
+    // ✅ Garde-fou: certaines actions UI (ex: "Nouveau devis") réinitialisent le formData.
+    // On suspend l'autosave pour éviter d'écraser un devis enregistré (submissionId précédent)
+    // avec un payload vide avant que le state React ne bascule sur le brouillon.
+    if (autosaveSuspendedRef.current) {
+      return;
+    }
 
     if (autosaveInFlightRef.current) {
       pendingAutosaveRef.current = { data, changedField };
@@ -958,13 +1316,71 @@ const TBL: React.FC<TBLProps> = ({
       lastQueuedSignatureRef.current = sig;
 
       if (!submissionId) {
-        // Aucun devis existant: uniquement prévisualiser (zéro écriture)
-        await previewNoSave(data);
-        broadcastCalculatedRefresh({ reason: 'preview-no-save' });
+        // ✅ Brouillon global (default-draft): persistant sans lead.
+        if (isDefaultDraft) {
+          const evaluationResponse = await api.post('/api/tbl/submissions/create-and-evaluate', {
+            treeId: effectiveTreeId || tree.id,
+            formData,
+            clientId: null,
+            status: 'default-draft',
+            providedName: 'Brouillon',
+            changedFieldId: changedField
+          });
+
+          const createdOrReusedId = evaluationResponse?.submission?.id;
+          if (createdOrReusedId) {
+            setSubmissionId(createdOrReusedId);
+            setDevisName('Brouillon');
+
+            console.log(`🎯 [TBL] changedFieldId envoyé au backend: "${changedField || 'NULL'}"`);
+            lastSavedSignatureRef.current = sig;
+            setAutosaveLast(new Date());
+            broadcastCalculatedRefresh({
+              reason: 'create-and-evaluate',
+              evaluatedSubmissionId: createdOrReusedId,
+              recalcCount: evaluationResponse?.submission?.TreeBranchLeafSubmissionData?.length
+            });
+          } else {
+            // Fallback: si on n'a pas d'ID, on ne peut pas persister.
+            await previewNoSave(data);
+            broadcastCalculatedRefresh({ reason: 'preview-no-save' });
+          }
+        } else if (leadId) {
+          // ✅ Brouillon de lead (draft): persistant et lié au lead.
+          const evaluationResponse = await api.post('/api/tbl/submissions/create-and-evaluate', {
+            treeId: effectiveTreeId || tree.id,
+            formData,
+            clientId: leadId,
+            status: 'draft',
+            providedName: 'Brouillon',
+            changedFieldId: changedField
+          });
+
+          const createdOrReusedId = evaluationResponse?.submission?.id;
+          if (createdOrReusedId) {
+            setSubmissionId(createdOrReusedId);
+            setDevisName('Brouillon');
+            lastSavedSignatureRef.current = sig;
+            setAutosaveLast(new Date());
+            broadcastCalculatedRefresh({
+              reason: 'create-and-evaluate',
+              evaluatedSubmissionId: createdOrReusedId,
+              recalcCount: evaluationResponse?.submission?.TreeBranchLeafSubmissionData?.length
+            });
+          } else {
+            await previewNoSave(data);
+            broadcastCalculatedRefresh({ reason: 'preview-no-save' });
+          }
+        } else {
+          // Aucun devis existant: uniquement prévisualiser (zéro écriture)
+          await previewNoSave(data);
+          broadcastCalculatedRefresh({ reason: 'preview-no-save' });
+        }
       } else {
         // Devis existant: mise à jour idempotente
-        // Pour un default-draft (mode simulation), on garde ce status et on ne passe pas de clientId
-        const effectiveStatus = isDefaultDraft ? 'default-draft' : 'draft';
+        // Pour un default-draft (mode brouillon), on garde ce status.
+        // Pour une révision d'un devis enregistré, on écrit en status=completed.
+        const effectiveStatus = isDefaultDraft ? 'default-draft' : (isDevisSaved ? 'completed' : 'draft');
         const effectiveClientId = isDefaultDraft ? null : leadId;
         
         const evaluationResponse = await api.post('/api/tbl/submissions/create-and-evaluate', {
@@ -974,6 +1390,17 @@ const TBL: React.FC<TBLProps> = ({
           status: effectiveStatus,
           changedFieldId: changedField // 🎯 Utiliser le paramètre direct au lieu de l'état React
         });
+
+        // ✅ Si le backend a créé une nouvelle révision (édition d'un devis completed), basculer automatiquement
+        const returnedSubmissionId = evaluationResponse?.submission?.id;
+        const effectiveSubmissionId = returnedSubmissionId || submissionId;
+        if (returnedSubmissionId && returnedSubmissionId !== submissionId) {
+          setSubmissionId(returnedSubmissionId);
+          setIsLoadedDevis(false);
+          setOriginalDevisId(null);
+          setOriginalDevisName(null);
+          setHasCopiedDevis(true);
+        }
         
         console.log(`🎯 [TBL] changedFieldId envoyé au backend: "${changedField || 'NULL'}"`);
         
@@ -981,7 +1408,7 @@ const TBL: React.FC<TBLProps> = ({
         setAutosaveLast(new Date());
         broadcastCalculatedRefresh({
           reason: 'create-and-evaluate',
-          evaluatedSubmissionId: submissionId,
+          evaluatedSubmissionId: effectiveSubmissionId,
           recalcCount: evaluationResponse?.submission?.TreeBranchLeafSubmissionData?.length
         });
       }
@@ -1002,7 +1429,7 @@ const TBL: React.FC<TBLProps> = ({
         }, 0);
       }
     }
-  }, [api, tree, normalizePayload, computeSignature, submissionId, leadId, isDefaultDraft, previewNoSave, broadcastCalculatedRefresh]);
+  }, [api, tree, effectiveTreeId, normalizePayload, computeSignature, submissionId, leadId, isDefaultDraft, isDevisSaved, hasCopiedDevis, previewNoSave, broadcastCalculatedRefresh]);
 
   // Déclencheur INSTANTANÉ - appel direct sans délai artificiel
   const scheduleAutosave = useCallback((data: TBLFormData, changedField?: string) => {
@@ -1035,6 +1462,7 @@ const TBL: React.FC<TBLProps> = ({
   
   useEffect(() => {
     if (!autoSaveEnabled || !tree) return;
+    if (isDevisSaved && !hasCopiedDevis) return;
 
     const interval = setInterval(() => {
       // Vérifier que formData a des données avant de sauvegarder
@@ -1044,7 +1472,7 @@ const TBL: React.FC<TBLProps> = ({
     }, 30000);
 
     return () => clearInterval(interval);
-  }, [autoSaveEnabled, tree, scheduleAutosave]);
+  }, [autoSaveEnabled, tree, scheduleAutosave, isDevisSaved, hasCopiedDevis]);
 
   const previewEvaluateAndStore = useCallback(async (data: TBLFormData) => {
     if (!api || !tree?.id) return;
@@ -1212,8 +1640,8 @@ const TBL: React.FC<TBLProps> = ({
     try {
       if (!api) return baseName;
       
-      // Récupérer tous les devis du lead actuel
-      const response = await api.get(`/api/treebranchleaf/submissions?leadId=${currentLeadId}`);
+      // Récupérer uniquement les devis enregistrés du lead (ne pas inclure le brouillon)
+      const response = await api.get(`/api/treebranchleaf/submissions?leadId=${currentLeadId}&status=completed`);
       const existingSubmissions = response.data || response || [];
       
       // Extraire les noms existants
@@ -1245,6 +1673,22 @@ const TBL: React.FC<TBLProps> = ({
 
   // 🆕 FONCTION ENREGISTRER - Ouvre le modal pour choisir le nom du devis
   const handleSaveDevis = useCallback(async () => {
+    // ✅ Devis enregistré: on crée une nouvelle version uniquement si l'utilisateur a modifié quelque chose.
+    if (isDevisSaved) {
+      if (!isCompletedDirty) {
+        message.info('Aucune modification à enregistrer');
+        return;
+      }
+      try {
+        await persistCompletedRevisionIfDirty('manual-save');
+        message.success('Nouvelle version enregistrée');
+      } catch (e) {
+        console.warn('⚠️ [TBL] Échec enregistrement nouvelle version:', e);
+        message.error('Erreur lors de l\'enregistrement de la nouvelle version');
+      }
+      return;
+    }
+
     // Vérifier qu'on a un lead (OBLIGATOIRE)
     if (!leadId) {
       message.warning('Veuillez sélectionner un lead pour enregistrer le devis');
@@ -1256,7 +1700,7 @@ const TBL: React.FC<TBLProps> = ({
     const defaultName = `Devis ${new Date().toLocaleDateString('fr-FR')} - ${clientName}`;
     setSaveDevisName(defaultName);
     setSaveDevisModalVisible(true);
-  }, [leadId, clientData.name]);
+  }, [isDevisSaved, isCompletedDirty, persistCompletedRevisionIfDirty, leadId, clientData.name]);
 
   // 🆕 CONFIRMER L'ENREGISTREMENT avec le nom choisi
   const handleConfirmSaveDevis = useCallback(async () => {
@@ -1279,8 +1723,8 @@ const TBL: React.FC<TBLProps> = ({
       // Générer le nom unique basé sur le nom choisi par l'utilisateur
       const finalName = await generateUniqueDevisName(saveDevisName.trim(), leadId);
       
-      // Sauvegarder l'ID du default-draft actuel pour le vider après
-      const oldDefaultDraftId = isDefaultDraft ? submissionId : null;
+      // Sauvegarder l'ID du brouillon courant pour le vider après (si distinct du devis créé)
+      const oldDraftIdToClear = submissionId;
       
       // Créer le VRAI devis avec les données actuelles
       const response = await api.post('/api/tbl/submissions/create-and-evaluate', {
@@ -1300,9 +1744,12 @@ const TBL: React.FC<TBLProps> = ({
         setDevisCreatedAt(new Date());
         setIsDevisSaved(true);
         setIsDefaultDraft(false); // On n'est plus en mode simulation
-        setIsLoadedDevis(false);
-        setOriginalDevisId(null);
-        setOriginalDevisName(null);
+        setIsLoadedDevis(true);
+        setOriginalDevisId(newSubmissionId);
+        const rootName = stripRevisionSuffix(finalName);
+        setOriginalDevisName(rootName);
+        setRevisionRootName(rootName);
+        setIsCompletedDirty(false);
         setHasCopiedDevis(false);
         
         // Marquer signature comme sauvegardée
@@ -1312,15 +1759,16 @@ const TBL: React.FC<TBLProps> = ({
           lastSavedSignatureRef.current = sig;
         } catch {/* noop */}
         
-        // 🔄 VIDER le default-draft en DB (pas supprimer, juste vider car il n'y en a qu'un seul)
-        if (oldDefaultDraftId && api) {
+        // 🔄 VIDER le brouillon courant en DB (pas supprimer, juste vider)
+        // ⚠️ Important: si le backend a créé le devis avec le même ID (cas rare), ne surtout pas le vider.
+        if (oldDraftIdToClear && api && oldDraftIdToClear !== newSubmissionId) {
           try {
-            console.log('🔄 [TBL] Vidage du default-draft:', oldDefaultDraftId);
+            console.log('🔄 [TBL] Vidage du brouillon courant:', oldDraftIdToClear);
             // Utiliser POST reset-data au lieu de PUT pour vider proprement
-            await api.post(`/api/treebranchleaf/submissions/${oldDefaultDraftId}/reset-data`, {});
-            console.log('✅ [TBL] Default-draft vidé (prêt pour le prochain devis)');
+            await api.post(`/api/treebranchleaf/submissions/${oldDraftIdToClear}/reset-data`, {});
+            console.log('✅ [TBL] Brouillon vidé (prêt pour le prochain devis)');
           } catch (error) {
-            console.warn('⚠️ [TBL] Impossible de vider le default-draft:', error);
+            console.warn('⚠️ [TBL] Impossible de vider le brouillon:', error);
             // Ce n'est pas critique, on continue
           }
         }
@@ -1337,56 +1785,75 @@ const TBL: React.FC<TBLProps> = ({
     } finally {
       setIsSavingDevis(false);
     }
-  }, [leadId, saveDevisName, effectiveTreeId, api, formData, normalizePayload, computeSignature, generateUniqueDevisName, isDefaultDraft, submissionId]);
+  }, [leadId, saveDevisName, effectiveTreeId, api, formData, normalizePayload, computeSignature, generateUniqueDevisName, stripRevisionSuffix, submissionId]);
 
   // 🆕 Créer une copie automatique du devis chargé
   const createDevisCopy = useCallback(async (): Promise<string | null> => {
     if (!originalDevisName || !leadId || !api || !effectiveTreeId) return null;
     
     try {
-      console.log('📋 [TBL] Création copie automatique du devis:', originalDevisName);
-      
-      // Générer un nom avec suffixe
-      const copyName = await generateCopySuffix(originalDevisName, leadId);
-      
-      // Créer la nouvelle submission (copie)
-      const response = await api.post('/api/tbl/submissions/create-and-evaluate', {
-        treeId: effectiveTreeId,
-        clientId: leadId,
-        formData: normalizePayload(formData),
-        status: 'draft',
-        providedName: copyName
-      });
-      
-      if (response?.submission?.id) {
-        const newSubmissionId = response.submission.id;
-        
-        // Mettre à jour les états
-        setSubmissionId(newSubmissionId);
-        setDevisName(copyName);
-        setHasCopiedDevis(true);
-        setIsLoadedDevis(false); // On travaille maintenant sur la copie
-        
-        // Marquer signature comme sauvegardée
-        try {
-          const normalized = normalizePayload(formData);
-          const sig = computeSignature(normalized);
-          lastSavedSignatureRef.current = sig;
-        } catch {/* noop */}
-        
-        message.info(`Copie créée : "${copyName}"`);
-        console.log('✅ [TBL] Copie créée:', newSubmissionId);
-        
-        return newSubmissionId;
+      console.log('📋 [TBL] Copie → Brouillon (default-draft):', originalDevisName);
+
+      // 1) Récupérer/créer le default-draft
+      const currentUserId = user?.id;
+      if (!currentUserId) return null;
+
+      const url = `/api/treebranchleaf/submissions?treeId=${effectiveTreeId}&status=default-draft&userId=${currentUserId}`;
+      const existingDrafts = await api.get(url);
+      const draftsArray = Array.isArray(existingDrafts) ? existingDrafts : (existingDrafts as any)?.data || [];
+      let defaultDraft = (draftsArray as Array<{ id?: string; status?: string }>).find((d) => d.status === 'default-draft' && d.id);
+      if (!defaultDraft?.id) {
+        const created = await api.post('/api/tbl/submissions/create-and-evaluate', {
+          treeId: effectiveTreeId,
+          formData: {},
+          status: 'default-draft',
+          providedName: 'Brouillon'
+        });
+        const createdId = (created as any)?.submission?.id;
+        if (!createdId) return null;
+        defaultDraft = { id: createdId, status: 'default-draft' };
       }
-      
-      return null;
+
+      // 2) Associer le lead au brouillon
+      try {
+        await api.patch(`/api/treebranchleaf/submissions/${defaultDraft.id}`, { clientId: leadId });
+      } catch (e) {
+        console.warn('⚠️ [TBL] Impossible d\'associer le lead au brouillon:', e);
+      }
+
+      // 3) Persister le contenu dans le brouillon (pour reload)
+      const normalized = normalizePayload(formData);
+      await api.post('/api/tbl/submissions/create-and-evaluate', {
+        submissionId: defaultDraft.id,
+        treeId: effectiveTreeId,
+        clientId: null,
+        formData: normalized,
+        status: 'default-draft',
+        changedFieldId: 'NULL'
+      });
+
+      // 4) Mettre à jour les états
+      setSubmissionId(defaultDraft.id);
+      setDevisName('Brouillon');
+      setIsDefaultDraft(true);
+      setHasCopiedDevis(true);
+      setIsLoadedDevis(false);
+      setIsDevisSaved(false);
+
+      try {
+        const sig = computeSignature(normalized);
+        lastSavedSignatureRef.current = sig;
+      } catch {/* noop */}
+
+      message.info('Copie chargée dans le brouillon');
+      console.log('✅ [TBL] Copie appliquée au brouillon:', defaultDraft.id);
+      return defaultDraft.id;
     } catch (error) {
       console.error('❌ [TBL] Erreur création copie:', error);
       message.error('Erreur lors de la création de la copie');
       return null;
     }
-  }, [originalDevisName, leadId, api, effectiveTreeId, formData, normalizePayload, computeSignature, generateCopySuffix]);
+  }, [originalDevisName, leadId, api, effectiveTreeId, formData, normalizePayload, computeSignature, user?.id]);
 
   // ⚡ Debounce pour éviter les requêtes multiples (200ms)
   const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
@@ -1401,21 +1868,25 @@ const TBL: React.FC<TBLProps> = ({
       console.log(`🚫 [TBL] Champ miroir ignoré: ${fieldId}`);
       return; // Ne pas traiter les miroirs, éviter d'appeler debounce avec undefined
     }
-    
-    //  COPIE AUTOMATIQUE: Si c'est un devis chargé et première modification → créer copie
-    if (isLoadedDevis && !hasCopiedDevis && originalDevisId) {
-      console.log('📋 [TBL] Première modification d\'un devis chargé → création copie...');
-      // Déclencher la création de copie (async, mais on continue)
-      createDevisCopy().then(newId => {
-        if (newId) {
-          console.log('✅ [TBL] Copie créée avec succès, nouvelles modifications iront sur:', newId);
+
+    // ✅ Devis enregistré: créer une révision -N dès la 1ère modification, puis autosave dans cette révision.
+    if (isDevisSaved) {
+      const root = revisionRootName || stripRevisionSuffix(originalDevisName || devisName || 'Devis');
+      if (!isCompletedDirty) {
+        setIsCompletedDirty(true);
+        setRevisionRootName(root);
+        // Préparer immédiatement un nom -N pour refléter la copie en cours (sans écrire en DB)
+        if (leadId) {
+          void planPendingRevisionName(root, leadId, submissionId);
         }
-      }).catch(err => {
-        console.error('❌ [TBL] Erreur création copie:', err);
-      });
-      // Marquer immédiatement pour éviter plusieurs copies
-      setHasCopiedDevis(true);
+      } else if (!revisionRootName) {
+        setRevisionRootName(root);
+      }
     }
+    
+    // ⚠️ Versioning devis: on laisse le BACKEND être la source de vérité.
+    // Si l'utilisateur modifie un devis "completed" sans être admin, le backend clone vers une nouvelle submission draft
+    // et renvoie le nouveau submissionId; doAutosave bascule automatiquement.
     
     // Vérifier si le champ existe dans la configuration
     let fieldConfig = tblConfig?.fields.find(f => f.id === fieldId);
@@ -1615,6 +2086,11 @@ const TBL: React.FC<TBLProps> = ({
       const fieldType = String((fieldConfig as any)?.type || '').toLowerCase();
       console.log(`🎯🎯🎯 [TBL] AVANT eval(DEBOUNCED 80ms): fieldId="${fieldId}", realFieldId="${realFieldId}", type="${fieldType || 'unknown'}"`);
 
+      // Garder en mémoire le dernier champ réellement modifié (utile pour flush/versioning)
+      if (realFieldId) {
+        lastRealChangedFieldIdRef.current = realFieldId;
+      }
+
       // ⚡ Évaluation avec debounce de 80ms - équilibre réactivité/groupage
       if (debounceTimerRef.current) {
         clearTimeout(debounceTimerRef.current);
@@ -1628,6 +2104,12 @@ const TBL: React.FC<TBLProps> = ({
           console.warn('⚠️ [TBL] immediateEvaluateRef pas encore initialisé');
         }
       }, 80);
+
+      // ✅ Si on édite un devis enregistré "original", créer tout de suite la révision en base
+      // pour qu'elle existe même si l'utilisateur quitte l'écran.
+      if (isDevisSaved && !hasCopiedDevis && leadId) {
+        void ensureCompletedRevisionExists(next as TBLFormData);
+      }
       
       // 🔄 NOUVEAU: Dispatch événement pour refresh automatique des display fields
       try {
@@ -1646,7 +2128,7 @@ const TBL: React.FC<TBLProps> = ({
       
       return next as typeof prev;
     });
-  }, [tblConfig, tabs, scheduleAutosave, scheduleCapabilityPreview, isLoadedDevis, hasCopiedDevis, originalDevisId, createDevisCopy]);
+  }, [tblConfig, tabs, scheduleAutosave, scheduleCapabilityPreview, isLoadedDevis, hasCopiedDevis, originalDevisId, createDevisCopy, isDevisSaved, isCompletedDirty, revisionRootName, stripRevisionSuffix, originalDevisName, devisName, leadId, submissionId, planPendingRevisionName, ensureCompletedRevisionExists]);
   
   // 🔄 Assigner la ref IMMÉDIATEMENT dans le corps du composant
   handleFieldChangeRef.current = handleFieldChangeImpl;
@@ -1832,47 +2314,6 @@ const TBL: React.FC<TBLProps> = ({
       setDevisSelectorVisible(true);
     }
   }, [treeId, api, clientData, leadId]);
-
-  // 🆕 NOUVEAU DEVIS - Vide le default-draft existant (il n'y en a qu'UN seul)
-  const handleNewDevis = async () => {
-    try {
-      console.log('🆕 [TBL] NOUVEAU DEVIS - Vidage du default-draft existant');
-      
-      // 1. Réinitialiser tout le formulaire (vide les données locales)
-      resetTBLForm();
-      
-      // 2. Vider le lead
-      setLeadId(null);
-      setClientData({
-        id: '',
-        name: '',
-        email: '',
-        phone: '',
-        address: ''
-      });
-      
-      // 3. Revenir en mode default-draft
-      setIsDefaultDraft(true);
-      
-      // 4. VIDER complètement le default-draft (données + lead + status)
-      if (submissionId && api) {
-        try {
-          console.log('🔄 [TBL] Vidage du default-draft existant:', submissionId);
-          await api.post(`/api/treebranchleaf/submissions/${submissionId}/reset-data`, {
-            status: 'default-draft'
-          });
-          console.log('✅ [TBL] Default-draft vidé (données supprimées)');
-        } catch (error) {
-          console.warn('⚠️ [TBL] Impossible de vider le default-draft:', error);
-        }
-      }
-      
-      message.success('Formulaire réinitialisé');
-    } catch (error) {
-      console.error('❌ [TBL] Erreur lors de la réinitialisation:', error);
-      message.error('Erreur lors de la réinitialisation');
-    }
-  };
 
   // Ajouter des numéros automatiquement aux noms de devis identiques pour l'affichage
   const addNumbersToDevisNames = (devisList: Array<{id: string, firstName: string, lastName: string, email: string, company?: string, submissions: Array<{id: string, name: string, status: string, createdAt: string, treeName?: string}>}>) => {
@@ -2089,7 +2530,7 @@ const TBL: React.FC<TBLProps> = ({
                   name: `${lead.firstName || ''} ${lead.lastName || ''}`.trim() || lead.company || 'Lead sans nom',
                   email: lead.email || '',
                   phone: lead.phone || lead.phoneNumber || lead.phoneHome || '',
-                  address: lead.address || lead.data?.address || ''
+                  address: formatAddressValue(lead.fullAddress ?? lead.address ?? lead.data?.address ?? '')
                 };
                 setClientData(newClientData);
               }
@@ -2287,12 +2728,21 @@ const TBL: React.FC<TBLProps> = ({
   // Sélectionner un devis spécifique
   const handleSelectDevis = useCallback(async (devisId: string, leadData?: {id: string, firstName: string, lastName: string, email: string}) => {
     try {
+      // ✅ Si on quittait un devis enregistré modifié, on crée d'abord la version -N.
+      try {
+        await persistCompletedRevisionIfDirty('load-devis');
+      } catch (e) {
+        console.warn('⚠️ [TBL] Persist revision avant chargement devis échoué (on continue):', e);
+      }
+
       // console.log('🔍 [TBL] === DÉBUT CHARGEMENT DEVIS ===');
       // console.log('🔍 [TBL] ID du devis:', devisId);
       // console.log('🔍 [TBL] Données du lead:', leadData);
       
       // Indicateur de chargement
       message.loading('Chargement du devis...', 0.5);
+
+      let hydratedLeadId: string | undefined = leadData?.id;
       
       // Si un lead est fourni, charger ses données complètes depuis l'API
       if (leadData?.id) {
@@ -2306,7 +2756,7 @@ const TBL: React.FC<TBLProps> = ({
               name: `${lead.firstName || ''} ${lead.lastName || ''}`.trim() || lead.company || 'Lead sans nom',
               email: lead.email || '',
               phone: lead.phone || lead.phoneNumber || lead.phoneHome || '',
-              address: lead.address || lead.data?.address || ''
+              address: formatAddressValue(lead.fullAddress ?? lead.address ?? lead.data?.address ?? '')
             };
             setClientData(newClientData);
             setLeadId(lead.id);
@@ -2329,74 +2779,170 @@ const TBL: React.FC<TBLProps> = ({
       
       // Charger les données du devis sélectionné
       // console.log('🔍 [TBL] Appel API pour récupérer la submission...');
-      const submission = await api.get(`/api/treebranchleaf/submissions/${devisId}`);
+      const submissionResponse = await api.get(`/api/treebranchleaf/submissions/${devisId}`);
+      const submission = (submissionResponse && typeof submissionResponse === 'object' && 'success' in submissionResponse)
+        ? ((submissionResponse as unknown as { success?: boolean; data?: unknown }).data ?? submissionResponse)
+        : submissionResponse;
+
+      const submissionObj = (submission && typeof submission === 'object' && 'submission' in (submission as Record<string, unknown>))
+        ? ((submission as Record<string, unknown>).submission as any)
+        : submission;
       // console.log('🔍 [TBL] Réponse API complète:', submission);
       
       // console.log('🔍 [TBL] Réponse API complète:', submission);
       
-      if (submission && submission.TreeBranchLeafSubmissionData) {
+      const submissionDataArray = (submissionObj && typeof submissionObj === 'object')
+        ? ((submissionObj as any).TreeBranchLeafSubmissionData as Array<{ nodeId: string; value?: string; operationSource?: string | null }> | undefined)
+        : undefined;
+
+      let formattedData: TBLFormData = {};
+      let skippedCalculated = 0;
+      const sourceStats: Record<string, number> = {};
+
+      if (Array.isArray(submissionDataArray)) {
         // console.log('🔍 [TBL] Données de submission trouvées:', submission.TreeBranchLeafSubmissionData.length, 'éléments');
         
-        // Reformater les données pour le formulaire
-        const formattedData: TBLFormData = {};
-        let skippedCalculated = 0;
-        
-        // ✅ FILTRE CRITIQUE : Exclure les champs avec calculatedValue (champs calculés/display)
-        // On charge UNIQUEMENT les champs de saisie utilisateur
-        submission.TreeBranchLeafSubmissionData.forEach((item: {nodeId: string, value?: string, TreeBranchLeafNode?: {calculatedValue?: string | null}}) => {
-          // ❌ IGNORER les champs avec calculatedValue (champs calculés/display)
-          const hasCalculatedValue = item.TreeBranchLeafNode?.calculatedValue !== null && item.TreeBranchLeafNode?.calculatedValue !== undefined;
-          if (hasCalculatedValue) {
+        // ✅ Filtrer pour recharger les entrées utilisateur.
+        // Selon la source, les saisies peuvent être taguées 'neutral' (legacy) OU 'field' (interpreter).
+        submissionDataArray.forEach((item) => {
+          const src = typeof item.operationSource === 'string' ? item.operationSource.toLowerCase() : null;
+          const srcKey = src || '(null)';
+          sourceStats[srcKey] = (sourceStats[srcKey] || 0) + 1;
+          const isUserInput = !src || src === 'neutral' || src === 'field' || src === 'fixed';
+          if (!isUserInput) {
             skippedCalculated++;
             return;
           }
-          
-          // ✅ CHARGER uniquement les champs de saisie utilisateur (sans calculatedValue)
           if (item.value !== undefined && item.value !== null && item.value !== '') {
             formattedData[item.nodeId] = item.value;
           }
         });
-        
-        if (skippedCalculated > 0) {
-          console.log(`🚫 [TBL LOAD] ${skippedCalculated} champs calculés ignorés (ont calculatedValue)`);
+      } else {
+        // 🔁 Fallback: certains endpoints ne renvoient pas TreeBranchLeafSubmissionData ici.
+        // On utilise la route /fields (déjà utilisée pour default-draft) pour réhydrater les champs utilisateur.
+        try {
+          const fieldsResponse = await api.get(`/api/treebranchleaf/submissions/${devisId}/fields`);
+          const payload = (fieldsResponse && typeof fieldsResponse === 'object' && 'success' in fieldsResponse)
+            ? ((fieldsResponse as any).data ?? fieldsResponse)
+            : fieldsResponse;
+          const fieldsMap = (payload as any)?.fields || {};
+
+          Object.entries(fieldsMap).forEach(([nodeId, fieldData]: [string, unknown]) => {
+            const field = fieldData as { rawValue?: unknown; value?: unknown; calculatedBy?: unknown; operationSource?: unknown };
+            const src = typeof field.operationSource === 'string'
+              ? field.operationSource.toLowerCase()
+              : (typeof field.calculatedBy === 'string' ? field.calculatedBy.toLowerCase() : null);
+            const srcKey = src || '(null)';
+            sourceStats[srcKey] = (sourceStats[srcKey] || 0) + 1;
+            const isUserInput = !src || src === 'neutral' || src === 'field' || src === 'fixed';
+            if (!isUserInput) {
+              skippedCalculated++;
+              return;
+            }
+            const candidate = field.rawValue ?? field.value;
+            if (candidate !== undefined && candidate !== null && String(candidate) !== '') {
+              formattedData[nodeId] = String(candidate);
+            }
+          });
+
+          // Réhydrater aussi le lead si le payload /fields le contient
+          const leadIdFromFields = (payload as any)?.leadId as string | undefined;
+          const leadFromFields = (payload as any)?.lead as any;
+          if (leadIdFromFields) {
+            hydratedLeadId = leadIdFromFields;
+            setLeadId(leadIdFromFields);
+            const leadName = leadFromFields
+              ? (`${leadFromFields.firstName || ''} ${leadFromFields.lastName || ''}`.trim() || leadFromFields.company || 'Lead sans nom')
+              : 'Lead associé';
+            setClientData({
+              id: leadIdFromFields,
+              name: leadName,
+              email: leadFromFields?.email || '',
+              phone: leadFromFields?.phone || leadFromFields?.phoneNumber || leadFromFields?.phoneHome || '',
+              address: formatAddressValue(leadFromFields?.fullAddress ?? leadFromFields?.address ?? leadFromFields?.data?.address ?? '')
+            });
+          }
+        } catch (fallbackErr) {
+          console.warn('⚠️ [TBL LOAD] Fallback /fields impossible:', fallbackErr);
         }
-        console.log(`✅ [TBL LOAD] ${Object.keys(formattedData).length} champs utilisateur chargés`);
-        
-        // Mettre à jour le formulaire
-        setFormData(formattedData);
-        // Enregistrer l'ID du devis sélectionné pour activer l'autosave idempotent
+      }
+
+      if (skippedCalculated > 0) {
+        console.log(`🚫 [TBL LOAD] ${skippedCalculated} champs non-neutral ignorés (calculés/capacités)`);
+      }
+
+      const loadedCount = Object.keys(formattedData).length;
+      console.log(`✅ [TBL LOAD] ${loadedCount} champs utilisateur chargés`);
+
+      if (loadedCount === 0) {
+        console.warn('⚠️ [TBL LOAD] 0 champ restauré - operationSource stats:', sourceStats);
+      }
+
+      if (loadedCount > 0) {
+        const loadedDevisName = (submissionObj as any)?.summary?.name || (submissionObj as any)?.name || `Devis ${devisId.slice(0, 8)}`;
+        const loadedStatus = String((submissionObj as any)?.status || '').toLowerCase();
+        // ✅ Nouveau workflow: un devis enregistré (completed) est chargé tel quel.
+        // Les modifications sont locales, et une version -N est créée à l'enregistrement/sortie.
+
+        // Mettre à jour le formulaire (préserver les clés système __*)
+        setFormData((prev) => {
+          const kept: TBLFormData = {};
+          Object.keys(prev || {}).forEach((k) => {
+            if (k.startsWith('__')) kept[k] = prev[k];
+          });
+          const next: TBLFormData = { ...kept, ...formattedData };
+          const leadIdForSystem = hydratedLeadId || (submissionObj as any)?.leadId;
+          if (leadIdForSystem) {
+            next.__leadId = leadIdForSystem;
+          }
+          return next;
+        });
+
+        // Enregistrer l'ID de la submission sélectionnée
         setSubmissionId(devisId);
+
         // Marquer la signature comme "déjà sauvegardée" pour éviter un autosave immédiat inutile
         try {
           const normalized = normalizePayload(formattedData);
           const sig = computeSignature(normalized);
           lastSavedSignatureRef.current = sig;
         } catch { /* noop */ }
-        // console.log('✅ [TBL] FormData mis à jour');
-        
-        const loadedDevisName = submission.summary?.name || submission.name || `Devis ${devisId.slice(0, 8)}`;
-        // console.log('🔍 [TBL] Nom du devis:', loadedDevisName);
-        
-        // 🆕 SYSTÈME DE COPIE AUTOMATIQUE
-        // Marquer que c'est un devis chargé (pour créer copie à la première modification)
-        setIsLoadedDevis(true);
-        setOriginalDevisId(devisId);
-        setOriginalDevisName(loadedDevisName);
-        setHasCopiedDevis(false);
-        setIsDevisSaved(true); // Le devis original est déjà enregistré
-        setIsDefaultDraft(false); // On n'est plus en mode simulation
-        
-        // Mettre à jour le nom et la date du devis dans l'état
-        setDevisName(loadedDevisName);
-        if (submission.createdAt) {
-          setDevisCreatedAt(new Date(submission.createdAt));
+
+        // Statut UI selon le type
+        if (loadedStatus === 'default-draft') {
+          setIsDefaultDraft(true);
+          setIsDevisSaved(false);
+          setIsLoadedDevis(false);
+          setOriginalDevisId(null);
+          setOriginalDevisName(null);
+          setHasCopiedDevis(false);
+          setPendingRevisionName(null);
+          pendingRevisionForSubmissionIdRef.current = null;
+          setDevisName('Brouillon');
+          setDevisCreatedAt(null);
+        } else {
+          // completed (ou autre) → affichage comme devis enregistré
+          setIsLoadedDevis(true);
+          setOriginalDevisId(devisId);
+          const root = stripRevisionSuffix(loadedDevisName);
+          setOriginalDevisName(root);
+          setRevisionRootName(root);
+          setIsCompletedDirty(false);
+          setHasCopiedDevis(false);
+          setIsDevisSaved(true);
+          setIsDefaultDraft(false);
+          setPendingRevisionName(null);
+          pendingRevisionForSubmissionIdRef.current = null;
+          setDevisName(loadedDevisName);
         }
-        
-        message.success(`Devis "${loadedDevisName}" chargé avec succès (${Object.keys(formattedData).length} champs)`);
+        if ((submissionObj as any)?.createdAt) {
+          setDevisCreatedAt(new Date((submissionObj as any).createdAt));
+        }
+
+        message.success(`${loadedStatus === 'default-draft' ? 'Brouillon' : `Devis "${loadedDevisName}"`} chargé avec succès (${loadedCount} champs)`);
       } else {
-        console.warn('🔍 [TBL] Aucune donnée TreeBranchLeafSubmissionData trouvée');
-        console.warn('🔍 [TBL] Structure de submission:', Object.keys(submission || {}));
-        message.warning('Devis trouvé mais aucune donnée de formulaire');
+        console.warn('🔍 [TBL LOAD] Aucune donnée utilisateur restaurée pour ce devis');
+        message.warning('Devis chargé, mais aucune donnée de formulaire à restaurer');
       }
       
       // Fermer la modal
@@ -2408,7 +2954,7 @@ const TBL: React.FC<TBLProps> = ({
       console.error('❌ [TBL] Détails de l\'erreur:', error);
       message.error('Erreur lors du chargement du devis. Vérifiez la console pour plus de détails.');
     }
-  }, [api, normalizePayload, computeSignature]);
+  }, [api, normalizePayload, computeSignature, formatAddressValue, effectiveTreeId, user?.id, isSuperAdmin, userRole]);
 
   useEffect(() => {
     if (!requestedDevisId) return;
@@ -2531,9 +3077,15 @@ const TBL: React.FC<TBLProps> = ({
                     {/* 🆕 Affichage du mode + informations */}
                     {isDefaultDraft ? (
                       <>
-                        <span style={{ color: '#faad14' }}>🔬 Mode Simulation</span>
-                        {' - '}
-                        {devisName || 'Devis par défaut'}
+                        {!leadId ? (
+                          <span style={{ color: '#faad14' }}>📝 Mode Brouillon</span>
+                        ) : (
+                          <>
+                            {clientData.name || 'Lead sans nom'}
+                            {' - '}
+                            Brouillon
+                          </>
+                        )}
                       </>
                     ) : (
                       <>
@@ -2555,7 +3107,7 @@ const TBL: React.FC<TBLProps> = ({
                     )}
                   </Title>
                   {/* Indicateur de sauvegarde automatique */}
-                  {autosaveLast && !isDefaultDraft && (
+                  {autosaveLast && (
                     <Text type="secondary" style={{ fontSize: '0.75em' }}>
                       <ClockCircleOutlined style={{ marginRight: 4 }} />
                       Dernière sauvegarde : {autosaveLast.toLocaleTimeString('fr-FR')}
@@ -2581,14 +3133,14 @@ const TBL: React.FC<TBLProps> = ({
                   <Tooltip title="Sélectionner un lead" placement="bottom">
                     <Button 
                       icon={<UserOutlined />}
-                      onClick={handleLoadLead}
+                      onClick={() => setLeadSelectorVisible(true)}
                       block={actionButtonBlock}
                     />
                   </Tooltip>
                   <Tooltip title="Créer un lead" placement="bottom">
                     <Button 
                       icon={<PlusOutlined />}
-                      onClick={handleNewLead}
+                      onClick={() => setLeadCreatorVisible(true)}
                       block={actionButtonBlock}
                     />
                   </Tooltip>
@@ -3091,16 +3643,21 @@ const TBL: React.FC<TBLProps> = ({
                 {(() => {
                   // Récupérer tous les devis avec infos lead
                   const allDevis = availableDevis.flatMap((lead) => 
-                    lead.submissions?.map((devis) => ({
-                      ...devis,
-                      leadInfo: {
-                        id: lead.id,
-                        firstName: lead.firstName,
-                        lastName: lead.lastName,
-                        email: lead.email,
-                        company: lead.company || 'Non renseigné'
-                      }
-                    })) || []
+                    (lead.submissions || [])
+                      // ⚠️ Règle produit: on n'affiche pas les anciens status 'draft' (il n'y a qu'UN seul brouillon)
+                      .filter((devis) => devis.status !== 'draft')
+                      .map((devis) => ({
+                        ...devis,
+                        // Le brouillon s'appelle toujours "Brouillon" pour éviter toute confusion.
+                        name: devis.status === 'completed' ? devis.name : 'Brouillon',
+                        leadInfo: {
+                          id: lead.id,
+                          firstName: lead.firstName,
+                          lastName: lead.lastName,
+                          email: lead.email,
+                          company: lead.company || 'Non renseigné'
+                        }
+                      }))
                   );
                   
                   // Ajouter la numérotation automatique
@@ -3129,6 +3686,11 @@ const TBL: React.FC<TBLProps> = ({
                               <div className="flex items-center gap-2">
                                 <span className="text-blue-500">📄</span>
                                 <span className="font-medium text-gray-900">{devis.displayName}</span>
+                                <Tag
+                                  color={devis.status === 'completed' ? 'green' : 'gold'}
+                                >
+                                  {devis.status === 'completed' ? 'Enregistré' : 'Brouillon'}
+                                </Tag>
                               </div>
                               <div className="flex items-center gap-2">
                                 <Button
@@ -3180,6 +3742,11 @@ const TBL: React.FC<TBLProps> = ({
                           <div className="flex items-center space-x-2">
                             <span className="text-blue-500">📄</span>
                             <span className="font-medium text-gray-900">{devis.displayName}</span>
+                            <Tag
+                              color={devis.status === 'completed' ? 'green' : 'gold'}
+                            >
+                              {devis.status === 'completed' ? 'Enregistré' : 'Brouillon'}
+                            </Tag>
                           </div>
                         
                         {/* Contact - EXACTEMENT comme dans la modal lead */}
@@ -3523,7 +4090,7 @@ const TBL: React.FC<TBLProps> = ({
               </div>
               <div className="flex justify-between mt-1">
                 <span>Mode actuel :</span>
-                <span className="font-medium">{isDefaultDraft ? 'Simulation (nouveau)' : isLoadedDevis ? 'Copie de devis' : 'Édition'}</span>
+                <span className="font-medium">{isDefaultDraft ? 'Brouillon (nouveau)' : isLoadedDevis ? 'Copie de devis' : 'Édition'}</span>
               </div>
             </div>
           </div>

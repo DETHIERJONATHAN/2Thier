@@ -1,7 +1,18 @@
 import rateLimit, { ipKeyGenerator } from 'express-rate-limit';
+import type { RequestHandler } from 'express';
 import { Request, Response, NextFunction } from 'express';
 import crypto from 'crypto';
 import { logSecurityEvent, securityMetrics } from './securityLogger';
+
+const isCodespaces =
+  process.env.CODESPACES === 'true' ||
+  typeof process.env.GITHUB_CODESPACES_PORT_FORWARDING_DOMAIN === 'string';
+
+// ✅ En dev/local/Codespaces: aucune limite (demandé).
+// ✅ En production: rate-limit actif.
+const isRateLimitEnabled = process.env.NODE_ENV === 'production' && !isCodespaces;
+
+const noopMiddleware: RequestHandler = (_req, _res, next) => next();
 
 // 🛡️ MIDDLEWARE DE MONITORING SÉCURISÉ
 export const securityMonitoring = (req: Request, res: Response, next: NextFunction) => {
@@ -71,7 +82,8 @@ export const timingAttackProtection = (req: Request, res: Response, next: NextFu
 
 // 🛡️ RATE LIMITING AVANCÉ AVEC WHITELIST
 // Limiteur spécifique pour les endpoints d'authentification (permet plus de tentatives sans bloquer d'autres routes)
-export const authRateLimit = rateLimit({
+export const authRateLimit: RequestHandler = isRateLimitEnabled
+  ? rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 20, // 20 tentatives de login / registre / reset par IP / 15min
   standardHeaders: true,
@@ -88,10 +100,12 @@ export const authRateLimit = rateLimit({
     logSecurityEvent('AUTH_RATE_LIMIT', { ip: req.ip, url: req.url, bodyKeys: Object.keys(req.body || {}) }, 'warn');
     res.status(429).json({ error: 'Trop de tentatives', retryAfter: 900 });
   }
-});
+  })
+  : noopMiddleware;
 
 // Limiteur général API (exclut explicitement static et OPTIONS, plus plafond élevé)
-export const advancedRateLimit = rateLimit({
+export const advancedRateLimit: RequestHandler = isRateLimitEnabled
+  ? rateLimit({
   windowMs: 15 * 60 * 1000,
   trustProxy: 1, // Spécifique pour Cloud Run
   max: (req: Request) => {
@@ -168,7 +182,8 @@ export const advancedRateLimit = rateLimit({
     logSecurityEvent('API_RATE_LIMIT', { ip: req.ip, url: req.url, method: req.method }, 'warn');
     res.status(429).json({ error: 'Trop de requêtes', retryAfter: 900 });
   }
-});
+  })
+  : noopMiddleware;
 
 // 🛡️ DÉTECTION D'ANOMALIES COMPORTEMENTALES
 // ⚠️ Désactivé en développement car génère trop de logs avec TBL

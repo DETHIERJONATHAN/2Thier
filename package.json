@@ -7,6 +7,7 @@
   },
   "type": "module",
   "scripts": {
+      "inspect:submission": "tsx scripts/inspect-submission-data.ts",
     "gcp-build": "npm run build",
     "prisma:generate": "prisma generate",
     "dev:server": "tsx watch --clear-screen=false --env-file=.env src/api-server-clean.ts",

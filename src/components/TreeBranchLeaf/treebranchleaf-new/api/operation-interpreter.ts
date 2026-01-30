@@ -1672,7 +1672,9 @@ async function interpretFormula(
         meta.refType
       );
       detailCacheByEncoded.set(encoded, refResult);
-      const numeric = Number(refResult.result);
+      // ⚠️ IMPORTANT: tolérer formats FR ("12,5"), unités ("12.5 m"), etc.
+      // Sinon Number("12,5") => NaN => 0 et la formule paraît "bloquée".
+      const numeric = parseNumericLookupValue(refResult.result);
       const safeValue = Number.isFinite(numeric) ? numeric : 0;
       valueCacheByEncoded.set(encoded, safeValue);
 

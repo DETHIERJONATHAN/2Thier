@@ -80,7 +80,18 @@ has_active_gcloud_account() {
     command -v gcloud >/dev/null 2>&1 || return 1
     local active
     active=$(gcloud auth list --filter=status:ACTIVE --format='value(account)' 2>/dev/null | head -n 1)
-    [ -n "$active" ]
+    [ -n "$active" ] || return 1
+
+    # Vérifier que gcloud peut réellement émettre un access token SANS interaction.
+    # Sinon, le proxy démarre mais échoue ensuite avec 401 / ACCESS_TOKEN_TYPE_UNSUPPORTED.
+    if command -v timeout >/dev/null 2>&1; then
+        timeout 3s gcloud auth print-access-token --quiet >/dev/null 2>&1 || return 1
+    else
+        # Fallback sans timeout: essayer quand même, mais ne jamais bloquer.
+        gcloud auth print-access-token --quiet >/dev/null 2>&1 || return 1
+    fi
+
+    return 0
 }
 
 ensure_adc() {

@@ -8,9 +8,10 @@
 
 import { Router, Request, Response } from 'express';
 import { randomUUID } from 'crypto';
-import { prisma } from '../lib/prisma';
+import { db } from '../lib/database';
 
 const router = Router();
+const prisma = db;
 
 const parseStoredStringValue = (raw?: string | null): string | number | boolean | null => {
   if (raw === null || raw === undefined) {
@@ -147,8 +148,8 @@ router.get('/:nodeId/calculated-value', async (req: Request, res: Response) => {
       return res.status(404).json({ error: 'Nœud non trouvé' });
     }
 
-    // 🎯 RÈGLE CRITIQUE: Les champs d'AFFICHAGE ne doivent JAMAIS utiliser les submissions
-    // Ils lisent UNIQUEMENT depuis TreeBranchLeafNode.calculatedValue
+    // 🎯 Champs DISPLAY: on préfère une valeur scoped par submissionId (zéro valeur fantôme).
+    // Fallback: TreeBranchLeafNode.calculatedValue pour compat legacy / écrans hors-contexte.
     const isDisplayField = node.fieldType === 'DISPLAY' || node.type === 'DISPLAY' || node.type === 'leaf_field';
 
     const nodeMetadata = (node.metadata && typeof node.metadata === 'object'
@@ -177,34 +178,67 @@ router.get('/:nodeId/calculated-value', async (req: Request, res: Response) => {
       );
     })();
     
-    // 🔥 FIX: Pour les display fields, TOUJOURS retourner calculatedValue directement (y compris "0")
-    if (isDisplayField && node.calculatedValue !== null && node.calculatedValue !== undefined) {
-      const existingValue = String(node.calculatedValue);
-      const hasValidExistingValue =
-        existingValue !== '' &&
-        existingValue !== '[]' &&
-        existingValue !== 'null' &&
-        existingValue !== 'undefined';
-
-      // ⚠️ Ne pas court-circuiter si un recalcul est explicitement requis
-      if (hasValidExistingValue && !requiresFreshCalculation && !forceRecompute) {
-        console.log(`✅ [CalculatedValueController] Display field "${node.label}" - retour direct du calculatedValue:`, existingValue);
-        return res.json({
-          success: true,
-          nodeId: node.id,
-          label: node.label,
-          value: parseStoredStringValue(existingValue),
-          calculatedAt: toIsoString(node.calculatedAt),
-          calculatedBy: node.calculatedBy,
-          type: node.type,
-          fieldType: node.fieldType,
-          fromStoredValue: true,
-          isDisplayField: true
+    if (isDisplayField) {
+      if (submissionId && !requiresFreshCalculation && !forceRecompute) {
+        const scoped = await prisma.treeBranchLeafSubmissionData.findUnique({
+          where: { submissionId_nodeId: { submissionId, nodeId } },
+          select: {
+            value: true,
+            lastResolved: true,
+            operationSource: true,
+            sourceRef: true,
+            operationResult: true
+          }
         });
+
+        const scopedValue = scoped?.value ?? null;
+        const parsedScoped = parseStoredStringValue(scopedValue);
+        const hasValidScoped = hasMeaningfulValue(parsedScoped);
+        const fromOpResult = hasValidScoped ? null : extractValueFromOperationResult(scoped?.operationResult);
+        const resolved = hasValidScoped ? parsedScoped : fromOpResult;
+
+        if (hasMeaningfulValue(resolved)) {
+          return res.json({
+            success: true,
+            nodeId: node.id,
+            label: node.label,
+            value: resolved,
+            calculatedAt: toIsoString(scoped?.lastResolved || undefined),
+            calculatedBy: scoped?.operationSource || node.calculatedBy,
+            type: node.type,
+            fieldType: node.fieldType,
+            fromSubmissionData: true,
+            isDisplayField: true
+          });
+        }
+      }
+
+      if (node.calculatedValue !== null && node.calculatedValue !== undefined) {
+        const existingValue = String(node.calculatedValue);
+        const hasValidExistingValue =
+          existingValue !== '' &&
+          existingValue !== '[]' &&
+          existingValue !== 'null' &&
+          existingValue !== 'undefined';
+
+        if (hasValidExistingValue && !requiresFreshCalculation && !forceRecompute) {
+          return res.json({
+            success: true,
+            nodeId: node.id,
+            label: node.label,
+            value: parseStoredStringValue(existingValue),
+            calculatedAt: toIsoString(node.calculatedAt),
+            calculatedBy: node.calculatedBy,
+            type: node.type,
+            fieldType: node.fieldType,
+            fromStoredValue: true,
+            isDisplayField: true
+          });
+        }
       }
     }
 
-    const preferSubmissionData = Boolean(submissionId) && !isDisplayField; // 🔥 Ne PAS préférer submission pour display fields
+    const preferSubmissionData = Boolean(submissionId) && !isDisplayField;
 
     let submissionDataEntry: SubmissionDataSnapshot | null = null;
     let submissionResolvedValue: string | number | boolean | null = null;

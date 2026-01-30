@@ -9,6 +9,7 @@
 import { Router, Request } from 'express';
 import { Prisma } from '@prisma/client';
 import { db } from '../../../../lib/database';
+import { randomUUID } from 'crypto';
 
 type OperationSourceType = 'condition' | 'formula' | 'table' | 'neutral';
 
@@ -25,17 +26,329 @@ interface SubmissionDataEntry {
   lastResolved?: Date | null;
 }
 import { evaluateVariableOperation } from '../../treebranchleaf-new/api/operation-interpreter';
-import { storeCalculatedValues } from '../../../../services/calculatedValuesService';
 
 interface AuthenticatedRequest extends Request {
   user?: {
     userId?: string;
     organizationId?: string;
+    role?: string;
+    isSuperAdmin?: boolean;
+    roles?: string[];
   };
 }
 
 const router = Router();
 const prisma = db;
+
+function normalizeRefForTriggers(ref?: unknown): string {
+  if (!ref || typeof ref !== 'string') return '';
+  return ref
+    .replace(/^@value\./, '')
+    .replace(/^@table\./, '')
+    .replace(/^node-formula:/, '')
+    .replace(/^node-table:/, '')
+    .replace(/^node-condition:/, '')
+    .replace(/^condition:/, '')
+    .trim();
+}
+
+function collectReferencedNodeIdsForTriggers(data: unknown, out: Set<string>) {
+  if (!data) return;
+  if (Array.isArray(data)) {
+    for (const item of data) collectReferencedNodeIdsForTriggers(item, out);
+    return;
+  }
+  if (typeof data === 'object') {
+    const obj = data as Record<string, unknown>;
+
+    // Cas fréquents
+    if (typeof obj.ref === 'string') {
+      const id = normalizeRefForTriggers(obj.ref);
+      if (id && isAcceptedNodeId(id)) out.add(id);
+    }
+
+    const leftRef = (obj as any)?.left?.ref;
+    if (typeof leftRef === 'string') {
+      const id = normalizeRefForTriggers(leftRef);
+      if (id && isAcceptedNodeId(id)) out.add(id);
+    }
+    const rightRef = (obj as any)?.right?.ref;
+    if (typeof rightRef === 'string') {
+      const id = normalizeRefForTriggers(rightRef);
+      if (id && isAcceptedNodeId(id)) out.add(id);
+    }
+
+    if (Array.isArray((obj as any).nodeIds)) {
+      for (const raw of (obj as any).nodeIds as unknown[]) {
+        if (typeof raw !== 'string') continue;
+        const id = normalizeRefForTriggers(raw);
+        if (id && isAcceptedNodeId(id)) out.add(id);
+      }
+    }
+
+    const lookup = (obj as any).lookup as any;
+    if (lookup?.selectors?.rowFieldId) {
+      const id = String(lookup.selectors.rowFieldId);
+      if (id && isAcceptedNodeId(id)) out.add(id);
+    }
+    if (lookup?.selectors?.columnFieldId) {
+      const id = String(lookup.selectors.columnFieldId);
+      if (id && isAcceptedNodeId(id)) out.add(id);
+    }
+
+    for (const key of Object.keys(obj)) {
+      collectReferencedNodeIdsForTriggers(obj[key], out);
+    }
+    return;
+  }
+  if (typeof data === 'string') {
+    const s = data.trim();
+    if (!s) return;
+    if (s.startsWith('@value.') || s.startsWith('@table.')) {
+      const id = normalizeRefForTriggers(s);
+      if (id && isAcceptedNodeId(id)) out.add(id);
+      return;
+    }
+    // Fallback: accepter directement un nodeId explicite
+    if (isAcceptedNodeId(s)) out.add(s);
+  }
+}
+
+function deriveTriggerNodeIdsFromCapacity(capacity: unknown, ownerNodeId: string): string[] {
+  const c = capacity as any;
+  const out = new Set<string>();
+  // Formule: tokens; Table: meta; Condition: conditionSet
+  collectReferencedNodeIdsForTriggers(c?.tokens, out);
+  collectReferencedNodeIdsForTriggers(c?.meta, out);
+  collectReferencedNodeIdsForTriggers(c?.conditionSet, out);
+  collectReferencedNodeIdsForTriggers(c?.metadata, out);
+
+  out.delete(ownerNodeId);
+  // Éviter les clés virtuelles (lead.*, etc.) qui ne sont pas des nodeIds
+  for (const id of Array.from(out)) {
+    if (id.includes('.')) out.delete(id);
+  }
+  return Array.from(out);
+}
+
+function uniqStrings(items: string[]): string[] {
+  return Array.from(new Set((items || []).filter((x) => typeof x === 'string' && x.trim())));
+}
+
+async function deriveTriggerNodeIdsFromNodeId(nodeId: string): Promise<string[]> {
+  const out = new Set<string>();
+  const [formulas, conditions, tables, variable, selectConfig] = await Promise.all([
+    prisma.treeBranchLeafNodeFormula.findMany({ where: { nodeId }, select: { tokens: true } }),
+    prisma.treeBranchLeafNodeCondition.findMany({ where: { nodeId }, select: { conditionSet: true } }),
+    prisma.treeBranchLeafNodeTable.findMany({ where: { nodeId }, select: { meta: true } }),
+    prisma.treeBranchLeafNodeVariable.findUnique({ where: { nodeId }, select: { metadata: true } }),
+    prisma.treeBranchLeafSelectConfig.findFirst({ where: { nodeId } })
+  ]);
+
+  for (const f of formulas) collectReferencedNodeIdsForTriggers((f as any).tokens, out);
+  for (const c of conditions) collectReferencedNodeIdsForTriggers((c as any).conditionSet, out);
+  for (const t of tables) collectReferencedNodeIdsForTriggers((t as any).meta, out);
+  if (variable) collectReferencedNodeIdsForTriggers((variable as any).metadata, out);
+  if (selectConfig) collectReferencedNodeIdsForTriggers(selectConfig as any, out);
+
+  out.delete(nodeId);
+  for (const id of Array.from(out)) {
+    if (id.includes('.')) out.delete(id);
+  }
+  return Array.from(out);
+}
+
+function isAdminOrSuperAdmin(req: Request): boolean {
+  const u = (req as AuthenticatedRequest).user as
+    | {
+        role?: string;
+        roles?: string[];
+        isSuperAdmin?: boolean;
+      }
+    | undefined;
+
+  if (!u) return false;
+  if (u.isSuperAdmin) return true;
+
+  const normalizedRole = typeof u.role === 'string' ? u.role.toLowerCase().replace(/_/g, '') : '';
+  if (normalizedRole === 'superadmin' || normalizedRole === 'admin') return true;
+
+  if (Array.isArray(u.roles)) {
+    const normalizedRoles = u.roles
+      .filter((r): r is string => typeof r === 'string')
+      .map((r) => r.toLowerCase().replace(/_/g, ''));
+    if (normalizedRoles.includes('superadmin') || normalizedRoles.includes('admin')) return true;
+  }
+
+  return false;
+}
+
+async function cloneCompletedSubmissionToDraft(params: {
+  originalSubmissionId: string;
+  requestedByUserId: string | null;
+  targetStatus?: 'draft' | 'completed';
+  providedName?: string | null;
+}): Promise<string> {
+  const { originalSubmissionId, requestedByUserId } = params;
+  const now = new Date();
+
+  const targetStatus = params.targetStatus ?? 'draft';
+  const providedName = typeof params.providedName === 'string' ? params.providedName.trim() : '';
+
+  return prisma.$transaction(async (tx) => {
+    const original = await tx.treeBranchLeafSubmission.findUnique({
+      where: { id: originalSubmissionId },
+    });
+
+    if (!original) {
+      throw new Error(`Soumission introuvable: ${originalSubmissionId}`);
+    }
+
+    const newSubmissionId = `tbl-rev-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+
+    const originalSummary = (original.summary || {}) as Record<string, unknown>;
+    const baseName =
+      (typeof originalSummary.name === 'string' && originalSummary.name.trim())
+        ? originalSummary.name.trim()
+        : `Devis ${original.id.slice(0, 8)}`;
+    const nextSummary: Record<string, unknown> = {
+      ...originalSummary,
+      name: providedName || `${baseName} (révision)`,
+      revisionOfSubmissionId: original.id,
+      revisionCreatedAt: now.toISOString(),
+      revisionCreatedByUserId: requestedByUserId,
+    };
+
+    await tx.treeBranchLeafSubmission.create({
+      data: {
+        id: newSubmissionId,
+        treeId: original.treeId,
+        userId: original.userId,
+        leadId: original.leadId,
+        sessionId: original.sessionId,
+        status: targetStatus,
+        totalScore: original.totalScore,
+        summary: nextSummary as unknown as Prisma.InputJsonValue,
+        exportData: (original.exportData ?? {}) as unknown as Prisma.InputJsonValue,
+        completedAt: targetStatus === 'completed' ? now : null,
+        updatedAt: now,
+        organizationId: original.organizationId,
+        lastEditedBy: requestedByUserId,
+        lockedBy: null,
+        lockedAt: null,
+        currentVersion: 1,
+      },
+    });
+
+    const originalRows = await tx.treeBranchLeafSubmissionData.findMany({
+      where: { submissionId: original.id },
+      orderBy: [{ lastResolved: 'desc' }, { createdAt: 'desc' }],
+    });
+
+    // ⚠️ Sécurité: certaines données legacy contiennent des doublons (submissionId,nodeId).
+    // On déduplique ici pour éviter un crash lors de la création de la révision.
+    const seenNodeIds = new Set<string>();
+    const uniqueOriginalRows: typeof originalRows = [];
+    let duplicateCount = 0;
+    for (const r of originalRows) {
+      if (!r.nodeId) continue;
+      if (seenNodeIds.has(r.nodeId)) {
+        duplicateCount++;
+        continue;
+      }
+      seenNodeIds.add(r.nodeId);
+      uniqueOriginalRows.push(r);
+    }
+    if (duplicateCount > 0) {
+      console.warn('⚠️ [TBL][REVISION] Doublons TreeBranchLeafSubmissionData détectés, dédupliqués', {
+        submissionId: original.id,
+        duplicateCount,
+        totalRows: originalRows.length,
+        keptRows: uniqueOriginalRows.length,
+      });
+    }
+
+    if (uniqueOriginalRows.length > 0) {
+      await tx.treeBranchLeafSubmissionData.createMany({
+        // ⚠️ Robustesse: même après déduplication, on sécurise contre un double appel concurrent.
+        // (Prisma/Postgres) Empêche un crash si (submissionId,nodeId) existe déjà.
+        skipDuplicates: true,
+        data: uniqueOriginalRows.map((r) => ({
+          id: randomUUID(),
+          submissionId: newSubmissionId,
+          nodeId: r.nodeId,
+          value: r.value,
+          createdAt: now,
+          lastResolved: r.lastResolved,
+          operationDetail: r.operationDetail,
+          operationResult: r.operationResult,
+          operationSource: r.operationSource,
+          sourceRef: r.sourceRef,
+          fieldLabel: r.fieldLabel,
+          isVariable: r.isVariable,
+          variableDisplayName: r.variableDisplayName,
+          variableKey: r.variableKey,
+          variableUnit: r.variableUnit,
+        })),
+      });
+    }
+
+    return newSubmissionId;
+  });
+}
+
+function coerceOperationSource(value: unknown): OperationSourceType {
+  const lowered = typeof value === 'string' ? value.toLowerCase().trim() : '';
+  if (lowered === 'condition' || lowered === 'formula' || lowered === 'table' || lowered === 'neutral') return lowered;
+  return 'formula';
+}
+
+async function upsertComputedValuesForSubmission(
+  submissionId: string,
+  rows: Array<{
+    nodeId: string;
+    value: string | null;
+    sourceRef?: string | null;
+    operationSource?: OperationSourceType | null;
+    fieldLabel?: string | null;
+    operationDetail?: Prisma.InputJsonValue | null;
+    operationResult?: Prisma.InputJsonValue | null;
+    calculatedBy?: string | null;
+  }>
+): Promise<number> {
+  if (!submissionId || !rows.length) return 0;
+
+  let stored = 0;
+  for (const row of rows) {
+    if (!row.nodeId) continue;
+    await prisma.treeBranchLeafSubmissionData.upsert({
+      where: { submissionId_nodeId: { submissionId, nodeId: row.nodeId } },
+      create: {
+        id: `${submissionId}-${row.nodeId}-calc-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
+        submissionId,
+        nodeId: row.nodeId,
+        value: row.value,
+        sourceRef: row.sourceRef ?? null,
+        operationSource: row.operationSource ?? null,
+        fieldLabel: row.fieldLabel ?? null,
+        operationDetail: row.operationDetail ?? null,
+        operationResult: row.operationResult ?? null,
+        lastResolved: new Date()
+      },
+      update: {
+        value: row.value,
+        sourceRef: row.sourceRef ?? null,
+        operationSource: row.operationSource ?? null,
+        fieldLabel: row.fieldLabel ?? null,
+        operationDetail: row.operationDetail ?? null,
+        operationResult: row.operationResult ?? null,
+        lastResolved: new Date()
+      }
+    });
+    stored++;
+  }
+  return stored;
+}
 
 // Mémoire: staging des modifications (par session) pour ne pas écrire en base tant que non validé
 type StageRecord = {
@@ -99,6 +412,36 @@ function normalizeTriggerCandidate(trigger: string): string {
 function extractNumericSuffix(nodeId: string): string | null {
   const m = String(nodeId || '').match(/-(\d+)$/);
   return m ? m[1] : null;
+}
+
+function applyCopyScopedInputAliases(valueMap: Map<string, unknown>, ownerNodeId: string, capacity: unknown): string[] {
+  const suffix = extractNumericSuffix(ownerNodeId);
+  if (!suffix) return [];
+
+  const suffixToken = `-${suffix}`;
+  const referenced = deriveTriggerNodeIdsFromCapacity(capacity, ownerNodeId);
+
+  const injected: string[] = [];
+  for (const refIdRaw of referenced) {
+    const refId = normalizeTriggerCandidate(refIdRaw);
+    if (!refId) continue;
+
+    // Cas principal: la formule copie (ownerNodeId-1) référence un UUID de base,
+    // mais l'utilisateur a modifié l'input suffixé (uuid-1).
+    if (UUID_NODE_REGEX.test(refId)) {
+      const suffixed = `${refId}${suffixToken}`;
+      if (!valueMap.has(refId) && valueMap.has(suffixed)) {
+        valueMap.set(refId, valueMap.get(suffixed));
+        injected.push(refId);
+      }
+    }
+  }
+
+  if (injected.length) {
+    console.log(`🔁 [COPY INPUT ALIAS] ${ownerNodeId}: ${injected.length} refs base → suffix '${suffixToken}'`);
+  }
+
+  return injected;
 }
 
 function expandTriggersForCopy(displayNodeId: string, triggerIds: string[]): string[] {
@@ -172,6 +515,29 @@ async function resolveSharedReferenceAliases(sharedRefs: string[], treeId?: stri
   return map;
 }
 
+async function resolveAliasToSharedReferenceId(nodeIds: string[], treeId?: string) {
+  const ids = (nodeIds || []).filter((id) => typeof id === 'string' && id.trim());
+  if (!ids.length) return new Map<string, string>();
+
+  const rows = await prisma.treeBranchLeafNode.findMany({
+    where: {
+      id: { in: ids },
+      ...(treeId ? { treeId } : {}),
+      sharedReferenceId: { not: null },
+    },
+    select: { id: true, sharedReferenceId: true },
+  });
+
+  const map = new Map<string, string>();
+  for (const r of rows) {
+    const sharedRef = (r as any).sharedReferenceId as string | null;
+    if (sharedRef && typeof sharedRef === 'string' && sharedRef.trim()) {
+      map.set(r.id, sharedRef);
+    }
+  }
+  return map;
+}
+
 async function applySharedReferenceValues(
   target: Map<string, unknown>,
   entries: Array<[string, unknown]>,
@@ -195,6 +561,27 @@ async function applySharedReferenceValues(
     for (const alias of aliases) {
       target.set(alias, value);
     }
+  }
+
+  // 🔁 BONUS: résolution inverse (alias nodeId → shared-ref-*)
+  // Cas réel: la formule référence un shared-ref, mais le frontend envoie seulement l'alias (nodeId).
+  try {
+    const aliasCandidates = entries
+      .map(([key]) => key)
+      .filter((k) => !isSharedReferenceId(k) && isAcceptedNodeId(k));
+    if (aliasCandidates.length) {
+      const reverse = await resolveAliasToSharedReferenceId(aliasCandidates, treeId);
+      for (const [key, value] of entries) {
+        if (isSharedReferenceId(key)) continue;
+        const sharedRef = reverse.get(key);
+        if (!sharedRef) continue;
+        if (!target.has(sharedRef)) {
+          target.set(sharedRef, value);
+        }
+      }
+    }
+  } catch {
+    // best-effort: pas bloquant
   }
 }
 
@@ -233,6 +620,13 @@ async function saveUserEntriesNeutral(
     ? await resolveSharedReferenceAliases(sharedRefKeys, treeId)
     : new Map<string, string[]>();
 
+  // 🔁 Résolution inverse: alias nodeId → sharedReferenceId (si le frontend n'a pas envoyé la clé shared-ref-*)
+  const aliasKeys = Object.keys(formData)
+    .filter((k) => !isSharedReferenceId(k) && isAcceptedNodeId(k));
+  const aliasToSharedRefMap = aliasKeys.length
+    ? await resolveAliasToSharedReferenceId(aliasKeys, treeId)
+    : new Map<string, string>();
+
   for (const [key, value] of Object.entries(formData)) {
     if (key.startsWith('__mirror_') || key.startsWith('__formula_') || key.startsWith('__condition_')) {
       continue;
@@ -249,7 +643,7 @@ async function saveUserEntriesNeutral(
 
     const storageIds = isSharedReferenceId(key)
       ? [key, ...(sharedRefAliasMap.get(key) || [])]
-      : [key];
+      : [key, ...(aliasToSharedRefMap.get(key) ? [aliasToSharedRefMap.get(key)!] : [])];
 
     for (const nodeId of storageIds) {
       if (!isAcceptedNodeId(nodeId)) continue;
@@ -354,6 +748,23 @@ async function evaluateCapacitiesForSubmission(
 ) {
   // 🔑 ÉTAPE 1: Construire le valueMap avec les données fraîches du formulaire
   const valueMap = new Map<string, unknown>();
+
+  // 🔁 IMPORTANT: Hydrater d'abord depuis la DB (submission scoped) pour éviter les régressions
+  // quand le frontend envoie un payload partiel/vidé (ex: formData: {}).
+  // Ensuite seulement, appliquer le formData en override.
+  try {
+    const existingData = await prisma.treeBranchLeafSubmissionData.findMany({
+      where: { submissionId },
+      select: { nodeId: true, value: true }
+    });
+    if (existingData.length) {
+      const existingEntries = existingData.map(r => [r.nodeId, r.value] as [string, unknown]);
+      await applySharedReferenceValues(valueMap, existingEntries, treeId);
+      console.log(`🔑 [EVALUATE] valueMap hydraté depuis DB: ${existingData.length} entrées → ${valueMap.size} clés`);
+    }
+  } catch (e) {
+    console.warn('⚠️ [EVALUATE] Hydratation DB du valueMap échouée (best-effort):', (e as Error)?.message || e);
+  }
   
   if (formData && typeof formData === 'object') {
     // Appliquer les données du formulaire au valueMap (avec résolution des sharedReferences)
@@ -409,8 +820,20 @@ async function evaluateCapacitiesForSubmission(
     updated: 0, created: 0, stored: 0, displayFieldsUpdated: 0 
   };
   
-  // 🎯 UNIQUEMENT pour les display fields - JAMAIS SubmissionData
-  const displayFieldValuesToStore: { nodeId: string; calculatedValue: string | number | boolean; calculatedBy?: string }[] = [];
+  // 🎯 Valeurs calculées par submissionId (inclut DISPLAY mais ne touche jamais aux neutral user inputs)
+  const computedValuesToStore: Array<{
+    nodeId: string;
+    value: string | null;
+    sourceRef?: string | null;
+    operationSource?: OperationSourceType | null;
+    fieldLabel?: string | null;
+    operationDetail?: Prisma.InputJsonValue | null;
+    operationResult?: Prisma.InputJsonValue | null;
+    calculatedBy?: string | null;
+  }> = [];
+
+  // Cache par requête pour éviter de recharger les mêmes nœuds en boucle
+  const triggerDerivationCache = new Map<string, string[]>();
 
   for (const capacity of capacities) {
     const sourceRef = capacity.sourceRef!;
@@ -435,7 +858,39 @@ async function evaluateCapacitiesForSubmission(
         select: { metadata: true }
       });
       
-      const triggerNodeIds = (node?.metadata as { triggerNodeIds?: string[] })?.triggerNodeIds;
+      const metaTriggerNodeIds = (node?.metadata as { triggerNodeIds?: string[] })?.triggerNodeIds;
+      let triggerNodeIds = Array.isArray(metaTriggerNodeIds) ? metaTriggerNodeIds.filter(Boolean) : [];
+
+      // 🆘 AUTO-HEAL: si aucun trigger n'est configuré, tenter de les déduire depuis la formule/table/condition.
+      // Objectif: éviter les display fields "gelés" (ex: N° de panneau max) qui ne se recalculent jamais.
+      if (triggerNodeIds.length === 0) {
+        const derived = deriveTriggerNodeIdsFromCapacity(capacity, capacity.nodeId);
+        if (derived.length > 0) {
+          triggerNodeIds = derived;
+          try {
+            const existingMeta = (node?.metadata && typeof node.metadata === 'object')
+              ? (node.metadata as Record<string, unknown>)
+              : {};
+            await prisma.treeBranchLeafNode.update({
+              where: { id: capacity.nodeId },
+              data: {
+                metadata: {
+                  ...existingMeta,
+                  triggerNodeIds: derived,
+                } as unknown as Prisma.InputJsonValue,
+              }
+            });
+            console.log(
+              `🧩 [TRIGGERS AUTO] Display field ${capacity.nodeId} (${capacity.TreeBranchLeafNode?.label}) triggers auto-déduits: ${derived.length}`
+            );
+          } catch (e) {
+            console.warn(
+              `⚠️ [TRIGGERS AUTO] Impossible de persister les triggerNodeIds pour ${capacity.nodeId}:`,
+              (e as Error)?.message || e
+            );
+          }
+        }
+      }
       
       // 🔑 LOGIQUE CORRECTE: 
       // - Chargement initial (changedFieldId=NULL) → Calculer TOUT
@@ -446,12 +901,54 @@ async function evaluateCapacitiesForSubmission(
       if (triggerNodeIds && Array.isArray(triggerNodeIds) && triggerNodeIds.length > 0) {
         // Des triggers sont définis, vérifier le match (compatible copies: on suffixe les triggers base)
         const expanded = expandTriggersForCopy(capacity.nodeId, triggerNodeIds);
-        const matchesTrigger = matchesChangedField(expanded, changedFieldId);
+        let matchesTrigger = matchesChangedField(expanded, changedFieldId);
         
         if (!matchesTrigger) {
-          // Le champ modifié n'est PAS un trigger pour ce display field → SKIP
-          console.log(`⏸️ [TRIGGER FILTER] Display field ${capacity.nodeId} (${capacity.TreeBranchLeafNode?.label}) skippé - changedFieldId "${changedFieldId}" pas dans triggers [${triggerNodeIds.length} triggers définis]`);
-          continue; // ✅ SKIP
+          // 🆘 AUTO-REPAIR: triggers existants mais potentiellement incomplets.
+          // On tente de re-déduire les dépendances depuis les capacités du nœud (formule/condition/table/etc.)
+          // pour éviter les valeurs "figées" quand Longueur/Rampant changent.
+          try {
+            const cached = triggerDerivationCache.get(capacity.nodeId);
+            const derived = cached ?? (await deriveTriggerNodeIdsFromNodeId(capacity.nodeId));
+            if (!cached) triggerDerivationCache.set(capacity.nodeId, derived);
+
+            const merged = uniqStrings([...triggerNodeIds, ...derived]);
+            if (merged.length > triggerNodeIds.length) {
+              const reExpanded = expandTriggersForCopy(capacity.nodeId, merged);
+              matchesTrigger = matchesChangedField(reExpanded, changedFieldId);
+
+              // Persister les triggers améliorés (best-effort)
+              if (matchesTrigger) {
+                const existingMeta = (node?.metadata && typeof node.metadata === 'object')
+                  ? (node.metadata as Record<string, unknown>)
+                  : {};
+                await prisma.treeBranchLeafNode.update({
+                  where: { id: capacity.nodeId },
+                  data: {
+                    metadata: {
+                      ...existingMeta,
+                      triggerNodeIds: merged,
+                    } as unknown as Prisma.InputJsonValue,
+                  }
+                });
+                console.log(
+                  `🧩 [TRIGGERS REPAIR] Display field ${capacity.nodeId} (${capacity.TreeBranchLeafNode?.label}) triggers étendus: ${triggerNodeIds.length} → ${merged.length}`
+                );
+              }
+            }
+          } catch (e) {
+            // Best-effort: si le repair échoue, on garde le comportement existant
+            console.warn(
+              `⚠️ [TRIGGERS REPAIR] Échec réparation triggers pour ${capacity.nodeId}:`,
+              (e as Error)?.message || e
+            );
+          }
+
+          if (!matchesTrigger) {
+            // Le champ modifié n'est PAS un trigger pour ce display field → SKIP
+            console.log(`⏸️ [TRIGGER FILTER] Display field ${capacity.nodeId} (${capacity.TreeBranchLeafNode?.label}) skippé - changedFieldId "${changedFieldId}" pas dans triggers [${triggerNodeIds.length} triggers définis]`);
+            continue; // ✅ SKIP
+          }
         } else {
           console.log(`✅ [TRIGGER MATCH] Display field ${capacity.nodeId} (${capacity.TreeBranchLeafNode?.label}) recalculé - changedFieldId "${changedFieldId}" dans triggers`);
         }
@@ -463,6 +960,10 @@ async function evaluateCapacitiesForSubmission(
     }
     
     try {
+      // 🔁 IMPORTANT: pour les copies (-1, -2, ...), certaines formules/conditions référencent encore
+      // les IDs de base (sans suffixe). On injecte temporairement baseId -> baseId-<suffix>
+      // dans le valueMap pour que l'évaluation lise les valeurs fraîches encodées.
+      const injectedBaseKeys = applyCopyScopedInputAliases(valueMap, capacity.nodeId, capacity);
       // ✨ ÉVALUATION avec le valueMap contenant les données FRAÎCHES
       const capacityResult = await evaluateVariableOperation(
         capacity.nodeId,
@@ -482,41 +983,49 @@ async function evaluateCapacitiesForSubmission(
       if (hasValidValue) {
         valueMap.set(capacity.nodeId, rawValue);
       }
-      
-      // 🎯 DISPLAY FIELDS: UNIQUEMENT dans calculatedValue, JAMAIS dans SubmissionData
-      if (isDisplayField) {
-        if (hasValidValue) {
-          let normalizedValue: string | number | boolean;
-          if (typeof rawValue === 'number' || typeof rawValue === 'boolean') {
-            normalizedValue = rawValue;
-          } else {
-            normalizedValue = String(rawValue);
-          }
 
-          displayFieldValuesToStore.push({
-            nodeId: capacity.nodeId,
-            calculatedValue: normalizedValue,
-            calculatedBy: `reactive-${userId || 'unknown'}`
-          });
-          console.log(`✅ [DISPLAY FIELD] ${capacity.nodeId} (${capacity.TreeBranchLeafNode?.label}) = ${normalizedValue}`);
-        }
-        // ❌ SKIP: Ne JAMAIS persister dans SubmissionData pour les display fields
+      const normalizedOperationSource: OperationSourceType = coerceOperationSource(
+        (capacityResult as { operationSource?: unknown }).operationSource
+      );
+
+      let parsedDetail: Prisma.InputJsonValue | null = null;
+      try {
+        parsedDetail = typeof (capacityResult as any).operationDetail === 'string'
+          ? (JSON.parse((capacityResult as any).operationDetail) as Prisma.InputJsonValue)
+          : ((capacityResult as any).operationDetail as Prisma.InputJsonValue);
+      } catch {
+        parsedDetail = (capacityResult as any).operationDetail as Prisma.InputJsonValue;
+      }
+
+      let parsedResult: Prisma.InputJsonValue | null = null;
+      try {
+        parsedResult = typeof (capacityResult as any).operationResult === 'string'
+          ? (JSON.parse((capacityResult as any).operationResult) as Prisma.InputJsonValue)
+          : ((capacityResult as any).operationResult as Prisma.InputJsonValue);
+      } catch {
+        parsedResult = (capacityResult as any).operationResult as Prisma.InputJsonValue;
+      }
+      
+      // 🎯 DISPLAY FIELDS: on stocke aussi, mais SCOPÉ par submissionId (pas global)
+      if (isDisplayField) {
+        computedValuesToStore.push({
+          nodeId: capacity.nodeId,
+          value: hasValidValue ? String(rawValue) : null,
+          sourceRef,
+          operationSource: normalizedOperationSource,
+          fieldLabel: capacity.TreeBranchLeafNode?.label || null,
+          operationDetail: parsedDetail,
+          operationResult: parsedResult,
+          calculatedBy: `reactive-${userId || 'unknown'}`
+        });
+        console.log(
+          `✅ [DISPLAY FIELD] ${capacity.nodeId} (${capacity.TreeBranchLeafNode?.label}) = ${hasValidValue ? String(rawValue) : 'null'}`
+        );
         continue;
       }
       
       // 📦 AUTRES CAPACITÉS (non-display): Persister dans SubmissionData
-      const normalizedOperationSource: OperationSourceType = (typeof capacityResult.operationSource === 'string'
-        ? (capacityResult.operationSource as string).toLowerCase()
-        : 'neutral') as OperationSourceType;
-
-      let parsedDetail: Prisma.InputJsonValue | null = null;
-      try {
-        parsedDetail = typeof capacityResult.operationDetail === 'string'
-          ? (JSON.parse(capacityResult.operationDetail as unknown as string) as Prisma.InputJsonValue)
-          : (capacityResult.operationDetail as unknown as Prisma.InputJsonValue);
-      } catch {
-        parsedDetail = capacityResult.operationDetail as unknown as Prisma.InputJsonValue;
-      }
+      // 📦 AUTRES CAPACITÉS (non-display): Persister dans SubmissionData
 
       const key = { submissionId_nodeId: { submissionId, nodeId: capacity.nodeId } } as const;
       const existing = await prisma.treeBranchLeafSubmissionData.findUnique({ where: key });
@@ -562,23 +1071,27 @@ async function evaluateCapacitiesForSubmission(
         });
         results.created++;
       }
+
+      // Rollback des alias temporaires (évite la pollution cross-capacities)
+      if (injectedBaseKeys.length) {
+        for (const k of injectedBaseKeys) {
+          valueMap.delete(k);
+        }
+      }
     } catch (error) {
       console.error(`[TBL CAPACITY ERROR] ${sourceRef}:`, error);
     }
   }
 
-  // 🎯 STOCKER les display fields UNIQUEMENT dans TreeBranchLeafNode.calculatedValue
-  if (displayFieldValuesToStore.length > 0) {
+  // 🎯 STOCKER les valeurs calculées (DISPLAY inclus) dans SubmissionData (scopé devis/brouillon)
+  if (computedValuesToStore.length > 0) {
     try {
-      console.log(`🎯 [DISPLAY FIELDS] Stockage de ${displayFieldValuesToStore.length} display fields dans calculatedValue`);
-      const displayStoreResult = await storeCalculatedValues(displayFieldValuesToStore, submissionId);
-      results.displayFieldsUpdated = displayStoreResult.stored;
-      console.log(`✅ [DISPLAY FIELDS] ${displayStoreResult.stored} display fields mis à jour dans calculatedValue`);
-      if (!displayStoreResult.success && displayStoreResult.errors.length > 0) {
-        console.warn('[DISPLAY FIELDS] Erreurs:', displayStoreResult.errors);
-      }
-    } catch (displayStoreError) {
-      console.error('[DISPLAY FIELDS] Erreur stockage:', displayStoreError);
+      console.log(`🎯 [COMPUTED VALUES] Stockage de ${computedValuesToStore.length} valeurs calculées (DISPLAY inclus) dans SubmissionData`);
+      const stored = await upsertComputedValuesForSubmission(submissionId, computedValuesToStore);
+      results.displayFieldsUpdated = stored;
+      console.log(`✅ [COMPUTED VALUES] ${stored} valeurs calculées stockées (submission scoped)`);
+    } catch (computedStoreError) {
+      console.error('[COMPUTED VALUES] Erreur stockage:', computedStoreError);
     }
   }
 
@@ -828,11 +1341,25 @@ router.get('/submissions/:submissionId/verification', async (req, res) => {
  */
 router.post('/submissions/create-and-evaluate', async (req, res) => {
   try {
-    const { treeId, clientId, formData, status = 'draft', providedName, reuseSubmissionId, changedFieldId } = req.body;
+    const {
+      treeId,
+      clientId,
+      formData,
+      status = 'draft',
+      providedName,
+      reuseSubmissionId,
+      submissionId: requestedSubmissionId,
+      changedFieldId,
+      forceNewSubmission,
+    } = req.body;
     const cleanFormData = formData && typeof formData === 'object' ? (sanitizeFormData(formData) as Record<string, unknown>) : undefined;
     
     // 🎯 Récupérer le champ modifié pour filtrer les triggers (nouveau paramètre optionnel)
     const triggerFieldId = changedFieldId as string | undefined;
+
+    // Permet de créer volontairement un nouveau brouillon (sans réutiliser le draft existant).
+    // Utile pour "copier" / "nouveau brouillon" côté UI.
+    const shouldForceNewSubmission = Boolean(forceNewSubmission);
     
     console.log(`🎯 [TRIGGER DEBUG] changedFieldId reçu du frontend: "${triggerFieldId || 'NULL'}"`);
     
@@ -840,9 +1367,8 @@ router.post('/submissions/create-and-evaluate', async (req, res) => {
     const organizationId = req.headers['x-organization-id'] as string || (req as AuthenticatedRequest).user?.organizationId;
     // 🔑 Récupérer userId depuis le header X-User-Id ou le middleware auth
     const userId = req.headers['x-user-id'] as string || (req as AuthenticatedRequest).user?.userId || 'unknown-user';
-    // 🔑 Vérifier si l'utilisateur est Super Admin
-    const userRole = (req as AuthenticatedRequest).user?.role;
-    const isSuperAdmin = userRole === 'super_admin';
+    const canEditCompletedInPlace = isAdminOrSuperAdmin(req);
+    const isSuperAdmin = Boolean((req as AuthenticatedRequest).user?.isSuperAdmin) || (req as AuthenticatedRequest).user?.role === 'super_admin';
     
     if (!organizationId) {
       return res.status(400).json({
@@ -856,7 +1382,7 @@ router.post('/submissions/create-and-evaluate', async (req, res) => {
     console.log(`📋 [TBL CREATE-AND-EVALUATE] TreeId reçu: ${treeId}, ClientId: ${clientId}`);
     
     // 1. Vérifier et récupérer l'arbre réel depuis la base de données
-    let effectiveTreeId = treeId;
+    let effectiveTreeId = treeId as string | undefined;
     
     // Si pas de treeId fourni ou si l'arbre n'existe pas, récupérer le premier arbre disponible
     if (!effectiveTreeId) {
@@ -966,11 +1492,107 @@ router.post('/submissions/create-and-evaluate', async (req, res) => {
       }
     }
     
-    // 4. Réutiliser éventuellement une soumission existante au lieu d'en créer une nouvelle
-    let submissionId = reuseSubmissionId as string | undefined;
+    // 4. Déterminer la soumission cible (compat: submissionId OU reuseSubmissionId)
+    let submissionId = (requestedSubmissionId as string | undefined) || (reuseSubmissionId as string | undefined);
+    let existingSubmission:
+      | {
+          id: string;
+          treeId: string;
+          leadId: string | null;
+          userId: string | null;
+          status: string;
+          organizationId: string | null;
+          summary: Prisma.JsonValue;
+          exportData: Prisma.JsonValue | null;
+          completedAt: Date | null;
+        }
+      | null = null;
+
     if (submissionId) {
-      const existing = await prisma.treeBranchLeafSubmission.findUnique({ where: { id: submissionId }, select: { id: true } });
-      if (!existing) submissionId = undefined;
+      existingSubmission = await prisma.treeBranchLeafSubmission.findUnique({
+        where: { id: submissionId },
+        select: {
+          id: true,
+          treeId: true,
+          leadId: true,
+          userId: true,
+          status: true,
+          organizationId: true,
+          summary: true,
+          exportData: true,
+          completedAt: true,
+        },
+      });
+      if (!existingSubmission) {
+        submissionId = undefined;
+      } else {
+        // Sécurité org (sauf superadmin)
+        if (!isSuperAdmin && existingSubmission.organizationId && existingSubmission.organizationId !== organizationId) {
+          return res.status(403).json({
+            success: false,
+            error: 'Soumission non autorisée',
+            message: 'Cette soumission n\'appartient pas à votre organisation.'
+          });
+        }
+
+        // En mode édition d'une soumission existante: verrouiller tree/lead (évite cross-write)
+        if (effectiveTreeId && effectiveTreeId !== existingSubmission.treeId) {
+          return res.status(400).json({
+            success: false,
+            error: 'treeId invalide',
+            message: 'treeId ne correspond pas à la soumission existante.'
+          });
+        }
+        effectiveTreeId = existingSubmission.treeId;
+
+        if (clientId && existingSubmission.leadId && clientId !== existingSubmission.leadId) {
+          return res.status(400).json({
+            success: false,
+            error: 'leadId invalide',
+            message: 'clientId ne correspond pas au lead de la soumission existante.'
+          });
+        }
+        if (existingSubmission.leadId) {
+          effectiveLeadId = existingSubmission.leadId;
+        }
+
+        const isCompleted = existingSubmission.status === 'completed';
+        const isRealUserChange = Boolean(triggerFieldId && triggerFieldId !== 'NULL');
+
+        const summaryObj = (existingSubmission.summary && typeof existingSubmission.summary === 'object')
+          ? (existingSubmission.summary as Record<string, unknown>)
+          : null;
+        const summaryName = summaryObj && typeof summaryObj.name === 'string' ? summaryObj.name : '';
+        const isRevision = Boolean(
+          summaryObj && typeof summaryObj.revisionOfSubmissionId === 'string' && summaryObj.revisionOfSubmissionId.trim()
+        ) || /-\d+\s*$/.test(summaryName);
+
+        // ✅ VERSIONING
+        // - Si `forceNewSubmission=true`: on clone la completed vers une nouvelle soumission au statut demandé (draft OU completed).
+        // - Sinon: pour non-admin, on protège l'original completed en clonant en draft, MAIS on autorise l'édition in-place des révisions.
+        if (isCompleted && !canEditCompletedInPlace && isRealUserChange) {
+          if (shouldForceNewSubmission) {
+            const newId = await cloneCompletedSubmissionToDraft({
+              originalSubmissionId: existingSubmission.id,
+              requestedByUserId: userId && userId !== 'unknown-user' ? userId : null,
+              targetStatus: status === 'completed' ? 'completed' : 'draft',
+              providedName: typeof providedName === 'string' ? providedName : null,
+            });
+            submissionId = newId;
+            existingSubmission = null;
+            console.log(`🆕 [TBL VERSIONING] Soumission completed ${requestedSubmissionId} clonée (forceNewSubmission) → ${newId}`);
+          } else if (!isRevision) {
+            const newId = await cloneCompletedSubmissionToDraft({
+              originalSubmissionId: existingSubmission.id,
+              requestedByUserId: userId && userId !== 'unknown-user' ? userId : null,
+              targetStatus: 'draft',
+            });
+            submissionId = newId;
+            existingSubmission = null;
+            console.log(`🆕 [TBL VERSIONING] Soumission completed ${requestedSubmissionId} clonée → ${newId}`);
+          }
+        }
+      }
     }
     
     // 🔥 NOUVEAU: Chercher une submission draft existante AVANT de créer une nouvelle
@@ -994,7 +1616,7 @@ router.post('/submissions/create-and-evaluate', async (req, res) => {
         if (existingDraft) {
           console.log(`♻️ [TBL CREATE-AND-EVALUATE] Réutilisation du default-draft existant: ${existingDraft.id}`);
         }
-      } else if (effectiveLeadId) {
+      } else if (effectiveLeadId && !shouldForceNewSubmission) {
         // Pour les drafts normaux: chercher par leadId + treeId
         existingDraft = await prisma.treeBranchLeafSubmission.findFirst({
           where: {
@@ -1034,16 +1656,33 @@ router.post('/submissions/create-and-evaluate', async (req, res) => {
       });
       console.log(`✅ [TBL CREATE-AND-EVALUATE] Soumission créée: ${submissionId} pour organization ${organizationId}`);
     } else {
-      // Mettre à jour la submission existante
+      // Mettre à jour la submission existante (ou une révision fraîchement créée)
+      const current = await prisma.treeBranchLeafSubmission.findUnique({
+        where: { id: submissionId },
+        select: { id: true, status: true, completedAt: true }
+      });
+      const keepCompleted = current?.status === 'completed' && canEditCompletedInPlace;
+      const nextStatus = keepCompleted ? 'completed' : (status || 'draft');
+
+      const updateData: Prisma.TreeBranchLeafSubmissionUpdateInput = {
+        status: nextStatus,
+        updatedAt: new Date(),
+        completedAt: keepCompleted ? (current?.completedAt ?? new Date()) : (nextStatus === 'completed' ? new Date() : null),
+      };
+
+      if (providedName && typeof providedName === 'string' && providedName.trim()) {
+        updateData.summary = { name: providedName.trim() } as unknown as Prisma.InputJsonValue;
+      }
+
+      // ⚠️ Ne pas écraser exportData si le frontend envoie formData vide ({})
+      // (sinon on “efface” le devis et on réintroduit des valeurs figées).
+      if (cleanFormData && typeof cleanFormData === 'object' && Object.keys(cleanFormData).length > 0) {
+        updateData.exportData = cleanFormData as unknown as Prisma.InputJsonValue;
+      }
+
       await prisma.treeBranchLeafSubmission.update({
         where: { id: submissionId },
-        data: {
-          status: status || 'draft',
-          summary: { name: providedName || `Devis TBL ${new Date().toLocaleDateString()}` },
-          exportData: cleanFormData || {},
-          completedAt: status === 'completed' ? new Date() : null,
-          updatedAt: new Date()
-        }
+        data: updateData
       });
       console.log(`♻️ [TBL CREATE-AND-EVALUATE] Soumission mise à jour: ${submissionId}`);
     }
@@ -1144,6 +1783,10 @@ router.put('/submissions/:submissionId/update-and-evaluate', async (req, res) =>
     }
     // 2b) Mettre à jour exportData si fourni (NO-OP)
     if (cleanFormData) {
+      // ⚠️ Protéger contre les payloads vides ({}) qui ne représentent pas une intention de “wipe”.
+      if (typeof cleanFormData === 'object' && Object.keys(cleanFormData).length === 0) {
+        // no-op
+      } else {
       const normalize = (v: unknown) => {
         if (v === null || v === undefined) return null;
         if (typeof v === 'string') return v;
@@ -1151,6 +1794,7 @@ router.put('/submissions/:submissionId/update-and-evaluate', async (req, res) =>
       };
       if (normalize(submission.exportData) !== normalize(cleanFormData)) {
         updateData.exportData = cleanFormData as unknown as Prisma.InputJsonValue;
+      }
       }
     }
     if (Object.keys(updateData).length > 0) {
@@ -1514,7 +2158,7 @@ router.post('/submissions/preview-evaluate', async (req, res) => {
 
     // Résultats prêts à envoyer
 
-    // 💾 STOCKER LES VALEURS CALCULÉES DANS PRISMA
+    // 💾 STOCKER LES VALEURS CALCULÉES (SCOPÉES PAR submissionId)
     try {
       // 🚨 IMPORTANT : Récupérer les infos des nodes pour identifier les DISPLAY fields
       const nodeIds = results.map(r => r.nodeId);
@@ -1528,9 +2172,7 @@ router.post('/submissions/preview-evaluate', async (req, res) => {
           .map(n => n.id)
       );
       
-      // 🎯 DISPLAY FIELDS: Stocker dans calculatedValue (PAS dans SubmissionData)
-      const displayFieldValues = results
-        .filter(r => displayFieldIds.has(r.nodeId))
+      const computedRows = results
         .map(r => {
           const candidate = r.value ?? (r as { calculatedValue?: unknown }).calculatedValue;
           return { ...r, candidate };
@@ -1543,40 +2185,18 @@ router.post('/submissions/preview-evaluate', async (req, res) => {
         })
         .map(r => ({
           nodeId: r.nodeId,
-          calculatedValue: String(r.candidate),
+          value: String(r.candidate),
+          sourceRef: (r as any).sourceRef || null,
+          operationSource: coerceOperationSource((r as any).operationSource),
+          fieldLabel: (r as any).nodeLabel || null,
+          operationDetail: ((r as any).operationDetail ?? null) as Prisma.InputJsonValue | null,
+          operationResult: ((r as any).operationResult ?? null) as Prisma.InputJsonValue | null,
           calculatedBy: `preview-${userId}`
         }));
 
-      if (displayFieldValues.length > 0) {
-        console.log(`🎯 [PREVIEW] Stockage de ${displayFieldValues.length} display fields dans calculatedValue`);
-        await storeCalculatedValues(displayFieldValues, submissionId);
-      }
-      
-      // 🔥 AUTRES CHAMPS: Ne PAS stocker les display fields dans SubmissionData
-      const calculatedValues = results
-        .map(r => {
-          const candidate = r.value ?? (r as { calculatedValue?: unknown }).calculatedValue;
-          return { ...r, candidate };
-        })
-        .filter(r => {
-          // 🚫 EXCLURE les display fields de SubmissionData - ils sont dans calculatedValue
-          if (displayFieldIds.has(r.nodeId)) {
-            return false;
-          }
-          // Exclure null, undefined, chaînes vides, et symboles de vide (∅)
-          if (r.candidate === null || r.candidate === undefined) return false;
-          const strValue = String(r.candidate).trim();
-          if (strValue === '' || strValue === '∅') return false;
-          return true;
-        })
-        .map(r => ({
-          nodeId: r.nodeId,
-          calculatedValue: String(r.candidate),
-          calculatedBy: `preview-${userId}`
-        }));
-
-      if (calculatedValues.length > 0) {
-        await storeCalculatedValues(calculatedValues, submissionId);
+      if (computedRows.length > 0) {
+        console.log(`🎯 [PREVIEW] Stockage de ${computedRows.length} valeurs calculées dans SubmissionData`);
+        await upsertComputedValuesForSubmission(submissionId, computedRows);
       }
     } catch (storeError) {
       // Silencieux - ne pas bloquer la réponse si le stockage échoue
@@ -1673,6 +2293,10 @@ router.post('/submissions/stage/preview', async (req, res) => {
     const results = [] as Array<{ nodeId: string; nodeLabel: string | null; sourceRef: string; operationSource: string; operationResult: unknown; operationDetail: unknown }>;
     for (const c of capacities) {
       try {
+        // 🔁 IMPORTANT: appliquer le mapping baseId -> baseId-<suffix> pour les copies (-1, -2, ...)
+        // afin que la prévisualisation lise les inputs suffixés au lieu des valeurs “originales”.
+        const injectedBaseKeys = applyCopyScopedInputAliases(valueMap, c.nodeId, c);
+
         // ✨ Utilisation du système unifié operation-interpreter
         const r = await evaluateVariableOperation(
           c.nodeId,
@@ -1680,6 +2304,13 @@ router.post('/submissions/stage/preview', async (req, res) => {
           prisma,
           context.valueMap
         );
+
+        // Rollback des alias temporaires (évite la pollution cross-capacities)
+        if (injectedBaseKeys.length) {
+          for (const k of injectedBaseKeys) {
+            context.valueMap.delete(k);
+          }
+        }
         
         // 🔑 CRITIQUE: Ajouter la valeur calculée au valueMap pour les formules suivantes
         if (r.value !== null && r.value !== undefined && r.value !== '∅') {

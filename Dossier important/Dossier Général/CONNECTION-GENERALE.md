@@ -45,6 +45,11 @@ git push origin main
 bash scripts/start-local.sh
 ```
 
+✅ **En local / Codespaces : aucune limite de tentatives**
+
+- Les protections de type **rate-limit** (ex: “Trop de tentatives”) sont **désactivées hors production**.
+- Elles ne s'appliquent **qu'en production** (Cloud Run) pour la sécurité.
+
 ⚠️ **IMPORTANT** : Le script tue automatiquement tous les processus existants avant de relancer. Si vous avez des problèmes de port déjà utilisé, vous pouvez aussi les tuer manuellement :
 
 ```bash
@@ -66,6 +71,11 @@ Ce script fait automatiquement :
    🔧 Backend API: http://localhost:4000
    💾 DB: Proxy Cloud SQL sur localhost:5432
 ```
+
+> Meme (100% scientifique) :
+> - Si ça marche : ne touche à rien.
+> - Si ça ne marche pas : tu as touché à quelque chose.
+> - Si ça ne marche toujours pas : `CLOUD_SQL_AUTH_MODE=adc bash scripts/start-local.sh`
 
 ### Pour arrêter tout
 
@@ -104,6 +114,24 @@ Si tu vois dans les logs du proxy :
 Solutions :
 1) Utiliser une clé service account à jour (rôle Cloud SQL Client) ou
 2) Forcer le mode ADC : `CLOUD_SQL_AUTH_MODE=adc bash scripts/start-local.sh` puis suivre le lien Google et coller le **code d'autorisation** (ce n'est pas un mot de passe).
+
+### Dépannage: `ACCESS_TOKEN_TYPE_UNSUPPORTED` / 401 "invalid credentials"
+
+Si tu vois un message du proxy du style `ACCESS_TOKEN_TYPE_UNSUPPORTED` ou un `401 invalid credentials`, c'est généralement que :
+- `gcloud` a bien un compte actif, mais ne peut pas émettre de token non-interactif (session cassée / cache corrompu), ou
+- les ADC (Application Default Credentials) ne sont pas valides.
+
+Solutions rapides (dans l'ordre) :
+1) Relancer le script en forçant un mode stable :
+  - `CLOUD_SQL_AUTH_MODE=gcloud bash scripts/start-local.sh`
+  - ou `CLOUD_SQL_AUTH_MODE=adc bash scripts/start-local.sh`
+2) Ré-authentifier `gcloud` (sans ouvrir de navigateur) :
+  - `gcloud auth login --no-launch-browser`
+  - `gcloud auth application-default login --no-launch-browser`
+3) En dernier recours (si tu sais ce que tu fais), réinitialiser l'auth locale puis refaire (2) :
+  - `gcloud auth revoke --all`
+
+Note : le script `scripts/start-local.sh` vérifie désormais que `gcloud auth print-access-token` fonctionne avant de choisir le mode `gcloud`.
 
 ---
 

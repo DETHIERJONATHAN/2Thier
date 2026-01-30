@@ -8,7 +8,9 @@
  * const results = await storeCalculatedValues(nodeValues, submissionId);
  */
 
-import { prisma } from '../lib/prisma';
+import { db } from '../lib/database';
+
+const prisma = db;
 
 export interface CalculatedValueInput {
   nodeId: string;

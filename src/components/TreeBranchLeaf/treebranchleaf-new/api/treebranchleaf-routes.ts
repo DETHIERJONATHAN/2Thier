@@ -8961,7 +8961,8 @@ router.get('/submissions/by-leads', async (req, res) => {
     const submissions = await prisma.treeBranchLeafSubmission.findMany({
       where: {
         ...submissionWhere,
-        leadId: { not: null }
+        leadId: { not: null },
+        status: { in: ['completed', 'default-draft'] }
       },
       select: {
         id: true,
@@ -9022,7 +9023,9 @@ router.get('/submissions/by-leads', async (req, res) => {
       company: lead.company,
       submissions: (submissionsByLead.get(lead.id) || []).map(submission => ({
         id: submission.id,
-        name: (submission.summary as { name?: string })?.name || `Devis ${new Date(submission.createdAt).toLocaleDateString('fr-FR')}`,
+        name: submission.status === 'default-draft'
+          ? 'Brouillon'
+          : ((submission.summary as { name?: string })?.name || `Devis ${new Date(submission.createdAt).toLocaleDateString('fr-FR')}`),
         status: submission.status,
         createdAt: submission.createdAt,
         updatedAt: submission.updatedAt,
@@ -11135,11 +11138,21 @@ router.post('/submissions/:id/reset-data', async (req, res) => {
     // Charger la soumission pour contrôle d'accès
     const submission = await prisma.treeBranchLeafSubmission.findUnique({
       where: { id },
-      select: { id: true, treeId: true, organizationId: true }
+      select: { id: true, treeId: true, organizationId: true, status: true }
     });
 
     if (!submission) {
       return res.status(404).json({ error: 'Soumission non trouvée' });
+    }
+
+    // 🚫 Garde-fou: ne jamais permettre de vider un devis enregistré (completed)
+    // via cet endpoint. Cela évite qu'une action UI (ex: "Nouveau devis")
+    // efface accidentellement un devis.
+    if (submission.status === 'completed') {
+      return res.status(400).json({
+        error: 'RESET_NOT_ALLOWED',
+        message: 'Impossible de réinitialiser un devis enregistré (completed).'
+      });
     }
 
     // Contrôle d'accès via l'organisation de l'arbre
