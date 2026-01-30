@@ -1286,8 +1286,12 @@ const TBL: React.FC<TBLProps> = ({
 
     // ✅ Devis enregistrés: on n'écrit PAS au fil de l'eau, SAUF si on est en train d'éditer une révision (-N)
     // déjà créée (hasCopiedDevis=true). Dans ce cas, on écrase la révision au fil de l'eau.
+    // 🔧 IMPORTANT: si l'utilisateur modifie un devis enregistré (changedField réel),
+    // on DOIT laisser passer l'appel: le backend gère le versioning (clone vers une révision) et renvoie un nouveau submissionId.
+    // On continue à bloquer les autosaves périodiques (changedField='NULL') pour éviter de créer une révision sans action utilisateur.
     if (isDevisSaved && !hasCopiedDevis) {
-      return;
+      const isRealUserChange = Boolean(changedField && changedField !== 'NULL');
+      if (!isRealUserChange) return;
     }
 
     // ✅ Garde-fou: certaines actions UI (ex: "Nouveau devis") réinitialisent le formData.
