@@ -179,7 +179,15 @@ router.get('/:nodeId/calculated-value', async (req: Request, res: Response) => {
     })();
     
     if (isDisplayField) {
-      if (submissionId && !requiresFreshCalculation && !forceRecompute) {
+      // 🔥 FIX RACE CONDITION 2026-01-30:
+      // TOUJOURS vérifier SubmissionData d'abord pour les DISPLAY fields, même si
+      // requiresFreshCalculation est true. La raison:
+      // 1. Le POST create-and-evaluate calcule la valeur avec les formData fraîches et la stocke dans SubmissionData
+      // 2. Le GET triggered ensuite doit retourner cette valeur stockée, pas recalculer avec des données DB obsolètes
+      // 3. Les flags requiresFreshCalculation sont persistants dans metadata et ne devraient pas
+      //    forcer un recalcul si une valeur fraîchement calculée existe déjà dans SubmissionData
+      // 4. Seul forceRecompute (explicite dans la query string) devrait bypasser SubmissionData
+      if (submissionId && !forceRecompute) {
         const scoped = await prisma.treeBranchLeafSubmissionData.findUnique({
           where: { submissionId_nodeId: { submissionId, nodeId } },
           select: {
@@ -198,6 +206,7 @@ router.get('/:nodeId/calculated-value', async (req: Request, res: Response) => {
         const resolved = hasValidScoped ? parsedScoped : fromOpResult;
 
         if (hasMeaningfulValue(resolved)) {
+          console.log(`✅ [DISPLAY FIELD] ${nodeId} (${node.label}) retourne valeur SubmissionData: ${resolved}`);
           return res.json({
             success: true,
             nodeId: node.id,
@@ -211,31 +220,18 @@ router.get('/:nodeId/calculated-value', async (req: Request, res: Response) => {
             isDisplayField: true
           });
         }
+        // Si pas de valeur dans SubmissionData, on continue vers le recalcul ci-dessous
+        console.log(`⚠️ [DISPLAY FIELD] ${nodeId} (${node.label}) pas de valeur SubmissionData, recalcul nécessaire`);
       }
 
-      if (node.calculatedValue !== null && node.calculatedValue !== undefined) {
-        const existingValue = String(node.calculatedValue);
-        const hasValidExistingValue =
-          existingValue !== '' &&
-          existingValue !== '[]' &&
-          existingValue !== 'null' &&
-          existingValue !== 'undefined';
-
-        if (hasValidExistingValue && !requiresFreshCalculation && !forceRecompute) {
-          return res.json({
-            success: true,
-            nodeId: node.id,
-            label: node.label,
-            value: parseStoredStringValue(existingValue),
-            calculatedAt: toIsoString(node.calculatedAt),
-            calculatedBy: node.calculatedBy,
-            type: node.type,
-            fieldType: node.fieldType,
-            fromStoredValue: true,
-            isDisplayField: true
-          });
-        }
-      }
+      // 🔥 FIX DONNÉES FANTÔMES: Pour les DISPLAY fields, NE JAMAIS retourner
+      // TreeBranchLeafNode.calculatedValue (valeur GLOBALE non scopée).
+      // On doit recalculer à la volée en continuant vers le code de recalcul ci-dessous.
+      // L'ancien code faisait un fallback vers node.calculatedValue qui contenait
+      // des valeurs d'autres submissions = DONNÉES FANTÔMES.
+      // 
+      // SUPPRIMÉ: le bloc qui retournait node.calculatedValue pour les DISPLAY fields
+      // Le flow continue maintenant vers le recalcul via operation-interpreter.
     }
 
     const preferSubmissionData = Boolean(submissionId) && !isDisplayField;
@@ -483,8 +479,11 @@ router.get('/:nodeId/calculated-value', async (req: Request, res: Response) => {
       }
     }
     
-    // Si on a déjà une valeur valide (et ce n'est pas une copie repeater), la retourner directement sans recalculer
-    if (hasValidExistingValue) {
+    // 🔥 FIX DONNÉES FANTÔMES: Pour les DISPLAY fields, NE JAMAIS retourner node.calculatedValue
+    // car c'est une valeur GLOBALE non scopée par submission.
+    // Les DISPLAY fields doivent toujours être recalculés à la volée ou retourner null.
+    // Si on a déjà une valeur valide (et ce n'est PAS un DISPLAY field), la retourner directement sans recalculer
+    if (hasValidExistingValue && !isDisplayField) {
       return res.json({
         success: true,
         nodeId: node.id,
@@ -510,15 +509,23 @@ router.get('/:nodeId/calculated-value', async (req: Request, res: Response) => {
     const isRealSubmission = submissionId && !submissionId.startsWith('preview-');
     const canRecalculateHere = hasTableLookup && !hasConditionVariable && !hasTreeSourceVariable;
     
-    if (canRecalculateHere && node.treeId && isRealSubmission) {
-      console.log(`🔥 [CalculatedValueController] Node "${node.label}" - recalcul table lookup:`, {
+    // 🔥 FIX: Pour les DISPLAY fields sans valeur scopée, TOUJOURS essayer de recalculer
+    // via operation-interpreter. Les données sont disponibles dans la submission.
+    const canRecalculateDisplayField = isDisplayField && isRealSubmission && 
+      (hasTableLookup || hasFormulaVariable || hasConditionVariable || hasTreeSourceVariable);
+    
+    if ((canRecalculateHere || canRecalculateDisplayField) && node.treeId && isRealSubmission) {
+      console.log(`🔥 [CalculatedValueController] Node "${node.label}" - recalcul ${isDisplayField ? 'DISPLAY field' : 'table lookup'}:`, {
         nodeId, 
         hasTableLookup,
+        hasFormulaVariable,
+        hasConditionVariable,
+        isDisplayField,
         submissionId
       });
       
       try {
-        // 🚀 INVOQUER OPERATION-INTERPRETER pour les lookups uniquement
+        // 🚀 INVOQUER OPERATION-INTERPRETER pour les lookups ET les DISPLAY fields
         const { evaluateVariableOperation } = await import('../components/TreeBranchLeaf/treebranchleaf-new/api/operation-interpreter.js');
         
         const result = await evaluateVariableOperation(
@@ -529,20 +536,48 @@ router.get('/:nodeId/calculated-value', async (req: Request, res: Response) => {
         
         console.log('🎯 [CalculatedValueController] Résultat operation-interpreter:', result);
         
-        // Si on a un résultat VALIDE (pas 0, pas vide), le stocker ET le retourner
+        // Si on a un résultat VALIDE, le stocker ET le retourner
         if (result && (result.value !== undefined || result.operationResult !== undefined)) {
           const stringValue = String(result.value ?? result.operationResult);
           
-          // Ne stocker que si la valeur est non-nulle et non-zéro
-          if (stringValue && stringValue !== '0' && stringValue !== '') {
-            await prisma.treeBranchLeafNode.update({
-              where: { id: nodeId },
-              data: {
-                calculatedValue: stringValue,
-                calculatedAt: new Date(),
-                calculatedBy: 'operation-interpreter-auto'
+          // 🔥 FIX: Pour les DISPLAY fields, NE PAS stocker dans TreeBranchLeafNode.calculatedValue (GLOBAL)
+          // Stocker uniquement dans SubmissionData (scoped par submission)
+          if (isDisplayField) {
+            // Stocker dans SubmissionData (scoped)
+            await prisma.treeBranchLeafSubmissionData.upsert({
+              where: { submissionId_nodeId: { submissionId: submissionId!, nodeId } },
+              update: {
+                value: stringValue,
+                lastResolved: new Date(),
+                operationSource: result.operationSource || 'operation-interpreter-display',
+                sourceRef: result.sourceRef,
+                operationDetail: result.operationDetail,
+                fieldLabel: node.label
+              },
+              create: {
+                id: randomUUID(),
+                submissionId: submissionId!,
+                nodeId,
+                value: stringValue,
+                lastResolved: new Date(),
+                operationSource: result.operationSource || 'operation-interpreter-display',
+                sourceRef: result.sourceRef,
+                operationDetail: result.operationDetail,
+                fieldLabel: node.label
               }
             });
+          } else {
+            // Pour les NON-display fields, stocker dans TreeBranchLeafNode (comportement legacy)
+            if (stringValue && stringValue !== '0' && stringValue !== '') {
+              await prisma.treeBranchLeafNode.update({
+                where: { id: nodeId },
+                data: {
+                  calculatedValue: stringValue,
+                  calculatedAt: new Date(),
+                  calculatedBy: 'operation-interpreter-auto'
+                }
+              });
+            }
           }
 
           return res.json({
@@ -551,10 +586,12 @@ router.get('/:nodeId/calculated-value', async (req: Request, res: Response) => {
             label: node.label,
             value: stringValue,
             calculatedAt: new Date().toISOString(),
-            calculatedBy: 'operation-interpreter-auto',
+            calculatedBy: result.operationSource || 'operation-interpreter-auto',
             type: node.type,
             fieldType: node.fieldType,
-            freshCalculation: true
+            freshCalculation: true,
+            isDisplayField,
+            submissionScoped: isDisplayField
           });
         }
       } catch (operationErr) {
@@ -564,6 +601,23 @@ router.get('/:nodeId/calculated-value', async (req: Request, res: Response) => {
     }
 
     // ✅ Retourner la valeur calculée du Nœud (par défaut)
+    // 🔥 FIX DONNÉES FANTÔMES: Pour les DISPLAY fields, ne JAMAIS retourner la valeur GLOBALE
+    // car elle n'est pas scopée par submission. Retourner null pour forcer le recalcul frontend.
+    if (isDisplayField) {
+      console.log(`⚠️ [CalculatedValueController] DISPLAY field "${node.label}" - pas de valeur scopée, retourne null`);
+      return res.json({
+        success: true,
+        nodeId: node.id,
+        label: node.label,
+        value: null, // Pas de valeur GLOBALE pour les DISPLAY fields
+        calculatedAt: node.calculatedAt,
+        calculatedBy: node.calculatedBy,
+        type: node.type,
+        fieldType: node.fieldType,
+        noScopedValue: true
+      });
+    }
+    
     return res.json({
       success: true,
       nodeId: node.id,

@@ -9177,6 +9177,17 @@ router.get('/submissions/:id/fields', async (req, res) => {
       const node = nodesMap.get(row.nodeId);
       if (!node) continue;
 
+      // 🚫 EXCLURE les champs DISPLAY (calculés) - ils doivent être recalculés dynamiquement
+      // Ces champs ont fieldType='DISPLAY' ou (type='leaf_field' + fieldSubType='display')
+      const isDisplayField = 
+        node.fieldType === 'DISPLAY' ||
+        (node.type === 'leaf_field' && ['display', 'DISPLAY', 'Display'].includes(node.fieldSubType || ''));
+      
+      if (isDisplayField) {
+        console.log(`[TBL-FIELDS] ⏸️ Champ DISPLAY exclu: ${node.label} (${node.id})`);
+        continue; // Ne pas inclure dans fieldsMap
+      }
+
       const key = node.id;
       const raw = typeof row.value === 'string' ? row.value : JSON.stringify(row.value ?? null);
 

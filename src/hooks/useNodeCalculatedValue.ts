@@ -12,9 +12,62 @@ import { useAuthenticatedApi } from './useAuthenticatedApi';
 import { tblLog, isTBLDebugEnabled } from '../utils/tblDebug';
 
 // 🧠 Coalescing global (module-level): évite les bursts de requêtes identiques
-const inFlightByKey = new Map<string, Promise<void>>();
 const lastFetchAtByKey = new Map<string, number>();
 
+// 🛡️ Anti-race-condition: compteur de version par clé - SEULE protection fiable
+// (AbortController ne fonctionne pas car useAuthenticatedApi déduplique les requêtes GET)
+const requestVersionByKey = new Map<string, number>();
+
+// 🛡️ NOUVEAU: Timestamp de la DERNIÈRE réponse traitée par nodeId
+// Protège contre les réponses qui arrivent dans le désordre (out-of-order)
+// Utilise uniquement nodeId comme clé (pas submissionId qui peut changer)
+const lastProcessedTimestampByNode = new Map<string, number>();
+
+// 🛡️ Dernière valeur connue par clé - pour éviter les régressions de valeur
+const lastKnownValueByKey = new Map<string, { value: string | number | boolean | null; version: number }>();
+// 🎯 NOUVEAU FIX: Signal global de blocage des GET pendant qu'un changement est en cours
+// Quand un champ change, on bloque les GET jusqu'à ce que le backend retourne
+// Cela évite que les GET retournent des valeurs obsolètes avant que create-and-evaluate ne finisse
+let changeInProgressUntil = 0;
+
+// 🎯 FIX V2: Protection des valeurs inline après broadcast
+// Les valeurs reçues via inline sont "fraîches" et ne doivent pas être écrasées par des GET obsolètes
+// Clé: nodeId, Valeur: timestamp jusqu'auquel cette valeur est protégée
+const inlineValueProtectedUntil = new Map<string, number>();
+
+/**
+ * 🚦 Active le blocage des GET pour une durée donnée
+ * Appelé par TBL.tsx AVANT d'envoyer une requête au backend
+ */
+export function blockGetRequestsTemporarily(durationMs: number = 2000): void {
+  const now = Date.now();
+  changeInProgressUntil = now + durationMs;
+  console.log(`🚫 [useNodeCalculatedValue] GET bloqués jusqu'à ${new Date(changeInProgressUntil).toISOString().slice(11, 23)}`);
+}
+
+/**
+ * 🟢 Désactive le blocage des GET immédiatement
+ * Appelé par TBL.tsx quand le backend a retourné et les valeurs inline sont broadcastées
+ */
+export function unblockGetRequests(): void {
+  changeInProgressUntil = 0;
+  console.log(`✅ [useNodeCalculatedValue] GET débloqués`);
+}
+
+/**
+ * 🛡️ Protège une valeur inline d'être écrasée par un GET obsolète
+ */
+function protectInlineValue(nodeId: string, durationMs: number = 1500): void {
+  inlineValueProtectedUntil.set(nodeId, Date.now() + durationMs);
+}
+
+/**
+ * 🔍 Vérifie si une valeur inline est encore protégée
+ */
+function isInlineValueProtected(nodeId: string): boolean {
+  const protectedUntil = inlineValueProtectedUntil.get(nodeId) || 0;
+  return Date.now() < protectedUntil;
+}
 interface CalculatedValueResult {
   value: string | number | boolean | null;
   loading: boolean;
@@ -84,6 +137,23 @@ export function useNodeCalculatedValue(
 
     const requestKey = `${treeId}::${submissionId || ''}::${nodeId}`;
     const now = Date.now();
+    
+    // 🎯 FIX DONNÉES FANTÔMES: Bloquer les GET pendant qu'un changement est en cours
+    // Les valeurs correctes arriveront via l'événement tbl-force-retransform avec calculatedValues inline
+    if (changeInProgressUntil > now) {
+      console.log(`🚫 [useNodeCalculatedValue] GET BLOQUÉ pour nodeId=${nodeId} - changement en cours (encore ${changeInProgressUntil - now}ms)`);
+      return;
+    }
+    
+    // 🛡️ FIX V2: Bloquer les GET si une valeur inline a été reçue récemment
+    // Cela évite qu'un GET obsolète (lancé juste avant le inline) écrase la bonne valeur
+    if (isInlineValueProtected(nodeId)) {
+      console.log(`🛡️ [useNodeCalculatedValue] GET IGNORÉ pour nodeId=${nodeId} - valeur inline protégée`);
+      return;
+    }
+    
+    // 🛡️ NOUVEAU: Capturer le timestamp de CETTE requête (sera utilisé pour rejeter les réponses obsolètes)
+    const requestTimestamp = now;
 
     // Throttle court (évite l'empilement d'events: preview + autosave + retransform)
     const last = lastFetchAtByKey.get(requestKey);
@@ -91,11 +161,11 @@ export function useNodeCalculatedValue(
       return;
     }
 
-    const inFlight = inFlightByKey.get(requestKey);
-    if (inFlight) {
-      await inFlight;
-      return;
-    }
+    // 🛡️ Anti-race-condition: incrémenter et capturer la version AVANT la requête
+    const currentVersion = (requestVersionByKey.get(requestKey) || 0) + 1;
+    requestVersionByKey.set(requestKey, currentVersion);
+    
+    console.log(`🔢 [useNodeCalculatedValue] Requête v${currentVersion} pour nodeId=${nodeId}`);
 
     try {
       lastFetchAtByKey.set(requestKey, now);
@@ -110,17 +180,41 @@ export function useNodeCalculatedValue(
       // n'est JAMAIS enregistré dans la submission - il reste dynamique.
       // ✅ IMPORTANT: Un 404 doit être toléré (ex: display field pas encore créé en DB)
       // et ne doit pas polluer la console ni casser l'UI.
-      const reqPromise = (async () => {
-        const response = await api.get(
-          `/api/tree-nodes/${nodeId}/calculated-value`,
-          {
-            params: submissionId ? { submissionId } : undefined,
-            suppressErrorLogForStatuses: [404]
-          }
-        );
+      const response = await api.get(
+        `/api/tree-nodes/${nodeId}/calculated-value`,
+        {
+          params: submissionId ? { submissionId } : undefined,
+          suppressErrorLogForStatuses: [404]
+        }
+      );
 
-        // Déclarer extractedValue au niveau supérieur pour pouvoir l'utiliser dans le fallback
-        let extractedValue: string | number | boolean | null = null;
+      // 🛡️ Anti-race-condition V1: vérifier si une requête plus récente a été lancée (par version)
+      const latestVersion = requestVersionByKey.get(requestKey) || 0;
+      if (currentVersion !== latestVersion) {
+        console.log(`🛡️ [useNodeCalculatedValue] IGNORÉ v${currentVersion}: réponse obsolète pour nodeId=${nodeId} (version courante: v${latestVersion})`);
+        return;
+      }
+      
+      // 🛡️ FIX V2: Vérifier si une valeur inline a été reçue PENDANT que ce GET était en cours
+      // Si oui, ignorer la réponse du GET car elle contient des données obsolètes
+      if (isInlineValueProtected(nodeId)) {
+        console.log(`🛡️ [useNodeCalculatedValue] IGNORÉ v${currentVersion}: réponse GET pour nodeId=${nodeId} - valeur inline plus récente reçue pendant le fetch`);
+        return;
+      }
+      
+      // 🛡️ Anti-race-condition V2: vérifier par TIMESTAMP (protection cross-instances)
+      // Utilise uniquement nodeId comme clé pour protéger contre les réponses out-of-order
+      // même si le submissionId a changé entre-temps
+      const lastProcessedTs = lastProcessedTimestampByNode.get(nodeId) || 0;
+      if (requestTimestamp < lastProcessedTs) {
+        console.log(`🛡️ [useNodeCalculatedValue] IGNORÉ ts=${requestTimestamp}: réponse obsolète pour nodeId=${nodeId} (dernier traité: ts=${lastProcessedTs})`);
+        return;
+      }
+      // Marquer ce timestamp comme le dernier traité pour ce node
+      lastProcessedTimestampByNode.set(nodeId, requestTimestamp);
+
+      // Déclarer extractedValue au niveau supérieur pour pouvoir l'utiliser dans le fallback
+      let extractedValue: string | number | boolean | null = null;
         
         if (response && typeof response === 'object') {
           const data = response as Record<string, unknown>;
@@ -173,7 +267,14 @@ export function useNodeCalculatedValue(
 
           // Si on a une valeur valide, l'utiliser directement
           if (extractedValue !== null && extractedValue !== undefined && extractedValue !== '') {
-            console.log(`🔄 [useNodeCalculatedValue] Mise à jour valeur pour nodeId=${nodeId}:`, extractedValue);
+            // 🛡️ Anti-régression: ne jamais revenir à une valeur "pire" qu'avant
+            // sauf si c'est la requête la plus récente ET qu'on est en mode non-protégé
+            const lastKnown = lastKnownValueByKey.get(requestKey);
+            
+            // Stocker cette valeur comme dernière connue pour cette version
+            lastKnownValueByKey.set(requestKey, { value: extractedValue as string | number | boolean | null, version: currentVersion });
+            
+            console.log(`🔄 [useNodeCalculatedValue] v${currentVersion} ts=${requestTimestamp} Mise à jour valeur pour nodeId=${nodeId}:`, extractedValue);
             setValue(extractedValue as string | number | boolean | null);
             setCalculatedAt(data.calculatedAt as string | undefined);
             setCalculatedBy(data.calculatedBy as string | undefined);
@@ -183,11 +284,9 @@ export function useNodeCalculatedValue(
         
         // Si la valeur est vide, on l'affiche vide intentionnellement
         setValue(null);
-      })();
-
-      inFlightByKey.set(requestKey, reqPromise);
-      await reqPromise;
     } catch (err) {
+      const errMsg = err instanceof Error ? err.message : String(err);
+      
       const status = (err as Error & { status?: number })?.status;
       if (status === 404) {
         // Tolérer le 404 (nœud inexistant / pas encore créé) -> valeur vide
@@ -196,7 +295,6 @@ export function useNodeCalculatedValue(
         return;
       }
 
-      const errMsg = err instanceof Error ? err.message : String(err);
       setError(errMsg);
       console.error('❌ [useNodeCalculatedValue] Erreur récupération:', {
         nodeId,
@@ -204,8 +302,6 @@ export function useNodeCalculatedValue(
         error: errMsg
       });
     } finally {
-      const requestKey = `${treeId}::${submissionId || ''}::${nodeId}`;
-      inFlightByKey.delete(requestKey);
       setLoading(false);
     }
   }, [nodeId, treeId, submissionId, api]);
@@ -251,7 +347,17 @@ export function useNodeCalculatedValue(
     }
     
     const handler = (event: Event) => {
-      const detail = (event as CustomEvent<{ nodeId?: string; submissionId?: string; treeId?: string | number; reason?: string; signature?: string; timestamp?: number; debugId?: string }>).detail;
+      const detail = (event as CustomEvent<{ 
+        nodeId?: string; 
+        submissionId?: string; 
+        treeId?: string | number; 
+        reason?: string; 
+        signature?: string; 
+        timestamp?: number; 
+        debugId?: string;
+        // 🎯 FIX: Valeurs calculées passées directement pour éviter refetch
+        calculatedValues?: Record<string, unknown>;
+      }>).detail;
 
       // Filtrer par treeId si présent
       if (detail?.treeId !== undefined && detail?.treeId !== null && String(detail.treeId) !== String(treeId)) {
@@ -273,13 +379,33 @@ export function useNodeCalculatedValue(
       // Global refresh sans nodeId => tous les champs, mais étalé pour éviter un burst de requêtes
       const isGlobal = !detail?.nodeId;
       if (isGlobal || detail.nodeId === nodeId) {
+        lastGlobalRefreshKeyRef.current = refreshKey;
+        lastGlobalRefreshAtRef.current = now;
+
+        // 🎯 FIX RACE CONDITION: Si des valeurs calculées sont fournies dans l'événement,
+        // les utiliser DIRECTEMENT au lieu de faire un refetch qui peut retourner des valeurs obsolètes
+        if (detail?.calculatedValues && nodeId in detail.calculatedValues) {
+          const inlineValue = detail.calculatedValues[nodeId];
+          console.log(`📥 [useNodeCalculatedValue] Valeur inline pour nodeId=${nodeId}:`, inlineValue);
+          
+          // Mettre à jour le timestamp pour protéger contre les réponses GET obsolètes
+          lastProcessedTimestampByNode.set(nodeId, now);
+          
+          // 🛡️ FIX V2: Protéger cette valeur inline contre les GET obsolètes pendant 1.5s
+          protectInlineValue(nodeId, 1500);
+          
+          // Utiliser la valeur directement
+          if (inlineValue !== undefined && inlineValue !== null) {
+            setValue(inlineValue as string | number | boolean | null);
+          }
+          return; // 🎯 Ne PAS faire de refetch !
+        }
+
+        // Si pas de valeur inline, faire le refetch classique (fallback)
         // 🎯 PROTECTION: Incrémenter le compteur quand un refresh est demandé
         pendingEvaluationsRef.current++;
         setIsProtected(true);
         console.log(`⬆️ [GRD nodeId=${nodeId}] Rafraîchissement demandé (${pendingEvaluationsRef.current} en cours)`);
-
-        lastGlobalRefreshKeyRef.current = refreshKey;
-        lastGlobalRefreshAtRef.current = now;
 
         // 🚀 Triggers au centre: rafraîchissement immédiat (throttle 450ms déjà appliqué dans fetchCalculatedValue)
         fetchCalculatedValue();
@@ -292,24 +418,25 @@ export function useNodeCalculatedValue(
     };
   }, [fetchCalculatedValue, nodeId, submissionId, treeId]);
 
-  // � NOUVEAU: Rafraîchir automatiquement quand les données du formulaire changent
-  // Pour les display fields comme GRD qui dépendent de lead.postalCode, etc.
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    if (!nodeId || !treeId) return;
-    
-    const handler = () => {
-      // 🚀 Triggers au centre: rafraîchissement immédiat au changement de champ
-      // (Garde-fou léger anti-doublon, le throttle 450ms est le principal)
-      if (Date.now() - lastGlobalRefreshAtRef.current < 120) return;
-      fetchCalculatedValue();
-    };
-    
-    window.addEventListener('tbl-field-changed', handler);
-    return () => {
-      window.removeEventListener('tbl-field-changed', handler);
-    };
-  }, [fetchCalculatedValue, nodeId, treeId, submissionId]);
+  // 🚫 DÉSACTIVÉ: L'événement tbl-field-changed créait une race condition
+  // Il déclenchait des requêtes GET AVANT que le backend ait sauvegardé les nouvelles données
+  // Résultat: la première modification affichait toujours des valeurs obsolètes
+  // Le seul événement qui doit déclencher un refresh est tbl-force-retransform,
+  // émis APRÈS le succès de create-and-evaluate
+  // useEffect(() => {
+  //   if (typeof window === 'undefined') return;
+  //   if (!nodeId || !treeId) return;
+  //   
+  //   const handler = () => {
+  //     if (Date.now() - lastGlobalRefreshAtRef.current < 120) return;
+  //     fetchCalculatedValue();
+  //   };
+  //   
+  //   window.addEventListener('tbl-field-changed', handler);
+  //   return () => {
+  //     window.removeEventListener('tbl-field-changed', handler);
+  //   };
+  // }, [fetchCalculatedValue, nodeId, treeId, submissionId]);
 
   // �🔔 Rafraîchir aussi quand un événement tbl-node-updated est dispatché avec notre nodeId
   useEffect(() => {

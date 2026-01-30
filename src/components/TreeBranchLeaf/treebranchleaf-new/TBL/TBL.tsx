@@ -45,6 +45,7 @@ import { useAuth } from '../../../../auth/useAuth';
 import { useParams, useSearchParams } from 'react-router-dom';
 import { useTreeBranchLeafConfig } from '../../hooks/useTreeBranchLeafConfig';
 import { useAuthenticatedApi } from '../../../../hooks/useAuthenticatedApi';
+import { blockGetRequestsTemporarily, unblockGetRequests } from '../../../../hooks/useNodeCalculatedValue';
 import { ClientSidebar } from './components/ClientSidebar';
 import TBLSectionRenderer from './components/TBLSectionRenderer';
 import { useTBLDataPrismaComplete, type TBLField, type TBLSection } from './hooks/useTBLDataPrismaComplete';
@@ -174,6 +175,9 @@ const TBL: React.FC<TBLProps> = ({
   const lastQueuedSignatureRef = useRef<string | null>(null);
   const previewDebounceRef = useRef<number | null>(null);
   const lastPreviewSignatureRef = useRef<string | null>(null);
+  // 🔧 FIX RACE CONDITION: Track si un changement est en attente dans le debounce de 80ms
+  // Ceci permet d'éviter le broadcast quand une nouvelle modification est en cours de debounce
+  const debounceActiveRef = useRef<boolean>(false);
 
   const [isDefaultDraft, setIsDefaultDraft] = useState<boolean>(!urlLeadId);
   const [isLoadedDevis, setIsLoadedDevis] = useState<boolean>(false);
@@ -325,7 +329,8 @@ const TBL: React.FC<TBLProps> = ({
           formData: normalizePayload(formData),
           status: 'draft',
           providedName: 'Brouillon',
-          changedFieldId: 'NULL'
+          changedFieldId: 'NULL',
+          evaluationMode: 'open'  // 🎯 Forcer recalcul complet des DISPLAY
         });
         leadDraftId = (resp as any)?.submission?.id || null;
       } else {
@@ -339,7 +344,8 @@ const TBL: React.FC<TBLProps> = ({
             formData: {},
             status: 'draft',
             providedName: 'Brouillon',
-            changedFieldId: 'NULL'
+            changedFieldId: 'NULL',
+            evaluationMode: 'open'  // 🎯 Forcer recalcul complet des DISPLAY
           });
           leadDraftId = (created as any)?.submission?.id || null;
         }
@@ -726,7 +732,8 @@ const TBL: React.FC<TBLProps> = ({
         status: 'completed',
         providedName: planned,
         forceNewSubmission: true,
-        changedFieldId: lastRealChangedFieldIdRef.current || 'NULL'
+        changedFieldId: lastRealChangedFieldIdRef.current || 'NULL',
+        evaluationMode: 'autosave'  // ⏩ Optimisation: skip recalcul DISPLAY
       });
 
       const newId = (resp as any)?.submission?.id;
@@ -772,7 +779,8 @@ const TBL: React.FC<TBLProps> = ({
       status: 'completed',
       providedName: nextName,
       forceNewSubmission: true,
-      changedFieldId: 'NULL'
+      changedFieldId: 'NULL',
+      evaluationMode: 'autosave'  // ⏩ Optimisation: skip recalcul DISPLAY (déjà calculé côté client)
     });
 
     const newId = (resp as any)?.submission?.id;
@@ -1019,7 +1027,8 @@ const TBL: React.FC<TBLProps> = ({
             formData: {},
             status: 'draft',
             providedName: 'Brouillon',
-            changedFieldId: 'NULL'
+            changedFieldId: 'NULL',
+            evaluationMode: 'open'  // 🎯 Forcer recalcul complet des DISPLAY
           });
           leadDraftId = (created as any)?.submission?.id || null;
         }
@@ -1233,6 +1242,19 @@ const TBL: React.FC<TBLProps> = ({
       return;
     }
     try {
+      // 🎯 FIX RACE CONDITION: Extraire les valeurs calculées de la réponse
+      // pour les passer directement dans l'événement au lieu de refetch
+      const calculatedValuesMap: Record<string, unknown> = {};
+      const submissionDataArray = detail?.submissionData as Array<{nodeId?: string; value?: unknown}> | undefined;
+      if (submissionDataArray && Array.isArray(submissionDataArray)) {
+        for (const item of submissionDataArray) {
+          if (item?.nodeId && item?.value !== undefined) {
+            calculatedValuesMap[item.nodeId] = item.value;
+          }
+        }
+        console.log(`📤 [TBL] Broadcasting ${Object.keys(calculatedValuesMap).length} valeurs calculées inline`);
+      }
+      
       window.dispatchEvent(new CustomEvent('tbl-force-retransform', {
         detail: {
           source: 'autosave',
@@ -1240,11 +1262,18 @@ const TBL: React.FC<TBLProps> = ({
           treeId: tree?.id,
           timestamp: Date.now(),
           skipFormReload: true,
+          // 🎯 Passer les valeurs calculées directement pour éviter le refetch
+          calculatedValues: calculatedValuesMap,
           ...(detail || {})
         }
       }));
+      
+      // 🎯 FIX DONNÉES FANTÔMES: Débloquer les GET maintenant que les valeurs inline ont été broadcastées
+      unblockGetRequests();
     } catch (err) {
       console.warn('⚠️ [TBL][AUTOSAVE] Dispatch tbl-force-retransform échoué', err);
+      // Débloquer aussi en cas d'erreur pour éviter un blocage permanent
+      unblockGetRequests();
     }
   }, [submissionId, tree?.id]);
 
@@ -1284,13 +1313,19 @@ const TBL: React.FC<TBLProps> = ({
   const doAutosave = useCallback(async (data: TBLFormData, changedField?: string) => {
     if (!api || !tree) return;
 
+    // 🎯 FIX DONNÉES FANTÔMES: Bloquer les GET dès qu'un changement utilisateur est détecté
+    // Les valeurs correctes arriveront via broadcastCalculatedRefresh avec les valeurs inline
+    const isRealUserChange = Boolean(changedField && changedField !== 'NULL');
+    if (isRealUserChange) {
+      blockGetRequestsTemporarily(3000); // Bloquer pendant 3 secondes max
+    }
+
     // ✅ Devis enregistrés: on n'écrit PAS au fil de l'eau, SAUF si on est en train d'éditer une révision (-N)
     // déjà créée (hasCopiedDevis=true). Dans ce cas, on écrase la révision au fil de l'eau.
     // 🔧 IMPORTANT: si l'utilisateur modifie un devis enregistré (changedField réel),
     // on DOIT laisser passer l'appel: le backend gère le versioning (clone vers une révision) et renvoie un nouveau submissionId.
     // On continue à bloquer les autosaves périodiques (changedField='NULL') pour éviter de créer une révision sans action utilisateur.
     if (isDevisSaved && !hasCopiedDevis) {
-      const isRealUserChange = Boolean(changedField && changedField !== 'NULL');
       if (!isRealUserChange) return;
     }
 
@@ -1339,15 +1374,29 @@ const TBL: React.FC<TBLProps> = ({
             console.log(`🎯 [TBL] changedFieldId envoyé au backend: "${changedField || 'NULL'}"`);
             lastSavedSignatureRef.current = sig;
             setAutosaveLast(new Date());
-            broadcastCalculatedRefresh({
-              reason: 'create-and-evaluate',
-              evaluatedSubmissionId: createdOrReusedId,
-              recalcCount: evaluationResponse?.submission?.TreeBranchLeafSubmissionData?.length
-            });
+            // 🚀 FIX: Ne pas broadcast si autosave périodique OU si une requête pendante existe OU si un debounce est actif
+            // Une requête pendante = l'utilisateur a changé à nouveau pendant qu'on sauvegardait
+            // Un debounce actif = un nouveau changement est en attente des 80ms avant d'être envoyé
+            // La prochaine requête fera son propre broadcast avec les données à jour
+            const isPeriodicAutosave = !changedField || changedField === 'NULL';
+            const hasPendingRequest = !!pendingAutosaveRef.current;
+            const hasDebounceActive = !!debounceActiveRef.current;
+            if (!isPeriodicAutosave && !hasPendingRequest && !hasDebounceActive) {
+              broadcastCalculatedRefresh({
+                reason: 'create-and-evaluate',
+                evaluatedSubmissionId: createdOrReusedId,
+                recalcCount: evaluationResponse?.submission?.TreeBranchLeafSubmissionData?.length,
+                // 🎯 FIX: Passer les valeurs calculées pour éviter le refetch race condition
+                submissionData: evaluationResponse?.submission?.TreeBranchLeafSubmissionData
+              });
+            } else if (hasDebounceActive) {
+              console.log(`🔒 [TBL] Broadcast SKIP: debounce actif (nouveau changement en attente)`);
+            }
           } else {
             // Fallback: si on n'a pas d'ID, on ne peut pas persister.
             await previewNoSave(data);
-            broadcastCalculatedRefresh({ reason: 'preview-no-save' });
+            // 🚀 FIX: preview-no-save ne déclenche pas de broadcast non plus
+            // broadcastCalculatedRefresh({ reason: 'preview-no-save' });
           }
         } else if (leadId) {
           // ✅ Brouillon de lead (draft): persistant et lié au lead.
@@ -1366,19 +1415,31 @@ const TBL: React.FC<TBLProps> = ({
             setDevisName('Brouillon');
             lastSavedSignatureRef.current = sig;
             setAutosaveLast(new Date());
-            broadcastCalculatedRefresh({
-              reason: 'create-and-evaluate',
-              evaluatedSubmissionId: createdOrReusedId,
-              recalcCount: evaluationResponse?.submission?.TreeBranchLeafSubmissionData?.length
-            });
+            // 🚀 FIX: Ne pas broadcast si autosave périodique OU si une requête pendante existe OU si un debounce est actif
+            const isPeriodicAutosave = !changedField || changedField === 'NULL';
+            const hasPendingRequest = !!pendingAutosaveRef.current;
+            const hasDebounceActive = !!debounceActiveRef.current;
+            if (!isPeriodicAutosave && !hasPendingRequest && !hasDebounceActive) {
+              broadcastCalculatedRefresh({
+                reason: 'create-and-evaluate',
+                evaluatedSubmissionId: createdOrReusedId,
+                recalcCount: evaluationResponse?.submission?.TreeBranchLeafSubmissionData?.length,
+                // 🎯 FIX: Passer les valeurs calculées pour éviter le refetch race condition
+                submissionData: evaluationResponse?.submission?.TreeBranchLeafSubmissionData
+              });
+            } else if (hasDebounceActive) {
+              console.log(`🔒 [TBL] Broadcast SKIP: debounce actif (nouveau changement en attente)`);
+            }
           } else {
             await previewNoSave(data);
-            broadcastCalculatedRefresh({ reason: 'preview-no-save' });
+            // 🚀 FIX: preview-no-save ne déclenche pas de broadcast non plus
+            // broadcastCalculatedRefresh({ reason: 'preview-no-save' });
           }
         } else {
           // Aucun devis existant: uniquement prévisualiser (zéro écriture)
           await previewNoSave(data);
-          broadcastCalculatedRefresh({ reason: 'preview-no-save' });
+          // 🚀 FIX: preview-no-save ne déclenche pas de broadcast
+          // broadcastCalculatedRefresh({ reason: 'preview-no-save' });
         }
       } else {
         // Devis existant: mise à jour idempotente
@@ -1410,11 +1471,25 @@ const TBL: React.FC<TBLProps> = ({
         
         lastSavedSignatureRef.current = sig;
         setAutosaveLast(new Date());
-        broadcastCalculatedRefresh({
-          reason: 'create-and-evaluate',
-          evaluatedSubmissionId: effectiveSubmissionId,
-          recalcCount: evaluationResponse?.submission?.TreeBranchLeafSubmissionData?.length
-        });
+        
+        // 🚀 FIX: Ne PAS broadcast si:
+        // 1. C'est un autosave périodique (changedField NULL) - backend ne recalcule pas
+        // 2. Une requête pendante existe - elle fera son propre broadcast avec données à jour
+        // 3. Un debounce est actif - un nouveau changement est en attente des 80ms
+        const isPeriodicAutosave = !changedField || changedField === 'NULL';
+        const hasPendingRequest = !!pendingAutosaveRef.current;
+        const hasDebounceActive = !!debounceActiveRef.current;
+        if (!isPeriodicAutosave && !hasPendingRequest && !hasDebounceActive) {
+          broadcastCalculatedRefresh({
+            reason: 'create-and-evaluate',
+            evaluatedSubmissionId: effectiveSubmissionId,
+            recalcCount: evaluationResponse?.submission?.TreeBranchLeafSubmissionData?.length,
+            // 🎯 FIX: Passer les valeurs calculées pour éviter le refetch race condition
+            submissionData: evaluationResponse?.submission?.TreeBranchLeafSubmissionData
+          });
+        } else if (hasDebounceActive) {
+          console.log(`🔒 [TBL] Broadcast SKIP: debounce actif (nouveau changement en attente)`);
+        }
       }
     } catch (e) {
       // Discret: pas de toast pour éviter le spam, logs console seulement
@@ -1731,12 +1806,15 @@ const TBL: React.FC<TBLProps> = ({
       const oldDraftIdToClear = submissionId;
       
       // Créer le VRAI devis avec les données actuelles
+      // 🔥 FIX 2026-02-04: evaluationMode: 'open' pour recalculer TOUS les display fields
+      // Sans ça, les champs calculés (N° panneau max, Rampant, etc.) ne sont pas évalués
       const response = await api.post('/api/tbl/submissions/create-and-evaluate', {
         treeId: effectiveTreeId,
         clientId: leadId,
         formData: normalizePayload(formData),
         status: 'completed',
-        providedName: finalName
+        providedName: finalName,
+        evaluationMode: 'open'  // 🎯 Recalcul complet des DISPLAY fields
       });
       
       if (response?.submission?.id) {
@@ -1833,7 +1911,8 @@ const TBL: React.FC<TBLProps> = ({
         clientId: null,
         formData: normalized,
         status: 'default-draft',
-        changedFieldId: 'NULL'
+        changedFieldId: 'NULL',
+        evaluationMode: 'open'  // 🎯 Forcer recalcul complet lors de la copie
       });
 
       // 4) Mettre à jour les états
@@ -2100,7 +2179,12 @@ const TBL: React.FC<TBLProps> = ({
         clearTimeout(debounceTimerRef.current);
       }
       
+      // 🔧 FIX RACE CONDITION: Marquer qu'un changement est en debounce
+      debounceActiveRef.current = true;
+      
       debounceTimerRef.current = setTimeout(() => {
+        // 🔧 FIX RACE CONDITION: Debounce terminé, prêt à évaluer
+        debounceActiveRef.current = false;
         if (immediateEvaluateRef.current) {
           immediateEvaluateRef.current(next as TBLFormData, realFieldId);
           console.log(`✅✅✅ [TBL] APRÈS eval DEBOUNCED appelé avec realFieldId="${realFieldId}"`);
@@ -2115,20 +2199,19 @@ const TBL: React.FC<TBLProps> = ({
         void ensureCompletedRevisionExists(next as TBLFormData);
       }
       
-      // 🔄 NOUVEAU: Dispatch événement pour refresh automatique des display fields
-      try {
-        if (typeof window !== 'undefined') {
-          const event = new CustomEvent('tbl-field-changed', { 
-            detail: { 
-              fieldId, 
-              value, 
-              formData: next,
-              timestamp: Date.now()
-            } 
-          });
-          window.dispatchEvent(event);
-        }
-      } catch { /* noop */ }
+      // � DÉSACTIVÉ: L'événement tbl-field-changed créait une race condition
+      // Il déclenchait des requêtes GET dans useNodeCalculatedValue AVANT que le backend
+      // ait sauvegardé les nouvelles données via create-and-evaluate
+      // Résultat: la première modification affichait toujours des valeurs obsolètes
+      // Le refresh doit se faire uniquement via tbl-force-retransform APRÈS le save backend
+      // try {
+      //   if (typeof window !== 'undefined') {
+      //     const event = new CustomEvent('tbl-field-changed', { 
+      //       detail: { fieldId, value, formData: next, timestamp: Date.now() }
+      //     });
+      //     window.dispatchEvent(event);
+      //   }
+      // } catch { /* noop */ }
       
       return next as typeof prev;
     });

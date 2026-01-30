@@ -598,21 +598,29 @@ async function saveUserEntriesNeutral(
   const entriesToDelete = new Set<string>(); // 🗑️ Champs à supprimer (vidés)
 
   // 🚫 ÉTAPE 1 : Récupérer les nodes à EXCLURE
-  // SEULE CONDITION : calculatedValue NON NULL = champ calculé = ne pas sauvegarder
-  const excludedNodes = treeId 
+  // IMPORTANT: ne JAMAIS exclure sur `calculatedValue != null`.
+  // Certaines données historiques ont un calculatedValue sur des champs user-input.
+  // On exclut uniquement les champs calculés DISPLAY pour éviter de les sauvegarder comme inputs.
+  const excludedNodes = treeId
     ? await prisma.treeBranchLeafNode.findMany({
-        where: { 
+        where: {
           treeId,
-          calculatedValue: { not: null }  // ✅ SEULE condition: calculatedValue rempli
+          OR: [
+            { fieldType: 'DISPLAY' },
+            {
+              type: { in: ['leaf_field', 'LEAF_FIELD'] },
+              subType: { in: ['display', 'DISPLAY', 'Display'] },
+            },
+          ],
         },
-        select: { id: true, label: true, calculatedValue: true }
+        select: { id: true, label: true },
       })
     : [];
 
   const excludedNodeIds = new Set(excludedNodes.map(n => n.id));
   
   if (excludedNodeIds.size > 0) {
-    console.log(`🚫 [SAVE] ${excludedNodeIds.size} champs avec calculatedValue exclus:`, excludedNodes.map(n => n.label).join(', '));
+    console.log(`🚫 [SAVE] ${excludedNodeIds.size} champs calculés/DISPLAY exclus:`, excludedNodes.map(n => n.label).join(', '));
   }
 
   const sharedRefKeys = Object.keys(formData).filter(isSharedReferenceId);
@@ -633,7 +641,7 @@ async function saveUserEntriesNeutral(
     }
     if (!isAcceptedNodeId(key)) continue;
     
-    // 🚫 ÉTAPE 2 : Skip les champs avec calculatedValue (seule condition d'exclusion)
+    // 🚫 ÉTAPE 2 : Skip les champs calculés display (ne jamais les sauvegarder comme inputs)
     if (excludedNodeIds.has(key)) {
       continue; // Ne PAS sauvegarder les champs calculés
     }
@@ -737,30 +745,43 @@ async function saveUserEntriesNeutral(
  * @param userId - ID de l'utilisateur
  * @param treeId - ID de l'arbre
  * @param formData - 🔑 NOUVEAU: Données fraîches du formulaire pour évaluation réactive
+ * @param mode - Mode d'évaluation: 'open' (ouverture, recalcul complet), 'autosave' (skip DISPLAY), 'change' (recalcul ciblé)
+ * @param changedFieldId - ID du champ modifié (utilisé en mode 'change')
  */
+type EvaluationMode = 'open' | 'autosave' | 'change';
+
 async function evaluateCapacitiesForSubmission(
   submissionId: string,
   organizationId: string,
   userId: string | null,
   treeId: string,
   formData?: Record<string, unknown>,
+  mode: EvaluationMode = 'change',
   changedFieldId?: string
 ) {
+  console.log(`🎯 [EVALUATE] Mode: ${mode}, changedFieldId: ${changedFieldId || 'N/A'}`);
   // 🔑 ÉTAPE 1: Construire le valueMap avec les données fraîches du formulaire
   const valueMap = new Map<string, unknown>();
 
   // 🔁 IMPORTANT: Hydrater d'abord depuis la DB (submission scoped) pour éviter les régressions
   // quand le frontend envoie un payload partiel/vidé (ex: formData: {}).
-  // Ensuite seulement, appliquer le formData en override.
+  // ⚠️ PROTECTION DONNÉES FANTÔMES: Ne charger QUE les inputs utilisateur (operationSource null/neutral)
+  // Les anciens résultats calculés (formula/condition/table) ne doivent PAS polluer le valueMap.
   try {
     const existingData = await prisma.treeBranchLeafSubmissionData.findMany({
-      where: { submissionId },
-      select: { nodeId: true, value: true }
+      where: {
+        submissionId,
+        OR: [
+          { operationSource: null },
+          { operationSource: 'neutral' }
+        ]
+      },
+      select: { nodeId: true, value: true, operationSource: true }
     });
     if (existingData.length) {
       const existingEntries = existingData.map(r => [r.nodeId, r.value] as [string, unknown]);
       await applySharedReferenceValues(valueMap, existingEntries, treeId);
-      console.log(`🔑 [EVALUATE] valueMap hydraté depuis DB: ${existingData.length} entrées → ${valueMap.size} clés`);
+      console.log(`🔑 [EVALUATE] valueMap hydraté depuis DB (inputs only): ${existingData.length} entrées → ${valueMap.size} clés`);
     }
   } catch (e) {
     console.warn('⚠️ [EVALUATE] Hydratation DB du valueMap échouée (best-effort):', (e as Error)?.message || e);
@@ -843,15 +864,22 @@ async function evaluateCapacitiesForSubmission(
       || capacity.TreeBranchLeafNode?.type === 'DISPLAY'
       || capacity.TreeBranchLeafNode?.type === 'leaf_field';
     
-    // 🎯 AUTOSAVE PÉRIODIQUE: changedFieldId="NULL" → SKIP tous les display fields
-    // IMPORTANT: changedFieldId absent/undefined = évaluation initiale (on calcule tout)
-    if (isDisplayField && changedFieldId === 'NULL') {
-      console.log(`⏸️ [AUTOSAVE] Display field ${capacity.nodeId} (${capacity.TreeBranchLeafNode?.label}) skippé - autosave périodique`);
-      continue; // ✅ SKIP - les display fields sont déjà calculés
+    // 🎯 MODE AUTOSAVE: Skip tous les display fields (optimisation performance)
+    // MODE OPEN: Recalculer TOUS les display fields (ouverture / transfert)
+    // MODE CHANGE: Recalculer uniquement les display fields impactés par le trigger
+    if (isDisplayField && mode === 'autosave') {
+      console.log(`⏸️ [AUTOSAVE] Display field ${capacity.nodeId} (${capacity.TreeBranchLeafNode?.label}) skippé - mode autosave`);
+      continue; // ✅ SKIP - optimisation autosave
     }
     
-    // 🎯 OPTIMISATION: Filtrage par triggerNodeIds pour les display fields
-    if (isDisplayField && changedFieldId && changedFieldId !== 'NULL') {
+    // 🎯 MODE OPEN: Recalculer TOUS les display fields sans filtrage
+    if (isDisplayField && mode === 'open') {
+      console.log(`🔄 [OPEN] Display field ${capacity.nodeId} (${capacity.TreeBranchLeafNode?.label}) recalculé - mode open`);
+      // Ne pas continue → on laisse passer pour recalcul
+    }
+    
+    // 🎯 MODE CHANGE: Filtrage par triggerNodeIds pour les display fields
+    if (isDisplayField && mode === 'change' && changedFieldId) {
       // Récupérer les triggerNodeIds depuis le node
       const node = await prisma.treeBranchLeafNode.findUnique({
         where: { id: capacity.nodeId },
@@ -860,6 +888,14 @@ async function evaluateCapacitiesForSubmission(
       
       const metaTriggerNodeIds = (node?.metadata as { triggerNodeIds?: string[] })?.triggerNodeIds;
       let triggerNodeIds = Array.isArray(metaTriggerNodeIds) ? metaTriggerNodeIds.filter(Boolean) : [];
+      
+      // 🔍 DEBUG: Log au moment du chargement des triggers
+      console.log(`🔎 [TRIGGER LOAD] Display field ${capacity.nodeId} - changedFieldId: ${changedFieldId}`);
+      console.log(`   🔎 Node trouvé: ${node ? 'OUI' : 'NON'}, triggers: ${triggerNodeIds.length}`);
+      if (triggerNodeIds.length > 0 && triggerNodeIds.length <= 12) {
+        console.log(`   🔎 Triggers: ${JSON.stringify(triggerNodeIds)}`);
+      }
+      console.log(`   🔎 changedFieldId dans triggers? ${triggerNodeIds.includes(changedFieldId)}`);
 
       // 🆘 AUTO-HEAL: si aucun trigger n'est configuré, tenter de les déduire depuis la formule/table/condition.
       // Objectif: éviter les display fields "gelés" (ex: N° de panneau max) qui ne se recalculent jamais.
@@ -947,6 +983,10 @@ async function evaluateCapacitiesForSubmission(
           if (!matchesTrigger) {
             // Le champ modifié n'est PAS un trigger pour ce display field → SKIP
             console.log(`⏸️ [TRIGGER FILTER] Display field ${capacity.nodeId} (${capacity.TreeBranchLeafNode?.label}) skippé - changedFieldId "${changedFieldId}" pas dans triggers [${triggerNodeIds.length} triggers définis]`);
+            // 🔍 DEBUG: Afficher les triggers et le résultat de la comparaison
+            console.log(`   📋 [DEBUG] Triggers: ${JSON.stringify(triggerNodeIds.slice(0, 5))}${triggerNodeIds.length > 5 ? '...' : ''}`);
+            console.log(`   📋 [DEBUG] Position incluse? ${triggerNodeIds.includes(changedFieldId)}`);
+            console.log(`   📋 [DEBUG] Expanded triggers: ${JSON.stringify(expanded.slice(0, 5))}${expanded.length > 5 ? '...' : ''}`);
             continue; // ✅ SKIP
           }
         } else {
@@ -1350,8 +1390,21 @@ router.post('/submissions/create-and-evaluate', async (req, res) => {
       reuseSubmissionId,
       submissionId: requestedSubmissionId,
       changedFieldId,
+      evaluationMode,
       forceNewSubmission,
     } = req.body;
+    
+    // 🎯 Déterminer le mode d'évaluation
+    // - 'open': ouverture brouillon/devis, transfert lead → recalcul complet
+    // - 'autosave': sauvegarde périodique → skip DISPLAY
+    // - 'change': modification utilisateur → recalcul ciblé par triggers
+    let mode: EvaluationMode = 'change';
+    if (evaluationMode === 'open' || evaluationMode === 'autosave' || evaluationMode === 'change') {
+      mode = evaluationMode;
+    } else if (changedFieldId === 'NULL') {
+      // Rétrocompatibilité: changedFieldId='NULL' sans mode explicite → autosave
+      mode = 'autosave';
+    }
     const cleanFormData = formData && typeof formData === 'object' ? (sanitizeFormData(formData) as Record<string, unknown>) : undefined;
     
     // 🎯 Récupérer le champ modifié pour filtrer les triggers (nouveau paramètre optionnel)
@@ -1711,8 +1764,8 @@ router.post('/submissions/create-and-evaluate', async (req, res) => {
       console.log(`🎯 [TBL CREATE-AND-EVALUATE] ${capacities.length} capacités trouvées`);
       
       // C. Évaluer et persister les capacités avec NO-OP - 🔑 PASSER LE FORMDATA pour réactivité !
-      const evalStats = await evaluateCapacitiesForSubmission(submissionId!, organizationId!, userId || null, effectiveTreeId, cleanFormData, triggerFieldId);
-      console.log(`✅ [TBL CREATE-AND-EVALUATE] Capacités: ${evalStats.updated} mises à jour, ${evalStats.created} créées, ${evalStats.displayFieldsUpdated} display fields réactifs`);
+      const evalStats = await evaluateCapacitiesForSubmission(submissionId!, organizationId!, userId || null, effectiveTreeId, cleanFormData, mode, triggerFieldId);
+      console.log(`✅ [TBL CREATE-AND-EVALUATE] Capacités: ${evalStats.updated} mises à jour, ${evalStats.created} créées, ${evalStats.displayFieldsUpdated} display fields réactifs (mode: ${mode})`);
     }
     
     // 3. Évaluation immédiate déjà effectuée via operation-interpreter ci-dessus.
@@ -1802,7 +1855,7 @@ router.put('/submissions/:submissionId/update-and-evaluate', async (req, res) =>
     }
 
     // 3) Évaluer et persister les capacités liées à l'arbre - 🔑 PASSER LE FORMDATA pour réactivité !
-    const stats = await evaluateCapacitiesForSubmission(submissionId, organizationId, userId, submission.treeId, cleanFormData);
+    const stats = await evaluateCapacitiesForSubmission(submissionId, organizationId, userId, submission.treeId, cleanFormData, 'change');
 
     // 4) Retourner la soumission complète
     const finalSubmission = await prisma.treeBranchLeafSubmission.findUnique({
@@ -1939,9 +1992,17 @@ router.post('/submissions/preview-evaluate', async (req, res) => {
     }
     
     // 3b) Charger les données de la submission existante
+    // 🔥 FIX 30/01/2026: Filtrer par operationSource pour ne charger QUE les inputs utilisateur
+    // Les anciennes valeurs calculées (formula/condition/table) ne doivent PAS polluer le valueMap
     if (baseSubmissionId) {
       const existingData = await prisma.treeBranchLeafSubmissionData.findMany({
-        where: { submissionId: baseSubmissionId },
+        where: { 
+          submissionId: baseSubmissionId,
+          OR: [
+            { operationSource: null },
+            { operationSource: 'neutral' }
+          ]
+        },
         select: { nodeId: true, value: true }
       });
 
@@ -2369,7 +2430,7 @@ router.post('/submissions/stage/commit', async (req, res) => {
       // update exportData (NO-OP) + données neutral + évaluations
       await prisma.treeBranchLeafSubmission.update({ where: { id: stage.submissionId }, data: { exportData: stage.formData as unknown as Prisma.InputJsonValue } });
   const saved = await saveUserEntriesNeutral(stage.submissionId, stage.formData, stage.treeId);
-      const stats = await evaluateCapacitiesForSubmission(stage.submissionId, stage.organizationId, stage.userId, stage.treeId);
+      const stats = await evaluateCapacitiesForSubmission(stage.submissionId, stage.organizationId, stage.userId, stage.treeId, undefined, 'change');
       return res.json({ success: true, submissionId: stage.submissionId, saved, stats });
     }
 
@@ -2377,7 +2438,7 @@ router.post('/submissions/stage/commit', async (req, res) => {
     const submissionId = `tbl-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
     await prisma.treeBranchLeafSubmission.create({ data: { id: submissionId, treeId: stage.treeId, userId: stage.userId, status: 'draft', summary: { name: `Devis TBL ${new Date().toLocaleDateString()}` }, exportData: stage.formData as unknown as Prisma.InputJsonValue, updatedAt: new Date() } });
   const saved = await saveUserEntriesNeutral(submissionId, stage.formData, stage.treeId);
-    const stats = await evaluateCapacitiesForSubmission(submissionId, stage.organizationId, stage.userId, stage.treeId);
+    const stats = await evaluateCapacitiesForSubmission(submissionId, stage.organizationId, stage.userId, stage.treeId, undefined, 'open');
     // attacher l’id créé au stage pour permettre des commit suivants sur ce même devis
     stage.submissionId = submissionId; stage.updatedAt = Date.now(); stagingStore.set(stage.id, stage);
     return res.status(201).json({ success: true, submissionId, saved, stats });

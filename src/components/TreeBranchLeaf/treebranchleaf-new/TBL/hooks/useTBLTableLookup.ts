@@ -282,7 +282,7 @@ export function useTBLTableLookup(
               return acc;
             }, {} as Record<string, any>);
           
-          // � BATCHING: Utiliser le cache batch pour les valeurs calculées au lieu de charger tous les nœuds
+          // 🚀 BATCHING: Utiliser le cache batch pour les valeurs calculées au lieu de charger tous les nœuds
           // Cela évite un appel API /trees/:id/nodes pour CHAQUE champ SELECT
           try {
             if (batchContext.isReady && batchContext.batchData?.valuesByNode) {

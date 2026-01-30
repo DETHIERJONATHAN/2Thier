@@ -414,12 +414,10 @@ async function enrichDataFromSubmission(
           labelMap.set(node.id, canonicalLabel);
         }
         
-        // Ã°Å¸â€ â€¢ ENRICHIR VALUEMAP avec calculatedValue si prÃƒÂ©sent et pas dÃƒÂ©jÃƒÂ  dans valueMap
-        // Ceci permet aux formules copiÃƒÂ©es (ex: MAX paysage-1) d'accÃƒÂ©der aux valeurs 
-        // des variables calculÃƒÂ©es (ex: Rampant toiture-1)
-        if (!valueMap.has(node.id) && node.calculatedValue !== null && node.calculatedValue !== undefined && node.calculatedValue !== '') {
-          valueMap.set(node.id, node.calculatedValue);
-        }
+        // 🔥 FIX 30/01/2026: NE PLUS CHARGER les calculatedValue GLOBAUX depuis TreeBranchLeafNode
+        // Ces valeurs sont GLOBALES (pas scopées par submission) et polluent les calculs
+        // des nouvelles soumissions avec des "données fantômes" d'anciennes soumissions.
+        // Les valeurs calculées doivent venir UNIQUEMENT de TreeBranchLeafSubmissionData (scopé).
       }
     } else {
       // Mode preview - pas d'avertissement
@@ -517,6 +515,14 @@ async function getNodeValue(
     }
     return String(val);
   }
+  
+  // 🔥 FIX 30/01/2026 v2: SUPPRESSION DU FALLBACK DANGEREUX
+  // ❌ L'ancien code essayait TOUS les suffixes (-1, -2, -3, -4) ce qui créait des DONNÉES FANTÔMES !
+  // Par exemple: chercher "Position" pouvait retourner la valeur de "Position-2" au lieu de "Position-1"
+  // Le mapping correct doit être fait EN AMONT par applyCopyScopedInputAliases() qui connaît
+  // le suffixe de la copie actuelle et peut mapper base → base-N correctement.
+  // ANCIEN CODE SUPPRIMÉ (causait données fantômes):
+  // for (let suffix = 1; suffix <= 4; suffix++) { ... valueMap.get(`${nodeId}-${suffix}`) ... }
 
   
   // 🎯 PRIORITÉ 2: Requête Prisma pour récupérer depuis TreeBranchLeafSubmissionData
@@ -534,20 +540,23 @@ async function getNodeValue(
     return String(data.value);
   }
   
-  // 🎯 PRIORITÉ 3 (NOUVEAU): Récupérer depuis TreeBranchLeafNode.calculatedValue
-  // Ceci permet de récupérer les valeurs calculées d'autres formules (ex: Mur, Mur-1)
-  // même si elles ne sont pas dans le valueMap ou SubmissionData
-  const node = await prisma.treeBranchLeafNode.findUnique({
-    where: { id: nodeId },
-    select: { calculatedValue: true, label: true }
-  });
-
-  if (node?.calculatedValue !== null && node?.calculatedValue !== undefined && node?.calculatedValue !== '') {
-    return String(node.calculatedValue);
-  }
-
+  // 🔥 FIX 30/01/2026 v2: SUPPRESSION DU FALLBACK DANGEREUX POUR PRISMA AUSSI
+  // ❌ L'ancien code essayait TOUS les suffixes (-1, -2, -3, -4) ce qui créait des DONNÉES FANTÔMES !
+  // Le mapping correct doit être fait EN AMONT par applyCopyScopedInputAliases()
+  // ANCIEN CODE SUPPRIMÉ (causait données fantômes):
+  // for (let suffix = 1; suffix <= 4; suffix++) { ... prisma.findFirst({ nodeId: `${nodeId}-${suffix}` }) ... }
   
-  // Retourner "0" par défaut si aucune valeur trouvée
+  // 🔥 FIX 30/01/2026: SUPPRESSION de la PRIORITÉ 3 (fallback vers TreeBranchLeafNode.calculatedValue)
+  // Ce fallback chargeait des valeurs GLOBALES (pas scopées par submission) et polluait
+  // les calculs des nouvelles soumissions avec des "données fantômes".
+  // Les valeurs calculées doivent venir UNIQUEMENT de:
+  //   1. valueMap (données fraîches du formData)
+  //   2. TreeBranchLeafSubmissionData (scopé par submission)
+  // ANCIEN CODE SUPPRIMÉ:
+  // const node = await prisma.treeBranchLeafNode.findUnique({ where: { id: nodeId }, ... });
+  // if (node?.calculatedValue ...) { return String(node.calculatedValue); }
+
+  // Retourner "0" par défaut si aucune valeur trouvée (comportement normal pour les formules)
   return options?.preserveEmpty ? null : "0";
 }
 

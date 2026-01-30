@@ -2590,9 +2590,6 @@ async function enrichDataFromSubmission(submissionId, prisma51, valueMap, labelM
           const canonicalLabel = node.sharedReferenceName || node.field_label || node.label;
           labelMap.set(node.id, canonicalLabel);
         }
-        if (!valueMap.has(node.id) && node.calculatedValue !== null && node.calculatedValue !== void 0 && node.calculatedValue !== "") {
-          valueMap.set(node.id, node.calculatedValue);
-        }
       }
     } else {
     }
@@ -2649,13 +2646,6 @@ async function getNodeValue(nodeId, submissionId, prisma51, valueMap, options) {
   });
   if (data?.value !== null && data?.value !== void 0) {
     return String(data.value);
-  }
-  const node = await prisma51.treeBranchLeafNode.findUnique({
-    where: { id: nodeId },
-    select: { calculatedValue: true, label: true }
-  });
-  if (node?.calculatedValue !== null && node?.calculatedValue !== void 0 && node?.calculatedValue !== "") {
-    return String(node.calculatedValue);
   }
   return options?.preserveEmpty ? null : "0";
 }
@@ -43684,6 +43674,11 @@ router56.get("/submissions/:id/fields", async (req2, res) => {
     for (const row of dataRows) {
       const node = nodesMap.get(row.nodeId);
       if (!node) continue;
+      const isDisplayField = node.fieldType === "DISPLAY" || node.type === "leaf_field" && ["display", "DISPLAY", "Display"].includes(node.fieldSubType || "");
+      if (isDisplayField) {
+        console.log(`[TBL-FIELDS] \u23F8\uFE0F Champ DISPLAY exclu: ${node.label} (${node.id})`);
+        continue;
+      }
       const key2 = node.id;
       const raw = typeof row.value === "string" ? row.value : JSON.stringify(row.value ?? null);
       fieldsMap[key2] = {
@@ -58909,14 +58904,19 @@ async function saveUserEntriesNeutral(submissionId, formData, treeId) {
   const excludedNodes = treeId ? await prisma43.treeBranchLeafNode.findMany({
     where: {
       treeId,
-      calculatedValue: { not: null }
-      // ✅ SEULE condition: calculatedValue rempli
+      OR: [
+        { fieldType: "DISPLAY" },
+        {
+          type: { in: ["leaf_field", "LEAF_FIELD"] },
+          subType: { in: ["display", "DISPLAY", "Display"] }
+        }
+      ]
     },
-    select: { id: true, label: true, calculatedValue: true }
+    select: { id: true, label: true }
   }) : [];
   const excludedNodeIds = new Set(excludedNodes.map((n) => n.id));
   if (excludedNodeIds.size > 0) {
-    console.log(`\u{1F6AB} [SAVE] ${excludedNodeIds.size} champs avec calculatedValue exclus:`, excludedNodes.map((n) => n.label).join(", "));
+    console.log(`\u{1F6AB} [SAVE] ${excludedNodeIds.size} champs calcul\xE9s/DISPLAY exclus:`, excludedNodes.map((n) => n.label).join(", "));
   }
   const sharedRefKeys = Object.keys(formData).filter(isSharedReferenceId);
   const sharedRefAliasMap = sharedRefKeys.length ? await resolveSharedReferenceAliases(sharedRefKeys, treeId) : /* @__PURE__ */ new Map();
@@ -58998,17 +58998,24 @@ async function saveUserEntriesNeutral(submissionId, formData, treeId) {
   }
   return saved;
 }
-async function evaluateCapacitiesForSubmission(submissionId, organizationId, userId, treeId, formData, changedFieldId) {
+async function evaluateCapacitiesForSubmission(submissionId, organizationId, userId, treeId, formData, mode = "change", changedFieldId) {
+  console.log(`\u{1F3AF} [EVALUATE] Mode: ${mode}, changedFieldId: ${changedFieldId || "N/A"}`);
   const valueMap = /* @__PURE__ */ new Map();
   try {
     const existingData = await prisma43.treeBranchLeafSubmissionData.findMany({
-      where: { submissionId },
-      select: { nodeId: true, value: true }
+      where: {
+        submissionId,
+        OR: [
+          { operationSource: null },
+          { operationSource: "neutral" }
+        ]
+      },
+      select: { nodeId: true, value: true, operationSource: true }
     });
     if (existingData.length) {
       const existingEntries = existingData.map((r) => [r.nodeId, r.value]);
       await applySharedReferenceValues(valueMap, existingEntries, treeId);
-      console.log(`\u{1F511} [EVALUATE] valueMap hydrat\xE9 depuis DB: ${existingData.length} entr\xE9es \u2192 ${valueMap.size} cl\xE9s`);
+      console.log(`\u{1F511} [EVALUATE] valueMap hydrat\xE9 depuis DB (inputs only): ${existingData.length} entr\xE9es \u2192 ${valueMap.size} cl\xE9s`);
     }
   } catch (e) {
     console.warn("\u26A0\uFE0F [EVALUATE] Hydratation DB du valueMap \xE9chou\xE9e (best-effort):", e?.message || e);
@@ -59064,17 +59071,26 @@ async function evaluateCapacitiesForSubmission(submissionId, organizationId, use
   for (const capacity of capacities) {
     const sourceRef = capacity.sourceRef;
     const isDisplayField = capacity.TreeBranchLeafNode?.fieldType === "DISPLAY" || capacity.TreeBranchLeafNode?.type === "DISPLAY" || capacity.TreeBranchLeafNode?.type === "leaf_field";
-    if (isDisplayField && changedFieldId === "NULL") {
-      console.log(`\u23F8\uFE0F [AUTOSAVE] Display field ${capacity.nodeId} (${capacity.TreeBranchLeafNode?.label}) skipp\xE9 - autosave p\xE9riodique`);
+    if (isDisplayField && mode === "autosave") {
+      console.log(`\u23F8\uFE0F [AUTOSAVE] Display field ${capacity.nodeId} (${capacity.TreeBranchLeafNode?.label}) skipp\xE9 - mode autosave`);
       continue;
     }
-    if (isDisplayField && changedFieldId && changedFieldId !== "NULL") {
+    if (isDisplayField && mode === "open") {
+      console.log(`\u{1F504} [OPEN] Display field ${capacity.nodeId} (${capacity.TreeBranchLeafNode?.label}) recalcul\xE9 - mode open`);
+    }
+    if (isDisplayField && mode === "change" && changedFieldId) {
       const node = await prisma43.treeBranchLeafNode.findUnique({
         where: { id: capacity.nodeId },
         select: { metadata: true }
       });
       const metaTriggerNodeIds = node?.metadata?.triggerNodeIds;
       let triggerNodeIds = Array.isArray(metaTriggerNodeIds) ? metaTriggerNodeIds.filter(Boolean) : [];
+      console.log(`\u{1F50E} [TRIGGER LOAD] Display field ${capacity.nodeId} - changedFieldId: ${changedFieldId}`);
+      console.log(`   \u{1F50E} Node trouv\xE9: ${node ? "OUI" : "NON"}, triggers: ${triggerNodeIds.length}`);
+      if (triggerNodeIds.length > 0 && triggerNodeIds.length <= 12) {
+        console.log(`   \u{1F50E} Triggers: ${JSON.stringify(triggerNodeIds)}`);
+      }
+      console.log(`   \u{1F50E} changedFieldId dans triggers? ${triggerNodeIds.includes(changedFieldId)}`);
       if (triggerNodeIds.length === 0) {
         const derived = deriveTriggerNodeIdsFromCapacity(capacity, capacity.nodeId);
         if (derived.length > 0) {
@@ -59137,6 +59153,9 @@ async function evaluateCapacitiesForSubmission(submissionId, organizationId, use
           }
           if (!matchesTrigger) {
             console.log(`\u23F8\uFE0F [TRIGGER FILTER] Display field ${capacity.nodeId} (${capacity.TreeBranchLeafNode?.label}) skipp\xE9 - changedFieldId "${changedFieldId}" pas dans triggers [${triggerNodeIds.length} triggers d\xE9finis]`);
+            console.log(`   \u{1F4CB} [DEBUG] Triggers: ${JSON.stringify(triggerNodeIds.slice(0, 5))}${triggerNodeIds.length > 5 ? "..." : ""}`);
+            console.log(`   \u{1F4CB} [DEBUG] Position incluse? ${triggerNodeIds.includes(changedFieldId)}`);
+            console.log(`   \u{1F4CB} [DEBUG] Expanded triggers: ${JSON.stringify(expanded.slice(0, 5))}${expanded.length > 5 ? "..." : ""}`);
             continue;
           }
         } else {
@@ -59452,8 +59471,15 @@ router73.post("/submissions/create-and-evaluate", async (req2, res) => {
       reuseSubmissionId,
       submissionId: requestedSubmissionId,
       changedFieldId,
+      evaluationMode,
       forceNewSubmission
     } = req2.body;
+    let mode = "change";
+    if (evaluationMode === "open" || evaluationMode === "autosave" || evaluationMode === "change") {
+      mode = evaluationMode;
+    } else if (changedFieldId === "NULL") {
+      mode = "autosave";
+    }
     const cleanFormData = formData && typeof formData === "object" ? sanitizeFormData(formData) : void 0;
     const triggerFieldId = changedFieldId;
     const shouldForceNewSubmission = Boolean(forceNewSubmission);
@@ -59723,8 +59749,8 @@ router73.post("/submissions/create-and-evaluate", async (req2, res) => {
         }
       });
       console.log(`\u{1F3AF} [TBL CREATE-AND-EVALUATE] ${capacities.length} capacit\xE9s trouv\xE9es`);
-      const evalStats = await evaluateCapacitiesForSubmission(submissionId, organizationId, userId || null, effectiveTreeId, cleanFormData, triggerFieldId);
-      console.log(`\u2705 [TBL CREATE-AND-EVALUATE] Capacit\xE9s: ${evalStats.updated} mises \xE0 jour, ${evalStats.created} cr\xE9\xE9es, ${evalStats.displayFieldsUpdated} display fields r\xE9actifs`);
+      const evalStats = await evaluateCapacitiesForSubmission(submissionId, organizationId, userId || null, effectiveTreeId, cleanFormData, mode, triggerFieldId);
+      console.log(`\u2705 [TBL CREATE-AND-EVALUATE] Capacit\xE9s: ${evalStats.updated} mises \xE0 jour, ${evalStats.created} cr\xE9\xE9es, ${evalStats.displayFieldsUpdated} display fields r\xE9actifs (mode: ${mode})`);
     }
     const finalSubmission = await prisma43.treeBranchLeafSubmission.findUnique({
       where: { id: submissionId }
@@ -59790,7 +59816,7 @@ router73.put("/submissions/:submissionId/update-and-evaluate", async (req2, res)
     if (Object.keys(updateData).length > 0) {
       await prisma43.treeBranchLeafSubmission.update({ where: { id: submissionId }, data: updateData });
     }
-    const stats = await evaluateCapacitiesForSubmission(submissionId, organizationId, userId, submission.treeId, cleanFormData);
+    const stats = await evaluateCapacitiesForSubmission(submissionId, organizationId, userId, submission.treeId, cleanFormData, "change");
     const finalSubmission = await prisma43.treeBranchLeafSubmission.findUnique({
       where: { id: submissionId },
       include: { TreeBranchLeafSubmissionData: true }
@@ -59893,7 +59919,13 @@ router73.post("/submissions/preview-evaluate", async (req2, res) => {
     }
     if (baseSubmissionId) {
       const existingData = await prisma43.treeBranchLeafSubmissionData.findMany({
-        where: { submissionId: baseSubmissionId },
+        where: {
+          submissionId: baseSubmissionId,
+          OR: [
+            { operationSource: null },
+            { operationSource: "neutral" }
+          ]
+        },
         select: { nodeId: true, value: true }
       });
       const existingEntries = existingData.map((row) => [row.nodeId, row.value]);
@@ -60246,13 +60278,13 @@ router73.post("/submissions/stage/commit", async (req2, res) => {
       if (!submission) return res.status(404).json({ success: false, error: "Soumission introuvable" });
       await prisma43.treeBranchLeafSubmission.update({ where: { id: stage.submissionId }, data: { exportData: stage.formData } });
       const saved2 = await saveUserEntriesNeutral(stage.submissionId, stage.formData, stage.treeId);
-      const stats2 = await evaluateCapacitiesForSubmission(stage.submissionId, stage.organizationId, stage.userId, stage.treeId);
+      const stats2 = await evaluateCapacitiesForSubmission(stage.submissionId, stage.organizationId, stage.userId, stage.treeId, void 0, "change");
       return res.json({ success: true, submissionId: stage.submissionId, saved: saved2, stats: stats2 });
     }
     const submissionId = `tbl-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
     await prisma43.treeBranchLeafSubmission.create({ data: { id: submissionId, treeId: stage.treeId, userId: stage.userId, status: "draft", summary: { name: `Devis TBL ${(/* @__PURE__ */ new Date()).toLocaleDateString()}` }, exportData: stage.formData, updatedAt: /* @__PURE__ */ new Date() } });
     const saved = await saveUserEntriesNeutral(submissionId, stage.formData, stage.treeId);
-    const stats = await evaluateCapacitiesForSubmission(submissionId, stage.organizationId, stage.userId, stage.treeId);
+    const stats = await evaluateCapacitiesForSubmission(submissionId, stage.organizationId, stage.userId, stage.treeId, void 0, "open");
     stage.submissionId = submissionId;
     stage.updatedAt = Date.now();
     stagingStore.set(stage.id, stage);
@@ -60549,7 +60581,7 @@ router75.get("/:nodeId/calculated-value", async (req2, res) => {
       );
     })();
     if (isDisplayField) {
-      if (submissionId && !requiresFreshCalculation && !forceRecompute) {
+      if (submissionId && !forceRecompute) {
         const scoped = await prisma44.treeBranchLeafSubmissionData.findUnique({
           where: { submissionId_nodeId: { submissionId, nodeId } },
           select: {
@@ -60566,6 +60598,7 @@ router75.get("/:nodeId/calculated-value", async (req2, res) => {
         const fromOpResult = hasValidScoped ? null : extractValueFromOperationResult(scoped?.operationResult);
         const resolved = hasValidScoped ? parsedScoped : fromOpResult;
         if (hasMeaningfulValue(resolved)) {
+          console.log(`\u2705 [DISPLAY FIELD] ${nodeId} (${node.label}) retourne valeur SubmissionData: ${resolved}`);
           return res.json({
             success: true,
             nodeId: node.id,
@@ -60579,24 +60612,7 @@ router75.get("/:nodeId/calculated-value", async (req2, res) => {
             isDisplayField: true
           });
         }
-      }
-      if (node.calculatedValue !== null && node.calculatedValue !== void 0) {
-        const existingValue2 = String(node.calculatedValue);
-        const hasValidExistingValue2 = existingValue2 !== "" && existingValue2 !== "[]" && existingValue2 !== "null" && existingValue2 !== "undefined";
-        if (hasValidExistingValue2 && !requiresFreshCalculation && !forceRecompute) {
-          return res.json({
-            success: true,
-            nodeId: node.id,
-            label: node.label,
-            value: parseStoredStringValue(existingValue2),
-            calculatedAt: toIsoString(node.calculatedAt),
-            calculatedBy: node.calculatedBy,
-            type: node.type,
-            fieldType: node.fieldType,
-            fromStoredValue: true,
-            isDisplayField: true
-          });
-        }
+        console.log(`\u26A0\uFE0F [DISPLAY FIELD] ${nodeId} (${node.label}) pas de valeur SubmissionData, recalcul n\xE9cessaire`);
       }
     }
     const preferSubmissionData = Boolean(submissionId) && !isDisplayField;
@@ -60782,7 +60798,7 @@ router75.get("/:nodeId/calculated-value", async (req2, res) => {
         console.error("\u274C [CalculatedValueController] Recompute (requiresFreshCalculation) error:", recomputeErr);
       }
     }
-    if (hasValidExistingValue) {
+    if (hasValidExistingValue && !isDisplayField) {
       return res.json({
         success: true,
         nodeId: node.id,
@@ -60797,10 +60813,14 @@ router75.get("/:nodeId/calculated-value", async (req2, res) => {
     }
     const isRealSubmission = submissionId && !submissionId.startsWith("preview-");
     const canRecalculateHere = hasTableLookup && !hasConditionVariable && !hasTreeSourceVariable;
-    if (canRecalculateHere && node.treeId && isRealSubmission) {
-      console.log(`\u{1F525} [CalculatedValueController] Node "${node.label}" - recalcul table lookup:`, {
+    const canRecalculateDisplayField = isDisplayField && isRealSubmission && (hasTableLookup || hasFormulaVariable || hasConditionVariable || hasTreeSourceVariable);
+    if ((canRecalculateHere || canRecalculateDisplayField) && node.treeId && isRealSubmission) {
+      console.log(`\u{1F525} [CalculatedValueController] Node "${node.label}" - recalcul ${isDisplayField ? "DISPLAY field" : "table lookup"}:`, {
         nodeId,
         hasTableLookup,
+        hasFormulaVariable,
+        hasConditionVariable,
+        isDisplayField,
         submissionId
       });
       try {
@@ -60813,15 +60833,40 @@ router75.get("/:nodeId/calculated-value", async (req2, res) => {
         console.log("\u{1F3AF} [CalculatedValueController] R\xE9sultat operation-interpreter:", result);
         if (result && (result.value !== void 0 || result.operationResult !== void 0)) {
           const stringValue = String(result.value ?? result.operationResult);
-          if (stringValue && stringValue !== "0" && stringValue !== "") {
-            await prisma44.treeBranchLeafNode.update({
-              where: { id: nodeId },
-              data: {
-                calculatedValue: stringValue,
-                calculatedAt: /* @__PURE__ */ new Date(),
-                calculatedBy: "operation-interpreter-auto"
+          if (isDisplayField) {
+            await prisma44.treeBranchLeafSubmissionData.upsert({
+              where: { submissionId_nodeId: { submissionId, nodeId } },
+              update: {
+                value: stringValue,
+                lastResolved: /* @__PURE__ */ new Date(),
+                operationSource: result.operationSource || "operation-interpreter-display",
+                sourceRef: result.sourceRef,
+                operationDetail: result.operationDetail,
+                fieldLabel: node.label
+              },
+              create: {
+                id: (0, import_crypto23.randomUUID)(),
+                submissionId,
+                nodeId,
+                value: stringValue,
+                lastResolved: /* @__PURE__ */ new Date(),
+                operationSource: result.operationSource || "operation-interpreter-display",
+                sourceRef: result.sourceRef,
+                operationDetail: result.operationDetail,
+                fieldLabel: node.label
               }
             });
+          } else {
+            if (stringValue && stringValue !== "0" && stringValue !== "") {
+              await prisma44.treeBranchLeafNode.update({
+                where: { id: nodeId },
+                data: {
+                  calculatedValue: stringValue,
+                  calculatedAt: /* @__PURE__ */ new Date(),
+                  calculatedBy: "operation-interpreter-auto"
+                }
+              });
+            }
           }
           return res.json({
             success: true,
@@ -60829,15 +60874,32 @@ router75.get("/:nodeId/calculated-value", async (req2, res) => {
             label: node.label,
             value: stringValue,
             calculatedAt: (/* @__PURE__ */ new Date()).toISOString(),
-            calculatedBy: "operation-interpreter-auto",
+            calculatedBy: result.operationSource || "operation-interpreter-auto",
             type: node.type,
             fieldType: node.fieldType,
-            freshCalculation: true
+            freshCalculation: true,
+            isDisplayField,
+            submissionScoped: isDisplayField
           });
         }
       } catch (operationErr) {
         console.error("\u274C [CalculatedValueController] Erreur operation-interpreter:", operationErr);
       }
+    }
+    if (isDisplayField) {
+      console.log(`\u26A0\uFE0F [CalculatedValueController] DISPLAY field "${node.label}" - pas de valeur scop\xE9e, retourne null`);
+      return res.json({
+        success: true,
+        nodeId: node.id,
+        label: node.label,
+        value: null,
+        // Pas de valeur GLOBALE pour les DISPLAY fields
+        calculatedAt: node.calculatedAt,
+        calculatedBy: node.calculatedBy,
+        type: node.type,
+        fieldType: node.fieldType,
+        noScopedValue: true
+      });
     }
     return res.json({
       success: true,

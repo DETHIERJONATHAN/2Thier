@@ -8660,6 +8660,16 @@ router.get('/submissions/:id/fields', async (req, res) => {
       const node = row.TreeBranchLeafNode;
       if (!node) continue;
 
+      // 🚫 EXCLURE les champs DISPLAY (calculés) - ils doivent être recalculés dynamiquement
+      // Ces champs ont fieldType='DISPLAY' ou (type='leaf_field' + fieldSubType='display')
+      const isDisplayField = 
+        node.fieldType === 'DISPLAY' ||
+        (node.type === 'leaf_field' && ['display', 'DISPLAY', 'Display'].includes(node.fieldSubType || ''));
+      
+      if (isDisplayField) {
+        console.log(`[TBL-FIELDS] ⏸️ Champ DISPLAY exclu: ${node.label} (${node.id})`);
+        continue; // Ne pas inclure dans fieldsMap
+      }
       // DÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â©terminer la clÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â© (utiliser name si disponible, sinon label, sinon nodeId)
       const key = node.name || node.label || node.id;
 
