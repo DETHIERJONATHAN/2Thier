@@ -58807,13 +58807,14 @@ function expandTriggersForCopy(displayNodeId2, triggerIds) {
   }
   return Array.from(out);
 }
-function matchesChangedField(triggers, changedFieldId) {
-  const normalizedChanged = normalizeTriggerCandidate(changedFieldId);
-  if (!normalizedChanged) return false;
+function matchesAnyEffectiveTrigger(triggers, effectiveTriggers) {
   for (const t of triggers || []) {
     const normalized = normalizeTriggerCandidate(t);
     if (!normalized) continue;
-    if (normalized === normalizedChanged) return true;
+    for (const eff of effectiveTriggers) {
+      const normalizedEff = normalizeTriggerCandidate(eff);
+      if (normalizedEff && normalized === normalizedEff) return true;
+    }
   }
   return false;
 }
@@ -59000,6 +59001,10 @@ async function saveUserEntriesNeutral(submissionId, formData, treeId) {
 }
 async function evaluateCapacitiesForSubmission(submissionId, organizationId, userId, treeId, formData, mode = "change", changedFieldId) {
   console.log(`\u{1F3AF} [EVALUATE] Mode: ${mode}, changedFieldId: ${changedFieldId || "N/A"}`);
+  const effectiveTriggers = /* @__PURE__ */ new Set();
+  if (changedFieldId) {
+    effectiveTriggers.add(changedFieldId);
+  }
   const valueMap = /* @__PURE__ */ new Map();
   try {
     const existingData = await prisma43.treeBranchLeafSubmissionData.findMany({
@@ -59068,6 +59073,8 @@ async function evaluateCapacitiesForSubmission(submissionId, organizationId, use
   };
   const computedValuesToStore = [];
   const triggerDerivationCache = /* @__PURE__ */ new Map();
+  const skippedDisplayFields = [];
+  const processedNodeIds = /* @__PURE__ */ new Set();
   for (const capacity of capacities) {
     const sourceRef = capacity.sourceRef;
     const isDisplayField = capacity.TreeBranchLeafNode?.fieldType === "DISPLAY" || capacity.TreeBranchLeafNode?.type === "DISPLAY" || capacity.TreeBranchLeafNode?.type === "leaf_field";
@@ -59119,7 +59126,7 @@ async function evaluateCapacitiesForSubmission(submissionId, organizationId, use
       }
       if (triggerNodeIds && Array.isArray(triggerNodeIds) && triggerNodeIds.length > 0) {
         const expanded = expandTriggersForCopy(capacity.nodeId, triggerNodeIds);
-        let matchesTrigger = matchesChangedField(expanded, changedFieldId);
+        let matchesTrigger = matchesAnyEffectiveTrigger(expanded, effectiveTriggers);
         if (!matchesTrigger) {
           try {
             const cached = triggerDerivationCache.get(capacity.nodeId);
@@ -59128,7 +59135,7 @@ async function evaluateCapacitiesForSubmission(submissionId, organizationId, use
             const merged = uniqStrings([...triggerNodeIds, ...derived]);
             if (merged.length > triggerNodeIds.length) {
               const reExpanded = expandTriggersForCopy(capacity.nodeId, merged);
-              matchesTrigger = matchesChangedField(reExpanded, changedFieldId);
+              matchesTrigger = matchesAnyEffectiveTrigger(reExpanded, effectiveTriggers);
               if (matchesTrigger) {
                 const existingMeta = node?.metadata && typeof node.metadata === "object" ? node.metadata : {};
                 await prisma43.treeBranchLeafNode.update({
@@ -59152,14 +59159,12 @@ async function evaluateCapacitiesForSubmission(submissionId, organizationId, use
             );
           }
           if (!matchesTrigger) {
-            console.log(`\u23F8\uFE0F [TRIGGER FILTER] Display field ${capacity.nodeId} (${capacity.TreeBranchLeafNode?.label}) skipp\xE9 - changedFieldId "${changedFieldId}" pas dans triggers [${triggerNodeIds.length} triggers d\xE9finis]`);
-            console.log(`   \u{1F4CB} [DEBUG] Triggers: ${JSON.stringify(triggerNodeIds.slice(0, 5))}${triggerNodeIds.length > 5 ? "..." : ""}`);
-            console.log(`   \u{1F4CB} [DEBUG] Position incluse? ${triggerNodeIds.includes(changedFieldId)}`);
-            console.log(`   \u{1F4CB} [DEBUG] Expanded triggers: ${JSON.stringify(expanded.slice(0, 5))}${expanded.length > 5 ? "..." : ""}`);
+            skippedDisplayFields.push(capacity);
+            console.log(`\u23F8\uFE0F [TRIGGER FILTER] Display field ${capacity.nodeId} (${capacity.TreeBranchLeafNode?.label}) skipp\xE9 - effectiveTriggers [${effectiveTriggers.size}] pas dans triggers [${triggerNodeIds.length}]`);
             continue;
           }
         } else {
-          console.log(`\u2705 [TRIGGER MATCH] Display field ${capacity.nodeId} (${capacity.TreeBranchLeafNode?.label}) recalcul\xE9 - changedFieldId "${changedFieldId}" dans triggers`);
+          console.log(`\u2705 [TRIGGER MATCH] Display field ${capacity.nodeId} (${capacity.TreeBranchLeafNode?.label}) recalcul\xE9 - match avec effectiveTriggers [${effectiveTriggers.size}]`);
         }
       } else {
         console.log(`\u23F8\uFE0F [NO TRIGGERS] Display field ${capacity.nodeId} (${capacity.TreeBranchLeafNode?.label}) skipp\xE9 - aucun trigger d\xE9fini, calcul\xE9 uniquement au chargement initial`);
@@ -59207,11 +59212,14 @@ async function evaluateCapacitiesForSubmission(submissionId, organizationId, use
           operationResult: parsedResult,
           calculatedBy: `reactive-${userId || "unknown"}`
         });
+        effectiveTriggers.add(capacity.nodeId);
+        processedNodeIds.add(capacity.nodeId);
         console.log(
-          `\u2705 [DISPLAY FIELD] ${capacity.nodeId} (${capacity.TreeBranchLeafNode?.label}) = ${hasValidValue ? String(rawValue) : "null"}`
+          `\u2705 [DISPLAY FIELD] ${capacity.nodeId} (${capacity.TreeBranchLeafNode?.label}) = ${hasValidValue ? String(rawValue) : "null"} \u2192 ajout\xE9 aux effectiveTriggers [${effectiveTriggers.size}]`
         );
         continue;
       }
+      processedNodeIds.add(capacity.nodeId);
       const key2 = { submissionId_nodeId: { submissionId, nodeId: capacity.nodeId } };
       const existing = await prisma43.treeBranchLeafSubmissionData.findUnique({ where: key2 });
       const normalize2 = (v) => {

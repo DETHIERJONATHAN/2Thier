@@ -763,35 +763,85 @@ async function evaluateCapacitiesForSubmission(
   // 🔑 ÉTAPE 1: Construire le valueMap avec les données fraîches du formulaire
   const valueMap = new Map<string, unknown>();
 
+  // �️ FIX 2026-01-31: Collecter les DISPLAY nodeIds pour protéger leurs valeurs DB
+  // Les DISPLAY fields sont CALCULÉS par le backend - le frontend ne fait que "cacher" les valeurs.
+  // Lors d'une révision, le frontend peut envoyer des valeurs obsolètes (0, 1) pour les DISPLAY fields
+  // qui servent de dépendances à d'autres calculs. On doit CONSERVER les valeurs DB pour ces champs.
+  const displayNodeIds = new Set<string>();
+  try {
+    const displayNodes = await prisma.treeBranchLeafNode.findMany({
+      where: {
+        treeId,
+        OR: [
+          { fieldType: 'DISPLAY' },
+          { type: { in: ['leaf_field', 'LEAF_FIELD'] }, subType: { in: ['display', 'DISPLAY', 'Display'] } },
+        ],
+      },
+      select: { id: true },
+    });
+    for (const n of displayNodes) {
+      displayNodeIds.add(n.id);
+      displayNodeIds.add(`${n.id}-sum-total`);
+    }
+  } catch {
+    // best-effort
+  }
+  
   // 🔁 IMPORTANT: Hydrater d'abord depuis la DB (submission scoped) pour éviter les régressions
   // quand le frontend envoie un payload partiel/vidé (ex: formData: {}).
-  // ⚠️ PROTECTION DONNÉES FANTÔMES: Ne charger QUE les inputs utilisateur (operationSource null/neutral)
-  // Les anciens résultats calculés (formula/condition/table) ne doivent PAS polluer le valueMap.
+  // ✅ FIX 2026-01-31: Charger TOUTES les données (y compris DISPLAY calculées) pour que les dépendances
+  // soient disponibles lors du calcul. Les résultats calculés seront recalculés et écraseront les anciennes valeurs.
+  const dbDisplayValues = new Map<string, unknown>(); // 🛡️ Mémoriser les valeurs DB des DISPLAY fields
   try {
     const existingData = await prisma.treeBranchLeafSubmissionData.findMany({
-      where: {
-        submissionId,
-        OR: [
-          { operationSource: null },
-          { operationSource: 'neutral' }
-        ]
-      },
+      where: { submissionId },
       select: { nodeId: true, value: true, operationSource: true }
     });
     if (existingData.length) {
       const existingEntries = existingData.map(r => [r.nodeId, r.value] as [string, unknown]);
       await applySharedReferenceValues(valueMap, existingEntries, treeId);
-      console.log(`🔑 [EVALUATE] valueMap hydraté depuis DB (inputs only): ${existingData.length} entrées → ${valueMap.size} clés`);
+      // 🛡️ Mémoriser les valeurs DB des DISPLAY fields pour les restaurer après formData
+      for (const r of existingData) {
+        if (displayNodeIds.has(r.nodeId)) {
+          dbDisplayValues.set(r.nodeId, r.value);
+        }
+      }
+      console.log(`🔑 [EVALUATE] valueMap hydraté depuis DB (ALL data): ${existingData.length} entrées → ${valueMap.size} clés (${dbDisplayValues.size} DISPLAY mémorisés)`);
     }
   } catch (e) {
     console.warn('⚠️ [EVALUATE] Hydratation DB du valueMap échouée (best-effort):', (e as Error)?.message || e);
   }
+  
+  // 🛡️ FIX 2026-01-31 v2: Collecter les valeurs DB restaurées pour les renvoyer au frontend
+  // Ces valeurs seront ajoutées à computedValuesToStore même si le champ est skippé par le trigger
+  const restoredDbDisplayValues = new Map<string, unknown>();
   
   if (formData && typeof formData === 'object') {
     // Appliquer les données du formulaire au valueMap (avec résolution des sharedReferences)
     const entries = Object.entries(formData).filter(([k]) => !k.startsWith('__'));
     await applySharedReferenceValues(valueMap, entries as Array<[string, unknown]>, treeId);
     console.log(`🔑 [EVALUATE] valueMap initialisé avec ${valueMap.size} entrées depuis formData`);
+    
+    // 🛡️ FIX 2026-01-31: RESTAURER les valeurs DB des DISPLAY fields
+    // Les valeurs du frontend pour les DISPLAY fields peuvent être obsolètes (0, 1)
+    // alors que la DB contient les vraies valeurs calculées (ex: après copie de révision)
+    // Ces valeurs servent de DÉPENDANCES pour d'autres calculs (conditions de visibilité)
+    let restoredCount = 0;
+    for (const [nodeId, dbValue] of dbDisplayValues) {
+      const formValue = valueMap.get(nodeId);
+      // Restaurer si la valeur formData semble obsolète/vide comparée à la valeur DB
+      const isFormValueWeak = formValue === undefined || formValue === null || formValue === '' || formValue === 0 || formValue === '0' || formValue === 1 || formValue === '1';
+      const isDbValueStrong = dbValue !== undefined && dbValue !== null && dbValue !== '' && dbValue !== 0 && dbValue !== '0' && dbValue !== 1 && dbValue !== '1';
+      if (isFormValueWeak && isDbValueStrong) {
+        valueMap.set(nodeId, dbValue);
+        // 🔑 Mémoriser pour renvoyer au frontend
+        restoredDbDisplayValues.set(nodeId, dbValue);
+        restoredCount++;
+      }
+    }
+    if (restoredCount > 0) {
+      console.log(`🛡️ [EVALUATE] ${restoredCount} valeurs DISPLAY restaurées depuis DB (formData avait des valeurs obsolètes)`);
+    }
   }
   
   // 🔥 RÉCUPÉRER LES VARIABLES ET LES FORMULES
@@ -1120,6 +1170,32 @@ async function evaluateCapacitiesForSubmission(
       }
     } catch (error) {
       console.error(`[TBL CAPACITY ERROR] ${sourceRef}:`, error);
+    }
+  }
+
+  // 🛡️ FIX 2026-01-31 v2: Ajouter les valeurs DISPLAY restaurées depuis DB qui n'ont pas été recalculées
+  // Ces valeurs avaient été écrasées par le formData avec des valeurs obsolètes (0, 1)
+  // Elles doivent être renvoyées au frontend pour corriger l'affichage
+  if (restoredDbDisplayValues.size > 0) {
+    const alreadyComputed = new Set(computedValuesToStore.map(c => c.nodeId));
+    let addedFromDb = 0;
+    for (const [nodeId, dbValue] of restoredDbDisplayValues) {
+      if (!alreadyComputed.has(nodeId)) {
+        computedValuesToStore.push({
+          nodeId,
+          value: String(dbValue),
+          sourceRef: 'db-restored',
+          operationSource: 'display_calculated' as OperationSourceType,
+          fieldLabel: null,
+          operationDetail: { source: 'db-restore', reason: 'formData had weak value' } as Prisma.InputJsonValue,
+          operationResult: null,
+          calculatedBy: 'db-restore-fix'
+        });
+        addedFromDb++;
+      }
+    }
+    if (addedFromDb > 0) {
+      console.log(`🛡️ [DB RESTORE] ${addedFromDb} valeurs DISPLAY restaurées depuis DB ajoutées aux résultats`);
     }
   }
 
@@ -1547,6 +1623,7 @@ router.post('/submissions/create-and-evaluate', async (req, res) => {
     
     // 4. Déterminer la soumission cible (compat: submissionId OU reuseSubmissionId)
     let submissionId = (requestedSubmissionId as string | undefined) || (reuseSubmissionId as string | undefined);
+    let revisionJustCreated = false; // 🛡️ FIX 2026-01-31: Track si une révision vient d'être créée
     let existingSubmission:
       | {
           id: string;
@@ -1633,6 +1710,7 @@ router.post('/submissions/create-and-evaluate', async (req, res) => {
             });
             submissionId = newId;
             existingSubmission = null;
+            revisionJustCreated = true; // 🛡️ FIX: Forcer mode 'open' pour recalculer tous les DISPLAY
             console.log(`🆕 [TBL VERSIONING] Soumission completed ${requestedSubmissionId} clonée (forceNewSubmission) → ${newId}`);
           } else if (!isRevision) {
             const newId = await cloneCompletedSubmissionToDraft({
@@ -1642,6 +1720,7 @@ router.post('/submissions/create-and-evaluate', async (req, res) => {
             });
             submissionId = newId;
             existingSubmission = null;
+            revisionJustCreated = true; // 🛡️ FIX: Forcer mode 'open' pour recalculer tous les DISPLAY
             console.log(`🆕 [TBL VERSIONING] Soumission completed ${requestedSubmissionId} clonée → ${newId}`);
           }
         }
@@ -1763,9 +1842,17 @@ router.post('/submissions/create-and-evaluate', async (req, res) => {
       
       console.log(`🎯 [TBL CREATE-AND-EVALUATE] ${capacities.length} capacités trouvées`);
       
+      // 🛡️ FIX 2026-01-31: Quand une révision vient d'être créée, forcer le mode 'open'
+      // pour recalculer TOUS les champs DISPLAY avec les données copiées depuis la soumission parente.
+      // Sinon, seuls les champs qui matchent le trigger seraient recalculés et les autres garderaient des valeurs obsolètes.
+      const effectiveMode = revisionJustCreated ? 'open' : mode;
+      if (revisionJustCreated) {
+        console.log(`🛡️ [TBL REVISION] Mode forcé à 'open' car révision créée - recalcul complet des DISPLAY`);
+      }
+      
       // C. Évaluer et persister les capacités avec NO-OP - 🔑 PASSER LE FORMDATA pour réactivité !
-      const evalStats = await evaluateCapacitiesForSubmission(submissionId!, organizationId!, userId || null, effectiveTreeId, cleanFormData, mode, triggerFieldId);
-      console.log(`✅ [TBL CREATE-AND-EVALUATE] Capacités: ${evalStats.updated} mises à jour, ${evalStats.created} créées, ${evalStats.displayFieldsUpdated} display fields réactifs (mode: ${mode})`);
+      const evalStats = await evaluateCapacitiesForSubmission(submissionId!, organizationId!, userId || null, effectiveTreeId, cleanFormData, effectiveMode, triggerFieldId);
+      console.log(`✅ [TBL CREATE-AND-EVALUATE] Capacités: ${evalStats.updated} mises à jour, ${evalStats.created} créées, ${evalStats.displayFieldsUpdated} display fields réactifs (mode: ${effectiveMode})`);
     }
     
     // 3. Évaluation immédiate déjà effectuée via operation-interpreter ci-dessus.

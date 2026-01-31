@@ -35,6 +35,20 @@ let changeInProgressUntil = 0;
 // Clé: nodeId, Valeur: timestamp jusqu'auquel cette valeur est protégée
 const inlineValueProtectedUntil = new Map<string, number>();
 
+// 🔥 FIX V3: DÉSACTIVÉ - La protection globale bloquait les GET légitimes
+// Les GET sont nécessaires pour récupérer les valeurs correctes après le broadcast
+// La protection inline (V2) suffit pour les champs qui reçoivent une valeur via broadcast
+
+/**
+ * 🛡️ DÉSACTIVÉ - Ne fait plus rien
+ * La protection inline (protectInlineValue) est suffisante
+ */
+export function protectAllDisplayFieldsAfterBroadcast(durationMs: number = 2000): void {
+  // DÉSACTIVÉ: Cette protection bloquait les GET légitimes qui sont nécessaires
+  // pour récupérer les valeurs correctes après le broadcast
+  console.log(`🛡️ [useNodeCalculatedValue] Protection globale DÉSACTIVÉE (ne fait plus rien)`);
+}
+
 /**
  * 🚦 Active le blocage des GET pour une durée donnée
  * Appelé par TBL.tsx AVANT d'envoyer une requête au backend
@@ -152,7 +166,11 @@ export function useNodeCalculatedValue(
       return;
     }
     
-    // 🛡️ NOUVEAU: Capturer le timestamp de CETTE requête (sera utilisé pour rejeter les réponses obsolètes)
+    // 🔥 FIX V3: DÉSACTIVÉ - La protection globale a été retirée
+    // Elle bloquait les GET légitimes qui sont nécessaires pour récupérer les vraies valeurs
+    // La protection inline (V2) est suffisante pour les champs qui reçoivent une valeur via broadcast
+    
+    // �🛡️ NOUVEAU: Capturer le timestamp de CETTE requête (sera utilisé pour rejeter les réponses obsolètes)
     const requestTimestamp = now;
 
     // Throttle court (évite l'empilement d'events: preview + autosave + retransform)
@@ -306,9 +324,26 @@ export function useNodeCalculatedValue(
     }
   }, [nodeId, treeId, submissionId, api]);
 
-  // Récupérer la valeur quand nodeId/treeId change
+  // 🔥 FIX 30/01/2026: Stocker le submissionId précédent pour détecter les changements
+  const prevSubmissionIdRef = useRef<string | undefined>(submissionId);
+
+  // Récupérer la valeur quand nodeId/treeId change (mais PAS quand submissionId change seul)
+  // Quand submissionId change, les valeurs arriveront via broadcast inline depuis create-and-evaluate
   useEffect(() => {
     if (nodeId && treeId) {
+      // 🔥 FIX: Si SEUL submissionId a changé, ne PAS déclencher de GET
+      // Les valeurs correctes arriveront via l'événement tbl-force-retransform avec calculatedValues inline
+      const previousSubmissionId = prevSubmissionIdRef.current;
+      const submissionIdChanged = previousSubmissionId !== submissionId;
+      
+      // Mettre à jour le ref APRÈS avoir comparé
+      prevSubmissionIdRef.current = submissionId;
+      
+      if (submissionIdChanged && submissionId) {
+        console.log(`🛡️ [useNodeCalculatedValue] GET IGNORÉ pour nodeId=${nodeId} - submissionId a changé (${previousSubmissionId} → ${submissionId}), attente du broadcast inline`);
+        return;
+      }
+      
       fetchCalculatedValue();
     }
   }, [nodeId, treeId, fetchCalculatedValue]);
@@ -401,7 +436,17 @@ export function useNodeCalculatedValue(
           return; // 🎯 Ne PAS faire de refetch !
         }
 
-        // Si pas de valeur inline, faire le refetch classique (fallback)
+        // 🔥 FIX 30/01/2026: Si calculatedValues existe mais notre nodeId n'y est PAS,
+        // cela signifie que ce display field n'a PAS été recalculé (skippé par le trigger filter).
+        // Dans ce cas, NE PAS faire de refetch car la valeur actuelle est toujours correcte !
+        // Le refetch risquerait de retourner null/obsolète pour les nouvelles révisions.
+        if (detail?.calculatedValues && Object.keys(detail.calculatedValues).length > 0) {
+          console.log(`🛡️ [useNodeCalculatedValue] nodeId=${nodeId} pas dans calculatedValues - conserver valeur actuelle (pas de refetch)`);
+          return; // 🎯 Ne PAS faire de refetch - le champ n'a pas été impacté par le changement
+        }
+
+        // Si pas de valeur inline ET pas de calculatedValues, faire le refetch classique (fallback)
+        // Cela couvre les cas comme le chargement initial ou les refreshs manuels
         // 🎯 PROTECTION: Incrémenter le compteur quand un refresh est demandé
         pendingEvaluationsRef.current++;
         setIsProtected(true);

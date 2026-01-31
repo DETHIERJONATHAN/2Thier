@@ -115,6 +115,13 @@ Solutions :
 1) Utiliser une clé service account à jour (rôle Cloud SQL Client) ou
 2) Forcer le mode ADC : `CLOUD_SQL_AUTH_MODE=adc bash scripts/start-local.sh` puis suivre le lien Google et coller le **code d'autorisation** (ce n'est pas un mot de passe).
 
+✅ Astuce Codespaces (fréquent) : si ton environnement exporte `GOOGLE_APPLICATION_CREDENTIALS=/tmp/gcloud-key.json`, cette clé est parfois **obsolète** et provoque exactement cette erreur.
+
+Dans ce cas, relance comme ceci :
+```bash
+env -u GOOGLE_APPLICATION_CREDENTIALS CLOUD_SQL_AUTH_MODE=adc bash scripts/start-local.sh
+```
+
 ### Dépannage: `ACCESS_TOKEN_TYPE_UNSUPPORTED` / 401 "invalid credentials"
 
 Si tu vois un message du proxy du style `ACCESS_TOKEN_TYPE_UNSUPPORTED` ou un `401 invalid credentials`, c'est généralement que :

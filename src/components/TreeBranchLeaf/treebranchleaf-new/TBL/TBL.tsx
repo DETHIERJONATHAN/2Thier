@@ -192,6 +192,8 @@ const TBL: React.FC<TBLProps> = ({
   const pendingRevisionForSubmissionIdRef = useRef<string | null>(null);
   const revisionCreateInFlightRef = useRef(false);
   const revisionCreatedFromSubmissionIdRef = useRef<string | null>(null);
+  // 🔥 FIX 30/01/2026: Track quand le submissionId vient de changer pour forcer mode='open'
+  const submissionIdJustChangedUntilRef = useRef<number>(0);
 
   const [saveDevisModalVisible, setSaveDevisModalVisible] = useState<boolean>(false);
   const [saveDevisName, setSaveDevisName] = useState<string>('');
@@ -725,6 +727,7 @@ const TBL: React.FC<TBLProps> = ({
       const root = revisionRootName || stripRevisionSuffix(originalDevisName || devisName || 'Devis');
       const planned = pendingRevisionName || await generateNextRevisionName(root, leadId);
 
+      const changedFieldId = lastRealChangedFieldIdRef.current || 'NULL';
       const resp = await api.post('/api/tbl/submissions/create-and-evaluate', {
         treeId: effectiveTreeId,
         clientId: leadId,
@@ -732,12 +735,17 @@ const TBL: React.FC<TBLProps> = ({
         status: 'completed',
         providedName: planned,
         forceNewSubmission: true,
-        changedFieldId: lastRealChangedFieldIdRef.current || 'NULL',
-        evaluationMode: 'autosave'  // ⏩ Optimisation: skip recalcul DISPLAY
+        changedFieldId,
+        evaluationMode: 'open'  // ✅ TOUJOURS recalculer TOUS les display fields (comme brouillon)
       });
 
       const newId = (resp as any)?.submission?.id;
       if (!newId) return;
+
+      // 🔥 FIX 30/01/2026: Marquer que le submissionId vient de changer
+      // Les prochains appels dans les 3 secondes utiliseront mode='open'
+      submissionIdJustChangedUntilRef.current = Date.now() + 3000;
+      console.log(`🔄 [TBL] Révision créée → forcer mode='open' pendant 3s`);
 
       // Basculer l'éditeur sur la révision (on n'écrase plus jamais l'original)
       revisionCreatedFromSubmissionIdRef.current = submissionId;
@@ -780,7 +788,7 @@ const TBL: React.FC<TBLProps> = ({
       providedName: nextName,
       forceNewSubmission: true,
       changedFieldId: 'NULL',
-      evaluationMode: 'autosave'  // ⏩ Optimisation: skip recalcul DISPLAY (déjà calculé côté client)
+      evaluationMode: 'open'  // ✅ Recalcul complet des DISPLAY pour l'enregistrement
     });
 
     const newId = (resp as any)?.submission?.id;
@@ -1248,11 +1256,14 @@ const TBL: React.FC<TBLProps> = ({
       const submissionDataArray = detail?.submissionData as Array<{nodeId?: string; value?: unknown}> | undefined;
       if (submissionDataArray && Array.isArray(submissionDataArray)) {
         for (const item of submissionDataArray) {
-          if (item?.nodeId && item?.value !== undefined) {
+          // 🔥 FIX 30/01/2026: Exclure les valeurs null pour éviter d'écraser les valeurs existantes
+          // Quand un display field est skippé par le trigger filter, sa valeur en base peut être null
+          // mais on ne veut PAS écraser la valeur affichée actuellement
+          if (item?.nodeId && item?.value !== undefined && item?.value !== null) {
             calculatedValuesMap[item.nodeId] = item.value;
           }
         }
-        console.log(`📤 [TBL] Broadcasting ${Object.keys(calculatedValuesMap).length} valeurs calculées inline`);
+        console.log(`📤 [TBL] Broadcasting ${Object.keys(calculatedValuesMap).length} valeurs calculées inline (nulls exclus)`);
       }
       
       window.dispatchEvent(new CustomEvent('tbl-force-retransform', {
@@ -1269,6 +1280,8 @@ const TBL: React.FC<TBLProps> = ({
       }));
       
       // 🎯 FIX DONNÉES FANTÔMES: Débloquer les GET maintenant que les valeurs inline ont été broadcastées
+      // Note: La protection inline (protectInlineValue) dans useNodeCalculatedValue protège déjà
+      // les champs qui ont reçu une valeur via broadcast contre les GET obsolètes
       unblockGetRequests();
     } catch (err) {
       console.warn('⚠️ [TBL][AUTOSAVE] Dispatch tbl-force-retransform échoué', err);
@@ -1317,7 +1330,7 @@ const TBL: React.FC<TBLProps> = ({
     // Les valeurs correctes arriveront via broadcastCalculatedRefresh avec les valeurs inline
     const isRealUserChange = Boolean(changedField && changedField !== 'NULL');
     if (isRealUserChange) {
-      blockGetRequestsTemporarily(3000); // Bloquer pendant 3 secondes max
+      blockGetRequestsTemporarily(1500); // Bloquer pendant 1.5 secondes - équilibre entre réactivité et fiabilité
     }
 
     // ✅ Devis enregistrés: on n'écrit PAS au fil de l'eau, SAUF si on est en train d'éditer une révision (-N)
@@ -1364,6 +1377,7 @@ const TBL: React.FC<TBLProps> = ({
             status: 'default-draft',
             providedName: 'Brouillon',
             changedFieldId: changedField
+            // Mode par défaut ('change') = rapide, recalcule seulement les champs concernés
           });
 
           const createdOrReusedId = evaluationResponse?.submission?.id;
@@ -1407,6 +1421,7 @@ const TBL: React.FC<TBLProps> = ({
             status: 'draft',
             providedName: 'Brouillon',
             changedFieldId: changedField
+            // Mode par défaut ('change') = rapide, recalcule seulement les champs concernés
           });
 
           const createdOrReusedId = evaluationResponse?.submission?.id;
@@ -1448,18 +1463,36 @@ const TBL: React.FC<TBLProps> = ({
         const effectiveStatus = isDefaultDraft ? 'default-draft' : (isDevisSaved ? 'completed' : 'draft');
         const effectiveClientId = isDefaultDraft ? null : leadId;
         
+        // 🎯 MODE CENTRALISÉ:
+        // - 'change': changement utilisateur → recalcul ciblé par triggers (RAPIDE)
+        // - 'autosave': sauvegarde périodique → skip DISPLAY fields
+        // - 'open': chargement initial OU après changement de submissionId
+        const isUserChange = changedField && changedField !== 'NULL';
+        // 🔥 FIX 30/01/2026: Forcer mode='open' si le submissionId vient de changer
+        const submissionIdJustChanged = Date.now() < submissionIdJustChangedUntilRef.current;
+        let effectiveMode: 'open' | 'change' | 'autosave' = isUserChange ? 'change' : 'autosave';
+        if (submissionIdJustChanged) {
+          effectiveMode = 'open';
+          console.log(`🔄 [TBL] Mode forcé à 'open' car submissionId a changé récemment`);
+        }
+        
         const evaluationResponse = await api.post('/api/tbl/submissions/create-and-evaluate', {
           submissionId,
           formData,
           clientId: effectiveClientId,
           status: effectiveStatus,
-          changedFieldId: changedField // 🎯 Utiliser le paramètre direct au lieu de l'état React
+          changedFieldId: changedField, // 🎯 Utiliser le paramètre direct au lieu de l'état React
+          evaluationMode: effectiveMode // ✅ FIX: 'change' pour triggers, 'autosave' pour périodique, 'open' après changement submissionId
         });
 
         // ✅ Si le backend a créé une nouvelle révision (édition d'un devis completed), basculer automatiquement
         const returnedSubmissionId = evaluationResponse?.submission?.id;
         const effectiveSubmissionId = returnedSubmissionId || submissionId;
         if (returnedSubmissionId && returnedSubmissionId !== submissionId) {
+          // 🔥 FIX 30/01/2026: Marquer que le submissionId vient de changer
+          submissionIdJustChangedUntilRef.current = Date.now() + 3000;
+          console.log(`🔄 [TBL] Backend a créé révision → forcer mode='open' pendant 3s`);
+          
           setSubmissionId(returnedSubmissionId);
           setIsLoadedDevis(false);
           setOriginalDevisId(null);
@@ -1494,10 +1527,16 @@ const TBL: React.FC<TBLProps> = ({
     } catch (e) {
       // Discret: pas de toast pour éviter le spam, logs console seulement
       console.warn('⚠️ [TBL][AUTOSAVE] Échec autosave', e);
+      // 🎯 FIX: Débloquer les GET en cas d'erreur
+      unblockGetRequests();
     } finally {
       lastQueuedSignatureRef.current = null;
       setIsAutosaving(false);
       autosaveInFlightRef.current = false;
+      
+      // 🎯 FIX: Toujours débloquer les GET à la fin de l'autosave
+      // (même si le broadcast a été skippé)
+      unblockGetRequests();
 
       const pending = pendingAutosaveRef.current;
       if (pending) {
@@ -1819,6 +1858,11 @@ const TBL: React.FC<TBLProps> = ({
       
       if (response?.submission?.id) {
         const newSubmissionId = response.submission.id;
+        
+        // 🔥 FIX 30/01/2026: Marquer que le submissionId vient de changer
+        // Les prochains appels dans les 3 secondes utiliseront mode='open'
+        submissionIdJustChangedUntilRef.current = Date.now() + 3000;
+        console.log(`🔄 [TBL] submissionId changé → forcer mode='open' pendant 3s`);
         
         // Pointer vers le nouveau devis (les données restent à l'écran)
         setSubmissionId(newSubmissionId);
@@ -2526,7 +2570,8 @@ const TBL: React.FC<TBLProps> = ({
           clientId: submissionData.leadId,
           formData,
           status: 'completed',
-          providedName: submissionData.name
+          providedName: submissionData.name,
+          evaluationMode: 'open' // ✅ Recalculer TOUS les display fields
         });
         
         submission = response.submission;
@@ -2559,7 +2604,8 @@ const TBL: React.FC<TBLProps> = ({
                 clientId: submissionData.leadId,
                 formData: fallbackFormData,
                 status: 'completed',
-                providedName: submissionData.name
+                providedName: submissionData.name,
+                evaluationMode: 'open' // ✅ Recalculer TOUS les display fields
               });
               
               submission = fallbackResponse.submission;
@@ -2798,7 +2844,8 @@ const TBL: React.FC<TBLProps> = ({
           clientId: leadId,
           formData: filledData,
           status: 'completed',
-          providedName: uniqueName
+          providedName: uniqueName,
+          evaluationMode: 'open' // ✅ Recalculer TOUS les display fields
         });
         
         message.success(`Champs remplis (${count}) et devis enregistré via TBL Prisma: ${uniqueName}`);
