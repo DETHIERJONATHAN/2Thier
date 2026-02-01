@@ -12,7 +12,13 @@ interface DynamicTabProps {
   debugMode?: boolean;
 }
 
-const pickIcon = (leafType?: TblNode['leafType']) => {
+const pickIcon = (leafType?: TblNode['leafType'], displayIcon?: string) => {
+  // 🎯 Si une icône est explicitement configurée dans l'apparence, l'utiliser
+  if (displayIcon && displayIcon.trim()) {
+    return <span title="Icône personnalisée" className="mr-2 text-base">{displayIcon}</span>;
+  }
+  
+  // Sinon utiliser l'icône par défaut selon le type de feuille
   switch (leafType) {
     case 'OPTION': return <IconO />;
     case 'OPTION_FIELD': return <IconOC />;
@@ -124,7 +130,7 @@ const DynamicTab: React.FC<DynamicTabProps> = ({ groupNode, values, onChange, de
       }).map((leaf) => (
         <SectionCard
           key={leaf.id}
-          title={<div className="flex items-center">{pickIcon(leaf.leafType)} {leaf.title}</div>}
+          title={<div className="flex items-center">{pickIcon(leaf.leafType, (leaf as any)?.metadata?.appearance?.displayIcon)} {leaf.title}</div>}
           subtitle={leaf.subtitle || undefined}
           badges={debugMode ? [leaf.leafType || ''] : undefined}
           debugMode={debugMode}

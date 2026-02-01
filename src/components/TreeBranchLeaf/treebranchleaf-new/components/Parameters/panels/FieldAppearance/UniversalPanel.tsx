@@ -22,6 +22,7 @@ const DEFAULT_CONFIG: Record<string, unknown> = {
   variant: 'default',
   width: '',
   labelColor: '', // 🎨 Couleur du label (héritée par les enfants/copies)
+  displayIcon: '', // 🎯 Icône affichée dans la table (○, ◐, ●) - héritée par les copies
   columnsDesktop: 2,
   columnsMobile: 1,
   gutter: 16,
@@ -186,6 +187,21 @@ const UniversalPanel: React.FC<UniversalPanelProps> = ({ value = {}, onChange, r
             getValueFromEvent={(color) => color ? (typeof color === 'string' ? color : color.toHexString()) : ''}
           >
             <ColorPicker showText allowClear />
+          </Form.Item>
+          <Form.Item 
+            name="displayIcon" 
+            label={<Tooltip title="Icône affichée dans la colonne 'subtap display' de la table. Héritée par les copies du champ">Icône de champ (TBL)</Tooltip>}
+          >
+            <Select
+              allowClear
+              placeholder="Choisir une icône"
+              options={[
+                { value: '', label: '(Aucune - icône par défaut)' },
+                { value: '●', label: '● Champ (C)' },
+                { value: '◐', label: '◐ Champ + Option (O+C)' },
+                { value: '○', label: '○ Option (O)' }
+              ]}
+            />
           </Form.Item>
           <Form.Item name="columnsDesktop" label="Colonnes desktop">
             <InputNumber min={1} max={12} style={{ width: '100%' }} />
