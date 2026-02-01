@@ -1,0 +1,28 @@
+                       id                       |               label                | fieldType | number_min | number_max | defaultValue | number_defaultValue 
+------------------------------------------------+------------------------------------+-----------+------------+------------+--------------+---------------------
+ 962677c1-224e-4f1a-9837-88cbc2be2aad           | Charpente                          |           |            |            |              |                    
+ b625007f-ab89-4a25-a439-7d8c1adb05b8           | Combien de châssis                 |           |            |            |              |                    
+ 59a179fd-ae3e-441b-8119-43532cf36968           | Combien de mètre de descente d'eau |           |            |            |              |                    
+ bba85c12-f64f-47f9-ae88-06ff3be3cec4           | Combien de mur                     |           |            |            |              |                    
+ a5877005-d182-4544-ab23-5529908d42f9           | Combien de pents                   |           |            |            |              |                    
+ eb667489-cd4d-4cd8-9425-662ede5a0f22           | Combien de sol                     |           |            |            |              |                    
+ 03ce7ea6-1cda-4829-8a48-33507967998b           | mur                                |           |            |            |              |                    
+ 430298a7-a340-438d-acb4-8fad52b16908           | Mur                                |           |            |            |              |                    
+ 430298a7-a340-438d-acb4-8fad52b16908-sum-total | Mur - Total                        |           |            |            |              |                    
+ 2aef18c4-c8fa-4c9b-b960-9c0e7141fd4c           | Photo du mur                       |           |            |            |              |                    
+(10 rows)
+
+                       id                       |               label                | fieldType | number_min | number_max | defaultValue | number_defaultValue 
+------------------------------------------------+------------------------------------+-----------+------------+------------+--------------+---------------------
+ 962677c1-224e-4f1a-9837-88cbc2be2aad           | Charpente                          |           |            |            |              |                    
+ b625007f-ab89-4a25-a439-7d8c1adb05b8           | Combien de châssis                 |           |            |            |              |                    
+ 59a179fd-ae3e-441b-8119-43532cf36968           | Combien de mètre de descente d'eau |           |            |            |              |                    
+ bba85c12-f64f-47f9-ae88-06ff3be3cec4           | Combien de mur                     |           |            |            |              |                    
+ a5877005-d182-4544-ab23-5529908d42f9           | Combien de pents                   |           |            |            |              |                    
+ eb667489-cd4d-4cd8-9425-662ede5a0f22           | Combien de sol                     |           |            |            |              |                    
+ 03ce7ea6-1cda-4829-8a48-33507967998b           | mur                                |           |            |            |              |                    
+ 430298a7-a340-438d-acb4-8fad52b16908           | Mur                                |           |            |            |              |                    
+ 430298a7-a340-438d-acb4-8fad52b16908-sum-total | Mur - Total                        |           |            |            |              |                    
+ 2aef18c4-c8fa-4c9b-b960-9c0e7141fd4c           | Photo du mur                       |           |            |            |              |                    
+(10 rows)
+

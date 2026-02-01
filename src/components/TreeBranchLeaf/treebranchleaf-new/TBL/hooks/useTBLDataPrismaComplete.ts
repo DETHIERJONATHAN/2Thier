@@ -3461,7 +3461,8 @@ export const useTBLDataPrismaComplete = ({ tree_id, disabled = false, triggerRet
         return;
       }
 
-      fetchDataRef.current();
+      // Refresh silencieux pour éviter le spinner de chargement
+      fetchDataRef.current({ silent: true });
     };
 
     window.addEventListener('tbl-repeater-updated', handleRepeaterUpdate);

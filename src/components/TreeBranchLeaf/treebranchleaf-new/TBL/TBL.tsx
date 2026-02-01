@@ -2272,6 +2272,13 @@ const TBL: React.FC<TBLProps> = ({
         let numericValue = typeof value === 'number' ? value : parseInt(String(value), 10);
         
         // 🔒 VALIDATION: Vérifier si ce champ est source d'un repeater
+        // 🔍 DEBUG: Afficher tous les repeaters avec countSourceNodeId
+        const allRepeaters = (rawNodes || []).filter((n: any) => n.type === 'leaf_repeater');
+        console.log(`🔍 [PRELOAD DEBUG] Champ modifié: ${fieldId}, rawNodes: ${(rawNodes || []).length}, repeaters: ${allRepeaters.length}`);
+        allRepeaters.forEach((r: any) => {
+          console.log(`   📦 Repeater "${r.label}" (${r.id}) → countSourceNodeId: ${r.repeater_countSourceNodeId || 'NULL'}`);
+        });
+        
         const repeatersUsingThisField = (rawNodes || []).filter(
           (node: any) => node.repeater_countSourceNodeId === fieldId
         );
@@ -2281,7 +2288,10 @@ const TBL: React.FC<TBLProps> = ({
           console.log(`🔒 [PRELOAD] Champ ${fieldId}: valeur ${numericValue} forcée à 1 (minimum obligatoire)`);
           numericValue = 1;
           // Mettre à jour la valeur dans le state pour afficher 1
-          next[fieldId] = { ...field, value: '1' };
+          const currentFieldValue = next[fieldId];
+          next[fieldId] = typeof currentFieldValue === 'object' && currentFieldValue !== null
+            ? { ...currentFieldValue, value: '1' }
+            : '1';
         }
         
         if (!isNaN(numericValue) && numericValue >= 1 && repeatersUsingThisField.length > 0) {

@@ -124,20 +124,21 @@ export default function createRepeatRouter(prisma: PrismaClient) {
    * Fonctionne exactement comme si on cliquait N fois sur le bouton repeat.
    * 
    * Body: { targetCount: number }
-   * - targetCount: Nombre total de copies souhaitées (ex: 3 = 1 original + 2 copies)
+   * - targetCount: Nombre total souhaité (ex: 3 = 1 original + 2 copies)
+   * - Si targetCount < total actuel, les copies excédentaires sont SUPPRIMÉES (les plus récentes d'abord)
    */
   router.post('/:repeaterId/preload-copies', async (req, res) => {
     try {
       const { repeaterId } = req.params;
       const { targetCount } = (req.body || {}) as { targetCount?: number };
       
-      console.log(`⚡ [PRELOAD] Démarrage pré-chargement pour repeater ${repeaterId}, cible: ${targetCount}`);
+      console.log(`⚡ [PRELOAD] Démarrage pour repeater ${repeaterId}, cible: ${targetCount}`);
       
       if (typeof targetCount !== 'number' || targetCount < 1) {
         return res.status(400).json({ error: 'targetCount doit être un nombre >= 1' });
       }
       
-      // 1. Récupérer le nœud repeater
+      // 1. Récupérer le nœud repeater avec ses templateNodeIds
       const repeaterNode = await prisma.treeBranchLeafNode.findUnique({
         where: { id: repeaterId },
         select: { 
@@ -157,67 +158,127 @@ export default function createRepeatRouter(prisma: PrismaClient) {
         return res.status(400).json({ error: 'Le nœud spécifié n\'est pas un repeater' });
       }
       
-      // 2. Compter les copies existantes (nœuds avec ce repeater comme rootOriginalId dans metadata.copyOf)
-      const existingCopies = await prisma.treeBranchLeafNode.count({
+      // 2. Extraire les templateNodeIds depuis metadata.repeater.templateNodeIds
+      const metadata = repeaterNode.metadata as { repeater?: { templateNodeIds?: string[] } } | null;
+      const templateNodeIds = metadata?.repeater?.templateNodeIds || [];
+      
+      if (templateNodeIds.length === 0) {
+        return res.status(400).json({ error: 'Aucun templateNodeIds configuré pour ce repeater' });
+      }
+      
+      console.log(`⚡ [PRELOAD] Templates: ${templateNodeIds.join(', ')}`);
+      
+      // 3. Trouver les copies existantes (IDs suffixés comme templateId-1, templateId-2...)
+      // On utilise la même logique que suffix-utils.ts
+      const orStartsWith = templateNodeIds.map(templateId => ({ id: { startsWith: `${templateId}-` } }));
+      
+      const allCopies = await prisma.treeBranchLeafNode.findMany({
         where: {
           treeId: repeaterNode.treeId,
-          metadata: {
-            path: ['copyOf', 'rootOriginalId'],
-            equals: repeaterId
-          }
-        }
+          OR: orStartsWith
+        },
+        select: { id: true, createdAt: true },
+        orderBy: { createdAt: 'asc' }
       });
       
-      // 3. Calculer combien de copies créer: targetCount - 1 (l'original) - existingCopies
-      const copiesToCreate = Math.max(0, targetCount - 1 - existingCopies);
-      
-      console.log(`⚡ [PRELOAD] Copies existantes: ${existingCopies}, à créer: ${copiesToCreate}`);
-      
-      if (copiesToCreate === 0) {
-        return res.json({ 
-          success: true, 
-          message: 'Aucune copie à créer',
-          existingCopies: existingCopies + 1, // +1 pour l'original
-          createdCopies: 0,
-          totalCopies: existingCopies + 1
-        });
-      }
-      
-      // 4. Créer les copies séquentiellement EN UTILISANT LA MÊME LOGIQUE QUE LE BOUTON REPEAT
-      const createdNodes: string[] = [];
-      
-      for (let i = 0; i < copiesToCreate; i++) {
-        console.log(`⚡ [PRELOAD] Exécution repeat ${i + 1}/${copiesToCreate}...`);
-        
-        try {
-          // Utiliser executeRepeatDuplication + runRepeatExecution comme le bouton
-          const executionPlan = await executeRepeatDuplication(prisma, repeaterId, {});
-          
-          const executionSummary = await runRepeatExecution(
-            prisma,
-            req as unknown as MinimalReq,
-            executionPlan
-          );
-          
-          if (executionSummary.duplicated?.newId) {
-            createdNodes.push(executionSummary.duplicated.newId);
-            console.log(`⚡ [PRELOAD] Copie ${i + 1} créée: ${executionSummary.duplicated.newId}`);
+      // Extraire les suffixes uniques (ex: -1, -2, -3)
+      const suffixSet = new Set<number>();
+      for (const copy of allCopies) {
+        for (const templateId of templateNodeIds) {
+          if (copy.id.startsWith(`${templateId}-`)) {
+            const rest = copy.id.slice(templateId.length + 1);
+            if (/^\d+$/.test(rest)) {
+              suffixSet.add(Number(rest));
+            }
+            break;
           }
-        } catch (execError) {
-          console.error(`⚡ [PRELOAD] Erreur création copie ${i + 1}:`, execError);
-          // Continuer avec les autres copies
         }
       }
       
-      console.log(`✅ [PRELOAD] Pré-chargement terminé: ${createdNodes.length} copies créées`);
+      const existingSuffixes = Array.from(suffixSet).sort((a, b) => a - b);
+      const existingCopiesCount = existingSuffixes.length;
+      const totalCurrentInstances = existingCopiesCount + 1; // +1 pour l'original
+      
+      console.log(`⚡ [PRELOAD] Suffixes existants: [${existingSuffixes.join(', ')}] (total: ${totalCurrentInstances})`);
+      
+      // 4. Calculer les actions nécessaires
+      const copiesToCreate = Math.max(0, targetCount - totalCurrentInstances);
+      const copiesToDelete = Math.max(0, totalCurrentInstances - targetCount);
+      
+      console.log(`⚡ [PRELOAD] À créer: ${copiesToCreate}, à supprimer: ${copiesToDelete}`);
+      
+      const createdNodes: string[] = [];
+      const deletedNodes: string[] = [];
+      
+      // 5. SUPPRESSION des copies excédentaires (les plus récentes = suffixes les plus élevés)
+      if (copiesToDelete > 0) {
+        // Prendre les N suffixes les plus élevés pour les supprimer
+        const suffixesToDelete = existingSuffixes.slice(-copiesToDelete);
+        
+        console.log(`🗑️ [PRELOAD] Suppression des suffixes: [${suffixesToDelete.join(', ')}]`);
+        
+        for (const suffix of suffixesToDelete) {
+          // Trouver TOUS les nœuds avec ce suffixe (templates + display nodes + autres)
+          const nodesToDeleteForSuffix = await prisma.treeBranchLeafNode.findMany({
+            where: {
+              treeId: repeaterNode.treeId,
+              id: { endsWith: `-${suffix}` }
+            },
+            select: { id: true }
+          });
+          
+          console.log(`🗑️ [PRELOAD] Suffixe -${suffix}: ${nodesToDeleteForSuffix.length} nœuds à supprimer`);
+          
+          for (const node of nodesToDeleteForSuffix) {
+            try {
+              console.log(`🗑️ [PRELOAD] Suppression ${node.id}...`);
+              await deleteNodeWithCascade(prisma, repeaterNode.treeId, node.id);
+              deletedNodes.push(node.id);
+            } catch (deleteError) {
+              // Peut échouer si déjà supprimé par cascade, c'est OK
+              console.warn(`⚠️ [PRELOAD] Node ${node.id} peut-être déjà supprimé:`, (deleteError as Error).message);
+            }
+          }
+        }
+      }
+      
+      // 6. CRÉATION des copies manquantes
+      if (copiesToCreate > 0) {
+        for (let i = 0; i < copiesToCreate; i++) {
+          console.log(`⚡ [PRELOAD] Création copie ${i + 1}/${copiesToCreate}...`);
+          
+          try {
+            const executionPlan = await executeRepeatDuplication(prisma, repeaterId, {});
+            
+            const executionSummary = await runRepeatExecution(
+              prisma,
+              req as unknown as MinimalReq,
+              executionPlan
+            );
+            
+            if (executionSummary.duplicated?.newId) {
+              createdNodes.push(executionSummary.duplicated.newId);
+              console.log(`✅ [PRELOAD] Copie créée: ${executionSummary.duplicated.newId}`);
+            }
+          } catch (execError) {
+            console.error(`❌ [PRELOAD] Erreur création copie ${i + 1}:`, execError);
+          }
+        }
+      }
+      
+      const finalTotal = totalCurrentInstances + createdNodes.length - (copiesToDelete > 0 ? copiesToDelete : 0);
+      
+      console.log(`✅ [PRELOAD] Terminé: ${createdNodes.length} créées, ${deletedNodes.length} supprimées, total: ${finalTotal}`);
       
       res.json({
         success: true,
-        message: `${createdNodes.length} copies créées`,
-        existingCopies: existingCopies + 1,
+        message: `${createdNodes.length} créées, ${deletedNodes.length} supprimées`,
+        existingCopies: totalCurrentInstances,
         createdCopies: createdNodes.length,
-        totalCopies: existingCopies + 1 + createdNodes.length,
-        newNodeIds: createdNodes
+        deletedCopies: deletedNodes.length,
+        totalCopies: finalTotal,
+        newNodeIds: createdNodes,
+        deletedNodeIds: deletedNodes
       });
       
     } catch (error) {
@@ -227,4 +288,54 @@ export default function createRepeatRouter(prisma: PrismaClient) {
   });
 
   return router;
+}
+
+/**
+ * Supprime un nœud avec cascade (même logique que DELETE /trees/:treeId/nodes/:nodeId)
+ */
+async function deleteNodeWithCascade(prisma: PrismaClient, treeId: string, nodeId: string): Promise<void> {
+  // Charger tous les nœuds de l'arbre pour calculer la sous-arborescence
+  const allNodes = await prisma.treeBranchLeafNode.findMany({ 
+    where: { treeId },
+    select: { id: true, parentId: true }
+  });
+  
+  const childrenByParent = new Map<string, string[]>();
+  for (const n of allNodes) {
+    if (!n.parentId) continue;
+    const arr = childrenByParent.get(n.parentId) || [];
+    arr.push(n.id);
+    childrenByParent.set(n.parentId, arr);
+  }
+  
+  // Collecter tous les descendants (BFS)
+  const toDelete: string[] = [];
+  const queue: string[] = [nodeId];
+  const depth = new Map<string, number>();
+  depth.set(nodeId, 0);
+  
+  while (queue.length) {
+    const cur = queue.shift()!;
+    toDelete.push(cur);
+    const children = childrenByParent.get(cur) || [];
+    for (const c of children) {
+      depth.set(c, (depth.get(cur) || 0) + 1);
+      queue.push(c);
+    }
+  }
+  
+  // Supprimer en partant des feuilles (profondeur décroissante)
+  toDelete.sort((a, b) => (depth.get(b)! - depth.get(a)!));
+  
+  // Suppression transactionnelle
+  await prisma.$transaction(async (tx) => {
+    for (const id of toDelete) {
+      try {
+        await tx.treeBranchLeafNode.delete({ where: { id } });
+      } catch (err) {
+        // Ignorer si déjà supprimé
+        console.warn(`[PRELOAD DELETE] Node ${id} peut-être déjà supprimé`);
+      }
+    }
+  });
 }

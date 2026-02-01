@@ -613,8 +613,8 @@ export function useTBLDataHierarchicalFixed(params: UseTBLDataHierarchicalParams
           return;
         }
 
-        ddiag('Repeater update detected → refetch', detail);
-        fetchData();
+        ddiag('Repeater update detected → refetch (silent)', detail);
+        fetchData({ silent: true });
     };
 
     window.addEventListener('tbl-repeater-updated', handleRepeaterUpdate);
