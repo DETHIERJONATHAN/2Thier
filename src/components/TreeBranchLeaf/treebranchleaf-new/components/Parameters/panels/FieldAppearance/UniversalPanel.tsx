@@ -607,20 +607,26 @@ const UniversalPanel: React.FC<UniversalPanelProps> = ({ value = {}, onChange, r
                 accept="image/*"
                 maxCount={1}
                 showUploadList={false}
-                beforeUpload={() => false}
-                onChange={(info) => {
-                  const file = info.file?.originFileObj as File | undefined;
-                  if (!file) return;
+                beforeUpload={(file) => {
+                  // 🎯 FIX: Lire le fichier directement dans beforeUpload
                   const reader = new FileReader();
                   reader.onload = () => {
                     const result = typeof reader.result === 'string' ? reader.result : '';
-                    if (!result) return;
+                    if (!result || !result.startsWith('data:image')) {
+                      console.error('❌ [Upload] Fichier non valide ou lecture échouée');
+                      return;
+                    }
+                    console.log('✅ [Upload] Image convertie en base64:', result.substring(0, 50) + '...');
                     form.setFieldValue('displayIcon', result);
                     const nextValues = { ...localValues, displayIcon: result };
                     setLocalValues(nextValues);
                     debouncedSave(nextValues);
                   };
+                  reader.onerror = () => {
+                    console.error('❌ [Upload] Erreur lecture fichier');
+                  };
                   reader.readAsDataURL(file);
+                  return false; // Empêcher l'upload auto
                 }}
               >
                 <Button icon={<UploadOutlined />}>Uploader une icône (PNG/SVG)</Button>
