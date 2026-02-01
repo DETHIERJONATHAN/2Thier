@@ -2543,15 +2543,29 @@ async function enrichDataFromSubmission(submissionId, prisma51, valueMap, labelM
         valueMap.set("lead.notes", lead.notes);
         if (lead.data && typeof lead.data === "object") {
           const leadData = lead.data;
+          console.log("\u{1F50D} [GRD DEBUG] Lead data:", JSON.stringify(leadData).substring(0, 500));
           if (leadData.postalCode) {
+            console.log("\u{1F50D} [GRD DEBUG] Found postalCode direct:", leadData.postalCode);
             valueMap.set("lead.postalCode", leadData.postalCode);
+          } else if (leadData.address && typeof leadData.address === "object") {
+            const addressObj = leadData.address;
+            console.log("\u{1F50D} [GRD DEBUG] Address object:", JSON.stringify(addressObj));
+            if (addressObj.zipCode) {
+              console.log("\u{1F50D} [GRD DEBUG] Found address.zipCode:", addressObj.zipCode);
+              valueMap.set("lead.postalCode", addressObj.zipCode);
+            } else if (addressObj.postalCode) {
+              console.log("\u{1F50D} [GRD DEBUG] Found address.postalCode:", addressObj.postalCode);
+              valueMap.set("lead.postalCode", addressObj.postalCode);
+            }
           } else if (leadData.address && typeof leadData.address === "string") {
-            const postalCodeMatch = leadData.address.match(/\b(\d{4})\b/);
+            const postalCodeMatch = leadData.address.match(/\b(\d{4,5})\b/);
             if (postalCodeMatch) {
               const extractedPostalCode = postalCodeMatch[1];
+              console.log("\u{1F50D} [GRD DEBUG] Extracted postalCode from string:", extractedPostalCode);
               valueMap.set("lead.postalCode", extractedPostalCode);
             }
           }
+          console.log("\u{1F50D} [GRD DEBUG] Final lead.postalCode in valueMap:", valueMap.get("lead.postalCode"));
           if (leadData.address) {
             valueMap.set("lead.address", leadData.address);
           }
@@ -3328,11 +3342,21 @@ async function interpretFormula(formulaId, submissionId, prisma51, valuesCache, 
   };
 }
 async function getSourceValue(sourceOption, lookupConfig, fieldId, submissionId, prisma51, valuesCache, depth, valueMap, labelMap) {
+  console.log("\u{1F50D} [GRD DEBUG] getSourceValue called with:", {
+    sourceOption: JSON.stringify(sourceOption),
+    fieldId,
+    valueMapHas_lead_postalCode: valueMap?.has("lead.postalCode"),
+    lead_postalCode_value: valueMap?.get("lead.postalCode")
+  });
   if (!sourceOption || sourceOption.type === "select") {
-    return fieldId ? await getNodeValue(fieldId, submissionId, prisma51, valueMap) : null;
+    const result = fieldId ? await getNodeValue(fieldId, submissionId, prisma51, valueMap) : null;
+    console.log("\u{1F50D} [GRD DEBUG] getSourceValue SELECT mode result:", result);
+    return result;
   }
   if (sourceOption.type === "field" && sourceOption.sourceField) {
+    console.log("\u{1F50D} [GRD DEBUG] getSourceValue FIELD mode, sourceField:", sourceOption.sourceField);
     const result = await getNodeValue(sourceOption.sourceField, submissionId, prisma51, valueMap);
+    console.log("\u{1F50D} [GRD DEBUG] getSourceValue FIELD mode result:", result);
     return result;
   }
   if (sourceOption.type === "capacity" && sourceOption.capacityRef) {
@@ -3588,6 +3612,11 @@ async function interpretTable(tableId, submissionId, prisma51, valuesCache, dept
       labelMap
     );
     const colLabel2 = await getSourceLabel(colSourceOption, lookup, colFieldId, prisma51, labelMap);
+    console.log("\u{1F50D} [GRD DEBUG] MODE 1 After getSourceValue:", {
+      colSelectorValue: colSelectorValue2,
+      colLabel: colLabel2,
+      displayColumn: lookup.displayColumn
+    });
     const displayColumns = Array.isArray(lookup.displayColumn) ? lookup.displayColumn : [lookup.displayColumn];
     if (!colSelectorValue2) {
       return {
@@ -31964,7 +31993,12 @@ function registerSumDisplayFieldRoutes(router94) {
           metadata: true,
           subType: true,
           // 🎯 FIX: Récupérer le subType de l'original
-          fieldType: true
+          fieldType: true,
+          appearance_displayIcon: true,
+          // 🎨 FIX: Récupérer l'icône pour l'hériter sur les totaux
+          appearance_size: true,
+          appearance_variant: true,
+          appearance_width: true
         }
       });
       if (!node) {
@@ -32059,6 +32093,11 @@ function registerSumDisplayFieldRoutes(router94) {
         data_displayFormat: mainVariable.displayFormat,
         data_unit: mainVariable.unit,
         data_precision: mainVariable.precision,
+        // 🎨 HÉRITAGE APPARENCE: Copier les propriétés d'apparence du champ source
+        appearance_displayIcon: node.appearance_displayIcon,
+        appearance_size: node.appearance_size,
+        appearance_variant: node.appearance_variant,
+        appearance_width: node.appearance_width,
         metadata: {
           ...existingSumNode?.metadata || {},
           icon: sourceNodeIcon,
@@ -33847,6 +33886,7 @@ async function copyVariableWithCapacities(originalVarId, suffix, newNodeId, pris
               appearance_size: true,
               appearance_variant: true,
               appearance_width: true,
+              appearance_displayIcon: true,
               fieldType: true,
               fieldSubType: true,
               field_label: true
@@ -33895,6 +33935,7 @@ async function copyVariableWithCapacities(originalVarId, suffix, newNodeId, pris
             appearance_size: true,
             appearance_variant: true,
             appearance_width: true,
+            appearance_displayIcon: true,
             fieldType: true,
             fieldSubType: true,
             field_label: true,
@@ -34212,6 +34253,7 @@ async function copyVariableWithCapacities(originalVarId, suffix, newNodeId, pris
               appearance_size: tableSourceNode.appearance_size ?? "md",
               appearance_variant: tableSourceNode.appearance_variant,
               appearance_width: tableSourceNode.appearance_width ?? "100%",
+              appearance_displayIcon: tableSourceNode.appearance_displayIcon,
               fieldType: tableSourceNode.fieldType ?? "TEXT",
               fieldSubType: tableSourceNode.fieldSubType,
               field_label: displayLabel
@@ -34831,9 +34873,10 @@ async function createDisplayNodeForExistingVariable(variableId, prisma51, displa
     linkedConditionIds: [],
     linkedFormulaIds: [],
     linkedVariableIds: [variableId],
-    appearance_size: "md",
-    appearance_variant: null,
-    appearance_width: "100%",
+    appearance_size: owner?.appearance_size ?? "md",
+    appearance_variant: owner?.appearance_variant ?? null,
+    appearance_width: owner?.appearance_width ?? "100%",
+    appearance_displayIcon: owner?.appearance_displayIcon ?? null,
     fieldType: "TEXT",
     fieldSubType: null,
     field_label: v.displayName
@@ -35110,6 +35153,7 @@ async function addToNodeLinkedField6(client, nodeId, field, idsToAdd) {
   await setNodeLinkedField2(client, nodeId, field, next);
 }
 function buildResponseFromColumns(node) {
+  const metadataAppearance = node.metadata && typeof node.metadata === "object" ? node.metadata.appearance : void 0;
   const appearance = {
     size: node.appearance_size || "md",
     width: node.appearance_width || null,
@@ -35164,7 +35208,9 @@ function buildResponseFromColumns(node) {
     buttonWidth: node.repeater_buttonWidth || legacyRepeater?.buttonWidth || "auto",
     iconOnly: node.repeater_iconOnly ?? legacyRepeater?.iconOnly ?? false
   };
+  const storedAppearanceConfig = node.appearanceConfig && typeof node.appearanceConfig === "object" ? node.appearanceConfig : void 0;
   const appearanceConfig = {
+    ...storedAppearanceConfig || {},
     size: node.appearance_size || "md",
     variant: node.appearance_variant || "singleline",
     placeholder: node.text_placeholder || "",
@@ -35173,7 +35219,8 @@ function buildResponseFromColumns(node) {
     regex: node.text_regex || "",
     helpTooltipType: node.text_helpTooltipType || "none",
     helpTooltipText: node.text_helpTooltipText || null,
-    helpTooltipImage: node.text_helpTooltipImage || null
+    helpTooltipImage: node.text_helpTooltipImage || null,
+    displayIcon: storedAppearanceConfig?.displayIcon || metadataAppearance?.displayIcon
   };
   const fieldConfig = {
     text: {
@@ -35227,7 +35274,10 @@ function buildResponseFromColumns(node) {
   });
   const cleanedMetadata = {
     ...node.metadata || {},
-    appearance
+    appearance: {
+      ...metadataAppearance || {},
+      ...appearance
+    }
   };
   if (node.subtabs) {
     try {
@@ -35825,8 +35875,7 @@ var TableLookupDuplicationService = class {
         });
         console.log(`[TBL-DUP] \u2705 SelectConfig cr\xE9\xE9 avec displayColumn SAUVEGARD\xC9 en DB`);
         try {
-          const node = await prisma51.treeBranchLeafNode.findUnique({ where: { id: copiedNodeId }, select: { capabilities: true, linkedTableIds: true, fieldType: true, metadata: true } });
-          const currentCapabilities = node?.capabilities && typeof node.capabilities === "object" ? node.capabilities : {};
+          const node = await prisma51.treeBranchLeafNode.findUnique({ where: { id: copiedNodeId }, select: { linkedTableIds: true, fieldType: true, metadata: true } });
           const isInputField = node?.fieldType === null || node?.fieldType === "" || node?.fieldType === void 0;
           const currentLinked = node?.linkedTableIds || [];
           const newLinked = isInputField ? [] : Array.from(/* @__PURE__ */ new Set([...currentLinked, copiedTableId]));
@@ -35849,21 +35898,17 @@ var TableLookupDuplicationService = class {
             }
           }
           if (isTableOwnedByThisNode) {
-            currentCapabilities.table = currentCapabilities.table || {};
-            currentCapabilities.table.enabled = true;
-            currentCapabilities.table.activeId = copiedTableId;
-            currentCapabilities.table.instances = currentCapabilities.table.instances || {};
-            currentCapabilities.table.instances[copiedTableId] = currentCapabilities.table.instances[copiedTableId] || {};
+            const tableInstances = {};
+            tableInstances[copiedTableId] = {};
             await prisma51.treeBranchLeafNode.update({
               where: { id: copiedNodeId },
               data: {
                 hasTable: true,
                 // ✅ Seulement le propriétaire a hasTable: true
                 table_activeId: copiedTableId,
-                table_instances: { set: currentCapabilities.table.instances },
+                table_instances: { set: tableInstances },
                 table_name: originalTable.name + suffix,
                 table_type: originalTable.type,
-                capabilities: currentCapabilities,
                 linkedTableIds: { set: newLinked },
                 metadata: currentMetadata
                 // 🔥 FIX: Sauvegarder le metadata mis à jour
@@ -36215,6 +36260,7 @@ async function deepCopyNodeInternal(prisma51, req2, nodeId, opts) {
     appearance_size: oldNode.appearance_size,
     appearance_variant: oldNode.appearance_variant,
     appearance_width: oldNode.appearance_width,
+    appearance_displayIcon: oldNode.appearance_displayIcon,
     text_placeholder: oldNode.text_placeholder,
     text_maxLength: oldNode.text_maxLength,
     text_minLength: oldNode.text_minLength,
@@ -36611,6 +36657,7 @@ async function deepCopyNodeInternal(prisma51, req2, nodeId, opts) {
             appearance_size: originalTargetField.appearance_size,
             appearance_variant: originalTargetField.appearance_variant,
             appearance_width: originalTargetField.appearance_width,
+            appearance_displayIcon: originalTargetField.appearance_displayIcon,
             text_placeholder: originalTargetField.text_placeholder,
             text_maxLength: originalTargetField.text_maxLength,
             text_minLength: originalTargetField.text_minLength,
@@ -39278,6 +39325,7 @@ function mapJSONToColumns(updateData) {
     if (appearanceConfig.helpTooltipType) columnData.text_helpTooltipType = appearanceConfig.helpTooltipType;
     if (appearanceConfig.helpTooltipText) columnData.text_helpTooltipText = appearanceConfig.helpTooltipText;
     if (appearanceConfig.helpTooltipImage) columnData.text_helpTooltipImage = appearanceConfig.helpTooltipImage;
+    if (appearanceConfig.displayIcon) columnData.appearance_displayIcon = appearanceConfig.displayIcon;
     if (appearanceConfig.collapsible !== void 0) columnData.section_collapsible = appearanceConfig.collapsible;
     if (appearanceConfig.defaultCollapsed !== void 0) columnData.section_defaultCollapsed = appearanceConfig.defaultCollapsed;
     if (appearanceConfig.showChildrenCount !== void 0) columnData.section_showChildrenCount = appearanceConfig.showChildrenCount;
@@ -39402,6 +39450,8 @@ function mapJSONToColumns(updateData) {
   return columnData;
 }
 function buildResponseFromColumns2(node) {
+  const metadataAppearance = node.metadata && typeof node.metadata === "object" ? node.metadata.appearance : void 0;
+  const storedAppearanceConfig = node.appearanceConfig && typeof node.appearanceConfig === "object" ? node.appearanceConfig : void 0;
   const appearance = {
     size: node.appearance_size || "md",
     width: node.appearance_width || null,
@@ -39409,7 +39459,8 @@ function buildResponseFromColumns2(node) {
     // ÃƒÂ°Ã…Â¸Ã¢â‚¬ÂÃ‚Â¥ TOOLTIP FIX : Inclure les champs tooltip dans metadata.appearance
     helpTooltipType: node.text_helpTooltipType || "none",
     helpTooltipText: node.text_helpTooltipText || null,
-    helpTooltipImage: node.text_helpTooltipImage || null
+    helpTooltipImage: node.text_helpTooltipImage || null,
+    displayIcon: node.appearance_displayIcon || storedAppearanceConfig?.displayIcon || metadataAppearance?.displayIcon || null
   };
   const legacyRepeater = (() => {
     if (node.metadata && typeof node.metadata === "object" && node.metadata.repeater) {
@@ -39455,9 +39506,12 @@ function buildResponseFromColumns2(node) {
     addButtonLabel: node.repeater_addButtonLabel || legacyRepeater?.addButtonLabel || null,
     buttonSize: node.repeater_buttonSize || legacyRepeater?.buttonSize || "middle",
     buttonWidth: node.repeater_buttonWidth || legacyRepeater?.buttonWidth || "auto",
-    iconOnly: node.repeater_iconOnly ?? legacyRepeater?.iconOnly ?? false
+    iconOnly: node.repeater_iconOnly ?? legacyRepeater?.iconOnly ?? false,
+    // 🔄 Sync bidirectionnel : UUID du champ numérique qui contrôle le nombre de copies
+    countSourceNodeId: node.repeater_countSourceNodeId || null
   };
   const appearanceConfig = {
+    ...storedAppearanceConfig || {},
     size: node.appearance_size || "md",
     variant: node.appearance_variant || "singleline",
     placeholder: node.text_placeholder || "",
@@ -39466,7 +39520,9 @@ function buildResponseFromColumns2(node) {
     regex: node.text_regex || "",
     helpTooltipType: node.text_helpTooltipType || "none",
     helpTooltipText: node.text_helpTooltipText || null,
-    helpTooltipImage: node.text_helpTooltipImage || null
+    helpTooltipImage: node.text_helpTooltipImage || null,
+    // 🎨 FIX: Lire displayIcon depuis la colonne dédiée EN PRIORITÉ
+    displayIcon: node.appearance_displayIcon || storedAppearanceConfig?.displayIcon || metadataAppearance?.displayIcon
   };
   const fieldConfig = {
     text: {
@@ -39522,14 +39578,18 @@ function buildResponseFromColumns2(node) {
   });
   const cleanedMetadata = {
     ...node.metadata || {},
-    appearance
+    appearance: {
+      ...metadataAppearance || {},
+      ...appearance
+    }
   };
   if (node.metadata && node.metadata.triggerNodeIds) {
     cleanedMetadata.triggerNodeIds = node.metadata.triggerNodeIds;
   }
   if (node.id === "131a7b51-97d5-4f40-8a5a-9359f38939e8") {
   }
-  const metadataWithRepeater = repeater.templateNodeIds && repeater.templateNodeIds.length > 0 ? { ...cleanedMetadata, repeater } : cleanedMetadata;
+  const hasRepeaterConfig = repeater.templateNodeIds && repeater.templateNodeIds.length > 0 || repeater.countSourceNodeId;
+  const metadataWithRepeater = hasRepeaterConfig ? { ...cleanedMetadata, repeater } : cleanedMetadata;
   if (repeater.templateNodeIds && repeater.templateNodeIds.length > 0) {
   }
   if (node.subtabs) {
@@ -39570,6 +39630,8 @@ function buildResponseFromColumns2(node) {
     text_helpTooltipType: node.text_helpTooltipType,
     text_helpTooltipText: node.text_helpTooltipText,
     text_helpTooltipImage: node.text_helpTooltipImage,
+    // 🎨 APPEARANCE: Colonne dédiée displayIcon
+    appearance_displayIcon: node.appearance_displayIcon,
     // 🔧 AI MEASURE: Colonnes dédiées pour la configuration IA Mesure
     aiMeasure_enabled: node.aiMeasure_enabled ?? false,
     aiMeasure_autoTrigger: node.aiMeasure_autoTrigger ?? true,
@@ -39707,7 +39769,7 @@ function buildResponseFromColumns2(node) {
   return result;
 }
 function removeJSONFromUpdate(updateData) {
-  const { metadata, fieldConfig: _fieldConfig, appearanceConfig: _appearanceConfig, ...cleanData } = updateData;
+  const { metadata, fieldConfig: _fieldConfig, appearanceConfig, ...cleanData } = updateData;
   if (metadata && typeof metadata === "object") {
     const metaObj = metadata;
     const preservedMeta = {};
@@ -39729,10 +39791,29 @@ function removeJSONFromUpdate(updateData) {
     if ("triggerNodeIds" in metaObj) {
       preservedMeta.triggerNodeIds = metaObj.triggerNodeIds;
     }
+    if ("appearance" in metaObj && metaObj.appearance && typeof metaObj.appearance === "object") {
+      preservedMeta.appearance = metaObj.appearance;
+    }
+    if (appearanceConfig && typeof appearanceConfig === "object") {
+      const appConfig = appearanceConfig;
+      if ("displayIcon" in appConfig && appConfig.displayIcon) {
+        cleanData.appearance_displayIcon = appConfig.displayIcon;
+        console.log("\u{1F3A8} [removeJSONFromUpdate] displayIcon extrait vers colonne:", appConfig.displayIcon);
+      }
+    }
     if (Object.keys(preservedMeta).length > 0) {
       return {
         ...cleanData,
         metadata: preservedMeta
+      };
+    }
+  } else if (appearanceConfig && typeof appearanceConfig === "object") {
+    const appConfig = appearanceConfig;
+    if ("displayIcon" in appConfig && appConfig.displayIcon) {
+      console.log("\u{1F3A8} [removeJSONFromUpdate] displayIcon vers colonne (sans metadata):", appConfig.displayIcon);
+      return {
+        ...cleanData,
+        appearance_displayIcon: appConfig.displayIcon
       };
     }
   }
@@ -39953,6 +40034,11 @@ var updateOrMoveNode = async (req2, res) => {
     if (updateObj.metadata && typeof updateObj.metadata === "object") {
       const currentMetadata = existingNode.metadata || {};
       const newMetadata = updateObj.metadata;
+      console.log("\u{1F3A8} [updateOrMoveNode] displayIcon AVANT fusion:", {
+        dansUpdateObjMetadata: updateObj.metadata?.appearance?.displayIcon,
+        dansCurrentMetadata: currentMetadata?.appearance?.displayIcon,
+        dansNewMetadata: newMetadata?.appearance?.displayIcon
+      });
       if (newMetadata.aiMeasure) {
         const aiConfig = newMetadata.aiMeasure;
         updateObj.aiMeasure_enabled = aiConfig.enabled ?? false;
@@ -39967,10 +40053,20 @@ var updateOrMoveNode = async (req2, res) => {
         });
         delete newMetadata.aiMeasure;
       }
+      const mergedAppearance = {
+        ...currentMetadata.appearance || {},
+        ...newMetadata.appearance || {}
+      };
       updateObj.metadata = {
         ...currentMetadata,
-        ...newMetadata
+        ...newMetadata,
+        // 🎨 Écraser appearance avec le merge profond
+        ...Object.keys(mergedAppearance).length > 0 ? { appearance: mergedAppearance } : {}
       };
+      console.log("\u{1F3A8} [updateOrMoveNode] displayIcon APR\xC8S fusion:", {
+        mergedAppearance,
+        finalDisplayIcon: updateObj.metadata?.appearance?.displayIcon
+      });
       if (updateObj.metadata.aiMeasure) {
         delete updateObj.metadata.aiMeasure;
       }
@@ -39994,6 +40090,10 @@ var updateOrMoveNode = async (req2, res) => {
       aiMeasure_prompt: updateObj.aiMeasure_prompt,
       aiMeasure_keys: updateObj.aiMeasure_keys
     });
+    console.log("\u{1F3A8} [updateOrMoveNode] displayIcon AVANT DB.update:", {
+      metadataComplet: updateObj.metadata,
+      displayIcon: updateObj.metadata?.appearance?.displayIcon
+    });
     await prisma31.treeBranchLeafNode.update({
       where: { id: nodeId },
       data: { ...updateObj, updatedAt: /* @__PURE__ */ new Date() }
@@ -40004,6 +40104,10 @@ var updateOrMoveNode = async (req2, res) => {
       aiMeasure_autoTrigger: updatedNode?.aiMeasure_autoTrigger,
       aiMeasure_prompt: updatedNode?.aiMeasure_prompt,
       aiMeasure_keys: updatedNode?.aiMeasure_keys
+    });
+    console.log("\u{1F3A8} [updateOrMoveNode] displayIcon APR\xC8S DB.read:", {
+      metadataDB: updatedNode?.metadata,
+      displayIcon: updatedNode?.metadata?.appearance?.displayIcon
     });
     const responseData = updatedNode ? buildResponseFromColumns2(updatedNode) : updatedNode;
     return res.json(responseData);
@@ -58807,14 +58911,13 @@ function expandTriggersForCopy(displayNodeId2, triggerIds) {
   }
   return Array.from(out);
 }
-function matchesAnyEffectiveTrigger(triggers, effectiveTriggers) {
+function matchesChangedField(triggers, changedFieldId) {
+  const normalizedChanged = normalizeTriggerCandidate(changedFieldId);
+  if (!normalizedChanged) return false;
   for (const t of triggers || []) {
     const normalized = normalizeTriggerCandidate(t);
     if (!normalized) continue;
-    for (const eff of effectiveTriggers) {
-      const normalizedEff = normalizeTriggerCandidate(eff);
-      if (normalizedEff && normalized === normalizedEff) return true;
-    }
+    if (normalized === normalizedChanged) return true;
   }
   return false;
 }
@@ -59001,34 +59104,63 @@ async function saveUserEntriesNeutral(submissionId, formData, treeId) {
 }
 async function evaluateCapacitiesForSubmission(submissionId, organizationId, userId, treeId, formData, mode = "change", changedFieldId) {
   console.log(`\u{1F3AF} [EVALUATE] Mode: ${mode}, changedFieldId: ${changedFieldId || "N/A"}`);
-  const effectiveTriggers = /* @__PURE__ */ new Set();
-  if (changedFieldId) {
-    effectiveTriggers.add(changedFieldId);
-  }
   const valueMap = /* @__PURE__ */ new Map();
+  const displayNodeIds = /* @__PURE__ */ new Set();
   try {
-    const existingData = await prisma43.treeBranchLeafSubmissionData.findMany({
+    const displayNodes = await prisma43.treeBranchLeafNode.findMany({
       where: {
-        submissionId,
+        treeId,
         OR: [
-          { operationSource: null },
-          { operationSource: "neutral" }
+          { fieldType: "DISPLAY" },
+          { type: { in: ["leaf_field", "LEAF_FIELD"] }, subType: { in: ["display", "DISPLAY", "Display"] } }
         ]
       },
+      select: { id: true }
+    });
+    for (const n of displayNodes) {
+      displayNodeIds.add(n.id);
+      displayNodeIds.add(`${n.id}-sum-total`);
+    }
+  } catch {
+  }
+  const dbDisplayValues = /* @__PURE__ */ new Map();
+  try {
+    const existingData = await prisma43.treeBranchLeafSubmissionData.findMany({
+      where: { submissionId },
       select: { nodeId: true, value: true, operationSource: true }
     });
     if (existingData.length) {
       const existingEntries = existingData.map((r) => [r.nodeId, r.value]);
       await applySharedReferenceValues(valueMap, existingEntries, treeId);
-      console.log(`\u{1F511} [EVALUATE] valueMap hydrat\xE9 depuis DB (inputs only): ${existingData.length} entr\xE9es \u2192 ${valueMap.size} cl\xE9s`);
+      for (const r of existingData) {
+        if (displayNodeIds.has(r.nodeId)) {
+          dbDisplayValues.set(r.nodeId, r.value);
+        }
+      }
+      console.log(`\u{1F511} [EVALUATE] valueMap hydrat\xE9 depuis DB (ALL data): ${existingData.length} entr\xE9es \u2192 ${valueMap.size} cl\xE9s (${dbDisplayValues.size} DISPLAY m\xE9moris\xE9s)`);
     }
   } catch (e) {
     console.warn("\u26A0\uFE0F [EVALUATE] Hydratation DB du valueMap \xE9chou\xE9e (best-effort):", e?.message || e);
   }
+  const restoredDbDisplayValues = /* @__PURE__ */ new Map();
   if (formData && typeof formData === "object") {
     const entries = Object.entries(formData).filter(([k]) => !k.startsWith("__"));
     await applySharedReferenceValues(valueMap, entries, treeId);
     console.log(`\u{1F511} [EVALUATE] valueMap initialis\xE9 avec ${valueMap.size} entr\xE9es depuis formData`);
+    let restoredCount = 0;
+    for (const [nodeId, dbValue] of dbDisplayValues) {
+      const formValue = valueMap.get(nodeId);
+      const isFormValueWeak = formValue === void 0 || formValue === null || formValue === "" || formValue === 0 || formValue === "0" || formValue === 1 || formValue === "1";
+      const isDbValueStrong = dbValue !== void 0 && dbValue !== null && dbValue !== "" && dbValue !== 0 && dbValue !== "0" && dbValue !== 1 && dbValue !== "1";
+      if (isFormValueWeak && isDbValueStrong) {
+        valueMap.set(nodeId, dbValue);
+        restoredDbDisplayValues.set(nodeId, dbValue);
+        restoredCount++;
+      }
+    }
+    if (restoredCount > 0) {
+      console.log(`\u{1F6E1}\uFE0F [EVALUATE] ${restoredCount} valeurs DISPLAY restaur\xE9es depuis DB (formData avait des valeurs obsol\xE8tes)`);
+    }
   }
   const [variablesRaw, formulasRaw] = await Promise.all([
     prisma43.treeBranchLeafNodeVariable.findMany({
@@ -59073,8 +59205,6 @@ async function evaluateCapacitiesForSubmission(submissionId, organizationId, use
   };
   const computedValuesToStore = [];
   const triggerDerivationCache = /* @__PURE__ */ new Map();
-  const skippedDisplayFields = [];
-  const processedNodeIds = /* @__PURE__ */ new Set();
   for (const capacity of capacities) {
     const sourceRef = capacity.sourceRef;
     const isDisplayField = capacity.TreeBranchLeafNode?.fieldType === "DISPLAY" || capacity.TreeBranchLeafNode?.type === "DISPLAY" || capacity.TreeBranchLeafNode?.type === "leaf_field";
@@ -59126,7 +59256,7 @@ async function evaluateCapacitiesForSubmission(submissionId, organizationId, use
       }
       if (triggerNodeIds && Array.isArray(triggerNodeIds) && triggerNodeIds.length > 0) {
         const expanded = expandTriggersForCopy(capacity.nodeId, triggerNodeIds);
-        let matchesTrigger = matchesAnyEffectiveTrigger(expanded, effectiveTriggers);
+        let matchesTrigger = matchesChangedField(expanded, changedFieldId);
         if (!matchesTrigger) {
           try {
             const cached = triggerDerivationCache.get(capacity.nodeId);
@@ -59135,7 +59265,7 @@ async function evaluateCapacitiesForSubmission(submissionId, organizationId, use
             const merged = uniqStrings([...triggerNodeIds, ...derived]);
             if (merged.length > triggerNodeIds.length) {
               const reExpanded = expandTriggersForCopy(capacity.nodeId, merged);
-              matchesTrigger = matchesAnyEffectiveTrigger(reExpanded, effectiveTriggers);
+              matchesTrigger = matchesChangedField(reExpanded, changedFieldId);
               if (matchesTrigger) {
                 const existingMeta = node?.metadata && typeof node.metadata === "object" ? node.metadata : {};
                 await prisma43.treeBranchLeafNode.update({
@@ -59159,12 +59289,14 @@ async function evaluateCapacitiesForSubmission(submissionId, organizationId, use
             );
           }
           if (!matchesTrigger) {
-            skippedDisplayFields.push(capacity);
-            console.log(`\u23F8\uFE0F [TRIGGER FILTER] Display field ${capacity.nodeId} (${capacity.TreeBranchLeafNode?.label}) skipp\xE9 - effectiveTriggers [${effectiveTriggers.size}] pas dans triggers [${triggerNodeIds.length}]`);
+            console.log(`\u23F8\uFE0F [TRIGGER FILTER] Display field ${capacity.nodeId} (${capacity.TreeBranchLeafNode?.label}) skipp\xE9 - changedFieldId "${changedFieldId}" pas dans triggers [${triggerNodeIds.length} triggers d\xE9finis]`);
+            console.log(`   \u{1F4CB} [DEBUG] Triggers: ${JSON.stringify(triggerNodeIds.slice(0, 5))}${triggerNodeIds.length > 5 ? "..." : ""}`);
+            console.log(`   \u{1F4CB} [DEBUG] Position incluse? ${triggerNodeIds.includes(changedFieldId)}`);
+            console.log(`   \u{1F4CB} [DEBUG] Expanded triggers: ${JSON.stringify(expanded.slice(0, 5))}${expanded.length > 5 ? "..." : ""}`);
             continue;
           }
         } else {
-          console.log(`\u2705 [TRIGGER MATCH] Display field ${capacity.nodeId} (${capacity.TreeBranchLeafNode?.label}) recalcul\xE9 - match avec effectiveTriggers [${effectiveTriggers.size}]`);
+          console.log(`\u2705 [TRIGGER MATCH] Display field ${capacity.nodeId} (${capacity.TreeBranchLeafNode?.label}) recalcul\xE9 - changedFieldId "${changedFieldId}" dans triggers`);
         }
       } else {
         console.log(`\u23F8\uFE0F [NO TRIGGERS] Display field ${capacity.nodeId} (${capacity.TreeBranchLeafNode?.label}) skipp\xE9 - aucun trigger d\xE9fini, calcul\xE9 uniquement au chargement initial`);
@@ -59212,14 +59344,11 @@ async function evaluateCapacitiesForSubmission(submissionId, organizationId, use
           operationResult: parsedResult,
           calculatedBy: `reactive-${userId || "unknown"}`
         });
-        effectiveTriggers.add(capacity.nodeId);
-        processedNodeIds.add(capacity.nodeId);
         console.log(
-          `\u2705 [DISPLAY FIELD] ${capacity.nodeId} (${capacity.TreeBranchLeafNode?.label}) = ${hasValidValue ? String(rawValue) : "null"} \u2192 ajout\xE9 aux effectiveTriggers [${effectiveTriggers.size}]`
+          `\u2705 [DISPLAY FIELD] ${capacity.nodeId} (${capacity.TreeBranchLeafNode?.label}) = ${hasValidValue ? String(rawValue) : "null"}`
         );
         continue;
       }
-      processedNodeIds.add(capacity.nodeId);
       const key2 = { submissionId_nodeId: { submissionId, nodeId: capacity.nodeId } };
       const existing = await prisma43.treeBranchLeafSubmissionData.findUnique({ where: key2 });
       const normalize2 = (v) => {
@@ -59270,6 +59399,28 @@ async function evaluateCapacitiesForSubmission(submissionId, organizationId, use
       }
     } catch (error) {
       console.error(`[TBL CAPACITY ERROR] ${sourceRef}:`, error);
+    }
+  }
+  if (restoredDbDisplayValues.size > 0) {
+    const alreadyComputed = new Set(computedValuesToStore.map((c) => c.nodeId));
+    let addedFromDb = 0;
+    for (const [nodeId, dbValue] of restoredDbDisplayValues) {
+      if (!alreadyComputed.has(nodeId)) {
+        computedValuesToStore.push({
+          nodeId,
+          value: String(dbValue),
+          sourceRef: "db-restored",
+          operationSource: "display_calculated",
+          fieldLabel: null,
+          operationDetail: { source: "db-restore", reason: "formData had weak value" },
+          operationResult: null,
+          calculatedBy: "db-restore-fix"
+        });
+        addedFromDb++;
+      }
+    }
+    if (addedFromDb > 0) {
+      console.log(`\u{1F6E1}\uFE0F [DB RESTORE] ${addedFromDb} valeurs DISPLAY restaur\xE9es depuis DB ajout\xE9es aux r\xE9sultats`);
     }
   }
   if (computedValuesToStore.length > 0) {
@@ -59588,6 +59739,7 @@ router73.post("/submissions/create-and-evaluate", async (req2, res) => {
       }
     }
     let submissionId = requestedSubmissionId || reuseSubmissionId;
+    let revisionJustCreated = false;
     let existingSubmission = null;
     if (submissionId) {
       existingSubmission = await prisma43.treeBranchLeafSubmission.findUnique({
@@ -59649,6 +59801,7 @@ router73.post("/submissions/create-and-evaluate", async (req2, res) => {
             });
             submissionId = newId;
             existingSubmission = null;
+            revisionJustCreated = true;
             console.log(`\u{1F195} [TBL VERSIONING] Soumission completed ${requestedSubmissionId} clon\xE9e (forceNewSubmission) \u2192 ${newId}`);
           } else if (!isRevision) {
             const newId = await cloneCompletedSubmissionToDraft({
@@ -59658,6 +59811,7 @@ router73.post("/submissions/create-and-evaluate", async (req2, res) => {
             });
             submissionId = newId;
             existingSubmission = null;
+            revisionJustCreated = true;
             console.log(`\u{1F195} [TBL VERSIONING] Soumission completed ${requestedSubmissionId} clon\xE9e \u2192 ${newId}`);
           }
         }
@@ -59757,8 +59911,12 @@ router73.post("/submissions/create-and-evaluate", async (req2, res) => {
         }
       });
       console.log(`\u{1F3AF} [TBL CREATE-AND-EVALUATE] ${capacities.length} capacit\xE9s trouv\xE9es`);
-      const evalStats = await evaluateCapacitiesForSubmission(submissionId, organizationId, userId || null, effectiveTreeId, cleanFormData, mode, triggerFieldId);
-      console.log(`\u2705 [TBL CREATE-AND-EVALUATE] Capacit\xE9s: ${evalStats.updated} mises \xE0 jour, ${evalStats.created} cr\xE9\xE9es, ${evalStats.displayFieldsUpdated} display fields r\xE9actifs (mode: ${mode})`);
+      const effectiveMode = revisionJustCreated ? "open" : mode;
+      if (revisionJustCreated) {
+        console.log(`\u{1F6E1}\uFE0F [TBL REVISION] Mode forc\xE9 \xE0 'open' car r\xE9vision cr\xE9\xE9e - recalcul complet des DISPLAY`);
+      }
+      const evalStats = await evaluateCapacitiesForSubmission(submissionId, organizationId, userId || null, effectiveTreeId, cleanFormData, effectiveMode, triggerFieldId);
+      console.log(`\u2705 [TBL CREATE-AND-EVALUATE] Capacit\xE9s: ${evalStats.updated} mises \xE0 jour, ${evalStats.created} cr\xE9\xE9es, ${evalStats.displayFieldsUpdated} display fields r\xE9actifs (mode: ${effectiveMode})`);
     }
     const finalSubmission = await prisma43.treeBranchLeafSubmission.findUnique({
       where: { id: submissionId }
@@ -59906,8 +60064,15 @@ router73.post("/submissions/preview-evaluate", async (req2, res) => {
           const leadData = lead.data;
           if (leadData.postalCode) {
             valueMap.set("lead.postalCode", leadData.postalCode);
+          } else if (leadData.address && typeof leadData.address === "object") {
+            const addressObj = leadData.address;
+            if (addressObj.zipCode) {
+              valueMap.set("lead.postalCode", addressObj.zipCode);
+            } else if (addressObj.postalCode) {
+              valueMap.set("lead.postalCode", addressObj.postalCode);
+            }
           } else if (leadData.address && typeof leadData.address === "string") {
-            const postalCodeMatch = leadData.address.match(/\b(\d{4})\b/);
+            const postalCodeMatch = leadData.address.match(/\b(\d{4,5})\b/);
             if (postalCodeMatch) {
               const extractedPostalCode = postalCodeMatch[1];
               valueMap.set("lead.postalCode", extractedPostalCode);
@@ -65567,9 +65732,10 @@ async function copyVariableWithCapacities2(originalVarId, suffix, newNodeId, pri
             linkedConditionIds: [],
             linkedFormulaIds: [],
             linkedVariableIds: [],
-            appearance_size: "md",
-            appearance_variant: null,
-            appearance_width: "100%",
+            appearance_size: originalOwnerNode?.appearance_size ?? "md",
+            appearance_variant: originalOwnerNode?.appearance_variant ?? null,
+            appearance_width: originalOwnerNode?.appearance_width ?? "100%",
+            appearance_displayIcon: originalOwnerNode?.appearance_displayIcon ?? null,
             fieldType: "TEXT",
             fieldSubType: null,
             field_label: originalVar.displayName
@@ -67798,7 +67964,162 @@ function createRepeatRouter(prisma51) {
       inFlightExecuteByRepeater.delete(repeaterNodeId);
     }
   });
+  router94.post("/:repeaterId/preload-copies", async (req2, res) => {
+    try {
+      const { repeaterId } = req2.params;
+      const { targetCount } = req2.body || {};
+      console.log(`\u26A1 [PRELOAD] D\xE9marrage pour repeater ${repeaterId}, cible: ${targetCount}`);
+      if (typeof targetCount !== "number" || targetCount < 1) {
+        return res.status(400).json({ error: "targetCount doit \xEAtre un nombre >= 1" });
+      }
+      const repeaterNode = await prisma51.treeBranchLeafNode.findUnique({
+        where: { id: repeaterId },
+        select: {
+          id: true,
+          parentId: true,
+          treeId: true,
+          type: true,
+          metadata: true
+        }
+      });
+      if (!repeaterNode) {
+        return res.status(404).json({ error: "Repeater non trouv\xE9" });
+      }
+      if (repeaterNode.type !== "leaf_repeater") {
+        return res.status(400).json({ error: "Le n\u0153ud sp\xE9cifi\xE9 n'est pas un repeater" });
+      }
+      const metadata = repeaterNode.metadata;
+      const templateNodeIds = metadata?.repeater?.templateNodeIds || [];
+      if (templateNodeIds.length === 0) {
+        return res.status(400).json({ error: "Aucun templateNodeIds configur\xE9 pour ce repeater" });
+      }
+      console.log(`\u26A1 [PRELOAD] Templates: ${templateNodeIds.join(", ")}`);
+      const orStartsWith = templateNodeIds.map((templateId) => ({ id: { startsWith: `${templateId}-` } }));
+      const allCopies = await prisma51.treeBranchLeafNode.findMany({
+        where: {
+          treeId: repeaterNode.treeId,
+          OR: orStartsWith
+        },
+        select: { id: true, createdAt: true },
+        orderBy: { createdAt: "asc" }
+      });
+      const suffixSet = /* @__PURE__ */ new Set();
+      for (const copy of allCopies) {
+        for (const templateId of templateNodeIds) {
+          if (copy.id.startsWith(`${templateId}-`)) {
+            const rest = copy.id.slice(templateId.length + 1);
+            if (/^\d+$/.test(rest)) {
+              suffixSet.add(Number(rest));
+            }
+            break;
+          }
+        }
+      }
+      const existingSuffixes = Array.from(suffixSet).sort((a, b) => a - b);
+      const existingCopiesCount = existingSuffixes.length;
+      const totalCurrentInstances = existingCopiesCount + 1;
+      console.log(`\u26A1 [PRELOAD] Suffixes existants: [${existingSuffixes.join(", ")}] (total: ${totalCurrentInstances})`);
+      const copiesToCreate = Math.max(0, targetCount - totalCurrentInstances);
+      const copiesToDelete = Math.max(0, totalCurrentInstances - targetCount);
+      console.log(`\u26A1 [PRELOAD] \xC0 cr\xE9er: ${copiesToCreate}, \xE0 supprimer: ${copiesToDelete}`);
+      const createdNodes = [];
+      const deletedNodes = [];
+      if (copiesToDelete > 0) {
+        const suffixesToDelete = existingSuffixes.slice(-copiesToDelete);
+        console.log(`\u{1F5D1}\uFE0F [PRELOAD] Suppression des suffixes: [${suffixesToDelete.join(", ")}]`);
+        for (const suffix of suffixesToDelete) {
+          const nodesToDeleteForSuffix = await prisma51.treeBranchLeafNode.findMany({
+            where: {
+              treeId: repeaterNode.treeId,
+              id: { endsWith: `-${suffix}` }
+            },
+            select: { id: true }
+          });
+          console.log(`\u{1F5D1}\uFE0F [PRELOAD] Suffixe -${suffix}: ${nodesToDeleteForSuffix.length} n\u0153uds \xE0 supprimer`);
+          for (const node of nodesToDeleteForSuffix) {
+            try {
+              console.log(`\u{1F5D1}\uFE0F [PRELOAD] Suppression ${node.id}...`);
+              await deleteNodeWithCascade(prisma51, repeaterNode.treeId, node.id);
+              deletedNodes.push(node.id);
+            } catch (deleteError) {
+              console.warn(`\u26A0\uFE0F [PRELOAD] Node ${node.id} peut-\xEAtre d\xE9j\xE0 supprim\xE9:`, deleteError.message);
+            }
+          }
+        }
+      }
+      if (copiesToCreate > 0) {
+        for (let i = 0; i < copiesToCreate; i++) {
+          console.log(`\u26A1 [PRELOAD] Cr\xE9ation copie ${i + 1}/${copiesToCreate}...`);
+          try {
+            const executionPlan = await executeRepeatDuplication(prisma51, repeaterId, {});
+            const executionSummary = await runRepeatExecution(
+              prisma51,
+              req2,
+              executionPlan
+            );
+            if (executionSummary.duplicated?.newId) {
+              createdNodes.push(executionSummary.duplicated.newId);
+              console.log(`\u2705 [PRELOAD] Copie cr\xE9\xE9e: ${executionSummary.duplicated.newId}`);
+            }
+          } catch (execError) {
+            console.error(`\u274C [PRELOAD] Erreur cr\xE9ation copie ${i + 1}:`, execError);
+          }
+        }
+      }
+      const finalTotal = totalCurrentInstances + createdNodes.length - (copiesToDelete > 0 ? copiesToDelete : 0);
+      console.log(`\u2705 [PRELOAD] Termin\xE9: ${createdNodes.length} cr\xE9\xE9es, ${deletedNodes.length} supprim\xE9es, total: ${finalTotal}`);
+      res.json({
+        success: true,
+        message: `${createdNodes.length} cr\xE9\xE9es, ${deletedNodes.length} supprim\xE9es`,
+        existingCopies: totalCurrentInstances,
+        createdCopies: createdNodes.length,
+        deletedCopies: deletedNodes.length,
+        totalCopies: finalTotal,
+        newNodeIds: createdNodes,
+        deletedNodeIds: deletedNodes
+      });
+    } catch (error) {
+      console.error("\u274C [PRELOAD] Erreur:", error);
+      res.status(500).json({ error: "Erreur lors du pr\xE9-chargement des copies" });
+    }
+  });
   return router94;
+}
+async function deleteNodeWithCascade(prisma51, treeId, nodeId) {
+  const allNodes = await prisma51.treeBranchLeafNode.findMany({
+    where: { treeId },
+    select: { id: true, parentId: true }
+  });
+  const childrenByParent = /* @__PURE__ */ new Map();
+  for (const n of allNodes) {
+    if (!n.parentId) continue;
+    const arr = childrenByParent.get(n.parentId) || [];
+    arr.push(n.id);
+    childrenByParent.set(n.parentId, arr);
+  }
+  const toDelete = [];
+  const queue = [nodeId];
+  const depth = /* @__PURE__ */ new Map();
+  depth.set(nodeId, 0);
+  while (queue.length) {
+    const cur = queue.shift();
+    toDelete.push(cur);
+    const children = childrenByParent.get(cur) || [];
+    for (const c of children) {
+      depth.set(c, (depth.get(cur) || 0) + 1);
+      queue.push(c);
+    }
+  }
+  toDelete.sort((a, b) => depth.get(b) - depth.get(a));
+  await prisma51.$transaction(async (tx) => {
+    for (const id of toDelete) {
+      try {
+        await tx.treeBranchLeafNode.delete({ where: { id } });
+      } catch (err) {
+        console.warn(`[PRELOAD DELETE] Node ${id} peut-\xEAtre d\xE9j\xE0 supprim\xE9`);
+      }
+    }
+  });
 }
 
 // src/api/cloud-run-domains.ts

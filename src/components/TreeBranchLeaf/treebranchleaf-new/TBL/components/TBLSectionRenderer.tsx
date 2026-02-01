@@ -4051,8 +4051,19 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
               : undefined);
   dlog(`🔬 [TEST DATA] Instance active:`, dataInstance);
         
-        if (dataInstance && dataInstance.metadata) {
-          const { sourceType: configSourceType, sourceRef: configSourceRef, fixedValue } = dataInstance.metadata;
+        // 🔥 FIX: Les données peuvent être dans dataInstance.metadata OU directement dans dataInstance
+        // (selon si elles viennent de metadataCapabilities.datas ou de data_instances)
+        const instanceData = dataInstance?.metadata || dataInstance;
+        
+        // 🔥 DEBUG TEMPORAIRE - à supprimer après fix
+        if (field.label === 'GRD') {
+          console.log(`🔥🔥🔥 [GRD DEBUG FRONTEND] instanceData:`, JSON.stringify(instanceData, null, 2));
+          console.log(`🔥🔥🔥 [GRD DEBUG FRONTEND] sourceType:`, instanceData?.sourceType);
+          console.log(`🔥🔥🔥 [GRD DEBUG FRONTEND] sourceRef:`, instanceData?.sourceRef);
+        }
+        
+        if (instanceData && (instanceData.sourceType || instanceData.sourceRef)) {
+          const { sourceType: configSourceType, sourceRef: configSourceRef, fixedValue } = instanceData as { sourceType?: string; sourceRef?: string; fixedValue?: unknown };
           
           dlog(`� [TEST METADATA] sourceType: "${configSourceType}"`);
           dlog(`🔬 [TEST METADATA] sourceRef: "${configSourceRef}"`);
@@ -4080,12 +4091,12 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
               // Récupérer le nodeId pour le composant
               let variableNodeId = (capabilities?.data?.activeId) || (capabilities?.data?.instances ? Object.keys(capabilities.data.instances)[0] : undefined);
               
-              // 🔥 FIX CRITIQUE FORMULE: Pour les formules/conditions, le backend retourne les résultats
-              // avec le nodeId du CHAMP D'AFFICHAGE (field.id), PAS le nodeId de la formule elle-même.
-              // On doit donc TOUJOURS utiliser field.id pour les formules/conditions.
-              if (isCondition || isFormula) {
+              // 🔥 FIX CRITIQUE FORMULE/TABLE: Pour les formules/conditions/tables, le backend retourne les résultats
+              // avec le nodeId du CHAMP D'AFFICHAGE (field.id), PAS le nodeId de la formule/table elle-même.
+              // On doit donc TOUJOURS utiliser field.id pour les formules/conditions/tables.
+              if (isCondition || isFormula || isTable) {
                 variableNodeId = field.id;
-                if (isTBLDebugEnabled()) tblLog(`🔥🔥🔥 [FIX ${isFormula ? 'FORMULA' : 'CONDITION'}] Utilisation de field.id: ${variableNodeId} pour "${field.label}"`);
+                if (isTBLDebugEnabled()) tblLog(`🔥🔥🔥 [FIX ${isFormula ? 'FORMULA' : isCondition ? 'CONDITION' : 'TABLE'}] Utilisation de field.id: ${variableNodeId} pour "${field.label}"`);
               }
               
               if (!variableNodeId || !treeId) {

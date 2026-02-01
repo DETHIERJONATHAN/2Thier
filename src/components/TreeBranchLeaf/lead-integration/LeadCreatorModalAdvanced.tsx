@@ -119,6 +119,35 @@ const LeadCreatorModalAdvanced: React.FC<LeadCreatorModalPropsExtended> = ({
     if (!il) return;
     const ilData = (il.data || {}) as Record<string, unknown>;
     const str = (v: unknown): string | undefined => typeof v === 'string' ? v : undefined;
+    
+    // 🔥 FIX: Gérer l'adresse qui peut être un string OU un objet
+    let addressStr: string | undefined;
+    let localityStr: string | undefined;
+    let postalCodeStr: string | undefined;
+    
+    const rawAddress = ilData.address;
+    if (typeof rawAddress === 'string') {
+      // Format ancien: adresse en string simple
+      addressStr = rawAddress;
+      localityStr = str(ilData.locality) || str(ilData.city);
+      postalCodeStr = str(ilData.postalCode) || str(ilData.zipCode);
+    } else if (rawAddress && typeof rawAddress === 'object') {
+      // Format nouveau: adresse en objet { street, city, zipCode, country }
+      const addrObj = rawAddress as Record<string, unknown>;
+      const street = str(addrObj.street) || '';
+      const city = str(addrObj.city) || str(addrObj.locality) || '';
+      const zipCode = str(addrObj.zipCode) || str(addrObj.postalCode) || '';
+      const country = str(addrObj.country) || '';
+      
+      // Construire l'adresse formatée
+      addressStr = [street, zipCode, city, country].filter(Boolean).join(', ');
+      localityStr = city;
+      postalCodeStr = zipCode;
+    } else {
+      localityStr = str(ilData.locality) || str(ilData.city);
+      postalCodeStr = str(ilData.postalCode) || str(ilData.zipCode);
+    }
+    
     // Préparer valeurs de formulaire à partir du lead initial
     const v: Partial<ExtendedCreateLeadData> = {
       company: str(il.company),
@@ -129,10 +158,10 @@ const LeadCreatorModalAdvanced: React.FC<LeadCreatorModalPropsExtended> = ({
       website: str(il.website) || str(ilData.website),
       source: str(il.source),
       nextFollowUpDate: str(il.nextFollowUpDate) || str(ilData.nextFollowUpDate),
-      address: str(ilData.address),
+      address: addressStr,
       addressDetails: str(ilData.addressDetails),
-      locality: str(ilData.locality),
-      postalCode: str(ilData.postalCode),
+      locality: localityStr,
+      postalCode: postalCodeStr,
       notes: str(il.notes) || str(ilData.notes)
     };
     form.setFieldsValue(v);

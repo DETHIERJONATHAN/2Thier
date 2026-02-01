@@ -2054,11 +2054,23 @@ router.post('/submissions/preview-evaluate', async (req, res) => {
           const leadData = lead.data as Record<string, unknown>;
           
           // Ajouter le code postal s'il existe dans data
+          // 🔥 FIX: Support multiple formats de données
+          // 1. data.postalCode (format direct)
+          // 2. data.address.zipCode (format structuré)
+          // 3. Extraction depuis data.address (string)
           if (leadData.postalCode) {
             valueMap.set('lead.postalCode', leadData.postalCode);
+          } else if (leadData.address && typeof leadData.address === 'object') {
+            // Format structuré: data.address.zipCode
+            const addressObj = leadData.address as Record<string, unknown>;
+            if (addressObj.zipCode) {
+              valueMap.set('lead.postalCode', addressObj.zipCode);
+            } else if (addressObj.postalCode) {
+              valueMap.set('lead.postalCode', addressObj.postalCode);
+            }
           } else if (leadData.address && typeof leadData.address === 'string') {
             // 🆕 Extraire le code postal depuis l'adresse (format: "Rue..., 5150 Ville, Pays")
-            const postalCodeMatch = leadData.address.match(/\b(\d{4})\b/);
+            const postalCodeMatch = leadData.address.match(/\b(\d{4,5})\b/);
             if (postalCodeMatch) {
               const extractedPostalCode = postalCodeMatch[1];
               valueMap.set('lead.postalCode', extractedPostalCode);

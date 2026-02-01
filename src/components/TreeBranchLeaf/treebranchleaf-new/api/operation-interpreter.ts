@@ -357,17 +357,38 @@ async function enrichDataFromSubmission(
         if (lead.data && typeof lead.data === 'object') {
           const leadData = lead.data as Record<string, unknown>;
           
+          console.log('🔍 [GRD DEBUG] Lead data:', JSON.stringify(leadData).substring(0, 500));
+          
           // Ajouter le code postal s'il existe dans data
+          // 🔥 FIX: Support multiple formats de données
+          // 1. data.postalCode (format direct)
+          // 2. data.address.zipCode (format structuré)
+          // 3. Extraction depuis data.address (string)
           if (leadData.postalCode) {
+            console.log('🔍 [GRD DEBUG] Found postalCode direct:', leadData.postalCode);
             valueMap.set('lead.postalCode', leadData.postalCode);
+          } else if (leadData.address && typeof leadData.address === 'object') {
+            // Format structuré: data.address.zipCode
+            const addressObj = leadData.address as Record<string, unknown>;
+            console.log('🔍 [GRD DEBUG] Address object:', JSON.stringify(addressObj));
+            if (addressObj.zipCode) {
+              console.log('🔍 [GRD DEBUG] Found address.zipCode:', addressObj.zipCode);
+              valueMap.set('lead.postalCode', addressObj.zipCode);
+            } else if (addressObj.postalCode) {
+              console.log('🔍 [GRD DEBUG] Found address.postalCode:', addressObj.postalCode);
+              valueMap.set('lead.postalCode', addressObj.postalCode);
+            }
           } else if (leadData.address && typeof leadData.address === 'string') {
             // Extraire le code postal depuis l'adresse (format: "Rue..., 5150 Ville, Pays")
-            const postalCodeMatch = leadData.address.match(/\b(\d{4})\b/);
+            const postalCodeMatch = leadData.address.match(/\b(\d{4,5})\b/);
             if (postalCodeMatch) {
               const extractedPostalCode = postalCodeMatch[1];
+              console.log('🔍 [GRD DEBUG] Extracted postalCode from string:', extractedPostalCode);
               valueMap.set('lead.postalCode', extractedPostalCode);
             }
           }
+          
+          console.log('🔍 [GRD DEBUG] Final lead.postalCode in valueMap:', valueMap.get('lead.postalCode'));
           
           if (leadData.address) {
             valueMap.set('lead.address', leadData.address);
@@ -1840,15 +1861,25 @@ async function getSourceValue(
   valueMap?: Map<string, unknown>,
   labelMap?: Map<string, string>
 ): Promise<string | null> {
+  console.log('🔍 [GRD DEBUG] getSourceValue called with:', {
+    sourceOption: JSON.stringify(sourceOption),
+    fieldId,
+    valueMapHas_lead_postalCode: valueMap?.has('lead.postalCode'),
+    lead_postalCode_value: valueMap?.get('lead.postalCode')
+  });
+  
   // Par dÃƒÂ©faut (ou option SELECT): utiliser le fieldId configurÃƒÂ©
   if (!sourceOption || sourceOption.type === 'select') {
-    return fieldId ? await getNodeValue(fieldId, submissionId, prisma, valueMap) : null;
+    const result = fieldId ? await getNodeValue(fieldId, submissionId, prisma, valueMap) : null;
+    console.log('🔍 [GRD DEBUG] getSourceValue SELECT mode result:', result);
+    return result;
   }
   
   // Option 2 (CHAMP): rÃƒÂ©cupÃƒÂ©rer la valeur du champ source
   if (sourceOption.type === 'field' && sourceOption.sourceField) {
-    
+    console.log('🔍 [GRD DEBUG] getSourceValue FIELD mode, sourceField:', sourceOption.sourceField);
     const result = await getNodeValue(sourceOption.sourceField, submissionId, prisma, valueMap);
+    console.log('🔍 [GRD DEBUG] getSourceValue FIELD mode result:', result);
     return result;
   }
   
@@ -2218,6 +2249,12 @@ async function interpretTable(
       labelMap
     );
     const colLabel = await getSourceLabel(colSourceOption, lookup, colFieldId, prisma, labelMap);
+    
+    console.log('🔍 [GRD DEBUG] MODE 1 After getSourceValue:', {
+      colSelectorValue,
+      colLabel,
+      displayColumn: lookup.displayColumn
+    });
     
     // displayColumn peut ÃƒÂªtre un string OU un array
     const displayColumns = Array.isArray(lookup.displayColumn) 

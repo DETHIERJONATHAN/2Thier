@@ -196,6 +196,8 @@ const TBL: React.FC<TBLProps> = ({
   const revisionCreatedFromSubmissionIdRef = useRef<string | null>(null);
   // 🔥 FIX 30/01/2026: Track quand le submissionId vient de changer pour forcer mode='open'
   const submissionIdJustChangedUntilRef = useRef<number>(0);
+  // 🔥 FIX 01/02/2026: Track le dernier clientId (leadId) pour forcer mode='open' quand il change
+  const lastClientIdRef = useRef<string | null>(null);
 
   const [saveDevisModalVisible, setSaveDevisModalVisible] = useState<boolean>(false);
   const [saveDevisName, setSaveDevisName] = useState<string>('');
@@ -342,6 +344,7 @@ const TBL: React.FC<TBLProps> = ({
         const draftsArray = Array.isArray(existing) ? existing : (existing as any)?.data || [];
         leadDraftId = (draftsArray as Array<{ id?: string }>)[0]?.id || null;
         if (!leadDraftId) {
+          // 🆕 Créer un nouveau brouillon pour ce lead
           const created = await api.post('/api/tbl/submissions/create-and-evaluate', {
             treeId: effectiveTreeId,
             clientId: selectedLead.id,
@@ -352,6 +355,26 @@ const TBL: React.FC<TBLProps> = ({
             evaluationMode: 'open'  // 🎯 Forcer recalcul complet des DISPLAY
           });
           leadDraftId = (created as any)?.submission?.id || null;
+        } else {
+          // 🔥 FIX 01/02/2026: Forcer recalcul des DISPLAY fields pour le brouillon existant
+          // Quand on sélectionne un lead avec un brouillon existant, les DISPLAY fields
+          // (comme GRD qui dépend du code postal du lead) doivent être recalculés
+          console.log(`🔄 [TBL] Brouillon existant ${leadDraftId} - forcer recalcul DISPLAY fields`);
+          const refreshed = await api.post('/api/tbl/submissions/create-and-evaluate', {
+            submissionId: leadDraftId,
+            clientId: selectedLead.id,
+            formData: {}, // Les données seront chargées depuis la DB
+            status: 'draft',
+            changedFieldId: 'NULL',
+            evaluationMode: 'open'  // 🎯 Forcer recalcul complet des DISPLAY
+          });
+          // Broadcaster les valeurs calculées pour les DISPLAY fields
+          broadcastCalculatedRefresh({
+            reason: 'lead-selection-refresh',
+            evaluatedSubmissionId: leadDraftId,
+            recalcCount: (refreshed as any)?.submission?.TreeBranchLeafSubmissionData?.length,
+            submissionData: (refreshed as any)?.submission?.TreeBranchLeafSubmissionData
+          });
         }
       }
 
@@ -1266,6 +1289,13 @@ const TBL: React.FC<TBLProps> = ({
           }
         }
         console.log(`📤 [TBL] Broadcasting ${Object.keys(calculatedValuesMap).length} valeurs calculées inline (nulls exclus)`);
+        // 🔍 DEBUG GRD: Vérifier si GRD est dans le broadcast
+        const GRD_ID = '9f27d411-6511-487c-a983-9f9fc357c560';
+        if (calculatedValuesMap[GRD_ID]) {
+          console.log(`✅ [TBL] GRD dans broadcast: "${calculatedValuesMap[GRD_ID]}"`);
+        } else {
+          console.log(`❌ [TBL] GRD ABSENT du broadcast !`);
+        }
       }
       
       window.dispatchEvent(new CustomEvent('tbl-force-retransform', {
@@ -1468,14 +1498,21 @@ const TBL: React.FC<TBLProps> = ({
         // 🎯 MODE CENTRALISÉ:
         // - 'change': changement utilisateur → recalcul ciblé par triggers (RAPIDE)
         // - 'autosave': sauvegarde périodique → skip DISPLAY fields
-        // - 'open': chargement initial OU après changement de submissionId
+        // - 'open': chargement initial OU après changement de submissionId OU clientId
         const isUserChange = changedField && changedField !== 'NULL';
         // 🔥 FIX 30/01/2026: Forcer mode='open' si le submissionId vient de changer
         const submissionIdJustChanged = Date.now() < submissionIdJustChangedUntilRef.current;
+        // 🔥 FIX 01/02/2026: Forcer mode='open' si le clientId (leadId) a changé
+        const clientIdJustChanged = effectiveClientId !== lastClientIdRef.current && effectiveClientId !== null;
+        if (clientIdJustChanged) {
+          console.log(`🔄 [TBL] ClientId changé: ${lastClientIdRef.current} → ${effectiveClientId}`);
+          lastClientIdRef.current = effectiveClientId;
+        }
+        
         let effectiveMode: 'open' | 'change' | 'autosave' = isUserChange ? 'change' : 'autosave';
-        if (submissionIdJustChanged) {
+        if (submissionIdJustChanged || clientIdJustChanged) {
           effectiveMode = 'open';
-          console.log(`🔄 [TBL] Mode forcé à 'open' car submissionId a changé récemment`);
+          console.log(`🔄 [TBL] Mode forcé à 'open' car ${submissionIdJustChanged ? 'submissionId' : 'clientId'} a changé`);
         }
         
         const evaluationResponse = await api.post('/api/tbl/submissions/create-and-evaluate', {
@@ -1484,7 +1521,7 @@ const TBL: React.FC<TBLProps> = ({
           clientId: effectiveClientId,
           status: effectiveStatus,
           changedFieldId: changedField, // 🎯 Utiliser le paramètre direct au lieu de l'état React
-          evaluationMode: effectiveMode // ✅ FIX: 'change' pour triggers, 'autosave' pour périodique, 'open' après changement submissionId
+          evaluationMode: effectiveMode // ✅ FIX: 'change' pour triggers, 'autosave' pour périodique, 'open' après changement submissionId/clientId
         });
 
         // ✅ Si le backend a créé une nouvelle révision (édition d'un devis completed), basculer automatiquement
@@ -1508,13 +1545,17 @@ const TBL: React.FC<TBLProps> = ({
         setAutosaveLast(new Date());
         
         // 🚀 FIX: Ne PAS broadcast si:
-        // 1. C'est un autosave périodique (changedField NULL) - backend ne recalcule pas
+        // 1. C'est un autosave périodique (changedField NULL) ET pas mode 'open' - backend ne recalcule pas
         // 2. Une requête pendante existe - elle fera son propre broadcast avec données à jour
         // 3. Un debounce est actif - un nouveau changement est en attente des 80ms
+        // 🔥 FIX 01/02/2026: TOUJOURS broadcaster en mode 'open' car le backend recalcule TOUS les display fields
         const isPeriodicAutosave = !changedField || changedField === 'NULL';
+        const isOpenMode = effectiveMode === 'open';
         const hasPendingRequest = !!pendingAutosaveRef.current;
         const hasDebounceActive = !!debounceActiveRef.current;
-        if (!isPeriodicAutosave && !hasPendingRequest && !hasDebounceActive) {
+        const shouldBroadcast = (!isPeriodicAutosave || isOpenMode) && !hasPendingRequest && !hasDebounceActive;
+        if (shouldBroadcast) {
+          console.log(`📤 [TBL] Broadcast des valeurs calculées (mode=${effectiveMode}, isOpenMode=${isOpenMode})`);
           broadcastCalculatedRefresh({
             reason: 'create-and-evaluate',
             evaluatedSubmissionId: effectiveSubmissionId,

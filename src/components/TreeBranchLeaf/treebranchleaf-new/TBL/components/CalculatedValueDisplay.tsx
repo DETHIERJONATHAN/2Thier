@@ -64,6 +64,12 @@ export const CalculatedValueDisplay: React.FC<CalculatedValueDisplayProps> = ({
   fallbackValue
   , fallbackNodeIds = []
 }) => {
+  // � DEBUG GRD: Tracer le montage du composant
+  const GRD_ID = '9f27d411-6511-487c-a983-9f9fc357c560';
+  if (nodeId === GRD_ID) {
+    console.log(`🎯 [CalculatedValueDisplay] GRD MONTÉ - treeId=${treeId}, submissionId=${submissionId}`);
+  }
+  
   // 🔥 CORRECTION: Passer le submissionId pour que le backend puisse recalculer
   // les table lookups (GRD, etc.) avec les bonnes valeurs de champs
   const { value, loading, error, calculatedAt, calculatedBy, refresh } = useNodeCalculatedValue(
@@ -71,6 +77,11 @@ export const CalculatedValueDisplay: React.FC<CalculatedValueDisplayProps> = ({
     treeId,
     submissionId  // ✅ Réactivé pour permettre les recalculs table lookup
   );
+  
+  // 🔍 DEBUG GRD: Tracer la valeur reçue
+  if (nodeId === GRD_ID) {
+    console.log(`🎯 [CalculatedValueDisplay] GRD value="${value}", loading=${loading}, error=${error}`);
+  }
 
   // Support client-side fallback: try fallbackNodeIds if primary node returns nothing
   const [fallbackValueFound, setFallbackValueFound] = React.useState<null | string | number | boolean>(null);
