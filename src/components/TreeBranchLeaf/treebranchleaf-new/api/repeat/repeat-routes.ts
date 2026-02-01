@@ -116,5 +116,115 @@ export default function createRepeatRouter(prisma: PrismaClient) {
     }
   });
 
+  /**
+   * ⚡ POST /api/repeat/:repeaterId/preload-copies
+   * 
+   * Pré-charge automatiquement des copies d'un repeater en fonction d'un nombre cible.
+   * Si l'utilisateur veut 3 copies et qu'il y en a déjà 1 (la base), on crée 2 copies.
+   * Fonctionne exactement comme si on cliquait N fois sur le bouton repeat.
+   * 
+   * Body: { targetCount: number }
+   * - targetCount: Nombre total de copies souhaitées (ex: 3 = 1 original + 2 copies)
+   */
+  router.post('/:repeaterId/preload-copies', async (req, res) => {
+    try {
+      const { repeaterId } = req.params;
+      const { targetCount } = (req.body || {}) as { targetCount?: number };
+      
+      console.log(`⚡ [PRELOAD] Démarrage pré-chargement pour repeater ${repeaterId}, cible: ${targetCount}`);
+      
+      if (typeof targetCount !== 'number' || targetCount < 1) {
+        return res.status(400).json({ error: 'targetCount doit être un nombre >= 1' });
+      }
+      
+      // 1. Récupérer le nœud repeater
+      const repeaterNode = await prisma.treeBranchLeafNode.findUnique({
+        where: { id: repeaterId },
+        select: { 
+          id: true, 
+          parentId: true, 
+          treeId: true, 
+          type: true,
+          metadata: true 
+        }
+      });
+      
+      if (!repeaterNode) {
+        return res.status(404).json({ error: 'Repeater non trouvé' });
+      }
+      
+      if (repeaterNode.type !== 'leaf_repeater') {
+        return res.status(400).json({ error: 'Le nœud spécifié n\'est pas un repeater' });
+      }
+      
+      // 2. Compter les copies existantes (nœuds avec ce repeater comme rootOriginalId dans metadata.copyOf)
+      const existingCopies = await prisma.treeBranchLeafNode.count({
+        where: {
+          treeId: repeaterNode.treeId,
+          metadata: {
+            path: ['copyOf', 'rootOriginalId'],
+            equals: repeaterId
+          }
+        }
+      });
+      
+      // 3. Calculer combien de copies créer: targetCount - 1 (l'original) - existingCopies
+      const copiesToCreate = Math.max(0, targetCount - 1 - existingCopies);
+      
+      console.log(`⚡ [PRELOAD] Copies existantes: ${existingCopies}, à créer: ${copiesToCreate}`);
+      
+      if (copiesToCreate === 0) {
+        return res.json({ 
+          success: true, 
+          message: 'Aucune copie à créer',
+          existingCopies: existingCopies + 1, // +1 pour l'original
+          createdCopies: 0,
+          totalCopies: existingCopies + 1
+        });
+      }
+      
+      // 4. Créer les copies séquentiellement EN UTILISANT LA MÊME LOGIQUE QUE LE BOUTON REPEAT
+      const createdNodes: string[] = [];
+      
+      for (let i = 0; i < copiesToCreate; i++) {
+        console.log(`⚡ [PRELOAD] Exécution repeat ${i + 1}/${copiesToCreate}...`);
+        
+        try {
+          // Utiliser executeRepeatDuplication + runRepeatExecution comme le bouton
+          const executionPlan = await executeRepeatDuplication(prisma, repeaterId, {});
+          
+          const executionSummary = await runRepeatExecution(
+            prisma,
+            req as unknown as MinimalReq,
+            executionPlan
+          );
+          
+          if (executionSummary.duplicated?.newId) {
+            createdNodes.push(executionSummary.duplicated.newId);
+            console.log(`⚡ [PRELOAD] Copie ${i + 1} créée: ${executionSummary.duplicated.newId}`);
+          }
+        } catch (execError) {
+          console.error(`⚡ [PRELOAD] Erreur création copie ${i + 1}:`, execError);
+          // Continuer avec les autres copies
+        }
+      }
+      
+      console.log(`✅ [PRELOAD] Pré-chargement terminé: ${createdNodes.length} copies créées`);
+      
+      res.json({
+        success: true,
+        message: `${createdNodes.length} copies créées`,
+        existingCopies: existingCopies + 1,
+        createdCopies: createdNodes.length,
+        totalCopies: existingCopies + 1 + createdNodes.length,
+        newNodeIds: createdNodes
+      });
+      
+    } catch (error) {
+      console.error('❌ [PRELOAD] Erreur:', error);
+      res.status(500).json({ error: 'Erreur lors du pré-chargement des copies' });
+    }
+  });
+
   return router;
 }

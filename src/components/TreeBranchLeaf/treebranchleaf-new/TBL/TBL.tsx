@@ -17,6 +17,8 @@ declare global {
   interface Window {
     TBL_FORCE_REFRESH?: () => void;
     __TBL_LAST_TREE_ID?: string;
+    // 🔒 FLAG: Empêcher le preload pendant le sync bidirectionnel
+    __TBL_SKIP_PRELOAD_UNTIL?: number;
   }
 }
 import { 
@@ -2257,9 +2259,70 @@ const TBL: React.FC<TBLProps> = ({
       //   }
       // } catch { /* noop */ }
       
+      // 🚀 PRELOAD REPEATER: Vérifier si ce champ est source d'un repeater pour pré-créer des copies
+      // 🔒 PROTECTION: Ne pas déclencher le preload si le changement vient d'un sync bidirectionnel
+      const skipPreloadUntil = typeof window !== 'undefined' ? window.__TBL_SKIP_PRELOAD_UNTIL || 0 : 0;
+      const shouldSkipPreload = Date.now() < skipPreloadUntil;
+      
+      if (shouldSkipPreload) {
+        console.log(`🔒 [PRELOAD] Sauté pour ${fieldId} car sync bidirectionnel en cours (skip jusqu'à ${new Date(skipPreloadUntil).toISOString()})`);
+      }
+      
+      if (fieldId && value !== null && value !== undefined && !shouldSkipPreload) {
+        let numericValue = typeof value === 'number' ? value : parseInt(String(value), 10);
+        
+        // 🔒 VALIDATION: Vérifier si ce champ est source d'un repeater
+        const repeatersUsingThisField = (rawNodes || []).filter(
+          (node: any) => node.repeater_countSourceNodeId === fieldId
+        );
+        
+        // Si ce champ est lié à un repeater, forcer min=1 (l'original ne peut pas être supprimé)
+        if (repeatersUsingThisField.length > 0 && !isNaN(numericValue) && numericValue < 1) {
+          console.log(`🔒 [PRELOAD] Champ ${fieldId}: valeur ${numericValue} forcée à 1 (minimum obligatoire)`);
+          numericValue = 1;
+          // Mettre à jour la valeur dans le state pour afficher 1
+          next[fieldId] = { ...field, value: '1' };
+        }
+        
+        if (!isNaN(numericValue) && numericValue >= 1 && repeatersUsingThisField.length > 0) {
+          console.log(`🚀 [PRELOAD] Champ ${fieldId} = ${numericValue} déclenche preload pour ${repeatersUsingThisField.length} repeater(s)`);
+          
+          // Récupérer le treeId depuis le contexte (tree ou rawNodes[0])
+          const currentTreeId = tree?.id || rawNodes?.[0]?.treeId || '';
+          
+          // Déclencher le preload pour chaque repeater concerné (en arrière-plan)
+          repeatersUsingThisField.forEach((repeater: any) => {
+            console.log(`🚀 [PRELOAD] Appel /api/repeat/${repeater.id}/preload-copies avec targetCount=${numericValue}, treeId=${currentTreeId}`);
+            api.post(`/api/repeat/${repeater.id}/preload-copies`, { targetCount: numericValue })
+              .then((result: any) => {
+                console.log(`✅ [PRELOAD] Repeater ${repeater.id}: ${result.createdCopies} copies créées (total: ${result.totalCopies})`, result.newNodeIds);
+                // Déclencher un refresh de l'arbre - TOUJOURS pour synchroniser
+                if (typeof window !== 'undefined' && currentTreeId) {
+                  console.log(`🔄 [PRELOAD] Déclenchement refresh arbre via tbl-repeater-updated (treeId=${currentTreeId})`);
+                  // Utiliser tbl-repeater-updated SANS suppressReload pour déclencher un fetchData() complet
+                  window.dispatchEvent(new CustomEvent('tbl-repeater-updated', { 
+                    detail: { 
+                      treeId: currentTreeId,
+                      nodeId: repeater.id,
+                      source: 'preload-copies',
+                      // PAS de suppressReload → déclenche fetchData() dans useTBLData-hierarchical-fixed
+                      newNodeIds: result.newNodeIds || [],
+                      createdCopies: result.createdCopies || 0,
+                      timestamp: Date.now()
+                    } 
+                  }));
+                }
+              })
+              .catch((err: any) => {
+                console.error(`❌ [PRELOAD] Erreur pour repeater ${repeater.id}:`, err);
+              });
+          });
+        }
+      }
+      
       return next as typeof prev;
     });
-  }, [tblConfig, tabs, scheduleAutosave, scheduleCapabilityPreview, isLoadedDevis, hasCopiedDevis, originalDevisId, createDevisCopy, isDevisSaved, isCompletedDirty, revisionRootName, stripRevisionSuffix, originalDevisName, devisName, leadId, submissionId, planPendingRevisionName, ensureCompletedRevisionExists]);
+  }, [tblConfig, tabs, scheduleAutosave, scheduleCapabilityPreview, isLoadedDevis, hasCopiedDevis, originalDevisId, createDevisCopy, isDevisSaved, isCompletedDirty, revisionRootName, stripRevisionSuffix, originalDevisName, devisName, leadId, submissionId, planPendingRevisionName, ensureCompletedRevisionExists, rawNodes, api]);
   
   // 🔄 Assigner la ref IMMÉDIATEMENT dans le corps du composant
   handleFieldChangeRef.current = handleFieldChangeImpl;

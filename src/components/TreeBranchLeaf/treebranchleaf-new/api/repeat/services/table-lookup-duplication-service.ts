@@ -477,8 +477,8 @@ export class TableLookupDuplicationService {
         // 🔧 FIX: Mise à jour du nœud - SEULEMENT si c'est le VRAI propriétaire
         // 🔥 CRITICAL FIX 08/01/2026: Ne PAS ajouter linkedTableIds pour les INPUT fields (fieldType = null)
         try {
-          const node = await prisma.treeBranchLeafNode.findUnique({ where: { id: copiedNodeId }, select: { capabilities: true, linkedTableIds: true, fieldType: true, metadata: true } });
-          const currentCapabilities = (node?.capabilities && typeof node.capabilities === 'object') ? (node.capabilities as Record<string, any>) : {};
+          // 🔥 FIX 01/02/2026: Retirer "capabilities" qui n'existe pas dans le schéma Prisma
+          const node = await prisma.treeBranchLeafNode.findUnique({ where: { id: copiedNodeId }, select: { linkedTableIds: true, fieldType: true, metadata: true } });
           
           // 🔥 CRITICAL: Vérifier le fieldType - ne PAS lier les tables aux INPUT fields
           const isInputField = node?.fieldType === null || node?.fieldType === '' || node?.fieldType === undefined;
@@ -511,21 +511,18 @@ export class TableLookupDuplicationService {
 
           if (isTableOwnedByThisNode) {
             // ✅ Ce nœud est le VRAI propriétaire de la table
-            currentCapabilities.table = currentCapabilities.table || {};
-            currentCapabilities.table.enabled = true;
-            currentCapabilities.table.activeId = copiedTableId;
-            currentCapabilities.table.instances = currentCapabilities.table.instances || {};
-            currentCapabilities.table.instances[copiedTableId] = currentCapabilities.table.instances[copiedTableId] || {};
+            // 🔥 FIX 01/02/2026: Retirer capabilities qui n'existe pas dans Prisma
+            const tableInstances: Record<string, any> = {};
+            tableInstances[copiedTableId] = {};
 
             await prisma.treeBranchLeafNode.update({
               where: { id: copiedNodeId },
               data: {
                 hasTable: true,  // ✅ Seulement le propriétaire a hasTable: true
                 table_activeId: copiedTableId,
-                table_instances: { set: currentCapabilities.table.instances },
+                table_instances: { set: tableInstances },
                 table_name: originalTable.name + suffix,
                 table_type: originalTable.type,
-                capabilities: currentCapabilities,
                 linkedTableIds: { set: newLinked },
                 metadata: currentMetadata  // 🔥 FIX: Sauvegarder le metadata mis à jour
               }

@@ -1379,8 +1379,49 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
 
   // Handler to delete a full copy group (used by delete button)
   const handleDeleteCopyGroup = useCallback(async (f: TBLField) => {
+    console.log('🗑️ [DELETE COPY GROUP] *** CALLBACK APPELÉ ***', { fieldId: f.id, fieldLabel: f.label });
     try {
-      const repeaterId = (f as any).parentRepeaterId as string;
+      // 🔧 FIX: Récupérer le repeaterId de plusieurs sources possibles
+      let repeaterId = (f as any).parentRepeaterId as string | undefined;
+      
+      // Fallback 1: Chercher dans le metadata du champ
+      if (!repeaterId) {
+        const meta = (f as any).metadata || {};
+        repeaterId = meta.copyOf?.rootOriginalId || meta.sourceTemplateId?.split('-').slice(0, 5).join('-');
+        console.log('🗑️ [DELETE COPY GROUP] Fallback 1 (metadata):', repeaterId);
+      }
+      
+      // Fallback 2: Chercher le nœud dans allNodes pour avoir son parentId
+      if (!repeaterId && allNodes) {
+        const node = allNodes.find((n: any) => n.id === f.id);
+        if (node) {
+          repeaterId = node.parentId;
+          // Vérifier que c'est bien un repeater (branch_repeater OU leaf_repeater)
+          const parent = allNodes.find((n: any) => n.id === repeaterId);
+          if (parent?.type !== 'branch_repeater' && parent?.type !== 'leaf_repeater') {
+            // Le parent n'est pas un repeater, chercher dans metadata
+            const nodeMeta = node.metadata || {};
+            repeaterId = nodeMeta.copyOf?.rootOriginalId;
+          }
+          console.log('🗑️ [DELETE COPY GROUP] Fallback 2 (allNodes):', repeaterId);
+        }
+      }
+      
+      // Fallback 3: Extraire l'ID de base du champ copié (enlever le suffixe) et chercher le repeater parent
+      if (!repeaterId && f.id) {
+        const baseId = f.id.replace(/-\d+$/, ''); // Enlever -1, -2, etc.
+        const originalNode = allNodes?.find((n: any) => n.id === baseId);
+        if (originalNode?.parentId) {
+          const parent = allNodes?.find((n: any) => n.id === originalNode.parentId);
+          // 🔧 FIX: Accepter les deux types de repeater
+          if (parent?.type === 'branch_repeater' || parent?.type === 'leaf_repeater') {
+            repeaterId = parent.id;
+            console.log('🗑️ [DELETE COPY GROUP] Fallback 3 (baseId→parent):', repeaterId);
+          }
+        }
+      }
+      
+      console.log('🗑️ [DELETE COPY GROUP] repeaterId FINAL=', repeaterId);
       // ✅ Priorité: utiliser l'index d'instance du repeater (plus fiable que le suffixe du label)
       const instanceIndex: number | null = (f as any).repeaterInstanceIndex ?? null;
       const label = String(f.label || '');
@@ -1564,6 +1605,55 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
       }
 
       dlog('🗑️ [DELETE COPY GROUP] Suppression terminée - Total IDs supprimés:', globalSuccessIds.length);
+      console.log('🟢🟢🟢 [POST-DELETE] Après boucle de suppression - globalSuccessIds:', globalSuccessIds.length);
+
+      // 🔄 SYNC BIDIRECTIONNEL: Suppression = -1 sur le champ source
+      // On cherche le repeater qui a un countSourceNodeId configuré dans metadata.repeater
+      // et on fait -1 sur ce champ (minimum 1)
+      try {
+        console.log('🔄🔄🔄 [SYNC DELETE] Recherche repeater avec countSourceNodeId dans allNodes:', allNodes?.length || 0, 'nodes');
+        
+        // 🔍 DEBUG: Lister tous les repeaters trouvés
+        const allRepeaters = (allNodes || []).filter((n: any) => n.type === 'branch_repeater' || n.type === 'leaf_repeater');
+        console.log('🔄🔄🔄 [SYNC DELETE] Repeaters dans allNodes:', allRepeaters.map((r: any) => ({
+          id: r.id,
+          type: r.type,
+          hasMetadata: !!r.metadata,
+          hasRepeater: !!r.metadata?.repeater,
+          countSourceNodeId: r.metadata?.repeater?.countSourceNodeId || 'N/A'
+        })));
+        
+        // 🔧 FIX: Chercher à la fois les types 'branch_repeater' ET 'leaf_repeater'
+        const repeaterWithSync = (allNodes || []).find(
+          (n: any) => (n.type === 'branch_repeater' || n.type === 'leaf_repeater') && n.metadata?.repeater?.countSourceNodeId
+        );
+        
+        console.log('🔄🔄🔄 [SYNC DELETE] Repeater trouvé:', repeaterWithSync ? {
+          id: repeaterWithSync.id,
+          countSourceNodeId: repeaterWithSync.metadata?.repeater?.countSourceNodeId
+        } : 'AUCUN');
+        
+        if (repeaterWithSync) {
+          const countSourceNodeId = repeaterWithSync.metadata.repeater.countSourceNodeId;
+          
+          // 🔒 PROTECTION: Empêcher le preload de se déclencher pendant le sync
+          if (typeof window !== 'undefined') {
+            window.__TBL_SKIP_PRELOAD_UNTIL = Date.now() + 2000; // Skip pendant 2 secondes
+            console.log(`🔒 [SYNC DELETE] Preload désactivé temporairement jusqu'à ${new Date(window.__TBL_SKIP_PRELOAD_UNTIL).toISOString()}`);
+          }
+          
+          // 🔧 FIX: Utiliser section.fields ou allNodes (fields n'existait pas dans ce scope!)
+          const currentField = section.fields.find((fld: any) => fld.id === countSourceNodeId) 
+            || allNodes.find((n: any) => n.id === countSourceNodeId);
+          const currentValue = parseInt(String(currentField?.value || currentField?.defaultValue || '1'), 10);
+          const newValue = Math.max(1, currentValue - 1); // MINIMUM 1 !
+          
+          console.log(`🔄 [SYNC] Repeater ${repeaterWithSync.id}: champ ${countSourceNodeId} = ${currentValue} → ${newValue}`);
+          onChange(countSourceNodeId, String(newValue));
+        }
+      } catch (syncErr) {
+        console.warn('⚠️ [SYNC] Erreur:', syncErr);
+      }
 
       // ✨ MISE À JOUR LOCALE SANS RECHARGEMENT
       // Émettre un événement avec les IDs supprimés pour que le composant parent filtre localement
@@ -1607,7 +1697,7 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
     } catch (error) {
       console.error('❌ [DELETE COPY GROUP] Erreur lors de la suppression de la copie:', error);
     }
-  }, [api, allNodes, section, treeId, dlog, resolveEventTreeId]);
+  }, [api, allNodes, section, treeId, dlog, resolveEventTreeId, onChange]);
   
   // Debug gating (localStorage.setItem('TBL_SMART_DEBUG','1')) is declared earlier
 
@@ -4777,6 +4867,31 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
                                 }
                                 
                                 if (isTBLDebugEnabled()) tblLog(`✅ [COPY-API] Repeat execute terminé:`, response);
+                                
+                                // 🔄 SYNC BIDIRECTIONNELLE: Mettre à jour le champ source si configuré
+                                try {
+                                  console.log(`🔍 [SYNC DEBUG ADD] parentField.id=${parentField?.id}`);
+                                  console.log(`🔍 [SYNC DEBUG ADD] parentField.repeater_countSourceNodeId:`, parentField?.repeater_countSourceNodeId);
+                                  const countSourceNodeId = parentField?.repeater_countSourceNodeId;
+                                  if (countSourceNodeId) {
+                                    // 🔒 PROTECTION: Empêcher le preload de se déclencher pendant le sync
+                                    if (typeof window !== 'undefined') {
+                                      window.__TBL_SKIP_PRELOAD_UNTIL = Date.now() + 2000; // Skip pendant 2 secondes
+                                      console.log(`🔒 [SYNC BIDIRECTIONNELLE] Preload désactivé temporairement jusqu'à ${new Date(window.__TBL_SKIP_PRELOAD_UNTIL).toISOString()}`);
+                                    }
+                                    
+                                    // Compter les copies existantes (nœuds avec rootOriginalId = repeaterParentId)
+                                    const existingCopiesCount = (allNodes || []).filter(
+                                      (n: any) => n.metadata?.copyOf?.rootOriginalId === repeaterParentId
+                                    ).length;
+                                    // Total = 1 (original) + copies existantes + 1 (nouvelle copie)
+                                    const newTotal = 1 + existingCopiesCount + 1;
+                                    console.log(`🔄 [SYNC BIDIRECTIONNELLE] Mise à jour champ source ${countSourceNodeId}: ${newTotal}`);
+                                    onChange(countSourceNodeId, String(newTotal));
+                                  }
+                                } catch (syncErr) {
+                                  console.warn('⚠️ [SYNC BIDIRECTIONNELLE] Erreur mise à jour champ source:', syncErr);
+                                }
                                 
                                 // ✅ Réponse reçue. On n'appelle PAS TBL_FORCE_REFRESH pour éviter le rechargement
                                 // du formulaire complet et l'affichage d'un loader. On émet un événement local

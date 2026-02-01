@@ -1745,6 +1745,7 @@ model TreeBranchLeafNode {
   repeater_maxItems           Int?
   repeater_addButtonLabel     String?
   repeater_templateNodeLabels String?
+  repeater_countSourceNodeId  String?            // UUID du champ numérique qui contrôle le nombre de copies
   isMultiple                  Boolean?           @default(false)
   isSharedReference           Boolean?           @default(false)
   sharedReferenceCategory     String?

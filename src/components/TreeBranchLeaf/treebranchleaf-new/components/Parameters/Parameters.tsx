@@ -429,6 +429,10 @@ const Parameters: React.FC<ParametersProps> = (props) => {
   const [repeaterMinItems, setRepeaterMinItems] = useState<number | undefined>(undefined);
   const [repeaterMaxItems, setRepeaterMaxItems] = useState<number | undefined>(undefined);
   const [repeaterAddLabel, setRepeaterAddLabel] = useState<string>(REPEATER_DEFAULT_LABEL);
+  // 🆕 État pour le champ source du nombre de copies (pré-chargement intelligent)
+  const [repeaterCountSourceNodeId, setRepeaterCountSourceNodeId] = useState<string | null>(null);
+  // 🆕 État pour le modal de sélection du champ source
+  const [repeaterCountSelectorOpen, setRepeaterCountSelectorOpen] = useState(false);
   
   // 🆕 Bloquer l'hydratation temporairement après une modification utilisateur
   const skipNextHydrationRef = useRef(false);
@@ -1392,11 +1396,14 @@ const Parameters: React.FC<ParametersProps> = (props) => {
           ? repeaterMeta.addButtonLabel
           : REPEATER_DEFAULT_LABEL
       );
+      // 🆕 Hydratation du champ source pour le nombre de copies
+      setRepeaterCountSourceNodeId((selectedNode as any)?.repeater_countSourceNodeId ?? null);
     } else {
       setRepeaterTemplateIds([]);
       setRepeaterMinItems(undefined);
       setRepeaterMaxItems(undefined);
       setRepeaterAddLabel(REPEATER_DEFAULT_LABEL);
+      setRepeaterCountSourceNodeId(null);
     }
   }, [selectedNode, registry, panelStateOpenCapabilities, selectedNodeFromTree]);
 
@@ -2564,6 +2571,139 @@ const Parameters: React.FC<ParametersProps> = (props) => {
                   </div>
                 </div>
               )}
+
+              {/* 🆕 SECTION PRÉ-CHARGEMENT INTELLIGENT */}
+              <div style={{ marginTop: 12, borderTop: '1px solid #f0f0f0', paddingTop: 12 }}>
+                <strong style={{ fontSize: 12 }}>⚡ Pré-chargement intelligent</strong>
+                <Alert
+                  type="info"
+                  showIcon
+                  style={{ marginTop: 4, marginBottom: 8 }}
+                  message={
+                    <span style={{ fontSize: 11 }}>
+                      Liez ce répéteur à un champ numérique. Le système créera automatiquement 
+                      les copies en arrière-plan quand l'utilisateur remplit ce champ.
+                    </span>
+                  }
+                />
+                
+                {/* Input cliquable pour ouvrir le NodeTreeSelector */}
+                <Input
+                  size="small"
+                  readOnly
+                  value={(() => {
+                    if (!repeaterCountSourceNodeId) return '';
+                    // Trouver le label du nœud sélectionné
+                    const findLabel = (list: TreeBranchLeafNode[] | undefined): string | null => {
+                      if (!list) return null;
+                      for (const n of list) {
+                        if (n.id === repeaterCountSourceNodeId) return n.label || n.id;
+                        if (n.children) {
+                          const found = findLabel(n.children);
+                          if (found) return found;
+                        }
+                      }
+                      return null;
+                    };
+                    return findLabel(nodes) || repeaterCountSourceNodeId;
+                  })()}
+                  placeholder="🔍 Cliquez pour sélectionner un champ..."
+                  style={{ width: '100%', cursor: 'pointer' }}
+                  onClick={() => setRepeaterCountSelectorOpen(true)}
+                  suffix={
+                    repeaterCountSourceNodeId ? (
+                      <span 
+                        style={{ cursor: 'pointer', color: '#999' }}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setRepeaterCountSourceNodeId(null);
+                          patchNode({ repeater_countSourceNodeId: null });
+                        }}
+                      >
+                        ✕
+                      </span>
+                    ) : (
+                      <span style={{ color: '#1890ff' }}>📂</span>
+                    )
+                  }
+                />
+                
+                {/* Modal NodeTreeSelector */}
+                <NodeTreeSelector
+                  nodeId={selectedNode?.id || ''}
+                  open={repeaterCountSelectorOpen}
+                  onClose={() => setRepeaterCountSelectorOpen(false)}
+                  selectionContext="nodeId"
+                  onSelect={(val) => {
+                    console.log('⚡ [Pre-load] Champ source sélectionné via NodeTreeSelector:', val);
+                    // Extraire le nodeId du ref (format: @value.{nodeId})
+                    const nodeId = val.ref.replace('@value.', '').replace('@select.', '');
+                    setRepeaterCountSourceNodeId(nodeId);
+                    patchNode({ repeater_countSourceNodeId: nodeId });
+                    setRepeaterCountSelectorOpen(false);
+                  }}
+                />
+                
+                {repeaterCountSourceNodeId && (
+                  <div style={{ marginTop: 8, padding: 8, backgroundColor: '#e6f4ff', borderRadius: 4, fontSize: 11 }}>
+                    ✅ Quand l'utilisateur remplira le champ sélectionné, le système créera 
+                    automatiquement le nombre de copies correspondant <strong>en arrière-plan</strong>, 
+                    pendant qu'il continue de travailler sur le dossier.
+                  </div>
+                )}
+
+                {/* 🧪 Test manuel du pré-chargement */}
+                <div style={{ marginTop: 12, padding: 12, backgroundColor: '#fff7e6', borderRadius: 6, border: '1px solid #ffd591' }}>
+                  <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 8 }}>🧪 Test manuel du pré-chargement</div>
+                  <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                    <Input
+                      type="number"
+                      min={1}
+                      max={20}
+                      placeholder="Nb copies"
+                      style={{ width: 100 }}
+                      id="preload-test-count"
+                    />
+                    <Button
+                      type="primary"
+                      size="small"
+                      onClick={async () => {
+                        console.log('🔴🔴🔴 BOUTON CLIQUÉ! selectedNode:', selectedNode?.id);
+                        const input = document.getElementById('preload-test-count') as HTMLInputElement;
+                        console.log('🔴 Input trouvé:', input, 'value:', input?.value);
+                        const targetCount = parseInt(input?.value || '0', 10);
+                        console.log('🔴 targetCount:', targetCount);
+                        if (!targetCount || targetCount < 1) {
+                          alert('Entrez un nombre >= 1');
+                          return;
+                        }
+                        if (!selectedNode?.id) {
+                          alert('Aucun repeater sélectionné');
+                          return;
+                        }
+                        console.log(`⚡ [PRELOAD TEST] Déclenchement pour ${selectedNode.id} avec cible ${targetCount}`);
+                        try {
+                          const result = await api.post(`/api/repeat/${selectedNode.id}/preload-copies`, {
+                            targetCount
+                          });
+                          console.log('⚡ [PRELOAD TEST] Résultat:', result);
+                          alert(`✅ ${result.createdCopies} copies créées! Total: ${result.totalCopies}`);
+                          // Rafraîchir l'arbre
+                          if (refreshTree) refreshTree();
+                        } catch (error) {
+                          console.error('❌ [PRELOAD TEST] Erreur:', error);
+                          alert('❌ Erreur: ' + ((error as Error).message || 'Erreur inconnue'));
+                        }
+                      }}
+                    >
+                      Créer copies
+                    </Button>
+                  </div>
+                  <div style={{ fontSize: 10, color: '#666', marginTop: 6 }}>
+                    Ex: Si vous mettez "3", le système créera 2 copies (car l'original compte pour 1)
+                  </div>
+                </div>
+              </div>
             </Space>
           </div>
         )}

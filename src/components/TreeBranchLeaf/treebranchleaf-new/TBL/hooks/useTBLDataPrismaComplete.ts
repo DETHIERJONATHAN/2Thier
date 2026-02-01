@@ -519,6 +519,18 @@ export interface TreeBranchLeafNode {
   markers_instances?: Record<string, unknown> | null;
   markers_activeId?: string | null;
   
+  // 🔁 REPEATER: Colonnes Prisma dédiées
+  repeater_templateNodeIds?: string | string[];
+  repeater_templateNodeLabels?: string | Record<string, string>;
+  repeater_minItems?: number;
+  repeater_maxItems?: number;
+  repeater_addButtonLabel?: string;
+  repeater_buttonSize?: string;
+  repeater_buttonWidth?: string;
+  repeater_iconOnly?: boolean;
+  // 🔄 PRÉ-CHARGEMENT INTELLIGENT: ID du champ source qui contrôle le nombre de copies
+  repeater_countSourceNodeId?: string | null;
+  
   // Métadonnées
   metadata: Record<string, unknown>;
   subtab?: string | null;
@@ -699,6 +711,11 @@ export interface TBLField {
   // Propriété pour le bouton d'ajout de nouveau versant
   canAddNewCopy?: boolean;
   isLastInCopyGroup?: boolean;
+  
+  // 🔄 PRÉ-CHARGEMENT INTELLIGENT: ID du champ source qui contrôle le nombre de copies
+  repeater_countSourceNodeId?: string | null;
+  // 🔁 REPEATER: colonnes Prisma directes pour le bouton "Ajouter"
+  repeater_templateNodeIds?: string[] | string;
   
   // 🤖 AI MEASURE: Propriétés pour la mesure par IA sur champs IMAGE
   aiMeasure_enabled?: boolean;
@@ -1605,8 +1622,11 @@ const transformPrismaNodeToField = (
       metadata: {
         repeater: repeaterMetadata
       },
-      capabilities
-      ,
+      capabilities,
+      // 🔄 PRÉ-CHARGEMENT INTELLIGENT: Transmettre l'ID du champ source
+      repeater_countSourceNodeId: node.repeater_countSourceNodeId || null,
+      // 🔁 REPEATER: Colonnes Prisma directes pour "Ajouter"
+      repeater_templateNodeIds: templateNodeIds,
       subTabKey: primarySubTabKey ?? undefined,
       subTabKeys: subTabAssignments.length ? subTabAssignments : undefined
     };

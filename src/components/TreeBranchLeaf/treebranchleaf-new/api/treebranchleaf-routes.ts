@@ -2899,7 +2899,9 @@ function buildResponseFromColumns(node: any): Record<string, unknown> {
     addButtonLabel: node.repeater_addButtonLabel || legacyRepeater?.addButtonLabel || null,
     buttonSize: node.repeater_buttonSize || legacyRepeater?.buttonSize || 'middle',
     buttonWidth: node.repeater_buttonWidth || legacyRepeater?.buttonWidth || 'auto',
-    iconOnly: node.repeater_iconOnly ?? legacyRepeater?.iconOnly ?? false
+    iconOnly: node.repeater_iconOnly ?? legacyRepeater?.iconOnly ?? false,
+    // 🔄 Sync bidirectionnel : UUID du champ numérique qui contrôle le nombre de copies
+    countSourceNodeId: node.repeater_countSourceNodeId || null
   };
   
   // ÃƒÂ°Ã…Â¸Ã…Â½Ã‚Â¯ CORRECTION CRITIQUE : Construire aussi appearanceConfig pour l'interface Parameters
@@ -2984,8 +2986,10 @@ function buildResponseFromColumns(node: any): Record<string, unknown> {
   if (node.id === '131a7b51-97d5-4f40-8a5a-9359f38939e8') {
   }
   
-  // ÃƒÂ°Ã…Â¸Ã¢â‚¬ÂÃ‚Â¥ INJECTER repeater dans cleanedMetadata
-  const metadataWithRepeater = repeater.templateNodeIds && repeater.templateNodeIds.length > 0
+  // 🔧 INJECTER repeater dans cleanedMetadata
+  // 🔧 FIX: Injecter repeater si templateNodeIds > 0 OU si countSourceNodeId est défini (pour sync bidirectionnel)
+  const hasRepeaterConfig = (repeater.templateNodeIds && repeater.templateNodeIds.length > 0) || repeater.countSourceNodeId;
+  const metadataWithRepeater = hasRepeaterConfig
     ? { ...cleanedMetadata, repeater: repeater }
     : cleanedMetadata;
 
