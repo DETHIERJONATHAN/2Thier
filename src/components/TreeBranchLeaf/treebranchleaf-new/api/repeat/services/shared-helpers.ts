@@ -190,6 +190,10 @@ export function buildResponseFromColumns(node: any): Record<string, unknown> {
     addButtonLabel?: string | null;
   };
 
+  const metadataAppearance = (node.metadata && typeof node.metadata === 'object'
+    ? (node.metadata as Record<string, unknown>).appearance
+    : undefined) as Record<string, unknown> | undefined;
+
   const appearance = {
     size: node.appearance_size || 'md',
     width: node.appearance_width || null,
@@ -247,7 +251,12 @@ export function buildResponseFromColumns(node: any): Record<string, unknown> {
     iconOnly: node.repeater_iconOnly ?? legacyRepeater?.iconOnly ?? false
   };
 
+  const storedAppearanceConfig = (node.appearanceConfig && typeof node.appearanceConfig === 'object')
+    ? node.appearanceConfig as Record<string, unknown>
+    : undefined;
+
   const appearanceConfig = {
+    ...(storedAppearanceConfig || {}),
     size: node.appearance_size || 'md',
     variant: node.appearance_variant || 'singleline',
     placeholder: node.text_placeholder || '',
@@ -256,7 +265,8 @@ export function buildResponseFromColumns(node: any): Record<string, unknown> {
     regex: node.text_regex || '',
     helpTooltipType: node.text_helpTooltipType || 'none',
     helpTooltipText: node.text_helpTooltipText || null,
-    helpTooltipImage: node.text_helpTooltipImage || null
+    helpTooltipImage: node.text_helpTooltipImage || null,
+    displayIcon: (storedAppearanceConfig as any)?.displayIcon || (metadataAppearance as any)?.displayIcon
   };
 
   const fieldConfig = {
@@ -313,7 +323,10 @@ export function buildResponseFromColumns(node: any): Record<string, unknown> {
 
   const cleanedMetadata = {
     ...(node.metadata || {}),
-    appearance
+    appearance: {
+      ...(metadataAppearance || {}),
+      ...appearance
+    }
   };
 
   if (node.subtabs) {

@@ -192,16 +192,446 @@ const UniversalPanel: React.FC<UniversalPanelProps> = ({ value = {}, onChange, r
             name="displayIcon" 
             label={<Tooltip title="Icône affichée dans la colonne 'subtap display' de la table. Héritée par les copies du champ">Icône de champ (TBL)</Tooltip>}
           >
-            <Select
-              allowClear
-              placeholder="Choisir une icône"
-              options={[
-                { value: '', label: '(Aucune - icône par défaut)' },
-                { value: '●', label: '● Champ (C)' },
-                { value: '◐', label: '◐ Champ + Option (O+C)' },
-                { value: '○', label: '○ Option (O)' }
-              ]}
-            />
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <Select
+                showSearch
+                value={localValues.displayIcon as string || undefined}
+                optionFilterProp="label"
+                options={[
+                  // ═══════════════════════════════════════════════════════════════
+                  // 🎯 DÉFAUT
+                  // ═══════════════════════════════════════════════════════════════
+                  { value: '', label: '(par défaut)' },
+                  
+                  // ═══════════════════════════════════════════════════════════════
+                  // ⭕ SYMBOLES TECHNIQUES TBL
+                  // ═══════════════════════════════════════════════════════════════
+                  { value: '●', label: '● Champ (C)' },
+                  { value: '◐', label: '◐ Champ + Option (O+C)' },
+                  { value: '○', label: '○ Option (O)' },
+                  { value: '◉', label: '◉ Cible' },
+                  { value: '◎', label: '◎ Double cercle' },
+                  { value: '◯', label: '◯ Grand cercle' },
+                  { value: '◆', label: '◆ Losange plein' },
+                  { value: '◇', label: '◇ Losange vide' },
+                  { value: '▲', label: '▲ Triangle haut' },
+                  { value: '▼', label: '▼ Triangle bas' },
+                  { value: '◀', label: '◀ Triangle gauche' },
+                  { value: '▶', label: '▶ Triangle droit' },
+                  { value: '■', label: '■ Carré plein' },
+                  { value: '□', label: '□ Carré vide' },
+                  { value: '★', label: '★ Étoile pleine' },
+                  { value: '☆', label: '☆ Étoile vide' },
+                  { value: '✦', label: '✦ Étoile 4 branches' },
+                  { value: '✧', label: '✧ Étoile 4 branches vide' },
+                  
+                  // ═══════════════════════════════════════════════════════════════
+                  // 📐 MESURES & DIMENSIONS
+                  // ═══════════════════════════════════════════════════════════════
+                  { value: '📏', label: '📏 Règle / Longueur' },
+                  { value: '📐', label: '📐 Équerre / Angle' },
+                  { value: '🧭', label: '🧭 Boussole / Orientation' },
+                  { value: '⬜', label: '⬜ Surface / Carré' },
+                  { value: '⬛', label: '⬛ Surface pleine' },
+                  { value: '🔲', label: '🔲 Zone / Périmètre' },
+                  { value: '🔳', label: '🔳 Zone sélectionnée' },
+                  { value: '📍', label: '📍 Position / Point' },
+                  { value: '🎯', label: '🎯 Cible / Précision' },
+                  { value: '↔️', label: '↔️ Largeur' },
+                  { value: '↕️', label: '↕️ Hauteur' },
+                  { value: '↗️', label: '↗️ Diagonale' },
+                  { value: '🔄', label: '🔄 Rotation' },
+                  { value: '↩️', label: '↩️ Retour' },
+                  { value: '↪️', label: '↪️ Avancer' },
+                  
+                  // ═══════════════════════════════════════════════════════════════
+                  // 🏠 BÂTIMENT & CONSTRUCTION
+                  // ═══════════════════════════════════════════════════════════════
+                  { value: '🏠', label: '🏠 Maison / Toiture' },
+                  { value: '🏡', label: '🏡 Maison jardin' },
+                  { value: '🏢', label: '🏢 Immeuble' },
+                  { value: '🏭', label: '🏭 Usine / Industrie' },
+                  { value: '🏗️', label: '🏗️ Construction' },
+                  { value: '🧱', label: '🧱 Briques / Mur' },
+                  { value: '🪵', label: '🪵 Bois / Charpente' },
+                  { value: '🪨', label: '🪨 Pierre / Fondation' },
+                  { value: '🚪', label: '🚪 Porte' },
+                  { value: '🪟', label: '🪟 Fenêtre' },
+                  { value: '🛖', label: '🛖 Abri' },
+                  { value: '⛺', label: '⛺ Tente / Temporaire' },
+                  { value: '🏚️', label: '🏚️ Ancien / Rénovation' },
+                  { value: '🏛️', label: '🏛️ Monument / Historique' },
+                  
+                  // ═══════════════════════════════════════════════════════════════
+                  // ☀️ ÉNERGIE SOLAIRE & ÉLECTRICITÉ
+                  // ═══════════════════════════════════════════════════════════════
+                  { value: '☀️', label: '☀️ Soleil / Panneau' },
+                  { value: '🌤️', label: '🌤️ Ensoleillement partiel' },
+                  { value: '⛅', label: '⛅ Nuageux' },
+                  { value: '🌞', label: '🌞 Plein soleil' },
+                  { value: '⚡', label: '⚡ Électricité / Puissance' },
+                  { value: '🔌', label: '🔌 Branchement' },
+                  { value: '🔋', label: '🔋 Batterie / Stockage' },
+                  { value: '🪫', label: '🪫 Batterie faible' },
+                  { value: '💡', label: '💡 Ampoule / Éclairage' },
+                  { value: '🔦', label: '🔦 Lampe torche' },
+                  { value: '🕯️', label: '🕯️ Bougie / Secours' },
+                  { value: '⚙️', label: '⚙️ Engrenage / Mécanique' },
+                  { value: '🔩', label: '🔩 Boulon / Fixation' },
+                  { value: '⛽', label: '⛽ Carburant' },
+                  { value: '🛢️', label: '🛢️ Réservoir' },
+                  
+                  // ═══════════════════════════════════════════════════════════════
+                  // 💰 FINANCE & COMMERCE
+                  // ═══════════════════════════════════════════════════════════════
+                  { value: '💰', label: '💰 Argent / Prix' },
+                  { value: '💵', label: '💵 Billets' },
+                  { value: '💶', label: '💶 Euros' },
+                  { value: '💳', label: '💳 Carte bancaire' },
+                  { value: '🧾', label: '🧾 Reçu / Facture' },
+                  { value: '📃', label: '📃 Document' },
+                  { value: '📄', label: '📄 Page' },
+                  { value: '📑', label: '📑 Onglets' },
+                  { value: '🧮', label: '🧮 Calcul / Comptabilité' },
+                  { value: '💹', label: '💹 Croissance' },
+                  { value: '📈', label: '📈 Hausse / Progression' },
+                  { value: '📉', label: '📉 Baisse / Diminution' },
+                  { value: '📊', label: '📊 Graphique / Statistiques' },
+                  { value: '🏷️', label: '🏷️ Étiquette / Prix' },
+                  { value: '🛒', label: '🛒 Panier / Commande' },
+                  { value: '🛍️', label: '🛍️ Shopping' },
+                  { value: '💎', label: '💎 Premium / Qualité' },
+                  { value: '🏆', label: '🏆 Trophée / Meilleur' },
+                  { value: '🥇', label: '🥇 Premier / Top' },
+                  { value: '🥈', label: '🥈 Deuxième' },
+                  { value: '🥉', label: '🥉 Troisième' },
+                  
+                  // ═══════════════════════════════════════════════════════════════
+                  // 🔢 QUANTITÉS & NOMBRES
+                  // ═══════════════════════════════════════════════════════════════
+                  { value: '🔢', label: '🔢 Nombres / Quantité' },
+                  { value: '#️⃣', label: '#️⃣ Hashtag / Numéro' },
+                  { value: '0️⃣', label: '0️⃣ Zéro' },
+                  { value: '1️⃣', label: '1️⃣ Un' },
+                  { value: '2️⃣', label: '2️⃣ Deux' },
+                  { value: '3️⃣', label: '3️⃣ Trois' },
+                  { value: '4️⃣', label: '4️⃣ Quatre' },
+                  { value: '5️⃣', label: '5️⃣ Cinq' },
+                  { value: '6️⃣', label: '6️⃣ Six' },
+                  { value: '7️⃣', label: '7️⃣ Sept' },
+                  { value: '8️⃣', label: '8️⃣ Huit' },
+                  { value: '9️⃣', label: '9️⃣ Neuf' },
+                  { value: '🔟', label: '🔟 Dix' },
+                  { value: '💯', label: '💯 Cent / Parfait' },
+                  { value: '➕', label: '➕ Plus / Addition' },
+                  { value: '➖', label: '➖ Moins / Soustraction' },
+                  { value: '✖️', label: '✖️ Multiplier' },
+                  { value: '➗', label: '➗ Diviser' },
+                  { value: '♾️', label: '♾️ Infini' },
+                  { value: '🔣', label: '🔣 Symboles' },
+                  { value: '%', label: '% Pourcentage' },
+                  
+                  // ═══════════════════════════════════════════════════════════════
+                  // ⚖️ POIDS & MESURES
+                  // ═══════════════════════════════════════════════════════════════
+                  { value: '⚖️', label: '⚖️ Balance / Poids' },
+                  { value: '🏋️', label: '🏋️ Charge lourde' },
+                  { value: '🪶', label: '🪶 Léger / Plume' },
+                  { value: '⏱️', label: '⏱️ Chronomètre / Durée' },
+                  { value: '⏰', label: '⏰ Réveil / Alarme' },
+                  { value: '🕐', label: '🕐 Heure' },
+                  { value: '📅', label: '📅 Calendrier / Date' },
+                  { value: '🗓️', label: '🗓️ Planning' },
+                  
+                  // ═══════════════════════════════════════════════════════════════
+                  // 🌡️ MÉTÉO & ENVIRONNEMENT
+                  // ═══════════════════════════════════════════════════════════════
+                  { value: '🌡️', label: '🌡️ Température' },
+                  { value: '❄️', label: '❄️ Froid / Gel' },
+                  { value: '🔥', label: '🔥 Chaud / Feu' },
+                  { value: '💧', label: '💧 Eau / Goutte' },
+                  { value: '🌊', label: '🌊 Vague / Inondation' },
+                  { value: '💦', label: '💦 Éclaboussure' },
+                  { value: '🌬️', label: '🌬️ Vent' },
+                  { value: '🌪️', label: '🌪️ Tornade / Tempête' },
+                  { value: '⛈️', label: '⛈️ Orage' },
+                  { value: '🌧️', label: '🌧️ Pluie' },
+                  { value: '☔', label: '☔ Parapluie' },
+                  { value: '❄️', label: '❄️ Neige' },
+                  { value: '☁️', label: '☁️ Nuage' },
+                  { value: '🌈', label: '🌈 Arc-en-ciel' },
+                  { value: '🌍', label: '🌍 Terre / Global' },
+                  { value: '🌱', label: '🌱 Pousse / Écologie' },
+                  { value: '🌲', label: '🌲 Arbre / Forêt' },
+                  { value: '🌳', label: '🌳 Feuillu' },
+                  { value: '🍀', label: '🍀 Chance / Nature' },
+                  { value: '♻️', label: '♻️ Recyclage' },
+                  
+                  // ═══════════════════════════════════════════════════════════════
+                  // 🔧 OUTILS & TECHNIQUE
+                  // ═══════════════════════════════════════════════════════════════
+                  { value: '🔧', label: '🔧 Clé / Réglage' },
+                  { value: '🔨', label: '🔨 Marteau' },
+                  { value: '🪚', label: '🪚 Scie' },
+                  { value: '🪛', label: '🪛 Tournevis' },
+                  { value: '🛠️', label: '🛠️ Outils' },
+                  { value: '⚒️', label: '⚒️ Pioche & Marteau' },
+                  { value: '🪜', label: '🪜 Échelle' },
+                  { value: '🧰', label: '🧰 Boîte à outils' },
+                  { value: '🔬', label: '🔬 Microscope / Analyse' },
+                  { value: '🔭', label: '🔭 Télescope / Vision' },
+                  { value: '🧪', label: '🧪 Test / Labo' },
+                  { value: '🧫', label: '🧫 Échantillon' },
+                  { value: '🧲', label: '🧲 Aimant' },
+                  { value: '🪤', label: '🪤 Piège' },
+                  { value: '🔗', label: '🔗 Lien / Chaîne' },
+                  { value: '⛓️', label: '⛓️ Chaîne' },
+                  { value: '🪝', label: '🪝 Crochet' },
+                  { value: '📎', label: '📎 Trombone' },
+                  { value: '✂️', label: '✂️ Ciseaux' },
+                  { value: '🖊️', label: '🖊️ Stylo' },
+                  { value: '✏️', label: '✏️ Crayon' },
+                  { value: '🖌️', label: '🖌️ Pinceau' },
+                  { value: '🖍️', label: '🖍️ Crayon couleur' },
+                  
+                  // ═══════════════════════════════════════════════════════════════
+                  // ✅ STATUTS & VALIDATION
+                  // ═══════════════════════════════════════════════════════════════
+                  { value: '✅', label: '✅ Validé / OK' },
+                  { value: '☑️', label: '☑️ Coché' },
+                  { value: '✔️', label: '✔️ Check' },
+                  { value: '❌', label: '❌ Erreur / Non' },
+                  { value: '❎', label: '❎ Croix carrée' },
+                  { value: '⚠️', label: '⚠️ Attention / Warning' },
+                  { value: '⛔', label: '⛔ Interdit / Stop' },
+                  { value: '🚫', label: '🚫 Interdit' },
+                  { value: '🚷', label: '🚷 Accès interdit' },
+                  { value: '📛', label: '📛 Badge / Nom' },
+                  { value: '❗', label: '❗ Important' },
+                  { value: '❓', label: '❓ Question' },
+                  { value: '❔', label: '❔ Question blanche' },
+                  { value: '❕', label: '❕ Exclamation blanche' },
+                  { value: '💬', label: '💬 Commentaire' },
+                  { value: '💭', label: '💭 Pensée' },
+                  { value: '🗨️', label: '🗨️ Bulle' },
+                  { value: '📌', label: '📌 Épinglé / Important' },
+                  { value: '📍', label: '📍 Localisation' },
+                  { value: '🔒', label: '🔒 Verrouillé' },
+                  { value: '🔓', label: '🔓 Déverrouillé' },
+                  { value: '🔐', label: '🔐 Sécurisé' },
+                  { value: '🔑', label: '🔑 Clé / Accès' },
+                  { value: '🗝️', label: '🗝️ Clé ancienne' },
+                  
+                  // ═══════════════════════════════════════════════════════════════
+                  // 📞 COMMUNICATION & CONTACT
+                  // ═══════════════════════════════════════════════════════════════
+                  { value: '📞', label: '📞 Téléphone' },
+                  { value: '📱', label: '📱 Mobile' },
+                  { value: '📧', label: '📧 Email' },
+                  { value: '✉️', label: '✉️ Enveloppe' },
+                  { value: '📨', label: '📨 Message entrant' },
+                  { value: '📩', label: '📩 Message sortant' },
+                  { value: '📬', label: '📬 Boîte aux lettres' },
+                  { value: '🔔', label: '🔔 Notification' },
+                  { value: '🔕', label: '🔕 Silencieux' },
+                  { value: '📢', label: '📢 Annonce' },
+                  { value: '📣', label: '📣 Mégaphone' },
+                  
+                  // ═══════════════════════════════════════════════════════════════
+                  // 👤 PERSONNES & RÔLES
+                  // ═══════════════════════════════════════════════════════════════
+                  { value: '👤', label: '👤 Personne' },
+                  { value: '👥', label: '👥 Groupe' },
+                  { value: '👷', label: '👷 Ouvrier / Chantier' },
+                  { value: '🧑‍💼', label: '🧑‍💼 Commercial' },
+                  { value: '🧑‍🔧', label: '🧑‍🔧 Technicien' },
+                  { value: '🧑‍💻', label: '🧑‍💻 Développeur' },
+                  { value: '🧑‍🏫', label: '🧑‍🏫 Formateur' },
+                  { value: '👨‍👩‍👧', label: '👨‍👩‍👧 Famille / Client' },
+                  { value: '🏃', label: '🏃 En cours' },
+                  { value: '🧍', label: '🧍 Debout / Attente' },
+                  { value: '🤝', label: '🤝 Accord / Partenariat' },
+                  { value: '👍', label: '👍 Approuvé' },
+                  { value: '👎', label: '👎 Refusé' },
+                  { value: '👋', label: '👋 Salut / Bienvenue' },
+                  { value: '✋', label: '✋ Stop / Pause' },
+                  { value: '🖐️', label: '🖐️ Main ouverte' },
+                  { value: '👆', label: '👆 Pointer haut' },
+                  { value: '👇', label: '👇 Pointer bas' },
+                  { value: '👈', label: '👈 Pointer gauche' },
+                  { value: '👉', label: '👉 Pointer droite' },
+                  
+                  // ═══════════════════════════════════════════════════════════════
+                  // 🚗 TRANSPORT & VÉHICULES
+                  // ═══════════════════════════════════════════════════════════════
+                  { value: '🚗', label: '🚗 Voiture' },
+                  { value: '🚙', label: '🚙 SUV' },
+                  { value: '🚐', label: '🚐 Camionnette' },
+                  { value: '🚚', label: '🚚 Camion' },
+                  { value: '🚛', label: '🚛 Semi-remorque' },
+                  { value: '🏍️', label: '🏍️ Moto' },
+                  { value: '🛵', label: '🛵 Scooter' },
+                  { value: '🚲', label: '🚲 Vélo' },
+                  { value: '🛻', label: '🛻 Pick-up' },
+                  { value: '🚜', label: '🚜 Tracteur' },
+                  { value: '🚁', label: '🚁 Hélicoptère' },
+                  { value: '✈️', label: '✈️ Avion' },
+                  { value: '🚀', label: '🚀 Fusée / Rapide' },
+                  
+                  // ═══════════════════════════════════════════════════════════════
+                  // 📁 FICHIERS & DOSSIERS
+                  // ═══════════════════════════════════════════════════════════════
+                  { value: '📁', label: '📁 Dossier' },
+                  { value: '📂', label: '📂 Dossier ouvert' },
+                  { value: '🗂️', label: '🗂️ Classeur' },
+                  { value: '📋', label: '📋 Presse-papiers' },
+                  { value: '📝', label: '📝 Note / Mémo' },
+                  { value: '📓', label: '📓 Carnet' },
+                  { value: '📔', label: '📔 Carnet décoré' },
+                  { value: '📒', label: '📒 Cahier' },
+                  { value: '📕', label: '📕 Livre rouge' },
+                  { value: '📗', label: '📗 Livre vert' },
+                  { value: '📘', label: '📘 Livre bleu' },
+                  { value: '📙', label: '📙 Livre orange' },
+                  { value: '📚', label: '📚 Livres / Documentation' },
+                  { value: '🗃️', label: '🗃️ Boîte archives' },
+                  { value: '🗄️', label: '🗄️ Armoire' },
+                  { value: '🗑️', label: '🗑️ Corbeille' },
+                  
+                  // ═══════════════════════════════════════════════════════════════
+                  // 💻 INFORMATIQUE & TECH
+                  // ═══════════════════════════════════════════════════════════════
+                  { value: '💻', label: '💻 Ordinateur' },
+                  { value: '🖥️', label: '🖥️ Écran' },
+                  { value: '🖨️', label: '🖨️ Imprimante' },
+                  { value: '⌨️', label: '⌨️ Clavier' },
+                  { value: '🖱️', label: '🖱️ Souris' },
+                  { value: '💾', label: '💾 Disquette / Sauvegarde' },
+                  { value: '💿', label: '💿 CD' },
+                  { value: '📀', label: '📀 DVD' },
+                  { value: '🔊', label: '🔊 Son fort' },
+                  { value: '🔉', label: '🔉 Son moyen' },
+                  { value: '🔈', label: '🔈 Son faible' },
+                  { value: '🔇', label: '🔇 Muet' },
+                  { value: '🎙️', label: '🎙️ Micro' },
+                  { value: '📷', label: '📷 Photo' },
+                  { value: '📸', label: '📸 Flash' },
+                  { value: '📹', label: '📹 Vidéo' },
+                  { value: '🎥', label: '🎥 Caméra' },
+                  { value: '📺', label: '📺 TV' },
+                  { value: '📻', label: '📻 Radio' },
+                  { value: '🎮', label: '🎮 Jeu' },
+                  { value: '🕹️', label: '🕹️ Joystick' },
+                  { value: '🔍', label: '🔍 Recherche' },
+                  { value: '🔎', label: '🔎 Loupe droite' },
+                  
+                  // ═══════════════════════════════════════════════════════════════
+                  // 🎨 COULEURS & DESIGN
+                  // ═══════════════════════════════════════════════════════════════
+                  { value: '🎨', label: '🎨 Palette / Design' },
+                  { value: '🖼️', label: '🖼️ Cadre / Image' },
+                  { value: '🏳️', label: '🏳️ Drapeau blanc' },
+                  { value: '🏴', label: '🏴 Drapeau noir' },
+                  { value: '🚩', label: '🚩 Drapeau rouge / Alerte' },
+                  { value: '🔴', label: '🔴 Rouge' },
+                  { value: '🟠', label: '🟠 Orange' },
+                  { value: '🟡', label: '🟡 Jaune' },
+                  { value: '🟢', label: '🟢 Vert' },
+                  { value: '🔵', label: '🔵 Bleu' },
+                  { value: '🟣', label: '🟣 Violet' },
+                  { value: '🟤', label: '🟤 Marron' },
+                  { value: '⚫', label: '⚫ Noir' },
+                  { value: '⚪', label: '⚪ Blanc' },
+                  { value: '🩶', label: '🩶 Gris' },
+                  { value: '🩷', label: '🩷 Rose' },
+                  { value: '🩵', label: '🩵 Bleu clair' },
+                  { value: '💜', label: '💜 Cœur violet' },
+                  { value: '💙', label: '💙 Cœur bleu' },
+                  { value: '💚', label: '💚 Cœur vert' },
+                  { value: '💛', label: '💛 Cœur jaune' },
+                  { value: '🧡', label: '🧡 Cœur orange' },
+                  { value: '❤️', label: '❤️ Cœur rouge' },
+                  { value: '🖤', label: '🖤 Cœur noir' },
+                  { value: '🤍', label: '🤍 Cœur blanc' },
+                  
+                  // ═══════════════════════════════════════════════════════════════
+                  // 🎉 ÉVÉNEMENTS & CÉLÉBRATIONS
+                  // ═══════════════════════════════════════════════════════════════
+                  { value: '🎉', label: '🎉 Fête / Succès' },
+                  { value: '🎊', label: '🎊 Confettis' },
+                  { value: '🎁', label: '🎁 Cadeau' },
+                  { value: '🎂', label: '🎂 Anniversaire' },
+                  { value: '🍾', label: '🍾 Champagne' },
+                  { value: '🥂', label: '🥂 Trinquer' },
+                  { value: '🎈', label: '🎈 Ballon' },
+                  { value: '🎀', label: '🎀 Ruban' },
+                  { value: '🏅', label: '🏅 Médaille' },
+                  { value: '🎖️', label: '🎖️ Décoration' },
+                  
+                  // ═══════════════════════════════════════════════════════════════
+                  // 🍴 NOURRITURE & BOISSONS
+                  // ═══════════════════════════════════════════════════════════════
+                  { value: '☕', label: '☕ Café' },
+                  { value: '🍵', label: '🍵 Thé' },
+                  { value: '🍺', label: '🍺 Bière' },
+                  { value: '🍷', label: '🍷 Vin' },
+                  { value: '🍕', label: '🍕 Pizza' },
+                  { value: '🍔', label: '🍔 Burger' },
+                  { value: '🍽️', label: '🍽️ Assiette / Repas' },
+                  
+                  // ═══════════════════════════════════════════════════════════════
+                  // ⏸️ CONTRÔLES MÉDIA
+                  // ═══════════════════════════════════════════════════════════════
+                  { value: '▶️', label: '▶️ Play / Lecture' },
+                  { value: '⏸️', label: '⏸️ Pause' },
+                  { value: '⏹️', label: '⏹️ Stop' },
+                  { value: '⏺️', label: '⏺️ Enregistrer' },
+                  { value: '⏭️', label: '⏭️ Suivant' },
+                  { value: '⏮️', label: '⏮️ Précédent' },
+                  { value: '⏩', label: '⏩ Avance rapide' },
+                  { value: '⏪', label: '⏪ Retour rapide' },
+                  { value: '🔀', label: '🔀 Aléatoire' },
+                  { value: '🔁', label: '🔁 Répéter' },
+                  { value: '🔂', label: '🔂 Répéter une fois' }
+                ]}
+                allowClear
+                placeholder="Rechercher une icône..."
+                onChange={(val) => {
+                  const nextValues = { ...localValues, displayIcon: val };
+                  form.setFieldValue('displayIcon', val);
+                  setLocalValues(nextValues);
+                  debouncedSave(nextValues);
+                }}
+              />
+              <Upload
+                accept="image/*"
+                maxCount={1}
+                showUploadList={false}
+                beforeUpload={() => false}
+                onChange={(info) => {
+                  const file = info.file?.originFileObj as File | undefined;
+                  if (!file) return;
+                  const reader = new FileReader();
+                  reader.onload = () => {
+                    const result = typeof reader.result === 'string' ? reader.result : '';
+                    if (!result) return;
+                    form.setFieldValue('displayIcon', result);
+                    const nextValues = { ...localValues, displayIcon: result };
+                    setLocalValues(nextValues);
+                    debouncedSave(nextValues);
+                  };
+                  reader.readAsDataURL(file);
+                }}
+              >
+                <Button icon={<UploadOutlined />}>Uploader une icône (PNG/SVG)</Button>
+              </Upload>
+              {localValues.displayIcon && typeof localValues.displayIcon === 'string' && (localValues.displayIcon as string).startsWith('data:image') && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <img src={localValues.displayIcon as string} alt="Icône" style={{ width: 24, height: 24, borderRadius: 4 }} />
+                  <Text type="secondary" style={{ fontSize: 12 }}>Icône personnalisée chargée</Text>
+                </div>
+              )}
+            </div>
           </Form.Item>
           <Form.Item name="columnsDesktop" label="Colonnes desktop">
             <InputNumber min={1} max={12} style={{ width: '100%' }} />

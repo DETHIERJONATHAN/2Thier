@@ -56,7 +56,11 @@ export function registerSumDisplayFieldRoutes(router: Router): void {
           linkedVariableIds: true,
           metadata: true,
           subType: true, // 🎯 FIX: Récupérer le subType de l'original
-          fieldType: true
+          fieldType: true,
+          appearance_displayIcon: true, // 🎨 FIX: Récupérer l'icône pour l'hériter sur les totaux
+          appearance_size: true,
+          appearance_variant: true,
+          appearance_width: true
         }
       });
 
@@ -180,6 +184,11 @@ export function registerSumDisplayFieldRoutes(router: Router): void {
         data_displayFormat: mainVariable.displayFormat,
         data_unit: mainVariable.unit,
         data_precision: mainVariable.precision,
+        // 🎨 HÉRITAGE APPARENCE: Copier les propriétés d'apparence du champ source
+        appearance_displayIcon: node.appearance_displayIcon,
+        appearance_size: node.appearance_size,
+        appearance_variant: node.appearance_variant,
+        appearance_width: node.appearance_width,
         metadata: {
           ...(existingSumNode?.metadata as Record<string, unknown> || {}),
           icon: sourceNodeIcon, // 🎨 HÉRITAGE: même icône que le champ source

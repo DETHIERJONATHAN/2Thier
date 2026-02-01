@@ -1658,6 +1658,7 @@ model TreeBranchLeafNode {
   appearance_size             String?            @default("md")
   appearance_variant          String?
   appearance_width            String?
+  appearance_displayIcon      String?
   bool_defaultValue           Boolean?
   bool_falseLabel             String?
   bool_trueLabel              String?

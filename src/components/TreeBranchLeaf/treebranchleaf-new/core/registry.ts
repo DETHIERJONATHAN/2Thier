@@ -1101,10 +1101,18 @@ export class TreeBranchLeafRegistry {
 
     const selectMode = tblData.select_multiple ? 'multiple' : 'single';
 
+    const meta = (tblData as any)?.metadata || {};
+    const metaAppearance = (meta?.appearance || {}) as Record<string, unknown>;
+    // 🎨 Lire displayIcon depuis toutes les sources possibles
+    const appearanceObj = (tblData as any)?.appearance || {};
+
     const result: Record<string, unknown> = {
       size: tblData.appearance_size || 'md',
       variant: tblData.appearance_variant || 'default',
       width: tblData.appearance_width || '',
+
+      // 🎨 displayIcon: priorité colonne > appearance objet > metadata > appearanceConfig
+      displayIcon: (tblData as any)?.appearance_displayIcon || appearanceObj.displayIcon || metaAppearance.displayIcon || (tblData as any)?.appearanceConfig?.displayIcon || undefined,
 
       columnsDesktop: numberOrUndefined(tblData.section_columnsDesktop),
       columnsMobile: numberOrUndefined(tblData.section_columnsMobile),

@@ -1475,6 +1475,7 @@ const transformPrismaNodeToField = (
       // 🎯 APPARENCE CONFIG avec tooltips intégrés
       appearanceConfig: {
         ...(node.appearanceConfig || {}),
+        ...((node.metadata as any)?.appearance || {}),
         // ✅ Ajouter les tooltips dans appearanceConfig
         helpTooltipType: node.text_helpTooltipType,
         helpTooltipText: node.text_helpTooltipText,
@@ -1613,6 +1614,7 @@ const transformPrismaNodeToField = (
       // 🎯 APPARENCE CONFIG pour le repeater
       appearanceConfig: {
         ...(node.appearanceConfig || {}),
+        ...((node.metadata as any)?.appearance || {}),
         // ✅ Ajouter les tooltips dans appearanceConfig
         helpTooltipType: node.text_helpTooltipType,
         helpTooltipText: node.text_helpTooltipText,
@@ -1644,6 +1646,7 @@ const transformPrismaNodeToField = (
       name: node.label,
       label: node.label,
       type: finalFieldType,
+      displayIcon: (node as any)?.metadata?.appearance?.displayIcon || (node as any)?.appearanceConfig?.displayIcon,
       required: node.isRequired,
       value: node.defaultValue || node.value || node.bool_defaultValue || node.text_defaultValue || node.number_defaultValue || node.select_defaultValue || node.date_defaultValue,
       visible: node.isVisible,
@@ -1659,6 +1662,7 @@ const transformPrismaNodeToField = (
       // 🎯 APPARENCE CONFIG avec tooltips intégrés
       appearanceConfig: {
         ...(node.appearanceConfig || {}),
+        ...((node.metadata as any)?.appearance || {}),
         // ✅ Ajouter les tooltips dans appearanceConfig
         helpTooltipType: node.text_helpTooltipType,
         helpTooltipText: node.text_helpTooltipText,
@@ -1668,6 +1672,7 @@ const transformPrismaNodeToField = (
         size: node.appearance_size,
         width: node.appearance_width,
         variant: node.appearance_variant,
+        displayIcon: (node as any)?.metadata?.appearance?.displayIcon || (node as any)?.appearanceConfig?.displayIcon,
         minLength: node.text_minLength,
         maxLength: node.text_maxLength,
         rows: node.text_rows,

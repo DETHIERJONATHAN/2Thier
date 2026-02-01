@@ -39,10 +39,9 @@ git push origin main
 ## 🏠 Connexion Locale (Développement)
 
 ### Script de démarrage rapide
-
+bash scripts/start-local.sh
 ```bash
 # Démarrer tout l'environnement de développement (proxy + serveur)
-bash scripts/start-local.sh
 ```
 
 ✅ **En local / Codespaces : aucune limite de tentatives**
@@ -64,7 +63,7 @@ Ce script fait automatiquement :
 4. ✅ Lance `npm run dev` (frontend + backend)
 
 ### Résultat attendu
-
+bash scripts/start-local.sh
 ```
 ✅ Environnement de développement prêt!
    🌐 Frontend: http://localhost:5173

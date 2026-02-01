@@ -1953,6 +1953,7 @@ async function deepCopyNodeInternal(
         appearance_size: oldNode.appearance_size,
         appearance_variant: oldNode.appearance_variant,
         appearance_width: oldNode.appearance_width,
+        appearance_displayIcon: oldNode.appearance_displayIcon,
         text_placeholder: oldNode.text_placeholder,
         text_maxLength: oldNode.text_maxLength,
         text_minLength: oldNode.text_minLength,
@@ -2662,6 +2663,9 @@ function mapJSONToColumns(updateData: Record<string, unknown>): Record<string, u
     if (appearanceConfig.helpTooltipText) columnData.text_helpTooltipText = appearanceConfig.helpTooltipText;
     if (appearanceConfig.helpTooltipImage) columnData.text_helpTooltipImage = appearanceConfig.helpTooltipImage;
     
+    // 🎨 displayIcon - Icône personnalisée du champ TBL
+    if (appearanceConfig.displayIcon) columnData.appearance_displayIcon = appearanceConfig.displayIcon;
+    
     // ?? Configuration sections/branches (COLONNES DESKTOP/MOBILE)
     if (appearanceConfig.collapsible !== undefined) columnData.section_collapsible = appearanceConfig.collapsible;
     if (appearanceConfig.defaultCollapsed !== undefined) columnData.section_defaultCollapsed = appearanceConfig.defaultCollapsed;
@@ -2842,6 +2846,13 @@ function buildResponseFromColumns(node: any): Record<string, unknown> {
     maxItems?: number | null;
     addButtonLabel?: string | null;
   };
+  const metadataAppearance = (node.metadata && typeof node.metadata === 'object'
+    ? (node.metadata as Record<string, unknown>).appearance
+    : undefined) as Record<string, unknown> | undefined;
+
+  const storedAppearanceConfig = (node.appearanceConfig && typeof node.appearanceConfig === 'object')
+    ? (node.appearanceConfig as Record<string, unknown>)
+    : undefined;
   // Construire l'objet appearance depuis les colonnes
   const appearance = {
     size: node.appearance_size || 'md',
@@ -2850,7 +2861,8 @@ function buildResponseFromColumns(node: any): Record<string, unknown> {
     // ÃƒÂ°Ã…Â¸Ã¢â‚¬ÂÃ‚Â¥ TOOLTIP FIX : Inclure les champs tooltip dans metadata.appearance
     helpTooltipType: node.text_helpTooltipType || 'none',
     helpTooltipText: node.text_helpTooltipText || null,
-    helpTooltipImage: node.text_helpTooltipImage || null
+    helpTooltipImage: node.text_helpTooltipImage || null,
+    displayIcon: node.appearance_displayIcon || (storedAppearanceConfig as any)?.displayIcon || (metadataAppearance as any)?.displayIcon || null
   };
 
   // ÃƒÂ°Ã…Â¸Ã¢â‚¬ÂÃ‚Â¥ NOUVEAU : Construire l'objet repeater depuis les colonnes dÃƒÆ’Ã‚Â©diÃƒÆ’Ã‚Â©es
@@ -2906,6 +2918,7 @@ function buildResponseFromColumns(node: any): Record<string, unknown> {
   
   // ÃƒÂ°Ã…Â¸Ã…Â½Ã‚Â¯ CORRECTION CRITIQUE : Construire aussi appearanceConfig pour l'interface Parameters
   const appearanceConfig = {
+    ...(storedAppearanceConfig || {}),
     size: node.appearance_size || 'md',
     variant: node.appearance_variant || 'singleline',
     placeholder: node.text_placeholder || '',
@@ -2914,7 +2927,9 @@ function buildResponseFromColumns(node: any): Record<string, unknown> {
     regex: node.text_regex || '',
     helpTooltipType: node.text_helpTooltipType || 'none',
     helpTooltipText: node.text_helpTooltipText || null,
-    helpTooltipImage: node.text_helpTooltipImage || null
+    helpTooltipImage: node.text_helpTooltipImage || null,
+    // 🎨 FIX: Lire displayIcon depuis la colonne dédiée EN PRIORITÉ
+    displayIcon: node.appearance_displayIcon || (storedAppearanceConfig as any)?.displayIcon || (metadataAppearance as any)?.displayIcon
   };
   
   // Construire fieldConfig depuis les colonnes dÃƒÆ’Ã‚Â©diÃƒÆ’Ã‚Â©es
@@ -2974,7 +2989,10 @@ function buildResponseFromColumns(node: any): Record<string, unknown> {
   // Mettre ÃƒÆ’Ã‚Â  jour les mÃƒÆ’Ã‚Â©tadonnÃƒÆ’Ã‚Â©es avec les nouvelles donnÃƒÆ’Ã‚Â©es
   const cleanedMetadata = {
     ...(node.metadata || {}),
-    appearance
+    appearance: {
+      ...(metadataAppearance || {}),
+      ...appearance
+    }
   };
   
   
@@ -3039,6 +3057,8 @@ function buildResponseFromColumns(node: any): Record<string, unknown> {
     text_helpTooltipType: node.text_helpTooltipType,
     text_helpTooltipText: node.text_helpTooltipText,
     text_helpTooltipImage: node.text_helpTooltipImage,
+    // 🎨 APPEARANCE: Colonne dédiée displayIcon
+    appearance_displayIcon: node.appearance_displayIcon,
     // 🔧 AI MEASURE: Colonnes dédiées pour la configuration IA Mesure
     aiMeasure_enabled: node.aiMeasure_enabled ?? false,
     aiMeasure_autoTrigger: node.aiMeasure_autoTrigger ?? true,
@@ -3206,9 +3226,9 @@ function buildResponseFromColumns(node: any): Record<string, unknown> {
  * PrÃƒÆ’Ã‚Â©serve metadata.capabilities (formules multiples, etc.) tout en migrant le reste vers les colonnes
  */
 function removeJSONFromUpdate(updateData: Record<string, unknown>): Record<string, unknown> {
-  const { metadata, fieldConfig: _fieldConfig, appearanceConfig: _appearanceConfig, ...cleanData } = updateData;
+  const { metadata, fieldConfig: _fieldConfig, appearanceConfig, ...cleanData } = updateData;
   
-  // ÃƒÂ°Ã…Â¸Ã¢â‚¬ÂÃ‚Â¥ CORRECTION : PrÃƒÆ’Ã‚Â©server metadata.capabilities pour les formules multiples
+  // 🔧 CORRECTION : Préserver metadata.capabilities pour les formules multiples
   if (metadata && typeof metadata === 'object') {
     const metaObj = metadata as Record<string, unknown>;
     const preservedMeta: Record<string, unknown> = {};
@@ -3234,11 +3254,35 @@ function removeJSONFromUpdate(updateData: Record<string, unknown>): Record<strin
     if ('triggerNodeIds' in metaObj) {
       preservedMeta.triggerNodeIds = metaObj.triggerNodeIds;
     }
+    // ✅ AJOUT: Préserver appearance pour displayIcon et autres configs d'apparence
+    if ('appearance' in metaObj && metaObj.appearance && typeof metaObj.appearance === 'object') {
+      preservedMeta.appearance = metaObj.appearance;
+    }
+    
+    // 🎨 FIX: Extraire displayIcon depuis appearanceConfig vers colonne dédiée
+    if (appearanceConfig && typeof appearanceConfig === 'object') {
+      const appConfig = appearanceConfig as Record<string, unknown>;
+      if ('displayIcon' in appConfig && appConfig.displayIcon) {
+        // Stocker dans cleanData pour écriture en colonne dédiée
+        (cleanData as Record<string, unknown>).appearance_displayIcon = appConfig.displayIcon;
+        console.log('🎨 [removeJSONFromUpdate] displayIcon extrait vers colonne:', appConfig.displayIcon);
+      }
+    }
     
     if (Object.keys(preservedMeta).length > 0) {
       return {
         ...cleanData,
         metadata: preservedMeta
+      };
+    }
+  } else if (appearanceConfig && typeof appearanceConfig === 'object') {
+    // 🎨 FIX: Même si pas de metadata, extraire displayIcon vers colonne dédiée
+    const appConfig = appearanceConfig as Record<string, unknown>;
+    if ('displayIcon' in appConfig && appConfig.displayIcon) {
+      console.log('🎨 [removeJSONFromUpdate] displayIcon vers colonne (sans metadata):', appConfig.displayIcon);
+      return {
+        ...cleanData,
+        appearance_displayIcon: appConfig.displayIcon
       };
     }
   }
@@ -3574,6 +3618,13 @@ const updateOrMoveNode = async (req, res) => {
       const currentMetadata = existingNode.metadata as any || {};
       const newMetadata = updateObj.metadata as any;
       
+      // 🎨 DEBUG: Log displayIcon AVANT fusion
+      console.log('🎨 [updateOrMoveNode] displayIcon AVANT fusion:', {
+        dansUpdateObjMetadata: (updateObj.metadata as any)?.appearance?.displayIcon,
+        dansCurrentMetadata: currentMetadata?.appearance?.displayIcon,
+        dansNewMetadata: newMetadata?.appearance?.displayIcon
+      });
+      
       // 🔧 NOUVEAU: Extraire aiMeasure du metadata et le convertir en colonnes dédiées
       if (newMetadata.aiMeasure) {
         const aiConfig = newMetadata.aiMeasure;
@@ -3594,10 +3645,24 @@ const updateOrMoveNode = async (req, res) => {
       }
       
       // Fusionner les métadonnées : garder l'existant + ajouter/remplacer les nouvelles clés
+      // 🎨 FIX: Deep merge pour appearance afin de préserver displayIcon
+      const mergedAppearance = {
+        ...(currentMetadata.appearance || {}),
+        ...(newMetadata.appearance || {})
+      };
+      
       updateObj.metadata = {
         ...currentMetadata,
-        ...newMetadata
+        ...newMetadata,
+        // 🎨 Écraser appearance avec le merge profond
+        ...(Object.keys(mergedAppearance).length > 0 ? { appearance: mergedAppearance } : {})
       };
+      
+      // 🎨 DEBUG: Log displayIcon APRÈS fusion
+      console.log('🎨 [updateOrMoveNode] displayIcon APRÈS fusion:', {
+        mergedAppearance,
+        finalDisplayIcon: (updateObj.metadata as any)?.appearance?.displayIcon
+      });
       
       // Nettoyer aiMeasure de metadata.existant aussi
       if ((updateObj.metadata as any).aiMeasure) {
@@ -3629,6 +3694,12 @@ const updateOrMoveNode = async (req, res) => {
       aiMeasure_prompt: updateObj.aiMeasure_prompt,
       aiMeasure_keys: updateObj.aiMeasure_keys
     });
+    
+    // 🎨 DEBUG displayIcon: Log avant sauvegarde DB
+    console.log('🎨 [updateOrMoveNode] displayIcon AVANT DB.update:', {
+      metadataComplet: updateObj.metadata,
+      displayIcon: (updateObj.metadata as any)?.appearance?.displayIcon
+    });
 
     await prisma.treeBranchLeafNode.update({
       where: { id: nodeId },
@@ -3643,6 +3714,12 @@ const updateOrMoveNode = async (req, res) => {
       aiMeasure_autoTrigger: updatedNode?.aiMeasure_autoTrigger,
       aiMeasure_prompt: updatedNode?.aiMeasure_prompt,
       aiMeasure_keys: updatedNode?.aiMeasure_keys
+    });
+    
+    // 🎨 DEBUG displayIcon: Log après lecture DB
+    console.log('🎨 [updateOrMoveNode] displayIcon APRÈS DB.read:', {
+      metadataDB: updatedNode?.metadata,
+      displayIcon: (updatedNode?.metadata as any)?.appearance?.displayIcon
     });
     
     

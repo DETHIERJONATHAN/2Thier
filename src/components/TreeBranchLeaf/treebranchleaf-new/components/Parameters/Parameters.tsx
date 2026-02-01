@@ -711,8 +711,17 @@ const Parameters: React.FC<ParametersProps> = (props) => {
 
       // Emit generic event for other listeners; include returned updated node for local merges
       try {
-        const nodeToEmit = _updated || { id: selectedNodeId };
-        if (process.env.NODE_ENV === 'development') console.log('🔔 [Parameters] Emission tbl-node-updated pour:', nodeToEmit.id);
+        const baseNode = _updated || { id: selectedNodeId };
+        const mergedMetadata = {
+          ...((baseNode as any).metadata || {}),
+          ...((apiData.metadata as Record<string, unknown>) || {})
+        };
+        const nodeToEmit = {
+          ...(baseNode as Record<string, unknown>),
+          metadata: mergedMetadata,
+          ...(payload.appearanceConfig ? { appearanceConfig: payload.appearanceConfig } : {})
+        };
+        if (process.env.NODE_ENV === 'development') console.log('🔔 [Parameters] Emission tbl-node-updated pour:', (nodeToEmit as any).id);
         window.dispatchEvent(new CustomEvent('tbl-node-updated', { detail: { node: nodeToEmit, treeId: tree?.id } }));
       } catch { /* noop */ }
       console.log('✅ [Parameters] Sauvegarde OK');
@@ -768,9 +777,19 @@ const Parameters: React.FC<ParametersProps> = (props) => {
     const hydratedAppearanceConfig = useMemo(() => {
       if (!selectedNode) return {};
       const tblSnapshot = TreeBranchLeafRegistry.mapTBLToAppearanceConfig(selectedNode as unknown as Record<string, unknown>);
+      
+      // 🎯 FIX: Filtrer les valeurs null/undefined de appearanceConfig pour ne pas écraser tblSnapshot
+      const appearanceConfig = selectedNode.appearanceConfig || {};
+      const cleanAppearanceConfig: Record<string, unknown> = {};
+      for (const [key, val] of Object.entries(appearanceConfig as Record<string, unknown>)) {
+        if (val !== null && val !== undefined && val !== '') {
+          cleanAppearanceConfig[key] = val;
+        }
+      }
+      
       return {
         ...tblSnapshot,
-        ...(selectedNode.appearanceConfig || {})
+        ...cleanAppearanceConfig
       };
     }, [selectedNode]);
 

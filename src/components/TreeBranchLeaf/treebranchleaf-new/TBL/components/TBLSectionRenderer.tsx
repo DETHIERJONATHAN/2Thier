@@ -4320,13 +4320,27 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
     // 🎨 NOUVEAU: Système d'icônes pour les cartes de données
     // L'icône peut être définie dans field.config.displayIcon ou field.metadata.displayIcon
     // Sinon on détecte automatiquement selon le label
-    const getFieldIcon = (f: TBLField): string => {
+    const getFieldIcon = (f: TBLField): React.ReactNode => {
       const cfg = (f.config || {}) as Record<string, unknown>;
+      const appearance = (f.appearanceConfig || {}) as Record<string, unknown>;
       const meta = ((f as any).metadata || {}) as Record<string, unknown>;
+      const metaAppearance = (meta.appearance || {}) as Record<string, unknown>;
       
-      // 1. Icône explicitement configurée
-      if (cfg.displayIcon) return String(cfg.displayIcon);
-      if (meta.displayIcon) return String(meta.displayIcon);
+      // 1. Icône explicitement configurée (apparence prioritaire)
+      const explicit = (f as any).displayIcon || appearance.displayIcon || metaAppearance.displayIcon || cfg.displayIcon || meta.displayIcon;
+      if (explicit) {
+        const explicitValue = String(explicit);
+        if (/^data:image\//.test(explicitValue) || /^https?:\/\//.test(explicitValue)) {
+          return (
+            <img
+              src={explicitValue}
+              alt="Icône"
+              style={{ width: 22, height: 22, borderRadius: 4 }}
+            />
+          );
+        }
+        return explicitValue;
+      }
       
       // 2. Auto-détection basée sur le label
       const label = (f.label || '').toLowerCase();
