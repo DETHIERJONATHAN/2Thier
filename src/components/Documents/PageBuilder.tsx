@@ -1404,7 +1404,50 @@ const PageBuilder = ({ templateId, initialConfig, onSave, onClose }: PageBuilder
           <Button key="close" onClick={() => setPreviewMode(false)}>
             Fermer
           </Button>,
-          <Button key="pdf" type="primary" icon={<DownloadOutlined />}>
+          <Button 
+            key="pdf" 
+            type="primary" 
+            icon={<DownloadOutlined />}
+            onClick={async () => {
+              try {
+                message.loading({ content: 'Génération du PDF...', key: 'pdf-gen' });
+                
+                // Appeler l'API pour générer le PDF avec la config actuelle
+                const response = await fetch(`/api/documents/templates/${templateId}/preview-pdf`, {
+                  method: 'POST',
+                  headers: {
+                    'Content-Type': 'application/json',
+                    'x-organization-id': localStorage.getItem('organizationId') || '',
+                  },
+                  body: JSON.stringify({
+                    pages: config.pages,
+                    globalTheme: config.globalTheme,
+                  }),
+                });
+
+                if (!response.ok) {
+                  const error = await response.json();
+                  throw new Error(error.error || 'Erreur lors de la génération du PDF');
+                }
+
+                // Télécharger le PDF
+                const blob = await response.blob();
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `apercu-document-${templateId}.pdf`;
+                document.body.appendChild(a);
+                a.click();
+                window.URL.revokeObjectURL(url);
+                document.body.removeChild(a);
+
+                message.success({ content: '✅ PDF téléchargé !', key: 'pdf-gen' });
+              } catch (error: any) {
+                console.error('❌ Erreur génération PDF:', error);
+                message.error({ content: `Erreur: ${error.message}`, key: 'pdf-gen' });
+              }
+            }}
+          >
             Télécharger PDF
           </Button>,
         ]}

@@ -22,6 +22,7 @@ import {
   Tag,
   Divider,
   Select,
+  InputNumber,
   message,
   Alert,
   Drawer
@@ -56,7 +57,6 @@ import {
   computeHomography,
   applyHomography,
   computeRealDistanceWithUncertainty,
-  createMetreA4V10DestinationPoints,
   cornersToPoints,
   generateDebugGrid,
   type HomographyResult,
@@ -68,19 +68,13 @@ import { CoordinateGrid } from './CoordinateGrid';
 const { Text } = Typography;
 const { Option } = Select;
 
-// ============================================================================
-// TYPES
-// ============================================================================
-
-type Tool = 'select' | 'addPoint' | 'addRectZone' | 'addEllipseZone' | 'delete' | 'adjustReference' | 'selectZoneA4' | 'selectZoneMeasure';
-
 interface ImageMeasurementCanvasProps {
   imageUrl: string;
-  calibration?: CalibrationData;
   initialPoints?: MeasurementPoint[];
   initialExclusionZones?: ExclusionZone[];
   onMeasurementsChange?: (measurements: MeasurementResults) => void;
   onAnnotationsChange?: (annotations: Partial<ImageAnnotations>) => void;
+  calibration?: CalibrationData;
   onValidate?: (annotations: ImageAnnotations) => void;
   onCancel?: () => void;
   readOnly?: boolean;
@@ -131,17 +125,13 @@ interface HistoryState {
   exclusionZones: ExclusionZone[];
 }
 
-// ============================================================================
-// COMPONENT
-// ============================================================================
-
 export const ImageMeasurementCanvas: React.FC<ImageMeasurementCanvasProps> = ({
   imageUrl,
-  calibration,
   initialPoints = [],
   initialExclusionZones = [],
   onMeasurementsChange,
   onAnnotationsChange: _onAnnotationsChange,
+  calibration,
   onValidate,
   onCancel,
   readOnly = false,
@@ -214,6 +204,26 @@ export const ImageMeasurementCanvas: React.FC<ImageMeasurementCanvasProps> = ({
 
   // � DIMENSIONS DE RÉFÉRENCE - Métré A4 V10
   const [localReferenceRealSize, setReferenceRealSize] = useState<{ width: number; height: number }>(referenceRealSize);
+
+  // Sync props → state : permet une référence manuelle (non V10)
+  useEffect(() => {
+    setReferenceRealSize(referenceRealSize);
+  }, [referenceRealSize]);
+
+  // Points destination en millimètres, basés sur la taille réelle (cm) de la référence.
+  // Exemple V10: 13×20.5cm → 130×205mm.
+  const getReferenceDestinationPointsMm = useCallback((): [number, number][] => {
+    const widthCm = Math.max(0.01, Number(localReferenceRealSize?.width || 13));
+    const heightCm = Math.max(0.01, Number(localReferenceRealSize?.height || 20.5));
+    const widthMm = widthCm * 10;
+    const heightMm = heightCm * 10;
+    return [
+      [0, 0],
+      [widthMm, 0],
+      [widthMm, heightMm],
+      [0, heightMm]
+    ];
+  }, [localReferenceRealSize]);
 
   // �🆕 État local pour le rectangle de référence ajustable (en pixels d'affichage)
   const [adjustableRefBox, setAdjustableRefBox] = useState<{ x: number; y: number; width: number; height: number } | null>(null);
@@ -864,10 +874,10 @@ export const ImageMeasurementCanvas: React.FC<ImageMeasurementCanvasProps> = ({
     
     setAdjustableRefBox(fusedBox);
     
-    // 🎯 Calibration Métré A4 V10
-    const refWidth = 13.0;
-    const refHeight = 20.5;
-    console.log(`🎯 [Canvas] Calibration Métré A4 V10 (${refWidth}cm × ${refHeight}cm)`);
+    // 🎯 Calibration basée sur la référence réelle
+    const refWidth = Math.max(0.01, Number(localReferenceRealSize?.width || 13));
+    const refHeight = Math.max(0.01, Number(localReferenceRealSize?.height || 20.5));
+    console.log(`🎯 [Canvas] Calibration référence (${refWidth}cm × ${refHeight}cm)`);
     
     const newPixelPerCmX = fusedBox.width / refWidth;
     const newPixelPerCmY = fusedBox.height / refHeight;
@@ -888,7 +898,7 @@ export const ImageMeasurementCanvas: React.FC<ImageMeasurementCanvasProps> = ({
     console.log('🚀 [Canvas] Passage automatique à l\'étape selectMeasureZone');
     setWorkflowStep('selectMeasureZone');
     
-  }, [fusedCorners, homographyReady, imageDimensions, referenceCorners, quadrilateralMode, image]);
+  }, [fusedCorners, homographyReady, imageDimensions, referenceCorners, quadrilateralMode, image, localReferenceRealSize]);
 
   // � SECOURS: Si référence pré-détectée et qu'on est encore en selectReferenceZone, forcer le passage
   useEffect(() => {
@@ -910,9 +920,9 @@ export const ImageMeasurementCanvas: React.FC<ImageMeasurementCanvasProps> = ({
     const ratio = snappedBox.width / snappedBox.height;
     const isLandscape = ratio > 1; // Plus large que haut = paysage
     
-    const refWidth = 13.0;
-    const refHeight = 20.5;
-    console.log(`🎯 [Canvas] Métré A4 V10: ${refWidth}cm × ${refHeight}cm`);
+    const refWidth = isLandscape ? localReferenceRealSize.height : localReferenceRealSize.width;
+    const refHeight = isLandscape ? localReferenceRealSize.width : localReferenceRealSize.height;
+    console.log(`🎯 [Canvas] Référence: ${refWidth}cm × ${refHeight}cm`);
     
     // 🆕 ÉTAPE 2: CALCUL HOMOGRAPHIE - Transformation perspective exacte
     // Les 4 coins du rectangle détecté (en pixels)
@@ -932,8 +942,8 @@ export const ImageMeasurementCanvas: React.FC<ImageMeasurementCanvasProps> = ({
     const rightEdgeDx = Math.abs(srcCorners.bottomRight.x - srcCorners.topRight.x);
     const maxPerspectiveDeform = Math.max(topEdgeDy, bottomEdgeDy, leftEdgeDx, rightEdgeDx);
     
-    // Rectangle destination V10 (centres des 6 petits tags) = 130×205mm
-    const dstPoints = createMetreA4V10DestinationPoints();
+    // Rectangle destination (mm) basé sur la référence réelle
+    const dstPoints = getReferenceDestinationPointsMm();
     const srcPoints = cornersToPoints(srcCorners);
     
     // 🚨 Si le rectangle source est trop "parfait" (pas de perspective), skip l'homographie
@@ -1052,40 +1062,39 @@ export const ImageMeasurementCanvas: React.FC<ImageMeasurementCanvasProps> = ({
     const avgWidth = ((corners.topRight.x - corners.topLeft.x) + (corners.bottomRight.x - corners.bottomLeft.x)) / 2;
     const avgHeight = ((corners.bottomLeft.y - corners.topLeft.y) + (corners.bottomRight.y - corners.topRight.y)) / 2;
     
-    // 🛡️ VALIDATION: Vérifier que le quadrilatère a une taille raisonnable (V10)
+    // 🛡️ VALIDATION: Vérifier que le quadrilatère a une taille raisonnable (référence)
     const ratio = Math.abs(avgWidth / avgHeight);
     const area = Math.abs(avgWidth * avgHeight);
     const imageArea = imageDimensions.width * imageDimensions.height;
     const areaRatio = area / imageArea;
     
-    const expectedRatioText = 'Métré A4 V10 0.63';
-    console.log(`   Ratio largeur/hauteur: ${ratio.toFixed(2)} (attendu ~${expectedRatioText})`);
+    const expectedRatio = Math.abs(localReferenceRealSize.width / localReferenceRealSize.height);
+    console.log(`   Ratio largeur/hauteur: ${ratio.toFixed(2)} (attendu ~${expectedRatio.toFixed(2)})`);
     console.log(`   Surface relative: ${(areaRatio * 100).toFixed(1)}% de l'image`);
-    
-    const minRatio = 0.45;
-    const maxRatio = 0.85;
-    
-    if (ratio < minRatio || ratio > maxRatio) {
-      console.warn(`⚠️ [Canvas] Ratio aberrant ${ratio.toFixed(2)} (attendu ${minRatio.toFixed(1)}-${maxRatio.toFixed(1)}) - les coins ne forment pas le bon marqueur`);
+
+    // Tolérance large (la référence n'est pas forcément un V10)
+    const ratioError = Math.abs(ratio - expectedRatio) / expectedRatio;
+    if (!Number.isFinite(ratioError) || ratioError > 0.8) {
+      console.warn(`⚠️ [Canvas] Ratio très éloigné (${ratio.toFixed(2)} vs ~${expectedRatio.toFixed(2)}) - vérifier les coins/référence`);
       return;
     }
     if (areaRatio > 0.5 || areaRatio < 0.001) {  // Permettre des marqueurs plus petits
       console.warn(`⚠️ [Canvas] Surface aberrante - le quadrilatère est trop grand ou trop petit`);
       return;
     }
-    
-    const dstPoints = createMetreA4V10DestinationPoints();
-    console.log('   📐 Référence utilisée: Métré A4 V10 (130×205mm)');
+
+    const dstPoints = getReferenceDestinationPointsMm();
+    console.log(`   📐 Référence utilisée: ${localReferenceRealSize.width}×${localReferenceRealSize.height}cm`);
     console.log(`   📐 Points destination:`, dstPoints.map(p => `(${p[0]}, ${p[1]})`).join(', '));
     
     try {
       const homography = computeHomography(srcPoints, dstPoints);
       
-      // 🔍 VÉRIFICATION: La distance entre TL et TR devrait être 130mm (Métré A4 V10)
+      // 🔍 VÉRIFICATION: La distance TL↔TR doit correspondre à la largeur réelle (mm)
       const topLeftReal = applyHomography(homography.matrix, srcPoints[0]);
       const topRightReal = applyHomography(homography.matrix, srcPoints[1]);
       const verifyDistanceMm = Math.hypot(topRightReal[0] - topLeftReal[0], topRightReal[1] - topLeftReal[1]);
-      const expectedDistanceMm = 130;
+      const expectedDistanceMm = Math.abs(dstPoints[1][0] - dstPoints[0][0]);
       console.log(`   🔍 VÉRIFICATION HOMOGRAPHIE: distance TL↔TR = ${verifyDistanceMm.toFixed(1)}mm (attendu: ${expectedDistanceMm}mm)`);
       if (Math.abs(verifyDistanceMm - expectedDistanceMm) > 1) {
         console.warn(`   ⚠️ ERREUR HOMOGRAPHIE: écart de ${Math.abs(verifyDistanceMm - expectedDistanceMm).toFixed(1)}mm !`);
@@ -1194,12 +1203,12 @@ export const ImageMeasurementCanvas: React.FC<ImageMeasurementCanvasProps> = ({
       // 🆕 Détecter l'orientation à partir des dimensions des srcPoints EN PIXELS (pas fusedCorners qui est en %)
       const avgWidth = ((srcPoints[1][0] - srcPoints[0][0]) + (srcPoints[2][0] - srcPoints[3][0])) / 2;
       const avgHeight = ((srcPoints[3][1] - srcPoints[0][1]) + (srcPoints[2][1] - srcPoints[1][1])) / 2;
-      console.log(`   📐 Référence détectée: Métré A4 V10 (130×205mm) (${avgWidth.toFixed(0)}x${avgHeight.toFixed(0)}px)`);
+      console.log(`   📐 Référence (configurée) (${localReferenceRealSize.width}×${localReferenceRealSize.height}cm) (${avgWidth.toFixed(0)}x${avgHeight.toFixed(0)}px)`);
       
       // Si perspective suffisante (>5px), calculer l'homographie
       if (maxPerspectiveDeform > 5) {
-        const dstPoints = createMetreA4V10DestinationPoints();
-        console.log('   📐 Points destination Métré A4 V10:', dstPoints.map(p => `(${p[0]}, ${p[1]})`).join(', '));
+        const dstPoints = getReferenceDestinationPointsMm();
+        console.log('   📐 Points destination référence:', dstPoints.map(p => `(${p[0]}, ${p[1]})`).join(', '));
         
         // Calculer l'homographie directement depuis les corners fusionnés
         const homography = computeHomography(srcPoints, dstPoints);
@@ -1365,8 +1374,8 @@ export const ImageMeasurementCanvas: React.FC<ImageMeasurementCanvasProps> = ({
       [referenceCorners.bottomLeft.x, referenceCorners.bottomLeft.y]
     ];
     
-    // Points destination Métré A4 V10 (130×205mm)
-    const dstPoints = createMetreA4V10DestinationPoints();
+    // Points destination (mm) basés sur la référence réelle
+    const dstPoints = getReferenceDestinationPointsMm();
     
     // Calculer la déformation perspective
     const topEdgeDy = Math.abs(referenceCorners.topRight.y - referenceCorners.topLeft.y);
@@ -1375,7 +1384,7 @@ export const ImageMeasurementCanvas: React.FC<ImageMeasurementCanvasProps> = ({
     const rightEdgeDx = Math.abs(referenceCorners.bottomRight.x - referenceCorners.topRight.x);
     const maxPerspectiveDeform = Math.max(topEdgeDy, bottomEdgeDy, leftEdgeDx, rightEdgeDx);
     
-    console.log('📐 [Canvas] Analyse PERSPECTIVE Métré A4 V10:');
+    console.log('📐 [Canvas] Analyse PERSPECTIVE référence:');
     console.log(`   Déformation haut: ${topEdgeDy.toFixed(1)}px, bas: ${bottomEdgeDy.toFixed(1)}px`);
     console.log(`   Déformation gauche: ${leftEdgeDx.toFixed(1)}px, droite: ${rightEdgeDx.toFixed(1)}px`);
     console.log(`   🎯 Déformation MAX: ${maxPerspectiveDeform.toFixed(1)}px`);
@@ -1403,9 +1412,9 @@ export const ImageMeasurementCanvas: React.FC<ImageMeasurementCanvasProps> = ({
       const tRightHeight = Math.hypot(transformedCorners[2][0] - transformedCorners[1][0], 
                                       transformedCorners[2][1] - transformedCorners[1][1]);
       
-      // 🎯 Dimensions attendues selon le type de marqueur
-      const markerWidthMM = 130;
-      const markerHeightMM = 205;
+      // 🎯 Dimensions attendues selon la référence réelle
+      const markerWidthMM = Math.abs(dstPoints[1][0] - dstPoints[0][0]);
+      const markerHeightMM = Math.abs(dstPoints[3][1] - dstPoints[0][1]);
       
       console.log(`🔬 [DIAGNOSTIC HOMOGRAPHIE] Vérification transformation marqueur:`);
       console.log(`   Coins originaux (px): ${srcPoints.map(p => `(${p[0].toFixed(1)},${p[1].toFixed(1)})`).join(' ')}`);
@@ -2597,13 +2606,13 @@ export const ImageMeasurementCanvas: React.FC<ImageMeasurementCanvasProps> = ({
         };
 
         if (workflowStep === 'selectReferenceZone') {
-          // Étape 1: Référence détectée (Métré A4 V10) → passer à l'étape 2
-          const refType = 'Métré A4 V10 (13×20.5cm)';
-          console.log(`📐 [Canvas] Référence ${refType} détectée, coins:`, cornersPixels);
+          // Étape 1: Référence détectée → passer à l'étape 2
+          const refType = `${localReferenceRealSize.width}×${localReferenceRealSize.height}cm`;
+          console.log(`📐 [Canvas] Référence (${refType}) détectée, coins:`, cornersPixels);
           console.log('📐 [Canvas] Confiance:', result.confidence, '% - Objet trouvé:', result.objectFound);
           setReferenceCorners(cornersPixels);
           setQuadrilateralMode(true);
-          message.success(`✅ Référence ${refType} détectée (confiance: ${Math.round(result.confidence || 0)}%)`);
+          message.success(`✅ Référence détectée (confiance: ${Math.round(result.confidence || 0)}%)`);
           setWorkflowStep('selectMeasureZone');
         } else {
           // Étape 2: Objet à mesurer détecté → passer à l'étape 3
@@ -3540,6 +3549,42 @@ export const ImageMeasurementCanvas: React.FC<ImageMeasurementCanvasProps> = ({
                 <Option value="inch">Pouces (inch)</Option>
               </Select>
             </Card>
+
+            {/* Référence */}
+            <Card size="small" title="Référence (cm)">
+              <Space direction="vertical" style={{ width: '100%' }} size="small">
+                <Space wrap>
+                  <span>Largeur</span>
+                  <InputNumber
+                    min={0.01}
+                    step={0.1}
+                    value={localReferenceRealSize.width}
+                    onChange={(v) => setReferenceRealSize(prev => ({ ...prev, width: Number(v || 0) }))}
+                  />
+                  <span>Hauteur</span>
+                  <InputNumber
+                    min={0.01}
+                    step={0.1}
+                    value={localReferenceRealSize.height}
+                    onChange={(v) => setReferenceRealSize(prev => ({ ...prev, height: Number(v || 0) }))}
+                  />
+                </Space>
+                <Space wrap>
+                  <Button onClick={() => setReferenceRealSize(prev => ({ width: prev.height, height: prev.width }))}>
+                    Inverser
+                  </Button>
+                  <Button onClick={() => setReferenceRealSize({ width: 21, height: 29.7 })}>
+                    A4
+                  </Button>
+                  <Button onClick={() => setReferenceRealSize({ width: 13, height: 20.5 })}>
+                    V10
+                  </Button>
+                  <Button onClick={() => setReferenceRealSize({ width: 8.56, height: 5.398 })}>
+                    Carte
+                  </Button>
+                </Space>
+              </Space>
+            </Card>
             
             {/* 📊 Grille de Coordonnées */}
             <Card size="small" title="Visualisation">
@@ -3552,7 +3597,7 @@ export const ImageMeasurementCanvas: React.FC<ImageMeasurementCanvasProps> = ({
                 📊 {showCoordinateGrid ? 'Masquer' : 'Afficher'} grille coordonnées
               </Button>
               <p style={{ fontSize: 12, marginTop: 8, color: '#666' }}>
-                🟩 Vert = Référence V10 | 🟪 Magenta = Objet mesuré
+                🟩 Vert = Référence | 🟪 Magenta = Objet mesuré
               </p>
             </Card>
             
@@ -3635,7 +3680,7 @@ export const ImageMeasurementCanvas: React.FC<ImageMeasurementCanvasProps> = ({
                   setReferenceCorners(null);
                   setQuadrilateralMode(false);
                   setWorkflowStep('selectReferenceZone');
-                  message.info('Référence Métré A4 V10 effacée. Redessinez autour du document.');
+                  message.info('Référence effacée. Redessinez autour de l\'objet de référence.');
                 }}
               >
                 Effacer référence
@@ -3660,7 +3705,7 @@ export const ImageMeasurementCanvas: React.FC<ImageMeasurementCanvasProps> = ({
                 setPoints([]);
                 setHomographyResult(null);
                 setWorkflowStep('selectReferenceZone');
-                message.info('Tout effacé. Recommencez depuis la référence Métré A4 V10.');
+                message.info('Tout effacé. Recommencez depuis la référence.');
               }}
             >
               Tout recommencer
@@ -4303,8 +4348,8 @@ export const ImageMeasurementCanvas: React.FC<ImageMeasurementCanvasProps> = ({
                   x={adjustableRefBox.x}
                   y={adjustableRefBox.y - 28}
                   text={isRefSelected
-                    ? `⚠️ Ajustez ce rectangle sur le Métré A4 V10 (13×20.5cm)`
-                    : '📐 Métré A4 V10 (13×20.5cm) - CLIQUEZ pour ajuster'}
+                    ? `⚠️ Ajustez ce rectangle sur la référence (${localReferenceRealSize.width}×${localReferenceRealSize.height}cm)`
+                    : `📐 Référence (${localReferenceRealSize.width}×${localReferenceRealSize.height}cm) - CLIQUEZ pour ajuster`}
                   fontSize={11}
                   fontStyle="bold"
                   fill={isRefSelected ? "#ff4d4f" : "#52c41a"}
@@ -4432,7 +4477,7 @@ export const ImageMeasurementCanvas: React.FC<ImageMeasurementCanvasProps> = ({
                 <KonvaText
                   x={referenceCorners.topLeft.x}
                   y={referenceCorners.topLeft.y - 40}
-                  text="📐 Métré A4 V10 (13×20.5cm)"
+                  text={`📐 Référence (${localReferenceRealSize.width}×${localReferenceRealSize.height}cm)`}
                   fontSize={12}
                   fontStyle="bold"
                   fill="#52c41a"

@@ -514,13 +514,22 @@ const ModuleRenderer = ({
       return lastPart.length > 20 ? `${lastPart.substring(0, 17)}...` : lastPart;
     };
     
+    const asNumberOrNull = (v: any): number | null => {
+      if (typeof v === 'number' && Number.isFinite(v)) return v;
+      if (typeof v === 'string' && v.trim() !== '') {
+        const n = Number(v);
+        return Number.isFinite(n) ? n : null;
+      }
+      return null;
+    };
+
     // Convertir pricingLines en format rows pour l'affichage
     const rows = pricingLines.length > 0 
       ? pricingLines.map((line: any) => ({
           // 🔧 Utiliser labelSource si label est vide
           designation: line.label || (line.labelSource ? `📊 ${extractTblLabel(line.labelSource)}` : 'Sans désignation'),
-          quantity: typeof line.quantity === 'number' ? line.quantity : 1,
-          unitPrice: typeof line.unitPrice === 'number' ? line.unitPrice : 0,
+          quantity: asNumberOrNull(line.quantity),
+          unitPrice: asNumberOrNull(line.unitPrice),
           // Indicateurs visuels pour les sources TBL
           hasLabelSource: !!line.labelSource,
           labelSource: line.labelSource,
@@ -535,24 +544,44 @@ const ModuleRenderer = ({
     const currency = config.currency || '€';
     const tvaRate = config.tvaRate || config.vatRate || 21;
     
-    const totalHT = rows.reduce((sum: number, row: any) => sum + ((row.quantity || 0) * (row.unitPrice || 0)), 0);
+    const pricedLines = rows
+      .map((row: any) => {
+        const qty = typeof row.quantity === 'number' ? row.quantity : null;
+        const unit = typeof row.unitPrice === 'number' ? row.unitPrice : null;
+        const lineTotal = qty !== null && unit !== null ? qty * unit : null;
+        return { ...row, _lineTotal: lineTotal };
+      });
+
+    const totalHT = pricedLines.reduce((sum: number, row: any) => sum + (typeof row._lineTotal === 'number' ? row._lineTotal : 0), 0);
     const tva = totalHT * (tvaRate / 100);
     const totalTTC = totalHT + tva;
+    const hasAnyPricedLine = pricedLines.some((r: any) => typeof r._lineTotal === 'number');
+
+    const stickyHeaderCellStyle: React.CSSProperties = {
+      padding: '12px',
+      position: 'sticky',
+      top: 0,
+      backgroundColor: globalTheme.primaryColor,
+      color: '#fff',
+      zIndex: 1,
+    };
 
     return (
-      <div style={{ ...themeStyles, backgroundColor: '#ffffff', borderRadius: '8px', padding: '12px' }}>
+      <div style={{ ...themeStyles, backgroundColor: '#ffffff', borderRadius: '8px', padding: '12px', height: '100%', display: 'flex', flexDirection: 'column' }}>
         {config.title && (
           <h3 style={{ marginBottom: '16px', color: globalTheme.primaryColor }}>
             {config.title}
           </h3>
         )}
+
+        <div style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden' }}>
         <table style={{ width: '100%', borderCollapse: 'collapse', backgroundColor: '#ffffff' }}>
           <thead>
-            <tr style={{ backgroundColor: globalTheme.primaryColor, color: '#fff' }}>
-              <th style={{ padding: '12px', textAlign: 'left' }}>Désignation</th>
-              <th style={{ padding: '12px', textAlign: 'center', width: '80px' }}>Qté</th>
-              <th style={{ padding: '12px', textAlign: 'right', width: '100px' }}>P.U.</th>
-              <th style={{ padding: '12px', textAlign: 'right', width: '100px' }}>Total</th>
+            <tr>
+              <th style={{ ...stickyHeaderCellStyle, textAlign: 'left' }}>Désignation</th>
+              <th style={{ ...stickyHeaderCellStyle, textAlign: 'center', width: '80px' }}>Qté</th>
+              <th style={{ ...stickyHeaderCellStyle, textAlign: 'right', width: '100px' }}>P.U.</th>
+              <th style={{ ...stickyHeaderCellStyle, textAlign: 'right', width: '100px' }}>Total</th>
             </tr>
           </thead>
           <tbody>
@@ -563,7 +592,7 @@ const ModuleRenderer = ({
                 </td>
               </tr>
             ) : (
-              rows.map((row: any, idx: number) => (
+              pricedLines.map((row: any, idx: number) => (
                 <tr key={idx} style={{ borderBottom: '1px solid #e8e8e8', backgroundColor: '#fff' }}>
                   <td style={{ padding: '12px', color: '#333' }}>
                     {row.hasLabelSource ? (
@@ -601,29 +630,29 @@ const ModuleRenderer = ({
                   <td style={{ padding: '12px', textAlign: 'center', color: '#333' }}>
                     {row.hasQuantitySource ? (
                       <span style={{ color: '#1890ff', fontSize: '11px', fontWeight: 500 }} title={row.quantitySource}>
-                        📊 {row.quantity || '?'}
+                        📊 {row.quantity ?? '?'}
                       </span>
                     ) : (
-                      row.quantity || 0
+                      row.quantity ?? ''
                     )}
                   </td>
                   <td style={{ padding: '12px', textAlign: 'right', color: '#333' }}>
                     {row.hasUnitPriceSource ? (
                       <span style={{ color: '#52c41a', fontSize: '11px', fontWeight: 500 }} title={row.unitPriceSource}>
-                        📊 {(row.unitPrice || 0).toFixed(2)} {currency}
+                        📊 {(typeof row.unitPrice === 'number' ? row.unitPrice : 0).toFixed(2)} {currency}
                       </span>
                     ) : (
-                      <>{(row.unitPrice || 0).toFixed(2)} {currency}</>
+                      <>{typeof row.unitPrice === 'number' ? `${row.unitPrice.toFixed(2)} ${currency}` : ''}</>
                     )}
                   </td>
                   <td style={{ padding: '12px', textAlign: 'right', fontWeight: 600, color: '#333' }}>
-                    {((row.quantity || 0) * (row.unitPrice || 0)).toFixed(2)} {currency}
+                    {typeof row._lineTotal === 'number' ? `${row._lineTotal.toFixed(2)} ${currency}` : ''}
                   </td>
                 </tr>
               ))
             )}
           </tbody>
-          {config.showTotal && (
+          {config.showTotal && hasAnyPricedLine && (
             <tfoot>
               <tr style={{ borderTop: '2px solid #e8e8e8' }}>
                 <td colSpan={3} style={{ padding: '12px', textAlign: 'right', fontWeight: 600 }}>
@@ -656,6 +685,7 @@ const ModuleRenderer = ({
             </tfoot>
           )}
         </table>
+        </div>
       </div>
     );
   }
@@ -1068,11 +1098,13 @@ const ModuleRenderer = ({
           {config.showCompanyInfo !== false && (
             <div>
               <div style={{ fontWeight: 700, fontSize: '16px', color: globalTheme.primaryColor }}>{companyName}</div>
-              <div style={{ fontSize: '12px', color: '#555', whiteSpace: 'pre-line' }}>{companyAddress}</div>
-              <div style={{ fontSize: '11px', color: '#666', marginTop: '4px' }}>
-                {companyPhone && <span>📞 {companyPhone} </span>}
-                {companyEmail && <span>✉️ {companyEmail}</span>}
-              </div>
+              {(companyPhone || companyEmail) && (
+                <div style={{ fontSize: '11px', color: '#666', marginTop: '4px', display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                  {companyPhone && <span>📞 {companyPhone}</span>}
+                  {companyEmail && <span>✉️ {companyEmail}</span>}
+                </div>
+              )}
+              <div style={{ fontSize: '12px', color: '#555', whiteSpace: 'pre-line', marginTop: '2px' }}>{companyAddress}</div>
               {companyTVA && <div style={{ fontSize: '10px', color: '#888', marginTop: '2px' }}>TVA: {companyTVA}</div>}
             </div>
           )}
@@ -1446,30 +1478,379 @@ const ModuleRenderer = ({
         )}
         {config.showTotalHT !== false && (
           <div style={rowStyle}>
-            <span style={labelStyle}>Total HT:</span>
-            <span style={valueStyle}>{totalHT} {currency}</span>
+            <span style={labelStyle}>Sous-Total HT:</span>
+            <span style={valueStyle}>{totalHT}</span>
           </div>
         )}
         {config.showTVA !== false && (
           <div style={rowStyle}>
             <span style={labelStyle}>TVA ({tvaRate}%):</span>
-            <span style={valueStyle}>{tvaAmount} {currency}</span>
+            <span style={valueStyle}>{tvaAmount}</span>
           </div>
         )}
         {config.showTotalTTC !== false && (
           <div style={{ 
             ...rowStyle, 
             borderBottom: 'none',
-            borderTop: '2px solid #333',
-            paddingTop: '12px',
+            backgroundColor: '#0e4a6f',
+            color: '#fff',
+            padding: '12px 16px',
             marginTop: '4px',
           }}>
-            <span style={{ ...labelStyle, fontWeight: 700, color: '#000' }}>Total TTC:</span>
-            <span style={{ ...valueStyle, fontWeight: 700, fontSize: '18px', color: globalTheme.primaryColor }}>
-              {totalTTC} {currency}
+            <span style={{ ...labelStyle, fontWeight: 700, color: '#fff' }}>Total TTC:</span>
+            <span style={{ ...valueStyle, fontWeight: 700, fontSize: '18px', color: '#fff' }}>
+              {totalTTC}
             </span>
           </div>
         )}
+      </div>
+    );
+  }
+
+  // ============== DECORATIVE_BANNER ==============
+  if (module.moduleId === 'DECORATIVE_BANNER') {
+    const style = config.style || 'energy-skyline';
+    const primaryColor = config.primaryColor || '#22c55e';
+    const secondaryColor = config.secondaryColor || '#15803d';
+    const height = config.height || 120;
+    const opacity = config.opacity ? config.opacity / 100 : 1;
+    
+    // SVG pour skyline énergie verte (bâtiments stylisés)
+    const energySkylineSVG = `
+      <svg viewBox="0 0 1200 200" preserveAspectRatio="none" style="width:100%;height:100%;">
+        <defs>
+          <linearGradient id="skyGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+            <stop offset="0%" style="stop-color:${primaryColor};stop-opacity:0.3"/>
+            <stop offset="100%" style="stop-color:${primaryColor};stop-opacity:0.1"/>
+          </linearGradient>
+          <linearGradient id="buildingGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+            <stop offset="0%" style="stop-color:${primaryColor}"/>
+            <stop offset="100%" style="stop-color:${secondaryColor}"/>
+          </linearGradient>
+        </defs>
+        <!-- Fond -->
+        <rect width="1200" height="200" fill="url(#skyGradient)"/>
+        <!-- Bâtiments style éco -->
+        <path d="M0,200 L0,140 L50,140 L50,120 L80,120 L80,100 L120,100 L120,120 L150,120 L150,140 L200,140 L200,80 L250,80 L250,100 L280,100 L280,120 L320,120 L320,60 L380,60 L380,100 L420,100 L420,130 L470,130 L470,90 L520,90 L520,110 L560,110 L560,70 L620,70 L620,100 L670,100 L670,140 L720,140 L720,50 L780,50 L780,90 L830,90 L830,120 L880,120 L880,80 L940,80 L940,110 L990,110 L990,130 L1040,130 L1040,100 L1100,100 L1100,140 L1150,140 L1150,160 L1200,160 L1200,200 Z" fill="url(#buildingGradient)" opacity="0.9"/>
+        <!-- Fenêtres (petits rectangles blancs) -->
+        <g fill="white" opacity="0.6">
+          <rect x="215" y="95" width="8" height="8"/>
+          <rect x="230" y="95" width="8" height="8"/>
+          <rect x="215" y="110" width="8" height="8"/>
+          <rect x="335" y="75" width="8" height="8"/>
+          <rect x="350" y="75" width="8" height="8"/>
+          <rect x="335" y="90" width="8" height="8"/>
+          <rect x="485" y="105" width="8" height="8"/>
+          <rect x="500" y="105" width="8" height="8"/>
+          <rect x="575" y="85" width="8" height="8"/>
+          <rect x="590" y="85" width="8" height="8"/>
+          <rect x="735" y="65" width="8" height="8"/>
+          <rect x="750" y="65" width="8" height="8"/>
+          <rect x="735" y="80" width="8" height="8"/>
+          <rect x="895" y="95" width="8" height="8"/>
+          <rect x="910" y="95" width="8" height="8"/>
+        </g>
+        <!-- Éoliennes/symboles écologiques -->
+        <g fill="${primaryColor}">
+          <circle cx="180" cy="130" r="6" fill="white" opacity="0.8"/>
+          <circle cx="450" cy="120" r="6" fill="white" opacity="0.8"/>
+          <circle cx="700" cy="135" r="6" fill="white" opacity="0.8"/>
+          <circle cx="1000" cy="125" r="6" fill="white" opacity="0.8"/>
+        </g>
+        <!-- Arbres stylisés -->
+        <g fill="${secondaryColor}">
+          <ellipse cx="100" cy="175" rx="20" ry="25"/>
+          <ellipse cx="400" cy="170" rx="25" ry="30"/>
+          <ellipse cx="650" cy="175" rx="20" ry="25"/>
+          <ellipse cx="850" cy="165" rx="30" ry="35"/>
+          <ellipse cx="1050" cy="175" rx="22" ry="25"/>
+        </g>
+      </svg>
+    `;
+    
+    if (style === 'custom' && config.customImage) {
+      return (
+        <div style={{
+          width: '100%',
+          height: `${height}px`,
+          backgroundImage: `url(${config.customImage})`,
+          backgroundSize: 'cover',
+          backgroundPosition: 'bottom',
+          opacity,
+          ...themeStyles,
+        }} />
+      );
+    }
+    
+    return (
+      <div 
+        style={{
+          width: '100%',
+          height: `${height}px`,
+          opacity,
+          ...themeStyles,
+        }}
+        dangerouslySetInnerHTML={{ __html: energySkylineSVG }}
+      />
+    );
+  }
+
+  // ============== SERVICES_FOOTER ==============
+  if (module.moduleId === 'SERVICES_FOOTER') {
+    const services = config.services || [
+      { icon: '⚡', label: 'Audit Énergétique' },
+      { icon: '🌡️', label: 'Thermographie' },
+      { icon: '✅', label: 'Conseil en Efficacité Énergétique' },
+    ];
+    const separatorColor = config.separatorColor || '#0ea5e9';
+    const textColor = config.textColor || '#0284c7';
+    
+    const companyName = interpolateVariables(config.companyName || config.companyNameBinding || '{org.name}', documentData, isEditing);
+    const address = interpolateVariables(config.address || config.addressBinding || '{org.address}', documentData, isEditing);
+    const phone = interpolateVariables(config.phone || config.phoneBinding || '{org.phone}', documentData, isEditing);
+    const email = interpolateVariables(config.email || config.emailBinding || '{org.email}', documentData, isEditing);
+    
+    return (
+      <div style={{
+        borderTop: `3px solid ${separatorColor}`,
+        paddingTop: '12px',
+        ...themeStyles,
+      }}>
+        {/* Ligne des services */}
+        <div style={{
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
+          gap: '32px',
+          marginBottom: '12px',
+          flexWrap: 'wrap',
+        }}>
+          {services.map((service: { icon: string; label: string }, index: number) => (
+            <div key={index} style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              color: textColor,
+              fontWeight: 600,
+              fontSize: '13px',
+            }}>
+              <span>{service.icon}</span>
+              <span>{service.label}</span>
+              {index < services.length - 1 && (
+                <span style={{ color: '#cbd5e1', marginLeft: '24px' }}>|</span>
+              )}
+            </div>
+          ))}
+        </div>
+        
+        {/* Ligne des coordonnées */}
+        <div style={{
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
+          gap: '16px',
+          fontSize: '11px',
+          color: '#64748b',
+          flexWrap: 'wrap',
+        }}>
+          {config.showCompanyName !== false && companyName && (
+            <span style={{ fontWeight: 600 }}>{companyName}</span>
+          )}
+          {config.showAddress !== false && address && (
+            <>
+              <span>•</span>
+              <span>{address}</span>
+            </>
+          )}
+          {config.showPhone !== false && phone && (
+            <>
+              <span>•</span>
+              <span>Tél: {phone}</span>
+            </>
+          )}
+          {config.showEmail !== false && email && (
+            <>
+              <span>•</span>
+              <span>Email: <a href={`mailto:${email}`} style={{ color: textColor }}>{email}</a></span>
+            </>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  // ============== QUOTE_PRESTATIONS_TABLE ==============
+  if (module.moduleId === 'QUOTE_PRESTATIONS_TABLE') {
+    const title = config.title || 'DÉTAIL DES PRESTATIONS';
+    const headerBgColor = config.headerBgColor || '#0e4a6f';
+    const headerTextColor = config.headerTextColor || '#ffffff';
+    const alternateRowColor = config.alternateRowColor || '#f8fafc';
+    const borderColor = config.borderColor || '#e2e8f0';
+    const currency = config.currency || '€';
+    
+    // Lignes du tableau (statiques pour le moment, peuvent être liées aux données)
+    const items = config.items || [
+      { description: 'Audit énergétique complet', quantity: 1, unitPrice: 750, total: 750 },
+      { description: 'Analyse thermographique', quantity: 1, unitPrice: 350, total: 350 },
+      { description: 'Rapport de recommendations', quantity: 1, unitPrice: 400, total: 400 },
+      { description: 'Suivi et conseil énergétique', quantity: 'Forfait', unitPrice: 300, total: 300 },
+    ];
+    
+    const formatPrice = (value: number | string) => {
+      if (typeof value === 'number') {
+        return value.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' ' + currency;
+      }
+      return value;
+    };
+    
+    return (
+      <div style={{ ...themeStyles }}>
+        <table style={{
+          width: '100%',
+          borderCollapse: 'collapse',
+          fontSize: '13px',
+        }}>
+          <thead>
+            <tr style={{
+              backgroundColor: headerBgColor,
+              color: headerTextColor,
+            }}>
+              <th style={{ padding: '12px 16px', textAlign: 'left', fontWeight: 600 }}>{title}</th>
+              {config.showQuantity !== false && (
+                <th style={{ padding: '12px 16px', textAlign: 'center', fontWeight: 600, width: '100px' }}>Quantité</th>
+              )}
+              {config.showUnitPrice !== false && (
+                <th style={{ padding: '12px 16px', textAlign: 'right', fontWeight: 600, width: '120px' }}>Prix Unitaire</th>
+              )}
+              {config.showTotal !== false && (
+                <th style={{ padding: '12px 16px', textAlign: 'right', fontWeight: 600, width: '100px' }}>Total HT</th>
+              )}
+            </tr>
+          </thead>
+          <tbody>
+            {items.map((item: { description: string; quantity: number | string; unitPrice: number; total: number }, index: number) => (
+              <tr key={index} style={{
+                backgroundColor: index % 2 === 1 ? alternateRowColor : '#fff',
+                borderBottom: `1px solid ${borderColor}`,
+              }}>
+                <td style={{ padding: '12px 16px' }}>{item.description}</td>
+                {config.showQuantity !== false && (
+                  <td style={{ padding: '12px 16px', textAlign: 'center' }}>
+                    {typeof item.quantity === 'number' ? item.quantity : item.quantity}
+                  </td>
+                )}
+                {config.showUnitPrice !== false && (
+                  <td style={{ padding: '12px 16px', textAlign: 'right' }}>{formatPrice(item.unitPrice)}</td>
+                )}
+                {config.showTotal !== false && (
+                  <td style={{ padding: '12px 16px', textAlign: 'right', fontWeight: 500 }}>{formatPrice(item.total)}</td>
+                )}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    );
+  }
+
+  // ============== CONDITIONS_NOTES_BLOCK ==============
+  if (module.moduleId === 'CONDITIONS_NOTES_BLOCK') {
+    const conditionsTitle = config.conditionsTitle || 'Conditions de Paiement :';
+    const conditions = config.conditions || ['50% à la commande', 'Solde à la livraison du rapport'];
+    const notesTitle = config.notesTitle || 'Notes :';
+    const notes = interpolateVariables(config.notes || config.notesBinding || '', documentData, isEditing);
+    const layout = config.layout || 'two-columns';
+    
+    const containerStyle: React.CSSProperties = layout === 'two-columns' ? {
+      display: 'grid',
+      gridTemplateColumns: '1fr 1fr',
+      gap: '24px',
+    } : {
+      display: 'flex',
+      flexDirection: 'column',
+      gap: '16px',
+    };
+    
+    const sectionStyle: React.CSSProperties = {
+      padding: '16px',
+      border: '1px solid #e2e8f0',
+      borderRadius: '4px',
+    };
+    
+    return (
+      <div style={{ ...containerStyle, ...themeStyles }}>
+        {/* Conditions */}
+        <div style={sectionStyle}>
+          <div style={{ fontWeight: 700, marginBottom: '12px', textDecoration: 'underline' }}>
+            {conditionsTitle}
+          </div>
+          <ul style={{ margin: 0, paddingLeft: '20px', fontSize: '13px' }}>
+            {conditions.map((condition: string, index: number) => (
+              <li key={index} style={{ marginBottom: '4px' }}>• {condition}</li>
+            ))}
+          </ul>
+        </div>
+        
+        {/* Notes */}
+        <div style={sectionStyle}>
+          <div style={{ fontWeight: 700, marginBottom: '12px', textDecoration: 'underline' }}>
+            {notesTitle}
+          </div>
+          <div style={{ fontSize: '13px' }}>
+            {notes || 'Aucune note.'}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ============== ACCEPTANCE_BLOCK ==============
+  if (module.moduleId === 'ACCEPTANCE_BLOCK') {
+    const title = config.title || 'Pour Acceptation :';
+    const nameLabel = config.nameLabel || 'Nom :';
+    const dateLabel = config.dateLabel || 'Date :';
+    const signatureLabel = config.signatureLabel || 'Signature :';
+    const lineWidth = config.lineWidth || 200;
+    
+    const lineStyle: React.CSSProperties = {
+      borderBottom: '1px solid #333',
+      minWidth: `${lineWidth}px`,
+      display: 'inline-block',
+    };
+    
+    return (
+      <div style={{
+        padding: '20px',
+        border: '1px solid #e2e8f0',
+        borderRadius: '4px',
+        ...themeStyles,
+      }}>
+        <div style={{ fontWeight: 700, marginBottom: '20px', textDecoration: 'underline' }}>
+          {title}
+        </div>
+        
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+          {config.showName !== false && (
+            <div style={{ display: 'flex', alignItems: 'flex-end', gap: '8px' }}>
+              <span style={{ minWidth: '80px' }}>{nameLabel}</span>
+              <span style={lineStyle}>&nbsp;</span>
+            </div>
+          )}
+          
+          {config.showDate !== false && (
+            <div style={{ display: 'flex', alignItems: 'flex-end', gap: '8px' }}>
+              <span style={{ minWidth: '80px' }}>{dateLabel}</span>
+              <span style={lineStyle}>&nbsp;</span>
+            </div>
+          )}
+          
+          {config.showSignature !== false && (
+            <div style={{ display: 'flex', alignItems: 'flex-end', gap: '8px' }}>
+              <span style={{ minWidth: '80px' }}>{signatureLabel}</span>
+              <span style={{ ...lineStyle, minHeight: '60px' }}>&nbsp;</span>
+            </div>
+          )}
+        </div>
       </div>
     );
   }

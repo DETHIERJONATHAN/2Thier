@@ -421,6 +421,7 @@ const Parameters: React.FC<ParametersProps> = (props) => {
         });
     }
   }, [selectedNode?.id, api]);
+
   const panelStateOpenCapabilities = panelState.openCapabilities;
   const selectedNodeId = selectedNode?.id ?? null;
 
@@ -763,6 +764,7 @@ const Parameters: React.FC<ParametersProps> = (props) => {
   }, [nodes, selectedNode]);
 
   // Build a flat map (id -> node) for efficient deep lookups (used across multiple UI widgets)
+  // 🔥 IMPORTANT: Cette map doit contenir TOUS les nodes de l'arbre, y compris ceux imbriqués profondément
   const nodesMap = useMemo(() => {
     const m = new Map<string, TreeBranchLeafNode>();
     const stack: TreeBranchLeafNode[] = [...(nodes || [])];
@@ -774,7 +776,7 @@ const Parameters: React.FC<ParametersProps> = (props) => {
     return m;
   }, [nodes]);
 
-    const hydratedAppearanceConfig = useMemo(() => {
+  const hydratedAppearanceConfig = useMemo(() => {
       if (!selectedNode) return {};
       const tblSnapshot = TreeBranchLeafRegistry.mapTBLToAppearanceConfig(selectedNode as unknown as Record<string, unknown>);
       
@@ -1870,18 +1872,14 @@ const Parameters: React.FC<ParametersProps> = (props) => {
                         const node = nodesMap.get(nodeId);
                         displayLabel = node?.label || nodeId;
                         isTreeNode = true;
-                        console.log('🏷️ [TriggerField] Format @value - label:', displayLabel);
                       } else if (idOrRef.startsWith('{') && idOrRef.endsWith('}')) {
-                        // Variable lead ou autre : afficher tel quel
                         displayLabel = idOrRef;
                         isTreeNode = false;
-                        console.log('🏷️ [TriggerField] Format variable - label:', displayLabel);
                       } else {
                         // C'est juste un nodeId direct
                         const node = nodesMap.get(idOrRef);
                         displayLabel = node?.label || idOrRef;
                         isTreeNode = !!node;
-                        console.log('🏷️ [TriggerField] Format nodeId - label:', displayLabel, 'found:', !!node);
                       }
                       
                       return (

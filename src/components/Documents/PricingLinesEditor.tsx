@@ -54,11 +54,11 @@ export interface PricingLine {
   type: PricingLineType;
   label: string;
   labelSource?: string;       // Référence TBL pour le label dynamique
-  quantity: number | string;
+  quantity?: number | string | null;
   quantitySource?: string;    // Référence TBL pour la quantité
-  unitPrice: number | string;
+  unitPrice?: number | string | null;
   unitPriceSource?: string;   // Référence TBL pour le prix unitaire
-  total?: number | string;
+  total?: number | string | null;
   totalSource?: string;       // Référence TBL pour le total
   repeaterId?: string;        // ID du repeater pour type='repeater'
   repeaterLabel?: string;     // Label du repeater pour affichage
@@ -167,8 +167,8 @@ const PricingLinesEditor: React.FC<PricingLinesEditorProps> = ({
       id: generateId(),
       type,
       label: type === 'static' ? 'Nouvelle ligne' : '',
-      quantity: 1,
-      unitPrice: 0,
+      quantity: undefined,
+      unitPrice: undefined,
       order: lines.length,
     };
     setCurrentLine(newLine);
@@ -223,6 +223,29 @@ const PricingLinesEditor: React.FC<PricingLinesEditorProps> = ({
         ...currentLine!,
         ...values,
       };
+
+      // Normalisation des champs numériques (InputNumber avec allowClear => null)
+      if (updatedLine.quantity === null || updatedLine.quantity === '') {
+        delete (updatedLine as any).quantity;
+      }
+      if (updatedLine.unitPrice === null || updatedLine.unitPrice === '') {
+        delete (updatedLine as any).unitPrice;
+      }
+      if (updatedLine.total === null || updatedLine.total === '') {
+        delete (updatedLine as any).total;
+      }
+
+      // ✅ Règle métier: éviter l'incohérence "qté + prix unitaire + total"
+      // Le total est calculé automatiquement côté rendu (PDF/preview). Si une ancienne config
+      // contient `total`/`totalSource`, on le supprime dès qu'on a quantité + prix unitaire.
+      const hasQuantity = updatedLine.quantitySource || updatedLine.quantity !== undefined;
+      const hasUnitPrice = updatedLine.unitPriceSource || updatedLine.unitPrice !== undefined;
+      const hasTotal = updatedLine.totalSource || updatedLine.total !== undefined;
+      if (hasQuantity && hasUnitPrice && hasTotal) {
+        delete (updatedLine as any).total;
+        delete (updatedLine as any).totalSource;
+        message.info('Total supprimé: il est calculé automatiquement (Qté × Prix unitaire).');
+      }
       
       const existingIndex = lines.findIndex(l => l.id === updatedLine.id);
       if (existingIndex >= 0) {
@@ -577,7 +600,7 @@ const PricingLinesEditor: React.FC<PricingLinesEditorProps> = ({
                     danger 
                     icon={<DeleteOutlined />}
                     onClick={() => {
-                      form.setFieldsValue({ quantity: 1, quantitySource: undefined });
+                      form.setFieldsValue({ quantity: undefined, quantitySource: undefined });
                     }}
                   />
                 </Tooltip>
@@ -586,7 +609,7 @@ const PricingLinesEditor: React.FC<PricingLinesEditorProps> = ({
               // Saisie manuelle ou sélection TBL
               <Space.Compact>
                 <Form.Item name="quantity" noStyle>
-                  <InputNumber min={0} style={{ width: 100 }} />
+                  <InputNumber allowClear min={0} placeholder="-" style={{ width: 100 }} />
                 </Form.Item>
                 <Tooltip title="Lier à une donnée TBL (calculatedValue, formule...)">
                   <Button icon={<LinkOutlined />} onClick={() => openTblSelector('quantity')} />
@@ -621,7 +644,7 @@ const PricingLinesEditor: React.FC<PricingLinesEditorProps> = ({
                     danger 
                     icon={<DeleteOutlined />}
                     onClick={() => {
-                      form.setFieldsValue({ unitPrice: 0, unitPriceSource: undefined });
+                      form.setFieldsValue({ unitPrice: undefined, unitPriceSource: undefined });
                     }}
                   />
                 </Tooltip>
@@ -631,8 +654,10 @@ const PricingLinesEditor: React.FC<PricingLinesEditorProps> = ({
               <Space.Compact>
                 <Form.Item name="unitPrice" noStyle>
                   <InputNumber 
+                    allowClear
                     min={0} 
                     step={0.01} 
+                    placeholder="-"
                     style={{ width: 120 }} 
                     addonAfter="€"
                   />

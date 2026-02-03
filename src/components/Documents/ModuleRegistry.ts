@@ -1034,6 +1034,217 @@ export const MODULE_REGISTRY: ModuleDefinition[] = [
       ]},
     ]
   },
+
+  /**
+   * 🏙️ BANDEAU DÉCORATIF
+   * Skyline/illustration décorative en bas de page (style expertise énergétique)
+   */
+  {
+    id: 'DECORATIVE_BANNER',
+    name: 'Bandeau Décoratif',
+    icon: '🏙️',
+    category: 'media',
+    description: 'Illustration décorative (skyline, bâtiments, etc.)',
+    resizable: true,
+    defaultSize: { width: 100, height: 15 },
+    defaultConfig: {
+      style: 'energy-skyline', // energy-skyline | city | nature | custom
+      primaryColor: '#22c55e', // Vert énergie
+      secondaryColor: '#15803d',
+      showGradient: true,
+      customImage: '',
+      height: 120,
+    },
+    themes: [
+      { id: 'energy', name: 'Énergie Verte', description: 'Skyline éco-responsable', styles: {} },
+      { id: 'corporate', name: 'Corporate', description: 'Style professionnel bleu', styles: {} },
+      { id: 'nature', name: 'Nature', description: 'Arbres et verdure', styles: {} },
+      { id: 'custom', name: 'Personnalisé', description: 'Image personnalisée', styles: {} },
+    ],
+    configFields: [
+      { key: 'style', label: 'Style', type: 'select', options: [
+        { value: 'energy-skyline', label: '🌿 Skyline Énergie Verte' },
+        { value: 'city-blue', label: '🏢 Ville Corporate Bleu' },
+        { value: 'nature', label: '🌳 Nature' },
+        { value: 'custom', label: '📷 Image personnalisée' },
+      ]},
+      { key: 'primaryColor', label: 'Couleur principale', type: 'color', defaultValue: '#22c55e' },
+      { key: 'secondaryColor', label: 'Couleur secondaire', type: 'color', defaultValue: '#15803d' },
+      { key: 'showGradient', label: 'Dégradé', type: 'toggle', defaultValue: true },
+      { key: 'customImage', label: 'Image personnalisée', type: 'image' },
+      { key: 'height', label: 'Hauteur (px)', type: 'number', defaultValue: 120 },
+      { key: 'opacity', label: 'Opacité (%)', type: 'number', defaultValue: 100 },
+    ]
+  },
+
+  /**
+   * 🏷️ PIED DE PAGE SERVICES
+   * Bandeau avec services/compétences (style expertise énergétique)
+   */
+  {
+    id: 'SERVICES_FOOTER',
+    name: 'Pied de page Services',
+    icon: '🏷️',
+    category: 'layout',
+    description: 'Bandeau avec liste de services et coordonnées',
+    resizable: true,
+    defaultSize: { width: 100, height: 12 },
+    defaultConfig: {
+      services: [
+        { icon: '⚡', label: 'Audit Énergétique' },
+        { icon: '🌡️', label: 'Thermographie' },
+        { icon: '✅', label: 'Conseil en Efficacité Énergétique' },
+      ],
+      showCompanyName: true,
+      showAddress: true,
+      showPhone: true,
+      showEmail: true,
+      separatorColor: '#0ea5e9',
+      textColor: '#0284c7',
+    },
+    themes: [
+      { id: 'energy', name: 'Énergie', description: 'Style expertise énergétique', styles: { borderTop: '3px solid #0ea5e9' } },
+      { id: 'corporate', name: 'Corporate', description: 'Style professionnel', styles: { borderTop: '2px solid #1e3a5f' } },
+      { id: 'minimal', name: 'Minimaliste', description: 'Style épuré', styles: {} },
+    ],
+    configFields: [
+      { key: 'companyName', label: 'Nom entreprise', type: 'text', placeholder: '{org.name}', allowManualInput: true },
+      { key: 'companyNameBinding', label: '🔗 Lier nom', type: 'data-binding', group: 'data' },
+      { key: 'address', label: 'Adresse', type: 'text', placeholder: '{org.address}', allowManualInput: true },
+      { key: 'addressBinding', label: '🔗 Lier adresse', type: 'data-binding', group: 'data' },
+      { key: 'phone', label: 'Téléphone', type: 'text', placeholder: '{org.phone}', allowManualInput: true },
+      { key: 'phoneBinding', label: '🔗 Lier tél.', type: 'data-binding', group: 'data' },
+      { key: 'email', label: 'Email', type: 'text', placeholder: '{org.email}', allowManualInput: true },
+      { key: 'emailBinding', label: '🔗 Lier email', type: 'data-binding', group: 'data' },
+      { key: 'separatorColor', label: 'Couleur séparateur', type: 'color', defaultValue: '#0ea5e9' },
+      { key: 'textColor', label: 'Couleur texte', type: 'color', defaultValue: '#0284c7' },
+      { key: 'showCompanyName', label: 'Afficher nom', type: 'toggle', defaultValue: true },
+      { key: 'showAddress', label: 'Afficher adresse', type: 'toggle', defaultValue: true },
+      { key: 'showPhone', label: 'Afficher téléphone', type: 'toggle', defaultValue: true },
+      { key: 'showEmail', label: 'Afficher email', type: 'toggle', defaultValue: true },
+    ]
+  },
+
+  /**
+   * 📊 TABLEAU DE PRESTATIONS
+   * Tableau style devis pro avec en-tête coloré
+   */
+  {
+    id: 'QUOTE_PRESTATIONS_TABLE',
+    name: 'Tableau Prestations Pro',
+    icon: '📊',
+    category: 'data',
+    description: 'Tableau de prestations avec en-tête coloré style devis professionnel',
+    resizable: true,
+    defaultSize: { width: 100, height: 35 },
+    defaultConfig: {
+      title: 'DÉTAIL DES PRESTATIONS',
+      headerBgColor: '#0e4a6f',
+      headerTextColor: '#ffffff',
+      showQuantity: true,
+      showUnitPrice: true,
+      showTotal: true,
+      currency: '€',
+      alternateRowColor: '#f8fafc',
+      borderColor: '#e2e8f0',
+      items: [],
+    },
+    themes: [
+      { id: 'energy-blue', name: 'Bleu Énergie', description: 'Style expertise énergétique', styles: {} },
+      { id: 'corporate', name: 'Corporate', description: 'Style professionnel gris', styles: {} },
+      { id: 'green', name: 'Vert Éco', description: 'Style écologique', styles: {} },
+    ],
+    configFields: [
+      { key: 'title', label: 'Titre du tableau', type: 'text', defaultValue: 'DÉTAIL DES PRESTATIONS' },
+      { key: 'headerBgColor', label: 'Couleur fond en-tête', type: 'color', defaultValue: '#0e4a6f' },
+      { key: 'headerTextColor', label: 'Couleur texte en-tête', type: 'color', defaultValue: '#ffffff' },
+      { key: 'alternateRowColor', label: 'Couleur lignes alternées', type: 'color', defaultValue: '#f8fafc' },
+      { key: 'borderColor', label: 'Couleur bordures', type: 'color', defaultValue: '#e2e8f0' },
+      { key: 'currency', label: 'Devise', type: 'select', options: [
+        { value: '€', label: 'Euro (€)' },
+        { value: '$', label: 'Dollar ($)' },
+        { value: '£', label: 'Livre (£)' },
+      ]},
+      { key: 'showQuantity', label: 'Afficher quantité', type: 'toggle', defaultValue: true },
+      { key: 'showUnitPrice', label: 'Afficher prix unitaire', type: 'toggle', defaultValue: true },
+      { key: 'showTotal', label: 'Afficher total', type: 'toggle', defaultValue: true },
+    ]
+  },
+
+  /**
+   * 📝 BLOC CONDITIONS + NOTES
+   * Deux colonnes: Conditions de paiement + Notes
+   */
+  {
+    id: 'CONDITIONS_NOTES_BLOCK',
+    name: 'Conditions & Notes',
+    icon: '📝',
+    category: 'content',
+    description: 'Bloc deux colonnes: conditions de paiement et notes',
+    resizable: true,
+    defaultSize: { width: 100, height: 15 },
+    defaultConfig: {
+      conditionsTitle: 'Conditions de Paiement :',
+      conditions: ['50% à la commande', 'Solde à la livraison du rapport'],
+      notesTitle: 'Notes :',
+      notes: 'Valable 30 jours. Déplacement inclus.',
+      layout: 'two-columns',
+    },
+    themes: [
+      { id: 'bordered', name: 'Bordé', description: 'Avec bordures', styles: { border: '1px solid #e2e8f0' } },
+      { id: 'clean', name: 'Épuré', description: 'Sans bordures', styles: {} },
+      { id: 'highlighted', name: 'Fond coloré', description: 'Avec fond gris', styles: { backgroundColor: '#f8fafc' } },
+    ],
+    configFields: [
+      { key: 'conditionsTitle', label: 'Titre conditions', type: 'text', defaultValue: 'Conditions de Paiement :' },
+      { key: 'notesTitle', label: 'Titre notes', type: 'text', defaultValue: 'Notes :' },
+      { key: 'notes', label: 'Contenu notes', type: 'textarea', allowManualInput: true },
+      { key: 'notesBinding', label: '🔗 Lier notes', type: 'data-binding', group: 'data' },
+      { key: 'layout', label: 'Disposition', type: 'select', options: [
+        { value: 'two-columns', label: 'Deux colonnes' },
+        { value: 'stacked', label: 'Empilé' },
+      ]},
+    ]
+  },
+
+  /**
+   * ✍️ BLOC ACCEPTATION
+   * Zone "Pour Acceptation" avec nom, date, signature
+   */
+  {
+    id: 'ACCEPTANCE_BLOCK',
+    name: 'Bloc Acceptation',
+    icon: '✍️',
+    category: 'interaction',
+    description: 'Zone pour acceptation: Nom, Date, Signature',
+    resizable: true,
+    defaultSize: { width: 50, height: 20 },
+    defaultConfig: {
+      title: 'Pour Acceptation :',
+      showName: true,
+      showDate: true,
+      showSignature: true,
+      nameLabel: 'Nom :',
+      dateLabel: 'Date :',
+      signatureLabel: 'Signature :',
+      lineWidth: 200,
+    },
+    themes: [
+      { id: 'boxed', name: 'Encadré', description: 'Dans un cadre', styles: { border: '1px solid #e2e8f0', padding: '16px', borderRadius: '4px' } },
+      { id: 'clean', name: 'Épuré', description: 'Lignes simples', styles: {} },
+      { id: 'formal', name: 'Formel', description: 'Style officiel', styles: { borderTop: '2px solid #000' } },
+    ],
+    configFields: [
+      { key: 'title', label: 'Titre', type: 'text', defaultValue: 'Pour Acceptation :' },
+      { key: 'nameLabel', label: 'Label nom', type: 'text', defaultValue: 'Nom :' },
+      { key: 'dateLabel', label: 'Label date', type: 'text', defaultValue: 'Date :' },
+      { key: 'signatureLabel', label: 'Label signature', type: 'text', defaultValue: 'Signature :' },
+      { key: 'lineWidth', label: 'Largeur lignes (px)', type: 'number', defaultValue: 200 },
+      { key: 'showName', label: 'Afficher nom', type: 'toggle', defaultValue: true },
+      { key: 'showDate', label: 'Afficher date', type: 'toggle', defaultValue: true },
+      { key: 'showSignature', label: 'Afficher signature', type: 'toggle', defaultValue: true },
+    ]
+  },
 ];
 
 /**

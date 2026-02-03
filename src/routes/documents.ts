@@ -2,9 +2,53 @@ import { Router, type Request, type Response } from 'express';
 import { db } from '../lib/database';
 import { nanoid } from 'nanoid';
 import { renderDocumentPdf } from '../services/documentPdfRenderer';
+import type { AuthenticatedRequest } from '../middlewares/auth';
 
 const router = Router();
 const prisma = db;
+
+function toJsonSafe(value: any): any {
+  const seen = new WeakSet<object>();
+
+  const inner = (v: any): any => {
+    if (v === undefined) return undefined;
+    if (v === null) return null;
+    if (typeof v === 'function' || typeof v === 'symbol') return undefined;
+    if (typeof v === 'bigint') return v.toString();
+    if (typeof v === 'number') return Number.isFinite(v) ? v : null;
+    if (v instanceof Date) return v.toISOString();
+
+    if (Array.isArray(v)) {
+      return v.map(inner).filter(x => x !== undefined);
+    }
+
+    if (typeof v === 'object') {
+      // Gérer les types qui exposent un toJSON (Decimal, etc.)
+      const maybeToJson = (v as any).toJSON;
+      if (typeof maybeToJson === 'function') {
+        try {
+          return inner(maybeToJson.call(v));
+        } catch {
+          // ignore
+        }
+      }
+
+      if (seen.has(v)) return '[Circular]';
+      seen.add(v);
+
+      const out: Record<string, any> = {};
+      for (const [key, val] of Object.entries(v)) {
+        const safeVal = inner(val);
+        if (safeVal !== undefined) out[key] = safeVal;
+      }
+      return out;
+    }
+
+    return v;
+  };
+
+  return inner(value);
+}
 
 /**
  * Extrait les composants d'adresse (street, box, postalCode, city) depuis un lead.
@@ -804,10 +848,10 @@ router.get('/generated/:id', async (req: Request, res: Response) => {
 });
 
 // POST /api/documents/generated/generate - Générer un nouveau document PDF
-router.post('/generated/generate', async (req: Request, res: Response) => {
+router.post('/generated/generate', async (req: AuthenticatedRequest, res: Response) => {
   try {
-    const organizationId = req.headers['x-organization-id'] as string;
-    const userId = req.headers['x-user-id'] as string;
+    const organizationId = (req.headers['x-organization-id'] as string) || req.user?.organizationId || undefined;
+    const userId = (req.headers['x-user-id'] as string) || req.user?.userId || undefined;
     
     const {
       templateId,
@@ -819,14 +863,36 @@ router.post('/generated/generate', async (req: Request, res: Response) => {
     } = req.body;
 
     console.log('📄 [GENERATE DOC] Demande de génération:', { templateId, leadId, submissionId, organizationId, userId });
-    console.log('📄 [GENERATE DOC] Body complet:', JSON.stringify(req.body, null, 2));
+    try {
+      console.log('📄 [GENERATE DOC] Body complet:', JSON.stringify(toJsonSafe(req.body), null, 2));
+    } catch (e) {
+      console.warn('📄 [GENERATE DOC] Body non serialisable (log simplifié):', {
+        templateId,
+        leadId,
+        submissionId,
+        hasTblData: !!tblData,
+        hasLeadData: !!leadData,
+        error: (e as any)?.message,
+      });
+    }
+  const tblDataSafe = toJsonSafe(tblData ?? {});
+  const leadDataSafe = toJsonSafe(leadData ?? {});
+
+
+    if (!organizationId) {
+      return res.status(400).json({ error: 'X-Organization-Id requis' });
+    }
+
+    if (!userId) {
+      return res.status(400).json({ error: 'X-User-Id requis' });
+    }
 
     if (!templateId) {
       return res.status(400).json({ error: 'Template ID requis' });
     }
 
     // Récupérer le template avec ses sections
-    console.log('📄 [GENERATE DOC] Recherche du template...');
+    console.log('📄 [GENERATE DOC] Recherche du template...', { templateId, organizationId });
     const template = await prisma.documentTemplate.findFirst({
       where: { 
         id: templateId,
@@ -840,17 +906,24 @@ router.post('/generated/generate', async (req: Request, res: Response) => {
       }
     });
 
-    console.log('📄 [GENERATE DOC] Template trouvé:', template ? template.id : 'null');
+    console.log('📄 [GENERATE DOC] Template trouvé:', template ? template.id : 'NULL ❌');
 
     if (!template) {
-      return res.status(404).json({ error: 'Template non trouvé' });
+      console.error('❌ [GENERATE DOC] Template non trouvé avec templateId=' + templateId + ' et organizationId=' + organizationId);
+      return res.status(404).json({ 
+        error: 'Template non trouvé',
+        details: `Template ${templateId} not found for organization ${organizationId}`,
+        templateId,
+        organizationId,
+      });
     }
 
-    // Générer un numéro de document unique
-    const documentCount = await prisma.generatedDocument.count({
-      where: { templateId }
-    });
-    const documentNumber = `${template.type}-${String(documentCount + 1).padStart(6, '0')}`;
+    // Générer un numéro de document unique (timestamp + nanoid pour garantir l'unicité)
+    const timestamp = Date.now().toString(36).toUpperCase();
+    const randomSuffix = nanoid(6);
+    const documentNumber = `${template.type}-${timestamp}-${randomSuffix}`;
+
+    console.log('📄 [GENERATE DOC] Document number généré:', documentNumber);
 
     // Créer l'entrée du document généré
     // Utiliser les champs conformes au schéma Prisma (synchronisé avec la base de données)
@@ -867,8 +940,8 @@ router.post('/generated/generate', async (req: Request, res: Response) => {
         documentNumber,
         pdfUrl: null, // Sera rempli après génération réelle du PDF
         dataSnapshot: {
-          tblData: tblData || {},
-          lead: leadData || {},
+          tblData: tblDataSafe,
+          lead: leadDataSafe,
           generatedAt: new Date().toISOString(),
           generatedBy: userId
         },
@@ -898,14 +971,14 @@ router.post('/generated/generate', async (req: Request, res: Response) => {
         pdfUrl: `/api/documents/generated/${generatedDocument.id}/download`
       },
       include: {
-        template: {
+        DocumentTemplate: {
           select: {
             id: true,
             name: true,
             type: true
           }
         },
-        sentByUser: {
+        User_GeneratedDocument_sentByToUser: {
           select: {
             id: true,
             firstName: true,
@@ -913,7 +986,7 @@ router.post('/generated/generate', async (req: Request, res: Response) => {
             email: true
           }
         },
-        lead: {
+        Lead: {
           select: {
             id: true,
             firstName: true,
@@ -932,7 +1005,14 @@ router.post('/generated/generate', async (req: Request, res: Response) => {
     console.error('❌ [GENERATE DOC] Error code:', error?.code);
     console.error('❌ [GENERATE DOC] Error message:', error?.message);
     console.error('❌ [GENERATE DOC] Error meta:', error?.meta);
-    res.status(500).json({ error: 'Erreur serveur lors de la génération', details: error?.message });
+    res.status(500).json({
+      error: 'Erreur serveur lors de la génération',
+      details: error?.message,
+      name: error?.name,
+      code: error?.code,
+      meta: error?.meta,
+      stack: process.env.NODE_ENV !== 'production' ? error?.stack : undefined,
+    });
   }
 });
 
@@ -967,18 +1047,18 @@ router.delete('/generated/:id', async (req: Request, res: Response) => {
 });
 
 // GET /api/documents/generated/:id/download - Télécharger le PDF d'un document
-router.get('/generated/:id/download', async (req: Request, res: Response) => {
+router.get('/generated/:id/download', async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { id } = req.params;
-    const organizationId = req.headers['x-organization-id'] as string;
 
-    console.log('📥 [DOWNLOAD] Demande de téléchargement:', { id, organizationId });
+    console.log('📥 [DOWNLOAD] Demande de téléchargement:', { id });
 
     // Charger le document avec template, sections, theme et lead
+    // On ne filtre PAS par organizationId ici car l'ID du document est unique
+    // et la sécurité est assurée par l'authentification
     const document = await prisma.generatedDocument.findFirst({
       where: { 
-        id,
-        organizationId
+        id
       },
       include: {
         DocumentTemplate: {
@@ -999,6 +1079,9 @@ router.get('/generated/:id/download', async (req: Request, res: Response) => {
     }
 
     console.log('📥 [DOWNLOAD] Document trouvé:', document.documentNumber);
+
+    // Utiliser l'organizationId du document pour charger les ressources
+    const organizationId = document.organizationId;
 
     // Charger le thème par défaut de l'organisation (ou celui du template)
     const defaultTheme = await prisma.documentTheme.findFirst({
@@ -1072,10 +1155,10 @@ router.get('/generated/:id/download', async (req: Request, res: Response) => {
     }
     
     const renderContext = {
-      template: document.template ? {
-        id: document.template.id,
-        name: document.template.name,
-        type: document.template.type,
+      template: document.DocumentTemplate ? {
+        id: document.DocumentTemplate.id,
+        name: document.DocumentTemplate.name,
+        type: document.DocumentTemplate.type,
         theme: theme,
         sections: sections // Sections DANS le template comme attendu par le renderer
       } : {
@@ -1087,7 +1170,7 @@ router.get('/generated/:id/download', async (req: Request, res: Response) => {
       },
       lead: (() => {
         // Merger les données du lead de la DB avec celles du dataSnapshot (TBL)
-        const dbLead = document.lead || {};
+        const dbLead = document.Lead || {};
         const snapshotLead = dataSnapshot.lead || {};
         
         // Combiner les sources de données (priorité au DB, puis snapshot)
@@ -1129,13 +1212,18 @@ router.get('/generated/:id/download', async (req: Request, res: Response) => {
         logo: (organization as any).logo || ''
       } : undefined,
       tblData: dataSnapshot.tblData || dataSnapshot,
-      quote: dataSnapshot.quote || {
-        number: document.documentNumber,
-        date: document.createdAt?.toISOString().split('T')[0] || new Date().toISOString().split('T')[0],
-        validUntil: dataSnapshot.validUntil || '',
-        totalHT: dataSnapshot.totalHT || 0,
-        totalTVA: dataSnapshot.totalTVA || 0,
-        totalTTC: dataSnapshot.totalTTC || 0
+      quote: {
+        // Priorité au dataSnapshot.quote s'il existe
+        ...(dataSnapshot.quote || {}),
+        // Valeurs par défaut
+        number: dataSnapshot.quote?.number || document.documentNumber || '',
+        reference: dataSnapshot.quote?.reference || document.documentNumber || '',
+        date: dataSnapshot.quote?.date || (document.createdAt ? new Intl.DateTimeFormat('fr-BE').format(document.createdAt) : new Intl.DateTimeFormat('fr-BE').format(new Date())),
+        validUntil: dataSnapshot.quote?.validUntil || (document.createdAt ? new Intl.DateTimeFormat('fr-BE').format(new Date(document.createdAt.getTime() + 30 * 24 * 60 * 60 * 1000)) : new Intl.DateTimeFormat('fr-BE').format(new Date(Date.now() + 30 * 24 * 60 * 60 * 1000))),
+        totalHT: dataSnapshot.quote?.totalHT || dataSnapshot.totalHT || 0,
+        totalTVA: dataSnapshot.quote?.totalTVA || dataSnapshot.totalTVA || 0,
+        totalTTC: dataSnapshot.quote?.totalTTC || dataSnapshot.totalTTC || 0,
+        status: dataSnapshot.quote?.status || 'draft'
       },
       documentNumber: document.documentNumber || '',
       language: document.language || 'fr'
@@ -1148,7 +1236,8 @@ router.get('/generated/:id/download', async (req: Request, res: Response) => {
       language: renderContext.language,
       tblDataKeys: Object.keys(renderContext.tblData || {}),
       tblDataKeysCount: Object.keys(renderContext.tblData || {}).length,
-      dataSnapshotKeys: Object.keys(dataSnapshot || {})
+      dataSnapshotKeys: Object.keys(dataSnapshot || {}),
+      quote: renderContext.quote // 🔥 Afficher les données du devis
     });
     console.log('📥 [DOWNLOAD] Lead data (avec adresse parsée):', {
       address: renderContext.lead.address,
@@ -1177,6 +1266,144 @@ router.get('/generated/:id/download', async (req: Request, res: Response) => {
     res.send(pdfBuffer);
   } catch (error: any) {
     console.error('❌ [DOWNLOAD] Erreur téléchargement:', error);
+    res.status(500).json({ error: 'Erreur serveur', details: error?.message });
+  }
+});
+
+// POST /api/documents/templates/:templateId/preview-pdf - Générer un PDF de prévisualisation depuis le PageBuilder
+router.post('/templates/:templateId/preview-pdf', async (req: Request, res: Response) => {
+  try {
+    const { templateId } = req.params;
+    const organizationId = req.headers['x-organization-id'] as string;
+
+    console.log('🖨️ [PREVIEW-PDF] Demande de génération PDF preview:', { templateId, organizationId });
+
+    const { pages, globalTheme } = req.body;
+
+    if (!pages || !Array.isArray(pages)) {
+      return res.status(400).json({ error: 'Pages manquantes dans la requête' });
+    }
+
+    // Charger l'organisation pour les infos org
+    const organization = await prisma.organization.findFirst({
+      where: { id: organizationId }
+    });
+
+    // Construire les sections à partir des pages du PageBuilder
+    const sections = pages.map((page: any, index: number) => ({
+      id: page.id || `page-${index}`,
+      type: 'MODULAR_PAGE',
+      order: index,
+      config: {
+        pageId: page.id,
+        name: page.name,
+        modules: page.modules || [],
+        padding: page.padding || { top: 40, right: 40, bottom: 40, left: 40 },
+        backgroundColor: page.backgroundColor,
+        backgroundImage: page.backgroundImage,
+        backgroundId: page.backgroundId,
+        backgroundCustomSvg: page.backgroundCustomSvg,
+      },
+      linkedNodeIds: [],
+      linkedVariables: [],
+      translations: {}
+    }));
+
+    // Construire le thème
+    const theme = globalTheme ? {
+      primaryColor: globalTheme.primaryColor || '#1890ff',
+      secondaryColor: globalTheme.secondaryColor || '#52c41a',
+      accentColor: globalTheme.accentColor || '#faad14',
+      textColor: globalTheme.textColor || '#333333',
+      backgroundColor: globalTheme.backgroundColor || '#ffffff',
+      fontFamily: globalTheme.fontFamily || 'Helvetica',
+      fontSize: globalTheme.fontSize || 12,
+      logoUrl: globalTheme.logoUrl || ''
+    } : {
+      primaryColor: '#1890ff',
+      secondaryColor: '#52c41a',
+      accentColor: '#faad14',
+      textColor: '#333333',
+      backgroundColor: '#ffffff',
+      fontFamily: 'Helvetica',
+      fontSize: 12,
+      logoUrl: ''
+    };
+
+    // Données de test/prévisualisation
+    const renderContext = {
+      template: {
+        id: templateId,
+        name: 'Aperçu Document',
+        type: 'QUOTE',
+        theme: theme,
+        sections: sections
+      },
+      lead: {
+        firstName: 'Jean',
+        lastName: 'Dupont',
+        fullName: 'Jean Dupont',
+        email: 'jean.dupont@example.com',
+        phone: '+32 470 12 34 56',
+        company: 'Entreprise Test',
+        address: '123 Rue du Test, 1000 Bruxelles',
+        street: 'Rue du Test',
+        number: '123',
+        postalCode: '1000',
+        city: 'Bruxelles',
+        country: 'Belgique',
+      },
+      organization: organization ? {
+        name: organization.name || '2Thier SRL',
+        email: (organization as any).email || 'contact@2thier.be',
+        phone: (organization as any).phone || '+32 81 10 20 30',
+        address: (organization as any).address || 'Rue de l\'Organisation 1, 4000 Liège',
+        vatNumber: (organization as any).vatNumber || 'BE 1025.391.354',
+        bankAccount: (organization as any).bankAccount || 'BE35 0020 1049 3637',
+        bic: (organization as any).bic || 'GEBABEBB',
+        website: (organization as any).website || 'www.2thier.be',
+        logo: (organization as any).logo || ''
+      } : {
+        name: '2Thier SRL',
+        email: 'jonathan.dethier@2thier.be',
+        phone: '081/10.20.30',
+        address: 'Rue de l\'Organisation 1, 4000 Liège',
+        vatNumber: 'BE 1025.391.354',
+        bankAccount: 'BE35 0020 1049 3637',
+        bic: 'GEBABEBB',
+        website: 'www.2thier.be'
+      },
+      tblData: {},
+      quote: {
+        reference: 'PREVIEW-001',
+        number: 'PREVIEW-001',
+        date: new Intl.DateTimeFormat('fr-BE').format(new Date()),
+        validUntil: new Intl.DateTimeFormat('fr-BE').format(new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)),
+        totalHT: 1500.00,
+        totalTVA: 315.00,
+        totalTTC: 1815.00,
+        status: 'draft'
+      },
+      documentNumber: 'PREVIEW-001',
+      language: 'fr'
+    };
+
+    console.log('🖨️ [PREVIEW-PDF] Sections:', sections.length);
+    console.log('🖨️ [PREVIEW-PDF] Theme:', theme);
+
+    // Générer le PDF
+    const pdfBuffer = await renderDocumentPdf(renderContext);
+
+    console.log('🖨️ [PREVIEW-PDF] PDF généré, taille:', pdfBuffer.length, 'bytes');
+
+    // Envoyer le PDF
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="preview-${templateId}.pdf"`);
+    res.setHeader('Content-Length', pdfBuffer.length.toString());
+    
+    res.send(pdfBuffer);
+  } catch (error: any) {
+    console.error('❌ [PREVIEW-PDF] Erreur génération:', error);
     res.status(500).json({ error: 'Erreur serveur', details: error?.message });
   }
 });

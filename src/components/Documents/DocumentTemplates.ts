@@ -492,11 +492,159 @@ export const CREDIT_NOTE: DocumentTemplate = {
 };
 
 /**
+ * TEMPLATE 7: Devis Expertise Énergétique
+ * Design professionnel style 2THIER avec bandeau décoratif
+ */
+export const QUOTE_ENERGY_EXPERTISE: DocumentTemplate = {
+  id: 'quote-energy-expertise',
+  name: 'Devis Expertise Énergétique',
+  description: 'Devis professionnel style 2THIER avec design vert/bleu et illustrations',
+  icon: '⚡',
+  category: 'devis',
+  modules: [
+    // 1. En-tête avec logo 2THIER à gauche + Référence DEVIS à droite
+    createModule('DOCUMENT_HEADER', 1, 'modern', {
+      layout: 'side-by-side',
+      showLogo: true,
+      logo: '/printable/logo-2thier.png',
+      logoSize: 100,
+      showCompanyInfo: false, // Logo seul à gauche
+      showClientInfo: false,  // On utilise un module séparé
+    }),
+    // 2. Bloc référence devis (coin supérieur droit)
+    createModule('DOCUMENT_INFO', 2, 'header', {
+      layout: 'stacked',
+      documentType: 'DEVIS',
+      showReference: true,
+      referencePrefix: 'N°',
+      showDate: true,
+      datePrefix: 'Date:',
+      showValidUntil: true,
+      validUntilPrefix: 'Validité:',
+      validityDays: 30,
+      showObject: false,
+    }),
+    createModule('SPACER', 3, 'empty', { height: 20 }),
+    // 3. Client à gauche + Entreprise à droite
+    createModule('CLIENT_HEADER', 4, 'boxed', {
+      title: 'Client :',
+      showTitle: true,
+      showName: true,
+      showCompany: true,
+      showAddress: true,
+      showPhone: true,
+      showEmail: false,
+      showTVA: false,
+    }),
+    createModule('COMPANY_HEADER', 5, 'modern', {
+      layout: 'vertical',
+      showLogo: false, // Logo déjà en haut
+      showName: true,
+      showAddress: true,
+      showPhone: false,
+      showEmail: true,
+      showWebsite: true,
+      showTVA: false,
+    }),
+    createModule('SPACER', 6, 'empty', { height: 15 }),
+    // 4. Objet du devis (bandeau bleu)
+    createModule('TEXT_BLOCK', 7, 'highlight', {
+      content: '**Objet :** Audit Énergétique et Optimisation de Performance',
+      alignment: 'left',
+      backgroundColor: '#0e4a6f',
+      textColor: '#ffffff',
+      padding: 12,
+    }),
+    createModule('SPACER', 8, 'empty', { height: 20 }),
+    // 5. Tableau des prestations
+    createModule('QUOTE_PRESTATIONS_TABLE', 9, 'energy-blue', {
+      title: 'DÉTAIL DES PRESTATIONS',
+      headerBgColor: '#0e4a6f',
+      headerTextColor: '#ffffff',
+      showQuantity: true,
+      showUnitPrice: true,
+      showTotal: true,
+      currency: '€',
+      alternateRowColor: '#f8fafc',
+      items: [
+        { description: 'Audit énergétique complet', quantity: 1, unitPrice: 750, total: 750 },
+        { description: 'Analyse thermographique', quantity: 1, unitPrice: 350, total: 350 },
+        { description: 'Rapport de recommendations', quantity: 1, unitPrice: 400, total: 400 },
+        { description: 'Suivi et conseil énergétique', quantity: 'Forfait', unitPrice: 300, total: 300 },
+      ],
+    }),
+    createModule('SPACER', 10, 'empty', { height: 10 }),
+    // 6. Totaux à droite
+    createModule('TOTALS_SUMMARY', 11, 'boxed', {
+      showTotalHT: true,
+      showTVA: true,
+      showTotalTTC: true,
+      tvaRate: 20,
+      currency: '€',
+      alignment: 'right',
+      totalHT: '1 800,00 €',
+      tvaAmount: '360,00 €',
+      totalTTC: '2 160,00 €',
+    }),
+    createModule('SPACER', 12, 'empty', { height: 20 }),
+    // 7. Conditions + Notes (deux colonnes)
+    createModule('CONDITIONS_NOTES_BLOCK', 13, 'bordered', {
+      conditionsTitle: 'Conditions de Paiement :',
+      conditions: ['50% à la commande', 'Solde à la livraison du rapport'],
+      notesTitle: 'Notes :',
+      notes: 'Valable 30 jours. Déplacement inclus.',
+      layout: 'two-columns',
+    }),
+    createModule('SPACER', 14, 'empty', { height: 25 }),
+    // 8. Bloc acceptation (à droite)
+    createModule('ACCEPTANCE_BLOCK', 15, 'boxed', {
+      title: 'Pour Acceptation :',
+      showName: true,
+      showDate: true,
+      showSignature: true,
+      nameLabel: 'Nom :',
+      dateLabel: 'Date :',
+      signatureLabel: 'Signature :',
+      lineWidth: 200,
+    }),
+    createModule('SPACER', 16, 'empty', { height: 30 }),
+    // 9. Bandeau décoratif (skyline verte)
+    createModule('DECORATIVE_BANNER', 17, 'energy', {
+      style: 'energy-skyline',
+      primaryColor: '#22c55e',
+      secondaryColor: '#15803d',
+      showGradient: true,
+      height: 100,
+    }),
+    // 10. Pied de page services
+    createModule('SERVICES_FOOTER', 18, 'energy', {
+      services: [
+        { icon: '⚡', label: 'Audit Énergétique' },
+        { icon: '🌡️', label: 'Thermographie' },
+        { icon: '✅', label: 'Conseil en Efficacité Énergétique' },
+      ],
+      showCompanyName: true,
+      showAddress: true,
+      showPhone: true,
+      showEmail: true,
+      separatorColor: '#0ea5e9',
+      textColor: '#0284c7',
+    }),
+  ],
+  defaultPageSettings: {
+    format: 'A4',
+    orientation: 'portrait',
+    margins: { top: 15, right: 15, bottom: 10, left: 15 },
+  },
+};
+
+/**
  * Liste de tous les templates disponibles
  */
 export const ALL_TEMPLATES: DocumentTemplate[] = [
   QUOTE_CLASSIC,
   QUOTE_MODERN,
+  QUOTE_ENERGY_EXPERTISE,
   ORDER_FORM,
   CONTRACT,
   INVOICE,

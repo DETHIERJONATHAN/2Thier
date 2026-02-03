@@ -20,6 +20,7 @@ import {
   Steps,
   Result,
   Card,
+  InputNumber,
   message
 } from 'antd';
 import {
@@ -267,7 +268,7 @@ export const ImageMeasurementPreview: React.FC<ImageMeasurementPreviewProps> = (
     boundingBox?: { x: number; y: number; width: number; height: number };
   } | null>(null); // 🆕 State pour la référence détectée
   
-  // 🆕 Dimensions réelles de la référence (Métré A4 V10)
+  // 🆕 Dimensions réelles de la référence (cm)
   const [referenceRealSize, setReferenceRealSize] = useState<{ width: number; height: number }>({ width: 13, height: 20.5 });
   
   // 🔒 Flag pour éviter de re-suggérer les points après l'initialisation
@@ -427,8 +428,6 @@ export const ImageMeasurementPreview: React.FC<ImageMeasurementPreviewProps> = (
 
       // 1. Charger config de référence (optionnelle)
       await loadReferenceConfig();
-      // Métré A4 V10 = 13×20.5cm (centres des 6 tags)
-      setReferenceRealSize({ width: 13.0, height: 20.5 });
 
       // 2. Vérifier que l'image est disponible
       if (!imageBase64) {
@@ -815,46 +814,75 @@ export const ImageMeasurementPreview: React.FC<ImageMeasurementPreviewProps> = (
 
       {/* Adjusting state - Desktop only (mobile is handled by early return above) */}
       {step === 'adjusting' && !isMobile && (
-        <ImageMeasurementCanvas
-          imageUrl={imageUrl}
-          calibration={calibration || undefined}
-          initialPoints={[]}  /* 🆕 WORKFLOW GUIDÉ: Pas de points au départ - l'utilisateur dessine les zones */
-          onMeasurementsChange={setMeasurements}
-          onValidate={handleCanvasValidate}
-          onCancel={() => setStep('complete')}
-          minPoints={2}
-          maxWidth={850}
-          referenceDetected={null}  /* 🆕 Pas de référence pré-détectée - l'utilisateur la sélectionne */
-          referenceRealSize={referenceRealSize}
-          onReferenceAdjusted={handleReferenceAdjusted}
-          imageBase64={imageBase64}
-          mimeType={mimeType}
-          api={api}
-          // 🆕 HOMOGRAPHIE: Passer les coins fusionnés de l'IA multi-photos
-          fusedCorners={fusedCorners}
-          homographyReady={homographyReady}
-          // V10 only
-          // 🆕 CONFIG DYNAMIQUE TBL: Passer les configurations pour les prompts IA
-          referenceConfig={referenceConfig ? {
-            referenceType: referenceConfig.referenceType as 'a4' | 'card' | 'meter' | 'custom',
-            customName: referenceConfig.customName,
-            customWidth: referenceConfig.referenceType === 'a4' ? 21 : 
-                         referenceConfig.referenceType === 'card' ? 8.56 : 
-                         referenceConfig.customSize,
-            customHeight: referenceConfig.referenceType === 'a4' ? 29.7 : 
-                          referenceConfig.referenceType === 'card' ? 5.398 : 
-                          referenceConfig.customSize
-          } : undefined}
-          measurementObjectConfig={{
-            objectType: measureKeys.some(k => k.includes('porte') || k.includes('door')) ? 'door' :
-                        measureKeys.some(k => k.includes('fenetre') || k.includes('window')) ? 'window' :
-                        measureKeys.some(k => k.includes('chassis')) ? 'chassis' : 'door',
-            objectName: measureKeys.some(k => k.includes('porte')) ? 'Porte' :
-                        measureKeys.some(k => k.includes('fenetre')) ? 'Fenêtre' :
-                        measureKeys.some(k => k.includes('chassis')) ? 'Châssis' : 'Objet à mesurer',
-            objectDescription: `Objet rectangulaire à mesurer (${measureKeys.join(', ')})`
-          }}
-        />
+        <div>
+          <Card size="small" title="Référence (cm)" style={{ marginBottom: 12 }}>
+            <Space wrap>
+              <span>Largeur</span>
+              <InputNumber
+                min={0.01}
+                step={0.1}
+                value={referenceRealSize.width}
+                onChange={(v) => setReferenceRealSize(prev => ({ ...prev, width: Number(v || 0) }))}
+              />
+              <span>Hauteur</span>
+              <InputNumber
+                min={0.01}
+                step={0.1}
+                value={referenceRealSize.height}
+                onChange={(v) => setReferenceRealSize(prev => ({ ...prev, height: Number(v || 0) }))}
+              />
+              <Button onClick={() => setReferenceRealSize(prev => ({ width: prev.height, height: prev.width }))}>
+                Inverser
+              </Button>
+              <Button onClick={() => setReferenceRealSize({ width: 21, height: 29.7 })}>
+                A4
+              </Button>
+              <Button onClick={() => setReferenceRealSize({ width: 13, height: 20.5 })}>
+                V10
+              </Button>
+            </Space>
+          </Card>
+
+          <ImageMeasurementCanvas
+            imageUrl={imageUrl}
+            calibration={calibration || undefined}
+            initialPoints={[]}  /* 🆕 WORKFLOW GUIDÉ: Pas de points au départ - l'utilisateur dessine les zones */
+            onMeasurementsChange={setMeasurements}
+            onValidate={handleCanvasValidate}
+            onCancel={() => setStep('complete')}
+            minPoints={2}
+            maxWidth={850}
+            referenceDetected={null}  /* 🆕 Pas de référence pré-détectée - l'utilisateur la sélectionne */
+            referenceRealSize={referenceRealSize}
+            onReferenceAdjusted={handleReferenceAdjusted}
+            imageBase64={imageBase64}
+            mimeType={mimeType}
+            api={api}
+            // 🆕 HOMOGRAPHIE: Passer les coins fusionnés de l'IA multi-photos
+            fusedCorners={fusedCorners}
+            homographyReady={homographyReady}
+            // 🆕 CONFIG DYNAMIQUE TBL: Passer les configurations pour les prompts IA
+            referenceConfig={referenceConfig ? {
+              referenceType: referenceConfig.referenceType as 'a4' | 'card' | 'meter' | 'custom',
+              customName: referenceConfig.customName,
+              customWidth: referenceConfig.referenceType === 'a4' ? 21 : 
+                           referenceConfig.referenceType === 'card' ? 8.56 : 
+                           referenceConfig.customSize,
+              customHeight: referenceConfig.referenceType === 'a4' ? 29.7 : 
+                            referenceConfig.referenceType === 'card' ? 5.398 : 
+                            referenceConfig.customSize
+            } : undefined}
+            measurementObjectConfig={{
+              objectType: measureKeys.some(k => k.includes('porte') || k.includes('door')) ? 'door' :
+                          measureKeys.some(k => k.includes('fenetre') || k.includes('window')) ? 'window' :
+                          measureKeys.some(k => k.includes('chassis')) ? 'chassis' : 'door',
+              objectName: measureKeys.some(k => k.includes('porte')) ? 'Porte' :
+                          measureKeys.some(k => k.includes('fenetre')) ? 'Fenêtre' :
+                          measureKeys.some(k => k.includes('chassis')) ? 'Châssis' : 'Objet à mesurer',
+              objectDescription: `Objet rectangulaire à mesurer (${measureKeys.join(', ')})`
+            }}
+          />
+        </div>
       )}
     </Modal>
   );

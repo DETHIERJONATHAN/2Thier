@@ -164,6 +164,8 @@ export class DocumentPdfRenderer {
   private scaleY: number = 1;
   private scaleFactor: number = 1;
   private isFirstModularPage: boolean = true; // 🔥 Flag pour gérer la pagination multi-pages
+  private hasModularPage: boolean = false;
+  private unicodeFontName?: string;
 
   constructor(context: RenderContext) {
     this.ctx = context;
@@ -171,13 +173,18 @@ export class DocumentPdfRenderer {
     this.contentWidth = this.pageWidth - (this.margin * 2);
     this.currentY = this.margin;
 
+    // 🔥 IMPORTANT: en mode PageBuilder (MODULAR_PAGE), PDFKit ne doit pas appliquer ses marges
+    // sinon du texte placé « en bas de page » est automatiquement poussé sur une nouvelle page.
+    const hasModularSections = (context.template.sections || []).some(s => s.type === 'MODULAR_PAGE');
+    const pdfKitMargin = hasModularSections ? 0 : this.margin;
+
     this.doc = new (PDFDocument as any)({
       size: 'A4',
       margins: {
-        top: this.margin,
-        bottom: this.margin,
-        left: this.margin,
-        right: this.margin
+        top: pdfKitMargin,
+        bottom: pdfKitMargin,
+        left: pdfKitMargin,
+        right: pdfKitMargin
       },
       autoFirstPage: true,
       // NE PAS utiliser bufferPages - ça complique la gestion des pages
@@ -188,6 +195,18 @@ export class DocumentPdfRenderer {
         CreationDate: new Date()
       }
     });
+
+    // Police unicode fallback (symboles/accents). En production, si le chemin n'existe pas,
+    // on retombe simplement sur Helvetica.
+    try {
+      const dejavuPath = '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf';
+      if (fs.existsSync(dejavuPath)) {
+        this.doc.registerFont('DejaVuSans', dejavuPath);
+        this.unicodeFontName = 'DejaVuSans';
+      }
+    } catch {
+      // ignore
+    }
 
     this.ensureDocumentIsA4();
 
@@ -472,8 +491,10 @@ export class DocumentPdfRenderer {
 
         console.log('📄 [PDF RENDERER] ✅ Rendu terminé');
 
-        // Footer sur la page actuelle
-        this.renderFooter();
+        // Footer global uniquement si ce n'est PAS un document PageBuilder
+        if (!this.hasModularPage) {
+          this.renderFooter();
+        }
 
         this.doc.end();
       } catch (error) {
@@ -554,12 +575,12 @@ export class DocumentPdfRenderer {
     const rawWidth = (position.width ?? 100) * this.scaleX;
     const rawHeight = (position.height ?? (position.blockHeight ?? 50)) * this.scaleY;
 
-    const safeX = this.clamp(rawX, 0, this.pageWidth);
-    const safeY = this.clamp(rawY, 0, this.pageHeight);
-    const maxWidth = Math.max(1, this.pageWidth - safeX);
-    const maxHeight = Math.max(1, this.pageHeight - safeY);
-    const safeWidth = this.clamp(rawWidth, 1, maxWidth);
-    const safeHeight = this.clamp(rawHeight, 1, maxHeight);
+    const safeWidth = this.clamp(rawWidth, 1, this.pageWidth);
+    const safeHeight = this.clamp(rawHeight, 1, this.pageHeight);
+    const maxX = Math.max(0, this.pageWidth - safeWidth);
+    const maxY = Math.max(0, this.pageHeight - safeHeight);
+    const safeX = this.clamp(rawX, 0, maxX);
+    const safeY = this.clamp(rawY, 0, maxY);
 
     return {
       x: safeX,
@@ -598,6 +619,23 @@ export class DocumentPdfRenderer {
     return Math.min(Math.max(value, min), max);
   }
 
+  /**
+   * 🔥 Vérifie si du contenu peut tenir dans l'espace restant avant la limite de page
+   * Retourne la hauteur disponible (0 si pas de place)
+   */
+  private getAvailableHeightOnPage(startY: number): number {
+    const maxY = this.pageHeight - this.margin;
+    const availableHeight = Math.max(0, maxY - startY);
+    return availableHeight;
+  }
+
+  /**
+   * 🔥 Vérifie si du contenu de hauteur donnée peut tenir à une position Y
+   */
+  private canFitOnPage(startY: number, contentHeight: number): boolean {
+    return this.getAvailableHeightOnPage(startY) >= contentHeight;
+  }
+
   private scaleFontSize(size: number): number {
     const scaled = size * this.scaleFactor;
     return Math.max(6, scaled);
@@ -612,6 +650,7 @@ export class DocumentPdfRenderer {
    * Chaque MODULAR_PAGE crée une nouvelle page dans le PDF (sauf la première)
    */
   private renderModularPage(config: Record<string, any>): void {
+    this.hasModularPage = true;
     console.log('📄 [PDF] ========================================');
     console.log('📄 [PDF] Rendu page modulaire:', config.name);
     console.log('📄 [PDF] Pages actuelles dans le doc:', (this.doc as any).bufferedPageRange?.()?.count || 'N/A');
@@ -629,14 +668,6 @@ export class DocumentPdfRenderer {
     const modules = config.modules || [];
     console.log('📄 [PDF] Nombre de modules:', modules.length);
     
-    // Fond de page si configuré (pleine page)
-    if (config.backgroundColor) {
-      console.log('📄 [PDF] Fond de page:', config.backgroundColor);
-      this.doc
-        .rect(0, 0, this.pageWidth, this.pageHeight)
-        .fill(config.backgroundColor);
-    }
-
     // Les modules sont positionnés en coordonnées absolues du Page Builder (794x1123 pixels)
     // On les convertit en coordonnées PDF (595.28x841.89 points)
 
@@ -661,13 +692,337 @@ export class DocumentPdfRenderer {
     console.log(`📄 [PDF] Rendu de ${sortedModules.length} modules sur la page`);
     console.log(`📄 [PDF] Ordre des modules:`, sortedModules.map((m: any) => m.moduleId || m.moduleType || m.type));
 
-    // Rendre chaque module avec ses coordonnées absolues converties
-    for (const moduleInstance of sortedModules) {
-      this.renderModuleAbsolute(moduleInstance);
+    // Objectif: si le détail (table) descend, déplacer les modules placés sous la table
+    // (conditions, totaux, signatures, footer, etc.) sur la page suivante plutôt que de tronquer.
+    // On ne peut pas « reflow » le builder (positions absolues), donc on conserve les positions,
+    // mais on pousse le groupe « sous-table » sur la dernière page de la table.
+    const backgroundModuleIds = new Set(['BACKGROUND']);
+    const flowModuleIds = new Set(['PRICING_TABLE']);
+
+    const getModuleType = (m: any) => m.moduleId || m.moduleType || m.type;
+    const getModuleY = (m: any) => Number(m?.position?.y ?? 0);
+
+    const backgroundModules = sortedModules.filter((m: any) => backgroundModuleIds.has(getModuleType(m)));
+    const nonBackgroundModules = sortedModules.filter((m: any) => !backgroundModuleIds.has(getModuleType(m)));
+    const flowModulesInOrder = nonBackgroundModules.filter((m: any) => flowModuleIds.has(getModuleType(m)));
+    let remainingModules = nonBackgroundModules.filter((m: any) => !flowModuleIds.has(getModuleType(m)));
+
+    const renderModularBackground = () => {
+      // Fond de page si configuré (pleine page)
+      if (config.backgroundColor) {
+        this.doc.rect(0, 0, this.pageWidth, this.pageHeight).fill(config.backgroundColor);
+      }
+      // BACKGROUND modules (image/couleur) au-dessus du fond mais derrière le contenu
+      for (const bg of backgroundModules) {
+        this.renderModuleAbsolute(bg);
+      }
+    };
+
+    // Page courante: fond + modules au-dessus des modules flow, puis le(s) flow, puis les modules restants.
+    renderModularBackground();
+
+    for (const flowModule of flowModulesInOrder) {
+      const flowType = getModuleType(flowModule);
+      const flowY = getModuleY(flowModule);
+
+      // Rendre tout ce qui est placé au-dessus (Y strictement inférieur)
+      const above = remainingModules.filter((m: any) => getModuleY(m) < flowY);
+      for (const m of above) {
+        this.renderModuleAbsolute(m);
+      }
+
+      // Conserver le reste (Y >= flowY) pour l'après-table
+      const belowOrEqual = remainingModules.filter((m: any) => getModuleY(m) >= flowY);
+
+      if (flowType !== 'PRICING_TABLE') {
+        // Par sécurité, si on ajoute d'autres flows plus tard
+        this.renderModuleAbsolute(flowModule);
+        remainingModules = belowOrEqual;
+        continue;
+      }
+
+      const position = flowModule.position || {};
+      const rect = this.convertPageBuilderRect(position);
+      const configRaw = flowModule.config || {};
+
+      const conditionResult = this.evaluateModuleConditions(configRaw);
+      if (!conditionResult.shouldRender) {
+        console.log(`📄 [PDF] Module ${flowType}: SKIPPED (condition false)`);
+        remainingModules = belowOrEqual;
+        continue;
+      }
+
+      // Déterminer où commence la zone « sous-table » (premier module sous la table)
+      let bottomStartY: number | undefined;
+      for (const m of belowOrEqual) {
+        const r = this.convertPageBuilderRect(m.position || {});
+        bottomStartY = bottomStartY === undefined ? r.y : Math.min(bottomStartY, r.y);
+      }
+
+      const effectiveConfig = { ...configRaw, _themeId: flowModule.themeId };
+      if (conditionResult.content !== undefined) {
+        // pour PRICING_TABLE, on ne remplace rien ici
+        console.log(`📄 [PDF] Module ${flowType}: Using conditional content: "${conditionResult.content}"`);
+      }
+
+      this.renderModulePricingTablePaginated(effectiveConfig, rect.x, rect.y, rect.width, rect.height, {
+        reservedBottomY: bottomStartY,
+        onAddPage: () => {
+          renderModularBackground();
+        }
+      });
+
+      // Après la table, on continue avec les modules restants (sous-table)
+      remainingModules = belowOrEqual;
     }
 
-    // Marquer que cette page est terminée
-    this.currentY = this.pageHeight;
+    // S'il n'y avait pas de flow ou s'il reste des modules « sous-table », on les rend sur la page actuelle
+    for (const m of remainingModules) {
+      this.renderModuleAbsolute(m);
+    }
+
+    // Ne pas forcer currentY en bas de page: cela peut déclencher un page-break
+    // dans les renderers « legacy » qui utilisent checkPageBreak.
+    this.currentY = this.margin;
+  }
+
+  private renderModulePricingTablePaginated(
+    config: Record<string, any>,
+    x: number,
+    y: number,
+    width: number,
+    height?: number,
+    options?: {
+      reservedBottomY?: number;
+      onAddPage?: () => void;
+    }
+  ): void {
+    const title = config.title || 'Tarifs';
+    const currency = config.currency || '€';
+    const tvaRate = config.tvaRate || config.vatRate || 21;
+    const showTotal = config.showTotal !== false;
+    const showTVA = config.showTVA !== false;
+
+    let items: Array<{ description: string; quantity: number | null; unitPrice: number | null; total: number | null }> = [];
+    if (config.pricingLines && config.pricingLines.length > 0) {
+      items = this.processPricingLines(config.pricingLines, config);
+    } else if (config.items && config.items.length > 0) {
+      items = config.items.map((item: any) => ({
+        description: this.substituteVariables(item.name || item.label || ''),
+        quantity: item.quantity || 1,
+        unitPrice: parseFloat(item.price || item.amount || item.unitPrice || 0),
+        total: parseFloat(item.price || item.amount || 0) * (item.quantity || 1)
+      }));
+    } else if (config.rows && config.rows.length > 0) {
+      items = config.rows.map((row: any) => ({
+        description: this.substituteVariables(row.designation || row.label || ''),
+        quantity: row.quantity || 1,
+        unitPrice: parseFloat(row.unitPrice || 0),
+        total: (row.quantity || 1) * parseFloat(row.unitPrice || 0)
+      }));
+    }
+
+    const reservedBottomY = options?.reservedBottomY;
+    const getPageBottomLimit = () => {
+      const hardLimit = this.pageHeight - this.margin;
+      if (reservedBottomY && Number.isFinite(reservedBottomY)) {
+        return Math.min(hardLimit, reservedBottomY - 8);
+      }
+      return hardLimit;
+    };
+
+    // Colonnes ajustées pour éviter que "Total" soit coupé (+ padding)
+    const colWidths = [width * 0.45, width * 0.12, width * 0.18, width * 0.25];
+    const headerHeight = 20;
+    const rowHeight = 18;
+    const titleHeight = 25;
+    const cellPadding = 8;
+
+    const drawHeaderRow = (startY: number) => {
+      this.doc
+        .rect(x, startY, width, headerHeight)
+        .fill(this.theme.primaryColor || '#1890ff');
+
+      this.doc
+        .fontSize(this.scaleFontSize(10))
+        .font('Helvetica-Bold')
+        .fillColor('#FFFFFF');
+
+      this.doc.text('Désignation', x + 5, startY + 5, { width: colWidths[0] - 10 });
+      this.doc.text('Qté', x + colWidths[0], startY + 5, { width: colWidths[1], align: 'center' });
+      this.doc.text('P.U.', x + colWidths[0] + colWidths[1], startY + 5, { width: colWidths[2] - cellPadding, align: 'right' });
+      this.doc.text('Total', x + colWidths[0] + colWidths[1] + colWidths[2], startY + 5, { width: colWidths[3] - cellPadding, align: 'right' });
+    };
+
+    const drawTitle = (startY: number) => {
+      this.doc
+        .fontSize(this.scaleFontSize(16))
+        .font('Helvetica-Bold')
+        .fillColor(this.theme.primaryColor || '#1890ff')
+        .text(title, x, startY, { width });
+    };
+
+    const canFitUnderBottomLimit = (startY: number, neededHeight: number): boolean => {
+      return startY + neededHeight <= getPageBottomLimit();
+    };
+
+    const startNewPage = () => {
+      this.doc.addPage();
+      this.currentY = 0;
+      options?.onAddPage?.();
+    };
+
+    // Si rien à afficher, on garde l'ancien rendu "vide" (mais paginé)
+    if (!items || items.length === 0) {
+      if (!this.canFitOnPage(y, 50)) {
+        return;
+      }
+      drawTitle(y);
+      const headerY = y + titleHeight;
+      if (!canFitUnderBottomLimit(headerY, headerHeight + 25)) {
+        startNewPage();
+        const y2 = this.margin;
+        drawTitle(y2);
+        drawHeaderRow(y2 + titleHeight);
+        this.doc
+          .fontSize(this.scaleFontSize(10))
+          .font('Helvetica-Oblique')
+          .fillColor('#999999')
+          .text('Aucune ligne configurée', x + 5, y2 + titleHeight + headerHeight + 5, { width: width - 10, align: 'center' });
+        return;
+      }
+      drawHeaderRow(headerY);
+      this.doc
+        .fontSize(this.scaleFontSize(10))
+        .font('Helvetica-Oblique')
+        .fillColor('#999999')
+        .text('Aucune ligne configurée', x + 5, headerY + headerHeight + 5, { width: width - 10, align: 'center' });
+      return;
+    }
+
+    // Calcul totaux (on les affiche sur la dernière page)
+    let totalHT = 0;
+    let hasAnyPricedLine = false;
+    for (const item of items) {
+      const lineTotal = (typeof item.total === 'number'
+        ? item.total
+        : (typeof item.quantity === 'number' && typeof item.unitPrice === 'number'
+            ? item.quantity * item.unitPrice
+            : null));
+      if (typeof lineTotal === 'number') {
+        totalHT += lineTotal;
+        hasAnyPricedLine = true;
+      }
+    }
+
+    // Pagination des lignes
+    let pageIndex = 0;
+    let rowIndex = 0;
+
+    while (rowIndex < items.length) {
+      const isFirstPage = pageIndex === 0;
+      const pageY = isFirstPage ? y : this.margin;
+
+      // Titre + header
+      if (!canFitUnderBottomLimit(pageY, titleHeight + headerHeight + rowHeight)) {
+        startNewPage();
+        pageIndex += 1;
+        continue;
+      }
+
+      drawTitle(pageY);
+      let currentY = pageY + titleHeight;
+      drawHeaderRow(currentY);
+      currentY += headerHeight;
+
+      // Lignes
+      while (rowIndex < items.length) {
+        const item = items[rowIndex];
+        if (!canFitUnderBottomLimit(currentY, rowHeight + 2)) {
+          break;
+        }
+
+        const lineTotal = (typeof item.total === 'number'
+          ? item.total
+          : (typeof item.quantity === 'number' && typeof item.unitPrice === 'number'
+              ? item.quantity * item.unitPrice
+              : null));
+        this.doc
+          .fontSize(this.scaleFontSize(10))
+          .font('Helvetica')
+          .fillColor(this.theme.textColor || '#333333');
+
+        this.doc.text(item.description || '-', x + 5, currentY + 4, { width: colWidths[0] - 10 });
+        this.doc.text(typeof item.quantity === 'number' ? String(item.quantity) : '', x + colWidths[0], currentY + 4, { width: colWidths[1], align: 'center' });
+        this.doc.text(typeof item.unitPrice === 'number' ? `${item.unitPrice.toFixed(2)} ${currency}` : '', x + colWidths[0] + colWidths[1], currentY + 4, { width: colWidths[2] - cellPadding, align: 'right' });
+        this.doc.text(typeof lineTotal === 'number' ? `${lineTotal.toFixed(2)} ${currency}` : '', x + colWidths[0] + colWidths[1] + colWidths[2], currentY + 4, { width: colWidths[3] - cellPadding, align: 'right' });
+
+        this.doc
+          .strokeColor('#e8e8e8')
+          .lineWidth(0.5)
+          .moveTo(x, currentY + rowHeight)
+          .lineTo(x + width, currentY + rowHeight)
+          .stroke();
+
+        currentY += rowHeight;
+        rowIndex += 1;
+      }
+
+      // Si on a fini les lignes, tenter d'afficher les totaux sur cette page
+      if (rowIndex >= items.length && showTotal && hasAnyPricedLine) {
+        const totalsHeight = showTVA ? 50 : 20;
+        if (!canFitUnderBottomLimit(currentY + 5, totalsHeight + 5)) {
+          // Pas assez de place pour les totaux + bas de page -> nouvelle page
+          startNewPage();
+          pageIndex += 1;
+          continue;
+        }
+
+        const tva = totalHT * (tvaRate / 100);
+        const totalTTC = totalHT + tva;
+        currentY += 5;
+
+        this.doc
+          .fontSize(this.scaleFontSize(10))
+          .font('Helvetica-Bold')
+          .fillColor(this.theme.textColor || '#333333')
+          .text('Total HT', x + colWidths[0] + colWidths[1], currentY, { width: colWidths[2] + colWidths[3] * 0.5 - cellPadding, align: 'right' });
+        this.doc.text(`${totalHT.toFixed(2)} ${currency}`, x + width - colWidths[3], currentY, { width: colWidths[3] - cellPadding, align: 'right' });
+
+        currentY += 15;
+        if (showTVA) {
+          this.doc
+            .font('Helvetica')
+            .text(`TVA (${tvaRate}%)`, x + colWidths[0] + colWidths[1], currentY, { width: colWidths[2] + colWidths[3] * 0.5 - cellPadding, align: 'right' });
+          this.doc.text(`${tva.toFixed(2)} ${currency}`, x + width - colWidths[3], currentY, { width: colWidths[3] - cellPadding, align: 'right' });
+
+          currentY += 15;
+
+          this.doc
+            .rect(x + width * 0.6, currentY - 2, width * 0.4, 20)
+            .fill(this.theme.primaryColor || '#1890ff');
+
+          this.doc
+            .fontSize(this.scaleFontSize(12))
+            .font('Helvetica-Bold')
+            .fillColor('#FFFFFF')
+            .text('Total TTC', x + width * 0.6 + 5, currentY + 3, { width: width * 0.2 - 10 });
+          this.doc.text(`${totalTTC.toFixed(2)} ${currency}`, x + width * 0.8, currentY + 3, { width: width * 0.2 - 10, align: 'right' });
+        }
+      }
+
+      // Si on n'a pas fini les lignes, nouvelle page
+      if (rowIndex < items.length) {
+        startNewPage();
+        pageIndex += 1;
+      } else {
+        break;
+      }
+    }
+
+    // Si une hauteur était imposée (module), on respecte en laissant le bas de page décider.
+    // (height est volontairement ignoré en mode paginé)
+    void height;
   }
 
   /**
@@ -687,7 +1042,7 @@ export class DocumentPdfRenderer {
     }
     
     // Si un contenu alternatif est défini par la condition, on le passe à la config
-    const effectiveConfig = { ...config };
+    const effectiveConfig = { ...config, _themeId: module.themeId };
     if (conditionResult.content !== undefined) {
       console.log(`📄 [PDF] Module ${moduleType}: Using conditional content: "${conditionResult.content}"`);
       // Pour TITLE, SUBTITLE, TEXT_BLOCK -> remplacer le text
@@ -717,7 +1072,10 @@ export class DocumentPdfRenderer {
           this.renderModuleBackground(effectiveConfig, rect.x, rect.y, rect.width, rect.height);
           break;
         case 'PRICING_TABLE':
-          this.renderModulePricingTable(effectiveConfig, rect.x, rect.y, rect.width);
+          this.renderModulePricingTable(effectiveConfig, rect.x, rect.y, rect.width, rect.height);
+          break;
+        case 'TOTALS_SUMMARY':
+          this.renderModuleTotalsSummary(effectiveConfig, rect.x, rect.y, rect.width, rect.height);
           break;
         case 'TESTIMONIAL':
           this.renderModuleTestimonial(effectiveConfig, rect.x, rect.y, rect.width);
@@ -734,6 +1092,24 @@ export class DocumentPdfRenderer {
         case 'SPACER':
           // Spacer ne rend rien
           break;
+        case 'DOCUMENT_HEADER':
+          this.renderModuleDocumentHeader(effectiveConfig, rect.x, rect.y, rect.width, rect.height);
+          break;
+        case 'DOCUMENT_INFO':
+          this.renderModuleDocumentInfo(effectiveConfig, rect.x, rect.y, rect.width, rect.height);
+          break;
+        case 'DOCUMENT_FOOTER':
+          this.renderModuleDocumentFooter(effectiveConfig, rect.x, rect.y, rect.width, rect.height);
+          break;
+        case 'SIGNATURE_BLOCK':
+          this.renderModuleSignatureBlock(effectiveConfig, rect.x, rect.y, rect.width, rect.height);
+          break;
+        case 'PAYMENT_INFO':
+          this.renderModulePaymentInfo(effectiveConfig, rect.x, rect.y, rect.width, rect.height);
+          break;
+        case 'CONTACT_INFO':
+          this.renderModuleContactInfo(effectiveConfig, rect.x, rect.y, rect.width, rect.height);
+          break;
         default:
           console.warn(`📄 [PDF] Module type inconnu: ${moduleType}`);
       }
@@ -741,6 +1117,29 @@ export class DocumentPdfRenderer {
       this.doc.restore();
     }
 
+  }
+
+  private parseMaybeNumber(value: unknown): number | undefined {
+    if (value === null || value === undefined) return undefined;
+    if (typeof value === 'number' && Number.isFinite(value)) return value;
+    if (typeof value !== 'string') return undefined;
+    const trimmed = value.trim();
+    if (!trimmed) return undefined;
+    const cleaned = trimmed
+      .replace(/\s/g, '')
+      .replace(/[^0-9,.-]/g, '')
+      .replace(/,(?=\d{1,2}$)/, '.');
+    const n = Number(cleaned);
+    return Number.isFinite(n) ? n : undefined;
+  }
+
+  private formatMoney(value: unknown, currency: string): string {
+    const n = this.parseMaybeNumber(value);
+    if (n === undefined) {
+      const s = value === null || value === undefined ? '' : String(value);
+      return s ? `${s} ${currency}` : '';
+    }
+    return `${n.toFixed(2)} ${currency}`;
   }
 
   // ============================================================
@@ -799,9 +1198,13 @@ export class DocumentPdfRenderer {
   }
 
   private renderModuleSubtitle(config: Record<string, any>, x: number, y: number, width: number, height?: number): void {
-    const text = this.substituteVariables(config.text || 'Sous-titre');
+    const rawText = this.substituteVariables(config.text || 'Sous-titre');
+    const text = this.normalizeText(rawText);
     const alignment = config.alignment || 'center';
-    const color = config.color || '#FFFFFF';
+    let color = config.color || config.textColor || config.style?.color || this.theme.textColor || '#333333';
+    if (!config.backgroundColor && this.isNearWhite(color)) {
+      color = this.theme.textColor || '#333333';
+    }
     const actualHeight = height || 30;
     
     let fontSize = config.fontSize || 14;
@@ -839,10 +1242,25 @@ export class DocumentPdfRenderer {
   }
 
   private renderModuleTextBlock(config: Record<string, any>, x: number, y: number, width: number, height?: number): void {
-    const text = this.substituteVariables(config.content || config.text || '');
+    // 🔥 Vérifier si le bloc peut tenir
+    const availableHeight = this.getAvailableHeightOnPage(y);
+    if (availableHeight < 10) {
+      console.warn(`📄 [PDF] TEXT_BLOCK: Pas de place (${availableHeight.toFixed(0)}px). Bloc masqué.`);
+      return;
+    }
+
+    const rawText = this.substituteVariables(config.content || config.text || '');
+    const text = this.normalizeText(rawText);
     const alignment = config.alignment || 'left';
-    const color = config.color || '#FFFFFF';
-    const actualHeight = height || 100;
+    let color = config.color || config.textColor || config.style?.color || this.theme.textColor || '#333333';
+    if (!config.backgroundColor && this.isNearWhite(color)) {
+      color = this.theme.textColor || '#333333';
+    }
+    
+    // 🔥 Limiter la hauteur disponible à ce qui peut tenir sur la page
+    const maxHeight = Math.min(height || 100, availableHeight - 5);
+    const actualHeight = Math.max(10, maxHeight);
+    
     let fontSize = config.fontSize || 12;
     
     const maxFontSize = Math.floor(actualHeight / 4);
@@ -856,6 +1274,7 @@ export class DocumentPdfRenderer {
     while (fontSize > 6) {
       this.doc.fontSize(scaledFontSize);
       const textHeight = this.doc.heightOfString(text, { width: innerWidth });
+      // 🔥 Vérifier que le texte entre dans la hauteur disponible
       if (textHeight <= innerHeight) break;
       fontSize -= 1;
       scaledFontSize = this.scaleFontSize(fontSize);
@@ -868,7 +1287,7 @@ export class DocumentPdfRenderer {
         .fill(config.backgroundColor);
     }
 
-    console.log(`📄 [PDF] TEXT_BLOCK: text="${text.substring(0, 30)}...", color=${color}, fontSize=${fontSize}`);
+    console.log(`📄 [PDF] TEXT_BLOCK: text="${text.substring(0, 30)}...", color=${color}, fontSize=${fontSize}, hauteur disponible=${availableHeight.toFixed(0)}px`);
 
     const savedY = (this.doc as any).y;
     const finalTextHeight = this.doc.heightOfString(text, { width: innerWidth });
@@ -1078,7 +1497,7 @@ export class DocumentPdfRenderer {
     return `#${((r << 16) | (g << 8) | b).toString(16).padStart(6, '0')}`;
   }
 
-  private renderModulePricingTable(config: Record<string, any>, x: number, y: number, width: number): void {
+  private renderModulePricingTable(config: Record<string, any>, x: number, y: number, width: number, _height?: number): void {
     // Version améliorée du tableau de prix avec support pricingLines
     const title = config.title || 'Tarifs';
     const currency = config.currency || '€';
@@ -1087,7 +1506,7 @@ export class DocumentPdfRenderer {
     const showTVA = config.showTVA !== false;
     
     // 🆕 Support des pricingLines (nouveau système) ou items (ancien système)
-    let items: Array<{ description: string; quantity: number; unitPrice: number; total: number }> = [];
+    let items: Array<{ description: string; quantity: number | null; unitPrice: number | null; total: number | null }> = [];
     
     if (config.pricingLines && config.pricingLines.length > 0) {
       console.log('📄 [PDF] PRICING_TABLE: Utilisation de pricingLines', config.pricingLines.length);
@@ -1111,6 +1530,14 @@ export class DocumentPdfRenderer {
       }));
     }
 
+    // 🔥 BOUNDS CHECKING
+    const availableHeight = this.getAvailableHeightOnPage(y);
+    
+    if (availableHeight < 50) {
+      console.warn(`📄 [PDF] PRICING_TABLE: Pas assez de place (${availableHeight.toFixed(0)}px restants). Tableau masqué.`);
+      return; // Trop petit pour afficher quoi que ce soit
+    }
+
     // Titre
     this.doc
       .fontSize(this.scaleFontSize(16))
@@ -1120,9 +1547,16 @@ export class DocumentPdfRenderer {
 
     let currentY = y + 25;
     
-    // En-tête du tableau
-    const colWidths = [width * 0.5, width * 0.15, width * 0.15, width * 0.2];
+    // 🔥 Vérifier si le titre + header peuvent tenir
+    if (!this.canFitOnPage(currentY, 30)) {
+      console.warn(`📄 [PDF] PRICING_TABLE: Pas de place pour la table. Tableau masqué.`);
+      return;
+    }
+    
+    // En-tête du tableau - colonnes ajustées pour éviter coupure
+    const colWidths = [width * 0.45, width * 0.12, width * 0.18, width * 0.25];
     const headerHeight = 20;
+    const cellPadding = 8;
     
     this.doc
       .rect(x, currentY, width, headerHeight)
@@ -1135,13 +1569,14 @@ export class DocumentPdfRenderer {
     
     this.doc.text('Désignation', x + 5, currentY + 5, { width: colWidths[0] - 10 });
     this.doc.text('Qté', x + colWidths[0], currentY + 5, { width: colWidths[1], align: 'center' });
-    this.doc.text('P.U.', x + colWidths[0] + colWidths[1], currentY + 5, { width: colWidths[2], align: 'right' });
-    this.doc.text('Total', x + colWidths[0] + colWidths[1] + colWidths[2], currentY + 5, { width: colWidths[3], align: 'right' });
+    this.doc.text('P.U.', x + colWidths[0] + colWidths[1], currentY + 5, { width: colWidths[2] - cellPadding, align: 'right' });
+    this.doc.text('Total', x + colWidths[0] + colWidths[1] + colWidths[2], currentY + 5, { width: colWidths[3] - cellPadding, align: 'right' });
     
     currentY += headerHeight;
     
     // Lignes du tableau
     let totalHT = 0;
+    let rowsRendered = 0;
     
     if (items.length === 0) {
       // Aucune ligne
@@ -1153,9 +1588,19 @@ export class DocumentPdfRenderer {
       currentY += 25;
     } else {
       for (const item of items) {
+        // 🔥 Avant de rendre chaque ligne, vérifier si elle peut tenir
         const rowHeight = 18;
-        const lineTotal = item.total || (item.quantity * item.unitPrice);
-        totalHT += lineTotal;
+        if (!this.canFitOnPage(currentY, rowHeight + 5)) {
+          console.warn(`📄 [PDF] PRICING_TABLE: Plus de place pour ${items.length - rowsRendered} lignes. Arrêt du rendu.`);
+          break; // Arrêter ici plutôt que de déborder
+        }
+        
+        const lineTotal = (typeof item.total === 'number'
+          ? item.total
+          : (typeof item.quantity === 'number' && typeof item.unitPrice === 'number'
+              ? item.quantity * item.unitPrice
+              : null));
+        if (typeof lineTotal === 'number') totalHT += lineTotal;
         
         this.doc
           .fontSize(this.scaleFontSize(10))
@@ -1163,9 +1608,9 @@ export class DocumentPdfRenderer {
           .fillColor(this.theme.textColor || '#333333');
         
         this.doc.text(item.description || '-', x + 5, currentY + 4, { width: colWidths[0] - 10 });
-        this.doc.text(String(item.quantity), x + colWidths[0], currentY + 4, { width: colWidths[1], align: 'center' });
-        this.doc.text(`${item.unitPrice.toFixed(2)} ${currency}`, x + colWidths[0] + colWidths[1], currentY + 4, { width: colWidths[2], align: 'right' });
-        this.doc.text(`${lineTotal.toFixed(2)} ${currency}`, x + colWidths[0] + colWidths[1] + colWidths[2], currentY + 4, { width: colWidths[3], align: 'right' });
+        this.doc.text(typeof item.quantity === 'number' ? String(item.quantity) : '', x + colWidths[0], currentY + 4, { width: colWidths[1], align: 'center' });
+        this.doc.text(typeof item.unitPrice === 'number' ? `${item.unitPrice.toFixed(2)} ${currency}` : '', x + colWidths[0] + colWidths[1], currentY + 4, { width: colWidths[2] - cellPadding, align: 'right' });
+        this.doc.text(typeof lineTotal === 'number' ? `${lineTotal.toFixed(2)} ${currency}` : '', x + colWidths[0] + colWidths[1] + colWidths[2], currentY + 4, { width: colWidths[3] - cellPadding, align: 'right' });
         
         // Ligne séparatrice
         this.doc
@@ -1176,11 +1621,21 @@ export class DocumentPdfRenderer {
           .stroke();
         
         currentY += rowHeight;
+        rowsRendered++;
       }
     }
     
+    const hasAnyPricedLine = items.some((it) => typeof it.total === 'number' || (typeof it.quantity === 'number' && typeof it.unitPrice === 'number'));
+
     // Totaux
-    if (showTotal) {
+    if (showTotal && hasAnyPricedLine) {
+      // 🔥 Vérifier si les totaux peuvent tenir
+      const totalsHeight = showTVA ? 50 : 20;
+      if (!this.canFitOnPage(currentY, totalsHeight + 5)) {
+        console.warn(`📄 [PDF] PRICING_TABLE: Pas de place pour les totaux. Totaux masqués.`);
+        return;
+      }
+      
       const tva = totalHT * (tvaRate / 100);
       const totalTTC = totalHT + tva;
       
@@ -1191,8 +1646,8 @@ export class DocumentPdfRenderer {
         .fontSize(this.scaleFontSize(10))
         .font('Helvetica-Bold')
         .fillColor(this.theme.textColor || '#333333')
-        .text('Total HT', x + colWidths[0] + colWidths[1], currentY, { width: colWidths[2] + colWidths[3] * 0.5, align: 'right' });
-      this.doc.text(`${totalHT.toFixed(2)} ${currency}`, x + width - colWidths[3], currentY, { width: colWidths[3], align: 'right' });
+        .text('Total HT', x + colWidths[0] + colWidths[1], currentY, { width: colWidths[2] + colWidths[3] * 0.5 - cellPadding, align: 'right' });
+      this.doc.text(`${totalHT.toFixed(2)} ${currency}`, x + width - colWidths[3], currentY, { width: colWidths[3] - cellPadding, align: 'right' });
       
       currentY += 15;
       
@@ -1200,8 +1655,8 @@ export class DocumentPdfRenderer {
         // TVA
         this.doc
           .font('Helvetica')
-          .text(`TVA (${tvaRate}%)`, x + colWidths[0] + colWidths[1], currentY, { width: colWidths[2] + colWidths[3] * 0.5, align: 'right' });
-        this.doc.text(`${tva.toFixed(2)} ${currency}`, x + width - colWidths[3], currentY, { width: colWidths[3], align: 'right' });
+          .text(`TVA (${tvaRate}%)`, x + colWidths[0] + colWidths[1], currentY, { width: colWidths[2] + colWidths[3] * 0.5 - cellPadding, align: 'right' });
+        this.doc.text(`${tva.toFixed(2)} ${currency}`, x + width - colWidths[3], currentY, { width: colWidths[3] - cellPadding, align: 'right' });
         
         currentY += 15;
         
@@ -1215,7 +1670,7 @@ export class DocumentPdfRenderer {
           .font('Helvetica-Bold')
           .fillColor('#FFFFFF')
           .text('Total TTC', x + width * 0.6 + 5, currentY + 3, { width: width * 0.2 - 10 });
-        this.doc.text(`${totalTTC.toFixed(2)} ${currency}`, x + width * 0.8, currentY + 3, { width: width * 0.2 - 5, align: 'right' });
+        this.doc.text(`${totalTTC.toFixed(2)} ${currency}`, x + width * 0.8, currentY + 3, { width: width * 0.2 - 10, align: 'right' });
       }
     }
   }
@@ -1304,6 +1759,795 @@ export class DocumentPdfRenderer {
       const aHeight = this.doc.heightOfString(`R: ${answer}`, { width: width });
       currentY += aHeight + 15;
     }
+  }
+
+  // ============================================================
+  // DOCUMENT_HEADER - En-tête avec logo entreprise et infos client
+  // ============================================================
+  private renderModuleDocumentHeader(config: Record<string, any>, x: number, y: number, width: number, height: number): void {
+    // Entreprise
+    const companyName = this.substituteVariables(config.companyName || '{org.name}');
+    const companyAddress = this.substituteVariables(config.companyAddress || '{org.address}');
+    const companyPhone = this.substituteVariables(config.companyPhone || '{org.phone}');
+    const companyEmail = this.substituteVariables(config.companyEmail || '{org.email}');
+    const companyTVA = this.substituteVariables(config.companyTVA || '{org.tva}');
+    
+    // Client
+    const clientTitle = config.clientTitle || 'CLIENT:';
+    const clientName = this.substituteVariables(config.clientName || '{lead.firstName} {lead.lastName}');
+    const clientCompany = this.substituteVariables(config.clientCompany || '{lead.company}');
+    const clientAddress = this.substituteVariables(config.clientAddress || '{lead.address}');
+    const clientEmail = this.substituteVariables(config.clientEmail || '{lead.email}');
+    
+    const halfWidth = width / 2 - 20;
+    let currentY = y;
+    
+    // Logo si présent
+    if (config.showLogo !== false && config.logo) {
+      try {
+        const logoSize = config.logoSize || 60;
+        const maxLogoWidth = Math.min(logoSize, width * 0.3);
+        const maxLogoHeight = Math.min(logoSize, (height || logoSize) - 4);
+        const logoData = config.logo;
+        if (logoData && logoData.startsWith('data:image')) {
+          const base64Data = logoData.split(',')[1];
+          const buffer = Buffer.from(base64Data, 'base64');
+          this.doc.image(buffer, x, currentY, { fit: [maxLogoWidth, maxLogoHeight] });
+        }
+      } catch (e) {
+        console.warn('📄 [PDF] Impossible de charger le logo:', e);
+      }
+    }
+    
+    // Info entreprise (à gauche)
+    if (config.showCompanyInfo !== false) {
+      const logoOffset = (config.showLogo !== false && config.logo) ? (Math.min(config.logoSize || 60, width * 0.3)) + 12 : 0;
+      
+      this.doc
+        .font('Helvetica-Bold')
+        .fontSize(this.scaleFontSize(14))
+        .fillColor(this.theme.primaryColor || '#1890ff')
+        .text(companyName, x + logoOffset, currentY, { width: halfWidth - logoOffset });
+      
+      currentY += 18;
+      
+      if (companyPhone) {
+        this.doc
+          .fontSize(this.scaleFontSize(9))
+          .fillColor('#666666')
+          .text(`Tel: ${companyPhone}`, x + logoOffset, currentY, { width: halfWidth - logoOffset });
+        currentY += 12;
+      }
+
+      if (companyEmail) {
+        this.doc
+          .fontSize(this.scaleFontSize(9))
+          .fillColor('#666666')
+          .text(`Email: ${companyEmail}`, x + logoOffset, currentY, { width: halfWidth - logoOffset });
+        currentY += 12;
+      }
+
+      this.doc
+        .font('Helvetica')
+        .fontSize(this.scaleFontSize(10))
+        .fillColor('#555555')
+        .text(companyAddress, x + logoOffset, currentY, { width: halfWidth - logoOffset });
+      
+      const addrHeight = this.doc.heightOfString(companyAddress, { width: halfWidth - logoOffset });
+      currentY += addrHeight + 4;
+      
+      if (companyTVA) {
+        this.doc
+          .fontSize(this.scaleFontSize(8))
+          .fillColor('#888888')
+          .text(`TVA: ${companyTVA}`, x + logoOffset, currentY, { width: halfWidth - logoOffset });
+      }
+    }
+    
+    // Info client (à droite)
+    if (config.showClientInfo !== false) {
+      const clientX = x + halfWidth + 40;
+      let clientY = y;
+      
+      this.doc
+        .font('Helvetica')
+        .fontSize(this.scaleFontSize(9))
+        .fillColor('#888888')
+        .text(clientTitle, clientX, clientY, { width: halfWidth, align: 'right' });
+      
+      clientY += 14;
+      
+      this.doc
+        .font('Helvetica-Bold')
+        .fontSize(this.scaleFontSize(12))
+        .fillColor('#333333')
+        .text(clientName, clientX, clientY, { width: halfWidth, align: 'right' });
+      
+      clientY += 16;
+      
+      if (clientCompany) {
+        this.doc
+          .font('Helvetica')
+          .fontSize(this.scaleFontSize(11))
+          .fillColor('#444444')
+          .text(clientCompany, clientX, clientY, { width: halfWidth, align: 'right' });
+        clientY += 14;
+      }
+      
+      this.doc
+        .font('Helvetica')
+        .fontSize(this.scaleFontSize(10))
+        .fillColor('#555555')
+        .text(clientAddress, clientX, clientY, { width: halfWidth, align: 'right' });
+      
+      const clientAddrHeight = this.doc.heightOfString(clientAddress, { width: halfWidth });
+      clientY += clientAddrHeight + 4;
+      
+      if (clientEmail) {
+        this.doc
+          .fontSize(this.scaleFontSize(9))
+          .fillColor('#666666')
+          .text(`Email: ${clientEmail}`, clientX, clientY, { width: halfWidth, align: 'right' });
+      }
+    }
+    
+    console.log(`📄 [PDF] DOCUMENT_HEADER rendu: company=${companyName}, client=${clientName}`);
+  }
+
+  // ============================================================
+  // DOCUMENT_INFO - Référence, date, validité
+  // ============================================================
+  private renderModuleDocumentInfo(config: Record<string, any>, x: number, y: number, width: number, _height: number): void {
+    const themeId = (config as any)._themeId as string | undefined;
+    const layoutRaw = (config.layout || '').toString().trim();
+    const layout = 'inline'; // 🔥 Forcer l'alignement en badges comme PageBuilder
+    console.log('📄 [PDF] DOCUMENT_INFO render', {
+      themeId,
+      layoutRaw,
+      forcedLayout: layout,
+      showReference: config.showReference,
+      showDate: config.showDate,
+      showValidUntil: config.showValidUntil,
+      referencePrefix: config.referencePrefix,
+      datePrefix: config.datePrefix,
+      validUntilPrefix: config.validUntilPrefix
+    });
+    
+    const reference = this.normalizeText(this.substituteVariables(config.reference || config.referenceBinding || '{quote.reference}'));
+    const date = this.normalizeText(this.substituteVariables(config.date || config.dateBinding || '{quote.date}'));
+    const validUntil = this.normalizeText(this.substituteVariables(config.validUntil || config.validUntilBinding || '{quote.validUntil}'));
+    const object = this.normalizeText(this.substituteVariables(config.object || config.objectBinding || ''));
+    
+    const referencePrefix = config.referencePrefix || 'DEV-';
+    const datePrefix = config.datePrefix || 'Date:';
+    const validUntilPrefix = config.validUntilPrefix || 'Valide jusqu\'au:';
+    const objectPrefix = config.objectPrefix || 'Objet:';
+    
+    let currentY = y;
+    const badgeFontSize = this.scaleFontSize(13);
+    const badgePaddingX = 12;
+    const badgePaddingY = 6;
+    const badgeGap = 12;
+    
+    if (layout === 'inline') {
+      // Inline badges
+      let currentX = x;
+
+      const drawBadge = (label: string, value: string) => {
+        const text = `${label}${value ? ` ${value}` : ''}`;
+        this.doc.font('Helvetica').fontSize(badgeFontSize);
+        const textHeight = this.doc.heightOfString(text, { width: width });
+        const badgeWidth = this.doc.widthOfString(text) + badgePaddingX * 2;
+        const badgeHeight = textHeight + badgePaddingY * 2;
+        const textY = currentY + (badgeHeight - textHeight) / 2;
+
+        this.doc
+          .lineWidth(1)
+          .roundedRect(currentX, currentY, badgeWidth, badgeHeight, 4)
+          .fill('#f5f5f5')
+          .stroke('#e5e5e5');
+
+        this.doc
+          .fillColor('#333333')
+          .font('Helvetica-Bold')
+          .fontSize(badgeFontSize)
+          .text(label, currentX + badgePaddingX, textY, { continued: true, lineBreak: false })
+          .font('Helvetica')
+          .text(value ? ` ${value}` : '', { continued: false, lineBreak: false });
+
+        currentX += badgeWidth + badgeGap;
+      };
+      
+      if (config.showReference !== false) {
+        drawBadge(referencePrefix, reference);
+      }
+      
+      if (config.showDate !== false) {
+        drawBadge(datePrefix, date);
+      }
+      
+      if (config.showValidUntil !== false && validUntil) {
+        drawBadge(validUntilPrefix, validUntil);
+      }
+      
+    } else {
+      // Stacked ou table
+      if (config.showReference !== false) {
+        this.doc
+          .font('Helvetica-Bold')
+          .fontSize(this.scaleFontSize(11))
+          .fillColor('#333333')
+          .text(`${referencePrefix} ${reference}`, x, currentY, { width });
+        currentY += 16;
+      }
+      
+      if (config.showDate !== false) {
+        this.doc
+          .font('Helvetica')
+          .fontSize(this.scaleFontSize(11))
+          .fillColor('#333333')
+          .text(`${datePrefix} ${date}`, x, currentY, { width });
+        currentY += 16;
+      }
+      
+      if (config.showValidUntil !== false && validUntil) {
+        this.doc
+          .font('Helvetica')
+          .fontSize(this.scaleFontSize(11))
+          .fillColor('#333333')
+          .text(`${validUntilPrefix} ${validUntil}`, x, currentY, { width });
+        currentY += 16;
+      }
+      
+      if (config.showObject !== false && object) {
+        this.doc
+          .font('Helvetica')
+          .fontSize(this.scaleFontSize(11))
+          .fillColor('#333333')
+          .text(`${objectPrefix} ${object}`, x, currentY, { width });
+      }
+    }
+    
+    console.log(`📄 [PDF] DOCUMENT_INFO rendu: ref=${reference}, date=${date}`);
+  }
+
+  // ============================================================
+  // DOCUMENT_FOOTER - Pied de page avec infos entreprise
+  // ============================================================
+  private renderModuleDocumentFooter(config: Record<string, any>, x: number, y: number, width: number, height: number): void {
+    const layout = config.layout || 'centered';
+    const fontSize = config.fontSize || 10;
+    const maxY = y + (height || 40);
+
+    const textFont = this.unicodeFontName || 'Helvetica';
+    
+    const companyName = this.substituteVariables(config.companyName || '{org.name}');
+    const phone = this.substituteVariables(config.companyPhone || '{org.phone}');
+    const email = this.substituteVariables(config.companyEmail || '{org.email}');
+    const website = this.substituteVariables(config.companyWebsite || '{org.website}');
+    const tva = this.substituteVariables(config.companyTVA || '{org.tva}');
+    const iban = this.substituteVariables(config.bankIBAN || '{org.iban}');
+    const bic = this.substituteVariables(config.bankBIC || '{org.bic}');
+
+    const showCompanyInfo = config.showCompanyInfo !== false;
+    const showBankInfo = config.showBankInfo !== false;
+    const showPageNumber = config.showPageNumber !== false;
+
+    const companyInfoParts: string[] = [];
+    // Utiliser du texte simple car Helvetica ne supporte pas les emojis/symboles Unicode avancés
+    if (showCompanyInfo) {
+      companyInfoParts.push(companyName);
+      if (phone) companyInfoParts.push(`Tel: ${phone}`);
+      if (email) companyInfoParts.push(`${email}`);
+      if (website) companyInfoParts.push(`${website}`);
+    }
+    const companyInfoText = companyInfoParts.filter(Boolean).join(' | ');
+
+    const bankInfoShouldRender = showBankInfo && (!!iban || !!bic);
+    const bankInfoParts: string[] = [];
+    if (bankInfoShouldRender) {
+      if (tva) bankInfoParts.push(`TVA: ${tva}`);
+      if (iban) bankInfoParts.push(`IBAN: ${iban}`);
+      if (bic) bankInfoParts.push(`BIC: ${bic}`);
+    }
+    const bankInfoText = bankInfoParts.join(' | ');
+
+    // Tant qu'on ne bufferise pas les pages, on affiche 1/1 (objectif: parité PageBuilder sur 1 page).
+    const pageNumberText = showPageNumber ? 'Page 1 / 1' : '';
+
+    const baseFontSize = this.scaleFontSize(fontSize);
+    const smallFontSize = this.scaleFontSize(fontSize - 1);
+
+    const drawSingleLine = (
+      text: string,
+      lineY: number,
+      opts: { font: string; size: number; color: string; align: 'left' | 'center' | 'right' }
+    ): number => {
+      if (!text) return 0;
+      const h = this.doc.font(opts.font).fontSize(opts.size).heightOfString(text, { width, lineBreak: false });
+      if (lineY + h > maxY) return 0;
+      this.doc.font(opts.font).fontSize(opts.size).fillColor(opts.color).text(text, x, lineY, { width, align: opts.align, lineBreak: false });
+      return h;
+    };
+
+    if (layout === 'spread') {
+      // Gauche: companyInfo, Droite: page number (comme le flex du frontend)
+      const lineY = y;
+      const leftWidth = Math.floor(width * 0.78);
+      const rightWidth = width - leftWidth;
+
+      if (companyInfoText) {
+        const h = this.doc.font(textFont).fontSize(baseFontSize).heightOfString(companyInfoText, { width: leftWidth, lineBreak: false });
+        if (lineY + h <= maxY) {
+          this.doc
+            .font(textFont)
+            .fontSize(baseFontSize)
+            .fillColor('#666666')
+            .text(companyInfoText, x, lineY, { width: leftWidth, align: 'left', lineBreak: false });
+        }
+      }
+
+      if (pageNumberText) {
+        const h = this.doc.font(textFont).fontSize(baseFontSize).heightOfString(pageNumberText, { width: rightWidth, lineBreak: false });
+        if (lineY + h <= maxY) {
+          this.doc
+            .font(textFont)
+            .fontSize(baseFontSize)
+            .fillColor('#888888')
+            .text(pageNumberText, x + leftWidth, lineY, { width: rightWidth, align: 'right', lineBreak: false });
+        }
+      }
+
+      console.log(`📄 [PDF] DOCUMENT_FOOTER rendu (spread): ${companyName}`);
+      return;
+    }
+
+    if (layout === 'minimal') {
+      const minimalText = `${companyName}${pageNumberText ? ` — ${pageNumberText}` : ''}`;
+      drawSingleLine(minimalText, y, { font: textFont, size: baseFontSize, color: '#888888', align: 'center' });
+      console.log(`📄 [PDF] DOCUMENT_FOOTER rendu (minimal): ${companyName}`);
+      return;
+    }
+
+    // Layout centered (default)
+    let currentY = y;
+    if (companyInfoText) {
+      const h1 = drawSingleLine(companyInfoText, currentY, { font: textFont, size: baseFontSize, color: '#666666', align: 'center' });
+      if (h1) currentY += h1 + 4;
+    }
+
+    if (bankInfoText) {
+      const h2 = drawSingleLine(bankInfoText, currentY, { font: textFont, size: smallFontSize, color: '#888888', align: 'center' });
+      if (h2) currentY += h2 + 4;
+    }
+
+    if (config.showLegalMention && config.legalMention) {
+      const legalText = String(config.legalMention);
+      const h3 = drawSingleLine(legalText, currentY, { font: 'Helvetica-Oblique', size: smallFontSize, color: '#888888', align: 'center' });
+      if (h3) currentY += h3 + 4;
+    }
+
+    if (pageNumberText) {
+      drawSingleLine(pageNumberText, currentY, { font: textFont, size: baseFontSize, color: '#888888', align: 'center' });
+    }
+    
+    console.log(`📄 [PDF] DOCUMENT_FOOTER rendu: ${companyName}`);
+  }
+
+  // ============================================================
+  // SIGNATURE_BLOCK - Zone de signatures
+  // ============================================================
+  private renderModuleSignatureBlock(config: Record<string, any>, x: number, y: number, width: number, height: number): void {
+    // 🔥 Vérifier si le bloc peut tenir
+    const availableHeight = this.getAvailableHeightOnPage(y);
+    const minHeight = 120; // Hauteur minimale pour un bloc de signature
+    
+    if (availableHeight < minHeight) {
+      console.warn(`📄 [PDF] SIGNATURE_BLOCK: Pas assez de place (${availableHeight.toFixed(0)}px restants). Bloc masqué.`);
+      return;
+    }
+
+    const isStacked = config.layout === 'stacked';
+    const gap = 16;
+    const actualHeight = Math.min(height || 140, availableHeight - 10); // -10 pour éviter de toucher le bas
+    const boxHeight = isStacked ? Math.floor((actualHeight - gap) / 2) : Math.floor(actualHeight);
+    const boxWidth = isStacked ? width : (width - 24) / 2;
+    
+    const clientLabel = config.clientLabel || 'Le Client';
+    const companyLabel = config.companyLabel || 'Pour l\'entreprise';
+    
+    // Clipping au niveau du module (comme l'overflow:hidden dans le Page Builder)
+    this.doc.save();
+    this.doc.rect(x, y, width, height).clip();
+
+    const renderBox = (label: string, boxX: number, boxY: number) => {
+      // Bordure
+      this.doc
+        .roundedRect(boxX, boxY, boxWidth, boxHeight, 6)
+        .stroke('#e8e8e8');
+
+      // Layout interne (comme le frontend)
+      const padding = 20;
+
+      // Label
+      const labelY = boxY + padding;
+      this.doc
+        .font('Helvetica-Bold')
+        .fontSize(this.scaleFontSize(11))
+        .fillColor('#333333')
+        .text(label, boxX + padding, labelY, { width: boxWidth - padding * 2 });
+
+      let currentY = labelY + 11 + 8; // label + marginBottom
+
+      // Date (par défaut true comme dans PageBuilder)
+      const showDate = config.showDate !== false;
+      if (showDate) {
+        this.doc
+          .font('Helvetica')
+          .fontSize(this.scaleFontSize(10))
+          .fillColor('#666666')
+          .text('Date: ____/____/________', boxX + padding, currentY, { width: boxWidth - padding * 2 });
+        currentY += 12 + 16; // texte + marginBottom
+      }
+
+      // Mention (par défaut true comme dans PageBuilder)
+      const showMention = config.showMention !== false;
+      if (showMention) {
+        const mention = config.mention || 'Lu et approuvé, bon pour accord';
+        this.doc
+          .font('Helvetica-Oblique')
+          .fontSize(this.scaleFontSize(10))
+          .fillColor('#666666')
+          .text(`"${mention}"`, boxX + padding, currentY, { width: boxWidth - padding * 2 });
+        currentY += 12 + 8;
+      }
+
+      // Zone signature (marginTop 20, hauteur 80, borderBottom dashed)
+      const signatureAreaTop = currentY + 20;
+      const signatureLineY = signatureAreaTop + 80;
+
+      this.doc
+        .font('Helvetica')
+        .fontSize(this.scaleFontSize(11))
+        .fillColor('#999999')
+        .text('Signature', boxX + padding, signatureAreaTop + 2, { width: boxWidth - padding * 2 });
+
+      this.doc
+        .moveTo(boxX + padding, signatureLineY)
+        .lineTo(boxX + boxWidth - padding, signatureLineY)
+        .dash(3, { space: 3 })
+        .stroke('#cccccc')
+        .undash();
+
+      return true;
+    };
+    
+    if (isStacked) {
+      renderBox(clientLabel, x, y);
+      renderBox(companyLabel, x, y + boxHeight + 16);
+    } else {
+      renderBox(clientLabel, x, y);
+      renderBox(companyLabel, x + boxWidth + 24, y);
+    }
+
+    this.doc.restore();
+    
+    console.log(`📄 [PDF] SIGNATURE_BLOCK rendu: ${clientLabel} / ${companyLabel} (disponible: ${availableHeight.toFixed(0)}px)`);
+  }
+
+  // ============================================================
+  // TOTALS_SUMMARY - Récapitulatif des totaux (HT/TVA/TTC)
+  // ============================================================
+  private renderModuleTotalsSummary(config: Record<string, any>, x: number, y: number, width: number, height: number): void {
+    // Clipping au niveau du module (comme l'overflow:hidden dans le Page Builder)
+    this.doc.save();
+    this.doc.rect(x, y, width, height).clip();
+
+    const currency = config.currency || '€';
+    const alignment: 'left' | 'center' | 'right' = config.alignment || 'right';
+    const tvaRate = Number(config.tvaRate ?? 21);
+
+    const showDiscount = config.showDiscount === true;
+    const showTotalHT = config.showTotalHT !== false;
+    const showTVA = config.showTVA !== false;
+    const showTotalTTC = config.showTotalTTC !== false;
+
+    const paddingX = 16;
+    const paddingTop = 8;
+    const gap = 24;
+    const contentMaxWidth = Math.max(0, width - paddingX * 2);
+    const valueWidth = Math.min(110, Math.max(80, contentMaxWidth * 0.35));
+    const labelWidth = Math.max(120, contentMaxWidth - valueWidth - gap);
+    const contentWidth = Math.min(contentMaxWidth, labelWidth + gap + valueWidth);
+
+    let startX = x + paddingX;
+    if (alignment === 'right') startX = x + width - paddingX - contentWidth;
+    if (alignment === 'center') startX = x + (width - contentWidth) / 2;
+
+    const labelX = startX;
+    const valueX = startX + (contentWidth - valueWidth);
+
+    const rowHeight = 22;
+    let currentY = y + paddingTop;
+
+    const drawRow = (label: string, value: string, opts?: { valueColor?: string; negative?: boolean }) => {
+      this.doc
+        .strokeColor('#f0f0f0')
+        .lineWidth(1)
+        .moveTo(x + paddingX, currentY + rowHeight)
+        .lineTo(x + width - paddingX, currentY + rowHeight)
+        .stroke();
+
+      this.doc
+        .font('Helvetica')
+        .fontSize(this.scaleFontSize(11))
+        .fillColor('#666666')
+        .text(label, labelX, currentY + 6, { width: contentWidth - valueWidth - gap, align: 'right' });
+
+      this.doc
+        .font('Helvetica-Bold')
+        .fontSize(this.scaleFontSize(11))
+        .fillColor(opts?.valueColor || '#333333')
+        .text(value, valueX, currentY + 6, { width: valueWidth, align: 'right' });
+
+      currentY += rowHeight;
+    };
+
+    // Valeurs: priorité aux données de devis si présentes, sinon bindings/config
+    const totalHTValue = this.ctx.quote?.totalHT ?? this.substituteVariables(String(config.totalHTBinding || config.totalHT || '{quote.totalHT}'));
+    const tvaValue = this.ctx.quote?.totalTVA ?? this.substituteVariables(String(config.tvaBinding || config.tvaAmount || '{quote.totalTVA}'));
+    const totalTTCValue = this.ctx.quote?.totalTTC ?? this.substituteVariables(String(config.totalTTCBinding || config.totalTTC || '{quote.totalTTC}'));
+    const discountValue = this.substituteVariables(String(config.discount || ''));
+
+    if (showDiscount && discountValue) {
+      const discountFormatted = this.formatMoney(discountValue, currency);
+      drawRow('Remise:', `-${discountFormatted}`, { valueColor: '#52c41a' });
+    }
+
+    if (showTotalHT) {
+      drawRow('Sous-Total HT:', this.formatMoney(totalHTValue, currency));
+    }
+
+    if (showTVA) {
+      drawRow(`TVA (${Number.isFinite(tvaRate) ? tvaRate : 21}%):`, this.formatMoney(tvaValue, currency));
+    }
+
+    if (showTotalTTC) {
+      const barHeight = 32;
+      const barY = currentY + 4;
+      this.doc
+        .rect(x, barY, width, barHeight)
+        .fill('#0e4a6f');
+
+      const innerPad = 16;
+      const barLabelX = x + innerPad;
+      const barValueWidth = Math.min(valueWidth + 20, width - innerPad * 2);
+
+      this.doc
+        .font('Helvetica-Bold')
+        .fontSize(this.scaleFontSize(12))
+        .fillColor('#FFFFFF')
+        .text('Total TTC:', barLabelX, barY + 9, { width: width - innerPad * 2 - barValueWidth, align: 'right' });
+
+      this.doc
+        .font('Helvetica-Bold')
+        .fontSize(this.scaleFontSize(16))
+        .fillColor('#FFFFFF')
+        .text(this.formatMoney(totalTTCValue, currency), x + width - innerPad - barValueWidth, barY + 7, { width: barValueWidth, align: 'right' });
+    }
+
+    this.doc.restore();
+  }
+
+  // ============================================================
+  // PAYMENT_INFO - Informations de paiement
+  // ============================================================
+  private renderModulePaymentInfo(config: Record<string, any>, x: number, y: number, width: number, _height: number): void {
+    // 🔥 Vérifier si le bloc peut tenir
+    const availableHeight = this.getAvailableHeightOnPage(y);
+    if (availableHeight < 30) {
+      console.warn(`📄 [PDF] PAYMENT_INFO: Pas de place (${availableHeight.toFixed(0)}px). Bloc masqué.`);
+      return;
+    }
+
+    const title = config.title || 'Modalités de paiement';
+    
+    const iban = this.substituteVariables(config.iban || '{org.iban}');
+    const bic = this.substituteVariables(config.bic || '{org.bic}');
+    const bankName = this.substituteVariables(config.bankName || '{org.bankName}');
+    const communication = this.substituteVariables(config.communication || '{quote.reference}');
+    
+    let currentY = y;
+    
+    if (config.showTitle !== false) {
+      // 🔥 Vérifier si le titre peut tenir
+      if (!this.canFitOnPage(currentY, 20)) {
+        console.warn(`📄 [PDF] PAYMENT_INFO: Pas de place pour le titre. Bloc masqué.`);
+        return;
+      }
+      
+      this.doc
+        .font('Helvetica-Bold')
+        .fontSize(this.scaleFontSize(12))
+        .fillColor('#333333')
+        .text(`${title}`, x, currentY, { width });
+      currentY += 20;
+    }
+    
+    const labelWidth = 100;
+    const fieldHeight = 16;
+    
+    if (config.showIBAN !== false && iban) {
+      // 🔥 Vérifier si on peut ajouter ce champ
+      if (!this.canFitOnPage(currentY, fieldHeight)) {
+        console.warn(`📄 [PDF] PAYMENT_INFO: Plus de place pour IBAN et suivants.`);
+        return;
+      }
+      
+      this.doc
+        .font('Helvetica')
+        .fontSize(this.scaleFontSize(11))
+        .fillColor('#666666')
+        .text('IBAN:', x, currentY, { width: labelWidth, continued: true })
+        .font('Courier')
+        .fillColor('#333333')
+        .text(iban);
+      currentY += fieldHeight;
+    }
+    
+    if (config.showBIC !== false && bic) {
+      if (!this.canFitOnPage(currentY, fieldHeight)) {
+        return;
+      }
+      
+      this.doc
+        .font('Helvetica')
+        .fontSize(this.scaleFontSize(11))
+        .fillColor('#666666')
+        .text('BIC:', x, currentY, { width: labelWidth, continued: true })
+        .font('Courier')
+        .fillColor('#333333')
+        .text(bic);
+      currentY += fieldHeight;
+    }
+    
+    if (config.showBankName && bankName) {
+      if (!this.canFitOnPage(currentY, fieldHeight)) {
+        return;
+      }
+      
+      this.doc
+        .font('Helvetica')
+        .fontSize(this.scaleFontSize(11))
+        .fillColor('#666666')
+        .text('Banque:', x, currentY, { width: labelWidth, continued: true })
+        .font('Helvetica')
+        .fillColor('#333333')
+        .text(bankName);
+      currentY += fieldHeight;
+    }
+    
+    if (config.showCommunication !== false && communication) {
+      if (!this.canFitOnPage(currentY, fieldHeight)) {
+        return;
+      }
+      
+      this.doc
+        .font('Helvetica')
+        .fontSize(this.scaleFontSize(11))
+        .fillColor('#666666')
+        .text('Communication:', x, currentY, { width: labelWidth, continued: true })
+        .font('Helvetica-Bold')
+        .fillColor('#333333')
+        .text(communication);
+      currentY += fieldHeight;
+    }
+    
+    if (config.showPaymentTerms !== false && config.paymentTerms) {
+      // 🔥 Vérifier si le bloc des conditions de paiement peut tenir
+      if (!this.canFitOnPage(currentY, 40)) {
+        return;
+      }
+      
+      currentY += 8;
+      this.doc
+        .roundedRect(x, currentY, width, 28, 4)
+        .fill('#f9f9f9');
+      
+      this.doc
+        .font('Helvetica')
+        .fontSize(this.scaleFontSize(10))
+        .fillColor('#666666')
+        .text(`${config.paymentTerms}`, x + 10, currentY + 8, { width: width - 20 });
+    }
+    
+    console.log(`📄 [PDF] PAYMENT_INFO rendu (disponible: ${availableHeight.toFixed(0)}px)`);
+  }
+
+  // ============================================================
+  // CONTACT_INFO - Informations de contact
+  // ============================================================
+  private renderModuleContactInfo(config: Record<string, any>, x: number, y: number, width: number, _height: number): void {
+    // 🔥 Vérifier si le bloc peut tenir
+    const availableHeight = this.getAvailableHeightOnPage(y);
+    if (availableHeight < 30) {
+      console.warn(`📄 [PDF] CONTACT_INFO: Pas de place (${availableHeight.toFixed(0)}px). Bloc masqué.`);
+      return;
+    }
+
+    let currentY = y;
+    
+    if (config.title) {
+      // 🔥 Vérifier si le titre peut tenir
+      if (!this.canFitOnPage(currentY, 20)) {
+        console.warn(`📄 [PDF] CONTACT_INFO: Pas de place pour le titre. Bloc masqué.`);
+        return;
+      }
+      
+      this.doc
+        .font('Helvetica-Bold')
+        .fontSize(this.scaleFontSize(12))
+        .fillColor('#333333')
+        .text(config.title, x, currentY, { width });
+      currentY += 20;
+    }
+    
+    const fieldHeight = 14;
+    
+    if (config.showPhone && config.phone) {
+      // 🔥 Vérifier si on peut ajouter ce champ
+      if (!this.canFitOnPage(currentY, fieldHeight)) {
+        console.warn(`📄 [PDF] CONTACT_INFO: Plus de place pour Phone et suivants.`);
+        return;
+      }
+      
+      this.doc
+        .font('Helvetica')
+        .fontSize(this.scaleFontSize(11))
+        .fillColor('#333333')
+        .text(`Tel: ${config.phone}`, x, currentY, { width });
+      currentY += fieldHeight;
+    }
+    
+    if (config.showEmail && config.email) {
+      if (!this.canFitOnPage(currentY, fieldHeight)) {
+        return;
+      }
+      
+      this.doc
+        .font('Helvetica')
+        .fontSize(this.scaleFontSize(11))
+        .fillColor('#333333')
+        .text(`Email: ${config.email}`, x, currentY, { width });
+      currentY += fieldHeight;
+    }
+    
+    if (config.showAddress && config.address) {
+      if (!this.canFitOnPage(currentY, fieldHeight)) {
+        return;
+      }
+      
+      this.doc
+        .font('Helvetica')
+        .fontSize(this.scaleFontSize(11))
+        .fillColor('#333333')
+        .text(`Adresse: ${config.address}`, x, currentY, { width });
+      currentY += fieldHeight;
+    }
+    
+    if (config.showWebsite && config.website) {
+      if (!this.canFitOnPage(currentY, fieldHeight)) {
+        return;
+      }
+      
+      this.doc
+        .font('Helvetica')
+        .fontSize(this.scaleFontSize(11))
+        .fillColor('#333333')
+        .text(`Web: ${config.website}`, x, currentY, { width });
+    }
+    
+    console.log(`📄 [PDF] CONTACT_INFO rendu (disponible: ${availableHeight.toFixed(0)}px)`);
   }
 
   // ============================================================
@@ -1625,11 +2869,11 @@ export class DocumentPdfRenderer {
       unitPriceSource: line.unitPriceSource,
     });
     
-    const resolvedLine = {
+    const resolvedLine: { description: string; quantity: number | null; unitPrice: number | null; total: number | null } = {
       description: '',
-      quantity: 1,
-      unitPrice: 0,
-      total: 0,
+      quantity: null,
+      unitPrice: null,
+      total: null,
     };
     
     // Résoudre le label/description
@@ -1646,44 +2890,66 @@ export class DocumentPdfRenderer {
       resolvedLine.description = `${resolvedLine.description} (${repeaterInstance.instanceLabel})`;
     }
     
-    // Résoudre la quantité
+    // Résoudre la quantité (optionnelle)
     if (line.quantitySource) {
       const qty = this.resolveVariable(line.quantitySource);
       console.log(`📄 [PDF] Quantité résolue: "${qty}" (source: ${line.quantitySource})`);
-      resolvedLine.quantity = parseFloat(qty) || 1;
+      const n = parseFloat(qty);
+      resolvedLine.quantity = Number.isFinite(n) ? n : null;
     } else if (typeof line.quantity === 'string' && line.quantity.startsWith('@')) {
       const qty = this.resolveVariable(line.quantity);
-      resolvedLine.quantity = parseFloat(qty) || 1;
+      const n = parseFloat(qty);
+      resolvedLine.quantity = Number.isFinite(n) ? n : null;
     } else {
-      resolvedLine.quantity = parseFloat(line.quantity) || 1;
+      if (line.quantity === undefined || line.quantity === null || line.quantity === '') {
+        resolvedLine.quantity = null;
+      } else {
+        const n = parseFloat(line.quantity);
+        resolvedLine.quantity = Number.isFinite(n) ? n : null;
+      }
     }
     
-    // Résoudre le prix unitaire
+    // Résoudre le prix unitaire (optionnel)
     if (line.unitPriceSource) {
       const price = this.resolveVariable(line.unitPriceSource);
       console.log(`📄 [PDF] Prix résolu: "${price}" (source: ${line.unitPriceSource})`);
-      resolvedLine.unitPrice = parseFloat(price) || 0;
+      const n = parseFloat(price);
+      resolvedLine.unitPrice = Number.isFinite(n) ? n : null;
     } else if (typeof line.unitPrice === 'string' && (line.unitPrice.startsWith('@') || line.unitPrice.startsWith('node-formula:') || line.unitPrice.startsWith('condition:'))) {
       const price = this.resolveVariable(line.unitPrice);
-      resolvedLine.unitPrice = parseFloat(price) || 0;
+      const n = parseFloat(price);
+      resolvedLine.unitPrice = Number.isFinite(n) ? n : null;
     } else {
-      resolvedLine.unitPrice = parseFloat(line.unitPrice) || 0;
+      if (line.unitPrice === undefined || line.unitPrice === null || line.unitPrice === '') {
+        resolvedLine.unitPrice = null;
+      } else {
+        const n = parseFloat(line.unitPrice);
+        resolvedLine.unitPrice = Number.isFinite(n) ? n : null;
+      }
     }
     
     console.log(`📄 [PDF] ➡️ Ligne résolue:`, resolvedLine);
     
     // Résoudre le total (ou le calculer)
-    if (line.totalSource) {
+    const hasExplicitTotal = line.totalSource || line.total !== undefined;
+    const hasQtyAndUnit = (typeof resolvedLine.quantity === 'number') && (typeof resolvedLine.unitPrice === 'number');
+    if (hasExplicitTotal && hasQtyAndUnit) {
+      // ✅ Règle: on évite le "qté + prix + total" -> total calculé
+      resolvedLine.total = (resolvedLine.quantity as number) * (resolvedLine.unitPrice as number);
+    } else if (line.totalSource) {
       const tot = this.resolveVariable(line.totalSource);
-      resolvedLine.total = parseFloat(tot) || 0;
+      const n = parseFloat(tot);
+      resolvedLine.total = Number.isFinite(n) ? n : null;
     } else if (typeof line.total === 'string' && line.total.startsWith('@')) {
       const tot = this.resolveVariable(line.total);
-      resolvedLine.total = parseFloat(tot) || 0;
+      const n = parseFloat(tot);
+      resolvedLine.total = Number.isFinite(n) ? n : null;
     } else if (line.total !== undefined) {
-      resolvedLine.total = parseFloat(line.total) || 0;
+      const n = parseFloat(line.total);
+      resolvedLine.total = Number.isFinite(n) ? n : null;
     } else {
-      // Calcul automatique si pas de total défini
-      resolvedLine.total = resolvedLine.quantity * resolvedLine.unitPrice;
+      // Calcul automatique si quantité+prix sont définis
+      resolvedLine.total = hasQtyAndUnit ? (resolvedLine.quantity as number) * (resolvedLine.unitPrice as number) : null;
     }
     
     return resolvedLine;
@@ -2325,22 +3591,55 @@ export class DocumentPdfRenderer {
     let result = text;
 
     // Substitution des variables @value.xxx et @select.xxx
-    result = result.replace(/@(value|select)\.([a-zA-Z0-9_.-]+)/g, (match, type, ref) => {
-      return this.resolveVariable(`@${type}.${ref}`) || match;
+    result = result.replace(/@(value|select)\.([a-zA-Z0-9_.-]+)/g, (_match, type, ref) => {
+      return this.resolveVariable(`@${type}.${ref}`);
     });
 
     // Substitution des variables {{xxx.yyy}}
-    result = result.replace(/\{\{([a-zA-Z0-9_.]+)\}\}/g, (match, ref) => {
-      return this.resolveVariable(ref) || match;
+    result = result.replace(/\{\{([a-zA-Z0-9_.]+)\}\}/g, (_match, ref) => {
+      return this.resolveVariable(ref);
     });
 
     // 🔥 Substitution des variables {lead.xxx}, {quote.xxx}, {org.xxx} (format utilisé dans les conditions)
-    result = result.replace(/\{(lead|quote|org)\.([a-zA-Z0-9_.]+)\}/g, (match, source, key) => {
-      const resolved = this.resolveVariable(`${source}.${key}`);
-      return resolved || match;
+    result = result.replace(/\{(lead|quote|org)\.([a-zA-Z0-9_.]+)\}/g, (_match, source, key) => {
+      return this.resolveVariable(`${source}.${key}`);
     });
 
     return result;
+  }
+
+  private normalizeText(text: string): string {
+    if (!text || typeof text !== 'string') return '';
+    return text
+      .replace(/<br\s*\/?>/gi, '\n')
+      .replace(/<\/p>\s*<p>/gi, '\n\n')
+      .replace(/<\/?p>/gi, '')
+      .replace(/<[^>]+>/g, '')
+      .replace(/\*\*(.*?)\*\*/g, '$1')
+      .replace(/__(.*?)__/g, '$1')
+      .replace(/&nbsp;/g, ' ')
+      .replace(/\s+\n/g, '\n')
+      .trim();
+  }
+
+  private isNearWhite(color?: string): boolean {
+    if (!color) return false;
+    const normalized = color.toLowerCase().trim();
+    if (normalized === '#fff' || normalized === '#ffffff' || normalized === 'white') return true;
+    const hex = normalized.replace('#', '');
+    if (hex.length === 3) {
+      const r = parseInt(hex[0] + hex[0], 16);
+      const g = parseInt(hex[1] + hex[1], 16);
+      const b = parseInt(hex[2] + hex[2], 16);
+      return r >= 245 && g >= 245 && b >= 245;
+    }
+    if (hex.length === 6) {
+      const r = parseInt(hex.slice(0, 2), 16);
+      const g = parseInt(hex.slice(2, 4), 16);
+      const b = parseInt(hex.slice(4, 6), 16);
+      return r >= 245 && g >= 245 && b >= 245;
+    }
+    return false;
   }
 
   /**
@@ -2352,24 +3651,35 @@ export class DocumentPdfRenderer {
     const quote = this.ctx.quote || {};
     const tblData = this.ctx.tblData || {};
 
-    console.log(`📄 [PDF] resolveVariable("${ref}")`, { tblDataKeys: Object.keys(tblData).slice(0, 10) });
-
     // Variables lead.xxx
     if (ref.startsWith('lead.')) {
-      const key = ref.replace('lead.', '') as keyof LeadData;
-      return String(lead[key] || '');
+      const key = ref.replace('lead.', '');
+      const value = (lead as any)[key];
+      console.log(`📄 [PDF] resolveVariable("${ref}") -> lead.${key} = "${value}"`);
+      return String(value || '');
     }
 
     // Variables org.xxx
     if (ref.startsWith('org.')) {
-      const key = ref.replace('org.', '') as keyof OrganizationData;
-      return String(org[key] || '');
+      const key = ref.replace('org.', '');
+      const orgAny = org as any;
+
+      // Synonymes / compat PageBuilder
+      if (key === 'tva') return String(orgAny.tva ?? orgAny.vatNumber ?? '');
+      if (key === 'iban') return String(orgAny.iban ?? orgAny.bankAccount ?? '');
+      if (key === 'bic') return String(orgAny.bic ?? '');
+      if (key === 'bankName') return String(orgAny.bankName ?? '');
+
+      const value = orgAny[key];
+      console.log(`📄 [PDF] resolveVariable("${ref}") -> org.${key} = "${value}"`);
+      return String(value || '');
     }
 
     // Variables quote.xxx
     if (ref.startsWith('quote.')) {
-      const key = ref.replace('quote.', '') as keyof QuoteData;
-      const value = quote[key];
+      const key = ref.replace('quote.', '');
+      const value = (quote as any)[key];
+      console.log(`📄 [PDF] resolveVariable("${ref}") -> quote.${key} = "${value}"`, { quoteKeys: Object.keys(quote) });
       if (typeof value === 'number') return value.toFixed(2);
       return String(value || '');
     }

@@ -906,6 +906,64 @@ async function evaluateCapacitiesForSubmission(
   // Cache par requête pour éviter de recharger les mêmes nœuds en boucle
   const triggerDerivationCache = new Map<string, string[]>();
 
+  // 🚀 OPTIMISATION CRITIQUE: Construire l'index inversé des triggers AVANT la boucle
+  // Au lieu de charger 40+ nodes un par un, on charge TOUT en UNE requête et on indexe
+  // Index: Map<changedFieldId, Set<displayFieldIdsToCalculate>>
+  const triggerIndex = new Map<string, Set<string>>();
+  
+  if (mode === 'change' && changedFieldId) {
+    // Charger TOUS les display fields metadata en UNE SEULE requête SQL
+    const displayFieldIds = capacities
+      .filter(cap => {
+        const isDisplayField = cap.TreeBranchLeafNode?.fieldType === 'DISPLAY' 
+          || cap.TreeBranchLeafNode?.type === 'DISPLAY'
+          || cap.TreeBranchLeafNode?.type === 'leaf_field';
+        return isDisplayField;
+      })
+      .map(cap => cap.nodeId);
+    
+    if (displayFieldIds.length > 0) {
+      console.log(`🚀 [TRIGGER INDEX] Chargement de ${displayFieldIds.length} display fields en 1 requête`);
+      
+      const displayNodes = await prisma.treeBranchLeafNode.findMany({
+        where: { id: { in: displayFieldIds } },
+        select: { id: true, metadata: true }
+      });
+      
+      // Construire l'index inversé
+      for (const node of displayNodes) {
+        const metaTriggerNodeIds = (node.metadata as { triggerNodeIds?: string[] })?.triggerNodeIds;
+        let triggerNodeIds = Array.isArray(metaTriggerNodeIds) ? metaTriggerNodeIds.filter(Boolean) : [];
+        
+        // Auto-heal si pas de triggers
+        if (triggerNodeIds.length === 0) {
+          const capacity = capacities.find(c => c.nodeId === node.id);
+          if (capacity) {
+            triggerNodeIds = deriveTriggerNodeIdsFromCapacity(capacity, node.id);
+          }
+        }
+        
+        // Expansion pour les copies (-1, -2, etc.)
+        const expandedTriggers = expandTriggersForCopy(node.id, triggerNodeIds);
+        
+        // Pour chaque trigger, ajouter ce display field à l'index
+        for (const triggerId of expandedTriggers) {
+          if (!triggerIndex.has(triggerId)) {
+            triggerIndex.set(triggerId, new Set());
+          }
+          triggerIndex.get(triggerId)!.add(node.id);
+        }
+      }
+      
+      const affectedCount = triggerIndex.get(changedFieldId)?.size || 0;
+      console.log(`🚀 [TRIGGER INDEX] Index créé: ${displayFieldIds.length} display fields → ${affectedCount} impactés par "${changedFieldId}"`);
+    }
+  }
+
+  // 🔥 DÉDUPLICATION: Un même nodeId peut apparaître plusieurs fois dans capacities
+  // (ex: formula + autre capacité). On déduplique pour éviter de calculer 3 fois le même champ !
+  const processedDisplayFields = new Set<string>();
+
   for (const capacity of capacities) {
     const sourceRef = capacity.sourceRef!;
     
@@ -928,125 +986,24 @@ async function evaluateCapacitiesForSubmission(
       // Ne pas continue → on laisse passer pour recalcul
     }
     
-    // 🎯 MODE CHANGE: Filtrage par triggerNodeIds pour les display fields
+    // 🎯 MODE CHANGE: Utiliser l'index inversé pour filtrage O(1) au lieu de O(n) queries
     if (isDisplayField && mode === 'change' && changedFieldId) {
-      // Récupérer les triggerNodeIds depuis le node
-      const node = await prisma.treeBranchLeafNode.findUnique({
-        where: { id: capacity.nodeId },
-        select: { metadata: true }
-      });
-      
-      const metaTriggerNodeIds = (node?.metadata as { triggerNodeIds?: string[] })?.triggerNodeIds;
-      let triggerNodeIds = Array.isArray(metaTriggerNodeIds) ? metaTriggerNodeIds.filter(Boolean) : [];
-      
-      // 🔍 DEBUG: Log au moment du chargement des triggers
-      console.log(`🔎 [TRIGGER LOAD] Display field ${capacity.nodeId} - changedFieldId: ${changedFieldId}`);
-      console.log(`   🔎 Node trouvé: ${node ? 'OUI' : 'NON'}, triggers: ${triggerNodeIds.length}`);
-      if (triggerNodeIds.length > 0 && triggerNodeIds.length <= 12) {
-        console.log(`   🔎 Triggers: ${JSON.stringify(triggerNodeIds)}`);
-      }
-      console.log(`   🔎 changedFieldId dans triggers? ${triggerNodeIds.includes(changedFieldId)}`);
-
-      // 🆘 AUTO-HEAL: si aucun trigger n'est configuré, tenter de les déduire depuis la formule/table/condition.
-      // Objectif: éviter les display fields "gelés" (ex: N° de panneau max) qui ne se recalculent jamais.
-      if (triggerNodeIds.length === 0) {
-        const derived = deriveTriggerNodeIdsFromCapacity(capacity, capacity.nodeId);
-        if (derived.length > 0) {
-          triggerNodeIds = derived;
-          try {
-            const existingMeta = (node?.metadata && typeof node.metadata === 'object')
-              ? (node.metadata as Record<string, unknown>)
-              : {};
-            await prisma.treeBranchLeafNode.update({
-              where: { id: capacity.nodeId },
-              data: {
-                metadata: {
-                  ...existingMeta,
-                  triggerNodeIds: derived,
-                } as unknown as Prisma.InputJsonValue,
-              }
-            });
-            console.log(
-              `🧩 [TRIGGERS AUTO] Display field ${capacity.nodeId} (${capacity.TreeBranchLeafNode?.label}) triggers auto-déduits: ${derived.length}`
-            );
-          } catch (e) {
-            console.warn(
-              `⚠️ [TRIGGERS AUTO] Impossible de persister les triggerNodeIds pour ${capacity.nodeId}:`,
-              (e as Error)?.message || e
-            );
-          }
-        }
+      // 🔥 DÉDUPLICATION: Si ce display field a déjà été traité, skip
+      if (processedDisplayFields.has(capacity.nodeId)) {
+        continue; // ✅ Déjà calculé, skip ce duplicata
       }
       
-      // 🔑 LOGIQUE CORRECTE: 
-      // - Chargement initial (changedFieldId=NULL) → Calculer TOUT
-      // - Changement d'un champ (changedFieldId existe) :
-      //   → Champ AVEC triggers qui match → Recalculer
-      //   → Champ AVEC triggers sans match → SKIP
-      //   → Champ SANS triggers → SKIP (calculé seulement au chargement initial)
-      if (triggerNodeIds && Array.isArray(triggerNodeIds) && triggerNodeIds.length > 0) {
-        // Des triggers sont définis, vérifier le match (compatible copies: on suffixe les triggers base)
-        const expanded = expandTriggersForCopy(capacity.nodeId, triggerNodeIds);
-        let matchesTrigger = matchesChangedField(expanded, changedFieldId);
-        
-        if (!matchesTrigger) {
-          // 🆘 AUTO-REPAIR: triggers existants mais potentiellement incomplets.
-          // On tente de re-déduire les dépendances depuis les capacités du nœud (formule/condition/table/etc.)
-          // pour éviter les valeurs "figées" quand Longueur/Rampant changent.
-          try {
-            const cached = triggerDerivationCache.get(capacity.nodeId);
-            const derived = cached ?? (await deriveTriggerNodeIdsFromNodeId(capacity.nodeId));
-            if (!cached) triggerDerivationCache.set(capacity.nodeId, derived);
-
-            const merged = uniqStrings([...triggerNodeIds, ...derived]);
-            if (merged.length > triggerNodeIds.length) {
-              const reExpanded = expandTriggersForCopy(capacity.nodeId, merged);
-              matchesTrigger = matchesChangedField(reExpanded, changedFieldId);
-
-              // Persister les triggers améliorés (best-effort)
-              if (matchesTrigger) {
-                const existingMeta = (node?.metadata && typeof node.metadata === 'object')
-                  ? (node.metadata as Record<string, unknown>)
-                  : {};
-                await prisma.treeBranchLeafNode.update({
-                  where: { id: capacity.nodeId },
-                  data: {
-                    metadata: {
-                      ...existingMeta,
-                      triggerNodeIds: merged,
-                    } as unknown as Prisma.InputJsonValue,
-                  }
-                });
-                console.log(
-                  `🧩 [TRIGGERS REPAIR] Display field ${capacity.nodeId} (${capacity.TreeBranchLeafNode?.label}) triggers étendus: ${triggerNodeIds.length} → ${merged.length}`
-                );
-              }
-            }
-          } catch (e) {
-            // Best-effort: si le repair échoue, on garde le comportement existant
-            console.warn(
-              `⚠️ [TRIGGERS REPAIR] Échec réparation triggers pour ${capacity.nodeId}:`,
-              (e as Error)?.message || e
-            );
-          }
-
-          if (!matchesTrigger) {
-            // Le champ modifié n'est PAS un trigger pour ce display field → SKIP
-            console.log(`⏸️ [TRIGGER FILTER] Display field ${capacity.nodeId} (${capacity.TreeBranchLeafNode?.label}) skippé - changedFieldId "${changedFieldId}" pas dans triggers [${triggerNodeIds.length} triggers définis]`);
-            // 🔍 DEBUG: Afficher les triggers et le résultat de la comparaison
-            console.log(`   📋 [DEBUG] Triggers: ${JSON.stringify(triggerNodeIds.slice(0, 5))}${triggerNodeIds.length > 5 ? '...' : ''}`);
-            console.log(`   📋 [DEBUG] Position incluse? ${triggerNodeIds.includes(changedFieldId)}`);
-            console.log(`   📋 [DEBUG] Expanded triggers: ${JSON.stringify(expanded.slice(0, 5))}${expanded.length > 5 ? '...' : ''}`);
-            continue; // ✅ SKIP
-          }
-        } else {
-          console.log(`✅ [TRIGGER MATCH] Display field ${capacity.nodeId} (${capacity.TreeBranchLeafNode?.label}) recalculé - changedFieldId "${changedFieldId}" dans triggers`);
-        }
-      } else {
-        // ❌ AUCUN trigger configuré → SKIP lors des changements (calculé uniquement au chargement initial)
-        console.log(`⏸️ [NO TRIGGERS] Display field ${capacity.nodeId} (${capacity.TreeBranchLeafNode?.label}) skippé - aucun trigger défini, calculé uniquement au chargement initial`);
-        continue; // ✅ SKIP - ne calculer que si changedFieldId=NULL
+      // ✅ NOUVEAU: Vérification O(1) dans l'index au lieu de requête SQL
+      const affectedDisplayFields = triggerIndex.get(changedFieldId);
+      
+      if (!affectedDisplayFields || !affectedDisplayFields.has(capacity.nodeId)) {
+        console.log(`⏸️ [TRIGGER INDEX] Display field ${capacity.nodeId} (${capacity.TreeBranchLeafNode?.label}) skippé - pas dans l'index pour "${changedFieldId}"`);
+        continue; // ✅ SKIP - pas affecté par ce changement
       }
+      
+      // Marquer comme traité pour éviter les duplicatas
+      processedDisplayFields.add(capacity.nodeId);
+      console.log(`✅ [TRIGGER INDEX] Display field ${capacity.nodeId} (${capacity.TreeBranchLeafNode?.label}) recalculé - trouvé dans l'index`);
     }
     
     try {

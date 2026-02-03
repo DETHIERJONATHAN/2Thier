@@ -15,10 +15,11 @@
  * - Évite les appels API individuels /select-config et /trees/:id/nodes
  */
 
-import { useState, useEffect, useContext } from 'react';
+import { useState, useEffect, useContext, useMemo } from 'react';
 import { useAuthenticatedApi } from '../../../../../hooks/useAuthenticatedApi';
 import { tblLog, tblWarn, isTBLDebugEnabled } from '../../../../../utils/tblDebug';
 import { useTBLBatch } from '../contexts/TBLBatchContext';
+import { canFieldBeSelect } from '../../../../../lib/fieldDuplicationPolicy';
 
 // 🚀 PERF: Cache global pour les SelectConfig
 const selectConfigCache = new Map<string, TreeBranchLeafSelectConfig>();
@@ -95,10 +96,20 @@ export function useTBLTableLookup(
   enabled: boolean = true, // ✅ NOUVEAU: Paramètre pour activer/désactiver le lookup
   formData?: Record<string, any> // 🆕 ÉTAPE 2.5: Valeurs du formulaire pour filtrage dynamique
 ): TableLookupResult {
-  const { api } = useAuthenticatedApi();
+  const apiHook = useAuthenticatedApi();
+  // 🔥 FIX: Stabiliser l'instance API pour éviter les boucles de rendu infinies
+  // Conformément aux conventions du projet (.github/copilot-instructions.md)
+  const api = useMemo(() => apiHook.api, []);
   
   // 🚀 BATCHING: Utiliser le contexte batch pour les configs
   const batchContext = useTBLBatch();
+  
+  // 🔥 FIX: Stabiliser formData en le sérialisant en JSON pour la dépendance
+  // Cela évite les boucles infinies quand formData est un nouvel objet à chaque rendu
+  const formDataJson = useMemo(() => 
+    formData ? JSON.stringify(formData) : '', 
+    [formData]
+  );
   
   const [options, setOptions] = useState<TableLookupOption[]>([]);
   const [loading, setLoading] = useState(false);
@@ -108,6 +119,9 @@ export function useTBLTableLookup(
 
   useEffect(() => {
     const isTargetField = fieldId === '131a7b51-97d5-4f40-8a5a-9359f38939e8';
+
+    // 🔥 FIX: Reconstruire formData depuis la version JSON sérialisée
+    const formDataParsed: Record<string, any> | undefined = formDataJson ? JSON.parse(formDataJson) : undefined;
 
     if (isTargetField) {
       console.log(`[DEBUG][Test - liste] 🚀 Hook déclenché pour le champ cible. fieldId: ${fieldId}, nodeId: ${nodeId}, enabled: ${enabled}`);
@@ -172,60 +186,44 @@ export function useTBLTableLookup(
         
         // Fallback: appel API individuel si pas dans le cache batch
         if (!selectConfig) {
-          // 🔄 REPEATER SUPPORT: D'abord essayer avec l'ID complet (suffixé), puis fallback sur l'ID de base
-          // ⚠️ FIX 06/01/2026: Pour les repeaters, la SelectConfig copiée a un nodeId suffixé (ex: uuid-1)
-          // Il faut d'abord chercher avec cet ID suffixé avant de fallback sur l'original
-          
-          // Détecte si le fieldId a un suffixe de repeater (-1, -2, etc.)
-          const suffixMatch = fieldId.match(/-(\d{1,3})$/);
-          const hasSuffix = !!suffixMatch;
-          const baseFieldId = hasSuffix ? fieldId.replace(/-\d{1,3}$/, '') : fieldId;
-          
-          console.log(`[useTBLTableLookup] 🔍 Recherche SelectConfig pour fieldId=${fieldId}, hasSuffix=${hasSuffix}, baseFieldId=${baseFieldId}`);
-          
-          // 🔥 FIX: D'abord TOUJOURS essayer avec l'ID tel quel (qui peut être suffixé ou non)
-          console.log(`[useTBLTableLookup] ➡️ GET /api/treebranchleaf/nodes/${fieldId}/select-config (primary)`);
-          selectConfig = await api.get<TreeBranchLeafSelectConfig>(
-            `/api/treebranchleaf/nodes/${fieldId}/select-config`,
-            { suppressErrorLogForStatuses: [404] }
-          );
-          
-          console.log(`[useTBLTableLookup] 📥 Réponse PRIMARY:`, selectConfig ? `TROUVÉ - nodeId=${selectConfig.nodeId}` : 'NULL (pas trouvé ou erreur)');
-          
-          // Si pas trouvé et qu'on a un suffixe, essayer avec l'ID de base (l'original)
-          if (!selectConfig && hasSuffix) {
-            console.log(`[useTBLTableLookup] ⚠️ PRIMARY ÉCHOUÉ - Tentative fallback...`);
+          try {
+            const suffixMatch = fieldId.match(/-(\d{1,3})$/);
+            const hasSuffix = !!suffixMatch;
+            const baseFieldId = hasSuffix ? fieldId.replace(/-\d{1,3}$/, '') : fieldId;
             
-            // 🚀 PERF: Vérifier cache pour baseFieldId
-            if (selectConfigCache.has(baseFieldId)) {
-              selectConfig = selectConfigCache.get(baseFieldId)!;
-              console.log(`[useTBLTableLookup] 💾 CACHE HIT (fallback) pour ${baseFieldId}`);
-            } else {
-              console.log(`[useTBLTableLookup] ➡️ GET /api/treebranchleaf/nodes/${baseFieldId}/select-config (fallback to base ID)`);
-              selectConfig = await api.get<TreeBranchLeafSelectConfig>(
-                `/api/treebranchleaf/nodes/${baseFieldId}/select-config`,
-                { suppressErrorLogForStatuses: [404] }
-              );
-              
-              // 🚀 PERF: Cache aussi le fallback
-              if (selectConfig) {
-                selectConfigCache.set(baseFieldId, selectConfig);
-                // Cache aussi pour le fieldId suffixé pour éviter re-lookup
-                selectConfigCache.set(fieldId, selectConfig);
-                console.log(`[useTBLTableLookup] 💾 CACHE MISS (fallback) → ajouté pour ${baseFieldId} et ${fieldId}`);
-              }
+            if (isTBLDebugEnabled()) {
+              console.log(`[useTBLTableLookup] 🔍 Recherche SelectConfig pour fieldId=${fieldId}, hasSuffix=${hasSuffix}, baseFieldId=${baseFieldId}`);
+              console.log(`[useTBLTableLookup] ➡️ GET /api/treebranchleaf/nodes/${fieldId}/select-config (primary)`);
             }
-            console.log(`[useTBLTableLookup] 📥 Réponse FALLBACK:`, selectConfig ? `TROUVÉ - nodeId=${selectConfig.nodeId}` : 'NULL');
 
-            if (selectConfig) {
-              console.warn(`[useTBLTableLookup] ⚠️ ⚠️ ⚠️ BUG DÉTECTÉ ⚠️ ⚠️ ⚠️`);
-              console.warn(`[useTBLTableLookup] Le SelectConfig -${suffixMatch[1]} n'existe PAS, fallback sur l'original!`);
-              console.warn(`[useTBLTableLookup] Demandé: ${fieldId}`);
-              console.warn(`[useTBLTableLookup] Reçu: ${selectConfig.nodeId}`);
+            selectConfig = await api.get<TreeBranchLeafSelectConfig>(
+              `/api/treebranchleaf/nodes/${fieldId}/select-config`,
+              { suppressErrorLogForStatuses: [404] }
+            );
+
+            if (isTBLDebugEnabled()) {
+              console.log(`[useTBLTableLookup] 📥 Réponse PRIMARY:`, selectConfig ? `TROUVÉ - nodeId=${selectConfig.nodeId}` : 'NULL (pas trouvé ou erreur)');
             }
+
+          } catch (err: any) {
+            // 🔥 GESTION CRITIQUE DU BUG INCLINAISON-1
+            // Si l'API renvoie une erreur avec `isCalculated: true`, cela signifie que
+            // la politique du backend a déterminé que ce champ ne DOIT PAS être un select.
+            if (err.response?.data?.isCalculated === true) {
+              if (isTBLDebugEnabled()) {
+                console.log(`[useTBLTableLookup] 🛡️ Politique appliquée: le champ ${fieldId} est calculé, pas un select. Arrêt du lookup.`);
+              }
+              setOptions([]);
+              setTableData(undefined);
+              setConfig(undefined);
+              setLoading(false);
+              setError(null); // Ce n'est pas une erreur, c'est un comportement attendu
+              return; // Arrêter l'exécution du hook
+            }
+            
+            // Si c'est une autre erreur, on la lance pour être gérée plus bas
+            throw err;
           }
-          
-          console.log(`[useTBLTableLookup] ⬅️ SelectConfig FINALE:`, selectConfig ? `nodeId=${selectConfig.nodeId}, tableRef=${selectConfig.tableReference}` : 'null');
         }
 
         if (isTargetField) console.log(`[DEBUG][Test - liste] ⬅️ Réponse select-config:`, selectConfig);
@@ -235,6 +233,19 @@ export function useTBLTableLookup(
         // 404 supprimé retourne null
         if (!selectConfig) {
           if (isTargetField) console.log(`[DEBUG][Test - liste] ❌ Pas de selectConfig. Arrêt.`);
+          setOptions([]);
+          setTableData(undefined);
+          setConfig(undefined);
+          setLoading(false);
+          return;
+        }
+
+        // 🔥 POLITIQUE DE DUPLICATION: Vérifier si ce champ PEUT être un SELECT
+        // 🆕 RÉVISÉE: Permettre aux champs SELECT dupliqués (comme Orientation-1) de rester SELECT
+        //            Bloquer les champs TEXT dupliqués de devenir SELECT
+        const fieldType = selectConfig?.sourceType || 'TEXT'; // Si pas de source, c'est TEXT
+        if (!canFieldBeSelect(fieldId, fieldType)) {
+          if (isTargetField) console.log(`[DEBUG][Test - liste] 🛡️ Politique appliquée: champ dupliqué (${fieldId}) de type ${fieldType} ne peut pas être SELECT. Arrêt.`);
           setOptions([]);
           setTableData(undefined);
           setConfig(undefined);
@@ -265,9 +276,9 @@ export function useTBLTableLookup(
         
         // 🆕 ÉTAPE 2.5: Construire les formValues pour le filtrage dynamique
         let queryParams = '';
-        if (formData && Object.keys(formData).length > 0) {
+        if (formDataParsed && Object.keys(formDataParsed).length > 0) {
           // 🔥 Filtrer les champs mirror TBL internes + images/fichiers base64 (évite URL trop longue)
-          const filteredFormData = Object.entries(formData)
+          const filteredFormData = Object.entries(formDataParsed)
             .filter(([key, value]) => {
               // Exclure les champs mirror internes
               if (key.startsWith('__mirror_')) return false;
@@ -408,7 +419,7 @@ export function useTBLTableLookup(
     return () => {
       cancelled = true;
     };
-  }, [fieldId, nodeId, api, enabled, formData, batchContext.isReady]); // 🚀 Ajout de batchContext.isReady pour utiliser le cache quand prêt
+  }, [fieldId, nodeId, enabled, formDataJson, batchContext.isReady]); // 🔥 FIX: Utiliser formDataJson (stable) au lieu de formData (instable)
 
   return { options, loading, error, tableData, config };
 }

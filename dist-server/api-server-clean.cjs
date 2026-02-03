@@ -4306,7 +4306,7 @@ __export(api_server_clean_exports, {
 });
 module.exports = __toCommonJS(api_server_clean_exports);
 var import_dotenv = __toESM(require("dotenv"), 1);
-var import_express97 = __toESM(require("express"), 1);
+var import_express98 = __toESM(require("express"), 1);
 var import_path8 = __toESM(require("path"), 1);
 var import_fs8 = __toESM(require("fs"), 1);
 var import_cors = __toESM(require("cors"), 1);
@@ -4318,7 +4318,7 @@ var import_compression = __toESM(require("compression"), 1);
 var import_express_winston = __toESM(require("express-winston"), 1);
 
 // src/routes/index.ts
-var import_express74 = require("express");
+var import_express75 = require("express");
 
 // src/routes/authRoutes.ts
 var import_express = require("express");
@@ -31970,8 +31970,8 @@ function getOrgId(req2) {
   const headerOrg = req2.headers?.["x-organization-id"] || req2.headers?.["x-organization"] || req2.headers?.["organization-id"];
   return user.organizationId || headerOrg || null;
 }
-function registerSumDisplayFieldRoutes(router94) {
-  router94.post("/trees/:treeId/nodes/:nodeId/sum-display-field", async (req2, res) => {
+function registerSumDisplayFieldRoutes(router95) {
+  router95.post("/trees/:treeId/nodes/:nodeId/sum-display-field", async (req2, res) => {
     try {
       const { treeId, nodeId } = req2.params;
       const organizationId = getOrgId(req2);
@@ -32280,7 +32280,7 @@ function registerSumDisplayFieldRoutes(router94) {
       res.status(500).json({ error: "Erreur lors de la cr\xC3\u0192\xC2\xA9ation du champ Total", details: errMsg });
     }
   });
-  router94.delete("/trees/:treeId/nodes/:nodeId/sum-display-field", async (req2, res) => {
+  router95.delete("/trees/:treeId/nodes/:nodeId/sum-display-field", async (req2, res) => {
     try {
       const { treeId, nodeId } = req2.params;
       const organizationId = getOrgId(req2);
@@ -49923,11 +49923,121 @@ router59.get("/capabilities", authenticateToken, async (req2, res) => {
 });
 var tbl_capabilities_default = router59;
 
-// src/routes/leadGeneration.ts
+// src/routes/tbl-select-config-route.ts
 var import_express61 = require("express");
 init_database();
-var import_express_rate_limit6 = __toESM(require("express-rate-limit"), 1);
+
+// src/routes/utils/getAuthCtx.ts
+function getAuthCtx5(req2) {
+  const user = req2.user;
+  return {
+    organizationId: user?.organizationId || null,
+    isSuperAdmin: user?.isSuperAdmin || false
+  };
+}
+
+// src/components/TreeBranchLeaf/treebranchleaf-new/api/shared/select-config-policy.ts
+var SELECT_FIELD_TYPES = /* @__PURE__ */ new Set([
+  "select",
+  "multi-select",
+  "radio",
+  "checkbox"
+]);
+function isSelectLikeFieldType(fieldType) {
+  if (!fieldType) return false;
+  const normalized = String(fieldType).toLowerCase();
+  if (SELECT_FIELD_TYPES.has(normalized)) return true;
+  return normalized.includes("select");
+}
+function shouldAutoCreateSelectConfig(input) {
+  const { node, tableMeta } = input;
+  if (isSelectLikeFieldType(node.fieldType)) return true;
+  if (typeof node.subType === "string" && node.subType.toUpperCase() === "SELECT") return true;
+  const optionsSource = node.TreeBranchLeafSelectConfig?.optionsSource ?? null;
+  if (typeof optionsSource === "string" && optionsSource.toLowerCase() === "table") return true;
+  const lookup = tableMeta && typeof tableMeta === "object" ? tableMeta.lookup : void 0;
+  if (lookup && typeof lookup === "object" && (lookup.enabled === true || lookup.columnLookupEnabled === true || lookup.rowLookupEnabled === true)) {
+    return true;
+  }
+  return false;
+}
+
+// src/routes/tbl-select-config-route.ts
 var router60 = (0, import_express61.Router)();
+router60.get("/nodes/:nodeId/select-config", async (req2, res) => {
+  try {
+    const { nodeId } = req2.params;
+    const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx5(req2);
+    const match = nodeId.match(/^(.*?)(-\d+)?$/);
+    const baseNodeId = match ? match[1] : nodeId;
+    const isDuplicated = !!(match && match[2]);
+    const baseNodePromise = db.treeBranchLeafNode.findUnique({
+      where: { id: baseNodeId },
+      // On utilise l'ID de base
+      include: {
+        TreeBranchLeafSelectConfig: true,
+        TreeBranchLeafTree: {
+          select: { organizationId: true }
+        }
+      }
+    });
+    const duplicatedNodePromise = isDuplicated ? db.treeBranchLeafNode.findUnique({
+      where: { id: nodeId }
+    }) : Promise.resolve(null);
+    const [baseNode, duplicatedNode] = await Promise.all([baseNodePromise, duplicatedNodePromise]);
+    const effectiveNode = duplicatedNode || baseNode;
+    if (!effectiveNode) {
+      return res.status(404).json({ error: "N\u0153ud non trouv\xE9" });
+    }
+    if (!isSuperAdmin2 && organizationId && baseNode?.TreeBranchLeafTree?.organizationId !== organizationId) {
+      return res.status(403).json({ error: "Acc\xE8s non autoris\xE9 \xE0 ce n\u0153ud" });
+    }
+    if (nodeId.includes("76a40eb1-a3c5-499f-addb-0ce7fdb4b4c9")) {
+      console.log(`[INCLINAISON DEBUG] Node ID: ${nodeId}`);
+      console.log(`[INCLINAISON DEBUG] Is Duplicated: ${isDuplicated}`);
+      console.log(`[INCLINAISON DEBUG] Base Node ID: ${baseNodeId}`);
+      console.log(`[INCLINAISON DEBUG] Effective Node:`, effectiveNode ? { id: effectiveNode.id, subType: effectiveNode.subType, table_activeId: effectiveNode.table_activeId } : null);
+      console.log(`[INCLINAISON DEBUG] Base Node:`, baseNode ? { id: baseNode.id, subType: baseNode.subType, table_activeId: baseNode.table_activeId, selectConfig: !!baseNode.TreeBranchLeafSelectConfig } : null);
+    }
+    if (isDuplicated) {
+      const tableId = baseNode.TreeBranchLeafSelectConfig?.tableReference || effectiveNode.table_activeId;
+      const tableMeta = tableId ? await db.treeBranchLeafNodeTable.findUnique({
+        where: { id: tableId },
+        select: { meta: true }
+      }) : null;
+      const policyCheck = shouldAutoCreateSelectConfig({ node: effectiveNode, tableMeta: tableMeta?.meta });
+      if (nodeId.includes("76a40eb1-a3c5-499f-addb-0ce7fdb4b4c9")) {
+        console.log(`[INCLINAISON DEBUG] Table ID for policy check: ${tableId}`);
+        console.log(`[INCLINAISON DEBUG] Table Meta found:`, tableMeta);
+        console.log(`[INCLINAISON DEBUG] Policy Result (shouldAutoCreateSelectConfig): ${policyCheck}`);
+      }
+      if (!policyCheck) {
+        if (nodeId.includes("76a40eb1-a3c5-499f-addb-0ce7fdb4b4c9")) {
+          console.log(`[INCLINAISON DEBUG] POLITIQUE REFUS\xC9E. Renvoi d'une erreur 404 pour forcer un champ normal.`);
+        }
+        return res.status(404).json({
+          error: "Ce champ dupliqu\xE9 est configur\xE9 comme un champ calcul\xE9 et non un select.",
+          isCalculated: true
+        });
+      }
+    }
+    if (baseNode?.TreeBranchLeafSelectConfig) {
+      return res.json(baseNode.TreeBranchLeafSelectConfig);
+    }
+    return res.status(404).json({ error: "Aucune configuration de type select trouv\xE9e pour ce n\u0153ud" });
+  } catch (error) {
+    const err = error;
+    console.error(`[API] Erreur sur GET /nodes/:nodeId/select-config:`, err.message);
+    res.status(500).json({ error: "Erreur interne du serveur", details: err.message });
+  }
+});
+var tblSelectConfigRouter = router60;
+
+// src/routes/leadGeneration.ts
+var import_express62 = require("express");
+init_database();
+var import_express_rate_limit6 = __toESM(require("express-rate-limit"), 1);
+var router61 = (0, import_express62.Router)();
 var prisma34 = db;
 var leadGenRateLimit = (0, import_express_rate_limit6.default)({
   windowMs: 60 * 1e3,
@@ -49936,8 +50046,8 @@ var leadGenRateLimit = (0, import_express_rate_limit6.default)({
   // 50 requêtes par minute
   message: { success: false, message: "Trop de requ\xEAtes lead generation" }
 });
-router60.use(authMiddleware);
-router60.use(leadGenRateLimit);
+router61.use(authMiddleware);
+router61.use(leadGenRateLimit);
 var getQueryString = (value) => {
   if (typeof value === "string") return value;
   if (Array.isArray(value)) {
@@ -49955,7 +50065,7 @@ var buildOriginFilter = (origin) => {
     ]
   };
 };
-router60.get("/campaigns", requireRole2(["admin", "super_admin"]), async (req2, res) => {
+router61.get("/campaigns", requireRole2(["admin", "super_admin"]), async (req2, res) => {
   try {
     const organizationId = req2.user?.organizationId;
     if (!organizationId) {
@@ -50007,7 +50117,7 @@ router60.get("/campaigns", requireRole2(["admin", "super_admin"]), async (req2, 
     res.status(500).json({ success: false, message: "Erreur lors de la r\xE9cup\xE9ration des campagnes" });
   }
 });
-router60.post("/campaigns", requireRole2(["admin", "super_admin"]), async (req2, res) => {
+router61.post("/campaigns", requireRole2(["admin", "super_admin"]), async (req2, res) => {
   try {
     const organizationId = req2.user?.organizationId;
     if (!organizationId) return res.status(400).json({ success: false, message: "Organization ID manquant" });
@@ -50022,7 +50132,7 @@ router60.post("/campaigns", requireRole2(["admin", "super_admin"]), async (req2,
     res.status(500).json({ success: false, message: "Erreur lors de la cr\xE9ation de la campagne" });
   }
 });
-router60.get("/stats", requireRole2(["admin", "super_admin"]), async (req2, res) => {
+router61.get("/stats", requireRole2(["admin", "super_admin"]), async (req2, res) => {
   try {
     const organizationId = req2.user?.organizationId;
     if (!organizationId) return res.status(400).json({ success: false, message: "Organization ID manquant" });
@@ -50043,7 +50153,7 @@ router60.get("/stats", requireRole2(["admin", "super_admin"]), async (req2, res)
     res.status(500).json({ success: false, message: "Erreur lors de la r\xE9cup\xE9ration des statistiques" });
   }
 });
-router60.put("/campaigns/:id", requireRole2(["admin", "super_admin"]), async (req2, res) => {
+router61.put("/campaigns/:id", requireRole2(["admin", "super_admin"]), async (req2, res) => {
   try {
     const { id } = req2.params;
     const organizationId = req2.user?.organizationId;
@@ -50058,7 +50168,7 @@ router60.put("/campaigns/:id", requireRole2(["admin", "super_admin"]), async (re
     res.status(500).json({ success: false, message: "Erreur lors de la modification de la campagne" });
   }
 });
-router60.delete("/campaigns/:id", requireRole2(["admin", "super_admin"]), async (req2, res) => {
+router61.delete("/campaigns/:id", requireRole2(["admin", "super_admin"]), async (req2, res) => {
   try {
     const { id } = req2.params;
     const organizationId = req2.user?.organizationId;
@@ -50071,7 +50181,7 @@ router60.delete("/campaigns/:id", requireRole2(["admin", "super_admin"]), async 
     res.status(500).json({ success: false, message: "Erreur lors de la suppression de la campagne" });
   }
 });
-router60.patch("/campaigns/:id/status", requireRole2(["admin", "super_admin"]), async (req2, res) => {
+router61.patch("/campaigns/:id/status", requireRole2(["admin", "super_admin"]), async (req2, res) => {
   try {
     const { id } = req2.params;
     const { status } = req2.body;
@@ -50087,7 +50197,7 @@ router60.patch("/campaigns/:id/status", requireRole2(["admin", "super_admin"]), 
     res.status(500).json({ success: false, message: "Erreur lors de la mise \xE0 jour du statut" });
   }
 });
-router60.post("/campaigns/:id/duplicate", requireRole2(["admin", "super_admin"]), async (req2, res) => {
+router61.post("/campaigns/:id/duplicate", requireRole2(["admin", "super_admin"]), async (req2, res) => {
   try {
     const { id } = req2.params;
     const organizationId = req2.user?.organizationId;
@@ -50110,7 +50220,7 @@ router60.post("/campaigns/:id/duplicate", requireRole2(["admin", "super_admin"])
     res.status(500).json({ success: false, message: "Erreur lors de la duplication de la campagne" });
   }
 });
-router60.get("/stats/timeseries", requireRole2(["admin", "super_admin"]), async (req2, res) => {
+router61.get("/stats/timeseries", requireRole2(["admin", "super_admin"]), async (req2, res) => {
   try {
     const organizationId = req2.user?.organizationId;
     if (!organizationId) return res.status(400).json({ success: false, message: "Organization ID manquant" });
@@ -50148,13 +50258,13 @@ router60.get("/stats/timeseries", requireRole2(["admin", "super_admin"]), async 
     res.status(500).json({ success: false, message: "Erreur lors de la r\xE9cup\xE9ration des s\xE9ries temporelles" });
   }
 });
-var leadGeneration_default = router60;
+var leadGeneration_default = router61;
 
 // src/routes/marketplace-fixed.ts
-var import_express62 = require("express");
+var import_express63 = require("express");
 init_prisma();
 var import_express_rate_limit7 = __toESM(require("express-rate-limit"), 1);
-var router61 = (0, import_express62.Router)();
+var router62 = (0, import_express63.Router)();
 var marketplaceRateLimit = (0, import_express_rate_limit7.default)({
   windowMs: 60 * 1e3,
   // 1 minute
@@ -50162,9 +50272,9 @@ var marketplaceRateLimit = (0, import_express_rate_limit7.default)({
   // 100 requêtes par minute
   message: { success: false, message: "Trop de requ\xEAtes marketplace" }
 });
-router61.use(authMiddleware);
-router61.use(marketplaceRateLimit);
-router61.get("/leads", requireRole2(["admin", "super_admin"]), async (req2, res) => {
+router62.use(authMiddleware);
+router62.use(marketplaceRateLimit);
+router62.get("/leads", requireRole2(["admin", "super_admin"]), async (req2, res) => {
   try {
     const organizationId = req2.user?.organizationId;
     if (!organizationId) {
@@ -50284,7 +50394,7 @@ router61.get("/leads", requireRole2(["admin", "super_admin"]), async (req2, res)
     });
   }
 });
-router61.get("/stats", requireRole2(["admin", "super_admin"]), async (req2, res) => {
+router62.get("/stats", requireRole2(["admin", "super_admin"]), async (req2, res) => {
   try {
     const organizationId = req2.user?.organizationId;
     if (!organizationId) {
@@ -50345,7 +50455,7 @@ router61.get("/stats", requireRole2(["admin", "super_admin"]), async (req2, res)
     });
   }
 });
-router61.get("/saved-searches", requireRole2(["admin", "super_admin"]), async (req2, res) => {
+router62.get("/saved-searches", requireRole2(["admin", "super_admin"]), async (req2, res) => {
   try {
     const organizationId = req2.user?.organizationId;
     if (!organizationId) {
@@ -50367,7 +50477,7 @@ router61.get("/saved-searches", requireRole2(["admin", "super_admin"]), async (r
     });
   }
 });
-router61.post("/purchase/:leadId", requireRole2(["admin", "super_admin"]), async (req2, res) => {
+router62.post("/purchase/:leadId", requireRole2(["admin", "super_admin"]), async (req2, res) => {
   try {
     const { leadId } = req2.params;
     const organizationId = req2.user?.organizationId;
@@ -50406,13 +50516,13 @@ router61.post("/purchase/:leadId", requireRole2(["admin", "super_admin"]), async
     });
   }
 });
-var marketplace_fixed_default = router61;
+var marketplace_fixed_default = router62;
 
 // src/routes/partner.ts
-var import_express63 = require("express");
+var import_express64 = require("express");
 init_database();
 var import_express_rate_limit8 = __toESM(require("express-rate-limit"), 1);
-var router62 = (0, import_express63.Router)();
+var router63 = (0, import_express64.Router)();
 var prisma35 = db;
 var partnerRateLimit = (0, import_express_rate_limit8.default)({
   windowMs: 60 * 1e3,
@@ -50421,9 +50531,9 @@ var partnerRateLimit = (0, import_express_rate_limit8.default)({
   // 30 requêtes par minute
   message: { success: false, message: "Trop de requ\xEAtes partner portal" }
 });
-router62.use(authMiddleware);
-router62.use(partnerRateLimit);
-router62.get("/dashboard", requireRole2(["admin", "super_admin"]), async (req2, res) => {
+router63.use(authMiddleware);
+router63.use(partnerRateLimit);
+router63.get("/dashboard", requireRole2(["admin", "super_admin"]), async (req2, res) => {
   try {
     const organizationId = req2.user?.organizationId;
     if (!organizationId) {
@@ -50510,7 +50620,7 @@ router62.get("/dashboard", requireRole2(["admin", "super_admin"]), async (req2, 
     });
   }
 });
-router62.get("/earnings", requireRole2(["admin", "super_admin"]), async (req2, res) => {
+router63.get("/earnings", requireRole2(["admin", "super_admin"]), async (req2, res) => {
   try {
     const organizationId = req2.user?.organizationId;
     if (!organizationId) {
@@ -50572,7 +50682,7 @@ router62.get("/earnings", requireRole2(["admin", "super_admin"]), async (req2, r
     });
   }
 });
-router62.get("/leads", requireRole2(["admin", "super_admin"]), async (req2, res) => {
+router63.get("/leads", requireRole2(["admin", "super_admin"]), async (req2, res) => {
   try {
     const organizationId = req2.user?.organizationId;
     if (!organizationId) {
@@ -50651,7 +50761,7 @@ router62.get("/leads", requireRole2(["admin", "super_admin"]), async (req2, res)
     });
   }
 });
-router62.post("/register", requireRole2(["admin", "super_admin"]), async (req2, res) => {
+router63.post("/register", requireRole2(["admin", "super_admin"]), async (req2, res) => {
   try {
     const organizationId = req2.user?.organizationId;
     if (!organizationId) {
@@ -50718,15 +50828,15 @@ router62.post("/register", requireRole2(["admin", "super_admin"]), async (req2, 
     });
   }
 });
-var partner_default = router62;
+var partner_default = router63;
 
 // src/routes/publicForms.ts
-var import_express64 = require("express");
+var import_express65 = require("express");
 var import_express_rate_limit9 = __toESM(require("express-rate-limit"), 1);
 var import_zod8 = require("zod");
 init_prisma();
 console.log("[PUBLIC-FORMS-DEBUG] prisma import\xE9:", typeof db, db ? "\u2705 OK" : "\u274C UNDEFINED");
-var router63 = (0, import_express64.Router)();
+var router64 = (0, import_express65.Router)();
 var submissionRateLimit = (0, import_express_rate_limit9.default)({
   windowMs: 5 * 60 * 1e3,
   max: 10,
@@ -51180,28 +51290,28 @@ var deleteFormHandler = async (req2, res) => {
     res.status(500).json({ success: false, message: "Erreur lors de la suppression du formulaire" });
   }
 };
-router63.get(
+router64.get(
   "/",
   authMiddleware,
   requireRole2(["admin", "super_admin"]),
   adminRateLimit,
   listFormsHandler
 );
-router63.get(
+router64.get(
   "/stats",
   authMiddleware,
   requireRole2(["admin", "super_admin"]),
   adminRateLimit,
   statsHandler
 );
-router63.get(
+router64.get(
   "/:formId/submissions",
   authMiddleware,
   requireRole2(["admin", "super_admin"]),
   adminRateLimit,
   submissionsHandler
 );
-router63.get(
+router64.get(
   "/:formId",
   authMiddleware,
   requireRole2(["admin", "super_admin"]),
@@ -51227,35 +51337,35 @@ router63.get(
     }
   }
 );
-router63.post(
+router64.post(
   "/",
   authMiddleware,
   requireRole2(["admin", "super_admin"]),
   adminRateLimit,
   createFormHandler
 );
-router63.put(
+router64.put(
   "/:formId",
   authMiddleware,
   requireRole2(["admin", "super_admin"]),
   adminRateLimit,
   updateFormHandler
 );
-router63.patch(
+router64.patch(
   "/:formId/toggle",
   authMiddleware,
   requireRole2(["admin", "super_admin"]),
   adminRateLimit,
   toggleFormHandler
 );
-router63.delete(
+router64.delete(
   "/:formId",
   authMiddleware,
   requireRole2(["admin", "super_admin"]),
   adminRateLimit,
   deleteFormHandler
 );
-var adminRouter = (0, import_express64.Router)();
+var adminRouter = (0, import_express65.Router)();
 adminRouter.get("/list", listFormsHandler);
 adminRouter.get("/stats", statsHandler);
 adminRouter.get("/:formId/submissions", submissionsHandler);
@@ -51264,14 +51374,14 @@ adminRouter.put("/:formId", updateFormHandler);
 adminRouter.patch("/:formId/toggle", toggleFormHandler);
 adminRouter.post("/:formId/toggle", toggleFormHandler);
 adminRouter.delete("/:formId", deleteFormHandler);
-router63.use(
+router64.use(
   "/admin",
   authMiddleware,
   requireRole2(["admin", "super_admin"]),
   adminRateLimit,
   adminRouter
 );
-router63.get("/my-commercial-links", authMiddleware, async (req2, res) => {
+router64.get("/my-commercial-links", authMiddleware, async (req2, res) => {
   const userId = req2.user?.id;
   const organizationId = req2.user?.organizationId;
   if (!userId || !organizationId) {
@@ -51314,7 +51424,7 @@ router63.get("/my-commercial-links", authMiddleware, async (req2, res) => {
     res.status(500).json({ success: false, message: "Erreur lors de la r\xE9cup\xE9ration" });
   }
 });
-router63.get("/public/:identifier/config", async (req2, res) => {
+router64.get("/public/:identifier/config", async (req2, res) => {
   try {
     const { identifier } = req2.params;
     const form = await db.publicForm.findFirst({
@@ -51351,7 +51461,7 @@ router63.get("/public/:identifier/config", async (req2, res) => {
     res.status(500).json({ success: false, message: "Erreur lors de la recuperation de la configuration du formulaire" });
   }
 });
-router63.post("/submit", submissionRateLimit, async (req2, res) => {
+router64.post("/submit", submissionRateLimit, async (req2, res) => {
   const parsed = submissionSchema.safeParse(req2.body);
   if (!parsed.success) {
     res.status(400).json({ success: false, message: "Donnees de soumission invalides", issues: parsed.error.flatten() });
@@ -51472,13 +51582,13 @@ router63.post("/submit", submissionRateLimit, async (req2, res) => {
     res.status(500).json({ success: false, message: "Erreur lors de la soumission du formulaire" });
   }
 });
-var publicForms_default = router63;
+var publicForms_default = router64;
 
 // src/routes/landingPages.ts
-var import_express65 = require("express");
+var import_express66 = require("express");
 var import_express_rate_limit10 = __toESM(require("express-rate-limit"), 1);
 init_prisma();
-var router64 = (0, import_express65.Router)();
+var router65 = (0, import_express66.Router)();
 var publicLandingRateLimit = (0, import_express_rate_limit10.default)({
   windowMs: 60 * 1e3,
   // 1 minute
@@ -51518,7 +51628,7 @@ var toSnapshots = (value) => {
     return snapshot;
   }).filter((snapshot) => snapshot !== null);
 };
-router64.get("/public/:slug", publicLandingRateLimit, async (req2, res) => {
+router65.get("/public/:slug", publicLandingRateLimit, async (req2, res) => {
   try {
     const { slug } = req2.params;
     const landingPage = await db.treeBranchLeafTree.findFirst({
@@ -51585,7 +51695,7 @@ router64.get("/public/:slug", publicLandingRateLimit, async (req2, res) => {
     });
   }
 });
-router64.post("/public/:slug/track", publicLandingRateLimit, async (req2, res) => {
+router65.post("/public/:slug/track", publicLandingRateLimit, async (req2, res) => {
   try {
     const { slug } = req2.params;
     const { event, data = {} } = req2.body;
@@ -51632,9 +51742,9 @@ router64.post("/public/:slug/track", publicLandingRateLimit, async (req2, res) =
     });
   }
 });
-router64.use("/admin", authMiddleware);
-router64.use("/admin", adminLandingRateLimit);
-router64.get("/admin/list", requireRole2(["admin", "super_admin"]), async (req2, res) => {
+router65.use("/admin", authMiddleware);
+router65.use("/admin", adminLandingRateLimit);
+router65.get("/admin/list", requireRole2(["admin", "super_admin"]), async (req2, res) => {
   try {
     const organizationId = req2.user?.organizationId;
     if (!organizationId) {
@@ -51684,7 +51794,7 @@ router64.get("/admin/list", requireRole2(["admin", "super_admin"]), async (req2,
     res.status(500).json({ success: false, message: "Erreur lors de la r\xE9cup\xE9ration des landing pages" });
   }
 });
-router64.get("/", authMiddleware, adminLandingRateLimit, requireRole2(["admin", "super_admin"]), async (req2, res) => {
+router65.get("/", authMiddleware, adminLandingRateLimit, requireRole2(["admin", "super_admin"]), async (req2, res) => {
   try {
     const organizationId = req2.user?.organizationId;
     if (!organizationId) return res.status(400).json({ success: false, message: "Organization ID manquant" });
@@ -51726,7 +51836,7 @@ router64.get("/", authMiddleware, adminLandingRateLimit, requireRole2(["admin", 
     res.status(500).json({ success: false, message: "Erreur lors de la r\xE9cup\xE9ration des landing pages" });
   }
 });
-router64.get("/stats", authMiddleware, adminLandingRateLimit, requireRole2(["admin", "super_admin"]), async (req2, res) => {
+router65.get("/stats", authMiddleware, adminLandingRateLimit, requireRole2(["admin", "super_admin"]), async (req2, res) => {
   try {
     const organizationId = req2.user?.organizationId;
     if (!organizationId) return res.status(400).json({ success: false, message: "Organization ID manquant" });
@@ -51744,7 +51854,7 @@ router64.get("/stats", authMiddleware, adminLandingRateLimit, requireRole2(["adm
     res.status(500).json({ success: false, message: "Erreur lors de la r\xE9cup\xE9ration des statistiques" });
   }
 });
-router64.get("/stats/timeseries", authMiddleware, adminLandingRateLimit, requireRole2(["admin", "super_admin"]), async (req2, res) => {
+router65.get("/stats/timeseries", authMiddleware, adminLandingRateLimit, requireRole2(["admin", "super_admin"]), async (req2, res) => {
   try {
     const organizationId = req2.user?.organizationId;
     if (!organizationId) return res.status(400).json({ success: false, message: "Organization ID manquant" });
@@ -51779,7 +51889,7 @@ router64.get("/stats/timeseries", authMiddleware, adminLandingRateLimit, require
     res.status(500).json({ success: false, message: "Erreur s\xE9ries temporelles landing" });
   }
 });
-router64.post("/", authMiddleware, adminLandingRateLimit, requireRole2(["admin", "super_admin"]), async (req2, res) => {
+router65.post("/", authMiddleware, adminLandingRateLimit, requireRole2(["admin", "super_admin"]), async (req2, res) => {
   try {
     const organizationId = req2.user?.organizationId;
     if (!organizationId) return res.status(400).json({ success: false, message: "Organization ID manquant" });
@@ -51802,7 +51912,7 @@ router64.post("/", authMiddleware, adminLandingRateLimit, requireRole2(["admin",
     res.status(500).json({ success: false, message: "Erreur lors de la cr\xE9ation" });
   }
 });
-router64.put("/:id", authMiddleware, adminLandingRateLimit, requireRole2(["admin", "super_admin"]), async (req2, res) => {
+router65.put("/:id", authMiddleware, adminLandingRateLimit, requireRole2(["admin", "super_admin"]), async (req2, res) => {
   try {
     const { id } = req2.params;
     const organizationId = req2.user?.organizationId;
@@ -51826,7 +51936,7 @@ router64.put("/:id", authMiddleware, adminLandingRateLimit, requireRole2(["admin
     res.status(500).json({ success: false, message: "Erreur lors de la mise \xE0 jour" });
   }
 });
-router64.delete("/:id", authMiddleware, adminLandingRateLimit, requireRole2(["admin", "super_admin"]), async (req2, res) => {
+router65.delete("/:id", authMiddleware, adminLandingRateLimit, requireRole2(["admin", "super_admin"]), async (req2, res) => {
   try {
     const { id } = req2.params;
     const organizationId = req2.user?.organizationId;
@@ -51839,7 +51949,7 @@ router64.delete("/:id", authMiddleware, adminLandingRateLimit, requireRole2(["ad
     res.status(500).json({ success: false, message: "Erreur lors de la suppression" });
   }
 });
-router64.patch("/:id/publish", authMiddleware, adminLandingRateLimit, requireRole2(["admin", "super_admin"]), async (req2, res) => {
+router65.patch("/:id/publish", authMiddleware, adminLandingRateLimit, requireRole2(["admin", "super_admin"]), async (req2, res) => {
   try {
     const { id } = req2.params;
     const { publish } = req2.body;
@@ -51855,7 +51965,7 @@ router64.patch("/:id/publish", authMiddleware, adminLandingRateLimit, requireRol
     res.status(500).json({ success: false, message: "Erreur lors de la publication" });
   }
 });
-router64.get("/admin/:id", requireRole2(["admin", "super_admin"]), async (req2, res) => {
+router65.get("/admin/:id", requireRole2(["admin", "super_admin"]), async (req2, res) => {
   try {
     const { id } = req2.params;
     const organizationId = req2.user?.organizationId;
@@ -51895,7 +52005,7 @@ router64.get("/admin/:id", requireRole2(["admin", "super_admin"]), async (req2, 
     res.status(500).json({ success: false, message: "Erreur lors de la r\xE9cup\xE9ration du d\xE9tail" });
   }
 });
-router64.post("/:id/duplicate", authMiddleware, adminLandingRateLimit, requireRole2(["admin", "super_admin"]), async (req2, res) => {
+router65.post("/:id/duplicate", authMiddleware, adminLandingRateLimit, requireRole2(["admin", "super_admin"]), async (req2, res) => {
   try {
     const { id } = req2.params;
     const organizationId = req2.user?.organizationId;
@@ -51921,7 +52031,7 @@ router64.post("/:id/duplicate", authMiddleware, adminLandingRateLimit, requireRo
     res.status(500).json({ success: false, message: "Erreur lors de la duplication" });
   }
 });
-router64.post("/:id/snapshot", authMiddleware, adminLandingRateLimit, requireRole2(["admin", "super_admin"]), async (req2, res) => {
+router65.post("/:id/snapshot", authMiddleware, adminLandingRateLimit, requireRole2(["admin", "super_admin"]), async (req2, res) => {
   try {
     const { id } = req2.params;
     const { label } = req2.body;
@@ -51950,7 +52060,7 @@ router64.post("/:id/snapshot", authMiddleware, adminLandingRateLimit, requireRol
     res.status(500).json({ success: false, message: "Erreur lors de la cr\xE9ation du snapshot" });
   }
 });
-router64.get("/:id/versions", authMiddleware, adminLandingRateLimit, requireRole2(["admin", "super_admin"]), async (req2, res) => {
+router65.get("/:id/versions", authMiddleware, adminLandingRateLimit, requireRole2(["admin", "super_admin"]), async (req2, res) => {
   try {
     const { id } = req2.params;
     const organizationId = req2.user?.organizationId;
@@ -51972,7 +52082,7 @@ router64.get("/:id/versions", authMiddleware, adminLandingRateLimit, requireRole
     res.status(500).json({ success: false, message: "Erreur lors de la r\xE9cup\xE9ration des versions" });
   }
 });
-router64.post("/:id/restore", authMiddleware, adminLandingRateLimit, requireRole2(["admin", "super_admin"]), async (req2, res) => {
+router65.post("/:id/restore", authMiddleware, adminLandingRateLimit, requireRole2(["admin", "super_admin"]), async (req2, res) => {
   try {
     const { id } = req2.params;
     const { snapshotId } = req2.body;
@@ -51998,13 +52108,13 @@ router64.post("/:id/restore", authMiddleware, adminLandingRateLimit, requireRole
     res.status(500).json({ success: false, message: "Erreur lors de la restauration" });
   }
 });
-var landingPages_default = router64;
+var landingPages_default = router65;
 
 // src/routes/campaignAnalytics.ts
-var import_express66 = require("express");
+var import_express67 = require("express");
 init_database();
 var import_express_rate_limit11 = __toESM(require("express-rate-limit"), 1);
-var router65 = (0, import_express66.Router)();
+var router66 = (0, import_express67.Router)();
 var prisma36 = db;
 var campaignAnalyticsRateLimit = (0, import_express_rate_limit11.default)({
   windowMs: 60 * 1e3,
@@ -52013,9 +52123,9 @@ var campaignAnalyticsRateLimit = (0, import_express_rate_limit11.default)({
   // 50 requêtes par minute
   message: { success: false, message: "Trop de requ\xEAtes campaign analytics" }
 });
-router65.use(authMiddleware);
-router65.use(campaignAnalyticsRateLimit);
-router65.get("/dashboard", requireRole2(["admin", "super_admin"]), async (req2, res) => {
+router66.use(authMiddleware);
+router66.use(campaignAnalyticsRateLimit);
+router66.get("/dashboard", requireRole2(["admin", "super_admin"]), async (req2, res) => {
   try {
     const organizationId = req2.user?.organizationId;
     if (!organizationId) {
@@ -52143,7 +52253,7 @@ router65.get("/dashboard", requireRole2(["admin", "super_admin"]), async (req2, 
     });
   }
 });
-router65.get("/campaign/:id", requireRole2(["admin", "super_admin"]), async (req2, res) => {
+router66.get("/campaign/:id", requireRole2(["admin", "super_admin"]), async (req2, res) => {
   try {
     const { id } = req2.params;
     const organizationId = req2.user?.organizationId;
@@ -52315,7 +52425,7 @@ router65.get("/campaign/:id", requireRole2(["admin", "super_admin"]), async (req
     });
   }
 });
-router65.get("/ai-insights", requireRole2(["admin", "super_admin"]), async (req2, res) => {
+router66.get("/ai-insights", requireRole2(["admin", "super_admin"]), async (req2, res) => {
   try {
     const organizationId = req2.user?.organizationId;
     if (!organizationId) {
@@ -52420,7 +52530,7 @@ router65.get("/ai-insights", requireRole2(["admin", "super_admin"]), async (req2
     });
   }
 });
-router65.get("/export", requireRole2(["admin", "super_admin"]), async (req2, res) => {
+router66.get("/export", requireRole2(["admin", "super_admin"]), async (req2, res) => {
   try {
     const organizationId = req2.user?.organizationId;
     if (!organizationId) {
@@ -52499,22 +52609,22 @@ router65.get("/export", requireRole2(["admin", "super_admin"]), async (req2, res
     });
   }
 });
-var campaignAnalytics_default = router65;
+var campaignAnalytics_default = router66;
 
 // src/routes/dispatch.ts
-var import_express67 = require("express");
+var import_express68 = require("express");
 var import_express_rate_limit12 = __toESM(require("express-rate-limit"), 1);
 init_database();
-var router66 = (0, import_express67.Router)();
+var router67 = (0, import_express68.Router)();
 var prisma37 = db;
 var dispatchRateLimit = (0, import_express_rate_limit12.default)({
   windowMs: 60 * 1e3,
   max: 60,
   message: { success: false, message: "Trop de requ\xEAtes dispatch" }
 });
-router66.use(authMiddleware);
-router66.use(dispatchRateLimit);
-router66.get("/rules", requireRole2(["admin", "super_admin"]), async (req2, res) => {
+router67.use(authMiddleware);
+router67.use(dispatchRateLimit);
+router67.get("/rules", requireRole2(["admin", "super_admin"]), async (req2, res) => {
   try {
     const organizationId = req2.user?.organizationId;
     if (!organizationId) return res.status(400).json({ success: false, message: "Organization ID manquant" });
@@ -52528,7 +52638,7 @@ router66.get("/rules", requireRole2(["admin", "super_admin"]), async (req2, res)
     res.status(500).json({ success: false, message: "Erreur lors de la r\xE9cup\xE9ration des r\xE8gles" });
   }
 });
-router66.post("/rules", requireRole2(["admin", "super_admin"]), async (req2, res) => {
+router67.post("/rules", requireRole2(["admin", "super_admin"]), async (req2, res) => {
   try {
     const organizationId = req2.user?.organizationId;
     if (!organizationId) return res.status(400).json({ success: false, message: "Organization ID manquant" });
@@ -52541,7 +52651,7 @@ router66.post("/rules", requireRole2(["admin", "super_admin"]), async (req2, res
     res.status(500).json({ success: false, message: "Erreur lors de la cr\xE9ation de la r\xE8gle" });
   }
 });
-router66.put("/rules/:id", requireRole2(["admin", "super_admin"]), async (req2, res) => {
+router67.put("/rules/:id", requireRole2(["admin", "super_admin"]), async (req2, res) => {
   try {
     const { id } = req2.params;
     const organizationId = req2.user?.organizationId;
@@ -52556,7 +52666,7 @@ router66.put("/rules/:id", requireRole2(["admin", "super_admin"]), async (req2, 
     res.status(500).json({ success: false, message: "Erreur lors de la mise \xE0 jour de la r\xE8gle" });
   }
 });
-router66.delete("/rules/:id", requireRole2(["admin", "super_admin"]), async (req2, res) => {
+router67.delete("/rules/:id", requireRole2(["admin", "super_admin"]), async (req2, res) => {
   try {
     const { id } = req2.params;
     const organizationId = req2.user?.organizationId;
@@ -52569,7 +52679,7 @@ router66.delete("/rules/:id", requireRole2(["admin", "super_admin"]), async (req
     res.status(500).json({ success: false, message: "Erreur lors de la suppression de la r\xE8gle" });
   }
 });
-router66.post("/simulate", requireRole2(["admin", "super_admin"]), async (req2, res) => {
+router67.post("/simulate", requireRole2(["admin", "super_admin"]), async (req2, res) => {
   try {
     const organizationId = req2.user?.organizationId;
     if (!organizationId) return res.status(400).json({ success: false, message: "Organization ID manquant" });
@@ -52597,19 +52707,19 @@ router66.post("/simulate", requireRole2(["admin", "super_admin"]), async (req2, 
     res.status(500).json({ success: false, message: "Erreur lors de la simulation" });
   }
 });
-var dispatch_default = router66;
+var dispatch_default = router67;
 
 // src/routes/integrationsStatus.ts
-var import_express68 = require("express");
+var import_express69 = require("express");
 var import_crypto20 = require("crypto");
 var import_express_rate_limit13 = __toESM(require("express-rate-limit"), 1);
 init_database();
-var router67 = (0, import_express68.Router)();
+var router68 = (0, import_express69.Router)();
 var prisma38 = db;
 var rl = (0, import_express_rate_limit13.default)({ windowMs: 60 * 1e3, max: 60 });
-router67.use(authMiddleware);
-router67.use(rl);
-router67.get("/status", requireRole2(["admin", "super_admin"]), async (req2, res) => {
+router68.use(authMiddleware);
+router68.use(rl);
+router68.get("/status", requireRole2(["admin", "super_admin"]), async (req2, res) => {
   try {
     const organizationId = req2.user?.organizationId;
     if (!organizationId) return res.status(400).json({ success: false, message: "Organization ID manquant" });
@@ -52641,7 +52751,7 @@ router67.get("/status", requireRole2(["admin", "super_admin"]), async (req2, res
     res.status(500).json({ success: false, message: "Erreur lors de la r\xE9cup\xE9ration du statut des int\xE9grations" });
   }
 });
-router67.post("/ad-platform/connect", requireRole2(["admin", "super_admin"]), async (req2, res) => {
+router68.post("/ad-platform/connect", requireRole2(["admin", "super_admin"]), async (req2, res) => {
   try {
     const organizationId = req2.user?.organizationId;
     if (!organizationId) return res.status(400).json({ success: false, message: "Organization ID manquant" });
@@ -52682,7 +52792,7 @@ router67.post("/ad-platform/connect", requireRole2(["admin", "super_admin"]), as
     res.status(500).json({ success: false, message: "Erreur connexion plateforme" });
   }
 });
-router67.post("/ad-platform/disconnect", requireRole2(["admin", "super_admin"]), async (req2, res) => {
+router68.post("/ad-platform/disconnect", requireRole2(["admin", "super_admin"]), async (req2, res) => {
   try {
     const organizationId = req2.user?.organizationId;
     if (!organizationId) return res.status(400).json({ success: false, message: "Organization ID manquant" });
@@ -52700,7 +52810,7 @@ router67.post("/ad-platform/disconnect", requireRole2(["admin", "super_admin"]),
     res.status(500).json({ success: false, message: "Erreur d\xE9connexion plateforme" });
   }
 });
-router67.post("/ad-platform/sync", requireRole2(["admin", "super_admin"]), async (req2, res) => {
+router68.post("/ad-platform/sync", requireRole2(["admin", "super_admin"]), async (req2, res) => {
   try {
     const organizationId = req2.user?.organizationId;
     if (!organizationId) return res.status(400).json({ success: false, message: "Organization ID manquant" });
@@ -52715,10 +52825,10 @@ router67.post("/ad-platform/sync", requireRole2(["admin", "super_admin"]), async
     res.status(500).json({ success: false, message: "Erreur lors de la synchronisation" });
   }
 });
-var integrationsStatus_default = router67;
+var integrationsStatus_default = router68;
 
 // src/routes/integrations.ts
-var import_express69 = require("express");
+var import_express70 = require("express");
 init_database();
 var import_axios3 = __toESM(require("axios"), 1);
 var import_googleapis9 = require("googleapis");
@@ -53489,7 +53599,7 @@ var EcommerceService = class {
 
 // src/routes/integrations.ts
 var prisma39 = db;
-var router68 = (0, import_express69.Router)();
+var router69 = (0, import_express70.Router)();
 var memCache = /* @__PURE__ */ new Map();
 function cacheGet(key2) {
   const it = memCache.get(key2);
@@ -53563,7 +53673,7 @@ function formatGoogleAdsCustomerId(raw) {
   if (!normalized) return void 0;
   return `${normalized.slice(0, 3)}-${normalized.slice(3, 6)}-${normalized.slice(6)}`;
 }
-router68.get("/", async (req2, res) => {
+router69.get("/", async (req2, res) => {
   const { code, state } = req2.query;
   if (code && state) {
     try {
@@ -53584,7 +53694,7 @@ router68.get("/", async (req2, res) => {
   }
   res.send("CRM API Server - Facebook OAuth Callback Handler");
 });
-router68.get("/callback", async (req2, res) => {
+router69.get("/callback", async (req2, res) => {
   const { code, state } = req2.query;
   if (code && state) {
     try {
@@ -53605,7 +53715,7 @@ router68.get("/callback", async (req2, res) => {
   }
   res.status(400).send("Callback invalide");
 });
-router68.get("/advertising/oauth/:platform/callback", async (req2, res) => {
+router69.get("/advertising/oauth/:platform/callback", async (req2, res) => {
   res.setHeader("ngrok-skip-browser-warning", "true");
   res.setHeader("User-Agent", "CRM-OAuth-Handler");
   try {
@@ -53721,7 +53831,7 @@ router68.get("/advertising/oauth/:platform/callback", async (req2, res) => {
     res.status(500).send("OAuth callback error");
   }
 });
-router68.get("/advertising/oauth/callback-close.js", (req2, res) => {
+router69.get("/advertising/oauth/callback-close.js", (req2, res) => {
   const platform = req2.query.platform || "google_ads";
   const js = `(() => {
   const payload = { type: 'ads_oauth_done', platform: ${JSON.stringify(platform)}, ts: Date.now() };
@@ -53744,7 +53854,7 @@ router68.get("/advertising/oauth/callback-close.js", (req2, res) => {
   res.setHeader("Content-Type", "application/javascript; charset=utf-8");
   res.send(js);
 });
-router68.use(authMiddleware, impersonationMiddleware);
+router69.use(authMiddleware, impersonationMiddleware);
 var getEffectiveOrgId = (req2) => {
   const headerOrgId = req2.headers["x-organization-id"];
   if (typeof headerOrgId === "string" && headerOrgId !== "all") return headerOrgId;
@@ -53753,7 +53863,7 @@ var getEffectiveOrgId = (req2) => {
   const user = req2.user;
   return user?.organizationId;
 };
-router68.get("/", async (req2, res) => {
+router69.get("/", async (req2, res) => {
   const user = req2.user;
   const organizationId = getEffectiveOrgId(req2);
   if (!user) {
@@ -53777,7 +53887,7 @@ router68.get("/", async (req2, res) => {
     res.status(500).json({ success: false, message: "Failed to get integrations" });
   }
 });
-router68.post("/", async (req2, res) => {
+router69.post("/", async (req2, res) => {
   const user = req2.user;
   const organizationId = getEffectiveOrgId(req2);
   const { type, config, enabled } = req2.body;
@@ -53820,7 +53930,7 @@ router68.post("/", async (req2, res) => {
     res.status(500).json({ success: false, message: "Failed to upsert integration" });
   }
 });
-router68.delete("/:type", async (req2, res) => {
+router69.delete("/:type", async (req2, res) => {
   const user = req2.user;
   const organizationId = getEffectiveOrgId(req2);
   const { type } = req2.params;
@@ -53851,13 +53961,13 @@ router68.delete("/:type", async (req2, res) => {
     res.status(500).json({ success: false, message: "Failed to delete integration" });
   }
 });
-router68.get("/advertising/platforms", (req2, res) => {
+router69.get("/advertising/platforms", (req2, res) => {
   res.json({
     success: true,
     platforms: Object.values(AD_PLATFORMS)
   });
 });
-router68.get("/advertising/env-check", (_req, res) => {
+router69.get("/advertising/env-check", (_req, res) => {
   const backendUrl = process.env.BACKEND_URL;
   const googleClientId = sanitizeClientValue(process.env.GOOGLE_ADS_CLIENT_ID);
   const googleClientSecret = sanitizeClientValue(process.env.GOOGLE_ADS_CLIENT_SECRET);
@@ -53980,7 +54090,7 @@ router68.get("/advertising/env-check", (_req, res) => {
     details
   });
 });
-router68.get("/advertising", async (req2, res) => {
+router69.get("/advertising", async (req2, res) => {
   try {
     const organizationId = getEffectiveOrgId(req2);
     if (!organizationId) {
@@ -53996,7 +54106,7 @@ router68.get("/advertising", async (req2, res) => {
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
-router68.get("/advertising/oauth/:platform/url", async (req2, res) => {
+router69.get("/advertising/oauth/:platform/url", async (req2, res) => {
   try {
     const platform = req2.params.platform;
     const user = req2.user;
@@ -54075,7 +54185,7 @@ router68.get("/advertising/oauth/:platform/url", async (req2, res) => {
     res.status(500).json({ success: false, message: "Erreur g\xE9n\xE9ration URL OAuth" });
   }
 });
-router68.get("/advertising/oauth/google_ads/debug", async (req2, res) => {
+router69.get("/advertising/oauth/google_ads/debug", async (req2, res) => {
   try {
     const user = req2.user;
     const organizationId = getEffectiveOrgId(req2);
@@ -54129,7 +54239,7 @@ router68.get("/advertising/oauth/google_ads/debug", async (req2, res) => {
     res.status(500).json({ success: false, message: "Erreur serveur (debug OAuth)" });
   }
 });
-router68.get("/advertising/oauth/:platform/demo", (req2, res) => {
+router69.get("/advertising/oauth/:platform/demo", (req2, res) => {
   const platform = req2.params.platform;
   const missing = String(req2.query.missing || "").split(",").filter(Boolean);
   const platformLabel = platform === "google_ads" ? "Google Ads" : platform === "meta_ads" ? "Meta Ads" : platform;
@@ -54170,7 +54280,7 @@ router68.get("/advertising/oauth/:platform/demo", (req2, res) => {
     </body>
   </html>`);
 });
-router68.get("/advertising/:platform/accounts", async (req2, res) => {
+router69.get("/advertising/:platform/accounts", async (req2, res) => {
   try {
     const platform = req2.params.platform;
     const organizationId = getEffectiveOrgId(req2);
@@ -54839,7 +54949,7 @@ router68.get("/advertising/:platform/accounts", async (req2, res) => {
     res.status(500).json({ success: false, message: "Erreur listing comptes" });
   }
 });
-router68.get("/advertising/google_ads/test/customers-get", async (req2, res) => {
+router69.get("/advertising/google_ads/test/customers-get", async (req2, res) => {
   try {
     const organizationId = getEffectiveOrgId(req2);
     if (!organizationId) return res.status(400).json({ success: false, message: "Organisation requise" });
@@ -54960,7 +55070,7 @@ router68.get("/advertising/google_ads/test/customers-get", async (req2, res) => 
     res.status(500).json({ success: false, message: "Erreur test customers.get" });
   }
 });
-router68.delete("/advertising/:platform", async (req2, res) => {
+router69.delete("/advertising/:platform", async (req2, res) => {
   const user = req2.user;
   const organizationId = getEffectiveOrgId(req2);
   const platform = req2.params.platform;
@@ -54989,7 +55099,7 @@ router68.delete("/advertising/:platform", async (req2, res) => {
     res.status(500).json({ success: false, message: "Failed to delete integration" });
   }
 });
-router68.post("/advertising/:platform/select-account", async (req2, res) => {
+router69.post("/advertising/:platform/select-account", async (req2, res) => {
   try {
     const platform = req2.params.platform;
     const organizationId = getEffectiveOrgId(req2);
@@ -55017,7 +55127,7 @@ router68.post("/advertising/:platform/select-account", async (req2, res) => {
     res.status(500).json({ success: false, message: "Erreur s\xE9lection compte" });
   }
 });
-router68.post("/advertising", async (req2, res) => {
+router69.post("/advertising", async (req2, res) => {
   try {
     const organizationId = getEffectiveOrgId(req2);
     if (!organizationId) {
@@ -55050,13 +55160,13 @@ router68.post("/advertising", async (req2, res) => {
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
-router68.get("/ecommerce/platforms", (req2, res) => {
+router69.get("/ecommerce/platforms", (req2, res) => {
   res.json({
     success: true,
     platforms: Object.values(ECOMMERCE_PLATFORMS)
   });
 });
-router68.get("/ecommerce", async (req2, res) => {
+router69.get("/ecommerce", async (req2, res) => {
   try {
     const organizationId = getEffectiveOrgId(req2);
     if (!organizationId) {
@@ -55072,7 +55182,7 @@ router68.get("/ecommerce", async (req2, res) => {
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
-router68.post("/ecommerce", async (req2, res) => {
+router69.post("/ecommerce", async (req2, res) => {
   try {
     const organizationId = getEffectiveOrgId(req2);
     if (!organizationId) {
@@ -55106,14 +55216,14 @@ router68.post("/ecommerce", async (req2, res) => {
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
-var integrations_default = router68;
+var integrations_default = router69;
 
 // src/routes/publicLeads.ts
-var import_express70 = require("express");
+var import_express71 = require("express");
 var import_express_rate_limit14 = require("express-rate-limit");
 var import_express_validator = require("express-validator");
 init_database();
-var router69 = (0, import_express70.Router)();
+var router70 = (0, import_express71.Router)();
 var prisma40 = db;
 var geminiService2 = getGeminiService();
 var publicRateLimit = (0, import_express_rate_limit14.rateLimit)({
@@ -55191,7 +55301,7 @@ async function calculateLeadScore(leadData) {
     return 50;
   }
 }
-router69.get("/health", (req2, res) => {
+router70.get("/health", (req2, res) => {
   res.json({
     status: "healthy",
     service: "Devis1Minute Public API",
@@ -55204,7 +55314,7 @@ router69.get("/health", (req2, res) => {
     }
   });
 });
-router69.get("/stats", publicRateLimit, async (req2, res) => {
+router70.get("/stats", publicRateLimit, async (req2, res) => {
   try {
     const stats = await prisma40.$transaction(async (tx) => {
       const totalLeads = await tx.lead.count();
@@ -55240,7 +55350,7 @@ router69.get("/stats", publicRateLimit, async (req2, res) => {
     });
   }
 });
-router69.get("/categories", publicRateLimit, (req2, res) => {
+router70.get("/categories", publicRateLimit, (req2, res) => {
   const categories = [
     {
       id: "website",
@@ -55293,7 +55403,7 @@ router69.get("/categories", publicRateLimit, (req2, res) => {
   ];
   res.json(categories);
 });
-router69.post("/leads", leadCreationLimit, validateLead, async (req2, res) => {
+router70.post("/leads", leadCreationLimit, validateLead, async (req2, res) => {
   try {
     const errors = (0, import_express_validator.validationResult)(req2);
     if (!errors.isEmpty()) {
@@ -55378,7 +55488,7 @@ router69.post("/leads", leadCreationLimit, validateLead, async (req2, res) => {
     });
   }
 });
-router69.get("/lead-status/:id", publicRateLimit, async (req2, res) => {
+router70.get("/lead-status/:id", publicRateLimit, async (req2, res) => {
   try {
     const { id } = req2.params;
     if (!id || typeof id !== "string") {
@@ -55426,10 +55536,10 @@ router69.get("/lead-status/:id", publicRateLimit, async (req2, res) => {
     });
   }
 });
-var publicLeads_default = router69;
+var publicLeads_default = router70;
 
 // src/routes/documents.ts
-var import_express71 = require("express");
+var import_express72 = require("express");
 init_database();
 var import_nanoid2 = require("nanoid");
 
@@ -55485,18 +55595,22 @@ var DocumentPdfRenderer = class {
   scaleFactor = 1;
   isFirstModularPage = true;
   // 🔥 Flag pour gérer la pagination multi-pages
+  hasModularPage = false;
+  unicodeFontName;
   constructor(context) {
     this.ctx = context;
     this.theme = { ...DEFAULT_THEME, ...context.template.theme };
     this.contentWidth = this.pageWidth - this.margin * 2;
     this.currentY = this.margin;
+    const hasModularSections = (context.template.sections || []).some((s) => s.type === "MODULAR_PAGE");
+    const pdfKitMargin = hasModularSections ? 0 : this.margin;
     this.doc = new import_pdfkit2.default({
       size: "A4",
       margins: {
-        top: this.margin,
-        bottom: this.margin,
-        left: this.margin,
-        right: this.margin
+        top: pdfKitMargin,
+        bottom: pdfKitMargin,
+        left: pdfKitMargin,
+        right: pdfKitMargin
       },
       autoFirstPage: true,
       // NE PAS utiliser bufferPages - ça complique la gestion des pages
@@ -55507,6 +55621,14 @@ var DocumentPdfRenderer = class {
         CreationDate: /* @__PURE__ */ new Date()
       }
     });
+    try {
+      const dejavuPath = "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf";
+      if (fs8.existsSync(dejavuPath)) {
+        this.doc.registerFont("DejaVuSans", dejavuPath);
+        this.unicodeFontName = "DejaVuSans";
+      }
+    } catch {
+    }
     this.ensureDocumentIsA4();
     this.scaleX = this.pageWidth / PAGE_BUILDER_WIDTH;
     this.scaleY = this.pageHeight / PAGE_BUILDER_HEIGHT;
@@ -55686,7 +55808,9 @@ var DocumentPdfRenderer = class {
           }
         }
         console.log("\u{1F4C4} [PDF RENDERER] \u2705 Rendu termin\xE9");
-        this.renderFooter();
+        if (!this.hasModularPage) {
+          this.renderFooter();
+        }
         this.doc.end();
       } catch (error) {
         reject(error);
@@ -55756,12 +55880,12 @@ var DocumentPdfRenderer = class {
     const rawY = (position.y ?? 0) * this.scaleY;
     const rawWidth = (position.width ?? 100) * this.scaleX;
     const rawHeight = (position.height ?? (position.blockHeight ?? 50)) * this.scaleY;
-    const safeX = this.clamp(rawX, 0, this.pageWidth);
-    const safeY = this.clamp(rawY, 0, this.pageHeight);
-    const maxWidth = Math.max(1, this.pageWidth - safeX);
-    const maxHeight = Math.max(1, this.pageHeight - safeY);
-    const safeWidth = this.clamp(rawWidth, 1, maxWidth);
-    const safeHeight = this.clamp(rawHeight, 1, maxHeight);
+    const safeWidth = this.clamp(rawWidth, 1, this.pageWidth);
+    const safeHeight = this.clamp(rawHeight, 1, this.pageHeight);
+    const maxX = Math.max(0, this.pageWidth - safeWidth);
+    const maxY = Math.max(0, this.pageHeight - safeHeight);
+    const safeX = this.clamp(rawX, 0, maxX);
+    const safeY = this.clamp(rawY, 0, maxY);
     return {
       x: safeX,
       y: safeY,
@@ -55795,6 +55919,21 @@ var DocumentPdfRenderer = class {
   clamp(value, min, max) {
     return Math.min(Math.max(value, min), max);
   }
+  /**
+   * 🔥 Vérifie si du contenu peut tenir dans l'espace restant avant la limite de page
+   * Retourne la hauteur disponible (0 si pas de place)
+   */
+  getAvailableHeightOnPage(startY) {
+    const maxY = this.pageHeight - this.margin;
+    const availableHeight = Math.max(0, maxY - startY);
+    return availableHeight;
+  }
+  /**
+   * 🔥 Vérifie si du contenu de hauteur donnée peut tenir à une position Y
+   */
+  canFitOnPage(startY, contentHeight) {
+    return this.getAvailableHeightOnPage(startY) >= contentHeight;
+  }
   scaleFontSize(size) {
     const scaled = size * this.scaleFactor;
     return Math.max(6, scaled);
@@ -55807,6 +55946,7 @@ var DocumentPdfRenderer = class {
    * Chaque MODULAR_PAGE crée une nouvelle page dans le PDF (sauf la première)
    */
   renderModularPage(config) {
+    this.hasModularPage = true;
     console.log("\u{1F4C4} [PDF] ========================================");
     console.log("\u{1F4C4} [PDF] Rendu page modulaire:", config.name);
     console.log("\u{1F4C4} [PDF] Pages actuelles dans le doc:", this.doc.bufferedPageRange?.()?.count || "N/A");
@@ -55819,10 +55959,6 @@ var DocumentPdfRenderer = class {
     this.isFirstModularPage = false;
     const modules = config.modules || [];
     console.log("\u{1F4C4} [PDF] Nombre de modules:", modules.length);
-    if (config.backgroundColor) {
-      console.log("\u{1F4C4} [PDF] Fond de page:", config.backgroundColor);
-      this.doc.rect(0, 0, this.pageWidth, this.pageHeight).fill(config.backgroundColor);
-    }
     const sortedModules = [...modules].sort((a, b) => {
       const aType = a.moduleId || a.moduleType || a.type;
       const bType = b.moduleId || b.moduleType || b.type;
@@ -55837,10 +55973,209 @@ var DocumentPdfRenderer = class {
     });
     console.log(`\u{1F4C4} [PDF] Rendu de ${sortedModules.length} modules sur la page`);
     console.log(`\u{1F4C4} [PDF] Ordre des modules:`, sortedModules.map((m) => m.moduleId || m.moduleType || m.type));
-    for (const moduleInstance of sortedModules) {
-      this.renderModuleAbsolute(moduleInstance);
+    const backgroundModuleIds = /* @__PURE__ */ new Set(["BACKGROUND"]);
+    const flowModuleIds = /* @__PURE__ */ new Set(["PRICING_TABLE"]);
+    const getModuleType = (m) => m.moduleId || m.moduleType || m.type;
+    const getModuleY = (m) => Number(m?.position?.y ?? 0);
+    const backgroundModules = sortedModules.filter((m) => backgroundModuleIds.has(getModuleType(m)));
+    const nonBackgroundModules = sortedModules.filter((m) => !backgroundModuleIds.has(getModuleType(m)));
+    const flowModulesInOrder = nonBackgroundModules.filter((m) => flowModuleIds.has(getModuleType(m)));
+    let remainingModules = nonBackgroundModules.filter((m) => !flowModuleIds.has(getModuleType(m)));
+    const renderModularBackground = () => {
+      if (config.backgroundColor) {
+        this.doc.rect(0, 0, this.pageWidth, this.pageHeight).fill(config.backgroundColor);
+      }
+      for (const bg of backgroundModules) {
+        this.renderModuleAbsolute(bg);
+      }
+    };
+    renderModularBackground();
+    for (const flowModule of flowModulesInOrder) {
+      const flowType = getModuleType(flowModule);
+      const flowY = getModuleY(flowModule);
+      const above = remainingModules.filter((m) => getModuleY(m) < flowY);
+      for (const m of above) {
+        this.renderModuleAbsolute(m);
+      }
+      const belowOrEqual = remainingModules.filter((m) => getModuleY(m) >= flowY);
+      if (flowType !== "PRICING_TABLE") {
+        this.renderModuleAbsolute(flowModule);
+        remainingModules = belowOrEqual;
+        continue;
+      }
+      const position = flowModule.position || {};
+      const rect = this.convertPageBuilderRect(position);
+      const configRaw = flowModule.config || {};
+      const conditionResult = this.evaluateModuleConditions(configRaw);
+      if (!conditionResult.shouldRender) {
+        console.log(`\u{1F4C4} [PDF] Module ${flowType}: SKIPPED (condition false)`);
+        remainingModules = belowOrEqual;
+        continue;
+      }
+      let bottomStartY;
+      for (const m of belowOrEqual) {
+        const r = this.convertPageBuilderRect(m.position || {});
+        bottomStartY = bottomStartY === void 0 ? r.y : Math.min(bottomStartY, r.y);
+      }
+      const effectiveConfig = { ...configRaw, _themeId: flowModule.themeId };
+      if (conditionResult.content !== void 0) {
+        console.log(`\u{1F4C4} [PDF] Module ${flowType}: Using conditional content: "${conditionResult.content}"`);
+      }
+      this.renderModulePricingTablePaginated(effectiveConfig, rect.x, rect.y, rect.width, rect.height, {
+        reservedBottomY: bottomStartY,
+        onAddPage: () => {
+          renderModularBackground();
+        }
+      });
+      remainingModules = belowOrEqual;
     }
-    this.currentY = this.pageHeight;
+    for (const m of remainingModules) {
+      this.renderModuleAbsolute(m);
+    }
+    this.currentY = this.margin;
+  }
+  renderModulePricingTablePaginated(config, x, y, width, height, options) {
+    const title = config.title || "Tarifs";
+    const currency = config.currency || "\u20AC";
+    const tvaRate = config.tvaRate || config.vatRate || 21;
+    const showTotal = config.showTotal !== false;
+    const showTVA = config.showTVA !== false;
+    let items = [];
+    if (config.pricingLines && config.pricingLines.length > 0) {
+      items = this.processPricingLines(config.pricingLines, config);
+    } else if (config.items && config.items.length > 0) {
+      items = config.items.map((item) => ({
+        description: this.substituteVariables(item.name || item.label || ""),
+        quantity: item.quantity || 1,
+        unitPrice: parseFloat(item.price || item.amount || item.unitPrice || 0),
+        total: parseFloat(item.price || item.amount || 0) * (item.quantity || 1)
+      }));
+    } else if (config.rows && config.rows.length > 0) {
+      items = config.rows.map((row) => ({
+        description: this.substituteVariables(row.designation || row.label || ""),
+        quantity: row.quantity || 1,
+        unitPrice: parseFloat(row.unitPrice || 0),
+        total: (row.quantity || 1) * parseFloat(row.unitPrice || 0)
+      }));
+    }
+    const reservedBottomY = options?.reservedBottomY;
+    const getPageBottomLimit = () => {
+      const hardLimit = this.pageHeight - this.margin;
+      if (reservedBottomY && Number.isFinite(reservedBottomY)) {
+        return Math.min(hardLimit, reservedBottomY - 8);
+      }
+      return hardLimit;
+    };
+    const colWidths = [width * 0.45, width * 0.12, width * 0.18, width * 0.25];
+    const headerHeight = 20;
+    const rowHeight = 18;
+    const titleHeight = 25;
+    const cellPadding = 8;
+    const drawHeaderRow = (startY) => {
+      this.doc.rect(x, startY, width, headerHeight).fill(this.theme.primaryColor || "#1890ff");
+      this.doc.fontSize(this.scaleFontSize(10)).font("Helvetica-Bold").fillColor("#FFFFFF");
+      this.doc.text("D\xE9signation", x + 5, startY + 5, { width: colWidths[0] - 10 });
+      this.doc.text("Qt\xE9", x + colWidths[0], startY + 5, { width: colWidths[1], align: "center" });
+      this.doc.text("P.U.", x + colWidths[0] + colWidths[1], startY + 5, { width: colWidths[2] - cellPadding, align: "right" });
+      this.doc.text("Total", x + colWidths[0] + colWidths[1] + colWidths[2], startY + 5, { width: colWidths[3] - cellPadding, align: "right" });
+    };
+    const drawTitle = (startY) => {
+      this.doc.fontSize(this.scaleFontSize(16)).font("Helvetica-Bold").fillColor(this.theme.primaryColor || "#1890ff").text(title, x, startY, { width });
+    };
+    const canFitUnderBottomLimit = (startY, neededHeight) => {
+      return startY + neededHeight <= getPageBottomLimit();
+    };
+    const startNewPage = () => {
+      this.doc.addPage();
+      this.currentY = 0;
+      options?.onAddPage?.();
+    };
+    if (!items || items.length === 0) {
+      if (!this.canFitOnPage(y, 50)) {
+        return;
+      }
+      drawTitle(y);
+      const headerY = y + titleHeight;
+      if (!canFitUnderBottomLimit(headerY, headerHeight + 25)) {
+        startNewPage();
+        const y2 = this.margin;
+        drawTitle(y2);
+        drawHeaderRow(y2 + titleHeight);
+        this.doc.fontSize(this.scaleFontSize(10)).font("Helvetica-Oblique").fillColor("#999999").text("Aucune ligne configur\xE9e", x + 5, y2 + titleHeight + headerHeight + 5, { width: width - 10, align: "center" });
+        return;
+      }
+      drawHeaderRow(headerY);
+      this.doc.fontSize(this.scaleFontSize(10)).font("Helvetica-Oblique").fillColor("#999999").text("Aucune ligne configur\xE9e", x + 5, headerY + headerHeight + 5, { width: width - 10, align: "center" });
+      return;
+    }
+    let totalHT = 0;
+    let hasAnyPricedLine = false;
+    for (const item of items) {
+      const lineTotal = typeof item.total === "number" ? item.total : typeof item.quantity === "number" && typeof item.unitPrice === "number" ? item.quantity * item.unitPrice : null;
+      if (typeof lineTotal === "number") {
+        totalHT += lineTotal;
+        hasAnyPricedLine = true;
+      }
+    }
+    let pageIndex = 0;
+    let rowIndex = 0;
+    while (rowIndex < items.length) {
+      const isFirstPage = pageIndex === 0;
+      const pageY = isFirstPage ? y : this.margin;
+      if (!canFitUnderBottomLimit(pageY, titleHeight + headerHeight + rowHeight)) {
+        startNewPage();
+        pageIndex += 1;
+        continue;
+      }
+      drawTitle(pageY);
+      let currentY = pageY + titleHeight;
+      drawHeaderRow(currentY);
+      currentY += headerHeight;
+      while (rowIndex < items.length) {
+        const item = items[rowIndex];
+        if (!canFitUnderBottomLimit(currentY, rowHeight + 2)) {
+          break;
+        }
+        const lineTotal = typeof item.total === "number" ? item.total : typeof item.quantity === "number" && typeof item.unitPrice === "number" ? item.quantity * item.unitPrice : null;
+        this.doc.fontSize(this.scaleFontSize(10)).font("Helvetica").fillColor(this.theme.textColor || "#333333");
+        this.doc.text(item.description || "-", x + 5, currentY + 4, { width: colWidths[0] - 10 });
+        this.doc.text(typeof item.quantity === "number" ? String(item.quantity) : "", x + colWidths[0], currentY + 4, { width: colWidths[1], align: "center" });
+        this.doc.text(typeof item.unitPrice === "number" ? `${item.unitPrice.toFixed(2)} ${currency}` : "", x + colWidths[0] + colWidths[1], currentY + 4, { width: colWidths[2] - cellPadding, align: "right" });
+        this.doc.text(typeof lineTotal === "number" ? `${lineTotal.toFixed(2)} ${currency}` : "", x + colWidths[0] + colWidths[1] + colWidths[2], currentY + 4, { width: colWidths[3] - cellPadding, align: "right" });
+        this.doc.strokeColor("#e8e8e8").lineWidth(0.5).moveTo(x, currentY + rowHeight).lineTo(x + width, currentY + rowHeight).stroke();
+        currentY += rowHeight;
+        rowIndex += 1;
+      }
+      if (rowIndex >= items.length && showTotal && hasAnyPricedLine) {
+        const totalsHeight = showTVA ? 50 : 20;
+        if (!canFitUnderBottomLimit(currentY + 5, totalsHeight + 5)) {
+          startNewPage();
+          pageIndex += 1;
+          continue;
+        }
+        const tva = totalHT * (tvaRate / 100);
+        const totalTTC = totalHT + tva;
+        currentY += 5;
+        this.doc.fontSize(this.scaleFontSize(10)).font("Helvetica-Bold").fillColor(this.theme.textColor || "#333333").text("Total HT", x + colWidths[0] + colWidths[1], currentY, { width: colWidths[2] + colWidths[3] * 0.5 - cellPadding, align: "right" });
+        this.doc.text(`${totalHT.toFixed(2)} ${currency}`, x + width - colWidths[3], currentY, { width: colWidths[3] - cellPadding, align: "right" });
+        currentY += 15;
+        if (showTVA) {
+          this.doc.font("Helvetica").text(`TVA (${tvaRate}%)`, x + colWidths[0] + colWidths[1], currentY, { width: colWidths[2] + colWidths[3] * 0.5 - cellPadding, align: "right" });
+          this.doc.text(`${tva.toFixed(2)} ${currency}`, x + width - colWidths[3], currentY, { width: colWidths[3] - cellPadding, align: "right" });
+          currentY += 15;
+          this.doc.rect(x + width * 0.6, currentY - 2, width * 0.4, 20).fill(this.theme.primaryColor || "#1890ff");
+          this.doc.fontSize(this.scaleFontSize(12)).font("Helvetica-Bold").fillColor("#FFFFFF").text("Total TTC", x + width * 0.6 + 5, currentY + 3, { width: width * 0.2 - 10 });
+          this.doc.text(`${totalTTC.toFixed(2)} ${currency}`, x + width * 0.8, currentY + 3, { width: width * 0.2 - 10, align: "right" });
+        }
+      }
+      if (rowIndex < items.length) {
+        startNewPage();
+        pageIndex += 1;
+      } else {
+        break;
+      }
+    }
+    void height;
   }
   /**
    * Rend un module à sa position absolue (conversion pixel Page Builder -> points PDF)
@@ -55855,7 +56190,7 @@ var DocumentPdfRenderer = class {
       console.log(`\u{1F4C4} [PDF] Module ${moduleType}: SKIPPED (condition false)`);
       return;
     }
-    const effectiveConfig = { ...config };
+    const effectiveConfig = { ...config, _themeId: module2.themeId };
     if (conditionResult.content !== void 0) {
       console.log(`\u{1F4C4} [PDF] Module ${moduleType}: Using conditional content: "${conditionResult.content}"`);
       if (moduleType === "TITLE" || moduleType === "SUBTITLE" || moduleType === "TEXT_BLOCK") {
@@ -55882,7 +56217,10 @@ var DocumentPdfRenderer = class {
           this.renderModuleBackground(effectiveConfig, rect.x, rect.y, rect.width, rect.height);
           break;
         case "PRICING_TABLE":
-          this.renderModulePricingTable(effectiveConfig, rect.x, rect.y, rect.width);
+          this.renderModulePricingTable(effectiveConfig, rect.x, rect.y, rect.width, rect.height);
+          break;
+        case "TOTALS_SUMMARY":
+          this.renderModuleTotalsSummary(effectiveConfig, rect.x, rect.y, rect.width, rect.height);
           break;
         case "TESTIMONIAL":
           this.renderModuleTestimonial(effectiveConfig, rect.x, rect.y, rect.width);
@@ -55898,12 +56236,48 @@ var DocumentPdfRenderer = class {
           break;
         case "SPACER":
           break;
+        case "DOCUMENT_HEADER":
+          this.renderModuleDocumentHeader(effectiveConfig, rect.x, rect.y, rect.width, rect.height);
+          break;
+        case "DOCUMENT_INFO":
+          this.renderModuleDocumentInfo(effectiveConfig, rect.x, rect.y, rect.width, rect.height);
+          break;
+        case "DOCUMENT_FOOTER":
+          this.renderModuleDocumentFooter(effectiveConfig, rect.x, rect.y, rect.width, rect.height);
+          break;
+        case "SIGNATURE_BLOCK":
+          this.renderModuleSignatureBlock(effectiveConfig, rect.x, rect.y, rect.width, rect.height);
+          break;
+        case "PAYMENT_INFO":
+          this.renderModulePaymentInfo(effectiveConfig, rect.x, rect.y, rect.width, rect.height);
+          break;
+        case "CONTACT_INFO":
+          this.renderModuleContactInfo(effectiveConfig, rect.x, rect.y, rect.width, rect.height);
+          break;
         default:
           console.warn(`\u{1F4C4} [PDF] Module type inconnu: ${moduleType}`);
       }
     } finally {
       this.doc.restore();
     }
+  }
+  parseMaybeNumber(value) {
+    if (value === null || value === void 0) return void 0;
+    if (typeof value === "number" && Number.isFinite(value)) return value;
+    if (typeof value !== "string") return void 0;
+    const trimmed = value.trim();
+    if (!trimmed) return void 0;
+    const cleaned = trimmed.replace(/\s/g, "").replace(/[^0-9,.-]/g, "").replace(/,(?=\d{1,2}$)/, ".");
+    const n = Number(cleaned);
+    return Number.isFinite(n) ? n : void 0;
+  }
+  formatMoney(value, currency) {
+    const n = this.parseMaybeNumber(value);
+    if (n === void 0) {
+      const s = value === null || value === void 0 ? "" : String(value);
+      return s ? `${s} ${currency}` : "";
+    }
+    return `${n.toFixed(2)} ${currency}`;
   }
   // ============================================================
   // RENDERERS DE MODULES INDIVIDUELS
@@ -55944,9 +56318,13 @@ var DocumentPdfRenderer = class {
     this.doc.y = Math.min(savedY, this.margin + 100);
   }
   renderModuleSubtitle(config, x, y, width, height) {
-    const text = this.substituteVariables(config.text || "Sous-titre");
+    const rawText = this.substituteVariables(config.text || "Sous-titre");
+    const text = this.normalizeText(rawText);
     const alignment = config.alignment || "center";
-    const color = config.color || "#FFFFFF";
+    let color = config.color || config.textColor || config.style?.color || this.theme.textColor || "#333333";
+    if (!config.backgroundColor && this.isNearWhite(color)) {
+      color = this.theme.textColor || "#333333";
+    }
     const actualHeight = height || 30;
     let fontSize = config.fontSize || 14;
     this.doc.font("Helvetica");
@@ -55973,10 +56351,20 @@ var DocumentPdfRenderer = class {
     this.doc.y = Math.min(savedY, this.margin + 100);
   }
   renderModuleTextBlock(config, x, y, width, height) {
-    const text = this.substituteVariables(config.content || config.text || "");
+    const availableHeight = this.getAvailableHeightOnPage(y);
+    if (availableHeight < 10) {
+      console.warn(`\u{1F4C4} [PDF] TEXT_BLOCK: Pas de place (${availableHeight.toFixed(0)}px). Bloc masqu\xE9.`);
+      return;
+    }
+    const rawText = this.substituteVariables(config.content || config.text || "");
+    const text = this.normalizeText(rawText);
     const alignment = config.alignment || "left";
-    const color = config.color || "#FFFFFF";
-    const actualHeight = height || 100;
+    let color = config.color || config.textColor || config.style?.color || this.theme.textColor || "#333333";
+    if (!config.backgroundColor && this.isNearWhite(color)) {
+      color = this.theme.textColor || "#333333";
+    }
+    const maxHeight = Math.min(height || 100, availableHeight - 5);
+    const actualHeight = Math.max(10, maxHeight);
     let fontSize = config.fontSize || 12;
     const maxFontSize = Math.floor(actualHeight / 4);
     fontSize = Math.min(fontSize, Math.max(maxFontSize, 8));
@@ -55995,7 +56383,7 @@ var DocumentPdfRenderer = class {
     if (config.backgroundColor) {
       this.doc.rect(x, y, width, actualHeight).fill(config.backgroundColor);
     }
-    console.log(`\u{1F4C4} [PDF] TEXT_BLOCK: text="${text.substring(0, 30)}...", color=${color}, fontSize=${fontSize}`);
+    console.log(`\u{1F4C4} [PDF] TEXT_BLOCK: text="${text.substring(0, 30)}...", color=${color}, fontSize=${fontSize}, hauteur disponible=${availableHeight.toFixed(0)}px`);
     const savedY = this.doc.y;
     const finalTextHeight = this.doc.heightOfString(text, { width: innerWidth });
     const textYOffset = calculateVerticalCenterOffset(innerHeight, finalTextHeight);
@@ -56151,7 +56539,7 @@ var DocumentPdfRenderer = class {
     const b = Math.round(b1 + (b2 - b1) * ratio);
     return `#${(r << 16 | g << 8 | b).toString(16).padStart(6, "0")}`;
   }
-  renderModulePricingTable(config, x, y, width) {
+  renderModulePricingTable(config, x, y, width, _height) {
     const title = config.title || "Tarifs";
     const currency = config.currency || "\u20AC";
     const tvaRate = config.tvaRate || config.vatRate || 21;
@@ -56177,49 +56565,71 @@ var DocumentPdfRenderer = class {
         total: (row.quantity || 1) * parseFloat(row.unitPrice || 0)
       }));
     }
+    const availableHeight = this.getAvailableHeightOnPage(y);
+    if (availableHeight < 50) {
+      console.warn(`\u{1F4C4} [PDF] PRICING_TABLE: Pas assez de place (${availableHeight.toFixed(0)}px restants). Tableau masqu\xE9.`);
+      return;
+    }
     this.doc.fontSize(this.scaleFontSize(16)).font("Helvetica-Bold").fillColor(this.theme.primaryColor || "#1890ff").text(title, x, y, { width });
     let currentY = y + 25;
-    const colWidths = [width * 0.5, width * 0.15, width * 0.15, width * 0.2];
+    if (!this.canFitOnPage(currentY, 30)) {
+      console.warn(`\u{1F4C4} [PDF] PRICING_TABLE: Pas de place pour la table. Tableau masqu\xE9.`);
+      return;
+    }
+    const colWidths = [width * 0.45, width * 0.12, width * 0.18, width * 0.25];
     const headerHeight = 20;
+    const cellPadding = 8;
     this.doc.rect(x, currentY, width, headerHeight).fill(this.theme.primaryColor || "#1890ff");
     this.doc.fontSize(this.scaleFontSize(10)).font("Helvetica-Bold").fillColor("#FFFFFF");
     this.doc.text("D\xE9signation", x + 5, currentY + 5, { width: colWidths[0] - 10 });
     this.doc.text("Qt\xE9", x + colWidths[0], currentY + 5, { width: colWidths[1], align: "center" });
-    this.doc.text("P.U.", x + colWidths[0] + colWidths[1], currentY + 5, { width: colWidths[2], align: "right" });
-    this.doc.text("Total", x + colWidths[0] + colWidths[1] + colWidths[2], currentY + 5, { width: colWidths[3], align: "right" });
+    this.doc.text("P.U.", x + colWidths[0] + colWidths[1], currentY + 5, { width: colWidths[2] - cellPadding, align: "right" });
+    this.doc.text("Total", x + colWidths[0] + colWidths[1] + colWidths[2], currentY + 5, { width: colWidths[3] - cellPadding, align: "right" });
     currentY += headerHeight;
     let totalHT = 0;
+    let rowsRendered = 0;
     if (items.length === 0) {
       this.doc.fontSize(this.scaleFontSize(10)).font("Helvetica-Oblique").fillColor("#999999").text("Aucune ligne configur\xE9e", x + 5, currentY + 5, { width: width - 10, align: "center" });
       currentY += 25;
     } else {
       for (const item of items) {
         const rowHeight = 18;
-        const lineTotal = item.total || item.quantity * item.unitPrice;
-        totalHT += lineTotal;
+        if (!this.canFitOnPage(currentY, rowHeight + 5)) {
+          console.warn(`\u{1F4C4} [PDF] PRICING_TABLE: Plus de place pour ${items.length - rowsRendered} lignes. Arr\xEAt du rendu.`);
+          break;
+        }
+        const lineTotal = typeof item.total === "number" ? item.total : typeof item.quantity === "number" && typeof item.unitPrice === "number" ? item.quantity * item.unitPrice : null;
+        if (typeof lineTotal === "number") totalHT += lineTotal;
         this.doc.fontSize(this.scaleFontSize(10)).font("Helvetica").fillColor(this.theme.textColor || "#333333");
         this.doc.text(item.description || "-", x + 5, currentY + 4, { width: colWidths[0] - 10 });
-        this.doc.text(String(item.quantity), x + colWidths[0], currentY + 4, { width: colWidths[1], align: "center" });
-        this.doc.text(`${item.unitPrice.toFixed(2)} ${currency}`, x + colWidths[0] + colWidths[1], currentY + 4, { width: colWidths[2], align: "right" });
-        this.doc.text(`${lineTotal.toFixed(2)} ${currency}`, x + colWidths[0] + colWidths[1] + colWidths[2], currentY + 4, { width: colWidths[3], align: "right" });
+        this.doc.text(typeof item.quantity === "number" ? String(item.quantity) : "", x + colWidths[0], currentY + 4, { width: colWidths[1], align: "center" });
+        this.doc.text(typeof item.unitPrice === "number" ? `${item.unitPrice.toFixed(2)} ${currency}` : "", x + colWidths[0] + colWidths[1], currentY + 4, { width: colWidths[2] - cellPadding, align: "right" });
+        this.doc.text(typeof lineTotal === "number" ? `${lineTotal.toFixed(2)} ${currency}` : "", x + colWidths[0] + colWidths[1] + colWidths[2], currentY + 4, { width: colWidths[3] - cellPadding, align: "right" });
         this.doc.strokeColor("#e8e8e8").lineWidth(0.5).moveTo(x, currentY + rowHeight).lineTo(x + width, currentY + rowHeight).stroke();
         currentY += rowHeight;
+        rowsRendered++;
       }
     }
-    if (showTotal) {
+    const hasAnyPricedLine = items.some((it) => typeof it.total === "number" || typeof it.quantity === "number" && typeof it.unitPrice === "number");
+    if (showTotal && hasAnyPricedLine) {
+      const totalsHeight = showTVA ? 50 : 20;
+      if (!this.canFitOnPage(currentY, totalsHeight + 5)) {
+        console.warn(`\u{1F4C4} [PDF] PRICING_TABLE: Pas de place pour les totaux. Totaux masqu\xE9s.`);
+        return;
+      }
       const tva = totalHT * (tvaRate / 100);
       const totalTTC = totalHT + tva;
       currentY += 5;
-      this.doc.fontSize(this.scaleFontSize(10)).font("Helvetica-Bold").fillColor(this.theme.textColor || "#333333").text("Total HT", x + colWidths[0] + colWidths[1], currentY, { width: colWidths[2] + colWidths[3] * 0.5, align: "right" });
-      this.doc.text(`${totalHT.toFixed(2)} ${currency}`, x + width - colWidths[3], currentY, { width: colWidths[3], align: "right" });
+      this.doc.fontSize(this.scaleFontSize(10)).font("Helvetica-Bold").fillColor(this.theme.textColor || "#333333").text("Total HT", x + colWidths[0] + colWidths[1], currentY, { width: colWidths[2] + colWidths[3] * 0.5 - cellPadding, align: "right" });
+      this.doc.text(`${totalHT.toFixed(2)} ${currency}`, x + width - colWidths[3], currentY, { width: colWidths[3] - cellPadding, align: "right" });
       currentY += 15;
       if (showTVA) {
-        this.doc.font("Helvetica").text(`TVA (${tvaRate}%)`, x + colWidths[0] + colWidths[1], currentY, { width: colWidths[2] + colWidths[3] * 0.5, align: "right" });
-        this.doc.text(`${tva.toFixed(2)} ${currency}`, x + width - colWidths[3], currentY, { width: colWidths[3], align: "right" });
+        this.doc.font("Helvetica").text(`TVA (${tvaRate}%)`, x + colWidths[0] + colWidths[1], currentY, { width: colWidths[2] + colWidths[3] * 0.5 - cellPadding, align: "right" });
+        this.doc.text(`${tva.toFixed(2)} ${currency}`, x + width - colWidths[3], currentY, { width: colWidths[3] - cellPadding, align: "right" });
         currentY += 15;
         this.doc.rect(x + width * 0.6, currentY - 2, width * 0.4, 20).fill(this.theme.primaryColor || "#1890ff");
         this.doc.fontSize(this.scaleFontSize(12)).font("Helvetica-Bold").fillColor("#FFFFFF").text("Total TTC", x + width * 0.6 + 5, currentY + 3, { width: width * 0.2 - 10 });
-        this.doc.text(`${totalTTC.toFixed(2)} ${currency}`, x + width * 0.8, currentY + 3, { width: width * 0.2 - 5, align: "right" });
+        this.doc.text(`${totalTTC.toFixed(2)} ${currency}`, x + width * 0.8, currentY + 3, { width: width * 0.2 - 10, align: "right" });
       }
     }
   }
@@ -56259,6 +56669,460 @@ var DocumentPdfRenderer = class {
       const aHeight = this.doc.heightOfString(`R: ${answer}`, { width });
       currentY += aHeight + 15;
     }
+  }
+  // ============================================================
+  // DOCUMENT_HEADER - En-tête avec logo entreprise et infos client
+  // ============================================================
+  renderModuleDocumentHeader(config, x, y, width, height) {
+    const companyName = this.substituteVariables(config.companyName || "{org.name}");
+    const companyAddress = this.substituteVariables(config.companyAddress || "{org.address}");
+    const companyPhone = this.substituteVariables(config.companyPhone || "{org.phone}");
+    const companyEmail = this.substituteVariables(config.companyEmail || "{org.email}");
+    const companyTVA = this.substituteVariables(config.companyTVA || "{org.tva}");
+    const clientTitle = config.clientTitle || "CLIENT:";
+    const clientName = this.substituteVariables(config.clientName || "{lead.firstName} {lead.lastName}");
+    const clientCompany = this.substituteVariables(config.clientCompany || "{lead.company}");
+    const clientAddress = this.substituteVariables(config.clientAddress || "{lead.address}");
+    const clientEmail = this.substituteVariables(config.clientEmail || "{lead.email}");
+    const halfWidth = width / 2 - 20;
+    let currentY = y;
+    if (config.showLogo !== false && config.logo) {
+      try {
+        const logoSize = config.logoSize || 60;
+        const maxLogoWidth = Math.min(logoSize, width * 0.3);
+        const maxLogoHeight = Math.min(logoSize, (height || logoSize) - 4);
+        const logoData = config.logo;
+        if (logoData && logoData.startsWith("data:image")) {
+          const base64Data = logoData.split(",")[1];
+          const buffer = Buffer.from(base64Data, "base64");
+          this.doc.image(buffer, x, currentY, { fit: [maxLogoWidth, maxLogoHeight] });
+        }
+      } catch (e) {
+        console.warn("\u{1F4C4} [PDF] Impossible de charger le logo:", e);
+      }
+    }
+    if (config.showCompanyInfo !== false) {
+      const logoOffset = config.showLogo !== false && config.logo ? Math.min(config.logoSize || 60, width * 0.3) + 12 : 0;
+      this.doc.font("Helvetica-Bold").fontSize(this.scaleFontSize(14)).fillColor(this.theme.primaryColor || "#1890ff").text(companyName, x + logoOffset, currentY, { width: halfWidth - logoOffset });
+      currentY += 18;
+      if (companyPhone) {
+        this.doc.fontSize(this.scaleFontSize(9)).fillColor("#666666").text(`Tel: ${companyPhone}`, x + logoOffset, currentY, { width: halfWidth - logoOffset });
+        currentY += 12;
+      }
+      if (companyEmail) {
+        this.doc.fontSize(this.scaleFontSize(9)).fillColor("#666666").text(`Email: ${companyEmail}`, x + logoOffset, currentY, { width: halfWidth - logoOffset });
+        currentY += 12;
+      }
+      this.doc.font("Helvetica").fontSize(this.scaleFontSize(10)).fillColor("#555555").text(companyAddress, x + logoOffset, currentY, { width: halfWidth - logoOffset });
+      const addrHeight = this.doc.heightOfString(companyAddress, { width: halfWidth - logoOffset });
+      currentY += addrHeight + 4;
+      if (companyTVA) {
+        this.doc.fontSize(this.scaleFontSize(8)).fillColor("#888888").text(`TVA: ${companyTVA}`, x + logoOffset, currentY, { width: halfWidth - logoOffset });
+      }
+    }
+    if (config.showClientInfo !== false) {
+      const clientX = x + halfWidth + 40;
+      let clientY = y;
+      this.doc.font("Helvetica").fontSize(this.scaleFontSize(9)).fillColor("#888888").text(clientTitle, clientX, clientY, { width: halfWidth, align: "right" });
+      clientY += 14;
+      this.doc.font("Helvetica-Bold").fontSize(this.scaleFontSize(12)).fillColor("#333333").text(clientName, clientX, clientY, { width: halfWidth, align: "right" });
+      clientY += 16;
+      if (clientCompany) {
+        this.doc.font("Helvetica").fontSize(this.scaleFontSize(11)).fillColor("#444444").text(clientCompany, clientX, clientY, { width: halfWidth, align: "right" });
+        clientY += 14;
+      }
+      this.doc.font("Helvetica").fontSize(this.scaleFontSize(10)).fillColor("#555555").text(clientAddress, clientX, clientY, { width: halfWidth, align: "right" });
+      const clientAddrHeight = this.doc.heightOfString(clientAddress, { width: halfWidth });
+      clientY += clientAddrHeight + 4;
+      if (clientEmail) {
+        this.doc.fontSize(this.scaleFontSize(9)).fillColor("#666666").text(`Email: ${clientEmail}`, clientX, clientY, { width: halfWidth, align: "right" });
+      }
+    }
+    console.log(`\u{1F4C4} [PDF] DOCUMENT_HEADER rendu: company=${companyName}, client=${clientName}`);
+  }
+  // ============================================================
+  // DOCUMENT_INFO - Référence, date, validité
+  // ============================================================
+  renderModuleDocumentInfo(config, x, y, width, _height) {
+    const themeId = config._themeId;
+    const layoutRaw = (config.layout || "").toString().trim();
+    const layout = "inline";
+    console.log("\u{1F4C4} [PDF] DOCUMENT_INFO render", {
+      themeId,
+      layoutRaw,
+      forcedLayout: layout,
+      showReference: config.showReference,
+      showDate: config.showDate,
+      showValidUntil: config.showValidUntil,
+      referencePrefix: config.referencePrefix,
+      datePrefix: config.datePrefix,
+      validUntilPrefix: config.validUntilPrefix
+    });
+    const reference = this.normalizeText(this.substituteVariables(config.reference || config.referenceBinding || "{quote.reference}"));
+    const date = this.normalizeText(this.substituteVariables(config.date || config.dateBinding || "{quote.date}"));
+    const validUntil = this.normalizeText(this.substituteVariables(config.validUntil || config.validUntilBinding || "{quote.validUntil}"));
+    const object = this.normalizeText(this.substituteVariables(config.object || config.objectBinding || ""));
+    const referencePrefix = config.referencePrefix || "DEV-";
+    const datePrefix = config.datePrefix || "Date:";
+    const validUntilPrefix = config.validUntilPrefix || "Valide jusqu'au:";
+    const objectPrefix = config.objectPrefix || "Objet:";
+    let currentY = y;
+    const badgeFontSize = this.scaleFontSize(13);
+    const badgePaddingX = 12;
+    const badgePaddingY = 6;
+    const badgeGap = 12;
+    if (layout === "inline") {
+      let currentX = x;
+      const drawBadge = (label, value) => {
+        const text = `${label}${value ? ` ${value}` : ""}`;
+        this.doc.font("Helvetica").fontSize(badgeFontSize);
+        const textHeight = this.doc.heightOfString(text, { width });
+        const badgeWidth = this.doc.widthOfString(text) + badgePaddingX * 2;
+        const badgeHeight = textHeight + badgePaddingY * 2;
+        const textY = currentY + (badgeHeight - textHeight) / 2;
+        this.doc.lineWidth(1).roundedRect(currentX, currentY, badgeWidth, badgeHeight, 4).fill("#f5f5f5").stroke("#e5e5e5");
+        this.doc.fillColor("#333333").font("Helvetica-Bold").fontSize(badgeFontSize).text(label, currentX + badgePaddingX, textY, { continued: true, lineBreak: false }).font("Helvetica").text(value ? ` ${value}` : "", { continued: false, lineBreak: false });
+        currentX += badgeWidth + badgeGap;
+      };
+      if (config.showReference !== false) {
+        drawBadge(referencePrefix, reference);
+      }
+      if (config.showDate !== false) {
+        drawBadge(datePrefix, date);
+      }
+      if (config.showValidUntil !== false && validUntil) {
+        drawBadge(validUntilPrefix, validUntil);
+      }
+    } else {
+      if (config.showReference !== false) {
+        this.doc.font("Helvetica-Bold").fontSize(this.scaleFontSize(11)).fillColor("#333333").text(`${referencePrefix} ${reference}`, x, currentY, { width });
+        currentY += 16;
+      }
+      if (config.showDate !== false) {
+        this.doc.font("Helvetica").fontSize(this.scaleFontSize(11)).fillColor("#333333").text(`${datePrefix} ${date}`, x, currentY, { width });
+        currentY += 16;
+      }
+      if (config.showValidUntil !== false && validUntil) {
+        this.doc.font("Helvetica").fontSize(this.scaleFontSize(11)).fillColor("#333333").text(`${validUntilPrefix} ${validUntil}`, x, currentY, { width });
+        currentY += 16;
+      }
+      if (config.showObject !== false && object) {
+        this.doc.font("Helvetica").fontSize(this.scaleFontSize(11)).fillColor("#333333").text(`${objectPrefix} ${object}`, x, currentY, { width });
+      }
+    }
+    console.log(`\u{1F4C4} [PDF] DOCUMENT_INFO rendu: ref=${reference}, date=${date}`);
+  }
+  // ============================================================
+  // DOCUMENT_FOOTER - Pied de page avec infos entreprise
+  // ============================================================
+  renderModuleDocumentFooter(config, x, y, width, height) {
+    const layout = config.layout || "centered";
+    const fontSize = config.fontSize || 10;
+    const maxY = y + (height || 40);
+    const textFont = this.unicodeFontName || "Helvetica";
+    const companyName = this.substituteVariables(config.companyName || "{org.name}");
+    const phone = this.substituteVariables(config.companyPhone || "{org.phone}");
+    const email = this.substituteVariables(config.companyEmail || "{org.email}");
+    const website = this.substituteVariables(config.companyWebsite || "{org.website}");
+    const tva = this.substituteVariables(config.companyTVA || "{org.tva}");
+    const iban = this.substituteVariables(config.bankIBAN || "{org.iban}");
+    const bic = this.substituteVariables(config.bankBIC || "{org.bic}");
+    const showCompanyInfo = config.showCompanyInfo !== false;
+    const showBankInfo = config.showBankInfo !== false;
+    const showPageNumber = config.showPageNumber !== false;
+    const companyInfoParts = [];
+    if (showCompanyInfo) {
+      companyInfoParts.push(companyName);
+      if (phone) companyInfoParts.push(`Tel: ${phone}`);
+      if (email) companyInfoParts.push(`${email}`);
+      if (website) companyInfoParts.push(`${website}`);
+    }
+    const companyInfoText = companyInfoParts.filter(Boolean).join(" | ");
+    const bankInfoShouldRender = showBankInfo && (!!iban || !!bic);
+    const bankInfoParts = [];
+    if (bankInfoShouldRender) {
+      if (tva) bankInfoParts.push(`TVA: ${tva}`);
+      if (iban) bankInfoParts.push(`IBAN: ${iban}`);
+      if (bic) bankInfoParts.push(`BIC: ${bic}`);
+    }
+    const bankInfoText = bankInfoParts.join(" | ");
+    const pageNumberText = showPageNumber ? "Page 1 / 1" : "";
+    const baseFontSize = this.scaleFontSize(fontSize);
+    const smallFontSize = this.scaleFontSize(fontSize - 1);
+    const drawSingleLine = (text, lineY, opts) => {
+      if (!text) return 0;
+      const h = this.doc.font(opts.font).fontSize(opts.size).heightOfString(text, { width, lineBreak: false });
+      if (lineY + h > maxY) return 0;
+      this.doc.font(opts.font).fontSize(opts.size).fillColor(opts.color).text(text, x, lineY, { width, align: opts.align, lineBreak: false });
+      return h;
+    };
+    if (layout === "spread") {
+      const lineY = y;
+      const leftWidth = Math.floor(width * 0.78);
+      const rightWidth = width - leftWidth;
+      if (companyInfoText) {
+        const h = this.doc.font(textFont).fontSize(baseFontSize).heightOfString(companyInfoText, { width: leftWidth, lineBreak: false });
+        if (lineY + h <= maxY) {
+          this.doc.font(textFont).fontSize(baseFontSize).fillColor("#666666").text(companyInfoText, x, lineY, { width: leftWidth, align: "left", lineBreak: false });
+        }
+      }
+      if (pageNumberText) {
+        const h = this.doc.font(textFont).fontSize(baseFontSize).heightOfString(pageNumberText, { width: rightWidth, lineBreak: false });
+        if (lineY + h <= maxY) {
+          this.doc.font(textFont).fontSize(baseFontSize).fillColor("#888888").text(pageNumberText, x + leftWidth, lineY, { width: rightWidth, align: "right", lineBreak: false });
+        }
+      }
+      console.log(`\u{1F4C4} [PDF] DOCUMENT_FOOTER rendu (spread): ${companyName}`);
+      return;
+    }
+    if (layout === "minimal") {
+      const minimalText = `${companyName}${pageNumberText ? ` \u2014 ${pageNumberText}` : ""}`;
+      drawSingleLine(minimalText, y, { font: textFont, size: baseFontSize, color: "#888888", align: "center" });
+      console.log(`\u{1F4C4} [PDF] DOCUMENT_FOOTER rendu (minimal): ${companyName}`);
+      return;
+    }
+    let currentY = y;
+    if (companyInfoText) {
+      const h1 = drawSingleLine(companyInfoText, currentY, { font: textFont, size: baseFontSize, color: "#666666", align: "center" });
+      if (h1) currentY += h1 + 4;
+    }
+    if (bankInfoText) {
+      const h2 = drawSingleLine(bankInfoText, currentY, { font: textFont, size: smallFontSize, color: "#888888", align: "center" });
+      if (h2) currentY += h2 + 4;
+    }
+    if (config.showLegalMention && config.legalMention) {
+      const legalText = String(config.legalMention);
+      const h3 = drawSingleLine(legalText, currentY, { font: "Helvetica-Oblique", size: smallFontSize, color: "#888888", align: "center" });
+      if (h3) currentY += h3 + 4;
+    }
+    if (pageNumberText) {
+      drawSingleLine(pageNumberText, currentY, { font: textFont, size: baseFontSize, color: "#888888", align: "center" });
+    }
+    console.log(`\u{1F4C4} [PDF] DOCUMENT_FOOTER rendu: ${companyName}`);
+  }
+  // ============================================================
+  // SIGNATURE_BLOCK - Zone de signatures
+  // ============================================================
+  renderModuleSignatureBlock(config, x, y, width, height) {
+    const availableHeight = this.getAvailableHeightOnPage(y);
+    const minHeight = 120;
+    if (availableHeight < minHeight) {
+      console.warn(`\u{1F4C4} [PDF] SIGNATURE_BLOCK: Pas assez de place (${availableHeight.toFixed(0)}px restants). Bloc masqu\xE9.`);
+      return;
+    }
+    const isStacked = config.layout === "stacked";
+    const gap = 16;
+    const actualHeight = Math.min(height || 140, availableHeight - 10);
+    const boxHeight = isStacked ? Math.floor((actualHeight - gap) / 2) : Math.floor(actualHeight);
+    const boxWidth = isStacked ? width : (width - 24) / 2;
+    const clientLabel = config.clientLabel || "Le Client";
+    const companyLabel = config.companyLabel || "Pour l'entreprise";
+    this.doc.save();
+    this.doc.rect(x, y, width, height).clip();
+    const renderBox = (label, boxX, boxY) => {
+      this.doc.roundedRect(boxX, boxY, boxWidth, boxHeight, 6).stroke("#e8e8e8");
+      const padding = 20;
+      const labelY = boxY + padding;
+      this.doc.font("Helvetica-Bold").fontSize(this.scaleFontSize(11)).fillColor("#333333").text(label, boxX + padding, labelY, { width: boxWidth - padding * 2 });
+      let currentY = labelY + 11 + 8;
+      const showDate = config.showDate !== false;
+      if (showDate) {
+        this.doc.font("Helvetica").fontSize(this.scaleFontSize(10)).fillColor("#666666").text("Date: ____/____/________", boxX + padding, currentY, { width: boxWidth - padding * 2 });
+        currentY += 12 + 16;
+      }
+      const showMention = config.showMention !== false;
+      if (showMention) {
+        const mention = config.mention || "Lu et approuv\xE9, bon pour accord";
+        this.doc.font("Helvetica-Oblique").fontSize(this.scaleFontSize(10)).fillColor("#666666").text(`"${mention}"`, boxX + padding, currentY, { width: boxWidth - padding * 2 });
+        currentY += 12 + 8;
+      }
+      const signatureAreaTop = currentY + 20;
+      const signatureLineY = signatureAreaTop + 80;
+      this.doc.font("Helvetica").fontSize(this.scaleFontSize(11)).fillColor("#999999").text("Signature", boxX + padding, signatureAreaTop + 2, { width: boxWidth - padding * 2 });
+      this.doc.moveTo(boxX + padding, signatureLineY).lineTo(boxX + boxWidth - padding, signatureLineY).dash(3, { space: 3 }).stroke("#cccccc").undash();
+      return true;
+    };
+    if (isStacked) {
+      renderBox(clientLabel, x, y);
+      renderBox(companyLabel, x, y + boxHeight + 16);
+    } else {
+      renderBox(clientLabel, x, y);
+      renderBox(companyLabel, x + boxWidth + 24, y);
+    }
+    this.doc.restore();
+    console.log(`\u{1F4C4} [PDF] SIGNATURE_BLOCK rendu: ${clientLabel} / ${companyLabel} (disponible: ${availableHeight.toFixed(0)}px)`);
+  }
+  // ============================================================
+  // TOTALS_SUMMARY - Récapitulatif des totaux (HT/TVA/TTC)
+  // ============================================================
+  renderModuleTotalsSummary(config, x, y, width, height) {
+    this.doc.save();
+    this.doc.rect(x, y, width, height).clip();
+    const currency = config.currency || "\u20AC";
+    const alignment = config.alignment || "right";
+    const tvaRate = Number(config.tvaRate ?? 21);
+    const showDiscount = config.showDiscount === true;
+    const showTotalHT = config.showTotalHT !== false;
+    const showTVA = config.showTVA !== false;
+    const showTotalTTC = config.showTotalTTC !== false;
+    const paddingX = 16;
+    const paddingTop = 8;
+    const gap = 24;
+    const contentMaxWidth = Math.max(0, width - paddingX * 2);
+    const valueWidth = Math.min(110, Math.max(80, contentMaxWidth * 0.35));
+    const labelWidth = Math.max(120, contentMaxWidth - valueWidth - gap);
+    const contentWidth = Math.min(contentMaxWidth, labelWidth + gap + valueWidth);
+    let startX = x + paddingX;
+    if (alignment === "right") startX = x + width - paddingX - contentWidth;
+    if (alignment === "center") startX = x + (width - contentWidth) / 2;
+    const labelX = startX;
+    const valueX = startX + (contentWidth - valueWidth);
+    const rowHeight = 22;
+    let currentY = y + paddingTop;
+    const drawRow = (label, value, opts) => {
+      this.doc.strokeColor("#f0f0f0").lineWidth(1).moveTo(x + paddingX, currentY + rowHeight).lineTo(x + width - paddingX, currentY + rowHeight).stroke();
+      this.doc.font("Helvetica").fontSize(this.scaleFontSize(11)).fillColor("#666666").text(label, labelX, currentY + 6, { width: contentWidth - valueWidth - gap, align: "right" });
+      this.doc.font("Helvetica-Bold").fontSize(this.scaleFontSize(11)).fillColor(opts?.valueColor || "#333333").text(value, valueX, currentY + 6, { width: valueWidth, align: "right" });
+      currentY += rowHeight;
+    };
+    const totalHTValue = this.ctx.quote?.totalHT ?? this.substituteVariables(String(config.totalHTBinding || config.totalHT || "{quote.totalHT}"));
+    const tvaValue = this.ctx.quote?.totalTVA ?? this.substituteVariables(String(config.tvaBinding || config.tvaAmount || "{quote.totalTVA}"));
+    const totalTTCValue = this.ctx.quote?.totalTTC ?? this.substituteVariables(String(config.totalTTCBinding || config.totalTTC || "{quote.totalTTC}"));
+    const discountValue = this.substituteVariables(String(config.discount || ""));
+    if (showDiscount && discountValue) {
+      const discountFormatted = this.formatMoney(discountValue, currency);
+      drawRow("Remise:", `-${discountFormatted}`, { valueColor: "#52c41a" });
+    }
+    if (showTotalHT) {
+      drawRow("Sous-Total HT:", this.formatMoney(totalHTValue, currency));
+    }
+    if (showTVA) {
+      drawRow(`TVA (${Number.isFinite(tvaRate) ? tvaRate : 21}%):`, this.formatMoney(tvaValue, currency));
+    }
+    if (showTotalTTC) {
+      const barHeight = 32;
+      const barY = currentY + 4;
+      this.doc.rect(x, barY, width, barHeight).fill("#0e4a6f");
+      const innerPad = 16;
+      const barLabelX = x + innerPad;
+      const barValueWidth = Math.min(valueWidth + 20, width - innerPad * 2);
+      this.doc.font("Helvetica-Bold").fontSize(this.scaleFontSize(12)).fillColor("#FFFFFF").text("Total TTC:", barLabelX, barY + 9, { width: width - innerPad * 2 - barValueWidth, align: "right" });
+      this.doc.font("Helvetica-Bold").fontSize(this.scaleFontSize(16)).fillColor("#FFFFFF").text(this.formatMoney(totalTTCValue, currency), x + width - innerPad - barValueWidth, barY + 7, { width: barValueWidth, align: "right" });
+    }
+    this.doc.restore();
+  }
+  // ============================================================
+  // PAYMENT_INFO - Informations de paiement
+  // ============================================================
+  renderModulePaymentInfo(config, x, y, width, _height) {
+    const availableHeight = this.getAvailableHeightOnPage(y);
+    if (availableHeight < 30) {
+      console.warn(`\u{1F4C4} [PDF] PAYMENT_INFO: Pas de place (${availableHeight.toFixed(0)}px). Bloc masqu\xE9.`);
+      return;
+    }
+    const title = config.title || "Modalit\xE9s de paiement";
+    const iban = this.substituteVariables(config.iban || "{org.iban}");
+    const bic = this.substituteVariables(config.bic || "{org.bic}");
+    const bankName = this.substituteVariables(config.bankName || "{org.bankName}");
+    const communication = this.substituteVariables(config.communication || "{quote.reference}");
+    let currentY = y;
+    if (config.showTitle !== false) {
+      if (!this.canFitOnPage(currentY, 20)) {
+        console.warn(`\u{1F4C4} [PDF] PAYMENT_INFO: Pas de place pour le titre. Bloc masqu\xE9.`);
+        return;
+      }
+      this.doc.font("Helvetica-Bold").fontSize(this.scaleFontSize(12)).fillColor("#333333").text(`${title}`, x, currentY, { width });
+      currentY += 20;
+    }
+    const labelWidth = 100;
+    const fieldHeight = 16;
+    if (config.showIBAN !== false && iban) {
+      if (!this.canFitOnPage(currentY, fieldHeight)) {
+        console.warn(`\u{1F4C4} [PDF] PAYMENT_INFO: Plus de place pour IBAN et suivants.`);
+        return;
+      }
+      this.doc.font("Helvetica").fontSize(this.scaleFontSize(11)).fillColor("#666666").text("IBAN:", x, currentY, { width: labelWidth, continued: true }).font("Courier").fillColor("#333333").text(iban);
+      currentY += fieldHeight;
+    }
+    if (config.showBIC !== false && bic) {
+      if (!this.canFitOnPage(currentY, fieldHeight)) {
+        return;
+      }
+      this.doc.font("Helvetica").fontSize(this.scaleFontSize(11)).fillColor("#666666").text("BIC:", x, currentY, { width: labelWidth, continued: true }).font("Courier").fillColor("#333333").text(bic);
+      currentY += fieldHeight;
+    }
+    if (config.showBankName && bankName) {
+      if (!this.canFitOnPage(currentY, fieldHeight)) {
+        return;
+      }
+      this.doc.font("Helvetica").fontSize(this.scaleFontSize(11)).fillColor("#666666").text("Banque:", x, currentY, { width: labelWidth, continued: true }).font("Helvetica").fillColor("#333333").text(bankName);
+      currentY += fieldHeight;
+    }
+    if (config.showCommunication !== false && communication) {
+      if (!this.canFitOnPage(currentY, fieldHeight)) {
+        return;
+      }
+      this.doc.font("Helvetica").fontSize(this.scaleFontSize(11)).fillColor("#666666").text("Communication:", x, currentY, { width: labelWidth, continued: true }).font("Helvetica-Bold").fillColor("#333333").text(communication);
+      currentY += fieldHeight;
+    }
+    if (config.showPaymentTerms !== false && config.paymentTerms) {
+      if (!this.canFitOnPage(currentY, 40)) {
+        return;
+      }
+      currentY += 8;
+      this.doc.roundedRect(x, currentY, width, 28, 4).fill("#f9f9f9");
+      this.doc.font("Helvetica").fontSize(this.scaleFontSize(10)).fillColor("#666666").text(`${config.paymentTerms}`, x + 10, currentY + 8, { width: width - 20 });
+    }
+    console.log(`\u{1F4C4} [PDF] PAYMENT_INFO rendu (disponible: ${availableHeight.toFixed(0)}px)`);
+  }
+  // ============================================================
+  // CONTACT_INFO - Informations de contact
+  // ============================================================
+  renderModuleContactInfo(config, x, y, width, _height) {
+    const availableHeight = this.getAvailableHeightOnPage(y);
+    if (availableHeight < 30) {
+      console.warn(`\u{1F4C4} [PDF] CONTACT_INFO: Pas de place (${availableHeight.toFixed(0)}px). Bloc masqu\xE9.`);
+      return;
+    }
+    let currentY = y;
+    if (config.title) {
+      if (!this.canFitOnPage(currentY, 20)) {
+        console.warn(`\u{1F4C4} [PDF] CONTACT_INFO: Pas de place pour le titre. Bloc masqu\xE9.`);
+        return;
+      }
+      this.doc.font("Helvetica-Bold").fontSize(this.scaleFontSize(12)).fillColor("#333333").text(config.title, x, currentY, { width });
+      currentY += 20;
+    }
+    const fieldHeight = 14;
+    if (config.showPhone && config.phone) {
+      if (!this.canFitOnPage(currentY, fieldHeight)) {
+        console.warn(`\u{1F4C4} [PDF] CONTACT_INFO: Plus de place pour Phone et suivants.`);
+        return;
+      }
+      this.doc.font("Helvetica").fontSize(this.scaleFontSize(11)).fillColor("#333333").text(`Tel: ${config.phone}`, x, currentY, { width });
+      currentY += fieldHeight;
+    }
+    if (config.showEmail && config.email) {
+      if (!this.canFitOnPage(currentY, fieldHeight)) {
+        return;
+      }
+      this.doc.font("Helvetica").fontSize(this.scaleFontSize(11)).fillColor("#333333").text(`Email: ${config.email}`, x, currentY, { width });
+      currentY += fieldHeight;
+    }
+    if (config.showAddress && config.address) {
+      if (!this.canFitOnPage(currentY, fieldHeight)) {
+        return;
+      }
+      this.doc.font("Helvetica").fontSize(this.scaleFontSize(11)).fillColor("#333333").text(`Adresse: ${config.address}`, x, currentY, { width });
+      currentY += fieldHeight;
+    }
+    if (config.showWebsite && config.website) {
+      if (!this.canFitOnPage(currentY, fieldHeight)) {
+        return;
+      }
+      this.doc.font("Helvetica").fontSize(this.scaleFontSize(11)).fillColor("#333333").text(`Web: ${config.website}`, x, currentY, { width });
+    }
+    console.log(`\u{1F4C4} [PDF] CONTACT_INFO rendu (disponible: ${availableHeight.toFixed(0)}px)`);
   }
   // ============================================================
   /**
@@ -56457,9 +57321,9 @@ var DocumentPdfRenderer = class {
     });
     const resolvedLine = {
       description: "",
-      quantity: 1,
-      unitPrice: 0,
-      total: 0
+      quantity: null,
+      unitPrice: null,
+      total: null
     };
     if (line.labelSource) {
       const resolved = this.resolveVariable(line.labelSource);
@@ -56474,34 +57338,55 @@ var DocumentPdfRenderer = class {
     if (line.quantitySource) {
       const qty = this.resolveVariable(line.quantitySource);
       console.log(`\u{1F4C4} [PDF] Quantit\xE9 r\xE9solue: "${qty}" (source: ${line.quantitySource})`);
-      resolvedLine.quantity = parseFloat(qty) || 1;
+      const n = parseFloat(qty);
+      resolvedLine.quantity = Number.isFinite(n) ? n : null;
     } else if (typeof line.quantity === "string" && line.quantity.startsWith("@")) {
       const qty = this.resolveVariable(line.quantity);
-      resolvedLine.quantity = parseFloat(qty) || 1;
+      const n = parseFloat(qty);
+      resolvedLine.quantity = Number.isFinite(n) ? n : null;
     } else {
-      resolvedLine.quantity = parseFloat(line.quantity) || 1;
+      if (line.quantity === void 0 || line.quantity === null || line.quantity === "") {
+        resolvedLine.quantity = null;
+      } else {
+        const n = parseFloat(line.quantity);
+        resolvedLine.quantity = Number.isFinite(n) ? n : null;
+      }
     }
     if (line.unitPriceSource) {
       const price = this.resolveVariable(line.unitPriceSource);
       console.log(`\u{1F4C4} [PDF] Prix r\xE9solu: "${price}" (source: ${line.unitPriceSource})`);
-      resolvedLine.unitPrice = parseFloat(price) || 0;
+      const n = parseFloat(price);
+      resolvedLine.unitPrice = Number.isFinite(n) ? n : null;
     } else if (typeof line.unitPrice === "string" && (line.unitPrice.startsWith("@") || line.unitPrice.startsWith("node-formula:") || line.unitPrice.startsWith("condition:"))) {
       const price = this.resolveVariable(line.unitPrice);
-      resolvedLine.unitPrice = parseFloat(price) || 0;
+      const n = parseFloat(price);
+      resolvedLine.unitPrice = Number.isFinite(n) ? n : null;
     } else {
-      resolvedLine.unitPrice = parseFloat(line.unitPrice) || 0;
+      if (line.unitPrice === void 0 || line.unitPrice === null || line.unitPrice === "") {
+        resolvedLine.unitPrice = null;
+      } else {
+        const n = parseFloat(line.unitPrice);
+        resolvedLine.unitPrice = Number.isFinite(n) ? n : null;
+      }
     }
     console.log(`\u{1F4C4} [PDF] \u27A1\uFE0F Ligne r\xE9solue:`, resolvedLine);
-    if (line.totalSource) {
+    const hasExplicitTotal = line.totalSource || line.total !== void 0;
+    const hasQtyAndUnit = typeof resolvedLine.quantity === "number" && typeof resolvedLine.unitPrice === "number";
+    if (hasExplicitTotal && hasQtyAndUnit) {
+      resolvedLine.total = resolvedLine.quantity * resolvedLine.unitPrice;
+    } else if (line.totalSource) {
       const tot = this.resolveVariable(line.totalSource);
-      resolvedLine.total = parseFloat(tot) || 0;
+      const n = parseFloat(tot);
+      resolvedLine.total = Number.isFinite(n) ? n : null;
     } else if (typeof line.total === "string" && line.total.startsWith("@")) {
       const tot = this.resolveVariable(line.total);
-      resolvedLine.total = parseFloat(tot) || 0;
+      const n = parseFloat(tot);
+      resolvedLine.total = Number.isFinite(n) ? n : null;
     } else if (line.total !== void 0) {
-      resolvedLine.total = parseFloat(line.total) || 0;
+      const n = parseFloat(line.total);
+      resolvedLine.total = Number.isFinite(n) ? n : null;
     } else {
-      resolvedLine.total = resolvedLine.quantity * resolvedLine.unitPrice;
+      resolvedLine.total = hasQtyAndUnit ? resolvedLine.quantity * resolvedLine.unitPrice : null;
     }
     return resolvedLine;
   }
@@ -56907,17 +57792,39 @@ var DocumentPdfRenderer = class {
   substituteVariables(text) {
     if (!text || typeof text !== "string") return text || "";
     let result = text;
-    result = result.replace(/@(value|select)\.([a-zA-Z0-9_.-]+)/g, (match, type, ref) => {
-      return this.resolveVariable(`@${type}.${ref}`) || match;
+    result = result.replace(/@(value|select)\.([a-zA-Z0-9_.-]+)/g, (_match, type, ref) => {
+      return this.resolveVariable(`@${type}.${ref}`);
     });
-    result = result.replace(/\{\{([a-zA-Z0-9_.]+)\}\}/g, (match, ref) => {
-      return this.resolveVariable(ref) || match;
+    result = result.replace(/\{\{([a-zA-Z0-9_.]+)\}\}/g, (_match, ref) => {
+      return this.resolveVariable(ref);
     });
-    result = result.replace(/\{(lead|quote|org)\.([a-zA-Z0-9_.]+)\}/g, (match, source, key2) => {
-      const resolved = this.resolveVariable(`${source}.${key2}`);
-      return resolved || match;
+    result = result.replace(/\{(lead|quote|org)\.([a-zA-Z0-9_.]+)\}/g, (_match, source, key2) => {
+      return this.resolveVariable(`${source}.${key2}`);
     });
     return result;
+  }
+  normalizeText(text) {
+    if (!text || typeof text !== "string") return "";
+    return text.replace(/<br\s*\/?>/gi, "\n").replace(/<\/p>\s*<p>/gi, "\n\n").replace(/<\/?p>/gi, "").replace(/<[^>]+>/g, "").replace(/\*\*(.*?)\*\*/g, "$1").replace(/__(.*?)__/g, "$1").replace(/&nbsp;/g, " ").replace(/\s+\n/g, "\n").trim();
+  }
+  isNearWhite(color) {
+    if (!color) return false;
+    const normalized = color.toLowerCase().trim();
+    if (normalized === "#fff" || normalized === "#ffffff" || normalized === "white") return true;
+    const hex = normalized.replace("#", "");
+    if (hex.length === 3) {
+      const r = parseInt(hex[0] + hex[0], 16);
+      const g = parseInt(hex[1] + hex[1], 16);
+      const b = parseInt(hex[2] + hex[2], 16);
+      return r >= 245 && g >= 245 && b >= 245;
+    }
+    if (hex.length === 6) {
+      const r = parseInt(hex.slice(0, 2), 16);
+      const g = parseInt(hex.slice(2, 4), 16);
+      const b = parseInt(hex.slice(4, 6), 16);
+      return r >= 245 && g >= 245 && b >= 245;
+    }
+    return false;
   }
   /**
    * Résout une référence de variable
@@ -56927,18 +57834,27 @@ var DocumentPdfRenderer = class {
     const org = this.ctx.organization || {};
     const quote = this.ctx.quote || {};
     const tblData = this.ctx.tblData || {};
-    console.log(`\u{1F4C4} [PDF] resolveVariable("${ref}")`, { tblDataKeys: Object.keys(tblData).slice(0, 10) });
     if (ref.startsWith("lead.")) {
       const key2 = ref.replace("lead.", "");
-      return String(lead[key2] || "");
+      const value = lead[key2];
+      console.log(`\u{1F4C4} [PDF] resolveVariable("${ref}") -> lead.${key2} = "${value}"`);
+      return String(value || "");
     }
     if (ref.startsWith("org.")) {
       const key2 = ref.replace("org.", "");
-      return String(org[key2] || "");
+      const orgAny = org;
+      if (key2 === "tva") return String(orgAny.tva ?? orgAny.vatNumber ?? "");
+      if (key2 === "iban") return String(orgAny.iban ?? orgAny.bankAccount ?? "");
+      if (key2 === "bic") return String(orgAny.bic ?? "");
+      if (key2 === "bankName") return String(orgAny.bankName ?? "");
+      const value = orgAny[key2];
+      console.log(`\u{1F4C4} [PDF] resolveVariable("${ref}") -> org.${key2} = "${value}"`);
+      return String(value || "");
     }
     if (ref.startsWith("quote.")) {
       const key2 = ref.replace("quote.", "");
       const value = quote[key2];
+      console.log(`\u{1F4C4} [PDF] resolveVariable("${ref}") -> quote.${key2} = "${value}"`, { quoteKeys: Object.keys(quote) });
       if (typeof value === "number") return value.toFixed(2);
       return String(value || "");
     }
@@ -57211,8 +58127,41 @@ async function renderDocumentPdf(context) {
 }
 
 // src/routes/documents.ts
-var router70 = (0, import_express71.Router)();
+var router71 = (0, import_express72.Router)();
 var prisma41 = db;
+function toJsonSafe2(value) {
+  const seen = /* @__PURE__ */ new WeakSet();
+  const inner = (v) => {
+    if (v === void 0) return void 0;
+    if (v === null) return null;
+    if (typeof v === "function" || typeof v === "symbol") return void 0;
+    if (typeof v === "bigint") return v.toString();
+    if (typeof v === "number") return Number.isFinite(v) ? v : null;
+    if (v instanceof Date) return v.toISOString();
+    if (Array.isArray(v)) {
+      return v.map(inner).filter((x) => x !== void 0);
+    }
+    if (typeof v === "object") {
+      const maybeToJson = v.toJSON;
+      if (typeof maybeToJson === "function") {
+        try {
+          return inner(maybeToJson.call(v));
+        } catch {
+        }
+      }
+      if (seen.has(v)) return "[Circular]";
+      seen.add(v);
+      const out = {};
+      for (const [key2, val] of Object.entries(v)) {
+        const safeVal = inner(val);
+        if (safeVal !== void 0) out[key2] = safeVal;
+      }
+      return out;
+    }
+    return v;
+  };
+  return inner(value);
+}
 function extractAddressComponents(lead) {
   const data = lead?.data || {};
   const result = {
@@ -57275,7 +58224,7 @@ function parseAddress(address) {
   }
   return result;
 }
-router70.get("/templates", async (req2, res) => {
+router71.get("/templates", async (req2, res) => {
   try {
     const organizationId = req2.headers["x-organization-id"];
     const isSuperAdmin2 = req2.headers["x-is-super-admin"] === "true";
@@ -57332,7 +58281,7 @@ router70.get("/templates", async (req2, res) => {
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
-router70.get("/templates/:id", async (req2, res) => {
+router71.get("/templates/:id", async (req2, res) => {
   try {
     const { id } = req2.params;
     const organizationId = req2.headers["x-organization-id"];
@@ -57359,7 +58308,7 @@ router70.get("/templates/:id", async (req2, res) => {
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
-router70.post("/templates", async (req2, res) => {
+router71.post("/templates", async (req2, res) => {
   try {
     const organizationId = req2.headers["x-organization-id"];
     const userId = req2.headers["x-user-id"];
@@ -57412,7 +58361,7 @@ router70.post("/templates", async (req2, res) => {
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
-router70.put("/templates/:id", async (req2, res) => {
+router71.put("/templates/:id", async (req2, res) => {
   try {
     const { id } = req2.params;
     const organizationId = req2.headers["x-organization-id"];
@@ -57487,7 +58436,7 @@ router70.put("/templates/:id", async (req2, res) => {
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
-router70.delete("/templates/:id", async (req2, res) => {
+router71.delete("/templates/:id", async (req2, res) => {
   try {
     const { id } = req2.params;
     const organizationId = req2.headers["x-organization-id"];
@@ -57515,7 +58464,7 @@ router70.delete("/templates/:id", async (req2, res) => {
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
-router70.get("/themes", async (req2, res) => {
+router71.get("/themes", async (req2, res) => {
   try {
     const organizationId = req2.headers["x-organization-id"];
     const themes = await prisma41.documentTheme.findMany({
@@ -57531,7 +58480,7 @@ router70.get("/themes", async (req2, res) => {
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
-router70.post("/themes", async (req2, res) => {
+router71.post("/themes", async (req2, res) => {
   try {
     const organizationId = req2.headers["x-organization-id"];
     const themeData = req2.body;
@@ -57554,7 +58503,7 @@ router70.post("/themes", async (req2, res) => {
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
-router70.put("/themes/:id", async (req2, res) => {
+router71.put("/themes/:id", async (req2, res) => {
   try {
     const { id } = req2.params;
     const organizationId = req2.headers["x-organization-id"];
@@ -57579,7 +58528,7 @@ router70.put("/themes/:id", async (req2, res) => {
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
-router70.delete("/themes/:id", async (req2, res) => {
+router71.delete("/themes/:id", async (req2, res) => {
   try {
     const { id } = req2.params;
     const templatesCount = await prisma41.documentTemplate.count({
@@ -57600,7 +58549,7 @@ router70.delete("/themes/:id", async (req2, res) => {
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
-router70.get("/templates/:templateId/sections", async (req2, res) => {
+router71.get("/templates/:templateId/sections", async (req2, res) => {
   try {
     const { templateId } = req2.params;
     const organizationId = req2.headers["x-organization-id"];
@@ -57626,7 +58575,7 @@ router70.get("/templates/:templateId/sections", async (req2, res) => {
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
-router70.post("/templates/:templateId/sections", async (req2, res) => {
+router71.post("/templates/:templateId/sections", async (req2, res) => {
   try {
     const { templateId } = req2.params;
     const { type, order, config } = req2.body;
@@ -57659,7 +58608,7 @@ router70.post("/templates/:templateId/sections", async (req2, res) => {
     res.status(500).json({ error: "Erreur serveur", details: error?.message });
   }
 });
-router70.put("/templates/:templateId/sections/:sectionId", async (req2, res) => {
+router71.put("/templates/:templateId/sections/:sectionId", async (req2, res) => {
   try {
     const { templateId, sectionId } = req2.params;
     const { order, config } = req2.body;
@@ -57688,7 +58637,7 @@ router70.put("/templates/:templateId/sections/:sectionId", async (req2, res) => 
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
-router70.delete("/templates/:templateId/sections/:sectionId", async (req2, res) => {
+router71.delete("/templates/:templateId/sections/:sectionId", async (req2, res) => {
   try {
     const { templateId, sectionId } = req2.params;
     const organizationId = req2.headers["x-organization-id"];
@@ -57712,7 +58661,7 @@ router70.delete("/templates/:templateId/sections/:sectionId", async (req2, res) 
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
-router70.get("/generated", async (req2, res) => {
+router71.get("/generated", async (req2, res) => {
   try {
     const organizationId = req2.headers["x-organization-id"];
     const { leadId, submissionId, templateId } = req2.query;
@@ -57775,7 +58724,7 @@ router70.get("/generated", async (req2, res) => {
     res.status(500).json({ error: "Erreur serveur", details: error?.message });
   }
 });
-router70.get("/generated/:id", async (req2, res) => {
+router71.get("/generated/:id", async (req2, res) => {
   try {
     const { id } = req2.params;
     const organizationId = req2.headers["x-organization-id"];
@@ -57815,10 +58764,10 @@ router70.get("/generated/:id", async (req2, res) => {
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
-router70.post("/generated/generate", async (req2, res) => {
+router71.post("/generated/generate", async (req2, res) => {
   try {
-    const organizationId = req2.headers["x-organization-id"];
-    const userId = req2.headers["x-user-id"];
+    const organizationId = req2.headers["x-organization-id"] || req2.user?.organizationId || void 0;
+    const userId = req2.headers["x-user-id"] || req2.user?.userId || void 0;
     const {
       templateId,
       leadId,
@@ -57828,11 +58777,30 @@ router70.post("/generated/generate", async (req2, res) => {
       language
     } = req2.body;
     console.log("\u{1F4C4} [GENERATE DOC] Demande de g\xE9n\xE9ration:", { templateId, leadId, submissionId, organizationId, userId });
-    console.log("\u{1F4C4} [GENERATE DOC] Body complet:", JSON.stringify(req2.body, null, 2));
+    try {
+      console.log("\u{1F4C4} [GENERATE DOC] Body complet:", JSON.stringify(toJsonSafe2(req2.body), null, 2));
+    } catch (e) {
+      console.warn("\u{1F4C4} [GENERATE DOC] Body non serialisable (log simplifi\xE9):", {
+        templateId,
+        leadId,
+        submissionId,
+        hasTblData: !!tblData,
+        hasLeadData: !!leadData,
+        error: e?.message
+      });
+    }
+    const tblDataSafe = toJsonSafe2(tblData ?? {});
+    const leadDataSafe = toJsonSafe2(leadData ?? {});
+    if (!organizationId) {
+      return res.status(400).json({ error: "X-Organization-Id requis" });
+    }
+    if (!userId) {
+      return res.status(400).json({ error: "X-User-Id requis" });
+    }
     if (!templateId) {
       return res.status(400).json({ error: "Template ID requis" });
     }
-    console.log("\u{1F4C4} [GENERATE DOC] Recherche du template...");
+    console.log("\u{1F4C4} [GENERATE DOC] Recherche du template...", { templateId, organizationId });
     const template = await prisma41.documentTemplate.findFirst({
       where: {
         id: templateId,
@@ -57845,14 +58813,20 @@ router70.post("/generated/generate", async (req2, res) => {
         DocumentTheme: true
       }
     });
-    console.log("\u{1F4C4} [GENERATE DOC] Template trouv\xE9:", template ? template.id : "null");
+    console.log("\u{1F4C4} [GENERATE DOC] Template trouv\xE9:", template ? template.id : "NULL \u274C");
     if (!template) {
-      return res.status(404).json({ error: "Template non trouv\xE9" });
+      console.error("\u274C [GENERATE DOC] Template non trouv\xE9 avec templateId=" + templateId + " et organizationId=" + organizationId);
+      return res.status(404).json({
+        error: "Template non trouv\xE9",
+        details: `Template ${templateId} not found for organization ${organizationId}`,
+        templateId,
+        organizationId
+      });
     }
-    const documentCount = await prisma41.generatedDocument.count({
-      where: { templateId }
-    });
-    const documentNumber = `${template.type}-${String(documentCount + 1).padStart(6, "0")}`;
+    const timestamp = Date.now().toString(36).toUpperCase();
+    const randomSuffix = (0, import_nanoid2.nanoid)(6);
+    const documentNumber = `${template.type}-${timestamp}-${randomSuffix}`;
+    console.log("\u{1F4C4} [GENERATE DOC] Document number g\xE9n\xE9r\xE9:", documentNumber);
     const generatedDocument = await prisma41.generatedDocument.create({
       data: {
         id: (0, import_nanoid2.nanoid)(),
@@ -57867,8 +58841,8 @@ router70.post("/generated/generate", async (req2, res) => {
         pdfUrl: null,
         // Sera rempli après génération réelle du PDF
         dataSnapshot: {
-          tblData: tblData || {},
-          lead: leadData || {},
+          tblData: tblDataSafe,
+          lead: leadDataSafe,
           generatedAt: (/* @__PURE__ */ new Date()).toISOString(),
           generatedBy: userId
         },
@@ -57895,14 +58869,14 @@ router70.post("/generated/generate", async (req2, res) => {
         pdfUrl: `/api/documents/generated/${generatedDocument.id}/download`
       },
       include: {
-        template: {
+        DocumentTemplate: {
           select: {
             id: true,
             name: true,
             type: true
           }
         },
-        sentByUser: {
+        User_GeneratedDocument_sentByToUser: {
           select: {
             id: true,
             firstName: true,
@@ -57910,7 +58884,7 @@ router70.post("/generated/generate", async (req2, res) => {
             email: true
           }
         },
-        lead: {
+        Lead: {
           select: {
             id: true,
             firstName: true,
@@ -57928,10 +58902,17 @@ router70.post("/generated/generate", async (req2, res) => {
     console.error("\u274C [GENERATE DOC] Error code:", error?.code);
     console.error("\u274C [GENERATE DOC] Error message:", error?.message);
     console.error("\u274C [GENERATE DOC] Error meta:", error?.meta);
-    res.status(500).json({ error: "Erreur serveur lors de la g\xE9n\xE9ration", details: error?.message });
+    res.status(500).json({
+      error: "Erreur serveur lors de la g\xE9n\xE9ration",
+      details: error?.message,
+      name: error?.name,
+      code: error?.code,
+      meta: error?.meta,
+      stack: process.env.NODE_ENV !== "production" ? error?.stack : void 0
+    });
   }
 });
-router70.delete("/generated/:id", async (req2, res) => {
+router71.delete("/generated/:id", async (req2, res) => {
   try {
     const { id } = req2.params;
     const organizationId = req2.headers["x-organization-id"];
@@ -57953,15 +58934,13 @@ router70.delete("/generated/:id", async (req2, res) => {
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
-router70.get("/generated/:id/download", async (req2, res) => {
+router71.get("/generated/:id/download", async (req2, res) => {
   try {
     const { id } = req2.params;
-    const organizationId = req2.headers["x-organization-id"];
-    console.log("\u{1F4E5} [DOWNLOAD] Demande de t\xE9l\xE9chargement:", { id, organizationId });
+    console.log("\u{1F4E5} [DOWNLOAD] Demande de t\xE9l\xE9chargement:", { id });
     const document = await prisma41.generatedDocument.findFirst({
       where: {
-        id,
-        organizationId
+        id
       },
       include: {
         DocumentTemplate: {
@@ -57980,6 +58959,7 @@ router70.get("/generated/:id/download", async (req2, res) => {
       return res.status(404).json({ error: "Document non trouv\xE9" });
     }
     console.log("\u{1F4E5} [DOWNLOAD] Document trouv\xE9:", document.documentNumber);
+    const organizationId = document.organizationId;
     const defaultTheme = await prisma41.documentTheme.findFirst({
       where: {
         organizationId,
@@ -58039,10 +59019,10 @@ router70.get("/generated/:id/download", async (req2, res) => {
       }
     }
     const renderContext = {
-      template: document.template ? {
-        id: document.template.id,
-        name: document.template.name,
-        type: document.template.type,
+      template: document.DocumentTemplate ? {
+        id: document.DocumentTemplate.id,
+        name: document.DocumentTemplate.name,
+        type: document.DocumentTemplate.type,
         theme,
         sections
         // Sections DANS le template comme attendu par le renderer
@@ -58054,7 +59034,7 @@ router70.get("/generated/:id/download", async (req2, res) => {
         sections: []
       },
       lead: (() => {
-        const dbLead = document.lead || {};
+        const dbLead = document.Lead || {};
         const snapshotLead = dataSnapshot.lead || {};
         const mergedLead = {
           ...snapshotLead,
@@ -58092,13 +59072,18 @@ router70.get("/generated/:id/download", async (req2, res) => {
         logo: organization.logo || ""
       } : void 0,
       tblData: dataSnapshot.tblData || dataSnapshot,
-      quote: dataSnapshot.quote || {
-        number: document.documentNumber,
-        date: document.createdAt?.toISOString().split("T")[0] || (/* @__PURE__ */ new Date()).toISOString().split("T")[0],
-        validUntil: dataSnapshot.validUntil || "",
-        totalHT: dataSnapshot.totalHT || 0,
-        totalTVA: dataSnapshot.totalTVA || 0,
-        totalTTC: dataSnapshot.totalTTC || 0
+      quote: {
+        // Priorité au dataSnapshot.quote s'il existe
+        ...dataSnapshot.quote || {},
+        // Valeurs par défaut
+        number: dataSnapshot.quote?.number || document.documentNumber || "",
+        reference: dataSnapshot.quote?.reference || document.documentNumber || "",
+        date: dataSnapshot.quote?.date || (document.createdAt ? new Intl.DateTimeFormat("fr-BE").format(document.createdAt) : new Intl.DateTimeFormat("fr-BE").format(/* @__PURE__ */ new Date())),
+        validUntil: dataSnapshot.quote?.validUntil || (document.createdAt ? new Intl.DateTimeFormat("fr-BE").format(new Date(document.createdAt.getTime() + 30 * 24 * 60 * 60 * 1e3)) : new Intl.DateTimeFormat("fr-BE").format(new Date(Date.now() + 30 * 24 * 60 * 60 * 1e3))),
+        totalHT: dataSnapshot.quote?.totalHT || dataSnapshot.totalHT || 0,
+        totalTVA: dataSnapshot.quote?.totalTVA || dataSnapshot.totalTVA || 0,
+        totalTTC: dataSnapshot.quote?.totalTTC || dataSnapshot.totalTTC || 0,
+        status: dataSnapshot.quote?.status || "draft"
       },
       documentNumber: document.documentNumber || "",
       language: document.language || "fr"
@@ -58110,7 +59095,9 @@ router70.get("/generated/:id/download", async (req2, res) => {
       language: renderContext.language,
       tblDataKeys: Object.keys(renderContext.tblData || {}),
       tblDataKeysCount: Object.keys(renderContext.tblData || {}).length,
-      dataSnapshotKeys: Object.keys(dataSnapshot || {})
+      dataSnapshotKeys: Object.keys(dataSnapshot || {}),
+      quote: renderContext.quote
+      // 🔥 Afficher les données du devis
     });
     console.log("\u{1F4E5} [DOWNLOAD] Lead data (avec adresse pars\xE9e):", {
       address: renderContext.lead.address,
@@ -58134,7 +59121,125 @@ router70.get("/generated/:id/download", async (req2, res) => {
     res.status(500).json({ error: "Erreur serveur", details: error?.message });
   }
 });
-router70.get("/generated/:id/preview", async (req2, res) => {
+router71.post("/templates/:templateId/preview-pdf", async (req2, res) => {
+  try {
+    const { templateId } = req2.params;
+    const organizationId = req2.headers["x-organization-id"];
+    console.log("\u{1F5A8}\uFE0F [PREVIEW-PDF] Demande de g\xE9n\xE9ration PDF preview:", { templateId, organizationId });
+    const { pages, globalTheme } = req2.body;
+    if (!pages || !Array.isArray(pages)) {
+      return res.status(400).json({ error: "Pages manquantes dans la requ\xEAte" });
+    }
+    const organization = await prisma41.organization.findFirst({
+      where: { id: organizationId }
+    });
+    const sections = pages.map((page, index) => ({
+      id: page.id || `page-${index}`,
+      type: "MODULAR_PAGE",
+      order: index,
+      config: {
+        pageId: page.id,
+        name: page.name,
+        modules: page.modules || [],
+        padding: page.padding || { top: 40, right: 40, bottom: 40, left: 40 },
+        backgroundColor: page.backgroundColor,
+        backgroundImage: page.backgroundImage,
+        backgroundId: page.backgroundId,
+        backgroundCustomSvg: page.backgroundCustomSvg
+      },
+      linkedNodeIds: [],
+      linkedVariables: [],
+      translations: {}
+    }));
+    const theme = globalTheme ? {
+      primaryColor: globalTheme.primaryColor || "#1890ff",
+      secondaryColor: globalTheme.secondaryColor || "#52c41a",
+      accentColor: globalTheme.accentColor || "#faad14",
+      textColor: globalTheme.textColor || "#333333",
+      backgroundColor: globalTheme.backgroundColor || "#ffffff",
+      fontFamily: globalTheme.fontFamily || "Helvetica",
+      fontSize: globalTheme.fontSize || 12,
+      logoUrl: globalTheme.logoUrl || ""
+    } : {
+      primaryColor: "#1890ff",
+      secondaryColor: "#52c41a",
+      accentColor: "#faad14",
+      textColor: "#333333",
+      backgroundColor: "#ffffff",
+      fontFamily: "Helvetica",
+      fontSize: 12,
+      logoUrl: ""
+    };
+    const renderContext = {
+      template: {
+        id: templateId,
+        name: "Aper\xE7u Document",
+        type: "QUOTE",
+        theme,
+        sections
+      },
+      lead: {
+        firstName: "Jean",
+        lastName: "Dupont",
+        fullName: "Jean Dupont",
+        email: "jean.dupont@example.com",
+        phone: "+32 470 12 34 56",
+        company: "Entreprise Test",
+        address: "123 Rue du Test, 1000 Bruxelles",
+        street: "Rue du Test",
+        number: "123",
+        postalCode: "1000",
+        city: "Bruxelles",
+        country: "Belgique"
+      },
+      organization: organization ? {
+        name: organization.name || "2Thier SRL",
+        email: organization.email || "contact@2thier.be",
+        phone: organization.phone || "+32 81 10 20 30",
+        address: organization.address || "Rue de l'Organisation 1, 4000 Li\xE8ge",
+        vatNumber: organization.vatNumber || "BE 1025.391.354",
+        bankAccount: organization.bankAccount || "BE35 0020 1049 3637",
+        bic: organization.bic || "GEBABEBB",
+        website: organization.website || "www.2thier.be",
+        logo: organization.logo || ""
+      } : {
+        name: "2Thier SRL",
+        email: "jonathan.dethier@2thier.be",
+        phone: "081/10.20.30",
+        address: "Rue de l'Organisation 1, 4000 Li\xE8ge",
+        vatNumber: "BE 1025.391.354",
+        bankAccount: "BE35 0020 1049 3637",
+        bic: "GEBABEBB",
+        website: "www.2thier.be"
+      },
+      tblData: {},
+      quote: {
+        reference: "PREVIEW-001",
+        number: "PREVIEW-001",
+        date: new Intl.DateTimeFormat("fr-BE").format(/* @__PURE__ */ new Date()),
+        validUntil: new Intl.DateTimeFormat("fr-BE").format(new Date(Date.now() + 30 * 24 * 60 * 60 * 1e3)),
+        totalHT: 1500,
+        totalTVA: 315,
+        totalTTC: 1815,
+        status: "draft"
+      },
+      documentNumber: "PREVIEW-001",
+      language: "fr"
+    };
+    console.log("\u{1F5A8}\uFE0F [PREVIEW-PDF] Sections:", sections.length);
+    console.log("\u{1F5A8}\uFE0F [PREVIEW-PDF] Theme:", theme);
+    const pdfBuffer = await renderDocumentPdf(renderContext);
+    console.log("\u{1F5A8}\uFE0F [PREVIEW-PDF] PDF g\xE9n\xE9r\xE9, taille:", pdfBuffer.length, "bytes");
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader("Content-Disposition", `attachment; filename="preview-${templateId}.pdf"`);
+    res.setHeader("Content-Length", pdfBuffer.length.toString());
+    res.send(pdfBuffer);
+  } catch (error) {
+    console.error("\u274C [PREVIEW-PDF] Erreur g\xE9n\xE9ration:", error);
+    res.status(500).json({ error: "Erreur serveur", details: error?.message });
+  }
+});
+router71.get("/generated/:id/preview", async (req2, res) => {
   try {
     const { id } = req2.params;
     const organizationId = req2.headers["x-organization-id"];
@@ -58187,14 +59292,14 @@ router70.get("/generated/:id/preview", async (req2, res) => {
     res.status(500).json({ error: "Erreur serveur", details: error?.message });
   }
 });
-var documents_default = router70;
+var documents_default = router71;
 
 // src/routes/sync-temp.ts
-var import_express72 = require("express");
+var import_express73 = require("express");
 init_database();
-var router71 = (0, import_express72.Router)();
+var router72 = (0, import_express73.Router)();
 var prisma42 = db;
-router71.post("/sync-documents", async (req2, res) => {
+router72.post("/sync-documents", async (req2, res) => {
   const { secret } = req2.body;
   if (secret !== "SYNC_2THIER_2024") {
     return res.status(401).json({ error: "Non autoris\xE9" });
@@ -58259,14 +59364,14 @@ router71.post("/sync-documents", async (req2, res) => {
     res.status(500).json({ error: error.message });
   }
 });
-var sync_temp_default = router71;
+var sync_temp_default = router72;
 
 // src/routes/join-requests.ts
-var import_express73 = require("express");
+var import_express74 = require("express");
 init_database();
 var import_client6 = require("@prisma/client");
-var router72 = (0, import_express73.Router)();
-router72.post("/", authMiddleware, async (req2, res) => {
+var router73 = (0, import_express74.Router)();
+router73.post("/", authMiddleware, async (req2, res) => {
   try {
     const userId = req2.user?.userId;
     const { organizationId, message } = req2.body;
@@ -58323,7 +59428,7 @@ router72.post("/", authMiddleware, async (req2, res) => {
     res.status(500).json({ success: false, error: "Erreur serveur" });
   }
 });
-router72.get("/my-requests", authMiddleware, async (req2, res) => {
+router73.get("/my-requests", authMiddleware, async (req2, res) => {
   try {
     const userId = req2.user?.userId;
     if (!userId) {
@@ -58342,7 +59447,7 @@ router72.get("/my-requests", authMiddleware, async (req2, res) => {
     res.status(500).json({ success: false, error: "Erreur serveur" });
   }
 });
-router72.get("/pending", authMiddleware, requireRole2(["admin", "super_admin"]), async (req2, res) => {
+router73.get("/pending", authMiddleware, requireRole2(["admin", "super_admin"]), async (req2, res) => {
   try {
     const organizationId = req2.user?.organizationId;
     const isSuperAdmin2 = req2.user?.role === "super_admin";
@@ -58364,7 +59469,7 @@ router72.get("/pending", authMiddleware, requireRole2(["admin", "super_admin"]),
     res.status(500).json({ success: false, error: "Erreur serveur" });
   }
 });
-router72.post("/:id/approve", authMiddleware, requireRole2(["admin", "super_admin"]), async (req2, res) => {
+router73.post("/:id/approve", authMiddleware, requireRole2(["admin", "super_admin"]), async (req2, res) => {
   try {
     const { id } = req2.params;
     const { roleId } = req2.body;
@@ -58436,7 +59541,7 @@ router72.post("/:id/approve", authMiddleware, requireRole2(["admin", "super_admi
     res.status(500).json({ success: false, error: "Erreur serveur" });
   }
 });
-router72.post("/:id/reject", authMiddleware, requireRole2(["admin", "super_admin"]), async (req2, res) => {
+router73.post("/:id/reject", authMiddleware, requireRole2(["admin", "super_admin"]), async (req2, res) => {
   try {
     const { id } = req2.params;
     const { reason } = req2.body;
@@ -58477,7 +59582,7 @@ router72.post("/:id/reject", authMiddleware, requireRole2(["admin", "super_admin
     res.status(500).json({ success: false, error: "Erreur serveur" });
   }
 });
-router72.delete("/:id", authMiddleware, async (req2, res) => {
+router73.delete("/:id", authMiddleware, async (req2, res) => {
   try {
     const { id } = req2.params;
     const userId = req2.user?.userId;
@@ -58503,10 +59608,10 @@ router72.delete("/:id", authMiddleware, async (req2, res) => {
     res.status(500).json({ success: false, error: "Erreur serveur" });
   }
 });
-var join_requests_default = router72;
+var join_requests_default = router73;
 
 // src/routes/index.ts
-var apiRouter = (0, import_express74.Router)();
+var apiRouter = (0, import_express75.Router)();
 apiRouter.use("/auth", authRoutes_default);
 console.log("[ROUTER] Routes d'authentification mont\xE9es sur /auth");
 apiRouter.use("/auto-google-auth", autoGoogleAuthRoutes_default);
@@ -58562,6 +59667,7 @@ apiRouter.use("/treebranchleaf", authenticateToken, fetchFullUser, treebranchlea
 apiRouter.use("/tbl", tbl_intelligence_routes_default);
 apiRouter.use("/tbl", tbl_routes_default);
 apiRouter.use("/tbl", tbl_capabilities_default);
+apiRouter.use("/treebranchleaf", tblSelectConfigRouter);
 apiRouter.use("/validations", validations_default);
 apiRouter.use("/formulas", formulas_default2);
 apiRouter.use("/dependencies", dependencies_default2);
@@ -58589,11 +59695,11 @@ var routes_default = apiRouter;
 init_prisma();
 
 // src/components/TreeBranchLeaf/tbl-bridge/routes/tbl-submission-evaluator.ts
-var import_express75 = require("express");
+var import_express76 = require("express");
 init_database();
 var import_crypto22 = require("crypto");
 init_operation_interpreter();
-var router73 = (0, import_express75.Router)();
+var router74 = (0, import_express76.Router)();
 var prisma43 = db;
 function normalizeRefForTriggers(ref) {
   if (!ref || typeof ref !== "string") return "";
@@ -58661,29 +59767,6 @@ function deriveTriggerNodeIdsFromCapacity(capacity, ownerNodeId) {
   collectReferencedNodeIdsForTriggers(c?.conditionSet, out);
   collectReferencedNodeIdsForTriggers(c?.metadata, out);
   out.delete(ownerNodeId);
-  for (const id of Array.from(out)) {
-    if (id.includes(".")) out.delete(id);
-  }
-  return Array.from(out);
-}
-function uniqStrings(items) {
-  return Array.from(new Set((items || []).filter((x) => typeof x === "string" && x.trim())));
-}
-async function deriveTriggerNodeIdsFromNodeId(nodeId) {
-  const out = /* @__PURE__ */ new Set();
-  const [formulas, conditions, tables, variable, selectConfig] = await Promise.all([
-    prisma43.treeBranchLeafNodeFormula.findMany({ where: { nodeId }, select: { tokens: true } }),
-    prisma43.treeBranchLeafNodeCondition.findMany({ where: { nodeId }, select: { conditionSet: true } }),
-    prisma43.treeBranchLeafNodeTable.findMany({ where: { nodeId }, select: { meta: true } }),
-    prisma43.treeBranchLeafNodeVariable.findUnique({ where: { nodeId }, select: { metadata: true } }),
-    prisma43.treeBranchLeafSelectConfig.findFirst({ where: { nodeId } })
-  ]);
-  for (const f of formulas) collectReferencedNodeIdsForTriggers(f.tokens, out);
-  for (const c of conditions) collectReferencedNodeIdsForTriggers(c.conditionSet, out);
-  for (const t of tables) collectReferencedNodeIdsForTriggers(t.meta, out);
-  if (variable) collectReferencedNodeIdsForTriggers(variable.metadata, out);
-  if (selectConfig) collectReferencedNodeIdsForTriggers(selectConfig, out);
-  out.delete(nodeId);
   for (const id of Array.from(out)) {
     if (id.includes(".")) out.delete(id);
   }
@@ -58910,16 +59993,6 @@ function expandTriggersForCopy(displayNodeId2, triggerIds) {
     }
   }
   return Array.from(out);
-}
-function matchesChangedField(triggers, changedFieldId) {
-  const normalizedChanged = normalizeTriggerCandidate(changedFieldId);
-  if (!normalizedChanged) return false;
-  for (const t of triggers || []) {
-    const normalized = normalizeTriggerCandidate(t);
-    if (!normalized) continue;
-    if (normalized === normalizedChanged) return true;
-  }
-  return false;
 }
 function isSharedReferenceId(nodeId) {
   return SHARED_REFERENCE_REGEX.test(nodeId);
@@ -59205,6 +60278,40 @@ async function evaluateCapacitiesForSubmission(submissionId, organizationId, use
   };
   const computedValuesToStore = [];
   const triggerDerivationCache = /* @__PURE__ */ new Map();
+  const triggerIndex = /* @__PURE__ */ new Map();
+  if (mode === "change" && changedFieldId) {
+    const displayFieldIds = capacities.filter((cap) => {
+      const isDisplayField = cap.TreeBranchLeafNode?.fieldType === "DISPLAY" || cap.TreeBranchLeafNode?.type === "DISPLAY" || cap.TreeBranchLeafNode?.type === "leaf_field";
+      return isDisplayField;
+    }).map((cap) => cap.nodeId);
+    if (displayFieldIds.length > 0) {
+      console.log(`\u{1F680} [TRIGGER INDEX] Chargement de ${displayFieldIds.length} display fields en 1 requ\xEAte`);
+      const displayNodes = await prisma43.treeBranchLeafNode.findMany({
+        where: { id: { in: displayFieldIds } },
+        select: { id: true, metadata: true }
+      });
+      for (const node of displayNodes) {
+        const metaTriggerNodeIds = node.metadata?.triggerNodeIds;
+        let triggerNodeIds = Array.isArray(metaTriggerNodeIds) ? metaTriggerNodeIds.filter(Boolean) : [];
+        if (triggerNodeIds.length === 0) {
+          const capacity = capacities.find((c) => c.nodeId === node.id);
+          if (capacity) {
+            triggerNodeIds = deriveTriggerNodeIdsFromCapacity(capacity, node.id);
+          }
+        }
+        const expandedTriggers = expandTriggersForCopy(node.id, triggerNodeIds);
+        for (const triggerId of expandedTriggers) {
+          if (!triggerIndex.has(triggerId)) {
+            triggerIndex.set(triggerId, /* @__PURE__ */ new Set());
+          }
+          triggerIndex.get(triggerId).add(node.id);
+        }
+      }
+      const affectedCount = triggerIndex.get(changedFieldId)?.size || 0;
+      console.log(`\u{1F680} [TRIGGER INDEX] Index cr\xE9\xE9: ${displayFieldIds.length} display fields \u2192 ${affectedCount} impact\xE9s par "${changedFieldId}"`);
+    }
+  }
+  const processedDisplayFields = /* @__PURE__ */ new Set();
   for (const capacity of capacities) {
     const sourceRef = capacity.sourceRef;
     const isDisplayField = capacity.TreeBranchLeafNode?.fieldType === "DISPLAY" || capacity.TreeBranchLeafNode?.type === "DISPLAY" || capacity.TreeBranchLeafNode?.type === "leaf_field";
@@ -59216,92 +60323,16 @@ async function evaluateCapacitiesForSubmission(submissionId, organizationId, use
       console.log(`\u{1F504} [OPEN] Display field ${capacity.nodeId} (${capacity.TreeBranchLeafNode?.label}) recalcul\xE9 - mode open`);
     }
     if (isDisplayField && mode === "change" && changedFieldId) {
-      const node = await prisma43.treeBranchLeafNode.findUnique({
-        where: { id: capacity.nodeId },
-        select: { metadata: true }
-      });
-      const metaTriggerNodeIds = node?.metadata?.triggerNodeIds;
-      let triggerNodeIds = Array.isArray(metaTriggerNodeIds) ? metaTriggerNodeIds.filter(Boolean) : [];
-      console.log(`\u{1F50E} [TRIGGER LOAD] Display field ${capacity.nodeId} - changedFieldId: ${changedFieldId}`);
-      console.log(`   \u{1F50E} Node trouv\xE9: ${node ? "OUI" : "NON"}, triggers: ${triggerNodeIds.length}`);
-      if (triggerNodeIds.length > 0 && triggerNodeIds.length <= 12) {
-        console.log(`   \u{1F50E} Triggers: ${JSON.stringify(triggerNodeIds)}`);
-      }
-      console.log(`   \u{1F50E} changedFieldId dans triggers? ${triggerNodeIds.includes(changedFieldId)}`);
-      if (triggerNodeIds.length === 0) {
-        const derived = deriveTriggerNodeIdsFromCapacity(capacity, capacity.nodeId);
-        if (derived.length > 0) {
-          triggerNodeIds = derived;
-          try {
-            const existingMeta = node?.metadata && typeof node.metadata === "object" ? node.metadata : {};
-            await prisma43.treeBranchLeafNode.update({
-              where: { id: capacity.nodeId },
-              data: {
-                metadata: {
-                  ...existingMeta,
-                  triggerNodeIds: derived
-                }
-              }
-            });
-            console.log(
-              `\u{1F9E9} [TRIGGERS AUTO] Display field ${capacity.nodeId} (${capacity.TreeBranchLeafNode?.label}) triggers auto-d\xE9duits: ${derived.length}`
-            );
-          } catch (e) {
-            console.warn(
-              `\u26A0\uFE0F [TRIGGERS AUTO] Impossible de persister les triggerNodeIds pour ${capacity.nodeId}:`,
-              e?.message || e
-            );
-          }
-        }
-      }
-      if (triggerNodeIds && Array.isArray(triggerNodeIds) && triggerNodeIds.length > 0) {
-        const expanded = expandTriggersForCopy(capacity.nodeId, triggerNodeIds);
-        let matchesTrigger = matchesChangedField(expanded, changedFieldId);
-        if (!matchesTrigger) {
-          try {
-            const cached = triggerDerivationCache.get(capacity.nodeId);
-            const derived = cached ?? await deriveTriggerNodeIdsFromNodeId(capacity.nodeId);
-            if (!cached) triggerDerivationCache.set(capacity.nodeId, derived);
-            const merged = uniqStrings([...triggerNodeIds, ...derived]);
-            if (merged.length > triggerNodeIds.length) {
-              const reExpanded = expandTriggersForCopy(capacity.nodeId, merged);
-              matchesTrigger = matchesChangedField(reExpanded, changedFieldId);
-              if (matchesTrigger) {
-                const existingMeta = node?.metadata && typeof node.metadata === "object" ? node.metadata : {};
-                await prisma43.treeBranchLeafNode.update({
-                  where: { id: capacity.nodeId },
-                  data: {
-                    metadata: {
-                      ...existingMeta,
-                      triggerNodeIds: merged
-                    }
-                  }
-                });
-                console.log(
-                  `\u{1F9E9} [TRIGGERS REPAIR] Display field ${capacity.nodeId} (${capacity.TreeBranchLeafNode?.label}) triggers \xE9tendus: ${triggerNodeIds.length} \u2192 ${merged.length}`
-                );
-              }
-            }
-          } catch (e) {
-            console.warn(
-              `\u26A0\uFE0F [TRIGGERS REPAIR] \xC9chec r\xE9paration triggers pour ${capacity.nodeId}:`,
-              e?.message || e
-            );
-          }
-          if (!matchesTrigger) {
-            console.log(`\u23F8\uFE0F [TRIGGER FILTER] Display field ${capacity.nodeId} (${capacity.TreeBranchLeafNode?.label}) skipp\xE9 - changedFieldId "${changedFieldId}" pas dans triggers [${triggerNodeIds.length} triggers d\xE9finis]`);
-            console.log(`   \u{1F4CB} [DEBUG] Triggers: ${JSON.stringify(triggerNodeIds.slice(0, 5))}${triggerNodeIds.length > 5 ? "..." : ""}`);
-            console.log(`   \u{1F4CB} [DEBUG] Position incluse? ${triggerNodeIds.includes(changedFieldId)}`);
-            console.log(`   \u{1F4CB} [DEBUG] Expanded triggers: ${JSON.stringify(expanded.slice(0, 5))}${expanded.length > 5 ? "..." : ""}`);
-            continue;
-          }
-        } else {
-          console.log(`\u2705 [TRIGGER MATCH] Display field ${capacity.nodeId} (${capacity.TreeBranchLeafNode?.label}) recalcul\xE9 - changedFieldId "${changedFieldId}" dans triggers`);
-        }
-      } else {
-        console.log(`\u23F8\uFE0F [NO TRIGGERS] Display field ${capacity.nodeId} (${capacity.TreeBranchLeafNode?.label}) skipp\xE9 - aucun trigger d\xE9fini, calcul\xE9 uniquement au chargement initial`);
+      if (processedDisplayFields.has(capacity.nodeId)) {
         continue;
       }
+      const affectedDisplayFields = triggerIndex.get(changedFieldId);
+      if (!affectedDisplayFields || !affectedDisplayFields.has(capacity.nodeId)) {
+        console.log(`\u23F8\uFE0F [TRIGGER INDEX] Display field ${capacity.nodeId} (${capacity.TreeBranchLeafNode?.label}) skipp\xE9 - pas dans l'index pour "${changedFieldId}"`);
+        continue;
+      }
+      processedDisplayFields.add(capacity.nodeId);
+      console.log(`\u2705 [TRIGGER INDEX] Display field ${capacity.nodeId} (${capacity.TreeBranchLeafNode?.label}) recalcul\xE9 - trouv\xE9 dans l'index`);
     }
     try {
       const injectedBaseKeys = applyCopyScopedInputAliases(valueMap, capacity.nodeId, capacity);
@@ -59435,7 +60466,7 @@ async function evaluateCapacitiesForSubmission(submissionId, organizationId, use
   }
   return results;
 }
-router73.post("/submissions/:submissionId/evaluate-all", async (req2, res) => {
+router74.post("/submissions/:submissionId/evaluate-all", async (req2, res) => {
   try {
     const { submissionId } = req2.params;
     const { forceUpdate = false } = req2.body || {};
@@ -59563,7 +60594,7 @@ router73.post("/submissions/:submissionId/evaluate-all", async (req2, res) => {
     });
   }
 });
-router73.get("/submissions/:submissionId/verification", async (req2, res) => {
+router74.get("/submissions/:submissionId/verification", async (req2, res) => {
   try {
     const { submissionId } = req2.params;
     console.log("\u{1F50D} [TBL VERIFICATION] V\xE9rification soumission:", submissionId);
@@ -59619,7 +60650,7 @@ router73.get("/submissions/:submissionId/verification", async (req2, res) => {
     });
   }
 });
-router73.post("/submissions/create-and-evaluate", async (req2, res) => {
+router74.post("/submissions/create-and-evaluate", async (req2, res) => {
   try {
     const {
       treeId,
@@ -59940,7 +60971,7 @@ router73.post("/submissions/create-and-evaluate", async (req2, res) => {
     });
   }
 });
-router73.put("/submissions/:submissionId/update-and-evaluate", async (req2, res) => {
+router74.put("/submissions/:submissionId/update-and-evaluate", async (req2, res) => {
   try {
     const { submissionId } = req2.params;
     const { formData, status } = req2.body || {};
@@ -59997,7 +61028,7 @@ router73.put("/submissions/:submissionId/update-and-evaluate", async (req2, res)
     return res.status(500).json({ success: false, error: error instanceof Error ? error.message : "Erreur interne" });
   }
 });
-router73.post("/submissions/preview-evaluate", async (req2, res) => {
+router74.post("/submissions/preview-evaluate", async (req2, res) => {
   try {
     const { treeId, formData, baseSubmissionId, leadId } = req2.body || {};
     if (formData) {
@@ -60324,7 +61355,7 @@ router73.post("/submissions/preview-evaluate", async (req2, res) => {
     return res.status(500).json({ success: false, error: error instanceof Error ? error.message : "Erreur interne" });
   }
 });
-router73.post("/submissions/stage", async (req2, res) => {
+router74.post("/submissions/stage", async (req2, res) => {
   try {
     pruneStages();
     const { stageId, treeId, submissionId, formData } = req2.body || {};
@@ -60355,7 +61386,7 @@ router73.post("/submissions/stage", async (req2, res) => {
     return res.status(500).json({ success: false, error: e instanceof Error ? e.message : "Erreur interne" });
   }
 });
-router73.post("/submissions/stage/preview", async (req2, res) => {
+router74.post("/submissions/stage/preview", async (req2, res) => {
   try {
     pruneStages();
     const { stageId } = req2.body || {};
@@ -60440,7 +61471,7 @@ router73.post("/submissions/stage/preview", async (req2, res) => {
     return res.status(500).json({ success: false, error: e instanceof Error ? e.message : "Erreur interne" });
   }
 });
-router73.post("/submissions/stage/commit", async (req2, res) => {
+router74.post("/submissions/stage/commit", async (req2, res) => {
   try {
     pruneStages();
     const { stageId, asNew } = req2.body || {};
@@ -60466,14 +61497,14 @@ router73.post("/submissions/stage/commit", async (req2, res) => {
     return res.status(500).json({ success: false, error: e instanceof Error ? e.message : "Erreur interne" });
   }
 });
-router73.post("/submissions/stage/discard", (req2, res) => {
+router74.post("/submissions/stage/discard", (req2, res) => {
   pruneStages();
   const { stageId } = req2.body || {};
   if (!stageId || !stagingStore.has(stageId)) return res.json({ success: true, discarded: false });
   stagingStore.delete(stageId);
   return res.json({ success: true, discarded: true });
 });
-router73.get("/tables/:tableId", async (req2, res) => {
+router74.get("/tables/:tableId", async (req2, res) => {
   try {
     const { tableId } = req2.params;
     console.log(`\u{1F4CA} [GET TABLE] R\xE9cup\xE9ration table: ${tableId}`);
@@ -60545,13 +61576,13 @@ router73.get("/tables/:tableId", async (req2, res) => {
     });
   }
 });
-var tbl_submission_evaluator_default = router73;
+var tbl_submission_evaluator_default = router74;
 
 // src/components/TreeBranchLeaf/treebranchleaf-new/TBL/routes/ia-config-routes.ts
-var import_express76 = __toESM(require("express"), 1);
+var import_express77 = __toESM(require("express"), 1);
 init_database();
-var router74 = import_express76.default.Router();
-router74.get("/nodes/:nodeId/ia-config", async (req2, res) => {
+var router75 = import_express77.default.Router();
+router75.get("/nodes/:nodeId/ia-config", async (req2, res) => {
   try {
     const { nodeId } = req2.params;
     console.log(`\u{1F4CA} [IA-CONFIG] R\xE9cup\xE9ration config pour node ${nodeId}`);
@@ -60581,7 +61612,7 @@ router74.get("/nodes/:nodeId/ia-config", async (req2, res) => {
     res.status(500).json({ error: "Failed to fetch IA config" });
   }
 });
-router74.put("/nodes/:nodeId/ia-config", async (req2, res) => {
+router75.put("/nodes/:nodeId/ia-config", async (req2, res) => {
   try {
     const { nodeId } = req2.params;
     const config = req2.body;
@@ -60610,7 +61641,7 @@ router74.put("/nodes/:nodeId/ia-config", async (req2, res) => {
     res.status(500).json({ error: "Failed to update IA config" });
   }
 });
-router74.delete("/nodes/:nodeId/ia-config", async (req2, res) => {
+router75.delete("/nodes/:nodeId/ia-config", async (req2, res) => {
   try {
     const { nodeId } = req2.params;
     console.log(`\u{1F5D1}\uFE0F [IA-CONFIG] Suppression config pour node ${nodeId}`);
@@ -60628,13 +61659,13 @@ router74.delete("/nodes/:nodeId/ia-config", async (req2, res) => {
     res.status(500).json({ error: "Failed to delete IA config" });
   }
 });
-var ia_config_routes_default = router74;
+var ia_config_routes_default = router75;
 
 // src/controllers/calculatedValueController.ts
-var import_express77 = require("express");
+var import_express78 = require("express");
 var import_crypto23 = require("crypto");
 init_database();
-var router75 = (0, import_express77.Router)();
+var router76 = (0, import_express78.Router)();
 var prisma44 = db;
 var parseStoredStringValue = (raw) => {
   if (raw === null || raw === void 0) {
@@ -60703,7 +61734,7 @@ var toIsoString = (date) => {
     return void 0;
   }
 };
-router75.get("/:nodeId/calculated-value", async (req2, res) => {
+router76.get("/:nodeId/calculated-value", async (req2, res) => {
   try {
     const { nodeId } = req2.params;
     const pickQueryString = (key2) => {
@@ -61089,7 +62120,7 @@ router75.get("/:nodeId/calculated-value", async (req2, res) => {
     return res.status(500).json({ error: String(error) });
   }
 });
-router75.post("/:nodeId/store-calculated-value", async (req2, res) => {
+router76.post("/:nodeId/store-calculated-value", async (req2, res) => {
   try {
     const { nodeId } = req2.params;
     const { calculatedValue, calculatedBy, submissionId } = req2.body;
@@ -61142,7 +62173,7 @@ router75.post("/:nodeId/store-calculated-value", async (req2, res) => {
     return res.status(500).json({ error: String(error) });
   }
 });
-router75.post("/store-batch-calculated-values", async (req2, res) => {
+router76.post("/store-batch-calculated-values", async (req2, res) => {
   try {
     const { values, submissionId } = req2.body;
     if (!Array.isArray(values) || values.length === 0) {
@@ -61189,23 +62220,23 @@ router75.post("/store-batch-calculated-values", async (req2, res) => {
     return res.status(500).json({ error: String(error) });
   }
 });
-var calculatedValueController_default = router75;
+var calculatedValueController_default = router76;
 
 // src/routes/tbl-batch-routes.ts
-var import_express78 = require("express");
+var import_express79 = require("express");
 init_database();
-var router76 = (0, import_express78.Router)();
-function getAuthCtx5(req2) {
+var router77 = (0, import_express79.Router)();
+function getAuthCtx6(req2) {
   const user = req2.user;
   return {
     organizationId: user?.organizationId || null,
     isSuperAdmin: user?.isSuperAdmin || false
   };
 }
-router76.get("/trees/:treeId/formulas", async (req2, res) => {
+router77.get("/trees/:treeId/formulas", async (req2, res) => {
   try {
     const { treeId } = req2.params;
-    const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx5(req2);
+    const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx6(req2);
     const treeWhereFilter = isSuperAdmin2 || !organizationId ? { id: treeId } : { id: treeId, organizationId };
     const tree = await db.treeBranchLeafTree.findFirst({ where: treeWhereFilter });
     if (!tree) {
@@ -61239,11 +62270,11 @@ router76.get("/trees/:treeId/formulas", async (req2, res) => {
     res.status(500).json({ error: "Erreur lors de la r\xE9cup\xE9ration batch des formules" });
   }
 });
-router76.get("/trees/:treeId/calculated-values", async (req2, res) => {
+router77.get("/trees/:treeId/calculated-values", async (req2, res) => {
   try {
     const { treeId } = req2.params;
     const { leadId } = req2.query;
-    const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx5(req2);
+    const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx6(req2);
     const treeWhereFilter = isSuperAdmin2 || !organizationId ? { id: treeId } : { id: treeId, organizationId };
     const tree = await db.treeBranchLeafTree.findFirst({ where: treeWhereFilter });
     if (!tree) {
@@ -61304,10 +62335,10 @@ router76.get("/trees/:treeId/calculated-values", async (req2, res) => {
     res.status(500).json({ error: "Erreur lors de la r\xE9cup\xE9ration batch des valeurs calcul\xE9es" });
   }
 });
-router76.get("/trees/:treeId/select-configs", async (req2, res) => {
+router77.get("/trees/:treeId/select-configs", async (req2, res) => {
   try {
     const { treeId } = req2.params;
-    const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx5(req2);
+    const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx6(req2);
     const treeWhereFilter = isSuperAdmin2 || !organizationId ? { id: treeId } : { id: treeId, organizationId };
     const tree = await db.treeBranchLeafTree.findFirst({ where: treeWhereFilter });
     if (!tree) {
@@ -61328,8 +62359,10 @@ router76.get("/trees/:treeId/select-configs", async (req2, res) => {
       },
       select: {
         id: true,
+        subType: true,
         fieldType: true,
         select_options: true,
+        table_activeId: true,
         // Utiliser la relation pour les configs avancées
         TreeBranchLeafSelectConfig: {
           select: {
@@ -61364,12 +62397,12 @@ router76.get("/trees/:treeId/select-configs", async (req2, res) => {
     res.status(500).json({ error: "Erreur lors de la r\xE9cup\xE9ration batch des configs select" });
   }
 });
-router76.get("/trees/:treeId/all", async (req2, res) => {
+router77.get("/trees/:treeId/all", async (req2, res) => {
   const { treeId } = req2.params;
   console.log(`[TBL Batch API] /all called for treeId: ${treeId}`);
   try {
     const { leadId } = req2.query;
-    const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx5(req2);
+    const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx6(req2);
     console.log(`[TBL Batch API] Auth context: org=${organizationId}, superAdmin=${isSuperAdmin2}`);
     const treeWhereFilter = isSuperAdmin2 || !organizationId ? { id: treeId } : { id: treeId, organizationId };
     const tree = await db.treeBranchLeafTree.findFirst({ where: treeWhereFilter });
@@ -61491,10 +62524,10 @@ router76.get("/trees/:treeId/all", async (req2, res) => {
     });
   }
 });
-router76.get("/trees/:treeId/node-data", async (req2, res) => {
+router77.get("/trees/:treeId/node-data", async (req2, res) => {
   try {
     const { treeId } = req2.params;
-    const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx5(req2);
+    const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx6(req2);
     const treeWhereFilter = isSuperAdmin2 || !organizationId ? { id: treeId } : { id: treeId, organizationId };
     const tree = await db.treeBranchLeafTree.findFirst({ where: treeWhereFilter });
     if (!tree) {
@@ -61559,10 +62592,10 @@ router76.get("/trees/:treeId/node-data", async (req2, res) => {
     res.status(500).json({ error: "Erreur lors de la r\xE9cup\xE9ration batch des donn\xE9es de noeuds" });
   }
 });
-router76.get("/trees/:treeId/conditions", async (req2, res) => {
+router77.get("/trees/:treeId/conditions", async (req2, res) => {
   try {
     const { treeId } = req2.params;
-    const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx5(req2);
+    const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx6(req2);
     const treeWhereFilter = isSuperAdmin2 || !organizationId ? { id: treeId } : { id: treeId, organizationId };
     const tree = await db.treeBranchLeafTree.findFirst({ where: treeWhereFilter });
     if (!tree) {
@@ -61606,14 +62639,14 @@ router76.get("/trees/:treeId/conditions", async (req2, res) => {
     res.status(500).json({ error: "Erreur lors de la r\xE9cup\xE9ration batch des conditions" });
   }
 });
-var tbl_batch_routes_default = router76;
+var tbl_batch_routes_default = router77;
 
 // src/routes/batch-routes.ts
-var import_express79 = require("express");
+var import_express80 = require("express");
 init_database();
 var import_googleapis10 = require("googleapis");
-var router77 = (0, import_express79.Router)();
-function getAuthCtx6(req2) {
+var router78 = (0, import_express80.Router)();
+function getAuthCtx7(req2) {
   const user = req2.user;
   return {
     userId: user?.id,
@@ -61621,9 +62654,9 @@ function getAuthCtx6(req2) {
     isSuperAdmin: user?.isSuperAdmin || false
   };
 }
-router77.post("/gmail/modify", async (req2, res) => {
+router78.post("/gmail/modify", async (req2, res) => {
   try {
-    const { userId, organizationId } = getAuthCtx6(req2);
+    const { userId, organizationId } = getAuthCtx7(req2);
     const { messageIds, addLabelIds = [], removeLabelIds = [] } = req2.body;
     if (!messageIds || !Array.isArray(messageIds) || messageIds.length === 0) {
       return res.status(400).json({ error: "messageIds requis (array non vide)" });
@@ -61659,9 +62692,9 @@ router77.post("/gmail/modify", async (req2, res) => {
     res.status(500).json({ error: error.message || "Erreur batch Gmail" });
   }
 });
-router77.post("/gmail/trash", async (req2, res) => {
+router78.post("/gmail/trash", async (req2, res) => {
   try {
-    const { userId } = getAuthCtx6(req2);
+    const { userId } = getAuthCtx7(req2);
     const { messageIds } = req2.body;
     if (!messageIds || !Array.isArray(messageIds) || messageIds.length === 0) {
       return res.status(400).json({ error: "messageIds requis (array non vide)" });
@@ -61697,9 +62730,9 @@ router77.post("/gmail/trash", async (req2, res) => {
     res.status(500).json({ error: error.message || "Erreur batch Gmail" });
   }
 });
-router77.delete("/gmail/delete", async (req2, res) => {
+router78.delete("/gmail/delete", async (req2, res) => {
   try {
-    const { userId } = getAuthCtx6(req2);
+    const { userId } = getAuthCtx7(req2);
     const { messageIds } = req2.body;
     if (!messageIds || !Array.isArray(messageIds) || messageIds.length === 0) {
       return res.status(400).json({ error: "messageIds requis (array non vide)" });
@@ -61733,9 +62766,9 @@ router77.delete("/gmail/delete", async (req2, res) => {
     res.status(500).json({ error: error.message || "Erreur batch Gmail" });
   }
 });
-router77.patch("/leads/status", async (req2, res) => {
+router78.patch("/leads/status", async (req2, res) => {
   try {
-    const { organizationId } = getAuthCtx6(req2);
+    const { organizationId } = getAuthCtx7(req2);
     const { leadIds, statusId } = req2.body;
     if (!leadIds || !Array.isArray(leadIds) || leadIds.length === 0) {
       return res.status(400).json({ error: "leadIds requis (array non vide)" });
@@ -61770,9 +62803,9 @@ router77.patch("/leads/status", async (req2, res) => {
     res.status(500).json({ error: error.message || "Erreur batch leads" });
   }
 });
-router77.patch("/leads/assign", async (req2, res) => {
+router78.patch("/leads/assign", async (req2, res) => {
   try {
-    const { organizationId } = getAuthCtx6(req2);
+    const { organizationId } = getAuthCtx7(req2);
     const { leadIds, assignedToId } = req2.body;
     if (!leadIds || !Array.isArray(leadIds) || leadIds.length === 0) {
       return res.status(400).json({ error: "leadIds requis (array non vide)" });
@@ -61798,9 +62831,9 @@ router77.patch("/leads/assign", async (req2, res) => {
     res.status(500).json({ error: error.message || "Erreur batch leads" });
   }
 });
-router77.delete("/leads", async (req2, res) => {
+router78.delete("/leads", async (req2, res) => {
   try {
-    const { organizationId } = getAuthCtx6(req2);
+    const { organizationId } = getAuthCtx7(req2);
     const { leadIds } = req2.body;
     if (!leadIds || !Array.isArray(leadIds) || leadIds.length === 0) {
       return res.status(400).json({ error: "leadIds requis (array non vide)" });
@@ -61822,7 +62855,7 @@ router77.delete("/leads", async (req2, res) => {
     res.status(500).json({ error: error.message || "Erreur batch leads" });
   }
 });
-router77.post("/fields/configs", async (req2, res) => {
+router78.post("/fields/configs", async (req2, res) => {
   try {
     const { fieldIds } = req2.body;
     if (!fieldIds || !Array.isArray(fieldIds) || fieldIds.length === 0) {
@@ -61851,9 +62884,9 @@ router77.post("/fields/configs", async (req2, res) => {
     res.status(500).json({ error: error.message || "Erreur batch fields" });
   }
 });
-router77.patch("/modules/toggle", async (req2, res) => {
+router78.patch("/modules/toggle", async (req2, res) => {
   try {
-    const { organizationId } = getAuthCtx6(req2);
+    const { organizationId } = getAuthCtx7(req2);
     const { moduleIds, enabled } = req2.body;
     if (!moduleIds || !Array.isArray(moduleIds) || moduleIds.length === 0) {
       return res.status(400).json({ error: "moduleIds requis (array non vide)" });
@@ -61882,9 +62915,9 @@ router77.patch("/modules/toggle", async (req2, res) => {
     res.status(500).json({ error: error.message || "Erreur batch modules" });
   }
 });
-router77.get("/analytics/leads-by-status", async (req2, res) => {
+router78.get("/analytics/leads-by-status", async (req2, res) => {
   try {
-    const { organizationId } = getAuthCtx6(req2);
+    const { organizationId } = getAuthCtx7(req2);
     const counts = await db.lead.groupBy({
       by: ["leadStatusId"],
       where: {
@@ -61913,9 +62946,9 @@ router77.get("/analytics/leads-by-status", async (req2, res) => {
     res.status(500).json({ error: error.message || "Erreur analytics" });
   }
 });
-router77.get("/analytics/leads-by-source", async (req2, res) => {
+router78.get("/analytics/leads-by-source", async (req2, res) => {
   try {
-    const { organizationId } = getAuthCtx6(req2);
+    const { organizationId } = getAuthCtx7(req2);
     const counts = await db.lead.groupBy({
       by: ["source"],
       where: {
@@ -61936,9 +62969,9 @@ router77.get("/analytics/leads-by-source", async (req2, res) => {
     res.status(500).json({ error: error.message || "Erreur analytics" });
   }
 });
-router77.get("/analytics/leads-by-assignee", async (req2, res) => {
+router78.get("/analytics/leads-by-assignee", async (req2, res) => {
   try {
-    const { organizationId } = getAuthCtx6(req2);
+    const { organizationId } = getAuthCtx7(req2);
     const counts = await db.lead.groupBy({
       by: ["assignedToId"],
       where: {
@@ -61966,13 +62999,13 @@ router77.get("/analytics/leads-by-assignee", async (req2, res) => {
     res.status(500).json({ error: error.message || "Erreur analytics" });
   }
 });
-var batch_routes_default = router77;
+var batch_routes_default = router78;
 
 // src/api/websites.ts
-var import_express80 = require("express");
+var import_express81 = require("express");
 init_database();
-var router78 = (0, import_express80.Router)();
-router78.get("/websites", authenticateToken, async (req2, res) => {
+var router79 = (0, import_express81.Router)();
+router79.get("/websites", authenticateToken, async (req2, res) => {
   try {
     const organizationId = req2.headers["x-organization-id"];
     const showAll = req2.query.all === "true";
@@ -62000,7 +63033,7 @@ router78.get("/websites", authenticateToken, async (req2, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
-router78.get("/websites/id/:id", authenticateToken, async (req2, res) => {
+router79.get("/websites/id/:id", authenticateToken, async (req2, res) => {
   try {
     const { id } = req2.params;
     const websiteId = parseInt(id, 10);
@@ -62023,7 +63056,7 @@ router78.get("/websites/id/:id", authenticateToken, async (req2, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
-router78.put("/websites/:id", authenticateToken, async (req2, res) => {
+router79.put("/websites/:id", authenticateToken, async (req2, res) => {
   try {
     const websiteId = parseInt(req2.params.id);
     const organizationId = req2.headers["x-organization-id"];
@@ -62088,7 +63121,7 @@ router78.put("/websites/:id", authenticateToken, async (req2, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
-router78.delete("/websites/:id", authenticateToken, async (req2, res) => {
+router79.delete("/websites/:id", authenticateToken, async (req2, res) => {
   try {
     const websiteId = parseInt(req2.params.id);
     const organizationId = req2.headers["x-organization-id"];
@@ -62112,7 +63145,7 @@ router78.delete("/websites/:id", authenticateToken, async (req2, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
-router78.post("/websites", authenticateToken, async (req2, res) => {
+router79.post("/websites", authenticateToken, async (req2, res) => {
   try {
     const organizationId = req2.headers["x-organization-id"];
     const data = req2.body;
@@ -62143,7 +63176,7 @@ router78.post("/websites", authenticateToken, async (req2, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
-router78.get("/websites/:idOrSlug", async (req2, res) => {
+router79.get("/websites/:idOrSlug", async (req2, res) => {
   try {
     const { idOrSlug } = req2.params;
     const organizationId = req2.headers["x-organization-id"];
@@ -62203,7 +63236,7 @@ router78.get("/websites/:idOrSlug", async (req2, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
-router78.get("/websites/:slug/services", async (req2, res) => {
+router79.get("/websites/:slug/services", async (req2, res) => {
   try {
     const { slug } = req2.params;
     const website = await db.websites.findFirst({
@@ -62226,7 +63259,7 @@ router78.get("/websites/:slug/services", async (req2, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
-router78.get("/websites/:slug/projects", async (req2, res) => {
+router79.get("/websites/:slug/projects", async (req2, res) => {
   try {
     const { slug } = req2.params;
     const { featured } = req2.query;
@@ -62254,7 +63287,7 @@ router78.get("/websites/:slug/projects", async (req2, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
-router78.get("/websites/:slug/testimonials", async (req2, res) => {
+router79.get("/websites/:slug/testimonials", async (req2, res) => {
   try {
     const { slug } = req2.params;
     const { featured } = req2.query;
@@ -62282,7 +63315,7 @@ router78.get("/websites/:slug/testimonials", async (req2, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
-router78.get("/websites/:slug/blog", async (req2, res) => {
+router79.get("/websites/:slug/blog", async (req2, res) => {
   try {
     const { slug } = req2.params;
     const { limit = "10", featured } = req2.query;
@@ -62321,7 +63354,7 @@ router78.get("/websites/:slug/blog", async (req2, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
-router78.get("/websites/:slug/blog/:postSlug", async (req2, res) => {
+router79.get("/websites/:slug/blog/:postSlug", async (req2, res) => {
   try {
     const { slug, postSlug } = req2.params;
     const website = await db.websites.findFirst({
@@ -62358,14 +63391,14 @@ router78.get("/websites/:slug/blog/:postSlug", async (req2, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
-var websites_default = router78;
+var websites_default = router79;
 
 // src/api/website-services.ts
-var import_express81 = require("express");
+var import_express82 = require("express");
 init_database();
-var router79 = (0, import_express81.Router)();
+var router80 = (0, import_express82.Router)();
 var prisma45 = db;
-router79.get("/website-services/:websiteId", async (req2, res) => {
+router80.get("/website-services/:websiteId", async (req2, res) => {
   try {
     const { websiteId } = req2.params;
     const services = await prisma45.webSiteService.findMany({
@@ -62382,7 +63415,7 @@ router79.get("/website-services/:websiteId", async (req2, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
-router79.post("/website-services", async (req2, res) => {
+router80.post("/website-services", async (req2, res) => {
   try {
     const { websiteId, key: key2, icon, title, description, features, ctaText, ctaUrl, isActive } = req2.body;
     if (!websiteId || !key2 || !title) {
@@ -62412,7 +63445,7 @@ router79.post("/website-services", async (req2, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
-router79.put("/website-services/:id", async (req2, res) => {
+router80.put("/website-services/:id", async (req2, res) => {
   try {
     const { id } = req2.params;
     const { key: key2, icon, title, description, features, ctaText, ctaUrl, isActive } = req2.body;
@@ -62435,7 +63468,7 @@ router79.put("/website-services/:id", async (req2, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
-router79.delete("/website-services/:id", async (req2, res) => {
+router80.delete("/website-services/:id", async (req2, res) => {
   try {
     const { id } = req2.params;
     await prisma45.webSiteService.delete({
@@ -62447,7 +63480,7 @@ router79.delete("/website-services/:id", async (req2, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
-router79.post("/website-services/reorder", async (req2, res) => {
+router80.post("/website-services/reorder", async (req2, res) => {
   try {
     const { services } = req2.body;
     if (!Array.isArray(services)) {
@@ -62467,14 +63500,14 @@ router79.post("/website-services/reorder", async (req2, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
-var website_services_default = router79;
+var website_services_default = router80;
 
 // src/api/website-projects.ts
-var import_express82 = require("express");
+var import_express83 = require("express");
 init_database();
-var router80 = (0, import_express82.Router)();
+var router81 = (0, import_express83.Router)();
 var prisma46 = db;
-router80.get("/website-projects/:websiteId", async (req2, res) => {
+router81.get("/website-projects/:websiteId", async (req2, res) => {
   try {
     const { websiteId } = req2.params;
     const projects = await prisma46.webSiteProject.findMany({
@@ -62491,7 +63524,7 @@ router80.get("/website-projects/:websiteId", async (req2, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
-router80.post("/website-projects", async (req2, res) => {
+router81.post("/website-projects", async (req2, res) => {
   try {
     const { websiteId, title, location, details, tags, isActive, isFeatured, completedAt } = req2.body;
     if (!websiteId || !title) {
@@ -62520,7 +63553,7 @@ router80.post("/website-projects", async (req2, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
-router80.put("/website-projects/:id", async (req2, res) => {
+router81.put("/website-projects/:id", async (req2, res) => {
   try {
     const { id } = req2.params;
     const { title, location, details, tags, isActive, isFeatured, completedAt } = req2.body;
@@ -62542,7 +63575,7 @@ router80.put("/website-projects/:id", async (req2, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
-router80.delete("/website-projects/:id", async (req2, res) => {
+router81.delete("/website-projects/:id", async (req2, res) => {
   try {
     const { id } = req2.params;
     await prisma46.webSiteProject.delete({
@@ -62554,7 +63587,7 @@ router80.delete("/website-projects/:id", async (req2, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
-router80.post("/website-projects/reorder", async (req2, res) => {
+router81.post("/website-projects/reorder", async (req2, res) => {
   try {
     const { projects } = req2.body;
     if (!Array.isArray(projects)) {
@@ -62574,14 +63607,14 @@ router80.post("/website-projects/reorder", async (req2, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
-var website_projects_default = router80;
+var website_projects_default = router81;
 
 // src/api/website-testimonials.ts
-var import_express83 = require("express");
+var import_express84 = require("express");
 init_database();
-var router81 = (0, import_express83.Router)();
+var router82 = (0, import_express84.Router)();
 var prisma47 = db;
-router81.get("/website-testimonials/:websiteId", async (req2, res) => {
+router82.get("/website-testimonials/:websiteId", async (req2, res) => {
   try {
     const { websiteId } = req2.params;
     const testimonials = await prisma47.webSiteTestimonial.findMany({
@@ -62598,7 +63631,7 @@ router81.get("/website-testimonials/:websiteId", async (req2, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
-router81.post("/website-testimonials", async (req2, res) => {
+router82.post("/website-testimonials", async (req2, res) => {
   try {
     const { websiteId, customerName, location, service, rating, text, isActive, isFeatured, publishedAt } = req2.body;
     if (!websiteId || !customerName || !text) {
@@ -62628,7 +63661,7 @@ router81.post("/website-testimonials", async (req2, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
-router81.put("/website-testimonials/:id", async (req2, res) => {
+router82.put("/website-testimonials/:id", async (req2, res) => {
   try {
     const { id } = req2.params;
     const { customerName, location, service, rating, text, isActive, isFeatured, publishedAt } = req2.body;
@@ -62651,7 +63684,7 @@ router81.put("/website-testimonials/:id", async (req2, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
-router81.delete("/website-testimonials/:id", async (req2, res) => {
+router82.delete("/website-testimonials/:id", async (req2, res) => {
   try {
     const { id } = req2.params;
     await prisma47.webSiteTestimonial.delete({
@@ -62663,7 +63696,7 @@ router81.delete("/website-testimonials/:id", async (req2, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
-router81.post("/website-testimonials/reorder", async (req2, res) => {
+router82.post("/website-testimonials/reorder", async (req2, res) => {
   try {
     const { testimonials } = req2.body;
     if (!Array.isArray(testimonials)) {
@@ -62683,13 +63716,13 @@ router81.post("/website-testimonials/reorder", async (req2, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
-var website_testimonials_default = router81;
+var website_testimonials_default = router82;
 
 // src/api/website-sections.ts
-var import_express84 = __toESM(require("express"), 1);
+var import_express85 = __toESM(require("express"), 1);
 init_database();
-var router82 = import_express84.default.Router();
-router82.get("/website-sections/:websiteId", async (req2, res) => {
+var router83 = import_express85.default.Router();
+router83.get("/website-sections/:websiteId", async (req2, res) => {
   try {
     const { websiteId } = req2.params;
     const sections = await db.website_sections.findMany({
@@ -62706,7 +63739,7 @@ router82.get("/website-sections/:websiteId", async (req2, res) => {
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
-router82.post("/website-sections", async (req2, res) => {
+router83.post("/website-sections", async (req2, res) => {
   try {
     const { websiteId, key: key2, type, name, content, backgroundColor, textColor, customCss } = req2.body;
     const maxOrder = await db.website_sections.aggregate({
@@ -62734,7 +63767,7 @@ router82.post("/website-sections", async (req2, res) => {
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
-router82.put("/website-sections/:id", async (req2, res) => {
+router83.put("/website-sections/:id", async (req2, res) => {
   try {
     const { id } = req2.params;
     const { name, content, backgroundColor, textColor, customCss, isActive } = req2.body;
@@ -62785,7 +63818,7 @@ router82.put("/website-sections/:id", async (req2, res) => {
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
-router82.patch("/website-sections/:id", async (req2, res) => {
+router83.patch("/website-sections/:id", async (req2, res) => {
   try {
     const { id } = req2.params;
     const { name, content, backgroundColor, textColor, customCss, isActive } = req2.body;
@@ -62833,7 +63866,7 @@ router82.patch("/website-sections/:id", async (req2, res) => {
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
-router82.delete("/website-sections/:id", async (req2, res) => {
+router83.delete("/website-sections/:id", async (req2, res) => {
   try {
     const { id } = req2.params;
     const section = await db.website_sections.findUnique({
@@ -62851,7 +63884,7 @@ router82.delete("/website-sections/:id", async (req2, res) => {
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
-router82.post("/website-sections/reorder", async (req2, res) => {
+router83.post("/website-sections/reorder", async (req2, res) => {
   try {
     const { sections } = req2.body;
     await db.$transaction(
@@ -62868,7 +63901,7 @@ router82.post("/website-sections/reorder", async (req2, res) => {
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
-router82.post("/website-sections/duplicate/:id", async (req2, res) => {
+router83.post("/website-sections/duplicate/:id", async (req2, res) => {
   try {
     const { id } = req2.params;
     const original = await db.website_sections.findUnique({
@@ -62899,13 +63932,13 @@ router82.post("/website-sections/duplicate/:id", async (req2, res) => {
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
-var website_sections_default = router82;
+var website_sections_default = router83;
 
 // src/api/website-themes.ts
-var import_express85 = require("express");
+var import_express86 = require("express");
 init_prisma();
-var router83 = (0, import_express85.Router)();
-router83.get("/:websiteId", async (req2, res) => {
+var router84 = (0, import_express86.Router)();
+router84.get("/:websiteId", async (req2, res) => {
   try {
     const { websiteId } = req2.params;
     console.log("\u{1F4E1} [API] GET theme websiteId:", websiteId);
@@ -62921,7 +63954,7 @@ router83.get("/:websiteId", async (req2, res) => {
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
-router83.post("/", async (req2, res) => {
+router84.post("/", async (req2, res) => {
   try {
     const themeData = req2.body;
     console.log("\u{1F4E1} [API] POST theme:", themeData);
@@ -62934,7 +63967,7 @@ router83.post("/", async (req2, res) => {
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
-router83.put("/:id", async (req2, res) => {
+router84.put("/:id", async (req2, res) => {
   try {
     const { id } = req2.params;
     const themeData = req2.body;
@@ -62949,7 +63982,7 @@ router83.put("/:id", async (req2, res) => {
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
-router83.delete("/:id", async (req2, res) => {
+router84.delete("/:id", async (req2, res) => {
   try {
     const { id } = req2.params;
     console.log("\u{1F4E1} [API] DELETE theme:", id);
@@ -62962,12 +63995,12 @@ router83.delete("/:id", async (req2, res) => {
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
-var website_themes_default = router83;
+var website_themes_default = router84;
 
 // src/api/contact-form.ts
-var import_express86 = require("express");
+var import_express87 = require("express");
 init_database();
-var router84 = (0, import_express86.Router)();
+var router85 = (0, import_express87.Router)();
 var prisma48 = db;
 var isValidEmail = (email) => {
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -62985,7 +64018,7 @@ var isSpam = (data) => {
   }
   return false;
 };
-router84.post("/contact-form", async (req2, res) => {
+router85.post("/contact-form", async (req2, res) => {
   try {
     const data = req2.body;
     if (!data.name || data.name.trim().length < 2) {
@@ -63061,7 +64094,7 @@ router84.post("/contact-form", async (req2, res) => {
     });
   }
 });
-router84.get("/contact-submissions/:websiteId", async (req2, res) => {
+router85.get("/contact-submissions/:websiteId", async (req2, res) => {
   try {
     const websiteId = parseInt(req2.params.websiteId);
     const submissions = await prisma48.contactSubmission.findMany({
@@ -63076,7 +64109,7 @@ router84.get("/contact-submissions/:websiteId", async (req2, res) => {
     res.status(500).json({ success: false, message: "Erreur serveur" });
   }
 });
-router84.patch("/contact-submission/:id/read", async (req2, res) => {
+router85.patch("/contact-submission/:id/read", async (req2, res) => {
   try {
     const id = parseInt(req2.params.id);
     const submission = await prisma48.contactSubmission.update({
@@ -63089,7 +64122,7 @@ router84.patch("/contact-submission/:id/read", async (req2, res) => {
     res.status(500).json({ success: false, message: "Erreur serveur" });
   }
 });
-router84.patch("/contact-submission/:id/status", async (req2, res) => {
+router85.patch("/contact-submission/:id/status", async (req2, res) => {
   try {
     const id = parseInt(req2.params.id);
     const { status, notes } = req2.body;
@@ -63111,7 +64144,7 @@ router84.patch("/contact-submission/:id/status", async (req2, res) => {
     res.status(500).json({ success: false, message: "Erreur serveur" });
   }
 });
-router84.delete("/contact-submission/:id", async (req2, res) => {
+router85.delete("/contact-submission/:id", async (req2, res) => {
   try {
     const id = parseInt(req2.params.id);
     await prisma48.contactSubmission.delete({
@@ -63123,15 +64156,15 @@ router84.delete("/contact-submission/:id", async (req2, res) => {
     res.status(500).json({ success: false, message: "Erreur serveur" });
   }
 });
-var contact_form_default = router84;
+var contact_form_default = router85;
 
 // src/api/image-upload.ts
-var import_express87 = require("express");
+var import_express88 = require("express");
 var import_multer2 = __toESM(require("multer"), 1);
 var import_path7 = __toESM(require("path"), 1);
 var import_promises = __toESM(require("fs/promises"), 1);
 init_database();
-var router85 = (0, import_express87.Router)();
+var router86 = (0, import_express88.Router)();
 var prisma49 = db;
 var storage2 = import_multer2.default.diskStorage({
   destination: async (req2, file, cb) => {
@@ -63160,7 +64193,7 @@ var upload2 = (0, import_multer2.default)({
     // 5MB max
   }
 });
-router85.post("/upload", upload2.single("file"), async (req2, res) => {
+router86.post("/upload", upload2.single("file"), async (req2, res) => {
   try {
     if (!req2.file) {
       return res.status(400).json({
@@ -63203,7 +64236,7 @@ router85.post("/upload", upload2.single("file"), async (req2, res) => {
     });
   }
 });
-router85.post("/upload-image", upload2.single("image"), async (req2, res) => {
+router86.post("/upload-image", upload2.single("image"), async (req2, res) => {
   try {
     if (!req2.file) {
       return res.status(400).json({
@@ -63260,7 +64293,7 @@ router85.post("/upload-image", upload2.single("image"), async (req2, res) => {
     });
   }
 });
-router85.get("/images/:websiteId", async (req2, res) => {
+router86.get("/images/:websiteId", async (req2, res) => {
   try {
     const websiteId = parseInt(req2.params.websiteId);
     const { category } = req2.query;
@@ -63284,7 +64317,7 @@ router85.get("/images/:websiteId", async (req2, res) => {
     });
   }
 });
-router85.delete("/image/:id", async (req2, res) => {
+router86.delete("/image/:id", async (req2, res) => {
   try {
     const id = parseInt(req2.params.id);
     const mediaFile = await prisma49.webSiteMediaFile.findUnique({
@@ -63316,10 +64349,10 @@ router85.delete("/image/:id", async (req2, res) => {
     });
   }
 });
-var image_upload_default = router85;
+var image_upload_default = router86;
 
 // src/api/ai-content.ts
-var import_express88 = require("express");
+var import_express89 = require("express");
 
 // src/services/aiContentService.ts
 var AIContentService = class {
@@ -63532,8 +64565,8 @@ R\xE8gles :
 var aiContentService = new AIContentService();
 
 // src/api/ai-content.ts
-var router86 = (0, import_express88.Router)();
-router86.post("/generate-service", async (req2, res) => {
+var router87 = (0, import_express89.Router)();
+router87.post("/generate-service", async (req2, res) => {
   try {
     const { siteName, industry, serviceType, keywords } = req2.body;
     if (!siteName || !industry || !serviceType) {
@@ -63559,7 +64592,7 @@ router86.post("/generate-service", async (req2, res) => {
     });
   }
 });
-router86.post("/generate-project", async (req2, res) => {
+router87.post("/generate-project", async (req2, res) => {
   try {
     const { siteName, industry, projectType, location } = req2.body;
     if (!siteName || !industry || !projectType) {
@@ -63585,7 +64618,7 @@ router86.post("/generate-project", async (req2, res) => {
     });
   }
 });
-router86.post("/generate-testimonial", async (req2, res) => {
+router87.post("/generate-testimonial", async (req2, res) => {
   try {
     const { siteName, industry, serviceType, customerType } = req2.body;
     if (!siteName || !industry || !serviceType) {
@@ -63611,7 +64644,7 @@ router86.post("/generate-testimonial", async (req2, res) => {
     });
   }
 });
-router86.post("/generate-page", async (req2, res) => {
+router87.post("/generate-page", async (req2, res) => {
   try {
     const { siteName, siteType, industry, mainServices, targetAudience } = req2.body;
     if (!siteName || !siteType || !industry || !mainServices) {
@@ -63638,7 +64671,7 @@ router86.post("/generate-page", async (req2, res) => {
     });
   }
 });
-router86.post("/optimize-seo", async (req2, res) => {
+router87.post("/optimize-seo", async (req2, res) => {
   try {
     const { currentTitle, currentDescription, pageContent, targetKeywords, siteName, industry } = req2.body;
     if (!pageContent || !siteName || !industry) {
@@ -63666,7 +64699,7 @@ router86.post("/optimize-seo", async (req2, res) => {
     });
   }
 });
-router86.post("/generate-multiple-services", async (req2, res) => {
+router87.post("/generate-multiple-services", async (req2, res) => {
   try {
     const { siteName, industry, serviceTypes } = req2.body;
     if (!siteName || !industry || !serviceTypes || !Array.isArray(serviceTypes)) {
@@ -63692,15 +64725,15 @@ router86.post("/generate-multiple-services", async (req2, res) => {
     });
   }
 });
-var ai_content_default = router86;
+var ai_content_default = router87;
 
 // src/api/ai.ts
-var import_express89 = __toESM(require("express"), 1);
+var import_express90 = __toESM(require("express"), 1);
 var import_generative_ai2 = require("@google/generative-ai");
-var router87 = import_express89.default.Router();
+var router88 = import_express90.default.Router();
 var genAI = new import_generative_ai2.GoogleGenerativeAI(process.env.GEMINI_API_KEY || "");
 var MODEL_NAME = "gemini-pro";
-router87.post("/generate", async (req2, res) => {
+router88.post("/generate", async (req2, res) => {
   try {
     const { prompt, context, sectionType, currentValue } = req2.body;
     if (!prompt) {
@@ -63863,7 +64896,7 @@ function formatSuggestions(data, context) {
       return [{ value: data }];
   }
 }
-router87.post("/analyze-section", async (req2, res) => {
+router88.post("/analyze-section", async (req2, res) => {
   try {
     const { sectionType, content, prompt } = req2.body;
     if (!process.env.GEMINI_API_KEY) {
@@ -63998,7 +65031,7 @@ function generateFallbackAnalysis(sectionType, content) {
     }
   };
 }
-router87.post("/optimize-seo", async (req2, res) => {
+router88.post("/optimize-seo", async (req2, res) => {
   try {
     const { content, sectionType } = req2.body;
     if (!process.env.GEMINI_API_KEY) {
@@ -64038,7 +65071,7 @@ Format de r\xE9ponse : JSON avec { metaTitle, metaDescription, keywords: [], slu
     });
   }
 });
-router87.post("/improve-content", async (req2, res) => {
+router88.post("/improve-content", async (req2, res) => {
   try {
     const { content, instructions } = req2.body;
     if (!process.env.GEMINI_API_KEY) {
@@ -64075,7 +65108,7 @@ Retourne le contenu am\xE9lior\xE9 au format JSON identique \xE0 l'original.`;
     });
   }
 });
-router87.post("/optimize-layout", async (req2, res) => {
+router88.post("/optimize-layout", async (req2, res) => {
   try {
     const { itemCount, sectionType, currentLayout } = req2.body;
     if (!process.env.GEMINI_API_KEY) {
@@ -64130,7 +65163,7 @@ Format de r\xE9ponse : JSON array avec :
     });
   }
 });
-router87.post("/generate-palette", async (req2, res) => {
+router88.post("/generate-palette", async (req2, res) => {
   try {
     const { baseColor, mood, industry } = req2.body;
     if (!process.env.GEMINI_API_KEY) {
@@ -64270,7 +65303,7 @@ function generateFallbackPalettes(baseColor) {
   ];
 }
 var geminiMeasureService = getGeminiService();
-router87.post("/measure-image", async (req2, res) => {
+router88.post("/measure-image", async (req2, res) => {
   const startTime = Date.now();
   try {
     const {
@@ -64350,7 +65383,7 @@ router87.post("/measure-image", async (req2, res) => {
     });
   }
 });
-router87.post("/measure-image/apply", async (req2, res) => {
+router88.post("/measure-image/apply", async (req2, res) => {
   try {
     const {
       measurements,
@@ -64409,7 +65442,7 @@ router87.post("/measure-image/apply", async (req2, res) => {
     });
   }
 });
-router87.get("/measure-image/status", async (_req, res) => {
+router88.get("/measure-image/status", async (_req, res) => {
   try {
     const status = geminiMeasureService.getStatus();
     res.json({
@@ -64429,13 +65462,13 @@ router87.get("/measure-image/status", async (_req, res) => {
     });
   }
 });
-var ai_default2 = router87;
+var ai_default2 = router88;
 
 // src/routes/ai-field-generator.ts
-var import_express90 = __toESM(require("express"), 1);
-var router88 = import_express90.default.Router();
+var import_express91 = __toESM(require("express"), 1);
+var router89 = import_express91.default.Router();
 var geminiService3 = getGeminiService();
-router88.use(authMiddleware);
+router89.use(authMiddleware);
 var SmartPromptBuilder = class {
   /**
    * Construit un prompt optimisé selon le type de champ
@@ -64818,7 +65851,7 @@ var QualityAnalyzer = class {
     }
   }
 };
-router88.post("/generate-field", async (req2, res) => {
+router89.post("/generate-field", async (req2, res) => {
   const startTime = Date.now();
   try {
     const { fieldId, fieldType, fieldLabel, currentValue, aiContext } = req2.body;
@@ -64905,7 +65938,7 @@ router88.post("/generate-field", async (req2, res) => {
     });
   }
 });
-router88.get("/status", async (_req, res) => {
+router89.get("/status", async (_req, res) => {
   try {
     const isAvailable = !!process.env.GOOGLE_API_KEY || !!process.env.GEMINI_API_KEY;
     res.json({
@@ -64922,10 +65955,10 @@ router88.get("/status", async (_req, res) => {
     });
   }
 });
-var ai_field_generator_default = router88;
+var ai_field_generator_default = router89;
 
 // src/components/TreeBranchLeaf/treebranchleaf-new/api/repeat/repeat-routes.ts
-var import_express91 = require("express");
+var import_express92 = require("express");
 
 // src/components/TreeBranchLeaf/treebranchleaf-new/api/repeat/repeat-blueprint-builder.ts
 var parseJsonArray = (value) => {
@@ -67877,10 +68910,10 @@ function normalizeMetadata(metadata) {
 
 // src/components/TreeBranchLeaf/treebranchleaf-new/api/repeat/repeat-routes.ts
 function createRepeatRouter(prisma51) {
-  const router94 = (0, import_express91.Router)();
+  const router95 = (0, import_express92.Router)();
   const inFlightExecuteByRepeater = /* @__PURE__ */ new Set();
-  router94.use(authenticateToken);
-  router94.post("/:repeaterNodeId/instances", async (req2, res) => {
+  router95.use(authenticateToken);
+  router95.post("/:repeaterNodeId/instances", async (req2, res) => {
     const { repeaterNodeId } = req2.params;
     const body2 = req2.body || {};
     try {
@@ -67912,7 +68945,7 @@ function createRepeatRouter(prisma51) {
       });
     }
   });
-  router94.post("/:repeaterNodeId/instances/execute", async (req2, res) => {
+  router95.post("/:repeaterNodeId/instances/execute", async (req2, res) => {
     const { repeaterNodeId } = req2.params;
     const body2 = req2.body || {};
     if (inFlightExecuteByRepeater.has(repeaterNodeId)) {
@@ -67964,7 +68997,7 @@ function createRepeatRouter(prisma51) {
       inFlightExecuteByRepeater.delete(repeaterNodeId);
     }
   });
-  router94.post("/:repeaterId/preload-copies", async (req2, res) => {
+  router95.post("/:repeaterId/preload-copies", async (req2, res) => {
     try {
       const { repeaterId } = req2.params;
       const { targetCount } = req2.body || {};
@@ -68083,7 +69116,7 @@ function createRepeatRouter(prisma51) {
       res.status(500).json({ error: "Erreur lors du pr\xE9-chargement des copies" });
     }
   });
-  return router94;
+  return router95;
 }
 async function deleteNodeWithCascade(prisma51, treeId, nodeId) {
   const allNodes = await prisma51.treeBranchLeafNode.findMany({
@@ -68123,9 +69156,9 @@ async function deleteNodeWithCascade(prisma51, treeId, nodeId) {
 }
 
 // src/api/cloud-run-domains.ts
-var import_express92 = require("express");
-var router89 = (0, import_express92.Router)();
-router89.get("/cloud-run-domains", authenticateToken, async (req2, res) => {
+var import_express93 = require("express");
+var router90 = (0, import_express93.Router)();
+router90.get("/cloud-run-domains", authenticateToken, async (req2, res) => {
   try {
     const user = req2.user;
     if (!user.isSuperAdmin) {
@@ -68167,7 +69200,7 @@ router89.get("/cloud-run-domains", authenticateToken, async (req2, res) => {
     });
   }
 });
-router89.post("/cloud-run-domains/verify", authenticateToken, async (req2, res) => {
+router90.post("/cloud-run-domains/verify", authenticateToken, async (req2, res) => {
   try {
     const user = req2.user;
     const { domain } = req2.body;
@@ -68220,10 +69253,10 @@ async function checkDomainReachability(domain) {
     return false;
   }
 }
-var cloud_run_domains_default = router89;
+var cloud_run_domains_default = router90;
 
 // src/api/measurement-reference.ts
-var import_express93 = require("express");
+var import_express94 = require("express");
 var sharpModule = __toESM(require("sharp"), 1);
 
 // src/lib/apriltag-detector-server.ts
@@ -69104,8 +70137,8 @@ function computeObjectDimensions(calibration, objectCorners) {
 
 // src/api/measurement-reference.ts
 var sharp = sharpModule.default || sharpModule;
-var router90 = (0, import_express93.Router)();
-router90.post("/ultra-fusion-detect", authenticateToken, async (req2, res) => {
+var router91 = (0, import_express94.Router)();
+router91.post("/ultra-fusion-detect", authenticateToken, async (req2, res) => {
   const startTime = Date.now();
   try {
     const { photos } = req2.body;
@@ -69232,7 +70265,7 @@ ${"=".repeat(80)}`);
     });
   }
 });
-router90.post("/compute-dimensions-simple", authenticateToken, async (req2, res) => {
+router91.post("/compute-dimensions-simple", authenticateToken, async (req2, res) => {
   try {
     if (!req2.user?.id) {
       return res.status(401).json({ error: "Non authentifi\xE9" });
@@ -69322,13 +70355,13 @@ router90.post("/compute-dimensions-simple", authenticateToken, async (req2, res)
     });
   }
 });
-var measurement_reference_default = router90;
+var measurement_reference_default = router91;
 
 // src/routes/userFavoritesRoutes.ts
-var import_express94 = require("express");
+var import_express95 = require("express");
 init_database();
-var router91 = (0, import_express94.Router)();
-router91.get("/", authMiddleware, async (req2, res) => {
+var router92 = (0, import_express95.Router)();
+router92.get("/", authMiddleware, async (req2, res) => {
   try {
     const userId = req2.user?.userId;
     const organizationId = req2.user?.organizationId;
@@ -69360,7 +70393,7 @@ router91.get("/", authMiddleware, async (req2, res) => {
     });
   }
 });
-router91.post("/", authMiddleware, async (req2, res) => {
+router92.post("/", authMiddleware, async (req2, res) => {
   try {
     const userId = req2.user?.userId;
     const organizationId = req2.user?.organizationId;
@@ -69402,7 +70435,7 @@ router91.post("/", authMiddleware, async (req2, res) => {
     });
   }
 });
-router91.delete("/:moduleKey", authMiddleware, async (req2, res) => {
+router92.delete("/:moduleKey", authMiddleware, async (req2, res) => {
   try {
     const userId = req2.user?.userId;
     const organizationId = req2.user?.organizationId;
@@ -69435,18 +70468,18 @@ router91.delete("/:moduleKey", authMiddleware, async (req2, res) => {
     });
   }
 });
-var userFavoritesRoutes_default = router91;
+var userFavoritesRoutes_default = router92;
 
 // src/routes/website-forms.ts
-var import_express95 = require("express");
+var import_express96 = require("express");
 init_database();
-var router92 = (0, import_express95.Router)();
+var router93 = (0, import_express96.Router)();
 var getOrgId2 = (req2) => {
   const orgId = req2.organizationId || req2.headers["x-organization-id"];
   if (!orgId) throw new Error("Organization ID manquant");
   return orgId;
 };
-router92.get("/", async (req2, res) => {
+router93.get("/", async (req2, res) => {
   try {
     const organizationId = getOrgId2(req2);
     const { websiteId } = req2.query;
@@ -69492,7 +70525,7 @@ router92.get("/", async (req2, res) => {
     });
   }
 });
-router92.get("/by-website/:websiteId", async (req2, res) => {
+router93.get("/by-website/:websiteId", async (req2, res) => {
   try {
     const organizationId = getOrgId2(req2);
     const { websiteId } = req2.params;
@@ -69536,7 +70569,7 @@ router92.get("/by-website/:websiteId", async (req2, res) => {
     });
   }
 });
-router92.get("/my-commercial-links", authMiddleware, async (req2, res) => {
+router93.get("/my-commercial-links", authMiddleware, async (req2, res) => {
   try {
     const organizationId = getOrgId2(req2);
     const userId = req2.user.userId;
@@ -69610,7 +70643,7 @@ router92.get("/my-commercial-links", authMiddleware, async (req2, res) => {
     });
   }
 });
-router92.get("/:id", async (req2, res) => {
+router93.get("/:id", async (req2, res) => {
   try {
     const organizationId = getOrgId2(req2);
     const { id } = req2.params;
@@ -69654,7 +70687,7 @@ router92.get("/:id", async (req2, res) => {
     });
   }
 });
-router92.post("/", async (req2, res) => {
+router93.post("/", async (req2, res) => {
   try {
     const organizationId = getOrgId2(req2);
     const { name, slug, description, treeId, settings, successTitle, successMessage, requiresCommercialTracking } = req2.body;
@@ -69694,7 +70727,7 @@ router92.post("/", async (req2, res) => {
     });
   }
 });
-router92.put("/:id", async (req2, res) => {
+router93.put("/:id", async (req2, res) => {
   try {
     const organizationId = getOrgId2(req2);
     const { id } = req2.params;
@@ -69748,7 +70781,7 @@ router92.put("/:id", async (req2, res) => {
     });
   }
 });
-router92.delete("/:id", async (req2, res) => {
+router93.delete("/:id", async (req2, res) => {
   try {
     const organizationId = getOrgId2(req2);
     const { id } = req2.params;
@@ -69772,7 +70805,7 @@ router92.delete("/:id", async (req2, res) => {
     });
   }
 });
-router92.post("/:id/steps", async (req2, res) => {
+router93.post("/:id/steps", async (req2, res) => {
   try {
     const organizationId = getOrgId2(req2);
     const { id } = req2.params;
@@ -69810,7 +70843,7 @@ router92.post("/:id/steps", async (req2, res) => {
     });
   }
 });
-router92.put("/steps/:stepId", async (req2, res) => {
+router93.put("/steps/:stepId", async (req2, res) => {
   try {
     const { stepId } = req2.params;
     const { title, subtitle, helpText, stepType, order, isRequired, condition, settings } = req2.body;
@@ -69839,7 +70872,7 @@ router92.put("/steps/:stepId", async (req2, res) => {
     });
   }
 });
-router92.delete("/steps/:stepId", async (req2, res) => {
+router93.delete("/steps/:stepId", async (req2, res) => {
   try {
     const { stepId } = req2.params;
     console.log("\u{1F4CB} [WebsiteForms] DELETE step:", stepId);
@@ -69856,7 +70889,7 @@ router92.delete("/steps/:stepId", async (req2, res) => {
     });
   }
 });
-router92.put("/:id/steps/reorder", async (req2, res) => {
+router93.put("/:id/steps/reorder", async (req2, res) => {
   try {
     const { id } = req2.params;
     const { stepIds } = req2.body;
@@ -69878,7 +70911,7 @@ router92.put("/:id/steps/reorder", async (req2, res) => {
     });
   }
 });
-router92.post("/steps/:stepId/fields", async (req2, res) => {
+router93.post("/steps/:stepId/fields", async (req2, res) => {
   try {
     const { stepId } = req2.params;
     const {
@@ -69936,7 +70969,7 @@ router92.post("/steps/:stepId/fields", async (req2, res) => {
     });
   }
 });
-router92.put("/fields/:fieldId", async (req2, res) => {
+router93.put("/fields/:fieldId", async (req2, res) => {
   try {
     const { fieldId } = req2.params;
     const {
@@ -69987,7 +71020,7 @@ router92.put("/fields/:fieldId", async (req2, res) => {
     });
   }
 });
-router92.delete("/fields/:fieldId", async (req2, res) => {
+router93.delete("/fields/:fieldId", async (req2, res) => {
   try {
     const { fieldId } = req2.params;
     console.log("\u{1F4CB} [WebsiteForms] DELETE field:", fieldId);
@@ -70004,7 +71037,7 @@ router92.delete("/fields/:fieldId", async (req2, res) => {
     });
   }
 });
-router92.put("/steps/:stepId/fields/reorder", async (req2, res) => {
+router93.put("/steps/:stepId/fields/reorder", async (req2, res) => {
   try {
     const { stepId } = req2.params;
     const { fieldIds } = req2.body;
@@ -70026,7 +71059,7 @@ router92.put("/steps/:stepId/fields/reorder", async (req2, res) => {
     });
   }
 });
-router92.post("/:id/link-website", async (req2, res) => {
+router93.post("/:id/link-website", async (req2, res) => {
   try {
     const { id } = req2.params;
     const { websiteId, isDefault, urlPath } = req2.body;
@@ -70059,7 +71092,7 @@ router92.post("/:id/link-website", async (req2, res) => {
     });
   }
 });
-router92.delete("/:id/unlink-website/:websiteId", async (req2, res) => {
+router93.delete("/:id/unlink-website/:websiteId", async (req2, res) => {
   try {
     const { id, websiteId } = req2.params;
     console.log("\u{1F4CB} [WebsiteForms] UNLINK form", id, "from website", websiteId);
@@ -70079,7 +71112,7 @@ router92.delete("/:id/unlink-website/:websiteId", async (req2, res) => {
     });
   }
 });
-router92.get("/:id/stats", async (req2, res) => {
+router93.get("/:id/stats", async (req2, res) => {
   try {
     const _organizationId = getOrgId2(req2);
     const { id } = req2.params;
@@ -70117,7 +71150,7 @@ router92.get("/:id/stats", async (req2, res) => {
     });
   }
 });
-router92.get("/:id/questions", async (req2, res) => {
+router93.get("/:id/questions", async (req2, res) => {
   try {
     const organizationId = getOrgId2(req2);
     const { id } = req2.params;
@@ -70142,7 +71175,7 @@ router92.get("/:id/questions", async (req2, res) => {
     });
   }
 });
-router92.post("/:id/questions", async (req2, res) => {
+router93.post("/:id/questions", async (req2, res) => {
   try {
     const organizationId = getOrgId2(req2);
     const { id } = req2.params;
@@ -70200,7 +71233,7 @@ router92.post("/:id/questions", async (req2, res) => {
     });
   }
 });
-router92.put("/questions/:questionId", async (req2, res) => {
+router93.put("/questions/:questionId", async (req2, res) => {
   try {
     const organizationId = getOrgId2(req2);
     const { questionId } = req2.params;
@@ -70251,7 +71284,7 @@ router92.put("/questions/:questionId", async (req2, res) => {
     });
   }
 });
-router92.delete("/questions/:questionId", async (req2, res) => {
+router93.delete("/questions/:questionId", async (req2, res) => {
   try {
     const organizationId = getOrgId2(req2);
     const { questionId } = req2.params;
@@ -70309,16 +71342,16 @@ var generateUserSlug2 = async (firstName, lastName, organizationId) => {
   }
   return slug;
 };
-var website_forms_default = router92;
+var website_forms_default = router93;
 
 // src/routes/public-forms.ts
-var import_express96 = require("express");
+var import_express97 = require("express");
 init_database();
 var import_uuid6 = require("uuid");
 var fs10 = __toESM(require("fs"), 1);
 var path9 = __toESM(require("path"), 1);
-var router93 = (0, import_express96.Router)();
-router93.get("/:slug", async (req2, res) => {
+var router94 = (0, import_express97.Router)();
+router94.get("/:slug", async (req2, res) => {
   try {
     const { slug } = req2.params;
     const { websiteSlug: _websiteSlug } = req2.query;
@@ -70428,7 +71461,7 @@ router93.get("/:slug", async (req2, res) => {
     });
   }
 });
-router93.get("/:slug/questions", async (req2, res) => {
+router94.get("/:slug/questions", async (req2, res) => {
   try {
     const { slug } = req2.params;
     console.log("\u{1F3AF} [PublicForms] GET form questions (Effy mode) by slug:", slug);
@@ -70491,7 +71524,7 @@ router93.get("/:slug/questions", async (req2, res) => {
     });
   }
 });
-router93.get("/by-website/:websiteSlug", async (req2, res) => {
+router94.get("/by-website/:websiteSlug", async (req2, res) => {
   try {
     const { websiteSlug } = req2.params;
     console.log("\u{1F4CB} [PublicForms] GET form for website:", websiteSlug);
@@ -70566,7 +71599,7 @@ router93.get("/by-website/:websiteSlug", async (req2, res) => {
     });
   }
 });
-router93.post("/:slug/submit", async (req2, res) => {
+router94.post("/:slug/submit", async (req2, res) => {
   try {
     const { slug } = req2.params;
     const {
@@ -70901,7 +71934,7 @@ router93.post("/:slug/submit", async (req2, res) => {
     });
   }
 });
-router93.post("/:slug/partial", async (req2, res) => {
+router94.post("/:slug/partial", async (req2, res) => {
   try {
     const { slug } = req2.params;
     const { formData, currentStep, metadata } = req2.body;
@@ -70930,7 +71963,7 @@ router93.post("/:slug/partial", async (req2, res) => {
     res.status(500).json({ error: "Erreur" });
   }
 });
-var public_forms_default = router93;
+var public_forms_default = router94;
 
 // src/middleware/websiteDetection.ts
 init_prisma();
@@ -71545,7 +72578,7 @@ logSecurityEvent("SERVER_STARTUP", {
   environment: process.env.NODE_ENV || "development",
   securityLevel: "ENTERPRISE"
 }, "info");
-var app = (0, import_express97.default)();
+var app = (0, import_express98.default)();
 app.set("trust proxy", 1);
 var port = Number(process.env.PORT || 8080);
 console.log("\u{1F3AF} [BOOTSTRAP] Server will listen on port:", port);
@@ -71673,7 +72706,7 @@ app.use((0, import_cors.default)({
   exposedHeaders: ["X-Total-Count", "X-Rate-Limit-Remaining", "x-organization-id"]
 }));
 app.use(inputSanitization);
-app.use(import_express97.default.json({
+app.use(import_express98.default.json({
   limit: "50mb",
   verify: (req2, res, buf) => {
     try {
@@ -71687,7 +72720,7 @@ app.use(import_express97.default.json({
     }
   }
 }));
-app.use(import_express97.default.urlencoded({ extended: true, limit: "50mb" }));
+app.use(import_express98.default.urlencoded({ extended: true, limit: "50mb" }));
 app.use((0, import_cookie_parser.default)());
 app.use((0, import_express_session.default)({
   secret: process.env.SESSION_SECRET || "crm-dev-secret-2024",
@@ -71713,7 +72746,7 @@ app.use("/uploads", (req2, res, next) => {
   res.setHeader("Access-Control-Allow-Headers", "Content-Type");
   res.setHeader("Cross-Origin-Resource-Policy", "cross-origin");
   next();
-}, import_express97.default.static(uploadsDir, {
+}, import_express98.default.static(uploadsDir, {
   maxAge: "1h",
   // Cache 1 heure
   etag: true,
@@ -71777,7 +72810,7 @@ if (process.env.NODE_ENV === "production") {
   if (import_fs8.default.existsSync(indexHtml)) {
     console.log("\u{1F5C2}\uFE0F [STATIC] Distribution front d\xE9tect\xE9e, activation du serveur statique");
     const assetsDir = import_path8.default.join(distDir, "assets");
-    app.use("/assets", import_express97.default.static(assetsDir, {
+    app.use("/assets", import_express98.default.static(assetsDir, {
       setHeaders: (res) => {
         res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
       }

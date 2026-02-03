@@ -645,6 +645,24 @@ const TBL: React.FC<TBLProps> = ({
   const rawNodes = useMemo(() => (useFixed ? (newData.rawNodes || []) : (oldData.rawNodes || [])), [useFixed, newData.rawNodes, oldData.rawNodes]); // 🔥 NOUVEAU: Nœuds bruts pour Cascader
   const effectiveTreeId = tree?.id || requestedTreeId;
 
+  // ⚡ OPTIMISATION: Index O(1) pour résolution des alias sharedRef (remplace boucle O(n²))
+  const sharedRefAliasMap = useMemo(() => {
+    const map = new Map<string, string>();
+    if (!tabs || !Array.isArray(tabs)) return map;
+    for (const tab of tabs) {
+      if (!tab?.sections || !Array.isArray(tab.sections)) continue;
+      for (const section of tab.sections) {
+        if (!section?.fields || !Array.isArray(section.fields)) continue;
+        for (const field of section.fields) {
+          if (field?.sharedReferenceId && field?.id) {
+            map.set(field.sharedReferenceId, field.id);
+          }
+        }
+      }
+    }
+    return map;
+  }, [tabs]);
+
   const isDraftMode = !isDevisSaved;
   const isGlobalDraftMode = isDraftMode && !leadId;
   const isLeadDraftMode = isDraftMode && !!leadId;
@@ -2241,16 +2259,9 @@ const TBL: React.FC<TBLProps> = ({
       
       // ⚡ FILTRE: Ne JAMAIS envoyer les miroirs comme changedFieldId au backend
       let realFieldId = fieldId?.startsWith('__mirror_data_') ? undefined : fieldId;
+      // ⚡ OPTIMISATION: Résolution O(1) des alias sharedRef via Map (au lieu de boucle O(n²))
       if (realFieldId && realFieldId.startsWith('shared-ref-')) {
-        const aliasId = (() => {
-          for (const tab of tabs) {
-            for (const section of tab.sections) {
-              const alias = section.fields.find((sf: any) => sf.sharedReferenceId === realFieldId);
-              if (alias?.id) return alias.id;
-            }
-          }
-          return null;
-        })();
+        const aliasId = sharedRefAliasMap.get(realFieldId);
         if (aliasId) realFieldId = aliasId;
       }
       const fieldType = String((fieldConfig as any)?.type || '').toLowerCase();

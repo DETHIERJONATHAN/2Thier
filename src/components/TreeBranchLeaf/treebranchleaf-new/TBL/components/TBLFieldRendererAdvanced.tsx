@@ -42,7 +42,8 @@ import { useTBLTooltip } from '../../../../../hooks/useTBLTooltip';
 import { useTBLValidationContext } from '../contexts/TBLValidationContext';
 import { useTBLTableLookup } from '../hooks/useTBLTableLookup';
 import { type DynamicConstraints } from '../hooks/useDynamicConstraints';
-import { useNodeFormulas, getConstraintFormulas, extractSourceNodeIdFromTokens } from '../hooks/useNodeFormulas';
+import { getConstraintFormulas, extractSourceNodeIdFromTokens } from '../hooks/useNodeFormulas';
+import { useTBLBatch } from '../contexts/TBLBatchContext';
 import { useNodeCalculatedValue } from '../../../../../hooks/useNodeCalculatedValue';
 import { generateMirrorVariants } from '../utils/mirrorNormalization';
 import { tblLog, isTBLDebugEnabled } from '../../../../../utils/tblDebug';
@@ -973,10 +974,25 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
   
   console.log(`[TBL-DEBUG] Field: ${field.label}, field.id=${field.id}, lookupNodeId=${lookupNodeId}, duplicatedFromRepeater=${isDuplicatedFromRepeater}`);
 
+  // 🔧 FIX CRITIQUE: Pour les champs dupliqués avec suffix (-1, -2, etc.),
+  // il faut charger la config du champ ORIGINAL (sans suffix)
+  // Car TreeBranchLeafSelectConfig est lié à l'ID original uniquement
+  const getBaseFieldId = (fieldId: string): string => {
+    return fieldId.replace(/-(\d{1,3})$/, '');
+  };
+  
+  const isDuplicatedWithSuffix = /-(\d{1,3})$/.test(field.id);
+  const baseFieldId = getBaseFieldId(field.id);
+  
+  // Pour charger la config, on utilise toujours l'ID de base (sans suffix)
+  // Exemple: "c071a466-abc-1" → "c071a466-abc"
+  const configLookupId = isDuplicatedWithSuffix ? baseFieldId : lookupNodeId;
+
   // 🔧 FIX 06/01/2026: Le hook useTBLTableLookup charge la SelectConfig si elle existe
   // Si la SelectConfig n'existe pas, tableLookup.selectConfig sera null et ne causera pas de problème
   // Si elle existe, les options seront chargées depuis la table de capacité
-  const tableLookup = useTBLTableLookup(lookupNodeId, lookupNodeId, hasTableCapability, formData);
+  // ✅ On utilise configLookupId pour charger depuis l'ID de base (sans suffix)
+  const tableLookup = useTBLTableLookup(configLookupId, configLookupId, hasTableCapability, formData);
 
   const templateAppearanceOverrides = useMemo(() => {
     if (!allNodes || allNodes.length === 0) return null;
@@ -1126,11 +1142,31 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
     const nodeType = field.type?.toUpperCase() || 'TEXT';
     const baseSubType = field.type?.toUpperCase() || metadata.subType || nodeType; // 🎯 Type d'origine depuis Prisma
     
-    // ✅ CORRECTION DYNAMIQUE: Si table lookup activé, transformer TEXT en SELECT
-    // 🔧 FIX 17/12/2025: Utiliser hasTableCapability (déjà calculé avec field.hasTable prioritaire)
-    // au lieu de recalculer. field.hasTable vient directement de la DB et est la source de vérité.
-    const hasTableLookup = hasTableCapability || capabilities.table?.enabled || metadata.hasTable || false;
-    const subType = hasTableLookup ? 'SELECT' : baseSubType; // 🔥 TRANSFORMATION DYNAMIQUE
+    // ✅ VRAI PRINCIPE: Respecter la configuration du champ telle que dans la DB
+    // Le type du champ = ce qu'il est réellement (field.type), NOT une transformation arbitraire
+    // Sauf si une table lookup config existe → le champ devient SELECT avec sa config
+    
+    // 🔧 FIX DÉFINITIF: La vraie source de vérité est tableLookup.config
+    // Ce config vient de l'API /select-config et est chargé par useTBLTableLookup
+    // Si tableLookup.config existe et n'est pas null, alors c'est un SELECT
+    const hasRealTableLookupConfig = !!(tableLookup?.config);
+    
+    // LOGIQUE: 
+    // - Si le champ a une table lookup config (chargée depuis l'API) → il doit être SELECT
+    // - Sinon → respecter le type original (TEXT, NUMBER, etc.)
+    // Les champs dupliqués respectent la même logique que le champ original
+    
+    let subType: string;
+    
+    if (hasRealTableLookupConfig) {
+      // Ce champ a une vraie table lookup config → c'est un SELECT
+      subType = 'SELECT';
+    } else {
+      // Pas de table lookup config → respecter le type original
+      subType = baseSubType;
+    }
+    
+    const metadataSelectConfig = (metadata.selectConfig || {}) as Record<string, unknown>;
     
     //  CORRECTION: Lire l'apparence depuis field.config ET metadata.appearance
     const columnAppearance = {
@@ -1210,7 +1246,7 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
     
     const metadataTextConfig = (metadata.textConfig || {}) as Record<string, unknown>;
     const metadataNumberConfig = (metadata.numberConfig || {}) as Record<string, unknown>;
-    const metadataSelectConfig = (metadata.selectConfig || {}) as Record<string, unknown>;
+    // metadataSelectConfig déjà défini ligne 1153
     const metadataCheckboxConfig = (metadata.checkboxConfig || {}) as Record<string, unknown>;
     const metadataDateConfig = (metadata.dateConfig || {}) as Record<string, unknown>;
 
@@ -1534,25 +1570,18 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
     };
   }, [field, treeMetadata, templateAppearanceOverrides]);
 
-  // 🎯 NOUVEAU: Charger les formules depuis l'API pour avoir accès au targetProperty
-  // On charge pour tous les champs qui peuvent avoir des contraintes dynamiques
-  // DEBUG: Afficher le type pour diagnostic
-  const fieldTypeLower = (field.type || '').toLowerCase();
-  const shouldLoadFormulas = ['number', 'text', 'select', 'checkbox', 'date'].includes(fieldTypeLower);
+  // 🚀 OPTIMISÉ: Utiliser le batch au lieu de requêtes individuelles
+  const { getFormulasForNode, isReady: batchReady } = useTBLBatch();
   
-  // Débug supprimé - trop verbeux
-  
-  const { formulas: nodeFormulas, loading: formulasLoading } = useNodeFormulas({
-    nodeId: field.id,
-    enabled: shouldLoadFormulas
-  });
-  
-  // Debug: log uniquement si debug activé ET si formules trouvées
-  useEffect(() => {
-    if (nodeFormulas.length > 0 && isTBLDebugEnabled()) {
-      tblLog(`📋 [NodeFormulas] "${field.label}" (${field.id}) - ${nodeFormulas.length} formule(s) chargée(s)`);
+  // Récupérer les formules depuis le cache batch (pas de requête HTTP !)
+  const nodeFormulas = useMemo(() => {
+    if (!batchReady) return [];
+    const formulas = getFormulasForNode(field.id);
+    if (formulas.length > 0 && isTBLDebugEnabled()) {
+      tblLog(`📋 [BATCH] "${field.label}" (${field.id}) - ${formulas.length} formule(s) depuis cache`);
     }
-  }, [nodeFormulas, field.label, field.id]);
+    return formulas;
+  }, [field.id, field.label, getFormulasForNode, batchReady]);
 
   // 🎯 NOUVEAU: Extraction des formules de contrainte (number_max, number_min, etc.)
   const constraintFormulas = useMemo(() => {

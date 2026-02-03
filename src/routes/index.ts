@@ -55,6 +55,7 @@ import treeBranchLeafNewRoutes from '../components/TreeBranchLeaf/treebranchleaf
 import tblRoutes from '../components/TreeBranchLeaf/treebranchleaf-new/TBL/routes/tbl-routes'; // 🎯 Routes TBL (TreeBranchLeaf Business Logic)
 import tblIntelligenceRoutes from '../components/TreeBranchLeaf/tbl-bridge/routes/tbl-intelligence-routes'; // 🧠 Routes TBL Intelligence V2.0
 import tblCapabilitiesRoutes from './tbl-capabilities'; // 🧠 Nouveau endpoint capabilities pré-chargées
+import { tblSelectConfigRouter } from './tbl-select-config-route'; // 🎯 NOUVEAU: Route dédiée pour select-config
 import { logout } from '../controllers/authController';
 // import googleAuthRouter from './authGoogleRoutes'; // Commenté car non défini ou non utilisé
 
@@ -301,6 +302,9 @@ apiRouter.use('/tbl', tblRoutes);
 // Routes TBL Capabilities (pré-chargement des capacités sourceRef)
 apiRouter.use('/tbl', tblCapabilitiesRoutes);
 
+
+// Routes TBL Select Config 🎯 (NOUVELLE ROUTE DEDIEE)
+apiRouter.use('/treebranchleaf', tblSelectConfigRouter); // 🎯 MONTAGE DE LA NOUVELLE ROUTE
 
 // ... (autres montages de routeurs)
 

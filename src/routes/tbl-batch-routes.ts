@@ -7,6 +7,7 @@
 
 import { Router, Request, Response } from 'express';
 import { db } from '../lib/database';
+import { shouldAutoCreateSelectConfig } from '../components/TreeBranchLeaf/treebranchleaf-new/api/shared/select-config-policy';
 
 const router = Router();
 
@@ -215,8 +216,10 @@ router.get('/trees/:treeId/select-configs', async (req, res) => {
       },
       select: {
         id: true,
+        subType: true,
         fieldType: true,
         select_options: true,
+        table_activeId: true,
         // Utiliser la relation pour les configs avancées
         TreeBranchLeafSelectConfig: {
           select: {
