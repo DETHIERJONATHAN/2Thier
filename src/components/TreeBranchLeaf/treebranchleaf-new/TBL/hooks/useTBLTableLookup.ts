@@ -283,8 +283,17 @@ export function useTBLTableLookup(
               // Exclure les champs mirror internes
               if (key.startsWith('__mirror_')) return false;
               
-              // Exclure les valeurs base64 (images/fichiers) qui rendent l'URL trop longue
+              // Exclure les valeurs base64 directes (string)
               if (typeof value === 'string' && value.startsWith('data:')) return false;
+              
+              // Exclure les objets image avec propriété "annotated" contenant du base64
+              if (value && typeof value === 'object' && 'annotated' in value) {
+                const annotated = (value as any).annotated;
+                if (typeof annotated === 'string' && annotated.startsWith('data:image/')) {
+                  console.log(`[useTBLTableLookup] 🖼️ Image object exclue pour lookup: ${key} (${(annotated.length / 1024).toFixed(1)} KB)`);
+                  return false;
+                }
+              }
               
               return true;
             })
@@ -347,7 +356,7 @@ export function useTBLTableLookup(
             console.warn('[useTBLTableLookup] Erreur chargement valeurs calculées:', err);
           }
           
-          // Uniquement si des valeurs utilisateur existent
+          // Uniquement si des valeurs utilisateur existent (filteredFormData a déjà exclu les images)
           if (Object.keys(filteredFormData).length > 0) {
             const formValues = JSON.stringify(filteredFormData);
             queryParams = `?formValues=${encodeURIComponent(formValues)}`;
