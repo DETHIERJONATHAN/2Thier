@@ -1761,9 +1761,9 @@ const Parameters: React.FC<ParametersProps> = (props) => {
         {!isContainerNode && selectedNode && (
           (() => {
             // Trouver le parent branch de ce champ en naviguant via parentId sur le map
-            const findParentBranch = (id?: string | null): TreeBranchLeafNode | null => {
-              if (!id) return null;
-              let currentId: string | undefined | null = id;
+            const findParentBranch = (startId?: string | null): TreeBranchLeafNode | null => {
+              if (!startId) return null;
+              let currentId: string | undefined | null = startId;
               while (currentId) {
                 const node = nodesMap.get(currentId);
                 if (!node) break;
@@ -1773,7 +1773,8 @@ const Parameters: React.FC<ParametersProps> = (props) => {
               return null;
             };
 
-            const parentBranch = findParentBranch(selectedNode.id);
+            // ✅ FIX: Commencer la recherche depuis le parentId du nœud sélectionné
+            const parentBranch = findParentBranch(selectedNode.parentId as string | undefined);
             const parentSubTabs = parentBranch ? (Array.isArray(parentBranch.metadata?.subTabs) ? parentBranch.metadata?.subTabs as string[] : []) : [];
 
             return (
