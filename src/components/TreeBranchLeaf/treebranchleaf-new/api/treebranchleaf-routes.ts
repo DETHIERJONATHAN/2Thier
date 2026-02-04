@@ -39,10 +39,13 @@ import { rewriteReferences } from './repeat/utils/universal-reference-rewriter.j
 import { copySelectorTablesAfterNodeCopy } from './copy-selector-tables.js';
 import { copyFormulaCapacity } from './copy-capacity-formula.js';
 import { getNodeIdForLookup } from '../../../../utils/node-helpers.js';
-// ?? Import de la fonction de copie profonde centralisÃƒÂ¯Ã‚Â¿Ã‚Â½e
+// 📊 Import de la fonction de copie profonde centralisée
 import { deepCopyNodeInternal as deepCopyNodeInternalService } from './repeat/services/deep-copy-service.js';
 
-// ?? Import des routes pour les champs Total (somme des copies)
+// 🔄 Import de la fonction de synchronisation cascade des variables
+import { cascadeSyncVariableTableRef, cascadeSyncVariableFormulaRef } from './sync-variable-hook.js';
+
+// 📊 Import des routes pour les champs Total (somme des copies)
 import { registerSumDisplayFieldRoutes, updateSumDisplayFieldAfterCopyChange } from './sum-display-field-routes.js';
 
 // ÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚Â
@@ -4204,7 +4207,116 @@ router.delete('/trees/:treeId/nodes/:nodeId', async (req, res) => {
       console.warn('[DELETE] Erreur nettoyage variables orphelines:', (orphanCleanError as Error).message);
     }
 
-    // ?? Mise ÃƒÂ¯Ã‚Â¿Ã‚Â½ jour des champs Total aprÃƒÂ¯Ã‚Â¿Ã‚Â½s suppression de copies
+    // 🧹 **CRITICAL FIX**: Nettoyage des FORMULES et CONDITIONS copiées (suffixées)
+    // Les formules/conditions avec suffixe numérique (-1, -2, etc.) sont des copies qui doivent être supprimées
+    // NOTE: TreeBranchLeafNodeFormula et TreeBranchLeafNodeCondition n'ont PAS de relation CASCADE avec TreeBranchLeafNode
+    // donc elles ne sont PAS supprimées automatiquement - on doit les supprimer manuellement
+    try {
+      const suffixPattern = /-\d+$/; // Détecte un suffixe numérique à la fin
+      
+      // 1️⃣ Supprimer les FORMULES copiées (attachées aux nœuds supprimés OU avec ID suffixé)
+      const formulasToCheck = await prisma.treeBranchLeafNodeFormula.findMany({
+        where: {
+          OR: [
+            { nodeId: { in: allDeletedIds } },  // Formules attachées aux nodes supprimés
+            { id: { in: allDeletedIds.filter(id => suffixPattern.test(id)) } }  // Formules dont l'ID est un node supprimé suffixé
+          ]
+        },
+        select: { id: true, nodeId: true, name: true }
+      });
+      
+      // Filtrer pour ne supprimer que les formules SUFFIXÉES (copies)
+      const formulaIdsToDelete = formulasToCheck
+        .filter(f => suffixPattern.test(f.id) || suffixPattern.test(f.nodeId))
+        .map(f => f.id);
+      
+      if (formulaIdsToDelete.length > 0) {
+        const deletedFormulas = await prisma.treeBranchLeafNodeFormula.deleteMany({
+          where: { id: { in: formulaIdsToDelete } }
+        });
+        console.log(`[DELETE] 🧹 Supprimé ${deletedFormulas.count} formule(s) copiée(s)`);
+      }
+      
+      // 2️⃣ Supprimer les CONDITIONS copiées (attachées aux nœuds supprimés OU avec ID suffixé)
+      const conditionsToCheck = await prisma.treeBranchLeafNodeCondition.findMany({
+        where: {
+          OR: [
+            { nodeId: { in: allDeletedIds } },  // Conditions attachées aux nodes supprimés
+            { id: { in: allDeletedIds.filter(id => suffixPattern.test(id)) } }  // Conditions dont l'ID est un node supprimé suffixé
+          ]
+        },
+        select: { id: true, nodeId: true, name: true }
+      });
+      
+      // Filtrer pour ne supprimer que les conditions SUFFIXÉES (copies)
+      const conditionIdsToDelete = conditionsToCheck
+        .filter(c => suffixPattern.test(c.id) || suffixPattern.test(c.nodeId))
+        .map(c => c.id);
+      
+      if (conditionIdsToDelete.length > 0) {
+        const deletedConditions = await prisma.treeBranchLeafNodeCondition.deleteMany({
+          where: { id: { in: conditionIdsToDelete } }
+        });
+        console.log(`[DELETE] 🧹 Supprimé ${deletedConditions.count} condition(s) copiée(s)`);
+      }
+      
+      // 3️⃣ Nettoyage agressif: supprimer TOUTES les formules/conditions dont le nodeId n'existe plus
+      // Cela couvre les cas où le nodeId est un node copié qui a été supprimé
+      try {
+        // Trouver tous les nodeIds distincts des formules
+        const allFormulaNodeIds = await prisma.treeBranchLeafNodeFormula.findMany({
+          select: { nodeId: true },
+          distinct: ['nodeId']
+        });
+        
+        // Vérifier quels nodeIds n'existent plus
+        const existingNodeIds = new Set(
+          (await prisma.treeBranchLeafNode.findMany({
+            where: { id: { in: allFormulaNodeIds.map(f => f.nodeId) } },
+            select: { id: true }
+          })).map(n => n.id)
+        );
+        
+        const orphanedFormulaNodeIds = allFormulaNodeIds
+          .map(f => f.nodeId)
+          .filter(nodeId => !existingNodeIds.has(nodeId));
+        
+        if (orphanedFormulaNodeIds.length > 0) {
+          const deletedOrphanedFormulas = await prisma.treeBranchLeafNodeFormula.deleteMany({
+            where: { nodeId: { in: orphanedFormulaNodeIds } }
+          });
+          if (deletedOrphanedFormulas.count > 0) {
+            console.log(`[DELETE] 🧹 Supprimé ${deletedOrphanedFormulas.count} formule(s) orpheline(s) (nodeId inexistant)`);
+          }
+        }
+        
+        // Même chose pour les conditions
+        const allConditionNodeIds = await prisma.treeBranchLeafNodeCondition.findMany({
+          select: { nodeId: true },
+          distinct: ['nodeId']
+        });
+        
+        const orphanedConditionNodeIds = allConditionNodeIds
+          .map(c => c.nodeId)
+          .filter(nodeId => !existingNodeIds.has(nodeId));
+        
+        if (orphanedConditionNodeIds.length > 0) {
+          const deletedOrphanedConditions = await prisma.treeBranchLeafNodeCondition.deleteMany({
+            where: { nodeId: { in: orphanedConditionNodeIds } }
+          });
+          if (deletedOrphanedConditions.count > 0) {
+            console.log(`[DELETE] 🧹 Supprimé ${deletedOrphanedConditions.count} condition(s) orpheline(s) (nodeId inexistant)`);
+          }
+        }
+      } catch (orphanCleanupError) {
+        console.warn('[DELETE] Erreur nettoyage formules/conditions orphelines:', (orphanCleanupError as Error).message);
+      }
+      
+    } catch (formulaConditionCleanError) {
+      console.warn('[DELETE] Erreur nettoyage formules/conditions copiées:', (formulaConditionCleanError as Error).message);
+    }
+
+    // 📊 Mise à jour des champs Total après suppression de copies
     // Les nÃƒÂ¯Ã‚Â¿Ã‚Â½uds Total doivent mettre ÃƒÂ¯Ã‚Â¿Ã‚Â½ jour leur formule pour exclure les copies supprimÃƒÂ¯Ã‚Â¿Ã‚Â½es
     try {
       // Chercher tous les nÃƒÂ¯Ã‚Â¿Ã‚Â½uds Total (sum-display-field) qui rÃƒÂ¯Ã‚Â¿Ã‚Â½fÃƒÂ¯Ã‚Â¿Ã‚Â½rencent les nÃƒÂ¯Ã‚Â¿Ã‚Â½uds supprimÃƒÂ¯Ã‚Â¿Ã‚Â½s
