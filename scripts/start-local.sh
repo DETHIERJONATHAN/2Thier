@@ -94,23 +94,65 @@ has_active_gcloud_account() {
     return 0
 }
 
+ensure_gcloud_login() {
+    # Vérifie si gcloud a un compte actif, sinon demande à l'utilisateur de se connecter.
+    # IMPORTANT: On utilise `gcloud auth login` (pas application-default) car ce dernier
+    # peut être bloqué par les politiques de sécurité Google Workspace.
+    local active
+    active=$(gcloud auth list --filter=status:ACTIVE --format='value(account)' 2>/dev/null | head -n 1)
+    if [ -z "$active" ]; then
+        echo "⚠️  Aucun compte gcloud actif détecté."
+        echo ""
+        echo "👉 Lance cette commande et suis les instructions :"
+        echo "   gcloud auth login --no-launch-browser"
+        echo ""
+        echo "   1. Copie le lien affiché et ouvre-le dans ton navigateur"
+        echo "   2. Connecte-toi avec ton compte Google"
+        echo "   3. Copie le code d'autorisation et colle-le ici"
+        echo ""
+        gcloud auth login --no-launch-browser
+        active=$(gcloud auth list --filter=status:ACTIVE --format='value(account)' 2>/dev/null | head -n 1)
+    fi
+    if [ -z "$active" ]; then
+        echo "❌ Impossible de s'authentifier à gcloud."
+        echo "👉 Réessaie avec: gcloud auth login --no-launch-browser"
+        exit 1
+    fi
+    echo "✅ Connecté en tant que: $active"
+}
+
 ensure_adc() {
-    # IMPORTANT: si GOOGLE_APPLICATION_CREDENTIALS pointe vers un SA invalide,
-    # gcloud peut quand même générer des ADC, mais le proxy utilisera toujours le SA via cette variable.
-    # Donc on force le mode ADC en désactivant cette variable.
+    # DEPRECATED: ADC peut être bloqué par les politiques Google Workspace.
+    # On préfère maintenant `gcloud auth login` + `--gcloud-auth` pour le proxy.
+    # Cette fonction reste pour compatibilité si quelqu'un force CLOUD_SQL_AUTH_MODE=adc.
     unset GOOGLE_APPLICATION_CREDENTIALS
     local token
     token=$(gcloud auth application-default print-access-token 2>/dev/null)
     if [ -z "$token" ]; then
-        echo "⚠️  Aucun credential ADC détecté. Initialisation..."
-        echo "👉 Lancez la commande et suivez le lien (une seule fois) :"
+        echo "⚠️  Aucun credential ADC détecté."
+        echo ""
+        echo "⚠️  ATTENTION: 'gcloud auth application-default login' peut être BLOQUÉ"
+        echo "   par les politiques de sécurité de ton organisation Google Workspace."
+        echo ""
+        echo "👉 RECOMMANDÉ: Utilise plutôt le mode gcloud :"
+        echo "   CLOUD_SQL_AUTH_MODE=gcloud bash scripts/start-local.sh"
+        echo ""
+        echo "👉 Si tu veux quand même essayer ADC, lance :"
         echo "   gcloud auth application-default login --no-launch-browser"
-        gcloud auth application-default login --no-launch-browser
-        token=$(gcloud auth application-default print-access-token 2>/dev/null)
+        echo ""
+        read -p "Tenter ADC quand même ? (o/N) " -n 1 -r
+        echo
+        if [[ $REPLY =~ ^[Oo]$ ]]; then
+            gcloud auth application-default login --no-launch-browser
+            token=$(gcloud auth application-default print-access-token 2>/dev/null)
+        else
+            echo "👉 Relance avec: CLOUD_SQL_AUTH_MODE=gcloud bash scripts/start-local.sh"
+            exit 1
+        fi
     fi
     if [ -z "$token" ]; then
-        echo "❌ Impossible de récupérer un token ADC. Vérifiez gcloud et vos droits IAM (Cloud SQL Client)."
-        echo "ℹ️  Note: l'authorization code attendu est celui fourni par la page Google, ce n'est PAS un mot de passe."
+        echo "❌ Impossible de récupérer un token ADC."
+        echo "👉 Utilise plutôt: CLOUD_SQL_AUTH_MODE=gcloud bash scripts/start-local.sh"
         exit 1
     fi
 }
@@ -133,14 +175,23 @@ fi
 
 if [ "$CLOUD_SQL_AUTH_MODE" = "gcloud" ]; then
     if ! has_active_gcloud_account; then
-        echo "❌ CLOUD_SQL_AUTH_MODE=gcloud mais aucun compte gcloud actif n'est détecté."
-        echo "👉 Essaie: gcloud auth login --no-launch-browser"
-        exit 1
+        echo "⚠️  CLOUD_SQL_AUTH_MODE=gcloud mais aucun compte gcloud actif n'est détecté."
+        ensure_gcloud_login
     fi
 fi
 
-if [ "$CLOUD_SQL_AUTH_MODE" = "auto" ] && has_active_gcloud_account; then
-    CLOUD_SQL_AUTH_MODE="gcloud"
+# En mode auto: prioriser gcloud (plus fiable que ADC qui peut être bloqué)
+if [ "$CLOUD_SQL_AUTH_MODE" = "auto" ]; then
+    if has_active_gcloud_account; then
+        CLOUD_SQL_AUTH_MODE="gcloud"
+    elif [ -n "$SERVICE_ACCOUNT_CREDENTIALS_FILE" ]; then
+        CLOUD_SQL_AUTH_MODE="service-account"
+    else
+        # Pas de SA, pas de gcloud actif → demander de se connecter via gcloud auth login
+        echo "⚠️  Aucune authentification détectée."
+        ensure_gcloud_login
+        CLOUD_SQL_AUTH_MODE="gcloud"
+    fi
 fi
 
 if [ "$CLOUD_SQL_AUTH_MODE" = "gcloud" ]; then
@@ -201,15 +252,13 @@ if command -v pg_isready >/dev/null 2>&1; then
 
         if [ -n "$SERVICE_ACCOUNT_CREDENTIALS_FILE" ] && [ "$CLOUD_SQL_AUTH_MODE" = "auto" ]; then
             echo ""
-            echo "🔁 Fallback: tentative via gcloud (utilisateur), puis ADC si nécessaire."
+            echo "🔁 Fallback: tentative via gcloud (utilisateur)."
             kill "$PROXY_PID" 2>/dev/null || true
             SERVICE_ACCOUNT_CREDENTIALS_FILE=""
-            if has_active_gcloud_account; then
-                CLOUD_SQL_AUTH_MODE="gcloud"
-            else
-                CLOUD_SQL_AUTH_MODE="adc"
-                ensure_adc
+            if ! has_active_gcloud_account; then
+                ensure_gcloud_login
             fi
+            CLOUD_SQL_AUTH_MODE="gcloud"
 
             rm -f "$PROXY_LOG_FILE" >/dev/null 2>&1 || true
             PROXY_ARGS=(thiernew:europe-west1:crm-postgres-prod --address 127.0.0.1 --port 5432 --debug-logs)
@@ -234,16 +283,18 @@ if command -v pg_isready >/dev/null 2>&1; then
             done
             if ! pg_isready -h 127.0.0.1 -p 5432 >/dev/null 2>&1; then
                 echo "❌ Toujours pas de réponse Postgres."
-                echo "🧾 Derniers logs du proxy (ADC):"
+                echo "🧾 Derniers logs du proxy:"
                 tail -n 160 "$PROXY_LOG_FILE" 2>/dev/null || true
-                echo "👉 Astuce: pour forcer gcloud: CLOUD_SQL_AUTH_MODE=gcloud bash scripts/start-local.sh"
-                echo "👉 Astuce: pour forcer ADC: CLOUD_SQL_AUTH_MODE=adc bash scripts/start-local.sh"
+                echo ""
+                echo "👉 Astuce: reconnecte-toi avec: gcloud auth login --no-launch-browser"
+                echo "👉 Puis relance: bash scripts/start-local.sh"
                 exit 1
             fi
         else
-            echo "👉 Astuce: pour forcer gcloud: CLOUD_SQL_AUTH_MODE=gcloud bash scripts/start-local.sh"
-            echo "👉 Astuce: pour forcer ADC: CLOUD_SQL_AUTH_MODE=adc bash scripts/start-local.sh"
-            echo "👉 Vérifie que ton compte a le rôle Cloud SQL Client et que l'instance est accessible depuis ce réseau."
+            echo ""
+            echo "👉 Astuce: reconnecte-toi avec: gcloud auth login --no-launch-browser"
+            echo "👉 Puis relance: bash scripts/start-local.sh"
+            echo "👉 Vérifie que ton compte a le rôle Cloud SQL Client et que l'instance est accessible."
             exit 1
         fi
     fi
