@@ -3594,29 +3594,56 @@ const updateOrMoveNode = async (req, res) => {
       return res.json(responseData);
     }
 
-    // Cas simple: pas de dÃƒÆ’Ã‚Â©placement ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ mise ÃƒÆ’Ã‚Â  jour directe
-    // ÃƒÂ°Ã…Â¸Ã¢â‚¬ÂÃ‚Â¥ FIX : Reconstruire metadata.repeater depuis les colonnes pour synchroniser le JSON Prisma
-    if (updateObj.repeater_buttonSize || updateObj.repeater_maxItems !== undefined || updateObj.repeater_minItems !== undefined) {
+    // 🔧 FIX CRITICAL: Reconstruire metadata.repeater avec TOUS les champs, y compris templateNodeIds
+    // ⚠️ CORRECTION : Le bloc précédent écrasait templateNodeIds avec l'ancienne valeur !
+    if (updateObj.repeater_buttonSize || updateObj.repeater_maxItems !== undefined || updateObj.repeater_minItems !== undefined || updateObj.repeater_templateNodeIds !== undefined) {
       const currentMetadata = existingNode.metadata as any || {};
+      const newMetadataRepeater = (updateObj.metadata as any)?.repeater || {};
+      
+      // 🔧 CRITICAL FIX: Priorité au nouveau templateNodeIds s'il est présent
+      const resolvedTemplateNodeIds = (() => {
+        // 1. Colonne directe (source de vérité)
+        if (updateObj.repeater_templateNodeIds !== undefined) {
+          if (updateObj.repeater_templateNodeIds === null) return null;
+          try {
+            const parsed = JSON.parse(updateObj.repeater_templateNodeIds as string);
+            return Array.isArray(parsed) ? parsed : null;
+          } catch { return null; }
+        }
+        // 2. Nouveau metadata.repeater.templateNodeIds
+        if (newMetadataRepeater.templateNodeIds !== undefined) {
+          return newMetadataRepeater.templateNodeIds;
+        }
+        // 3. Fallback: ancien repeater
+        return currentMetadata.repeater?.templateNodeIds;
+      })();
+      
       const updatedRepeaterMetadata = {
         ...(currentMetadata.repeater || {}),
+        ...newMetadataRepeater,
         ...(updateObj.repeater_addButtonLabel !== undefined ? { addButtonLabel: updateObj.repeater_addButtonLabel } : {}),
         ...(updateObj.repeater_buttonSize !== undefined ? { buttonSize: updateObj.repeater_buttonSize } : {}),
         ...(updateObj.repeater_buttonWidth !== undefined ? { buttonWidth: updateObj.repeater_buttonWidth } : {}),
         ...(updateObj.repeater_iconOnly !== undefined ? { iconOnly: updateObj.repeater_iconOnly } : {}),
         ...(updateObj.repeater_minItems !== undefined ? { minItems: updateObj.repeater_minItems } : {}),
         ...(updateObj.repeater_maxItems !== undefined ? { maxItems: updateObj.repeater_maxItems } : {}),
+        // 🔧 CRITICAL: Toujours inclure templateNodeIds avec la nouvelle valeur
+        templateNodeIds: resolvedTemplateNodeIds,
       };
+      
+      // Nettoyer si templateNodeIds est null/vide
+      if (!resolvedTemplateNodeIds || (Array.isArray(resolvedTemplateNodeIds) && resolvedTemplateNodeIds.length === 0)) {
+        delete updatedRepeaterMetadata.templateNodeIds;
+      }
       
       updateObj.metadata = {
         ...currentMetadata,
         repeater: updatedRepeaterMetadata
       };
       
-      console.warn('ÃƒÂ°Ã…Â¸Ã¢â‚¬ÂÃ‚Â¥ [updateOrMoveNode] Synchronisation metadata.repeater:', updatedRepeaterMetadata);
+      console.warn('🔧 [updateOrMoveNode] Synchronisation metadata.repeater:', updatedRepeaterMetadata);
     }
-    
-    // ✅ FIX: Fusionner metadata.aiMeasure avec le metadata existant (ne pas écraser)
+
     if (updateObj.metadata && typeof updateObj.metadata === 'object') {
       const currentMetadata = existingNode.metadata as any || {};
       const newMetadata = updateObj.metadata as any;
@@ -3703,6 +3730,12 @@ const updateOrMoveNode = async (req, res) => {
       metadataComplet: updateObj.metadata,
       displayIcon: (updateObj.metadata as any)?.appearance?.displayIcon
     });
+    
+    // 🔧 DEBUG repeater_templateNodeIds: Log avant sauvegarde pour identifier le bug
+    console.log('🔧 [updateOrMoveNode] repeater_templateNodeIds AVANT DB.update:', {
+      'updateObj.repeater_templateNodeIds': updateObj.repeater_templateNodeIds,
+      'metadata.repeater?.templateNodeIds': (updateObj.metadata as any)?.repeater?.templateNodeIds
+    });
 
     await prisma.treeBranchLeafNode.update({
       where: { id: nodeId },
@@ -3725,6 +3758,11 @@ const updateOrMoveNode = async (req, res) => {
       displayIcon: (updatedNode?.metadata as any)?.appearance?.displayIcon
     });
     
+    // 🔧 DEBUG repeater_templateNodeIds: Log après lecture pour vérifier persistance
+    console.log('🔧 [updateOrMoveNode] repeater_templateNodeIds APRÈS DB.read:', {
+      'repeater_templateNodeIds (colonne)': updatedNode?.repeater_templateNodeIds,
+      'metadata.repeater?.templateNodeIds': (updatedNode?.metadata as any)?.repeater?.templateNodeIds
+    });
     
     const responseData = updatedNode ? buildResponseFromColumns(updatedNode) : updatedNode;
     

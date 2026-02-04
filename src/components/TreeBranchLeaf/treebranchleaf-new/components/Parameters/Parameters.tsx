@@ -1393,19 +1393,24 @@ const Parameters: React.FC<ParametersProps> = (props) => {
       
       const columnTemplateIds = parseTemplateIdsFromColumn();
       const fallbackTemplateIds = deriveTemplateIdsFromCopies();
-      let templateIds = Array.isArray(repeaterMeta.templateNodeIds)
-        ? repeaterMeta.templateNodeIds
-        : columnTemplateIds
-          ?? (fallbackTemplateIds.length > 0 ? fallbackTemplateIds : []);
+      
+      // 🔧 FIX: Priorité à columnTemplateIds (colonne DB directe) car metadata peut être stale
+      // L'ordre de priorité est maintenant:
+      // 1. columnTemplateIds (colonne repeater_templateNodeIds - source de vérité)
+      // 2. repeaterMeta.templateNodeIds (peut être désynchronisé si selectedNode est stale)
+      // 3. fallbackTemplateIds (déprécié)
+      let templateIds = columnTemplateIds 
+        ?? (Array.isArray(repeaterMeta.templateNodeIds) ? repeaterMeta.templateNodeIds : null)
+        ?? (fallbackTemplateIds.length > 0 ? fallbackTemplateIds : []);
       
       // 🔥 NETTOYAGE SUPPLÉMENTAIRE: Même si templateIds vient de repeaterMeta, nettoyer
       templateIds = filterOutNestedRepeaters(templateIds);
 
       console.log('🔍 [Parameters] Template IDs extraits:', {
         templateIds,
+        'columnTemplateIds (PRIORITÉ)': columnTemplateIds,
         'Array.isArray(repeaterMeta.templateNodeIds)': Array.isArray(repeaterMeta.templateNodeIds),
         'repeaterMeta.templateNodeIds': repeaterMeta.templateNodeIds,
-        columnTemplateIds,
         fallbackTemplateIds
       });
       
