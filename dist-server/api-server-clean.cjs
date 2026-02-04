@@ -40511,6 +40511,83 @@ router56.delete("/trees/:treeId/nodes/:nodeId", async (req2, res) => {
       console.warn("[DELETE] Erreur nettoyage variables orphelines:", orphanCleanError.message);
     }
     try {
+      const suffixPattern = /-\d+$/;
+      const formulasToCheck = await prisma31.treeBranchLeafNodeFormula.findMany({
+        where: {
+          OR: [
+            { nodeId: { in: allDeletedIds } },
+            // Formules attachées aux nodes supprimés
+            { id: { in: allDeletedIds.filter((id) => suffixPattern.test(id)) } }
+            // Formules dont l'ID est un node supprimé suffixé
+          ]
+        },
+        select: { id: true, nodeId: true, name: true }
+      });
+      const formulaIdsToDelete = formulasToCheck.filter((f) => suffixPattern.test(f.id) || suffixPattern.test(f.nodeId)).map((f) => f.id);
+      if (formulaIdsToDelete.length > 0) {
+        const deletedFormulas = await prisma31.treeBranchLeafNodeFormula.deleteMany({
+          where: { id: { in: formulaIdsToDelete } }
+        });
+        console.log(`[DELETE] \u{1F9F9} Supprim\xE9 ${deletedFormulas.count} formule(s) copi\xE9e(s)`);
+      }
+      const conditionsToCheck = await prisma31.treeBranchLeafNodeCondition.findMany({
+        where: {
+          OR: [
+            { nodeId: { in: allDeletedIds } },
+            // Conditions attachées aux nodes supprimés
+            { id: { in: allDeletedIds.filter((id) => suffixPattern.test(id)) } }
+            // Conditions dont l'ID est un node supprimé suffixé
+          ]
+        },
+        select: { id: true, nodeId: true, name: true }
+      });
+      const conditionIdsToDelete = conditionsToCheck.filter((c) => suffixPattern.test(c.id) || suffixPattern.test(c.nodeId)).map((c) => c.id);
+      if (conditionIdsToDelete.length > 0) {
+        const deletedConditions = await prisma31.treeBranchLeafNodeCondition.deleteMany({
+          where: { id: { in: conditionIdsToDelete } }
+        });
+        console.log(`[DELETE] \u{1F9F9} Supprim\xE9 ${deletedConditions.count} condition(s) copi\xE9e(s)`);
+      }
+      try {
+        const allFormulaNodeIds = await prisma31.treeBranchLeafNodeFormula.findMany({
+          select: { nodeId: true },
+          distinct: ["nodeId"]
+        });
+        const existingNodeIds = new Set(
+          (await prisma31.treeBranchLeafNode.findMany({
+            where: { id: { in: allFormulaNodeIds.map((f) => f.nodeId) } },
+            select: { id: true }
+          })).map((n) => n.id)
+        );
+        const orphanedFormulaNodeIds = allFormulaNodeIds.map((f) => f.nodeId).filter((nodeId2) => !existingNodeIds.has(nodeId2));
+        if (orphanedFormulaNodeIds.length > 0) {
+          const deletedOrphanedFormulas = await prisma31.treeBranchLeafNodeFormula.deleteMany({
+            where: { nodeId: { in: orphanedFormulaNodeIds } }
+          });
+          if (deletedOrphanedFormulas.count > 0) {
+            console.log(`[DELETE] \u{1F9F9} Supprim\xE9 ${deletedOrphanedFormulas.count} formule(s) orpheline(s) (nodeId inexistant)`);
+          }
+        }
+        const allConditionNodeIds = await prisma31.treeBranchLeafNodeCondition.findMany({
+          select: { nodeId: true },
+          distinct: ["nodeId"]
+        });
+        const orphanedConditionNodeIds = allConditionNodeIds.map((c) => c.nodeId).filter((nodeId2) => !existingNodeIds.has(nodeId2));
+        if (orphanedConditionNodeIds.length > 0) {
+          const deletedOrphanedConditions = await prisma31.treeBranchLeafNodeCondition.deleteMany({
+            where: { nodeId: { in: orphanedConditionNodeIds } }
+          });
+          if (deletedOrphanedConditions.count > 0) {
+            console.log(`[DELETE] \u{1F9F9} Supprim\xE9 ${deletedOrphanedConditions.count} condition(s) orpheline(s) (nodeId inexistant)`);
+          }
+        }
+      } catch (orphanCleanupError) {
+        console.warn("[DELETE] Erreur nettoyage formules/conditions orphelines:", orphanCleanupError.message);
+      }
+    } catch (formulaConditionCleanError) {
+      console.warn("[DELETE] Erreur nettoyage formules/conditions copi\xE9es:", formulaConditionCleanError.message);
+    }
+    try {
       const remainingNodes = await prisma31.treeBranchLeafNode.findMany({
         where: { treeId },
         select: { id: true, metadata: true }
@@ -42324,22 +42401,22 @@ async function resolveFilterValueRef(valueRef, formValues) {
   if (!valueRef) return null;
   if (valueRef.startsWith("@calculated.") || valueRef.startsWith("@calculated:")) {
     const nodeId = valueRef.replace(/^@calculated[.:]/, "");
-    const node = await prisma31.treeBranchLeafNode.findUnique({
-      where: { id: nodeId },
-      select: { id: true, label: true, calculatedValue: true }
-    });
-    if (node && node.calculatedValue !== null && node.calculatedValue !== void 0) {
-      console.log(`\u{1F527} [resolveFilterValueRef] @calculated.${nodeId} \u2192 DB value: ${node.calculatedValue} (formValues had: ${formValues[nodeId]})`);
-      return node.calculatedValue;
-    }
     if (formValues[nodeId] !== void 0 && formValues[nodeId] !== null) {
       let value = formValues[nodeId];
       if (value && typeof value === "object" && "value" in value) {
         const objValue = value.value;
         value = objValue;
       }
-      console.log(`\u{1F527} [resolveFilterValueRef] @calculated.${nodeId} \u2192 formValues fallback: ${value}`);
+      console.log(`\u2705 [resolveFilterValueRef] @calculated.${nodeId} \u2192 formValues (FRESH): ${value}`);
       return value;
+    }
+    const node = await prisma31.treeBranchLeafNode.findUnique({
+      where: { id: nodeId },
+      select: { id: true, label: true, calculatedValue: true }
+    });
+    if (node && node.calculatedValue !== null && node.calculatedValue !== void 0) {
+      console.log(`\u{1F527} [resolveFilterValueRef] @calculated.${nodeId} \u2192 DB fallback: ${node.calculatedValue}`);
+      return node.calculatedValue;
     }
     console.log(`\u26A0\uFE0F [resolveFilterValueRef] @calculated.${nodeId} \u2192 NO VALUE FOUND`);
     return null;
@@ -72509,6 +72586,42 @@ var inputSanitization = (req2, res, next) => {
 // src/components/TreeBranchLeaf/treebranchleaf-new/api/sync-variable-hook.ts
 init_database();
 var prisma50 = db;
+async function validateSourceRefExists(sourceRef) {
+  if (!sourceRef) return false;
+  try {
+    if (sourceRef.startsWith("@table.")) {
+      const tableId = sourceRef.replace("@table.", "");
+      const table = await prisma50.treeBranchLeafNodeTable.findUnique({
+        where: { id: tableId },
+        select: { id: true }
+      });
+      return !!table;
+    }
+    if (sourceRef.startsWith("node-formula:")) {
+      const formulaId = sourceRef.replace("node-formula:", "");
+      const formula = await prisma50.treeBranchLeafNodeFormula.findUnique({
+        where: { id: formulaId },
+        select: { id: true }
+      });
+      return !!formula;
+    }
+    if (sourceRef.startsWith("node-condition:")) {
+      const conditionId = sourceRef.replace("node-condition:", "");
+      const condition = await prisma50.treeBranchLeafNodeCondition.findUnique({
+        where: { id: conditionId },
+        select: { id: true }
+      });
+      return !!condition;
+    }
+    if (sourceRef.startsWith("@value.")) {
+      return true;
+    }
+    return true;
+  } catch (error) {
+    console.warn(`[SYNC HOOK] \u26A0\uFE0F Erreur validation sourceRef "${sourceRef}":`, error);
+    return false;
+  }
+}
 async function syncVariableSourceRefs() {
   try {
     const nodes = await prisma50.treeBranchLeafNode.findMany({
@@ -72521,6 +72634,7 @@ async function syncVariableSourceRefs() {
     });
     let syncCount = 0;
     let skipCount = 0;
+    let blockedCount = 0;
     for (const node of nodes) {
       if (!node.data_instances) continue;
       const dataInstances = node.data_instances;
@@ -72542,6 +72656,12 @@ async function syncVariableSourceRefs() {
       if (jsonSourceRef === dbSourceRef) {
         continue;
       }
+      const newRefExists = await validateSourceRefExists(jsonSourceRef);
+      if (!newRefExists) {
+        console.warn(`[SYNC HOOK] \u{1F6E1}\uFE0F BLOQUE: Variable ${node.TreeBranchLeafNodeVariable.id} - sourceRef "${jsonSourceRef}" pointe vers une entite inexistante. Conservation de "${dbSourceRef || "null"}"`);
+        blockedCount++;
+        continue;
+      }
       await prisma50.treeBranchLeafNodeVariable.update({
         where: { id: node.TreeBranchLeafNodeVariable.id },
         data: { sourceRef: jsonSourceRef }
@@ -72549,20 +72669,26 @@ async function syncVariableSourceRefs() {
       syncCount++;
     }
     if (syncCount > 0) {
+      console.log(`[SYNC HOOK] \u2705 ${syncCount} variable(s) synchronisee(s)`);
     }
     if (skipCount > 0) {
+      console.log(`[SYNC HOOK] \u23ED\uFE0F ${skipCount} variable(s) ignoree(s) (protection @table/@value)`);
     }
-    if (syncCount === 0 && skipCount === 0) {
+    if (blockedCount > 0) {
+      console.log(`[SYNC HOOK] \u{1F6E1}\uFE0F ${blockedCount} synchronisation(s) BLOQUEE(s) - references inexistantes`);
+    }
+    if (syncCount === 0 && skipCount === 0 && blockedCount === 0) {
+      console.log(`[SYNC HOOK] \u2705 Aucune synchronisation necessaire`);
     }
   } catch (error) {
-    console.error("\xC3\xA2\xC2\x9D\xC5\u2019 [SYNC HOOK] Erreur:", error);
+    console.error("\u274C [SYNC HOOK] Erreur:", error);
   }
 }
 async function initializeTreeBranchLeafSync() {
   try {
     await syncVariableSourceRefs();
   } catch (error) {
-    console.error("\xC3\xA2\xC2\x9D\xC5\u2019 [INIT SYNC] Erreur:", error);
+    console.error("\u274C [INIT SYNC] Erreur:", error);
   } finally {
     await prisma50.$disconnect();
   }

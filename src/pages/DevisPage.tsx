@@ -428,6 +428,8 @@ export default function DevisPage() {
       overrideMetaRef.current = {};
       recentUserFieldsRef.current = new Set();
       lastUserEditRef.current = null;
+      // ✅ FIX: Réinitialiser aussi les valeurs calculées pour un nouveau devis
+      setValues({});
     }
   }, [storageKey, lead]);
 
@@ -1170,7 +1172,8 @@ export default function DevisPage() {
 
   // ✅ NOUVEAU : Application automatique des formules quand les données sont chargées
   useEffect(() => {
-    if (!block || !Object.keys(rules).length || !Object.keys(values).length) return;
+    // Ne pas exécuter si le bloc ou les règles ne sont pas prêtes
+    if (!block || !Object.keys(rules).length) return;
     
     dbg('🔄 Application automatique des formules au chargement/changement de données');
     
