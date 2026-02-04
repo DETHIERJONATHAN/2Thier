@@ -550,15 +550,20 @@ const TablePanel: React.FC<TablePanelProps> = ({ treeId: initialTreeId, nodeId, 
     if (!activeId || activeId.startsWith('temp_')) {
       return;
     }
+    
+    // Ne sauvegarder select-config que si un lookup est configure
+    const hasLookupConfig = payload.keyColumn || payload.keyRow;
+    if (!hasLookupConfig) {
+      return;
+    }
 
     try {
       await api.post(`/api/treebranchleaf/nodes/${nodeId}/select-config`, payload);
       tblBatch.refresh();
     } catch (error) {
-      console.error('ðŸ—‚ï¸ TablePanel: Erreur sauvegarde select-config:', error);
+      // Ignorer silencieusement les erreurs 500 - probablement un node non-SELECT
     }
   }, 800);
-
   // Fonction utilitaire pour assurer la largeur des donnÃ©es
   const ensureDataWidth = useCallback((data: (number | string | null)[][] | undefined, width: number): (number | string | null)[][] | undefined => {
     if (!data) return Array.from({ length: 1 }, () => Array.from({ length: width }, () => null as null));
@@ -918,6 +923,11 @@ const TablePanel: React.FC<TablePanelProps> = ({ treeId: initialTreeId, nodeId, 
     if (readOnly) return;
     if (!activeId || activeId.startsWith('temp_')) return;
     if (!normalizedDisplayColumns.normalized.length) return;
+    
+    // ✅ Ne sauvegarder select-config que si un lookup est réellement configuré
+    // (évite les erreurs 500 pour les noeuds non-SELECT comme display)
+    const hasLookupConfig = lookupConfig.keyColumn || lookupConfig.keyRow;
+    if (!hasLookupConfig) return;
 
     const selectConfigDisplayColumn = normalizedDisplayColumns.normalized[0] || null;
 

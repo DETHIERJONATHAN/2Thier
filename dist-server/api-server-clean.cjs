@@ -42324,21 +42324,24 @@ async function resolveFilterValueRef(valueRef, formValues) {
   if (!valueRef) return null;
   if (valueRef.startsWith("@calculated.") || valueRef.startsWith("@calculated:")) {
     const nodeId = valueRef.replace(/^@calculated[.:]/, "");
+    const node = await prisma31.treeBranchLeafNode.findUnique({
+      where: { id: nodeId },
+      select: { id: true, label: true, calculatedValue: true }
+    });
+    if (node && node.calculatedValue !== null && node.calculatedValue !== void 0) {
+      console.log(`\u{1F527} [resolveFilterValueRef] @calculated.${nodeId} \u2192 DB value: ${node.calculatedValue} (formValues had: ${formValues[nodeId]})`);
+      return node.calculatedValue;
+    }
     if (formValues[nodeId] !== void 0 && formValues[nodeId] !== null) {
       let value = formValues[nodeId];
       if (value && typeof value === "object" && "value" in value) {
         const objValue = value.value;
         value = objValue;
       }
+      console.log(`\u{1F527} [resolveFilterValueRef] @calculated.${nodeId} \u2192 formValues fallback: ${value}`);
       return value;
     }
-    const node = await prisma31.treeBranchLeafNode.findUnique({
-      where: { id: nodeId },
-      select: { id: true, label: true, calculatedValue: true }
-    });
-    if (node) {
-      return node.calculatedValue ?? null;
-    }
+    console.log(`\u26A0\uFE0F [resolveFilterValueRef] @calculated.${nodeId} \u2192 NO VALUE FOUND`);
     return null;
   }
   if (valueRef.startsWith("@select.") || valueRef.startsWith("@select:")) {

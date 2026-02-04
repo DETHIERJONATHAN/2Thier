@@ -104,6 +104,28 @@ export function useTBLTableLookup(
   // 🚀 BATCHING: Utiliser le contexte batch pour les configs
   const batchContext = useTBLBatch();
   
+  // 🔥 FIX 04/02/2026: Stocker les valeurs calculées FRAÎCHES du broadcast
+  // Le lookup doit attendre que create-and-evaluate soit terminé avant de filtrer
+  // car formData contient des valeurs STALES (ex: "Puissance WC Total" = 0 au lieu de 9100)
+  const [broadcastedCalcValues, setBroadcastedCalcValues] = useState<Record<string, any>>({});
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
+  
+  // 🎯 Écouter tbl-force-retransform pour récupérer les valeurs calculées FRAÎCHES
+  useEffect(() => {
+    const handleBroadcast = (event: CustomEvent) => {
+      const { calculatedValues } = event.detail || {};
+      if (calculatedValues && typeof calculatedValues === 'object' && Object.keys(calculatedValues).length > 0) {
+        console.log(`🔄 [useTBLTableLookup] Broadcast reçu avec ${Object.keys(calculatedValues).length} valeurs calculées fraîches`);
+        setBroadcastedCalcValues(prev => ({ ...prev, ...calculatedValues }));
+        // Déclencher un refresh du lookup avec les nouvelles valeurs
+        setRefreshTrigger(t => t + 1);
+      }
+    };
+    
+    window.addEventListener('tbl-force-retransform', handleBroadcast as EventListener);
+    return () => window.removeEventListener('tbl-force-retransform', handleBroadcast as EventListener);
+  }, []);
+  
   // 🔥 FIX: Stabiliser formData en le sérialisant en JSON pour la dépendance
   // Cela évite les boucles infinies quand formData est un nouvel objet à chaque rendu
   const formDataJson = useMemo(() => 
@@ -121,7 +143,14 @@ export function useTBLTableLookup(
     const isTargetField = fieldId === '131a7b51-97d5-4f40-8a5a-9359f38939e8';
 
     // 🔥 FIX: Reconstruire formData depuis la version JSON sérialisée
-    const formDataParsed: Record<string, any> | undefined = formDataJson ? JSON.parse(formDataJson) : undefined;
+    let formDataParsed: Record<string, any> | undefined = formDataJson ? JSON.parse(formDataJson) : undefined;
+    
+    // 🔥 FIX 04/02/2026: Enrichir avec les valeurs calculées FRAÎCHES du broadcast
+    // Ces valeurs viennent du backend APRÈS le calcul, donc elles sont correctes
+    if (formDataParsed && Object.keys(broadcastedCalcValues).length > 0) {
+      formDataParsed = { ...formDataParsed, ...broadcastedCalcValues };
+      console.log(`🔧 [useTBLTableLookup] formData enrichi avec ${Object.keys(broadcastedCalcValues).length} valeurs calculées fraîches`);
+    }
 
     if (isTargetField) {
       console.log(`[DEBUG][Test - liste] 🚀 Hook déclenché pour le champ cible. fieldId: ${fieldId}, nodeId: ${nodeId}, enabled: ${enabled}`);
@@ -428,7 +457,7 @@ export function useTBLTableLookup(
     return () => {
       cancelled = true;
     };
-  }, [fieldId, nodeId, enabled, formDataJson, batchContext.isReady]); // 🔥 FIX: Utiliser formDataJson (stable) au lieu de formData (instable)
+  }, [fieldId, nodeId, enabled, formDataJson, batchContext.isReady, refreshTrigger, broadcastedCalcValues]); // 🔥 FIX 04/02/2026: refreshTrigger + broadcastedCalcValues pour re-filtrer après le calcul
 
   return { options, loading, error, tableData, config };
 }

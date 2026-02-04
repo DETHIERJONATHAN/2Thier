@@ -7069,36 +7069,41 @@ async function resolveFilterValueRef(
 ): Promise<unknown> {
   if (!valueRef) return null;
 
-  // ÃƒÂ°Ã…Â¸Ã¢â‚¬Â Ã¢â‚¬Â¢ @calculated.{nodeId} ou @calculated:{nodeId} - RÃƒÆ’Ã‚Â©cupÃƒÆ’Ã‚Â©rer la calculatedValue
+  // 🔧 @calculated.{nodeId} ou @calculated:{nodeId} - Récupérer la calculatedValue
+  // 🔥 PRIORITÉ FORMVALUES: Le frontend envoie les valeurs FRAÎCHES depuis le broadcast
+  // après que create-and-evaluate ait calculé. La DB contient des valeurs STALES (par submission).
   if (valueRef.startsWith('@calculated.') || valueRef.startsWith('@calculated:')) {
     const nodeId = valueRef.replace(/^@calculated[.:]/, '');
     
-    // D'abord essayer depuis formValues (qui contient les calculatedValues injectÃƒÆ’Ã‚Â©es par le frontend)
+    // 🔥 FIX: PRIORISER formValues (envoyé par le frontend avec les valeurs fraîches du broadcast)
     if (formValues[nodeId] !== undefined && formValues[nodeId] !== null) {
       let value = formValues[nodeId];
       
-      // ÃƒÂ°Ã…Â¸Ã¢â‚¬ÂÃ‚Â§ FIX: Si la valeur est un objet {value: 'xxx', label: 'yyy'}, extraire .value
+      // 🔧 FIX: Si la valeur est un objet {value: 'xxx', label: 'yyy'}, extraire .value
       if (value && typeof value === 'object' && 'value' in (value as Record<string, unknown>)) {
         const objValue = (value as Record<string, unknown>).value;
         value = objValue;
       }
       
+      console.log(`✅ [resolveFilterValueRef] @calculated.${nodeId} → formValues (FRESH): ${value}`);
       return value;
     }
     
-    // Fallback: rÃƒÆ’Ã‚Â©cupÃƒÆ’Ã‚Â©rer depuis la base de donnÃƒÆ’Ã‚Â©es
+    // Fallback: chercher dans la DB si formValues n'a pas la valeur
+    // (cas rare - normalement le frontend devrait toujours envoyer les valeurs)
     const node = await prisma.treeBranchLeafNode.findUnique({
       where: { id: nodeId },
       select: { id: true, label: true, calculatedValue: true }
     });
     
-    if (node) {
-      return node.calculatedValue ?? null;
+    if (node && node.calculatedValue !== null && node.calculatedValue !== undefined) {
+      console.log(`🔧 [resolveFilterValueRef] @calculated.${nodeId} → DB fallback: ${node.calculatedValue}`);
+      return node.calculatedValue;
     }
     
+    console.log(`⚠️ [resolveFilterValueRef] @calculated.${nodeId} → NO VALUE FOUND`);
     return null;
   }
-
   // @select.{nodeId} ou @select:{nodeId} - RÃƒÆ’Ã‚Â©cupÃƒÆ’Ã‚Â©rer la rÃƒÆ’Ã‚Â©ponse sÃƒÆ’Ã‚Â©lectionnÃƒÆ’Ã‚Â©e depuis formValues
   if (valueRef.startsWith('@select.') || valueRef.startsWith('@select:')) {
     const nodeId = valueRef.replace(/^@select[.:]/, '');
