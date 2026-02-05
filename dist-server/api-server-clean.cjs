@@ -72246,160 +72246,13 @@ var public_forms_default = router94;
 init_prisma();
 
 // src/middleware/websiteRenderer.ts
-function renderSection(section) {
-  const content = section.content || {};
-  const sectionType = section.type;
-  switch (sectionType) {
-    case "header":
-      return renderHeader(content);
-    case "hero":
-      return renderHero(content);
-    case "services":
-      return renderServices(content);
-    case "about":
-      return renderAbout(content);
-    case "stats":
-      return renderStats(content);
-    case "cta":
-      return renderCTA(content);
-    case "testimonials":
-      return renderTestimonials(content);
-    case "faq":
-      return renderFAQ(content);
-    case "contact":
-      return renderContact(content);
-    case "footer":
-      return renderFooter(content);
-    default:
-      return `<!-- Section inconnue: ${sectionType} -->`;
-  }
-}
-function renderHeader(content) {
-  const logo = content.logo || {};
-  const menu = content.menu || {};
-  const cta = content.cta || {};
-  return `
-    <header class="site-header" style="background-color: ${content.background?.color || "#ffffff"}; padding: ${content.spacing?.padding || "20px"} 0;">
-      <div class="container" style="max-width: 1200px; margin: 0 auto; display: flex; justify-content: space-between; align-items: center;">
-        <div class="logo">
-          ${logo.image?.url ? `<img src="${logo.image.url}" alt="${logo.text || "Logo"}" style="height: ${logo.size?.height || "40px"};">` : `<span style="font-size: ${logo.text?.fontSize || "24px"}; font-weight: bold; color: ${logo.text?.color || "#000000"};">${logo.text?.value || "Logo"}</span>`}
-        </div>
-        <nav class="menu" style="display: flex; gap: ${menu.spacing?.gap || "30px"};">
-          ${(menu.items || []).map((item) => `
-            <a href="${item.link || "#"}" style="color: ${menu.text?.color || "#333333"}; text-decoration: none; font-size: ${menu.text?.fontSize || "16px"};">
-              ${item.label || "Menu"}
-            </a>
-          `).join("")}
-        </nav>
-        ${cta.text?.value ? `
-          <a href="${cta.link || "#"}" class="cta-button" style="background-color: ${cta.background?.color || "#007bff"}; color: ${cta.text?.color || "#ffffff"}; padding: ${cta.spacing?.padding || "12px 24px"}; border-radius: ${cta.border?.radius || "4px"}; text-decoration: none; font-size: ${cta.text?.fontSize || "16px"};">
-            ${cta.text.value}
-          </a>
-        ` : ""}
-      </div>
-    </header>
-  `;
-}
-function renderHero(content) {
-  const title = content.title || {};
-  const subtitle = content.subtitle || {};
-  const cta = content.cta || {};
-  return `
-    <section class="hero-section" style="background: ${content.background?.type === "image" && content.background?.image?.url ? `url('${content.background.image.url}') center/cover` : content.background?.color || "#f5f5f5"}; padding: ${content.spacing?.padding || "100px"} 0; text-align: ${content.layout?.alignment || "center"};">
-      <div class="container" style="max-width: 1200px; margin: 0 auto;">
-        <h1 style="font-size: ${title.fontSize || "48px"}; color: ${title.color || "#000000"}; margin-bottom: ${content.spacing?.gap || "20px"};">
-          ${title.value || "Titre Principal"}
-        </h1>
-        ${subtitle.value ? `
-          <p style="font-size: ${subtitle.fontSize || "20px"}; color: ${subtitle.color || "#666666"}; margin-bottom: ${content.spacing?.gap || "30px"};">
-            ${subtitle.value}
-          </p>
-        ` : ""}
-        ${cta.text?.value ? `
-          <a href="${cta.link || "#"}" style="display: inline-block; background-color: ${cta.background?.color || "#007bff"}; color: ${cta.text?.color || "#ffffff"}; padding: ${cta.spacing?.padding || "16px 32px"}; border-radius: ${cta.border?.radius || "4px"}; text-decoration: none; font-size: ${cta.text?.fontSize || "18px"};">
-            ${cta.text.value}
-          </a>
-        ` : ""}
-      </div>
-    </section>
-  `;
-}
-function renderServices(content) {
-  const title = content.title || {};
-  const services = content.services || [];
-  return `
-    <section class="services-section" style="background-color: ${content.background?.color || "#ffffff"}; padding: ${content.spacing?.padding || "80px"} 0;">
-      <div class="container" style="max-width: 1200px; margin: 0 auto;">
-        ${title.value ? `
-          <h2 style="font-size: ${title.fontSize || "36px"}; color: ${title.color || "#000000"}; text-align: center; margin-bottom: ${content.spacing?.gap || "50px"};">
-            ${title.value}
-          </h2>
-        ` : ""}
-        <div class="services-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: ${content.grid?.gap || "30px"};">
-          ${services.map((service) => `
-            <div class="service-card" style="background-color: ${service.background?.color || "#f9f9f9"}; padding: ${service.spacing?.padding || "30px"}; border-radius: ${service.border?.radius || "8px"}; text-align: center;">
-              ${service.icon ? `<div class="service-icon" style="font-size: ${service.icon?.size || "48px"}; color: ${service.icon?.color || "#007bff"}; margin-bottom: 20px;">${service.icon.value || "\u{1F527}"}</div>` : ""}
-              <h3 style="font-size: ${service.title?.fontSize || "24px"}; color: ${service.title?.color || "#000000"}; margin-bottom: 15px;">
-                ${service.title?.value || "Service"}
-              </h3>
-              <p style="font-size: ${service.description?.fontSize || "16px"}; color: ${service.description?.color || "#666666"};">
-                ${service.description?.value || "Description du service"}
-              </p>
-            </div>
-          `).join("")}
-        </div>
-      </div>
-    </section>
-  `;
-}
-function renderAbout(_content) {
-  return `<section class="about-section"><!-- Section About --></section>`;
-}
-function renderStats(_content) {
-  return `<section class="stats-section"><!-- Section Stats --></section>`;
-}
-function renderCTA(_content) {
-  return `<section class="cta-section"><!-- Section CTA --></section>`;
-}
-function renderTestimonials(_content) {
-  return `<section class="testimonials-section"><!-- Section Testimonials --></section>`;
-}
-function renderFAQ(_content) {
-  return `<section class="faq-section"><!-- Section FAQ --></section>`;
-}
-function renderContact(_content) {
-  return `<section class="contact-section"><!-- Section Contact --></section>`;
-}
-function renderFooter(content) {
-  const text = content.text || {};
-  const social = content.social || [];
-  return `
-    <footer class="site-footer" style="background-color: ${content.background?.color || "#333333"}; color: ${text.color || "#ffffff"}; padding: ${content.spacing?.padding || "40px"} 0; text-align: center;">
-      <div class="container" style="max-width: 1200px; margin: 0 auto;">
-        ${text.value ? `
-          <p style="font-size: ${text.fontSize || "14px"}; margin-bottom: ${content.spacing?.gap || "20px"};">
-            ${text.value}
-          </p>
-        ` : ""}
-        ${social.length > 0 ? `
-          <div class="social-links" style="display: flex; justify-content: center; gap: ${content.social?.spacing || "20px"};">
-            ${social.map((link) => `
-              <a href="${link.url || "#"}" target="${link.openInNewTab !== false ? "_blank" : "_self"}" rel="${link.openInNewTab !== false ? "noopener noreferrer" : ""}" style="color: ${content.social?.color || "#ffffff"}; font-size: ${content.social?.size || "24px"};">
-                ${link.icon || link.platform || "\u{1F517}"}
-              </a>
-            `).join("")}
-          </div>
-        ` : ""}
-      </div>
-    </footer>
-  `;
-}
 async function renderWebsite(req2, res) {
   try {
     const website = req2.websiteData;
-    console.log(`\u{1F3A8} [WEBSITE-RENDERER] Donn\xE9es re\xE7ues:`, {
+    console.log(`\u{1F3A8} [WEBSITE-RENDERER] Site d\xE9tect\xE9:`, {
       hasWebsite: !!website,
       name: website?.name,
+      slug: website?.slug,
       sectionsCount: website?.sections?.length
     });
     if (!website) {
@@ -72418,8 +72271,9 @@ async function renderWebsite(req2, res) {
         </html>
       `);
     }
-    const sectionsHTML = website.sections.map((section) => renderSection(section)).join("\n");
-    const html = `
+    const targetPath = `/${website.slug}`;
+    console.log(`\u{1F504} [WEBSITE-RENDERER] Redirection vers: ${targetPath}`);
+    const frontendHtml = `
       <!DOCTYPE html>
       <html lang="fr">
         <head>
@@ -72427,48 +72281,58 @@ async function renderWebsite(req2, res) {
           <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes">
           <meta name="mobile-web-app-capable" content="yes">
           <meta name="apple-mobile-web-app-capable" content="yes">
-          <title>${website.name}</title>
-          <meta name="description" content="${website.config?.seo?.description || website.name}">
+          <title>${website.name || "2Thier Energy"}</title>
+          <meta name="description" content="${website.config?.metaDescription || website.config?.seo?.description || "Votre partenaire en transition \xE9nerg\xE9tique"}">
+          <meta name="keywords" content="photovolta\xEFque, batteries, bornes de recharge, pompes \xE0 chaleur, \xE9nergie renouvelable, Belgique">
+          <meta property="og:title" content="${website.name || "2Thier Energy"}">
+          <meta property="og:description" content="${website.config?.metaDescription || "Votre partenaire en transition \xE9nerg\xE9tique"}">
+          <meta property="og:type" content="website">
+          <link rel="icon" type="image/png" href="/2thier-logo.png">
+          <script>
+            // Redirection c\xF4t\xE9 client vers la route React
+            window.location.replace('${targetPath}');
+          </script>
           <style>
-            * {
+            body {
               margin: 0;
               padding: 0;
-              box-sizing: border-box;
+              background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+              min-height: 100vh;
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
             }
-            body {
-              font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-              line-height: 1.6;
+            .loading {
+              text-align: center;
+              color: white;
             }
-            .container {
-              max-width: 1200px;
-              margin: 0 auto;
-              padding: 0 20px;
+            .spinner {
+              width: 50px;
+              height: 50px;
+              border: 4px solid rgba(255,255,255,0.3);
+              border-top-color: white;
+              border-radius: 50%;
+              animation: spin 1s linear infinite;
+              margin: 0 auto 20px;
             }
-            @media (max-width: 768px) {
-              .site-header .container {
-                flex-direction: column;
-                gap: 20px;
-              }
-              .menu {
-                flex-direction: column;
-                text-align: center;
-              }
-              .services-grid {
-                grid-template-columns: 1fr !important;
-              }
+            @keyframes spin {
+              to { transform: rotate(360deg); }
             }
           </style>
         </head>
         <body>
-          ${sectionsHTML}
-          <script>
-            console.log('\u2705 Site vitrine charg\xE9: ${website.name}');
-            console.log('\u{1F4CD} Domaine: ${website.domain}');
-          </script>
+          <noscript>
+            <meta http-equiv="refresh" content="0;url=${targetPath}">
+          </noscript>
+          <div class="loading">
+            <div class="spinner"></div>
+            <p>Chargement de ${website.name || "2Thier Energy"}...</p>
+          </div>
         </body>
       </html>
     `;
-    res.send(html);
+    res.send(frontendHtml);
   } catch (error) {
     console.error("\u274C [WEBSITE-RENDERER] Erreur:", error);
     res.status(500).send("Erreur lors du chargement du site");
@@ -72486,8 +72350,12 @@ var CRM_DOMAINS = [
   "localhost",
   "run.app",
   // Google Cloud Run
-  "appspot.com"
+  "appspot.com",
   // Google App Engine
+  "github.dev",
+  // GitHub Codespaces
+  "preview.app.github.dev"
+  // GitHub Preview
 ];
 async function detectWebsite(req2, res, next) {
   try {
@@ -72844,11 +72712,10 @@ async function syncVariableSourceRefs() {
         continue;
       }
       const dbSourceRef = node.TreeBranchLeafNodeVariable.sourceRef;
-      if (dbSourceRef && (dbSourceRef.startsWith("@table.") || dbSourceRef.startsWith("@value."))) {
-        if (jsonSourceRef.startsWith("node-formula:")) {
-          skipCount++;
-          continue;
-        }
+      if (dbSourceRef && (dbSourceRef.startsWith("node-formula:") || dbSourceRef.startsWith("formula:") || dbSourceRef.startsWith("node-condition:") || dbSourceRef.startsWith("condition:") || dbSourceRef.startsWith("@table.") || dbSourceRef.startsWith("table:") || dbSourceRef.startsWith("@value."))) {
+        console.log(`[SYNC HOOK] \u{1F6E1}\uFE0F PROTECTION: Variable ${node.TreeBranchLeafNodeVariable.id} conserve sa capacite DB "${dbSourceRef}" (ignore JSON "${jsonSourceRef}")`);
+        skipCount++;
+        continue;
       }
       if (jsonSourceRef === dbSourceRef) {
         continue;

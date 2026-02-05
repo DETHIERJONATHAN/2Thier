@@ -113,16 +113,29 @@ export async function syncVariableSourceRefs() {
 
       const dbSourceRef = node.TreeBranchLeafNodeVariable.sourceRef;
 
-      // ⚠️ PROTECTION: Ne pas ecraser les references @table. et @value.
-      if (dbSourceRef && (dbSourceRef.startsWith('@table.') || dbSourceRef.startsWith('@value.'))) {
-        // Verifier que le JSON ne dit pas autre chose
-        if (jsonSourceRef.startsWith('node-formula:')) {
-          // Le JSON dit formula mais la DB dit table/value
-          // C'est probablement une erreur de sync precedente
-          // On GARDE la DB (table/value) car c'est ce qui fonctionne
-          skipCount++;
-          continue;
-        }
+      // 🛡️ PROTECTION CRITIQUE: Ne JAMAIS ecraser une capacite existante avec une autre
+      // Le sourceRef de la variable est la SOURCE DE VERITE
+      // data_instances peut contenir des references obsoletes (anciennes tables, etc.)
+      // Une fois qu'une formule/condition/table est definie, elle doit rester SAUF si
+      // l'utilisateur la supprime ou la change explicitement via l'interface
+      
+      // Si la DB a deja une capacite definie (formule, condition, table, value),
+      // NE PAS laisser data_instances l'ecraser !
+      if (dbSourceRef && (
+        dbSourceRef.startsWith('node-formula:') || 
+        dbSourceRef.startsWith('formula:') ||
+        dbSourceRef.startsWith('node-condition:') || 
+        dbSourceRef.startsWith('condition:') ||
+        dbSourceRef.startsWith('@table.') || 
+        dbSourceRef.startsWith('table:') ||
+        dbSourceRef.startsWith('@value.')
+      )) {
+        // La DB a une capacite definie - c'est la verite
+        // On ne synchronise PAS depuis data_instances qui peut etre obsolete
+        console.log(`[SYNC HOOK] 🛡️ PROTECTION: Variable ${node.TreeBranchLeafNodeVariable.id} ` +
+          `conserve sa capacite DB "${dbSourceRef}" (ignore JSON "${jsonSourceRef}")`);
+        skipCount++;
+        continue;
       }
 
       // Si deja synchronise, skip

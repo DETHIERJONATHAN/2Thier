@@ -5290,8 +5290,10 @@ router.put('/trees/:treeId/nodes/:nodeId/data', async (req, res) => {
     const { organizationId } = req.user!;
     const { 
       exposedKey, displayFormat, unit, precision, visibleToUser, isReadonly, defaultValue, metadata,
-      // ÃƒÂ°Ã…Â¸Ã…Â½Ã‚Â¯ NOUVEAUX CHAMPS pour sourceType/sourceRef/fixedValue
-      sourceType, sourceRef, fixedValue, selectedNodeId 
+      // 🎯 NOUVEAUX CHAMPS pour sourceType/sourceRef/fixedValue
+      sourceType, sourceRef, fixedValue, selectedNodeId,
+      // 🏷️ NOUVEAU: Nom de la capacité (displayName)
+      displayName: bodyDisplayName
     } = req.body || {};
 
     // VÃƒÆ’Ã‚Â©rifier l'appartenance de l'arbre ÃƒÆ’Ã‚Â  l'organisation (ou accÃƒÆ’Ã‚Â¨s super admin)
@@ -5318,7 +5320,10 @@ router.put('/trees/:treeId/nodes/:nodeId/data', async (req, res) => {
 
     // Normalisation des valeurs
     const safeExposedKey: string | null = typeof exposedKey === 'string' && exposedKey.trim() ? exposedKey.trim() : null;
-    const displayName = safeExposedKey || node.label || `var_${String(nodeId).slice(0, 4)}`;
+    // 🏷️ NOUVEAU: Utiliser displayName du body en priorité, sinon exposedKey, sinon label du nœud
+    const displayName = (typeof bodyDisplayName === 'string' && bodyDisplayName.trim()) 
+      ? bodyDisplayName.trim() 
+      : (safeExposedKey || node.label || `var_${String(nodeId).slice(0, 4)}`);
 
     const { variable: previousVariable, ownerNodeId } = await resolveNodeVariable(
       nodeId,
@@ -5371,6 +5376,7 @@ router.put('/trees/:treeId/nodes/:nodeId/data', async (req, res) => {
         select: {
           id: true,
           exposedKey: true,
+          displayName: true, // 🏷️ Inclure le nom de la capacité
           displayFormat: true,
           unit: true,
           precision: true,
@@ -5378,7 +5384,7 @@ router.put('/trees/:treeId/nodes/:nodeId/data', async (req, res) => {
           isReadonly: true,
           defaultValue: true,
           metadata: true,
-          // ÃƒÂ°Ã…Â¸Ã…Â½Ã‚Â¯ NOUVEAUX CHAMPS source
+          // 🎯 NOUVEAUX CHAMPS source
           sourceType: true,
           sourceRef: true,
           fixedValue: true,

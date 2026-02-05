@@ -7,6 +7,7 @@ type NodeLite = { id: string; parentId?: string | null; label: string; type: str
 export type NodeTreeSelectorValue = {
   kind: 'node' | 'nodeOption' | 'formula' | 'condition';
   ref: string; // @value.{nodeKey} | @select.{nodeKey}[.optionKey] | formula:{id} | condition:{id}
+  name?: string; // Nom de la capacité sélectionnée (table, formule, condition)
 };
 
 type Props = {
@@ -84,6 +85,7 @@ const NodeTreeSelector: React.FC<Props> = ({ nodeId, open, onClose, onSelect, se
   const { api } = useAuthenticatedApi();
   const [nodes, setNodes] = useState<NodeLite[]>([]);
   const [value, setValue] = useState<string | string[] | undefined>(undefined);
+  const [selectedName, setSelectedName] = useState<string | undefined>(undefined); // 🎯 Nom de la capacité sélectionnée
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [tokenKind, setTokenKind] = useState<'value' | 'option'>('value');
@@ -150,6 +152,7 @@ const NodeTreeSelector: React.FC<Props> = ({ nodeId, open, onClose, onSelect, se
     setLoading(true);
     setError(null);
     setValue(undefined); // Réinitialiser la sélection quand on ouvre
+    setSelectedName(undefined); // 🎯 Réinitialiser le nom aussi
     (async () => {
       try {
         const info = await api.get(`/api/treebranchleaf/nodes/${nodeId}`) as { treeId: string };
@@ -423,19 +426,22 @@ const NodeTreeSelector: React.FC<Props> = ({ nodeId, open, onClose, onSelect, se
       // Cas formules (toutes sont maintenant des formules de nœuds)
       if (String(v).startsWith('node-formula:')) {
         const formulaId = String(v).replace('node-formula:', '');
-        onSelect({ kind: 'formula', ref: `node-formula:${formulaId}` });
+        // 🎯 Utiliser selectedName directement (plus fiable que la recherche)
+        onSelect({ kind: 'formula', ref: `node-formula:${formulaId}`, name: selectedName });
         continue;
       }
       // Cas conditions réutilisables
       if (String(v).startsWith('condition:') || String(v).startsWith('node-condition:')) {
         const conditionId = String(v).replace(/^(node-)?condition:/, '');
-        onSelect({ kind: 'condition', ref: `condition:${conditionId}` });
+        // 🎯 Utiliser selectedName directement (plus fiable que la recherche)
+        onSelect({ kind: 'condition', ref: `condition:${conditionId}`, name: selectedName });
         continue;
       }
       // Cas tables réutilisables
       if (String(v).startsWith('table:') || String(v).startsWith('node-table:')) {
         const tableId = String(v).replace(/^(node-)?table:/, '');
-        onSelect({ kind: 'node', ref: `@table.${tableId}` });
+        // 🎯 Utiliser selectedName directement (plus fiable que la recherche)
+        onSelect({ kind: 'node', ref: `@table.${tableId}`, name: selectedName });
         continue;
       }
       // 🆕 Cas valeurs calculées
@@ -783,7 +789,7 @@ const NodeTreeSelector: React.FC<Props> = ({ nodeId, open, onClose, onSelect, se
                             const isSelected = value === `node-formula:${item.id}`;
                             return (
                               <List.Item
-                                onClick={() => setValue(`node-formula:${item.id}`)}
+                                onClick={() => { setValue(`node-formula:${item.id}`); setSelectedName(item.name); }}
                                 style={{ 
                                   cursor: 'pointer', 
                                   backgroundColor: isSelected ? '#1890ff' : '#f0f9ff',
@@ -828,7 +834,7 @@ const NodeTreeSelector: React.FC<Props> = ({ nodeId, open, onClose, onSelect, se
                             const isSelected = value === `node-formula:${item.id}`;
                             return (
                               <List.Item
-                                onClick={() => setValue(`node-formula:${item.id}`)}
+                                onClick={() => { setValue(`node-formula:${item.id}`); setSelectedName(item.name); }}
                                 style={{ 
                                   cursor: 'pointer', 
                                   backgroundColor: isSelected ? '#1890ff' : '#fefce8',
@@ -895,7 +901,7 @@ const NodeTreeSelector: React.FC<Props> = ({ nodeId, open, onClose, onSelect, se
                             const isSelected = value === `condition:${item.id}`;
                             return (
                               <List.Item
-                                onClick={() => setValue(`condition:${item.id}`)}
+                                onClick={() => { setValue(`condition:${item.id}`); setSelectedName(item.name); }}
                                 style={{ 
                                   cursor: 'pointer', 
                                   backgroundColor: isSelected ? '#1890ff' : '#f0f8e8',
@@ -939,7 +945,7 @@ const NodeTreeSelector: React.FC<Props> = ({ nodeId, open, onClose, onSelect, se
                             const isSelected = value === `node-condition:${item.id}`;
                             return (
                               <List.Item
-                                onClick={() => setValue(`node-condition:${item.id}`)}
+                                onClick={() => { setValue(`node-condition:${item.id}`); setSelectedName(item.name); }}
                                 style={{ 
                                   cursor: 'pointer', 
                                   backgroundColor: isSelected ? '#1890ff' : '#fef3c7',
@@ -1005,7 +1011,7 @@ const NodeTreeSelector: React.FC<Props> = ({ nodeId, open, onClose, onSelect, se
                             const isSelected = value === `table:${item.id}`;
                             return (
                               <List.Item
-                                onClick={() => setValue(`table:${item.id}`)}
+                                onClick={() => { setValue(`table:${item.id}`); setSelectedName(item.name); }}
                                 style={{ 
                                   cursor: 'pointer', 
                                   backgroundColor: isSelected ? '#1890ff' : '#e8f4fd',
@@ -1049,7 +1055,7 @@ const NodeTreeSelector: React.FC<Props> = ({ nodeId, open, onClose, onSelect, se
                             const isSelected = value === `node-table:${item.id}`;
                             return (
                               <List.Item
-                                onClick={() => setValue(`node-table:${item.id}`)}
+                                onClick={() => { setValue(`node-table:${item.id}`); setSelectedName(item.name); }}
                                 style={{ 
                                   cursor: 'pointer', 
                                   backgroundColor: isSelected ? '#1890ff' : '#fff4e6',

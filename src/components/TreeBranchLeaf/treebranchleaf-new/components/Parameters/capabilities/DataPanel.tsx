@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Card, Form, Input, Checkbox, Typography, Select, Space, message, Button, Radio, InputNumber, Switch, Divider, Tag } from 'antd';
+import { Card, Form, Input, Checkbox, Typography, Select, Space, message, Button, InputNumber, Switch, Divider, Tag } from 'antd';
 import { useAuthenticatedApi } from '../../../../../../hooks/useAuthenticatedApi';
 import { useDebouncedCallback } from '../../../hooks/useDebouncedCallback';
 import NodeTreeSelector, { NodeTreeSelectorValue } from '../shared/NodeTreeSelector';
@@ -29,9 +29,10 @@ type DataInstance = {
   name: string;
   config: {
     exposedKey?: string; // Gardé pour compatibilité
-    sourceType?: 'fixed' | 'tree'; // NOUVEAU : Type de source
-    fixedValue?: string; // NOUVEAU : Valeur fixe
+    sourceType?: 'fixed' | 'tree'; // Type de source (toujours 'tree' par défaut)
+    fixedValue?: string; // Conservé pour compatibilité
     sourceRef?: string; // Référence d'arborescence (@value.nodeId, @select.nodeId, formule, etc.)
+    sourceRefName?: string; // 🎯 NOUVEAU : Nom de la capacité référencée pour l'affichage
     displayFormat?: 'number' | 'text' | 'boolean' | 'date' | 'currency' | 'percentage';
     unit?: string;
     precision?: number;
@@ -65,15 +66,17 @@ const DataPanel: React.FC<DataPanelProps> = ({ treeId, nodeId, value, onChange, 
   // 🌲 États pour le sélecteur d'arborescence
   const [treeSelectorOpen, setTreeSelectorOpen] = useState(false);
   const [selectedSourceRef, setSelectedSourceRef] = useState<string>('');
+  const [selectedCapacityName, setSelectedCapacityName] = useState<string | null>(null); // 🎯 Nom de la capacité sélectionnée
   const [conditions, setConditions] = useState<{ items: Array<{ id: string; name: string }> }>({ items: [] });
   const [formulas, setFormulas] = useState<{ items: Array<{ id: string; name: string }> }>({ items: [] });
+  const [tables, setTables] = useState<{ items: Array<{ id: string; name: string }> }>({ items: [] });
   
   // 🎯 NOUVEAU : Référence pour tracker les changements utilisateur avec protection renforcée
   const lastUserChangeRef = useRef<number>(0);
   const userSelectedRefRef = useRef<string | null>(null); // Track what user actually selected
   
-  // 🎯 NOUVEAU : État pour le choix entre valeur fixe ou arborescence
-  const [sourceType, setSourceType] = useState<'fixed' | 'tree'>('fixed');
+  // 🔗 Source depuis l'arborescence uniquement
+  const [sourceType, setSourceType] = useState<'fixed' | 'tree'>('tree');
   const [fixedValue, setFixedValue] = useState<string>('');
   
   // 🎯 NOUVEAU : État pour le dernier résultat de test
@@ -138,28 +141,44 @@ const DataPanel: React.FC<DataPanelProps> = ({ treeId, nodeId, value, onChange, 
         const sumFieldEnabled = (node?.metadata as { createSumDisplayField?: boolean } | undefined)?.createSumDisplayField || false;
         setCreateSumDisplayField(sumFieldEnabled);
         
+        // 🏷️ TOUJOURS récupérer la variable pour avoir le displayName correct
+        const variableData = await api.get(`/api/treebranchleaf/trees/${treeId}/nodes/${nodeId}/data`) as { 
+          id?: string; 
+          usedVariableId?: string;
+          displayName?: string;
+          sourceRef?: string;
+          sourceType?: string;
+          fixedValue?: string;
+        } | undefined;
+        
+        if (variableData && typeof variableData.usedVariableId === 'string') {
+          setVariableId(variableData.usedVariableId);
+        }
+        
+        // 🏷️ Utiliser le displayName de la variable comme nom officiel
+        const variableDisplayName = variableData?.displayName || '';
+        
         if (list.length > 0) {
           const first = list[0];
-          setInstances(list);
+          // 🏷️ IMPORTANT: Utiliser le displayName de la variable, pas celui de la metadata
+          const resolvedName = variableDisplayName || first.name || 'Donnée 1';
+          setInstances(list.map((it, idx) => idx === 0 ? { ...it, name: resolvedName } : it));
           setActiveId(first.id);
-          setName(first.name || '');
-          // 🎯 Initialiser les nouveaux états
-          setSourceType(first.config.sourceType || 'fixed');
-          setFixedValue(first.config.fixedValue || '');
+          setName(resolvedName);
+          // 🎯 Initialiser les nouveaux états depuis la VARIABLE (source de vérité)
+          setSourceType(variableData?.sourceType || first.config.sourceType || 'tree');
+          setFixedValue(variableData?.fixedValue || first.config.fixedValue || '');
+          setSelectedSourceRef(variableData?.sourceRef || first.config.sourceRef || '');
+          setSelectedCapacityName(first.config.sourceRefName || null);
           // Laisser l'effet de synchronisation (activeId) remplir le formulaire après montage
           onChange?.(first.config as Record<string, unknown>);
-          // Récupérer l'ID de la variable pour affichage (même si on a déjà des instances en metadata)
-          try {
-            const v = await api.get(`/api/treebranchleaf/trees/${treeId}/nodes/${nodeId}/data`) as { id?: string; usedVariableId?: string } | undefined;
-            if (v && typeof v.usedVariableId === 'string') setVariableId(v.usedVariableId);
-          } catch { /* noop */ }
         } else {
-          const data = await api.get(`/api/treebranchleaf/trees/${treeId}/nodes/${nodeId}/data`);
+          const data = variableData;
           if (!mountedRef.current) return;
           const initial = {
             exposedKey: data?.exposedKey || `var_${nodeId.slice(0, 4)}`,
-            sourceType: data?.sourceType || 'fixed', // NOUVEAU : Par défaut valeur fixe
-            fixedValue: data?.fixedValue || '', // NOUVEAU : Valeur vide par défaut
+            sourceType: data?.sourceType || 'tree', // Toujours arborescence
+            fixedValue: data?.fixedValue || '', // Conservé pour compatibilité
             sourceRef: data?.sourceRef || '', // Référence d'arborescence vide par défaut
             displayFormat: data?.displayFormat || 'number',
             unit: data?.unit || '',
@@ -169,15 +188,13 @@ const DataPanel: React.FC<DataPanelProps> = ({ treeId, nodeId, value, onChange, 
           // 🎯 Initialiser les nouveaux états
           setSourceType(initial.sourceType);
           setFixedValue(initial.fixedValue);
-          // Laisser l'effet de synchronisation (activeId) remplir le formulaire après montage
-          const first: DataInstance = { id: `data_${Date.now()}`, name: 'Donnée 1', config: initial };
+          setSelectedSourceRef(initial.sourceRef);
+          // 🏷️ Utiliser le displayName de la variable ou un nom par défaut
+          const resolvedName = variableDisplayName || 'Donnée 1';
+          const first: DataInstance = { id: `data_${Date.now()}`, name: resolvedName, config: initial };
           setInstances([first]);
           setActiveId(first.id);
-          setName(first.name);
-          // Capturer l'ID de la variable si déjà existante côté API
-          if (data && typeof (data as { usedVariableId?: string }).usedVariableId === 'string') {
-            setVariableId((data as { usedVariableId?: string }).usedVariableId!);
-          }
+          setName(resolvedName);
           // persister dans metadata
           try {
             const md = (node?.metadata || {}) as Record<string, unknown>;
@@ -194,6 +211,25 @@ const DataPanel: React.FC<DataPanelProps> = ({ treeId, nodeId, value, onChange, 
     })();
     return () => { mountedRef.current = false; };
   }, [api, treeId, nodeId, onChange, value, form]);
+
+  // 📦 Charger les capacités (formules, conditions, tables) au montage pour l'affichage
+  useEffect(() => {
+    (async () => {
+      try {
+        const [conditionsResponse, formulasResponse, tablesResponse] = await Promise.all([
+          api.get('/api/treebranchleaf/reusables/conditions'),
+          api.get('/api/treebranchleaf/reusables/formulas'),
+          api.get('/api/treebranchleaf/reusables/tables')
+        ]);
+        console.log('📦 [DataPanel] Capacités chargées - tables:', tablesResponse);
+        setConditions(conditionsResponse || { items: [] });
+        setFormulas(formulasResponse || { items: [] });
+        setTables(tablesResponse || { items: [] });
+      } catch (error) {
+        console.warn('Erreur lors du chargement des capacités:', error);
+      }
+    })();
+  }, [api]);
 
   // 🎯 NOUVEAU: Effect pour synchroniser les états locaux quand activeId change
   useEffect(() => {
@@ -341,19 +377,26 @@ const DataPanel: React.FC<DataPanelProps> = ({ treeId, nodeId, value, onChange, 
     // 🎯 CORRECTION: Passer automatiquement en mode "tree" quand on sélectionne une référence
     setSourceType('tree');
     
+    // 🎯 Stocker le nom de la capacité sélectionnée
+    if (selection.name) {
+      setSelectedCapacityName(selection.name);
+    }
+    
     // Mettre à jour le champ sourceRef ET sourceType dans le formulaire
     form.setFieldsValue({ 
       sourceRef: selection.ref,
-      sourceType: 'tree'
+      sourceType: 'tree',
+      sourceRefName: selection.name // 🎯 Persister le nom pour les rechargements
     });
     setSelectedSourceRef(selection.ref);
     
-    // Sauvegarder automatiquement
+    // Sauvegarder automatiquement avec le nom de la capacité
     const currentValues = form.getFieldsValue();
     const updatedValues = { 
       ...currentValues, 
       sourceRef: selection.ref,
-      sourceType: 'tree'
+      sourceType: 'tree',
+      sourceRefName: selection.name // 🎯 Inclure le nom dans la sauvegarde
     };
     debouncedSave(updatedValues);
     
@@ -379,21 +422,24 @@ const DataPanel: React.FC<DataPanelProps> = ({ treeId, nodeId, value, onChange, 
     // 🎯 NOUVEAU : Marquer le changement utilisateur
     lastUserChangeRef.current = Date.now();
     
-    // Charger les conditions et formules pour l'affichage des noms
+    // Charger les conditions, formules et tables pour l'affichage des noms
     try {
-      const [conditionsResponse, formulasResponse] = await Promise.all([
+      const [conditionsResponse, formulasResponse, tablesResponse] = await Promise.all([
         api.get('/api/treebranchleaf/reusables/conditions'),
-        api.get('/api/treebranchleaf/reusables/formulas')
+        api.get('/api/treebranchleaf/reusables/formulas'),
+        api.get('/api/treebranchleaf/reusables/tables')
       ]);
       console.log('🔍 [DataPanel] Conditions chargées:', conditionsResponse);
       console.log('🔍 [DataPanel] Formules chargées:', formulasResponse);
+      console.log('🔍 [DataPanel] Tables chargées:', tablesResponse);
       setConditions(conditionsResponse || { items: [] });
       setFormulas(formulasResponse || { items: [] });
+      setTables(tablesResponse || { items: [] });
     } catch (error) {
-      console.warn('Erreur lors du chargement des conditions/formules:', error);
+      console.warn('Erreur lors du chargement des conditions/formules/tables:', error);
     }
     setTreeSelectorOpen(true);
-  }, [api, setConditions, setFormulas]);
+  }, [api, setConditions, setFormulas, setTables]);
 
   // 🧠 Utilitaire: transformer une clause "when" en texte lisible
   const stringifyWhen = useCallback((when?: { op?: string; left?: { key?: string; ref?: string; value?: unknown }; right?: unknown | { ref?: string; value?: unknown } }) => {
@@ -544,28 +590,48 @@ const DataPanel: React.FC<DataPanelProps> = ({ treeId, nodeId, value, onChange, 
   const selectedRefLabel = useMemo(() => {
     const ref = selectedSourceRef || '';
     if (!ref) return '';
-    if (ref.startsWith('condition:')) {
-      const id = ref.slice('condition:'.length);
+    if (ref.startsWith('condition:') || ref.startsWith('node-condition:')) {
+      const id = ref.replace('condition:', '').replace('node-condition:', '');
       const c = conditions.items?.find((x) => x.id === id);
       return c ? `🧩 Condition: ${c.name}` : `🧩 Condition: ${id.slice(0, 8)}…`;
     }
-    if (ref.startsWith('formula:')) {
-      const id = ref.slice('formula:'.length);
+    if (ref.startsWith('formula:') || ref.startsWith('node-formula:')) {
+      const id = ref.replace('formula:', '').replace('node-formula:', '');
       const f = formulas.items?.find((x) => x.id === id);
       return f ? `🧮 Formule: ${f.name}` : `🧮 Formule: ${id.slice(0, 8)}…`;
+    }
+    if (ref.startsWith('@table.') || ref.startsWith('table:')) {
+      const id = ref.replace('@table.', '').replace('table:', '');
+      const t = tables.items?.find((x) => x.id === id);
+      return t ? `📊 Table: ${t.name}` : `📊 Table: ${id.slice(0, 8)}…`;
     }
     if (ref.startsWith('@value.')) {
       return `📊 Champ: ${ref.replace('@value.', '')}`;
     }
     return ref;
-  }, [selectedSourceRef, conditions.items, formulas.items]);
+  }, [selectedSourceRef, conditions.items, formulas.items, tables.items]);
 
-  // Affichage demandé: montrer l'ID de la variable directement dans le champ de sélection
+  // Affichage demandé: montrer l'ID de la CAPACITÉ dans le champ de sélection
   const selectedRefDisplay = useMemo(() => {
+    const ref = selectedSourceRef || '';
+    // Extraire l'ID de la capacité du sourceRef
+    if (ref.startsWith('node-formula:') || ref.startsWith('formula:')) {
+      return ref.replace('node-formula:', '').replace('formula:', '');
+    }
+    if (ref.startsWith('node-condition:') || ref.startsWith('condition:')) {
+      return ref.replace('node-condition:', '').replace('condition:', '');
+    }
+    if (ref.startsWith('@table.') || ref.startsWith('table:')) {
+      return ref.replace('@table.', '').replace('table:', '');
+    }
+    if (ref.startsWith('@value.')) {
+      return ref.replace('@value.', '');
+    }
+    // Fallback: afficher variableId ou le label
     return (variableId && typeof variableId === 'string' && variableId.length > 0)
       ? variableId
       : selectedRefLabel;
-  }, [variableId, selectedRefLabel]);
+  }, [selectedSourceRef, variableId, selectedRefLabel]);
 
   // (supprimé) getSelectedName n'était pas utilisé
 
@@ -711,6 +777,7 @@ const DataPanel: React.FC<DataPanelProps> = ({ treeId, nodeId, value, onChange, 
             (async () => {
               if (!activeId) return;
               try {
+                // 🏷️ 1. Sauvegarder dans la metadata du nœud (instances locales)
                 const node = await api.get(`/api/treebranchleaf/nodes/${nodeId}`) as { metadata?: Record<string, unknown> };
                 const md = (node?.metadata || {}) as Record<string, unknown>;
                 const list: DataInstance[] = ((md as { capabilities?: { datas?: DataInstance[] } }).capabilities?.datas) || instances;
@@ -718,78 +785,147 @@ const DataPanel: React.FC<DataPanelProps> = ({ treeId, nodeId, value, onChange, 
                 const nextMd = { ...md, capabilities: { ...(md as { capabilities?: Record<string, unknown> }).capabilities, datas: updated } };
                 await api.put(`/api/treebranchleaf/trees/${treeId}/nodes/${nodeId}`, { metadata: nextMd });
                 setInstances(updated);
-              } catch { /* noop */ }
+                
+                // 🏷️ 2. NOUVEAU: Sauvegarder aussi dans la table variable (displayName)
+                const currentValues = form.getFieldsValue();
+                await api.put(`/api/treebranchleaf/trees/${treeId}/nodes/${nodeId}/data`, {
+                  ...currentValues,
+                  displayName: n // 🏷️ Envoyer le nom pour mise à jour dans la variable
+                });
+                console.log('✅ [DataPanel] Nom sauvegardé dans la variable:', n);
+              } catch (err) {
+                console.warn('⚠️ [DataPanel] Erreur sauvegarde nom:', err);
+              }
             })();
           }}
         />
       </div>
 
-      {/* Résumé test */}
-      <div style={{ marginBottom: 8, padding: '6px 8px', background: '#fafafa', border: '1px solid #f0f0f0', borderRadius: 6 }}>
-        <Text strong style={{ marginRight: 8 }}>Résumé test:</Text>
-        <div>
-          <Text type="secondary">
-            {(() => {
-              const exposedKey = form.getFieldValue('exposedKey') || '';
-              const sourceType = form.getFieldValue('sourceType');
-              const fixedValue = form.getFieldValue('fixedValue');
-              const selectedNodeId = form.getFieldValue('selectedNodeId');
-              const selectedSourceRef = form.getFieldValue('sourceRef');
-              const unit = form.getFieldValue('unit') || '';
-              const precision = form.getFieldValue('precision') || 2;
-              
-              // Valeur de test simulée
-              const testValue = 1250.50;
-              
-              if (sourceType === 'fixed' && fixedValue) {
-                return `Valeur fixe: ${fixedValue}`;
-              } else if (sourceType === 'tree' && selectedSourceRef) {
-                // Gestion des références vers des conditions
-                if (selectedSourceRef.startsWith('condition:')) {
-                  const conditionId = selectedSourceRef.replace('condition:', '');
-                  // Rechercher le nom de la condition dans les données chargées
-                  const condition = Array.isArray(conditions.items)
-                    ? conditions.items.find((c: { id: string; name: string }) => c.id === conditionId)
-                    : null;
-                  const conditionName = condition?.name || `ID: ${conditionId.substring(0, 8)}...`;
-                  return `🔗 Condition: "${conditionName}"\n📋 Utilisez le bouton "Tester" pour évaluer la logique`;
-                }
-                // Gestion des références vers des formules
-                if (selectedSourceRef.startsWith('formula:')) {
-                  const formulaId = selectedSourceRef.replace('formula:', '');
-                  const formula = Array.isArray(formulas.items)
-                    ? formulas.items.find((f: { id: string; name: string }) => f.id === formulaId)
-                    : null;
-                  const formulaName = formula?.name || `ID: ${formulaId.substring(0, 8)}...`;
-                  return `🧮 Formule: "${formulaName}"\n⚡ Évaluation automatique lors du calcul`;
-                }
-                // Gestion des références vers des champs/nœuds
-                if (selectedSourceRef.startsWith('@value.')) {
-                  const nodeKey = selectedSourceRef.replace('@value.', '');
-                  return `📊 Champ référencé: ${nodeKey.substring(0, 15)}...\n🔄 Valeur en temps réel`;
-                }
-                return `🌲 Référence: ${selectedSourceRef.substring(0, 20)}...`;
-              } else if (sourceType === 'tree' && selectedNodeId) {
-                // Formatage selon la configuration
-                let formatted = testValue.toLocaleString('fr-FR', {
-                  minimumFractionDigits: precision,
-                  maximumFractionDigits: precision
-                });
-                
-                if (unit === '€') {
-                  formatted = `${formatted} €`;
-                } else if (unit) {
-                  formatted = `${formatted} ${unit}`;
-                }
-                
-                return `Valeur calculée (test): ${formatted}`;
-              }
-              
-              return `Clé exposée: ${exposedKey}`;
-            })()}
-          </Text>
-        </div>
-      </div>
+      {/* 📦 Capacité liée - Affiche le type et nom de la capacité */}
+      {useMemo(() => {
+        // 🎯 CORRECTION: Utiliser selectedSourceRef (état local) au lieu du formulaire pour persistance
+        const currentSourceRef = selectedSourceRef || form.getFieldValue('sourceRef');
+        const currentSourceType = sourceType || form.getFieldValue('sourceType');
+        const currentFixedValue = fixedValue || form.getFieldValue('fixedValue');
+        
+        // Déterminer le type et le nom de la capacité
+        let capacityType: 'formula' | 'condition' | 'table' | 'value' | 'fixed' | null = null;
+        let capacityName: string | null = null;
+        let capacityId: string | null = null;
+        let capacityIcon = '📦';
+        let capacityColor = '#1890ff';
+        
+        if (currentSourceType === 'fixed' && currentFixedValue) {
+          capacityType = 'fixed';
+          capacityName = `Valeur: ${currentFixedValue}`;
+          capacityIcon = '📌';
+          capacityColor = '#722ed1';
+        } else if (currentSourceRef) {
+          // node-formula:UUID ou formula:UUID
+          if (currentSourceRef.startsWith('node-formula:') || currentSourceRef.startsWith('formula:')) {
+            capacityType = 'formula';
+            const formulaId = currentSourceRef.replace('node-formula:', '').replace('formula:', '');
+            capacityId = formulaId;
+            // 🎯 Utiliser selectedCapacityName en priorité, sinon chercher dans la liste
+            const formula = Array.isArray(formulas.items)
+              ? formulas.items.find((f: { id: string; name: string }) => f.id === formulaId)
+              : null;
+            capacityName = selectedCapacityName || formula?.name || `Formule (${formulaId.substring(0, 8)}...)`;
+            capacityIcon = '🧮';
+            capacityColor = '#52c41a';
+          }
+          // node-condition:UUID ou condition:UUID
+          else if (currentSourceRef.startsWith('node-condition:') || currentSourceRef.startsWith('condition:')) {
+            capacityType = 'condition';
+            const conditionId = currentSourceRef.replace('node-condition:', '').replace('condition:', '');
+            capacityId = conditionId;
+            // 🎯 Utiliser selectedCapacityName en priorité, sinon chercher dans la liste
+            const condition = Array.isArray(conditions.items)
+              ? conditions.items.find((c: { id: string; name: string }) => c.id === conditionId)
+              : null;
+            capacityName = selectedCapacityName || condition?.name || `Condition (${conditionId.substring(0, 8)}...)`;
+            capacityIcon = '🔀';
+            capacityColor = '#fa8c16';
+          }
+          // @table.UUID ou table:UUID
+          else if (currentSourceRef.startsWith('@table.') || currentSourceRef.startsWith('table:')) {
+            capacityType = 'table';
+            const tableId = currentSourceRef.replace('@table.', '').replace('table:', '');
+            capacityId = tableId;
+            // 🎯 Utiliser selectedCapacityName en priorité, sinon chercher dans la liste
+            const table = Array.isArray(tables.items)
+              ? tables.items.find((t: { id: string; name: string }) => t.id === tableId)
+              : null;
+            capacityName = selectedCapacityName || table?.name || `Table (${tableId.substring(0, 8)}...)`;
+            capacityIcon = '📊';
+            capacityColor = '#13c2c2';
+          }
+          // @value.nodeId - référence à un champ
+          else if (currentSourceRef.startsWith('@value.')) {
+            capacityType = 'value';
+            capacityId = currentSourceRef.replace('@value.', '');
+            capacityName = selectedCapacityName || `Champ référencé`;
+            capacityIcon = '🔗';
+            capacityColor = '#1890ff';
+          }
+          // 🎯 NOUVEAU: Si aucun préfixe reconnu mais sourceRef existe (UUID brut = table)
+          else if (currentSourceRef && currentSourceRef.length > 10) {
+            capacityType = 'table';
+            capacityId = currentSourceRef;
+            const table = Array.isArray(tables.items)
+              ? tables.items.find((t: { id: string; name: string }) => t.id === currentSourceRef)
+              : null;
+            capacityName = selectedCapacityName || table?.name || `Table (${currentSourceRef.substring(0, 8)}...)`;
+            capacityIcon = '📊';
+            capacityColor = '#13c2c2';
+          }
+        }
+        
+        if (!capacityType) return null;
+        
+        const typeLabels: Record<string, string> = {
+          formula: 'FORMULE',
+          condition: 'CONDITION',
+          table: 'TABLE',
+          value: 'VALEUR',
+          fixed: 'FIXE'
+        };
+        
+        return (
+          <div style={{ 
+            marginBottom: 12, 
+            padding: '10px 12px', 
+            background: `linear-gradient(135deg, ${capacityColor}08 0%, ${capacityColor}15 100%)`,
+            border: `1px solid ${capacityColor}40`,
+            borderRadius: 8,
+            borderLeft: `4px solid ${capacityColor}`
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span style={{ fontSize: 18 }}>{capacityIcon}</span>
+              <Tag color={capacityColor} style={{ margin: 0, fontWeight: 600, fontSize: 11 }}>
+                {typeLabels[capacityType]}
+              </Tag>
+              <Text strong style={{ color: capacityColor, flex: 1 }}>
+                {capacityName}
+              </Text>
+            </div>
+            {capacityId && (
+              <div style={{ marginTop: 6 }}>
+                <Text type="secondary" style={{ fontSize: 11, fontFamily: 'monospace' }}>
+                  ID: {capacityId}
+                </Text>
+              </div>
+            )}
+            {currentSourceRef && (
+              <div style={{ marginTop: 4 }}>
+                <Text type="secondary" style={{ fontSize: 11, fontFamily: 'monospace', color: '#722ed1' }}>
+                  Source: {currentSourceRef}
+                </Text>
+              </div>
+            )}
+          </div>
+        );
+      }, [form, tables, formulas, conditions, sourceType, fixedValue, selectedSourceRef, selectedCapacityName])}
       
       {/* Bouton de test pour les conditions */}
       {(() => {
@@ -1137,90 +1273,30 @@ const DataPanel: React.FC<DataPanelProps> = ({ treeId, nodeId, value, onChange, 
         onValuesChange={onValuesChange}
         disabled={readOnly}
       >
-        {/* 🎯 NOUVEAU : Choix entre valeur fixe ou arborescence */}
-        <Form.Item label="Source de la donnée" name="sourceType">
-          <Radio.Group 
-            onChange={(e) => {
-              const newType = e.target.value;
-              console.log('🔄 [DataPanel] Changement sourceType:', newType);
-              
-              // 🎯 NOUVEAU : Marquer le changement utilisateur et sauvegarder le type
-              lastUserChangeRef.current = Date.now();
-              if (newType === 'tree') {
-                userSelectedRefRef.current = null; // Reset user selection when switching to tree mode
-              }
-              
-              setSourceType(newType);
-              
-              // Si on passe en mode arborescence, effacer la valeur fixe
-              if (newType === 'tree') {
-                setFixedValue('');
-                form.setFieldsValue({ fixedValue: '' });
-              }
-              // Si on passe en mode valeur fixe, effacer la référence d'arborescence
-              else if (newType === 'fixed') {
-                setSelectedSourceRef('');
-                form.setFieldsValue({ sourceRef: '' });
-              }
-              
-              // Sauvegarder immédiatement le changement de type
-              const currentValues = form.getFieldsValue();
-              const updatedValues = { 
-                ...currentValues, 
-                sourceType: newType,
-                // Nettoyer les champs selon le type
-                ...(newType === 'tree' ? { fixedValue: '' } : { sourceRef: '' })
-              };
-              console.log('🔄 [DataPanel] Sauvegarde valeurs:', updatedValues);
-              debouncedSave(updatedValues);
-            }}
-            style={{ marginBottom: 12 }}
-          >
-            <Radio value="fixed">📝 Valeur fixe</Radio>
-            <Radio value="tree">🔗 Depuis l'arborescence</Radio>
-          </Radio.Group>
-        </Form.Item>
-
-        {/* Champs dépendants du type de source - séparés pour éviter l'avertissement Form.Item */}
-        {sourceType === 'fixed' ? (
-          <Form.Item name="fixedValue" label="Valeur fixe">
+        {/* 🔗 Source depuis l'arborescence uniquement */}
+        <Form.Item label="Source de la donnée" name="sourceRef">
+          <Space direction="vertical" style={{ width: '100%' }}>
             <Input 
-              placeholder="ex: 95%, 1234.56, Texte fixe..." 
-              value={fixedValue}
-              onChange={(e) => {
-                const newValue = e.target.value;
-                setFixedValue(newValue);
-                form.setFieldsValue({ fixedValue: newValue });
-                const currentValues = form.getFieldsValue();
-                debouncedSave({ ...currentValues, fixedValue: newValue });
-              }}
+              placeholder="Sélectionnez dans l'arborescence..." 
+              readOnly
+              style={{ cursor: 'pointer' }}
+              value={selectedRefDisplay}
+              title={selectedRefDisplay}
+              onClick={openTreeSelector}
             />
-          </Form.Item>
-        ) : (
-          <Form.Item label="Référence arborescence" name="sourceRef">
-            <Space direction="vertical" style={{ width: '100%' }}>
-              <Input 
-                placeholder="Sélectionnez dans l'arborescence..." 
-                readOnly
-                style={{ cursor: 'pointer' }}
-                value={selectedRefDisplay}
-                title={selectedRefDisplay}
-                onClick={openTreeSelector}
-              />
-              <Button 
-                type="dashed" 
-                onClick={openTreeSelector}
-                disabled={readOnly}
-                style={{ width: '100%' }}
-              >
-                📋 Sélectionner dans l'arborescence
-              </Button>
-              <Text type="secondary" style={{ fontSize: '12px' }}>
-                Choisissez un champ, une formule ou une condition comme source
-              </Text>
-            </Space>
-          </Form.Item>
-        )}
+            <Button 
+              type="dashed" 
+              onClick={openTreeSelector}
+              disabled={readOnly}
+              style={{ width: '100%' }}
+            >
+              📋 Sélectionner dans l'arborescence
+            </Button>
+            <Text type="secondary" style={{ fontSize: '12px' }}>
+              Choisissez un champ, une formule ou une condition comme source
+            </Text>
+          </Space>
+        </Form.Item>
         
         <Form.Item name="displayFormat" label="Format d'affichage">
           <Select options={formatOptions} placeholder="Choisir un format" />
