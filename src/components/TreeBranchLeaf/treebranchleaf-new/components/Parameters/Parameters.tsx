@@ -368,6 +368,8 @@ const Parameters: React.FC<ParametersProps> = (props) => {
   // Mémorise l'état précédent des capacités pour détecter les activations externes
   const prevCapsRef = useRef<Record<string, boolean>>({});
   const lastNodeIdRef = useRef<string | null>(null);
+  // 🔗 Empêche la réinitialisation de capsState pendant un court laps de temps après une sauvegarde manuelle
+  const skipCapsReinitUntilRef = useRef<number>(0);
   
   // État local pour les trigger fields (optimistic update)
   const [localTriggerNodeIds, setLocalTriggerNodeIds] = useState<string[]>([]);
@@ -487,6 +489,44 @@ const Parameters: React.FC<ParametersProps> = (props) => {
       window.removeEventListener('delete-copy-group-finished', handleDeleteCopyEvent);
     };
   }, [selectedNode?.id, refreshTree]);
+
+  // 🔗 Écouter l'événement tbl-node-updated pour mettre à jour capsState immédiatement
+  useEffect(() => {
+    const handleNodeUpdated = (event: Event) => {
+      const customEvent = event as CustomEvent<{ node?: Record<string, unknown>; nodeId?: string }>;
+      const { node: updatedNode, nodeId } = customEvent.detail || {};
+      
+      const targetId = (updatedNode?.id as string) || nodeId;
+      if (!targetId || targetId !== selectedNode?.id) return;
+      
+      console.log('🔔 [Parameters] Événement tbl-node-updated reçu pour ce nœud:', {
+        nodeId: targetId,
+        hasLink: updatedNode?.hasLink,
+        hasData: updatedNode?.hasData
+      });
+      
+      // 🔗 Bloquer la réinitialisation de capsState pendant 2 secondes
+      skipCapsReinitUntilRef.current = Date.now() + 2000;
+      
+      // Mettre à jour capsState directement si des flags de capacités sont présents
+      setCapsState(prev => {
+        const next = { ...prev };
+        if (updatedNode?.hasLink !== undefined) next.link = !!updatedNode.hasLink;
+        if (updatedNode?.hasData !== undefined) next.data = !!updatedNode.hasData;
+        if (updatedNode?.hasFormula !== undefined) next.formula = !!updatedNode.hasFormula;
+        if (updatedNode?.hasTable !== undefined) next.table = !!updatedNode.hasTable;
+        if (updatedNode?.hasCondition !== undefined) next.condition = !!updatedNode.hasCondition;
+        if (updatedNode?.hasAPI !== undefined) next.api = !!updatedNode.hasAPI;
+        if (updatedNode?.hasMarkers !== undefined) next.markers = !!updatedNode.hasMarkers;
+        
+        console.log('🔗 [Parameters] capsState mis à jour via événement:', next);
+        return next;
+      });
+    };
+    
+    window.addEventListener('tbl-node-updated', handleNodeUpdated);
+    return () => window.removeEventListener('tbl-node-updated', handleNodeUpdated);
+  }, [selectedNode?.id]);
 
   useEffect(() => {
     const next = normalizeSubTabValue(selectedNode?.metadata?.subTab);
@@ -1289,15 +1329,28 @@ const Parameters: React.FC<ParametersProps> = (props) => {
     // Le TreeBranchLeafEditor applique déjà les valeurs par défaut lors de la création
 
     const conditionActive = !!selectedNode.hasCondition;
-    setCapsState({
-      data: !!selectedNode.hasData,
-      formula: !!selectedNode.hasFormula,
-      condition: conditionActive,
-      table: !!selectedNode.hasTable,
-      api: !!selectedNode.hasAPI,
-      link: !!selectedNode.hasLink,
-      markers: !!selectedNode.hasMarkers
-    });
+    
+    // 🔗 Ignorer la réinitialisation si on est dans la période de blocage (après un save manuel)
+    const now = Date.now();
+    const skipUntil = skipCapsReinitUntilRef.current;
+    if (now < skipUntil) {
+      console.log('⏭️ [Parameters] Réinitialisation capsState ignorée (blocage actif)', { now, skipUntil, diff: skipUntil - now });
+    } else {
+      const newCapsState = {
+        data: !!selectedNode.hasData,
+        formula: !!selectedNode.hasFormula,
+        condition: conditionActive,
+        table: !!selectedNode.hasTable,
+        api: !!selectedNode.hasAPI,
+        link: !!selectedNode.hasLink,
+        markers: !!selectedNode.hasMarkers
+      };
+      console.log('🔄 [Parameters] capsState réinitialisé via hydratation:', newCapsState, { 
+        'selectedNode.hasLink': selectedNode.hasLink,
+        'selectedNode.id': selectedNode.id 
+      });
+      setCapsState(newCapsState);
+    }
 
     if (isNewNode) {
       setOpenCaps(new Set<string>(Array.from(panelStateOpenCapabilities || [])));
@@ -1431,7 +1484,8 @@ const Parameters: React.FC<ParametersProps> = (props) => {
       setRepeaterAddLabel(REPEATER_DEFAULT_LABEL);
       setRepeaterCountSourceNodeId(null);
     }
-  }, [selectedNode, registry, panelStateOpenCapabilities, selectedNodeFromTree]);
+  // 🔗 FIX: Ajouter les flags de capacités aux dépendances pour que le useEffect se redéclenche quand ils changent
+  }, [selectedNode, selectedNode?.hasData, selectedNode?.hasFormula, selectedNode?.hasLink, selectedNode?.hasTable, selectedNode?.hasCondition, selectedNode?.hasAPI, registry, panelStateOpenCapabilities, selectedNodeFromTree]);
 
   // Auto-focus sur le libellé pour édition rapide
   useEffect(() => {

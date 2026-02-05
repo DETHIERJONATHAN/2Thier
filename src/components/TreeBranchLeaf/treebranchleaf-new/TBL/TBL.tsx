@@ -1314,6 +1314,15 @@ const TBL: React.FC<TBLProps> = ({
         } else {
           console.log(`❌ [TBL] GRD ABSENT du broadcast !`);
         }
+        
+        // 🔗🔗🔗 FIX CRITIQUE: Injecter les valeurs calculées (Link, DISPLAY, etc.) dans TBL_FORM_DATA
+        // Sans cela, TBLFieldRendererAdvanced ne voit pas les valeurs Link dans formData
+        if (typeof window !== 'undefined' && window.TBL_FORM_DATA) {
+          for (const [nodeId, value] of Object.entries(calculatedValuesMap)) {
+            window.TBL_FORM_DATA[nodeId] = value;
+          }
+          console.log(`🔗 [FIX] Injecté ${Object.keys(calculatedValuesMap).length} valeurs calculées dans TBL_FORM_DATA`);
+        }
       }
       
       window.dispatchEvent(new CustomEvent('tbl-force-retransform', {

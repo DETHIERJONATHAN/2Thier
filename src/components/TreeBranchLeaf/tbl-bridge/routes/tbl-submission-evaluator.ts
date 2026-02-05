@@ -911,6 +911,9 @@ async function evaluateCapacitiesForSubmission(
   // Index: Map<changedFieldId, Set<displayFieldIdsToCalculate>>
   const triggerIndex = new Map<string, Set<string>>();
   
+  // 🔗 NOUVEAU: Map pour stocker les valeurs des champs Link à retourner au frontend
+  const linkedFieldsToRefresh = new Map<string, { targetNodeId: string; nodeLabel: string }>();
+  
   if (mode === 'change' && changedFieldId) {
     // Charger TOUS les display fields metadata en UNE SEULE requête SQL
     const displayFieldIds = capacities
@@ -927,7 +930,7 @@ async function evaluateCapacitiesForSubmission(
       
       const displayNodes = await prisma.treeBranchLeafNode.findMany({
         where: { id: { in: displayFieldIds } },
-        select: { id: true, metadata: true }
+        select: { id: true, metadata: true, hasLink: true, link_targetNodeId: true }
       });
       
       // Construire l'index inversé
@@ -935,12 +938,10 @@ async function evaluateCapacitiesForSubmission(
         const metaTriggerNodeIds = (node.metadata as { triggerNodeIds?: string[] })?.triggerNodeIds;
         let triggerNodeIds = Array.isArray(metaTriggerNodeIds) ? metaTriggerNodeIds.filter(Boolean) : [];
         
-        // Auto-heal si pas de triggers
-        if (triggerNodeIds.length === 0) {
-          const capacity = capacities.find(c => c.nodeId === node.id);
-          if (capacity) {
-            triggerNodeIds = deriveTriggerNodeIdsFromCapacity(capacity, node.id);
-          }
+        // 🔗 NOUVEAU: Si le champ a un Link, ajouter le link_targetNodeId comme trigger
+        if (node.hasLink && node.link_targetNodeId) {
+          triggerNodeIds.push(node.link_targetNodeId);
+          console.log(`🔗 [TRIGGER INDEX] Champ ${node.id} a un Link vers ${node.link_targetNodeId} - ajouté comme trigger`);
         }
         
         // Expansion pour les copies (-1, -2, etc.)
@@ -954,10 +955,48 @@ async function evaluateCapacitiesForSubmission(
           triggerIndex.get(triggerId)!.add(node.id);
         }
       }
-      
-      const affectedCount = triggerIndex.get(changedFieldId)?.size || 0;
-      console.log(`🚀 [TRIGGER INDEX] Index créé: ${displayFieldIds.length} display fields → ${affectedCount} impactés par "${changedFieldId}"`);
     }
+    
+    // 🔗 NOUVEAU: Charger TOUS les champs avec Link du tree (même sans capacity)
+    // Ces champs doivent être rafraîchis quand leur champ source change
+    const allLinkedNodes = await prisma.treeBranchLeafNode.findMany({
+      where: { 
+        treeId,
+        hasLink: true,
+        link_targetNodeId: { not: null }
+      },
+      select: { id: true, label: true, link_targetNodeId: true }
+    });
+    
+    if (allLinkedNodes.length > 0) {
+      console.log(`🔗 [LINK TRIGGER] ${allLinkedNodes.length} champs avec Link trouvés dans le tree`);
+      
+      // 🔍 DEBUG: Afficher tous les champs Link trouvés
+      for (const ln of allLinkedNodes) {
+        console.log(`   🔗 [LINK] "${ln.label}" (${ln.id}) → target: ${ln.link_targetNodeId}`);
+      }
+      
+      for (const linkedNode of allLinkedNodes) {
+        // Ajouter au trigger index: quand link_targetNodeId change, ce champ doit être rafraîchi
+        const targetId = linkedNode.link_targetNodeId!;
+        if (!triggerIndex.has(targetId)) {
+          triggerIndex.set(targetId, new Set());
+        }
+        triggerIndex.get(targetId)!.add(linkedNode.id);
+        
+        // Si ce changement affecte ce champ lié, mémoriser pour le rafraîchir
+        if (targetId === changedFieldId) {
+          linkedFieldsToRefresh.set(linkedNode.id, {
+            targetNodeId: targetId,
+            nodeLabel: linkedNode.label || linkedNode.id
+          });
+          console.log(`🔗 [LINK TRIGGER] Champ "${linkedNode.label}" (${linkedNode.id}) sera rafraîchi car son source ${targetId} a changé`);
+        }
+      }
+    }
+      
+    const affectedCount = triggerIndex.get(changedFieldId)?.size || 0;
+    console.log(`🚀 [TRIGGER INDEX] Index créé: display fields + ${allLinkedNodes.length} linked fields → ${affectedCount} impactés par "${changedFieldId}"`);
   }
 
   // 🔥 DÉDUPLICATION: Un même nodeId peut apparaître plusieurs fois dans capacities
@@ -1142,7 +1181,7 @@ async function evaluateCapacitiesForSubmission(
           nodeId,
           value: String(dbValue),
           sourceRef: 'db-restored',
-          operationSource: 'display_calculated' as OperationSourceType,
+          operationSource: 'neutral' as OperationSourceType,
           fieldLabel: null,
           operationDetail: { source: 'db-restore', reason: 'formData had weak value' } as Prisma.InputJsonValue,
           operationResult: null,
@@ -1153,6 +1192,73 @@ async function evaluateCapacitiesForSubmission(
     }
     if (addedFromDb > 0) {
       console.log(`🛡️ [DB RESTORE] ${addedFromDb} valeurs DISPLAY restaurées depuis DB ajoutées aux résultats`);
+    }
+  }
+
+  // 🔗 NOUVEAU: Rafraîchir les champs Link dont le champ source a changé
+  // Les valeurs Link sont récupérées depuis le champ cible et ajoutées aux résultats
+  if (linkedFieldsToRefresh.size > 0) {
+    console.log(`🔗 [LINK REFRESH] ${linkedFieldsToRefresh.size} champs Link à rafraîchir`);
+    const alreadyComputed = new Set(computedValuesToStore.map(c => c.nodeId));
+    
+    for (const [linkedNodeId, linkInfo] of linkedFieldsToRefresh.entries()) {
+      if (alreadyComputed.has(linkedNodeId)) {
+        console.log(`🔗 [LINK REFRESH] ${linkedNodeId} déjà calculé - skip`);
+        continue;
+      }
+      
+      // Récupérer la valeur du champ source
+      // 1. D'abord essayer dans formData (valeur qui vient d'être changée)
+      // 2. Sinon dans SubmissionData
+      // 3. Sinon dans TreeBranchLeafNode.calculatedValue
+      let linkValue: string | null = null;
+      
+      // 1. Vérifier dans formData
+      if (formData && linkInfo.targetNodeId in formData) {
+        const fv = formData[linkInfo.targetNodeId];
+        linkValue = fv !== null && fv !== undefined ? String(fv) : null;
+        console.log(`🔗 [LINK REFRESH] ${linkedNodeId} → valeur depuis formData: "${linkValue}"`);
+      }
+      
+      // 2. Sinon dans SubmissionData
+      if (!linkValue) {
+        const submissionDataRecord = await prisma.treeBranchLeafSubmissionData.findFirst({
+          where: { submissionId, nodeId: linkInfo.targetNodeId },
+          orderBy: { lastResolved: 'desc' }
+        });
+        if (submissionDataRecord?.value) {
+          linkValue = submissionDataRecord.value;
+          console.log(`🔗 [LINK REFRESH] ${linkedNodeId} → valeur depuis SubmissionData: "${linkValue}"`);
+        }
+      }
+      
+      // 3. Sinon dans TreeBranchLeafNode.calculatedValue
+      if (!linkValue) {
+        const targetNode = await prisma.treeBranchLeafNode.findUnique({
+          where: { id: linkInfo.targetNodeId },
+          select: { calculatedValue: true }
+        });
+        if (targetNode?.calculatedValue) {
+          linkValue = targetNode.calculatedValue;
+          console.log(`🔗 [LINK REFRESH] ${linkedNodeId} → valeur depuis TreeBranchLeafNode.calculatedValue: "${linkValue}"`);
+        }
+      }
+      
+      if (linkValue !== null) {
+        computedValuesToStore.push({
+          nodeId: linkedNodeId,
+          value: linkValue,
+          sourceRef: `link:${linkInfo.targetNodeId}`,
+          operationSource: 'neutral' as OperationSourceType,
+          fieldLabel: linkInfo.nodeLabel,
+          operationDetail: { source: 'link', targetNodeId: linkInfo.targetNodeId } as Prisma.InputJsonValue,
+          operationResult: null,
+          calculatedBy: 'link'
+        });
+        console.log(`🔗 [LINK REFRESH] Champ "${linkInfo.nodeLabel}" (${linkedNodeId}) → valeur "${linkValue}" ajoutée aux résultats`);
+      } else {
+        console.log(`🔗 [LINK REFRESH] ${linkedNodeId} → pas de valeur trouvée pour le champ source ${linkInfo.targetNodeId}`);
+      }
     }
   }
 

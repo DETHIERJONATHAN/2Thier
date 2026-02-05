@@ -515,6 +515,12 @@ export interface TreeBranchLeafNode {
   
   link_instances?: Record<string, unknown> | null;
   link_activeId?: string | null;
+  // 🔗 LINK CAPABILITY: Colonnes directes pour afficher la valeur d'un autre champ
+  hasLink?: boolean;
+  link_targetNodeId?: string | null;
+  link_targetTreeId?: string | null;
+  link_mode?: string | null;
+  link_carryContext?: boolean | null;
   
   markers_instances?: Record<string, unknown> | null;
   markers_activeId?: string | null;
@@ -729,6 +735,13 @@ export interface TBLField {
     targetRef?: string;
     targetLabel?: string;
   }> | null;
+  
+  // 🔗 LINK CAPABILITY: Propriétés pour afficher la valeur d'un autre champ
+  hasLink?: boolean;
+  link_targetNodeId?: string | null;
+  link_targetTreeId?: string | null;
+  link_mode?: 'JUMP' | 'APPEND_SECTION' | 'PHOTO' | string | null;
+  link_carryContext?: boolean | null;
 }
 
 const tryParseJSON = (value: unknown): unknown => {
@@ -1492,8 +1505,13 @@ const transformPrismaNodeToField = (
         allowClear: node.select_allowClear,
         selectDefaultValue: node.select_defaultValue,
       },
-      capabilities
-      ,
+      capabilities,
+      // 🔗 LINK CAPABILITY: Copier les propriétés directement sur le champ pour le rendu
+      hasLink: node.hasLink,
+      link_targetNodeId: node.link_targetNodeId,
+      link_targetTreeId: node.link_targetTreeId,
+      link_mode: node.link_mode,
+      link_carryContext: node.link_carryContext,
       subTabKey: primarySubTabKey ?? undefined,
       subTabKeys: subTabAssignments.length ? subTabAssignments : undefined
     };
@@ -1625,7 +1643,13 @@ const transformPrismaNodeToField = (
         repeater: repeaterMetadata
       },
       capabilities,
-      // 🔄 PRÉ-CHARGEMENT INTELLIGENT: Transmettre l'ID du champ source
+      // � LINK CAPABILITY: Copier les propriétés directement sur le champ pour le rendu
+      hasLink: node.hasLink,
+      link_targetNodeId: node.link_targetNodeId,
+      link_targetTreeId: node.link_targetTreeId,
+      link_mode: node.link_mode,
+      link_carryContext: node.link_carryContext,
+      // �🔄 PRÉ-CHARGEMENT INTELLIGENT: Transmettre l'ID du champ source
       repeater_countSourceNodeId: node.repeater_countSourceNodeId || null,
       // 🔁 REPEATER: Colonnes Prisma directes pour "Ajouter"
       repeater_templateNodeIds: templateNodeIds,
@@ -1707,6 +1731,12 @@ const transformPrismaNodeToField = (
         thumbnails: node.image_thumbnails,
       },
       capabilities,
+      // 🔗 LINK CAPABILITY: Copier les propriétés directement sur le champ pour le rendu
+      hasLink: node.hasLink,
+      link_targetNodeId: node.link_targetNodeId,
+      link_targetTreeId: node.link_targetTreeId,
+      link_mode: node.link_mode,
+      link_carryContext: node.link_carryContext,
       // 🤖 AI MEASURE: Transmettre la configuration IA Mesure pour les champs IMAGE
       aiMeasure_enabled: node.aiMeasure_enabled,
       aiMeasure_autoTrigger: node.aiMeasure_autoTrigger,
@@ -1731,8 +1761,13 @@ const transformPrismaNodeToField = (
     required: node.isRequired,
     visible: node.isVisible,
     order: node.order,
-    capabilities
-    ,
+    capabilities,
+    // 🔗 LINK CAPABILITY: Copier les propriétés directement sur le champ pour le rendu
+    hasLink: node.hasLink,
+    link_targetNodeId: node.link_targetNodeId,
+    link_targetTreeId: node.link_targetTreeId,
+    link_mode: node.link_mode,
+    link_carryContext: node.link_carryContext,
     subTabKey: primarySubTabKey ?? undefined,
     subTabKeys: subTabAssignments.length ? subTabAssignments : undefined
   };
@@ -2517,14 +2552,26 @@ export const useTBLDataPrismaComplete = ({ tree_id, disabled = false, triggerRet
 
   const fetchData = useCallback(async (options?: FetchOptions) => {
     const silent = options?.silent === true;
+    console.log('🔗🔗🔗 [FETCH-DATA] fetchData appelé, tree_id:', tree_id, 'disabled:', disabled);
     if (!tree_id || disabled) return;
 
     try {
       if (!silent) setLoading(true);
       setError(null);
+      console.log('🔗🔗🔗 [FETCH-DATA] Appel API /api/treebranchleaf/trees/' + tree_id + '/nodes');
       if (verbose()) dlog('📡 [TBL-PRISMA] Récupération données:', { tree_id });
 
       const response = await api.get(`/api/treebranchleaf/trees/${tree_id}/nodes`);
+      console.log('🔗🔗🔗 [FETCH-DATA] Réponse reçue, isArray:', Array.isArray(response), 'length:', Array.isArray(response) ? response.length : 'N/A');
+      
+      // 🔗 DEBUG: Vérifier les nodes avec hasLink AVANT transformation
+      if (Array.isArray(response)) {
+        const nodesWithLink = (response as any[]).filter((n: any) => n.hasLink === true);
+        console.log(`🔗🔗🔗 [FETCH-DATA RAW] ${nodesWithLink.length} nodes avec hasLink=true reçus de l'API:`, 
+          nodesWithLink.map((n: any) => ({ id: n.id, label: n.label, hasLink: n.hasLink, link_targetNodeId: n.link_targetNodeId, link_mode: n.link_mode }))
+        );
+      }
+      
       if (response && Array.isArray(response)) {
         // store raw
         updateRawRef.current(response);
@@ -2816,12 +2863,15 @@ export const useTBLDataPrismaComplete = ({ tree_id, disabled = false, triggerRet
 
 
   useEffect(() => {
+    console.log('🔗🔗🔗 [INITIAL-FETCH] useEffect triggered, disabled:', disabled);
     if (disabled) {
       setLoading(false);
       return;
     }
-    fetchDataRef.current();
-  }, [disabled]);
+    // 🔥 FIX: Use fetchData directly instead of fetchDataRef which is defined later
+    console.log('🔗🔗🔗 [INITIAL-FETCH] Calling fetchData directly');
+    fetchData();
+  }, [disabled, fetchData]);
 
   // 🔄 FONCTION: Retransformer les données avec le formData actuel (SANS recharger depuis l'API)
   const retransformWithCurrentFormData = useCallback(async () => {

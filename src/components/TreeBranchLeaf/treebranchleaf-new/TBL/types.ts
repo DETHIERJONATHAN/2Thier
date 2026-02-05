@@ -57,6 +57,12 @@ export type RawTreeNode = {
   api_activeId?: string | null;
   link_instances?: Record<string, unknown> | null;
   link_activeId?: string | null;
+  // Colonnes directes pour les liens
+  hasLink?: boolean | null;
+  link_targetNodeId?: string | null;
+  link_targetTreeId?: string | null;
+  link_mode?: string | null;
+  link_carryContext?: boolean | null;
   markers_instances?: Record<string, unknown> | null;
   markers_activeId?: string | null;
   metadata?: Record<string, unknown> | null;

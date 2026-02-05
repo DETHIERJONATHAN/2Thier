@@ -402,6 +402,12 @@ export function buildResponseFromColumns(node: any): Record<string, unknown> {
     aiMeasure_autoTrigger: node.aiMeasure_autoTrigger ?? true,
     aiMeasure_prompt: node.aiMeasure_prompt || null,
     aiMeasure_keys: node.aiMeasure_keys || null,
+    // 🔗 LINK: Colonnes dédiées pour la configuration des liens (valeur d'un autre champ)
+    hasLink: node.hasLink ?? false,
+    link_targetNodeId: node.link_targetNodeId || null,
+    link_targetTreeId: node.link_targetTreeId || null,
+    link_mode: node.link_mode || null,
+    link_carryContext: node.link_carryContext ?? false,
     tables: node.TreeBranchLeafNodeTable || [],
     sharedReferenceIds: node.sharedReferenceIds || undefined
   } as Record<string, unknown>;

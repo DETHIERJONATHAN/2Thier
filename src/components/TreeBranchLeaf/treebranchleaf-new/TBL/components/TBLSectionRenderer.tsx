@@ -13,6 +13,8 @@ import { dlog as globalDlog } from '../../../../../utils/debug';
 import { tblLog, isTBLDebugEnabled } from '../../../../../utils/tblDebug';
 // ✅ NOUVEAU SYSTÈME : CalculatedValueDisplay affiche les valeurs STOCKÉES dans Prisma
 import { CalculatedValueDisplay } from './CalculatedValueDisplay';
+// 🖼️ NOUVEAU: ImageDisplayBubble pour afficher les photos liées via link mode PHOTO
+import { ImageDisplayBubble } from './ImageDisplayBubble';
 import { useBatchEvaluation } from '../hooks/useBatchEvaluation';
 import { 
   Card, 
@@ -1866,6 +1868,19 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
         api: buildBaseCapability(node.api_instances as Record<string, unknown> | null, node.api_activeId as string | null),
         link: buildBaseCapability(node.link_instances as Record<string, unknown> | null, node.link_activeId as string | null),
         markers: buildBaseCapability(node.markers_instances as Record<string, unknown> | null, node.markers_activeId as string | null),
+      },
+      // � LINK: Propriétés au niveau racine pour TBLFieldRendererAdvanced
+      hasLink: node.hasLink as boolean | undefined,
+      link_targetNodeId: node.link_targetNodeId as string | undefined,
+      link_targetTreeId: node.link_targetTreeId as string | undefined,
+      link_mode: node.link_mode as 'JUMP' | 'APPEND_SECTION' | 'PHOTO' | undefined,
+      link_carryContext: node.link_carryContext as boolean | undefined,
+      // 🖼️ NOUVEAU: Propriétés de link pour affichage photo (format alternatif)
+      linkConfig: {
+        targetNodeId: node.link_targetNodeId as string | undefined,
+        targetTreeId: node.link_targetTreeId as string | undefined,
+        mode: node.link_mode as 'JUMP' | 'APPEND_SECTION' | 'PHOTO' | undefined,
+        carryContext: node.link_carryContext as boolean | undefined,
       },
     } as TBLField;
   }, [allNodes]);
@@ -4479,8 +4494,37 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
       whiteSpace: 'nowrap',
     };
     
+    // 🔍 DEBUG PHOTO LINK: Vérifier si le champ a les propriétés Link
+    if (field.label?.toLowerCase().includes('photo') || (field as any).hasLink || (field as any).link_mode) {
+      console.log(`🖼️🔍 [PHOTO LINK DEBUG] Champ "${field.label}" (${field.id}):`, {
+        hasLink: (field as any).hasLink,
+        link_mode: (field as any).link_mode,
+        link_targetNodeId: (field as any).link_targetNodeId,
+        linkConfig: (field as any).linkConfig,
+        linkConfigMode: (field as any).linkConfig?.mode,
+        linkConfigTargetNodeId: (field as any).linkConfig?.targetNodeId,
+      });
+    }
+    
+    // 🎯 FIX: Vérifier AUSSI les propriétés au niveau racine du field (pas seulement linkConfig)
+    const isPhotoLink = (
+      ((field as any).linkConfig?.mode === 'PHOTO' && (field as any).linkConfig?.targetNodeId) ||
+      ((field as any).link_mode === 'PHOTO' && (field as any).link_targetNodeId)
+    );
+    const photoTargetNodeId = (field as any).linkConfig?.targetNodeId || (field as any).link_targetNodeId;
+
     return (
       <Col key={field.id} xs={8} sm={6} md={4} lg={4} xl={3} style={{ marginBottom: 12 }}>
+        {/* 🖼️ MODE PHOTO: Si linkConfig.mode === 'PHOTO' OU link_mode === 'PHOTO', utiliser ImageDisplayBubble */}
+        {isPhotoLink && photoTargetNodeId ? (
+          <ImageDisplayBubble
+            fieldId={field.id}
+            sourceNodeId={photoTargetNodeId}
+            label={field.label || 'Photo'}
+            formData={formData as Record<string, unknown>}
+            size={bubbleSize}
+          />
+        ) : (
         <Tooltip title={field.label} placement="top">
           <div 
             style={bubbleStyle}
@@ -4512,6 +4556,7 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
             })()}
           </div>
         </Tooltip>
+        )}
       </Col>
     );
   };

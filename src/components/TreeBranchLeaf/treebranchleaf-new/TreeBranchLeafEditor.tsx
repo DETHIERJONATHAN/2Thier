@@ -160,6 +160,53 @@ const TreeBranchLeafEditor: React.FC<TreeBranchLeafEditorProps> = ({
     nodesRef.current = propNodes || [];
   }, [propNodes]);
   
+  // 🔔 Écouter les événements de mise à jour de node (pour hasData, hasFormula, etc.)
+  useEffect(() => {
+    const handleNodeUpdated = (event: Event) => {
+      try {
+        const customEvent = event as CustomEvent<{ node?: TreeBranchLeafNode; treeId?: string | number; nodeId?: string }>;
+        const { node: updatedNode, nodeId } = customEvent.detail || {};
+        
+        console.log('🔔 [TreeBranchLeafEditor] Événement tbl-node-updated reçu:', {
+          updatedNodeId: updatedNode?.id,
+          nodeId,
+          hasLink: updatedNode?.hasLink,
+          detail: customEvent.detail
+        });
+        
+        if (!updatedNode && !nodeId) return;
+        
+        // Mettre à jour le selectedNode si c'est lui qui a été modifié
+        setUIState(prev => {
+          const targetId = updatedNode?.id || nodeId;
+          console.log('🔔 [TreeBranchLeafEditor] Comparaison IDs:', {
+            targetId,
+            selectedNodeId: prev.selectedNode?.id,
+            match: prev.selectedNode?.id === targetId
+          });
+          if (!prev.selectedNode || prev.selectedNode.id !== targetId) {
+            return prev;
+          }
+          // Fusionner les propriétés mises à jour (notamment hasData, hasFormula, hasLink, etc.)
+          const merged = { ...prev.selectedNode, ...updatedNode } as TreeBranchLeafNode;
+          console.log('🔄 [TreeBranchLeafEditor] selectedNode mis à jour via tbl-node-updated:', {
+            nodeId: targetId,
+            hasData: merged.hasData,
+            hasFormula: merged.hasFormula,
+            hasLink: merged.hasLink,
+            link_targetNodeId: merged.link_targetNodeId
+          });
+          return { ...prev, selectedNode: merged };
+        });
+      } catch (e) {
+        console.error('❌ [TreeBranchLeafEditor] handleNodeUpdated error:', e);
+      }
+    };
+    
+    window.addEventListener('tbl-node-updated', handleNodeUpdated);
+    return () => window.removeEventListener('tbl-node-updated', handleNodeUpdated);
+  }, []);
+  
   // Actions sur les arbres
   const createTree = useCallback(async (data: Partial<TreeBranchLeafTree>) => {
     try {

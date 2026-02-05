@@ -577,16 +577,63 @@ const DataPanel: React.FC<DataPanelProps> = ({ treeId, nodeId, value, onChange, 
         // ✅ Utiliser DELETE au lieu de PUT avec valeurs vides
         await api.delete(`/api/treebranchleaf/trees/${treeId}/nodes/${nodeId}/data`);
         
-        const emptyVals = { exposedKey: undefined, displayFormat: 'number', unit: '', precision: 2, visibleToUser: false } as Record<string, unknown>;
-        form.setFieldsValue(emptyVals);
-        onChange?.(emptyVals);
+        // 🎯 Nettoyer l'instance du tableau local
+        const updatedInstances = instances.filter(it => it.id !== activeId);
+        setInstances(updatedInstances);
+        
+        // 🎯 Réinitialiser TOUS les états locaux
+        setSourceType('fixed');
+        setFixedValue('');
+        setSelectedSourceRef('');
+        setVariableId(null);
+        setName('');
+        setConditionDetails(null);
+        setLastTestResult(null);
+        userSelectedRefRef.current = null;
+        
+        // 🎯 Mettre à jour metadata pour supprimer l'instance
+        try {
+          const node = await api.get(`/api/treebranchleaf/nodes/${nodeId}`) as { metadata?: Record<string, unknown>; hasData?: boolean };
+          const md = (node?.metadata || {}) as Record<string, unknown>;
+          const nextMd = { ...md, capabilities: { ...(md as { capabilities?: Record<string, unknown> }).capabilities, datas: updatedInstances } };
+          await api.put(`/api/treebranchleaf/trees/${treeId}/nodes/${nodeId}`, { metadata: nextMd, hasData: false });
+          
+          // 🔔 Émettre l'événement pour rafraîchir l'arbre
+          window.dispatchEvent(new CustomEvent('tbl-node-updated', { 
+            detail: { 
+              node: { ...node, hasData: false, metadata: nextMd }, 
+              treeId,
+              nodeId 
+            } 
+          }));
+        } catch (e) {
+          console.warn('⚠️ Impossible de nettoyer la metadata:', (e as Error).message);
+        }
+        
+        // 🎯 Passer à une autre instance ou vider si aucune
+        if (updatedInstances.length > 0) {
+          const next = updatedInstances[0];
+          setActiveId(next.id);
+          setName(next.name || '');
+          setSourceType(next.config.sourceType || 'fixed');
+          setFixedValue(next.config.fixedValue || '');
+          setSelectedSourceRef(next.config.sourceRef || '');
+          form.setFieldsValue(next.config as Record<string, unknown>);
+          onChange?.(next.config as Record<string, unknown>);
+        } else {
+          setActiveId(null);
+          const emptyVals = { exposedKey: undefined, displayFormat: 'number', unit: '', precision: 2, visibleToUser: false, sourceType: 'fixed', sourceRef: '', fixedValue: '' } as Record<string, unknown>;
+          form.setFieldsValue(emptyVals);
+          onChange?.(emptyVals);
+        }
+        
         messageApi.success('Donnée supprimée');
       } catch (err) {
         console.error('Erreur lors de la suppression de la variable:', err);
         messageApi.error('Impossible de supprimer la donnée');
       }
     })();
-  }, [api, form, nodeId, onChange, treeId, messageApi]);
+  }, [api, form, nodeId, onChange, treeId, messageApi, instances, activeId]);
 
   return (
     <Card size="small" variant="outlined" loading={loading}>

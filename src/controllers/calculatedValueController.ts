@@ -140,12 +140,74 @@ router.get('/:nodeId/calculated-value', async (req: Request, res: Response) => {
         fieldType: true,
         table_activeId: true,
         linkedTableIds: true,
-        treeId: true // ✨ Ajouté pour operation-interpreter
+        treeId: true, // ✨ Ajouté pour operation-interpreter
+        // 🔗 Champs Link pour afficher la valeur d'un autre champ
+        hasLink: true,
+        link_targetNodeId: true,
+        link_targetTreeId: true,
+        link_mode: true
       }
     });
 
     if (!node) {
       return res.status(404).json({ error: 'Nœud non trouvé' });
+    }
+
+    // 🔗 PRIORITÉ 0: Si le champ a un Link configuré, récupérer la valeur du champ cible
+    // Ce bloc DOIT être exécuté AVANT toute autre logique de calcul
+    if (node.hasLink && node.link_targetNodeId) {
+      console.log(`🔗 [LINK] Champ "${node.label}" (${nodeId}) a un link vers ${node.link_targetNodeId}`);
+      
+      // Récupérer la valeur du champ cible depuis SubmissionData (valeur scopée)
+      if (submissionId) {
+        const targetSubmissionData = await prisma.treeBranchLeafSubmissionData.findUnique({
+          where: { submissionId_nodeId: { submissionId, nodeId: node.link_targetNodeId } },
+          select: { value: true, fieldLabel: true, lastResolved: true }
+        });
+        
+        if (targetSubmissionData?.value) {
+          console.log(`🔗 [LINK] Valeur trouvée dans SubmissionData: "${targetSubmissionData.value}"`);
+          return res.json({
+            success: true,
+            nodeId: node.id,
+            label: node.label,
+            value: parseStoredStringValue(targetSubmissionData.value),
+            calculatedAt: toIsoString(targetSubmissionData.lastResolved),
+            calculatedBy: 'link',
+            type: node.type,
+            fieldType: node.fieldType,
+            fromLink: true,
+            linkTargetNodeId: node.link_targetNodeId,
+            linkTargetLabel: targetSubmissionData.fieldLabel
+          });
+        }
+      }
+      
+      // Fallback: récupérer la valeur directement depuis le nœud cible
+      const targetNode = await prisma.treeBranchLeafNode.findUnique({
+        where: { id: node.link_targetNodeId },
+        select: { calculatedValue: true, label: true, calculatedAt: true }
+      });
+      
+      if (targetNode?.calculatedValue) {
+        console.log(`🔗 [LINK] Valeur trouvée dans TreeBranchLeafNode: "${targetNode.calculatedValue}"`);
+        return res.json({
+          success: true,
+          nodeId: node.id,
+          label: node.label,
+          value: parseStoredStringValue(targetNode.calculatedValue),
+          calculatedAt: toIsoString(targetNode.calculatedAt),
+          calculatedBy: 'link',
+          type: node.type,
+          fieldType: node.fieldType,
+          fromLink: true,
+          linkTargetNodeId: node.link_targetNodeId,
+          linkTargetLabel: targetNode.label
+        });
+      }
+      
+      // Aucune valeur trouvée pour le lien
+      console.log(`⚠️ [LINK] Champ "${node.label}" - pas de valeur disponible pour le lien vers ${node.link_targetNodeId}`);
     }
 
     // 🎯 Champs DISPLAY: on préfère une valeur scoped par submissionId (zéro valeur fantôme).

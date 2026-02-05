@@ -50,6 +50,8 @@ import { tblLog, isTBLDebugEnabled } from '../../../../../utils/tblDebug';
 // 🤖 AI Measure: Import du composant et de la fonction de config
 import TBLImageFieldWithAI from './TBLImageFieldWithAI';
 import { getAIMeasureConfig } from '../../../../../hooks/useAIMeasure';
+// 🖼️ PHOTO MODE: Import pour afficher les images liées
+import { ImageDisplayBubble } from './ImageDisplayBubble';
 
 import type { RawTreeNode } from '../types';
 
@@ -487,6 +489,13 @@ interface TreeBranchLeafFieldConfig {
   hasTable?: boolean;
   hasAPI?: boolean;
   hasMarkers?: boolean;
+  hasLink?: boolean;
+  
+  // Colonnes directes pour les liens
+  link_targetNodeId?: string | null;
+  link_targetTreeId?: string | null;
+  link_mode?: string | null;
+  link_carryContext?: boolean | null;
   
   // Configuration des capacités
   conditionConfig?: {
@@ -2084,7 +2093,236 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
     const capabilities = field.capabilities || {};
     const tableActiveId = capabilities?.table?.activeId as string | undefined;
 
-    // 🚀 PRIORITÉ 1: Champs TreeBranchLeaf intelligents (générés dynamiquement)
+    // 🔗 DEBUG LINK: Accès aux propriétés via cast pour contourner TypeScript
+    const fieldAsAny = field as Record<string, unknown>;
+    
+    // 🔗 FIX: Si hasLink n'est pas sur field, chercher dans allNodes
+    // Les propriétés Link peuvent être perdues lors de la transformation, mais elles sont toujours sur le node original
+    const originalNode = allNodes?.find((n: { id?: string }) => n.id === field.id) as Record<string, unknown> | undefined;
+    
+    const fieldHasLink = Boolean(fieldAsAny.hasLink ?? originalNode?.hasLink);
+    const fieldLinkTargetNodeId = (fieldAsAny.link_targetNodeId ?? originalNode?.link_targetNodeId) as string | undefined;
+    const fieldLinkMode = (fieldAsAny.link_mode ?? originalNode?.link_mode) as string | undefined;
+    
+    // 🔗 DEBUG DYNAMIQUE: Logger TOUS les champs avec link détecté (pas de hardcoding)
+    if (fieldHasLink || fieldLinkTargetNodeId) {
+      console.log(`🔗 [LINK] Champ "${fieldConfig.label}" (${field.id}) hasLink=${fieldHasLink}, target=${fieldLinkTargetNodeId}, mode=${fieldLinkMode}`);
+      // 🔍 DEBUG DÉTAILLÉ pour comprendre d'où vient (ou ne vient pas) link_mode
+      console.log(`🔗 [LINK DEBUG] fieldAsAny.link_mode=${fieldAsAny.link_mode}, originalNode?.link_mode=${originalNode?.link_mode}`);
+    }
+
+    // 🔗 PRIORITÉ 0: Capacité Link (affiche la valeur d'un autre champ)
+    // Si le champ a un lien configuré, on affiche la valeur du champ cible
+    const hasLinkCapability = Boolean(fieldHasLink && fieldLinkTargetNodeId);
+    
+    if (hasLinkCapability && fieldLinkTargetNodeId) {
+      const targetNodeId = fieldLinkTargetNodeId;
+      
+      // 🖼️ MODE PHOTO: Afficher une image au lieu d'une valeur texte
+      if (fieldLinkMode === 'PHOTO') {
+        // 🎯 FIX: Passer les deux IDs pour que ImageDisplayBubble cherche dans formData[fieldId] ET formData[sourceNodeId]
+        return wrapWithCustomTooltip(
+          <ImageDisplayBubble
+            fieldId={field.id}
+            sourceNodeId={targetNodeId}
+            label={field.label || 'Photo'}
+            formData={formData as Record<string, unknown>}
+            size={60}
+          />,
+          field
+        );
+      }
+      
+      // 🔗 MODE JUMP/APPEND_SECTION: Afficher la valeur texte du champ lié
+      // 🎯 FIX: Le serveur stocke la valeur Link sous le nodeId du champ lui-même (field.id)
+      // pas sous le targetNodeId ! Donc on cherche d'abord dans formData[field.id]
+      let linkedValue = formData?.[field.id];
+      
+      // 🔍 DEBUG: Tracer la recherche de la valeur liée
+      console.log(`🔍🔍🔍 [LINK VALUE SEARCH] Champ "${field.label}" (${field.id}):`);
+      console.log(`   - formData[field.id]="${formData?.[field.id]}"`);
+      console.log(`   - formData[targetNodeId]="${formData?.[targetNodeId]}"`);
+      console.log(`   - targetNodeId="${targetNodeId}"`);
+      console.log(`   - fieldLinkMode="${fieldLinkMode}"`);
+      // Afficher toutes les clés qui contiennent "photo" ou l'ID
+      const relevantKeys = Object.keys(formData || {}).filter(k => 
+        k.toLowerCase().includes('photo') || 
+        k.includes(field.id) || 
+        k.includes(targetNodeId)
+      );
+      console.log(`   - Clés pertinentes dans formData:`, relevantKeys);
+      
+      // 🎯 ÉTAPE 1b: Si pas trouvé sous field.id, chercher sous targetNodeId (ancien comportement)
+      if (linkedValue === undefined || linkedValue === null || linkedValue === '') {
+        linkedValue = formData?.[targetNodeId];
+      }
+      
+      // 🎯 ÉTAPE 2: Si pas trouvé, essayer avec des variantes de clé
+      if (linkedValue === undefined || linkedValue === null || linkedValue === '') {
+        // Essayer avec le label du nœud cible si disponible
+        const targetLabel = (field as Record<string, unknown>).link_targetLabel as string | undefined;
+        if (targetLabel && formData?.[targetLabel] !== undefined) {
+          linkedValue = formData[targetLabel];
+        }
+      }
+      
+      // 🎯 ÉTAPE 3: Chercher dans les clés qui contiennent l'ID du nœud
+      if (linkedValue === undefined || linkedValue === null || linkedValue === '') {
+        for (const key of Object.keys(formData || {})) {
+          if (key.includes(targetNodeId)) {
+            linkedValue = formData[key];
+            break;
+          }
+        }
+      }
+      
+      // 🎯 ÉTAPE 4: Chercher le nœud cible dans allNodes pour avoir son label
+      if (linkedValue === undefined || linkedValue === null || linkedValue === '') {
+        const targetNode = allNodes?.find((n: { id?: string }) => n.id === targetNodeId);
+        if (targetNode) {
+          const targetLabel = (targetNode as { label?: string }).label;
+          
+          // Chercher dans formData avec le label
+          if (targetLabel) {
+            // Essayer avec le label exact
+            if (formData?.[targetLabel] !== undefined) {
+              linkedValue = formData[targetLabel];
+            }
+            // Essayer avec miroir data
+            if (linkedValue === undefined || linkedValue === null || linkedValue === '') {
+              const mirrorKey = `__mirror_data_${targetLabel}`;
+              if (formData?.[mirrorKey] !== undefined) {
+                linkedValue = formData[mirrorKey];
+              }
+            }
+          }
+        }
+      }
+      
+      // Si on a trouvé une valeur dans formData, l'afficher directement
+      if (linkedValue !== undefined && linkedValue !== null && linkedValue !== '') {
+        // 🎯 GESTION DES TABLEAUX (SELECT multiples ou cascader)
+        if (Array.isArray(linkedValue)) {
+          // Pour un cascader ou select multiple, afficher le dernier élément ou joindre
+          const displayValue = linkedValue.length > 0 
+            ? linkedValue[linkedValue.length - 1] // Dernier élément pour cascader
+            : '---';
+          
+          return wrapWithCustomTooltip(
+            <>{displayValue}</>,
+            field
+          );
+        }
+        
+        // 🖼️ DÉTECTION AUTOMATIQUE DES IMAGES: Si la valeur est une URL d'image, afficher ImageDisplayBubble
+        // Ceci fonctionne même si link_mode n'est pas "PHOTO" - détection intelligente
+        if (typeof linkedValue === 'string') {
+          // 🔍 DEBUG: Afficher la valeur pour voir ce qu'on reçoit
+          console.log(`🔍 [LINK IMAGE CHECK] Champ "${field.label}" - valeur type=${typeof linkedValue}, debut="${String(linkedValue).substring(0, 80)}..."`);
+          
+          // Détection des différents types d'URLs d'images
+          const isDataImage = linkedValue.startsWith('data:image');
+          const isBlobUrl = linkedValue.startsWith('blob:');
+          const isHttpImage = linkedValue.startsWith('http') && (
+            linkedValue.includes('.jpg') || 
+            linkedValue.includes('.jpeg') || 
+            linkedValue.includes('.png') || 
+            linkedValue.includes('.gif') || 
+            linkedValue.includes('.webp') ||
+            linkedValue.includes('.svg') ||
+            linkedValue.includes('/image')
+          );
+          
+          const isImageUrl = isDataImage || isBlobUrl || isHttpImage;
+          console.log(`🔍 [LINK IMAGE CHECK] isDataImage=${isDataImage}, isBlobUrl=${isBlobUrl}, isHttpImage=${isHttpImage}, isImageUrl=${isImageUrl}`);
+          
+          if (isImageUrl) {
+            console.log(`🖼️ [LINK] Détection automatique d'image RÉUSSIE pour "${field.label}"`);
+            return wrapWithCustomTooltip(
+              <ImageDisplayBubble
+                fieldId={field.id}
+                sourceNodeId={targetNodeId}
+                label={field.label || 'Photo'}
+                formData={{ ...formData, [field.id]: linkedValue } as Record<string, unknown>}
+                size={60}
+              />,
+              field
+            );
+          }
+        }
+        
+        // Formatage de la valeur
+        let displayValue: string;
+        if (typeof linkedValue === 'number') {
+          displayValue = linkedValue.toFixed(fieldConfig.decimals || 2);
+        } else if (typeof linkedValue === 'string') {
+          // 🔗 NOUVEAU: Si c'est un ID d'option, essayer de trouver le label correspondant
+          const targetNode = allNodes?.find((n: { id?: string }) => n.id === targetNodeId);
+          if (targetNode) {
+            const targetOptions = (targetNode as { options?: Array<{ id?: string; value?: string; label?: string }> }).options;
+            if (targetOptions && Array.isArray(targetOptions)) {
+              // Chercher l'option par value ou id
+              const matchedOption = targetOptions.find(
+                opt => opt.value === linkedValue || opt.id === linkedValue
+              );
+              if (matchedOption?.label) {
+                displayValue = matchedOption.label;
+                console.log(`🔗 [LINK] Option trouvée: "${linkedValue}" -> label="${displayValue}"`);
+              } else {
+                displayValue = linkedValue;
+              }
+            } else {
+              // Pas un SELECT, afficher la valeur directement
+              const num = parseFloat(linkedValue);
+              if (!isNaN(num) && fieldConfig.decimals !== undefined) {
+                displayValue = num.toFixed(fieldConfig.decimals || 2);
+              } else {
+                displayValue = linkedValue;
+              }
+            }
+          } else {
+            const num = parseFloat(linkedValue);
+            if (!isNaN(num) && fieldConfig.decimals !== undefined) {
+              displayValue = num.toFixed(fieldConfig.decimals || 2);
+            } else {
+              displayValue = linkedValue;
+            }
+          }
+        } else {
+          displayValue = String(linkedValue);
+        }
+        
+        // Ajouter l'unité si présente
+        if (fieldConfig.unit) {
+          displayValue = `${displayValue} ${fieldConfig.unit}`;
+        }
+        
+        return wrapWithCustomTooltip(
+          <>{displayValue}</>,
+          field
+        );
+      }
+      
+      // 🎯 FALLBACK: Utiliser BackendValueDisplay pour récupérer via API
+      // 🔗 FIX: Utiliser field.id (le nodeId du champ Link) car c'est là que le serveur stocke la valeur
+      if (!treeId) {
+        return <span style={{ color: '#888' }}>---</span>;
+      }
+      
+      return wrapWithCustomTooltip(
+        <BackendValueDisplay
+          nodeId={field.id}
+          treeId={treeId}
+          formData={formData}
+          unit={fieldConfig.unit}
+          precision={fieldConfig.decimals || 2}
+          placeholder="---"
+        />,
+        field
+      );
+    }
+
+    // �🚀 PRIORITÉ 1: Champs TreeBranchLeaf intelligents (générés dynamiquement)
     if (field.isTreeBranchLeafSmart && (field.hasData || field.hasFormula)) {
       const caps = capabilities;
 

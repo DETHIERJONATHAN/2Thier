@@ -340,9 +340,10 @@ const OptimizedStructureNodeComponent: React.FC<OptimizedStructureNodeProps> = (
       );
     }
     
-    if (node.linkConfig && Object.keys(node.linkConfig).length > 0) {
+    // 🔗 FIX: Utiliser hasLink au lieu de linkConfig pour être cohérent avec le nouveau système
+    if (node.hasLink) {
       icons.push(
-        <span key="link" title="Lien" style={{ color: '#13c2c2', fontSize: '9px', marginLeft: '1px', opacity: 0.7 }}>
+        <span key="link" title="Lien vers un autre champ" style={{ color: '#13c2c2', fontSize: '9px', marginLeft: '1px', opacity: 0.7 }}>
           🔗
         </span>
       );

@@ -1322,9 +1322,27 @@ router.get('/trees/:treeId/nodes', async (req, res) => {
       ]
     });
 
+    // 🔗 DEBUG LINK RAW: Voir les champs avec hasLink AVANT transformation
+    const rawNodesWithLink = nodes.filter(node => node.hasLink === true);
+    if (rawNodesWithLink.length > 0) {
+      console.log(`🔗🔗🔗 [API RAW] ${rawNodesWithLink.length} champs hasLink=true AVANT buildResponseFromColumns`);
+      rawNodesWithLink.forEach(node => {
+        console.log(`  - RAW "${node.label}" (${node.id}): hasLink=${node.hasLink}`);
+      });
+    }
+
+
     // ÃƒÂ°Ã…Â¸Ã¢â‚¬ÂÃ¢â‚¬Å¾ MIGRATION : Reconstruire les donnÃƒÆ’Ã‚Â©es JSON depuis les colonnes dÃƒÆ’Ã‚Â©diÃƒÆ’Ã‚Â©es
     const reconstructedNodes = nodes.map(node => buildResponseFromColumns(node));
     
+    // 🔗 DEBUG LINK: Voir les champs avec hasLink
+    const nodesWithLink = reconstructedNodes.filter(node => node.hasLink === true);
+    if (nodesWithLink.length > 0) {
+      console.log(`🔗🔗🔗 [API /trees/:treeId/nodes] ${nodesWithLink.length} champs avec hasLink=true:`);
+      nodesWithLink.forEach(node => {
+        console.log(`  - "${node.label}" (${node.id}): hasLink=${node.hasLink}, link_targetNodeId=${node.link_targetNodeId}, link_mode=${node.link_mode}`);
+      });
+    }
     // ÃƒÂ°Ã…Â¸Ã…Â¡Ã‚Â¨ DEBUG TOOLTIP FINAL : VÃƒÆ’Ã‚Â©rifier ce qui va ÃƒÆ’Ã‚Âªtre envoyÃƒÆ’Ã‚Â© au client
     const nodesWithTooltips = reconstructedNodes.filter(node => 
       node.text_helpTooltipType && node.text_helpTooltipType !== 'none'
@@ -3067,6 +3085,12 @@ function buildResponseFromColumns(node: any): Record<string, unknown> {
     aiMeasure_autoTrigger: node.aiMeasure_autoTrigger ?? true,
     aiMeasure_prompt: node.aiMeasure_prompt || null,
     aiMeasure_keys: node.aiMeasure_keys || null,
+    // 🔗 LINK: Colonnes dédiées pour la configuration des liens (valeur d'un autre champ)
+    hasLink: node.hasLink ?? false,
+    link_targetNodeId: node.link_targetNodeId || null,
+    link_targetTreeId: node.link_targetTreeId || null,
+    link_mode: node.link_mode || null,
+    link_carryContext: node.link_carryContext ?? false,
     // ÃƒÂ°Ã…Â¸Ã¢â‚¬ÂÃ‚Â¥ TABLES : Inclure les tables avec leurs colonnes/lignes pour le lookup
     tables: node.TreeBranchLeafNodeTable || [],
     // ÃƒÂ°Ã…Â¸Ã¢â‚¬ÂÃ¢â‚¬â€ SHARED REFERENCES : Inclure les rÃƒÆ’Ã‚Â©fÃƒÆ’Ã‚Â©rences partagÃƒÆ’Ã‚Â©es pour les cascades
@@ -4476,6 +4500,12 @@ router.get('/nodes/:nodeId', async (req, res) => {
         aiMeasure_autoTrigger: true,
         aiMeasure_prompt: true,
         aiMeasure_keys: true,
+        // Colonnes Link
+        hasLink: true,
+        link_targetNodeId: true,
+        link_targetTreeId: true,
+        link_mode: true,
+        link_carryContext: true,
         TreeBranchLeafTree: { select: { organizationId: true } }
       }
     });
@@ -4502,6 +4532,12 @@ router.get('/nodes/:nodeId', async (req, res) => {
       aiMeasure_autoTrigger: node.aiMeasure_autoTrigger,
       aiMeasure_prompt: node.aiMeasure_prompt,
       aiMeasure_keys: node.aiMeasure_keys,
+      // Colonnes Link
+      hasLink: node.hasLink || false,
+      link_targetNodeId: node.link_targetNodeId || null,
+      link_targetTreeId: node.link_targetTreeId || null,
+      link_mode: node.link_mode || 'JUMP',
+      link_carryContext: node.link_carryContext || false,
     });
   } catch (error) {
     console.error('[TreeBranchLeaf API] Error fetching node info:', error);
