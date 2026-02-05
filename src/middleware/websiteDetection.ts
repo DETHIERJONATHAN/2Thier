@@ -28,7 +28,9 @@ const CRM_DOMAINS = [
   'crm.2thier.be',
   'localhost',
   'run.app',         // Google Cloud Run
-  'appspot.com'      // Google App Engine
+  'appspot.com',     // Google App Engine
+  'github.dev',      // GitHub Codespaces
+  'preview.app.github.dev'  // GitHub Preview
 ];
 
 export interface WebsiteRequest extends Request {

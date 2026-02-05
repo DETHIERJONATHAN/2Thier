@@ -180,14 +180,18 @@ function renderFooter(content: any): string {
 
 /**
  * Rend le site vitrine complet en HTML
+ * 
+ * 🚀 STRATÉGIE: Au lieu de générer du HTML SSR basique,
+ * on redirige vers le frontend React qui a le beau site complet
  */
 export async function renderWebsite(req: WebsiteRequest, res: Response) {
   try {
     const website = req.websiteData;
 
-    console.log(`🎨 [WEBSITE-RENDERER] Données reçues:`, {
+    console.log(`🎨 [WEBSITE-RENDERER] Site détecté:`, {
       hasWebsite: !!website,
       name: website?.name,
+      slug: website?.slug,
       sectionsCount: website?.sections?.length
     });
 
@@ -208,13 +212,16 @@ export async function renderWebsite(req: WebsiteRequest, res: Response) {
       `);
     }
 
-    // Générer le HTML de toutes les sections
-    const sectionsHTML = website.sections
-      .map(section => renderSection(section))
-      .join('\n');
-
-    // Générer le document HTML complet
-    const html = `
+    // 🚀 REDIRECTION VERS LE FRONTEND REACT
+    // Le frontend React a le beau site complet avec tous les renderers
+    // On redirige vers la route /site-vitrine-2thier (ou selon le slug)
+    const targetPath = `/${website.slug}`;
+    
+    console.log(`🔄 [WEBSITE-RENDERER] Redirection vers: ${targetPath}`);
+    
+    // Retourner le HTML du frontend React (SPA)
+    // Le frontend va charger les données via l'API et afficher le site complet
+    const frontendHtml = `
       <!DOCTYPE html>
       <html lang="fr">
         <head>
@@ -222,49 +229,59 @@ export async function renderWebsite(req: WebsiteRequest, res: Response) {
           <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes">
           <meta name="mobile-web-app-capable" content="yes">
           <meta name="apple-mobile-web-app-capable" content="yes">
-          <title>${website.name}</title>
-          <meta name="description" content="${website.config?.seo?.description || website.name}">
+          <title>${website.name || '2Thier Energy'}</title>
+          <meta name="description" content="${website.config?.metaDescription || website.config?.seo?.description || 'Votre partenaire en transition énergétique'}">
+          <meta name="keywords" content="photovoltaïque, batteries, bornes de recharge, pompes à chaleur, énergie renouvelable, Belgique">
+          <meta property="og:title" content="${website.name || '2Thier Energy'}">
+          <meta property="og:description" content="${website.config?.metaDescription || 'Votre partenaire en transition énergétique'}">
+          <meta property="og:type" content="website">
+          <link rel="icon" type="image/png" href="/2thier-logo.png">
+          <script>
+            // Redirection côté client vers la route React
+            window.location.replace('${targetPath}');
+          </script>
           <style>
-            * {
+            body {
               margin: 0;
               padding: 0;
-              box-sizing: border-box;
+              background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+              min-height: 100vh;
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
             }
-            body {
-              font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-              line-height: 1.6;
+            .loading {
+              text-align: center;
+              color: white;
             }
-            .container {
-              max-width: 1200px;
-              margin: 0 auto;
-              padding: 0 20px;
+            .spinner {
+              width: 50px;
+              height: 50px;
+              border: 4px solid rgba(255,255,255,0.3);
+              border-top-color: white;
+              border-radius: 50%;
+              animation: spin 1s linear infinite;
+              margin: 0 auto 20px;
             }
-            @media (max-width: 768px) {
-              .site-header .container {
-                flex-direction: column;
-                gap: 20px;
-              }
-              .menu {
-                flex-direction: column;
-                text-align: center;
-              }
-              .services-grid {
-                grid-template-columns: 1fr !important;
-              }
+            @keyframes spin {
+              to { transform: rotate(360deg); }
             }
           </style>
         </head>
         <body>
-          ${sectionsHTML}
-          <script>
-            console.log('✅ Site vitrine chargé: ${website.name}');
-            console.log('📍 Domaine: ${website.domain}');
-          </script>
+          <noscript>
+            <meta http-equiv="refresh" content="0;url=${targetPath}">
+          </noscript>
+          <div class="loading">
+            <div class="spinner"></div>
+            <p>Chargement de ${website.name || '2Thier Energy'}...</p>
+          </div>
         </body>
       </html>
     `;
 
-    res.send(html);
+    res.send(frontendHtml);
   } catch (error) {
     console.error('❌ [WEBSITE-RENDERER] Erreur:', error);
     res.status(500).send('Erreur lors du chargement du site');
