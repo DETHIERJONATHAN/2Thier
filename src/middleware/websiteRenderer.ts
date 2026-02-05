@@ -9,6 +9,8 @@
 
 import { Response } from 'express';
 import { WebsiteRequest } from '../middleware/websiteDetection';
+import * as fs from 'fs';
+import * as path from 'path';
 
 /**
  * Génère le HTML d'une section en fonction de son type
@@ -181,8 +183,8 @@ function renderFooter(content: any): string {
 /**
  * Rend le site vitrine complet en HTML
  * 
- * 🚀 STRATÉGIE: Au lieu de générer du HTML SSR basique,
- * on redirige vers le frontend React qui a le beau site complet
+ * 🚀 STRATÉGIE: Servir le vrai index.html de React avec les bundles JS/CSS
+ * pour que l'application React prenne le relais et affiche le site vitrine
  */
 export async function renderWebsite(req: WebsiteRequest, res: Response) {
   try {
@@ -212,76 +214,73 @@ export async function renderWebsite(req: WebsiteRequest, res: Response) {
       `);
     }
 
-    // 🚀 REDIRECTION VERS LE FRONTEND REACT
-    // Le frontend React a le beau site complet avec tous les renderers
-    // On redirige vers la route /site-vitrine-2thier (ou selon le slug)
-    const targetPath = `/${website.slug}`;
+    // 🚀 SERVIR LE VRAI INDEX.HTML DE REACT AVEC LES BUNDLES
+    // Au lieu de rediriger (ce qui crée une boucle), on sert directement
+    // le fichier index.html qui contient les références aux bundles JS/CSS
+    const distDir = path.resolve(process.cwd(), 'dist');
+    const indexHtmlPath = path.join(distDir, 'index.html');
     
-    console.log(`🔄 [WEBSITE-RENDERER] Redirection vers: ${targetPath}`);
+    if (fs.existsSync(indexHtmlPath)) {
+      // Lire le contenu du index.html
+      let indexHtml = fs.readFileSync(indexHtmlPath, 'utf-8');
+      
+      // Injecter les métadonnées SEO du site vitrine
+      const seoMeta = `
+        <title>${website.name || '2Thier Energy'}</title>
+        <meta name="description" content="${website.config?.metaDescription || website.config?.seo?.description || 'Votre partenaire en transition énergétique'}">
+        <meta name="keywords" content="photovoltaïque, batteries, bornes de recharge, pompes à chaleur, énergie renouvelable, Belgique">
+        <meta property="og:title" content="${website.name || '2Thier Energy'}">
+        <meta property="og:description" content="${website.config?.metaDescription || 'Votre partenaire en transition énergétique'}">
+        <meta property="og:type" content="website">
+      `;
+      
+      // Remplacer le title par défaut par le SEO du site vitrine
+      indexHtml = indexHtml.replace(/<title>.*?<\/title>/i, seoMeta);
+      
+      // Injecter le slug du site dans une variable globale pour que React sache quel site charger
+      const siteDataScript = `
+        <script>
+          window.__WEBSITE_SLUG__ = '${website.slug}';
+          window.__WEBSITE_DOMAIN__ = '${website.domain}';
+        </script>
+      `;
+      indexHtml = indexHtml.replace('</head>', `${siteDataScript}</head>`);
+      
+      console.log(`📱 [WEBSITE-RENDERER] Serving React app with bundles for: ${website.name}`);
+      return res.send(indexHtml);
+    }
     
-    // Retourner le HTML du frontend React (SPA)
-    // Le frontend va charger les données via l'API et afficher le site complet
-    const frontendHtml = `
+    // Fallback si pas de build React (environnement de dev)
+    console.warn('⚠️ [WEBSITE-RENDERER] dist/index.html non trouvé, fallback SSR basique');
+    
+    // Générer un rendu SSR basique avec les sections
+    const sections = website.sections || [];
+    const sectionsHtml = sections
+      .sort((a: any, b: any) => a.order - b.order)
+      .map((section: any) => renderSection(section))
+      .join('\n');
+
+    const fallbackHtml = `
       <!DOCTYPE html>
       <html lang="fr">
         <head>
           <meta charset="UTF-8">
-          <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes">
-          <meta name="mobile-web-app-capable" content="yes">
-          <meta name="apple-mobile-web-app-capable" content="yes">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
           <title>${website.name || '2Thier Energy'}</title>
-          <meta name="description" content="${website.config?.metaDescription || website.config?.seo?.description || 'Votre partenaire en transition énergétique'}">
-          <meta name="keywords" content="photovoltaïque, batteries, bornes de recharge, pompes à chaleur, énergie renouvelable, Belgique">
-          <meta property="og:title" content="${website.name || '2Thier Energy'}">
-          <meta property="og:description" content="${website.config?.metaDescription || 'Votre partenaire en transition énergétique'}">
-          <meta property="og:type" content="website">
+          <meta name="description" content="${website.config?.metaDescription || 'Votre partenaire en transition énergétique'}">
           <link rel="icon" type="image/png" href="/2thier-logo.png">
-          <script>
-            // Redirection côté client vers la route React
-            window.location.replace('${targetPath}');
-          </script>
           <style>
-            body {
-              margin: 0;
-              padding: 0;
-              background: linear-gradient(135deg, #10b981 0%, #059669 100%);
-              min-height: 100vh;
-              display: flex;
-              align-items: center;
-              justify-content: center;
-              font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            }
-            .loading {
-              text-align: center;
-              color: white;
-            }
-            .spinner {
-              width: 50px;
-              height: 50px;
-              border: 4px solid rgba(255,255,255,0.3);
-              border-top-color: white;
-              border-radius: 50%;
-              animation: spin 1s linear infinite;
-              margin: 0 auto 20px;
-            }
-            @keyframes spin {
-              to { transform: rotate(360deg); }
-            }
+            * { margin: 0; padding: 0; box-sizing: border-box; }
+            body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
           </style>
         </head>
         <body>
-          <noscript>
-            <meta http-equiv="refresh" content="0;url=${targetPath}">
-          </noscript>
-          <div class="loading">
-            <div class="spinner"></div>
-            <p>Chargement de ${website.name || '2Thier Energy'}...</p>
-          </div>
+          ${sectionsHtml}
         </body>
       </html>
     `;
 
-    res.send(frontendHtml);
+    res.send(fallbackHtml);
   } catch (error) {
     console.error('❌ [WEBSITE-RENDERER] Erreur:', error);
     res.status(500).send('Erreur lors du chargement du site');
