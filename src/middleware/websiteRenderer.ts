@@ -15,7 +15,8 @@ import { WebsiteRequest } from '../middleware/websiteDetection';
  */
 function renderSection(section: any): string {
   const content = section.content || {};
-  const sectionType = section.sectionType;
+  // Note: Le champ s'appelle "type" dans la BD (pas "sectionType")
+  const sectionType = section.type;
 
   switch (sectionType) {
     case 'header':
