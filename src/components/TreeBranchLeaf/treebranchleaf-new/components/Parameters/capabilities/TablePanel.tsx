@@ -1087,17 +1087,37 @@ const TablePanel: React.FC<TablePanelProps> = ({ treeId: initialTreeId, nodeId, 
     if (!multiplierConditionId || !multiplierSelectorTarget) return;
     
     const fieldKey = multiplierSelectorTarget === 'A' ? 'conditionFieldA' : 'conditionFieldB';
-    updateFilterCondition(multiplierConditionId, {
-      multiplier: {
-        ...(lookupConfig.filterConditions?.conditions?.find(c => c.id === multiplierConditionId)?.multiplier || {}),
-        [fieldKey]: selection.ref
-      }
-    });
+    
+    // Support pour les filtres columnSourceOption (préfixe cso_)
+    if (multiplierConditionId.startsWith('cso_')) {
+      const filterIndex = parseInt(multiplierConditionId.replace('cso_', ''), 10);
+      updateLookupConfig((prev) => {
+        const newFilters = [...(prev.columnSourceOption?.filters || [])];
+        if (newFilters[filterIndex]) {
+          newFilters[filterIndex] = {
+            ...newFilters[filterIndex],
+            multiplier: {
+              ...(newFilters[filterIndex].multiplier || {}),
+              [fieldKey]: selection.ref
+            }
+          };
+        }
+        return { ...prev, columnSourceOption: { ...(prev.columnSourceOption || {}), filters: newFilters } };
+      });
+    } else {
+      // Support pour les filterConditions classiques
+      updateFilterCondition(multiplierConditionId, {
+        multiplier: {
+          ...(lookupConfig.filterConditions?.conditions?.find(c => c.id === multiplierConditionId)?.multiplier || {}),
+          [fieldKey]: selection.ref
+        }
+      });
+    }
     
     setShowMultiplierSelector(false);
     setMultiplierConditionId(null);
     setMultiplierSelectorTarget(null);
-  }, [multiplierConditionId, multiplierSelectorTarget, updateFilterCondition, lookupConfig.filterConditions?.conditions]);
+  }, [multiplierConditionId, multiplierSelectorTarget, updateFilterCondition, updateLookupConfig, lookupConfig.filterConditions?.conditions]);
 
   // Gestion Colonnes (tous types)
   const addColumn = useCallback(() => {
@@ -2243,6 +2263,191 @@ const TablePanel: React.FC<TablePanelProps> = ({ treeId: initialTreeId, nodeId, 
                                         <Text type="secondary" style={{ fontSize: 10, marginTop: 2, display: 'block', color: '#999' }}>
                                           Sélectionnez un champ, formule, répétition, référence, condition ou table
                                         </Text>
+                                      </div>
+                                    )}
+
+                                    {/* ✨ Multiplicateur conditionnel */}
+                                    {filter.column && (
+                                      <div style={{ 
+                                        marginTop: 4,
+                                        padding: '8px', 
+                                        background: filter.multiplier?.enabled ? '#fff7e6' : '#fafafa', 
+                                        border: `1px ${filter.multiplier?.enabled ? 'solid #faad14' : 'dashed #d9d9d9'}`, 
+                                        borderRadius: '4px' 
+                                      }}>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: filter.multiplier?.enabled ? 8 : 0 }}>
+                                          <Switch
+                                            size="small"
+                                            checked={filter.multiplier?.enabled || false}
+                                            onChange={(checked) => {
+                                              updateLookupConfig((prev) => {
+                                                const newFilters = [...(prev.columnSourceOption?.filters || [])];
+                                                newFilters[index] = { 
+                                                  ...newFilters[index], 
+                                                  multiplier: {
+                                                    ...(newFilters[index].multiplier || {}),
+                                                    enabled: checked,
+                                                    factor: newFilters[index].multiplier?.factor ?? 2,
+                                                    elseFactor: newFilters[index].multiplier?.elseFactor ?? 1,
+                                                    conditionOperator: newFilters[index].multiplier?.conditionOperator ?? 'equals'
+                                                  }
+                                                };
+                                                return { ...prev, columnSourceOption: { ...(prev.columnSourceOption || {}), filters: newFilters } };
+                                              });
+                                            }}
+                                            disabled={readOnly}
+                                          />
+                                          <Text style={{ fontSize: 11, fontWeight: 500 }}>
+                                            ✖️ Multiplicateur conditionnel
+                                          </Text>
+                                          {filter.multiplier?.enabled && (
+                                            <Text type="secondary" style={{ fontSize: 10 }}>
+                                              (multiplie la valeur du tableau avant comparaison)
+                                            </Text>
+                                          )}
+                                        </div>
+
+                                        {filter.multiplier?.enabled && (
+                                          <Space direction="vertical" style={{ width: '100%' }} size={4}>
+                                            {/* Condition: SI champ A [opérateur] champ B */}
+                                            <Text type="secondary" style={{ fontSize: 11, fontWeight: 600 }}>SI :</Text>
+                                            <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+                                              {/* Champ A */}
+                                              <div style={{ flex: 1 }}>
+                                                <div style={{ display: 'flex', gap: 4 }}>
+                                                  <Input
+                                                    size="small"
+                                                    placeholder="Champ A"
+                                                    value={filter.multiplier.conditionFieldA || ''}
+                                                    readOnly
+                                                    style={{ flex: 1, fontSize: 10 }}
+                                                  />
+                                                  <Button
+                                                    size="small"
+                                                    type="dashed"
+                                                    onClick={() => {
+                                                      setMultiplierConditionId(`cso_${index}`);
+                                                      setMultiplierSelectorTarget('A');
+                                                      setShowMultiplierSelector(true);
+                                                    }}
+                                                    disabled={readOnly}
+                                                  >
+                                                    🌳
+                                                  </Button>
+                                                </div>
+                                              </div>
+                                              
+                                              {/* Opérateur */}
+                                              <Select
+                                                size="small"
+                                                value={filter.multiplier.conditionOperator || 'equals'}
+                                                style={{ width: 70 }}
+                                                onChange={(value) => {
+                                                  updateLookupConfig((prev) => {
+                                                    const newFilters = [...(prev.columnSourceOption?.filters || [])];
+                                                    newFilters[index] = { ...newFilters[index], multiplier: { ...newFilters[index].multiplier, conditionOperator: value } };
+                                                    return { ...prev, columnSourceOption: { ...(prev.columnSourceOption || {}), filters: newFilters } };
+                                                  });
+                                                }}
+                                                disabled={readOnly}
+                                              >
+                                                <Select.Option value="equals">=</Select.Option>
+                                                <Select.Option value="notEquals">≠</Select.Option>
+                                                <Select.Option value="greaterThan">&gt;</Select.Option>
+                                                <Select.Option value="lessThan">&lt;</Select.Option>
+                                                <Select.Option value="greaterOrEqual">≥</Select.Option>
+                                                <Select.Option value="lessOrEqual">≤</Select.Option>
+                                              </Select>
+
+                                              {/* Champ B */}
+                                              <div style={{ flex: 1 }}>
+                                                <div style={{ display: 'flex', gap: 4 }}>
+                                                  <Input
+                                                    size="small"
+                                                    placeholder="Champ B"
+                                                    value={filter.multiplier.conditionFieldB || ''}
+                                                    readOnly
+                                                    style={{ flex: 1, fontSize: 10 }}
+                                                  />
+                                                  <Button
+                                                    size="small"
+                                                    type="dashed"
+                                                    onClick={() => {
+                                                      setMultiplierConditionId(`cso_${index}`);
+                                                      setMultiplierSelectorTarget('B');
+                                                      setShowMultiplierSelector(true);
+                                                    }}
+                                                    disabled={readOnly}
+                                                  >
+                                                    🌳
+                                                  </Button>
+                                                </div>
+                                              </div>
+                                            </div>
+
+                                            {/* ALORS / SINON facteurs */}
+                                            <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
+                                              <div style={{ flex: 1 }}>
+                                                <Text type="secondary" style={{ fontSize: 10 }}>ALORS × :</Text>
+                                                <InputNumber
+                                                  size="small"
+                                                  min={0}
+                                                  step={0.5}
+                                                  value={filter.multiplier.factor ?? 2}
+                                                  onChange={(value) => {
+                                                    updateLookupConfig((prev) => {
+                                                      const newFilters = [...(prev.columnSourceOption?.filters || [])];
+                                                      newFilters[index] = { ...newFilters[index], multiplier: { ...newFilters[index].multiplier, factor: value ?? 2 } };
+                                                      return { ...prev, columnSourceOption: { ...(prev.columnSourceOption || {}), filters: newFilters } };
+                                                    });
+                                                  }}
+                                                  style={{ width: '100%', marginTop: 2 }}
+                                                  disabled={readOnly}
+                                                />
+                                              </div>
+                                              <div style={{ flex: 1 }}>
+                                                <Text type="secondary" style={{ fontSize: 10 }}>SINON × :</Text>
+                                                <InputNumber
+                                                  size="small"
+                                                  min={0}
+                                                  step={0.5}
+                                                  value={filter.multiplier.elseFactor ?? 1}
+                                                  onChange={(value) => {
+                                                    updateLookupConfig((prev) => {
+                                                      const newFilters = [...(prev.columnSourceOption?.filters || [])];
+                                                      newFilters[index] = { ...newFilters[index], multiplier: { ...newFilters[index].multiplier, elseFactor: value ?? 1 } };
+                                                      return { ...prev, columnSourceOption: { ...(prev.columnSourceOption || {}), filters: newFilters } };
+                                                    });
+                                                  }}
+                                                  style={{ width: '100%', marginTop: 2 }}
+                                                  disabled={readOnly}
+                                                />
+                                              </div>
+                                            </div>
+
+                                            {/* Preview de la règle */}
+                                            <div style={{ 
+                                              marginTop: 4, 
+                                              padding: '4px 8px', 
+                                              background: '#fffbe6', 
+                                              borderRadius: 4, 
+                                              border: '1px solid #ffe58f' 
+                                            }}>
+                                              <Text style={{ fontSize: 10, color: '#874d00' }}>
+                                                📐 SI {filter.multiplier.conditionFieldA || '?'} {
+                                                  filter.multiplier.conditionOperator === 'equals' ? '=' :
+                                                  filter.multiplier.conditionOperator === 'notEquals' ? '≠' :
+                                                  filter.multiplier.conditionOperator === 'greaterThan' ? '>' :
+                                                  filter.multiplier.conditionOperator === 'lessThan' ? '<' :
+                                                  filter.multiplier.conditionOperator === 'greaterOrEqual' ? '≥' :
+                                                  filter.multiplier.conditionOperator === 'lessOrEqual' ? '≤' : '='
+                                                } {filter.multiplier.conditionFieldB || '?'}
+                                                {' → '}valeur tableau × {filter.multiplier.factor ?? 2}
+                                                {' | sinon '}× {filter.multiplier.elseFactor ?? 1}
+                                              </Text>
+                                            </div>
+                                          </Space>
+                                        )}
                                       </div>
                                     )}
                                   </Space>

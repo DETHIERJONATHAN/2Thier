@@ -7239,7 +7239,57 @@ async function applyTableFilters(
         break;
       }
 
-      const cellValue = row[columnIndex];
+      let cellValue: unknown = row[columnIndex];
+
+      // ✨ Multiplicateur conditionnel: modifier cellValue avant la comparaison
+      if ((filter as any).multiplier?.enabled) {
+        const mult = (filter as any).multiplier;
+        let multiplierConditionMet = false;
+        
+        const resolveRef = (ref: string | undefined): unknown => {
+          if (!ref) return null;
+          if (ref.startsWith('@value.') || ref.startsWith('@select.')) {
+            const nodeId = ref.replace(/^@(value|select)\./, '');
+            return formValues[nodeId] ?? null;
+          }
+          if (ref.startsWith('@calculated.') || ref.startsWith('@calculated:')) {
+            const nodeId = ref.replace(/^@calculated[.:]/, '');
+            return formValues[nodeId] ?? null;
+          }
+          if (ref.startsWith('node-formula:') || ref.startsWith('formula:')) {
+            const nodeId = ref.replace(/^(node-formula|formula):/, '');
+            return formValues[nodeId] ?? null;
+          }
+          return formValues[ref] ?? null;
+        };
+        
+        const fieldAValue = resolveRef(mult.conditionFieldA);
+        const fieldBValue = resolveRef(mult.conditionFieldB);
+        
+        if (fieldAValue !== null && fieldAValue !== undefined && fieldBValue !== null && fieldBValue !== undefined) {
+          const numA = Number(fieldAValue);
+          const numB = Number(fieldBValue);
+          const strA = String(fieldAValue).trim().toLowerCase();
+          const strB = String(fieldBValue).trim().toLowerCase();
+          
+          switch (mult.conditionOperator) {
+            case 'equals': multiplierConditionMet = (!isNaN(numA) && !isNaN(numB)) ? numA === numB : strA === strB; break;
+            case 'notEquals': multiplierConditionMet = (!isNaN(numA) && !isNaN(numB)) ? numA !== numB : strA !== strB; break;
+            case 'greaterThan': multiplierConditionMet = numA > numB; break;
+            case 'lessThan': multiplierConditionMet = numA < numB; break;
+            case 'greaterOrEqual': multiplierConditionMet = numA >= numB; break;
+            case 'lessOrEqual': multiplierConditionMet = numA <= numB; break;
+          }
+        }
+        
+        const factor = multiplierConditionMet ? (mult.factor ?? 2) : (mult.elseFactor ?? 1);
+        const numericCell = Number(cellValue);
+        if (!isNaN(numericCell) && factor !== 1) {
+          console.log(`[Multiplier] ${mult.conditionFieldA}=${fieldAValue} ${mult.conditionOperator} ${mult.conditionFieldB}=${fieldBValue} -> ${multiplierConditionMet ? 'OUI' : 'NON'} -> cellValue ${cellValue} x ${factor} = ${numericCell * factor}`);
+          cellValue = numericCell * factor;
+        }
+      }
+
       const passes = compareFilterValues(cellValue, filter.operator, filter.resolvedValue);
       
       
