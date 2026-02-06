@@ -239,6 +239,26 @@ const ConditionsDnDComposer: React.FC<Props> = ({ nodeId, value, onChange, readO
             readOnly={readOnly}
           />
           <Button size="small" onClick={() => setPickLeft(true)}>Sélectionner…</Button>
+          <Input
+            size="small"
+            placeholder="ou tapez une valeur…"
+            style={{ width: 160 }}
+            disabled={readOnly}
+            onPressEnter={(e) => {
+              const val = (e.target as HTMLInputElement).value.trim();
+              if (val) {
+                updateExpr({ left: tokenToValueRef(val) });
+                (e.target as HTMLInputElement).value = '';
+              }
+            }}
+            onBlur={(e) => {
+              const val = e.target.value.trim();
+              if (val) {
+                updateExpr({ left: tokenToValueRef(val) });
+                e.target.value = '';
+              }
+            }}
+          />
           <Select
             size="small"
             value={binary.op as BinaryOp}
@@ -256,11 +276,31 @@ const ConditionsDnDComposer: React.FC<Props> = ({ nodeId, value, onChange, readO
                 readOnly={readOnly}
               />
               <Button size="small" onClick={() => setPickRight(true)}>Sélectionner…</Button>
+              <Input
+                size="small"
+                placeholder="ou tapez une valeur…"
+                style={{ width: 160 }}
+                disabled={readOnly}
+                onPressEnter={(e) => {
+                  const val = (e.target as HTMLInputElement).value.trim();
+                  if (val) {
+                    updateExpr({ right: tokenToValueRef(val) });
+                    (e.target as HTMLInputElement).value = '';
+                  }
+                }}
+                onBlur={(e) => {
+                  const val = e.target.value.trim();
+                  if (val) {
+                    updateExpr({ right: tokenToValueRef(val) });
+                    e.target.value = '';
+                  }
+                }}
+              />
             </>
           )}
         </Space>
         <Text type="secondary" style={{ fontSize: 12 }}>
-          Utilisez les boutons « Sélectionner… » pour choisir vos références. Le glisser-déposer depuis la Structure est désactivé ici.
+          Utilisez « Sélectionner… » pour choisir depuis l'arbre, ou tapez directement une valeur (ex: HUAWEI, 100, etc.).
         </Text>
         <div style={{ height: 1, background: '#f0f0f0', margin: '4px 0' }} />
         <Text strong>ALORS</Text>
@@ -276,7 +316,23 @@ const ConditionsDnDComposer: React.FC<Props> = ({ nodeId, value, onChange, readO
             })}
           </Space>
         )}
-        <Button size="small" onClick={() => setPickThen(true)}>Sélectionner des nœuds…</Button>
+        <Space>
+          <Button size="small" onClick={() => setPickThen(true)}>Sélectionner des nœuds…</Button>
+          <Input
+            size="small"
+            placeholder="ou tapez un ID/valeur + Entrée"
+            style={{ width: 220 }}
+            disabled={readOnly}
+            onPressEnter={(e) => {
+              const val = (e.target as HTMLInputElement).value.trim();
+              if (val) {
+                const normalizedRef = normalizeActionRef(val);
+                if (normalizedRef) updateShowAction(uniqRefs([...(thenRefs || []), normalizedRef]));
+                (e.target as HTMLInputElement).value = '';
+              }
+            }}
+          />
+        </Space>
 
         <div style={{ height: 1, background: '#f0f0f0', margin: '4px 0' }} />
         <Text strong>SINON</Text>
@@ -292,7 +348,23 @@ const ConditionsDnDComposer: React.FC<Props> = ({ nodeId, value, onChange, readO
             })}
           </Space>
         )}
-        <Button size="small" onClick={() => setPickElse(true)}>Sélectionner des nœuds…</Button>
+        <Space>
+          <Button size="small" onClick={() => setPickElse(true)}>Sélectionner des nœuds…</Button>
+          <Input
+            size="small"
+            placeholder="ou tapez un ID/valeur + Entrée"
+            style={{ width: 220 }}
+            disabled={readOnly}
+            onPressEnter={(e) => {
+              const val = (e.target as HTMLInputElement).value.trim();
+              if (val) {
+                const normalizedRef = normalizeActionRef(val);
+                if (normalizedRef) updateElseShowAction(uniqRefs([...(elseRefs || []), normalizedRef]));
+                (e.target as HTMLInputElement).value = '';
+              }
+            }}
+          />
+        </Space>
       </Space>
   <NodeTreeSelector nodeId={nodeId} open={pickLeft} onClose={() => setPickLeft(false)} onSelect={applyPicker('left')} />
   <NodeTreeSelector nodeId={nodeId} open={pickRight} onClose={() => setPickRight(false)} onSelect={applyPicker('right')} />
