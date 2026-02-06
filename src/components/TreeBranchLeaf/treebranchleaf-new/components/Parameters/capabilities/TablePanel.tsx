@@ -253,9 +253,10 @@ type TableLookupCondition = {
   operator: 'equals' | 'notEquals' | 'greaterThan' | 'lessThan' | 'greaterOrEqual' | 'lessOrEqual' | 'contains' | 'notContains';
   compareWithRef?: string; // Référence NodeTreeSelector vers un champ/formule
   description?: string; // Description lisible de la condition
-  // ✨ Multiplicateur conditionnel: multiplie la valeur du tableau avant comparaison
+  // ✨ Multiplicateur/Valeur fixe conditionnel
   multiplier?: {
-    enabled?: boolean; // Activer le multiplicateur conditionnel
+    enabled?: boolean; // Activer le mode conditionnel
+    mode?: 'multiply' | 'fixed'; // 'multiply' = valeur × facteur, 'fixed' = remplacer par valeur fixe
     // Plusieurs conditions combinées en AND
     conditions?: Array<{
       fieldA?: string; // Référence champ A (ex: @select.onduleur)
@@ -266,8 +267,8 @@ type TableLookupCondition = {
     conditionFieldA?: string;
     conditionFieldB?: string;
     conditionOperator?: 'equals' | 'notEquals' | 'greaterThan' | 'lessThan' | 'greaterOrEqual' | 'lessOrEqual';
-    factor?: number; // Facteur multiplicateur quand TOUTES les conditions sont vraies (ex: 2)
-    elseFactor?: number; // Facteur quand au moins une condition est fausse (défaut: 1)
+    factor?: number; // Mode multiply: facteur multiplicateur / Mode fixed: valeur directe (ALORS)
+    elseFactor?: number; // Mode multiply: facteur sinon / Mode fixed: valeur directe (SINON)
   };
   // ✨ Filtrage conditionnel SI...ALORS...SINON (optionnel)
   conditionalFilter?: {
@@ -2318,7 +2319,7 @@ const TablePanel: React.FC<TablePanelProps> = ({ treeId: initialTreeId, nodeId, 
                                             disabled={readOnly}
                                           />
                                           <Text style={{ fontSize: 11, fontWeight: 500 }}>
-                                            ✖️ Multiplicateur conditionnel
+                                            ⚡ Conditionnel (multiplicateur ou valeur fixe)
                                           </Text>
                                           {filter.multiplier?.enabled && (
                                             <Text type="secondary" style={{ fontSize: 10 }}>
@@ -2329,6 +2330,26 @@ const TablePanel: React.FC<TablePanelProps> = ({ treeId: initialTreeId, nodeId, 
 
                                         {filter.multiplier?.enabled && (
                                           <Space direction="vertical" style={{ width: '100%' }} size={4}>
+                                            {/* Mode: multiplicateur ou valeur fixe */}
+                                            <div style={{ display: 'flex', gap: 8, alignItems: 'center', padding: '4px 8px', background: '#f0f5ff', borderRadius: 4, border: '1px solid #d6e4ff' }}>
+                                              <Text type="secondary" style={{ fontSize: 10 }}>Mode :</Text>
+                                              <Select
+                                                size="small"
+                                                value={filter.multiplier.mode || 'multiply'}
+                                                style={{ width: 200 }}
+                                                onChange={(value) => {
+                                                  updateLookupConfig((prev) => {
+                                                    const newFilters = [...(prev.columnSourceOption?.filters || [])];
+                                                    newFilters[index] = { ...newFilters[index], multiplier: { ...newFilters[index].multiplier, mode: value } };
+                                                    return { ...prev, columnSourceOption: { ...(prev.columnSourceOption || {}), filters: newFilters } };
+                                                  });
+                                                }}
+                                                disabled={readOnly}
+                                              >
+                                                <Select.Option value="multiply">✖️ Multiplicateur (× facteur)</Select.Option>
+                                                <Select.Option value="fixed">🎯 Valeur fixe (= valeur)</Select.Option>
+                                              </Select>
+                                            </div>
                                             {/* Liste des conditions */}
                                             {(filter.multiplier.conditions || []).map((cond: any, condIdx: number) => (
                                               <div key={condIdx} style={{ display: 'flex', gap: 4, alignItems: 'center', padding: '4px', background: '#fff', border: '1px solid #f0f0f0', borderRadius: 4 }}>
@@ -2463,12 +2484,14 @@ const TablePanel: React.FC<TablePanelProps> = ({ treeId: initialTreeId, nodeId, 
                                             {/* ALORS / SINON facteurs */}
                                             <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
                                               <div style={{ flex: 1 }}>
-                                                <Text type="secondary" style={{ fontSize: 10 }}>ALORS × :</Text>
+                                                <Text type="secondary" style={{ fontSize: 10 }}>
+                                                  ALORS {(filter.multiplier.mode || 'multiply') === 'multiply' ? '×' : '='} :
+                                                </Text>
                                                 <InputNumber
                                                   size="small"
                                                   min={0}
-                                                  step={0.5}
-                                                  value={filter.multiplier.factor ?? 2}
+                                                  step={(filter.multiplier.mode || 'multiply') === 'fixed' ? 100 : 0.5}
+                                                  value={filter.multiplier.factor ?? ((filter.multiplier.mode || 'multiply') === 'fixed' ? 10000 : 2)}
                                                   onChange={(value) => {
                                                     updateLookupConfig((prev) => {
                                                       const newFilters = [...(prev.columnSourceOption?.filters || [])];
@@ -2481,12 +2504,14 @@ const TablePanel: React.FC<TablePanelProps> = ({ treeId: initialTreeId, nodeId, 
                                                 />
                                               </div>
                                               <div style={{ flex: 1 }}>
-                                                <Text type="secondary" style={{ fontSize: 10 }}>SINON × :</Text>
+                                                <Text type="secondary" style={{ fontSize: 10 }}>
+                                                  SINON {(filter.multiplier.mode || 'multiply') === 'multiply' ? '×' : '='} :
+                                                </Text>
                                                 <InputNumber
                                                   size="small"
                                                   min={0}
-                                                  step={0.5}
-                                                  value={filter.multiplier.elseFactor ?? 1}
+                                                  step={(filter.multiplier.mode || 'multiply') === 'fixed' ? 100 : 0.5}
+                                                  value={filter.multiplier.elseFactor ?? ((filter.multiplier.mode || 'multiply') === 'fixed' ? 5000 : 1)}
                                                   onChange={(value) => {
                                                     updateLookupConfig((prev) => {
                                                       const newFilters = [...(prev.columnSourceOption?.filters || [])];
@@ -2504,12 +2529,12 @@ const TablePanel: React.FC<TablePanelProps> = ({ treeId: initialTreeId, nodeId, 
                                             <div style={{ 
                                               marginTop: 4, 
                                               padding: '4px 8px', 
-                                              background: '#fffbe6', 
+                                              background: (filter.multiplier.mode || 'multiply') === 'fixed' ? '#f0f5ff' : '#fffbe6', 
                                               borderRadius: 4, 
-                                              border: '1px solid #ffe58f' 
+                                              border: `1px solid ${(filter.multiplier.mode || 'multiply') === 'fixed' ? '#adc6ff' : '#ffe58f'}` 
                                             }}>
-                                              <Text style={{ fontSize: 10, color: '#874d00' }}>
-                                                📐 SI {(filter.multiplier.conditions || []).map((c: any, i: number) => 
+                                              <Text style={{ fontSize: 10, color: (filter.multiplier.mode || 'multiply') === 'fixed' ? '#1d39c4' : '#874d00' }}>
+                                                {(filter.multiplier.mode || 'multiply') === 'fixed' ? '🎯' : '📐'} SI {(filter.multiplier.conditions || []).map((c: any, i: number) => 
                                                   `${i > 0 ? ' ET ' : ''}${c.fieldA || '?'} ${
                                                     c.operator === 'equals' ? '=' :
                                                     c.operator === 'notEquals' ? '≠' :
@@ -2520,8 +2545,10 @@ const TablePanel: React.FC<TablePanelProps> = ({ treeId: initialTreeId, nodeId, 
                                                     c.operator === 'contains' ? '∋' : '='
                                                   } ${c.fieldB || '?'}`
                                                 ).join('')}
-                                                {' → '}valeur tableau × {filter.multiplier.factor ?? 2}
-                                                {' | sinon '}× {filter.multiplier.elseFactor ?? 1}
+                                                {(filter.multiplier.mode || 'multiply') === 'fixed'
+                                                  ? ` → valeur = ${filter.multiplier.factor ?? 10000} | sinon = ${filter.multiplier.elseFactor ?? 5000}`
+                                                  : ` → valeur tableau × ${filter.multiplier.factor ?? 2} | sinon × ${filter.multiplier.elseFactor ?? 1}`
+                                                }
                                               </Text>
                                             </div>
                                           </Space>

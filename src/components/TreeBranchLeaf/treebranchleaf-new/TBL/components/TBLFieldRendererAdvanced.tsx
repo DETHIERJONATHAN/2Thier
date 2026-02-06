@@ -71,9 +71,10 @@ interface TableLookupCondition {
   operator: 'equals' | 'notEquals' | 'greaterThan' | 'lessThan' | 'greaterOrEqual' | 'lessOrEqual' | 'contains' | 'notContains';
   compareWithRef?: string; // Référence NodeTreeSelector vers un champ/formule
   description?: string; // Description lisible de la condition
-  // ✨ Multiplicateur conditionnel: multiplie la valeur du tableau avant comparaison
+  // ✨ Multiplicateur/Valeur fixe conditionnel
   multiplier?: {
     enabled?: boolean;
+    mode?: 'multiply' | 'fixed'; // 'multiply' = × facteur, 'fixed' = valeur directe
     conditions?: Array<{
       fieldA?: string;
       operator?: 'equals' | 'notEquals' | 'greaterThan' | 'lessThan' | 'greaterOrEqual' | 'lessOrEqual' | 'contains';
@@ -244,11 +245,20 @@ const evaluateFilterConditions = (
         
         const allConditionsMet = conditions.every((cond: any) => evaluateSingleCondition(cond));
         
-        const factor = allConditionsMet ? (mult.factor ?? 2) : (mult.elseFactor ?? 1);
-        const numericTableValue = Number(tableValue);
-        if (!isNaN(numericTableValue) && factor !== 1) {
-          tableValue = numericTableValue * factor;
-          console.log(`[Multiplier] ${conditions.length} condition(s) → ${allConditionsMet ? 'TOUTES VRAIES' : 'NON'} → tableValue ${originalTableValue} × ${factor} = ${tableValue}`);
+        const mode = mult.mode || 'multiply';
+        if (mode === 'fixed') {
+          // Mode valeur fixe: remplacer la valeur du tableau par la valeur ALORS ou SINON
+          const fixedValue = allConditionsMet ? (mult.factor ?? 0) : (mult.elseFactor ?? 0);
+          console.log(`[Fixed] ${conditions.length} condition(s) → ${allConditionsMet ? 'TOUTES VRAIES' : 'NON'} → tableValue ${originalTableValue} → ${fixedValue}`);
+          tableValue = fixedValue;
+        } else {
+          // Mode multiplicateur: multiplier la valeur du tableau
+          const factor = allConditionsMet ? (mult.factor ?? 2) : (mult.elseFactor ?? 1);
+          const numericTableValue = Number(tableValue);
+          if (!isNaN(numericTableValue) && factor !== 1) {
+            tableValue = numericTableValue * factor;
+            console.log(`[Multiplier] ${conditions.length} condition(s) → ${allConditionsMet ? 'TOUTES VRAIES' : 'NON'} → tableValue ${originalTableValue} × ${factor} = ${tableValue}`);
+          }
         }
       }
 

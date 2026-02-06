@@ -7297,11 +7297,20 @@ async function applyTableFilters(
         
         const allConditionsMet = conditions.every((cond: any) => evaluateSingleCondition(cond));
         
-        const factor = allConditionsMet ? (mult.factor ?? 2) : (mult.elseFactor ?? 1);
-        const numericCell = Number(cellValue);
-        if (!isNaN(numericCell) && factor !== 1) {
-          console.log(`[Multiplier] ${conditions.length} condition(s) → ${allConditionsMet ? 'TOUTES VRAIES' : 'NON'} → cellValue ${cellValue} × ${factor} = ${numericCell * factor}`);
-          cellValue = numericCell * factor;
+        const mode = mult.mode || 'multiply';
+        if (mode === 'fixed') {
+          // Mode valeur fixe: remplacer cellValue par la valeur ALORS ou SINON
+          const fixedValue = allConditionsMet ? (mult.factor ?? 0) : (mult.elseFactor ?? 0);
+          console.log(`[Fixed] ${conditions.length} condition(s) → ${allConditionsMet ? 'TOUTES VRAIES' : 'NON'} → cellValue ${cellValue} → ${fixedValue}`);
+          cellValue = fixedValue;
+        } else {
+          // Mode multiplicateur: multiplier cellValue
+          const factor = allConditionsMet ? (mult.factor ?? 2) : (mult.elseFactor ?? 1);
+          const numericCell = Number(cellValue);
+          if (!isNaN(numericCell) && factor !== 1) {
+            console.log(`[Multiplier] ${conditions.length} condition(s) → ${allConditionsMet ? 'TOUTES VRAIES' : 'NON'} → cellValue ${cellValue} × ${factor} = ${numericCell * factor}`);
+            cellValue = numericCell * factor;
+          }
         }
       }
 
