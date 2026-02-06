@@ -25,7 +25,8 @@ import {
   BatchCalculatedValue, 
   BatchSelectConfig,
   BatchNodeData,
-  BatchCondition
+  BatchCondition,
+  InverseConditionInfo
 } from '../hooks/useTBLBatchData';
 import { setBatchNodeDataCache } from '../hooks/useTBLDataPrismaComplete';
 
@@ -53,6 +54,8 @@ interface TBLBatchContextValue {
   getConditionById: (conditionId: string) => BatchCondition | null;
   /** 🚀 NOUVEAU: Récupère la condition active d'un noeud */
   getActiveConditionForNode: (nodeId: string) => BatchCondition | null;
+  /** 🚀 CRITIQUE: Récupère les conditions qui CIBLENT ce noeud (visibilité conditionnelle) */
+  getConditionsTargetingNode: (nodeId: string) => InverseConditionInfo[];
   /** Force un rechargement du batch */
   refresh: () => void;
   /** ID du tree actuel */
@@ -74,6 +77,7 @@ const defaultContextValue: TBLBatchContextValue = {
   getConditionsForNode: () => [],
   getConditionById: () => null,
   getActiveConditionForNode: () => null,
+  getConditionsTargetingNode: () => [],
   refresh: () => {},
   treeId: undefined,
   leadId: undefined
@@ -110,6 +114,7 @@ export const TBLBatchProvider: React.FC<TBLBatchProviderProps> = ({
     getConditionsForNode,
     getConditionById,
     getActiveConditionForNode,
+    getConditionsTargetingNode,
     refresh
   } = useTBLBatchData(treeId, leadId);
 
@@ -134,6 +139,7 @@ export const TBLBatchProvider: React.FC<TBLBatchProviderProps> = ({
     getConditionsForNode,
     getConditionById,
     getActiveConditionForNode,
+    getConditionsTargetingNode,
     refresh,
     treeId,
     leadId
@@ -149,6 +155,7 @@ export const TBLBatchProvider: React.FC<TBLBatchProviderProps> = ({
     getConditionsForNode,
     getConditionById,
     getActiveConditionForNode,
+    getConditionsTargetingNode,
     refresh,
     treeId,
     leadId

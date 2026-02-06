@@ -1957,7 +1957,16 @@ const Parameters: React.FC<ParametersProps> = (props) => {
                             } else {
                               nextMeta.triggerNodeIds = newIds;
                             }
-                            patchNode({ metadata: nextMeta });
+                            // 🔥 FIX: Sauvegarder immédiatement (pas de debounce)
+                            if (selectedNodeId) {
+                              onNodeUpdateRef.current({ metadata: nextMeta, id: selectedNodeId })
+                                .then((resp: any) => {
+                                  console.log('✅ [TriggerField] triggerNodeIds supprimé et sauvegardé:', resp?.metadata?.triggerNodeIds);
+                                })
+                                .catch((err: any) => {
+                                  console.error('❌ [TriggerField] Erreur sauvegarde après suppression:', err);
+                                });
+                            }
                             emitMetadataUpdate(nextMeta);
                           }}
                           color={isTreeNode ? "blue" : "purple"}
@@ -2980,7 +2989,17 @@ const Parameters: React.FC<ParametersProps> = (props) => {
                 setLocalTriggerNodeIds(newIds);
                 console.log('🎯 [TriggerNodeSelector] État local mis à jour avec TOUS les champs:', newIds);
                 
-                patchNode({ metadata: nextMeta });
+                // 🔥 FIX: Sauvegarder immédiatement via l'API (pas de debounce)
+                // patchNode est debounced et peut être annulé par un autre appel dans les 400ms
+                if (selectedNodeId) {
+                  onNodeUpdateRef.current({ metadata: nextMeta, id: selectedNodeId })
+                    .then((resp: any) => {
+                      console.log('✅ [TriggerNodeSelector] triggerNodeIds sauvegardé en DB:', resp?.metadata?.triggerNodeIds);
+                    })
+                    .catch((err: any) => {
+                      console.error('❌ [TriggerNodeSelector] Erreur sauvegarde triggerNodeIds:', err);
+                    });
+                }
                 emitMetadataUpdate(nextMeta);
                 console.log('✅ [TriggerNodeSelector] Champ ajouté avec succès!');
               } else {

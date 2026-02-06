@@ -892,7 +892,7 @@ var init_AutoMailSyncService = __esm({
           console.error(`\u274C [AUTO-SYNC] Erreur de synchronisation (tentative ${retryCount + 1}/${this.maxRetries}):`, error);
           if (retryCount < this.maxRetries - 1) {
             console.log(`\u{1F504} [AUTO-SYNC] Nouvelle tentative dans ${this.retryDelay}ms...`);
-            await new Promise((resolve) => setTimeout(resolve, this.retryDelay));
+            await new Promise((resolve2) => setTimeout(resolve2, this.retryDelay));
             return this.performSyncWithRetry(retryCount + 1);
           } else {
             console.error(`\u{1F4A5} [AUTO-SYNC] \xC9chec d\xE9finitif apr\xE8s ${this.maxRetries} tentatives`);
@@ -920,7 +920,7 @@ var init_AutoMailSyncService = __esm({
               }
               const result = await this.syncUserEmails(emailAccount);
               totalResults.push(result);
-              await new Promise((resolve) => setTimeout(resolve, 1e3));
+              await new Promise((resolve2) => setTimeout(resolve2, 1e3));
             } catch (userError) {
               console.error(`\u274C [AUTO-SYNC] Erreur pour l'utilisateur ${emailAccount.userId}:`, userError);
             }
@@ -15475,7 +15475,7 @@ init_prisma();
 // src/services/formResponsePdfGenerator.ts
 var import_pdfkit = __toESM(require("pdfkit"), 1);
 async function generateFormResponsePdf(data) {
-  return new Promise((resolve, reject) => {
+  return new Promise((resolve2, reject) => {
     try {
       const sanitizeText2 = (input) => {
         if (input === null || input === void 0) return "";
@@ -15494,7 +15494,7 @@ async function generateFormResponsePdf(data) {
       });
       const chunks = [];
       doc.on("data", (chunk) => chunks.push(chunk));
-      doc.on("end", () => resolve(Buffer.concat(chunks)));
+      doc.on("end", () => resolve2(Buffer.concat(chunks)));
       doc.on("error", reject);
       doc.fontSize(24).fillColor("#1890ff").text("R\xE9capitulatif du Formulaire", { align: "center" });
       doc.moveDown(0.5);
@@ -17305,10 +17305,10 @@ router22.post("/me/current-organization", async (req2, res) => {
     }
     if (req2.session) {
       req2.session.currentOrganizationId = organizationId;
-      await new Promise((resolve, reject) => {
+      await new Promise((resolve2, reject) => {
         req2.session.save((err) => {
           if (err) reject(err);
-          else resolve();
+          else resolve2();
         });
       });
       console.log(`[USERS] \u2705 Organisation chang\xE9e avec succ\xE8s vers ${userOrg.Organization.name}`);
@@ -20366,9 +20366,9 @@ function getBackendBaseUrl(options = {}) {
   }
   throw new Error("BACKEND_URL/APP_URL/API_URL non configur\xE9e (impossible de construire une URL en production)");
 }
-function joinUrl(base, path11) {
+function joinUrl(base, path12) {
   const cleanBase = base.endsWith("/") ? base.slice(0, -1) : base;
-  const cleanPath = path11.startsWith("/") ? path11 : `/${path11}`;
+  const cleanPath = path12.startsWith("/") ? path12 : `/${path12}`;
   return `${cleanBase}${cleanPath}`;
 }
 
@@ -23235,12 +23235,12 @@ var telnyx_default = router33;
 // src/routes/telnyx.ts
 var router34 = (0, import_express35.Router)();
 router34.use((req2, res, next) => {
-  const path11 = req2.path || "";
+  const path12 = req2.path || "";
   const originalUrl = req2.originalUrl || "";
-  const isWebhook = path11 === "/webhooks" || path11.startsWith("/webhooks/") || originalUrl.includes("/api/telnyx/webhooks");
+  const isWebhook = path12 === "/webhooks" || path12.startsWith("/webhooks/") || originalUrl.includes("/api/telnyx/webhooks");
   if (isWebhook) {
     if (process.env.TELNYX_DEBUG_WEBHOOKS === "1") {
-      console.log("\u{1F9F7} [Telnyx Webhook Debug] bypass auth", { path: path11, originalUrl });
+      console.log("\u{1F9F7} [Telnyx Webhook Debug] bypass auth", { path: path12, originalUrl });
     }
     return next();
   }
@@ -24945,10 +24945,10 @@ function buildChatPrompt({ message, context, conversationHistory, analysis, memo
       if (source) parts.push(`\u{1F4CD} Source: ${source}`);
       if (createdAt) parts.push(`\u{1F550} Contact depuis: ${new Date(createdAt).toLocaleDateString("fr-FR")}`);
       if (Array.isArray(formSubmissions) && formSubmissions.length > 0) {
-        const formData = formSubmissions.map((fs12) => {
-          const formTitle = fs12.formTitle || "Formulaire";
-          const data = fs12.data;
-          if (!data || typeof data !== "object") return `${formTitle} (${new Date(fs12.createdAt).toLocaleDateString("fr-FR")})`;
+        const formData = formSubmissions.map((fs13) => {
+          const formTitle = fs13.formTitle || "Formulaire";
+          const data = fs13.data;
+          if (!data || typeof data !== "object") return `${formTitle} (${new Date(fs13.createdAt).toLocaleDateString("fr-FR")})`;
           const dataObj = data;
           const allFields = Object.entries(dataObj).map(([k, v]) => {
             const cleanKey = k.replace(/([A-Z])/g, " $1").toLowerCase().trim().split(" ").map((word) => word.charAt(0).toUpperCase() + word.slice(1)).join(" ");
@@ -24956,7 +24956,7 @@ function buildChatPrompt({ message, context, conversationHistory, analysis, memo
             val = val.slice(0, 80);
             return `${cleanKey}: ${val}`;
           }).join(" | ");
-          return `${formTitle} (${new Date(fs12.createdAt).toLocaleDateString("fr-FR")}): ${allFields}`;
+          return `${formTitle} (${new Date(fs13.createdAt).toLocaleDateString("fr-FR")}): ${allFields}`;
         }).join("\n");
         parts.push(`\u{1F4CB} FORMULAIRES REMPLIS (\xC0 UTILISER SP\xC9CIFIQUEMENT!):
 ${formData}`);
@@ -25563,7 +25563,7 @@ router39.post("/schedule-recommendations", async (req2, res) => {
         }
       }
     ];
-    await new Promise((resolve) => setTimeout(resolve, 800));
+    await new Promise((resolve2) => setTimeout(resolve2, 800));
     const latency = Date.now() - t0;
     res.json({
       success: true,
@@ -25878,12 +25878,12 @@ router39.get("/context/lead/:id", async (req2, res) => {
         messages: wanted.has("messages") ? messages : void 0,
         upcomingEvents: wanted.has("events") ? upcomingEvents : void 0,
         timeline: wanted.has("timeline") ? timeline : void 0,
-        formSubmissions: formSubmissions.length > 0 ? formSubmissions.map((fs12) => ({
-          id: fs12.id,
-          formTitle: fs12.PublicForm?.title || fs12.PublicForm?.name || "Formulaire",
-          data: fs12.data,
-          createdAt: fs12.createdAt,
-          status: fs12.status
+        formSubmissions: formSubmissions.length > 0 ? formSubmissions.map((fs13) => ({
+          id: fs13.id,
+          formTitle: fs13.PublicForm?.title || fs13.PublicForm?.name || "Formulaire",
+          data: fs13.data,
+          createdAt: fs13.createdAt,
+          status: fs13.status
         })) : void 0,
         metrics: { activityScore, formCount: formSubmissions.length },
         meta: { generatedAt: (/* @__PURE__ */ new Date()).toISOString(), version: 1, filtered: Array.from(wanted) }
@@ -25995,7 +25995,7 @@ ${mockAnalysis.commercialWisdom.successFactors.join("\n\u2022 ")}
         }
       ]
     };
-    await new Promise((resolve) => setTimeout(resolve, 1500));
+    await new Promise((resolve2) => setTimeout(resolve2, 1500));
     const latency = Date.now() - t0;
     res.json({
       success: true,
@@ -32107,9 +32107,14 @@ function registerSumDisplayFieldRoutes(router95) {
           sourceNodeId: nodeId,
           sumTokens,
           copiesCount: allCopies.length,
-          // � FIX: Copier les triggerNodeIds de l'original pour que le Total se recalcule
-          // Le Total doit se recalculer quand les mêmes champs que l'original changent
-          ...originalTriggerNodeIds && originalTriggerNodeIds.length > 0 ? { triggerNodeIds: originalTriggerNodeIds } : {},
+          // 🔥 FIX: Fusionner les triggerNodeIds existants avec ceux de l'original
+          // au lieu d'écraser (préserve les triggers configurés manuellement)
+          ...(() => {
+            const existingTriggers = Array.isArray(existingSumNode?.metadata?.triggerNodeIds) ? (existingSumNode?.metadata).triggerNodeIds : [];
+            const newTriggers = originalTriggerNodeIds && originalTriggerNodeIds.length > 0 ? originalTriggerNodeIds : [];
+            const merged = Array.from(/* @__PURE__ */ new Set([...existingTriggers, ...newTriggers]));
+            return merged.length > 0 ? { triggerNodeIds: merged } : {};
+          })(),
           // �🎨 HÉRITAGE ICÔNE: Ajouter l'icône dans capabilities.datas pour le frontend
           capabilities: {
             ...existingSumNode?.metadata?.capabilities || {},
@@ -32212,6 +32217,15 @@ function registerSumDisplayFieldRoutes(router95) {
           }
         }
       }
+      try {
+        await prisma29.treeBranchLeafNodeFormula.deleteMany({
+          where: {
+            nodeId: sumFieldNodeId,
+            id: { not: sumFormulaId }
+          }
+        });
+      } catch {
+      }
       const existingSumFormula = await prisma29.treeBranchLeafNodeFormula.findUnique({
         where: { id: sumFormulaId }
       });
@@ -32238,16 +32252,19 @@ function registerSumDisplayFieldRoutes(router95) {
           });
         } catch (err) {
           if (err instanceof import_client4.Prisma.PrismaClientKnownRequestError && err.code === "P2002") {
-            await prisma29.treeBranchLeafNodeFormula.update({
-              where: {
-                nodeId_name: {
-                  nodeId: sumFieldNodeId,
-                  name: `Somme ${mainVariable.displayName}`
-                }
-              },
-              data: sumFormulaData
+            await prisma29.treeBranchLeafNodeFormula.deleteMany({ where: { nodeId: sumFieldNodeId } });
+            await prisma29.treeBranchLeafNodeFormula.create({
+              data: {
+                id: sumFormulaId,
+                nodeId: sumFieldNodeId,
+                organizationId: formulaOrgId,
+                name: `Somme ${mainVariable.displayName}`,
+                description: `Somme automatique de toutes les copies de ${mainVariable.displayName}`,
+                createdAt: now,
+                ...sumFormulaData
+              }
             });
-            console.warn(`\xC3\xA2\xC5\xA1\xC2\xA0\xC3\xAF\xC2\xB8\xC2\x8F [SUM DISPLAY] Formule Total d\xC3\u0192\xC2\xA9j\xC3\u0192\xC2\xA0 existante, mise \xC3\u0192\xC2\xA0 jour forc\xC3\u0192\xC2\xA9e: ${sumFormulaId}`);
+            console.warn(`\u26A0\uFE0F [SUM DISPLAY] Formule orpheline nettoy\xE9e et recr\xE9\xE9e: ${sumFormulaId}`);
           } else {
             throw err;
           }
@@ -32303,6 +32320,12 @@ function registerSumDisplayFieldRoutes(router95) {
         select: { id: true }
       });
       const sumFormulaId = mainVariable ? `${mainVariable.id}-sum-formula` : null;
+      try {
+        await prisma29.treeBranchLeafNodeFormula.deleteMany({
+          where: { nodeId: sumFieldNodeId }
+        });
+      } catch {
+      }
       if (sumFormulaId) {
         try {
           await prisma29.treeBranchLeafNodeFormula.delete({
@@ -32415,6 +32438,15 @@ async function updateSumDisplayFieldAfterCopyChange(sourceNodeId, prismaClient) 
       return;
     }
     const formulaName = `Somme ${mainVariable.displayName}`;
+    try {
+      await db2.treeBranchLeafNodeFormula.deleteMany({
+        where: {
+          nodeId: sumFieldNodeId,
+          id: { not: sumFormulaId }
+        }
+      });
+    } catch {
+    }
     await db2.treeBranchLeafNodeFormula.upsert({
       where: {
         nodeId_name: {
@@ -32441,6 +32473,9 @@ async function updateSumDisplayFieldAfterCopyChange(sourceNodeId, prismaClient) 
       select: { metadata: true }
     });
     if (sumNode) {
+      const existingMetadata = sumNode.metadata || {};
+      const existingTriggers = Array.isArray(existingMetadata.triggerNodeIds) ? existingMetadata.triggerNodeIds : [];
+      const mergedTriggers = Array.from(/* @__PURE__ */ new Set([...existingTriggers, ...allTriggerNodeIds]));
       await db2.treeBranchLeafNode.update({
         where: { id: sumFieldNodeId },
         data: {
@@ -32448,13 +32483,13 @@ async function updateSumDisplayFieldAfterCopyChange(sourceNodeId, prismaClient) 
           formula_instances: { [sumFormulaId]: formulaInstance },
           formula_tokens: sumTokens,
           calculatedValue: String(newCalculatedValue),
-          // Ã°Å¸â€Â¥ NOUVEAU: Mettre ÃƒÂ  jour la valeur
+          // Ã°Å¸â€Â¥ NOUVEAU: Mettre ÃƒÂ  jour la valeur
           metadata: {
-            ...sumNode.metadata || {},
+            ...existingMetadata,
             sumTokens,
             copiesCount: allCopies.length,
-            // 🎯 FIX: Ajouter les triggerNodeIds agrégés de TOUTES les copies
-            ...allTriggerNodeIds.length > 0 ? { triggerNodeIds: allTriggerNodeIds } : {},
+            // 🔥 FIX: Fusionner au lieu d'écraser pour préserver les triggers manuels
+            ...mergedTriggers.length > 0 ? { triggerNodeIds: mergedTriggers } : {},
             updatedAt: now.toISOString()
           }
         }
@@ -41245,11 +41280,13 @@ router56.put("/trees/:treeId/nodes/:nodeId/data", async (req2, res) => {
       isReadonly,
       defaultValue,
       metadata,
-      // ÃƒÂ°Ã…Â¸Ã…Â½Ã‚Â¯ NOUVEAUX CHAMPS pour sourceType/sourceRef/fixedValue
+      // 🎯 NOUVEAUX CHAMPS pour sourceType/sourceRef/fixedValue
       sourceType,
       sourceRef,
       fixedValue,
-      selectedNodeId
+      selectedNodeId,
+      // 🏷️ NOUVEAU: Nom de la capacité (displayName)
+      displayName: bodyDisplayName
     } = req2.body || {};
     const tree = await prisma31.treeBranchLeafTree.findFirst({
       where: organizationId ? { id: treeId, organizationId } : { id: treeId }
@@ -41268,7 +41305,7 @@ router56.put("/trees/:treeId/nodes/:nodeId/data", async (req2, res) => {
       return res.status(404).json({ error: "N\xC3\u0192\xE2\u20AC\xA6\xC3\xA2\xE2\u201A\xAC\xC5\u201Cud non trouv\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9" });
     }
     const safeExposedKey = typeof exposedKey === "string" && exposedKey.trim() ? exposedKey.trim() : null;
-    const displayName = safeExposedKey || node.label || `var_${String(nodeId).slice(0, 4)}`;
+    const displayName = typeof bodyDisplayName === "string" && bodyDisplayName.trim() ? bodyDisplayName.trim() : safeExposedKey || node.label || `var_${String(nodeId).slice(0, 4)}`;
     const { variable: previousVariable, ownerNodeId } = await resolveNodeVariable(
       nodeId,
       node.linkedVariableIds
@@ -41319,6 +41356,8 @@ router56.put("/trees/:treeId/nodes/:nodeId/data", async (req2, res) => {
         select: {
           id: true,
           exposedKey: true,
+          displayName: true,
+          // 🏷️ Inclure le nom de la capacité
           displayFormat: true,
           unit: true,
           precision: true,
@@ -41326,7 +41365,7 @@ router56.put("/trees/:treeId/nodes/:nodeId/data", async (req2, res) => {
           isReadonly: true,
           defaultValue: true,
           metadata: true,
-          // ÃƒÂ°Ã…Â¸Ã…Â½Ã‚Â¯ NOUVEAUX CHAMPS source
+          // 🎯 NOUVEAUX CHAMPS source
           sourceType: true,
           sourceRef: true,
           fixedValue: true,
@@ -55929,11 +55968,11 @@ var DocumentPdfRenderer = class {
    */
   async render() {
     await this.preloadImages();
-    return new Promise((resolve, reject) => {
+    return new Promise((resolve2, reject) => {
       const chunks = [];
       const stream = new import_stream.PassThrough();
       stream.on("data", (chunk) => chunks.push(chunk));
-      stream.on("end", () => resolve(Buffer.concat(chunks)));
+      stream.on("end", () => resolve2(Buffer.concat(chunks)));
       stream.on("error", reject);
       this.doc.pipe(stream);
       try {
@@ -59851,7 +59890,7 @@ var router74 = (0, import_express76.Router)();
 var prisma43 = db;
 function normalizeRefForTriggers(ref) {
   if (!ref || typeof ref !== "string") return "";
-  return ref.replace(/^@value\./, "").replace(/^@table\./, "").replace(/^node-formula:/, "").replace(/^node-table:/, "").replace(/^node-condition:/, "").replace(/^condition:/, "").trim();
+  return ref.replace(/^@value\./, "").replace(/^@calculated\./, "").replace(/^@table\./, "").replace(/^@select\./, "").replace(/^node-formula:/, "").replace(/^node-table:/, "").replace(/^node-condition:/, "").replace(/^node-variable:/, "").replace(/^condition:/, "").replace(/^formula:/, "").trim();
 }
 function collectReferencedNodeIdsForTriggers(data, out) {
   if (!data) return;
@@ -60480,6 +60519,58 @@ async function evaluateCapacitiesForSubmission(submissionId, organizationId, use
             nodeLabel: linkedNode.label || linkedNode.id
           });
           console.log(`\u{1F517} [LINK TRIGGER] Champ "${linkedNode.label}" (${linkedNode.id}) sera rafra\xEEchi car son source ${targetId} a chang\xE9`);
+        }
+      }
+    }
+    const allTreeNodeIds = await prisma43.treeBranchLeafNode.findMany({
+      where: { treeId },
+      select: { id: true }
+    });
+    if (allTreeNodeIds.length > 0) {
+      const nodeIds = allTreeNodeIds.map((n) => n.id);
+      const allConditions = await prisma43.treeBranchLeafNodeCondition.findMany({
+        where: { nodeId: { in: nodeIds } },
+        select: { id: true, nodeId: true, conditionSet: true, name: true }
+      });
+      if (allConditions.length > 0) {
+        console.log(`\u{1F3AF} [CONDITION TRIGGER] ${allConditions.length} conditions trouv\xE9es dans le tree`);
+        for (const condition of allConditions) {
+          const conditionSet = condition.conditionSet;
+          const referencedFieldIds = /* @__PURE__ */ new Set();
+          const targetShowNodeIds = /* @__PURE__ */ new Set();
+          for (const branch of conditionSet.branches || []) {
+            const leftRef = branch.when?.left?.ref;
+            const rightRef = branch.when?.right?.ref;
+            if (leftRef) {
+              const id = normalizeRefForTriggers(leftRef);
+              if (id) referencedFieldIds.add(id);
+            }
+            if (rightRef) {
+              const id = normalizeRefForTriggers(rightRef);
+              if (id) referencedFieldIds.add(id);
+            }
+            for (const action2 of branch.actions || []) {
+              if ((action2.type === "SHOW" || action2.type === "HIDE") && action2.nodeIds) {
+                action2.nodeIds.forEach((nid) => targetShowNodeIds.add(nid));
+              }
+            }
+          }
+          for (const action2 of conditionSet.fallback?.actions || []) {
+            if ((action2.type === "SHOW" || action2.type === "HIDE") && action2.nodeIds) {
+              action2.nodeIds.forEach((nid) => targetShowNodeIds.add(nid));
+            }
+          }
+          if (referencedFieldIds.has(changedFieldId)) {
+            console.log(`\u{1F3AF} [CONDITION TRIGGER] Condition "${condition.name}" (${condition.id}) r\xE9f\xE9rence "${changedFieldId}" \u2192 SHOW nodeIds: [${[...targetShowNodeIds].join(", ")}]`);
+            for (const rawShowNodeId of targetShowNodeIds) {
+              const showNodeId = normalizeRefForTriggers(rawShowNodeId);
+              if (!showNodeId) continue;
+              if (!triggerIndex.has(changedFieldId)) {
+                triggerIndex.set(changedFieldId, /* @__PURE__ */ new Set());
+              }
+              triggerIndex.get(changedFieldId).add(showNodeId);
+            }
+          }
         }
       }
     }
@@ -62897,6 +62988,27 @@ router77.get("/trees/:treeId/conditions", async (req2, res) => {
     const conditionsById = {};
     for (const condition of allConditions) {
       conditionsById[condition.id] = condition;
+    }
+    const allConditionIdsSet = new Set(allConditions.map((c) => c.id));
+    const orphanCleanups = [];
+    for (const node of nodes) {
+      if (!Array.isArray(node.linkedConditionIds) || node.linkedConditionIds.length === 0) continue;
+      const validIds = node.linkedConditionIds.filter((id) => allConditionIdsSet.has(id));
+      const orphanCount = node.linkedConditionIds.length - validIds.length;
+      if (orphanCount > 0) {
+        console.log(`\u{1F9F9} [AUTO-CLEANUP] Node ${node.id}: ${orphanCount} linkedConditionIds orphelins supprim\xE9s (${node.linkedConditionIds.length} \u2192 ${validIds.length})`);
+        orphanCleanups.push(
+          db.treeBranchLeafNode.update({
+            where: { id: node.id },
+            data: { linkedConditionIds: validIds }
+          }).catch((e) => console.warn(`[AUTO-CLEANUP] Erreur nettoyage node ${node.id}:`, e.message))
+        );
+      }
+    }
+    if (orphanCleanups.length > 0) {
+      Promise.all(orphanCleanups).then(() => {
+        console.log(`\u{1F9F9} [AUTO-CLEANUP] ${orphanCleanups.length} node(s) nettoy\xE9(s) de leurs linkedConditionIds orphelins`);
+      });
     }
     const activeConditionByNode = {};
     for (const node of nodes) {
@@ -69507,7 +69619,7 @@ router90.post("/cloud-run-domains/verify", authenticateToken, async (req2, res) 
 async function checkDomainReachability(domain) {
   try {
     const https = await import("https");
-    return new Promise((resolve) => {
+    return new Promise((resolve2) => {
       const options = {
         hostname: domain,
         port: 443,
@@ -69516,12 +69628,12 @@ async function checkDomainReachability(domain) {
         timeout: 5e3
       };
       const req2 = https.request(options, (res) => {
-        resolve(res.statusCode !== void 0 && res.statusCode < 500);
+        resolve2(res.statusCode !== void 0 && res.statusCode < 500);
       });
-      req2.on("error", () => resolve(false));
+      req2.on("error", () => resolve2(false));
       req2.on("timeout", () => {
         req2.destroy();
-        resolve(false);
+        resolve2(false);
       });
       req2.end();
     });
@@ -72246,6 +72358,156 @@ var public_forms_default = router94;
 init_prisma();
 
 // src/middleware/websiteRenderer.ts
+var fs11 = __toESM(require("fs"), 1);
+var path10 = __toESM(require("path"), 1);
+function renderSection(section) {
+  const content = section.content || {};
+  const sectionType = section.type;
+  switch (sectionType) {
+    case "header":
+      return renderHeader(content);
+    case "hero":
+      return renderHero(content);
+    case "services":
+      return renderServices(content);
+    case "about":
+      return renderAbout(content);
+    case "stats":
+      return renderStats(content);
+    case "cta":
+      return renderCTA(content);
+    case "testimonials":
+      return renderTestimonials(content);
+    case "faq":
+      return renderFAQ(content);
+    case "contact":
+      return renderContact(content);
+    case "footer":
+      return renderFooter(content);
+    default:
+      return `<!-- Section inconnue: ${sectionType} -->`;
+  }
+}
+function renderHeader(content) {
+  const logo = content.logo || {};
+  const menu = content.menu || {};
+  const cta = content.cta || {};
+  return `
+    <header class="site-header" style="background-color: ${content.background?.color || "#ffffff"}; padding: ${content.spacing?.padding || "20px"} 0;">
+      <div class="container" style="max-width: 1200px; margin: 0 auto; display: flex; justify-content: space-between; align-items: center;">
+        <div class="logo">
+          ${logo.image?.url ? `<img src="${logo.image.url}" alt="${logo.text || "Logo"}" style="height: ${logo.size?.height || "40px"};">` : `<span style="font-size: ${logo.text?.fontSize || "24px"}; font-weight: bold; color: ${logo.text?.color || "#000000"};">${logo.text?.value || "Logo"}</span>`}
+        </div>
+        <nav class="menu" style="display: flex; gap: ${menu.spacing?.gap || "30px"};">
+          ${(menu.items || []).map((item) => `
+            <a href="${item.link || "#"}" style="color: ${menu.text?.color || "#333333"}; text-decoration: none; font-size: ${menu.text?.fontSize || "16px"};">
+              ${item.label || "Menu"}
+            </a>
+          `).join("")}
+        </nav>
+        ${cta.text?.value ? `
+          <a href="${cta.link || "#"}" class="cta-button" style="background-color: ${cta.background?.color || "#007bff"}; color: ${cta.text?.color || "#ffffff"}; padding: ${cta.spacing?.padding || "12px 24px"}; border-radius: ${cta.border?.radius || "4px"}; text-decoration: none; font-size: ${cta.text?.fontSize || "16px"};">
+            ${cta.text.value}
+          </a>
+        ` : ""}
+      </div>
+    </header>
+  `;
+}
+function renderHero(content) {
+  const title = content.title || {};
+  const subtitle = content.subtitle || {};
+  const cta = content.cta || {};
+  return `
+    <section class="hero-section" style="background: ${content.background?.type === "image" && content.background?.image?.url ? `url('${content.background.image.url}') center/cover` : content.background?.color || "#f5f5f5"}; padding: ${content.spacing?.padding || "100px"} 0; text-align: ${content.layout?.alignment || "center"};">
+      <div class="container" style="max-width: 1200px; margin: 0 auto;">
+        <h1 style="font-size: ${title.fontSize || "48px"}; color: ${title.color || "#000000"}; margin-bottom: ${content.spacing?.gap || "20px"};">
+          ${title.value || "Titre Principal"}
+        </h1>
+        ${subtitle.value ? `
+          <p style="font-size: ${subtitle.fontSize || "20px"}; color: ${subtitle.color || "#666666"}; margin-bottom: ${content.spacing?.gap || "30px"};">
+            ${subtitle.value}
+          </p>
+        ` : ""}
+        ${cta.text?.value ? `
+          <a href="${cta.link || "#"}" style="display: inline-block; background-color: ${cta.background?.color || "#007bff"}; color: ${cta.text?.color || "#ffffff"}; padding: ${cta.spacing?.padding || "16px 32px"}; border-radius: ${cta.border?.radius || "4px"}; text-decoration: none; font-size: ${cta.text?.fontSize || "18px"};">
+            ${cta.text.value}
+          </a>
+        ` : ""}
+      </div>
+    </section>
+  `;
+}
+function renderServices(content) {
+  const title = content.title || {};
+  const services = content.services || [];
+  return `
+    <section class="services-section" style="background-color: ${content.background?.color || "#ffffff"}; padding: ${content.spacing?.padding || "80px"} 0;">
+      <div class="container" style="max-width: 1200px; margin: 0 auto;">
+        ${title.value ? `
+          <h2 style="font-size: ${title.fontSize || "36px"}; color: ${title.color || "#000000"}; text-align: center; margin-bottom: ${content.spacing?.gap || "50px"};">
+            ${title.value}
+          </h2>
+        ` : ""}
+        <div class="services-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: ${content.grid?.gap || "30px"};">
+          ${services.map((service) => `
+            <div class="service-card" style="background-color: ${service.background?.color || "#f9f9f9"}; padding: ${service.spacing?.padding || "30px"}; border-radius: ${service.border?.radius || "8px"}; text-align: center;">
+              ${service.icon ? `<div class="service-icon" style="font-size: ${service.icon?.size || "48px"}; color: ${service.icon?.color || "#007bff"}; margin-bottom: 20px;">${service.icon.value || "\u{1F527}"}</div>` : ""}
+              <h3 style="font-size: ${service.title?.fontSize || "24px"}; color: ${service.title?.color || "#000000"}; margin-bottom: 15px;">
+                ${service.title?.value || "Service"}
+              </h3>
+              <p style="font-size: ${service.description?.fontSize || "16px"}; color: ${service.description?.color || "#666666"};">
+                ${service.description?.value || "Description du service"}
+              </p>
+            </div>
+          `).join("")}
+        </div>
+      </div>
+    </section>
+  `;
+}
+function renderAbout(_content) {
+  return `<section class="about-section"><!-- Section About --></section>`;
+}
+function renderStats(_content) {
+  return `<section class="stats-section"><!-- Section Stats --></section>`;
+}
+function renderCTA(_content) {
+  return `<section class="cta-section"><!-- Section CTA --></section>`;
+}
+function renderTestimonials(_content) {
+  return `<section class="testimonials-section"><!-- Section Testimonials --></section>`;
+}
+function renderFAQ(_content) {
+  return `<section class="faq-section"><!-- Section FAQ --></section>`;
+}
+function renderContact(_content) {
+  return `<section class="contact-section"><!-- Section Contact --></section>`;
+}
+function renderFooter(content) {
+  const text = content.text || {};
+  const social = content.social || [];
+  return `
+    <footer class="site-footer" style="background-color: ${content.background?.color || "#333333"}; color: ${text.color || "#ffffff"}; padding: ${content.spacing?.padding || "40px"} 0; text-align: center;">
+      <div class="container" style="max-width: 1200px; margin: 0 auto;">
+        ${text.value ? `
+          <p style="font-size: ${text.fontSize || "14px"}; margin-bottom: ${content.spacing?.gap || "20px"};">
+            ${text.value}
+          </p>
+        ` : ""}
+        ${social.length > 0 ? `
+          <div class="social-links" style="display: flex; justify-content: center; gap: ${content.social?.spacing || "20px"};">
+            ${social.map((link) => `
+              <a href="${link.url || "#"}" target="${link.openInNewTab !== false ? "_blank" : "_self"}" rel="${link.openInNewTab !== false ? "noopener noreferrer" : ""}" style="color: ${content.social?.color || "#ffffff"}; font-size: ${content.social?.size || "24px"};">
+                ${link.icon || link.platform || "\u{1F517}"}
+              </a>
+            `).join("")}
+          </div>
+        ` : ""}
+      </div>
+    </footer>
+  `;
+}
 async function renderWebsite(req2, res) {
   try {
     const website = req2.websiteData;
@@ -72271,68 +72533,52 @@ async function renderWebsite(req2, res) {
         </html>
       `);
     }
-    const targetPath = `/${website.slug}`;
-    console.log(`\u{1F504} [WEBSITE-RENDERER] Redirection vers: ${targetPath}`);
-    const frontendHtml = `
+    const distDir = path10.resolve(process.cwd(), "dist");
+    const indexHtmlPath = path10.join(distDir, "index.html");
+    if (fs11.existsSync(indexHtmlPath)) {
+      let indexHtml = fs11.readFileSync(indexHtmlPath, "utf-8");
+      const seoMeta = `
+        <title>${website.name || "2Thier Energy"}</title>
+        <meta name="description" content="${website.config?.metaDescription || website.config?.seo?.description || "Votre partenaire en transition \xE9nerg\xE9tique"}">
+        <meta name="keywords" content="photovolta\xEFque, batteries, bornes de recharge, pompes \xE0 chaleur, \xE9nergie renouvelable, Belgique">
+        <meta property="og:title" content="${website.name || "2Thier Energy"}">
+        <meta property="og:description" content="${website.config?.metaDescription || "Votre partenaire en transition \xE9nerg\xE9tique"}">
+        <meta property="og:type" content="website">
+      `;
+      indexHtml = indexHtml.replace(/<title>.*?<\/title>/i, seoMeta);
+      const siteDataScript = `
+        <script>
+          window.__WEBSITE_SLUG__ = '${website.slug}';
+          window.__WEBSITE_DOMAIN__ = '${website.domain}';
+        </script>
+      `;
+      indexHtml = indexHtml.replace("</head>", `${siteDataScript}</head>`);
+      console.log(`\u{1F4F1} [WEBSITE-RENDERER] Serving React app with bundles for: ${website.name}`);
+      return res.send(indexHtml);
+    }
+    console.warn("\u26A0\uFE0F [WEBSITE-RENDERER] dist/index.html non trouv\xE9, fallback SSR basique");
+    const sections = website.sections || [];
+    const sectionsHtml = sections.sort((a, b) => a.order - b.order).map((section) => renderSection(section)).join("\n");
+    const fallbackHtml = `
       <!DOCTYPE html>
       <html lang="fr">
         <head>
           <meta charset="UTF-8">
-          <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes">
-          <meta name="mobile-web-app-capable" content="yes">
-          <meta name="apple-mobile-web-app-capable" content="yes">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
           <title>${website.name || "2Thier Energy"}</title>
-          <meta name="description" content="${website.config?.metaDescription || website.config?.seo?.description || "Votre partenaire en transition \xE9nerg\xE9tique"}">
-          <meta name="keywords" content="photovolta\xEFque, batteries, bornes de recharge, pompes \xE0 chaleur, \xE9nergie renouvelable, Belgique">
-          <meta property="og:title" content="${website.name || "2Thier Energy"}">
-          <meta property="og:description" content="${website.config?.metaDescription || "Votre partenaire en transition \xE9nerg\xE9tique"}">
-          <meta property="og:type" content="website">
+          <meta name="description" content="${website.config?.metaDescription || "Votre partenaire en transition \xE9nerg\xE9tique"}">
           <link rel="icon" type="image/png" href="/2thier-logo.png">
-          <script>
-            // Redirection c\xF4t\xE9 client vers la route React
-            window.location.replace('${targetPath}');
-          </script>
           <style>
-            body {
-              margin: 0;
-              padding: 0;
-              background: linear-gradient(135deg, #10b981 0%, #059669 100%);
-              min-height: 100vh;
-              display: flex;
-              align-items: center;
-              justify-content: center;
-              font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            }
-            .loading {
-              text-align: center;
-              color: white;
-            }
-            .spinner {
-              width: 50px;
-              height: 50px;
-              border: 4px solid rgba(255,255,255,0.3);
-              border-top-color: white;
-              border-radius: 50%;
-              animation: spin 1s linear infinite;
-              margin: 0 auto 20px;
-            }
-            @keyframes spin {
-              to { transform: rotate(360deg); }
-            }
+            * { margin: 0; padding: 0; box-sizing: border-box; }
+            body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
           </style>
         </head>
         <body>
-          <noscript>
-            <meta http-equiv="refresh" content="0;url=${targetPath}">
-          </noscript>
-          <div class="loading">
-            <div class="spinner"></div>
-            <p>Chargement de ${website.name || "2Thier Energy"}...</p>
-          </div>
+          ${sectionsHtml}
         </body>
       </html>
     `;
-    res.send(frontendHtml);
+    res.send(fallbackHtml);
   } catch (error) {
     console.error("\u274C [WEBSITE-RENDERER] Erreur:", error);
     res.status(500).send("Erreur lors du chargement du site");

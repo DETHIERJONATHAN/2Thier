@@ -124,11 +124,16 @@ function identifyReferenceType(ref: string): ReferenceType {
   if (ref.startsWith('@table.')) {
     return 'table';
   }
+  if (ref.startsWith('@calculated.')) {
+    return 'value';
+  }
   
   // Nettoyer les prÃƒÂ©fixes courants pour analyse
   const cleaned = ref
     .replace('@value.', '')
     .replace('@table.', '')
+    .replace('@calculated.', '')
+    .replace('@select.', '')
     .trim();
   
   // Ã°Å¸Â§Â® VÃƒÂ©rifier si c'est une FORMULE
@@ -226,10 +231,14 @@ function normalizeRef(ref: string): string {
   return ref
      .replace('@value.', '')
      .replace('@table.', '')
+     .replace('@calculated.', '')
+     .replace('@select.', '')
      .replace('node-formula:', '')
      .replace('node-table:', '')
      .replace('node-condition:', '')
+     .replace('node-variable:', '')
      .replace('condition:', '')
+     .replace('formula:', '')
     .trim();
 }
 
@@ -978,6 +987,18 @@ async function interpretCondition(
     const operandType = identifyReferenceType(ref);
     if (operandType === 'field' || operandType === 'value') {
       const operandId = normalizeRef(ref);
+      
+      // 🛡️ Protection: si @value.X référence un nœud de type leaf_option ou leaf_option_field,
+      // c'est une option de SELECT → on doit retourner l'ID du nœud (pas la valeur texte du champ).
+      // Cela arrive quand le condition builder génère @value. au lieu de @select. pour les options.
+      const optionCheckNode = await prisma.treeBranchLeafNode.findUnique({
+        where: { id: operandId },
+        select: { id: true, label: true, type: true }
+      });
+      if (optionCheckNode && (optionCheckNode.type === 'leaf_option' || optionCheckNode.type === 'leaf_option_field')) {
+        return { value: optionCheckNode.id, label: optionCheckNode.label };
+      }
+      
       const value = await getNodeValue(operandId, submissionId, prisma, valueMap, { preserveEmpty: true });
       const label = await getNodeLabel(operandId, prisma, labelMap);
       return { value, label };
@@ -1039,6 +1060,7 @@ async function interpretCondition(
   // Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
   const operator = when.op;
   const conditionMet = evaluateOperator(operator, leftValue, rightValue);
+  console.log(`🔍 [CONDITION EVAL] "${condition.name}" (${condition.id}): LEFT="${leftLabel}"(${leftValue}) ${operator} RIGHT="${rightLabel}"(${rightValue}) → ${conditionMet ? 'VRAI' : 'FAUX'}`);
   
   
   // Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
@@ -1116,6 +1138,7 @@ async function interpretCondition(
   // Ã°Å¸â€œÂ¤ Ãƒâ€°TAPE 9 : Retourner le rÃƒÂ©sultat structurÃƒÂ© avec le rÃƒÂ©sultat de la branche sÃƒÂ©lectionnÃƒÂ©e
   // Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
   const finalResult = conditionMet ? alorsResult.result : sinonResult.result;
+  console.log(`🔍 [CONDITION RESULT] "${condition.name}" → branche ${branchName}: ALORS="${alorsResult.result}" / SINON="${sinonResult.result}" → FINAL="${finalResult}"`);
   
   return {
     result: finalResult,
@@ -1211,8 +1234,8 @@ function evaluateOperator(op: string, left: any, right: any): boolean {
     
     // Ã°Å¸â€Â¥ NOUVEAU: OpÃƒÂ©rateur 'contains' pour vÃƒÂ©rifier si une chaÃƒÂ®ne contient une autre
     case 'contains':
-      if (left === null || left === undefined) return false;
-      if (right === null || right === undefined) return false;
+      if (left === null || left === undefined || left === '') return false;
+      if (right === null || right === undefined || right === '') return false;
 
       {
         const nl = normalizeComparable(left);

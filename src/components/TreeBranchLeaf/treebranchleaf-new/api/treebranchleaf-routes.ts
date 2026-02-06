@@ -3618,6 +3618,9 @@ const updateOrMoveNode = async (req, res) => {
       return res.json(responseData);
     }
 
+    // 🔧 FIX: Sauvegarder les clés metadata entrantes AVANT le bloc repeater qui peut les écraser
+    const incomingMetadataBeforeRepeater = updateObj.metadata ? { ...(updateObj.metadata as any) } : null;
+    
     // 🔧 FIX CRITICAL: Reconstruire metadata.repeater avec TOUS les champs, y compris templateNodeIds
     // ⚠️ CORRECTION : Le bloc précédent écrasait templateNodeIds avec l'ancienne valeur !
     if (updateObj.repeater_buttonSize || updateObj.repeater_maxItems !== undefined || updateObj.repeater_minItems !== undefined || updateObj.repeater_templateNodeIds !== undefined) {
@@ -3662,6 +3665,9 @@ const updateOrMoveNode = async (req, res) => {
       
       updateObj.metadata = {
         ...currentMetadata,
+        // 🔧 FIX: Ré-appliquer les clés metadata entrantes (triggerNodeIds, capabilities, etc.)
+        // qui ont été préservées par removeJSONFromUpdate mais écrasées par le spread currentMetadata
+        ...(incomingMetadataBeforeRepeater || {}),
         repeater: updatedRepeaterMetadata
       };
       
@@ -10491,13 +10497,18 @@ router.post('/nodes/:fieldId/select-config', async (req, res) => {
       optionsSource,
       tableReference,
       keyColumn,
-      keyRow,
+      keyRow: rawKeyRow,
       valueColumn,
-      valueRow,
+      valueRow: rawValueRow,
       displayColumn,
       displayRow,
       dependsOnNodeId,
     } = req.body;
+    
+    // 🔧 FIX: keyRow/valueRow sont String? dans Prisma mais le frontend peut envoyer un array
+    // Sérialiser en JSON string si c'est un array
+    const keyRow = Array.isArray(rawKeyRow) ? JSON.stringify(rawKeyRow) : rawKeyRow;
+    const valueRow = Array.isArray(rawValueRow) ? JSON.stringify(rawValueRow) : rawValueRow;
 
     // 🔎 LOG MANUEL: Sauvegarde SelectConfig (flux TablePanel Étape 4)
     console.log('[MANUAL-SAVE][SELECT-CONFIG] ➡️ POST /nodes/:fieldId/select-config', {

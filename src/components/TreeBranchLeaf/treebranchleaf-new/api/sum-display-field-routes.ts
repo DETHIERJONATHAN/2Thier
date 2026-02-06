@@ -197,9 +197,16 @@ export function registerSumDisplayFieldRoutes(router: Router): void {
           sourceNodeId: nodeId,
           sumTokens,
           copiesCount: allCopies.length,
-          // � FIX: Copier les triggerNodeIds de l'original pour que le Total se recalcule
-          // Le Total doit se recalculer quand les mêmes champs que l'original changent
-          ...(originalTriggerNodeIds && originalTriggerNodeIds.length > 0 ? { triggerNodeIds: originalTriggerNodeIds } : {}),
+          // 🔥 FIX: Fusionner les triggerNodeIds existants avec ceux de l'original
+          // au lieu d'écraser (préserve les triggers configurés manuellement)
+          ...(() => {
+            const existingTriggers = Array.isArray((existingSumNode?.metadata as Record<string, unknown>)?.triggerNodeIds)
+              ? ((existingSumNode?.metadata as Record<string, unknown>).triggerNodeIds as string[])
+              : [];
+            const newTriggers = originalTriggerNodeIds && originalTriggerNodeIds.length > 0 ? originalTriggerNodeIds : [];
+            const merged = Array.from(new Set([...existingTriggers, ...newTriggers]));
+            return merged.length > 0 ? { triggerNodeIds: merged } : {};
+          })(),
           // �🎨 HÉRITAGE ICÔNE: Ajouter l'icône dans capabilities.datas pour le frontend
           capabilities: {
             ...(existingSumNode?.metadata?.capabilities || {}),
@@ -307,12 +314,23 @@ export function registerSumDisplayFieldRoutes(router: Router): void {
         }
       }
 
-      // CrÃƒÂ©er/mettre ÃƒÂ  jour la formule de somme dans la table dÃƒÂ©diÃƒÂ©e
+      // Créer/mettre à jour la formule de somme dans la table dédiée
+      // 🔥 FIX: D'abord supprimer toute formule orpheline pour ce nodeId qui a un ID différent
+      // Cela évite les conflits de contrainte unique (nodeId, name) avec des formules périmées
+      try {
+        await prisma.treeBranchLeafNodeFormula.deleteMany({
+          where: {
+            nodeId: sumFieldNodeId,
+            id: { not: sumFormulaId }
+          }
+        });
+      } catch { /* noop */ }
+
       const existingSumFormula = await prisma.treeBranchLeafNodeFormula.findUnique({
         where: { id: sumFormulaId }
       });
 
-      // Ã°Å¸â€Â¥ OrganizationId pour la formule (depuis tree ou request)
+      // 🔥 OrganizationId pour la formule (depuis tree ou request)
       const formulaOrgId = tree.organizationId || organizationId;
 
       const sumFormulaData = {
@@ -338,17 +356,21 @@ export function registerSumDisplayFieldRoutes(router: Router): void {
           });
         } catch (err) {
           if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
-            // La contrainte unique (nodeId, name) a échoué, on update via cette combinaison
-            await prisma.treeBranchLeafNodeFormula.update({
-              where: {
-                nodeId_name: {
-                  nodeId: sumFieldNodeId,
-                  name: `Somme ${mainVariable.displayName}`
-                }
-              },
-              data: sumFormulaData
+            // La contrainte unique (nodeId, name) a échoué malgré le nettoyage préalable
+            // Supprimer toute formule conflictuante et recréer avec le bon ID
+            await prisma.treeBranchLeafNodeFormula.deleteMany({ where: { nodeId: sumFieldNodeId } });
+            await prisma.treeBranchLeafNodeFormula.create({
+              data: {
+                id: sumFormulaId,
+                nodeId: sumFieldNodeId,
+                organizationId: formulaOrgId,
+                name: `Somme ${mainVariable.displayName}`,
+                description: `Somme automatique de toutes les copies de ${mainVariable.displayName}`,
+                createdAt: now,
+                ...sumFormulaData
+              }
             });
-            console.warn(`Ã¢Å¡Â Ã¯Â¸Â [SUM DISPLAY] Formule Total dÃƒÂ©jÃƒÂ  existante, mise ÃƒÂ  jour forcÃƒÂ©e: ${sumFormulaId}`);
+            console.warn(`⚠️ [SUM DISPLAY] Formule orpheline nettoyée et recréée: ${sumFormulaId}`);
           } else {
             throw err;
           }
@@ -423,7 +445,14 @@ export function registerSumDisplayFieldRoutes(router: Router): void {
 
       const sumFormulaId = mainVariable ? `${mainVariable.id}-sum-formula` : null;
 
-      // Supprimer la formule
+      // 🔥 FIX: Supprimer TOUTES les formules liées au nœud sum-total (pas seulement celle du variable ID actuel)
+      // Cela évite les formules orphelines quand le variable ID a changé entre les activations
+      try {
+        await prisma.treeBranchLeafNodeFormula.deleteMany({
+          where: { nodeId: sumFieldNodeId }
+        });
+      } catch { /* noop si n'existe pas */ }
+      // Aussi supprimer par ID spécifique (au cas où le nodeId serait différent)
       if (sumFormulaId) {
         try {
           await prisma.treeBranchLeafNodeFormula.delete({
@@ -579,9 +608,18 @@ export async function updateSumDisplayFieldAfterCopyChange(
       return;
     }
 
-    // ✅ FIX 11/01/2026: Utiliser la contrainte unique (nodeId, name) au lieu de id
-    // La table TreeBranchLeafNodeFormula a @@unique([nodeId, name])
+    // ✅ FIX: Supprimer toute formule orpheline avec un ID différent pour ce nodeId
+    // Puis upsert avec le bon ID basé sur le mainVariable.id actuel
     const formulaName = `Somme ${mainVariable.displayName}`;
+    try {
+      await db.treeBranchLeafNodeFormula.deleteMany({
+        where: {
+          nodeId: sumFieldNodeId,
+          id: { not: sumFormulaId }
+        }
+      });
+    } catch { /* noop */ }
+    
     await db.treeBranchLeafNodeFormula.upsert({
       where: { 
         nodeId_name: { 
@@ -613,19 +651,27 @@ export async function updateSumDisplayFieldAfterCopyChange(
     });
 
     if (sumNode) {
+      // 🔥 FIX: Fusionner les triggerNodeIds existants (configurés manuellement par l'utilisateur)
+      // avec les triggerNodeIds agrégés des copies, au lieu d'écraser
+      const existingMetadata = (sumNode.metadata as Record<string, unknown>) || {};
+      const existingTriggers = Array.isArray(existingMetadata.triggerNodeIds)
+        ? (existingMetadata.triggerNodeIds as string[])
+        : [];
+      const mergedTriggers = Array.from(new Set([...existingTriggers, ...allTriggerNodeIds]));
+
       await db.treeBranchLeafNode.update({
         where: { id: sumFieldNodeId },
         data: {
           updatedAt: now,
           formula_instances: { [sumFormulaId]: formulaInstance },
           formula_tokens: sumTokens,
-          calculatedValue: String(newCalculatedValue), // Ã°Å¸â€Â¥ NOUVEAU: Mettre ÃƒÂ  jour la valeur
+          calculatedValue: String(newCalculatedValue), // Ã°Å¸â€Â¥ NOUVEAU: Mettre ÃƒÂ  jour la valeur
           metadata: {
-            ...(sumNode.metadata as Record<string, unknown> || {}),
+            ...existingMetadata,
             sumTokens,
             copiesCount: allCopies.length,
-            // 🎯 FIX: Ajouter les triggerNodeIds agrégés de TOUTES les copies
-            ...(allTriggerNodeIds.length > 0 ? { triggerNodeIds: allTriggerNodeIds } : {}),
+            // 🔥 FIX: Fusionner au lieu d'écraser pour préserver les triggers manuels
+            ...(mergedTriggers.length > 0 ? { triggerNodeIds: mergedTriggers } : {}),
             updatedAt: now.toISOString()
           }
         }

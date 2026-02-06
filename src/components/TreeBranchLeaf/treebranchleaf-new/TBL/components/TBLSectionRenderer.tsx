@@ -43,6 +43,7 @@ import { buildMirrorKeys } from '../utils/mirrorNormalization';
 import type { RawTreeNode } from '../types';
 import { useAuthenticatedApi } from '../../../../../hooks/useAuthenticatedApi';
 import { isCopyFromRepeater } from '../utils/isCopyFromRepeater';
+import { useTBLBatchOptional } from '../contexts/TBLBatchContext';
 
 const { Text } = Typography;
 const { Panel } = Collapse;
@@ -967,6 +968,12 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
   // ✅ CRITIQUE: Stabiliser l'API pour éviter les re-rendus à chaque frappe
   const apiHook = useAuthenticatedApi();
   const api = useMemo(() => apiHook.api, [apiHook.api]);
+  
+  // 🚀 CRITIQUE: Accès aux conditions inversées pour les champs SHOW/HIDE (sum-total, etc.)
+  const batchCtx = useTBLBatchOptional();
+  const getConditionsTargetingNode = batchCtx?.getConditionsTargetingNode;
+  const batchReady = batchCtx?.isReady ?? false;
+  
   // dlog alias to global debug logger (globalDlog checks DEBUG_VERBOSE)
   const dlog = globalDlog;
 
@@ -3744,6 +3751,53 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
       // 🎯 NOUVEAU: Détection directe des champs -sum-total
       const isSumTotalField = typeof field.id === 'string' && field.id.endsWith('-sum-total');
 
+      // 🚀 CRITIQUE: Évaluer les conditions inversées (SHOW/HIDE) pour les champs sum-total
+      // Ces champs ne passent pas par TBLFieldRendererAdvanced, donc les conditions
+      // doivent être évaluées ici directement pour masquer/afficher le champ.
+      if (isSumTotalField && batchReady && getConditionsTargetingNode) {
+        const inverseConditions = getConditionsTargetingNode(field.id);
+        if (inverseConditions.length > 0) {
+          let isVisible = true;
+          for (const cond of inverseConditions) {
+            const dependentValue = formData[cond.dependsOn];
+            let condResult = false;
+            
+            switch (cond.operator) {
+              case 'equals':
+              case '==':
+                condResult = dependentValue === cond.showWhen;
+                break;
+              case 'not_equals':
+              case '!=':
+                condResult = dependentValue !== cond.showWhen;
+                break;
+              case 'contains':
+                condResult = String(dependentValue || '').includes(String(cond.showWhen));
+                break;
+              case 'not_contains':
+                condResult = !String(dependentValue || '').includes(String(cond.showWhen));
+                break;
+              default:
+                condResult = true;
+            }
+            
+            if (cond.actionType === 'SHOW' && !condResult) {
+              isVisible = false;
+              break;
+            } else if (cond.actionType === 'HIDE' && condResult) {
+              isVisible = false;
+              break;
+            }
+          }
+          
+          console.log(`🎯 [SUM-TOTAL CONDITIONS] "${field.label}" (${field.id}): ${inverseConditions.length} condition(s), visible: ${isVisible}`);
+          
+          if (!isVisible) {
+            return null; // Masquer complètement le champ (pas de bulle rendue)
+          }
+        }
+      }
+
       const isCopyWithSuffix = typeof field.id === 'string' && /^.+-\d+$/.test(field.id);
       const isRepeaterCopy = Boolean(fieldMetadata.duplicatedFromRepeater || fieldMetadata.copySuffix || fieldMetadata.suffixNum);
 
@@ -3868,6 +3922,7 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
 
       // 🎯 PRIORITÉ 0 ABSOLUE: Champs Total (-sum-total) - AVANT TOUT
       // Ces champs ont leur propre valeur calculée stockée en base, pas besoin de capacités complexes
+      // Note: La visibilité conditionnelle (SHOW/HIDE) est gérée en amont dans renderDataSectionField
       if (treeId && isSumTotalField) {
         if (isTBLDebugEnabled()) tblLog(`🎯 [SUM-TOTAL] Affichage direct pour champ Total: ${field.id} (${field.label})`);
         return renderStoredCalculatedValue(field.id, {

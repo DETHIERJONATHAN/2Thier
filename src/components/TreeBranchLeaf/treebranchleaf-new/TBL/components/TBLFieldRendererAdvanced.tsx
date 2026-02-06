@@ -1580,7 +1580,7 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
   }, [field, treeMetadata, templateAppearanceOverrides]);
 
   // 🚀 OPTIMISÉ: Utiliser le batch au lieu de requêtes individuelles
-  const { getFormulasForNode, isReady: batchReady } = useTBLBatch();
+  const { getFormulasForNode, getConditionsTargetingNode, isReady: batchReady } = useTBLBatch();
   
   // Récupérer les formules depuis le cache batch (pas de requête HTTP !)
   const nodeFormulas = useMemo(() => {
@@ -1727,17 +1727,47 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
     return constraints;
   }, [constraintFormulas, constraintSourceValue, constraintSourceNodeId, field.label]);
 
-  // Gestion des conditions du champ (système useTBLData)
+  // 🚀 CRITIQUE: Fusionner les conditions directes ET les conditions inversées (SHOW/HIDE targets)
+  const allConditions = useMemo(() => {
+    // D'abord les conditions directes du champ
+    const directConditions = field.conditions || [];
+    
+    // Ensuite les conditions inversées (ce champ est ciblé par SHOW/HIDE d'une autre condition)
+    const inverseConditions = batchReady ? getConditionsTargetingNode(field.id) : [];
+    
+    // Convertir les conditions inversées au format attendu
+    const convertedInverse = inverseConditions.map(inv => ({
+      dependsOn: inv.dependsOn,
+      operator: inv.operator === '==' ? 'equals' : 
+               inv.operator === '!=' ? 'not_equals' : 
+               inv.operator === '>' ? 'greater_than' : 
+               inv.operator === '<' ? 'less_than' : 
+               inv.operator,
+      showWhen: inv.showWhen,
+      actionType: inv.actionType, // SHOW ou HIDE
+      isInverse: true as const
+    }));
+    
+    // Log si on trouve des conditions inversées
+    if (convertedInverse.length > 0) {
+      console.log(`🎯 [TBLFieldRendererAdvanced] "${field.label}" (${field.id}) a ${convertedInverse.length} condition(s) inversée(s):`, convertedInverse);
+    }
+    
+    return [...directConditions, ...convertedInverse];
+  }, [field.conditions, field.id, field.label, batchReady, getConditionsTargetingNode]);
+
+  // Gestion des conditions du champ (système useTBLData + conditions inversées)
   useEffect(() => {
-    if (!field.conditions || field.conditions.length === 0) {
+    if (!allConditions || allConditions.length === 0) {
       setConditionMet(true);
       return;
     }
 
     let isVisible = true;
+    let hasShowCondition = false; // Pour gérer le SHOW: masqué par défaut si condition SHOW existe
     
     // Vérifier chaque condition
-    for (const condition of field.conditions) {
+    for (const condition of allConditions) {
       const dependentValue = formData[condition.dependsOn];
       let conditionResult = false;
       
@@ -1748,35 +1778,62 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
       // });
       switch (condition.operator) {
         case 'equals':
+        case '==':
           conditionResult = dependentValue === condition.showWhen;
           break;
         case 'not_equals':
+        case '!=':
           conditionResult = dependentValue !== condition.showWhen;
           break;
         case 'contains':
           conditionResult = String(dependentValue || '').includes(String(condition.showWhen));
           break;
+        case 'not_contains':
+          conditionResult = !String(dependentValue || '').includes(String(condition.showWhen));
+          break;
         case 'greater_than':
+        case '>':
           conditionResult = Number(dependentValue) > Number(condition.showWhen);
           break;
         case 'less_than':
+        case '<':
           conditionResult = Number(dependentValue) < Number(condition.showWhen);
           break;
         default:
           conditionResult = true;
       }
       
-      // console.log(`🔍 [TBLFieldRendererAdvanced] Résultat condition: ${conditionResult}`); // ✨ Log réduit
+      console.log(`🔍 [TBLFieldRendererAdvanced] Condition "${field.label}": dependentValue="${dependentValue}", op="${condition.operator}", showWhen="${condition.showWhen}" → ${conditionResult}`);
       
-      if (!conditionResult) {
-        isVisible = false;
-        break;
+      // 🔥 CRITIQUE: Gérer les actions SHOW vs HIDE
+      const isInverseCondition = 'isInverse' in condition && condition.isInverse;
+      const actionType = 'actionType' in condition ? condition.actionType : 'SHOW';
+      
+      if (isInverseCondition) {
+        if (actionType === 'SHOW') {
+          hasShowCondition = true;
+          // SHOW: visible seulement si la condition est vraie
+          if (!conditionResult) {
+            isVisible = false;
+          }
+        } else if (actionType === 'HIDE') {
+          // HIDE: masqué seulement si la condition est vraie
+          if (conditionResult) {
+            isVisible = false;
+          }
+        }
+      } else {
+        // Condition classique: visible si la condition est vraie
+        if (!conditionResult) {
+          isVisible = false;
+          break;
+        }
       }
     }
     
-    // console.log(`🔍 [TBLFieldRendererAdvanced] Champ "${field.label}" visible: ${isVisible}`); // ✨ Log réduit
+    console.log(`🔍 [TBLFieldRendererAdvanced] Champ "${field.label}" (${field.id}) visible: ${isVisible}, hasShowCondition: ${hasShowCondition}`);
     setConditionMet(isVisible);
-  }, [field.conditions, formData, field.label]);
+  }, [allConditions, formData, field.label, field.id]);
 
   // Gestion des formules TreeBranchLeaf
   useEffect(() => {

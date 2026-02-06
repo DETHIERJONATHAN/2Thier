@@ -44,11 +44,15 @@ function normalizeRefForTriggers(ref?: unknown): string {
   if (!ref || typeof ref !== 'string') return '';
   return ref
     .replace(/^@value\./, '')
+    .replace(/^@calculated\./, '')
     .replace(/^@table\./, '')
+    .replace(/^@select\./, '')
     .replace(/^node-formula:/, '')
     .replace(/^node-table:/, '')
     .replace(/^node-condition:/, '')
+    .replace(/^node-variable:/, '')
     .replace(/^condition:/, '')
+    .replace(/^formula:/, '')
     .trim();
 }
 
@@ -991,6 +995,92 @@ async function evaluateCapacitiesForSubmission(
             nodeLabel: linkedNode.label || linkedNode.id
           });
           console.log(`🔗 [LINK TRIGGER] Champ "${linkedNode.label}" (${linkedNode.id}) sera rafraîchi car son source ${targetId} a changé`);
+        }
+      }
+    }
+    
+    // 🎯 NOUVEAU: Charger TOUTES les conditions du tree pour construire l'index
+    // Une condition qui référence changedFieldId doit déclencher l'évaluation de ses SHOW nodeIds
+    const allTreeNodeIds = await prisma.treeBranchLeafNode.findMany({
+      where: { treeId },
+      select: { id: true }
+    });
+    
+    if (allTreeNodeIds.length > 0) {
+      const nodeIds = allTreeNodeIds.map(n => n.id);
+      const allConditions = await prisma.treeBranchLeafNodeCondition.findMany({
+        where: { nodeId: { in: nodeIds } },
+        select: { id: true, nodeId: true, conditionSet: true, name: true }
+      });
+      
+      if (allConditions.length > 0) {
+        console.log(`🎯 [CONDITION TRIGGER] ${allConditions.length} conditions trouvées dans le tree`);
+        
+        for (const condition of allConditions) {
+          // Parser le conditionSet pour extraire les références aux champs
+          const conditionSet = condition.conditionSet as {
+            branches?: Array<{
+              when?: { left?: { ref?: string }; right?: { ref?: string } };
+              actions?: Array<{ type?: string; nodeIds?: string[] }>;
+            }>;
+            fallback?: { actions?: Array<{ type?: string; nodeIds?: string[] }> };
+          };
+          
+          const referencedFieldIds = new Set<string>();
+          const targetShowNodeIds = new Set<string>();
+          
+          // Parcourir les branches pour extraire les références et les SHOW nodeIds
+          for (const branch of conditionSet.branches || []) {
+            // Extraire les références de la clause when (left et right)
+            const leftRef = branch.when?.left?.ref;
+            const rightRef = branch.when?.right?.ref;
+            
+            if (leftRef) {
+              const id = normalizeRefForTriggers(leftRef);
+              if (id) referencedFieldIds.add(id);
+            }
+            if (rightRef) {
+              const id = normalizeRefForTriggers(rightRef);
+              if (id) referencedFieldIds.add(id);
+            }
+            
+            // Extraire les nodeIds des actions SHOW/HIDE (les deux impactent des display fields)
+            for (const action of branch.actions || []) {
+              if ((action.type === 'SHOW' || action.type === 'HIDE') && action.nodeIds) {
+                action.nodeIds.forEach(nid => targetShowNodeIds.add(nid));
+              }
+            }
+          }
+          
+          // Aussi le fallback
+          for (const action of conditionSet.fallback?.actions || []) {
+            if ((action.type === 'SHOW' || action.type === 'HIDE') && action.nodeIds) {
+              action.nodeIds.forEach(nid => targetShowNodeIds.add(nid));
+            }
+          }
+          
+          // Si cette condition référence le changedFieldId, ajouter ses SHOW nodeIds au trigger index
+          if (referencedFieldIds.has(changedFieldId)) {
+            console.log(`🎯 [CONDITION TRIGGER] Condition "${condition.name}" (${condition.id}) référence "${changedFieldId}" → SHOW nodeIds: [${[...targetShowNodeIds].join(', ')}]`);
+            
+            if (!triggerIndex.has(changedFieldId)) {
+              triggerIndex.set(changedFieldId, new Set());
+            }
+            
+            // 🔥 FIX CRITIQUE: Ajouter le NODE PROPRIÉTAIRE de la condition au trigger index
+            // Le condition.nodeId est le display field qui A cette capacité condition (sourceRef: "condition:xxx")
+            // Quand l'input de la condition change, c'est CE display field qui doit être réévalué !
+            triggerIndex.get(changedFieldId)!.add(condition.nodeId);
+            console.log(`🎯 [CONDITION TRIGGER] → Ajout du node propriétaire "${condition.nodeId}" au trigger index`);
+            
+            for (const rawShowNodeId of targetShowNodeIds) {
+              // Normaliser les nodeIds pour supprimer les préfixes (@calculated., condition:, etc.)
+              const showNodeId = normalizeRefForTriggers(rawShowNodeId);
+              if (!showNodeId) continue; // Skip les IDs vides après normalisation
+              
+              triggerIndex.get(changedFieldId)!.add(showNodeId);
+            }
+          }
         }
       }
     }

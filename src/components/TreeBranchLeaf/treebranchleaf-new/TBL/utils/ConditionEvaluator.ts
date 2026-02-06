@@ -13,7 +13,7 @@ interface ConditionBranch {
   when: {
     op: string;
     left: { ref: string; kind?: string };
-    right?: { ref?: string; value?: unknown };
+    right?: { ref?: string; value?: unknown; kind?: string };
   };
   label: string;
   actions: Array<{
@@ -114,51 +114,97 @@ export class ConditionEvaluator {
     
     const { op, left, right } = when;
     
+    // 🔧 Helper pour extraire l'ID depuis @value.xxx, @select.xxx, etc.
+    const extractIdFromRef = (ref: string): string => {
+      const m = /@(?:value|select|calculated|input)\.([a-f0-9-]{36})/i.exec(ref);
+      return m && m[1] ? m[1] : ref;
+    };
+    
     // Résoudre la valeur de gauche
+    const leftId = extractIdFromRef(left.ref);
     const leftValue = this.resolveReference(left.ref, formData, debug);
     
+    // Résoudre la valeur de droite si présente
+    let rightValue: unknown = null;
+    if (right) {
+      // 🔧 Si c'est une référence @select.{optionId} avec kind=nodeOption,
+      // on compare DIRECTEMENT avec l'optionId (pas besoin de lookup)
+      if (right.kind === 'nodeOption' && right.ref) {
+        rightValue = extractIdFromRef(right.ref);
+      } else if (right.ref) {
+        rightValue = this.resolveReference(right.ref, formData, debug);
+      } else if (right.value !== undefined) {
+        rightValue = right.value;
+      }
+    }
+    
     if (debug) {
-      
-      
+      console.log(`[ConditionEvaluator] op=${op}, leftValue=${leftValue}, rightValue=${rightValue}`);
     }
     
     switch (op) {
       case 'isNotEmpty': {
         const isEmpty = leftValue === null || leftValue === undefined || leftValue === '';
-        const result = !isEmpty;
-        if (debug) {
-          
-        }
-        return result;
+        return !isEmpty;
       }
         
       case 'isEmpty': {
-        const isEmptyResult = leftValue === null || leftValue === undefined || leftValue === '';
-        if (debug) {
-          
-        }
-        return isEmptyResult;
+        return leftValue === null || leftValue === undefined || leftValue === '';
       }
         
-      case 'equals': {
-        const rightValue = right ? this.resolveReference(right.ref || right.value, formData, debug) : null;
-        const equalsResult = leftValue === rightValue;
-        if (debug) {
-          
-        }
-        return equalsResult;
+      case 'equals':
+      case 'eq':
+      case '==':
+      case '===': {
+        // 🔧 Comparaison avec conversion string pour les IDs
+        return String(leftValue) === String(rightValue);
+      }
+      
+      case 'notEquals':
+      case 'ne':
+      case '!=':
+      case '!==': {
+        return String(leftValue) !== String(rightValue);
+      }
+      
+      case 'gt':
+      case '>': {
+        return Number(leftValue) > Number(rightValue);
+      }
+      
+      case 'gte':
+      case '>=': {
+        return Number(leftValue) >= Number(rightValue);
+      }
+      
+      case 'lt':
+      case '<': {
+        return Number(leftValue) < Number(rightValue);
+      }
+      
+      case 'lte':
+      case '<=': {
+        return Number(leftValue) <= Number(rightValue);
+      }
+      
+      case 'contains': {
+        return String(leftValue || '').toLowerCase().includes(String(rightValue || '').toLowerCase());
+      }
+      
+      case 'notContains': {
+        return !String(leftValue || '').toLowerCase().includes(String(rightValue || '').toLowerCase());
       }
         
       default:
         if (debug) {
-          
+          console.warn(`[ConditionEvaluator] Opérateur non supporté: ${op}`);
         }
         return false;
     }
   }
   
   /**
-   * Résout une référence @value.xxx vers la valeur dans formData
+   * Résout une référence @value.xxx, @select.xxx vers la valeur dans formData
    */
   private static resolveReference(
     ref: string | unknown, 
@@ -170,14 +216,15 @@ export class ConditionEvaluator {
       return ref; // Valeur directe
     }
     
-    // Format @value.nodeId
-    if (ref.startsWith('@value.')) {
-      const nodeId = ref.replace('@value.', '');
+    // 🔧 Pattern unifié pour @value.xxx, @select.xxx, @calculated.xxx, etc.
+    const refMatch = /@(?:value|select|calculated|input)\.([a-f0-9-]{36})/i.exec(ref);
+    if (refMatch) {
+      const nodeId = refMatch[1];
       
       // Chercher dans formData par nodeId direct
       if (formData[nodeId] !== undefined) {
         if (debug) {
-          
+          console.log(`[resolveReference] Trouvé ${nodeId} = ${formData[nodeId]}`);
         }
         return formData[nodeId];
       }
@@ -186,15 +233,14 @@ export class ConditionEvaluator {
       for (const [key, value] of Object.entries(formData)) {
         if (key.includes(nodeId)) {
           if (debug) {
-            
+            console.log(`[resolveReference] Trouvé via clé ${key} = ${value}`);
           }
           return value;
         }
       }
       
       if (debug) {
-        
-        
+        console.log(`[resolveReference] Non trouvé: ${nodeId}`);
       }
       
       return null;

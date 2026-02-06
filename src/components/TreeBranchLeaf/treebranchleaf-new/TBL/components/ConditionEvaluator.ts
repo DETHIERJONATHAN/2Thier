@@ -14,6 +14,11 @@ interface ConditionWhen {
     ref: string;
     kind: string;
   };
+  right?: {
+    ref?: string;
+    value?: unknown;
+    kind?: string;
+  };
   type: string;
 }
 
@@ -132,24 +137,70 @@ export class ConditionEvaluator {
    * Évalue une condition individuelle (when)
    */
   private evaluateCondition(condition: ConditionWhen, formData: Record<string, unknown>): boolean {
-    const { op, left } = condition;
+    const { op, left, right } = condition;
     
-    // Résoudre la référence @value.xxx
-    const fieldRef = left.ref; // "@value.702d1b09-abc9-4096-9aaa-77155ac5294f"
-    const fieldId = fieldRef.replace('@value.', ''); // "702d1b09-abc9-4096-9aaa-77155ac5294f"
-    const fieldValue = formData[fieldId];
+    // 🔧 Helper pour extraire l'ID depuis @value.xxx, @select.xxx, etc.
+    const extractIdFromRef = (ref: string): string => {
+      const m = /@(?:value|select|calculated|input)\.([a-f0-9-]{36})/i.exec(ref);
+      return m && m[1] ? m[1] : ref;
+    };
+    
+    // Résoudre la référence gauche @value.xxx, @select.xxx etc.
+    const fieldRef = left.ref;
+    const fieldId = extractIdFromRef(fieldRef);
+    const leftValue = formData[fieldId];
+    
+    // Résoudre la référence droite si présente
+    let rightValue: unknown = null;
+    if (right) {
+      // 🔧 Si c'est une référence @select.{optionId} avec kind=nodeOption, 
+      // on compare DIRECTEMENT avec l'optionId (pas la valeur dans formData)
+      if (right.kind === 'nodeOption' && right.ref) {
+        const rightId = extractIdFromRef(right.ref);
+        rightValue = rightId; // L'ID de l'option EST la valeur à comparer
+      } else if (right.ref) {
+        const rightId = extractIdFromRef(right.ref);
+        rightValue = formData[rightId];
+      } else if (right.value !== undefined) {
+        rightValue = right.value;
+      }
+    }
     
     // Évaluer l'opération
     switch (op) {
       case 'isNotEmpty':
-        return fieldValue !== null && fieldValue !== undefined && fieldValue !== '';
+        return leftValue !== null && leftValue !== undefined && leftValue !== '';
       case 'isEmpty':
-        return fieldValue === null || fieldValue === undefined || fieldValue === '';
+        return leftValue === null || leftValue === undefined || leftValue === '';
       case 'equals':
-        // Pour equals, il faudrait une valeur right dans la condition
-        return false;
+      case 'eq':
+      case '==':
+      case '===':
+        // 🔧 Comparaison avec conversion string pour les IDs
+        return String(leftValue) === String(rightValue);
+      case 'notEquals':
+      case 'ne':
+      case '!=':
+      case '!==':
+        return String(leftValue) !== String(rightValue);
+      case 'gt':
+      case '>':
+        return Number(leftValue) > Number(rightValue);
+      case 'gte':
+      case '>=':
+        return Number(leftValue) >= Number(rightValue);
+      case 'lt':
+      case '<':
+        return Number(leftValue) < Number(rightValue);
+      case 'lte':
+      case '<=':
+        return Number(leftValue) <= Number(rightValue);
+      case 'contains':
+        return String(leftValue || '').toLowerCase().includes(String(rightValue || '').toLowerCase());
+      case 'notContains':
+        return !String(leftValue || '').toLowerCase().includes(String(rightValue || '').toLowerCase());
       default:
-        console.warn(`Opération non supportée: ${op}`);
+        console.warn(`[ConditionEvaluator] Opération non supportée: ${op}`);
         return false;
     }
   }

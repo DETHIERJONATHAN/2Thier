@@ -721,12 +721,18 @@ function evaluateCondition(when: Record<string, unknown>, values: ValuesMap): bo
   const left = when.left as Record<string, unknown> | undefined;
   const right = when.right as Record<string, unknown> | undefined;
   
+  // 🔧 Helper pour extraire l'ID depuis @value.xxx, @select.xxx, etc.
+  const extractIdFromRef = (ref: string): string => {
+    // Pattern: @value.{uuid}, @select.{uuid}, @calculated.{uuid}, etc.
+    const m = /@(?:value|select|calculated|input)\.([a-f0-9-]{36})/i.exec(ref);
+    return m && m[1] ? m[1] : ref;
+  };
+  
   // Obtenir la valeur de gauche
   let leftValue: unknown = null;
   if (left && typeof left === 'object') {
     if (typeof left.ref === 'string') {
-      const m = /@value\.([a-f0-9-]{36})/i.exec(left.ref);
-      const id = m && m[1] ? m[1] : left.ref;
+      const id = extractIdFromRef(left.ref);
       leftValue = values.get(id);
     } else {
       leftValue = left.value;
@@ -736,9 +742,13 @@ function evaluateCondition(when: Record<string, unknown>, values: ValuesMap): bo
   // Obtenir la valeur de droite
   let rightValue: unknown = null;
   if (right && typeof right === 'object') {
-    if (typeof right.ref === 'string') {
-      const m = /@value\.([a-f0-9-]{36})/i.exec(right.ref);
-      const id = m && m[1] ? m[1] : right.ref;
+    // 🔧 Si c'est une référence @select.{optionId} avec kind='nodeOption', 
+    // on compare DIRECTEMENT avec l'optionId (pas besoin de lookup)
+    if (right.kind === 'nodeOption' && typeof right.ref === 'string') {
+      const id = extractIdFromRef(right.ref);
+      rightValue = id; // L'ID de l'option EST la valeur à comparer
+    } else if (typeof right.ref === 'string') {
+      const id = extractIdFromRef(right.ref);
       rightValue = values.get(id);
     } else {
       rightValue = right.value;
@@ -753,22 +763,34 @@ function evaluateCondition(when: Record<string, unknown>, values: ValuesMap): bo
     case 'isNotEmpty':
       return leftValue !== null && leftValue !== undefined && leftValue !== '';
     case 'eq':
-      return leftValue === rightValue;
+    case '==':
+    case '===':
+    case 'equals':
+      // 🔧 Support des comparaisons avec conversion string pour les IDs
+      return String(leftValue) === String(rightValue);
     case 'ne':
-      return leftValue !== rightValue;
+    case '!=':
+    case '!==':
+    case 'notEquals':
+      return String(leftValue) !== String(rightValue);
     case 'gt':
+    case '>':
       return Number(leftValue) > Number(rightValue);
     case 'gte':
+    case '>=':
       return Number(leftValue) >= Number(rightValue);
     case 'lt':
+    case '<':
       return Number(leftValue) < Number(rightValue);
     case 'lte':
+    case '<=':
       return Number(leftValue) <= Number(rightValue);
     case 'contains':
       return String(leftValue || '').includes(String(rightValue || ''));
     case 'notContains':
       return !String(leftValue || '').includes(String(rightValue || ''));
     default:
+      console.warn(`[evaluateCondition] Opérateur non reconnu: "${op}"`);
       return false;
   }
 }

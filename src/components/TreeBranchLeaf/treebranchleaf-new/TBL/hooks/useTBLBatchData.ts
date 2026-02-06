@@ -78,6 +78,17 @@ export interface BatchCondition {
   order?: number;
 }
 
+// 🚀 CRITIQUE: Type pour les conditions inversées (conditions qui CIBLENT un nodeId)
+// Utilisé pour savoir quand un champ doit être affiché/masqué basé sur une condition externe
+export interface InverseConditionInfo {
+  conditionId: string;        // ID de la condition
+  sourceNodeId: string;       // NodeId qui DÉFINIT la condition (le champ source à surveiller)
+  dependsOn: string;          // NodeId du champ dont dépend la visibilité
+  operator: string;           // Opérateur de comparaison (==, !=, etc.)
+  showWhen: string;           // Valeur à comparer (option ID pour select)
+  actionType: 'SHOW' | 'HIDE'; // Type d'action
+}
+
 export interface TBLBatchData {
   formulasByNode: Record<string, BatchFormula[]>;
   valuesByNode: Record<string, BatchCalculatedValue>;
@@ -87,6 +98,8 @@ export interface TBLBatchData {
   conditionsByNode?: Record<string, BatchCondition[]>;
   conditionsById?: Record<string, BatchCondition>;
   activeConditionByNode?: Record<string, string | null>;
+  // 🚀 CRITIQUE: Index inversé des conditions (qui CIBLENT un nodeId avec SHOW/HIDE)
+  conditionsTargetingNode?: Record<string, InverseConditionInfo[]>;
   stats: {
     totalNodes: number;
     totalFormulas: number;
@@ -96,6 +109,264 @@ export interface TBLBatchData {
     nodesWithData: number;
     nodesWithConditions?: number; // 🚀 NOUVEAU
   };
+}
+
+/**
+ * 🚀 CRITIQUE: Construit l'index inversé des conditions
+ * Parse tous les conditionSet pour trouver les actions SHOW/HIDE et créer un mapping:
+ * targetNodeId -> [{conditionId, dependsOn, operator, showWhen}]
+ * 
+ * Cela permet de savoir si un champ doit être visible/masqué basé sur les conditions d'autres champs.
+ */
+/**
+ * 🔧 Helper: Normaliser un opérateur pour éliminer les doubles négations
+ */
+function normalizeOperator(op: string): string {
+  // Simplifier les doubles négations
+  if (op === 'not_not_contains') return 'contains';
+  if (op === 'not_not_equals') return 'equals';
+  if (op === 'not_!=') return '==';
+  if (op === 'not_==') return '!=';
+  if (op.startsWith('not_not_')) return op.substring(8);
+  return op;
+}
+
+/**
+ * 🔧 Helper: Inverser un opérateur
+ */
+function invertOperator(op: string): string {
+  const inverted = op === 'contains' ? 'not_contains' : 
+                   op === 'not_contains' ? 'contains' :
+                   op === '==' ? '!=' : 
+                   op === '!=' ? '==' :
+                   op === 'equals' ? 'not_equals' :
+                   op === 'not_equals' ? 'equals' :
+                   op.startsWith('not_') ? op.substring(4) :
+                   'not_' + op;
+  return normalizeOperator(inverted);
+}
+
+/**
+ * 🔧 Helper: Extraire un nodeId depuis une référence
+ */
+function extractNodeIdFromRef(ref: string): string {
+  if (!ref) return '';
+  
+  if (ref.startsWith('@value.')) {
+    return ref.substring(7);
+  } else if (ref.startsWith('@select.')) {
+    return ref.substring(8);
+  } else if (ref.startsWith('@calculated.')) {
+    // Retourner la partie complète après @calculated. (UUID + suffixe éventuel comme -sum-total)
+    return ref.substring(12);
+  } else if (ref.startsWith('@node.')) {
+    return ref.substring(6);
+  } else if (ref.startsWith('condition:')) {
+    return ''; // Géré séparément
+  } else {
+    // UUID direct ?
+    const uuidMatch = ref.match(/^([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})/i);
+    return uuidMatch ? uuidMatch[1] : ref;
+  }
+}
+
+/**
+ * 🚀 CRITIQUE: Construit l'index inversé des conditions
+ * Parse tous les conditionSet (branches + fallback) pour trouver les actions SHOW/HIDE
+ */
+function buildConditionsTargetingIndex(
+  conditionsById: Record<string, BatchCondition> | undefined
+): Record<string, InverseConditionInfo[]> {
+  const index: Record<string, InverseConditionInfo[]> = {};
+  
+  if (!conditionsById) {
+    return index;
+  }
+
+  // Helper pour ajouter une entrée à l'index
+  const addToIndex = (
+    targetNodeId: string,
+    info: InverseConditionInfo
+  ) => {
+    if (!targetNodeId || targetNodeId.startsWith('condition:')) return;
+    
+    if (!index[targetNodeId]) {
+      index[targetNodeId] = [];
+    }
+    index[targetNodeId].push(info);
+  };
+
+  // Helper pour résoudre récursivement les conditions chaînées
+  const resolveConditionTargets = (
+    conditionId: string,
+    parentDependsOn: string,
+    parentOperator: string,
+    parentShowWhen: string,
+    inverted: boolean,
+    visited: Set<string>
+  ) => {
+    if (visited.has(conditionId)) return; // Éviter les boucles infinies
+    visited.add(conditionId);
+    
+    const chainedCondition = conditionsById[conditionId];
+    if (!chainedCondition?.conditionSet) return;
+    
+    const chainedSet = chainedCondition.conditionSet as {
+      branches?: Array<{
+        when?: { op?: string; left?: { ref?: string }; right?: { ref?: string } };
+        actions?: Array<{ type?: string; nodeIds?: string[] }>;
+      }>;
+      fallback?: {
+        actions?: Array<{ type?: string; nodeIds?: string[] }>;
+      };
+    };
+    
+
+    
+    // Parser les branches de la condition chaînée
+    for (const branch of chainedSet.branches || []) {
+      const when = branch.when;
+      const branchDependsOn = when?.left?.ref ? extractNodeIdFromRef(when.left.ref) : parentDependsOn;
+      const branchOperator = when?.op || '==';
+      const branchShowWhen = when?.right?.ref ? extractNodeIdFromRef(when.right.ref) : '';
+      
+      for (const action of branch.actions || []) {
+        const actionType = (action.type?.toUpperCase() || 'SHOW') as 'SHOW' | 'HIDE';
+        
+        for (const targetRef of action.nodeIds || []) {
+          if (targetRef.startsWith('condition:')) {
+            resolveConditionTargets(targetRef.substring(10), branchDependsOn, branchOperator, branchShowWhen, false, visited);
+          } else {
+            const targetNodeId = extractNodeIdFromRef(targetRef);
+            addToIndex(targetNodeId, {
+              conditionId,
+              sourceNodeId: chainedCondition.nodeId,
+              dependsOn: branchDependsOn,
+              operator: branchOperator,
+              showWhen: branchShowWhen,
+              actionType
+            });
+          }
+        }
+      }
+    }
+    
+    // Parser le fallback de la condition chaînée
+    if (chainedSet.fallback?.actions) {
+      for (const action of chainedSet.fallback.actions) {
+        const actionType = (action.type?.toUpperCase() || 'SHOW') as 'SHOW' | 'HIDE';
+        
+        for (const targetRef of action.nodeIds || []) {
+          if (targetRef.startsWith('condition:')) {
+            // 🔥 FIX: Si on vient d'un fallback parent (inverted=true), on n'inverse pas encore
+            const opForChain = inverted ? parentOperator : ('not_' + parentOperator);
+            resolveConditionTargets(targetRef.substring(10), parentDependsOn, opForChain, parentShowWhen, true, visited);
+          } else {
+            const targetNodeId = extractNodeIdFromRef(targetRef);
+            // 🔥 FIX: Si le parent vient déjà d'un fallback (inverted=true), 
+            // son opérateur est déjà inversé, on n'inverse pas une deuxième fois !
+            // Sinon, on inverse normalement car le fallback s'applique quand la condition est FAUSSE
+            const finalOp = inverted ? parentOperator : invertOperator(parentOperator);
+
+            addToIndex(targetNodeId, {
+              conditionId,
+              sourceNodeId: chainedCondition.nodeId,
+              dependsOn: parentDependsOn,
+              operator: finalOp,
+              showWhen: parentShowWhen,
+              actionType
+            });
+          }
+        }
+      }
+    }
+  };
+  
+  // Parser chaque condition
+  for (const condition of Object.values(conditionsById)) {
+    if (!condition.conditionSet) continue;
+    
+    const conditionSet = condition.conditionSet as {
+      branches?: Array<{
+        when?: { op?: string; left?: { ref?: string }; right?: { ref?: string } };
+        actions?: Array<{ type?: string; nodeIds?: string[] }>;
+      }>;
+      fallback?: {
+        actions?: Array<{ type?: string; nodeIds?: string[] }>;
+      };
+    };
+    
+    // === PARSER LES BRANCHES ===
+    for (const branch of conditionSet.branches || []) {
+      if (!branch.when) continue;
+      
+      const when = branch.when;
+      const operator = when.op || '==';
+      const dependsOn = when.left?.ref ? extractNodeIdFromRef(when.left.ref) : '';
+      const showWhen = when.right?.ref ? extractNodeIdFromRef(when.right.ref) : '';
+      
+      if (!dependsOn) continue;
+      
+      for (const action of branch.actions || []) {
+        const actionType = (action.type?.toUpperCase() || 'SHOW') as 'SHOW' | 'HIDE';
+        
+        for (const targetRef of action.nodeIds || []) {
+          if (targetRef.startsWith('condition:')) {
+            // Résoudre la condition chaînée
+            resolveConditionTargets(targetRef.substring(10), dependsOn, operator, showWhen, false, new Set([condition.id]));
+          } else {
+            const targetNodeId = extractNodeIdFromRef(targetRef);
+            addToIndex(targetNodeId, {
+              conditionId: condition.id,
+              sourceNodeId: condition.nodeId,
+              dependsOn,
+              operator,
+              showWhen,
+              actionType
+            });
+          }
+        }
+      }
+    }
+    
+    // === PARSER LE FALLBACK (SINON) ===
+    if (conditionSet.fallback?.actions && conditionSet.branches?.[0]?.when) {
+      // Le fallback hérite du when de la première branche mais avec opérateur inversé
+      const firstBranch = conditionSet.branches[0];
+      const when = firstBranch.when!;
+      const dependsOn = when.left?.ref ? extractNodeIdFromRef(when.left.ref) : '';
+      const showWhen = when.right?.ref ? extractNodeIdFromRef(when.right.ref) : '';
+      const originalOp = when.op || '==';
+      
+      // Inverser l'opérateur pour le fallback (avec normalisation)
+      const invertedOp = invertOperator(originalOp);
+      
+      if (dependsOn) {
+        for (const action of conditionSet.fallback.actions) {
+          const actionType = (action.type?.toUpperCase() || 'SHOW') as 'SHOW' | 'HIDE';
+          
+          for (const targetRef of action.nodeIds || []) {
+            if (targetRef.startsWith('condition:')) {
+              // Résoudre la condition chaînée (avec opérateur inversé hérité)
+              resolveConditionTargets(targetRef.substring(10), dependsOn, invertedOp, showWhen, true, new Set([condition.id]));
+            } else {
+              const targetNodeId = extractNodeIdFromRef(targetRef);
+              addToIndex(targetNodeId, {
+                conditionId: condition.id,
+                sourceNodeId: condition.nodeId,
+                dependsOn,
+                operator: invertedOp,
+                showWhen,
+                actionType
+              });
+            }
+          }
+        }
+      }
+    }
+  }
+  
+  return index;
 }
 
 interface UseTBLBatchDataResult {
@@ -121,6 +392,8 @@ interface UseTBLBatchDataResult {
   getConditionById: (conditionId: string) => BatchCondition | null;
   /** 🚀 NOUVEAU: Récupère la condition active d'un noeud */
   getActiveConditionForNode: (nodeId: string) => BatchCondition | null;
+  /** 🚀 CRITIQUE: Récupère les conditions qui CIBLENT ce noeud (pour visibilité conditionnelle) */
+  getConditionsTargetingNode: (nodeId: string) => InverseConditionInfo[];
   /** Force un rechargement du batch */
   refresh: () => void;
 }
@@ -219,6 +492,9 @@ export const useTBLBatchData = (
         const duration = performance.now() - startTime;
 
         if (mountedRef.current && baseResponse?.success) {
+          // 🚀 CRITIQUE: Construire l'index inversé des conditions AVANT de créer batchData
+          const conditionsTargetingNode = buildConditionsTargetingIndex(conditionsResponse?.conditionsById);
+          
           const data: TBLBatchData = {
             formulasByNode: baseResponse.formulasByNode || {},
             valuesByNode: baseResponse.valuesByNode || {},
@@ -228,6 +504,8 @@ export const useTBLBatchData = (
             conditionsByNode: conditionsResponse?.conditionsByNode || {},
             conditionsById: conditionsResponse?.conditionsById || {},
             activeConditionByNode: conditionsResponse?.activeConditionByNode || {},
+            // 🚀 CRITIQUE: Index inversé des conditions (SHOW/HIDE targets)
+            conditionsTargetingNode,
             stats: {
               ...(baseResponse.stats || {
                 totalNodes: 0,
@@ -400,6 +678,43 @@ export const useTBLBatchData = (
     return batchData.conditionsById[activeId] || null;
   }, [batchData]);
 
+  // 🚀 CRITIQUE: Helper pour récupérer les conditions qui CIBLENT ce noeud (visibilité conditionnelle)
+  const getConditionsTargetingNode = useCallback((nodeId: string): InverseConditionInfo[] => {
+    if (!batchData?.conditionsTargetingNode) {
+      return [];
+    }
+    
+    // Essayer d'abord l'ID exact
+    if (batchData.conditionsTargetingNode[nodeId]) {
+      return batchData.conditionsTargetingNode[nodeId];
+    }
+    
+    // Fallback: essayer des variantes connues de l'ID
+    const variants: string[] = [];
+    
+    // Suffixe "-1" (copies de repeater)
+    if (nodeId.endsWith('-1')) {
+      variants.push(nodeId.slice(0, -2));
+    } else {
+      variants.push(`${nodeId}-1`);
+    }
+    
+    // Suffixe "-sum-total" (champs Total calculés)
+    if (nodeId.endsWith('-sum-total')) {
+      variants.push(nodeId.replace(/-sum-total$/, ''));
+    } else {
+      variants.push(`${nodeId}-sum-total`);
+    }
+    
+    for (const variant of variants) {
+      if (batchData.conditionsTargetingNode[variant]) {
+        return batchData.conditionsTargetingNode[variant];
+      }
+    }
+    
+    return [];
+  }, [batchData]);
+
   const refresh = useCallback(() => {
     lastLoadedTreeId.current = null;
     lastLoadedLeadId.current = undefined;
@@ -422,6 +737,7 @@ export const useTBLBatchData = (
     getConditionsForNode,
     getConditionById,
     getActiveConditionForNode,
+    getConditionsTargetingNode,
     refresh
   };
 };
