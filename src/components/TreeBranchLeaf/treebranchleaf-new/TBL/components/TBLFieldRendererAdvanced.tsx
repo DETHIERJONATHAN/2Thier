@@ -74,6 +74,11 @@ interface TableLookupCondition {
   // ✨ Multiplicateur conditionnel: multiplie la valeur du tableau avant comparaison
   multiplier?: {
     enabled?: boolean;
+    conditions?: Array<{
+      fieldA?: string;
+      operator?: 'equals' | 'notEquals' | 'greaterThan' | 'lessThan' | 'greaterOrEqual' | 'lessOrEqual' | 'contains';
+      fieldB?: string;
+    }>;
     conditionFieldA?: string;
     conditionFieldB?: string;
     conditionOperator?: 'equals' | 'notEquals' | 'greaterThan' | 'lessThan' | 'greaterOrEqual' | 'lessOrEqual';
@@ -198,51 +203,52 @@ const evaluateFilterConditions = (
       // ✨ Multiplicateur conditionnel : modifier tableValue avant la comparaison
       if (condition.multiplier?.enabled) {
         const mult = condition.multiplier;
-        let multiplierConditionMet = false;
         
-        // Résoudre les valeurs des champs A et B depuis formData
+        // Résoudre les valeurs des champs depuis formData — supporte les valeurs littérales
         const resolveMultiplierRef = (ref: string | undefined): any => {
           if (!ref) return null;
           if (ref.startsWith('@value.')) return formData[ref.replace('@value.', '')];
           if (ref.startsWith('@select.')) return formData[ref.replace('@select.', '')];
           if (ref.startsWith('node-formula:')) return formData[ref.replace('node-formula:', '')];
           if (ref.startsWith('formula:')) return formData[ref.replace('formula:', '')];
-          return formData[ref] ?? null;
+          if (ref.startsWith('@calculated.') || ref.startsWith('@calculated:')) return formData[ref.replace(/^@calculated[.:]/, '')];
+          // Si c'est une clé dans formData, utiliser cette valeur
+          if (formData[ref] !== undefined) return formData[ref];
+          // Sinon, c'est une valeur littérale (ex: "HUAWEI") — retourner telle quelle
+          return ref;
         };
         
-        const fieldAValue = resolveMultiplierRef(mult.conditionFieldA);
-        const fieldBValue = resolveMultiplierRef(mult.conditionFieldB);
+        // Construire le tableau de conditions (rétrocompat avec l'ancien format single-condition)
+        const conditions = mult.conditions?.length
+          ? mult.conditions
+          : [{ fieldA: mult.conditionFieldA || '', operator: mult.conditionOperator || 'equals', fieldB: mult.conditionFieldB || '' }];
         
-        if (fieldAValue !== null && fieldAValue !== undefined && fieldBValue !== null && fieldBValue !== undefined) {
-          switch (mult.conditionOperator) {
-            case 'equals':
-              multiplierConditionMet = String(fieldAValue).trim().toLowerCase() === String(fieldBValue).trim().toLowerCase();
-              break;
-            case 'notEquals':
-              multiplierConditionMet = String(fieldAValue).trim().toLowerCase() !== String(fieldBValue).trim().toLowerCase();
-              break;
-            case 'greaterThan':
-              multiplierConditionMet = Number(fieldAValue) > Number(fieldBValue);
-              break;
-            case 'lessThan':
-              multiplierConditionMet = Number(fieldAValue) < Number(fieldBValue);
-              break;
-            case 'greaterOrEqual':
-              multiplierConditionMet = Number(fieldAValue) >= Number(fieldBValue);
-              break;
-            case 'lessOrEqual':
-              multiplierConditionMet = Number(fieldAValue) <= Number(fieldBValue);
-              break;
-            default:
-              multiplierConditionMet = false;
+        // Évaluer chaque condition — TOUTES doivent être vraies (logique AND)
+        const evaluateSingleCondition = (cond: { fieldA?: string; operator?: string; fieldB?: string }): boolean => {
+          if (!cond.fieldA && !cond.fieldB) return false;
+          const fieldAValue = resolveMultiplierRef(cond.fieldA);
+          const fieldBValue = resolveMultiplierRef(cond.fieldB);
+          if (fieldAValue === null || fieldAValue === undefined || fieldBValue === null || fieldBValue === undefined) return false;
+          
+          switch (cond.operator || 'equals') {
+            case 'equals': return String(fieldAValue).trim().toLowerCase() === String(fieldBValue).trim().toLowerCase();
+            case 'notEquals': return String(fieldAValue).trim().toLowerCase() !== String(fieldBValue).trim().toLowerCase();
+            case 'greaterThan': return Number(fieldAValue) > Number(fieldBValue);
+            case 'lessThan': return Number(fieldAValue) < Number(fieldBValue);
+            case 'greaterOrEqual': return Number(fieldAValue) >= Number(fieldBValue);
+            case 'lessOrEqual': return Number(fieldAValue) <= Number(fieldBValue);
+            case 'contains': return String(fieldAValue).toLowerCase().includes(String(fieldBValue).toLowerCase());
+            default: return false;
           }
-        }
+        };
         
-        const factor = multiplierConditionMet ? (mult.factor ?? 2) : (mult.elseFactor ?? 1);
+        const allConditionsMet = conditions.every((cond: any) => evaluateSingleCondition(cond));
+        
+        const factor = allConditionsMet ? (mult.factor ?? 2) : (mult.elseFactor ?? 1);
         const numericTableValue = Number(tableValue);
         if (!isNaN(numericTableValue) && factor !== 1) {
           tableValue = numericTableValue * factor;
-          console.log(`[Multiplier] ${mult.conditionFieldA}=${fieldAValue} ${mult.conditionOperator} ${mult.conditionFieldB}=${fieldBValue} → ${multiplierConditionMet ? 'OUI' : 'NON'} → tableValue ${originalTableValue} × ${factor} = ${tableValue}`);
+          console.log(`[Multiplier] ${conditions.length} condition(s) → ${allConditionsMet ? 'TOUTES VRAIES' : 'NON'} → tableValue ${originalTableValue} × ${factor} = ${tableValue}`);
         }
       }
 

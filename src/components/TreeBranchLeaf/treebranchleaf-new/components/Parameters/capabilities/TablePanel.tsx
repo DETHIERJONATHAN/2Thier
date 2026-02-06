@@ -256,11 +256,18 @@ type TableLookupCondition = {
   // ✨ Multiplicateur conditionnel: multiplie la valeur du tableau avant comparaison
   multiplier?: {
     enabled?: boolean; // Activer le multiplicateur conditionnel
-    conditionFieldA?: string; // Référence champ A (ex: @value.panneaux)
-    conditionFieldB?: string; // Référence champ B (ex: @value.optimiseurs_huawei)
+    // Plusieurs conditions combinées en AND
+    conditions?: Array<{
+      fieldA?: string; // Référence champ A (ex: @select.onduleur)
+      operator?: 'equals' | 'notEquals' | 'greaterThan' | 'lessThan' | 'greaterOrEqual' | 'lessOrEqual' | 'contains';
+      fieldB?: string; // Référence champ B (ex: @value.nb_optimiseurs) ou valeur littérale
+    }>;
+    // Rétrocompat: anciens champs single-condition
+    conditionFieldA?: string;
+    conditionFieldB?: string;
     conditionOperator?: 'equals' | 'notEquals' | 'greaterThan' | 'lessThan' | 'greaterOrEqual' | 'lessOrEqual';
-    factor?: number; // Facteur multiplicateur quand la condition est vraie (ex: 2)
-    elseFactor?: number; // Facteur quand la condition est fausse (défaut: 1)
+    factor?: number; // Facteur multiplicateur quand TOUTES les conditions sont vraies (ex: 2)
+    elseFactor?: number; // Facteur quand au moins une condition est fausse (défaut: 1)
   };
   // ✨ Filtrage conditionnel SI...ALORS...SINON (optionnel)
   conditionalFilter?: {
@@ -1086,26 +1093,31 @@ const TablePanel: React.FC<TablePanelProps> = ({ treeId: initialTreeId, nodeId, 
   const handleMultiplierSelection = useCallback((selection: NodeTreeSelectorValue) => {
     if (!multiplierConditionId || !multiplierSelectorTarget) return;
     
-    const fieldKey = multiplierSelectorTarget === 'A' ? 'conditionFieldA' : 'conditionFieldB';
-    
-    // Support pour les filtres columnSourceOption (préfixe cso_)
+    // Format: cso_{filterIndex}_{condIndex}_{A|B}
     if (multiplierConditionId.startsWith('cso_')) {
-      const filterIndex = parseInt(multiplierConditionId.replace('cso_', ''), 10);
+      const parts = multiplierConditionId.split('_');
+      const filterIndex = parseInt(parts[1], 10);
+      const condIndex = parts.length >= 4 ? parseInt(parts[2], 10) : 0;
+      const targetField = parts.length >= 4 ? parts[3] : multiplierSelectorTarget;
+      const fieldKey = targetField === 'A' ? 'fieldA' : 'fieldB';
+      
       updateLookupConfig((prev) => {
         const newFilters = [...(prev.columnSourceOption?.filters || [])];
         if (newFilters[filterIndex]) {
+          const newConds = [...(newFilters[filterIndex].multiplier?.conditions || [])];
+          if (newConds[condIndex]) {
+            newConds[condIndex] = { ...newConds[condIndex], [fieldKey]: selection.ref };
+          }
           newFilters[filterIndex] = {
             ...newFilters[filterIndex],
-            multiplier: {
-              ...(newFilters[filterIndex].multiplier || {}),
-              [fieldKey]: selection.ref
-            }
+            multiplier: { ...newFilters[filterIndex].multiplier, conditions: newConds }
           };
         }
         return { ...prev, columnSourceOption: { ...(prev.columnSourceOption || {}), filters: newFilters } };
       });
     } else {
       // Support pour les filterConditions classiques
+      const fieldKey = multiplierSelectorTarget === 'A' ? 'conditionFieldA' : 'conditionFieldB';
       updateFilterCondition(multiplierConditionId, {
         multiplier: {
           ...(lookupConfig.filterConditions?.conditions?.find(c => c.id === multiplierConditionId)?.multiplier || {}),
@@ -2282,14 +2294,15 @@ const TablePanel: React.FC<TablePanelProps> = ({ treeId: initialTreeId, nodeId, 
                                             onChange={(checked) => {
                                               updateLookupConfig((prev) => {
                                                 const newFilters = [...(prev.columnSourceOption?.filters || [])];
+                                                const existingMult = newFilters[index].multiplier || {};
                                                 newFilters[index] = { 
                                                   ...newFilters[index], 
                                                   multiplier: {
-                                                    ...(newFilters[index].multiplier || {}),
+                                                    ...existingMult,
                                                     enabled: checked,
-                                                    factor: newFilters[index].multiplier?.factor ?? 2,
-                                                    elseFactor: newFilters[index].multiplier?.elseFactor ?? 1,
-                                                    conditionOperator: newFilters[index].multiplier?.conditionOperator ?? 'equals'
+                                                    factor: existingMult.factor ?? 2,
+                                                    elseFactor: existingMult.elseFactor ?? 1,
+                                                    conditions: existingMult.conditions?.length ? existingMult.conditions : [{ fieldA: existingMult.conditionFieldA || '', operator: existingMult.conditionOperator || 'equals', fieldB: existingMult.conditionFieldB || '' }]
                                                   }
                                                 };
                                                 return { ...prev, columnSourceOption: { ...(prev.columnSourceOption || {}), filters: newFilters } };
@@ -2302,88 +2315,143 @@ const TablePanel: React.FC<TablePanelProps> = ({ treeId: initialTreeId, nodeId, 
                                           </Text>
                                           {filter.multiplier?.enabled && (
                                             <Text type="secondary" style={{ fontSize: 10 }}>
-                                              (multiplie la valeur du tableau avant comparaison)
+                                              (TOUTES les conditions doivent être vraies)
                                             </Text>
                                           )}
                                         </div>
 
                                         {filter.multiplier?.enabled && (
                                           <Space direction="vertical" style={{ width: '100%' }} size={4}>
-                                            {/* Condition: SI champ A [opérateur] champ B */}
-                                            <Text type="secondary" style={{ fontSize: 11, fontWeight: 600 }}>SI :</Text>
-                                            <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
-                                              {/* Champ A */}
-                                              <div style={{ flex: 1 }}>
-                                                <div style={{ display: 'flex', gap: 4 }}>
-                                                  <Input
-                                                    size="small"
-                                                    placeholder="Champ A"
-                                                    value={filter.multiplier.conditionFieldA || ''}
-                                                    readOnly
-                                                    style={{ flex: 1, fontSize: 10 }}
-                                                  />
-                                                  <Button
-                                                    size="small"
-                                                    type="dashed"
-                                                    onClick={() => {
-                                                      setMultiplierConditionId(`cso_${index}`);
-                                                      setMultiplierSelectorTarget('A');
-                                                      setShowMultiplierSelector(true);
-                                                    }}
-                                                    disabled={readOnly}
-                                                  >
-                                                    🌳
-                                                  </Button>
+                                            {/* Liste des conditions */}
+                                            {(filter.multiplier.conditions || []).map((cond: any, condIdx: number) => (
+                                              <div key={condIdx} style={{ display: 'flex', gap: 4, alignItems: 'center', padding: '4px', background: '#fff', border: '1px solid #f0f0f0', borderRadius: 4 }}>
+                                                <Text type="secondary" style={{ fontSize: 10, minWidth: 12 }}>{condIdx === 0 ? 'SI' : 'ET'}</Text>
+                                                {/* Champ A */}
+                                                <div style={{ flex: 1 }}>
+                                                  <div style={{ display: 'flex', gap: 2 }}>
+                                                    <Input
+                                                      size="small"
+                                                      placeholder="Champ A"
+                                                      value={cond.fieldA || ''}
+                                                      readOnly
+                                                      style={{ flex: 1, fontSize: 9 }}
+                                                    />
+                                                    <Button
+                                                      size="small"
+                                                      type="dashed"
+                                                      onClick={() => {
+                                                        setMultiplierConditionId(`cso_${index}_${condIdx}_A`);
+                                                        setMultiplierSelectorTarget('A');
+                                                        setShowMultiplierSelector(true);
+                                                      }}
+                                                      disabled={readOnly}
+                                                      style={{ padding: '0 4px' }}
+                                                    >
+                                                      🌳
+                                                    </Button>
+                                                  </div>
                                                 </div>
-                                              </div>
-                                              
-                                              {/* Opérateur */}
-                                              <Select
-                                                size="small"
-                                                value={filter.multiplier.conditionOperator || 'equals'}
-                                                style={{ width: 70 }}
-                                                onChange={(value) => {
-                                                  updateLookupConfig((prev) => {
-                                                    const newFilters = [...(prev.columnSourceOption?.filters || [])];
-                                                    newFilters[index] = { ...newFilters[index], multiplier: { ...newFilters[index].multiplier, conditionOperator: value } };
-                                                    return { ...prev, columnSourceOption: { ...(prev.columnSourceOption || {}), filters: newFilters } };
-                                                  });
-                                                }}
-                                                disabled={readOnly}
-                                              >
-                                                <Select.Option value="equals">=</Select.Option>
-                                                <Select.Option value="notEquals">≠</Select.Option>
-                                                <Select.Option value="greaterThan">&gt;</Select.Option>
-                                                <Select.Option value="lessThan">&lt;</Select.Option>
-                                                <Select.Option value="greaterOrEqual">≥</Select.Option>
-                                                <Select.Option value="lessOrEqual">≤</Select.Option>
-                                              </Select>
+                                                
+                                                {/* Opérateur */}
+                                                <Select
+                                                  size="small"
+                                                  value={cond.operator || 'equals'}
+                                                  style={{ width: 65 }}
+                                                  onChange={(value) => {
+                                                    updateLookupConfig((prev) => {
+                                                      const newFilters = [...(prev.columnSourceOption?.filters || [])];
+                                                      const newConds = [...(newFilters[index].multiplier?.conditions || [])];
+                                                      newConds[condIdx] = { ...newConds[condIdx], operator: value };
+                                                      newFilters[index] = { ...newFilters[index], multiplier: { ...newFilters[index].multiplier, conditions: newConds } };
+                                                      return { ...prev, columnSourceOption: { ...(prev.columnSourceOption || {}), filters: newFilters } };
+                                                    });
+                                                  }}
+                                                  disabled={readOnly}
+                                                >
+                                                  <Select.Option value="equals">=</Select.Option>
+                                                  <Select.Option value="notEquals">≠</Select.Option>
+                                                  <Select.Option value="greaterThan">&gt;</Select.Option>
+                                                  <Select.Option value="lessThan">&lt;</Select.Option>
+                                                  <Select.Option value="greaterOrEqual">≥</Select.Option>
+                                                  <Select.Option value="lessOrEqual">≤</Select.Option>
+                                                  <Select.Option value="contains">∋</Select.Option>
+                                                </Select>
 
-                                              {/* Champ B */}
-                                              <div style={{ flex: 1 }}>
-                                                <div style={{ display: 'flex', gap: 4 }}>
-                                                  <Input
-                                                    size="small"
-                                                    placeholder="Champ B"
-                                                    value={filter.multiplier.conditionFieldB || ''}
-                                                    readOnly
-                                                    style={{ flex: 1, fontSize: 10 }}
-                                                  />
+                                                {/* Champ B */}
+                                                <div style={{ flex: 1 }}>
+                                                  <div style={{ display: 'flex', gap: 2 }}>
+                                                    <Input
+                                                      size="small"
+                                                      placeholder="Champ B ou valeur"
+                                                      value={cond.fieldB || ''}
+                                                      onChange={(e) => {
+                                                        // Permettre la saisie libre (valeur littérale)
+                                                        updateLookupConfig((prev) => {
+                                                          const newFilters = [...(prev.columnSourceOption?.filters || [])];
+                                                          const newConds = [...(newFilters[index].multiplier?.conditions || [])];
+                                                          newConds[condIdx] = { ...newConds[condIdx], fieldB: e.target.value };
+                                                          newFilters[index] = { ...newFilters[index], multiplier: { ...newFilters[index].multiplier, conditions: newConds } };
+                                                          return { ...prev, columnSourceOption: { ...(prev.columnSourceOption || {}), filters: newFilters } };
+                                                        });
+                                                      }}
+                                                      style={{ flex: 1, fontSize: 9 }}
+                                                    />
+                                                    <Button
+                                                      size="small"
+                                                      type="dashed"
+                                                      onClick={() => {
+                                                        setMultiplierConditionId(`cso_${index}_${condIdx}_B`);
+                                                        setMultiplierSelectorTarget('B');
+                                                        setShowMultiplierSelector(true);
+                                                      }}
+                                                      disabled={readOnly}
+                                                      style={{ padding: '0 4px' }}
+                                                    >
+                                                      🌳
+                                                    </Button>
+                                                  </div>
+                                                </div>
+
+                                                {/* Supprimer cette condition */}
+                                                {(filter.multiplier.conditions || []).length > 1 && (
                                                   <Button
                                                     size="small"
-                                                    type="dashed"
+                                                    type="text"
+                                                    danger
                                                     onClick={() => {
-                                                      setMultiplierConditionId(`cso_${index}`);
-                                                      setMultiplierSelectorTarget('B');
-                                                      setShowMultiplierSelector(true);
+                                                      updateLookupConfig((prev) => {
+                                                        const newFilters = [...(prev.columnSourceOption?.filters || [])];
+                                                        const newConds = [...(newFilters[index].multiplier?.conditions || [])].filter((_, i) => i !== condIdx);
+                                                        newFilters[index] = { ...newFilters[index], multiplier: { ...newFilters[index].multiplier, conditions: newConds } };
+                                                        return { ...prev, columnSourceOption: { ...(prev.columnSourceOption || {}), filters: newFilters } };
+                                                      });
                                                     }}
                                                     disabled={readOnly}
+                                                    style={{ padding: '0 2px' }}
                                                   >
-                                                    🌳
+                                                    ✕
                                                   </Button>
-                                                </div>
+                                                )}
                                               </div>
-                                            </div>
+                                            ))}
+
+                                            {/* Bouton ajouter condition */}
+                                            <Button
+                                              size="small"
+                                              type="dashed"
+                                              onClick={() => {
+                                                updateLookupConfig((prev) => {
+                                                  const newFilters = [...(prev.columnSourceOption?.filters || [])];
+                                                  const newConds = [...(newFilters[index].multiplier?.conditions || []), { fieldA: '', operator: 'equals', fieldB: '' }];
+                                                  newFilters[index] = { ...newFilters[index], multiplier: { ...newFilters[index].multiplier, conditions: newConds } };
+                                                  return { ...prev, columnSourceOption: { ...(prev.columnSourceOption || {}), filters: newFilters } };
+                                                });
+                                              }}
+                                              disabled={readOnly}
+                                              style={{ fontSize: 10 }}
+                                            >
+                                              + Ajouter une condition ET
+                                            </Button>
 
                                             {/* ALORS / SINON facteurs */}
                                             <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
@@ -2434,14 +2502,17 @@ const TablePanel: React.FC<TablePanelProps> = ({ treeId: initialTreeId, nodeId, 
                                               border: '1px solid #ffe58f' 
                                             }}>
                                               <Text style={{ fontSize: 10, color: '#874d00' }}>
-                                                📐 SI {filter.multiplier.conditionFieldA || '?'} {
-                                                  filter.multiplier.conditionOperator === 'equals' ? '=' :
-                                                  filter.multiplier.conditionOperator === 'notEquals' ? '≠' :
-                                                  filter.multiplier.conditionOperator === 'greaterThan' ? '>' :
-                                                  filter.multiplier.conditionOperator === 'lessThan' ? '<' :
-                                                  filter.multiplier.conditionOperator === 'greaterOrEqual' ? '≥' :
-                                                  filter.multiplier.conditionOperator === 'lessOrEqual' ? '≤' : '='
-                                                } {filter.multiplier.conditionFieldB || '?'}
+                                                📐 SI {(filter.multiplier.conditions || []).map((c: any, i: number) => 
+                                                  `${i > 0 ? ' ET ' : ''}${c.fieldA || '?'} ${
+                                                    c.operator === 'equals' ? '=' :
+                                                    c.operator === 'notEquals' ? '≠' :
+                                                    c.operator === 'greaterThan' ? '>' :
+                                                    c.operator === 'lessThan' ? '<' :
+                                                    c.operator === 'greaterOrEqual' ? '≥' :
+                                                    c.operator === 'lessOrEqual' ? '≤' :
+                                                    c.operator === 'contains' ? '∋' : '='
+                                                  } ${c.fieldB || '?'}`
+                                                ).join('')}
                                                 {' → '}valeur tableau × {filter.multiplier.factor ?? 2}
                                                 {' | sinon '}× {filter.multiplier.elseFactor ?? 1}
                                               </Text>

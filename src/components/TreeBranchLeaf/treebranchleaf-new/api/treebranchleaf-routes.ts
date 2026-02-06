@@ -7244,8 +7244,8 @@ async function applyTableFilters(
       // ✨ Multiplicateur conditionnel: modifier cellValue avant la comparaison
       if ((filter as any).multiplier?.enabled) {
         const mult = (filter as any).multiplier;
-        let multiplierConditionMet = false;
         
+        // Résoudre une référence — supporte les valeurs littérales (ex: "HUAWEI")
         const resolveRef = (ref: string | undefined): unknown => {
           if (!ref) return null;
           if (ref.startsWith('@value.') || ref.startsWith('@select.')) {
@@ -7260,32 +7260,47 @@ async function applyTableFilters(
             const nodeId = ref.replace(/^(node-formula|formula):/, '');
             return formValues[nodeId] ?? null;
           }
-          return formValues[ref] ?? null;
+          // Si c'est une clé dans formValues, utiliser cette valeur
+          if (formValues[ref] !== undefined) return formValues[ref];
+          // Sinon, c'est une valeur littérale (ex: "HUAWEI") — retourner telle quelle
+          return ref;
         };
         
-        const fieldAValue = resolveRef(mult.conditionFieldA);
-        const fieldBValue = resolveRef(mult.conditionFieldB);
+        // Construire le tableau de conditions (rétrocompat avec l'ancien format single-condition)
+        const conditions = mult.conditions?.length
+          ? mult.conditions
+          : [{ fieldA: mult.conditionFieldA || '', operator: mult.conditionOperator || 'equals', fieldB: mult.conditionFieldB || '' }];
         
-        if (fieldAValue !== null && fieldAValue !== undefined && fieldBValue !== null && fieldBValue !== undefined) {
+        // Évaluer chaque condition — TOUTES doivent être vraies (logique AND)
+        const evaluateSingleCondition = (cond: { fieldA?: string; operator?: string; fieldB?: string }): boolean => {
+          if (!cond.fieldA && !cond.fieldB) return false;
+          const fieldAValue = resolveRef(cond.fieldA);
+          const fieldBValue = resolveRef(cond.fieldB);
+          if (fieldAValue === null || fieldAValue === undefined || fieldBValue === null || fieldBValue === undefined) return false;
+          
           const numA = Number(fieldAValue);
           const numB = Number(fieldBValue);
           const strA = String(fieldAValue).trim().toLowerCase();
           const strB = String(fieldBValue).trim().toLowerCase();
           
-          switch (mult.conditionOperator) {
-            case 'equals': multiplierConditionMet = (!isNaN(numA) && !isNaN(numB)) ? numA === numB : strA === strB; break;
-            case 'notEquals': multiplierConditionMet = (!isNaN(numA) && !isNaN(numB)) ? numA !== numB : strA !== strB; break;
-            case 'greaterThan': multiplierConditionMet = numA > numB; break;
-            case 'lessThan': multiplierConditionMet = numA < numB; break;
-            case 'greaterOrEqual': multiplierConditionMet = numA >= numB; break;
-            case 'lessOrEqual': multiplierConditionMet = numA <= numB; break;
+          switch (cond.operator || 'equals') {
+            case 'equals': return (!isNaN(numA) && !isNaN(numB) && String(fieldAValue).trim() !== '' && String(fieldBValue).trim() !== '') ? numA === numB : strA === strB;
+            case 'notEquals': return (!isNaN(numA) && !isNaN(numB) && String(fieldAValue).trim() !== '' && String(fieldBValue).trim() !== '') ? numA !== numB : strA !== strB;
+            case 'greaterThan': return numA > numB;
+            case 'lessThan': return numA < numB;
+            case 'greaterOrEqual': return numA >= numB;
+            case 'lessOrEqual': return numA <= numB;
+            case 'contains': return strA.includes(strB);
+            default: return false;
           }
-        }
+        };
         
-        const factor = multiplierConditionMet ? (mult.factor ?? 2) : (mult.elseFactor ?? 1);
+        const allConditionsMet = conditions.every((cond: any) => evaluateSingleCondition(cond));
+        
+        const factor = allConditionsMet ? (mult.factor ?? 2) : (mult.elseFactor ?? 1);
         const numericCell = Number(cellValue);
         if (!isNaN(numericCell) && factor !== 1) {
-          console.log(`[Multiplier] ${mult.conditionFieldA}=${fieldAValue} ${mult.conditionOperator} ${mult.conditionFieldB}=${fieldBValue} -> ${multiplierConditionMet ? 'OUI' : 'NON'} -> cellValue ${cellValue} x ${factor} = ${numericCell * factor}`);
+          console.log(`[Multiplier] ${conditions.length} condition(s) → ${allConditionsMet ? 'TOUTES VRAIES' : 'NON'} → cellValue ${cellValue} × ${factor} = ${numericCell * factor}`);
           cellValue = numericCell * factor;
         }
       }
