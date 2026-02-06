@@ -2249,16 +2249,23 @@ const TablePanel: React.FC<TablePanelProps> = ({ treeId: initialTreeId, nodeId, 
                                     {filter.column && (
                                       <div>
                                         <Text type="secondary" style={{ fontSize: 11, marginBottom: 4, display: 'block' }}>
-                                          🌳 Comparer avec (valeur de l'arborescence):
+                                          🌳 Comparer avec (valeur de l'arborescence ou saisie libre):
                                         </Text>
                                         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                                          <div style={{ flex: 1, padding: '8px 12px', background: '#fafafa', border: '1px solid #d9d9d9', borderRadius: '4px', minHeight: 32, display: 'flex', alignItems: 'center' }}>
-                                            <Text type="secondary" style={{ fontSize: 11 }}>
-                                              {filter.valueRef 
-                                                ? `✓ ${filter.valueRef}` 
-                                                : 'Aucune sélection'}
-                                            </Text>
-                                          </div>
+                                          <Input
+                                            size="small"
+                                            placeholder="Tapez une valeur ou sélectionnez 🌳"
+                                            value={filter.valueRef || ''}
+                                            onChange={(e) => {
+                                              updateLookupConfig((prev) => {
+                                                const newFilters = [...(prev.columnSourceOption?.filters || [])];
+                                                newFilters[index] = { ...newFilters[index], valueRef: e.target.value };
+                                                return { ...prev, columnSourceOption: { ...(prev.columnSourceOption || {}), filters: newFilters } };
+                                              });
+                                            }}
+                                            style={{ flex: 1 }}
+                                            disabled={readOnly}
+                                          />
                                           <Button
                                             size="small"
                                             type="primary"
@@ -2273,7 +2280,7 @@ const TablePanel: React.FC<TablePanelProps> = ({ treeId: initialTreeId, nodeId, 
                                           </Button>
                                         </div>
                                         <Text type="secondary" style={{ fontSize: 10, marginTop: 2, display: 'block', color: '#999' }}>
-                                          Sélectionnez un champ, formule, répétition, référence, condition ou table
+                                          Tapez directement une valeur (ex: HUAWEI) ou sélectionnez un champ, formule, référence via 🌳
                                         </Text>
                                       </div>
                                     )}
@@ -3248,14 +3255,15 @@ const TablePanel: React.FC<TablePanelProps> = ({ treeId: initialTreeId, nodeId, 
                                 </div>
 
                                 <div style={{ flex: 1 }}>
-                                  <Text type="secondary" style={{ fontSize: 11 }}>Comparer avec:</Text>
+                                  <Text type="secondary" style={{ fontSize: 11 }}>Comparer avec (valeur de l'arborescence ou saisie libre):</Text>
                                   <div style={{ display: 'flex', gap: 4, marginTop: 2 }}>
                                     <Input
                                       size="small"
-                                      placeholder="Sélectionner dans l'arborescence"
+                                      placeholder="Tapez une valeur ou sélectionnez 🌳"
                                       value={condition.compareWithRef}
-                                      readOnly
+                                      onChange={(e) => updateFilterCondition(condition.id, { compareWithRef: e.target.value })}
                                       style={{ flex: 1 }}
+                                      disabled={readOnly}
                                     />
                                     <Button
                                       size="small"
