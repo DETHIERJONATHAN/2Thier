@@ -13903,13 +13903,18 @@ router.get('/trees/:treeId/calculated-values', async (req, res) => {
       return res.status(404).json({ error: 'Arbre non trouvÃƒÂ¯Ã‚Â¿Ã‚Â½' });
     }
 
-    // RÃƒÂ¯Ã‚Â¿Ã‚Â½cupÃƒÂ¯Ã‚Â¿Ã‚Â½rer tous les nÃƒÂ¯Ã‚Â¿Ã‚Â½uds ayant une calculatedValue non nulle
+    // 🔧 FIX: Récupérer TOUS les nœuds qui ont une capacité de calcul,
+    // pas seulement ceux qui ont déjà une calculatedValue stockée.
+    // Inclut: formules, conditions, données/variables, ET valeurs déjà calculées.
     const nodesWithCalculatedValue = await prisma.treeBranchLeafNode.findMany({
       where: { 
         treeId,
-        calculatedValue: {
-          not: null
-        }
+        OR: [
+          { calculatedValue: { not: null } },
+          { hasFormula: true },
+          { hasCondition: true },
+          { hasData: true },
+        ]
       },
       select: {
         id: true,
@@ -13917,7 +13922,11 @@ router.get('/trees/:treeId/calculated-values', async (req, res) => {
         type: true,
         calculatedValue: true,
         calculatedBy: true,
-        parentId: true
+        calculatedAt: true,
+        parentId: true,
+        hasFormula: true,
+        hasCondition: true,
+        hasData: true,
       }
     });
 
@@ -13934,15 +13943,25 @@ router.get('/trees/:treeId/calculated-values', async (req, res) => {
     
     const parentLabelsMap = new Map(parentNodes.map(p => [p.id, p.label]));
 
-    // Formater les valeurs calculÃƒÂ¯Ã‚Â¿Ã‚Â½es pour le frontend
-    const calculatedValues = nodesWithCalculatedValue.map(node => ({
-      id: node.id,
-      label: node.label || 'Champ sans nom',
-      calculatedValue: node.calculatedValue,
-      calculatedBy: node.calculatedBy || undefined,
-      type: node.type,
-      parentLabel: node.parentId ? parentLabelsMap.get(node.parentId) : undefined
-    }));
+    // Formater les valeurs calculées pour le frontend
+    const calculatedValues = nodesWithCalculatedValue.map(node => {
+      // Déterminer la source du calcul
+      const source = node.calculatedBy 
+        ? `Source: ${node.calculatedBy}`
+        : node.hasFormula ? 'Source: formule'
+        : node.hasCondition ? 'Source: condition'
+        : node.hasData ? 'Source: variable/donnée'
+        : undefined;
+      
+      return {
+        id: node.id,
+        label: node.label || 'Champ sans nom',
+        calculatedValue: node.calculatedValue,
+        calculatedBy: source,
+        type: node.type,
+        parentLabel: node.parentId ? parentLabelsMap.get(node.parentId) : undefined
+      };
+    });
 
     
     res.json(calculatedValues);
