@@ -3538,217 +3538,9 @@ const TablePanel: React.FC<TablePanelProps> = ({ treeId: initialTreeId, nodeId, 
                             </Text>
                           </div>
                         )}
-                      </Space>
-                    )}  
-                  </div>
-                )}
 
-                {/* ✨ ULTRA-NOUVEAU: Section filtrage temps réel */}
-                {lookupConfig.filterConditions?.enabled && lookupConfig.filterConditions?.conditions?.length > 0 && (
-                  <div style={{ 
-                    marginTop: 16, 
-                    padding: '16px', 
-                    background: 'linear-gradient(135deg, #f6ffed 0%, #f0f9ff 100%)', 
-                    border: '2px solid #52c41a', 
-                    borderRadius: '8px',
-                    boxShadow: '0 4px 12px rgba(82, 196, 26, 0.15)'
-                  }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
-                      <ThunderboltOutlined style={{ color: '#52c41a', fontSize: 18 }} />
-                      <Text strong style={{ fontSize: 15, color: '#52c41a' }}>🚀 Filtrage Temps Réel</Text>
-                      {filterResults && (
-                        <div style={{ 
-                          background: filterResults.conditions.every(c => c.result) ? '#f6ffed' : '#fff2e8',
-                          color: filterResults.conditions.every(c => c.result) ? '#52c41a' : '#fa8c16',
-                          padding: '2px 8px',
-                          borderRadius: '10px',
-                          fontSize: 10,
-                          fontWeight: 'bold',
-                          border: `1px solid ${filterResults.conditions.every(c => c.result) ? '#b7eb8f' : '#ffd591'}`
-                        }}>
-                          {filterResults.conditions.every(c => c.result) ? '✅ TOUTES OK' : '⚠️ PARTIELLES'}
-                        </div>
-                      )}
-                      <Switch
-                        size="small"
-                        checked={realtimePreview}
-                        onChange={setRealtimePreview}
-                        checkedChildren="ON"
-                        unCheckedChildren="OFF"
-                      />
-                      <Button
-                        type="primary" 
-                        size="small"
-                        icon={<PlayCircleOutlined />}
-                        onClick={() => {
-                          evaluateFilterConditionsRealtime();
-                          message.success('🎯 Évaluation lancée !', 1);
-                        }}
-                        loading={evaluationLoading}
-                        style={{ marginLeft: 'auto' }}
-                      >
-                        Évaluer maintenant
-                      </Button>
-                      <Tooltip title="Copier la configuration de filtrage">
-                        <Button
-                          size="small"
-                          icon={<InfoCircleOutlined />}
-                          onClick={() => {
-                            const config = JSON.stringify(lookupConfig.filterConditions, null, 2);
-                            navigator.clipboard?.writeText(config);
-                            message.success('📋 Configuration copiée !', 1.5);
-                          }}
-                        />
-                      </Tooltip>
-                    </div>
-
-                    <Row gutter={16}>
-                      <Col span={12}>
-                        <Card size="small" style={{ 
-                          background: 'linear-gradient(135deg, #f6ffed 0%, #ffffff 100%)', 
-                          border: '1px solid #d9f7be',
-                          boxShadow: '0 2px 8px rgba(82, 196, 26, 0.1)'
-                        }}>
-                          <Statistic
-                            title={
-                              <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                                <CheckCircleOutlined style={{ color: '#52c41a' }} />
-                                Options disponibles
-                              </span>
-                            }
-                            value={filterResults?.filteredOptions || 0}
-                            suffix={`/ ${filterResults?.totalOptions || 0}`}
-                            valueStyle={{ 
-                              color: filterResults && filterResults.filteredOptions > 0 ? '#52c41a' : '#ff4d4f', 
-                              fontSize: 20,
-                              fontWeight: 'bold'
-                            }}
-                          />
-                          {filterResults && (
-                            <div>
-                              <Progress
-                                percent={Math.round((filterResults.filteredOptions / filterResults.totalOptions) * 100)}
-                                size="small"
-                                strokeColor={{
-                                  '0%': '#52c41a',
-                                  '100%': '#389e0d'
-                                }}
-                                trailColor="#f0f0f0"
-                                style={{ marginTop: 8 }}
-                              />
-                              <Text style={{ 
-                                fontSize: 10, 
-                                color: '#666', 
-                                marginTop: 4,
-                                display: 'block'
-                              }}>
-                                {filterResults.filteredOptions === 0 ? '🚫 Aucune option' : 
-                                 filterResults.filteredOptions === filterResults.totalOptions ? '✨ Toutes visibles' :
-                                 '🎯 Filtrage actif'}
-                              </Text>
-                            </div>
-                          )}
-                        </Card>
-                      </Col>
-                      <Col span={12}>
-                        <Card size="small" style={{ background: '#fff', border: '1px solid #d9f7be' }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-                            <BulbOutlined style={{ color: '#fa8c16' }} />
-                            <Text strong style={{ fontSize: 13 }}>Mode Test</Text>
-                            <Switch
-                              size="small"
-                              checked={testMode}
-                              onChange={setTestMode}
-                              checkedChildren="✓"
-                              unCheckedChildren="✗"
-                            />
-                          </div>
-                          {testMode && (
-                            <Space direction="vertical" size={4} style={{ width: '100%' }}>
-                              {lookupConfig.filterConditions?.conditions?.map(condition => (
-                                <div key={condition.id} style={{ display: 'flex', gap: 4 }}>
-                                  <Text style={{ fontSize: 11, minWidth: 60 }}>{condition.sourceRef?.split(':').pop() || 'Source'}:</Text>
-                                  <Input
-                                    size="small"
-                                    placeholder="Valeur test"
-                                    value={testValues[condition.sourceRef] || ''}
-                                    onChange={(e) => setTestValues(prev => ({ ...prev, [condition.sourceRef]: e.target.value }))}
-                                    style={{ flex: 1 }}
-                                  />
-                                </div>
-                              ))}
-                            </Space>
-                          )}
-                        </Card>
-                      </Col>
-                    </Row>
-
-                    {/* Résultats des conditions */}
-                    {filterResults && (
-                      <div style={{ marginTop: 16 }}>
-                        <Text strong style={{ fontSize: 13, marginBottom: 8, display: 'block' }}>🎯 Évaluation des conditions:</Text>
-                        <Timeline
-                          size="small"
-                          items={filterResults.conditions.map(cond => ({
-                            dot: cond.result ? 
-                              <CheckCircleOutlined style={{ color: '#52c41a' }} /> : 
-                              <CloseCircleOutlined style={{ color: '#ff4d4f' }} />,
-                            children: (
-                              <Text style={{ 
-                                fontSize: 12, 
-                                color: cond.result ? '#52c41a' : '#ff4d4f',
-                                fontFamily: 'monospace'
-                              }}>
-                                {cond.description}
-                              </Text>
-                            )
-                          }))}
-                        />
-                      </div>
-                    )}
-
-                    {evaluationLoading && (
-                      <div style={{ textAlign: 'center', padding: '20px' }}>
-                        <Spin size="small" />
-                        <Text style={{ marginLeft: 8, fontSize: 12, color: '#999' }}>Évaluation en cours...</Text>
-                      </div>
-                    )}
-
-                    {/* 🎯 SECTION HELP CONTEXTUELLE */}
-                    {!filterResults && !evaluationLoading && (
-                      <div style={{ 
-                        marginTop: 16, 
-                        padding: '12px', 
-                        background: '#f0f9ff', 
-                        border: '1px dashed #1890ff', 
-                        borderRadius: '6px' 
-                      }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-                          <BulbOutlined style={{ color: '#1890ff' }} />
-                          <Text strong style={{ color: '#1890ff', fontSize: 12 }}>💡 Aide</Text>
-                        </div>
-                        <Text style={{ fontSize: 11, color: '#666' }}>
-                          • <strong>Temps réel ON</strong> : Évaluation automatique à chaque modification<br/>
-                          • <strong>Mode Test</strong> : Simulez différentes valeurs pour tester vos conditions<br/>
-                          • <strong>Évaluer maintenant</strong> : Lance une évaluation manuelle instantanée
-                        </Text>
-                      </div>
-                    )}
-
-                    {/* 🏆 SECTION PERFORMANCE TIPS */}
-                    {filterResults && filterResults.filteredOptions < filterResults.totalOptions * 0.1 && (
-                      <div style={{ 
-                        marginTop: 12, 
-                        padding: '8px 12px', 
-                        background: '#fff7e6', 
-                        border: '1px solid #ffd591', 
-                        borderRadius: '4px' 
-                      }}>
-                        <Text style={{ fontSize: 11, color: '#d48806' }}>
-                          ⚡ <strong>Filtrage très sélectif</strong> : Seulement {Math.round((filterResults.filteredOptions / filterResults.totalOptions) * 100)}% des options sont affichées
-                        </Text>
-                      </div>
-                    )}
+                      {/* ── Divider: Extensions Lookup ── */}
+                      <Divider style={{ margin: '8px 0' }} />
 
                     {/* ── Extensions Lookup: Colonne conditionnelle, Plafonds, Alertes ── */}
                     {lookupConfig.filterConditions?.enabled && (
@@ -4440,6 +4232,218 @@ const TablePanel: React.FC<TablePanelProps> = ({ treeId: initialTreeId, nodeId, 
                       )}
                       </Space>
                     )}
+                      </Space>
+                    )}  
+                  </div>
+                )}
+
+                {/* ✨ ULTRA-NOUVEAU: Section filtrage temps réel */}
+                {lookupConfig.filterConditions?.enabled && lookupConfig.filterConditions?.conditions?.length > 0 && (
+                  <div style={{ 
+                    marginTop: 16, 
+                    padding: '16px', 
+                    background: 'linear-gradient(135deg, #f6ffed 0%, #f0f9ff 100%)', 
+                    border: '2px solid #52c41a', 
+                    borderRadius: '8px',
+                    boxShadow: '0 4px 12px rgba(82, 196, 26, 0.15)'
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
+                      <ThunderboltOutlined style={{ color: '#52c41a', fontSize: 18 }} />
+                      <Text strong style={{ fontSize: 15, color: '#52c41a' }}>🚀 Filtrage Temps Réel</Text>
+                      {filterResults && (
+                        <div style={{ 
+                          background: filterResults.conditions.every(c => c.result) ? '#f6ffed' : '#fff2e8',
+                          color: filterResults.conditions.every(c => c.result) ? '#52c41a' : '#fa8c16',
+                          padding: '2px 8px',
+                          borderRadius: '10px',
+                          fontSize: 10,
+                          fontWeight: 'bold',
+                          border: `1px solid ${filterResults.conditions.every(c => c.result) ? '#b7eb8f' : '#ffd591'}`
+                        }}>
+                          {filterResults.conditions.every(c => c.result) ? '✅ TOUTES OK' : '⚠️ PARTIELLES'}
+                        </div>
+                      )}
+                      <Switch
+                        size="small"
+                        checked={realtimePreview}
+                        onChange={setRealtimePreview}
+                        checkedChildren="ON"
+                        unCheckedChildren="OFF"
+                      />
+                      <Button
+                        type="primary" 
+                        size="small"
+                        icon={<PlayCircleOutlined />}
+                        onClick={() => {
+                          evaluateFilterConditionsRealtime();
+                          message.success('🎯 Évaluation lancée !', 1);
+                        }}
+                        loading={evaluationLoading}
+                        style={{ marginLeft: 'auto' }}
+                      >
+                        Évaluer maintenant
+                      </Button>
+                      <Tooltip title="Copier la configuration de filtrage">
+                        <Button
+                          size="small"
+                          icon={<InfoCircleOutlined />}
+                          onClick={() => {
+                            const config = JSON.stringify(lookupConfig.filterConditions, null, 2);
+                            navigator.clipboard?.writeText(config);
+                            message.success('📋 Configuration copiée !', 1.5);
+                          }}
+                        />
+                      </Tooltip>
+                    </div>
+
+                    <Row gutter={16}>
+                      <Col span={12}>
+                        <Card size="small" style={{ 
+                          background: 'linear-gradient(135deg, #f6ffed 0%, #ffffff 100%)', 
+                          border: '1px solid #d9f7be',
+                          boxShadow: '0 2px 8px rgba(82, 196, 26, 0.1)'
+                        }}>
+                          <Statistic
+                            title={
+                              <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                                <CheckCircleOutlined style={{ color: '#52c41a' }} />
+                                Options disponibles
+                              </span>
+                            }
+                            value={filterResults?.filteredOptions || 0}
+                            suffix={`/ ${filterResults?.totalOptions || 0}`}
+                            valueStyle={{ 
+                              color: filterResults && filterResults.filteredOptions > 0 ? '#52c41a' : '#ff4d4f', 
+                              fontSize: 20,
+                              fontWeight: 'bold'
+                            }}
+                          />
+                          {filterResults && (
+                            <div>
+                              <Progress
+                                percent={Math.round((filterResults.filteredOptions / filterResults.totalOptions) * 100)}
+                                size="small"
+                                strokeColor={{
+                                  '0%': '#52c41a',
+                                  '100%': '#389e0d'
+                                }}
+                                trailColor="#f0f0f0"
+                                style={{ marginTop: 8 }}
+                              />
+                              <Text style={{ 
+                                fontSize: 10, 
+                                color: '#666', 
+                                marginTop: 4,
+                                display: 'block'
+                              }}>
+                                {filterResults.filteredOptions === 0 ? '🚫 Aucune option' : 
+                                 filterResults.filteredOptions === filterResults.totalOptions ? '✨ Toutes visibles' :
+                                 '🎯 Filtrage actif'}
+                              </Text>
+                            </div>
+                          )}
+                        </Card>
+                      </Col>
+                      <Col span={12}>
+                        <Card size="small" style={{ background: '#fff', border: '1px solid #d9f7be' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                            <BulbOutlined style={{ color: '#fa8c16' }} />
+                            <Text strong style={{ fontSize: 13 }}>Mode Test</Text>
+                            <Switch
+                              size="small"
+                              checked={testMode}
+                              onChange={setTestMode}
+                              checkedChildren="✓"
+                              unCheckedChildren="✗"
+                            />
+                          </div>
+                          {testMode && (
+                            <Space direction="vertical" size={4} style={{ width: '100%' }}>
+                              {lookupConfig.filterConditions?.conditions?.map(condition => (
+                                <div key={condition.id} style={{ display: 'flex', gap: 4 }}>
+                                  <Text style={{ fontSize: 11, minWidth: 60 }}>{condition.sourceRef?.split(':').pop() || 'Source'}:</Text>
+                                  <Input
+                                    size="small"
+                                    placeholder="Valeur test"
+                                    value={testValues[condition.sourceRef] || ''}
+                                    onChange={(e) => setTestValues(prev => ({ ...prev, [condition.sourceRef]: e.target.value }))}
+                                    style={{ flex: 1 }}
+                                  />
+                                </div>
+                              ))}
+                            </Space>
+                          )}
+                        </Card>
+                      </Col>
+                    </Row>
+
+                    {/* Résultats des conditions */}
+                    {filterResults && (
+                      <div style={{ marginTop: 16 }}>
+                        <Text strong style={{ fontSize: 13, marginBottom: 8, display: 'block' }}>🎯 Évaluation des conditions:</Text>
+                        <Timeline
+                          size="small"
+                          items={filterResults.conditions.map(cond => ({
+                            dot: cond.result ? 
+                              <CheckCircleOutlined style={{ color: '#52c41a' }} /> : 
+                              <CloseCircleOutlined style={{ color: '#ff4d4f' }} />,
+                            children: (
+                              <Text style={{ 
+                                fontSize: 12, 
+                                color: cond.result ? '#52c41a' : '#ff4d4f',
+                                fontFamily: 'monospace'
+                              }}>
+                                {cond.description}
+                              </Text>
+                            )
+                          }))}
+                        />
+                      </div>
+                    )}
+
+                    {evaluationLoading && (
+                      <div style={{ textAlign: 'center', padding: '20px' }}>
+                        <Spin size="small" />
+                        <Text style={{ marginLeft: 8, fontSize: 12, color: '#999' }}>Évaluation en cours...</Text>
+                      </div>
+                    )}
+
+                    {/* 🎯 SECTION HELP CONTEXTUELLE */}
+                    {!filterResults && !evaluationLoading && (
+                      <div style={{ 
+                        marginTop: 16, 
+                        padding: '12px', 
+                        background: '#f0f9ff', 
+                        border: '1px dashed #1890ff', 
+                        borderRadius: '6px' 
+                      }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                          <BulbOutlined style={{ color: '#1890ff' }} />
+                          <Text strong style={{ color: '#1890ff', fontSize: 12 }}>💡 Aide</Text>
+                        </div>
+                        <Text style={{ fontSize: 11, color: '#666' }}>
+                          • <strong>Temps réel ON</strong> : Évaluation automatique à chaque modification<br/>
+                          • <strong>Mode Test</strong> : Simulez différentes valeurs pour tester vos conditions<br/>
+                          • <strong>Évaluer maintenant</strong> : Lance une évaluation manuelle instantanée
+                        </Text>
+                      </div>
+                    )}
+
+                    {/* 🏆 SECTION PERFORMANCE TIPS */}
+                    {filterResults && filterResults.filteredOptions < filterResults.totalOptions * 0.1 && (
+                      <div style={{ 
+                        marginTop: 12, 
+                        padding: '8px 12px', 
+                        background: '#fff7e6', 
+                        border: '1px solid #ffd591', 
+                        borderRadius: '4px' 
+                      }}>
+                        <Text style={{ fontSize: 11, color: '#d48806' }}>
+                          ⚡ <strong>Filtrage très sélectif</strong> : Seulement {Math.round((filterResults.filteredOptions / filterResults.totalOptions) * 100)}% des options sont affichées
+                        </Text>
+                      </div>
+                    )}
+
                   </div>
                 )}
               </div>
