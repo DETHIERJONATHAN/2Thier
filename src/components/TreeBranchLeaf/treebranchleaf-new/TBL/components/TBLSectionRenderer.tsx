@@ -3711,8 +3711,10 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
     
   // Rendre éditable si c'est un lookup (rowBased/columnBased) OU un répétable
   // ⚠️ Ne PAS traiter les résultats de matrice comme éditables: ils doivent s'afficher via BackendValueDisplay
+  // 🔧 FIX: Les champs repeater ne forcent plus la pleine largeur - ils utilisent leur width configurée
+  // pour permettre un flux horizontal continu (gauche à droite, puis ligne suivante)
   if ((hasTableCapability && hasRowOrColumnMode) || isRepeater) {
-      const editableColProps = getFieldColProps(section, field, { forceFullWidth: isRepeater });
+      const editableColProps = getFieldColProps(section, field, { forceFullWidth: false });
       return (
         <Col
           key={field.id}
