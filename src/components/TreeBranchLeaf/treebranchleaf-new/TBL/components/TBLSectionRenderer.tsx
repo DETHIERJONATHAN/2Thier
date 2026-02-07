@@ -2348,8 +2348,9 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
           repeaterButtonSize: buttonSize,
           repeaterButtonWidth: buttonWidth,
           repeaterIconOnly: false,
+          // 🔧 FIX: Ne plus forcer 'full' - utiliser 'auto' pour permettre le flux horizontal continu
           repeater_buttonSize: 'middle',
-          repeater_buttonWidth: 'full',
+          repeater_buttonWidth: 'auto',
           repeater_iconOnly: false
         } as TBLField & { isRepeaterButton?: boolean };
         finalFields.push(addButtonField);
