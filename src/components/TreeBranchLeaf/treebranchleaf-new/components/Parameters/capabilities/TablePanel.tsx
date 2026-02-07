@@ -2622,6 +2622,700 @@ const TablePanel: React.FC<TablePanelProps> = ({ treeId: initialTreeId, nodeId, 
                                 </div>
                               )}
                             </Space>
+
+                            {/* ── Extensions Lookup: Colonne conditionnelle, Plafonds, Alertes ── */}
+                            <Divider style={{ margin: '12px 0' }}>
+                              <Text type="secondary" style={{ fontSize: 11 }}>Extensions conditionnelles</Text>
+                            </Divider>
+
+                            <Space direction="vertical" style={{ width: '100%' }} size={12}>
+
+                            {/* ── SECTION 1: Colonne Conditionnelle ─── */}
+                            <div style={{ 
+                              padding: '12px', 
+                              background: '#fff', 
+                              border: '1px solid #d3adf7', 
+                              borderRadius: '6px' 
+                            }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+                                <Text strong style={{ fontSize: 13, color: '#722ed1' }}>🔄 Colonne Conditionnelle</Text>
+                                <Text type="secondary" style={{ fontSize: 10 }}>
+                                  (Change dynamiquement la colonne du lookup selon les conditions)
+                                </Text>
+                              </div>
+
+                              {/* Colonne par défaut */}
+                              <div style={{ marginBottom: 12 }}>
+                                <Text type="secondary" style={{ fontSize: 11, display: 'block', marginBottom: 4 }}>
+                                  📌 Colonne par défaut (utilisée si aucune règle ne match):
+                                </Text>
+                                <Select
+                                  size="small"
+                                  placeholder="Sélectionner la colonne par défaut"
+                                  value={lookupConfig.filterConditions?.defaultColumn || undefined}
+                                  options={(cfg.columns || []).map(col => ({ label: col, value: col }))}
+                                  onChange={(value) => {
+                                    updateLookupConfig((prev) => ({
+                                      ...prev,
+                                      filterConditions: { ...(prev.filterConditions || {}), defaultColumn: value }
+                                    }));
+                                  }}
+                                  disabled={readOnly}
+                                  style={{ width: '100%' }}
+                                  allowClear
+                                />
+                              </div>
+
+                              {/* Liste des règles de switch colonne */}
+                              {(lookupConfig.filterConditions?.columnOverrides || []).map((rule, ruleIdx) => (
+                                <div key={rule.id} style={{ 
+                                  padding: '10px', 
+                                  background: '#faf5ff', 
+                                  border: '1px solid #e8d5f5', 
+                                  borderRadius: '4px', 
+                                  marginBottom: 8 
+                                }}>
+                                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                                    <Text style={{ fontSize: 11, fontWeight: 600, color: '#531dab' }}>
+                                      Règle {ruleIdx + 1}: {rule.label || 'Sans nom'}
+                                    </Text>
+                                    <Button 
+                                      size="small" type="text" danger
+                                      onClick={() => {
+                                        updateLookupConfig((prev) => ({
+                                          ...prev,
+                                          filterConditions: {
+                                            ...(prev.filterConditions || {}),
+                                            columnOverrides: (prev.filterConditions?.columnOverrides || []).filter((_, i) => i !== ruleIdx)
+                                          }
+                                        }));
+                                      }}
+                                      disabled={readOnly}
+                                    >✕</Button>
+                                  </div>
+
+                                  <Input
+                                    size="small"
+                                    placeholder="Nom de la règle (ex: Triphasé → kVA triphasé)"
+                                    value={rule.label || ''}
+                                    onChange={(e) => {
+                                      updateLookupConfig((prev) => {
+                                        const rules = [...(prev.filterConditions?.columnOverrides || [])];
+                                        rules[ruleIdx] = { ...rules[ruleIdx], label: e.target.value };
+                                        return { ...prev, filterConditions: { ...(prev.filterConditions || {}), columnOverrides: rules } };
+                                      });
+                                    }}
+                                    style={{ marginBottom: 8, fontSize: 11 }}
+                                    disabled={readOnly}
+                                  />
+
+                                  {/* Conditions */}
+                                  {(rule.conditions || []).map((cond, condIdx) => (
+                                    <div key={condIdx} style={{ display: 'flex', gap: 4, alignItems: 'center', marginBottom: 4 }}>
+                                      <Text type="secondary" style={{ fontSize: 10, minWidth: 16 }}>{condIdx === 0 ? 'SI' : 'ET'}</Text>
+                                      <div style={{ flex: 1, display: 'flex', gap: 2 }}>
+                                        <Input
+                                          size="small"
+                                          placeholder="Champ (ex: @select.alimentation)"
+                                          value={cond.fieldRef || ''}
+                                          onChange={(e) => {
+                                            updateLookupConfig((prev) => {
+                                              const rules = [...(prev.filterConditions?.columnOverrides || [])];
+                                              const conds = [...(rules[ruleIdx]?.conditions || [])];
+                                              conds[condIdx] = { ...conds[condIdx], fieldRef: e.target.value };
+                                              rules[ruleIdx] = { ...rules[ruleIdx], conditions: conds };
+                                              return { ...prev, filterConditions: { ...(prev.filterConditions || {}), columnOverrides: rules } };
+                                            });
+                                          }}
+                                          style={{ flex: 1, fontSize: 9 }}
+                                          disabled={readOnly}
+                                        />
+                                        <Button
+                                          size="small" type="dashed"
+                                          onClick={() => {
+                                            setMultiplierConditionId(`lk_co_${ruleIdx}_${condIdx}_fieldRef`);
+                                            setMultiplierSelectorTarget('A');
+                                            setShowMultiplierSelector(true);
+                                          }}
+                                          disabled={readOnly}
+                                          style={{ padding: '0 4px' }}
+                                        >🌳</Button>
+                                      </div>
+                                      <Select
+                                        size="small"
+                                        value={cond.operator || 'equals'}
+                                        style={{ width: 65 }}
+                                        onChange={(value) => {
+                                          updateLookupConfig((prev) => {
+                                            const rules = [...(prev.filterConditions?.columnOverrides || [])];
+                                            const conds = [...(rules[ruleIdx]?.conditions || [])];
+                                            conds[condIdx] = { ...conds[condIdx], operator: value };
+                                            rules[ruleIdx] = { ...rules[ruleIdx], conditions: conds };
+                                            return { ...prev, filterConditions: { ...(prev.filterConditions || {}), columnOverrides: rules } };
+                                          });
+                                        }}
+                                        disabled={readOnly}
+                                      >
+                                        <Select.Option value="equals">=</Select.Option>
+                                        <Select.Option value="notEquals">≠</Select.Option>
+                                        <Select.Option value="contains">∋</Select.Option>
+                                        <Select.Option value="greaterThan">&gt;</Select.Option>
+                                        <Select.Option value="lessThan">&lt;</Select.Option>
+                                      </Select>
+                                      <Input
+                                        size="small"
+                                        placeholder="Valeur (ex: Triphasé)"
+                                        value={cond.value || ''}
+                                        onChange={(e) => {
+                                          updateLookupConfig((prev) => {
+                                            const rules = [...(prev.filterConditions?.columnOverrides || [])];
+                                            const conds = [...(rules[ruleIdx]?.conditions || [])];
+                                            conds[condIdx] = { ...conds[condIdx], value: e.target.value };
+                                            rules[ruleIdx] = { ...rules[ruleIdx], conditions: conds };
+                                            return { ...prev, filterConditions: { ...(prev.filterConditions || {}), columnOverrides: rules } };
+                                          });
+                                        }}
+                                        style={{ flex: 1, fontSize: 9 }}
+                                        disabled={readOnly}
+                                      />
+                                      {(rule.conditions || []).length > 1 && (
+                                        <Button
+                                          size="small" type="text" danger
+                                          onClick={() => {
+                                            updateLookupConfig((prev) => {
+                                              const rules = [...(prev.filterConditions?.columnOverrides || [])];
+                                              const conds = [...(rules[ruleIdx]?.conditions || [])].filter((_, i) => i !== condIdx);
+                                              rules[ruleIdx] = { ...rules[ruleIdx], conditions: conds };
+                                              return { ...prev, filterConditions: { ...(prev.filterConditions || {}), columnOverrides: rules } };
+                                            });
+                                          }}
+                                          disabled={readOnly}
+                                          style={{ padding: '0 2px' }}
+                                        >✕</Button>
+                                      )}
+                                    </div>
+                                  ))}
+                                  <Button
+                                    size="small" type="dashed"
+                                    onClick={() => {
+                                      updateLookupConfig((prev) => {
+                                        const rules = [...(prev.filterConditions?.columnOverrides || [])];
+                                        const conds = [...(rules[ruleIdx]?.conditions || []), { fieldRef: '', operator: 'equals' as const, value: '' }];
+                                        rules[ruleIdx] = { ...rules[ruleIdx], conditions: conds };
+                                        return { ...prev, filterConditions: { ...(prev.filterConditions || {}), columnOverrides: rules } };
+                                      });
+                                    }}
+                                    disabled={readOnly}
+                                    style={{ fontSize: 10, marginBottom: 8 }}
+                                  >+ Condition ET</Button>
+
+                                  {/* Colonne cible */}
+                                  <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                                    <Text style={{ fontSize: 11, fontWeight: 600, color: '#52c41a' }}>ALORS utiliser colonne:</Text>
+                                    <Select
+                                      size="small"
+                                      placeholder="Colonne cible"
+                                      value={rule.targetColumn || undefined}
+                                      options={(cfg.columns || []).map(col => ({ label: col, value: col }))}
+                                      onChange={(value) => {
+                                        updateLookupConfig((prev) => {
+                                          const rules = [...(prev.filterConditions?.columnOverrides || [])];
+                                          rules[ruleIdx] = { ...rules[ruleIdx], targetColumn: value };
+                                          return { ...prev, filterConditions: { ...(prev.filterConditions || {}), columnOverrides: rules } };
+                                        });
+                                      }}
+                                      disabled={readOnly}
+                                      style={{ flex: 1 }}
+                                    />
+                                  </div>
+                                </div>
+                              ))}
+
+                              <Button
+                                size="small" type="dashed" block
+                                onClick={() => {
+                                  updateLookupConfig((prev) => ({
+                                    ...prev,
+                                    filterConditions: {
+                                      ...(prev.filterConditions || {}),
+                                      columnOverrides: [
+                                        ...(prev.filterConditions?.columnOverrides || []),
+                                        { id: crypto.randomUUID(), enabled: true, label: '', conditions: [{ fieldRef: '', operator: 'equals' as const, value: '' }], targetColumn: '' }
+                                      ]
+                                    }
+                                  }));
+                                }}
+                                disabled={readOnly}
+                                style={{ marginTop: 4 }}
+                              >
+                                + Ajouter une règle de colonne conditionnelle
+                              </Button>
+                            </div>
+
+                            {/* ── SECTION 2: Plafonds de Valeur ─── */}
+                            <div style={{ 
+                              padding: '12px', 
+                              background: '#fff', 
+                              border: '1px solid #ffd591', 
+                              borderRadius: '6px' 
+                            }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+                                <Text strong style={{ fontSize: 13, color: '#d48806' }}>📏 Plafonds de Valeur</Text>
+                                <Text type="secondary" style={{ fontSize: 10 }}>
+                                  (Limite la valeur max du lookup selon les conditions)
+                                </Text>
+                              </div>
+
+                              {(lookupConfig.filterConditions?.valueCaps || []).map((rule, ruleIdx) => (
+                                <div key={rule.id} style={{ 
+                                  padding: '10px', 
+                                  background: '#fffbe6', 
+                                  border: '1px solid #ffe58f', 
+                                  borderRadius: '4px', 
+                                  marginBottom: 8 
+                                }}>
+                                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                                    <Text style={{ fontSize: 11, fontWeight: 600, color: '#d48806' }}>
+                                      Plafond {ruleIdx + 1}: {rule.label || 'Sans nom'}
+                                    </Text>
+                                    <Button 
+                                      size="small" type="text" danger
+                                      onClick={() => {
+                                        updateLookupConfig((prev) => ({
+                                          ...prev,
+                                          filterConditions: {
+                                            ...(prev.filterConditions || {}),
+                                            valueCaps: (prev.filterConditions?.valueCaps || []).filter((_, i) => i !== ruleIdx)
+                                          }
+                                        }));
+                                      }}
+                                      disabled={readOnly}
+                                    >✕</Button>
+                                  </div>
+
+                                  <Input
+                                    size="small"
+                                    placeholder="Nom (ex: Max 5000 mono non-RESA)"
+                                    value={rule.label || ''}
+                                    onChange={(e) => {
+                                      updateLookupConfig((prev) => {
+                                        const rules = [...(prev.filterConditions?.valueCaps || [])];
+                                        rules[ruleIdx] = { ...rules[ruleIdx], label: e.target.value };
+                                        return { ...prev, filterConditions: { ...(prev.filterConditions || {}), valueCaps: rules } };
+                                      });
+                                    }}
+                                    style={{ marginBottom: 8, fontSize: 11 }}
+                                    disabled={readOnly}
+                                  />
+
+                                  {/* Conditions */}
+                                  {(rule.conditions || []).map((cond, condIdx) => (
+                                    <div key={condIdx} style={{ display: 'flex', gap: 4, alignItems: 'center', marginBottom: 4 }}>
+                                      <Text type="secondary" style={{ fontSize: 10, minWidth: 16 }}>{condIdx === 0 ? 'SI' : 'ET'}</Text>
+                                      <div style={{ flex: 1, display: 'flex', gap: 2 }}>
+                                        <Input
+                                          size="small"
+                                          placeholder="Champ"
+                                          value={cond.fieldRef || ''}
+                                          onChange={(e) => {
+                                            updateLookupConfig((prev) => {
+                                              const rules = [...(prev.filterConditions?.valueCaps || [])];
+                                              const conds = [...(rules[ruleIdx]?.conditions || [])];
+                                              conds[condIdx] = { ...conds[condIdx], fieldRef: e.target.value };
+                                              rules[ruleIdx] = { ...rules[ruleIdx], conditions: conds };
+                                              return { ...prev, filterConditions: { ...(prev.filterConditions || {}), valueCaps: rules } };
+                                            });
+                                          }}
+                                          style={{ flex: 1, fontSize: 9 }}
+                                          disabled={readOnly}
+                                        />
+                                        <Button
+                                          size="small" type="dashed"
+                                          onClick={() => {
+                                            setMultiplierConditionId(`lk_vc_${ruleIdx}_${condIdx}_fieldRef`);
+                                            setMultiplierSelectorTarget('A');
+                                            setShowMultiplierSelector(true);
+                                          }}
+                                          disabled={readOnly}
+                                          style={{ padding: '0 4px' }}
+                                        >🌳</Button>
+                                      </div>
+                                      <Select
+                                        size="small"
+                                        value={cond.operator || 'equals'}
+                                        style={{ width: 65 }}
+                                        onChange={(value) => {
+                                          updateLookupConfig((prev) => {
+                                            const rules = [...(prev.filterConditions?.valueCaps || [])];
+                                            const conds = [...(rules[ruleIdx]?.conditions || [])];
+                                            conds[condIdx] = { ...conds[condIdx], operator: value };
+                                            rules[ruleIdx] = { ...rules[ruleIdx], conditions: conds };
+                                            return { ...prev, filterConditions: { ...(prev.filterConditions || {}), valueCaps: rules } };
+                                          });
+                                        }}
+                                        disabled={readOnly}
+                                      >
+                                        <Select.Option value="equals">=</Select.Option>
+                                        <Select.Option value="notEquals">≠</Select.Option>
+                                        <Select.Option value="contains">∋</Select.Option>
+                                        <Select.Option value="greaterThan">&gt;</Select.Option>
+                                        <Select.Option value="lessThan">&lt;</Select.Option>
+                                      </Select>
+                                      <Input
+                                        size="small"
+                                        placeholder="Valeur"
+                                        value={cond.value || ''}
+                                        onChange={(e) => {
+                                          updateLookupConfig((prev) => {
+                                            const rules = [...(prev.filterConditions?.valueCaps || [])];
+                                            const conds = [...(rules[ruleIdx]?.conditions || [])];
+                                            conds[condIdx] = { ...conds[condIdx], value: e.target.value };
+                                            rules[ruleIdx] = { ...rules[ruleIdx], conditions: conds };
+                                            return { ...prev, filterConditions: { ...(prev.filterConditions || {}), valueCaps: rules } };
+                                          });
+                                        }}
+                                        style={{ flex: 1, fontSize: 9 }}
+                                        disabled={readOnly}
+                                      />
+                                      {(rule.conditions || []).length > 1 && (
+                                        <Button
+                                          size="small" type="text" danger
+                                          onClick={() => {
+                                            updateLookupConfig((prev) => {
+                                              const rules = [...(prev.filterConditions?.valueCaps || [])];
+                                              const conds = [...(rules[ruleIdx]?.conditions || [])].filter((_, i) => i !== condIdx);
+                                              rules[ruleIdx] = { ...rules[ruleIdx], conditions: conds };
+                                              return { ...prev, filterConditions: { ...(prev.filterConditions || {}), valueCaps: rules } };
+                                            });
+                                          }}
+                                          disabled={readOnly}
+                                          style={{ padding: '0 2px' }}
+                                        >✕</Button>
+                                      )}
+                                    </div>
+                                  ))}
+                                  <Button
+                                    size="small" type="dashed"
+                                    onClick={() => {
+                                      updateLookupConfig((prev) => {
+                                        const rules = [...(prev.filterConditions?.valueCaps || [])];
+                                        const conds = [...(rules[ruleIdx]?.conditions || []), { fieldRef: '', operator: 'equals' as const, value: '' }];
+                                        rules[ruleIdx] = { ...rules[ruleIdx], conditions: conds };
+                                        return { ...prev, filterConditions: { ...(prev.filterConditions || {}), valueCaps: rules } };
+                                      });
+                                    }}
+                                    disabled={readOnly}
+                                    style={{ fontSize: 10, marginBottom: 8 }}
+                                  >+ Condition ET</Button>
+
+                                  {/* Plafond et scope */}
+                                  <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                                    <Text style={{ fontSize: 11, fontWeight: 600, color: '#d48806' }}>ALORS max =</Text>
+                                    <InputNumber
+                                      size="small"
+                                      min={0}
+                                      step={500}
+                                      value={rule.maxValue ?? 5000}
+                                      onChange={(value) => {
+                                        updateLookupConfig((prev) => {
+                                          const rules = [...(prev.filterConditions?.valueCaps || [])];
+                                          rules[ruleIdx] = { ...rules[ruleIdx], maxValue: value ?? 5000 };
+                                          return { ...prev, filterConditions: { ...(prev.filterConditions || {}), valueCaps: rules } };
+                                        });
+                                      }}
+                                      style={{ width: 120 }}
+                                      disabled={readOnly}
+                                    />
+                                    <Text type="secondary" style={{ fontSize: 10 }}>VA</Text>
+                                    <Select
+                                      size="small"
+                                      value={rule.scope || 'total'}
+                                      style={{ width: 140 }}
+                                      onChange={(value) => {
+                                        updateLookupConfig((prev) => {
+                                          const rules = [...(prev.filterConditions?.valueCaps || [])];
+                                          rules[ruleIdx] = { ...rules[ruleIdx], scope: value };
+                                          return { ...prev, filterConditions: { ...(prev.filterConditions || {}), valueCaps: rules } };
+                                        });
+                                      }}
+                                      disabled={readOnly}
+                                    >
+                                      <Select.Option value="total">📊 Total</Select.Option>
+                                      <Select.Option value="per_unit">🔧 Par unité</Select.Option>
+                                    </Select>
+                                  </div>
+                                </div>
+                              ))}
+
+                              <Button
+                                size="small" type="dashed" block
+                                onClick={() => {
+                                  updateLookupConfig((prev) => ({
+                                    ...prev,
+                                    filterConditions: {
+                                      ...(prev.filterConditions || {}),
+                                      valueCaps: [
+                                        ...(prev.filterConditions?.valueCaps || []),
+                                        { id: crypto.randomUUID(), enabled: true, label: '', conditions: [{ fieldRef: '', operator: 'equals' as const, value: '' }], maxValue: 5000, scope: 'total' as const }
+                                      ]
+                                    }
+                                  }));
+                                }}
+                                disabled={readOnly}
+                                style={{ marginTop: 4 }}
+                              >
+                                + Ajouter un plafond de valeur
+                              </Button>
+                            </div>
+
+                            {/* ── SECTION 3: Alertes Contextuelles ─── */}
+                            <div style={{ 
+                              padding: '12px', 
+                              background: '#fff', 
+                              border: '1px solid #ffccc7', 
+                              borderRadius: '6px' 
+                            }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+                                <Text strong style={{ fontSize: 13, color: '#cf1322' }}>⚠️ Alertes Contextuelles</Text>
+                                <Text type="secondary" style={{ fontSize: 10 }}>
+                                  (Messages affichés selon conditions — basés sur le lookup)
+                                </Text>
+                              </div>
+
+                              {(lookupConfig.filterConditions?.lookupAlerts || []).map((rule, ruleIdx) => (
+                                <div key={rule.id} style={{ 
+                                  padding: '10px', 
+                                  background: rule.level === 'error' ? '#fff2f0' : rule.level === 'warning' ? '#fffbe6' : '#f0f9ff',
+                                  border: `1px solid ${rule.level === 'error' ? '#ffccc7' : rule.level === 'warning' ? '#ffe58f' : '#bae7ff'}`,
+                                  borderRadius: '4px', 
+                                  marginBottom: 8 
+                                }}>
+                                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                                    <Text style={{ fontSize: 11, fontWeight: 600 }}>
+                                      {rule.level === 'error' ? '🔴' : rule.level === 'warning' ? '🟡' : 'ℹ️'} Alerte {ruleIdx + 1}
+                                    </Text>
+                                    <Button 
+                                      size="small" type="text" danger
+                                      onClick={() => {
+                                        updateLookupConfig((prev) => ({
+                                          ...prev,
+                                          filterConditions: {
+                                            ...(prev.filterConditions || {}),
+                                            lookupAlerts: (prev.filterConditions?.lookupAlerts || []).filter((_, i) => i !== ruleIdx)
+                                          }
+                                        }));
+                                      }}
+                                      disabled={readOnly}
+                                    >✕</Button>
+                                  </div>
+
+                                  <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
+                                    <Input
+                                      size="small"
+                                      placeholder="Nom de l'alerte"
+                                      value={rule.label || ''}
+                                      onChange={(e) => {
+                                        updateLookupConfig((prev) => {
+                                          const rules = [...(prev.filterConditions?.lookupAlerts || [])];
+                                          rules[ruleIdx] = { ...rules[ruleIdx], label: e.target.value };
+                                          return { ...prev, filterConditions: { ...(prev.filterConditions || {}), lookupAlerts: rules } };
+                                        });
+                                      }}
+                                      style={{ flex: 1, fontSize: 11 }}
+                                      disabled={readOnly}
+                                    />
+                                    <Select
+                                      size="small"
+                                      value={rule.level || 'warning'}
+                                      style={{ width: 140 }}
+                                      onChange={(value) => {
+                                        updateLookupConfig((prev) => {
+                                          const rules = [...(prev.filterConditions?.lookupAlerts || [])];
+                                          rules[ruleIdx] = { ...rules[ruleIdx], level: value };
+                                          return { ...prev, filterConditions: { ...(prev.filterConditions || {}), lookupAlerts: rules } };
+                                        });
+                                      }}
+                                      disabled={readOnly}
+                                    >
+                                      <Select.Option value="info">ℹ️ Info</Select.Option>
+                                      <Select.Option value="warning">⚠️ Avertissement</Select.Option>
+                                      <Select.Option value="error">🔴 Erreur</Select.Option>
+                                    </Select>
+                                  </div>
+
+                                  {/* Conditions */}
+                                  {(rule.conditions || []).map((cond, condIdx) => (
+                                    <div key={condIdx} style={{ display: 'flex', gap: 4, alignItems: 'center', marginBottom: 4 }}>
+                                      <Text type="secondary" style={{ fontSize: 10, minWidth: 16 }}>{condIdx === 0 ? 'SI' : 'ET'}</Text>
+                                      <div style={{ flex: 1, display: 'flex', gap: 2 }}>
+                                        <Input
+                                          size="small"
+                                          placeholder="Champ"
+                                          value={cond.fieldRef || ''}
+                                          onChange={(e) => {
+                                            updateLookupConfig((prev) => {
+                                              const rules = [...(prev.filterConditions?.lookupAlerts || [])];
+                                              const conds = [...(rules[ruleIdx]?.conditions || [])];
+                                              conds[condIdx] = { ...conds[condIdx], fieldRef: e.target.value };
+                                              rules[ruleIdx] = { ...rules[ruleIdx], conditions: conds };
+                                              return { ...prev, filterConditions: { ...(prev.filterConditions || {}), lookupAlerts: rules } };
+                                            });
+                                          }}
+                                          style={{ flex: 1, fontSize: 9 }}
+                                          disabled={readOnly}
+                                        />
+                                        <Button
+                                          size="small" type="dashed"
+                                          onClick={() => {
+                                            setMultiplierConditionId(`lk_al_${ruleIdx}_${condIdx}_fieldRef`);
+                                            setMultiplierSelectorTarget('A');
+                                            setShowMultiplierSelector(true);
+                                          }}
+                                          disabled={readOnly}
+                                          style={{ padding: '0 4px' }}
+                                        >🌳</Button>
+                                      </div>
+                                      <Select
+                                        size="small"
+                                        value={cond.operator || 'greaterThan'}
+                                        style={{ width: 65 }}
+                                        onChange={(value) => {
+                                          updateLookupConfig((prev) => {
+                                            const rules = [...(prev.filterConditions?.lookupAlerts || [])];
+                                            const conds = [...(rules[ruleIdx]?.conditions || [])];
+                                            conds[condIdx] = { ...conds[condIdx], operator: value };
+                                            rules[ruleIdx] = { ...rules[ruleIdx], conditions: conds };
+                                            return { ...prev, filterConditions: { ...(prev.filterConditions || {}), lookupAlerts: rules } };
+                                          });
+                                        }}
+                                        disabled={readOnly}
+                                      >
+                                        <Select.Option value="equals">=</Select.Option>
+                                        <Select.Option value="notEquals">≠</Select.Option>
+                                        <Select.Option value="greaterThan">&gt;</Select.Option>
+                                        <Select.Option value="lessThan">&lt;</Select.Option>
+                                        <Select.Option value="greaterOrEqual">≥</Select.Option>
+                                        <Select.Option value="lessOrEqual">≤</Select.Option>
+                                        <Select.Option value="contains">∋</Select.Option>
+                                      </Select>
+                                      <Input
+                                        size="small"
+                                        placeholder="Valeur"
+                                        value={cond.value || ''}
+                                        onChange={(e) => {
+                                          updateLookupConfig((prev) => {
+                                            const rules = [...(prev.filterConditions?.lookupAlerts || [])];
+                                            const conds = [...(rules[ruleIdx]?.conditions || [])];
+                                            conds[condIdx] = { ...conds[condIdx], value: e.target.value };
+                                            rules[ruleIdx] = { ...rules[ruleIdx], conditions: conds };
+                                            return { ...prev, filterConditions: { ...(prev.filterConditions || {}), lookupAlerts: rules } };
+                                          });
+                                        }}
+                                        style={{ flex: 1, fontSize: 9 }}
+                                        disabled={readOnly}
+                                      />
+                                      {(rule.conditions || []).length > 1 && (
+                                        <Button
+                                          size="small" type="text" danger
+                                          onClick={() => {
+                                            updateLookupConfig((prev) => {
+                                              const rules = [...(prev.filterConditions?.lookupAlerts || [])];
+                                              const conds = [...(rules[ruleIdx]?.conditions || [])].filter((_, i) => i !== condIdx);
+                                              rules[ruleIdx] = { ...rules[ruleIdx], conditions: conds };
+                                              return { ...prev, filterConditions: { ...(prev.filterConditions || {}), lookupAlerts: rules } };
+                                            });
+                                          }}
+                                          disabled={readOnly}
+                                          style={{ padding: '0 2px' }}
+                                        >✕</Button>
+                                      )}
+                                    </div>
+                                  ))}
+                                  <Button
+                                    size="small" type="dashed"
+                                    onClick={() => {
+                                      updateLookupConfig((prev) => {
+                                        const rules = [...(prev.filterConditions?.lookupAlerts || [])];
+                                        const conds = [...(rules[ruleIdx]?.conditions || []), { fieldRef: '', operator: 'greaterThan' as const, value: '10000' }];
+                                        rules[ruleIdx] = { ...rules[ruleIdx], conditions: conds };
+                                        return { ...prev, filterConditions: { ...(prev.filterConditions || {}), lookupAlerts: rules } };
+                                      });
+                                    }}
+                                    disabled={readOnly}
+                                    style={{ fontSize: 10, marginBottom: 8 }}
+                                  >+ Condition ET</Button>
+
+                                  <Input.TextArea
+                                    size="small"
+                                    placeholder="Message d'alerte (ex: ⚠️ Puissance > 10000VA — Hors résidentiel)"
+                                    value={rule.message || ''}
+                                    onChange={(e) => {
+                                      updateLookupConfig((prev) => {
+                                        const rules = [...(prev.filterConditions?.lookupAlerts || [])];
+                                        rules[ruleIdx] = { ...rules[ruleIdx], message: e.target.value };
+                                        return { ...prev, filterConditions: { ...(prev.filterConditions || {}), lookupAlerts: rules } };
+                                      });
+                                    }}
+                                    rows={2}
+                                    style={{ fontSize: 11 }}
+                                    disabled={readOnly}
+                                  />
+                                </div>
+                              ))}
+
+                              <Button
+                                size="small" type="dashed" block
+                                onClick={() => {
+                                  updateLookupConfig((prev) => ({
+                                    ...prev,
+                                    filterConditions: {
+                                      ...(prev.filterConditions || {}),
+                                      lookupAlerts: [
+                                        ...(prev.filterConditions?.lookupAlerts || []),
+                                        { id: crypto.randomUUID(), enabled: true, label: '', conditions: [{ fieldRef: '', operator: 'greaterThan' as const, value: '10000' }], message: '', level: 'warning' as const }
+                                      ]
+                                    }
+                                  }));
+                                }}
+                                disabled={readOnly}
+                                style={{ marginTop: 4 }}
+                              >
+                                + Ajouter une alerte
+                              </Button>
+                            </div>
+
+                            {/* ── RÉSUMÉ VISUEL ─── */}
+                            {((lookupConfig.filterConditions?.columnOverrides?.length || 0) > 0 ||
+                              (lookupConfig.filterConditions?.valueCaps?.length || 0) > 0 ||
+                              (lookupConfig.filterConditions?.lookupAlerts?.length || 0) > 0) && (
+                              <div style={{ 
+                                padding: '12px', 
+                                background: 'linear-gradient(135deg, #f6ffed 0%, #f9f0ff 100%)', 
+                                border: '1px solid #b7eb8f', 
+                                borderRadius: '6px' 
+                              }}>
+                                <Text strong style={{ fontSize: 12, color: '#389e0d', display: 'block', marginBottom: 8 }}>
+                                  📋 Résumé des extensions lookup
+                                </Text>
+                                {(lookupConfig.filterConditions?.columnOverrides || []).map((r, i) => (
+                                  <div key={`co-${i}`} style={{ fontSize: 10, marginBottom: 2, fontFamily: 'monospace' }}>
+                                    🔄 {r.label || `Règle ${i+1}`}: SI [{r.conditions?.map(c => `${c.fieldRef?.split('.').pop() || '?'} ${c.operator} ${c.value}`).join(' ET ')}] → colonne "{r.targetColumn}"
+                                  </div>
+                                ))}
+                                {(lookupConfig.filterConditions?.valueCaps || []).map((r, i) => (
+                                  <div key={`vc-${i}`} style={{ fontSize: 10, marginBottom: 2, fontFamily: 'monospace' }}>
+                                    📏 {r.label || `Plafond ${i+1}`}: SI [{r.conditions?.map(c => `${c.fieldRef?.split('.').pop() || '?'} ${c.operator} ${c.value}`).join(' ET ')}] → max {r.maxValue} VA ({r.scope === 'per_unit' ? 'par unité' : 'total'})
+                                  </div>
+                                ))}
+                                {(lookupConfig.filterConditions?.lookupAlerts || []).map((r, i) => (
+                                  <div key={`al-${i}`} style={{ fontSize: 10, marginBottom: 2, fontFamily: 'monospace' }}>
+                                    {r.level === 'error' ? '🔴' : r.level === 'warning' ? '🟡' : 'ℹ️'} {r.label || `Alerte ${i+1}`}: SI [{r.conditions?.map(c => `${c.fieldRef?.split('.').pop() || '?'} ${c.operator} ${c.value}`).join(' ET ')}] → "{r.message?.substring(0, 50)}..."
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                            </Space>
+
                           </div>
                         </div>
                       )}
@@ -3539,699 +4233,6 @@ const TablePanel: React.FC<TablePanelProps> = ({ treeId: initialTreeId, nodeId, 
                           </div>
                         )}
 
-                      {/* ── Divider: Extensions Lookup ── */}
-                      <Divider style={{ margin: '8px 0' }} />
-
-                    {/* ── Extensions Lookup: Colonne conditionnelle, Plafonds, Alertes ── */}
-                    {lookupConfig.filterConditions?.enabled && (
-                      <Space direction="vertical" style={{ width: '100%' }} size={12}>
-
-                      {/* ── SECTION 1: Colonne Conditionnelle ─── */}
-                      <div style={{ 
-                        padding: '12px', 
-                        background: '#fff', 
-                        border: '1px solid #d3adf7', 
-                        borderRadius: '6px' 
-                      }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
-                          <Text strong style={{ fontSize: 13, color: '#722ed1' }}>🔄 Colonne Conditionnelle</Text>
-                          <Text type="secondary" style={{ fontSize: 10 }}>
-                            (Change dynamiquement la colonne du lookup selon les conditions)
-                          </Text>
-                        </div>
-
-                        {/* Colonne par défaut */}
-                        <div style={{ marginBottom: 12 }}>
-                          <Text type="secondary" style={{ fontSize: 11, display: 'block', marginBottom: 4 }}>
-                            📌 Colonne par défaut (utilisée si aucune règle ne match):
-                          </Text>
-                          <Select
-                            size="small"
-                            placeholder="Sélectionner la colonne par défaut"
-                            value={lookupConfig.filterConditions?.defaultColumn || undefined}
-                            options={(cfg.columns || []).map(col => ({ label: col, value: col }))}
-                            onChange={(value) => {
-                              updateLookupConfig((prev) => ({
-                                ...prev,
-                                filterConditions: { ...(prev.filterConditions || {}), defaultColumn: value }
-                              }));
-                            }}
-                            disabled={readOnly}
-                            style={{ width: '100%' }}
-                            allowClear
-                          />
-                        </div>
-
-                        {/* Liste des règles de switch colonne */}
-                        {(lookupConfig.filterConditions?.columnOverrides || []).map((rule, ruleIdx) => (
-                          <div key={rule.id} style={{ 
-                            padding: '10px', 
-                            background: '#faf5ff', 
-                            border: '1px solid #e8d5f5', 
-                            borderRadius: '4px', 
-                            marginBottom: 8 
-                          }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                              <Text style={{ fontSize: 11, fontWeight: 600, color: '#531dab' }}>
-                                Règle {ruleIdx + 1}: {rule.label || 'Sans nom'}
-                              </Text>
-                              <Button 
-                                size="small" type="text" danger
-                                onClick={() => {
-                                  updateLookupConfig((prev) => ({
-                                    ...prev,
-                                    filterConditions: {
-                                      ...(prev.filterConditions || {}),
-                                      columnOverrides: (prev.filterConditions?.columnOverrides || []).filter((_, i) => i !== ruleIdx)
-                                    }
-                                  }));
-                                }}
-                                disabled={readOnly}
-                              >✕</Button>
-                            </div>
-
-                            <Input
-                              size="small"
-                              placeholder="Nom de la règle (ex: Triphasé → kVA triphasé)"
-                              value={rule.label || ''}
-                              onChange={(e) => {
-                                updateLookupConfig((prev) => {
-                                  const rules = [...(prev.filterConditions?.columnOverrides || [])];
-                                  rules[ruleIdx] = { ...rules[ruleIdx], label: e.target.value };
-                                  return { ...prev, filterConditions: { ...(prev.filterConditions || {}), columnOverrides: rules } };
-                                });
-                              }}
-                              style={{ marginBottom: 8, fontSize: 11 }}
-                              disabled={readOnly}
-                            />
-
-                            {/* Conditions */}
-                            {(rule.conditions || []).map((cond, condIdx) => (
-                              <div key={condIdx} style={{ display: 'flex', gap: 4, alignItems: 'center', marginBottom: 4 }}>
-                                <Text type="secondary" style={{ fontSize: 10, minWidth: 16 }}>{condIdx === 0 ? 'SI' : 'ET'}</Text>
-                                <div style={{ flex: 1, display: 'flex', gap: 2 }}>
-                                  <Input
-                                    size="small"
-                                    placeholder="Champ (ex: @select.alimentation)"
-                                    value={cond.fieldRef || ''}
-                                    onChange={(e) => {
-                                      updateLookupConfig((prev) => {
-                                        const rules = [...(prev.filterConditions?.columnOverrides || [])];
-                                        const conds = [...(rules[ruleIdx]?.conditions || [])];
-                                        conds[condIdx] = { ...conds[condIdx], fieldRef: e.target.value };
-                                        rules[ruleIdx] = { ...rules[ruleIdx], conditions: conds };
-                                        return { ...prev, filterConditions: { ...(prev.filterConditions || {}), columnOverrides: rules } };
-                                      });
-                                    }}
-                                    style={{ flex: 1, fontSize: 9 }}
-                                    disabled={readOnly}
-                                  />
-                                  <Button
-                                    size="small" type="dashed"
-                                    onClick={() => {
-                                      setMultiplierConditionId(`lk_co_${ruleIdx}_${condIdx}_fieldRef`);
-                                      setMultiplierSelectorTarget('A');
-                                      setShowMultiplierSelector(true);
-                                    }}
-                                    disabled={readOnly}
-                                    style={{ padding: '0 4px' }}
-                                  >🌳</Button>
-                                </div>
-                                <Select
-                                  size="small"
-                                  value={cond.operator || 'equals'}
-                                  style={{ width: 65 }}
-                                  onChange={(value) => {
-                                    updateLookupConfig((prev) => {
-                                      const rules = [...(prev.filterConditions?.columnOverrides || [])];
-                                      const conds = [...(rules[ruleIdx]?.conditions || [])];
-                                      conds[condIdx] = { ...conds[condIdx], operator: value };
-                                      rules[ruleIdx] = { ...rules[ruleIdx], conditions: conds };
-                                      return { ...prev, filterConditions: { ...(prev.filterConditions || {}), columnOverrides: rules } };
-                                    });
-                                  }}
-                                  disabled={readOnly}
-                                >
-                                  <Select.Option value="equals">=</Select.Option>
-                                  <Select.Option value="notEquals">≠</Select.Option>
-                                  <Select.Option value="contains">∋</Select.Option>
-                                  <Select.Option value="greaterThan">&gt;</Select.Option>
-                                  <Select.Option value="lessThan">&lt;</Select.Option>
-                                </Select>
-                                <Input
-                                  size="small"
-                                  placeholder="Valeur (ex: Triphasé)"
-                                  value={cond.value || ''}
-                                  onChange={(e) => {
-                                    updateLookupConfig((prev) => {
-                                      const rules = [...(prev.filterConditions?.columnOverrides || [])];
-                                      const conds = [...(rules[ruleIdx]?.conditions || [])];
-                                      conds[condIdx] = { ...conds[condIdx], value: e.target.value };
-                                      rules[ruleIdx] = { ...rules[ruleIdx], conditions: conds };
-                                      return { ...prev, filterConditions: { ...(prev.filterConditions || {}), columnOverrides: rules } };
-                                    });
-                                  }}
-                                  style={{ flex: 1, fontSize: 9 }}
-                                  disabled={readOnly}
-                                />
-                                {(rule.conditions || []).length > 1 && (
-                                  <Button
-                                    size="small" type="text" danger
-                                    onClick={() => {
-                                      updateLookupConfig((prev) => {
-                                        const rules = [...(prev.filterConditions?.columnOverrides || [])];
-                                        const conds = [...(rules[ruleIdx]?.conditions || [])].filter((_, i) => i !== condIdx);
-                                        rules[ruleIdx] = { ...rules[ruleIdx], conditions: conds };
-                                        return { ...prev, filterConditions: { ...(prev.filterConditions || {}), columnOverrides: rules } };
-                                      });
-                                    }}
-                                    disabled={readOnly}
-                                    style={{ padding: '0 2px' }}
-                                  >✕</Button>
-                                )}
-                              </div>
-                            ))}
-                            <Button
-                              size="small" type="dashed"
-                              onClick={() => {
-                                updateLookupConfig((prev) => {
-                                  const rules = [...(prev.filterConditions?.columnOverrides || [])];
-                                  const conds = [...(rules[ruleIdx]?.conditions || []), { fieldRef: '', operator: 'equals' as const, value: '' }];
-                                  rules[ruleIdx] = { ...rules[ruleIdx], conditions: conds };
-                                  return { ...prev, filterConditions: { ...(prev.filterConditions || {}), columnOverrides: rules } };
-                                });
-                              }}
-                              disabled={readOnly}
-                              style={{ fontSize: 10, marginBottom: 8 }}
-                            >+ Condition ET</Button>
-
-                            {/* Colonne cible */}
-                            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                              <Text style={{ fontSize: 11, fontWeight: 600, color: '#52c41a' }}>ALORS utiliser colonne:</Text>
-                              <Select
-                                size="small"
-                                placeholder="Colonne cible"
-                                value={rule.targetColumn || undefined}
-                                options={(cfg.columns || []).map(col => ({ label: col, value: col }))}
-                                onChange={(value) => {
-                                  updateLookupConfig((prev) => {
-                                    const rules = [...(prev.filterConditions?.columnOverrides || [])];
-                                    rules[ruleIdx] = { ...rules[ruleIdx], targetColumn: value };
-                                    return { ...prev, filterConditions: { ...(prev.filterConditions || {}), columnOverrides: rules } };
-                                  });
-                                }}
-                                disabled={readOnly}
-                                style={{ flex: 1 }}
-                              />
-                            </div>
-                          </div>
-                        ))}
-
-                        <Button
-                          size="small" type="dashed" block
-                          onClick={() => {
-                            updateLookupConfig((prev) => ({
-                              ...prev,
-                              filterConditions: {
-                                ...(prev.filterConditions || {}),
-                                columnOverrides: [
-                                  ...(prev.filterConditions?.columnOverrides || []),
-                                  { id: crypto.randomUUID(), enabled: true, label: '', conditions: [{ fieldRef: '', operator: 'equals' as const, value: '' }], targetColumn: '' }
-                                ]
-                              }
-                            }));
-                          }}
-                          disabled={readOnly}
-                          style={{ marginTop: 4 }}
-                        >
-                          + Ajouter une règle de colonne conditionnelle
-                        </Button>
-                      </div>
-
-                      {/* ── SECTION 2: Plafonds de Valeur ─── */}
-                      <div style={{ 
-                        padding: '12px', 
-                        background: '#fff', 
-                        border: '1px solid #ffd591', 
-                        borderRadius: '6px' 
-                      }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
-                          <Text strong style={{ fontSize: 13, color: '#d48806' }}>📏 Plafonds de Valeur</Text>
-                          <Text type="secondary" style={{ fontSize: 10 }}>
-                            (Limite la valeur max du lookup selon les conditions)
-                          </Text>
-                        </div>
-
-                        {(lookupConfig.filterConditions?.valueCaps || []).map((rule, ruleIdx) => (
-                          <div key={rule.id} style={{ 
-                            padding: '10px', 
-                            background: '#fffbe6', 
-                            border: '1px solid #ffe58f', 
-                            borderRadius: '4px', 
-                            marginBottom: 8 
-                          }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                              <Text style={{ fontSize: 11, fontWeight: 600, color: '#d48806' }}>
-                                Plafond {ruleIdx + 1}: {rule.label || 'Sans nom'}
-                              </Text>
-                              <Button 
-                                size="small" type="text" danger
-                                onClick={() => {
-                                  updateLookupConfig((prev) => ({
-                                    ...prev,
-                                    filterConditions: {
-                                      ...(prev.filterConditions || {}),
-                                      valueCaps: (prev.filterConditions?.valueCaps || []).filter((_, i) => i !== ruleIdx)
-                                    }
-                                  }));
-                                }}
-                                disabled={readOnly}
-                              >✕</Button>
-                            </div>
-
-                            <Input
-                              size="small"
-                              placeholder="Nom (ex: Max 5000 mono non-RESA)"
-                              value={rule.label || ''}
-                              onChange={(e) => {
-                                updateLookupConfig((prev) => {
-                                  const rules = [...(prev.filterConditions?.valueCaps || [])];
-                                  rules[ruleIdx] = { ...rules[ruleIdx], label: e.target.value };
-                                  return { ...prev, filterConditions: { ...(prev.filterConditions || {}), valueCaps: rules } };
-                                });
-                              }}
-                              style={{ marginBottom: 8, fontSize: 11 }}
-                              disabled={readOnly}
-                            />
-
-                            {/* Conditions */}
-                            {(rule.conditions || []).map((cond, condIdx) => (
-                              <div key={condIdx} style={{ display: 'flex', gap: 4, alignItems: 'center', marginBottom: 4 }}>
-                                <Text type="secondary" style={{ fontSize: 10, minWidth: 16 }}>{condIdx === 0 ? 'SI' : 'ET'}</Text>
-                                <div style={{ flex: 1, display: 'flex', gap: 2 }}>
-                                  <Input
-                                    size="small"
-                                    placeholder="Champ"
-                                    value={cond.fieldRef || ''}
-                                    onChange={(e) => {
-                                      updateLookupConfig((prev) => {
-                                        const rules = [...(prev.filterConditions?.valueCaps || [])];
-                                        const conds = [...(rules[ruleIdx]?.conditions || [])];
-                                        conds[condIdx] = { ...conds[condIdx], fieldRef: e.target.value };
-                                        rules[ruleIdx] = { ...rules[ruleIdx], conditions: conds };
-                                        return { ...prev, filterConditions: { ...(prev.filterConditions || {}), valueCaps: rules } };
-                                      });
-                                    }}
-                                    style={{ flex: 1, fontSize: 9 }}
-                                    disabled={readOnly}
-                                  />
-                                  <Button
-                                    size="small" type="dashed"
-                                    onClick={() => {
-                                      setMultiplierConditionId(`lk_vc_${ruleIdx}_${condIdx}_fieldRef`);
-                                      setMultiplierSelectorTarget('A');
-                                      setShowMultiplierSelector(true);
-                                    }}
-                                    disabled={readOnly}
-                                    style={{ padding: '0 4px' }}
-                                  >🌳</Button>
-                                </div>
-                                <Select
-                                  size="small"
-                                  value={cond.operator || 'equals'}
-                                  style={{ width: 65 }}
-                                  onChange={(value) => {
-                                    updateLookupConfig((prev) => {
-                                      const rules = [...(prev.filterConditions?.valueCaps || [])];
-                                      const conds = [...(rules[ruleIdx]?.conditions || [])];
-                                      conds[condIdx] = { ...conds[condIdx], operator: value };
-                                      rules[ruleIdx] = { ...rules[ruleIdx], conditions: conds };
-                                      return { ...prev, filterConditions: { ...(prev.filterConditions || {}), valueCaps: rules } };
-                                    });
-                                  }}
-                                  disabled={readOnly}
-                                >
-                                  <Select.Option value="equals">=</Select.Option>
-                                  <Select.Option value="notEquals">≠</Select.Option>
-                                  <Select.Option value="contains">∋</Select.Option>
-                                  <Select.Option value="greaterThan">&gt;</Select.Option>
-                                  <Select.Option value="lessThan">&lt;</Select.Option>
-                                </Select>
-                                <Input
-                                  size="small"
-                                  placeholder="Valeur"
-                                  value={cond.value || ''}
-                                  onChange={(e) => {
-                                    updateLookupConfig((prev) => {
-                                      const rules = [...(prev.filterConditions?.valueCaps || [])];
-                                      const conds = [...(rules[ruleIdx]?.conditions || [])];
-                                      conds[condIdx] = { ...conds[condIdx], value: e.target.value };
-                                      rules[ruleIdx] = { ...rules[ruleIdx], conditions: conds };
-                                      return { ...prev, filterConditions: { ...(prev.filterConditions || {}), valueCaps: rules } };
-                                    });
-                                  }}
-                                  style={{ flex: 1, fontSize: 9 }}
-                                  disabled={readOnly}
-                                />
-                                {(rule.conditions || []).length > 1 && (
-                                  <Button
-                                    size="small" type="text" danger
-                                    onClick={() => {
-                                      updateLookupConfig((prev) => {
-                                        const rules = [...(prev.filterConditions?.valueCaps || [])];
-                                        const conds = [...(rules[ruleIdx]?.conditions || [])].filter((_, i) => i !== condIdx);
-                                        rules[ruleIdx] = { ...rules[ruleIdx], conditions: conds };
-                                        return { ...prev, filterConditions: { ...(prev.filterConditions || {}), valueCaps: rules } };
-                                      });
-                                    }}
-                                    disabled={readOnly}
-                                    style={{ padding: '0 2px' }}
-                                  >✕</Button>
-                                )}
-                              </div>
-                            ))}
-                            <Button
-                              size="small" type="dashed"
-                              onClick={() => {
-                                updateLookupConfig((prev) => {
-                                  const rules = [...(prev.filterConditions?.valueCaps || [])];
-                                  const conds = [...(rules[ruleIdx]?.conditions || []), { fieldRef: '', operator: 'equals' as const, value: '' }];
-                                  rules[ruleIdx] = { ...rules[ruleIdx], conditions: conds };
-                                  return { ...prev, filterConditions: { ...(prev.filterConditions || {}), valueCaps: rules } };
-                                });
-                              }}
-                              disabled={readOnly}
-                              style={{ fontSize: 10, marginBottom: 8 }}
-                            >+ Condition ET</Button>
-
-                            {/* Plafond et scope */}
-                            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                              <Text style={{ fontSize: 11, fontWeight: 600, color: '#d48806' }}>ALORS max =</Text>
-                              <InputNumber
-                                size="small"
-                                min={0}
-                                step={500}
-                                value={rule.maxValue ?? 5000}
-                                onChange={(value) => {
-                                  updateLookupConfig((prev) => {
-                                    const rules = [...(prev.filterConditions?.valueCaps || [])];
-                                    rules[ruleIdx] = { ...rules[ruleIdx], maxValue: value ?? 5000 };
-                                    return { ...prev, filterConditions: { ...(prev.filterConditions || {}), valueCaps: rules } };
-                                  });
-                                }}
-                                style={{ width: 120 }}
-                                disabled={readOnly}
-                              />
-                              <Text type="secondary" style={{ fontSize: 10 }}>VA</Text>
-                              <Select
-                                size="small"
-                                value={rule.scope || 'total'}
-                                style={{ width: 140 }}
-                                onChange={(value) => {
-                                  updateLookupConfig((prev) => {
-                                    const rules = [...(prev.filterConditions?.valueCaps || [])];
-                                    rules[ruleIdx] = { ...rules[ruleIdx], scope: value };
-                                    return { ...prev, filterConditions: { ...(prev.filterConditions || {}), valueCaps: rules } };
-                                  });
-                                }}
-                                disabled={readOnly}
-                              >
-                                <Select.Option value="total">📊 Total</Select.Option>
-                                <Select.Option value="per_unit">🔧 Par unité</Select.Option>
-                              </Select>
-                            </div>
-                          </div>
-                        ))}
-
-                        <Button
-                          size="small" type="dashed" block
-                          onClick={() => {
-                            updateLookupConfig((prev) => ({
-                              ...prev,
-                              filterConditions: {
-                                ...(prev.filterConditions || {}),
-                                valueCaps: [
-                                  ...(prev.filterConditions?.valueCaps || []),
-                                  { id: crypto.randomUUID(), enabled: true, label: '', conditions: [{ fieldRef: '', operator: 'equals' as const, value: '' }], maxValue: 5000, scope: 'total' as const }
-                                ]
-                              }
-                            }));
-                          }}
-                          disabled={readOnly}
-                          style={{ marginTop: 4 }}
-                        >
-                          + Ajouter un plafond de valeur
-                        </Button>
-                      </div>
-
-                      {/* ── SECTION 3: Alertes Contextuelles ─── */}
-                      <div style={{ 
-                        padding: '12px', 
-                        background: '#fff', 
-                        border: '1px solid #ffccc7', 
-                        borderRadius: '6px' 
-                      }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
-                          <Text strong style={{ fontSize: 13, color: '#cf1322' }}>⚠️ Alertes Contextuelles</Text>
-                          <Text type="secondary" style={{ fontSize: 10 }}>
-                            (Messages affichés selon conditions — basés sur le lookup)
-                          </Text>
-                        </div>
-
-                        {(lookupConfig.filterConditions?.lookupAlerts || []).map((rule, ruleIdx) => (
-                          <div key={rule.id} style={{ 
-                            padding: '10px', 
-                            background: rule.level === 'error' ? '#fff2f0' : rule.level === 'warning' ? '#fffbe6' : '#f0f9ff',
-                            border: `1px solid ${rule.level === 'error' ? '#ffccc7' : rule.level === 'warning' ? '#ffe58f' : '#bae7ff'}`,
-                            borderRadius: '4px', 
-                            marginBottom: 8 
-                          }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                              <Text style={{ fontSize: 11, fontWeight: 600 }}>
-                                {rule.level === 'error' ? '🔴' : rule.level === 'warning' ? '🟡' : 'ℹ️'} Alerte {ruleIdx + 1}
-                              </Text>
-                              <Button 
-                                size="small" type="text" danger
-                                onClick={() => {
-                                  updateLookupConfig((prev) => ({
-                                    ...prev,
-                                    filterConditions: {
-                                      ...(prev.filterConditions || {}),
-                                      lookupAlerts: (prev.filterConditions?.lookupAlerts || []).filter((_, i) => i !== ruleIdx)
-                                    }
-                                  }));
-                                }}
-                                disabled={readOnly}
-                              >✕</Button>
-                            </div>
-
-                            <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
-                              <Input
-                                size="small"
-                                placeholder="Nom de l'alerte"
-                                value={rule.label || ''}
-                                onChange={(e) => {
-                                  updateLookupConfig((prev) => {
-                                    const rules = [...(prev.filterConditions?.lookupAlerts || [])];
-                                    rules[ruleIdx] = { ...rules[ruleIdx], label: e.target.value };
-                                    return { ...prev, filterConditions: { ...(prev.filterConditions || {}), lookupAlerts: rules } };
-                                  });
-                                }}
-                                style={{ flex: 1, fontSize: 11 }}
-                                disabled={readOnly}
-                              />
-                              <Select
-                                size="small"
-                                value={rule.level || 'warning'}
-                                style={{ width: 140 }}
-                                onChange={(value) => {
-                                  updateLookupConfig((prev) => {
-                                    const rules = [...(prev.filterConditions?.lookupAlerts || [])];
-                                    rules[ruleIdx] = { ...rules[ruleIdx], level: value };
-                                    return { ...prev, filterConditions: { ...(prev.filterConditions || {}), lookupAlerts: rules } };
-                                  });
-                                }}
-                                disabled={readOnly}
-                              >
-                                <Select.Option value="info">ℹ️ Info</Select.Option>
-                                <Select.Option value="warning">⚠️ Avertissement</Select.Option>
-                                <Select.Option value="error">🔴 Erreur</Select.Option>
-                              </Select>
-                            </div>
-
-                            {/* Conditions */}
-                            {(rule.conditions || []).map((cond, condIdx) => (
-                              <div key={condIdx} style={{ display: 'flex', gap: 4, alignItems: 'center', marginBottom: 4 }}>
-                                <Text type="secondary" style={{ fontSize: 10, minWidth: 16 }}>{condIdx === 0 ? 'SI' : 'ET'}</Text>
-                                <div style={{ flex: 1, display: 'flex', gap: 2 }}>
-                                  <Input
-                                    size="small"
-                                    placeholder="Champ"
-                                    value={cond.fieldRef || ''}
-                                    onChange={(e) => {
-                                      updateLookupConfig((prev) => {
-                                        const rules = [...(prev.filterConditions?.lookupAlerts || [])];
-                                        const conds = [...(rules[ruleIdx]?.conditions || [])];
-                                        conds[condIdx] = { ...conds[condIdx], fieldRef: e.target.value };
-                                        rules[ruleIdx] = { ...rules[ruleIdx], conditions: conds };
-                                        return { ...prev, filterConditions: { ...(prev.filterConditions || {}), lookupAlerts: rules } };
-                                      });
-                                    }}
-                                    style={{ flex: 1, fontSize: 9 }}
-                                    disabled={readOnly}
-                                  />
-                                  <Button
-                                    size="small" type="dashed"
-                                    onClick={() => {
-                                      setMultiplierConditionId(`lk_al_${ruleIdx}_${condIdx}_fieldRef`);
-                                      setMultiplierSelectorTarget('A');
-                                      setShowMultiplierSelector(true);
-                                    }}
-                                    disabled={readOnly}
-                                    style={{ padding: '0 4px' }}
-                                  >🌳</Button>
-                                </div>
-                                <Select
-                                  size="small"
-                                  value={cond.operator || 'greaterThan'}
-                                  style={{ width: 65 }}
-                                  onChange={(value) => {
-                                    updateLookupConfig((prev) => {
-                                      const rules = [...(prev.filterConditions?.lookupAlerts || [])];
-                                      const conds = [...(rules[ruleIdx]?.conditions || [])];
-                                      conds[condIdx] = { ...conds[condIdx], operator: value };
-                                      rules[ruleIdx] = { ...rules[ruleIdx], conditions: conds };
-                                      return { ...prev, filterConditions: { ...(prev.filterConditions || {}), lookupAlerts: rules } };
-                                    });
-                                  }}
-                                  disabled={readOnly}
-                                >
-                                  <Select.Option value="equals">=</Select.Option>
-                                  <Select.Option value="notEquals">≠</Select.Option>
-                                  <Select.Option value="greaterThan">&gt;</Select.Option>
-                                  <Select.Option value="lessThan">&lt;</Select.Option>
-                                  <Select.Option value="greaterOrEqual">≥</Select.Option>
-                                  <Select.Option value="lessOrEqual">≤</Select.Option>
-                                  <Select.Option value="contains">∋</Select.Option>
-                                </Select>
-                                <Input
-                                  size="small"
-                                  placeholder="Valeur"
-                                  value={cond.value || ''}
-                                  onChange={(e) => {
-                                    updateLookupConfig((prev) => {
-                                      const rules = [...(prev.filterConditions?.lookupAlerts || [])];
-                                      const conds = [...(rules[ruleIdx]?.conditions || [])];
-                                      conds[condIdx] = { ...conds[condIdx], value: e.target.value };
-                                      rules[ruleIdx] = { ...rules[ruleIdx], conditions: conds };
-                                      return { ...prev, filterConditions: { ...(prev.filterConditions || {}), lookupAlerts: rules } };
-                                    });
-                                  }}
-                                  style={{ flex: 1, fontSize: 9 }}
-                                  disabled={readOnly}
-                                />
-                                {(rule.conditions || []).length > 1 && (
-                                  <Button
-                                    size="small" type="text" danger
-                                    onClick={() => {
-                                      updateLookupConfig((prev) => {
-                                        const rules = [...(prev.filterConditions?.lookupAlerts || [])];
-                                        const conds = [...(rules[ruleIdx]?.conditions || [])].filter((_, i) => i !== condIdx);
-                                        rules[ruleIdx] = { ...rules[ruleIdx], conditions: conds };
-                                        return { ...prev, filterConditions: { ...(prev.filterConditions || {}), lookupAlerts: rules } };
-                                      });
-                                    }}
-                                    disabled={readOnly}
-                                    style={{ padding: '0 2px' }}
-                                  >✕</Button>
-                                )}
-                              </div>
-                            ))}
-                            <Button
-                              size="small" type="dashed"
-                              onClick={() => {
-                                updateLookupConfig((prev) => {
-                                  const rules = [...(prev.filterConditions?.lookupAlerts || [])];
-                                  const conds = [...(rules[ruleIdx]?.conditions || []), { fieldRef: '', operator: 'greaterThan' as const, value: '10000' }];
-                                  rules[ruleIdx] = { ...rules[ruleIdx], conditions: conds };
-                                  return { ...prev, filterConditions: { ...(prev.filterConditions || {}), lookupAlerts: rules } };
-                                });
-                              }}
-                              disabled={readOnly}
-                              style={{ fontSize: 10, marginBottom: 8 }}
-                            >+ Condition ET</Button>
-
-                            <Input.TextArea
-                              size="small"
-                              placeholder="Message d'alerte (ex: ⚠️ Puissance > 10000VA — Hors résidentiel)"
-                              value={rule.message || ''}
-                              onChange={(e) => {
-                                updateLookupConfig((prev) => {
-                                  const rules = [...(prev.filterConditions?.lookupAlerts || [])];
-                                  rules[ruleIdx] = { ...rules[ruleIdx], message: e.target.value };
-                                  return { ...prev, filterConditions: { ...(prev.filterConditions || {}), lookupAlerts: rules } };
-                                });
-                              }}
-                              rows={2}
-                              style={{ fontSize: 11 }}
-                              disabled={readOnly}
-                            />
-                          </div>
-                        ))}
-
-                        <Button
-                          size="small" type="dashed" block
-                          onClick={() => {
-                            updateLookupConfig((prev) => ({
-                              ...prev,
-                              filterConditions: {
-                                ...(prev.filterConditions || {}),
-                                lookupAlerts: [
-                                  ...(prev.filterConditions?.lookupAlerts || []),
-                                  { id: crypto.randomUUID(), enabled: true, label: '', conditions: [{ fieldRef: '', operator: 'greaterThan' as const, value: '10000' }], message: '', level: 'warning' as const }
-                                ]
-                              }
-                            }));
-                          }}
-                          disabled={readOnly}
-                          style={{ marginTop: 4 }}
-                        >
-                          + Ajouter une alerte
-                        </Button>
-                      </div>
-
-                      {/* ── RÉSUMÉ VISUEL ─── */}
-                      {((lookupConfig.filterConditions?.columnOverrides?.length || 0) > 0 ||
-                        (lookupConfig.filterConditions?.valueCaps?.length || 0) > 0 ||
-                        (lookupConfig.filterConditions?.lookupAlerts?.length || 0) > 0) && (
-                        <div style={{ 
-                          padding: '12px', 
-                          background: 'linear-gradient(135deg, #f6ffed 0%, #f9f0ff 100%)', 
-                          border: '1px solid #b7eb8f', 
-                          borderRadius: '6px' 
-                        }}>
-                          <Text strong style={{ fontSize: 12, color: '#389e0d', display: 'block', marginBottom: 8 }}>
-                            📋 Résumé des extensions lookup
-                          </Text>
-                          {(lookupConfig.filterConditions?.columnOverrides || []).map((r, i) => (
-                            <div key={`co-${i}`} style={{ fontSize: 10, marginBottom: 2, fontFamily: 'monospace' }}>
-                              🔄 {r.label || `Règle ${i+1}`}: SI [{r.conditions?.map(c => `${c.fieldRef?.split('.').pop() || '?'} ${c.operator} ${c.value}`).join(' ET ')}] → colonne "{r.targetColumn}"
-                            </div>
-                          ))}
-                          {(lookupConfig.filterConditions?.valueCaps || []).map((r, i) => (
-                            <div key={`vc-${i}`} style={{ fontSize: 10, marginBottom: 2, fontFamily: 'monospace' }}>
-                              📏 {r.label || `Plafond ${i+1}`}: SI [{r.conditions?.map(c => `${c.fieldRef?.split('.').pop() || '?'} ${c.operator} ${c.value}`).join(' ET ')}] → max {r.maxValue} VA ({r.scope === 'per_unit' ? 'par unité' : 'total'})
-                            </div>
-                          ))}
-                          {(lookupConfig.filterConditions?.lookupAlerts || []).map((r, i) => (
-                            <div key={`al-${i}`} style={{ fontSize: 10, marginBottom: 2, fontFamily: 'monospace' }}>
-                              {r.level === 'error' ? '🔴' : r.level === 'warning' ? '🟡' : 'ℹ️'} {r.label || `Alerte ${i+1}`}: SI [{r.conditions?.map(c => `${c.fieldRef?.split('.').pop() || '?'} ${c.operator} ${c.value}`).join(' ET ')}] → "{r.message?.substring(0, 50)}..."
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                      </Space>
-                    )}
                       </Space>
                     )}  
                   </div>
