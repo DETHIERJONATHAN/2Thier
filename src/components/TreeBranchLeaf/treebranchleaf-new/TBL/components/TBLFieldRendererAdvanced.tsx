@@ -142,6 +142,7 @@ const evaluateLookupCondition = (
     case 'greaterOrEqual': return !isNaN(numA) && !isNaN(numB) ? numA >= numB : strA >= strB;
     case 'lessOrEqual': return !isNaN(numA) && !isNaN(numB) ? numA <= numB : strA <= strB;
     case 'contains': return strA.includes(strB);
+    case 'notContains': return !strA.includes(strB);
     default: return false;
   }
 };
@@ -325,6 +326,11 @@ const evaluateFilterConditions = (
         // Résoudre les valeurs des champs depuis formData — supporte les valeurs littérales
         const resolveMultiplierRef = (ref: string | undefined): any => {
           if (!ref) return null;
+          // 🎯 Support @column.COLNAME: accéder à une colonne pour l'option courante
+          if (ref.startsWith('@column.')) {
+            const colName = ref.replace('@column.', '');
+            return extractValueFromColumn(option, colName, tableData, config);
+          }
           if (ref.startsWith('@value.')) return formData[ref.replace('@value.', '')];
           if (ref.startsWith('@select.')) return formData[ref.replace('@select.', '')];
           if (ref.startsWith('@table.')) return formData[ref.replace('@table.', '')] ?? null;

@@ -7261,6 +7261,12 @@ async function applyTableFilters(
         // Résoudre une référence — supporte les valeurs littérales (ex: "HUAWEI")
         const resolveRef = (ref: string | undefined): unknown => {
           if (!ref) return null;
+          // 🎯 Support @column.COLNAME: accéder à une colonne de la ligne courante
+          if (ref.startsWith('@column.')) {
+            const colName = ref.replace('@column.', '');
+            const colIdx = columns.indexOf(colName);
+            return colIdx >= 0 ? row[colIdx] : null;
+          }
           if (ref.startsWith('@value.') || ref.startsWith('@select.')) {
             const nodeId = ref.replace(/^@(value|select)\./, '');
             return formValues[nodeId] ?? null;
