@@ -101,6 +101,7 @@ interface ActiveAlert {
 }
 interface LookupExtensionsResult {
   activeColumn?: string;
+  capColumn?: string; // Colonne à lire pour comparer au plafond (ex: "KVA")
   activeCaps: Array<{ maxValue: number; scope: 'total' | 'per_unit'; label?: string }>;
   activeAlerts: ActiveAlert[];
 }
@@ -153,6 +154,11 @@ const evaluateLookupExtensions = (
 ): LookupExtensionsResult => {
   const result: LookupExtensionsResult = { activeCaps: [], activeAlerts: [] };
   if (!filterConditions) return result;
+
+  // 0. Cap Column: quelle colonne contient la valeur à comparer aux plafonds (ex: "KVA")
+  if (filterConditions.capColumn) {
+    result.capColumn = filterConditions.capColumn;
+  }
 
   // 1. Column Overrides (remplace columnSwitchRules)
   if (filterConditions.columnOverrides?.length) {
@@ -3134,6 +3140,65 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
           }
         }
         
+        // 🔥 FILTRAGE PAR PLAFONDS (valueCaps) — filtre réellement les options du select
+        if (lookupExtensionsResult.activeCaps.length > 0 && tableLookup.tableData && tableLookup.config) {
+          const capColumn = lookupExtensionsResult.activeColumn || lookupExtensionsResult.capColumn;
+          if (capColumn) {
+            // Calculer le KVA déjà consommé par les autres copies du repeater (pour scope=total)
+            let existingTotal = 0;
+            const totalCap = lookupExtensionsResult.activeCaps.find(c => c.scope === 'total');
+            if (totalCap) {
+              // Chercher les valeurs KVA des autres onduleurs du repeater dans formData
+              const baseId = baseFieldId || field.id;
+              const suffixMatch = field.id.match(/-(\d{1,3})$/);
+              const currentSuffix = suffixMatch ? parseInt(suffixMatch[1], 10) : 0;
+              // Parcourir formData pour trouver les copies du même champ
+              for (const [key, val] of Object.entries(formData)) {
+                if (!key.startsWith(baseId)) continue;
+                const keySuffix = key === baseId ? 0 : parseInt((key.match(/-(\d{1,3})$/) || ['', '-1'])[1], 10);
+                if (keySuffix === currentSuffix) continue; // Skip la copie courante
+                if (keySuffix < 0) continue;
+                // val = valeur sélectionnée (label de l'onduleur)
+                // Chercher le KVA correspondant dans tableData
+                if (val && tableLookup.tableData) {
+                  const kvaForSibling = extractValueFromColumn(
+                    { value: val },
+                    capColumn,
+                    tableLookup.tableData,
+                    tableLookup.config!
+                  );
+                  if (kvaForSibling !== null && !isNaN(Number(kvaForSibling))) {
+                    existingTotal += Number(kvaForSibling);
+                  }
+                }
+              }
+            }
+
+            baseOptions = baseOptions.filter(option => {
+              const optionValue = extractValueFromColumn(
+                option,
+                capColumn,
+                tableLookup.tableData!,
+                tableLookup.config!
+              );
+              if (optionValue === null || isNaN(Number(optionValue))) return true; // Pas de valeur → on garde
+              const numValue = Number(optionValue);
+
+              for (const cap of lookupExtensionsResult.activeCaps) {
+                if (cap.scope === 'per_unit' && numValue > cap.maxValue) {
+                  return false; // Dépasse le plafond par unité
+                }
+                if (cap.scope === 'total' && (existingTotal + numValue) > cap.maxValue) {
+                  return false; // Dépasse le plafond total avec les existants
+                }
+              }
+              return true;
+            });
+
+            console.log(`[ValueCaps] capColumn="${capColumn}", existingTotal=${existingTotal}, caps=`, lookupExtensionsResult.activeCaps, `→ ${baseOptions.length} options restantes`);
+          }
+        }
+
         const finalOptions = baseOptions;
 
         // 🩹 PATCH: Enrichir les options sans id avec le nodeId correspondant depuis allNodes
@@ -3962,7 +4027,7 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
                 marginBottom: 2,
               }}
             >
-              📏 Plafond actif: max {cap.maxValue} VA {cap.scope === 'per_unit' ? '(par unité)' : '(total)'}
+              📏 Plafond: max {cap.maxValue.toLocaleString()} VA {cap.scope === 'per_unit' ? '(par unité)' : '(total)'}
               {cap.label && ` — ${cap.label}`}
             </div>
           ))}

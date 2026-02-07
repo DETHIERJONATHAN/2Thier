@@ -2862,8 +2862,30 @@ const TablePanel: React.FC<TablePanelProps> = ({ treeId: initialTreeId, nodeId, 
                               <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
                                 <Text strong style={{ fontSize: 13, color: '#d48806' }}>📏 Plafonds de Valeur</Text>
                                 <Text type="secondary" style={{ fontSize: 10 }}>
-                                  (Limite la valeur max du lookup selon les conditions)
+                                  (Limite la valeur max du lookup selon les conditions — filtre réellement les options)
                                 </Text>
+                              </div>
+
+                              {/* Colonne de comparaison pour les plafonds */}
+                              <div style={{ marginBottom: 12 }}>
+                                <Text type="secondary" style={{ fontSize: 11, display: 'block', marginBottom: 4 }}>
+                                  📊 Colonne de valeur (colonne dont la valeur est comparée au plafond, ex: "KVA"):
+                                </Text>
+                                <Select
+                                  size="small"
+                                  placeholder="Sélectionner la colonne (ex: KVA)"
+                                  value={lookupConfig.filterConditions?.capColumn || undefined}
+                                  options={(cfg.columns || []).map(col => ({ label: col, value: col }))}
+                                  onChange={(value) => {
+                                    updateLookupConfig((prev) => ({
+                                      ...prev,
+                                      filterConditions: { ...(prev.filterConditions || {}), capColumn: value }
+                                    }));
+                                  }}
+                                  disabled={readOnly}
+                                  style={{ width: '100%' }}
+                                  allowClear
+                                />
                               </div>
 
                               {(lookupConfig.filterConditions?.valueCaps || []).map((rule, ruleIdx) => (
