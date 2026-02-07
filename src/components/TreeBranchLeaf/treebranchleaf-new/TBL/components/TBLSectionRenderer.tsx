@@ -140,10 +140,11 @@ const groupDisplayFieldsBySuffix = (fields: TBLField[]): Array<{ suffix: string;
   // Extraire le suffixe numérique d'un champ (-1, -2, etc.)
   const getSuffixNumber = (field: TBLField): number => {
     if (isTotal(field)) return Infinity; // Totaux toujours à la fin
-    // 🔧 Les boutons repeater (Ajouter/Supprimer) restent APRÈS les copies mais AVANT les totaux
+    // 🔧 Les boutons repeater (Ajouter/Supprimer) restent APRÈS les originaux mais AVANT les copies
+    // Ordre: Originaux (0) → Bouton Ajouter (0.5) → Copies (1, 2, ...) → Totaux (Infinity)
     const fieldType = ((field as any).type || '').toString();
     if (fieldType === 'REPEATER_ADD_BUTTON' || fieldType === 'REPEATER_REMOVE_INSTANCE_BUTTON') {
-      return 999998; // Après toutes les copies possibles, avant Infinity (totaux)
+      return 0.5; // Après les originaux, avant les copies
     }
     const suffix = extractFieldSuffix(field);
     if (suffix === BASE_SUFFIX_KEY) return 0; // Originaux = 0
