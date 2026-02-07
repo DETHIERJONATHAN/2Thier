@@ -104,6 +104,18 @@ export function registerSumDisplayFieldRoutes(router: Router): void {
         const existing = await prisma.treeBranchLeafNodeVariable.findUnique({ where: { exposedKey } });
         const finalExposedKey = existing ? `var_${nodeId.slice(0, 8)}` : exposedKey;
         
+        // 🎯 FIX: Récupérer la config table du nœud pour hériter sourceRef/sourceType
+        const nodeTableInfo = await prisma.treeBranchLeafNode.findUnique({
+          where: { id: nodeId },
+          select: { table_activeId: true, hasTable: true }
+        });
+        const inheritedSourceRef = nodeTableInfo?.table_activeId 
+          ? `@table.${nodeTableInfo.table_activeId}` 
+          : null;
+        const inheritedSourceType = nodeTableInfo?.hasTable && inheritedSourceRef ? 'tree' : 'fixed';
+        
+        console.log('🎯 [SUM-DISPLAY] Héritage table:', { inheritedSourceRef, inheritedSourceType });
+        
         mainVariable = await prisma.treeBranchLeafNodeVariable.create({
           data: {
             id: newId,
@@ -115,7 +127,8 @@ export function registerSumDisplayFieldRoutes(router: Router): void {
             precision: 2,
             visibleToUser: true,
             isReadonly: false,
-            sourceType: 'fixed',
+            sourceType: inheritedSourceType,
+            sourceRef: inheritedSourceRef,
             metadata: {},
             updatedAt: new Date(),
           },
@@ -130,14 +143,26 @@ export function registerSumDisplayFieldRoutes(router: Router): void {
         });
         
         // Mettre à jour le nœud pour refléter la variable
+        const nodeUpdateData: Record<string, unknown> = {
+          hasData: true,
+          data_activeId: inheritedSourceRef ? nodeTableInfo!.table_activeId! : newId,
+          linkedVariableIds: [newId],
+          updatedAt: new Date(),
+        };
+        // Si on a un lien table, aussi synchroniser data_instances
+        if (inheritedSourceRef && nodeTableInfo?.table_activeId) {
+          nodeUpdateData.data_instances = {
+            [nodeTableInfo.table_activeId]: {
+              sourceType: inheritedSourceType,
+              sourceRef: inheritedSourceRef,
+              exposedKey: finalExposedKey,
+            }
+          };
+        }
         await prisma.treeBranchLeafNode.update({
           where: { id: nodeId },
-          data: {
-            hasData: true,
-            data_activeId: newId,
-            linkedVariableIds: [newId],
-            updatedAt: new Date(),
-          }
+          data: nodeUpdateData
+        });
         });
         
         console.log('✅ [SUM-DISPLAY] Variable auto-créée:', { id: newId, exposedKey: finalExposedKey });
