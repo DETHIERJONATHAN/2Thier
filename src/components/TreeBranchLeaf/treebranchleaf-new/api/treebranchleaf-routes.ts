@@ -337,6 +337,12 @@ async function setNodeLinkedField(
   field: LinkedField,
   values: string[]
 ) {
+  // 🛡️ FIX: Vérifier que le nœud existe AVANT l'update pour éviter de "poisoner" une $transaction
+  const exists = await client.treeBranchLeafNode.findUnique({ where: { id: nodeId }, select: { id: true } });
+  if (!exists) {
+    // L'ID peut être un tableId, formulaId, etc. — pas un nodeId réel
+    return;
+  }
   try {
     await client.treeBranchLeafNode.update({
       where: { id: nodeId },
@@ -5519,11 +5525,16 @@ router.put('/trees/:treeId/nodes/:nodeId/data', async (req, res) => {
 
         if (idsToAdd.length > 0) {
           for (const refId of idsToAdd) {
+            // 🛡️ Skip: les tableIds ne sont pas des nodeIds — pas de linkedVariableIds dessus
+            const refParsed = parseSourceRef(refId);
+            if (refParsed && refParsed.type === 'table') continue;
             await addToNodeLinkedField(tx, refId, 'linkedVariableIds', [variable.id]);
           }
         }
         if (idsToRemove.length > 0) {
           for (const refId of idsToRemove) {
+            const refParsed = parseSourceRef(refId);
+            if (refParsed && refParsed.type === 'table') continue;
             await removeFromNodeLinkedField(tx, refId, 'linkedVariableIds', [variable.id]);
           }
         }

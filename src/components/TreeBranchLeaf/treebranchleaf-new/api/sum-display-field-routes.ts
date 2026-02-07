@@ -12,6 +12,7 @@
 import { Router, Request } from 'express';
 import { Prisma } from '@prisma/client';
 import { db } from '../../../../lib/database';
+import { randomUUID } from 'crypto';
 
 const prisma = db;
 
@@ -81,7 +82,7 @@ export function registerSumDisplayFieldRoutes(router: Router): void {
       });
 
       // RÃƒÂ©cupÃƒÂ©rer la variable principale du nÃ…â€œud
-      const mainVariable = await prisma.treeBranchLeafNodeVariable.findUnique({
+      let mainVariable = await prisma.treeBranchLeafNodeVariable.findUnique({
         where: { nodeId },
         select: { 
           id: true, 
@@ -94,7 +95,52 @@ export function registerSumDisplayFieldRoutes(router: Router): void {
       });
 
       if (!mainVariable) {
-        return res.status(404).json({ error: 'Variable non trouvÃƒÂ©e pour ce nÃ…â€œud' });
+        // 🛡️ AUTO-CREATE: Créer la variable automatiquement si elle n'existe pas
+        // Cela arrive quand l'utilisateur a désactivé/réactivé la capacité Données
+        console.log('🛡️ [SUM-DISPLAY] Variable manquante pour nodeId:', nodeId, '- création automatique');
+        const newId = randomUUID();
+        const exposedKey = `var_${nodeId.slice(0, 4)}`;
+        // Vérifier que l'exposedKey n'est pas déjà prise
+        const existing = await prisma.treeBranchLeafNodeVariable.findUnique({ where: { exposedKey } });
+        const finalExposedKey = existing ? `var_${nodeId.slice(0, 8)}` : exposedKey;
+        
+        mainVariable = await prisma.treeBranchLeafNodeVariable.create({
+          data: {
+            id: newId,
+            nodeId,
+            exposedKey: finalExposedKey,
+            displayName: node.label || 'Variable',
+            displayFormat: 'number',
+            unit: null,
+            precision: 2,
+            visibleToUser: true,
+            isReadonly: false,
+            sourceType: 'fixed',
+            metadata: {},
+            updatedAt: new Date(),
+          },
+          select: {
+            id: true,
+            displayName: true,
+            exposedKey: true,
+            displayFormat: true,
+            unit: true,
+            precision: true
+          }
+        });
+        
+        // Mettre à jour le nœud pour refléter la variable
+        await prisma.treeBranchLeafNode.update({
+          where: { id: nodeId },
+          data: {
+            hasData: true,
+            data_activeId: newId,
+            linkedVariableIds: [newId],
+            updatedAt: new Date(),
+          }
+        });
+        
+        console.log('✅ [SUM-DISPLAY] Variable auto-créée:', { id: newId, exposedKey: finalExposedKey });
       }
 
       // Trouver toutes les copies de cette variable (basÃƒÂ© sur exposedKey avec suffixes)
