@@ -163,7 +163,6 @@ export function registerSumDisplayFieldRoutes(router: Router): void {
           where: { id: nodeId },
           data: nodeUpdateData
         });
-        });
         
         console.log('✅ [SUM-DISPLAY] Variable auto-créée:', { id: newId, exposedKey: finalExposedKey });
       }
