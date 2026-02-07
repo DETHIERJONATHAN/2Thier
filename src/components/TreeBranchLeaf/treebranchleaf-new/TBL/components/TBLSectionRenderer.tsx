@@ -123,11 +123,13 @@ const extractFieldSuffix = (field: TBLField): string => {
 };
 
 const groupDisplayFieldsBySuffix = (fields: TBLField[]): Array<{ suffix: string; fields: TBLField[] }> => {
-  // 🔧 FIX 07/02/2026: NE PLUS RÉORDONNER par suffixe !
-  // L'ordre des champs vient de orderedFields qui respecte déjà l'arbre TBL
-  // et place les copies du repeater JUSTE APRÈS les originaux (flux horizontal continu).
-  // Le tri par suffixe cassait cet ordre en poussant les copies à la fin,
-  // ce qui créait un retour à la ligne visuel non désiré.
+  // 🎯 RÈGLE D'ORDRE (07/02/2026):
+  // 1. Tous les ORIGINAUX (suffixe __BASE__) triés par ordre TBL
+  // 2. Toutes les copies -1 triées par ordre TBL
+  // 3. Toutes les copies -2 triées par ordre TBL
+  // ...
+  // N. Tous les Totaux à la FIN triés par ordre TBL
+  // Ceci s'applique aux sections FORM et DATA.
   
   // Déterminer si un champ est un Total
   const isTotal = (field: TBLField): boolean => {
@@ -138,27 +140,39 @@ const groupDisplayFieldsBySuffix = (fields: TBLField[]): Array<{ suffix: string;
   // Extraire le suffixe numérique d'un champ (-1, -2, etc.)
   const getSuffixNumber = (field: TBLField): number => {
     if (isTotal(field)) return Infinity; // Totaux toujours à la fin
+    // 🔧 Les boutons repeater (Ajouter/Supprimer) restent APRÈS les copies mais AVANT les totaux
+    const fieldType = ((field as any).type || '').toString();
+    if (fieldType === 'REPEATER_ADD_BUTTON' || fieldType === 'REPEATER_REMOVE_INSTANCE_BUTTON') {
+      return 999998; // Après toutes les copies possibles, avant Infinity (totaux)
+    }
     const suffix = extractFieldSuffix(field);
     if (suffix === BASE_SUFFIX_KEY) return 0; // Originaux = 0
     const num = parseInt(suffix, 10);
     return Number.isFinite(num) ? num : 0;
   };
   
-  // 🎯 GARDER l'ordre d'entrée tel quel (orderedFields gère déjà l'ordre TBL + repeater)
-  // On marque juste le dernier champ de chaque groupe de suffixe consécutif
-  const finalFields: TBLField[] = [];
-  for (let i = 0; i < fields.length; i++) {
-    const field = fields[i];
-    const currentSuffix = getSuffixNumber(field);
-    const nextSuffix = i + 1 < fields.length ? getSuffixNumber(fields[i + 1]) : -1;
-    const isLastInGroup = currentSuffix !== nextSuffix;
-    finalFields.push({ ...field, isLastInCopyGroup: isLastInGroup });
+  // Trier les champs : par suffixe d'abord, puis par ordre TBL (position dans le tableau d'entrée)
+  const indexed = fields.map((f, i) => ({ field: f, originalIndex: i, suffixNum: getSuffixNumber(f) }));
+  indexed.sort((a, b) => {
+    // 1. Trier par suffixe (0 = originaux, 1, 2, ..., Infinity = totaux)
+    if (a.suffixNum !== b.suffixNum) return a.suffixNum - b.suffixNum;
+    // 2. À suffixe égal, conserver l'ordre TBL d'entrée
+    return a.originalIndex - b.originalIndex;
+  });
+  
+  // Reconstruire la liste triée et marquer isLastInCopyGroup
+  const sortedFields: TBLField[] = [];
+  for (let i = 0; i < indexed.length; i++) {
+    const current = indexed[i];
+    const next = indexed[i + 1];
+    const isLastInGroup = !next || current.suffixNum !== next.suffixNum;
+    sortedFields.push({ ...current.field, isLastInCopyGroup: isLastInGroup });
   }
   
-  // Retourner un seul groupe avec tous les champs dans l'ORDRE ORIGINAL
+  // Retourner un seul groupe pour garder la compatibilité avec le rendu flatMap
   return [{
     suffix: '__SUFFIX_ORDERED__',
-    fields: finalFields
+    fields: sortedFields
   }];
 };
 
