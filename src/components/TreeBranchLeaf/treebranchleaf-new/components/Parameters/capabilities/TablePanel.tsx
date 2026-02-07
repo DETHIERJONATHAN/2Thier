@@ -3749,28 +3749,10 @@ const TablePanel: React.FC<TablePanelProps> = ({ treeId: initialTreeId, nodeId, 
                         </Text>
                       </div>
                     )}
-                  </div>
-                )}
 
-                {/* ═══════════════════════════════════════════════════════════════ */}
-                {/* 🔄📏⚠️ Extensions du Lookup — Intégrées dans filterConditions  */}
-                {/* ═══════════════════════════════════════════════════════════════ */}
-                {lookupConfig.filterConditions?.enabled && (lookupConfig.columnLookupEnabled || lookupConfig.rowLookupEnabled) && (
-                  <div style={{ 
-                    padding: '16px', 
-                    background: 'linear-gradient(135deg, #f9f0ff 0%, #f0f5ff 100%)', 
-                    border: '2px solid #722ed1', 
-                    borderRadius: '8px', 
-                    marginTop: 12 
-                  }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
-                      <Text strong style={{ fontSize: 14, color: '#722ed1' }}>🔧 Extensions du Lookup</Text>
-                      <Tooltip title="Ces fonctionnalités font partie du pipeline de lookup : changement de colonne, plafonds de valeur et alertes. Elles s'appliquent directement sur les résultats du lookup.">
-                        <InfoCircleOutlined style={{ color: '#999' }} />
-                      </Tooltip>
-                    </div>
-
-                    <Space direction="vertical" style={{ width: '100%' }} size={16}>
+                    {/* ── Extensions Lookup: Colonne conditionnelle, Plafonds, Alertes ── */}
+                    {lookupConfig.filterConditions?.enabled && (
+                      <Space direction="vertical" style={{ width: '100%' }} size={12}>
 
                       {/* ── SECTION 1: Colonne Conditionnelle ─── */}
                       <div style={{ 
@@ -4456,7 +4438,8 @@ const TablePanel: React.FC<TablePanelProps> = ({ treeId: initialTreeId, nodeId, 
                           ))}
                         </div>
                       )}
-                    </Space>
+                      </Space>
+                    )}
                   </div>
                 )}
               </div>
