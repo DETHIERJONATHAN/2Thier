@@ -19,6 +19,7 @@ import { evaluateFormulaOrchestrated } from './evaluation/orchestrator.js';
 import { Prisma } from '@prisma/client';
 import { db } from '../../../../lib/database';
 import { linkVariableToAllCapacityNodes } from './universal-linking-system.js';
+import { parseSourceRef } from './repeat/utils/source-ref.js';
 // import { authenticateToken } from '../../../../middleware/auth'; // Temporairement dÃƒÆ’Ã‚Â©sactivÃƒÆ’Ã‚Â©
 import { 
   validateParentChildRelation, 
