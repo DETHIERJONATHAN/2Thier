@@ -88,8 +88,8 @@ interface TableLookupCondition {
   };
 }
 
-// 🆕 Types pour les Règles Métier (Business Rules)
-interface BusinessRuleCondition {
+// 🔄 Types pour les Extensions du Lookup (intégrées dans filterConditions)
+interface LookupCondition {
   fieldRef: string;
   operator: string;
   value: string;
@@ -99,15 +99,15 @@ interface ActiveAlert {
   level: 'info' | 'warning' | 'error';
   label?: string;
 }
-interface BusinessRulesResult {
+interface LookupExtensionsResult {
   activeColumn?: string;
   activeCaps: Array<{ maxValue: number; scope: 'total' | 'per_unit'; label?: string }>;
   activeAlerts: ActiveAlert[];
 }
 
-// 🆕 Évaluer les conditions d'une règle métier
-const evaluateBusinessRuleCondition = (
-  cond: BusinessRuleCondition,
+// 🔄 Évaluer une condition de lookup (utilisé par columnOverrides, valueCaps, lookupAlerts)
+const evaluateLookupCondition = (
+  cond: LookupCondition,
   formData: Record<string, any>
 ): boolean => {
   if (!cond.fieldRef) return false;
@@ -145,44 +145,45 @@ const evaluateBusinessRuleCondition = (
   }
 };
 
-// 🆕 Évaluer toutes les règles métier
-const evaluateBusinessRules = (
-  businessRules: any,
+// 🔄 Évaluer les extensions du lookup (columnOverrides, valueCaps, lookupAlerts)
+// Lit directement depuis filterConditions — PAS de système séparé
+const evaluateLookupExtensions = (
+  filterConditions: any,
   formData: Record<string, any>
-): BusinessRulesResult => {
-  const result: BusinessRulesResult = { activeCaps: [], activeAlerts: [] };
-  if (!businessRules?.enabled) return result;
+): LookupExtensionsResult => {
+  const result: LookupExtensionsResult = { activeCaps: [], activeAlerts: [] };
+  if (!filterConditions) return result;
 
-  // 1. Column Switch
-  if (businessRules.columnSwitchRules?.length) {
-    for (const rule of businessRules.columnSwitchRules) {
-      if (!rule.enabled || !rule.conditions?.length || !rule.targetColumn) continue;
-      if (rule.conditions.every((c: BusinessRuleCondition) => evaluateBusinessRuleCondition(c, formData))) {
-        result.activeColumn = rule.targetColumn;
+  // 1. Column Overrides (remplace columnSwitchRules)
+  if (filterConditions.columnOverrides?.length) {
+    for (const override of filterConditions.columnOverrides) {
+      if (!override.enabled || !override.conditions?.length || !override.targetColumn) continue;
+      if (override.conditions.every((c: LookupCondition) => evaluateLookupCondition(c, formData))) {
+        result.activeColumn = override.targetColumn;
         break;
       }
     }
-    if (!result.activeColumn && businessRules.defaultColumn) {
-      result.activeColumn = businessRules.defaultColumn;
+    if (!result.activeColumn && filterConditions.defaultColumn) {
+      result.activeColumn = filterConditions.defaultColumn;
     }
   }
 
-  // 2. Value Caps
-  if (businessRules.valueCapRules?.length) {
-    for (const rule of businessRules.valueCapRules) {
-      if (!rule.enabled || !rule.conditions?.length) continue;
-      if (rule.conditions.every((c: BusinessRuleCondition) => evaluateBusinessRuleCondition(c, formData))) {
-        result.activeCaps.push({ maxValue: rule.maxValue, scope: rule.scope || 'total', label: rule.label });
+  // 2. Value Caps (plafonds de valeur)
+  if (filterConditions.valueCaps?.length) {
+    for (const cap of filterConditions.valueCaps) {
+      if (!cap.enabled || !cap.conditions?.length) continue;
+      if (cap.conditions.every((c: LookupCondition) => evaluateLookupCondition(c, formData))) {
+        result.activeCaps.push({ maxValue: cap.maxValue, scope: cap.scope || 'total', label: cap.label });
       }
     }
   }
 
-  // 3. Alerts
-  if (businessRules.alertRules?.length) {
-    for (const rule of businessRules.alertRules) {
-      if (!rule.enabled || !rule.conditions?.length || !rule.message) continue;
-      if (rule.conditions.every((c: BusinessRuleCondition) => evaluateBusinessRuleCondition(c, formData))) {
-        result.activeAlerts.push({ message: rule.message, level: rule.level || 'warning', label: rule.label });
+  // 3. Lookup Alerts (alertes contextuelles)
+  if (filterConditions.lookupAlerts?.length) {
+    for (const alert of filterConditions.lookupAlerts) {
+      if (!alert.enabled || !alert.conditions?.length || !alert.message) continue;
+      if (alert.conditions.every((c: LookupCondition) => evaluateLookupCondition(c, formData))) {
+        result.activeAlerts.push({ message: alert.message, level: alert.level || 'warning', label: alert.label });
       }
     }
   }
@@ -1192,13 +1193,14 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
   // ✅ On utilise configLookupId pour charger depuis l'ID de base (sans suffix)
   const tableLookup = useTBLTableLookup(configLookupId, configLookupId, hasTableCapability, formData);
 
-  // 🆕 Évaluation des Règles Métier (Business Rules)
-  const businessRulesResult = useMemo(() => {
+  // 🔄 Évaluation des extensions du lookup (columnOverrides, valueCaps, lookupAlerts)
+  const lookupExtensionsResult = useMemo(() => {
     const lookupConfig = field.capabilities?.table?.currentTable?.meta?.lookup;
-    if (!lookupConfig?.businessRules?.enabled) {
-      return { activeCaps: [], activeAlerts: [] } as BusinessRulesResult;
+    const fc = lookupConfig?.filterConditions;
+    if (!fc) {
+      return { activeCaps: [], activeAlerts: [] } as LookupExtensionsResult;
     }
-    return evaluateBusinessRules(lookupConfig.businessRules, formData);
+    return evaluateLookupExtensions(fc, formData);
   }, [field.capabilities?.table?.currentTable?.meta?.lookup, formData]);
 
   const templateAppearanceOverrides = useMemo(() => {
@@ -3923,10 +3925,10 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
       {renderCapabilityBadges()}
       {renderFieldInput()}
       
-      {/* 🆕 ALERTES RÈGLES MÉTIER */}
-      {businessRulesResult.activeAlerts.length > 0 && (
+      {/* 🔄 ALERTES DU LOOKUP */}
+      {lookupExtensionsResult.activeAlerts.length > 0 && (
         <div style={{ marginTop: 6 }}>
-          {businessRulesResult.activeAlerts.map((alert, idx) => (
+          {lookupExtensionsResult.activeAlerts.map((alert, idx) => (
             <div 
               key={idx}
               style={{
@@ -3945,9 +3947,9 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
           ))}
         </div>
       )}
-      {businessRulesResult.activeCaps.length > 0 && (
+      {lookupExtensionsResult.activeCaps.length > 0 && (
         <div style={{ marginTop: 4 }}>
-          {businessRulesResult.activeCaps.map((cap, idx) => (
+          {lookupExtensionsResult.activeCaps.map((cap, idx) => (
             <div 
               key={idx}
               style={{
