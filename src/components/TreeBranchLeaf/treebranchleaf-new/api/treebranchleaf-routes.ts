@@ -7188,6 +7188,68 @@ const fetchNormalizedTable = async (
  * @param formValues - Valeurs du formulaire pour rÃƒÆ’Ã‚Â©soudre les rÃƒÆ’Ã‚Â©fÃƒÆ’Ã‚Â©rences
  * @returns Indices des lignes qui passent TOUS les filtres (logique AND)
  */
+/**
+ * 🆕 Évalue les Règles Métier côté serveur
+ */
+function evaluateBusinessRulesServer(
+  businessRules: any,
+  formValues: Record<string, unknown>
+): { activeColumn?: string; activeCaps: Array<{ maxValue: number; scope: string; label?: string }>; activeAlerts: Array<{ message: string; level: string; label?: string }> } {
+  const res: { activeColumn?: string; activeCaps: any[]; activeAlerts: any[] } = { activeCaps: [], activeAlerts: [] };
+  if (!businessRules?.enabled) return res;
+
+  const rvRef = (ref: string): unknown => {
+    if (!ref) return null;
+    if (ref.startsWith('@value.') || ref.startsWith('@select.')) return formValues[ref.replace(/^@(value|select)\./, '')] ?? null;
+    if (ref.startsWith('@table.')) return formValues[ref.replace('@table.', '')] ?? null;
+    if (ref.startsWith('@calculated.') || ref.startsWith('@calculated:')) return formValues[ref.replace(/^@calculated[.:]/, '')] ?? null;
+    if (ref.startsWith('node-formula:') || ref.startsWith('formula:')) return formValues[ref.replace(/^(node-formula|formula):/, '')] ?? null;
+    if (formValues[ref] !== undefined) return formValues[ref];
+    return ref;
+  };
+
+  const evCond = (cond: any): boolean => {
+    if (!cond.fieldRef) return false;
+    const a = rvRef(cond.fieldRef), b = rvRef(cond.value);
+    if (a === null || a === undefined) return false;
+    const sa = String(a).trim().toLowerCase(), sb = String(b).trim().toLowerCase();
+    const na = Number(a), nb = Number(b);
+    switch (cond.operator) {
+      case 'equals': return sa === sb || sa.startsWith(sb) || sb.startsWith(sa);
+      case 'notEquals': return sa !== sb;
+      case 'greaterThan': return !isNaN(na) && !isNaN(nb) ? na > nb : false;
+      case 'lessThan': return !isNaN(na) && !isNaN(nb) ? na < nb : false;
+      case 'greaterOrEqual': return !isNaN(na) && !isNaN(nb) ? na >= nb : false;
+      case 'lessOrEqual': return !isNaN(na) && !isNaN(nb) ? na <= nb : false;
+      case 'contains': return sa.includes(sb);
+      default: return false;
+    }
+  };
+
+  if (businessRules.columnSwitchRules?.length) {
+    for (const rule of businessRules.columnSwitchRules) {
+      if (!rule.enabled || !rule.conditions?.length || !rule.targetColumn) continue;
+      if (rule.conditions.every((c: any) => evCond(c))) { res.activeColumn = rule.targetColumn; break; }
+    }
+    if (!res.activeColumn && businessRules.defaultColumn) res.activeColumn = businessRules.defaultColumn;
+  }
+  if (businessRules.valueCapRules?.length) {
+    for (const rule of businessRules.valueCapRules) {
+      if (!rule.enabled || !rule.conditions?.length) continue;
+      if (rule.conditions.every((c: any) => evCond(c)))
+        res.activeCaps.push({ maxValue: rule.maxValue, scope: rule.scope || 'total', label: rule.label });
+    }
+  }
+  if (businessRules.alertRules?.length) {
+    for (const rule of businessRules.alertRules) {
+      if (!rule.enabled || !rule.conditions?.length || !rule.message) continue;
+      if (rule.conditions.every((c: any) => evCond(c)))
+        res.activeAlerts.push({ message: rule.message, level: rule.level || 'warning', label: rule.label });
+    }
+  }
+  return res;
+}
+
 async function applyTableFilters(
   matrix: unknown[][],
   columns: string[],
@@ -7250,6 +7312,10 @@ async function applyTableFilters(
           if (!ref) return null;
           if (ref.startsWith('@value.') || ref.startsWith('@select.')) {
             const nodeId = ref.replace(/^@(value|select)\./, '');
+            return formValues[nodeId] ?? null;
+          }
+          if (ref.startsWith('@table.')) {
+            const nodeId = ref.replace('@table.', '');
             return formValues[nodeId] ?? null;
           }
           if (ref.startsWith('@calculated.') || ref.startsWith('@calculated:')) {

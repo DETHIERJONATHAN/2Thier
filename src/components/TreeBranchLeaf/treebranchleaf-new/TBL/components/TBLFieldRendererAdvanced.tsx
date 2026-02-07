@@ -88,6 +88,108 @@ interface TableLookupCondition {
   };
 }
 
+// 🆕 Types pour les Règles Métier (Business Rules)
+interface BusinessRuleCondition {
+  fieldRef: string;
+  operator: string;
+  value: string;
+}
+interface ActiveAlert {
+  message: string;
+  level: 'info' | 'warning' | 'error';
+  label?: string;
+}
+interface BusinessRulesResult {
+  activeColumn?: string;
+  activeCaps: Array<{ maxValue: number; scope: 'total' | 'per_unit'; label?: string }>;
+  activeAlerts: ActiveAlert[];
+}
+
+// 🆕 Évaluer les conditions d'une règle métier
+const evaluateBusinessRuleCondition = (
+  cond: BusinessRuleCondition,
+  formData: Record<string, any>
+): boolean => {
+  if (!cond.fieldRef) return false;
+  
+  const resolveRef = (ref: string): any => {
+    if (!ref) return null;
+    if (ref.startsWith('@value.')) return formData[ref.replace('@value.', '')];
+    if (ref.startsWith('@select.')) return formData[ref.replace('@select.', '')];
+    if (ref.startsWith('@table.')) return formData[ref.replace('@table.', '')];
+    if (ref.startsWith('@calculated.') || ref.startsWith('@calculated:')) return formData[ref.replace(/^@calculated[.:]/, '')];
+    if (ref.startsWith('node-formula:')) return formData[ref.replace('node-formula:', '')];
+    if (ref.startsWith('formula:')) return formData[ref.replace('formula:', '')];
+    if (formData[ref] !== undefined) return formData[ref];
+    return ref; // valeur littérale
+  };
+
+  const fieldValue = resolveRef(cond.fieldRef);
+  const compareValue = resolveRef(cond.value);
+  if (fieldValue === null || fieldValue === undefined) return false;
+  
+  const strA = String(fieldValue).trim().toLowerCase();
+  const strB = String(compareValue).trim().toLowerCase();
+  const numA = Number(fieldValue);
+  const numB = Number(compareValue);
+  
+  switch (cond.operator) {
+    case 'equals': return strA === strB || strA.startsWith(strB) || strB.startsWith(strA);
+    case 'notEquals': return strA !== strB;
+    case 'greaterThan': return !isNaN(numA) && !isNaN(numB) ? numA > numB : strA > strB;
+    case 'lessThan': return !isNaN(numA) && !isNaN(numB) ? numA < numB : strA < strB;
+    case 'greaterOrEqual': return !isNaN(numA) && !isNaN(numB) ? numA >= numB : strA >= strB;
+    case 'lessOrEqual': return !isNaN(numA) && !isNaN(numB) ? numA <= numB : strA <= strB;
+    case 'contains': return strA.includes(strB);
+    default: return false;
+  }
+};
+
+// 🆕 Évaluer toutes les règles métier
+const evaluateBusinessRules = (
+  businessRules: any,
+  formData: Record<string, any>
+): BusinessRulesResult => {
+  const result: BusinessRulesResult = { activeCaps: [], activeAlerts: [] };
+  if (!businessRules?.enabled) return result;
+
+  // 1. Column Switch
+  if (businessRules.columnSwitchRules?.length) {
+    for (const rule of businessRules.columnSwitchRules) {
+      if (!rule.enabled || !rule.conditions?.length || !rule.targetColumn) continue;
+      if (rule.conditions.every((c: BusinessRuleCondition) => evaluateBusinessRuleCondition(c, formData))) {
+        result.activeColumn = rule.targetColumn;
+        break;
+      }
+    }
+    if (!result.activeColumn && businessRules.defaultColumn) {
+      result.activeColumn = businessRules.defaultColumn;
+    }
+  }
+
+  // 2. Value Caps
+  if (businessRules.valueCapRules?.length) {
+    for (const rule of businessRules.valueCapRules) {
+      if (!rule.enabled || !rule.conditions?.length) continue;
+      if (rule.conditions.every((c: BusinessRuleCondition) => evaluateBusinessRuleCondition(c, formData))) {
+        result.activeCaps.push({ maxValue: rule.maxValue, scope: rule.scope || 'total', label: rule.label });
+      }
+    }
+  }
+
+  // 3. Alerts
+  if (businessRules.alertRules?.length) {
+    for (const rule of businessRules.alertRules) {
+      if (!rule.enabled || !rule.conditions?.length || !rule.message) continue;
+      if (rule.conditions.every((c: BusinessRuleCondition) => evaluateBusinessRuleCondition(c, formData))) {
+        result.activeAlerts.push({ message: rule.message, level: rule.level || 'warning', label: rule.label });
+      }
+    }
+  }
+
+  return result;
+};
+
 // 🛡️ Normalisation des valeurs pour l'UI (évite le rendu d'objets React)
 const normalizeValueForUi = (value: unknown): unknown => {
   if (value === null || value === undefined) return value;
@@ -150,6 +252,14 @@ const evaluateFilterConditions = (
     } else if (condition.compareWithRef?.startsWith('@select.')) {
       const fieldId = condition.compareWithRef.replace('@select.', '');
       referenceValue = formData[fieldId];
+    } else if (condition.compareWithRef?.startsWith('@table.')) {
+      // Support pour les références @table.{nodeId}
+      const nodeId = condition.compareWithRef.replace('@table.', '');
+      referenceValue = formData[nodeId];
+    } else if (condition.compareWithRef?.startsWith('@calculated.') || condition.compareWithRef?.startsWith('@calculated:')) {
+      // Support pour les références @calculated.{nodeId}
+      const nodeId = condition.compareWithRef.replace(/^@calculated[.:]/, '');
+      referenceValue = formData[nodeId];
     } else if (condition.compareWithRef?.startsWith('node-formula:')) {
       // Support pour les références node-formula:
       const nodeId = condition.compareWithRef.replace('node-formula:', '');
@@ -210,6 +320,7 @@ const evaluateFilterConditions = (
           if (!ref) return null;
           if (ref.startsWith('@value.')) return formData[ref.replace('@value.', '')];
           if (ref.startsWith('@select.')) return formData[ref.replace('@select.', '')];
+          if (ref.startsWith('@table.')) return formData[ref.replace('@table.', '')] ?? null;
           if (ref.startsWith('node-formula:')) return formData[ref.replace('node-formula:', '')];
           if (ref.startsWith('formula:')) return formData[ref.replace('formula:', '')];
           if (ref.startsWith('@calculated.') || ref.startsWith('@calculated:')) return formData[ref.replace(/^@calculated[.:]/, '')];
@@ -1080,6 +1191,15 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
   // Si elle existe, les options seront chargées depuis la table de capacité
   // ✅ On utilise configLookupId pour charger depuis l'ID de base (sans suffix)
   const tableLookup = useTBLTableLookup(configLookupId, configLookupId, hasTableCapability, formData);
+
+  // 🆕 Évaluation des Règles Métier (Business Rules)
+  const businessRulesResult = useMemo(() => {
+    const lookupConfig = field.capabilities?.table?.currentTable?.meta?.lookup;
+    if (!lookupConfig?.businessRules?.enabled) {
+      return { activeCaps: [], activeAlerts: [] } as BusinessRulesResult;
+    }
+    return evaluateBusinessRules(lookupConfig.businessRules, formData);
+  }, [field.capabilities?.table?.currentTable?.meta?.lookup, formData]);
 
   const templateAppearanceOverrides = useMemo(() => {
     if (!allNodes || allNodes.length === 0) return null;
@@ -3802,6 +3922,50 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
     >
       {renderCapabilityBadges()}
       {renderFieldInput()}
+      
+      {/* 🆕 ALERTES RÈGLES MÉTIER */}
+      {businessRulesResult.activeAlerts.length > 0 && (
+        <div style={{ marginTop: 6 }}>
+          {businessRulesResult.activeAlerts.map((alert, idx) => (
+            <div 
+              key={idx}
+              style={{
+                padding: '6px 10px',
+                marginBottom: 4,
+                borderRadius: 4,
+                fontSize: 12,
+                fontWeight: 500,
+                background: alert.level === 'error' ? '#fff2f0' : alert.level === 'warning' ? '#fffbe6' : '#f0f9ff',
+                border: `1px solid ${alert.level === 'error' ? '#ffccc7' : alert.level === 'warning' ? '#ffe58f' : '#bae7ff'}`,
+                color: alert.level === 'error' ? '#cf1322' : alert.level === 'warning' ? '#d48806' : '#096dd9',
+              }}
+            >
+              {alert.level === 'error' ? '🔴' : alert.level === 'warning' ? '⚠️' : 'ℹ️'} {alert.message}
+            </div>
+          ))}
+        </div>
+      )}
+      {businessRulesResult.activeCaps.length > 0 && (
+        <div style={{ marginTop: 4 }}>
+          {businessRulesResult.activeCaps.map((cap, idx) => (
+            <div 
+              key={idx}
+              style={{
+                padding: '4px 8px',
+                fontSize: 10,
+                color: '#d48806',
+                background: '#fffbe6',
+                border: '1px solid #ffe58f',
+                borderRadius: 4,
+                marginBottom: 2,
+              }}
+            >
+              📏 Plafond actif: max {cap.maxValue} VA {cap.scope === 'per_unit' ? '(par unité)' : '(total)'}
+              {cap.label && ` — ${cap.label}`}
+            </div>
+          ))}
+        </div>
+      )}
       
       {/* ❌ MASQUÉ : Alert formule réservée à l'éditeur TreeBranchLeaf */}
       
