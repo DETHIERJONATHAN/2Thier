@@ -378,14 +378,27 @@ const evaluateFilterConditions = (
         } else {
           // Mode multiplicateur: multiplier la valeur du tableau
           const factor = allConditionsMet ? (mult.factor ?? 2) : (mult.elseFactor ?? 1);
-          const numericTableValue = Number(tableValue);
-          if (!isNaN(numericTableValue) && factor !== 1) {
-            tableValue = numericTableValue * factor;
-            console.log(`[Multiplier] ${conditions.length} condition(s) → ${allConditionsMet ? 'TOUTES VRAIES' : 'NON'} → tableValue ${originalTableValue} × ${factor} = ${tableValue}`);
+          // 🎯 sourceColumn: quand conditions vraies, lire la valeur depuis une autre colonne
+          let baseValue = tableValue;
+          if (allConditionsMet && mult.sourceColumn) {
+            const sourceVal = extractValueFromColumn(option, mult.sourceColumn, tableData, config);
+            if (sourceVal !== null && sourceVal !== undefined) {
+              baseValue = sourceVal;
+              console.log(`[Multiplier] sourceColumn "${mult.sourceColumn}" → baseValue = ${sourceVal}`);
+            }
+          }
+          const numericValue = Number(baseValue);
+          if (!isNaN(numericValue) && factor !== 1) {
+            tableValue = numericValue * factor;
+            console.log(`[Multiplier] ${conditions.length} condition(s) → ${allConditionsMet ? 'TOUTES VRAIES' : 'NON'} → ${allConditionsMet && mult.sourceColumn ? `sourceCol(${mult.sourceColumn})=${baseValue}` : `tableValue ${originalTableValue}`} × ${factor} = ${tableValue}`);
+          } else if (!isNaN(numericValue)) {
+            tableValue = numericValue;
           }
         }
       }
 
+      // 🔧 Direction: tableValue [op] referenceValue (aligné sur le backend)
+      // Ex: "P min WC" greaterOrEqual totalWC → P_min_WC >= totalWC
       let result = false;
       switch (condition.operator) {
         case 'equals':
@@ -395,16 +408,16 @@ const evaluateFilterConditions = (
           result = String(referenceValue).trim().toLowerCase() !== String(tableValue).trim().toLowerCase();
           break;
         case 'greaterThan':
-          result = Number(referenceValue) > Number(tableValue);
+          result = Number(tableValue) > Number(referenceValue);
           break;
         case 'lessThan':
-          result = Number(referenceValue) < Number(tableValue);
+          result = Number(tableValue) < Number(referenceValue);
           break;
         case 'greaterOrEqual':
-          result = Number(referenceValue) >= Number(tableValue);
+          result = Number(tableValue) >= Number(referenceValue);
           break;
         case 'lessOrEqual':
-          result = Number(referenceValue) <= Number(tableValue);
+          result = Number(tableValue) <= Number(referenceValue);
           break;
         case 'contains':
           result = String(tableValue).toLowerCase().includes(String(referenceValue).toLowerCase());

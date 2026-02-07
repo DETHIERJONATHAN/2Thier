@@ -7329,10 +7329,21 @@ async function applyTableFilters(
         } else {
           // Mode multiplicateur: multiplier cellValue
           const factor = allConditionsMet ? (mult.factor ?? 2) : (mult.elseFactor ?? 1);
-          const numericCell = Number(cellValue);
-          if (!isNaN(numericCell) && factor !== 1) {
-            console.log(`[Multiplier] ${conditions.length} condition(s) → ${allConditionsMet ? 'TOUTES VRAIES' : 'NON'} → cellValue ${cellValue} × ${factor} = ${numericCell * factor}`);
-            cellValue = numericCell * factor;
+          // 🎯 sourceColumn: quand conditions vraies, lire la valeur depuis une autre colonne
+          let baseValue = cellValue;
+          if (allConditionsMet && mult.sourceColumn) {
+            const srcColIdx = columns.indexOf(mult.sourceColumn);
+            if (srcColIdx >= 0) {
+              baseValue = row[srcColIdx];
+              console.log(`[Multiplier] sourceColumn "${mult.sourceColumn}" → baseValue = ${baseValue}`);
+            }
+          }
+          const numericBase = Number(baseValue);
+          if (!isNaN(numericBase) && factor !== 1) {
+            console.log(`[Multiplier] ${conditions.length} condition(s) → ${allConditionsMet ? 'TOUTES VRAIES' : 'NON'} → ${allConditionsMet && mult.sourceColumn ? `sourceCol(${mult.sourceColumn})=${baseValue}` : `cellValue ${cellValue}`} × ${factor} = ${numericBase * factor}`);
+            cellValue = numericBase * factor;
+          } else if (!isNaN(numericBase)) {
+            cellValue = numericBase;
           }
         }
       }
