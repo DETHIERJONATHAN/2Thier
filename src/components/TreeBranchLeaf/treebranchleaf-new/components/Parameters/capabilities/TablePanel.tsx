@@ -3751,7 +3751,6 @@ const TablePanel: React.FC<TablePanelProps> = ({ treeId: initialTreeId, nodeId, 
                     )}
                   </div>
                 )}
-              </div>
 
                 {/* ═══════════════════════════════════════════════════════════════ */}
                 {/* 🔄📏⚠️ Extensions du Lookup — Intégrées dans filterConditions  */}
@@ -4460,6 +4459,7 @@ const TablePanel: React.FC<TablePanelProps> = ({ treeId: initialTreeId, nodeId, 
                     </Space>
                   </div>
                 )}
+              </div>
             </Space>      <div style={{ maxHeight: 320, overflow: 'auto', border: '1px solid #f0f0f0', borderRadius: 6 }}>
               <Table
                 size="small"

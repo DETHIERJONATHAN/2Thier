@@ -269,9 +269,9 @@ const evaluateFilterConditions = (
       // Support pour les références formula:
       const formulaId = condition.compareWithRef.replace('formula:', '');
       referenceValue = formData[formulaId];
-    } else if (condition.compareWithRef && formData[condition.compareWithRef]) {
-      // Fallback: essayer directement l'ID
-      referenceValue = formData[condition.compareWithRef];
+    } else if (condition.compareWithRef) {
+      // Essayer d'abord comme clé dans formData, sinon traiter comme valeur littérale
+      referenceValue = formData[condition.compareWithRef] ?? condition.compareWithRef;
     }
     
     // Vérification de la valeur de référence
