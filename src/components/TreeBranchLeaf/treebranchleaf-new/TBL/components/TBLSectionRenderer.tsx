@@ -123,12 +123,11 @@ const extractFieldSuffix = (field: TBLField): string => {
 };
 
 const groupDisplayFieldsBySuffix = (fields: TBLField[]): Array<{ suffix: string; fields: TBLField[] }> => {
-  // 🎯 NOUVEL ORDRE PAR SUFFIXE (16/12/2025):
-  // 1. Tous les originaux (sans suffixe) triés par ordre TBL
-  // 2. Toutes les copies -1 triées par ordre TBL
-  // 3. Toutes les copies -2 triées par ordre TBL
-  // ...
-  // N. Tous les Totaux à la FIN triés par ordre TBL
+  // 🔧 FIX 07/02/2026: NE PLUS RÉORDONNER par suffixe !
+  // L'ordre des champs vient de orderedFields qui respecte déjà l'arbre TBL
+  // et place les copies du repeater JUSTE APRÈS les originaux (flux horizontal continu).
+  // Le tri par suffixe cassait cet ordre en poussant les copies à la fin,
+  // ce qui créait un retour à la ligne visuel non désiré.
   
   // Déterminer si un champ est un Total
   const isTotal = (field: TBLField): boolean => {
@@ -145,33 +144,18 @@ const groupDisplayFieldsBySuffix = (fields: TBLField[]): Array<{ suffix: string;
     return Number.isFinite(num) ? num : 0;
   };
   
-  // Trier les champs:
-  // 1. Par suffixe (0 = original, 1, 2, ..., Infinity = Total)
-  // 2. À suffixe égal, par ordre TBL
-  const sortedFields = [...fields].sort((a, b) => {
-    const suffixA = getSuffixNumber(a);
-    const suffixB = getSuffixNumber(b);
-    
-    // D'abord trier par suffixe
-    if (suffixA !== suffixB) {
-      return suffixA - suffixB;
-    }
-    
-    // À suffixe égal, trier par ordre TBL
-    return (a.order ?? 9999) - (b.order ?? 9999);
-  });
-  
-  // Marquer le dernier de chaque groupe de suffixe
+  // 🎯 GARDER l'ordre d'entrée tel quel (orderedFields gère déjà l'ordre TBL + repeater)
+  // On marque juste le dernier champ de chaque groupe de suffixe consécutif
   const finalFields: TBLField[] = [];
-  for (let i = 0; i < sortedFields.length; i++) {
-    const field = sortedFields[i];
+  for (let i = 0; i < fields.length; i++) {
+    const field = fields[i];
     const currentSuffix = getSuffixNumber(field);
-    const nextSuffix = i + 1 < sortedFields.length ? getSuffixNumber(sortedFields[i + 1]) : -1;
+    const nextSuffix = i + 1 < fields.length ? getSuffixNumber(fields[i + 1]) : -1;
     const isLastInGroup = currentSuffix !== nextSuffix;
     finalFields.push({ ...field, isLastInCopyGroup: isLastInGroup });
   }
   
-  // Retourner un seul groupe avec tous les champs dans le bon ordre
+  // Retourner un seul groupe avec tous les champs dans l'ORDRE ORIGINAL
   return [{
     suffix: '__SUFFIX_ORDERED__',
     fields: finalFields
@@ -1269,7 +1253,9 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
     if (
       type === 'textarea' ||
       type === 'text_area' ||
-      type.includes('repeater') ||
+      // 🔧 FIX: Les repeaters ne doivent PAS forcer la pleine largeur
+      // Ils doivent suivre le flux horizontal comme les autres champs
+      // Seuls textarea et tableau restent en pleine largeur
       type.includes('tableau') ||
       variant === 'textarea'
     ) {
