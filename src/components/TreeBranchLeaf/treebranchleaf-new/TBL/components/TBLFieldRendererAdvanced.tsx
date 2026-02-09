@@ -303,10 +303,10 @@ const evaluateFilterConditions = (
     }
     
     // Vérification de la valeur de référence
+    // 🛡️ Si la valeur est vide/null/undefined (ex: select vidé), IGNORER cette condition
+    // Aligné sur le comportement serveur: un champ vide = filtre inactif (pas de filtrage)
     if (referenceValue === null || referenceValue === undefined || referenceValue === '') {
-      console.warn(`[evaluateFilterConditions] Valeur de référence non trouvée pour: ${condition.compareWithRef}`);
-      console.warn(`[evaluateFilterConditions] FormData disponible:`, Object.keys(formData));
-      return false; // Si pas de valeur de référence, la condition échoue
+      return true; // Condition ignorée = considérée comme passée
     }
 
     // 2. Trouver la/les valeur(s) correspondante(s) dans le tableau pour cette option
