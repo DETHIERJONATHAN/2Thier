@@ -7257,10 +7257,17 @@ async function applyTableFilters(
       // ✨ Multiplicateur conditionnel: modifier cellValue avant la comparaison
       if ((filter as any).multiplier?.enabled) {
         const mult = (filter as any).multiplier;
+        // 🔍 DEBUG: Log formValues pour les clés du multiplier (1 seule fois)
+        if (rowIndex === 0) {
+          const condKeys = (mult.conditions || []).flatMap((c: any) => [c.fieldA, c.fieldB].filter((r: string) => r?.startsWith('@value.')).map((r: string) => r.replace('@value.', '')));
+          console.log(`[Multiplier-BE] formValues pour conditions:`, condKeys.map((k: string) => `${k}=${JSON.stringify(formValues[k])}`).join(', '));
+        }
         
         // Résoudre une référence — supporte les valeurs littérales (ex: "HUAWEI")
         const resolveRef = (ref: string | undefined): unknown => {
           if (!ref) return null;
+          // 🎯 Support @literal.xxx: retourner la valeur littérale sans résolution
+          if (ref.startsWith('@literal.')) return ref.replace('@literal.', '');
           // 🎯 Support @column.COLNAME: accéder à une colonne de la ligne courante
           if (ref.startsWith('@column.')) {
             const colName = ref.replace('@column.', '');
@@ -7295,11 +7302,15 @@ async function applyTableFilters(
           : [{ fieldA: mult.conditionFieldA || '', operator: mult.conditionOperator || 'equals', fieldB: mult.conditionFieldB || '' }];
         
         // Évaluer chaque condition — TOUTES doivent être vraies (logique AND)
-        const evaluateSingleCondition = (cond: { fieldA?: string; operator?: string; fieldB?: string }): boolean => {
+        const evaluateSingleCondition = (cond: { fieldA?: string; operator?: string; fieldB?: string }, condIdx?: number): boolean => {
           if (!cond.fieldA && !cond.fieldB) return false;
           const fieldAValue = resolveRef(cond.fieldA);
           const fieldBValue = resolveRef(cond.fieldB);
-          if (fieldAValue === null || fieldAValue === undefined || fieldBValue === null || fieldBValue === undefined) return false;
+          // 🔍 DEBUG MULTIPLIER: afficher valeurs résolues pour diagnostic
+          if (fieldAValue === null || fieldAValue === undefined || fieldBValue === null || fieldBValue === undefined) {
+            console.log(`[Multiplier-BE] Cond${condIdx ?? '?'}: "${cond.fieldA}" → ${JSON.stringify(fieldAValue)} | "${cond.fieldB}" → ${JSON.stringify(fieldBValue)} → NULL → FALSE`);
+            return false;
+          }
           
           const numA = Number(fieldAValue);
           const numB = Number(fieldBValue);
@@ -7318,7 +7329,7 @@ async function applyTableFilters(
           }
         };
         
-        const allConditionsMet = conditions.every((cond: any) => evaluateSingleCondition(cond));
+        const allConditionsMet = conditions.every((cond: any, idx: number) => evaluateSingleCondition(cond, idx));
         
         const mode = mult.mode || 'multiply';
         if (mode === 'fixed') {

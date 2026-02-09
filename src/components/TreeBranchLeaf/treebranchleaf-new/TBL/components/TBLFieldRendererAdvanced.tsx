@@ -115,10 +115,19 @@ const evaluateLookupCondition = (
   
   const resolveRef = (ref: string): any => {
     if (!ref) return null;
+    if (ref.startsWith('@literal.')) return ref.replace('@literal.', '');
     if (ref.startsWith('@value.')) return formData[ref.replace('@value.', '')];
     if (ref.startsWith('@select.')) return formData[ref.replace('@select.', '')];
     if (ref.startsWith('@table.')) return formData[ref.replace('@table.', '')];
-    if (ref.startsWith('@calculated.') || ref.startsWith('@calculated:')) return formData[ref.replace(/^@calculated[.:]/, '')];
+    if (ref.startsWith('@calculated.') || ref.startsWith('@calculated:')) {
+      const nodeId = ref.replace(/^@calculated[.:]/, '');
+      // Chercher la valeur dans formData avec différentes clés possibles
+      if (formData[nodeId] !== undefined && formData[nodeId] !== null) return formData[nodeId];
+      // Vérifier les clés __mirror_formula_ (valeurs calculées/agrégées)
+      const mirrorKey = `__mirror_formula_${nodeId}`;
+      if (formData[mirrorKey] !== undefined && formData[mirrorKey] !== null) return formData[mirrorKey];
+      return null;
+    }
     if (ref.startsWith('node-formula:')) return formData[ref.replace('node-formula:', '')];
     if (ref.startsWith('formula:')) return formData[ref.replace('formula:', '')];
     if (formData[ref] !== undefined) return formData[ref];
@@ -195,7 +204,13 @@ const evaluateLookupExtensions = (
   if (filterConditions.lookupAlerts?.length) {
     for (const alert of filterConditions.lookupAlerts) {
       if (!alert.enabled || !alert.conditions?.length || !alert.message) continue;
-      if (alert.conditions.every((c: LookupCondition) => evaluateLookupCondition(c, formData))) {
+      const condResults = alert.conditions.map((c: LookupCondition) => {
+        const met = evaluateLookupCondition(c, formData);
+        return { ref: c.fieldRef, op: c.operator, val: c.value, met };
+      });
+      const allMet = condResults.every((r: any) => r.met);
+      console.log(`[LookupAlerts] "${alert.label}": ${allMet ? '✅ ACTIVE' : '❌ inactive'}`, condResults);
+      if (allMet) {
         result.activeAlerts.push({ message: alert.message, level: alert.level || 'warning', label: alert.label });
       }
     }
@@ -332,6 +347,8 @@ const evaluateFilterConditions = (
         // Résoudre les valeurs des champs depuis formData — supporte les valeurs littérales
         const resolveMultiplierRef = (ref: string | undefined): any => {
           if (!ref) return null;
+          // 🎯 Support @literal.xxx: retourner la valeur littérale sans résolution
+          if (ref.startsWith('@literal.')) return ref.replace('@literal.', '');
           // 🎯 Support @column.COLNAME: accéder à une colonne pour l'option courante
           if (ref.startsWith('@column.')) {
             const colName = ref.replace('@column.', '');
@@ -355,11 +372,15 @@ const evaluateFilterConditions = (
           : [{ fieldA: mult.conditionFieldA || '', operator: mult.conditionOperator || 'equals', fieldB: mult.conditionFieldB || '' }];
         
         // Évaluer chaque condition — TOUTES doivent être vraies (logique AND)
-        const evaluateSingleCondition = (cond: { fieldA?: string; operator?: string; fieldB?: string }): boolean => {
+        const evaluateSingleCondition = (cond: { fieldA?: string; operator?: string; fieldB?: string }, condIdx?: number): boolean => {
           if (!cond.fieldA && !cond.fieldB) return false;
           const fieldAValue = resolveMultiplierRef(cond.fieldA);
           const fieldBValue = resolveMultiplierRef(cond.fieldB);
-          if (fieldAValue === null || fieldAValue === undefined || fieldBValue === null || fieldBValue === undefined) return false;
+          // 🔍 DEBUG MULTIPLIER: Log les valeurs résolues pour chaque condition
+          if (fieldAValue === null || fieldAValue === undefined || fieldBValue === null || fieldBValue === undefined) {
+            console.log(`[Multiplier] Cond${condIdx ?? '?'}: "${cond.fieldA}" → ${JSON.stringify(fieldAValue)} | "${cond.fieldB}" → ${JSON.stringify(fieldBValue)} → NULL/UNDEFINED → FALSE`);
+            return false;
+          }
           
           switch (cond.operator || 'equals') {
             case 'equals': return String(fieldAValue).trim().toLowerCase() === String(fieldBValue).trim().toLowerCase();
@@ -373,7 +394,7 @@ const evaluateFilterConditions = (
           }
         };
         
-        const allConditionsMet = conditions.every((cond: any) => evaluateSingleCondition(cond));
+        const allConditionsMet = conditions.every((cond: any, idx: number) => evaluateSingleCondition(cond, idx));
         
         const mode = mult.mode || 'multiply';
         if (mode === 'fixed') {
