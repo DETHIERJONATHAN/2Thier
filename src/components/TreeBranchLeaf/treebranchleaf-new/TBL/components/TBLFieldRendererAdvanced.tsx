@@ -135,7 +135,13 @@ const evaluateLookupCondition = (
   const numB = Number(compareValue);
   
   switch (cond.operator) {
-    case 'equals': return strA === strB || strA.startsWith(strB) || strB.startsWith(strA);
+    case 'equals': {
+      if (strA === strB) return true;
+      // Support multi-valeurs séparées par " ; " (ex: "Triphasé 220-240v ; Tétraphasé 380-400v")
+      const segsA = strA.includes(' ; ') ? strA.split(' ; ').map(s => s.trim()) : [strA];
+      const segsB = strB.includes(' ; ') ? strB.split(' ; ').map(s => s.trim()) : [strB];
+      return segsA.some(a => segsB.some(b => a.startsWith(b) || b.startsWith(a)));
+    }
     case 'notEquals': return strA !== strB;
     case 'greaterThan': return !isNaN(numA) && !isNaN(numB) ? numA > numB : strA > strB;
     case 'lessThan': return !isNaN(numA) && !isNaN(numB) ? numA < numB : strA < strB;

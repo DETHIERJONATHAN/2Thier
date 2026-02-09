@@ -7485,8 +7485,12 @@ function compareFilterValues(
       if (typeof normalizedCell === 'string' && typeof normalizedCompare === 'string') {
         const cellLower = normalizedCell.toLowerCase().trim();
         const compareLower = normalizedCompare.toLowerCase().trim();
-        // Match si la cellule commence par la valeur OU si la valeur commence par la cellule
-        return cellLower.startsWith(compareLower) || compareLower.startsWith(cellLower);
+        // Découper la cellule par " ; " pour gérer les valeurs multiples (ex: "Triphasé 220-240v ; Tétraphasé 380-400v")
+        const cellSegments = cellLower.includes(' ; ') ? cellLower.split(' ; ').map(s => s.trim()) : [cellLower];
+        // Match si UN segment commence par la valeur de comparaison ou vice versa
+        return cellSegments.some(segment =>
+          segment.startsWith(compareLower) || compareLower.startsWith(segment)
+        );
       }
       return false;
     
