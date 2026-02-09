@@ -2030,14 +2030,20 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
     
     // Vérifier chaque condition
     for (const condition of allConditions) {
-      const dependentValue = formData[condition.dependsOn];
+      let dependentValue = formData[condition.dependsOn];
+      
+      // 🔧 FIX: Si la valeur directe n'existe pas, c'est peut-être un ID d'option
+      // (ex: @select.optionId). Chercher si un select field a cet optionId comme valeur sélectionnée.
+      if (dependentValue === undefined && condition.dependsOn) {
+        const isSelectedAsOption = Object.values(formData).some(v => v === condition.dependsOn);
+        if (isSelectedAsOption) {
+          // L'option EST sélectionnée → la valeur dépendante est l'ID de l'option
+          dependentValue = condition.dependsOn;
+        }
+      }
+      
       let conditionResult = false;
       
-      // console.log(`🔍 [TBLFieldRendererAdvanced] Condition pour "${field.label}":`, { // ✨ Log réduit
-      //   dependentValue,
-      //   showWhen: condition.showWhen,
-      //   operator: condition.operator
-      // });
       switch (condition.operator) {
         case 'equals':
         case '==':
@@ -2060,6 +2066,12 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
         case 'less_than':
         case '<':
           conditionResult = Number(dependentValue) < Number(condition.showWhen);
+          break;
+        case 'isEmpty':
+          conditionResult = dependentValue === undefined || dependentValue === null || String(dependentValue).trim() === '';
+          break;
+        case 'isNotEmpty':
+          conditionResult = dependentValue !== undefined && dependentValue !== null && String(dependentValue).trim() !== '';
           break;
         default:
           conditionResult = true;
