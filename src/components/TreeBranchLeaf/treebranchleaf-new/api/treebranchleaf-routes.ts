@@ -7361,8 +7361,22 @@ async function applyTableFilters(
 
       const passes = compareFilterValues(cellValue, filter.operator, filter.resolvedValue);
       
+      // 🔄 alsoInclude: si la valeur résolue contient un "when", accepter aussi les "alsoMatch"
+      // Ex: Triphasé sélectionné → accepter aussi Monophasé (car mono fonctionne sur réseau tri)
+      let finalPasses = passes;
+      if (!passes && (filter as any).alsoInclude?.length && filter.resolvedValue) {
+        for (const rule of (filter as any).alsoInclude) {
+          if (!rule.when || !rule.alsoMatch) continue;
+          if (String(filter.resolvedValue).toLowerCase().includes(String(rule.when).toLowerCase())) {
+            if (compareFilterValues(cellValue, filter.operator, rule.alsoMatch)) {
+              finalPasses = true;
+              break;
+            }
+          }
+        }
+      }
       
-      if (!passes) {
+      if (!finalPasses) {
         passesAllFilters = false;
         break;
       }
