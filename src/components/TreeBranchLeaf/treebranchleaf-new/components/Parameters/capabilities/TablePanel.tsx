@@ -166,8 +166,9 @@ import { useAuthenticatedApi } from '../../../../../../hooks/useAuthenticatedApi
 import { useTBLBatch } from '../../../TBL/contexts/TBLBatchContext';
 import { useDebouncedCallback } from '../../../hooks/useDebouncedCallback';
 import * as XLSX from 'xlsx';
-import { DeleteOutlined, PlusOutlined, InfoCircleOutlined, DownloadOutlined, FilterOutlined, PlayCircleOutlined, BulbOutlined, CheckCircleOutlined, CloseCircleOutlined, ThunderboltOutlined } from '@ant-design/icons';
+import { DeleteOutlined, PlusOutlined, InfoCircleOutlined, DownloadOutlined, FilterOutlined, PlayCircleOutlined, BulbOutlined, CheckCircleOutlined, CloseCircleOutlined, ThunderboltOutlined, FullscreenOutlined } from '@ant-design/icons';
 import NodeTreeSelector, { NodeTreeSelectorValue } from '../shared/NodeTreeSelector';
+import TableFullscreenEditor from './TableFullscreenEditor';
 
 const { Title, Text } = Typography;
 
@@ -544,6 +545,7 @@ const TablePanel: React.FC<TablePanelProps> = ({ treeId: initialTreeId, nodeId, 
     conditions: Array<{ id: string; result: boolean; description: string }>;
   } | null>(null);
   const [evaluationLoading, setEvaluationLoading] = useState(false);
+  const [fullscreenOpen, setFullscreenOpen] = useState(false);
 
   const isPhysicalNodeId = useCallback((fieldId?: string | null): fieldId is string => {
     if (!fieldId) return false;
@@ -1760,6 +1762,13 @@ const TablePanel: React.FC<TablePanelProps> = ({ treeId: initialTreeId, nodeId, 
             disabled={readOnly || !cfg.columns?.length || !cfg.rows?.length || isImporting}
           >
             Télécharger Excel
+          </Button>
+          <Button
+            icon={<FullscreenOutlined />}
+            onClick={() => setFullscreenOpen(true)}
+            disabled={!cfg.columns?.length}
+          >
+            Ouvrir en grand
           </Button>
           {isImporting && <Text type="secondary">⏳ Import de {cfg.rows?.length || 0} lignes en cours, veuillez patienter...</Text>}
         </div>
@@ -4681,6 +4690,18 @@ const TablePanel: React.FC<TablePanelProps> = ({ treeId: initialTreeId, nodeId, 
         allowMulti={false}
       />
 
+      {/* 📊 Éditeur plein écran */}
+      <TableFullscreenEditor
+        open={fullscreenOpen}
+        onClose={() => setFullscreenOpen(false)}
+        cfg={cfg}
+        onCfgChange={(newCfg) => {
+          setCfg(newCfg);
+          debouncedSave(newCfg);
+        }}
+        readOnly={readOnly}
+        tableName={instances.find(i => i.id === activeId)?.name}
+      />
     </Card>
   );
 };
