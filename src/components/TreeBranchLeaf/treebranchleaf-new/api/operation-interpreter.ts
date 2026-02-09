@@ -924,6 +924,106 @@ async function interpretCondition(
   // Ã°Å¸â€Â Ãƒâ€°TAPE 2 : Extraire la structure WHEN et les branches
   // Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
   const condSet = condition.conditionSet as any;
+
+  // ════════════════════════════════════════════════════════════════════
+  // 🔀 MODE FIRST-MATCH : Support multi-branches
+  // Si mode="first-match" et plusieurs branches, on itère toutes les branches
+  // et on prend la première dont la condition WHEN est vraie.
+  // ════════════════════════════════════════════════════════════════════
+  if (condSet.mode === 'first-match' && condSet.branches && condSet.branches.length > 1) {
+    console.log(`🔀 [CONDITION FIRST-MATCH] "${condition.name}" (${condition.id}): ${condSet.branches.length} branches à évaluer`);
+    
+    for (const fmBranch of condSet.branches) {
+      const fmWhen = fmBranch?.when;
+      if (!fmWhen) continue;
+      
+      // Résoudre le côté gauche
+      const fmLeftRef = fmWhen.left?.ref;
+      let fmLeftValue: string | null = null;
+      let fmLeftLabel = 'Inconnu';
+      if (fmLeftRef) {
+        const leftInfo = await resolveOperandReference(fmLeftRef);
+        fmLeftValue = leftInfo.value;
+        fmLeftLabel = leftInfo.label;
+      }
+      
+      // Résoudre le côté droit
+      const fmRightRef = fmWhen.right?.ref;
+      let fmRightValue: string | null = null;
+      let fmRightLabel = 'Inconnu';
+      if (fmRightRef) {
+        const rightInfo = await resolveOperandReference(fmRightRef);
+        fmRightValue = rightInfo.value;
+        fmRightLabel = rightInfo.label;
+      } else if (fmWhen.right?.value !== undefined) {
+        fmRightValue = String(fmWhen.right.value);
+        fmRightLabel = fmRightValue;
+      }
+      
+      const fmMatches = evaluateOperator(fmWhen.op, fmLeftValue, fmRightValue);
+      console.log(`🔀 [FIRST-MATCH] Branche "${fmBranch.label || fmBranch.id}": LEFT="${fmLeftLabel}"(${fmLeftValue}) ${fmWhen.op} RIGHT="${fmRightLabel}"(${fmRightValue}) → ${fmMatches ? 'MATCH ✅' : 'skip'}`);
+      
+      if (fmMatches) {
+        // Cette branche matche → interpréter son action
+        let fmResult: InterpretResult = { result: '∅', humanText: 'Aucune action' };
+        if (fmBranch.actions && fmBranch.actions.length > 0) {
+          const fmAction = fmBranch.actions[0];
+          const fmNodeId = fmAction.nodeIds?.[0];
+          if (fmNodeId) {
+            fmResult = await interpretReference(
+              fmNodeId,
+              submissionId,
+              prisma,
+              valuesCache,
+              depth + 1,
+              valueMap,
+              labelMap
+            );
+          }
+        }
+        
+        console.log(`🔀 [FIRST-MATCH RESULT] "${condition.name}" → branche "${fmBranch.label || fmBranch.id}" matchée → result="${fmResult.result}"`);
+        return {
+          result: fmResult.result,
+          humanText: `Condition first-match "${condition.name}": branche "${fmBranch.label}" → ${fmResult.humanText}`,
+          details: {
+            type: 'condition',
+            conditionId: condition.id,
+            conditionName: condition.name,
+            mode: 'first-match',
+            branchUsed: fmBranch.label || fmBranch.id,
+            matchResult: fmResult.details
+          }
+        };
+      }
+    }
+    
+    // Aucune branche n'a matché → fallback
+    let fmFallbackResult: InterpretResult = { result: '∅', humanText: 'Aucune action' };
+    if (condSet.fallback?.actions?.length > 0) {
+      const fbAction = condSet.fallback.actions[0];
+      const fbNodeId = fbAction.nodeIds?.[0];
+      if (fbNodeId) {
+        fmFallbackResult = await interpretReference(fbNodeId, submissionId, prisma, valuesCache, depth + 1, valueMap, labelMap);
+      }
+    }
+    
+    console.log(`🔀 [FIRST-MATCH FALLBACK] "${condition.name}" → aucune branche matchée → fallback="${fmFallbackResult.result}"`);
+    return {
+      result: fmFallbackResult.result,
+      humanText: `Condition first-match "${condition.name}": fallback → ${fmFallbackResult.humanText}`,
+      details: {
+        type: 'condition',
+        conditionId: condition.id,
+        conditionName: condition.name,
+        mode: 'first-match',
+        branchUsed: 'fallback',
+        matchResult: fmFallbackResult.details
+      }
+    };
+  }
+  
+  // Mode classique (single branch IF/THEN/ELSE) - ci-dessous
   const branch = condSet.branches?.[0];
   const when = branch?.when;
   
@@ -940,7 +1040,7 @@ async function interpretCondition(
   // Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
   // Ã°Å¸â€œÅ  Ãƒâ€°TAPE 3 : RÃƒÂ©cupÃƒÂ©rer la valeur LEFT (cÃƒÂ´tÃƒÂ© gauche de la condition)
   // Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
-  const resolveOperandReference = async (ref: string | undefined): Promise<{ value: string | null; label: string }> => {
+  async function resolveOperandReference(ref: string | undefined): Promise<{ value: string | null; label: string }> {
     if (!ref) {
       return { value: null, label: 'Inconnu' };
     }
@@ -1046,7 +1146,7 @@ async function interpretCondition(
       value: interpreted.result,
       label: labelFromDetails
     };
-  };
+  }
 
   const leftRef = when.left?.ref;
   let leftValue: string | null = null;

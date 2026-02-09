@@ -4522,9 +4522,12 @@ const TBLTabContentWithSections: React.FC<TBLTabContentWithSectionsProps> = Reac
         return;
       }
       // 🔧 FIX: Si le champ a un sous-onglet qui n'est PAS dans la liste explicite,
-      // on ne crée PAS de sous-onglet "Général" pour ça - le champ sera simplement ignoré
-      // car il a un sous-onglet invalide/non défini dans TreeBranchLeaf
-      // (le champ reste visible si on ne filtre pas par sous-onglet)
+      // on DOIT créer le sous-onglet "Général" pour l'afficher là-dedans.
+      // Sans cela, ces champs disparaissent car ils n'ont aucun onglet correspondant.
+      const hasRecognizedSubTab = fieldSubTabs.some(tab => recognizedKeys.has(tab));
+      if (!hasRecognizedSubTab) {
+        hasDefault = true;
+      }
     };
     // When checking for a default (unassigned fields), ignore sections/fields marked as displayOnly (displayAlways)
     sections.forEach(s => {
@@ -4668,6 +4671,7 @@ const TBLTabContentWithSections: React.FC<TBLTabContentWithSectionsProps> = Reac
               disabled={disabled}
               submissionId={submissionId}
               activeSubTab={activeSubTab}
+              allSubTabs={allSubTabs}
             />
           ))}
         </div>
@@ -4747,6 +4751,7 @@ const TBLTabContentWithSections: React.FC<TBLTabContentWithSectionsProps> = Reac
             disabled={disabled}
             submissionId={submissionId}
             activeSubTab={activeSubTab}
+            allSubTabs={allSubTabs}
           />
         </div>
       );

@@ -33,6 +33,7 @@ export const iconForFieldType = (name: string): React.ReactNode => {
     produit: <ShoppingCartOutlined />,
     image_admin: <PictureOutlined />,
     image_user: <CameraOutlined />,
+    photo: <CameraOutlined />,
     fichier_user: <PaperClipOutlined />,
   tableau: <TableOutlined />,
   };

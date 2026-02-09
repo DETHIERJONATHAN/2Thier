@@ -82,6 +82,39 @@ const FieldRenderer: React.FC<FieldRendererProps> = ({ node, value, onChange }) 
           onChange={(e) => onChange(e.target.value)}
         />
       );
+    case 'PHOTO':
+      return (
+        <div className="mt-2">
+          <input
+            type="file"
+            accept="image/*"
+            capture="environment"
+            style={{ display: 'none' }}
+            id={`photo-input-${node.id}`}
+            onChange={e => {
+              const file = e.target.files?.[0];
+              if (file) onChange(file);
+            }}
+          />
+          <label htmlFor={`photo-input-${node.id}`}>
+            <button
+              type="button"
+              className="rounded bg-blue-600 px-4 py-2 text-white hover:bg-blue-700"
+            >
+              Photo
+            </button>
+          </label>
+          {value && typeof value === 'object' && 'name' in value && (
+            <div className="mt-2">
+              <img
+                src={URL.createObjectURL(value as File)}
+                alt="Photo prise"
+                className="max-w-xs max-h-48 rounded border mt-2"
+              />
+            </div>
+          )}
+        </div>
+      );
     default:
       return null;
   }

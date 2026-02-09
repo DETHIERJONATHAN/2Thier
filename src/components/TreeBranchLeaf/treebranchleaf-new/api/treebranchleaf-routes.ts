@@ -3130,7 +3130,7 @@ function buildResponseFromColumns(node: any): Record<string, unknown> {
         precision: typeof node.data_precision === 'number' ? node.data_precision : 2,
         exposedKey: node.data_exposedKey || null,
         displayFormat: node.data_displayFormat || null,
-        visibleToUser: node.data_visibleToUser === true
+        visibleToUser: node.data_visibleToUser !== false
       } : undefined,
       // Formules
       formula: (node.hasFormula || node.formula_activeId || node.formula_instances) ? {

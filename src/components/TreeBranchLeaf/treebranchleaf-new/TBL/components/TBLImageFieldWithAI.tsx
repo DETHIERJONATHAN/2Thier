@@ -940,7 +940,7 @@ const TBLImageFieldWithAI: React.FC<TBLImageFieldWithAIProps> = ({
     {
       key: 'camera',
       icon: <VideoCameraOutlined />,
-      label: 'Prendre une photo',
+      label: 'Photo',
       onClick: openCamera
     }
   ];

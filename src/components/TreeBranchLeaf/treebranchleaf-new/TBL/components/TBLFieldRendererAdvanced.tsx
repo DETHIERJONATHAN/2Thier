@@ -33,7 +33,8 @@ import {
   InfoCircleOutlined, 
   UploadOutlined,
   PlusOutlined,
-  MinusCircleOutlined
+  MinusCircleOutlined,
+  CameraOutlined
 } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { BackendValueDisplay } from './BackendValueDisplay';
@@ -994,6 +995,13 @@ const FIELD_TYPE_DEFINITIONS = {
     variants: ['upload', 'dropzone'],
     validation: ['required', 'fileSize', 'fileType']
   },
+  PHOTO: {
+    label: 'Photo',
+    icon: '📸',
+    category: 'media',
+    variants: ['camera'],
+    validation: ['required', 'fileSize']
+  },
   EMAIL: {
     label: 'Email',
     icon: '📧',
@@ -1410,8 +1418,14 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
     };
     
     // Récupérer la configuration depuis les métadonnées TreeBranchLeaf
-    const nodeType = field.type?.toUpperCase() || 'TEXT';
-    const baseSubType = field.type?.toUpperCase() || metadata.subType || nodeType; // 🎯 Type d'origine depuis Prisma
+    // 🎯 PRIORITÉ DE RÉSOLUTION DU TYPE:
+    // 1. field.type (déjà résolu par buildConditionalFieldFromNode: node.subType || node.fieldType || node.type)
+    // 2. field.subType / field.fieldSubType (fallback direct depuis les colonnes DB)
+    // 3. metadata.subType
+    // 4. 'TEXT' (défaut)
+    const rawFieldType = (field as any).subType || (field as any).fieldSubType || field.type;
+    const nodeType = rawFieldType?.toUpperCase() || 'TEXT';
+    const baseSubType = rawFieldType?.toUpperCase() || metadata.subType || nodeType; // 🎯 Type d'origine depuis Prisma
     
     // ✅ VRAI PRINCIPE: Respecter la configuration du champ telle que dans la DB
     // Le type du champ = ce qu'il est réellement (field.type), NOT une transformation arbitraire
@@ -1528,7 +1542,15 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
       (metadata as Record<string, any>).required
     ) ?? false;
 
-    const resolvedVisible = (field.visible !== false) && (metadata.isVisible !== false) && (normalizedAppearanceConfig.visibleToUser !== false);
+    // 🔧 FIX CRITIQUE: visibleToUser ne doit masquer un champ QUE si la capacité data est activée.
+    // Le flag data_visibleToUser (@default(false) en DB) est conçu pour les champs calculés/display
+    // (hasData=true) - pas pour les champs normaux. Sans cette garde, TOUS les champs seraient
+    // masqués car le default Prisma est false.
+    const hasDataCapability = capabilities?.data?.enabled;
+    const visibleToUserCheck = hasDataCapability 
+      ? (normalizedAppearanceConfig.visibleToUser !== false) 
+      : true; // Ignorer visibleToUser pour les champs sans capacité data
+    const resolvedVisible = (field.visible !== false) && (metadata.isVisible !== false) && visibleToUserCheck;
 
     return {
       fieldType: subType,
@@ -3795,6 +3817,52 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
           </Upload>
         );
       }
+
+      case 'PHOTO':
+        // 📸 Champ photo natif : bouton qui ouvre la caméra du téléphone/tablette
+        return wrapWithCustomTooltip(
+          <div>
+            <input
+              type="file"
+              accept="image/*"
+              capture="environment"
+              style={{ display: 'none' }}
+              id={`photo-input-${field.id}`}
+              onChange={e => {
+                const file = e.target.files?.[0];
+                if (file) {
+                  const reader = new FileReader();
+                  reader.onload = (ev) => {
+                    handleChange(ev.target?.result);
+                  };
+                  reader.readAsDataURL(file);
+                }
+              }}
+              disabled={isDisabled}
+            />
+            <label htmlFor={`photo-input-${field.id}`}>
+              <Button
+                icon={<CameraOutlined />}
+                disabled={isDisabled}
+                size={resolvedSize}
+                style={{ ...commonProps.style, cursor: 'pointer' }}
+                onClick={() => document.getElementById(`photo-input-${field.id}`)?.click()}
+              >
+                {finalValue ? 'Reprendre' : 'Photo'}
+              </Button>
+            </label>
+            {finalValue && typeof finalValue === 'string' && (
+              <div style={{ marginTop: 8 }}>
+                <img
+                  src={finalValue}
+                  alt="Photo prise"
+                  style={{ maxWidth: '200px', maxHeight: '200px', objectFit: 'cover', border: '1px solid #d9d9d9', borderRadius: '6px' }}
+                />
+              </div>
+            )}
+          </div>,
+          field
+        );
 
       case 'leaf_repeater':
       case 'LEAF_REPEATER': {

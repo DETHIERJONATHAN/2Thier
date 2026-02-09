@@ -785,6 +785,13 @@ export const FIELD_TYPES_CONFIG = {
     description: 'Case ├á cocher bool├®enne',
     validation: ['required']
   },
+  PHOTO: {
+    label: 'Photo',
+    icon: '📸',
+    category: 'media',
+    description: 'Prendre une photo avec l\'appareil photo natif',
+    validation: ['required']
+  },
   RADIO: { 
     label: 'Bouton radio', 
     icon: '­ƒöÿ', 

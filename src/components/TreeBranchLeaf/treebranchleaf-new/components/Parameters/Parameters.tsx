@@ -1662,7 +1662,23 @@ const Parameters: React.FC<ParametersProps> = (props) => {
             {/* Libellé avec boutons de visibilité à droite */}
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <div style={{ flex: 1 }}>
-                <strong style={{ fontSize: 12 }}>Libellé</strong>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <strong style={{ fontSize: 12 }}>Libellé</strong>
+                  {selectedNode?.id && (
+                    <Tooltip title="Cliquer pour copier l'ID">
+                      <Tag
+                        color="default"
+                        style={{ fontSize: 10, cursor: 'pointer', margin: 0, lineHeight: '18px', padding: '0 4px' }}
+                        onClick={() => {
+                          navigator.clipboard.writeText(String(selectedNode.id));
+                          import('antd').then(({ message }) => message.success('ID copié !'));
+                        }}
+                      >
+                        ID: {selectedNode.id}
+                      </Tag>
+                    </Tooltip>
+                  )}
+                </div>
                 <Input
                   ref={labelInputRef}
                   value={label}
@@ -1767,6 +1783,7 @@ const Parameters: React.FC<ParametersProps> = (props) => {
                     <Select.Option value="multiselect">📋✅ Sélection multiple (MULTISELECT)</Select.Option>
                     <Select.Option value="date">📅 Date/Heure (DATE)</Select.Option>
                     <Select.Option value="image">🖼️ Image (IMAGE)</Select.Option>
+                    <Select.Option value="photo">📸 Photo (PHOTO)</Select.Option>
                     <Select.Option value="file">📎 Fichier (FILE)</Select.Option>
                     <Select.Option value="display">💡 Affichage (DISPLAY)</Select.Option>
                   </Select>

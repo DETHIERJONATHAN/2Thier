@@ -117,7 +117,7 @@ export interface TreeBranchLeafNodeVariable {
 
 export type FieldTypeKey = 
   | 'TEXT' | 'NUMBER' | 'BOOL' | 'SELECT' | 'MULTISELECT' 
-  | 'DATE' | 'IMAGE' | 'FILE';
+  | 'DATE' | 'IMAGE' | 'FILE' | 'PHOTO';
 
 export interface FieldType {
   key: FieldTypeKey;

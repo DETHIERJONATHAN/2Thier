@@ -188,6 +188,28 @@ export const FIELD_TYPES: Record<string, FieldType> = {
     }
   },
 
+  // 📸 PHOTO (caméra native uniquement)
+  PHOTO: {
+    key: 'PHOTO',
+    label: 'Photo',
+    icon: 'CameraOutlined',
+    description: 'Prendre une photo avec l\'appareil photo du téléphone/tablette',
+    category: 'media',
+    variants: ['camera'],
+    defaultVariant: 'camera',
+    hasOptions: false,
+    hasSubfields: false,
+    capabilities: ['data', 'validation'],
+    appearanceConfig: {
+      variants: [
+        { key: 'camera', label: 'Caméra', icon: 'CameraOutlined' }
+      ],
+      properties: [
+        'maxSize', 'ratio', 'crop', 'thumbnails'
+      ]
+    }
+  },
+
   // 📎 FILE
   FILE: {
     key: 'FILE',
@@ -455,6 +477,7 @@ export const FieldAppearancePanels = {
   DATE: universalPanelImporter,
   FILE: universalPanelImporter,
   IMAGE: universalPanelImporter,
+  PHOTO: universalPanelImporter,
   DATA: universalPanelImporter,
   LEAF_REPEATER: universalPanelImporter
 };
@@ -959,6 +982,14 @@ export class TreeBranchLeafRegistry {
           accept: '.pdf,.docx,.xlsx',
           maxSize: 10,
           multiple: false
+        };
+      
+      case 'PHOTO':
+        return {
+          size: 'md',
+          variant: 'camera',
+          formats: ['jpeg', 'png', 'webp'],
+          maxSize: 10
         };
       
       default:

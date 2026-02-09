@@ -1130,6 +1130,14 @@ async function evaluateCapacitiesForSubmission(
       
     const affectedCount = triggerIndex.get(changedFieldId)?.size || 0;
     console.log(`🚀 [TRIGGER INDEX] Index créé: display fields + ${allLinkedNodes.length} linked fields → ${affectedCount} impactés par "${changedFieldId}"`);
+    // 🔍 DEBUG OPTIMISEUR: vérifier si 410ad1e1 est dans l'index
+    const optimiseurCheck = triggerIndex.get(changedFieldId);
+    if (optimiseurCheck) {
+      const has410 = [...optimiseurCheck].find(id => id.startsWith('410ad1e1'));
+      console.log(`🔍 [DEBUG-OPTI] triggerIndex pour "${changedFieldId}" contient 410ad1e1? ${has410 ? 'OUI' : 'NON'} (total: ${optimiseurCheck.size} entries: ${[...optimiseurCheck].join(', ')})`);
+    } else {
+      console.log(`🔍 [DEBUG-OPTI] triggerIndex pour "${changedFieldId}" est VIDE/ABSENT`);
+    }
   }
 
   // 🔥 DÉDUPLICATION: Un même nodeId peut apparaître plusieurs fois dans capacities
@@ -1143,6 +1151,11 @@ async function evaluateCapacitiesForSubmission(
     const isDisplayField = capacity.TreeBranchLeafNode?.fieldType === 'DISPLAY' 
       || capacity.TreeBranchLeafNode?.type === 'DISPLAY'
       || capacity.TreeBranchLeafNode?.type === 'leaf_field';
+    
+    // 🔍 DEBUG: tracer 410ad1e1
+    if (capacity.nodeId.startsWith('410ad1e1')) {
+      console.log(`🔍 [DEBUG-OPTI] capacity 410ad1e1 trouvé! isDisplayField=${isDisplayField}, mode=${mode}, changedFieldId=${changedFieldId}, sourceRef=${sourceRef}`);
+    }
     
     // 🎯 MODE AUTOSAVE: Skip tous les display fields (optimisation performance)
     // MODE OPEN: Recalculer TOUS les display fields (ouverture / transfert)

@@ -948,6 +948,7 @@ interface TBLSectionRendererProps {
   isValidation?: boolean; // Mode validation (affichage des erreurs)
   submissionId?: string | null;
   activeSubTab?: string; // 🔧 FIX: Sous-onglet actif pour filtrer les champs conditionnels
+  allSubTabs?: Array<{ key: string; label: string }>; // 🔧 FIX: Liste des sous-onglets reconnus pour filtrage cohérent
 }
 
 const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
@@ -962,7 +963,8 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
   parentConditions = {},
   isValidation = false,
   submissionId,
-  activeSubTab
+  activeSubTab,
+  allSubTabs = []
 }) => {
   // ✅ CRITIQUE: Stabiliser l'API pour éviter les re-rendus à chaque frappe
   const apiHook = useAuthenticatedApi();
@@ -1797,6 +1799,8 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
       name: (node.field_label as string) || (node.name as string) || node.label,
       label: node.label,
       type: finalFieldType,
+      subType: (node.subType || node.fieldSubType || finalFieldType) as string, // 📸 Fallback pour le renderer
+      fieldSubType: (node.fieldSubType || node.subType || finalFieldType) as string, // 📸 Fallback pour le renderer
       required: Boolean(node.isRequired),
       visible: node.isVisible !== false,
       placeholder: node.text_placeholder ?? undefined,
@@ -3523,6 +3527,10 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
     // Les champs de répéteurs et références partagées sont créés dynamiquement après le filtrage initial de TBL.tsx
     // On doit donc les filtrer ici aussi
     if (activeSubTab) {
+      // 🔧 FIX CRITIQUE: Construire un Set des sous-onglets reconnus pour gérer les subTabs non reconnus
+      // Même logique que TBL.tsx pour éviter le double-filtrage incohérent
+      const recognizedSubTabKeys = new Set((allSubTabs || []).map(st => st.key));
+      
       fieldsAfterDeletion = fieldsAfterDeletion.filter(field => {
         // Vérifier le subTabKey du champ
         const fieldSubTabs = extractSubTabAssignments(field);
@@ -3544,6 +3552,17 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
           // Pas de subTab assigné = va dans Général (__default__)
           return activeSubTab === '__default__';
         }
+        
+        // 🔧 FIX CRITIQUE: Si le champ a un sous-onglet qui n'est PAS reconnu
+        // dans la liste explicite, traiter comme s'il n'avait pas de sous-onglet
+        // = afficher dans "Général" (__default__). Cohérent avec TBL.tsx.
+        if (recognizedSubTabKeys.size > 0) {
+          const hasRecognizedSubTab = fieldSubTabs.some(tab => recognizedSubTabKeys.has(tab));
+          if (!hasRecognizedSubTab) {
+            return activeSubTab === '__default__';
+          }
+        }
+        
         // Vérifier si le subTab actif correspond
         return fieldSubTabs.includes(activeSubTab);
       });
@@ -3583,7 +3602,7 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
     });
     
     return result;
-  }, [orderedFields, section.title, allNodes, activeSubTab]);
+  }, [orderedFields, section.title, allNodes, activeSubTab, allSubTabs]);
 
   // 🎨 Déterminer le style selon le niveau
   const getSectionStyle = () => {
