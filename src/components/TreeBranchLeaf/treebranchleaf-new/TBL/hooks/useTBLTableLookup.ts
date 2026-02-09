@@ -128,6 +128,18 @@ export function useTBLTableLookup(
   
   // 🔥 FIX: Stabiliser formData en le sérialisant en JSON pour la dépendance
   // Cela évite les boucles infinies quand formData est un nouvel objet à chaque rendu
+  // 🛡️ FIX: Conserver les clés explicitement vidées (undefined/null) pour empêcher la réinjection
+  // JSON.stringify supprime les clés undefined, donc on les track séparément
+  const clearedKeysJson = useMemo(() => {
+    if (!formData) return '[]';
+    const cleared: string[] = [];
+    for (const [key, value] of Object.entries(formData)) {
+      if (value === undefined || value === null || value === '') {
+        cleared.push(key);
+      }
+    }
+    return JSON.stringify(cleared);
+  }, [formData]);
   const formDataJson = useMemo(() => 
     formData ? JSON.stringify(formData) : '', 
     [formData]
@@ -145,11 +157,20 @@ export function useTBLTableLookup(
     // 🔥 FIX: Reconstruire formData depuis la version JSON sérialisée
     let formDataParsed: Record<string, any> | undefined = formDataJson ? JSON.parse(formDataJson) : undefined;
     
+    // 🛡️ FIX: Reconstruire le set de clés explicitement vidées par l'utilisateur
+    // Ces clés ne doivent JAMAIS être réinjectées par le batch ou les valeurs calculées
+    const clearedKeys = new Set<string>(JSON.parse(clearedKeysJson) as string[]);
+    
     // 🔥 FIX 04/02/2026: Enrichir avec les valeurs calculées FRAÎCHES du broadcast
     // Ces valeurs viennent du backend APRÈS le calcul, donc elles sont correctes
+    // 🛡️ Mais ne PAS réinjecter les valeurs pour des champs explicitement vidés par l'utilisateur
     if (formDataParsed && Object.keys(broadcastedCalcValues).length > 0) {
-      formDataParsed = { ...formDataParsed, ...broadcastedCalcValues };
-      console.log(`🔧 [useTBLTableLookup] formData enrichi avec ${Object.keys(broadcastedCalcValues).length} valeurs calculées fraîches`);
+      const safeBroadcast = { ...broadcastedCalcValues };
+      for (const key of clearedKeys) {
+        delete safeBroadcast[key];
+      }
+      formDataParsed = { ...formDataParsed, ...safeBroadcast };
+      console.log(`🔧 [useTBLTableLookup] formData enrichi avec ${Object.keys(safeBroadcast).length} valeurs calculées fraîches`);
     }
 
     if (isTargetField) {
@@ -366,6 +387,9 @@ export function useTBLTableLookup(
                   continue;
                 }
 
+                // 🛡️ FIX: Ne JAMAIS réinjecter une valeur pour un champ explicitement vidé par l'utilisateur
+                if (clearedKeys.has(nodeId)) continue;
+
                 const existingValue = filteredFormData[nodeId];
                 const shouldOverride = existingValue === undefined || existingValue === null || existingValue === '';
 
@@ -390,6 +414,9 @@ export function useTBLTableLookup(
                   if (node.calculatedValue === null || node.calculatedValue === undefined || node.calculatedValue === '') {
                     continue;
                   }
+
+                  // 🛡️ FIX: Ne JAMAIS réinjecter une valeur pour un champ explicitement vidé par l'utilisateur
+                  if (clearedKeys.has(node.id)) continue;
 
                   const existingValue = filteredFormData[node.id];
                   const isComputedField = Boolean(node.hasFormula || node.hasData);
@@ -487,7 +514,7 @@ export function useTBLTableLookup(
     return () => {
       cancelled = true;
     };
-  }, [fieldId, nodeId, enabled, formDataJson, batchContext.isReady, refreshTrigger, broadcastedCalcValues]); // 🔥 FIX 04/02/2026: refreshTrigger + broadcastedCalcValues pour re-filtrer après le calcul
+  }, [fieldId, nodeId, enabled, formDataJson, clearedKeysJson, batchContext.isReady, refreshTrigger, broadcastedCalcValues]); // 🔥 FIX: clearedKeysJson pour détecter quand un select est vidé
 
   return { options, loading, error, tableData, config };
 }
