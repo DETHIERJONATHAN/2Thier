@@ -25,7 +25,7 @@ interface SubmissionDataEntry {
   operationResult?: Prisma.InputJsonValue | null;
   lastResolved?: Date | null;
 }
-import { evaluateVariableOperation } from '../../treebranchleaf-new/api/operation-interpreter';
+import { evaluateVariableOperation, interpretReference, InterpretResult } from '../../treebranchleaf-new/api/operation-interpreter';
 
 interface AuthenticatedRequest extends Request {
   user?: {
@@ -1006,6 +1006,34 @@ async function evaluateCapacitiesForSubmission(
       select: { id: true }
     });
     
+    // 🔧 FIX: Construire un map optionId → parentSelectFieldId
+    // Les conditions utilisent @select.OPTION_ID mais changedFieldId est le SELECT FIELD parent
+    // Sans ce mapping, le trigger index ne fait jamais le lien entre le changement du select
+    // et la condition qui teste une de ses options
+    const optionToSelectMap = new Map<string, string>();
+    const selectFieldNodes = await prisma.treeBranchLeafNode.findMany({
+      where: { treeId, type: 'leaf_option_field' },
+      select: { id: true, parentId: true }
+    });
+    for (const optNode of selectFieldNodes) {
+      if (optNode.parentId) {
+        optionToSelectMap.set(optNode.id, optNode.parentId);
+      }
+    }
+    // Aussi les options leaf_option
+    const optionNodes = await prisma.treeBranchLeafNode.findMany({
+      where: { treeId, type: 'leaf_option' },
+      select: { id: true, parentId: true }
+    });
+    for (const optNode of optionNodes) {
+      if (optNode.parentId) {
+        optionToSelectMap.set(optNode.id, optNode.parentId);
+      }
+    }
+    if (optionToSelectMap.size > 0) {
+      console.log(`🔧 [OPTION→SELECT MAP] ${optionToSelectMap.size} options mappées vers leur select parent`);
+    }
+    
     if (allTreeNodeIds.length > 0) {
       const nodeIds = allTreeNodeIds.map(n => n.id);
       const allConditions = await prisma.treeBranchLeafNodeCondition.findMany({
@@ -1037,11 +1065,26 @@ async function evaluateCapacitiesForSubmission(
             
             if (leftRef) {
               const id = normalizeRefForTriggers(leftRef);
-              if (id) referencedFieldIds.add(id);
+              if (id) {
+                referencedFieldIds.add(id);
+                // 🔧 FIX: Si c'est un @select.OPTION_ID, ajouter aussi le parent select field ID
+                // Car changedFieldId est l'ID du select, pas de l'option
+                if (typeof leftRef === 'string' && leftRef.startsWith('@select.')) {
+                  const parentSelectId = optionToSelectMap.get(id);
+                  if (parentSelectId) referencedFieldIds.add(parentSelectId);
+                }
+              }
             }
             if (rightRef) {
               const id = normalizeRefForTriggers(rightRef);
-              if (id) referencedFieldIds.add(id);
+              if (id) {
+                referencedFieldIds.add(id);
+                // 🔧 FIX: Même résolution pour le côté droit
+                if (typeof rightRef === 'string' && rightRef.startsWith('@select.')) {
+                  const parentSelectId = optionToSelectMap.get(id);
+                  if (parentSelectId) referencedFieldIds.add(parentSelectId);
+                }
+              }
             }
             
             // Extraire les nodeIds des actions SHOW/HIDE (les deux impactent des display fields)
@@ -1140,13 +1183,65 @@ async function evaluateCapacitiesForSubmission(
       // les IDs de base (sans suffixe). On injecte temporairement baseId -> baseId-<suffix>
       // dans le valueMap pour que l'évaluation lise les valeurs fraîches encodées.
       const injectedBaseKeys = applyCopyScopedInputAliases(valueMap, capacity.nodeId, capacity);
-      // ✨ ÉVALUATION avec le valueMap contenant les données FRAÎCHES
-      const capacityResult = await evaluateVariableOperation(
-        capacity.nodeId,
-        submissionId,
-        prisma,
-        valueMap  // 🔑 PASSER LE VALUEMAP avec les données fraîches !
-      );
+      
+      let capacityResult: { value?: unknown; calculatedValue?: unknown; result?: unknown; operationSource?: unknown; operationDetail?: unknown; operationResult?: unknown };
+      
+      try {
+        // ✨ ÉVALUATION avec le valueMap contenant les données FRAÎCHES
+        capacityResult = await evaluateVariableOperation(
+          capacity.nodeId,
+          submissionId,
+          prisma,
+          valueMap  // 🔑 PASSER LE VALUEMAP avec les données fraîches !
+        );
+      } catch (varError) {
+        // 🔧 FIX: Si pas de variable mais le noeud a une condition, évaluer la condition directement
+        // Cas: noeud avec hasCondition=true et des formules mais SANS TreeBranchLeafNodeVariable
+        const nodeForFallback = await prisma.treeBranchLeafNode.findUnique({
+          where: { id: capacity.nodeId },
+          select: { condition_activeId: true, linkedConditionIds: true, formula_activeId: true }
+        });
+        
+        const rootConditionId = nodeForFallback?.linkedConditionIds?.[0] || nodeForFallback?.condition_activeId;
+        
+        if (rootConditionId) {
+          console.log(`🔧 [FALLBACK] Node ${capacity.nodeId} n'a pas de variable → évaluation directe condition:${rootConditionId}`);
+          const valuesCache = new Map<string, InterpretResult>();
+          const condResult = await interpretReference(
+            `condition:${rootConditionId}`,
+            submissionId,
+            prisma,
+            valuesCache,
+            0,
+            valueMap
+          );
+          capacityResult = {
+            value: condResult.result,
+            operationDetail: condResult.details,
+            operationResult: condResult.humanText,
+            operationSource: 'condition'
+          };
+        } else if (nodeForFallback?.formula_activeId) {
+          console.log(`🔧 [FALLBACK] Node ${capacity.nodeId} n'a pas de variable → évaluation directe formula:${nodeForFallback.formula_activeId}`);
+          const valuesCache = new Map<string, InterpretResult>();
+          const fResult = await interpretReference(
+            `node-formula:${nodeForFallback.formula_activeId}`,
+            submissionId,
+            prisma,
+            valuesCache,
+            0,
+            valueMap
+          );
+          capacityResult = {
+            value: fResult.result,
+            operationDetail: fResult.details,
+            operationResult: fResult.humanText,
+            operationSource: 'formula'
+          };
+        } else {
+          throw varError; // Pas de fallback possible → re-throw
+        }
+      }
       
       // Extraire la valeur calculée
       const rawValue = (capacityResult as { value?: unknown; calculatedValue?: unknown; result?: unknown }).value

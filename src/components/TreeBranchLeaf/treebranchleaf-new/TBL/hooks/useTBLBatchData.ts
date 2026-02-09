@@ -141,6 +141,8 @@ function invertOperator(op: string): string {
                    op === '!=' ? '==' :
                    op === 'equals' ? 'not_equals' :
                    op === 'not_equals' ? 'equals' :
+                   op === 'isEmpty' ? 'isNotEmpty' :
+                   op === 'isNotEmpty' ? 'isEmpty' :
                    op.startsWith('not_') ? op.substring(4) :
                    'not_' + op;
   return normalizeOperator(inverted);
@@ -161,6 +163,16 @@ function extractNodeIdFromRef(ref: string): string {
     return ref.substring(12);
   } else if (ref.startsWith('@node.')) {
     return ref.substring(6);
+  } else if (ref.startsWith('node-formula:')) {
+    return ref.substring(13);
+  } else if (ref.startsWith('node-table:')) {
+    return ref.substring(11);
+  } else if (ref.startsWith('node-condition:')) {
+    return ref.substring(15);
+  } else if (ref.startsWith('node-variable:')) {
+    return ref.substring(14);
+  } else if (ref.startsWith('formula:')) {
+    return ref.substring(8);
   } else if (ref.startsWith('condition:')) {
     return ''; // Géré séparément
   } else {
@@ -236,6 +248,17 @@ function buildConditionsTargetingIndex(
         for (const targetRef of action.nodeIds || []) {
           if (targetRef.startsWith('condition:')) {
             resolveConditionTargets(targetRef.substring(10), branchDependsOn, branchOperator, branchShowWhen, false, visited);
+          } else if (targetRef.startsWith('node-formula:') || targetRef.startsWith('node-table:') || targetRef.startsWith('node-variable:')) {
+            // 🔧 FIX: node-formula:/node-table:/node-variable: targets select WHICH formula/table/variable
+            // to use on the condition's OWN node, not a different node
+            addToIndex(chainedCondition.nodeId, {
+              conditionId,
+              sourceNodeId: chainedCondition.nodeId,
+              dependsOn: branchDependsOn,
+              operator: branchOperator,
+              showWhen: branchShowWhen,
+              actionType
+            });
           } else {
             const targetNodeId = extractNodeIdFromRef(targetRef);
             addToIndex(targetNodeId, {
@@ -261,6 +284,17 @@ function buildConditionsTargetingIndex(
             // 🔥 FIX: Si on vient d'un fallback parent (inverted=true), on n'inverse pas encore
             const opForChain = inverted ? parentOperator : ('not_' + parentOperator);
             resolveConditionTargets(targetRef.substring(10), parentDependsOn, opForChain, parentShowWhen, true, visited);
+          } else if (targetRef.startsWith('node-formula:') || targetRef.startsWith('node-table:') || targetRef.startsWith('node-variable:')) {
+            // 🔧 FIX: node-formula:/node-table:/node-variable: targets = formula selection on owning node
+            const finalOp = inverted ? parentOperator : invertOperator(parentOperator);
+            addToIndex(chainedCondition.nodeId, {
+              conditionId,
+              sourceNodeId: chainedCondition.nodeId,
+              dependsOn: parentDependsOn,
+              operator: finalOp,
+              showWhen: parentShowWhen,
+              actionType
+            });
           } else {
             const targetNodeId = extractNodeIdFromRef(targetRef);
             // 🔥 FIX: Si le parent vient déjà d'un fallback (inverted=true), 
@@ -314,6 +348,16 @@ function buildConditionsTargetingIndex(
           if (targetRef.startsWith('condition:')) {
             // Résoudre la condition chaînée
             resolveConditionTargets(targetRef.substring(10), dependsOn, operator, showWhen, false, new Set([condition.id]));
+          } else if (targetRef.startsWith('node-formula:') || targetRef.startsWith('node-table:') || targetRef.startsWith('node-variable:')) {
+            // 🔧 FIX: node-formula: etc. targets = formula selection on the condition's own node
+            addToIndex(condition.nodeId, {
+              conditionId: condition.id,
+              sourceNodeId: condition.nodeId,
+              dependsOn,
+              operator,
+              showWhen,
+              actionType
+            });
           } else {
             const targetNodeId = extractNodeIdFromRef(targetRef);
             addToIndex(targetNodeId, {
@@ -349,6 +393,16 @@ function buildConditionsTargetingIndex(
             if (targetRef.startsWith('condition:')) {
               // Résoudre la condition chaînée (avec opérateur inversé hérité)
               resolveConditionTargets(targetRef.substring(10), dependsOn, invertedOp, showWhen, true, new Set([condition.id]));
+            } else if (targetRef.startsWith('node-formula:') || targetRef.startsWith('node-table:') || targetRef.startsWith('node-variable:')) {
+              // 🔧 FIX: node-formula: etc. targets = formula selection on the condition's own node
+              addToIndex(condition.nodeId, {
+                conditionId: condition.id,
+                sourceNodeId: condition.nodeId,
+                dependsOn,
+                operator: invertedOp,
+                showWhen,
+                actionType
+              });
             } else {
               const targetNodeId = extractNodeIdFromRef(targetRef);
               addToIndex(targetNodeId, {

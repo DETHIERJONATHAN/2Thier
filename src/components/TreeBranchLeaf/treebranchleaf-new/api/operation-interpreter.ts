@@ -975,12 +975,32 @@ async function interpretCondition(
       }
       
       if (optionNode) {
-        // Pour une option, la "valeur" ÃƒÂ  comparer est son ID (car c'est ce qui est stockÃƒÂ© dans la soumission)
-        // et le label est le texte affichÃƒÂ©
+        // 🔧 FIX CRITIQUE: Vérifier si l'option est RÉELLEMENT SÉLECTIONNÉE
+        // Avant ce fix, on retournait toujours l'ID de l'option, ce qui faisait que
+        // `isNotEmpty` était TOUJOURS vrai → la première branche de condition était toujours prise.
+        // Maintenant on vérifie la valeur du champ select parent (dans valueMap ou soumission).
+        if (optionNode.parentId) {
+          const parentSelectValue = await getNodeValue(optionNode.parentId, submissionId, prisma, valueMap, { preserveEmpty: true });
+          
+          if (parentSelectValue !== null && parentSelectValue !== undefined) {
+            const normalizedParentVal = stripUuidNumericSuffix(String(parentSelectValue));
+            const normalizedOptionId = stripUuidNumericSuffix(optionNode.id);
+            const normalizedOptionNodeId = stripUuidNumericSuffix(optionNodeId);
+            
+            if (normalizedParentVal === normalizedOptionId || normalizedParentVal === normalizedOptionNodeId) {
+              console.log(`🎯 [CONDITION @select] Option "${optionNode.label}" (${optionNode.id}) EST sélectionnée dans ${optionNode.parentId}`);
+              return { value: optionNode.id, label: optionNode.label };
+            } else {
+              console.log(`🎯 [CONDITION @select] Option "${optionNode.label}" (${optionNode.id}) PAS sélectionnée (parent=${parentSelectValue})`);
+              return { value: null, label: optionNode.label };
+            }
+          }
+          console.log(`🎯 [CONDITION @select] Option "${optionNode.label}" (${optionNode.id}) → parent sans valeur`);
+          return { value: null, label: optionNode.label };
+        }
         return { value: optionNode.id, label: optionNode.label };
       }
       
-      // Log supprim�
       return { value: optionNodeId, label: 'Option inconnue' };
     }
 
