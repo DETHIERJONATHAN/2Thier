@@ -195,12 +195,18 @@ const DataPanel: React.FC<DataPanelProps> = ({ treeId, nodeId, value, onChange, 
           setInstances([first]);
           setActiveId(first.id);
           setName(resolvedName);
-          // persister dans metadata
-          try {
-            const md = (node?.metadata || {}) as Record<string, unknown>;
-            const nextMd = { ...md, capabilities: { ...(md as { capabilities?: Record<string, unknown> }).capabilities, datas: [first] } };
-            await api.put(`/api/treebranchleaf/trees/${treeId}/nodes/${nodeId}`, { metadata: nextMd });
-          } catch { /* noop */ }
+          // 🛡️ PROTECTION FANTÔMES: Ne persister en metadata que si une variable réelle existe
+          // (sourceRef non vide = l'utilisateur a configuré quelque chose)
+          const hasRealData = !!(data?.sourceRef || data?.fixedValue || data?.usedVariableId);
+          if (hasRealData) {
+            try {
+              const md = (node?.metadata || {}) as Record<string, unknown>;
+              const nextMd = { ...md, capabilities: { ...(md as { capabilities?: Record<string, unknown> }).capabilities, datas: [first] } };
+              await api.put(`/api/treebranchleaf/trees/${treeId}/nodes/${nodeId}`, { metadata: nextMd });
+            } catch { /* noop */ }
+          } else {
+            console.log('🛡️ [DataPanel] Pas de variable réelle, skip persistence metadata pour', nodeId);
+          }
           onChange?.(initial);
         }
       } catch {

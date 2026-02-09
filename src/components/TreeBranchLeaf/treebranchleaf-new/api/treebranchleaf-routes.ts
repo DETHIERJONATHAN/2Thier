@@ -3685,6 +3685,23 @@ const updateOrMoveNode = async (req, res) => {
       const currentMetadata = existingNode.metadata as any || {};
       const newMetadata = updateObj.metadata as any;
       
+      // 🛡️ PROTECTION FANTÔMES: Empêcher l'écriture de capabilities parasites
+      // Si le nœud n'a pas hasData/hasCondition activé, ne pas accepter capabilities.datas/conditions
+      // On vérifie aussi updateObj au cas où hasData est envoyé dans le même appel
+      if (newMetadata?.capabilities) {
+        const nodeFlags = existingNode as any;
+        const hasDataFlag = updateObj.hasData ?? nodeFlags.hasData;
+        const hasConditionFlag = updateObj.hasCondition ?? nodeFlags.hasCondition;
+        if (newMetadata.capabilities.datas && !hasDataFlag) {
+          console.warn(`🛡️ [updateOrMoveNode] BLOQUÉ: tentative d'écriture capabilities.datas sur nœud ${nodeId} sans hasData=true`);
+          delete newMetadata.capabilities.datas;
+        }
+        if (newMetadata.capabilities.conditions && !hasConditionFlag) {
+          console.warn(`🛡️ [updateOrMoveNode] BLOQUÉ: tentative d'écriture capabilities.conditions sur nœud ${nodeId} sans hasCondition=true`);
+          delete newMetadata.capabilities.conditions;
+        }
+      }
+      
       // 🎨 DEBUG: Log displayIcon AVANT fusion
       console.log('🎨 [updateOrMoveNode] displayIcon AVANT fusion:', {
         dansUpdateObjMetadata: (updateObj.metadata as any)?.appearance?.displayIcon,

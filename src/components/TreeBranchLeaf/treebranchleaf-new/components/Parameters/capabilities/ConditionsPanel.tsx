@@ -75,12 +75,15 @@ const ConditionsPanel: React.FC<ConditionsPanelProps> = ({ treeId, nodeId, value
           setActiveId(first.id);
           setCond(cs);
           setName(first.name);
-          if (treeId) {
+          // 🛡️ PROTECTION FANTÔMES: Ne persister en metadata que si une condition réelle existe en DB
+          if (treeId && isConditionSet(data)) {
             try {
               const md = (node?.metadata || {}) as Record<string, unknown>;
               const nextMd = { ...md, capabilities: { ...(md as { capabilities?: Record<string, unknown> }).capabilities, conditions: [first] } };
               await api.put(`/api/treebranchleaf/trees/${treeId}/nodes/${nodeId}`, { metadata: nextMd });
             } catch { /* noop */ }
+          } else {
+            console.log('🛡️ [ConditionsPanel] Pas de condition réelle, skip persistence metadata pour', nodeId);
           }
           onChange?.({ ...(value || {}), conditionSet: cs, name: first.name });
         }
