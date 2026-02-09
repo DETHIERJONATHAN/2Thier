@@ -7227,8 +7227,12 @@ async function applyTableFilters(
     })
   );
 
-  // ÃƒÂ°Ã…Â¸Ã¢â‚¬ÂÃ‚Â§ Ignorer les filtres dont la valeur rÃƒÆ’Ã‚Â©solue est null/undefined (champ non encore rempli)
-  const activeFilters = resolvedFilters.filter(f => f.resolvedValue !== null && f.resolvedValue !== undefined);
+  // 🛡️ Ignorer les filtres dont la valeur résolue est null/undefined/vide (select vidé = filtre inactif)
+  const activeFilters = resolvedFilters.filter(f => {
+    if (f.resolvedValue === null || f.resolvedValue === undefined || f.resolvedValue === '') return false;
+    if (Array.isArray(f.resolvedValue) && (f.resolvedValue as unknown[]).length === 0) return false;
+    return true;
+  });
   
   if (activeFilters.length === 0) {
     return matrix.map((_, i) => i);

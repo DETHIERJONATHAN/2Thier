@@ -302,10 +302,20 @@ const evaluateFilterConditions = (
       referenceValue = formData[condition.compareWithRef] ?? condition.compareWithRef;
     }
     
-    // Vérification de la valeur de référence
+    // 🛡️ Normaliser: si referenceValue est un objet {value: 'xxx', label: 'yyy'}, extraire .value
+    if (referenceValue && typeof referenceValue === 'object' && !Array.isArray(referenceValue) && 'value' in referenceValue) {
+      referenceValue = (referenceValue as any).value;
+    }
+    
     // 🛡️ Si la valeur est vide/null/undefined (ex: select vidé), IGNORER cette condition
     // Aligné sur le comportement serveur: un champ vide = filtre inactif (pas de filtrage)
-    if (referenceValue === null || referenceValue === undefined || referenceValue === '') {
+    // Couvre: null, undefined, '', [], objet vide
+    if (
+      referenceValue === null || 
+      referenceValue === undefined || 
+      referenceValue === '' ||
+      (Array.isArray(referenceValue) && referenceValue.length === 0)
+    ) {
       return true; // Condition ignorée = considérée comme passée
     }
 
