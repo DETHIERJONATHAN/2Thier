@@ -316,6 +316,11 @@ const getLazyAppearancePanel = (panelKey: string): LazyAppearanceComponent | nul
   return lazyComponent;
 };
 
+// 🛡️ Cache global stable pour les panneaux de capacités (React.lazy)
+// Évite de recréer un composant lazy à chaque render, ce qui causait
+// des remontages fantômes et l'affichage de données d'autres champs
+const lazyCapPanelCache = new Map<string, React.LazyExoticComponent<React.ComponentType<Record<string, unknown>>>>();
+
 const Parameters: React.FC<ParametersProps> = (props) => {
   const { tree, selectedNode, nodes = [], panelState, registry, onNodeUpdate, refreshTree, onDeleteNode, onSelectNodeId, onExpandNodeId, onNodeMetadataUpdated } = props;
   
@@ -2917,15 +2922,20 @@ const Parameters: React.FC<ParametersProps> = (props) => {
             })}
           </div>
 
-          {/* Panneaux auto-ouverts - TEMPORAIREMENT DÉSACTIVÉS POUR DEBUG */}
+          {/* Panneaux auto-ouverts */}
           <div style={{ marginTop: 12 }}>
             {capabilities.map(cap => {
               if (!openCaps.has(cap.key)) return null;
               const importer = (CapabilityPanels as Record<string, () => Promise<{ default: React.ComponentType<Record<string, unknown>> }>>)[cap.key];
               if (!importer) return null;
-              const LazyPanel = React.lazy(importer);
+              // 🛡️ FIX: Utiliser le cache stable pour React.lazy au lieu de créer
+              // un nouveau composant à chaque render (ce qui causait des remontages fantômes)
+              if (!lazyCapPanelCache.has(cap.key)) {
+                lazyCapPanelCache.set(cap.key, React.lazy(importer));
+              }
+              const LazyPanel = lazyCapPanelCache.get(cap.key)!;
               return (
-                <React.Suspense fallback={<div style={{ padding: 8, fontSize: 12 }}>Chargement {cap.label}…</div>} key={`cap-panel-${cap.key}`}>
+                <React.Suspense fallback={<div style={{ padding: 8, fontSize: 12 }}>Chargement {cap.label}…</div>} key={`cap-panel-${cap.key}-${selectedNode!.id}`}>
                   <div style={{ marginTop: 8 }} ref={(el) => { capRefs.current[cap.key] = el; }}>
                     <LazyPanel 
                       treeId={tree?.id || ''} 
