@@ -5277,21 +5277,30 @@ router.get('/trees/:treeId/nodes/:nodeId/data', async (req, res) => {
 
     const node = await prisma.treeBranchLeafNode.findFirst({
       where: { id: nodeId, treeId },
-      select: { id: true, data_activeId: true, linkedVariableIds: true },
+      select: { id: true, data_activeId: true, linkedVariableIds: true, hasData: true },
     });
 
     if (!node) {
       return res.status(404).json({ error: 'Noeud non trouve' });
     }
 
-    const { variable, ownerNodeId, proxiedFromNodeId } = await resolveNodeVariable(nodeId, node.linkedVariableIds);
-
-    if (variable) {
-      const { sourceType, sourceRef, fixedValue, selectedNodeId, exposedKey } = variable;
-      if (!sourceType && !sourceRef) {
-      }
-    } else {
+    // 🛡️ PROTECTION FANTÔMES: D'abord chercher une variable directe
+    const directVariable = await prisma.treeBranchLeafNodeVariable.findUnique({ where: { nodeId } });
+    
+    if (directVariable) {
+      // Le nœud a sa propre variable → tout normal
+      const usedVariableId = node.data_activeId || directVariable.id || null;
+      return res.json({ ...directVariable, usedVariableId, ownerNodeId: nodeId, proxiedFromNodeId: null });
     }
+    
+    // 🛡️ Si le nœud n'a PAS hasData, ne PAS résoudre via linkedVariableIds
+    // linkedVariableIds contient les dépendances/triggers, pas les variables propres
+    if (!node.hasData) {
+      return res.json({ usedVariableId: node.data_activeId || null, ownerNodeId: null, proxiedFromNodeId: null });
+    }
+    
+    // Sinon (hasData=true mais pas de variable directe), fallback vers linkedVariableIds
+    const { variable, ownerNodeId, proxiedFromNodeId } = await resolveNodeVariable(nodeId, node.linkedVariableIds);
 
     const usedVariableId = node.data_activeId || variable?.id || null;
     if (variable) {

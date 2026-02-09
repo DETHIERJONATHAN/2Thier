@@ -195,9 +195,10 @@ const DataPanel: React.FC<DataPanelProps> = ({ treeId, nodeId, value, onChange, 
           setInstances([first]);
           setActiveId(first.id);
           setName(resolvedName);
-          // 🛡️ PROTECTION FANTÔMES: Ne persister en metadata que si une variable réelle existe
-          // (sourceRef non vide = l'utilisateur a configuré quelque chose)
-          const hasRealData = !!(data?.sourceRef || data?.fixedValue || data?.usedVariableId);
+          // 🛡️ PROTECTION FANTÔMES: Ne persister en metadata que si c'est une variable propre au nœud
+          // (pas proxiée d'un autre nœud, et sourceRef non vide)
+          const isProxied = !!(data as Record<string, unknown>)?.proxiedFromNodeId;
+          const hasRealData = !isProxied && !!(data?.sourceRef || data?.fixedValue || data?.usedVariableId);
           if (hasRealData) {
             try {
               const md = (node?.metadata || {}) as Record<string, unknown>;
@@ -205,7 +206,7 @@ const DataPanel: React.FC<DataPanelProps> = ({ treeId, nodeId, value, onChange, 
               await api.put(`/api/treebranchleaf/trees/${treeId}/nodes/${nodeId}`, { metadata: nextMd });
             } catch { /* noop */ }
           } else {
-            console.log('🛡️ [DataPanel] Pas de variable réelle, skip persistence metadata pour', nodeId);
+            console.log('🛡️ [DataPanel] Variable proxiée ou vide, skip persistence metadata pour', nodeId);
           }
           onChange?.(initial);
         }
