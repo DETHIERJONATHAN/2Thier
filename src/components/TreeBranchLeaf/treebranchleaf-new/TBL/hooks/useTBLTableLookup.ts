@@ -315,13 +315,36 @@ export function useTBLTableLookup(
               // Exclure les valeurs base64 directes (string)
               if (typeof value === 'string' && value.startsWith('data:')) return false;
               
-              // Exclure les objets image avec propriété "annotated" contenant du base64
-              if (value && typeof value === 'object' && 'annotated' in value) {
-                const annotated = (value as any).annotated;
-                if (typeof annotated === 'string' && annotated.startsWith('data:image/')) {
-                  console.log(`[useTBLTableLookup] 🖼️ Image object exclue pour lookup: ${key} (${(annotated.length / 1024).toFixed(1)} KB)`);
+              // 🛡️ Exclure toute string de plus de 2000 caractères (images, signatures, fichiers encodés)
+              if (typeof value === 'string' && value.length > 2000) {
+                console.log(`[useTBLTableLookup] 🛡️ Valeur trop longue exclue pour lookup: ${key} (${(value.length / 1024).toFixed(1)} KB)`);
+                return false;
+              }
+              
+              // 🛡️ Exclure les objets contenant des données binaires/images (toutes les variantes possibles)
+              if (value && typeof value === 'object' && !Array.isArray(value)) {
+                const obj = value as Record<string, unknown>;
+                // Vérifier les propriétés typiques des champs image: original, annotated, src, thumbnails
+                for (const prop of ['original', 'annotated', 'src', 'image', 'data', 'base64']) {
+                  const v = obj[prop];
+                  if (typeof v === 'string' && (v.startsWith('data:') || v.length > 2000)) {
+                    console.log(`[useTBLTableLookup] 🖼️ Image object exclue pour lookup: ${key}.${prop} (${(v.length / 1024).toFixed(1)} KB)`);
+                    return false;
+                  }
+                }
+                // Exclure si l'objet a une propriété thumbnails (= champ image)
+                if ('thumbnails' in obj || 'original' in obj) {
+                  console.log(`[useTBLTableLookup] 🖼️ Image object exclue pour lookup: ${key} (contient thumbnails/original)`);
                   return false;
                 }
+                // 🛡️ Exclure tout objet sérialisé > 5KB
+                try {
+                  const serialized = JSON.stringify(value);
+                  if (serialized.length > 5000) {
+                    console.log(`[useTBLTableLookup] 🛡️ Objet trop volumineux exclu: ${key} (${(serialized.length / 1024).toFixed(1)} KB)`);
+                    return false;
+                  }
+                } catch { /* ignore serialization errors */ }
               }
               
               return true;
@@ -388,7 +411,14 @@ export function useTBLTableLookup(
           // Uniquement si des valeurs utilisateur existent (filteredFormData a déjà exclu les images)
           if (Object.keys(filteredFormData).length > 0) {
             const formValues = JSON.stringify(filteredFormData);
-            queryParams = `?formValues=${encodeURIComponent(formValues)}`;
+            // 🛡️ Garde-fou final: si le JSON dépasse 8KB, on envoie sans formValues
+            // Évite HTTP 414 URI Too Long qui crashe les requêtes
+            if (formValues.length > 8000) {
+              console.warn(`[useTBLTableLookup] ⚠️ formValues trop volumineuses (${(formValues.length / 1024).toFixed(1)} KB), envoi sans formValues`);
+              queryParams = '';
+            } else {
+              queryParams = `?formValues=${encodeURIComponent(formValues)}`;
+            }
             if (isTargetField) console.log(`[DEBUG][Test - liste] 📊 formValues filtrées (avec calculatedValues):`, filteredFormData);
           }
         }
