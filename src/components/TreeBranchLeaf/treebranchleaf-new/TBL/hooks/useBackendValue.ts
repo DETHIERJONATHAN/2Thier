@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { useAuthenticatedApi } from '../../../../../hooks/useAuthenticatedApi';
 import { useTBLBatchOptional } from '../contexts/TBLBatchContext';
+import { isChangeInProgress } from '../../../../../hooks/useNodeCalculatedValue';
 
 /**
  * 🎯 SYSTÈME ULTRA-SIMPLE : Récupère la valeur calculée par le backend
@@ -123,8 +124,30 @@ export const useBackendValue = (
         nodeId?: string;
         node?: { id?: string };
         targetNodeIds?: string[];
+        calculatedValues?: Record<string, unknown>;
       }>;
       const detail = custom.detail;
+
+      // 🎯 FIX OFF-BY-ONE: Consommer les valeurs inline du broadcast DIRECTEMENT
+      // Avant ce fix, useBackendValue ne lisait jamais les calculatedValues inline,
+      // et refetchait depuis la DB qui avait encore les ANCIENNES valeurs.
+      if (detail?.calculatedValues && nodeId && nodeId in detail.calculatedValues) {
+        const inlineValue = detail.calculatedValues[nodeId];
+        if (inlineValue !== undefined && inlineValue !== null) {
+          console.log(`📥 [useBackendValue] Valeur inline pour nodeId=${nodeId}:`, inlineValue);
+          setValueSafely(inlineValue);
+          setLoading(false);
+          return; // 🎯 Ne PAS faire de refetch, on a la bonne valeur directement
+        }
+      }
+
+      // 🛡️ Si calculatedValues existe mais notre nodeId n'y est PAS,
+      // cela signifie que ce champ n'a pas été impacté par le changement → ne pas refetch
+      if (detail?.calculatedValues && Object.keys(detail.calculatedValues).length > 0) {
+        return;
+      }
+
+      // Fallback: vérifier si un refresh spécifique est demandé pour ce nodeId
       const candidates: Array<string | string[] | undefined> = [detail?.nodeId, detail?.node?.id, detail?.targetNodeIds];
       if (candidates.some(id => shouldRefresh(id))) {
         usedBatch.current = false;
@@ -167,6 +190,13 @@ export const useBackendValue = (
     // 🔄 FALLBACK : Appel API individuel
     if (!api) {
       setValueSafely(undefined);
+      return;
+    }
+
+    // 🎯 FIX OFF-BY-ONE: Ne pas fetch depuis la DB pendant qu'un changement est en cours
+    // La DB contient encore les ANCIENNES valeurs. Les bonnes viendront via le broadcast inline.
+    if (isChangeInProgress()) {
+      console.log(`🚫 [useBackendValue] GET BLOQUÉ pour nodeId=${nodeId} - changement en cours, attente du broadcast inline`);
       return;
     }
 

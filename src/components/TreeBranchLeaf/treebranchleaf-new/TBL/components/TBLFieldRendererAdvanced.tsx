@@ -516,7 +516,21 @@ const extractValueFromColumn = (
       const targetColIndex = tableData.columns.indexOf(targetColumn);
       
       if (config.keyColumn) {
-        // Lookup par colonne: l'option correspond à une colonne
+        // 🔧 FIX: D'abord essayer de matcher option.value comme valeur dans une COLONNE (pas un nom de colonne)
+        // Car pour les tables type "onduleur/KVA", les options sont des valeurs de cellules, pas des en-têtes
+        const keyColIndex = tableData.columns.indexOf(config.keyColumn);
+        if (keyColIndex >= 0 && targetColIndex >= 0) {
+          const matchingRowIndex = tableData.data.findIndex(row => {
+            if (!row) return false;
+            const cellValue = row[keyColIndex];
+            return String(cellValue ?? '').trim().toLowerCase() === String(option.value ?? '').trim().toLowerCase();
+          });
+          if (matchingRowIndex >= 0 && tableData.data[matchingRowIndex]?.[targetColIndex] !== undefined) {
+            return tableData.data[matchingRowIndex][targetColIndex];
+          }
+        }
+        
+        // Fallback: Lookup par colonne - l'option correspond à un NOM de colonne (cas Orientation/Inclinaison)
         const optionColIndex = tableData.columns.findIndex(col => 
           String(col).trim().toLowerCase() === String(option.value).trim().toLowerCase()
         );

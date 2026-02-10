@@ -11085,22 +11085,39 @@ router.get('/nodes/:nodeId/table/lookup', async (req, res) => {
     // ÃƒÂ¯Ã‚Â¿Ã‚Â½ÃƒÂ°Ã…Â¸Ã…Â½Ã‚Â¯ ÃƒÆ’Ã¢â‚¬Â°TAPE 3: GÃƒÆ’Ã‚Â©nÃƒÆ’Ã‚Â©rer les options selon la configuration
     if (table.type === 'matrix') {
 
-      // CAS 1: keyRow dÃƒÆ’Ã‚Â©fini ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ Extraire les VALEURS de cette ligne
-      if (selectConfig?.keyRow) {
-        const rowIndex = rows.indexOf(selectConfig.keyRow);
+      // 🛡️ FIX: Protéger contre un keyRow invalide (JSON array stringifié au lieu d'un nom de ligne)
+      let effectiveKeyRow = selectConfig?.keyRow ?? null;
+      if (effectiveKeyRow) {
+        try {
+          const parsed = JSON.parse(effectiveKeyRow);
+          if (Array.isArray(parsed)) {
+            console.warn(`[TreeBranchLeaf API] ⚠️ keyRow est un JSON array au lieu d'un nom de ligne — ignoré:`, effectiveKeyRow);
+            effectiveKeyRow = null;
+            // Corriger la DB pour éviter ce problème à l'avenir
+            await prisma.treeBranchLeafSelectConfig.update({
+              where: { nodeId },
+              data: { keyRow: null, updatedAt: new Date() }
+            }).catch(() => {});
+          }
+        } catch {
+          // Pas du JSON → c'est un vrai nom de ligne, OK
+        }
+      }
+
+      // CAS 1: keyRow défini → Extraire les VALEURS de cette ligne
+      if (effectiveKeyRow) {
+        const rowIndex = rows.indexOf(effectiveKeyRow);
         
         if (rowIndex === -1) {
-          console.warn(`ÃƒÂ¢Ã…Â¡Ã‚Â ÃƒÂ¯Ã‚Â¸Ã‚Â [TreeBranchLeaf API] Ligne "${selectConfig.keyRow}" introuvable`);
+          console.warn(`⚠️ [TreeBranchLeaf API] Ligne "${effectiveKeyRow}" introuvable`);
           return res.json({ options: [] });
         }
 
-        // ÃƒÂ°Ã…Â¸Ã…Â½Ã‚Â¯ RÃƒÆ’Ã‹â€ GLE A1: rows[0] = A1 ("Orientation"), rows[1] = "Nord", etc.
-        // data[0] correspond ÃƒÆ’Ã‚Â  rows[1], donc il faut dÃƒÆ’Ã‚Â©caler : dataRowIndex = rowIndex - 1
-        // Si rowIndex === 0 (A1), on doit extraire les en-tÃƒÆ’Ã‚Âªtes de colonnes (columns[]), pas data[]
+        // RÈGLE A1: rows[0] = A1, rows[1] = première ligne de données, etc.
         let options;
         
         if (rowIndex === 0) {
-          // Ligne A1 sÃƒÆ’Ã‚Â©lectionnÃƒÆ’Ã‚Â©e ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ Extraire les en-tÃƒÆ’Ã‚Âªtes de colonnes (SANS A1 lui-mÃƒÆ’Ã‚Âªme)
+          // Ligne A1 sélectionnée → Extraire les en-têtes de colonnes (SANS A1 lui-même)
           options = columns.slice(1).map((colName) => {
             return {
               value: colName,
@@ -11108,7 +11125,7 @@ router.get('/nodes/:nodeId/table/lookup', async (req, res) => {
             };
           }).filter(opt => opt.value !== 'undefined' && opt.value !== 'null' && opt.value !== '');
         } else {
-          // Autre ligne ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ Extraire depuis data[rowIndex - 1]
+          // Autre ligne → Extraire depuis data[rowIndex - 1]
           const dataRowIndex = rowIndex - 1;
           const rowData = data[dataRowIndex] || [];
           options = columns.slice(1).map((colName, colIdx) => {
@@ -11120,26 +11137,22 @@ router.get('/nodes/:nodeId/table/lookup', async (req, res) => {
           }).filter(opt => opt.value !== 'undefined' && opt.value !== 'null' && opt.value !== '');
         }
 
-
         return res.json({ options });
       }
 
-      // CAS 2: keyColumn dÃƒÆ’Ã‚Â©fini ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ Extraire les VALEURS de cette colonne
+      // CAS 2: keyColumn défini → Extraire les VALEURS de cette colonne
       if (selectConfig?.keyColumn) {
         const colIndex = columns.indexOf(selectConfig.keyColumn);
         
         if (colIndex === -1) {
-          console.warn(`ÃƒÂ¢Ã…Â¡Ã‚Â ÃƒÂ¯Ã‚Â¸Ã‚Â [TreeBranchLeaf API] Colonne "${selectConfig.keyColumn}" introuvable`);
+          console.warn(`⚠️ [TreeBranchLeaf API] Colonne "${selectConfig.keyColumn}" introuvable`);
           return res.json({ options: [] });
         }
 
-        // ÃƒÂ°Ã…Â¸Ã…Â½Ã‚Â¯ RÃƒÆ’Ã‹â€ GLE A1 EXCEL: Si colIndex = 0, c'est la colonne A (labels des lignes)
-        // Ces labels sont dans rows[], PAS dans data[][0] !
-        // ÃƒÂ¢Ã…Â¡Ã‚Â ÃƒÂ¯Ã‚Â¸Ã‚Â IMPORTANT: rows[0] = A1 (ex: "Orientation"), rows[1...] = labels de lignes rÃƒÆ’Ã‚Â©els
+        // RÈGLE A1 EXCEL: Si colIndex = 0, c'est la colonne A (labels des lignes)
         let options;
         if (colIndex === 0) {
-          // Colonne A = labels des lignes ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ Extraire depuis rows[] SAUF rows[0] (qui est A1)
-          // ÃƒÂ°Ã…Â¸Ã¢â‚¬Â Ã¢â‚¬Â¢ FILTRAGE: N'inclure que les lignes qui passent les filtres
+          // Colonne A = labels des lignes → Extraire depuis rows[] SAUF rows[0]
           options = filteredRowIndices
             .filter(idx => idx > 0) // Exclure rows[0] (A1)
             .map((rowIdx) => {
@@ -11151,26 +11164,31 @@ router.get('/nodes/:nodeId/table/lookup', async (req, res) => {
             })
             .filter(opt => opt.value !== 'undefined' && opt.value !== 'null' && opt.value !== '');
         } else {
-          // Autre colonne ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ Extraire depuis data[][colIndex - 1]
-          // ÃƒÂ¢Ã…Â¡Ã‚Â ÃƒÂ¯Ã‚Â¸Ã‚Â ATTENTION: data ne contient PAS la colonne 0, donc colIndex doit ÃƒÆ’Ã‚Âªtre dÃƒÆ’Ã‚Â©calÃƒÆ’Ã‚Â© de -1
-          // ÃƒÂ°Ã…Â¸Ã¢â‚¬Â Ã¢â‚¬Â¢ FILTRAGE: N'inclure que les lignes qui passent les filtres
-          const dataColIndex = colIndex - 1;
-          options = filteredRowIndices.map((rowIdx) => {
-            const row = data[rowIdx] || [];
-            const value = row[dataColIndex];
-            const rowLabel = rows[rowIdx] || '';
-            return {
-              value: String(value),
-              label: selectConfig.displayColumn ? `${rowLabel}: ${value}` : String(value),
-            };
-          }).filter(opt => opt.value !== 'undefined' && opt.value !== 'null' && opt.value !== '');
+          // 🔧 FIX: Utiliser fullMatrixForFilters pour accès direct sans décalage
+          // 🔧 FIX: Exclure la ligne d'en-tête (row 0) qui contient les noms de colonnes
+          // 🔧 FIX: Utiliser displayColumn pour afficher la valeur KVA à côté du nom
+          // Extraire les valeurs de la colonne pour chaque ligne filtrée
+          options = filteredRowIndices
+            .filter(idx => idx > 0) // Exclure la ligne d'en-tête (row 0)
+            .map((rowIdx) => {
+              const fullRow = fullMatrixForFilters[rowIdx] || [];
+              const value = fullRow[colIndex]; // Accès direct pour la colonne de valeur
+              return { value: String(value), label: String(value) };
+            })
+            .filter(opt => opt.value !== 'undefined' && opt.value !== 'null' && opt.value !== '');
         }
 
-
-        return res.json({ options });
+        // 🔧 FIX: Retourner aussi les données complètes pour le filtrage valueCaps front-end
+        // Les données sont renvoyées en mode "columns" pour que extractValueFromColumn fonctionne
+        return res.json({
+          options,
+          columns,
+          rows: rows.slice(1).map(String), // Sans la ligne d'en-tête
+          data: fullMatrixForFilters.slice(1), // Données complètes sans l'en-tête
+          type: 'columns' // Override: données structurées comme un tableau colonnes
+        });
       }
     }
-
     // Fallback: Si pas de keyRow/keyColumn, retourner le tableau complet
     // 🔥 AUTO-DEFAULT MATRIX (Orientation / Inclinaison) : Générer options dynamiques selon le rôle du champ
     if (table.type === 'matrix') {
@@ -11243,10 +11261,7 @@ router.get('/nodes/:nodeId/table/lookup', async (req, res) => {
               tableReference: table.id,
               keyColumn: keyColumnValue,
               keyRow: keyRowValue,
-              valueColumn: null,
-              valueRow: null,
-              displayColumn: null,
-              displayRow: null,
+              // 🛡️ NE PAS écraser displayColumn/displayRow s'ils existent déjà
               updatedAt: new Date(),
             }
           });
@@ -11261,8 +11276,13 @@ router.get('/nodes/:nodeId/table/lookup', async (req, res) => {
           detectedRole: isRowField ? 'rowField' : isColumnField ? 'columnField' : 'fallback'
         });
         
+        // 🔧 FIX: Retourner aussi les données complètes pour le filtrage valueCaps côté front-end
         return res.json({ 
           options: autoOptions, 
+          columns,
+          rows: rows.slice(1).map(String),
+          data: fullMatrixForFilters.slice(1),
+          type: 'columns',
           autoDefault: { 
             source: isRowField ? 'rowA1' : 'columnA', 
             keyColumnCandidate: keyColumnValue,

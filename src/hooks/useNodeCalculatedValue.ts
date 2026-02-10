@@ -69,6 +69,14 @@ export function unblockGetRequests(): void {
 }
 
 /**
+ * 🔍 Vérifie si un changement est en cours (GET bloqués)
+ * Utilisé par useBackendValue pour éviter les fetch de données périmées
+ */
+export function isChangeInProgress(): boolean {
+  return Date.now() < changeInProgressUntil;
+}
+
+/**
  * 🛡️ Protège une valeur inline d'être écrasée par un GET obsolète
  */
 function protectInlineValue(nodeId: string, durationMs: number = 1500): void {

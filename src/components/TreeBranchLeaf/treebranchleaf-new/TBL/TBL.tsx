@@ -1403,7 +1403,7 @@ const TBL: React.FC<TBLProps> = ({
     // Les valeurs correctes arriveront via broadcastCalculatedRefresh avec les valeurs inline
     const isRealUserChange = Boolean(changedField && changedField !== 'NULL');
     if (isRealUserChange) {
-      blockGetRequestsTemporarily(1500); // Bloquer pendant 1.5 secondes - équilibre entre réactivité et fiabilité
+      blockGetRequestsTemporarily(800); // 🚀 FIX 10/02/2026: Réduit de 1500ms à 800ms - le broadcast débloque immédiatement
     }
 
     // ✅ Devis enregistrés: on n'écrit PAS au fil de l'eau, SAUF si on est en train d'éditer une révision (-N)
@@ -1465,6 +1465,7 @@ const TBL: React.FC<TBLProps> = ({
             // Une requête pendante = l'utilisateur a changé à nouveau pendant qu'on sauvegardait
             // Un debounce actif = un nouveau changement est en attente des 80ms avant d'être envoyé
             // La prochaine requête fera son propre broadcast avec les données à jour
+            // 🚀 FIX: Ne pas broadcast si autosave périodique OU si une requête pendante existe OU si un debounce est actif
             const isPeriodicAutosave = !changedField || changedField === 'NULL';
             const hasPendingRequest = !!pendingAutosaveRef.current;
             const hasDebounceActive = !!debounceActiveRef.current;
@@ -1513,7 +1514,6 @@ const TBL: React.FC<TBLProps> = ({
                 reason: 'create-and-evaluate',
                 evaluatedSubmissionId: createdOrReusedId,
                 recalcCount: evaluationResponse?.submission?.TreeBranchLeafSubmissionData?.length,
-                // 🎯 FIX: Passer les valeurs calculées pour éviter le refetch race condition
                 submissionData: evaluationResponse?.submission?.TreeBranchLeafSubmissionData
               });
             } else if (hasDebounceActive) {
@@ -1586,11 +1586,10 @@ const TBL: React.FC<TBLProps> = ({
         lastSavedSignatureRef.current = sig;
         setAutosaveLast(new Date());
         
-        // 🚀 FIX: Ne PAS broadcast si:
-        // 1. C'est un autosave périodique (changedField NULL) ET pas mode 'open' - backend ne recalcule pas
-        // 2. Une requête pendante existe - elle fera son propre broadcast avec données à jour
-        // 3. Un debounce est actif - un nouveau changement est en attente des 80ms
-        // 🔥 FIX 01/02/2026: TOUJOURS broadcaster en mode 'open' car le backend recalcule TOUS les display fields
+        // 🚀 FIX: Ne pas broadcast si autosave périodique OU si une requête pendante existe OU si un debounce est actif
+        // Une requête pendante = l'utilisateur a changé à nouveau pendant qu'on sauvegardait → données périmées
+        // Un debounce actif = un nouveau changement est en attente avant d'être envoyé
+        // Broadcaster avec pending cause des cascades Auto-Select en boucle (selects qui changent tout seuls)
         const isPeriodicAutosave = !changedField || changedField === 'NULL';
         const isOpenMode = effectiveMode === 'open';
         const hasPendingRequest = !!pendingAutosaveRef.current;
@@ -1606,6 +1605,8 @@ const TBL: React.FC<TBLProps> = ({
             // 🎯 FIX: Passer les valeurs calculées pour éviter le refetch race condition
             submissionData: evaluationResponse?.submission?.TreeBranchLeafSubmissionData
           });
+        } else if (hasPendingRequest) {
+          console.log(`🔒 [TBL] Broadcast SKIP: requête pendante (données potentiellement périmées, évite boucle Auto-Select)`);
         } else if (hasDebounceActive) {
           console.log(`🔒 [TBL] Broadcast SKIP: debounce actif (nouveau changement en attente)`);
         }
@@ -2290,14 +2291,14 @@ const TBL: React.FC<TBLProps> = ({
         if (aliasId) realFieldId = aliasId;
       }
       const fieldType = String((fieldConfig as any)?.type || '').toLowerCase();
-      console.log(`🎯🎯🎯 [TBL] AVANT eval(DEBOUNCED 80ms): fieldId="${fieldId}", realFieldId="${realFieldId}", type="${fieldType || 'unknown'}"`);
+      console.log(`🎯🎯🎯 [TBL] AVANT eval(DEBOUNCED 50ms): fieldId="${fieldId}", realFieldId="${realFieldId}", type="${fieldType || 'unknown'}"`);
 
       // Garder en mémoire le dernier champ réellement modifié (utile pour flush/versioning)
       if (realFieldId) {
         lastRealChangedFieldIdRef.current = realFieldId;
       }
 
-      // ⚡ Évaluation avec debounce de 80ms - équilibre réactivité/groupage
+      // ⚡ Évaluation avec debounce de 50ms - réduit de 80ms pour meilleure réactivité en cascade
       if (debounceTimerRef.current) {
         clearTimeout(debounceTimerRef.current);
       }
@@ -2314,7 +2315,7 @@ const TBL: React.FC<TBLProps> = ({
         } else {
           console.warn('⚠️ [TBL] immediateEvaluateRef pas encore initialisé');
         }
-      }, 80);
+      }, 50);
 
       // ✅ Si on édite un devis enregistré "original", créer tout de suite la révision en base
       // pour qu'elle existe même si l'utilisateur quitte l'écran.
