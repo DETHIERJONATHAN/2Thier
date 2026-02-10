@@ -366,7 +366,6 @@ async function enrichDataFromSubmission(
         if (lead.data && typeof lead.data === 'object') {
           const leadData = lead.data as Record<string, unknown>;
           
-          console.log('🔍 [GRD DEBUG] Lead data:', JSON.stringify(leadData).substring(0, 500));
           
           // Ajouter le code postal s'il existe dans data
           // 🔥 FIX: Support multiple formats de données
@@ -374,17 +373,13 @@ async function enrichDataFromSubmission(
           // 2. data.address.zipCode (format structuré)
           // 3. Extraction depuis data.address (string)
           if (leadData.postalCode) {
-            console.log('🔍 [GRD DEBUG] Found postalCode direct:', leadData.postalCode);
             valueMap.set('lead.postalCode', leadData.postalCode);
           } else if (leadData.address && typeof leadData.address === 'object') {
             // Format structuré: data.address.zipCode
             const addressObj = leadData.address as Record<string, unknown>;
-            console.log('🔍 [GRD DEBUG] Address object:', JSON.stringify(addressObj));
             if (addressObj.zipCode) {
-              console.log('🔍 [GRD DEBUG] Found address.zipCode:', addressObj.zipCode);
               valueMap.set('lead.postalCode', addressObj.zipCode);
             } else if (addressObj.postalCode) {
-              console.log('🔍 [GRD DEBUG] Found address.postalCode:', addressObj.postalCode);
               valueMap.set('lead.postalCode', addressObj.postalCode);
             }
           } else if (leadData.address && typeof leadData.address === 'string') {
@@ -392,12 +387,10 @@ async function enrichDataFromSubmission(
             const postalCodeMatch = leadData.address.match(/\b(\d{4,5})\b/);
             if (postalCodeMatch) {
               const extractedPostalCode = postalCodeMatch[1];
-              console.log('🔍 [GRD DEBUG] Extracted postalCode from string:', extractedPostalCode);
               valueMap.set('lead.postalCode', extractedPostalCode);
             }
           }
           
-          console.log('🔍 [GRD DEBUG] Final lead.postalCode in valueMap:', valueMap.get('lead.postalCode'));
           
           if (leadData.address) {
             valueMap.set('lead.address', leadData.address);
@@ -461,7 +454,6 @@ async function enrichDataFromSubmission(
         if (valueMap.has(data.nodeId)) {
           // 🔍 DEBUG: Log quand on skip un champ
           if (data.nodeId === 'd6212e5e-3fe9-4cce-b380-e6745524d011') {
-            console.log(`🔍 [enrichDataFromSubmission] SKIP Facture annuelle - valueMap a déjà: ${valueMap.get(data.nodeId)}, DB a: ${data.value}`);
           }
           continue;
         }
@@ -475,7 +467,6 @@ async function enrichDataFromSubmission(
         }
         // 🔍 DEBUG: Log quand on SET un champ
         if (data.nodeId === 'd6212e5e-3fe9-4cce-b380-e6745524d011') {
-          console.log(`🔍 [enrichDataFromSubmission] SET Facture annuelle depuis DB: ${parsedValue}`);
         }
         valueMap.set(data.nodeId, parsedValue);
       }
@@ -779,6 +770,73 @@ async function interpretReference(
   // Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
   // Ã°Å¸â€™Â¾ Ãƒâ€°TAPE 5 : Mettre en cache le rÃƒÂ©sultat
   // Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
+
+  // 🔥 FIX 10/02/2026 v3: @calculated.{nodeId} - Retourner PRIORITAIREMENT la calculatedValue STOCKÉE
+  // Un champ "d'affichage" (@calculated.) doit retourner sa VALEUR CALCULÉE STOCKÉE,
+  // pas évaluer sa CAPACITÉ (condition/formule qui l'a défini).
+  // 
+  // PRIORITÉS (dans cet ordre):
+  // 1️⃣ calculatedValue STOCKÉE du nœud (la VRAIE valeur affichée)
+  // 2️⃣ formula_activeId si pas de calculatedValue (cas de formules pures)
+  // 3️⃣ capabilities sourceRef si formule (fallback pour cases limites)
+  // ⚠️ N'évaluer JAMAIS une condition (SHOW/HIDE) - elle ne produit pas de valeur!
+  const isCalculatedRef = ref.startsWith('@calculated.');
+  if (isCalculatedRef && result && String(result.result) === '0') {
+    try {
+      const calcNode = await prisma.treeBranchLeafNode.findUnique({
+        where: { id: cleanRef },
+        select: {
+          id: true,
+          label: true,
+          calculatedValue: true,  // 🎯 NOUVEAU: Récupérer la valeur STOCKÉE
+          formula_activeId: true,
+          hasFormula: true,
+          hasTable: true,
+          metadata: true,
+        }
+      });
+      
+      if (calcNode) {
+        // ✅ PRIORITÉ 0 (NOUVELLE): Retourner directement la calculatedValue STOCKÉE
+        // Cette valeur a déjà été calculée et stockée - c'est le vrai résultat!
+        if (calcNode.calculatedValue) {
+          result = {
+            result: String(calcNode.calculatedValue),
+            humanText: `Valeur calculée de ${calcNode.label}`,
+            details: { type: 'calculated-stored-value', nodeId: cleanRef }
+          };
+        }
+        // PRIORITÉ 1: formula_activeId (si pas de valeur stockée)
+        else if (calcNode.formula_activeId) {
+          const formulaResult = await interpretReference(
+            `node-formula:${calcNode.formula_activeId}`, submissionId, prisma, valuesCache, depth + 1, valueMap, labelMap
+          );
+          if (formulaResult && String(formulaResult.result) !== '0') {
+            result = formulaResult;
+          }
+        }
+        
+        // PRIORITÉ 2: capabilities sourceRef UNIQUEMENT si c'est une formule (pas condition)
+        if (String(result.result) === '0') {
+          const meta = calcNode.metadata as any;
+          const datas = meta?.capabilities?.datas;
+          if (datas && datas.length > 0) {
+            const sourceRef = datas[0]?.config?.sourceRef;
+            if (sourceRef && typeof sourceRef === 'string' && sourceRef.startsWith('node-formula:')) {
+              const capResult = await interpretReference(
+                sourceRef, submissionId, prisma, valuesCache, depth + 1, valueMap, labelMap
+              );
+              if (capResult && String(capResult.result) !== '0') {
+                result = capResult;
+              }
+            }
+          }
+        }
+      }
+    } catch (calcError) {
+      console.warn(`[CALCULATED-FALLBACK] ⚠️ Erreur fallback pour ${cleanRef}:`, calcError);
+    }
+  }
   valuesCache.set(cleanRef, result);
   
   return result;
@@ -931,7 +989,6 @@ async function interpretCondition(
   // et on prend la première dont la condition WHEN est vraie.
   // ════════════════════════════════════════════════════════════════════
   if (condSet.mode === 'first-match' && condSet.branches && condSet.branches.length > 1) {
-    console.log(`🔀 [CONDITION FIRST-MATCH] "${condition.name}" (${condition.id}): ${condSet.branches.length} branches à évaluer`);
     
     for (const fmBranch of condSet.branches) {
       const fmWhen = fmBranch?.when;
@@ -961,7 +1018,6 @@ async function interpretCondition(
       }
       
       const fmMatches = evaluateOperator(fmWhen.op, fmLeftValue, fmRightValue);
-      console.log(`🔀 [FIRST-MATCH] Branche "${fmBranch.label || fmBranch.id}": LEFT="${fmLeftLabel}"(${fmLeftValue}) ${fmWhen.op} RIGHT="${fmRightLabel}"(${fmRightValue}) → ${fmMatches ? 'MATCH ✅' : 'skip'}`);
       
       if (fmMatches) {
         // Cette branche matche → interpréter son action
@@ -1080,7 +1136,6 @@ async function interpretCondition(
         const isSelectField = optionNode.type === 'branch' || optionNode.type === 'leaf_select' || optionNode.type === 'branch_select';
         if (isSelectField) {
           const selectValue = await getNodeValue(optionNode.id, submissionId, prisma, valueMap, { preserveEmpty: true });
-          console.log(`🎯 [CONDITION @select] SELECT FIELD "${optionNode.label}" (${optionNode.id}) → valeur: ${selectValue}`);
           return { value: selectValue !== null && selectValue !== undefined ? String(selectValue) : null, label: optionNode.label };
         }
 
@@ -1097,14 +1152,11 @@ async function interpretCondition(
             const normalizedOptionNodeId = stripUuidNumericSuffix(optionNodeId);
             
             if (normalizedParentVal === normalizedOptionId || normalizedParentVal === normalizedOptionNodeId) {
-              console.log(`🎯 [CONDITION @select] Option "${optionNode.label}" (${optionNode.id}) EST sélectionnée dans ${optionNode.parentId}`);
               return { value: optionNode.id, label: optionNode.label };
             } else {
-              console.log(`🎯 [CONDITION @select] Option "${optionNode.label}" (${optionNode.id}) PAS sélectionnée (parent=${parentSelectValue})`);
               return { value: null, label: optionNode.label };
             }
           }
-          console.log(`🎯 [CONDITION @select] Option "${optionNode.label}" (${optionNode.id}) → parent sans valeur`);
           return { value: null, label: optionNode.label };
         }
         return { value: optionNode.id, label: optionNode.label };
@@ -1189,7 +1241,6 @@ async function interpretCondition(
   // Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
   const operator = when.op;
   const conditionMet = evaluateOperator(operator, leftValue, rightValue);
-  console.log(`🔍 [CONDITION EVAL] "${condition.name}" (${condition.id}): LEFT="${leftLabel}"(${leftValue}) ${operator} RIGHT="${rightLabel}"(${rightValue}) → ${conditionMet ? 'VRAI' : 'FAUX'}`);
   
   
   // Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
@@ -1267,7 +1318,6 @@ async function interpretCondition(
   // Ã°Å¸â€œÂ¤ Ãƒâ€°TAPE 9 : Retourner le rÃƒÂ©sultat structurÃƒÂ© avec le rÃƒÂ©sultat de la branche sÃƒÂ©lectionnÃƒÂ©e
   // Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
   const finalResult = conditionMet ? alorsResult.result : sinonResult.result;
-  console.log(`🔍 [CONDITION RESULT] "${condition.name}" → branche ${branchName}: ALORS="${alorsResult.result}" / SINON="${sinonResult.result}" → FINAL="${finalResult}"`);
   
   return {
     result: finalResult,
@@ -2013,25 +2063,15 @@ async function getSourceValue(
   valueMap?: Map<string, unknown>,
   labelMap?: Map<string, string>
 ): Promise<string | null> {
-  console.log('🔍 [GRD DEBUG] getSourceValue called with:', {
-    sourceOption: JSON.stringify(sourceOption),
-    fieldId,
-    valueMapHas_lead_postalCode: valueMap?.has('lead.postalCode'),
-    lead_postalCode_value: valueMap?.get('lead.postalCode')
-  });
-  
   // Par dÃƒÂ©faut (ou option SELECT): utiliser le fieldId configurÃƒÂ©
   if (!sourceOption || sourceOption.type === 'select') {
     const result = fieldId ? await getNodeValue(fieldId, submissionId, prisma, valueMap) : null;
-    console.log('🔍 [GRD DEBUG] getSourceValue SELECT mode result:', result);
     return result;
   }
   
   // Option 2 (CHAMP): rÃƒÂ©cupÃƒÂ©rer la valeur du champ source
   if (sourceOption.type === 'field' && sourceOption.sourceField) {
-    console.log('🔍 [GRD DEBUG] getSourceValue FIELD mode, sourceField:', sourceOption.sourceField);
     const result = await getNodeValue(sourceOption.sourceField, submissionId, prisma, valueMap);
-    console.log('🔍 [GRD DEBUG] getSourceValue FIELD mode result:', result);
     return result;
   }
   
@@ -2389,7 +2429,7 @@ async function interpretTable(
   else if (colEnabled && (colFieldId || colSourceOption) && lookup.displayColumn && !(rowEnabled && colEnabled && hasRowSelector && hasColSelector)) {
     
     // Ã°Å¸â€Â¥ NOUVEAU: Support des 3 options de source (SELECT/CHAMP/CAPACITÃƒâ€°)
-    const colSelectorValue = await getSourceValue(
+    let colSelectorValue = await getSourceValue(
       colSourceOption,
       lookup,
       colFieldId,
@@ -2402,11 +2442,24 @@ async function interpretTable(
     );
     const colLabel = await getSourceLabel(colSourceOption, lookup, colFieldId, prisma, labelMap);
     
-    console.log('🔍 [GRD DEBUG] MODE 1 After getSourceValue:', {
-      colSelectorValue,
-      colLabel,
-      displayColumn: lookup.displayColumn
-    });
+    // 🔧 FIX: Si colSelectorValue est un UUID (option d'un champ select/parent),
+    // le résoudre en label du node pour pouvoir matcher avec les labels texte de la table.
+    // Ex: "c803489c-..." → "Huawei" pour matcher la colonne "Marque" de la table.
+    const uuidPattern = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}(-\d+)?$/i;
+    if (colSelectorValue && uuidPattern.test(colSelectorValue)) {
+      try {
+        const baseUuid = colSelectorValue.replace(/-\d+$/, '').replace(/-(\d+)$/, '');
+        const optionNode = await prisma.treeBranchLeafNode.findFirst({
+          where: { id: { startsWith: baseUuid.substring(0, 36) } },
+          select: { label: true }
+        });
+        if (optionNode?.label) {
+          colSelectorValue = optionNode.label;
+        }
+      } catch (e) {
+        console.warn(`[TABLE] ⚠️ Impossible de résoudre UUID ${colSelectorValue}:`, e);
+      }
+    }
     
     // displayColumn peut ÃƒÂªtre un string OU un array
     const displayColumns = Array.isArray(lookup.displayColumn) 
@@ -2692,7 +2745,7 @@ async function interpretTable(
   else if (rowEnabled && !colEnabled && hasRowSelector && lookup.displayRow) {
     
     // Ã°Å¸â€Â¥ NOUVEAU: Support des 3 options de source (SELECT/CHAMP/CAPACITÃƒâ€°)
-    const rowSelectorValue = await getSourceValue(
+    let rowSelectorValue = await getSourceValue(
       rowSourceOption,
       lookup,
       rowFieldId,
@@ -2704,6 +2757,22 @@ async function interpretTable(
       labelMap
     );
     const rowLabel = await getSourceLabel(rowSourceOption, lookup, rowFieldId, prisma, labelMap);
+    
+    // 🔧 FIX: Résoudre UUID option → label pour le lookup de ligne aussi
+    const uuidPatternRow = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}(-\d+)?$/i;
+    if (rowSelectorValue && uuidPatternRow.test(rowSelectorValue)) {
+      try {
+        const optionNode = await prisma.treeBranchLeafNode.findFirst({
+          where: { id: { startsWith: rowSelectorValue.substring(0, 36) } },
+          select: { label: true }
+        });
+        if (optionNode?.label) {
+          rowSelectorValue = optionNode.label;
+        }
+      } catch (e) {
+        console.warn(`[TABLE] ⚠️ Impossible de résoudre UUID row ${rowSelectorValue}:`, e);
+      }
+    }
     
     // displayRow peut ÃƒÂªtre un string OU un array
     const displayRows = Array.isArray(lookup.displayRow) 
@@ -2995,6 +3064,30 @@ async function interpretTable(
   const rowLabel = await getSourceLabel(rowSourceOption, lookup, rowFieldId, prisma, labelMap);
   const colLabel = await getSourceLabel(colSourceOption, lookup, colFieldId, prisma, labelMap);
   
+  // 🔧 FIX: Résoudre UUID option → label pour le lookup MODE 3
+  const uuidPatternM3 = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}(-\d+)?$/i;
+  if (rowSelectorValue && uuidPatternM3.test(rowSelectorValue)) {
+    try {
+      const optionNode = await prisma.treeBranchLeafNode.findFirst({
+        where: { id: { startsWith: rowSelectorValue.substring(0, 36) } },
+        select: { label: true }
+      });
+      if (optionNode?.label) {
+        rowSelectorValue = optionNode.label;
+      }
+    } catch (e) { /* ignore */ }
+  }
+  if (colSelectorValue && uuidPatternM3.test(colSelectorValue)) {
+    try {
+      const optionNode = await prisma.treeBranchLeafNode.findFirst({
+        where: { id: { startsWith: colSelectorValue.substring(0, 36) } },
+        select: { label: true }
+      });
+      if (optionNode?.label) {
+        colSelectorValue = optionNode.label;
+      }
+    } catch (e) { /* ignore */ }
+  }
   
   if (!rowSelectorValue || !colSelectorValue) {
     return {
@@ -3273,22 +3366,8 @@ export async function evaluateVariableOperation(
   const localValueMap = valueMap || new Map<string, unknown>();
   const labelMap = new Map<string, string>();
   
-  // 🔍 DEBUG 26/01: Afficher valueMap AVANT enrichissement
-  console.log(`🔍 [evaluateVariableOperation] AVANT enrichissement pour ${variableNodeId}:`);
-  console.log(`   - valueMap.size = ${localValueMap.size}`);
-  if (localValueMap.has('d6212e5e-3fe9-4cce-b380-e6745524d011')) {
-    console.log(`   - Facture annuelle = ${localValueMap.get('d6212e5e-3fe9-4cce-b380-e6745524d011')}`);
-  }
-  
   // Enrichir automatiquement les données depuis la base AVEC le treeId
   await enrichDataFromSubmission(submissionId, prisma, localValueMap, labelMap, treeId);
-  
-  // 🔍 DEBUG 26/01: Afficher valueMap APRÈS enrichissement
-  console.log(`🔍 [evaluateVariableOperation] APRÈS enrichissement pour ${variableNodeId}:`);
-  console.log(`   - valueMap.size = ${localValueMap.size}`);
-  if (localValueMap.has('d6212e5e-3fe9-4cce-b380-e6745524d011')) {
-    console.log(`   - Facture annuelle = ${localValueMap.get('d6212e5e-3fe9-4cce-b380-e6745524d011')}`);
-  }
   
   
   // Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
@@ -3314,7 +3393,6 @@ export async function evaluateVariableOperation(
     throw new Error(`Variable introuvable: ${variableNodeId}`);
   }
   
-  console.log(`✅ [VARIABLE TROUVÉE] ${variableNodeId} → sourceRef: ${variable.sourceRef}`);
   
   
   // Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â

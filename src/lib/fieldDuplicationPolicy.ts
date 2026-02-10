@@ -34,24 +34,7 @@ export function canFieldBeSelect(fieldId: string | undefined, fieldType?: string
   // - Si c'est un champ de base → PEUT être SELECT
   
   if (isDuplicated && fieldType && fieldType.toUpperCase() !== 'SELECT') {
-    // Champ dupliqué qui n'était pas SELECT → NE PEUT PAS devenir SELECT
-    if (fieldId.includes('76a40eb1') || fieldId.includes('Inclinaison')) {
-      console.log(`[MASSIVE DEBUG] canFieldBeSelect("${fieldId}", fieldType="${fieldType}")`);
-      console.log(`  - suffixMatch: OUI "${suffixMatch[1]}"`);
-      console.log(`  - isDuplicated: true`);
-      console.log(`  - fieldType was: ${fieldType}`);
-      console.log(`  - RETOUR: CANNOT SELECT (duplicated TEXT field cannot become SELECT)`);
-    }
     return false;
-  }
-  
-  // Champ dupliqué mais SELECT d'origine, ou champ de base → PEUT être SELECT
-  if (fieldId.includes('76a40eb1') || fieldId.includes('c071a466')) {
-    console.log(`[MASSIVE DEBUG] canFieldBeSelect("${fieldId}", fieldType="${fieldType}")`);
-    console.log(`  - suffixMatch: ${suffixMatch ? 'OUI ' + JSON.stringify(suffixMatch[1]) : 'NON'}`);
-    console.log(`  - isDuplicated: ${isDuplicated}`);
-    console.log(`  - fieldType: ${fieldType}`);
-    console.log(`  - RETOUR: CAN SELECT`);
   }
   
   return true;

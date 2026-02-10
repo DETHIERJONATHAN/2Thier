@@ -348,8 +348,9 @@ const NodeTreeSelector: React.FC<Props> = ({ nodeId, open, onClose, onSelect, se
         const isBranch = k.type === 'branch';
         const isTree = k.type === 'tree';
         
+        const shortId = k.id.length > 8 ? k.id.slice(0, 8) + '…' : k.id;
         const base: TreeNode = {
-          title: `${k.label} (${k.type}${k.subType ? ':' + k.subType : ''})`,
+          title: `${k.label} [${shortId}] (${k.type}${k.subType ? ':' + k.subType : ''})`,
           value: k.id,
           key: k.id,
           disabled: isTree // Seuls les "tree" restent désactivés
@@ -803,6 +804,15 @@ const NodeTreeSelector: React.FC<Props> = ({ nodeId, open, onClose, onSelect, se
                                     {item.name}
                                   </Typography.Text>
                                   <Typography.Text 
+                                    style={{ 
+                                      fontSize: '10px',
+                                      fontFamily: 'monospace',
+                                      color: isSelected ? 'rgba(255,255,255,0.6)' : '#bbb'
+                                    }}
+                                  >
+                                    [{item.id.slice(0, 8)}]
+                                  </Typography.Text>
+                                  <Typography.Text 
                                     type="secondary" 
                                     style={{ 
                                       fontSize: '11px',
@@ -846,6 +856,15 @@ const NodeTreeSelector: React.FC<Props> = ({ nodeId, open, onClose, onSelect, se
                                   <span>🧮</span>
                                   <Typography.Text style={{ color: isSelected ? 'white' : 'inherit' }}>
                                     {item.name}
+                                  </Typography.Text>
+                                  <Typography.Text 
+                                    style={{ 
+                                      fontSize: '10px',
+                                      fontFamily: 'monospace',
+                                      color: isSelected ? 'rgba(255,255,255,0.6)' : '#bbb'
+                                    }}
+                                  >
+                                    [{item.id.slice(0, 8)}]
                                   </Typography.Text>
                                   <Typography.Text 
                                     type="secondary" 
@@ -914,6 +933,15 @@ const NodeTreeSelector: React.FC<Props> = ({ nodeId, open, onClose, onSelect, se
                                     {item.name}
                                   </Typography.Text>
                                   <Typography.Text 
+                                    style={{ 
+                                      fontSize: '10px',
+                                      fontFamily: 'monospace',
+                                      color: isSelected ? 'rgba(255,255,255,0.6)' : '#bbb'
+                                    }}
+                                  >
+                                    [{item.id.slice(0, 8)}]
+                                  </Typography.Text>
+                                  <Typography.Text 
                                     type="secondary" 
                                     style={{ 
                                       fontSize: '11px',
@@ -956,6 +984,15 @@ const NodeTreeSelector: React.FC<Props> = ({ nodeId, open, onClose, onSelect, se
                                   <span>⚡</span>
                                   <Typography.Text style={{ color: isSelected ? 'white' : 'inherit' }}>
                                     {item.name}
+                                  </Typography.Text>
+                                  <Typography.Text 
+                                    style={{ 
+                                      fontSize: '10px',
+                                      fontFamily: 'monospace',
+                                      color: isSelected ? 'rgba(255,255,255,0.6)' : '#bbb'
+                                    }}
+                                  >
+                                    [{item.id.slice(0, 8)}]
                                   </Typography.Text>
                                   <Typography.Text 
                                     type="secondary" 
@@ -1024,6 +1061,15 @@ const NodeTreeSelector: React.FC<Props> = ({ nodeId, open, onClose, onSelect, se
                                     {item.name}
                                   </Typography.Text>
                                   <Typography.Text 
+                                    style={{ 
+                                      fontSize: '10px',
+                                      fontFamily: 'monospace',
+                                      color: isSelected ? 'rgba(255,255,255,0.6)' : '#bbb'
+                                    }}
+                                  >
+                                    [{item.id.slice(0, 8)}]
+                                  </Typography.Text>
+                                  <Typography.Text 
                                     type="secondary" 
                                     style={{ 
                                       fontSize: '11px',
@@ -1066,6 +1112,15 @@ const NodeTreeSelector: React.FC<Props> = ({ nodeId, open, onClose, onSelect, se
                                   <span>🗂️</span>
                                   <Typography.Text style={{ color: isSelected ? 'white' : 'inherit' }}>
                                     {item.name}
+                                  </Typography.Text>
+                                  <Typography.Text 
+                                    style={{ 
+                                      fontSize: '10px',
+                                      fontFamily: 'monospace',
+                                      color: isSelected ? 'rgba(255,255,255,0.6)' : '#bbb'
+                                    }}
+                                  >
+                                    [{item.id.slice(0, 8)}]
                                   </Typography.Text>
                                   <Typography.Text 
                                     type="secondary" 
@@ -1145,6 +1200,15 @@ const NodeTreeSelector: React.FC<Props> = ({ nodeId, open, onClose, onSelect, se
                                 <Typography.Text strong style={{ color: isSelected ? 'white' : 'inherit' }}>
                                   {item.label}
                                 </Typography.Text>
+                                <Typography.Text 
+                                  style={{ 
+                                    fontSize: '10px',
+                                    fontFamily: 'monospace',
+                                    color: isSelected ? 'rgba(255,255,255,0.6)' : '#bbb'
+                                  }}
+                                >
+                                  [{item.id.slice(0, 8)}]
+                                </Typography.Text>
                                 {isSelected && <span>✓</span>}
                               </Space>
                               <Typography.Text 
@@ -1221,6 +1285,15 @@ const NodeTreeSelector: React.FC<Props> = ({ nodeId, open, onClose, onSelect, se
                                 <span>{sourceIcon}</span>
                                 <Typography.Text strong style={{ color: isSelected ? 'white' : 'inherit' }}>
                                   {item.label}
+                                </Typography.Text>
+                                <Typography.Text 
+                                  style={{ 
+                                    fontSize: '10px',
+                                    fontFamily: 'monospace',
+                                    color: isSelected ? 'rgba(255,255,255,0.6)' : '#bbb'
+                                  }}
+                                >
+                                  [{item.id.slice(0, 8)}]
                                 </Typography.Text>
                                 {item.calculatedValue !== null && (
                                   <Typography.Text 
@@ -1321,6 +1394,15 @@ const NodeTreeSelector: React.FC<Props> = ({ nodeId, open, onClose, onSelect, se
                                 <span>🔗</span>
                                 <Typography.Text strong style={{ color: isSelected ? 'white' : 'inherit' }}>
                                   {item.label}
+                                </Typography.Text>
+                                <Typography.Text 
+                                  style={{ 
+                                    fontSize: '10px',
+                                    fontFamily: 'monospace',
+                                    color: isSelected ? 'rgba(255,255,255,0.6)' : '#bbb'
+                                  }}
+                                >
+                                  [{item.id.slice(0, 8)}]
                                 </Typography.Text>
                                 {isSelected && <span>✓</span>}
                               </Space>

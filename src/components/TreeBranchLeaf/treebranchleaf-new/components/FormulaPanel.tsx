@@ -154,6 +154,15 @@ const FormulaPanel: React.FC<FormulaPanelProps> = ({ treeId, nodeId, onChange, r
   const saveFormula = useCallback(async (nextTokens: string[], nextName: string) => {
     // Vérifications de sécurité
     if (!mountedRef.current || isSaving || !isLoaded) return;
+
+    // 🛡️ Détection de références circulaires côté frontend
+    const circularToken = nextTokens.find(t => 
+      t === `@calculated.${nodeId}` || t === `@value.${nodeId}`
+    );
+    if (circularToken) {
+      message.error('⚠️ Référence circulaire détectée : cette formule ne peut pas utiliser sa propre valeur calculée');
+      return;
+    }
     
     // Éviter les sauvegardes identiques
     const tokensStr = JSON.stringify(nextTokens);

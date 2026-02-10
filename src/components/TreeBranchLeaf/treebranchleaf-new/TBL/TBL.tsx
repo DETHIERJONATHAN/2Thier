@@ -1306,28 +1306,6 @@ const TBL: React.FC<TBLProps> = ({
             calculatedValuesMap[item.nodeId] = item.value;
           }
         }
-        console.log(`📤 [TBL] Broadcasting ${Object.keys(calculatedValuesMap).length} valeurs calculées inline (nulls exclus)`);
-        // 🔍 DEBUG PRIX KWH: Vérifier si le display field est dans le broadcast
-        const PRIX_KWH_ID = '99476bab-4835-4108-ad02-7f37e096647d';
-        if (calculatedValuesMap[PRIX_KWH_ID] !== undefined) {
-          console.log(`🔎🔎🔎 [DIAG PRIX KWH] DANS broadcast: "${calculatedValuesMap[PRIX_KWH_ID]}"`);
-        } else {
-          console.log(`🔎🔎🔎 [DIAG PRIX KWH] ABSENT du broadcast! submissionData a ${submissionDataArray?.length || 0} items`);
-          // Chercher dans les raw data
-          const prixItem = submissionDataArray?.find(item => item?.nodeId === PRIX_KWH_ID);
-          if (prixItem) {
-            console.log(`🔎🔎🔎 [DIAG PRIX KWH] Trouvé dans raw data mais exclu: value=${prixItem.value}, type=${typeof prixItem.value}`);
-          } else {
-            console.log(`🔎🔎🔎 [DIAG PRIX KWH] PAS dans les raw data du tout!`);
-          }
-        }
-        // 🔍 DEBUG GRD: Vérifier si GRD est dans le broadcast
-        const GRD_ID = '9f27d411-6511-487c-a983-9f9fc357c560';
-        if (calculatedValuesMap[GRD_ID]) {
-          console.log(`✅ [TBL] GRD dans broadcast: "${calculatedValuesMap[GRD_ID]}"`);
-        } else {
-          console.log(`❌ [TBL] GRD ABSENT du broadcast !`);
-        }
         
         // 🔗🔗🔗 FIX CRITIQUE: Injecter les valeurs calculées (Link, DISPLAY, etc.) dans TBL_FORM_DATA
         // Sans cela, TBLFieldRendererAdvanced ne voit pas les valeurs Link dans formData
@@ -1335,7 +1313,6 @@ const TBL: React.FC<TBLProps> = ({
           for (const [nodeId, value] of Object.entries(calculatedValuesMap)) {
             window.TBL_FORM_DATA[nodeId] = value;
           }
-          console.log(`🔗 [FIX] Injecté ${Object.keys(calculatedValuesMap).length} valeurs calculées dans TBL_FORM_DATA`);
         }
       }
       
@@ -1458,7 +1435,6 @@ const TBL: React.FC<TBLProps> = ({
             setSubmissionId(createdOrReusedId);
             setDevisName('Brouillon');
 
-            console.log(`🎯 [TBL] changedFieldId envoyé au backend: "${changedField || 'NULL'}"`);
             lastSavedSignatureRef.current = sig;
             setAutosaveLast(new Date());
             // 🚀 FIX: Ne pas broadcast si autosave périodique OU si une requête pendante existe OU si un debounce est actif
@@ -1469,7 +1445,6 @@ const TBL: React.FC<TBLProps> = ({
             const isPeriodicAutosave = !changedField || changedField === 'NULL';
             const hasPendingRequest = !!pendingAutosaveRef.current;
             const hasDebounceActive = !!debounceActiveRef.current;
-            console.log(`🔎🔎🔎 [DIAG BROADCAST default-draft] isPeriodicAutosave=${isPeriodicAutosave}, hasPending=${hasPendingRequest}, hasDebounce=${hasDebounceActive}, changedField="${changedField}"`);
             if (!isPeriodicAutosave && !hasPendingRequest && !hasDebounceActive) {
               broadcastCalculatedRefresh({
                 reason: 'create-and-evaluate',
@@ -1479,7 +1454,6 @@ const TBL: React.FC<TBLProps> = ({
                 submissionData: evaluationResponse?.submission?.TreeBranchLeafSubmissionData
               });
             } else if (hasDebounceActive) {
-              console.log(`🔒 [TBL] Broadcast SKIP: debounce actif (nouveau changement en attente)`);
             }
           } else {
             // Fallback: si on n'a pas d'ID, on ne peut pas persister.
@@ -1517,7 +1491,6 @@ const TBL: React.FC<TBLProps> = ({
                 submissionData: evaluationResponse?.submission?.TreeBranchLeafSubmissionData
               });
             } else if (hasDebounceActive) {
-              console.log(`🔒 [TBL] Broadcast SKIP: debounce actif (nouveau changement en attente)`);
             }
           } else {
             await previewNoSave(data);
@@ -1581,7 +1554,6 @@ const TBL: React.FC<TBLProps> = ({
           setHasCopiedDevis(true);
         }
         
-        console.log(`🎯 [TBL] changedFieldId envoyé au backend: "${changedField || 'NULL'}"`);
         
         lastSavedSignatureRef.current = sig;
         setAutosaveLast(new Date());
@@ -1595,9 +1567,7 @@ const TBL: React.FC<TBLProps> = ({
         const hasPendingRequest = !!pendingAutosaveRef.current;
         const hasDebounceActive = !!debounceActiveRef.current;
         const shouldBroadcast = (!isPeriodicAutosave || isOpenMode) && !hasPendingRequest && !hasDebounceActive;
-        console.log(`🔎🔎🔎 [DIAG BROADCAST existing-sub] shouldBroadcast=${shouldBroadcast}, isPeriodicAutosave=${isPeriodicAutosave}, isOpenMode=${isOpenMode}, hasPending=${hasPendingRequest}, hasDebounce=${hasDebounceActive}, changedField="${changedField}", mode=${effectiveMode}`);
         if (shouldBroadcast) {
-          console.log(`📤 [TBL] Broadcast des valeurs calculées (mode=${effectiveMode}, isOpenMode=${isOpenMode})`);
           broadcastCalculatedRefresh({
             reason: 'create-and-evaluate',
             evaluatedSubmissionId: effectiveSubmissionId,
@@ -1606,9 +1576,6 @@ const TBL: React.FC<TBLProps> = ({
             submissionData: evaluationResponse?.submission?.TreeBranchLeafSubmissionData
           });
         } else if (hasPendingRequest) {
-          console.log(`🔒 [TBL] Broadcast SKIP: requête pendante (données potentiellement périmées, évite boucle Auto-Select)`);
-        } else if (hasDebounceActive) {
-          console.log(`🔒 [TBL] Broadcast SKIP: debounce actif (nouveau changement en attente)`);
         }
       }
     } catch (e) {
@@ -1652,7 +1619,6 @@ const TBL: React.FC<TBLProps> = ({
           scheduleCapabilityPreviewRef.current(nextData);
         } catch {/* noop */}
       };
-      console.log('🎯 [TBL] immediateEvaluateRef créé (ZERO debounce)');
     }
   }, []); // ✅ Deps vides = créé UNE SEULE FOIS
 
@@ -2275,7 +2241,6 @@ const TBL: React.FC<TBLProps> = ({
           if ((isMirrorKey || isSharedRef || mirrorUpdated) && valueChanged) {
             const event = new CustomEvent('TBL_FORM_DATA_CHANGED', { detail: { fieldId, value } });
             window.dispatchEvent(event);
-            console.log('🚀 [TBL] Événement TBL_FORM_DATA_CHANGED dispatché:', { fieldId, value, isMirrorKey, isSharedRef, mirrorUpdated });
           } else {
             if (localStorage.getItem('TBL_DIAG') === '1') console.log('🔕 [TBL] Dispatch TBL_FORM_DATA_CHANGED SKIPPED:', { fieldId, value, isMirrorKey, isSharedRef, mirrorUpdated, valueChanged });
           }
@@ -2291,14 +2256,14 @@ const TBL: React.FC<TBLProps> = ({
         if (aliasId) realFieldId = aliasId;
       }
       const fieldType = String((fieldConfig as any)?.type || '').toLowerCase();
-      console.log(`🎯🎯🎯 [TBL] AVANT eval(DEBOUNCED 50ms): fieldId="${fieldId}", realFieldId="${realFieldId}", type="${fieldType || 'unknown'}"`);
+      // Log supprimé pour performance
 
       // Garder en mémoire le dernier champ réellement modifié (utile pour flush/versioning)
       if (realFieldId) {
         lastRealChangedFieldIdRef.current = realFieldId;
       }
 
-      // ⚡ Évaluation avec debounce de 50ms - réduit de 80ms pour meilleure réactivité en cascade
+      // ⚡ Évaluation avec debounce de 300ms - évite les requêtes doublons lors de la saisie rapide
       if (debounceTimerRef.current) {
         clearTimeout(debounceTimerRef.current);
       }
@@ -2311,11 +2276,10 @@ const TBL: React.FC<TBLProps> = ({
         debounceActiveRef.current = false;
         if (immediateEvaluateRef.current) {
           immediateEvaluateRef.current(next as TBLFormData, realFieldId);
-          console.log(`✅✅✅ [TBL] APRÈS eval DEBOUNCED appelé avec realFieldId="${realFieldId}"`);
         } else {
           console.warn('⚠️ [TBL] immediateEvaluateRef pas encore initialisé');
         }
-      }, 50);
+      }, 300);
 
       // ✅ Si on édite un devis enregistré "original", créer tout de suite la révision en base
       // pour qu'elle existe même si l'utilisateur quitte l'écran.
@@ -2352,10 +2316,6 @@ const TBL: React.FC<TBLProps> = ({
         // 🔒 VALIDATION: Vérifier si ce champ est source d'un repeater
         // 🔍 DEBUG: Afficher tous les repeaters avec countSourceNodeId
         const allRepeaters = (rawNodes || []).filter((n: any) => n.type === 'leaf_repeater');
-        console.log(`🔍 [PRELOAD DEBUG] Champ modifié: ${fieldId}, rawNodes: ${(rawNodes || []).length}, repeaters: ${allRepeaters.length}`);
-        allRepeaters.forEach((r: any) => {
-          console.log(`   📦 Repeater "${r.label}" (${r.id}) → countSourceNodeId: ${r.repeater_countSourceNodeId || 'NULL'}`);
-        });
         
         const repeatersUsingThisField = (rawNodes || []).filter(
           (node: any) => node.repeater_countSourceNodeId === fieldId
@@ -4462,14 +4422,10 @@ const TBLTabContentWithSections: React.FC<TBLTabContentWithSectionsProps> = Reac
 
   // ✅ STABILISER onChange pour éviter les re-rendus en cascade !
   const stableOnChange = useCallback((fieldId: string, value: unknown) => {
-    console.log(`🟨🟨🟨 [TBLTabContentWithSections] stableOnChange appelé: fieldId=${fieldId}, value=${value}`);
-    console.log(`🟨🟨🟨 [TBLTabContentWithSections] onChange.name="${onChange.name}", typeof="${typeof onChange}"`);
-    console.log(`🟨🟨🟨 [TBLTabContentWithSections] onChange toString:`, onChange.toString().substring(0, 200));
     try {
       onChange(fieldId, value);
-      console.log(`🟨🟨🟨 [TBLTabContentWithSections] onChange APPELÉ - fin (succès)`);
     } catch (error) {
-      console.error(`❌❌❌ [TBLTabContentWithSections] ERREUR dans onChange:`, error);
+      console.error(`❌ [TBLTabContentWithSections] ERREUR dans onChange:`, error);
       throw error;
     }
   }, [onChange]);

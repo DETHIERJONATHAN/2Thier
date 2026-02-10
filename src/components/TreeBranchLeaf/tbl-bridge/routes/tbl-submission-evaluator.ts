@@ -40,6 +40,27 @@ interface AuthenticatedRequest extends Request {
 const router = Router();
 const prisma = db;
 
+// 🚀 CACHE: Trigger index par treeId pour éviter 6-7 requêtes prisma par évaluation
+// Le trigger index dépend UNIQUEMENT de la structure de l'arbre (nœuds, formules, tables, variables, conditions)
+// TTL: 60 secondes — suffisant pour couvrir les changements rapides de l'utilisateur
+interface CachedTriggerIndex {
+  triggerIndex: Map<string, Set<string>>;
+  allLinkedNodes: Array<{ id: string; label: string | null; link_targetNodeId: string }>;
+  optionToSelectMap: Map<string, string>;
+  timestamp: number;
+}
+const triggerIndexCache = new Map<string, CachedTriggerIndex>();
+const TRIGGER_INDEX_CACHE_TTL = 60_000; // 60 secondes
+
+/** Invalider le cache du trigger index pour un treeId donné */
+export function invalidateTriggerIndexCache(treeId?: string) {
+  if (treeId) {
+    triggerIndexCache.delete(treeId);
+  } else {
+    triggerIndexCache.clear();
+  }
+}
+
 function normalizeRefForTriggers(ref?: unknown): string {
   if (!ref || typeof ref !== 'string') return '';
   return ref
@@ -108,7 +129,8 @@ function collectReferencedNodeIdsForTriggers(data: unknown, out: Set<string>) {
   if (typeof data === 'string') {
     const s = data.trim();
     if (!s) return;
-    if (s.startsWith('@value.') || s.startsWith('@table.')) {
+    // 🔥 FIX: Gérer TOUS les préfixes de référence, pas seulement @value. et @table.
+    if (s.startsWith('@value.') || s.startsWith('@table.') || s.startsWith('@calculated.') || s.startsWith('@select.')) {
       const id = normalizeRefForTriggers(s);
       if (id && isAcceptedNodeId(id)) out.add(id);
       return;
@@ -442,7 +464,6 @@ function applyCopyScopedInputAliases(valueMap: Map<string, unknown>, ownerNodeId
   }
 
   if (injected.length) {
-    console.log(`🔁 [COPY INPUT ALIAS] ${ownerNodeId}: ${injected.length} refs base → suffix '${suffixToken}'`);
   }
 
   return injected;
@@ -624,7 +645,6 @@ async function saveUserEntriesNeutral(
   const excludedNodeIds = new Set(excludedNodes.map(n => n.id));
   
   if (excludedNodeIds.size > 0) {
-    console.log(`🚫 [SAVE] ${excludedNodeIds.size} champs calculés/DISPLAY exclus:`, excludedNodes.map(n => n.label).join(', '));
   }
 
   const sharedRefKeys = Object.keys(formData).filter(isSharedReferenceId);
@@ -728,7 +748,6 @@ async function saveUserEntriesNeutral(
     const existing = await prisma.treeBranchLeafSubmissionData.findUnique({ where: key });
     if (existing) {
       await prisma.treeBranchLeafSubmissionData.delete({ where: key });
-      console.log(`🗑️ [SAVE] Champ vidé supprimé: ${nodeId}`);
       saved++;
     }
   }
@@ -763,7 +782,6 @@ async function evaluateCapacitiesForSubmission(
   mode: EvaluationMode = 'change',
   changedFieldId?: string
 ) {
-  console.log(`🎯 [EVALUATE] Mode: ${mode}, changedFieldId: ${changedFieldId || 'N/A'}`);
   // 🔑 ÉTAPE 1: Construire le valueMap avec les données fraîches du formulaire
   const valueMap = new Map<string, unknown>();
 
@@ -810,7 +828,6 @@ async function evaluateCapacitiesForSubmission(
           dbDisplayValues.set(r.nodeId, r.value);
         }
       }
-      console.log(`🔑 [EVALUATE] valueMap hydraté depuis DB (ALL data): ${existingData.length} entrées → ${valueMap.size} clés (${dbDisplayValues.size} DISPLAY mémorisés)`);
     }
   } catch (e) {
     console.warn('⚠️ [EVALUATE] Hydratation DB du valueMap échouée (best-effort):', (e as Error)?.message || e);
@@ -824,7 +841,6 @@ async function evaluateCapacitiesForSubmission(
     // Appliquer les données du formulaire au valueMap (avec résolution des sharedReferences)
     const entries = Object.entries(formData).filter(([k]) => !k.startsWith('__'));
     await applySharedReferenceValues(valueMap, entries as Array<[string, unknown]>, treeId);
-    console.log(`🔑 [EVALUATE] valueMap initialisé avec ${valueMap.size} entrées depuis formData`);
     
     // 🛡️ FIX 2026-01-31: RESTAURER les valeurs DB des DISPLAY fields
     // Les valeurs du frontend pour les DISPLAY fields peuvent être obsolètes (0, 1)
@@ -844,7 +860,6 @@ async function evaluateCapacitiesForSubmission(
       }
     }
     if (restoredCount > 0) {
-      console.log(`🛡️ [EVALUATE] ${restoredCount} valeurs DISPLAY restaurées depuis DB (formData avait des valeurs obsolètes)`);
     }
   }
   
@@ -910,252 +925,241 @@ async function evaluateCapacitiesForSubmission(
   // Cache par requête pour éviter de recharger les mêmes nœuds en boucle
   const triggerDerivationCache = new Map<string, string[]>();
 
-  // 🚀 OPTIMISATION CRITIQUE: Construire l'index inversé des triggers AVANT la boucle
-  // Au lieu de charger 40+ nodes un par un, on charge TOUT en UNE requête et on indexe
+  // 🚀 OPTIMISATION CRITIQUE: Index inversé des triggers avec CACHE par treeId
+  // Au lieu de 6-7 requêtes prisma à chaque évaluation, on utilise un cache de 60s
   // Index: Map<changedFieldId, Set<displayFieldIdsToCalculate>>
   const triggerIndex = new Map<string, Set<string>>();
   
-  // 🔗 NOUVEAU: Map pour stocker les valeurs des champs Link à retourner au frontend
+  // 🔗 Map pour stocker les valeurs des champs Link à retourner au frontend
   const linkedFieldsToRefresh = new Map<string, { targetNodeId: string; nodeLabel: string }>();
   
   if (mode === 'change' && changedFieldId) {
-    // Charger TOUS les display fields metadata en UNE SEULE requête SQL
-    const displayFieldIds = capacities
-      .filter(cap => {
-        const isDisplayField = cap.TreeBranchLeafNode?.fieldType === 'DISPLAY' 
-          || cap.TreeBranchLeafNode?.type === 'DISPLAY'
-          || cap.TreeBranchLeafNode?.type === 'leaf_field';
-        return isDisplayField;
-      })
-      .map(cap => cap.nodeId);
+    // 🚀 CHECK CACHE: Réutiliser le trigger index si déjà construit pour ce tree
+    const cached = triggerIndexCache.get(treeId);
+    const cacheValid = cached && (Date.now() - cached.timestamp < TRIGGER_INDEX_CACHE_TTL);
     
-    if (displayFieldIds.length > 0) {
-      console.log(`🚀 [TRIGGER INDEX] Chargement de ${displayFieldIds.length} display fields en 1 requête`);
+    if (cacheValid) {
+      // ✅ CACHE HIT: Copier l'index depuis le cache (O(1) lookup pré-construit)
+      for (const [key, value] of cached.triggerIndex) {
+        triggerIndex.set(key, new Set(value));
+      }
       
-      const displayNodes = await prisma.treeBranchLeafNode.findMany({
-        where: { id: { in: displayFieldIds } },
-        select: { id: true, metadata: true, hasLink: true, link_targetNodeId: true }
-      });
+      // Construire linkedFieldsToRefresh depuis le cache
+      for (const ln of cached.allLinkedNodes) {
+        if (ln.link_targetNodeId === changedFieldId) {
+          linkedFieldsToRefresh.set(ln.id, {
+            targetNodeId: ln.link_targetNodeId,
+            nodeLabel: ln.label || ln.id
+          });
+        }
+      }
       
-      // Construire l'index inversé
+      const affectedCount = triggerIndex.get(changedFieldId)?.size || 0;
+      console.log(`🚀 [TRIGGER INDEX CACHE HIT] ${affectedCount} impactés par "${changedFieldId}" (cache age: ${Math.round((Date.now() - cached.timestamp) / 1000)}s)`);
+    } else {
+      // 🔧 CACHE MISS: Construire le trigger index complet (pour TOUS les changedFieldIds possibles)
+      
+      const displayFieldIds = capacities
+        .filter(cap => {
+          const isDisplayField = cap.TreeBranchLeafNode?.fieldType === 'DISPLAY' 
+            || cap.TreeBranchLeafNode?.type === 'DISPLAY'
+            || cap.TreeBranchLeafNode?.type === 'leaf_field';
+          return isDisplayField;
+        })
+        .map(cap => cap.nodeId);
+    
+      // 🚀 PARALLÉLISER: charger options, display nodes, tables, links et conditions en parallèle
+      const [selectFieldNodes, optionNodes, displayNodes, displayFieldTables, allLinkedNodes, allTreeNodeIds] = await Promise.all([
+        prisma.treeBranchLeafNode.findMany({
+          where: { treeId, type: 'leaf_option_field' },
+          select: { id: true, parentId: true }
+        }),
+        prisma.treeBranchLeafNode.findMany({
+          where: { treeId, type: 'leaf_option' },
+          select: { id: true, parentId: true }
+        }),
+        displayFieldIds.length > 0 ? prisma.treeBranchLeafNode.findMany({
+          where: { id: { in: displayFieldIds } },
+          select: { id: true, metadata: true, hasLink: true, link_targetNodeId: true, formula_tokens: true }
+        }) : Promise.resolve([]),
+        displayFieldIds.length > 0 ? prisma.treeBranchLeafNodeTable.findMany({
+          where: { nodeId: { in: displayFieldIds } },
+          select: { nodeId: true, meta: true }
+        }) : Promise.resolve([]),
+        prisma.treeBranchLeafNode.findMany({
+          where: { treeId, hasLink: true, link_targetNodeId: { not: null } },
+          select: { id: true, label: true, link_targetNodeId: true }
+        }),
+        prisma.treeBranchLeafNode.findMany({
+          where: { treeId },
+          select: { id: true }
+        })
+      ]);
+      
+      // Construire optionToSelectMap
+      const optionToSelectMap = new Map<string, string>();
+      for (const optNode of selectFieldNodes) {
+        if (optNode.parentId) optionToSelectMap.set(optNode.id, optNode.parentId);
+      }
+      for (const optNode of optionNodes) {
+        if (optNode.parentId) optionToSelectMap.set(optNode.id, optNode.parentId);
+      }
+    
+      // Grouper formules, tables, variables par nodeId
+      const formulasByNodeId = new Map<string, Array<{ tokens: unknown }>>();
+      for (const f of formulasRaw) {
+        if (!formulasByNodeId.has(f.nodeId)) formulasByNodeId.set(f.nodeId, []);
+        formulasByNodeId.get(f.nodeId)!.push(f);
+      }
+      const tablesByNodeId = new Map<string, Array<{ meta: unknown }>>();
+      for (const t of displayFieldTables) {
+        if (!tablesByNodeId.has(t.nodeId)) tablesByNodeId.set(t.nodeId, []);
+        tablesByNodeId.get(t.nodeId)!.push(t);
+      }
+      const variablesByNodeId = new Map<string, { metadata: unknown; sourceRef?: string | null }>();
+      for (const v of variablesRaw) {
+        variablesByNodeId.set(v.nodeId, v);
+      }
+      
+      
+      // Helper: extraire les nodeIds référencés et les ajouter au trigger index
+      const extractAndAddTriggers = (data: unknown, nodeId: string, triggerNodeIds: string[]) => {
+        const refs = new Set<string>();
+        collectReferencedNodeIdsForTriggers(data, refs);
+        refs.delete(nodeId);
+        for (const refId of refs) {
+          if (!refId.includes('.') && !triggerNodeIds.includes(refId)) {
+            triggerNodeIds.push(refId);
+            const parentSelect = optionToSelectMap.get(refId);
+            if (parentSelect && !triggerNodeIds.includes(parentSelect)) {
+              triggerNodeIds.push(parentSelect);
+            }
+          }
+        }
+      };
+      
+      // Construire l'index inversé avec TOUTES les sources de dépendances
       for (const node of displayNodes) {
         const metaTriggerNodeIds = (node.metadata as { triggerNodeIds?: string[] })?.triggerNodeIds;
         let triggerNodeIds = Array.isArray(metaTriggerNodeIds) ? metaTriggerNodeIds.filter(Boolean) : [];
         
-        // 🔗 NOUVEAU: Si le champ a un Link, ajouter le link_targetNodeId comme trigger
         if (node.hasLink && node.link_targetNodeId) {
           triggerNodeIds.push(node.link_targetNodeId);
-          console.log(`🔗 [TRIGGER INDEX] Champ ${node.id} a un Link vers ${node.link_targetNodeId} - ajouté comme trigger`);
         }
+        const nodeTokens = Array.isArray(node.formula_tokens) ? (node.formula_tokens as unknown[]) : [];
+        if (nodeTokens.length > 0) extractAndAddTriggers(nodeTokens, node.id, triggerNodeIds);
+        const nodeFormulas = formulasByNodeId.get(node.id) || [];
+        for (const formula of nodeFormulas) extractAndAddTriggers((formula as any).tokens, node.id, triggerNodeIds);
+        const nodeTables = tablesByNodeId.get(node.id) || [];
+        for (const table of nodeTables) extractAndAddTriggers(table.meta, node.id, triggerNodeIds);
+        const nodeVar = variablesByNodeId.get(node.id);
+        if (nodeVar) extractAndAddTriggers(nodeVar.metadata, node.id, triggerNodeIds);
         
-        // 🎯 SUM-TOTAL: Pour les champs sum-total, extraire les triggers depuis formula_tokens
-        // car les triggerNodeIds dans metadata peuvent être incomplets
-        if (node.id.endsWith('-sum-total')) {
-          const sumNode = await prisma.treeBranchLeafNode.findUnique({
-            where: { id: node.id },
-            select: { formula_tokens: true }
-          });
-          const tokens = Array.isArray(sumNode?.formula_tokens) ? (sumNode!.formula_tokens as string[]) : [];
-          for (const token of tokens) {
-            if (typeof token === 'string' && token.startsWith('@value.')) {
-              const refNodeId = token.slice(7);
-              if (refNodeId && !triggerNodeIds.includes(refNodeId)) {
-                triggerNodeIds.push(refNodeId);
-              }
-            }
-          }
-          console.log(`🎯 [SUM-TOTAL TRIGGER] ${node.id} → ${triggerNodeIds.length} triggers depuis formula_tokens`);
-        }
-        
-        // Expansion pour les copies (-1, -2, etc.)
         const expandedTriggers = expandTriggersForCopy(node.id, triggerNodeIds);
-        
-        // Pour chaque trigger, ajouter ce display field à l'index
         for (const triggerId of expandedTriggers) {
-          if (!triggerIndex.has(triggerId)) {
-            triggerIndex.set(triggerId, new Set());
-          }
+          if (!triggerIndex.has(triggerId)) triggerIndex.set(triggerId, new Set());
           triggerIndex.get(triggerId)!.add(node.id);
         }
       }
-    }
-    
-    // 🔗 NOUVEAU: Charger TOUS les champs avec Link du tree (même sans capacity)
-    // Ces champs doivent être rafraîchis quand leur champ source change
-    const allLinkedNodes = await prisma.treeBranchLeafNode.findMany({
-      where: { 
-        treeId,
-        hasLink: true,
-        link_targetNodeId: { not: null }
-      },
-      select: { id: true, label: true, link_targetNodeId: true }
-    });
-    
-    if (allLinkedNodes.length > 0) {
-      console.log(`🔗 [LINK TRIGGER] ${allLinkedNodes.length} champs avec Link trouvés dans le tree`);
       
-      // 🔍 DEBUG: Afficher tous les champs Link trouvés
-      for (const ln of allLinkedNodes) {
-        console.log(`   🔗 [LINK] "${ln.label}" (${ln.id}) → target: ${ln.link_targetNodeId}`);
-      }
-      
+      // Linked fields: ajouter au trigger index
       for (const linkedNode of allLinkedNodes) {
-        // Ajouter au trigger index: quand link_targetNodeId change, ce champ doit être rafraîchi
         const targetId = linkedNode.link_targetNodeId!;
-        if (!triggerIndex.has(targetId)) {
-          triggerIndex.set(targetId, new Set());
-        }
+        if (!triggerIndex.has(targetId)) triggerIndex.set(targetId, new Set());
         triggerIndex.get(targetId)!.add(linkedNode.id);
         
-        // Si ce changement affecte ce champ lié, mémoriser pour le rafraîchir
         if (targetId === changedFieldId) {
           linkedFieldsToRefresh.set(linkedNode.id, {
             targetNodeId: targetId,
             nodeLabel: linkedNode.label || linkedNode.id
           });
-          console.log(`🔗 [LINK TRIGGER] Champ "${linkedNode.label}" (${linkedNode.id}) sera rafraîchi car son source ${targetId} a changé`);
         }
       }
-    }
-    
-    // 🎯 NOUVEAU: Charger TOUTES les conditions du tree pour construire l'index
-    // Une condition qui référence changedFieldId doit déclencher l'évaluation de ses SHOW nodeIds
-    const allTreeNodeIds = await prisma.treeBranchLeafNode.findMany({
-      where: { treeId },
-      select: { id: true }
-    });
-    
-    // 🔧 FIX: Construire un map optionId → parentSelectFieldId
-    // Les conditions utilisent @select.OPTION_ID mais changedFieldId est le SELECT FIELD parent
-    // Sans ce mapping, le trigger index ne fait jamais le lien entre le changement du select
-    // et la condition qui teste une de ses options
-    const optionToSelectMap = new Map<string, string>();
-    const selectFieldNodes = await prisma.treeBranchLeafNode.findMany({
-      where: { treeId, type: 'leaf_option_field' },
-      select: { id: true, parentId: true }
-    });
-    for (const optNode of selectFieldNodes) {
-      if (optNode.parentId) {
-        optionToSelectMap.set(optNode.id, optNode.parentId);
-      }
-    }
-    // Aussi les options leaf_option
-    const optionNodes = await prisma.treeBranchLeafNode.findMany({
-      where: { treeId, type: 'leaf_option' },
-      select: { id: true, parentId: true }
-    });
-    for (const optNode of optionNodes) {
-      if (optNode.parentId) {
-        optionToSelectMap.set(optNode.id, optNode.parentId);
-      }
-    }
-    if (optionToSelectMap.size > 0) {
-      console.log(`🔧 [OPTION→SELECT MAP] ${optionToSelectMap.size} options mappées vers leur select parent`);
-    }
-    
-    if (allTreeNodeIds.length > 0) {
-      const nodeIds = allTreeNodeIds.map(n => n.id);
-      const allConditions = await prisma.treeBranchLeafNodeCondition.findMany({
-        where: { nodeId: { in: nodeIds } },
-        select: { id: true, nodeId: true, conditionSet: true, name: true }
-      });
       
-      if (allConditions.length > 0) {
-        console.log(`🎯 [CONDITION TRIGGER] ${allConditions.length} conditions trouvées dans le tree`);
+      // Conditions: construire l'index pour TOUS les changedFieldIds possibles (pas juste le courant)
+      if (allTreeNodeIds.length > 0) {
+        const nodeIds = allTreeNodeIds.map(n => n.id);
+        const allConditions = await prisma.treeBranchLeafNodeCondition.findMany({
+          where: { nodeId: { in: nodeIds } },
+          select: { id: true, nodeId: true, conditionSet: true, name: true }
+        });
         
-        for (const condition of allConditions) {
-          // Parser le conditionSet pour extraire les références aux champs
-          const conditionSet = condition.conditionSet as {
-            branches?: Array<{
-              when?: { left?: { ref?: string }; right?: { ref?: string } };
-              actions?: Array<{ type?: string; nodeIds?: string[] }>;
-            }>;
-            fallback?: { actions?: Array<{ type?: string; nodeIds?: string[] }> };
-          };
+        if (allConditions.length > 0) {
           
-          const referencedFieldIds = new Set<string>();
-          const targetShowNodeIds = new Set<string>();
-          
-          // Parcourir les branches pour extraire les références et les SHOW nodeIds
-          for (const branch of conditionSet.branches || []) {
-            // Extraire les références de la clause when (left et right)
-            const leftRef = branch.when?.left?.ref;
-            const rightRef = branch.when?.right?.ref;
+          for (const condition of allConditions) {
+            const conditionSet = condition.conditionSet as {
+              branches?: Array<{
+                when?: { left?: { ref?: string }; right?: { ref?: string } };
+                actions?: Array<{ type?: string; nodeIds?: string[] }>;
+              }>;
+              fallback?: { actions?: Array<{ type?: string; nodeIds?: string[] }> };
+            };
             
-            if (leftRef) {
-              const id = normalizeRefForTriggers(leftRef);
-              if (id) {
-                referencedFieldIds.add(id);
-                // 🔧 FIX: Si c'est un @select.OPTION_ID, ajouter aussi le parent select field ID
-                // Car changedFieldId est l'ID du select, pas de l'option
-                if (typeof leftRef === 'string' && leftRef.startsWith('@select.')) {
-                  const parentSelectId = optionToSelectMap.get(id);
-                  if (parentSelectId) referencedFieldIds.add(parentSelectId);
+            const referencedFieldIds = new Set<string>();
+            const targetShowNodeIds = new Set<string>();
+            
+            for (const branch of conditionSet.branches || []) {
+              const leftRef = branch.when?.left?.ref;
+              const rightRef = branch.when?.right?.ref;
+              if (leftRef) {
+                const id = normalizeRefForTriggers(leftRef);
+                if (id) {
+                  referencedFieldIds.add(id);
+                  if (typeof leftRef === 'string' && leftRef.startsWith('@select.')) {
+                    const parentSelectId = optionToSelectMap.get(id);
+                    if (parentSelectId) referencedFieldIds.add(parentSelectId);
+                  }
+                }
+              }
+              if (rightRef) {
+                const id = normalizeRefForTriggers(rightRef);
+                if (id) {
+                  referencedFieldIds.add(id);
+                  if (typeof rightRef === 'string' && rightRef.startsWith('@select.')) {
+                    const parentSelectId = optionToSelectMap.get(id);
+                    if (parentSelectId) referencedFieldIds.add(parentSelectId);
+                  }
+                }
+              }
+              for (const action of branch.actions || []) {
+                if ((action.type === 'SHOW' || action.type === 'HIDE') && action.nodeIds) {
+                  action.nodeIds.forEach(nid => targetShowNodeIds.add(nid));
                 }
               }
             }
-            if (rightRef) {
-              const id = normalizeRefForTriggers(rightRef);
-              if (id) {
-                referencedFieldIds.add(id);
-                // 🔧 FIX: Même résolution pour le côté droit
-                if (typeof rightRef === 'string' && rightRef.startsWith('@select.')) {
-                  const parentSelectId = optionToSelectMap.get(id);
-                  if (parentSelectId) referencedFieldIds.add(parentSelectId);
-                }
-              }
-            }
-            
-            // Extraire les nodeIds des actions SHOW/HIDE (les deux impactent des display fields)
-            for (const action of branch.actions || []) {
+            for (const action of conditionSet.fallback?.actions || []) {
               if ((action.type === 'SHOW' || action.type === 'HIDE') && action.nodeIds) {
                 action.nodeIds.forEach(nid => targetShowNodeIds.add(nid));
               }
             }
-          }
-          
-          // Aussi le fallback
-          for (const action of conditionSet.fallback?.actions || []) {
-            if ((action.type === 'SHOW' || action.type === 'HIDE') && action.nodeIds) {
-              action.nodeIds.forEach(nid => targetShowNodeIds.add(nid));
-            }
-          }
-          
-          // Si cette condition référence le changedFieldId, ajouter ses SHOW nodeIds au trigger index
-          if (referencedFieldIds.has(changedFieldId)) {
-            console.log(`🎯 [CONDITION TRIGGER] Condition "${condition.name}" (${condition.id}) référence "${changedFieldId}" → SHOW nodeIds: [${[...targetShowNodeIds].join(', ')}]`);
             
-            if (!triggerIndex.has(changedFieldId)) {
-              triggerIndex.set(changedFieldId, new Set());
-            }
-            
-            // 🔥 FIX CRITIQUE: Ajouter le NODE PROPRIÉTAIRE de la condition au trigger index
-            // Le condition.nodeId est le display field qui A cette capacité condition (sourceRef: "condition:xxx")
-            // Quand l'input de la condition change, c'est CE display field qui doit être réévalué !
-            triggerIndex.get(changedFieldId)!.add(condition.nodeId);
-            console.log(`🎯 [CONDITION TRIGGER] → Ajout du node propriétaire "${condition.nodeId}" au trigger index`);
-            
-            for (const rawShowNodeId of targetShowNodeIds) {
-              // Normaliser les nodeIds pour supprimer les préfixes (@calculated., condition:, etc.)
-              const showNodeId = normalizeRefForTriggers(rawShowNodeId);
-              if (!showNodeId) continue; // Skip les IDs vides après normalisation
-              
-              triggerIndex.get(changedFieldId)!.add(showNodeId);
+            // 🔥 FIX: Ajouter au trigger index pour CHAQUE champ référencé (pas juste changedFieldId)
+            for (const refFieldId of referencedFieldIds) {
+              if (!triggerIndex.has(refFieldId)) triggerIndex.set(refFieldId, new Set());
+              triggerIndex.get(refFieldId)!.add(condition.nodeId);
+              for (const rawShowNodeId of targetShowNodeIds) {
+                const showNodeId = normalizeRefForTriggers(rawShowNodeId);
+                if (showNodeId) triggerIndex.get(refFieldId)!.add(showNodeId);
+              }
             }
           }
         }
       }
-    }
       
-    const affectedCount = triggerIndex.get(changedFieldId)?.size || 0;
-    console.log(`🚀 [TRIGGER INDEX] Index créé: display fields + ${allLinkedNodes.length} linked fields → ${affectedCount} impactés par "${changedFieldId}"`);
-    // 🔍 DEBUG OPTIMISEUR: vérifier si 410ad1e1 est dans l'index
+      // 📦 STOCKER dans le cache pour les prochaines évaluations
+      triggerIndexCache.set(treeId, {
+        triggerIndex: new Map([...triggerIndex].map(([k, v]) => [k, new Set(v)])),
+        allLinkedNodes: allLinkedNodes.map(ln => ({ id: ln.id, label: ln.label, link_targetNodeId: ln.link_targetNodeId! })),
+        optionToSelectMap,
+        timestamp: Date.now()
+      });
+      
+      const affectedCount = triggerIndex.get(changedFieldId)?.size || 0;
+    }
+    
+    // 🔍 DEBUG compact
     const optimiseurCheck = triggerIndex.get(changedFieldId);
     if (optimiseurCheck) {
-      const has410 = [...optimiseurCheck].find(id => id.startsWith('410ad1e1'));
-      console.log(`🔍 [DEBUG-OPTI] triggerIndex pour "${changedFieldId}" contient 410ad1e1? ${has410 ? 'OUI' : 'NON'} (total: ${optimiseurCheck.size} entries: ${[...optimiseurCheck].join(', ')})`);
-    } else {
-      console.log(`🔍 [DEBUG-OPTI] triggerIndex pour "${changedFieldId}" est VIDE/ABSENT`);
     }
   }
 
@@ -1171,47 +1175,18 @@ async function evaluateCapacitiesForSubmission(
       || capacity.TreeBranchLeafNode?.type === 'DISPLAY'
       || capacity.TreeBranchLeafNode?.type === 'leaf_field';
     
-    // 🔍 DEBUG: tracer 410ad1e1
-    if (capacity.nodeId.startsWith('410ad1e1')) {
-      console.log(`🔍 [DEBUG-OPTI] capacity 410ad1e1 trouvé! isDisplayField=${isDisplayField}, mode=${mode}, changedFieldId=${changedFieldId}, sourceRef=${sourceRef}`);
-    }
-    
-    // 🎯 MODE AUTOSAVE: Skip tous les display fields (optimisation performance)
-    // MODE OPEN: Recalculer TOUS les display fields (ouverture / transfert)
-    // MODE CHANGE: Recalculer uniquement les display fields impactés par le trigger
+    // MODE AUTOSAVE: Skip tous les display fields (perf: pas besoin de recalculer)
+    // MODE OPEN / CHANGE: Recalculer TOUS les display fields (garantit la cohérence)
     if (isDisplayField && mode === 'autosave') {
-      console.log(`⏸️ [AUTOSAVE] Display field ${capacity.nodeId} (${capacity.TreeBranchLeafNode?.label}) skippé - mode autosave`);
-      continue; // ✅ SKIP - optimisation autosave
+      continue;
     }
     
-    // 🎯 MODE OPEN: Recalculer TOUS les display fields sans filtrage
-    if (isDisplayField && mode === 'open') {
-      console.log(`🔄 [OPEN] Display field ${capacity.nodeId} (${capacity.TreeBranchLeafNode?.label}) recalculé - mode open`);
-      // Ne pas continue → on laisse passer pour recalcul
-    }
-    
-    // 🎯 MODE CHANGE: Utiliser l'index inversé pour filtrage O(1) au lieu de O(n) queries
-    if (isDisplayField && mode === 'change' && changedFieldId) {
-      // 🔥 DÉDUPLICATION: Si ce display field a déjà été traité, skip
+    // 🔥 DÉDUPLICATION: Un même display field peut apparaître N fois dans capacities
+    if (isDisplayField) {
       if (processedDisplayFields.has(capacity.nodeId)) {
-        continue; // ✅ Déjà calculé, skip ce duplicata
+        continue;
       }
-      
-      // ✅ NOUVEAU: Vérification O(1) dans l'index au lieu de requête SQL
-      const affectedDisplayFields = triggerIndex.get(changedFieldId);
-      
-      if (!affectedDisplayFields || !affectedDisplayFields.has(capacity.nodeId)) {
-        console.log(`⏸️ [TRIGGER INDEX] Display field ${capacity.nodeId} (${capacity.TreeBranchLeafNode?.label}) skippé - pas dans l'index pour "${changedFieldId}"`);
-        continue; // ✅ SKIP - pas affecté par ce changement
-      }
-      
-      // Marquer comme traité pour éviter les duplicatas
       processedDisplayFields.add(capacity.nodeId);
-      console.log(`✅ [TRIGGER INDEX] Display field ${capacity.nodeId} (${capacity.TreeBranchLeafNode?.label}) recalculé - trouvé dans l'index`);
-      // 🔎 DIAG PRIX KWH
-      if (capacity.nodeId.startsWith('99476bab')) {
-        console.log(`🔎🔎🔎 [DIAG PRIX KWH BACKEND] Display field 99476bab déclenché par changedFieldId="${changedFieldId}", valueMap contient 702d1b09=${valueMap.get('702d1b09-abc9-4096-9aaa-77155ac5294f')}, select=${valueMap.get('node_1757366229542_r791f4qk7')}`);
-      }
     }
     
     try {
@@ -1285,7 +1260,7 @@ async function evaluateCapacitiesForSubmission(
             // Les opérateurs "+", "-", etc. sont ignorés car on fait une somme simple
           }
 
-          console.log(`🎯 [SUM-TOTAL EVALUATOR] ${capacity.nodeId} (${sumTokensNode?.label}) = ${sum}`, debugParts);
+          // Sum-total debug omitted for perf
 
           capacityResult = {
             value: sum,
@@ -1318,7 +1293,7 @@ async function evaluateCapacitiesForSubmission(
         const rootConditionId = nodeForFallback?.linkedConditionIds?.[0] || nodeForFallback?.condition_activeId;
         
         if (rootConditionId) {
-          console.log(`🔧 [FALLBACK] Node ${capacity.nodeId} n'a pas de variable → évaluation directe condition:${rootConditionId}`);
+          // Fallback condition evaluation
           const valuesCache = new Map<string, InterpretResult>();
           const condResult = await interpretReference(
             `condition:${rootConditionId}`,
@@ -1335,7 +1310,7 @@ async function evaluateCapacitiesForSubmission(
             operationSource: 'condition'
           };
         } else if (nodeForFallback?.formula_activeId) {
-          console.log(`🔧 [FALLBACK] Node ${capacity.nodeId} n'a pas de variable → évaluation directe formula:${nodeForFallback.formula_activeId}`);
+          // Fallback formula evaluation
           const valuesCache = new Map<string, InterpretResult>();
           const fResult = await interpretReference(
             `node-formula:${nodeForFallback.formula_activeId}`,
@@ -1403,13 +1378,6 @@ async function evaluateCapacitiesForSubmission(
           operationResult: parsedResult,
           calculatedBy: `reactive-${userId || 'unknown'}`
         });
-        console.log(
-          `✅ [DISPLAY FIELD] ${capacity.nodeId} (${capacity.TreeBranchLeafNode?.label}) = ${hasValidValue ? String(rawValue) : 'null'}`
-        );
-        // 🔎 DIAG PRIX KWH
-        if (capacity.nodeId.startsWith('99476bab')) {
-          console.log(`🔎🔎🔎 [DIAG PRIX KWH RESULT] rawValue="${rawValue}", stringified="${stringified}", hasValid=${hasValidValue}, operationSource="${normalizedOperationSource}"`);
-        }
         continue;
       }
       
@@ -1494,57 +1462,38 @@ async function evaluateCapacitiesForSubmission(
       }
     }
     if (addedFromDb > 0) {
-      console.log(`🛡️ [DB RESTORE] ${addedFromDb} valeurs DISPLAY restaurées depuis DB ajoutées aux résultats`);
     }
   }
 
   // 🔗 NOUVEAU: Rafraîchir les champs Link dont le champ source a changé
   // Les valeurs Link sont récupérées depuis le champ cible et ajoutées aux résultats
   if (linkedFieldsToRefresh.size > 0) {
-    console.log(`🔗 [LINK REFRESH] ${linkedFieldsToRefresh.size} champs Link à rafraîchir`);
     const alreadyComputed = new Set(computedValuesToStore.map(c => c.nodeId));
     
     for (const [linkedNodeId, linkInfo] of linkedFieldsToRefresh.entries()) {
-      if (alreadyComputed.has(linkedNodeId)) {
-        console.log(`🔗 [LINK REFRESH] ${linkedNodeId} déjà calculé - skip`);
-        continue;
-      }
+      if (alreadyComputed.has(linkedNodeId)) continue;
       
-      // Récupérer la valeur du champ source
-      // 1. D'abord essayer dans formData (valeur qui vient d'être changée)
-      // 2. Sinon dans SubmissionData
-      // 3. Sinon dans TreeBranchLeafNode.calculatedValue
       let linkValue: string | null = null;
       
-      // 1. Vérifier dans formData
       if (formData && linkInfo.targetNodeId in formData) {
         const fv = formData[linkInfo.targetNodeId];
         linkValue = fv !== null && fv !== undefined ? String(fv) : null;
-        console.log(`🔗 [LINK REFRESH] ${linkedNodeId} → valeur depuis formData: "${linkValue}"`);
       }
       
-      // 2. Sinon dans SubmissionData
       if (!linkValue) {
         const submissionDataRecord = await prisma.treeBranchLeafSubmissionData.findFirst({
           where: { submissionId, nodeId: linkInfo.targetNodeId },
           orderBy: { lastResolved: 'desc' }
         });
-        if (submissionDataRecord?.value) {
-          linkValue = submissionDataRecord.value;
-          console.log(`🔗 [LINK REFRESH] ${linkedNodeId} → valeur depuis SubmissionData: "${linkValue}"`);
-        }
+        if (submissionDataRecord?.value) linkValue = submissionDataRecord.value;
       }
       
-      // 3. Sinon dans TreeBranchLeafNode.calculatedValue
       if (!linkValue) {
         const targetNode = await prisma.treeBranchLeafNode.findUnique({
           where: { id: linkInfo.targetNodeId },
           select: { calculatedValue: true }
         });
-        if (targetNode?.calculatedValue) {
-          linkValue = targetNode.calculatedValue;
-          console.log(`🔗 [LINK REFRESH] ${linkedNodeId} → valeur depuis TreeBranchLeafNode.calculatedValue: "${linkValue}"`);
-        }
+        if (targetNode?.calculatedValue) linkValue = targetNode.calculatedValue;
       }
       
       if (linkValue !== null) {
@@ -1558,9 +1507,6 @@ async function evaluateCapacitiesForSubmission(
           operationResult: null,
           calculatedBy: 'link'
         });
-        console.log(`🔗 [LINK REFRESH] Champ "${linkInfo.nodeLabel}" (${linkedNodeId}) → valeur "${linkValue}" ajoutée aux résultats`);
-      } else {
-        console.log(`🔗 [LINK REFRESH] ${linkedNodeId} → pas de valeur trouvée pour le champ source ${linkInfo.targetNodeId}`);
       }
     }
   }
@@ -1568,10 +1514,8 @@ async function evaluateCapacitiesForSubmission(
   // 🎯 STOCKER les valeurs calculées (DISPLAY inclus) dans SubmissionData (scopé devis/brouillon)
   if (computedValuesToStore.length > 0) {
     try {
-      console.log(`🎯 [COMPUTED VALUES] Stockage de ${computedValuesToStore.length} valeurs calculées (DISPLAY inclus) dans SubmissionData`);
       const stored = await upsertComputedValuesForSubmission(submissionId, computedValuesToStore);
       results.displayFieldsUpdated = stored;
-      console.log(`✅ [COMPUTED VALUES] ${stored} valeurs calculées stockées (submission scoped)`);
     } catch (computedStoreError) {
       console.error('[COMPUTED VALUES] Erreur stockage:', computedStoreError);
     }
@@ -1603,8 +1547,6 @@ router.post('/submissions/:submissionId/evaluate-all', async (req, res) => {
       });
     }
     
-    console.log('🔥 [TBL EVALUATE ALL] Début évaluation complète:', submissionId);
-    console.log(`🏢 [TBL EVALUATE ALL] Organisation: ${organizationId}, Utilisateur: ${userId}`);
     
     // 1. Récupérer toutes les données de soumission avec capacités
     const submissionData = await prisma.treeBranchLeafSubmissionData.findMany({
@@ -1619,7 +1561,6 @@ router.post('/submissions/:submissionId/evaluate-all', async (req, res) => {
       }
     });
     
-    console.log(`📊 [TBL EVALUATE ALL] ${submissionData.length} éléments avec capacités trouvés`);
     
     if (submissionData.length === 0) {
       return res.json({
@@ -1647,11 +1588,9 @@ router.post('/submissions/:submissionId/evaluate-all', async (req, res) => {
       try {
         // Skip si déjà évalué (sauf si forceUpdate)
         if (!forceUpdate && data.operationResult && data.lastResolved) {
-          console.log(`⏭️ [TBL EVALUATE ALL] Skip ${data.sourceRef} (déjà évalué)`);
           continue;
         }
         
-        console.log(`🔄 [TBL EVALUATE ALL] Évaluation ${data.sourceRef}...`);
         
         // ✨ Calculer avec operation-interpreter (système unifié)
         const calculationResult = await evaluateVariableOperation(
@@ -1660,7 +1599,6 @@ router.post('/submissions/:submissionId/evaluate-all', async (req, res) => {
           prisma
         );
         
-        console.log(`✅ [TBL EVALUATE ALL] Résultat pour ${data.sourceRef}:`, calculationResult.operationResult);
 
         // 5. Sauvegarder en base SEULEMENT si changement (NO-OP sinon)
         const normalize = (v: unknown) => {
@@ -1698,7 +1636,6 @@ router.post('/submissions/:submissionId/evaluate-all', async (req, res) => {
             }
           });
         } else {
-          console.log(`⏭️ [TBL EVALUATE ALL] NO-OP ${data.sourceRef} (inchangé)`);
         }
         
         results.push({
@@ -1726,7 +1663,6 @@ router.post('/submissions/:submissionId/evaluate-all', async (req, res) => {
       }
     }
     
-    console.log(`🎉 [TBL EVALUATE ALL] Terminé: ${evaluatedCount} évalués, ${errorCount} erreurs`);
     
     return res.json({
       success: true,
@@ -1757,7 +1693,6 @@ router.get('/submissions/:submissionId/verification', async (req, res) => {
   try {
     const { submissionId } = req.params;
     
-    console.log('🔍 [TBL VERIFICATION] Vérification soumission:', submissionId);
     
     // Récupérer les lignes concernées et compter en mémoire (operationResult est un JSON)
     const rows = await prisma.treeBranchLeafSubmissionData.findMany({
@@ -1856,11 +1791,8 @@ router.post('/submissions/create-and-evaluate', async (req, res) => {
     // Utile pour "copier" / "nouveau brouillon" côté UI.
     const shouldForceNewSubmission = Boolean(forceNewSubmission);
     
-    console.log(`🎯 [TRIGGER DEBUG] changedFieldId reçu du frontend: "${triggerFieldId || 'NULL'}"`);
-    
-    // Récupérer l'organisation de l'utilisateur authentifié (endpoint POST)
+    // Récupérer l'organisation de l'utilisateur authentifié
     const organizationId = req.headers['x-organization-id'] as string || (req as AuthenticatedRequest).user?.organizationId;
-    // 🔑 Récupérer userId depuis le header X-User-Id ou le middleware auth
     const userId = req.headers['x-user-id'] as string || (req as AuthenticatedRequest).user?.userId || 'unknown-user';
     const canEditCompletedInPlace = isAdminOrSuperAdmin(req);
     const isSuperAdmin = Boolean((req as AuthenticatedRequest).user?.isSuperAdmin) || (req as AuthenticatedRequest).user?.role === 'super_admin';
@@ -1872,9 +1804,6 @@ router.post('/submissions/create-and-evaluate', async (req, res) => {
       });
     }
     
-    console.log('🔥 [TBL CREATE-AND-EVALUATE] Début création complète TBL Prisma');
-    console.log(`🏢 [TBL CREATE-AND-EVALUATE] Organisation: ${organizationId}, Utilisateur: ${userId}`);
-    console.log(`📋 [TBL CREATE-AND-EVALUATE] TreeId reçu: ${treeId}, ClientId: ${clientId}`);
     
     // 1. Vérifier et récupérer l'arbre réel depuis la base de données
     let effectiveTreeId = treeId as string | undefined;
@@ -1891,7 +1820,6 @@ router.post('/submissions/create-and-evaluate', async (req, res) => {
       }
       
       effectiveTreeId = firstTree.id;
-      console.log(`🌳 [TBL CREATE-AND-EVALUATE] Arbre par défaut sélectionné: ${effectiveTreeId} (${firstTree.name})`);
     } else {
       // Vérifier que l'arbre fourni existe bien
       const treeExists = await prisma.treeBranchLeafTree.findUnique({
@@ -1910,9 +1838,7 @@ router.post('/submissions/create-and-evaluate', async (req, res) => {
         }
         
         effectiveTreeId = firstTree.id;
-        console.log(`🌳 [TBL CREATE-AND-EVALUATE] Arbre alternatif sélectionné: ${effectiveTreeId} (${firstTree.name})`);
       } else {
-        console.log(`✅ [TBL CREATE-AND-EVALUATE] Arbre validé: ${effectiveTreeId} (${treeExists.name})`);
       }
     }
     
@@ -1961,13 +1887,10 @@ router.post('/submissions/create-and-evaluate', async (req, res) => {
       }
       
       if (isSuperAdmin && leadExists.organizationId !== organizationId) {
-        console.log(`🔑 [TBL CREATE-AND-EVALUATE] Super Admin - Bypass vérification organisation pour lead ${clientId}`);
       }
       
-      console.log(`✅ [TBL CREATE-AND-EVALUATE] Lead validé: ${clientId} (${leadExists.firstName} ${leadExists.lastName})`);
       effectiveLeadId = leadExists.id;
     } else {
-      console.log('📝 [TBL CREATE-AND-EVALUATE] Création default-draft SANS lead');
     }
     
     // 3. Vérifier l'utilisateur si fourni
@@ -1983,7 +1906,6 @@ router.post('/submissions/create-and-evaluate', async (req, res) => {
         console.log(`❌ [TBL CREATE-AND-EVALUATE] User ${effectiveUserId} introuvable, soumission sans utilisateur`);
         effectiveUserId = null;
       } else {
-        console.log(`✅ [TBL CREATE-AND-EVALUATE] User validé: ${effectiveUserId} (${userExists.firstName} ${userExists.lastName})`);
       }
     }
     
@@ -2077,7 +1999,6 @@ router.post('/submissions/create-and-evaluate', async (req, res) => {
             submissionId = newId;
             existingSubmission = null;
             revisionJustCreated = true; // 🛡️ FIX: Forcer mode 'open' pour recalculer tous les DISPLAY
-            console.log(`🆕 [TBL VERSIONING] Soumission completed ${requestedSubmissionId} clonée (forceNewSubmission) → ${newId}`);
           } else if (!isRevision) {
             const newId = await cloneCompletedSubmissionToDraft({
               originalSubmissionId: existingSubmission.id,
@@ -2087,7 +2008,6 @@ router.post('/submissions/create-and-evaluate', async (req, res) => {
             submissionId = newId;
             existingSubmission = null;
             revisionJustCreated = true; // 🛡️ FIX: Forcer mode 'open' pour recalculer tous les DISPLAY
-            console.log(`🆕 [TBL VERSIONING] Soumission completed ${requestedSubmissionId} clonée → ${newId}`);
           }
         }
       }
@@ -2112,7 +2032,6 @@ router.post('/submissions/create-and-evaluate', async (req, res) => {
           select: { id: true }
         });
         if (existingDraft) {
-          console.log(`♻️ [TBL CREATE-AND-EVALUATE] Réutilisation du default-draft existant: ${existingDraft.id}`);
         }
       } else if (effectiveLeadId && !shouldForceNewSubmission) {
         // Pour les drafts normaux: chercher par leadId + treeId
@@ -2127,7 +2046,6 @@ router.post('/submissions/create-and-evaluate', async (req, res) => {
           select: { id: true }
         });
         if (existingDraft) {
-          console.log(`♻️ [TBL CREATE-AND-EVALUATE] Réutilisation du draft existant: ${existingDraft.id} (leadId: ${effectiveLeadId})`);
         }
       }
       
@@ -2152,7 +2070,6 @@ router.post('/submissions/create-and-evaluate', async (req, res) => {
           updatedAt: new Date()
         }
       });
-      console.log(`✅ [TBL CREATE-AND-EVALUATE] Soumission créée: ${submissionId} pour organization ${organizationId}`);
     } else {
       // Mettre à jour la submission existante (ou une révision fraîchement créée)
       const current = await prisma.treeBranchLeafSubmission.findUnique({
@@ -2182,14 +2099,12 @@ router.post('/submissions/create-and-evaluate', async (req, res) => {
         where: { id: submissionId },
         data: updateData
       });
-      console.log(`♻️ [TBL CREATE-AND-EVALUATE] Soumission mise à jour: ${submissionId}`);
     }
     
     // 5. Sauvegarder d'abord les données UTILISATEUR en base, puis évaluer et sauvegarder les CAPACITÉS
     if (cleanFormData && typeof cleanFormData === 'object') {
       // A. Sauvegarder les données utilisateur directes (réutilise NO-OP)
   const savedCount = await saveUserEntriesNeutral(submissionId!, cleanFormData, effectiveTreeId);
-      if (savedCount > 0) console.log(`✅ [TBL CREATE-AND-EVALUATE] ${savedCount} entrées utilisateur enregistrées`);
       
       // B. Récupérer toutes les capacités (conditions, formules, tables) depuis TreeBranchLeafNodeVariable
       const capacities = await prisma.treeBranchLeafNodeVariable.findMany({
@@ -2206,19 +2121,16 @@ router.post('/submissions/create-and-evaluate', async (req, res) => {
         }
       });
       
-      console.log(`🎯 [TBL CREATE-AND-EVALUATE] ${capacities.length} capacités trouvées`);
       
       // 🛡️ FIX 2026-01-31: Quand une révision vient d'être créée, forcer le mode 'open'
       // pour recalculer TOUS les champs DISPLAY avec les données copiées depuis la soumission parente.
       // Sinon, seuls les champs qui matchent le trigger seraient recalculés et les autres garderaient des valeurs obsolètes.
       const effectiveMode = revisionJustCreated ? 'open' : mode;
       if (revisionJustCreated) {
-        console.log(`🛡️ [TBL REVISION] Mode forcé à 'open' car révision créée - recalcul complet des DISPLAY`);
       }
       
       // C. Évaluer et persister les capacités avec NO-OP - 🔑 PASSER LE FORMDATA pour réactivité !
       const evalStats = await evaluateCapacitiesForSubmission(submissionId!, organizationId!, userId || null, effectiveTreeId, cleanFormData, effectiveMode, triggerFieldId);
-      console.log(`✅ [TBL CREATE-AND-EVALUATE] Capacités: ${evalStats.updated} mises à jour, ${evalStats.created} créées, ${evalStats.displayFieldsUpdated} display fields réactifs (mode: ${effectiveMode})`);
     }
     
     // 3. Évaluation immédiate déjà effectuée via operation-interpreter ci-dessus.
@@ -2345,9 +2257,6 @@ router.post('/submissions/preview-evaluate', async (req, res) => {
       const keys = Object.keys(formData).filter(k => !k.startsWith('__'));
       const orientationKeys = keys.filter(k => k.includes('c071a466') || k.includes('Orientation'));
       const inclinaisonKeys = keys.filter(k => k.includes('76a40eb1') || k.includes('Inclinaison'));
-      console.log('🔍 [PREVIEW-EVALUATE DEBUG] formData keys contenant Orientation:', orientationKeys);
-      console.log('🔍 [PREVIEW-EVALUATE DEBUG] formData keys contenant Inclinaison:', inclinaisonKeys);
-      console.log('🔍 [PREVIEW-EVALUATE DEBUG] Toutes les clés -1:', keys.filter(k => k.endsWith('-1')));
     }
 
     const organizationId = req.headers['x-organization-id'] as string || (req as AuthenticatedRequest).user?.organizationId;
@@ -2721,7 +2630,6 @@ router.post('/submissions/preview-evaluate', async (req, res) => {
         }));
 
       if (computedRows.length > 0) {
-        console.log(`🎯 [PREVIEW] Stockage de ${computedRows.length} valeurs calculées dans SubmissionData`);
         await upsertComputedValuesForSubmission(submissionId, computedRows);
       }
     } catch (storeError) {
@@ -2930,7 +2838,6 @@ router.get('/tables/:tableId', async (req, res) => {
   try {
     const { tableId } = req.params;
     
-    console.log(`📊 [GET TABLE] Récupération table: ${tableId}`);
     
     // ✅ CORRIGÉ: Récupérer la table depuis TreeBranchLeafNodeTable
     const table = await prisma.treeBranchLeafNodeTable.findUnique({
@@ -2944,14 +2851,12 @@ router.get('/tables/:tableId', async (req, res) => {
     });
     
     if (!table) {
-      console.log(`❌ [GET TABLE] Table introuvable: ${tableId}`);
       return res.status(404).json({
         success: false,
         error: 'Table introuvable'
       });
     }
     
-    console.log(`✅ [GET TABLE] Table trouvée: ${table.name || tableId}`);
     
     // Extraire la configuration de lookup depuis meta
     const meta = table.meta as any;
@@ -2962,13 +2867,6 @@ router.get('/tables/:tableId', async (req, res) => {
     const columns = tableData.columns || [];
     const rows = tableData.rows || [];
     const data = tableData.matrix || [];
-    
-    console.log(`📊 [GET TABLE] Données extraites:`, {
-      columnsCount: columns.length,
-      rowsCount: rows.length,
-      dataRowsCount: data.length,
-      lookupEnabled: lookupConfig.rowLookupEnabled || lookupConfig.columnLookupEnabled
-    });
     
     // Retourner les informations de la table AVEC les données
     return res.json({

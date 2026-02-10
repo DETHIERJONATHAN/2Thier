@@ -7255,11 +7255,7 @@ async function applyTableFilters(
       // ✨ Multiplicateur conditionnel: modifier cellValue avant la comparaison
       if ((filter as any).multiplier?.enabled) {
         const mult = (filter as any).multiplier;
-        // 🔍 DEBUG: Log formValues pour les clés du multiplier (1 seule fois)
-        if (rowIndex === 0) {
-          const condKeys = (mult.conditions || []).flatMap((c: any) => [c.fieldA, c.fieldB].filter((r: string) => r?.startsWith('@value.')).map((r: string) => r.replace('@value.', '')));
-          console.log(`[Multiplier-BE] formValues pour conditions:`, condKeys.map((k: string) => `${k}=${JSON.stringify(formValues[k])}`).join(', '));
-        }
+        // Multiplier conditions resolved silently (debug logs removed for perf)
         
         // Résoudre une référence — supporte les valeurs littérales (ex: "HUAWEI")
         const resolveRef = (ref: string | undefined): unknown => {
@@ -7304,9 +7300,7 @@ async function applyTableFilters(
           if (!cond.fieldA && !cond.fieldB) return false;
           const fieldAValue = resolveRef(cond.fieldA);
           const fieldBValue = resolveRef(cond.fieldB);
-          // 🔍 DEBUG MULTIPLIER: afficher valeurs résolues pour diagnostic
           if (fieldAValue === null || fieldAValue === undefined || fieldBValue === null || fieldBValue === undefined) {
-            console.log(`[Multiplier-BE] Cond${condIdx ?? '?'}: "${cond.fieldA}" → ${JSON.stringify(fieldAValue)} | "${cond.fieldB}" → ${JSON.stringify(fieldBValue)} → NULL → FALSE`);
             return false;
           }
           
@@ -8541,10 +8535,143 @@ router.post('/evaluate/formula/:formulaId', async (req, res) => {
         type: 'value' | 'variable' | 'operator' | 'lparen' | 'rparen';
         value?: string | number;
         name?: string;
+        variableId?: string;
       }
 
-      // Tokens de la formule (nouveau format)
-      const tokens = Array.isArray(formula.tokens) ? formula.tokens as FormulaToken[] : [];
+      // 🔄 NORMALISATION: Convertir les tokens bruts (strings) en objets FormulaToken structurés
+      // Les formules peuvent être stockées en DB sous 2 formats :
+      //   - Ancien format (strings brutes) : ["@table.xxx", "*", "@calculated.yyy"]
+      //   - Nouveau format (objets structurés) : [{ type: 'variable', name: 'xxx' }, ...]
+      const rawTokens = Array.isArray(formula.tokens) ? formula.tokens : [];
+      const hasRawStringTokens = rawTokens.length > 0 && typeof rawTokens[0] === 'string';
+
+      let tokens: FormulaToken[] = [];
+      
+      if (hasRawStringTokens) {
+        // 🧩 RÉSOLUTION DES TOKENS BRUTS (@table.xxx, @calculated.xxx, @value.xxx, opérateurs, nombres)
+        const resolvedTokens: FormulaToken[] = [];
+        
+        for (const rawToken of rawTokens as string[]) {
+          if (!rawToken || typeof rawToken !== 'string') continue;
+          
+          // Opérateurs mathématiques
+          if (['+', '-', '*', '/'].includes(rawToken)) {
+            resolvedTokens.push({ type: 'operator', value: rawToken });
+            continue;
+          }
+          
+          // Parenthèses
+          if (rawToken === '(') { resolvedTokens.push({ type: 'lparen', value: '(' }); continue; }
+          if (rawToken === ')') { resolvedTokens.push({ type: 'rparen', value: ')' }); continue; }
+          
+          // 📊 @table.{tableId} → résoudre la calculatedValue du nœud propriétaire de la table
+          if (rawToken.startsWith('@table.')) {
+            const tableId = rawToken.replace('@table.', '');
+            try {
+              const table = await prisma.treeBranchLeafNodeTable.findUnique({
+                where: { id: tableId },
+                select: { nodeId: true, name: true }
+              });
+              
+              let resolvedValue = 0;
+              
+              if (table?.nodeId) {
+                const ownerNode = await prisma.treeBranchLeafNode.findUnique({
+                  where: { id: table.nodeId },
+                  select: { calculatedValue: true, label: true }
+                });
+                
+                if (ownerNode?.calculatedValue != null) {
+                  const parsed = parseFloat(String(ownerNode.calculatedValue));
+                  resolvedValue = isNaN(parsed) ? 0 : parsed;
+                  console.log(`📊 [FORMULA] @table.${tableId} (${table.name}) → nœud "${ownerNode.label}" = ${resolvedValue}`);
+                } else {
+                  // Fallback: chercher dans fieldValues envoyés par le frontend
+                  const fromFV = fieldValues[table.nodeId] ?? fieldValues[tableId];
+                  if (fromFV != null) {
+                    const parsed = parseFloat(String(fromFV).replace(/\s+/g, '').replace(/,/g, '.'));
+                    resolvedValue = isNaN(parsed) ? 0 : parsed;
+                    console.log(`📊 [FORMULA] @table.${tableId} (${table.name}) → fieldValues = ${resolvedValue}`);
+                  } else {
+                    console.warn(`⚠️ [FORMULA] @table.${tableId} (${table.name}) → nœud "${ownerNode?.label}" calculatedValue=null, fieldValues=absent`);
+                  }
+                }
+              } else {
+                console.warn(`⚠️ [FORMULA] @table.${tableId} → table introuvable en DB`);
+              }
+              
+              resolvedTokens.push({ type: 'value', value: resolvedValue });
+            } catch (tableError) {
+              console.error(`❌ [FORMULA] Erreur résolution @table.${tableId}:`, tableError);
+              resolvedTokens.push({ type: 'value', value: 0 });
+            }
+            continue;
+          }
+          
+          // 🔢 @calculated.{nodeId} → résoudre la calculatedValue du nœud
+          if (rawToken.startsWith('@calculated.') || rawToken.startsWith('@calculated:')) {
+            const nodeId = rawToken.replace(/^@calculated[.:]/, '');
+            try {
+              const refNode = await prisma.treeBranchLeafNode.findUnique({
+                where: { id: nodeId },
+                select: { calculatedValue: true, label: true }
+              });
+              
+              let resolvedValue = 0;
+              
+              if (refNode?.calculatedValue != null) {
+                const parsed = parseFloat(String(refNode.calculatedValue));
+                resolvedValue = isNaN(parsed) ? 0 : parsed;
+                console.log(`🔢 [FORMULA] @calculated.${nodeId} → "${refNode.label}" = ${resolvedValue}`);
+              } else {
+                const fromFV = fieldValues[nodeId] ?? fieldValues[`__calculated__${nodeId}`];
+                if (fromFV != null) {
+                  const parsed = parseFloat(String(fromFV).replace(/\s+/g, '').replace(/,/g, '.'));
+                  resolvedValue = isNaN(parsed) ? 0 : parsed;
+                  console.log(`🔢 [FORMULA] @calculated.${nodeId} → fieldValues = ${resolvedValue}`);
+                } else {
+                  console.warn(`⚠️ [FORMULA] @calculated.${nodeId} → "${refNode?.label}" calculatedValue=null, fieldValues=absent`);
+                }
+              }
+              
+              resolvedTokens.push({ type: 'value', value: resolvedValue });
+            } catch (calcError) {
+              console.error(`❌ [FORMULA] Erreur résolution @calculated.${nodeId}:`, calcError);
+              resolvedTokens.push({ type: 'value', value: 0 });
+            }
+            continue;
+          }
+          
+          // 📌 @value.{nodeId} ou @select.{nodeId} → résoudre depuis fieldValues
+          if (rawToken.startsWith('@value.') || rawToken.startsWith('@select.')) {
+            const nodeId = rawToken.replace(/^@(value|select)\./, '');
+            const fromFV = fieldValues[nodeId];
+            let resolvedValue = 0;
+            if (fromFV != null) {
+              const parsed = parseFloat(String(fromFV).replace(/\s+/g, '').replace(/,/g, '.'));
+              resolvedValue = isNaN(parsed) ? 0 : parsed;
+            }
+            resolvedTokens.push({ type: 'value', value: resolvedValue });
+            continue;
+          }
+          
+          // Nombre littéral
+          const numValue = parseFloat(rawToken);
+          if (!isNaN(numValue)) {
+            resolvedTokens.push({ type: 'value', value: numValue });
+            continue;
+          }
+          
+          // Fallback: traiter comme variable
+          resolvedTokens.push({ type: 'variable', name: rawToken, variableId: rawToken });
+        }
+        
+        tokens = resolvedTokens;
+        console.log(`🔄 [FORMULA] ${rawTokens.length} tokens bruts normalisés → ${tokens.length} tokens structurés`);
+      } else {
+        // Tokens déjà au format structuré
+        tokens = rawTokens as FormulaToken[];
+      }
       
       // Extraire les variables des tokens
       const tokenVariables = tokens
@@ -9012,9 +9139,108 @@ router.post('/evaluate/batch', async (req, res) => {
           type: 'value' | 'variable' | 'operator' | 'lparen' | 'rparen';
           value?: string | number;
           name?: string;
+          variableId?: string;
         }
 
-        const tokens = Array.isArray(formula.tokens) ? formula.tokens as FormulaToken[] : [];
+        // 🔄 NORMALISATION BATCH: Même logique que l'endpoint individuel
+        const batchRawTokens = Array.isArray(formula.tokens) ? formula.tokens : [];
+        const batchHasRawStrings = batchRawTokens.length > 0 && typeof batchRawTokens[0] === 'string';
+
+        let tokens: FormulaToken[] = [];
+        
+        if (batchHasRawStrings) {
+          const resolvedBatchTokens: FormulaToken[] = [];
+          
+          for (const rawToken of batchRawTokens as string[]) {
+            if (!rawToken || typeof rawToken !== 'string') continue;
+            
+            if (['+', '-', '*', '/'].includes(rawToken)) {
+              resolvedBatchTokens.push({ type: 'operator', value: rawToken });
+              continue;
+            }
+            if (rawToken === '(') { resolvedBatchTokens.push({ type: 'lparen', value: '(' }); continue; }
+            if (rawToken === ')') { resolvedBatchTokens.push({ type: 'rparen', value: ')' }); continue; }
+            
+            // 📊 @table.{tableId}
+            if (rawToken.startsWith('@table.')) {
+              const tableId = rawToken.replace('@table.', '');
+              try {
+                const table = await prisma.treeBranchLeafNodeTable.findUnique({
+                  where: { id: tableId },
+                  select: { nodeId: true, name: true }
+                });
+                let resolvedValue = 0;
+                if (table?.nodeId) {
+                  const ownerNode = await prisma.treeBranchLeafNode.findUnique({
+                    where: { id: table.nodeId },
+                    select: { calculatedValue: true, label: true }
+                  });
+                  if (ownerNode?.calculatedValue != null) {
+                    const parsed = parseFloat(String(ownerNode.calculatedValue));
+                    resolvedValue = isNaN(parsed) ? 0 : parsed;
+                  } else {
+                    const fromFV = fieldValues[table.nodeId] ?? fieldValues[tableId];
+                    if (fromFV != null) {
+                      const parsed = parseFloat(String(fromFV).replace(/\s+/g, '').replace(/,/g, '.'));
+                      resolvedValue = isNaN(parsed) ? 0 : parsed;
+                    }
+                  }
+                }
+                resolvedBatchTokens.push({ type: 'value', value: resolvedValue });
+              } catch { resolvedBatchTokens.push({ type: 'value', value: 0 }); }
+              continue;
+            }
+            
+            // 🔢 @calculated.{nodeId}
+            if (rawToken.startsWith('@calculated.') || rawToken.startsWith('@calculated:')) {
+              const nodeId = rawToken.replace(/^@calculated[.:]/, '');
+              try {
+                const refNode = await prisma.treeBranchLeafNode.findUnique({
+                  where: { id: nodeId },
+                  select: { calculatedValue: true, label: true }
+                });
+                let resolvedValue = 0;
+                if (refNode?.calculatedValue != null) {
+                  const parsed = parseFloat(String(refNode.calculatedValue));
+                  resolvedValue = isNaN(parsed) ? 0 : parsed;
+                } else {
+                  const fromFV = fieldValues[nodeId] ?? fieldValues[`__calculated__${nodeId}`];
+                  if (fromFV != null) {
+                    const parsed = parseFloat(String(fromFV).replace(/\s+/g, '').replace(/,/g, '.'));
+                    resolvedValue = isNaN(parsed) ? 0 : parsed;
+                  }
+                }
+                resolvedBatchTokens.push({ type: 'value', value: resolvedValue });
+              } catch { resolvedBatchTokens.push({ type: 'value', value: 0 }); }
+              continue;
+            }
+            
+            // 📌 @value.{nodeId} / @select.{nodeId}
+            if (rawToken.startsWith('@value.') || rawToken.startsWith('@select.')) {
+              const nodeId = rawToken.replace(/^@(value|select)\./, '');
+              const fromFV = fieldValues[nodeId];
+              let resolvedValue = 0;
+              if (fromFV != null) {
+                const parsed = parseFloat(String(fromFV).replace(/\s+/g, '').replace(/,/g, '.'));
+                resolvedValue = isNaN(parsed) ? 0 : parsed;
+              }
+              resolvedBatchTokens.push({ type: 'value', value: resolvedValue });
+              continue;
+            }
+            
+            const numValue = parseFloat(rawToken);
+            if (!isNaN(numValue)) {
+              resolvedBatchTokens.push({ type: 'value', value: numValue });
+              continue;
+            }
+            
+            resolvedBatchTokens.push({ type: 'variable', name: rawToken, variableId: rawToken });
+          }
+          
+          tokens = resolvedBatchTokens;
+        } else {
+          tokens = batchRawTokens as FormulaToken[];
+        }
         
         const tokenVariables = tokens
           .filter((t): t is FormulaToken => Boolean(t) && t.type === 'variable')
@@ -14038,8 +14264,9 @@ router.get('/variables/search', async (req, res) => {
 // =============================================================================
 /**
  * GET /trees/:treeId/calculated-values
- * RÃƒÂ¯Ã‚Â¿Ã‚Â½cupÃƒÂ¯Ã‚Â¿Ã‚Â½re tous les champs ayant une calculatedValue non nulle
- * Utile pour rÃƒÂ¯Ã‚Â¿Ã‚Â½fÃƒÂ¯Ã‚Â¿Ã‚Â½rencer les rÃƒÂ¯Ã‚Â¿Ã‚Â½sultats de formules/conditions comme contraintes dynamiques
+ * 🔥 NOUVEAU: Évalue à la volée TOUS les nœuds avec une capacité (formule/condition)
+ * Pas besoin de pré-calcul ou de stocker en DB - on évalue et on retourne le résultat directement!
+ * Utilise le même système que pour les nœuds individuels (evaluateVariableOperation)
  */
 router.get('/trees/:treeId/calculated-values', async (req, res) => {
   try {
@@ -14058,26 +14285,24 @@ router.get('/trees/:treeId/calculated-values', async (req, res) => {
       return res.status(404).json({ error: 'Arbre non trouvÃƒÂ¯Ã‚Â¿Ã‚Â½' });
     }
 
-    // 🔧 FIX: Récupérer TOUS les nœuds qui ont une capacité de calcul,
-    // pas seulement ceux qui ont déjà une calculatedValue stockée.
-    // Inclut: formules, conditions, données/variables, ET valeurs déjà calculées.
-    const nodesWithCalculatedValue = await prisma.treeBranchLeafNode.findMany({
+    // 🎯 Récupérer TOUS les nœuds qui ont une capacité (formule, condition, donnée)
+    const nodesWithCapacity = await prisma.treeBranchLeafNode.findMany({
       where: { 
         treeId,
         OR: [
-          { calculatedValue: { not: null } },
-          { hasFormula: true },
-          { hasCondition: true },
-          { hasData: true },
+          { hasFormula: true },      // Nœuds avec formule
+          { hasCondition: true },    // Nœuds avec condition
+          { hasData: true },         // Nœuds avec donnée/variable
+          { calculatedValue: { not: null } }  // Nœuds avec valeur pré-calculée
         ]
       },
       select: {
         id: true,
         label: true,
         type: true,
-        calculatedValue: true,
+        fieldType: true,
+        calculatedValue: true,  // Fallback si valeur pré-stockée
         calculatedBy: true,
-        calculatedAt: true,
         parentId: true,
         hasFormula: true,
         hasCondition: true,
@@ -14085,38 +14310,62 @@ router.get('/trees/:treeId/calculated-values', async (req, res) => {
       }
     });
 
-
-    // RÃƒÂ¯Ã‚Â¿Ã‚Â½cupÃƒÂ¯Ã‚Â¿Ã‚Â½rer les labels des parents pour context
-    const parentIds = nodesWithCalculatedValue
+    // Récupérer les labels des parents pour le contexte
+    const parentIds = nodesWithCapacity
       .map(n => n.parentId)
       .filter((id): id is string => !!id);
     
-    const parentNodes = await prisma.treeBranchLeafNode.findMany({
-      where: { id: { in: parentIds } },
-      select: { id: true, label: true }
-    });
+    const parentNodes = await parentIds.length > 0
+      ? await prisma.treeBranchLeafNode.findMany({
+         where: { id: { in: parentIds } },
+         select: { id: true, label: true }
+       })
+      : [];
     
     const parentLabelsMap = new Map(parentNodes.map(p => [p.id, p.label]));
 
-    // Formater les valeurs calculées pour le frontend
-    const calculatedValues = nodesWithCalculatedValue.map(node => {
-      // Déterminer la source du calcul
-      const source = node.calculatedBy 
-        ? `Source: ${node.calculatedBy}`
-        : node.hasFormula ? 'Source: formule'
-        : node.hasCondition ? 'Source: condition'
-        : node.hasData ? 'Source: variable/donnée'
-        : undefined;
-      
-      return {
-        id: node.id,
-        label: node.label || 'Champ sans nom',
-        calculatedValue: node.calculatedValue,
-        calculatedBy: source,
-        type: node.type,
-        parentLabel: node.parentId ? parentLabelsMap.get(node.parentId) : undefined
-      };
-    });
+    // 🚀 Évaluer TOUS les nœuds et retourner les réponses
+    // Pas de pré-calcul, juste évaluer à la volée comme pour chaque nœud individuellement
+    const { evaluateVariableOperation } = await import('../api/operation-interpreter.js');
+
+    const calculatedValues = await Promise.all(
+      nodesWithCapacity.map(async (node) => {
+        try {
+          // 🎯 Évaluer le nœud avec evaluateVariableOperation (même système que les nœuds individuels)
+          const evaluation = await evaluateVariableOperation(node.id, undefined, prisma);
+          const resolvedValue = evaluation.value ?? evaluation.operationResult ?? node.calculatedValue ?? null;
+          const source = evaluation.operationSource || node.calculatedBy || 
+            (node.hasFormula ? 'formule' :
+             node.hasCondition ? 'condition' :
+             node.hasData ? 'donnée' : 'inconnu');
+
+          return {
+            id: node.id,
+            label: node.label || 'Champ sans nom',
+            calculatedValue: resolvedValue,
+            calculatedBy: source,
+            type: node.type,
+            fieldType: node.fieldType,
+            parentLabel: node.parentId ? parentLabelsMap.get(node.parentId) : undefined,
+            evaluated: true
+          };
+        } catch (evalError) {
+          console.warn(`⚠️ [calculated-values] Erreur évaluation ${node.id} (${node.label}):`, evalError);
+          // Fallback: retourner la valeur pré-stockée si évaluation échoue
+          return {
+            id: node.id,
+            label: node.label || 'Champ sans nom',
+            calculatedValue: node.calculatedValue,
+            calculatedBy: node.calculatedBy || 'pré-calculé',
+            type: node.type,
+            fieldType: node.fieldType,
+            parentLabel: node.parentId ? parentLabelsMap.get(node.parentId) : undefined,
+            evaluated: false,
+            error: 'Évaluation échouée, valeur pré-stockée utilisée'
+          };
+        }
+      })
+    );
 
     
     res.json(calculatedValues);

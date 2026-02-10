@@ -145,6 +145,15 @@ const FormulaPanel: React.FC<FormulaPanelProps> = ({ nodeId, onChange, readOnly 
   const saveFormula = useCallback(async (nextTokens: string[], nextName: string, nextTargetProperty?: string, nextConstraintMessage?: string) => {
     if (!mountedRef.current || isSaving) return;
 
+    // 🛡️ Détection de références circulaires côté frontend
+    const circularToken = nextTokens.find(t => 
+      t === `@calculated.${nodeId}` || t === `@value.${nodeId}`
+    );
+    if (circularToken) {
+      message.error('⚠️ Référence circulaire détectée : cette formule ne peut pas utiliser sa propre valeur calculée');
+      return;
+    }
+
     const tokensStr = JSON.stringify(nextTokens);
     const targetProp = nextTargetProperty ?? localTargetProperty;
     const constraintMsg = nextConstraintMessage ?? localConstraintMessage;

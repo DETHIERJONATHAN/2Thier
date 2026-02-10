@@ -3788,52 +3788,8 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
       // 🎯 NOUVEAU: Détection directe des champs -sum-total
       const isSumTotalField = typeof field.id === 'string' && field.id.endsWith('-sum-total');
 
-      // 🚀 CRITIQUE: Évaluer les conditions inversées (SHOW/HIDE) pour les champs sum-total
-      // Ces champs ne passent pas par TBLFieldRendererAdvanced, donc les conditions
-      // doivent être évaluées ici directement pour masquer/afficher le champ.
-      if (isSumTotalField && batchReady && getConditionsTargetingNode) {
-        const inverseConditions = getConditionsTargetingNode(field.id);
-        if (inverseConditions.length > 0) {
-          let isVisible = true;
-          for (const cond of inverseConditions) {
-            const dependentValue = formData[cond.dependsOn];
-            let condResult = false;
-            
-            switch (cond.operator) {
-              case 'equals':
-              case '==':
-                condResult = dependentValue === cond.showWhen;
-                break;
-              case 'not_equals':
-              case '!=':
-                condResult = dependentValue !== cond.showWhen;
-                break;
-              case 'contains':
-                condResult = String(dependentValue || '').includes(String(cond.showWhen));
-                break;
-              case 'not_contains':
-                condResult = !String(dependentValue || '').includes(String(cond.showWhen));
-                break;
-              default:
-                condResult = true;
-            }
-            
-            if (cond.actionType === 'SHOW' && !condResult) {
-              isVisible = false;
-              break;
-            } else if (cond.actionType === 'HIDE' && condResult) {
-              isVisible = false;
-              break;
-            }
-          }
-          
-          console.log(`🎯 [SUM-TOTAL CONDITIONS] "${field.label}" (${field.id}): ${inverseConditions.length} condition(s), visible: ${isVisible}`);
-          
-          if (!isVisible) {
-            return null; // Masquer complètement le champ (pas de bulle rendue)
-          }
-        }
-      }
+      // �️ Les champs sum-total sont TOUJOURS visibles — ils additionnent
+      // les repeaters + l'original. Aucune condition ne doit les masquer.
 
       const isCopyWithSuffix = typeof field.id === 'string' && /^.+-\d+$/.test(field.id);
       const isRepeaterCopy = Boolean(fieldMetadata.duplicatedFromRepeater || fieldMetadata.copySuffix || fieldMetadata.suffixNum);
@@ -4164,9 +4120,6 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
         
         // 🔥 DEBUG TEMPORAIRE - à supprimer après fix
         if (field.label === 'GRD') {
-          console.log(`🔥🔥🔥 [GRD DEBUG FRONTEND] instanceData:`, JSON.stringify(instanceData, null, 2));
-          console.log(`🔥🔥🔥 [GRD DEBUG FRONTEND] sourceType:`, instanceData?.sourceType);
-          console.log(`🔥🔥🔥 [GRD DEBUG FRONTEND] sourceRef:`, instanceData?.sourceRef);
         }
         
         if (instanceData && (instanceData.sourceType || instanceData.sourceRef)) {
@@ -4585,18 +4538,6 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
       textOverflow: 'ellipsis',
       whiteSpace: 'nowrap',
     };
-    
-    // 🔍 DEBUG PHOTO LINK: Vérifier si le champ a les propriétés Link
-    if (field.label?.toLowerCase().includes('photo') || (field as any).hasLink || (field as any).link_mode) {
-      console.log(`🖼️🔍 [PHOTO LINK DEBUG] Champ "${field.label}" (${field.id}):`, {
-        hasLink: (field as any).hasLink,
-        link_mode: (field as any).link_mode,
-        link_targetNodeId: (field as any).link_targetNodeId,
-        linkConfig: (field as any).linkConfig,
-        linkConfigMode: (field as any).linkConfig?.mode,
-        linkConfigTargetNodeId: (field as any).linkConfig?.targetNodeId,
-      });
-    }
     
     // 🎯 FIX: Vérifier AUSSI les propriétés au niveau racine du field (pas seulement linkConfig)
     const isPhotoLink = (
