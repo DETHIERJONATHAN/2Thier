@@ -1208,6 +1208,10 @@ async function evaluateCapacitiesForSubmission(
       // Marquer comme traité pour éviter les duplicatas
       processedDisplayFields.add(capacity.nodeId);
       console.log(`✅ [TRIGGER INDEX] Display field ${capacity.nodeId} (${capacity.TreeBranchLeafNode?.label}) recalculé - trouvé dans l'index`);
+      // 🔎 DIAG PRIX KWH
+      if (capacity.nodeId.startsWith('99476bab')) {
+        console.log(`🔎🔎🔎 [DIAG PRIX KWH BACKEND] Display field 99476bab déclenché par changedFieldId="${changedFieldId}", valueMap contient 702d1b09=${valueMap.get('702d1b09-abc9-4096-9aaa-77155ac5294f')}, select=${valueMap.get('node_1757366229542_r791f4qk7')}`);
+      }
     }
     
     try {
@@ -1402,6 +1406,10 @@ async function evaluateCapacitiesForSubmission(
         console.log(
           `✅ [DISPLAY FIELD] ${capacity.nodeId} (${capacity.TreeBranchLeafNode?.label}) = ${hasValidValue ? String(rawValue) : 'null'}`
         );
+        // 🔎 DIAG PRIX KWH
+        if (capacity.nodeId.startsWith('99476bab')) {
+          console.log(`🔎🔎🔎 [DIAG PRIX KWH RESULT] rawValue="${rawValue}", stringified="${stringified}", hasValid=${hasValidValue}, operationSource="${normalizedOperationSource}"`);
+        }
         continue;
       }
       

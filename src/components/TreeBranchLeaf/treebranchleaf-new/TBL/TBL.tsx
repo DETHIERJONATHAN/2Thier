@@ -1307,6 +1307,20 @@ const TBL: React.FC<TBLProps> = ({
           }
         }
         console.log(`📤 [TBL] Broadcasting ${Object.keys(calculatedValuesMap).length} valeurs calculées inline (nulls exclus)`);
+        // 🔍 DEBUG PRIX KWH: Vérifier si le display field est dans le broadcast
+        const PRIX_KWH_ID = '99476bab-4835-4108-ad02-7f37e096647d';
+        if (calculatedValuesMap[PRIX_KWH_ID] !== undefined) {
+          console.log(`🔎🔎🔎 [DIAG PRIX KWH] DANS broadcast: "${calculatedValuesMap[PRIX_KWH_ID]}"`);
+        } else {
+          console.log(`🔎🔎🔎 [DIAG PRIX KWH] ABSENT du broadcast! submissionData a ${submissionDataArray?.length || 0} items`);
+          // Chercher dans les raw data
+          const prixItem = submissionDataArray?.find(item => item?.nodeId === PRIX_KWH_ID);
+          if (prixItem) {
+            console.log(`🔎🔎🔎 [DIAG PRIX KWH] Trouvé dans raw data mais exclu: value=${prixItem.value}, type=${typeof prixItem.value}`);
+          } else {
+            console.log(`🔎🔎🔎 [DIAG PRIX KWH] PAS dans les raw data du tout!`);
+          }
+        }
         // 🔍 DEBUG GRD: Vérifier si GRD est dans le broadcast
         const GRD_ID = '9f27d411-6511-487c-a983-9f9fc357c560';
         if (calculatedValuesMap[GRD_ID]) {
@@ -1454,6 +1468,7 @@ const TBL: React.FC<TBLProps> = ({
             const isPeriodicAutosave = !changedField || changedField === 'NULL';
             const hasPendingRequest = !!pendingAutosaveRef.current;
             const hasDebounceActive = !!debounceActiveRef.current;
+            console.log(`🔎🔎🔎 [DIAG BROADCAST default-draft] isPeriodicAutosave=${isPeriodicAutosave}, hasPending=${hasPendingRequest}, hasDebounce=${hasDebounceActive}, changedField="${changedField}"`);
             if (!isPeriodicAutosave && !hasPendingRequest && !hasDebounceActive) {
               broadcastCalculatedRefresh({
                 reason: 'create-and-evaluate',
@@ -1581,6 +1596,7 @@ const TBL: React.FC<TBLProps> = ({
         const hasPendingRequest = !!pendingAutosaveRef.current;
         const hasDebounceActive = !!debounceActiveRef.current;
         const shouldBroadcast = (!isPeriodicAutosave || isOpenMode) && !hasPendingRequest && !hasDebounceActive;
+        console.log(`🔎🔎🔎 [DIAG BROADCAST existing-sub] shouldBroadcast=${shouldBroadcast}, isPeriodicAutosave=${isPeriodicAutosave}, isOpenMode=${isOpenMode}, hasPending=${hasPendingRequest}, hasDebounce=${hasDebounceActive}, changedField="${changedField}", mode=${effectiveMode}`);
         if (shouldBroadcast) {
           console.log(`📤 [TBL] Broadcast des valeurs calculées (mode=${effectiveMode}, isOpenMode=${isOpenMode})`);
           broadcastCalculatedRefresh({

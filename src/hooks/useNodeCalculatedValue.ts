@@ -341,6 +341,10 @@ export function useNodeCalculatedValue(
       
       if (submissionIdChanged && submissionId) {
         console.log(`🛡️ [useNodeCalculatedValue] GET IGNORÉ pour nodeId=${nodeId} - submissionId a changé (${previousSubmissionId} → ${submissionId}), attente du broadcast inline`);
+        // 🔎 DIAG PRIX KWH
+        if (nodeId.startsWith('99476bab')) {
+          console.log(`🔎🔎🔎 [DIAG PRIX KWH HOOK] GET IGNORÉ car submissionId changed - current value="${valueRef.current}"`);
+        }
         return;
       }
       
@@ -422,6 +426,11 @@ export function useNodeCalculatedValue(
         if (detail?.calculatedValues && nodeId in detail.calculatedValues) {
           const inlineValue = detail.calculatedValues[nodeId];
           console.log(`📥 [useNodeCalculatedValue] Valeur inline pour nodeId=${nodeId}:`, inlineValue);
+          
+          // 🔎 DIAG PRIX KWH
+          if (nodeId.startsWith('99476bab')) {
+            console.log(`🔎🔎🔎 [DIAG PRIX KWH HOOK] Inline reçue: "${inlineValue}", type=${typeof inlineValue}, submissionId=${submissionId}`);
+          }
           
           // Mettre à jour le timestamp pour protéger contre les réponses GET obsolètes
           lastProcessedTimestampByNode.set(nodeId, now);

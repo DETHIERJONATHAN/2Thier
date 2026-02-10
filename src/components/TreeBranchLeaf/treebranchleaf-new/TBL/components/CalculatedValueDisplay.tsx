@@ -78,7 +78,12 @@ export const CalculatedValueDisplay: React.FC<CalculatedValueDisplayProps> = ({
     submissionId  // ✅ Réactivé pour permettre les recalculs table lookup
   );
   
-  // 🔍 DEBUG GRD: Tracer la valeur reçue
+  // � DIAG PRIX KWH
+  if (nodeId.startsWith('99476bab')) {
+    console.log(`🔎🔎🔎 [DIAG PRIX KWH RENDER] value="${value}", loading=${loading}, error=${error}, submissionId=${submissionId}`);
+  }
+  
+  // �🔍 DEBUG GRD: Tracer la valeur reçue
   if (nodeId === GRD_ID) {
     console.log(`🎯 [CalculatedValueDisplay] GRD value="${value}", loading=${loading}, error=${error}`);
   }
