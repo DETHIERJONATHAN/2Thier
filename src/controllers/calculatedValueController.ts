@@ -210,6 +210,116 @@ router.get('/:nodeId/calculated-value', async (req: Request, res: Response) => {
       console.log(`⚠️ [LINK] Champ "${node.label}" - pas de valeur disponible pour le lien vers ${node.link_targetNodeId}`);
     }
 
+    // 🎯 PRIORITÉ 1: Champs Sum-Total (-sum-total)
+    // Ces champs ont des formula_tokens ["@value.nodeId1", "+", "@value.nodeId2", ...]
+    // On les évalue directement ici en lisant les valeurs depuis SubmissionData (scoped)
+    // puis fallback vers calculatedValue du nœud source.
+    // Cela évite le blocage "isDisplayField" et l'évaluation par operation-interpreter
+    // qui ne sait pas résoudre @value.{nodeId} depuis SubmissionData.
+    const isSumTotalNode = typeof nodeId === 'string' && nodeId.endsWith('-sum-total');
+    if (isSumTotalNode) {
+      try {
+        // Récupérer les formula_tokens du nœud (pas dans le select initial)
+        const sumTokensNode = await prisma.treeBranchLeafNode.findUnique({
+          where: { id: nodeId },
+          select: { formula_tokens: true }
+        });
+        const tokens = Array.isArray(sumTokensNode?.formula_tokens)
+          ? (sumTokensNode!.formula_tokens as string[])
+          : [];
+
+        let sum = 0;
+        const debugParts: Array<{ refId: string; value: number; source: string }> = [];
+
+        for (const token of tokens) {
+          if (typeof token === 'string' && token.startsWith('@value.')) {
+            const refNodeId = token.slice(7); // retirer '@value.'
+            let val: number | null = null;
+            let valSource = 'none';
+
+            // 1. Essayer SubmissionData (valeur scoped, fraîche)
+            if (submissionId) {
+              const sd = await prisma.treeBranchLeafSubmissionData.findUnique({
+                where: { submissionId_nodeId: { submissionId, nodeId: refNodeId } },
+                select: { value: true }
+              });
+              if (sd?.value !== null && sd?.value !== undefined) {
+                val = parseFloat(sd.value) || 0;
+                valSource = 'submissionData';
+              }
+            }
+
+            // 2. Fallback: calculatedValue du nœud source
+            if (val === null) {
+              const srcNode = await prisma.treeBranchLeafNode.findUnique({
+                where: { id: refNodeId },
+                select: { calculatedValue: true }
+              });
+              if (srcNode?.calculatedValue !== null && srcNode?.calculatedValue !== undefined) {
+                val = parseFloat(srcNode.calculatedValue) || 0;
+                valSource = 'calculatedValue';
+              }
+            }
+
+            const resolvedVal = val ?? 0;
+            sum += resolvedVal;
+            debugParts.push({ refId: refNodeId, value: resolvedVal, source: valSource });
+          }
+          // Les opérateurs "+", "-", etc. sont ignorés car on fait une somme simple
+        }
+
+        console.log(`🎯 [SUM-TOTAL DIRECT] ${nodeId} (${node.label}) = ${sum}`, debugParts);
+
+        // Persister la valeur calculée sur le nœud pour les autres consommateurs
+        await prisma.treeBranchLeafNode.update({
+          where: { id: nodeId },
+          data: {
+            calculatedValue: String(sum),
+            calculatedAt: new Date(),
+            calculatedBy: 'sum-total-direct'
+          }
+        });
+
+        // Aussi persister dans SubmissionData si on a un submissionId
+        if (submissionId) {
+          await prisma.treeBranchLeafSubmissionData.upsert({
+            where: { submissionId_nodeId: { submissionId, nodeId } },
+            update: {
+              value: String(sum),
+              lastResolved: new Date(),
+              operationSource: 'formula',
+              fieldLabel: node.label
+            },
+            create: {
+              id: randomUUID(),
+              submissionId,
+              nodeId,
+              value: String(sum),
+              lastResolved: new Date(),
+              operationSource: 'formula',
+              fieldLabel: node.label
+            }
+          });
+        }
+
+        return res.json({
+          success: true,
+          nodeId: node.id,
+          label: node.label,
+          value: sum,
+          calculatedAt: new Date().toISOString(),
+          calculatedBy: 'sum-total-direct',
+          type: node.type,
+          fieldType: node.fieldType,
+          isSumTotal: true,
+          debugParts
+        });
+      } catch (sumTotalError) {
+        console.error(`❌ [SUM-TOTAL DIRECT] Erreur pour ${nodeId}:`, sumTotalError);
+        // Continue vers le flow normal en cas d'erreur
+      }
+    }
+
     // 🎯 Champs DISPLAY: on préfère une valeur scoped par submissionId (zéro valeur fantôme).
     // Fallback: TreeBranchLeafNode.calculatedValue pour compat legacy / écrans hors-contexte.
     const isDisplayField = node.fieldType === 'DISPLAY' || node.type === 'DISPLAY' || node.type === 'leaf_field';

@@ -311,6 +311,98 @@ export default function DevisPage() {
     []
   );
 
+  // ✅ FIX: Data Composer extrait en fonction réutilisable pour les champs "donnee"
+  // Peut être appelé au chargement initial, après formules, et dans handleChange
+  const applyDataComposer = useCallback((currentValues: Record<string, unknown>, blockData: Block | null): Record<string, unknown> => {
+    if (!blockData) return currentValues;
+    const computed = { ...currentValues };
+    const str = (v: unknown) => {
+      if (v === null || typeof v === 'undefined') return '';
+      if (typeof v === 'object') return JSON.stringify(v);
+      return String(v);
+    };
+    const getAdv = (fid: string, part?: string) => {
+      const base = computed[fid];
+      if (base && typeof base === 'object') {
+        const obj = base as Record<string, unknown>;
+        if (!part || part === 'selection') return obj['selection'];
+        if (part === 'extra') return obj['extra'];
+        return undefined;
+      }
+      if (!part || part === 'selection') return base;
+      return undefined;
+    };
+    const replaceTemplate = (tpl: string): string => {
+      return tpl.replace(/\{\{\s*([^}]+)\s*\}\}/g, (_m, expr) => {
+        const parts = String(expr).split('.');
+        const root = parts[0];
+        const fid = parts[1];
+        const rest = parts.slice(2);
+        if (!fid) return '';
+        if (root === 'values') {
+          let v: unknown = computed[fid];
+          for (const p of rest) {
+            if (!v || typeof v !== 'object') { v = undefined; break; }
+            v = (v as Record<string, unknown>)[p];
+          }
+          return str(v);
+        }
+        if (root === 'advancedSelect') {
+          const part = rest[0] || 'selection';
+          return str(getAdv(fid, part));
+        }
+        return '';
+      });
+    };
+    const deepEq = (a: unknown, b: unknown) => {
+      if (a === b) return true;
+      try { return JSON.stringify(a) === JSON.stringify(b); } catch { return false; }
+    };
+    let hasChanges = false;
+    (blockData.sections || []).forEach((s) => {
+      (s.fields || []).forEach((f) => {
+        if (f.type !== 'donnee') return;
+        const ac = (f.advancedConfig || {}) as Record<string, unknown>;
+        const composer = ac?.['composer'] as Record<string, unknown> | undefined;
+        if (!composer) return;
+        const mode = (composer['mode'] as string) || 'template';
+        let outVal: unknown = computed[f.id];
+        if (mode === 'picks') {
+          const picks = Array.isArray(composer['picks']) ? composer['picks'] as Array<Record<string, unknown>> : [];
+          const res: Record<string, unknown> = {};
+          picks.forEach((p) => {
+            const key = String(p['key'] ?? '');
+            const from = String(p['from'] ?? 'values');
+            const fid = String(p['fieldId'] ?? '');
+            const path = p['path'] ? String(p['path']) : undefined;
+            if (!key || !fid) return;
+            if (from === 'values') {
+              let v: unknown = computed[fid];
+              if (path && v && typeof v === 'object') v = (v as Record<string, unknown>)[path];
+              res[key] = v;
+            } else if (from === 'advancedSelect') {
+              const part = path || 'selection';
+              res[key] = getAdv(fid, part);
+            } else {
+              res[key] = computed[fid];
+            }
+          });
+          outVal = res;
+        } else {
+          const tpl = String(composer['template'] ?? '');
+          outVal = replaceTemplate(tpl);
+        }
+        if (!deepEq(outVal, computed[f.id])) {
+          if (!(typeof outVal === 'string' && outVal.trim() === '' && typeof computed[f.id] !== 'undefined')) {
+            computed[f.id] = outVal;
+            hasChanges = true;
+          }
+        }
+      });
+    });
+    return hasChanges ? computed : currentValues;
+  }, []);
+
   // Charger le bloc (lecture sûre) dès qu'un blockId est présent
   useEffect(() => {
     if (!blockId) return;
@@ -1201,6 +1293,14 @@ export default function DevisPage() {
               }
             });
             
+            // ✅ FIX: Appliquer le Data Composer pour les champs "donnee" après les formules
+            const afterComposer = applyDataComposer(updatedValues, block);
+            if (afterComposer !== updatedValues) {
+              Object.assign(updatedValues, afterComposer);
+              hasChanges = true;
+              dbg('📊 Data Composer appliqué après formules auto');
+            }
+
             if (hasChanges) {
               if (newlyAuto.length) {
                 setAutoFields(prev => {
@@ -1215,12 +1315,23 @@ export default function DevisPage() {
             
             return prevValues;
           });
+        } else {
+          // ✅ FIX: Même sans formules, calculer les champs "donnee" via Data Composer
+          setValues(prevValues => {
+            const afterComposer = applyDataComposer(prevValues, block);
+            if (afterComposer !== prevValues) {
+              dbg('📊 Data Composer appliqué (sans formules)');
+              scheduleSave(afterComposer);
+              return afterComposer;
+            }
+            return prevValues;
+          });
         }
       } catch (error) {
         dbg('❌ Erreur application automatique formules:', error);
       }
     })();
-  }, [block, rules, values, dynamicEngine, debugEnabled, dbg, scheduleSave]);
+  }, [block, rules, values, dynamicEngine, debugEnabled, dbg, scheduleSave, applyDataComposer]);
 
   // ⛔ Fallback local prix kWh supprimé : désormais géré 100% par le moteur TreeBranchLeaf via une formule attachée au champ.
   // (Ancien useEffect retiré pour éviter toute divergence ou double écriture.)

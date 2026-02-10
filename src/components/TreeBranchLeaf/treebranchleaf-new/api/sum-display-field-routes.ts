@@ -708,13 +708,72 @@ export async function updateSumDisplayFieldAfterCopyChange(
       }
     });
 
-    // Ã°Å¸â€Â¥ NOUVEAU: Recalculer la valeur avec allCopyNodes (déjà récupéré ligne 519)
+    // 🎯 FIX: Recalculer la valeur depuis SubmissionData (pas calculatedValue qui est null pour les display fields)
+    // Trouver la/les soumissions actives pour ce tree afin de lire les vraies valeurs
     let newCalculatedValue = 0;
-    for (const node of allCopyNodes) {
-      newCalculatedValue += parseFloat(String(node.calculatedValue)) || 0;
+    const copyNodeIds2 = allCopyNodes.map(n => n.id);
+    try {
+      // Trouver la dernière soumission active de ce tree
+      const latestSubmission = await db.treeBranchLeafSubmission.findFirst({
+        where: { treeId: sourceNode.treeId, status: { in: ['draft', 'completed'] } },
+        orderBy: { updatedAt: 'desc' },
+        select: { id: true }
+      });
+      if (latestSubmission) {
+        const submissionValues = await db.treeBranchLeafSubmissionData.findMany({
+          where: { submissionId: latestSubmission.id, nodeId: { in: copyNodeIds2 } },
+          select: { nodeId: true, value: true }
+        });
+        for (const sv of submissionValues) {
+          newCalculatedValue += parseFloat(String(sv.value)) || 0;
+        }
+        console.log(`🎯 [SUM UPDATE] Valeur recalculée depuis SubmissionData (submission ${latestSubmission.id}): ${newCalculatedValue} (${submissionValues.length} valeurs)`);
+      } else {
+        // Pas de soumission → fallback vers calculatedValue (legacy)
+        for (const node of allCopyNodes) {
+          newCalculatedValue += parseFloat(String(node.calculatedValue)) || 0;
+        }
+      }
+    } catch (sdErr) {
+      console.warn(`⚠️ [SUM UPDATE] Erreur lecture SubmissionData, fallback calculatedValue:`, (sdErr as Error).message);
+      for (const node of allCopyNodes) {
+        newCalculatedValue += parseFloat(String(node.calculatedValue)) || 0;
+      }
     }
 
-    // Mettre ÃƒÂ  jour le nÃ…â€œud Total avec formula_instances et formula_tokens
+    // Persister la valeur sum-total dans SubmissionData pour TOUTES les soumissions actives du tree
+    // Cela garantit que l'évaluateur et le frontend lisent la bonne valeur
+    try {
+      const activeSubmissions = await db.treeBranchLeafSubmission.findMany({
+        where: { treeId: sourceNode.treeId, status: { in: ['draft', 'completed'] } },
+        select: { id: true }
+      });
+      for (const sub of activeSubmissions) {
+        await db.treeBranchLeafSubmissionData.upsert({
+          where: { submissionId_nodeId: { submissionId: sub.id, nodeId: sumFieldNodeId } },
+          update: {
+            value: String(newCalculatedValue),
+            lastResolved: now,
+            operationSource: 'formula',
+          },
+          create: {
+            id: `${sub.id}-${sumFieldNodeId}`.slice(0, 36),
+            submissionId: sub.id,
+            nodeId: sumFieldNodeId,
+            value: String(newCalculatedValue),
+            lastResolved: now,
+            operationSource: 'formula',
+          }
+        });
+      }
+      if (activeSubmissions.length > 0) {
+        console.log(`🎯 [SUM UPDATE] SubmissionData mis à jour pour ${activeSubmissions.length} soumission(s): ${sumFieldNodeId} = ${newCalculatedValue}`);
+      }
+    } catch (sdUpdateErr) {
+      console.warn(`⚠️ [SUM UPDATE] Erreur mise à jour SubmissionData sum-total:`, (sdUpdateErr as Error).message);
+    }
+
+    // Mettre à jour le nœud Total avec formula_instances et formula_tokens
     const sumNode = await db.treeBranchLeafNode.findUnique({
       where: { id: sumFieldNodeId },
       select: { metadata: true }

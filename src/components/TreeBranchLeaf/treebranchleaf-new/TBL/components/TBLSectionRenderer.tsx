@@ -1703,6 +1703,20 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
             deletedIds: globalSuccessIds 
           } 
         }));
+
+        // 🎯 CRITICAL: Forcer le recalcul des valeurs sum-total après suppression
+        // Le hook useNodeCalculatedValue écoute cet événement et re-fetch les valeurs
+        // depuis le backend qui a nettoyé les SubmissionData des copies supprimées
+        setTimeout(() => {
+          window.dispatchEvent(new CustomEvent('tbl-force-retransform', {
+            detail: {
+              treeId: eventTreeId,
+              reason: 'delete-copy-group',
+              timestamp: Date.now()
+            }
+          }));
+          dlog('🎯 [DELETE COPY GROUP] Dispatched tbl-force-retransform pour recalculer les sum-totals');
+        }, 800); // Délai pour laisser le serveur terminer updateSumDisplayFieldAfterCopyChange
       } catch {
         dlog('⚠️ [DELETE COPY GROUP] Impossible de dispatch final tbl-repeater-updated (silent)');
       }

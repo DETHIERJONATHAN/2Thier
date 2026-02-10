@@ -4237,6 +4237,19 @@ router.delete('/trees/:treeId/nodes/:nodeId', async (req, res) => {
     const allDeletedSet = new Set<string>([...deletedSubtreeIds, ...deletedOrphansIds, ...deletedExtraIds]);
     const allDeletedIds = Array.from(allDeletedSet);
 
+    // 🧹 NETTOYAGE SUBMISSIONDATA: Supprimer les entrées orphelines des nœuds supprimés
+    // Sans cela, les champs sum-total continuent de sommer les valeurs des copies supprimées
+    try {
+      const deletedSubmissionData = await prisma.treeBranchLeafSubmissionData.deleteMany({
+        where: { nodeId: { in: allDeletedIds } }
+      });
+      if (deletedSubmissionData.count > 0) {
+        console.log(`🧹 [DELETE] ${deletedSubmissionData.count} entrée(s) SubmissionData orpheline(s) supprimée(s)`);
+      }
+    } catch (sdCleanupError) {
+      console.warn('[DELETE] Erreur nettoyage SubmissionData orphelines:', (sdCleanupError as Error).message);
+    }
+
     // 🧹 **CRITICAL FIX**: Nettoyage des variables orphelines après suppression
     // Quand on supprime une copie de repeater, les variables SUFFIXÉES doivent être supprimées
     // MAIS les variables ORIGINALES (sans suffixe) doivent être PRÉSERVÉES!
@@ -4352,57 +4365,9 @@ router.delete('/trees/:treeId/nodes/:nodeId', async (req, res) => {
         console.log(`[DELETE] 🧹 Supprimé ${deletedConditions.count} condition(s) copiée(s)`);
       }
       
-      // 3️⃣ Nettoyage agressif: supprimer TOUTES les formules/conditions dont le nodeId n'existe plus
-      // Cela couvre les cas où le nodeId est un node copié qui a été supprimé
-      try {
-        // Trouver tous les nodeIds distincts des formules
-        const allFormulaNodeIds = await prisma.treeBranchLeafNodeFormula.findMany({
-          select: { nodeId: true },
-          distinct: ['nodeId']
-        });
-        
-        // Vérifier quels nodeIds n'existent plus
-        const existingNodeIds = new Set(
-          (await prisma.treeBranchLeafNode.findMany({
-            where: { id: { in: allFormulaNodeIds.map(f => f.nodeId) } },
-            select: { id: true }
-          })).map(n => n.id)
-        );
-        
-        const orphanedFormulaNodeIds = allFormulaNodeIds
-          .map(f => f.nodeId)
-          .filter(nodeId => !existingNodeIds.has(nodeId));
-        
-        if (orphanedFormulaNodeIds.length > 0) {
-          const deletedOrphanedFormulas = await prisma.treeBranchLeafNodeFormula.deleteMany({
-            where: { nodeId: { in: orphanedFormulaNodeIds } }
-          });
-          if (deletedOrphanedFormulas.count > 0) {
-            console.log(`[DELETE] 🧹 Supprimé ${deletedOrphanedFormulas.count} formule(s) orpheline(s) (nodeId inexistant)`);
-          }
-        }
-        
-        // Même chose pour les conditions
-        const allConditionNodeIds = await prisma.treeBranchLeafNodeCondition.findMany({
-          select: { nodeId: true },
-          distinct: ['nodeId']
-        });
-        
-        const orphanedConditionNodeIds = allConditionNodeIds
-          .map(c => c.nodeId)
-          .filter(nodeId => !existingNodeIds.has(nodeId));
-        
-        if (orphanedConditionNodeIds.length > 0) {
-          const deletedOrphanedConditions = await prisma.treeBranchLeafNodeCondition.deleteMany({
-            where: { nodeId: { in: orphanedConditionNodeIds } }
-          });
-          if (deletedOrphanedConditions.count > 0) {
-            console.log(`[DELETE] 🧹 Supprimé ${deletedOrphanedConditions.count} condition(s) orpheline(s) (nodeId inexistant)`);
-          }
-        }
-      } catch (orphanCleanupError) {
-        console.warn('[DELETE] Erreur nettoyage formules/conditions orphelines:', (orphanCleanupError as Error).message);
-      }
+      // ⛔ PROTECTION: PAS de nettoyage agressif des formules/conditions "orphelines"
+      // Seul l'utilisateur peut supprimer manuellement les formules et conditions.
+      // Les seules suppressions automatiques autorisées sont les copies suffixées (sections 1️⃣ et 2️⃣ ci-dessus).
       
     } catch (formulaConditionCleanError) {
       console.warn('[DELETE] Erreur nettoyage formules/conditions copiées:', (formulaConditionCleanError as Error).message);
@@ -4420,10 +4385,13 @@ router.delete('/trees/:treeId/nodes/:nodeId', async (req, res) => {
       for (const node of remainingNodes) {
         const meta = node.metadata as Record<string, unknown> | null;
         if (meta?.isSumDisplayField === true && meta?.sourceNodeId) {
-          // Ce nÃƒÂ¯Ã‚Â¿Ã‚Â½ud Total doit mettre ÃƒÂ¯Ã‚Â¿Ã‚Â½ jour sa formule
-          updateSumDisplayFieldAfterCopyChange(String(meta.sourceNodeId), prisma).catch(err => {
-            console.warn(`[DELETE] ?? Erreur mise ÃƒÂ¯Ã‚Â¿Ã‚Â½ jour champ Total ${node.id}:`, err);
-          });
+          // Ce nœud Total doit mettre à jour sa formule - AWAIT pour garantir la cohérence
+          try {
+            await updateSumDisplayFieldAfterCopyChange(String(meta.sourceNodeId), prisma);
+            console.log(`✅ [DELETE] Champ Total ${node.id} mis à jour avec succès`);
+          } catch (err) {
+            console.warn(`[DELETE] ⚠️ Erreur mise à jour champ Total ${node.id}:`, err);
+          }
         }
       }
     } catch (sumUpdateError) {

@@ -948,6 +948,25 @@ async function evaluateCapacitiesForSubmission(
           console.log(`🔗 [TRIGGER INDEX] Champ ${node.id} a un Link vers ${node.link_targetNodeId} - ajouté comme trigger`);
         }
         
+        // 🎯 SUM-TOTAL: Pour les champs sum-total, extraire les triggers depuis formula_tokens
+        // car les triggerNodeIds dans metadata peuvent être incomplets
+        if (node.id.endsWith('-sum-total')) {
+          const sumNode = await prisma.treeBranchLeafNode.findUnique({
+            where: { id: node.id },
+            select: { formula_tokens: true }
+          });
+          const tokens = Array.isArray(sumNode?.formula_tokens) ? (sumNode!.formula_tokens as string[]) : [];
+          for (const token of tokens) {
+            if (typeof token === 'string' && token.startsWith('@value.')) {
+              const refNodeId = token.slice(7);
+              if (refNodeId && !triggerNodeIds.includes(refNodeId)) {
+                triggerNodeIds.push(refNodeId);
+              }
+            }
+          }
+          console.log(`🎯 [SUM-TOTAL TRIGGER] ${node.id} → ${triggerNodeIds.length} triggers depuis formula_tokens`);
+        }
+        
         // Expansion pour les copies (-1, -2, etc.)
         const expandedTriggers = expandTriggersForCopy(node.id, triggerNodeIds);
         
@@ -1199,6 +1218,83 @@ async function evaluateCapacitiesForSubmission(
       
       let capacityResult: { value?: unknown; calculatedValue?: unknown; result?: unknown; operationSource?: unknown; operationDetail?: unknown; operationResult?: unknown };
       
+      // 🎯 INTERCEPT SUM-TOTAL: Évaluation directe sans passer par evaluateVariableOperation
+      // Les champs sum-total ont des formula_tokens ["@value.nodeId1", "+", "@value.nodeId2", ...]
+      // On les évalue en sommant directement les valeurs depuis valueMap / SubmissionData
+      const isSumTotalField = capacity.nodeId.endsWith('-sum-total');
+      if (isSumTotalField) {
+        try {
+          const sumTokensNode = await prisma.treeBranchLeafNode.findUnique({
+            where: { id: capacity.nodeId },
+            select: { formula_tokens: true, label: true }
+          });
+          const tokens = Array.isArray(sumTokensNode?.formula_tokens)
+            ? (sumTokensNode!.formula_tokens as string[])
+            : [];
+
+          let sum = 0;
+          const debugParts: Array<{ refId: string; value: number; source: string }> = [];
+
+          for (const token of tokens) {
+            if (typeof token === 'string' && token.startsWith('@value.')) {
+              const refNodeId = token.slice(7); // retirer '@value.'
+              let val: number | null = null;
+              let valSource = 'none';
+
+              // 1. Essayer le valueMap (données fraîches en mémoire)
+              if (valueMap.has(refNodeId)) {
+                const mapVal = valueMap.get(refNodeId);
+                if (mapVal !== null && mapVal !== undefined && String(mapVal).trim() !== '') {
+                  val = parseFloat(String(mapVal)) || 0;
+                  valSource = 'valueMap';
+                }
+              }
+
+              // 2. Fallback: SubmissionData (valeur persistée)
+              if (val === null) {
+                const sd = await prisma.treeBranchLeafSubmissionData.findUnique({
+                  where: { submissionId_nodeId: { submissionId, nodeId: refNodeId } },
+                  select: { value: true }
+                });
+                if (sd?.value !== null && sd?.value !== undefined && String(sd.value).trim() !== '') {
+                  val = parseFloat(sd.value) || 0;
+                  valSource = 'submissionData';
+                }
+              }
+
+              // 3. Dernier fallback: calculatedValue du nœud source
+              if (val === null) {
+                const srcNode = await prisma.treeBranchLeafNode.findUnique({
+                  where: { id: refNodeId },
+                  select: { calculatedValue: true }
+                });
+                if (srcNode?.calculatedValue !== null && srcNode?.calculatedValue !== undefined) {
+                  val = parseFloat(srcNode.calculatedValue) || 0;
+                  valSource = 'calculatedValue';
+                }
+              }
+
+              const resolvedVal = val ?? 0;
+              sum += resolvedVal;
+              debugParts.push({ refId: refNodeId, value: resolvedVal, source: valSource });
+            }
+            // Les opérateurs "+", "-", etc. sont ignorés car on fait une somme simple
+          }
+
+          console.log(`🎯 [SUM-TOTAL EVALUATOR] ${capacity.nodeId} (${sumTokensNode?.label}) = ${sum}`, debugParts);
+
+          capacityResult = {
+            value: sum,
+            operationSource: 'formula',
+            operationDetail: { tokens, parts: debugParts } as unknown as undefined,
+            operationResult: `Somme = ${sum}`
+          };
+        } catch (sumError) {
+          console.error(`❌ [SUM-TOTAL EVALUATOR] Erreur pour ${capacity.nodeId}:`, sumError);
+          capacityResult = { value: 0, operationSource: 'formula' };
+        }
+      } else {
+      // ── Chemin normal (non sum-total) ──
       try {
         // ✨ ÉVALUATION avec le valueMap contenant les données FRAÎCHES
         capacityResult = await evaluateVariableOperation(
@@ -1255,6 +1351,7 @@ async function evaluateCapacitiesForSubmission(
           throw varError; // Pas de fallback possible → re-throw
         }
       }
+      } // fin du else (chemin non sum-total)
       
       // Extraire la valeur calculée
       const rawValue = (capacityResult as { value?: unknown; calculatedValue?: unknown; result?: unknown }).value

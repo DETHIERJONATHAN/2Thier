@@ -743,6 +743,14 @@ export const useTBLBatchData = (
       return batchData.conditionsTargetingNode[nodeId];
     }
     
+    // 🔥 FIX: Les champs sum-total ne doivent PAS hériter les conditions de leur source
+    // Ils ont leur propre logique de visibilité. Le fallback ci-dessous ne doit pas
+    // s'appliquer aux sum-total → source car cela cache le Total quand la condition
+    // du source est active (ex: Portrait/Paysage cache le source mais PAS le total)
+    if (nodeId.endsWith('-sum-total')) {
+      return []; // Pas de conditions héritées pour les sum-total
+    }
+    
     // Fallback: essayer des variantes connues de l'ID
     const variants: string[] = [];
     
@@ -751,13 +759,6 @@ export const useTBLBatchData = (
       variants.push(nodeId.slice(0, -2));
     } else {
       variants.push(`${nodeId}-1`);
-    }
-    
-    // Suffixe "-sum-total" (champs Total calculés)
-    if (nodeId.endsWith('-sum-total')) {
-      variants.push(nodeId.replace(/-sum-total$/, ''));
-    } else {
-      variants.push(`${nodeId}-sum-total`);
     }
     
     for (const variant of variants) {

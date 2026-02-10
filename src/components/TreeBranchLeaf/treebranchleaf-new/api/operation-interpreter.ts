@@ -1056,10 +1056,10 @@ async function interpretCondition(
     if (ref.startsWith('@select.')) {
       const optionNodeId = ref.slice('@select.'.length).split('.')[0];
       
-      // RÃƒÂ©cupÃƒÂ©rer le noeud d'option pour obtenir son label
+      // Récupérer le noeud pour obtenir son label et type
       let optionNode = await prisma.treeBranchLeafNode.findUnique({
         where: { id: optionNodeId },
-        select: { id: true, label: true, parentId: true }
+        select: { id: true, label: true, parentId: true, type: true }
       });
 
       // 🔁 Les options de select ne sont pas toujours dupliquées: si on a un suffixe (-1) mais pas de node en base,
@@ -1069,12 +1069,21 @@ async function interpretCondition(
         if (baseOptionId !== optionNodeId) {
           optionNode = await prisma.treeBranchLeafNode.findUnique({
             where: { id: baseOptionId },
-            select: { id: true, label: true, parentId: true }
+            select: { id: true, label: true, parentId: true, type: true }
           });
         }
       }
       
       if (optionNode) {
+        // 🔧 FIX: Si @select. référence le SELECT FIELD lui-même (type branch/leaf_select)
+        // et non une option, retourner directement sa valeur depuis le valueMap.
+        const isSelectField = optionNode.type === 'branch' || optionNode.type === 'leaf_select' || optionNode.type === 'branch_select';
+        if (isSelectField) {
+          const selectValue = await getNodeValue(optionNode.id, submissionId, prisma, valueMap, { preserveEmpty: true });
+          console.log(`🎯 [CONDITION @select] SELECT FIELD "${optionNode.label}" (${optionNode.id}) → valeur: ${selectValue}`);
+          return { value: selectValue !== null && selectValue !== undefined ? String(selectValue) : null, label: optionNode.label };
+        }
+
         // 🔧 FIX CRITIQUE: Vérifier si l'option est RÉELLEMENT SÉLECTIONNÉE
         // Avant ce fix, on retournait toujours l'ID de l'option, ce qui faisait que
         // `isNotEmpty` était TOUJOURS vrai → la première branche de condition était toujours prise.

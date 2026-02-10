@@ -1546,10 +1546,13 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
     // Le flag data_visibleToUser (@default(false) en DB) est conçu pour les champs calculés/display
     // (hasData=true) - pas pour les champs normaux. Sans cette garde, TOUS les champs seraient
     // masqués car le default Prisma est false.
+    // 🎯 FIX: Les champs Total (-sum-total / isSumDisplayField) sont TOUJOURS visibles.
+    // Ils sont créés avec data_visibleToUser=false mais doivent quand même s'afficher.
+    const isSumTotalField = (typeof field.id === 'string' && field.id.endsWith('-sum-total')) || metadata.isSumDisplayField === true;
     const hasDataCapability = capabilities?.data?.enabled;
-    const visibleToUserCheck = hasDataCapability 
+    const visibleToUserCheck = (hasDataCapability && !isSumTotalField)
       ? (normalizedAppearanceConfig.visibleToUser !== false) 
-      : true; // Ignorer visibleToUser pour les champs sans capacité data
+      : true; // Ignorer visibleToUser pour les champs sans capacité data ou les champs Total
     const resolvedVisible = (field.visible !== false) && (metadata.isVisible !== false) && visibleToUserCheck;
 
     return {

@@ -4,6 +4,7 @@ import { planRepeatDuplication, executeRepeatDuplication, RepeatOperationError }
 import { runRepeatExecution } from './repeat-executor.js';
 import type { MinimalReq } from './services/shared-helpers.js';
 import { authenticateToken } from '../../../../../middleware/auth';
+import { updateSumDisplayFieldAfterCopyChange } from '../sum-display-field-routes.js';
 
 interface RepeatRequestBody {
   suffix?: string | number;
@@ -242,6 +243,39 @@ export default function createRepeatRouter(prisma: PrismaClient) {
         }
       }
       
+      // 5b. NETTOYAGE: Supprimer les SubmissionData orphelines des nœuds supprimés
+      // + Mettre à jour les champs sum-total
+      if (deletedNodes.length > 0) {
+        try {
+          const deletedSD = await prisma.treeBranchLeafSubmissionData.deleteMany({
+            where: { nodeId: { in: deletedNodes } }
+          });
+          if (deletedSD.count > 0) {
+            console.log(`🧹 [PRELOAD] ${deletedSD.count} entrée(s) SubmissionData orpheline(s) supprimée(s)`);
+          }
+        } catch (sdErr) {
+          console.warn(`⚠️ [PRELOAD] Erreur nettoyage SubmissionData:`, (sdErr as Error).message);
+        }
+
+        // Mettre à jour les champs sum-total impactés
+        try {
+          const remainingNodes = await prisma.treeBranchLeafNode.findMany({
+            where: { treeId: repeaterNode.treeId },
+            select: { id: true, metadata: true }
+          });
+          for (const node of remainingNodes) {
+            const meta = node.metadata as Record<string, unknown> | null;
+            if (meta?.isSumDisplayField === true && meta?.sourceNodeId) {
+              updateSumDisplayFieldAfterCopyChange(String(meta.sourceNodeId), prisma).catch(err => {
+                console.warn(`[PRELOAD] Erreur mise à jour champ Total ${node.id}:`, err);
+              });
+            }
+          }
+        } catch (sumErr) {
+          console.warn(`⚠️ [PRELOAD] Erreur mise à jour sum-total:`, (sumErr as Error).message);
+        }
+      }
+
       // 6. CRÉATION des copies manquantes
       if (copiesToCreate > 0) {
         for (let i = 0; i < copiesToCreate; i++) {
