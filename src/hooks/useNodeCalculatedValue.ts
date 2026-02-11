@@ -435,6 +435,13 @@ export function useNodeCalculatedValue(
         lastGlobalRefreshKeyRef.current = refreshKey;
         lastGlobalRefreshAtRef.current = now;
 
+        // 🔥 NOUVEAU: Détecter la demande de reset/clear des display fields
+        if (detail?.clearDisplayFields === true) {
+          console.log(`🧹 [useNodeCalculatedValue] Clear display field: nodeId=${nodeId}`);
+          setValue(null); // Vider la valeur
+          return; // Ne pas faire de refetch
+        }
+
         // 🎯 FIX RACE CONDITION: Si des valeurs calculées sont fournies dans l'événement,
         // les utiliser DIRECTEMENT au lieu de faire un refetch qui peut retourner des valeurs obsolètes
         if (detail?.calculatedValues && nodeId in detail.calculatedValues) {

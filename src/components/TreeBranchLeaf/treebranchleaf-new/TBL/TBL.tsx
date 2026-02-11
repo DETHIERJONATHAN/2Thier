@@ -266,6 +266,12 @@ const TBL: React.FC<TBLProps> = ({
         return kept;
       });
 
+      // 🔥 NOUVEAU: Vider aussi les champs DISPLAY calculés côté frontend
+      broadcastCalculatedRefresh({
+        clearDisplayFields: true,
+        reason: 'nouveau-devis'
+      });
+
       setIsDevisSaved(false);
       setIsLoadedDevis(false);
       setOriginalDevisId(null);
@@ -1293,25 +1299,48 @@ const TBL: React.FC<TBLProps> = ({
       return;
     }
     try {
-      // 🎯 FIX RACE CONDITION: Extraire les valeurs calculées de la réponse
-      // pour les passer directement dans l'événement au lieu de refetch
-      const calculatedValuesMap: Record<string, unknown> = {};
-      const submissionDataArray = detail?.submissionData as Array<{nodeId?: string; value?: unknown}> | undefined;
-      if (submissionDataArray && Array.isArray(submissionDataArray)) {
-        for (const item of submissionDataArray) {
-          // 🔥 FIX 30/01/2026: Exclure les valeurs null pour éviter d'écraser les valeurs existantes
-          // Quand un display field est skippé par le trigger filter, sa valeur en base peut être null
-          // mais on ne veut PAS écraser la valeur affichée actuellement
-          if (item?.nodeId && item?.value !== undefined && item?.value !== null) {
-            calculatedValuesMap[item.nodeId] = item.value;
+      let calculatedValuesMap: Record<string, unknown> = {};
+
+      // 🔥 NOUVEAU: Gestion spéciale pour le clear des display fields
+      if (detail?.clearDisplayFields === true) {
+        // Vider les valeurs calculées dans window.TBL_FORM_DATA
+        if (window.TBL_FORM_DATA) {
+          const displayFieldsToRemove: string[] = [];
+          for (const [key] of Object.entries(window.TBL_FORM_DATA)) {
+            // Identifier les champs calculés/display (ceux qui ne sont pas des input utilisateur)
+            if (!key.startsWith('__') && !key.match(/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i)) {
+              // Conserver les UUIDs simples qui sont des inputs utilisateur
+              continue;
+            }
+            // Supprimer les champs calculés (sum-total, linkés, etc.)
+            if (key.includes('-sum-total') || key.includes('-') && !key.startsWith('__')) {
+              displayFieldsToRemove.push(key);
+            }
+          }
+          for (const key of displayFieldsToRemove) {
+            delete window.TBL_FORM_DATA[key];
           }
         }
-        
-        // 🔗🔗🔗 FIX CRITIQUE: Injecter les valeurs calculées (Link, DISPLAY, etc.) dans TBL_FORM_DATA
-        // Sans cela, TBLFieldRendererAdvanced ne voit pas les valeurs Link dans formData
-        if (typeof window !== 'undefined' && window.TBL_FORM_DATA) {
-          for (const [nodeId, value] of Object.entries(calculatedValuesMap)) {
-            window.TBL_FORM_DATA[nodeId] = value;
+      } else {
+        // Mode normal: extraire les valeurs calculées de la réponse
+        // pour les passer directement dans l'événement au lieu de refetch
+        const submissionDataArray = detail?.submissionData as Array<{nodeId?: string; value?: unknown}> | undefined;
+        if (submissionDataArray && Array.isArray(submissionDataArray)) {
+          for (const item of submissionDataArray) {
+            // 🔥 FIX 30/01/2026: Exclure les valeurs null pour éviter d'écraser les valeurs existantes
+            // Quand un display field est skippé par le trigger filter, sa valeur en base peut être null
+            // mais on ne veut PAS écraser la valeur affichée actuellement
+            if (item?.nodeId && item?.value !== undefined && item?.value !== null) {
+              calculatedValuesMap[item.nodeId] = item.value;
+            }
+          }
+          
+          // 🔗🔗🔗 FIX CRITIQUE: Injecter les valeurs calculées (Link, DISPLAY, etc.) dans TBL_FORM_DATA
+          // Sans cela, TBLFieldRendererAdvanced ne voit pas les valeurs Link dans formData
+          if (typeof window !== 'undefined' && window.TBL_FORM_DATA) {
+            for (const [nodeId, value] of Object.entries(calculatedValuesMap)) {
+              window.TBL_FORM_DATA[nodeId] = value;
+            }
           }
         }
       }
