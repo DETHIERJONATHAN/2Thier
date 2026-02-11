@@ -205,7 +205,7 @@ export const useBackendValue = (
         setLoading(true);
         
         // 🔑 Extraire le submissionId du formData pour les lookups de table
-        const parsedFormData = JSON.parse(formDataHash);
+        const parsedFormData = typeof formDataHash === 'string' ? JSON.parse(formDataHash) : formData;
         const submissionId = parsedFormData.__submissionId || parsedFormData.submissionId || '';
 
         // 🚀 ÉTAPE 1 : CHERCHER D'ABORD LA VALEUR STOCKÉE DANS PRISMA
@@ -360,7 +360,7 @@ export const useBackendValue = (
     };
 
     fetchBackendValue();
-  }, [nodeId, treeId, formDataHash, api, refreshToken, batchValue, batchContext]); // ✅ Utiliser formDataHash au lieu de formData
+  }, [nodeId, treeId, api, refreshToken, batchValue, batchContext]); // 🔥 FIX R10: RETIRÉ formDataHash - les display fields se mettent à jour via broadcast inline, PAS via refetch sur changement formData
 
   return { value, loading };
 };

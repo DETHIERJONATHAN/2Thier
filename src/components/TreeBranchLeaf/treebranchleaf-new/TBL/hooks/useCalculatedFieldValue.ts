@@ -88,12 +88,46 @@ export const useCalculatedFieldValue = (
       }
     };
 
+    // 🔥 FIX R10: Handler séparé pour tbl-force-retransform qui consomme les valeurs inline
+    // Avant ce fix, tbl-force-retransform déclenchait un refreshToken++ → GET API → données stale
+    const handleForceRetransform = (event: Event) => {
+      const custom = event as CustomEvent<{
+        calculatedValues?: Record<string, unknown>;
+        nodeId?: string;
+        node?: { id?: string };
+        targetNodeIds?: string[];
+      }>;
+      const detail = custom.detail;
+
+      // 🎯 PRIORITÉ: Consommer les valeurs inline du broadcast DIRECTEMENT
+      if (detail?.calculatedValues && nodeId && nodeId in detail.calculatedValues) {
+        const inlineValue = detail.calculatedValues[nodeId];
+        if (inlineValue !== undefined && inlineValue !== null) {
+          console.log(`📥 [useCalculatedFieldValue] Valeur inline pour nodeId=${nodeId}:`, inlineValue);
+          setValue(inlineValue);
+          setLoading(false);
+          return; // 🎯 Ne PAS refetch
+        }
+      }
+
+      // 🛡️ Si calculatedValues existe mais nodeId pas dedans → ne pas refetch
+      if (detail?.calculatedValues && Object.keys(detail.calculatedValues).length > 0) {
+        return;
+      }
+
+      // Fallback: refresh spécifique pour ce nodeId
+      const candidates = [detail?.nodeId, detail?.node?.id, ...(detail?.targetNodeIds || [])];
+      if (candidates.includes(nodeId)) {
+        setRefreshToken(t => t + 1);
+      }
+    };
+
     window.addEventListener('tbl-node-updated', handleNodeEvent as EventListener);
-    window.addEventListener('tbl-force-retransform', handleNodeEvent as EventListener);
+    window.addEventListener('tbl-force-retransform', handleForceRetransform as EventListener);
 
     return () => {
       window.removeEventListener('tbl-node-updated', handleNodeEvent as EventListener);
-      window.removeEventListener('tbl-force-retransform', handleNodeEvent as EventListener);
+      window.removeEventListener('tbl-force-retransform', handleForceRetransform as EventListener);
     };
   }, [nodeId]);
 
@@ -173,7 +207,7 @@ export const useCalculatedFieldValue = (
     };
 
     fetchValue();
-  }, [nodeId, treeId, formDataKey, leadId, api, batchValue, batchContext, refreshToken]);
+  }, [nodeId, treeId, leadId, api, batchValue, batchContext, refreshToken]); // 🔥 FIX R10: RETIRÉ formDataKey - les display fields se mettent à jour via broadcast inline, PAS via refetch sur changement formData
 
   return { value, loading, error, humanText, displayConfig };
 };

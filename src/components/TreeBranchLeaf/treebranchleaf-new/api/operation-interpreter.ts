@@ -771,15 +771,10 @@ async function interpretReference(
   // Ã°Å¸â€™Â¾ Ãƒâ€°TAPE 5 : Mettre en cache le rÃƒÂ©sultat
   // Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
 
-  // 🔥 FIX 10/02/2026 v3: @calculated.{nodeId} - Retourner PRIORITAIREMENT la calculatedValue STOCKÉE
-  // Un champ "d'affichage" (@calculated.) doit retourner sa VALEUR CALCULÉE STOCKÉE,
-  // pas évaluer sa CAPACITÉ (condition/formule qui l'a défini).
-  // 
-  // PRIORITÉS (dans cet ordre):
-  // 1️⃣ calculatedValue STOCKÉE du nœud (la VRAIE valeur affichée)
-  // 2️⃣ formula_activeId si pas de calculatedValue (cas de formules pures)
-  // 3️⃣ capabilities sourceRef si formule (fallback pour cases limites)
-  // ⚠️ N'évaluer JAMAIS une condition (SHOW/HIDE) - elle ne produit pas de valeur!
+  // 🔥 FIX R8: @calculated.{nodeId} - NE PLUS utiliser calculatedValue STOCKÉE GLOBALE
+  // La calculatedValue de TreeBranchLeafNode est GLOBALE (pas scopée par submission).
+  // Elle contenait des valeurs d'anciennes soumissions qui polluaient les calculs.
+  // Maintenant: utiliser UNIQUEMENT les valeurs du valueMap (fraîches) ou évaluer la formule.
   const isCalculatedRef = ref.startsWith('@calculated.');
   if (isCalculatedRef && result && String(result.result) === '0') {
     try {
@@ -788,7 +783,6 @@ async function interpretReference(
         select: {
           id: true,
           label: true,
-          calculatedValue: true,  // 🎯 NOUVEAU: Récupérer la valeur STOCKÉE
           formula_activeId: true,
           hasFormula: true,
           hasTable: true,
@@ -797,17 +791,36 @@ async function interpretReference(
       });
       
       if (calcNode) {
-        // ✅ PRIORITÉ 0 (NOUVELLE): Retourner directement la calculatedValue STOCKÉE
-        // Cette valeur a déjà été calculée et stockée - c'est le vrai résultat!
-        if (calcNode.calculatedValue) {
-          result = {
-            result: String(calcNode.calculatedValue),
-            humanText: `Valeur calculée de ${calcNode.label}`,
-            details: { type: 'calculated-stored-value', nodeId: cleanRef }
-          };
+        // 🔥 FIX R8: NE PLUS lire calculatedValue globale → source de valeurs stale!
+        // Chercher d'abord dans le valueMap (valeur fraîche du cycle d'évaluation actuel)
+        if (valueMap?.has(cleanRef)) {
+          const freshValue = valueMap.get(cleanRef);
+          if (freshValue !== null && freshValue !== undefined && String(freshValue).trim() !== '') {
+            result = {
+              result: String(freshValue),
+              humanText: `Valeur fraîche de ${calcNode.label}`,
+              details: { type: 'calculated-fresh-valueMap', nodeId: cleanRef }
+            };
+          }
         }
-        // PRIORITÉ 1: formula_activeId (si pas de valeur stockée)
-        else if (calcNode.formula_activeId) {
+        
+        // Fallback: Chercher dans SubmissionData (scopé par submission, pas global)
+        if (String(result.result) === '0') {
+          const submissionValue = await prisma.treeBranchLeafSubmissionData.findUnique({
+            where: { submissionId_nodeId: { submissionId, nodeId: cleanRef } },
+            select: { value: true }
+          });
+          if (submissionValue?.value && String(submissionValue.value).trim() !== '' && submissionValue.value !== '0') {
+            result = {
+              result: String(submissionValue.value),
+              humanText: `Valeur submission de ${calcNode.label}`,
+              details: { type: 'calculated-submission-scoped', nodeId: cleanRef }
+            };
+          }
+        }
+        
+        // PRIORITÉ 1: formula_activeId (évaluer dynamiquement)
+        if (String(result.result) === '0' && calcNode.formula_activeId) {
           const formulaResult = await interpretReference(
             `node-formula:${calcNode.formula_activeId}`, submissionId, prisma, valuesCache, depth + 1, valueMap, labelMap
           );
@@ -2650,6 +2663,15 @@ async function interpretTable(
       if (isNumericSourceWithoutOperator) {
         const optionLabel = colSourceOption?.type === 'field' ? 'Option 2' : 'Option 3';
 
+        // 🚀 FIX R9: Ne pas tenter le lookup si la valeur source n'est pas encore résolue
+        if (colSelectorValue === 0 || colSelectorValue === '0' || colSelectorValue === '' || colSelectorValue === null || colSelectorValue === undefined) {
+          return {
+            result: null,
+            humanText: `Table: en attente de la valeur source (${optionLabel})`,
+            details: { type: 'table', status: 'pending-source', colSelectorValue }
+          };
+        }
+
         const match = findClosestIndexInLabels(colSelectorValue, rows, validRowIndices);
         if (match) {
           const foundRowIndex = match.index;
@@ -3366,8 +3388,26 @@ export async function evaluateVariableOperation(
   const localValueMap = valueMap || new Map<string, unknown>();
   const labelMap = new Map<string, string>();
   
-  // Enrichir automatiquement les données depuis la base AVEC le treeId
-  await enrichDataFromSubmission(submissionId, prisma, localValueMap, labelMap, treeId);
+  // 🔥 FIX R8: Si un valueMap est fourni par l'évaluateur, il contient DÉJÀ les données fraîches.
+  // NE PAS appeler enrichDataFromSubmission qui re-requête la DB et réintroduit des valeurs STALE.
+  // enrichDataFromSubmission est N×appelé (1 par capacity) → N requêtes DB inutiles + pollution.
+  if (!valueMap) {
+    // Mode standalone (pas d'évaluateur): enrichir depuis la DB
+    await enrichDataFromSubmission(submissionId, prisma, localValueMap, labelMap, treeId);
+  } else {
+    // Mode évaluateur: juste enrichir les labels (pas les valeurs)
+    if (treeId) {
+      const allNodes = await prisma.treeBranchLeafNode.findMany({
+        where: { treeId },
+        select: { id: true, label: true, sharedReferenceName: true, field_label: true }
+      });
+      for (const node of allNodes) {
+        if (!labelMap.has(node.id)) {
+          labelMap.set(node.id, node.sharedReferenceName || node.field_label || node.label);
+        }
+      }
+    }
+  }
   
   
   // Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
@@ -3388,9 +3428,15 @@ export async function evaluateVariableOperation(
   });
   
   if (!variable) {
-    // Variable introuvable - LOG CRITIQUE
-    console.error(`❌ [VARIABLE MANQUANTE] nodeId: ${variableNodeId}`);
-    throw new Error(`Variable introuvable: ${variableNodeId}`);
+    // Variable introuvable - retourner valeur par défaut au lieu de crasher l'évaluation
+    console.warn(`⚠️ [VARIABLE MANQUANTE] nodeId: ${variableNodeId} - retour valeur par défaut (null)`);
+    return {
+      value: null,
+      operationDetail: { type: 'missing-variable', nodeId: variableNodeId },
+      operationResult: `Variable manquante: ${variableNodeId}`,
+      operationSource: 'fixed' as const,
+      sourceRef: ''
+    };
   }
   
   

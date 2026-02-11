@@ -424,6 +424,8 @@ function sanitizeFormData(input: unknown): unknown {
 const UUID_NODE_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 // 🔥 NOUVEAU: Regex pour UUID avec suffixe de duplication (-1, -2, -3, etc.)
 const UUID_WITH_SUFFIX_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}-\d+$/i;
+// FIX R14c: Accepter les nodeIds sum-total (UUID-sum-total et UUID-N-sum-total)
+const UUID_SUM_TOTAL_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}(-\d+)?-sum-total$/i;
 const GENERATED_NODE_REGEX = /^node_[0-9]+_[a-z0-9]+$/i;
 const SHARED_REFERENCE_REGEX = /^shared-ref-[a-z0-9-]+$/i;
 
@@ -505,6 +507,7 @@ function isAcceptedNodeId(nodeId: string): boolean {
   return (
     UUID_NODE_REGEX.test(nodeId) || 
     UUID_WITH_SUFFIX_REGEX.test(nodeId) ||  // 🔥 NOUVEAU: Accepter UUID avec suffixe -1, -2, etc.
+    UUID_SUM_TOTAL_REGEX.test(nodeId) ||  // FIX R14c: Accepter UUID-sum-total
     GENERATED_NODE_REGEX.test(nodeId) || 
     isSharedReferenceId(nodeId)
   );
@@ -863,6 +866,16 @@ async function evaluateCapacitiesForSubmission(
     }
   }
   
+  // 🔥 FIX R8: En mode 'change', SUPPRIMER les anciennes valeurs DISPLAY du valueMap
+  // pour forcer un recalcul frais. Les anciennes valeurs DB polluent les dépendances inter-display.
+  // Ex: si Optimiseur dépend de N° panneau (DISPLAY), et N° panneau a changé,
+  // Optimiseur doit utiliser la NOUVELLE valeur de N° panneau, pas l'ancienne de la DB.
+  if (mode === 'change') {
+    for (const displayNodeId of displayNodeIds) {
+      valueMap.delete(displayNodeId);
+    }
+  }
+  
   // 🔥 RÉCUPÉRER LES VARIABLES ET LES FORMULES
   const [variablesRaw, formulasRaw] = await Promise.all([
     prisma.treeBranchLeafNodeVariable.findMany({
@@ -899,11 +912,67 @@ async function evaluateCapacitiesForSubmission(
     }))
   ];
   
-  // 🔑 TRIER: formules simples d'abord, sum-total ensuite
+  // 🔑 FIX R8: TRI TOPOLOGIQUE des capacities pour garantir l'ordre de dépendance
+  // Les DISPLAY fields qui dépendent d'autres DISPLAY fields doivent être évalués APRÈS leurs dépendances.
+  // Ex: prix_optimiseur dépend d'optimiseur qui dépend de n_panneau → n_panneau > optimiseur > prix_optimiseur
+  const displayCapNodeIds = new Set(capacitiesRaw.filter(c => 
+    c.TreeBranchLeafNode?.fieldType === 'DISPLAY' || c.TreeBranchLeafNode?.type === 'DISPLAY' || c.TreeBranchLeafNode?.type === 'leaf_field'
+  ).map(c => c.nodeId));
+  
+  // 🔥 FIX R14: Construire un graphe de dépendances inter-display FIABLE
+  // L'ancien code ne détectait PAS les dépendances car:
+  //   1. metadata.triggerNodeIds n'était jamais lu (metadata pas sélectionné dans la requête Prisma)
+  //   2. sourceRef des formules = "formula:<id>" → pas de nodeIds utiles
+  //   3. displayDeps.set() écrasait les deps quand un nodeId avait variable + formula
+  // CONSÉQUENCE: ordre d'évaluation aléatoire → DISPLAY fields lisant des valeurs STALE
+  // FIX: Utiliser le trigger index (construit plus bas) pour dériver les dépendances APRÈS sa construction.
+  // Pour l'instant, initialiser displayDeps vide - il sera rempli APRÈS le trigger index.
+  
+  // FIX R14c: AJOUTER les sum-total fields dans displayCapNodeIds
+  // Les sum-total (ex: e1007de0-...-sum-total) sont dans capacitiesRaw mais pas detectes comme DISPLAY.
+  // Sans ca, le tri topologique ne peut pas les ordonner correctement par rapport aux fields qui en dependent.
+  for (const cap of capacitiesRaw) {
+    if (cap.nodeId.endsWith('-sum-total')) {
+      displayCapNodeIds.add(cap.nodeId);
+    }
+  }
+
+const displayDeps = new Map<string, Set<string>>(); // nodeId → Set<dependsOn>
+  
+  // Tri topologique: calculer l'ordre (profondeur de dépendance)
+  const topoOrder = new Map<string, number>(); // nodeId → depth
+  const computeDepth = (nodeId: string, visited: Set<string>): number => {
+    if (topoOrder.has(nodeId)) return topoOrder.get(nodeId)!;
+    if (visited.has(nodeId)) return 0; // Cycle détecté → couper
+    visited.add(nodeId);
+    const deps = displayDeps.get(nodeId);
+    let maxDepth = 0;
+    if (deps) {
+      for (const dep of deps) {
+        maxDepth = Math.max(maxDepth, computeDepth(dep, visited) + 1);
+      }
+    }
+    topoOrder.set(nodeId, maxDepth);
+    return maxDepth;
+  };
+  for (const nodeId of displayCapNodeIds) {
+    computeDepth(nodeId, new Set());
+  }
+  
+  // Tri final: non-display d'abord, puis display par profondeur, puis sum-total
   const capacities = capacitiesRaw.sort((a, b) => {
     const aIsSumFormula = a.sourceRef?.includes('sum-formula') || a.sourceRef?.includes('sum-total') ? 1 : 0;
     const bIsSumFormula = b.sourceRef?.includes('sum-formula') || b.sourceRef?.includes('sum-total') ? 1 : 0;
-    return aIsSumFormula - bIsSumFormula;
+    if (aIsSumFormula !== bIsSumFormula) return aIsSumFormula - bIsSumFormula;
+    
+    const aIsDisplay = displayCapNodeIds.has(a.nodeId) ? 1 : 0;
+    const bIsDisplay = displayCapNodeIds.has(b.nodeId) ? 1 : 0;
+    if (aIsDisplay !== bIsDisplay) return aIsDisplay - bIsDisplay; // Non-display d'abord
+    
+    // Entre display fields: trier par profondeur de dépendance (0 = pas de deps = d'abord)
+    const aDepth = topoOrder.get(a.nodeId) || 0;
+    const bDepth = topoOrder.get(b.nodeId) || 0;
+    return aDepth - bDepth;
   });
 
   const results: { updated: number; created: number; stored: number; displayFieldsUpdated: number } = { 
@@ -1062,6 +1131,27 @@ async function evaluateCapacitiesForSubmission(
         }
       }
       
+      // FIX R14c PART 4: Ajouter les formules sum-total au trigger index
+      // Les sum-total ne sont PAS dans displayNodes (pas de vrais tree nodes)
+      // mais leurs formules existent en DB. Il faut les ajouter pour que
+      // e1007de0 -> e1007de0-sum-total -> dfc77f3d fonctionne.
+      for (const cap of capacitiesRaw) {
+        if (!cap.nodeId.endsWith('-sum-total')) continue;
+        const sumTotalNodeId = cap.nodeId;
+        // Extraire les references de la formule sum-total
+        const sumFormulas = formulasByNodeId.get(sumTotalNodeId) || [];
+        const sumVariable = variablesByNodeId.get(sumTotalNodeId);
+        const sumRefs = new Set<string>();
+        for (const formula of sumFormulas) collectReferencedNodeIdsForTriggers((formula as any).tokens, sumRefs);
+        if (sumVariable) collectReferencedNodeIdsForTriggers(sumVariable.metadata, sumRefs);
+        sumRefs.delete(sumTotalNodeId);
+        for (const refId of sumRefs) {
+          if (refId.includes('.')) continue;
+          if (!triggerIndex.has(refId)) triggerIndex.set(refId, new Set());
+          triggerIndex.get(refId)!.add(sumTotalNodeId);
+        }
+      }
+
       // Linked fields: ajouter au trigger index
       for (const linkedNode of allLinkedNodes) {
         const targetId = linkedNode.link_targetNodeId!;
@@ -1142,6 +1232,19 @@ async function evaluateCapacitiesForSubmission(
                 if (showNodeId) triggerIndex.get(refFieldId)!.add(showNodeId);
               }
             }
+            
+            // 🔥 FIX R14d: Les SHOW nodeIds sont des DÉPENDANCES du condition.nodeId
+            // La condition UTILISE/AFFICHE la valeur du SHOW nodeId comme résultat.
+            // Ex: condition sur 410ad1e1 fait SHOW @calculated.e1007de0-sum-total
+            //   → 410ad1e1 DÉPEND de e1007de0-sum-total (doit être évalué APRÈS)
+            // Sans ça, la condition est évaluée AVANT sa dépendance → lit une valeur STALE.
+            for (const rawShowNodeId of targetShowNodeIds) {
+              const showNodeId = normalizeRefForTriggers(rawShowNodeId);
+              if (showNodeId && isAcceptedNodeId(showNodeId)) {
+                if (!triggerIndex.has(showNodeId)) triggerIndex.set(showNodeId, new Set());
+                triggerIndex.get(showNodeId)!.add(condition.nodeId);
+              }
+            }
           }
         }
       }
@@ -1163,6 +1266,105 @@ async function evaluateCapacitiesForSubmission(
     }
   }
 
+  // 🔥 FIX R14: Dériver les dépendances inter-display depuis le trigger index
+  // Le trigger index mappe: changedFieldId → Set<displayFieldIds qui doivent être recalculés>
+  // On inverse: si triggerIndex.get(displayFieldA) contient displayFieldB,
+  // alors B DÉPEND de A (B doit être recalculé quand A change)
+  // → B doit être évalué APRÈS A dans le tri topologique
+  if (triggerIndex.size > 0) {
+    for (const [triggerId, targets] of triggerIndex) {
+      // Seuls les triggers qui sont eux-mêmes des DISPLAY fields créent des dépendances inter-display
+      if (!displayCapNodeIds.has(triggerId)) continue;
+      for (const targetId of targets) {
+        if (!displayCapNodeIds.has(targetId)) continue;
+        if (targetId === triggerId) continue; // Pas de self-dep
+        // targetId dépend de triggerId
+        if (!displayDeps.has(targetId)) displayDeps.set(targetId, new Set());
+        displayDeps.get(targetId)!.add(triggerId);
+      }
+    }
+    const depsCount = [...displayDeps.values()].reduce((sum, s) => sum + s.size, 0);
+    console.log(`🔗 [FIX R14] ${depsCount} dépendances inter-display détectées via trigger index`);
+  }
+
+  // 🔥 FIX R14: Recalculer la profondeur topologique avec les deps FIABLES
+  // (remplace l'ancien calcul qui utilisait triggerNodeIds/sourceRef cassés)
+  topoOrder.clear();
+  const computeDepthFixed = (nodeId: string, visited: Set<string>): number => {
+    if (topoOrder.has(nodeId)) return topoOrder.get(nodeId)!;
+    if (visited.has(nodeId)) return 0; // Cycle détecté → couper
+    visited.add(nodeId);
+    const deps = displayDeps.get(nodeId);
+    let maxDepth = 0;
+    if (deps) {
+      for (const dep of deps) {
+        maxDepth = Math.max(maxDepth, computeDepthFixed(dep, visited) + 1);
+      }
+    }
+    topoOrder.set(nodeId, maxDepth);
+    return maxDepth;
+  };
+  for (const nodeId of displayCapNodeIds) {
+    computeDepthFixed(nodeId, new Set());
+  }
+
+  // � FIX R14: RE-TRIER les capacities avec les profondeurs FIABLES
+  // Le sort initial (ligne ~950) a été fait avec des profondeurs = 0 car displayDeps était vide.
+  // Maintenant que topoOrder est correct, on re-trie pour garantir l'ordre de dépendance.
+  capacities.sort((a, b) => {
+    const aIsDisplay = displayCapNodeIds.has(a.nodeId) ? 1 : 0;
+    const bIsDisplay = displayCapNodeIds.has(b.nodeId) ? 1 : 0;
+    if (aIsDisplay !== bIsDisplay) return aIsDisplay - bIsDisplay; // Non-display d'abord
+    
+    // Entre display fields: trier par profondeur topologique (PRIMARY KEY)
+    // 🔥 FIX R14b: Le depth est la clé primaire. Le flag sum-formula n'est qu'un tiebreaker.
+    // AVANT: sum-formula overridait le depth → un display qui dépend d'un sum-total
+    // était évalué AVANT le sum-total → lisait la vieille valeur DB → bug "10→1"
+    const aDepth = topoOrder.get(a.nodeId) || 0;
+    const bDepth = topoOrder.get(b.nodeId) || 0;
+    if (aDepth !== bDepth) return aDepth - bDepth;
+    
+    // TIEBREAKER: à depth égal, sum-total après les bases (pour le cas naturel base→sum)
+    const aIsSumFormula = a.sourceRef?.includes('sum-formula') || a.sourceRef?.includes('sum-total') ? 1 : 0;
+    const bIsSumFormula = b.sourceRef?.includes('sum-formula') || b.sourceRef?.includes('sum-total') ? 1 : 0;
+    return aIsSumFormula - bIsSumFormula;
+  });
+
+  // FIX R14b DEBUG: Log eval order
+  if (mode === 'change') {
+    const displayOrder = capacities
+      .filter(c => displayCapNodeIds.has(c.nodeId))
+      .map(c => `${c.nodeId.substring(0,8)}(d=${topoOrder.get(c.nodeId)||0},sum=${c.sourceRef?.includes('sum-formula')||c.sourceRef?.includes('sum-total')?'Y':'N'})`);
+    console.log(`[FIX R14b] Eval order: ${displayOrder.join(' -> ')}`);
+  }
+
+  // �🚀 FIX R12: Calculer la fermeture transitive des DISPLAY fields affectés
+  // En mode 'change', seuls les DISPLAY fields directement/indirectement impactés
+  // par changedFieldId doivent être recalculés (au lieu de TOUS)
+  let affectedDisplayFieldIds: Set<string> | null = null;
+  if (mode === 'change' && changedFieldId && triggerIndex.size > 0) {
+    affectedDisplayFieldIds = new Set(triggerIndex.get(changedFieldId) || []);
+    // Fermeture transitive: si A dépend de changedField et B dépend de A, B est aussi affecté
+    let changed = true;
+    let iterations = 0;
+    while (changed && iterations < 50) {
+      changed = false;
+      iterations++;
+      for (const fieldId of [...affectedDisplayFieldIds]) {
+        const cascaded = triggerIndex.get(fieldId);
+        if (cascaded) {
+          for (const cid of cascaded) {
+            if (!affectedDisplayFieldIds.has(cid)) {
+              affectedDisplayFieldIds.add(cid);
+              changed = true;
+            }
+          }
+        }
+      }
+    }
+    console.log(`🚀 [FIX R12] mode=change: ${affectedDisplayFieldIds.size} DISPLAY fields affectés sur ${displayCapNodeIds.size} total (skip ${displayCapNodeIds.size - affectedDisplayFieldIds.size})`);
+  }
+
   // 🔥 DÉDUPLICATION: Un même nodeId peut apparaître plusieurs fois dans capacities
   // (ex: formula + autre capacité). On déduplique pour éviter de calculer 3 fois le même champ !
   const processedDisplayFields = new Set<string>();
@@ -1176,9 +1378,15 @@ async function evaluateCapacitiesForSubmission(
       || capacity.TreeBranchLeafNode?.type === 'leaf_field';
     
     // MODE AUTOSAVE: Skip tous les display fields (perf: pas besoin de recalculer)
-    // MODE OPEN / CHANGE: Recalculer TOUS les display fields (garantit la cohérence)
     if (isDisplayField && mode === 'autosave') {
       continue;
+    }
+    
+    // 🚀 FIX R12: En mode 'change', skip les DISPLAY fields NON affectés par le changement
+    if (isDisplayField && affectedDisplayFieldIds !== null) {
+      if (!affectedDisplayFieldIds.has(capacity.nodeId)) {
+        continue; // Ce DISPLAY field n'est pas impacté → skip pour gagner du temps
+      }
     }
     
     // 🔥 DÉDUPLICATION: Un même display field peut apparaître N fois dans capacities
@@ -1807,10 +2015,12 @@ router.post('/submissions/create-and-evaluate', async (req, res) => {
     
     // 1. Vérifier et récupérer l'arbre réel depuis la base de données
     let effectiveTreeId = treeId as string | undefined;
+    const hasExistingSubmission = requestedSubmissionId || reuseSubmissionId;
     
-    // Si pas de treeId fourni ou si l'arbre n'existe pas, récupérer le premier arbre disponible
-    if (!effectiveTreeId) {
-      console.log('⚠️ [TBL CREATE-AND-EVALUATE] Aucun treeId fourni, recherche du premier arbre disponible...');
+    // 🚀 FIX R9: Si une submissionId est fournie, on récupérera le treeId depuis la soumission existante
+    // → Pas besoin de faire un findFirst() coûteux ici
+    if (!effectiveTreeId && !hasExistingSubmission) {
+      console.log('⚠️ [TBL CREATE-AND-EVALUATE] Aucun treeId fourni et pas de submissionId, recherche du premier arbre...');
       const firstTree = await prisma.treeBranchLeafTree.findFirst({
         select: { id: true, name: true }
       });
@@ -1820,26 +2030,9 @@ router.post('/submissions/create-and-evaluate', async (req, res) => {
       }
       
       effectiveTreeId = firstTree.id;
-    } else {
-      // Vérifier que l'arbre fourni existe bien
-      const treeExists = await prisma.treeBranchLeafTree.findUnique({
-        where: { id: effectiveTreeId },
-        select: { id: true, name: true }
-      });
-      
-      if (!treeExists) {
-        console.log(`❌ [TBL CREATE-AND-EVALUATE] Arbre ${effectiveTreeId} introuvable, recherche d'un arbre alternatif...`);
-        const firstTree = await prisma.treeBranchLeafTree.findFirst({
-          select: { id: true, name: true }
-        });
-        
-        if (!firstTree) {
-          throw new Error('Aucun arbre TreeBranchLeaf trouvé dans la base de données');
-        }
-        
-        effectiveTreeId = firstTree.id;
-      } else {
-      }
+    } else if (effectiveTreeId) {
+      // treeId fourni: on fait confiance au frontend (skip la vérification DB pour la perf)
+      // Le treeId sera de toute façon validé plus tard lors de l'évaluation
     }
     
     // 2. Vérifier et gérer le Lead (clientId)

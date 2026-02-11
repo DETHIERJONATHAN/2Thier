@@ -1376,12 +1376,7 @@ const TBL: React.FC<TBLProps> = ({
   const doAutosave = useCallback(async (data: TBLFormData, changedField?: string) => {
     if (!api || !tree) return;
 
-    // 🎯 FIX DONNÉES FANTÔMES: Bloquer les GET dès qu'un changement utilisateur est détecté
-    // Les valeurs correctes arriveront via broadcastCalculatedRefresh avec les valeurs inline
     const isRealUserChange = Boolean(changedField && changedField !== 'NULL');
-    if (isRealUserChange) {
-      blockGetRequestsTemporarily(800); // 🚀 FIX 10/02/2026: Réduit de 1500ms à 800ms - le broadcast débloque immédiatement
-    }
 
     // ✅ Devis enregistrés: on n'écrit PAS au fil de l'eau, SAUF si on est en train d'éditer une révision (-N)
     // déjà créée (hasCopiedDevis=true). Dans ce cas, on écrase la révision au fil de l'eau.
@@ -1416,6 +1411,12 @@ const TBL: React.FC<TBLProps> = ({
         return;
       }
       lastQueuedSignatureRef.current = sig;
+
+      // � FIX R11: SUPPRIMÉ blockGetRequestsTemporarily(800) ici
+      // Ce blockGET(800) ÉCRASAIT la protection 5000ms de handleFieldChangeImpl
+      // car blockGetRequestsTemporarily remplaçait changeInProgressUntil par now+800
+      // au lieu de garder le max(existant, new). La protection 5000ms dans
+      // handleFieldChangeImpl suffit et couvre tout le cycle.
 
       if (!submissionId) {
         // ✅ Brouillon global (default-draft): persistant sans lead.
@@ -1531,6 +1532,7 @@ const TBL: React.FC<TBLProps> = ({
         }
         
         const evaluationResponse = await api.post('/api/tbl/submissions/create-and-evaluate', {
+          treeId: effectiveTreeId || tree.id, // 🚀 FIX R9: Toujours envoyer treeId pour éviter une requête DB inutile côté backend
           submissionId,
           formData,
           clientId: effectiveClientId,
@@ -1588,17 +1590,20 @@ const TBL: React.FC<TBLProps> = ({
       setIsAutosaving(false);
       autosaveInFlightRef.current = false;
       
-      // 🎯 FIX: Toujours débloquer les GET à la fin de l'autosave
-      // (même si le broadcast a été skippé)
-      unblockGetRequests();
-
       const pending = pendingAutosaveRef.current;
       if (pending) {
+        // 🔥 FIX R11: NE PAS débloquer les GET si une requête pending existe
+        // La requête pending va être traitée immédiatement, et les GETs
+        // retourneraient des valeurs stale (anciennes) pendant cette fenêtre
         pendingAutosaveRef.current = null;
         // Micro-coalescing: exécuter juste après la fin de la requête courante.
         setTimeout(() => {
           void doAutosave(pending.data, pending.changedField);
         }, 0);
+      } else if (!debounceActiveRef.current) {
+        // 🔥 FIX R11: Ne débloquer que s'il n'y a NI pending NI debounce actif
+        // Si debounce actif = l'utilisateur tape encore → le prochain doAutosave gèrera le unblock
+        unblockGetRequests();
       }
     }
   }, [api, tree, effectiveTreeId, normalizePayload, computeSignature, submissionId, leadId, isDefaultDraft, isDevisSaved, hasCopiedDevis, previewNoSave, broadcastCalculatedRefresh]);
@@ -2180,6 +2185,13 @@ const TBL: React.FC<TBLProps> = ({
       return;
     }
 
+    // 🚀 FIX STALE VALUES: Bloquer les GET IMMÉDIATEMENT lors du changement utilisateur
+    // Avant, les GET n'étaient bloqués qu'après 300ms de debounce (dans doAutosave)
+    // Pendant ces 300ms, un GET pouvait retourner des valeurs stale et écraser l'affichage
+    if (!fieldId?.startsWith('__mirror_data_')) {
+      blockGetRequestsTemporarily(5000); // 🔥 FIX R10: Protection 5s (couvre debounce 300ms + latence réseau), sera reset par unblockGetRequests dans doAutosave
+    }
+
     // Si la validation passe, mettre à jour le state
     setFormData(prev => {
       const next: Record<string, unknown> = { ...prev, [fieldId]: value };
@@ -2271,15 +2283,20 @@ const TBL: React.FC<TBLProps> = ({
       // 🔧 FIX RACE CONDITION: Marquer qu'un changement est en debounce
       debounceActiveRef.current = true;
       
+      // 🚀 FIX STALE VALUES: Capturer `next` et `realFieldId` dans des variables locales
+      // pour éviter toute capture stale dans la closure du setTimeout
+      const capturedNext = { ...next } as TBLFormData;
+      const capturedFieldId = realFieldId;
+      
       debounceTimerRef.current = setTimeout(() => {
         // 🔧 FIX RACE CONDITION: Debounce terminé, prêt à évaluer
         debounceActiveRef.current = false;
         if (immediateEvaluateRef.current) {
-          immediateEvaluateRef.current(next as TBLFormData, realFieldId);
+          immediateEvaluateRef.current(capturedNext, capturedFieldId);
         } else {
           console.warn('⚠️ [TBL] immediateEvaluateRef pas encore initialisé');
         }
-      }, 300);
+      }, 100); // 🚀 FIX R12: réduit de 300ms à 100ms pour réponse plus rapide
 
       // ✅ Si on édite un devis enregistré "original", créer tout de suite la révision en base
       // pour qu'elle existe même si l'utilisateur quitte l'écran.

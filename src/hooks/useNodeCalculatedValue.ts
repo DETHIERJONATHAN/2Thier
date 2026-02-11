@@ -52,11 +52,17 @@ export function protectAllDisplayFieldsAfterBroadcast(durationMs: number = 2000)
 /**
  * 🚦 Active le blocage des GET pour une durée donnée
  * Appelé par TBL.tsx AVANT d'envoyer une requête au backend
+ * 🔥 FIX R11: Utilise Math.max pour NE JAMAIS RÉDUIRE le temps de blocage existant
+ * Problème corrigé: blockGET(800) dans doAutosave écrasait blockGET(5000) de handleFieldChangeImpl
  */
 export function blockGetRequestsTemporarily(durationMs: number = 2000): void {
   const now = Date.now();
-  changeInProgressUntil = now + durationMs;
-  console.log(`🚫 [useNodeCalculatedValue] GET bloqués jusqu'à ${new Date(changeInProgressUntil).toISOString().slice(11, 23)}`);
+  const newUntil = now + durationMs;
+  // 🔥 FIX R11: Ne jamais réduire le temps de blocage existant
+  if (newUntil > changeInProgressUntil) {
+    changeInProgressUntil = newUntil;
+    console.log(`🚫 [useNodeCalculatedValue] GET bloqués jusqu'à ${new Date(changeInProgressUntil).toISOString().slice(11, 23)}`);
+  }
 }
 
 /**
