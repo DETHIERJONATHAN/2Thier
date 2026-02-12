@@ -2285,7 +2285,9 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
       if (currentValue !== null && currentValue !== undefined && currentValue !== '' && lastAutoSelectedValueRef.current !== null) {
         console.log(`🧹 [Auto-Clear] Champ "${field.label}": Aucune option disponible, vidage de la sélection`);
         lastAutoSelectedValueRef.current = null;
-        onChange?.(null);
+        // 🚀 FIX R18: Utiliser handleChange au lieu de onChange direct
+        // pour passer par toute la chaîne (normalisation, protection, etc.)
+        handleChange(null);
         setLocalValue(null);
       }
       return;
@@ -2303,7 +2305,9 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
       if (lastAutoSelectedValueRef.current !== firstOption.value) {
         console.log(`🔄 [Auto-Select] Champ "${field.label}": Valeur "${currentValue}" invalide, sélection automatique de "${firstOption.label}"`);
         lastAutoSelectedValueRef.current = firstOption.value;
-        onChange?.(firstOption.value);
+        // 🚀 FIX R18: Utiliser handleChange au lieu de onChange direct
+        // pour que le système de trigger index voit le changement et recalcule les display fields
+        handleChange(firstOption.value);
         setLocalValue(firstOption.value);
       }
     }

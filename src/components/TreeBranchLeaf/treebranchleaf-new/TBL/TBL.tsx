@@ -2067,7 +2067,10 @@ const TBL: React.FC<TBLProps> = ({
 
   // 🎯 Implémentation complète de handleFieldChange avec toutes les dépendances
   const handleFieldChangeImpl = useCallback((fieldId: string, value: string | number | boolean | string[] | null | undefined) => {
-    console.log(`🔄🔄🔄 [TBL] handleFieldChangeImpl appelé: fieldId=${fieldId}, value=${value}, type=${typeof fieldId}`);
+    // 🚀 FIX R18: Normaliser undefined → null pour garantir la sérialisation JSON
+    // JSON.stringify({ key: undefined }) supprime la clé = le backend ne voit pas le clear
+    const normalizedValue = value === undefined ? null : value;
+    console.log(`🔄🔄🔄 [TBL] handleFieldChangeImpl appelé: fieldId=${fieldId}, value=${normalizedValue}, type=${typeof fieldId}`);
     
     // ⚡ IGNORER COMPLÈTEMENT les champs miroirs - ils sont gérés automatiquement par le système
     if (fieldId?.startsWith('__mirror_data_')) {
@@ -2215,8 +2218,8 @@ const TBL: React.FC<TBLProps> = ({
 
     // Si la validation passe, mettre à jour le state
     setFormData(prev => {
-      const next: Record<string, unknown> = { ...prev, [fieldId]: value };
-      console.log(`✅✅✅ [TBL] setFormData - Mise à jour: fieldId=${fieldId}, value=${value}, formData.keys=${Object.keys(next).length}`);
+      const next: Record<string, unknown> = { ...prev, [fieldId]: normalizedValue };
+      console.log(`✅✅✅ [TBL] setFormData - Mise à jour: fieldId=${fieldId}, value=${normalizedValue}, formData.keys=${Object.keys(next).length}`);
       console.log(`📦 [TBL] formData COMPLET après mise à jour:`, next);
       
       // 🔗 NOUVEAU : Si le champ est une référence partagée (alias), ajouter aussi la clé shared-ref-*
@@ -2238,7 +2241,7 @@ const TBL: React.FC<TBLProps> = ({
         if (fieldDef?.sharedReferenceId) {
           const sharedRefKey = fieldDef.sharedReferenceId;
           console.log(`🔗 [TBL] Champ ${fieldId} est un alias de ${sharedRefKey}, ajout au formData`);
-          next[sharedRefKey] = value;
+          next[sharedRefKey] = normalizedValue;
         }
 
         // Si le fieldId est déjà un shared-ref-*, chercher les aliases pour les mettre à jour aussi
@@ -2248,7 +2251,7 @@ const TBL: React.FC<TBLProps> = ({
               const aliases = section.fields.filter((sf: any) => sf.sharedReferenceId === fieldId);
               aliases.forEach((alias: any) => {
                 console.log(`🔗 [TBL] Mise à jour alias ${alias.id} depuis shared-ref ${fieldId}`);
-                next[alias.id] = value;
+                next[alias.id] = normalizedValue;
               });
             }
           }

@@ -2077,14 +2077,16 @@ async function getSourceValue(
   labelMap?: Map<string, string>
 ): Promise<string | null> {
   // Par dÃƒÂ©faut (ou option SELECT): utiliser le fieldId configurÃƒÂ©
+  // 🚀 FIX R18: Utiliser preserveEmpty=true pour que les selects vides retournent null
+  // au lieu de "0", permettant au lookup de détecter "aucune sélection"
   if (!sourceOption || sourceOption.type === 'select') {
-    const result = fieldId ? await getNodeValue(fieldId, submissionId, prisma, valueMap) : null;
+    const result = fieldId ? await getNodeValue(fieldId, submissionId, prisma, valueMap, { preserveEmpty: true }) : null;
     return result;
   }
   
   // Option 2 (CHAMP): rÃƒÂ©cupÃƒÂ©rer la valeur du champ source
   if (sourceOption.type === 'field' && sourceOption.sourceField) {
-    const result = await getNodeValue(sourceOption.sourceField, submissionId, prisma, valueMap);
+    const result = await getNodeValue(sourceOption.sourceField, submissionId, prisma, valueMap, { preserveEmpty: true });
     return result;
   }
   
