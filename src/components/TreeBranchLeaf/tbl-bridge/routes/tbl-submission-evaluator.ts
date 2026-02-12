@@ -1365,6 +1365,27 @@ const displayDeps = new Map<string, Set<string>>(); // nodeId → Set<dependsOn>
     console.log(`🚀 [FIX R12] mode=change: ${affectedDisplayFieldIds.size} DISPLAY fields affectés sur ${displayCapNodeIds.size} total (skip ${displayCapNodeIds.size - affectedDisplayFieldIds.size})`);
   }
 
+  // 🔥 FIX R20: Mettre à jour le valueMap pour les champs LINK AVANT la boucle d'évaluation
+  // PROBLÈME: Les champs Link (ex: 2c5e01cc "Onduleur" lié à 78c78d8d via JUMP) ne sont
+  // rafraîchis qu'APRÈS la boucle d'évaluation (ligne ~1685). Mais si un DISPLAY field
+  // (ex: 8906d529 "Prix onduleur") fait un table lookup qui utilise un champ LINK
+  // comme columnSourceOption.sourceField, il lit la valeur STALE du Link dans le valueMap
+  // → retourne le prix de l'ANCIEN onduleur au lieu du nouveau → toujours "un pas en arrière".
+  // FIX: Injecter la valeur fraîche du champ source (changedFieldId) dans le valueMap
+  // de tous les linked fields AVANT que les DISPLAY fields ne soient évalués.
+  if (mode === 'change' && linkedFieldsToRefresh.size > 0 && formData) {
+    for (const [linkedNodeId, linkInfo] of linkedFieldsToRefresh.entries()) {
+      // La valeur fraîche du champ source est dans formData (c'est le champ que l'utilisateur a changé)
+      if (linkInfo.targetNodeId in formData) {
+        const freshValue = formData[linkInfo.targetNodeId];
+        if (freshValue !== null && freshValue !== undefined) {
+          valueMap.set(linkedNodeId, freshValue);
+          console.log(`🔗 [FIX R20] valueMap LINK pre-refresh: ${linkedNodeId.substring(0,8)} = "${freshValue}" (source: ${linkInfo.targetNodeId.substring(0,8)})`);
+        }
+      }
+    }
+  }
+
   // 🔥 DÉDUPLICATION: Un même nodeId peut apparaître plusieurs fois dans capacities
   // (ex: formula + autre capacité). On déduplique pour éviter de calculer 3 fois le même champ !
   const processedDisplayFields = new Set<string>();
