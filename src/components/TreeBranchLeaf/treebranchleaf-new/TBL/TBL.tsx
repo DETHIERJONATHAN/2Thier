@@ -2325,7 +2325,7 @@ const TBL: React.FC<TBLProps> = ({
         } else {
           console.warn('⚠️ [TBL] immediateEvaluateRef pas encore initialisé');
         }
-      }, 100); // 🚀 FIX R12: réduit de 300ms à 100ms pour réponse plus rapide
+      }, 300); // 🚀 PERF FIX R15: Revenir à 300ms - 100ms cause trop de requêtes = lenteur !
 
       // ✅ Si on édite un devis enregistré "original", créer tout de suite la révision en base
       // pour qu'elle existe même si l'utilisateur quitte l'écran.
