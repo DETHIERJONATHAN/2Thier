@@ -151,6 +151,8 @@ const TBL: React.FC<TBLProps> = ({
   });
   const [leadId, setLeadId] = useState<string | undefined>(urlLeadId);
   const [isLoadingLead, setIsLoadingLead] = useState<boolean>(!!urlLeadId);
+  // 🚀 FIX R17: Loading state pour initDefaultDraft (mode brouillon global)
+  const [isInitializingDraft, setIsInitializingDraft] = useState<boolean>(!urlLeadId);
 
   const [leadSelectorVisible, setLeadSelectorVisible] = useState(false);
   const [leadCreatorVisible, setLeadCreatorVisible] = useState(false);
@@ -867,16 +869,7 @@ const TBL: React.FC<TBLProps> = ({
     }
   }, [effectiveTreeId]);
   
-  // 🔥 DEBUG TEMPORAIRE: Vérifier si rawNodes est peuplé
-  console.log('[TBL] 🔥 DEBUG rawNodes:', {
-    useFixed,
-    rawNodesLength: rawNodes.length,
-    oldDataRawNodesLength: oldData.rawNodes?.length || 0,
-    newDataRawNodesLength: newData.rawNodes?.length || 0,
-    oldDataLoading: oldData.loading,
-    newDataLoading: newData.loading,
-    rawNodesSample: rawNodes.slice(0, 3).map(n => ({ id: n.id, type: n.type, label: n.label, parentId: n.parentId }))
-  });
+  // � FIX R17: Log déplacé derrière un guard pour éviter le spam à chaque render
 
   // 🎯 Hook de validation pour les onglets et champs obligatoires
   const { validationState, actions: validationActions } = useTBLValidation({
@@ -933,6 +926,7 @@ const TBL: React.FC<TBLProps> = ({
       // Ne pas initialiser si on a un lead ou si pas d'API
       if (!api || !effectiveTreeId || !defaultDraftId || !isGlobalDraftMode) {
         console.log('⏭️ [TBL] initDefaultDraft skip - conditions not met');
+        setIsInitializingDraft(false);
         return;
       }
 
@@ -1029,6 +1023,8 @@ const TBL: React.FC<TBLProps> = ({
         console.warn('⚠️ [TBL] Impossible d\'initialiser le devis par défaut:', error);
         // Mode fallback: on continue sans draft persistant
         setDevisName('Brouillon');
+      } finally {
+        setIsInitializingDraft(false);
       }
     };
     
@@ -2323,11 +2319,10 @@ const TBL: React.FC<TBLProps> = ({
         }
       }, 300); // 🚀 PERF FIX R15: Revenir à 300ms - 100ms cause trop de requêtes = lenteur !
 
-      // ✅ Si on édite un devis enregistré "original", créer tout de suite la révision en base
-      // pour qu'elle existe même si l'utilisateur quitte l'écran.
-      if (isDevisSaved && !hasCopiedDevis && leadId) {
-        void ensureCompletedRevisionExists(next as TBLFormData);
-      }
+      // 🚀 FIX R17: Suppression de l'appel ensureCompletedRevisionExists ici.
+      // Le backend gère déjà le versioning automatiquement dans doAutosave:
+      // si status='completed' et que ce n'est pas déjà une révision, il clone.
+      // Un seul POST suffit (comme en mode brouillon).
       
       // � DÉSACTIVÉ: L'événement tbl-field-changed créait une race condition
       // Il déclenchait des requêtes GET dans useNodeCalculatedValue AVANT que le backend
@@ -3252,7 +3247,9 @@ const TBL: React.FC<TBLProps> = ({
   // (Ancienne fonction calcul kWh supprimée: sera réintroduite si UI dédiée)
 
   // Gérer le chargement de la configuration et des données
-  if (dataLoading || configLoading) {
+  // 🚀 FIX R17: Inclure isInitializingDraft pour empêcher l'utilisateur d'encoder
+  // pendant que les données ne sont pas encore restaurées
+  if (dataLoading || configLoading || isInitializingDraft) {
     return (
       <div className="flex justify-center items-center h-96">
         <Spin size="large">
