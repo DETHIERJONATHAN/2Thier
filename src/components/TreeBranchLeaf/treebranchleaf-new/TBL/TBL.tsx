@@ -785,16 +785,14 @@ const TBL: React.FC<TBLProps> = ({
         providedName: planned,
         forceNewSubmission: true,
         changedFieldId,
-        evaluationMode: 'open'  // ✅ TOUJOURS recalculer TOUS les display fields (comme brouillon)
+        evaluationMode: 'change'  // 🚀 FIX R16: Même moteur que brouillon - recalcul ciblé par triggers
       });
 
       const newId = (resp as any)?.submission?.id;
       if (!newId) return;
 
-      // 🔥 FIX 30/01/2026: Marquer que le submissionId vient de changer
-      // Les prochains appels dans les 3 secondes utiliseront mode='open'
-      submissionIdJustChangedUntilRef.current = Date.now() + 3000;
-      console.log(`🔄 [TBL] Révision créée → forcer mode='open' pendant 3s`);
+      // � FIX R16: Plus besoin de fenêtre 3s en mode 'open' - le trigger index gère tout
+      // Le clone a copié toutes les données, seul le champ modifié déclenche un recalcul ciblé
 
       // Basculer l'éditeur sur la révision (on n'écrase plus jamais l'original)
       revisionCreatedFromSubmissionIdRef.current = submissionId;
@@ -1545,8 +1543,6 @@ const TBL: React.FC<TBLProps> = ({
         // - 'autosave': sauvegarde périodique → skip DISPLAY fields
         // - 'open': chargement initial OU après changement de submissionId OU clientId
         const isUserChange = changedField && changedField !== 'NULL';
-        // 🔥 FIX 30/01/2026: Forcer mode='open' si le submissionId vient de changer
-        const submissionIdJustChanged = Date.now() < submissionIdJustChangedUntilRef.current;
         // 🔥 FIX 01/02/2026: Forcer mode='open' si le clientId (leadId) a changé
         const clientIdJustChanged = effectiveClientId !== lastClientIdRef.current && effectiveClientId !== null;
         if (clientIdJustChanged) {
@@ -1554,10 +1550,12 @@ const TBL: React.FC<TBLProps> = ({
           lastClientIdRef.current = effectiveClientId;
         }
         
+        // 🚀 FIX R16: Le moteur est IDENTIQUE pour tous les modes (brouillon, lead, enregistré)
+        // Seul un changement de clientId force 'open' (nouvelles données client)
         let effectiveMode: 'open' | 'change' | 'autosave' = isUserChange ? 'change' : 'autosave';
-        if (submissionIdJustChanged || clientIdJustChanged) {
+        if (clientIdJustChanged) {
           effectiveMode = 'open';
-          console.log(`🔄 [TBL] Mode forcé à 'open' car ${submissionIdJustChanged ? 'submissionId' : 'clientId'} a changé`);
+          console.log(`🔄 [TBL] Mode forcé à 'open' car clientId a changé`);
         }
         
         const evaluationResponse = await api.post('/api/tbl/submissions/create-and-evaluate', {
@@ -1574,9 +1572,7 @@ const TBL: React.FC<TBLProps> = ({
         const returnedSubmissionId = evaluationResponse?.submission?.id;
         const effectiveSubmissionId = returnedSubmissionId || submissionId;
         if (returnedSubmissionId && returnedSubmissionId !== submissionId) {
-          // 🔥 FIX 30/01/2026: Marquer que le submissionId vient de changer
-          submissionIdJustChangedUntilRef.current = Date.now() + 3000;
-          console.log(`🔄 [TBL] Backend a créé révision → forcer mode='open' pendant 3s`);
+          // � FIX R16: Plus besoin de fenêtre 3s - le trigger index gère le recalcul ciblé
           
           setSubmissionId(returnedSubmissionId);
           setIsLoadedDevis(false);

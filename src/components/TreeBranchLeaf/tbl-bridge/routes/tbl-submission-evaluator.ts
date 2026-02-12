@@ -2315,12 +2315,11 @@ router.post('/submissions/create-and-evaluate', async (req, res) => {
       });
       
       
-      // 🛡️ FIX 2026-01-31: Quand une révision vient d'être créée, forcer le mode 'open'
-      // pour recalculer TOUS les champs DISPLAY avec les données copiées depuis la soumission parente.
-      // Sinon, seuls les champs qui matchent le trigger seraient recalculés et les autres garderaient des valeurs obsolètes.
-      const effectiveMode = revisionJustCreated ? 'open' : mode;
-      if (revisionJustCreated) {
-      }
+      // � FIX R16: Le moteur de calcul est IDENTIQUE quel que soit le mode (brouillon, lead, enregistré).
+      // Le clone copie toutes les données → les valeurs DISPLAY sont déjà correctes.
+      // Seul le champ modifié par l'utilisateur déclenche un recalcul ciblé via triggers.
+      // On ne force PLUS 'open' après révision → le mode 'change' fonctionne parfaitement.
+      const effectiveMode = mode;
       
       // C. Évaluer et persister les capacités avec NO-OP - 🔑 PASSER LE FORMDATA pour réactivité !
       const evalStats = await evaluateCapacitiesForSubmission(submissionId!, organizationId!, userId || null, effectiveTreeId, cleanFormData, effectiveMode, triggerFieldId);
