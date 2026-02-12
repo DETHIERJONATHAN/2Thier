@@ -1490,6 +1490,13 @@ const displayDeps = new Map<string, Set<string>>(); // nodeId → Set<dependsOn>
           prisma,
           valueMap  // 🔑 PASSER LE VALUEMAP avec les données fraîches !
         );
+        
+        // 🔧 FIX R19: evaluateVariableOperation retourne { value: null } au lieu de throw
+        // quand il n'y a pas de TreeBranchLeafNodeVariable. Le catch-block contient le
+        // fallback vers condition/formula mais n'est jamais atteint → déclencher manuellement.
+        if (capacityResult.value === null && (capacityResult as any).operationDetail?.type === 'missing-variable') {
+          throw new Error(`[FIX R19] Variable manquante pour ${capacity.nodeId} - fallback condition/formula`);
+        }
       } catch (varError) {
         // 🔧 FIX: Si pas de variable mais le noeud a une condition, évaluer la condition directement
         // Cas: noeud avec hasCondition=true et des formules mais SANS TreeBranchLeafNodeVariable
