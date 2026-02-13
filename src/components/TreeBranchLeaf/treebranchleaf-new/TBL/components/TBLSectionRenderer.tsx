@@ -27,7 +27,8 @@ import {
   Grid,
   Button,
   Form,
-  Tooltip
+  Tooltip,
+  Drawer
 } from 'antd';
 import { 
   BranchesOutlined,
@@ -342,6 +343,16 @@ const extractHexTuple = (color: string): [number, number, number] | undefined =>
       intVal & 255
     ];
   }
+  // 8-char hex (with alpha) — extract RGB only (ignore alpha)
+  if (normalized.length === 8) {
+    const intVal = parseInt(normalized.substring(0, 6), 16);
+    if (Number.isNaN(intVal)) return undefined;
+    return [
+      (intVal >> 16) & 255,
+      (intVal >> 8) & 255,
+      intVal & 255
+    ];
+  }
   if (normalized.length === 6) {
     const intVal = parseInt(normalized, 16);
     if (Number.isNaN(intVal)) return undefined;
@@ -365,6 +376,40 @@ const withAlpha = (color: string, alpha: number, fallbackAccent?: string): strin
     return withAlpha(fallbackAccent, alpha);
   }
   return `rgba(14,165,233,${alpha})`;
+};
+
+/**
+ * Normalise une couleur hex potentiellement avec canal alpha (8 chars) en hex 6 chars.
+ * Gère aussi les formats rgb/rgba en extrayant un hex propre.
+ */
+const normalizeHexColor = (color: string): string => {
+  if (!color || typeof color !== 'string') return color;
+  const trimmed = color.trim();
+  // Hex 8-char (#rrggbbaa) → garder seulement #rrggbb
+  if (/^#[0-9a-fA-F]{8}$/.test(trimmed)) {
+    return trimmed.substring(0, 7);
+  }
+  // rgb(r,g,b) ou rgba(r,g,b,a) → convertir en hex
+  const rgbMatch = trimmed.match(/^rgba?\((\d+),\s*(\d+),\s*(\d+)/);
+  if (rgbMatch) {
+    const r = parseInt(rgbMatch[1]).toString(16).padStart(2, '0');
+    const g = parseInt(rgbMatch[2]).toString(16).padStart(2, '0');
+    const b = parseInt(rgbMatch[3]).toString(16).padStart(2, '0');
+    return `#${r}${g}${b}`;
+  }
+  return trimmed;
+};
+
+/**
+ * Détermine si une couleur hex est "sombre" (luminosité < 128).
+ * Utilisé pour adapter le texte (blanc sur fond sombre, teal sur fond clair).
+ */
+const isColorDark = (hex: string): boolean => {
+  const tuple = extractHexTuple(hex);
+  if (!tuple) return true; // Par défaut considérer comme sombre
+  // Luminance relative perceptuelle (formule ITU-R BT.601)
+  const luminance = 0.299 * tuple[0] + 0.587 * tuple[1] + 0.114 * tuple[2];
+  return luminance < 128;
 };
 
 const buildDefaultVariant = (accent: string): Partial<DisplayAppearanceTokens> => ({
@@ -1001,6 +1046,12 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
   
   // 🎯 État pour ouvrir/fermer la section Données (bulles)
   const [isDataSectionOpen, setIsDataSectionOpen] = useState(true);
+  
+  // 🎯 État pour le panneau de détails enfants (clic sur bulle parent)
+  const [expandedBranchId, setExpandedBranchId] = useState<string | null>(null);
+  // Refs pour partager les maps entre le IIFE de rendu et le Drawer
+  const branchChildrenMap_ref = useRef<Map<string, TBLField[]>>(new Map());
+  const branchInfoMap_ref = useRef<Map<string, { id: string; label: string; type: string }>>(new Map());
   
   // 🚫 PROTECTION ANTI-DOUBLE-CLIC pour les boutons de répétition
   const [isRepeating, setIsRepeating] = useState<Record<string, boolean>>({});
@@ -1853,6 +1904,7 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
         variant: parentAppearance?.variant ?? metadataAppearance.variant ?? metadataFieldAppearance.variant ?? node.appearance_variant,
         width: parentAppearance?.width ?? metadataAppearance.width ?? metadataFieldAppearance.width ?? node.appearance_width,
         labelColor: parentAppearance?.labelColor ?? metadataAppearance.labelColor ?? metadataFieldAppearance.labelColor,
+        bubbleColor: metadataAppearance.bubbleColor ?? metadataFieldAppearance.bubbleColor,
       },
       config: {
         // 🎨 HÉRITAGE: parentAppearance PREND PRIORITÉ pour les shared references
@@ -1860,6 +1912,7 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
         width: parentAppearance?.width ?? node.appearance_width ?? metadataAppearance.width as string ?? undefined,
         variant: parentAppearance?.variant ?? node.appearance_variant ?? metadataAppearance.variant as string ?? undefined,
         labelColor: parentAppearance?.labelColor ?? metadataAppearance.labelColor as string ?? undefined,
+        bubbleColor: metadataAppearance.bubbleColor as string ?? undefined,
         minLength: node.text_minLength ?? undefined,
         maxLength: node.text_maxLength ?? undefined,
         rows: node.text_rows ?? undefined,
@@ -4462,6 +4515,14 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
     // 🎯 Détection des champs "Total" pour style distinctif (teal foncé + texte blanc)
     const isTotalField = (field.label || '').toLowerCase().includes('total');
     
+    // 🎨 Couleur de bulle personnalisée (surcharge le style auto "total")
+    const rawBubbleColor = (
+      (field.appearanceConfig as Record<string, unknown> | undefined)?.bubbleColor ||
+      (field.config as Record<string, unknown> | undefined)?.bubbleColor ||
+      ((field.metadata as Record<string, unknown> | undefined)?.appearance as Record<string, unknown> | undefined)?.bubbleColor
+    ) as string | undefined;
+    const customBubbleColor = rawBubbleColor ? normalizeHexColor(rawBubbleColor) : undefined;
+    
     // 🎨 NOUVEAU: Système d'icônes pour les cartes de données
     // L'icône peut être définie dans field.config.displayIcon ou field.metadata.displayIcon
     // Sinon on détecte automatiquement selon le label
@@ -4529,8 +4590,25 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
     let labelStyle = buildDisplayLabelStyle(displayAppearance.tokens);
     let valueStyle = buildDisplayValueStyle(displayAppearance.tokens);
     
-    // 🎨 Surcharge pour les champs Total : fond teal foncé (#0b5c6b) + texte blanc
-    if (isTotalField) {
+    // 🎨 Surcharge pour les champs Total ou avec couleur de bulle personnalisée
+    if (customBubbleColor) {
+      const isDark = isColorDark(customBubbleColor);
+      cardStyle = {
+        ...cardStyle,
+        background: `linear-gradient(135deg, ${customBubbleColor} 0%, ${customBubbleColor}dd 100%)`,
+        backgroundColor: customBubbleColor,
+        borderColor: customBubbleColor
+      };
+      labelStyle = {
+        ...labelStyle,
+        color: isDark ? 'rgba(255, 255, 255, 0.85)' : 'rgba(0, 0, 0, 0.75)'
+      };
+      valueStyle = {
+        ...valueStyle,
+        color: isDark ? '#ffffff' : '#1a1a1a',
+        fontWeight: 600
+      };
+    } else if (isTotalField) {
       cardStyle = {
         ...cardStyle,
         background: 'linear-gradient(135deg, #0b5c6b 0%, #0d4f59 100%)',
@@ -4550,7 +4628,12 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
     
     // 🎨 DESIGN MODERNE: Bulles rondes compactes
     // Icône + Valeur seulement, label en tooltip
-    const bubbleSize = isTotalField ? 90 : 80; // px - plus petit pour mobile
+    
+    // 🎨 Déterminer si on utilise un style "foncé" (total ou couleur custom foncée)
+    const hasCustomBubble = Boolean(customBubbleColor);
+    const usesDarkBubble = hasCustomBubble ? isColorDark(customBubbleColor!) : isTotalField;
+    
+    const bubbleSize = (isTotalField || hasCustomBubble) ? 90 : 80; // px - plus petit pour mobile
     
     // 🔢 Détecter si c'est une copie (suffixe -1, -2, etc.)
     const copyMatch = (field.id || '').match(/-(\d+)$/);
@@ -4565,10 +4648,14 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
       flexDirection: 'column',
       alignItems: 'center',
       justifyContent: 'center',
-      background: isTotalField 
-        ? 'linear-gradient(135deg, #0b5c6b 0%, #0d4f59 100%)'
-        : 'linear-gradient(135deg, #f0fdfa 0%, #e0f7f5 100%)',
-      border: isTotalField ? '2px solid #094d56' : '2px solid #99f6e4',
+      background: hasCustomBubble
+        ? `linear-gradient(135deg, ${customBubbleColor} 0%, ${customBubbleColor}dd 100%)`
+        : isTotalField 
+          ? 'linear-gradient(135deg, #0b5c6b 0%, #0d4f59 100%)'
+          : 'linear-gradient(135deg, #f0fdfa 0%, #e0f7f5 100%)',
+      border: hasCustomBubble
+        ? `2px solid ${customBubbleColor}`
+        : isTotalField ? '2px solid #094d56' : '2px solid #99f6e4',
       boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
       cursor: 'default',
       transition: 'all 0.2s ease',
@@ -4596,15 +4683,15 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
     };
     
     const iconStyle: React.CSSProperties = {
-      fontSize: isTotalField ? 24 : 22,
+      fontSize: (isTotalField || hasCustomBubble) ? 24 : 22,
       marginBottom: 2,
-      filter: isTotalField ? 'brightness(0) invert(1)' : 'none',
+      filter: usesDarkBubble ? 'brightness(0) invert(1)' : 'none',
     };
     
     const valueTextStyle: React.CSSProperties = {
-      fontSize: isTotalField ? 14 : 12,
+      fontSize: (isTotalField || hasCustomBubble) ? 14 : 12,
       fontWeight: 600,
-      color: isTotalField ? '#ffffff' : '#0d9488',
+      color: usesDarkBubble ? '#ffffff' : '#0d9488',
       textAlign: 'center',
       lineHeight: 1.2,
       maxWidth: bubbleSize - 16,
@@ -4831,8 +4918,77 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
                     
                     if (isTBLDebugEnabled()) tblLog(`🎯🎯🎯 [DATA SECTION ROW] Rendering ${filteredFields.length} filtered fields in Row:`, filteredFields.map(f => ({ id: f.id, label: f.label })));
                     
-                    const groupedBySuffix = groupDisplayFieldsBySuffix(filteredFields);
-                    return groupedBySuffix.reduce<React.ReactElement[]>((elements, { suffix, fields: groupedFields }) => {
+                    // 🎯 GROUPEMENT PARENT-ENFANT: Identifier les champs enfants de branches (conteneurs)
+                    // Pour chaque champ, trouver son parent dans allNodes et vérifier si c'est une branche
+                    const sectionNodeId = section.id.replace(/-section$/, '');
+                    const fieldIdsInSection = new Set(filteredFields.map(f => f.id));
+                    
+                    // Map: branchNodeId → children field IDs in this section
+                    const branchChildrenMap = new Map<string, TBLField[]>();
+                    // Map: branchNodeId → branch node info (label, etc.)
+                    const branchInfoMap = new Map<string, { id: string; label: string; type: string }>();
+                    // Set of field IDs that are children of a branch (should be hidden from main grid)
+                    const childFieldIds = new Set<string>();
+                    
+                    for (const field of filteredFields) {
+                      const node = allNodes.find(n => n.id === field.id);
+                      if (!node || !node.parentId) continue;
+                      
+                      // Vérifier si le parent direct est une branche (conteneur) et pas la section elle-même
+                      const parentNode = allNodes.find(n => n.id === node.parentId);
+                      if (!parentNode) continue;
+                      
+                      // Le parent est une branche si: type === 'branch' ET n'est PAS la section directe
+                      // Et le parent doit aussi NE PAS être une leaf_option/repeater
+                      const isParentBranch = (
+                        parentNode.type === 'branch' && 
+                        parentNode.id !== sectionNodeId &&
+                        !parentNode.type.includes('leaf') &&
+                        !parentNode.type.includes('section') &&
+                        !parentNode.type.includes('root')
+                      );
+                      
+                      if (isParentBranch) {
+                        // Vérifier que la branche parent n'a PAS d'options (sinon c'est un select, pas un conteneur)
+                        const branchChildren = allNodes.filter(n => n.parentId === parentNode.id);
+                        const hasOptions = branchChildren.some(c => c.type === 'leaf_option' || c.type === 'leaf_option_field');
+                        
+                        if (!hasOptions) {
+                          // C'est un vrai conteneur → grouper les enfants
+                          if (!branchChildrenMap.has(parentNode.id)) {
+                            branchChildrenMap.set(parentNode.id, []);
+                            branchInfoMap.set(parentNode.id, {
+                              id: parentNode.id,
+                              label: parentNode.label || parentNode.name || 'Groupe',
+                              type: parentNode.type
+                            });
+                          }
+                          branchChildrenMap.get(parentNode.id)!.push(field);
+                          childFieldIds.add(field.id);
+                        }
+                      }
+                    }
+                    
+                    // Séparer: champs visibles (top-level) vs champs cachés (enfants de branches)
+                    const topLevelFields = filteredFields.filter(f => !childFieldIds.has(f.id));
+                    
+                    // 🔗 Sauvegarder dans les refs pour le Drawer (hors IIFE)
+                    branchChildrenMap_ref.current = branchChildrenMap;
+                    branchInfoMap_ref.current = branchInfoMap;
+                    
+                    if (isTBLDebugEnabled() && branchChildrenMap.size > 0) {
+                      tblLog(`🎯 [DATA SECTION GROUPS] ${branchChildrenMap.size} branches avec enfants:`, 
+                        Array.from(branchChildrenMap.entries()).map(([branchId, children]) => ({
+                          branchId,
+                          branchLabel: branchInfoMap.get(branchId)?.label,
+                          childrenCount: children.length,
+                          children: children.map(c => c.label)
+                        }))
+                      );
+                    }
+                    
+                    const groupedBySuffix = groupDisplayFieldsBySuffix(topLevelFields);
+                    const topLevelElements = groupedBySuffix.reduce<React.ReactElement[]>((elements, { suffix, fields: groupedFields }) => {
                       if (groupedFields.length > 0) {
                         if (isTBLDebugEnabled()) tblLog(`🎯 [DATA SECTION GROUP] Suffix "${suffix}" -> ${groupedFields.length} champs`);
                       }
@@ -4843,8 +4999,127 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
                       });
                       return elements.concat(groupElements);
                     }, []);
+                    
+                    // 🎯 Ajouter les bulles de branches (groupes cliquables) après les champs top-level
+                    const branchBubbles = Array.from(branchChildrenMap.entries()).map(([branchId, children]) => {
+                      const branchInfo = branchInfoMap.get(branchId)!;
+                      const isExpanded = expandedBranchId === branchId;
+                      const bubbleCols = Math.max(1, section.config?.columnsDesktop ?? 9);
+                      const bubbleColsMobile = Math.max(1, section.config?.columnsMobile ?? 3);
+                      const bubbleSpan = Math.ceil(24 / bubbleCols);
+                      const bubbleSpanMob = Math.ceil(24 / bubbleColsMobile);
+                      
+                      return (
+                        <Col key={`branch-${branchId}`} xs={bubbleSpanMob} sm={bubbleSpanMob} md={bubbleSpan} lg={bubbleSpan} xl={bubbleSpan} style={{ marginBottom: 12 }}>
+                          <Tooltip title={`${branchInfo.label} (${children.length} champs)`} placement="top">
+                            <div 
+                              onClick={() => setExpandedBranchId(isExpanded ? null : branchId)}
+                              style={{
+                                width: 90,
+                                height: 90,
+                                borderRadius: '50%',
+                                display: 'flex',
+                                flexDirection: 'column',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                background: isExpanded
+                                  ? 'linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)'
+                                  : 'linear-gradient(135deg, #eef2ff 0%, #e0e7ff 100%)',
+                                border: isExpanded
+                                  ? '2px solid #4338ca'
+                                  : '2px solid #a5b4fc',
+                                boxShadow: isExpanded 
+                                  ? '0 4px 12px rgba(99, 102, 241, 0.35)'
+                                  : '0 2px 8px rgba(0,0,0,0.08)',
+                                cursor: 'pointer',
+                                transition: 'all 0.25s ease',
+                                margin: '0 auto',
+                                position: 'relative',
+                              }}
+                              className="hover:shadow-lg hover:scale-105"
+                            >
+                              {/* Badge nombre d'enfants */}
+                              <span style={{
+                                position: 'absolute',
+                                top: -4,
+                                right: -4,
+                                width: 22,
+                                height: 22,
+                                borderRadius: '50%',
+                                backgroundColor: '#6366f1',
+                                color: '#ffffff',
+                                fontSize: 11,
+                                fontWeight: 700,
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                border: '2px solid #ffffff',
+                                boxShadow: '0 1px 3px rgba(0,0,0,0.2)',
+                              }}>
+                                {children.length}
+                              </span>
+                              <span style={{ fontSize: 24, marginBottom: 2, filter: isExpanded ? 'brightness(0) invert(1)' : 'none' }}>📂</span>
+                              <span style={{
+                                fontSize: 11,
+                                fontWeight: 600,
+                                color: isExpanded ? '#ffffff' : '#4338ca',
+                                textAlign: 'center',
+                                lineHeight: 1.2,
+                                maxWidth: 74,
+                                overflow: 'hidden',
+                                textOverflow: 'ellipsis',
+                                whiteSpace: 'nowrap',
+                              }}>
+                                {branchInfo.label}
+                              </span>
+                            </div>
+                          </Tooltip>
+                        </Col>
+                      );
+                    });
+                    
+                    return [...topLevelElements, ...branchBubbles];
                   })()}
                   </Row>
+                  
+                  {/* 🎯 DRAWER: Panneau latéral pour les champs enfants d'une branche */}
+                  {expandedBranchId && branchChildrenMap_ref.current.has(expandedBranchId) && (() => {
+                    // Note: On reconstruit les infos ici car le Drawer est en dehors du IIFE
+                    const branchChildren = branchChildrenMap_ref.current.get(expandedBranchId)!;
+                    const branchLabel = branchInfoMap_ref.current.get(expandedBranchId)?.label || 'Détails';
+                    return (
+                      <Drawer
+                        title={
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                            <span style={{ fontSize: 20 }}>📂</span>
+                            <span style={{ fontWeight: 600, color: '#4338ca' }}>{branchLabel}</span>
+                            <span style={{
+                              backgroundColor: '#eef2ff',
+                              color: '#4338ca',
+                              borderRadius: 12,
+                              padding: '2px 8px',
+                              fontSize: 12,
+                              fontWeight: 600,
+                            }}>
+                              {branchChildren.length} champs
+                            </span>
+                          </div>
+                        }
+                        placement="right"
+                        open={true}
+                        onClose={() => setExpandedBranchId(null)}
+                        width={Math.min(400, window.innerWidth * 0.4)}
+                        styles={{
+                          body: { padding: 16, backgroundColor: '#fafafe' },
+                        }}
+                        mask={false}
+                      >
+                        <Row gutter={[12, 12]} justify="center">
+                          {branchChildren.map((childField) => renderDataSectionField(childField))}
+                        </Row>
+                      </Drawer>
+                    );
+                  })()}
                 </div>
               </>
             ) : visibilityFilteredFields.length > 0 ? (
