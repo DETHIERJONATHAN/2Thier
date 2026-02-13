@@ -88,8 +88,8 @@ app.use(cors({
 console.log('✅ [DEBUG] CORS configuré');
 
 console.log('🔧 [DEBUG] Configuration JSON parser...');
-app.use(express.json());
-console.log('✅ [DEBUG] JSON parser configuré');
+app.use(express.json({ limit: '50mb' }));
+console.log('✅ [DEBUG] JSON parser configuré (limit: 50mb)');
 
 console.log('🔧 [DEBUG] Configuration Cookie parser...');
 app.use(cookieParser());

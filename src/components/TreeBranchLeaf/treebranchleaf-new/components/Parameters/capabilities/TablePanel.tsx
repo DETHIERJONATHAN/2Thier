@@ -1328,7 +1328,7 @@ const TablePanel: React.FC<TablePanelProps> = ({ treeId: initialTreeId, nodeId, 
         );
       }
     }));
-    return [firstCol, ...rest];
+    return [firstCol, ...rest].filter(Boolean);
   }, [cfg, readOnly, renameRow, setCellMatrix]);
 
   // Gestion des instances de tableaux
@@ -1550,7 +1550,9 @@ const TablePanel: React.FC<TablePanelProps> = ({ treeId: initialTreeId, nodeId, 
         // Dans l'affichage du tableau, A1 apparaît une seule fois comme titre de première colonne
         
         // Colonnes = Première ligne complète (AVEC A1 en position 0)
-        columns = jsonData[0].map((col, idx) => {
+        // ⚠️ Array.from() au lieu de .map() pour gérer les sparse arrays XLSX
+        // (.map() IGNORE les trous empty, Array.from() les convertit en undefined)
+        columns = Array.from(jsonData[0], (col, idx) => {
           if (col === null || col === undefined) return `Colonne ${idx + 1}`;
           return String(col);
         });
@@ -1558,18 +1560,18 @@ const TablePanel: React.FC<TablePanelProps> = ({ treeId: initialTreeId, nodeId, 
         // ✅ FIX CRITIQUE: Backend attend rows = array de arrays (lignes complètes)
         // PAS un array de strings (juste les labels)!
         rows = jsonData.map((row) => {
-          // Retourner la ligne COMPLÈTE avec toutes les cellules
-          return row.map(val => val === null || val === undefined ? '' : val);
+          // ⚠️ Array.from() pour gérer les sparse arrays (cellules vides dans Excel)
+          return Array.from(row, val => val === null || val === undefined ? '' : val);
         });
         
         // Data = Corps SANS première ligne NI première colonne (pour affichage)
-        tableData = jsonData.slice(1).map(row => row.slice(1));
+        tableData = jsonData.slice(1).map(row => Array.from(row.slice(1), v => v ?? null));
       } else {
         // Mode columns: TOUTES les colonnes sont importÃ©es (y compris la premiÃ¨re)
-        columns = jsonData[0].map((col, idx) => 
+        columns = Array.from(jsonData[0], (col, idx) => 
           typeof col === 'string' ? col : `Colonne ${idx + 1}`
         );
-        tableData = jsonData.slice(1);
+        tableData = jsonData.slice(1).map(row => Array.from(row, v => v ?? null));
       }
       
       const next: TableConfig = {
@@ -1619,22 +1621,10 @@ const TablePanel: React.FC<TablePanelProps> = ({ treeId: initialTreeId, nodeId, 
             type: next.type,
             columns: next.columns,
             rows: next.rows || [],
-            data: next.data || [],
             meta: next.meta || {},
           };
           
-          console.log('🗂️ TablePanel: ========================================');
-          console.log('🗂️ TablePanel: 📤 PAYLOAD À ENVOYER AU SERVEUR');
-          console.log('🗂️ TablePanel: name:', payload.name);
-          console.log('🗂️ TablePanel: type:', payload.type);
-          console.log('🗂️ TablePanel: columns:', payload.columns.length, 'items');
-          console.log('🗂️ TablePanel: rows:', payload.rows.length, 'items');
-          console.log('🗂️ TablePanel: data:', payload.data.length, 'lignes');
-          console.log('🗂️ TablePanel: Premières rows:', payload.rows.slice(0, 10));
-          console.log('🗂️ TablePanel: Dernières rows:', payload.rows.slice(-10));
-          console.log('🗂️ TablePanel: Première ligne data:', payload.data[0]);
-          console.log('🗂️ TablePanel: Dernière ligne data:', payload.data[payload.data.length - 1]);
-          console.log('🗂️ TablePanel: ========================================');
+          console.log('🗂️ TablePanel: 📤 PAYLOAD:', payload.name, '|', payload.columns.length, 'cols |', payload.rows.length, 'rows');
           
           console.log('🗂️ TablePanel: 🚀 Envoi POST vers /api/treebranchleaf/nodes/' + nodeId + '/tables');
           const created = await api.post(`/api/treebranchleaf/nodes/${nodeId}/tables`, payload);

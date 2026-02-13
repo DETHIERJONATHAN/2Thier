@@ -159,13 +159,13 @@ router.post('/nodes/:nodeId/tables', async (req, res) => {
       updatedAt: new Date(),
     };
 
-    // PrÃƒÂ©parer les colonnes
+    // PrÃƒÂ©parer les colonnes (col peut être null si sparse array côté client)
     const tableColumnsData = columns.map((col: any, index: number) => {
-      const colName = typeof col === 'string' ? col : (col.name || `Colonne ${index + 1}`);
-      const colType = typeof col === 'object' && col.type ? col.type : 'text';
-      const colWidth = typeof col === 'object' && col.width ? col.width : null;
-      const colFormat = typeof col === 'object' && col.format ? col.format : null;
-      const colMetadata = typeof col === 'object' && col.metadata ? col.metadata : {};
+      const colName = typeof col === 'string' ? col : (col && col.name ? col.name : `Colonne ${index + 1}`);
+      const colType = typeof col === 'object' && col !== null && col.type ? col.type : 'text';
+      const colWidth = typeof col === 'object' && col !== null && col.width ? col.width : null;
+      const colFormat = typeof col === 'object' && col !== null && col.format ? col.format : null;
+      const colMetadata = typeof col === 'object' && col !== null && col.metadata ? col.metadata : {};
 
       return {
         id: randomUUID(),
