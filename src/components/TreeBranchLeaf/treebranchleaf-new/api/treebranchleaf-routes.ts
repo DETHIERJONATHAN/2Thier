@@ -8478,7 +8478,7 @@ router.post('/evaluate/formula', async (req, res) => {
     const valueStore = (values && typeof values === 'object') ? (values as Record<string, unknown>) : {};
 
     const evaluation = await evaluateExpression(expr, createRolesProxy(rolesMap), {
-      resolveVariable: (nodeId) => coerceToNumber(valueStore[nodeId] ?? valueStore[nodeId.toLowerCase()]),
+      resolveVariable: (nodeId) => coerceToNumber(valueStore[nodeId]),
       strictVariables: strict,
       enableCache,
       divisionByZeroValue,

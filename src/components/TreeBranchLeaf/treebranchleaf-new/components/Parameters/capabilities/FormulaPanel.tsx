@@ -865,6 +865,8 @@ const FormulaPanel: React.FC<FormulaPanelProps> = ({ nodeId, onChange, readOnly 
   // Chargement des nœuds pour le cache
   const loadNode = useCallback(async (id: string) => {
     if (!id || nodeCache[id]) return;
+    // 🛡️ Les formules, conditions et tables ne sont pas des nœuds TBL
+    if (id.startsWith('node-formula:') || id.startsWith('formula:') || id.startsWith('condition:') || id.startsWith('node-condition:')) return;
     try {
       const data = await api.get(`/api/treebranchleaf/nodes/${id}`) as { label?: string; type?: string } | null;
       if (!data) return;

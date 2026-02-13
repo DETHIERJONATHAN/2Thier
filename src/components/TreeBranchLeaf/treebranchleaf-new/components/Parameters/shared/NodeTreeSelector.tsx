@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { TreeSelect, Modal, Space, Tabs, Typography, Alert, Spin, Segmented, Tooltip, List, Input } from 'antd';
+import { TreeSelect, Modal, Space, Tabs, Typography, Alert, Spin, Segmented, Tooltip, List, Input, Collapse } from 'antd';
 import { useAuthenticatedApi } from '../../../../../../hooks/useAuthenticatedApi';
 
 type NodeLite = { id: string; parentId?: string | null; label: string; type: string; subType?: string | null };
@@ -384,6 +384,55 @@ const NodeTreeSelector: React.FC<Props> = ({ nodeId, open, onClose, onSelect, se
     nodes.forEach(n => { map[n.id] = n; });
     return map;
   }, [nodes]);
+
+  // 🆕 Grouper les valeurs calculées par onglet (top-level branch)
+  const calculatedValuesByOnglet = useMemo(() => {
+    if (!calculatedValues.length || !nodes.length) return [];
+
+    const nodesMap = new Map(nodes.map(n => [n.id, n]));
+
+    // Remonter la chaîne des parents jusqu'au branch dont le parent est un 'tree'
+    const findOnglet = (nodeId: string): { id: string; label: string } | null => {
+      let current = nodesMap.get(nodeId);
+      if (!current) return null;
+      const visited = new Set<string>();
+      while (current) {
+        if (visited.has(current.id)) break;
+        visited.add(current.id);
+        const parent = current.parentId ? nodesMap.get(current.parentId) : null;
+        if (!parent || parent.type === 'tree') {
+          // current est le branch de niveau onglet
+          if (current.type === 'branch') {
+            return { id: current.id, label: current.label || 'Sans nom' };
+          }
+          return null;
+        }
+        current = parent;
+      }
+      return null;
+    };
+
+    const groups: Record<string, { ongletLabel: string; items: typeof calculatedValues }> = {};
+    const ungrouped: typeof calculatedValues = [];
+
+    for (const cv of calculatedValues) {
+      const onglet = findOnglet(cv.id);
+      if (onglet) {
+        if (!groups[onglet.id]) {
+          groups[onglet.id] = { ongletLabel: onglet.label, items: [] };
+        }
+        groups[onglet.id].items.push(cv);
+      } else {
+        ungrouped.push(cv);
+      }
+    }
+
+    const result = Object.values(groups);
+    if (ungrouped.length > 0) {
+      result.push({ ongletLabel: 'Autres', items: ungrouped });
+    }
+    return result;
+  }, [calculatedValues, nodes]);
 
   // Synchroniser le type de token selon le type de nœud choisi
   useEffect(() => {
@@ -1256,86 +1305,108 @@ const NodeTreeSelector: React.FC<Props> = ({ nodeId, open, onClose, onSelect, se
                       showIcon
                       style={{ marginBottom: 8 }}
                     />
-                    <List
-                      size="small"
-                      bordered
-                      dataSource={calculatedValues.filter(cv => 
-                        !calculatedValueSearch || 
-                        cv.label.toLowerCase().includes(calculatedValueSearch.toLowerCase()) ||
-                        (cv.calculatedBy && cv.calculatedBy.toLowerCase().includes(calculatedValueSearch.toLowerCase()))
-                      )}
-                      renderItem={(item) => {
-                        const isSelected = value === `calculated:${item.id}`;
-                        const sourceIcon = item.calculatedBy?.startsWith('formula') ? '🧮' : 
-                                          item.calculatedBy?.startsWith('condition') ? '⚡' : 
-                                          item.calculatedBy?.startsWith('table') ? '📊' : '📈';
-                        return (
-                          <List.Item
-                            onClick={() => setValue(`calculated:${item.id}`)}
-                            style={{ 
-                              cursor: 'pointer', 
-                              backgroundColor: isSelected ? '#1890ff' : '#f0fff4',
-                              color: isSelected ? 'white' : 'inherit',
-                              transition: 'all 0.2s',
-                              borderLeft: '3px solid #52c41a'
-                            }}
-                          >
-                            <Space direction="vertical" size={2} style={{ width: '100%' }}>
-                              <Space>
-                                <span>{sourceIcon}</span>
-                                <Typography.Text strong style={{ color: isSelected ? 'white' : 'inherit' }}>
-                                  {item.label}
-                                </Typography.Text>
-                                <Typography.Text 
-                                  style={{ 
-                                    fontSize: '10px',
-                                    fontFamily: 'monospace',
-                                    color: isSelected ? 'rgba(255,255,255,0.6)' : '#bbb'
-                                  }}
-                                >
-                                  [{item.id.slice(0, 8)}]
-                                </Typography.Text>
-                                {item.calculatedValue !== null && (
-                                  <Typography.Text 
-                                    style={{ 
-                                      color: isSelected ? 'rgba(255,255,255,0.9)' : '#52c41a',
-                                      fontWeight: 'bold'
-                                    }}
-                                  >
-                                    = {item.calculatedValue}
-                                  </Typography.Text>
-                                )}
-                                {isSelected && <span>✓</span>}
-                              </Space>
-                              <Space size={16} style={{ paddingLeft: '24px' }}>
-                                {item.parentLabel && (
-                                  <Typography.Text 
-                                    type="secondary" 
-                                    style={{ 
-                                      fontSize: '11px',
-                                      color: isSelected ? 'rgba(255,255,255,0.8)' : '#666'
-                                    }}
-                                  >
-                                    📁 {item.parentLabel}
-                                  </Typography.Text>
-                                )}
-                                {item.calculatedBy && (
-                                  <Typography.Text 
-                                    type="secondary" 
-                                    style={{ 
-                                      fontSize: '10px',
-                                      color: isSelected ? 'rgba(255,255,255,0.7)' : '#999',
-                                      fontStyle: 'italic'
-                                    }}
-                                  >
-                                    Source: {item.calculatedBy}
-                                  </Typography.Text>
-                                )}
-                              </Space>
-                            </Space>
-                          </List.Item>
+                    <Collapse
+                      defaultActiveKey={[]}
+                      style={{ background: '#fafafa' }}
+                      items={calculatedValuesByOnglet.map((group, groupIdx) => {
+                        const filteredItems = group.items.filter(cv =>
+                          !calculatedValueSearch ||
+                          cv.label.toLowerCase().includes(calculatedValueSearch.toLowerCase()) ||
+                          (cv.calculatedBy && cv.calculatedBy.toLowerCase().includes(calculatedValueSearch.toLowerCase()))
                         );
-                      }}
+                        if (filteredItems.length === 0) return null;
+                        return {
+                          key: String(groupIdx),
+                          label: (
+                            <Space>
+                              <span>📂</span>
+                              <Typography.Text strong>{group.ongletLabel}</Typography.Text>
+                              <Typography.Text type="secondary" style={{ fontSize: '11px' }}>
+                                ({filteredItems.length})
+                              </Typography.Text>
+                            </Space>
+                          ),
+                          children: (
+                            <List
+                              size="small"
+                              dataSource={filteredItems}
+                              renderItem={(item) => {
+                                const isSelected = value === `calculated:${item.id}`;
+                                const sourceIcon = item.calculatedBy?.startsWith('formula') ? '🧮' :
+                                                  item.calculatedBy?.startsWith('condition') ? '⚡' :
+                                                  item.calculatedBy?.startsWith('table') ? '📊' : '📈';
+                                return (
+                                  <List.Item
+                                    onClick={() => setValue(`calculated:${item.id}`)}
+                                    style={{
+                                      cursor: 'pointer',
+                                      backgroundColor: isSelected ? '#1890ff' : '#f0fff4',
+                                      color: isSelected ? 'white' : 'inherit',
+                                      transition: 'all 0.2s',
+                                      borderLeft: '3px solid #52c41a',
+                                      padding: '6px 12px'
+                                    }}
+                                  >
+                                    <Space direction="vertical" size={2} style={{ width: '100%' }}>
+                                      <Space>
+                                        <span>{sourceIcon}</span>
+                                        <Typography.Text strong style={{ color: isSelected ? 'white' : 'inherit' }}>
+                                          {item.label}
+                                        </Typography.Text>
+                                        <Typography.Text
+                                          style={{
+                                            fontSize: '10px',
+                                            fontFamily: 'monospace',
+                                            color: isSelected ? 'rgba(255,255,255,0.6)' : '#bbb'
+                                          }}
+                                        >
+                                          [{item.id.slice(0, 8)}]
+                                        </Typography.Text>
+                                        {item.calculatedValue !== null && (
+                                          <Typography.Text
+                                            style={{
+                                              color: isSelected ? 'rgba(255,255,255,0.9)' : '#52c41a',
+                                              fontWeight: 'bold'
+                                            }}
+                                          >
+                                            = {item.calculatedValue}
+                                          </Typography.Text>
+                                        )}
+                                        {isSelected && <span>✓</span>}
+                                      </Space>
+                                      <Space size={16} style={{ paddingLeft: '24px' }}>
+                                        {item.parentLabel && (
+                                          <Typography.Text
+                                            type="secondary"
+                                            style={{
+                                              fontSize: '11px',
+                                              color: isSelected ? 'rgba(255,255,255,0.8)' : '#666'
+                                            }}
+                                          >
+                                            📁 {item.parentLabel}
+                                          </Typography.Text>
+                                        )}
+                                        {item.calculatedBy && (
+                                          <Typography.Text
+                                            type="secondary"
+                                            style={{
+                                              fontSize: '10px',
+                                              color: isSelected ? 'rgba(255,255,255,0.7)' : '#999',
+                                              fontStyle: 'italic'
+                                            }}
+                                          >
+                                            Source: {item.calculatedBy}
+                                          </Typography.Text>
+                                        )}
+                                      </Space>
+                                    </Space>
+                                  </List.Item>
+                                );
+                              }}
+                            />
+                          )
+                        };
+                      }).filter(Boolean)}
                     />
                   </>
                 )}

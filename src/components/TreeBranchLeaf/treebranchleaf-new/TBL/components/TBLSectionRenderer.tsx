@@ -1332,16 +1332,28 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
       const resolvedMobileSpan = options?.forceFullWidth ? 24 : mobileSpan;
       const resolvedDesktopSpan = options?.forceFullWidth ? 24 : desktopSpan;
 
+      // 🎯 Fix colonnes non-divisibles par 24 (5, 7, 9, 10, 11 colonnes)
+      // Le système de spans Ant Design arrondit et perd des colonnes (ex: 9→8)
+      // Solution: flex CSS pour obtenir exactement le bon pourcentage
+      const activeColumns = isMobile ? columnsMobile : columnsDesktop;
+      const activeFieldColumns = isMobile ? finalMobileColumns : finalDesktopColumns;
+      const needsFlexOverride = 24 % activeColumns !== 0;
+      const flexStyle = needsFlexOverride ? {
+        flex: `0 0 ${(activeFieldColumns / activeColumns) * 100}%`,
+        maxWidth: `${(activeFieldColumns / activeColumns) * 100}%`,
+      } : undefined;
+
       return {
         xs: resolvedMobileSpan ?? fallbackXs,
         sm: resolvedMobileSpan ?? fallbackSm,
         md: resolvedDesktopSpan ?? fallbackMd,
         lg: resolvedDesktopSpan ?? fallbackLg,
         xl: resolvedDesktopSpan ?? fallbackXl,
-        xxl: resolvedDesktopSpan ?? fallbackXxl
+        xxl: resolvedDesktopSpan ?? fallbackXxl,
+        ...(flexStyle ? { style: flexStyle } : {})
       };
     },
-    [clampValue, extractWidthHints, getResponsiveColSpan, inferDefaultDesktopColumns, parseWidthToken]
+    [clampValue, extractWidthHints, getResponsiveColSpan, inferDefaultDesktopColumns, parseWidthToken, isMobile]
   );
 
   const getUniformDisplayColProps = useCallback((section: TBLSection) => {
@@ -4587,8 +4599,20 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
     );
     const photoTargetNodeId = (field as any).linkConfig?.targetNodeId || (field as any).link_targetNodeId;
 
+    // 🎯 Bulles Données: raccordées au réglage columnsDesktop de la section (Paramètres TBL)
+    const bubbleCols = Math.max(1, section.config?.columnsDesktop ?? 9);
+    const bubbleColsMobile = Math.max(1, section.config?.columnsMobile ?? 3);
+    const bubbleActiveCols = isMobile ? bubbleColsMobile : bubbleCols;
+    const bubbleSpan = Math.ceil(24 / bubbleCols);
+    const bubbleSpanMob = Math.ceil(24 / bubbleColsMobile);
+    const bubbleNeedsFlex = 24 % bubbleActiveCols !== 0;
+    const bubbleFlexStyle = bubbleNeedsFlex ? {
+      flex: `0 0 ${100 / bubbleActiveCols}%`,
+      maxWidth: `${100 / bubbleActiveCols}%`,
+    } : undefined;
+
     return (
-      <Col key={field.id} xs={8} sm={6} md={4} lg={4} xl={3} style={{ marginBottom: 12 }}>
+      <Col key={field.id} xs={bubbleSpanMob} sm={bubbleSpanMob} md={bubbleSpan} lg={bubbleSpan} xl={bubbleSpan} style={{ marginBottom: 12, ...bubbleFlexStyle }}>
         {/* 🖼️ MODE PHOTO: Si linkConfig.mode === 'PHOTO' OU link_mode === 'PHOTO', utiliser ImageDisplayBubble */}
         {isPhotoLink && photoTargetNodeId ? (
           <ImageDisplayBubble
