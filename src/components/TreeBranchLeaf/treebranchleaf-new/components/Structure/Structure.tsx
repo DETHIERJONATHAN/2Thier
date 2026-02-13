@@ -49,6 +49,18 @@ import type {
 
 const { Text } = Typography;
 
+// Type pour les éléments de la liste aplatie (nœuds + en-têtes de sous-onglets)
+interface FlatItem {
+  node?: TreeBranchLeafNode;
+  level: number;
+  subtabHeader?: {
+    name: string;
+    parentId: string;
+    childCount: number;
+    key: string;
+  };
+}
+
 interface StructureProps {
   tree: TreeBranchLeafTree | null;
   nodes: TreeBranchLeafNode[];
@@ -111,6 +123,17 @@ const StructureComponent: React.FC<StructureProps> = ({
   const [filters, setFilters] = useState<SearchOptions>(searchState.filters);
   const lastFiltersSignature = useRef<string | null>(null);
   const [filtersOpen, setFiltersOpen] = useState(false);
+  // 📂 État des sous-onglets pliés/dépliés dans l'arbre
+  const [collapsedSubTabs, setCollapsedSubTabs] = useState<Set<string>>(new Set());
+
+  const handleToggleSubTab = useCallback((key: string) => {
+    setCollapsedSubTabs(prev => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  }, []);
   const _expandedSignatureRef = useRef<string>('');
 
   // ExpandedNodes monitoring temporairement supprimé
@@ -156,6 +179,8 @@ const StructureComponent: React.FC<StructureProps> = ({
     const ids = getAllExpandableIds(nodes);
     // N'appeler que pour ceux non encore ouverts
     ids.forEach(id => { if (!expandedNodes.has(id)) onToggleExpanded(id); });
+    // Aussi ouvrir tous les sous-onglets
+    setCollapsedSubTabs(new Set());
   }, [expandedNodes, getAllExpandableIds, nodes, onToggleExpanded]);
 
   const handleCollapseAll = useCallback(() => {
@@ -198,61 +223,118 @@ const StructureComponent: React.FC<StructureProps> = ({
     return a;
   }, []);
 
+  // Utilitaire: obtenir le premier sous-onglet d'un nœud
+  const getFirstSubTab = useCallback((n: TreeBranchLeafNode): string | null => {
+    const raw = n.metadata?.subTab;
+    if (Array.isArray(raw) && raw.length > 0) return String(raw[0]).trim() || null;
+    if (typeof raw === 'string' && raw.trim()) return raw.trim();
+    return null;
+  }, []);
+
   // Fonction récursive pour construire la liste plate
   const flattenNodes = useCallback((
     nodeList: TreeBranchLeafNode[],
     level = 0,
-    result: Array<{ node: TreeBranchLeafNode; level: number }> = []
-  ): Array<{ node: TreeBranchLeafNode; level: number }> => {
-    
-    // Log simplifié (moins verbeux)
-    // console.log(`🔧 [Structure flattenNodes] Level ${level}, processing ${nodeList.length} nodes`);
+    result: FlatItem[] = []
+  ): FlatItem[] => {
     
     for (const node of nodeList) {
       // Appliquer la recherche texte
       if (searchQuery && !node.label.toLowerCase().includes(searchQuery.toLowerCase())) continue;
 
       // Appliquer les filtres avancés
-  let ok = true;
-  const f: SearchOptions = filters || {};
-  // type (nouvelle clé nodeTypes ou legacy 'type' dans UIState)
-  const types: NodeTypeKey[] | undefined = f.nodeTypes || legacyTypes;
+      let ok = true;
+      const f: SearchOptions = filters || {};
+      const types: NodeTypeKey[] | undefined = f.nodeTypes || legacyTypes;
       if (ok && types && types.length) ok = types.includes(node.type as NodeTypeKey);
-      // capabilities
       if (ok && f.capabilities && f.capabilities.length) {
         for (const cap of f.capabilities as CapabilityKey[]) {
           const flagMap: Record<CapabilityKey, keyof TreeBranchLeafNode> = {
             data: 'hasData', formula: 'hasFormula', condition: 'hasCondition', table: 'hasTable',
-    api: 'hasAPI', link: 'hasLink', markers: 'hasMarkers', validation: 'hasCondition' // no separate flag, best-effort
+            api: 'hasAPI', link: 'hasLink', markers: 'hasMarkers', validation: 'hasCondition'
           };
           const flagKey = flagMap[cap];
-      if (flagKey && !(node as unknown as Record<string, unknown>)[flagKey]) { ok = false; break; }
+          if (flagKey && !(node as unknown as Record<string, unknown>)[flagKey]) { ok = false; break; }
         }
       }
-      // hasData / isRequired
       if (ok && typeof f.hasData === 'boolean') ok = !!node.hasData === f.hasData;
       if (ok && typeof f.isRequired === 'boolean') ok = !!node.isRequired === f.isRequired;
       if (!ok) continue;
 
       result.push({ node, level });
-      // flattenNodes log temporairement supprimé
 
-  // Récursion pour les enfants uniquement si le nœud est marqué comme étendu
-  if (node.children && expandedNodes.has(node.id)) {
-        // Recursion log temporairement supprimé
-        flattenNodes(node.children, level + 1, result);
+      // Récursion pour les enfants uniquement si le nœud est marqué comme étendu
+      if (node.children && expandedNodes.has(node.id)) {
+        // 📂 Détecter si les enfants ont des sous-onglets différents → grouper
+        const subtabMap = new Map<string, TreeBranchLeafNode[]>();
+        const noSubTab: TreeBranchLeafNode[] = [];
+
+        for (const child of node.children) {
+          const st = getFirstSubTab(child);
+          if (st) {
+            if (!subtabMap.has(st)) subtabMap.set(st, []);
+            subtabMap.get(st)!.push(child);
+          } else {
+            noSubTab.push(child);
+          }
+        }
+
+        if (subtabMap.size > 0) {
+          // D'abord les enfants SANS sous-onglet (à level+1, comme avant)
+          if (noSubTab.length > 0) {
+            flattenNodes(noSubTab, level + 1, result);
+          }
+
+          // Déterminer l'ordre des sous-onglets (utiliser metadata.subTabs du parent si disponible)
+          const parentSubTabs = Array.isArray(node.metadata?.subTabs)
+            ? (node.metadata.subTabs as string[]) : [];
+          const orderedSubTabs: string[] = [];
+          for (const st of parentSubTabs) {
+            if (subtabMap.has(st)) orderedSubTabs.push(st);
+          }
+          for (const [st] of subtabMap) {
+            if (!orderedSubTabs.includes(st)) orderedSubTabs.push(st);
+          }
+
+          // Pour chaque sous-onglet, insérer un en-tête pliable puis ses enfants
+          for (const tabName of orderedSubTabs) {
+            const group = subtabMap.get(tabName)!;
+            const key = `${node.id}::${tabName}`;
+            const isCollapsed = collapsedSubTabs.has(key);
+
+            result.push({
+              level: level + 1,
+              subtabHeader: {
+                name: tabName,
+                parentId: node.id,
+                childCount: group.length,
+                key
+              }
+            });
+
+            if (!isCollapsed) {
+              flattenNodes(group, level + 2, result);
+            }
+          }
+        } else {
+          // Pas de sous-onglets → récursion classique
+          flattenNodes(node.children, level + 1, result);
+        }
       }
     }
 
     return result;
-  }, [searchQuery, expandedNodes, filters, legacyTypes]);
+  }, [searchQuery, expandedNodes, filters, legacyTypes, collapsedSubTabs, getFirstSubTab]);
 
   // Rendu de la liste aplatie
   const flattenedNodes = useMemo(() => {
     return flattenNodes(nodes);
   }, [flattenNodes, nodes]);
 
-  const allNodesForMemo = useMemo(() => flattenedNodes.map(fn => fn.node), [flattenedNodes]);
+  const allNodesForMemo = useMemo(() => 
+    flattenedNodes.filter((fn): fn is FlatItem & { node: TreeBranchLeafNode } => !!fn.node).map(fn => fn.node),
+    [flattenedNodes]
+  );
 
   const handleDoubleClick = useCallback((node: TreeBranchLeafNode) => {
     // Double-clic : ouvrir les paramètres du nœud (et basculer vers l'onglet Paramètres sur mobile)
@@ -440,7 +522,52 @@ const StructureComponent: React.FC<StructureProps> = ({
         {flattenedNodes.length > 0 ? (
           <div style={{ padding: '2px', textAlign: 'left' }}>
             {flattenedNodes.map((item) => {
-              const { node, level } = item;
+              // 📂 Rendu d'un en-tête de sous-onglet pliable
+              if (item.subtabHeader) {
+                const { name, childCount, key } = item.subtabHeader;
+                const isSubTabCollapsed = collapsedSubTabs.has(key);
+                return (
+                  <div
+                    key={`subtab-${key}`}
+                    onClick={() => handleToggleSubTab(key)}
+                    style={{
+                      marginLeft: `${item.level * 12}px`,
+                      padding: '3px 8px',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 6,
+                      backgroundColor: isSubTabCollapsed ? '#f5f5f5' : '#f0f5ff',
+                      borderLeft: `3px solid ${isSubTabCollapsed ? '#d9d9d9' : '#1890ff'}`,
+                      borderRadius: '0 4px 4px 0',
+                      marginBottom: 1,
+                      marginTop: 2,
+                      userSelect: 'none',
+                      fontSize: 11,
+                      color: isSubTabCollapsed ? '#888' : '#1890ff',
+                      fontWeight: 600,
+                      transition: 'all 150ms'
+                    }}
+                    title={`${isSubTabCollapsed ? 'Développer' : 'Réduire'} le sous-onglet "${name}"`}
+                  >
+                    <span style={{
+                      fontSize: 8,
+                      transition: 'transform 150ms',
+                      display: 'inline-block',
+                      transform: isSubTabCollapsed ? 'rotate(0deg)' : 'rotate(90deg)'
+                    }}>▶</span>
+                    <span style={{ fontSize: 10 }}>{isSubTabCollapsed ? '📁' : '📂'}</span>
+                    <span>{name}</span>
+                    <span style={{ fontSize: 9, color: '#999', marginLeft: 'auto', fontWeight: 400 }}>
+                      {childCount} champ{childCount > 1 ? 's' : ''}
+                    </span>
+                  </div>
+                );
+              }
+
+              // Rendu d'un nœud normal
+              if (!item.node) return null;
+              const { node, level } = item as { node: TreeBranchLeafNode; level: number };
               const isSelected = selectedNode?.id === node.id;
               const isExpanded = expandedNodes.has(node.id);
               const hasChildren = (node.children?.length || 0) > 0;
