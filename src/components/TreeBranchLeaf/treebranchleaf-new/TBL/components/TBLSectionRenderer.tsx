@@ -134,7 +134,10 @@ const groupDisplayFieldsBySuffix = (fields: TBLField[]): Array<{ suffix: string;
   // Déterminer si un champ est un Total
   const isTotal = (field: TBLField): boolean => {
     const label = (field.label || '').toLowerCase();
-    return label.includes('- total') || label.endsWith(' total');
+    // 🔧 FIX: Seuls les vrais champs de totalisation sont des "Totaux"
+    // Convention: "xxx - total", "xxx -total", "total xxx" en début de label
+    // EXCLURE les labels qui contiennent simplement le mot "total" (ex: "Hauteur total")
+    return label.includes('- total') || label.startsWith('total ') || label === 'total';
   };
   
   // Extraire le suffixe numérique d'un champ (-1, -2, etc.)
@@ -2323,6 +2326,8 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
               }
 
               if (conditionalFieldsToRender.length > 0) {
+                // 🔧 FIX: Trier les champs conditionnels par leur order configuré
+                conditionalFieldsToRender.sort((a, b) => (a.order ?? 9999) - (b.order ?? 9999));
                 // Injecter juste après la copie
                 conditionalFieldsToRender.forEach((cf) => {
                   // Éviter doublons au sein du même parent/option
@@ -2979,6 +2984,9 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
               }
 
               if (conditionalFields.length > 0) {
+                // 🔧 FIX: Trier les champs conditionnels par leur order configuré
+                // pour respecter l'ordre défini dans l'arbre (ex: Hauteur total, Hauteur corniche, Base du triangle)
+                conditionalFields.sort((a, b) => (a.order ?? 9999) - (b.order ?? 9999));
                 reconstructedOption.conditionalFields = conditionalFields;
               }
 
@@ -3050,6 +3058,8 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
                 });
 
                 if (rebuiltConditional.length > 0) {
+                  // 🔧 FIX: Trier les champs conditionnels par leur order configuré
+                  rebuiltConditional.sort((a, b) => (a.order ?? 9999) - (b.order ?? 9999));
                   (selectedOption as any).conditionalFields = rebuiltConditional;
                   if (isTBLDebugEnabled()) tblLog('✅ [SECTION RENDERER] conditionalFields reconstruits dynamiquement pour option sélectionnée:', {
                     fieldId: field.id,
@@ -3067,7 +3077,10 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
           dlog(`🔍 [SECTION RENDERER] Option finale trouvée:`, selectedOption);
           
           const rawConditionalFields = selectedOption?.conditionalFields || [];
-          let conditionalFieldsToRender = rawConditionalFields;
+          // 🔧 FIX: Toujours trier les champs conditionnels par order pour respecter l'ordre configuré
+          // (même si selectedOption vient de field.options et pas de la reconstruction)
+          let conditionalFieldsToRender = [...rawConditionalFields].sort((a, b) => (a.order ?? 9999) - (b.order ?? 9999));
+
 
           // �🚨🚨 [DIAGNOSTIC VERSANT-MESURE SIMPLE] - Log TOUTES les sélections cascade
           if (field.type === 'cascade' && selectedValue) {
@@ -3330,6 +3343,9 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
               }
               
               // Injecter TOUS les champs conditionnels avec des ordres séquentiels
+              // 🔧 FIX: Trier par order configuré pour respecter l'ordre défini dans l'arbre
+              conditionalFieldsToRender.sort((a, b) => (a.order ?? 9999) - (b.order ?? 9999));
+              
               conditionalFieldsToRender.forEach((conditionalField, index) => {
               // 🔥 VÉRIFICATION AMÉLIORÉE: Éviter les doublons basé sur plusieurs critères
               const isAlreadyInFinalFields = finalFields.some(existingField => 
@@ -3345,23 +3361,27 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
                 existingField.label === conditionalField.label
               );
               
-              // 🔧 FIX CRITIQUE: Vérifier si le champ existe DÉJÀ dans section.fields (pas comme conditionnel)
-              // Cela arrive quand un champ enfant d'option a été ajouté par erreur à la liste de section
-              const existsInSectionFieldsDirectly = section.fields.some(sf => 
-                sf.id === conditionalField.id && !(sf as any).isConditional
-              );
-              
-              if (isAlreadyInFinalFields || isDuplicateBasedOnParent || existsInSectionFieldsDirectly) {
+              if (isAlreadyInFinalFields || isDuplicateBasedOnParent) {
                 if (isTBLDebugEnabled()) tblLog('🚫 [CONDITIONAL FIELD] Éviter doublon - champ déjà présent:', {
                   id: conditionalField.id,
                   label: conditionalField.label,
                   parentField: parentIdForInjection,
                   selectedOption: selectedOption.label,
                   reasonByFieldId: isAlreadyInFinalFields,
-                  reasonByParentCombo: isDuplicateBasedOnParent,
-                  reasonInSectionFields: existsInSectionFieldsDirectly
+                  reasonByParentCombo: isDuplicateBasedOnParent
                 });
                 return; // Skip cette injection pour éviter le doublon
+              }
+              
+              // 🔧 FIX: Si ce champ conditionnel existe aussi dans section.fields (comme champ normal),
+              // le marquer comme consommé pour qu'il ne soit pas rendu deux fois.
+              // On l'injecte ICI (position conditionnelle, après le cascade parent) et on skip
+              // sa position originale dans section.fields.
+              const matchInSectionFields = section.fields.find(sf => 
+                sf.id === conditionalField.id && !(sf as any).isConditional
+              );
+              if (matchInSectionFields) {
+                consumedFieldIds.add(matchInSectionFields.id);
               }
               
               // 🔥 CORRECTION : Utiliser le nom de la référence partagée au lieu du label de l'option
@@ -3495,6 +3515,7 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
     
     // 🎯 CORRECTION: Ne pas trier pour préserver l'ordre des repeaters
     // Les champs sont déjà dans le bon ordre car ajoutés séquentiellement avec nextOrder
+    
     return uniqueFields;
   }, [dlog, formData, section, allNodes, buildConditionalFieldFromNode, findAllSharedReferencesRecursive, resolveMatchingNodeFromSelectedValue]);
 

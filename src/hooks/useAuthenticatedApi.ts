@@ -27,7 +27,7 @@ const inFlight = new Map<string, Promise<unknown>>();
 const inFlightData = new Map<string, Promise<unknown>>();
 const ROUTE_TTLS: Record<string, number> = {
   '/api/field-types': 60_000,
-  '/api/ai/status': 15_000,
+  '/api/ai/status': 120_000,
   '/api/notifications': 8_000,
   // Cache statut Google pour éviter des rafales d'appels tout en restant frais
   '/api/google-auth/status': 30_000,

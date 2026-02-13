@@ -1318,7 +1318,7 @@ const transformPrismaNodeToField = (
                     visible: refNode.isVisible,
                     placeholder: refNode.text_placeholder,
                     description: refNode.description,
-                    order: refNode.order || 9999,
+                    order: typeof refNode.order === 'number' ? refNode.order : 9999,
                     sharedReferenceName: refNode.label,
                     subTabKey: effectiveSubTabs[0] ?? undefined,
                     subTabKeys: effectiveSubTabs.length ? effectiveSubTabs : undefined,
@@ -1377,7 +1377,7 @@ const transformPrismaNodeToField = (
                 visible: refNode.isVisible,
                 placeholder: refNode.text_placeholder,
                 description: refNode.description,
-                order: refNode.order || 9999, // Ordre élevé par défaut
+                order: typeof refNode.order === 'number' ? refNode.order : 9999, // Ordre élevé par défaut
                 // 🎯 AJOUT CRITIQUE: Nom de la référence partagée pour l'affichage dans TBLSectionRenderer
                 sharedReferenceName: refNode.label,
                 // 🔧 FIX: Propager les sous-onglets - hérité de l'option parente si nécessaire
@@ -1474,7 +1474,8 @@ const transformPrismaNodeToField = (
           // Cela permet aux conditions @select.xxx de fonctionner correctement
           // car elles comparent avec l'ID de l'option, pas son label
           value: optionNode.value || optionNode.id,
-          conditionalFields: conditionalFields.length > 0 ? conditionalFields : undefined,
+          // 🔧 FIX: Trier les champs conditionnels par order pour respecter l'ordre configuré
+          conditionalFields: conditionalFields.length > 0 ? conditionalFields.sort((a, b) => ((typeof a.order === 'number' ? a.order : 9999) - (typeof b.order === 'number' ? b.order : 9999))) : undefined,
           // ✨ AJOUT: Capacités TreeBranchLeaf pour la détection automatique
           hasData: optionNode.hasData,
           hasFormula: optionNode.hasFormula,
@@ -2618,20 +2619,20 @@ export const useTBLDataPrismaComplete = ({ tree_id, disabled = false, triggerRet
 
   const fetchData = useCallback(async (options?: FetchOptions) => {
     const silent = options?.silent === true;
-    console.log('🔗🔗🔗 [FETCH-DATA] fetchData appelé, tree_id:', tree_id, 'disabled:', disabled);
+    // console.log removed for performance
     if (!tree_id || disabled) return;
 
     try {
       if (!silent) setLoading(true);
       setError(null);
-      console.log('🔗🔗🔗 [FETCH-DATA] Appel API /api/treebranchleaf/trees/' + tree_id + '/nodes');
+      // console.log removed for performance
       if (verbose()) dlog('📡 [TBL-PRISMA] Récupération données:', { tree_id });
 
       const response = await api.get(`/api/treebranchleaf/trees/${tree_id}/nodes`);
-      console.log('🔗🔗🔗 [FETCH-DATA] Réponse reçue, isArray:', Array.isArray(response), 'length:', Array.isArray(response) ? response.length : 'N/A');
+      // console.log removed for performance
       
-      // 🔗 DEBUG: Vérifier les nodes avec hasLink AVANT transformation
-      if (Array.isArray(response)) {
+      // 🔗 DEBUG: Vérifier les nodes avec hasLink AVANT transformation (verbose only)
+      if (Array.isArray(response) && verbose()) {
         const nodesWithLink = (response as any[]).filter((n: any) => n.hasLink === true);
         console.log(`🔗🔗🔗 [FETCH-DATA RAW] ${nodesWithLink.length} nodes avec hasLink=true reçus de l'API:`, 
           nodesWithLink.map((n: any) => ({ id: n.id, label: n.label, hasLink: n.hasLink, link_targetNodeId: n.link_targetNodeId, link_mode: n.link_mode }))

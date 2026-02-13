@@ -2070,7 +2070,6 @@ const TBL: React.FC<TBLProps> = ({
     // 🚀 FIX R18: Normaliser undefined → null pour garantir la sérialisation JSON
     // JSON.stringify({ key: undefined }) supprime la clé = le backend ne voit pas le clear
     const normalizedValue = value === undefined ? null : value;
-    console.log(`🔄🔄🔄 [TBL] handleFieldChangeImpl appelé: fieldId=${fieldId}, value=${normalizedValue}, type=${typeof fieldId}`);
     
     // ⚡ IGNORER COMPLÈTEMENT les champs miroirs - ils sont gérés automatiquement par le système
     if (fieldId?.startsWith('__mirror_data_')) {
@@ -2235,8 +2234,7 @@ const TBL: React.FC<TBLProps> = ({
     // Si la validation passe, mettre à jour le state
     setFormData(prev => {
       const next: Record<string, unknown> = { ...prev, [fieldId]: normalizedValue };
-      console.log(`✅✅✅ [TBL] setFormData - Mise à jour: fieldId=${fieldId}, value=${normalizedValue}, formData.keys=${Object.keys(next).length}`);
-      console.log(`📦 [TBL] formData COMPLET après mise à jour:`, next);
+      // console.log removed for performance
       
       // 🔗 NOUVEAU : Si le champ est une référence partagée (alias), ajouter aussi la clé shared-ref-*
       let fieldDef: any = null;
