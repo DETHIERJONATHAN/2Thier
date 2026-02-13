@@ -1046,8 +1046,8 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
   // 🎯 État pour ouvrir/fermer la section Données (bulles)
   const [isDataSectionOpen, setIsDataSectionOpen] = useState(true);
   
-  // 🎯 État pour le panneau de détails enfants (clic sur bulle parent → enfants inline)
-  const [expandedBranchId, setExpandedBranchId] = useState<string | null>(null);
+  // 🎯 État pour les bulles parent expandées (Set pour permettre expansion multi-niveaux récursive)
+  const [expandedBranchIds, setExpandedBranchIds] = useState<Set<string>>(new Set());
   
   // 🚫 PROTECTION ANTI-DOUBLE-CLIC pour les boutons de répétition
   const [isRepeating, setIsRepeating] = useState<Record<string, boolean>>({});
@@ -4975,86 +4975,51 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
                       return elements.concat(groupElements);
                     }, []);
                     
-                    // 🎯 INLINE CHILDREN: Insérer les bulles enfants directement après la bulle parent dans le flux
-                    const finalElements: React.ReactElement[] = [];
-                    for (const el of topLevelElements) {
-                      const fieldId = el.key as string;
-                      const childrenOfField = branchChildrenMap.get(fieldId);
-                      const hasChildren = childrenOfField && childrenOfField.length > 0;
-                      const isExpanded = expandedBranchId === fieldId;
-                      
-                      if (!hasChildren) {
-                        // Bulle normale sans enfants
-                        finalElements.push(el);
-                      } else {
-                        // 🎯 Bulle parent: ajouter badge + onClick, PUIS insérer enfants inline si expanded
-                        const parentBubble = React.cloneElement(el, {
-                          key: fieldId,
-                          style: { ...(el.props as any)?.style, position: 'relative' as const },
-                          children: (
-                            <div 
-                              onClick={() => setExpandedBranchId(isExpanded ? null : fieldId)} 
-                              style={{ cursor: 'pointer', position: 'relative' }}
-                            >
-                              {/* Badge nombre d'enfants */}
-                              <span style={{
-                                position: 'absolute' as const,
-                                bottom: 2,
-                                right: 'calc(50% - 45px)',
-                                zIndex: 10,
-                                minWidth: 20,
-                                height: 20,
-                                borderRadius: 10,
-                                backgroundColor: isExpanded ? '#4f46e5' : '#6366f1',
-                                color: '#ffffff',
-                                fontSize: 10,
-                                fontWeight: 700,
-                                display: 'flex' as const,
-                                alignItems: 'center' as const,
-                                justifyContent: 'center' as const,
-                                padding: '0 5px',
-                                border: '2px solid #ffffff',
-                                boxShadow: '0 1px 3px rgba(0,0,0,0.2)',
-                                transition: 'all 0.2s ease',
-                              }}>
-                                +{childrenOfField.length}
-                              </span>
-                              {/* Ring indicator si expanded */}
-                              {isExpanded && (
-                                <div style={{
-                                  position: 'absolute' as const,
-                                  top: -3,
-                                  left: '50%',
-                                  transform: 'translateX(-50%)',
-                                  width: 96,
-                                  height: 96,
-                                  borderRadius: '50%',
-                                  border: '3px solid #6366f1',
-                                  pointerEvents: 'none' as const,
-                                  zIndex: 5,
-                                }} />
-                              )}
-                              {/* La bulle originale du champ */}
-                              {(el.props as any)?.children}
-                            </div>
-                          ),
-                        } as any);
-                        finalElements.push(parentBubble);
+                    // 🎯 FONCTION RÉCURSIVE: Insérer les bulles enfants inline après le parent, à l'infini
+                    const toggleExpand = (fieldId: string) => {
+                      setExpandedBranchIds(prev => {
+                        const next = new Set(prev);
+                        if (next.has(fieldId)) {
+                          // Fermer ce parent ET tous ses descendants
+                          next.delete(fieldId);
+                          const removeDescendants = (parentId: string) => {
+                            const children = branchChildrenMap.get(parentId);
+                            if (children) {
+                              for (const child of children) {
+                                next.delete(child.id);
+                                removeDescendants(child.id);
+                              }
+                            }
+                          };
+                          removeDescendants(fieldId);
+                        } else {
+                          next.add(fieldId);
+                        }
+                        return next;
+                      });
+                    };
+                    
+                    // Fonction récursive qui aplatit les éléments avec enfants inline
+                    const flattenWithChildren = (elements: React.ReactElement[], depth: number = 0): React.ReactElement[] => {
+                      const result: React.ReactElement[] = [];
+                      for (const el of elements) {
+                        const fieldId = el.key as string;
+                        const childrenOfField = branchChildrenMap.get(fieldId);
+                        const hasChildren = childrenOfField && childrenOfField.length > 0;
+                        const isExpanded = expandedBranchIds.has(fieldId);
                         
-                        // 🎯 Si la bulle parent est expanded, insérer les enfants juste après dans le flux
-                        if (isExpanded) {
-                          for (const childField of childrenOfField) {
-                            const childEl = renderDataSectionField(childField);
-                            // Wrapper l'enfant avec un style distinct (légère bordure indigo + animation)
-                            const styledChild = React.cloneElement(childEl, {
-                              key: `child-${childField.id}`,
+                        if (!hasChildren) {
+                          // Bulle normale (peut être enfant d'un parent) - appliquer animation + dot si depth > 0
+                          if (depth > 0) {
+                            const styledEl = React.cloneElement(el, {
+                              key: `depth${depth}-${fieldId}`,
                               style: {
-                                ...(childEl.props as any)?.style,
+                                ...(el.props as any)?.style,
                                 animation: 'tbl-child-slide-in 0.3s ease-out',
                               },
                               children: (
                                 <div style={{ position: 'relative' }}>
-                                  {/* Petit indicateur de lien vers le parent */}
+                                  {/* Petit dot coloré selon la profondeur */}
                                   <div style={{
                                     position: 'absolute' as const,
                                     top: -6,
@@ -5063,21 +5028,102 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
                                     width: 8,
                                     height: 8,
                                     borderRadius: '50%',
-                                    backgroundColor: '#6366f1',
+                                    backgroundColor: depth === 1 ? '#6366f1' : depth === 2 ? '#8b5cf6' : '#a855f7',
                                     border: '2px solid #fff',
                                     zIndex: 10,
                                   }} />
-                                  {(childEl.props as any)?.children}
+                                  {(el.props as any)?.children}
                                 </div>
                               ),
                             } as any);
-                            finalElements.push(styledChild);
+                            result.push(styledEl);
+                          } else {
+                            result.push(el);
+                          }
+                        } else {
+                          // 🎯 Bulle parent (avec enfants) : badge + onClick
+                          const parentBubble = React.cloneElement(el, {
+                            key: depth > 0 ? `depth${depth}-${fieldId}` : fieldId,
+                            style: { ...(el.props as any)?.style, position: 'relative' as const, ...(depth > 0 ? { animation: 'tbl-child-slide-in 0.3s ease-out' } : {}) },
+                            children: (
+                              <div 
+                                onClick={() => toggleExpand(fieldId)} 
+                                style={{ cursor: 'pointer', position: 'relative' }}
+                              >
+                                {/* Badge nombre d'enfants */}
+                                <span style={{
+                                  position: 'absolute' as const,
+                                  bottom: 2,
+                                  right: 'calc(50% - 45px)',
+                                  zIndex: 10,
+                                  minWidth: 20,
+                                  height: 20,
+                                  borderRadius: 10,
+                                  backgroundColor: isExpanded ? '#4f46e5' : '#6366f1',
+                                  color: '#ffffff',
+                                  fontSize: 10,
+                                  fontWeight: 700,
+                                  display: 'flex' as const,
+                                  alignItems: 'center' as const,
+                                  justifyContent: 'center' as const,
+                                  padding: '0 5px',
+                                  border: '2px solid #ffffff',
+                                  boxShadow: '0 1px 3px rgba(0,0,0,0.2)',
+                                  transition: 'all 0.2s ease',
+                                }}>
+                                  {isExpanded ? '−' : `+${childrenOfField.length}`}
+                                </span>
+                                {/* Indicateur subtil expanded: ombre lumineuse au lieu d'un ring moche */}
+                                {isExpanded && (
+                                  <div style={{
+                                    position: 'absolute' as const,
+                                    top: -2,
+                                    left: '50%',
+                                    transform: 'translateX(-50%)',
+                                    width: 92,
+                                    height: 92,
+                                    borderRadius: '50%',
+                                    background: 'transparent',
+                                    boxShadow: '0 0 0 2px rgba(99,102,241,0.3), 0 0 12px rgba(99,102,241,0.15)',
+                                    pointerEvents: 'none' as const,
+                                    zIndex: 5,
+                                    transition: 'all 0.3s ease',
+                                  }} />
+                                )}
+                                {/* Dot de profondeur si enfant lui-même */}
+                                {depth > 0 && (
+                                  <div style={{
+                                    position: 'absolute' as const,
+                                    top: -6,
+                                    left: '50%',
+                                    transform: 'translateX(-50%)',
+                                    width: 8,
+                                    height: 8,
+                                    borderRadius: '50%',
+                                    backgroundColor: depth === 1 ? '#6366f1' : depth === 2 ? '#8b5cf6' : '#a855f7',
+                                    border: '2px solid #fff',
+                                    zIndex: 10,
+                                  }} />
+                                )}
+                                {/* La bulle originale */}
+                                {(el.props as any)?.children}
+                              </div>
+                            ),
+                          } as any);
+                          result.push(parentBubble);
+                          
+                          // 🎯 Si expanded, rendre les enfants et RÉCURSIVEMENT traiter leurs propres enfants
+                          if (isExpanded) {
+                            const childElements = childrenOfField.map(childField => renderDataSectionField(childField));
+                            const flattenedChildren = flattenWithChildren(childElements, depth + 1);
+                            result.push(...flattenedChildren);
                           }
                         }
                       }
-                    }
+                      return result;
+                    };
                     
-                    return finalElements;
+                    return flattenWithChildren(topLevelElements, 0);
                   })()}
                   </Row>
                   
