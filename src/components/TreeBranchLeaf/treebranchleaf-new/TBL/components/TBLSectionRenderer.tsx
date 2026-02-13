@@ -4918,9 +4918,7 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
                     
                     if (isTBLDebugEnabled()) tblLog(`🎯🎯🎯 [DATA SECTION ROW] Rendering ${filteredFields.length} filtered fields in Row:`, filteredFields.map(f => ({ id: f.id, label: f.label })));
                     
-                    // 🎯 GROUPEMENT PARENT-ENFANT: Identifier les champs enfants de branches (conteneurs)
-                    // Pour chaque champ, trouver son parent dans allNodes et vérifier si c'est une branche
-                    const sectionNodeId = section.id.replace(/-section$/, '');
+                    // 🎯 GROUPEMENT PARENT-ENFANT: Identifier les champs qui sont enfants d'autres champs dans la section
                     const fieldIdsInSection = new Set(filteredFields.map(f => f.id));
                     
                     // Map: branchNodeId → children field IDs in this section
@@ -4934,38 +4932,23 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
                       const node = allNodes.find(n => n.id === field.id);
                       if (!node || !node.parentId) continue;
                       
-                      // Vérifier si le parent direct est une branche (conteneur) et pas la section elle-même
-                      const parentNode = allNodes.find(n => n.id === node.parentId);
-                      if (!parentNode) continue;
+                      // Vérifier si le parent direct du champ est un AUTRE champ qui est aussi dans cette section
+                      // C'est le pattern: "PV achat" (leaf_field) → enfants "PV marge" + "PV TVAC" (leaf_field)
+                      const parentFieldInSection = filteredFields.find(f => f.id === node.parentId);
                       
-                      // Le parent est une branche si: type === 'branch' ET n'est PAS la section directe
-                      // Et le parent doit aussi NE PAS être une leaf_option/repeater
-                      const isParentBranch = (
-                        parentNode.type === 'branch' && 
-                        parentNode.id !== sectionNodeId &&
-                        !parentNode.type.includes('leaf') &&
-                        !parentNode.type.includes('section') &&
-                        !parentNode.type.includes('root')
-                      );
-                      
-                      if (isParentBranch) {
-                        // Vérifier que la branche parent n'a PAS d'options (sinon c'est un select, pas un conteneur)
-                        const branchChildren = allNodes.filter(n => n.parentId === parentNode.id);
-                        const hasOptions = branchChildren.some(c => c.type === 'leaf_option' || c.type === 'leaf_option_field');
-                        
-                        if (!hasOptions) {
-                          // C'est un vrai conteneur → grouper les enfants
-                          if (!branchChildrenMap.has(parentNode.id)) {
-                            branchChildrenMap.set(parentNode.id, []);
-                            branchInfoMap.set(parentNode.id, {
-                              id: parentNode.id,
-                              label: parentNode.label || parentNode.name || 'Groupe',
-                              type: parentNode.type
-                            });
-                          }
-                          branchChildrenMap.get(parentNode.id)!.push(field);
-                          childFieldIds.add(field.id);
+                      if (parentFieldInSection) {
+                        // Ce champ a un parent qui est aussi dans la section → c'est un enfant à grouper
+                        const parentId = node.parentId;
+                        if (!branchChildrenMap.has(parentId)) {
+                          branchChildrenMap.set(parentId, []);
+                          branchInfoMap.set(parentId, {
+                            id: parentId,
+                            label: parentFieldInSection.label || 'Groupe',
+                            type: 'leaf_field'
+                          });
                         }
+                        branchChildrenMap.get(parentId)!.push(field);
+                        childFieldIds.add(field.id);
                       }
                     }
                     
@@ -5000,85 +4983,66 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
                       return elements.concat(groupElements);
                     }, []);
                     
-                    // 🎯 Ajouter les bulles de branches (groupes cliquables) après les champs top-level
-                    const branchBubbles = Array.from(branchChildrenMap.entries()).map(([branchId, children]) => {
-                      const branchInfo = branchInfoMap.get(branchId)!;
-                      const isExpanded = expandedBranchId === branchId;
-                      const bubbleCols = Math.max(1, section.config?.columnsDesktop ?? 9);
-                      const bubbleColsMobile = Math.max(1, section.config?.columnsMobile ?? 3);
-                      const bubbleSpan = Math.ceil(24 / bubbleCols);
-                      const bubbleSpanMob = Math.ceil(24 / bubbleColsMobile);
+                    // 🎯 Wraper les bulles parentes avec onClick + badge enfants
+                    const wrappedElements = topLevelElements.map(el => {
+                      const fieldId = el.key as string;
+                      const childrenOfField = branchChildrenMap.get(fieldId);
+                      if (!childrenOfField || childrenOfField.length === 0) return el;
                       
+                      const isExpanded = expandedBranchId === fieldId;
+                      // Wrapper la bulle avec un badge et un onClick
                       return (
-                        <Col key={`branch-${branchId}`} xs={bubbleSpanMob} sm={bubbleSpanMob} md={bubbleSpan} lg={bubbleSpan} xl={bubbleSpan} style={{ marginBottom: 12 }}>
-                          <Tooltip title={`${branchInfo.label} (${children.length} champs)`} placement="top">
-                            <div 
-                              onClick={() => setExpandedBranchId(isExpanded ? null : branchId)}
-                              style={{
-                                width: 90,
-                                height: 90,
-                                borderRadius: '50%',
-                                display: 'flex',
-                                flexDirection: 'column',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                background: isExpanded
-                                  ? 'linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)'
-                                  : 'linear-gradient(135deg, #eef2ff 0%, #e0e7ff 100%)',
-                                border: isExpanded
-                                  ? '2px solid #4338ca'
-                                  : '2px solid #a5b4fc',
-                                boxShadow: isExpanded 
-                                  ? '0 4px 12px rgba(99, 102, 241, 0.35)'
-                                  : '0 2px 8px rgba(0,0,0,0.08)',
-                                cursor: 'pointer',
-                                transition: 'all 0.25s ease',
-                                margin: '0 auto',
-                                position: 'relative',
-                              }}
-                              className="hover:shadow-lg hover:scale-105"
-                            >
-                              {/* Badge nombre d'enfants */}
-                              <span style={{
+                        <Col key={fieldId} {...(el.props as any)} style={{ ...(el.props as any)?.style, position: 'relative' }}>
+                          <div 
+                            onClick={() => setExpandedBranchId(isExpanded ? null : fieldId)} 
+                            style={{ cursor: 'pointer', position: 'relative' }}
+                          >
+                            {/* Badge nombre d'enfants */}
+                            <span style={{
+                              position: 'absolute',
+                              bottom: 2,
+                              right: 'calc(50% - 45px)',
+                              zIndex: 10,
+                              minWidth: 20,
+                              height: 20,
+                              borderRadius: 10,
+                              backgroundColor: isExpanded ? '#4f46e5' : '#6366f1',
+                              color: '#ffffff',
+                              fontSize: 10,
+                              fontWeight: 700,
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              padding: '0 5px',
+                              border: '2px solid #ffffff',
+                              boxShadow: '0 1px 3px rgba(0,0,0,0.2)',
+                              transition: 'all 0.2s ease',
+                            }}>
+                              +{childrenOfField.length}
+                            </span>
+                            {/* Ring indicator si expanded */}
+                            {isExpanded && (
+                              <div style={{
                                 position: 'absolute',
-                                top: -4,
-                                right: -4,
-                                width: 22,
-                                height: 22,
+                                top: -3,
+                                left: '50%',
+                                transform: 'translateX(-50%)',
+                                width: 96,
+                                height: 96,
                                 borderRadius: '50%',
-                                backgroundColor: '#6366f1',
-                                color: '#ffffff',
-                                fontSize: 11,
-                                fontWeight: 700,
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                border: '2px solid #ffffff',
-                                boxShadow: '0 1px 3px rgba(0,0,0,0.2)',
-                              }}>
-                                {children.length}
-                              </span>
-                              <span style={{ fontSize: 24, marginBottom: 2, filter: isExpanded ? 'brightness(0) invert(1)' : 'none' }}>📂</span>
-                              <span style={{
-                                fontSize: 11,
-                                fontWeight: 600,
-                                color: isExpanded ? '#ffffff' : '#4338ca',
-                                textAlign: 'center',
-                                lineHeight: 1.2,
-                                maxWidth: 74,
-                                overflow: 'hidden',
-                                textOverflow: 'ellipsis',
-                                whiteSpace: 'nowrap',
-                              }}>
-                                {branchInfo.label}
-                              </span>
-                            </div>
-                          </Tooltip>
+                                border: '3px solid #6366f1',
+                                pointerEvents: 'none',
+                                zIndex: 5,
+                              }} />
+                            )}
+                            {/* La bulle originale du champ */}
+                            {(el.props as any)?.children}
+                          </div>
                         </Col>
                       );
                     });
                     
-                    return [...topLevelElements, ...branchBubbles];
+                    return wrappedElements;
                   })()}
                   </Row>
                   
