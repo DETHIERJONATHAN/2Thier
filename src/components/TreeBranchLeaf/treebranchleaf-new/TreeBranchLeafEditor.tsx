@@ -1530,34 +1530,10 @@ const TreeBranchLeafEditor: React.FC<TreeBranchLeafEditorProps> = ({
     // }
   // }, [propNodes]);
 
-  // 🔥 AUTO-EXPAND INITIAL : Ouvrir automatiquement les leaf_option qui ont des enfants
+  // 🔥 AUTO-EXPAND INITIAL : Désactivé - onglets et sous-onglets fermés par défaut
+  // L'utilisateur ouvre manuellement ce qu'il veut voir
   const hasAutoExpandedRef = useRef(false);
-  useEffect(() => {
-    if (!propNodes || propNodes.length === 0 || hasAutoExpandedRef.current) return;
-    
-    // Collecter tous les leaf_option qui ont des enfants
-    const optionsWithChildren = new Set<string>();
-    
-    for (const node of propNodes) {
-      // Si c'est une option et qu'elle a un parent (donc des enfants potentiels)
-      if (node.type === 'leaf_option' || node.type === 'leaf_option_field') {
-        // Vérifier s'il y a des nœuds qui ont ce node comme parent
-        const hasChildren = propNodes.some(n => n.parentId === node.id);
-        if (hasChildren) {
-          optionsWithChildren.add(node.id);
-        }
-      }
-    }
-    
-    if (optionsWithChildren.size > 0) {
-      console.log(`🔥 [TreeBranchLeafEditor] Auto-expand ${optionsWithChildren.size} leaf_option avec enfants`);
-      setUIState(prev => ({
-        ...prev,
-        expandedNodes: new Set([...prev.expandedNodes, ...optionsWithChildren])
-      }));
-      hasAutoExpandedRef.current = true;
-    }
-  }, [propNodes]);
+  void hasAutoExpandedRef; // éviter l'avertissement unused
 
   // Garder l'objet du nœud sélectionné synchronisé lorsque la liste des nœuds change
   const _previousSelectedNodeIdRef = useRef<string | null>(null);

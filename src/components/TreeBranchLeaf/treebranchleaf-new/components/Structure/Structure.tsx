@@ -123,11 +123,11 @@ const StructureComponent: React.FC<StructureProps> = ({
   const [filters, setFilters] = useState<SearchOptions>(searchState.filters);
   const lastFiltersSignature = useRef<string | null>(null);
   const [filtersOpen, setFiltersOpen] = useState(false);
-  // 📂 État des sous-onglets pliés/dépliés dans l'arbre
-  const [collapsedSubTabs, setCollapsedSubTabs] = useState<Set<string>>(new Set());
+  // 📂 État des sous-onglets dépliés dans l'arbre (Set vide = tout fermé par défaut)
+  const [expandedSubTabs, setExpandedSubTabs] = useState<Set<string>>(new Set());
 
   const handleToggleSubTab = useCallback((key: string) => {
-    setCollapsedSubTabs(prev => {
+    setExpandedSubTabs(prev => {
       const next = new Set(prev);
       if (next.has(key)) next.delete(key);
       else next.add(key);
@@ -179,14 +179,29 @@ const StructureComponent: React.FC<StructureProps> = ({
     const ids = getAllExpandableIds(nodes);
     // N'appeler que pour ceux non encore ouverts
     ids.forEach(id => { if (!expandedNodes.has(id)) onToggleExpanded(id); });
-    // Aussi ouvrir tous les sous-onglets
-    setCollapsedSubTabs(new Set());
+    // Aussi ouvrir tous les sous-onglets : collecter toutes les clés et les ajouter
+    const allSubTabKeys = new Set<string>();
+    const collectSubTabKeys = (nodeList: TreeBranchLeafNode[]) => {
+      for (const n of nodeList) {
+        if (n.children) {
+          for (const child of n.children) {
+            const st = getFirstSubTab(child);
+            if (st) allSubTabKeys.add(`${n.id}::${st}`);
+          }
+          collectSubTabKeys(n.children);
+        }
+      }
+    };
+    collectSubTabKeys(nodes);
+    setExpandedSubTabs(allSubTabKeys);
   }, [expandedNodes, getAllExpandableIds, nodes, onToggleExpanded]);
 
   const handleCollapseAll = useCallback(() => {
     const ids = getAllExpandableIds(nodes);
     // Fermer uniquement ceux actuellement ouverts
     ids.forEach(id => { if (expandedNodes.has(id)) onToggleExpanded(id); });
+    // Fermer aussi tous les sous-onglets
+    setExpandedSubTabs(new Set());
   }, [expandedNodes, getAllExpandableIds, nodes, onToggleExpanded]);
 
   // Sync des filtres depuis l'état global si changé ailleurs
@@ -300,7 +315,7 @@ const StructureComponent: React.FC<StructureProps> = ({
           for (const tabName of orderedSubTabs) {
             const group = subtabMap.get(tabName)!;
             const key = `${node.id}::${tabName}`;
-            const isCollapsed = collapsedSubTabs.has(key);
+            const isCollapsed = !expandedSubTabs.has(key);
 
             result.push({
               level: level + 1,
@@ -324,7 +339,7 @@ const StructureComponent: React.FC<StructureProps> = ({
     }
 
     return result;
-  }, [searchQuery, expandedNodes, filters, legacyTypes, collapsedSubTabs, getFirstSubTab]);
+  }, [searchQuery, expandedNodes, filters, legacyTypes, expandedSubTabs, getFirstSubTab]);
 
   // Rendu de la liste aplatie
   const flattenedNodes = useMemo(() => {
@@ -525,7 +540,7 @@ const StructureComponent: React.FC<StructureProps> = ({
               // 📂 Rendu d'un en-tête de sous-onglet pliable
               if (item.subtabHeader) {
                 const { name, childCount, key } = item.subtabHeader;
-                const isSubTabCollapsed = collapsedSubTabs.has(key);
+                const isSubTabCollapsed = !expandedSubTabs.has(key);
                 return (
                   <div
                     key={`subtab-${key}`}
