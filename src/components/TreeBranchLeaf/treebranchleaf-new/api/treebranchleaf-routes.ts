@@ -2890,7 +2890,10 @@ function buildResponseFromColumns(node: any): Record<string, unknown> {
     helpTooltipType: node.text_helpTooltipType || 'none',
     helpTooltipText: node.text_helpTooltipText || null,
     helpTooltipImage: node.text_helpTooltipImage || null,
-    displayIcon: node.appearance_displayIcon || (storedAppearanceConfig as any)?.displayIcon || (metadataAppearance as any)?.displayIcon || null
+    displayIcon: node.appearance_displayIcon || (storedAppearanceConfig as any)?.displayIcon || (metadataAppearance as any)?.displayIcon || null,
+    // 🎨 Couleurs personnalisées
+    bubbleColor: (metadataAppearance as any)?.bubbleColor || null,
+    labelColor: (metadataAppearance as any)?.labelColor || null
   };
 
   // ÃƒÂ°Ã…Â¸Ã¢â‚¬ÂÃ‚Â¥ NOUVEAU : Construire l'objet repeater depuis les colonnes dÃƒÆ’Ã‚Â©diÃƒÆ’Ã‚Â©es
@@ -2957,7 +2960,10 @@ function buildResponseFromColumns(node: any): Record<string, unknown> {
     helpTooltipText: node.text_helpTooltipText || null,
     helpTooltipImage: node.text_helpTooltipImage || null,
     // 🎨 FIX: Lire displayIcon depuis la colonne dédiée EN PRIORITÉ
-    displayIcon: node.appearance_displayIcon || (storedAppearanceConfig as any)?.displayIcon || (metadataAppearance as any)?.displayIcon
+    displayIcon: node.appearance_displayIcon || (storedAppearanceConfig as any)?.displayIcon || (metadataAppearance as any)?.displayIcon,
+    // 🎨 Couleurs personnalisées (stockées dans metadata.appearance)
+    bubbleColor: (metadataAppearance as any)?.bubbleColor || (storedAppearanceConfig as any)?.bubbleColor || null,
+    labelColor: (metadataAppearance as any)?.labelColor || (storedAppearanceConfig as any)?.labelColor || null
   };
   
   // Construire fieldConfig depuis les colonnes dÃƒÆ’Ã‚Â©diÃƒÆ’Ã‚Â©es
@@ -3305,6 +3311,13 @@ function removeJSONFromUpdate(updateData: Record<string, unknown>): Record<strin
         (cleanData as Record<string, unknown>).appearance_displayIcon = appConfig.displayIcon;
         console.log('🎨 [removeJSONFromUpdate] displayIcon extrait vers colonne:', appConfig.displayIcon);
       }
+      // 🎨 FIX: Persister bubbleColor et labelColor dans metadata.appearance
+      if (!preservedMeta.appearance || typeof preservedMeta.appearance !== 'object') {
+        preservedMeta.appearance = preservedMeta.appearance || {};
+      }
+      const metaApp = preservedMeta.appearance as Record<string, unknown>;
+      if ('bubbleColor' in appConfig) metaApp.bubbleColor = appConfig.bubbleColor || null;
+      if ('labelColor' in appConfig) metaApp.labelColor = appConfig.labelColor || null;
     }
     
     if (Object.keys(preservedMeta).length > 0) {
@@ -3314,14 +3327,23 @@ function removeJSONFromUpdate(updateData: Record<string, unknown>): Record<strin
       };
     }
   } else if (appearanceConfig && typeof appearanceConfig === 'object') {
-    // 🎨 FIX: Même si pas de metadata, extraire displayIcon vers colonne dédiée
+    // 🎨 FIX: Même si pas de metadata, extraire displayIcon et couleurs depuis appearanceConfig
     const appConfig = appearanceConfig as Record<string, unknown>;
+    const preservedAppearance: Record<string, unknown> = {};
     if ('displayIcon' in appConfig && appConfig.displayIcon) {
       console.log('🎨 [removeJSONFromUpdate] displayIcon vers colonne (sans metadata):', appConfig.displayIcon);
+      (cleanData as Record<string, unknown>).appearance_displayIcon = appConfig.displayIcon;
+    }
+    if ('bubbleColor' in appConfig) preservedAppearance.bubbleColor = appConfig.bubbleColor || null;
+    if ('labelColor' in appConfig) preservedAppearance.labelColor = appConfig.labelColor || null;
+    if (Object.keys(preservedAppearance).length > 0) {
       return {
         ...cleanData,
-        appearance_displayIcon: appConfig.displayIcon
+        metadata: { appearance: preservedAppearance }
       };
+    }
+    if ((cleanData as Record<string, unknown>).appearance_displayIcon) {
+      return cleanData;
     }
   }
   

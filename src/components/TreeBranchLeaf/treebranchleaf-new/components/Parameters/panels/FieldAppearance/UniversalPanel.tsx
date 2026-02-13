@@ -189,6 +189,13 @@ const UniversalPanel: React.FC<UniversalPanelProps> = ({ value = {}, onChange, r
             <ColorPicker showText allowClear />
           </Form.Item>
           <Form.Item 
+            name="bubbleColor" 
+            label={<Tooltip title="Couleur personnalisée pour la bulle dans la section Données. Permet de distinguer visuellement ce champ des autres (ex: champs Total)">Couleur de bulle (Données)</Tooltip>}
+            getValueFromEvent={(color) => color ? (typeof color === 'string' ? color : color.toHexString()) : ''}
+          >
+            <ColorPicker showText allowClear />
+          </Form.Item>
+          <Form.Item 
             name="displayIcon" 
             label={<Tooltip title="Icône affichée dans la colonne 'subtap display' de la table. Héritée par les copies du champ">Icône de champ (TBL)</Tooltip>}
           >

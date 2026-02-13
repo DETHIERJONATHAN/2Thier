@@ -28,7 +28,6 @@ import {
   Button,
   Form,
   Tooltip,
-  Drawer
 } from 'antd';
 import { 
   BranchesOutlined,
@@ -1047,11 +1046,8 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
   // 🎯 État pour ouvrir/fermer la section Données (bulles)
   const [isDataSectionOpen, setIsDataSectionOpen] = useState(true);
   
-  // 🎯 État pour le panneau de détails enfants (clic sur bulle parent)
+  // 🎯 État pour le panneau de détails enfants (clic sur bulle parent → enfants inline)
   const [expandedBranchId, setExpandedBranchId] = useState<string | null>(null);
-  // Refs pour partager les maps entre le IIFE de rendu et le Drawer
-  const branchChildrenMap_ref = useRef<Map<string, TBLField[]>>(new Map());
-  const branchInfoMap_ref = useRef<Map<string, { id: string; label: string; type: string }>>(new Map());
   
   // 🚫 PROTECTION ANTI-DOUBLE-CLIC pour les boutons de répétition
   const [isRepeating, setIsRepeating] = useState<Record<string, boolean>>({});
@@ -4955,10 +4951,6 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
                     // Séparer: champs visibles (top-level) vs champs cachés (enfants de branches)
                     const topLevelFields = filteredFields.filter(f => !childFieldIds.has(f.id));
                     
-                    // 🔗 Sauvegarder dans les refs pour le Drawer (hors IIFE)
-                    branchChildrenMap_ref.current = branchChildrenMap;
-                    branchInfoMap_ref.current = branchInfoMap;
-                    
                     if (isTBLDebugEnabled() && branchChildrenMap.size > 0) {
                       tblLog(`🎯 [DATA SECTION GROUPS] ${branchChildrenMap.size} branches avec enfants:`, 
                         Array.from(branchChildrenMap.entries()).map(([branchId, children]) => ({
@@ -4983,107 +4975,125 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
                       return elements.concat(groupElements);
                     }, []);
                     
-                    // 🎯 Wraper les bulles parentes avec onClick + badge enfants
-                    const wrappedElements = topLevelElements.map(el => {
+                    // 🎯 INLINE CHILDREN: Insérer les bulles enfants directement après la bulle parent dans le flux
+                    const finalElements: React.ReactElement[] = [];
+                    for (const el of topLevelElements) {
                       const fieldId = el.key as string;
                       const childrenOfField = branchChildrenMap.get(fieldId);
-                      if (!childrenOfField || childrenOfField.length === 0) return el;
-                      
+                      const hasChildren = childrenOfField && childrenOfField.length > 0;
                       const isExpanded = expandedBranchId === fieldId;
-                      // Wrapper la bulle avec un badge et un onClick
-                      return (
-                        <Col key={fieldId} {...(el.props as any)} style={{ ...(el.props as any)?.style, position: 'relative' }}>
-                          <div 
-                            onClick={() => setExpandedBranchId(isExpanded ? null : fieldId)} 
-                            style={{ cursor: 'pointer', position: 'relative' }}
-                          >
-                            {/* Badge nombre d'enfants */}
-                            <span style={{
-                              position: 'absolute',
-                              bottom: 2,
-                              right: 'calc(50% - 45px)',
-                              zIndex: 10,
-                              minWidth: 20,
-                              height: 20,
-                              borderRadius: 10,
-                              backgroundColor: isExpanded ? '#4f46e5' : '#6366f1',
-                              color: '#ffffff',
-                              fontSize: 10,
-                              fontWeight: 700,
-                              display: 'flex',
-                              alignItems: 'center',
-                              justifyContent: 'center',
-                              padding: '0 5px',
-                              border: '2px solid #ffffff',
-                              boxShadow: '0 1px 3px rgba(0,0,0,0.2)',
-                              transition: 'all 0.2s ease',
-                            }}>
-                              +{childrenOfField.length}
-                            </span>
-                            {/* Ring indicator si expanded */}
-                            {isExpanded && (
-                              <div style={{
-                                position: 'absolute',
-                                top: -3,
-                                left: '50%',
-                                transform: 'translateX(-50%)',
-                                width: 96,
-                                height: 96,
-                                borderRadius: '50%',
-                                border: '3px solid #6366f1',
-                                pointerEvents: 'none',
-                                zIndex: 5,
-                              }} />
-                            )}
-                            {/* La bulle originale du champ */}
-                            {(el.props as any)?.children}
-                          </div>
-                        </Col>
-                      );
-                    });
+                      
+                      if (!hasChildren) {
+                        // Bulle normale sans enfants
+                        finalElements.push(el);
+                      } else {
+                        // 🎯 Bulle parent: ajouter badge + onClick, PUIS insérer enfants inline si expanded
+                        const parentBubble = React.cloneElement(el, {
+                          key: fieldId,
+                          style: { ...(el.props as any)?.style, position: 'relative' as const },
+                          children: (
+                            <div 
+                              onClick={() => setExpandedBranchId(isExpanded ? null : fieldId)} 
+                              style={{ cursor: 'pointer', position: 'relative' }}
+                            >
+                              {/* Badge nombre d'enfants */}
+                              <span style={{
+                                position: 'absolute' as const,
+                                bottom: 2,
+                                right: 'calc(50% - 45px)',
+                                zIndex: 10,
+                                minWidth: 20,
+                                height: 20,
+                                borderRadius: 10,
+                                backgroundColor: isExpanded ? '#4f46e5' : '#6366f1',
+                                color: '#ffffff',
+                                fontSize: 10,
+                                fontWeight: 700,
+                                display: 'flex' as const,
+                                alignItems: 'center' as const,
+                                justifyContent: 'center' as const,
+                                padding: '0 5px',
+                                border: '2px solid #ffffff',
+                                boxShadow: '0 1px 3px rgba(0,0,0,0.2)',
+                                transition: 'all 0.2s ease',
+                              }}>
+                                +{childrenOfField.length}
+                              </span>
+                              {/* Ring indicator si expanded */}
+                              {isExpanded && (
+                                <div style={{
+                                  position: 'absolute' as const,
+                                  top: -3,
+                                  left: '50%',
+                                  transform: 'translateX(-50%)',
+                                  width: 96,
+                                  height: 96,
+                                  borderRadius: '50%',
+                                  border: '3px solid #6366f1',
+                                  pointerEvents: 'none' as const,
+                                  zIndex: 5,
+                                }} />
+                              )}
+                              {/* La bulle originale du champ */}
+                              {(el.props as any)?.children}
+                            </div>
+                          ),
+                        } as any);
+                        finalElements.push(parentBubble);
+                        
+                        // 🎯 Si la bulle parent est expanded, insérer les enfants juste après dans le flux
+                        if (isExpanded) {
+                          for (const childField of childrenOfField) {
+                            const childEl = renderDataSectionField(childField);
+                            // Wrapper l'enfant avec un style distinct (légère bordure indigo + animation)
+                            const styledChild = React.cloneElement(childEl, {
+                              key: `child-${childField.id}`,
+                              style: {
+                                ...(childEl.props as any)?.style,
+                                animation: 'tbl-child-slide-in 0.3s ease-out',
+                              },
+                              children: (
+                                <div style={{ position: 'relative' }}>
+                                  {/* Petit indicateur de lien vers le parent */}
+                                  <div style={{
+                                    position: 'absolute' as const,
+                                    top: -6,
+                                    left: '50%',
+                                    transform: 'translateX(-50%)',
+                                    width: 8,
+                                    height: 8,
+                                    borderRadius: '50%',
+                                    backgroundColor: '#6366f1',
+                                    border: '2px solid #fff',
+                                    zIndex: 10,
+                                  }} />
+                                  {(childEl.props as any)?.children}
+                                </div>
+                              ),
+                            } as any);
+                            finalElements.push(styledChild);
+                          }
+                        }
+                      }
+                    }
                     
-                    return wrappedElements;
+                    return finalElements;
                   })()}
                   </Row>
                   
-                  {/* 🎯 DRAWER: Panneau latéral pour les champs enfants d'une branche */}
-                  {expandedBranchId && branchChildrenMap_ref.current.has(expandedBranchId) && (() => {
-                    // Note: On reconstruit les infos ici car le Drawer est en dehors du IIFE
-                    const branchChildren = branchChildrenMap_ref.current.get(expandedBranchId)!;
-                    const branchLabel = branchInfoMap_ref.current.get(expandedBranchId)?.label || 'Détails';
-                    return (
-                      <Drawer
-                        title={
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                            <span style={{ fontSize: 20 }}>📂</span>
-                            <span style={{ fontWeight: 600, color: '#4338ca' }}>{branchLabel}</span>
-                            <span style={{
-                              backgroundColor: '#eef2ff',
-                              color: '#4338ca',
-                              borderRadius: 12,
-                              padding: '2px 8px',
-                              fontSize: 12,
-                              fontWeight: 600,
-                            }}>
-                              {branchChildren.length} champs
-                            </span>
-                          </div>
-                        }
-                        placement="right"
-                        open={true}
-                        onClose={() => setExpandedBranchId(null)}
-                        width={Math.min(400, window.innerWidth * 0.4)}
-                        styles={{
-                          body: { padding: 16, backgroundColor: '#fafafe' },
-                        }}
-                        mask={false}
-                      >
-                        <Row gutter={[12, 12]} justify="center">
-                          {branchChildren.map((childField) => renderDataSectionField(childField))}
-                        </Row>
-                      </Drawer>
-                    );
-                  })()}
+                  {/* 🎯 CSS Animation pour les bulles enfants qui apparaissent */}
+                  <style>{`
+                    @keyframes tbl-child-slide-in {
+                      from {
+                        opacity: 0;
+                        transform: scale(0.7) translateX(-20px);
+                      }
+                      to {
+                        opacity: 1;
+                        transform: scale(1) translateX(0);
+                      }
+                    }
+                  `}</style>
                 </div>
               </>
             ) : visibilityFilteredFields.length > 0 ? (
