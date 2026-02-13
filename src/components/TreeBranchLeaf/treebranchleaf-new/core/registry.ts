@@ -364,6 +364,22 @@ export const CAPABILITY_MODULES: Record<string, CapabilityModule> = {
     panelComponent: 'AIMeasureConfigPanel',
     validationRules: ['prompt', 'measureKeys', 'mappings'],
     dependencies: []
+  },
+
+  // 📦 PRODUIT (Filtrage de visibilité par produit)
+  product: {
+    key: 'product',
+    label: 'Produit',
+    icon: 'ShoppingOutlined',
+    emoji: '📦',
+    description: 'Filtrer la visibilité selon le produit sélectionné',
+    category: 'logic',
+    autoOpen: true,
+    requiresConfig: true,
+    compatibleWith: ['branch', 'leaf'],
+    panelComponent: 'ProductFilterPanel',
+    validationRules: [],
+    dependencies: []
   }
 };
 
@@ -384,7 +400,7 @@ export const NODE_TYPES: Record<string, NodeType> = {
   // Mise à jour: une Branche peut être enfant d'une autre Branche (imbrication infinie)
   canBeChild: true,
     acceptsDropFrom: ['palette', 'structure'],
-    capabilities: ['data', 'condition', 'formula', 'api', 'link', 'markers']
+    capabilities: ['data', 'condition', 'formula', 'api', 'link', 'markers', 'product']
   },
 
   // 🍃 FEUILLES
@@ -398,7 +414,7 @@ export const NODE_TYPES: Record<string, NodeType> = {
     canHaveChildren: true,
     canBeChild: true,
     acceptsDropFrom: ['palette', 'structure'],
-    capabilities: ['data', 'condition', 'markers'],
+    capabilities: ['data', 'condition', 'markers', 'product'],
     defaultFieldType: 'SELECT',
     fieldRequired: false
   },
@@ -413,7 +429,7 @@ export const NODE_TYPES: Record<string, NodeType> = {
     canHaveChildren: true,
     canBeChild: true,
     acceptsDropFrom: ['palette', 'structure'],
-    capabilities: ['data', 'condition', 'formula', 'table', 'api', 'markers'],
+    capabilities: ['data', 'condition', 'formula', 'table', 'api', 'markers', 'product'],
   defaultFieldType: 'TEXT',
     fieldRequired: true
   },
@@ -428,7 +444,7 @@ export const NODE_TYPES: Record<string, NodeType> = {
     canHaveChildren: true,
     canBeChild: true,
     acceptsDropFrom: ['palette', 'structure'],
-    capabilities: ['data', 'condition', 'formula', 'table', 'api', 'validation', 'markers'],
+    capabilities: ['data', 'condition', 'formula', 'table', 'api', 'validation', 'markers', 'product'],
     defaultFieldType: 'TEXT',
     fieldRequired: true
   },
@@ -490,7 +506,8 @@ export const CapabilityPanels = {
   api: () => import('../components/Parameters/capabilities/APIPanel'),
   link: () => import('../components/Parameters/capabilities/LinkPanel'),
   markers: () => import('../components/Parameters/capabilities/MarkersPanel'),
-  aiMeasure: () => import('../components/Parameters/capabilities/AIMeasurePanel')
+  aiMeasure: () => import('../components/Parameters/capabilities/AIMeasurePanel'),
+  product: () => import('../components/Parameters/capabilities/ProductFilterPanel')
 };
 
 // =============================================================================

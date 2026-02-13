@@ -3582,6 +3582,47 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
       });
     }
     
+    // 🛒 PRODUIT: Filtrer les champs par visibilité produit
+    // Si un champ a product_visibleFor configuré, il n'est visible que si
+    // un des produits sélectionnés dans le champ source correspond
+    {
+      // Debug: compter les champs avec product config
+      const productFields = fieldsAfterDeletion.filter(f => (f as any).hasProduct || (f as any).product_visibleFor);
+      if (productFields.length > 0) {
+        console.log(`🛒🛒🛒 [PRODUCT FILTER] Section "${section.title}": ${productFields.length} champs avec config produit sur ${fieldsAfterDeletion.length} total`, 
+          productFields.map(f => ({ id: f.id, label: f.label, hasProduct: (f as any).hasProduct, visibleFor: (f as any).product_visibleFor, sourceId: (f as any).product_sourceNodeId })));
+      }
+    }
+    fieldsAfterDeletion = fieldsAfterDeletion.filter(field => {
+      const f = field as any;
+      // Si pas de configuration produit, toujours visible
+      if (!f.hasProduct) return true;
+      if (!f.product_visibleFor || !Array.isArray(f.product_visibleFor) || f.product_visibleFor.length === 0) return true;
+      if (!f.product_sourceNodeId) return true;
+
+      // Récupérer la valeur du champ source produit depuis formData
+      const sourceValue = formData[f.product_sourceNodeId];
+      console.log(`🛒 [PRODUCT VISIBILITY] "${field.label}": sourceNodeId=${f.product_sourceNodeId}, sourceValue=${JSON.stringify(sourceValue)}, visibleFor=${JSON.stringify(f.product_visibleFor)}`);
+      // Si aucune valeur sélectionnée → tout afficher
+      if (sourceValue === undefined || sourceValue === null || sourceValue === '') return true;
+
+      // Parser la valeur source (peut être string csv, array, ou valeur simple)
+      let selectedValues: string[];
+      if (Array.isArray(sourceValue)) {
+        selectedValues = sourceValue.map(String);
+      } else if (typeof sourceValue === 'string' && sourceValue.includes(',')) {
+        selectedValues = sourceValue.split(',').map(v => v.trim()).filter(Boolean);
+      } else {
+        selectedValues = [String(sourceValue)];
+      }
+
+      if (selectedValues.length === 0) return true;
+
+      const isVisible = f.product_visibleFor.some((v: string) => selectedValues.includes(v));
+      console.log(`🛒 [PRODUCT VISIBILITY RESULT] "${field.label}": selected=${JSON.stringify(selectedValues)}, visible=${isVisible}`);
+      return isVisible;
+    });
+
     // ✅ FILTRE SIMPLE: On affiche TOUS les champs, y compris les copies de répéteurs
     // Les copies d'originals de répéteurs doivent s'afficher là où elles sont placées
     const result = fieldsAfterDeletion;
@@ -3616,7 +3657,7 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
     });
     
     return result;
-  }, [orderedFields, section.title, allNodes, activeSubTab, allSubTabs]);
+  }, [orderedFields, section.title, allNodes, activeSubTab, allSubTabs, formData]);
 
   // 🎨 Déterminer le style selon le niveau
   const getSectionStyle = () => {

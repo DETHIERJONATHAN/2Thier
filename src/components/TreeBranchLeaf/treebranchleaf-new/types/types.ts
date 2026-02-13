@@ -66,6 +66,12 @@ export interface TblNode {
     children: TblNode[];
     // Metadata libre (copié depuis TreeBranchLeaf API) — utilisé pour étendre localement
     metadata?: JsonObject | null;
+
+    // 📦 Filtrage par Produit : visibilité conditionnelle
+    hasProduct?: boolean;
+    product_sourceNodeId?: string | null;
+    product_visibleFor?: string[] | null;
+    product_options?: Array<{ value: string; label: string }> | null;
 }
 
 /**
@@ -74,6 +80,8 @@ export interface TblNode {
 export interface TblFieldConfig {
     id: string;
     fieldType: 'TEXT' | 'NUMBER' | 'SELECT' | 'CHECKBOX' | 'DATE';
+    /** true = multiselect (Ant Design Select mode="multiple") */
+    multiple?: boolean;
     // Configurations spécifiques par type
     numberConfig?: {
         min?: number;

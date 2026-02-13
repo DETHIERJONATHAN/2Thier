@@ -2192,9 +2192,25 @@ const TBL: React.FC<TBLProps> = ({
         }
 
         case 'select': {
-          if (fieldConfig.options && !fieldConfig.options.find(opt => opt.value === value)) {
-            isValid = false;
-            validationMessage = 'Valeur non valide pour cette liste';
+          if (fieldConfig.options) {
+            // 🔧 FIX: Supporter les valeurs multiselect (CSV ou array)
+            // Pour un multiselect, la valeur peut être "pc,iso" ou ["pc","iso"] ou "" (déselection)
+            const strValue = String(value ?? '');
+            if (strValue === '') {
+              // Valeur vide = déselection → toujours valide
+              break;
+            }
+            // Séparer les valeurs CSV et vérifier chacune individuellement
+            const selectedValues = strValue.includes(',') 
+              ? strValue.split(',').map(v => v.trim()).filter(Boolean) 
+              : [strValue];
+            const invalidValues = selectedValues.filter(
+              sv => !fieldConfig.options!.find(opt => opt.value === sv)
+            );
+            if (invalidValues.length > 0) {
+              isValid = false;
+              validationMessage = `Valeur(s) non valide(s) pour cette liste: ${invalidValues.join(', ')}`;
+            }
           }
           break;
         }
@@ -3734,7 +3750,10 @@ const TBL: React.FC<TBLProps> = ({
                         tabSubTabs={tab.subTabs}
                         tabId={tab.id}
                         submissionId={submissionId}
-                        // 🔄 Props pour navigation swipe mobile
+                        // � PRODUIT: Visibilité sous-onglets
+                        productSubTabsVisibility={tab.product_subTabsVisibility}
+                        productSourceNodeId={tab.product_sourceNodeId}
+                        // �🔄 Props pour navigation swipe mobile
                         controlledActiveSubTab={isMobile ? activeSubTabs[tab.id] : undefined}
                         onSubTabChange={isMobile ? (subTabKey) => handleSwipeSubTabChange(tab.id, subTabKey) : undefined}
                         onSubTabsComputed={isMobile ? (subTabs) => handleSubTabsComputed(tab.id, subTabs) : undefined}
@@ -4406,7 +4425,10 @@ interface TBLTabContentWithSectionsProps {
   tabSubTabs?: { key: string; label: string }[] | undefined;
   tabId?: string;
   submissionId?: string | null;
-  // 🔄 Props pour navigation swipe centralisée
+  // � PRODUIT: Visibilité des sous-onglets par produit
+  productSubTabsVisibility?: Record<string, string[] | null> | null;
+  productSourceNodeId?: string | null;
+  // �🔄 Props pour navigation swipe centralisée
   controlledActiveSubTab?: string;
   onSubTabChange?: (subTabKey: string | undefined) => void;
   onSubTabsComputed?: (subTabs: { key: string; label: string }[]) => void;
@@ -4427,6 +4449,8 @@ const TBLTabContentWithSections: React.FC<TBLTabContentWithSectionsProps> = Reac
   tabSubTabs,
   tabId,
   submissionId,
+  productSubTabsVisibility,
+  productSourceNodeId,
   controlledActiveSubTab,
   onSubTabChange,
   onSubTabsComputed
@@ -4562,7 +4586,66 @@ const TBLTabContentWithSections: React.FC<TBLTabContentWithSectionsProps> = Reac
     return orderedTabs;
   }, [sections, fields, tabSubTabs]);
 
-  // 🔄 Notifier le parent des sous-onglets calculés (pour la navigation swipe)
+  // 🛒 PRODUIT: Filtrer les sous-onglets par visibilité produit
+  // Utilise product_subTabsVisibility du nœud GROUP (configuré dans ProductFilterPanel)
+  const visibleSubTabs = useMemo(() => {
+    if (allSubTabs.length === 0) return allSubTabs;
+    
+    // 🛒 STRATÉGIE 1: Utiliser product_subTabsVisibility (configuré sur le nœud GROUP/onglet)
+    if (productSubTabsVisibility && productSourceNodeId) {
+      const sourceValue = formData[productSourceNodeId];
+      
+      // Si pas de sélection produit → tout visible
+      if (sourceValue === undefined || sourceValue === null || sourceValue === '') {
+        console.log('🛒🏷️ [SUBTAB VISIBILITY] Pas de sélection produit → tous visibles');
+        return allSubTabs;
+      }
+      
+      // Normaliser les valeurs sélectionnées
+      let selectedValues: string[];
+      if (Array.isArray(sourceValue)) {
+        selectedValues = sourceValue.map(String);
+      } else if (typeof sourceValue === 'string' && sourceValue.includes(',')) {
+        selectedValues = sourceValue.split(',').map(v => v.trim()).filter(Boolean);
+      } else {
+        selectedValues = [String(sourceValue)];
+      }
+      
+      if (selectedValues.length === 0) {
+        console.log('🛒🏷️ [SUBTAB VISIBILITY] Sélection vide → tous visibles');
+        return allSubTabs;
+      }
+      
+      const filtered = allSubTabs.filter(subTab => {
+        // Chercher la config de visibilité pour ce sous-onglet (par key ou label)
+        const visConfig = productSubTabsVisibility[subTab.key] ?? productSubTabsVisibility[subTab.label];
+        
+        // Si pas configuré (undefined) → toujours visible
+        if (visConfig === undefined || visConfig === null) {
+          console.log(`🛒🏷️ [SUBTAB VISIBILITY] "${subTab.label}": config=null → VISIBLE (toujours)`);
+          return true;
+        }
+        
+        // Si tableau vide → jamais visible
+        if (Array.isArray(visConfig) && visConfig.length === 0) {
+          console.log(`🛒🏷️ [SUBTAB VISIBILITY] "${subTab.label}": config=[] → MASQUÉ (jamais visible)`);
+          return false;
+        }
+        
+        // Vérifier si au moins une valeur sélectionnée est dans la config
+        const isVisible = visConfig.some((v: string) => selectedValues.includes(v));
+        console.log(`🛒🏷️ [SUBTAB VISIBILITY] "${subTab.label}": config=${JSON.stringify(visConfig)}, selected=${JSON.stringify(selectedValues)} → ${isVisible ? 'VISIBLE' : 'MASQUÉ'}`);
+        return isVisible;
+      });
+      
+      return filtered;
+    }
+    
+    // Pas de config product_subTabsVisibility → tous visibles
+    return allSubTabs;
+  }, [allSubTabs, productSubTabsVisibility, productSourceNodeId, formData]);
+
+  // �🔄 Notifier le parent des sous-onglets calculés (pour la navigation swipe)
   useEffect(() => {
     if (onSubTabsComputed && allSubTabs.length > 0) {
       onSubTabsComputed(allSubTabs);
@@ -4598,13 +4681,27 @@ const TBLTabContentWithSections: React.FC<TBLTabContentWithSectionsProps> = Reac
     });
   }, [allSubTabs, controlledActiveSubTab]);
 
+  // 🛒 FIX: Si l'onglet actif n'est plus dans visibleSubTabs (tous ses champs cachés par produit),
+  // basculer automatiquement sur le premier onglet visible
+  useEffect(() => {
+    if (controlledActiveSubTab !== undefined) return;
+    if (visibleSubTabs.length === 0) return;
+    
+    setLocalActiveSubTab(prev => {
+      if (!prev) return visibleSubTabs[0].key;
+      // Si l'onglet actif n'est plus visible, basculer
+      if (!visibleSubTabs.find(st => st.key === prev)) return visibleSubTabs[0].key;
+      return prev;
+    });
+  }, [visibleSubTabs, controlledActiveSubTab]);
+
   // Log ActiveSubTab supprimé pour performance (utilisez window.enableTBLDebug() si besoin)
 
   const renderContent = () => {
     if (sections.length) {
       // Si on a plusieurs sous-onglets, ou si l'onglet a explicitement des subTabs définis
       const explicitTabSubTabs = Array.isArray(tabSubTabs) && tabSubTabs.length > 0;
-      const showSubTabs = explicitTabSubTabs || allSubTabs.length > 1;
+      const showSubTabs = explicitTabSubTabs || visibleSubTabs.length > 1;
       
       // 🔧 FIX: Créer un Set des sous-onglets reconnus pour vérification rapide
       const recognizedSubTabKeys = new Set(allSubTabs.map(st => st.key));
@@ -4661,7 +4758,7 @@ const TBLTabContentWithSections: React.FC<TBLTabContentWithSectionsProps> = Reac
               msOverflowStyle: 'none',
               paddingBottom: 4
             }} className="hide-scrollbar">
-              {(allSubTabs || []).map(st => (
+              {(visibleSubTabs || []).map(st => (
                 <Button
                   key={st.key}
                   size="small"
@@ -4702,7 +4799,7 @@ const TBLTabContentWithSections: React.FC<TBLTabContentWithSectionsProps> = Reac
         subsections: []
       } as unknown as TBLSection;
       const explicitTabSubTabs = Array.isArray(tabSubTabs) && tabSubTabs.length > 0;
-      const showSubTabs = explicitTabSubTabs || allSubTabs.length > 1;
+      const showSubTabs = explicitTabSubTabs || visibleSubTabs.length > 1;
       
       // 🔧 FIX: Créer un Set des sous-onglets reconnus pour vérification rapide
       const recognizedSubTabKeys = new Set(allSubTabs.map(st => st.key));
@@ -4743,7 +4840,7 @@ const TBLTabContentWithSections: React.FC<TBLTabContentWithSectionsProps> = Reac
               msOverflowStyle: 'none',
               paddingBottom: 4
             }} className="hide-scrollbar">
-              {(allSubTabs || []).map(st => (
+              {(visibleSubTabs || []).map(st => (
                 <Button
                   key={st.key}
                   size="small"

@@ -537,12 +537,20 @@ export interface TreeBranchLeafNode {
   // 🔄 PRÉ-CHARGEMENT INTELLIGENT: ID du champ source qui contrôle le nombre de copies
   repeater_countSourceNodeId?: string | null;
   
+  // 🛒 PRODUIT: Colonnes dédiées pour la visibilité conditionnelle par produit
+  hasProduct?: boolean;
+  product_visibleFor?: string[] | null;
+  product_sourceNodeId?: string | null;
+  product_options?: Array<{ label: string; value: string }> | null;
+
   // Métadonnées
   metadata: Record<string, unknown>;
   subtab?: string | null;
   subtabs?: string | string[] | Record<string, unknown> | null;
   defaultValue?: string;
   calculatedValue?: string;
+  // Permet l'accès à des propriétés additionnelles de l'API
+  [key: string]: unknown;
 }
 
 // 🎯 INTERFACES TBL COMPLÈTES (toutes les capacités)
@@ -742,6 +750,11 @@ export interface TBLField {
   link_targetTreeId?: string | null;
   link_mode?: 'JUMP' | 'APPEND_SECTION' | 'PHOTO' | string | null;
   link_carryContext?: boolean | null;
+
+  // 🛒 PRODUIT: Propriétés pour la visibilité conditionnelle par produit
+  hasProduct?: boolean;
+  product_visibleFor?: string[] | null;
+  product_sourceNodeId?: string | null;
 }
 
 const tryParseJSON = (value: unknown): unknown => {
@@ -905,6 +918,9 @@ export interface TBLTab {
   allFields: TBLField[];  // 🎯 NOUVEAU: Tous les champs de cet onglet (pour statistiques)
   // Subtabs metadata (optionnelement défini dans metadata du noeud parent)
   subTabs?: { key: string; label: string }[];
+  // 🛒 PRODUIT: Visibilité des sous-onglets par produit (depuis metadata du noeud GROUP)
+  product_subTabsVisibility?: Record<string, string[] | null> | null;
+  product_sourceNodeId?: string | null;
 }
 
 export interface TBLTree {
@@ -1512,6 +1528,10 @@ const transformPrismaNodeToField = (
       link_targetTreeId: node.link_targetTreeId,
       link_mode: node.link_mode,
       link_carryContext: node.link_carryContext,
+      // 🛒 PRODUIT: Propriétés de visibilité conditionnelle
+      hasProduct: node.hasProduct,
+      product_visibleFor: node.product_visibleFor || null,
+      product_sourceNodeId: node.product_sourceNodeId || null,
       subTabKey: primarySubTabKey ?? undefined,
       subTabKeys: subTabAssignments.length ? subTabAssignments : undefined
     };
@@ -1653,6 +1673,10 @@ const transformPrismaNodeToField = (
       repeater_countSourceNodeId: node.repeater_countSourceNodeId || null,
       // 🔁 REPEATER: Colonnes Prisma directes pour "Ajouter"
       repeater_templateNodeIds: templateNodeIds,
+      // 🛒 PRODUIT: Propriétés de visibilité conditionnelle
+      hasProduct: node.hasProduct,
+      product_visibleFor: node.product_visibleFor || null,
+      product_sourceNodeId: node.product_sourceNodeId || null,
       subTabKey: primarySubTabKey ?? undefined,
       subTabKeys: subTabAssignments.length ? subTabAssignments : undefined
     };
@@ -1664,12 +1688,36 @@ const transformPrismaNodeToField = (
     const finalFieldType = node.subType || node.fieldType || node.type || 'text';
     
   dlog(`🔍 [TYPE DETECTION SIMPLE] ${node.label}`, { fieldType: node.fieldType, subType: node.subType, type: node.type, final: finalFieldType });
+
+    // 🛒 PRODUIT: Construire les options depuis select_options (champs source produit sans enfants leaf_option)
+    const selectOptionsFromColumn = (() => {
+      if (node.select_options && Array.isArray(node.select_options) && (node.select_options as unknown[]).length > 0) {
+        return (node.select_options as Array<{ label: string; value: string }>).map(opt => ({
+          id: opt.value || opt.label,
+          label: opt.label,
+          value: opt.value || opt.label,
+        }));
+      }
+      return undefined;
+    })();
+    
+    const isSelectWithOptions = !!selectOptionsFromColumn && selectOptionsFromColumn.length > 0;
+    
+    // 🛒 Si le champ a des select_options non vides, forcer le type à 'select' pour le rendu
+    // select_multiple n'affecte que le MODE (simple/multiple), pas la DÉCISION d'être un select
+    const effectiveFieldType = isSelectWithOptions
+      ? 'select'
+      : finalFieldType;
+
+    if (isSelectWithOptions) {
+      dlog(`🛒 [PRODUCT SELECT] Champ "${node.label}": ${selectOptionsFromColumn!.length} options depuis select_options, multiple=${node.select_multiple}, type=${effectiveFieldType}`);
+    }
     
     return {
       id: node.id,
       name: node.label,
       label: node.label,
-      type: finalFieldType,
+      type: effectiveFieldType,
       displayIcon: (node as any)?.metadata?.appearance?.displayIcon || (node as any)?.appearanceConfig?.displayIcon,
       required: node.isRequired,
       value: node.defaultValue || node.value || node.bool_defaultValue || node.text_defaultValue || node.number_defaultValue || node.select_defaultValue || node.date_defaultValue,
@@ -1692,6 +1740,8 @@ const transformPrismaNodeToField = (
         helpTooltipText: node.text_helpTooltipText,
         helpTooltipImage: node.text_helpTooltipImage
       },
+      // 🛒 PRODUIT: Options depuis select_options pour les champs source produit
+      ...(isSelectWithOptions ? { options: selectOptionsFromColumn, isSelect: true } : {}),
       config: {
         size: node.appearance_size,
         width: node.appearance_width,
@@ -1718,7 +1768,8 @@ const transformPrismaNodeToField = (
         // 🔥 AJOUT PRISMA DYNAMIC MINDATE/MAXDATE
         minDate: node.date_minDate,
         maxDate: node.date_maxDate,
-        multiple: node.select_multiple,
+        // 🛒 PRODUIT: Forcer multiple à true si le champ a des select_options (source produit)
+        multiple: isSelectWithOptions ? (node.select_multiple !== false) : node.select_multiple,
         searchable: node.select_searchable,
         allowClear: node.select_allowClear,
         selectDefaultValue: node.select_defaultValue,
@@ -1742,6 +1793,10 @@ const transformPrismaNodeToField = (
       aiMeasure_autoTrigger: node.aiMeasure_autoTrigger,
       aiMeasure_prompt: node.aiMeasure_prompt,
       aiMeasure_keys: node.aiMeasure_keys,
+      // 🛒 PRODUIT: Propriétés de visibilité conditionnelle
+      hasProduct: node.hasProduct,
+      product_visibleFor: node.product_visibleFor || null,
+      product_sourceNodeId: node.product_sourceNodeId || null,
       subTabKey: primarySubTabKey ?? undefined,
       subTabKeys: subTabAssignments.length ? subTabAssignments : undefined
     };
@@ -1768,6 +1823,10 @@ const transformPrismaNodeToField = (
     link_targetTreeId: node.link_targetTreeId,
     link_mode: node.link_mode,
     link_carryContext: node.link_carryContext,
+    // 🛒 PRODUIT: Propriétés de visibilité conditionnelle
+    hasProduct: node.hasProduct,
+    product_visibleFor: node.product_visibleFor || null,
+    product_sourceNodeId: node.product_sourceNodeId || null,
     subTabKey: primarySubTabKey ?? undefined,
     subTabKeys: subTabAssignments.length ? subTabAssignments : undefined
   };
@@ -2403,6 +2462,11 @@ export const transformNodesToTBLComplete = (
         fieldsByTab[ongletNode.id].push(field);
       });
 
+      // 🛒 PRODUIT: Extraire product_subTabsVisibility depuis metadata du noeud onglet
+      const ongletMeta = ongletNode.metadata as Record<string, unknown> | null | undefined;
+      const productSubTabsVis = ongletMeta?.product_subTabsVisibility as Record<string, string[] | null> | null | undefined;
+      const productSourceId = (ongletNode as any).product_sourceNodeId as string | null | undefined;
+
       const tab: TBLTab = {
         id: ongletNode.id,
         name: ongletNode.label,
@@ -2413,7 +2477,9 @@ export const transformNodesToTBLComplete = (
           ongletSections.flatMap(section => section.fields) : // Utiliser tous les champs des sections
           fieldsForThisTab // Utiliser SEULEMENT les champs qui appartiennent vraiment à cet onglet
         ,
-        subTabs: inferredSubTabs.length > 0 ? inferredSubTabs : undefined
+        subTabs: inferredSubTabs.length > 0 ? inferredSubTabs : undefined,
+        product_subTabsVisibility: productSubTabsVis || null,
+        product_sourceNodeId: productSourceId || null,
       };
       
       tabs.push(tab);

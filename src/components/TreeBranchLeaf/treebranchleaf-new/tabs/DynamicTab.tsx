@@ -36,6 +36,27 @@ const DynamicTab: React.FC<DynamicTabProps> = ({ groupNode, values, onChange, de
   const subGroups = children.filter(n => n.type === 'GROUP');
   const leaves = children.filter(n => n.type === 'LEAF');
 
+  // 📦 Filtrage par Produit : vérifie si un nœud est visible selon la sélection produit
+  const isProductVisible = (node: TblNode): boolean => {
+    if (!node.hasProduct) return true;
+    if (!node.product_visibleFor || !Array.isArray(node.product_visibleFor) || node.product_visibleFor.length === 0) return true;
+    if (!node.product_sourceNodeId) return true;
+
+    const sourceValue = values[node.product_sourceNodeId];
+    // Si aucune valeur sélectionnée dans le champ source → tout afficher
+    if (sourceValue === undefined || sourceValue === null || sourceValue === '') return true;
+    if (Array.isArray(sourceValue) && sourceValue.length === 0) return true;
+
+    const selectedValues: string[] = Array.isArray(sourceValue)
+      ? sourceValue.map(String)
+      : [String(sourceValue)];
+    return node.product_visibleFor.some(v => selectedValues.includes(v));
+  };
+
+  // Appliquer le filtre produit aux feuilles et sous-groupes
+  const visibleLeaves = useMemo(() => leaves.filter(isProductVisible), [leaves, values]);
+  const visibleSubGroups = useMemo(() => subGroups.filter(isProductVisible), [subGroups, values]);
+
   // SubTabs: utiliser la définition explicite de la branche (metadata.subTabs) et ajouter "Général" uniquement si des champs restent non affectés
   const allSubTabs = useMemo(() => {
     const explicitTabs = Array.isArray((groupNode as any).metadata?.subTabs)
@@ -49,7 +70,7 @@ const DynamicTab: React.FC<DynamicTabProps> = ({ groupNode, values, onChange, de
     // de sous-onglet reconnu (soit pas de sous-onglet, soit un sous-onglet "parasite" comme "Générales")
     let needsDefault = explicitTabs.length === 0; // si aucun onglet défini, afficher "Général"
     if (!needsDefault) {
-      leaves.forEach(l => {
+      visibleLeaves.forEach(l => {
         const leafMeta = (l as any).metadata || {};
         const leafAlwaysVisible = (leafMeta.displayAlways === true || String(leafMeta.displayAlways) === 'true') || /affich|aperç|display/i.test(l.title || '');
         if (groupAlwaysVisible || leafAlwaysVisible) return;
@@ -81,16 +102,40 @@ const DynamicTab: React.FC<DynamicTabProps> = ({ groupNode, values, onChange, de
     });
 
     return tabs.length > 0 ? tabs : [{ key: DEFAULT_SUBTAB_KEY, label: 'Général' }];
-  }, [leaves, groupNode]);
+  }, [visibleLeaves, groupNode]);
+
+  // 📦 Filtrage produit des sous-onglets : masquer ceux qui ne correspondent pas au produit sélectionné
+  const visibleSubTabs = useMemo(() => {
+    const meta = (groupNode as any).metadata;
+    const subTabsVis = meta?.product_subTabsVisibility as Record<string, string[] | null> | undefined;
+    if (!subTabsVis || !groupNode.hasProduct || !groupNode.product_sourceNodeId) return allSubTabs;
+
+    const sourceValue = values[groupNode.product_sourceNodeId];
+    // Si aucune valeur sélectionnée → tout afficher
+    if (sourceValue === undefined || sourceValue === null || sourceValue === '') return allSubTabs;
+    if (Array.isArray(sourceValue) && sourceValue.length === 0) return allSubTabs;
+
+    const selectedValues: string[] = Array.isArray(sourceValue)
+      ? sourceValue.map(String)
+      : [String(sourceValue)];
+
+    return allSubTabs.filter(tab => {
+      if (tab.key === DEFAULT_SUBTAB_KEY) return true; // Général toujours visible
+      const vis = subTabsVis[tab.label];
+      if (vis === null || vis === undefined) return true; // null = toujours visible
+      if (vis.length === 0) return false; // [] = jamais visible
+      return vis.some(v => selectedValues.includes(v));
+    });
+  }, [allSubTabs, groupNode, values]);
 
   useEffect(() => {
-    try { console.debug('[DynamicTab] subTabs for group', groupNode.id, allSubTabs); } catch { /* noop */ }
-  }, [allSubTabs, groupNode.id]);
+    try { console.debug('[DynamicTab] subTabs for group', groupNode.id, visibleSubTabs); } catch { /* noop */ }
+  }, [visibleSubTabs, groupNode.id]);
 
-  const showSubTabs = allSubTabs.length > 1;
+  const showSubTabs = visibleSubTabs.length > 1;
 
-  const [activeSubTab, setActiveSubTab] = useState<string | undefined>(allSubTabs.length ? allSubTabs[0].key : undefined);
-  useEffect(() => { if (allSubTabs.length > 0 && !allSubTabs.find(st => st.key === activeSubTab)) setActiveSubTab(allSubTabs[0].key); }, [allSubTabs, activeSubTab]);
+  const [activeSubTab, setActiveSubTab] = useState<string | undefined>(visibleSubTabs.length ? visibleSubTabs[0].key : undefined);
+  useEffect(() => { if (visibleSubTabs.length > 0 && !visibleSubTabs.find(st => st.key === activeSubTab)) setActiveSubTab(visibleSubTabs[0].key); }, [visibleSubTabs, activeSubTab]);
 
   return (
     <>
@@ -98,7 +143,7 @@ const DynamicTab: React.FC<DynamicTabProps> = ({ groupNode, values, onChange, de
       {/* SubTabs UI: afficher si plus d'un subtab */}
       {showSubTabs && (
         <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
-          {allSubTabs.map(st => (
+          {visibleSubTabs.map(st => (
             <button
               key={st.key}
               className={`btn btn-sm ${activeSubTab === st.key ? 'btn-primary' : 'btn-default'}`}
@@ -108,7 +153,7 @@ const DynamicTab: React.FC<DynamicTabProps> = ({ groupNode, values, onChange, de
         </div>
       )}
 
-      {leaves.filter(l => {
+      {visibleLeaves.filter(l => {
         const leafMeta = (l as any).metadata || {};
         // 🔧 FIX: Vérifier aussi subTabKey/subTabKeys directement sur le nœud (pas seulement metadata.subTab)
         // Les champs partagés et les champs TBL stockent leur affectation dans subTabKey/subTabKeys
@@ -144,7 +189,7 @@ const DynamicTab: React.FC<DynamicTabProps> = ({ groupNode, values, onChange, de
       ))}
 
       {/* Sous-groupes récursifs */}
-      {subGroups.map((grp) => (
+      {visibleSubGroups.map((grp) => (
         <SectionCard
           key={grp.id}
           title={<div className="flex items-center">{pickIcon()} {grp.title}</div>}

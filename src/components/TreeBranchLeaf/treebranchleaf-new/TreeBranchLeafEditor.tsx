@@ -591,7 +591,8 @@ const TreeBranchLeafEditor: React.FC<TreeBranchLeafEditorProps> = ({
       table: 'hasTable',
       api: 'hasAPI',
       link: 'hasLink',
-      markers: 'hasMarkers'
+      markers: 'hasMarkers',
+      product: 'hasProduct'
     };
     const flag = flagMap[capability];
     if (!flag) return;
@@ -1006,7 +1007,8 @@ const TreeBranchLeafEditor: React.FC<TreeBranchLeafEditorProps> = ({
       table: 'hasTable',
       api: 'hasAPI',
       link: 'hasLink',
-      markers: 'hasMarkers'
+      markers: 'hasMarkers',
+      product: 'hasProduct'
     };
     const flag = flagMap[capability];
     if (!flag) return;
@@ -1025,6 +1027,8 @@ const TreeBranchLeafEditor: React.FC<TreeBranchLeafEditorProps> = ({
           return { linkConfig: {} };
         case 'markers':
           return { markers: [] };
+        case 'product':
+          return { product_sourceNodeId: null, product_visibleFor: null, product_options: null };
         default:
           return {};
       }

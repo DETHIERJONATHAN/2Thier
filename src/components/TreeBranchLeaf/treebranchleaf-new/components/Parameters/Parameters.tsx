@@ -22,7 +22,8 @@ import {
   TagsOutlined,
   DeleteOutlined,
   HolderOutlined,
-  NodeIndexOutlined
+  NodeIndexOutlined,
+  ShoppingOutlined
 } from '@ant-design/icons';
 import { 
   DndContext, 
@@ -1348,13 +1349,23 @@ const Parameters: React.FC<ParametersProps> = (props) => {
         table: !!selectedNode.hasTable,
         api: !!selectedNode.hasAPI,
         link: !!selectedNode.hasLink,
-        markers: !!selectedNode.hasMarkers
+        markers: !!selectedNode.hasMarkers,
+        product: !!selectedNode.hasProduct
       };
-      console.log('🔄 [Parameters] capsState réinitialisé via hydratation:', newCapsState, { 
-        'selectedNode.hasLink': selectedNode.hasLink,
-        'selectedNode.id': selectedNode.id 
+      // 🔒 Éviter re-render inutile si capsState n'a pas changé
+      setCapsState(prev => {
+        const keys = Object.keys(newCapsState) as Array<keyof typeof newCapsState>;
+        const changed = keys.some(k => prev[k] !== newCapsState[k]);
+        if (!changed) {
+          console.log('⏭️ [Parameters] capsState identique, skip re-render');
+          return prev; // même référence → pas de re-render
+        }
+        console.log('🔄 [Parameters] capsState réinitialisé via hydratation:', newCapsState, { 
+          'selectedNode.hasLink': selectedNode.hasLink,
+          'selectedNode.id': selectedNode.id 
+        });
+        return newCapsState;
       });
-      setCapsState(newCapsState);
     }
 
     if (isNewNode) {
@@ -2848,6 +2859,8 @@ const Parameters: React.FC<ParametersProps> = (props) => {
                     return !!selectedNode?.hasLink;
                   case 'markers':
                     return !!selectedNode?.hasMarkers;
+                  case 'product':
+                    return !!selectedNode?.hasProduct;
                   default:
                     return selectedNode?.config?.[cap.key] && Object.keys(selectedNode.config[cap.key]).length > 0;
                 }
@@ -2864,6 +2877,7 @@ const Parameters: React.FC<ParametersProps> = (props) => {
                   case 'api': return <ApiOutlined />;
                   case 'link': return <LinkOutlined />;
                   case 'markers': return <TagsOutlined />;
+                  case 'product': return <ShoppingOutlined />;
                   default: return <AppstoreOutlined />;
                 }
               };

@@ -1674,6 +1674,8 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
           metadata.allowClear
         ) ?? !resolvedRequired,
         mode: pickDefined(
+          // 📦 PRODUIT FIX: Si config.multiple est explicitement true, forcer mode 'multiple'
+          (config.multiple === true) ? 'multiple' as const : undefined,
           normalizedAppearanceConfig.selectMode as 'single' | 'multiple' | 'checkboxes' | 'tags' | undefined,
           metadataSelectConfig.mode as 'single' | 'multiple' | 'checkboxes' | 'tags' | undefined
         ),
@@ -3470,7 +3472,10 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
           );
         }
         
-        const selectionMode = fieldConfig.selectConfig?.mode || ((fieldConfig.selectConfig?.multiple || fieldConfig.multiple) ? 'multiple' : 'single');
+        // 📦 PRODUIT FIX: multiple:true doit TOUJOURS gagner sur mode:'single' (metadata stale)
+        const selectionMode = (fieldConfig.selectConfig?.multiple || fieldConfig.multiple)
+          ? 'multiple'
+          : (fieldConfig.selectConfig?.mode || 'single');
         const allowCustomValues = fieldConfig.selectConfig?.allowCustom;
         const maxSelections = fieldConfig.selectConfig?.maxSelections;
         const isCheckboxMode = selectionMode === 'checkboxes';

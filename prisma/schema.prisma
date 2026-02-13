@@ -1786,6 +1786,12 @@ model TreeBranchLeafNode {
   iaMesureConfig Json? @map("ia_mesure_config") @db.Json
   // Structure: { enabled: boolean, referenceObjects: [{type,width,height,unit}], detectionSettings: {minPhotos,confidenceThreshold,useSharp,useFusion} }
 
+  // 📦 PRODUIT - Capacité de filtrage par produit
+  hasProduct                  Boolean            @default(false)
+  product_sourceNodeId        String?            // ID du nœud MULTISELECT qui pilote le filtrage
+  product_visibleFor          Json?              @db.Json // Liste des valeurs d'options pour lesquelles ce nœud est visible. Ex: ["panneaux","batteries"]. null = toujours visible.
+  product_options             Json?              @db.Json // Options du produit (stockées sur le nœud source). Ex: [{value:"panneaux",label:"Panneaux solaires"}]
+
   // Relation vers la variable exposée (1-to-1)
   TreeBranchLeafNodeVariable TreeBranchLeafNodeVariable?
   TreeBranchLeafNodeTable    TreeBranchLeafNodeTable[]
@@ -1796,6 +1802,7 @@ model TreeBranchLeafNode {
   @@index([data_exposedKey])
   @@index([fieldType])
   @@index([formula_activeId])
+  @@index([hasProduct])
   @@index([isSharedReference])
   @@index([link_activeId])
   @@index([markers_activeId])

@@ -3288,6 +3288,10 @@ function removeJSONFromUpdate(updateData: Record<string, unknown>): Record<strin
     if ('triggerNodeIds' in metaObj) {
       preservedMeta.triggerNodeIds = metaObj.triggerNodeIds;
     }
+    // ✅ AJOUT: Préserver product_subTabsVisibility pour la visibilité produit des sous-onglets
+    if ('product_subTabsVisibility' in metaObj) {
+      preservedMeta.product_subTabsVisibility = metaObj.product_subTabsVisibility;
+    }
     // ✅ AJOUT: Préserver appearance pour displayIcon et autres configs d'apparence
     if ('appearance' in metaObj && metaObj.appearance && typeof metaObj.appearance === 'object') {
       preservedMeta.appearance = metaObj.appearance;
@@ -4504,6 +4508,15 @@ router.get('/nodes/:nodeId', async (req, res) => {
         link_targetTreeId: true,
         link_mode: true,
         link_carryContext: true,
+        // Colonnes Product
+        hasProduct: true,
+        product_sourceNodeId: true,
+        product_visibleFor: true,
+        product_options: true,
+        // Select options (pour préremplir les options produit)
+        select_options: true,
+        // Sous-onglets (colonne dédiée pour les GROUP/branch nodes)
+        subtabs: true,
         TreeBranchLeafTree: { select: { organizationId: true } }
       }
     });
@@ -4517,6 +4530,19 @@ router.get('/nodes/:nodeId', async (req, res) => {
       return res.status(403).json({ error: 'AccÃƒÆ’Ã‚Â¨s refusÃƒÆ’Ã‚Â©' });
     }
 
+    // 📑 Reconstruire metadata.subTabs depuis la colonne subtabs (comme buildResponseFromColumns)
+    const rawMeta = (node.metadata && typeof node.metadata === 'object') ? { ...(node.metadata as Record<string, unknown>) } : {};
+    if (node.subtabs) {
+      try {
+        const parsedSubTabs = typeof node.subtabs === 'string' ? JSON.parse(node.subtabs) : node.subtabs;
+        if (Array.isArray(parsedSubTabs)) {
+          rawMeta.subTabs = parsedSubTabs;
+        }
+      } catch (e) {
+        console.error('[GET /nodes/:nodeId] Erreur parse subtabs:', e);
+      }
+    }
+
     return res.json({
       id: node.id,
       treeId: node.treeId,
@@ -4524,7 +4550,7 @@ router.get('/nodes/:nodeId', async (req, res) => {
       type: node.type,
       subType: node.subType,
       label: node.label,
-      metadata: node.metadata,
+      metadata: rawMeta,
       // Colonnes AI Measure dédiées
       aiMeasure_enabled: node.aiMeasure_enabled,
       aiMeasure_autoTrigger: node.aiMeasure_autoTrigger,
@@ -4536,6 +4562,13 @@ router.get('/nodes/:nodeId', async (req, res) => {
       link_targetTreeId: node.link_targetTreeId || null,
       link_mode: node.link_mode || 'JUMP',
       link_carryContext: node.link_carryContext || false,
+      // Colonnes Product
+      hasProduct: node.hasProduct || false,
+      product_sourceNodeId: node.product_sourceNodeId || null,
+      product_visibleFor: node.product_visibleFor || null,
+      product_options: node.product_options || null,
+      // Select options
+      select_options: node.select_options || [],
     });
   } catch (error) {
     console.error('[TreeBranchLeaf API] Error fetching node info:', error);

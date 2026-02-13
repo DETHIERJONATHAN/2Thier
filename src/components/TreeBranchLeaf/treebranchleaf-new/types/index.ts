@@ -60,6 +60,12 @@ export interface TreeBranchLeafNode {
   hasLink: boolean;
   hasMarkers: boolean;
   hasTable: boolean;
+  hasProduct: boolean;
+  
+  // Produit - Filtrage par produit
+  product_sourceNodeId?: string;
+  product_visibleFor?: string[] | null;
+  product_options?: Array<{ value: string; label: string }> | null;
   
   // Relations
   children?: TreeBranchLeafNode[];

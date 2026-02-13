@@ -1,4 +1,5 @@
 import React from 'react';
+import { Select } from 'antd';
 import { TblNode, TblFieldConfig } from "../types/types";
 
 export interface FieldRendererProps {
@@ -49,18 +50,34 @@ const FieldRenderer: React.FC<FieldRendererProps> = ({ node, value, onChange }) 
         />
       );
     }
-    case 'SELECT':
+    case 'SELECT': {
+      const selectOptions = (cfg.selectConfig?.options ?? []).map(o => ({ label: o.label, value: o.value }));
+      if (cfg.multiple) {
+        // 🛒 Mode multiselect avec Ant Design
+        const multiVal = Array.isArray(value) ? value as string[] : (value ? [value as string] : []);
+        return (
+          <Select
+            mode="multiple"
+            className="mt-2 w-full"
+            placeholder="Sélectionnez…"
+            value={multiVal}
+            onChange={(v: string[]) => onChange(v)}
+            options={selectOptions}
+            allowClear
+          />
+        );
+      }
       return (
-        <select
-          className="mt-2 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
-          value={(value as string) ?? cfg.selectConfig?.defaultValue ?? ''}
-          onChange={(e) => onChange(e.target.value)}
-        >
-          {(cfg.selectConfig?.options ?? []).map((o) => (
-            <option key={o.value} value={o.value}>{o.label}</option>
-          ))}
-        </select>
+        <Select
+          className="mt-2 w-full"
+          placeholder="Sélectionnez…"
+          value={(value as string) ?? cfg.selectConfig?.defaultValue ?? undefined}
+          onChange={(v: string) => onChange(v)}
+          options={selectOptions}
+          allowClear
+        />
       );
+    }
     case 'CHECKBOX':
       return (
         <label className="inline-flex items-center gap-2 text-sm text-slate-700">

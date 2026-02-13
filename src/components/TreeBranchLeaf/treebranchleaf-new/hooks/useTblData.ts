@@ -10,8 +10,17 @@ type ApiNode = {
 	description?: string | null;
 	type: string;
 	subType?: string | null;
+	fieldType?: string | null;
 	order?: number | null;
     metadata?: Record<string, unknown> | null;
+	// 📦 Filtrage par Produit
+	hasProduct?: boolean;
+	product_sourceNodeId?: string | null;
+	product_visibleFor?: string[] | null;
+	product_options?: Array<{ value: string; label: string }> | null;
+	// 🛒 Select options depuis colonne DB
+	select_options?: Array<{ label: string; value: string }> | null;
+	select_multiple?: boolean | null;
 };
 
 const mockTree: TblTree = {
@@ -200,8 +209,17 @@ function coerceNodes(response: unknown): ApiNode[] | undefined {
 			description: typeof node.description === 'string' ? node.description : null,
 			type: typeof node.type === 'string' ? node.type : 'leaf_field',
 			subType: typeof node.subType === 'string' ? node.subType : null,
+			fieldType: typeof node.fieldType === 'string' ? node.fieldType : null,
 			order: typeof node.order === 'number' ? node.order : null,
-			metadata: typeof node.metadata === 'object' && node.metadata !== null ? (node.metadata as JsonObject) : null
+			metadata: typeof node.metadata === 'object' && node.metadata !== null ? (node.metadata as JsonObject) : null,
+			// � Filtrage par Produit
+			hasProduct: typeof node.hasProduct === 'boolean' ? node.hasProduct : false,
+			product_sourceNodeId: typeof node.product_sourceNodeId === 'string' ? node.product_sourceNodeId : null,
+			product_visibleFor: Array.isArray(node.product_visibleFor) ? node.product_visibleFor as string[] : null,
+			product_options: Array.isArray(node.product_options) ? node.product_options as Array<{ value: string; label: string }> : null,
+			// �🛒 Select options depuis les colonnes DB
+			select_options: Array.isArray(node.select_options) ? node.select_options as Array<{ label: string; value: string }> : null,
+			select_multiple: typeof node.select_multiple === 'boolean' ? node.select_multiple : null,
 		};
 	});
 }
@@ -224,20 +242,41 @@ export function mapApiTree(tree: ApiTree, nodes: ApiNode[] | undefined): TblTree
 		return { type: 'LEAF', leafType: 'FIELD' };
 	};
 
-	const mapFieldConfig = (type: string, subType?: string | null): TblNode['fieldConfig'] => {
+	const mapFieldConfig = (type: string, subType?: string | null, apiNode?: ApiNode | null): TblNode['fieldConfig'] => {
 		const base = (subType || '').toUpperCase();
+		const ft = (apiNode?.fieldType || '').toUpperCase();
 		const t = type.toLowerCase();
-		if (t === 'leaf_number' || base === 'NUMBER') {
+
+		// 📦 Résoudre les options : select_options > product_options > []
+		const resolvedOpts: Array<{ label: string; value: string }> =
+			(apiNode?.select_options && apiNode.select_options.length > 0)
+				? apiNode.select_options.map(o => ({ label: o.label, value: o.value }))
+				: (apiNode?.product_options && apiNode.product_options.length > 0)
+					? apiNode.product_options.map(o => ({ label: o.label, value: o.value }))
+					: [];
+		// 📦 Multiselect si select_multiple OU s'il a des product_options (champ Produit = toujours multi)
+		const isProductSource = apiNode?.hasProduct === true && resolvedOpts.length > 0;
+		const isMulti = apiNode?.select_multiple === true || isProductSource;
+
+		if (t === 'leaf_number' || base === 'NUMBER' || ft === 'NUMBER') {
 			return { id: `cfg-${Math.random().toString(36).slice(2, 8)}`, fieldType: 'NUMBER', numberConfig: { min: 0, max: 100, step: 1, defaultValue: 0, ui: 'input' } };
 		}
-		if (t === 'leaf_select' || base === 'SELECT') {
-			return { id: `cfg-${Math.random().toString(36).slice(2, 8)}`, fieldType: 'SELECT', selectConfig: { options: [] } };
+		// 🛒 MULTISELECT: Traiter comme SELECT avec multiple=true
+		if (base === 'MULTISELECT' || ft === 'MULTISELECT') {
+			return { id: `cfg-${Math.random().toString(36).slice(2, 8)}`, fieldType: 'SELECT', multiple: true, selectConfig: { options: resolvedOpts } };
 		}
-		if (t === 'leaf_checkbox' || base === 'CHECKBOX') {
+		if (t === 'leaf_select' || base === 'SELECT' || ft === 'SELECT') {
+			return { id: `cfg-${Math.random().toString(36).slice(2, 8)}`, fieldType: 'SELECT', multiple: isMulti, selectConfig: { options: resolvedOpts } };
+		}
+		if (t === 'leaf_checkbox' || base === 'CHECKBOX' || ft === 'CHECKBOX') {
 			return { id: `cfg-${Math.random().toString(36).slice(2, 8)}`, fieldType: 'CHECKBOX' };
 		}
-		if (t === 'leaf_date' || base === 'DATE') {
+		if (t === 'leaf_date' || base === 'DATE' || ft === 'DATE') {
 			return { id: `cfg-${Math.random().toString(36).slice(2, 8)}`, fieldType: 'DATE' };
+		}
+		// 🛒 Fallback: Si le nœud a des options (select OU product), c'est un SELECT
+		if (resolvedOpts.length > 0) {
+			return { id: `cfg-${Math.random().toString(36).slice(2, 8)}`, fieldType: 'SELECT', multiple: isMulti, selectConfig: { options: resolvedOpts } };
 		}
 		return { id: `cfg-${Math.random().toString(36).slice(2, 8)}`, fieldType: 'TEXT', textConfig: { placeholder: '' } };
 	};
@@ -255,10 +294,15 @@ export function mapApiTree(tree: ApiTree, nodes: ApiNode[] | undefined): TblTree
 			order: apiNode.order ?? 0,
 			markers: [],
 			children: [],
-			fieldConfig: type === 'LEAF' ? mapFieldConfig(apiNode.type, apiNode.subType) : null,
+			fieldConfig: type === 'LEAF' ? mapFieldConfig(apiNode.type, apiNode.subType, apiNode) : null,
 			conditionConfig: null,
 			formulaConfig: null,
-			metadata: apiNode.metadata as JsonObject ?? undefined
+			metadata: apiNode.metadata as JsonObject ?? undefined,
+			// 📦 Filtrage par Produit
+			hasProduct: apiNode.hasProduct ?? false,
+			product_sourceNodeId: apiNode.product_sourceNodeId ?? null,
+			product_visibleFor: apiNode.product_visibleFor ?? null,
+			product_options: apiNode.product_options ?? null,
 		});
 	});
 
