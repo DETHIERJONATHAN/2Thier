@@ -812,7 +812,10 @@ const TablePanel: React.FC<TablePanelProps> = ({ treeId: initialTreeId, nodeId, 
   // 🎯 Options pour SELECT : Toutes les colonnes et lignes AVEC A1 disponibles
   const columnOptions = useMemo(() => {
     // ✅ Les colonnes sont déjà des strings simples, pas besoin de transformation
-    return (cfg.columns || []).map((col) => ({ value: col, label: col }));
+    // 🔥 FIX: Filtrer les colonnes vides/nulles pour éviter des options fantômes
+    return (cfg.columns || [])
+      .filter((col) => col != null && String(col).trim() !== '')
+      .map((col) => ({ value: col, label: col }));
   }, [cfg]);
   
   const rowOptions = useMemo(() => {
@@ -3496,15 +3499,22 @@ const TablePanel: React.FC<TablePanelProps> = ({ treeId: initialTreeId, nodeId, 
                         {/* ÉTAPE 4: Colonnes à afficher */}
                         <div style={{ paddingTop: 12, borderTop: '1px solid #91d5ff' }}>
                           <Text type="secondary" strong style={{ fontSize: 12, marginBottom: 8, display: 'block' }}>
-                            📌 ÉTAPE 4: Colonnes à afficher
+                            📌 ÉTAPE 4: Colonnes à afficher ({columnOptions.length} disponibles)
                           </Text>
                           <Select
                             size="small"
                             mode="multiple"
                             placeholder="Sélectionner colonne(s)..."
-                            value={normalizedDisplayColumns.normalized}
+                            value={normalizedDisplayColumns.normalized.filter(
+                              (col) => columnOptions.some((opt) => opt.value === col)
+                            )}
                             options={columnOptions}
                             allowClear
+                            showSearch
+                            optionFilterProp="label"
+                            virtual={false}
+                            listHeight={400}
+                            maxTagCount="responsive"
                             onChange={(values) => {
                               updateLookupConfig((prev) => ({
                                 ...prev,
@@ -3513,6 +3523,8 @@ const TablePanel: React.FC<TablePanelProps> = ({ treeId: initialTreeId, nodeId, 
                             }}
                             disabled={readOnly}
                             style={{ width: '100%', marginTop: 4 }}
+                            popupMatchSelectWidth={false}
+                            getPopupContainer={(trigger) => trigger.parentNode as HTMLElement}
                           />
                           <Text type="secondary" style={{ fontSize: 10, marginTop: 2, display: 'block' }}>
                             Ex: Janvier, Février... (plusieurs possibles)

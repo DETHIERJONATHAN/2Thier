@@ -337,6 +337,7 @@ export interface DropTargetData {
   capability?: CapabilityKey;
   position?: 'before' | 'after' | 'child';
   slot?: string; // slot spécifique pour paramètres (ex: condition_left, condition_right)
+  subTab?: string; // sous-onglet cible (rempli automatiquement lors du drop sur un en-tête de sous-onglet)
   accepts: (NodeTypeKey | TokenTypeKey)[];
 }
 

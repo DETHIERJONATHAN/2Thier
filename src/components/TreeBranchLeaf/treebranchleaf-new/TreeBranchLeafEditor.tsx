@@ -1214,7 +1214,8 @@ const TreeBranchLeafEditor: React.FC<TreeBranchLeafEditorProps> = ({
       capability: over.data.current?.capability,
       position: over.data.current?.position,
       accepts: over.data.current?.accepts || [],
-      slot: over.data.current?.slot
+      slot: over.data.current?.slot,
+      subTab: over.data.current?.subTab
     };
 
     const canDropHere = canDrop(draggedItem, targetData);
@@ -1239,7 +1240,8 @@ const TreeBranchLeafEditor: React.FC<TreeBranchLeafEditorProps> = ({
       capability: over.data.current?.capability,
       position: over.data.current?.position,
       accepts: over.data.current?.accepts || [],
-      slot: over.data.current?.slot
+      slot: over.data.current?.slot,
+      subTab: over.data.current?.subTab
     };
 
     try {
@@ -1285,8 +1287,46 @@ const TreeBranchLeafEditor: React.FC<TreeBranchLeafEditorProps> = ({
           payload.metadata = defaultMetadata;
         }
 
+        // 🎯 Auto-détection du sous-onglet depuis le contexte de drop
+        let detectedSubTab: string | null = null;
+        // Cas 1 : Drop sur un en-tête de sous-onglet (subTab dans les données du droppable)
+        if (targetData.subTab) {
+          detectedSubTab = String(targetData.subTab);
+        }
+        // Cas 2 : Drop avant/après un frère qui a un sous-onglet
+        else if ((targetData.position === 'before' || targetData.position === 'after') && targetData.nodeId) {
+          const sibling = map.get(String(targetData.nodeId));
+          if (sibling?.metadata?.subTab) {
+            const st = sibling.metadata.subTab;
+            detectedSubTab = Array.isArray(st) ? String(st[0]) : String(st);
+          }
+        }
+        // Cas 3 : Drop en enfant d'un nœud qui a lui-même un sous-onglet
+        else if (targetData.position === 'child' && targetData.nodeId) {
+          const targetNode = map.get(String(targetData.nodeId));
+          if (targetNode?.metadata?.subTab) {
+            const st = targetNode.metadata.subTab;
+            detectedSubTab = Array.isArray(st) ? String(st[0]) : String(st);
+          }
+        }
+
+        // Appliquer le sous-onglet détecté au metadata du nouveau nœud
+        if (detectedSubTab) {
+          const meta = payload.metadata || {};
+          meta.subTab = detectedSubTab;
+          payload.metadata = meta;
+          console.log(`📂 [DnD] Auto-affectation sous-onglet "${detectedSubTab}" au nouveau nœud`);
+        }
+
         // Appel de la fonction centralisée
         const newNode = await createNode(payload);
+
+        // 📂 Persister le sous-onglet via PUT (le POST ne migre pas vers la colonne dédiée 'subtab')
+        if (detectedSubTab && newNode) {
+          const newMeta = { ...(newNode.metadata || {}), subTab: detectedSubTab };
+          await updateNode({ id: newNode.id, metadata: newMeta } as Partial<TreeBranchLeafNode> & { id: string });
+          console.log(`📂 [DnD] Sous-onglet "${detectedSubTab}" persisté via PUT pour nœud ${newNode.id}`);
+        }
 
         if (newNode && (targetData.position === 'before' || targetData.position === 'after') && targetData.nodeId) {
           // Le rechargement dans createNode a déjà la bonne position, mais un moveNode peut forcer l'ordre si le backend ne le gère pas à la création.
@@ -1301,6 +1341,32 @@ const TreeBranchLeafEditor: React.FC<TreeBranchLeafEditorProps> = ({
           return;
         }
 
+        // 🎯 Auto-détection du sous-onglet pour le nœud déplacé
+        const nodeMap = new Map<string, TreeBranchLeafNode>();
+        const nodeStack: TreeBranchLeafNode[] = [...(propNodes || [])];
+        while (nodeStack.length) {
+          const cur = nodeStack.pop()!;
+          nodeMap.set(cur.id, cur);
+          if (cur.children) for (const c of cur.children) nodeStack.push(c);
+        }
+
+        let moveDetectedSubTab: string | null = null;
+        if (targetData.subTab) {
+          moveDetectedSubTab = String(targetData.subTab);
+        } else if ((targetData.position === 'before' || targetData.position === 'after') && targetData.nodeId) {
+          const sibling = nodeMap.get(String(targetData.nodeId));
+          if (sibling?.metadata?.subTab) {
+            const st = sibling.metadata.subTab;
+            moveDetectedSubTab = Array.isArray(st) ? String(st[0]) : String(st);
+          }
+        } else if (targetData.position === 'child' && targetData.nodeId) {
+          const targetNode = nodeMap.get(String(targetData.nodeId));
+          if (targetNode?.metadata?.subTab) {
+            const st = targetNode.metadata.subTab;
+            moveDetectedSubTab = Array.isArray(st) ? String(st[0]) : String(st);
+          }
+        }
+
         const success = await moveNode(
           draggedItem.data.id,
           targetData.nodeId,
@@ -1308,9 +1374,27 @@ const TreeBranchLeafEditor: React.FC<TreeBranchLeafEditorProps> = ({
         );
 
         if (success) {
-          // ✅ Succès silencieux (évite warning Ant Design sur message statique)
           console.log('✅ [TreeBranchLeafEditor] Élément déplacé avec succès');
           console.log('✅ DROP RÉUSSI !');
+
+          // 🎯 Mettre à jour le sous-onglet du nœud déplacé
+          const movedNode = nodeMap.get(String(draggedItem.data.id));
+          if (movedNode) {
+            const currentSubTab = movedNode.metadata?.subTab;
+            const currentSubTabStr = Array.isArray(currentSubTab) ? String(currentSubTab[0]) : (currentSubTab ? String(currentSubTab) : null);
+            
+            if (moveDetectedSubTab && moveDetectedSubTab !== currentSubTabStr) {
+              // Déplacé dans un sous-onglet différent → mettre à jour
+              const newMeta = { ...(movedNode.metadata || {}), subTab: moveDetectedSubTab };
+              console.log(`📂 [DnD] Auto-affectation sous-onglet "${moveDetectedSubTab}" au nœud déplacé`);
+              await updateNode({ id: movedNode.id, metadata: newMeta } as Partial<TreeBranchLeafNode> & { id: string });
+            } else if (!moveDetectedSubTab && currentSubTab) {
+              // Déplacé hors d'un sous-onglet → retirer le sous-onglet
+              const newMeta = { ...(movedNode.metadata || {}), subTab: null };
+              console.log(`📂 [DnD] Retrait sous-onglet du nœud déplacé (hors sous-onglet)`);
+              await updateNode({ id: movedNode.id, metadata: newMeta } as Partial<TreeBranchLeafNode> & { id: string });
+            }
+          }
         } else {
           console.error('❌ [TreeBranchLeafEditor] Échec du déplacement');
         }
@@ -1322,7 +1406,7 @@ const TreeBranchLeafEditor: React.FC<TreeBranchLeafEditorProps> = ({
       setHoveredTarget(null);
       setValidDrop(false);
     }
-  }, [draggedItem, validDrop, createNode, moveNode, propNodes, buildDefaultMetadata]);
+  }, [draggedItem, validDrop, createNode, moveNode, updateNode, propNodes, buildDefaultMetadata]);
   // 🎛️ HANDLERS - Gestionnaires d'événements
   // =============================================================================
 

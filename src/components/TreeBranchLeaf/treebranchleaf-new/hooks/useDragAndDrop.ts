@@ -293,7 +293,8 @@ export function useDragAndDrop({
       capability: over.data.current?.capability,
       position: over.data.current?.position,
   accepts: over.data.current?.accepts || [],
-  slot: over.data.current?.slot
+  slot: over.data.current?.slot,
+  subTab: over.data.current?.subTab
     };
     
     console.log(`🎯 Target data:`, targetData);
@@ -464,7 +465,8 @@ export function useDragAndDrop({
       capability: over.data.current?.capability,
       position: over.data.current?.position,
   accepts: over.data.current?.accepts || [],
-  slot: over.data.current?.slot
+  slot: over.data.current?.slot,
+  subTab: over.data.current?.subTab
     };
 
     console.log(`🚀 EXECUTING DROP:`, { draggedItem, targetData });

@@ -49,6 +49,78 @@ import type {
 
 const { Text } = Typography;
 
+// =============================================================================
+// 📂 Composant en-tête de sous-onglet Droppable
+// =============================================================================
+// Extrait en composant séparé car les hooks React (useDroppable) ne peuvent
+// pas être appelés dans un .map(). Ce composant rend l'en-tête de sous-onglet
+// en zone de drop : quand on glisse un élément dessus, on crée le nœud
+// directement dans ce sous-onglet avec metadata.subTab pré-rempli.
+const SubTabDropHeader: React.FC<{
+  name: string;
+  parentId: string;
+  childCount: number;
+  tabKey: string;
+  level: number;
+  isCollapsed: boolean;
+  onToggle: () => void;
+  readOnly?: boolean;
+}> = ({ name, parentId, childCount, tabKey, level, isCollapsed, onToggle, readOnly }) => {
+  const { isOver, setNodeRef } = useDroppable({
+    id: `droppable-subtab-${tabKey}`,
+    data: {
+      type: 'structure',
+      nodeId: parentId,
+      accepts: ['palette-item', 'node'],
+      position: 'child' as const,
+      subTab: name // ← passe le nom du sous-onglet au handler de drop
+    },
+    disabled: readOnly
+  });
+
+  return (
+    <div
+      ref={setNodeRef}
+      onClick={onToggle}
+      style={{
+        marginLeft: `${level * 12}px`,
+        padding: '3px 8px',
+        cursor: 'pointer',
+        display: 'flex',
+        alignItems: 'center',
+        gap: 6,
+        backgroundColor: isOver ? '#e6f7ff' : (isCollapsed ? '#f5f5f5' : '#f0f5ff'),
+        borderLeft: `3px solid ${isOver ? '#40a9ff' : (isCollapsed ? '#d9d9d9' : '#1890ff')}`,
+        borderRadius: '0 4px 4px 0',
+        marginBottom: 1,
+        marginTop: 2,
+        userSelect: 'none',
+        fontSize: 11,
+        color: isOver ? '#096dd9' : (isCollapsed ? '#888' : '#1890ff'),
+        fontWeight: 600,
+        transition: 'all 150ms',
+        outline: isOver ? '2px dashed #1890ff' : 'none'
+      }}
+      title={isOver
+        ? `Déposer ici pour ajouter au sous-onglet "${name}"`
+        : `${isCollapsed ? 'Développer' : 'Réduire'} le sous-onglet "${name}"`
+      }
+    >
+      <span style={{
+        fontSize: 8,
+        transition: 'transform 150ms',
+        display: 'inline-block',
+        transform: isCollapsed ? 'rotate(0deg)' : 'rotate(90deg)'
+      }}>▶</span>
+      <span style={{ fontSize: 10 }}>{isOver ? '📥' : (isCollapsed ? '📁' : '📂')}</span>
+      <span>{name}</span>
+      <span style={{ fontSize: 9, color: '#999', marginLeft: 'auto', fontWeight: 400 }}>
+        {childCount} champ{childCount > 1 ? 's' : ''}
+      </span>
+    </div>
+  );
+};
+
 // Type pour les éléments de la liste aplatie (nœuds + en-têtes de sous-onglets)
 interface FlatItem {
   node?: TreeBranchLeafNode;
@@ -537,46 +609,22 @@ const StructureComponent: React.FC<StructureProps> = ({
         {flattenedNodes.length > 0 ? (
           <div style={{ padding: '2px', textAlign: 'left' }}>
             {flattenedNodes.map((item) => {
-              // 📂 Rendu d'un en-tête de sous-onglet pliable
+              // 📂 Rendu d'un en-tête de sous-onglet pliable (avec zone de drop)
               if (item.subtabHeader) {
-                const { name, childCount, key } = item.subtabHeader;
+                const { name, parentId, childCount, key } = item.subtabHeader;
                 const isSubTabCollapsed = !expandedSubTabs.has(key);
                 return (
-                  <div
+                  <SubTabDropHeader
                     key={`subtab-${key}`}
-                    onClick={() => handleToggleSubTab(key)}
-                    style={{
-                      marginLeft: `${item.level * 12}px`,
-                      padding: '3px 8px',
-                      cursor: 'pointer',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 6,
-                      backgroundColor: isSubTabCollapsed ? '#f5f5f5' : '#f0f5ff',
-                      borderLeft: `3px solid ${isSubTabCollapsed ? '#d9d9d9' : '#1890ff'}`,
-                      borderRadius: '0 4px 4px 0',
-                      marginBottom: 1,
-                      marginTop: 2,
-                      userSelect: 'none',
-                      fontSize: 11,
-                      color: isSubTabCollapsed ? '#888' : '#1890ff',
-                      fontWeight: 600,
-                      transition: 'all 150ms'
-                    }}
-                    title={`${isSubTabCollapsed ? 'Développer' : 'Réduire'} le sous-onglet "${name}"`}
-                  >
-                    <span style={{
-                      fontSize: 8,
-                      transition: 'transform 150ms',
-                      display: 'inline-block',
-                      transform: isSubTabCollapsed ? 'rotate(0deg)' : 'rotate(90deg)'
-                    }}>▶</span>
-                    <span style={{ fontSize: 10 }}>{isSubTabCollapsed ? '📁' : '📂'}</span>
-                    <span>{name}</span>
-                    <span style={{ fontSize: 9, color: '#999', marginLeft: 'auto', fontWeight: 400 }}>
-                      {childCount} champ{childCount > 1 ? 's' : ''}
-                    </span>
-                  </div>
+                    name={name}
+                    parentId={parentId}
+                    childCount={childCount}
+                    tabKey={key}
+                    level={item.level}
+                    isCollapsed={isSubTabCollapsed}
+                    onToggle={() => handleToggleSubTab(key)}
+                    readOnly={readOnly}
+                  />
                 );
               }
 
