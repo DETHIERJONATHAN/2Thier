@@ -2300,18 +2300,15 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
       opt => String(opt.value) === String(currentValue)
     );
     
-    // CAS 3 : Si la valeur actuelle n'est plus valide, auto-sélectionner la première option
-    // 🔥 FIX: Ne pas re-sélectionner si on vient déjà d'auto-sélectionner cette valeur
-    if (!isCurrentValueValid && tableLookup.options.length > 0) {
-      const firstOption = tableLookup.options[0];
-      if (lastAutoSelectedValueRef.current !== firstOption.value) {
-        console.log(`🔄 [Auto-Select] Champ "${field.label}": Valeur "${currentValue}" invalide, sélection automatique de "${firstOption.label}"`);
-        lastAutoSelectedValueRef.current = firstOption.value;
-        // 🚀 FIX R18: Utiliser handleChange au lieu de onChange direct
-        // pour que le système de trigger index voit le changement et recalcule les display fields
-        handleChange(firstOption.value);
-        setLocalValue(firstOption.value);
-      }
+    // CAS 3 : Si la valeur actuelle n'est plus valide, VIDER la sélection (sans auto-sélectionner)
+    // 🎯 FIX: On ne fait JAMAIS d'auto-sélection. Seul l'utilisateur choisit.
+    // Les filtres/conditions continuent de fonctionner (ils limitent les options disponibles)
+    // mais aucune valeur n'est pré-sélectionnée automatiquement.
+    if (!isCurrentValueValid && currentValue !== null && currentValue !== undefined && currentValue !== '') {
+      console.log(`🧹 [Auto-Clear] Champ "${field.label}": Valeur "${currentValue}" invalide parmi les options, vidage (pas d'auto-sélection)`);
+      lastAutoSelectedValueRef.current = null;
+      handleChange(null);
+      setLocalValue(null);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tableLookup.options, tableLookup.loading, fieldConfig.fieldType, fieldConfig.hasTable, field.label]);

@@ -125,8 +125,18 @@ export const useBackendValue = (
         node?: { id?: string };
         targetNodeIds?: string[];
         calculatedValues?: Record<string, unknown>;
+        clearDisplayFields?: boolean;
       }>;
       const detail = custom.detail;
+
+      // 🔥 FIX RESET: Quand "Nouveau devis" demande de vider les display fields,
+      // on reset la valeur ET le lastValidValue ref pour empêcher la restauration
+      if (detail?.clearDisplayFields === true) {
+        console.log(`🧹 [useBackendValue] Clear display field: nodeId=${nodeId}`);
+        lastValidValue.current = undefined; // 🎯 Crucial: vider le ref pour empêcher setValueSafely de restaurer
+        setValue(undefined);
+        return;
+      }
 
       // 🎯 FIX OFF-BY-ONE: Consommer les valeurs inline du broadcast DIRECTEMENT
       // Avant ce fix, useBackendValue ne lisait jamais les calculatedValues inline,
