@@ -835,6 +835,79 @@ router.get('/email-templates', async (req, res) => {
   }
 });
 
+// POST /api/settings/email-templates - Créer un template email
+router.post('/email-templates', async (req, res) => {
+  try {
+    const authReq = req as AuthenticatedRequest;
+    const organizationId = authReq.user?.organizationId;
+    if (!organizationId) return res.status(400).json({ error: 'Organisation non spécifiée' });
+
+    const { name, subject, content, type } = req.body;
+    if (!name || !content) return res.status(400).json({ error: 'Nom et contenu requis' });
+
+    const template = await prisma.emailTemplate.create({
+      data: {
+        id: `et_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`,
+        organizationId,
+        name,
+        subject: subject || '',
+        content,
+        type: type || 'general',
+        updatedAt: new Date(),
+      }
+    });
+
+    console.log('[TEMPLATES] ✅ Template email créé:', template.id);
+    res.status(201).json(template);
+  } catch (error) {
+    console.error('[TEMPLATES] Erreur création template:', error);
+    res.status(500).json({ error: 'Erreur lors de la création du modèle', message: error instanceof Error ? error.message : 'Erreur inconnue' });
+  }
+});
+
+// PUT /api/settings/email-templates/:id - Modifier un template email
+router.put('/email-templates/:id', async (req, res) => {
+  try {
+    const authReq = req as AuthenticatedRequest;
+    const organizationId = authReq.user?.organizationId;
+    if (!organizationId) return res.status(400).json({ error: 'Organisation non spécifiée' });
+
+    const { name, subject, content, type } = req.body;
+    const template = await prisma.emailTemplate.update({
+      where: { id: req.params.id },
+      data: {
+        ...(name && { name }),
+        ...(subject !== undefined && { subject }),
+        ...(content !== undefined && { content }),
+        ...(type && { type }),
+        updatedAt: new Date(),
+      }
+    });
+
+    console.log('[TEMPLATES] ✅ Template email modifié:', template.id);
+    res.json(template);
+  } catch (error) {
+    console.error('[TEMPLATES] Erreur modification template:', error);
+    res.status(500).json({ error: 'Erreur lors de la modification du modèle', message: error instanceof Error ? error.message : 'Erreur inconnue' });
+  }
+});
+
+// DELETE /api/settings/email-templates/:id - Supprimer un template email
+router.delete('/email-templates/:id', async (req, res) => {
+  try {
+    const authReq = req as AuthenticatedRequest;
+    const organizationId = authReq.user?.organizationId;
+    if (!organizationId) return res.status(400).json({ error: 'Organisation non spécifiée' });
+
+    await prisma.emailTemplate.delete({ where: { id: req.params.id } });
+    console.log('[TEMPLATES] ✅ Template email supprimé:', req.params.id);
+    res.json({ success: true });
+  } catch (error) {
+    console.error('[TEMPLATES] Erreur suppression template:', error);
+    res.status(500).json({ error: 'Erreur lors de la suppression du modèle', message: error instanceof Error ? error.message : 'Erreur inconnue' });
+  }
+});
+
 // GET /api/settings/lead-sources
 router.get('/lead-sources', async (req, res) => {
   try {

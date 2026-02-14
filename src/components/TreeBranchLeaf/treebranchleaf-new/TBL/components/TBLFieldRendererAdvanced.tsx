@@ -2263,10 +2263,24 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
   // 🎯 Auto-sélection intelligente pour les champs SELECT avec table lookup
   // Quand les filtres changent (via formData), gérer automatiquement la sélection :
   // - Si aucune option disponible : vider la sélection
-  // - Si la valeur actuelle est invalide : auto-sélectionner la première option
+  // - Si la valeur actuelle est invalide ET que l'utilisateur avait déjà sélectionné : auto-sélectionner la première option
   // 🔥 FIX: Utiliser des refs pour éviter les boucles de rendu infinies (React Error #185)
   const lastAutoSelectedValueRef = useRef<unknown>(null);
   const lastOptionsSignatureRef = useRef<string>('');
+  
+  // 🎯 FIX CRITIQUE: Tracker si le champ a déjà eu une valeur réelle
+  // (sélection utilisateur OU valeur chargée depuis une soumission sauvegardée)
+  // → Empêche l'auto-sélection au chargement initial quand l'utilisateur n'a pas encore interagi
+  const hasEverHadValueRef = useRef<boolean>(
+    value !== null && value !== undefined && value !== ''
+  );
+  
+  // Mettre à jour le tracking quand la valeur change (manuellement ou depuis une soumission)
+  useEffect(() => {
+    if (localValue !== null && localValue !== undefined && localValue !== '') {
+      hasEverHadValueRef.current = true;
+    }
+  }, [localValue]);
   
   useEffect(() => {
     // Ne s'applique qu'aux champs SELECT avec table lookup activé
@@ -2282,13 +2296,11 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
     
     const currentValue = localValue;
     
-    // CAS 1 : Aucune option disponible → VIDER la sélection
+    // CAS 1 : Aucune option disponible → VIDER la sélection (seulement si on avait une valeur)
     if (!tableLookup.options || tableLookup.options.length === 0) {
       if (currentValue !== null && currentValue !== undefined && currentValue !== '' && lastAutoSelectedValueRef.current !== null) {
         console.log(`🧹 [Auto-Clear] Champ "${field.label}": Aucune option disponible, vidage de la sélection`);
         lastAutoSelectedValueRef.current = null;
-        // 🚀 FIX R18: Utiliser handleChange au lieu de onChange direct
-        // pour passer par toute la chaîne (normalisation, protection, etc.)
         handleChange(null);
         setLocalValue(null);
       }
@@ -2301,16 +2313,40 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
     );
     
     // CAS 3 : Si la valeur actuelle n'est plus valide, auto-sélectionner la première option
-    // 🔥 FIX: Ne pas re-sélectionner si on vient déjà d'auto-sélectionner cette valeur
+    // 🎯 FIX CRITIQUE: Ne PAS auto-sélectionner si l'utilisateur n'a JAMAIS sélectionné/eu de valeur
+    // → Évite l'apparition de "Sunny Boy 4.0" au chargement initial sans calcul des capacités
     if (!isCurrentValueValid && tableLookup.options.length > 0) {
+      // 🔒 GARDE: Si le champ n'a JAMAIS eu de valeur (chargement initial, aucune interaction),
+      // ne PAS auto-sélectionner. L'utilisateur doit d'abord faire une sélection manuelle.
+      if (!hasEverHadValueRef.current) {
+        console.log(`⏳ [Auto-Select BLOQUÉ] Champ "${field.label}": Pas d'auto-sélection au chargement initial (aucune interaction utilisateur)`);
+        return;
+      }
+      
       const firstOption = tableLookup.options[0];
       if (lastAutoSelectedValueRef.current !== firstOption.value) {
-        console.log(`🔄 [Auto-Select] Champ "${field.label}": Valeur "${currentValue}" invalide, sélection automatique de "${firstOption.label}"`);
+        console.log(`🔄 [Auto-Select] Champ "${field.label}": Valeur "${currentValue}" invalide après changement de filtres, sélection automatique de "${firstOption.label}"`);
         lastAutoSelectedValueRef.current = firstOption.value;
-        // 🚀 FIX R18: Utiliser handleChange au lieu de onChange direct
-        // pour que le système de trigger index voit le changement et recalcule les display fields
+        // 🚀 FIX R18+R21: Utiliser handleChange pour passer par toute la chaîne
+        // et déclencher le recalcul des champs d'affichage (capacités, prix, etc.)
         handleChange(firstOption.value);
         setLocalValue(firstOption.value);
+        
+        // 🎯 FIX CAPACITÉS: Forcer un dispatch tbl-force-retransform après un délai
+        // pour garantir que les champs DISPLAY (capacités) se recalculent
+        // même si le debounce normal rate le recalcul
+        setTimeout(() => {
+          if (typeof window !== 'undefined') {
+            console.log(`🔄 [Auto-Select] Champ "${field.label}": Dispatch forcé tbl-force-retransform pour recalcul des capacités`);
+            window.dispatchEvent(new CustomEvent('tbl-force-retransform', {
+              detail: {
+                source: 'auto-select-capacities',
+                nodeId: field.id,
+                timestamp: Date.now()
+              }
+            }));
+          }
+        }, 500); // Après le debounce de 300ms + marge
       }
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps

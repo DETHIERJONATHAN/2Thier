@@ -260,10 +260,16 @@ export class GoogleGmailService {
       const boundary = '----=_Part_' + Date.now();
       let messageParts: string[] = [];
       
-      // HEADERS - comme Gmail
-      messageParts.push(`From: ${options.fromName || '2Thier CRM'} <${this.adminEmail}>`);
+      // HEADERS - professionnels anti-spam
+      const fromEmail = this.adminEmail;
+      const fromName = options.fromName || '2Thier CRM';
+      messageParts.push(`From: ${fromName} <${fromEmail}>`);
       messageParts.push(`To: ${options.to}`);
       messageParts.push(`Subject: ${options.subject}`);
+      messageParts.push(`Reply-To: ${fromName} <${fromEmail}>`);
+      messageParts.push(`Date: ${new Date().toUTCString()}`);
+      messageParts.push(`Message-ID: <${Date.now()}.${Math.random().toString(36).substring(2)}@${fromEmail.split('@')[1] || '2thier.be'}>`);
+      messageParts.push(`X-Mailer: 2Thier CRM`);
       
       if (options.cc) messageParts.push(`Cc: ${options.cc}`);
       if (options.bcc) messageParts.push(`Bcc: ${options.bcc}`);

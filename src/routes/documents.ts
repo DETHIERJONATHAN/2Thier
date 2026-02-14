@@ -3,6 +3,7 @@ import { db } from '../lib/database';
 import { nanoid } from 'nanoid';
 import { renderDocumentPdf } from '../services/documentPdfRenderer';
 import type { AuthenticatedRequest } from '../middlewares/auth';
+import { GoogleGmailService } from '../google-auth/services/GoogleGmailService';
 
 const router = Router();
 const prisma = db;
@@ -1289,6 +1290,198 @@ router.get('/generated/:id/download', async (req: AuthenticatedRequest, res: Res
   } catch (error: any) {
     console.error('❌ [DOWNLOAD] Erreur téléchargement:', error);
     res.status(500).json({ error: 'Erreur serveur', details: error?.message });
+  }
+});
+
+// POST /api/documents/generated/:id/send-email - Envoyer le PDF par email
+router.post('/generated/:id/send-email', async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { to, subject, body, cc, bcc } = req.body;
+    const organizationId = (req.headers['x-organization-id'] as string) || req.user?.organizationId || undefined;
+    const userId = (req.headers['x-user-id'] as string) || req.user?.userId || undefined;
+
+    if (!to || !subject) {
+      return res.status(400).json({ error: 'Destinataire et sujet requis' });
+    }
+    if (!organizationId) {
+      return res.status(400).json({ error: 'Organisation non spécifiée' });
+    }
+
+    console.log('📧 [SEND-EMAIL] Envoi du document', id, 'à', to);
+
+    // 1. Charger le document (même logique que download)
+    const document = await prisma.generatedDocument.findFirst({
+      where: { id },
+      include: {
+        DocumentTemplate: {
+          include: {
+            DocumentSection: { orderBy: { order: 'asc' } },
+            DocumentTheme: true
+          }
+        },
+        Lead: true
+      }
+    });
+
+    if (!document) {
+      return res.status(404).json({ error: 'Document non trouvé' });
+    }
+
+    // 2. Générer le PDF (même logique que download)
+    const dataSnapshot = (document.dataSnapshot || {}) as Record<string, any>;
+    const templateTheme = document.DocumentTemplate?.DocumentTheme;
+    const defaultTheme = await prisma.documentTheme.findFirst({
+      where: { organizationId: document.organizationId, isDefault: true }
+    });
+    const organization = await prisma.organization.findFirst({
+      where: { id: document.organizationId }
+    });
+
+    const themeSource = templateTheme || defaultTheme;
+    const theme = themeSource ? {
+      primaryColor: themeSource.primaryColor || '#1890ff',
+      secondaryColor: themeSource.secondaryColor || '#52c41a',
+      accentColor: themeSource.accentColor || '#faad14',
+      textColor: themeSource.textColor || '#333333',
+      backgroundColor: themeSource.backgroundColor || '#ffffff',
+      fontFamily: themeSource.fontFamily || 'Helvetica',
+      fontSize: themeSource.fontSize || 12,
+      logoUrl: themeSource.logoUrl || ''
+    } : {
+      primaryColor: '#1890ff', secondaryColor: '#52c41a', accentColor: '#faad14',
+      textColor: '#333333', backgroundColor: '#ffffff', fontFamily: 'Helvetica',
+      fontSize: 12, logoUrl: ''
+    };
+
+    const sections = document.DocumentTemplate?.DocumentSection?.map(s => ({
+      id: s.id, type: s.type, name: (s as any).name || s.type,
+      config: (s.config || {}) as Record<string, any>,
+      translations: (s.translations || {}) as Record<string, any>,
+      linkedNodeIds: (s.linkedNodeIds || []) as string[],
+      order: s.order, isActive: (s as any).isActive !== false
+    })) || [];
+
+    const dbLead = document.Lead || {};
+    const snapshotLead = dataSnapshot.lead || {};
+    const mergedLead = { ...snapshotLead, ...dbLead };
+
+    const renderContext = {
+      template: document.DocumentTemplate ? {
+        id: document.DocumentTemplate.id, name: document.DocumentTemplate.name,
+        type: document.DocumentTemplate.type, theme, sections
+      } : { id: 'default', name: 'Document', type: 'QUOTE', theme, sections: [] },
+      lead: {
+        id: (dbLead as any).id || snapshotLead.id || '',
+        firstName: (dbLead as any).firstName || snapshotLead.firstName || '',
+        lastName: (dbLead as any).lastName || snapshotLead.lastName || '',
+        fullName: [(dbLead as any).firstName || snapshotLead.firstName, (dbLead as any).lastName || snapshotLead.lastName].filter(Boolean).join(' '),
+        email: (dbLead as any).email || snapshotLead.email || '',
+        phone: (dbLead as any).phone || snapshotLead.phone || '',
+        company: (dbLead as any).company || snapshotLead.company || '',
+        address: (mergedLead as any).address || '',
+        street: '', number: '', box: '', postalCode: '', city: '', country: ''
+      },
+      organization: organization ? {
+        name: organization.name || '', email: (organization as any).email || '',
+        phone: (organization as any).phone || '', address: (organization as any).address || '',
+        vatNumber: (organization as any).vatNumber || '', logo: (organization as any).logo || ''
+      } : undefined,
+      tblData: dataSnapshot.tblData || dataSnapshot,
+      quote: {
+        ...(dataSnapshot.quote || {}),
+        number: dataSnapshot.quote?.number || document.documentNumber || '',
+        reference: dataSnapshot.quote?.reference || document.documentNumber || '',
+        date: dataSnapshot.quote?.date || new Intl.DateTimeFormat('fr-BE').format(document.createdAt || new Date()),
+        totalHT: dataSnapshot.quote?.totalHT || 0,
+        totalTVA: dataSnapshot.quote?.totalTVA || 0,
+        totalTTC: dataSnapshot.quote?.totalTTC || 0,
+        status: dataSnapshot.quote?.status || 'draft'
+      },
+      documentNumber: document.documentNumber || '',
+      language: document.language || 'fr'
+    };
+
+    const pdfBuffer = await renderDocumentPdf(renderContext);
+    const filename = `${document.documentNumber || document.id}.pdf`;
+    console.log('📧 [SEND-EMAIL] PDF généré:', filename, pdfBuffer.length, 'bytes');
+
+    // 3. Envoyer via Gmail
+    const gmailService = await GoogleGmailService.create(organizationId, userId);
+    if (!gmailService) {
+      return res.status(401).json({ error: 'Google non connecté pour cette organisation' });
+    }
+
+    // Construire un email HTML professionnel pour éviter les filtres anti-spam
+    const orgName = organization?.name || '2Thier CRM';
+    const orgEmail = (organization as any)?.email || '';
+    const orgPhone = (organization as any)?.phone || '';
+    const orgAddress = (organization as any)?.address || '';
+    const bodyText = (body || '').trim();
+    // Convertir les sauts de ligne en <br> pour le HTML
+    const bodyHtml = bodyText.replace(/\n/g, '<br>');
+    
+    const htmlBody = `<!DOCTYPE html>
+<html lang="fr">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"></head>
+<body style="font-family: Arial, Helvetica, sans-serif; font-size: 14px; color: #333; line-height: 1.6; margin: 0; padding: 0; background-color: #f5f5f5;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="max-width: 600px; margin: 20px auto; background-color: #ffffff; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.08);">
+    <tr>
+      <td style="background-color: #1a1a2e; padding: 20px 30px; text-align: center;">
+        <h2 style="color: #ffffff; margin: 0; font-size: 20px;">${orgName}</h2>
+      </td>
+    </tr>
+    <tr>
+      <td style="padding: 30px;">
+        <p>${bodyHtml}</p>
+        <hr style="border: none; border-top: 1px solid #eee; margin: 25px 0;">
+        <p style="font-size: 13px; color: #666;">📎 Vous trouverez le document <strong>${filename}</strong> en pièce jointe de cet email.</p>
+      </td>
+    </tr>
+    <tr>
+      <td style="background-color: #f8f9fa; padding: 20px 30px; border-top: 1px solid #eee;">
+        <p style="margin: 0; font-size: 12px; color: #888;">Cordialement,</p>
+        <p style="margin: 5px 0 0; font-size: 13px; color: #555; font-weight: bold;">${orgName}</p>
+        ${orgEmail ? `<p style="margin: 2px 0; font-size: 12px; color: #888;">📧 ${orgEmail}</p>` : ''}
+        ${orgPhone ? `<p style="margin: 2px 0; font-size: 12px; color: #888;">📞 ${orgPhone}</p>` : ''}
+        ${orgAddress ? `<p style="margin: 2px 0; font-size: 12px; color: #888;">📍 ${orgAddress}</p>` : ''}
+      </td>
+    </tr>
+  </table>
+  <p style="text-align: center; font-size: 11px; color: #aaa; margin-top: 10px;">Cet email a été envoyé depuis ${orgName}. Si vous n'attendiez pas ce message, vous pouvez l'ignorer.</p>
+</body>
+</html>`;
+
+    const result = await gmailService.sendEmail({
+      to,
+      subject,
+      body: htmlBody,
+      isHtml: true,
+      cc: cc || undefined,
+      bcc: bcc || undefined,
+      fromName: orgName,
+      attachments: [{
+        filename,
+        content: pdfBuffer,
+        mimeType: 'application/pdf'
+      }]
+    });
+
+    if (!result) {
+      return res.status(500).json({ error: 'Erreur lors de l\'envoi de l\'email' });
+    }
+
+    // 4. Mettre à jour le statut du document
+    await prisma.generatedDocument.update({
+      where: { id },
+      data: { status: 'SENT', updatedAt: new Date() }
+    });
+
+    console.log('📧 [SEND-EMAIL] ✅ Email envoyé à', to, 'avec PDF', filename);
+    res.json({ success: true, messageId: result.messageId });
+  } catch (error: any) {
+    console.error('❌ [SEND-EMAIL] Erreur:', error);
+    res.status(500).json({ error: 'Erreur lors de l\'envoi', details: error?.message });
   }
 });
 

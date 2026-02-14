@@ -572,10 +572,14 @@ const LeadsSettingsPage = () => {
     try {
       const values = await emailForm.validateFields();
       
-      if (editingTemplate) {
+      if (editingTemplate && editingTemplate.id) {
+        // Mise à jour via API
+        await api.put(`/api/settings/email-templates/${editingTemplate.id}`, values);
         setEmailTemplates(prev => prev.map(t => t.id === editingTemplate.id ? { ...t, ...values } : t));
       } else {
-        setEmailTemplates(prev => [...prev, { id: Date.now().toString(), ...values }]);
+        // Création via API
+        const created = await api.post('/api/settings/email-templates', { ...values, type: values.type || 'CUSTOM' });
+        setEmailTemplates(prev => [...prev, created]);
       }
       
       NotificationManager.success(`Modèle ${editingTemplate ? 'modifié' : 'ajouté'} avec succès`);
@@ -592,6 +596,22 @@ const LeadsSettingsPage = () => {
       NotificationManager.error(errorMessage);
     }
   };
+
+  // 🗑️ Suppression d'un modèle email
+  const handleDeleteEmailTemplate = async (templateId: string) => {
+    try {
+      await api.delete(`/api/settings/email-templates/${templateId}`);
+      setEmailTemplates(prev => prev.filter(t => t.id !== templateId));
+      NotificationManager.success('Modèle supprimé avec succès');
+    } catch (error) {
+      const errorMessage = getErrorMessage(error, 'Erreur lors de la suppression');
+      NotificationManager.error(errorMessage);
+    }
+  };
+
+  // 📧 Insérer une variable dans le champ actif du formulaire email
+  const [variableSelectorVisible, setVariableSelectorVisible] = useState(false);
+  const [variableTargetField, setVariableTargetField] = useState<'subject' | 'content'>('content');
 
   // 📋 Configuration des onglets selon le cahier des charges
   const tabItems = [
@@ -1083,7 +1103,17 @@ const LeadsSettingsPage = () => {
                     }}
                   >
                     Modifier
-                  </Button>
+                  </Button>,
+                  <Popconfirm
+                    title="Supprimer ce modèle ?"
+                    onConfirm={() => template.id && handleDeleteEmailTemplate(template.id)}
+                    okText="Oui"
+                    cancelText="Non"
+                  >
+                    <Button icon={<DeleteOutlined />} danger>
+                      Supprimer
+                    </Button>
+                  </Popconfirm>
                 ]}
               >
                 <List.Item.Meta
@@ -1238,7 +1268,7 @@ const LeadsSettingsPage = () => {
         </Form>
       </Modal>
 
-      {/* Modal Modèles Email */}
+      {/* Modal Modèles Email — avec insertion de variables */}
       <Modal
         title={editingTemplate ? 'Modifier le modèle' : 'Nouveau modèle'}
         open={isEmailModalVisible}
@@ -1246,19 +1276,143 @@ const LeadsSettingsPage = () => {
         onCancel={() => setIsEmailModalVisible(false)}
         okText="Sauvegarder"
         cancelText="Annuler"
-        width={800}
+        width={900}
       >
         <Form form={emailForm} layout="vertical">
           <Form.Item name="name" label="Nom du modèle" rules={[{ required: true }]}>
             <Input />
           </Form.Item>
-          <Form.Item name="subject" label="Sujet de l'email" rules={[{ required: true }]}>
-            <Input />
-          </Form.Item>
-          <Form.Item name="content" label="Contenu" rules={[{ required: true }]}>
-            <Input.TextArea rows={6} />
+          <Row gutter={16}>
+            <Col span={24}>
+              <Form.Item name="subject" label={
+                <Space>
+                  <span>Sujet de l'email</span>
+                  <Button size="small" type="dashed" onClick={() => { setVariableTargetField('subject'); setVariableSelectorVisible(true); }}>
+                    + Variable
+                  </Button>
+                </Space>
+              } rules={[{ required: true }]}>
+                <Input />
+              </Form.Item>
+            </Col>
+          </Row>
+          <Form.Item name="content" label={
+            <Space>
+              <span>Contenu</span>
+              <Button size="small" type="dashed" onClick={() => { setVariableTargetField('content'); setVariableSelectorVisible(true); }}>
+                + Variable
+              </Button>
+            </Space>
+          } rules={[{ required: true }]}>
+            <Input.TextArea rows={8} />
           </Form.Item>
         </Form>
+        <Alert
+          message="Variables disponibles"
+          description="Cliquez sur '+ Variable' pour insérer des données dynamiques comme {lead.firstName}, {lead.email}, {org.name}, etc. Ces variables seront remplacées par les vraies données lors de l'envoi."
+          type="info"
+          showIcon
+          className="mt-2"
+        />
+      </Modal>
+
+      {/* Modal sélection de variable pour templates email */}
+      <Modal
+        title="Insérer une variable"
+        open={variableSelectorVisible}
+        onCancel={() => setVariableSelectorVisible(false)}
+        footer={null}
+        width={600}
+      >
+        <Alert
+          message={`La variable sera insérée dans le champ : ${variableTargetField === 'subject' ? 'Sujet' : 'Contenu'}`}
+          type="info"
+          showIcon
+          className="mb-4"
+        />
+        <div className="space-y-4">
+          <div>
+            <Text strong>👤 Données Client / Lead</Text>
+            <div className="mt-2 flex flex-wrap gap-2">
+              {[
+                { key: '{lead.firstName}', label: 'Prénom' },
+                { key: '{lead.lastName}', label: 'Nom' },
+                { key: '{lead.fullName}', label: 'Nom complet' },
+                { key: '{lead.email}', label: 'Email' },
+                { key: '{lead.phone}', label: 'Téléphone' },
+                { key: '{lead.company}', label: 'Société' },
+                { key: '{lead.address}', label: 'Adresse' },
+                { key: '{lead.city}', label: 'Ville' },
+                { key: '{lead.postalCode}', label: 'Code postal' },
+                { key: '{lead.vatNumber}', label: 'N° TVA' },
+              ].map(v => (
+                <Tag
+                  key={v.key}
+                  color="blue"
+                  style={{ cursor: 'pointer', margin: 2 }}
+                  onClick={() => {
+                    const current = emailForm.getFieldValue(variableTargetField) || '';
+                    emailForm.setFieldValue(variableTargetField, current + v.key);
+                    setVariableSelectorVisible(false);
+                  }}
+                >
+                  {v.label} <code style={{ fontSize: '0.8em' }}>{v.key}</code>
+                </Tag>
+              ))}
+            </div>
+          </div>
+          <div>
+            <Text strong>📄 Données Devis</Text>
+            <div className="mt-2 flex flex-wrap gap-2">
+              {[
+                { key: '{quote.number}', label: 'N° devis' },
+                { key: '{quote.date}', label: 'Date' },
+                { key: '{quote.totalHT}', label: 'Total HT' },
+                { key: '{quote.totalTTC}', label: 'Total TTC' },
+                { key: '{quote.reference}', label: 'Référence' },
+              ].map(v => (
+                <Tag
+                  key={v.key}
+                  color="green"
+                  style={{ cursor: 'pointer', margin: 2 }}
+                  onClick={() => {
+                    const current = emailForm.getFieldValue(variableTargetField) || '';
+                    emailForm.setFieldValue(variableTargetField, current + v.key);
+                    setVariableSelectorVisible(false);
+                  }}
+                >
+                  {v.label} <code style={{ fontSize: '0.8em' }}>{v.key}</code>
+                </Tag>
+              ))}
+            </div>
+          </div>
+          <div>
+            <Text strong>🏛️ Données Organisation</Text>
+            <div className="mt-2 flex flex-wrap gap-2">
+              {[
+                { key: '{org.name}', label: 'Nom société' },
+                { key: '{org.email}', label: 'Email' },
+                { key: '{org.phone}', label: 'Téléphone' },
+                { key: '{org.address}', label: 'Adresse' },
+                { key: '{org.vatNumber}', label: 'N° TVA' },
+                { key: '{org.website}', label: 'Site web' },
+              ].map(v => (
+                <Tag
+                  key={v.key}
+                  color="purple"
+                  style={{ cursor: 'pointer', margin: 2 }}
+                  onClick={() => {
+                    const current = emailForm.getFieldValue(variableTargetField) || '';
+                    emailForm.setFieldValue(variableTargetField, current + v.key);
+                    setVariableSelectorVisible(false);
+                  }}
+                >
+                  {v.label} <code style={{ fontSize: '0.8em' }}>{v.key}</code>
+                </Tag>
+              ))}
+            </div>
+          </div>
+        </div>
       </Modal>
 
       {/* Modal Mapping */}
