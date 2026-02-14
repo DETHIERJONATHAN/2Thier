@@ -2307,26 +2307,10 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
       if (lastAutoSelectedValueRef.current !== firstOption.value) {
         console.log(`🔄 [Auto-Select] Champ "${field.label}": Valeur "${currentValue}" invalide, sélection automatique de "${firstOption.label}"`);
         lastAutoSelectedValueRef.current = firstOption.value;
-        // 🚀 FIX R18+R21: Utiliser handleChange pour passer par toute la chaîne
-        // et déclencher le recalcul des champs d'affichage (capacités, prix, etc.)
+        // 🚀 FIX R18: Utiliser handleChange au lieu de onChange direct
+        // pour que le système de trigger index voit le changement et recalcule les display fields
         handleChange(firstOption.value);
         setLocalValue(firstOption.value);
-        
-        // 🎯 FIX CAPACITÉS: Forcer un dispatch tbl-force-retransform après un délai
-        // pour garantir que les champs DISPLAY (capacités) se recalculent
-        // quand l'auto-sélection est déclenchée par un changement de filtres
-        setTimeout(() => {
-          if (typeof window !== 'undefined') {
-            console.log(`🔄 [Auto-Select] Champ "${field.label}": Dispatch forcé tbl-force-retransform pour recalcul des capacités`);
-            window.dispatchEvent(new CustomEvent('tbl-force-retransform', {
-              detail: {
-                source: 'auto-select-capacities',
-                nodeId: field.id,
-                timestamp: Date.now()
-              }
-            }));
-          }
-        }, 500); // Après le debounce de 300ms + marge
       }
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
