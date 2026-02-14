@@ -71,6 +71,8 @@ export class GoogleGmailService {
   private organizationId: string;
   private userId: string | null = null;
   private adminEmail: string | null = null;
+  private userEmail: string | null = null;
+  private userFullName: string | null = null;
 
   constructor(gmail: gmail_v1.Gmail, organizationId: string, userId?: string) {
     this.gmail = gmail;
@@ -119,6 +121,22 @@ export class GoogleGmailService {
         console.log(`[GoogleGmailService] 📧 Email admin chargé: ${this.adminEmail}`);
       } else {
         console.warn(`[GoogleGmailService] ⚠️ Email admin non trouvé pour l'organisation ${this.organizationId}`);
+      }
+
+      // 🎯 Charger l'email du user connecté (pour envoyer depuis SON adresse)
+      if (this.userId) {
+        const googleToken = await db.googleToken.findUnique({
+          where: { userId_organizationId: { userId: this.userId, organizationId: this.organizationId } },
+        });
+        if (googleToken?.googleEmail) {
+          this.userEmail = googleToken.googleEmail;
+          console.log(`[GoogleGmailService] 📧 Email user Google chargé: ${this.userEmail}`);
+        }
+        // Charger aussi le nom complet du user
+        const user = await db.user.findUnique({ where: { id: this.userId } });
+        if (user) {
+          this.userFullName = [user.firstName, user.lastName].filter(Boolean).join(' ') || null;
+        }
       }
     } catch (error) {
       console.error('[GoogleGmailService] Erreur lors du chargement des infos organisation:', error);
@@ -260,9 +278,9 @@ export class GoogleGmailService {
       const boundary = '----=_Part_' + Date.now();
       let messageParts: string[] = [];
       
-      // HEADERS - professionnels anti-spam
-      const fromEmail = this.adminEmail;
-      const fromName = options.fromName || '2Thier CRM';
+      // HEADERS - envoyer depuis l'email du user connecté (fallback vers admin)
+      const fromEmail = this.userEmail || this.adminEmail;
+      const fromName = options.fromName || this.userFullName || '2Thier CRM';
       messageParts.push(`From: ${fromName} <${fromEmail}>`);
       messageParts.push(`To: ${options.to}`);
       messageParts.push(`Subject: ${options.subject}`);

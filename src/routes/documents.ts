@@ -1471,11 +1471,47 @@ router.post('/generated/:id/send-email', async (req: AuthenticatedRequest, res: 
       return res.status(500).json({ error: 'Erreur lors de l\'envoi de l\'email' });
     }
 
-    // 4. Mettre à jour le statut du document
+    // 4. Mettre à jour le statut du document + remplir les champs de traçabilité
+    const now = new Date();
     await prisma.generatedDocument.update({
       where: { id },
-      data: { status: 'SENT', updatedAt: new Date() }
+      data: {
+        status: 'SENT',
+        sentAt: now,
+        sentTo: to,
+        sentBy: userId || null,
+        updatedAt: now,
+      }
     });
+
+    // 5. Logger dans l'historique du lead (TimelineEvent)
+    if (document.leadId) {
+      try {
+        await prisma.timelineEvent.create({
+          data: {
+            id: nanoid(),
+            organizationId: organizationId || null,
+            entityType: 'document',
+            entityId: id,
+            eventType: 'email_sent',
+            leadId: document.leadId,
+            data: {
+              to,
+              cc: cc || null,
+              subject,
+              documentNumber: document.documentNumber || null,
+              filename,
+              templateName: document.DocumentTemplate?.name || null,
+              sentBy: userId || null,
+              messageId: result.messageId,
+            },
+          },
+        });
+        console.log('📧 [SEND-EMAIL] ✅ TimelineEvent créé pour le lead', document.leadId);
+      } catch (tlErr) {
+        console.warn('⚠️ [SEND-EMAIL] Impossible de créer TimelineEvent:', tlErr);
+      }
+    }
 
     console.log('📧 [SEND-EMAIL] ✅ Email envoyé à', to, 'avec PDF', filename);
     res.json({ success: true, messageId: result.messageId });
