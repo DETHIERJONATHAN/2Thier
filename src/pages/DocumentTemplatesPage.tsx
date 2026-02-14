@@ -245,20 +245,37 @@ const DocumentTemplatesPage = () => {
     }
   };
 
-  // Dupliquer template
+  // Dupliquer template (deep copy avec sections)
   const handleDuplicateTemplate = async (template: DocumentTemplate) => {
     try {
+      const hide = message.loading('Duplication en cours...', 0);
       const response = await api.get(`/api/documents/templates/${template.id}`);
+
+      // Mapper DocumentSection → sections (le POST attend "sections", pas "DocumentSection")
+      const sections = (response.DocumentSection || []).map((s: any) => ({
+        order: s.order,
+        type: s.type,
+        config: s.config || {},
+        displayConditions: s.displayConditions,
+        linkedNodeIds: s.linkedNodeIds || [],
+        linkedVariables: s.linkedVariables || [],
+        translations: s.translations || {},
+      }));
+
       const newTemplate = {
-        ...response,
         name: `${template.name} (Copie)`,
-        id: undefined,
-        createdAt: undefined,
-        updatedAt: undefined
+        type: response.type,
+        description: response.description,
+        translations: response.translations,
+        defaultLanguage: response.defaultLanguage,
+        themeId: response.themeId,
+        treeId: response.treeId,
+        sections,
       };
-      
+
       await api.post('/api/documents/templates', newTemplate);
-      message.success('Template dupliqué');
+      hide();
+      message.success(`Template dupliqué (${sections.length} section${sections.length > 1 ? 's' : ''} copiée${sections.length > 1 ? 's' : ''})`);
       loadTemplates();
     } catch {
       message.error('Erreur lors de la duplication');

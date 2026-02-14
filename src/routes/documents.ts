@@ -287,6 +287,7 @@ router.post('/templates', async (req: Request, res: Response) => {
       translations,
       defaultLanguage,
       themeId,
+      treeId,
       sections
     } = req.body;
 
@@ -304,6 +305,7 @@ router.post('/templates', async (req: Request, res: Response) => {
         translations: translations || {},
         defaultLanguage: defaultLanguage || 'fr',
         themeId,
+        treeId: treeId || null,
         createdBy: userId,
         updatedAt: new Date(),
         DocumentSection: {
