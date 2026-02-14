@@ -426,26 +426,46 @@ router.delete('/templates/:id', async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     const organizationId = req.headers['x-organization-id'] as string;
+    const isSuperAdmin = req.headers['x-is-super-admin'] === 'true';
+    const force = req.query.force === 'true';
+
+    // Construire la clause where
+    const whereClause: any = { id };
+    if (!isSuperAdmin && organizationId) {
+      whereClause.organizationId = organizationId;
+    }
 
     const template = await prisma.documentTemplate.findFirst({
-      where: { id, organizationId }
+      where: whereClause
     });
 
     if (!template) {
       return res.status(404).json({ error: 'Template non trouvé' });
     }
 
-    // Vérifier qu'il n'y a pas de documents générés avec ce template
+    // Vérifier s'il y a des documents générés avec ce template
     const documentsCount = await prisma.generatedDocument.count({
       where: { templateId: id }
     });
 
-    if (documentsCount > 0) {
+    if (documentsCount > 0 && !force) {
       return res.status(400).json({ 
-        error: 'Impossible de supprimer : des documents utilisent ce template',
+        error: `Impossible de supprimer : ${documentsCount} document(s) utilisent ce template. Utilisez ?force=true pour supprimer quand même.`,
         documentsCount 
       });
     }
+
+    // Supprimer en cascade : documents générés → sections → template
+    if (documentsCount > 0) {
+      await prisma.generatedDocument.deleteMany({
+        where: { templateId: id }
+      });
+    }
+
+    // Supprimer les sections liées (onDelete: NoAction dans le schéma)
+    await prisma.documentSection.deleteMany({
+      where: { templateId: id }
+    });
 
     await prisma.documentTemplate.delete({
       where: { id }

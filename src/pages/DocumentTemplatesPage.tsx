@@ -235,13 +235,27 @@ const DocumentTemplatesPage = () => {
   };
 
   // Supprimer template
-  const handleDeleteTemplate = async (id: string) => {
+  const handleDeleteTemplate = async (id: string, force = false) => {
     try {
-      await api.delete(`/api/documents/templates/${id}`);
+      const url = force ? `/api/documents/templates/${id}?force=true` : `/api/documents/templates/${id}`;
+      await api.delete(url);
       message.success('Template supprimé');
       loadTemplates();
     } catch (error: any) {
-      message.error(error.response?.data?.error || 'Erreur lors de la suppression');
+      const data = error?.response?.data || error;
+      // Si des documents générés bloquent, proposer la suppression forcée
+      if (data?.documentsCount > 0) {
+        Modal.confirm({
+          title: 'Documents liés détectés',
+          content: `${data.documentsCount} document(s) généré(s) utilisent ce template. Voulez-vous tout supprimer ?`,
+          okText: 'Supprimer tout',
+          cancelText: 'Annuler',
+          okButtonProps: { danger: true },
+          onOk: () => handleDeleteTemplate(id, true),
+        });
+      } else {
+        message.error(data?.error || 'Erreur lors de la suppression');
+      }
     }
   };
 
