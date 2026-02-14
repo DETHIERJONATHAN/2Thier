@@ -1217,6 +1217,443 @@ router.post('/trees', async (req, res) => {
   }
 });
 
+
+// =============================================================================
+// POST /api/treebranchleaf/trees/:id/duplicate - Dupliquer un arbre AVEC tout son contenu
+// =============================================================================
+router.post('/trees/:id/duplicate', async (req, res) => {
+  try {
+    const { id: sourceTreeId } = req.params;
+    const { name } = req.body || {};
+    const authCtx = getAuthCtx(req as unknown as MinimalReq);
+    const targetOrgId = authCtx.organizationId as string | null;
+
+    if (!targetOrgId) {
+      return res.status(400).json({ error: 'organizationId requis' });
+    }
+
+    // 1. Récupérer l'arbre source
+    const sourceTree = await prisma.treeBranchLeafTree.findFirst({
+      where: { id: sourceTreeId, organizationId: targetOrgId }
+    });
+    if (!sourceTree) {
+      return res.status(404).json({ error: 'Arbre source non trouvé' });
+    }
+
+    // 2. Créer le nouvel arbre
+    const newTreeId = randomUUID();
+    const newTree = await prisma.treeBranchLeafTree.create({
+      data: {
+        id: newTreeId,
+        organizationId: targetOrgId,
+        name: (name || `${sourceTree.name} (Copie)`).trim(),
+        description: sourceTree.description,
+        category: sourceTree.category,
+        icon: sourceTree.icon,
+        color: sourceTree.color,
+        version: sourceTree.version,
+        status: 'draft',
+        settings: sourceTree.settings as Prisma.InputJsonValue ?? {},
+        metadata: sourceTree.metadata as Prisma.InputJsonValue ?? {},
+        isPublic: sourceTree.isPublic,
+        updatedAt: new Date(),
+      }
+    });
+
+    // 3. Récupérer TOUS les noeuds de l'arbre source
+    const sourceNodes = await prisma.treeBranchLeafNode.findMany({
+      where: { treeId: sourceTreeId }
+    });
+
+    if (sourceNodes.length === 0) {
+      console.log(`[DUPLICATE TREE] Arbre source ${sourceTreeId} n'a aucun noeud. Arbre vide créé.`);
+      return res.status(201).json({ tree: newTree, nodesCount: 0 });
+    }
+
+    // 4. Construire la map oldId -> newId
+    const idMap = new Map<string, string>();
+    for (const node of sourceNodes) {
+      idMap.set(node.id, randomUUID());
+    }
+
+    // 5. Copier tous les noeuds avec les nouveaux IDs
+    const now = new Date();
+    const nodeCreateData = sourceNodes.map(node => {
+      const newId = idMap.get(node.id)!;
+      const newParentId = node.parentId ? (idMap.get(node.parentId) ?? null) : null;
+
+      // Remap les linkedVariableIds, linkedFormulaIds, etc.
+      const remapArray = (arr: string[]) => arr.map(oldId => idMap.get(oldId) ?? oldId);
+
+      // Remap repeater_templateNodeIds (JSON string d'array d'IDs)
+      let newRepeaterTemplateNodeIds = node.repeater_templateNodeIds;
+      if (newRepeaterTemplateNodeIds) {
+        try {
+          const parsed = JSON.parse(newRepeaterTemplateNodeIds);
+          if (Array.isArray(parsed)) {
+            newRepeaterTemplateNodeIds = JSON.stringify(parsed.map((tid: string) => idMap.get(tid) ?? tid));
+          }
+        } catch { /* garder tel quel */ }
+      }
+
+      // Remap les IDs dans metadata
+      let newMetadata = node.metadata as Record<string, unknown> ?? {};
+      try {
+        let metaStr = JSON.stringify(newMetadata);
+        for (const [oldId, newMappedId] of idMap.entries()) {
+          metaStr = metaStr.split(oldId).join(newMappedId);
+        }
+        newMetadata = JSON.parse(metaStr);
+      } catch { /* garder tel quel */ }
+
+      // Remap link_targetNodeId
+      let newLinkTargetNodeId = node.link_targetNodeId;
+      if (newLinkTargetNodeId && idMap.has(newLinkTargetNodeId)) {
+        newLinkTargetNodeId = idMap.get(newLinkTargetNodeId)!;
+      }
+
+      // Remap link_targetTreeId si meme arbre
+      let newLinkTargetTreeId = node.link_targetTreeId;
+      if (newLinkTargetTreeId === sourceTreeId) {
+        newLinkTargetTreeId = newTreeId;
+      }
+
+      // Remap product_sourceNodeId
+      let newProductSourceNodeId = node.product_sourceNodeId;
+      if (newProductSourceNodeId && idMap.has(newProductSourceNodeId)) {
+        newProductSourceNodeId = idMap.get(newProductSourceNodeId)!;
+      }
+
+      // Remap repeater_countSourceNodeId
+      let newRepeaterCountSourceNodeId = node.repeater_countSourceNodeId;
+      if (newRepeaterCountSourceNodeId && idMap.has(newRepeaterCountSourceNodeId)) {
+        newRepeaterCountSourceNodeId = idMap.get(newRepeaterCountSourceNodeId)!;
+      }
+
+      return {
+        id: newId,
+        treeId: newTreeId,
+        parentId: newParentId,
+        type: node.type,
+        subType: node.subType,
+        label: node.label,
+        description: node.description,
+        value: node.value,
+        order: node.order,
+        isRequired: node.isRequired,
+        isVisible: node.isVisible,
+        isActive: node.isActive,
+        fieldConfig: node.fieldConfig as Prisma.InputJsonValue,
+        conditionConfig: node.conditionConfig as Prisma.InputJsonValue,
+        formulaConfig: node.formulaConfig as Prisma.InputJsonValue,
+        tableConfig: node.tableConfig as Prisma.InputJsonValue,
+        apiConfig: node.apiConfig as Prisma.InputJsonValue,
+        linkConfig: node.linkConfig as Prisma.InputJsonValue,
+        defaultValue: node.defaultValue,
+        calculatedValue: null,
+        metadata: newMetadata as Prisma.InputJsonValue,
+        createdAt: now,
+        updatedAt: now,
+        hasAPI: node.hasAPI,
+        hasCondition: node.hasCondition,
+        hasData: node.hasData,
+        hasFormula: node.hasFormula,
+        hasLink: node.hasLink,
+        hasMarkers: node.hasMarkers,
+        hasTable: node.hasTable,
+        hasProduct: node.hasProduct,
+        fieldType: node.fieldType,
+        fieldSubType: node.fieldSubType,
+        field_label: node.field_label,
+        text_placeholder: node.text_placeholder,
+        text_minLength: node.text_minLength,
+        text_maxLength: node.text_maxLength,
+        text_regex: node.text_regex,
+        text_mask: node.text_mask,
+        text_rows: node.text_rows,
+        text_helpTooltipType: node.text_helpTooltipType,
+        text_helpTooltipText: node.text_helpTooltipText,
+        text_helpTooltipImage: node.text_helpTooltipImage,
+        number_min: node.number_min,
+        number_max: node.number_max,
+        number_step: node.number_step,
+        number_decimals: node.number_decimals,
+        number_unit: node.number_unit,
+        number_prefix: node.number_prefix,
+        number_suffix: node.number_suffix,
+        number_defaultValue: node.number_defaultValue,
+        bool_defaultValue: node.bool_defaultValue,
+        bool_trueLabel: node.bool_trueLabel,
+        bool_falseLabel: node.bool_falseLabel,
+        date_format: node.date_format,
+        date_showTime: node.date_showTime,
+        date_minDate: node.date_minDate,
+        date_maxDate: node.date_maxDate,
+        select_options: node.select_options as Prisma.InputJsonValue,
+        select_multiple: node.select_multiple,
+        select_searchable: node.select_searchable,
+        select_allowClear: node.select_allowClear,
+        select_defaultValue: node.select_defaultValue,
+        option_label: node.option_label,
+        image_maxSize: node.image_maxSize,
+        image_ratio: node.image_ratio,
+        image_crop: node.image_crop,
+        image_thumbnails: node.image_thumbnails as Prisma.InputJsonValue,
+        file_allowedTypes: node.file_allowedTypes,
+        file_maxSize: node.file_maxSize,
+        file_multiple: node.file_multiple,
+        file_showPreview: node.file_showPreview,
+        appearance_size: node.appearance_size,
+        appearance_variant: node.appearance_variant,
+        appearance_width: node.appearance_width,
+        appearance_displayIcon: node.appearance_displayIcon,
+        section_collapsible: node.section_collapsible,
+        section_columnsDesktop: node.section_columnsDesktop,
+        section_columnsMobile: node.section_columnsMobile,
+        section_defaultCollapsed: node.section_defaultCollapsed,
+        section_gutter: node.section_gutter,
+        section_showChildrenCount: node.section_showChildrenCount,
+        data_activeId: node.data_activeId,
+        data_displayFormat: node.data_displayFormat,
+        data_exposedKey: node.data_exposedKey ? `${node.data_exposedKey}_copy_${newTreeId.slice(0, 8)}` : null,
+        data_instances: node.data_instances as Prisma.InputJsonValue,
+        data_precision: node.data_precision,
+        data_unit: node.data_unit,
+        data_visibleToUser: node.data_visibleToUser,
+        formula_activeId: node.formula_activeId,
+        formula_instances: node.formula_instances as Prisma.InputJsonValue,
+        formula_name: node.formula_name,
+        formula_tokens: node.formula_tokens as Prisma.InputJsonValue,
+        condition_activeId: node.condition_activeId,
+        condition_branches: node.condition_branches as Prisma.InputJsonValue,
+        condition_instances: node.condition_instances as Prisma.InputJsonValue,
+        condition_mode: node.condition_mode,
+        condition_tokens: node.condition_tokens as Prisma.InputJsonValue,
+        api_activeId: node.api_activeId,
+        api_bodyVars: node.api_bodyVars as Prisma.InputJsonValue,
+        api_instances: node.api_instances as Prisma.InputJsonValue,
+        api_name: node.api_name,
+        link_activeId: node.link_activeId,
+        link_carryContext: node.link_carryContext,
+        link_instances: node.link_instances as Prisma.InputJsonValue,
+        link_mode: node.link_mode,
+        link_name: node.link_name,
+        link_params: node.link_params as Prisma.InputJsonValue,
+        link_targetNodeId: newLinkTargetNodeId,
+        link_targetTreeId: newLinkTargetTreeId,
+        markers_activeId: node.markers_activeId,
+        markers_available: node.markers_available as Prisma.InputJsonValue,
+        markers_instances: node.markers_instances as Prisma.InputJsonValue,
+        markers_name: node.markers_name,
+        markers_selectedIds: node.markers_selectedIds as Prisma.InputJsonValue,
+        table_activeId: node.table_activeId,
+        table_columns: node.table_columns as Prisma.InputJsonValue,
+        table_data: node.table_data as Prisma.InputJsonValue,
+        table_importSource: node.table_importSource,
+        table_instances: node.table_instances as Prisma.InputJsonValue,
+        table_isImported: node.table_isImported,
+        table_meta: node.table_meta as Prisma.InputJsonValue,
+        table_name: node.table_name,
+        table_rows: node.table_rows as Prisma.InputJsonValue,
+        table_type: node.table_type,
+        tbl_auto_generated: node.tbl_auto_generated,
+        tbl_capacity: node.tbl_capacity,
+        tbl_code: node.tbl_code,
+        tbl_type: node.tbl_type,
+        repeater_templateNodeIds: newRepeaterTemplateNodeIds,
+        repeater_minItems: node.repeater_minItems,
+        repeater_maxItems: node.repeater_maxItems,
+        repeater_addButtonLabel: node.repeater_addButtonLabel,
+        repeater_templateNodeLabels: node.repeater_templateNodeLabels,
+        repeater_countSourceNodeId: newRepeaterCountSourceNodeId,
+        repeater_buttonSize: node.repeater_buttonSize,
+        repeater_buttonWidth: node.repeater_buttonWidth,
+        repeater_iconOnly: node.repeater_iconOnly,
+        isMultiple: node.isMultiple,
+        isSharedReference: node.isSharedReference,
+        sharedReferenceCategory: node.sharedReferenceCategory,
+        sharedReferenceDescription: node.sharedReferenceDescription,
+        sharedReferenceId: node.sharedReferenceId,
+        sharedReferenceName: node.sharedReferenceName,
+        sharedReferenceIds: node.sharedReferenceIds,
+        linkedConditionIds: remapArray(node.linkedConditionIds),
+        linkedFormulaIds: remapArray(node.linkedFormulaIds),
+        linkedTableIds: remapArray(node.linkedTableIds),
+        linkedVariableIds: remapArray(node.linkedVariableIds),
+        subtabs: node.subtabs as Prisma.InputJsonValue,
+        subtab: node.subtab as Prisma.InputJsonValue,
+        aiMeasure_enabled: node.aiMeasure_enabled,
+        aiMeasure_autoTrigger: node.aiMeasure_autoTrigger,
+        aiMeasure_prompt: node.aiMeasure_prompt,
+        aiMeasure_keys: node.aiMeasure_keys as Prisma.InputJsonValue,
+        iaMesureConfig: node.iaMesureConfig as Prisma.InputJsonValue,
+        product_sourceNodeId: newProductSourceNodeId,
+        product_visibleFor: node.product_visibleFor as Prisma.InputJsonValue,
+        product_options: node.product_options as Prisma.InputJsonValue,
+      };
+    });
+
+    // 6. Insérer tous les noeuds en batch
+    const created = await prisma.treeBranchLeafNode.createMany({
+      data: nodeCreateData as any[],
+    });
+
+    // 7. Copier les variables liées
+    const sourceNodeIds = sourceNodes.map(n => n.id);
+    const sourceVariables = await prisma.treeBranchLeafNodeVariable.findMany({
+      where: { nodeId: { in: sourceNodeIds } }
+    });
+    if (sourceVariables.length > 0) {
+      const varCreateData = sourceVariables.map(v => ({
+        id: randomUUID(),
+        nodeId: idMap.get(v.nodeId) ?? v.nodeId,
+        exposedKey: `${v.exposedKey}_${newTreeId.slice(0, 8)}`,
+        displayName: v.displayName,
+        displayFormat: v.displayFormat,
+        unit: v.unit,
+        precision: v.precision,
+        visibleToUser: v.visibleToUser,
+        isReadonly: v.isReadonly,
+        defaultValue: v.defaultValue,
+        metadata: v.metadata as Prisma.InputJsonValue,
+        createdAt: now,
+        updatedAt: now,
+        fixedValue: v.fixedValue,
+        selectedNodeId: v.selectedNodeId ? (idMap.get(v.selectedNodeId) ?? v.selectedNodeId) : null,
+        sourceRef: v.sourceRef,
+        sourceType: v.sourceType,
+      }));
+      await prisma.treeBranchLeafNodeVariable.createMany({ data: varCreateData as any[] });
+    }
+
+    // 8. Copier les conditions
+    const sourceConditions = await prisma.treeBranchLeafNodeCondition.findMany({
+      where: { nodeId: { in: sourceNodeIds } }
+    });
+    if (sourceConditions.length > 0) {
+      const condCreateData = sourceConditions.map(c => ({
+        id: randomUUID(),
+        nodeId: idMap.get(c.nodeId) ?? c.nodeId,
+        organizationId: targetOrgId,
+        name: c.name,
+        conditionSet: c.conditionSet as Prisma.InputJsonValue,
+        description: c.description,
+        isDefault: c.isDefault,
+        order: c.order,
+        createdAt: now,
+        updatedAt: now,
+      }));
+      await prisma.treeBranchLeafNodeCondition.createMany({ data: condCreateData as any[] });
+    }
+
+    // 9. Copier les formules
+    const sourceFormulas = await prisma.treeBranchLeafNodeFormula.findMany({
+      where: { nodeId: { in: sourceNodeIds } }
+    });
+    if (sourceFormulas.length > 0) {
+      const formulaCreateData = sourceFormulas.map(f => ({
+        id: randomUUID(),
+        nodeId: idMap.get(f.nodeId) ?? f.nodeId,
+        organizationId: targetOrgId,
+        name: f.name,
+        tokens: f.tokens as Prisma.InputJsonValue,
+        description: f.description,
+        isDefault: f.isDefault,
+        order: f.order,
+        createdAt: now,
+        updatedAt: now,
+        targetProperty: f.targetProperty,
+        constraintMessage: f.constraintMessage,
+      }));
+      await prisma.treeBranchLeafNodeFormula.createMany({ data: formulaCreateData as any[] });
+    }
+
+    // 10. Copier les tables liées
+    const sourceTables = await prisma.treeBranchLeafNodeTable.findMany({
+      where: { nodeId: { in: sourceNodeIds } },
+      include: { tableColumns: true, tableRows: true }
+    });
+    for (const table of sourceTables) {
+      const newTableId = randomUUID();
+      await prisma.treeBranchLeafNodeTable.create({
+        data: {
+          id: newTableId,
+          nodeId: idMap.get(table.nodeId) ?? table.nodeId,
+          organizationId: targetOrgId,
+          name: table.name,
+          description: table.description,
+          type: table.type,
+          meta: table.meta as Prisma.InputJsonValue,
+          isDefault: table.isDefault,
+          order: table.order,
+          createdAt: now,
+          updatedAt: now,
+          lookupDisplayColumns: table.lookupDisplayColumns,
+          lookupSelectColumn: table.lookupSelectColumn,
+          columnCount: table.columnCount,
+          rowCount: table.rowCount,
+        }
+      });
+      if (table.tableColumns.length > 0) {
+        await prisma.treeBranchLeafNodeTableColumn.createMany({
+          data: table.tableColumns.map(col => ({
+            id: randomUUID(),
+            tableId: newTableId,
+            columnIndex: col.columnIndex,
+            name: col.name,
+            type: col.type,
+            width: col.width,
+            format: col.format,
+            metadata: col.metadata as Prisma.InputJsonValue,
+          }))
+        });
+      }
+      if (table.tableRows.length > 0) {
+        await prisma.treeBranchLeafNodeTableRow.createMany({
+          data: table.tableRows.map(row => ({
+            id: randomUUID(),
+            tableId: newTableId,
+            rowIndex: row.rowIndex,
+            cells: row.cells as Prisma.InputJsonValue,
+          }))
+        });
+      }
+    }
+
+    // 11. Copier les select configs
+    const sourceSelectConfigs = await prisma.treeBranchLeafSelectConfig.findMany({
+      where: { nodeId: { in: sourceNodeIds } }
+    });
+    if (sourceSelectConfigs.length > 0) {
+      const selectCreateData = sourceSelectConfigs.map(sc => ({
+        id: randomUUID(),
+        nodeId: idMap.get(sc.nodeId) ?? sc.nodeId,
+        options: sc.options as Prisma.InputJsonValue,
+        multiple: sc.multiple,
+        searchable: sc.searchable,
+        allowClear: (sc as any).allowClear ?? true,
+        placeholder: (sc as any).placeholder ?? null,
+        createdAt: now,
+        updatedAt: now,
+      }));
+      await prisma.treeBranchLeafSelectConfig.createMany({ data: selectCreateData as any[] });
+    }
+
+    console.log(`[DUPLICATE TREE] Arbre ${sourceTreeId} dupliqué -> ${newTreeId} (${created.count} noeuds, ${sourceVariables.length} variables, ${sourceConditions.length} conditions, ${sourceFormulas.length} formules, ${sourceTables.length} tables)`);
+
+    res.status(201).json({
+      tree: newTree,
+      nodesCount: created.count,
+      variablesCount: sourceVariables.length,
+      conditionsCount: sourceConditions.length,
+      formulasCount: sourceFormulas.length,
+      tablesCount: sourceTables.length,
+    });
+  } catch (error) {
+    console.error('[TreeBranchLeaf API] Error duplicating tree:', error);
+    res.status(500).json({ error: 'Erreur lors de la duplication de l\'arbre' });
+  }
+});
 // PUT /api/treebranchleaf/trees/:id - Mettre ÃƒÆ’Ã‚Â  jour un arbre
 router.put('/trees/:id', async (req, res) => {
   try {

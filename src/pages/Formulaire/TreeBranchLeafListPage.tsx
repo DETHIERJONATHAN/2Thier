@@ -144,17 +144,16 @@ const TreeBranchLeafListPage: React.FC = () => {
     }
   };
 
-  // Dupliquer un arbre
+  // Dupliquer un arbre (deep copy: noeuds, variables, conditions, formules, tables, configs)
   const handleDuplicateTree = async (tree: TreeBranchLeafTree) => {
     try {
-      const duplicatedTree = {
+      const hide = message.loading('Duplication en cours...', 0);
+      const result = await api.post(`/api/treebranchleaf/trees/${tree.id}/duplicate`, {
         name: `${tree.name} (Copie)`,
-        description: tree.description,
-        icon: tree.icon,
-        color: tree.color,
-      };
-      await api.post('/api/treebranchleaf/trees', duplicatedTree);
-      message.success('Arbre dupliqué avec succès');
+      });
+      hide();
+      const nodesCount = result?.nodesCount ?? 0;
+      message.success(`Arbre dupliqué avec succès (${nodesCount} nœuds copiés)`);
       fetchTrees();
     } catch (error) {
       console.error('[TREEBRANCHLEAF] Erreur lors de la duplication:', error);
