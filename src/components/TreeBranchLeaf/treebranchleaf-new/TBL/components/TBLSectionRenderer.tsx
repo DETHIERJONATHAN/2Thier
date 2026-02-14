@@ -5073,23 +5073,6 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
                                 }}>
                                   {isExpanded ? '−' : `+${childrenOfField.length}`}
                                 </span>
-                                {/* Indicateur subtil expanded: ombre lumineuse au lieu d'un ring moche */}
-                                {isExpanded && (
-                                  <div style={{
-                                    position: 'absolute' as const,
-                                    top: -2,
-                                    left: '50%',
-                                    transform: 'translateX(-50%)',
-                                    width: 92,
-                                    height: 92,
-                                    borderRadius: '50%',
-                                    background: 'transparent',
-                                    boxShadow: '0 0 0 2px rgba(99,102,241,0.3), 0 0 12px rgba(99,102,241,0.15)',
-                                    pointerEvents: 'none' as const,
-                                    zIndex: 5,
-                                    transition: 'all 0.3s ease',
-                                  }} />
-                                )}
                                 {/* Dot de profondeur si enfant lui-même */}
                                 {depth > 0 && (
                                   <div style={{
