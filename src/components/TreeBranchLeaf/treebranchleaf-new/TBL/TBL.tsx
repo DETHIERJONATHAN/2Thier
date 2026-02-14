@@ -42,7 +42,7 @@ import {
   Tooltip,
   Tag
 } from 'antd';
-import { FileTextOutlined, DownloadOutlined, ClockCircleOutlined, FolderOpenOutlined, PlusOutlined, UserOutlined, FileAddOutlined, SearchOutlined, MailOutlined, PhoneOutlined, HomeOutlined, SwapOutlined, LeftOutlined, RightOutlined, SaveOutlined } from '@ant-design/icons';
+import { FileTextOutlined, DownloadOutlined, ClockCircleOutlined, FolderOpenOutlined, PlusOutlined, UserOutlined, FileAddOutlined, SearchOutlined, MailOutlined, PhoneOutlined, HomeOutlined, SwapOutlined, LeftOutlined, RightOutlined, SaveOutlined, SendOutlined } from '@ant-design/icons';
 import { useAuth } from '../../../../auth/useAuth';
 import { useParams, useSearchParams } from 'react-router-dom';
 import { useTreeBranchLeafConfig } from '../../hooks/useTreeBranchLeafConfig';
@@ -204,6 +204,19 @@ const TBL: React.FC<TBLProps> = ({
   const [saveDevisModalVisible, setSaveDevisModalVisible] = useState<boolean>(false);
   const [saveDevisName, setSaveDevisName] = useState<string>('');
   const [isSavingDevis, setIsSavingDevis] = useState<boolean>(false);
+
+  // 📧 États pour l'envoi d'email avec PDF
+  const [emailModalVisible, setEmailModalVisible] = useState(false);
+  const [lastGeneratedDocId, setLastGeneratedDocId] = useState<string | null>(null);
+  const [emailTemplatesList, setEmailTemplatesList] = useState<Array<{id: string, name: string, subject: string, content: string, type: string}>>([]);
+  const [sendingEmail, setSendingEmail] = useState(false);
+  const [emailForm] = Form.useForm();
+
+  // 📧 États pour l'envoi depuis la liste des devis
+  const [devisPdfSelectorVisible, setDevisPdfSelectorVisible] = useState(false);
+  const [devisPdfList, setDevisPdfList] = useState<Array<{id: string, documentNumber: string, createdAt: string, template?: {name: string}}>>([]);
+  const [loadingDevisPdfs, setLoadingDevisPdfs] = useState(false);
+  const [devisEmailRecipient, setDevisEmailRecipient] = useState<string>('');
 
   // 🆕 NOUVEAU DEVIS
   // Règle: en brouillon (global ou lead) => on vide seulement les données et on reste en mode brouillon.
@@ -2530,6 +2543,9 @@ const TBL: React.FC<TBLProps> = ({
         message.success('Document généré avec succès !');
         setPdfModalVisible(false);
         
+        // 📧 Stocker l'ID du document généré pour l'envoi par email
+        setLastGeneratedDocId(response.id);
+        
         // Ouvrir le PDF directement dans un nouvel onglet
         const pdfUrl = `/api/documents/generated/${response.id}/download`;
         console.log('📄 [TBL] Ouverture du PDF:', pdfUrl);
@@ -2548,6 +2564,146 @@ const TBL: React.FC<TBLProps> = ({
       setGeneratingPdf(false);
     }
   };
+
+  // 📧 Résoudre les variables dans un template email
+  const resolveTemplateVariables = useCallback((text: string): string => {
+    if (!text) return '';
+    let resolved = text;
+    // Variables lead/client
+    const leadMap: Record<string, string> = {
+      'lead.firstName': clientData.name?.split(' ')[0] || '',
+      'lead.lastName': clientData.name?.split(' ').slice(1).join(' ') || '',
+      'lead.fullName': clientData.name || '',
+      'lead.email': clientData.email || '',
+      'lead.phone': clientData.phone || '',
+      'lead.address': clientData.address || '',
+      'lead.company': clientData.name || '',
+    };
+    for (const [key, val] of Object.entries(leadMap)) {
+      resolved = resolved.replace(new RegExp(`\\{${key.replace('.', '\\.')}\\}`, 'g'), val);
+    }
+    // Variables organisation (on utilise user.organization si disponible)
+    const orgMap: Record<string, string> = {
+      'org.name': '',
+      'org.email': '',
+      'org.phone': '',
+    };
+    resolved = resolved.replace(/\{org\.(\w+)\}/g, (_match, field) => orgMap[`org.${field}`] || '');
+    // Variables devis
+    resolved = resolved.replace(/\{quote\.(\w+)\}/g, '');
+    // Variables TBL (formData)
+    resolved = resolved.replace(/@value\.\{([^}]+)\}/g, (_match, nodeId) => {
+      const val = formData[nodeId];
+      if (val === null || val === undefined) return '';
+      return String(val);
+    });
+    return resolved;
+  }, [clientData, formData]);
+
+  // 📧 Ouvrir le sélecteur de PDF pour un devis depuis la liste
+  const handleSendEmailFromDevisList = useCallback(async (devisSubmissionId: string, leadEmail: string) => {
+    try {
+      setLoadingDevisPdfs(true);
+      setDevisEmailRecipient(leadEmail);
+      const docs = await api.get(`/api/documents/generated?submissionId=${devisSubmissionId}`);
+      const docList = Array.isArray(docs) ? docs : [];
+      if (docList.length === 0) {
+        message.info('Aucun PDF généré pour ce devis. Générez d\'abord un PDF.');
+        return;
+      }
+      if (docList.length === 1) {
+        // Un seul PDF → ouvrir directement le modal d'envoi
+        setLastGeneratedDocId(docList[0].id);
+        // Charger les templates email
+        try {
+          const templates = await api.get('/api/settings/email-templates');
+          setEmailTemplatesList(Array.isArray(templates) ? templates : []);
+        } catch { setEmailTemplatesList([]); }
+        emailForm.setFieldsValue({ to: leadEmail, subject: '', body: '' });
+        setEmailModalVisible(true);
+      } else {
+        // Plusieurs PDFs → laisser choisir
+        setDevisPdfList(docList);
+        setDevisPdfSelectorVisible(true);
+      }
+    } catch (error) {
+      console.error('❌ Erreur chargement PDFs du devis:', error);
+      message.error('Erreur lors du chargement des documents');
+    } finally {
+      setLoadingDevisPdfs(false);
+    }
+  }, [api, emailForm]);
+
+  // 📧 Sélectionner un PDF depuis la liste et ouvrir le modal d'envoi
+  const handleSelectPdfForEmail = useCallback(async (docId: string) => {
+    setLastGeneratedDocId(docId);
+    setDevisPdfSelectorVisible(false);
+    try {
+      const templates = await api.get('/api/settings/email-templates');
+      setEmailTemplatesList(Array.isArray(templates) ? templates : []);
+    } catch { setEmailTemplatesList([]); }
+    emailForm.setFieldsValue({ to: devisEmailRecipient, subject: '', body: '' });
+    setEmailModalVisible(true);
+  }, [api, emailForm, devisEmailRecipient]);
+
+  // 📧 Ouvrir le modal d'envoi email
+  const handleOpenEmailModal = useCallback(async () => {
+    if (!lastGeneratedDocId) {
+      message.warning('Veuillez d\'abord générer un PDF');
+      return;
+    }
+    // Charger les templates email
+    try {
+      const templates = await api.get('/api/settings/email-templates');
+      setEmailTemplatesList(Array.isArray(templates) ? templates : []);
+    } catch {
+      setEmailTemplatesList([]);
+    }
+    // Pré-remplir le formulaire
+    emailForm.setFieldsValue({
+      to: clientData.email || '',
+      subject: '',
+      body: '',
+    });
+    setEmailModalVisible(true);
+  }, [lastGeneratedDocId, api, emailForm, clientData.email]);
+
+  // 📧 Appliquer un template email sélectionné
+  const handleSelectEmailTemplate = useCallback((templateId: string) => {
+    const tmpl = emailTemplatesList.find(t => t.id === templateId);
+    if (!tmpl) return;
+    emailForm.setFieldsValue({
+      subject: resolveTemplateVariables(tmpl.subject),
+      body: resolveTemplateVariables(tmpl.content),
+    });
+  }, [emailTemplatesList, emailForm, resolveTemplateVariables]);
+
+  // 📧 Envoyer l'email avec le PDF
+  const handleSendEmailWithPdf = useCallback(async () => {
+    try {
+      const values = await emailForm.validateFields();
+      if (!lastGeneratedDocId) {
+        message.error('Aucun document PDF à envoyer');
+        return;
+      }
+      setSendingEmail(true);
+      await api.post(`/api/documents/generated/${lastGeneratedDocId}/send-email`, {
+        to: values.to,
+        subject: values.subject,
+        body: values.body,
+        cc: values.cc || undefined,
+        bcc: values.bcc || undefined,
+      });
+      message.success('Email envoyé avec succès !');
+      setEmailModalVisible(false);
+      emailForm.resetFields();
+    } catch (error: any) {
+      console.error('❌ Erreur envoi email:', error);
+      message.error(error?.response?.data?.error || error?.message || 'Erreur lors de l\'envoi de l\'email');
+    } finally {
+      setSendingEmail(false);
+    }
+  }, [emailForm, lastGeneratedDocId, api]);
 
   // Charger un devis existant
   const handleLoadDevis = useCallback(async () => {
@@ -3557,6 +3713,15 @@ const TBL: React.FC<TBLProps> = ({
                       block={actionButtonBlock}
                     />
                   </Tooltip>
+                  <Tooltip title={lastGeneratedDocId ? "Envoyer le PDF par email" : "Générez d'abord un PDF"} placement="bottom">
+                    <Button 
+                      icon={<MailOutlined />}
+                      onClick={handleOpenEmailModal}
+                      disabled={!lastGeneratedDocId}
+                      block={actionButtonBlock}
+                      style={lastGeneratedDocId ? { backgroundColor: '#1890ff', borderColor: '#1890ff', color: '#fff' } : undefined}
+                    />
+                  </Tooltip>
                 </Space>
               </div>
 
@@ -4091,6 +4256,17 @@ const TBL: React.FC<TBLProps> = ({
                                   Ouvrir
                                 </Button>
                                 <Button
+                                  type="default"
+                                  size="small"
+                                  icon={<SendOutlined />}
+                                  loading={loadingDevisPdfs}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleSendEmailFromDevisList(devis.id, devis.leadInfo.email);
+                                  }}
+                                  title="Envoyer le PDF par email"
+                                />
+                                <Button
                                   type="text"
                                   size="small"
                                   danger
@@ -4156,7 +4332,7 @@ const TBL: React.FC<TBLProps> = ({
                           <span>{devis.leadInfo.company}</span>
                         </div>
                         
-                        {/* Actions - boutons Sélectionner et Supprimer */}
+                        {/* Actions - boutons Sélectionner, Envoyer et Supprimer */}
                         <div className="flex items-center justify-center space-x-2">
                           <Button
                             type="primary"
@@ -4166,6 +4342,18 @@ const TBL: React.FC<TBLProps> = ({
                           >
                             Sélectionner
                           </Button>
+                          <Tooltip title="Envoyer le PDF par email">
+                            <Button
+                              type="default"
+                              size="small"
+                              icon={<SendOutlined />}
+                              loading={loadingDevisPdfs}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleSendEmailFromDevisList(devis.id, devis.leadInfo.email);
+                              }}
+                            />
+                          </Tooltip>
                           <Button
                             type="text"
                             size="small"
@@ -4402,6 +4590,96 @@ const TBL: React.FC<TBLProps> = ({
               ))}
             </div>
           )}
+        </div>
+      </Modal>
+
+      {/* 📧 Modal d'envoi d'email avec PDF */}
+      <Modal
+        title="📧 Envoyer le PDF par email"
+        open={emailModalVisible}
+        onCancel={() => {
+          setEmailModalVisible(false);
+          emailForm.resetFields();
+        }}
+        footer={[
+          <Button key="cancel" onClick={() => { setEmailModalVisible(false); emailForm.resetFields(); }}>
+            Annuler
+          </Button>,
+          <Button key="send" type="primary" icon={<MailOutlined />} loading={sendingEmail} onClick={handleSendEmailWithPdf}>
+            Envoyer
+          </Button>
+        ]}
+        width={700}
+      >
+        {/* Sélecteur de template pré-rempli */}
+        {emailTemplatesList.length > 0 && (
+          <div className="mb-4">
+            <Text strong>Modèle pré-rempli :</Text>
+            <div className="mt-2 flex flex-wrap gap-2">
+              {emailTemplatesList.map(tmpl => (
+                <Button
+                  key={tmpl.id}
+                  size="small"
+                  onClick={() => handleSelectEmailTemplate(tmpl.id)}
+                >
+                  {tmpl.name}
+                </Button>
+              ))}
+            </div>
+          </div>
+        )}
+        <Form form={emailForm} layout="vertical">
+          <Form.Item name="to" label="Destinataire" rules={[{ required: true, message: 'Email requis' }, { type: 'email', message: 'Email invalide' }]}>
+            <Input placeholder="email@exemple.com" />
+          </Form.Item>
+          <Form.Item name="cc" label="CC">
+            <Input placeholder="cc@exemple.com (optionnel)" />
+          </Form.Item>
+          <Form.Item name="subject" label="Sujet" rules={[{ required: true, message: 'Sujet requis' }]}>
+            <Input placeholder="Sujet de l'email" />
+          </Form.Item>
+          <Form.Item name="body" label="Message" rules={[{ required: true, message: 'Message requis' }]}>
+            <Input.TextArea rows={8} placeholder="Contenu de l'email..." />
+          </Form.Item>
+        </Form>
+        <Alert
+          message="Le PDF généré sera automatiquement joint à cet email."
+          type="info"
+          showIcon
+          className="mt-2"
+        />
+      </Modal>
+
+      {/* 📧 Modal sélection de PDF pour envoi (quand plusieurs PDFs disponibles) */}
+      <Modal
+        title="📄 Choisir le PDF à envoyer"
+        open={devisPdfSelectorVisible}
+        onCancel={() => setDevisPdfSelectorVisible(false)}
+        footer={<Button onClick={() => setDevisPdfSelectorVisible(false)}>Annuler</Button>}
+        width={500}
+      >
+        <div className="space-y-2">
+          {devisPdfList.map(doc => (
+            <Card
+              key={doc.id}
+              size="small"
+              hoverable
+              className="cursor-pointer"
+              onClick={() => handleSelectPdfForEmail(doc.id)}
+            >
+              <div className="flex items-center justify-between">
+                <div>
+                  <div className="font-medium">{doc.documentNumber || doc.id}</div>
+                  <div className="text-sm text-gray-500">
+                    {doc.template?.name || 'Document'} — {new Date(doc.createdAt).toLocaleDateString('fr-FR')}
+                  </div>
+                </div>
+                <Button type="primary" size="small" icon={<SendOutlined />}>
+                  Envoyer
+                </Button>
+              </div>
+            </Card>
+          ))}
         </div>
       </Modal>
 
