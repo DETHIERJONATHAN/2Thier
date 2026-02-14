@@ -234,28 +234,15 @@ const DocumentTemplatesPage = () => {
     }
   };
 
-  // Supprimer template
-  const handleDeleteTemplate = async (id: string, force = false) => {
+  // Supprimer template (toujours force=true, la confirmation se fait côté UI)
+  const handleDeleteTemplate = async (id: string) => {
     try {
-      const url = force ? `/api/documents/templates/${id}?force=true` : `/api/documents/templates/${id}`;
-      await api.delete(url);
+      await api.delete(`/api/documents/templates/${id}?force=true`);
       message.success('Template supprimé');
       loadTemplates();
     } catch (error: any) {
-      const data = error?.response?.data || error;
-      // Si des documents générés bloquent, proposer la suppression forcée
-      if (data?.documentsCount > 0) {
-        Modal.confirm({
-          title: 'Documents liés détectés',
-          content: `${data.documentsCount} document(s) généré(s) utilisent ce template. Voulez-vous tout supprimer ?`,
-          okText: 'Supprimer tout',
-          cancelText: 'Annuler',
-          okButtonProps: { danger: true },
-          onOk: () => handleDeleteTemplate(id, true),
-        });
-      } else {
-        message.error(data?.error || 'Erreur lors de la suppression');
-      }
+      console.error('Erreur suppression template:', error);
+      message.error(error?.message || 'Erreur lors de la suppression');
     }
   };
 
@@ -336,9 +323,12 @@ const DocumentTemplatesPage = () => {
         label: 'Supprimer',
         danger: true,
         onClick: () => {
+          const docsCount = record._count?.generatedDocuments || 0;
           Modal.confirm({
             title: 'Supprimer ce template ?',
-            content: 'Cette action est irréversible.',
+            content: docsCount > 0
+              ? `⚠️ ${docsCount} document(s) généré(s) seront aussi supprimés. Cette action est irréversible.`
+              : 'Cette action est irréversible.',
             okText: 'Supprimer',
             cancelText: 'Annuler',
             okButtonProps: { danger: true },
