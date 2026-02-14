@@ -81,6 +81,8 @@ const DocumentTemplatesPage = () => {
   const [templateSelectorVisible, setTemplateSelectorVisible] = useState(false);
   const [pendingTemplateId, setPendingTemplateId] = useState<string | null>(null);
   const [initialPageBuilderConfig, setInitialPageBuilderConfig] = useState<any>(null);
+  const [deleteConfirm, setDeleteConfirm] = useState<{ id: string; name: string; docsCount: number } | null>(null);
+  const [deleting, setDeleting] = useState(false);
   
   const [form] = Form.useForm();
 
@@ -236,13 +238,19 @@ const DocumentTemplatesPage = () => {
 
   // Supprimer template (toujours force=true, la confirmation se fait côté UI)
   const handleDeleteTemplate = async (id: string) => {
+    console.log('🗑️ [handleDeleteTemplate] Suppression du template:', id);
     try {
+      setDeleting(true);
       await api.delete(`/api/documents/templates/${id}?force=true`);
+      console.log('✅ [handleDeleteTemplate] Template supprimé avec succès');
       message.success('Template supprimé');
+      setDeleteConfirm(null);
       loadTemplates();
     } catch (error: any) {
-      console.error('Erreur suppression template:', error);
+      console.error('❌ [handleDeleteTemplate] Erreur suppression template:', error);
       message.error(error?.message || 'Erreur lors de la suppression');
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -323,16 +331,11 @@ const DocumentTemplatesPage = () => {
         label: 'Supprimer',
         danger: true,
         onClick: () => {
-          const docsCount = record._count?.generatedDocuments || 0;
-          Modal.confirm({
-            title: 'Supprimer ce template ?',
-            content: docsCount > 0
-              ? `⚠️ ${docsCount} document(s) généré(s) seront aussi supprimés. Cette action est irréversible.`
-              : 'Cette action est irréversible.',
-            okText: 'Supprimer',
-            cancelText: 'Annuler',
-            okButtonProps: { danger: true },
-            onOk: () => handleDeleteTemplate(record.id),
+          console.log('🗑️ [Supprimer] Clic sur Supprimer pour:', record.id, record.name);
+          setDeleteConfirm({
+            id: record.id,
+            name: record.name,
+            docsCount: record._count?.generatedDocuments || 0,
           });
         },
       },
@@ -525,6 +528,28 @@ const DocumentTemplatesPage = () => {
           </TabPane>
         </Tabs>
       </Card>
+
+      {/* Modal Confirmation Suppression */}
+      <Modal
+        title="Supprimer ce template ?"
+        open={!!deleteConfirm}
+        onCancel={() => setDeleteConfirm(null)}
+        onOk={() => deleteConfirm && handleDeleteTemplate(deleteConfirm.id)}
+        okText="Supprimer"
+        cancelText="Annuler"
+        okButtonProps={{ danger: true, loading: deleting }}
+        centered
+      >
+        <p>
+          Voulez-vous supprimer le template <strong>{deleteConfirm?.name}</strong> ?
+        </p>
+        {(deleteConfirm?.docsCount ?? 0) > 0 && (
+          <p style={{ color: '#ff4d4f' }}>
+            ⚠️ {deleteConfirm?.docsCount} document(s) généré(s) seront aussi supprimés.
+          </p>
+        )}
+        <p>Cette action est irréversible.</p>
+      </Modal>
 
       {/* Modal Template */}
       <Modal
