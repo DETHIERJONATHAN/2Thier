@@ -418,6 +418,7 @@ model EmailAccount {
   encryptedPassword String
   userId            String       @unique
   organizationId    String
+  mailProvider      String       @default("gmail") // "gmail" | "yandex" — Fournisseur de messagerie utilisé par cet utilisateur
   createdAt         DateTime     @default(now())
   updatedAt         DateTime
   Organization      Organization @relation(fields: [organizationId], references: [id], onDelete: NoAction, onUpdate: NoAction)

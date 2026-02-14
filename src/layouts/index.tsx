@@ -16,7 +16,7 @@ const DashboardPage = React.lazy(() => import('../pages/DashboardPage'));
 const CRMPage = React.lazy(() => import('../pages/CRMPage'));
 const GestionSAVPage = React.lazy(() => import('../pages/GestionSAVPage'));
 const LeadsPage = React.lazy(() => import('../pages/Leads/LeadsPage'));
-const MailPage = React.lazy(() => import('../pages/MailPage'));
+const MailPage = React.lazy(() => import('../pages/UnifiedMailPage'));  // ✅ Redirigé vers page mail unifiée
 const PremiumTestPage = React.lazy(() => import('../pages/PremiumTestPage'));
 const DiagnosticCompletPage = React.lazy(() => import('../pages/DiagnosticCompletPage'));
 
@@ -29,7 +29,7 @@ const AgendaWrapper = React.lazy(() => import('../pages/AgendaWrapper'));
 const DevisPage = React.lazy(() => import('../pages/DevisPage'));
 
 // Pages Google Workspace
-const GoogleMailPageFixed = React.lazy(() => import('../pages/GoogleMailPageFixed_New'));
+const GoogleMailPageFixed = React.lazy(() => import('../pages/UnifiedMailPage'));  // ✅ Page mail unifiée Gmail + Yandex
 const GoogleAgendaPage = React.lazy(() => import('../pages/GoogleAgendaPage'));
 const GoogleContactsPage = React.lazy(() => import('../pages/GoogleContactsPage'));
 

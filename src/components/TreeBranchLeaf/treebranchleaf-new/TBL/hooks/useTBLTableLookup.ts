@@ -113,10 +113,25 @@ export function useTBLTableLookup(
   // 🎯 Écouter tbl-force-retransform pour récupérer les valeurs calculées FRAÎCHES
   useEffect(() => {
     const handleBroadcast = (event: CustomEvent) => {
-      const { calculatedValues } = event.detail || {};
+      const { calculatedValues, clearDisplayFields, resetCalculatedCache, replaceAll } = event.detail || {};
+      
+      // 🔥 FIX 14/02/2026: Quand on change de devis, vider le cache des valeurs calculées
+      // pour éviter que les valeurs du devis précédent polluent le devis actuel
+      if (clearDisplayFields || resetCalculatedCache) {
+        setBroadcastedCalcValues({});
+        setRefreshTrigger(t => t + 1);
+        return;
+      }
+      
       if (calculatedValues && typeof calculatedValues === 'object' && Object.keys(calculatedValues).length > 0) {
         console.log(`🔄 [useTBLTableLookup] Broadcast reçu avec ${Object.keys(calculatedValues).length} valeurs calculées fraîches`);
-        setBroadcastedCalcValues(prev => ({ ...prev, ...calculatedValues }));
+        // 🔥 FIX 14/02/2026: Si replaceAll=true (chargement devis), REMPLACER au lieu de MERGER
+        // Sinon les valeurs du devis précédent persistent et polluent les lookups
+        if (replaceAll) {
+          setBroadcastedCalcValues(calculatedValues);
+        } else {
+          setBroadcastedCalcValues(prev => ({ ...prev, ...calculatedValues }));
+        }
         // Déclencher un refresh du lookup avec les nouvelles valeurs
         setRefreshTrigger(t => t + 1);
       }

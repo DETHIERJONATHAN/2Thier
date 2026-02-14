@@ -7,6 +7,7 @@ import fs from 'fs';
 import cors from 'cors';
 import session from 'express-session';
 import cookieParser from 'cookie-parser';
+import fileUpload from 'express-fileupload';
 import passport from 'passport';
 import helmet from 'helmet';
 import compression from 'compression';
@@ -152,8 +153,8 @@ app.use(helmet({
       fontSrc: ["'self'", "fonts.gstatic.com", "data:"],
       imgSrc: ["'self'", "data:", "https:", "blob:", "maps.gstatic.com", "*.googleapis.com", "*.ggpht.com"],
       connectSrc: ["'self'", "https:", "wss:", "maps.googleapis.com", "*.googleapis.com"],
-      frameSrc: ["'self'", "maps.google.com", "*.google.com"],
-      objectSrc: ["'none'"],
+      frameSrc: ["'self'", "maps.google.com", "*.google.com", "blob:"],
+      objectSrc: ["'self'", "blob:"],
       mediaSrc: ["'self'"],
       manifestSrc: ["'self'"],
       workerSrc: ["'self'", "blob:"]
@@ -253,6 +254,15 @@ app.use(express.json({
 }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 app.use(cookieParser());
+
+// 📎 Middleware pour parser les formulaires multipart (pièces jointes email)
+app.use(fileUpload({
+  limits: { fileSize: 25 * 1024 * 1024 }, // 25 MB max
+  useTempFiles: false, // Garder en mémoire (Buffer) pour compatibilité avec le contrôleur Gmail
+  abortOnLimit: true,
+  responseOnLimit: 'Fichier trop volumineux (max 25 Mo)',
+}));
+console.log('✅ [FileUpload] Middleware configuré (25MB max)');
 
 // 🔐 Configuration Session avec sécurité Enterprise
 app.use(session({

@@ -30,7 +30,7 @@ const DevisPage = React.lazy(() => import('../pages/DevisPage'));
 const TreeBranchLeafLayoutV2 = React.lazy(() => import('../pages/Formulaire/TreeBranchLeafWrapper-Fixed'));
 
 // Pages Google Workspace
-const GoogleGmailPageV2 = React.lazy(() => import('../google-workspace/pages/GoogleGmailPageV2'));
+const GoogleGmailPageV2 = React.lazy(() => import('../pages/UnifiedMailPage'));  // ✅ Page mail unifiée Gmail + Yandex
 const GoogleAgendaPage = React.lazy(() => import('../pages/GoogleAgendaPage'));
 const GoogleContactsPage = React.lazy(() => import('../pages/GoogleContactsPage'));
 

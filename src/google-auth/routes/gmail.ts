@@ -181,6 +181,6 @@ router.patch('/labels/:id', updateLabel);
 router.delete('/labels/:id', deleteLabel);
 
 // Routes pour les pièces jointes
-router.get('/messages/:messageId/attachments/:id', getAttachment);
+router.get('/messages/:messageId/attachments/:attachmentId', getAttachment);
 
 export default router;

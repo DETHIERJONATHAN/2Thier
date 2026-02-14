@@ -14,6 +14,8 @@ import session from 'express-session';
 console.log('✅ [DEBUG] Session importée');
 import cookieParser from 'cookie-parser';
 console.log('✅ [DEBUG] CookieParser importé');
+import fileUpload from 'express-fileupload';
+console.log('✅ [DEBUG] FileUpload importé');
 import passport from 'passport';
 console.log('✅ [DEBUG] Passport importé');
 import { prisma } from './lib/prisma'; // 🎯 INSTANCE PRISMA CENTRALISÉE
@@ -90,6 +92,19 @@ console.log('✅ [DEBUG] CORS configuré');
 console.log('🔧 [DEBUG] Configuration JSON parser...');
 app.use(express.json({ limit: '50mb' }));
 console.log('✅ [DEBUG] JSON parser configuré (limit: 50mb)');
+
+console.log('🔧 [DEBUG] Configuration URL-encoded parser...');
+app.use(express.urlencoded({ extended: true, limit: '50mb' }));
+console.log('✅ [DEBUG] URL-encoded parser configuré');
+
+console.log('🔧 [DEBUG] Configuration FileUpload middleware...');
+app.use(fileUpload({
+  limits: { fileSize: 25 * 1024 * 1024 }, // 25 MB max
+  useTempFiles: false, // Garder en mémoire (Buffer) pour compatibilité avec le contrôleur Gmail
+  abortOnLimit: true,
+  responseOnLimit: 'Fichier trop volumineux (max 25 Mo)',
+}));
+console.log('✅ [DEBUG] FileUpload middleware configuré (25MB max)');
 
 console.log('🔧 [DEBUG] Configuration Cookie parser...');
 app.use(cookieParser());

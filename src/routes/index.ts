@@ -65,6 +65,8 @@ import marketplaceRoutes from './marketplace-fixed'; // 🏪 Routes marketplace 
 import partnerRoutes from './partner'; // 🤝 Routes portal partenaires
 import publicFormsRoutes from './publicForms'; // 📝 Routes formulaires publics
 import landingPagesRoutes from './landingPages'; // 🌐 Routes landing pages
+import yandexMailRoutes from './yandex-mail'; // 📧 Routes Yandex Mail (IMAP/SMTP)
+import mailProviderRoutes from './mail-provider'; // 🔍 Détection fournisseur mail (Gmail/Yandex)
 import campaignAnalyticsRoutes from './campaignAnalytics'; // 📊 Routes analytics campagnes
 import dispatchRoutes from './dispatch'; // 🚚 Rules engine (Dispatch)
 import integrationsStatusRoutes from './integrationsStatus'; // 🔌 État des intégrations
@@ -220,6 +222,14 @@ apiRouter.use('/admin-password', adminPasswordRoutes);
 
 // Routes Gmail
 apiRouter.use('/gmail', gmailRoutes);
+
+
+// Routes Yandex Mail (📧 IMAP/SMTP — alternative à Gmail)
+apiRouter.use('/yandex', yandexMailRoutes);
+
+
+// Routes détection fournisseur mail (🔍 Gmail ou Yandex ?)
+apiRouter.use('/mail', mailProviderRoutes);
 
 
 // Routes Calendar

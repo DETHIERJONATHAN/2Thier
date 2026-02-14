@@ -3238,6 +3238,91 @@ const TBL: React.FC<TBLProps> = ({
           setDevisCreatedAt(new Date((submissionObj as any).createdAt));
         }
 
+        // 🔥 FIX 14/02/2026: Recalculer TOUS les champs DISPLAY après chargement d'un devis.
+        // On suspend l'autosave pendant le recalcul pour éviter que l'auto-select
+        // (qui se déclenche sur les champs SELECT avec table lookup) ne provoque
+        // des sauvegardes intermédiaires avec des données incorrectes.
+        autosaveSuspendedRef.current = true;
+        try {
+          const effectiveClientId = hydratedLeadId || (submissionObj as any)?.leadId || null;
+          console.log(`🔄 [TBL LOAD] Recalcul des DISPLAY fields pour devis ${devisId} (mode 'open')...`);
+          const evaluationResponse = await api.post('/api/tbl/submissions/create-and-evaluate', {
+            treeId: effectiveTreeId || (submissionObj as any)?.treeId,
+            submissionId: devisId,
+            formData: normalizePayload(formattedData),
+            clientId: effectiveClientId,
+            status: loadedStatus === 'default-draft' ? 'default-draft' : 'completed',
+            changedFieldId: 'NULL',
+            evaluationMode: 'open'  // 🎯 Forcer recalcul complet des DISPLAY
+          });
+
+          // Mettre à jour la signature pour éviter un autosave immédiat
+          try {
+            const normalized = normalizePayload(formattedData);
+            const sig = computeSignature(normalized);
+            lastSavedSignatureRef.current = sig;
+          } catch { /* noop */ }
+
+          // 🔥 FIX: Broadcaster les valeurs calculées avec replaceAll=true.
+          // Cela REMPLACE entièrement broadcastedCalcValues dans useTBLTableLookup
+          // au lieu de MERGER avec les anciennes valeurs du devis précédent.
+          //
+          // 🔥🔥 FIX CRITIQUE: Passer submissionId: devisId dans le detail !
+          // broadcastCalculatedRefresh est un useCallback qui capture le submissionId de la closure.
+          // Après setSubmissionId(devisId) + await, React a re-rendu les hooks avec le NOUVEAU submissionId,
+          // mais handleSelectDevis tourne toujours dans l'ANCIENNE closure.
+          // Sans ce fix, l'event avait submissionId=ANCIEN_ID, et useNodeCalculatedValue
+          // (re-rendu avec submissionId=devisId) REJETAIT l'event car ANCIEN_ID !== devisId.
+          // Le spread ...(detail||{}) dans broadcastCalculatedRefresh écrase le submissionId de la closure.
+          broadcastCalculatedRefresh({
+            reason: 'load-devis-recalcul',
+            replaceAll: true,
+            submissionId: devisId,  // 🔥 Forcer le bon submissionId (écrase la closure périmée)
+            evaluatedSubmissionId: devisId,
+            recalcCount: evaluationResponse?.submission?.TreeBranchLeafSubmissionData?.length,
+            submissionData: evaluationResponse?.submission?.TreeBranchLeafSubmissionData
+          });
+
+          // 🔥🔥 FIX CRITIQUE: Injecter les valeurs calculées dans le state React formData.
+          // Sans cela, les champs DISPLAY rendus comme LINK (qui lisent formData[field.id])
+          // ne trouvent pas leur valeur car setFormData() plus haut ne charge que les inputs
+          // utilisateur (operationSource = neutral/field/fixed).
+          // Le broadcast met les valeurs dans window.TBL_FORM_DATA (mutation directe),
+          // mais le React state formData n'est PAS mis à jour → les LINK fields affichent "---".
+          const submDataForFormData = evaluationResponse?.submission?.TreeBranchLeafSubmissionData;
+          if (Array.isArray(submDataForFormData) && submDataForFormData.length > 0) {
+            setFormData(prev => {
+              const next = { ...prev };
+              for (const item of submDataForFormData) {
+                if (item?.nodeId && item?.value !== undefined && item?.value !== null) {
+                  next[item.nodeId] = item.value;
+                }
+              }
+              return next;
+            });
+            // Mettre à jour la signature avec les valeurs calculées incluses
+            // pour éviter un autosave parasite qui détecterait un changement
+            try {
+              const allData: Record<string, unknown> = { ...formattedData };
+              for (const item of submDataForFormData) {
+                if (item?.nodeId && item?.value !== undefined && item?.value !== null) {
+                  allData[item.nodeId] = item.value;
+                }
+              }
+              lastSavedSignatureRef.current = computeSignature(normalizePayload(allData));
+            } catch { /* noop */ }
+          }
+
+          console.log(`✅ [TBL LOAD] Recalcul DISPLAY terminé pour devis ${devisId}, ${submDataForFormData?.length || 0} valeurs injectées dans formData`);
+        } catch (recalcErr) {
+          console.warn('⚠️ [TBL LOAD] Recalcul DISPLAY échoué (les champs calculés peuvent être vides):', recalcErr);
+        } finally {
+          // Réactiver l'autosave après le recalcul
+          setTimeout(() => {
+            autosaveSuspendedRef.current = false;
+          }, 500); // Délai court pour laisser React re-render avec les nouvelles valeurs
+        }
+
         message.success(`${loadedStatus === 'default-draft' ? 'Brouillon' : `Devis "${loadedDevisName}"`} chargé avec succès (${loadedCount} champs)`);
       } else {
         console.warn('🔍 [TBL LOAD] Aucune donnée utilisateur restaurée pour ce devis');
@@ -3253,7 +3338,7 @@ const TBL: React.FC<TBLProps> = ({
       console.error('❌ [TBL] Détails de l\'erreur:', error);
       message.error('Erreur lors du chargement du devis. Vérifiez la console pour plus de détails.');
     }
-  }, [api, normalizePayload, computeSignature, formatAddressValue, effectiveTreeId, user?.id, isSuperAdmin, userRole]);
+  }, [api, normalizePayload, computeSignature, formatAddressValue, effectiveTreeId, user?.id, isSuperAdmin, userRole, broadcastCalculatedRefresh]);
 
   useEffect(() => {
     if (!requestedDevisId) return;

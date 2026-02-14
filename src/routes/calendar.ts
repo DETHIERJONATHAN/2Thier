@@ -3,6 +3,7 @@ import { authMiddleware, AuthenticatedRequest } from '../middlewares/auth.js';
 import { impersonationMiddleware } from '../middlewares/impersonation.js';
 import { googleCalendarService } from '../google-auth/services/GoogleCalendarService.js';
 import { prisma } from '../lib/prisma';
+import { db } from '../lib/database.js';
 
 const router = Router();
 // Logging global minimal pour diagnostiquer les requêtes qui n'atteignent pas les handlers spécifiques
@@ -62,6 +63,82 @@ router.get('/stream', (req: AuthenticatedRequest, res) => {
   initSSE(req, res);
 });
 // (Les autres routes sont déjà protégées car le use() précédent est placé avant leur déclaration)
+
+// ─────────────────────────────────────────────────────────────
+//  UTILITAIRE: Détecte si l'utilisateur a un accès Google Calendar
+//  (= utilisateur Gmail) ou non (= utilisateur Yandex).
+//  Pour les utilisateurs Yandex, les événements sont stockés en DB
+//  uniquement, puis poussés vers le Google Calendar d'entreprise
+//  via le compte admin de l'organisation.
+// ─────────────────────────────────────────────────────────────
+async function hasGoogleCalendarAccess(userId: string, organizationId: string): Promise<boolean> {
+  const googleToken = await db.googleToken.findFirst({
+    where: { userId, organizationId, isValid: true },
+    select: { id: true }
+  });
+  return !!googleToken;
+}
+
+/**
+ * Pousse un événement vers le Google Calendar d'entreprise (pour les utilisateurs Yandex).
+ * Utilise le premier compte admin de l'organisation qui a un token Google valide.
+ * Préfixe le titre avec le nom de l'utilisateur pour identification.
+ */
+async function pushToCompanyCalendar(
+  organizationId: string,
+  event: { title: string; description?: string | null; startDate: Date; endDate: Date },
+  ownerName: string
+): Promise<string | null> {
+  try {
+    // Trouver un admin de l'organisation avec un token Google valide
+    const adminToken = await db.googleToken.findFirst({
+      where: {
+        organizationId,
+        isValid: true,
+        User: {
+          UserOrganization: {
+            some: {
+              organizationId,
+              Role: { name: { in: ['admin', 'super_admin', 'manager'] } }
+            }
+          }
+        }
+      },
+      select: { userId: true }
+    });
+
+    if (!adminToken) {
+      console.warn('[CALENDAR] ⚠️ Aucun admin avec Google Calendar trouvé pour org:', organizationId);
+      return null;
+    }
+
+    // Créer l'événement sur le Google Calendar de l'admin avec le nom de l'employé
+    const googleEventData = {
+      summary: `[${ownerName}] ${event.title}`,
+      description: event.description || undefined,
+      start: {
+        dateTime: event.startDate.toISOString(),
+        timeZone: 'Europe/Brussels',
+      },
+      end: {
+        dateTime: event.endDate.toISOString(),
+        timeZone: 'Europe/Brussels',
+      },
+    };
+
+    const externalId = await googleCalendarService.createEvent(
+      organizationId,
+      googleEventData,
+      adminToken.userId
+    );
+
+    console.log(`✅ [CALENDAR] Événement poussé vers Google Calendar entreprise: [${ownerName}] ${event.title}`);
+    return externalId;
+  } catch (error) {
+    console.warn('[CALENDAR] ⚠️ Erreur push vers Google Calendar entreprise:', error);
+    return null;
+  }
+}
 
 // GET /api/calendar/events - Récupérer les événements de l'utilisateur
 router.get('/events', async (req: AuthenticatedRequest, res) => {
@@ -133,7 +210,13 @@ router.get('/events', async (req: AuthenticatedRequest, res) => {
     }
 
     const needSync = forceSync === 'true' || events.length === 0; // stratégie simple: si aucun local → sync
-    if (needSync) {
+    
+    // ─── Auto-sync Google Calendar uniquement pour les utilisateurs Gmail ───
+    // Les utilisateurs Yandex n'ont pas de Google Calendar personnel,
+    // leurs événements sont stockés en DB uniquement.
+    const userHasGoogleCalendar = await hasGoogleCalendarAccess(userIdToSearch, organizationId);
+    
+    if (needSync && userHasGoogleCalendar) {
       console.log('[CALENDAR ROUTES] 🔄 Lancement auto-sync Google Calendar (needSync=', needSync, ')');
       try {
         const syncStart = startDate ? new Date(startDate) : new Date(Date.now() - 7 * 24 * 3600 * 1000); // -7j par défaut
@@ -412,38 +495,73 @@ router.post('/events', async (req: AuthenticatedRequest, res) => {
     
     console.log('[CALENDAR ROUTES] Événement créé:', event);
 
-    // Utilise le nouveau service Google Calendar centralisé
-    try {
-      const googleEventData = {
-        summary: event.title,
-        description: event.description,
-        start: {
-          dateTime: new Date(event.startDate).toISOString(),
-          timeZone: 'Europe/Brussels',
-        },
-        end: {
-          dateTime: new Date(event.endDate).toISOString(),
-          timeZone: 'Europe/Brussels',
-        },
-      };
-      
-      const externalCalendarId = await googleCalendarService.createEvent(organizationId, googleEventData, req.user!.userId);
-      
-      const updatedEvent = await prisma.calendarEvent.update({
-        where: { id: event.id },
-        data: {
-          externalCalendarId,
-        },
-        include: {
-          project: { select: { id: true, name: true, clientName: true } },
-          lead: { select: { id: true, firstName: true, lastName: true, email: true } }
+    // ─── Synchronisation Google Calendar ───
+    // Gmail users : sync vers leur propre Google Calendar
+    // Yandex users : push vers le Google Calendar d'entreprise (via admin)
+    const userHasGoogle = await hasGoogleCalendarAccess(userId, organizationId);
+    
+    if (userHasGoogle) {
+      // ✅ Utilisateur Gmail → sync vers SON Google Calendar
+      try {
+        const googleEventData = {
+          summary: event.title,
+          description: event.description,
+          start: {
+            dateTime: new Date(event.startDate).toISOString(),
+            timeZone: 'Europe/Brussels',
+          },
+          end: {
+            dateTime: new Date(event.endDate).toISOString(),
+            timeZone: 'Europe/Brussels',
+          },
+        };
+        
+        const externalCalendarId = await googleCalendarService.createEvent(organizationId, googleEventData, userId);
+        
+        const updatedEvent = await prisma.calendarEvent.update({
+          where: { id: event.id },
+          data: { externalCalendarId },
+          include: {
+            project: { select: { id: true, name: true, clientName: true } },
+            lead: { select: { id: true, firstName: true, lastName: true, email: true } }
+          }
+        });
+        broadcast(organizationId, 'event.created', updatedEvent);
+        return res.status(201).json(updatedEvent);
+      } catch (googleError) {
+        console.warn('[CALENDAR ROUTES] Erreur Google Calendar (événement créé en local):', googleError);
+      }
+    } else {
+      // ✅ Utilisateur Yandex → push vers le Google Calendar d'entreprise
+      try {
+        const owner = await db.user.findUnique({
+          where: { id: userId },
+          select: { firstName: true, lastName: true }
+        });
+        const ownerName = [owner?.firstName, owner?.lastName].filter(Boolean).join(' ') || 'Employé';
+
+        const externalCalendarId = await pushToCompanyCalendar(
+          organizationId,
+          {
+            title: event.title,
+            description: event.description,
+            startDate: new Date(event.startDate),
+            endDate: new Date(event.endDate),
+          },
+          ownerName
+        );
+
+        if (externalCalendarId) {
+          await prisma.calendarEvent.update({
+            where: { id: event.id },
+            data: { externalCalendarId }
+          });
         }
-      });
-      broadcast(organizationId, 'event.created', updatedEvent);
-      return res.status(201).json(updatedEvent);
-    } catch (googleError) {
-      console.warn('[CALENDAR ROUTES] Erreur Google Calendar (événement créé en local):', googleError);
+      } catch (companyCalError) {
+        console.warn('[CALENDAR ROUTES] Erreur push vers calendrier entreprise (événement créé en local):', companyCalError);
+      }
     }
+    
     broadcast(organizationId, 'event.created', event);
     res.status(201).json(event);
   } catch (error) {

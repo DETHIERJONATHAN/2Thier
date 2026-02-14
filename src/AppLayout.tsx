@@ -13,7 +13,7 @@ const CRMPage = lazy(() => import('./pages/CRMPage'));
 const GestionSAVPage = lazy(() => import('./pages/GestionSAVPage'));
 const LeadsPage = lazy(() => import('./pages/Leads/LeadsPage'));
 const AgendaWrapper = lazy(() => import('./pages/AgendaWrapper'));
-const MailPage = lazy(() => import('./pages/MailPage'));
+const MailPage = lazy(() => import('./pages/UnifiedMailPage'));  // ✅ Redirigé vers page mail unifiée
 const GestionTableauxPage = lazy(() => import('./pages/GestionTableauxPage'));
 const PremiumTestPage = lazy(() => import('./pages/PremiumTestPage'));
 const TailwindTestPage = lazy(() => import('./pages/TailwindTestPage'));
@@ -64,7 +64,7 @@ const Devis1minuteAdminIntegrations = lazy(() => import('./pages/devis1minute/ad
 const Devis1minuteAdminSite = lazy(() => import('./pages/devis1minute/admin/Devis1minuteAdminSite'));
 
 // Pages Google Workspace (très lourdes)
-const GoogleGmailPageV2 = lazy(() => import('./google-workspace/pages/GoogleGmailPageV2'));
+const GoogleGmailPageV2 = lazy(() => import('./pages/UnifiedMailPage'));  // ✅ Page mail unifiée Gmail + Yandex
 const GoogleAgendaPage = lazy(() => import('./pages/GoogleAgendaPage'));
 const GoogleDrivePage = lazy(() => import('./google-workspace/pages/GoogleDrivePageV2'));
 const GoogleMeetPage = lazy(() => import('./pages/GoogleMeetPage'));

@@ -288,9 +288,9 @@ export const useGmailService = () => {
     });
   }, [handleApiCall]);
 
-  const downloadAttachment = useCallback(async (messageId: string, attachmentId: string, filename: string) => {
+  const downloadAttachment = useCallback(async (messageId: string, attachmentId: string, fallbackFilename: string) => {
     try {
-      const response = await fetch(`${window.location.origin}/api/gmail/messages/${messageId}/attachments/${attachmentId}`, {
+      const response = await fetch(`${window.location.origin}/api/gmail/messages/${messageId}/attachments/${encodeURIComponent(attachmentId)}`, {
         credentials: 'include',
         headers: {
           'x-organization-id': localStorage.getItem('organizationId') || '',
@@ -299,6 +299,16 @@ export const useGmailService = () => {
       
       if (!response.ok) {
         throw new Error(`Erreur téléchargement: ${response.status}`);
+      }
+      
+      // Extraire le vrai nom de fichier depuis Content-Disposition du backend
+      let filename = fallbackFilename;
+      const contentDisposition = response.headers.get('content-disposition');
+      if (contentDisposition) {
+        const match = contentDisposition.match(/filename="?([^"\n;]+)"?/i);
+        if (match && match[1]) {
+          filename = match[1].trim();
+        }
       }
       
       const blob = await response.blob();
