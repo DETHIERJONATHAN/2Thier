@@ -418,10 +418,10 @@ const TBL: React.FC<TBLProps> = ({
       setLeadId(selectedLead.id);
       setClientData({
         id: selectedLead.id,
-        name: `${selectedLead.firstName || ''} ${selectedLead.lastName || ''}`.trim() || selectedLead.company || 'Lead sans nom',
+        name: selectedLead.name || `${selectedLead.firstName || ''} ${selectedLead.lastName || ''}`.trim() || selectedLead.company || 'Lead sans nom',
         email: selectedLead.email || '',
         phone: selectedLead.phone || '',
-        address: formatAddressValue((selectedLead as unknown as { address?: unknown; data?: { address?: unknown } })?.address ?? (selectedLead as unknown as { data?: { address?: unknown } })?.data?.address ?? '')
+        address: formatAddressValue(selectedLead.address || (selectedLead as unknown as { data?: { address?: unknown } })?.data?.address || '')
       });
       setIsDevisSaved(false);
       setIsLoadedDevis(false);

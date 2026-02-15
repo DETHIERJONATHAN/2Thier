@@ -24,9 +24,12 @@ export interface Lead {
 export interface TBLLead {
   id: string;
   name: string; // firstName + lastName ou company
+  firstName?: string;
+  lastName?: string;
   email?: string;
   phone?: string;
   company?: string;
+  address?: string;
   hasSubmission: boolean; // A déjà une soumission TBL
   submissionId?: string;
   lastModified?: Date;

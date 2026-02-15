@@ -935,7 +935,75 @@ async function evaluateCapacitiesForSubmission(
     }
   }
   
-  // 🔥 RÉCUPÉRER LES VARIABLES ET LES FORMULES
+  // � FIX R21b: Résoudre les valeurs LINK pour TOUS les modes (open, change, autosave)
+  // PROBLÈME: En mode 'open', les LINK fields ne sont jamais résolus car le bloc trigger index
+  // ne s'exécute qu'en mode 'change'. Si un DISPLAY field (ex: "Onduleur achat") fait un table
+  // lookup qui dépend d'un LINK field (ex: "Onduleur" → pointe vers le select onduleur du repeater),
+  // la valeur du LINK est absente du valueMap → le lookup retourne 0/null.
+  // FIX: Charger tous les LINK fields, résoudre la valeur de leur cible dans le valueMap,
+  // et injecter cette valeur sous l'ID du LINK. Supporte les suffixes repeater (-1, -2, etc.)
+  try {
+    const linkNodes = await prisma.treeBranchLeafNode.findMany({
+      where: { treeId, hasLink: true, link_targetNodeId: { not: null } },
+      select: { id: true, label: true, link_targetNodeId: true }
+    });
+    let linkResolvedCount = 0;
+    for (const ln of linkNodes) {
+      const targetId = ln.link_targetNodeId!;
+      // Si le valueMap a déjà une valeur pour ce LINK, ne pas écraser
+      if (valueMap.has(ln.id) && valueMap.get(ln.id) !== null && valueMap.get(ln.id) !== undefined && valueMap.get(ln.id) !== '' && valueMap.get(ln.id) !== 0 && valueMap.get(ln.id) !== '0') {
+        continue;
+      }
+      // Chercher la valeur de la cible dans le valueMap (ID de base)
+      let targetValue = valueMap.get(targetId);
+      // Si pas trouvé, chercher avec des suffixes repeater (-1, -2, etc.)
+      if (targetValue === undefined || targetValue === null || targetValue === '') {
+        for (const [key, val] of valueMap) {
+          if (key.startsWith(targetId + '-') && /^-\d+$/.test(key.slice(targetId.length))) {
+            if (val !== undefined && val !== null && val !== '') {
+              targetValue = val;
+              break; // Prendre la première valeur trouvée (instance la plus récente)
+            }
+          }
+        }
+      }
+      // Si pas trouvé dans valueMap, chercher dans SubmissionData
+      if (targetValue === undefined || targetValue === null || targetValue === '') {
+        const targetSubmData = await prisma.treeBranchLeafSubmissionData.findFirst({
+          where: { submissionId, nodeId: targetId },
+          select: { value: true }
+        });
+        if (targetSubmData?.value) targetValue = targetSubmData.value;
+      }
+      // Si toujours pas trouvé, chercher SubmissionData avec suffixes repeater
+      if (targetValue === undefined || targetValue === null || targetValue === '') {
+        const suffixedSubmData = await prisma.treeBranchLeafSubmissionData.findMany({
+          where: { submissionId, nodeId: { startsWith: targetId } },
+          select: { nodeId: true, value: true },
+          orderBy: { lastResolved: 'desc' }
+        });
+        for (const sd of suffixedSubmData) {
+          if (sd.nodeId !== targetId && /^-\d+$/.test(sd.nodeId.slice(targetId.length))) {
+            if (sd.value !== null && sd.value !== '') {
+              targetValue = sd.value;
+              break;
+            }
+          }
+        }
+      }
+      if (targetValue !== undefined && targetValue !== null && targetValue !== '') {
+        valueMap.set(ln.id, targetValue);
+        linkResolvedCount++;
+      }
+    }
+    if (linkResolvedCount > 0) {
+      console.log(`🔗 [FIX R21b] ${linkResolvedCount} LINK field(s) résolus dans le valueMap (mode: ${mode})`);
+    }
+  } catch (e) {
+    console.warn('⚠️ [FIX R21b] Résolution LINK fields échouée (best-effort):', (e as Error)?.message || e);
+  }
+  
+  // �🔥 RÉCUPÉRER LES VARIABLES ET LES FORMULES
   const [variablesRaw, formulasRaw] = await Promise.all([
     prisma.treeBranchLeafNodeVariable.findMany({
       where: { TreeBranchLeafNode: { treeId }, sourceRef: { not: null } },
@@ -1061,6 +1129,14 @@ const displayDeps = new Map<string, Set<string>>(); // nodeId → Set<dependsOn>
   // 🔗 Map pour stocker les valeurs des champs Link à retourner au frontend
   const linkedFieldsToRefresh = new Map<string, { targetNodeId: string; nodeLabel: string }>();
   
+  // 🔧 FIX R21: Extraire l'ID de base si changedFieldId a un suffixe repeater (-1, -2, etc.)
+  // Quand l'utilisateur modifie un champ dans un repeater (ex: onduleur-1), le LINK pointe vers
+  // l'ID de base (onduleur). On doit chercher dans le triggerIndex avec les DEUX IDs.
+  const changedFieldIdBase = changedFieldId ? (() => {
+    const suffix = extractNumericSuffix(changedFieldId);
+    return suffix ? changedFieldId.replace(/-\d+$/, '') : null;
+  })() : null;
+  
   if (mode === 'change' && changedFieldId) {
     // 🚀 CHECK CACHE: Réutiliser le trigger index si déjà construit pour ce tree
     const cached = triggerIndexCache.get(treeId);
@@ -1073,8 +1149,9 @@ const displayDeps = new Map<string, Set<string>>(); // nodeId → Set<dependsOn>
       }
       
       // Construire linkedFieldsToRefresh depuis le cache
+      // 🔧 FIX R21: Aussi matcher sur l'ID de base pour les champs repeater suffixés
       for (const ln of cached.allLinkedNodes) {
-        if (ln.link_targetNodeId === changedFieldId) {
+        if (ln.link_targetNodeId === changedFieldId || (changedFieldIdBase && ln.link_targetNodeId === changedFieldIdBase)) {
           linkedFieldsToRefresh.set(ln.id, {
             targetNodeId: ln.link_targetNodeId,
             nodeLabel: ln.label || ln.id
@@ -1264,7 +1341,8 @@ const displayDeps = new Map<string, Set<string>>(); // nodeId → Set<dependsOn>
         if (!triggerIndex.has(targetId)) triggerIndex.set(targetId, new Set());
         triggerIndex.get(targetId)!.add(linkedNode.id);
         
-        if (targetId === changedFieldId) {
+        // 🔧 FIX R21: Aussi matcher sur l'ID de base pour les champs repeater suffixés
+        if (targetId === changedFieldId || (changedFieldIdBase && targetId === changedFieldIdBase)) {
           linkedFieldsToRefresh.set(linkedNode.id, {
             targetNodeId: targetId,
             nodeLabel: linkedNode.label || linkedNode.id
@@ -1450,6 +1528,13 @@ const displayDeps = new Map<string, Set<string>>(); // nodeId → Set<dependsOn>
   let affectedDisplayFieldIds: Set<string> | null = null;
   if (mode === 'change' && changedFieldId && triggerIndex.size > 0) {
     affectedDisplayFieldIds = new Set(triggerIndex.get(changedFieldId) || []);
+    // 🔧 FIX R21: Aussi inclure les display fields déclenchés par l'ID de base (repeater)
+    if (changedFieldIdBase) {
+      const baseAffected = triggerIndex.get(changedFieldIdBase);
+      if (baseAffected) {
+        for (const id of baseAffected) affectedDisplayFieldIds.add(id);
+      }
+    }
     // Fermeture transitive: si A dépend de changedField et B dépend de A, B est aussi affecté
     let changed = true;
     let iterations = 0;
@@ -1482,12 +1567,18 @@ const displayDeps = new Map<string, Set<string>>(); // nodeId → Set<dependsOn>
   if (mode === 'change' && linkedFieldsToRefresh.size > 0 && formData) {
     for (const [linkedNodeId, linkInfo] of linkedFieldsToRefresh.entries()) {
       // La valeur fraîche du champ source est dans formData (c'est le champ que l'utilisateur a changé)
+      // 🔧 FIX R21: Chercher la valeur dans formData sous targetNodeId OU sous changedFieldId (version suffixée)
+      // Car formData contient la clé suffixée (ex: 78c78d8d-1) mais le LINK pointe vers l'ID de base (78c78d8d)
+      let freshValue: unknown = undefined;
       if (linkInfo.targetNodeId in formData) {
-        const freshValue = formData[linkInfo.targetNodeId];
-        if (freshValue !== null && freshValue !== undefined) {
-          valueMap.set(linkedNodeId, freshValue);
-          console.log(`🔗 [FIX R20] valueMap LINK pre-refresh: ${linkedNodeId.substring(0,8)} = "${freshValue}" (source: ${linkInfo.targetNodeId.substring(0,8)})`);
-        }
+        freshValue = formData[linkInfo.targetNodeId];
+      } else if (changedFieldId && changedFieldId in formData && changedFieldIdBase === linkInfo.targetNodeId) {
+        // Le formData a la clé suffixée mais le LINK pointe vers l'ID de base
+        freshValue = formData[changedFieldId];
+      }
+      if (freshValue !== null && freshValue !== undefined) {
+        valueMap.set(linkedNodeId, freshValue);
+        console.log(`🔗 [FIX R20/R21] valueMap LINK pre-refresh: ${linkedNodeId.substring(0,8)} = "${freshValue}" (source: ${linkInfo.targetNodeId.substring(0,8)}, changedField: ${changedFieldId?.substring(0,8) || 'N/A'})`);
       }
     }
   }
@@ -1817,9 +1908,21 @@ const displayDeps = new Map<string, Set<string>>(); // nodeId → Set<dependsOn>
       
       let linkValue: string | null = null;
       
+      // 🔧 FIX R21: Chercher dans formData sous targetNodeId OU sous changedFieldId (version suffixée repeater)
       if (formData && linkInfo.targetNodeId in formData) {
         const fv = formData[linkInfo.targetNodeId];
         linkValue = fv !== null && fv !== undefined ? String(fv) : null;
+      }
+      // FIX R21: Si pas trouvé avec l'ID de base, chercher avec les clés suffixées dans formData
+      if (!linkValue && formData) {
+        for (const [key, val] of Object.entries(formData)) {
+          if (key.startsWith(linkInfo.targetNodeId + '-') && /^-\d+$/.test(key.slice(linkInfo.targetNodeId.length))) {
+            if (val !== null && val !== undefined) {
+              linkValue = String(val);
+              break;
+            }
+          }
+        }
       }
       
       if (!linkValue) {

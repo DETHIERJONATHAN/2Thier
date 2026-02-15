@@ -5,6 +5,7 @@ import miscRoutes from './misc';
 import profileRoutes from './profile';
 import modulesRoutes from './modules';
 import adminModulesRoutes from './admin-modules'; // 🎯 ROUTES ADMINISTRATION MODULES DYNAMIQUE
+import adminTreesRoutes from './admin-trees'; // 🌳 ROUTES ADMINISTRATION ARBRES
 import iconsRoutes from './icons'; // 🎨 ROUTES ICÔNES DYNAMIQUES
 import companyRoutes from './company'; // ✅ RÉACTIVÉ - Fichier créé
 import invitationRoutes from './invitations';
@@ -211,6 +212,9 @@ apiRouter.use('/users', usersRoutes);
 
 // Routes d'administration
 apiRouter.use('/admin', adminRoutes);
+
+// 🌳 Routes admin gestion des arbres (TreeBranchLeaf)
+apiRouter.use('/admin-trees', adminTreesRoutes);
 
 
 // Routes d'usurpation d'identité

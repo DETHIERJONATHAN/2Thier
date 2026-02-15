@@ -85,6 +85,7 @@ const OrganizationsAdminPage = lazy(() => import('./pages/admin/OrganizationsAdm
 const PermissionsAdminPage = lazy(() => import('./pages/admin/PermissionsAdminPageNew'));
 const IntegrationsAdminPage = lazy(() => import('./pages/admin/IntegrationsAdminPage'));
 const UserRightsSummaryPage = lazy(() => import('./pages/admin/UserRightsSummaryPage'));
+const TreesAdminPage = lazy(() => import('./pages/admin/TreesAdminPage'));
 const AuthDebugPage = lazy(() => import('./pages/admin/AuthDebugPage'));
 const ArchitectIAPanel = lazy(() => import('./components/ArchitectIAPanel'));
 
@@ -275,6 +276,7 @@ export default function AppLayout() {
             {can('organization:read') && <Route path="/admin/organizations" element={<OrganizationsAdminPage />} />}
             {isSuperAdmin && <Route path="/admin/permissions" element={<PermissionsAdminPage />} />}
             {isSuperAdmin && <Route path="/admin/integrations" element={<IntegrationsAdminPage />} />}
+            {isSuperAdmin && <Route path="/admin/trees" element={<TreesAdminPage />} />}
             {isSuperAdmin && <Route path="/admin/architect" element={<ArchitectIAPanel />} />}
             
             {/* Routes Admin Devis1Minute (nouvelles) */}

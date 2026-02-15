@@ -10357,7 +10357,8 @@ router.get('/submissions/:id/fields', async (req, res) => {
         email: lead.email,
         phone: lead.phone,
         company: lead.company,
-        fullAddress: null
+        fullAddress: (lead.data as any)?.address || null,
+        data: lead.data
       } : null,
       status: submission.status,
       createdAt: submission.createdAt,
@@ -11251,6 +11252,24 @@ router.delete('/submissions/:id', async (req, res) => {
     // Supprimer les versions si elles existent
     await prisma.treeBranchLeafSubmissionVersion.deleteMany({
       where: { submissionId: id }
+    });
+
+    // Dissocier les documents générés (ne pas les supprimer, juste retirer le lien)
+    await prisma.generatedDocument.updateMany({
+      where: { submissionId: id },
+      data: { submissionId: null }
+    });
+
+    // Dissocier les stages (sessions de travail temporaires)
+    await prisma.treeBranchLeafStage.updateMany({
+      where: { submissionId: id },
+      data: { submissionId: null }
+    });
+
+    // Dissocier les soumissions de formulaires website
+    await prisma.website_form_submissions.updateMany({
+      where: { submissionId: id },
+      data: { submissionId: null }
     });
 
     // Puis supprimer la soumission

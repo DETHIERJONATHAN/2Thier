@@ -43,6 +43,7 @@ const OrganizationsAdminPage = React.lazy(() => import('../pages/admin/Organizat
 const PermissionsAdminPage = React.lazy(() => import('../pages/admin/PermissionsAdminPageNew'));
 const IntegrationsAdminPage = React.lazy(() => import('../pages/admin/IntegrationsAdminPage'));
 const UserRightsSummaryPage = React.lazy(() => import('../pages/admin/UserRightsSummaryPage'));
+const TreesAdminPage = React.lazy(() => import('../pages/admin/TreesAdminPage')); // 🌳 Gestion des Arbres
 
 // Pages Paramètres
 const SettingsPage = React.lazy(() => import('../pages/SettingsPage'));
@@ -144,6 +145,7 @@ export const AppLayout: React.FC = () => {
                       <Route path="/admin/modules" element={<ModulesAdminPage />} />
                       <Route path="/admin/permissions" element={<PermissionsAdminPage />} />
                       <Route path="/admin/integrations" element={<IntegrationsAdminPage />} />
+                      <Route path="/admin/trees" element={<TreesAdminPage />} />
                     </>
                   )}
                   {can('role:read') && <Route path="/admin/roles" element={<RolesAdminPage />} />}

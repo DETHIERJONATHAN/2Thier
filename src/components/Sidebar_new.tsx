@@ -272,6 +272,7 @@ const Sidebar = ({ modules, hasFeature }: { modules: Array<{ key?: string; id?: 
     { key: 'admin-permissions', label: 'Permissions', icon: 'FaShieldAlt', route: '/admin/permissions', permission: 'admin_panel:view' },
     { key: 'admin-rights-summary', label: 'Synthèse des droits', icon: 'FaFileContract', route: '/admin/rights-summary', permission: 'admin_panel:view' },
     { key: 'admin-orgs', label: 'Organisations', icon: 'FaBuilding', route: '/admin/organizations', permission: 'super_admin' },
+    { key: 'admin-trees', label: 'Gestion des Arbres', icon: 'FaCodeBranch', route: '/admin/trees', permission: 'super_admin' },
     { key: 'admin-telnyx', label: 'Telnyx Communications', icon: 'FaPhone', route: '/telnyx', permission: 'admin_panel:view' },
   ], []);
 

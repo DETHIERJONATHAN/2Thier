@@ -39,7 +39,8 @@ import {
   AppstoreOutlined,
   KeyOutlined,
   SafetyOutlined,
-  BankOutlined
+  BankOutlined,
+  ApartmentOutlined
 } from '@ant-design/icons';
 import { useAuth } from '../../auth/useAuth';
 import { useAuthenticatedApi } from '../../hooks/useAuthenticatedApi';
@@ -110,6 +111,7 @@ const MODULE_ROUTES: Record<string, string> = {
   google_agenda: '/google-agenda',
   google_drive: '/google-drive',
   fiches_techniques: '/fiches-techniques',
+  admin_trees: '/admin/trees',
 };
 
 const getModuleRoute = (mod: { key?: string; id?: string; route?: string; name?: string; label?: string }) => {
@@ -327,7 +329,9 @@ const MainLayout: React.FC<MainLayoutProps> = ({
       'FaShieldAlt': <SafetyOutlined style={iconStyle} />,
       'FaFileContract': <FileTextOutlined style={iconStyle} />,
       'FaBuilding': <BankOutlined style={iconStyle} />,
-      'FaWpforms': <FormOutlined style={iconStyle} />
+      'FaWpforms': <FormOutlined style={iconStyle} />,
+      'FaCodeBranch': <ApartmentOutlined style={iconStyle} />,
+      'ApartmentOutlined': <ApartmentOutlined style={iconStyle} />
     };
 
     return iconMap[iconName] || <AppstoreOutlined style={iconStyle} />;

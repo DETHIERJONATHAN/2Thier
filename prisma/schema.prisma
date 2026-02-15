@@ -1082,6 +1082,7 @@ model Organization {
   GoogleTokenRefreshHistory  GoogleTokenRefreshHistory[]
   website_forms              website_forms[]
   ProductDocument            ProductDocument[]
+  TreeOrganizationAccess     TreeOrganizationAccess[]
 }
 
 model OrganizationModuleStatus {
@@ -2152,9 +2153,33 @@ model TreeBranchLeafTree {
   // Relation vers les nodes de l'arbre
   TreeBranchLeafNode TreeBranchLeafNode[]
 
+  // Relation vers les accès organisationnels
+  TreeOrganizationAccess TreeOrganizationAccess[]
+
   @@index([category])
   @@index([organizationId])
   @@index([status])
+}
+
+/// Gestion des accès aux arbres par organisation, rôles et onglets
+model TreeOrganizationAccess {
+  id             String       @id @default(cuid())
+  treeId         String
+  organizationId String
+  isOwner        Boolean      @default(false)  // L'organisation propriétaire de l'arbre
+  active         Boolean      @default(true)
+  // Configuration JSON des accès par onglet/sous-onglet
+  // Structure: { tabs: { [nodeId]: { visible: bool, allowedRoles: string[], isSequential: bool, sequentialOrder: int, subTabs: { [subTabKey]: { visible: bool, allowedRoles: string[] } } } } }
+  tabAccessConfig Json        @default("{}")
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  tree           TreeBranchLeafTree @relation(fields: [treeId], references: [id], onDelete: Cascade)
+  organization   Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([treeId, organizationId])
+  @@index([organizationId])
+  @@index([treeId])
 }
 
 model User {

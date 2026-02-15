@@ -78,9 +78,12 @@ const LeadSelectorModal: React.FC<LeadSelectorModalProps> = ({
         const tblLeads: TBLLead[] = response.data.map((lead: any) => ({
           id: lead.id,
           name: lead.name || `${lead.firstName || ''} ${lead.lastName || ''}`.trim() || 'Lead sans nom',
+          firstName: lead.firstName || '',
+          lastName: lead.lastName || '',
           email: lead.email,
           phone: lead.phone,
           company: lead.company,
+          address: lead.address || lead.data?.address || '',
           hasSubmission: false, // TODO: Vérifier s'il y a une soumission TBL
           lastModified: lead.updatedAt ? new Date(lead.updatedAt) : undefined
         }));
