@@ -109,6 +109,7 @@ const MODULE_ROUTES: Record<string, string> = {
   formulaire: '/formulaire',
   google_agenda: '/google-agenda',
   google_drive: '/google-drive',
+  fiches_techniques: '/fiches-techniques',
 };
 
 const getModuleRoute = (mod: { key?: string; id?: string; route?: string; name?: string; label?: string }) => {

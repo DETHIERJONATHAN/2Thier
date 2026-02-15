@@ -129,13 +129,17 @@ function collectReferencedNodeIdsForTriggers(data: unknown, out: Set<string>) {
   if (typeof data === 'string') {
     const s = data.trim();
     if (!s) return;
-    // 🔥 FIX: Gérer TOUS les préfixes de référence, pas seulement @value. et @table.
-    if (s.startsWith('@value.') || s.startsWith('@table.') || s.startsWith('@calculated.') || s.startsWith('@select.')) {
-      const id = normalizeRefForTriggers(s);
-      if (id && isAcceptedNodeId(id)) out.add(id);
+    // 🔥 FIX R21: Gérer TOUS les préfixes de référence, y compris node-formula:, condition:, etc.
+    // Avant ce fix, seuls @value., @table., @calculated., @select. étaient normalisés.
+    // Les tokens node-formula:xxx, condition:xxx étaient ignorés → leurs dépendances
+    // ne remontaient PAS dans le trigger index → cascade incomplète.
+    // Ex: Onduleur TVAC avec token "node-formula:83d7d601..." n'avait PAS le trigger TVA → Onduleur TVAC.
+    const id = normalizeRefForTriggers(s);
+    if (id && isAcceptedNodeId(id)) {
+      out.add(id);
       return;
     }
-    // Fallback: accepter directement un nodeId explicite
+    // Fallback: accepter directement un nodeId explicite (déjà un UUID brut)
     if (isAcceptedNodeId(s)) out.add(s);
   }
 }
@@ -788,6 +792,61 @@ async function evaluateCapacitiesForSubmission(
   // 🔑 ÉTAPE 1: Construire le valueMap avec les données fraîches du formulaire
   const valueMap = new Map<string, unknown>();
 
+  // 🔑 FIX R22: Charger les données du Lead depuis la soumission pour les clés virtuelles (lead.postalCode, etc.)
+  // Sans cela, les lookups de table qui utilisent lead.postalCode retournent "Aucune sélection colonne"
+  try {
+    const submission = await prisma.treeBranchLeafSubmission.findUnique({
+      where: { id: submissionId },
+      select: { leadId: true }
+    });
+    if (submission?.leadId) {
+      const lead = await prisma.lead.findUnique({
+        where: { id: submission.leadId },
+        select: {
+          id: true, firstName: true, lastName: true, email: true, phone: true,
+          company: true, leadNumber: true, linkedin: true, website: true,
+          status: true, notes: true, data: true
+        }
+      });
+      if (lead) {
+        valueMap.set('lead.id', lead.id);
+        valueMap.set('lead.firstName', lead.firstName);
+        valueMap.set('lead.lastName', lead.lastName);
+        valueMap.set('lead.email', lead.email);
+        valueMap.set('lead.phone', lead.phone);
+        valueMap.set('lead.company', lead.company);
+        valueMap.set('lead.leadNumber', lead.leadNumber);
+        valueMap.set('lead.linkedin', lead.linkedin);
+        valueMap.set('lead.website', lead.website);
+        valueMap.set('lead.status', lead.status);
+        valueMap.set('lead.notes', lead.notes);
+        if (lead.data && typeof lead.data === 'object') {
+          const leadData = lead.data as Record<string, unknown>;
+          if (leadData.postalCode) {
+            valueMap.set('lead.postalCode', leadData.postalCode);
+          } else if (leadData.address && typeof leadData.address === 'object') {
+            const addressObj = leadData.address as Record<string, unknown>;
+            if (addressObj.zipCode) {
+              valueMap.set('lead.postalCode', addressObj.zipCode);
+            } else if (addressObj.postalCode) {
+              valueMap.set('lead.postalCode', addressObj.postalCode);
+            }
+          } else if (leadData.address && typeof leadData.address === 'string') {
+            const postalCodeMatch = leadData.address.match(/\b(\d{4,5})\b/);
+            if (postalCodeMatch) {
+              valueMap.set('lead.postalCode', postalCodeMatch[1]);
+            }
+          }
+          if (leadData.address) valueMap.set('lead.address', leadData.address);
+          if (leadData.city) valueMap.set('lead.city', leadData.city);
+          if (leadData.country) valueMap.set('lead.country', leadData.country);
+        }
+      }
+    }
+  } catch (e) {
+    console.warn('⚠️ [EVALUATE] Chargement lead échoué (best-effort):', (e as Error)?.message || e);
+  }
+
   // �️ FIX 2026-01-31: Collecter les DISPLAY nodeIds pour protéger leurs valeurs DB
   // Les DISPLAY fields sont CALCULÉS par le backend - le frontend ne fait que "cacher" les valeurs.
   // Lors d'une révision, le frontend peut envoyer des valeurs obsolètes (0, 1) pour les DISPLAY fields
@@ -1076,9 +1135,12 @@ const displayDeps = new Map<string, Set<string>>(); // nodeId → Set<dependsOn>
     
       // Grouper formules, tables, variables par nodeId
       const formulasByNodeId = new Map<string, Array<{ tokens: unknown }>>();
+      // 🔥 FIX R21: Aussi indexer les formules par ID pour résoudre les node-formula: cross-node
+      const formulasById = new Map<string, { tokens: unknown; nodeId: string }>();
       for (const f of formulasRaw) {
         if (!formulasByNodeId.has(f.nodeId)) formulasByNodeId.set(f.nodeId, []);
         formulasByNodeId.get(f.nodeId)!.push(f);
+        formulasById.set(f.id, { tokens: (f as any).tokens, nodeId: f.nodeId });
       }
       const tablesByNodeId = new Map<string, Array<{ meta: unknown }>>();
       for (const t of displayFieldTables) {
@@ -1107,6 +1169,43 @@ const displayDeps = new Map<string, Set<string>>(); // nodeId → Set<dependsOn>
         }
       };
       
+      // 🔥 FIX R21: Résoudre les dépendances transitives des node-formula: cross-node
+      // Quand un token "node-formula:formulaId" référence une formule d'un AUTRE noeud,
+      // il faut aussi ajouter les dépendances de CETTE formule au trigger index du noeud courant.
+      // Ex: Onduleur TVAC a "node-formula:83d7d601" (formule TVA de PV TVAC)
+      //     → les dépendances de la formule TVA (comme @calculated.5e258abf = TVA node)
+      //     doivent être triggers pour Onduleur TVAC.
+      const resolveNodeFormulaTransitiveTriggers = (data: unknown, nodeId: string, triggerNodeIds: string[], visited: Set<string>) => {
+        if (!data) return;
+        if (Array.isArray(data)) {
+          for (const item of data) resolveNodeFormulaTransitiveTriggers(item, nodeId, triggerNodeIds, visited);
+          return;
+        }
+        if (typeof data === 'string') {
+          const s = data.trim();
+          // Détecter les tokens node-formula:formulaId
+          if (s.startsWith('node-formula:')) {
+            const formulaId = s.slice('node-formula:'.length).trim();
+            if (formulaId && !visited.has(formulaId)) {
+              visited.add(formulaId);
+              // Chercher la formule dans le cache
+              const referencedFormula = formulasById.get(formulaId);
+              if (referencedFormula && referencedFormula.tokens) {
+                // Extraire les dépendances de cette formule cross-node
+                extractAndAddTriggers(referencedFormula.tokens, nodeId, triggerNodeIds);
+                // Résoudre récursivement (formule qui référence une autre formule)
+                resolveNodeFormulaTransitiveTriggers(referencedFormula.tokens, nodeId, triggerNodeIds, visited);
+              }
+            }
+          }
+        }
+        if (typeof data === 'object' && data !== null) {
+          for (const key of Object.keys(data as Record<string, unknown>)) {
+            resolveNodeFormulaTransitiveTriggers((data as Record<string, unknown>)[key], nodeId, triggerNodeIds, visited);
+          }
+        }
+      };
+      
       // Construire l'index inversé avec TOUTES les sources de dépendances
       for (const node of displayNodes) {
         const metaTriggerNodeIds = (node.metadata as { triggerNodeIds?: string[] })?.triggerNodeIds;
@@ -1123,6 +1222,13 @@ const displayDeps = new Map<string, Set<string>>(); // nodeId → Set<dependsOn>
         for (const table of nodeTables) extractAndAddTriggers(table.meta, node.id, triggerNodeIds);
         const nodeVar = variablesByNodeId.get(node.id);
         if (nodeVar) extractAndAddTriggers(nodeVar.metadata, node.id, triggerNodeIds);
+        
+        // 🔥 FIX R21: Résoudre les dépendances transitives des node-formula: cross-node
+        // Si un token "node-formula:formulaId" référence une formule d'un AUTRE noeud,
+        // on extrait les dépendances de CETTE formule et on les ajoute comme triggers.
+        const visitedFormulas = new Set<string>();
+        if (nodeTokens.length > 0) resolveNodeFormulaTransitiveTriggers(nodeTokens, node.id, triggerNodeIds, visitedFormulas);
+        for (const formula of nodeFormulas) resolveNodeFormulaTransitiveTriggers((formula as any).tokens, node.id, triggerNodeIds, visitedFormulas);
         
         const expandedTriggers = expandTriggersForCopy(node.id, triggerNodeIds);
         for (const triggerId of expandedTriggers) {

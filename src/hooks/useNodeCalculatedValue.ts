@@ -437,6 +437,12 @@ export function useNodeCalculatedValue(
 
         // 🔥 NOUVEAU: Détecter la demande de reset/clear des display fields
         if (detail?.clearDisplayFields === true) {
+          // 🔒 Ne pas vider les champs protégés
+          const protectedIds = detail?.protectedNodeIds;
+          if (Array.isArray(protectedIds) && protectedIds.includes(nodeId)) {
+            console.log(`🔒 [useNodeCalculatedValue] Skip clear pour nœud protégé: nodeId=${nodeId}`);
+            return; // Ne pas vider
+          }
           console.log(`🧹 [useNodeCalculatedValue] Clear display field: nodeId=${nodeId}`);
           setValue(null); // Vider la valeur
           return; // Ne pas faire de refetch

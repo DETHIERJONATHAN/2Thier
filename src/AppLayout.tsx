@@ -25,6 +25,7 @@ const FacturePage = lazy(() => import('./pages/FacturePage'));
 const TechniquePage = lazy(() => import('./pages/TechniquePage'));
 const FormulairePage = lazy(() => import('./pages/FormulairePage'));
 const DevisPage = lazy(() => import('./pages/DevisPage'));
+const ProductDocumentsPage = lazy(() => import('./pages/ProductDocumentsPage'));
 // Rendu utilisateur TBL centralisé – import direct pour éviter toute divergence
 // UserRenderer components supprimés
 
@@ -225,6 +226,9 @@ export default function AppLayout() {
             
             {/* Devis - Accessible si module présent ou super admin */}
             {(hasFeature('devis') || isSuperAdmin) && <Route path="/devis" element={<DevisPage />} />}
+
+            {/* Fiches Techniques - Documents produits */}
+            {(hasFeature('fiches_techniques') || isSuperAdmin) && <Route path="/fiches-techniques" element={<ProductDocumentsPage />} />}
 
             {/* Routes Devis1Minute - Lead Generation Marketplace */}
             <Route path="/marketplace" element={<MarketplacePage />} />

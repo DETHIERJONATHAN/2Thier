@@ -599,6 +599,11 @@ const Parameters: React.FC<ParametersProps> = (props) => {
 
   const handleDeleteSelected = useCallback(async () => {
     if (!selectedNode) return;
+    // Vérifier si le nœud est protégé
+    if ((selectedNode.metadata as Record<string, unknown>)?.isProtected) {
+      console.warn('🔒 [Parameters] Suppression bloquée: nœud protégé');
+      return;
+    }
     try {
       if (typeof onDeleteNode === 'function') {
         await Promise.resolve(onDeleteNode(selectedNode));
@@ -1649,18 +1654,41 @@ const Parameters: React.FC<ParametersProps> = (props) => {
 
             <Popconfirm
               title="Supprimer ce nœud ?"
-              description="Cette action supprimera également ses enfants."
+              description={!!(selectedNode?.metadata as Record<string, unknown>)?.isProtected ? "Ce nœud est protégé. Désactivez d'abord le mode protégé." : "Cette action supprimera également ses enfants."}
               okText="Supprimer"
               cancelText="Annuler"
               okButtonProps={{ danger: true }}
               onConfirm={handleDeleteSelected}
-              disabled={!selectedNode || props.readOnly}
+              disabled={!selectedNode || props.readOnly || !!(selectedNode?.metadata as Record<string, unknown>)?.isProtected}
             >
-              <Button danger size="small" icon={<DeleteOutlined />} disabled={!selectedNode || props.readOnly} style={{ fontSize: 11 }}>
-                Supprimer nœud
-              </Button>
+              <Tooltip title={!!(selectedNode?.metadata as Record<string, unknown>)?.isProtected ? "Nœud protégé — suppression impossible" : undefined}>
+                <Button danger size="small" icon={<DeleteOutlined />} disabled={!selectedNode || props.readOnly || !!(selectedNode?.metadata as Record<string, unknown>)?.isProtected} style={{ fontSize: 11 }}>
+                  {!!(selectedNode?.metadata as Record<string, unknown>)?.isProtected ? '🔒 Protégé' : 'Supprimer nœud'}
+                </Button>
+              </Tooltip>
             </Popconfirm>
           </div>
+
+          {/* Mode protégé */}
+          {selectedNode && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 8, padding: '6px 10px', background: !!(selectedNode.metadata as Record<string, unknown>)?.isProtected ? '#fff7ed' : 'transparent', borderRadius: 6, border: !!(selectedNode.metadata as Record<string, unknown>)?.isProtected ? '1px solid #fed7aa' : '1px solid transparent' }}>
+              <Checkbox
+                checked={!!(selectedNode.metadata as Record<string, unknown>)?.isProtected}
+                onChange={(e) => {
+                  const next: Record<string, unknown> = { ...(selectedNode?.metadata || {}) };
+                  if (e.target.checked) {
+                    next.isProtected = true;
+                  } else {
+                    delete next.isProtected;
+                  }
+                  patchNode({ metadata: next });
+                }}
+                disabled={props.readOnly}
+              />
+              <span style={{ fontSize: 12, fontWeight: 600, color: '#ea580c' }}>🔒 Mode protégé</span>
+              <span style={{ fontSize: 11, color: '#888' }}>Empêche la suppression de ce nœud</span>
+            </div>
+          )}
         </div>
         {/* Section Apparence */}
         <div>

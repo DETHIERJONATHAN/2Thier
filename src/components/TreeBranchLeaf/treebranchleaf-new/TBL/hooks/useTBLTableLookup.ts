@@ -117,8 +117,21 @@ export function useTBLTableLookup(
       
       // 🔥 FIX 14/02/2026: Quand on change de devis, vider le cache des valeurs calculées
       // pour éviter que les valeurs du devis précédent polluent le devis actuel
+      // 🔒 Préserver les valeurs des nœuds protégés
       if (clearDisplayFields || resetCalculatedCache) {
-        setBroadcastedCalcValues({});
+        const protectedIds = (event.detail as any)?.protectedNodeIds;
+        if (Array.isArray(protectedIds) && protectedIds.length > 0) {
+          // Garder les valeurs des nœuds protégés dans le cache
+          setBroadcastedCalcValues(prev => {
+            const kept: Record<string, any> = {};
+            for (const id of protectedIds) {
+              if (id in prev) kept[id] = prev[id];
+            }
+            return kept;
+          });
+        } else {
+          setBroadcastedCalcValues({});
+        }
         setRefreshTrigger(t => t + 1);
         return;
       }

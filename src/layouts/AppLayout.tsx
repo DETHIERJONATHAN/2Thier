@@ -25,6 +25,7 @@ const GestionTableauxPage = React.lazy(() => import('../pages/GestionTableauxPag
 const FormulairePage = React.lazy(() => import('../pages/FormulairePage'));
 const AgendaWrapper = React.lazy(() => import('../pages/AgendaWrapper'));
 const DevisPage = React.lazy(() => import('../pages/DevisPage'));
+const ProductDocumentsPage = React.lazy(() => import('../pages/ProductDocumentsPage'));
 
 // Pages TreeBranchLeaf (système 3 colonnes)
 const TreeBranchLeafLayoutV2 = React.lazy(() => import('../pages/Formulaire/TreeBranchLeafWrapper-Fixed'));
@@ -121,6 +122,7 @@ export const AppLayout: React.FC = () => {
                   {hasFeature('formulaire') && <Route path="/formulaire/treebranchleaf-v2/:id" element={<TreeBranchLeafLayoutV2 />} />}
                   {hasFeature('Agenda') && <Route path="/agenda" element={<AgendaWrapper />} />}
                   {(hasFeature('devis') || isSuperAdmin) && <Route path="/devis" element={<DevisPage />} />}
+                  {(hasFeature('fiches_techniques') || isSuperAdmin) && <Route path="/fiches-techniques" element={<ProductDocumentsPage />} />}
 
                   {/* Routes Google Workspace */}
                   {hasFeature('google_gmail_access') && <Route path="/google-gmail" element={<GoogleGmailPageV2 />} />}

@@ -1293,11 +1293,139 @@ router.get('/generated/:id/download', async (req: AuthenticatedRequest, res: Res
   }
 });
 
+// ─── HELPER: Résoudre les fiches techniques associées à un devis ──────────
+/**
+ * À partir des données TBL d'un devis (formData), retrouve automatiquement
+ * les ProductDocument (fiches techniques) associés aux produits sélectionnés.
+ *
+ * Gère 2 types de champs :
+ *  - Lookup (panneau, onduleur) : via TreeBranchLeafSelectConfig.tableReference → tableRowId
+ *  - Children (options directes) : via node.parentId + label matching
+ */
+async function getProductDocumentsForDevis(
+  organizationId: string,
+  tblData: Record<string, any>
+): Promise<Array<{ id: string; name: string; fileName: string; mimeType: string; storageType: string; driveFileId?: string | null; localPath?: string | null; externalUrl?: string | null; category: string; nodeLabel?: string }>> {
+  if (!tblData || Object.keys(tblData).length === 0) return [];
+
+  // 1. Collecter TOUTES les valeurs texte du formulaire (ce que l'utilisateur a sélectionné/saisi)
+  const formValues: string[] = [];
+  for (const [key, value] of Object.entries(tblData)) {
+    if (key.startsWith('__')) continue;
+    if (typeof value === 'string' && value.trim()) {
+      formValues.push(value.trim());
+    }
+  }
+
+  if (formValues.length === 0) return [];
+  console.log('📎 [FICHES-TECH] Valeurs du formulaire:', formValues);
+
+  // 2. Récupérer TOUS les ProductDocuments de cette organisation avec leurs rows
+  const allDocs = await prisma.productDocument.findMany({
+    where: { organizationId },
+    include: {
+      tableRow: true,
+      node: { select: { label: true } }
+    }
+  });
+
+  if (allDocs.length === 0) {
+    console.log('📎 [FICHES-TECH] Aucun ProductDocument dans cette organisation');
+    return [];
+  }
+
+  console.log('📎 [FICHES-TECH]', allDocs.length, 'ProductDocument(s) en base');
+
+  // 3. Matcher : pour chaque doc, vérifier si UNE des valeurs du formulaire
+  //    se retrouve dans les cellules de la row associée
+  const matchedDocs = new Map<string, typeof allDocs[0]>(); // driveFileId → doc (dédupliquer)
+
+  for (const doc of allDocs) {
+    if (!doc.tableRow) continue;
+
+    // Les cells peuvent être un array JSON-stringifié ou une chaîne CSV
+    let cells: string[] = [];
+    try {
+      const raw = doc.tableRow.cells;
+      if (Array.isArray(raw)) {
+        cells = raw.map((c: any) => String(c).trim());
+      } else if (typeof raw === 'string') {
+        // Tenter de parser comme JSON d'abord
+        try {
+          const parsed = JSON.parse(raw);
+          cells = Array.isArray(parsed) ? parsed.map((c: any) => String(c).trim()) : [raw.trim()];
+        } catch {
+          // CSV ou valeur simple
+          cells = raw.split(',').map(c => c.trim());
+        }
+      }
+    } catch {
+      continue;
+    }
+
+    // Vérifier si une valeur du formulaire correspond à une cellule de cette row
+    for (const formVal of formValues) {
+      const matched = cells.some(cell => cell === formVal);
+      if (matched) {
+        const fileKey = doc.driveFileId || doc.id; // dédupliquer par fichier
+        if (!matchedDocs.has(fileKey)) {
+          matchedDocs.set(fileKey, doc);
+          console.log('📎 [FICHES-TECH] ✅ Match:', formVal, '→', doc.name, '(', doc.node?.label, ')');
+        }
+        break;
+      }
+    }
+  }
+
+  console.log('📎 [FICHES-TECH]', matchedDocs.size, 'fiche(s) technique(s) trouvée(s)');
+
+  return Array.from(matchedDocs.values()).map(doc => ({
+    id: doc.id,
+    name: doc.name,
+    fileName: doc.fileName,
+    mimeType: doc.mimeType,
+    storageType: doc.storageType,
+    driveFileId: doc.driveFileId,
+    localPath: doc.localPath,
+    externalUrl: doc.externalUrl,
+    category: doc.category,
+    nodeLabel: doc.node?.label
+  }));
+}
+
+/**
+ * Télécharge le contenu d'un fichier Google Drive en Buffer
+ */
+async function downloadDriveFileAsBuffer(
+  organizationId: string,
+  driveFileId: string,
+  userId?: string
+): Promise<Buffer | null> {
+  try {
+    const { googleAuthManager } = await import('../google-auth/index');
+    const { google } = await import('googleapis');
+
+    const authClient = await googleAuthManager.getAuthenticatedClient(organizationId, userId);
+    if (!authClient) return null;
+
+    const drive = google.drive({ version: 'v3', auth: authClient });
+    const response = await drive.files.get(
+      { fileId: driveFileId, alt: 'media', supportsAllDrives: true },
+      { responseType: 'arraybuffer' }
+    );
+
+    return Buffer.from(response.data as ArrayBuffer);
+  } catch (error) {
+    console.error('📎 [FICHES-TECH] ❌ Erreur téléchargement Drive:', driveFileId, error);
+    return null;
+  }
+}
+
 // POST /api/documents/generated/:id/send-email - Envoyer le PDF par email
 router.post('/generated/:id/send-email', async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { id } = req.params;
-    const { to, subject, body, cc, bcc } = req.body;
+    const { to, subject, body, cc, bcc, includeProductDocs, tblData: clientTblData } = req.body;
     const organizationId = (req.headers['x-organization-id'] as string) || req.user?.organizationId || undefined;
     const userId = (req.headers['x-user-id'] as string) || req.user?.userId || undefined;
 
@@ -1412,6 +1540,64 @@ router.post('/generated/:id/send-email', async (req: AuthenticatedRequest, res: 
       return res.status(401).json({ error: 'Google non connecté pour cette organisation' });
     }
 
+    // 3b. Si demandé, résoudre et télécharger les fiches techniques des produits du devis
+    const allAttachments: Array<{ filename: string; content: Buffer; mimeType: string }> = [{
+      filename,
+      content: pdfBuffer,
+      mimeType: 'application/pdf'
+    }];
+
+    let attachedProductDocsCount = 0;
+    const attachedProductDocNames: string[] = [];
+    if (includeProductDocs) {
+      try {
+        // Utiliser les données ACTUELLES du formulaire envoyées par le frontend (priorité)
+        // Fallback sur le snapshot du document si pas de données fraîches
+        const tblData = clientTblData || dataSnapshot.tblData || dataSnapshot;
+        console.log('📎 [SEND-EMAIL] Recherche des fiches techniques pour le devis...', clientTblData ? '(données actuelles du formulaire)' : '(snapshot du document)');
+        const productDocs = await getProductDocumentsForDevis(organizationId!, tblData);
+
+        for (const doc of productDocs) {
+          try {
+            let fileBuffer: Buffer | null = null;
+
+            if (doc.storageType === 'GOOGLE_DRIVE' && doc.driveFileId) {
+              fileBuffer = await downloadDriveFileAsBuffer(organizationId!, doc.driveFileId, userId);
+            } else if (doc.localPath) {
+              const fs = await import('fs/promises');
+              try { fileBuffer = await fs.readFile(doc.localPath); } catch { /* skip */ }
+            } else if (doc.externalUrl) {
+              try {
+                const resp = await fetch(doc.externalUrl);
+                if (resp.ok) fileBuffer = Buffer.from(await resp.arrayBuffer());
+              } catch { /* skip */ }
+            }
+
+            if (fileBuffer) {
+              allAttachments.push({
+                filename: doc.fileName,
+                content: fileBuffer,
+                mimeType: doc.mimeType || 'application/pdf'
+              });
+              attachedProductDocsCount++;
+              attachedProductDocNames.push(doc.name || doc.fileName);
+              console.log('📎 [SEND-EMAIL] ✅ Fiche technique ajoutée:', doc.fileName, `(${(fileBuffer.length / 1024).toFixed(0)} KB)`);
+            } else {
+              console.warn('📎 [SEND-EMAIL] ⚠️ Impossible de télécharger:', doc.fileName);
+            }
+          } catch (docErr) {
+            console.warn('📎 [SEND-EMAIL] ⚠️ Erreur téléchargement fiche:', doc.fileName, docErr);
+          }
+        }
+
+        if (attachedProductDocsCount > 0) {
+          console.log(`📎 [SEND-EMAIL] ${attachedProductDocsCount} fiche(s) technique(s) jointe(s) au total`);
+        }
+      } catch (prodDocErr) {
+        console.warn('📎 [SEND-EMAIL] ⚠️ Erreur récupération fiches techniques (envoi sans):', prodDocErr);
+      }
+    }
+
     // Construire un email HTML professionnel pour éviter les filtres anti-spam
     const orgName = organization?.name || '2Thier CRM';
     const orgEmail = (organization as any)?.email || '';
@@ -1420,7 +1606,12 @@ router.post('/generated/:id/send-email', async (req: AuthenticatedRequest, res: 
     const bodyText = (body || '').trim();
     // Convertir les sauts de ligne en <br> pour le HTML
     const bodyHtml = bodyText.replace(/\n/g, '<br>');
-    
+
+    // Mention des fiches techniques dans l'email si elles sont jointes
+    const fichesHtml = attachedProductDocsCount > 0
+      ? `<p style="font-size: 13px; color: #666; margin-top: 10px;">📄 ${attachedProductDocsCount} fiche(s) technique(s) jointe(s) :<br>${attachedProductDocNames.map(n => `&nbsp;&nbsp;• <em>${n}</em>`).join('<br>')}</p>`
+      : '';
+
     const htmlBody = `<!DOCTYPE html>
 <html lang="fr">
 <head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"></head>
@@ -1436,6 +1627,7 @@ router.post('/generated/:id/send-email', async (req: AuthenticatedRequest, res: 
         <p>${bodyHtml}</p>
         <hr style="border: none; border-top: 1px solid #eee; margin: 25px 0;">
         <p style="font-size: 13px; color: #666;">📎 Vous trouverez le document <strong>${filename}</strong> en pièce jointe de cet email.</p>
+        ${fichesHtml}
       </td>
     </tr>
     <tr>
@@ -1460,11 +1652,7 @@ router.post('/generated/:id/send-email', async (req: AuthenticatedRequest, res: 
       cc: cc || undefined,
       bcc: bcc || undefined,
       fromName: orgName,
-      attachments: [{
-        filename,
-        content: pdfBuffer,
-        mimeType: 'application/pdf'
-      }]
+      attachments: allAttachments
     });
 
     if (!result) {
@@ -1504,6 +1692,8 @@ router.post('/generated/:id/send-email', async (req: AuthenticatedRequest, res: 
               templateName: document.DocumentTemplate?.name || null,
               sentBy: userId || null,
               messageId: result.messageId,
+              productDocsAttached: attachedProductDocsCount,
+              totalAttachments: allAttachments.length,
             },
           },
         });
@@ -1513,8 +1703,13 @@ router.post('/generated/:id/send-email', async (req: AuthenticatedRequest, res: 
       }
     }
 
-    console.log('📧 [SEND-EMAIL] ✅ Email envoyé à', to, 'avec PDF', filename);
-    res.json({ success: true, messageId: result.messageId });
+    const fichesMsg = attachedProductDocsCount > 0 ? ` + ${attachedProductDocsCount} fiche(s) technique(s)` : '';
+    console.log(`📧 [SEND-EMAIL] ✅ Email envoyé à ${to} avec PDF ${filename}${fichesMsg}`);
+    res.json({ 
+      success: true, 
+      messageId: result.messageId,
+      productDocsAttached: attachedProductDocsCount
+    });
   } catch (error: any) {
     console.error('❌ [SEND-EMAIL] Erreur:', error);
     res.status(500).json({ error: 'Erreur lors de l\'envoi', details: error?.message });

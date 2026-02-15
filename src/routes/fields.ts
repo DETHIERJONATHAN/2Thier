@@ -102,16 +102,25 @@ router.post('/:id/reorder-dependencies', requireRole(['admin', 'super_admin']), 
 // PUT /api/fields/:id - Mise à jour d'un champ (onglet Paramètres)
 router.put('/:id', requireRole(['admin', 'super_admin']), async (req, res) => {
   const { id } = req.params;
-  const { label, type, required, width, advancedConfig } = req.body;
+  const { label, type, required, width, advancedConfig, isProtected } = req.body;
   
   console.log('[fields.ts] PUT /:id - fieldId:', id);
   console.log('[fields.ts] PUT /:id - body reçu:', req.body);
   console.log('[fields.ts] PUT /:id - advancedConfig:', advancedConfig);
   
+  // Construire l'objet data dynamiquement pour ne pas écraser avec undefined
+  const data: Record<string, unknown> = {};
+  if (label !== undefined) data.label = label;
+  if (type !== undefined) data.type = type;
+  if (required !== undefined) data.required = required;
+  if (width !== undefined) data.width = width;
+  if (advancedConfig !== undefined) data.advancedConfig = advancedConfig;
+  if (isProtected !== undefined) data.isProtected = isProtected;
+  
   try {
     const field = await prisma.field.update({
       where: { id },
-      data: { label, type, required, width, advancedConfig }
+      data
     });
     
     console.log('[fields.ts] PUT /:id - Champ mis à jour:', field);
@@ -247,6 +256,35 @@ router.post('/meta-counts', requireRole(['admin', 'super_admin']), async (req, r
   }
 });
 
+// PATCH /api/fields/:id/protection - Basculer la protection d'un champ (super_admin uniquement)
+router.patch('/:id/protection', requireRole(['super_admin']), async (req: Request, res: Response): Promise<Response | void> => {
+    const { id } = req.params;
+    const { isProtected } = req.body;
+
+    if (typeof isProtected !== 'boolean') {
+        res.status(400).json({ error: "Le champ 'isProtected' (boolean) est requis." });
+        return;
+    }
+
+    try {
+        const field = await prisma.field.findUnique({ where: { id } });
+        if (!field) {
+            res.status(404).json({ error: "Champ non trouvé" });
+            return;
+        }
+
+        const updated = await prisma.field.update({
+            where: { id },
+            data: { isProtected },
+        });
+
+        res.status(200).json(updated);
+    } catch (error: unknown) {
+        console.error('[API] Erreur toggle protection champ:', error);
+        res.status(500).json({ error: "Erreur lors de la mise à jour de la protection du champ" });
+    }
+});
+
 // DELETE /api/fields/:id - Suppression d'un champ
 router.delete('/:id', requireRole(['admin', 'super_admin']), async (req: Request, res: Response): Promise<Response | void> => {
     const { id } = req.params;
@@ -259,6 +297,12 @@ router.delete('/:id', requireRole(['admin', 'super_admin']), async (req: Request
 
         if (!field || !field.Section) {
             res.status(404).json({ error: "Champ ou section parente non trouvé" });
+            return;
+        }
+
+        // Vérifier si le champ est protégé
+        if (field.isProtected) {
+            res.status(403).json({ error: "Ce champ est protégé et ne peut pas être supprimé. Retirez d'abord la protection." });
             return;
         }
 

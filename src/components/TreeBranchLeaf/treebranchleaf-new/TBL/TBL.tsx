@@ -40,9 +40,10 @@ import {
   Grid,
   Skeleton,
   Tooltip,
-  Tag
+  Tag,
+  Switch
 } from 'antd';
-import { FileTextOutlined, DownloadOutlined, ClockCircleOutlined, FolderOpenOutlined, PlusOutlined, UserOutlined, FileAddOutlined, SearchOutlined, MailOutlined, PhoneOutlined, HomeOutlined, SwapOutlined, LeftOutlined, RightOutlined, SaveOutlined, SendOutlined } from '@ant-design/icons';
+import { FileTextOutlined, DownloadOutlined, ClockCircleOutlined, FolderOpenOutlined, PlusOutlined, UserOutlined, FileAddOutlined, SearchOutlined, MailOutlined, PhoneOutlined, HomeOutlined, SwapOutlined, LeftOutlined, RightOutlined, SaveOutlined, SendOutlined, PaperClipOutlined } from '@ant-design/icons';
 import { useAuth } from '../../../../auth/useAuth';
 import { useParams, useSearchParams } from 'react-router-dom';
 import { useTreeBranchLeafConfig } from '../../hooks/useTreeBranchLeafConfig';
@@ -211,6 +212,7 @@ const TBL: React.FC<TBLProps> = ({
   const [emailTemplatesList, setEmailTemplatesList] = useState<Array<{id: string, name: string, subject: string, content: string, type: string}>>([]);
   const [sendingEmail, setSendingEmail] = useState(false);
   const [emailForm] = Form.useForm();
+  const [includeProductDocs, setIncludeProductDocs] = useState(true); // 📎 Joindre les fiches techniques par défaut
 
   // 📧 États pour l'envoi depuis la liste des devis
   const [devisPdfSelectorVisible, setDevisPdfSelectorVisible] = useState(false);
@@ -270,10 +272,22 @@ const TBL: React.FC<TBLProps> = ({
         }
       }
 
+      // Collecter les IDs des nœuds protégés AVANT setFormData (pour réutiliser après)
+      const protectedNodeIds = new Set<string>();
+      (rawNodes as Array<{ id: string; metadata?: Record<string, unknown> }>).forEach((n) => {
+        if ((n.metadata as Record<string, unknown>)?.isProtected) protectedNodeIds.add(n.id);
+      });
+      console.log('🔒 [handleNewDevis] Nœuds protégés détectés:', Array.from(protectedNodeIds));
+
       setFormData((prev) => {
         const kept: TBLFormData = {};
         Object.keys(prev || {}).forEach((k) => {
+          // Garder les clés internes (__) et les valeurs des champs protégés
           if (k.startsWith('__')) kept[k] = prev[k];
+          else if (protectedNodeIds.has(k)) {
+            kept[k] = prev[k];
+            console.log(`🔒 [handleNewDevis] Valeur protégée préservée: ${k} = ${prev[k]}`);
+          }
         });
         if (isLeadDraftNow && leadId) {
           kept.__leadId = leadId;
@@ -282,9 +296,11 @@ const TBL: React.FC<TBLProps> = ({
       });
 
       // 🔥 NOUVEAU: Vider aussi les champs DISPLAY calculés côté frontend
+      // Mais exclure les nœuds protégés du clear
       broadcastCalculatedRefresh({
         clearDisplayFields: true,
-        reason: 'nouveau-devis'
+        reason: 'nouveau-devis',
+        protectedNodeIds: Array.from(protectedNodeIds)
       });
 
       setIsDevisSaved(false);
@@ -1310,10 +1326,14 @@ const TBL: React.FC<TBLProps> = ({
 
       // 🔥 NOUVEAU: Gestion spéciale pour le clear des display fields
       if (detail?.clearDisplayFields === true) {
+        // 🔒 Collecter les IDs protégés pour les exclure du clear
+        const protectedIds = new Set<string>(Array.isArray(detail?.protectedNodeIds) ? detail.protectedNodeIds as string[] : []);
         // Vider les valeurs calculées dans window.TBL_FORM_DATA
         if (window.TBL_FORM_DATA) {
           const displayFieldsToRemove: string[] = [];
           for (const [key] of Object.entries(window.TBL_FORM_DATA)) {
+            // 🔒 Ne pas toucher aux champs protégés
+            if (protectedIds.has(key)) continue;
             // Identifier les champs calculés/display (ceux qui ne sont pas des input utilisateur)
             if (!key.startsWith('__') && !key.match(/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i)) {
               // Conserver les UUIDs simples qui sont des inputs utilisateur
@@ -2687,14 +2707,19 @@ const TBL: React.FC<TBLProps> = ({
         return;
       }
       setSendingEmail(true);
-      await api.post(`/api/documents/generated/${lastGeneratedDocId}/send-email`, {
+      const result = await api.post(`/api/documents/generated/${lastGeneratedDocId}/send-email`, {
         to: values.to,
         subject: values.subject,
         body: values.body,
         cc: values.cc || undefined,
         bcc: values.bcc || undefined,
+        includeProductDocs,
+        tblData: includeProductDocs ? formData : undefined,
       });
-      message.success('Email envoyé avec succès !');
+      const fichesMsg = result?.productDocsAttached > 0
+        ? ` (+ ${result.productDocsAttached} fiche(s) technique(s))`
+        : '';
+      message.success(`Email envoyé avec succès !${fichesMsg}`);
       setEmailModalVisible(false);
       emailForm.resetFields();
     } catch (error: any) {
@@ -2703,7 +2728,7 @@ const TBL: React.FC<TBLProps> = ({
     } finally {
       setSendingEmail(false);
     }
-  }, [emailForm, lastGeneratedDocId, api]);
+  }, [emailForm, lastGeneratedDocId, api, includeProductDocs, formData]);
 
   // Charger un devis existant
   const handleLoadDevis = useCallback(async () => {
@@ -4642,8 +4667,28 @@ const TBL: React.FC<TBLProps> = ({
             <Input.TextArea rows={8} placeholder="Contenu de l'email..." />
           </Form.Item>
         </Form>
+        <div className="mt-3 p-3 bg-blue-50 rounded-lg border border-blue-200">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <PaperClipOutlined style={{ color: '#1890ff', fontSize: 16 }} />
+              <div>
+                <div className="font-medium text-sm text-gray-800">Joindre les fiches techniques</div>
+                <div className="text-xs text-gray-500">Panneaux, onduleurs et autres documents associés au devis</div>
+              </div>
+            </div>
+            <Switch
+              checked={includeProductDocs}
+              onChange={setIncludeProductDocs}
+              checkedChildren="Oui"
+              unCheckedChildren="Non"
+            />
+          </div>
+        </div>
         <Alert
-          message="Le PDF généré sera automatiquement joint à cet email."
+          message={includeProductDocs
+            ? "Le PDF du devis + les fiches techniques des produits seront joints à cet email."
+            : "Seul le PDF du devis sera joint à cet email."
+          }
           type="info"
           showIcon
           className="mt-2"

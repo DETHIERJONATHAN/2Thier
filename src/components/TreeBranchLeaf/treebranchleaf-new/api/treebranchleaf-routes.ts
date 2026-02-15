@@ -3739,6 +3739,10 @@ function removeJSONFromUpdate(updateData: Record<string, unknown>): Record<strin
     if ('appearance' in metaObj && metaObj.appearance && typeof metaObj.appearance === 'object') {
       preservedMeta.appearance = metaObj.appearance;
     }
+    // ✅ AJOUT: Préserver isProtected pour le mode protégé des nœuds
+    if ('isProtected' in metaObj) {
+      preservedMeta.isProtected = metaObj.isProtected;
+    }
     
     // 🎨 FIX: Extraire displayIcon depuis appearanceConfig vers colonne dédiée
     if (appearanceConfig && typeof appearanceConfig === 'object') {
@@ -12340,7 +12344,29 @@ router.post('/submissions/:id/reset-data', async (req, res) => {
     }
 
     await prisma.$transaction(async tx => {
-      await tx.treeBranchLeafSubmissionData.deleteMany({ where: { submissionId: id } });
+      // Trouver les nœuds protégés pour préserver leurs données
+      const protectedNodes = await tx.treeBranchLeafNode.findMany({
+        where: {
+          treeId: submission.treeId,
+          metadata: { path: ['isProtected'], equals: true }
+        },
+        select: { id: true }
+      });
+      const protectedNodeIds = protectedNodes.map(n => n.id);
+
+      if (protectedNodeIds.length > 0) {
+        // Supprimer uniquement les données des champs NON protégés
+        await tx.treeBranchLeafSubmissionData.deleteMany({
+          where: {
+            submissionId: id,
+            nodeId: { notIn: protectedNodeIds }
+          }
+        });
+      } else {
+        // Aucun champ protégé: vider tout normalement
+        await tx.treeBranchLeafSubmissionData.deleteMany({ where: { submissionId: id } });
+      }
+
       await tx.treeBranchLeafSubmission.update({
         where: { id },
         data: {

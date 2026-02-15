@@ -1,9 +1,0 @@
-                  id                  |  label   |    type    | subType |               parentId               | hasLink |          link_targetNodeId           | link_mode 
---------------------------------------+----------+------------+---------+--------------------------------------+---------+--------------------------------------+-----------
- 2c5e01cc-9918-4b21-8a92-2df0d99f0a61 | Onduleur | leaf_field | display | 2ba77812-bf10-45b2-b2ae-9c50e09bd45f | t       | 78c78d8d-45fb-4dc7-b284-fed98e5ff168 | JUMP
- 78c78d8d-45fb-4dc7-b284-fed98e5ff168 | Onduleur | leaf_field | TEXT    | 7528d92c-ade9-4b38-8c60-fbbeffec6df9 | f       |                                      | JUMP
- 507bf781-468d-4961-aa13-77baf4e9e827 | Panneau  | leaf_field | TEXT    | 7528d92c-ade9-4b38-8c60-fbbeffec6df9 | f       |                                      | JUMP
- b3b4d4be-a859-439c-a295-b2eff7c39c2d | Photo    | leaf_field | TEXT    | 2ba77812-bf10-45b2-b2ae-9c50e09bd45f | t       | dfe038c5-a737-4e7d-b293-4f946b076047 | PHOTO
- 809cfaca-f8b9-4a0e-9d68-edd6810f1bf3 | test     | leaf_field | display | 2ba77812-bf10-45b2-b2ae-9c50e09bd45f | t       | 507bf781-468d-4961-aa13-77baf4e9e827 | JUMP
-(5 rows)
-

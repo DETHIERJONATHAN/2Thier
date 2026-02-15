@@ -75,6 +75,7 @@ import integrationsRoutes from './integrations'; // 🔌 Intégrations (advertis
 // 🌐 ROUTES PUBLIQUES (sans authentification)
 import publicLeadsRoutes from './publicLeads'; // 🌍 API publique leads
 import documentsRoutes from './documents'; // 📄 Routes documents (templates, génération PDF)
+import productDocumentsRoutes from './product-documents'; // 📋 Routes fiches techniques produits (panneaux/onduleurs)
 import syncTempRoutes from './sync-temp'; // 🔄 TEMPORAIRE: Sync documents
 import joinRequestsRoutes from './join-requests'; // 📝 Routes demandes d'adhésion
 import { authenticateToken, fetchFullUser } from '../middleware/auth'; // 🔐 Middleware auth pour TBL
@@ -375,7 +376,11 @@ apiRouter.use('/public', publicLeadsRoutes);
 // 📄 Routes Documents (templates, génération PDF)
 apiRouter.use('/documents', documentsRoutes);
 
-// 🔄 TEMPORAIRE: Sync documents vers Cloud SQL
+// � Routes Fiches Techniques Produits (panneaux, onduleurs)
+apiRouter.use('/product-documents', productDocumentsRoutes);
+console.log('[ROUTER] Routes fiches techniques produits montées sur /product-documents');
+
+// �🔄 TEMPORAIRE: Sync documents vers Cloud SQL
 apiRouter.use('/sync', syncTempRoutes);
 
 

@@ -283,9 +283,15 @@ const SortableField = ({ field, sectionId, isSelected, setSelectedField, onRemov
           onClick={(e) => { e.stopPropagation(); setSelectedField({ sectionId, fieldId: field.id }); }}
         />
       </Tooltip>
-      <Tooltip title="Supprimer le champ">
-        <Button size="small" type="text" danger icon={<DeleteOutlined />} onClick={(e) => { e.stopPropagation(); onRemove(field.id); }} />
-      </Tooltip>
+      {field.isProtected ? (
+        <Tooltip title="Champ protégé — suppression impossible">
+          <span className="text-orange-500 text-sm px-1 cursor-not-allowed">🔒</span>
+        </Tooltip>
+      ) : (
+        <Tooltip title="Supprimer le champ">
+          <Button size="small" type="text" danger icon={<DeleteOutlined />} onClick={(e) => { e.stopPropagation(); onRemove(field.id); }} />
+        </Tooltip>
+      )}
     </div>
   );
 };
@@ -462,7 +468,13 @@ const FormSections = ({ selectedField, setSelectedField }: { selectedField: Sele
 
 
   // Suppression d’un champ
-  const handleRemoveField = async (fieldId: string) => {
+  const handleRemoveField = async (fieldId: string) => {    // Vérifier si le champ est protégé
+    const allFields = blocks.flatMap(b => (b.sections ?? []).flatMap(s => s.fields ?? []));
+    const targetField = allFields.find(f => String(f.id) === String(fieldId));
+    if (targetField?.isProtected) {
+      toast.error('Ce champ est protégé et ne peut pas être supprimé. Retirez d\'abord la protection dans les paramètres du champ.');
+      return;
+    }
     const confirmed = window.confirm('Voulez-vous vraiment supprimer ce champ ? Cette action est irréversible.');
     if (!confirmed) {
       return;

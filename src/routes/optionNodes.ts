@@ -103,6 +103,48 @@ router.get('/field/:fieldId/tree', async (req: Request, res: Response) => {
   }
 });
 
+// GET /api/option-nodes/search?q=xxx&limit=20 -> recherche fulltext dans les nœuds
+router.get('/search', async (req: Request, res: Response) => {
+  try {
+    const q = (req.query.q as string || '').trim();
+    const limit = parseInt(req.query.limit as string || '20');
+    if (q.length < 2) {
+      return res.json({ success: true, nodes: [] });
+    }
+
+    const nodes = await prisma.fieldOptionNode.findMany({
+      where: {
+        label: { contains: q, mode: 'insensitive' },
+        active: true
+      },
+      select: {
+        id: true,
+        label: true,
+        parentId: true,
+        fieldId: true,
+        FieldOptionNode: {
+          select: { label: true }
+        }
+      },
+      take: limit,
+      orderBy: { label: 'asc' }
+    });
+
+    const result = nodes.map(n => ({
+      id: n.id,
+      label: n.label,
+      parentId: n.parentId,
+      fieldId: n.fieldId,
+      parentLabel: n.FieldOptionNode?.label || null
+    }));
+
+    return res.json({ success: true, nodes: result });
+  } catch (e) {
+    console.error('[API] GET option-nodes search error:', e);
+    return res.status(500).json({ success: false, message: 'Erreur serveur' });
+  }
+});
+
 // GET /api/option-nodes/field/:fieldId/children?parentId=xxx
 router.get('/field/:fieldId/children', async (req: Request, res: Response) => {
   try {

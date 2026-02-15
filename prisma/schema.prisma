@@ -462,6 +462,7 @@ model Field {
   type                                               String
   width                                              String?
   required                                           Boolean           @default(false)
+  isProtected                                        Boolean           @default(false)
   sectionId                                          String
   order                                              Int
   advancedConfig                                     Json?
@@ -1080,6 +1081,7 @@ model Organization {
   MeasurementReferenceConfig OrganizationMeasurementReferenceConfig[]
   GoogleTokenRefreshHistory  GoogleTokenRefreshHistory[]
   website_forms              website_forms[]
+  ProductDocument            ProductDocument[]
 }
 
 model OrganizationModuleStatus {
@@ -1797,6 +1799,7 @@ model TreeBranchLeafNode {
   TreeBranchLeafNodeVariable TreeBranchLeafNodeVariable?
   TreeBranchLeafNodeTable    TreeBranchLeafNodeTable[]
   TreeBranchLeafSelectConfig TreeBranchLeafSelectConfig?
+  ProductDocument             ProductDocument[]
 
   @@index([api_activeId])
   @@index([condition_activeId])
@@ -1921,6 +1924,7 @@ model TreeBranchLeafNodeTableRow {
 
   // Relation vers la table parente
   TreeBranchLeafNodeTable TreeBranchLeafNodeTable @relation(fields: [tableId], references: [id], onDelete: Cascade)
+  ProductDocument         ProductDocument[]
 
   @@unique([tableId, rowIndex])
   @@index([tableId])
@@ -2199,6 +2203,7 @@ model User {
   website_blog_posts                                  website_blog_posts[]
   website_media_files                                 website_media_files[]
   MeasurementReferenceConfig                          OrganizationMeasurementReferenceConfig[] @relation("MeasurementConfigCreator")
+  ProductDocumentsUploaded                             ProductDocument[] @relation("ProductDocumentsUploaded")
 
   @@index([organizationId, commercialSlug]) // 🎯 Index pour optimiser les recherches de slug
 }
@@ -2592,6 +2597,53 @@ enum QuoteStatus {
 enum QuoteStorageType {
   LOCAL
   DRIVE
+}
+
+enum DocumentStorageType {
+  LOCAL
+  GOOGLE_DRIVE
+  YANDEX_DISK
+}
+
+/// Fiches techniques / documents liés aux produits (panneaux, onduleurs, etc.)
+/// Liés aux FieldOptionNode pour association automatique dans les devis
+model ProductDocument {
+  id             String              @id @default(dbgenerated("(gen_random_uuid())::text"))
+  nodeId         String              /// Référence au TreeBranchLeafNode (champ/option de l'arbre)
+  tableRowId     String?             /// Référence optionnelle à une ligne de table lookup
+  organizationId String
+  uploadedById   String              /// Utilisateur qui a uploadé
+
+  /// Métadonnées du fichier
+  name           String              /// Nom affiché (ex: "Fiche technique JA Solar 425W")
+  fileName       String              /// Nom du fichier original
+  mimeType       String              @default("application/pdf")
+  fileSize       Int?                /// Taille en octets
+
+  /// Stockage unifié
+  storageType    DocumentStorageType @default(LOCAL)
+  localPath      String?             /// Chemin local pour stockage CRM (users Yandex)
+  driveFileId    String?             /// ID fichier Google Drive (users Google)
+  driveUrl       String?             /// URL publique/partagée Google Drive
+  externalUrl    String?             /// URL externe (Yandex Disk ou autre)
+
+  /// Catégorie pour filtrage
+  category       String              @default("fiche_technique") /// fiche_technique, certification, garantie, notice
+
+  createdAt      DateTime            @default(now()) @db.Timestamp(6)
+  updatedAt      DateTime            @updatedAt @db.Timestamp(6)
+
+  /// Relations
+  organization   Organization        @relation(fields: [organizationId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  uploadedBy     User                @relation("ProductDocumentsUploaded", fields: [uploadedById], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  node           TreeBranchLeafNode  @relation(fields: [nodeId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  tableRow       TreeBranchLeafNodeTableRow? @relation(fields: [tableRowId], references: [id], onDelete: SetNull, onUpdate: NoAction)
+
+  @@index([nodeId])
+  @@index([tableRowId])
+  @@index([organizationId])
+  @@index([category])
+  @@index([storageType])
 }
 
 enum SectionType {

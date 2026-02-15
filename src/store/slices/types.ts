@@ -76,6 +76,7 @@ export interface Field {
   label: string;
   type: string;
   required?: boolean;
+  isProtected?: boolean; // Champ protégé contre la suppression
   width?: string;
   order?: number; // Ajout pour la gestion de l'ordre
   placeholder?: string;

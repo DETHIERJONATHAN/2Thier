@@ -205,6 +205,19 @@ const AdvancedConfigPanel: React.FC<AdvancedConfigPanelProps> = ({ selectedField
         setSaveError(e => ({ ...e, required: err?.message || 'Erreur de sauvegarde' }));
       });
   };
+  const handleProtectedChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!fieldId) return;
+    const value = e.target.checked;
+    setLocalValues(v => ({ ...v, isProtected: value }));
+    setSaving(s => ({ ...s, isProtected: true }));
+    setSaveError(e => ({ ...e, isProtected: null }));
+    saveFieldChange({ isProtected: value })
+      .then(() => setSaving(s => ({ ...s, isProtected: false })))
+      .catch(err => {
+        setSaving(s => ({ ...s, isProtected: false }));
+        setSaveError(e => ({ ...e, isProtected: err?.message || 'Erreur de sauvegarde' }));
+      });
+  };
   const handleWidthChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     if (!fieldId) return;
     const value = e.target.value;
@@ -547,6 +560,14 @@ const AdvancedConfigPanel: React.FC<AdvancedConfigPanelProps> = ({ selectedField
               children: (
                 <div className="cfg-pane-card" data-kind="parametres">
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <label className="flex items-center gap-2">
+                      <input type="checkbox" checked={localValues.isProtected ?? (field.isProtected || false)} onChange={handleProtectedChange} />
+                      <span className="text-sm font-semibold text-orange-600">🔒 Mode protégé</span>
+                      {saving.isProtected && <span className="animate-spin text-blue-500">⏳</span>}
+                      {saveError.isProtected && <span className="text-red-500" title={saveError.isProtected}>⚠️</span>}
+                      {!saving.isProtected && !saveError.isProtected && localValues.isProtected !== undefined && localValues.isProtected !== field.isProtected && <span className="text-green-500">✔️</span>}
+                      <span className="text-xs text-gray-500">Empêche la suppression du champ</span>
+                    </label>
                     <label className="flex items-center gap-2">
                       <input type="checkbox" checked={localValues.readOnly ?? !!advancedConfig.readOnly} onChange={e => handleAdvancedChange('readOnly', e.target.checked)} />
                       <span className="text-sm">Lecture seule</span>

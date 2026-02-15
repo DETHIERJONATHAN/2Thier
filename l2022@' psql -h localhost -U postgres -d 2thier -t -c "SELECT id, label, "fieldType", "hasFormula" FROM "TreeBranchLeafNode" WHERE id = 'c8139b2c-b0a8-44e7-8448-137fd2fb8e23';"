@@ -1,8 +1,0 @@
-                   id                   |     label      | fieldType | hasFormula |            formula_activeId            
-----------------------------------------+----------------+-----------+------------+----------------------------------------
- c8139b2c-b0a8-44e7-8448-137fd2fb8e23   | Puissance WC   |           | t          | 0d86e720-3947-43cf-9d22-480e6d578aed
- c8139b2c-b0a8-44e7-8448-137fd2fb8e23-1 | Puissance WC-1 | TEXT      | t          | 0d86e720-3947-43cf-9d22-480e6d578aed-1
- c8139b2c-b0a8-44e7-8448-137fd2fb8e23-2 | Puissance WC-2 | TEXT      | t          | 0d86e720-3947-43cf-9d22-480e6d578aed-2
- c8139b2c-b0a8-44e7-8448-137fd2fb8e23-3 | Puissance WC-3 | TEXT      | t          | 0d86e720-3947-43cf-9d22-480e6d578aed-3
-(4 rows)
-
