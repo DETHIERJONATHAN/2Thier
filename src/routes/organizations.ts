@@ -240,13 +240,15 @@ const organizationCreateSchema = z.object({
   name: z.string()
     .min(2, 'Nom organisation minimum 2 caractères')
     .max(100, 'Nom organisation maximum 100 caractères')
-    .regex(/^[a-zA-Z0-9\s\-_]+$/, 'Nom organisation contient des caractères non autorisés'),
+    .regex(/^[a-zA-ZÀ-ÿ0-9\s\-_'.&(),]+$/, 'Nom organisation contient des caractères non autorisés'),
   description: z.string()
     .max(500, 'Description maximum 500 caractères')
     .optional(),
-  status: z.enum(['ACTIVE', 'INACTIVE'], {
-    errorMap: () => ({ message: 'Statut doit être ACTIVE ou INACTIVE' })
-  }).optional(),
+  status: z.string()
+    .transform(s => s.toUpperCase())
+    .pipe(z.enum(['ACTIVE', 'INACTIVE'], {
+      errorMap: () => ({ message: 'Statut doit être ACTIVE ou INACTIVE' })
+    })).optional(),
   // 📞 NOUVEAUX CHAMPS DE CONTACT
   website: z.string()
     .url('Site web doit être une URL valide')
@@ -280,14 +282,16 @@ const organizationUpdateSchema = z.object({
   name: z.string()
     .min(2, 'Nom organisation minimum 2 caractères')
     .max(100, 'Nom organisation maximum 100 caractères')
-    .regex(/^[a-zA-Z0-9\s\-_]+$/, 'Nom organisation contient des caractères non autorisés')
+    .regex(/^[a-zA-ZÀ-ÿ0-9\s\-_'.&(),]+$/, 'Nom organisation contient des caractères non autorisés')
     .optional(),
   description: z.string()
     .max(500, 'Description maximum 500 caractères')
     .nullish(),
-  status: z.enum(['ACTIVE', 'INACTIVE'], {
-    errorMap: () => ({ message: 'Statut doit être ACTIVE ou INACTIVE' })
-  }).optional(),
+  status: z.string()
+    .transform(s => s.toUpperCase())
+    .pipe(z.enum(['ACTIVE', 'INACTIVE'], {
+      errorMap: () => ({ message: 'Statut doit être ACTIVE ou INACTIVE' })
+    })).optional(),
   // 📞 NOUVEAUX CHAMPS DE CONTACT
   website: z.string()
     .url('Site web doit être une URL valide')
