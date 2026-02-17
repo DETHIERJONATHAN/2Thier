@@ -632,7 +632,12 @@ async function saveUserEntriesNeutral(
   // 🚫 ÉTAPE 1 : Récupérer les nodes à EXCLURE
   // IMPORTANT: ne JAMAIS exclure sur `calculatedValue != null`.
   // Certaines données historiques ont un calculatedValue sur des champs user-input.
-  // On exclut uniquement les champs calculés DISPLAY pour éviter de les sauvegarder comme inputs.
+  // On exclut les champs calculés pour éviter de les sauvegarder comme inputs.
+  // 🔥 FIX E: AJOUTER hasFormula=true ET hasCondition=true comme critères d'exclusion.
+  // AVANT: seuls fieldType='DISPLAY' ou subType='display' étaient exclus.
+  // Mais beaucoup de champs calculés (ex: "Main d'œuvre TVAC") ont subType='TEXT' malgré hasFormula=true.
+  // Résultat: saveUserEntriesNeutral les sauvegardait comme inputs "neutral", ÉCRASANT la valeur calculée.
+  // Lors de l'autosave (mode='autosave', skip DISPLAY), cette valeur stale persistait.
   const excludedNodes = treeId
     ? await prisma.treeBranchLeafNode.findMany({
         where: {
@@ -643,6 +648,10 @@ async function saveUserEntriesNeutral(
               type: { in: ['leaf_field', 'LEAF_FIELD'] },
               subType: { in: ['display', 'DISPLAY', 'Display'] },
             },
+            // 🔥 FIX E: Exclure TOUT nœud ayant une formule ou condition active
+            // Si hasFormula=true → c'est un champ calculé, pas un input utilisateur
+            { hasFormula: true },
+            { hasCondition: true },
           ],
         },
         select: { id: true, label: true },
