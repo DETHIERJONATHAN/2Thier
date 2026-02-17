@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import { Card, Table, Button, Modal, Form, Input, Select, Tag, Space, Switch, Statistic, Alert, Badge, Grid, Tooltip } from 'antd';
-import { PlusOutlined, EditOutlined, DeleteOutlined, TeamOutlined, AppstoreOutlined, CheckCircleOutlined, CrownOutlined, TagsOutlined, SafetyOutlined } from '@ant-design/icons';
+import { PlusOutlined, EditOutlined, DeleteOutlined, TeamOutlined, AppstoreOutlined, CheckCircleOutlined, CrownOutlined, TagsOutlined } from '@ant-design/icons';
 import { useAuth } from '../../auth/useAuth';
 import { useAuthenticatedApi } from '../../hooks/useAuthenticatedApi';
 import { NotificationManager } from '../../components/Notifications';
@@ -186,8 +186,8 @@ function RoleFormModal({
   );
 }
 
-// --------- UI modernisée: Modal pour gérer les permissions ---------
-function PermissionsModal({ role, open, onClose }: { role: Role; open: boolean; onClose: () => void }) {
+// --------- UI modernisée: Modal pour gérer les modules d'un rôle ---------
+function ModulesModal({ role, open, onClose }: { role: Role; open: boolean; onClose: () => void }) {
   const { api, isLoading: apiIsLoading } = useAuthenticatedApi();
   const screens = useBreakpoint();
   const isMobile = !screens.md;
@@ -204,12 +204,14 @@ function PermissionsModal({ role, open, onClose }: { role: Role; open: boolean; 
         : `/api/permissions?roleId=${role.id}`;
       const response = await api.get(url);
       if (response.success) {
-        setPermissions(Array.isArray(response.data) ? response.data : []);
+        const permsData = Array.isArray(response.data) ? response.data : [];
+        console.log('[ModulesModal] Permissions loaded:', permsData.length, '| access:', permsData.filter((p: any) => p.action === 'access' && p.allowed).length);
+        setPermissions(permsData);
       } else {
-        throw new Error(response.message || 'Erreur lors du chargement des permissions');
+        throw new Error(response.message || 'Erreur lors du chargement des modules activés');
       }
     } catch (e: unknown) {
-      const msg = (e as Error).message || 'Erreur lors du chargement des permissions';
+      const msg = (e as Error).message || 'Erreur lors du chargement des modules activés';
       setError(msg);
       NotificationManager.error(msg);
     }
@@ -217,12 +219,19 @@ function PermissionsModal({ role, open, onClose }: { role: Role; open: boolean; 
 
   const fetchModules = useCallback(async () => {
     try {
-      const url = role.organizationId ? `/api/modules?organizationId=${role.organizationId}` : '/api/modules';
+      // Charger les modules avec le statut d'activation
+      // Seuls les modules activés dans "Gestion des Modules" seront affichés
+      const orgId = role.organizationId;
+      const url = orgId ? `/api/modules?organizationId=${orgId}` : '/api/modules/all';
       const response = await api.get(url);
       if (response.success) {
         const all: Module[] = Array.isArray(response.data) ? response.data : [];
-        const active = role.organizationId ? all.filter((m) => m.isActiveForOrg) : all.filter((m) => m.active);
-        setModules(active);
+        // Filtrer uniquement les modules actifs (activés dans Gestion des Modules)
+        const activeModules = all.filter(m => m.active !== false);
+        // Tri alphabétique par label
+        activeModules.sort((a, b) => a.label.localeCompare(b.label, 'fr'));
+        console.log('[ModulesModal] Modules loaded:', all.length, '| actifs:', activeModules.length);
+        setModules(activeModules);
       } else {
         throw new Error(response.message || 'Erreur lors du chargement des modules');
       }
@@ -238,27 +247,28 @@ function PermissionsModal({ role, open, onClose }: { role: Role; open: boolean; 
       setError('');
       fetchPermissions();
       fetchModules();
+      console.log('[ModulesModal] Opened for role:', role.label, '(', role.id, ')');
     }
   }, [open, fetchPermissions, fetchModules]);
 
   const updatePermission = useCallback((moduleId: string, allowed: boolean) => {
     const newPerms = [...permissions];
     const idx = newPerms.findIndex((p) => p.moduleId === moduleId && p.action === 'access');
-    const resource = modules.find((m) => m.id === moduleId)?.key;
     if (idx > -1) newPerms[idx] = { ...newPerms[idx], allowed };
     else if (allowed)
-      newPerms.push({ roleId: role.id, organizationId: role.organizationId, moduleId, action: 'access', resource, allowed: true });
+      newPerms.push({ moduleId, action: 'access', resource: '*', allowed: true });
     setPermissions(newPerms);
-  }, [permissions, modules, role.id, role.organizationId]);
+  }, [permissions]);
 
   const toggleAll = (checked: boolean) => {
-    const newPerms = [...permissions];
+    const newPerms = permissions.map(p => ({ ...p })); // deep copy to avoid mutation
     modules.forEach((mod) => {
       const idx = newPerms.findIndex((p) => p.moduleId === mod.id && p.action === 'access');
-      if (idx > -1) newPerms[idx].allowed = checked;
+      if (idx > -1) newPerms[idx] = { ...newPerms[idx], allowed: checked };
       else if (checked)
-        newPerms.push({ roleId: role.id, organizationId: role.organizationId, moduleId: mod.id, action: 'access', resource: mod.key, allowed: true });
+        newPerms.push({ moduleId: mod.id, action: 'access', resource: '*', allowed: true });
     });
+    console.log('[ModulesModal] toggleAll:', checked, '→', newPerms.filter(p => p.action === 'access').length, 'access permissions');
     setPermissions(newPerms);
   };
 
@@ -268,17 +278,18 @@ function PermissionsModal({ role, open, onClose }: { role: Role; open: boolean; 
       const payload = {
         roleId: role.id,
         organizationId: role.organizationId,
-        permissions: permissions.map(({ moduleId, action, resource, allowed }) => ({ moduleId, action, resource, allowed })),
+        permissions: permissions.map(({ moduleId, action, resource, allowed }) => ({ moduleId, action, resource: resource || '*', allowed })),
       };
+      console.log('[ModulesModal] Saving', payload.permissions.length, 'permissions for role', role.label, '(', role.id, '), access:', payload.permissions.filter(p => p.action === 'access' && p.allowed).length);
       const response = await api.post('/api/permissions/bulk', payload);
       if (response.success) {
-        NotificationManager.success('Permissions sauvegardées avec succès.');
+        NotificationManager.success('Modules du rôle sauvegardés avec succès.');
         onClose();
       } else {
-        throw new Error(response.message || 'Erreur lors de la sauvegarde des permissions');
+        throw new Error(response.message || 'Erreur lors de la sauvegarde des modules');
       }
     } catch (e: unknown) {
-      const msg = (e as Error).message || 'Erreur lors de la sauvegarde des permissions';
+      const msg = (e as Error).message || 'Erreur lors de la sauvegarde des modules';
       setError(msg);
       NotificationManager.error(msg);
     } finally {
@@ -326,7 +337,7 @@ function PermissionsModal({ role, open, onClose }: { role: Role; open: boolean; 
     <Modal
       title={
         <span>
-          Permissions du rôle <Badge color="gold" text={role.label} />
+          Modules du rôle <Badge color="gold" text={role.label} />
         </span>
       }
       open={open}
@@ -577,14 +588,14 @@ export default function RolesAdminPage() {
             wrap
             className={isMobile ? 'w-full' : undefined}
           >
-            <Tooltip title={!isSuperAdmin && r.isGlobal && !r.isActiveForOrg ? 'Activer le rôle pour modifier les permissions' : 'Gérer les permissions'}>
+            <Tooltip title={!isSuperAdmin && r.isGlobal && !r.isActiveForOrg ? 'Activer le rôle pour gérer les modules' : 'Gérer les modules'}>
               <Button
                 size="small"
-                icon={<SafetyOutlined />}
+                icon={<AppstoreOutlined />}
                 onClick={() => setSelectedRoleForPermissions(r)}
                 disabled={!isSuperAdmin && r.isGlobal && !r.isActiveForOrg}
                 shape="circle"
-                aria-label="Gérer les permissions"
+                aria-label="Gérer les modules"
               />
             </Tooltip>
             <Tooltip title="Modifier le rôle">
@@ -757,7 +768,7 @@ export default function RolesAdminPage() {
       />
 
       {selectedRoleForPermissions && (
-        <PermissionsModal role={selectedRoleForPermissions} open={!!selectedRoleForPermissions} onClose={() => setSelectedRoleForPermissions(null)} />
+        <ModulesModal role={selectedRoleForPermissions} open={!!selectedRoleForPermissions} onClose={() => setSelectedRoleForPermissions(null)} />
       )}
     </div>
   );

@@ -18,24 +18,33 @@ const roleCreateSchema = z.object({
   name: z.string()
     .min(2, 'Nom du rôle minimum 2 caractères')
     .max(50, 'Nom du rôle maximum 50 caractères')
-    .regex(/^[a-zA-Z0-9_\-\s]+$/, 'Nom du rôle contient des caractères non autorisés'),
+    .regex(/^[a-zA-ZÀ-ÿ0-9_\-\s]+$/, 'Nom du rôle contient des caractères non autorisés'),
+  label: z.string()
+    .max(100, 'Label maximum 100 caractères')
+    .optional(),
   description: z.string()
     .max(500, 'Description maximum 500 caractères')
     .optional(),
   organizationId: z.string()
-    .uuid('ID organisation invalide')
-    .optional()
+    .min(1, 'ID organisation invalide')
+    .nullish()
 });
 
 const roleUpdateSchema = z.object({
   name: z.string()
     .min(2, 'Nom du rôle minimum 2 caractères')
     .max(50, 'Nom du rôle maximum 50 caractères')
-    .regex(/^[a-zA-Z0-9_\-\s]+$/, 'Nom du rôle contient des caractères non autorisés')
+    .regex(/^[a-zA-ZÀ-ÿ0-9_\-\s]+$/, 'Nom du rôle contient des caractères non autorisés')
+    .optional(),
+  label: z.string()
+    .max(100, 'Label maximum 100 caractères')
     .optional(),
   description: z.string()
     .max(500, 'Description maximum 500 caractères')
-    .optional()
+    .optional(),
+  organizationId: z.string()
+    .min(1, 'ID organisation invalide')
+    .nullish()
 });
 
 const roleQuerySchema = z.object({
@@ -188,7 +197,7 @@ router.get('/:id', async (req: AuthenticatedRequest, res: Response): Promise<voi
       where: { id: sanitizedId },
       include: {
         Permission: true,
-        UserOrganizations: {
+        UserOrganization: {
           include: {
             Organization: true,
             User: {
@@ -257,10 +266,11 @@ router.post('/', rolesCreateRateLimit, async (req: AuthenticatedRequest, res: Re
     }
 
     const requestingUser = req.user;
-    const { name, description, organizationId } = bodyValidation.data;
+    const { name, label, description, organizationId } = bodyValidation.data;
 
     // 🧹 SANITISATION DES ENTRÉES
     const sanitizedName = sanitizeString(name);
+    const sanitizedLabel = label ? sanitizeString(label) : sanitizedName;
     const sanitizedDescription = description ? sanitizeString(description) : '';
 
     console.log(`[ROLES] Création rôle: ${sanitizedName} pour org: ${organizationId || requestingUser.organizationId}`);
@@ -308,14 +318,14 @@ router.post('/', rolesCreateRateLimit, async (req: AuthenticatedRequest, res: Re
       data: {
         id: `role_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
         name: sanitizedName,
-        label: sanitizedName,
+        label: sanitizedLabel,
         description: sanitizedDescription,
         organizationId: finalOrgId,
         createdAt: new Date(),
         updatedAt: new Date()
       },
       include: {
-        UserOrganizations: {
+        UserOrganization: {
           include: {
             Organization: true,
             User: true
@@ -338,9 +348,9 @@ router.post('/', rolesCreateRateLimit, async (req: AuthenticatedRequest, res: Re
   }
 });
 
-// PUT /api/roles/:id - Mettre à jour un rôle
-// 🏷️ PUT /api/roles/:id - MODIFIER UN RÔLE SÉCURISÉ  
-router.put('/:id', async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+// PUT/PATCH /api/roles/:id - Mettre à jour un rôle
+// 🏷️ PUT|PATCH /api/roles/:id - MODIFIER UN RÔLE SÉCURISÉ  
+const handleUpdateRole = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   const { id } = req.params;
   console.log(`[ROLES] PUT /roles/${id} - Mise à jour du rôle SÉCURISÉE`);
   
@@ -370,10 +380,11 @@ router.put('/:id', async (req: AuthenticatedRequest, res: Response): Promise<voi
     }
 
     const requestingUser = req.user;
-    const { name, description } = bodyValidation.data;
+    const { name, label, description, organizationId } = bodyValidation.data;
 
     // 🧹 SANITISATION DES ENTRÉES
     const sanitizedName = name ? sanitizeString(name) : undefined;
+    const sanitizedLabel = label ? sanitizeString(label) : undefined;
     const sanitizedDescription = description ? sanitizeString(description) : undefined;
 
     // 🔍 VÉRIFIER EXISTENCE DU RÔLE
@@ -411,10 +422,12 @@ router.put('/:id', async (req: AuthenticatedRequest, res: Response): Promise<voi
 
     // �🔍 VÉRIFIER UNICITÉ DU NOUVEAU NOM (SI CHANGÉ)
     if (sanitizedName && sanitizedName !== existingRole.name) {
+      // Utiliser le nouvel organizationId si fourni, sinon l'ancien
+      const targetOrgId = organizationId !== undefined ? organizationId : existingRole.organizationId;
       const duplicateRole = await prisma.role.findFirst({
         where: {
           name: sanitizedName,
-          organizationId: existingRole.organizationId,
+          organizationId: targetOrgId,
           id: { not: id.trim() }
         }
       });
@@ -434,24 +447,43 @@ router.put('/:id', async (req: AuthenticatedRequest, res: Response): Promise<voi
       name?: string;
       label?: string;
       description?: string;
+      organizationId?: string | null;
     } = {
       updatedAt: new Date()
     };
 
     if (sanitizedName !== undefined) {
       updateData.name = sanitizedName;
-      updateData.label = sanitizedName; // Synchroniser label avec name
+      updateData.label = sanitizedLabel || sanitizedName; // Utiliser label envoyé ou synchroniser avec name
+    } else if (sanitizedLabel !== undefined) {
+      updateData.label = sanitizedLabel;
     }
 
     if (sanitizedDescription !== undefined) {
       updateData.description = sanitizedDescription;
     }
 
+    // 🌐 MISE À JOUR DE LA PORTÉE (organizationId)
+    // organizationId est explicitement dans le body → on le prend en compte
+    // null = rôle global, string = rôle lié à une organisation
+    if (organizationId !== undefined) {
+      // Seul un super_admin peut rendre un rôle global (organizationId = null)
+      if (organizationId === null && requestingUser.role !== 'super_admin') {
+        res.status(403).json({
+          success: false,
+          message: 'Seul un Super Admin peut rendre un rôle global'
+        });
+        return;
+      }
+      updateData.organizationId = organizationId;
+      console.log(`[ROLES] Changement de portée → ${organizationId === null ? 'GLOBAL' : `org: ${organizationId}`}`);
+    }
+
     const updatedRole = await prisma.role.update({
       where: { id: id.trim() },
       data: updateData,
       include: {
-        UserOrganizations: {
+        UserOrganization: {
           include: {
             Organization: true,
             User: true
@@ -475,7 +507,9 @@ router.put('/:id', async (req: AuthenticatedRequest, res: Response): Promise<voi
       message: 'Erreur interne lors de la modification du rôle' 
     });
   }
-});
+};
+router.put('/:id', handleUpdateRole);
+router.patch('/:id', handleUpdateRole);
 
 // DELETE /api/roles/:id - Supprimer un rôle
 // 🏷️ DELETE /api/roles/:id - SUPPRIMER UN RÔLE SÉCURISÉ
@@ -508,7 +542,7 @@ router.delete('/:id', async (req: AuthenticatedRequest, res: Response): Promise<
     const existingRole = await prisma.role.findUnique({
       where: { id: roleId },
       include: {
-        UserOrganizations: true // Pour vérifier s'il y a des utilisateurs assignés
+        UserOrganization: true // Pour vérifier s'il y a des utilisateurs assignés
       }
     });
 
@@ -541,10 +575,10 @@ router.delete('/:id', async (req: AuthenticatedRequest, res: Response): Promise<
     }
 
     // ⚠️ VÉRIFIER QU'AUCUN UTILISATEUR N'EST ASSIGNÉ
-    if (existingRole.UserOrganizations && existingRole.UserOrganizations.length > 0) {
+    if (existingRole.UserOrganization && existingRole.UserOrganization.length > 0) {
       res.status(409).json({
         success: false,
-        message: `Impossible de supprimer le rôle "${existingRole.name}": ${existingRole.UserOrganizations.length} utilisateur(s) y sont encore assigné(s)`
+        message: `Impossible de supprimer le rôle "${existingRole.name}": ${existingRole.UserOrganization.length} utilisateur(s) y sont encore assigné(s)`
       });
       return;
     }

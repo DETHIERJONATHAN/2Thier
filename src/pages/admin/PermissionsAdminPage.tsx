@@ -89,17 +89,20 @@ export default function PermissionsAdminPage() {
       const orgId = currentOrganization.id;
       const [rolesResponse, modulesResponse] = await Promise.all([
         api.get(`/api/roles?organizationId=${orgId}`),
-        api.get(`/api/modules?organizationId=${orgId}`),
+        api.get('/api/modules/all'),
       ]);
 
       if (rolesResponse.success) {
+        console.log('[PermissionsAdminPage] Roles loaded:', (rolesResponse.data || []).length);
         setRoles(rolesResponse.data || []);
       } else {
         throw new Error(rolesResponse.message || 'Erreur lors du chargement des rôles');
       }
 
       if (modulesResponse.success) {
-        setModules(modulesResponse.data || []);
+        const sortedModules = (modulesResponse.data || []).sort((a: Module, b: Module) => a.label.localeCompare(b.label, 'fr'));
+        console.log('[PermissionsAdminPage] Modules loaded:', sortedModules.length);
+        setModules(sortedModules);
       } else {
         throw new Error(modulesResponse.message || 'Erreur lors du chargement des modules');
       }
@@ -128,12 +131,15 @@ export default function PermissionsAdminPage() {
       // Always pass organizationId to ensure correct permission checking on the backend, especially for super admins.
       const response = await api.get(`/api/permissions?roleId=${selectedRole.id}&organizationId=${currentOrganization.id}`);
       if (response.success) {
-        setPermissions(response.data || []);
+        const permsData = response.data || [];
+        console.log('[PermissionsAdminPage] Permissions loaded for role', selectedRole.label, ':', permsData.length, 'total,', permsData.filter((p: Permission) => p.action === 'access' && p.allowed).length, 'access actifs');
+        setPermissions(permsData);
       } else {
         throw new Error(response.message || 'Erreur lors du chargement des permissions');
       }
     } catch (err: unknown) {
       const errorMessage = resolveErrorMessage(err, 'Erreur lors du chargement des permissions.');
+      console.error('[PermissionsAdminPage] Error loading permissions:', errorMessage);
       setError(errorMessage);
       NotificationManager.error(errorMessage);
       setPermissions([]);
@@ -192,6 +198,7 @@ export default function PermissionsAdminPage() {
   };
 
   const handleSelectRole = async (role: Role | null) => {
+    console.log('[PermissionsAdminPage] Role selected:', role?.label, '(', role?.id, ')');
     setSelectedRole(role);
     if (!role) {
       setPermissions([]);

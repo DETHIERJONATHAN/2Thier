@@ -88,6 +88,8 @@ router.get('/', async (req: AuthenticatedRequest, res: Response): Promise<void> 
                 roleId: roleId as string,
             },
         });
+        const accessCount = permissions.filter(p => p.action === 'access' && p.allowed).length;
+        console.log(`[API][permissions] GET roleId=${roleId} → ${permissions.length} permissions totales, ${accessCount} access actifs`);
         res.json({ success: true, data: permissions });
     } catch (error) {
         console.error('[API][permissions] Erreur lors de la récupération des permissions :', error);
@@ -140,10 +142,15 @@ router.post('/bulk', async (req: AuthenticatedRequest, res: Response): Promise<v
         }
     }
 
+    // Determine which actions are being updated to only delete those, preserve others
+    const actionsBeingUpdated = [...new Set((permissions as MinimalPermissionInput[]).map(p => p.action))];
+    console.log(`[API][permissions/bulk] Updating ${permissions.length} permissions for role ${roleId}, actions: ${actionsBeingUpdated.join(', ')}`);
+
     await prisma.$transaction([
       prisma.permission.deleteMany({
         where: {
           roleId: roleId,
+          action: { in: actionsBeingUpdated },
         }
       }),
       ...(permissions.length > 0 ? [prisma.permission.createMany({
@@ -153,7 +160,7 @@ router.post('/bulk', async (req: AuthenticatedRequest, res: Response): Promise<v
           organizationId: roleToUpdate.organizationId || null,
           moduleId: p.moduleId,
           action: p.action,
-          resource: p.resource,
+          resource: p.resource || '*',
           allowed: p.allowed,
           createdAt: new Date(),
           updatedAt: new Date(),
@@ -215,10 +222,15 @@ router.post('/', async (req: AuthenticatedRequest, res: Response): Promise<void>
         }
     }
 
+    // Determine which actions are being updated to only delete those, preserve others
+    const actionsToUpdate = [...new Set((permissions as MinimalPermissionInput[]).map(p => p.action))];
+    console.log(`[API][permissions] Updating ${permissions.length} permissions for role ${roleId}, actions: ${actionsToUpdate.join(', ')}`);
+
     await prisma.$transaction([
       prisma.permission.deleteMany({
         where: {
           roleId: roleId,
+          action: { in: actionsToUpdate },
         }
       }),
       ...(permissions.length > 0 ? [prisma.permission.createMany({
@@ -228,7 +240,7 @@ router.post('/', async (req: AuthenticatedRequest, res: Response): Promise<void>
           organizationId: roleToUpdate.organizationId || null,
           moduleId: p.moduleId,
           action: p.action,
-          resource: p.resource,
+          resource: p.resource || '*',
           allowed: p.allowed,
           createdAt: new Date(),
           updatedAt: new Date(),

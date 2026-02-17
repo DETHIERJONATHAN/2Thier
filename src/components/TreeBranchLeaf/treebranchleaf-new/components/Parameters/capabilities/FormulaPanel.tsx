@@ -269,11 +269,25 @@ const FormulaPanel: React.FC<FormulaPanelProps> = ({ nodeId, onChange, readOnly 
   // Placeholder mémorisé
   const placeholder = useMemo(() => 'Glissez ici des références (@value.*, @key, #marker)…', []);
 
-  // Gestion sélection via sélecteur
+  // 🎯 Accumulateur pour multi-sélection (évite le problème de closure stale)
+  const pendingRefsRef = React.useRef<string[]>([]);
+  const flushTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+  const localTokensRef = React.useRef(localTokens);
+  localTokensRef.current = localTokens;
+
+  // Gestion sélection via sélecteur (supporte multi-sélection)
   const onSelectRef = useCallback((val: NodeTreeSelectorValue) => {
-    const ref = val.ref;
-    handleTokensChange([...localTokens, ref]);
-  }, [localTokens, handleTokensChange]);
+    pendingRefsRef.current.push(val.ref);
+    // Flush en micro-tâche : tous les onSelect du même handleOk sont regroupés
+    if (flushTimerRef.current) clearTimeout(flushTimerRef.current);
+    flushTimerRef.current = setTimeout(() => {
+      const batch = pendingRefsRef.current.splice(0);
+      if (batch.length > 0) {
+        handleTokensChange([...localTokensRef.current, ...batch]);
+      }
+      flushTimerRef.current = null;
+    }, 0);
+  }, [handleTokensChange]);
 
   // Actions sur les tokens
   const appendToken = useCallback((t: string) => {
@@ -1177,7 +1191,8 @@ const FormulaPanel: React.FC<FormulaPanelProps> = ({ nodeId, onChange, readOnly 
         nodeId={nodeId} 
         open={pickRef} 
         onClose={() => setPickRef(false)} 
-        onSelect={onSelectRef} 
+        onSelect={onSelectRef}
+        allowMulti
       />
 
       <Modal

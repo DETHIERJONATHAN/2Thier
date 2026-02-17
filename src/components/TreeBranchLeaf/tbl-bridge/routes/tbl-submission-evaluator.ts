@@ -904,17 +904,16 @@ async function evaluateCapacitiesForSubmission(
     const entries = Object.entries(formData).filter(([k]) => !k.startsWith('__'));
     await applySharedReferenceValues(valueMap, entries as Array<[string, unknown]>, treeId);
     
-    // 🛡️ FIX 2026-01-31: RESTAURER les valeurs DB des DISPLAY fields
-    // Les valeurs du frontend pour les DISPLAY fields peuvent être obsolètes (0, 1)
-    // alors que la DB contient les vraies valeurs calculées (ex: après copie de révision)
-    // Ces valeurs servent de DÉPENDANCES pour d'autres calculs (conditions de visibilité)
+    // 🛡️ FIX 2026-01-31 v3 (FIX C): RESTAURER les valeurs DB des DISPLAY fields
+    // UNIQUEMENT si le frontend n'a PAS envoyé de valeur pour ce champ (clé absente du formData).
+    // ⚠️ AVANT: l'heuristique considérait 0 et 1 comme "faibles" et les écrasait par les valeurs DB.
+    // Cela cassait les calculs légitimes qui produisent 0 ou 1 (ex: TVA=0, quantité=1).
+    // MAINTENANT: on ne restaure que si formData n'a PAS la clé → valeur réellement absente.
     let restoredCount = 0;
     for (const [nodeId, dbValue] of dbDisplayValues) {
-      const formValue = valueMap.get(nodeId);
-      // Restaurer si la valeur formData semble obsolète/vide comparée à la valeur DB
-      const isFormValueWeak = formValue === undefined || formValue === null || formValue === '' || formValue === 0 || formValue === '0' || formValue === 1 || formValue === '1';
-      const isDbValueStrong = dbValue !== undefined && dbValue !== null && dbValue !== '' && dbValue !== 0 && dbValue !== '0' && dbValue !== 1 && dbValue !== '1';
-      if (isFormValueWeak && isDbValueStrong) {
+      // 🔑 FIX C: Vérifier si la clé est ABSENTE du formData original (pas juste si la valeur est "faible")
+      const formHasKey = formData && nodeId in formData;
+      if (!formHasKey && dbValue !== undefined && dbValue !== null && dbValue !== '') {
         valueMap.set(nodeId, dbValue);
         // 🔑 Mémoriser pour renvoyer au frontend
         restoredDbDisplayValues.set(nodeId, dbValue);
@@ -922,18 +921,21 @@ async function evaluateCapacitiesForSubmission(
       }
     }
     if (restoredCount > 0) {
+      console.log(`🛡️ [FIX C] Restauré ${restoredCount} valeurs DB DISPLAY (clés absentes du formData)`);
     }
   }
   
-  // 🔥 FIX R8: En mode 'change', SUPPRIMER les anciennes valeurs DISPLAY du valueMap
-  // pour forcer un recalcul frais. Les anciennes valeurs DB polluent les dépendances inter-display.
-  // Ex: si Optimiseur dépend de N° panneau (DISPLAY), et N° panneau a changé,
-  // Optimiseur doit utiliser la NOUVELLE valeur de N° panneau, pas l'ancienne de la DB.
-  if (mode === 'change') {
+  // 🔥 FIX B (remplace FIX R8): Suppression CIBLÉE des valeurs DISPLAY du valueMap
+  // AVANT: on supprimait TOUS les display values → si display B dépend de display C (non affecté),
+  // C était supprimé du valueMap → B lisait undefined → calculait 0.
+  // MAINTENANT: la suppression est DÉFÉRÉE après le calcul de affectedDisplayFieldIds (voir FIX B phase 2).
+  // En mode 'open', on supprime TOUT (recalcul complet).
+  if (mode === 'open') {
     for (const displayNodeId of displayNodeIds) {
       valueMap.delete(displayNodeId);
     }
   }
+  // ⚠️ En mode 'change': la suppression ciblée se fait plus bas, après affectedDisplayFieldIds (FIX B phase 2)
   
   // � FIX R21b: Résoudre les valeurs LINK pour TOUS les modes (open, change, autosave)
   // PROBLÈME: En mode 'open', les LINK fields ne sont jamais résolus car le bloc trigger index
@@ -1065,7 +1067,93 @@ async function evaluateCapacitiesForSubmission(
   }
 
 const displayDeps = new Map<string, Set<string>>(); // nodeId → Set<dependsOn>
-  
+
+  // 🔥 FIX R14e: Construire displayDeps dans TOUS les modes (pas seulement 'change')
+  // PROBLÈME: Le trigger index est construit uniquement en mode 'change'.
+  // En mode 'open' (nouveau devis/évaluation initiale), displayDeps restait VIDE
+  // → tous les display fields avaient depth=0 → ordre d'évaluation ARBITRAIRE
+  // → les chaînes @calculated (Transport achat → marge → TVAC) échouaient.
+  // FIX: Analyser les tokens des formules pour détecter les dépendances display→display.
+  {
+    // Index des formules par nodeId et par formulaId
+    const formulasByNodeIdForTopo = new Map<string, Array<{ tokens: unknown; id: string }>>();
+    const formulasByIdForTopo = new Map<string, { tokens: unknown; nodeId: string }>();
+    for (const f of formulasRaw) {
+      if (!formulasByNodeIdForTopo.has(f.nodeId)) formulasByNodeIdForTopo.set(f.nodeId, []);
+      formulasByNodeIdForTopo.get(f.nodeId)!.push({ tokens: (f as any).tokens, id: f.id });
+      formulasByIdForTopo.set(f.id, { tokens: (f as any).tokens, nodeId: f.nodeId });
+    }
+
+    // Index des variables par nodeId
+    const variablesByNodeIdForTopo = new Map<string, { metadata: unknown; sourceRef?: string | null }>();
+    for (const v of variablesRaw) {
+      variablesByNodeIdForTopo.set(v.nodeId, v);
+    }
+
+    for (const displayNodeId of displayCapNodeIds) {
+      const refs = new Set<string>();
+
+      // 1. Collecter les refs depuis les tokens des formules du noeud
+      const formulas = formulasByNodeIdForTopo.get(displayNodeId) || [];
+      for (const formula of formulas) {
+        collectReferencedNodeIdsForTriggers(formula.tokens, refs);
+      }
+
+      // 2. Collecter les refs depuis le metadata de la variable
+      const variable = variablesByNodeIdForTopo.get(displayNodeId);
+      if (variable) {
+        collectReferencedNodeIdsForTriggers((variable as any).metadata, refs);
+      }
+
+      // 3. Résoudre les node-formula: cross-node de manière transitive
+      const visitedFormulas = new Set<string>();
+      const resolveTransitiveDeps = (data: unknown) => {
+        if (!data) return;
+        if (Array.isArray(data)) {
+          for (const item of data) resolveTransitiveDeps(item);
+          return;
+        }
+        if (typeof data === 'string') {
+          const s = data.trim();
+          if (s.startsWith('node-formula:')) {
+            const fId = s.slice('node-formula:'.length).trim();
+            if (fId && !visitedFormulas.has(fId)) {
+              visitedFormulas.add(fId);
+              const crossFormula = formulasByIdForTopo.get(fId);
+              if (crossFormula && crossFormula.tokens) {
+                collectReferencedNodeIdsForTriggers(crossFormula.tokens, refs);
+                resolveTransitiveDeps(crossFormula.tokens);
+              }
+            }
+          }
+        }
+        if (typeof data === 'object' && data !== null) {
+          for (const val of Object.values(data as Record<string, unknown>)) {
+            resolveTransitiveDeps(val);
+          }
+        }
+      };
+      for (const formula of formulas) resolveTransitiveDeps(formula.tokens);
+
+      // Retirer l'auto-référence
+      refs.delete(displayNodeId);
+
+      // 4. Ajouter les dépendances display→display
+      for (const refId of refs) {
+        if (refId.includes('.')) continue; // Ignorer les clés virtuelles (lead.*, etc.)
+        if (displayCapNodeIds.has(refId)) {
+          if (!displayDeps.has(displayNodeId)) displayDeps.set(displayNodeId, new Set());
+          displayDeps.get(displayNodeId)!.add(refId);
+        }
+      }
+    }
+
+    const depsCountEarly = [...displayDeps.values()].reduce((sum, s) => sum + s.size, 0);
+    if (depsCountEarly > 0) {
+      console.log(`🔗 [FIX R14e] ${depsCountEarly} dépendances inter-display détectées depuis les formules (tous modes)`);
+    }
+  }
+
   // Tri topologique: calculer l'ordre (profondeur de dépendance)
   const topoOrder = new Map<string, number>(); // nodeId → depth
   const computeDepth = (nodeId: string, visited: Set<string>): number => {
@@ -1137,6 +1225,22 @@ const displayDeps = new Map<string, Set<string>>(); // nodeId → Set<dependsOn>
     return suffix ? changedFieldId.replace(/-\d+$/, '') : null;
   })() : null;
   
+  // 🔥 FIX A (backend): Support multi-changedFieldIds (comma-separated depuis le frontend)
+  // Si l'utilisateur modifie champ A puis champ B en <300ms, le frontend envoie "A,B"
+  // On doit trouver les DISPLAY fields affectés par A ET par B (union)
+  const allChangedFieldIds: string[] = changedFieldId 
+    ? changedFieldId.split(',').map(s => s.trim()).filter(Boolean) 
+    : [];
+  const allChangedFieldIdBases: string[] = allChangedFieldIds
+    .map(id => { const s = extractNumericSuffix(id); return s ? id.replace(/-\d+$/, '') : null; })
+    .filter((b): b is string => b !== null);
+  // Set O(1) pour les checks de LINK matching
+  const changedFieldIdSet = new Set([...allChangedFieldIds, ...allChangedFieldIdBases]);
+  
+  if (allChangedFieldIds.length > 1) {
+    console.log(`🔥 [FIX A] Multi-changedFieldIds: ${allChangedFieldIds.length} champs modifiés pendant le debounce: ${allChangedFieldIds.map(id => id.substring(0,12)).join(', ')}`);
+  }
+  
   if (mode === 'change' && changedFieldId) {
     // 🚀 CHECK CACHE: Réutiliser le trigger index si déjà construit pour ce tree
     const cached = triggerIndexCache.get(treeId);
@@ -1149,17 +1253,17 @@ const displayDeps = new Map<string, Set<string>>(); // nodeId → Set<dependsOn>
       }
       
       // Construire linkedFieldsToRefresh depuis le cache
-      // 🔧 FIX R21: Aussi matcher sur l'ID de base pour les champs repeater suffixés
+      // 🔧 FIX R21 + FIX A: Matcher sur TOUS les changedFieldIds et leurs bases
       for (const ln of cached.allLinkedNodes) {
-        if (ln.link_targetNodeId === changedFieldId || (changedFieldIdBase && ln.link_targetNodeId === changedFieldIdBase)) {
+        if (changedFieldIdSet.has(ln.link_targetNodeId!)) {
           linkedFieldsToRefresh.set(ln.id, {
-            targetNodeId: ln.link_targetNodeId,
+            targetNodeId: ln.link_targetNodeId!,
             nodeLabel: ln.label || ln.id
           });
         }
       }
       
-      const affectedCount = triggerIndex.get(changedFieldId)?.size || 0;
+      const affectedCount = allChangedFieldIds.reduce((sum, id) => sum + (triggerIndex.get(id)?.size || 0), 0);
       console.log(`🚀 [TRIGGER INDEX CACHE HIT] ${affectedCount} impactés par "${changedFieldId}" (cache age: ${Math.round((Date.now() - cached.timestamp) / 1000)}s)`);
     } else {
       // 🔧 CACHE MISS: Construire le trigger index complet (pour TOUS les changedFieldIds possibles)
@@ -1341,8 +1445,8 @@ const displayDeps = new Map<string, Set<string>>(); // nodeId → Set<dependsOn>
         if (!triggerIndex.has(targetId)) triggerIndex.set(targetId, new Set());
         triggerIndex.get(targetId)!.add(linkedNode.id);
         
-        // 🔧 FIX R21: Aussi matcher sur l'ID de base pour les champs repeater suffixés
-        if (targetId === changedFieldId || (changedFieldIdBase && targetId === changedFieldIdBase)) {
+        // 🔧 FIX R21 + FIX A: Matcher sur TOUS les changedFieldIds et leurs bases
+        if (changedFieldIdSet.has(targetId)) {
           linkedFieldsToRefresh.set(linkedNode.id, {
             targetNodeId: targetId,
             nodeLabel: linkedNode.label || linkedNode.id
@@ -1522,15 +1626,21 @@ const displayDeps = new Map<string, Set<string>>(); // nodeId → Set<dependsOn>
     console.log(`[FIX R14b] Eval order: ${displayOrder.join(' -> ')}`);
   }
 
-  // �🚀 FIX R12: Calculer la fermeture transitive des DISPLAY fields affectés
+  // 🚀 FIX R12 + FIX A: Calculer la fermeture transitive des DISPLAY fields affectés
   // En mode 'change', seuls les DISPLAY fields directement/indirectement impactés
-  // par changedFieldId doivent être recalculés (au lieu de TOUS)
+  // par TOUS les changedFieldIds doivent être recalculés (union)
   let affectedDisplayFieldIds: Set<string> | null = null;
   if (mode === 'change' && changedFieldId && triggerIndex.size > 0) {
-    affectedDisplayFieldIds = new Set(triggerIndex.get(changedFieldId) || []);
-    // 🔧 FIX R21: Aussi inclure les display fields déclenchés par l'ID de base (repeater)
-    if (changedFieldIdBase) {
-      const baseAffected = triggerIndex.get(changedFieldIdBase);
+    affectedDisplayFieldIds = new Set<string>();
+    // 🔥 FIX A: Itérer sur TOUS les changedFieldIds (et leurs bases) pour l'union
+    for (const cId of allChangedFieldIds) {
+      const affected = triggerIndex.get(cId);
+      if (affected) {
+        for (const id of affected) affectedDisplayFieldIds.add(id);
+      }
+    }
+    for (const cIdBase of allChangedFieldIdBases) {
+      const baseAffected = triggerIndex.get(cIdBase);
       if (baseAffected) {
         for (const id of baseAffected) affectedDisplayFieldIds.add(id);
       }
@@ -1554,6 +1664,35 @@ const displayDeps = new Map<string, Set<string>>(); // nodeId → Set<dependsOn>
       }
     }
     console.log(`🚀 [FIX R12] mode=change: ${affectedDisplayFieldIds.size} DISPLAY fields affectés sur ${displayCapNodeIds.size} total (skip ${displayCapNodeIds.size - affectedDisplayFieldIds.size})`);
+    
+    // 🔥 FIX D: Si aucun DISPLAY field affecté trouvé mais qu'on a un changedFieldId,
+    // c'est que le triggerIndex ne couvre pas ce champ → fallback vers évaluation complète
+    if (affectedDisplayFieldIds.size === 0) {
+      console.warn(`⚠️ [FIX D] changedFieldId="${changedFieldId?.substring(0,12)}" n'est dans aucun trigger → fallback évaluation COMPLÈTE (comme mode='open')`);
+      affectedDisplayFieldIds = null; // null = évaluer TOUS les display fields
+    }
+  }
+
+  // 🔥 FIX B phase 2: Suppression CIBLÉE des valeurs DISPLAY du valueMap en mode 'change'
+  // Seuls les display fields qui vont être recalculés (affectedDisplayFieldIds) sont supprimés.
+  // Les display fields NON affectés GARDENT leur valeur dans le valueMap → les calculs
+  // qui en dépendent lisent la bonne valeur au lieu de undefined/0.
+  if (mode === 'change') {
+    if (affectedDisplayFieldIds) {
+      // Ciblé: ne supprimer que les display fields qu'on va recalculer
+      for (const affectedId of affectedDisplayFieldIds) {
+        if (displayNodeIds.has(affectedId)) {
+          valueMap.delete(affectedId);
+        }
+      }
+      console.log(`🔥 [FIX B] Suppression ciblée: ${affectedDisplayFieldIds.size} display values supprimés sur ${displayNodeIds.size} total`);
+    } else {
+      // Fallback complet (FIX D actif): supprimer TOUS les display values
+      for (const displayNodeId of displayNodeIds) {
+        valueMap.delete(displayNodeId);
+      }
+      console.log(`🔥 [FIX B] Suppression COMPLÈTE: ${displayNodeIds.size} display values (fallback FIX D)`);
+    }
   }
 
   // 🔥 FIX R20: Mettre à jour le valueMap pour les champs LINK AVANT la boucle d'évaluation
@@ -1567,14 +1706,21 @@ const displayDeps = new Map<string, Set<string>>(); // nodeId → Set<dependsOn>
   if (mode === 'change' && linkedFieldsToRefresh.size > 0 && formData) {
     for (const [linkedNodeId, linkInfo] of linkedFieldsToRefresh.entries()) {
       // La valeur fraîche du champ source est dans formData (c'est le champ que l'utilisateur a changé)
-      // 🔧 FIX R21: Chercher la valeur dans formData sous targetNodeId OU sous changedFieldId (version suffixée)
-      // Car formData contient la clé suffixée (ex: 78c78d8d-1) mais le LINK pointe vers l'ID de base (78c78d8d)
+      // 🔧 FIX R21 + FIX A: Chercher la valeur dans formData sous targetNodeId OU sous TOUS les changedFieldIds (version suffixée)
       let freshValue: unknown = undefined;
       if (linkInfo.targetNodeId in formData) {
         freshValue = formData[linkInfo.targetNodeId];
-      } else if (changedFieldId && changedFieldId in formData && changedFieldIdBase === linkInfo.targetNodeId) {
-        // Le formData a la clé suffixée mais le LINK pointe vers l'ID de base
-        freshValue = formData[changedFieldId];
+      } else {
+        // FIX A: Chercher parmi TOUS les changedFieldIds suffixés dont la base == targetNodeId
+        for (const cId of allChangedFieldIds) {
+          if (cId in formData) {
+            const cBase = extractNumericSuffix(cId) ? cId.replace(/-\d+$/, '') : null;
+            if (cBase === linkInfo.targetNodeId) {
+              freshValue = formData[cId];
+              break;
+            }
+          }
+        }
       }
       if (freshValue !== null && freshValue !== undefined) {
         valueMap.set(linkedNodeId, freshValue);

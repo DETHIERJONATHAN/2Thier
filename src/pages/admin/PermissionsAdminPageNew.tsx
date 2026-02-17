@@ -128,10 +128,17 @@ const PermissionsAdminPage: React.FC = () => {
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
 
-  // Filtrage des modules
+  // Filtrage des modules : uniquement ceux ayant 'access' activé pour le rôle sélectionné
   const filteredModules = useMemo(() => {
     return modules.filter(module => {
+      // Ne montrer que les modules avec access=true pour le rôle sélectionné
+      const hasAccess = permissions.some(p => p.moduleId === module.id && p.action === 'access' && p.allowed);
+      if (!hasAccess) return false;
+
+      const moduleTranslation = getModuleTranslation(module.key);
+      const displayName = moduleTranslation.name !== module.key ? moduleTranslation.name : module.label;
       const matchesSearch = !searchTerm || 
+        displayName.toLowerCase().includes(searchTerm.toLowerCase()) ||
         module.label.toLowerCase().includes(searchTerm.toLowerCase()) ||
         module.key.toLowerCase().includes(searchTerm.toLowerCase());
       
@@ -140,7 +147,7 @@ const PermissionsAdminPage: React.FC = () => {
       
       return matchesSearch && matchesCategory;
     });
-  }, [modules, searchTerm, categoryFilter]);
+  }, [modules, searchTerm, categoryFilter, permissions]);
 
   // Catégories uniques
   const categories = useMemo(() => {
@@ -169,7 +176,11 @@ const PermissionsAdminPage: React.FC = () => {
       }
 
       if (modulesResponse.success) {
-        setModules(modulesResponse.data || []);
+        // Filtrer uniquement les modules actifs et trier par label
+        const activeModules = (modulesResponse.data || [])
+          .filter((m: Module & { active?: boolean }) => m.active !== false)
+          .sort((a: Module, b: Module) => a.label.localeCompare(b.label, 'fr'));
+        setModules(activeModules);
       } else {
         throw new Error('Erreur lors du chargement des modules');
       }
@@ -341,12 +352,14 @@ const PermissionsAdminPage: React.FC = () => {
         const stats = getModuleStats(record.id);
         const isFullyEnabled = isModuleFullyEnabled(record.id);
         const moduleTranslation = getModuleTranslation(record.key);
+        // Utiliser le label de la DB si la traduction retourne juste la key
+        const displayName = moduleTranslation.name !== record.key ? moduleTranslation.name : record.label;
         
         return (
           <Space direction="vertical" size={0}>
             <Space>
               <Tooltip title={moduleTranslation.description}>
-                <Text strong>{moduleTranslation.name}</Text>
+                <Text strong>{displayName}</Text>
               </Tooltip>
               <Badge 
                 count={`${stats.allowed}/${stats.total}`} 
@@ -380,9 +393,10 @@ const PermissionsAdminPage: React.FC = () => {
       render: (_: unknown, record: Module) => {
         const isFullyEnabled = isModuleFullyEnabled(record.id);
         const moduleTranslation = getModuleTranslation(record.key);
+        const displayName = moduleTranslation.name !== record.key ? moduleTranslation.name : record.label;
         
         return (
-          <Tooltip title={`${isFullyEnabled ? 'Désactiver' : 'Activer'} toutes les permissions pour "${moduleTranslation.name}"`}>
+          <Tooltip title={`${isFullyEnabled ? 'Désactiver' : 'Activer'} toutes les permissions pour "${displayName}"`}>
             <Switch
               checked={isFullyEnabled}
               onChange={(checked) => handleToggleModule(record.id, checked)}
@@ -419,6 +433,7 @@ const PermissionsAdminPage: React.FC = () => {
         );
         
         const moduleTranslation = getModuleTranslation(record.key);
+        const displayName = moduleTranslation.name !== record.key ? moduleTranslation.name : record.label;
         const isChecked = permission ? permission.allowed : false;
         
         // Debug log pour les switches
@@ -434,7 +449,7 @@ const PermissionsAdminPage: React.FC = () => {
         
         return (
           <Tooltip 
-            title={`${isChecked ? 'Autoriser' : 'Interdire'} l'action "${name}" pour le module "${moduleTranslation.name}"`}
+            title={`${isChecked ? 'Autoriser' : 'Interdire'} l'action "${name}" pour le module "${displayName}"`}
           >
             <PermissionSwitch
               permission={permission}

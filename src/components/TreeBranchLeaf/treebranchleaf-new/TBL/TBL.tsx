@@ -201,6 +201,10 @@ const TBL: React.FC<TBLProps> = ({
   const submissionIdJustChangedUntilRef = useRef<number>(0);
   // 🔥 FIX 01/02/2026: Track le dernier clientId (leadId) pour forcer mode='open' quand il change
   const lastClientIdRef = useRef<string | null>(null);
+  // 🔥 FIX DISPLAY-ZERO: Forcer mode='open' après handleNewDevis
+  // La première évaluation après un nouveau devis doit recalculer TOUS les display fields
+  // car le mode='change' ne recalcule que le sous-ensemble affecté par le champ modifié.
+  const forceOpenAfterNewDevisRef = useRef<boolean>(false);
 
   const [saveDevisModalVisible, setSaveDevisModalVisible] = useState<boolean>(false);
   const [saveDevisName, setSaveDevisName] = useState<string>('');
@@ -302,6 +306,13 @@ const TBL: React.FC<TBLProps> = ({
         reason: 'nouveau-devis',
         protectedNodeIds: Array.from(protectedNodeIds)
       });
+
+      // 🔥 FIX DISPLAY-ZERO: Forcer le prochain cycle d'évaluation en mode 'open' (complet)
+      // Après un nouveau devis, le mode 'change' ne recalculerait qu'un sous-ensemble
+      // de display fields → les autres resteraient à 0/vide.
+      forceOpenAfterNewDevisRef.current = true;
+      // Vider aussi les valeurs accumulées (stale)
+      accumulatedDisplayValuesRef.current = {};
 
       setIsDevisSaved(false);
       setIsLoadedDevis(false);
@@ -1362,7 +1373,21 @@ const TBL: React.FC<TBLProps> = ({
             }
           }
           
-          // 🔗🔗🔗 FIX CRITIQUE: Injecter les valeurs calculées (Link, DISPLAY, etc.) dans TBL_FORM_DATA
+          // � FIX DISPLAY-ZERO: Fusionner les valeurs accumulées des broadcasts précédents sautés
+          // Les valeurs du broadcast courant ont priorité sur les valeurs accumulées (plus récentes)
+          const accumulated = accumulatedDisplayValuesRef.current;
+          if (Object.keys(accumulated).length > 0) {
+            for (const [nodeId, value] of Object.entries(accumulated)) {
+              // Ne pas écraser une valeur fraîche par une accumulée
+              if (!(nodeId in calculatedValuesMap)) {
+                calculatedValuesMap[nodeId] = value;
+              }
+            }
+            console.log(`🔗 [broadcastCalculatedRefresh] Fusionné ${Object.keys(accumulated).length} valeurs accumulées (broadcasts précédents sautés)`);
+            accumulatedDisplayValuesRef.current = {}; // Vider les accumulés
+          }
+          
+          // �🔗🔗🔗 FIX CRITIQUE: Injecter les valeurs calculées (Link, DISPLAY, etc.) dans TBL_FORM_DATA
           // Sans cela, TBLFieldRendererAdvanced ne voit pas les valeurs Link dans formData
           if (typeof window !== 'undefined' && window.TBL_FORM_DATA) {
             for (const [nodeId, value] of Object.entries(calculatedValuesMap)) {
@@ -1417,6 +1442,12 @@ const TBL: React.FC<TBLProps> = ({
   const pendingAutosaveRef = useRef<{ data: TBLFormData; changedField?: string } | null>(null);
   const autosaveSuspendedRef = useRef(false);
   const lastRealChangedFieldIdRef = useRef<string | undefined>(undefined);
+
+  // 🔥 FIX DISPLAY-ZERO: Accumuler les valeurs display non-broadcastées
+  // Quand un broadcast est sauté (hasPendingRequest/hasDebounceActive),
+  // les valeurs calculées sont perdues → le bouclier garde les valeurs vides.
+  // On les accumule ici et on les fusionne dans le prochain broadcast réel.
+  const accumulatedDisplayValuesRef = useRef<Record<string, unknown>>({});
 
   const waitForAutosaveIdle = useCallback(async (timeoutMs: number = 5000) => {
     const start = Date.now();
@@ -1475,6 +1506,15 @@ const TBL: React.FC<TBLProps> = ({
       // handleFieldChangeImpl suffit et couvre tout le cycle.
 
       if (!submissionId) {
+        // 🔥 FIX DISPLAY-ZERO: Déterminer si on force mode='open' après un nouveau devis
+        const isUserChangeDraft = changedField && changedField !== 'NULL';
+        let draftEvaluationMode: 'open' | 'change' | undefined = undefined;
+        if (forceOpenAfterNewDevisRef.current && isUserChangeDraft) {
+          draftEvaluationMode = 'open';
+          forceOpenAfterNewDevisRef.current = false;
+          console.log(`🔄 [TBL] Mode forcé à 'open' pour draft car nouveau devis (première évaluation complète)`);
+        }
+
         // ✅ Brouillon global (default-draft): persistant sans lead.
         if (isDefaultDraft) {
           const evaluationResponse = await api.post('/api/tbl/submissions/create-and-evaluate', {
@@ -1483,8 +1523,8 @@ const TBL: React.FC<TBLProps> = ({
             clientId: null,
             status: 'default-draft',
             providedName: 'Brouillon',
-            changedFieldId: changedField
-            // Mode par défaut ('change') = rapide, recalcule seulement les champs concernés
+            changedFieldId: changedField,
+            ...(draftEvaluationMode ? { evaluationMode: draftEvaluationMode } : {})
           });
 
           const createdOrReusedId = evaluationResponse?.submission?.id;
@@ -1510,7 +1550,16 @@ const TBL: React.FC<TBLProps> = ({
                 // 🎯 FIX: Passer les valeurs calculées pour éviter le refetch race condition
                 submissionData: evaluationResponse?.submission?.TreeBranchLeafSubmissionData
               });
-            } else if (hasDebounceActive) {
+            } else {
+              // 🔥 FIX DISPLAY-ZERO: Accumuler les valeurs pour le prochain broadcast
+              const sdArray = evaluationResponse?.submission?.TreeBranchLeafSubmissionData as Array<{nodeId?: string; value?: unknown}> | undefined;
+              if (sdArray && Array.isArray(sdArray)) {
+                for (const entry of sdArray) {
+                  if (entry?.nodeId && entry?.value !== undefined && entry?.value !== null) {
+                    accumulatedDisplayValuesRef.current[entry.nodeId] = entry.value;
+                  }
+                }
+              }
             }
           } else {
             // Fallback: si on n'a pas d'ID, on ne peut pas persister.
@@ -1526,8 +1575,8 @@ const TBL: React.FC<TBLProps> = ({
             clientId: leadId,
             status: 'draft',
             providedName: 'Brouillon',
-            changedFieldId: changedField
-            // Mode par défaut ('change') = rapide, recalcule seulement les champs concernés
+            changedFieldId: changedField,
+            ...(draftEvaluationMode ? { evaluationMode: draftEvaluationMode } : {})
           });
 
           const createdOrReusedId = evaluationResponse?.submission?.id;
@@ -1547,7 +1596,16 @@ const TBL: React.FC<TBLProps> = ({
                 recalcCount: evaluationResponse?.submission?.TreeBranchLeafSubmissionData?.length,
                 submissionData: evaluationResponse?.submission?.TreeBranchLeafSubmissionData
               });
-            } else if (hasDebounceActive) {
+            } else {
+              // 🔥 FIX DISPLAY-ZERO: Accumuler les valeurs pour le prochain broadcast
+              const sdArray = evaluationResponse?.submission?.TreeBranchLeafSubmissionData as Array<{nodeId?: string; value?: unknown}> | undefined;
+              if (sdArray && Array.isArray(sdArray)) {
+                for (const entry of sdArray) {
+                  if (entry?.nodeId && entry?.value !== undefined && entry?.value !== null) {
+                    accumulatedDisplayValuesRef.current[entry.nodeId] = entry.value;
+                  }
+                }
+              }
             }
           } else {
             await previewNoSave(data);
@@ -1585,6 +1643,13 @@ const TBL: React.FC<TBLProps> = ({
         if (clientIdJustChanged) {
           effectiveMode = 'open';
           console.log(`🔄 [TBL] Mode forcé à 'open' car clientId a changé`);
+        }
+        // 🔥 FIX DISPLAY-ZERO: Après handleNewDevis, la première évaluation doit être 'open'
+        // pour recalculer TOUS les display fields (pas seulement ceux affectés par un seul champ)
+        if (forceOpenAfterNewDevisRef.current && isUserChange) {
+          effectiveMode = 'open';
+          forceOpenAfterNewDevisRef.current = false;
+          console.log(`🔄 [TBL] Mode forcé à 'open' car nouveau devis (première évaluation complète)`);
         }
         
         const evaluationResponse = await api.post('/api/tbl/submissions/create-and-evaluate', {
@@ -1631,7 +1696,16 @@ const TBL: React.FC<TBLProps> = ({
             // 🎯 FIX: Passer les valeurs calculées pour éviter le refetch race condition
             submissionData: evaluationResponse?.submission?.TreeBranchLeafSubmissionData
           });
-        } else if (hasPendingRequest) {
+        } else {
+          // 🔥 FIX DISPLAY-ZERO: Accumuler les valeurs pour le prochain broadcast
+          const sdArray = evaluationResponse?.submission?.TreeBranchLeafSubmissionData as Array<{nodeId?: string; value?: unknown}> | undefined;
+          if (sdArray && Array.isArray(sdArray)) {
+            for (const entry of sdArray) {
+              if (entry?.nodeId && entry?.value !== undefined && entry?.value !== null) {
+                accumulatedDisplayValuesRef.current[entry.nodeId] = entry.value;
+              }
+            }
+          }
         }
       }
     } catch (e) {
@@ -2097,6 +2171,9 @@ const TBL: React.FC<TBLProps> = ({
   // ⚡ Debounce pour éviter les requêtes multiples (200ms)
   const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
   const immediateEvaluateRef = useRef<(...args: any[]) => void>();
+  // 🔥 FIX A: Accumuler TOUS les changedFieldIds pendant la fenêtre de debounce
+  // AVANT: seul le dernier capturedFieldId était envoyé → les champs modifiés avant étaient perdus
+  const accumulatedChangedFieldIdsRef = useRef<Set<string>>(new Set());
 
   // 🎯 Implémentation complète de handleFieldChange avec toutes les dépendances
   const handleFieldChangeImpl = useCallback((fieldId: string, value: string | number | boolean | string[] | null | undefined) => {
@@ -2354,16 +2431,26 @@ const TBL: React.FC<TBLProps> = ({
       // 🔧 FIX RACE CONDITION: Marquer qu'un changement est en debounce
       debounceActiveRef.current = true;
       
-      // 🚀 FIX STALE VALUES: Capturer `next` et `realFieldId` dans des variables locales
-      // pour éviter toute capture stale dans la closure du setTimeout
+      // 🚀 FIX STALE VALUES: Capturer `next` dans une variable locale
       const capturedNext = { ...next } as TBLFormData;
-      const capturedFieldId = realFieldId;
+      
+      // 🔥 FIX A: Accumuler le changedFieldId dans le Set au lieu de ne garder que le dernier
+      // Si l'utilisateur modifie champ A puis champ B en <300ms, les DEUX sont envoyés au backend
+      if (realFieldId) {
+        accumulatedChangedFieldIdsRef.current.add(realFieldId);
+      }
       
       debounceTimerRef.current = setTimeout(() => {
         // 🔧 FIX RACE CONDITION: Debounce terminé, prêt à évaluer
         debounceActiveRef.current = false;
+        
+        // 🔥 FIX A: Envoyer TOUS les changedFieldIds accumulés (comma-separated)
+        const allChangedIds = Array.from(accumulatedChangedFieldIdsRef.current);
+        const combinedFieldId = allChangedIds.length > 0 ? allChangedIds.join(',') : undefined;
+        accumulatedChangedFieldIdsRef.current.clear(); // Reset pour le prochain cycle
+        
         if (immediateEvaluateRef.current) {
-          immediateEvaluateRef.current(capturedNext, capturedFieldId);
+          immediateEvaluateRef.current(capturedNext, combinedFieldId);
         } else {
           console.warn('⚠️ [TBL] immediateEvaluateRef pas encore initialisé');
         }

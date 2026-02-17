@@ -474,9 +474,30 @@ export function useNodeCalculatedValue(
 
         // 🔥 FIX 30/01/2026: Si calculatedValues existe mais notre nodeId n'y est PAS,
         // cela signifie que ce display field n'a PAS été recalculé (skippé par le trigger filter).
-        // Dans ce cas, NE PAS faire de refetch car la valeur actuelle est toujours correcte !
-        // Le refetch risquerait de retourner null/obsolète pour les nouvelles révisions.
+        // 
+        // 🔥 FIX DISPLAY-ZERO 2026-02: EXCEPTION CRITIQUE: Si la valeur actuelle est null/vide/∅,
+        // le bouclier ne doit PAS protéger une absence de valeur !
+        // Après handleNewDevis (clearDisplayFields), tous les display fields sont à null.
+        // Si un broadcast arrive avec calculatedValues qui n'incluent pas ce champ,
+        // le bouclier gardait null → le display field restait vide pour toujours.
+        // FIX: Quand la valeur actuelle est vide, on déclenche un GET retardé
+        // pour récupérer toute valeur calculée stockée en SubmissionData par un
+        // cycle d'évaluation dont le broadcast a été sauté (pending/debounce).
         if (detail?.calculatedValues && Object.keys(detail.calculatedValues).length > 0) {
+          const currentVal = valueRef.current;
+          const isCurrentValueEmpty = (
+            currentVal === null ||
+            currentVal === undefined ||
+            currentVal === '' ||
+            currentVal === '∅'
+          );
+          if (isCurrentValueEmpty) {
+            // 🔄 Valeur vide/null → NE PAS protéger, déclencher un GET retardé
+            // pour récupérer une éventuelle valeur calculée en DB
+            console.log(`🔄 [useNodeCalculatedValue] nodeId=${nodeId} pas dans calculatedValues ET valeur vide - GET retardé déclenché`);
+            setTimeout(() => fetchCalculatedValue(), 350);
+            return;
+          }
           console.log(`🛡️ [useNodeCalculatedValue] nodeId=${nodeId} pas dans calculatedValues - conserver valeur actuelle (pas de refetch)`);
           return; // 🎯 Ne PAS faire de refetch - le champ n'a pas été impacté par le changement
         }

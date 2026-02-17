@@ -1,5 +1,5 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import { TreeSelect, Modal, Space, Tabs, Typography, Alert, Spin, Segmented, Tooltip, List, Input, Collapse } from 'antd';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { TreeSelect, Modal, Space, Tabs, Typography, Alert, Spin, Segmented, Tooltip, List, Input, Collapse, Badge, Tag } from 'antd';
 import { useAuthenticatedApi } from '../../../../../../hooks/useAuthenticatedApi';
 
 type NodeLite = { id: string; parentId?: string | null; label: string; type: string; subType?: string | null };
@@ -86,6 +86,7 @@ const NodeTreeSelector: React.FC<Props> = ({ nodeId, open, onClose, onSelect, se
   const [nodes, setNodes] = useState<NodeLite[]>([]);
   const [value, setValue] = useState<string | string[] | undefined>(undefined);
   const [selectedName, setSelectedName] = useState<string | undefined>(undefined); // 🎯 Nom de la capacité sélectionnée
+  const [selectedNames, setSelectedNames] = useState<Record<string, string>>({}); // 🎯 Map des noms pour multi-sélection
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [tokenKind, setTokenKind] = useState<'value' | 'option'>('value');
@@ -146,6 +147,40 @@ const NodeTreeSelector: React.FC<Props> = ({ nodeId, open, onClose, onSelect, se
     parentLabel?: string;
   }>>([]);
 
+  // 🎯 Helpers multi-sélection: toggle et vérification
+  const toggleValue = useCallback((key: string, name?: string) => {
+    if (!allowMulti) {
+      setValue(key);
+      if (name) { setSelectedName(name); setSelectedNames({ [key]: name }); }
+      return;
+    }
+    setValue(prev => {
+      const arr = Array.isArray(prev) ? [...prev] : prev ? [prev] : [];
+      const idx = arr.indexOf(key);
+      if (idx >= 0) arr.splice(idx, 1);
+      else arr.push(key);
+      return arr.length ? arr : undefined;
+    });
+    if (name) {
+      setSelectedNames(prev => {
+        const next = { ...prev };
+        if (next[key]) delete next[key];
+        else next[key] = name;
+        return next;
+      });
+    }
+  }, [allowMulti]);
+
+  const isValueSelected = useCallback((key: string): boolean => {
+    if (Array.isArray(value)) return value.includes(key);
+    return value === key;
+  }, [value]);
+
+  const selectedCount = useMemo(() => {
+    if (Array.isArray(value)) return value.length;
+    return value ? 1 : 0;
+  }, [value]);
+
   useEffect(() => {
     if (!open) return;
     let mounted = true;
@@ -153,6 +188,7 @@ const NodeTreeSelector: React.FC<Props> = ({ nodeId, open, onClose, onSelect, se
     setError(null);
     setValue(undefined); // Réinitialiser la sélection quand on ouvre
     setSelectedName(undefined); // 🎯 Réinitialiser le nom aussi
+    setSelectedNames({}); // 🎯 Réinitialiser les noms multi aussi
     (async () => {
       try {
         const info = await api.get(`/api/treebranchleaf/nodes/${nodeId}`) as { treeId: string };
@@ -385,54 +421,129 @@ const NodeTreeSelector: React.FC<Props> = ({ nodeId, open, onClose, onSelect, se
     return map;
   }, [nodes]);
 
-  // 🆕 Grouper les valeurs calculées par onglet (top-level branch)
-  const calculatedValuesByOnglet = useMemo(() => {
-    if (!calculatedValues.length || !nodes.length) return [];
+  // 🆕 Fonction générique pour grouper des items par onglet ET sous-onglet
+  type HierarchyGroup<T> = {
+    ongletLabel: string;
+    subGroups: Array<{
+      sousOngletLabel: string | null;
+      items: T[];
+    }>;
+  };
 
+  const groupByHierarchy = useMemo(() => {
     const nodesMap = new Map(nodes.map(n => [n.id, n]));
 
-    // Remonter la chaîne des parents jusqu'au branch dont le parent est un 'tree'
-    const findOnglet = (nodeId: string): { id: string; label: string } | null => {
-      let current = nodesMap.get(nodeId);
-      if (!current) return null;
+    const findAncestors = (targetNodeId: string): { onglet?: { id: string; label: string }; sousOnglet?: { id: string; label: string } } => {
+      const path: NodeLite[] = [];
+      let current = nodesMap.get(targetNodeId);
       const visited = new Set<string>();
       while (current) {
         if (visited.has(current.id)) break;
         visited.add(current.id);
-        const parent = current.parentId ? nodesMap.get(current.parentId) : null;
-        if (!parent || parent.type === 'tree') {
-          // current est le branch de niveau onglet
-          if (current.type === 'branch') {
-            return { id: current.id, label: current.label || 'Sans nom' };
-          }
-          return null;
-        }
-        current = parent;
+        path.unshift(current);
+        current = current.parentId ? nodesMap.get(current.parentId) : undefined;
       }
-      return null;
+      let onglet: { id: string; label: string } | undefined;
+      let sousOnglet: { id: string; label: string } | undefined;
+      for (const node of path) {
+        if (node.type === 'tree') continue;
+        if (!onglet) {
+          onglet = { id: node.id, label: node.label };
+        } else if (!sousOnglet && node.type === 'branch') {
+          sousOnglet = { id: node.id, label: node.label };
+          break;
+        }
+      }
+      return { onglet, sousOnglet };
     };
 
-    const groups: Record<string, { ongletLabel: string; items: typeof calculatedValues }> = {};
-    const ungrouped: typeof calculatedValues = [];
+    return <T,>(
+      items: T[],
+      getNodeId: (item: T) => string,
+      sortKey: (item: T) => string
+    ): HierarchyGroup<T>[] => {
+      const ongletMap: Record<string, {
+        ongletLabel: string;
+        sousOngletMap: Record<string, { sousOngletLabel: string | null; items: T[] }>;
+      }> = {};
+      const ungrouped: T[] = [];
 
-    for (const cv of calculatedValues) {
-      const onglet = findOnglet(cv.id);
-      if (onglet) {
-        if (!groups[onglet.id]) {
-          groups[onglet.id] = { ongletLabel: onglet.label, items: [] };
+      for (const item of items) {
+        const ancestors = findAncestors(getNodeId(item));
+        if (ancestors.onglet) {
+          const oKey = ancestors.onglet.id;
+          if (!ongletMap[oKey]) {
+            ongletMap[oKey] = { ongletLabel: ancestors.onglet.label, sousOngletMap: {} };
+          }
+          const soKey = ancestors.sousOnglet?.id || '__root__';
+          if (!ongletMap[oKey].sousOngletMap[soKey]) {
+            ongletMap[oKey].sousOngletMap[soKey] = {
+              sousOngletLabel: ancestors.sousOnglet?.label || null,
+              items: []
+            };
+          }
+          ongletMap[oKey].sousOngletMap[soKey].items.push(item);
+        } else {
+          ungrouped.push(item);
         }
-        groups[onglet.id].items.push(cv);
-      } else {
-        ungrouped.push(cv);
       }
-    }
 
-    const result = Object.values(groups);
-    if (ungrouped.length > 0) {
-      result.push({ ongletLabel: 'Autres', items: ungrouped });
-    }
-    return result;
-  }, [calculatedValues, nodes]);
+      const result = Object.values(ongletMap)
+        .map(g => ({
+          ongletLabel: g.ongletLabel,
+          subGroups: Object.values(g.sousOngletMap)
+            .map(sg => ({
+              ...sg,
+              items: [...sg.items].sort((a, b) => sortKey(a).localeCompare(sortKey(b), 'fr'))
+            }))
+            .sort((a, b) => (a.sousOngletLabel || '').localeCompare(b.sousOngletLabel || '', 'fr'))
+        }))
+        .sort((a, b) => a.ongletLabel.localeCompare(b.ongletLabel, 'fr'));
+
+      if (ungrouped.length > 0) {
+        result.push({
+          ongletLabel: 'Autres',
+          subGroups: [{
+            sousOngletLabel: null,
+            items: ungrouped.sort((a, b) => sortKey(a).localeCompare(sortKey(b), 'fr'))
+          }]
+        });
+      }
+      return result;
+    };
+  }, [nodes]);
+
+  // Grouped formulas by onglet/sous-onglet
+  const groupedFormulas = useMemo(() => {
+    const all = [
+      ...nodeFormulas.map(f => ({ ...f, _isCurrentNode: true as const, _nodeId: nodeId })),
+      ...allNodeFormulas.map(f => ({ ...f, _isCurrentNode: false as const, _nodeId: f.nodeId || '' }))
+    ];
+    return groupByHierarchy(all, (f) => f._nodeId || nodeId, (f) => f.name);
+  }, [nodeFormulas, allNodeFormulas, groupByHierarchy, nodeId]);
+
+  // Grouped conditions by onglet/sous-onglet
+  const groupedConditions = useMemo(() => {
+    const all = [
+      ...nodeConditions.map(c => ({ ...c, _isCurrentNode: true as const, _nodeId: nodeId })),
+      ...allNodeConditions.map(c => ({ ...c, _isCurrentNode: false as const, _nodeId: c.nodeId || '' }))
+    ];
+    return groupByHierarchy(all, (c) => c._nodeId || nodeId, (c) => c.name);
+  }, [nodeConditions, allNodeConditions, groupByHierarchy, nodeId]);
+
+  // Grouped tables by onglet/sous-onglet
+  const groupedTables = useMemo(() => {
+    const all = [
+      ...nodeTables.map(t => ({ ...t, _isCurrentNode: true as const, _nodeId: nodeId })),
+      ...allNodeTables.map(t => ({ ...t, _isCurrentNode: false as const, _nodeId: t.nodeId || '' }))
+    ];
+    return groupByHierarchy(all, (t) => t._nodeId || nodeId, (t) => t.name);
+  }, [nodeTables, allNodeTables, groupByHierarchy, nodeId]);
+
+  // Grouped calculated values by onglet/sous-onglet
+  const groupedCalculatedValues = useMemo(() => {
+    return groupByHierarchy(calculatedValues, (cv) => cv.id, (cv) => cv.label);
+  }, [calculatedValues, groupByHierarchy]);
 
   // Synchroniser le type de token selon le type de nœud choisi
   useEffect(() => {
@@ -450,18 +561,9 @@ const NodeTreeSelector: React.FC<Props> = ({ nodeId, open, onClose, onSelect, se
   const handleOk = () => {
     if (!value || (Array.isArray(value) && value.length === 0)) return onClose();
     
-    // 🆕 Cas variables prédéfinies Client/Devis/Organisation (format {lead.xxx}, {quote.xxx}, {org.xxx})
-    if (typeof value === 'string' && value.startsWith('{') && value.endsWith('}')) {
-      // C'est une variable prédéfinie, on la retourne directement comme référence
-      onSelect({ kind: 'node', ref: value });
-      onClose();
-      return;
-    }
-    
     // Mode ALORS (SHOW) → toujours id de nœud via @value.{id} pour compat (pas de multi)
     if (selectionContext === 'nodeId') {
       if (Array.isArray(value)) {
-        // Sécurité: ne pas gérer multi en nodeId
         const first = value[0];
         onSelect({ kind: 'node', ref: `@value.${first}` });
       } else {
@@ -473,37 +575,42 @@ const NodeTreeSelector: React.FC<Props> = ({ nodeId, open, onClose, onSelect, se
     // Mode token → multi ou simple
     const values = Array.isArray(value) ? value : [value];
     for (const v of values) {
+      const vStr = String(v);
+      // 🎯 Résoudre le nom: d'abord selectedNames (multi), sinon selectedName (simple)
+      const itemName = selectedNames[vStr] || selectedName;
+      
+      // 🆕 Cas variables prédéfinies Client/Devis/Organisation (format {lead.xxx}, {quote.xxx}, {org.xxx})
+      if (vStr.startsWith('{') && vStr.endsWith('}')) {
+        onSelect({ kind: 'node', ref: vStr });
+        continue;
+      }
       // Cas formules (toutes sont maintenant des formules de nœuds)
-      if (String(v).startsWith('node-formula:')) {
-        const formulaId = String(v).replace('node-formula:', '');
-        // 🎯 Utiliser selectedName directement (plus fiable que la recherche)
-        onSelect({ kind: 'formula', ref: `node-formula:${formulaId}`, name: selectedName });
+      if (vStr.startsWith('node-formula:')) {
+        const formulaId = vStr.replace('node-formula:', '');
+        onSelect({ kind: 'formula', ref: `node-formula:${formulaId}`, name: itemName });
         continue;
       }
       // Cas conditions réutilisables
-      if (String(v).startsWith('condition:') || String(v).startsWith('node-condition:')) {
-        const conditionId = String(v).replace(/^(node-)?condition:/, '');
-        // 🎯 Utiliser selectedName directement (plus fiable que la recherche)
-        onSelect({ kind: 'condition', ref: `condition:${conditionId}`, name: selectedName });
+      if (vStr.startsWith('condition:') || vStr.startsWith('node-condition:')) {
+        const conditionId = vStr.replace(/^(node-)?condition:/, '');
+        onSelect({ kind: 'condition', ref: `condition:${conditionId}`, name: itemName });
         continue;
       }
       // Cas tables réutilisables
-      if (String(v).startsWith('table:') || String(v).startsWith('node-table:')) {
-        const tableId = String(v).replace(/^(node-)?table:/, '');
-        // 🎯 Utiliser selectedName directement (plus fiable que la recherche)
-        onSelect({ kind: 'node', ref: `@table.${tableId}`, name: selectedName });
+      if (vStr.startsWith('table:') || vStr.startsWith('node-table:')) {
+        const tableId = vStr.replace(/^(node-)?table:/, '');
+        onSelect({ kind: 'node', ref: `@table.${tableId}`, name: itemName });
         continue;
       }
       // 🆕 Cas valeurs calculées
-      if (String(v).startsWith('calculated:')) {
-        const calcNodeId = String(v).replace('calculated:', '');
+      if (vStr.startsWith('calculated:')) {
+        const calcNodeId = vStr.replace('calculated:', '');
         onSelect({ kind: 'node', ref: `@calculated.${calcNodeId}` });
         continue;
       }
-      const isVirtual = String(v).includes('::');
+      const isVirtual = vStr.includes('::');
       if (isVirtual) {
-        const [nodeKey, kind] = String(v).split('::');
-        // 🔥 NOUVEAU: Traiter la sélection spéciale de branche (réponse directe)
+        const [nodeKey, kind] = vStr.split('::');
         if (kind === 'branch-response') {
           onSelect({ kind: 'node', ref: `@select.${nodeKey}` });
           continue;
@@ -512,7 +619,7 @@ const NodeTreeSelector: React.FC<Props> = ({ nodeId, open, onClose, onSelect, se
         else onSelect({ kind: 'node', ref: `@value.${nodeKey}` });
         continue;
       }
-      const node = nodesById[String(v)];
+      const node = nodesById[vStr];
       const useOption = tokenKind === 'option' || node?.type === 'leaf_option';
       const ref = useOption ? `@select.${v}` : `@value.${v}`;
       onSelect({ kind: useOption ? 'nodeOption' : 'node', ref });
@@ -522,12 +629,12 @@ const NodeTreeSelector: React.FC<Props> = ({ nodeId, open, onClose, onSelect, se
 
   return (
     <Modal
-      title="Sélectionner dans l'arborescence"
+      title={<Space>{"Sélectionner dans l'arborescence"}{allowMulti && selectedCount > 0 && <Badge count={selectedCount} style={{ backgroundColor: '#52c41a' }} />}</Space>}
       open={open}
       onCancel={onClose}
       onOk={handleOk}
-      okText="Sélectionner"
-      okButtonProps={{ disabled: !value, loading }}
+      okText={allowMulti && selectedCount > 1 ? `Insérer ${selectedCount} éléments` : 'Sélectionner'}
+      okButtonProps={{ disabled: !value || (Array.isArray(value) && value.length === 0), loading }}
       className="node-tree-selector-modal"
       width={700}
     >
@@ -626,10 +733,10 @@ const NodeTreeSelector: React.FC<Props> = ({ nodeId, open, onClose, onSelect, se
                   bordered
                   dataSource={LEAD_VARIABLES}
                   renderItem={(item) => {
-                    const isSelected = value === `{${item.key}}`;
+                    const isSelected = isValueSelected(`{${item.key}}`);
                     return (
                       <List.Item
-                        onClick={() => setValue(`{${item.key}}`)}
+                        onClick={() => toggleValue(`{${item.key}}`)}
                         style={{ 
                           cursor: 'pointer', 
                           backgroundColor: isSelected ? '#1890ff' : undefined,
@@ -671,10 +778,10 @@ const NodeTreeSelector: React.FC<Props> = ({ nodeId, open, onClose, onSelect, se
                   bordered
                   dataSource={QUOTE_VARIABLES}
                   renderItem={(item) => {
-                    const isSelected = value === `{${item.key}}`;
+                    const isSelected = isValueSelected(`{${item.key}}`);
                     return (
                       <List.Item
-                        onClick={() => setValue(`{${item.key}}`)}
+                        onClick={() => toggleValue(`{${item.key}}`)}
                         style={{ 
                           cursor: 'pointer', 
                           backgroundColor: isSelected ? '#52c41a' : undefined,
@@ -716,10 +823,10 @@ const NodeTreeSelector: React.FC<Props> = ({ nodeId, open, onClose, onSelect, se
                   bordered
                   dataSource={ORG_VARIABLES}
                   renderItem={(item) => {
-                    const isSelected = value === `{${item.key}}`;
+                    const isSelected = isValueSelected(`{${item.key}}`);
                     return (
                       <List.Item
-                        onClick={() => setValue(`{${item.key}}`)}
+                        onClick={() => toggleValue(`{${item.key}}`)}
                         style={{ 
                           cursor: 'pointer', 
                           backgroundColor: isSelected ? '#722ed1' : undefined,
@@ -766,8 +873,18 @@ const NodeTreeSelector: React.FC<Props> = ({ nodeId, open, onClose, onSelect, se
                       style={{ width: '100%' }}
                       treeData={treeData}
                       placeholder="Choisissez un nœud"
-                      value={value}
-                      onChange={(v) => setValue(v)}
+                      value={allowMulti ? (Array.isArray(value) ? value.filter(v => !v.startsWith('node-formula:') && !v.startsWith('condition:') && !v.startsWith('node-condition:') && !v.startsWith('table:') && !v.startsWith('node-table:') && !v.startsWith('calculated:') && !v.startsWith('{')) : value ? [value as string] : []) : value}
+                      onChange={(v) => {
+                        if (allowMulti) {
+                          // Merge tree values with non-tree values
+                          const treeVals = Array.isArray(v) ? v : v ? [v] : [];
+                          const otherVals = Array.isArray(value) ? value.filter(x => x.startsWith('node-formula:') || x.startsWith('condition:') || x.startsWith('node-condition:') || x.startsWith('table:') || x.startsWith('node-table:') || x.startsWith('calculated:') || x.startsWith('{')) : [];
+                          const merged = [...otherVals, ...treeVals];
+                          setValue(merged.length ? merged : undefined);
+                        } else {
+                          setValue(v);
+                        }
+                      }}
                       showSearch
                       treeLine
                       treeIcon={false}
@@ -812,389 +929,239 @@ const NodeTreeSelector: React.FC<Props> = ({ nodeId, open, onClose, onSelect, se
             )},
             { key: 'formulas', label: '🧮 Formules', children: (
               <Space direction="vertical" style={{ width: '100%' }} size={8}>
-                <Input
+                <Input.Search
                   size="small"
                   placeholder="Rechercher une formule…"
                   value={formulaSearch}
                   onChange={(e) => setFormulaSearch(e.target.value)}
+                  style={{ width: '100%' }}
                 />
                 {formulasLoading ? (
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                     <Spin size="small" />
                     <Typography.Text>Chargement des formules…</Typography.Text>
                   </div>
-                ) : (
-                  <Space direction="vertical" style={{ width: '100%' }} size={12}>
-                    {/* Formules du nœud actuel */}
-                    {nodeFormulas.length > 0 && (
-                      <>
-                        <Typography.Text strong style={{ fontSize: '12px', color: '#666' }}>
-                          📍 Formules de ce nœud
-                        </Typography.Text>
-                        <List
-                          size="small"
-                          bordered
-                          dataSource={nodeFormulas.filter(f => !formulaSearch || f.name.toLowerCase().includes(formulaSearch.toLowerCase()))}
-                          renderItem={(item) => {
-                            const isSelected = value === `node-formula:${item.id}`;
-                            return (
-                              <List.Item
-                                onClick={() => { setValue(`node-formula:${item.id}`); setSelectedName(item.name); }}
-                                style={{ 
-                                  cursor: 'pointer', 
-                                  backgroundColor: isSelected ? '#1890ff' : '#f0f9ff',
-                                  color: isSelected ? 'white' : 'inherit'
-,
-                                }}
-                              >
-                                <Space>
-                                  <span>🧮</span>
-                                  <Typography.Text style={{ color: isSelected ? 'white' : 'inherit' }}>
-                                    {item.name}
+                ) : (() => {
+                  const filtered = groupedFormulas.map(g => ({
+                    ...g,
+                    subGroups: g.subGroups.map(sg => ({
+                      ...sg,
+                      items: sg.items.filter(f => !formulaSearch || f.name.toLowerCase().includes(formulaSearch.toLowerCase()))
+                    })).filter(sg => sg.items.length > 0)
+                  })).filter(g => g.subGroups.length > 0);
+                  const total = filtered.reduce((a, g) => a + g.subGroups.reduce((b, sg) => b + sg.items.length, 0), 0);
+                  if (total === 0) return <Typography.Text type="secondary">Aucune formule disponible.</Typography.Text>;
+                  return (
+                    <Collapse
+                      defaultActiveKey={[]}
+                      style={{ background: '#fafafa' }}
+                      items={filtered.map((group, groupIdx) => ({
+                        key: String(groupIdx),
+                        label: (
+                          <Space>
+                            <span>📂</span>
+                            <Typography.Text strong>{group.ongletLabel}</Typography.Text>
+                            <Typography.Text type="secondary" style={{ fontSize: '11px' }}>
+                              ({group.subGroups.reduce((a, sg) => a + sg.items.length, 0)})
+                            </Typography.Text>
+                          </Space>
+                        ),
+                        children: (
+                          <Space direction="vertical" style={{ width: '100%' }} size={4}>
+                            {group.subGroups.map((sg, sgIdx) => (
+                              <div key={sgIdx}>
+                                {sg.sousOngletLabel && (
+                                  <Typography.Text strong style={{ fontSize: '12px', color: '#1890ff', display: 'block', marginBottom: 4, marginTop: sgIdx > 0 ? 8 : 0, paddingLeft: 4 }}>
+                                    📁 {sg.sousOngletLabel}
                                   </Typography.Text>
-                                  <Typography.Text 
-                                    style={{ 
-                                      fontSize: '10px',
-                                      fontFamily: 'monospace',
-                                      color: isSelected ? 'rgba(255,255,255,0.6)' : '#bbb'
-                                    }}
-                                  >
-                                    [{item.id.slice(0, 8)}]
-                                  </Typography.Text>
-                                  <Typography.Text 
-                                    type="secondary" 
-                                    style={{ 
-                                      fontSize: '11px',
-                                      color: isSelected ? 'rgba(255,255,255,0.7)' : undefined
-                                    }}
-                                  >
-                                    (ce nœud)
-                                  </Typography.Text>
-                                  {isSelected && <span>✓</span>}
-                                </Space>
-                              </List.Item>
-                            );
-                          }}
-                        />
-                      </>
-                    )}
-                    
-                    {/* Formules d'autres nœuds */}
-                    {allNodeFormulas.length > 0 && (
-                      <>
-                        <Typography.Text strong style={{ fontSize: '12px', color: '#666' }}>
-                          � Formules d'autres nœuds (réutilisables)
-                        </Typography.Text>
-                        <List
-                          size="small"
-                          bordered
-                          dataSource={allNodeFormulas.filter(f => !formulaSearch || f.name.toLowerCase().includes(formulaSearch.toLowerCase()))}
-                          renderItem={(item) => {
-                            const isSelected = value === `node-formula:${item.id}`;
-                            return (
-                              <List.Item
-                                onClick={() => { setValue(`node-formula:${item.id}`); setSelectedName(item.name); }}
-                                style={{ 
-                                  cursor: 'pointer', 
-                                  backgroundColor: isSelected ? '#1890ff' : '#fefce8',
-                                  color: isSelected ? 'white' : 'inherit'
-,
-                                }}
-                              >
-                                <Space>
-                                  <span>🧮</span>
-                                  <Typography.Text style={{ color: isSelected ? 'white' : 'inherit' }}>
-                                    {item.name}
-                                  </Typography.Text>
-                                  <Typography.Text 
-                                    style={{ 
-                                      fontSize: '10px',
-                                      fontFamily: 'monospace',
-                                      color: isSelected ? 'rgba(255,255,255,0.6)' : '#bbb'
-                                    }}
-                                  >
-                                    [{item.id.slice(0, 8)}]
-                                  </Typography.Text>
-                                  <Typography.Text 
-                                    type="secondary" 
-                                    style={{ 
-                                      fontSize: '11px',
-                                      color: isSelected ? 'rgba(255,255,255,0.7)' : undefined
-                                    }}
-                                  >
-                                    ({item.nodeLabel || 'Nœud inconnu'})
-                                  </Typography.Text>
-                                  {isSelected && <span>✓</span>}
-                                </Space>
-                              </List.Item>
-                            );
-                          }}
-                        />
-                      </>
-                    )}
-                    
-                    {/* Message si aucune formule */}
-                    {nodeFormulas.length === 0 && allNodeFormulas.length === 0 && (
-                      <Typography.Text type="secondary">Aucune formule disponible.</Typography.Text>
-                    )}
-                  </Space>
-                )}
+                                )}
+                                <List
+                                  size="small"
+                                  bordered
+                                  style={sg.sousOngletLabel ? { marginLeft: 12, borderLeft: '2px solid #e6f4ff' } : undefined}
+                                  dataSource={sg.items}
+                                  renderItem={(item) => {
+                                    const isSelected = isValueSelected(`node-formula:${item.id}`);
+                                    return (
+                                      <List.Item
+                                        onClick={() => toggleValue(`node-formula:${item.id}`, item.name)}
+                                        style={{ cursor: 'pointer', backgroundColor: isSelected ? '#1890ff' : item._isCurrentNode ? '#f0f9ff' : '#fefce8', color: isSelected ? 'white' : 'inherit', transition: 'all 0.2s', padding: '6px 12px' }}
+                                      >
+                                        <Space>
+                                          <span>🧮</span>
+                                          <Typography.Text style={{ color: isSelected ? 'white' : 'inherit' }}>{item.name}</Typography.Text>
+                                          <Typography.Text style={{ fontSize: '10px', fontFamily: 'monospace', color: isSelected ? 'rgba(255,255,255,0.6)' : '#bbb' }}>[{item.id.slice(0, 8)}]</Typography.Text>
+                                          {item._isCurrentNode && <Typography.Text type="secondary" style={{ fontSize: '11px', color: isSelected ? 'rgba(255,255,255,0.7)' : undefined }}>(ce nœud)</Typography.Text>}
+                                          {isSelected && <span>✓</span>}
+                                        </Space>
+                                      </List.Item>
+                                    );
+                                  }}
+                                />
+                              </div>
+                            ))}
+                          </Space>
+                        )
+                      }))}
+                    />
+                  );
+                })()}
               </Space>
             )},
             { key: 'conditions', label: '⚡ Conditions', children: (
               <Space direction="vertical" style={{ width: '100%' }}>
-                {/* Recherche dans les conditions */}
                 <Input.Search
                   placeholder="Rechercher une condition..."
                   value={conditionSearch}
                   onChange={(e) => setConditionSearch(e.target.value)}
                   style={{ width: '100%' }}
                 />
-
                 {conditionsLoading ? (
                   <Spin>Chargement des conditions...</Spin>
-                ) : (
-                  <Space direction="vertical" style={{ width: '100%' }}>
-                    {/* Conditions du nœud actuel */}
-                    {nodeConditions.length > 0 && (
-                      <>
-                        <Typography.Text strong style={{ fontSize: '12px', color: '#666' }}>
-                          🎯 Conditions de ce nœud
-                        </Typography.Text>
-                        <List
-                          size="small"
-                          bordered
-                          dataSource={nodeConditions.filter(c => !conditionSearch || c.name.toLowerCase().includes(conditionSearch.toLowerCase()))}
-                          renderItem={(item) => {
-                            const isSelected = value === `condition:${item.id}`;
-                            return (
-                              <List.Item
-                                onClick={() => { setValue(`condition:${item.id}`); setSelectedName(item.name); }}
-                                style={{ 
-                                  cursor: 'pointer', 
-                                  backgroundColor: isSelected ? '#1890ff' : '#f0f8e8',
-                                  color: isSelected ? 'white' : 'inherit'
-                                }}
-                              >
-                                <Space>
-                                  <span>⚡</span>
-                                  <Typography.Text style={{ color: isSelected ? 'white' : 'inherit' }}>
-                                    {item.name}
+                ) : (() => {
+                  const filtered = groupedConditions.map(g => ({
+                    ...g,
+                    subGroups: g.subGroups.map(sg => ({
+                      ...sg,
+                      items: sg.items.filter(c => !conditionSearch || c.name.toLowerCase().includes(conditionSearch.toLowerCase()))
+                    })).filter(sg => sg.items.length > 0)
+                  })).filter(g => g.subGroups.length > 0);
+                  const total = filtered.reduce((a, g) => a + g.subGroups.reduce((b, sg) => b + sg.items.length, 0), 0);
+                  if (total === 0) return <Typography.Text type="secondary">Aucune condition disponible.</Typography.Text>;
+                  return (
+                    <Collapse
+                      defaultActiveKey={[]}
+                      style={{ background: '#fafafa' }}
+                      items={filtered.map((group, groupIdx) => ({
+                        key: String(groupIdx),
+                        label: (
+                          <Space>
+                            <span>📂</span>
+                            <Typography.Text strong>{group.ongletLabel}</Typography.Text>
+                            <Typography.Text type="secondary" style={{ fontSize: '11px' }}>
+                              ({group.subGroups.reduce((a, sg) => a + sg.items.length, 0)})
+                            </Typography.Text>
+                          </Space>
+                        ),
+                        children: (
+                          <Space direction="vertical" style={{ width: '100%' }} size={4}>
+                            {group.subGroups.map((sg, sgIdx) => (
+                              <div key={sgIdx}>
+                                {sg.sousOngletLabel && (
+                                  <Typography.Text strong style={{ fontSize: '12px', color: '#1890ff', display: 'block', marginBottom: 4, marginTop: sgIdx > 0 ? 8 : 0, paddingLeft: 4 }}>
+                                    📁 {sg.sousOngletLabel}
                                   </Typography.Text>
-                                  <Typography.Text 
-                                    style={{ 
-                                      fontSize: '10px',
-                                      fontFamily: 'monospace',
-                                      color: isSelected ? 'rgba(255,255,255,0.6)' : '#bbb'
-                                    }}
-                                  >
-                                    [{item.id.slice(0, 8)}]
-                                  </Typography.Text>
-                                  <Typography.Text 
-                                    type="secondary" 
-                                    style={{ 
-                                      fontSize: '11px',
-                                      color: isSelected ? 'rgba(255,255,255,0.7)' : undefined
-                                    }}
-                                  >
-                                    (ce nœud)
-                                  </Typography.Text>
-                                  {isSelected && <span>✓</span>}
-                                </Space>
-                              </List.Item>
-                            );
-                          }}
-                        />
-                      </>
-                    )}
-                    
-                    {/* Conditions d'autres nœuds */}
-                    {allNodeConditions.length > 0 && (
-                      <>
-                        <Typography.Text strong style={{ fontSize: '12px', color: '#666' }}>
-                          🔄 Conditions d'autres nœuds (réutilisables)
-                        </Typography.Text>
-                        <List
-                          size="small"
-                          bordered
-                          dataSource={allNodeConditions.filter(c => !conditionSearch || c.name.toLowerCase().includes(conditionSearch.toLowerCase()))}
-                          renderItem={(item) => {
-                            const isSelected = value === `node-condition:${item.id}`;
-                            return (
-                              <List.Item
-                                onClick={() => { setValue(`node-condition:${item.id}`); setSelectedName(item.name); }}
-                                style={{ 
-                                  cursor: 'pointer', 
-                                  backgroundColor: isSelected ? '#1890ff' : '#fef3c7',
-                                  color: isSelected ? 'white' : 'inherit'
-                                }}
-                              >
-                                <Space>
-                                  <span>⚡</span>
-                                  <Typography.Text style={{ color: isSelected ? 'white' : 'inherit' }}>
-                                    {item.name}
-                                  </Typography.Text>
-                                  <Typography.Text 
-                                    style={{ 
-                                      fontSize: '10px',
-                                      fontFamily: 'monospace',
-                                      color: isSelected ? 'rgba(255,255,255,0.6)' : '#bbb'
-                                    }}
-                                  >
-                                    [{item.id.slice(0, 8)}]
-                                  </Typography.Text>
-                                  <Typography.Text 
-                                    type="secondary" 
-                                    style={{ 
-                                      fontSize: '11px',
-                                      color: isSelected ? 'rgba(255,255,255,0.7)' : undefined
-                                    }}
-                                  >
-                                    ({item.nodeLabel || 'Nœud inconnu'})
-                                  </Typography.Text>
-                                  {isSelected && <span>✓</span>}
-                                </Space>
-                              </List.Item>
-                            );
-                          }}
-                        />
-                      </>
-                    )}
-                    
-                    {/* Message si aucune condition */}
-                    {nodeConditions.length === 0 && allNodeConditions.length === 0 && (
-                      <Typography.Text type="secondary">Aucune condition disponible.</Typography.Text>
-                    )}
-                  </Space>
-                )}
+                                )}
+                                <List
+                                  size="small"
+                                  bordered
+                                  style={sg.sousOngletLabel ? { marginLeft: 12, borderLeft: '2px solid #e6f4ff' } : undefined}
+                                  dataSource={sg.items}
+                                  renderItem={(item) => {
+                                    const valKey = item._isCurrentNode ? `condition:${item.id}` : `node-condition:${item.id}`;
+                                    const isSelected = isValueSelected(valKey);
+                                    return (
+                                      <List.Item
+                                        onClick={() => toggleValue(valKey, item.name)}
+                                        style={{ cursor: 'pointer', backgroundColor: isSelected ? '#1890ff' : item._isCurrentNode ? '#f0f8e8' : '#fef3c7', color: isSelected ? 'white' : 'inherit', transition: 'all 0.2s', padding: '6px 12px' }}
+                                      >
+                                        <Space>
+                                          <span>⚡</span>
+                                          <Typography.Text style={{ color: isSelected ? 'white' : 'inherit' }}>{item.name}</Typography.Text>
+                                          <Typography.Text style={{ fontSize: '10px', fontFamily: 'monospace', color: isSelected ? 'rgba(255,255,255,0.6)' : '#bbb' }}>[{item.id.slice(0, 8)}]</Typography.Text>
+                                          {item._isCurrentNode && <Typography.Text type="secondary" style={{ fontSize: '11px', color: isSelected ? 'rgba(255,255,255,0.7)' : undefined }}>(ce nœud)</Typography.Text>}
+                                          {isSelected && <span>✓</span>}
+                                        </Space>
+                                      </List.Item>
+                                    );
+                                  }}
+                                />
+                              </div>
+                            ))}
+                          </Space>
+                        )
+                      }))}
+                    />
+                  );
+                })()}
               </Space>
             )},
             { key: 'tables', label: '📊 Tables', children: (
               <Space direction="vertical" style={{ width: '100%' }}>
-                {/* Recherche dans les tables */}
                 <Input.Search
                   placeholder="Rechercher une table..."
                   value={tableSearch}
                   onChange={(e) => setTableSearch(e.target.value)}
                   style={{ width: '100%' }}
                 />
-
                 {tablesLoading ? (
                   <Spin>Chargement des tables...</Spin>
-                ) : (
-                  <Space direction="vertical" style={{ width: '100%' }}>
-                    {/* Tables du nœud actuel */}
-                    {nodeTables.length > 0 && (
-                      <>
-                        <Typography.Text strong style={{ fontSize: '12px', color: '#666' }}>
-                          📊 Tables de ce nœud
-                        </Typography.Text>
-                        <List
-                          size="small"
-                          bordered
-                          dataSource={nodeTables.filter(t => !tableSearch || t.name.toLowerCase().includes(tableSearch.toLowerCase()))}
-                          renderItem={(item) => {
-                            const isSelected = value === `table:${item.id}`;
-                            return (
-                              <List.Item
-                                onClick={() => { setValue(`table:${item.id}`); setSelectedName(item.name); }}
-                                style={{ 
-                                  cursor: 'pointer', 
-                                  backgroundColor: isSelected ? '#1890ff' : '#e8f4fd',
-                                  color: isSelected ? 'white' : 'inherit'
-                                }}
-                              >
-                                <Space>
-                                  <span>🗂️</span>
-                                  <Typography.Text style={{ color: isSelected ? 'white' : 'inherit' }}>
-                                    {item.name}
+                ) : (() => {
+                  const filtered = groupedTables.map(g => ({
+                    ...g,
+                    subGroups: g.subGroups.map(sg => ({
+                      ...sg,
+                      items: sg.items.filter(t => !tableSearch || t.name.toLowerCase().includes(tableSearch.toLowerCase()))
+                    })).filter(sg => sg.items.length > 0)
+                  })).filter(g => g.subGroups.length > 0);
+                  const total = filtered.reduce((a, g) => a + g.subGroups.reduce((b, sg) => b + sg.items.length, 0), 0);
+                  if (total === 0) return <Typography.Text type="secondary">Aucune table disponible.</Typography.Text>;
+                  return (
+                    <Collapse
+                      defaultActiveKey={[]}
+                      style={{ background: '#fafafa' }}
+                      items={filtered.map((group, groupIdx) => ({
+                        key: String(groupIdx),
+                        label: (
+                          <Space>
+                            <span>📂</span>
+                            <Typography.Text strong>{group.ongletLabel}</Typography.Text>
+                            <Typography.Text type="secondary" style={{ fontSize: '11px' }}>
+                              ({group.subGroups.reduce((a, sg) => a + sg.items.length, 0)})
+                            </Typography.Text>
+                          </Space>
+                        ),
+                        children: (
+                          <Space direction="vertical" style={{ width: '100%' }} size={4}>
+                            {group.subGroups.map((sg, sgIdx) => (
+                              <div key={sgIdx}>
+                                {sg.sousOngletLabel && (
+                                  <Typography.Text strong style={{ fontSize: '12px', color: '#1890ff', display: 'block', marginBottom: 4, marginTop: sgIdx > 0 ? 8 : 0, paddingLeft: 4 }}>
+                                    📁 {sg.sousOngletLabel}
                                   </Typography.Text>
-                                  <Typography.Text 
-                                    style={{ 
-                                      fontSize: '10px',
-                                      fontFamily: 'monospace',
-                                      color: isSelected ? 'rgba(255,255,255,0.6)' : '#bbb'
-                                    }}
-                                  >
-                                    [{item.id.slice(0, 8)}]
-                                  </Typography.Text>
-                                  <Typography.Text 
-                                    type="secondary" 
-                                    style={{ 
-                                      fontSize: '11px',
-                                      color: isSelected ? 'rgba(255,255,255,0.7)' : undefined
-                                    }}
-                                  >
-                                    ({item.type || 'table'}) - (ce nœud)
-                                  </Typography.Text>
-                                  {isSelected && <span>✓</span>}
-                                </Space>
-                              </List.Item>
-                            );
-                          }}
-                        />
-                      </>
-                    )}
-                    
-                    {/* Tables d'autres nœuds */}
-                    {allNodeTables.length > 0 && (
-                      <>
-                        <Typography.Text strong style={{ fontSize: '12px', color: '#666' }}>
-                          🌐 Tables d'autres nœuds (réutilisables)
-                        </Typography.Text>
-                        <List
-                          size="small"
-                          bordered
-                          dataSource={allNodeTables.filter(t => !tableSearch || t.name.toLowerCase().includes(tableSearch.toLowerCase()))}
-                          renderItem={(item) => {
-                            const isSelected = value === `node-table:${item.id}`;
-                            return (
-                              <List.Item
-                                onClick={() => { setValue(`node-table:${item.id}`); setSelectedName(item.name); }}
-                                style={{ 
-                                  cursor: 'pointer', 
-                                  backgroundColor: isSelected ? '#1890ff' : '#fff4e6',
-                                  color: isSelected ? 'white' : 'inherit'
-                                }}
-                              >
-                                <Space>
-                                  <span>🗂️</span>
-                                  <Typography.Text style={{ color: isSelected ? 'white' : 'inherit' }}>
-                                    {item.name}
-                                  </Typography.Text>
-                                  <Typography.Text 
-                                    style={{ 
-                                      fontSize: '10px',
-                                      fontFamily: 'monospace',
-                                      color: isSelected ? 'rgba(255,255,255,0.6)' : '#bbb'
-                                    }}
-                                  >
-                                    [{item.id.slice(0, 8)}]
-                                  </Typography.Text>
-                                  <Typography.Text 
-                                    type="secondary" 
-                                    style={{ 
-                                      fontSize: '11px',
-                                      color: isSelected ? 'rgba(255,255,255,0.7)' : undefined
-                                    }}
-                                  >
-                                    ({item.type || 'table'}) - ({item.nodeLabel || 'Nœud inconnu'})
-                                  </Typography.Text>
-                                  {isSelected && <span>✓</span>}
-                                </Space>
-                              </List.Item>
-                            );
-                          }}
-                        />
-                      </>
-                    )}
-                    
-                    {/* Message si aucune table */}
-                    {nodeTables.length === 0 && allNodeTables.length === 0 && (
-                      <Typography.Text type="secondary">Aucune table disponible.</Typography.Text>
-                    )}
-                  </Space>
-                )}
+                                )}
+                                <List
+                                  size="small"
+                                  bordered
+                                  style={sg.sousOngletLabel ? { marginLeft: 12, borderLeft: '2px solid #e6f4ff' } : undefined}
+                                  dataSource={sg.items}
+                                  renderItem={(item) => {
+                                    const valKey = item._isCurrentNode ? `table:${item.id}` : `node-table:${item.id}`;
+                                    const isSelected = isValueSelected(valKey);
+                                    return (
+                                      <List.Item
+                                        onClick={() => toggleValue(valKey, item.name)}
+                                        style={{ cursor: 'pointer', backgroundColor: isSelected ? '#1890ff' : item._isCurrentNode ? '#e8f4fd' : '#fff4e6', color: isSelected ? 'white' : 'inherit', transition: 'all 0.2s', padding: '6px 12px' }}
+                                      >
+                                        <Space>
+                                          <span>🗂️</span>
+                                          <Typography.Text style={{ color: isSelected ? 'white' : 'inherit' }}>{item.name}</Typography.Text>
+                                          <Typography.Text style={{ fontSize: '10px', fontFamily: 'monospace', color: isSelected ? 'rgba(255,255,255,0.6)' : '#bbb' }}>[{item.id.slice(0, 8)}]</Typography.Text>
+                                          {item._isCurrentNode && <Typography.Text type="secondary" style={{ fontSize: '11px', color: isSelected ? 'rgba(255,255,255,0.7)' : undefined }}>(ce nœud)</Typography.Text>}
+                                          {isSelected && <span>✓</span>}
+                                        </Space>
+                                      </List.Item>
+                                    );
+                                  }}
+                                />
+                              </div>
+                            ))}
+                          </Space>
+                        )
+                      }))}
+                    />
+                  );
+                })()}
               </Space>
             )},
             { key: 'repeaters', label: '🔁 Repeat', children: (
@@ -1232,10 +1199,10 @@ const NodeTreeSelector: React.FC<Props> = ({ nodeId, open, onClose, onSelect, se
                         f.repeaterLabel.toLowerCase().includes(repeaterSearch.toLowerCase())
                       )}
                       renderItem={(item) => {
-                        const isSelected = value === item.id;
+                        const isSelected = isValueSelected(item.id);
                         return (
                           <List.Item
-                            onClick={() => setValue(item.id)}
+                            onClick={() => toggleValue(item.id)}
                             style={{ 
                               cursor: 'pointer', 
                               backgroundColor: isSelected ? '#1890ff' : '#f0f0f0',
@@ -1281,135 +1248,110 @@ const NodeTreeSelector: React.FC<Props> = ({ nodeId, open, onClose, onSelect, se
             )},
             { key: 'calculatedValues', label: '📊 Valeurs calculées', children: (
               <Space direction="vertical" style={{ width: '100%' }}>
-                {/* Recherche dans les valeurs calculées */}
                 <Input.Search
                   placeholder="Rechercher une valeur calculée..."
                   value={calculatedValueSearch}
                   onChange={(e) => setCalculatedValueSearch(e.target.value)}
                   style={{ width: '100%' }}
                 />
-
                 {calculatedValuesLoading ? (
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                     <Spin size="small" />
                     <Typography.Text>Chargement des valeurs calculées...</Typography.Text>
                   </div>
-                ) : calculatedValues.length === 0 ? (
-                  <Typography.Text type="secondary">Aucune valeur calculée disponible dans cet arbre.</Typography.Text>
-                ) : (
-                  <>
-                    <Alert
-                      type="info"
-                      message="Valeurs calculées (calculatedValue)"
-                      description="Ces champs ont une valeur calculée par une formule, condition ou table. Utilisez-les comme contraintes dynamiques (min/max) ou comme variables."
-                      showIcon
-                      style={{ marginBottom: 8 }}
-                    />
-                    <Collapse
-                      defaultActiveKey={[]}
-                      style={{ background: '#fafafa' }}
-                      items={calculatedValuesByOnglet.map((group, groupIdx) => {
-                        const filteredItems = group.items.filter(cv =>
-                          !calculatedValueSearch ||
-                          cv.label.toLowerCase().includes(calculatedValueSearch.toLowerCase()) ||
-                          (cv.calculatedBy && cv.calculatedBy.toLowerCase().includes(calculatedValueSearch.toLowerCase()))
-                        );
-                        if (filteredItems.length === 0) return null;
-                        return {
+                ) : (() => {
+                  const filtered = groupedCalculatedValues.map(g => ({
+                    ...g,
+                    subGroups: g.subGroups.map(sg => ({
+                      ...sg,
+                      items: sg.items.filter(cv =>
+                        !calculatedValueSearch ||
+                        cv.label.toLowerCase().includes(calculatedValueSearch.toLowerCase()) ||
+                        (cv.calculatedBy && cv.calculatedBy.toLowerCase().includes(calculatedValueSearch.toLowerCase()))
+                      )
+                    })).filter(sg => sg.items.length > 0)
+                  })).filter(g => g.subGroups.length > 0);
+                  const total = filtered.reduce((a, g) => a + g.subGroups.reduce((b, sg) => b + sg.items.length, 0), 0);
+                  if (total === 0) return <Typography.Text type="secondary">Aucune valeur calculée disponible dans cet arbre.</Typography.Text>;
+                  return (
+                    <>
+                      <Alert
+                        type="info"
+                        message="Valeurs calculées (calculatedValue)"
+                        description="Ces champs ont une valeur calculée par une formule, condition ou table. Utilisez-les comme contraintes dynamiques (min/max) ou comme variables."
+                        showIcon
+                        style={{ marginBottom: 8 }}
+                      />
+                      <Collapse
+                        defaultActiveKey={[]}
+                        style={{ background: '#fafafa' }}
+                        items={filtered.map((group, groupIdx) => ({
                           key: String(groupIdx),
                           label: (
                             <Space>
                               <span>📂</span>
                               <Typography.Text strong>{group.ongletLabel}</Typography.Text>
                               <Typography.Text type="secondary" style={{ fontSize: '11px' }}>
-                                ({filteredItems.length})
+                                ({group.subGroups.reduce((a, sg) => a + sg.items.length, 0)})
                               </Typography.Text>
                             </Space>
                           ),
                           children: (
-                            <List
-                              size="small"
-                              dataSource={filteredItems}
-                              renderItem={(item) => {
-                                const isSelected = value === `calculated:${item.id}`;
-                                const sourceIcon = item.calculatedBy?.startsWith('formula') ? '🧮' :
-                                                  item.calculatedBy?.startsWith('condition') ? '⚡' :
-                                                  item.calculatedBy?.startsWith('table') ? '📊' : '📈';
-                                return (
-                                  <List.Item
-                                    onClick={() => setValue(`calculated:${item.id}`)}
-                                    style={{
-                                      cursor: 'pointer',
-                                      backgroundColor: isSelected ? '#1890ff' : '#f0fff4',
-                                      color: isSelected ? 'white' : 'inherit',
-                                      transition: 'all 0.2s',
-                                      borderLeft: '3px solid #52c41a',
-                                      padding: '6px 12px'
-                                    }}
-                                  >
-                                    <Space direction="vertical" size={2} style={{ width: '100%' }}>
-                                      <Space>
-                                        <span>{sourceIcon}</span>
-                                        <Typography.Text strong style={{ color: isSelected ? 'white' : 'inherit' }}>
-                                          {item.label}
-                                        </Typography.Text>
-                                        <Typography.Text
-                                          style={{
-                                            fontSize: '10px',
-                                            fontFamily: 'monospace',
-                                            color: isSelected ? 'rgba(255,255,255,0.6)' : '#bbb'
-                                          }}
+                            <Space direction="vertical" style={{ width: '100%' }} size={4}>
+                              {group.subGroups.map((sg, sgIdx) => (
+                                <div key={sgIdx}>
+                                  {sg.sousOngletLabel && (
+                                    <Typography.Text strong style={{ fontSize: '12px', color: '#1890ff', display: 'block', marginBottom: 4, marginTop: sgIdx > 0 ? 8 : 0, paddingLeft: 4 }}>
+                                      📁 {sg.sousOngletLabel}
+                                    </Typography.Text>
+                                  )}
+                                  <List
+                                    size="small"
+                                    bordered
+                                    style={sg.sousOngletLabel ? { marginLeft: 12, borderLeft: '2px solid #e6f4ff' } : undefined}
+                                    dataSource={sg.items}
+                                    renderItem={(item) => {
+                                      const isSelected = isValueSelected(`calculated:${item.id}`);
+                                      const sourceIcon = item.calculatedBy?.startsWith('formula') ? '🧮' :
+                                                        item.calculatedBy?.startsWith('condition') ? '⚡' :
+                                                        item.calculatedBy?.startsWith('table') ? '📊' : '📈';
+                                      return (
+                                        <List.Item
+                                          onClick={() => toggleValue(`calculated:${item.id}`)}
+                                          style={{ cursor: 'pointer', backgroundColor: isSelected ? '#1890ff' : '#f0fff4', color: isSelected ? 'white' : 'inherit', transition: 'all 0.2s', borderLeft: '3px solid #52c41a', padding: '6px 12px' }}
                                         >
-                                          [{item.id.slice(0, 8)}]
-                                        </Typography.Text>
-                                        {item.calculatedValue !== null && (
-                                          <Typography.Text
-                                            style={{
-                                              color: isSelected ? 'rgba(255,255,255,0.9)' : '#52c41a',
-                                              fontWeight: 'bold'
-                                            }}
-                                          >
-                                            = {item.calculatedValue}
-                                          </Typography.Text>
-                                        )}
-                                        {isSelected && <span>✓</span>}
-                                      </Space>
-                                      <Space size={16} style={{ paddingLeft: '24px' }}>
-                                        {item.parentLabel && (
-                                          <Typography.Text
-                                            type="secondary"
-                                            style={{
-                                              fontSize: '11px',
-                                              color: isSelected ? 'rgba(255,255,255,0.8)' : '#666'
-                                            }}
-                                          >
-                                            📁 {item.parentLabel}
-                                          </Typography.Text>
-                                        )}
-                                        {item.calculatedBy && (
-                                          <Typography.Text
-                                            type="secondary"
-                                            style={{
-                                              fontSize: '10px',
-                                              color: isSelected ? 'rgba(255,255,255,0.7)' : '#999',
-                                              fontStyle: 'italic'
-                                            }}
-                                          >
-                                            Source: {item.calculatedBy}
-                                          </Typography.Text>
-                                        )}
-                                      </Space>
-                                    </Space>
-                                  </List.Item>
-                                );
-                              }}
-                            />
+                                          <Space direction="vertical" size={2} style={{ width: '100%' }}>
+                                            <Space>
+                                              <span>{sourceIcon}</span>
+                                              <Typography.Text strong style={{ color: isSelected ? 'white' : 'inherit' }}>{item.label}</Typography.Text>
+                                              <Typography.Text style={{ fontSize: '10px', fontFamily: 'monospace', color: isSelected ? 'rgba(255,255,255,0.6)' : '#bbb' }}>[{item.id.slice(0, 8)}]</Typography.Text>
+                                              {item.calculatedValue !== null && (
+                                                <Typography.Text style={{ color: isSelected ? 'rgba(255,255,255,0.9)' : '#52c41a', fontWeight: 'bold' }}>= {item.calculatedValue}</Typography.Text>
+                                              )}
+                                              {isSelected && <span>✓</span>}
+                                            </Space>
+                                            <Space size={16} style={{ paddingLeft: '24px' }}>
+                                              {item.parentLabel && (
+                                                <Typography.Text type="secondary" style={{ fontSize: '11px', color: isSelected ? 'rgba(255,255,255,0.8)' : '#666' }}>📁 {item.parentLabel}</Typography.Text>
+                                              )}
+                                              {item.calculatedBy && (
+                                                <Typography.Text type="secondary" style={{ fontSize: '10px', color: isSelected ? 'rgba(255,255,255,0.7)' : '#999', fontStyle: 'italic' }}>Source: {item.calculatedBy}</Typography.Text>
+                                              )}
+                                            </Space>
+                                          </Space>
+                                        </List.Item>
+                                      );
+                                    }}
+                                  />
+                                </div>
+                              ))}
+                            </Space>
                           )
-                        };
-                      }).filter(Boolean)}
-                    />
-                  </>
-                )}
+                        }))}
+                      />
+                    </>
+                  );
+                })()}
               </Space>
             )},
             { key: 'sharedReferences', label: '🔗 Références Partagées', children: (
@@ -1448,10 +1390,10 @@ const NodeTreeSelector: React.FC<Props> = ({ nodeId, open, onClose, onSelect, se
                         (ref.description && ref.description.toLowerCase().includes(sharedReferenceSearch.toLowerCase()))
                       )}
                       renderItem={(item) => {
-                        const isSelected = value === item.id;
+                        const isSelected = isValueSelected(item.id);
                         return (
                           <List.Item
-                            onClick={() => setValue(item.id)}
+                            onClick={() => toggleValue(item.id)}
                             style={{ 
                               cursor: 'pointer', 
                               backgroundColor: isSelected ? '#1890ff' : '#e6f7ff',
@@ -1512,8 +1454,46 @@ const NodeTreeSelector: React.FC<Props> = ({ nodeId, open, onClose, onSelect, se
                 )}
               </Space>
             )}
-          ]}
+          ].sort((a, b) => {
+            const strip = (s: unknown) => String(s).replace(/[^\p{L}\p{N}\s]/gu, '').trim();
+            return strip(a.label).localeCompare(strip(b.label), 'fr');
+          })}
         />
+        {/* 🎯 Résumé des éléments sélectionnés en mode multi */}
+        {allowMulti && selectedCount > 0 && (
+          <div style={{ 
+            padding: '8px 12px', 
+            background: '#f6ffed', 
+            border: '1px solid #b7eb8f', 
+            borderRadius: 6,
+            maxHeight: 100,
+            overflowY: 'auto'
+          }}>
+            <Space size={[4, 4]} wrap>
+              <Typography.Text strong style={{ fontSize: 12, color: '#52c41a' }}>
+                {selectedCount} sélectionné{selectedCount > 1 ? 's' : ''} :
+              </Typography.Text>
+              {(Array.isArray(value) ? value : value ? [value] : []).map((v, i) => {
+                // Déterminer un label court pour le tag
+                const label = selectedNames[v] 
+                  || (v.startsWith('{') && v.endsWith('}') ? v.slice(1, -1) : undefined)
+                  || (v.startsWith('calculated:') ? `calc:${v.slice(11, 19)}` : undefined)
+                  || v.slice(0, 16);
+                return (
+                  <Tag 
+                    key={i} 
+                    closable 
+                    color="green"
+                    onClose={(e) => { e.preventDefault(); toggleValue(v); }}
+                    style={{ fontSize: 11 }}
+                  >
+                    {label}
+                  </Tag>
+                );
+              })}
+            </Space>
+          </div>
+        )}
       </Space>
     </Modal>
   );
