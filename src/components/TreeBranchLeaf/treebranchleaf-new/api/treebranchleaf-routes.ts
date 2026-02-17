@@ -7969,7 +7969,145 @@ async function resolveFilterValueRef(
     return value;
   }
 
-  // Valeur littÃƒÆ’Ã‚Â©rale
+  // 🔧 @table.{tableId} - Résolution DYNAMIQUE d'une valeur extraite d'une table
+  // Cas d'usage : Le filtre de "Prix batterie" dit valueRef="@table.{Marque onduleur tableId}"
+  // → On doit : trouver la table, lire sa config lookup, trouver le champ source dans formValues,
+  //   matcher la ligne, et extraire la valeur de displayColumn.
+  // Ce mécanisme est GÉNÉRIQUE : il fonctionne pour toute table avec une config lookup.
+  if (valueRef.startsWith('@table.')) {
+    const tableId = valueRef.replace('@table.', '');
+    
+    console.log(`🔍 [resolveFilterValueRef] @table.${tableId} → Résolution dynamique...`);
+    
+    // 1. Essayer formValues[tableId] directement (si le frontend l'a injecté)
+    if (formValues[tableId] !== undefined && formValues[tableId] !== null && formValues[tableId] !== '') {
+      let val = formValues[tableId];
+      if (val && typeof val === 'object' && 'value' in (val as Record<string, unknown>)) {
+        val = (val as Record<string, unknown>).value;
+      }
+      console.log(`✅ [resolveFilterValueRef] @table.${tableId} → formValues direct: ${val}`);
+      return val;
+    }
+    
+    // 2. Résolution dynamique via DB + lookup config
+    try {
+      const refTable = await prisma.treeBranchLeafNodeTable.findUnique({
+        where: { id: tableId },
+        select: { 
+          id: true, 
+          nodeId: true, 
+          name: true,
+          meta: true,
+          tableColumns: { select: { name: true, columnIndex: true }, orderBy: { columnIndex: 'asc' as const } },
+          tableRows: { select: { cells: true, rowIndex: true }, orderBy: { rowIndex: 'asc' as const } }
+        }
+      });
+      
+      if (!refTable) {
+        console.warn(`⚠️ [resolveFilterValueRef] @table.${tableId} → table introuvable`);
+        return null;
+      }
+      
+      // 2a. Essayer formValues[nodeId du propriétaire]
+      if (refTable.nodeId && formValues[refTable.nodeId] !== undefined && formValues[refTable.nodeId] !== null && formValues[refTable.nodeId] !== '') {
+        let val = formValues[refTable.nodeId];
+        if (val && typeof val === 'object' && 'value' in (val as Record<string, unknown>)) {
+          val = (val as Record<string, unknown>).value;
+        }
+        console.log(`✅ [resolveFilterValueRef] @table.${tableId} → formValues[nodeId=${refTable.nodeId}]: ${val}`);
+        return val;
+      }
+      
+      // 3. Résolution complète via lookup config de la table
+      const meta = refTable.meta as Record<string, unknown> | null;
+      const lookup = meta?.lookup as Record<string, unknown> | undefined;
+      
+      if (lookup) {
+        const columnSourceOption = lookup.columnSourceOption as Record<string, unknown> | undefined;
+        const displayColumns = lookup.displayColumn as string[] | undefined;
+        
+        if (columnSourceOption?.sourceField && columnSourceOption?.comparisonColumn && displayColumns?.length) {
+          const sourceFieldId = String(columnSourceOption.sourceField);
+          const comparisonColumn = String(columnSourceOption.comparisonColumn);
+          const displayColumn = displayColumns[0];
+          
+          // Récupérer la valeur actuelle du champ source depuis formValues
+          let sourceValue = formValues[sourceFieldId] ?? null;
+          
+          // Extraire .value si c'est un objet {value, label}
+          if (sourceValue && typeof sourceValue === 'object' && 'value' in (sourceValue as Record<string, unknown>)) {
+            sourceValue = (sourceValue as Record<string, unknown>).value;
+          }
+          
+          if (sourceValue !== undefined && sourceValue !== null && sourceValue !== '') {
+            const columns = refTable.tableColumns.map(c => c.name);
+            const compColIdx = columns.indexOf(comparisonColumn);
+            const displayColIdx = columns.indexOf(displayColumn);
+            
+            if (compColIdx >= 0 && displayColIdx >= 0) {
+              // Chercher la ligne qui matche
+              for (const row of refTable.tableRows) {
+                let cells: unknown[];
+                if (typeof row.cells === 'string') {
+                  try { cells = JSON.parse(row.cells); } catch { cells = [row.cells]; }
+                } else {
+                  cells = (row.cells as unknown[]) || [];
+                }
+                
+                const compValue = String(cells[compColIdx] ?? '').trim();
+                const sourceStr = String(sourceValue).trim();
+                
+                if (compValue.toLowerCase() === sourceStr.toLowerCase()) {
+                  const result = cells[displayColIdx];
+                  console.log(`✅ [resolveFilterValueRef] @table.${tableId} (${refTable.name}) → "${comparisonColumn}"="${sourceStr}" → "${displayColumn}"="${result}"`);
+                  return result;
+                }
+              }
+              console.warn(`⚠️ [resolveFilterValueRef] @table.${tableId} (${refTable.name}) → Aucune ligne ne matche "${comparisonColumn}"="${sourceValue}"`);
+            } else {
+              console.warn(`⚠️ [resolveFilterValueRef] @table.${tableId} → Colonnes introuvables: comp="${comparisonColumn}"(${compColIdx}), display="${displayColumn}"(${displayColIdx}) dans [${columns.join(', ')}]`);
+            }
+          } else {
+            console.log(`⚠️ [resolveFilterValueRef] @table.${tableId} → sourceField ${sourceFieldId} n'a pas de valeur dans formValues`);
+          }
+        }
+        
+        // 3b. Fallback: si la table a des selectors.columnFieldId, chercher la valeur du champ lié
+        const selectors = lookup.selectors as Record<string, unknown> | undefined;
+        if (selectors?.columnFieldId) {
+          const linkedFieldId = String(selectors.columnFieldId);
+          let linkedVal = formValues[linkedFieldId] ?? null;
+          if (linkedVal && typeof linkedVal === 'object' && 'value' in (linkedVal as Record<string, unknown>)) {
+            linkedVal = (linkedVal as Record<string, unknown>).value;
+          }
+          if (linkedVal !== null && linkedVal !== undefined && linkedVal !== '') {
+            console.log(`✅ [resolveFilterValueRef] @table.${tableId} → selectors.columnFieldId=${linkedFieldId}: ${linkedVal}`);
+            return linkedVal;
+          }
+        }
+      }
+      
+      // 4. Dernier fallback: calculatedValue du nœud propriétaire en DB
+      if (refTable.nodeId) {
+        const ownerNode = await prisma.treeBranchLeafNode.findUnique({
+          where: { id: refTable.nodeId },
+          select: { calculatedValue: true, label: true }
+        });
+        if (ownerNode?.calculatedValue !== null && ownerNode?.calculatedValue !== undefined) {
+          console.log(`✅ [resolveFilterValueRef] @table.${tableId} → ownerNode "${ownerNode.label}" calculatedValue: ${ownerNode.calculatedValue}`);
+          return ownerNode.calculatedValue;
+        }
+      }
+      
+      console.warn(`⚠️ [resolveFilterValueRef] @table.${tableId} (${refTable?.name}) → AUCUNE VALEUR RÉSOLUE`);
+      return null;
+    } catch (error) {
+      console.error(`❌ [resolveFilterValueRef] @table.${tableId} → Erreur:`, error);
+      return null;
+    }
+  }
+
+  // Valeur littérale
   return valueRef;
 }
 
