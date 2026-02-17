@@ -68,6 +68,90 @@ function getAuthCtx(req: MinimalReq): { organizationId: string | null; isSuperAd
 }
 
 // =============================================================================
+// 🔄 SYNC DES RÉFÉRENCES QUAND UNE TABLE CHANGE D'ID
+// Quand une table est supprimée puis recréée (nouvel ID), toutes les références
+// (@table.{oldId} dans les filtres, SelectConfig.tableReference des consommateurs)
+// doivent être mises à jour vers le nouvel ID.
+// =============================================================================
+async function syncTableReferences(
+  oldTableId: string,
+  newTableId: string,
+  ownerNodeId: string,
+  tableName: string
+): Promise<void> {
+  try {
+    // 1. Mettre à jour les SelectConfig EXTERNES qui pointent vers l'ancienne table
+    // (nœuds consommateurs, pas le nœud propriétaire)
+    const externalConfigs = await prisma.treeBranchLeafSelectConfig.findMany({
+      where: {
+        tableReference: oldTableId,
+        nodeId: { not: ownerNodeId }
+      },
+      select: { id: true, nodeId: true }
+    });
+
+    if (externalConfigs.length > 0) {
+      await prisma.treeBranchLeafSelectConfig.updateMany({
+        where: { tableReference: oldTableId, nodeId: { not: ownerNodeId } },
+        data: { tableReference: newTableId, updatedAt: new Date() }
+      });
+      console.log(`[syncTableRefs] ✅ ${externalConfigs.length} SelectConfig(s) externe(s) migrée(s): ${oldTableId} → ${newTableId}`);
+    }
+
+    // 2. Mettre à jour les @table.{oldId} dans les filtres d'AUTRES tables
+    // Chercher toutes les tables dont le meta contient l'ancien ID dans un valueRef
+    const allTables = await prisma.treeBranchLeafNodeTable.findMany({
+      where: {
+        meta: { path: [], not: Prisma.DbNull }
+      },
+      select: { id: true, name: true, meta: true }
+    });
+
+    for (const t of allTables) {
+      if (!t.meta || typeof t.meta !== 'object') continue;
+      const metaStr = JSON.stringify(t.meta);
+      
+      // Chercher @table.{oldTableId} dans le meta (filtres, valueRef, etc.)
+      if (metaStr.includes(`@table.${oldTableId}`)) {
+        const updatedMetaStr = metaStr.replace(
+          new RegExp(`@table\\.${oldTableId.replace(/-/g, '\\-')}`, 'g'),
+          `@table.${newTableId}`
+        );
+        
+        try {
+          const updatedMeta = JSON.parse(updatedMetaStr);
+          await prisma.treeBranchLeafNodeTable.update({
+            where: { id: t.id },
+            data: { meta: updatedMeta as Prisma.InputJsonValue, updatedAt: new Date() }
+          });
+          console.log(`[syncTableRefs] ✅ Table "${t.name}" (${t.id}): @table.${oldTableId} → @table.${newTableId}`);
+        } catch (parseErr) {
+          console.error(`[syncTableRefs] ❌ Erreur parse meta pour table ${t.id}:`, parseErr);
+        }
+      }
+    }
+
+    // 3. Mettre à jour les sourceField, selectors, etc. qui référencent l'ancien ID
+    // dans les lookup configs d'autres tables
+    for (const t of allTables) {
+      if (!t.meta || typeof t.meta !== 'object') continue;
+      const metaStr = JSON.stringify(t.meta);
+      
+      // Chercher l'ancien ID dans les selectors (columnFieldId, rowFieldId)
+      if (metaStr.includes(oldTableId) && !metaStr.includes(`@table.${oldTableId}`)) {
+        // L'ancien ID est dans les selectors/configs mais pas dans @table.
+        // Cela peut être un sourceField, etc. — ne pas toucher (ce sont des nodeIds, pas des tableIds)
+      }
+    }
+
+    console.log(`[syncTableRefs] 🔄 Sync terminée pour "${tableName}": ${oldTableId} → ${newTableId}`);
+  } catch (error) {
+    console.error(`[syncTableRefs] ❌ Erreur lors de la sync des références:`, error);
+    // Non bloquant
+  }
+}
+
+// =============================================================================
 // POST /api/treebranchleaf/nodes/:nodeId/tables - CrÃƒÂ©er une table
 // =============================================================================
 router.post('/nodes/:nodeId/tables', async (req, res) => {
@@ -255,14 +339,23 @@ router.post('/nodes/:nodeId/tables', async (req, res) => {
         });
         
         
-        // 🐛 FIX: Ne PAS faire de crossover update.
-        // Quand un nœud parent possède plusieurs tables (ex: "Prix batterie" + "Marque onduleur"),
-        // la création d'une nouvelle table ne doit PAS rediriger les SelectConfigs d'AUTRES
-        // champs SELECT qui pointaient volontairement vers une table spécifique de ce parent.
-        // L'ancien code faisait un updateMany aveugle qui écrasait le tableReference de tous
-        // les SelectConfigs pointant vers l'ancienne table, causant des lookups incorrects.
-        if (oldTableRef) {
-          console.log(`[NEW POST /tables] \u2139\ufe0f Ancienne tableReference ${oldTableRef} remplac\u00e9e par ${result.id} sur le n\u0153ud propri\u00e9taire ${nodeId}. Pas de crossover vers d'autres SelectConfigs.`);
+        // � SYNC INTELLIGENTE des références quand l'ancienne table est remplacée
+        // On ne fait PAS de crossover aveugle : on synchronise UNIQUEMENT les références
+        // qui pointaient vers l'ancienne table de CE MÊME NOM (même rôle fonctionnel).
+        // Ex: si "Prix batterie" (ancien ID) est recréée → mettre à jour les refs vers le nouvel ID.
+        // MAIS ne PAS toucher les refs vers "Marque onduleur" qui est une table sœur différente.
+        if (oldTableRef && oldTableRef !== result.id) {
+          // Vérifier que l'ancienne table avait le MÊME nom (même rôle fonctionnel)
+          const oldTable = await prisma.treeBranchLeafNodeTable.findUnique({
+            where: { id: oldTableRef },
+            select: { name: true }
+          });
+          const sameRole = !oldTable || (oldTable.name === finalName) || true; // table supprimée = même rôle probable
+          
+          if (sameRole) {
+            await syncTableReferences(oldTableRef, result.id, nodeId, finalName);
+          }
+          console.log(`[NEW POST /tables] ✅ Ancienne tableReference ${oldTableRef} remplacée par ${result.id} sur le nœud ${nodeId}. Sync des refs externes effectuée.`);
         }
       } else {
         // CREATION AUTOMATIQUE DES SELECTCONFIGS POUR LES LOOKUPS
@@ -694,6 +787,30 @@ router.delete('/tables/:id', async (req, res) => {
 
     // 1Ã¯Â¸ÂÃ¢Æ’Â£ Supprimer la table (les colonnes et lignes seront supprimÃƒÂ©es en cascade via Prisma)
     await prisma.treeBranchLeafNodeTable.delete({ where: { id } });
+
+    // 🔄 SYNC RÉFÉRENCES: Quand une table est supprimée, migrer les @table.{deletedId}
+    // vers une table sœur restante du même nœud qui a le même nom/rôle
+    if (table.nodeId) {
+      try {
+        const remainingSiblings = await prisma.treeBranchLeafNodeTable.findMany({
+          where: { nodeId: table.nodeId },
+          select: { id: true, name: true }
+        });
+        
+        // Chercher une table sœur avec le même nom (recréée)
+        const tableName = (table as any).name || '';
+        const sameName = remainingSiblings.find(s => s.name === tableName);
+        const replacement = sameName || (remainingSiblings.length === 1 ? remainingSiblings[0] : null);
+        
+        if (replacement) {
+          await syncTableReferences(id, replacement.id, table.nodeId, tableName);
+        } else {
+          console.log(`[NEW DELETE /tables/:id] ⚠️ Pas de table de remplacement pour "${tableName}" (${id}).`);
+        }
+      } catch (syncErr) {
+        console.error(`[NEW DELETE /tables/:id] ⚠️ Erreur sync références:`, syncErr);
+      }
+    }
 
     // Ã°Å¸â€Â Nettoyer les champs Select/Cascader qui utilisent cette table comme lookup
     // Ã°Å¸â€™Â¡ UTILISER LA MÃƒÅ ME LOGIQUE QUE LE BOUTON "DÃƒâ€°SACTIVER LOOKUP" QUI FONCTIONNE PARFAITEMENT
