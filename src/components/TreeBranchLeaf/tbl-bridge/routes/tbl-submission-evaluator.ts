@@ -1796,16 +1796,6 @@ const displayDeps = new Map<string, Set<string>>(); // nodeId → Set<dependsOn>
   // (ex: formula + autre capacité). On déduplique pour éviter de calculer 3 fois le même champ !
   const processedDisplayFields = new Set<string>();
 
-  // 🚀 PERF: Accumuler les résultats non-display pour batch DB écriture après la boucle
-  const nonDisplayToStore: Array<{
-    nodeId: string;
-    value: string | null;
-    sourceRef: string;
-    operationSource: OperationSourceType;
-    fieldLabel: string | null;
-    operationDetail: Prisma.InputJsonValue | null;
-  }> = [];
-
   for (const capacity of capacities) {
     const sourceRef = capacity.sourceRef!;
     
@@ -2033,17 +2023,53 @@ const displayDeps = new Map<string, Set<string>>(); // nodeId → Set<dependsOn>
         continue;
       }
       
-      // 📦 AUTRES CAPACITÉS (non-display): Accumuler pour batch DB à la fin de la boucle
-      // 📦 AUTRES CAPACITÉS (non-display): Accumuler pour batch DB à la fin de la boucle
-
-      nonDisplayToStore.push({
-        nodeId: capacity.nodeId,
-        value: hasValidValue ? String(rawValue) : null,
-        sourceRef,
-        operationSource: normalizedOperationSource,
-        fieldLabel: capacity.TreeBranchLeafNode?.label || null,
-        operationDetail: parsedDetail,
-      });
+      // 📦 AUTRES CAPACITÉS (non-display): Persister dans SubmissionData
+      // Écriture séquentielle pour garantir que les capacités chaînées lisent des données fraîches
+      const key = { submissionId_nodeId: { submissionId, nodeId: capacity.nodeId } } as const;
+      const existing = await prisma.treeBranchLeafSubmissionData.findUnique({ where: key });
+      const normalize = (v: unknown) => {
+        if (v === null || v === undefined) return null;
+        if (typeof v === 'string') return v;
+        try { return JSON.stringify(v); } catch { return String(v); }
+      };
+      if (existing) {
+        const changed = (
+          normalize(existing.value) !== normalize(hasValidValue ? String(rawValue) : null) ||
+          (existing.sourceRef || null) !== (sourceRef || null) ||
+          (existing.operationSource || null) !== (normalizedOperationSource || null) ||
+          (existing.fieldLabel || null) !== ((capacity.TreeBranchLeafNode?.label || null)) ||
+          normalize(existing.operationDetail) !== normalize(parsedDetail)
+        );
+        if (changed) {
+          await prisma.treeBranchLeafSubmissionData.update({
+            where: key,
+            data: {
+              value: hasValidValue ? String(rawValue) : null,
+              sourceRef,
+              operationSource: normalizedOperationSource,
+              fieldLabel: capacity.TreeBranchLeafNode?.label || null,
+              operationDetail: parsedDetail,
+              lastResolved: new Date()
+            }
+          });
+          results.updated++;
+        }
+      } else {
+        await prisma.treeBranchLeafSubmissionData.create({
+          data: {
+            id: `${submissionId}-${capacity.nodeId}-cap-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+            submissionId,
+            nodeId: capacity.nodeId,
+            value: hasValidValue ? String(rawValue) : null,
+            sourceRef,
+            operationSource: normalizedOperationSource,
+            fieldLabel: capacity.TreeBranchLeafNode?.label || null,
+            operationDetail: parsedDetail,
+            lastResolved: new Date()
+          }
+        });
+        results.created++;
+      }
 
       // Rollback des alias temporaires (évite la pollution cross-capacities)
       if (injectedBaseKeys.length) {
@@ -2053,67 +2079,6 @@ const displayDeps = new Map<string, Set<string>>(); // nodeId → Set<dependsOn>
       }
     } catch (error) {
       console.error(`[TBL CAPACITY ERROR] ${sourceRef}:`, error);
-    }
-  }
-
-  // � PERF FIX: Batch write des capacités non-display (au lieu de N findUnique+update/create séquentiels)
-  if (nonDisplayToStore.length > 0) {
-    const nonDisplayNodeIds = nonDisplayToStore.map(r => r.nodeId);
-    const existingNonDisplay = await prisma.treeBranchLeafSubmissionData.findMany({
-      where: { submissionId, nodeId: { in: nonDisplayNodeIds } },
-      select: { nodeId: true, sourceRef: true, operationSource: true, fieldLabel: true, operationDetail: true }
-    });
-    const existingNdMap = new Map(existingNonDisplay.map(e => [e.nodeId, e]));
-
-    const normalize = (v: unknown) => {
-      if (v === null || v === undefined) return null;
-      if (typeof v === 'string') return v;
-      try { return JSON.stringify(v); } catch { return String(v); }
-    };
-    const now = new Date();
-    const ops: Prisma.PrismaPromise<unknown>[] = [];
-    for (const row of nonDisplayToStore) {
-      const existing = existingNdMap.get(row.nodeId);
-      if (existing) {
-        const changed = (
-          (existing.sourceRef || null) !== (row.sourceRef || null) ||
-          (existing.operationSource || null) !== (row.operationSource || null) ||
-          (existing.fieldLabel || null) !== (row.fieldLabel || null) ||
-          normalize(existing.operationDetail) !== normalize(row.operationDetail)
-        );
-        if (changed) {
-          ops.push(prisma.treeBranchLeafSubmissionData.update({
-            where: { submissionId_nodeId: { submissionId, nodeId: row.nodeId } },
-            data: {
-              value: row.value,
-              sourceRef: row.sourceRef,
-              operationSource: row.operationSource,
-              fieldLabel: row.fieldLabel,
-              operationDetail: row.operationDetail,
-              lastResolved: now
-            }
-          }));
-          results.updated++;
-        }
-      } else {
-        ops.push(prisma.treeBranchLeafSubmissionData.create({
-          data: {
-            id: `${submissionId}-${row.nodeId}-cap-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-            submissionId,
-            nodeId: row.nodeId,
-            value: row.value,
-            sourceRef: row.sourceRef,
-            operationSource: row.operationSource,
-            fieldLabel: row.fieldLabel,
-            operationDetail: row.operationDetail,
-            lastResolved: now
-          }
-        }));
-        results.created++;
-      }
-    }
-    if (ops.length > 0) {
-      await prisma.$transaction(ops);
     }
   }
 
