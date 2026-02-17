@@ -255,28 +255,14 @@ router.post('/nodes/:nodeId/tables', async (req, res) => {
         });
         
         
-        // Chercher d'autres champs qui utilisaient l'ancien tableau (crossover tables)
+        // 🐛 FIX: Ne PAS faire de crossover update.
+        // Quand un nœud parent possède plusieurs tables (ex: "Prix batterie" + "Marque onduleur"),
+        // la création d'une nouvelle table ne doit PAS rediriger les SelectConfigs d'AUTRES
+        // champs SELECT qui pointaient volontairement vers une table spécifique de ce parent.
+        // L'ancien code faisait un updateMany aveugle qui écrasait le tableReference de tous
+        // les SelectConfigs pointant vers l'ancienne table, causant des lookups incorrects.
         if (oldTableRef) {
-          const otherConfigs = await prisma.treeBranchLeafSelectConfig.findMany({
-            where: { 
-              tableReference: oldTableRef,
-              nodeId: { not: nodeId } // Exclure celui qu'on vient de mettre ÃƒÂ  jour
-            },
-          });
-          
-          if (otherConfigs.length > 0) {
-            
-            // Mettre ÃƒÂ  jour tous les autres
-            await prisma.treeBranchLeafSelectConfig.updateMany({
-              where: { 
-                tableReference: oldTableRef,
-                nodeId: { not: nodeId }
-              },
-              data: { tableReference: result.id }
-            });
-            
-            // best-effort bulk update, no further action
-          }
+          console.log(`[NEW POST /tables] \u2139\ufe0f Ancienne tableReference ${oldTableRef} remplac\u00e9e par ${result.id} sur le n\u0153ud propri\u00e9taire ${nodeId}. Pas de crossover vers d'autres SelectConfigs.`);
         }
       } else {
         // CREATION AUTOMATIQUE DES SELECTCONFIGS POUR LES LOOKUPS
