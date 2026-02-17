@@ -659,8 +659,36 @@ async function saveUserEntriesNeutral(
     : [];
 
   const excludedNodeIds = new Set(excludedNodes.map(n => n.id));
-  
-  if (excludedNodeIds.size > 0) {
+
+  // 🔧 FIX E2: RE-INCLURE les nœuds qui ont UNIQUEMENT des formules de CONTRAINTE
+  // Une formule de contrainte a targetProperty non-null (ex: "number_max").
+  // Ces champs restent éditables — la formule sert juste à limiter la valeur max/min.
+  // On ne doit PAS les exclure de la sauvegarde utilisateur.
+  if (treeId && excludedNodeIds.size > 0) {
+    // Récupérer les nœuds exclus qui ont hasFormula=true
+    const formulaExcludedIds = excludedNodes
+      .filter(n => excludedNodeIds.has(n.id))
+      .map(n => n.id);
+    
+    if (formulaExcludedIds.length > 0) {
+      // Trouver les nœuds qui ont AU MOINS une formule de calcul (targetProperty IS NULL)
+      const nodesWithCalcFormulas = await prisma.treeBranchLeafNodeFormula.findMany({
+        where: {
+          nodeId: { in: formulaExcludedIds },
+          targetProperty: null, // formule de calcul (pas de contrainte)
+        },
+        select: { nodeId: true },
+      });
+      const nodesWithCalcSet = new Set(nodesWithCalcFormulas.map(f => f.nodeId));
+
+      // Re-inclure les nœuds qui n'ont AUCUNE formule de calcul (uniquement contraintes)
+      for (const nodeId of formulaExcludedIds) {
+        if (!nodesWithCalcSet.has(nodeId)) {
+          // Ce nœud a hasFormula=true mais toutes ses formules sont des contraintes → éditable
+          excludedNodeIds.delete(nodeId);
+        }
+      }
+    }
   }
 
   const sharedRefKeys = Object.keys(formData).filter(isSharedReferenceId);
