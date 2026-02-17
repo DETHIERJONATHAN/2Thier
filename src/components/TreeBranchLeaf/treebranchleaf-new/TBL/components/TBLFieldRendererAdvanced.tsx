@@ -2244,6 +2244,18 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
           if (pattern && !new RegExp(pattern).test(textVal)) {
             error = 'Le format du texte n\'est pas valide';
           }
+          // 🎯 FIX G: Appliquer les contraintes dynamiques number_max/number_min aux champs TEXT numériques
+          const textNumVal = parseFloat(textVal);
+          if (!isNaN(textNumVal)) {
+            const dynMin = dynamicConstraints.number_min;
+            const dynMax = dynamicConstraints.number_max;
+            if (dynMin !== undefined && textNumVal < dynMin) {
+              error = dynamicConstraints.constraintMessage || `La valeur doit être supérieure ou égale à ${dynMin}`;
+            }
+            if (dynMax !== undefined && textNumVal > dynMax) {
+              error = dynamicConstraints.constraintMessage || `La valeur doit être inférieure ou égale à ${dynMax}`;
+            }
+          }
           break;
         }
           
@@ -3022,12 +3034,54 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
     }
 
     switch (fieldConfig.fieldType) {
-      case 'TEXT':
+      case 'TEXT': {
+        // 🎯 FIX G: Si le champ TEXT a des contraintes dynamiques (number_max/min),
+        // clamper la valeur au onBlur pour empêcher de dépasser la contrainte
+        const textDynMax = dynamicConstraints.number_max;
+        const textDynMin = dynamicConstraints.number_min;
+        const hasTextConstraint = textDynMax !== undefined || textDynMin !== undefined;
+        
+        const handleTextBlur = hasTextConstraint ? () => {
+          const val = parseFloat(String(finalValue));
+          if (isNaN(val)) return;
+          
+          let clampedVal = val;
+          let wasConstrained = false;
+          let constraintType: 'max' | 'min' | null = null;
+          
+          if (textDynMax !== undefined && val > textDynMax) {
+            clampedVal = textDynMax;
+            wasConstrained = true;
+            constraintType = 'max';
+          }
+          if (textDynMin !== undefined && val < textDynMin) {
+            clampedVal = textDynMin;
+            wasConstrained = true;
+            constraintType = 'min';
+          }
+          
+          if (wasConstrained) {
+            const constraintMsg = dynamicConstraints.constraintMessage;
+            if (constraintMsg) {
+              message.warning(constraintMsg
+                .replace(/\{max\}/g, String(textDynMax ?? ''))
+                .replace(/\{min\}/g, String(textDynMin ?? ''))
+                .replace(/\{value\}/g, String(val)));
+            } else if (constraintType === 'max') {
+              message.warning(`La valeur maximale est ${textDynMax}`);
+            } else if (constraintType === 'min') {
+              message.warning(`La valeur minimale est ${textDynMin}`);
+            }
+            handleChange(String(clampedVal));
+          }
+        } : undefined;
+        
         return wrapWithCustomTooltip(
           <Input
             {...commonProps}
             value={finalValue || ''}
             onChange={(e) => handleChange(e.target.value)}
+            onBlur={handleTextBlur}
             // 🔥 LONGUEUR MAX DYNAMIQUE PRISMA - PRIORITÉ AUX DONNÉES DIRECTES
             maxLength={field.text_maxLength || fieldConfig.textConfig?.maxLength || fieldConfig.maxLength}
             showCount={!!(field.text_maxLength || fieldConfig.textConfig?.maxLength || fieldConfig.maxLength)}
@@ -3036,6 +3090,7 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
           />,
           field
         );
+      }
 
       case 'TEXTAREA':
         return wrapWithCustomTooltip(

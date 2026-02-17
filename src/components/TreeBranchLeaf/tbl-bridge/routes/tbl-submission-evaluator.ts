@@ -348,10 +348,13 @@ async function upsertComputedValuesForSubmission(
 ): Promise<number> {
   if (!submissionId || !rows.length) return 0;
 
-  let stored = 0;
-  for (const row of rows) {
-    if (!row.nodeId) continue;
-    await prisma.treeBranchLeafSubmissionData.upsert({
+  // 🚀 PERF FIX: Batch upserts en une seule transaction au lieu de N upserts séquentiels
+  const validRows = rows.filter(r => !!r.nodeId);
+  if (validRows.length === 0) return 0;
+
+  const now = new Date();
+  const ops = validRows.map(row =>
+    prisma.treeBranchLeafSubmissionData.upsert({
       where: { submissionId_nodeId: { submissionId, nodeId: row.nodeId } },
       create: {
         id: `${submissionId}-${row.nodeId}-calc-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
@@ -363,7 +366,7 @@ async function upsertComputedValuesForSubmission(
         fieldLabel: row.fieldLabel ?? null,
         operationDetail: row.operationDetail ?? null,
         operationResult: row.operationResult ?? null,
-        lastResolved: new Date()
+        lastResolved: now
       },
       update: {
         value: row.value,
@@ -372,12 +375,12 @@ async function upsertComputedValuesForSubmission(
         fieldLabel: row.fieldLabel ?? null,
         operationDetail: row.operationDetail ?? null,
         operationResult: row.operationResult ?? null,
-        lastResolved: new Date()
+        lastResolved: now
       }
-    });
-    stored++;
-  }
-  return stored;
+    })
+  );
+  await prisma.$transaction(ops);
+  return validRows.length;
 }
 
 // Mémoire: staging des modifications (par session) pour ne pas écrire en base tant que non validé
@@ -751,49 +754,72 @@ async function saveUserEntriesNeutral(
     }
   }
 
-  // ✅ SAUVEGARDER les entrées remplies
-  for (const entry of entries.values()) {
-    const key = { submissionId_nodeId: { submissionId: entry.submissionId, nodeId: entry.nodeId } } as const;
-    const existing = await prisma.treeBranchLeafSubmissionData.findUnique({ where: key });
-    const normalize = (v: unknown) => {
-      if (v === null || v === undefined) return null;
-      if (typeof v === 'string') return v;
-      try { return JSON.stringify(v); } catch { return String(v); }
-    };
+  // ✅ 🚀 PERF FIX: Batch save au lieu de N+1 queries séquentielles
+  // Avant: 1 findUnique + 1 update/create par entrée = 70-140 queries
+  // Après: 1 findMany batch + 1 transaction batch = 2-3 queries total
+  const entryArray = Array.from(entries.values());
+  const entryNodeIds = entryArray.map(e => e.nodeId);
+
+  // Récupérer TOUS les existants en une seule requête
+  const allExisting = entryNodeIds.length > 0
+    ? await prisma.treeBranchLeafSubmissionData.findMany({
+        where: { submissionId, nodeId: { in: entryNodeIds } },
+        select: { nodeId: true, value: true, operationSource: true }
+      })
+    : [];
+  const existingMap = new Map(allExisting.map(e => [e.nodeId, e]));
+
+  const normalize = (v: unknown) => {
+    if (v === null || v === undefined) return null;
+    if (typeof v === 'string') return v;
+    try { return JSON.stringify(v); } catch { return String(v); }
+  };
+
+  // Séparer creates et updates
+  const toCreate: typeof entryArray = [];
+  const toUpdate: typeof entryArray = [];
+  for (const entry of entryArray) {
+    const existing = existingMap.get(entry.nodeId);
     if (existing) {
-      // Idempotent: on ne considère que la valeur et la source; les détails/résultats neutres sont stables
       const changed = (
         normalize(existing.value) !== normalize(entry.value) ||
         (existing.operationSource || null) !== (entry.operationSource || null)
       );
-      if (changed) {
-        await prisma.treeBranchLeafSubmissionData.update({
-          where: key,
-          data: {
-            value: entry.value,
-            operationSource: 'neutral',
-            operationDetail: entry.operationDetail
-          }
-        });
-        saved++;
-      }
+      if (changed) toUpdate.push(entry);
     } else {
-      await prisma.treeBranchLeafSubmissionData.create({ data: entry });
-      saved++;
+      toCreate.push(entry);
     }
   }
 
-  // 🗑️ SUPPRIMER les entrées vidées
-  for (const nodeId of entriesToDelete) {
-    // Ne pas supprimer si on a aussi une entrée à sauvegarder (cas de mise à jour)
-    if (entries.has(nodeId)) continue;
-    
-    const key = { submissionId_nodeId: { submissionId, nodeId } } as const;
-    const existing = await prisma.treeBranchLeafSubmissionData.findUnique({ where: key });
-    if (existing) {
-      await prisma.treeBranchLeafSubmissionData.delete({ where: key });
-      saved++;
+  // Exécuter creates + updates en une seule transaction
+  if (toCreate.length > 0 || toUpdate.length > 0) {
+    const ops: Prisma.PrismaPromise<unknown>[] = [];
+    // Batch create
+    if (toCreate.length > 0) {
+      ops.push(prisma.treeBranchLeafSubmissionData.createMany({ data: toCreate, skipDuplicates: true }));
     }
+    // Updates individuels groupés dans la transaction (pas de updateMany pour des données différentes)
+    for (const entry of toUpdate) {
+      ops.push(prisma.treeBranchLeafSubmissionData.update({
+        where: { submissionId_nodeId: { submissionId: entry.submissionId, nodeId: entry.nodeId } },
+        data: {
+          value: entry.value,
+          operationSource: 'neutral',
+          operationDetail: entry.operationDetail
+        }
+      }));
+    }
+    await prisma.$transaction(ops);
+    saved += toCreate.length + toUpdate.length;
+  }
+
+  // 🗑️ SUPPRIMER les entrées vidées (batch)
+  const nodeIdsToDelete = Array.from(entriesToDelete).filter(nodeId => !entries.has(nodeId));
+  if (nodeIdsToDelete.length > 0) {
+    const deleteResult = await prisma.treeBranchLeafSubmissionData.deleteMany({
+      where: { submissionId, nodeId: { in: nodeIdsToDelete } }
+    });
+    saved += deleteResult.count;
   }
 
   return saved;
@@ -1770,6 +1796,16 @@ const displayDeps = new Map<string, Set<string>>(); // nodeId → Set<dependsOn>
   // (ex: formula + autre capacité). On déduplique pour éviter de calculer 3 fois le même champ !
   const processedDisplayFields = new Set<string>();
 
+  // 🚀 PERF: Accumuler les résultats non-display pour batch DB écriture après la boucle
+  const nonDisplayToStore: Array<{
+    nodeId: string;
+    value: string | null;
+    sourceRef: string;
+    operationSource: OperationSourceType;
+    fieldLabel: string | null;
+    operationDetail: Prisma.InputJsonValue | null;
+  }> = [];
+
   for (const capacity of capacities) {
     const sourceRef = capacity.sourceRef!;
     
@@ -1997,53 +2033,17 @@ const displayDeps = new Map<string, Set<string>>(); // nodeId → Set<dependsOn>
         continue;
       }
       
-      // 📦 AUTRES CAPACITÉS (non-display): Persister dans SubmissionData
-      // 📦 AUTRES CAPACITÉS (non-display): Persister dans SubmissionData
+      // 📦 AUTRES CAPACITÉS (non-display): Accumuler pour batch DB à la fin de la boucle
+      // 📦 AUTRES CAPACITÉS (non-display): Accumuler pour batch DB à la fin de la boucle
 
-      const key = { submissionId_nodeId: { submissionId, nodeId: capacity.nodeId } } as const;
-      const existing = await prisma.treeBranchLeafSubmissionData.findUnique({ where: key });
-      const normalize = (v: unknown) => {
-        if (v === null || v === undefined) return null;
-        if (typeof v === 'string') return v;
-        try { return JSON.stringify(v); } catch { return String(v); }
-      };
-      if (existing) {
-        const changed = (
-          (existing.sourceRef || null) !== (sourceRef || null) ||
-          (existing.operationSource || null) !== (normalizedOperationSource || null) ||
-          (existing.fieldLabel || null) !== ((capacity.TreeBranchLeafNode?.label || null)) ||
-          normalize(existing.operationDetail) !== normalize(parsedDetail)
-        );
-        if (changed) {
-          await prisma.treeBranchLeafSubmissionData.update({
-            where: key,
-            data: {
-              value: hasValidValue ? String(rawValue) : null,
-              sourceRef,
-              operationSource: normalizedOperationSource,
-              fieldLabel: capacity.TreeBranchLeafNode?.label || null,
-              operationDetail: parsedDetail,
-              lastResolved: new Date()
-            }
-          });
-          results.updated++;
-        }
-      } else {
-        await prisma.treeBranchLeafSubmissionData.create({
-          data: {
-            id: `${submissionId}-${capacity.nodeId}-cap-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-            submissionId,
-            nodeId: capacity.nodeId,
-            value: hasValidValue ? String(rawValue) : null,
-            sourceRef,
-            operationSource: normalizedOperationSource,
-            fieldLabel: capacity.TreeBranchLeafNode?.label || null,
-            operationDetail: parsedDetail,
-            lastResolved: new Date()
-          }
-        });
-        results.created++;
-      }
+      nonDisplayToStore.push({
+        nodeId: capacity.nodeId,
+        value: hasValidValue ? String(rawValue) : null,
+        sourceRef,
+        operationSource: normalizedOperationSource,
+        fieldLabel: capacity.TreeBranchLeafNode?.label || null,
+        operationDetail: parsedDetail,
+      });
 
       // Rollback des alias temporaires (évite la pollution cross-capacities)
       if (injectedBaseKeys.length) {
@@ -2056,7 +2056,68 @@ const displayDeps = new Map<string, Set<string>>(); // nodeId → Set<dependsOn>
     }
   }
 
-  // 🛡️ FIX 2026-01-31 v2: Ajouter les valeurs DISPLAY restaurées depuis DB qui n'ont pas été recalculées
+  // � PERF FIX: Batch write des capacités non-display (au lieu de N findUnique+update/create séquentiels)
+  if (nonDisplayToStore.length > 0) {
+    const nonDisplayNodeIds = nonDisplayToStore.map(r => r.nodeId);
+    const existingNonDisplay = await prisma.treeBranchLeafSubmissionData.findMany({
+      where: { submissionId, nodeId: { in: nonDisplayNodeIds } },
+      select: { nodeId: true, sourceRef: true, operationSource: true, fieldLabel: true, operationDetail: true }
+    });
+    const existingNdMap = new Map(existingNonDisplay.map(e => [e.nodeId, e]));
+
+    const normalize = (v: unknown) => {
+      if (v === null || v === undefined) return null;
+      if (typeof v === 'string') return v;
+      try { return JSON.stringify(v); } catch { return String(v); }
+    };
+    const now = new Date();
+    const ops: Prisma.PrismaPromise<unknown>[] = [];
+    for (const row of nonDisplayToStore) {
+      const existing = existingNdMap.get(row.nodeId);
+      if (existing) {
+        const changed = (
+          (existing.sourceRef || null) !== (row.sourceRef || null) ||
+          (existing.operationSource || null) !== (row.operationSource || null) ||
+          (existing.fieldLabel || null) !== (row.fieldLabel || null) ||
+          normalize(existing.operationDetail) !== normalize(row.operationDetail)
+        );
+        if (changed) {
+          ops.push(prisma.treeBranchLeafSubmissionData.update({
+            where: { submissionId_nodeId: { submissionId, nodeId: row.nodeId } },
+            data: {
+              value: row.value,
+              sourceRef: row.sourceRef,
+              operationSource: row.operationSource,
+              fieldLabel: row.fieldLabel,
+              operationDetail: row.operationDetail,
+              lastResolved: now
+            }
+          }));
+          results.updated++;
+        }
+      } else {
+        ops.push(prisma.treeBranchLeafSubmissionData.create({
+          data: {
+            id: `${submissionId}-${row.nodeId}-cap-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+            submissionId,
+            nodeId: row.nodeId,
+            value: row.value,
+            sourceRef: row.sourceRef,
+            operationSource: row.operationSource,
+            fieldLabel: row.fieldLabel,
+            operationDetail: row.operationDetail,
+            lastResolved: now
+          }
+        }));
+        results.created++;
+      }
+    }
+    if (ops.length > 0) {
+      await prisma.$transaction(ops);
+    }
+  }
+
+  // �🛡️ FIX 2026-01-31 v2: Ajouter les valeurs DISPLAY restaurées depuis DB qui n'ont pas été recalculées
   // Ces valeurs avaient été écrasées par le formData avec des valeurs obsolètes (0, 1)
   // Elles doivent être renvoyées au frontend pour corriger l'affichage
   if (restoredDbDisplayValues.size > 0) {

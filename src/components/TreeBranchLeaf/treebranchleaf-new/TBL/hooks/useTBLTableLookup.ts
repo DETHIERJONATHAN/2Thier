@@ -15,7 +15,7 @@
  * - Évite les appels API individuels /select-config et /trees/:id/nodes
  */
 
-import { useState, useEffect, useContext, useMemo } from 'react';
+import { useState, useEffect, useContext, useMemo, useRef } from 'react';
 import { useAuthenticatedApi } from '../../../../../hooks/useAuthenticatedApi';
 import { tblLog, tblWarn, isTBLDebugEnabled } from '../../../../../utils/tblDebug';
 import { useTBLBatch } from '../contexts/TBLBatchContext';
@@ -108,7 +108,10 @@ export function useTBLTableLookup(
   // Le lookup doit attendre que create-and-evaluate soit terminé avant de filtrer
   // car formData contient des valeurs STALES (ex: "Puissance WC Total" = 0 au lieu de 9100)
   const [broadcastedCalcValues, setBroadcastedCalcValues] = useState<Record<string, any>>({});
-  const [refreshTrigger, setRefreshTrigger] = useState(0);
+  
+  // 🚀 PERF: Debounce pour accumuler les broadcasts rapides en un seul state update
+  const pendingCalcValuesRef = useRef<Record<string, any>>({});
+  const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   
   // 🎯 Écouter tbl-force-retransform pour récupérer les valeurs calculées FRAÎCHES
   useEffect(() => {
@@ -119,9 +122,11 @@ export function useTBLTableLookup(
       // pour éviter que les valeurs du devis précédent polluent le devis actuel
       // 🔒 Préserver les valeurs des nœuds protégés
       if (clearDisplayFields || resetCalculatedCache) {
+        // Clear/reset immédiat (pas de debounce pour les resets)
+        if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
+        pendingCalcValuesRef.current = {};
         const protectedIds = (event.detail as any)?.protectedNodeIds;
         if (Array.isArray(protectedIds) && protectedIds.length > 0) {
-          // Garder les valeurs des nœuds protégés dans le cache
           setBroadcastedCalcValues(prev => {
             const kept: Record<string, any> = {};
             for (const id of protectedIds) {
@@ -132,26 +137,36 @@ export function useTBLTableLookup(
         } else {
           setBroadcastedCalcValues({});
         }
-        setRefreshTrigger(t => t + 1);
         return;
       }
       
       if (calculatedValues && typeof calculatedValues === 'object' && Object.keys(calculatedValues).length > 0) {
-        console.log(`🔄 [useTBLTableLookup] Broadcast reçu avec ${Object.keys(calculatedValues).length} valeurs calculées fraîches`);
-        // 🔥 FIX 14/02/2026: Si replaceAll=true (chargement devis), REMPLACER au lieu de MERGER
-        // Sinon les valeurs du devis précédent persistent et polluent les lookups
+        // 🚀 PERF: Accumuler les valeurs dans le ref, puis flush après 50ms de silence
         if (replaceAll) {
-          setBroadcastedCalcValues(calculatedValues);
+          pendingCalcValuesRef.current = { ...calculatedValues };
         } else {
-          setBroadcastedCalcValues(prev => ({ ...prev, ...calculatedValues }));
+          Object.assign(pendingCalcValuesRef.current, calculatedValues);
         }
-        // Déclencher un refresh du lookup avec les nouvelles valeurs
-        setRefreshTrigger(t => t + 1);
+        
+        if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
+        debounceTimerRef.current = setTimeout(() => {
+          const pending = pendingCalcValuesRef.current;
+          pendingCalcValuesRef.current = {};
+          console.log(`🔄 [useTBLTableLookup] Broadcast debounced: ${Object.keys(pending).length} valeurs calculées fraîches`);
+          if (replaceAll) {
+            setBroadcastedCalcValues(pending);
+          } else {
+            setBroadcastedCalcValues(prev => ({ ...prev, ...pending }));
+          }
+        }, 50);
       }
     };
     
     window.addEventListener('tbl-force-retransform', handleBroadcast as EventListener);
-    return () => window.removeEventListener('tbl-force-retransform', handleBroadcast as EventListener);
+    return () => {
+      window.removeEventListener('tbl-force-retransform', handleBroadcast as EventListener);
+      if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
+    };
   }, []);
   
   // 🔥 FIX: Stabiliser formData en le sérialisant en JSON pour la dépendance
@@ -542,7 +557,7 @@ export function useTBLTableLookup(
     return () => {
       cancelled = true;
     };
-  }, [fieldId, nodeId, enabled, formDataJson, clearedKeysJson, batchContext.isReady, refreshTrigger, broadcastedCalcValues]); // 🔥 FIX: clearedKeysJson pour détecter quand un select est vidé
+  }, [fieldId, nodeId, enabled, formDataJson, clearedKeysJson, batchContext.isReady, broadcastedCalcValues]); // 🔥 PERF FIX: retiré refreshTrigger (redondant avec broadcastedCalcValues)
 
   return { options, loading, error, tableData, config };
 }
