@@ -1,0 +1,17 @@
+id
+nodeId
+exposedKey
+displayName
+displayFormat
+unit
+precision
+visibleToUser
+isReadonly
+defaultValue
+metadata
+createdAt
+updatedAt
+fixedValue
+selectedNodeId
+sourceRef
+sourceType

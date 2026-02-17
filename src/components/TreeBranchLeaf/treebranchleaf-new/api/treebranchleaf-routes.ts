@@ -64,7 +64,7 @@ registerSumDisplayFieldRoutes(router);
 
 const prisma = db;
 
-
+// 🧪 TEMP: Test endpoint pour debug batterie lookup (sans auth)
 type InlineRolesInput = Record<string, unknown> | undefined;
 
 const normalizeRolesMap = (rolesMap: InlineRolesInput): Record<string, string> => {
@@ -11731,7 +11731,7 @@ router.post('/nodes/:nodeId/normalize-step4', async (req, res) => {
 
 // GET /api/treebranchleaf/nodes/:nodeId/table/lookup
 // RÃƒÆ’Ã‚Â©cupÃƒÆ’Ã‚Â¨re le tableau ACTIF d'un noeud pour lookup (utilisÃƒÆ’Ã‚Â© par useTBLTableLookup)
-router.get('/nodes/:nodeId/table/lookup', async (req, res) => {
+router.all('/nodes/:nodeId/table/lookup', async (req, res) => {
   try {
     const { nodeId } = req.params;
     const { organizationId, isSuperAdmin } = getAuthCtx(req as unknown as MinimalReq);
@@ -11739,14 +11739,26 @@ router.get('/nodes/:nodeId/table/lookup', async (req, res) => {
     // ÃƒÂ°Ã…Â¸Ã¢â‚¬Â Ã¢â‚¬Â¢ ÃƒÆ’Ã¢â‚¬Â°TAPE 2.5: Parser les formValues depuis la query string pour le filtrage dynamique
     const { formValues: formValuesParam } = req.query as { formValues?: string };
     let formValues: Record<string, unknown> = {};
+    // Support GET with query param OR POST with body
+    const formValuesFromBody = req.body?.formValues;
     if (formValuesParam) {
       try {
         formValues = JSON.parse(formValuesParam);
       } catch (e) {
-        console.warn(`[TreeBranchLeaf API] ÃƒÂ¢Ã…Â¡Ã‚Â ÃƒÂ¯Ã‚Â¸Ã‚Â Erreur parsing formValues:`, e);
+        console.warn('[TreeBranchLeaf API] Erreur parsing formValues:', e);
       }
     }
 
+    // Fallback: read formValues from POST body if not in query string
+    if (Object.keys(formValues).length === 0 && formValuesFromBody) {
+      try {
+        formValues = typeof formValuesFromBody === 'string' ? JSON.parse(formValuesFromBody) : formValuesFromBody;
+      } catch (e) {
+        console.warn('[table/lookup] Error parsing formValues from body:', e);
+      }
+    }
+
+    console.log(`[LOOKUP-DEBUG] nodeId=` + nodeId + `, method=` + req.method + `, formValues keys=` + Object.keys(formValues).length);
 
     // VÃƒÆ’Ã‚Â©rifier l'accÃƒÆ’Ã‚Â¨s au nÃƒâ€¦Ã¢â‚¬Å“ud
     const access = await ensureNodeOrgAccess(prisma, nodeId, { organizationId, isSuperAdmin });

@@ -112,6 +112,7 @@ export function useTBLTableLookup(
   // 🚀 PERF: Debounce pour accumuler les broadcasts rapides en un seul state update
   const pendingCalcValuesRef = useRef<Record<string, any>>({});
   const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const replaceAllRef = useRef(false);
   
   // 🎯 Écouter tbl-force-retransform pour récupérer les valeurs calculées FRAÎCHES
   useEffect(() => {
@@ -125,6 +126,7 @@ export function useTBLTableLookup(
         // Clear/reset immédiat (pas de debounce pour les resets)
         if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
         pendingCalcValuesRef.current = {};
+        replaceAllRef.current = false;
         const protectedIds = (event.detail as any)?.protectedNodeIds;
         if (Array.isArray(protectedIds) && protectedIds.length > 0) {
           setBroadcastedCalcValues(prev => {
@@ -142,7 +144,10 @@ export function useTBLTableLookup(
       
       if (calculatedValues && typeof calculatedValues === 'object' && Object.keys(calculatedValues).length > 0) {
         // 🚀 PERF: Accumuler les valeurs dans le ref, puis flush après 50ms de silence
+        // 🔥 FIX: Stocker replaceAll dans un ref pour éviter le bug de closure
+        // Si UN SEUL event dans la fenêtre a replaceAll=true, on remplace tout
         if (replaceAll) {
+          replaceAllRef.current = true;
           pendingCalcValuesRef.current = { ...calculatedValues };
         } else {
           Object.assign(pendingCalcValuesRef.current, calculatedValues);
@@ -151,9 +156,11 @@ export function useTBLTableLookup(
         if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
         debounceTimerRef.current = setTimeout(() => {
           const pending = pendingCalcValuesRef.current;
+          const shouldReplaceAll = replaceAllRef.current;
           pendingCalcValuesRef.current = {};
-          console.log(`🔄 [useTBLTableLookup] Broadcast debounced: ${Object.keys(pending).length} valeurs calculées fraîches`);
-          if (replaceAll) {
+          replaceAllRef.current = false;
+          console.log(`🔄 [useTBLTableLookup] Broadcast debounced: ${Object.keys(pending).length} valeurs calculées fraîches (replaceAll=${shouldReplaceAll})`);
+          if (shouldReplaceAll) {
             setBroadcastedCalcValues(pending);
           } else {
             setBroadcastedCalcValues(prev => ({ ...prev, ...pending }));
@@ -369,6 +376,8 @@ export function useTBLTableLookup(
         
         // 🆕 ÉTAPE 2.5: Construire les formValues pour le filtrage dynamique
         let queryParams = '';
+        let usePostMethod = false;
+        let postFormValues: Record<string, any> = {};
         if (formDataParsed && Object.keys(formDataParsed).length > 0) {
           // 🔥 Filtrer les champs mirror TBL internes + images/fichiers base64 (évite URL trop longue)
           const filteredFormData = Object.entries(formDataParsed)
@@ -481,10 +490,12 @@ export function useTBLTableLookup(
           // Uniquement si des valeurs utilisateur existent (filteredFormData a déjà exclu les images)
           if (Object.keys(filteredFormData).length > 0) {
             const formValues = JSON.stringify(filteredFormData);
-            // 🛡️ Garde-fou final: si le JSON dépasse 8KB, on envoie sans formValues
-            // Évite HTTP 414 URI Too Long qui crashe les requêtes
+            // � FIX: Si formValues > 8KB, utiliser POST au lieu de supprimer les formValues
+            // Cela permet le filtrage dynamique même avec beaucoup de champs
             if (formValues.length > 8000) {
-              console.warn(`[useTBLTableLookup] ⚠️ formValues trop volumineuses (${(formValues.length / 1024).toFixed(1)} KB), envoi sans formValues`);
+              console.warn(`[useTBLTableLookup] ⚠️ formValues volumineuses (${(formValues.length / 1024).toFixed(1)} KB), envoi via POST`);
+              usePostMethod = true;
+              postFormValues = filteredFormData;
               queryParams = '';
             } else {
               queryParams = `?formValues=${encodeURIComponent(formValues)}`;
@@ -493,10 +504,20 @@ export function useTBLTableLookup(
           }
         }
         
-        const table = await api.get<TableLookupPayload>(
-          `/api/treebranchleaf/nodes/${nodeId}/table/lookup${queryParams}`,
-          { suppressErrorLogForStatuses: [404] }
-        );
+        let table: TableLookupPayload;
+        if (usePostMethod) {
+          // POST: envoyer formValues dans le body pour éviter URI Too Long
+          table = await api.post<TableLookupPayload>(
+            `/api/treebranchleaf/nodes/${nodeId}/table/lookup`,
+            { formValues: postFormValues },
+            { suppressErrorLogForStatuses: [404] }
+          );
+        } else {
+          table = await api.get<TableLookupPayload>(
+            `/api/treebranchleaf/nodes/${nodeId}/table/lookup${queryParams}`,
+            { suppressErrorLogForStatuses: [404] }
+          );
+        }
         if (isTargetField) {
           console.log(`[DEBUG][Test - liste] ⬅️ Réponse table/lookup:`, table);
           console.log(`[DEBUG][Test - liste] 🔍 Structure de table:`, {
