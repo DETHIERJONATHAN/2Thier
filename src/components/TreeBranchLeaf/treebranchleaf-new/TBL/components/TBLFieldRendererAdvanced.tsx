@@ -2863,31 +2863,6 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
       );
     }
     
-    // 🔍 NOUVELLE LOGIQUE: Distinguer les formules de VALEUR des formules de CONTRAINTE
-    // Une formule de contrainte (ex: number_max dynamique) ne rend PAS le champ read-only
-    const isConstraintFormula = (formulaInstances: Record<string, unknown> | null | undefined): boolean => {
-      if (!formulaInstances) return false;
-      
-      // Parcourir toutes les instances de formule
-      for (const [_instanceId, instance] of Object.entries(formulaInstances)) {
-        const inst = instance as Record<string, unknown> | null;
-        if (!inst) continue;
-        
-        // Vérifier le targetProperty - si c'est une propriété de contrainte, ce n'est PAS une formule de valeur
-        const targetProperty = inst.targetProperty as string | undefined;
-        if (targetProperty && ['number_max', 'number_min', 'max', 'min', 'step', 'visible', 'disabled', 'required'].includes(targetProperty)) {
-          return true;
-        }
-        
-        // Vérifier aussi le nom de la formule pour des indices
-        const name = (inst.name as string) || '';
-        if (/\b(max|min|limit|constraint|validation)\b/i.test(name)) {
-          return true;
-        }
-      }
-      return false;
-    };
-    
     const hasFormulaCapability = Boolean(
       (capabilities.formula && (
         capabilities.formula.enabled !== false ||
@@ -2899,8 +2874,11 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
       field.hasFormula
     );
     
-    // 🎯 NOUVEAU: Vérifier si c'est une formule de contrainte (pas une formule de valeur)
-    const formulaIsConstraint = isConstraintFormula(capabilities.formula?.instances as Record<string, unknown> | null | undefined);
+    // 🎯 FIX F: Utiliser nodeFormulas (depuis TreeBranchLeafNodeFormula table, avec targetProperty)
+    // au lieu de capabilities.formula.instances (JSONB sans targetProperty).
+    // Un champ est "constraint-only" si TOUTES ses formules sont des contraintes.
+    const hasOnlyConstraintFormulas = nodeFormulas.length > 0 && constraintFormulas.length === nodeFormulas.length;
+    const formulaIsConstraint = hasOnlyConstraintFormulas;
     
     const manualOverrideAllowed = fieldConfig.formulaConfig?.allowManualOverride === true;
 
@@ -2954,7 +2932,8 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
     }
     
     // ✨ FALLBACK: Logique traditionnelle pour les champs sans capacités TreeBranchLeaf
-    const useCalculatedValue = fieldConfig.hasFormula && !manualOverrideAllowed && !formulaIsConstraint;
+    // 🎯 FIX F: Utiliser hasOnlyConstraintFormulas au lieu de l'ancien isConstraintFormula
+    const useCalculatedValue = fieldConfig.hasFormula && !manualOverrideAllowed && !hasOnlyConstraintFormulas;
     const finalValueRaw = useCalculatedValue ? calculatedValue : localValue;
     const finalValue = normalizeValueForUi(finalValueRaw);
     const isReadOnly = useCalculatedValue;
