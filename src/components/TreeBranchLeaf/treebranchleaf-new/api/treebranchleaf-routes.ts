@@ -8008,15 +8008,11 @@ async function resolveFilterValueRef(
         return null;
       }
       
-      // 2a. Essayer formValues[nodeId du propriétaire]
-      if (refTable.nodeId && formValues[refTable.nodeId] !== undefined && formValues[refTable.nodeId] !== null && formValues[refTable.nodeId] !== '') {
-        let val = formValues[refTable.nodeId];
-        if (val && typeof val === 'object' && 'value' in (val as Record<string, unknown>)) {
-          val = (val as Record<string, unknown>).value;
-        }
-        console.log(`✅ [resolveFilterValueRef] @table.${tableId} → formValues[nodeId=${refTable.nodeId}]: ${val}`);
-        return val;
-      }
+      // 2a. NE PAS utiliser formValues[nodeId du propriétaire] ici !
+      // Le nodeId de la table est le nœud PROPRIÉTAIRE (ex: "Batterie achat" = 5ac757f1)
+      // dont la formValues contient une valeur DISPLAY calculée (ex: 2470 = un prix),
+      // PAS la valeur que @table. doit résoudre (ex: "DEYE" = le Genre de l'onduleur).
+      // La résolution correcte passe par le lookup config (étape 3 ci-dessous).
       
       // 3. Résolution complète via lookup config de la table
       const meta = refTable.meta as Record<string, unknown> | null;
@@ -11757,8 +11753,6 @@ router.all('/nodes/:nodeId/table/lookup', async (req, res) => {
         console.warn('[table/lookup] Error parsing formValues from body:', e);
       }
     }
-
-    console.log(`[LOOKUP-DEBUG] nodeId=` + nodeId + `, method=` + req.method + `, formValues keys=` + Object.keys(formValues).length);
 
     // VÃƒÆ’Ã‚Â©rifier l'accÃƒÆ’Ã‚Â¨s au nÃƒâ€¦Ã¢â‚¬Å“ud
     const access = await ensureNodeOrgAccess(prisma, nodeId, { organizationId, isSuperAdmin });

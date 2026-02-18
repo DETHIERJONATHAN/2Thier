@@ -207,20 +207,35 @@ export function useTBLTableLookup(
     // 🔥 FIX: Reconstruire formData depuis la version JSON sérialisée
     let formDataParsed: Record<string, any> | undefined = formDataJson ? JSON.parse(formDataJson) : undefined;
     
-    // 🛡️ FIX: Reconstruire le set de clés explicitement vidées par l'utilisateur
+    // ️ FIX: Reconstruire le set de clés explicitement vidées par l'utilisateur
     // Ces clés ne doivent JAMAIS être réinjectées par le batch ou les valeurs calculées
     const clearedKeys = new Set<string>(JSON.parse(clearedKeysJson) as string[]);
     
-    // 🔥 FIX 04/02/2026: Enrichir avec les valeurs calculées FRAÎCHES du broadcast
-    // Ces valeurs viennent du backend APRÈS le calcul, donc elles sont correctes
-    // 🛡️ Mais ne PAS réinjecter les valeurs pour des champs explicitement vidés par l'utilisateur
+    // 🔥 FIX 04/02/2026: Enrichir avec les valeurs calculées du broadcast
+    // 🔥 FIX 21/02/2026: NE PAS écraser les valeurs utilisateur existantes dans formData !
+    // AVANT: `formDataParsed = { ...formDataParsed, ...safeBroadcast }` → broadcast écrasait formData
+    // BUG: Quand l'utilisateur change onduleur de Huawei→DEYE, formData a DEYE mais
+    // broadcastedCalcValues a encore Huawei (du dernier autosave) → spread remet Huawei
+    // → le lookup batterie envoyait toujours Huawei → n'affichait que les batteries Huawei !
+    // FIX: formData (saisie utilisateur fraîche) a PRIORITÉ sur broadcast (potentiellement stale)
+    // → broadcast ne complète que les clés ABSENTES ou vides de formData
     if (formDataParsed && Object.keys(broadcastedCalcValues).length > 0) {
       const safeBroadcast = { ...broadcastedCalcValues };
       for (const key of clearedKeys) {
         delete safeBroadcast[key];
       }
-      formDataParsed = { ...formDataParsed, ...safeBroadcast };
-      console.log(`🔧 [useTBLTableLookup] formData enrichi avec ${Object.keys(safeBroadcast).length} valeurs calculées fraîches`);
+      let enrichedCount = 0;
+      for (const [key, value] of Object.entries(safeBroadcast)) {
+        const existing = formDataParsed[key];
+        // Ne compléter QUE si la clé est absente ou vide dans formData
+        if (existing === undefined || existing === null || existing === '') {
+          formDataParsed[key] = value;
+          enrichedCount++;
+        }
+      }
+      if (enrichedCount > 0) {
+        console.log(`🔧 [useTBLTableLookup] formData enrichi avec ${enrichedCount}/${Object.keys(safeBroadcast).length} valeurs calculées (sans écraser les saisies utilisateur)`);
+      }
     }
 
     if (isTargetField) {
@@ -490,7 +505,8 @@ export function useTBLTableLookup(
           // Uniquement si des valeurs utilisateur existent (filteredFormData a déjà exclu les images)
           if (Object.keys(filteredFormData).length > 0) {
             const formValues = JSON.stringify(filteredFormData);
-            // � FIX: Si formValues > 8KB, utiliser POST au lieu de supprimer les formValues
+
+            //  FIX: Si formValues > 8KB, utiliser POST au lieu de supprimer les formValues
             // Cela permet le filtrage dynamique même avec beaucoup de champs
             if (formValues.length > 8000) {
               console.warn(`[useTBLTableLookup] ⚠️ formValues volumineuses (${(formValues.length / 1024).toFixed(1)} KB), envoi via POST`);
