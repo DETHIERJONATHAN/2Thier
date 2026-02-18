@@ -7725,16 +7725,10 @@ async function applyTableFilters(
   });
   
   if (activeFilters.length === 0) {
-    // 🔥 FIX: Filters exist but no source value selected yet → return EMPTY options
-    // User must select a value in the source field before options appear
-    // BEFORE: returned ALL rows (matrix.map((_, i) => i)) — caused SELECT to show all options
-    return [];
+    return matrix.map((_, i) => i);
   }
   
   if (activeFilters.length < resolvedFilters.length) {
-    // 🔥 FIX: Some filters couldn't be resolved (source value missing)
-    // Return EMPTY — all filter conditions must be satisfiable
-    return [];
   }
 
   // Filtrer les lignes
@@ -11968,13 +11962,8 @@ router.all('/nodes/:nodeId/table/lookup', async (req, res) => {
 
     // Appliquer les filtres si configurÃƒÆ’Ã‚Â©s
     let filteredRowIndices: number[] = fullMatrix.map((_, i) => i);
-    if (filters.length > 0) {
-      // 🔥 FIX: Toujours appliquer les filtres quand ils sont configurés,
-      // même si formValues est vide → retournera [] (aucune option) car les filtres
-      // ne peuvent pas être résolus. Cela évite d'afficher TOUTES les options
-      // quand le champ source n'a pas encore de valeur.
-      // BEFORE: exigeait Object.keys(formValues).length > 0, ce qui renvoyait
-      // toutes les options quand formValues était vide
+    if (filters.length > 0 && Object.keys(formValues).length > 0) {
+      // Utiliser columns DIRECTEMENT (pas columnsWithA) car cells[i] = valeur pour columns[i]
       filteredRowIndices = await applyTableFilters(fullMatrixForFilters, columns, filters, formValues);
     }
 

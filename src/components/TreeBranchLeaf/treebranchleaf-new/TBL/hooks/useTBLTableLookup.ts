@@ -219,7 +219,13 @@ export function useTBLTableLookup(
     // → le lookup batterie envoyait toujours Huawei → n'affichait que les batteries Huawei !
     // FIX: formData (saisie utilisateur fraîche) a PRIORITÉ sur broadcast (potentiellement stale)
     // → broadcast ne complète que les clés ABSENTES ou vides de formData
-    if (formDataParsed && Object.keys(broadcastedCalcValues).length > 0) {
+    // 🔥 FIX STALE DATA: Après nouveau devis, ne PAS enrichir avec les valeurs
+    // broadcastées car elles contiennent des données du devis précédent
+    // (onduleur, batterie, panneau) renvoyées par create-and-evaluate depuis la DB
+    const newDevisTs = typeof window !== 'undefined' ? (window as any).__TBL_NEW_DEVIS_TS : 0;
+    const isNewDevisRecent = newDevisTs && (Date.now() - newDevisTs < 10000);
+    
+    if (!isNewDevisRecent && formDataParsed && Object.keys(broadcastedCalcValues).length > 0) {
       const safeBroadcast = { ...broadcastedCalcValues };
       for (const key of clearedKeys) {
         delete safeBroadcast[key];
@@ -446,7 +452,7 @@ export function useTBLTableLookup(
           // Si oui, ne PAS injecter les vieilles valeurs calculées du batch cache
           // car elles proviennent du devis précédent et pollueraient les filtres
           const newDevisTs = typeof window !== 'undefined' ? (window as any).__TBL_NEW_DEVIS_TS : 0;
-          const isNewDevisRecent = newDevisTs && (Date.now() - newDevisTs < 5000);
+          const isNewDevisRecent = newDevisTs && (Date.now() - newDevisTs < 10000);
           
           // 🚀 BATCHING: Utiliser le cache batch pour les valeurs calculées au lieu de charger tous les nœuds
           // Cela évite un appel API /trees/:id/nodes pour CHAQUE champ SELECT

@@ -2348,7 +2348,7 @@ const TBL: React.FC<TBLProps> = ({
     // Avant, les GET n'étaient bloqués qu'après 300ms de debounce (dans doAutosave)
     // Pendant ces 300ms, un GET pouvait retourner des valeurs stale et écraser l'affichage
     if (!fieldId?.startsWith('__mirror_data_')) {
-      blockGetRequestsTemporarily(5000); // 🔥 FIX R10: Protection 5s (couvre debounce 300ms + latence réseau), sera reset par unblockGetRequests dans doAutosave
+      blockGetRequestsTemporarily(2000); // 🔥 FIX R10: Protection 2s (couvre debounce 300ms + latence réseau), sera reset par unblockGetRequests dans doAutosave
     }
 
     // Si la validation passe, mettre à jour le state
