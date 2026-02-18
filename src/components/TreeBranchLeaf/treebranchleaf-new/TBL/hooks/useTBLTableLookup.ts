@@ -23,6 +23,8 @@ import { canFieldBeSelect } from '../../../../../lib/fieldDuplicationPolicy';
 
 // 🚀 PERF: Cache global pour les SelectConfig
 const selectConfigCache = new Map<string, TreeBranchLeafSelectConfig>();
+// 🚀 PERF: Compteur de génération : incrémenté à chaque clear() pour invalider les lastSentLookupKeyRef
+let lookupCacheGeneration = 0;
 // 🚀 PERF: Cache résultat lookup par (fieldId + formValuesHash) pour éviter appels réseau redondants
 type LookupCacheEntry = {
   options: TableLookupOption[];
@@ -120,6 +122,10 @@ export function useTBLTableLookup(
   const pendingCalcValuesRef = useRef<Record<string, any>>({});
   const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const replaceAllRef = useRef(false);
+  // 🚀 PERF: Clé du dernier lookup exécuté avec succès et génération de cache associée
+  // Permet de skipper les re-exécutions du useEffect quand les filtres réels n'ont pas changé
+  const lastSentLookupKeyRef = useRef<string>('');
+  const lastSentCacheGenRef = useRef<number>(-1);
   
   // 🎯 Écouter tbl-force-retransform pour récupérer les valeurs calculées FRAÎCHES
   useEffect(() => {
@@ -136,6 +142,7 @@ export function useTBLTableLookup(
         replaceAllRef.current = false;
         // 🚀 PERF: Invalider le cache lookup au changement de devis pour éviter données stales
         lookupResultCache.clear();
+        lookupCacheGeneration++; // Invalide tous les lastSentLookupKeyRef en jeu
         const protectedIds = (event.detail as any)?.protectedNodeIds;
         if (Array.isArray(protectedIds) && protectedIds.length > 0) {
           setBroadcastedCalcValues(prev => {
@@ -568,6 +575,20 @@ export function useTBLTableLookup(
           return;
         }
 
+        // 🚀 PERF: Si la même clé a déjà été traitée avec succès dans cette instance
+        // (et que la génération de cache n'a pas été invalidée), skip l'appel API
+        // Cas typique : broadcast de valeurs calculées qui ne changent pas les filtres réels de CE champ
+        if (
+          lookupCacheKey === lastSentLookupKeyRef.current &&
+          lastSentCacheGenRef.current === lookupCacheGeneration
+        ) {
+          setLoading(false);
+          if (isTBLDebugEnabled()) {
+            console.log(`[useTBLTableLookup] ⚡ Skip lookup (clé identique au dernier appel): ${fieldId}`);
+          }
+          return;
+        }
+
         if (usePostMethod) {
           // POST: envoyer formValues dans le body pour éviter URI Too Long
           table = await api.post<TableLookupPayload>(
@@ -629,6 +650,9 @@ export function useTBLTableLookup(
           config: selectConfig,
           tableData: newTableData,
         });
+        // 🚀 PERF: Mémoriser la clé réussie pour les prochains broadcasts
+        lastSentLookupKeyRef.current = lookupCacheKey;
+        lastSentCacheGenRef.current = lookupCacheGeneration;
 
         setOptions(extractedOptions);
         setConfig(selectConfig);
