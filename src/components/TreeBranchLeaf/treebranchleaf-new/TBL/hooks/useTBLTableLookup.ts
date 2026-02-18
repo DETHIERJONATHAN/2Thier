@@ -442,10 +442,16 @@ export function useTBLTableLookup(
               return acc;
             }, {} as Record<string, any>);
           
+          // � FIX STALE DATA: Vérifier si un nouveau devis vient d'être créé
+          // Si oui, ne PAS injecter les vieilles valeurs calculées du batch cache
+          // car elles proviennent du devis précédent et pollueraient les filtres
+          const newDevisTs = typeof window !== 'undefined' ? (window as any).__TBL_NEW_DEVIS_TS : 0;
+          const isNewDevisRecent = newDevisTs && (Date.now() - newDevisTs < 5000);
+          
           // 🚀 BATCHING: Utiliser le cache batch pour les valeurs calculées au lieu de charger tous les nœuds
           // Cela évite un appel API /trees/:id/nodes pour CHAQUE champ SELECT
           try {
-            if (batchContext.isReady && batchContext.batchData?.valuesByNode) {
+            if (!isNewDevisRecent && batchContext.isReady && batchContext.batchData?.valuesByNode) {
               // Utiliser le cache batch pour injecter les valeurs calculées
               const valuesByNode = batchContext.batchData.valuesByNode;
               for (const [nodeId, valueData] of Object.entries(valuesByNode)) {
@@ -468,8 +474,9 @@ export function useTBLTableLookup(
                 }
               }
               if (isTargetField) console.log(`[DEBUG][Test - liste] 🚀 Valeurs calculées depuis batch cache`);
-            } else {
+            } else if (!isNewDevisRecent) {
               // Fallback: Charger depuis API si batch pas disponible
+              // 🔥 FIX: Ne PAS charger si nouveau devis récent (données stales)
               const treeId = (window as any).__TBL_LAST_TREE_ID;
               if (treeId) {
                 if (isTargetField) console.log(`[DEBUG][Test - liste] ⚠️ Batch pas prêt, fallback API /trees/${treeId}/nodes`);

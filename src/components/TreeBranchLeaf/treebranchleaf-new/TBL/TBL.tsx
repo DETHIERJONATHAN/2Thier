@@ -299,6 +299,16 @@ const TBL: React.FC<TBLProps> = ({
         return kept;
       });
 
+      // 🔥 FIX STALE DATA: Vider complètement window.TBL_FORM_DATA pour empêcher
+      // la réinjection de données stales via le sync useEffect
+      if (typeof window !== 'undefined') {
+        (window as any).TBL_FORM_DATA = {};
+        // 🔥 Marqueur temporel pour que les hooks (useTBLTableLookup, etc.)
+        // sachent qu'un nouveau devis vient d'être créé et ne réinjectent pas
+        // les vieilles valeurs calculées du batch cache
+        (window as any).__TBL_NEW_DEVIS_TS = Date.now();
+      }
+
       // 🔥 NOUVEAU: Vider aussi les champs DISPLAY calculés côté frontend
       // Mais exclure les nœuds protégés du clear
       broadcastCalculatedRefresh({
