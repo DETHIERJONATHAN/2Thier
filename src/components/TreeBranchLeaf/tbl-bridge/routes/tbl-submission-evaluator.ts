@@ -1253,8 +1253,8 @@ const displayDeps = new Map<string, Set<string>>(); // nodeId → Set<dependsOn>
     return aDepth - bDepth;
   });
 
-  const results: { updated: number; created: number; stored: number; displayFieldsUpdated: number } = { 
-    updated: 0, created: 0, stored: 0, displayFieldsUpdated: 0 
+  const results: { updated: number; created: number; stored: number; displayFieldsUpdated: number; computedNodeIds: string[] } = { 
+    updated: 0, created: 0, stored: 0, displayFieldsUpdated: 0, computedNodeIds: [] 
   };
   
   // 🎯 Valeurs calculées par submissionId (inclut DISPLAY mais ne touche jamais aux neutral user inputs)
@@ -2196,6 +2196,11 @@ const displayDeps = new Map<string, Set<string>>(); // nodeId → Set<dependsOn>
     }
   }
 
+  // 🔥 FIX BROADCAST-NULL 2026: Exposer les nodeIds freshement calculés (même si value=null)
+  // Permet au client d'utiliser operationResult comme fallback pour les fields avec ∅/null
+  // Cela évite le 🧯 safety GET +650ms pour des champs type table dont le lookup échoue
+  results.computedNodeIds = computedValuesToStore.map(c => c.nodeId);
+
   return results;
 }
 
@@ -2762,6 +2767,8 @@ router.post('/submissions/create-and-evaluate', async (req, res) => {
     }
     
     // 5. Sauvegarder d'abord les données UTILISATEUR en base, puis évaluer et sauvegarder les CAPACITÉS
+    // 🔥 FIX BROADCAST-NULL: Hisser evalStats pour l'inclure dans la réponse (freshlyComputedNodeIds)
+    let evalStats: { updated: number; created: number; stored: number; displayFieldsUpdated: number; computedNodeIds: string[] } | null = null;
     if (cleanFormData && typeof cleanFormData === 'object') {
       // A. Sauvegarder les données utilisateur directes (réutilise NO-OP)
   const savedCount = await saveUserEntriesNeutral(submissionId!, cleanFormData, effectiveTreeId);
@@ -2789,7 +2796,7 @@ router.post('/submissions/create-and-evaluate', async (req, res) => {
       const effectiveMode = mode;
       
       // C. Évaluer et persister les capacités avec NO-OP - 🔑 PASSER LE FORMDATA pour réactivité !
-      const evalStats = await evaluateCapacitiesForSubmission(submissionId!, organizationId!, userId || null, effectiveTreeId, cleanFormData, effectiveMode, triggerFieldId);
+      evalStats = await evaluateCapacitiesForSubmission(submissionId!, organizationId!, userId || null, effectiveTreeId, cleanFormData, effectiveMode, triggerFieldId);
     }
     
     // 3. Évaluation immédiate déjà effectuée via operation-interpreter ci-dessus.
@@ -2811,7 +2818,10 @@ router.post('/submissions/create-and-evaluate', async (req, res) => {
       submission: {
         ...finalSubmission,
         TreeBranchLeafSubmissionData: submissionData
-      }
+      },
+      // 🔥 FIX BROADCAST-NULL 2026: NodeIds des DISPLAY fields freshement calculés ce cycle
+      // Permet au client d'utiliser operationResult comme valeur inline même si value=null (ex: table lookup ∅)
+      freshlyComputedNodeIds: evalStats?.computedNodeIds ?? []
     });
     
   } catch (error) {

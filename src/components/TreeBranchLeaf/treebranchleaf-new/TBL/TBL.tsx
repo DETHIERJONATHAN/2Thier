@@ -1372,15 +1372,36 @@ const TBL: React.FC<TBLProps> = ({
       } else {
         // Mode normal: extraire les valeurs calculées de la réponse
         // pour les passer directement dans l'événement au lieu de refetch
-        const submissionDataArray = detail?.submissionData as Array<{nodeId?: string; value?: unknown}> | undefined;
+        const submissionDataArray = detail?.submissionData as Array<{nodeId?: string; value?: unknown; operationResult?: unknown}> | undefined;
+        // 🔥 FIX BROADCAST-NULL 2026: Set des nodeIds freshement calculés ce cycle
+        // Ces nodeIds peuvent avoir value=null (ex: table lookup ∅) mais on veut leur donner une valeur inline
+        // via operationResult pour éviter le 🧯 safety GET +650ms à chaque changement de champ
+        const freshlyComputedSet = new Set<string>(
+          Array.isArray(detail?.freshlyComputedNodeIds) ? detail.freshlyComputedNodeIds as string[] : []
+        );
         if (submissionDataArray && Array.isArray(submissionDataArray)) {
           for (const item of submissionDataArray) {
-            // 🔥 FIX 30/01/2026: Exclure les valeurs null pour éviter d'écraser les valeurs existantes
-            // Quand un display field est skippé par le trigger filter, sa valeur en base peut être null
-            // mais on ne veut PAS écraser la valeur affichée actuellement
-            if (item?.nodeId && item?.value !== undefined && item?.value !== null) {
+            if (!item?.nodeId) continue;
+            if (item?.value !== undefined && item?.value !== null) {
+              // Cas normal: valeur calculée valide → utiliser directement
               calculatedValuesMap[item.nodeId] = item.value;
+            } else if (freshlyComputedSet.has(item.nodeId) && item?.operationResult != null) {
+              // 🔥 FIX BROADCAST-NULL: Field freshement calculé mais value=null (ex: table lookup ∅)
+              // Utiliser operationResult comme valeur d'affichage inline → 📥 immédiat au lieu de 🧯 +650ms
+              const opRes = item.operationResult;
+              const displayVal = typeof opRes === 'string' ? opRes
+                : (typeof opRes === 'object' && opRes !== null)
+                  ? ((opRes as Record<string, unknown>).humanText
+                    ?? (opRes as Record<string, unknown>).value
+                    ?? (opRes as Record<string, unknown>).result
+                    ?? (opRes as Record<string, unknown>).text) as string ?? null
+                  : null;
+              if (displayVal != null) {
+                calculatedValuesMap[item.nodeId] = displayVal;
+                console.log(`💡 [broadcastCalculatedRefresh] FIX BROADCAST-NULL: ${item.nodeId} → opResult inline: ${displayVal}`);
+              }
             }
+            // Sinon: field skippé par FIX R12 avec value=null → pas touché (évite d'écraser valeur affichée)
           }
           
           // � FIX DISPLAY-ZERO: Fusionner les valeurs accumulées des broadcasts précédents sautés
@@ -1558,15 +1579,23 @@ const TBL: React.FC<TBLProps> = ({
                 evaluatedSubmissionId: createdOrReusedId,
                 recalcCount: evaluationResponse?.submission?.TreeBranchLeafSubmissionData?.length,
                 // 🎯 FIX: Passer les valeurs calculées pour éviter le refetch race condition
-                submissionData: evaluationResponse?.submission?.TreeBranchLeafSubmissionData
+                submissionData: evaluationResponse?.submission?.TreeBranchLeafSubmissionData,
+                // 🔥 FIX BROADCAST-NULL: nodeIds freshement calculés (incluant ceux avec value=null/∅)
+                freshlyComputedNodeIds: evaluationResponse?.freshlyComputedNodeIds
               });
             } else {
               // 🔥 FIX DISPLAY-ZERO: Accumuler les valeurs pour le prochain broadcast
-              const sdArray = evaluationResponse?.submission?.TreeBranchLeafSubmissionData as Array<{nodeId?: string; value?: unknown}> | undefined;
+              const sdArray = evaluationResponse?.submission?.TreeBranchLeafSubmissionData as Array<{nodeId?: string; value?: unknown; operationResult?: unknown}> | undefined;
+              const freshSet = new Set<string>(Array.isArray(evaluationResponse?.freshlyComputedNodeIds) ? evaluationResponse.freshlyComputedNodeIds as string[] : []);
               if (sdArray && Array.isArray(sdArray)) {
                 for (const entry of sdArray) {
                   if (entry?.nodeId && entry?.value !== undefined && entry?.value !== null) {
                     accumulatedDisplayValuesRef.current[entry.nodeId] = entry.value;
+                  } else if (entry?.nodeId && freshSet.has(entry.nodeId) && entry?.operationResult != null) {
+                    // 🔥 FIX BROADCAST-NULL: Accumuler la valeur d'affichage même pour les fields avec value=null
+                    const opRes = entry.operationResult;
+                    const displayVal = typeof opRes === 'string' ? opRes : (opRes as Record<string, unknown>)?.humanText as string ?? null;
+                    if (displayVal) accumulatedDisplayValuesRef.current[entry.nodeId] = displayVal;
                   }
                 }
               }
@@ -1604,15 +1633,22 @@ const TBL: React.FC<TBLProps> = ({
                 reason: 'create-and-evaluate',
                 evaluatedSubmissionId: createdOrReusedId,
                 recalcCount: evaluationResponse?.submission?.TreeBranchLeafSubmissionData?.length,
-                submissionData: evaluationResponse?.submission?.TreeBranchLeafSubmissionData
+                submissionData: evaluationResponse?.submission?.TreeBranchLeafSubmissionData,
+                // 🔥 FIX BROADCAST-NULL: nodeIds freshement calculés (incluant ceux avec value=null/∅)
+                freshlyComputedNodeIds: evaluationResponse?.freshlyComputedNodeIds
               });
             } else {
               // 🔥 FIX DISPLAY-ZERO: Accumuler les valeurs pour le prochain broadcast
-              const sdArray = evaluationResponse?.submission?.TreeBranchLeafSubmissionData as Array<{nodeId?: string; value?: unknown}> | undefined;
+              const sdArray = evaluationResponse?.submission?.TreeBranchLeafSubmissionData as Array<{nodeId?: string; value?: unknown; operationResult?: unknown}> | undefined;
+              const freshSet = new Set<string>(Array.isArray(evaluationResponse?.freshlyComputedNodeIds) ? evaluationResponse.freshlyComputedNodeIds as string[] : []);
               if (sdArray && Array.isArray(sdArray)) {
                 for (const entry of sdArray) {
                   if (entry?.nodeId && entry?.value !== undefined && entry?.value !== null) {
                     accumulatedDisplayValuesRef.current[entry.nodeId] = entry.value;
+                  } else if (entry?.nodeId && freshSet.has(entry.nodeId) && entry?.operationResult != null) {
+                    const opRes = entry.operationResult;
+                    const displayVal = typeof opRes === 'string' ? opRes : (opRes as Record<string, unknown>)?.humanText as string ?? null;
+                    if (displayVal) accumulatedDisplayValuesRef.current[entry.nodeId] = displayVal;
                   }
                 }
               }
@@ -1704,15 +1740,22 @@ const TBL: React.FC<TBLProps> = ({
             evaluatedSubmissionId: effectiveSubmissionId,
             recalcCount: evaluationResponse?.submission?.TreeBranchLeafSubmissionData?.length,
             // 🎯 FIX: Passer les valeurs calculées pour éviter le refetch race condition
-            submissionData: evaluationResponse?.submission?.TreeBranchLeafSubmissionData
+            submissionData: evaluationResponse?.submission?.TreeBranchLeafSubmissionData,
+            // 🔥 FIX BROADCAST-NULL: nodeIds freshement calculés (incluant ceux avec value=null/∅)
+            freshlyComputedNodeIds: evaluationResponse?.freshlyComputedNodeIds
           });
         } else {
           // 🔥 FIX DISPLAY-ZERO: Accumuler les valeurs pour le prochain broadcast
-          const sdArray = evaluationResponse?.submission?.TreeBranchLeafSubmissionData as Array<{nodeId?: string; value?: unknown}> | undefined;
+          const sdArray = evaluationResponse?.submission?.TreeBranchLeafSubmissionData as Array<{nodeId?: string; value?: unknown; operationResult?: unknown}> | undefined;
+          const freshSet = new Set<string>(Array.isArray(evaluationResponse?.freshlyComputedNodeIds) ? evaluationResponse.freshlyComputedNodeIds as string[] : []);
           if (sdArray && Array.isArray(sdArray)) {
             for (const entry of sdArray) {
               if (entry?.nodeId && entry?.value !== undefined && entry?.value !== null) {
                 accumulatedDisplayValuesRef.current[entry.nodeId] = entry.value;
+              } else if (entry?.nodeId && freshSet.has(entry.nodeId) && entry?.operationResult != null) {
+                const opRes = entry.operationResult;
+                const displayVal = typeof opRes === 'string' ? opRes : (opRes as Record<string, unknown>)?.humanText as string ?? null;
+                if (displayVal) accumulatedDisplayValuesRef.current[entry.nodeId] = displayVal;
               }
             }
           }
