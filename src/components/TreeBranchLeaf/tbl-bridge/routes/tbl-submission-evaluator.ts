@@ -52,6 +52,15 @@ interface CachedTriggerIndex {
 const triggerIndexCache = new Map<string, CachedTriggerIndex>();
 const TRIGGER_INDEX_CACHE_TTL = 60_000; // 60 secondes
 
+// 🚀 CACHE: Nœuds exclus (DISPLAY / hasFormula) par treeId pour saveUserEntriesNeutral
+// Évite 2-3 findMany(nodes) répétés sur chaque frappe (coût ~300-500ms)
+interface CachedExcludedNodes {
+  excludedNodeIds: Set<string>;
+  timestamp: number;
+}
+const excludedNodesCache = new Map<string, CachedExcludedNodes>();
+const EXCLUDED_NODES_CACHE_TTL = 60_000; // 60s
+
 /** Invalider le cache du trigger index pour un treeId donné */
 export function invalidateTriggerIndexCache(treeId?: string) {
   if (treeId) {
@@ -348,38 +357,51 @@ async function upsertComputedValuesForSubmission(
 ): Promise<number> {
   if (!submissionId || !rows.length) return 0;
 
-  // 🚀 PERF FIX: Batch upserts en une seule transaction au lieu de N upserts séquentiels
+  // 🚀 PERF FIX v2: ONE raw SQL batch upsert au lieu de N upserts séquentiels
+  // Avant: N × upsert() dans $transaction = N round-trips DB × ~50ms = ~1-2s pour 25 champs
+  // Après: 1 INSERT...ON CONFLICT = 1 round-trip DB = ~50ms
   const validRows = rows.filter(r => !!r.nodeId);
   if (validRows.length === 0) return 0;
 
-  const now = new Date();
-  const ops = validRows.map(row =>
-    prisma.treeBranchLeafSubmissionData.upsert({
-      where: { submissionId_nodeId: { submissionId, nodeId: row.nodeId } },
-      create: {
-        id: `${submissionId}-${row.nodeId}-calc-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
-        submissionId,
-        nodeId: row.nodeId,
-        value: row.value,
-        sourceRef: row.sourceRef ?? null,
-        operationSource: row.operationSource ?? null,
-        fieldLabel: row.fieldLabel ?? null,
-        operationDetail: row.operationDetail ?? null,
-        operationResult: row.operationResult ?? null,
-        lastResolved: now
-      },
-      update: {
-        value: row.value,
-        sourceRef: row.sourceRef ?? null,
-        operationSource: row.operationSource ?? null,
-        fieldLabel: row.fieldLabel ?? null,
-        operationDetail: row.operationDetail ?? null,
-        operationResult: row.operationResult ?? null,
-        lastResolved: now
-      }
-    })
-  );
-  await prisma.$transaction(ops);
+  // Colonnes: id, submissionId, nodeId, value, sourceRef, operationSource, fieldLabel, operationDetail, operationResult, lastResolved
+  const COLS_PER_ROW = 9; // lastResolved utilise NOW() côté SQL
+  const params: (string | null)[] = [];
+  const valuePlaceholders: string[] = [];
+
+  for (const [i, row] of validRows.entries()) {
+    const base = i * COLS_PER_ROW + 1;
+    // ($1, $2, $3, $4, $5, $6, $7, ($8)::jsonb, ($9)::jsonb, NOW())
+    valuePlaceholders.push(
+      `($${base}, $${base+1}, $${base+2}, $${base+3}, $${base+4}, $${base+5}, $${base+6}, ($${base+7})::jsonb, ($${base+8})::jsonb, NOW())`
+    );
+    params.push(
+      `${submissionId}-${row.nodeId}-calc-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`, // id
+      submissionId,
+      row.nodeId,
+      row.value ?? null,
+      row.sourceRef ?? null,
+      row.operationSource ?? null,
+      row.fieldLabel ?? null,
+      row.operationDetail != null ? JSON.stringify(row.operationDetail) : null,   // cast ::jsonb
+      row.operationResult != null ? JSON.stringify(row.operationResult) : null,   // cast ::jsonb
+    );
+  }
+
+  const sql = `
+    INSERT INTO "TreeBranchLeafSubmissionData"
+      ("id", "submissionId", "nodeId", "value", "sourceRef", "operationSource", "fieldLabel", "operationDetail", "operationResult", "lastResolved")
+    VALUES ${valuePlaceholders.join(', ')}
+    ON CONFLICT ("submissionId", "nodeId") DO UPDATE SET
+      "value"           = EXCLUDED."value",
+      "sourceRef"       = EXCLUDED."sourceRef",
+      "operationSource" = EXCLUDED."operationSource",
+      "fieldLabel"      = EXCLUDED."fieldLabel",
+      "operationDetail" = EXCLUDED."operationDetail",
+      "operationResult" = EXCLUDED."operationResult",
+      "lastResolved"    = EXCLUDED."lastResolved"
+  `;
+
+  await prisma.$executeRawUnsafe(sql, ...params);
   return validRows.length;
 }
 
@@ -641,57 +663,45 @@ async function saveUserEntriesNeutral(
   // Mais beaucoup de champs calculés (ex: "Main d'œuvre TVAC") ont subType='TEXT' malgré hasFormula=true.
   // Résultat: saveUserEntriesNeutral les sauvegardait comme inputs "neutral", ÉCRASANT la valeur calculée.
   // Lors de l'autosave (mode='autosave', skip DISPLAY), cette valeur stale persistait.
-  const excludedNodes = treeId
-    ? await prisma.treeBranchLeafNode.findMany({
+  // 🚀 CACHE: Nœuds exclus per-tree (DISPLAY / hasFormula) — évite 2 findMany à chaque frappe
+  let excludedNodeIds: Set<string>;
+  if (treeId) {
+    const cached = excludedNodesCache.get(treeId);
+    if (cached && (Date.now() - cached.timestamp < EXCLUDED_NODES_CACHE_TTL)) {
+      excludedNodeIds = cached.excludedNodeIds;
+    } else {
+      // Calcul initial: charger les nœuds exclus + affiner (FIX E2 contraintes)
+      const excludedNodes = await prisma.treeBranchLeafNode.findMany({
         where: {
           treeId,
           OR: [
             { fieldType: 'DISPLAY' },
-            {
-              type: { in: ['leaf_field', 'LEAF_FIELD'] },
-              subType: { in: ['display', 'DISPLAY', 'Display'] },
-            },
-            // 🔥 FIX E: Exclure TOUT nœud ayant une formule ou condition active
-            // Si hasFormula=true → c'est un champ calculé, pas un input utilisateur
+            { type: { in: ['leaf_field', 'LEAF_FIELD'] }, subType: { in: ['display', 'DISPLAY', 'Display'] } },
             { hasFormula: true },
             { hasCondition: true },
           ],
         },
         select: { id: true, label: true },
-      })
-    : [];
-
-  const excludedNodeIds = new Set(excludedNodes.map(n => n.id));
-
-  // 🔧 FIX E2: RE-INCLURE les nœuds qui ont UNIQUEMENT des formules de CONTRAINTE
-  // Une formule de contrainte a targetProperty non-null (ex: "number_max").
-  // Ces champs restent éditables — la formule sert juste à limiter la valeur max/min.
-  // On ne doit PAS les exclure de la sauvegarde utilisateur.
-  if (treeId && excludedNodeIds.size > 0) {
-    // Récupérer les nœuds exclus qui ont hasFormula=true
-    const formulaExcludedIds = excludedNodes
-      .filter(n => excludedNodeIds.has(n.id))
-      .map(n => n.id);
-    
-    if (formulaExcludedIds.length > 0) {
-      // Trouver les nœuds qui ont AU MOINS une formule de calcul (targetProperty IS NULL)
-      const nodesWithCalcFormulas = await prisma.treeBranchLeafNodeFormula.findMany({
-        where: {
-          nodeId: { in: formulaExcludedIds },
-          targetProperty: null, // formule de calcul (pas de contrainte)
-        },
-        select: { nodeId: true },
       });
-      const nodesWithCalcSet = new Set(nodesWithCalcFormulas.map(f => f.nodeId));
+      const ids = new Set(excludedNodes.map(n => n.id));
 
-      // Re-inclure les nœuds qui n'ont AUCUNE formule de calcul (uniquement contraintes)
-      for (const nodeId of formulaExcludedIds) {
-        if (!nodesWithCalcSet.has(nodeId)) {
-          // Ce nœud a hasFormula=true mais toutes ses formules sont des contraintes → éditable
-          excludedNodeIds.delete(nodeId);
+      // 🔧 FIX E2: Re-inclure les nœuds avec UNIQUEMENT des formules de contrainte (targetProperty non-null)
+      const formulaExcludedIds = excludedNodes.filter(n => ids.has(n.id)).map(n => n.id);
+      if (formulaExcludedIds.length > 0) {
+        const nodesWithCalcFormulas = await prisma.treeBranchLeafNodeFormula.findMany({
+          where: { nodeId: { in: formulaExcludedIds }, targetProperty: null },
+          select: { nodeId: true },
+        });
+        const nodesWithCalcSet = new Set(nodesWithCalcFormulas.map(f => f.nodeId));
+        for (const nodeId of formulaExcludedIds) {
+          if (!nodesWithCalcSet.has(nodeId)) ids.delete(nodeId);
         }
       }
+      excludedNodeIds = ids;
+      excludedNodesCache.set(treeId, { excludedNodeIds: ids, timestamp: Date.now() });
     }
+  } else {
+    excludedNodeIds = new Set<string>();
   }
 
   const sharedRefKeys = Object.keys(formData).filter(isSharedReferenceId);
@@ -2775,20 +2785,8 @@ router.post('/submissions/create-and-evaluate', async (req, res) => {
       // A. Sauvegarder les données utilisateur directes (réutilise NO-OP)
   const savedCount = await saveUserEntriesNeutral(submissionId!, cleanFormData, effectiveTreeId);
       
-      // B. Récupérer toutes les capacités (conditions, formules, tables) depuis TreeBranchLeafNodeVariable
-      const capacities = await prisma.treeBranchLeafNodeVariable.findMany({
-        where: {
-          TreeBranchLeafNode: {
-            treeId: effectiveTreeId
-          },
-          sourceRef: { not: null }
-        },
-        include: {
-          TreeBranchLeafNode: {
-            select: { id: true, label: true }
-          }
-        }
-      });
+      // B. 🚀 PERF: findMany(capacities) supprimé (code mort ~300ms).
+      // evaluateCapacitiesForSubmission charge ses propres données en interne.
       
       
       // � FIX R16: Le moteur de calcul est IDENTIQUE quel que soit le mode (brouillon, lead, enregistré).
