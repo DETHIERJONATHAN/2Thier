@@ -370,9 +370,11 @@ async function upsertComputedValuesForSubmission(
 
   for (const [i, row] of validRows.entries()) {
     const base = i * COLS_PER_ROW + 1;
-    // ($1, $2, $3, $4, $5, $6, $7, ($8)::jsonb, ($9)::jsonb, NOW())
+    // ($1, $2, $3, $4, $5, ($6)::"OperationSource", $7, ($8)::jsonb, ($9)::jsonb, NOW())
+    // ⚠️ CRITIQUE: le cast ::"OperationSource" est obligatoire car prisma.$executeRawUnsafe passe les strings en 'text'
+    // ce qui cause l'erreur "column operationSource is of type OperationSource but expression is of type text"
     valuePlaceholders.push(
-      `($${base}, $${base+1}, $${base+2}, $${base+3}, $${base+4}, $${base+5}, $${base+6}, ($${base+7})::jsonb, ($${base+8})::jsonb, NOW())`
+      `($${base}, $${base+1}, $${base+2}, $${base+3}, $${base+4}, ($${base+5})::"OperationSource", $${base+6}, ($${base+7})::jsonb, ($${base+8})::jsonb, NOW())`
     );
     params.push(
       `${submissionId}-${row.nodeId}-calc-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`, // id
