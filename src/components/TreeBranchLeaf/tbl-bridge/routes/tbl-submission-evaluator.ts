@@ -1253,8 +1253,8 @@ const displayDeps = new Map<string, Set<string>>(); // nodeId → Set<dependsOn>
     return aDepth - bDepth;
   });
 
-  const results: { updated: number; created: number; stored: number; displayFieldsUpdated: number; computedNodeIds: string[] } = { 
-    updated: 0, created: 0, stored: 0, displayFieldsUpdated: 0, computedNodeIds: [] 
+  const results: { updated: number; created: number; stored: number; displayFieldsUpdated: number; computedNodeIds: string[]; computedValues: Array<{ nodeId: string; value: string | null; operationResult?: Prisma.InputJsonValue | null; operationSource?: OperationSourceType | null; fieldLabel?: string | null }> } = { 
+    updated: 0, created: 0, stored: 0, displayFieldsUpdated: 0, computedNodeIds: [], computedValues: [] 
   };
   
   // 🎯 Valeurs calculées par submissionId (inclut DISPLAY mais ne touche jamais aux neutral user inputs)
@@ -2200,6 +2200,8 @@ const displayDeps = new Map<string, Set<string>>(); // nodeId → Set<dependsOn>
   // Permet au client d'utiliser operationResult comme fallback pour les fields avec ∅/null
   // Cela évite le 🧯 safety GET +650ms pour des champs type table dont le lookup échoue
   results.computedNodeIds = computedValuesToStore.map(c => c.nodeId);
+  // 🚀 PERF: Retourner les valeurs calculées directement pour éviter un findMany en fin de route
+  results.computedValues = computedValuesToStore;
 
   return results;
 }
@@ -2768,7 +2770,7 @@ router.post('/submissions/create-and-evaluate', async (req, res) => {
     
     // 5. Sauvegarder d'abord les données UTILISATEUR en base, puis évaluer et sauvegarder les CAPACITÉS
     // 🔥 FIX BROADCAST-NULL: Hisser evalStats pour l'inclure dans la réponse (freshlyComputedNodeIds)
-    let evalStats: { updated: number; created: number; stored: number; displayFieldsUpdated: number; computedNodeIds: string[] } | null = null;
+    let evalStats: { updated: number; created: number; stored: number; displayFieldsUpdated: number; computedNodeIds: string[]; computedValues: Array<{ nodeId: string; value: string | null; operationResult?: Prisma.InputJsonValue | null; operationSource?: OperationSourceType | null; fieldLabel?: string | null }> } | null = null;
     if (cleanFormData && typeof cleanFormData === 'object') {
       // A. Sauvegarder les données utilisateur directes (réutilise NO-OP)
   const savedCount = await saveUserEntriesNeutral(submissionId!, cleanFormData, effectiveTreeId);
@@ -2802,22 +2804,19 @@ router.post('/submissions/create-and-evaluate', async (req, res) => {
     // 3. Évaluation immédiate déjà effectuée via operation-interpreter ci-dessus.
     //    On évite une seconde passe redondante qui réécrit inutilement en base.
     
-    // 4. Retourner la soumission complète (sans include - pas de relation définie)
-    const finalSubmission = await prisma.treeBranchLeafSubmission.findUnique({
-      where: { id: submissionId }
-    });
-    
-    // Récupérer les données de soumission séparément
-    const submissionData = await prisma.treeBranchLeafSubmissionData.findMany({
-      where: { submissionId: submissionId }
-    });
-    
+    // 4. 🚀 PERF: Retourner directement les valeurs calculées en mémoire
+    // On ÉVITE les deux lectures DB redondantes (findUnique + findMany) qui prenaient 1-2s
+    // Le client n'utilise que submission.id + TreeBranchLeafSubmissionData pour le broadcast
     return res.status(201).json({
       success: true,
       message: 'Soumission créée et évaluée avec TBL Prisma',
       submission: {
-        ...finalSubmission,
-        TreeBranchLeafSubmissionData: submissionData
+        id: submissionId,
+        treeId: effectiveTreeId,
+        leadId: effectiveLeadId,
+        status: status || 'draft',
+        // 🔥 Les valeurs calculées sont déjà en mémoire via evalStats → pas de findMany
+        TreeBranchLeafSubmissionData: evalStats?.computedValues ?? []
       },
       // 🔥 FIX BROADCAST-NULL 2026: NodeIds des DISPLAY fields freshement calculés ce cycle
       // Permet au client d'utiliser operationResult comme valeur inline même si value=null (ex: table lookup ∅)
