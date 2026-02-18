@@ -151,6 +151,8 @@ export function useNodeCalculatedValue(
   // 🔇 Anti-spam: mémoriser les derniers refresh globaux traités
   const lastGlobalRefreshKeyRef = useRef<string | null>(null);
   const lastGlobalRefreshAtRef = useRef<number>(0);
+  // 🧯 Filet de sécurité: limiter les refetchs de cohérence quand un node est absent d'un broadcast partiel
+  const lastSafetyRefetchAtRef = useRef<number>(0);
 
   // Fonction pour récupérer la valeur
   const fetchCalculatedValue = useCallback(async () => {
@@ -498,7 +500,20 @@ export function useNodeCalculatedValue(
             setTimeout(() => fetchCalculatedValue(), 350);
             return;
           }
-          console.log(`🛡️ [useNodeCalculatedValue] nodeId=${nodeId} pas dans calculatedValues - conserver valeur actuelle (pas de refetch)`);
+          // 🧯 Filet de sécurité: certains broadcasts "change" sont partiels (skip trigger-index)
+          // et peuvent laisser un DISPLAY avec une valeur stale. On garde la valeur actuelle
+          // par défaut, mais on autorise un refetch différé throttlé pour convergence.
+          // 🔥 FIX 2026-02-18: Réduit 2500ms → 800ms pour couvrir les saisies rapides
+          // (ex: Orientation puis Inclinaison en 1-2s → le 2ème broadcast ne doit pas rester throttled)
+          const safetyRefetchAge = now - lastSafetyRefetchAtRef.current;
+          const shouldSafetyRefetch = !!submissionId && safetyRefetchAge > 800;
+          if (shouldSafetyRefetch) {
+            lastSafetyRefetchAtRef.current = now;
+            console.log(`🧯 [useNodeCalculatedValue] nodeId=${nodeId} absent du broadcast partiel - safety GET différé`);
+            setTimeout(() => fetchCalculatedValue(), 650);
+            return;
+          }
+          console.log(`🛡️ [useNodeCalculatedValue] nodeId=${nodeId} pas dans calculatedValues - conserver valeur actuelle (safety throttled)`);
           return; // 🎯 Ne PAS faire de refetch - le champ n'a pas été impacté par le changement
         }
 
