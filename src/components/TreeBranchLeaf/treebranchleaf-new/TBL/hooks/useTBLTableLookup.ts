@@ -23,6 +23,13 @@ import { canFieldBeSelect } from '../../../../../lib/fieldDuplicationPolicy';
 
 // 🚀 PERF: Cache global pour les SelectConfig
 const selectConfigCache = new Map<string, TreeBranchLeafSelectConfig>();
+// 🚀 PERF: Cache résultat lookup par (fieldId + formValuesHash) pour éviter appels réseau redondants
+type LookupCacheEntry = {
+  options: TableLookupOption[];
+  tableData?: { columns: string[]; rows: string[]; data: unknown[][]; type: 'columns' | 'matrix' };
+  config?: TreeBranchLeafSelectConfig;
+};
+const lookupResultCache = new Map<string, LookupCacheEntry>();
 
 export interface TableLookupOption {
   value: string | number;
@@ -127,6 +134,8 @@ export function useTBLTableLookup(
         if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
         pendingCalcValuesRef.current = {};
         replaceAllRef.current = false;
+        // 🚀 PERF: Invalider le cache lookup au changement de devis pour éviter données stales
+        lookupResultCache.clear();
         const protectedIds = (event.detail as any)?.protectedNodeIds;
         if (Array.isArray(protectedIds) && protectedIds.length > 0) {
           setBroadcastedCalcValues(prev => {
@@ -311,6 +320,14 @@ export function useTBLTableLookup(
             const suffixMatch = fieldId.match(/-(\d{1,3})$/);
             const hasSuffix = !!suffixMatch;
             const baseFieldId = hasSuffix ? fieldId.replace(/-\d{1,3}$/, '') : fieldId;
+
+            // 🚀 PERF: Vérifier d'abord le cache global (évite requêtes répétées à chaque re-render)
+            if (selectConfigCache.has(fieldId)) {
+              selectConfig = selectConfigCache.get(fieldId)!;
+              if (isTBLDebugEnabled()) {
+                console.log(`[useTBLTableLookup] ✅ Config SELECT depuis cache mémoire pour ${fieldId}`);
+              }
+            } else {
             
             if (isTBLDebugEnabled()) {
               console.log(`[useTBLTableLookup] 🔍 Recherche SelectConfig pour fieldId=${fieldId}, hasSuffix=${hasSuffix}, baseFieldId=${baseFieldId}`);
@@ -322,9 +339,15 @@ export function useTBLTableLookup(
               { suppressErrorLogForStatuses: [404] }
             );
 
+            // 🚀 PERF: Stocker dans le cache pour les prochains appels
+            if (selectConfig) {
+              selectConfigCache.set(fieldId, selectConfig);
+            }
+
             if (isTBLDebugEnabled()) {
               console.log(`[useTBLTableLookup] 📥 Réponse PRIMARY:`, selectConfig ? `TROUVÉ - nodeId=${selectConfig.nodeId}` : 'NULL (pas trouvé ou erreur)');
             }
+            } // fin du else (pas dans cache)
 
           } catch (err: any) {
             // 🔥 GESTION CRITIQUE DU BUG INCLINAISON-1
@@ -534,6 +557,17 @@ export function useTBLTableLookup(
         }
         
         let table: TableLookupPayload;
+        // 🚀 PERF: Clé de cache basée sur fieldId + formValues envoyés
+        const lookupCacheKey = `${fieldId}:${usePostMethod ? JSON.stringify(postFormValues) : queryParams}`;
+        const cachedLookup = lookupResultCache.get(lookupCacheKey);
+        if (cachedLookup) {
+          setOptions(cachedLookup.options);
+          setConfig(cachedLookup.config);
+          setTableData(cachedLookup.tableData);
+          setLoading(false);
+          return;
+        }
+
         if (usePostMethod) {
           // POST: envoyer formValues dans le body pour éviter URI Too Long
           table = await api.post<TableLookupPayload>(
@@ -582,14 +616,23 @@ export function useTBLTableLookup(
             });
         }
 
+        const newTableData = (table as any)?.columns !== undefined ? {
+          columns: (table as any).columns,
+          rows: (table as any).rows,
+          data: (table as any).data,
+          type: (table as any).type
+        } : undefined;
+
+        // 🚀 PERF: Stocker résultat dans le cache lookup 
+        lookupResultCache.set(lookupCacheKey, {
+          options: extractedOptions,
+          config: selectConfig,
+          tableData: newTableData,
+        });
+
         setOptions(extractedOptions);
         setConfig(selectConfig);
-        setTableData({
-          columns: table.columns,
-          rows: table.rows,
-          data: table.data,
-          type: table.type
-        });
+        setTableData(newTableData);
         setLoading(false);
       } catch (err) {
         if (isTargetField) console.error(`[DEBUG][Test - liste] 💥 Erreur dans le hook:`, err);
