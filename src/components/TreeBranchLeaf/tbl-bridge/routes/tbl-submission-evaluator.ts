@@ -2951,9 +2951,13 @@ router.post('/submissions/preview-evaluate', async (req, res) => {
     }
 
     // 2) Préparer labelMap pour tous les nodes de l'arbre
-    const nodes = await prisma.treeBranchLeafNode.findMany({ where: { treeId: effectiveTreeId }, select: { id: true, label: true } });
+    // 🔥 FIX: Récupérer tous les champs de label pour parité avec evaluateVariableOperation
+    const nodes = await prisma.treeBranchLeafNode.findMany({ 
+      where: { treeId: effectiveTreeId }, 
+      select: { id: true, label: true, field_label: true, sharedReferenceName: true } 
+    });
     const labelMap = new Map<string, string | null>();
-    for (const n of nodes) labelMap.set(n.id, n.label);
+    for (const n of nodes) labelMap.set(n.id, n.sharedReferenceName || n.field_label || n.label);
 
     // 3) Construire valueMap: données existantes (si baseSubmissionId) + overrides formData
     const valueMap = new Map<string, unknown>();
@@ -3191,6 +3195,12 @@ router.post('/submissions/preview-evaluate', async (req, res) => {
     } as const;
 
     const results: Array<{ nodeId: string; nodeLabel: string | null; sourceRef: string; operationSource: string; operationResult: unknown; operationDetail: unknown }>= [];
+    
+    // 🔥 OPTIMISATION: Préparer le labelMap propre (string only) une seule fois pour tout le lot
+    // Cela évite de le reconstruire à chaque appel de evaluateVariableOperation
+    const safeLabelMap = new Map<string, string>();
+    labelMap.forEach((v, k) => { if (v) safeLabelMap.set(k, v); });
+
     let evaluated = 0;
     for (const cap of capacities) {
       try {
@@ -3206,7 +3216,8 @@ router.post('/submissions/preview-evaluate', async (req, res) => {
             prisma,
             formulaValCache,
             0,
-            context.valueMap
+            context.valueMap,
+            safeLabelMap // 🔥 Pass optimized labelMap
           );
           evaluation = {
             value: fRes.result,
@@ -3217,11 +3228,17 @@ router.post('/submissions/preview-evaluate', async (req, res) => {
         } else {
           // NOUVEAU : Utiliser le système universel operation-interpreter
           // La fonction attend maintenant 4 paramètres : (variableNodeId, submissionId, prisma, valueMap)
+          
           evaluation = await evaluateVariableOperation(
             cap.nodeId,              // variableNodeId
             context.submissionId,     // submissionId
             prisma,                   // prismaClient
-            context.valueMap          // valueMap (données temporaires du formulaire)
+            context.valueMap,         // valueMap (données temporaires du formulaire)
+            {
+              treeId: context.treeId,
+              labelMap: safeLabelMap, // 🔥 Use outer safeLabelMap
+              preloadedVariable: cap // Passer la variable déjà fetchée
+            }
           );
         }
         
