@@ -1910,19 +1910,40 @@ const displayDeps = new Map<string, Set<string>>(); // nodeId → Set<dependsOn>
       } else {
       // ── Chemin normal (non sum-total) ──
       try {
-        // ✨ ÉVALUATION avec le valueMap contenant les données FRAÎCHES
-        capacityResult = await evaluateVariableOperation(
-          capacity.nodeId,
-          submissionId,
-          prisma,
-          valueMap  // 🔑 PASSER LE VALUEMAP avec les données fraîches !
-        );
-        
-        // 🔧 FIX R19: evaluateVariableOperation retourne { value: null } au lieu de throw
-        // quand il n'y a pas de TreeBranchLeafNodeVariable. Le catch-block contient le
-        // fallback vers condition/formula mais n'est jamais atteint → déclencher manuellement.
-        if (capacityResult.value === null && (capacityResult as any).operationDetail?.type === 'missing-variable') {
-          throw new Error(`[FIX R19] Variable manquante pour ${capacity.nodeId} - fallback condition/formula`);
+        // 🚀 FIX R22: Les capacités de type formule (sourceRef = 'formula:...') ont des nodes leaf_field
+        // sans TreeBranchLeafNodeVariable. Appeler evaluateVariableOperation ferait une DB query inutile
+        // et produirait le warning "VARIABLE MANQUANTE". On interprète directement la formule.
+        if (capacity.sourceRef?.startsWith('formula:')) {
+          const formulaValuesCache = new Map<string, InterpretResult>();
+          const fResult = await interpretReference(
+            capacity.sourceRef,
+            submissionId,
+            prisma,
+            formulaValuesCache,
+            0,
+            valueMap
+          );
+          capacityResult = {
+            value: fResult.result,
+            operationDetail: fResult.details,
+            operationResult: fResult.humanText,
+            operationSource: 'formula'
+          };
+        } else {
+          // ✨ ÉVALUATION via le système variable (TreeBranchLeafNodeVariable)
+          capacityResult = await evaluateVariableOperation(
+            capacity.nodeId,
+            submissionId,
+            prisma,
+            valueMap  // 🔑 PASSER LE VALUEMAP avec les données fraîches !
+          );
+          
+          // 🔧 FIX R19: evaluateVariableOperation retourne { value: null } au lieu de throw
+          // quand il n'y a pas de TreeBranchLeafNodeVariable. Le catch-block contient le
+          // fallback vers condition/formula mais n'est jamais atteint → déclencher manuellement.
+          if (capacityResult.value === null && (capacityResult as any).operationDetail?.type === 'missing-variable') {
+            throw new Error(`[FIX R19] Variable manquante pour ${capacity.nodeId} - fallback condition/formula`);
+          }
         }
       } catch (varError) {
         // 🔧 FIX: Si pas de variable mais le noeud a une condition, évaluer la condition directement
@@ -3165,14 +3186,35 @@ router.post('/submissions/preview-evaluate', async (req, res) => {
     for (const cap of capacities) {
       try {
         
-        // NOUVEAU : Utiliser le système universel operation-interpreter
-        // La fonction attend maintenant 4 paramètres : (variableNodeId, submissionId, prisma, valueMap)
-        const evaluation = await evaluateVariableOperation(
-          cap.nodeId,              // variableNodeId
-          context.submissionId,     // submissionId
-          prisma,                   // prismaClient
-          context.valueMap          // valueMap (données temporaires du formulaire)
-        );
+        // 🚀 FIX R22: Pour les capacités de type formule (sourceRef = 'formula:...'), interpréter
+        // directement la formule sans passer par evaluateVariableOperation (qui génère VARIABLE MANQUANTE)
+        let evaluation: { value?: unknown; operationSource?: unknown; operationResult?: unknown; operationDetail?: unknown; displayFormat?: string; unit?: string | null; precision?: number; visibleToUser?: boolean };
+        if (cap.sourceRef?.startsWith('formula:')) {
+          const formulaValCache = new Map<string, InterpretResult>();
+          const fRes = await interpretReference(
+            cap.sourceRef,
+            context.submissionId,
+            prisma,
+            formulaValCache,
+            0,
+            context.valueMap
+          );
+          evaluation = {
+            value: fRes.result,
+            operationSource: 'formula',
+            operationResult: fRes.humanText,
+            operationDetail: fRes.details
+          };
+        } else {
+          // NOUVEAU : Utiliser le système universel operation-interpreter
+          // La fonction attend maintenant 4 paramètres : (variableNodeId, submissionId, prisma, valueMap)
+          evaluation = await evaluateVariableOperation(
+            cap.nodeId,              // variableNodeId
+            context.submissionId,     // submissionId
+            prisma,                   // prismaClient
+            context.valueMap          // valueMap (données temporaires du formulaire)
+          );
+        }
         
         // 🔑 CRITIQUE: Ajouter la valeur calculée au valueMap pour que les formules suivantes puissent l'utiliser
         if (evaluation.value !== null && evaluation.value !== undefined && evaluation.value !== '∅') {
