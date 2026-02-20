@@ -720,12 +720,18 @@ router.get('/:nodeId/calculated-value', async (req: Request, res: Response) => {
           // Stocker uniquement dans SubmissionData (scoped par submission)
           if (isDisplayField) {
             // Stocker dans SubmissionData (scoped)
+            // 🔧 FIX: Normaliser operationSource vers une valeur valide de l'enum Prisma
+            // L'operation-interpreter peut retourner 'fixed', 'field', etc.
+            const validSources = ['condition', 'formula', 'table', 'neutral', 'fixed', 'field'];
+            const normalizedSource = validSources.includes(result.operationSource)
+              ? result.operationSource
+              : 'neutral';
             await prisma.treeBranchLeafSubmissionData.upsert({
               where: { submissionId_nodeId: { submissionId: submissionId!, nodeId } },
               update: {
                 value: stringValue,
                 lastResolved: new Date(),
-                operationSource: result.operationSource || 'operation-interpreter-display',
+                operationSource: normalizedSource,
                 sourceRef: result.sourceRef,
                 operationDetail: result.operationDetail,
                 fieldLabel: node.label
@@ -736,7 +742,7 @@ router.get('/:nodeId/calculated-value', async (req: Request, res: Response) => {
                 nodeId,
                 value: stringValue,
                 lastResolved: new Date(),
-                operationSource: result.operationSource || 'operation-interpreter-display',
+                operationSource: normalizedSource,
                 sourceRef: result.sourceRef,
                 operationDetail: result.operationDetail,
                 fieldLabel: node.label

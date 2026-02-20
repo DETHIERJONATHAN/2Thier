@@ -830,12 +830,12 @@ export class DynamicFormulaEngine {
   }
 
   /**
-   * �🗑️ Nettoyage des ressources
+   * 🗑️ Nettoyage des ressources (caches uniquement)
+   * ⚠️ NE PAS déconnecter prisma ici — le singleton `db` est partagé par toute l'app.
    */
   async cleanup(): Promise<void> {
     this.configCache.clear();
     this.formulaCache.clear();
-    await this.prisma.$disconnect();
   }
 }
 

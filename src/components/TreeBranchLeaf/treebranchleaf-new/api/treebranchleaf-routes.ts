@@ -7938,6 +7938,24 @@ async function resolveFilterValueRef(
       return node.calculatedValue;
     }
     
+    // 🛡️ FIX 20/02/2026: Fallback SubmissionData pour les DISPLAY fields
+    // Les champs DISPLAY stockent leur valeur dans SubmissionData, pas dans node.calculatedValue
+    // Quand le frontend n'a pas encore broadcasté la valeur (race condition de montage),
+    // on essaie de la récupérer depuis la dernière SubmissionData en DB
+    try {
+      const latestSubmissionData = await prisma.treeBranchLeafSubmissionData.findFirst({
+        where: { nodeId },
+        orderBy: { lastResolved: 'desc' },
+        select: { value: true }
+      });
+      if (latestSubmissionData?.value !== null && latestSubmissionData?.value !== undefined && latestSubmissionData?.value !== '') {
+        console.log(`🔧 [resolveFilterValueRef] @calculated.${nodeId} → SubmissionData fallback: ${latestSubmissionData.value}`);
+        return latestSubmissionData.value;
+      }
+    } catch (err) {
+      console.warn(`⚠️ [resolveFilterValueRef] @calculated.${nodeId} → SubmissionData fallback error:`, err);
+    }
+    
     console.log(`⚠️ [resolveFilterValueRef] @calculated.${nodeId} → NO VALUE FOUND`);
     return null;
   }

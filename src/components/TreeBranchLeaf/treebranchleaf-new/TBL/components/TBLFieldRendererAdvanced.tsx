@@ -1284,7 +1284,12 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
     if (!fc) {
       return { activeCaps: [], activeAlerts: [] } as LookupExtensionsResult;
     }
-    return evaluateLookupExtensions(fc, formData);
+    // 🚀 FIX PRÉ-FILTRAGE: Enrichir avec TBL_FORM_DATA pour que les valueCaps/columnOverrides
+    // voient les valeurs calculées (DISPLAY) dès le premier render
+    const enrichedFormData = typeof window !== 'undefined' && (window as any).TBL_FORM_DATA
+      ? { ...(window as any).TBL_FORM_DATA as Record<string, any>, ...formData }
+      : formData;
+    return evaluateLookupExtensions(fc, enrichedFormData);
   }, [field.capabilities?.table?.currentTable?.meta?.lookup, formData]);
 
   const templateAppearanceOverrides = useMemo(() => {
@@ -3304,12 +3309,22 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
           if (filterConfig?.enabled && filterConfig.conditions && filterConfig.conditions.length > 0 && 
               tableLookup.tableData && tableLookup.config) {
             
+            // 🚀 FIX PRÉ-FILTRAGE: Enrichir formData avec les valeurs calculées de TBL_FORM_DATA
+            // AVANT: le filtre utilisait le formData brut (sans valeurs DISPLAY calculées)
+            // → referenceValue null → condition ignorée → toutes les options affichées
+            // → l'utilisateur devait choisir un onduleur (déclenchant un broadcast) pour activer le filtre
+            // MAINTENANT: on injecte les valeurs calculées dès le premier render
+            // formData utilisateur a PRIORITÉ (spread en dernier)
+            const enrichedFormData = typeof window !== 'undefined' && (window as any).TBL_FORM_DATA
+              ? { ...(window as any).TBL_FORM_DATA as Record<string, any>, ...formData }
+              : formData;
+            
             // Filtrer chaque option individuellement
             baseOptions = baseOptions.filter(option => 
               evaluateFilterConditions(
                 option,
                 filterConfig.conditions,
-                formData,
+                enrichedFormData,
                 tableLookup.tableData!,
                 tableLookup.config!,
                 filterConfig.filterLogic || 'AND'
@@ -3330,8 +3345,12 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
               const baseId = baseFieldId || field.id;
               const suffixMatch = field.id.match(/-(\d{1,3})$/);
               const currentSuffix = suffixMatch ? parseInt(suffixMatch[1], 10) : 0;
+              // 🚀 FIX PRÉ-FILTRAGE: Enrichir avec TBL_FORM_DATA pour les valueCaps repeater
+              const enrichedFormDataCaps = typeof window !== 'undefined' && (window as any).TBL_FORM_DATA
+                ? { ...(window as any).TBL_FORM_DATA as Record<string, any>, ...formData }
+                : formData;
               // Parcourir formData pour trouver les copies du même champ
-              for (const [key, val] of Object.entries(formData)) {
+              for (const [key, val] of Object.entries(enrichedFormDataCaps)) {
                 if (!key.startsWith(baseId)) continue;
                 const keySuffix = key === baseId ? 0 : parseInt((key.match(/-(\d{1,3})$/) || ['', '-1'])[1], 10);
                 if (keySuffix === currentSuffix) continue; // Skip la copie courante

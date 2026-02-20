@@ -2601,6 +2601,8 @@ enum OperationSource {
   formula
   table
   neutral
+  fixed
+  field
 }
 
 enum PaymentStatus {

@@ -116,7 +116,30 @@ export function useTBLTableLookup(
   // 🔥 FIX 04/02/2026: Stocker les valeurs calculées FRAÎCHES du broadcast
   // Le lookup doit attendre que create-and-evaluate soit terminé avant de filtrer
   // car formData contient des valeurs STALES (ex: "Puissance WC Total" = 0 au lieu de 9100)
-  const [broadcastedCalcValues, setBroadcastedCalcValues] = useState<Record<string, any>>({});
+  // 🛡️ FIX 20/02/2026: Initialiser depuis TBL_FORM_DATA au lieu de {} vide
+  // Quand un hook monte APRÈS qu'un broadcast ait été émis (ex: "Puissance WC Total"
+  // calculé quand N° panneau change, avant que le champ Onduleur soit rendu/monté),
+  // le hook ratait les valeurs calculées → les filtres du lookup n'étaient pas appliqués
+  // → le dropdown montrait TOUTES les options au lieu des options filtrées.
+  // En initialisant depuis TBL_FORM_DATA, on récupère les valeurs déjà calculées.
+  const [broadcastedCalcValues, setBroadcastedCalcValues] = useState<Record<string, any>>(() => {
+    if (typeof window !== 'undefined' && (window as any).TBL_FORM_DATA) {
+      const snapshot: Record<string, any> = {};
+      for (const [key, value] of Object.entries((window as any).TBL_FORM_DATA as Record<string, any>)) {
+        if (key.startsWith('__mirror_')) continue;
+        if (value === null || value === undefined || value === '') continue;
+        if (typeof value === 'string' && (value.startsWith('data:') || value.length > 2000)) continue;
+        if (value && typeof value === 'object' && !Array.isArray(value)) {
+          try {
+            if (JSON.stringify(value).length > 5000) continue;
+          } catch { continue; }
+        }
+        snapshot[key] = value;
+      }
+      return snapshot;
+    }
+    return {};
+  });
   
   // 🚀 PERF: Debounce pour accumuler les broadcasts rapides en un seul state update
   const pendingCalcValuesRef = useRef<Record<string, any>>({});
@@ -246,17 +269,39 @@ export function useTBLTableLookup(
       for (const key of clearedKeys) {
         delete safeBroadcast[key];
       }
+      // 🔥 FIX 20/02/2026: Distinguer clés CALCULÉES vs clés SAISIE UTILISATEUR
+      // Les clés calculées (ex: "uuid-sum-total", "uuid-sum", "uuid-avg") contiennent
+      // un suffixe après l'UUID. Ces valeurs sont TOUJOURS fraîches dans le broadcast
+      // et DOIVENT écraser les valeurs stale de formData (ex: Puissance WC 0 → 8800).
+      // Les clés UUID simples (champs SELECT/INPUT) ne DOIVENT PAS être écrasées
+      // car formData contient la saisie utilisateur la plus récente (ex: Huawei → DEYE).
+      const isCalculatedKey = (key: string): boolean => {
+        // UUID simple = 8-4-4-4-12 → champ saisie utilisateur
+        const isSimpleUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(key);
+        if (!isSimpleUUID) return true; // Toute clé avec suffixe est calculée
+        return false;
+      };
       let enrichedCount = 0;
+      let overwrittenCount = 0;
       for (const [key, value] of Object.entries(safeBroadcast)) {
         const existing = formDataParsed[key];
-        // Ne compléter QUE si la clé est absente ou vide dans formData
-        if (existing === undefined || existing === null || existing === '') {
+        const isCalc = isCalculatedKey(key);
+        // Pour les clés calculées: TOUJOURS écraser (broadcast est plus frais que formData)
+        // Pour les clés saisie: ne compléter QUE si absente ou vide
+        if (isCalc) {
+          // Écraser inconditionnellement (valeur calculée fraîche du broadcast)
+          if (existing !== undefined && existing !== null && existing !== '' && existing !== value) {
+            overwrittenCount++;
+          }
+          formDataParsed[key] = value;
+          enrichedCount++;
+        } else if (existing === undefined || existing === null || existing === '') {
           formDataParsed[key] = value;
           enrichedCount++;
         }
       }
-      if (enrichedCount > 0) {
-        console.log(`🔧 [useTBLTableLookup] formData enrichi avec ${enrichedCount}/${Object.keys(safeBroadcast).length} valeurs calculées (sans écraser les saisies utilisateur)`);
+      if (enrichedCount > 0 || overwrittenCount > 0) {
+        console.log(`🔧 [useTBLTableLookup] formData enrichi avec ${enrichedCount}/${Object.keys(safeBroadcast).length} valeurs calculées (${overwrittenCount} valeurs stale écrasées)`);
       }
     }
 

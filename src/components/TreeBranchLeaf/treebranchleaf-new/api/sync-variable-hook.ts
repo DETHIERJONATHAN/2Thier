@@ -192,9 +192,10 @@ export async function initializeTreeBranchLeafSync() {
     await syncVariableSourceRefs();
   } catch (error) {
     console.error('❌ [INIT SYNC] Erreur:', error);
-  } finally {
-    await prisma.$disconnect();
   }
+  // ⚠️ NE PAS appeler prisma.$disconnect() ici !
+  // Le singleton `db` est partagé par toute l'application.
+  // Le déconnecter coupe la DB pour TOUS les endpoints.
 }
 
 /**

@@ -125,7 +125,6 @@ export async function POST(
       success: false, 
       message: 'Erreur interne du serveur lors de l\'activation' 
     }, { status: 500 });
-  } finally {
-    await prisma.$disconnect();
   }
+  // ⚠️ NE PAS appeler prisma.$disconnect() — le singleton `db` est partagé.
 }
