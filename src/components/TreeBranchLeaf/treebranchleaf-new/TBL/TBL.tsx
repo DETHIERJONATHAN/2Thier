@@ -1418,9 +1418,17 @@ const TBL: React.FC<TBLProps> = ({
               if (displayVal != null) {
                 calculatedValuesMap[item.nodeId] = displayVal;
                 console.log(`💡 [broadcastCalculatedRefresh] FIX BROADCAST-NULL: ${item.nodeId} → opResult inline: ${displayVal}`);
+              } else {
+                // 🚀 FIX BROADCAST-COMPLET: Même sans displayVal, marquer le nodeId comme présent
+                // pour empêcher le safety GET différé (la valeur est confirmée null/∅)
+                calculatedValuesMap[item.nodeId] = null;
               }
+            } else {
+              // 🚀 FIX BROADCAST-COMPLET: Inclure les nodeIds avec value=null dans calculatedValues
+              // pour empêcher le safety GET différé sur les fields non-affectés par le changement.
+              // Le hook useNodeCalculatedValue vérifie `nodeId in calculatedValues` → true → pas de GET.
+              calculatedValuesMap[item.nodeId] = null;
             }
-            // Sinon: field skippé par FIX R12 avec value=null → pas touché (évite d'écraser valeur affichée)
           }
           
           // � FIX DISPLAY-ZERO: Fusionner les valeurs accumulées des broadcasts précédents sautés

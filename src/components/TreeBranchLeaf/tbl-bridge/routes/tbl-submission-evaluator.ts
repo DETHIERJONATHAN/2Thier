@@ -2500,6 +2500,33 @@ const displayDeps = new Map<string, Set<string>>(); // nodeId → Set<dependsOn>
   // 🔥 FIX BROADCAST-NULL 2026: Exposer les nodeIds freshement calculés (même si value=null)
   // Permet au client d'utiliser operationResult comme fallback pour les fields avec ∅/null
   // Cela évite le 🧯 safety GET +650ms pour des champs type table dont le lookup échoue
+
+  // 🚀 FIX BROADCAST-COMPLET: En mode 'change' partiel, inclure AUSSI les valeurs existantes
+  // des DISPLAY fields NON recalculés. Cela donne un broadcast COMPLET au frontend,
+  // éliminant les dizaines de "safety GET différé" individuels (~20-50 requêtes HTTP inutiles).
+  // Coût: 0 requêtes DB supplémentaires (submissionDataMap déjà en mémoire).
+  if (mode === 'change' && affectedDisplayFieldIds !== null) {
+    const computedNodeIdSet = new Set(computedValuesToStore.map(c => c.nodeId));
+    let addedExistingCount = 0;
+    for (const displayNodeId of displayNodeIds) {
+      if (computedNodeIdSet.has(displayNodeId)) continue; // Déjà recalculé
+      const existingValue = submissionDataMap.get(displayNodeId);
+      if (existingValue !== undefined) {
+        computedValuesToStore.push({
+          nodeId: displayNodeId,
+          value: existingValue,
+          operationSource: null,
+          fieldLabel: null,
+          operationResult: null,
+        });
+        addedExistingCount++;
+      }
+    }
+    if (addedExistingCount > 0) {
+      console.log(`🚀 [FIX BROADCAST-COMPLET] ${computedValuesToStore.length} valeurs dans la réponse (${computedValuesToStore.length - addedExistingCount} fraîches + ${addedExistingCount} existantes inchangées)`);
+    }
+  }
+
   results.computedNodeIds = computedValuesToStore.map(c => c.nodeId);
   // 🚀 PERF: Retourner les valeurs calculées directement pour éviter un findMany en fin de route
   results.computedValues = computedValuesToStore;
