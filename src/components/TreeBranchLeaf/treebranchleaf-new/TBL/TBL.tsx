@@ -48,7 +48,7 @@ import { useAuth } from '../../../../auth/useAuth';
 import { useParams, useSearchParams } from 'react-router-dom';
 import { useTreeBranchLeafConfig } from '../../hooks/useTreeBranchLeafConfig';
 import { useAuthenticatedApi } from '../../../../hooks/useAuthenticatedApi';
-import { blockGetRequestsTemporarily, unblockGetRequests } from '../../../../hooks/useNodeCalculatedValue';
+import { blockGetRequestsTemporarily, unblockGetRequests, clearAllNodeValueCaches } from '../../../../hooks/useNodeCalculatedValue';
 import { ClientSidebar } from './components/ClientSidebar';
 import TBLSectionRenderer from './components/TBLSectionRenderer';
 import { useTBLDataPrismaComplete, type TBLField, type TBLSection } from './hooks/useTBLDataPrismaComplete';
@@ -308,6 +308,11 @@ const TBL: React.FC<TBLProps> = ({
         // les vieilles valeurs calculées du batch cache
         (window as any).__TBL_NEW_DEVIS_TS = Date.now();
       }
+
+      // 🧹 FIX STALE-DEVIS: Vider les caches de useNodeCalculatedValue AVANT le broadcast
+      // pour éviter que lastKnownValueByKey, inlineValueProtectedUntil, etc.
+      // ne restaurent les anciennes valeurs après le clearDisplayFields
+      clearAllNodeValueCaches();
 
       // 🔥 NOUVEAU: Vider aussi les champs DISPLAY calculés côté frontend
       // Mais exclure les nœuds protégés du clear
@@ -676,6 +681,19 @@ const TBL: React.FC<TBLProps> = ({
   useEffect(() => {
     if (justCreatedDevisRef.current && submissionId) {
       justCreatedDevisRef.current = false;
+    }
+  }, [submissionId]);
+
+  // 🎯 FIX: Synchroniser submissionId dans formData pour que useBackendValue puisse l'utiliser
+  // dans ses appels GET (GET /api/tree-nodes/:nodeId/calculated-value?submissionId=xxx)
+  // Sans cela, les DISPLAY fields en mode brouillon global (sans leadId) ne trouvent pas
+  // leurs valeurs SubmissionData côté contrôleur.
+  useEffect(() => {
+    if (submissionId) {
+      setFormData(prev => {
+        if (prev.submissionId === submissionId) return prev; // Pas de changement
+        return { ...prev, submissionId };
+      });
     }
   }, [submissionId]);
 
@@ -1184,6 +1202,13 @@ const TBL: React.FC<TBLProps> = ({
 
   // SYNCHRONISATION: Initialiser formData avec les mirrors créés par useTBLDataPrismaComplete
   useEffect(() => {
+    // 🔐 FIX STALE-DEVIS: Ne PAS synchroniser pendant les 15s après un nouveau devis
+    // car TBL_FORM_DATA peut contenir des résidus de l'ancien devis réinjectés par un broadcast
+    const newDevisTs = typeof window !== 'undefined' ? (window as any).__TBL_NEW_DEVIS_TS : 0;
+    if (newDevisTs && (Date.now() - newDevisTs < 15000)) {
+      return; // Skip: nouveau devis en cours, ne pas réinjecter d'anciennes données
+    }
+
     if (typeof window !== 'undefined' && window.TBL_FORM_DATA && Object.keys(window.TBL_FORM_DATA).length > 0) {
       const globalData = window.TBL_FORM_DATA;
       const mirrorKeys = Object.keys(globalData).filter(k => k.startsWith('__mirror_data_'));
@@ -1193,7 +1218,9 @@ const TBL: React.FC<TBLProps> = ({
           const next = { ...prev };
           let syncCount = 0;
           
-          // Copier tous les mirrors depuis window.TBL_FORM_DATA
+          // Copier UNIQUEMENT les mirrors depuis window.TBL_FORM_DATA
+          // 🔐 FIX STALE-DEVIS: Ne plus copier les données non-mirror car elles
+          // provoquent l'auto-complétion des champs avec les valeurs de l'ancien devis
           mirrorKeys.forEach(key => {
             if (!(key in next)) {
               next[key] = globalData[key];
@@ -1201,16 +1228,8 @@ const TBL: React.FC<TBLProps> = ({
             }
           });
           
-          // Copier aussi les données non-mirror qui ne sont pas dans formData
-          Object.keys(globalData).forEach(key => {
-            if (!key.startsWith('__mirror_data_') && !(key in next)) {
-              next[key] = globalData[key];
-              syncCount++;
-            }
-          });
-          
           if (syncCount > 0) {
-            // console.log(`✅ [SYNC] ${syncCount} éléments synchronisés vers FormData`);
+            // console.log(`✅ [SYNC] ${syncCount} mirrors synchronisés vers FormData`);
           }
           
           return next;
@@ -3491,6 +3510,11 @@ const TBL: React.FC<TBLProps> = ({
         console.log(`🚫 [TBL LOAD] ${skippedCalculated} champs non-neutral ignorés (calculés/capacités)`);
       }
 
+      // 🧹 FIX STALE-DEVIS: Vider les caches de useNodeCalculatedValue AVANT de
+      // charger le nouveau devis pour éviter que les protections anti-race-condition
+      // ne bloquent la mise à jour des DISPLAY fields avec les valeurs du nouveau devis
+      clearAllNodeValueCaches();
+
       const loadedCount = Object.keys(formattedData).length;
       console.log(`✅ [TBL LOAD] ${loadedCount} champs utilisateur chargés`);
 
@@ -3760,7 +3784,7 @@ const TBL: React.FC<TBLProps> = ({
 
   return (
     <TBLValidationProvider>
-    <TBLBatchProvider treeId={tree?.id || treeId} leadId={leadId}>
+    <TBLBatchProvider treeId={tree?.id || treeId} leadId={leadId} submissionId={submissionId}>
       <Layout className={`h-full bg-gray-50 ${isValidation ? 'tbl-validation-mode' : ''}`}>
         <Content className={contentPaddingClass}>
         <Row gutter={mainRowGutter} className="h-full">

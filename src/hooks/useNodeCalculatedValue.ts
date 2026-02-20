@@ -96,6 +96,22 @@ function isInlineValueProtected(nodeId: string): boolean {
   const protectedUntil = inlineValueProtectedUntil.get(nodeId) || 0;
   return Date.now() < protectedUntil;
 }
+
+/**
+ * 🧹 FIX STALE-DEVIS: Vide TOUS les caches module-level pour éviter que les
+ * valeurs d'un ancien devis polluent un nouveau devis.
+ * Appelé quand clearDisplayFields est reçu (nouveau devis).
+ */
+export function clearAllNodeValueCaches(): void {
+  lastFetchAtByKey.clear();
+  requestVersionByKey.clear();
+  lastProcessedTimestampByNode.clear();
+  lastKnownValueByKey.clear();
+  inlineValueProtectedUntil.clear();
+  changeInProgressUntil = 0;
+  console.log('🧹 [useNodeCalculatedValue] Tous les caches module-level vidés (nouveau devis)');
+}
+
 interface CalculatedValueResult {
   value: string | number | boolean | null;
   loading: boolean;
@@ -167,6 +183,15 @@ export function useNodeCalculatedValue(
 
     const requestKey = `${treeId}::${submissionId || ''}::${nodeId}`;
     const now = Date.now();
+    
+    // 🔐 FIX STALE-DEVIS: Bloquer TOUS les GET dans les 15s après un nouveau devis
+    // Les anciennes calculatedValue en DB (TreeBranchLeafNode) ne sont pas encore nettoyées
+    // Les valeurs fraîches arriveront via le broadcast après la première interaction utilisateur
+    const newDevisTs = typeof window !== 'undefined' ? (window as any).__TBL_NEW_DEVIS_TS : 0;
+    if (newDevisTs && (now - newDevisTs < 15000)) {
+      console.log(`🔐 [useNodeCalculatedValue] GET BLOQUÉ pour nodeId=${nodeId} - nouveau devis (${now - newDevisTs}ms)`);
+      return;
+    }
     
     // 🎯 FIX DONNÉES FANTÔMES: Bloquer les GET pendant qu'un changement est en cours
     // Les valeurs correctes arriveront via l'événement tbl-force-retransform avec calculatedValues inline
@@ -439,6 +464,9 @@ export function useNodeCalculatedValue(
 
         // 🔥 NOUVEAU: Détecter la demande de reset/clear des display fields
         if (detail?.clearDisplayFields === true) {
+          // 🧹 FIX STALE-DEVIS: Vider les caches module-level pour que les anciennes
+          // valeurs ne soient pas restaurées par les protections anti-race-condition
+          clearAllNodeValueCaches();
           // 🔒 Ne pas vider les champs protégés
           const protectedIds = detail?.protectedNodeIds;
           if (Array.isArray(protectedIds) && protectedIds.includes(nodeId)) {
@@ -494,7 +522,15 @@ export function useNodeCalculatedValue(
             currentVal === '∅'
           );
           if (isCurrentValueEmpty) {
-            // 🔄 Valeur vide/null → NE PAS protéger, déclencher un GET retardé
+            // � FIX STALE-DEVIS: Après un nouveau devis, ne PAS déclencher de safety GET
+            // car il rechargerait l'ancienne calculatedValue depuis la DB (TreeBranchLeafNode)
+            // Les valeurs correctes arriveront via la première évaluation déclenchée par l'utilisateur
+            const newDevisTs = typeof window !== 'undefined' ? (window as any).__TBL_NEW_DEVIS_TS : 0;
+            if (newDevisTs && (Date.now() - newDevisTs < 15000)) {
+              console.log(`🔐 [useNodeCalculatedValue] Safety GET BLOQUÉ pour nodeId=${nodeId} - nouveau devis (${Date.now() - newDevisTs}ms)`);
+              return;
+            }
+            // �🔄 Valeur vide/null → NE PAS protéger, déclencher un GET retardé
             // pour récupérer une éventuelle valeur calculée en DB
             console.log(`🔄 [useNodeCalculatedValue] nodeId=${nodeId} pas dans calculatedValues ET valeur vide - GET retardé déclenché`);
             setTimeout(() => fetchCalculatedValue(), 350);
@@ -508,6 +544,12 @@ export function useNodeCalculatedValue(
           const safetyRefetchAge = now - lastSafetyRefetchAtRef.current;
           const shouldSafetyRefetch = !!submissionId && safetyRefetchAge > 800;
           if (shouldSafetyRefetch) {
+            // 🔐 FIX STALE-DEVIS: Bloquer aussi le safety refetch après nouveau devis
+            const newDevisTs2 = typeof window !== 'undefined' ? (window as any).__TBL_NEW_DEVIS_TS : 0;
+            if (newDevisTs2 && (Date.now() - newDevisTs2 < 15000)) {
+              console.log(`🔐 [useNodeCalculatedValue] Safety refetch BLOQUÉ pour nodeId=${nodeId} - nouveau devis`);
+              return;
+            }
             lastSafetyRefetchAtRef.current = now;
             console.log(`🧯 [useNodeCalculatedValue] nodeId=${nodeId} absent du broadcast partiel - safety GET différé`);
             setTimeout(() => fetchCalculatedValue(), 650);

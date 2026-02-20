@@ -33,15 +33,16 @@ export interface ConstraintFormula {
 
 /**
  * Extrait le nodeId d'un token de référence
- * Format supportés: "@value.nodeId", "@value.shared-ref-xxx", { type: 'ref', ref: '@value.xxx' }
+ * Format supportés: "@value.nodeId", "@calculated.nodeId", "@select.nodeId",
+ *                   "@value.shared-ref-xxx", { type: 'ref', ref: '@value.xxx' }
  */
 const extractNodeIdFromToken = (token: unknown): string | null => {
   if (!token) return null;
   
   // Token string
   if (typeof token === 'string') {
-    // Format @value.nodeId ou @value.shared-ref-xxx
-    const match = token.match(/@value\.(.+)/);
+    // Format @value.nodeId, @calculated.nodeId, @select.nodeId
+    const match = token.match(/@(?:value|calculated|select)\.(.+)/);
     if (match) return match[1];
   }
   
@@ -49,7 +50,7 @@ const extractNodeIdFromToken = (token: unknown): string | null => {
   if (typeof token === 'object' && token !== null) {
     const tokenObj = token as Record<string, unknown>;
     if (tokenObj.type === 'ref' && typeof tokenObj.ref === 'string') {
-      const match = tokenObj.ref.match(/@value\.(.+)/);
+      const match = tokenObj.ref.match(/@(?:value|calculated|select)\.(.+)/);
       if (match) return match[1];
     }
   }

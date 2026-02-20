@@ -132,7 +132,7 @@ function internalEnqueue(
     pending.add(elementId);
     contextRef.current = contextData;
     bridge.push({ type: 'enqueue_new', elementId });
-    if (!batchTimer) batchTimer = setTimeout(() => flush(apiPost), 15);
+    if (!batchTimer) batchTimer = setTimeout(() => flush(apiPost), 100);
   });
   inflight.set(elementId, promise);
   promise.finally(() => { if (inflight.get(elementId) === promise) inflight.delete(elementId); });

@@ -457,10 +457,12 @@ interface UseTBLBatchDataResult {
  * 
  * @param treeId - ID du tree TBL
  * @param leadId - ID du lead (optionnel, pour récupérer les valeurs de submission)
+ * @param submissionId - ID de la submission (optionnel, fallback quand leadId absent, ex: draft global)
  */
 export const useTBLBatchData = (
   treeId: string | undefined,
-  leadId?: string
+  leadId?: string,
+  submissionId?: string | null
 ): UseTBLBatchDataResult => {
   const { api } = useAuthenticatedApi();
   const [batchData, setBatchData] = useState<TBLBatchData | null>(null);
@@ -507,9 +509,13 @@ export const useTBLBatchData = (
 
       try {
         // 🚀 Charger les données de base, node-data ET conditions en parallèle
+        // 🎯 FIX: Si pas de leadId mais un submissionId, passer submissionId au batch
+        // pour charger les SubmissionData des drafts globaux (sans lead)
         const baseUrl = leadId
           ? `/api/tbl/batch/trees/${treeId}/all?leadId=${leadId}`
-          : `/api/tbl/batch/trees/${treeId}/all`;
+          : submissionId
+            ? `/api/tbl/batch/trees/${treeId}/all?submissionId=${submissionId}`
+            : `/api/tbl/batch/trees/${treeId}/all`;
         const nodeDataUrl = `/api/tbl/batch/trees/${treeId}/node-data`;
         const conditionsUrl = `/api/tbl/batch/trees/${treeId}/conditions`;
 
@@ -601,7 +607,7 @@ export const useTBLBatchData = (
     };
 
     loadBatchData();
-  }, [treeId, leadId, api, refreshKey, batchData]);
+  }, [treeId, leadId, submissionId, api, refreshKey, batchData]);
 
   // Helpers pour accéder aux données
   const getFormulasForNode = useCallback((nodeId: string): BatchFormula[] => {

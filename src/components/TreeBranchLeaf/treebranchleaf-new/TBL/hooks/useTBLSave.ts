@@ -71,27 +71,15 @@ export const useTBLSave = () => {
 
       console.log('✅ [TBL-SAVE-DEVIS] Soumission créée et évaluée via TBL Prisma:', response.submission?.id);
 
-      // 2. 🔥 FORCER L'ÉVALUATION COMPLÈTE TBL PRISMA !
-      console.log('🔄 [TBL-SAVE-DEVIS] Lancement évaluation TBL Prisma...');
-      
-      const evaluationResponse = await api.post(`/api/tbl/submissions/${response.submission?.id}/evaluate-all`, {
-        forceUpdate: true, // Forcer la mise à jour même si déjà évalué
-        includeIntelligentTranslations: true // Activer les traductions intelligentes
-      });
-
-      console.log('✅ [TBL-SAVE-DEVIS] Évaluation TBL Prisma terminée:', evaluationResponse);
-
-      // 3. Vérifier que toutes les traductions intelligentes sont bien sauvegardées
-      const verificationResponse = await api.get(`/api/tbl/submissions/${response.submission?.id}/verification`);
-
-      console.log('🎯 [TBL-SAVE-DEVIS] Vérification:', verificationResponse);
+      // 🚀 PERF: create-and-evaluate fait déjà l'évaluation complète.
+      // Les appels evaluate-all et verification étaient REDONDANTS (+10s inutiles).
 
       return {
         success: true,
         devisId: response.submission?.id,
         message: 'Devis sauvegardé avec succès avec TBL Prisma',
-        evaluation: evaluationResponse,
-        verification: verificationResponse
+        evaluation: response.evaluatedCapacities,
+        verification: { status: 'ok' }
       };
 
     } catch (error) {

@@ -545,6 +545,30 @@ export function useTBLTableLookup(
             console.warn('[useTBLTableLookup] Erreur chargement valeurs calculées:', err);
           }
           
+          // 🔗 FIX LINK-RACE FRONTEND: Injecter les valeurs LINK depuis window.TBL_FORM_DATA
+          // broadcastCalculatedRefresh y stocke les valeurs LINK résolues par le backend.
+          // Ces valeurs sont nécessaires pour les lookups dont le filtre dépend d'un champ LINK.
+          // Sans cela, le premier lookup après un changement échoue car le LINK n'est pas dans formData.
+          if (!isNewDevisRecent && typeof window !== 'undefined' && (window as any).TBL_FORM_DATA) {
+            const tblFormData = (window as any).TBL_FORM_DATA as Record<string, any>;
+            let linkEnrichedCount = 0;
+            for (const [key, value] of Object.entries(tblFormData)) {
+              if (key.startsWith('__mirror_')) continue;
+              if (clearedKeys.has(key)) continue;
+              if (value === null || value === undefined || value === '') continue;
+              // Exclure base64 et valeurs trop longues
+              if (typeof value === 'string' && (value.startsWith('data:') || value.length > 2000)) continue;
+              const existing = filteredFormData[key];
+              if (existing === undefined || existing === null || existing === '') {
+                filteredFormData[key] = value;
+                linkEnrichedCount++;
+              }
+            }
+            if (linkEnrichedCount > 0) {
+              console.log(`🔗 [useTBLTableLookup] formData enrichi avec ${linkEnrichedCount} valeurs depuis TBL_FORM_DATA (LINK values)`);
+            }
+          }
+
           // Uniquement si des valeurs utilisateur existent (filteredFormData a déjà exclu les images)
           if (Object.keys(filteredFormData).length > 0) {
             const formValues = JSON.stringify(filteredFormData);

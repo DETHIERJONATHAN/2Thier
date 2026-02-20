@@ -91,6 +91,7 @@ interface TBLBatchProviderProps {
   children: ReactNode;
   treeId: string | undefined;
   leadId?: string;
+  submissionId?: string | null;
 }
 
 /**
@@ -99,7 +100,8 @@ interface TBLBatchProviderProps {
 export const TBLBatchProvider: React.FC<TBLBatchProviderProps> = ({
   children,
   treeId,
-  leadId
+  leadId,
+  submissionId
 }) => {
   // Utiliser le hook de batch
   const {
@@ -116,7 +118,7 @@ export const TBLBatchProvider: React.FC<TBLBatchProviderProps> = ({
     getActiveConditionForNode,
     getConditionsTargetingNode,
     refresh
-  } = useTBLBatchData(treeId, leadId);
+  } = useTBLBatchData(treeId, leadId, submissionId);
 
   // 🚀 Synchroniser le cache global quand les données batch sont prêtes
   useEffect(() => {

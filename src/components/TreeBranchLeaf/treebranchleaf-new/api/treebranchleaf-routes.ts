@@ -8064,7 +8064,67 @@ async function resolveFilterValueRef(
               console.warn(`⚠️ [resolveFilterValueRef] @table.${tableId} → Colonnes introuvables: comp="${comparisonColumn}"(${compColIdx}), display="${displayColumn}"(${displayColIdx}) dans [${columns.join(', ')}]`);
             }
           } else {
-            console.log(`⚠️ [resolveFilterValueRef] @table.${tableId} → sourceField ${sourceFieldId} n'a pas de valeur dans formValues`);
+            // 🔗 FIX LINK-RACE: Si le sourceField est un LINK node, sa valeur n'est PAS dans formValues
+            // car le frontend ne l'envoie jamais directement (c'est un champ DISPLAY résolu côté serveur).
+            // On résout ici le LINK → cible → valeur de la cible dans formValues ou SubmissionData.
+            const sourceNode = await prisma.treeBranchLeafNode.findUnique({
+              where: { id: sourceFieldId },
+              select: { id: true, hasLink: true, link_targetNodeId: true }
+            });
+            
+            if (sourceNode?.hasLink && sourceNode?.link_targetNodeId) {
+              const targetId = sourceNode.link_targetNodeId;
+              // Chercher la valeur de la cible LINK dans formValues (ID exact ou avec suffixe repeater)
+              let targetValue: unknown = formValues[targetId] ?? null;
+              if (!targetValue) {
+                for (const [fk, fv] of Object.entries(formValues)) {
+                  if (fk.startsWith(targetId + '-') && /^-\d+$/.test(fk.slice(targetId.length))) {
+                    if (fv !== null && fv !== undefined && fv !== '') {
+                      targetValue = fv;
+                      break;
+                    }
+                  }
+                }
+              }
+              // Extraire .value si c'est un objet {value, label}
+              if (targetValue && typeof targetValue === 'object' && 'value' in (targetValue as Record<string, unknown>)) {
+                targetValue = (targetValue as Record<string, unknown>).value;
+              }
+              
+              if (targetValue !== null && targetValue !== undefined && targetValue !== '') {
+                // Résoudre comme si on avait la valeur du sourceField
+                sourceValue = targetValue;
+                console.log(`🔗 [resolveFilterValueRef] @table.${tableId} → LINK ${sourceFieldId} → target ${targetId} → formValues: ${sourceValue}`);
+                
+                // Re-exécuter la logique de matching avec la valeur résolue
+                const columns = refTable.tableColumns.map(c => c.name);
+                const compColIdx = columns.indexOf(comparisonColumn);
+                const displayColIdx = columns.indexOf(displayColumn);
+                
+                if (compColIdx >= 0 && displayColIdx >= 0) {
+                  for (const row of refTable.tableRows) {
+                    let cells: unknown[];
+                    if (typeof row.cells === 'string') {
+                      try { cells = JSON.parse(row.cells); } catch { cells = [row.cells]; }
+                    } else {
+                      cells = (row.cells as unknown[]) || [];
+                    }
+                    const compValue = String(cells[compColIdx] ?? '').trim();
+                    const sourceStr = String(sourceValue).trim();
+                    if (compValue.toLowerCase() === sourceStr.toLowerCase()) {
+                      const result = cells[displayColIdx];
+                      console.log(`✅ [resolveFilterValueRef] @table.${tableId} (${refTable.name}) → LINK resolved → "${comparisonColumn}"="${sourceStr}" → "${displayColumn}"="${result}"`);
+                      return result;
+                    }
+                  }
+                  console.warn(`⚠️ [resolveFilterValueRef] @table.${tableId} (${refTable.name}) → LINK resolved mais aucune ligne ne matche "${comparisonColumn}"="${sourceValue}"`);
+                }
+              } else {
+                console.log(`⚠️ [resolveFilterValueRef] @table.${tableId} → LINK ${sourceFieldId} → target ${targetId} → pas de valeur dans formValues non plus`);
+              }
+            } else {
+              console.log(`⚠️ [resolveFilterValueRef] @table.${tableId} → sourceField ${sourceFieldId} n'a pas de valeur dans formValues`);
+            }
           }
         }
         

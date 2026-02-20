@@ -128,6 +128,12 @@ function identifyReferenceType(ref: string): ReferenceType {
     return 'value';
   }
   
+  // 🔧 FIX R27: Détecter le préfixe 'formula:' directement (sans 'node-' prefix)
+  // Le sourceRef des capacités de type formule est 'formula:UUID' — pas 'node-formula:UUID'
+  if (ref.startsWith('formula:')) {
+    return 'formula';
+  }
+  
   // Nettoyer les prÃƒÂ©fixes courants pour analyse
   const cleaned = ref
     .replace('@value.', '')
@@ -137,7 +143,7 @@ function identifyReferenceType(ref: string): ReferenceType {
     .trim();
   
   // Ã°Å¸Â§Â® VÃƒÂ©rifier si c'est une FORMULE
-  if (cleaned.startsWith('node-formula:')) {
+  if (cleaned.startsWith('node-formula:') || cleaned.startsWith('formula:')) {
     return 'formula';
   }
   
@@ -204,6 +210,20 @@ async function identifyReferenceTypeFromDB(id: string, prisma: PrismaClient): Pr
         return 'table';
       }
       return 'field';
+    }
+    
+    // 🔧 FIX R27b: Vérifier si l'UUID correspond à une formule dans TreeBranchLeafNodeFormula
+    // L'UUID peut être un ID de formule (pas un ID de nœud), utilisé dans capacity.sourceRef
+    try {
+      const formulaRecord = await (prisma as any).treeBranchLeafNodeFormula.findUnique({
+        where: { id },
+        select: { id: true }
+      });
+      if (formulaRecord) {
+        return 'formula';
+      }
+    } catch (e) {
+      // Table peut ne pas exister, ignorer silencieusement
     }
     
     return 'field';

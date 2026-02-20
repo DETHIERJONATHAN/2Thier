@@ -141,6 +141,7 @@ router.get('/:nodeId/calculated-value', async (req: Request, res: Response) => {
         table_activeId: true,
         linkedTableIds: true,
         treeId: true, // ✨ Ajouté pour operation-interpreter
+        hasFormula: true, // ✅ FIX R24: nécessaire pour canRecalculateDisplayField
         // 🔗 Champs Link pour afficher la valeur d'un autre champ
         hasLink: true,
         link_targetNodeId: true,
@@ -681,10 +682,13 @@ router.get('/:nodeId/calculated-value', async (req: Request, res: Response) => {
     const isRealSubmission = submissionId && !submissionId.startsWith('preview-');
     const canRecalculateHere = hasTableLookup && !hasConditionVariable && !hasTreeSourceVariable;
     
-    // 🔥 FIX: Pour les DISPLAY fields sans valeur scopée, TOUJOURS essayer de recalculer
+    // 🔥 FIX PERF: Pour les DISPLAY fields sans valeur scopée, TOUJOURS essayer de recalculer
     // via operation-interpreter. Les données sont disponibles dans la submission.
+    // 🔥 FIX R24: Inclure aussi les nodes qui ont hasFormula=true (évalués via capacities dans l'evaluator)
+    // Sans ce check, "N° de panneau max" et d'autres DISPLAY fields sans variable record
+    // tombent dans le fallback "pas de valeur scopée, retourne null" → jamais recalculés.
     const canRecalculateDisplayField = isDisplayField && isRealSubmission && 
-      (hasTableLookup || hasFormulaVariable || hasConditionVariable || hasTreeSourceVariable);
+      (hasTableLookup || hasFormulaVariable || hasConditionVariable || hasTreeSourceVariable || node.hasFormula);
     
     if ((canRecalculateHere || canRecalculateDisplayField) && node.treeId && isRealSubmission) {
       console.log(`🔥 [CalculatedValueController] Node "${node.label}" - recalcul ${isDisplayField ? 'DISPLAY field' : 'table lookup'}:`, {

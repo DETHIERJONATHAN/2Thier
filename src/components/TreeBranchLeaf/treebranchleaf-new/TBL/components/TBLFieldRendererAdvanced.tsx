@@ -1883,7 +1883,7 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
   }, [field, treeMetadata, templateAppearanceOverrides]);
 
   // 🚀 OPTIMISÉ: Utiliser le batch au lieu de requêtes individuelles
-  const { getFormulasForNode, getConditionsTargetingNode, isReady: batchReady } = useTBLBatch();
+  const { getFormulasForNode, getConditionsTargetingNode, getCalculatedValueForNode, isReady: batchReady } = useTBLBatch();
   
   // Récupérer les formules depuis le cache batch (pas de requête HTTP !)
   const nodeFormulas = useMemo(() => {
@@ -1944,8 +1944,8 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
     isDisplayField ? undefined : submissionId
   );
 
-  // 🎯 NOUVEAU: Récupérer la valeur du champ source depuis formData OU via useBackendValue
-  // D'abord on cherche dans formData (plus rapide et plus fiable)
+  // 🎯 NOUVEAU: Récupérer la valeur du champ source depuis formData, batch OU via useBackendValue
+  // D'abord on cherche dans formData (plus rapide), puis batch (instantané), puis backend GET (async)
   const constraintSourceValue = useMemo(() => {
     if (!constraintSourceNodeId) return undefined;
     
@@ -1980,9 +1980,22 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
 
     const hasBackendValue = constraintBackendValue !== undefined && constraintBackendValue !== null && constraintBackendValue !== '';
 
+    // 🚀 NOUVEAU: Vérifier le batch data comme source intermédiaire (instantané, pas de GET)
+    const batchValue = getCalculatedValueForNode(constraintSourceNodeId);
+    const batchSubmissionValue = batchValue?.submissionValue;
+    const batchCalcValue = batchValue?.calculatedValue;
+    const resolvedBatchValue = batchSubmissionValue ?? batchCalcValue;
+    const hasBatchValue = resolvedBatchValue !== undefined && resolvedBatchValue !== null && resolvedBatchValue !== '';
+
     if (foundKey) {
-      if (hasBackendValue && typeof foundValue === 'number' && foundValue === 0 && constraintBackendValue !== foundValue) {
-        return constraintBackendValue;
+      // formData a une valeur. Si c'est 0 et qu'on a mieux, prendre le mieux
+      if (typeof foundValue === 'number' && foundValue === 0) {
+        // Préférer backend > batch > formData quand formData est 0
+        if (hasBackendValue && constraintBackendValue !== 0) return constraintBackendValue;
+        if (hasBatchValue) {
+          const numBatch = typeof resolvedBatchValue === 'number' ? resolvedBatchValue : parseFloat(String(resolvedBatchValue));
+          if (!isNaN(numBatch) && numBatch !== 0) return numBatch;
+        }
       }
       return foundValue;
     }
@@ -1990,19 +2003,32 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
     if (hasBackendValue) {
       return constraintBackendValue;
     }
+
+    // 🚀 FALLBACK BATCH: Si ni formData ni backend n'ont de valeur, utiliser le batch
+    if (hasBatchValue) {
+      console.log(`🚀 [Constraint] "${field.label}" utilise valeur batch pour source ${constraintSourceNodeId}: ${resolvedBatchValue}`);
+      return resolvedBatchValue;
+    }
     
     return undefined;
-  }, [constraintSourceNodeId, formData, field.label, constraintMirrorVariants, constraintBackendValue]);
+  }, [constraintSourceNodeId, formData, field.label, constraintMirrorVariants, constraintBackendValue, getCalculatedValueForNode]);
 
   // 🎯 NOUVEAU: Construire les contraintes dynamiques à partir de la valeur calculée
   const dynamicConstraints = useMemo<DynamicConstraints>(() => {
     const constraints: DynamicConstraints = {};
     
     if (constraintFormulas.length === 0 || constraintSourceValue === undefined) {
+      // 🔍 DEBUG: Diagnostic quand la chaîne de contrainte échoue
+      if (constraintFormulas.length > 0 && constraintSourceValue === undefined) {
+        console.warn(`⚠️ [Constraint] "${field.label}" a ${constraintFormulas.length} formule(s) de contrainte mais PAS de valeur source`, {
+          constraintSourceNodeId,
+          constraintBackendValue,
+          constraintSourceValueUndefined: true,
+          formulaTokens: constraintFormulas.map(f => ({ targetProperty: f.targetProperty, tokens: f.tokens }))
+        });
+      }
       return constraints;
     }
-
-    // Log supprimé - trop verbeux
 
     for (const formula of constraintFormulas) {
       const targetProp = formula.targetProperty;
@@ -2015,8 +2041,16 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
       if (['number_max', 'number_min', 'step'].includes(targetProp)) {
         const numValue = typeof value === 'number' ? value : parseFloat(String(value));
         if (!isNaN(numValue)) {
+          // 🔥 FIX: Ne pas appliquer number_max = 0 comme contrainte dynamique
+          // Un max de 0 signifie généralement que les valeurs sources ne sont pas encore
+          // disponibles (la formule a calculé ENT((0-0.3)/x) = 0). Dans ce cas,
+          // on ne doit PAS bloquer le champ. Quand les valeurs sources seront renseignées,
+          // la contrainte se mettra à jour automatiquement avec la vraie valeur.
+          if (targetProp === 'number_max' && numValue === 0) {
+            console.log(`⚠️ [Constraint] "${field.label}" - number_max=0 ignoré (probablement pas encore calculé)`);
+            continue;
+          }
           (constraints as Record<string, number>)[targetProp] = numValue;
-          // Log supprimé - trop verbeux
         }
         // 🆕 Récupérer le message de contrainte depuis la formule
         if (formula.constraintMessage) {

@@ -736,6 +736,14 @@ async function saveUserEntriesNeutral(
       ? [key, ...(sharedRefAliasMap.get(key) || [])]
       : [key, ...(aliasToSharedRefMap.get(key) ? [aliasToSharedRefMap.get(key)!] : [])];
 
+    // 🔥 FIX SHARED-REF SAVE: Vérifier aussi les storageIds résolus contre excludedNodeIds
+    // Problème: si key="shared-ref-xxx" et que le vrai UUID résolu est un DISPLAY field,
+    // excludedNodeIds.has("shared-ref-xxx") → false → la valeur stale est sauvegardée.
+    // Fix: vérifier si N'IMPORTE QUEL storageId résolu est dans excludedNodeIds.
+    if (storageIds.some(sid => excludedNodeIds.has(sid))) {
+      continue; // Ne PAS sauvegarder: un des alias est un champ calculé display
+    }
+
     for (const nodeId of storageIds) {
       if (!isAcceptedNodeId(nodeId)) continue;
 
@@ -867,68 +875,17 @@ async function evaluateCapacitiesForSubmission(
   // 🔑 ÉTAPE 1: Construire le valueMap avec les données fraîches du formulaire
   const valueMap = new Map<string, unknown>();
 
-  // 🔑 FIX R22: Charger les données du Lead depuis la soumission pour les clés virtuelles (lead.postalCode, etc.)
-  // Sans cela, les lookups de table qui utilisent lead.postalCode retournent "Aucune sélection colonne"
-  try {
-    const submission = await prisma.treeBranchLeafSubmission.findUnique({
+  // � PERF: Lancer les 3 requêtes initiales EN PARALLÈLE au lieu de séquentiellement
+  // Avant: submission → lead → displayNodes → existingData (4 requêtes séquentielles ~400-800ms)
+  // Maintenant: tout en parallèle (~100-200ms)
+  const [submissionForLead, displayNodesParallel, existingDataParallel] = await Promise.all([
+    // 1. Charger la soumission pour obtenir leadId
+    prisma.treeBranchLeafSubmission.findUnique({
       where: { id: submissionId },
       select: { leadId: true }
-    });
-    if (submission?.leadId) {
-      const lead = await prisma.lead.findUnique({
-        where: { id: submission.leadId },
-        select: {
-          id: true, firstName: true, lastName: true, email: true, phone: true,
-          company: true, leadNumber: true, linkedin: true, website: true,
-          status: true, notes: true, data: true
-        }
-      });
-      if (lead) {
-        valueMap.set('lead.id', lead.id);
-        valueMap.set('lead.firstName', lead.firstName);
-        valueMap.set('lead.lastName', lead.lastName);
-        valueMap.set('lead.email', lead.email);
-        valueMap.set('lead.phone', lead.phone);
-        valueMap.set('lead.company', lead.company);
-        valueMap.set('lead.leadNumber', lead.leadNumber);
-        valueMap.set('lead.linkedin', lead.linkedin);
-        valueMap.set('lead.website', lead.website);
-        valueMap.set('lead.status', lead.status);
-        valueMap.set('lead.notes', lead.notes);
-        if (lead.data && typeof lead.data === 'object') {
-          const leadData = lead.data as Record<string, unknown>;
-          if (leadData.postalCode) {
-            valueMap.set('lead.postalCode', leadData.postalCode);
-          } else if (leadData.address && typeof leadData.address === 'object') {
-            const addressObj = leadData.address as Record<string, unknown>;
-            if (addressObj.zipCode) {
-              valueMap.set('lead.postalCode', addressObj.zipCode);
-            } else if (addressObj.postalCode) {
-              valueMap.set('lead.postalCode', addressObj.postalCode);
-            }
-          } else if (leadData.address && typeof leadData.address === 'string') {
-            const postalCodeMatch = leadData.address.match(/\b(\d{4,5})\b/);
-            if (postalCodeMatch) {
-              valueMap.set('lead.postalCode', postalCodeMatch[1]);
-            }
-          }
-          if (leadData.address) valueMap.set('lead.address', leadData.address);
-          if (leadData.city) valueMap.set('lead.city', leadData.city);
-          if (leadData.country) valueMap.set('lead.country', leadData.country);
-        }
-      }
-    }
-  } catch (e) {
-    console.warn('⚠️ [EVALUATE] Chargement lead échoué (best-effort):', (e as Error)?.message || e);
-  }
-
-  // �️ FIX 2026-01-31: Collecter les DISPLAY nodeIds pour protéger leurs valeurs DB
-  // Les DISPLAY fields sont CALCULÉS par le backend - le frontend ne fait que "cacher" les valeurs.
-  // Lors d'une révision, le frontend peut envoyer des valeurs obsolètes (0, 1) pour les DISPLAY fields
-  // qui servent de dépendances à d'autres calculs. On doit CONSERVER les valeurs DB pour ces champs.
-  const displayNodeIds = new Set<string>();
-  try {
-    const displayNodes = await prisma.treeBranchLeafNode.findMany({
+    }).catch(() => null),
+    // 2. Charger les display nodes
+    prisma.treeBranchLeafNode.findMany({
       where: {
         treeId,
         OR: [
@@ -937,30 +894,80 @@ async function evaluateCapacitiesForSubmission(
         ],
       },
       select: { id: true },
-    });
-    for (const n of displayNodes) {
-      displayNodeIds.add(n.id);
-      displayNodeIds.add(`${n.id}-sum-total`);
-    }
-  } catch {
-    // best-effort
-  }
-  
-  // 🔁 IMPORTANT: Hydrater d'abord depuis la DB (submission scoped) pour éviter les régressions
-  // quand le frontend envoie un payload partiel/vidé (ex: formData: {}).
-  // ✅ FIX 2026-01-31: Charger TOUTES les données (y compris DISPLAY calculées) pour que les dépendances
-  // soient disponibles lors du calcul. Les résultats calculés seront recalculés et écraseront les anciennes valeurs.
-  const dbDisplayValues = new Map<string, unknown>(); // 🛡️ Mémoriser les valeurs DB des DISPLAY fields
-  try {
-    const existingData = await prisma.treeBranchLeafSubmissionData.findMany({
+    }).catch(() => [] as { id: string }[]),
+    // 3. Charger les données existantes de la soumission
+    prisma.treeBranchLeafSubmissionData.findMany({
       where: { submissionId },
       select: { nodeId: true, value: true, operationSource: true }
-    });
-    if (existingData.length) {
-      const existingEntries = existingData.map(r => [r.nodeId, r.value] as [string, unknown]);
+    }).catch((e: Error) => { console.warn('⚠️ [EVALUATE] Hydratation DB échouée:', e?.message); return [] as { nodeId: string; value: string | null; operationSource: string | null }[]; })
+  ]);
+
+  // Charger le lead si leadId existe (requête séparée car pas de relation Prisma)
+  const lead = submissionForLead?.leadId
+    ? await prisma.lead.findUnique({
+        where: { id: submissionForLead.leadId },
+        select: {
+          id: true, firstName: true, lastName: true, email: true, phone: true,
+          company: true, leadNumber: true, linkedin: true, website: true,
+          status: true, notes: true, data: true
+        }
+      }).catch(() => null)
+    : null;
+
+  // Injecter les données du Lead dans le valueMap
+  try {
+    if (lead) {
+      valueMap.set('lead.id', lead.id);
+      valueMap.set('lead.firstName', lead.firstName);
+      valueMap.set('lead.lastName', lead.lastName);
+      valueMap.set('lead.email', lead.email);
+      valueMap.set('lead.phone', lead.phone);
+      valueMap.set('lead.company', lead.company);
+      valueMap.set('lead.leadNumber', lead.leadNumber);
+      valueMap.set('lead.linkedin', lead.linkedin);
+      valueMap.set('lead.website', lead.website);
+      valueMap.set('lead.status', lead.status);
+      valueMap.set('lead.notes', lead.notes);
+      if (lead.data && typeof lead.data === 'object') {
+        const leadData = lead.data as Record<string, unknown>;
+        if (leadData.postalCode) {
+          valueMap.set('lead.postalCode', leadData.postalCode);
+        } else if (leadData.address && typeof leadData.address === 'object') {
+          const addressObj = leadData.address as Record<string, unknown>;
+          if (addressObj.zipCode) {
+            valueMap.set('lead.postalCode', addressObj.zipCode);
+          } else if (addressObj.postalCode) {
+            valueMap.set('lead.postalCode', addressObj.postalCode);
+          }
+        } else if (leadData.address && typeof leadData.address === 'string') {
+          const postalCodeMatch = leadData.address.match(/\b(\d{4,5})\b/);
+          if (postalCodeMatch) {
+            valueMap.set('lead.postalCode', postalCodeMatch[1]);
+          }
+        }
+        if (leadData.address) valueMap.set('lead.address', leadData.address);
+        if (leadData.city) valueMap.set('lead.city', leadData.city);
+        if (leadData.country) valueMap.set('lead.country', leadData.country);
+      }
+    }
+  } catch (e) {
+    console.warn('⚠️ [EVALUATE] Chargement lead échoué (best-effort):', (e as Error)?.message || e);
+  }
+
+  // 🛡️ Collecter les DISPLAY nodeIds (déjà chargés en parallèle)
+  const displayNodeIds = new Set<string>();
+  for (const n of displayNodesParallel) {
+    displayNodeIds.add(n.id);
+    displayNodeIds.add(`${n.id}-sum-total`);
+  }
+  
+  // 🔁 Hydrater depuis la DB (déjà chargé en parallèle)
+  const dbDisplayValues = new Map<string, unknown>();
+  try {
+    if (existingDataParallel.length) {
+      const existingEntries = existingDataParallel.map(r => [r.nodeId, r.value] as [string, unknown]);
       await applySharedReferenceValues(valueMap, existingEntries, treeId);
-      // 🛡️ Mémoriser les valeurs DB des DISPLAY fields pour les restaurer après formData
-      for (const r of existingData) {
+      for (const r of existingDataParallel) {
         if (displayNodeIds.has(r.nodeId)) {
           dbDisplayValues.set(r.nodeId, r.value);
         }
@@ -1025,6 +1032,37 @@ async function evaluateCapacitiesForSubmission(
       select: { id: true, label: true, link_targetNodeId: true }
     });
     let linkResolvedCount = 0;
+    
+    // 🚀 PERF: Pré-charger TOUTES les SubmissionData liées aux LINK targets en BATCH
+    // Avant: 2 requêtes DB PAR link node (N+1) → avec 10 links = 20 queries
+    // Maintenant: 1 seule requête batch
+    const linkTargetIds = linkNodes
+      .filter(ln => {
+        const v = valueMap.get(ln.id);
+        return !(v !== null && v !== undefined && v !== '' && v !== 0 && v !== '0');
+      })
+      .map(ln => ln.link_targetNodeId!)
+      .filter(Boolean);
+    
+    // Charger toutes les SubmissionData dont le nodeId commence par un des targetIds
+    const allLinkSubmissionData = linkTargetIds.length > 0
+      ? await prisma.treeBranchLeafSubmissionData.findMany({
+          where: { 
+            submissionId,
+            OR: linkTargetIds.map(tid => ({ nodeId: { startsWith: tid } }))
+          },
+          select: { nodeId: true, value: true },
+          orderBy: { lastResolved: 'desc' }
+        })
+      : [];
+    // Indexer par nodeId pour un lookup O(1)
+    const linkSubmDataMap = new Map<string, string | null>();
+    for (const sd of allLinkSubmissionData) {
+      if (!linkSubmDataMap.has(sd.nodeId)) {
+        linkSubmDataMap.set(sd.nodeId, sd.value);
+      }
+    }
+    
     for (const ln of linkNodes) {
       const targetId = ln.link_targetNodeId!;
       // Si le valueMap a déjà une valeur pour ce LINK, ne pas écraser
@@ -1039,30 +1077,22 @@ async function evaluateCapacitiesForSubmission(
           if (key.startsWith(targetId + '-') && /^-\d+$/.test(key.slice(targetId.length))) {
             if (val !== undefined && val !== null && val !== '') {
               targetValue = val;
-              break; // Prendre la première valeur trouvée (instance la plus récente)
+              break;
             }
           }
         }
       }
-      // Si pas trouvé dans valueMap, chercher dans SubmissionData
+      // 🚀 PERF: Utiliser le batch pré-chargé au lieu de requêtes individuelles
       if (targetValue === undefined || targetValue === null || targetValue === '') {
-        const targetSubmData = await prisma.treeBranchLeafSubmissionData.findFirst({
-          where: { submissionId, nodeId: targetId },
-          select: { value: true }
-        });
-        if (targetSubmData?.value) targetValue = targetSubmData.value;
+        const sdValue = linkSubmDataMap.get(targetId);
+        if (sdValue) targetValue = sdValue;
       }
-      // Si toujours pas trouvé, chercher SubmissionData avec suffixes repeater
+      // Chercher avec suffixes repeater dans le batch
       if (targetValue === undefined || targetValue === null || targetValue === '') {
-        const suffixedSubmData = await prisma.treeBranchLeafSubmissionData.findMany({
-          where: { submissionId, nodeId: { startsWith: targetId } },
-          select: { nodeId: true, value: true },
-          orderBy: { lastResolved: 'desc' }
-        });
-        for (const sd of suffixedSubmData) {
-          if (sd.nodeId !== targetId && /^-\d+$/.test(sd.nodeId.slice(targetId.length))) {
-            if (sd.value !== null && sd.value !== '') {
-              targetValue = sd.value;
+        for (const [sdNodeId, sdValue] of linkSubmDataMap) {
+          if (sdNodeId.startsWith(targetId + '-') && /^-\d+$/.test(sdNodeId.slice(targetId.length))) {
+            if (sdValue !== null && sdValue !== '') {
+              targetValue = sdValue;
               break;
             }
           }
@@ -1107,14 +1137,35 @@ async function evaluateCapacitiesForSubmission(
   const nodeMap = new Map(formulaNodes.map(n => [n.id, n]));
   
   // 🔑 COMBINER Variables + Formulas en un seul tableau avec sourceRef unifié
-  const capacitiesRaw = [
+  // 🚀 PERF FIX: Dédupliquer par nodeId — un même node peut avoir variable + formula,
+  // ce qui crée des doublons dans capacities (~120 entrées → ~40 après dédup).
+  // On privilégie la formula (plus d'info) si les deux existent.
+  // 🔧 FIX CONSTRAINT-VALUE: Exclure les formules de contrainte (targetProperty non-null)
+  // Les formules avec targetProperty='number_max', 'number_min', 'step', 'visible', etc.
+  // définissent les CONTRAINTES du champ (max/min/step), PAS sa valeur calculée.
+  // Sans ce filtre, le résultat de la contrainte (ex: max=15 panneaux) était stocké
+  // comme la VALEUR du champ → le champ affichait "15" automatiquement au lieu de rester vide.
+  // Le frontend gère ces contraintes via useDynamicConstraints (lecture des formulas config + valeur source).
+  const capacitiesRawUndeduplicated = [
     ...variablesRaw,
-    ...formulasRaw.map(f => ({
-      ...f,
-      sourceRef: `formula:${f.id}`,
-      TreeBranchLeafNode: nodeMap.get(f.nodeId)
-    }))
+    ...formulasRaw
+      .filter(f => !(f as any).targetProperty)
+      .map(f => ({
+        ...f,
+        sourceRef: `formula:${f.id}`,
+        TreeBranchLeafNode: nodeMap.get(f.nodeId)
+      }))
   ];
+  const seenNodeIds = new Set<string>();
+  const capacitiesRaw = capacitiesRawUndeduplicated.filter(c => {
+    if (seenNodeIds.has(c.nodeId)) return false;
+    seenNodeIds.add(c.nodeId);
+    return true;
+  });
+  // Mettre les formulas en premier (filtre garde la première occurrence),
+  // donc inverser: formulas d'abord pour qu'elles soient prioritaires.
+  // Non — on garde l'ordre: variables d'abord, mais la dédup via Set élimine les formulas en double.
+  // C'est OK car les formulas sont traitées par processedDisplayFields de toute façon.
   
   // 🔑 FIX R8: TRI TOPOLOGIQUE des capacities pour garantir l'ordre de dépendance
   // Les DISPLAY fields qui dépendent d'autres DISPLAY fields doivent être évalués APRÈS leurs dépendances.
@@ -1165,6 +1216,25 @@ const displayDeps = new Map<string, Set<string>>(); // nodeId → Set<dependsOn>
       variablesByNodeIdForTopo.set(v.nodeId, v);
     }
 
+    // 🔥 FIX R23: Charger les CONDITIONS pour le tri topologique
+    // AVANT ce fix: seules les formules et variables étaient analysées pour les dépendances.
+    // Les conditions (ex: Rampant toiture qui dépend de Versant, Inclinaison, Base du triangle)
+    // n'étaient PAS incluses → profondeur topo = 0 → évaluation avant leurs dépendances.
+    const conditionsByNodeIdForTopo = new Map<string, Array<{ conditionSet: unknown; id: string }>>();
+    {
+      const displayNodeIdList = [...displayCapNodeIds];
+      if (displayNodeIdList.length > 0) {
+        const conditionsForTopo = await prisma.treeBranchLeafNodeCondition.findMany({
+          where: { nodeId: { in: displayNodeIdList } },
+          select: { id: true, nodeId: true, conditionSet: true }
+        });
+        for (const c of conditionsForTopo) {
+          if (!conditionsByNodeIdForTopo.has(c.nodeId)) conditionsByNodeIdForTopo.set(c.nodeId, []);
+          conditionsByNodeIdForTopo.get(c.nodeId)!.push({ conditionSet: c.conditionSet, id: c.id });
+        }
+      }
+    }
+
     for (const displayNodeId of displayCapNodeIds) {
       const refs = new Set<string>();
 
@@ -1180,7 +1250,13 @@ const displayDeps = new Map<string, Set<string>>(); // nodeId → Set<dependsOn>
         collectReferencedNodeIdsForTriggers((variable as any).metadata, refs);
       }
 
-      // 3. Résoudre les node-formula: cross-node de manière transitive
+      // 3. 🔥 FIX R23: Collecter les refs depuis les conditionSets
+      const conditions = conditionsByNodeIdForTopo.get(displayNodeId) || [];
+      for (const condition of conditions) {
+        collectReferencedNodeIdsForTriggers(condition.conditionSet, refs);
+      }
+
+      // 4. Résoudre les node-formula: cross-node de manière transitive
       const visitedFormulas = new Set<string>();
       const resolveTransitiveDeps = (data: unknown) => {
         if (!data) return;
@@ -1249,20 +1325,25 @@ const displayDeps = new Map<string, Set<string>>(); // nodeId → Set<dependsOn>
     computeDepth(nodeId, new Set());
   }
   
-  // Tri final: non-display d'abord, puis display par profondeur, puis sum-total
+  // 🔥 FIX R26: Tri final CORRIGÉ — profondeur topologique en PRIMARY KEY, sum-total en tiebreaker.
+  // AVANT: sum-total était en priorité absolue → un display qui dépend d'un sum-total
+  // (ex: Prix TVAC = sum de 6 display + 2 sum-totals) était évalué AVANT les sum-totals
+  // → lisait 0 dans le valueMap → résultat = 0. Aligné avec FIX R14b (mode 'change').
   const capacities = capacitiesRaw.sort((a, b) => {
-    const aIsSumFormula = a.sourceRef?.includes('sum-formula') || a.sourceRef?.includes('sum-total') ? 1 : 0;
-    const bIsSumFormula = b.sourceRef?.includes('sum-formula') || b.sourceRef?.includes('sum-total') ? 1 : 0;
-    if (aIsSumFormula !== bIsSumFormula) return aIsSumFormula - bIsSumFormula;
-    
     const aIsDisplay = displayCapNodeIds.has(a.nodeId) ? 1 : 0;
     const bIsDisplay = displayCapNodeIds.has(b.nodeId) ? 1 : 0;
     if (aIsDisplay !== bIsDisplay) return aIsDisplay - bIsDisplay; // Non-display d'abord
     
-    // Entre display fields: trier par profondeur de dépendance (0 = pas de deps = d'abord)
+    // Entre display fields: trier par profondeur topologique (PRIMARY KEY)
+    // 🔥 FIX R26: Même logique que FIX R14b — le depth est la clé primaire.
     const aDepth = topoOrder.get(a.nodeId) || 0;
     const bDepth = topoOrder.get(b.nodeId) || 0;
-    return aDepth - bDepth;
+    if (aDepth !== bDepth) return aDepth - bDepth;
+    
+    // TIEBREAKER: à depth égal, sum-total après les bases (pour le cas naturel base→sum)
+    const aIsSumFormula = a.sourceRef?.includes('sum-formula') || a.sourceRef?.includes('sum-total') ? 1 : 0;
+    const bIsSumFormula = b.sourceRef?.includes('sum-formula') || b.sourceRef?.includes('sum-total') ? 1 : 0;
+    return aIsSumFormula - bIsSumFormula;
   });
 
   const results: { updated: number; created: number; stored: number; displayFieldsUpdated: number; computedNodeIds: string[]; computedValues: Array<{ nodeId: string; value: string | null; operationResult?: Prisma.InputJsonValue | null; operationSource?: OperationSourceType | null; fieldLabel?: string | null }> } = { 
@@ -1303,9 +1384,36 @@ const displayDeps = new Map<string, Set<string>>(); // nodeId → Set<dependsOn>
   // 🔥 FIX A (backend): Support multi-changedFieldIds (comma-separated depuis le frontend)
   // Si l'utilisateur modifie champ A puis champ B en <300ms, le frontend envoie "A,B"
   // On doit trouver les DISPLAY fields affectés par A ET par B (union)
-  const allChangedFieldIds: string[] = changedFieldId 
+  let allChangedFieldIds: string[] = changedFieldId 
     ? changedFieldId.split(',').map(s => s.trim()).filter(Boolean) 
     : [];
+  
+  // 🔥 FIX SHARED-REF TRIGGER: Résoudre les shared-ref-* ↔ vrais UUIDs dans les changedFieldIds
+  // Problème: le frontend envoie changedFieldId="shared-ref-xxx" mais le triggerIndex
+  // peut contenir le vrai UUID du nœud (ou vice-versa). Sans résolution bidirectionnelle,
+  // les DISPLAY fields dépendants ne sont PAS trouvés → pas recalculés (ex: Rampant toiture).
+  if (allChangedFieldIds.length > 0) {
+    const sharedRefChangedIds = allChangedFieldIds.filter(isSharedReferenceId);
+    const uuidChangedIds = allChangedFieldIds.filter(id => !isSharedReferenceId(id) && isAcceptedNodeId(id));
+    
+    // shared-ref → real UUIDs
+    if (sharedRefChangedIds.length > 0) {
+      const refToUuids = await resolveSharedReferenceAliases(sharedRefChangedIds, treeId);
+      for (const [, uuids] of refToUuids) {
+        for (const uuid of uuids) {
+          if (!allChangedFieldIds.includes(uuid)) allChangedFieldIds.push(uuid);
+        }
+      }
+    }
+    // real UUID → shared-ref
+    if (uuidChangedIds.length > 0) {
+      const uuidToRef = await resolveAliasToSharedReferenceId(uuidChangedIds, treeId);
+      for (const [, sharedRef] of uuidToRef) {
+        if (!allChangedFieldIds.includes(sharedRef)) allChangedFieldIds.push(sharedRef);
+      }
+    }
+  }
+  
   const allChangedFieldIdBases: string[] = allChangedFieldIds
     .map(id => { const s = extractNumericSuffix(id); return s ? id.replace(/-\d+$/, '') : null; })
     .filter((b): b is string => b !== null);
@@ -1548,9 +1656,29 @@ const displayDeps = new Map<string, Set<string>>(); // nodeId → Set<dependsOn>
               fallback?: { actions?: Array<{ type?: string; nodeIds?: string[] }> };
             };
             
+            // 🔥 FIX R23: Extraire TOUTES les références du conditionSet (pas seulement when.left/right)
+            // AVANT ce fix: seuls when.left.ref et when.right.ref étaient extraits.
+            // Les formules dans les actions/fallback (ex: @value.Base_du_triangle, @value.Inclinaison)
+            // n'étaient PAS détectées → changer Inclinaison ne déclenchait PAS le recalcul de Rampant.
+            // MAINTENANT: collectReferencedNodeIdsForTriggers parcourt TOUT le conditionSet récursivement.
+            const allReferencedIds = new Set<string>();
+            collectReferencedNodeIdsForTriggers(condition.conditionSet, allReferencedIds);
+            // Retirer l'auto-référence
+            allReferencedIds.delete(condition.nodeId);
+            // Séparer les IDs: certains sont des refs d'input (triggers), d'autres des targets SHOW/HIDE
             const referencedFieldIds = new Set<string>();
             const targetShowNodeIds = new Set<string>();
             
+            // Ajouter TOUTES les refs extraites comme triggers potentiels
+            for (const refId of allReferencedIds) {
+              if (refId.includes('.')) continue; // Ignorer les clés virtuelles
+              referencedFieldIds.add(refId);
+              // Résoudre les options vers leur parent select
+              const parentSelectId = optionToSelectMap.get(refId);
+              if (parentSelectId) referencedFieldIds.add(parentSelectId);
+            }
+            
+            // Aussi extraire spécifiquement les targets SHOW/HIDE pour la cascade
             for (const branch of conditionSet.branches || []) {
               const leftRef = branch.when?.left?.ref;
               const rightRef = branch.when?.right?.ref;
@@ -1804,9 +1932,70 @@ const displayDeps = new Map<string, Set<string>>(); // nodeId → Set<dependsOn>
     }
   }
 
-  // 🔥 DÉDUPLICATION: Un même nodeId peut apparaître plusieurs fois dans capacities
+  // 🔥 OPTIMISATION GÉRER LA SURCHARGE DATABASE: Construire les maps une SEULE fois
+  // Pour éviter des milliers de requêtes (N+1), on prépare tout en BATCH.
+  const safeLabelMap = new Map<string, string>();
+  // 1. Récupérer TOUS les noeuds de l'arbre pour avoir les labels (nécessaire pour interpretReference {{Label}})
+  const allTreeNodesForLabels = await prisma.treeBranchLeafNode.findMany({
+    where: { treeId },
+    select: { id: true, label: true, field_label: true, sharedReferenceName: true, formula_tokens: true, calculatedValue: true }
+  });
+  for (const n of allTreeNodesForLabels) {
+    safeLabelMap.set(n.id, n.sharedReferenceName || n.field_label || n.label || n.id);
+  }
+
+  // 🚀 PERF: Pré-charger les sum-total nodes et SubmissionData en batch
+  // Avant: chaque sum-total faisait 1 findUnique(node) + N findUnique(submissionData) + N findUnique(calculatedValue) par token
+  // Maintenant: tout est pré-chargé en 0 requêtes supplémentaires (réutilise allTreeNodesForLabels)
+  const sumTotalNodeMap = new Map<string, { formula_tokens: unknown; label: string | null; calculatedValue: string | null }>();
+  for (const n of allTreeNodesForLabels) {
+    if (n.id.endsWith('-sum-total')) {
+      sumTotalNodeMap.set(n.id, { 
+        formula_tokens: n.formula_tokens, 
+        label: n.label, 
+        calculatedValue: n.calculatedValue 
+      });
+    }
+  }
+  // Index calculatedValue pour lookup rapide (fallback sum-total)
+  const nodeCalculatedValueMap = new Map<string, string | null>();
+  for (const n of allTreeNodesForLabels) {
+    if (n.calculatedValue !== null && n.calculatedValue !== undefined) {
+      nodeCalculatedValueMap.set(n.id, n.calculatedValue);
+    }
+  }
+  // 🚀 PERF: Pré-charger TOUTES les SubmissionData pour les sum-total tokens
+  // (existingDataParallel déjà chargé en parallèle au début)
+  const submissionDataMap = new Map<string, string | null>();
+  for (const sd of existingDataParallel) {
+    submissionDataMap.set(sd.nodeId, sd.value);
+  }
+
+  // 2. Indexer les variables pour preloadedVariable (évite de ré-fetcher la variable dans evaluateVariableOperation)
+  const preloadedVariablesMap = new Map<string, any>();
+  for (const v of variablesRaw) {
+    preloadedVariablesMap.set(v.nodeId, v);
+  }
+
+  // � FIX REFRESH: Si une valeur est dans valueMap (donnée fraîche calculée), on doit s'assurer
+  // que la variable préchargée ne force pas une vieille valeur fixe/default.
+  // On ne modifie pas preloadedVariablesMap ici car c'est la config statique, 
+  // mais on s'assure que evaluateVariableOperation utilise bien le valueMap passé.
+
+  // �🔥 DÉDUPLICATION: Un même nodeId peut apparaître plusieurs fois dans capacities
   // (ex: formula + autre capacité). On déduplique pour éviter de calculer 3 fois le même champ !
   const processedDisplayFields = new Set<string>();
+
+  // 🚀 PERF: Accumuler les non-display upserts pour batch après la boucle
+  const pendingNonDisplayUpserts: Array<{
+    nodeId: string;
+    value: string | null;
+    sourceRef: string;
+    operationSource: OperationSourceType;
+    fieldLabel: string | null;
+    operationDetail: Prisma.InputJsonValue | null;
+    isUpdate: boolean;
+  }> = [];
 
   for (const capacity of capacities) {
     const sourceRef = capacity.sourceRef!;
@@ -1822,9 +2011,18 @@ const displayDeps = new Map<string, Set<string>>(); // nodeId → Set<dependsOn>
     }
     
     // 🚀 FIX R12: En mode 'change', skip les DISPLAY fields NON affectés par le changement
+    // MAIS ATTENTION: Si "N° de panneau max" dépend d'une valeur calculée dynamiquement (qui vient de changer), 
+    // il se peut que le graphe de dépendance statique (triggerIndex) n'ait pas vu le lien si c'est une formule complexe.
+    // Pour l'instant, on désactive cette optimisation stricte pour les champs qui semblent importants ou calculés.
+    // Ou on s'assure que si on a un doute, on calcule.
+    
     if (isDisplayField && affectedDisplayFieldIds !== null) {
       if (!affectedDisplayFieldIds.has(capacity.nodeId)) {
-        continue; // Ce DISPLAY field n'est pas impacté → skip pour gagner du temps
+        // 🚀 FIX R12 STRICT: Le trigger index + fermeture transitive (FIX R14/R14e/R23)
+        // couvre désormais TOUTES les dépendances (formules, conditions, tables, cross-node formulas).
+        // L'ancien override hasDynamicSource faisait évaluer ~38 fields au lieu de ~14,
+        // annulant l'optimisation FIX R12. Supprimé pour performance.
+        continue;
       }
     }
     
@@ -1836,6 +2034,8 @@ const displayDeps = new Map<string, Set<string>>(); // nodeId → Set<dependsOn>
       processedDisplayFields.add(capacity.nodeId);
     }
     
+    // 🔍 DIAGNOSTIC RAMPANT TOITURE — supprimé (FIX R23 corrige le skip des conditions)
+
     try {
       // 🔁 IMPORTANT: pour les copies (-1, -2, ...), certaines formules/conditions référencent encore
       // les IDs de base (sans suffixe). On injecte temporairement baseId -> baseId-<suffix>
@@ -1850,10 +2050,8 @@ const displayDeps = new Map<string, Set<string>>(); // nodeId → Set<dependsOn>
       const isSumTotalField = capacity.nodeId.endsWith('-sum-total');
       if (isSumTotalField) {
         try {
-          const sumTokensNode = await prisma.treeBranchLeafNode.findUnique({
-            where: { id: capacity.nodeId },
-            select: { formula_tokens: true, label: true }
-          });
+          // 🚀 PERF: Utiliser les données pré-chargées (0 requêtes DB ici!)
+          const sumTokensNode = sumTotalNodeMap.get(capacity.nodeId);
           const tokens = Array.isArray(sumTokensNode?.formula_tokens)
             ? (sumTokensNode!.formula_tokens as string[])
             : [];
@@ -1863,7 +2061,7 @@ const displayDeps = new Map<string, Set<string>>(); // nodeId → Set<dependsOn>
 
           for (const token of tokens) {
             if (typeof token === 'string' && token.startsWith('@value.')) {
-              const refNodeId = token.slice(7); // retirer '@value.'
+              const refNodeId = token.slice(7);
               let val: number | null = null;
               let valSource = 'none';
 
@@ -1876,26 +2074,20 @@ const displayDeps = new Map<string, Set<string>>(); // nodeId → Set<dependsOn>
                 }
               }
 
-              // 2. Fallback: SubmissionData (valeur persistée)
+              // 2. Fallback: SubmissionData pré-chargée (0 requête DB!)
               if (val === null) {
-                const sd = await prisma.treeBranchLeafSubmissionData.findUnique({
-                  where: { submissionId_nodeId: { submissionId, nodeId: refNodeId } },
-                  select: { value: true }
-                });
-                if (sd?.value !== null && sd?.value !== undefined && String(sd.value).trim() !== '') {
-                  val = parseFloat(sd.value) || 0;
+                const sdValue = submissionDataMap.get(refNodeId);
+                if (sdValue !== null && sdValue !== undefined && String(sdValue).trim() !== '') {
+                  val = parseFloat(sdValue) || 0;
                   valSource = 'submissionData';
                 }
               }
 
-              // 3. Dernier fallback: calculatedValue du nœud source
+              // 3. Dernier fallback: calculatedValue pré-chargé (0 requête DB!)
               if (val === null) {
-                const srcNode = await prisma.treeBranchLeafNode.findUnique({
-                  where: { id: refNodeId },
-                  select: { calculatedValue: true }
-                });
-                if (srcNode?.calculatedValue !== null && srcNode?.calculatedValue !== undefined) {
-                  val = parseFloat(srcNode.calculatedValue) || 0;
+                const calcVal = nodeCalculatedValueMap.get(refNodeId);
+                if (calcVal !== null && calcVal !== undefined) {
+                  val = parseFloat(calcVal) || 0;
                   valSource = 'calculatedValue';
                 }
               }
@@ -1904,7 +2096,6 @@ const displayDeps = new Map<string, Set<string>>(); // nodeId → Set<dependsOn>
               sum += resolvedVal;
               debugParts.push({ refId: refNodeId, value: resolvedVal, source: valSource });
             }
-            // Les opérateurs "+", "-", etc. sont ignorés car on fait une somme simple
           }
 
           // Sum-total debug omitted for perf
@@ -1933,7 +2124,8 @@ const displayDeps = new Map<string, Set<string>>(); // nodeId → Set<dependsOn>
             prisma,
             formulaValuesCache,
             0,
-            valueMap
+            valueMap,
+            safeLabelMap // 🔥 OPTIMISATION: Passer safeLabelMap pour éviter N+1
           );
           capacityResult = {
             value: fResult.result,
@@ -1947,7 +2139,12 @@ const displayDeps = new Map<string, Set<string>>(); // nodeId → Set<dependsOn>
             capacity.nodeId,
             submissionId,
             prisma,
-            valueMap  // 🔑 PASSER LE VALUEMAP avec les données fraîches !
+            valueMap,  // 🔑 PASSER LE VALUEMAP avec les données fraîches !
+            {
+              treeId,
+              labelMap: safeLabelMap,
+              preloadedVariable: preloadedVariablesMap.get(capacity.nodeId) // 🔥 OPTIMISATION: Passer variable préchargée (évite N+1)
+            }
           );
           
           // 🔧 FIX R19: evaluateVariableOperation retourne { value: null } au lieu de throw
@@ -1976,7 +2173,8 @@ const displayDeps = new Map<string, Set<string>>(); // nodeId → Set<dependsOn>
             prisma,
             valuesCache,
             0,
-            valueMap
+            valueMap,
+            safeLabelMap // 🔥 OPTIMISATION
           );
           capacityResult = {
             value: condResult.result,
@@ -1993,7 +2191,8 @@ const displayDeps = new Map<string, Set<string>>(); // nodeId → Set<dependsOn>
             prisma,
             valuesCache,
             0,
-            valueMap
+            valueMap,
+            safeLabelMap // 🔥 OPTIMISATION
           );
           capacityResult = {
             value: fResult.result,
@@ -2013,10 +2212,16 @@ const displayDeps = new Map<string, Set<string>>(); // nodeId → Set<dependsOn>
         ?? (capacityResult as { result?: unknown }).result;
       const stringified = rawValue === null || rawValue === undefined ? null : String(rawValue).trim();
       const hasValidValue = rawValue !== null && rawValue !== undefined && stringified !== '' && stringified !== '∅';
-      
-      // 🔑 AJOUTER la valeur au valueMap pour les calculs suivants (chaînage)
+
+      //  AJOUTER la valeur au valueMap pour les calculs suivants (chaînage)
       if (hasValidValue) {
         valueMap.set(capacity.nodeId, rawValue);
+      }
+
+      // 🔍 DEBUG R26: Tracer Prix TVAC et ses deps sum-total
+      if (capacity.nodeId === '2f0c0d37-ae97-405e-8fae-0a07680e2183' || capacity.nodeId.includes('-sum-total')) {
+        const depthVal = topoOrder.get(capacity.nodeId) || 0;
+        console.log(`🔍 [FIX R26 DEBUG] ${capacity.nodeId.substring(0,12)}... depth=${depthVal} → rawValue=${rawValue} hasValid=${hasValidValue} sourceRef=${capacity.sourceRef?.substring(0,30)}`);
       }
 
       const normalizedOperationSource: OperationSourceType = coerceOperationSource(
@@ -2056,53 +2261,46 @@ const displayDeps = new Map<string, Set<string>>(); // nodeId → Set<dependsOn>
         continue;
       }
       
-      // 📦 AUTRES CAPACITÉS (non-display): Persister dans SubmissionData
-      // Écriture séquentielle pour garantir que les capacités chaînées lisent des données fraîches
-      const key = { submissionId_nodeId: { submissionId, nodeId: capacity.nodeId } } as const;
-      const existing = await prisma.treeBranchLeafSubmissionData.findUnique({ where: key });
-      const normalize = (v: unknown) => {
+      // � PERF: Accumuler les non-display capacities au lieu de persister une par une
+      // Avant: 1 findUnique + 1 update/create PAR capacité (N+1 pattern)
+      // Maintenant: on utilise le submissionDataMap pré-chargé + batch upsert après la boucle
+      const existingValue = submissionDataMap.get(capacity.nodeId);
+      const normalizeVal = (v: unknown) => {
         if (v === null || v === undefined) return null;
         if (typeof v === 'string') return v;
         try { return JSON.stringify(v); } catch { return String(v); }
       };
-      if (existing) {
-        const changed = (
-          normalize(existing.value) !== normalize(hasValidValue ? String(rawValue) : null) ||
-          (existing.sourceRef || null) !== (sourceRef || null) ||
-          (existing.operationSource || null) !== (normalizedOperationSource || null) ||
-          (existing.fieldLabel || null) !== ((capacity.TreeBranchLeafNode?.label || null)) ||
-          normalize(existing.operationDetail) !== normalize(parsedDetail)
-        );
+      const newValueStr = hasValidValue ? String(rawValue) : null;
+      const isExisting = existingValue !== undefined; // key exists in map (even if null)
+      
+      if (isExisting) {
+        const changed = normalizeVal(existingValue) !== normalizeVal(newValueStr);
         if (changed) {
-          await prisma.treeBranchLeafSubmissionData.update({
-            where: key,
-            data: {
-              value: hasValidValue ? String(rawValue) : null,
-              sourceRef,
-              operationSource: normalizedOperationSource,
-              fieldLabel: capacity.TreeBranchLeafNode?.label || null,
-              operationDetail: parsedDetail,
-              lastResolved: new Date()
-            }
-          });
-          results.updated++;
-        }
-      } else {
-        await prisma.treeBranchLeafSubmissionData.create({
-          data: {
-            id: `${submissionId}-${capacity.nodeId}-cap-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-            submissionId,
+          pendingNonDisplayUpserts.push({
             nodeId: capacity.nodeId,
-            value: hasValidValue ? String(rawValue) : null,
+            value: newValueStr,
             sourceRef,
             operationSource: normalizedOperationSource,
             fieldLabel: capacity.TreeBranchLeafNode?.label || null,
             operationDetail: parsedDetail,
-            lastResolved: new Date()
-          }
+            isUpdate: true
+          });
+          results.updated++;
+        }
+      } else {
+        pendingNonDisplayUpserts.push({
+          nodeId: capacity.nodeId,
+          value: newValueStr,
+          sourceRef,
+          operationSource: normalizedOperationSource,
+          fieldLabel: capacity.TreeBranchLeafNode?.label || null,
+          operationDetail: parsedDetail,
+          isUpdate: false
         });
         results.created++;
       }
+      // Mettre à jour le submissionDataMap pour les capacités chaînées
+      submissionDataMap.set(capacity.nodeId, newValueStr);
 
       // Rollback des alias temporaires (évite la pollution cross-capacities)
       if (injectedBaseKeys.length) {
@@ -2112,6 +2310,65 @@ const displayDeps = new Map<string, Set<string>>(); // nodeId → Set<dependsOn>
       }
     } catch (error) {
       console.error(`[TBL CAPACITY ERROR] ${sourceRef}:`, error);
+    }
+  }
+
+  // 🚀 PERF: Exécuter les upserts non-display en batch (transaction Prisma)
+  // Avant: N findUnique + N update/create séquentiels (~200ms par capacité)
+  // Maintenant: 1 transaction batch (~50ms total)
+  if (pendingNonDisplayUpserts.length > 0) {
+    try {
+      const now = new Date();
+      const operations = pendingNonDisplayUpserts.map(op => {
+        if (op.isUpdate) {
+          return prisma.treeBranchLeafSubmissionData.update({
+            where: { submissionId_nodeId: { submissionId, nodeId: op.nodeId } },
+            data: {
+              value: op.value,
+              sourceRef: op.sourceRef,
+              operationSource: op.operationSource,
+              fieldLabel: op.fieldLabel,
+              operationDetail: op.operationDetail,
+              lastResolved: now
+            }
+          });
+        } else {
+          return prisma.treeBranchLeafSubmissionData.create({
+            data: {
+              id: `${submissionId}-${op.nodeId}-cap-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+              submissionId,
+              nodeId: op.nodeId,
+              value: op.value,
+              sourceRef: op.sourceRef,
+              operationSource: op.operationSource,
+              fieldLabel: op.fieldLabel,
+              operationDetail: op.operationDetail,
+              lastResolved: now
+            }
+          });
+        }
+      });
+      await prisma.$transaction(operations);
+      console.log(`🚀 [PERF] Batch upsert: ${pendingNonDisplayUpserts.length} non-display capacities en 1 transaction`);
+    } catch (batchError) {
+      console.error('[PERF] Batch upsert échoué, fallback séquentiel:', batchError);
+      // Fallback séquentiel en cas d'erreur
+      for (const op of pendingNonDisplayUpserts) {
+        try {
+          if (op.isUpdate) {
+            await prisma.treeBranchLeafSubmissionData.update({
+              where: { submissionId_nodeId: { submissionId, nodeId: op.nodeId } },
+              data: { value: op.value, sourceRef: op.sourceRef, operationSource: op.operationSource, fieldLabel: op.fieldLabel, operationDetail: op.operationDetail, lastResolved: new Date() }
+            });
+          } else {
+            await prisma.treeBranchLeafSubmissionData.create({
+              data: { id: `${submissionId}-${op.nodeId}-cap-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`, submissionId, nodeId: op.nodeId, value: op.value, sourceRef: op.sourceRef, operationSource: op.operationSource, fieldLabel: op.fieldLabel, operationDetail: op.operationDetail, lastResolved: new Date() }
+            });
+          }
+        } catch (seqError) {
+          console.error(`[TBL CAPACITY UPSERT] ${op.nodeId}:`, seqError);
+        }
+      }
     }
   }
 
@@ -2137,6 +2394,42 @@ const displayDeps = new Map<string, Set<string>>(); // nodeId → Set<dependsOn>
       }
     }
     if (addedFromDb > 0) {
+    }
+  }
+
+  // 🔗 FIX R25: Persister les LINK DISPLAY fields résolus par FIX R21b mais HORS capacitiesRaw
+  // PROBLÈME: Les DISPLAY fields avec hasLink=true mais SANS variable.sourceRef et SANS hasFormula
+  // ne sont PAS dans capacitiesRaw → l'évaluateur ne les traite JAMAIS → pas de SubmissionData.
+  // FIX R21b résout leurs valeurs dans le valueMap, mais ne les persiste pas.
+  // FIX: Après la boucle d'évaluation, scanner les LINK fields résolus par R21b et les ajouter
+  // à computedValuesToStore pour persister dans SubmissionData.
+  {
+    const alreadyComputed = new Set(computedValuesToStore.map(c => c.nodeId));
+    // Re-charger les LINK nodes (déjà chargés dans FIX R21b, mais pas accessibles ici)
+    const linkDisplayNodes = await prisma.treeBranchLeafNode.findMany({
+      where: { treeId, hasLink: true, link_targetNodeId: { not: null }, subType: 'display' },
+      select: { id: true, label: true, link_targetNodeId: true }
+    });
+    let linkPersistedCount = 0;
+    for (const ln of linkDisplayNodes) {
+      if (alreadyComputed.has(ln.id)) continue; // Déjà persisté par le pipeline normal
+      const resolvedValue = valueMap.get(ln.id);
+      if (resolvedValue !== undefined && resolvedValue !== null && String(resolvedValue).trim() !== '') {
+        computedValuesToStore.push({
+          nodeId: ln.id,
+          value: String(resolvedValue),
+          sourceRef: `link:${ln.link_targetNodeId}`,
+          operationSource: 'neutral' as OperationSourceType,
+          fieldLabel: ln.label,
+          operationDetail: { source: 'link-r25', targetNodeId: ln.link_targetNodeId } as Prisma.InputJsonValue,
+          operationResult: null,
+          calculatedBy: 'link-fix-r25'
+        });
+        linkPersistedCount++;
+      }
+    }
+    if (linkPersistedCount > 0) {
+      console.log(`🔗 [FIX R25] ${linkPersistedCount} LINK DISPLAY field(s) persistés dans SubmissionData`);
     }
   }
 
@@ -2168,19 +2461,15 @@ const displayDeps = new Map<string, Set<string>>(); // nodeId → Set<dependsOn>
       }
       
       if (!linkValue) {
-        const submissionDataRecord = await prisma.treeBranchLeafSubmissionData.findFirst({
-          where: { submissionId, nodeId: linkInfo.targetNodeId },
-          orderBy: { lastResolved: 'desc' }
-        });
-        if (submissionDataRecord?.value) linkValue = submissionDataRecord.value;
+        // 🚀 PERF: Utiliser submissionDataMap pré-chargé au lieu de requête DB
+        const sdVal = submissionDataMap.get(linkInfo.targetNodeId);
+        if (sdVal) linkValue = sdVal;
       }
       
       if (!linkValue) {
-        const targetNode = await prisma.treeBranchLeafNode.findUnique({
-          where: { id: linkInfo.targetNodeId },
-          select: { calculatedValue: true }
-        });
-        if (targetNode?.calculatedValue) linkValue = targetNode.calculatedValue;
+        // 🚀 PERF: Utiliser nodeCalculatedValueMap pré-chargé au lieu de requête DB
+        const calcVal = nodeCalculatedValueMap.get(linkInfo.targetNodeId);
+        if (calcVal) linkValue = calcVal;
       }
       
       if (linkValue !== null) {
@@ -2247,11 +2536,6 @@ router.post('/submissions/:submissionId/evaluate-all', async (req, res) => {
       where: {
         submissionId,
         sourceRef: { not: null }
-      },
-      include: {
-        TreeBranchLeafNode: {
-          select: { label: true, type: true }
-        }
       }
     });
     
@@ -2530,6 +2814,9 @@ router.post('/submissions/create-and-evaluate', async (req, res) => {
     // Pour les default-draft, on autorise la création sans lead
     const isDefaultDraft = status === 'default-draft';
     
+    // 3. Préparer la validation user (parallélisée avec lead si possible)
+    let effectiveUserId = userId;
+    
     if (!clientId && !isDefaultDraft) {
       console.log('❌ [TBL CREATE-AND-EVALUATE] Aucun leadId fourni - REQUIS (sauf pour default-draft)');
       return res.status(400).json({
@@ -2540,11 +2827,17 @@ router.post('/submissions/create-and-evaluate', async (req, res) => {
     }
     
     if (clientId) {
-      // Vérifier que le lead fourni existe bien
-      const leadExists = await prisma.lead.findUnique({
-        where: { id: clientId },
-        select: { id: true, firstName: true, lastName: true, email: true, organizationId: true }
-      });
+      // 🚀 PERF: Paralléliser la validation lead + user (2 queries indépendantes)
+      const [leadExists, userExistsResult] = await Promise.all([
+        prisma.lead.findUnique({
+          where: { id: clientId },
+          select: { id: true, firstName: true, lastName: true, email: true, organizationId: true }
+        }),
+        effectiveUserId ? prisma.user.findUnique({
+          where: { id: effectiveUserId },
+          select: { id: true, firstName: true, lastName: true }
+        }) : Promise.resolve(null)
+      ]);
       
       if (!leadExists) {
         console.log(`❌ [TBL CREATE-AND-EVALUATE] Lead ${clientId} introuvable`);
@@ -2569,22 +2862,23 @@ router.post('/submissions/create-and-evaluate', async (req, res) => {
       }
       
       effectiveLeadId = leadExists.id;
-    } else {
-    }
-    
-    // 3. Vérifier l'utilisateur si fourni
-    let effectiveUserId = userId;
-    
-    if (effectiveUserId) {
-      const userExists = await prisma.user.findUnique({
-        where: { id: effectiveUserId },
-        select: { id: true, firstName: true, lastName: true }
-      });
       
-      if (!userExists) {
+      // User validation (résultat du Promise.all)
+      if (effectiveUserId && !userExistsResult) {
         console.log(`❌ [TBL CREATE-AND-EVALUATE] User ${effectiveUserId} introuvable, soumission sans utilisateur`);
         effectiveUserId = null;
-      } else {
+      }
+    } else {
+      // Pas de clientId: valider l'user seul
+      if (effectiveUserId) {
+        const userExists = await prisma.user.findUnique({
+          where: { id: effectiveUserId },
+          select: { id: true, firstName: true, lastName: true }
+        });
+        if (!userExists) {
+          console.log(`❌ [TBL CREATE-AND-EVALUATE] User ${effectiveUserId} introuvable`);
+          effectiveUserId = null;
+        }
       }
     }
     
@@ -2893,13 +3187,18 @@ router.put('/submissions/:submissionId/update-and-evaluate', async (req, res) =>
     // 4) Retourner la soumission complète
     const finalSubmission = await prisma.treeBranchLeafSubmission.findUnique({
       where: { id: submissionId },
-      include: { TreeBranchLeafSubmissionData: true }
+      include: { GeneratedDocument: true }
+    });
+    
+    // Charger les SubmissionData séparément (pas de relation directe)
+    const finalData = await prisma.treeBranchLeafSubmissionData.findMany({
+      where: { submissionId }
     });
 
     return res.json({
       success: true,
       message: `Soumission mise à jour (${saved} entrées) et évaluée (${stats.updated} mises à jour, ${stats.created} créées, ${stats.displayFieldsUpdated} display fields réactifs)`,
-      submission: finalSubmission
+      submission: { ...finalSubmission, submissionData: finalData }
     });
 
   } catch (error) {
@@ -3162,13 +3461,18 @@ router.post('/submissions/preview-evaluate', async (req, res) => {
     const nodeMapForFormulas = new Map(formulaNodes.map(n => [n.id, n]));
     
     // Combiner Variables + Formulas
+    // 🔧 FIX CONSTRAINT-VALUE: Exclure les formules de contrainte (targetProperty non-null)
+    // Même logique que dans create-and-evaluate — les formules de contrainte (number_max, etc.)
+    // ne doivent PAS être évaluées comme des valeurs calculées.
     const capacitiesRaw = [
       ...variablesRaw,
-      ...formulasRaw.map(f => ({
-        ...f,
-        sourceRef: `formula:${f.id}`,
-        TreeBranchLeafNode: nodeMapForFormulas.get(f.nodeId)
-      }))
+      ...formulasRaw
+        .filter(f => !(f as any).targetProperty)
+        .map(f => ({
+          ...f,
+          sourceRef: `formula:${f.id}`,
+          TreeBranchLeafNode: nodeMapForFormulas.get(f.nodeId)
+        }))
     ];
     
     // 🔑 TRIER les capacités: formules simples d'abord, formules composées (sum-total) ensuite

@@ -91,7 +91,7 @@ router.get('/trees/:treeId/formulas', async (req, res) => {
 router.get('/trees/:treeId/calculated-values', async (req, res) => {
   try {
     const { treeId } = req.params;
-    const { leadId } = req.query;
+    const { leadId, submissionId: qsSubmissionId } = req.query;
     const { organizationId, isSuperAdmin } = getAuthCtx(req as any);
 
     // Vérifier l'accès au tree
@@ -117,29 +117,37 @@ router.get('/trees/:treeId/calculated-values', async (req, res) => {
     });
 
     // Si un leadId est fourni, récupérer aussi les valeurs de la submission
+    // Si un leadId ou submissionId est fourni, récupérer aussi les valeurs de la submission
     let submissionValues: Record<string, unknown> = {};
+    
+    // Trouver l'ID de submission: d'abord via leadId, sinon via submissionId direct
+    let resolvedSubmissionId: string | null = null;
     if (leadId && typeof leadId === 'string') {
-      // D'abord trouver la submission
       const submission = await db.treeBranchLeafSubmission.findFirst({
-        where: { 
-          treeId,
-          leadId 
-        },
+        where: { treeId, leadId },
         orderBy: { updatedAt: 'desc' },
         select: { id: true }
       });
+      resolvedSubmissionId = submission?.id || null;
+    } else if (qsSubmissionId && typeof qsSubmissionId === 'string') {
+      // 🎯 FIX: Pour les drafts sans leadId, utiliser le submissionId direct
+      const submission = await db.treeBranchLeafSubmission.findFirst({
+        where: { id: qsSubmissionId, treeId },
+        select: { id: true }
+      });
+      resolvedSubmissionId = submission?.id || null;
+    }
+    
+    // Récupérer les SubmissionData pour la submission trouvée
+    if (resolvedSubmissionId) {
+      const submissionData = await db.treeBranchLeafSubmissionData.findMany({
+        where: { submissionId: resolvedSubmissionId },
+        select: { nodeId: true, value: true }
+      });
       
-      // Puis récupérer toutes les valeurs via TreeBranchLeafSubmissionData
-      if (submission?.id) {
-        const submissionData = await db.treeBranchLeafSubmissionData.findMany({
-          where: { submissionId: submission.id },
-          select: { nodeId: true, value: true }
-        });
-        
-        for (const data of submissionData) {
-          if (data.value !== null) {
-            submissionValues[data.nodeId] = data.value;
-          }
+      for (const data of submissionData) {
+        if (data.value !== null) {
+          submissionValues[data.nodeId] = data.value;
         }
       }
     }
@@ -279,7 +287,7 @@ router.get('/trees/:treeId/all', async (req: Request, res: Response) => {
   console.log(`[TBL Batch API] /all called for treeId: ${treeId}`);
   
   try {
-    const { leadId } = req.query;
+    const { leadId, submissionId: qsSubmissionId } = req.query;
     const { organizationId, isSuperAdmin } = getAuthCtx(req);
     console.log(`[TBL Batch API] Auth context: org=${organizationId}, superAdmin=${isSuperAdmin}`);
 
@@ -328,14 +336,19 @@ router.get('/trees/:treeId/all', async (req: Request, res: Response) => {
         },
         orderBy: { createdAt: 'asc' }
       }),
-      // Submission si leadId
+      // Submission: d'abord par leadId, sinon par submissionId direct (pour les drafts sans lead)
       leadId && typeof leadId === 'string'
         ? db.treeBranchLeafSubmission.findFirst({
             where: { treeId, leadId },
             orderBy: { updatedAt: 'desc' },
             select: { id: true }
           })
-        : Promise.resolve(null)
+        : qsSubmissionId && typeof qsSubmissionId === 'string'
+          ? db.treeBranchLeafSubmission.findFirst({
+              where: { id: qsSubmissionId, treeId },
+              select: { id: true }
+            })
+          : Promise.resolve(null)
     ]);
 
     // Récupérer les valeurs de submission si on a une submission
