@@ -46,6 +46,9 @@ import { deepCopyNodeInternal as deepCopyNodeInternalService } from './repeat/se
 // 🔄 Import de la fonction de synchronisation cascade des variables
 import { cascadeSyncVariableTableRef, cascadeSyncVariableFormulaRef } from './sync-variable-hook.js';
 
+// 🔥 FIX FORMULA-CACHE: Invalider le cache du trigger index quand les formules changent
+import { invalidateTriggerIndexCache } from '../../tbl-bridge/routes/tbl-submission-evaluator.js';
+
 // 📊 Import des routes pour les champs Total (somme des copies)
 import { registerSumDisplayFieldRoutes, updateSumDisplayFieldAfterCopyChange } from './sum-display-field-routes.js';
 
@@ -6415,6 +6418,9 @@ router.put('/nodes/:nodeId/formula', async (req, res) => {
       select: { formulaConfig: true, hasFormula: true }
     });
 
+    // 🔥 FIX FORMULA-CACHE: Invalider le cache du trigger index après MAJ formulaConfig
+    invalidateTriggerIndexCache();
+
     return res.json(updated.formulaConfig || {});
   } catch (error) {
     console.error('[TreeBranchLeaf API] Error updating node formula:', error);
@@ -6529,6 +6535,10 @@ router.post('/nodes/:nodeId/formulas', async (req, res) => {
       console.warn('[TreeBranchLeaf API] Warning updating linkedFormulaIds after create:', (e as Error).message);
     }
 
+    // 🔥 FIX FORMULA-CACHE: Invalider le cache du trigger index pour que les nouvelles dépendances soient prises en compte
+    invalidateTriggerIndexCache();
+    console.log(`🔄 [FORMULA CREATE] Trigger index cache invalidé après création formule ${formula.id} pour node ${nodeId}`);
+
     return res.status(201).json(formula);
   } catch (error) {
     console.error('[TreeBranchLeaf API] Error creating node formula:', error);
@@ -6588,6 +6598,10 @@ router.put('/nodes/:nodeId/formulas/:formulaId', async (req, res) => {
     } catch (e) {
       console.warn('[TreeBranchLeaf API] Warning updating inverse linkedFormulaIds after update:', (e as Error).message);
     }
+
+    // 🔥 FIX FORMULA-CACHE: Invalider le cache du trigger index quand les tokens de la formule changent
+    invalidateTriggerIndexCache();
+    console.log(`🔄 [FORMULA UPDATE] Trigger index cache invalidé après MAJ formule ${formulaId} pour node ${nodeId}`);
 
     return res.json(updated);
   } catch (error) {
@@ -6656,6 +6670,10 @@ router.delete('/nodes/:nodeId/formulas/:formulaId', async (req, res) => {
       where: { id: nodeId },
       data: { hasFormula: remainingFormulas > 0 }
     });
+
+    // 🔥 FIX FORMULA-CACHE: Invalider le cache du trigger index après suppression de formule
+    invalidateTriggerIndexCache();
+    console.log(`🔄 [FORMULA DELETE] Trigger index cache invalidé après suppression formule ${formulaId} pour node ${nodeId}`);
 
     return res.json({ success: true, message: 'Formule supprimÃƒÆ’Ã‚Â©e avec succÃƒÆ’Ã‚Â¨s' });
   } catch (error) {
