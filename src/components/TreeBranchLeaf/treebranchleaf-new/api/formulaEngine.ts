@@ -650,7 +650,9 @@ export async function evaluateTokens(tokens: FormulaToken[], opts: EvaluateOptio
           r = mapNumericValue(args[0] ?? 0, Math.floor);
           break;
         case 'int':
-          r = mapNumericValue(args[0] ?? 0, Math.floor);
+          // 🔧 FIX: Math.trunc (vers zéro) au lieu de Math.floor (vers -∞)
+          // Math.floor(-0.26) = -1 → causait des "N° panneau max" négatifs
+          r = mapNumericValue(args[0] ?? 0, Math.trunc);
           break;
         case 'if': {
           const cond = toNumber(args[0] ?? 0);
@@ -823,7 +825,9 @@ export async function evaluateTokens(tokens: FormulaToken[], opts: EvaluateOptio
           break; }
         case 'ent':
         // case 'int': // Déjà défini plus haut
-          r = mapNumericValue(args[0] ?? 0, Math.floor);
+          // 🔧 FIX: Math.trunc (vers zéro) au lieu de Math.floor (vers -∞)
+          // ENT(-0.26) doit donner 0 (pas -1) → sinon "N° panneau max" devient négatif
+          r = mapNumericValue(args[0] ?? 0, Math.trunc);
           break;
         case 'tronque':
         case 'trunc': {
