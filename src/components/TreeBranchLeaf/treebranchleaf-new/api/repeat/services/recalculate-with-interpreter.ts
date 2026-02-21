@@ -155,7 +155,8 @@ export async function recalculateNodeWithOperationInterpreter(
 export async function recalculateAllCopiedNodesWithOperationInterpreter(
   prisma: PrismaClient,
   repeaterNodeId: string,
-  suffixMarker: string = '-1'
+  suffixMarker: string = '-1',
+  precomputedNodeIds?: string[],
 ): Promise<RecalculationReport> {
 
   const report: RecalculationReport = {
@@ -165,47 +166,34 @@ export async function recalculateAllCopiedNodesWithOperationInterpreter(
   };
 
   try {
-    // 1. D'abord, trouver tous les enfants du repeater node
-    const repeaterChildren = await prisma.treeBranchLeafNode.findMany({
-      where: {
-        parentId: repeaterNodeId
-      },
-      select: {
-        id: true,
-        field_label: true
-      }
-    });
-
-
-    // 2. Chercher rÃƒÂ©cursivement tous les descendants (enfants + petits-enfants + etc.)
-    const allDescendants: Array<{ id: string; field_label: string | null }> = [];
-    const queue = [...repeaterChildren];
+    // 🚀 OPTIMISÉ: si les IDs sont pré-calculés, skip le BFS récursif
+    let copiedNodes: Array<{ id: string; field_label: string | null }>;
     
-    while (queue.length > 0) {
-      const current = queue.shift();
-      if (!current) continue;
-      
-      allDescendants.push(current);
-      
-      // Chercher les enfants de ce nÃ…â€œud
-      const children = await prisma.treeBranchLeafNode.findMany({
-        where: {
-          parentId: current.id
-        },
-        select: {
-          id: true,
-          field_label: true
-        }
+    if (precomputedNodeIds && precomputedNodeIds.length > 0) {
+      copiedNodes = precomputedNodeIds.map(id => ({ id, field_label: null }));
+    } else {
+      // Fallback: BFS récursif (pour les appels hors-repeater)
+      const repeaterChildren = await prisma.treeBranchLeafNode.findMany({
+        where: { parentId: repeaterNodeId },
+        select: { id: true, field_label: true }
       });
-      
-      queue.push(...children);
+      const allDescendants: Array<{ id: string; field_label: string | null }> = [];
+      const queue = [...repeaterChildren];
+      while (queue.length > 0) {
+        const current = queue.shift();
+        if (!current) continue;
+        allDescendants.push(current);
+        const children = await prisma.treeBranchLeafNode.findMany({
+          where: { parentId: current.id },
+          select: { id: true, field_label: true }
+        });
+        queue.push(...children);
+      }
+      copiedNodes = allDescendants.filter(node => node.id.includes(suffixMarker));
     }
-
-
-    // 3. Filtrer pour ne garder que ceux avec le suffixe
-    const copiedNodes = allDescendants.filter(node => node.id.includes(suffixMarker));
-
+    
     report.totalNodes = copiedNodes.length;
+
 
     // 4. Recalculer chacun
     for (const node of copiedNodes) {

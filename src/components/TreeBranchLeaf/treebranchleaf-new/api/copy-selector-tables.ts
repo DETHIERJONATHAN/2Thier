@@ -32,30 +32,14 @@ export async function copySelectorTablesAfterNodeCopy(
 ): Promise<void> {
 
   try {
-    // 1Ã¯Â¸ÂÃ¢Æ’Â£ Chercher le nÃ…â€œud copiÃƒÂ© et tous ses descendants
-    const getAllDescendants = async (nodeId: string): Promise<string[]> => {
-      const results: string[] = [];
-      const queue = [nodeId];
+    // 🚀 OPTIMISÉ: utiliser nodeIdMap au lieu de BFS récursif (getAllDescendants)
+    // nodeIdMap contient déjà TOUS les mappings originalId → copiedId
+    const originalNodeIds = Array.from(options.nodeIdMap.keys());
+    // Ajouter le root s'il n'est pas déjà dans le map
+    if (!originalNodeIds.includes(originalRootNodeId)) {
+      originalNodeIds.push(originalRootNodeId);
+    }
 
-      while (queue.length > 0) {
-        const currentId = queue.shift()!;
-        results.push(currentId);
-
-        const children = await prisma.treeBranchLeafNode.findMany({
-          where: { parentId: currentId },
-          select: { id: true }
-        });
-
-        queue.push(...children.map(c => c.id));
-      }
-
-      return results;
-    };
-
-    // AUSSI chercher les descendants ORIGINAUX pour les mapper
-    const originalNodeIds = await getAllDescendants(originalRootNodeId);
-    const copiedNodeIds = await getAllDescendants(copiedRootNodeId);
-    
 
     // 2Ã¯Â¸ÂÃ¢Æ’Â£ Chercher les nÃ…â€œuds ORIGINAUX avec table_activeId
     const selectorsInOriginal = await prisma.treeBranchLeafNode.findMany({

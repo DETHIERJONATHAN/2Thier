@@ -5,13 +5,9 @@ import { deepCopyNodeInternal, type DeepCopyOptions, type DeepCopyResult } from 
 import { buildResponseFromColumns, getAuthCtx, type MinimalReq } from './services/shared-helpers.js';
 import { RepeatOperationError, type RepeatExecutionResult } from './repeat-service.js';
 import { computeTemplateCopySuffixMax } from './utils/suffix-utils.js';
-import { resetCalculatedValuesAfterCopy } from './services/recalculate-values-service.js';
-import { diagnoseCopyProblems, fixCopyProblems } from './services/copy-diagnostic-service.js';
-import { enforceStrictIsolation, verifyIsolation } from './services/strict-isolation-service.js';
-import { forceIndependentCalculation, createRecalculationTriggers } from './services/force-independent-calculation.js';
-import { fixAllMissingCapacities } from './services/capacity-copy-service.js';
 import { fixAllCompleteDuplications } from './services/complete-duplication-fix.js';
-import { forceAllNodesRecalculationWithOwnData, blockFallbackToOriginalValues } from './services/force-recalculation-service.js';
+import { forceAllNodesRecalculationWithOwnData } from './services/force-recalculation-service.js';
+import { batchPostDuplicationProcessing } from './services/batch-post-duplication.js';
 import { tableLookupDuplicationService } from './services/table-lookup-duplication-service.js';
 import { recalculateAllCopiedNodesWithOperationInterpreter } from './services/recalculate-with-interpreter.js';
 import { syncRepeaterTemplateIds } from './services/repeater-template-sync.js';
@@ -211,11 +207,8 @@ export async function runRepeatExecution(
 
       const newRootId = copyResult.root.newId;
 
-      // 🎯 CRITIQUE: Récupérer le template ORIGINAL pour préserver subType
-      const originalTemplate = await prisma.treeBranchLeafNode.findUnique({
-        where: { id: template.id },
-        select: { subType: true, metadata: true }
-      });
+      // 🎯 CRITIQUE: template contient déjà subType et metadata (chargé par loadTemplateNodesWithFallback)
+      // Pas besoin de findUnique supplémentaire
 
       const created = await prisma.treeBranchLeafNode.findUnique({
         where: { id: newRootId }
@@ -226,8 +219,8 @@ export async function runRepeatExecution(
       }
       
       // 🎯 FIX: Récupérer les triggerNodeIds de l'ORIGINAL, pas de la copie
-      const originalMetadata = (originalTemplate?.metadata && typeof originalTemplate.metadata === 'object')
-        ? (originalTemplate.metadata as Record<string, unknown>)
+      const originalMetadata = (template.metadata && typeof template.metadata === 'object')
+        ? (template.metadata as Record<string, unknown>)
         : {};
       const originalTriggerNodeIds = originalMetadata.triggerNodeIds;
       
@@ -298,13 +291,13 @@ export async function runRepeatExecution(
 
       // 🎯🎯🎯 FIX CRITIQUE: Mettre à jour AUSSI le subType depuis l'original
       console.log('🔴🔴🔴 [AVANT UPDATE] newRootId:', newRootId);
-      console.log('🔴🔴🔴 [AVANT UPDATE] subType à appliquer:', originalTemplate?.subType);
+      console.log('🔴🔴🔴 [AVANT UPDATE] subType à appliquer:', template.subType);
       console.log('🔴🔴🔴 [AVANT UPDATE] triggers suffixés:', rootSuffixedTriggers);
       
       const updateResult = await prisma.treeBranchLeafNode.update({
         where: { id: newRootId },
         data: {
-          subType: originalTemplate?.subType || null,
+          subType: template.subType || null,
           metadata: updatedMetadata
         }
       });
@@ -315,8 +308,8 @@ export async function runRepeatExecution(
       triggersFixDebug.push({
         nodeId: newRootId,
         label: created.label || 'root',
-        originalSubType: originalTemplate?.subType || null,
-        appliedSubType: originalTemplate?.subType || null,
+        originalSubType: template.subType || null,
+        appliedSubType: template.subType || null,
         originalTriggers: originalTriggerNodeIds,
         suffixedTriggers: rootSuffixedTriggers
       });
@@ -338,21 +331,34 @@ export async function runRepeatExecution(
       if (copyResult.idMap && Object.keys(copyResult.idMap).length > 0) {
         const childNodeIds = Object.values(copyResult.idMap).filter(id => id !== newRootId);
         
+        // 🚀 BATCH: Construire le mapping inversé et charger TOUS les originaux + copies en 2 findMany
+        const reverseIdMap = new Map<string, string>();
+        for (const [oldId, newId] of Object.entries(copyResult.idMap)) {
+          if (newId !== newRootId) {
+            reverseIdMap.set(newId, oldId);
+          }
+        }
+        const originalChildIds = Array.from(reverseIdMap.values());
+        
+        const [originalChildren, copiedChildren] = await Promise.all([
+          prisma.treeBranchLeafNode.findMany({
+            where: { id: { in: originalChildIds } },
+            select: { id: true, label: true, metadata: true, subType: true }
+          }),
+          prisma.treeBranchLeafNode.findMany({
+            where: { id: { in: childNodeIds } },
+            select: { id: true, label: true, metadata: true, subType: true }
+          })
+        ]);
+        
+        const originalChildMap = new Map(originalChildren.map(n => [n.id, n]));
+        const copiedChildMap = new Map(copiedChildren.map(n => [n.id, n]));
+        
         for (const childId of childNodeIds) {
           try {
-            // 🎯 Récupérer l'ID original depuis idMap inversé
-            const originalChildId = Object.entries(copyResult.idMap).find(([_, newId]) => newId === childId)?.[0];
-            
-            // 🎯 Récupérer le nœud ORIGINAL pour préserver subType et triggers
-            const originalChildNode = originalChildId ? await prisma.treeBranchLeafNode.findUnique({
-              where: { id: originalChildId },
-              select: { id: true, label: true, metadata: true, subType: true }
-            }) : null;
-            
-            const childNode = await prisma.treeBranchLeafNode.findUnique({
-              where: { id: childId },
-              select: { id: true, label: true, metadata: true, subType: true }
-            });
+            const originalChildId = reverseIdMap.get(childId);
+            const originalChildNode = originalChildId ? originalChildMap.get(originalChildId) ?? null : null;
+            const childNode = copiedChildMap.get(childId);
             
             if (!childNode) continue;
             
@@ -614,40 +620,23 @@ export async function runRepeatExecution(
       // Ã°Å¸Â§Â­ NOUVEAU: rÃƒÂ©aligner les parents des copies quand la section dupliquÃƒÂ©e existe dÃƒÂ©jÃƒÂ 
       await reassignCopiedNodesToDuplicatedParents(prisma, duplicatedNodeIds, originalNodeIdByCopyId);
       
-      // 1. Forcer l'isolation complÃƒÂ¨te
-      const isolationResult = await enforceStrictIsolation(
+      // 1-5+7. BATCH: isolation + reset + calcul indep + triggers + block fallback
+      // (remplace 5 services individuels: ~560 queries → ~71 queries)
+      const batchResult = await batchPostDuplicationProcessing(
         prisma,
         Array.from(duplicatedNodeIds)
       );
-      
-      
-      // 2. VÃƒÂ©rification de l'isolation
-      await verifyIsolation(prisma, Array.from(duplicatedNodeIds));
-      
-      // 3. Reset final des valeurs calculÃƒÂ©es
-      const resetCount = await resetCalculatedValuesAfterCopy(
-        prisma,
-        Array.from(duplicatedNodeIds)
-      );
-      
-      // 4. ForÃƒÂ§age des calculs indÃƒÂ©pendants
-      await forceIndependentCalculation(prisma, Array.from(duplicatedNodeIds));
-      
-      // 5. CrÃƒÂ©ation des triggers de recalcul pour le frontend
-      await createRecalculationTriggers(prisma, Array.from(duplicatedNodeIds));
       
       // 6. FORCER LE RECALCUL AVEC LES PROPRES DONNÃƒâ€°ES
       const forceRecalcReport = await forceAllNodesRecalculationWithOwnData(prisma, repeaterNodeId);
-      
-      // 7. BLOQUER DÃƒâ€°FINITIVEMENT LE FALLBACK
-      await blockFallbackToOriginalValues(prisma, Array.from(duplicatedNodeIds));
       
       
       // Ã°Å¸Å¡â‚¬ 8. RECALCULER LES VRAIES VALEURS AVEC OPERATION INTERPRETER
       const interpreterRecalcReport = await recalculateAllCopiedNodesWithOperationInterpreter(
         prisma,
         repeaterNodeId,
-        '-1'
+        '-1',
+        Array.from(duplicatedNodeIds)
       );
       interpreterRecalcReport.recalculated.forEach(r => {
         if (r.hasCapacity && r.newValue) {
