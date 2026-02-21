@@ -1194,6 +1194,27 @@ async function evaluateCapacitiesForSubmission(
 
 const displayDeps = new Map<string, Set<string>>(); // nodeId → Set<dependsOn>
 
+  // 🔥 FIX R27: Pré-charger les formula_tokens des sum-total nodes pour le tri topologique
+  // Les sum-total nodes stockent leurs dépendances (@value.xxx) dans formula_tokens SUR LE NODE,
+  // PAS dans les tables Formula/Variable. Sans ça, displayDeps reste vide pour les sum-total
+  // → depth=0 → évaluation AVANT les nœuds de base → valeurs STALE ("one step behind").
+  const sumTotalFormulaTokensMap = new Map<string, string[]>();
+  {
+    const sumTotalNodeIds = [...displayCapNodeIds].filter(id => id.endsWith('-sum-total'));
+    if (sumTotalNodeIds.length > 0) {
+      const sumTotalNodes = await prisma.treeBranchLeafNode.findMany({
+        where: { id: { in: sumTotalNodeIds } },
+        select: { id: true, formula_tokens: true }
+      });
+      for (const n of sumTotalNodes) {
+        if (Array.isArray(n.formula_tokens)) {
+          sumTotalFormulaTokensMap.set(n.id, n.formula_tokens as string[]);
+        }
+      }
+      console.log(`🔗 [FIX R27] ${sumTotalFormulaTokensMap.size} sum-total nodes avec formula_tokens chargés`);
+    }
+  }
+
   // 🔥 FIX R14e: Construire displayDeps dans TOUS les modes (pas seulement 'change')
   // PROBLÈME: Le trigger index est construit uniquement en mode 'change'.
   // En mode 'open' (nouveau devis/évaluation initiale), displayDeps restait VIDE
@@ -1254,6 +1275,23 @@ const displayDeps = new Map<string, Set<string>>(); // nodeId → Set<dependsOn>
       const conditions = conditionsByNodeIdForTopo.get(displayNodeId) || [];
       for (const condition of conditions) {
         collectReferencedNodeIdsForTriggers(condition.conditionSet, refs);
+      }
+
+      // 3b. 🔥 FIX R27: Pour les sum-total, extraire les deps depuis formula_tokens du NODE
+      // Les sum-total ont des tokens ["@value.nodeId1", "+", "@value.nodeId2", ...]
+      // stockés sur le node, PAS dans les tables Formula/Variable.
+      if (displayNodeId.endsWith('-sum-total')) {
+        const sumTokens = sumTotalFormulaTokensMap.get(displayNodeId);
+        if (sumTokens) {
+          for (const token of sumTokens) {
+            if (typeof token === 'string' && token.startsWith('@value.')) {
+              const refNodeId = token.slice(7); // "@value.xxx" → "xxx"
+              if (refNodeId && refNodeId !== displayNodeId) {
+                refs.add(refNodeId);
+              }
+            }
+          }
+        }
       }
 
       // 4. Résoudre les node-formula: cross-node de manière transitive
@@ -1614,6 +1652,22 @@ const displayDeps = new Map<string, Set<string>>(); // nodeId → Set<dependsOn>
         const sumRefs = new Set<string>();
         for (const formula of sumFormulas) collectReferencedNodeIdsForTriggers((formula as any).tokens, sumRefs);
         if (sumVariable) collectReferencedNodeIdsForTriggers(sumVariable.metadata, sumRefs);
+        // 🔥 FIX R29a: Les sum-total stockent leurs deps @value.xxx dans TreeBranchLeafNode.formula_tokens,
+        // PAS dans les tables Formula/Variable. Sans cette extraction, sumRefs reste VIDE
+        // → le trigger index ne sait pas que KVA → KVA-sum-total
+        // → la fermeture transitive ne propage pas → le sum-total est skippé par FIX R12
+        // → valeur "one step behind" (toujours l'ancienne valeur au lieu de la fraîche).
+        const nodeFormulaTokens = sumTotalFormulaTokensMap.get(sumTotalNodeId);
+        if (nodeFormulaTokens) {
+          for (const token of nodeFormulaTokens) {
+            if (typeof token === 'string' && token.startsWith('@value.')) {
+              const refNodeId = token.slice(7);
+              if (refNodeId && refNodeId !== sumTotalNodeId) {
+                sumRefs.add(refNodeId);
+              }
+            }
+          }
+        }
         sumRefs.delete(sumTotalNodeId);
         for (const refId of sumRefs) {
           if (refId.includes('.')) continue;
@@ -1799,7 +1853,41 @@ const displayDeps = new Map<string, Set<string>>(); // nodeId → Set<dependsOn>
     computeDepthFixed(nodeId, new Set());
   }
 
-  // � FIX R14: RE-TRIER les capacities avec les profondeurs FIABLES
+  // 🔥 FIX R30: Corriger la profondeur des sum-totals après le topo sort
+  // PROBLÈME: Quand il y a un cycle dans displayDeps (base ↔ sum-total), le cycle detection
+  // retourne depth=0 pour le nœud cyclique, ce qui donne au sum-total une profondeur INFÉRIEURE
+  // à son nœud source (ex: sum-total depth=1, base depth=2). Résultat: le sum-total s'évalue
+  // AVANT sa source et lit submissionData (STALE) au lieu de valueMap (FRESH).
+  // FIX: Après le topo sort, forcer chaque sum-total à avoir depth >= max(source_depths) + 1.
+  {
+    let fixedCount = 0;
+    for (const [sumTotalNodeId, tokens] of sumTotalFormulaTokensMap) {
+      const currentDepth = topoOrder.get(sumTotalNodeId) || 0;
+      let maxSourceDepth = -1;
+      for (const token of tokens) {
+        if (typeof token === 'string' && token.startsWith('@value.')) {
+          const sourceNodeId = token.slice(7);
+          if (sourceNodeId && sourceNodeId !== sumTotalNodeId) {
+            const sourceDepth = topoOrder.get(sourceNodeId);
+            if (sourceDepth !== undefined && sourceDepth > maxSourceDepth) {
+              maxSourceDepth = sourceDepth;
+            }
+          }
+        }
+      }
+      if (maxSourceDepth >= 0 && currentDepth <= maxSourceDepth) {
+        const newDepth = maxSourceDepth + 1;
+        console.log(`🔧 [FIX R30] ${sumTotalNodeId.substring(0, 12)}... depth ${currentDepth} → ${newDepth} (source maxDepth=${maxSourceDepth})`);
+        topoOrder.set(sumTotalNodeId, newDepth);
+        fixedCount++;
+      }
+    }
+    if (fixedCount > 0) {
+      console.log(`🔧 [FIX R30] ${fixedCount} sum-total depth(s) corrigée(s)`);
+    }
+  }
+
+  // 🔥 FIX R14: RE-TRIER les capacities avec les profondeurs FIABLES
   // Le sort initial (ligne ~950) a été fait avec des profondeurs = 0 car displayDeps était vide.
   // Maintenant que topoOrder est correct, on re-trie pour garantir l'ordre de dépendance.
   capacities.sort((a, b) => {
@@ -1866,6 +1954,52 @@ const displayDeps = new Map<string, Set<string>>(); // nodeId → Set<dependsOn>
         }
       }
     }
+
+    // 🔥 FIX R28: Filet de sécurité pour les sum-total
+    // Si un sum-total dépend d'un display field affecté (via ses formula_tokens),
+    // le forcer dans affectedDisplayFieldIds même si le trigger index ne l'a pas trouvé.
+    // Cela couvre les cas où le cache trigger-index est stale ou incomplet.
+    for (const cap of capacitiesRaw) {
+      if (!cap.nodeId.endsWith('-sum-total')) continue;
+      if (affectedDisplayFieldIds.has(cap.nodeId)) continue; // Déjà inclus
+      const sumTokens = sumTotalFormulaTokensMap.get(cap.nodeId);
+      if (sumTokens) {
+        for (const token of sumTokens) {
+          if (typeof token === 'string' && token.startsWith('@value.')) {
+            const refNodeId = token.slice(7);
+            if (affectedDisplayFieldIds.has(refNodeId)) {
+              affectedDisplayFieldIds.add(cap.nodeId);
+              console.log(`🔥 [FIX R28] sum-total ${cap.nodeId.substring(0,12)}... forcé dans affectedDisplayFieldIds (dep ${refNodeId.substring(0,12)}... affecté)`);
+              break;
+            }
+          }
+        }
+      }
+    }
+
+    // 🔥 FIX R29b: Forcer INCONDITIONNELLEMENT tous les sum-total dans affectedDisplayFieldIds
+    // Les sum-totals sont très légers à évaluer (simple somme de @value tokens, 0 requêtes DB)
+    // et il n'y en a que ~13 dans un arbre typique. Le coût marginal est négligeable.
+    // Cela élimine DÉFINITIVEMENT le bug "one step behind" causé par :
+    //   - Un trigger index stale/caché qui ne mappe pas KVA → KVA-sum-total
+    //   - FIX R14c PART 4 qui ne trouvait pas les refs car elles sont dans node.formula_tokens
+    //     (corrigé par FIX R29a, mais le cache peut persister pendant 60s)
+    //   - FIX R28 qui ne détecte pas certains cas edge
+    // Résultat: les sum-totals lisent TOUJOURS les valeurs fraîches du valueMap (calculées
+    // plus tôt dans la boucle grâce au tri topologique) au lieu des anciennes submissionData.
+    {
+      let forcedCount = 0;
+      for (const cap of capacitiesRaw) {
+        if (cap.nodeId.endsWith('-sum-total') && !affectedDisplayFieldIds.has(cap.nodeId)) {
+          affectedDisplayFieldIds.add(cap.nodeId);
+          forcedCount++;
+        }
+      }
+      if (forcedCount > 0) {
+        console.log(`🔥 [FIX R29b] ${forcedCount} sum-total forcés dans affectedDisplayFieldIds (total sum-totals: ${[...affectedDisplayFieldIds].filter(id => id.endsWith('-sum-total')).length})`);
+      }
+    }
+
     console.log(`🚀 [FIX R12] mode=change: ${affectedDisplayFieldIds.size} DISPLAY fields affectés sur ${displayCapNodeIds.size} total (skip ${displayCapNodeIds.size - affectedDisplayFieldIds.size})`);
     
     // 🔥 FIX D: Si aucun DISPLAY field affecté trouvé mais qu'on a un changedFieldId,
@@ -2051,10 +2185,29 @@ const displayDeps = new Map<string, Set<string>>(); // nodeId → Set<dependsOn>
       if (isSumTotalField) {
         try {
           // 🚀 PERF: Utiliser les données pré-chargées (0 requêtes DB ici!)
+          // 🔥 FIX R28: Fallback multi-source pour les tokens
+          // Source 1: sumTotalNodeMap (pré-chargé depuis allTreeNodesForLabels)
+          // Source 2: formulasByNodeId (pré-chargé depuis TreeBranchLeafNodeFormula)
+          // Source 3: sumTotalFormulaTokensMap (pré-chargé spécifiquement pour le topo sort)
           const sumTokensNode = sumTotalNodeMap.get(capacity.nodeId);
-          const tokens = Array.isArray(sumTokensNode?.formula_tokens)
+          let tokens = Array.isArray(sumTokensNode?.formula_tokens)
             ? (sumTokensNode!.formula_tokens as string[])
             : [];
+          // Fallback: formulasRaw (formules chargées depuis TreeBranchLeafNodeFormula)
+          if (tokens.length === 0) {
+            const sumFormulasForEval = formulasRaw.filter(f => f.nodeId === capacity.nodeId);
+            for (const sf of sumFormulasForEval) {
+              if (Array.isArray((sf as any).tokens) && (sf as any).tokens.length > 0) {
+                tokens = (sf as any).tokens;
+                break;
+              }
+            }
+          }
+          // Fallback: sumTotalFormulaTokensMap (chargé au moment du topo sort)
+          if (tokens.length === 0) {
+            const topoTokens = sumTotalFormulaTokensMap.get(capacity.nodeId);
+            if (topoTokens && topoTokens.length > 0) tokens = topoTokens;
+          }
 
           let sum = 0;
           const debugParts: Array<{ refId: string; value: number; source: string }> = [];
@@ -2098,7 +2251,10 @@ const displayDeps = new Map<string, Set<string>>(); // nodeId → Set<dependsOn>
             }
           }
 
-          // Sum-total debug omitted for perf
+          // 🔍 DEBUG SUM-TOTAL: Tracer les valeurs pour diagnostiquer le lag
+          if (debugParts.length > 0) {
+            console.log(`🔍 [SUM-TOTAL DEBUG] ${capacity.nodeId.substring(0,12)}... tokens=${tokens.length} sum=${sum} parts=${JSON.stringify(debugParts.map(p => ({ ref: p.refId.substring(0,12), val: p.value, src: p.source })))}`);
+          }
 
           capacityResult = {
             value: sum,
@@ -2258,6 +2414,17 @@ const displayDeps = new Map<string, Set<string>>(); // nodeId → Set<dependsOn>
           operationResult: parsedResult,
           calculatedBy: `reactive-${userId || 'unknown'}`
         });
+        // 🔥 FIX R28: Rollback des alias copy-scoped MÊME pour les display fields
+        // AVANT ce fix: le `continue` ci-dessous sautait le cleanup des alias injectés
+        // par applyCopyScopedInputAliases. Conséquence: quand kva-node-1 injectait
+        // valueMap["baseId"] = valeur-de-copy-1, cet alias PERSISTAIT → kva-node-2
+        // lisait la valeur de copy-1 au lieu de copy-2 → contamination croisée
+        // → KVA total faux (double-comptage d'une copie).
+        if (injectedBaseKeys.length) {
+          for (const k of injectedBaseKeys) {
+            valueMap.delete(k);
+          }
+        }
         continue;
       }
       
