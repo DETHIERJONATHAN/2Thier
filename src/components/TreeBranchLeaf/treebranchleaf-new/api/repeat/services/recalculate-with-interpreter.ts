@@ -46,7 +46,7 @@ export async function recalculateNodeWithOperationInterpreter(
   };
 
   try {
-    // 1. Chercher le nÃ…â€œud
+    // 1. Chercher le noeud (sans relations inexistantes - seul TreeBranchLeafNodeTable est une relation)
     const node = await prisma.treeBranchLeafNode.findUnique({
       where: { id: nodeId },
       select: {
@@ -59,28 +59,25 @@ export async function recalculateNodeWithOperationInterpreter(
         linkedFormulaIds: true,
         linkedConditionIds: true,
         linkedTableIds: true,
-        TreeBranchLeafNodeFormula: { select: { id: true } },
-        TreeBranchLeafNodeCondition: { select: { id: true } },
-        TreeBranchLeafNodeTable: { select: { id: true } }
       }
     });
 
     if (!node) {
-      result.error = `NÃ…â€œud non trouvÃƒÂ©`;
+      result.error = `Noeud non trouvé`;
       return result;
     }
 
     result.label = node.field_label;
     result.oldValue = node.calculatedValue;
 
-    // 2. DÃƒÂ©terminer le type de capacitÃƒÂ©
-    if (node.TreeBranchLeafNodeFormula?.length > 0) {
+    // 2. Déterminer le type de capacité via les champs booléens et les IDs liés
+    if ((node.hasFormula || (node.linkedFormulaIds && (node.linkedFormulaIds as string[]).length > 0))) {
       result.capacityType = 'formula';
       result.hasCapacity = true;
-    } else if (node.TreeBranchLeafNodeCondition?.length > 0) {
+    } else if ((node.hasCondition || (node.linkedConditionIds && (node.linkedConditionIds as string[]).length > 0))) {
       result.capacityType = 'condition';
       result.hasCapacity = true;
-    } else if (node.TreeBranchLeafNodeTable?.length > 0) {
+    } else if ((node.hasTable || (node.linkedTableIds && (node.linkedTableIds as string[]).length > 0))) {
       result.capacityType = 'table';
       result.hasCapacity = true;
     }
@@ -148,9 +145,9 @@ export async function recalculateNodeWithOperationInterpreter(
 
   return result;
 }
-
 /**
- * Ã°Å¸Å¡â‚¬ RECALCULER TOUS LES NÃ…â€™UDS COPIÃƒâ€°S DU REPEATER
+ * RECALCULER TOUS LES NOEUDS COPIES DU REPEATER
+ * Optimise: 1 seul findMany pour tous les noeuds au lieu de N x findUnique
  */
 export async function recalculateAllCopiedNodesWithOperationInterpreter(
   prisma: PrismaClient,
@@ -166,13 +163,13 @@ export async function recalculateAllCopiedNodesWithOperationInterpreter(
   };
 
   try {
-    // 🚀 OPTIMISÉ: si les IDs sont pré-calculés, skip le BFS récursif
-    let copiedNodes: Array<{ id: string; field_label: string | null }>;
+    // Determiner les IDs a traiter
+    let nodeIds: string[];
     
     if (precomputedNodeIds && precomputedNodeIds.length > 0) {
-      copiedNodes = precomputedNodeIds.map(id => ({ id, field_label: null }));
+      nodeIds = precomputedNodeIds;
     } else {
-      // Fallback: BFS récursif (pour les appels hors-repeater)
+      // Fallback: BFS recursif (pour les appels hors-repeater)
       const repeaterChildren = await prisma.treeBranchLeafNode.findMany({
         where: { parentId: repeaterNodeId },
         select: { id: true, field_label: true }
@@ -189,39 +186,126 @@ export async function recalculateAllCopiedNodesWithOperationInterpreter(
         });
         queue.push(...children);
       }
-      copiedNodes = allDescendants.filter(node => node.id.includes(suffixMarker));
+      nodeIds = allDescendants.filter(node => node.id.includes(suffixMarker)).map(n => n.id);
     }
     
-    report.totalNodes = copiedNodes.length;
+    report.totalNodes = nodeIds.length;
+    
+    if (nodeIds.length === 0) return report;
 
-
-    // 4. Recalculer chacun
-    for (const node of copiedNodes) {
-      try {
-        const recalcResult = await recalculateNodeWithOperationInterpreter(
-          prisma,
-          node.id
-        );
-        report.recalculated.push(recalcResult);
-
-        if (recalcResult.recalculationSuccess && recalcResult.newValue) {
-        } else if (!recalcResult.recalculationSuccess) {
-        }
-      } catch (error) {
-        const errorMsg = error instanceof Error ? error.message : String(error);
-        report.errors.push({ nodeId: node.id, error: errorMsg });
-        console.error(`   Ã¢ÂÅ’ ${node.field_label}: ${errorMsg}`);
+    // BATCH: Charger TOUS les noeuds en une seule requete findMany
+    const allNodes = await prisma.treeBranchLeafNode.findMany({
+      where: { id: { in: nodeIds } },
+      select: {
+        id: true,
+        field_label: true,
+        calculatedValue: true,
+        hasFormula: true,
+        hasCondition: true,
+        hasTable: true,
+        linkedFormulaIds: true,
+        linkedConditionIds: true,
+        linkedTableIds: true,
       }
+    });
+    
+    const nodeMap = new Map(allNodes.map(n => [n.id, n]));
+
+    // Recalculer chaque noeud avec les donnees pre-chargees
+    for (const nodeId of nodeIds) {
+      const node = nodeMap.get(nodeId);
+      if (!node) {
+        report.errors.push({ nodeId, error: 'Noeud non trouve' });
+        continue;
+      }
+      
+      const result: RecalculationResult = {
+        nodeId,
+        label: node.field_label,
+        hasCapacity: false,
+        capacityType: 'none',
+        oldValue: node.calculatedValue,
+        newValue: null,
+        recalculationSuccess: false
+      };
+      
+      // Determiner le type de capacite
+      const linkedFormulas = node.linkedFormulaIds as string[] | null;
+      const linkedConditions = node.linkedConditionIds as string[] | null;
+      const linkedTables = node.linkedTableIds as string[] | null;
+      
+      if (node.hasFormula || (linkedFormulas && linkedFormulas.length > 0)) {
+        result.capacityType = 'formula';
+        result.hasCapacity = true;
+      } else if (node.hasCondition || (linkedConditions && linkedConditions.length > 0)) {
+        result.capacityType = 'condition';
+        result.hasCapacity = true;
+      } else if (node.hasTable || (linkedTables && linkedTables.length > 0)) {
+        result.capacityType = 'table';
+        result.hasCapacity = true;
+      }
+      
+      if (!result.hasCapacity) {
+        report.recalculated.push(result);
+        continue;
+      }
+      
+      // Construire la sourceRef
+      let sourceRef = '';
+      if (result.capacityType === 'formula' && linkedFormulas && linkedFormulas.length > 0) {
+        sourceRef = `node-formula:${linkedFormulas[0]}`;
+      } else if (result.capacityType === 'condition' && linkedConditions && linkedConditions.length > 0) {
+        sourceRef = `condition:${linkedConditions[0]}`;
+      } else if (result.capacityType === 'table' && linkedTables && linkedTables.length > 0) {
+        sourceRef = `node-table:${linkedTables[0]}`;
+      }
+      
+      if (!sourceRef) {
+        result.error = 'Impossible de construire sourceRef';
+        report.recalculated.push(result);
+        continue;
+      }
+      
+      // Appeler l'operation interpreter
+      try {
+        const valuesCache = new Map();
+        const interpretResult = await interpretReference(
+          sourceRef,
+          '',
+          prisma,
+          valuesCache,
+          0,
+          new Map(),
+          new Map()
+        );
+        
+        result.newValue = interpretResult.result;
+        result.recalculationSuccess = true;
+        
+        // Mettre a jour la BD
+        if (result.newValue && result.newValue !== 'null') {
+          await prisma.treeBranchLeafNode.update({
+            where: { id: nodeId },
+            data: {
+              calculatedValue: result.newValue,
+              calculatedAt: new Date(),
+              calculatedBy: `interpreter-${result.capacityType}`
+            }
+          });
+        }
+      } catch (interpretError) {
+        result.error = `Erreur interpretReference: ${interpretError instanceof Error ? interpretError.message : String(interpretError)}`;
+        console.warn(`[recalculate-with-interpreter] ${result.error}`);
+      }
+      
+      report.recalculated.push(result);
     }
 
   } catch (error) {
     const errorMsg = error instanceof Error ? error.message : String(error);
     report.errors.push({ nodeId: repeaterNodeId, error: `Erreur globale: ${errorMsg}` });
-    console.error(`Ã¢ÂÅ’ Erreur globale: ${errorMsg}`);
+    console.error(`[recalculate-with-interpreter] Erreur globale: ${errorMsg}`);
   }
-
-  // RÃƒÂ©sumÃƒÂ©
-  const successCount = report.recalculated.filter(r => r.recalculationSuccess).length;
 
   return report;
 }

@@ -67355,6 +67355,56 @@ router80.get("/:nodeId/calculated-value", async (req2, res) => {
     return res.status(500).json({ error: String(error) });
   }
 });
+router80.post("/batch-calculated-values", async (req2, res) => {
+  try {
+    const { nodeIds, submissionId } = req2.body;
+    if (!Array.isArray(nodeIds) || nodeIds.length === 0) {
+      return res.status(400).json({ error: "nodeIds doit \xEAtre un tableau non-vide" });
+    }
+    const ids = nodeIds.slice(0, 200);
+    const nodes = await prisma44.treeBranchLeafNode.findMany({
+      where: { id: { in: ids } },
+      select: {
+        id: true,
+        label: true,
+        calculatedValue: true,
+        calculatedAt: true,
+        calculatedBy: true,
+        type: true,
+        fieldType: true
+      }
+    });
+    let submissionValues = /* @__PURE__ */ new Map();
+    if (submissionId) {
+      const submissionData = await prisma44.treeBranchLeafSubmissionData.findMany({
+        where: { submissionId, nodeId: { in: ids } },
+        select: { nodeId: true, value: true }
+      });
+      for (const sd of submissionData) {
+        if (sd.value !== null) {
+          submissionValues.set(sd.nodeId, sd.value);
+        }
+      }
+    }
+    const results = {};
+    const nodeMap = new Map(nodes.map((n) => [n.id, n]));
+    for (const id of ids) {
+      const node = nodeMap.get(id);
+      if (!node) continue;
+      const subVal = submissionValues.get(id);
+      const rawValue = subVal ?? node.calculatedValue;
+      results[id] = {
+        value: parseStoredStringValue(rawValue),
+        calculatedAt: toIsoString(node.calculatedAt),
+        calculatedBy: node.calculatedBy ?? void 0
+      };
+    }
+    return res.json({ success: true, results });
+  } catch (error) {
+    console.error("[CalculatedValueController] BATCH GET erreur:", error);
+    return res.status(500).json({ error: String(error) });
+  }
+});
 router80.post("/:nodeId/store-calculated-value", async (req2, res) => {
   try {
     const { nodeId } = req2.params;
@@ -73172,98 +73222,6 @@ async function batchPostDuplicationProcessing(prisma51, copiedNodeIds) {
 
 // src/components/TreeBranchLeaf/treebranchleaf-new/api/repeat/services/recalculate-with-interpreter.ts
 init_operation_interpreter();
-async function recalculateNodeWithOperationInterpreter(prisma51, nodeId, submissionId) {
-  const result = {
-    nodeId,
-    label: null,
-    hasCapacity: false,
-    capacityType: "none",
-    oldValue: null,
-    newValue: null,
-    recalculationSuccess: false
-  };
-  try {
-    const node = await prisma51.treeBranchLeafNode.findUnique({
-      where: { id: nodeId },
-      select: {
-        id: true,
-        field_label: true,
-        calculatedValue: true,
-        hasFormula: true,
-        hasCondition: true,
-        hasTable: true,
-        linkedFormulaIds: true,
-        linkedConditionIds: true,
-        linkedTableIds: true,
-        TreeBranchLeafNodeFormula: { select: { id: true } },
-        TreeBranchLeafNodeCondition: { select: { id: true } },
-        TreeBranchLeafNodeTable: { select: { id: true } }
-      }
-    });
-    if (!node) {
-      result.error = `N\xC3\u2026\xE2\u20AC\u0153ud non trouv\xC3\u0192\xC2\xA9`;
-      return result;
-    }
-    result.label = node.field_label;
-    result.oldValue = node.calculatedValue;
-    if (node.TreeBranchLeafNodeFormula?.length > 0) {
-      result.capacityType = "formula";
-      result.hasCapacity = true;
-    } else if (node.TreeBranchLeafNodeCondition?.length > 0) {
-      result.capacityType = "condition";
-      result.hasCapacity = true;
-    } else if (node.TreeBranchLeafNodeTable?.length > 0) {
-      result.capacityType = "table";
-      result.hasCapacity = true;
-    }
-    if (!result.hasCapacity) {
-      return result;
-    }
-    let sourceRef = "";
-    if (result.capacityType === "formula" && node.linkedFormulaIds?.length > 0) {
-      sourceRef = `node-formula:${node.linkedFormulaIds[0]}`;
-    } else if (result.capacityType === "condition" && node.linkedConditionIds?.length > 0) {
-      sourceRef = `condition:${node.linkedConditionIds[0]}`;
-    } else if (result.capacityType === "table" && node.linkedTableIds?.length > 0) {
-      sourceRef = `node-table:${node.linkedTableIds[0]}`;
-    }
-    if (!sourceRef) {
-      result.error = `Impossible de construire sourceRef`;
-      return result;
-    }
-    try {
-      const valuesCache = /* @__PURE__ */ new Map();
-      const interpretResult = await interpretReference(
-        sourceRef,
-        submissionId || "",
-        prisma51,
-        valuesCache,
-        0,
-        /* @__PURE__ */ new Map(),
-        /* @__PURE__ */ new Map()
-      );
-      result.newValue = interpretResult.result;
-      result.recalculationSuccess = true;
-      if (result.newValue && result.newValue !== "null" && result.newValue !== "\xC3\xA2\xCB\u2020\xE2\u20AC\xA6") {
-        await prisma51.treeBranchLeafNode.update({
-          where: { id: nodeId },
-          data: {
-            calculatedValue: result.newValue,
-            calculatedAt: /* @__PURE__ */ new Date(),
-            calculatedBy: `interpreter-${result.capacityType}`
-          }
-        });
-      }
-    } catch (interpretError) {
-      result.error = `Erreur interpretReference: ${interpretError instanceof Error ? interpretError.message : String(interpretError)}`;
-      console.warn(`   \xC3\xA2\xC5\xA1\xC2\xA0\xC3\xAF\xC2\xB8\xC2\x8F  ${result.error}`);
-    }
-  } catch (error) {
-    result.error = error instanceof Error ? error.message : String(error);
-    console.error(`   \xC3\xA2\xC2\x9D\xC5\u2019 Erreur: ${result.error}`);
-  }
-  return result;
-}
 async function recalculateAllCopiedNodesWithOperationInterpreter(prisma51, repeaterNodeId, suffixMarker = "-1", precomputedNodeIds) {
   const report = {
     totalNodes: 0,
@@ -73271,9 +73229,9 @@ async function recalculateAllCopiedNodesWithOperationInterpreter(prisma51, repea
     errors: []
   };
   try {
-    let copiedNodes;
+    let nodeIds;
     if (precomputedNodeIds && precomputedNodeIds.length > 0) {
-      copiedNodes = precomputedNodeIds.map((id) => ({ id, field_label: null }));
+      nodeIds = precomputedNodeIds;
     } else {
       const repeaterChildren = await prisma51.treeBranchLeafNode.findMany({
         where: { parentId: repeaterNodeId },
@@ -73291,31 +73249,104 @@ async function recalculateAllCopiedNodesWithOperationInterpreter(prisma51, repea
         });
         queue.push(...children);
       }
-      copiedNodes = allDescendants.filter((node) => node.id.includes(suffixMarker));
+      nodeIds = allDescendants.filter((node) => node.id.includes(suffixMarker)).map((n) => n.id);
     }
-    report.totalNodes = copiedNodes.length;
-    for (const node of copiedNodes) {
-      try {
-        const recalcResult = await recalculateNodeWithOperationInterpreter(
-          prisma51,
-          node.id
-        );
-        report.recalculated.push(recalcResult);
-        if (recalcResult.recalculationSuccess && recalcResult.newValue) {
-        } else if (!recalcResult.recalculationSuccess) {
-        }
-      } catch (error) {
-        const errorMsg = error instanceof Error ? error.message : String(error);
-        report.errors.push({ nodeId: node.id, error: errorMsg });
-        console.error(`   \xC3\xA2\xC2\x9D\xC5\u2019 ${node.field_label}: ${errorMsg}`);
+    report.totalNodes = nodeIds.length;
+    if (nodeIds.length === 0) return report;
+    const allNodes = await prisma51.treeBranchLeafNode.findMany({
+      where: { id: { in: nodeIds } },
+      select: {
+        id: true,
+        field_label: true,
+        calculatedValue: true,
+        hasFormula: true,
+        hasCondition: true,
+        hasTable: true,
+        linkedFormulaIds: true,
+        linkedConditionIds: true,
+        linkedTableIds: true
       }
+    });
+    const nodeMap = new Map(allNodes.map((n) => [n.id, n]));
+    for (const nodeId of nodeIds) {
+      const node = nodeMap.get(nodeId);
+      if (!node) {
+        report.errors.push({ nodeId, error: "Noeud non trouve" });
+        continue;
+      }
+      const result = {
+        nodeId,
+        label: node.field_label,
+        hasCapacity: false,
+        capacityType: "none",
+        oldValue: node.calculatedValue,
+        newValue: null,
+        recalculationSuccess: false
+      };
+      const linkedFormulas = node.linkedFormulaIds;
+      const linkedConditions = node.linkedConditionIds;
+      const linkedTables = node.linkedTableIds;
+      if (node.hasFormula || linkedFormulas && linkedFormulas.length > 0) {
+        result.capacityType = "formula";
+        result.hasCapacity = true;
+      } else if (node.hasCondition || linkedConditions && linkedConditions.length > 0) {
+        result.capacityType = "condition";
+        result.hasCapacity = true;
+      } else if (node.hasTable || linkedTables && linkedTables.length > 0) {
+        result.capacityType = "table";
+        result.hasCapacity = true;
+      }
+      if (!result.hasCapacity) {
+        report.recalculated.push(result);
+        continue;
+      }
+      let sourceRef = "";
+      if (result.capacityType === "formula" && linkedFormulas && linkedFormulas.length > 0) {
+        sourceRef = `node-formula:${linkedFormulas[0]}`;
+      } else if (result.capacityType === "condition" && linkedConditions && linkedConditions.length > 0) {
+        sourceRef = `condition:${linkedConditions[0]}`;
+      } else if (result.capacityType === "table" && linkedTables && linkedTables.length > 0) {
+        sourceRef = `node-table:${linkedTables[0]}`;
+      }
+      if (!sourceRef) {
+        result.error = "Impossible de construire sourceRef";
+        report.recalculated.push(result);
+        continue;
+      }
+      try {
+        const valuesCache = /* @__PURE__ */ new Map();
+        const interpretResult = await interpretReference(
+          sourceRef,
+          "",
+          prisma51,
+          valuesCache,
+          0,
+          /* @__PURE__ */ new Map(),
+          /* @__PURE__ */ new Map()
+        );
+        result.newValue = interpretResult.result;
+        result.recalculationSuccess = true;
+        if (result.newValue && result.newValue !== "null") {
+          await prisma51.treeBranchLeafNode.update({
+            where: { id: nodeId },
+            data: {
+              calculatedValue: result.newValue,
+              calculatedAt: /* @__PURE__ */ new Date(),
+              calculatedBy: `interpreter-${result.capacityType}`
+            }
+          });
+        }
+      } catch (interpretError) {
+        result.error = `Erreur interpretReference: ${interpretError instanceof Error ? interpretError.message : String(interpretError)}`;
+        console.warn(`[recalculate-with-interpreter] ${result.error}`);
+      }
+      report.recalculated.push(result);
     }
   } catch (error) {
     const errorMsg = error instanceof Error ? error.message : String(error);
     report.errors.push({ nodeId: repeaterNodeId, error: `Erreur globale: ${errorMsg}` });
-    console.error(`\xC3\xA2\xC2\x9D\xC5\u2019 Erreur globale: ${errorMsg}`);
+    console.error(`[recalculate-with-interpreter] Erreur globale: ${errorMsg}`);
   }
-  const successCount = report.recalculated.filter((r) => r.recalculationSuccess).length;
   return report;
 }
 

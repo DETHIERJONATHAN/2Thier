@@ -10,6 +10,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useAuthenticatedApi } from './useAuthenticatedApi';
 import { tblLog, isTBLDebugEnabled } from '../utils/tblDebug';
+import { batchFetchCalculatedValue } from './calculatedValueBatcher';
 
 // 🧠 Coalescing global (module-level): évite les bursts de requêtes identiques
 const lastFetchAtByKey = new Map<string, number>();
@@ -46,7 +47,7 @@ const inlineValueProtectedUntil = new Map<string, number>();
 export function protectAllDisplayFieldsAfterBroadcast(durationMs: number = 2000): void {
   // DÉSACTIVÉ: Cette protection bloquait les GET légitimes qui sont nécessaires
   // pour récupérer les valeurs correctes après le broadcast
-  console.log(`🛡️ [useNodeCalculatedValue] Protection globale DÉSACTIVÉE (ne fait plus rien)`);
+  // protection globale disabled
 }
 
 /**
@@ -61,7 +62,7 @@ export function blockGetRequestsTemporarily(durationMs: number = 2000): void {
   // 🔥 FIX R11: Ne jamais réduire le temps de blocage existant
   if (newUntil > changeInProgressUntil) {
     changeInProgressUntil = newUntil;
-    console.log(`🚫 [useNodeCalculatedValue] GET bloqués jusqu'à ${new Date(changeInProgressUntil).toISOString().slice(11, 23)}`);
+    // GET blocked
   }
 }
 
@@ -71,7 +72,7 @@ export function blockGetRequestsTemporarily(durationMs: number = 2000): void {
  */
 export function unblockGetRequests(): void {
   changeInProgressUntil = 0;
-  console.log(`✅ [useNodeCalculatedValue] GET débloqués`);
+  // GET unblocked
 }
 
 /**
@@ -109,7 +110,7 @@ export function clearAllNodeValueCaches(): void {
   lastKnownValueByKey.clear();
   inlineValueProtectedUntil.clear();
   changeInProgressUntil = 0;
-  console.log('🧹 [useNodeCalculatedValue] Tous les caches module-level vidés (nouveau devis)');
+  // caches cleared
 }
 
 interface CalculatedValueResult {
@@ -189,21 +190,21 @@ export function useNodeCalculatedValue(
     // Les valeurs fraîches arriveront via le broadcast après la première interaction utilisateur
     const newDevisTs = typeof window !== 'undefined' ? (window as any).__TBL_NEW_DEVIS_TS : 0;
     if (newDevisTs && (now - newDevisTs < 15000)) {
-      console.log(`🔐 [useNodeCalculatedValue] GET BLOQUÉ pour nodeId=${nodeId} - nouveau devis (${now - newDevisTs}ms)`);
+      // GET blocked (new devis)
       return;
     }
     
     // 🎯 FIX DONNÉES FANTÔMES: Bloquer les GET pendant qu'un changement est en cours
     // Les valeurs correctes arriveront via l'événement tbl-force-retransform avec calculatedValues inline
     if (changeInProgressUntil > now) {
-      console.log(`🚫 [useNodeCalculatedValue] GET BLOQUÉ pour nodeId=${nodeId} - changement en cours (encore ${changeInProgressUntil - now}ms)`);
+      // GET blocked (change in progress)
       return;
     }
     
     // 🛡️ FIX V2: Bloquer les GET si une valeur inline a été reçue récemment
     // Cela évite qu'un GET obsolète (lancé juste avant le inline) écrase la bonne valeur
     if (isInlineValueProtected(nodeId)) {
-      console.log(`🛡️ [useNodeCalculatedValue] GET IGNORÉ pour nodeId=${nodeId} - valeur inline protégée`);
+      // GET blocked (inline value protected)
       return;
     }
     
@@ -223,65 +224,41 @@ export function useNodeCalculatedValue(
     // 🛡️ Anti-race-condition: incrémenter et capturer la version AVANT la requête
     const currentVersion = (requestVersionByKey.get(requestKey) || 0) + 1;
     requestVersionByKey.set(requestKey, currentVersion);
-    
-    console.log(`🔢 [useNodeCalculatedValue] Requête v${currentVersion} pour nodeId=${nodeId}`);
 
     try {
       lastFetchAtByKey.set(requestKey, now);
       setLoading(true);
       setError(null);
 
-      // 🎯 Endpoint: GET /api/tree-nodes/:nodeId/calculated-value
-      // Retourne: { value, calculatedAt, calculatedBy }
-      // 
-      // ⚠️ IMPORTANT: Le submissionId est envoyé UNIQUEMENT pour lire les valeurs
-      // des champs sources nécessaires au calcul. Le résultat calculé lui-même
-      // n'est JAMAIS enregistré dans la submission - il reste dynamique.
-      // ✅ IMPORTANT: Un 404 doit être toléré (ex: display field pas encore créé en DB)
-      // et ne doit pas polluer la console ni casser l'UI.
-      const response = await api.get(
-        `/api/tree-nodes/${nodeId}/calculated-value`,
-        {
-          params: submissionId ? { submissionId } : undefined,
-          suppressErrorLogForStatuses: [404]
-        }
-      );
+      // BATCH: Utilise le batcher qui coalise les requêtes dans une fenêtre de 50ms
+      // Au lieu de 30+ GET individuels, 1 seul POST batch est envoyé
+      const batchResult = await batchFetchCalculatedValue(api, nodeId, submissionId);
 
-      // 🛡️ Anti-race-condition V1: vérifier si une requête plus récente a été lancée (par version)
+      // Anti-race-condition V1: vérifier si une requête plus récente a été lancée (par version)
       const latestVersion = requestVersionByKey.get(requestKey) || 0;
       if (currentVersion !== latestVersion) {
-        console.log(`🛡️ [useNodeCalculatedValue] IGNORÉ v${currentVersion}: réponse obsolète pour nodeId=${nodeId} (version courante: v${latestVersion})`);
         return;
       }
       
-      // 🛡️ FIX V2: Vérifier si une valeur inline a été reçue PENDANT que ce GET était en cours
-      // Si oui, ignorer la réponse du GET car elle contient des données obsolètes
+      // FIX V2: Vérifier si une valeur inline a été reçue PENDANT que le batch était en cours
       if (isInlineValueProtected(nodeId)) {
-        console.log(`🛡️ [useNodeCalculatedValue] IGNORÉ v${currentVersion}: réponse GET pour nodeId=${nodeId} - valeur inline plus récente reçue pendant le fetch`);
         return;
       }
       
-      // 🛡️ Anti-race-condition V2: vérifier par TIMESTAMP (protection cross-instances)
-      // Utilise uniquement nodeId comme clé pour protéger contre les réponses out-of-order
-      // même si le submissionId a changé entre-temps
+      // Anti-race-condition V2: vérifier par TIMESTAMP
       const lastProcessedTs = lastProcessedTimestampByNode.get(nodeId) || 0;
       if (requestTimestamp < lastProcessedTs) {
-        console.log(`🛡️ [useNodeCalculatedValue] IGNORÉ ts=${requestTimestamp}: réponse obsolète pour nodeId=${nodeId} (dernier traité: ts=${lastProcessedTs})`);
         return;
       }
-      // Marquer ce timestamp comme le dernier traité pour ce node
       lastProcessedTimestampByNode.set(nodeId, requestTimestamp);
 
-      // Déclarer extractedValue au niveau supérieur pour pouvoir l'utiliser dans le fallback
+      // Extraire la valeur du batch result
       let extractedValue: string | number | boolean | null = null;
         
-        if (response && typeof response === 'object') {
-          const data = response as Record<string, unknown>;
+        if (batchResult && typeof batchResult === 'object') {
+          extractedValue = batchResult.value ?? null;
           
-          // Extraire les données de la réponse
-          extractedValue = data.value ?? data.calculatedValue ?? null;
-          
-          // 🔥 Si c'est un objet, extraire la valeur intelligemment
+          // Si c'est un objet, extraire la valeur intelligemment
           if (typeof extractedValue === 'object' && extractedValue !== null) {
             const obj = extractedValue as Record<string, unknown>;
             extractedValue = 
@@ -293,22 +270,22 @@ export function useNodeCalculatedValue(
           }
 
           if (isTBLDebugEnabled()) {
-            tblLog('✅ [useNodeCalculatedValue] Valeur récupérée:', {
+            tblLog('[useNodeCalculatedValue] Valeur récupérée:', {
               nodeId,
               treeId,
               value: extractedValue,
-              calculatedAt: data.calculatedAt,
-              calculatedBy: data.calculatedBy
+              calculatedAt: batchResult.calculatedAt,
+              calculatedBy: batchResult.calculatedBy
             });
           }
 
-          // 🎯 PROTECTION: Ne pas écraser une valeur existante par null/vide/[] si des évaluations sont en cours
+          // PROTECTION: Ne pas écraser une valeur existante par null/vide/[] si des évaluations sont en cours
           const isValueBeingCleared = (
             extractedValue === null || 
             extractedValue === undefined || 
             extractedValue === '' ||
             extractedValue === '∅' ||
-            (Array.isArray(extractedValue) && extractedValue.length === 0) // 🔥 NOUVEAU: Bloquer les tableaux vides []
+            (Array.isArray(extractedValue) && extractedValue.length === 0)
           );
           const currentValue = valueRef.current;
           const hasCurrentValue = (
@@ -320,23 +297,17 @@ export function useNodeCalculatedValue(
           );
           
           if (isProtectedRef.current && isValueBeingCleared && hasCurrentValue) {
-            console.log(`🛡️ [GRD nodeId=${nodeId}] PROTECTION: ne pas écraser "${currentValue}" avec "${extractedValue}" (${pendingEvaluationsRef.current} évaluations en cours)`);
             return;
           }
 
           // Si on a une valeur valide, l'utiliser directement
           if (extractedValue !== null && extractedValue !== undefined && extractedValue !== '') {
-            // 🛡️ Anti-régression: ne jamais revenir à une valeur "pire" qu'avant
-            // sauf si c'est la requête la plus récente ET qu'on est en mode non-protégé
-            const lastKnown = lastKnownValueByKey.get(requestKey);
-            
             // Stocker cette valeur comme dernière connue pour cette version
             lastKnownValueByKey.set(requestKey, { value: extractedValue as string | number | boolean | null, version: currentVersion });
             
-            console.log(`🔄 [useNodeCalculatedValue] v${currentVersion} ts=${requestTimestamp} Mise à jour valeur pour nodeId=${nodeId}:`, extractedValue);
             setValue(extractedValue as string | number | boolean | null);
-            setCalculatedAt(data.calculatedAt as string | undefined);
-            setCalculatedBy(data.calculatedBy as string | undefined);
+            setCalculatedAt(batchResult.calculatedAt);
+            setCalculatedBy(batchResult.calculatedBy);
             return;
           }
         }
@@ -346,20 +317,15 @@ export function useNodeCalculatedValue(
     } catch (err) {
       const errMsg = err instanceof Error ? err.message : String(err);
       
-      const status = (err as Error & { status?: number })?.status;
-      if (status === 404) {
-        // Tolérer le 404 (nœud inexistant / pas encore créé) -> valeur vide
-        setValue(null);
-        setError(null);
-        return;
-      }
-
+      // Batch ne retourne pas de 404 (renvoie null pour les nœuds introuvables)
       setError(errMsg);
-      console.error('❌ [useNodeCalculatedValue] Erreur récupération:', {
-        nodeId,
-        treeId,
-        error: errMsg
-      });
+      if (isTBLDebugEnabled()) {
+        console.error('[useNodeCalculatedValue] Erreur récupération:', {
+          nodeId,
+          treeId,
+          error: errMsg
+        });
+      }
     } finally {
       setLoading(false);
     }
@@ -381,11 +347,7 @@ export function useNodeCalculatedValue(
       prevSubmissionIdRef.current = submissionId;
       
       if (submissionIdChanged && submissionId) {
-        console.log(`🛡️ [useNodeCalculatedValue] GET IGNORÉ pour nodeId=${nodeId} - submissionId a changé (${previousSubmissionId} → ${submissionId}), attente du broadcast inline`);
-        // 🔎 DIAG PRIX KWH
-        if (nodeId.startsWith('99476bab')) {
-          console.log(`🔎🔎🔎 [DIAG PRIX KWH HOOK] GET IGNORÉ car submissionId changed - current value="${valueRef.current}"`);
-        }
+        // submissionId changed - wait for broadcast inline
         return;
       }
       
@@ -404,7 +366,7 @@ export function useNodeCalculatedValue(
     const handleEvaluationComplete = () => {
       if (pendingEvaluationsRef.current > 0) {
         pendingEvaluationsRef.current--;
-        console.log(`⬇️ [GRD nodeId=${nodeId}] Évaluation terminée (${pendingEvaluationsRef.current} restantes)`);
+        // evaluation complete
         
         // Désactiver la protection quand le compteur atteint 0
         if (pendingEvaluationsRef.current === 0) {
@@ -470,10 +432,10 @@ export function useNodeCalculatedValue(
           // 🔒 Ne pas vider les champs protégés
           const protectedIds = detail?.protectedNodeIds;
           if (Array.isArray(protectedIds) && protectedIds.includes(nodeId)) {
-            console.log(`🔒 [useNodeCalculatedValue] Skip clear pour nœud protégé: nodeId=${nodeId}`);
+            // skip clear for protected node
             return; // Ne pas vider
           }
-          console.log(`🧹 [useNodeCalculatedValue] Clear display field: nodeId=${nodeId}`);
+          // clear display field
           setValue(null); // Vider la valeur
           return; // Ne pas faire de refetch
         }
@@ -482,12 +444,6 @@ export function useNodeCalculatedValue(
         // les utiliser DIRECTEMENT au lieu de faire un refetch qui peut retourner des valeurs obsolètes
         if (detail?.calculatedValues && nodeId in detail.calculatedValues) {
           const inlineValue = detail.calculatedValues[nodeId];
-          console.log(`📥 [useNodeCalculatedValue] Valeur inline pour nodeId=${nodeId}:`, inlineValue);
-          
-          // 🔎 DIAG PRIX KWH
-          if (nodeId.startsWith('99476bab')) {
-            console.log(`🔎🔎🔎 [DIAG PRIX KWH HOOK] Inline reçue: "${inlineValue}", type=${typeof inlineValue}, submissionId=${submissionId}`);
-          }
           
           // Mettre à jour le timestamp pour protéger contre les réponses GET obsolètes
           lastProcessedTimestampByNode.set(nodeId, now);
@@ -527,12 +483,12 @@ export function useNodeCalculatedValue(
             // Les valeurs correctes arriveront via la première évaluation déclenchée par l'utilisateur
             const newDevisTs = typeof window !== 'undefined' ? (window as any).__TBL_NEW_DEVIS_TS : 0;
             if (newDevisTs && (Date.now() - newDevisTs < 15000)) {
-              console.log(`🔐 [useNodeCalculatedValue] Safety GET BLOQUÉ pour nodeId=${nodeId} - nouveau devis (${Date.now() - newDevisTs}ms)`);
+              // safety GET blocked for new devis
               return;
             }
             // �🔄 Valeur vide/null → NE PAS protéger, déclencher un GET retardé
             // pour récupérer une éventuelle valeur calculée en DB
-            console.log(`🔄 [useNodeCalculatedValue] nodeId=${nodeId} pas dans calculatedValues ET valeur vide - GET retardé déclenché`);
+            // delayed GET for empty value not in calculatedValues
             setTimeout(() => fetchCalculatedValue(), 350);
             return;
           }
@@ -547,15 +503,15 @@ export function useNodeCalculatedValue(
             // 🔐 FIX STALE-DEVIS: Bloquer aussi le safety refetch après nouveau devis
             const newDevisTs2 = typeof window !== 'undefined' ? (window as any).__TBL_NEW_DEVIS_TS : 0;
             if (newDevisTs2 && (Date.now() - newDevisTs2 < 15000)) {
-              console.log(`🔐 [useNodeCalculatedValue] Safety refetch BLOQUÉ pour nodeId=${nodeId} - nouveau devis`);
+              // safety refetch blocked
               return;
             }
             lastSafetyRefetchAtRef.current = now;
-            console.log(`🧯 [useNodeCalculatedValue] nodeId=${nodeId} absent du broadcast partiel - safety GET différé`);
+            // safety refetch for partial broadcast
             setTimeout(() => fetchCalculatedValue(), 650);
             return;
           }
-          console.log(`🛡️ [useNodeCalculatedValue] nodeId=${nodeId} pas dans calculatedValues - conserver valeur actuelle (safety throttled)`);
+          // keep current value (not in calculatedValues)
           return; // 🎯 Ne PAS faire de refetch - le champ n'a pas été impacté par le changement
         }
 
@@ -564,7 +520,7 @@ export function useNodeCalculatedValue(
         // 🎯 PROTECTION: Incrémenter le compteur quand un refresh est demandé
         pendingEvaluationsRef.current++;
         setIsProtected(true);
-        console.log(`⬆️ [GRD nodeId=${nodeId}] Rafraîchissement demandé (${pendingEvaluationsRef.current} en cours)`);
+        // refresh requested
 
         // 🚀 Triggers au centre: rafraîchissement immédiat (throttle 450ms déjà appliqué dans fetchCalculatedValue)
         fetchCalculatedValue();
@@ -609,7 +565,7 @@ export function useNodeCalculatedValue(
           // 🎯 PROTECTION: Incrémenter le compteur quand un update est signalé
           pendingEvaluationsRef.current++;
           setIsProtected(true);
-          console.log(`⬆️ [GRD nodeId=${nodeId}] Update signalé (${pendingEvaluationsRef.current} en cours)`);
+          // node update signaled
 
           lastGlobalRefreshAtRef.current = Date.now();
 

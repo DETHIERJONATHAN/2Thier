@@ -817,6 +817,83 @@ router.get('/:nodeId/calculated-value', async (req: Request, res: Response) => {
 });
 
 /**
+ * POST /api/tree-nodes/batch-calculated-values
+ * 
+ * Récupère les valeurs calculées de plusieurs nœuds en une seule requête.
+ * Remplace N appels individuels GET /:nodeId/calculated-value.
+ * Body: { nodeIds: string[], submissionId?: string }
+ */
+router.post('/batch-calculated-values', async (req: Request, res: Response) => {
+  try {
+    const { nodeIds, submissionId } = req.body as { nodeIds?: string[]; submissionId?: string };
+    
+    if (!Array.isArray(nodeIds) || nodeIds.length === 0) {
+      return res.status(400).json({ error: 'nodeIds doit être un tableau non-vide' });
+    }
+    
+    // Limiter à 200 nœuds max pour éviter les abus
+    const ids = nodeIds.slice(0, 200);
+    
+    // 1. Charger tous les nœuds en une seule requête
+    const nodes = await prisma.treeBranchLeafNode.findMany({
+      where: { id: { in: ids } },
+      select: {
+        id: true,
+        label: true,
+        calculatedValue: true,
+        calculatedAt: true,
+        calculatedBy: true,
+        type: true,
+        fieldType: true,
+      }
+    });
+    
+    // 2. Si submissionId fourni, charger aussi les valeurs de la soumission
+    let submissionValues = new Map<string, string>();
+    if (submissionId) {
+      const submissionData = await prisma.treeBranchLeafSubmissionData.findMany({
+        where: { submissionId, nodeId: { in: ids } },
+        select: { nodeId: true, value: true }
+      });
+      for (const sd of submissionData) {
+        if (sd.value !== null) {
+          submissionValues.set(sd.nodeId, sd.value);
+        }
+      }
+    }
+    
+    // 3. Construire le résultat
+    const results: Record<string, {
+      value: string | number | boolean | null;
+      calculatedAt?: string;
+      calculatedBy?: string;
+    }> = {};
+    
+    const nodeMap = new Map(nodes.map(n => [n.id, n]));
+    
+    for (const id of ids) {
+      const node = nodeMap.get(id);
+      if (!node) continue;
+      
+      // Priorité: submissionValue > calculatedValue
+      const subVal = submissionValues.get(id);
+      const rawValue = subVal ?? node.calculatedValue;
+      
+      results[id] = {
+        value: parseStoredStringValue(rawValue),
+        calculatedAt: toIsoString(node.calculatedAt),
+        calculatedBy: node.calculatedBy ?? undefined,
+      };
+    }
+    
+    return res.json({ success: true, results });
+  } catch (error) {
+    console.error('[CalculatedValueController] BATCH GET erreur:', error);
+    return res.status(500).json({ error: String(error) });
+  }
+});
+
+/**
  * POST /api/tree-nodes/:nodeId/store-calculated-value
  * 
  * Stocke une valeur calculée dans le nœud
