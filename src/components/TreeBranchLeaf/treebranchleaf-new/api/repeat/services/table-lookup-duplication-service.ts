@@ -335,35 +335,37 @@ export class TableLookupDuplicationService {
         });
         
       } else {
-        // ⚠️ CRITICAL FIX: Si la table existe déjà, SUPPRIMER et RECRÉER les colonnes
-        // pour s'assurer que le suffixe est correctement appliqué
+        // ⚠️ PERF FIX: Table existe déjà, recréer les colonnes avec skipDuplicates
+        // Utilise deleteMany + createMany au lieu de Promise.all(create) pour éviter P2002
+        // quand plusieurs TBL-DUP parallèles traitent la même table
         
-        // Supprimer les anciennes colonnes
         await prisma.treeBranchLeafNodeTableColumn.deleteMany({
           where: { tableId: copiedTableId }
         });
         
-        // Créer les nouvelles colonnes avec le suffixe correct
-        const newColumns = await Promise.all(
-          originalTable.tableColumns.map((col, idx) => {
-            const baseName = String(col.name ?? '');
-            const isNumericName = /^-?\d+(\.\d+)?$/.test(baseName.trim());
-            const shouldSuffix = baseName.length > 0 && !isNumericName && !baseName.endsWith(suffix);
-            const newName = shouldSuffix ? `${baseName}${suffix}` : baseName;
-            return prisma.treeBranchLeafNodeTableColumn.create({
-              data: {
-                id: col.id ? `${col.id}${suffix}` : randomUUID(),
-                tableId: copiedTableId,
-                columnIndex: col.columnIndex,
-                name: newName,
-                type: col.type,
-                width: col.width,
-                format: col.format,
-                metadata: col.metadata
-              }
-            });
-          })
-        );
+        const columnsData = originalTable.tableColumns.map((col, idx) => {
+          const baseName = String(col.name ?? '');
+          const isNumericName = /^-?\d+(\.\d+)?$/.test(baseName.trim());
+          const shouldSuffix = baseName.length > 0 && !isNumericName && !baseName.endsWith(suffix);
+          const newName = shouldSuffix ? `${baseName}${suffix}` : baseName;
+          return {
+            id: col.id ? `${col.id}${suffix}` : randomUUID(),
+            tableId: copiedTableId,
+            columnIndex: idx,
+            name: newName,
+            type: col.type,
+            width: col.width,
+            format: col.format,
+            metadata: col.metadata
+          };
+        });
+        
+        if (columnsData.length > 0) {
+          await prisma.treeBranchLeafNodeTableColumn.createMany({
+            data: columnsData,
+            skipDuplicates: true
+          });
+        }
         
         
         await prisma.treeBranchLeafNodeTable.update({

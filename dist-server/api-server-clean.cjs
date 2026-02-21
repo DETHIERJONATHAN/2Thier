@@ -36827,26 +36827,28 @@ var TableLookupDuplicationService = class {
         await prisma51.treeBranchLeafNodeTableColumn.deleteMany({
           where: { tableId: copiedTableId }
         });
-        const newColumns = await Promise.all(
-          originalTable.tableColumns.map((col, idx) => {
-            const baseName = String(col.name ?? "");
-            const isNumericName = /^-?\d+(\.\d+)?$/.test(baseName.trim());
-            const shouldSuffix = baseName.length > 0 && !isNumericName && !baseName.endsWith(suffix);
-            const newName = shouldSuffix ? `${baseName}${suffix}` : baseName;
-            return prisma51.treeBranchLeafNodeTableColumn.create({
-              data: {
-                id: col.id ? `${col.id}${suffix}` : (0, import_crypto18.randomUUID)(),
-                tableId: copiedTableId,
-                columnIndex: col.columnIndex,
-                name: newName,
-                type: col.type,
-                width: col.width,
-                format: col.format,
-                metadata: col.metadata
-              }
-            });
-          })
-        );
+        const columnsData = originalTable.tableColumns.map((col, idx) => {
+          const baseName = String(col.name ?? "");
+          const isNumericName = /^-?\d+(\.\d+)?$/.test(baseName.trim());
+          const shouldSuffix = baseName.length > 0 && !isNumericName && !baseName.endsWith(suffix);
+          const newName = shouldSuffix ? `${baseName}${suffix}` : baseName;
+          return {
+            id: col.id ? `${col.id}${suffix}` : (0, import_crypto18.randomUUID)(),
+            tableId: copiedTableId,
+            columnIndex: idx,
+            name: newName,
+            type: col.type,
+            width: col.width,
+            format: col.format,
+            metadata: col.metadata
+          };
+        });
+        if (columnsData.length > 0) {
+          await prisma51.treeBranchLeafNodeTableColumn.createMany({
+            data: columnsData,
+            skipDuplicates: true
+          });
+        }
         await prisma51.treeBranchLeafNodeTable.update({
           where: { id: copiedTableId },
           data: { meta: rewrittenMeta, updatedAt: /* @__PURE__ */ new Date() }
@@ -37708,10 +37710,36 @@ async function deepCopyNodeInternal(prisma51, req2, nodeId, opts) {
       displayNodeIds.push(newId);
     }
   }
+  const allOldNodeIds = createdNodes.map((n) => n.oldId);
+  const [allFormulasRaw, allConditionsRaw] = await Promise.all([
+    prisma51.treeBranchLeafNodeFormula.findMany({ where: { nodeId: { in: allOldNodeIds } } }),
+    prisma51.treeBranchLeafNodeCondition.findMany({ where: { nodeId: { in: allOldNodeIds } } })
+  ]);
+  const formulasByNodeId = /* @__PURE__ */ new Map();
+  for (const f of allFormulasRaw) {
+    const arr = formulasByNodeId.get(f.nodeId) || [];
+    arr.push(f);
+    formulasByNodeId.set(f.nodeId, arr);
+  }
+  const conditionsByNodeId = /* @__PURE__ */ new Map();
+  for (const c of allConditionsRaw) {
+    const arr = conditionsByNodeId.get(c.nodeId) || [];
+    arr.push(c);
+    conditionsByNodeId.set(c.nodeId, arr);
+  }
+  const allPotentialNewConditionIds = allConditionsRaw.map((c) => `${c.id}-${suffixToken}`);
+  const existingConditionsSet = /* @__PURE__ */ new Set();
+  if (allPotentialNewConditionIds.length > 0) {
+    const existingConds = await prisma51.treeBranchLeafNodeCondition.findMany({
+      where: { id: { in: allPotentialNewConditionIds } },
+      select: { id: true }
+    });
+    for (const ec of existingConds) existingConditionsSet.add(ec.id);
+  }
   for (const { oldId, newId, newParentId } of createdNodes) {
     const oldNode = byId.get(oldId);
     const linkedFormulaIdOrder = Array.isArray(oldNode.linkedFormulaIds) ? oldNode.linkedFormulaIds : [];
-    const formulas = await prisma51.treeBranchLeafNodeFormula.findMany({ where: { nodeId: oldId } });
+    const formulas = formulasByNodeId.get(oldId) || [];
     const formulaMap = new Map(formulas.map((f) => [f.id, f]));
     const sortedFormulas = [];
     const validLinkedIds = [];
@@ -37771,7 +37799,7 @@ async function deepCopyNodeInternal(prisma51, req2, nodeId, opts) {
         console.warn("[TreeBranchLeaf API] Warning updating linkedFormulaIds for node:", e.message);
       }
     }
-    const conditions = await prisma51.treeBranchLeafNodeCondition.findMany({ where: { nodeId: oldId } });
+    const conditions = conditionsByNodeId.get(oldId) || [];
     const linkedConditionIdOrder = Array.isArray(oldNode.linkedConditionIds) ? oldNode.linkedConditionIds : [];
     const copiedNodeIds = new Set(idMap.values());
     const conditionMap = new Map(conditions.map((c) => [c.id, c]));
@@ -37795,10 +37823,8 @@ async function deepCopyNodeInternal(prisma51, req2, nodeId, opts) {
       if (!firstNewConditionId) firstNewConditionId = newConditionId;
       conditionIdMap.set(c.id, newConditionId);
       const newSet = replaceIdsInConditionSet(c.conditionSet, idMap, formulaIdMap, conditionIdMap);
-      const existingCondition = await prisma51.treeBranchLeafNodeCondition.findUnique({
-        where: { id: newConditionId }
-      });
-      if (existingCondition) {
+      const conditionAlreadyExists = existingConditionsSet.has(newConditionId);
+      if (conditionAlreadyExists) {
         if (validLinkedConditionIds.includes(c.id)) {
           newLinkedConditionIds.push(newConditionId);
         }
@@ -72792,13 +72818,21 @@ async function runRepeatExecution(prisma51, req2, execution) {
       throw nodeExecErr;
     }
   }
+  const allTemplateVarIds = [...new Set(plan.variables.map((v) => v.templateVariableId))];
+  const templateVarsMap = /* @__PURE__ */ new Map();
+  if (allTemplateVarIds.length > 0) {
+    const templateVars = await prisma51.treeBranchLeafNodeVariable.findMany({
+      where: { id: { in: allTemplateVarIds } },
+      select: { id: true, displayName: true }
+    });
+    for (const tv of templateVars) {
+      templateVarsMap.set(tv.id, { displayName: tv.displayName });
+    }
+  }
   for (const variablePlan of plan.variables) {
     try {
       let { templateVariableId, targetNodeId, plannedVariableId, plannedSuffix } = variablePlan;
-      const templateVar = await prisma51.treeBranchLeafNodeVariable.findUnique({
-        where: { id: templateVariableId },
-        select: { displayName: true }
-      });
+      const templateVar = templateVarsMap.get(templateVariableId);
       const isLookup = templateVar?.displayName?.includes("Lookup Table");
       if (isLookup) {
         continue;

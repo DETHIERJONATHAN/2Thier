@@ -921,14 +921,44 @@ export async function deepCopyNodeInternal(
     }
   }
 
+  // PERF: Pre-load ALL formulas and conditions in 2 batch queries instead of 2*N
+  const allOldNodeIds = createdNodes.map(n => n.oldId);
+  const [allFormulasRaw, allConditionsRaw] = await Promise.all([
+    prisma.treeBranchLeafNodeFormula.findMany({ where: { nodeId: { in: allOldNodeIds } } }),
+    prisma.treeBranchLeafNodeCondition.findMany({ where: { nodeId: { in: allOldNodeIds } } })
+  ]);
+  const formulasByNodeId = new Map<string, typeof allFormulasRaw>();
+  for (const f of allFormulasRaw) {
+    const arr = formulasByNodeId.get(f.nodeId) || [];
+    arr.push(f);
+    formulasByNodeId.set(f.nodeId, arr);
+  }
+  const conditionsByNodeId = new Map<string, typeof allConditionsRaw>();
+  for (const c of allConditionsRaw) {
+    const arr = conditionsByNodeId.get(c.nodeId) || [];
+    arr.push(c);
+    conditionsByNodeId.set(c.nodeId, arr);
+  }
+
+  // PERF: Pre-check which new condition IDs already exist (1 query instead of N findUnique)
+  const allPotentialNewConditionIds = allConditionsRaw.map(c => `${c.id}-${suffixToken}`);
+  const existingConditionsSet = new Set<string>();
+  if (allPotentialNewConditionIds.length > 0) {
+    const existingConds = await prisma.treeBranchLeafNodeCondition.findMany({
+      where: { id: { in: allPotentialNewConditionIds } },
+      select: { id: true }
+    });
+    for (const ec of existingConds) existingConditionsSet.add(ec.id);
+  }
+
   for (const { oldId, newId, newParentId } of createdNodes) {
     const oldNode = byId.get(oldId)!;
     
     // Ã°Å¸â€â€˜ CRITICAL: RÃƒÂ©cupÃƒÂ©rer l'ordre de linkedFormulaIds de l'original
     const linkedFormulaIdOrder = Array.isArray(oldNode.linkedFormulaIds) ? oldNode.linkedFormulaIds : [];
     
-    // RÃƒÂ©cupÃƒÂ©rer toutes les formules
-    const formulas = await prisma.treeBranchLeafNodeFormula.findMany({ where: { nodeId: oldId } });
+    // PERF: Use pre-loaded formulas instead of per-node findMany
+    const formulas = formulasByNodeId.get(oldId) || [];
     
     // CRITICAL: Trier selon linkedFormulaIds order, MAIS SEULEMENT les IDs valides
     // D'abord, crÃƒÂ©er une map formula id -> formula
@@ -1007,7 +1037,8 @@ export async function deepCopyNodeInternal(
       }
     }
 
-    const conditions = await prisma.treeBranchLeafNodeCondition.findMany({ where: { nodeId: oldId } });
+    // PERF: Use pre-loaded conditions instead of per-node findMany
+    const conditions = conditionsByNodeId.get(oldId) || [];
     const linkedConditionIdOrder = Array.isArray(oldNode.linkedConditionIds) ? oldNode.linkedConditionIds : [];
     const copiedNodeIds = new Set(idMap.values());
     
@@ -1043,11 +1074,9 @@ export async function deepCopyNodeInternal(
       const newSet = replaceIdsInConditionSet(c.conditionSet, idMap, formulaIdMap, conditionIdMap) as Prisma.InputJsonValue;
       
       // Ã°Å¸â€Â§ FIX DYNAMIQUE: VÃƒÂ©rifier si la condition existe dÃƒÂ©jÃƒÂ  AVANT de la crÃƒÂ©er
-      const existingCondition = await prisma.treeBranchLeafNodeCondition.findUnique({
-        where: { id: newConditionId }
-      });
+      const conditionAlreadyExists = existingConditionsSet.has(newConditionId);
       
-      if (existingCondition) {
+      if (conditionAlreadyExists) {
         // La condition existe dÃƒÂ©jÃƒÂ  - si elle appartient ÃƒÂ  un autre nÃ…â€œud, c'est OK
         // On l'ajoute juste aux linkedConditionIds de ce nÃ…â€œud
         

@@ -498,22 +498,27 @@ export async function runRepeatExecution(
     }
   }
 
-  // Ã°Å¸Å¡â‚¬ COPIER LES VARIABLES APRÃƒË†S LES NÃ…â€™UDS
+  // 🚀 COPIER LES VARIABLES APRÈS LES NŒUDS
+  // PERF: Pré-charger TOUTES les variables en 1 findMany au lieu de N findUnique
+  const allTemplateVarIds = [...new Set(plan.variables.map(v => v.templateVariableId))];
+  const templateVarsMap = new Map<string, { displayName: string | null }>();
+  if (allTemplateVarIds.length > 0) {
+    const templateVars = await prisma.treeBranchLeafNodeVariable.findMany({
+      where: { id: { in: allTemplateVarIds } },
+      select: { id: true, displayName: true }
+    });
+    for (const tv of templateVars) {
+      templateVarsMap.set(tv.id, { displayName: tv.displayName });
+    }
+  }
   
   for (const variablePlan of plan.variables) {
     try {
       let { templateVariableId, targetNodeId, plannedVariableId, plannedSuffix } = variablePlan;
       
-      // Ã¢Å¡Â Ã¯Â¸Â BLOQUAGE: VÃƒÂ©rifier si c'est une variable lookup (pour ÃƒÂ©viter de crÃƒÂ©er des champs inutiles)
-      const templateVar = await prisma.treeBranchLeafNodeVariable.findUnique({
-        where: { id: templateVariableId },
-        select: { displayName: true }
-      });
-      
-      
-      // VÃƒÂ©rifier si c'est une variable lookup
+      // PERF: Lookup en mémoire au lieu de findUnique par variable
+      const templateVar = templateVarsMap.get(templateVariableId);
       const isLookup = templateVar?.displayName?.includes('Lookup Table');
-      
       
       if (isLookup) {
         continue;
