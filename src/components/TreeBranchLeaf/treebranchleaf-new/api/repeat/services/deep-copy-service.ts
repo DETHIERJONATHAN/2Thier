@@ -1456,13 +1456,14 @@ export async function deepCopyNodeInternal(
         // Les colonnes de table SONT suffixées (ex: "Orientation" → "Orientation-1")
         // Donc keyColumn doit aussi être suffixé pour matcher
         const shouldSuffixColumns = true; // TOUJOURS suffixer pour matcher les colonnes copiées
+        let tableWasCopied = false;
         
         if (originalSelectConfig.tableReference) {
           // 🐛 FIX 06/01/2026: Utiliser tableIdMap pour vérifier si la table a été copiée
           // IMPORTANT: Ne PAS utiliser idMap car les nodes créés via linkedVariableIds
           // (comme Orientation-inclinaison) ne sont PAS dans idMap (qui ne contient que les nodes du template).
           // La table est copiée par copyRepeaterCapacityTable() AVANT ce code, donc tableIdMap est fiable.
-          const tableWasCopied = tableIdMap.has(originalSelectConfig.tableReference);
+          tableWasCopied = tableIdMap.has(originalSelectConfig.tableReference);
           
           
           if (tableWasCopied) {

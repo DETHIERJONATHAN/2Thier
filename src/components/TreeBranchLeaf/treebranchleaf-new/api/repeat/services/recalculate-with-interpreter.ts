@@ -211,12 +211,14 @@ export async function recalculateAllCopiedNodesWithOperationInterpreter(
     
     const nodeMap = new Map(allNodes.map(n => [n.id, n]));
 
-    // Recalculer chaque noeud avec les donnees pre-chargees
-    for (const nodeId of nodeIds) {
+    // Recalculer chaque noeud — PARALLÉLISÉ par chunks de 5
+    const CHUNK_SIZE = 5;
+    for (let chunkStart = 0; chunkStart < nodeIds.length; chunkStart += CHUNK_SIZE) {
+      const chunk = nodeIds.slice(chunkStart, chunkStart + CHUNK_SIZE);
+      const chunkResults = await Promise.all(chunk.map(async (nodeId) => {
       const node = nodeMap.get(nodeId);
       if (!node) {
-        report.errors.push({ nodeId, error: 'Noeud non trouve' });
-        continue;
+        return { nodeId, error: 'Noeud non trouve' } as { nodeId: string; error: string };
       }
       
       const result: RecalculationResult = {
@@ -246,8 +248,7 @@ export async function recalculateAllCopiedNodesWithOperationInterpreter(
       }
       
       if (!result.hasCapacity) {
-        report.recalculated.push(result);
-        continue;
+        return result;
       }
       
       // Construire la sourceRef
@@ -262,8 +263,7 @@ export async function recalculateAllCopiedNodesWithOperationInterpreter(
       
       if (!sourceRef) {
         result.error = 'Impossible de construire sourceRef';
-        report.recalculated.push(result);
-        continue;
+        return result;
       }
       
       // Appeler l'operation interpreter
@@ -298,7 +298,17 @@ export async function recalculateAllCopiedNodesWithOperationInterpreter(
         console.warn(`[recalculate-with-interpreter] ${result.error}`);
       }
       
-      report.recalculated.push(result);
+      return result;
+      }));
+      
+      // Collecter les résultats du chunk
+      for (const r of chunkResults) {
+        if ('error' in r && !('hasCapacity' in r)) {
+          report.errors.push(r as { nodeId: string; error: string });
+        } else {
+          report.recalculated.push(r as RecalculationResult);
+        }
+      }
     }
 
   } catch (error) {

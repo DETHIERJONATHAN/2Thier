@@ -38091,9 +38091,10 @@ async function deepCopyNodeInternal(prisma51, req2, nodeId, opts) {
       if (!existingCopyConfig) {
         let newTableReference = null;
         const shouldSuffixColumns = true;
+        let tableWasCopied = false;
         if (originalSelectConfig.tableReference) {
-          const tableWasCopied2 = tableIdMap2.has(originalSelectConfig.tableReference);
-          if (tableWasCopied2) {
+          tableWasCopied = tableIdMap2.has(originalSelectConfig.tableReference);
+          if (tableWasCopied) {
             newTableReference = tableIdMap2.get(originalSelectConfig.tableReference);
           } else {
             newTableReference = originalSelectConfig.tableReference;
@@ -72215,545 +72216,6 @@ async function applySharedReferencesFromOriginalInternal2(params) {
   return { success: true, applied, suffix: chosenSuffix };
 }
 
-// src/components/TreeBranchLeaf/treebranchleaf-new/api/repeat/services/complete-duplication-fix.ts
-async function fixCompleteDuplication(prisma51, originalNodeId, copiedNodeId, suffix = "-1") {
-  const result = {
-    nodeId: copiedNodeId,
-    nodeLabel: null,
-    capacitiesFixed: {
-      formulas: 0,
-      conditions: 0,
-      tables: 0,
-      lookups: 0
-    },
-    fieldConfigUpdated: false,
-    calculatedValueReset: false
-  };
-  const [originalNode, copiedNode] = await Promise.all([
-    prisma51.treeBranchLeafNode.findUnique({
-      where: { id: originalNodeId },
-      include: {
-        TreeBranchLeafNodeTable: {
-          include: {
-            tableColumns: true,
-            tableRows: true
-          }
-        }
-      }
-    }),
-    prisma51.treeBranchLeafNode.findUnique({
-      where: { id: copiedNodeId }
-    })
-  ]);
-  if (!originalNode) {
-    throw new Error(`N\xC3\u2026\xE2\u20AC\u0153ud original ${originalNodeId} non trouv\xC3\u0192\xC2\xA9`);
-  }
-  if (!copiedNode) {
-    throw new Error(`N\xC3\u2026\xE2\u20AC\u0153ud copi\xC3\u0192\xC2\xA9 ${copiedNodeId} non trouv\xC3\u0192\xC2\xA9`);
-  }
-  result.nodeLabel = copiedNode.label;
-  const formulaIdMap = /* @__PURE__ */ new Map();
-  const suffixNum = parseInt(suffix.replace("-", "")) || 1;
-  const nodeIdMap = /* @__PURE__ */ new Map();
-  const treeId = copiedNode.treeId;
-  if (treeId) {
-    const allNodesInTree = await prisma51.treeBranchLeafNode.findMany({
-      where: { treeId },
-      select: { id: true }
-    });
-    for (const node of allNodesInTree) {
-      if (node.id.match(/-\d+$/)) {
-        const baseId = node.id.replace(/-\d+$/, "");
-        if (!nodeIdMap.has(baseId)) {
-          nodeIdMap.set(baseId, node.id);
-        }
-      }
-    }
-  }
-  for (const formula of originalNode.TreeBranchLeafNodeFormula) {
-    try {
-      const formulaResult = await copyFormulaCapacity(
-        formula.id,
-        copiedNodeId,
-        suffixNum,
-        prisma51,
-        { formulaIdMap, nodeIdMap }
-      );
-      if (formulaResult.success) {
-        formulaIdMap.set(formula.id, formulaResult.newFormulaId);
-        result.capacitiesFixed.formulas++;
-      } else {
-        console.error(`\xC3\xA2\xC2\x9D\xC5\u2019 Erreur copie formule: ${formula.id}`);
-      }
-    } catch (error) {
-      console.error(`\xC3\xA2\xC2\x9D\xC5\u2019 Exception copie formule ${formula.id}:`, error);
-    }
-  }
-  for (const condition of originalNode.TreeBranchLeafNodeCondition) {
-    const newConditionId = `${condition.id}${suffix}`;
-    const existingCondition = await prisma51.treeBranchLeafNodeCondition.findUnique({
-      where: { id: newConditionId }
-    });
-    if (!existingCondition) {
-      const adaptedConditionSet = adaptReferencesForCopiedNode(condition.conditionSet, suffix);
-      await prisma51.treeBranchLeafNodeCondition.create({
-        data: {
-          id: newConditionId,
-          nodeId: copiedNodeId,
-          organizationId: condition.organizationId,
-          name: condition.name ? `${condition.name}${suffix}` : condition.name,
-          conditionSet: adaptedConditionSet,
-          description: condition.description,
-          isDefault: condition.isDefault,
-          order: condition.order
-        }
-      });
-      result.capacitiesFixed.conditions++;
-    }
-  }
-  for (const table of originalNode.TreeBranchLeafNodeTable) {
-    const newTableId = `${table.id}${suffix}`;
-    const existingTable = await prisma51.treeBranchLeafNodeTable.findUnique({
-      where: { id: newTableId }
-    });
-    if (!existingTable) {
-      await prisma51.treeBranchLeafNodeTable.create({
-        data: {
-          id: newTableId,
-          nodeId: copiedNodeId,
-          organizationId: table.organizationId,
-          name: table.name ? `${table.name}${suffix}` : table.name,
-          description: table.description,
-          type: table.type,
-          rowCount: table.rowCount,
-          columnCount: table.columnCount,
-          // Ã°Å¸â€Â¢ COPIE TABLE META: suffixer comparisonColumn et UUIDs si c'est du texte
-          meta: (() => {
-            if (!table.meta) return table.meta;
-            try {
-              const metaObj = typeof table.meta === "string" ? JSON.parse(table.meta) : JSON.parse(JSON.stringify(table.meta));
-              const suffixNum2 = parseInt(suffix.replace("-", "")) || 1;
-              if (metaObj?.lookup?.selectors?.columnFieldId && !metaObj.lookup.selectors.columnFieldId.endsWith(`-${suffixNum2}`)) {
-                metaObj.lookup.selectors.columnFieldId = `${metaObj.lookup.selectors.columnFieldId}-${suffixNum2}`;
-              }
-              if (metaObj?.lookup?.selectors?.rowFieldId && !metaObj.lookup.selectors.rowFieldId.endsWith(`-${suffixNum2}`)) {
-                metaObj.lookup.selectors.rowFieldId = `${metaObj.lookup.selectors.rowFieldId}-${suffixNum2}`;
-              }
-              if (metaObj?.lookup?.rowSourceOption?.sourceField && !metaObj.lookup.rowSourceOption.sourceField.endsWith(`-${suffixNum2}`)) {
-                metaObj.lookup.rowSourceOption.sourceField = `${metaObj.lookup.rowSourceOption.sourceField}-${suffixNum2}`;
-              }
-              if (metaObj?.lookup?.columnSourceOption?.sourceField && !metaObj.lookup.columnSourceOption.sourceField.endsWith(`-${suffixNum2}`)) {
-                metaObj.lookup.columnSourceOption.sourceField = `${metaObj.lookup.columnSourceOption.sourceField}-${suffixNum2}`;
-              }
-              if (metaObj?.lookup?.rowSourceOption?.comparisonColumn) {
-                const val = metaObj.lookup.rowSourceOption.comparisonColumn;
-                if (!/^-?\d+(\.\d+)?$/.test(val.trim()) && !val.endsWith(suffix)) {
-                  metaObj.lookup.rowSourceOption.comparisonColumn = `${val}${suffix}`;
-                }
-              }
-              if (metaObj?.lookup?.columnSourceOption?.comparisonColumn) {
-                const val = metaObj.lookup.columnSourceOption.comparisonColumn;
-                if (!/^-?\d+(\.\d+)?$/.test(val.trim()) && !val.endsWith(suffix)) {
-                  metaObj.lookup.columnSourceOption.comparisonColumn = `${val}${suffix}`;
-                }
-              }
-              return metaObj;
-            } catch {
-              return table.meta;
-            }
-          })(),
-          isDefault: table.isDefault,
-          order: table.order,
-          lookupDisplayColumns: table.lookupDisplayColumns,
-          lookupSelectColumn: table.lookupSelectColumn
-        }
-      });
-      await Promise.all([
-        ...table.tableColumns.map(
-          (col) => prisma51.treeBranchLeafNodeTableColumn.create({
-            data: {
-              id: `${col.id}${suffix}`,
-              tableId: newTableId,
-              columnIndex: col.columnIndex,
-              // Ã°Å¸â€Â¢ COPIE TABLE COLUMN: suffixe seulement pour texte, pas pour nombres
-              name: col.name ? /^-?\d+(\.\d+)?$/.test(col.name.trim()) ? col.name : `${col.name}${suffix}` : col.name,
-              type: col.type,
-              width: col.width,
-              format: col.format,
-              metadata: col.metadata
-            }
-          })
-        ),
-        ...table.tableRows.map(
-          (row) => prisma51.treeBranchLeafNodeTableRow.create({
-            data: {
-              id: `${row.id}${suffix}`,
-              tableId: newTableId,
-              rowIndex: row.rowIndex,
-              cells: row.cells
-            }
-          })
-        )
-      ]);
-      result.capacitiesFixed.tables++;
-    }
-  }
-  await fixAssociatedLookups(prisma51, originalNode, copiedNode, suffix);
-  result.capacitiesFixed.lookups = 1;
-  if (copiedNode.fieldConfig) {
-    const newFieldConfig = updateFieldConfigReferences(copiedNode.fieldConfig, suffix);
-    if (newFieldConfig !== copiedNode.fieldConfig) {
-      await prisma51.treeBranchLeafNode.update({
-        where: { id: copiedNodeId },
-        data: { fieldConfig: newFieldConfig }
-      });
-      result.fieldConfigUpdated = true;
-    }
-  }
-  const copiedNodeTables = await prisma51.treeBranchLeafNodeTable.count({
-    where: { nodeId: copiedNodeId }
-  });
-  await prisma51.treeBranchLeafNode.update({
-    where: { id: copiedNodeId },
-    data: {
-      hasFormula: originalNode.TreeBranchLeafNodeFormula.length > 0,
-      hasCondition: originalNode.TreeBranchLeafNodeCondition.length > 0,
-      hasTable: copiedNodeTables > 0,
-      // Vérifier les tables du node COPIÉ, pas de l'original
-      calculatedValue: null,
-      calculatedAt: null,
-      calculatedBy: null
-    }
-  });
-  result.calculatedValueReset = true;
-  return result;
-}
-async function fixAssociatedLookups(prisma51, originalNode, copiedNode, suffix) {
-  const measureNodes = await prisma51.treeBranchLeafNode.findMany({
-    where: {
-      AND: [
-        { label: { contains: "Mesure" } },
-        { label: { endsWith: suffix } },
-        { treeId: copiedNode.treeId }
-      ]
-    },
-    include: {
-      TreeBranchLeafNodeTable: {
-        include: {
-          tableColumns: true,
-          tableRows: true
-        }
-      }
-    }
-  });
-  for (const originalTable of originalNode.TreeBranchLeafNodeTable) {
-    const lookupName = `Lookup ${originalNode.label}${suffix}`;
-    for (const measureNode of measureNodes) {
-      const lookupTable = measureNode.TreeBranchLeafNodeTable.find(
-        (t) => t.name.includes("Lookup") && (t.name.includes(originalNode.label) || t.name === lookupName)
-      );
-      if (lookupTable && lookupTable.tableRows.length === 0) {
-        await Promise.all([
-          prisma51.treeBranchLeafNodeTableColumn.deleteMany({
-            where: { tableId: lookupTable.id }
-          }),
-          prisma51.treeBranchLeafNodeTableRow.deleteMany({
-            where: { tableId: lookupTable.id }
-          })
-        ]);
-        await Promise.all([
-          ...originalTable.tableColumns.map(
-            (col) => prisma51.treeBranchLeafNodeTableColumn.create({
-              data: {
-                id: `${col.id}-lookup${suffix}`,
-                tableId: lookupTable.id,
-                columnIndex: col.columnIndex,
-                name: col.name,
-                type: col.type,
-                width: col.width,
-                format: col.format,
-                metadata: col.metadata
-              }
-            })
-          ),
-          ...originalTable.tableRows.map(
-            (row) => prisma51.treeBranchLeafNodeTableRow.create({
-              data: {
-                id: `${row.id}-lookup${suffix}`,
-                tableId: lookupTable.id,
-                rowIndex: row.rowIndex,
-                cells: row.cells
-              }
-            })
-          )
-        ]);
-        await prisma51.treeBranchLeafNodeTable.update({
-          where: { id: lookupTable.id },
-          data: {
-            rowCount: originalTable.rowCount,
-            columnCount: originalTable.columnCount,
-            lookupSelectColumn: originalTable.lookupSelectColumn || "Orientation",
-            lookupDisplayColumns: originalTable.lookupDisplayColumns.length > 0 ? originalTable.lookupDisplayColumns : ["Orientation"]
-          }
-        });
-      }
-    }
-  }
-}
-function adaptReferencesForCopiedNode(data, suffix) {
-  if (!data) return data;
-  const adaptString = (str) => {
-    return str.replace(/@value\.([A-Za-z0-9_:-]+)/g, (match, nodeId) => {
-      if (nodeId.includes("shared-ref") || nodeId.endsWith(suffix.replace("-", ""))) {
-        return match;
-      }
-      return `@value.${nodeId}${suffix}`;
-    }).replace(/node-formula:([a-f0-9-]{36})/gi, (match, formulaId) => {
-      return `node-formula:${formulaId}${suffix}`;
-    });
-  };
-  if (Array.isArray(data)) {
-    return data.map(
-      (item) => typeof item === "string" ? adaptString(item) : item
-    );
-  }
-  if (typeof data === "string") {
-    return adaptString(data);
-  }
-  try {
-    const str = JSON.stringify(data);
-    const adapted = adaptString(str);
-    return JSON.parse(adapted);
-  } catch {
-    return data;
-  }
-}
-function updateFieldConfigReferences(fieldConfig, suffix) {
-  if (!fieldConfig || typeof fieldConfig !== "object") return fieldConfig;
-  const config = { ...fieldConfig };
-  if (config.lookupTableId) {
-    config.lookupTableId = `${config.lookupTableId}${suffix}`;
-  }
-  if (config.lookupNodeId) {
-    config.lookupNodeId = `${config.lookupNodeId}${suffix}`;
-  }
-  return config;
-}
-async function fixAllCompleteDuplications(prisma51, repeaterNodeId) {
-  const report = {
-    totalNodesProcessed: 0,
-    nodesFixed: [],
-    errors: []
-  };
-  try {
-    const whereClause = {
-      AND: [
-        { label: { endsWith: "-1" } }
-      ]
-    };
-    if (repeaterNodeId) {
-      whereClause.AND.push({
-        metadata: {
-          path: ["duplicatedFromRepeater"],
-          equals: repeaterNodeId
-        }
-      });
-    }
-    const copiedNodes = await prisma51.treeBranchLeafNode.findMany({
-      where: whereClause,
-      select: {
-        id: true,
-        label: true,
-        metadata: true
-      }
-    });
-    for (const node of copiedNodes) {
-      report.totalNodesProcessed++;
-      try {
-        let originalNodeId = null;
-        if (node.metadata && typeof node.metadata === "object") {
-          const meta = node.metadata;
-          originalNodeId = meta.sourceTemplateId || meta.copiedFromNodeId || null;
-        }
-        if (!originalNodeId && node.label) {
-          const originalLabel = node.label.replace("-1", "");
-          const originalNode = await prisma51.treeBranchLeafNode.findFirst({
-            where: {
-              label: originalLabel,
-              id: { not: node.id }
-            },
-            select: { id: true }
-          });
-          if (originalNode) {
-            originalNodeId = originalNode.id;
-          }
-        }
-        if (!originalNodeId) {
-          report.errors.push({
-            nodeId: node.id,
-            error: "Impossible de trouver le n\xC3\u2026\xE2\u20AC\u0153ud original"
-          });
-          continue;
-        }
-        const result = await fixCompleteDuplication(prisma51, originalNodeId, node.id, "-1");
-        report.nodesFixed.push(result);
-      } catch (error) {
-        report.errors.push({
-          nodeId: node.id,
-          error: error instanceof Error ? error.message : String(error)
-        });
-      }
-    }
-  } catch (error) {
-    console.error("\xC3\xA2\xC2\x9D\xC5\u2019 [COMPLETE-DUPLICATION-FIX] Erreur g\xC3\u0192\xC2\xA9n\xC3\u0192\xC2\xA9rale:", error);
-  }
-  return report;
-}
-
-// src/components/TreeBranchLeaf/treebranchleaf-new/api/repeat/services/force-recalculation-service.ts
-async function forceNodeRecalculationWithOwnData(prisma51, copiedNodeId) {
-  const result = {
-    nodeId: copiedNodeId,
-    nodeLabel: null,
-    oldCalculatedValue: null,
-    newCalculatedValue: null,
-    recalculationForced: false,
-    referencesUpdated: []
-  };
-  const copiedNode = await prisma51.treeBranchLeafNode.findUnique({
-    where: { id: copiedNodeId },
-    include: {
-      TreeBranchLeafNodeTable: {
-        include: {
-          tableColumns: true,
-          tableRows: true
-        }
-      }
-    }
-  });
-  if (!copiedNode) {
-    throw new Error(`N\xC3\u2026\xE2\u20AC\u0153ud copi\xC3\u0192\xC2\xA9 ${copiedNodeId} non trouv\xC3\u0192\xC2\xA9`);
-  }
-  result.nodeLabel = copiedNode.label;
-  result.oldCalculatedValue = copiedNode.calculatedValue;
-  for (const formula of copiedNode.TreeBranchLeafNodeFormula) {
-    if (formula.tokens) {
-      let tokensStr = JSON.stringify(formula.tokens);
-      let updated = false;
-      const updatedTokensStr = tokensStr.replace(
-        /@value\.([A-Za-z0-9_:-]+)(?!-1)/g,
-        (match, nodeId) => {
-          if (nodeId.includes("shared-ref") || nodeId.endsWith("1")) {
-            return match;
-          }
-          updated = true;
-          result.referencesUpdated.push(`Formula ${formula.name}: ${nodeId} \xC3\xA2\xE2\u20AC\xA0\xE2\u20AC\u2122 ${nodeId}-1`);
-          return `@value.${nodeId}-1`;
-        }
-      );
-      if (updated) {
-        const newTokens = JSON.parse(updatedTokensStr);
-        await prisma51.treeBranchLeafNodeFormula.update({
-          where: { id: formula.id },
-          data: { tokens: newTokens }
-        });
-      }
-    }
-  }
-  for (const condition of copiedNode.TreeBranchLeafNodeCondition) {
-    if (condition.conditionSet) {
-      let conditionStr = JSON.stringify(condition.conditionSet);
-      let updated = false;
-      const updatedConditionStr = conditionStr.replace(
-        /@value\.([A-Za-z0-9_:-]+)(?!-1)/g,
-        (match, nodeId) => {
-          if (nodeId.includes("shared-ref") || nodeId.endsWith("1")) {
-            return match;
-          }
-          updated = true;
-          result.referencesUpdated.push(`Condition ${condition.name}: ${nodeId} \xC3\xA2\xE2\u20AC\xA0\xE2\u20AC\u2122 ${nodeId}-1`);
-          return `@value.${nodeId}-1`;
-        }
-      );
-      if (updated) {
-        const newConditionSet = JSON.parse(updatedConditionStr);
-        await prisma51.treeBranchLeafNodeCondition.update({
-          where: { id: condition.id },
-          data: { conditionSet: newConditionSet }
-        });
-      }
-    }
-  }
-  const forceRecalcMetadata = {
-    ...copiedNode.metadata && typeof copiedNode.metadata === "object" ? copiedNode.metadata : {},
-    forceRecalculation: true,
-    lastForceRecalc: (/* @__PURE__ */ new Date()).toISOString(),
-    independentCalculation: true,
-    noFallbackToOriginal: true,
-    recalculationReason: "Duplication independence enforcement"
-  };
-  await prisma51.treeBranchLeafNode.update({
-    where: { id: copiedNodeId },
-    data: {
-      calculatedValue: null,
-      calculatedAt: null,
-      calculatedBy: null,
-      metadata: forceRecalcMetadata
-    }
-  });
-  result.recalculationForced = true;
-  result.newCalculatedValue = null;
-  return result;
-}
-async function forceAllNodesRecalculationWithOwnData(prisma51, repeaterNodeId) {
-  const report = {
-    totalNodesProcessed: 0,
-    nodesRecalculated: [],
-    errors: []
-  };
-  try {
-    const whereClause = {
-      AND: [
-        { label: { endsWith: "-1" } }
-      ]
-    };
-    if (repeaterNodeId) {
-      whereClause.AND.push({
-        metadata: {
-          path: ["duplicatedFromRepeater"],
-          equals: repeaterNodeId
-        }
-      });
-    }
-    const copiedNodes = await prisma51.treeBranchLeafNode.findMany({
-      where: whereClause,
-      select: {
-        id: true,
-        label: true,
-        calculatedValue: true
-      }
-    });
-    for (const node of copiedNodes) {
-      report.totalNodesProcessed++;
-      try {
-        if (node.calculatedValue !== null) {
-          const result = await forceNodeRecalculationWithOwnData(prisma51, node.id);
-          report.nodesRecalculated.push(result);
-        } else {
-        }
-      } catch (error) {
-        report.errors.push({
-          nodeId: node.id,
-          error: error instanceof Error ? error.message : String(error)
-        });
-      }
-    }
-  } catch (error) {
-    console.error("\xC3\xA2\xC2\x9D\xC5\u2019 [FORCE-RECALC-ALL] Erreur g\xC3\u0192\xC2\xA9n\xC3\u0192\xC2\xA9rale:", error);
-  }
-  return report;
-}
-
 // src/components/TreeBranchLeaf/treebranchleaf-new/api/repeat/services/batch-post-duplication.ts
 async function batchPostDuplicationProcessing(prisma51, copiedNodeIds) {
   const result = {
@@ -72878,79 +72340,87 @@ async function recalculateAllCopiedNodesWithOperationInterpreter(prisma51, repea
       }
     });
     const nodeMap = new Map(allNodes.map((n) => [n.id, n]));
-    for (const nodeId of nodeIds) {
-      const node = nodeMap.get(nodeId);
-      if (!node) {
-        report.errors.push({ nodeId, error: "Noeud non trouve" });
-        continue;
-      }
-      const result = {
-        nodeId,
-        label: node.field_label,
-        hasCapacity: false,
-        capacityType: "none",
-        oldValue: node.calculatedValue,
-        newValue: null,
-        recalculationSuccess: false
-      };
-      const linkedFormulas = node.linkedFormulaIds;
-      const linkedConditions = node.linkedConditionIds;
-      const linkedTables = node.linkedTableIds;
-      if (node.hasFormula || linkedFormulas && linkedFormulas.length > 0) {
-        result.capacityType = "formula";
-        result.hasCapacity = true;
-      } else if (node.hasCondition || linkedConditions && linkedConditions.length > 0) {
-        result.capacityType = "condition";
-        result.hasCapacity = true;
-      } else if (node.hasTable || linkedTables && linkedTables.length > 0) {
-        result.capacityType = "table";
-        result.hasCapacity = true;
-      }
-      if (!result.hasCapacity) {
-        report.recalculated.push(result);
-        continue;
-      }
-      let sourceRef = "";
-      if (result.capacityType === "formula" && linkedFormulas && linkedFormulas.length > 0) {
-        sourceRef = `node-formula:${linkedFormulas[0]}`;
-      } else if (result.capacityType === "condition" && linkedConditions && linkedConditions.length > 0) {
-        sourceRef = `condition:${linkedConditions[0]}`;
-      } else if (result.capacityType === "table" && linkedTables && linkedTables.length > 0) {
-        sourceRef = `node-table:${linkedTables[0]}`;
-      }
-      if (!sourceRef) {
-        result.error = "Impossible de construire sourceRef";
-        report.recalculated.push(result);
-        continue;
-      }
-      try {
-        const valuesCache = /* @__PURE__ */ new Map();
-        const interpretResult = await interpretReference(
-          sourceRef,
-          "",
-          prisma51,
-          valuesCache,
-          0,
-          /* @__PURE__ */ new Map(),
-          /* @__PURE__ */ new Map()
-        );
-        result.newValue = interpretResult.result;
-        result.recalculationSuccess = true;
-        if (result.newValue && result.newValue !== "null") {
-          await prisma51.treeBranchLeafNode.update({
-            where: { id: nodeId },
-            data: {
-              calculatedValue: result.newValue,
-              calculatedAt: /* @__PURE__ */ new Date(),
-              calculatedBy: `interpreter-${result.capacityType}`
-            }
-          });
+    const CHUNK_SIZE = 5;
+    for (let chunkStart = 0; chunkStart < nodeIds.length; chunkStart += CHUNK_SIZE) {
+      const chunk = nodeIds.slice(chunkStart, chunkStart + CHUNK_SIZE);
+      const chunkResults = await Promise.all(chunk.map(async (nodeId) => {
+        const node = nodeMap.get(nodeId);
+        if (!node) {
+          return { nodeId, error: "Noeud non trouve" };
         }
-      } catch (interpretError) {
-        result.error = `Erreur interpretReference: ${interpretError instanceof Error ? interpretError.message : String(interpretError)}`;
-        console.warn(`[recalculate-with-interpreter] ${result.error}`);
+        const result = {
+          nodeId,
+          label: node.field_label,
+          hasCapacity: false,
+          capacityType: "none",
+          oldValue: node.calculatedValue,
+          newValue: null,
+          recalculationSuccess: false
+        };
+        const linkedFormulas = node.linkedFormulaIds;
+        const linkedConditions = node.linkedConditionIds;
+        const linkedTables = node.linkedTableIds;
+        if (node.hasFormula || linkedFormulas && linkedFormulas.length > 0) {
+          result.capacityType = "formula";
+          result.hasCapacity = true;
+        } else if (node.hasCondition || linkedConditions && linkedConditions.length > 0) {
+          result.capacityType = "condition";
+          result.hasCapacity = true;
+        } else if (node.hasTable || linkedTables && linkedTables.length > 0) {
+          result.capacityType = "table";
+          result.hasCapacity = true;
+        }
+        if (!result.hasCapacity) {
+          return result;
+        }
+        let sourceRef = "";
+        if (result.capacityType === "formula" && linkedFormulas && linkedFormulas.length > 0) {
+          sourceRef = `node-formula:${linkedFormulas[0]}`;
+        } else if (result.capacityType === "condition" && linkedConditions && linkedConditions.length > 0) {
+          sourceRef = `condition:${linkedConditions[0]}`;
+        } else if (result.capacityType === "table" && linkedTables && linkedTables.length > 0) {
+          sourceRef = `node-table:${linkedTables[0]}`;
+        }
+        if (!sourceRef) {
+          result.error = "Impossible de construire sourceRef";
+          return result;
+        }
+        try {
+          const valuesCache = /* @__PURE__ */ new Map();
+          const interpretResult = await interpretReference(
+            sourceRef,
+            "",
+            prisma51,
+            valuesCache,
+            0,
+            /* @__PURE__ */ new Map(),
+            /* @__PURE__ */ new Map()
+          );
+          result.newValue = interpretResult.result;
+          result.recalculationSuccess = true;
+          if (result.newValue && result.newValue !== "null") {
+            await prisma51.treeBranchLeafNode.update({
+              where: { id: nodeId },
+              data: {
+                calculatedValue: result.newValue,
+                calculatedAt: /* @__PURE__ */ new Date(),
+                calculatedBy: `interpreter-${result.capacityType}`
+              }
+            });
+          }
+        } catch (interpretError) {
+          result.error = `Erreur interpretReference: ${interpretError instanceof Error ? interpretError.message : String(interpretError)}`;
+          console.warn(`[recalculate-with-interpreter] ${result.error}`);
+        }
+        return result;
+      }));
+      for (const r of chunkResults) {
+        if ("error" in r && !("hasCapacity" in r)) {
+          report.errors.push(r);
+        } else {
+          report.recalculated.push(r);
+        }
       }
-      report.recalculated.push(result);
     }
   } catch (error) {
     const errorMsg = error instanceof Error ? error.message : String(error);
@@ -73394,7 +72864,6 @@ async function runRepeatExecution(prisma51, req2, execution) {
   }
   if (duplicatedNodeIds.size > 0) {
     try {
-      const completeDuplicationReport = await fixAllCompleteDuplications(prisma51, repeaterNodeId);
       {
         const dupPairs = [];
         for (const nodeId of duplicatedNodeIds) {
@@ -73439,7 +72908,6 @@ async function runRepeatExecution(prisma51, req2, execution) {
         prisma51,
         Array.from(duplicatedNodeIds)
       );
-      const forceRecalcReport = await forceAllNodesRecalculationWithOwnData(prisma51, repeaterNodeId);
       const interpreterRecalcReport = await recalculateAllCopiedNodesWithOperationInterpreter(
         prisma51,
         repeaterNodeId,

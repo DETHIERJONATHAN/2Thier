@@ -5,8 +5,10 @@ import { deepCopyNodeInternal, type DeepCopyOptions, type DeepCopyResult } from 
 import { buildResponseFromColumns, getAuthCtx, type MinimalReq } from './services/shared-helpers.js';
 import { RepeatOperationError, type RepeatExecutionResult } from './repeat-service.js';
 import { computeTemplateCopySuffixMax } from './utils/suffix-utils.js';
-import { fixAllCompleteDuplications } from './services/complete-duplication-fix.js';
-import { forceAllNodesRecalculationWithOwnData } from './services/force-recalculation-service.js';
+// SKIP: fixAllCompleteDuplications est REDONDANT + CASSÉ (include manquant → crash systématique)
+// import { fixAllCompleteDuplications } from './services/complete-duplication-fix.js';
+// SKIP: forceAllNodesRecalculationWithOwnData est CASSÉ (include manquant) + seule action utile déjà faite par batchPostDuplicationProcessing
+// import { forceAllNodesRecalculationWithOwnData } from './services/force-recalculation-service.js';
 import { batchPostDuplicationProcessing } from './services/batch-post-duplication.js';
 import { tableLookupDuplicationService } from './services/table-lookup-duplication-service.js';
 import { recalculateAllCopiedNodesWithOperationInterpreter } from './services/recalculate-with-interpreter.js';
@@ -598,8 +600,10 @@ export async function runRepeatExecution(
   // Ã°Å¸Å¡Â« NOUVEAU: Isolation stricte des nÃ…â€œuds copiÃƒÂ©s et correction des capacitÃƒÂ©s
   if (duplicatedNodeIds.size > 0) {
     try {
-      // 0. CORRECTION COMPLÃƒË†TE DE TOUTES LES DUPLICATIONS  
-      const completeDuplicationReport = await fixAllCompleteDuplications(prisma, repeaterNodeId);
+      // 0. SKIP fixAllCompleteDuplications — REDONDANT + CASSÉ
+      // deepCopyNodeInternal() copie déjà formules/conditions/tables/selectConfigs/numberConfigs.
+      // fixCompleteDuplication() crash systématiquement (include manquant pour Formula/Condition).
+      // Économie: ~60-80 queries DB gaspillées.
       
       // 0.1. DUPLICATION DES TABLES ET LOOKUPS (parallélisée + pré-filtrée)
       {
@@ -658,8 +662,11 @@ export async function runRepeatExecution(
         Array.from(duplicatedNodeIds)
       );
       
-      // 6. FORCER LE RECALCUL AVEC LES PROPRES DONNÃƒâ€°ES
-      const forceRecalcReport = await forceAllNodesRecalculationWithOwnData(prisma, repeaterNodeId);
+      // 6. SKIP forceAllNodesRecalculationWithOwnData — CASSÉ + REDONDANT
+      // Bug: include manquant (TreeBranchLeafNodeFormula, TreeBranchLeafNodeCondition)
+      // → les boucles de re-patch formules/conditions ne s'exécutent jamais
+      // → la seule action réelle (reset calculatedValue) est déjà faite par batchPostDuplicationProcessing
+      // Économie: ~58 queries DB gaspillées (2 × 29 nœuds)
       
       
       // Ã°Å¸Å¡â‚¬ 8. RECALCULER LES VRAIES VALEURS AVEC OPERATION INTERPRETER
