@@ -1269,7 +1269,7 @@ router.post('/trees/:id/duplicate', async (req, res) => {
     });
 
     if (sourceNodes.length === 0) {
-      console.log(`[DUPLICATE TREE] Arbre source ${sourceTreeId} n'a aucun noeud. Arbre vide créé.`);
+      // console.log(`[DUPLICATE TREE] Arbre source ${sourceTreeId} n'a aucun noeud. Arbre vide créé.`);
       return res.status(201).json({ tree: newTree, nodesCount: 0 });
     }
 
@@ -1642,7 +1642,7 @@ router.post('/trees/:id/duplicate', async (req, res) => {
       await prisma.treeBranchLeafSelectConfig.createMany({ data: selectCreateData as any[] });
     }
 
-    console.log(`[DUPLICATE TREE] Arbre ${sourceTreeId} dupliqué -> ${newTreeId} (${created.count} noeuds, ${sourceVariables.length} variables, ${sourceConditions.length} conditions, ${sourceFormulas.length} formules, ${sourceTables.length} tables)`);
+    // console.log(`[DUPLICATE TREE] Arbre ${sourceTreeId} dupliqué -> ${newTreeId} (${created.count} noeuds, ${sourceVariables.length} variables, ${sourceConditions.length} conditions, ${sourceFormulas.length} formules, ${sourceTables.length} tables)`);
 
     res.status(201).json({
       tree: newTree,
@@ -1772,9 +1772,9 @@ router.get('/trees/:treeId/nodes', async (req, res) => {
     // 🔗 DEBUG LINK RAW: Voir les champs avec hasLink AVANT transformation
     const rawNodesWithLink = nodes.filter(node => node.hasLink === true);
     if (rawNodesWithLink.length > 0) {
-      console.log(`🔗🔗🔗 [API RAW] ${rawNodesWithLink.length} champs hasLink=true AVANT buildResponseFromColumns`);
+      // console.log(`🔗🔗🔗 [API RAW] ${rawNodesWithLink.length} champs hasLink=true AVANT buildResponseFromColumns`);
       rawNodesWithLink.forEach(node => {
-        console.log(`  - RAW "${node.label}" (${node.id}): hasLink=${node.hasLink}`);
+        // console.log(`  - RAW "${node.label}" (${node.id}): hasLink=${node.hasLink}`);
       });
     }
 
@@ -1785,9 +1785,9 @@ router.get('/trees/:treeId/nodes', async (req, res) => {
     // 🔗 DEBUG LINK: Voir les champs avec hasLink
     const nodesWithLink = reconstructedNodes.filter(node => node.hasLink === true);
     if (nodesWithLink.length > 0) {
-      console.log(`🔗🔗🔗 [API /trees/:treeId/nodes] ${nodesWithLink.length} champs avec hasLink=true:`);
+      // console.log(`🔗🔗🔗 [API /trees/:treeId/nodes] ${nodesWithLink.length} champs avec hasLink=true:`);
       nodesWithLink.forEach(node => {
-        console.log(`  - "${node.label}" (${node.id}): hasLink=${node.hasLink}, link_targetNodeId=${node.link_targetNodeId}, link_mode=${node.link_mode}`);
+        // console.log(`  - "${node.label}" (${node.id}): hasLink=${node.hasLink}, link_targetNodeId=${node.link_targetNodeId}, link_mode=${node.link_mode}`);
       });
     }
     // ÃƒÂ°Ã…Â¸Ã…Â¡Ã‚Â¨ DEBUG TOOLTIP FINAL : VÃƒÆ’Ã‚Â©rifier ce qui va ÃƒÆ’Ã‚Âªtre envoyÃƒÆ’Ã‚Â© au client
@@ -2884,7 +2884,7 @@ async function deepCopyNodeInternal(
           // Récupérer tous les nœuds créés (displayNodeIds + le nœud racine)
           const allCopiedNodeIds = [result.root.newId, ...(result.displayNodeIds || [])];
           
-          console.log(`🔄 [DEEP-COPY] Déclenchement évaluation pour ${allCopiedNodeIds.length} nœuds copiés:`, allCopiedNodeIds);
+          // console.log(`🔄 [DEEP-COPY] Déclenchement évaluation pour ${allCopiedNodeIds.length} nœuds copiés:`, allCopiedNodeIds);
           
           // Évaluer chaque nœud copié qui a une configuration de calcul
           for (const copiedNodeId of allCopiedNodeIds) {
@@ -2907,7 +2907,7 @@ async function deepCopyNodeInternal(
               const needsEvaluation = copiedNode.formulaId || (copiedNode.tableConfig && typeof copiedNode.tableConfig === 'object');
               
               if (needsEvaluation) {
-                console.log(`🎯 [DEEP-COPY] Évaluation du nœud ${copiedNodeId} (${copiedNode.label})`);
+                // console.log(`🎯 [DEEP-COPY] Évaluation du nœud ${copiedNodeId} (${copiedNode.label})`);
                 
                 // Utiliser evaluateVariableOperation pour déclencher le calcul
                 // Utiliser la signature standard: (variableNodeId, submissionId, prisma)
@@ -2920,7 +2920,7 @@ async function deepCopyNodeInternal(
                 );
                 
                 if (evalResult.success) {
-                  console.log(`✅ [DEEP-COPY] Évaluation réussie pour ${copiedNodeId}:`, evalResult.result);
+                  // console.log(`✅ [DEEP-COPY] Évaluation réussie pour ${copiedNodeId}:`, evalResult.result);
                 } else {
                   console.warn(`⚠️ [DEEP-COPY] Évaluation échouée pour ${copiedNodeId}:`, evalResult.error);
                 }
@@ -2931,7 +2931,7 @@ async function deepCopyNodeInternal(
             }
           }
           
-          console.log(`✅ [DEEP-COPY] Évaluation initiale terminée pour ${allCopiedNodeIds.length} nœuds`);
+          // console.log(`✅ [DEEP-COPY] Évaluation initiale terminée pour ${allCopiedNodeIds.length} nœuds`);
           
           res.json(result);
         } catch (error) {
@@ -3753,7 +3753,7 @@ function removeJSONFromUpdate(updateData: Record<string, unknown>): Record<strin
       if ('displayIcon' in appConfig && appConfig.displayIcon) {
         // Stocker dans cleanData pour écriture en colonne dédiée
         (cleanData as Record<string, unknown>).appearance_displayIcon = appConfig.displayIcon;
-        console.log('🎨 [removeJSONFromUpdate] displayIcon extrait vers colonne:', appConfig.displayIcon);
+        // console.log('🎨 [removeJSONFromUpdate] displayIcon extrait vers colonne:', appConfig.displayIcon);
       }
       // 🎨 FIX: Persister bubbleColor et labelColor dans metadata.appearance
       if (!preservedMeta.appearance || typeof preservedMeta.appearance !== 'object') {
@@ -3775,7 +3775,7 @@ function removeJSONFromUpdate(updateData: Record<string, unknown>): Record<strin
     const appConfig = appearanceConfig as Record<string, unknown>;
     const preservedAppearance: Record<string, unknown> = {};
     if ('displayIcon' in appConfig && appConfig.displayIcon) {
-      console.log('🎨 [removeJSONFromUpdate] displayIcon vers colonne (sans metadata):', appConfig.displayIcon);
+      // console.log('🎨 [removeJSONFromUpdate] displayIcon vers colonne (sans metadata):', appConfig.displayIcon);
       (cleanData as Record<string, unknown>).appearance_displayIcon = appConfig.displayIcon;
     }
     if ('bubbleColor' in appConfig) preservedAppearance.bubbleColor = appConfig.bubbleColor || null;
@@ -3847,11 +3847,11 @@ const updateOrMoveNode = async (req, res) => {
     
     
     // 🔍 DEBUG triggerNodeIds
-    console.log('🔍 [updateOrMoveNode] Payload reçu:', {
-      nodeId,
-      hasTriggerNodeIds: !!updateData.metadata?.triggerNodeIds,
-      triggerNodeIds: updateData.metadata?.triggerNodeIds
-    });
+    // console.log('🔍 [updateOrMoveNode] Payload reçu:', {
+    //   nodeId,
+    //   hasTriggerNodeIds: !!updateData.metadata?.triggerNodeIds,
+    //   triggerNodeIds: updateData.metadata?.triggerNodeIds
+    // });
     
     // ÃƒÂ°Ã…Â¸Ã¢â‚¬ÂÃ¢â‚¬Å¾ ÃƒÆ’Ã¢â‚¬Â°TAPE 1 : Convertir JSON vers colonnes dÃƒÆ’Ã‚Â©diÃƒÆ’Ã‚Â©es
     const columnData = mapJSONToColumns(updateData);
@@ -3864,10 +3864,10 @@ const updateOrMoveNode = async (req, res) => {
     
     
     // 🔍 DEBUG triggerNodeIds après nettoyage
-    console.log('🔍 [updateOrMoveNode] Après removeJSONFromUpdate:', {
-      hasTriggerNodeIds: !!cleanUpdateData.metadata?.triggerNodeIds,
-      triggerNodeIds: cleanUpdateData.metadata?.triggerNodeIds
-    });
+    // console.log('🔍 [updateOrMoveNode] Après removeJSONFromUpdate:', {
+    //   hasTriggerNodeIds: !!cleanUpdateData.metadata?.triggerNodeIds,
+    //   triggerNodeIds: cleanUpdateData.metadata?.triggerNodeIds
+    // });
 
   // ÃƒÂ°Ã…Â¸Ã‚Â§Ã‚Â© IMPORTANT: Normaliser les rÃƒÆ’Ã‚Â©fÃƒÆ’Ã‚Â©rences partagÃƒÆ’Ã‚Â©es si le nÃƒâ€¦Ã¢â‚¬Å“ud est une COPIE (ID avec suffixe "-N")
   // Concerne les ÃƒÆ’Ã‚Â©critures directes envoyÃƒÆ’Ã‚Â©es par le frontend (single/array)
@@ -3967,13 +3967,13 @@ const updateOrMoveNode = async (req, res) => {
           return res.status(400).json({ error: 'Parent non trouvÃƒÆ’Ã‚Â©' });
         }
 
-        console.log("🔍 [DEBUG MOVE]", {
-          nodeLabel: existingNode.label,
-          nodeType: existingNode.type,
-          newParentLabel: newParentNode.label,
-          newParentType: newParentNode.type,
-          newParentId: newParentId
-        });
+        // console.log("🔍 [DEBUG MOVE]", {
+          // nodeLabel: existingNode.label,
+          // nodeType: existingNode.type,
+          // newParentLabel: newParentNode.label,
+          // newParentType: newParentNode.type,
+          // newParentId: newParentId
+        // });
         // Appliquer les rÃƒÆ’Ã‚Â¨gles hiÃƒÆ’Ã‚Â©rarchiques actualisÃƒÆ’Ã‚Â©es
         if (existingNode.type === 'leaf_option') {
           // Les options peuvent ÃƒÆ’Ã‚Âªtre sous :
@@ -3987,16 +3987,16 @@ const updateOrMoveNode = async (req, res) => {
               error: 'Les options ne peuvent ÃƒÆ’Ã‚Âªtre dÃƒÆ’Ã‚Â©placÃƒÆ’Ã‚Â©es que sous des champs SELECT ou des branches de niveau 2+' 
             });
           }
-          console.log('🔍 [DEBUG] Validation pour leaf_:', {
-            existingNodeType: existingNode.type,
-            newParentNodeType: newParentNode.type,
-            newParentId: newParentId,
-            isValidParent: newParentNode.type === 'branch' || newParentNode.type.startsWith('leaf_') || newParentNode.type === 'tree'
-          });
+          // console.log('🔍 [DEBUG] Validation pour leaf_:', {
+            // existingNodeType: existingNode.type,
+            // newParentNodeType: newParentNode.type,
+            // newParentId: newParentId,
+            // isValidParent: newParentNode.type === 'branch' || newParentNode.type.startsWith('leaf_') || newParentNode.type === 'tree'
+          // });
         } else if (existingNode.type.startsWith('leaf_')) {
           // 🎯 FIX: Les champs peuvent être déplacés sous des branches, sections, d'autres champs, ou ROOT (tree)
           // Ceci permet le déplacement des champs DISPLAY au niveau racine et dans les sections
-          console.log("🔍 [DEBUG MOVE] existingNode:", existingNode.type, "| newParentNode:", newParentNode?.type, "| newParentId:", newParentId);
+          // console.log("🔍 [DEBUG MOVE] existingNode:", existingNode.type, "| newParentNode:", newParentNode?.type, "| newParentId:", newParentId);
           const isValidParent = 
             newParentNode.type === 'branch' || 
             newParentNode.type === 'section' ||
@@ -4173,11 +4173,11 @@ const updateOrMoveNode = async (req, res) => {
       }
       
       // 🎨 DEBUG: Log displayIcon AVANT fusion
-      console.log('🎨 [updateOrMoveNode] displayIcon AVANT fusion:', {
-        dansUpdateObjMetadata: (updateObj.metadata as any)?.appearance?.displayIcon,
-        dansCurrentMetadata: currentMetadata?.appearance?.displayIcon,
-        dansNewMetadata: newMetadata?.appearance?.displayIcon
-      });
+      // console.log('🎨 [updateOrMoveNode] displayIcon AVANT fusion:', {
+        // dansUpdateObjMetadata: (updateObj.metadata as any)?.appearance?.displayIcon,
+        // dansCurrentMetadata: currentMetadata?.appearance?.displayIcon,
+        // dansNewMetadata: newMetadata?.appearance?.displayIcon
+      // });
       
       // 🔧 NOUVEAU: Extraire aiMeasure du metadata et le convertir en colonnes dédiées
       if (newMetadata.aiMeasure) {
@@ -4187,12 +4187,12 @@ const updateOrMoveNode = async (req, res) => {
         updateObj.aiMeasure_prompt = aiConfig.customPrompt || null;
         updateObj.aiMeasure_keys = aiConfig.keys && aiConfig.keys.length > 0 ? aiConfig.keys : null;
         
-        console.log('📊 [updateOrMoveNode] AI Measure extrait vers colonnes dédiées:', {
-          enabled: updateObj.aiMeasure_enabled,
-          autoTrigger: updateObj.aiMeasure_autoTrigger,
-          prompt: updateObj.aiMeasure_prompt,
-          keys: updateObj.aiMeasure_keys
-        });
+        // console.log('📊 [updateOrMoveNode] AI Measure extrait vers colonnes dédiées:', {
+          // enabled: updateObj.aiMeasure_enabled,
+          // autoTrigger: updateObj.aiMeasure_autoTrigger,
+          // prompt: updateObj.aiMeasure_prompt,
+          // keys: updateObj.aiMeasure_keys
+        // });
         
         // Supprimer aiMeasure du metadata car il est maintenant dans des colonnes
         delete newMetadata.aiMeasure;
@@ -4213,21 +4213,21 @@ const updateOrMoveNode = async (req, res) => {
       };
       
       // 🎨 DEBUG: Log displayIcon APRÈS fusion
-      console.log('🎨 [updateOrMoveNode] displayIcon APRÈS fusion:', {
-        mergedAppearance,
-        finalDisplayIcon: (updateObj.metadata as any)?.appearance?.displayIcon
-      });
+      // console.log('🎨 [updateOrMoveNode] displayIcon APRÈS fusion:', {
+        // mergedAppearance,
+        // finalDisplayIcon: (updateObj.metadata as any)?.appearance?.displayIcon
+      // });
       
       // Nettoyer aiMeasure de metadata.existant aussi
       if ((updateObj.metadata as any).aiMeasure) {
         delete (updateObj.metadata as any).aiMeasure;
       }
       
-      console.log('🔀 [updateOrMoveNode] Fusion metadata:', {
-        avant: currentMetadata,
-        nouveau: newMetadata,
-        resultat: updateObj.metadata
-      });
+      // console.log('🔀 [updateOrMoveNode] Fusion metadata:', {
+        // avant: currentMetadata,
+        // nouveau: newMetadata,
+        // resultat: updateObj.metadata
+      // });
     }
     
     // 🔥 CRITIQUE : Si repeater_templateNodeIds est explicitement NULL, supprimer metadata.repeater
@@ -4242,24 +4242,24 @@ const updateOrMoveNode = async (req, res) => {
     }
     
     // 🔍 DEBUG AI MEASURE: Log avant sauvegarde
-    console.log('🔍 [updateOrMoveNode] Sauvegarde AI Measure - données envoyées:', {
-      aiMeasure_enabled: updateObj.aiMeasure_enabled,
-      aiMeasure_autoTrigger: updateObj.aiMeasure_autoTrigger,
-      aiMeasure_prompt: updateObj.aiMeasure_prompt,
-      aiMeasure_keys: updateObj.aiMeasure_keys
-    });
+    // console.log('🔍 [updateOrMoveNode] Sauvegarde AI Measure - données envoyées:', {
+      // aiMeasure_enabled: updateObj.aiMeasure_enabled,
+      // aiMeasure_autoTrigger: updateObj.aiMeasure_autoTrigger,
+      // aiMeasure_prompt: updateObj.aiMeasure_prompt,
+      // aiMeasure_keys: updateObj.aiMeasure_keys
+    // });
     
     // 🎨 DEBUG displayIcon: Log avant sauvegarde DB
-    console.log('🎨 [updateOrMoveNode] displayIcon AVANT DB.update:', {
-      metadataComplet: updateObj.metadata,
-      displayIcon: (updateObj.metadata as any)?.appearance?.displayIcon
-    });
+    // console.log('🎨 [updateOrMoveNode] displayIcon AVANT DB.update:', {
+      // metadataComplet: updateObj.metadata,
+      // displayIcon: (updateObj.metadata as any)?.appearance?.displayIcon
+    // });
     
     // 🔧 DEBUG repeater_templateNodeIds: Log avant sauvegarde pour identifier le bug
-    console.log('🔧 [updateOrMoveNode] repeater_templateNodeIds AVANT DB.update:', {
-      'updateObj.repeater_templateNodeIds': updateObj.repeater_templateNodeIds,
-      'metadata.repeater?.templateNodeIds': (updateObj.metadata as any)?.repeater?.templateNodeIds
-    });
+    // console.log('🔧 [updateOrMoveNode] repeater_templateNodeIds AVANT DB.update:', {
+      // 'updateObj.repeater_templateNodeIds': updateObj.repeater_templateNodeIds,
+      // 'metadata.repeater?.templateNodeIds': (updateObj.metadata as any)?.repeater?.templateNodeIds
+    // });
 
     await prisma.treeBranchLeafNode.update({
       where: { id: nodeId },
@@ -4269,24 +4269,24 @@ const updateOrMoveNode = async (req, res) => {
     const updatedNode = await prisma.treeBranchLeafNode.findFirst({ where: { id: nodeId, treeId } });
     
     // 🔍 DEBUG AI MEASURE: Log après lecture
-    console.log('🔍 [updateOrMoveNode] Sauvegarde AI Measure - données relues:', {
-      aiMeasure_enabled: updatedNode?.aiMeasure_enabled,
-      aiMeasure_autoTrigger: updatedNode?.aiMeasure_autoTrigger,
-      aiMeasure_prompt: updatedNode?.aiMeasure_prompt,
-      aiMeasure_keys: updatedNode?.aiMeasure_keys
-    });
+    // console.log('🔍 [updateOrMoveNode] Sauvegarde AI Measure - données relues:', {
+      // aiMeasure_enabled: updatedNode?.aiMeasure_enabled,
+      // aiMeasure_autoTrigger: updatedNode?.aiMeasure_autoTrigger,
+      // aiMeasure_prompt: updatedNode?.aiMeasure_prompt,
+      // aiMeasure_keys: updatedNode?.aiMeasure_keys
+    // });
     
     // 🎨 DEBUG displayIcon: Log après lecture DB
-    console.log('🎨 [updateOrMoveNode] displayIcon APRÈS DB.read:', {
-      metadataDB: updatedNode?.metadata,
-      displayIcon: (updatedNode?.metadata as any)?.appearance?.displayIcon
-    });
+    // console.log('🎨 [updateOrMoveNode] displayIcon APRÈS DB.read:', {
+      // metadataDB: updatedNode?.metadata,
+      // displayIcon: (updatedNode?.metadata as any)?.appearance?.displayIcon
+    // });
     
     // 🔧 DEBUG repeater_templateNodeIds: Log après lecture pour vérifier persistance
-    console.log('🔧 [updateOrMoveNode] repeater_templateNodeIds APRÈS DB.read:', {
-      'repeater_templateNodeIds (colonne)': updatedNode?.repeater_templateNodeIds,
-      'metadata.repeater?.templateNodeIds': (updatedNode?.metadata as any)?.repeater?.templateNodeIds
-    });
+    // console.log('🔧 [updateOrMoveNode] repeater_templateNodeIds APRÈS DB.read:', {
+      // 'repeater_templateNodeIds (colonne)': updatedNode?.repeater_templateNodeIds,
+      // 'metadata.repeater?.templateNodeIds': (updatedNode?.metadata as any)?.repeater?.templateNodeIds
+    // });
     
     const responseData = updatedNode ? buildResponseFromColumns(updatedNode) : updatedNode;
     
@@ -4317,8 +4317,8 @@ router.put('/nodes/:nodeId', async (req, res) => {
   try {
     const { nodeId } = req.params;
     
-    console.log('🎯 [PUT /nodes/:nodeId] Requête reçue pour nodeId:', nodeId);
-    console.log('📋 [PUT /nodes/:nodeId] Body:', JSON.stringify(req.body, null, 2));
+    // console.log('🎯 [PUT /nodes/:nodeId] Requête reçue pour nodeId:', nodeId);
+    // console.log('📋 [PUT /nodes/:nodeId] Body:', JSON.stringify(req.body, null, 2));
     
     // Récupérer le treeId depuis la base de données
     const node = await prisma.treeBranchLeafNode.findUnique({
@@ -4714,7 +4714,7 @@ router.delete('/trees/:treeId/nodes/:nodeId', async (req, res) => {
         where: { nodeId: { in: allDeletedIds } }
       });
       if (deletedSubmissionData.count > 0) {
-        console.log(`🧹 [DELETE] ${deletedSubmissionData.count} entrée(s) SubmissionData orpheline(s) supprimée(s)`);
+        // console.log(`🧹 [DELETE] ${deletedSubmissionData.count} entrée(s) SubmissionData orpheline(s) supprimée(s)`);
       }
     } catch (sdCleanupError) {
       console.warn('[DELETE] Erreur nettoyage SubmissionData orphelines:', (sdCleanupError as Error).message);
@@ -4776,7 +4776,7 @@ router.delete('/trees/:treeId/nodes/:nodeId', async (req, res) => {
         }
       });
       if (orphanedVariables.count > 0) {
-        console.log(`[DELETE] 🧹 Supprimé ${orphanedVariables.count} variable(s) -sum-total orpheline(s)`);
+        // console.log(`[DELETE] 🧹 Supprimé ${orphanedVariables.count} variable(s) -sum-total orpheline(s)`);
       }
     } catch (orphanCleanError) {
       console.warn('[DELETE] Erreur nettoyage variables orphelines:', (orphanCleanError as Error).message);
@@ -4809,7 +4809,7 @@ router.delete('/trees/:treeId/nodes/:nodeId', async (req, res) => {
         const deletedFormulas = await prisma.treeBranchLeafNodeFormula.deleteMany({
           where: { id: { in: formulaIdsToDelete } }
         });
-        console.log(`[DELETE] 🧹 Supprimé ${deletedFormulas.count} formule(s) copiée(s)`);
+        // console.log(`[DELETE] 🧹 Supprimé ${deletedFormulas.count} formule(s) copiée(s)`);
       }
       
       // 2️⃣ Supprimer les CONDITIONS copiées (attachées aux nœuds supprimés OU avec ID suffixé)
@@ -4832,7 +4832,7 @@ router.delete('/trees/:treeId/nodes/:nodeId', async (req, res) => {
         const deletedConditions = await prisma.treeBranchLeafNodeCondition.deleteMany({
           where: { id: { in: conditionIdsToDelete } }
         });
-        console.log(`[DELETE] 🧹 Supprimé ${deletedConditions.count} condition(s) copiée(s)`);
+        // console.log(`[DELETE] 🧹 Supprimé ${deletedConditions.count} condition(s) copiée(s)`);
       }
       
       // ⛔ PROTECTION: PAS de nettoyage agressif des formules/conditions "orphelines"
@@ -4858,7 +4858,7 @@ router.delete('/trees/:treeId/nodes/:nodeId', async (req, res) => {
           // Ce nœud Total doit mettre à jour sa formule - AWAIT pour garantir la cohérence
           try {
             await updateSumDisplayFieldAfterCopyChange(String(meta.sourceNodeId), prisma);
-            console.log(`✅ [DELETE] Champ Total ${node.id} mis à jour avec succès`);
+            // console.log(`✅ [DELETE] Champ Total ${node.id} mis à jour avec succès`);
           } catch (err) {
             console.warn(`[DELETE] ⚠️ Erreur mise à jour champ Total ${node.id}:`, err);
           }
@@ -6537,7 +6537,7 @@ router.post('/nodes/:nodeId/formulas', async (req, res) => {
 
     // 🔥 FIX FORMULA-CACHE: Invalider le cache du trigger index pour que les nouvelles dépendances soient prises en compte
     invalidateTriggerIndexCache();
-    console.log(`🔄 [FORMULA CREATE] Trigger index cache invalidé après création formule ${formula.id} pour node ${nodeId}`);
+    // console.log(`🔄 [FORMULA CREATE] Trigger index cache invalidé après création formule ${formula.id} pour node ${nodeId}`);
 
     return res.status(201).json(formula);
   } catch (error) {
@@ -6601,7 +6601,7 @@ router.put('/nodes/:nodeId/formulas/:formulaId', async (req, res) => {
 
     // 🔥 FIX FORMULA-CACHE: Invalider le cache du trigger index quand les tokens de la formule changent
     invalidateTriggerIndexCache();
-    console.log(`🔄 [FORMULA UPDATE] Trigger index cache invalidé après MAJ formule ${formulaId} pour node ${nodeId}`);
+    // console.log(`🔄 [FORMULA UPDATE] Trigger index cache invalidé après MAJ formule ${formulaId} pour node ${nodeId}`);
 
     return res.json(updated);
   } catch (error) {
@@ -6673,7 +6673,7 @@ router.delete('/nodes/:nodeId/formulas/:formulaId', async (req, res) => {
 
     // 🔥 FIX FORMULA-CACHE: Invalider le cache du trigger index après suppression de formule
     invalidateTriggerIndexCache();
-    console.log(`🔄 [FORMULA DELETE] Trigger index cache invalidé après suppression formule ${formulaId} pour node ${nodeId}`);
+    // console.log(`🔄 [FORMULA DELETE] Trigger index cache invalidé après suppression formule ${formulaId} pour node ${nodeId}`);
 
     return res.json({ success: true, message: 'Formule supprimÃƒÆ’Ã‚Â©e avec succÃƒÆ’Ã‚Â¨s' });
   } catch (error) {
@@ -7841,7 +7841,7 @@ async function applyTableFilters(
         if (mode === 'fixed') {
           // Mode valeur fixe: remplacer cellValue par la valeur ALORS ou SINON
           const fixedValue = allConditionsMet ? (mult.factor ?? 0) : (mult.elseFactor ?? 0);
-          console.log(`[Fixed] ${conditions.length} condition(s) → ${allConditionsMet ? 'TOUTES VRAIES' : 'NON'} → cellValue ${cellValue} → ${fixedValue}`);
+          // console.log(`[Fixed] ${conditions.length} condition(s) → ${allConditionsMet ? 'TOUTES VRAIES' : 'NON'} → cellValue ${cellValue} → ${fixedValue}`);
           cellValue = fixedValue;
         } else {
           // Mode multiplicateur: multiplier cellValue
@@ -7852,12 +7852,12 @@ async function applyTableFilters(
             const srcColIdx = columns.indexOf(mult.sourceColumn);
             if (srcColIdx >= 0) {
               baseValue = row[srcColIdx];
-              console.log(`[Multiplier] sourceColumn "${mult.sourceColumn}" → baseValue = ${baseValue}`);
+              // console.log(`[Multiplier] sourceColumn "${mult.sourceColumn}" → baseValue = ${baseValue}`);
             }
           }
           const numericBase = Number(baseValue);
           if (!isNaN(numericBase) && factor !== 1) {
-            console.log(`[Multiplier] ${conditions.length} condition(s) → ${allConditionsMet ? 'TOUTES VRAIES' : 'NON'} → ${allConditionsMet && mult.sourceColumn ? `sourceCol(${mult.sourceColumn})=${baseValue}` : `cellValue ${cellValue}`} × ${factor} = ${numericBase * factor}`);
+            // console.log(`[Multiplier] ${conditions.length} condition(s) → ${allConditionsMet ? 'TOUTES VRAIES' : 'NON'} → ${allConditionsMet && mult.sourceColumn ? `sourceCol(${mult.sourceColumn})=${baseValue}` : `cellValue ${cellValue}`} × ${factor} = ${numericBase * factor}`);
             cellValue = numericBase * factor;
           } else if (!isNaN(numericBase)) {
             cellValue = numericBase;
@@ -7922,7 +7922,7 @@ async function resolveFilterValueRef(
         value = objValue;
       }
       
-      console.log(`✅ [resolveFilterValueRef] @calculated.${nodeId} → formValues (FRESH): ${value}`);
+      // console.log(`✅ [resolveFilterValueRef] @calculated.${nodeId} → formValues (FRESH): ${value}`);
       return value;
     }
     
@@ -7934,7 +7934,7 @@ async function resolveFilterValueRef(
     });
     
     if (node && node.calculatedValue !== null && node.calculatedValue !== undefined) {
-      console.log(`🔧 [resolveFilterValueRef] @calculated.${nodeId} → DB fallback: ${node.calculatedValue}`);
+      // console.log(`🔧 [resolveFilterValueRef] @calculated.${nodeId} → DB fallback: ${node.calculatedValue}`);
       return node.calculatedValue;
     }
     
@@ -7949,14 +7949,14 @@ async function resolveFilterValueRef(
         select: { value: true }
       });
       if (latestSubmissionData?.value !== null && latestSubmissionData?.value !== undefined && latestSubmissionData?.value !== '') {
-        console.log(`🔧 [resolveFilterValueRef] @calculated.${nodeId} → SubmissionData fallback: ${latestSubmissionData.value}`);
+        // console.log(`🔧 [resolveFilterValueRef] @calculated.${nodeId} → SubmissionData fallback: ${latestSubmissionData.value}`);
         return latestSubmissionData.value;
       }
     } catch (err) {
       console.warn(`⚠️ [resolveFilterValueRef] @calculated.${nodeId} → SubmissionData fallback error:`, err);
     }
     
-    console.log(`⚠️ [resolveFilterValueRef] @calculated.${nodeId} → NO VALUE FOUND`);
+    // console.log(`⚠️ [resolveFilterValueRef] @calculated.${nodeId} → NO VALUE FOUND`);
     return null;
   }
   // @select.{nodeId} ou @select:{nodeId} - RÃƒÆ’Ã‚Â©cupÃƒÆ’Ã‚Â©rer la rÃƒÆ’Ã‚Â©ponse sÃƒÆ’Ã‚Â©lectionnÃƒÆ’Ã‚Â©e depuis formValues
@@ -8013,7 +8013,7 @@ async function resolveFilterValueRef(
   if (valueRef.startsWith('@table.')) {
     const tableId = valueRef.replace('@table.', '');
     
-    console.log(`🔍 [resolveFilterValueRef] @table.${tableId} → Résolution dynamique...`);
+    // console.log(`🔍 [resolveFilterValueRef] @table.${tableId} → Résolution dynamique...`);
     
     // 1. Essayer formValues[tableId] directement (si le frontend l'a injecté)
     if (formValues[tableId] !== undefined && formValues[tableId] !== null && formValues[tableId] !== '') {
@@ -8021,7 +8021,7 @@ async function resolveFilterValueRef(
       if (val && typeof val === 'object' && 'value' in (val as Record<string, unknown>)) {
         val = (val as Record<string, unknown>).value;
       }
-      console.log(`✅ [resolveFilterValueRef] @table.${tableId} → formValues direct: ${val}`);
+      // console.log(`✅ [resolveFilterValueRef] @table.${tableId} → formValues direct: ${val}`);
       return val;
     }
     
@@ -8091,7 +8091,7 @@ async function resolveFilterValueRef(
                 
                 if (compValue.toLowerCase() === sourceStr.toLowerCase()) {
                   const result = cells[displayColIdx];
-                  console.log(`✅ [resolveFilterValueRef] @table.${tableId} (${refTable.name}) → "${comparisonColumn}"="${sourceStr}" → "${displayColumn}"="${result}"`);
+                  // console.log(`✅ [resolveFilterValueRef] @table.${tableId} (${refTable.name}) → "${comparisonColumn}"="${sourceStr}" → "${displayColumn}"="${result}"`);
                   return result;
                 }
               }
@@ -8130,7 +8130,7 @@ async function resolveFilterValueRef(
               if (targetValue !== null && targetValue !== undefined && targetValue !== '') {
                 // Résoudre comme si on avait la valeur du sourceField
                 sourceValue = targetValue;
-                console.log(`🔗 [resolveFilterValueRef] @table.${tableId} → LINK ${sourceFieldId} → target ${targetId} → formValues: ${sourceValue}`);
+                // console.log(`🔗 [resolveFilterValueRef] @table.${tableId} → LINK ${sourceFieldId} → target ${targetId} → formValues: ${sourceValue}`);
                 
                 // Re-exécuter la logique de matching avec la valeur résolue
                 const columns = refTable.tableColumns.map(c => c.name);
@@ -8149,17 +8149,17 @@ async function resolveFilterValueRef(
                     const sourceStr = String(sourceValue).trim();
                     if (compValue.toLowerCase() === sourceStr.toLowerCase()) {
                       const result = cells[displayColIdx];
-                      console.log(`✅ [resolveFilterValueRef] @table.${tableId} (${refTable.name}) → LINK resolved → "${comparisonColumn}"="${sourceStr}" → "${displayColumn}"="${result}"`);
+                      // console.log(`✅ [resolveFilterValueRef] @table.${tableId} (${refTable.name}) → LINK resolved → "${comparisonColumn}"="${sourceStr}" → "${displayColumn}"="${result}"`);
                       return result;
                     }
                   }
                   console.warn(`⚠️ [resolveFilterValueRef] @table.${tableId} (${refTable.name}) → LINK resolved mais aucune ligne ne matche "${comparisonColumn}"="${sourceValue}"`);
                 }
               } else {
-                console.log(`⚠️ [resolveFilterValueRef] @table.${tableId} → LINK ${sourceFieldId} → target ${targetId} → pas de valeur dans formValues non plus`);
+                // console.log(`⚠️ [resolveFilterValueRef] @table.${tableId} → LINK ${sourceFieldId} → target ${targetId} → pas de valeur dans formValues non plus`);
               }
             } else {
-              console.log(`⚠️ [resolveFilterValueRef] @table.${tableId} → sourceField ${sourceFieldId} n'a pas de valeur dans formValues`);
+              // console.log(`⚠️ [resolveFilterValueRef] @table.${tableId} → sourceField ${sourceFieldId} n'a pas de valeur dans formValues`);
             }
           }
         }
@@ -8173,7 +8173,7 @@ async function resolveFilterValueRef(
             linkedVal = (linkedVal as Record<string, unknown>).value;
           }
           if (linkedVal !== null && linkedVal !== undefined && linkedVal !== '') {
-            console.log(`✅ [resolveFilterValueRef] @table.${tableId} → selectors.columnFieldId=${linkedFieldId}: ${linkedVal}`);
+            // console.log(`✅ [resolveFilterValueRef] @table.${tableId} → selectors.columnFieldId=${linkedFieldId}: ${linkedVal}`);
             return linkedVal;
           }
         }
@@ -8186,7 +8186,7 @@ async function resolveFilterValueRef(
           select: { calculatedValue: true, label: true }
         });
         if (ownerNode?.calculatedValue !== null && ownerNode?.calculatedValue !== undefined) {
-          console.log(`✅ [resolveFilterValueRef] @table.${tableId} → ownerNode "${ownerNode.label}" calculatedValue: ${ownerNode.calculatedValue}`);
+          // console.log(`✅ [resolveFilterValueRef] @table.${tableId} → ownerNode "${ownerNode.label}" calculatedValue: ${ownerNode.calculatedValue}`);
           return ownerNode.calculatedValue;
         }
       }
@@ -9310,14 +9310,14 @@ router.post('/evaluate/formula/:formulaId', async (req, res) => {
                 if (ownerNode?.calculatedValue != null) {
                   const parsed = parseFloat(String(ownerNode.calculatedValue));
                   resolvedValue = isNaN(parsed) ? 0 : parsed;
-                  console.log(`📊 [FORMULA] @table.${tableId} (${table.name}) → nœud "${ownerNode.label}" = ${resolvedValue}`);
+                  // console.log(`📊 [FORMULA] @table.${tableId} (${table.name}) → nœud "${ownerNode.label}" = ${resolvedValue}`);
                 } else {
                   // Fallback: chercher dans fieldValues envoyés par le frontend
                   const fromFV = fieldValues[table.nodeId] ?? fieldValues[tableId];
                   if (fromFV != null) {
                     const parsed = parseFloat(String(fromFV).replace(/\s+/g, '').replace(/,/g, '.'));
                     resolvedValue = isNaN(parsed) ? 0 : parsed;
-                    console.log(`📊 [FORMULA] @table.${tableId} (${table.name}) → fieldValues = ${resolvedValue}`);
+                    // console.log(`📊 [FORMULA] @table.${tableId} (${table.name}) → fieldValues = ${resolvedValue}`);
                   } else {
                     console.warn(`⚠️ [FORMULA] @table.${tableId} (${table.name}) → nœud "${ownerNode?.label}" calculatedValue=null, fieldValues=absent`);
                   }
@@ -9348,13 +9348,13 @@ router.post('/evaluate/formula/:formulaId', async (req, res) => {
               if (refNode?.calculatedValue != null) {
                 const parsed = parseFloat(String(refNode.calculatedValue));
                 resolvedValue = isNaN(parsed) ? 0 : parsed;
-                console.log(`🔢 [FORMULA] @calculated.${nodeId} → "${refNode.label}" = ${resolvedValue}`);
+                // console.log(`🔢 [FORMULA] @calculated.${nodeId} → "${refNode.label}" = ${resolvedValue}`);
               } else {
                 const fromFV = fieldValues[nodeId] ?? fieldValues[`__calculated__${nodeId}`];
                 if (fromFV != null) {
                   const parsed = parseFloat(String(fromFV).replace(/\s+/g, '').replace(/,/g, '.'));
                   resolvedValue = isNaN(parsed) ? 0 : parsed;
-                  console.log(`🔢 [FORMULA] @calculated.${nodeId} → fieldValues = ${resolvedValue}`);
+                  // console.log(`🔢 [FORMULA] @calculated.${nodeId} → fieldValues = ${resolvedValue}`);
                 } else {
                   console.warn(`⚠️ [FORMULA] @calculated.${nodeId} → "${refNode?.label}" calculatedValue=null, fieldValues=absent`);
                 }
@@ -9393,7 +9393,7 @@ router.post('/evaluate/formula/:formulaId', async (req, res) => {
         }
         
         tokens = resolvedTokens;
-        console.log(`🔄 [FORMULA] ${rawTokens.length} tokens bruts normalisés → ${tokens.length} tokens structurés`);
+        // console.log(`🔄 [FORMULA] ${rawTokens.length} tokens bruts normalisés → ${tokens.length} tokens structurés`);
       } else {
         // Tokens déjà au format structuré
         tokens = rawTokens as FormulaToken[];
@@ -10418,7 +10418,7 @@ router.get('/submissions/:id/fields', async (req, res) => {
   try {
     const { id } = req.params;
     const { organizationId, isSuperAdmin } = getAuthCtx(req as unknown as MinimalReq);
-    console.log(`[TBL-FIELDS] ▶️ GET /submissions/${id}/fields`);
+    // console.log(`[TBL-FIELDS] ▶️ GET /submissions/${id}/fields`);
 
     // Charger la soumission SANS include (relations pas définies dans Prisma)
     let submission = null as Awaited<ReturnType<typeof prisma.treeBranchLeafSubmission.findUnique>> | null;
@@ -10497,7 +10497,7 @@ router.get('/submissions/:id/fields', async (req, res) => {
       console.warn('[TBL-FIELDS] ⚠️ findMany submissionData échoué:', e instanceof Error ? e.message : String(e));
       dataRows = [];
     }
-    console.log(`[TBL-FIELDS] ℹ️ dataRows=${dataRows.length}`);
+    // console.log(`[TBL-FIELDS] ℹ️ dataRows=${dataRows.length}`);
 
     // Récupérer les nodeIds uniques (en filtrant les valeurs invalides/nulles)
     const nodeIds = [...new Set(
@@ -10505,7 +10505,7 @@ router.get('/submissions/:id/fields', async (req, res) => {
         .map(r => r?.nodeId)
         .filter((nid): nid is string => typeof nid === 'string' && nid.length > 0)
     )];
-    console.log(`[TBL-FIELDS] ℹ️ nodeIds=${nodeIds.length}`);
+    // console.log(`[TBL-FIELDS] ℹ️ nodeIds=${nodeIds.length}`);
 
     // Récupérer les infos des nodes en une seule requête (défensif)
     let nodes: Array<{
@@ -10526,7 +10526,7 @@ router.get('/submissions/:id/fields', async (req, res) => {
         nodes = [];
       }
     }
-    console.log(`[TBL-FIELDS] ℹ️ nodes=${nodes.length}`);
+    // console.log(`[TBL-FIELDS] ℹ️ nodes=${nodes.length}`);
 
     // Créer un map nodeId -> nodeInfo
     const nodesMap = new Map(nodes.map(n => [n.id, n]));
@@ -10555,7 +10555,7 @@ router.get('/submissions/:id/fields', async (req, res) => {
         (node.type === 'leaf_field' && ['display', 'DISPLAY', 'Display'].includes(node.fieldSubType || ''));
       
       if (isDisplayField) {
-        console.log(`[TBL-FIELDS] ⏸️ Champ DISPLAY exclu: ${node.label} (${node.id})`);
+        // console.log(`[TBL-FIELDS] ⏸️ Champ DISPLAY exclu: ${node.label} (${node.id})`);
         continue; // Ne pas inclure dans fieldsMap
       }
 
@@ -10609,7 +10609,7 @@ router.get('/submissions/:id', async (req, res) => {
   try {
     const { organizationId, isSuperAdmin } = getAuthCtx(req as unknown as MinimalReq);
     const { id } = req.params;
-    console.log(`[TBL-API] ▶️ GET /submissions/${id}`);
+    // console.log(`[TBL-API] ▶️ GET /submissions/${id}`);
 
     // Charger la soumission SANS include (relations non définies dans Prisma)
     const submission = await prisma.treeBranchLeafSubmission.findUnique({
@@ -11507,7 +11507,7 @@ router.delete('/submissions/:id', async (req, res) => {
       where: { id }
     });
 
-    console.log(`[TreeBranchLeaf API] Soumission ${id} supprimee avec succes`);
+    // console.log(`[TreeBranchLeaf API] Soumission ${id} supprimee avec succes`);
     res.json({ success: true, message: 'Soumission supprimee avec succes' });
 
   } catch (error) {
@@ -11617,18 +11617,18 @@ router.post('/nodes/:fieldId/select-config', async (req, res) => {
     const valueRow = Array.isArray(rawValueRow) ? JSON.stringify(rawValueRow) : rawValueRow;
 
     // 🔎 LOG MANUEL: Sauvegarde SelectConfig (flux TablePanel Étape 4)
-    console.log('[MANUAL-SAVE][SELECT-CONFIG] ➡️ POST /nodes/:fieldId/select-config', {
-      fieldId,
-      optionsSource,
-      tableReference,
-      keyColumn,
-      keyRow,
-      valueColumn,
-      valueRow,
-      displayColumn,
-      displayRow,
-      dependsOnNodeId
-    });
+    // console.log('[MANUAL-SAVE][SELECT-CONFIG] ➡️ POST /nodes/:fieldId/select-config', {
+      // fieldId,
+      // optionsSource,
+      // tableReference,
+      // keyColumn,
+      // keyRow,
+      // valueColumn,
+      // valueRow,
+      // displayColumn,
+      // displayRow,
+      // dependsOnNodeId
+    // });
 
 
     // VÃƒÆ’Ã‚Â©rifier l'accÃƒÆ’Ã‚Â¨s au nÃƒâ€¦Ã¢â‚¬Å“ud
@@ -11674,18 +11674,18 @@ router.post('/nodes/:fieldId/select-config', async (req, res) => {
     });
 
     // 🔎 LOG MANUEL: Confirmation SelectConfig persisté
-    console.log('[MANUAL-SAVE][SELECT-CONFIG] ✅ Persisté', {
-      fieldId,
-      id: selectConfig.id,
-      tableReference: selectConfig.tableReference,
-      keyColumn: selectConfig.keyColumn,
-      keyRow: selectConfig.keyRow,
-      valueColumn: selectConfig.valueColumn,
-      valueRow: selectConfig.valueRow,
-      displayColumn: selectConfig.displayColumn,
-      displayRow: selectConfig.displayRow,
-      dependsOnNodeId: selectConfig.dependsOnNodeId
-    });
+    // console.log('[MANUAL-SAVE][SELECT-CONFIG] ✅ Persisté', {
+      // fieldId,
+      // id: selectConfig.id,
+      // tableReference: selectConfig.tableReference,
+      // keyColumn: selectConfig.keyColumn,
+      // keyRow: selectConfig.keyRow,
+      // valueColumn: selectConfig.valueColumn,
+      // valueRow: selectConfig.valueRow,
+      // displayColumn: selectConfig.displayColumn,
+      // displayRow: selectConfig.displayRow,
+      // dependsOnNodeId: selectConfig.dependsOnNodeId
+    // });
 
     return res.json(selectConfig);
 
@@ -11706,7 +11706,7 @@ router.post('/nodes/:nodeId/normalize-step4', async (req, res) => {
     const { organizationId, isSuperAdmin } = getAuthCtx(req as unknown as MinimalReq);
     const { tableId: bodyTableId, displayColumn: bodyDisplayColumn } = req.body || {};
 
-    console.log('[STEP4-AUTO] ➡️ START normalize-step4', { nodeId, bodyTableId, bodyDisplayColumn });
+    // console.log('[STEP4-AUTO] ➡️ START normalize-step4', { nodeId, bodyTableId, bodyDisplayColumn });
 
     // Vérifier accès
     const access = await ensureNodeOrgAccess(prisma, nodeId, { organizationId, isSuperAdmin });
@@ -11749,7 +11749,7 @@ router.post('/nodes/:nodeId/normalize-step4', async (req, res) => {
       return res.status(400).json({ error: 'Impossible de déterminer displayColumn' });
     }
 
-    console.log('[STEP4-AUTO] 🎯 Selected displayColumn', { tableId, displayColumn: chosenDisplayColumn });
+    // console.log('[STEP4-AUTO] 🎯 Selected displayColumn', { tableId, displayColumn: chosenDisplayColumn });
 
     // Mettre à jour META.lookup.displayColumn
     try {
@@ -11767,7 +11767,7 @@ router.post('/nodes/:nodeId/normalize-step4', async (req, res) => {
         where: { id: tableId },
         data: { meta: nextMeta, updatedAt: new Date() }
       });
-      console.log('[STEP4-AUTO] ✅ META updated', { tableId, displayColumn: chosenDisplayColumn });
+      // console.log('[STEP4-AUTO] ✅ META updated', { tableId, displayColumn: chosenDisplayColumn });
     } catch (e) {
       console.warn('[STEP4-AUTO] ⚠️ META update failed (non-bloquant):', (e as Error).message);
     }
@@ -11802,11 +11802,11 @@ router.post('/nodes/:nodeId/normalize-step4', async (req, res) => {
       },
     });
 
-    console.log('[STEP4-AUTO] ✅ SelectConfig upserted', {
-      nodeId,
-      tableReference: sc.tableReference,
-      displayColumn: sc.displayColumn,
-    });
+    // console.log('[STEP4-AUTO] ✅ SelectConfig upserted', {
+      // nodeId,
+      // tableReference: sc.tableReference,
+      // displayColumn: sc.displayColumn,
+    // });
 
     return res.json({
       success: true,
@@ -12251,11 +12251,11 @@ router.all('/nodes/:nodeId/table/lookup', async (req, res) => {
         }
         
         // 🔴 DEBUG: Log pour voir si on passe par AUTO-DEFAULT
-        console.log(`[TreeBranchLeaf API] 🎯 AUTO-DEFAULT pour nodeId=${nodeId}:`, {
-          optionsCount: autoOptions.length,
-          firstFive: autoOptions.slice(0, 5),
-          detectedRole: isRowField ? 'rowField' : isColumnField ? 'columnField' : 'fallback'
-        });
+        // console.log(`[TreeBranchLeaf API] 🎯 AUTO-DEFAULT pour nodeId=${nodeId}:`, {
+          // optionsCount: autoOptions.length,
+          // firstFive: autoOptions.slice(0, 5),
+          // detectedRole: isRowField ? 'rowField' : isColumnField ? 'columnField' : 'fallback'
+        // });
         
         // 🔧 FIX: Retourner aussi les données complètes pour le filtrage valueCaps côté front-end
         return res.json({ 
@@ -12463,15 +12463,15 @@ router.patch('/submissions/:id', async (req, res) => {
   const { clientId, status, name, formData } = req.body;
 
   try {
-    console.log('[TreeBranchLeaf API] PATCH /submissions/:id payload', {
-      id,
-      clientId,
-      status,
-      namePresent: name !== undefined,
-      formDataPresent: formData !== undefined,
-      organizationId,
-      isSuperAdmin
-    });
+    // console.log('[TreeBranchLeaf API] PATCH /submissions/:id payload', {
+      // id,
+      // clientId,
+      // status,
+      // namePresent: name !== undefined,
+      // formDataPresent: formData !== undefined,
+      // organizationId,
+      // isSuperAdmin
+    // });
     // Vérifier que la soumission existe
     const submission = await prisma.treeBranchLeafSubmission.findUnique({
       where: { id },
@@ -12512,7 +12512,7 @@ router.patch('/submissions/:id', async (req, res) => {
       }
       // Si le clientId demandé est identique à l'actuel, court-circuiter l'update
       if ((clientId ?? null) === (submission.leadId ?? null) && status === undefined && name === undefined && formData === undefined) {
-        console.log(`[TreeBranchLeaf API] PATCH /submissions/${id} - aucun changement (clientId inchangé)`);
+        // console.log(`[TreeBranchLeaf API] PATCH /submissions/${id} - aucun changement (clientId inchangé)`);
         return res.json(submission);
       }
     }
@@ -12547,7 +12547,7 @@ router.patch('/submissions/:id', async (req, res) => {
       data: updateData
     });
 
-    console.log(`[TreeBranchLeaf API] ✅ PATCH /submissions/${id} - clientId: ${clientId}, status: ${status}`);
+    // console.log(`[TreeBranchLeaf API] ✅ PATCH /submissions/${id} - clientId: ${clientId}, status: ${status}`);
 
     res.json(updatedSubmission);
   } catch (error) {
@@ -14945,7 +14945,7 @@ router.post('/nodes/:nodeId/copy-linked-variable', async (req, res) => {
     // 🔥 CRITIQUE: Déclencher l'évaluation immédiate après la copie
     // Sans cela, le nœud copié reste "muet" jusqu'à une interaction manuelle
     try {
-      console.log(`🔄 [COPY-LINKED-VAR] Déclenchement évaluation initiale pour ${targetNodeId}...`);
+      // console.log(`🔄 [COPY-LINKED-VAR] Déclenchement évaluation initiale pour ${targetNodeId}...`);
       
       // Récupérer le treeId pour l'évaluation
       const copiedNode = await prisma.treeBranchLeafNode.findUnique({
@@ -14981,7 +14981,7 @@ router.post('/nodes/:nodeId/copy-linked-variable', async (req, res) => {
             }
           });
 
-          console.log(`✅ [COPY-LINKED-VAR] Évaluation initiale terminée: ${targetNodeId} = ${evaluationResult.value}`);
+          // console.log(`✅ [COPY-LINKED-VAR] Évaluation initiale terminée: ${targetNodeId} = ${evaluationResult.value}`);
         } else {
           console.warn(`⚠️ [COPY-LINKED-VAR] Pas de submission active trouvée pour évaluation de ${targetNodeId}`);
         }

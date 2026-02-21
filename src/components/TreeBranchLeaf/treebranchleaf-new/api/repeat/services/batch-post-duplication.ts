@@ -47,61 +47,69 @@ export async function batchPostDuplicationProcessing(
     }
   });
 
-  // 2. For each node, compute ALL metadata changes in memory and write ONCE
+  // 2. Build all updates in memory, then execute as a single $transaction
+  const updateOps = [];
   for (const node of nodes) {
     try {
       const currentMetadata = (node.metadata && typeof node.metadata === 'object')
         ? (node.metadata as Record<string, unknown>)
         : {};
 
-      // Combined metadata from all 5 services (applied in original order):
       const combinedMetadata: Record<string, unknown> = {
         ...currentMetadata,
-        // From enforceStrictIsolation:
         strictlyIsolated: true,
         isolatedAt: now,
         calculatedValueReset: true,
         independentCalculation: true,
-        // From forceIndependentCalculation:
         lastForceRecalc: now,
         forceIndependentCalc: true,
         requiresFreshCalculation: true,
         calculationInvalidated: triggerTimestamp,
-        // From createRecalculationTriggers:
         recalcTrigger: triggerTimestamp,
         mustRecalculate: true,
         independentNode: true,
         noFallbackToOriginal: true,
-        // From blockFallbackToOriginalValues:
         blockFallbackToOriginal: true,
         enforceIndependentCalculation: true,
         lastAntiFactbackUpdate: now,
         calculationIsolationLevel: 'STRICT',
       };
 
-      // Build update data
       const updateData: Record<string, unknown> = {
         calculatedValue: null,
         calculatedAt: null,
         metadata: combinedMetadata,
       };
 
-      // From enforceStrictIsolation: fix hasTable if no tables found
       if (node.hasTable && (!node.TreeBranchLeafNodeTable || node.TreeBranchLeafNodeTable.length === 0)) {
         updateData.hasTable = false;
         result.hasTableFixCount++;
       }
 
-      await prisma.treeBranchLeafNode.update({
-        where: { id: node.id },
-        data: updateData,
-      });
-
+      updateOps.push(
+        prisma.treeBranchLeafNode.update({
+          where: { id: node.id },
+          data: updateData,
+        })
+      );
       result.processedCount++;
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error);
       result.errors.push({ nodeId: node.id, error: errorMsg });
-      console.error(`[BATCH-POST-DUP] Error for ${node.id}:`, errorMsg);
+    }
+  }
+
+  // Execute all updates in a single transaction (1 round-trip instead of N)
+  if (updateOps.length > 0) {
+    try {
+      await prisma.$transaction(updateOps);
+    } catch (txError) {
+      // Fallback: try individually if transaction fails
+      for (const op of updateOps) {
+        try { await op; } catch (e) {
+          console.error(`[BATCH-POST-DUP] Individual update failed:`, (e as Error).message);
+        }
+      }
     }
   }
 

@@ -1003,7 +1003,7 @@ async function evaluateCapacitiesForSubmission(
       }
     }
     if (restoredCount > 0) {
-      console.log(`🛡️ [FIX C] Restauré ${restoredCount} valeurs DB DISPLAY (clés absentes du formData)`);
+      // console.log(`🛡️ [FIX C] Restauré ${restoredCount} valeurs DB DISPLAY (clés absentes du formData)`);
     }
   }
   
@@ -1104,7 +1104,7 @@ async function evaluateCapacitiesForSubmission(
       }
     }
     if (linkResolvedCount > 0) {
-      console.log(`🔗 [FIX R21b] ${linkResolvedCount} LINK field(s) résolus dans le valueMap (mode: ${mode})`);
+      // console.log(`🔗 [FIX R21b] ${linkResolvedCount} LINK field(s) résolus dans le valueMap (mode: ${mode})`);
     }
   } catch (e) {
     console.warn('⚠️ [FIX R21b] Résolution LINK fields échouée (best-effort):', (e as Error)?.message || e);
@@ -1211,7 +1211,7 @@ const displayDeps = new Map<string, Set<string>>(); // nodeId → Set<dependsOn>
           sumTotalFormulaTokensMap.set(n.id, n.formula_tokens as string[]);
         }
       }
-      console.log(`🔗 [FIX R27] ${sumTotalFormulaTokensMap.size} sum-total nodes avec formula_tokens chargés`);
+      // console.log(`🔗 [FIX R27] ${sumTotalFormulaTokensMap.size} sum-total nodes avec formula_tokens chargés`);
     }
   }
 
@@ -1339,7 +1339,7 @@ const displayDeps = new Map<string, Set<string>>(); // nodeId → Set<dependsOn>
 
     const depsCountEarly = [...displayDeps.values()].reduce((sum, s) => sum + s.size, 0);
     if (depsCountEarly > 0) {
-      console.log(`🔗 [FIX R14e] ${depsCountEarly} dépendances inter-display détectées depuis les formules (tous modes)`);
+      // console.log(`🔗 [FIX R14e] ${depsCountEarly} dépendances inter-display détectées depuis les formules (tous modes)`);
     }
   }
 
@@ -1459,7 +1459,7 @@ const displayDeps = new Map<string, Set<string>>(); // nodeId → Set<dependsOn>
   const changedFieldIdSet = new Set([...allChangedFieldIds, ...allChangedFieldIdBases]);
   
   if (allChangedFieldIds.length > 1) {
-    console.log(`🔥 [FIX A] Multi-changedFieldIds: ${allChangedFieldIds.length} champs modifiés pendant le debounce: ${allChangedFieldIds.map(id => id.substring(0,12)).join(', ')}`);
+    // console.log(`🔥 [FIX A] Multi-changedFieldIds: ${allChangedFieldIds.length} champs modifiés pendant le debounce: ${allChangedFieldIds.map(id => id.substring(0,12)).join(', ')}`);
   }
   
   if (mode === 'change' && changedFieldId) {
@@ -1485,7 +1485,7 @@ const displayDeps = new Map<string, Set<string>>(); // nodeId → Set<dependsOn>
       }
       
       const affectedCount = allChangedFieldIds.reduce((sum, id) => sum + (triggerIndex.get(id)?.size || 0), 0);
-      console.log(`🚀 [TRIGGER INDEX CACHE HIT] ${affectedCount} impactés par "${changedFieldId}" (cache age: ${Math.round((Date.now() - cached.timestamp) / 1000)}s)`);
+      // console.log(`🚀 [TRIGGER INDEX CACHE HIT] ${affectedCount} impactés par "${changedFieldId}" (cache age: ${Math.round((Date.now() - cached.timestamp) / 1000)}s)`);
     } else {
       // 🔧 CACHE MISS: Construire le trigger index complet (pour TOUS les changedFieldIds possibles)
       
@@ -1829,7 +1829,7 @@ const displayDeps = new Map<string, Set<string>>(); // nodeId → Set<dependsOn>
       }
     }
     const depsCount = [...displayDeps.values()].reduce((sum, s) => sum + s.size, 0);
-    console.log(`🔗 [FIX R14] ${depsCount} dépendances inter-display détectées via trigger index`);
+    // console.log(`🔗 [FIX R14] ${depsCount} dépendances inter-display détectées via trigger index`);
   }
 
   // 🔥 FIX R14: Recalculer la profondeur topologique avec les deps FIABLES
@@ -1877,13 +1877,13 @@ const displayDeps = new Map<string, Set<string>>(); // nodeId → Set<dependsOn>
       }
       if (maxSourceDepth >= 0 && currentDepth <= maxSourceDepth) {
         const newDepth = maxSourceDepth + 1;
-        console.log(`🔧 [FIX R30] ${sumTotalNodeId.substring(0, 12)}... depth ${currentDepth} → ${newDepth} (source maxDepth=${maxSourceDepth})`);
+        // console.log(`🔧 [FIX R30] ${sumTotalNodeId.substring(0, 12)}... depth ${currentDepth} → ${newDepth} (source maxDepth=${maxSourceDepth})`);
         topoOrder.set(sumTotalNodeId, newDepth);
         fixedCount++;
       }
     }
     if (fixedCount > 0) {
-      console.log(`🔧 [FIX R30] ${fixedCount} sum-total depth(s) corrigée(s)`);
+      // console.log(`🔧 [FIX R30] ${fixedCount} sum-total depth(s) corrigée(s)`);
     }
   }
 
@@ -1914,7 +1914,7 @@ const displayDeps = new Map<string, Set<string>>(); // nodeId → Set<dependsOn>
     const displayOrder = capacities
       .filter(c => displayCapNodeIds.has(c.nodeId))
       .map(c => `${c.nodeId.substring(0,8)}(d=${topoOrder.get(c.nodeId)||0},sum=${c.sourceRef?.includes('sum-formula')||c.sourceRef?.includes('sum-total')?'Y':'N'})`);
-    console.log(`[FIX R14b] Eval order: ${displayOrder.join(' -> ')}`);
+    // console.log(`[FIX R14b] Eval order: ${displayOrder.join(' -> ')}`);
   }
 
   // 🚀 FIX R12 + FIX A: Calculer la fermeture transitive des DISPLAY fields affectés
@@ -1969,7 +1969,7 @@ const displayDeps = new Map<string, Set<string>>(); // nodeId → Set<dependsOn>
             const refNodeId = token.slice(7);
             if (affectedDisplayFieldIds.has(refNodeId)) {
               affectedDisplayFieldIds.add(cap.nodeId);
-              console.log(`🔥 [FIX R28] sum-total ${cap.nodeId.substring(0,12)}... forcé dans affectedDisplayFieldIds (dep ${refNodeId.substring(0,12)}... affecté)`);
+              // console.log(`🔥 [FIX R28] sum-total ${cap.nodeId.substring(0,12)}... forcé dans affectedDisplayFieldIds (dep ${refNodeId.substring(0,12)}... affecté)`);
               break;
             }
           }
@@ -1996,11 +1996,11 @@ const displayDeps = new Map<string, Set<string>>(); // nodeId → Set<dependsOn>
         }
       }
       if (forcedCount > 0) {
-        console.log(`🔥 [FIX R29b] ${forcedCount} sum-total forcés dans affectedDisplayFieldIds (total sum-totals: ${[...affectedDisplayFieldIds].filter(id => id.endsWith('-sum-total')).length})`);
+        // console.log(`🔥 [FIX R29b] ${forcedCount} sum-total forcés dans affectedDisplayFieldIds (total sum-totals: ${[...affectedDisplayFieldIds].filter(id => id.endsWith('-sum-total')).length})`);
       }
     }
 
-    console.log(`🚀 [FIX R12] mode=change: ${affectedDisplayFieldIds.size} DISPLAY fields affectés sur ${displayCapNodeIds.size} total (skip ${displayCapNodeIds.size - affectedDisplayFieldIds.size})`);
+    // console.log(`🚀 [FIX R12] mode=change: ${affectedDisplayFieldIds.size} DISPLAY fields affectés sur ${displayCapNodeIds.size} total (skip ${displayCapNodeIds.size - affectedDisplayFieldIds.size})`);
     
     // 🔥 FIX D: Si aucun DISPLAY field affecté trouvé mais qu'on a un changedFieldId,
     // c'est que le triggerIndex ne couvre pas ce champ → fallback vers évaluation complète
@@ -2022,13 +2022,13 @@ const displayDeps = new Map<string, Set<string>>(); // nodeId → Set<dependsOn>
           valueMap.delete(affectedId);
         }
       }
-      console.log(`🔥 [FIX B] Suppression ciblée: ${affectedDisplayFieldIds.size} display values supprimés sur ${displayNodeIds.size} total`);
+      // console.log(`🔥 [FIX B] Suppression ciblée: ${affectedDisplayFieldIds.size} display values supprimés sur ${displayNodeIds.size} total`);
     } else {
       // Fallback complet (FIX D actif): supprimer TOUS les display values
       for (const displayNodeId of displayNodeIds) {
         valueMap.delete(displayNodeId);
       }
-      console.log(`🔥 [FIX B] Suppression COMPLÈTE: ${displayNodeIds.size} display values (fallback FIX D)`);
+      // console.log(`🔥 [FIX B] Suppression COMPLÈTE: ${displayNodeIds.size} display values (fallback FIX D)`);
     }
   }
 
@@ -2061,7 +2061,7 @@ const displayDeps = new Map<string, Set<string>>(); // nodeId → Set<dependsOn>
       }
       if (freshValue !== null && freshValue !== undefined) {
         valueMap.set(linkedNodeId, freshValue);
-        console.log(`🔗 [FIX R20/R21] valueMap LINK pre-refresh: ${linkedNodeId.substring(0,8)} = "${freshValue}" (source: ${linkInfo.targetNodeId.substring(0,8)}, changedField: ${changedFieldId?.substring(0,8) || 'N/A'})`);
+        // console.log(`🔗 [FIX R20/R21] valueMap LINK pre-refresh: ${linkedNodeId.substring(0,8)} = "${freshValue}" (source: ${linkInfo.targetNodeId.substring(0,8)}, changedField: ${changedFieldId?.substring(0,8) || 'N/A'})`);
       }
     }
   }
@@ -2253,7 +2253,7 @@ const displayDeps = new Map<string, Set<string>>(); // nodeId → Set<dependsOn>
 
           // 🔍 DEBUG SUM-TOTAL: Tracer les valeurs pour diagnostiquer le lag
           if (debugParts.length > 0) {
-            console.log(`🔍 [SUM-TOTAL DEBUG] ${capacity.nodeId.substring(0,12)}... tokens=${tokens.length} sum=${sum} parts=${JSON.stringify(debugParts.map(p => ({ ref: p.refId.substring(0,12), val: p.value, src: p.source })))}`);
+            // console.log(`🔍 [SUM-TOTAL DEBUG] ${capacity.nodeId.substring(0,12)}... tokens=${tokens.length} sum=${sum} parts=${JSON.stringify(debugParts.map(p => ({ ref: p.refId.substring(0,12), val: p.value, src: p.source })))}`);
           }
 
           capacityResult = {
@@ -2377,7 +2377,7 @@ const displayDeps = new Map<string, Set<string>>(); // nodeId → Set<dependsOn>
       // 🔍 DEBUG R26: Tracer Prix TVAC et ses deps sum-total
       if (capacity.nodeId === '2f0c0d37-ae97-405e-8fae-0a07680e2183' || capacity.nodeId.includes('-sum-total')) {
         const depthVal = topoOrder.get(capacity.nodeId) || 0;
-        console.log(`🔍 [FIX R26 DEBUG] ${capacity.nodeId.substring(0,12)}... depth=${depthVal} → rawValue=${rawValue} hasValid=${hasValidValue} sourceRef=${capacity.sourceRef?.substring(0,30)}`);
+        // console.log(`🔍 [FIX R26 DEBUG] ${capacity.nodeId.substring(0,12)}... depth=${depthVal} → rawValue=${rawValue} hasValid=${hasValidValue} sourceRef=${capacity.sourceRef?.substring(0,30)}`);
       }
 
       const normalizedOperationSource: OperationSourceType = coerceOperationSource(
@@ -2516,7 +2516,7 @@ const displayDeps = new Map<string, Set<string>>(); // nodeId → Set<dependsOn>
         }
       });
       await prisma.$transaction(operations);
-      console.log(`🚀 [PERF] Batch upsert: ${pendingNonDisplayUpserts.length} non-display capacities en 1 transaction`);
+      // console.log(`🚀 [PERF] Batch upsert: ${pendingNonDisplayUpserts.length} non-display capacities en 1 transaction`);
     } catch (batchError) {
       console.error('[PERF] Batch upsert échoué, fallback séquentiel:', batchError);
       // Fallback séquentiel en cas d'erreur
@@ -2596,7 +2596,7 @@ const displayDeps = new Map<string, Set<string>>(); // nodeId → Set<dependsOn>
       }
     }
     if (linkPersistedCount > 0) {
-      console.log(`🔗 [FIX R25] ${linkPersistedCount} LINK DISPLAY field(s) persistés dans SubmissionData`);
+      // console.log(`🔗 [FIX R25] ${linkPersistedCount} LINK DISPLAY field(s) persistés dans SubmissionData`);
     }
   }
 
@@ -2690,7 +2690,7 @@ const displayDeps = new Map<string, Set<string>>(); // nodeId → Set<dependsOn>
       }
     }
     if (addedExistingCount > 0) {
-      console.log(`🚀 [FIX BROADCAST-COMPLET] ${computedValuesToStore.length} valeurs dans la réponse (${computedValuesToStore.length - addedExistingCount} fraîches + ${addedExistingCount} existantes inchangées)`);
+      // console.log(`🚀 [FIX BROADCAST-COMPLET] ${computedValuesToStore.length} valeurs dans la réponse (${computedValuesToStore.length - addedExistingCount} fraîches + ${addedExistingCount} existantes inchangées)`);
     }
   }
 
@@ -2984,7 +2984,7 @@ router.post('/submissions/create-and-evaluate', async (req, res) => {
     // 🚀 FIX R9: Si une submissionId est fournie, on récupérera le treeId depuis la soumission existante
     // → Pas besoin de faire un findFirst() coûteux ici
     if (!effectiveTreeId && !hasExistingSubmission) {
-      console.log('⚠️ [TBL CREATE-AND-EVALUATE] Aucun treeId fourni et pas de submissionId, recherche du premier arbre...');
+      // console.log('⚠️ [TBL CREATE-AND-EVALUATE] Aucun treeId fourni et pas de submissionId, recherche du premier arbre...');
       const firstTree = await prisma.treeBranchLeafTree.findFirst({
         select: { id: true, name: true }
       });
@@ -3012,7 +3012,7 @@ router.post('/submissions/create-and-evaluate', async (req, res) => {
     let effectiveUserId = userId;
     
     if (!clientId && !isDefaultDraft) {
-      console.log('❌ [TBL CREATE-AND-EVALUATE] Aucun leadId fourni - REQUIS (sauf pour default-draft)');
+      // console.log('❌ [TBL CREATE-AND-EVALUATE] Aucun leadId fourni - REQUIS (sauf pour default-draft)');
       return res.status(400).json({
         success: false,
         error: 'Lead obligatoire',
@@ -3034,7 +3034,7 @@ router.post('/submissions/create-and-evaluate', async (req, res) => {
       ]);
       
       if (!leadExists) {
-        console.log(`❌ [TBL CREATE-AND-EVALUATE] Lead ${clientId} introuvable`);
+        // console.log(`❌ [TBL CREATE-AND-EVALUATE] Lead ${clientId} introuvable`);
         return res.status(404).json({
           success: false,
           error: 'Lead introuvable',
@@ -3044,7 +3044,7 @@ router.post('/submissions/create-and-evaluate', async (req, res) => {
       
       // Vérifier que le lead appartient bien à la même organisation (sauf pour Super Admin)
       if (!isSuperAdmin && leadExists.organizationId !== organizationId) {
-        console.log(`❌ [TBL CREATE-AND-EVALUATE] Le lead ${clientId} n'appartient pas à l'organisation ${organizationId}`);
+        // console.log(`❌ [TBL CREATE-AND-EVALUATE] Le lead ${clientId} n'appartient pas à l'organisation ${organizationId}`);
         return res.status(403).json({
           success: false,
           error: 'Lead non autorisé',
@@ -3059,7 +3059,7 @@ router.post('/submissions/create-and-evaluate', async (req, res) => {
       
       // User validation (résultat du Promise.all)
       if (effectiveUserId && !userExistsResult) {
-        console.log(`❌ [TBL CREATE-AND-EVALUATE] User ${effectiveUserId} introuvable, soumission sans utilisateur`);
+        // console.log(`❌ [TBL CREATE-AND-EVALUATE] User ${effectiveUserId} introuvable, soumission sans utilisateur`);
         effectiveUserId = null;
       }
     } else {
@@ -3070,7 +3070,7 @@ router.post('/submissions/create-and-evaluate', async (req, res) => {
           select: { id: true, firstName: true, lastName: true }
         });
         if (!userExists) {
-          console.log(`❌ [TBL CREATE-AND-EVALUATE] User ${effectiveUserId} introuvable`);
+          // console.log(`❌ [TBL CREATE-AND-EVALUATE] User ${effectiveUserId} introuvable`);
           effectiveUserId = null;
         }
       }

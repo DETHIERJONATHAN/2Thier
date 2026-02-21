@@ -95,7 +95,7 @@ async function syncTableReferences(
         where: { tableReference: oldTableId, nodeId: { not: ownerNodeId } },
         data: { tableReference: newTableId, updatedAt: new Date() }
       });
-      console.log(`[syncTableRefs] ✅ ${externalConfigs.length} SelectConfig(s) externe(s) migrée(s): ${oldTableId} → ${newTableId}`);
+      // console.log(`[syncTableRefs] ✅ ${externalConfigs.length} SelectConfig(s) externe(s) migrée(s): ${oldTableId} → ${newTableId}`);
     }
 
     // 2. Mettre à jour les @table.{oldId} dans les filtres d'AUTRES tables
@@ -124,7 +124,7 @@ async function syncTableReferences(
             where: { id: t.id },
             data: { meta: updatedMeta as Prisma.InputJsonValue, updatedAt: new Date() }
           });
-          console.log(`[syncTableRefs] ✅ Table "${t.name}" (${t.id}): @table.${oldTableId} → @table.${newTableId}`);
+          // console.log(`[syncTableRefs] ✅ Table "${t.name}" (${t.id}): @table.${oldTableId} → @table.${newTableId}`);
         } catch (parseErr) {
           console.error(`[syncTableRefs] ❌ Erreur parse meta pour table ${t.id}:`, parseErr);
         }
@@ -144,7 +144,7 @@ async function syncTableReferences(
       }
     }
 
-    console.log(`[syncTableRefs] 🔄 Sync terminée pour "${tableName}": ${oldTableId} → ${newTableId}`);
+    // console.log(`[syncTableRefs] 🔄 Sync terminée pour "${tableName}": ${oldTableId} → ${newTableId}`);
   } catch (error) {
     console.error(`[syncTableRefs] ❌ Erreur lors de la sync des références:`, error);
     // Non bloquant
@@ -355,7 +355,7 @@ router.post('/nodes/:nodeId/tables', async (req, res) => {
           if (sameRole) {
             await syncTableReferences(oldTableRef, result.id, nodeId, finalName);
           }
-          console.log(`[NEW POST /tables] ✅ Ancienne tableReference ${oldTableRef} remplacée par ${result.id} sur le nœud ${nodeId}. Sync des refs externes effectuée.`);
+          // console.log(`[NEW POST /tables] ✅ Ancienne tableReference ${oldTableRef} remplacée par ${result.id} sur le nœud ${nodeId}. Sync des refs externes effectuée.`);
         }
       } else {
         // CREATION AUTOMATIQUE DES SELECTCONFIGS POUR LES LOOKUPS
@@ -392,7 +392,7 @@ router.post('/nodes/:nodeId/tables', async (req, res) => {
                     updatedAt: new Date(),
                   }
                 });
-                console.log(`[LOOKUP] SelectConfig cree pour ROW source: ${rowSourceField}`);
+                // console.log(`[LOOKUP] SelectConfig cree pour ROW source: ${rowSourceField}`);
               }
               
               // METTRE A JOUR les selectors si vides
@@ -430,7 +430,7 @@ router.post('/nodes/:nodeId/tables', async (req, res) => {
                     updatedAt: new Date(),
                   }
                 });
-                console.log(`[LOOKUP] SelectConfig cree pour COLUMN source: ${colSourceField}`);
+                // console.log(`[LOOKUP] SelectConfig cree pour COLUMN source: ${colSourceField}`);
               }
               
               // METTRE A JOUR les selectors si vides
@@ -466,7 +466,7 @@ router.post('/nodes/:nodeId/tables', async (req, res) => {
                   updatedAt: new Date(),
                 }
               });
-              console.log(`[LOOKUP] SelectConfig cree pour champ composite: ${nodeId}`);
+              // console.log(`[LOOKUP] SelectConfig cree pour champ composite: ${nodeId}`);
             }
             
             // ETAPE 4: METTRE A JOUR la table avec les selectors remplis
@@ -477,8 +477,8 @@ router.post('/nodes/:nodeId/tables', async (req, res) => {
               data: { meta: toJsonSafe(finalMeta) }
             });
             
-            console.log(`[LOOKUP] Configuration de lookup complete pour table: ${result.id}`);
-            console.log(`[LOOKUP] Selectors remplis: rowFieldId=${lookupMeta.selectors?.rowFieldId}, columnFieldId=${lookupMeta.selectors?.columnFieldId}`);
+            // console.log(`[LOOKUP] Configuration de lookup complete pour table: ${result.id}`);
+            // console.log(`[LOOKUP] Selectors remplis: rowFieldId=${lookupMeta.selectors?.rowFieldId}, columnFieldId=${lookupMeta.selectors?.columnFieldId}`);
           }
         } catch (lookupError) {
           console.error(`[NEW POST /tables] Erreur lors de la creation des SelectConfigs lookup:`, lookupError);
@@ -805,7 +805,7 @@ router.delete('/tables/:id', async (req, res) => {
         if (replacement) {
           await syncTableReferences(id, replacement.id, table.nodeId, tableName);
         } else {
-          console.log(`[NEW DELETE /tables/:id] ⚠️ Pas de table de remplacement pour "${tableName}" (${id}).`);
+          // console.log(`[NEW DELETE /tables/:id] ⚠️ Pas de table de remplacement pour "${tableName}" (${id}).`);
         }
       } catch (syncErr) {
         console.error(`[NEW DELETE /tables/:id] ⚠️ Erreur sync références:`, syncErr);
@@ -969,23 +969,23 @@ router.put('/nodes/:nodeId/tables/:tableId', async (req, res) => {
         const metaObj = typeof meta === 'string' ? JSON.parse(meta) : meta;
         const lookup = metaObj?.lookup || {};
         const selectors = lookup?.selectors || {};
-        console.log('[MANUAL-SAVE][TABLE META] ➡️ PUT /nodes/:nodeId/tables/:tableId', {
-          tableId,
-          name,
-          description,
-          type,
-          lookupSelectors: {
-            columnFieldId: selectors.columnFieldId || null,
-            rowFieldId: selectors.rowFieldId || null,
-            comparisonColumn: lookup?.comparisonColumn || null,
-            displayColumn: lookup?.displayColumn || null,
-            displayRow: lookup?.displayRow || null,
-          },
-          rawMetaKeys: Object.keys(metaObj || {})
-        });
+        // console.log('[MANUAL-SAVE][TABLE META] ➡️ PUT /nodes/:nodeId/tables/:tableId', {
+        //   tableId,
+        //   name,
+        //   description,
+        //   type,
+        //   lookupSelectors: {
+        //     columnFieldId: selectors.columnFieldId || null,
+        //     rowFieldId: selectors.rowFieldId || null,
+        //     comparisonColumn: lookup?.comparisonColumn || null,
+        //     displayColumn: lookup?.displayColumn || null,
+        //     displayRow: lookup?.displayRow || null,
+        //   },
+        //   rawMetaKeys: Object.keys(metaObj || {})
+        // });
       } catch {
-        console.log('[MANUAL-SAVE][TABLE META] ⚠️ Impossible de parser meta pour logging, envoi brut');
-        console.log('[MANUAL-SAVE][TABLE META] RAW:', typeof meta === 'string' ? meta : JSON.stringify(meta));
+        // console.log('[MANUAL-SAVE][TABLE META] ⚠️ Impossible de parser meta pour logging, envoi brut');
+        // console.log('[MANUAL-SAVE][TABLE META] RAW:', typeof meta === 'string' ? meta : JSON.stringify(meta));
       }
       
       const table = await prisma.treeBranchLeafNodeTable.findUnique({
@@ -1020,18 +1020,18 @@ router.put('/nodes/:nodeId/tables/:tableId', async (req, res) => {
         const persistedMeta = typeof updatedTable.meta === 'string' ? JSON.parse(updatedTable.meta) : updatedTable.meta;
         const lookup = (persistedMeta as any)?.lookup || {};
         const selectors = lookup?.selectors || {};
-        console.log('[MANUAL-SAVE][TABLE META] ✅ Persisté', {
-          tableId,
-          lookupSelectors: {
-            columnFieldId: selectors.columnFieldId || null,
-            rowFieldId: selectors.rowFieldId || null,
-            comparisonColumn: lookup?.comparisonColumn || null,
-            displayColumn: lookup?.displayColumn || null,
-            displayRow: lookup?.displayRow || null,
-          }
-        });
+        // console.log('[MANUAL-SAVE][TABLE META] ✅ Persisté', {
+        //   tableId,
+        //   lookupSelectors: {
+        //     columnFieldId: selectors.columnFieldId || null,
+        //     rowFieldId: selectors.rowFieldId || null,
+        //     comparisonColumn: lookup?.comparisonColumn || null,
+        //     displayColumn: lookup?.displayColumn || null,
+        //     displayRow: lookup?.displayRow || null,
+        //   }
+        // });
       } catch {
-        console.log('[MANUAL-SAVE][TABLE META] ⚠️ Persisté (meta non parsé)');
+        // console.log('[MANUAL-SAVE][TABLE META] ⚠️ Persisté (meta non parsé)');
       }
 
       return res.json(updatedTable);
@@ -1181,7 +1181,7 @@ router.get('/nodes/:nodeId/tables', async (req, res) => {
     // 🔧 FIX: AUSSI charger la table ACTIVE pointée par table_activeId
     // Cas typique: nœud LOOKUP qui référence une table via table_activeId
     let activeTable = null;
-    console.log(`[GET /nodes/:nodeId/tables] nodeId: ${nodeId}, table_activeId: ${node.table_activeId}`);
+    // console.log(`[GET /nodes/:nodeId/tables] nodeId: ${nodeId}, table_activeId: ${node.table_activeId}`);
     
     if (node.table_activeId) {
       activeTable = await prisma.treeBranchLeafNodeTable.findUnique({
@@ -1326,7 +1326,7 @@ router.get('/nodes/:nodeId/tables', async (req, res) => {
       updatedAt: table.updatedAt,
     }));
 
-    console.log(`[GET /nodes/:nodeId/tables] Returning ${formattedTables.length} tables. First table columns: ${formattedTables[0]?.columns?.slice(0, 3).join(', ')}`);
+    // console.log(`[GET /nodes/:nodeId/tables] Returning ${formattedTables.length} tables. First table columns: ${formattedTables[0]?.columns?.slice(0, 3).join(', ')}`);
     res.json(formattedTables);
 
   } catch (error) {

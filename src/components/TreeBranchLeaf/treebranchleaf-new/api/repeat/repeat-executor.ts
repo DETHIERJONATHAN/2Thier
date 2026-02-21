@@ -290,9 +290,6 @@ export async function runRepeatExecution(
       };
 
       // 🎯🎯🎯 FIX CRITIQUE: Mettre à jour AUSSI le subType depuis l'original
-      console.log('🔴🔴🔴 [AVANT UPDATE] newRootId:', newRootId);
-      console.log('🔴🔴🔴 [AVANT UPDATE] subType à appliquer:', template.subType);
-      console.log('🔴🔴🔴 [AVANT UPDATE] triggers suffixés:', rootSuffixedTriggers);
       
       const updateResult = await prisma.treeBranchLeafNode.update({
         where: { id: newRootId },
@@ -302,7 +299,6 @@ export async function runRepeatExecution(
         }
       });
       
-      console.log('🟢🟢🟢 [APRÈS UPDATE] Résultat:', updateResult.id, 'subType:', updateResult.subType);
       
       // 🎯 DEBUG FRONTEND: Collecter les infos pour affichage dans console navigateur
       triggersFixDebug.push({
@@ -605,16 +601,51 @@ export async function runRepeatExecution(
       // 0. CORRECTION COMPLÃƒË†TE DE TOUTES LES DUPLICATIONS  
       const completeDuplicationReport = await fixAllCompleteDuplications(prisma, repeaterNodeId);
       
-      // 0.1. DUPLICATION COMPLÃƒË†TE DES TABLES ET LOOKUPS
-      for (const nodeId of duplicatedNodeIds) {
-        const originalNodeId = originalNodeIdByCopyId.get(nodeId);
-        if (!originalNodeId) continue;
-        const suffixToken = deriveCopySuffixToken(originalNodeId, nodeId);
-        if (!suffixToken) continue;
-        await tableLookupDuplicationService.duplicateTableLookupSystem(prisma, originalNodeId, {
-          copiedNodeId: nodeId,
-          suffixToken
-        });
+      // 0.1. DUPLICATION DES TABLES ET LOOKUPS (parallélisée + pré-filtrée)
+      {
+        // Pré-calculer les paires (originalNodeId, copiedNodeId, suffixToken)
+        const dupPairs: Array<{ originalNodeId: string; copiedNodeId: string; suffixToken: string }> = [];
+        for (const nodeId of duplicatedNodeIds) {
+          const originalNodeId = originalNodeIdByCopyId.get(nodeId);
+          if (!originalNodeId) continue;
+          const suffixToken = deriveCopySuffixToken(originalNodeId, nodeId);
+          if (!suffixToken) continue;
+          dupPairs.push({ originalNodeId, copiedNodeId: nodeId, suffixToken });
+        }
+
+        if (dupPairs.length > 0) {
+          // Pré-filtrer: ne garder que les nœuds qui ont réellement des SelectConfigs ou table_activeId
+          const originalIds = [...new Set(dupPairs.map(p => p.originalNodeId))];
+          const [selectConfigCounts, nodesWithTables] = await Promise.all([
+            prisma.treeBranchLeafSelectConfig.groupBy({
+              by: ['nodeId'],
+              where: { nodeId: { in: originalIds } },
+              _count: true
+            }),
+            prisma.treeBranchLeafNode.findMany({
+              where: { id: { in: originalIds }, table_activeId: { not: null } },
+              select: { id: true }
+            })
+          ]);
+          const hasLookupSet = new Set([
+            ...selectConfigCounts.map(sc => sc.nodeId),
+            ...nodesWithTables.map(n => n.id)
+          ]);
+
+          const lookupPairs = dupPairs.filter(p => hasLookupSet.has(p.originalNodeId));
+
+          // Paralléliser par chunks de 5 pour éviter de surcharger la DB
+          const CHUNK_SIZE = 5;
+          for (let i = 0; i < lookupPairs.length; i += CHUNK_SIZE) {
+            const chunk = lookupPairs.slice(i, i + CHUNK_SIZE);
+            await Promise.all(chunk.map(p =>
+              tableLookupDuplicationService.duplicateTableLookupSystem(prisma, p.originalNodeId, {
+                copiedNodeId: p.copiedNodeId,
+                suffixToken: p.suffixToken
+              })
+            ));
+          }
+        }
       }
 
       // Ã°Å¸Â§Â­ NOUVEAU: rÃƒÂ©aligner les parents des copies quand la section dupliquÃƒÂ©e existe dÃƒÂ©jÃƒÂ 

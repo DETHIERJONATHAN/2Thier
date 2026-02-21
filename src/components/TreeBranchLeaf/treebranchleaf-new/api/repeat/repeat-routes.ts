@@ -133,7 +133,7 @@ export default function createRepeatRouter(prisma: PrismaClient) {
       const { repeaterId } = req.params;
       const { targetCount } = (req.body || {}) as { targetCount?: number };
       
-      console.log(`⚡ [PRELOAD] Démarrage pour repeater ${repeaterId}, cible: ${targetCount}`);
+      // console.log(`⚡ [PRELOAD] Démarrage pour repeater ${repeaterId}, cible: ${targetCount}`);
       
       if (typeof targetCount !== 'number' || targetCount < 1) {
         return res.status(400).json({ error: 'targetCount doit être un nombre >= 1' });
@@ -167,7 +167,7 @@ export default function createRepeatRouter(prisma: PrismaClient) {
         return res.status(400).json({ error: 'Aucun templateNodeIds configuré pour ce repeater' });
       }
       
-      console.log(`⚡ [PRELOAD] Templates: ${templateNodeIds.join(', ')}`);
+      // console.log(`⚡ [PRELOAD] Templates: ${templateNodeIds.join(', ')}`);
       
       // 3. Trouver les copies existantes (IDs suffixés comme templateId-1, templateId-2...)
       // On utilise la même logique que suffix-utils.ts
@@ -200,13 +200,13 @@ export default function createRepeatRouter(prisma: PrismaClient) {
       const existingCopiesCount = existingSuffixes.length;
       const totalCurrentInstances = existingCopiesCount + 1; // +1 pour l'original
       
-      console.log(`⚡ [PRELOAD] Suffixes existants: [${existingSuffixes.join(', ')}] (total: ${totalCurrentInstances})`);
+      // console.log(`⚡ [PRELOAD] Suffixes existants: [${existingSuffixes.join(', ')}] (total: ${totalCurrentInstances})`);
       
       // 4. Calculer les actions nécessaires
       const copiesToCreate = Math.max(0, targetCount - totalCurrentInstances);
       const copiesToDelete = Math.max(0, totalCurrentInstances - targetCount);
       
-      console.log(`⚡ [PRELOAD] À créer: ${copiesToCreate}, à supprimer: ${copiesToDelete}`);
+      // console.log(`⚡ [PRELOAD] À créer: ${copiesToCreate}, à supprimer: ${copiesToDelete}`);
       
       const createdNodes: string[] = [];
       const deletedNodes: string[] = [];
@@ -216,7 +216,7 @@ export default function createRepeatRouter(prisma: PrismaClient) {
         // Prendre les N suffixes les plus élevés pour les supprimer
         const suffixesToDelete = existingSuffixes.slice(-copiesToDelete);
         
-        console.log(`🗑️ [PRELOAD] Suppression des suffixes: [${suffixesToDelete.join(', ')}]`);
+        // console.log(`🗑️ [PRELOAD] Suppression des suffixes: [${suffixesToDelete.join(', ')}]`);
         
         for (const suffix of suffixesToDelete) {
           // Trouver TOUS les nœuds avec ce suffixe (templates + display nodes + autres)
@@ -228,11 +228,11 @@ export default function createRepeatRouter(prisma: PrismaClient) {
             select: { id: true }
           });
           
-          console.log(`🗑️ [PRELOAD] Suffixe -${suffix}: ${nodesToDeleteForSuffix.length} nœuds à supprimer`);
+          // console.log(`🗑️ [PRELOAD] Suffixe -${suffix}: ${nodesToDeleteForSuffix.length} nœuds à supprimer`);
           
           for (const node of nodesToDeleteForSuffix) {
             try {
-              console.log(`🗑️ [PRELOAD] Suppression ${node.id}...`);
+              // console.log(`🗑️ [PRELOAD] Suppression ${node.id}...`);
               await deleteNodeWithCascade(prisma, repeaterNode.treeId, node.id);
               deletedNodes.push(node.id);
             } catch (deleteError) {
@@ -251,7 +251,7 @@ export default function createRepeatRouter(prisma: PrismaClient) {
             where: { nodeId: { in: deletedNodes } }
           });
           if (deletedSD.count > 0) {
-            console.log(`🧹 [PRELOAD] ${deletedSD.count} entrée(s) SubmissionData orpheline(s) supprimée(s)`);
+            // console.log(`🧹 [PRELOAD] ${deletedSD.count} entrée(s) SubmissionData orpheline(s) supprimée(s)`);
           }
         } catch (sdErr) {
           console.warn(`⚠️ [PRELOAD] Erreur nettoyage SubmissionData:`, (sdErr as Error).message);
@@ -279,7 +279,7 @@ export default function createRepeatRouter(prisma: PrismaClient) {
       // 6. CRÉATION des copies manquantes
       if (copiesToCreate > 0) {
         for (let i = 0; i < copiesToCreate; i++) {
-          console.log(`⚡ [PRELOAD] Création copie ${i + 1}/${copiesToCreate}...`);
+          // console.log(`⚡ [PRELOAD] Création copie ${i + 1}/${copiesToCreate}...`);
           
           try {
             const executionPlan = await executeRepeatDuplication(prisma, repeaterId, {});
@@ -292,7 +292,7 @@ export default function createRepeatRouter(prisma: PrismaClient) {
             
             if (executionSummary.duplicated?.newId) {
               createdNodes.push(executionSummary.duplicated.newId);
-              console.log(`✅ [PRELOAD] Copie créée: ${executionSummary.duplicated.newId}`);
+              // console.log(`✅ [PRELOAD] Copie créée: ${executionSummary.duplicated.newId}`);
             }
           } catch (execError) {
             console.error(`❌ [PRELOAD] Erreur création copie ${i + 1}:`, execError);
@@ -302,7 +302,7 @@ export default function createRepeatRouter(prisma: PrismaClient) {
       
       const finalTotal = totalCurrentInstances + createdNodes.length - (copiesToDelete > 0 ? copiesToDelete : 0);
       
-      console.log(`✅ [PRELOAD] Terminé: ${createdNodes.length} créées, ${deletedNodes.length} supprimées, total: ${finalTotal}`);
+      // console.log(`✅ [PRELOAD] Terminé: ${createdNodes.length} créées, ${deletedNodes.length} supprimées, total: ${finalTotal}`);
       
       res.json({
         success: true,

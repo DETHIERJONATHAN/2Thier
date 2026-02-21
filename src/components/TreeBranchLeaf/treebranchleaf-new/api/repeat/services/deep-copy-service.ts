@@ -655,10 +655,6 @@ export async function deepCopyNodeInternal(
           }
           return suffixedId;
         });
-        console.log(`🎯 [DEEP-COPY] Suffixe triggers pour ${oldNode.label} (${newId}):`, {
-          oldTriggers,
-          newTriggers: newMeta.triggerNodeIds
-        });
       }
       
       return newMeta as Prisma.InputJsonValue;
@@ -825,7 +821,6 @@ export async function deepCopyNodeInternal(
     // "Longueur" et "Hauteur", on doit créer "Longueur-1" et "Hauteur-1" avec les mêmes propriétés
     if (oldNode.aiMeasure_keys && Array.isArray(oldNode.aiMeasure_keys) && (oldNode.aiMeasure_keys as any[]).length > 0) {
       try {
-        console.log(`[DEEP-COPY] 📐 Duplication des champs AI Measure pour ${newId}`);
         const mappings = oldNode.aiMeasure_keys as Array<{ key: string; targetRef: string }>;
         
         for (const mapping of mappings) {
@@ -850,7 +845,6 @@ export async function deepCopyNodeInternal(
           });
           
           if (existingDuplicatedField) {
-            console.log(`[DEEP-COPY] ✓ Champ cible ${duplicatedTargetId} existe déjà`);
             continue;
           }
           
@@ -913,7 +907,6 @@ export async function deepCopyNodeInternal(
           };
           
           await prisma.treeBranchLeafNode.create({ data: duplicatedFieldData });
-          console.log(`[DEEP-COPY] ✅ Champ AI Measure créé: ${duplicatedTargetId} (${mapping.key})`);
         }
       } catch (aiMeasureError) {
         console.error(`[DEEP-COPY] ❌ Erreur duplication champs AI Measure:`, aiMeasureError);
@@ -1248,9 +1241,6 @@ export async function deepCopyNodeInternal(
 
       if (!nodeExists && tableOwnerNodeId !== newId) {
         // C'est un node en linkedTableIds qui n'a pas été copié. On crée un stub.
-        console.log(
-          `[DEEP-COPY] Creating stub node "${tableOwnerNodeId}" for linked table owner`
-        );
         const originalOwnerNode = await prisma.treeBranchLeafNode.findUnique({
           where: { id: t.nodeId },
           select: { 
@@ -1276,7 +1266,6 @@ export async function deepCopyNodeInternal(
               }
             });
             nodeExists = createdNode;
-            console.log(`[DEEP-COPY] ✅ Stub node created: ${tableOwnerNodeId}`);
           } catch (err) {
             console.error(`[DEEP-COPY] ❌ Failed to create stub node: ${err.message}`);
             throw err; // Propager l'erreur pour arrêter le processus
@@ -1345,7 +1334,6 @@ export async function deepCopyNodeInternal(
                 } else if (typeof metaObj.lookup.displayColumn === 'string' && !metaObj.lookup.displayColumn.endsWith(`-${copySuffixNum}`)) {
                   metaObj.lookup.displayColumn = `${metaObj.lookup.displayColumn}-${copySuffixNum}`;
                 }
-                console.log(`🔧 [DEEP-COPY] displayColumn: ${originalDisplay} → ${JSON.stringify(metaObj.lookup.displayColumn)}`);
               }
               
               // Suffixer comparisonColumn
@@ -1476,16 +1464,13 @@ export async function deepCopyNodeInternal(
           // La table est copiée par copyRepeaterCapacityTable() AVANT ce code, donc tableIdMap est fiable.
           const tableWasCopied = tableIdMap.has(originalSelectConfig.tableReference);
           
-          console.log(`[DEEP-COPY SelectConfig] nodeId=${oldId} → tableReference=${originalSelectConfig.tableReference}, tableWasCopied=${tableWasCopied}, tableIdMap.size=${tableIdMap.size}`);
           
           if (tableWasCopied) {
             // Table copiée → utiliser la référence suffixée
             newTableReference = tableIdMap.get(originalSelectConfig.tableReference)!;
-            console.log(`[DEEP-COPY SelectConfig] ✅ Table copiée, utilisation de newTableReference=${newTableReference}`);
           } else {
             // Table partagée (lookup externe) → garder l'original
             newTableReference = originalSelectConfig.tableReference;
-            console.log(`[DEEP-COPY SelectConfig] ⚠️ Table partagée, conservation de tableReference original`);
           }
         }
 
@@ -1556,7 +1541,6 @@ export async function deepCopyNodeInternal(
                   });
                 }
               } else {
-                console.log(`[DEEP-COPY SelectConfig] ✅ displayColumn déjà rempli, pas de remplacement`);
               }
             }
           } catch (initDisplayErr) {

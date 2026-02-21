@@ -398,12 +398,9 @@ export async function copyVariableWithCapacities(
                 // Ajouter au map
                 tableIdMap.set(parsed.id, tableResult.newTableId);
                 newSourceRef = `${parsed.prefix}${tableResult.newTableId}`;
-                console.log(`✅ Table copiée et mappée: ${parsed.id} → ${tableResult.newTableId}`);
-                console.log(`   📋 ${tableResult.columnsCount} colonnes, ${tableResult.rowsCount} lignes, ${tableResult.cellsCount} cellules`);
                 emitCapacityEvent(tableResult.newTableId, 'table');
               } else {
                 newSourceRef = applySuffixOnceToSourceRef(originalVar.sourceRef);
-                console.log(`⚠️ Échec copie table, suffixe appliqué: ${newSourceRef}`);
               }
             } catch (e) {
               console.error(`❌ Exception copie table:`, (e as Error).message);
@@ -746,13 +743,6 @@ export async function copyVariableWithCapacities(
           const inheritedMetadata = cloneJson(originalDisplayNode?.metadata);
 
           // 🎯 DEBUG: Afficher les metadata originaux pour tracer les triggerNodeIds
-          console.log('🟣🟣🟣 [VARIABLE-COPY-ENGINE] Metadata originaux:', {
-            ownerMetadata: JSON.stringify(ownerMetadata),
-            inheritedMetadata: JSON.stringify(inheritedMetadata),
-            originalVarId: originalVar.id,
-            ownerSubType: originalOwnerNode.subType,
-            inheritedSubType: originalDisplayNode?.subType
-          });
 
           // 🎯 FIX: Extraire les triggerNodeIds AVANT de créer le metadata
           // On les supprime du spread pour les traiter séparément
@@ -879,13 +869,6 @@ export async function copyVariableWithCapacities(
           // On utilise _inheritedTriggers et _ownerTriggers (extraits lors de la création du metadata)
           const originalTriggers = (_inheritedTriggers ?? _ownerTriggers) as string[] | undefined;
           
-          console.log('🟢🟢🟢 [VARIABLE-COPY-ENGINE] Traitement des triggers:', {
-            _inheritedTriggers,
-            _ownerTriggers,
-            originalTriggers,
-            nodeIdMapSize: nodeIdMap.size,
-            nodeIdMapEntries: Array.from(nodeIdMap.entries()).slice(0, 10), // Premiers 10 mappings
-          });
           
           let suffixedTriggerNodeIds: string[] | null = null;
           if (Array.isArray(originalTriggers) && originalTriggers.length > 0) {
@@ -896,12 +879,6 @@ export async function copyVariableWithCapacities(
               // Chercher dans nodeIdMap si une copie existe
               const mappedId = nodeIdMap.get(cleanId);
               
-              console.log('🔵🔵🔵 [VARIABLE-COPY-ENGINE] Mapping trigger:', {
-                original: triggerId,
-                cleanId,
-                mappedId,
-                suffix,
-              });
               
               if (mappedId) {
                 // Restaurer le format original
@@ -915,18 +892,7 @@ export async function copyVariableWithCapacities(
               if (triggerId.startsWith('{')) return `{${suffixedId}}`;
               return suffixedId;
             });
-            console.log('🟢🟢🟢 [VARIABLE-COPY-ENGINE] Triggers suffixés FINAL:', {
-              originalTriggers,
-              suffixedTriggerNodeIds,
-              displayNodeId,
-              inheritedSubType
-            });
           } else {
-            console.log('⚠️⚠️⚠️ [VARIABLE-COPY-ENGINE] PAS DE TRIGGERS TROUVÉS:', {
-              originalTriggers,
-              type: typeof originalTriggers,
-              isArray: Array.isArray(originalTriggers),
-            });
           }
           
           // 🎯 Ajouter les triggerNodeIds suffixés au metadata
@@ -1788,7 +1754,6 @@ export async function createDisplayNodeForExistingVariable(
   // 
   // ═══════════════════════════════════════════════════════════════════════════════════════
   const displayParentId: string | null = owner.parentId;
-  console.log(`📌 [createDisplayNodeForExistingVariable] RÈGLE: Copie dans le MÊME parent que l'original: ${displayParentId}`);
 
   const now = new Date();
   

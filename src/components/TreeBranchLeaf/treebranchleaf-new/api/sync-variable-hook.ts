@@ -132,8 +132,8 @@ export async function syncVariableSourceRefs() {
       )) {
         // La DB a une capacite definie - c'est la verite
         // On ne synchronise PAS depuis data_instances qui peut etre obsolete
-        console.log(`[SYNC HOOK] 🛡️ PROTECTION: Variable ${node.TreeBranchLeafNodeVariable.id} ` +
-          `conserve sa capacite DB "${dbSourceRef}" (ignore JSON "${jsonSourceRef}")`);
+        // console.log(`[SYNC HOOK] 🛡️ PROTECTION: Variable ${node.TreeBranchLeafNodeVariable.id} ` +
+        //   `conserve sa capacite DB "${dbSourceRef}" (ignore JSON "${jsonSourceRef})"`);
         skipCount++;
         continue;
       }
@@ -166,16 +166,16 @@ export async function syncVariableSourceRefs() {
     }
 
     if (syncCount > 0) {
-      console.log(`[SYNC HOOK] ✅ ${syncCount} variable(s) synchronisee(s)`);
+      // console.log(`[SYNC HOOK] ✅ ${syncCount} variable(s) synchronisee(s)`);
     }
     if (skipCount > 0) {
-      console.log(`[SYNC HOOK] ⏭️ ${skipCount} variable(s) ignoree(s) (protection @table/@value)`);
+      // console.log(`[SYNC HOOK] ⏭️ ${skipCount} variable(s) ignoree(s) (protection @table/@value)`);
     }
     if (blockedCount > 0) {
-      console.log(`[SYNC HOOK] 🛡️ ${blockedCount} synchronisation(s) BLOQUEE(s) - references inexistantes`);
+      // console.log(`[SYNC HOOK] 🛡️ ${blockedCount} synchronisation(s) BLOQUEE(s) - references inexistantes`);
     }
     if (syncCount === 0 && skipCount === 0 && blockedCount === 0) {
-      console.log(`[SYNC HOOK] ✅ Aucune synchronisation necessaire`);
+      // console.log(`[SYNC HOOK] ✅ Aucune synchronisation necessaire`);
     }
 
   } catch (error) {
@@ -241,13 +241,13 @@ export async function cascadeSyncVariableTableRef(
     });
 
     if (variablesToUpdate.length === 0) {
-      console.log(`📋 [CASCADE SYNC] Aucune variable a mettre a jour pour ${baseNodeId}`);
+      // console.log(`📋 [CASCADE SYNC] Aucune variable a mettre a jour pour ${baseNodeId}`);
       return 0;
     }
 
-    console.log(`🔄 [CASCADE SYNC] Mise a jour de ${variablesToUpdate.length} variable(s):`);
-    console.log(`   Ancien: ${oldSourceRef}`);
-    console.log(`   Nouveau: ${newSourceRef}`);
+    // console.log(`🔄 [CASCADE SYNC] Mise a jour de ${variablesToUpdate.length} variable(s):`);
+    // console.log(`   Ancien: ${oldSourceRef}`);
+    // console.log(`   Nouveau: ${newSourceRef}`);
 
     // 2️⃣ Mettre a jour toutes les variables
     const updateResult = await prisma.treeBranchLeafNodeVariable.updateMany({
@@ -260,11 +260,11 @@ export async function cascadeSyncVariableTableRef(
       }
     });
 
-    console.log(`✅ [CASCADE SYNC] ${updateResult.count} variable(s) mise(s) a jour`);
+    // console.log(`✅ [CASCADE SYNC] ${updateResult.count} variable(s) mise(s) a jour`);
     
     // 3️⃣ Log detaille des variables mises a jour
     for (const v of variablesToUpdate) {
-      console.log(`   - ${v.id} (node: ${v.nodeId})`);
+      // console.log(`   - ${v.id} (node: ${v.nodeId})`);
     }
 
     return updateResult.count;
@@ -311,7 +311,7 @@ export async function cascadeSyncVariableFormulaRef(
       return 0;
     }
 
-    console.log(`🔄 [CASCADE SYNC FORMULA] Mise a jour de ${variablesToUpdate.length} variable(s)`);
+    // console.log(`🔄 [CASCADE SYNC FORMULA] Mise a jour de ${variablesToUpdate.length} variable(s)`);
 
     const updateResult = await prisma.treeBranchLeafNodeVariable.updateMany({
       where: { id: { in: variablesToUpdate.map(v => v.id) } },

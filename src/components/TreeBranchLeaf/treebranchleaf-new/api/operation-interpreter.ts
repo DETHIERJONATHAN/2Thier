@@ -1071,7 +1071,7 @@ async function interpretCondition(
           }
         }
         
-        console.log(`🔀 [FIRST-MATCH RESULT] "${condition.name}" → branche "${fmBranch.label || fmBranch.id}" matchée → result="${fmResult.result}"`);
+        // console.log(`🔀 [FIRST-MATCH RESULT] "${condition.name}" → branche "${fmBranch.label || fmBranch.id}" matchée → result="${fmResult.result}"`);
         return {
           result: fmResult.result,
           humanText: `Condition first-match "${condition.name}": branche "${fmBranch.label}" → ${fmResult.humanText}`,
@@ -1097,7 +1097,7 @@ async function interpretCondition(
       }
     }
     
-    console.log(`🔀 [FIRST-MATCH FALLBACK] "${condition.name}" → aucune branche matchée → fallback="${fmFallbackResult.result}"`);
+    // console.log(`🔀 [FIRST-MATCH FALLBACK] "${condition.name}" → aucune branche matchée → fallback="${fmFallbackResult.result}"`);
     return {
       result: fmFallbackResult.result,
       humanText: `Condition first-match "${condition.name}": fallback → ${fmFallbackResult.humanText}`,

@@ -19,12 +19,12 @@ import { evaluateVariableOperation, interpretFormula, interpretCondition } from 
 import { db } from '../../../../lib/database';
 
 const router = express.Router();
-console.log('🧠 [TBL INTELLIGENCE] Initialisation du routeur tbl-intelligence-routes (avec operation-interpreter)');
+// console.log('🧠 [TBL INTELLIGENCE] Initialisation du routeur tbl-intelligence-routes (avec operation-interpreter)');
 const evaluationEngine = new TBLEvaluationEngine();
 
 // Petit helper interne pour log
 function logRouteHit(route: string) {
-  console.log(`🛰️  [TBL INTELLIGENCE] Hit ${route} @ ${new Date().toISOString()}`);
+  // console.log(`🛰️  [TBL INTELLIGENCE] Hit ${route} @ ${new Date().toISOString()}`);
 }
 
 /**
@@ -125,7 +125,7 @@ router.post('/evaluate', async (req, res) => {
             }
           }
           
-          console.log(`🧮 [TBL EVALUATE] Évaluation directe formule: ${formula.name} (${formula.id})`);
+          // console.log(`🧮 [TBL EVALUATE] Évaluation directe formule: ${formula.name} (${formula.id})`);
           
           const valuesCache = new Map();
           const labelMap = new Map<string, string>();
@@ -314,7 +314,7 @@ async function resolveSingleEvaluation(prisma: MinimalPrisma, elementId: string,
           }
         }
         
-        console.log(`🧮 [TBL EVALUATE BATCH] Évaluation directe formule: ${formula.name} (${formula.id})`);
+        // console.log(`🧮 [TBL EVALUATE BATCH] Évaluation directe formule: ${formula.name} (${formula.id})`);
         
         const valuesCache = new Map();
         const labelMap = new Map<string, string>();
@@ -440,8 +440,8 @@ async function resolveSingleEvaluation(prisma: MinimalPrisma, elementId: string,
         }
       }
       
-      console.log(`🧮 [TBL EVALUATE] Utilisation de operation-interpreter pour formule: ${formulaId}`);
-      console.log(`   📊 ValueMap: ${valueMap.size} entrées`);
+      // console.log(`🧮 [TBL EVALUATE] Utilisation de operation-interpreter pour formule: ${formulaId}`);
+      // console.log(`   📊 ValueMap: ${valueMap.size} entrées`);
       
       // Utiliser interpretFormula d'operation-interpreter.ts
       const valuesCache = new Map();
@@ -528,12 +528,12 @@ async function resolveSingleEvaluation(prisma: MinimalPrisma, elementId: string,
         if (nodeId) {
           valueMap.set(nodeId, value);
           valueMap.set(`@value.${nodeId}`, value);
-          console.log(`   🔗 Mapping label "${key}" → nodeId "${nodeId}" = ${value}`);
+          // console.log(`   🔗 Mapping label "${key}" → nodeId "${nodeId}" = ${value}`);
         }
       }
       
-      console.log(`⚖️ [TBL EVALUATE] Utilisation de operation-interpreter pour condition: ${conditionId}`);
-      console.log(`   📊 ValueMap: ${valueMap.size} entrées`);
+      // console.log(`⚖️ [TBL EVALUATE] Utilisation de operation-interpreter pour condition: ${conditionId}`);
+      // console.log(`   📊 ValueMap: ${valueMap.size} entrées`);
       
       // Utiliser interpretCondition d'operation-interpreter.ts
       const valuesCache = new Map();
@@ -620,7 +620,7 @@ router.post('/condition', async (req, res) => {
       });
     }
 
-    console.log('🔧 [TBL CONDITION] Évaluation avec CapacityCalculator:', elementId);
+    // console.log('🔧 [TBL CONDITION] Évaluation avec CapacityCalculator:', elementId);
     
     // Utiliser le CapacityCalculator corrigé
     const calculator = new CapacityCalculator();
@@ -633,7 +633,7 @@ router.post('/condition', async (req, res) => {
 
     const result = await calculator.evaluateCondition(elementId, context);
     
-    console.log('✅ [TBL CONDITION] Résultat CapacityCalculator:', result);
+    // console.log('✅ [TBL CONDITION] Résultat CapacityCalculator:', result);
     
     return res.json({
       success: true,
@@ -669,7 +669,7 @@ router.post('/evaluate/condition/:tblCode', async (req, res) => {
     });
   }
 
-  console.log('🔧 [TBL EVALUATE CONDITION] Évaluation avec operation-interpreter:', tblCode);
+  // console.log('🔧 [TBL EVALUATE CONDITION] Évaluation avec operation-interpreter:', tblCode);
   
   // ✨ Utiliser le système unifié operation-interpreter
   // 🎯 Utilisation du singleton db centralisé
@@ -696,7 +696,7 @@ router.post('/evaluate/condition/:tblCode', async (req, res) => {
       prisma
     );
     
-    console.log('✅ [TBL EVALUATE CONDITION] Résultat operation-interpreter:', result);
+    // console.log('✅ [TBL EVALUATE CONDITION] Résultat operation-interpreter:', result);
     
     return res.json({
       success: true,
@@ -752,7 +752,7 @@ router.post('/update-database-results', async (req, res) => {
   try {
     const { submissionId = 'df833cac-0b44-4b2b-bb1c-de3878f00182' } = req.body || {};
     
-    console.log('🔄 [TBL UPDATE] Début mise à jour base de données avec CapacityCalculator');
+    // console.log('🔄 [TBL UPDATE] Début mise à jour base de données avec CapacityCalculator');
     
     // 🎯 Utilisation du singleton db centralisé
     const prisma = db;
@@ -765,7 +765,7 @@ router.post('/update-database-results', async (req, res) => {
       }
     });
     
-    console.log(`🔄 [TBL UPDATE] Trouvé ${submissionData.length} données de conditions à mettre à jour`);
+    // console.log(`🔄 [TBL UPDATE] Trouvé ${submissionData.length} données de conditions à mettre à jour`);
     
     const calculator = new CapacityCalculator();
     const context = {
@@ -781,7 +781,7 @@ router.post('/update-database-results', async (req, res) => {
       try {
         const conditionId = data.sourceRef;
         if (!conditionId) {
-          console.log(`⚠️ [TBL UPDATE] Pas de sourceRef pour ${data.id}, ignoré`);
+          // console.log(`⚠️ [TBL UPDATE] Pas de sourceRef pour ${data.id}, ignoré`);
           continue;
         }
         
@@ -815,7 +815,7 @@ router.post('/update-database-results', async (req, res) => {
         });
         
         updated++;
-        console.log(`✅ [TBL UPDATE] Condition ${conditionId} mise à jour:`, newOperationResult);
+        // console.log(`✅ [TBL UPDATE] Condition ${conditionId} mise à jour:`, newOperationResult);
         
       } catch (error) {
         errors.push({
@@ -907,7 +907,7 @@ router.post('/update-database-with-intelligent-translations', async (req, res) =
   try {
     const { submissionId = 'df833cac-0b44-4b2b-bb1c-de3878f00182' } = req.body || {};
     
-    console.log('🧠 [TBL INTELLIGENT UPDATE] Début mise à jour avec traductions intelligentes');
+    // console.log('🧠 [TBL INTELLIGENT UPDATE] Début mise à jour avec traductions intelligentes');
     
     // 🎯 Utilisation du singleton db centralisé
     const prisma = db;
@@ -943,14 +943,14 @@ router.post('/update-database-with-intelligent-translations', async (req, res) =
       }
     });
     
-    console.log(`🧠 [TBL INTELLIGENT UPDATE] Trouvé ${submissionData.length} données à traduire`);
+    // console.log(`🧠 [TBL INTELLIGENT UPDATE] Trouvé ${submissionData.length} données à traduire`);
     
     let updated = 0;
     const errors = [];
     
     for (const data of submissionData) {
       try {
-        console.log(`🔧 [TBL INTELLIGENT] Traduction: ${data.TreeBranchLeafNode?.label || 'Sans nom'} (${data.operationSource})`);
+        // console.log(`🔧 [TBL INTELLIGENT] Traduction: ${data.TreeBranchLeafNode?.label || 'Sans nom'} (${data.operationSource})`);
         
         // Générer la traduction intelligente
         const intelligentResult = await translator.translateCapacity(
@@ -960,7 +960,7 @@ router.post('/update-database-with-intelligent-translations', async (req, res) =
           data.submissionId
         );
         
-        console.log(`✅ [TBL INTELLIGENT] Traduction générée: ${intelligentResult.substring(0, 100)}...`);
+        // console.log(`✅ [TBL INTELLIGENT] Traduction générée: ${intelligentResult.substring(0, 100)}...`);
         
         // Mettre à jour en base
         await prisma.treeBranchLeafSubmissionData.update({
@@ -972,7 +972,7 @@ router.post('/update-database-with-intelligent-translations', async (req, res) =
         });
         
         updated++;
-        console.log(`✅ [TBL INTELLIGENT] Mis à jour: ${data.id}`);
+        // console.log(`✅ [TBL INTELLIGENT] Mis à jour: ${data.id}`);
         
       } catch (error) {
         errors.push({
@@ -1080,7 +1080,7 @@ router.get('/nodes/:nodeId', async (req, res) => {
   try {
     const { nodeId } = req.params;
     
-    console.log('🔄 [TBL NODES] Récupération node via TBL:', nodeId);
+    // console.log('🔄 [TBL NODES] Récupération node via TBL:', nodeId);
     
     // 🎯 Utilisation du singleton db centralisé
     const prisma = db;
@@ -1115,7 +1115,7 @@ router.get('/reusables/conditions', async (req, res) => {
   logRouteHit('GET /api/tbl/reusables/conditions');
   
   try {
-    console.log('🔄 [TBL CONDITIONS] Récupération conditions via TBL');
+    // console.log('🔄 [TBL CONDITIONS] Récupération conditions via TBL');
     
     // 🎯 Utilisation du singleton db centralisé
     const prisma = db;
@@ -1152,7 +1152,7 @@ router.get('/reusables/formulas', async (req, res) => {
   logRouteHit('GET /api/tbl/reusables/formulas');
   
   try {
-    console.log('🔄 [TBL FORMULAS] Récupération formules via TBL');
+    // console.log('🔄 [TBL FORMULAS] Récupération formules via TBL');
     
     // 🎯 Utilisation du singleton db centralisé
     const prisma = db;

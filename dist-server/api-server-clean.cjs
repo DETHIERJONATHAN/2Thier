@@ -5110,7 +5110,6 @@ async function interpretCondition(conditionId, submissionId, prisma51, valuesCac
             );
           }
         }
-        console.log(`\u{1F500} [FIRST-MATCH RESULT] "${condition.name}" \u2192 branche "${fmBranch.label || fmBranch.id}" match\xE9e \u2192 result="${fmResult.result}"`);
         return {
           result: fmResult.result,
           humanText: `Condition first-match "${condition.name}": branche "${fmBranch.label}" \u2192 ${fmResult.humanText}`,
@@ -5133,7 +5132,6 @@ async function interpretCondition(conditionId, submissionId, prisma51, valuesCac
         fmFallbackResult = await interpretReference(fbNodeId, submissionId, prisma51, valuesCache, depth + 1, valueMap, labelMap);
       }
     }
-    console.log(`\u{1F500} [FIRST-MATCH FALLBACK] "${condition.name}" \u2192 aucune branche match\xE9e \u2192 fallback="${fmFallbackResult.result}"`);
     return {
       result: fmFallbackResult.result,
       humanText: `Condition first-match "${condition.name}": fallback \u2192 ${fmFallbackResult.humanText}`,
@@ -32976,12 +32974,6 @@ function registerSumDisplayFieldRoutes(router99) {
       const originalMetadata = node.metadata || {};
       const originalTriggerNodeIds = originalMetadata.triggerNodeIds;
       const originalSubType = node.subType;
-      console.log("\u{1F3AF} [SUM-DISPLAY] N\u0153ud original:", {
-        nodeId,
-        subType: originalSubType,
-        triggerNodeIds: originalTriggerNodeIds,
-        metadata: JSON.stringify(originalMetadata)
-      });
       let mainVariable = await prisma29.treeBranchLeafNodeVariable.findUnique({
         where: { nodeId },
         select: {
@@ -32994,7 +32986,6 @@ function registerSumDisplayFieldRoutes(router99) {
         }
       });
       if (!mainVariable) {
-        console.log("\u{1F6E1}\uFE0F [SUM-DISPLAY] Variable manquante pour nodeId:", nodeId, "- cr\xE9ation automatique");
         const newId = (0, import_crypto17.randomUUID)();
         const exposedKey = `var_${nodeId.slice(0, 4)}`;
         const existing = await prisma29.treeBranchLeafNodeVariable.findUnique({ where: { exposedKey } });
@@ -33005,7 +32996,6 @@ function registerSumDisplayFieldRoutes(router99) {
         });
         const inheritedSourceRef = nodeTableInfo?.table_activeId ? `@table.${nodeTableInfo.table_activeId}` : null;
         const inheritedSourceType = nodeTableInfo?.hasTable && inheritedSourceRef ? "tree" : "fixed";
-        console.log("\u{1F3AF} [SUM-DISPLAY] H\xE9ritage table:", { inheritedSourceRef, inheritedSourceType });
         mainVariable = await prisma29.treeBranchLeafNodeVariable.create({
           data: {
             id: newId,
@@ -33050,7 +33040,6 @@ function registerSumDisplayFieldRoutes(router99) {
           where: { id: nodeId },
           data: nodeUpdateData
         });
-        console.log("\u2705 [SUM-DISPLAY] Variable auto-cr\xE9\xE9e:", { id: newId, exposedKey: finalExposedKey });
       }
       const baseExposedKey = mainVariable.exposedKey.replace(/-\d+$/, "");
       const allCopies = await prisma29.treeBranchLeafNodeVariable.findMany({
@@ -33077,7 +33066,6 @@ function registerSumDisplayFieldRoutes(router99) {
         select: { id: true, metadata: true }
       });
       const sourceNodeIcon = node.metadata?.icon || null;
-      console.log(`[SUM-DISPLAY] \u{1F3A8} Ic\xF4ne h\xE9rit\xE9e du champ source "${node.label}": ${sourceNodeIcon || "(aucune)"}`);
       const sumTokens = [];
       allCopies.forEach((copy, index) => {
         if (index > 0) {
@@ -33436,11 +33424,6 @@ async function updateSumDisplayFieldAfterCopyChange(sourceNodeId, prismaClient) 
       }
     });
     const allTriggerNodeIds = Array.from(aggregatedTriggers);
-    console.log("\u{1F3AF} [SUM UPDATE] Triggers agr\xE9g\xE9s:", {
-      copiesCount: allCopies.length,
-      copyNodeIds,
-      aggregatedTriggers: allTriggerNodeIds
-    });
     const sumTokens = [];
     allCopies.forEach((copy, index) => {
       if (index > 0) sumTokens.push("+");
@@ -33505,7 +33488,6 @@ async function updateSumDisplayFieldAfterCopyChange(sourceNodeId, prismaClient) 
         for (const sv of submissionValues) {
           newCalculatedValue += parseFloat(String(sv.value)) || 0;
         }
-        console.log(`\u{1F3AF} [SUM UPDATE] Valeur recalcul\xE9e depuis SubmissionData (submission ${latestSubmission.id}): ${newCalculatedValue} (${submissionValues.length} valeurs)`);
       } else {
         for (const node of allCopyNodes) {
           newCalculatedValue += parseFloat(String(node.calculatedValue)) || 0;
@@ -33541,7 +33523,6 @@ async function updateSumDisplayFieldAfterCopyChange(sourceNodeId, prismaClient) 
         });
       }
       if (activeSubmissions.length > 0) {
-        console.log(`\u{1F3AF} [SUM UPDATE] SubmissionData mis \xE0 jour pour ${activeSubmissions.length} soumission(s): ${sumFieldNodeId} = ${newCalculatedValue}`);
       }
     } catch (sdUpdateErr) {
       console.warn(`\u26A0\uFE0F [SUM UPDATE] Erreur mise \xE0 jour SubmissionData sum-total:`, sdUpdateErr.message);
@@ -34908,12 +34889,9 @@ async function copyVariableWithCapacities(originalVarId, suffix, newNodeId, pris
               if (tableResult.success) {
                 tableIdMap2.set(parsed.id, tableResult.newTableId);
                 newSourceRef = `${parsed.prefix}${tableResult.newTableId}`;
-                console.log(`\u2705 Table copi\xE9e et mapp\xE9e: ${parsed.id} \u2192 ${tableResult.newTableId}`);
-                console.log(`   \u{1F4CB} ${tableResult.columnsCount} colonnes, ${tableResult.rowsCount} lignes, ${tableResult.cellsCount} cellules`);
                 emitCapacityEvent(tableResult.newTableId, "table");
               } else {
                 newSourceRef = applySuffixOnceToSourceRef(originalVar.sourceRef);
-                console.log(`\u26A0\uFE0F \xC9chec copie table, suffixe appliqu\xE9: ${newSourceRef}`);
               }
             } catch (e) {
               console.error(`\u274C Exception copie table:`, e.message);
@@ -35147,13 +35125,6 @@ async function copyVariableWithCapacities(originalVarId, suffix, newNodeId, pris
             };
             const ownerMetadata = cloneJson(originalOwnerNode.metadata);
             const inheritedMetadata = cloneJson(originalDisplayNode?.metadata);
-            console.log("\u{1F7E3}\u{1F7E3}\u{1F7E3} [VARIABLE-COPY-ENGINE] Metadata originaux:", {
-              ownerMetadata: JSON.stringify(ownerMetadata),
-              inheritedMetadata: JSON.stringify(inheritedMetadata),
-              originalVarId: originalVar.id,
-              ownerSubType: originalOwnerNode.subType,
-              inheritedSubType: originalDisplayNode?.subType
-            });
             const { triggerNodeIds: _ownerTriggers, ...ownerMetadataWithoutTriggers } = ownerMetadata ?? {};
             const { triggerNodeIds: _inheritedTriggers, ...inheritedMetadataWithoutTriggers } = inheritedMetadata ?? {};
             const metadataForDisplay = {
@@ -35239,26 +35210,12 @@ async function copyVariableWithCapacities(originalVarId, suffix, newNodeId, pris
             })();
             const inheritedSubType = originalDisplayNode?.subType ?? originalOwnerNode.subType ?? null;
             const originalTriggers = _inheritedTriggers ?? _ownerTriggers;
-            console.log("\u{1F7E2}\u{1F7E2}\u{1F7E2} [VARIABLE-COPY-ENGINE] Traitement des triggers:", {
-              _inheritedTriggers,
-              _ownerTriggers,
-              originalTriggers,
-              nodeIdMapSize: nodeIdMap.size,
-              nodeIdMapEntries: Array.from(nodeIdMap.entries()).slice(0, 10)
-              // Premiers 10 mappings
-            });
             let suffixedTriggerNodeIds = null;
             if (Array.isArray(originalTriggers) && originalTriggers.length > 0) {
               suffixedTriggerNodeIds = originalTriggers.map((triggerId) => {
                 if (typeof triggerId !== "string") return triggerId;
                 const cleanId = triggerId.replace(/^@value\./, "").replace(/^{/, "").replace(/}$/, "");
                 const mappedId = nodeIdMap.get(cleanId);
-                console.log("\u{1F535}\u{1F535}\u{1F535} [VARIABLE-COPY-ENGINE] Mapping trigger:", {
-                  original: triggerId,
-                  cleanId,
-                  mappedId,
-                  suffix
-                });
                 if (mappedId) {
                   if (triggerId.startsWith("@value.")) return `@value.${mappedId}`;
                   if (triggerId.startsWith("{")) return `{${mappedId}}`;
@@ -35269,18 +35226,7 @@ async function copyVariableWithCapacities(originalVarId, suffix, newNodeId, pris
                 if (triggerId.startsWith("{")) return `{${suffixedId}}`;
                 return suffixedId;
               });
-              console.log("\u{1F7E2}\u{1F7E2}\u{1F7E2} [VARIABLE-COPY-ENGINE] Triggers suffix\xE9s FINAL:", {
-                originalTriggers,
-                suffixedTriggerNodeIds,
-                displayNodeId: displayNodeId2,
-                inheritedSubType
-              });
             } else {
-              console.log("\u26A0\uFE0F\u26A0\uFE0F\u26A0\uFE0F [VARIABLE-COPY-ENGINE] PAS DE TRIGGERS TROUV\xC9S:", {
-                originalTriggers,
-                type: typeof originalTriggers,
-                isArray: Array.isArray(originalTriggers)
-              });
             }
             if (suffixedTriggerNodeIds && suffixedTriggerNodeIds.length > 0) {
               metadataForDisplay.triggerNodeIds = suffixedTriggerNodeIds;
@@ -35939,7 +35885,6 @@ async function createDisplayNodeForExistingVariable(variableId, prisma51, displa
   });
   if (!owner) throw new Error(`N\u0153ud propri\xE9taire introuvable: ${v.nodeId}`);
   const displayParentId = owner.parentId;
-  console.log(`\u{1F4CC} [createDisplayNodeForExistingVariable] R\xC8GLE: Copie dans le M\xCAME parent que l'original: ${displayParentId}`);
   const now = /* @__PURE__ */ new Date();
   const variableHasTableCapacity = v.sourceType === "table" || v.sourceRef?.includes("table:");
   const baseData = {
@@ -36622,22 +36567,17 @@ var TableLookupDuplicationService = class {
     }
     const normalizedOriginalId = normalizeNodeBase(originalNodeId);
     const copiedNodeId = typeof arg === "object" && arg?.copiedNodeId ? arg.copiedNodeId : `${normalizedOriginalId}${suffixToken}`;
-    console.log(`[TBL-DUP] START duplicateTableLookupSystem: orig=${originalNodeId}, copy=${copiedNodeId}`);
     try {
       const copiedNode = await prisma51.treeBranchLeafNode.findUnique({
         where: { id: copiedNodeId }
       });
       if (!copiedNode) {
-        console.log(`[TBL-DUP] \u26A0\uFE0F Copied node does not exist (shared reference): ${copiedNodeId}, skipping`);
         return;
       }
-      console.log(`[TBL-DUP] \u2705 Copied node exists: ${copiedNode.label}, proceeding...`);
       const originalSelectConfigs = await prisma51.treeBranchLeafSelectConfig.findMany({
         where: { nodeId: originalNodeId }
       });
-      console.log(`[TBL-DUP] Found ${originalSelectConfigs.length} SelectConfigs for node=${originalNodeId}`);
       if (originalSelectConfigs.length === 0) {
-        console.log(`[TBL-DUP] \u26A0\uFE0F No SelectConfigs on original, creating NEW one for copy`);
         const originalNode = await prisma51.treeBranchLeafNode.findUnique({
           where: { id: originalNodeId },
           select: { table_activeId: true }
@@ -36651,7 +36591,6 @@ var TableLookupDuplicationService = class {
           const firstColName = copiedTable?.tableColumns[0]?.name || null;
           if (firstColName) {
             const displayCol = firstColName;
-            console.log(`[TBL-DUP] Creating NEW SelectConfig with displayColumn="${displayCol}"`);
             await prisma51.treeBranchLeafSelectConfig.create({
               data: {
                 id: (0, import_crypto18.randomUUID)(),
@@ -36681,19 +36620,14 @@ var TableLookupDuplicationService = class {
                 updatedAt: /* @__PURE__ */ new Date()
               }
             });
-            console.log(`[TBL-DUP] \u2705 NEW SelectConfig created with displayColumn="${displayCol}"`);
             return;
           }
         }
-        console.log(`[TBL-DUP] No table or columns found, skipping`);
         return;
       }
       for (const selectConfig of originalSelectConfigs) {
-        console.log(`[TBL-DUP] Processing SelectConfig id=${selectConfig.id} tableRef=${selectConfig.tableReference}`);
         await this.duplicateTableAndSelectConfig(prisma51, selectConfig, copiedNodeId, suffixToken);
-        console.log(`[TBL-DUP] \u2705 Completed SelectConfig ${selectConfig.id}`);
       }
-      console.log(`[TBL-DUP] \u2705 SUCCESS duplicateTableLookupSystem`);
     } catch (error) {
       console.error(`[TBL-DUP] ERROR: ${error instanceof Error ? error.message : String(error)}`);
       if (error instanceof Error) console.error(`[TBL-DUP] Stack: ${error.stack}`);
@@ -36726,9 +36660,6 @@ var TableLookupDuplicationService = class {
         select: { id: true }
       });
       if (!nodeOwnerExists && !isTableOwnedByThisNode) {
-        console.log(
-          `[TBL-DUP] Creating stub node "${copiedTableOwnerNodeId}" for table owner`
-        );
         const originalOwnerNode = await prisma51.treeBranchLeafNode.findUnique({
           where: { id: originalTable.nodeId },
           select: {
@@ -36753,7 +36684,6 @@ var TableLookupDuplicationService = class {
               }
             });
             nodeOwnerExists = createdNode;
-            console.log(`[TBL-DUP] \u2705 Stub node created: ${copiedTableOwnerNodeId}`);
           } catch (err) {
             console.error(`[TBL-DUP] \u274C Failed to create stub node: ${err.message}`);
             throw err;
@@ -36788,11 +36718,9 @@ var TableLookupDuplicationService = class {
           }
           if (metaObj?.lookup?.rowSourceOption?.comparisonColumn && !metaObj.lookup.rowSourceOption.operator) {
             metaObj.lookup.rowSourceOption.operator = "=";
-            console.log(`[TBL-DUP] \u2705 Ajout operator '=' pour rowSourceOption`);
           }
           if (metaObj?.lookup?.columnSourceOption?.comparisonColumn && !metaObj.lookup.columnSourceOption.operator) {
             metaObj.lookup.columnSourceOption.operator = "=";
-            console.log(`[TBL-DUP] \u2705 Ajout operator '=' pour columnSourceOption`);
           }
           if (metaObj?.lookup?.rowSourceOption?.comparisonColumn) {
             const val = metaObj.lookup.rowSourceOption.comparisonColumn;
@@ -36806,7 +36734,6 @@ var TableLookupDuplicationService = class {
               metaObj.lookup.columnSourceOption.comparisonColumn = `${val}${suffix}`;
             }
           }
-          console.log(`[TBL-DUP] DEBUG: displayColumn original = "${metaObj?.lookup?.displayColumn}"`);
           if (metaObj?.lookup?.displayColumn) {
             if (Array.isArray(metaObj.lookup.displayColumn)) {
               metaObj.lookup.displayColumn = metaObj.lookup.displayColumn.map((col) => {
@@ -36821,9 +36748,7 @@ var TableLookupDuplicationService = class {
                 metaObj.lookup.displayColumn = `${val}${suffix}`;
               }
             }
-            console.log(`[TBL-DUP] \u2705 displayColumn suffix\xE9 = "${metaObj.lookup.displayColumn}"`);
           } else {
-            console.log(`[TBL-DUP] \u274C displayColumn non d\xE9fini!`);
           }
           if (metaObj?.lookup?.displayRow) {
             if (Array.isArray(metaObj.lookup.displayRow)) {
@@ -36872,7 +36797,6 @@ var TableLookupDuplicationService = class {
                 const isNumericName = /^-?\d+(\.\d+)?$/.test(baseName.trim());
                 const shouldSuffix = baseName.length > 0 && !isNumericName && !baseName.endsWith(suffix);
                 const newName = shouldSuffix ? `${baseName}${suffix}` : baseName;
-                console.log(`[TBL-DUP] Column ${idx}: "${col.name}" -> "${newName}" (columnIndex: ${col.columnIndex} -> ${idx})`);
                 return {
                   id: col.id ? `${col.id}${suffix}` : (0, import_crypto18.randomUUID)(),
                   // ✅ FIX 11/01/2026: NE PAS inclure tableId dans nested create - Prisma le remplit automatiquement
@@ -36900,7 +36824,6 @@ var TableLookupDuplicationService = class {
           }
         });
       } else {
-        console.log(`[TBL-DUP] Table "${copiedTableId}" existe d\xE9j\xE0, mise \xE0 jour des colonnes...`);
         await prisma51.treeBranchLeafNodeTableColumn.deleteMany({
           where: { tableId: copiedTableId }
         });
@@ -36910,7 +36833,6 @@ var TableLookupDuplicationService = class {
             const isNumericName = /^-?\d+(\.\d+)?$/.test(baseName.trim());
             const shouldSuffix = baseName.length > 0 && !isNumericName && !baseName.endsWith(suffix);
             const newName = shouldSuffix ? `${baseName}${suffix}` : baseName;
-            console.log(`[TBL-DUP] Update Column ${idx}: "${col.name}" -> "${newName}"`);
             return prisma51.treeBranchLeafNodeTableColumn.create({
               data: {
                 id: col.id ? `${col.id}${suffix}` : (0, import_crypto18.randomUUID)(),
@@ -36925,19 +36847,16 @@ var TableLookupDuplicationService = class {
             });
           })
         );
-        console.log(`[TBL-DUP] \u2705 ${newColumns.length} colonnes cr\xE9\xE9es avec suffixe`);
         await prisma51.treeBranchLeafNodeTable.update({
           where: { id: copiedTableId },
           data: { meta: rewrittenMeta, updatedAt: /* @__PURE__ */ new Date() }
         });
-        console.log(`[TBL-DUP] \u2705 Meta de la table mise \xE0 jour avec suffixes`);
       }
       const existingSelectConfig = await prisma51.treeBranchLeafSelectConfig.findUnique({
         where: { nodeId: copiedNodeId }
       });
       if (!existingSelectConfig) {
         const shouldSuffixColumns = true;
-        console.log(`[TBL-DUP] Cr\xE9ation SelectConfig: nodeId=${copiedNodeId}, tableRef=${copiedTableId}, displayColumn=${originalSelectConfig.displayColumn || "(null)"}`);
         await prisma51.treeBranchLeafSelectConfig.create({
           data: {
             id: (0, import_crypto18.randomUUID)(),
@@ -36959,10 +36878,8 @@ var TableLookupDuplicationService = class {
                 const isNumericName = /^-?\d+(\.\d+)?$/.test(baseName.trim());
                 const shouldSuffix = baseName.length > 0 && !isNumericName && !baseName.endsWith(suffix);
                 const result = shouldSuffix ? `${baseName}${suffix}` : baseName;
-                console.log(`[TBL-DUP] displayColumn init: firstCol="${firstCol.name}" \u2192 "${result}"`);
                 return result;
               }
-              console.log(`[TBL-DUP] displayColumn: AUCUNE COLONNE TROUV\xC9E`);
               return null;
             })(),
             displayRow: originalSelectConfig.displayRow ? `${originalSelectConfig.displayRow}${suffix}` : null,
@@ -36980,7 +36897,6 @@ var TableLookupDuplicationService = class {
             updatedAt: /* @__PURE__ */ new Date()
           }
         });
-        console.log(`[TBL-DUP] \u2705 SelectConfig cr\xE9\xE9 avec displayColumn SAUVEGARD\xC9 en DB`);
         try {
           const node = await prisma51.treeBranchLeafNode.findUnique({ where: { id: copiedNodeId }, select: { linkedTableIds: true, fieldType: true, metadata: true } });
           const isInputField = node?.fieldType === null || node?.fieldType === "" || node?.fieldType === void 0;
@@ -37581,10 +37497,6 @@ async function deepCopyNodeInternal(prisma51, req2, nodeId, opts) {
           }
           return suffixedId;
         });
-        console.log(`\u{1F3AF} [DEEP-COPY] Suffixe triggers pour ${oldNode.label} (${newId}):`, {
-          oldTriggers,
-          newTriggers: newMeta.triggerNodeIds
-        });
       }
       return newMeta;
     })(),
@@ -37713,7 +37625,6 @@ async function deepCopyNodeInternal(prisma51, req2, nodeId, opts) {
     }
     if (oldNode.aiMeasure_keys && Array.isArray(oldNode.aiMeasure_keys) && oldNode.aiMeasure_keys.length > 0) {
       try {
-        console.log(`[DEEP-COPY] \u{1F4D0} Duplication des champs AI Measure pour ${newId}`);
         const mappings = oldNode.aiMeasure_keys;
         for (const mapping of mappings) {
           if (!mapping.targetRef) continue;
@@ -37729,7 +37640,6 @@ async function deepCopyNodeInternal(prisma51, req2, nodeId, opts) {
             where: { id: duplicatedTargetId }
           });
           if (existingDuplicatedField) {
-            console.log(`[DEEP-COPY] \u2713 Champ cible ${duplicatedTargetId} existe d\xE9j\xE0`);
             continue;
           }
           const duplicatedFieldData = {
@@ -37789,7 +37699,6 @@ async function deepCopyNodeInternal(prisma51, req2, nodeId, opts) {
             }
           };
           await prisma51.treeBranchLeafNode.create({ data: duplicatedFieldData });
-          console.log(`[DEEP-COPY] \u2705 Champ AI Measure cr\xE9\xE9: ${duplicatedTargetId} (${mapping.key})`);
         }
       } catch (aiMeasureError) {
         console.error(`[DEEP-COPY] \u274C Erreur duplication champs AI Measure:`, aiMeasureError);
@@ -38012,9 +37921,6 @@ async function deepCopyNodeInternal(prisma51, req2, nodeId, opts) {
         select: { id: true }
       });
       if (!nodeExists && tableOwnerNodeId !== newId) {
-        console.log(
-          `[DEEP-COPY] Creating stub node "${tableOwnerNodeId}" for linked table owner`
-        );
         const originalOwnerNode = await prisma51.treeBranchLeafNode.findUnique({
           where: { id: t.nodeId },
           select: {
@@ -38039,7 +37945,6 @@ async function deepCopyNodeInternal(prisma51, req2, nodeId, opts) {
               }
             });
             nodeExists = createdNode;
-            console.log(`[DEEP-COPY] \u2705 Stub node created: ${tableOwnerNodeId}`);
           } catch (err) {
             console.error(`[DEEP-COPY] \u274C Failed to create stub node: ${err.message}`);
             throw err;
@@ -38093,7 +37998,6 @@ async function deepCopyNodeInternal(prisma51, req2, nodeId, opts) {
                 } else if (typeof metaObj.lookup.displayColumn === "string" && !metaObj.lookup.displayColumn.endsWith(`-${copySuffixNum}`)) {
                   metaObj.lookup.displayColumn = `${metaObj.lookup.displayColumn}-${copySuffixNum}`;
                 }
-                console.log(`\u{1F527} [DEEP-COPY] displayColumn: ${originalDisplay} \u2192 ${JSON.stringify(metaObj.lookup.displayColumn)}`);
               }
               if (metaObj?.lookup?.columnSourceOption?.comparisonColumn && !metaObj.lookup.columnSourceOption.comparisonColumn.endsWith(`-${copySuffixNum}`)) {
                 metaObj.lookup.columnSourceOption.comparisonColumn = `${metaObj.lookup.columnSourceOption.comparisonColumn}-${copySuffixNum}`;
@@ -38189,13 +38093,10 @@ async function deepCopyNodeInternal(prisma51, req2, nodeId, opts) {
         const shouldSuffixColumns = true;
         if (originalSelectConfig.tableReference) {
           const tableWasCopied2 = tableIdMap2.has(originalSelectConfig.tableReference);
-          console.log(`[DEEP-COPY SelectConfig] nodeId=${oldId} \u2192 tableReference=${originalSelectConfig.tableReference}, tableWasCopied=${tableWasCopied2}, tableIdMap.size=${tableIdMap2.size}`);
           if (tableWasCopied2) {
             newTableReference = tableIdMap2.get(originalSelectConfig.tableReference);
-            console.log(`[DEEP-COPY SelectConfig] \u2705 Table copi\xE9e, utilisation de newTableReference=${newTableReference}`);
           } else {
             newTableReference = originalSelectConfig.tableReference;
-            console.log(`[DEEP-COPY SelectConfig] \u26A0\uFE0F Table partag\xE9e, conservation de tableReference original`);
           }
         }
         try {
@@ -38250,7 +38151,6 @@ async function deepCopyNodeInternal(prisma51, req2, nodeId, opts) {
                   });
                 }
               } else {
-                console.log(`[DEEP-COPY SelectConfig] \u2705 displayColumn d\xE9j\xE0 rempli, pas de remplacement`);
               }
             }
           } catch (initDisplayErr) {
@@ -39149,7 +39049,6 @@ async function evaluateCapacitiesForSubmission(submissionId, organizationId, use
       }
     }
     if (restoredCount > 0) {
-      console.log(`\u{1F6E1}\uFE0F [FIX C] Restaur\xE9 ${restoredCount} valeurs DB DISPLAY (cl\xE9s absentes du formData)`);
     }
   }
   if (mode === "open") {
@@ -39217,7 +39116,6 @@ async function evaluateCapacitiesForSubmission(submissionId, organizationId, use
       }
     }
     if (linkResolvedCount > 0) {
-      console.log(`\u{1F517} [FIX R21b] ${linkResolvedCount} LINK field(s) r\xE9solus dans le valueMap (mode: ${mode})`);
     }
   } catch (e) {
     console.warn("\u26A0\uFE0F [FIX R21b] R\xE9solution LINK fields \xE9chou\xE9e (best-effort):", e?.message || e);
@@ -39280,7 +39178,6 @@ async function evaluateCapacitiesForSubmission(submissionId, organizationId, use
           sumTotalFormulaTokensMap.set(n.id, n.formula_tokens);
         }
       }
-      console.log(`\u{1F517} [FIX R27] ${sumTotalFormulaTokensMap.size} sum-total nodes avec formula_tokens charg\xE9s`);
     }
   }
   {
@@ -39375,7 +39272,6 @@ async function evaluateCapacitiesForSubmission(submissionId, organizationId, use
     }
     const depsCountEarly = [...displayDeps.values()].reduce((sum, s) => sum + s.size, 0);
     if (depsCountEarly > 0) {
-      console.log(`\u{1F517} [FIX R14e] ${depsCountEarly} d\xE9pendances inter-display d\xE9tect\xE9es depuis les formules (tous modes)`);
     }
   }
   const topoOrder = /* @__PURE__ */ new Map();
@@ -39448,7 +39344,6 @@ async function evaluateCapacitiesForSubmission(submissionId, organizationId, use
   }).filter((b) => b !== null);
   const changedFieldIdSet = /* @__PURE__ */ new Set([...allChangedFieldIds, ...allChangedFieldIdBases]);
   if (allChangedFieldIds.length > 1) {
-    console.log(`\u{1F525} [FIX A] Multi-changedFieldIds: ${allChangedFieldIds.length} champs modifi\xE9s pendant le debounce: ${allChangedFieldIds.map((id) => id.substring(0, 12)).join(", ")}`);
   }
   if (mode === "change" && changedFieldId) {
     const cached = triggerIndexCache.get(treeId);
@@ -39466,7 +39361,6 @@ async function evaluateCapacitiesForSubmission(submissionId, organizationId, use
         }
       }
       const affectedCount = allChangedFieldIds.reduce((sum, id) => sum + (triggerIndex.get(id)?.size || 0), 0);
-      console.log(`\u{1F680} [TRIGGER INDEX CACHE HIT] ${affectedCount} impact\xE9s par "${changedFieldId}" (cache age: ${Math.round((Date.now() - cached.timestamp) / 1e3)}s)`);
     } else {
       const displayFieldIds = capacities.filter((cap) => {
         const isDisplayField = cap.TreeBranchLeafNode?.fieldType === "DISPLAY" || cap.TreeBranchLeafNode?.type === "DISPLAY" || cap.TreeBranchLeafNode?.type === "leaf_field";
@@ -39716,7 +39610,6 @@ async function evaluateCapacitiesForSubmission(submissionId, organizationId, use
       }
     }
     const depsCount = [...displayDeps.values()].reduce((sum, s) => sum + s.size, 0);
-    console.log(`\u{1F517} [FIX R14] ${depsCount} d\xE9pendances inter-display d\xE9tect\xE9es via trigger index`);
   }
   topoOrder.clear();
   const computeDepthFixed = (nodeId, visited) => {
@@ -39754,13 +39647,11 @@ async function evaluateCapacitiesForSubmission(submissionId, organizationId, use
       }
       if (maxSourceDepth >= 0 && currentDepth <= maxSourceDepth) {
         const newDepth = maxSourceDepth + 1;
-        console.log(`\u{1F527} [FIX R30] ${sumTotalNodeId.substring(0, 12)}... depth ${currentDepth} \u2192 ${newDepth} (source maxDepth=${maxSourceDepth})`);
         topoOrder.set(sumTotalNodeId, newDepth);
         fixedCount++;
       }
     }
     if (fixedCount > 0) {
-      console.log(`\u{1F527} [FIX R30] ${fixedCount} sum-total depth(s) corrig\xE9e(s)`);
     }
   }
   capacities.sort((a, b) => {
@@ -39776,7 +39667,6 @@ async function evaluateCapacitiesForSubmission(submissionId, organizationId, use
   });
   if (mode === "change") {
     const displayOrder = capacities.filter((c) => displayCapNodeIds.has(c.nodeId)).map((c) => `${c.nodeId.substring(0, 8)}(d=${topoOrder.get(c.nodeId) || 0},sum=${c.sourceRef?.includes("sum-formula") || c.sourceRef?.includes("sum-total") ? "Y" : "N"})`);
-    console.log(`[FIX R14b] Eval order: ${displayOrder.join(" -> ")}`);
   }
   let affectedDisplayFieldIds = null;
   if (mode === "change" && changedFieldId && triggerIndex.size > 0) {
@@ -39820,7 +39710,6 @@ async function evaluateCapacitiesForSubmission(submissionId, organizationId, use
             const refNodeId = token.slice(7);
             if (affectedDisplayFieldIds.has(refNodeId)) {
               affectedDisplayFieldIds.add(cap.nodeId);
-              console.log(`\u{1F525} [FIX R28] sum-total ${cap.nodeId.substring(0, 12)}... forc\xE9 dans affectedDisplayFieldIds (dep ${refNodeId.substring(0, 12)}... affect\xE9)`);
               break;
             }
           }
@@ -39836,10 +39725,8 @@ async function evaluateCapacitiesForSubmission(submissionId, organizationId, use
         }
       }
       if (forcedCount > 0) {
-        console.log(`\u{1F525} [FIX R29b] ${forcedCount} sum-total forc\xE9s dans affectedDisplayFieldIds (total sum-totals: ${[...affectedDisplayFieldIds].filter((id) => id.endsWith("-sum-total")).length})`);
       }
     }
-    console.log(`\u{1F680} [FIX R12] mode=change: ${affectedDisplayFieldIds.size} DISPLAY fields affect\xE9s sur ${displayCapNodeIds.size} total (skip ${displayCapNodeIds.size - affectedDisplayFieldIds.size})`);
     if (affectedDisplayFieldIds.size === 0) {
       console.warn(`\u26A0\uFE0F [FIX D] changedFieldId="${changedFieldId?.substring(0, 12)}" n'est dans aucun trigger \u2192 fallback \xE9valuation COMPL\xC8TE (comme mode='open')`);
       affectedDisplayFieldIds = null;
@@ -39852,12 +39739,10 @@ async function evaluateCapacitiesForSubmission(submissionId, organizationId, use
           valueMap.delete(affectedId);
         }
       }
-      console.log(`\u{1F525} [FIX B] Suppression cibl\xE9e: ${affectedDisplayFieldIds.size} display values supprim\xE9s sur ${displayNodeIds.size} total`);
     } else {
       for (const displayNodeId2 of displayNodeIds) {
         valueMap.delete(displayNodeId2);
       }
-      console.log(`\u{1F525} [FIX B] Suppression COMPL\xC8TE: ${displayNodeIds.size} display values (fallback FIX D)`);
     }
   }
   if (mode === "change" && linkedFieldsToRefresh.size > 0 && formData) {
@@ -39878,7 +39763,6 @@ async function evaluateCapacitiesForSubmission(submissionId, organizationId, use
       }
       if (freshValue !== null && freshValue !== void 0) {
         valueMap.set(linkedNodeId, freshValue);
-        console.log(`\u{1F517} [FIX R20/R21] valueMap LINK pre-refresh: ${linkedNodeId.substring(0, 8)} = "${freshValue}" (source: ${linkInfo.targetNodeId.substring(0, 8)}, changedField: ${changedFieldId?.substring(0, 8) || "N/A"})`);
       }
     }
   }
@@ -39988,7 +39872,6 @@ async function evaluateCapacitiesForSubmission(submissionId, organizationId, use
             }
           }
           if (debugParts.length > 0) {
-            console.log(`\u{1F50D} [SUM-TOTAL DEBUG] ${capacity.nodeId.substring(0, 12)}... tokens=${tokens2.length} sum=${sum} parts=${JSON.stringify(debugParts.map((p) => ({ ref: p.refId.substring(0, 12), val: p.value, src: p.source })))}`);
           }
           capacityResult = {
             value: sum,
@@ -40093,7 +39976,6 @@ async function evaluateCapacitiesForSubmission(submissionId, organizationId, use
       }
       if (capacity.nodeId === "2f0c0d37-ae97-405e-8fae-0a07680e2183" || capacity.nodeId.includes("-sum-total")) {
         const depthVal = topoOrder.get(capacity.nodeId) || 0;
-        console.log(`\u{1F50D} [FIX R26 DEBUG] ${capacity.nodeId.substring(0, 12)}... depth=${depthVal} \u2192 rawValue=${rawValue} hasValid=${hasValidValue} sourceRef=${capacity.sourceRef?.substring(0, 30)}`);
       }
       const normalizedOperationSource = coerceOperationSource(
         capacityResult.operationSource
@@ -40209,7 +40091,6 @@ async function evaluateCapacitiesForSubmission(submissionId, organizationId, use
         }
       });
       await prisma30.$transaction(operations);
-      console.log(`\u{1F680} [PERF] Batch upsert: ${pendingNonDisplayUpserts.length} non-display capacities en 1 transaction`);
     } catch (batchError) {
       console.error("[PERF] Batch upsert \xE9chou\xE9, fallback s\xE9quentiel:", batchError);
       for (const op of pendingNonDisplayUpserts) {
@@ -40276,7 +40157,6 @@ async function evaluateCapacitiesForSubmission(submissionId, organizationId, use
       }
     }
     if (linkPersistedCount > 0) {
-      console.log(`\u{1F517} [FIX R25] ${linkPersistedCount} LINK DISPLAY field(s) persist\xE9s dans SubmissionData`);
     }
   }
   if (linkedFieldsToRefresh.size > 0) {
@@ -40346,7 +40226,6 @@ async function evaluateCapacitiesForSubmission(submissionId, organizationId, use
       }
     }
     if (addedExistingCount > 0) {
-      console.log(`\u{1F680} [FIX BROADCAST-COMPLET] ${computedValuesToStore.length} valeurs dans la r\xE9ponse (${computedValuesToStore.length - addedExistingCount} fra\xEEches + ${addedExistingCount} existantes inchang\xE9es)`);
     }
   }
   results.computedNodeIds = computedValuesToStore.map((c) => c.nodeId);
@@ -40559,7 +40438,6 @@ router56.post("/submissions/create-and-evaluate", async (req2, res) => {
     let effectiveTreeId = treeId;
     const hasExistingSubmission = requestedSubmissionId || reuseSubmissionId;
     if (!effectiveTreeId && !hasExistingSubmission) {
-      console.log("\u26A0\uFE0F [TBL CREATE-AND-EVALUATE] Aucun treeId fourni et pas de submissionId, recherche du premier arbre...");
       const firstTree = await prisma30.treeBranchLeafTree.findFirst({
         select: { id: true, name: true }
       });
@@ -40573,7 +40451,6 @@ router56.post("/submissions/create-and-evaluate", async (req2, res) => {
     const isDefaultDraft = status === "default-draft";
     let effectiveUserId = userId;
     if (!clientId && !isDefaultDraft) {
-      console.log("\u274C [TBL CREATE-AND-EVALUATE] Aucun leadId fourni - REQUIS (sauf pour default-draft)");
       return res.status(400).json({
         success: false,
         error: "Lead obligatoire",
@@ -40592,7 +40469,6 @@ router56.post("/submissions/create-and-evaluate", async (req2, res) => {
         }) : Promise.resolve(null)
       ]);
       if (!leadExists) {
-        console.log(`\u274C [TBL CREATE-AND-EVALUATE] Lead ${clientId} introuvable`);
         return res.status(404).json({
           success: false,
           error: "Lead introuvable",
@@ -40600,7 +40476,6 @@ router56.post("/submissions/create-and-evaluate", async (req2, res) => {
         });
       }
       if (!isSuperAdmin2 && leadExists.organizationId !== organizationId) {
-        console.log(`\u274C [TBL CREATE-AND-EVALUATE] Le lead ${clientId} n'appartient pas \xE0 l'organisation ${organizationId}`);
         return res.status(403).json({
           success: false,
           error: "Lead non autoris\xE9",
@@ -40611,7 +40486,6 @@ router56.post("/submissions/create-and-evaluate", async (req2, res) => {
       }
       effectiveLeadId = leadExists.id;
       if (effectiveUserId && !userExistsResult) {
-        console.log(`\u274C [TBL CREATE-AND-EVALUATE] User ${effectiveUserId} introuvable, soumission sans utilisateur`);
         effectiveUserId = null;
       }
     } else {
@@ -40621,7 +40495,6 @@ router56.post("/submissions/create-and-evaluate", async (req2, res) => {
           select: { id: true, firstName: true, lastName: true }
         });
         if (!userExists) {
-          console.log(`\u274C [TBL CREATE-AND-EVALUATE] User ${effectiveUserId} introuvable`);
           effectiveUserId = null;
         }
       }
@@ -41494,7 +41367,6 @@ async function syncTableReferences(oldTableId, newTableId, ownerNodeId, tableNam
         where: { tableReference: oldTableId, nodeId: { not: ownerNodeId } },
         data: { tableReference: newTableId, updatedAt: /* @__PURE__ */ new Date() }
       });
-      console.log(`[syncTableRefs] \u2705 ${externalConfigs.length} SelectConfig(s) externe(s) migr\xE9e(s): ${oldTableId} \u2192 ${newTableId}`);
     }
     const allTables = await prisma31.treeBranchLeafNodeTable.findMany({
       where: {
@@ -41516,7 +41388,6 @@ async function syncTableReferences(oldTableId, newTableId, ownerNodeId, tableNam
             where: { id: t.id },
             data: { meta: updatedMeta, updatedAt: /* @__PURE__ */ new Date() }
           });
-          console.log(`[syncTableRefs] \u2705 Table "${t.name}" (${t.id}): @table.${oldTableId} \u2192 @table.${newTableId}`);
         } catch (parseErr) {
           console.error(`[syncTableRefs] \u274C Erreur parse meta pour table ${t.id}:`, parseErr);
         }
@@ -41528,7 +41399,6 @@ async function syncTableReferences(oldTableId, newTableId, ownerNodeId, tableNam
       if (metaStr.includes(oldTableId) && !metaStr.includes(`@table.${oldTableId}`)) {
       }
     }
-    console.log(`[syncTableRefs] \u{1F504} Sync termin\xE9e pour "${tableName}": ${oldTableId} \u2192 ${newTableId}`);
   } catch (error) {
     console.error(`[syncTableRefs] \u274C Erreur lors de la sync des r\xE9f\xE9rences:`, error);
   }
@@ -41675,7 +41545,6 @@ router57.post("/nodes/:nodeId/tables", async (req2, res) => {
           if (sameRole) {
             await syncTableReferences(oldTableRef, result.id, nodeId, finalName);
           }
-          console.log(`[NEW POST /tables] \u2705 Ancienne tableReference ${oldTableRef} remplac\xE9e par ${result.id} sur le n\u0153ud ${nodeId}. Sync des refs externes effectu\xE9e.`);
         }
       } else {
         try {
@@ -41705,7 +41574,6 @@ router57.post("/nodes/:nodeId/tables", async (req2, res) => {
                     updatedAt: /* @__PURE__ */ new Date()
                   }
                 });
-                console.log(`[LOOKUP] SelectConfig cree pour ROW source: ${rowSourceField}`);
               }
               if (!lookupMeta.selectors) {
                 lookupMeta.selectors = {};
@@ -41738,7 +41606,6 @@ router57.post("/nodes/:nodeId/tables", async (req2, res) => {
                     updatedAt: /* @__PURE__ */ new Date()
                   }
                 });
-                console.log(`[LOOKUP] SelectConfig cree pour COLUMN source: ${colSourceField}`);
               }
               if (!lookupMeta.selectors) {
                 lookupMeta.selectors = {};
@@ -41769,7 +41636,6 @@ router57.post("/nodes/:nodeId/tables", async (req2, res) => {
                   updatedAt: /* @__PURE__ */ new Date()
                 }
               });
-              console.log(`[LOOKUP] SelectConfig cree pour champ composite: ${nodeId}`);
             }
             await prisma31.treeBranchLeafNodeTable.update({
               where: { id: result.id },
@@ -41777,8 +41643,6 @@ router57.post("/nodes/:nodeId/tables", async (req2, res) => {
               // finalMeta contient deja lookupMeta (modifie ci-dessus) + toutes les autres cles meta.
               data: { meta: toJsonSafe(finalMeta) }
             });
-            console.log(`[LOOKUP] Configuration de lookup complete pour table: ${result.id}`);
-            console.log(`[LOOKUP] Selectors remplis: rowFieldId=${lookupMeta.selectors?.rowFieldId}, columnFieldId=${lookupMeta.selectors?.columnFieldId}`);
           }
         } catch (lookupError) {
           console.error(`[NEW POST /tables] Erreur lors de la creation des SelectConfigs lookup:`, lookupError);
@@ -42031,7 +41895,6 @@ router57.delete("/tables/:id", async (req2, res) => {
         if (replacement) {
           await syncTableReferences(id, replacement.id, table.nodeId, tableName);
         } else {
-          console.log(`[NEW DELETE /tables/:id] \u26A0\uFE0F Pas de table de remplacement pour "${tableName}" (${id}).`);
         }
       } catch (syncErr) {
         console.error(`[NEW DELETE /tables/:id] \u26A0\uFE0F Erreur sync r\xE9f\xE9rences:`, syncErr);
@@ -42154,23 +42017,7 @@ router57.put("/nodes/:nodeId/tables/:tableId", async (req2, res) => {
         const metaObj = typeof meta === "string" ? JSON.parse(meta) : meta;
         const lookup = metaObj?.lookup || {};
         const selectors = lookup?.selectors || {};
-        console.log("[MANUAL-SAVE][TABLE META] \u27A1\uFE0F PUT /nodes/:nodeId/tables/:tableId", {
-          tableId,
-          name,
-          description,
-          type,
-          lookupSelectors: {
-            columnFieldId: selectors.columnFieldId || null,
-            rowFieldId: selectors.rowFieldId || null,
-            comparisonColumn: lookup?.comparisonColumn || null,
-            displayColumn: lookup?.displayColumn || null,
-            displayRow: lookup?.displayRow || null
-          },
-          rawMetaKeys: Object.keys(metaObj || {})
-        });
       } catch {
-        console.log("[MANUAL-SAVE][TABLE META] \u26A0\uFE0F Impossible de parser meta pour logging, envoi brut");
-        console.log("[MANUAL-SAVE][TABLE META] RAW:", typeof meta === "string" ? meta : JSON.stringify(meta));
       }
       const table2 = await prisma31.treeBranchLeafNodeTable.findUnique({
         where: { id: tableId },
@@ -42198,18 +42045,7 @@ router57.put("/nodes/:nodeId/tables/:tableId", async (req2, res) => {
         const persistedMeta = typeof updatedTable2.meta === "string" ? JSON.parse(updatedTable2.meta) : updatedTable2.meta;
         const lookup = persistedMeta?.lookup || {};
         const selectors = lookup?.selectors || {};
-        console.log("[MANUAL-SAVE][TABLE META] \u2705 Persist\xE9", {
-          tableId,
-          lookupSelectors: {
-            columnFieldId: selectors.columnFieldId || null,
-            rowFieldId: selectors.rowFieldId || null,
-            comparisonColumn: lookup?.comparisonColumn || null,
-            displayColumn: lookup?.displayColumn || null,
-            displayRow: lookup?.displayRow || null
-          }
-        });
       } catch {
-        console.log("[MANUAL-SAVE][TABLE META] \u26A0\uFE0F Persist\xE9 (meta non pars\xE9)");
       }
       return res.json(updatedTable2);
     }
@@ -42322,7 +42158,6 @@ router57.get("/nodes/:nodeId/tables", async (req2, res) => {
       orderBy: { createdAt: "asc" }
     });
     let activeTable = null;
-    console.log(`[GET /nodes/:nodeId/tables] nodeId: ${nodeId}, table_activeId: ${node.table_activeId}`);
     if (node.table_activeId) {
       activeTable = await prisma31.treeBranchLeafNodeTable.findUnique({
         where: { id: node.table_activeId },
@@ -42444,7 +42279,6 @@ router57.get("/nodes/:nodeId/tables", async (req2, res) => {
       createdAt: table.createdAt,
       updatedAt: table.updatedAt
     }));
-    console.log(`[GET /nodes/:nodeId/tables] Returning ${formattedTables.length} tables. First table columns: ${formattedTables[0]?.columns?.slice(0, 3).join(", ")}`);
     res.json(formattedTables);
   } catch (error) {
     console.error(`\xC3\xA2\xC2\x9D\xC5\u2019 [NEW GET /nodes/:nodeId/tables] Erreur:`, error);
@@ -42939,7 +42773,6 @@ router58.post("/trees/:id/duplicate", async (req2, res) => {
       where: { treeId: sourceTreeId }
     });
     if (sourceNodes.length === 0) {
-      console.log(`[DUPLICATE TREE] Arbre source ${sourceTreeId} n'a aucun noeud. Arbre vide cr\xE9\xE9.`);
       return res.status(201).json({ tree: newTree, nodesCount: 0 });
     }
     const idMap = /* @__PURE__ */ new Map();
@@ -43282,7 +43115,6 @@ router58.post("/trees/:id/duplicate", async (req2, res) => {
       }));
       await prisma32.treeBranchLeafSelectConfig.createMany({ data: selectCreateData });
     }
-    console.log(`[DUPLICATE TREE] Arbre ${sourceTreeId} dupliqu\xE9 -> ${newTreeId} (${created.count} noeuds, ${sourceVariables.length} variables, ${sourceConditions.length} conditions, ${sourceFormulas.length} formules, ${sourceTables.length} tables)`);
     res.status(201).json({
       tree: newTree,
       nodesCount: created.count,
@@ -43380,17 +43212,13 @@ router58.get("/trees/:treeId/nodes", async (req2, res) => {
     });
     const rawNodesWithLink = nodes.filter((node) => node.hasLink === true);
     if (rawNodesWithLink.length > 0) {
-      console.log(`\u{1F517}\u{1F517}\u{1F517} [API RAW] ${rawNodesWithLink.length} champs hasLink=true AVANT buildResponseFromColumns`);
       rawNodesWithLink.forEach((node) => {
-        console.log(`  - RAW "${node.label}" (${node.id}): hasLink=${node.hasLink}`);
       });
     }
     const reconstructedNodes = nodes.map((node) => buildResponseFromColumns2(node));
     const nodesWithLink = reconstructedNodes.filter((node) => node.hasLink === true);
     if (nodesWithLink.length > 0) {
-      console.log(`\u{1F517}\u{1F517}\u{1F517} [API /trees/:treeId/nodes] ${nodesWithLink.length} champs avec hasLink=true:`);
       nodesWithLink.forEach((node) => {
-        console.log(`  - "${node.label}" (${node.id}): hasLink=${node.hasLink}, link_targetNodeId=${node.link_targetNodeId}, link_mode=${node.link_mode}`);
       });
     }
     const nodesWithTooltips = reconstructedNodes.filter(
@@ -43660,7 +43488,6 @@ router58.post("/nodes/:nodeId/deep-copy", async (req2, res) => {
     const { targetParentId, labelSuffix } = req2.body || {};
     const result = await deepCopyNodeInternal(prisma32, req2, nodeId, { targetParentId });
     const allCopiedNodeIds = [result.root.newId, ...result.displayNodeIds || []];
-    console.log(`\u{1F504} [DEEP-COPY] D\xE9clenchement \xE9valuation pour ${allCopiedNodeIds.length} n\u0153uds copi\xE9s:`, allCopiedNodeIds);
     for (const copiedNodeId of allCopiedNodeIds) {
       try {
         const copiedNode = await prisma32.treeBranchLeafNode.findUnique({
@@ -43677,7 +43504,6 @@ router58.post("/nodes/:nodeId/deep-copy", async (req2, res) => {
         if (!copiedNode) continue;
         const needsEvaluation = copiedNode.formulaId || copiedNode.tableConfig && typeof copiedNode.tableConfig === "object";
         if (needsEvaluation) {
-          console.log(`\u{1F3AF} [DEEP-COPY] \xC9valuation du n\u0153ud ${copiedNodeId} (${copiedNode.label})`);
           const submissionId = copiedNodeId;
           const evalResult = await evaluateVariableOperation(
             copiedNodeId,
@@ -43685,7 +43511,6 @@ router58.post("/nodes/:nodeId/deep-copy", async (req2, res) => {
             prisma32
           );
           if (evalResult.success) {
-            console.log(`\u2705 [DEEP-COPY] \xC9valuation r\xE9ussie pour ${copiedNodeId}:`, evalResult.result);
           } else {
             console.warn(`\u26A0\uFE0F [DEEP-COPY] \xC9valuation \xE9chou\xE9e pour ${copiedNodeId}:`, evalResult.error);
           }
@@ -43694,7 +43519,6 @@ router58.post("/nodes/:nodeId/deep-copy", async (req2, res) => {
         console.error(`\u274C [DEEP-COPY] Erreur \xE9valuation n\u0153ud ${copiedNodeId}:`, evalError);
       }
     }
-    console.log(`\u2705 [DEEP-COPY] \xC9valuation initiale termin\xE9e pour ${allCopiedNodeIds.length} n\u0153uds`);
     res.json(result);
   } catch (error) {
     console.error("\xC3\u0192\xC2\xA2\xC3\u201A\xC2\x9D\xC3\u2026\xE2\u20AC\u2122 [/nodes/:nodeId/deep-copy] Erreur:", error);
@@ -44340,7 +44164,6 @@ function removeJSONFromUpdate(updateData) {
       const appConfig = appearanceConfig;
       if ("displayIcon" in appConfig && appConfig.displayIcon) {
         cleanData.appearance_displayIcon = appConfig.displayIcon;
-        console.log("\u{1F3A8} [removeJSONFromUpdate] displayIcon extrait vers colonne:", appConfig.displayIcon);
       }
       if (!preservedMeta.appearance || typeof preservedMeta.appearance !== "object") {
         preservedMeta.appearance = preservedMeta.appearance || {};
@@ -44359,7 +44182,6 @@ function removeJSONFromUpdate(updateData) {
     const appConfig = appearanceConfig;
     const preservedAppearance = {};
     if ("displayIcon" in appConfig && appConfig.displayIcon) {
-      console.log("\u{1F3A8} [removeJSONFromUpdate] displayIcon vers colonne (sans metadata):", appConfig.displayIcon);
       cleanData.appearance_displayIcon = appConfig.displayIcon;
     }
     if ("bubbleColor" in appConfig) preservedAppearance.bubbleColor = appConfig.bubbleColor || null;
@@ -44406,18 +44228,9 @@ var updateOrMoveNode = async (req2, res) => {
     const { treeId, nodeId } = req2.params;
     const { organizationId } = req2.user;
     const updateData = req2.body || {};
-    console.log("\u{1F50D} [updateOrMoveNode] Payload re\xE7u:", {
-      nodeId,
-      hasTriggerNodeIds: !!updateData.metadata?.triggerNodeIds,
-      triggerNodeIds: updateData.metadata?.triggerNodeIds
-    });
     const columnData = mapJSONToColumns(updateData);
     const cleanUpdateData = removeJSONFromUpdate(updateData);
     const updateObj = { ...cleanUpdateData, ...columnData };
-    console.log("\u{1F50D} [updateOrMoveNode] Apr\xE8s removeJSONFromUpdate:", {
-      hasTriggerNodeIds: !!cleanUpdateData.metadata?.triggerNodeIds,
-      triggerNodeIds: cleanUpdateData.metadata?.triggerNodeIds
-    });
     normalizeSharedRefsForCopy(nodeId, updateObj);
     for (const k of ["markers", "hasMarkers"]) {
       if (k in updateObj) delete updateObj[k];
@@ -44481,13 +44294,6 @@ var updateOrMoveNode = async (req2, res) => {
         if (!newParentNode) {
           return res.status(400).json({ error: "Parent non trouv\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9" });
         }
-        console.log("\u{1F50D} [DEBUG MOVE]", {
-          nodeLabel: existingNode.label,
-          nodeType: existingNode.type,
-          newParentLabel: newParentNode.label,
-          newParentType: newParentNode.type,
-          newParentId
-        });
         if (existingNode.type === "leaf_option") {
           const isSelectField = newParentNode.type.startsWith("leaf_") && newParentNode.subType === "SELECT";
           const isSelectBranch = newParentNode.type === "branch" && newParentNode.parentId !== null;
@@ -44496,14 +44302,7 @@ var updateOrMoveNode = async (req2, res) => {
               error: "Les options ne peuvent \xC3\u0192\xC6\u2019\xC3\u201A\xC2\xAAtre d\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9plac\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9es que sous des champs SELECT ou des branches de niveau 2+"
             });
           }
-          console.log("\u{1F50D} [DEBUG] Validation pour leaf_:", {
-            existingNodeType: existingNode.type,
-            newParentNodeType: newParentNode.type,
-            newParentId,
-            isValidParent: newParentNode.type === "branch" || newParentNode.type.startsWith("leaf_") || newParentNode.type === "tree"
-          });
         } else if (existingNode.type.startsWith("leaf_")) {
-          console.log("\u{1F50D} [DEBUG MOVE] existingNode:", existingNode.type, "| newParentNode:", newParentNode?.type, "| newParentId:", newParentId);
           const isValidParent = newParentNode.type === "branch" || newParentNode.type === "section" || newParentNode.type.startsWith("leaf_") || newParentNode.type === "tree";
           if (!isValidParent) {
             return res.status(400).json({
@@ -44630,23 +44429,12 @@ var updateOrMoveNode = async (req2, res) => {
           delete newMetadata.capabilities.conditions;
         }
       }
-      console.log("\u{1F3A8} [updateOrMoveNode] displayIcon AVANT fusion:", {
-        dansUpdateObjMetadata: updateObj.metadata?.appearance?.displayIcon,
-        dansCurrentMetadata: currentMetadata?.appearance?.displayIcon,
-        dansNewMetadata: newMetadata?.appearance?.displayIcon
-      });
       if (newMetadata.aiMeasure) {
         const aiConfig = newMetadata.aiMeasure;
         updateObj.aiMeasure_enabled = aiConfig.enabled ?? false;
         updateObj.aiMeasure_autoTrigger = aiConfig.autoTrigger ?? true;
         updateObj.aiMeasure_prompt = aiConfig.customPrompt || null;
         updateObj.aiMeasure_keys = aiConfig.keys && aiConfig.keys.length > 0 ? aiConfig.keys : null;
-        console.log("\u{1F4CA} [updateOrMoveNode] AI Measure extrait vers colonnes d\xE9di\xE9es:", {
-          enabled: updateObj.aiMeasure_enabled,
-          autoTrigger: updateObj.aiMeasure_autoTrigger,
-          prompt: updateObj.aiMeasure_prompt,
-          keys: updateObj.aiMeasure_keys
-        });
         delete newMetadata.aiMeasure;
       }
       const mergedAppearance = {
@@ -44659,18 +44447,9 @@ var updateOrMoveNode = async (req2, res) => {
         // 🎨 Écraser appearance avec le merge profond
         ...Object.keys(mergedAppearance).length > 0 ? { appearance: mergedAppearance } : {}
       };
-      console.log("\u{1F3A8} [updateOrMoveNode] displayIcon APR\xC8S fusion:", {
-        mergedAppearance,
-        finalDisplayIcon: updateObj.metadata?.appearance?.displayIcon
-      });
       if (updateObj.metadata.aiMeasure) {
         delete updateObj.metadata.aiMeasure;
       }
-      console.log("\u{1F500} [updateOrMoveNode] Fusion metadata:", {
-        avant: currentMetadata,
-        nouveau: newMetadata,
-        resultat: updateObj.metadata
-      });
     }
     if ("repeater_templateNodeIds" in updateObj && updateObj.repeater_templateNodeIds === null) {
       const currentMeta = updateObj.metadata || existingNode.metadata || {};
@@ -44680,39 +44459,11 @@ var updateOrMoveNode = async (req2, res) => {
         console.warn("[updateOrMoveNode] \u{1F5D1}\uFE0F Suppression explicite de metadata.repeater car repeater_templateNodeIds = NULL");
       }
     }
-    console.log("\u{1F50D} [updateOrMoveNode] Sauvegarde AI Measure - donn\xE9es envoy\xE9es:", {
-      aiMeasure_enabled: updateObj.aiMeasure_enabled,
-      aiMeasure_autoTrigger: updateObj.aiMeasure_autoTrigger,
-      aiMeasure_prompt: updateObj.aiMeasure_prompt,
-      aiMeasure_keys: updateObj.aiMeasure_keys
-    });
-    console.log("\u{1F3A8} [updateOrMoveNode] displayIcon AVANT DB.update:", {
-      metadataComplet: updateObj.metadata,
-      displayIcon: updateObj.metadata?.appearance?.displayIcon
-    });
-    console.log("\u{1F527} [updateOrMoveNode] repeater_templateNodeIds AVANT DB.update:", {
-      "updateObj.repeater_templateNodeIds": updateObj.repeater_templateNodeIds,
-      "metadata.repeater?.templateNodeIds": updateObj.metadata?.repeater?.templateNodeIds
-    });
     await prisma32.treeBranchLeafNode.update({
       where: { id: nodeId },
       data: { ...updateObj, updatedAt: /* @__PURE__ */ new Date() }
     });
     const updatedNode = await prisma32.treeBranchLeafNode.findFirst({ where: { id: nodeId, treeId } });
-    console.log("\u{1F50D} [updateOrMoveNode] Sauvegarde AI Measure - donn\xE9es relues:", {
-      aiMeasure_enabled: updatedNode?.aiMeasure_enabled,
-      aiMeasure_autoTrigger: updatedNode?.aiMeasure_autoTrigger,
-      aiMeasure_prompt: updatedNode?.aiMeasure_prompt,
-      aiMeasure_keys: updatedNode?.aiMeasure_keys
-    });
-    console.log("\u{1F3A8} [updateOrMoveNode] displayIcon APR\xC8S DB.read:", {
-      metadataDB: updatedNode?.metadata,
-      displayIcon: updatedNode?.metadata?.appearance?.displayIcon
-    });
-    console.log("\u{1F527} [updateOrMoveNode] repeater_templateNodeIds APR\xC8S DB.read:", {
-      "repeater_templateNodeIds (colonne)": updatedNode?.repeater_templateNodeIds,
-      "metadata.repeater?.templateNodeIds": updatedNode?.metadata?.repeater?.templateNodeIds
-    });
     const responseData = updatedNode ? buildResponseFromColumns2(updatedNode) : updatedNode;
     return res.json(responseData);
   } catch (error) {
@@ -44733,8 +44484,6 @@ router58.patch("/trees/:treeId/nodes/:nodeId", updateOrMoveNode);
 router58.put("/nodes/:nodeId", async (req2, res) => {
   try {
     const { nodeId } = req2.params;
-    console.log("\u{1F3AF} [PUT /nodes/:nodeId] Requ\xEAte re\xE7ue pour nodeId:", nodeId);
-    console.log("\u{1F4CB} [PUT /nodes/:nodeId] Body:", JSON.stringify(req2.body, null, 2));
     const node = await prisma32.treeBranchLeafNode.findUnique({
       where: { id: nodeId },
       select: { treeId: true }
@@ -45082,7 +44831,6 @@ router58.delete("/trees/:treeId/nodes/:nodeId", async (req2, res) => {
         where: { nodeId: { in: allDeletedIds } }
       });
       if (deletedSubmissionData.count > 0) {
-        console.log(`\u{1F9F9} [DELETE] ${deletedSubmissionData.count} entr\xE9e(s) SubmissionData orpheline(s) supprim\xE9e(s)`);
       }
     } catch (sdCleanupError) {
       console.warn("[DELETE] Erreur nettoyage SubmissionData orphelines:", sdCleanupError.message);
@@ -45119,7 +44867,6 @@ router58.delete("/trees/:treeId/nodes/:nodeId", async (req2, res) => {
         }
       });
       if (orphanedVariables.count > 0) {
-        console.log(`[DELETE] \u{1F9F9} Supprim\xE9 ${orphanedVariables.count} variable(s) -sum-total orpheline(s)`);
       }
     } catch (orphanCleanError) {
       console.warn("[DELETE] Erreur nettoyage variables orphelines:", orphanCleanError.message);
@@ -45142,7 +44889,6 @@ router58.delete("/trees/:treeId/nodes/:nodeId", async (req2, res) => {
         const deletedFormulas = await prisma32.treeBranchLeafNodeFormula.deleteMany({
           where: { id: { in: formulaIdsToDelete } }
         });
-        console.log(`[DELETE] \u{1F9F9} Supprim\xE9 ${deletedFormulas.count} formule(s) copi\xE9e(s)`);
       }
       const conditionsToCheck = await prisma32.treeBranchLeafNodeCondition.findMany({
         where: {
@@ -45160,7 +44906,6 @@ router58.delete("/trees/:treeId/nodes/:nodeId", async (req2, res) => {
         const deletedConditions = await prisma32.treeBranchLeafNodeCondition.deleteMany({
           where: { id: { in: conditionIdsToDelete } }
         });
-        console.log(`[DELETE] \u{1F9F9} Supprim\xE9 ${deletedConditions.count} condition(s) copi\xE9e(s)`);
       }
     } catch (formulaConditionCleanError) {
       console.warn("[DELETE] Erreur nettoyage formules/conditions copi\xE9es:", formulaConditionCleanError.message);
@@ -45175,7 +44920,6 @@ router58.delete("/trees/:treeId/nodes/:nodeId", async (req2, res) => {
         if (meta?.isSumDisplayField === true && meta?.sourceNodeId) {
           try {
             await updateSumDisplayFieldAfterCopyChange(String(meta.sourceNodeId), prisma32);
-            console.log(`\u2705 [DELETE] Champ Total ${node.id} mis \xE0 jour avec succ\xE8s`);
           } catch (err) {
             console.warn(`[DELETE] \u26A0\uFE0F Erreur mise \xE0 jour champ Total ${node.id}:`, err);
           }
@@ -46334,7 +46078,6 @@ router58.post("/nodes/:nodeId/formulas", async (req2, res) => {
       console.warn("[TreeBranchLeaf API] Warning updating linkedFormulaIds after create:", e.message);
     }
     invalidateTriggerIndexCache();
-    console.log(`\u{1F504} [FORMULA CREATE] Trigger index cache invalid\xE9 apr\xE8s cr\xE9ation formule ${formula.id} pour node ${nodeId}`);
     return res.status(201).json(formula);
   } catch (error) {
     console.error("[TreeBranchLeaf API] Error creating node formula:", error);
@@ -46385,7 +46128,6 @@ router58.put("/nodes/:nodeId/formulas/:formulaId", async (req2, res) => {
       console.warn("[TreeBranchLeaf API] Warning updating inverse linkedFormulaIds after update:", e.message);
     }
     invalidateTriggerIndexCache();
-    console.log(`\u{1F504} [FORMULA UPDATE] Trigger index cache invalid\xE9 apr\xE8s MAJ formule ${formulaId} pour node ${nodeId}`);
     return res.json(updated);
   } catch (error) {
     console.error("[TreeBranchLeaf API] Error updating node formula:", error);
@@ -46437,7 +46179,6 @@ router58.delete("/nodes/:nodeId/formulas/:formulaId", async (req2, res) => {
       data: { hasFormula: remainingFormulas > 0 }
     });
     invalidateTriggerIndexCache();
-    console.log(`\u{1F504} [FORMULA DELETE] Trigger index cache invalid\xE9 apr\xE8s suppression formule ${formulaId} pour node ${nodeId}`);
     return res.json({ success: true, message: "Formule supprim\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9e avec succ\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA8s" });
   } catch (error) {
     console.error("[TreeBranchLeaf API] Error deleting node formula:", error);
@@ -47090,7 +46831,6 @@ async function applyTableFilters(matrix, columns, filters, formValues) {
         const mode = mult.mode || "multiply";
         if (mode === "fixed") {
           const fixedValue = allConditionsMet ? mult.factor ?? 0 : mult.elseFactor ?? 0;
-          console.log(`[Fixed] ${conditions.length} condition(s) \u2192 ${allConditionsMet ? "TOUTES VRAIES" : "NON"} \u2192 cellValue ${cellValue} \u2192 ${fixedValue}`);
           cellValue = fixedValue;
         } else {
           const factor = allConditionsMet ? mult.factor ?? 2 : mult.elseFactor ?? 1;
@@ -47099,12 +46839,10 @@ async function applyTableFilters(matrix, columns, filters, formValues) {
             const srcColIdx = columns.indexOf(mult.sourceColumn);
             if (srcColIdx >= 0) {
               baseValue = row[srcColIdx];
-              console.log(`[Multiplier] sourceColumn "${mult.sourceColumn}" \u2192 baseValue = ${baseValue}`);
             }
           }
           const numericBase = Number(baseValue);
           if (!isNaN(numericBase) && factor !== 1) {
-            console.log(`[Multiplier] ${conditions.length} condition(s) \u2192 ${allConditionsMet ? "TOUTES VRAIES" : "NON"} \u2192 ${allConditionsMet && mult.sourceColumn ? `sourceCol(${mult.sourceColumn})=${baseValue}` : `cellValue ${cellValue}`} \xD7 ${factor} = ${numericBase * factor}`);
             cellValue = numericBase * factor;
           } else if (!isNaN(numericBase)) {
             cellValue = numericBase;
@@ -47145,7 +46883,6 @@ async function resolveFilterValueRef(valueRef, formValues) {
         const objValue = value.value;
         value = objValue;
       }
-      console.log(`\u2705 [resolveFilterValueRef] @calculated.${nodeId} \u2192 formValues (FRESH): ${value}`);
       return value;
     }
     const node = await prisma32.treeBranchLeafNode.findUnique({
@@ -47153,7 +46890,6 @@ async function resolveFilterValueRef(valueRef, formValues) {
       select: { id: true, label: true, calculatedValue: true }
     });
     if (node && node.calculatedValue !== null && node.calculatedValue !== void 0) {
-      console.log(`\u{1F527} [resolveFilterValueRef] @calculated.${nodeId} \u2192 DB fallback: ${node.calculatedValue}`);
       return node.calculatedValue;
     }
     try {
@@ -47163,13 +46899,11 @@ async function resolveFilterValueRef(valueRef, formValues) {
         select: { value: true }
       });
       if (latestSubmissionData?.value !== null && latestSubmissionData?.value !== void 0 && latestSubmissionData?.value !== "") {
-        console.log(`\u{1F527} [resolveFilterValueRef] @calculated.${nodeId} \u2192 SubmissionData fallback: ${latestSubmissionData.value}`);
         return latestSubmissionData.value;
       }
     } catch (err) {
       console.warn(`\u26A0\uFE0F [resolveFilterValueRef] @calculated.${nodeId} \u2192 SubmissionData fallback error:`, err);
     }
-    console.log(`\u26A0\uFE0F [resolveFilterValueRef] @calculated.${nodeId} \u2192 NO VALUE FOUND`);
     return null;
   }
   if (valueRef.startsWith("@select.") || valueRef.startsWith("@select:")) {
@@ -47203,13 +46937,11 @@ async function resolveFilterValueRef(valueRef, formValues) {
   }
   if (valueRef.startsWith("@table.")) {
     const tableId = valueRef.replace("@table.", "");
-    console.log(`\u{1F50D} [resolveFilterValueRef] @table.${tableId} \u2192 R\xE9solution dynamique...`);
     if (formValues[tableId] !== void 0 && formValues[tableId] !== null && formValues[tableId] !== "") {
       let val = formValues[tableId];
       if (val && typeof val === "object" && "value" in val) {
         val = val.value;
       }
-      console.log(`\u2705 [resolveFilterValueRef] @table.${tableId} \u2192 formValues direct: ${val}`);
       return val;
     }
     try {
@@ -47261,7 +46993,6 @@ async function resolveFilterValueRef(valueRef, formValues) {
                 const sourceStr = String(sourceValue).trim();
                 if (compValue.toLowerCase() === sourceStr.toLowerCase()) {
                   const result = cells[displayColIdx];
-                  console.log(`\u2705 [resolveFilterValueRef] @table.${tableId} (${refTable.name}) \u2192 "${comparisonColumn}"="${sourceStr}" \u2192 "${displayColumn}"="${result}"`);
                   return result;
                 }
               }
@@ -47292,7 +47023,6 @@ async function resolveFilterValueRef(valueRef, formValues) {
               }
               if (targetValue !== null && targetValue !== void 0 && targetValue !== "") {
                 sourceValue = targetValue;
-                console.log(`\u{1F517} [resolveFilterValueRef] @table.${tableId} \u2192 LINK ${sourceFieldId} \u2192 target ${targetId} \u2192 formValues: ${sourceValue}`);
                 const columns = refTable.tableColumns.map((c) => c.name);
                 const compColIdx = columns.indexOf(comparisonColumn);
                 const displayColIdx = columns.indexOf(displayColumn);
@@ -47312,17 +47042,14 @@ async function resolveFilterValueRef(valueRef, formValues) {
                     const sourceStr = String(sourceValue).trim();
                     if (compValue.toLowerCase() === sourceStr.toLowerCase()) {
                       const result = cells[displayColIdx];
-                      console.log(`\u2705 [resolveFilterValueRef] @table.${tableId} (${refTable.name}) \u2192 LINK resolved \u2192 "${comparisonColumn}"="${sourceStr}" \u2192 "${displayColumn}"="${result}"`);
                       return result;
                     }
                   }
                   console.warn(`\u26A0\uFE0F [resolveFilterValueRef] @table.${tableId} (${refTable.name}) \u2192 LINK resolved mais aucune ligne ne matche "${comparisonColumn}"="${sourceValue}"`);
                 }
               } else {
-                console.log(`\u26A0\uFE0F [resolveFilterValueRef] @table.${tableId} \u2192 LINK ${sourceFieldId} \u2192 target ${targetId} \u2192 pas de valeur dans formValues non plus`);
               }
             } else {
-              console.log(`\u26A0\uFE0F [resolveFilterValueRef] @table.${tableId} \u2192 sourceField ${sourceFieldId} n'a pas de valeur dans formValues`);
             }
           }
         }
@@ -47334,7 +47061,6 @@ async function resolveFilterValueRef(valueRef, formValues) {
             linkedVal = linkedVal.value;
           }
           if (linkedVal !== null && linkedVal !== void 0 && linkedVal !== "") {
-            console.log(`\u2705 [resolveFilterValueRef] @table.${tableId} \u2192 selectors.columnFieldId=${linkedFieldId}: ${linkedVal}`);
             return linkedVal;
           }
         }
@@ -47345,7 +47071,6 @@ async function resolveFilterValueRef(valueRef, formValues) {
           select: { calculatedValue: true, label: true }
         });
         if (ownerNode?.calculatedValue !== null && ownerNode?.calculatedValue !== void 0) {
-          console.log(`\u2705 [resolveFilterValueRef] @table.${tableId} \u2192 ownerNode "${ownerNode.label}" calculatedValue: ${ownerNode.calculatedValue}`);
           return ownerNode.calculatedValue;
         }
       }
@@ -48070,13 +47795,11 @@ router58.post("/evaluate/formula/:formulaId", async (req2, res) => {
                 if (ownerNode?.calculatedValue != null) {
                   const parsed = parseFloat(String(ownerNode.calculatedValue));
                   resolvedValue = isNaN(parsed) ? 0 : parsed;
-                  console.log(`\u{1F4CA} [FORMULA] @table.${tableId} (${table.name}) \u2192 n\u0153ud "${ownerNode.label}" = ${resolvedValue}`);
                 } else {
                   const fromFV = fieldValues[table.nodeId] ?? fieldValues[tableId];
                   if (fromFV != null) {
                     const parsed = parseFloat(String(fromFV).replace(/\s+/g, "").replace(/,/g, "."));
                     resolvedValue = isNaN(parsed) ? 0 : parsed;
-                    console.log(`\u{1F4CA} [FORMULA] @table.${tableId} (${table.name}) \u2192 fieldValues = ${resolvedValue}`);
                   } else {
                     console.warn(`\u26A0\uFE0F [FORMULA] @table.${tableId} (${table.name}) \u2192 n\u0153ud "${ownerNode?.label}" calculatedValue=null, fieldValues=absent`);
                   }
@@ -48102,13 +47825,11 @@ router58.post("/evaluate/formula/:formulaId", async (req2, res) => {
               if (refNode?.calculatedValue != null) {
                 const parsed = parseFloat(String(refNode.calculatedValue));
                 resolvedValue = isNaN(parsed) ? 0 : parsed;
-                console.log(`\u{1F522} [FORMULA] @calculated.${nodeId} \u2192 "${refNode.label}" = ${resolvedValue}`);
               } else {
                 const fromFV = fieldValues[nodeId] ?? fieldValues[`__calculated__${nodeId}`];
                 if (fromFV != null) {
                   const parsed = parseFloat(String(fromFV).replace(/\s+/g, "").replace(/,/g, "."));
                   resolvedValue = isNaN(parsed) ? 0 : parsed;
-                  console.log(`\u{1F522} [FORMULA] @calculated.${nodeId} \u2192 fieldValues = ${resolvedValue}`);
                 } else {
                   console.warn(`\u26A0\uFE0F [FORMULA] @calculated.${nodeId} \u2192 "${refNode?.label}" calculatedValue=null, fieldValues=absent`);
                 }
@@ -48139,7 +47860,6 @@ router58.post("/evaluate/formula/:formulaId", async (req2, res) => {
           resolvedTokens.push({ type: "variable", name: rawToken, variableId: rawToken });
         }
         tokens2 = resolvedTokens;
-        console.log(`\u{1F504} [FORMULA] ${rawTokens.length} tokens bruts normalis\xE9s \u2192 ${tokens2.length} tokens structur\xE9s`);
       } else {
         tokens2 = rawTokens;
       }
@@ -48888,7 +48608,6 @@ router58.get("/submissions/:id/fields", async (req2, res) => {
   try {
     const { id } = req2.params;
     const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx3(req2);
-    console.log(`[TBL-FIELDS] \u25B6\uFE0F GET /submissions/${id}/fields`);
     let submission = null;
     try {
       submission = await prisma32.treeBranchLeafSubmission.findUnique({ where: { id } });
@@ -48945,11 +48664,9 @@ router58.get("/submissions/:id/fields", async (req2, res) => {
       console.warn("[TBL-FIELDS] \u26A0\uFE0F findMany submissionData \xE9chou\xE9:", e instanceof Error ? e.message : String(e));
       dataRows = [];
     }
-    console.log(`[TBL-FIELDS] \u2139\uFE0F dataRows=${dataRows.length}`);
     const nodeIds = [...new Set(
       dataRows.map((r) => r?.nodeId).filter((nid) => typeof nid === "string" && nid.length > 0)
     )];
-    console.log(`[TBL-FIELDS] \u2139\uFE0F nodeIds=${nodeIds.length}`);
     let nodes = [];
     if (nodeIds.length > 0) {
       try {
@@ -48962,7 +48679,6 @@ router58.get("/submissions/:id/fields", async (req2, res) => {
         nodes = [];
       }
     }
-    console.log(`[TBL-FIELDS] \u2139\uFE0F nodes=${nodes.length}`);
     const nodesMap = new Map(nodes.map((n) => [n.id, n]));
     const fieldsMap = {};
     for (const row of dataRows) {
@@ -48970,7 +48686,6 @@ router58.get("/submissions/:id/fields", async (req2, res) => {
       if (!node) continue;
       const isDisplayField = node.fieldType === "DISPLAY" || node.type === "leaf_field" && ["display", "DISPLAY", "Display"].includes(node.fieldSubType || "");
       if (isDisplayField) {
-        console.log(`[TBL-FIELDS] \u23F8\uFE0F Champ DISPLAY exclu: ${node.label} (${node.id})`);
         continue;
       }
       const key2 = node.id;
@@ -49020,7 +48735,6 @@ router58.get("/submissions/:id", async (req2, res) => {
   try {
     const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx3(req2);
     const { id } = req2.params;
-    console.log(`[TBL-API] \u25B6\uFE0F GET /submissions/${id}`);
     const submission = await prisma32.treeBranchLeafSubmission.findUnique({
       where: { id }
     });
@@ -49759,7 +49473,6 @@ router58.delete("/submissions/:id", async (req2, res) => {
     await prisma32.treeBranchLeafSubmission.delete({
       where: { id }
     });
-    console.log(`[TreeBranchLeaf API] Soumission ${id} supprimee avec succes`);
     res.json({ success: true, message: "Soumission supprimee avec succes" });
   } catch (error) {
     console.error("[TreeBranchLeaf API] Error deleting submission:", error);
@@ -49840,18 +49553,6 @@ router58.post("/nodes/:fieldId/select-config", async (req2, res) => {
     } = req2.body;
     const keyRow = Array.isArray(rawKeyRow) ? JSON.stringify(rawKeyRow) : rawKeyRow;
     const valueRow = Array.isArray(rawValueRow) ? JSON.stringify(rawValueRow) : rawValueRow;
-    console.log("[MANUAL-SAVE][SELECT-CONFIG] \u27A1\uFE0F POST /nodes/:fieldId/select-config", {
-      fieldId,
-      optionsSource,
-      tableReference,
-      keyColumn,
-      keyRow,
-      valueColumn,
-      valueRow,
-      displayColumn,
-      displayRow,
-      dependsOnNodeId
-    });
     const access = await ensureNodeOrgAccess(prisma32, fieldId, { organizationId, isSuperAdmin: isSuperAdmin2 });
     if (!access.ok) {
       return res.status(access.status).json({ error: access.error });
@@ -49890,18 +49591,6 @@ router58.post("/nodes/:fieldId/select-config", async (req2, res) => {
         updatedAt: /* @__PURE__ */ new Date()
       }
     });
-    console.log("[MANUAL-SAVE][SELECT-CONFIG] \u2705 Persist\xE9", {
-      fieldId,
-      id: selectConfig.id,
-      tableReference: selectConfig.tableReference,
-      keyColumn: selectConfig.keyColumn,
-      keyRow: selectConfig.keyRow,
-      valueColumn: selectConfig.valueColumn,
-      valueRow: selectConfig.valueRow,
-      displayColumn: selectConfig.displayColumn,
-      displayRow: selectConfig.displayRow,
-      dependsOnNodeId: selectConfig.dependsOnNodeId
-    });
     return res.json(selectConfig);
   } catch (error) {
     console.error("[TreeBranchLeaf API] Error creating select config:", error);
@@ -49913,7 +49602,6 @@ router58.post("/nodes/:nodeId/normalize-step4", async (req2, res) => {
     const { nodeId } = req2.params;
     const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx3(req2);
     const { tableId: bodyTableId, displayColumn: bodyDisplayColumn } = req2.body || {};
-    console.log("[STEP4-AUTO] \u27A1\uFE0F START normalize-step4", { nodeId, bodyTableId, bodyDisplayColumn });
     const access = await ensureNodeOrgAccess(prisma32, nodeId, { organizationId, isSuperAdmin: isSuperAdmin2 });
     if (!access.ok) {
       return res.status(access.status).json({ error: access.error });
@@ -49944,7 +49632,6 @@ router58.post("/nodes/:nodeId/normalize-step4", async (req2, res) => {
       console.warn("[STEP4-AUTO] \u274C No displayColumn candidate", { tableId });
       return res.status(400).json({ error: "Impossible de d\xE9terminer displayColumn" });
     }
-    console.log("[STEP4-AUTO] \u{1F3AF} Selected displayColumn", { tableId, displayColumn: chosenDisplayColumn });
     try {
       const metaObj = table.meta ? typeof table.meta === "string" ? JSON.parse(table.meta) : JSON.parse(JSON.stringify(table.meta)) : {};
       const nextMeta = {
@@ -49958,7 +49645,6 @@ router58.post("/nodes/:nodeId/normalize-step4", async (req2, res) => {
         where: { id: tableId },
         data: { meta: nextMeta, updatedAt: /* @__PURE__ */ new Date() }
       });
-      console.log("[STEP4-AUTO] \u2705 META updated", { tableId, displayColumn: chosenDisplayColumn });
     } catch (e) {
       console.warn("[STEP4-AUTO] \u26A0\uFE0F META update failed (non-bloquant):", e.message);
     }
@@ -49989,11 +49675,6 @@ router58.post("/nodes/:nodeId/normalize-step4", async (req2, res) => {
         displayColumn: chosenDisplayColumn,
         updatedAt: /* @__PURE__ */ new Date()
       }
-    });
-    console.log("[STEP4-AUTO] \u2705 SelectConfig upserted", {
-      nodeId,
-      tableReference: sc.tableReference,
-      displayColumn: sc.displayColumn
     });
     return res.json({
       success: true,
@@ -50307,11 +49988,6 @@ router58.all("/nodes/:nodeId/table/lookup", async (req2, res) => {
         } catch (e) {
           console.warn(`[TreeBranchLeaf API] \u26A0\uFE0F Auto-upsert select-config a \xE9chou\xE9 (non bloquant):`, e);
         }
-        console.log(`[TreeBranchLeaf API] \u{1F3AF} AUTO-DEFAULT pour nodeId=${nodeId}:`, {
-          optionsCount: autoOptions.length,
-          firstFive: autoOptions.slice(0, 5),
-          detectedRole: isRowField ? "rowField" : isColumnField ? "columnField" : "fallback"
-        });
         return res.json({
           options: autoOptions,
           columns,
@@ -50471,15 +50147,6 @@ router58.patch("/submissions/:id", async (req2, res) => {
   const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx3(req2);
   const { clientId, status, name, formData } = req2.body;
   try {
-    console.log("[TreeBranchLeaf API] PATCH /submissions/:id payload", {
-      id,
-      clientId,
-      status,
-      namePresent: name !== void 0,
-      formDataPresent: formData !== void 0,
-      organizationId,
-      isSuperAdmin: isSuperAdmin2
-    });
     const submission = await prisma32.treeBranchLeafSubmission.findUnique({
       where: { id },
       select: { id: true, treeId: true, leadId: true, organizationId: true }
@@ -50511,7 +50178,6 @@ router58.patch("/submissions/:id", async (req2, res) => {
         }
       }
       if ((clientId ?? null) === (submission.leadId ?? null) && status === void 0 && name === void 0 && formData === void 0) {
-        console.log(`[TreeBranchLeaf API] PATCH /submissions/${id} - aucun changement (clientId inchang\xE9)`);
         return res.json(submission);
       }
     }
@@ -50534,7 +50200,6 @@ router58.patch("/submissions/:id", async (req2, res) => {
       where: { id },
       data: updateData
     });
-    console.log(`[TreeBranchLeaf API] \u2705 PATCH /submissions/${id} - clientId: ${clientId}, status: ${status}`);
     res.json(updatedSubmission);
   } catch (error) {
     if (error && error.code) {
@@ -52350,7 +52015,6 @@ router58.post("/nodes/:nodeId/copy-linked-variable", async (req2, res) => {
       console.warn("?? [COPY-LINKED-VAR] \xC3\u0192\xC2\xAF\xC3\u201A\xC2\xBF\xC3\u201A\xC2\xBDchec MAJ linkedVariableIds:", e.message);
     }
     try {
-      console.log(`\u{1F504} [COPY-LINKED-VAR] D\xE9clenchement \xE9valuation initiale pour ${targetNodeId}...`);
       const copiedNode = await prisma32.treeBranchLeafNode.findUnique({
         where: { id: targetNodeId },
         select: { treeId: true, calculatedValue: true }
@@ -52377,7 +52041,6 @@ router58.post("/nodes/:nodeId/copy-linked-variable", async (req2, res) => {
               updatedAt: /* @__PURE__ */ new Date()
             }
           });
-          console.log(`\u2705 [COPY-LINKED-VAR] \xC9valuation initiale termin\xE9e: ${targetNodeId} = ${evaluationResult.value}`);
         } else {
           console.warn(`\u26A0\uFE0F [COPY-LINKED-VAR] Pas de submission active trouv\xE9e pour \xE9valuation de ${targetNodeId}`);
         }
@@ -54229,10 +53892,8 @@ var TBLEvaluationEngine_default = TBLEvaluationEngine;
 init_operation_interpreter();
 init_database();
 var router60 = import_express61.default.Router();
-console.log("\u{1F9E0} [TBL INTELLIGENCE] Initialisation du routeur tbl-intelligence-routes (avec operation-interpreter)");
 var evaluationEngine = new TBLEvaluationEngine_default();
 function logRouteHit(route) {
-  console.log(`\u{1F6F0}\uFE0F  [TBL INTELLIGENCE] Hit ${route} @ ${(/* @__PURE__ */ new Date()).toISOString()}`);
 }
 router60.post("/evaluate", async (req2, res) => {
   logRouteHit("POST /api/tbl/evaluate");
@@ -54307,7 +53968,6 @@ router60.post("/evaluate", async (req2, res) => {
               valueMap.set(`@value.${key2}`, value);
             }
           }
-          console.log(`\u{1F9EE} [TBL EVALUATE] \xC9valuation directe formule: ${formula.name} (${formula.id})`);
           const valuesCache = /* @__PURE__ */ new Map();
           const labelMap = /* @__PURE__ */ new Map();
           const result = await interpretFormula(
@@ -54446,7 +54106,6 @@ async function resolveSingleEvaluation(prisma51, elementId, contextData) {
             valueMap.set(`@value.${key2}`, value);
           }
         }
-        console.log(`\u{1F9EE} [TBL EVALUATE BATCH] \xC9valuation directe formule: ${formula.name} (${formula.id})`);
         const valuesCache = /* @__PURE__ */ new Map();
         const labelMap = /* @__PURE__ */ new Map();
         const result = await interpretFormula(
@@ -54541,8 +54200,6 @@ async function resolveSingleEvaluation(prisma51, elementId, contextData) {
           valueMap.set(`@value.${nodeId}`, value);
         }
       }
-      console.log(`\u{1F9EE} [TBL EVALUATE] Utilisation de operation-interpreter pour formule: ${formulaId}`);
-      console.log(`   \u{1F4CA} ValueMap: ${valueMap.size} entr\xE9es`);
       const valuesCache = /* @__PURE__ */ new Map();
       const labelMap = /* @__PURE__ */ new Map();
       const result = await interpretFormula(
@@ -54606,11 +54263,8 @@ async function resolveSingleEvaluation(prisma51, elementId, contextData) {
         if (nodeId) {
           valueMap.set(nodeId, value);
           valueMap.set(`@value.${nodeId}`, value);
-          console.log(`   \u{1F517} Mapping label "${key2}" \u2192 nodeId "${nodeId}" = ${value}`);
         }
       }
-      console.log(`\u2696\uFE0F [TBL EVALUATE] Utilisation de operation-interpreter pour condition: ${conditionId}`);
-      console.log(`   \u{1F4CA} ValueMap: ${valueMap.size} entr\xE9es`);
       const valuesCache = /* @__PURE__ */ new Map();
       const labelMap = /* @__PURE__ */ new Map();
       const result = await interpretCondition(
@@ -54674,7 +54328,6 @@ router60.post("/condition", async (req2, res) => {
         error: "elementId requis"
       });
     }
-    console.log("\u{1F527} [TBL CONDITION] \xC9valuation avec CapacityCalculator:", elementId);
     const calculator = new CapacityCalculator();
     const context = {
       submissionId,
@@ -54682,7 +54335,6 @@ router60.post("/condition", async (req2, res) => {
       userId: "test-user"
     };
     const result = await calculator.evaluateCondition(elementId, context);
-    console.log("\u2705 [TBL CONDITION] R\xE9sultat CapacityCalculator:", result);
     return res.json({
       success: true,
       evaluation: result,
@@ -54708,7 +54360,6 @@ router60.post("/evaluate/condition/:tblCode", async (req2, res) => {
       error: "tblCode requis"
     });
   }
-  console.log("\u{1F527} [TBL EVALUATE CONDITION] \xC9valuation avec operation-interpreter:", tblCode);
   const prisma51 = db;
   try {
     const conditionRecord = await prisma51.treeBranchLeafNodeCondition.findUnique({
@@ -54726,7 +54377,6 @@ router60.post("/evaluate/condition/:tblCode", async (req2, res) => {
       submissionId || tblCode,
       prisma51
     );
-    console.log("\u2705 [TBL EVALUATE CONDITION] R\xE9sultat operation-interpreter:", result);
     return res.json({
       success: true,
       evaluation: result,
@@ -54758,7 +54408,6 @@ router60.post("/update-database-results", async (req2, res) => {
   logRouteHit("POST /api/tbl/update-database-results");
   try {
     const { submissionId = "df833cac-0b44-4b2b-bb1c-de3878f00182" } = req2.body || {};
-    console.log("\u{1F504} [TBL UPDATE] D\xE9but mise \xE0 jour base de donn\xE9es avec CapacityCalculator");
     const prisma51 = db;
     const submissionData = await prisma51.treeBranchLeafSubmissionData.findMany({
       where: {
@@ -54767,7 +54416,6 @@ router60.post("/update-database-results", async (req2, res) => {
         // Seulement les conditions (en minuscules)
       }
     });
-    console.log(`\u{1F504} [TBL UPDATE] Trouv\xE9 ${submissionData.length} donn\xE9es de conditions \xE0 mettre \xE0 jour`);
     const calculator = new CapacityCalculator();
     const context = {
       submissionId,
@@ -54780,7 +54428,6 @@ router60.post("/update-database-results", async (req2, res) => {
       try {
         const conditionId = data.sourceRef;
         if (!conditionId) {
-          console.log(`\u26A0\uFE0F [TBL UPDATE] Pas de sourceRef pour ${data.id}, ignor\xE9`);
           continue;
         }
         const result = await calculator.evaluateCondition(conditionId, context);
@@ -54805,7 +54452,6 @@ router60.post("/update-database-results", async (req2, res) => {
           }
         });
         updated++;
-        console.log(`\u2705 [TBL UPDATE] Condition ${conditionId} mise \xE0 jour:`, newOperationResult);
       } catch (error) {
         errors.push({
           dataId: data.id,
@@ -54869,7 +54515,6 @@ router60.post("/update-database-with-intelligent-translations", async (req2, res
   logRouteHit("POST /api/tbl/update-database-with-intelligent-translations");
   try {
     const { submissionId = "df833cac-0b44-4b2b-bb1c-de3878f00182" } = req2.body || {};
-    console.log("\u{1F9E0} [TBL INTELLIGENT UPDATE] D\xE9but mise \xE0 jour avec traductions intelligentes");
     const prisma51 = db;
     let TBLIntelligentTranslator;
     try {
@@ -54897,19 +54542,16 @@ router60.post("/update-database-with-intelligent-translations", async (req2, res
         TreeBranchLeafNode: true
       }
     });
-    console.log(`\u{1F9E0} [TBL INTELLIGENT UPDATE] Trouv\xE9 ${submissionData.length} donn\xE9es \xE0 traduire`);
     let updated = 0;
     const errors = [];
     for (const data of submissionData) {
       try {
-        console.log(`\u{1F527} [TBL INTELLIGENT] Traduction: ${data.TreeBranchLeafNode?.label || "Sans nom"} (${data.operationSource})`);
         const intelligentResult = await translator.translateCapacity(
           data.operationSource,
           data.operationDetail,
           data.sourceRef || data.nodeId,
           data.submissionId
         );
-        console.log(`\u2705 [TBL INTELLIGENT] Traduction g\xE9n\xE9r\xE9e: ${intelligentResult.substring(0, 100)}...`);
         await prisma51.treeBranchLeafSubmissionData.update({
           where: { id: data.id },
           data: {
@@ -54918,7 +54560,6 @@ router60.post("/update-database-with-intelligent-translations", async (req2, res
           }
         });
         updated++;
-        console.log(`\u2705 [TBL INTELLIGENT] Mis \xE0 jour: ${data.id}`);
       } catch (error) {
         errors.push({
           dataId: data.id,
@@ -55000,7 +54641,6 @@ router60.get("/nodes/:nodeId", async (req2, res) => {
   logRouteHit("GET /api/tbl/nodes/:nodeId");
   try {
     const { nodeId } = req2.params;
-    console.log("\u{1F504} [TBL NODES] R\xE9cup\xE9ration node via TBL:", nodeId);
     const prisma51 = db;
     const node = await prisma51.treeBranchLeafNode.findUnique({
       where: { id: nodeId }
@@ -55021,7 +54661,6 @@ router60.get("/nodes/:nodeId", async (req2, res) => {
 router60.get("/reusables/conditions", async (req2, res) => {
   logRouteHit("GET /api/tbl/reusables/conditions");
   try {
-    console.log("\u{1F504} [TBL CONDITIONS] R\xE9cup\xE9ration conditions via TBL");
     const prisma51 = db;
     const conditions = await prisma51.treeBranchLeafNodeCondition.findMany({
       include: {
@@ -55045,7 +54684,6 @@ router60.get("/reusables/conditions", async (req2, res) => {
 router60.get("/reusables/formulas", async (req2, res) => {
   logRouteHit("GET /api/tbl/reusables/formulas");
   try {
-    console.log("\u{1F504} [TBL FORMULAS] R\xE9cup\xE9ration formules via TBL");
     const prisma51 = db;
     const formulas = await prisma51.treeBranchLeafNodeFormula.findMany({
       include: {
@@ -66874,14 +66512,12 @@ router80.get("/:nodeId/calculated-value", async (req2, res) => {
       return res.status(404).json({ error: "N\u0153ud non trouv\xE9" });
     }
     if (node.hasLink && node.link_targetNodeId) {
-      console.log(`\u{1F517} [LINK] Champ "${node.label}" (${nodeId}) a un link vers ${node.link_targetNodeId}`);
       if (submissionId) {
         const targetSubmissionData = await prisma44.treeBranchLeafSubmissionData.findUnique({
           where: { submissionId_nodeId: { submissionId, nodeId: node.link_targetNodeId } },
           select: { value: true, fieldLabel: true, lastResolved: true }
         });
         if (targetSubmissionData?.value) {
-          console.log(`\u{1F517} [LINK] Valeur trouv\xE9e dans SubmissionData: "${targetSubmissionData.value}"`);
           return res.json({
             success: true,
             nodeId: node.id,
@@ -66902,7 +66538,6 @@ router80.get("/:nodeId/calculated-value", async (req2, res) => {
         select: { calculatedValue: true, label: true, calculatedAt: true }
       });
       if (targetNode?.calculatedValue) {
-        console.log(`\u{1F517} [LINK] Valeur trouv\xE9e dans TreeBranchLeafNode: "${targetNode.calculatedValue}"`);
         return res.json({
           success: true,
           nodeId: node.id,
@@ -66917,7 +66552,6 @@ router80.get("/:nodeId/calculated-value", async (req2, res) => {
           linkTargetLabel: targetNode.label
         });
       }
-      console.log(`\u26A0\uFE0F [LINK] Champ "${node.label}" - pas de valeur disponible pour le lien vers ${node.link_targetNodeId}`);
     }
     const isSumTotalNode = typeof nodeId === "string" && nodeId.endsWith("-sum-total");
     if (isSumTotalNode) {
@@ -66959,7 +66593,6 @@ router80.get("/:nodeId/calculated-value", async (req2, res) => {
             debugParts.push({ refId: refNodeId, value: resolvedVal, source: valSource });
           }
         }
-        console.log(`\u{1F3AF} [SUM-TOTAL DIRECT] ${nodeId} (${node.label}) = ${sum}`, debugParts);
         await prisma44.treeBranchLeafNode.update({
           where: { id: nodeId },
           data: {
@@ -67035,7 +66668,6 @@ router80.get("/:nodeId/calculated-value", async (req2, res) => {
         const fromOpResult = hasValidScoped ? null : extractValueFromOperationResult(scoped?.operationResult);
         const resolved = hasValidScoped ? parsedScoped : fromOpResult;
         if (hasMeaningfulValue(resolved)) {
-          console.log(`\u2705 [DISPLAY FIELD] ${nodeId} (${node.label}) retourne valeur SubmissionData: ${resolved}`);
           return res.json({
             success: true,
             nodeId: node.id,
@@ -67049,7 +66681,6 @@ router80.get("/:nodeId/calculated-value", async (req2, res) => {
             isDisplayField: true
           });
         }
-        console.log(`\u26A0\uFE0F [DISPLAY FIELD] ${nodeId} (${node.label}) pas de valeur SubmissionData, recalcul n\xE9cessaire`);
       }
     }
     const preferSubmissionData = Boolean(submissionId) && !isDisplayField;
@@ -67252,14 +66883,6 @@ router80.get("/:nodeId/calculated-value", async (req2, res) => {
     const canRecalculateHere = hasTableLookup && !hasConditionVariable && !hasTreeSourceVariable;
     const canRecalculateDisplayField = isDisplayField && isRealSubmission && (hasTableLookup || hasFormulaVariable || hasConditionVariable || hasTreeSourceVariable || node.hasFormula);
     if ((canRecalculateHere || canRecalculateDisplayField) && node.treeId && isRealSubmission) {
-      console.log(`\u{1F525} [CalculatedValueController] Node "${node.label}" - recalcul ${isDisplayField ? "DISPLAY field" : "table lookup"}:`, {
-        nodeId,
-        hasTableLookup,
-        hasFormulaVariable,
-        hasConditionVariable,
-        isDisplayField,
-        submissionId
-      });
       try {
         const { evaluateVariableOperation: evaluateVariableOperation2 } = await Promise.resolve().then(() => (init_operation_interpreter(), operation_interpreter_exports));
         const result = await evaluateVariableOperation2(
@@ -67267,7 +66890,6 @@ router80.get("/:nodeId/calculated-value", async (req2, res) => {
           submissionId,
           prisma44
         );
-        console.log("\u{1F3AF} [CalculatedValueController] R\xE9sultat operation-interpreter:", result);
         if (result && (result.value !== void 0 || result.operationResult !== void 0)) {
           const stringValue = String(result.value ?? result.operationResult);
           if (isDisplayField) {
@@ -67326,7 +66948,6 @@ router80.get("/:nodeId/calculated-value", async (req2, res) => {
       }
     }
     if (isDisplayField) {
-      console.log(`\u26A0\uFE0F [CalculatedValueController] DISPLAY field "${node.label}" - pas de valeur scop\xE9e, retourne null`);
       return res.json({
         success: true,
         nodeId: node.id,
@@ -67415,16 +67036,6 @@ router80.post("/:nodeId/store-calculated-value", async (req2, res) => {
     if (calculatedValue === void 0) {
       return res.status(400).json({ error: "calculatedValue requis" });
     }
-    console.log("[CalculatedValueController] POST store-calculated-value", {
-      nodeId,
-      calculatedValue,
-      calculatedBy,
-      submissionId,
-      headers: {
-        organization: req2.headers["x-organization-id"],
-        referer: req2.headers["referer"]
-      }
-    });
     const updated = await prisma44.treeBranchLeafNode.update({
       where: { id: nodeId },
       data: {
@@ -67439,12 +67050,6 @@ router80.post("/:nodeId/store-calculated-value", async (req2, res) => {
         calculatedAt: true,
         calculatedBy: true
       }
-    });
-    console.log("\u2705 [CalculatedValueController] Valeur stock\xE9e:", {
-      nodeId,
-      calculatedValue,
-      calculatedBy,
-      submissionId
     });
     return res.json({
       success: true,
@@ -67489,12 +67094,6 @@ router80.post("/store-batch-calculated-values", async (req2, res) => {
         });
       }
     }
-    console.log("\u2705 [CalculatedValueController] BATCH stockage:", {
-      submissionId,
-      total: values.length,
-      success: results.filter((r) => r.success).length,
-      failed: results.filter((r) => !r.success).length
-    });
     return res.json({
       success: true,
       results,
@@ -73171,27 +72770,24 @@ async function batchPostDuplicationProcessing(prisma51, copiedNodeIds) {
       TreeBranchLeafNodeTable: { select: { id: true } }
     }
   });
+  const updateOps = [];
   for (const node of nodes) {
     try {
       const currentMetadata = node.metadata && typeof node.metadata === "object" ? node.metadata : {};
       const combinedMetadata = {
         ...currentMetadata,
-        // From enforceStrictIsolation:
         strictlyIsolated: true,
         isolatedAt: now,
         calculatedValueReset: true,
         independentCalculation: true,
-        // From forceIndependentCalculation:
         lastForceRecalc: now,
         forceIndependentCalc: true,
         requiresFreshCalculation: true,
         calculationInvalidated: triggerTimestamp,
-        // From createRecalculationTriggers:
         recalcTrigger: triggerTimestamp,
         mustRecalculate: true,
         independentNode: true,
         noFallbackToOriginal: true,
-        // From blockFallbackToOriginalValues:
         blockFallbackToOriginal: true,
         enforceIndependentCalculation: true,
         lastAntiFactbackUpdate: now,
@@ -73206,15 +72802,29 @@ async function batchPostDuplicationProcessing(prisma51, copiedNodeIds) {
         updateData.hasTable = false;
         result.hasTableFixCount++;
       }
-      await prisma51.treeBranchLeafNode.update({
-        where: { id: node.id },
-        data: updateData
-      });
+      updateOps.push(
+        prisma51.treeBranchLeafNode.update({
+          where: { id: node.id },
+          data: updateData
+        })
+      );
       result.processedCount++;
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error);
       result.errors.push({ nodeId: node.id, error: errorMsg });
-      console.error(`[BATCH-POST-DUP] Error for ${node.id}:`, errorMsg);
+    }
+  }
+  if (updateOps.length > 0) {
+    try {
+      await prisma51.$transaction(updateOps);
+    } catch (txError) {
+      for (const op of updateOps) {
+        try {
+          await op;
+        } catch (e) {
+          console.error(`[BATCH-POST-DUP] Individual update failed:`, e.message);
+        }
+      }
     }
   }
   return result;
@@ -73560,9 +73170,6 @@ async function runRepeatExecution(prisma51, req2, execution) {
         // 🎯 IMPORTANT: Ajouter les triggerNodeIds suffixés depuis l'ORIGINAL
         ...rootSuffixedTriggers ? { triggerNodeIds: rootSuffixedTriggers } : {}
       };
-      console.log("\u{1F534}\u{1F534}\u{1F534} [AVANT UPDATE] newRootId:", newRootId);
-      console.log("\u{1F534}\u{1F534}\u{1F534} [AVANT UPDATE] subType \xE0 appliquer:", template.subType);
-      console.log("\u{1F534}\u{1F534}\u{1F534} [AVANT UPDATE] triggers suffix\xE9s:", rootSuffixedTriggers);
       const updateResult = await prisma51.treeBranchLeafNode.update({
         where: { id: newRootId },
         data: {
@@ -73570,7 +73177,6 @@ async function runRepeatExecution(prisma51, req2, execution) {
           metadata: updatedMetadata
         }
       });
-      console.log("\u{1F7E2}\u{1F7E2}\u{1F7E2} [APR\xC8S UPDATE] R\xE9sultat:", updateResult.id, "subType:", updateResult.subType);
       triggersFixDebug.push({
         nodeId: newRootId,
         label: created.label || "root",
@@ -73789,15 +73395,44 @@ async function runRepeatExecution(prisma51, req2, execution) {
   if (duplicatedNodeIds.size > 0) {
     try {
       const completeDuplicationReport = await fixAllCompleteDuplications(prisma51, repeaterNodeId);
-      for (const nodeId of duplicatedNodeIds) {
-        const originalNodeId = originalNodeIdByCopyId.get(nodeId);
-        if (!originalNodeId) continue;
-        const suffixToken = deriveCopySuffixToken(originalNodeId, nodeId);
-        if (!suffixToken) continue;
-        await tableLookupDuplicationService.duplicateTableLookupSystem(prisma51, originalNodeId, {
-          copiedNodeId: nodeId,
-          suffixToken
-        });
+      {
+        const dupPairs = [];
+        for (const nodeId of duplicatedNodeIds) {
+          const originalNodeId = originalNodeIdByCopyId.get(nodeId);
+          if (!originalNodeId) continue;
+          const suffixToken = deriveCopySuffixToken(originalNodeId, nodeId);
+          if (!suffixToken) continue;
+          dupPairs.push({ originalNodeId, copiedNodeId: nodeId, suffixToken });
+        }
+        if (dupPairs.length > 0) {
+          const originalIds = [...new Set(dupPairs.map((p) => p.originalNodeId))];
+          const [selectConfigCounts, nodesWithTables] = await Promise.all([
+            prisma51.treeBranchLeafSelectConfig.groupBy({
+              by: ["nodeId"],
+              where: { nodeId: { in: originalIds } },
+              _count: true
+            }),
+            prisma51.treeBranchLeafNode.findMany({
+              where: { id: { in: originalIds }, table_activeId: { not: null } },
+              select: { id: true }
+            })
+          ]);
+          const hasLookupSet = /* @__PURE__ */ new Set([
+            ...selectConfigCounts.map((sc) => sc.nodeId),
+            ...nodesWithTables.map((n) => n.id)
+          ]);
+          const lookupPairs = dupPairs.filter((p) => hasLookupSet.has(p.originalNodeId));
+          const CHUNK_SIZE = 5;
+          for (let i = 0; i < lookupPairs.length; i += CHUNK_SIZE) {
+            const chunk = lookupPairs.slice(i, i + CHUNK_SIZE);
+            await Promise.all(chunk.map(
+              (p) => tableLookupDuplicationService.duplicateTableLookupSystem(prisma51, p.originalNodeId, {
+                copiedNodeId: p.copiedNodeId,
+                suffixToken: p.suffixToken
+              })
+            ));
+          }
+        }
       }
       await reassignCopiedNodesToDuplicatedParents(prisma51, duplicatedNodeIds, originalNodeIdByCopyId);
       const batchResult = await batchPostDuplicationProcessing(
@@ -74137,7 +73772,6 @@ function createRepeatRouter(prisma51) {
     try {
       const { repeaterId } = req2.params;
       const { targetCount } = req2.body || {};
-      console.log(`\u26A1 [PRELOAD] D\xE9marrage pour repeater ${repeaterId}, cible: ${targetCount}`);
       if (typeof targetCount !== "number" || targetCount < 1) {
         return res.status(400).json({ error: "targetCount doit \xEAtre un nombre >= 1" });
       }
@@ -74162,7 +73796,6 @@ function createRepeatRouter(prisma51) {
       if (templateNodeIds.length === 0) {
         return res.status(400).json({ error: "Aucun templateNodeIds configur\xE9 pour ce repeater" });
       }
-      console.log(`\u26A1 [PRELOAD] Templates: ${templateNodeIds.join(", ")}`);
       const orStartsWith = templateNodeIds.map((templateId) => ({ id: { startsWith: `${templateId}-` } }));
       const allCopies = await prisma51.treeBranchLeafNode.findMany({
         where: {
@@ -74187,15 +73820,12 @@ function createRepeatRouter(prisma51) {
       const existingSuffixes = Array.from(suffixSet).sort((a, b) => a - b);
       const existingCopiesCount = existingSuffixes.length;
       const totalCurrentInstances = existingCopiesCount + 1;
-      console.log(`\u26A1 [PRELOAD] Suffixes existants: [${existingSuffixes.join(", ")}] (total: ${totalCurrentInstances})`);
       const copiesToCreate = Math.max(0, targetCount - totalCurrentInstances);
       const copiesToDelete = Math.max(0, totalCurrentInstances - targetCount);
-      console.log(`\u26A1 [PRELOAD] \xC0 cr\xE9er: ${copiesToCreate}, \xE0 supprimer: ${copiesToDelete}`);
       const createdNodes = [];
       const deletedNodes = [];
       if (copiesToDelete > 0) {
         const suffixesToDelete = existingSuffixes.slice(-copiesToDelete);
-        console.log(`\u{1F5D1}\uFE0F [PRELOAD] Suppression des suffixes: [${suffixesToDelete.join(", ")}]`);
         for (const suffix of suffixesToDelete) {
           const nodesToDeleteForSuffix = await prisma51.treeBranchLeafNode.findMany({
             where: {
@@ -74204,10 +73834,8 @@ function createRepeatRouter(prisma51) {
             },
             select: { id: true }
           });
-          console.log(`\u{1F5D1}\uFE0F [PRELOAD] Suffixe -${suffix}: ${nodesToDeleteForSuffix.length} n\u0153uds \xE0 supprimer`);
           for (const node of nodesToDeleteForSuffix) {
             try {
-              console.log(`\u{1F5D1}\uFE0F [PRELOAD] Suppression ${node.id}...`);
               await deleteNodeWithCascade(prisma51, repeaterNode.treeId, node.id);
               deletedNodes.push(node.id);
             } catch (deleteError) {
@@ -74222,7 +73850,6 @@ function createRepeatRouter(prisma51) {
             where: { nodeId: { in: deletedNodes } }
           });
           if (deletedSD.count > 0) {
-            console.log(`\u{1F9F9} [PRELOAD] ${deletedSD.count} entr\xE9e(s) SubmissionData orpheline(s) supprim\xE9e(s)`);
           }
         } catch (sdErr) {
           console.warn(`\u26A0\uFE0F [PRELOAD] Erreur nettoyage SubmissionData:`, sdErr.message);
@@ -74246,7 +73873,6 @@ function createRepeatRouter(prisma51) {
       }
       if (copiesToCreate > 0) {
         for (let i = 0; i < copiesToCreate; i++) {
-          console.log(`\u26A1 [PRELOAD] Cr\xE9ation copie ${i + 1}/${copiesToCreate}...`);
           try {
             const executionPlan = await executeRepeatDuplication(prisma51, repeaterId, {});
             const executionSummary = await runRepeatExecution(
@@ -74256,7 +73882,6 @@ function createRepeatRouter(prisma51) {
             );
             if (executionSummary.duplicated?.newId) {
               createdNodes.push(executionSummary.duplicated.newId);
-              console.log(`\u2705 [PRELOAD] Copie cr\xE9\xE9e: ${executionSummary.duplicated.newId}`);
             }
           } catch (execError) {
             console.error(`\u274C [PRELOAD] Erreur cr\xE9ation copie ${i + 1}:`, execError);
@@ -74264,7 +73889,6 @@ function createRepeatRouter(prisma51) {
         }
       }
       const finalTotal = totalCurrentInstances + createdNodes.length - (copiesToDelete > 0 ? copiesToDelete : 0);
-      console.log(`\u2705 [PRELOAD] Termin\xE9: ${createdNodes.length} cr\xE9\xE9es, ${deletedNodes.length} supprim\xE9es, total: ${finalTotal}`);
       res.json({
         success: true,
         message: `${createdNodes.length} cr\xE9\xE9es, ${deletedNodes.length} supprim\xE9es`,
@@ -77734,7 +77358,6 @@ async function syncVariableSourceRefs() {
       }
       const dbSourceRef = node.TreeBranchLeafNodeVariable.sourceRef;
       if (dbSourceRef && (dbSourceRef.startsWith("node-formula:") || dbSourceRef.startsWith("formula:") || dbSourceRef.startsWith("node-condition:") || dbSourceRef.startsWith("condition:") || dbSourceRef.startsWith("@table.") || dbSourceRef.startsWith("table:") || dbSourceRef.startsWith("@value."))) {
-        console.log(`[SYNC HOOK] \u{1F6E1}\uFE0F PROTECTION: Variable ${node.TreeBranchLeafNodeVariable.id} conserve sa capacite DB "${dbSourceRef}" (ignore JSON "${jsonSourceRef}")`);
         skipCount++;
         continue;
       }
@@ -77754,16 +77377,12 @@ async function syncVariableSourceRefs() {
       syncCount++;
     }
     if (syncCount > 0) {
-      console.log(`[SYNC HOOK] \u2705 ${syncCount} variable(s) synchronisee(s)`);
     }
     if (skipCount > 0) {
-      console.log(`[SYNC HOOK] \u23ED\uFE0F ${skipCount} variable(s) ignoree(s) (protection @table/@value)`);
     }
     if (blockedCount > 0) {
-      console.log(`[SYNC HOOK] \u{1F6E1}\uFE0F ${blockedCount} synchronisation(s) BLOQUEE(s) - references inexistantes`);
     }
     if (syncCount === 0 && skipCount === 0 && blockedCount === 0) {
-      console.log(`[SYNC HOOK] \u2705 Aucune synchronisation necessaire`);
     }
   } catch (error) {
     console.error("\u274C [SYNC HOOK] Erreur:", error);

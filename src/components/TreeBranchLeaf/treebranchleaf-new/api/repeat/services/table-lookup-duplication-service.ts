@@ -28,7 +28,6 @@ export class TableLookupDuplicationService {
       ? arg.copiedNodeId
       : `${normalizedOriginalId}${suffixToken}`;
 
-    console.log(`[TBL-DUP] START duplicateTableLookupSystem: orig=${originalNodeId}, copy=${copiedNodeId}`);
     
     try {
       // 🔧 CRITICAL FIX: Vérifier que le node copié existe AVANT de créer les SelectConfigs
@@ -38,23 +37,19 @@ export class TableLookupDuplicationService {
       });
       
       if (!copiedNode) {
-        console.log(`[TBL-DUP] ⚠️ Copied node does not exist (shared reference): ${copiedNodeId}, skipping`);
         return;
       }
       
-      console.log(`[TBL-DUP] ✅ Copied node exists: ${copiedNode.label}, proceeding...`);
       
       // 1. RÃƒÂ©cupÃƒÂ©rer les configurations SELECT du nÃ…â€œud original
       const originalSelectConfigs = await prisma.treeBranchLeafSelectConfig.findMany({
         where: { nodeId: originalNodeId }
       });
       
-      console.log(`[TBL-DUP] Found ${originalSelectConfigs.length} SelectConfigs for node=${originalNodeId}`);
       
       // 🔥 FIX: Si aucun SelectConfig n'existe sur l'original, créer un NOUVEAU pour la copie
       // Cas typique: nœud LOOKUP qui n'a jamais eu ÉTAPE 4 configuré
       if (originalSelectConfigs.length === 0) {
-        console.log(`[TBL-DUP] ⚠️ No SelectConfigs on original, creating NEW one for copy`);
         
         // Chercher la table active du nœud original
         const originalNode = await prisma.treeBranchLeafNode.findUnique({
@@ -78,7 +73,6 @@ export class TableLookupDuplicationService {
             // ✅ IMPORTANT: Les colonnes de la table copiée sont DÉJÀ suffixées.
             // Ne pas re-suffixer displayColumn ici (évite Puissance-1-1)
             const displayCol = firstColName;
-            console.log(`[TBL-DUP] Creating NEW SelectConfig with displayColumn="${displayCol}"`);
             await prisma.treeBranchLeafSelectConfig.create({
               data: {
                 id: randomUUID(),
@@ -103,22 +97,17 @@ export class TableLookupDuplicationService {
                 updatedAt: new Date()
               }
             });
-            console.log(`[TBL-DUP] ✅ NEW SelectConfig created with displayColumn="${displayCol}"`);
             return;  // On a créé le SelectConfig, on termine
           }
         }
-        console.log(`[TBL-DUP] No table or columns found, skipping`);
         return;
       }
       
       // 2. Pour chaque configuration SELECT, dupliquer la table TBL et crÃƒÂ©er la configuration
       for (const selectConfig of originalSelectConfigs) {
-        console.log(`[TBL-DUP] Processing SelectConfig id=${selectConfig.id} tableRef=${selectConfig.tableReference}`);
         await this.duplicateTableAndSelectConfig(prisma, selectConfig, copiedNodeId, suffixToken);
-        console.log(`[TBL-DUP] ✅ Completed SelectConfig ${selectConfig.id}`);
       }
       
-      console.log(`[TBL-DUP] ✅ SUCCESS duplicateTableLookupSystem`);
     } catch (error) {
       console.error(`[TBL-DUP] ERROR: ${error instanceof Error ? error.message : String(error)}`);
       if (error instanceof Error) console.error(`[TBL-DUP] Stack: ${error.stack}`);
@@ -172,9 +161,6 @@ export class TableLookupDuplicationService {
 
       if (!nodeOwnerExists && !isTableOwnedByThisNode) {
         // C'est un node en linkedTableIds qui n'a pas été copié
-        console.log(
-          `[TBL-DUP] Creating stub node "${copiedTableOwnerNodeId}" for table owner`
-        );
         const originalOwnerNode = await prisma.treeBranchLeafNode.findUnique({
           where: { id: originalTable.nodeId },
           select: { 
@@ -200,7 +186,6 @@ export class TableLookupDuplicationService {
               }
             });
             nodeOwnerExists = createdNode;
-            console.log(`[TBL-DUP] ✅ Stub node created: ${copiedTableOwnerNodeId}`);
           } catch (err) {
             console.error(`[TBL-DUP] ❌ Failed to create stub node: ${err.message}`);
             throw err; // Propager l'erreur pour arrêter le processus
@@ -241,11 +226,9 @@ export class TableLookupDuplicationService {
           // Ajouter operator '=' si comparisonColumn défini
           if (metaObj?.lookup?.rowSourceOption?.comparisonColumn && !metaObj.lookup.rowSourceOption.operator) {
             metaObj.lookup.rowSourceOption.operator = '=';
-            console.log(`[TBL-DUP] ✅ Ajout operator '=' pour rowSourceOption`);
           }
           if (metaObj?.lookup?.columnSourceOption?.comparisonColumn && !metaObj.lookup.columnSourceOption.operator) {
             metaObj.lookup.columnSourceOption.operator = '=';
-            console.log(`[TBL-DUP] ✅ Ajout operator '=' pour columnSourceOption`);
           }
           // Suffixer comparisonColumn
           if (metaObj?.lookup?.rowSourceOption?.comparisonColumn) {
@@ -261,7 +244,6 @@ export class TableLookupDuplicationService {
             }
           }
           // Suffixer displayColumn
-          console.log(`[TBL-DUP] DEBUG: displayColumn original = "${metaObj?.lookup?.displayColumn}"`);
           if (metaObj?.lookup?.displayColumn) {
             if (Array.isArray(metaObj.lookup.displayColumn)) {
               metaObj.lookup.displayColumn = metaObj.lookup.displayColumn.map((col: string) => {
@@ -276,9 +258,7 @@ export class TableLookupDuplicationService {
                 metaObj.lookup.displayColumn = `${val}${suffix}`;
               }
             }
-            console.log(`[TBL-DUP] ✅ displayColumn suffixé = "${metaObj.lookup.displayColumn}"`);
           } else {
-            console.log(`[TBL-DUP] ❌ displayColumn non défini!`);
           }
           // Suffixer displayRow
           if (metaObj?.lookup?.displayRow) {
@@ -328,7 +308,6 @@ export class TableLookupDuplicationService {
                 const isNumericName = /^-?\d+(\.\d+)?$/.test(baseName.trim());
                 const shouldSuffix = baseName.length > 0 && !isNumericName && !baseName.endsWith(suffix);
                 const newName = shouldSuffix ? `${baseName}${suffix}` : baseName;
-                console.log(`[TBL-DUP] Column ${idx}: "${col.name}" -> "${newName}" (columnIndex: ${col.columnIndex} -> ${idx})`);
                 return {
                   id: col.id ? `${col.id}${suffix}` : randomUUID(),
                   // ✅ FIX 11/01/2026: NE PAS inclure tableId dans nested create - Prisma le remplit automatiquement
@@ -358,7 +337,6 @@ export class TableLookupDuplicationService {
       } else {
         // ⚠️ CRITICAL FIX: Si la table existe déjà, SUPPRIMER et RECRÉER les colonnes
         // pour s'assurer que le suffixe est correctement appliqué
-        console.log(`[TBL-DUP] Table "${copiedTableId}" existe déjà, mise à jour des colonnes...`);
         
         // Supprimer les anciennes colonnes
         await prisma.treeBranchLeafNodeTableColumn.deleteMany({
@@ -372,7 +350,6 @@ export class TableLookupDuplicationService {
             const isNumericName = /^-?\d+(\.\d+)?$/.test(baseName.trim());
             const shouldSuffix = baseName.length > 0 && !isNumericName && !baseName.endsWith(suffix);
             const newName = shouldSuffix ? `${baseName}${suffix}` : baseName;
-            console.log(`[TBL-DUP] Update Column ${idx}: "${col.name}" -> "${newName}"`);
             return prisma.treeBranchLeafNodeTableColumn.create({
               data: {
                 id: col.id ? `${col.id}${suffix}` : randomUUID(),
@@ -388,13 +365,11 @@ export class TableLookupDuplicationService {
           })
         );
         
-        console.log(`[TBL-DUP] ✅ ${newColumns.length} colonnes créées avec suffixe`);
         
         await prisma.treeBranchLeafNodeTable.update({
           where: { id: copiedTableId },
           data: { meta: rewrittenMeta, updatedAt: new Date() }
         });
-        console.log(`[TBL-DUP] ✅ Meta de la table mise à jour avec suffixes`);
       }
       
       // 3. CrÃƒÂ©er la configuration SELECT pour le nÃ…â€œud copiÃƒÂ©
@@ -412,7 +387,6 @@ export class TableLookupDuplicationService {
         const shouldSuffixColumns = true; // TOUJOURS suffixer les références pour la table copiée
         // ✅ FIX 11/01/2026: Utiliser le paramètre 'suffix' déjà défini (computedLabelSuffix n'existe pas)
         
-        console.log(`[TBL-DUP] Création SelectConfig: nodeId=${copiedNodeId}, tableRef=${copiedTableId}, displayColumn=${originalSelectConfig.displayColumn || '(null)'}`);
         
         await prisma.treeBranchLeafSelectConfig.create({
           data: {
@@ -446,10 +420,8 @@ export class TableLookupDuplicationService {
                 const isNumericName = /^-?\d+(\.\d+)?$/.test(baseName.trim());
                 const shouldSuffix = baseName.length > 0 && !isNumericName && !baseName.endsWith(suffix);
                 const result = shouldSuffix ? `${baseName}${suffix}` : baseName;
-                console.log(`[TBL-DUP] displayColumn init: firstCol="${firstCol.name}" → "${result}"`);
                 return result;
               }
-              console.log(`[TBL-DUP] displayColumn: AUCUNE COLONNE TROUVÉE`);
               return null;
             })(),
             displayRow: originalSelectConfig.displayRow
@@ -472,7 +444,6 @@ export class TableLookupDuplicationService {
           }
         });
         
-        console.log(`[TBL-DUP] ✅ SelectConfig créé avec displayColumn SAUVEGARDÉ en DB`);
         
         // 🔧 FIX: Mise à jour du nœud - SEULEMENT si c'est le VRAI propriétaire
         // 🔥 CRITICAL FIX 08/01/2026: Ne PAS ajouter linkedTableIds pour les INPUT fields (fieldType = null)
