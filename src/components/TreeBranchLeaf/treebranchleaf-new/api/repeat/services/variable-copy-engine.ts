@@ -1054,13 +1054,9 @@ export async function copyVariableWithCapacities(
               
               for (const f of originalFormulas) {
                 const newFormulaId = appendSuffixOnce(stripTrailingNumeric(f.id));
-                const existingFormula = await prisma.treeBranchLeafNodeFormula.findUnique({ where: { id: newFormulaId } });
-                
-                if (existingFormula) {
-                  if (existingFormula.nodeId === displayNodeId) {
-                    copiedFormulaIds.push(newFormulaId);
-                    continue;
-                  }
+                // PERF: Check formulaIdMap instead of DB findUnique (saves 1 query per formula)
+                if (formulaIdMap.has(f.id)) {
+                  copiedFormulaIds.push(formulaIdMap.get(f.id)!);
                   continue;
                 }
                 
@@ -1071,7 +1067,7 @@ export async function copyVariableWithCapacities(
                     displayNodeId,
                     suffix,
                     prisma,
-                    { formulaIdMap, nodeIdMap }
+                    { formulaIdMap, nodeIdMap, skipLinking: true, skipCapacitySync: true }
                   );
 
                   if (formulaResult.success) {
@@ -1886,24 +1882,15 @@ async function addToNodeLinkedField(
   idsToAdd: string[]
 ): Promise<void> {
   if (!idsToAdd || idsToAdd.length === 0) return;
-
-  const node = await prisma.treeBranchLeafNode.findUnique({
-    where: { id: nodeId },
-    select: { [field]: true }
-  });
-
-  if (!node) {
-    console.warn(`⚠️ Nœud ${nodeId} introuvable pour MAJ ${field}`);
-    return;
+  // PERF: Use single update with push instead of findUnique + merge + update (saves 1 query per call)
+  try {
+    await prisma.treeBranchLeafNode.update({
+      where: { id: nodeId },
+      data: { [field]: { push: idsToAdd } }
+    });
+  } catch (e) {
+    // Node doesn't exist — ignore silently
   }
-
-  const current = (node[field] || []) as string[];
-  const newIds = [...new Set([...current, ...idsToAdd])]; // Dédupliquer
-
-  await prisma.treeBranchLeafNode.update({
-    where: { id: nodeId },
-    data: { [field]: { set: newIds } }
-  });
 }
 
 // Remplace une variable liée par sa version suffixée sur un nœud donné

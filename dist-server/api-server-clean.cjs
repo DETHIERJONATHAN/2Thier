@@ -32356,38 +32356,6 @@ function extractNodeAndCapacityRefsFromTable(tableData) {
   for (const ref of extractCapacityRefsFromString(str)) capacityRefs.add(ref);
   return { nodeIds, capacityRefs };
 }
-async function getNodeLinkedField(client, nodeId, field) {
-  try {
-    const node = await client.treeBranchLeafNode.findUnique({
-      where: { id: nodeId },
-      select: { [field]: true }
-    });
-    if (!node) return [];
-    const value = node[field];
-    if (Array.isArray(value)) return value.filter(Boolean);
-    return [];
-  } catch (e) {
-    console.warn(`\xC3\xA2\xC5\xA1\xC2\xA0\xC3\xAF\xC2\xB8\xC2\x8F Impossible de lire ${field} pour n\xC3\u2026\xE2\u20AC\u0153ud ${nodeId}:`, e.message);
-    return [];
-  }
-}
-async function setNodeLinkedField(client, nodeId, field, values) {
-  try {
-    const uniqueValues = Array.from(new Set(values.filter(Boolean)));
-    const exists = await client.treeBranchLeafNode.findUnique({
-      where: { id: nodeId },
-      select: { id: true }
-    });
-    if (!exists) {
-      return;
-    }
-    await client.treeBranchLeafNode.update({
-      where: { id: nodeId },
-      data: { [field]: uniqueValues }
-    });
-  } catch (e) {
-  }
-}
 async function gatherNodeIdsRecursively(client, sourceRef, visited = /* @__PURE__ */ new Set()) {
   const aggregated = /* @__PURE__ */ new Set();
   const norm = normalizeCapacityRef(sourceRef);
@@ -32453,10 +32421,13 @@ async function gatherNodeIdsRecursively(client, sourceRef, visited = /* @__PURE_
 }
 async function addToNodeLinkedField(client, nodeId, field, idsToAdd) {
   if (!idsToAdd || idsToAdd.length === 0) return;
-  const current = await getNodeLinkedField(client, nodeId, field);
-  const updated = Array.from(/* @__PURE__ */ new Set([...current, ...idsToAdd.filter(Boolean)]));
-  if (updated.length === current.length) return;
-  await setNodeLinkedField(client, nodeId, field, updated);
+  try {
+    await client.treeBranchLeafNode.update({
+      where: { id: nodeId },
+      data: { [field]: { push: idsToAdd.filter(Boolean) } }
+    });
+  } catch (e) {
+  }
 }
 async function linkConditionToAllNodes(client, conditionId, conditionSet) {
   const nodeIds = extractNodeIdsFromCondition(conditionSet);
@@ -33889,19 +33860,21 @@ async function copyFormulaCapacity(originalFormulaId, newNodeId, suffix, prisma5
         updatedAt: /* @__PURE__ */ new Date()
       }
     });
-    try {
-      await linkFormulaToAllNodes(prisma51, newFormulaId, rewrittenTokens);
-    } catch (e) {
-      console.error(`\xC3\xA2\xC2\x9D\xC5\u2019 Erreur LIAISON AUTOMATIQUE:`, e.message);
+    if (!options.skipLinking) {
+      try {
+        await linkFormulaToAllNodes(prisma51, newFormulaId, rewrittenTokens);
+      } catch (e) {
+        console.error(`\xC3\xA2\xC2\x9D\xC5\u2019 Erreur LIAISON AUTOMATIQUE:`, e.message);
+      }
     }
-    if (ownerNodeExistsForUpdate) {
+    if (!options.skipLinking && ownerNodeExistsForUpdate) {
       try {
         await addToNodeLinkedField2(prisma51, finalOwnerNodeId, "linkedFormulaIds", [newFormulaId]);
       } catch (e) {
         console.warn(`Erreur MAJ linkedFormulaIds du proprietaire:`, e.message);
       }
     }
-    if (ownerNodeExistsForUpdate) {
+    if (!options.skipCapacitySync && ownerNodeExistsForUpdate) {
       try {
         await prisma51.treeBranchLeafNode.update({
           where: { id: finalOwnerNodeId },
@@ -33935,20 +33908,13 @@ async function copyFormulaCapacity(originalFormulaId, newNodeId, suffix, prisma5
 }
 async function addToNodeLinkedField2(prisma51, nodeId, field, idsToAdd) {
   if (!idsToAdd || idsToAdd.length === 0) return;
-  const node = await prisma51.treeBranchLeafNode.findUnique({
-    where: { id: nodeId },
-    select: { [field]: true }
-  });
-  if (!node) {
-    console.warn(`\xC3\xA2\xC5\xA1\xC2\xA0\xC3\xAF\xC2\xB8\xC2\x8F N\xC3\u2026\xE2\u20AC\u0153ud ${nodeId} introuvable pour MAJ ${field}`);
-    return;
+  try {
+    await prisma51.treeBranchLeafNode.update({
+      where: { id: nodeId },
+      data: { [field]: { push: idsToAdd } }
+    });
+  } catch (e) {
   }
-  const current = node[field] || [];
-  const newIds = [.../* @__PURE__ */ new Set([...current, ...idsToAdd])];
-  await prisma51.treeBranchLeafNode.update({
-    where: { id: nodeId },
-    data: { [field]: { set: newIds } }
-  });
 }
 
 // src/components/TreeBranchLeaf/treebranchleaf-new/api/copy-capacity-condition.ts
@@ -35313,12 +35279,8 @@ async function copyVariableWithCapacities(originalVarId, suffix, newNodeId, pris
                 });
                 for (const f of originalFormulas) {
                   const newFormulaId = appendSuffixOnce(stripTrailingNumeric(f.id));
-                  const existingFormula = await prisma51.treeBranchLeafNodeFormula.findUnique({ where: { id: newFormulaId } });
-                  if (existingFormula) {
-                    if (existingFormula.nodeId === displayNodeId2) {
-                      copiedFormulaIds.push(newFormulaId);
-                      continue;
-                    }
+                  if (formulaIdMap.has(f.id)) {
+                    copiedFormulaIds.push(formulaIdMap.get(f.id));
                     continue;
                   }
                   try {
@@ -35327,7 +35289,7 @@ async function copyVariableWithCapacities(originalVarId, suffix, newNodeId, pris
                       displayNodeId2,
                       suffix,
                       prisma51,
-                      { formulaIdMap, nodeIdMap }
+                      { formulaIdMap, nodeIdMap, skipLinking: true, skipCapacitySync: true }
                     );
                     if (formulaResult.success) {
                       formulaIdMap.set(f.id, formulaResult.newFormulaId);
@@ -35931,20 +35893,13 @@ async function createDisplayNodeForExistingVariable(variableId, prisma51, displa
 }
 async function addToNodeLinkedField5(prisma51, nodeId, field, idsToAdd) {
   if (!idsToAdd || idsToAdd.length === 0) return;
-  const node = await prisma51.treeBranchLeafNode.findUnique({
-    where: { id: nodeId },
-    select: { [field]: true }
-  });
-  if (!node) {
-    console.warn(`\u26A0\uFE0F N\u0153ud ${nodeId} introuvable pour MAJ ${field}`);
-    return;
+  try {
+    await prisma51.treeBranchLeafNode.update({
+      where: { id: nodeId },
+      data: { [field]: { push: idsToAdd } }
+    });
+  } catch (e) {
   }
-  const current = node[field] || [];
-  const newIds = [.../* @__PURE__ */ new Set([...current, ...idsToAdd])];
-  await prisma51.treeBranchLeafNode.update({
-    where: { id: nodeId },
-    data: { [field]: { set: newIds } }
-  });
 }
 async function replaceLinkedVariableId(prisma51, nodeId, originalVarId, newVarId, suffix) {
   const stripNumericSuffix2 = (raw) => raw.replace(/-\d+(?:-\d+)*$/, "");
@@ -36051,7 +36006,6 @@ function getAuthCtx(req2) {
   const organizationId = user.organizationId || headerOrg || null;
   return { organizationId, isSuperAdmin: isSuperAdmin2 };
 }
-var uniq = (arr) => Array.from(new Set(arr));
 var uuidLikeRef = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 var isRealNodeRef = (ref) => {
   if (!ref) return false;
@@ -36144,29 +36098,17 @@ function extractNodeIdsFromTokens(tokens2) {
   }
   return ids;
 }
-async function getNodeLinkedField2(client, nodeId, field) {
-  const node = await client.treeBranchLeafNode.findUnique({
-    where: { id: nodeId },
-    select: { [field]: true }
-  });
-  return node?.[field] ?? [];
-}
-async function setNodeLinkedField2(client, nodeId, field, values) {
-  try {
-    await client.treeBranchLeafNode.update({
-      where: { id: nodeId },
-      data: { [field]: { set: uniq(values) } }
-    });
-  } catch (e) {
-    console.warn("[TreeBranchLeaf API] setNodeLinkedField skipped:", { nodeId, field, error: e.message });
-  }
-}
 async function addToNodeLinkedField6(client, nodeId, field, idsToAdd) {
   const sanitized2 = idsToAdd?.filter((id) => id && isRealNodeRef(id)) ?? [];
   if (!sanitized2.length) return;
-  const current = await getNodeLinkedField2(client, nodeId, field);
-  const next = uniq([...current, ...sanitized2]);
-  await setNodeLinkedField2(client, nodeId, field, next);
+  try {
+    await client.treeBranchLeafNode.update({
+      where: { id: nodeId },
+      data: { [field]: { push: sanitized2 } }
+    });
+  } catch (e) {
+    console.warn("[TreeBranchLeaf API] addToNodeLinkedField skipped:", { nodeId, field, error: e.message });
+  }
 }
 function buildResponseFromColumns(node) {
   const metadataAppearance = node.metadata && typeof node.metadata === "object" ? node.metadata.appearance : void 0;
@@ -37287,6 +37229,8 @@ async function deepCopyNodeInternal(prisma51, req2, nodeId, opts) {
   for (const ec of existingCondsResult) existingConditionsSet.add(ec.id);
   for (const et of existingTablesResult) existingTablesSet.add(et.id);
   const pendingLinkedConditionUpdates = /* @__PURE__ */ new Map();
+  const copiedNodeIds = new Set(idMap.values());
+  const pendingLinkedFormulaUpdates = /* @__PURE__ */ new Map();
   for (const { oldId, newId, newParentId } of createdNodes) {
     const oldNode = byId.get(oldId);
     const linkedFormulaIdOrder = Array.isArray(oldNode.linkedFormulaIds) ? oldNode.linkedFormulaIds : [];
@@ -37320,7 +37264,11 @@ async function deepCopyNodeInternal(prisma51, req2, nodeId, opts) {
             // PERF: Pass pre-loaded formula data (saves 1 findUnique per formula)
             preloadedFormula: f,
             // PERF: Pass existingNodeIds set (saves 1 findUnique owner check per formula)
-            existingNodeIds
+            existingNodeIds,
+            // PERF: Skip per-formula linkFormulaToAllNodes (saves N*3 queries per formula) — batch flush at end
+            skipLinking: true,
+            // PERF: Skip per-formula hasFormula/formula_activeId sync — done in batch below
+            skipCapacitySync: true
           }
         );
         if (formulaResult.success) {
@@ -37340,6 +37288,18 @@ async function deepCopyNodeInternal(prisma51, req2, nodeId, opts) {
               context: normalizedRepeatContext
             });
           }
+          try {
+            const formulaRefNodeIds = Array.from(extractNodeIdsFromTokens(formulaResult.tokens || f.tokens));
+            for (const refId of formulaRefNodeIds) {
+              const normalizedRefId = normalizeRefId(refId);
+              if (normalizedRepeatContext && !copiedNodeIds.has(normalizedRefId)) continue;
+              if (!pendingLinkedFormulaUpdates.has(normalizedRefId)) {
+                pendingLinkedFormulaUpdates.set(normalizedRefId, /* @__PURE__ */ new Set());
+              }
+              pendingLinkedFormulaUpdates.get(normalizedRefId).add(newFormulaId);
+            }
+          } catch (e) {
+          }
         } else {
           console.error(`\xC3\xA2\xC2\x9D\xC5\u2019 Erreur copie formule centralis\xC3\u0192\xC2\xA9e: ${f.id}`);
         }
@@ -37356,7 +37316,6 @@ async function deepCopyNodeInternal(prisma51, req2, nodeId, opts) {
     }
     const conditions = conditionsByNodeId.get(oldId) || [];
     const linkedConditionIdOrder = Array.isArray(oldNode.linkedConditionIds) ? oldNode.linkedConditionIds : [];
-    const copiedNodeIds = new Set(idMap.values());
     const conditionMap = new Map(conditions.map((c) => [c.id, c]));
     const sortedConditions = [];
     const validLinkedConditionIds = [];
@@ -37746,6 +37705,16 @@ async function deepCopyNodeInternal(prisma51, req2, nodeId, opts) {
       );
     }
     await Promise.all(batchPromises);
+  }
+  if (pendingLinkedFormulaUpdates.size > 0) {
+    const batchFormulaPromises = [];
+    for (const [refNodeId, formulaIds] of pendingLinkedFormulaUpdates) {
+      batchFormulaPromises.push(
+        addToNodeLinkedField6(prisma51, refNodeId, "linkedFormulaIds", Array.from(formulaIds)).catch((e) => console.warn("[DEEP-COPY] Warning batch linkedFormulaIds:", e.message))
+      );
+    }
+    await Promise.all(batchFormulaPromises);
+    console.log(`[DEEP-COPY] PERF: Batch-flushed linkedFormulaIds for ${pendingLinkedFormulaUpdates.size} nodes (instead of per-formula linking)`);
   }
   const variableCopyCache = /* @__PURE__ */ new Map();
   for (const oldNodeId of toCopy) {
@@ -42048,15 +42017,15 @@ function resolveActionsLabels(actions, labels) {
     };
   });
 }
-var uniq2 = (arr) => Array.from(new Set(arr));
-async function getNodeLinkedField3(client, nodeId, field) {
+var uniq = (arr) => Array.from(new Set(arr));
+async function getNodeLinkedField(client, nodeId, field) {
   const node = await client.treeBranchLeafNode.findUnique({
     where: { id: nodeId },
     select: { [field]: true }
   });
   return node?.[field] ?? [];
 }
-async function setNodeLinkedField3(client, nodeId, field, values) {
+async function setNodeLinkedField(client, nodeId, field, values) {
   const exists = await client.treeBranchLeafNode.findUnique({ where: { id: nodeId }, select: { id: true } });
   if (!exists) {
     return;
@@ -42064,7 +42033,7 @@ async function setNodeLinkedField3(client, nodeId, field, values) {
   try {
     await client.treeBranchLeafNode.update({
       where: { id: nodeId },
-      data: { [field]: { set: uniq2(values) } }
+      data: { [field]: { set: uniq(values) } }
     });
   } catch (e) {
     console.warn("[TreeBranchLeaf API] setNodeLinkedField skipped:", { nodeId, field, error: e.message });
@@ -42072,16 +42041,16 @@ async function setNodeLinkedField3(client, nodeId, field, values) {
 }
 async function addToNodeLinkedField7(client, nodeId, field, idsToAdd) {
   if (!idsToAdd?.length) return;
-  const current = await getNodeLinkedField3(client, nodeId, field);
-  const next = uniq2([...current, ...idsToAdd.filter(Boolean)]);
-  await setNodeLinkedField3(client, nodeId, field, next);
+  const current = await getNodeLinkedField(client, nodeId, field);
+  const next = uniq([...current, ...idsToAdd.filter(Boolean)]);
+  await setNodeLinkedField(client, nodeId, field, next);
 }
 async function removeFromNodeLinkedField(client, nodeId, field, idsToRemove) {
   if (!idsToRemove?.length) return;
-  const current = await getNodeLinkedField3(client, nodeId, field);
+  const current = await getNodeLinkedField(client, nodeId, field);
   const toRemove = new Set(idsToRemove.filter(Boolean));
   const next = current.filter((id) => !toRemove.has(id));
-  await setNodeLinkedField3(client, nodeId, field, next);
+  await setNodeLinkedField(client, nodeId, field, next);
 }
 function fmtLV(label, value) {
   return `${label ?? "\xC3\u0192\xC2\xA2\xC3\xA2\xE2\u20AC\u0161\xC2\xAC\xC3\xA2\xE2\u201A\xAC\xC2\x9D"}(${value ?? "\xC3\u0192\xC2\xA2\xC3\u2039\xE2\u20AC\xA0\xC3\xA2\xE2\u201A\xAC\xC2\xA6"})`;

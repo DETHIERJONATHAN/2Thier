@@ -162,9 +162,16 @@ export async function addToNodeLinkedField(
 ) {
   const sanitized = idsToAdd?.filter(id => id && isRealNodeRef(id)) ?? [];
   if (!sanitized.length) return;
-  const current = await getNodeLinkedField(client, nodeId, field);
-  const next = uniq([...current, ...sanitized]);
-  await setNodeLinkedField(client, nodeId, field, next);
+  // PERF: Use single update with push instead of findUnique + merge + update (saves 1 query per call)
+  try {
+    await client.treeBranchLeafNode.update({
+      where: { id: nodeId },
+      data: { [field]: { push: sanitized } } as unknown as Prisma.TreeBranchLeafNodeUpdateInput
+    });
+  } catch (e) {
+    // Node doesn't exist or other error — fallback silently
+    console.warn('[TreeBranchLeaf API] addToNodeLinkedField skipped:', { nodeId, field, error: (e as Error).message });
+  }
 }
 
 export async function removeFromNodeLinkedField(

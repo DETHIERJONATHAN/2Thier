@@ -36,7 +36,11 @@ export interface CopyFormulaOptions {
   /** PERF: Set of existing node IDs to skip findUnique owner check */
   existingNodeIds?: Set<string>;
   /** PERF: formulaIdMap from deep-copy-service (passed to rewriteMaps) */
-  formulaIdMap?: Map<string, string>;}
+  formulaIdMap?: Map<string, string>;
+  /** PERF: Skip linkFormulaToAllNodes + owner linking during batch copy (caller handles linking) */
+  skipLinking?: boolean;
+  /** PERF: Skip hasFormula/formula_activeId sync during batch copy (caller handles sync) */
+  skipCapacitySync?: boolean;}
 
 /**
  * RÃƒÂ©sultat de la copie d'une formule
@@ -375,17 +379,21 @@ export async function copyFormulaCapacity(
     // Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
     // Ã¢Å¡Â¡ UTILISATION DU SYSTÃƒË†ME UNIVERSEL DE LIAISON
     // Cette fonction lie automatiquement la formule ÃƒÂ  TOUS les nÃ…â€œuds rÃƒÂ©fÃƒÂ©rencÃƒÂ©s
+    // PERF: Skip linking when caller (deep-copy/variable-copy) handles batch linking
+    if (!options.skipLinking) {
     try {
       await linkFormulaToAllNodes(prisma, newFormulaId, rewrittenTokens);
     } catch (e) {
       console.error(`Ã¢ÂÅ’ Erreur LIAISON AUTOMATIQUE:`, (e as Error).message);
     }
+    } // end skipLinking guard
 
     // Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
     // Ã°Å¸â€â€” Ãƒâ€°TAPE 5B : Mettre ÃƒÂ  jour linkedFormulaIds du nÃ…â€œud propriÃƒÂ©taire
     // Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
     // SEULEMENT si le noeud proprietaire existe parmi les noeuds copies
-    if (ownerNodeExistsForUpdate) {
+    // PERF: Skip owner linkedFormulaIds update when caller handles it in batch
+    if (!options.skipLinking && ownerNodeExistsForUpdate) {
       try {
         await addToNodeLinkedField(prisma, finalOwnerNodeId, 'linkedFormulaIds', [newFormulaId]);
       } catch (e) {
@@ -397,7 +405,8 @@ export async function copyFormulaCapacity(
     // Ã°Å¸â€œÂ Ãƒâ€°TAPE 7 : Synchroniser les paramÃƒÂ¨tres de capacitÃƒÂ©
     // Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
     // ETAPE 7 : Synchroniser hasFormula/formula_activeId SEULEMENT si proprietaire existe
-    if (ownerNodeExistsForUpdate) {
+    // PERF: Skip capacity sync when caller handles it in batch
+    if (!options.skipCapacitySync && ownerNodeExistsForUpdate) {
       try {
         await prisma.treeBranchLeafNode.update({
           where: { id: finalOwnerNodeId },
@@ -451,22 +460,13 @@ async function addToNodeLinkedField(
   idsToAdd: string[]
 ): Promise<void> {
   if (!idsToAdd || idsToAdd.length === 0) return;
-
-  const node = await prisma.treeBranchLeafNode.findUnique({
-    where: { id: nodeId },
-    select: { [field]: true }
-  });
-
-  if (!node) {
-    console.warn(`Ã¢Å¡Â Ã¯Â¸Â NÃ…â€œud ${nodeId} introuvable pour MAJ ${field}`);
-    return;
+  // PERF: Use single update with push instead of findUnique + merge + update (saves 1 query per call)
+  try {
+    await prisma.treeBranchLeafNode.update({
+      where: { id: nodeId },
+      data: { [field]: { push: idsToAdd } }
+    });
+  } catch (e) {
+    // Node doesn't exist — ignore silently
   }
-
-  const current = (node[field] || []) as string[];
-  const newIds = [...new Set([...current, ...idsToAdd])]; // DÃƒÂ©dupliquer
-
-  await prisma.treeBranchLeafNode.update({
-    where: { id: nodeId },
-    data: { [field]: { set: newIds } }
-  });
 }

@@ -537,13 +537,15 @@ export async function addToNodeLinkedField(
   idsToAdd: string[]
 ): Promise<void> {
   if (!idsToAdd || idsToAdd.length === 0) return;
-  
-  const current = await getNodeLinkedField(client, nodeId, field);
-  const updated = Array.from(new Set([...current, ...idsToAdd.filter(Boolean)]));
-  
-  if (updated.length === current.length) return; // Rien ÃƒÂ  ajouter
-  
-  await setNodeLinkedField(client, nodeId, field, updated);
+  // PERF: Use single update with push instead of findUnique + merge + update (saves 1 query per call)
+  try {
+    await (client as any).treeBranchLeafNode.update({
+      where: { id: nodeId },
+      data: { [field]: { push: idsToAdd.filter(Boolean) } }
+    });
+  } catch (e) {
+    // Node doesn't exist — ignore silently
+  }
 }
 
 /**

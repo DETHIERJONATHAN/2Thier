@@ -990,6 +990,9 @@ export async function deepCopyNodeInternal(
 
     // PERF: Accumulate condition ref updates for batch (instead of per-ref addToNodeLinkedField)
   const pendingLinkedConditionUpdates = new Map<string, Set<string>>();
+  const copiedNodeIds = new Set(idMap.values());
+  // PERF: Accumulate formula ref updates for batch flush (instead of per-formula linkFormulaToAllNodes)
+  const pendingLinkedFormulaUpdates = new Map<string, Set<string>>();
 
   for (const { oldId, newId, newParentId } of createdNodes) {
     const oldNode = byId.get(oldId)!;
@@ -1039,7 +1042,11 @@ export async function deepCopyNodeInternal(
             // PERF: Pass pre-loaded formula data (saves 1 findUnique per formula)
             preloadedFormula: f,
             // PERF: Pass existingNodeIds set (saves 1 findUnique owner check per formula)
-            existingNodeIds
+            existingNodeIds,
+            // PERF: Skip per-formula linkFormulaToAllNodes (saves N*3 queries per formula) — batch flush at end
+            skipLinking: true,
+            // PERF: Skip per-formula hasFormula/formula_activeId sync — done in batch below
+            skipCapacitySync: true
           }
         );
 
@@ -1064,6 +1071,20 @@ export async function deepCopyNodeInternal(
               context: normalizedRepeatContext
             });
           }
+          // PERF: Collect formula->nodeId refs for batch flush (replaces linkFormulaToAllNodes)
+          try {
+            const formulaRefNodeIds = Array.from(extractNodeIdsFromTokens(formulaResult.tokens || f.tokens));
+            for (const refId of formulaRefNodeIds) {
+              const normalizedRefId = normalizeRefId(refId);
+              if (normalizedRepeatContext && !copiedNodeIds.has(normalizedRefId)) continue;
+              if (!pendingLinkedFormulaUpdates.has(normalizedRefId)) {
+                pendingLinkedFormulaUpdates.set(normalizedRefId, new Set());
+              }
+              pendingLinkedFormulaUpdates.get(normalizedRefId)!.add(newFormulaId);
+            }
+          } catch (e) {
+            // Silent: formula ref collection for batch linking
+          }
         } else {
           console.error(`Ã¢ÂÅ’ Erreur copie formule centralisÃƒÂ©e: ${f.id}`);
         }
@@ -1084,7 +1105,6 @@ export async function deepCopyNodeInternal(
     // PERF: Use pre-loaded conditions instead of per-node findMany
     const conditions = conditionsByNodeId.get(oldId) || [];
     const linkedConditionIdOrder = Array.isArray(oldNode.linkedConditionIds) ? oldNode.linkedConditionIds : [];
-    const copiedNodeIds = new Set(idMap.values());
     
     // Trier les conditions selon linkedConditionIdOrder, MAIS SEULEMENT les IDs valides
     // D'abord, crÃƒÂ©er une map condition id -> condition
@@ -1641,6 +1661,19 @@ export async function deepCopyNodeInternal(
       );
     }
     await Promise.all(batchPromises);
+  }
+
+  // PERF: Batch flush all accumulated formula linkedField updates (replaces per-formula linkFormulaToAllNodes — saves ~300 queries!)
+  if (pendingLinkedFormulaUpdates.size > 0) {
+    const batchFormulaPromises: Promise<void>[] = [];
+    for (const [refNodeId, formulaIds] of pendingLinkedFormulaUpdates) {
+      batchFormulaPromises.push(
+        addToNodeLinkedField(prisma, refNodeId, 'linkedFormulaIds', Array.from(formulaIds))
+          .catch(e => console.warn('[DEEP-COPY] Warning batch linkedFormulaIds:', (e as Error).message))
+      );
+    }
+    await Promise.all(batchFormulaPromises);
+    console.log(`[DEEP-COPY] PERF: Batch-flushed linkedFormulaIds for ${pendingLinkedFormulaUpdates.size} nodes (instead of per-formula linking)`);
   }
 
   const variableCopyCache = new Map<string, string>();
