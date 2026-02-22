@@ -169,9 +169,13 @@ export async function runRepeatExecution(
   
   const _t1 = Date.now();
   console.log(`[PERF] Setup: ${_t1 - _t0}ms`);
-  for (const template of nodesToDuplicate) {
+  // PERF: Process ALL templates in PARALLEL instead of sequentially
+  // JS is single-threaded so in-memory mutations (Map.set, Array.push) are safe between awaits.
+  // Each template creates nodes with unique suffixed IDs → no DB conflicts.
+  const templateErrors: Error[] = [];
+  await Promise.all(nodesToDuplicate.map(async (template) => {
     try {
-      if (!template) continue;
+      if (!template) return;
 
       const plannedSuffix = plannedSuffixByTemplate.get(template.id);
       const baseContext = {
@@ -505,8 +509,12 @@ export async function runRepeatExecution(
     } catch (nodeExecErr) {
       // Provide contextual information and rethrow so the route returns 500
       console.error(`[repeat-executor] Error during execution for template ${template?.id || 'unknown'}:`, nodeExecErr instanceof Error ? nodeExecErr.stack || nodeExecErr.message : String(nodeExecErr));
-      throw nodeExecErr;
+      templateErrors.push(nodeExecErr instanceof Error ? nodeExecErr : new Error(String(nodeExecErr)));
     }
+  }));
+  // If any template failed, throw the first error
+  if (templateErrors.length > 0) {
+    throw templateErrors[0];
   }
 
   // 🚀 COPIER LES VARIABLES APRÈS LES NŒUDS

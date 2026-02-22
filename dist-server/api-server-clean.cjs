@@ -33798,17 +33798,12 @@ async function copyFormulaCapacity(originalFormulaId, newNodeId, suffix, prisma5
   try {
     if (formulaCopyCache.has(originalFormulaId)) {
       const cachedId = formulaCopyCache.get(originalFormulaId);
-      const cached = await prisma51.treeBranchLeafNodeFormula.findUnique({
-        where: { id: cachedId }
-      });
-      if (cached) {
-        return {
-          newFormulaId: cached.id,
-          nodeId: cached.nodeId,
-          tokens: cached.tokens,
-          success: true
-        };
-      }
+      return {
+        newFormulaId: cachedId,
+        nodeId: "",
+        tokens: null,
+        success: true
+      };
     }
     const cleanFormulaId = originalFormulaId.replace(/-\d+$/, "");
     const originalFormula = await prisma51.treeBranchLeafNodeFormula.findUnique({
@@ -33891,20 +33886,6 @@ async function copyFormulaCapacity(originalFormulaId, newNodeId, suffix, prisma5
         updatedAt: /* @__PURE__ */ new Date()
       }
     });
-    const savedFormula = await prisma51.treeBranchLeafNodeFormula.findUnique({
-      where: { id: newFormula.id }
-    });
-    if (savedFormula && Array.isArray(savedFormula.tokens)) {
-      const savedSharedRefs = savedFormula.tokens.filter(
-        (t) => typeof t === "string" && t.includes("shared-ref")
-      );
-      const suffixed = savedSharedRefs.filter((s) => /-\d+$/.test(s));
-      const nonSuffixed = savedSharedRefs.filter((s) => !/-\d+$/.test(s));
-      if (nonSuffixed.length > 0) {
-        console.error(`\xC3\xB0\xC5\xB8\xC5\xA1\xC2\xA8 ERREUR! Tokens non-suffix\xC3\u0192\xC2\xA9s en BD:`, nonSuffixed.slice(0, 2));
-      } else {
-      }
-    }
     try {
       await linkFormulaToAllNodes(prisma51, newFormulaId, rewrittenTokens);
     } catch (e) {
@@ -37294,13 +37275,28 @@ async function deepCopyNodeInternal(prisma51, req2, nodeId, opts) {
   }
   const allPotentialNewConditionIds = allConditionsRaw.map((c) => `${c.id}-${suffixToken}`);
   const existingConditionsSet = /* @__PURE__ */ new Set();
-  if (allPotentialNewConditionIds.length > 0) {
-    const existingConds = await prisma51.treeBranchLeafNodeCondition.findMany({
-      where: { id: { in: allPotentialNewConditionIds } },
-      select: { id: true }
-    });
-    for (const ec of existingConds) existingConditionsSet.add(ec.id);
+  const allPotentialNewTableIds = [];
+  for (const t of allTablesRaw) {
+    allPotentialNewTableIds.push(`${t.id}-${suffixToken}`);
   }
+  for (const oldId of allOldNodeIds) {
+    const node = byId.get(oldId);
+    if (node && Array.isArray(node.linkedTableIds)) {
+      for (const linkedTableId of node.linkedTableIds) {
+        const potentialId = `${linkedTableId}-${suffixToken}`;
+        if (!allPotentialNewTableIds.includes(potentialId)) {
+          allPotentialNewTableIds.push(potentialId);
+        }
+      }
+    }
+  }
+  const existingTablesSet = /* @__PURE__ */ new Set();
+  const [existingCondsResult, existingTablesResult] = await Promise.all([
+    allPotentialNewConditionIds.length > 0 ? prisma51.treeBranchLeafNodeCondition.findMany({ where: { id: { in: allPotentialNewConditionIds } }, select: { id: true } }) : Promise.resolve([]),
+    allPotentialNewTableIds.length > 0 ? prisma51.treeBranchLeafNodeTable.findMany({ where: { id: { in: allPotentialNewTableIds } }, select: { id: true } }) : Promise.resolve([])
+  ]);
+  for (const ec of existingCondsResult) existingConditionsSet.add(ec.id);
+  for (const et of existingTablesResult) existingTablesSet.add(et.id);
   for (const { oldId, newId, newParentId } of createdNodes) {
     const oldNode = byId.get(oldId);
     const linkedFormulaIdOrder = Array.isArray(oldNode.linkedFormulaIds) ? oldNode.linkedFormulaIds : [];
@@ -37494,30 +37490,16 @@ async function deepCopyNodeInternal(prisma51, req2, nodeId, opts) {
     for (const t of allTablesToCopy) {
       const newTableId = appendSuffix(t.id);
       tableIdMap2.set(t.id, newTableId);
-      const existingTable = await prisma51.treeBranchLeafNodeTable.findUnique({
-        where: { id: newTableId }
-      });
-      if (existingTable) {
+      if (existingTablesSet.has(newTableId)) {
         continue;
       }
       if (linkedTableIdOrder.includes(t.id)) {
         newLinkedTableIds.push(newTableId);
       }
       const tableOwnerNodeId = t.nodeId === oldId ? newId : appendSuffix(t.nodeId);
-      let nodeExists = await prisma51.treeBranchLeafNode.findUnique({
-        where: { id: tableOwnerNodeId },
-        select: { id: true }
-      });
+      let nodeExists = existingNodeIds.has(tableOwnerNodeId) ? { id: tableOwnerNodeId } : null;
       if (!nodeExists && tableOwnerNodeId !== newId) {
-        const originalOwnerNode = await prisma51.treeBranchLeafNode.findUnique({
-          where: { id: t.nodeId },
-          select: {
-            type: true,
-            label: true,
-            treeId: true,
-            parentId: true
-          }
-        });
+        const originalOwnerNode = byId.get(t.nodeId) ?? null;
         if (originalOwnerNode) {
           try {
             const createdNode = await prisma51.treeBranchLeafNode.create({
@@ -37717,25 +37699,16 @@ async function deepCopyNodeInternal(prisma51, req2, nodeId, opts) {
             }
           });
           try {
-            if (tableWasCopied && newTableReference) {
-              const copiedSelectConfig = await prisma51.treeBranchLeafSelectConfig.findUnique({
-                where: { id: copiedSelectConfigId },
-                select: { displayColumn: true }
-              });
-              if (!copiedSelectConfig?.displayColumn) {
-                const copiedColumns = await prisma51.treeBranchLeafTableColumn.findMany({
-                  where: { tableId: newTableReference },
-                  orderBy: { columnIndex: "asc" },
-                  select: { name: true }
+            const createdDisplayColumn = originalSelectConfig.displayColumn ? shouldSuffixColumns ? `${originalSelectConfig.displayColumn}${computedLabelSuffix}` : originalSelectConfig.displayColumn : null;
+            if (tableWasCopied && newTableReference && !createdDisplayColumn) {
+              const originalTable = [...tables, ...additionalTables].find((t) => tableIdMap2.get(t.id) === newTableReference);
+              if (originalTable && originalTable.tableColumns.length > 0) {
+                const sortedCols = [...originalTable.tableColumns].sort((a, b) => a.columnIndex - b.columnIndex);
+                const firstColumnName = `${sortedCols[0].name}-${copySuffixNum}`;
+                await prisma51.treeBranchLeafSelectConfig.update({
+                  where: { id: copiedSelectConfigId },
+                  data: { displayColumn: firstColumnName }
                 });
-                const firstColumnName = copiedColumns?.[0]?.name || null;
-                if (firstColumnName) {
-                  await prisma51.treeBranchLeafSelectConfig.update({
-                    where: { id: copiedSelectConfigId },
-                    data: { displayColumn: firstColumnName }
-                  });
-                }
-              } else {
               }
             }
           } catch (initDisplayErr) {
@@ -72586,9 +72559,10 @@ async function runRepeatExecution(prisma51, req2, execution) {
   const _preloadedTreeNodes = await prisma51.treeBranchLeafNode.findMany({ where: { treeId: repeaterNode.treeId } });
   const _t1 = Date.now();
   console.log(`[PERF] Setup: ${_t1 - _t0}ms`);
-  for (const template of nodesToDuplicate) {
+  const templateErrors = [];
+  await Promise.all(nodesToDuplicate.map(async (template) => {
     try {
-      if (!template) continue;
+      if (!template) return;
       const plannedSuffix = plannedSuffixByTemplate.get(template.id);
       const baseContext = {
         repeaterNodeId,
@@ -72825,8 +72799,11 @@ async function runRepeatExecution(prisma51, req2, execution) {
       }
     } catch (nodeExecErr) {
       console.error(`[repeat-executor] Error during execution for template ${template?.id || "unknown"}:`, nodeExecErr instanceof Error ? nodeExecErr.stack || nodeExecErr.message : String(nodeExecErr));
-      throw nodeExecErr;
+      templateErrors.push(nodeExecErr instanceof Error ? nodeExecErr : new Error(String(nodeExecErr)));
     }
+  }));
+  if (templateErrors.length > 0) {
+    throw templateErrors[0];
   }
   const _t2 = Date.now();
   console.log(`[PERF] Template duplication loop: ${_t2 - _t1}ms`);

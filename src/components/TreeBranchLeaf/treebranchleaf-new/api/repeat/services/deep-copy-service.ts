@@ -959,13 +959,34 @@ export async function deepCopyNodeInternal(
   // PERF: Pre-check which new condition IDs already exist (1 query instead of N findUnique)
   const allPotentialNewConditionIds = allConditionsRaw.map(c => `${c.id}-${suffixToken}`);
   const existingConditionsSet = new Set<string>();
-  if (allPotentialNewConditionIds.length > 0) {
-    const existingConds = await prisma.treeBranchLeafNodeCondition.findMany({
-      where: { id: { in: allPotentialNewConditionIds } },
-      select: { id: true }
-    });
-    for (const ec of existingConds) existingConditionsSet.add(ec.id);
+  // PERF: Pre-check which new TABLE IDs already exist (1 query instead of N findUnique per table)
+  const allPotentialNewTableIds: string[] = [];
+  for (const t of allTablesRaw) {
+    allPotentialNewTableIds.push(`${t.id}-${suffixToken}`);
   }
+  // Also collect table IDs from linkedTableIds of all old nodes
+  for (const oldId of allOldNodeIds) {
+    const node = byId.get(oldId);
+    if (node && Array.isArray(node.linkedTableIds)) {
+      for (const linkedTableId of node.linkedTableIds) {
+        const potentialId = `${linkedTableId}-${suffixToken}`;
+        if (!allPotentialNewTableIds.includes(potentialId)) {
+          allPotentialNewTableIds.push(potentialId);
+        }
+      }
+    }
+  }
+  const existingTablesSet = new Set<string>();
+  const [existingCondsResult, existingTablesResult] = await Promise.all([
+    allPotentialNewConditionIds.length > 0
+      ? prisma.treeBranchLeafNodeCondition.findMany({ where: { id: { in: allPotentialNewConditionIds } }, select: { id: true } })
+      : Promise.resolve([]),
+    allPotentialNewTableIds.length > 0
+      ? prisma.treeBranchLeafNodeTable.findMany({ where: { id: { in: allPotentialNewTableIds } }, select: { id: true } })
+      : Promise.resolve([])
+  ]);
+  for (const ec of existingCondsResult) existingConditionsSet.add(ec.id);
+  for (const et of existingTablesResult) existingTablesSet.add(et.id);
 
   for (const { oldId, newId, newParentId } of createdNodes) {
     const oldNode = byId.get(oldId)!;
@@ -1254,17 +1275,11 @@ export async function deepCopyNodeInternal(
       tableIdMap.set(t.id, newTableId);
       
       
-      // VÃƒÂ©rifier si la table copiÃƒÂ©e existe dÃƒÂ©jÃƒÂ 
-      const existingTable = await prisma.treeBranchLeafNodeTable.findUnique({
-        where: { id: newTableId }
-      });
-      
-      if (existingTable) {
+      // PERF: Use pre-loaded existingTablesSet instead of per-table findUnique
+      if (existingTablesSet.has(newTableId)) {
         continue;
       }
       
-      
-      // Ã°Å¸â€â€˜ Ajouter au linkedTableIds seulement si c'ÃƒÂ©tait liÃƒÂ© ÃƒÂ  l'original
       if (linkedTableIdOrder.includes(t.id)) {
         newLinkedTableIds.push(newTableId);
       }
@@ -1275,24 +1290,13 @@ export async function deepCopyNodeInternal(
         ? newId  // La table appartient au node en cours de copie
         : appendSuffix(t.nodeId);  // La table appartient à un autre node, suffixer son nodeId original
       
-      // 🔧 FIX 07/01/2026: Vérifier que le nodeId propriétaire existe avant de créer la table
-      // Si ce n'est pas le cas et que c'est un node en linkedTableIds, créer un stub de node d'abord
-      let nodeExists = await prisma.treeBranchLeafNode.findUnique({
-        where: { id: tableOwnerNodeId },
-        select: { id: true }
-      });
+      // PERF: Use in-memory existingNodeIds set instead of per-table findUnique
+      let nodeExists: { id: string } | null = existingNodeIds.has(tableOwnerNodeId) ? { id: tableOwnerNodeId } : null;
 
       if (!nodeExists && tableOwnerNodeId !== newId) {
         // C'est un node en linkedTableIds qui n'a pas été copié. On crée un stub.
-        const originalOwnerNode = await prisma.treeBranchLeafNode.findUnique({
-          where: { id: t.nodeId },
-          select: { 
-            type: true,
-            label: true,
-            treeId: true,
-            parentId: true
-          }
-        });
+        // PERF: Use byId map for original node data instead of findUnique
+        const originalOwnerNode = byId.get(t.nodeId) ?? null;
 
         if (originalOwnerNode) {
           try {
@@ -1558,31 +1562,23 @@ export async function deepCopyNodeInternal(
             }
           });
 
-          // ✅ Post-création: si displayColumn est null et la table a été copiée,
-          // initialiser automatiquement avec la première colonne de la table copiée
+          // PERF: Compute displayColumn from pre-loaded table data (skip 2 DB queries)
+          // We know displayColumn value because we just set it above
           try {
-            if (tableWasCopied && newTableReference) {
-              // Relire la config copiée pour vérifier displayColumn
-              const copiedSelectConfig = await prisma.treeBranchLeafSelectConfig.findUnique({
-                where: { id: copiedSelectConfigId },
-                select: { displayColumn: true }
-              });
-
-              if (!copiedSelectConfig?.displayColumn) {
-                const copiedColumns = await prisma.treeBranchLeafTableColumn.findMany({
-                  where: { tableId: newTableReference },
-                  orderBy: { columnIndex: 'asc' },
-                  select: { name: true }
+            const createdDisplayColumn = originalSelectConfig.displayColumn
+              ? (shouldSuffixColumns ? `${originalSelectConfig.displayColumn}${computedLabelSuffix}` : originalSelectConfig.displayColumn)
+              : null;
+            if (tableWasCopied && newTableReference && !createdDisplayColumn) {
+              // displayColumn was null - auto-populate from first column of copied table
+              // PERF: Use pre-loaded table data instead of DB query
+              const originalTable = [...tables, ...additionalTables].find(t => tableIdMap.get(t.id) === newTableReference);
+              if (originalTable && originalTable.tableColumns.length > 0) {
+                const sortedCols = [...originalTable.tableColumns].sort((a, b) => a.columnIndex - b.columnIndex);
+                const firstColumnName = `${sortedCols[0].name}-${copySuffixNum}`;
+                await prisma.treeBranchLeafSelectConfig.update({
+                  where: { id: copiedSelectConfigId },
+                  data: { displayColumn: firstColumnName }
                 });
-
-                const firstColumnName = copiedColumns?.[0]?.name || null;
-                if (firstColumnName) {
-                  await prisma.treeBranchLeafSelectConfig.update({
-                    where: { id: copiedSelectConfigId },
-                    data: { displayColumn: firstColumnName }
-                  });
-                }
-              } else {
               }
             }
           } catch (initDisplayErr) {
