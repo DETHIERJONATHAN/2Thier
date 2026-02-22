@@ -532,6 +532,7 @@ export async function runRepeatExecution(
   let allExistingNodeIds = new Set<string>();
   let allExistingVarIds = new Set<string>();
   let allExistingVarKeys = new Set<string>();
+  let allVarsByNodeId = new Map<string, any>();
 
   if (allTemplateVarIds.length > 0) {
     // 1. Load ALL full variable records in 1 query
@@ -566,7 +567,7 @@ export async function runRepeatExecution(
         where: { nodeId: { in: ownerNodeIds } }
       }) : Promise.resolve([]),
       prisma.treeBranchLeafNodeVariable.findMany({
-        select: { id: true, exposedKey: true }
+        select: { id: true, exposedKey: true, nodeId: true, displayName: true, displayFormat: true, unit: true, precision: true, visibleToUser: true, isReadonly: true }
       })
     ]);
 
@@ -596,6 +597,9 @@ export async function runRepeatExecution(
     // Build existing variable sets for collision checks
     allExistingVarIds = new Set(existingVars.map(v => v.id));
     allExistingVarKeys = new Set(existingVars.map(v => v.exposedKey));
+
+    // PERF: Index variables by nodeId for reuse checks (saves 1 findUnique per variable)
+    allVarsByNodeId = new Map(existingVars.filter(v => v.nodeId).map(v => [v.nodeId, v]));
   }
 
   for (const variablePlan of plan.variables) {
@@ -639,11 +643,12 @@ export async function runRepeatExecution(
           preloadedOriginalVar: fullVarsMap.get(templateVariableId),
           preloadedOwnerNode: fullVarsMap.get(templateVariableId)?.nodeId ? ownerNodesMap.get(fullVarsMap.get(templateVariableId)!.nodeId) : undefined,
           preloadedDuplicatedOwnerNode: { id: targetNodeId, parentId: _preloadedTreeNodesById?.get(targetNodeId)?.parentId ?? null },
-          preloadedDisplayNode: displayNodesMap.get(templateVariableId) ?? null,
+          preloadedDisplayNode: displayNodesMap.get(templateVariableId),
           preloadedFormulas: fullVarsMap.get(templateVariableId)?.nodeId ? formulasByNodeId.get(fullVarsMap.get(templateVariableId)!.nodeId) : undefined,
           existingNodeIds: allExistingNodeIds,
           existingVariableIds: allExistingVarIds,
           existingVariableKeys: allExistingVarKeys,
+          preloadedVarsByNodeId: allVarsByNodeId,
           repeatContext: {
             repeaterNodeId,
             templateNodeId: targetNodeId.replace(`-${plannedSuffix}`, ''),

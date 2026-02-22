@@ -126,6 +126,8 @@ export interface CopyVariableOptions {
   existingVariableIds?: Set<string>;
   /** Set of existing variable exposedKeys for collision checks */
   existingVariableKeys?: Set<string>;
+  /** Pre-loaded map of variable by nodeId for reuse checks (skips findUnique per variable) */
+  preloadedVarsByNodeId?: Map<string, any>;
 }
 
 
@@ -185,6 +187,7 @@ export async function copyVariableWithCapacities(
     existingNodeIds,
     existingVariableIds,
     existingVariableKeys,
+    preloadedVarsByNodeId,
   // displayNodeAlreadyCreated is not used anymore in this function; keep options API stable without reassigning
   } = options;
 
@@ -1019,12 +1022,14 @@ export async function copyVariableWithCapacities(
             field_label: displayLabel as any,
           };
 
-          const maybeExisting = await prisma.treeBranchLeafNode.findUnique({ where: { id: displayNodeId } });
-          if (maybeExisting) {
-            await prisma.treeBranchLeafNode.update({ where: { id: displayNodeId }, data: { ...displayNodeData, createdAt: maybeExisting.createdAt, updatedAt: now } });
-          } else {
-            await prisma.treeBranchLeafNode.create({ data: displayNodeData as any });
-          }
+          // PERF: Use upsert instead of findUnique + create/update (saves 1 query per variable)
+          await prisma.treeBranchLeafNode.upsert({
+            where: { id: displayNodeId },
+            update: { ...displayNodeData, updatedAt: now },
+            create: displayNodeData as any
+          });
+          // Update existingNodeIds to prevent stale collision checks
+          if (existingNodeIds) existingNodeIds.add(displayNodeId);
 
           // ═══════════════════════════════════════════════════════════════════════
           // 📋 COPIER LES FORMULES ET CONDITIONS du nœud propriétaire original
@@ -1254,7 +1259,10 @@ export async function copyVariableWithCapacities(
     let _existingVariableForReuse: any = null;
     
     try {
-      const existingForNode = await prisma.treeBranchLeafNodeVariable.findUnique({ where: { nodeId: finalNodeId } });
+      // PERF: Use pre-loaded map if available (saves 1 findUnique per variable)
+      const existingForNode = preloadedVarsByNodeId
+        ? (preloadedVarsByNodeId.get(finalNodeId) ?? null)
+        : await prisma.treeBranchLeafNodeVariable.findUnique({ where: { nodeId: finalNodeId } });
       if (existingForNode) {
         const expectedVarId = `${originalVarId}-${suffix}`;
         const hasSuffixMatch = existingForNode.id === expectedVarId || existingForNode.id === newVarId;
@@ -1442,6 +1450,9 @@ export async function copyVariableWithCapacities(
             updatedAt: new Date()
           }
         });
+        // PERF: Update collision Sets to prevent stale checks for next variable
+        if (existingVariableIds) existingVariableIds.add(newVarId);
+        if (existingVariableKeys) existingVariableKeys.add(newExposedKey);
       } catch (createError) {
         throw createError;
       }
