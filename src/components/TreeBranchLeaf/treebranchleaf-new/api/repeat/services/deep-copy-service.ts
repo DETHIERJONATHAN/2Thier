@@ -25,6 +25,8 @@ export interface DeepCopyOptions {
   cloneExternalParents?: boolean;
   /** Flag indiquant que la copie provient d'une duplication par repeater */
   isFromRepeaterDuplication?: boolean;
+  /** PERF: Pre-loaded tree nodes to avoid redundant findMany({treeId}) per template */
+  preloadedTreeNodes?: TreeBranchLeafNode[];
 }
 
 export interface DeepCopyResult {
@@ -234,7 +236,8 @@ export async function deepCopyNodeInternal(
       }
     : undefined;
 
-  const allNodes = await prisma.treeBranchLeafNode.findMany({ where: { treeId: source.treeId } });
+  // PERF: Use pre-loaded tree nodes if available (avoids 1 full-tree load per template)
+  const allNodes = opts?.preloadedTreeNodes ?? await prisma.treeBranchLeafNode.findMany({ where: { treeId: source.treeId } });
   const byId = new Map(allNodes.map(n => [n.id, n] as const));
   const existingNodeIds = new Set(byId.keys());
   const childrenByParent = new Map<string, string[]>();
@@ -805,16 +808,9 @@ export async function deepCopyNodeInternal(
     createdNodes.push({ oldId, newId, newParentId });
     existingNodeIds.add(newId);
 
-    // 🔧 CRITICAL: Dupliquer les SelectConfigs pour les tables lookup associées
-    try {
-      const tableLookupService = new TableLookupDuplicationService();
-      await tableLookupService.duplicateTableLookupSystem(prisma, oldId, {
-        suffixToken,
-        copiedNodeId: newId
-      });
-    } catch (lookupError) {
-      console.warn(`[DEEP-COPY] Warning duplicating table lookup for ${oldId} -> ${newId}:`, (lookupError as Error).message);
-    }
+    // PERF: tableLookupDuplicationService REMOVED — already done by:
+    // 1) repeat-executor TBL-DUP phase (pre-filtered + parallelized, more efficient)
+    // 2) SelectConfig copy below in this same loop (lines ~1470+)
 
     // 📐 CRITICAL: Si ce nœud a des configurations AI Measure, dupliquer les champs cibles
     // Exemple: si "Photo du mur" est dupliqué en "Photo du mur-1" et a des mappings vers
@@ -921,11 +917,19 @@ export async function deepCopyNodeInternal(
     }
   }
 
-  // PERF: Pre-load ALL formulas and conditions in 2 batch queries instead of 2*N
+  // PERF: Pre-load ALL formulas, conditions, selectConfigs, numberConfigs in batch queries
   const allOldNodeIds = createdNodes.map(n => n.oldId);
-  const [allFormulasRaw, allConditionsRaw] = await Promise.all([
+  const allNewNodeIds = createdNodes.map(n => n.newId);
+  const [allFormulasRaw, allConditionsRaw, allSelectConfigsRaw, allNumberConfigsRaw, existingCopySelectConfigs, existingCopyNumberConfigs, allTablesRaw] = await Promise.all([
     prisma.treeBranchLeafNodeFormula.findMany({ where: { nodeId: { in: allOldNodeIds } } }),
-    prisma.treeBranchLeafNodeCondition.findMany({ where: { nodeId: { in: allOldNodeIds } } })
+    prisma.treeBranchLeafNodeCondition.findMany({ where: { nodeId: { in: allOldNodeIds } } }),
+    prisma.treeBranchLeafSelectConfig.findMany({ where: { nodeId: { in: allOldNodeIds } } }),
+    prisma.treeBranchLeafNumberConfig.findMany({ where: { nodeId: { in: allOldNodeIds } } }),
+    // PERF: Also pre-check which COPY configs already exist (avoid per-node findUnique)
+    prisma.treeBranchLeafSelectConfig.findMany({ where: { nodeId: { in: allNewNodeIds } }, select: { nodeId: true } }),
+    prisma.treeBranchLeafNumberConfig.findMany({ where: { nodeId: { in: allNewNodeIds } }, select: { nodeId: true } }),
+    // PERF: Pre-load ALL tables with columns+rows in 1 query instead of N
+    prisma.treeBranchLeafNodeTable.findMany({ where: { nodeId: { in: allOldNodeIds } }, include: { tableColumns: true, tableRows: true } })
   ]);
   const formulasByNodeId = new Map<string, typeof allFormulasRaw>();
   for (const f of allFormulasRaw) {
@@ -938,6 +942,18 @@ export async function deepCopyNodeInternal(
     const arr = conditionsByNodeId.get(c.nodeId) || [];
     arr.push(c);
     conditionsByNodeId.set(c.nodeId, arr);
+  }
+  // PERF: Maps for SelectConfig and NumberConfig (avoid per-node findUnique)
+  const selectConfigByNodeId = new Map(allSelectConfigsRaw.map(sc => [sc.nodeId, sc]));
+  const numberConfigByNodeId = new Map(allNumberConfigsRaw.map(nc => [nc.nodeId, nc]));
+  const existingCopySelectConfigNodeIds = new Set(existingCopySelectConfigs.map(sc => sc.nodeId));
+  const existingCopyNumberConfigNodeIds = new Set(existingCopyNumberConfigs.map(nc => nc.nodeId));
+  // PERF: Pre-loaded tables grouped by nodeId
+  const preloadedTablesByNodeId = new Map<string, typeof allTablesRaw>();
+  for (const t of allTablesRaw) {
+    const arr = preloadedTablesByNodeId.get(t.nodeId) || [];
+    arr.push(t);
+    preloadedTablesByNodeId.set(t.nodeId, arr);
   }
 
   // PERF: Pre-check which new condition IDs already exist (1 query instead of N findUnique)
@@ -1183,10 +1199,8 @@ export async function deepCopyNodeInternal(
     // 1. Tables oÃƒÂ¹ nodeId = oldId (propriÃƒÂ©tÃƒÂ© directe)
     // 2. Tables via table_activeId (rÃƒÂ©fÃƒÂ©rence active)
     // 3. Tables via linkedTableIds (rÃƒÂ©fÃƒÂ©rences multiples)
-    const tables = await prisma.treeBranchLeafNodeTable.findMany({
-      where: { nodeId: oldId },
-      include: { tableColumns: true, tableRows: true }
-    });
+    // PERF: Use pre-loaded tables from batch query instead of per-node findMany
+    const tables = preloadedTablesByNodeId.get(oldId) || [];
 
     // Ã°Å¸â€ â€¢ IMPORTANT: Aussi copier les tables rÃƒÂ©fÃƒÂ©rencÃƒÂ©es via table_activeId qui ne sont PAS liÃƒÂ©es au nodeId
     // Cas typique: un champ "Orientation" template (22de...) rÃƒÂ©fÃƒÂ©rence une table (0701ed...) 
@@ -1465,17 +1479,15 @@ export async function deepCopyNodeInternal(
 
     // Ã°Å¸â€ â€¢ COPIE DES SELECT CONFIGS (TreeBranchLeafSelectConfig)
     // C'est crucial pour les champs "donnÃƒÂ©es d'affichage" qui utilisent des lookups
-    const originalSelectConfig = await prisma.treeBranchLeafSelectConfig.findUnique({
-      where: { nodeId: oldId }
-    });
+    // PERF: Use pre-loaded selectConfigByNodeId instead of per-node findUnique
+    const originalSelectConfig = selectConfigByNodeId.get(oldId) ?? null;
 
     if (originalSelectConfig) {
       // VÃƒÂ©rifier si la copie existe dÃƒÂ©jÃƒÂ 
-      const existingCopyConfig = await prisma.treeBranchLeafSelectConfig.findUnique({
-        where: { nodeId: newId }
-      });
+      // PERF: Use pre-loaded set instead of per-node findUnique
+      const copyAlreadyExists = existingCopySelectConfigNodeIds.has(newId);
 
-      if (!existingCopyConfig) {
+      if (!copyAlreadyExists) {
         // 🎯 FIX 06/01/2026: Distinguer table PARTAGÉE (lookup externe) vs table LOCALE/COPIÉE
         // - Table PARTAGÉE: la table N'a PAS été copiée → garder tableReference original
         // - Table LOCALE/COPIÉE: la table A été copiée → suffixer tableReference
@@ -1584,16 +1596,14 @@ export async function deepCopyNodeInternal(
     }
 
     // Ã°Å¸â€ â€¢ COPIE DES NUMBER CONFIGS (TreeBranchLeafNumberConfig)
-    const originalNumberConfig = await prisma.treeBranchLeafNumberConfig.findUnique({
-      where: { nodeId: oldId }
-    });
+    // PERF: Use pre-loaded numberConfigByNodeId instead of per-node findUnique
+    const originalNumberConfig = numberConfigByNodeId.get(oldId) ?? null;
 
     if (originalNumberConfig) {
-      const existingCopyNumberConfig = await prisma.treeBranchLeafNumberConfig.findUnique({
-        where: { nodeId: newId }
-      });
+      // PERF: Use pre-loaded set instead of per-node findUnique
+      const numberCopyAlreadyExists = existingCopyNumberConfigNodeIds.has(newId);
 
-      if (!existingCopyNumberConfig) {
+      if (!numberCopyAlreadyExists) {
 
         try {
           await prisma.treeBranchLeafNumberConfig.create({

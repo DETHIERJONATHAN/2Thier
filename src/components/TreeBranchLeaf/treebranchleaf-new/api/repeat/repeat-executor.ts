@@ -68,6 +68,7 @@ export async function runRepeatExecution(
   // Ã¢Å¡Â Ã¯Â¸Â IMPORTANT: Toujours utiliser les IDs dÃƒÂ©clarÃƒÂ©s dans le blueprint (metadata du rÃƒÂ©pÃƒÂ©teur)
   // Le plan peut ÃƒÂªtre partiel et omettre certains templates; l'utilisateur demande
   // la duplication EXACTE des 6 IDs listÃƒÂ©s dans le metadata.repeater.templateNodeIds
+  const _t0 = Date.now();
   const rawIds = blueprint.templateNodeIds;
   
   // Nettoyer les IDs: retirer TOUS les suffixes et vÃƒÂ©rifier qu'on a des UUIDs purs
@@ -163,6 +164,11 @@ export async function runRepeatExecution(
   const globalVariableCopyCache = new Map<string, string>();
 
   // Ã°Å¸Å¡â‚¬Ã°Å¸Å¡â‚¬Ã°Å¸Å¡â‚¬ DUPLICATION DES TEMPLATES: parcourir TOUS les templates ÃƒÂ  dupliquer (metadata)
+  // PERF: Pre-load ALL tree nodes ONCE (instead of once per template in deepCopyNodeInternal)
+  const _preloadedTreeNodes = await prisma.treeBranchLeafNode.findMany({ where: { treeId: repeaterNode.treeId } });
+  
+  const _t1 = Date.now();
+  console.log(`[PERF] Setup: ${_t1 - _t0}ms`);
   for (const template of nodesToDuplicate) {
     try {
       if (!template) continue;
@@ -184,7 +190,8 @@ export async function runRepeatExecution(
           : { ...baseContext };
         const options: DeepCopyOptions = {
           preserveSharedReferences: true,
-          repeatContext: context
+          repeatContext: context,
+          preloadedTreeNodes: _preloadedTreeNodes
         };
         if (forcedSuffix !== undefined) {
           options.forcedSuffix = forcedSuffix;
@@ -352,6 +359,8 @@ export async function runRepeatExecution(
         const originalChildMap = new Map(originalChildren.map(n => [n.id, n]));
         const copiedChildMap = new Map(copiedChildren.map(n => [n.id, n]));
         
+        // PERF: Batch child trigger updates — collect in memory, execute in single $transaction
+        const childUpdateOps = [];
         for (const childId of childNodeIds) {
           try {
             const originalChildId = reverseIdMap.get(childId);
@@ -364,20 +373,16 @@ export async function runRepeatExecution(
               ? (childNode.metadata as Record<string, unknown>)
               : {};
             
-            // 🎯 Récupérer les triggers de l'ORIGINAL
             const originalChildMetadata = (originalChildNode?.metadata && typeof originalChildNode.metadata === 'object')
               ? (originalChildNode.metadata as Record<string, unknown>)
               : {};
             const originalChildTriggers = originalChildMetadata.triggerNodeIds;
             
-            // Suffixer les triggers de l'enfant depuis l'ORIGINAL
-            // 🎯 Suffixer les triggers depuis l'ORIGINAL, pas depuis la copie
             const childSuffixedTriggers = suffixTriggers(
               originalChildTriggers, 
               childNode.label || childId
             );
             
-            // 🎯 Mettre à jour si triggers OU subType doit être restauré
             const needsSubTypeUpdate = originalChildNode?.subType && !childNode.subType;
             const needsTriggersUpdate = childSuffixedTriggers && childSuffixedTriggers.length > 0;
             
@@ -387,17 +392,23 @@ export async function runRepeatExecution(
                 ...(needsTriggersUpdate ? { triggerNodeIds: childSuffixedTriggers } : {})
               };
               
-              await prisma.treeBranchLeafNode.update({
-                where: { id: childId },
-                data: {
-                  ...(needsSubTypeUpdate ? { subType: originalChildNode?.subType } : {}),
-                  metadata: updatedChildMetadata
-                }
-              });
+              childUpdateOps.push(
+                prisma.treeBranchLeafNode.update({
+                  where: { id: childId },
+                  data: {
+                    ...(needsSubTypeUpdate ? { subType: originalChildNode?.subType } : {}),
+                    metadata: updatedChildMetadata
+                  }
+                })
+              );
             }
           } catch (childErr) {
-            console.error(`❌ [REPEAT-EXECUTOR] Erreur traitement triggers pour enfant ${childId}:`, childErr);
+            console.error(`[REPEAT-EXECUTOR] Erreur traitement triggers pour enfant ${childId}:`, childErr);
           }
+        }
+        // Execute all child updates in a single $transaction (1 round-trip instead of N)
+        if (childUpdateOps.length > 0) {
+          await prisma.$transaction(childUpdateOps);
         }
       }
 
@@ -499,6 +510,8 @@ export async function runRepeatExecution(
   }
 
   // 🚀 COPIER LES VARIABLES APRÈS LES NŒUDS
+  const _t2 = Date.now();
+  console.log(`[PERF] Template duplication loop: ${_t2 - _t1}ms`);
   // PERF: Pré-charger TOUTES les variables en 1 findMany au lieu de N findUnique
   const allTemplateVarIds = [...new Set(plan.variables.map(v => v.templateVariableId))];
   const templateVarsMap = new Map<string, { displayName: string | null }>();
@@ -596,6 +609,8 @@ export async function runRepeatExecution(
     }
   }
 
+  const _t3 = Date.now();
+  console.log(`[PERF] Variable copy loop: ${_t3 - _t2}ms`);
   try {
     await syncRepeaterTemplateIds(prisma, repeaterNodeId, templateNodeIds);
   } catch (syncErr) {
@@ -610,6 +625,7 @@ export async function runRepeatExecution(
       // fixCompleteDuplication() crash systématiquement (include manquant pour Formula/Condition).
       // Économie: ~60-80 queries DB gaspillées.
       
+      const _t4 = Date.now();
       // 0.1. DUPLICATION DES TABLES ET LOOKUPS (parallélisée + pré-filtrée)
       {
         // Pré-calculer les paires (originalNodeId, copiedNodeId, suffixToken)
@@ -658,10 +674,13 @@ export async function runRepeatExecution(
       }
 
       // Ã°Å¸Â§Â­ NOUVEAU: rÃƒÂ©aligner les parents des copies quand la section dupliquÃƒÂ©e existe dÃƒÂ©jÃƒÂ 
+      const _t5 = Date.now();
+      console.log(`[PERF] TBL-DUP: ${_t5 - _t4}ms`);
       await reassignCopiedNodesToDuplicatedParents(prisma, duplicatedNodeIds, originalNodeIdByCopyId);
       
       // 1-5+7. BATCH: isolation + reset + calcul indep + triggers + block fallback
       // (remplace 5 services individuels: ~560 queries → ~71 queries)
+      const _t6 = Date.now();
       const batchResult = await batchPostDuplicationProcessing(
         prisma,
         Array.from(duplicatedNodeIds)
@@ -675,12 +694,17 @@ export async function runRepeatExecution(
       
       
       // Ã°Å¸Å¡â‚¬ 8. RECALCULER LES VRAIES VALEURS AVEC OPERATION INTERPRETER
+      const _t7 = Date.now();
+      console.log(`[PERF] batchPostDup: ${_t7 - _t6}ms`);
       const interpreterRecalcReport = await recalculateAllCopiedNodesWithOperationInterpreter(
         prisma,
         repeaterNodeId,
         '-1',
         Array.from(duplicatedNodeIds)
       );
+      const _t8 = Date.now();
+      console.log(`[PERF] Recalculate interpreter: ${_t8 - _t7}ms`);
+      console.log(`[PERF] === TOTAL: ${_t8 - _t0}ms === | Templates: ${_t2-_t1}ms | Variables: ${_t3-_t2}ms | TBL-DUP: ${_t5-_t4}ms | BatchPost: ${_t7-_t6}ms | Recalc: ${_t8-_t7}ms`);
       interpreterRecalcReport.recalculated.forEach(r => {
         if (r.hasCapacity && r.newValue) {
         }

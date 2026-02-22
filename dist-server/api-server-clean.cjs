@@ -32820,7 +32820,7 @@ function getValidationErrorMessage(parentType, parentSubType, childType, childSu
 }
 
 // src/components/TreeBranchLeaf/treebranchleaf-new/api/treebranchleaf-routes.ts
-var import_crypto21 = require("crypto");
+var import_crypto20 = require("crypto");
 init_operation_interpreter();
 
 // src/components/TreeBranchLeaf/treebranchleaf-new/api/registry/repeat-id-registry.ts
@@ -36552,450 +36552,6 @@ function deriveRepeatContextFromMetadata(carrier, fallback = {}) {
   };
 }
 
-// src/components/TreeBranchLeaf/treebranchleaf-new/api/repeat/services/table-lookup-duplication-service.ts
-var import_crypto18 = require("crypto");
-var TableLookupDuplicationService = class {
-  /**
-   * Duplique complÃƒÂ¨tement les tables TBL et leurs configurations SELECT associÃƒÂ©es
-   * Assure l'indÃƒÂ©pendance totale des lookups pour les nÃ…â€œuds copiÃƒÂ©s
-   */
-  async duplicateTableLookupSystem(prisma51, originalNodeId, arg) {
-    let suffixToken = typeof arg === "string" ? arg : arg?.suffixToken ?? "-1";
-    if (!suffixToken) suffixToken = "-1";
-    if (!suffixToken.startsWith("-")) {
-      suffixToken = `-${suffixToken}`;
-    }
-    const normalizedOriginalId = normalizeNodeBase(originalNodeId);
-    const copiedNodeId = typeof arg === "object" && arg?.copiedNodeId ? arg.copiedNodeId : `${normalizedOriginalId}${suffixToken}`;
-    try {
-      const copiedNode = await prisma51.treeBranchLeafNode.findUnique({
-        where: { id: copiedNodeId }
-      });
-      if (!copiedNode) {
-        return;
-      }
-      const originalSelectConfigs = await prisma51.treeBranchLeafSelectConfig.findMany({
-        where: { nodeId: originalNodeId }
-      });
-      if (originalSelectConfigs.length === 0) {
-        const originalNode = await prisma51.treeBranchLeafNode.findUnique({
-          where: { id: originalNodeId },
-          select: { table_activeId: true }
-        });
-        if (originalNode?.table_activeId) {
-          const copiedTableId = `${originalNode.table_activeId}${suffixToken}`;
-          const copiedTable = await prisma51.treeBranchLeafNodeTable.findUnique({
-            where: { id: copiedTableId },
-            include: { tableColumns: { take: 1, orderBy: { columnIndex: "asc" } } }
-          });
-          const firstColName = copiedTable?.tableColumns[0]?.name || null;
-          if (firstColName) {
-            const displayCol = firstColName;
-            await prisma51.treeBranchLeafSelectConfig.create({
-              data: {
-                id: (0, import_crypto18.randomUUID)(),
-                nodeId: copiedNodeId,
-                tableReference: copiedTableId,
-                // 🔥 CRITICAL: Remplir TOUS les champs nécessaires (pas juste displayColumn)
-                displayColumn: displayCol,
-                optionsSource: "table",
-                // Type de source
-                multiple: false,
-                // Single select par défaut
-                searchable: true,
-                // Searchable par défaut
-                allowCustom: false,
-                // No custom values
-                options: [],
-                // Empty options (used only for 'fixed' source)
-                maxSelections: null,
-                apiEndpoint: null,
-                keyColumn: null,
-                keyRow: null,
-                valueColumn: null,
-                valueRow: null,
-                displayRow: null,
-                dependsOnNodeId: null,
-                createdAt: /* @__PURE__ */ new Date(),
-                updatedAt: /* @__PURE__ */ new Date()
-              }
-            });
-            return;
-          }
-        }
-        return;
-      }
-      for (const selectConfig of originalSelectConfigs) {
-        await this.duplicateTableAndSelectConfig(prisma51, selectConfig, copiedNodeId, suffixToken);
-      }
-    } catch (error) {
-      console.error(`[TBL-DUP] ERROR: ${error instanceof Error ? error.message : String(error)}`);
-      if (error instanceof Error) console.error(`[TBL-DUP] Stack: ${error.stack}`);
-      throw error;
-    }
-  }
-  /**
-   * Duplique une table TBL et sa configuration SELECT associÃƒÂ©e
-   */
-  async duplicateTableAndSelectConfig(prisma51, originalSelectConfig, copiedNodeId, suffix) {
-    const originalTableId = originalSelectConfig.tableReference;
-    const copiedTableId = `${originalTableId}${suffix}`;
-    try {
-      const originalTable = await prisma51.treeBranchLeafNodeTable.findUnique({
-        where: { id: originalTableId },
-        include: {
-          tableColumns: true,
-          tableRows: true
-        }
-      });
-      if (!originalTable) {
-        return;
-      }
-      const originalNodeIdBase = normalizeNodeBase(originalSelectConfig.nodeId);
-      const tableOwnerNodeIdBase = normalizeNodeBase(originalTable.nodeId);
-      const isTableOwnedByThisNode = originalNodeIdBase === tableOwnerNodeIdBase;
-      const copiedTableOwnerNodeId = isTableOwnedByThisNode ? copiedNodeId : `${tableOwnerNodeIdBase}${suffix}`;
-      let nodeOwnerExists = await prisma51.treeBranchLeafNode.findUnique({
-        where: { id: copiedTableOwnerNodeId },
-        select: { id: true }
-      });
-      if (!nodeOwnerExists && !isTableOwnedByThisNode) {
-        const originalOwnerNode = await prisma51.treeBranchLeafNode.findUnique({
-          where: { id: originalTable.nodeId },
-          select: {
-            type: true,
-            label: true,
-            treeId: true,
-            parentId: true
-          }
-        });
-        if (originalOwnerNode) {
-          try {
-            const createdNode = await prisma51.treeBranchLeafNode.create({
-              data: {
-                id: copiedTableOwnerNodeId,
-                type: originalOwnerNode.type,
-                label: originalOwnerNode.label ? `${originalOwnerNode.label}${suffix}` : "Stub",
-                treeId: originalOwnerNode.treeId,
-                parentId: null,
-                order: 0,
-                createdAt: /* @__PURE__ */ new Date(),
-                updatedAt: /* @__PURE__ */ new Date()
-              }
-            });
-            nodeOwnerExists = createdNode;
-          } catch (err) {
-            console.error(`[TBL-DUP] \u274C Failed to create stub node: ${err.message}`);
-            throw err;
-          }
-        }
-      }
-      if (!nodeOwnerExists) {
-        console.warn(
-          `[TBL-DUP] Cannot duplicate table: owner node "${copiedTableOwnerNodeId}" doesn't exist`
-        );
-        return;
-      }
-      const existingCopiedTable = await prisma51.treeBranchLeafNodeTable.findUnique({
-        where: { id: copiedTableId }
-      });
-      const rewrittenMeta = (() => {
-        if (!originalTable.meta) return originalTable.meta;
-        try {
-          const metaObj = typeof originalTable.meta === "string" ? JSON.parse(originalTable.meta) : JSON.parse(JSON.stringify(originalTable.meta));
-          const suffixNum = parseInt(suffix.replace("-", "")) || 1;
-          if (metaObj?.lookup?.selectors?.columnFieldId && !metaObj.lookup.selectors.columnFieldId.endsWith(`-${suffixNum}`)) {
-            metaObj.lookup.selectors.columnFieldId = `${metaObj.lookup.selectors.columnFieldId}-${suffixNum}`;
-          }
-          if (metaObj?.lookup?.selectors?.rowFieldId && !metaObj.lookup.selectors.rowFieldId.endsWith(`-${suffixNum}`)) {
-            metaObj.lookup.selectors.rowFieldId = `${metaObj.lookup.selectors.rowFieldId}-${suffixNum}`;
-          }
-          if (metaObj?.lookup?.rowSourceOption?.sourceField && !metaObj.lookup.rowSourceOption.sourceField.endsWith(`-${suffixNum}`)) {
-            metaObj.lookup.rowSourceOption.sourceField = `${metaObj.lookup.rowSourceOption.sourceField}-${suffixNum}`;
-          }
-          if (metaObj?.lookup?.columnSourceOption?.sourceField && !metaObj.lookup.columnSourceOption.sourceField.endsWith(`-${suffixNum}`)) {
-            metaObj.lookup.columnSourceOption.sourceField = `${metaObj.lookup.columnSourceOption.sourceField}-${suffixNum}`;
-          }
-          if (metaObj?.lookup?.rowSourceOption?.comparisonColumn && !metaObj.lookup.rowSourceOption.operator) {
-            metaObj.lookup.rowSourceOption.operator = "=";
-          }
-          if (metaObj?.lookup?.columnSourceOption?.comparisonColumn && !metaObj.lookup.columnSourceOption.operator) {
-            metaObj.lookup.columnSourceOption.operator = "=";
-          }
-          if (metaObj?.lookup?.rowSourceOption?.comparisonColumn) {
-            const val = metaObj.lookup.rowSourceOption.comparisonColumn;
-            if (!/^-?\d+(\.\d+)?$/.test(val.trim()) && !val.endsWith(suffix)) {
-              metaObj.lookup.rowSourceOption.comparisonColumn = `${val}${suffix}`;
-            }
-          }
-          if (metaObj?.lookup?.columnSourceOption?.comparisonColumn) {
-            const val = metaObj.lookup.columnSourceOption.comparisonColumn;
-            if (!/^-?\d+(\.\d+)?$/.test(val.trim()) && !val.endsWith(suffix)) {
-              metaObj.lookup.columnSourceOption.comparisonColumn = `${val}${suffix}`;
-            }
-          }
-          if (metaObj?.lookup?.displayColumn) {
-            if (Array.isArray(metaObj.lookup.displayColumn)) {
-              metaObj.lookup.displayColumn = metaObj.lookup.displayColumn.map((col) => {
-                if (col && !/^-?\d+(\.\d+)?$/.test(col.trim()) && !col.endsWith(suffix)) {
-                  return `${col}${suffix}`;
-                }
-                return col;
-              });
-            } else if (typeof metaObj.lookup.displayColumn === "string") {
-              const val = metaObj.lookup.displayColumn;
-              if (!/^-?\d+(\.\d+)?$/.test(val.trim()) && !val.endsWith(suffix)) {
-                metaObj.lookup.displayColumn = `${val}${suffix}`;
-              }
-            }
-          } else {
-          }
-          if (metaObj?.lookup?.displayRow) {
-            if (Array.isArray(metaObj.lookup.displayRow)) {
-              metaObj.lookup.displayRow = metaObj.lookup.displayRow.map((row) => {
-                if (row && !/^-?\d+(\.\d+)?$/.test(row.trim()) && !row.endsWith(suffix)) {
-                  return `${row}${suffix}`;
-                }
-                return row;
-              });
-            } else if (typeof metaObj.lookup.displayRow === "string") {
-              const val = metaObj.lookup.displayRow;
-              if (!/^-?\d+(\.\d+)?$/.test(val.trim()) && !val.endsWith(suffix)) {
-                metaObj.lookup.displayRow = `${val}${suffix}`;
-              }
-            }
-          }
-          return metaObj;
-        } catch {
-          return originalTable.meta;
-        }
-      })();
-      if (!existingCopiedTable) {
-        await prisma51.treeBranchLeafNodeTable.create({
-          data: {
-            id: copiedTableId,
-            nodeId: copiedTableOwnerNodeId,
-            // 🔧 FIX: Utiliser le vrai propriétaire,
-            name: originalTable.name + suffix,
-            type: originalTable.type,
-            description: originalTable.description,
-            // Ã°Å¸â€Â¢ COPIE TABLE META: suffixer UUIDs et comparisonColumn
-            meta: rewrittenMeta,
-            organizationId: originalTable.organizationId,
-            rowCount: originalTable.rowCount,
-            columnCount: originalTable.columnCount,
-            lookupDisplayColumns: originalTable.lookupDisplayColumns,
-            lookupSelectColumn: originalTable.lookupSelectColumn,
-            createdAt: /* @__PURE__ */ new Date(),
-            updatedAt: /* @__PURE__ */ new Date(),
-            // Duplication des colonnes
-            // Ã°Å¸â€Â¢ COPIE TABLE COLUMN: suffixe seulement pour texte, pas pour nombres
-            // ð ˆâ€  FIX 07/01/2026: RÃ©assigner les columnIndex en sÃ©quence (0, 1, 2, ...) pour prÃ©server l'ordre
-            tableColumns: {
-              create: originalTable.tableColumns.map((col, idx) => {
-                const baseName = String(col.name ?? "");
-                const isNumericName = /^-?\d+(\.\d+)?$/.test(baseName.trim());
-                const shouldSuffix = baseName.length > 0 && !isNumericName && !baseName.endsWith(suffix);
-                const newName = shouldSuffix ? `${baseName}${suffix}` : baseName;
-                return {
-                  id: col.id ? `${col.id}${suffix}` : (0, import_crypto18.randomUUID)(),
-                  // ✅ FIX 11/01/2026: NE PAS inclure tableId dans nested create - Prisma le remplit automatiquement
-                  columnIndex: idx,
-                  // ✅ FIX: Réassigner en séquence au lieu de copier
-                  name: newName,
-                  type: col.type,
-                  width: col.width,
-                  format: col.format,
-                  metadata: col.metadata
-                };
-              })
-            },
-            // Duplication des lignes
-            // ✅ FIX 07/01/2026: Réassigner aussi les rowIndex en séquence pour préserver l'ordre
-            tableRows: {
-              create: originalTable.tableRows.map((row, idx) => ({
-                id: row.id ? `${row.id}${suffix}` : (0, import_crypto18.randomUUID)(),
-                // ✅ FIX 11/01/2026: NE PAS inclure tableId dans nested create - Prisma le remplit automatiquement
-                rowIndex: idx,
-                // ✅ FIX: Réassigner en séquence
-                cells: row.cells
-              }))
-            }
-          }
-        });
-      } else {
-        await prisma51.treeBranchLeafNodeTableColumn.deleteMany({
-          where: { tableId: copiedTableId }
-        });
-        const columnsData = originalTable.tableColumns.map((col, idx) => {
-          const baseName = String(col.name ?? "");
-          const isNumericName = /^-?\d+(\.\d+)?$/.test(baseName.trim());
-          const shouldSuffix = baseName.length > 0 && !isNumericName && !baseName.endsWith(suffix);
-          const newName = shouldSuffix ? `${baseName}${suffix}` : baseName;
-          return {
-            id: col.id ? `${col.id}${suffix}` : (0, import_crypto18.randomUUID)(),
-            tableId: copiedTableId,
-            columnIndex: idx,
-            name: newName,
-            type: col.type,
-            width: col.width,
-            format: col.format,
-            metadata: col.metadata
-          };
-        });
-        if (columnsData.length > 0) {
-          await prisma51.treeBranchLeafNodeTableColumn.createMany({
-            data: columnsData,
-            skipDuplicates: true
-          });
-        }
-        await prisma51.treeBranchLeafNodeTable.update({
-          where: { id: copiedTableId },
-          data: { meta: rewrittenMeta, updatedAt: /* @__PURE__ */ new Date() }
-        });
-      }
-      const existingSelectConfig = await prisma51.treeBranchLeafSelectConfig.findUnique({
-        where: { nodeId: copiedNodeId }
-      });
-      if (!existingSelectConfig) {
-        const shouldSuffixColumns = true;
-        await prisma51.treeBranchLeafSelectConfig.create({
-          data: {
-            id: (0, import_crypto18.randomUUID)(),
-            // 🔧 FIX: Générer l'id manuellement
-            nodeId: copiedNodeId,
-            tableReference: copiedTableId,
-            // 🔥 SUFFIXER les références de colonnes/lignes si elles pointent vers la première colonne/ligne
-            keyColumn: originalSelectConfig.keyColumn ? `${originalSelectConfig.keyColumn}${suffix}` : null,
-            keyRow: originalSelectConfig.keyRow ? `${originalSelectConfig.keyRow}${suffix}` : null,
-            valueColumn: originalSelectConfig.valueColumn ? `${originalSelectConfig.valueColumn}${suffix}` : null,
-            valueRow: originalSelectConfig.valueRow ? `${originalSelectConfig.valueRow}${suffix}` : null,
-            displayColumn: (() => {
-              if (originalSelectConfig.displayColumn) {
-                return `${originalSelectConfig.displayColumn}${suffix}`;
-              }
-              const firstCol = originalTable.tableColumns && originalTable.tableColumns.length > 0 ? originalTable.tableColumns[0] : null;
-              if (firstCol && firstCol.name) {
-                const baseName = String(firstCol.name);
-                const isNumericName = /^-?\d+(\.\d+)?$/.test(baseName.trim());
-                const shouldSuffix = baseName.length > 0 && !isNumericName && !baseName.endsWith(suffix);
-                const result = shouldSuffix ? `${baseName}${suffix}` : baseName;
-                return result;
-              }
-              return null;
-            })(),
-            displayRow: originalSelectConfig.displayRow ? `${originalSelectConfig.displayRow}${suffix}` : null,
-            // 🔧 FIX 07/01/2026: Copier TOUS les autres champs du SelectConfig original
-            options: originalSelectConfig.options,
-            multiple: originalSelectConfig.multiple,
-            searchable: originalSelectConfig.searchable,
-            allowCustom: originalSelectConfig.allowCustom,
-            maxSelections: originalSelectConfig.maxSelections,
-            optionsSource: originalSelectConfig.optionsSource,
-            apiEndpoint: originalSelectConfig.apiEndpoint,
-            // 🔥 CRITICAL: Suffixer dependsOnNodeId s'il existe (référence à un autre nœud)
-            dependsOnNodeId: originalSelectConfig.dependsOnNodeId ? `${originalSelectConfig.dependsOnNodeId}${suffix}` : null,
-            createdAt: /* @__PURE__ */ new Date(),
-            updatedAt: /* @__PURE__ */ new Date()
-          }
-        });
-        try {
-          const node = await prisma51.treeBranchLeafNode.findUnique({ where: { id: copiedNodeId }, select: { linkedTableIds: true, fieldType: true, metadata: true } });
-          const isInputField = node?.fieldType === null || node?.fieldType === "" || node?.fieldType === void 0;
-          const currentLinked = node?.linkedTableIds || [];
-          const newLinked = isInputField ? [] : Array.from(/* @__PURE__ */ new Set([...currentLinked, copiedTableId]));
-          const currentMetadata = node?.metadata && typeof node.metadata === "object" ? JSON.parse(JSON.stringify(node.metadata)) : {};
-          if (currentMetadata.lookup) {
-            if (currentMetadata.lookup.tableRef) {
-              currentMetadata.lookup.tableRef = copiedTableId;
-            }
-            if (currentMetadata.lookup.displayColumn) {
-              if (Array.isArray(currentMetadata.lookup.displayColumn)) {
-                currentMetadata.lookup.displayColumn = currentMetadata.lookup.displayColumn.map(
-                  (col) => col && !col.endsWith(suffix) ? `${col}${suffix}` : col
-                );
-              } else if (typeof currentMetadata.lookup.displayColumn === "string") {
-                const val = currentMetadata.lookup.displayColumn;
-                if (!val.endsWith(suffix)) {
-                  currentMetadata.lookup.displayColumn = `${val}${suffix}`;
-                }
-              }
-            }
-          }
-          if (isTableOwnedByThisNode) {
-            const tableInstances = {};
-            tableInstances[copiedTableId] = {};
-            await prisma51.treeBranchLeafNode.update({
-              where: { id: copiedNodeId },
-              data: {
-                hasTable: true,
-                // ✅ Seulement le propriétaire a hasTable: true
-                table_activeId: copiedTableId,
-                table_instances: { set: tableInstances },
-                table_name: originalTable.name + suffix,
-                table_type: originalTable.type,
-                linkedTableIds: { set: newLinked },
-                metadata: currentMetadata
-                // 🔥 FIX: Sauvegarder le metadata mis à jour
-              }
-            });
-          } else {
-            await prisma51.treeBranchLeafNode.update({
-              where: { id: copiedNodeId },
-              data: {
-                hasTable: false,
-                // ✅ IMPORTANT: Les non-propriétaires NE doivent PAS avoir hasTable: true!
-                linkedTableIds: { set: newLinked },
-                metadata: currentMetadata
-                // 🔥 FIX: Sauvegarder le metadata mis à jour
-              }
-            });
-          }
-        } catch (nodeUpdateErr) {
-          console.warn(`   \u26A0\uFE0F Warning updating node ${copiedNodeId} capabilities:`, nodeUpdateErr.message);
-        }
-      } else {
-      }
-    } catch (error) {
-      console.error(`\u274C Erreur duplication table/config ${originalTableId}:`, error);
-      throw error;
-    }
-  }
-  /**
-   * RÃƒÂ©pare les configurations SELECT manquantes pour les nÃ…â€œuds copiÃƒÂ©s existants
-   */
-  async repairMissingSelectConfigs(prisma51) {
-    try {
-      const copiedNodes = await prisma51.treeBranchLeafNode.findMany({
-        where: {
-          id: {
-            endsWith: "-1"
-          }
-        }
-      });
-      for (const copiedNode of copiedNodes) {
-        const originalNodeId = copiedNode.id.replace("-1", "");
-        const copiedSelectConfigs = await prisma51.treeBranchLeafSelectConfig.findMany({
-          where: { nodeId: copiedNode.id }
-        });
-        if (copiedSelectConfigs.length === 0) {
-          await this.duplicateTableLookupSystem(prisma51, originalNodeId, {
-            copiedNodeId: copiedNode.id,
-            suffixToken: "-1"
-          });
-        }
-      }
-    } catch (error) {
-      console.error(`\xC3\xA2\xC2\x9D\xC5\u2019 [TableLookupDuplication] Erreur r\xC3\u0192\xC2\xA9paration:`, error);
-      throw error;
-    }
-  }
-};
-var tableLookupDuplicationService = new TableLookupDuplicationService();
-function normalizeNodeBase(value) {
-  return value.replace(/-\d+(?:-\d+)*$/, "");
-}
-
 // src/components/TreeBranchLeaf/treebranchleaf-new/api/repeat/services/deep-copy-service.ts
 async function deepCopyNodeInternal(prisma51, req2, nodeId, opts) {
   const {
@@ -37137,7 +36693,7 @@ async function deepCopyNodeInternal(prisma51, req2, nodeId, opts) {
     ...derivedRepeatContext,
     suffix: derivedRepeatContext.suffix ?? suffixToken
   } : void 0;
-  const allNodes = await prisma51.treeBranchLeafNode.findMany({ where: { treeId: source.treeId } });
+  const allNodes = opts?.preloadedTreeNodes ?? await prisma51.treeBranchLeafNode.findMany({ where: { treeId: source.treeId } });
   const byId = new Map(allNodes.map((n) => [n.id, n]));
   const existingNodeIds = new Set(byId.keys());
   const childrenByParent = /* @__PURE__ */ new Map();
@@ -37616,15 +37172,6 @@ async function deepCopyNodeInternal(prisma51, req2, nodeId, opts) {
     await prisma51.treeBranchLeafNode.create({ data: cloneData });
     createdNodes.push({ oldId, newId, newParentId });
     existingNodeIds.add(newId);
-    try {
-      const tableLookupService = new TableLookupDuplicationService();
-      await tableLookupService.duplicateTableLookupSystem(prisma51, oldId, {
-        suffixToken,
-        copiedNodeId: newId
-      });
-    } catch (lookupError) {
-      console.warn(`[DEEP-COPY] Warning duplicating table lookup for ${oldId} -> ${newId}:`, lookupError.message);
-    }
     if (oldNode.aiMeasure_keys && Array.isArray(oldNode.aiMeasure_keys) && oldNode.aiMeasure_keys.length > 0) {
       try {
         const mappings = oldNode.aiMeasure_keys;
@@ -37711,9 +37258,17 @@ async function deepCopyNodeInternal(prisma51, req2, nodeId, opts) {
     }
   }
   const allOldNodeIds = createdNodes.map((n) => n.oldId);
-  const [allFormulasRaw, allConditionsRaw] = await Promise.all([
+  const allNewNodeIds = createdNodes.map((n) => n.newId);
+  const [allFormulasRaw, allConditionsRaw, allSelectConfigsRaw, allNumberConfigsRaw, existingCopySelectConfigs, existingCopyNumberConfigs, allTablesRaw] = await Promise.all([
     prisma51.treeBranchLeafNodeFormula.findMany({ where: { nodeId: { in: allOldNodeIds } } }),
-    prisma51.treeBranchLeafNodeCondition.findMany({ where: { nodeId: { in: allOldNodeIds } } })
+    prisma51.treeBranchLeafNodeCondition.findMany({ where: { nodeId: { in: allOldNodeIds } } }),
+    prisma51.treeBranchLeafSelectConfig.findMany({ where: { nodeId: { in: allOldNodeIds } } }),
+    prisma51.treeBranchLeafNumberConfig.findMany({ where: { nodeId: { in: allOldNodeIds } } }),
+    // PERF: Also pre-check which COPY configs already exist (avoid per-node findUnique)
+    prisma51.treeBranchLeafSelectConfig.findMany({ where: { nodeId: { in: allNewNodeIds } }, select: { nodeId: true } }),
+    prisma51.treeBranchLeafNumberConfig.findMany({ where: { nodeId: { in: allNewNodeIds } }, select: { nodeId: true } }),
+    // PERF: Pre-load ALL tables with columns+rows in 1 query instead of N
+    prisma51.treeBranchLeafNodeTable.findMany({ where: { nodeId: { in: allOldNodeIds } }, include: { tableColumns: true, tableRows: true } })
   ]);
   const formulasByNodeId = /* @__PURE__ */ new Map();
   for (const f of allFormulasRaw) {
@@ -37726,6 +37281,16 @@ async function deepCopyNodeInternal(prisma51, req2, nodeId, opts) {
     const arr = conditionsByNodeId.get(c.nodeId) || [];
     arr.push(c);
     conditionsByNodeId.set(c.nodeId, arr);
+  }
+  const selectConfigByNodeId = new Map(allSelectConfigsRaw.map((sc) => [sc.nodeId, sc]));
+  const numberConfigByNodeId = new Map(allNumberConfigsRaw.map((nc) => [nc.nodeId, nc]));
+  const existingCopySelectConfigNodeIds = new Set(existingCopySelectConfigs.map((sc) => sc.nodeId));
+  const existingCopyNumberConfigNodeIds = new Set(existingCopyNumberConfigs.map((nc) => nc.nodeId));
+  const preloadedTablesByNodeId = /* @__PURE__ */ new Map();
+  for (const t of allTablesRaw) {
+    const arr = preloadedTablesByNodeId.get(t.nodeId) || [];
+    arr.push(t);
+    preloadedTablesByNodeId.set(t.nodeId, arr);
   }
   const allPotentialNewConditionIds = allConditionsRaw.map((c) => `${c.id}-${suffixToken}`);
   const existingConditionsSet = /* @__PURE__ */ new Set();
@@ -37900,10 +37465,7 @@ async function deepCopyNodeInternal(prisma51, req2, nodeId, opts) {
         console.warn("[DEEP-COPY]  Erreur mise \b\b\b\b\b\b\b jour flags/activeIds:", e.message);
       }
     }
-    const tables = await prisma51.treeBranchLeafNodeTable.findMany({
-      where: { nodeId: oldId },
-      include: { tableColumns: true, tableRows: true }
-    });
+    const tables = preloadedTablesByNodeId.get(oldId) || [];
     const additionalTableIds = [];
     if (source.table_activeId && !tables.some((t) => t.id === source.table_activeId)) {
       additionalTableIds.push(source.table_activeId);
@@ -38107,14 +37669,10 @@ async function deepCopyNodeInternal(prisma51, req2, nodeId, opts) {
         console.warn("[DEEP-COPY] Erreur mise \xE0 jour hasTable/table_activeId:", e.message);
       }
     }
-    const originalSelectConfig = await prisma51.treeBranchLeafSelectConfig.findUnique({
-      where: { nodeId: oldId }
-    });
+    const originalSelectConfig = selectConfigByNodeId.get(oldId) ?? null;
     if (originalSelectConfig) {
-      const existingCopyConfig = await prisma51.treeBranchLeafSelectConfig.findUnique({
-        where: { nodeId: newId }
-      });
-      if (!existingCopyConfig) {
+      const copyAlreadyExists = existingCopySelectConfigNodeIds.has(newId);
+      if (!copyAlreadyExists) {
         let newTableReference = null;
         const shouldSuffixColumns = true;
         let tableWasCopied = false;
@@ -38188,14 +37746,10 @@ async function deepCopyNodeInternal(prisma51, req2, nodeId, opts) {
       } else {
       }
     }
-    const originalNumberConfig = await prisma51.treeBranchLeafNumberConfig.findUnique({
-      where: { nodeId: oldId }
-    });
+    const originalNumberConfig = numberConfigByNodeId.get(oldId) ?? null;
     if (originalNumberConfig) {
-      const existingCopyNumberConfig = await prisma51.treeBranchLeafNumberConfig.findUnique({
-        where: { nodeId: newId }
-      });
-      if (!existingCopyNumberConfig) {
+      const numberCopyAlreadyExists = existingCopyNumberConfigNodeIds.has(newId);
+      if (!numberCopyAlreadyExists) {
         try {
           await prisma51.treeBranchLeafNumberConfig.create({
             data: {
@@ -38426,7 +37980,7 @@ async function deepCopyNodeInternal(prisma51, req2, nodeId, opts) {
 // src/components/TreeBranchLeaf/tbl-bridge/routes/tbl-submission-evaluator.ts
 var import_express57 = require("express");
 init_database();
-var import_crypto19 = require("crypto");
+var import_crypto18 = require("crypto");
 init_operation_interpreter();
 var router56 = (0, import_express57.Router)();
 var prisma30 = db;
@@ -38596,7 +38150,7 @@ async function cloneCompletedSubmissionToDraft(params) {
         // (Prisma/Postgres) Empêche un crash si (submissionId,nodeId) existe déjà.
         skipDuplicates: true,
         data: uniqueOriginalRows.map((r) => ({
-          id: (0, import_crypto19.randomUUID)(),
+          id: (0, import_crypto18.randomUUID)(),
           submissionId: newSubmissionId,
           nodeId: r.nodeId,
           value: r.value,
@@ -41341,7 +40895,7 @@ var tbl_submission_evaluator_default = router56;
 var import_express58 = require("express");
 var import_client5 = require("@prisma/client");
 init_database();
-var import_crypto20 = require("crypto");
+var import_crypto19 = require("crypto");
 var router57 = (0, import_express58.Router)();
 var prisma31 = db;
 function toJsonSafe(value) {
@@ -41464,7 +41018,7 @@ router57.post("/nodes/:nodeId/tables", async (req2, res) => {
       });
       finalName = `${name} (${existingCount + 1})`;
     }
-    const tableId = (0, import_crypto20.randomUUID)();
+    const tableId = (0, import_crypto19.randomUUID)();
     const defaultMeta = {
       lookup: {
         enabled: true,
@@ -41504,7 +41058,7 @@ router57.post("/nodes/:nodeId/tables", async (req2, res) => {
       const colFormat = typeof col === "object" && col !== null && col.format ? col.format : null;
       const colMetadata = typeof col === "object" && col !== null && col.metadata ? col.metadata : {};
       return {
-        id: (0, import_crypto20.randomUUID)(),
+        id: (0, import_crypto19.randomUUID)(),
         tableId,
         columnIndex: index,
         name: colName,
@@ -41515,7 +41069,7 @@ router57.post("/nodes/:nodeId/tables", async (req2, res) => {
       };
     });
     const tableRowsData = rows.map((row, index) => ({
-      id: (0, import_crypto20.randomUUID)(),
+      id: (0, import_crypto19.randomUUID)(),
       tableId,
       rowIndex: index,
       // IMPORTANT: Prisma JSON ne supporte pas undefined/NaN/BigInt/Date
@@ -41585,7 +41139,7 @@ router57.post("/nodes/:nodeId/tables", async (req2, res) => {
               if (!existingRowConfig) {
                 await prisma31.treeBranchLeafSelectConfig.create({
                   data: {
-                    id: (0, import_crypto20.randomUUID)(),
+                    id: (0, import_crypto19.randomUUID)(),
                     nodeId: rowSourceField,
                     options: [],
                     multiple: false,
@@ -41617,7 +41171,7 @@ router57.post("/nodes/:nodeId/tables", async (req2, res) => {
               if (!existingColConfig) {
                 await prisma31.treeBranchLeafSelectConfig.create({
                   data: {
-                    id: (0, import_crypto20.randomUUID)(),
+                    id: (0, import_crypto19.randomUUID)(),
                     nodeId: colSourceField,
                     options: [],
                     multiple: false,
@@ -41647,7 +41201,7 @@ router57.post("/nodes/:nodeId/tables", async (req2, res) => {
             if (!existingCompositeConfig) {
               await prisma31.treeBranchLeafSelectConfig.create({
                 data: {
-                  id: (0, import_crypto20.randomUUID)(),
+                  id: (0, import_crypto19.randomUUID)(),
                   nodeId,
                   options: [],
                   multiple: false,
@@ -41849,7 +41403,7 @@ router57.put("/tables/:id", async (req2, res) => {
         await tx.treeBranchLeafNodeTableColumn.deleteMany({ where: { tableId: id } });
         if (columns.length > 0) {
           const newColumnsData = columns.map((col, index) => ({
-            id: (0, import_crypto20.randomUUID)(),
+            id: (0, import_crypto19.randomUUID)(),
             tableId: id,
             columnIndex: index,
             name: typeof col === "string" ? col : col.name || `Colonne ${index + 1}`,
@@ -41868,7 +41422,7 @@ router57.put("/tables/:id", async (req2, res) => {
             const row = rows[index];
             await tx.treeBranchLeafNodeTableRow.create({
               data: {
-                id: (0, import_crypto20.randomUUID)(),
+                id: (0, import_crypto19.randomUUID)(),
                 tableId: id,
                 rowIndex: index,
                 cells: toJsonSafe(row)
@@ -42108,7 +41662,7 @@ router57.put("/nodes/:nodeId/tables/:tableId", async (req2, res) => {
       if (Array.isArray(columns) && columns.length > 0) {
         await tx.treeBranchLeafNodeTableColumn.deleteMany({ where: { tableId } });
         const newColumnsData = columns.map((col, index) => ({
-          id: (0, import_crypto20.randomUUID)(),
+          id: (0, import_crypto19.randomUUID)(),
           tableId,
           columnIndex: index,
           name: typeof col === "string" ? col : col.name || `Colonne ${index + 1}`,
@@ -42125,7 +41679,7 @@ router57.put("/nodes/:nodeId/tables/:tableId", async (req2, res) => {
           const row = rows[index];
           await tx.treeBranchLeafNodeTableRow.create({
             data: {
-              id: (0, import_crypto20.randomUUID)(),
+              id: (0, import_crypto19.randomUUID)(),
               tableId,
               rowIndex: index,
               cells: toJsonSafe(row)
@@ -42379,7 +41933,7 @@ var computeLogicVersion = () => {
     entries: stats.entries,
     parseCount: stats.parseCount
   });
-  const version = (0, import_crypto21.createHash)("sha1").update(seed).digest("hex").slice(0, 8);
+  const version = (0, import_crypto20.createHash)("sha1").update(seed).digest("hex").slice(0, 8);
   return { version, metrics, stats };
 };
 function getAuthCtx3(req2) {
@@ -42739,7 +42293,7 @@ router58.post("/trees", async (req2, res) => {
     if (!targetOrgId) {
       return res.status(400).json({ error: "organizationId requis (en-t\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xAAte x-organization-id ou dans le corps)" });
     }
-    const id = (0, import_crypto21.randomUUID)();
+    const id = (0, import_crypto20.randomUUID)();
     const tree = await prisma32.treeBranchLeafTree.create({
       data: {
         id,
@@ -42778,7 +42332,7 @@ router58.post("/trees/:id/duplicate", async (req2, res) => {
     if (!sourceTree) {
       return res.status(404).json({ error: "Arbre source non trouv\xE9" });
     }
-    const newTreeId = (0, import_crypto21.randomUUID)();
+    const newTreeId = (0, import_crypto20.randomUUID)();
     const newTree = await prisma32.treeBranchLeafTree.create({
       data: {
         id: newTreeId,
@@ -42804,7 +42358,7 @@ router58.post("/trees/:id/duplicate", async (req2, res) => {
     }
     const idMap = /* @__PURE__ */ new Map();
     for (const node of sourceNodes) {
-      idMap.set(node.id, (0, import_crypto21.randomUUID)());
+      idMap.set(node.id, (0, import_crypto20.randomUUID)());
     }
     const now = /* @__PURE__ */ new Date();
     const nodeCreateData = sourceNodes.map((node) => {
@@ -43017,7 +42571,7 @@ router58.post("/trees/:id/duplicate", async (req2, res) => {
     });
     if (sourceVariables.length > 0) {
       const varCreateData = sourceVariables.map((v) => ({
-        id: (0, import_crypto21.randomUUID)(),
+        id: (0, import_crypto20.randomUUID)(),
         nodeId: idMap.get(v.nodeId) ?? v.nodeId,
         exposedKey: `${v.exposedKey}_${newTreeId.slice(0, 8)}`,
         displayName: v.displayName,
@@ -43042,7 +42596,7 @@ router58.post("/trees/:id/duplicate", async (req2, res) => {
     });
     if (sourceConditions.length > 0) {
       const condCreateData = sourceConditions.map((c) => ({
-        id: (0, import_crypto21.randomUUID)(),
+        id: (0, import_crypto20.randomUUID)(),
         nodeId: idMap.get(c.nodeId) ?? c.nodeId,
         organizationId: targetOrgId,
         name: c.name,
@@ -43060,7 +42614,7 @@ router58.post("/trees/:id/duplicate", async (req2, res) => {
     });
     if (sourceFormulas.length > 0) {
       const formulaCreateData = sourceFormulas.map((f) => ({
-        id: (0, import_crypto21.randomUUID)(),
+        id: (0, import_crypto20.randomUUID)(),
         nodeId: idMap.get(f.nodeId) ?? f.nodeId,
         organizationId: targetOrgId,
         name: f.name,
@@ -43080,7 +42634,7 @@ router58.post("/trees/:id/duplicate", async (req2, res) => {
       include: { tableColumns: true, tableRows: true }
     });
     for (const table of sourceTables) {
-      const newTableId = (0, import_crypto21.randomUUID)();
+      const newTableId = (0, import_crypto20.randomUUID)();
       await prisma32.treeBranchLeafNodeTable.create({
         data: {
           id: newTableId,
@@ -43103,7 +42657,7 @@ router58.post("/trees/:id/duplicate", async (req2, res) => {
       if (table.tableColumns.length > 0) {
         await prisma32.treeBranchLeafNodeTableColumn.createMany({
           data: table.tableColumns.map((col) => ({
-            id: (0, import_crypto21.randomUUID)(),
+            id: (0, import_crypto20.randomUUID)(),
             tableId: newTableId,
             columnIndex: col.columnIndex,
             name: col.name,
@@ -43117,7 +42671,7 @@ router58.post("/trees/:id/duplicate", async (req2, res) => {
       if (table.tableRows.length > 0) {
         await prisma32.treeBranchLeafNodeTableRow.createMany({
           data: table.tableRows.map((row) => ({
-            id: (0, import_crypto21.randomUUID)(),
+            id: (0, import_crypto20.randomUUID)(),
             tableId: newTableId,
             rowIndex: row.rowIndex,
             cells: row.cells
@@ -43130,7 +42684,7 @@ router58.post("/trees/:id/duplicate", async (req2, res) => {
     });
     if (sourceSelectConfigs.length > 0) {
       const selectCreateData = sourceSelectConfigs.map((sc) => ({
-        id: (0, import_crypto21.randomUUID)(),
+        id: (0, import_crypto20.randomUUID)(),
         nodeId: idMap.get(sc.nodeId) ?? sc.nodeId,
         options: sc.options,
         multiple: sc.multiple,
@@ -45625,7 +45179,7 @@ router58.put("/trees/:treeId/nodes/:nodeId/data", async (req2, res) => {
           updatedAt: /* @__PURE__ */ new Date()
         },
         create: {
-          id: (0, import_crypto21.randomUUID)(),
+          id: (0, import_crypto20.randomUUID)(),
           nodeId: targetNodeId,
           exposedKey: safeExposedKey || `var_${String(nodeId).slice(0, 4)}`,
           displayName,
@@ -46074,7 +45628,7 @@ router58.post("/nodes/:nodeId/formulas", async (req2, res) => {
     }
     const formula = await prisma32.treeBranchLeafNodeFormula.create({
       data: {
-        id: (0, import_crypto21.randomUUID)(),
+        id: (0, import_crypto20.randomUUID)(),
         nodeId,
         organizationId: organizationId || null,
         name: uniqueName,
@@ -46493,7 +46047,7 @@ router58.post("/nodes/:nodeId/conditions", async (req2, res) => {
     }
     const condition = await prisma32.treeBranchLeafNodeCondition.create({
       data: {
-        id: (0, import_crypto21.randomUUID)(),
+        id: (0, import_crypto20.randomUUID)(),
         nodeId,
         organizationId: organizationId || null,
         name: uniqueName,
@@ -47509,7 +47063,7 @@ router58.post("/nodes/:nodeId/table/generate-selects", async (req2, res) => {
     let insertOrder = siblingsCount;
     const now = /* @__PURE__ */ new Date();
     for (const item of toCreate) {
-      const newNodeId = (0, import_crypto21.randomUUID)();
+      const newNodeId = (0, import_crypto20.randomUUID)();
       const nodeMetadata = {
         generatedFrom: "table_lookup",
         tableNodeId: baseNode.id,
@@ -47548,7 +47102,7 @@ router58.post("/nodes/:nodeId/table/generate-selects", async (req2, res) => {
       });
       await prisma32.treeBranchLeafSelectConfig.create({
         data: {
-          id: (0, import_crypto21.randomUUID)(),
+          id: (0, import_crypto20.randomUUID)(),
           nodeId: newNode.id,
           options: [],
           multiple: false,
@@ -49283,7 +48837,7 @@ router58.post("/submissions", async (req2, res) => {
       const now = /* @__PURE__ */ new Date();
       const created = await prisma32.treeBranchLeafSubmission.create({
         data: {
-          id: (0, import_crypto21.randomUUID)(),
+          id: (0, import_crypto20.randomUUID)(),
           treeId: normalizedTreeId,
           userId: safeUserId,
           leadId: normalizedLeadId,
@@ -49309,7 +48863,7 @@ router58.post("/submissions", async (req2, res) => {
           if (toCreate.length > 0) {
             await tx.treeBranchLeafSubmissionData.createMany({
               data: toCreate.map(({ nodeId, value: raw }) => ({
-                id: (0, import_crypto21.randomUUID)(),
+                id: (0, import_crypto20.randomUUID)(),
                 submissionId: created.id,
                 nodeId,
                 value: raw == null ? null : String(raw),
@@ -49535,7 +49089,7 @@ router58.get("/nodes/:fieldId/select-config", async (req2, res) => {
         if (isRowBased || isColumnBased) {
           selectConfig = await prisma32.treeBranchLeafSelectConfig.create({
             data: {
-              id: (0, import_crypto21.randomUUID)(),
+              id: (0, import_crypto20.randomUUID)(),
               nodeId: fieldId,
               options: [],
               multiple: false,
@@ -49587,7 +49141,7 @@ router58.post("/nodes/:fieldId/select-config", async (req2, res) => {
     const selectConfig = await prisma32.treeBranchLeafSelectConfig.upsert({
       where: { nodeId: fieldId },
       create: {
-        id: (0, import_crypto21.randomUUID)(),
+        id: (0, import_crypto20.randomUUID)(),
         nodeId: fieldId,
         options: [],
         multiple: false,
@@ -49678,7 +49232,7 @@ router58.post("/nodes/:nodeId/normalize-step4", async (req2, res) => {
     const sc = await prisma32.treeBranchLeafSelectConfig.upsert({
       where: { nodeId },
       create: {
-        id: (0, import_crypto21.randomUUID)(),
+        id: (0, import_crypto20.randomUUID)(),
         nodeId,
         options: [],
         multiple: false,
@@ -49760,7 +49314,7 @@ router58.all("/nodes/:nodeId/table/lookup", async (req2, res) => {
         await prisma32.treeBranchLeafSelectConfig.upsert({
           where: { nodeId },
           create: {
-            id: (0, import_crypto21.randomUUID)(),
+            id: (0, import_crypto20.randomUUID)(),
             nodeId,
             options: [],
             multiple: false,
@@ -49985,7 +49539,7 @@ router58.all("/nodes/:nodeId/table/lookup", async (req2, res) => {
           await prisma32.treeBranchLeafSelectConfig.upsert({
             where: { nodeId },
             create: {
-              id: (0, import_crypto21.randomUUID)(),
+              id: (0, import_crypto20.randomUUID)(),
               nodeId,
               options: [],
               multiple: false,
@@ -50112,7 +49666,7 @@ router58.put("/nodes/:nodeId/capabilities/table", async (req2, res) => {
         await prisma32.treeBranchLeafSelectConfig.upsert({
           where: { nodeId },
           create: {
-            id: (0, import_crypto21.randomUUID)(),
+            id: (0, import_crypto20.randomUUID)(),
             nodeId,
             options: [],
             multiple: false,
@@ -50458,7 +50012,7 @@ router58.put("/submissions/:id", async (req2, res) => {
               }
             }
             return {
-              id: (0, import_crypto21.randomUUID)(),
+              id: (0, import_crypto20.randomUUID)(),
               submissionId: id,
               nodeId,
               value: valueStr,
@@ -50608,7 +50162,7 @@ router58.put("/submissions/:id", async (req2, res) => {
         const allRows2 = await tx.treeBranchLeafSubmissionData.findMany({ where: { submissionId: id }, select: { nodeId: true, value: true } });
         const valuesMapTxAll = new Map(allRows2.map((r) => [r.nodeId, r.value == null ? null : String(r.value)]));
         const missingRows = await Promise.all(missingVars.map(async (v) => ({
-          id: (0, import_crypto21.randomUUID)(),
+          id: (0, import_crypto20.randomUUID)(),
           submissionId: id,
           nodeId: v.nodeId,
           value: null,
@@ -51047,7 +50601,7 @@ router58.post("/submissions/stage", async (req2, res) => {
       }
       stage = await prisma32.treeBranchLeafStage.create({
         data: {
-          id: (0, import_crypto21.randomUUID)(),
+          id: (0, import_crypto20.randomUUID)(),
           treeId,
           submissionId,
           leadId,
@@ -51223,7 +50777,7 @@ router58.post("/submissions/stage/commit", async (req2, res) => {
       const result = await prisma32.$transaction(async (tx) => {
         const submission = await tx.treeBranchLeafSubmission.create({
           data: {
-            id: (0, import_crypto21.randomUUID)(),
+            id: (0, import_crypto20.randomUUID)(),
             treeId: stage.treeId,
             userId: stage.userId,
             leadId: stage.leadId,
@@ -51237,7 +50791,7 @@ router58.post("/submissions/stage/commit", async (req2, res) => {
         if (results.length > 0) {
           await tx.treeBranchLeafSubmissionData.createMany({
             data: results.map((r) => ({
-              id: (0, import_crypto21.randomUUID)(),
+              id: (0, import_crypto20.randomUUID)(),
               submissionId: submission.id,
               nodeId: r.nodeId,
               value: String(r.operationResult || ""),
@@ -51252,7 +50806,7 @@ router58.post("/submissions/stage/commit", async (req2, res) => {
         }
         await tx.treeBranchLeafSubmissionVersion.create({
           data: {
-            id: (0, import_crypto21.randomUUID)(),
+            id: (0, import_crypto20.randomUUID)(),
             submissionId: submission.id,
             version: 1,
             formData: stage.formData,
@@ -51379,7 +50933,7 @@ router58.post("/submissions/stage/commit", async (req2, res) => {
         if (results.length > 0) {
           await tx.treeBranchLeafSubmissionData.createMany({
             data: results.map((r) => ({
-              id: (0, import_crypto21.randomUUID)(),
+              id: (0, import_crypto20.randomUUID)(),
               submissionId: updated.id,
               nodeId: r.nodeId,
               value: String(r.operationResult || ""),
@@ -51394,7 +50948,7 @@ router58.post("/submissions/stage/commit", async (req2, res) => {
         }
         await tx.treeBranchLeafSubmissionVersion.create({
           data: {
-            id: (0, import_crypto21.randomUUID)(),
+            id: (0, import_crypto20.randomUUID)(),
             submissionId: updated.id,
             version: nextVersion,
             formData: stage.formData,
@@ -51577,7 +51131,7 @@ router58.post("/submissions/:id/restore/:version", async (req2, res) => {
     }
     const stage = await prisma32.treeBranchLeafStage.create({
       data: {
-        id: (0, import_crypto21.randomUUID)(),
+        id: (0, import_crypto20.randomUUID)(),
         treeId: submission.treeId,
         submissionId: id,
         leadId: submission.leadId || "unknown",
@@ -58301,7 +57855,7 @@ var dispatch_default = router71;
 
 // src/routes/integrationsStatus.ts
 var import_express73 = require("express");
-var import_crypto23 = require("crypto");
+var import_crypto22 = require("crypto");
 var import_express_rate_limit13 = __toESM(require("express-rate-limit"), 1);
 init_database();
 var router72 = (0, import_express73.Router)();
@@ -58364,7 +57918,7 @@ router72.post("/ad-platform/connect", requireRole2(["admin", "super_admin"]), as
     } else {
       rec = await prisma39.adPlatformIntegration.create({
         data: {
-          id: (0, import_crypto23.randomUUID)(),
+          id: (0, import_crypto22.randomUUID)(),
           organizationId,
           platform,
           name: name || platform,
@@ -58422,7 +57976,7 @@ var import_express74 = require("express");
 init_database();
 var import_axios3 = __toESM(require("axios"), 1);
 var import_googleapis9 = require("googleapis");
-var import_crypto24 = require("crypto");
+var import_crypto23 = require("crypto");
 init_googleConfig();
 
 // src/services/adPlatformService.ts
@@ -59241,7 +58795,7 @@ function sanitizeClientValue(raw) {
 function fingerprintSecret(secret) {
   if (!secret) return null;
   try {
-    const hex = (0, import_crypto24.createHash)("sha256").update(secret).digest("hex");
+    const hex = (0, import_crypto23.createHash)("sha256").update(secret).digest("hex");
     return hex.slice(0, 12);
   } catch {
     return null;
@@ -59341,7 +58895,7 @@ router73.get("/advertising/oauth/:platform/callback", async (req2, res) => {
       }
       const created = await prisma40.adPlatformIntegration.create({
         data: {
-          id: (0, import_crypto24.randomUUID)(),
+          id: (0, import_crypto23.randomUUID)(),
           organizationId,
           platform,
           name: data.name || platform,
@@ -66423,7 +65977,7 @@ var ia_config_routes_default = router79;
 
 // src/controllers/calculatedValueController.ts
 var import_express82 = require("express");
-var import_crypto25 = require("crypto");
+var import_crypto24 = require("crypto");
 init_database();
 var router80 = (0, import_express82.Router)();
 var prisma44 = db;
@@ -66638,7 +66192,7 @@ router80.get("/:nodeId/calculated-value", async (req2, res) => {
               fieldLabel: node.label
             },
             create: {
-              id: (0, import_crypto25.randomUUID)(),
+              id: (0, import_crypto24.randomUUID)(),
               submissionId,
               nodeId,
               value: String(sum),
@@ -66762,7 +66316,7 @@ router80.get("/:nodeId/calculated-value", async (req2, res) => {
                   lastResolved: resolvedAt
                 },
                 create: {
-                  id: (0, import_crypto25.randomUUID)(),
+                  id: (0, import_crypto24.randomUUID)(),
                   submissionId,
                   nodeId,
                   value: persistedValue,
@@ -66933,7 +66487,7 @@ router80.get("/:nodeId/calculated-value", async (req2, res) => {
                 fieldLabel: node.label
               },
               create: {
-                id: (0, import_crypto25.randomUUID)(),
+                id: (0, import_crypto24.randomUUID)(),
                 submissionId,
                 nodeId,
                 value: stringValue,
@@ -72318,6 +71872,450 @@ async function batchPostDuplicationProcessing(prisma51, copiedNodeIds) {
   return result;
 }
 
+// src/components/TreeBranchLeaf/treebranchleaf-new/api/repeat/services/table-lookup-duplication-service.ts
+var import_crypto25 = require("crypto");
+var TableLookupDuplicationService = class {
+  /**
+   * Duplique complÃƒÂ¨tement les tables TBL et leurs configurations SELECT associÃƒÂ©es
+   * Assure l'indÃƒÂ©pendance totale des lookups pour les nÃ…â€œuds copiÃƒÂ©s
+   */
+  async duplicateTableLookupSystem(prisma51, originalNodeId, arg) {
+    let suffixToken = typeof arg === "string" ? arg : arg?.suffixToken ?? "-1";
+    if (!suffixToken) suffixToken = "-1";
+    if (!suffixToken.startsWith("-")) {
+      suffixToken = `-${suffixToken}`;
+    }
+    const normalizedOriginalId = normalizeNodeBase(originalNodeId);
+    const copiedNodeId = typeof arg === "object" && arg?.copiedNodeId ? arg.copiedNodeId : `${normalizedOriginalId}${suffixToken}`;
+    try {
+      const copiedNode = await prisma51.treeBranchLeafNode.findUnique({
+        where: { id: copiedNodeId }
+      });
+      if (!copiedNode) {
+        return;
+      }
+      const originalSelectConfigs = await prisma51.treeBranchLeafSelectConfig.findMany({
+        where: { nodeId: originalNodeId }
+      });
+      if (originalSelectConfigs.length === 0) {
+        const originalNode = await prisma51.treeBranchLeafNode.findUnique({
+          where: { id: originalNodeId },
+          select: { table_activeId: true }
+        });
+        if (originalNode?.table_activeId) {
+          const copiedTableId = `${originalNode.table_activeId}${suffixToken}`;
+          const copiedTable = await prisma51.treeBranchLeafNodeTable.findUnique({
+            where: { id: copiedTableId },
+            include: { tableColumns: { take: 1, orderBy: { columnIndex: "asc" } } }
+          });
+          const firstColName = copiedTable?.tableColumns[0]?.name || null;
+          if (firstColName) {
+            const displayCol = firstColName;
+            await prisma51.treeBranchLeafSelectConfig.create({
+              data: {
+                id: (0, import_crypto25.randomUUID)(),
+                nodeId: copiedNodeId,
+                tableReference: copiedTableId,
+                // 🔥 CRITICAL: Remplir TOUS les champs nécessaires (pas juste displayColumn)
+                displayColumn: displayCol,
+                optionsSource: "table",
+                // Type de source
+                multiple: false,
+                // Single select par défaut
+                searchable: true,
+                // Searchable par défaut
+                allowCustom: false,
+                // No custom values
+                options: [],
+                // Empty options (used only for 'fixed' source)
+                maxSelections: null,
+                apiEndpoint: null,
+                keyColumn: null,
+                keyRow: null,
+                valueColumn: null,
+                valueRow: null,
+                displayRow: null,
+                dependsOnNodeId: null,
+                createdAt: /* @__PURE__ */ new Date(),
+                updatedAt: /* @__PURE__ */ new Date()
+              }
+            });
+            return;
+          }
+        }
+        return;
+      }
+      for (const selectConfig of originalSelectConfigs) {
+        await this.duplicateTableAndSelectConfig(prisma51, selectConfig, copiedNodeId, suffixToken);
+      }
+    } catch (error) {
+      console.error(`[TBL-DUP] ERROR: ${error instanceof Error ? error.message : String(error)}`);
+      if (error instanceof Error) console.error(`[TBL-DUP] Stack: ${error.stack}`);
+      throw error;
+    }
+  }
+  /**
+   * Duplique une table TBL et sa configuration SELECT associÃƒÂ©e
+   */
+  async duplicateTableAndSelectConfig(prisma51, originalSelectConfig, copiedNodeId, suffix) {
+    const originalTableId = originalSelectConfig.tableReference;
+    const copiedTableId = `${originalTableId}${suffix}`;
+    try {
+      const originalTable = await prisma51.treeBranchLeafNodeTable.findUnique({
+        where: { id: originalTableId },
+        include: {
+          tableColumns: true,
+          tableRows: true
+        }
+      });
+      if (!originalTable) {
+        return;
+      }
+      const originalNodeIdBase = normalizeNodeBase(originalSelectConfig.nodeId);
+      const tableOwnerNodeIdBase = normalizeNodeBase(originalTable.nodeId);
+      const isTableOwnedByThisNode = originalNodeIdBase === tableOwnerNodeIdBase;
+      const copiedTableOwnerNodeId = isTableOwnedByThisNode ? copiedNodeId : `${tableOwnerNodeIdBase}${suffix}`;
+      let nodeOwnerExists = await prisma51.treeBranchLeafNode.findUnique({
+        where: { id: copiedTableOwnerNodeId },
+        select: { id: true }
+      });
+      if (!nodeOwnerExists && !isTableOwnedByThisNode) {
+        const originalOwnerNode = await prisma51.treeBranchLeafNode.findUnique({
+          where: { id: originalTable.nodeId },
+          select: {
+            type: true,
+            label: true,
+            treeId: true,
+            parentId: true
+          }
+        });
+        if (originalOwnerNode) {
+          try {
+            const createdNode = await prisma51.treeBranchLeafNode.create({
+              data: {
+                id: copiedTableOwnerNodeId,
+                type: originalOwnerNode.type,
+                label: originalOwnerNode.label ? `${originalOwnerNode.label}${suffix}` : "Stub",
+                treeId: originalOwnerNode.treeId,
+                parentId: null,
+                order: 0,
+                createdAt: /* @__PURE__ */ new Date(),
+                updatedAt: /* @__PURE__ */ new Date()
+              }
+            });
+            nodeOwnerExists = createdNode;
+          } catch (err) {
+            console.error(`[TBL-DUP] \u274C Failed to create stub node: ${err.message}`);
+            throw err;
+          }
+        }
+      }
+      if (!nodeOwnerExists) {
+        console.warn(
+          `[TBL-DUP] Cannot duplicate table: owner node "${copiedTableOwnerNodeId}" doesn't exist`
+        );
+        return;
+      }
+      const existingCopiedTable = await prisma51.treeBranchLeafNodeTable.findUnique({
+        where: { id: copiedTableId }
+      });
+      const rewrittenMeta = (() => {
+        if (!originalTable.meta) return originalTable.meta;
+        try {
+          const metaObj = typeof originalTable.meta === "string" ? JSON.parse(originalTable.meta) : JSON.parse(JSON.stringify(originalTable.meta));
+          const suffixNum = parseInt(suffix.replace("-", "")) || 1;
+          if (metaObj?.lookup?.selectors?.columnFieldId && !metaObj.lookup.selectors.columnFieldId.endsWith(`-${suffixNum}`)) {
+            metaObj.lookup.selectors.columnFieldId = `${metaObj.lookup.selectors.columnFieldId}-${suffixNum}`;
+          }
+          if (metaObj?.lookup?.selectors?.rowFieldId && !metaObj.lookup.selectors.rowFieldId.endsWith(`-${suffixNum}`)) {
+            metaObj.lookup.selectors.rowFieldId = `${metaObj.lookup.selectors.rowFieldId}-${suffixNum}`;
+          }
+          if (metaObj?.lookup?.rowSourceOption?.sourceField && !metaObj.lookup.rowSourceOption.sourceField.endsWith(`-${suffixNum}`)) {
+            metaObj.lookup.rowSourceOption.sourceField = `${metaObj.lookup.rowSourceOption.sourceField}-${suffixNum}`;
+          }
+          if (metaObj?.lookup?.columnSourceOption?.sourceField && !metaObj.lookup.columnSourceOption.sourceField.endsWith(`-${suffixNum}`)) {
+            metaObj.lookup.columnSourceOption.sourceField = `${metaObj.lookup.columnSourceOption.sourceField}-${suffixNum}`;
+          }
+          if (metaObj?.lookup?.rowSourceOption?.comparisonColumn && !metaObj.lookup.rowSourceOption.operator) {
+            metaObj.lookup.rowSourceOption.operator = "=";
+          }
+          if (metaObj?.lookup?.columnSourceOption?.comparisonColumn && !metaObj.lookup.columnSourceOption.operator) {
+            metaObj.lookup.columnSourceOption.operator = "=";
+          }
+          if (metaObj?.lookup?.rowSourceOption?.comparisonColumn) {
+            const val = metaObj.lookup.rowSourceOption.comparisonColumn;
+            if (!/^-?\d+(\.\d+)?$/.test(val.trim()) && !val.endsWith(suffix)) {
+              metaObj.lookup.rowSourceOption.comparisonColumn = `${val}${suffix}`;
+            }
+          }
+          if (metaObj?.lookup?.columnSourceOption?.comparisonColumn) {
+            const val = metaObj.lookup.columnSourceOption.comparisonColumn;
+            if (!/^-?\d+(\.\d+)?$/.test(val.trim()) && !val.endsWith(suffix)) {
+              metaObj.lookup.columnSourceOption.comparisonColumn = `${val}${suffix}`;
+            }
+          }
+          if (metaObj?.lookup?.displayColumn) {
+            if (Array.isArray(metaObj.lookup.displayColumn)) {
+              metaObj.lookup.displayColumn = metaObj.lookup.displayColumn.map((col) => {
+                if (col && !/^-?\d+(\.\d+)?$/.test(col.trim()) && !col.endsWith(suffix)) {
+                  return `${col}${suffix}`;
+                }
+                return col;
+              });
+            } else if (typeof metaObj.lookup.displayColumn === "string") {
+              const val = metaObj.lookup.displayColumn;
+              if (!/^-?\d+(\.\d+)?$/.test(val.trim()) && !val.endsWith(suffix)) {
+                metaObj.lookup.displayColumn = `${val}${suffix}`;
+              }
+            }
+          } else {
+          }
+          if (metaObj?.lookup?.displayRow) {
+            if (Array.isArray(metaObj.lookup.displayRow)) {
+              metaObj.lookup.displayRow = metaObj.lookup.displayRow.map((row) => {
+                if (row && !/^-?\d+(\.\d+)?$/.test(row.trim()) && !row.endsWith(suffix)) {
+                  return `${row}${suffix}`;
+                }
+                return row;
+              });
+            } else if (typeof metaObj.lookup.displayRow === "string") {
+              const val = metaObj.lookup.displayRow;
+              if (!/^-?\d+(\.\d+)?$/.test(val.trim()) && !val.endsWith(suffix)) {
+                metaObj.lookup.displayRow = `${val}${suffix}`;
+              }
+            }
+          }
+          return metaObj;
+        } catch {
+          return originalTable.meta;
+        }
+      })();
+      if (!existingCopiedTable) {
+        await prisma51.treeBranchLeafNodeTable.create({
+          data: {
+            id: copiedTableId,
+            nodeId: copiedTableOwnerNodeId,
+            // 🔧 FIX: Utiliser le vrai propriétaire,
+            name: originalTable.name + suffix,
+            type: originalTable.type,
+            description: originalTable.description,
+            // Ã°Å¸â€Â¢ COPIE TABLE META: suffixer UUIDs et comparisonColumn
+            meta: rewrittenMeta,
+            organizationId: originalTable.organizationId,
+            rowCount: originalTable.rowCount,
+            columnCount: originalTable.columnCount,
+            lookupDisplayColumns: originalTable.lookupDisplayColumns,
+            lookupSelectColumn: originalTable.lookupSelectColumn,
+            createdAt: /* @__PURE__ */ new Date(),
+            updatedAt: /* @__PURE__ */ new Date(),
+            // Duplication des colonnes
+            // Ã°Å¸â€Â¢ COPIE TABLE COLUMN: suffixe seulement pour texte, pas pour nombres
+            // ð ˆâ€  FIX 07/01/2026: RÃ©assigner les columnIndex en sÃ©quence (0, 1, 2, ...) pour prÃ©server l'ordre
+            tableColumns: {
+              create: originalTable.tableColumns.map((col, idx) => {
+                const baseName = String(col.name ?? "");
+                const isNumericName = /^-?\d+(\.\d+)?$/.test(baseName.trim());
+                const shouldSuffix = baseName.length > 0 && !isNumericName && !baseName.endsWith(suffix);
+                const newName = shouldSuffix ? `${baseName}${suffix}` : baseName;
+                return {
+                  id: col.id ? `${col.id}${suffix}` : (0, import_crypto25.randomUUID)(),
+                  // ✅ FIX 11/01/2026: NE PAS inclure tableId dans nested create - Prisma le remplit automatiquement
+                  columnIndex: idx,
+                  // ✅ FIX: Réassigner en séquence au lieu de copier
+                  name: newName,
+                  type: col.type,
+                  width: col.width,
+                  format: col.format,
+                  metadata: col.metadata
+                };
+              })
+            },
+            // Duplication des lignes
+            // ✅ FIX 07/01/2026: Réassigner aussi les rowIndex en séquence pour préserver l'ordre
+            tableRows: {
+              create: originalTable.tableRows.map((row, idx) => ({
+                id: row.id ? `${row.id}${suffix}` : (0, import_crypto25.randomUUID)(),
+                // ✅ FIX 11/01/2026: NE PAS inclure tableId dans nested create - Prisma le remplit automatiquement
+                rowIndex: idx,
+                // ✅ FIX: Réassigner en séquence
+                cells: row.cells
+              }))
+            }
+          }
+        });
+      } else {
+        await prisma51.treeBranchLeafNodeTableColumn.deleteMany({
+          where: { tableId: copiedTableId }
+        });
+        const columnsData = originalTable.tableColumns.map((col, idx) => {
+          const baseName = String(col.name ?? "");
+          const isNumericName = /^-?\d+(\.\d+)?$/.test(baseName.trim());
+          const shouldSuffix = baseName.length > 0 && !isNumericName && !baseName.endsWith(suffix);
+          const newName = shouldSuffix ? `${baseName}${suffix}` : baseName;
+          return {
+            id: col.id ? `${col.id}${suffix}` : (0, import_crypto25.randomUUID)(),
+            tableId: copiedTableId,
+            columnIndex: idx,
+            name: newName,
+            type: col.type,
+            width: col.width,
+            format: col.format,
+            metadata: col.metadata
+          };
+        });
+        if (columnsData.length > 0) {
+          await prisma51.treeBranchLeafNodeTableColumn.createMany({
+            data: columnsData,
+            skipDuplicates: true
+          });
+        }
+        await prisma51.treeBranchLeafNodeTable.update({
+          where: { id: copiedTableId },
+          data: { meta: rewrittenMeta, updatedAt: /* @__PURE__ */ new Date() }
+        });
+      }
+      const existingSelectConfig = await prisma51.treeBranchLeafSelectConfig.findUnique({
+        where: { nodeId: copiedNodeId }
+      });
+      if (!existingSelectConfig) {
+        const shouldSuffixColumns = true;
+        await prisma51.treeBranchLeafSelectConfig.create({
+          data: {
+            id: (0, import_crypto25.randomUUID)(),
+            // 🔧 FIX: Générer l'id manuellement
+            nodeId: copiedNodeId,
+            tableReference: copiedTableId,
+            // 🔥 SUFFIXER les références de colonnes/lignes si elles pointent vers la première colonne/ligne
+            keyColumn: originalSelectConfig.keyColumn ? `${originalSelectConfig.keyColumn}${suffix}` : null,
+            keyRow: originalSelectConfig.keyRow ? `${originalSelectConfig.keyRow}${suffix}` : null,
+            valueColumn: originalSelectConfig.valueColumn ? `${originalSelectConfig.valueColumn}${suffix}` : null,
+            valueRow: originalSelectConfig.valueRow ? `${originalSelectConfig.valueRow}${suffix}` : null,
+            displayColumn: (() => {
+              if (originalSelectConfig.displayColumn) {
+                return `${originalSelectConfig.displayColumn}${suffix}`;
+              }
+              const firstCol = originalTable.tableColumns && originalTable.tableColumns.length > 0 ? originalTable.tableColumns[0] : null;
+              if (firstCol && firstCol.name) {
+                const baseName = String(firstCol.name);
+                const isNumericName = /^-?\d+(\.\d+)?$/.test(baseName.trim());
+                const shouldSuffix = baseName.length > 0 && !isNumericName && !baseName.endsWith(suffix);
+                const result = shouldSuffix ? `${baseName}${suffix}` : baseName;
+                return result;
+              }
+              return null;
+            })(),
+            displayRow: originalSelectConfig.displayRow ? `${originalSelectConfig.displayRow}${suffix}` : null,
+            // 🔧 FIX 07/01/2026: Copier TOUS les autres champs du SelectConfig original
+            options: originalSelectConfig.options,
+            multiple: originalSelectConfig.multiple,
+            searchable: originalSelectConfig.searchable,
+            allowCustom: originalSelectConfig.allowCustom,
+            maxSelections: originalSelectConfig.maxSelections,
+            optionsSource: originalSelectConfig.optionsSource,
+            apiEndpoint: originalSelectConfig.apiEndpoint,
+            // 🔥 CRITICAL: Suffixer dependsOnNodeId s'il existe (référence à un autre nœud)
+            dependsOnNodeId: originalSelectConfig.dependsOnNodeId ? `${originalSelectConfig.dependsOnNodeId}${suffix}` : null,
+            createdAt: /* @__PURE__ */ new Date(),
+            updatedAt: /* @__PURE__ */ new Date()
+          }
+        });
+        try {
+          const node = await prisma51.treeBranchLeafNode.findUnique({ where: { id: copiedNodeId }, select: { linkedTableIds: true, fieldType: true, metadata: true } });
+          const isInputField = node?.fieldType === null || node?.fieldType === "" || node?.fieldType === void 0;
+          const currentLinked = node?.linkedTableIds || [];
+          const newLinked = isInputField ? [] : Array.from(/* @__PURE__ */ new Set([...currentLinked, copiedTableId]));
+          const currentMetadata = node?.metadata && typeof node.metadata === "object" ? JSON.parse(JSON.stringify(node.metadata)) : {};
+          if (currentMetadata.lookup) {
+            if (currentMetadata.lookup.tableRef) {
+              currentMetadata.lookup.tableRef = copiedTableId;
+            }
+            if (currentMetadata.lookup.displayColumn) {
+              if (Array.isArray(currentMetadata.lookup.displayColumn)) {
+                currentMetadata.lookup.displayColumn = currentMetadata.lookup.displayColumn.map(
+                  (col) => col && !col.endsWith(suffix) ? `${col}${suffix}` : col
+                );
+              } else if (typeof currentMetadata.lookup.displayColumn === "string") {
+                const val = currentMetadata.lookup.displayColumn;
+                if (!val.endsWith(suffix)) {
+                  currentMetadata.lookup.displayColumn = `${val}${suffix}`;
+                }
+              }
+            }
+          }
+          if (isTableOwnedByThisNode) {
+            const tableInstances = {};
+            tableInstances[copiedTableId] = {};
+            await prisma51.treeBranchLeafNode.update({
+              where: { id: copiedNodeId },
+              data: {
+                hasTable: true,
+                // ✅ Seulement le propriétaire a hasTable: true
+                table_activeId: copiedTableId,
+                table_instances: { set: tableInstances },
+                table_name: originalTable.name + suffix,
+                table_type: originalTable.type,
+                linkedTableIds: { set: newLinked },
+                metadata: currentMetadata
+                // 🔥 FIX: Sauvegarder le metadata mis à jour
+              }
+            });
+          } else {
+            await prisma51.treeBranchLeafNode.update({
+              where: { id: copiedNodeId },
+              data: {
+                hasTable: false,
+                // ✅ IMPORTANT: Les non-propriétaires NE doivent PAS avoir hasTable: true!
+                linkedTableIds: { set: newLinked },
+                metadata: currentMetadata
+                // 🔥 FIX: Sauvegarder le metadata mis à jour
+              }
+            });
+          }
+        } catch (nodeUpdateErr) {
+          console.warn(`   \u26A0\uFE0F Warning updating node ${copiedNodeId} capabilities:`, nodeUpdateErr.message);
+        }
+      } else {
+      }
+    } catch (error) {
+      console.error(`\u274C Erreur duplication table/config ${originalTableId}:`, error);
+      throw error;
+    }
+  }
+  /**
+   * RÃƒÂ©pare les configurations SELECT manquantes pour les nÃ…â€œuds copiÃƒÂ©s existants
+   */
+  async repairMissingSelectConfigs(prisma51) {
+    try {
+      const copiedNodes = await prisma51.treeBranchLeafNode.findMany({
+        where: {
+          id: {
+            endsWith: "-1"
+          }
+        }
+      });
+      for (const copiedNode of copiedNodes) {
+        const originalNodeId = copiedNode.id.replace("-1", "");
+        const copiedSelectConfigs = await prisma51.treeBranchLeafSelectConfig.findMany({
+          where: { nodeId: copiedNode.id }
+        });
+        if (copiedSelectConfigs.length === 0) {
+          await this.duplicateTableLookupSystem(prisma51, originalNodeId, {
+            copiedNodeId: copiedNode.id,
+            suffixToken: "-1"
+          });
+        }
+      }
+    } catch (error) {
+      console.error(`\xC3\xA2\xC2\x9D\xC5\u2019 [TableLookupDuplication] Erreur r\xC3\u0192\xC2\xA9paration:`, error);
+      throw error;
+    }
+  }
+};
+var tableLookupDuplicationService = new TableLookupDuplicationService();
+function normalizeNodeBase(value) {
+  return value.replace(/-\d+(?:-\d+)*$/, "");
+}
+
 // src/components/TreeBranchLeaf/treebranchleaf-new/api/repeat/services/recalculate-with-interpreter.ts
 init_operation_interpreter();
 async function recalculateAllCopiedNodesWithOperationInterpreter(prisma51, repeaterNodeId, suffixMarker = "-1", precomputedNodeIds) {
@@ -72365,62 +72363,63 @@ async function recalculateAllCopiedNodesWithOperationInterpreter(prisma51, repea
         linkedTableIds: true
       }
     });
-    const nodeMap = new Map(allNodes.map((n) => [n.id, n]));
-    const CHUNK_SIZE = 5;
-    for (let chunkStart = 0; chunkStart < nodeIds.length; chunkStart += CHUNK_SIZE) {
-      const chunk = nodeIds.slice(chunkStart, chunkStart + CHUNK_SIZE);
-      const chunkResults = await Promise.all(chunk.map(async (nodeId) => {
-        const node = nodeMap.get(nodeId);
-        if (!node) {
-          return { nodeId, error: "Noeud non trouve" };
-        }
-        const result = {
-          nodeId,
+    const sharedValuesCache = /* @__PURE__ */ new Map();
+    const sharedValueMap = /* @__PURE__ */ new Map();
+    const sharedLabelMap = /* @__PURE__ */ new Map();
+    const nodesWithCapacity = [];
+    for (const node of allNodes) {
+      const linkedFormulas = node.linkedFormulaIds;
+      const linkedConditions = node.linkedConditionIds;
+      const linkedTables = node.linkedTableIds;
+      let capacityType = null;
+      let sourceRef = "";
+      if (node.hasFormula || linkedFormulas && linkedFormulas.length > 0) {
+        capacityType = "formula";
+        sourceRef = linkedFormulas && linkedFormulas.length > 0 ? `node-formula:${linkedFormulas[0]}` : "";
+      } else if (node.hasCondition || linkedConditions && linkedConditions.length > 0) {
+        capacityType = "condition";
+        sourceRef = linkedConditions && linkedConditions.length > 0 ? `condition:${linkedConditions[0]}` : "";
+      } else if (node.hasTable || linkedTables && linkedTables.length > 0) {
+        capacityType = "table";
+        sourceRef = linkedTables && linkedTables.length > 0 ? `node-table:${linkedTables[0]}` : "";
+      }
+      if (capacityType && sourceRef) {
+        nodesWithCapacity.push({ nodeId: node.id, capacityType, sourceRef, node });
+      } else {
+        report.recalculated.push({
+          nodeId: node.id,
           label: node.field_label,
           hasCapacity: false,
           capacityType: "none",
           oldValue: node.calculatedValue,
           newValue: null,
           recalculationSuccess: false
+        });
+      }
+    }
+    console.log(`[PERF] Recalc: ${nodesWithCapacity.length}/${allNodes.length} nodes have capacities`);
+    const CHUNK_SIZE = 10;
+    for (let chunkStart = 0; chunkStart < nodesWithCapacity.length; chunkStart += CHUNK_SIZE) {
+      const chunk = nodesWithCapacity.slice(chunkStart, chunkStart + CHUNK_SIZE);
+      const chunkResults = await Promise.all(chunk.map(async ({ nodeId, capacityType, sourceRef, node }) => {
+        const result = {
+          nodeId,
+          label: node.field_label,
+          hasCapacity: true,
+          capacityType,
+          oldValue: node.calculatedValue,
+          newValue: null,
+          recalculationSuccess: false
         };
-        const linkedFormulas = node.linkedFormulaIds;
-        const linkedConditions = node.linkedConditionIds;
-        const linkedTables = node.linkedTableIds;
-        if (node.hasFormula || linkedFormulas && linkedFormulas.length > 0) {
-          result.capacityType = "formula";
-          result.hasCapacity = true;
-        } else if (node.hasCondition || linkedConditions && linkedConditions.length > 0) {
-          result.capacityType = "condition";
-          result.hasCapacity = true;
-        } else if (node.hasTable || linkedTables && linkedTables.length > 0) {
-          result.capacityType = "table";
-          result.hasCapacity = true;
-        }
-        if (!result.hasCapacity) {
-          return result;
-        }
-        let sourceRef = "";
-        if (result.capacityType === "formula" && linkedFormulas && linkedFormulas.length > 0) {
-          sourceRef = `node-formula:${linkedFormulas[0]}`;
-        } else if (result.capacityType === "condition" && linkedConditions && linkedConditions.length > 0) {
-          sourceRef = `condition:${linkedConditions[0]}`;
-        } else if (result.capacityType === "table" && linkedTables && linkedTables.length > 0) {
-          sourceRef = `node-table:${linkedTables[0]}`;
-        }
-        if (!sourceRef) {
-          result.error = "Impossible de construire sourceRef";
-          return result;
-        }
         try {
-          const valuesCache = /* @__PURE__ */ new Map();
           const interpretResult = await interpretReference(
             sourceRef,
             "",
             prisma51,
-            valuesCache,
+            sharedValuesCache,
             0,
-            /* @__PURE__ */ new Map(),
-            /* @__PURE__ */ new Map()
+            sharedValueMap,
+            sharedLabelMap
           );
           result.newValue = interpretResult.result;
           result.recalculationSuccess = true;
@@ -72529,6 +72528,7 @@ async function runRepeatExecution(prisma51, req2, execution) {
     throw new RepeatOperationError("Access denied for this repeater tree.", 403);
   }
   const hasCopySuffix = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}(-\d+)+$/i;
+  const _t0 = Date.now();
   const rawIds = blueprint.templateNodeIds;
   const templateNodeIds = rawIds.filter((id) => typeof id === "string" && !!id).map((id) => id.replace(/(-\d+)+$/, "")).filter((id) => !hasCopySuffix.test(id));
   if (rawIds.length !== templateNodeIds.length) {
@@ -72583,6 +72583,9 @@ async function runRepeatExecution(prisma51, req2, execution) {
   const globalConditionIdMap = /* @__PURE__ */ new Map();
   const globalTableIdMap = /* @__PURE__ */ new Map();
   const globalVariableCopyCache = /* @__PURE__ */ new Map();
+  const _preloadedTreeNodes = await prisma51.treeBranchLeafNode.findMany({ where: { treeId: repeaterNode.treeId } });
+  const _t1 = Date.now();
+  console.log(`[PERF] Setup: ${_t1 - _t0}ms`);
   for (const template of nodesToDuplicate) {
     try {
       if (!template) continue;
@@ -72598,7 +72601,8 @@ async function runRepeatExecution(prisma51, req2, execution) {
         const context = forcedSuffix !== void 0 ? { ...baseContext, suffix: forcedSuffix } : { ...baseContext };
         const options = {
           preserveSharedReferences: true,
-          repeatContext: context
+          repeatContext: context,
+          preloadedTreeNodes: _preloadedTreeNodes
         };
         if (forcedSuffix !== void 0) {
           options.forcedSuffix = forcedSuffix;
@@ -72712,6 +72716,7 @@ async function runRepeatExecution(prisma51, req2, execution) {
         ]);
         const originalChildMap = new Map(originalChildren.map((n) => [n.id, n]));
         const copiedChildMap = new Map(copiedChildren.map((n) => [n.id, n]));
+        const childUpdateOps = [];
         for (const childId of childNodeIds) {
           try {
             const originalChildId = reverseIdMap.get(childId);
@@ -72732,17 +72737,22 @@ async function runRepeatExecution(prisma51, req2, execution) {
                 ...childMetadata,
                 ...needsTriggersUpdate ? { triggerNodeIds: childSuffixedTriggers } : {}
               };
-              await prisma51.treeBranchLeafNode.update({
-                where: { id: childId },
-                data: {
-                  ...needsSubTypeUpdate ? { subType: originalChildNode?.subType } : {},
-                  metadata: updatedChildMetadata
-                }
-              });
+              childUpdateOps.push(
+                prisma51.treeBranchLeafNode.update({
+                  where: { id: childId },
+                  data: {
+                    ...needsSubTypeUpdate ? { subType: originalChildNode?.subType } : {},
+                    metadata: updatedChildMetadata
+                  }
+                })
+              );
             }
           } catch (childErr) {
-            console.error(`\u274C [REPEAT-EXECUTOR] Erreur traitement triggers pour enfant ${childId}:`, childErr);
+            console.error(`[REPEAT-EXECUTOR] Erreur traitement triggers pour enfant ${childId}:`, childErr);
           }
+        }
+        if (childUpdateOps.length > 0) {
+          await prisma51.$transaction(childUpdateOps);
         }
       }
       duplicatedSummaries.push({
@@ -72818,6 +72828,8 @@ async function runRepeatExecution(prisma51, req2, execution) {
       throw nodeExecErr;
     }
   }
+  const _t2 = Date.now();
+  console.log(`[PERF] Template duplication loop: ${_t2 - _t1}ms`);
   const allTemplateVarIds = [...new Set(plan.variables.map((v) => v.templateVariableId))];
   const templateVarsMap = /* @__PURE__ */ new Map();
   if (allTemplateVarIds.length > 0) {
@@ -72891,6 +72903,8 @@ async function runRepeatExecution(prisma51, req2, execution) {
       console.error(`[repeat-executor] Erreur lors de la copie de la variable ${variablePlan.templateVariableId}:`, varErr instanceof Error ? varErr.message : String(varErr));
     }
   }
+  const _t3 = Date.now();
+  console.log(`[PERF] Variable copy loop: ${_t3 - _t2}ms`);
   try {
     await syncRepeaterTemplateIds(prisma51, repeaterNodeId, templateNodeIds);
   } catch (syncErr) {
@@ -72898,6 +72912,7 @@ async function runRepeatExecution(prisma51, req2, execution) {
   }
   if (duplicatedNodeIds.size > 0) {
     try {
+      const _t4 = Date.now();
       {
         const dupPairs = [];
         for (const nodeId of duplicatedNodeIds) {
@@ -72937,17 +72952,25 @@ async function runRepeatExecution(prisma51, req2, execution) {
           }
         }
       }
+      const _t5 = Date.now();
+      console.log(`[PERF] TBL-DUP: ${_t5 - _t4}ms`);
       await reassignCopiedNodesToDuplicatedParents(prisma51, duplicatedNodeIds, originalNodeIdByCopyId);
+      const _t6 = Date.now();
       const batchResult = await batchPostDuplicationProcessing(
         prisma51,
         Array.from(duplicatedNodeIds)
       );
+      const _t7 = Date.now();
+      console.log(`[PERF] batchPostDup: ${_t7 - _t6}ms`);
       const interpreterRecalcReport = await recalculateAllCopiedNodesWithOperationInterpreter(
         prisma51,
         repeaterNodeId,
         "-1",
         Array.from(duplicatedNodeIds)
       );
+      const _t8 = Date.now();
+      console.log(`[PERF] Recalculate interpreter: ${_t8 - _t7}ms`);
+      console.log(`[PERF] === TOTAL: ${_t8 - _t0}ms === | Templates: ${_t2 - _t1}ms | Variables: ${_t3 - _t2}ms | TBL-DUP: ${_t5 - _t4}ms | BatchPost: ${_t7 - _t6}ms | Recalc: ${_t8 - _t7}ms`);
       interpreterRecalcReport.recalculated.forEach((r) => {
         if (r.hasCapacity && r.newValue) {
         }

@@ -1,5 +1,5 @@
 import { PrismaClient } from '@prisma/client';
-import { interpretReference, identifyReferenceType } from '../../operation-interpreter';
+import { interpretReference } from '../../operation-interpreter';
 
 /**
  * Ã°Å¸Å¡â‚¬ SERVICE: RECALCULATION DES CHAMPS APRÃƒË†S DUPLICATION
@@ -209,74 +209,77 @@ export async function recalculateAllCopiedNodesWithOperationInterpreter(
       }
     });
     
-    const nodeMap = new Map(allNodes.map(n => [n.id, n]));
+    // nodeMap removed — nodes are pre-filtered into nodesWithCapacity below
 
-    // Recalculer chaque noeud — PARALLÉLISÉ par chunks de 5
-    const CHUNK_SIZE = 5;
-    for (let chunkStart = 0; chunkStart < nodeIds.length; chunkStart += CHUNK_SIZE) {
-      const chunk = nodeIds.slice(chunkStart, chunkStart + CHUNK_SIZE);
-      const chunkResults = await Promise.all(chunk.map(async (nodeId) => {
-      const node = nodeMap.get(nodeId);
-      if (!node) {
-        return { nodeId, error: 'Noeud non trouve' } as { nodeId: string; error: string };
+    // PERF: Shared valuesCache across ALL recalculation calls (cache hits avoid redundant DB lookups)
+    const sharedValuesCache = new Map();
+    const sharedValueMap = new Map();
+    const sharedLabelMap = new Map();
+    
+    // PERF: Pre-filter nodes that actually have capacities (skip ~60% of nodes)
+    const nodesWithCapacity: Array<{ nodeId: string; capacityType: 'formula' | 'condition' | 'table'; sourceRef: string; node: typeof allNodes[0] }> = [];
+    for (const node of allNodes) {
+      const linkedFormulas = node.linkedFormulaIds as string[] | null;
+      const linkedConditions = node.linkedConditionIds as string[] | null;
+      const linkedTables = node.linkedTableIds as string[] | null;
+      
+      let capacityType: 'formula' | 'condition' | 'table' | null = null;
+      let sourceRef = '';
+      
+      if (node.hasFormula || (linkedFormulas && linkedFormulas.length > 0)) {
+        capacityType = 'formula';
+        sourceRef = linkedFormulas && linkedFormulas.length > 0 ? `node-formula:${linkedFormulas[0]}` : '';
+      } else if (node.hasCondition || (linkedConditions && linkedConditions.length > 0)) {
+        capacityType = 'condition';
+        sourceRef = linkedConditions && linkedConditions.length > 0 ? `condition:${linkedConditions[0]}` : '';
+      } else if (node.hasTable || (linkedTables && linkedTables.length > 0)) {
+        capacityType = 'table';
+        sourceRef = linkedTables && linkedTables.length > 0 ? `node-table:${linkedTables[0]}` : '';
       }
       
+      if (capacityType && sourceRef) {
+        nodesWithCapacity.push({ nodeId: node.id, capacityType, sourceRef, node });
+      } else {
+        // No capacity — register as skipped (no DB call needed)
+        report.recalculated.push({
+          nodeId: node.id,
+          label: node.field_label,
+          hasCapacity: false,
+          capacityType: 'none',
+          oldValue: node.calculatedValue,
+          newValue: null,
+          recalculationSuccess: false
+        });
+      }
+    }
+    
+    console.log(`[PERF] Recalc: ${nodesWithCapacity.length}/${allNodes.length} nodes have capacities`);
+    
+    // PERF: Increased chunk size from 5 to 10 for better parallelism
+    const CHUNK_SIZE = 10;
+    for (let chunkStart = 0; chunkStart < nodesWithCapacity.length; chunkStart += CHUNK_SIZE) {
+      const chunk = nodesWithCapacity.slice(chunkStart, chunkStart + CHUNK_SIZE);
+      const chunkResults = await Promise.all(chunk.map(async ({ nodeId, capacityType, sourceRef, node }) => {
       const result: RecalculationResult = {
         nodeId,
         label: node.field_label,
-        hasCapacity: false,
-        capacityType: 'none',
+        hasCapacity: true,
+        capacityType,
         oldValue: node.calculatedValue,
         newValue: null,
         recalculationSuccess: false
       };
       
-      // Determiner le type de capacite
-      const linkedFormulas = node.linkedFormulaIds as string[] | null;
-      const linkedConditions = node.linkedConditionIds as string[] | null;
-      const linkedTables = node.linkedTableIds as string[] | null;
-      
-      if (node.hasFormula || (linkedFormulas && linkedFormulas.length > 0)) {
-        result.capacityType = 'formula';
-        result.hasCapacity = true;
-      } else if (node.hasCondition || (linkedConditions && linkedConditions.length > 0)) {
-        result.capacityType = 'condition';
-        result.hasCapacity = true;
-      } else if (node.hasTable || (linkedTables && linkedTables.length > 0)) {
-        result.capacityType = 'table';
-        result.hasCapacity = true;
-      }
-      
-      if (!result.hasCapacity) {
-        return result;
-      }
-      
-      // Construire la sourceRef
-      let sourceRef = '';
-      if (result.capacityType === 'formula' && linkedFormulas && linkedFormulas.length > 0) {
-        sourceRef = `node-formula:${linkedFormulas[0]}`;
-      } else if (result.capacityType === 'condition' && linkedConditions && linkedConditions.length > 0) {
-        sourceRef = `condition:${linkedConditions[0]}`;
-      } else if (result.capacityType === 'table' && linkedTables && linkedTables.length > 0) {
-        sourceRef = `node-table:${linkedTables[0]}`;
-      }
-      
-      if (!sourceRef) {
-        result.error = 'Impossible de construire sourceRef';
-        return result;
-      }
-      
-      // Appeler l'operation interpreter
+      // Appeler l'operation interpreter — PERF: shared valuesCache across all nodes
       try {
-        const valuesCache = new Map();
         const interpretResult = await interpretReference(
           sourceRef,
           '',
           prisma,
-          valuesCache,
+          sharedValuesCache,
           0,
-          new Map(),
-          new Map()
+          sharedValueMap,
+          sharedLabelMap
         );
         
         result.newValue = interpretResult.result;
