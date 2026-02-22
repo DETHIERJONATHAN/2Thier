@@ -320,79 +320,86 @@ export async function runRepeatExecution(
       if (copyResult.idMap && Object.keys(copyResult.idMap).length > 0) {
         const childNodeIds = Object.values(copyResult.idMap).filter(id => id !== newRootId);
         
-        // 🚀 BATCH: Construire le mapping inversé et charger TOUS les originaux + copies en 2 findMany
+        // PERF R10: Use _preloadedTreeNodesById for original children (already loaded) — saves 1 findMany per template
         const reverseIdMap = new Map<string, string>();
         for (const [oldId, newId] of Object.entries(copyResult.idMap)) {
           if (newId !== newRootId) {
             reverseIdMap.set(newId, oldId);
           }
         }
-        const originalChildIds = Array.from(reverseIdMap.values());
-        
-        const [originalChildren, copiedChildren] = await Promise.all([
-          prisma.treeBranchLeafNode.findMany({
-            where: { id: { in: originalChildIds } },
-            select: { id: true, label: true, metadata: true, subType: true }
-          }),
-          prisma.treeBranchLeafNode.findMany({
-            where: { id: { in: childNodeIds } },
-            select: { id: true, label: true, metadata: true, subType: true }
-          })
-        ]);
-        
-        const originalChildMap = new Map(originalChildren.map(n => [n.id, n]));
-        const copiedChildMap = new Map(copiedChildren.map(n => [n.id, n]));
-        
-        // PERF: Batch child trigger updates — collect in memory, execute in single $transaction
-        const childUpdateOps = [];
+
+        // PERF R10: Pre-filter — only process children whose ORIGINAL has triggerNodeIds or missing subType
+        // This avoids loading copiedChildren from DB when no updates are needed
+        const childrenNeedingUpdate: Array<{ childId: string; originalChildId: string; originalNode: any }> = [];
         for (const childId of childNodeIds) {
-          try {
-            const originalChildId = reverseIdMap.get(childId);
-            const originalChildNode = originalChildId ? originalChildMap.get(originalChildId) ?? null : null;
-            const childNode = copiedChildMap.get(childId);
-            
-            if (!childNode) continue;
-            
-            const childMetadata = (childNode.metadata && typeof childNode.metadata === 'object')
-              ? (childNode.metadata as Record<string, unknown>)
-              : {};
-            
-            const originalChildMetadata = (originalChildNode?.metadata && typeof originalChildNode.metadata === 'object')
-              ? (originalChildNode.metadata as Record<string, unknown>)
-              : {};
-            const originalChildTriggers = originalChildMetadata.triggerNodeIds;
-            
-            const childSuffixedTriggers = suffixTriggers(
-              originalChildTriggers, 
-              childNode.label || childId
-            );
-            
-            const needsSubTypeUpdate = originalChildNode?.subType && !childNode.subType;
-            const needsTriggersUpdate = childSuffixedTriggers && childSuffixedTriggers.length > 0;
-            
-            if (needsTriggersUpdate || needsSubTypeUpdate) {
-              const updatedChildMetadata = {
-                ...childMetadata,
-                ...(needsTriggersUpdate ? { triggerNodeIds: childSuffixedTriggers } : {})
-              };
-              
-              childUpdateOps.push(
-                prisma.treeBranchLeafNode.update({
-                  where: { id: childId },
-                  data: {
-                    ...(needsSubTypeUpdate ? { subType: originalChildNode?.subType } : {}),
-                    metadata: updatedChildMetadata
-                  }
-                })
-              );
-            }
-          } catch (childErr) {
-            console.error(`[REPEAT-EXECUTOR] Erreur traitement triggers pour enfant ${childId}:`, childErr);
+          const originalChildId = reverseIdMap.get(childId);
+          if (!originalChildId) continue;
+          const originalNode = _preloadedTreeNodesById.get(originalChildId);
+          if (!originalNode) continue;
+          const origMeta = (originalNode.metadata && typeof originalNode.metadata === 'object')
+            ? (originalNode.metadata as Record<string, unknown>)
+            : {};
+          const hasTriggers = Array.isArray(origMeta.triggerNodeIds) && (origMeta.triggerNodeIds as unknown[]).length > 0;
+          // buildCloneData already copies subType, so needsSubTypeUpdate should be rare
+          if (hasTriggers) {
+            childrenNeedingUpdate.push({ childId, originalChildId, originalNode });
           }
         }
-        // Execute all child updates in a single $transaction (1 round-trip instead of N)
-        if (childUpdateOps.length > 0) {
-          await prisma.$transaction(childUpdateOps);
+
+        if (childrenNeedingUpdate.length > 0) {
+          // PERF R10: Only query copiedChildren that actually need trigger updates (instead of ALL children)
+          const copiedChildren = await prisma.treeBranchLeafNode.findMany({
+            where: { id: { in: childrenNeedingUpdate.map(c => c.childId) } },
+            select: { id: true, label: true, metadata: true, subType: true }
+          });
+          const copiedChildMap = new Map(copiedChildren.map(n => [n.id, n]));
+        
+          const childUpdateOps = [];
+          for (const { childId, originalNode } of childrenNeedingUpdate) {
+            try {
+              const childNode = copiedChildMap.get(childId);
+              if (!childNode) continue;
+              
+              const childMetadata = (childNode.metadata && typeof childNode.metadata === 'object')
+                ? (childNode.metadata as Record<string, unknown>)
+                : {};
+              
+              const originalChildMetadata = (originalNode.metadata && typeof originalNode.metadata === 'object')
+                ? (originalNode.metadata as Record<string, unknown>)
+                : {};
+              const originalChildTriggers = originalChildMetadata.triggerNodeIds;
+              
+              const childSuffixedTriggers = suffixTriggers(
+                originalChildTriggers, 
+                childNode.label || childId
+              );
+              
+              const needsSubTypeUpdate = originalNode.subType && !childNode.subType;
+              const needsTriggersUpdate = childSuffixedTriggers && childSuffixedTriggers.length > 0;
+              
+              if (needsTriggersUpdate || needsSubTypeUpdate) {
+                const updatedChildMetadata = {
+                  ...childMetadata,
+                  ...(needsTriggersUpdate ? { triggerNodeIds: childSuffixedTriggers } : {})
+                };
+                
+                childUpdateOps.push(
+                  prisma.treeBranchLeafNode.update({
+                    where: { id: childId },
+                    data: {
+                      ...(needsSubTypeUpdate ? { subType: originalNode.subType } : {}),
+                      metadata: updatedChildMetadata
+                    }
+                  })
+                );
+              }
+            } catch (childErr) {
+              console.error(`[REPEAT-EXECUTOR] Erreur traitement triggers pour enfant ${childId}:`, childErr);
+            }
+          }
+          if (childUpdateOps.length > 0) {
+            await prisma.$transaction(childUpdateOps);
+          }
         }
       }
 
