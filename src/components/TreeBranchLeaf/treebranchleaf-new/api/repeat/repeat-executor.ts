@@ -221,32 +221,23 @@ export async function runRepeatExecution(
 
       const newRootId = copyResult.root.newId;
 
-      // 🎯 CRITIQUE: template contient déjà subType et metadata (chargé par loadTemplateNodesWithFallback)
-      // Pas besoin de findUnique supplémentaire
-
-      const created = await prisma.treeBranchLeafNode.findUnique({
-        where: { id: newRootId }
-      });
-
-      if (!created) {
-        throw new RepeatOperationError(`Node copy failed to materialize for template ${template.id}.`, 500);
-      }
+      // PERF R9: Use root metadata from DeepCopyResult instead of redundant findUnique
+      // deepCopyNodeInternal already created this node — no need to re-read it from DB
       
       // 🎯 FIX: Récupérer les triggerNodeIds de l'ORIGINAL, pas de la copie
       const originalMetadata = (template.metadata && typeof template.metadata === 'object')
         ? (template.metadata as Record<string, unknown>)
         : {};
       const originalTriggerNodeIds = originalMetadata.triggerNodeIds;
-      
 
-
-      const createdMetadata = (created.metadata && typeof created.metadata === 'object')
-        ? (created.metadata as Record<string, unknown>)
+      // PERF R9: Use metadata from copyResult.root instead of DB findUnique
+      const createdMetadata = copyResult.root.metadata
+        ? { ...copyResult.root.metadata }
         : {};
 
       const resolvedSuffix =
         coerceSuffix(createdMetadata.copySuffix) ??
-        extractSuffixFromId(created.id) ??
+        extractSuffixFromId(newRootId) ??
         appliedSuffix ??
         null;
       const effectiveSuffix = resolvedSuffix ?? plannedSuffix ?? 1;
@@ -285,7 +276,7 @@ export async function runRepeatExecution(
       };
 
       // 🎯 TRAITER LE NŒUD RACINE - Utiliser les triggers ORIGINAUX
-      const rootSuffixedTriggers = suffixTriggers(originalTriggerNodeIds, created.label || 'root');
+      const rootSuffixedTriggers = suffixTriggers(originalTriggerNodeIds, copyResult.root.label || 'root');
 
       // FIX 25/01/2026: PRESERVER le lookup suffixé qui a été créé par buildCloneData
       // Ne pas écraser les champs lookup.sourceField, lookup.comparisonColumn, etc.
@@ -314,26 +305,14 @@ export async function runRepeatExecution(
       });
       
       
-      // 🎯 DEBUG FRONTEND: Collecter les infos pour affichage dans console navigateur
+      // PERF R9: Removed DEBUG_IDMAP noise — was creating large arrays per template
       triggersFixDebug.push({
         nodeId: newRootId,
-        label: created.label || 'root',
+        label: copyResult.root.label || 'root',
         originalSubType: template.subType || null,
         appliedSubType: template.subType || null,
         originalTriggers: originalTriggerNodeIds,
         suffixedTriggers: rootSuffixedTriggers
-      });
-      
-      // 🔴🔴🔴 DEBUG: Voir tous les IDs de l'idMap
-      const allIdMapEntries = Object.entries(copyResult.idMap || {}).map(([oldId, newId]) => ({
-        oldId,
-        newId,
-      }));
-      triggersFixDebug.push({
-        nodeId: 'DEBUG_IDMAP',
-        label: `TOTAL ${allIdMapEntries.length} entrées dans idMap`,
-        allIds: allIdMapEntries,
-        lookingFor: 'd371c32e-f69e-46b0-9846-f3f60f7b4ec8'
       });
 
       // 🎯🎯🎯 NOUVEAU: TRAITER TOUS LES NŒUDS ENFANTS (sections, champs, etc.)
@@ -418,16 +397,15 @@ export async function runRepeatExecution(
       }
 
       duplicatedSummaries.push({
-        id: created.id,
-        label: created.label,
-        type: created.type,
-        parentId: created.parentId,
+        id: newRootId,
+        label: copyResult.root.label,
+        type: copyResult.root.type,
+        parentId: copyResult.root.parentId,
         sourceTemplateId: template.id
       });
 
-
-      duplicatedNodeIds.add(created.id);
-      originalNodeIdByCopyId.set(created.id, template.id);
+      duplicatedNodeIds.add(newRootId);
+      originalNodeIdByCopyId.set(newRootId, template.id);
       
       // Ã°Å¸â€Â§ MAPPING: Enregistrer les IDs rÃƒÂ©els crÃƒÂ©ÃƒÂ©s
       // Le plan suppose `templateId-suffix` mais deepCopyNodeInternal a crÃƒÂ©ÃƒÂ© `newRootId`
@@ -555,8 +533,9 @@ export async function runRepeatExecution(
       }
     }
 
-    // 3. Load ALL display nodes + formulas + existing variables in parallel
-    const [displayNodes, allFormulas, existingVars] = await Promise.all([
+    // 3. Load ALL display nodes + formulas + collision data in parallel
+    // PERF R9: Split variable query — lightweight global for collision checks, targeted for node reuse
+    const [displayNodes, allFormulas, collisionVars] = await Promise.all([
       prisma.treeBranchLeafNode.findMany({
         where: {
           treeId: repeaterNode.treeId,
@@ -566,8 +545,9 @@ export async function runRepeatExecution(
       ownerNodeIds.length > 0 ? prisma.treeBranchLeafNodeFormula.findMany({
         where: { nodeId: { in: ownerNodeIds } }
       }) : Promise.resolve([]),
+      // PERF R9: Only load id + exposedKey for collision checks (was loading 9 cols for ALL vars)
       prisma.treeBranchLeafNodeVariable.findMany({
-        select: { id: true, exposedKey: true, nodeId: true, displayName: true, displayFormat: true, unit: true, precision: true, visibleToUser: true, isReadonly: true }
+        select: { id: true, exposedKey: true }
       })
     ]);
 
@@ -594,12 +574,11 @@ export async function runRepeatExecution(
     for (const id of duplicatedNodeIds) allExistingNodeIds.add(id);
     for (const id of globalNodeIdMap.values()) allExistingNodeIds.add(id);
 
-    // Build existing variable sets for collision checks
-    allExistingVarIds = new Set(existingVars.map(v => v.id));
-    allExistingVarKeys = new Set(existingVars.map(v => v.exposedKey));
+    // PERF R9: Build collision sets from lightweight query (only id + exposedKey)
+    allExistingVarIds = new Set(collisionVars.map(v => v.id));
+    allExistingVarKeys = new Set(collisionVars.map(v => v.exposedKey));
 
-    // PERF: Index variables by nodeId for reuse checks (saves 1 findUnique per variable)
-    allVarsByNodeId = new Map(existingVars.filter(v => v.nodeId).map(v => [v.nodeId, v]));
+    // PERF R9: preloadedVarsByNodeId will be loaded after varTasks are built (targeted query)
   }
 
   // PERF Round 6: Process variables in PARALLEL CHUNKS of 5 instead of sequentially
@@ -619,6 +598,16 @@ export async function runRepeatExecution(
       console.warn(`[REPEAT-EXECUTOR] No mapping for targetNodeId "${targetNodeId}", using directly`);
     }
     varTasks.push({ templateVariableId, targetNodeId, plannedSuffix });
+  }
+
+  // PERF R9: Targeted query for preloadedVarsByNodeId — only target nodes instead of ALL vars
+  if (varTasks.length > 0) {
+    const targetNodeIds = [...new Set(varTasks.map(t => t.targetNodeId))];
+    const targetVars = await prisma.treeBranchLeafNodeVariable.findMany({
+      where: { nodeId: { in: targetNodeIds } },
+      select: { id: true, nodeId: true, exposedKey: true, displayName: true, displayFormat: true, unit: true, precision: true, visibleToUser: true, isReadonly: true }
+    });
+    allVarsByNodeId = new Map(targetVars.filter(v => v.nodeId).map(v => [v.nodeId, v]));
   }
 
   const VAR_CHUNK_SIZE = 5;

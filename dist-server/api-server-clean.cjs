@@ -37077,12 +37077,14 @@ async function deepCopyNodeInternal(prisma51, req2, nodeId, opts) {
   };
   const nodeCreateOps = [];
   const aiMeasureNodes = [];
+  let rootCloneData = null;
   for (const oldId of nodesToCreate) {
     const oldNode = byId.get(oldId);
     const newId = idMap.get(oldId);
     const isRoot = oldId === source.id;
     const newParentId = await resolveParentId(oldNode, isRoot);
     const cloneData = buildCloneData(oldNode, newId, newParentId);
+    if (isRoot) rootCloneData = cloneData;
     nodeCreateOps.push(prisma51.treeBranchLeafNode.create({ data: cloneData }));
     createdNodes.push({ oldId, newId, newParentId });
     existingNodeIds.add(newId);
@@ -37921,7 +37923,15 @@ async function deepCopyNodeInternal(prisma51, req2, nodeId, opts) {
     console.warn("[DEEP-COPY] Post-copy data sync skipped:", syncPassThroughError.message);
   }
   return {
-    root: { oldId: source.id, newId: rootNewId },
+    root: {
+      oldId: source.id,
+      newId: rootNewId,
+      // PERF R9: Include root metadata inline to skip findUnique in repeat-executor
+      metadata: rootCloneData?.metadata ? typeof rootCloneData.metadata === "object" && !Array.isArray(rootCloneData.metadata) ? rootCloneData.metadata : null : null,
+      label: rootCloneData?.label ?? source.label ?? null,
+      type: rootCloneData?.type ?? source.type,
+      parentId: rootCloneData?.parentId ?? null
+    },
     idMap: Object.fromEntries(idMap),
     formulaIdMap: Object.fromEntries(formulaIdMap),
     conditionIdMap: Object.fromEntries(conditionIdMap),
@@ -72579,16 +72589,10 @@ async function runRepeatExecution(prisma51, req2, execution) {
       };
       const { result: copyResult, appliedSuffix } = await attemptCopy(plannedSuffix);
       const newRootId = copyResult.root.newId;
-      const created = await prisma51.treeBranchLeafNode.findUnique({
-        where: { id: newRootId }
-      });
-      if (!created) {
-        throw new RepeatOperationError(`Node copy failed to materialize for template ${template.id}.`, 500);
-      }
       const originalMetadata = template.metadata && typeof template.metadata === "object" ? template.metadata : {};
       const originalTriggerNodeIds = originalMetadata.triggerNodeIds;
-      const createdMetadata = created.metadata && typeof created.metadata === "object" ? created.metadata : {};
-      const resolvedSuffix = coerceSuffix(createdMetadata.copySuffix) ?? extractSuffixFromId2(created.id) ?? appliedSuffix ?? null;
+      const createdMetadata = copyResult.root.metadata ? { ...copyResult.root.metadata } : {};
+      const resolvedSuffix = coerceSuffix(createdMetadata.copySuffix) ?? extractSuffixFromId2(newRootId) ?? appliedSuffix ?? null;
       const effectiveSuffix = resolvedSuffix ?? plannedSuffix ?? 1;
       const suffixTriggers = (triggerNodeIds, label) => {
         if (!Array.isArray(triggerNodeIds) || triggerNodeIds.length === 0) {
@@ -72611,7 +72615,7 @@ async function runRepeatExecution(prisma51, req2, execution) {
         });
         return suffixedTriggerNodeIds;
       };
-      const rootSuffixedTriggers = suffixTriggers(originalTriggerNodeIds, created.label || "root");
+      const rootSuffixedTriggers = suffixTriggers(originalTriggerNodeIds, copyResult.root.label || "root");
       const updatedMetadata = {
         ...createdMetadata,
         sourceTemplateId: template.id,
@@ -72634,21 +72638,11 @@ async function runRepeatExecution(prisma51, req2, execution) {
       });
       triggersFixDebug.push({
         nodeId: newRootId,
-        label: created.label || "root",
+        label: copyResult.root.label || "root",
         originalSubType: template.subType || null,
         appliedSubType: template.subType || null,
         originalTriggers: originalTriggerNodeIds,
         suffixedTriggers: rootSuffixedTriggers
-      });
-      const allIdMapEntries = Object.entries(copyResult.idMap || {}).map(([oldId, newId]) => ({
-        oldId,
-        newId
-      }));
-      triggersFixDebug.push({
-        nodeId: "DEBUG_IDMAP",
-        label: `TOTAL ${allIdMapEntries.length} entr\xE9es dans idMap`,
-        allIds: allIdMapEntries,
-        lookingFor: "d371c32e-f69e-46b0-9846-f3f60f7b4ec8"
       });
       if (copyResult.idMap && Object.keys(copyResult.idMap).length > 0) {
         const childNodeIds = Object.values(copyResult.idMap).filter((id) => id !== newRootId);
@@ -72711,14 +72705,14 @@ async function runRepeatExecution(prisma51, req2, execution) {
         }
       }
       duplicatedSummaries.push({
-        id: created.id,
-        label: created.label,
-        type: created.type,
-        parentId: created.parentId,
+        id: newRootId,
+        label: copyResult.root.label,
+        type: copyResult.root.type,
+        parentId: copyResult.root.parentId,
         sourceTemplateId: template.id
       });
-      duplicatedNodeIds.add(created.id);
-      originalNodeIdByCopyId.set(created.id, template.id);
+      duplicatedNodeIds.add(newRootId);
+      originalNodeIdByCopyId.set(newRootId, template.id);
       const plannedRootId = `${template.id}-${effectiveSuffix}`;
       plannedNodeIdToRealNodeId.set(plannedRootId, newRootId);
       Object.entries(copyResult.idMap || {}).forEach(([oldId, newId]) => {
@@ -72815,7 +72809,7 @@ async function runRepeatExecution(prisma51, req2, execution) {
         ownerNodesMap.set(n.id, n);
       }
     }
-    const [displayNodes, allFormulas, existingVars] = await Promise.all([
+    const [displayNodes, allFormulas, collisionVars] = await Promise.all([
       prisma51.treeBranchLeafNode.findMany({
         where: {
           treeId: repeaterNode.treeId,
@@ -72825,8 +72819,9 @@ async function runRepeatExecution(prisma51, req2, execution) {
       ownerNodeIds.length > 0 ? prisma51.treeBranchLeafNodeFormula.findMany({
         where: { nodeId: { in: ownerNodeIds } }
       }) : Promise.resolve([]),
+      // PERF R9: Only load id + exposedKey for collision checks (was loading 9 cols for ALL vars)
       prisma51.treeBranchLeafNodeVariable.findMany({
-        select: { id: true, exposedKey: true, nodeId: true, displayName: true, displayFormat: true, unit: true, precision: true, visibleToUser: true, isReadonly: true }
+        select: { id: true, exposedKey: true }
       })
     ]);
     for (const dn of displayNodes) {
@@ -72846,9 +72841,8 @@ async function runRepeatExecution(prisma51, req2, execution) {
     allExistingNodeIds = new Set(_preloadedTreeNodes.map((n) => n.id));
     for (const id of duplicatedNodeIds) allExistingNodeIds.add(id);
     for (const id of globalNodeIdMap.values()) allExistingNodeIds.add(id);
-    allExistingVarIds = new Set(existingVars.map((v) => v.id));
-    allExistingVarKeys = new Set(existingVars.map((v) => v.exposedKey));
-    allVarsByNodeId = new Map(existingVars.filter((v) => v.nodeId).map((v) => [v.nodeId, v]));
+    allExistingVarIds = new Set(collisionVars.map((v) => v.id));
+    allExistingVarKeys = new Set(collisionVars.map((v) => v.exposedKey));
   }
   const varTasks = [];
   for (const variablePlan of plan.variables) {
@@ -72863,6 +72857,14 @@ async function runRepeatExecution(prisma51, req2, execution) {
       console.warn(`[REPEAT-EXECUTOR] No mapping for targetNodeId "${targetNodeId}", using directly`);
     }
     varTasks.push({ templateVariableId, targetNodeId, plannedSuffix });
+  }
+  if (varTasks.length > 0) {
+    const targetNodeIds = [...new Set(varTasks.map((t) => t.targetNodeId))];
+    const targetVars = await prisma51.treeBranchLeafNodeVariable.findMany({
+      where: { nodeId: { in: targetNodeIds } },
+      select: { id: true, nodeId: true, exposedKey: true, displayName: true, displayFormat: true, unit: true, precision: true, visibleToUser: true, isReadonly: true }
+    });
+    allVarsByNodeId = new Map(targetVars.filter((v) => v.nodeId).map((v) => [v.nodeId, v]));
   }
   const VAR_CHUNK_SIZE = 5;
   for (let ci = 0; ci < varTasks.length; ci += VAR_CHUNK_SIZE) {

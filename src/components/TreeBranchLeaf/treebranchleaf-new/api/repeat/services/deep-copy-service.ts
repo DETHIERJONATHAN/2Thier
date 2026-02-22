@@ -30,7 +30,7 @@ export interface DeepCopyOptions {
 }
 
 export interface DeepCopyResult {
-  root: { oldId: string; newId: string };
+  root: { oldId: string; newId: string; metadata: Record<string, unknown> | null; label: string | null; type: string; parentId: string | null };
   idMap: Record<string, string>;
   formulaIdMap: Record<string, string>;
   conditionIdMap: Record<string, string>;
@@ -799,6 +799,8 @@ export async function deepCopyNodeInternal(
   // PERF R8: Batch node creation -- pre-compute all data, then create in $transaction
   const nodeCreateOps: Prisma.PrismaPromise<unknown>[] = [];
   const aiMeasureNodes: Array<{ oldNode: TreeBranchLeafNode; newId: string }> = [];
+  // PERF R9: Capture root clone data to avoid redundant findUnique in repeat-executor
+  let rootCloneData: Prisma.TreeBranchLeafNodeCreateInput | null = null;
   for (const oldId of nodesToCreate) {
     const oldNode = byId.get(oldId)!;
     const newId = idMap.get(oldId)!;
@@ -806,6 +808,7 @@ export async function deepCopyNodeInternal(
 
     const newParentId = await resolveParentId(oldNode, isRoot);
     const cloneData = buildCloneData(oldNode, newId, newParentId);
+    if (isRoot) rootCloneData = cloneData;
 
     nodeCreateOps.push(prisma.treeBranchLeafNode.create({ data: cloneData }));
     createdNodes.push({ oldId, newId, newParentId });
@@ -1898,7 +1901,19 @@ export async function deepCopyNodeInternal(
   }
 
   return {
-    root: { oldId: source.id, newId: rootNewId },
+    root: {
+      oldId: source.id,
+      newId: rootNewId,
+      // PERF R9: Include root metadata inline to skip findUnique in repeat-executor
+      metadata: rootCloneData?.metadata
+        ? (typeof rootCloneData.metadata === 'object' && !Array.isArray(rootCloneData.metadata)
+          ? (rootCloneData.metadata as Record<string, unknown>)
+          : null)
+        : null,
+      label: (rootCloneData?.label as string) ?? source.label ?? null,
+      type: (rootCloneData?.type as string) ?? source.type,
+      parentId: (rootCloneData?.parentId as string) ?? null,
+    },
     idMap: Object.fromEntries(idMap),
     formulaIdMap: Object.fromEntries(formulaIdMap),
     conditionIdMap: Object.fromEntries(conditionIdMap),
