@@ -33793,7 +33793,10 @@ function forceSharedRefSuffixesInJson(obj, suffix) {
 async function copyFormulaCapacity(originalFormulaId, newNodeId, suffix, prisma51, options = {}) {
   const {
     nodeIdMap = /* @__PURE__ */ new Map(),
-    formulaCopyCache = /* @__PURE__ */ new Map()
+    formulaCopyCache = /* @__PURE__ */ new Map(),
+    preloadedFormula,
+    existingNodeIds,
+    formulaIdMap: externalFormulaIdMap
   } = options;
   try {
     if (formulaCopyCache.has(originalFormulaId)) {
@@ -33806,7 +33809,7 @@ async function copyFormulaCapacity(originalFormulaId, newNodeId, suffix, prisma5
       };
     }
     const cleanFormulaId = originalFormulaId.replace(/-\d+$/, "");
-    const originalFormula = await prisma51.treeBranchLeafNodeFormula.findUnique({
+    const originalFormula = preloadedFormula ?? await prisma51.treeBranchLeafNodeFormula.findUnique({
       where: { id: cleanFormulaId }
     });
     if (!originalFormula) {
@@ -33822,7 +33825,7 @@ async function copyFormulaCapacity(originalFormulaId, newNodeId, suffix, prisma5
     const newFormulaId = `${originalFormula.id}-${suffix}`;
     const originalOwnerNodeId = originalFormula.nodeId;
     const correctOwnerNodeId = `${originalOwnerNodeId}-${suffix}`;
-    const ownerNodeExists = await prisma51.treeBranchLeafNode.findUnique({
+    const ownerNodeExists = existingNodeIds ? existingNodeIds.has(correctOwnerNodeId) ? { id: correctOwnerNodeId, label: null } : null : await prisma51.treeBranchLeafNode.findUnique({
       where: { id: correctOwnerNodeId },
       select: { id: true, label: true }
     });
@@ -33830,7 +33833,7 @@ async function copyFormulaCapacity(originalFormulaId, newNodeId, suffix, prisma5
     const ownerNodeExistsForUpdate = !!ownerNodeExists;
     const rewriteMaps = {
       nodeIdMap,
-      formulaIdMap: formulaCopyCache || /* @__PURE__ */ new Map(),
+      formulaIdMap: externalFormulaIdMap || formulaCopyCache || /* @__PURE__ */ new Map(),
       conditionIdMap: /* @__PURE__ */ new Map(),
       // Pas besoin ici mais requis par l'interface
       tableIdMap: /* @__PURE__ */ new Map()
@@ -37283,6 +37286,7 @@ async function deepCopyNodeInternal(prisma51, req2, nodeId, opts) {
   ]);
   for (const ec of existingCondsResult) existingConditionsSet.add(ec.id);
   for (const et of existingTablesResult) existingTablesSet.add(et.id);
+  const pendingLinkedConditionUpdates = /* @__PURE__ */ new Map();
   for (const { oldId, newId, newParentId } of createdNodes) {
     const oldNode = byId.get(oldId);
     const linkedFormulaIdOrder = Array.isArray(oldNode.linkedFormulaIds) ? oldNode.linkedFormulaIds : [];
@@ -37312,7 +37316,11 @@ async function deepCopyNodeInternal(prisma51, req2, nodeId, opts) {
           prisma51,
           {
             formulaIdMap,
-            nodeIdMap: idMap
+            nodeIdMap: idMap,
+            // PERF: Pass pre-loaded formula data (saves 1 findUnique per formula)
+            preloadedFormula: f,
+            // PERF: Pass existingNodeIds set (saves 1 findUnique owner check per formula)
+            existingNodeIds
           }
         );
         if (formulaResult.success) {
@@ -37411,7 +37419,10 @@ async function deepCopyNodeInternal(prisma51, req2, nodeId, opts) {
           if (normalizedRepeatContext && !copiedNodeIds.has(normalizedRefId)) {
             continue;
           }
-          await addToNodeLinkedField6(prisma51, normalizedRefId, "linkedConditionIds", [newConditionId]);
+          if (!pendingLinkedConditionUpdates.has(normalizedRefId)) {
+            pendingLinkedConditionUpdates.set(normalizedRefId, /* @__PURE__ */ new Set());
+          }
+          pendingLinkedConditionUpdates.get(normalizedRefId).add(newConditionId);
         }
       } catch (e) {
         console.warn("[TreeBranchLeaf API] Warning updating linkedConditionIds during deep copy:", e.message);
@@ -37727,6 +37738,15 @@ async function deepCopyNodeInternal(prisma51, req2, nodeId, opts) {
       }
     }
   }
+  if (pendingLinkedConditionUpdates.size > 0) {
+    const batchPromises = [];
+    for (const [refNodeId, conditionIds] of pendingLinkedConditionUpdates) {
+      batchPromises.push(
+        addToNodeLinkedField6(prisma51, refNodeId, "linkedConditionIds", Array.from(conditionIds)).catch((e) => console.warn("[DEEP-COPY] Warning batch linkedConditionIds:", e.message))
+      );
+    }
+    await Promise.all(batchPromises);
+  }
   const variableCopyCache = /* @__PURE__ */ new Map();
   for (const oldNodeId of toCopy) {
     const newNodeId = idMap.get(oldNodeId);
@@ -37820,36 +37840,35 @@ async function deepCopyNodeInternal(prisma51, req2, nodeId, opts) {
   }
   const rootNewId = idMap.get(source.id);
   if (displayNodeIds.length > 0) {
+    const displayOriginalNodeIds = displayNodeIds.map((nid) => nid.replace(/-\d+$/, ""));
+    const originalDisplayVars = await prisma51.treeBranchLeafNodeVariable.findMany({
+      where: { nodeId: { in: displayOriginalNodeIds } }
+    });
+    const originalVarByNodeId = new Map(originalDisplayVars.map((v) => [v.nodeId, v]));
+    const potentialNewVarIds = originalDisplayVars.map((v) => appendSuffix(v.id));
+    const existingDisplayVarsResult = potentialNewVarIds.length > 0 ? await prisma51.treeBranchLeafNodeVariable.findMany({
+      where: { id: { in: potentialNewVarIds } },
+      select: { id: true }
+    }) : [];
+    const existingDisplayVarIds = new Set(existingDisplayVarsResult.map((v) => v.id));
     for (const nodeId2 of displayNodeIds) {
       try {
-        const copiedNode = await prisma51.treeBranchLeafNode.findUnique({
-          where: { id: nodeId2 },
-          select: { id: true, label: true, field_label: true, linkedTableIds: true }
-        });
-        if (!copiedNode || !copiedNode.linkedTableIds || copiedNode.linkedTableIds.length === 0) {
+        const copiedNodeData = byId.get(nodeId2.replace(/-\d+$/, ""));
+        if (!copiedNodeData || !Array.isArray(copiedNodeData.linkedTableIds) || copiedNodeData.linkedTableIds.length === 0) {
           continue;
         }
         const originalNodeId = nodeId2.replace(/-\d+$/, "");
-        const originalVar = await prisma51.treeBranchLeafNodeVariable.findFirst({
-          where: { nodeId: originalNodeId }
-        });
-        if (!originalVar) {
-          continue;
-        }
+        const originalVar = originalVarByNodeId.get(originalNodeId);
+        if (!originalVar) continue;
         const newVarId = appendSuffix(originalVar.id);
         const newExposedKey = appendSuffix(originalVar.exposedKey);
-        const existingVar = await prisma51.treeBranchLeafNodeVariable.findUnique({
-          where: { id: newVarId }
-        });
-        if (existingVar) {
-          continue;
-        }
+        if (existingDisplayVarIds.has(newVarId)) continue;
         await prisma51.treeBranchLeafNodeVariable.create({
           data: {
             id: newVarId,
             nodeId: nodeId2,
             exposedKey: newExposedKey,
-            displayName: copiedNode.label || copiedNode.field_label || originalVar.displayName,
+            displayName: copiedNodeData.label || copiedNodeData.field_label || originalVar.displayName,
             displayFormat: originalVar.displayFormat,
             precision: originalVar.precision,
             unit: originalVar.unit,
@@ -37874,12 +37893,11 @@ async function deepCopyNodeInternal(prisma51, req2, nodeId, opts) {
             data_precision: originalVar.precision,
             data_unit: originalVar.unit,
             data_visibleToUser: originalVar.visibleToUser,
-            // linkedVariableIds doit contenir la variable copiÃƒÂ©e (suffixÃƒÂ©e)
             linkedVariableIds: { set: [newVarId] }
           }
         });
       } catch (varError) {
-        console.error(`[DEEP-COPY] \xC3\xA2\xC2\x9D\xC5\u2019 Erreur cr\xC3\u0192\xC2\xA9ation variable pour ${nodeId2}:`, varError);
+        console.error("[DEEP-COPY] Erreur creation variable pour " + nodeId2 + ":", varError);
       }
     }
   }

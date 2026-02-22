@@ -31,8 +31,12 @@ export interface CopyFormulaOptions {
   /** Map des nÃ…â€œuds copiÃƒÂ©s (ancien ID Ã¢â€ â€™ nouveau ID) pour rÃƒÂ©ÃƒÂ©crire les tokens */
   nodeIdMap?: Map<string, string>;
   /** Map des formules dÃƒÂ©jÃƒÂ  copiÃƒÂ©es (cache pour ÃƒÂ©viter doublons) */
-  formulaCopyCache?: Map<string, string>;
-}
+  formulaCopyCache?: Map<string, string>;  /** PERF: Formula data pre-loaded by deep-copy-service (avoids findUnique per formula) */
+  preloadedFormula?: { id: string; nodeId: string; organizationId: string; name: string | null; description: string | null; tokens: any; targetProperty: string | null; constraintMessage: string | null; isDefault: boolean | null; order: number | null } | null;
+  /** PERF: Set of existing node IDs to skip findUnique owner check */
+  existingNodeIds?: Set<string>;
+  /** PERF: formulaIdMap from deep-copy-service (passed to rewriteMaps) */
+  formulaIdMap?: Map<string, string>;}
 
 /**
  * RÃƒÂ©sultat de la copie d'une formule
@@ -194,7 +198,10 @@ export async function copyFormulaCapacity(
 
   const {
     nodeIdMap = new Map(),
-    formulaCopyCache = new Map()
+    formulaCopyCache = new Map(),
+    preloadedFormula,
+    existingNodeIds,
+    formulaIdMap: externalFormulaIdMap
   } = options;
 
   try {
@@ -217,9 +224,10 @@ export async function copyFormulaCapacity(
     // Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
     // originalFormulaId peut contenir un suffixe si c'est dÃƒÂ©jÃƒÂ  une copie
     // On enlÃƒÂ¨ve le suffixe pour trouver l'original
+    // PERF: Use pre-loaded formula data if available (saves 1 findUnique per formula)
     const cleanFormulaId = originalFormulaId.replace(/-\d+$/, '');
     
-    const originalFormula = await prisma.treeBranchLeafNodeFormula.findUnique({
+    const originalFormula = preloadedFormula ?? await prisma.treeBranchLeafNodeFormula.findUnique({
       where: { id: cleanFormulaId }
     });
 
@@ -251,10 +259,13 @@ export async function copyFormulaCapacity(
     const correctOwnerNodeId = `${originalOwnerNodeId}-${suffix}`;
     
     // VÃƒÂ©rifier si le nÃ…â€œud propriÃƒÂ©taire copiÃƒÂ© existe
-    const ownerNodeExists = await prisma.treeBranchLeafNode.findUnique({
-      where: { id: correctOwnerNodeId },
-      select: { id: true, label: true }
-    });
+    // PERF: Use existingNodeIds set if available (saves 1 findUnique per formula)
+    const ownerNodeExists = existingNodeIds
+      ? (existingNodeIds.has(correctOwnerNodeId) ? { id: correctOwnerNodeId, label: null } : null)
+      : await prisma.treeBranchLeafNode.findUnique({
+        where: { id: correctOwnerNodeId },
+        select: { id: true, label: true }
+      });
     
     // 🛡️ CRITICAL FIX: TOUJOURS utiliser correctOwnerNodeId pour la formule
     // JAMAIS de fallback sur newNodeId car cela assignerait la formule au mauvais nœud !
@@ -270,7 +281,7 @@ export async function copyFormulaCapacity(
     // Ã°Å¸â€Â¥ UTILISER LE SYSTÃƒË†ME UNIVERSEL pour traiter TOUS les types de rÃƒÂ©fÃƒÂ©rences
     const rewriteMaps: RewriteMaps = {
       nodeIdMap: nodeIdMap,
-      formulaIdMap: formulaCopyCache || new Map(),
+      formulaIdMap: externalFormulaIdMap || formulaCopyCache || new Map(),
       conditionIdMap: new Map(), // Pas besoin ici mais requis par l'interface
       tableIdMap: new Map() // Pas besoin ici mais requis par l'interface
     };
