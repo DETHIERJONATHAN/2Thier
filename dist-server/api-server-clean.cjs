@@ -37231,6 +37231,7 @@ async function deepCopyNodeInternal(prisma51, req2, nodeId, opts) {
   const pendingLinkedConditionUpdates = /* @__PURE__ */ new Map();
   const copiedNodeIds = new Set(idMap.values());
   const pendingLinkedFormulaUpdates = /* @__PURE__ */ new Map();
+  const pendingCapacityFlags = /* @__PURE__ */ new Map();
   for (const { oldId, newId, newParentId } of createdNodes) {
     const oldNode = byId.get(oldId);
     const linkedFormulaIdOrder = Array.isArray(oldNode.linkedFormulaIds) ? oldNode.linkedFormulaIds : [];
@@ -37307,13 +37308,6 @@ async function deepCopyNodeInternal(prisma51, req2, nodeId, opts) {
         console.error(`\xC3\xA2\xC2\x9D\xC5\u2019 Exception copie formule ${f.id}:`, error);
       }
     }
-    if (newLinkedFormulaIds.length > 0) {
-      try {
-        await addToNodeLinkedField6(prisma51, newId, "linkedFormulaIds", newLinkedFormulaIds);
-      } catch (e) {
-        console.warn("[TreeBranchLeaf API] Warning updating linkedFormulaIds for node:", e.message);
-      }
-    }
     const conditions = conditionsByNodeId.get(oldId) || [];
     const linkedConditionIdOrder = Array.isArray(oldNode.linkedConditionIds) ? oldNode.linkedConditionIds : [];
     const conditionMap = new Map(conditions.map((c) => [c.id, c]));
@@ -37387,35 +37381,21 @@ async function deepCopyNodeInternal(prisma51, req2, nodeId, opts) {
         console.warn("[TreeBranchLeaf API] Warning updating linkedConditionIds during deep copy:", e.message);
       }
     }
-    if (newLinkedConditionIds.length > 0) {
-      try {
-        await addToNodeLinkedField6(prisma51, newId, "linkedConditionIds", newLinkedConditionIds);
-      } catch (e) {
-        console.warn("[TreeBranchLeaf API] Warning updating linkedConditionIds for node:", e.message);
-      }
-    }
     const shouldHaveFormula = oldNode.hasFormula === true || formulas.length > 0;
     const shouldHaveCondition = oldNode.hasCondition === true || conditions.length > 0;
-    const updateCaps = {};
-    if (shouldHaveFormula) {
-      updateCaps.hasFormula = true;
-      const mappedActive = oldNode.formula_activeId ? formulaIdMap.get(oldNode.formula_activeId) || null : null;
-      updateCaps.formula_activeId = mappedActive || firstNewFormulaId || null;
-    }
-    if (shouldHaveCondition) {
-      updateCaps.hasCondition = true;
-      const mappedActive = oldNode.condition_activeId ? conditionIdMap.get(oldNode.condition_activeId) || null : null;
-      updateCaps.condition_activeId = mappedActive || firstNewConditionId || null;
-    }
-    if (Object.keys(updateCaps).length > 0) {
-      try {
-        await prisma51.treeBranchLeafNode.update({
-          where: { id: newId },
-          data: updateCaps
-        });
-      } catch (e) {
-        console.warn("[DEEP-COPY]  Erreur mise \b\b\b\b\b\b\b jour flags/activeIds:", e.message);
+    if (shouldHaveFormula || shouldHaveCondition) {
+      const caps = {};
+      if (shouldHaveFormula) {
+        caps.hasFormula = true;
+        const mappedActive = oldNode.formula_activeId ? formulaIdMap.get(oldNode.formula_activeId) || null : null;
+        caps.formula_activeId = mappedActive || firstNewFormulaId || null;
       }
+      if (shouldHaveCondition) {
+        caps.hasCondition = true;
+        const mappedActive = oldNode.condition_activeId ? conditionIdMap.get(oldNode.condition_activeId) || null : null;
+        caps.condition_activeId = mappedActive || firstNewConditionId || null;
+      }
+      pendingCapacityFlags.set(newId, { ...pendingCapacityFlags.get(newId) || {}, ...caps });
     }
     const tables = preloadedTablesByNodeId.get(oldId) || [];
     const additionalTableIds = [];
@@ -37584,28 +37564,15 @@ async function deepCopyNodeInternal(prisma51, req2, nodeId, opts) {
         });
       }
     }
-    if (newLinkedTableIds.length > 0) {
-      try {
-        await addToNodeLinkedField6(prisma51, newId, "linkedTableIds", newLinkedTableIds);
-      } catch (e) {
-        console.warn("[TreeBranchLeaf API] Warning updating linkedTableIds for node:", e.message);
-      }
-    }
     const shouldHaveTable = oldNode.hasTable === true || allTablesToCopy.length > 0;
     if (shouldHaveTable) {
       const mappedActiveTableId = oldNode.table_activeId ? tableIdMap2.get(oldNode.table_activeId) || null : null;
       const firstNewTableId = allTablesToCopy.length > 0 ? tableIdMap2.get(allTablesToCopy[0].id) || null : null;
-      try {
-        await prisma51.treeBranchLeafNode.update({
-          where: { id: newId },
-          data: {
-            hasTable: true,
-            table_activeId: mappedActiveTableId || firstNewTableId || (newLinkedTableIds[0] ?? null)
-          }
-        });
-      } catch (e) {
-        console.warn("[DEEP-COPY] Erreur mise \xE0 jour hasTable/table_activeId:", e.message);
-      }
+      pendingCapacityFlags.set(newId, {
+        ...pendingCapacityFlags.get(newId) || {},
+        hasTable: true,
+        table_activeId: mappedActiveTableId || firstNewTableId || (newLinkedTableIds[0] ?? null)
+      });
     }
     const originalSelectConfig = selectConfigByNodeId.get(oldId) ?? null;
     if (originalSelectConfig) {
@@ -37791,19 +37758,21 @@ async function deepCopyNodeInternal(prisma51, req2, nodeId, opts) {
         }
       }
     }
-    if (newLinkedFormulaIds.length > 0 || newLinkedConditionIds.length > 0 || newLinkedTableIds.length > 0) {
+    const capsData = pendingCapacityFlags.get(newNodeId) || {};
+    const hasSomethingToUpdate = newLinkedFormulaIds.length > 0 || newLinkedConditionIds.length > 0 || newLinkedTableIds.length > 0 || Object.keys(capsData).length > 0;
+    if (hasSomethingToUpdate) {
       try {
         await prisma51.treeBranchLeafNode.update({
           where: { id: newNodeId },
           data: {
             linkedFormulaIds: newLinkedFormulaIds.length > 0 ? { set: newLinkedFormulaIds } : { set: [] },
             linkedConditionIds: newLinkedConditionIds.length > 0 ? { set: newLinkedConditionIds } : { set: [] },
-            linkedTableIds: newLinkedTableIds.length > 0 ? { set: newLinkedTableIds } : { set: [] }
-            // linkedVariableIds: SUPPRIMÃƒâ€° - ne doit PAS ÃƒÂªtre mis ÃƒÂ  jour !
+            linkedTableIds: newLinkedTableIds.length > 0 ? { set: newLinkedTableIds } : { set: [] },
+            ...capsData
           }
         });
       } catch (e) {
-        console.warn("[DEEP-COPY] Erreur lors du UPDATE des linked***", e.message);
+        console.warn("[DEEP-COPY] Erreur merged update:", e.message);
       }
     }
   }
@@ -72843,76 +72812,83 @@ async function runRepeatExecution(prisma51, req2, execution) {
     allExistingVarKeys = new Set(existingVars.map((v) => v.exposedKey));
     allVarsByNodeId = new Map(existingVars.filter((v) => v.nodeId).map((v) => [v.nodeId, v]));
   }
+  const varTasks = [];
   for (const variablePlan of plan.variables) {
-    try {
-      let { templateVariableId, targetNodeId, plannedVariableId, plannedSuffix } = variablePlan;
-      const templateVar = templateVarsMap.get(templateVariableId);
-      const isLookup = templateVar?.displayName?.includes("Lookup Table");
-      if (isLookup) {
-        continue;
+    let { templateVariableId, targetNodeId, plannedSuffix } = variablePlan;
+    const templateVar = templateVarsMap.get(templateVariableId);
+    const isLookup = templateVar?.displayName?.includes("Lookup Table");
+    if (isLookup) continue;
+    const realTargetNodeId = plannedNodeIdToRealNodeId.get(targetNodeId);
+    if (realTargetNodeId) {
+      targetNodeId = realTargetNodeId;
+    } else {
+      console.warn(`[REPEAT-EXECUTOR] No mapping for targetNodeId "${targetNodeId}", using directly`);
+    }
+    varTasks.push({ templateVariableId, targetNodeId, plannedSuffix });
+  }
+  const VAR_CHUNK_SIZE = 5;
+  for (let ci = 0; ci < varTasks.length; ci += VAR_CHUNK_SIZE) {
+    const chunk = varTasks.slice(ci, ci + VAR_CHUNK_SIZE);
+    const results = await Promise.all(chunk.map(async (task) => {
+      try {
+        const variableResult = await copyVariableWithCapacities(
+          task.templateVariableId,
+          task.plannedSuffix,
+          task.targetNodeId,
+          prisma51,
+          {
+            autoCreateDisplayNode: true,
+            isFromRepeaterDuplication: true,
+            nodeIdMap: globalNodeIdMap,
+            formulaIdMap: globalFormulaIdMap,
+            conditionIdMap: globalConditionIdMap,
+            tableIdMap: globalTableIdMap,
+            variableCopyCache: globalVariableCopyCache,
+            preloadedOriginalVar: fullVarsMap.get(task.templateVariableId),
+            preloadedOwnerNode: fullVarsMap.get(task.templateVariableId)?.nodeId ? ownerNodesMap.get(fullVarsMap.get(task.templateVariableId).nodeId) : void 0,
+            preloadedDuplicatedOwnerNode: { id: task.targetNodeId, parentId: _preloadedTreeNodesById?.get(task.targetNodeId)?.parentId ?? null },
+            preloadedDisplayNode: displayNodesMap.get(task.templateVariableId),
+            preloadedFormulas: fullVarsMap.get(task.templateVariableId)?.nodeId ? formulasByNodeId.get(fullVarsMap.get(task.templateVariableId).nodeId) : void 0,
+            existingNodeIds: allExistingNodeIds,
+            existingVariableIds: allExistingVarIds,
+            existingVariableKeys: allExistingVarKeys,
+            preloadedVarsByNodeId: allVarsByNodeId,
+            repeatContext: {
+              repeaterNodeId,
+              templateNodeId: task.targetNodeId.replace(`-${task.plannedSuffix}`, ""),
+              duplicatedFromNodeId: task.targetNodeId.replace(`-${task.plannedSuffix}`, ""),
+              scopeId,
+              mode: "repeater"
+            }
+          }
+        );
+        return { task, result: variableResult };
+      } catch (varErr) {
+        console.error(`[repeat-executor] Erreur copie variable ${task.templateVariableId}:`, varErr instanceof Error ? varErr.message : String(varErr));
+        return { task, result: null };
       }
-      const realTargetNodeId = plannedNodeIdToRealNodeId.get(targetNodeId);
-      if (realTargetNodeId) {
-        targetNodeId = realTargetNodeId;
-      } else {
-        console.warn(`\xC3\xA2\xC5\xA1\xC2\xA0\xC3\xAF\xC2\xB8\xC2\x8F  [REPEAT-EXECUTOR] Aucun mapping trouv\xC3\u0192\xC2\xA9 pour targetNodeId "${targetNodeId}", utilisation directe`);
-      }
-      const variableResult = await copyVariableWithCapacities(
-        templateVariableId,
-        plannedSuffix,
-        targetNodeId,
-        prisma51,
-        {
-          autoCreateDisplayNode: true,
-          isFromRepeaterDuplication: true,
-          // Ã°Å¸â€Â¥ PASSER LES MAPS GLOBALES pour que les capacitÃƒÂ©s utilisent les bons IDs
-          nodeIdMap: globalNodeIdMap,
-          formulaIdMap: globalFormulaIdMap,
-          conditionIdMap: globalConditionIdMap,
-          tableIdMap: globalTableIdMap,
-          variableCopyCache: globalVariableCopyCache,
-          // PERF: Pre-loaded data to skip per-variable DB queries
-          preloadedOriginalVar: fullVarsMap.get(templateVariableId),
-          preloadedOwnerNode: fullVarsMap.get(templateVariableId)?.nodeId ? ownerNodesMap.get(fullVarsMap.get(templateVariableId).nodeId) : void 0,
-          preloadedDuplicatedOwnerNode: { id: targetNodeId, parentId: _preloadedTreeNodesById?.get(targetNodeId)?.parentId ?? null },
-          preloadedDisplayNode: displayNodesMap.get(templateVariableId),
-          preloadedFormulas: fullVarsMap.get(templateVariableId)?.nodeId ? formulasByNodeId.get(fullVarsMap.get(templateVariableId).nodeId) : void 0,
-          existingNodeIds: allExistingNodeIds,
-          existingVariableIds: allExistingVarIds,
-          existingVariableKeys: allExistingVarKeys,
-          preloadedVarsByNodeId: allVarsByNodeId,
-          repeatContext: {
-            repeaterNodeId,
-            templateNodeId: targetNodeId.replace(`-${plannedSuffix}`, ""),
-            duplicatedFromNodeId: targetNodeId.replace(`-${plannedSuffix}`, ""),
-            scopeId,
-            mode: "repeater"
-          }
-        }
-      );
-      if (variableResult.success) {
-        if (variableResult.formulaIdMap) {
-          for (const [oldId, newId] of variableResult.formulaIdMap.entries()) {
-            globalFormulaIdMap.set(oldId, newId);
-          }
-        }
-        if (variableResult.conditionIdMap) {
-          for (const [oldId, newId] of variableResult.conditionIdMap.entries()) {
-            globalConditionIdMap.set(oldId, newId);
-          }
-        }
-        if (variableResult.tableIdMap) {
-          for (const [oldId, newId] of variableResult.tableIdMap.entries()) {
-            globalTableIdMap.set(oldId, newId);
-          }
+    }));
+    for (const { result } of results) {
+      if (!result || !result.success) continue;
+      if (result.formulaIdMap) {
+        for (const [oldId, newId] of result.formulaIdMap.entries()) {
+          globalFormulaIdMap.set(oldId, newId);
         }
       }
-      if (variableResult.success && variableResult.displayNodeId) {
-        const originalDisplayNodeId = variableResult.displayNodeId.replace(/-\d+$/, "");
-        globalNodeIdMap.set(originalDisplayNodeId, variableResult.displayNodeId);
+      if (result.conditionIdMap) {
+        for (const [oldId, newId] of result.conditionIdMap.entries()) {
+          globalConditionIdMap.set(oldId, newId);
+        }
       }
-    } catch (varErr) {
-      console.error(`[repeat-executor] Erreur lors de la copie de la variable ${variablePlan.templateVariableId}:`, varErr instanceof Error ? varErr.message : String(varErr));
+      if (result.tableIdMap) {
+        for (const [oldId, newId] of result.tableIdMap.entries()) {
+          globalTableIdMap.set(oldId, newId);
+        }
+      }
+      if (result.displayNodeId) {
+        const originalDisplayNodeId = result.displayNodeId.replace(/-\d+$/, "");
+        globalNodeIdMap.set(originalDisplayNodeId, result.displayNodeId);
+      }
     }
   }
   const _t3 = Date.now();

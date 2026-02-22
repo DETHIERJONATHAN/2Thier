@@ -602,97 +602,89 @@ export async function runRepeatExecution(
     allVarsByNodeId = new Map(existingVars.filter(v => v.nodeId).map(v => [v.nodeId, v]));
   }
 
+  // PERF Round 6: Process variables in PARALLEL CHUNKS of 5 instead of sequentially
+  // Each variable's copyVariableWithCapacities is independent (different target nodes).
+  // Shared Maps (formulaIdMap, etc.) are safe in single-threaded JS (no true concurrency).
+  // formulaCopyCache already uses upsert internally, so double-copies are idempotent.
+  const varTasks: Array<{ templateVariableId: string; targetNodeId: string; plannedSuffix: any }> = [];
   for (const variablePlan of plan.variables) {
-    try {
-      let { templateVariableId, targetNodeId, plannedVariableId, plannedSuffix } = variablePlan;
-      
-      // PERF: Lookup en mémoire au lieu de findUnique par variable
-      const templateVar = templateVarsMap.get(templateVariableId);
-      const isLookup = templateVar?.displayName?.includes('Lookup Table');
-      
-      if (isLookup) {
-        continue;
+    let { templateVariableId, targetNodeId, plannedSuffix } = variablePlan;
+    const templateVar = templateVarsMap.get(templateVariableId);
+    const isLookup = templateVar?.displayName?.includes('Lookup Table');
+    if (isLookup) continue;
+    const realTargetNodeId = plannedNodeIdToRealNodeId.get(targetNodeId);
+    if (realTargetNodeId) {
+      targetNodeId = realTargetNodeId;
+    } else {
+      console.warn(`[REPEAT-EXECUTOR] No mapping for targetNodeId "${targetNodeId}", using directly`);
+    }
+    varTasks.push({ templateVariableId, targetNodeId, plannedSuffix });
+  }
+
+  const VAR_CHUNK_SIZE = 5;
+  for (let ci = 0; ci < varTasks.length; ci += VAR_CHUNK_SIZE) {
+    const chunk = varTasks.slice(ci, ci + VAR_CHUNK_SIZE);
+    const results = await Promise.all(chunk.map(async (task) => {
+      try {
+        const variableResult = await copyVariableWithCapacities(
+          task.templateVariableId,
+          task.plannedSuffix,
+          task.targetNodeId,
+          prisma,
+          {
+            autoCreateDisplayNode: true,
+            isFromRepeaterDuplication: true,
+            nodeIdMap: globalNodeIdMap,
+            formulaIdMap: globalFormulaIdMap,
+            conditionIdMap: globalConditionIdMap,
+            tableIdMap: globalTableIdMap,
+            variableCopyCache: globalVariableCopyCache,
+            preloadedOriginalVar: fullVarsMap.get(task.templateVariableId),
+            preloadedOwnerNode: fullVarsMap.get(task.templateVariableId)?.nodeId ? ownerNodesMap.get(fullVarsMap.get(task.templateVariableId)!.nodeId) : undefined,
+            preloadedDuplicatedOwnerNode: { id: task.targetNodeId, parentId: _preloadedTreeNodesById?.get(task.targetNodeId)?.parentId ?? null },
+            preloadedDisplayNode: displayNodesMap.get(task.templateVariableId),
+            preloadedFormulas: fullVarsMap.get(task.templateVariableId)?.nodeId ? formulasByNodeId.get(fullVarsMap.get(task.templateVariableId)!.nodeId) : undefined,
+            existingNodeIds: allExistingNodeIds,
+            existingVariableIds: allExistingVarIds,
+            existingVariableKeys: allExistingVarKeys,
+            preloadedVarsByNodeId: allVarsByNodeId,
+            repeatContext: {
+              repeaterNodeId,
+              templateNodeId: task.targetNodeId.replace(`-${task.plannedSuffix}`, ''),
+              duplicatedFromNodeId: task.targetNodeId.replace(`-${task.plannedSuffix}`, ''),
+              scopeId,
+              mode: 'repeater'
+            }
+          }
+        );
+        return { task, result: variableResult };
+      } catch (varErr) {
+        console.error(`[repeat-executor] Erreur copie variable ${task.templateVariableId}:`, varErr instanceof Error ? varErr.message : String(varErr));
+        return { task, result: null as any };
       }
-      
-      
-      // Ã°Å¸â€Â§ CORRECTION: Utiliser le vrai ID du nÃ…â€œud crÃƒÂ©ÃƒÂ© si disponible
-      const realTargetNodeId = plannedNodeIdToRealNodeId.get(targetNodeId);
-      if (realTargetNodeId) {
-        targetNodeId = realTargetNodeId;
-      } else {
-        console.warn(`Ã¢Å¡Â Ã¯Â¸Â  [REPEAT-EXECUTOR] Aucun mapping trouvÃƒÂ© pour targetNodeId "${targetNodeId}", utilisation directe`);
-      }
-      
-      
-      
-      const variableResult = await copyVariableWithCapacities(
-        templateVariableId,
-        plannedSuffix,
-        targetNodeId,
-        prisma,
-        {
-          autoCreateDisplayNode: true,
-          isFromRepeaterDuplication: true,
-          // Ã°Å¸â€Â¥ PASSER LES MAPS GLOBALES pour que les capacitÃƒÂ©s utilisent les bons IDs
-          nodeIdMap: globalNodeIdMap,
-          formulaIdMap: globalFormulaIdMap,
-          conditionIdMap: globalConditionIdMap,
-          tableIdMap: globalTableIdMap,
-          variableCopyCache: globalVariableCopyCache,
-          // PERF: Pre-loaded data to skip per-variable DB queries
-          preloadedOriginalVar: fullVarsMap.get(templateVariableId),
-          preloadedOwnerNode: fullVarsMap.get(templateVariableId)?.nodeId ? ownerNodesMap.get(fullVarsMap.get(templateVariableId)!.nodeId) : undefined,
-          preloadedDuplicatedOwnerNode: { id: targetNodeId, parentId: _preloadedTreeNodesById?.get(targetNodeId)?.parentId ?? null },
-          preloadedDisplayNode: displayNodesMap.get(templateVariableId),
-          preloadedFormulas: fullVarsMap.get(templateVariableId)?.nodeId ? formulasByNodeId.get(fullVarsMap.get(templateVariableId)!.nodeId) : undefined,
-          existingNodeIds: allExistingNodeIds,
-          existingVariableIds: allExistingVarIds,
-          existingVariableKeys: allExistingVarKeys,
-          preloadedVarsByNodeId: allVarsByNodeId,
-          repeatContext: {
-            repeaterNodeId,
-            templateNodeId: targetNodeId.replace(`-${plannedSuffix}`, ''),
-            duplicatedFromNodeId: targetNodeId.replace(`-${plannedSuffix}`, ''),
-            scopeId,
-            mode: 'repeater'
-          }
-        }
-      );
-      
-      
-      // Ã¯Â¿Â½ AGRÃƒâ€°GER LES MAPS retournÃƒÂ©es par copyVariableWithCapacities dans les maps globales
-      if (variableResult.success) {
-        // Ajouter les formules copiÃƒÂ©es
-        if (variableResult.formulaIdMap) {
-          for (const [oldId, newId] of variableResult.formulaIdMap.entries()) {
-            globalFormulaIdMap.set(oldId, newId);
-          }
-        }
-        
-        // Ajouter les conditions copiÃƒÂ©es
-        if (variableResult.conditionIdMap) {
-          for (const [oldId, newId] of variableResult.conditionIdMap.entries()) {
-            globalConditionIdMap.set(oldId, newId);
-          }
-        }
-        
-        // Ajouter les tables copiÃƒÂ©es
-        if (variableResult.tableIdMap) {
-          for (const [oldId, newId] of variableResult.tableIdMap.entries()) {
-            globalTableIdMap.set(oldId, newId);
-          }
+    }));
+    // Aggregate chunk results into global maps
+    for (const { result } of results) {
+      if (!result || !result.success) continue;
+      if (result.formulaIdMap) {
+        for (const [oldId, newId] of result.formulaIdMap.entries()) {
+          globalFormulaIdMap.set(oldId, newId);
         }
       }
-      
-      // Ã°Å¸Å¸Â¢ ENREGISTRER le displayNode crÃƒÂ©ÃƒÂ© dans la map globale
-      if (variableResult.success && variableResult.displayNodeId) {
-        // DÃƒÂ©terminer l'ID original du displayNode (sans suffixe)
-        const originalDisplayNodeId = variableResult.displayNodeId.replace(/-\d+$/, '');
-        globalNodeIdMap.set(originalDisplayNodeId, variableResult.displayNodeId);
+      if (result.conditionIdMap) {
+        for (const [oldId, newId] of result.conditionIdMap.entries()) {
+          globalConditionIdMap.set(oldId, newId);
+        }
       }
-    } catch (varErr) {
-      console.error(`[repeat-executor] Erreur lors de la copie de la variable ${variablePlan.templateVariableId}:`, varErr instanceof Error ? varErr.message : String(varErr));
-      // Ne pas bloquer - continuer avec les autres variables
+      if (result.tableIdMap) {
+        for (const [oldId, newId] of result.tableIdMap.entries()) {
+          globalTableIdMap.set(oldId, newId);
+        }
+      }
+      if (result.displayNodeId) {
+        const originalDisplayNodeId = result.displayNodeId.replace(/-\d+$/, '');
+        globalNodeIdMap.set(originalDisplayNodeId, result.displayNodeId);
+      }
     }
   }
 

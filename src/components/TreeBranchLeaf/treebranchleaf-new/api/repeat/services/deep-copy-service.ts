@@ -993,6 +993,8 @@ export async function deepCopyNodeInternal(
   const copiedNodeIds = new Set(idMap.values());
   // PERF: Accumulate formula ref updates for batch flush (instead of per-formula linkFormulaToAllNodes)
   const pendingLinkedFormulaUpdates = new Map<string, Set<string>>();
+  // PERF R6: Accumulate capacity flags for merged final update
+  const pendingCapacityFlags = new Map<string, Record<string, any>>();
 
   for (const { oldId, newId, newParentId } of createdNodes) {
     const oldNode = byId.get(oldId)!;
@@ -1093,14 +1095,7 @@ export async function deepCopyNodeInternal(
       }
     }
     
-    // Ã°Å¸â€â€˜ CRITICAL: Ajouter tous les linkedFormulaIds en UNE SEULE OPÃƒâ€°RATION dans le BON ORDRE!
-    if (newLinkedFormulaIds.length > 0) {
-      try {
-        await addToNodeLinkedField(prisma, newId, 'linkedFormulaIds', newLinkedFormulaIds);
-      } catch (e) {
-        console.warn('[TreeBranchLeaf API] Warning updating linkedFormulaIds for node:', (e as Error).message);
-      }
-    }
+    // PERF R6: addToNodeLinkedField for linkedFormulaIds REMOVED (handled by merged final update)
 
     // PERF: Use pre-loaded conditions instead of per-node findMany
     const conditions = conditionsByNodeId.get(oldId) || [];
@@ -1201,49 +1196,24 @@ export async function deepCopyNodeInternal(
       }
     }
     
-    // Ã°Å¸â€â€˜ IMPORTANT: Ajouter tous les linkedConditionIds en UNE SEULE OPÃƒâ€°RATION dans le BON ORDRE!
-    if (newLinkedConditionIds.length > 0) {
-      try {
-        await addToNodeLinkedField(prisma, newId, 'linkedConditionIds', newLinkedConditionIds);
-      } catch (e) {
-        console.warn('[TreeBranchLeaf API] Warning updating linkedConditionIds for node:', (e as Error).message);
-      }
-    }
+    // PERF R6: addToNodeLinkedField for linkedConditionIds REMOVED (handled by merged final update)
 
-    //  FIX: Synchroniser les flags de capacités et les activeIds
-    // Problème rencontré: des formules/conditions peuvent exister en DB alors que hasFormula/hasCondition est faux
-    // => l'UI n'affiche pas l'onglet bleu / l'icône. Ici on aligne le nœud copié avec le contenu réellement copié.
+    // PERF R6: Store capacity flags in Map for merged final update (instead of separate DB update)
     const shouldHaveFormula = (oldNode.hasFormula === true) || formulas.length > 0;
     const shouldHaveCondition = (oldNode.hasCondition === true) || conditions.length > 0;
-
-    const updateCaps: {
-      hasFormula?: boolean;
-      formula_activeId?: string | null;
-      hasCondition?: boolean;
-      condition_activeId?: string | null;
-    } = {};
-
-    if (shouldHaveFormula) {
-      updateCaps.hasFormula = true;
-      const mappedActive = oldNode.formula_activeId ? (formulaIdMap.get(oldNode.formula_activeId) || null) : null;
-      updateCaps.formula_activeId = mappedActive || firstNewFormulaId || null;
-    }
-
-    if (shouldHaveCondition) {
-      updateCaps.hasCondition = true;
-      const mappedActive = oldNode.condition_activeId ? (conditionIdMap.get(oldNode.condition_activeId) || null) : null;
-      updateCaps.condition_activeId = mappedActive || firstNewConditionId || null;
-    }
-
-    if (Object.keys(updateCaps).length > 0) {
-      try {
-        await prisma.treeBranchLeafNode.update({
-          where: { id: newId },
-          data: updateCaps
-        });
-      } catch (e) {
-        console.warn('[DEEP-COPY]  Erreur mise  jour flags/activeIds:', (e as Error).message);
+    if (shouldHaveFormula || shouldHaveCondition) {
+      const caps: Record<string, any> = {};
+      if (shouldHaveFormula) {
+        caps.hasFormula = true;
+        const mappedActive = oldNode.formula_activeId ? (formulaIdMap.get(oldNode.formula_activeId) || null) : null;
+        caps.formula_activeId = mappedActive || firstNewFormulaId || null;
       }
+      if (shouldHaveCondition) {
+        caps.hasCondition = true;
+        const mappedActive = oldNode.condition_activeId ? (conditionIdMap.get(oldNode.condition_activeId) || null) : null;
+        caps.condition_activeId = mappedActive || firstNewConditionId || null;
+      }
+      pendingCapacityFlags.set(newId, { ...(pendingCapacityFlags.get(newId) || {}), ...caps });
     }
 
     // Ã°Å¸â€Â´ COPIE DES TABLES: Chercher les tables de 3 faÃƒÂ§ons:
@@ -1480,35 +1450,20 @@ export async function deepCopyNodeInternal(
       }
     }
     
-    // Ã°Å¸â€â€˜ IMPORTANT: Ajouter tous les linkedTableIds en UNE SEULE OPÃƒâ€°RATION dans le BON ORDRE!
-    if (newLinkedTableIds.length > 0) {
-      try {
-        await addToNodeLinkedField(prisma, newId, 'linkedTableIds', newLinkedTableIds);
-      } catch (e) {
-        console.warn('[TreeBranchLeaf API] Warning updating linkedTableIds for node:', (e as Error).message);
-      }
-    }
+    // PERF R6: addToNodeLinkedField for linkedTableIds REMOVED (handled by merged final update)
 
-    // FIX: Synchroniser hasTable + table_activeId (comme formule/condition)
-    // Problème rencontré: tables copiées en DB mais table_activeId reste NULL => lookup retombe à 0.
+    // PERF R6: Store table capacity flags in Map for merged final update
     const shouldHaveTable = (oldNode.hasTable === true) || allTablesToCopy.length > 0;
     if (shouldHaveTable) {
       const mappedActiveTableId = oldNode.table_activeId
         ? (tableIdMap.get(oldNode.table_activeId) || null)
         : null;
       const firstNewTableId = allTablesToCopy.length > 0 ? (tableIdMap.get(allTablesToCopy[0].id) || null) : null;
-
-      try {
-        await prisma.treeBranchLeafNode.update({
-          where: { id: newId },
-          data: {
-            hasTable: true,
-            table_activeId: mappedActiveTableId || firstNewTableId || (newLinkedTableIds[0] ?? null)
-          }
-        });
-      } catch (e) {
-        console.warn('[DEEP-COPY] Erreur mise à jour hasTable/table_activeId:', (e as Error).message);
-      }
+      pendingCapacityFlags.set(newId, {
+        ...(pendingCapacityFlags.get(newId) || {}),
+        hasTable: true,
+        table_activeId: mappedActiveTableId || firstNewTableId || (newLinkedTableIds[0] ?? null)
+      });
     }
 
     // Ã°Å¸â€ â€¢ COPIE DES SELECT CONFIGS (TreeBranchLeafSelectConfig)
@@ -1780,29 +1735,27 @@ export async function deepCopyNodeInternal(
       }
     }
 
-    if (
+    // PERF R6: MERGED UPDATE - linkedIds SET + capacity flags (saves ~5 DB queries per node)
+    const capsData = pendingCapacityFlags.get(newNodeId) || {};
+    const hasSomethingToUpdate = (
       newLinkedFormulaIds.length > 0 ||
       newLinkedConditionIds.length > 0 ||
-      newLinkedTableIds.length > 0
-    ) {
+      newLinkedTableIds.length > 0 ||
+      Object.keys(capsData).length > 0
+    );
+    if (hasSomethingToUpdate) {
       try {
-        // Ã¢Å¡Â Ã¯Â¸Â CRITIQUE: Ne PAS mettre ÃƒÂ  jour linkedVariableIds !
-        // Il est copiÃƒÂ© automatiquement et doit rester intact
         await prisma.treeBranchLeafNode.update({
           where: { id: newNodeId },
           data: {
             linkedFormulaIds: newLinkedFormulaIds.length > 0 ? { set: newLinkedFormulaIds } : { set: [] },
             linkedConditionIds: newLinkedConditionIds.length > 0 ? { set: newLinkedConditionIds } : { set: [] },
-            linkedTableIds: newLinkedTableIds.length > 0 ? { set: newLinkedTableIds } : { set: [] }
-            // linkedVariableIds: SUPPRIMÃƒâ€° - ne doit PAS ÃƒÂªtre mis ÃƒÂ  jour !
+            linkedTableIds: newLinkedTableIds.length > 0 ? { set: newLinkedTableIds } : { set: [] },
+            ...capsData
           }
         });
-        
-        // Ã¢Å¡Â Ã¯Â¸Â SUPPRIMÃƒâ€°: Ne PAS mettre ÃƒÂ  jour linkedVariableIds aprÃƒÂ¨s la copie !
-        // Le linkedVariableIds est copiÃƒÂ© automatiquement depuis le template original
-        // et doit rester INTACT (contenir seulement l'ID original, pas les IDs copiÃƒÂ©s)
       } catch (e) {
-        console.warn('[DEEP-COPY] Erreur lors du UPDATE des linked***', (e as Error).message);
+        console.warn('[DEEP-COPY] Erreur merged update:', (e as Error).message);
       }
     }
   }
