@@ -996,7 +996,8 @@ export async function deepCopyNodeInternal(
   // PERF R6: Accumulate capacity flags for merged final update
   const pendingCapacityFlags = new Map<string, Record<string, any>>();
 
-  for (const { oldId, newId, newParentId } of createdNodes) {
+  // PERF R7: Process all nodes' capacities in PARALLEL (independent nodes, shared Maps safe in single-threaded JS)
+  await Promise.all(createdNodes.map(async ({ oldId, newId, newParentId }) => {
     const oldNode = byId.get(oldId)!;
     
     // Ã°Å¸â€â€˜ CRITICAL: RÃƒÂ©cupÃƒÂ©rer l'ordre de linkedFormulaIds de l'original
@@ -1325,7 +1326,7 @@ export async function deepCopyNodeInternal(
           `[DEEP-COPY] ⚠️ Cannot create table "${t.name}": owner node "${tableOwnerNodeId}" doesn't exist. ` +
           `Original nodeId: "${t.nodeId}", oldId: "${oldId}", newId: "${newId}"`
         );
-        return; // Skip this table creation
+        continue; // PERF R7: Skip this table only (was return which would exit entire function)
       }
       
       await prisma.treeBranchLeafNodeTable.create({
@@ -1604,7 +1605,7 @@ export async function deepCopyNodeInternal(
         }
       }
     }
-  }
+  }));
 
   // PERF: Batch flush all accumulated condition linkedField updates (saves ~30 queries)
   if (pendingLinkedConditionUpdates.size > 0) {
@@ -1632,6 +1633,8 @@ export async function deepCopyNodeInternal(
   }
 
   const variableCopyCache = new Map<string, string>();
+  // PERF R7: Collect merged updates for batch $transaction
+  const pendingFinalUpdateOps: Prisma.PrismaPromise<unknown>[] = [];
   for (const oldNodeId of toCopy) {
     const newNodeId = idMap.get(oldNodeId)!;
     const oldNode = byId.get(oldNodeId)!;
@@ -1735,7 +1738,7 @@ export async function deepCopyNodeInternal(
       }
     }
 
-    // PERF R6: MERGED UPDATE - linkedIds SET + capacity flags (saves ~5 DB queries per node)
+    // PERF R7: Collect merged update for batch $transaction (saves N-1 round trips)
     const capsData = pendingCapacityFlags.get(newNodeId) || {};
     const hasSomethingToUpdate = (
       newLinkedFormulaIds.length > 0 ||
@@ -1744,8 +1747,8 @@ export async function deepCopyNodeInternal(
       Object.keys(capsData).length > 0
     );
     if (hasSomethingToUpdate) {
-      try {
-        await prisma.treeBranchLeafNode.update({
+      pendingFinalUpdateOps.push(
+        prisma.treeBranchLeafNode.update({
           where: { id: newNodeId },
           data: {
             linkedFormulaIds: newLinkedFormulaIds.length > 0 ? { set: newLinkedFormulaIds } : { set: [] },
@@ -1753,10 +1756,17 @@ export async function deepCopyNodeInternal(
             linkedTableIds: newLinkedTableIds.length > 0 ? { set: newLinkedTableIds } : { set: [] },
             ...capsData
           }
-        });
-      } catch (e) {
-        console.warn('[DEEP-COPY] Erreur merged update:', (e as Error).message);
-      }
+        })
+      );
+    }
+  }
+
+  // PERF R7: Execute ALL merged updates in single $transaction (1 round-trip instead of N)
+  if (pendingFinalUpdateOps.length > 0) {
+    try {
+      await prisma.$transaction(pendingFinalUpdateOps);
+    } catch (e) {
+      console.warn('[DEEP-COPY] PERF R7: Batch merged update error:', (e as Error).message);
     }
   }
 
