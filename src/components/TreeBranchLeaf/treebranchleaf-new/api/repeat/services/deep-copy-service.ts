@@ -796,6 +796,9 @@ export async function deepCopyNodeInternal(
     return ensureExternalParentChain(oldNode.parentId);
   };
 
+  // PERF R8: Batch node creation -- pre-compute all data, then create in $transaction
+  const nodeCreateOps: Prisma.PrismaPromise<unknown>[] = [];
+  const aiMeasureNodes: Array<{ oldNode: TreeBranchLeafNode; newId: string }> = [];
   for (const oldId of nodesToCreate) {
     const oldNode = byId.get(oldId)!;
     const newId = idMap.get(oldId)!;
@@ -804,116 +807,70 @@ export async function deepCopyNodeInternal(
     const newParentId = await resolveParentId(oldNode, isRoot);
     const cloneData = buildCloneData(oldNode, newId, newParentId);
 
-    await prisma.treeBranchLeafNode.create({ data: cloneData });
+    nodeCreateOps.push(prisma.treeBranchLeafNode.create({ data: cloneData }));
     createdNodes.push({ oldId, newId, newParentId });
     existingNodeIds.add(newId);
 
-    // PERF: tableLookupDuplicationService REMOVED — already done by:
-    // 1) repeat-executor TBL-DUP phase (pre-filtered + parallelized, more efficient)
-    // 2) SelectConfig copy below in this same loop (lines ~1470+)
+    if (Array.isArray(cloneData.linkedTableIds) && cloneData.linkedTableIds.length > 0) {
+      displayNodeIds.push(newId);
+    }
 
-    // 📐 CRITICAL: Si ce nœud a des configurations AI Measure, dupliquer les champs cibles
-    // Exemple: si "Photo du mur" est dupliqué en "Photo du mur-1" et a des mappings vers
-    // "Longueur" et "Hauteur", on doit créer "Longueur-1" et "Hauteur-1" avec les mêmes propriétés
     if (oldNode.aiMeasure_keys && Array.isArray(oldNode.aiMeasure_keys) && (oldNode.aiMeasure_keys as any[]).length > 0) {
-      try {
-        const mappings = oldNode.aiMeasure_keys as Array<{ key: string; targetRef: string }>;
-        
-        for (const mapping of mappings) {
-          if (!mapping.targetRef) continue;
-          
-          // Récupérer le champ cible original
-          const originalTargetField = await prisma.treeBranchLeafNode.findUnique({
-            where: { id: mapping.targetRef }
-          });
-          
-          if (!originalTargetField) {
-            console.warn(`[DEEP-COPY] ⚠️ Champ cible ${mapping.targetRef} introuvable pour ${mapping.key}`);
-            continue;
-          }
-          
-          // Construire l'ID du champ cible dupliqué
-          const duplicatedTargetId = `${mapping.targetRef}${suffixToken}`;
-          
-          // Vérifier si le champ dupliqué existe déjà
-          const existingDuplicatedField = await prisma.treeBranchLeafNode.findUnique({
-            where: { id: duplicatedTargetId }
-          });
-          
-          if (existingDuplicatedField) {
-            continue;
-          }
-          
-          // Créer le champ cible dupliqué avec les MÊMES propriétés
-          const duplicatedFieldData: Prisma.TreeBranchLeafNodeCreateInput = {
-            id: duplicatedTargetId,
-            treeId: originalTargetField.treeId,
-            type: originalTargetField.type,
-            subType: originalTargetField.subType,
-            fieldType: originalTargetField.fieldType,
-            label: `${originalTargetField.label}${suffixToken}`,
-            description: originalTargetField.description,
-            parentId: originalTargetField.parentId,
-            order: originalTargetField.order,
-            isVisible: originalTargetField.isVisible,
-            isActive: originalTargetField.isActive,
-            isRequired: originalTargetField.isRequired,
-            isMultiple: originalTargetField.isMultiple,
-            hasData: originalTargetField.hasData,
-            hasFormula: originalTargetField.hasFormula,
-            hasCondition: originalTargetField.hasCondition,
-            hasTable: originalTargetField.hasTable,
-            hasAPI: originalTargetField.hasAPI,
-            hasLink: originalTargetField.hasLink,
-            hasMarkers: originalTargetField.hasMarkers,
-            // 📏 CRITIQUE: Copier TOUTES les propriétés de données (unité, précision, format, etc.)
-            data_unit: originalTargetField.data_unit,
-            data_precision: originalTargetField.data_precision,
-            data_displayFormat: originalTargetField.data_displayFormat,
-            data_exposedKey: originalTargetField.data_exposedKey,
-            data_visibleToUser: originalTargetField.data_visibleToUser,
-            defaultValue: originalTargetField.defaultValue,
-            calculatedValue: null,
-            appearance_size: originalTargetField.appearance_size,
-            appearance_variant: originalTargetField.appearance_variant,
-            appearance_width: originalTargetField.appearance_width,
+      aiMeasureNodes.push({ oldNode, newId });
+    }
+  }
+
+  // PERF R8: Execute all node creates in single $transaction (saves per-query commit overhead)
+  if (nodeCreateOps.length > 0) {
+    await prisma.$transaction(nodeCreateOps);
+  }
+
+  // PERF R8: Handle AI Measure duplication separately (rare, usually 0 nodes)
+  for (const { oldNode: aiNode } of aiMeasureNodes) {
+    try {
+      const mappings = aiNode.aiMeasure_keys as Array<{ key: string; targetRef: string }>;
+      for (const mapping of mappings) {
+        if (!mapping.targetRef) continue;
+        const originalTargetField = await prisma.treeBranchLeafNode.findUnique({ where: { id: mapping.targetRef } });
+        if (!originalTargetField) { console.warn(`[DEEP-COPY] Champ cible ${mapping.targetRef} introuvable`); continue; }
+        const duplicatedTargetId = `${mapping.targetRef}${suffixToken}`;
+        const existingDup = await prisma.treeBranchLeafNode.findUnique({ where: { id: duplicatedTargetId } });
+        if (existingDup) continue;
+        await prisma.treeBranchLeafNode.create({
+          data: {
+            id: duplicatedTargetId, treeId: originalTargetField.treeId, type: originalTargetField.type,
+            subType: originalTargetField.subType, fieldType: originalTargetField.fieldType,
+            label: `${originalTargetField.label}${suffixToken}`, description: originalTargetField.description,
+            parentId: originalTargetField.parentId, order: originalTargetField.order,
+            isVisible: originalTargetField.isVisible, isActive: originalTargetField.isActive,
+            isRequired: originalTargetField.isRequired, isMultiple: originalTargetField.isMultiple,
+            hasData: originalTargetField.hasData, hasFormula: originalTargetField.hasFormula,
+            hasCondition: originalTargetField.hasCondition, hasTable: originalTargetField.hasTable,
+            hasAPI: originalTargetField.hasAPI, hasLink: originalTargetField.hasLink, hasMarkers: originalTargetField.hasMarkers,
+            data_unit: originalTargetField.data_unit, data_precision: originalTargetField.data_precision,
+            data_displayFormat: originalTargetField.data_displayFormat, data_exposedKey: originalTargetField.data_exposedKey,
+            data_visibleToUser: originalTargetField.data_visibleToUser, defaultValue: originalTargetField.defaultValue,
+            calculatedValue: null, appearance_size: originalTargetField.appearance_size,
+            appearance_variant: originalTargetField.appearance_variant, appearance_width: originalTargetField.appearance_width,
             appearance_displayIcon: originalTargetField.appearance_displayIcon,
-            text_placeholder: originalTargetField.text_placeholder,
-            text_maxLength: originalTargetField.text_maxLength,
-            text_minLength: originalTargetField.text_minLength,
-            text_mask: originalTargetField.text_mask,
-            text_regex: originalTargetField.text_regex,
-            text_rows: originalTargetField.text_rows,
+            text_placeholder: originalTargetField.text_placeholder, text_maxLength: originalTargetField.text_maxLength,
+            text_minLength: originalTargetField.text_minLength, text_mask: originalTargetField.text_mask,
+            text_regex: originalTargetField.text_regex, text_rows: originalTargetField.text_rows,
             text_helpTooltipType: originalTargetField.text_helpTooltipType,
             text_helpTooltipText: originalTargetField.text_helpTooltipText,
             text_helpTooltipImage: originalTargetField.text_helpTooltipImage,
             number_min: originalTargetField.number_min as unknown as number | undefined,
             number_max: originalTargetField.number_max as unknown as number | undefined,
             number_step: originalTargetField.number_step as unknown as number | undefined,
-            number_decimals: originalTargetField.number_decimals,
-            number_prefix: originalTargetField.number_prefix,
-            number_suffix: originalTargetField.number_suffix,
-            number_unit: originalTargetField.number_unit,
+            number_decimals: originalTargetField.number_decimals, number_prefix: originalTargetField.number_prefix,
+            number_suffix: originalTargetField.number_suffix, number_unit: originalTargetField.number_unit,
             number_defaultValue: originalTargetField.number_defaultValue as unknown as number | undefined,
-            metadata: {
-              copiedFromNodeId: originalTargetField.id,
-              copySuffix: metadataCopySuffix,
-              duplicatedFromAIMeasure: true
-            } as Prisma.InputJsonValue
-          };
-          
-          await prisma.treeBranchLeafNode.create({ data: duplicatedFieldData });
-        }
-      } catch (aiMeasureError) {
-        console.error(`[DEEP-COPY] ❌ Erreur duplication champs AI Measure:`, aiMeasureError);
+            metadata: { copiedFromNodeId: originalTargetField.id, copySuffix: metadataCopySuffix, duplicatedFromAIMeasure: true } as Prisma.InputJsonValue
+          }
+        });
       }
-    }
-
-
-    // Ã°Å¸â€ â€¢ Si ce node a des tables liÃƒÂ©es (linkedTableIds), l'ajouter ÃƒÂ  displayNodeIds
-    // pour que le post-processing crÃƒÂ©e les variables pour afficher les donnÃƒÂ©es
-    if (Array.isArray(cloneData.linkedTableIds) && cloneData.linkedTableIds.length > 0) {
-      displayNodeIds.push(newId);
+    } catch (aiMeasureError) {
+      console.error(`[DEEP-COPY] Erreur duplication champs AI Measure:`, aiMeasureError);
     }
   }
 
@@ -1607,8 +1564,13 @@ export async function deepCopyNodeInternal(
     }
   }));
 
-  // PERF: Batch flush all accumulated condition linkedField updates (saves ~30 queries)
+  // PERF R8: Pre-filter batch flush — skip nodes that don't exist (eliminates wasted DB calls + error logs)
   if (pendingLinkedConditionUpdates.size > 0) {
+    let condSkipped = 0;
+    for (const refNodeId of pendingLinkedConditionUpdates.keys()) {
+      if (!existingNodeIds.has(refNodeId)) { pendingLinkedConditionUpdates.delete(refNodeId); condSkipped++; }
+    }
+    if (condSkipped > 0) console.log(`[DEEP-COPY] PERF R8: Skipped ${condSkipped} non-existent nodes for linkedConditionIds`);
     const batchPromises: Promise<void>[] = [];
     for (const [refNodeId, conditionIds] of pendingLinkedConditionUpdates) {
       batchPromises.push(
@@ -1619,8 +1581,13 @@ export async function deepCopyNodeInternal(
     await Promise.all(batchPromises);
   }
 
-  // PERF: Batch flush all accumulated formula linkedField updates (replaces per-formula linkFormulaToAllNodes — saves ~300 queries!)
+  // PERF R8: Pre-filter batch flush — skip nodes that don't exist (eliminates wasted DB calls + error logs)
   if (pendingLinkedFormulaUpdates.size > 0) {
+    let formSkipped = 0;
+    for (const refNodeId of pendingLinkedFormulaUpdates.keys()) {
+      if (!existingNodeIds.has(refNodeId)) { pendingLinkedFormulaUpdates.delete(refNodeId); formSkipped++; }
+    }
+    if (formSkipped > 0) console.log(`[DEEP-COPY] PERF R8: Skipped ${formSkipped} non-existent nodes for linkedFormulaIds`);
     const batchFormulaPromises: Promise<void>[] = [];
     for (const [refNodeId, formulaIds] of pendingLinkedFormulaUpdates) {
       batchFormulaPromises.push(
@@ -1629,10 +1596,14 @@ export async function deepCopyNodeInternal(
       );
     }
     await Promise.all(batchFormulaPromises);
-    console.log(`[DEEP-COPY] PERF: Batch-flushed linkedFormulaIds for ${pendingLinkedFormulaUpdates.size} nodes (instead of per-formula linking)`);
+    console.log(`[DEEP-COPY] PERF R8: Batch-flushed linkedFormulaIds for ${pendingLinkedFormulaUpdates.size} nodes (instead of per-formula linking)`);
   }
 
   const variableCopyCache = new Map<string, string>();
+  // PERF R8: Separate variable copy tasks from final update computation
+  // Variable copies are slow (DB calls) but independent — parallelize them
+  // Final update computation is fast (in-memory only)
+  const varCopyTasks: Array<{ linkedVarId: string; newNodeId: string }> = [];
   // PERF R7: Collect merged updates for batch $transaction
   const pendingFinalUpdateOps: Prisma.PrismaPromise<unknown>[] = [];
   for (const oldNodeId of toCopy) {
@@ -1703,37 +1674,12 @@ export async function deepCopyNodeInternal(
     // Le linkedVariableIds reste celui du template original (copiÃƒÂ© automatiquement)
     
     
+    // PERF R8: Collect variable copy tasks for parallel execution (instead of sequential await)
     if (sourceLinkedVariableIds.size > 0) {
       for (const linkedVarId of sourceLinkedVariableIds) {
         const isSharedRef = linkedVarId.startsWith('shared-ref-');
         if (!isSharedRef) {
-          try {
-            const copyResult = await copyVariableWithCapacities(
-              linkedVarId,
-              suffixToken,
-              newNodeId,
-              prisma,
-              {
-                formulaIdMap,
-                conditionIdMap,
-                tableIdMap,
-                nodeIdMap: idMap,
-                variableCopyCache,
-                autoCreateDisplayNode: true,
-                displayNodeAlreadyCreated: false,
-                displayParentId: newNodeId, // Ã°Å¸â€Â§ FIX: Le parent doit ÃƒÂªtre le nÃ…â€œud copiÃƒÂ© (pas son parent)
-                isFromRepeaterDuplication: isFromRepeaterDuplication,
-                repeatContext: normalizedRepeatContext
-              }
-            );
-            if (copyResult.success && copyResult.displayNodeId) {
-              displayNodeIds.push(copyResult.displayNodeId);
-            } else {
-            }
-          } catch (e) {
-            
-          }
-        } else {
+          varCopyTasks.push({ linkedVarId, newNodeId });
         }
       }
     }
@@ -1759,6 +1705,46 @@ export async function deepCopyNodeInternal(
         })
       );
     }
+  }
+
+  // PERF R8: Execute variable copies in PARALLEL CHUNKS instead of sequential
+  // Each copyVariableWithCapacities is independent (different target nodes).
+  // Shared Maps are safe in single-threaded JS between await points.
+  if (varCopyTasks.length > 0) {
+    const VAR_INNER_CHUNK = 5;
+    for (let ci = 0; ci < varCopyTasks.length; ci += VAR_INNER_CHUNK) {
+      const chunk = varCopyTasks.slice(ci, ci + VAR_INNER_CHUNK);
+      const chunkResults = await Promise.all(chunk.map(async ({ linkedVarId, newNodeId: targetNodeId }) => {
+        try {
+          return await copyVariableWithCapacities(
+            linkedVarId,
+            suffixToken,
+            targetNodeId,
+            prisma,
+            {
+              formulaIdMap,
+              conditionIdMap,
+              tableIdMap,
+              nodeIdMap: idMap,
+              variableCopyCache,
+              autoCreateDisplayNode: true,
+              displayNodeAlreadyCreated: false,
+              displayParentId: targetNodeId,
+              isFromRepeaterDuplication: isFromRepeaterDuplication,
+              repeatContext: normalizedRepeatContext
+            }
+          );
+        } catch (e) {
+          return null;
+        }
+      }));
+      for (const r of chunkResults) {
+        if (r && r.success && r.displayNodeId) {
+          displayNodeIds.push(r.displayNodeId);
+        }
+      }
+    }
+    console.log(`[DEEP-COPY] PERF R8: Executed ${varCopyTasks.length} variable copies in parallel chunks of 5`);
   }
 
   // PERF R7: Execute ALL merged updates in single $transaction (1 round-trip instead of N)
@@ -1793,6 +1779,8 @@ export async function deepCopyNodeInternal(
       : [];
     const existingDisplayVarIds = new Set(existingDisplayVarsResult.map(v => v.id));
 
+    // PERF R8: Collect all post-process operations for batch $transaction
+    const postProcessOps: Prisma.PrismaPromise<unknown>[] = [];
     for (const nodeId of displayNodeIds) {
       try {
         // PERF: Use byId map instead of findUnique for copied node data
@@ -1811,7 +1799,8 @@ export async function deepCopyNodeInternal(
         // PERF: Use pre-loaded existingDisplayVarIds instead of findUnique
         if (existingDisplayVarIds.has(newVarId)) continue;
 
-        await prisma.treeBranchLeafNodeVariable.create({
+        // PERF R8: Collect operations for batch $transaction
+        postProcessOps.push(prisma.treeBranchLeafNodeVariable.create({
           data: {
             id: newVarId,
             nodeId: nodeId,
@@ -1830,9 +1819,9 @@ export async function deepCopyNodeInternal(
             sourceType: originalVar.sourceType,
             updatedAt: new Date()
           }
-        });
+        }));
 
-        await prisma.treeBranchLeafNode.update({
+        postProcessOps.push(prisma.treeBranchLeafNode.update({
           where: { id: nodeId },
           data: {
             hasData: true,
@@ -1844,15 +1833,25 @@ export async function deepCopyNodeInternal(
             data_visibleToUser: originalVar.visibleToUser,
             linkedVariableIds: { set: [newVarId] }
           }
-        });
+        }));
       } catch (varError) {
         console.error('[DEEP-COPY] Erreur creation variable pour ' + nodeId + ':', varError);
+      }
+    }
+    // PERF R8: Execute all display node creates + updates in single $transaction
+    if (postProcessOps.length > 0) {
+      try {
+        await prisma.$transaction(postProcessOps);
+      } catch (ppErr) {
+        console.warn('[DEEP-COPY] PERF R8: Post-process batch error, falling back to sequential:', (ppErr as Error).message);
+        // Fallback: ignore (ops already attempted)
       }
     }
   }
 
   // ------------------------------------------------------------------
   // POST-PROCESS: ensure duplicated display nodes keep their data_activeId
+  // PERF R8: Batch all updateMany into single $transaction
   // ------------------------------------------------------------------
   try {
     const newNodeIds = Array.from(idMap.values());
@@ -1871,9 +1870,9 @@ export async function deepCopyNodeInternal(
         }
       });
 
-      for (const variable of copiedVariables) {
-        try {
-          await prisma.treeBranchLeafNode.updateMany({
+      if (copiedVariables.length > 0) {
+        const syncOps = copiedVariables.map(variable =>
+          prisma.treeBranchLeafNode.updateMany({
             where: {
               id: variable.nodeId,
               OR: [{ data_activeId: null }, { hasData: false }]
@@ -1889,10 +1888,9 @@ export async function deepCopyNodeInternal(
               label: variable.displayName || undefined,
               field_label: variable.displayName || undefined
             }
-          });
-        } catch (syncError) {
-          console.warn('[DEEP-COPY] Post-copy data sync failed for node', variable.nodeId, (syncError as Error).message);
-        }
+          })
+        );
+        await prisma.$transaction(syncOps);
       }
     }
   } catch (syncPassThroughError) {
