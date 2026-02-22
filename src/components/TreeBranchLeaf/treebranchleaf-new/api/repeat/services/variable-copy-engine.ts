@@ -107,6 +107,25 @@ export interface CopyVariableOptions {
    * repeat-blueprint-writer.
    */
   repeatContext?: DuplicationContext;
+  // ═══════════════════════════════════════════════════════════════════════
+  // 🚀 PERF: Pre-loaded data to avoid per-variable DB queries
+  // ═══════════════════════════════════════════════════════════════════════
+  /** Pre-loaded original variable record (skips findUnique) */
+  preloadedOriginalVar?: any;
+  /** Pre-loaded owner node record (skips findUnique for originalOwnerNode) */
+  preloadedOwnerNode?: any;
+  /** Pre-loaded duplicated owner node record (skips findUnique for duplicatedOwnerNode) */
+  preloadedDuplicatedOwnerNode?: any;
+  /** Pre-loaded display node record (skips findFirst + findMany searches) */
+  preloadedDisplayNode?: any | null;
+  /** Pre-loaded formulas for the source node (skips findMany) */
+  preloadedFormulas?: any[];
+  /** Set of existing node IDs for quick existence checks */
+  existingNodeIds?: Set<string>;
+  /** Set of existing variable IDs for collision checks */
+  existingVariableIds?: Set<string>;
+  /** Set of existing variable exposedKeys for collision checks */
+  existingVariableKeys?: Set<string>;
 }
 
 
@@ -157,6 +176,15 @@ export async function copyVariableWithCapacities(
     displayParentId,
     isFromRepeaterDuplication = false,
     repeatContext,
+    // PERF: Pre-loaded data to skip per-variable DB queries
+    preloadedOriginalVar,
+    preloadedOwnerNode,
+    preloadedDuplicatedOwnerNode,
+    preloadedDisplayNode,
+    preloadedFormulas,
+    existingNodeIds,
+    existingVariableIds,
+    existingVariableKeys,
   // displayNodeAlreadyCreated is not used anymore in this function; keep options API stable without reassigning
   } = options;
 
@@ -169,30 +197,22 @@ export async function copyVariableWithCapacities(
     const cacheKey = `${originalVarId}|${newNodeId}`;
     if (variableCopyCache.has(cacheKey)) {
       const cachedId = variableCopyCache.get(cacheKey)!;
-      // Variable en cache, réutilisation silencieuse
-      
-      // Récupérer les infos depuis la base pour retourner un résultat complet
-      const cached = await prisma.treeBranchLeafNodeVariable.findUnique({
-        where: { id: cachedId }
-      });
-      
-      if (cached) {
-        const parsed = parseSourceRef(cached.sourceRef);
-        return {
-          variableId: cached.id,
-          exposedKey: cached.exposedKey,
-          capacityType: parsed?.type || null,
-          sourceRef: cached.sourceRef,
-          success: true,
-          displayNodeId: undefined
-        };
-      }
+      // PERF: Return from cache without DB query — trust the cache
+      return {
+        variableId: cachedId,
+        exposedKey: '',
+        capacityType: null,
+        sourceRef: null,
+        success: true,
+        displayNodeId: undefined
+      };
     }
 
     // ═══════════════════════════════════════════════════════════════════════
     // 📥 ÉTAPE 2 : Récupérer la variable originale
+    // PERF: Use pre-loaded data if available (saves 1 findUnique per variable)
     // ═══════════════════════════════════════════════════════════════════════
-    const originalVar = await prisma.treeBranchLeafNodeVariable.findUnique({
+    const originalVar = preloadedOriginalVar ?? await prisma.treeBranchLeafNodeVariable.findUnique({
       where: { id: originalVarId }
     });
 
@@ -462,7 +482,8 @@ export async function copyVariableWithCapacities(
           }
         };
 
-        const originalOwnerNode = await prisma.treeBranchLeafNode.findUnique({
+        // PERF: Use pre-loaded owner node if available (saves 1 findUnique per variable)
+        const originalOwnerNode = preloadedOwnerNode ?? await prisma.treeBranchLeafNode.findUnique({
           where: { id: originalVar.nodeId! },
           select: {
             id: true,
@@ -580,7 +601,8 @@ export async function copyVariableWithCapacities(
           return withoutRepeater ?? nodes[0];
         };
 
-        let originalDisplayNode = await prisma.treeBranchLeafNode.findFirst({
+        // PERF: Use pre-loaded display node if available (saves 1-3 findUnique/findMany per variable)
+        let originalDisplayNode = preloadedDisplayNode !== undefined ? preloadedDisplayNode : await prisma.treeBranchLeafNode.findFirst({
           where: {
             metadata: {
               path: ['fromVariableId'],
@@ -590,7 +612,8 @@ export async function copyVariableWithCapacities(
           select: displayNodeSelect
         });
 
-        if (!originalDisplayNode) {
+        // PERF: Skip fallback display node search if pre-loaded data was provided
+        if (!originalDisplayNode && preloadedDisplayNode === undefined) {
           // 🔍 IMPORTANT: Pour les variables LIÉES, on cherche le display node
           // BUT on EXCLUT tous les nœuds template eux-mêmes (les nœuds qui LIENT la variable)
           // Sinon on récupère le nœud template comme "display node" ce qui est faux!
@@ -651,7 +674,8 @@ export async function copyVariableWithCapacities(
         // 🔑 CRITIQUE: Charger le nœud DUPLIQUÉ pour obtenir son parentId
         // Le nœud dupliqué peut avoir un parentId différent du nœud original
         // (ex: parent suffixé lors d'une duplication de repeater)
-        const duplicatedOwnerNode = await prisma.treeBranchLeafNode.findUnique({
+        // PERF: Use pre-loaded duplicated owner node if available (saves 1 findUnique per variable)
+        const duplicatedOwnerNode = preloadedDuplicatedOwnerNode ?? await prisma.treeBranchLeafNode.findUnique({
           where: { id: newNodeId },
           select: {
             id: true,
@@ -707,16 +731,12 @@ export async function copyVariableWithCapacities(
             ?? null;
           
           // Vérifier que le parent existe
-          if (resolvedParentId && prisma) {
-            try {
-              const parentExists = await prisma.treeBranchLeafNode.findUnique({
-                where: { id: resolvedParentId },
-                select: { id: true }
-              });
-              if (!parentExists) {
-                resolvedParentId = duplicatedOwnerNode.parentId ?? null;
-              }
-            } catch (parentCheckErr) {
+          // PERF: Use existingNodeIds set if available (saves 1 findUnique per variable)
+          if (resolvedParentId) {
+            const parentKnownToExist = existingNodeIds
+              ? existingNodeIds.has(resolvedParentId)
+              : await prisma.treeBranchLeafNode.findUnique({ where: { id: resolvedParentId }, select: { id: true } }).then(r => !!r).catch(() => false);
+            if (!parentKnownToExist) {
               resolvedParentId = duplicatedOwnerNode.parentId ?? null;
             }
           } else if (!resolvedParentId) {
@@ -1022,7 +1042,8 @@ export async function copyVariableWithCapacities(
             // - la variable a une capacité formule, OU
             // - on est sur un display node (subType='display') qui porte déjà une formule côté source.
             if (shouldCopyFormulaCapability) {
-              const originalFormulas = await prisma.treeBranchLeafNodeFormula.findMany({
+              // PERF: Use pre-loaded formulas if available (saves 1 findMany per variable)
+              const originalFormulas = preloadedFormulas ?? await prisma.treeBranchLeafNodeFormula.findMany({
                 where: { nodeId: tableSourceNode.id }
               });
               
@@ -1199,9 +1220,12 @@ export async function copyVariableWithCapacities(
     }
     
     // Éviter les collisions d'ID
+    // PERF: Use pre-loaded sets if available (saves 2 findUnique per variable)
     try {
-      const existingById = await prisma.treeBranchLeafNodeVariable.findUnique({ where: { id: newVarId } });
-      if (existingById) {
+      const idCollision = existingVariableIds
+        ? existingVariableIds.has(newVarId)
+        : await prisma.treeBranchLeafNodeVariable.findUnique({ where: { id: newVarId } }).then(r => !!r).catch(() => false);
+      if (idCollision) {
         const tail = (finalNodeId || newNodeId || '').slice(-6) || `${Date.now()}`;
         newVarId = `${originalVarId}-${suffix}-${tail}`;
       }
@@ -1210,8 +1234,10 @@ export async function copyVariableWithCapacities(
     }
 
     try {
-      const existingByKey = await prisma.treeBranchLeafNodeVariable.findUnique({ where: { exposedKey: newExposedKey } });
-      if (existingByKey) {
+      const keyCollision = existingVariableKeys
+        ? existingVariableKeys.has(newExposedKey)
+        : await prisma.treeBranchLeafNodeVariable.findUnique({ where: { exposedKey: newExposedKey } }).then(r => !!r).catch(() => false);
+      if (keyCollision) {
         const tail = (finalNodeId || newNodeId || '').slice(-6) || `${Date.now()}`;
         newExposedKey = `${originalVar.exposedKey}-${suffix}-${tail}`;
       }
@@ -1290,10 +1316,10 @@ export async function copyVariableWithCapacities(
       }
 
       // ✅ FIX 11/01/2026: Vérifier que le nœud existe réellement avant de créer la variable
-      const nodeExists = await prisma.treeBranchLeafNode.findUnique({
-        where: { id: finalNodeId },
-        select: { id: true }
-      });
+      // PERF: Use existingNodeIds set if available (saves 1 findUnique per variable)
+      const nodeExists = existingNodeIds
+        ? existingNodeIds.has(finalNodeId)
+        : await prisma.treeBranchLeafNode.findUnique({ where: { id: finalNodeId }, select: { id: true } }).then(r => !!r);
       if (!nodeExists) {
         console.warn(`⚠️ Cannot create variable: node ${finalNodeId} does not exist in database. Skipping variable creation.`);
         return {
@@ -1447,13 +1473,7 @@ export async function copyVariableWithCapacities(
       }
     }
     
-    // Vérification existence
-    const verification = await prisma.treeBranchLeafNodeVariable.findUnique({
-      where: { id: newVariable.id }
-    });
-    if (!verification) {
-      console.error(`❌ Variable ${newVariable.id} N'EXISTE PAS après création !`);
-    }
+    // PERF: Removed post-creation verification findUnique — trusts Prisma create to succeed or throw
 
     // Mettre à jour le nœud d'affichage
     try {
@@ -1667,13 +1687,10 @@ export async function copyVariableWithCapacities(
     }
 
     // 📊 Mettre à jour le champ Total si activé sur le nœud source
+    // PERF: Use originalVar already loaded in ÉTAPE 2 instead of re-reading from DB
     try {
-      const originalVariable = await prisma.treeBranchLeafNodeVariable.findUnique({
-        where: { id: originalVarId },
-        select: { nodeId: true }
-      });
-      if (originalVariable?.nodeId) {
-        updateSumDisplayFieldAfterCopyChange(originalVariable.nodeId, prisma).catch(() => {});
+      if (originalVar?.nodeId) {
+        updateSumDisplayFieldAfterCopyChange(originalVar.nodeId, prisma).catch(() => {});
       }
     } catch (sumErr) {
       // Erreur mise à jour Total silencieuse

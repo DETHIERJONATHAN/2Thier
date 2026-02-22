@@ -166,6 +166,7 @@ export async function runRepeatExecution(
   // Ã°Å¸Å¡â‚¬Ã°Å¸Å¡â‚¬Ã°Å¸Å¡â‚¬ DUPLICATION DES TEMPLATES: parcourir TOUS les templates ÃƒÂ  dupliquer (metadata)
   // PERF: Pre-load ALL tree nodes ONCE (instead of once per template in deepCopyNodeInternal)
   const _preloadedTreeNodes = await prisma.treeBranchLeafNode.findMany({ where: { treeId: repeaterNode.treeId } });
+  const _preloadedTreeNodesById = new Map(_preloadedTreeNodes.map(n => [n.id, n] as const));
   
   const _t1 = Date.now();
   console.log(`[PERF] Setup: ${_t1 - _t0}ms`);
@@ -520,19 +521,83 @@ export async function runRepeatExecution(
   // 🚀 COPIER LES VARIABLES APRÈS LES NŒUDS
   const _t2 = Date.now();
   console.log(`[PERF] Template duplication loop: ${_t2 - _t1}ms`);
-  // PERF: Pré-charger TOUTES les variables en 1 findMany au lieu de N findUnique
+  // PERF: Pre-charger TOUTES les variables COMPLETES + owner nodes + display nodes + formules
+  // en batch avant la boucle pour eliminer ~12 findUnique par variable
   const allTemplateVarIds = [...new Set(plan.variables.map(v => v.templateVariableId))];
   const templateVarsMap = new Map<string, { displayName: string | null }>();
+  const fullVarsMap = new Map<string, any>();
+  const ownerNodesMap = new Map<string, any>();
+  const displayNodesMap = new Map<string, any>();
+  const formulasByNodeId = new Map<string, any[]>();
+  let allExistingNodeIds = new Set<string>();
+  let allExistingVarIds = new Set<string>();
+  let allExistingVarKeys = new Set<string>();
+
   if (allTemplateVarIds.length > 0) {
+    // 1. Load ALL full variable records in 1 query
     const templateVars = await prisma.treeBranchLeafNodeVariable.findMany({
-      where: { id: { in: allTemplateVarIds } },
-      select: { id: true, displayName: true }
+      where: { id: { in: allTemplateVarIds } }
     });
     for (const tv of templateVars) {
       templateVarsMap.set(tv.id, { displayName: tv.displayName });
+      fullVarsMap.set(tv.id, tv);
     }
+
+    // 2. Load ALL owner nodes in 1 query
+    const ownerNodeIds = [...new Set(templateVars.map(v => v.nodeId).filter(Boolean))] as string[];
+    if (ownerNodeIds.length > 0) {
+      const ownerNodes = await prisma.treeBranchLeafNode.findMany({
+        where: { id: { in: ownerNodeIds } }
+      });
+      for (const n of ownerNodes) {
+        ownerNodesMap.set(n.id, n);
+      }
+    }
+
+    // 3. Load ALL display nodes + formulas + existing variables in parallel
+    const [displayNodes, allFormulas, existingVars] = await Promise.all([
+      prisma.treeBranchLeafNode.findMany({
+        where: {
+          treeId: repeaterNode.treeId,
+          metadata: { path: ['autoCreatedDisplayNode'], equals: true }
+        }
+      }),
+      ownerNodeIds.length > 0 ? prisma.treeBranchLeafNodeFormula.findMany({
+        where: { nodeId: { in: ownerNodeIds } }
+      }) : Promise.resolve([]),
+      prisma.treeBranchLeafNodeVariable.findMany({
+        select: { id: true, exposedKey: true }
+      })
+    ]);
+
+    // Index display nodes by fromVariableId
+    for (const dn of displayNodes) {
+      const meta = dn.metadata as Record<string, unknown> | null;
+      if (meta?.fromVariableId && typeof meta.fromVariableId === 'string') {
+        if (!displayNodesMap.has(meta.fromVariableId)) {
+          displayNodesMap.set(meta.fromVariableId, dn);
+        }
+      }
+    }
+
+    // Index formulas by nodeId
+    for (const f of allFormulas) {
+      if (!formulasByNodeId.has(f.nodeId)) {
+        formulasByNodeId.set(f.nodeId, []);
+      }
+      formulasByNodeId.get(f.nodeId)!.push(f);
+    }
+
+    // Build existing node IDs set from _preloadedTreeNodes + duplicated nodes
+    allExistingNodeIds = new Set(_preloadedTreeNodes.map(n => n.id));
+    for (const id of duplicatedNodeIds) allExistingNodeIds.add(id);
+    for (const id of globalNodeIdMap.values()) allExistingNodeIds.add(id);
+
+    // Build existing variable sets for collision checks
+    allExistingVarIds = new Set(existingVars.map(v => v.id));
+    allExistingVarKeys = new Set(existingVars.map(v => v.exposedKey));
   }
-  
+
   for (const variablePlan of plan.variables) {
     try {
       let { templateVariableId, targetNodeId, plannedVariableId, plannedSuffix } = variablePlan;
@@ -570,6 +635,15 @@ export async function runRepeatExecution(
           conditionIdMap: globalConditionIdMap,
           tableIdMap: globalTableIdMap,
           variableCopyCache: globalVariableCopyCache,
+          // PERF: Pre-loaded data to skip per-variable DB queries
+          preloadedOriginalVar: fullVarsMap.get(templateVariableId),
+          preloadedOwnerNode: fullVarsMap.get(templateVariableId)?.nodeId ? ownerNodesMap.get(fullVarsMap.get(templateVariableId)!.nodeId) : undefined,
+          preloadedDuplicatedOwnerNode: { id: targetNodeId, parentId: _preloadedTreeNodesById?.get(targetNodeId)?.parentId ?? null },
+          preloadedDisplayNode: displayNodesMap.get(templateVariableId) ?? null,
+          preloadedFormulas: fullVarsMap.get(templateVariableId)?.nodeId ? formulasByNodeId.get(fullVarsMap.get(templateVariableId)!.nodeId) : undefined,
+          existingNodeIds: allExistingNodeIds,
+          existingVariableIds: allExistingVarIds,
+          existingVariableKeys: allExistingVarKeys,
           repeatContext: {
             repeaterNodeId,
             templateNodeId: targetNodeId.replace(`-${plannedSuffix}`, ''),

@@ -34697,29 +34697,32 @@ async function copyVariableWithCapacities(originalVarId, suffix, newNodeId, pris
     linkToDisplaySection = false,
     displayParentId,
     isFromRepeaterDuplication = false,
-    repeatContext
+    repeatContext,
+    // PERF: Pre-loaded data to skip per-variable DB queries
+    preloadedOriginalVar,
+    preloadedOwnerNode,
+    preloadedDuplicatedOwnerNode,
+    preloadedDisplayNode,
+    preloadedFormulas,
+    existingNodeIds,
+    existingVariableIds,
+    existingVariableKeys
     // displayNodeAlreadyCreated is not used anymore in this function; keep options API stable without reassigning
   } = options;
   try {
     const cacheKey = `${originalVarId}|${newNodeId}`;
     if (variableCopyCache.has(cacheKey)) {
       const cachedId = variableCopyCache.get(cacheKey);
-      const cached = await prisma51.treeBranchLeafNodeVariable.findUnique({
-        where: { id: cachedId }
-      });
-      if (cached) {
-        const parsed = parseSourceRef(cached.sourceRef);
-        return {
-          variableId: cached.id,
-          exposedKey: cached.exposedKey,
-          capacityType: parsed?.type || null,
-          sourceRef: cached.sourceRef,
-          success: true,
-          displayNodeId: void 0
-        };
-      }
+      return {
+        variableId: cachedId,
+        exposedKey: "",
+        capacityType: null,
+        sourceRef: null,
+        success: true,
+        displayNodeId: void 0
+      };
     }
-    const originalVar = await prisma51.treeBranchLeafNodeVariable.findUnique({
+    const originalVar = preloadedOriginalVar ?? await prisma51.treeBranchLeafNodeVariable.findUnique({
       where: { id: originalVarId }
     });
     if (!originalVar) {
@@ -34912,7 +34915,7 @@ async function copyVariableWithCapacities(originalVarId, suffix, newNodeId, pris
               return value;
             }
           };
-          const originalOwnerNode = await prisma51.treeBranchLeafNode.findUnique({
+          const originalOwnerNode = preloadedOwnerNode ?? await prisma51.treeBranchLeafNode.findUnique({
             where: { id: originalVar.nodeId },
             select: {
               id: true,
@@ -35026,7 +35029,7 @@ async function copyVariableWithCapacities(originalVarId, suffix, newNodeId, pris
             const withoutRepeater = nodes.find((node) => !hasRepeaterMetadata(node.metadata));
             return withoutRepeater ?? nodes[0];
           };
-          let originalDisplayNode = await prisma51.treeBranchLeafNode.findFirst({
+          let originalDisplayNode = preloadedDisplayNode !== void 0 ? preloadedDisplayNode : await prisma51.treeBranchLeafNode.findFirst({
             where: {
               metadata: {
                 path: ["fromVariableId"],
@@ -35035,7 +35038,7 @@ async function copyVariableWithCapacities(originalVarId, suffix, newNodeId, pris
             },
             select: displayNodeSelect
           });
-          if (!originalDisplayNode) {
+          if (!originalDisplayNode && preloadedDisplayNode === void 0) {
             const templateNodeIds = await prisma51.treeBranchLeafNode.findMany({
               where: {
                 linkedVariableIds: {
@@ -35068,7 +35071,7 @@ async function copyVariableWithCapacities(originalVarId, suffix, newNodeId, pris
             });
             originalDisplayNode = pickDisplayCandidate(candidates);
           }
-          const duplicatedOwnerNode = await prisma51.treeBranchLeafNode.findUnique({
+          const duplicatedOwnerNode = preloadedDuplicatedOwnerNode ?? await prisma51.treeBranchLeafNode.findUnique({
             where: { id: newNodeId },
             select: {
               id: true,
@@ -35078,16 +35081,9 @@ async function copyVariableWithCapacities(originalVarId, suffix, newNodeId, pris
           if (originalOwnerNode && duplicatedOwnerNode) {
             const inheritedDisplayParentId = originalDisplayNode?.parentId ?? null;
             let resolvedParentId = inheritedDisplayParentId ?? originalOwnerNode.parentId ?? displayParentId ?? duplicatedOwnerNode.parentId ?? null;
-            if (resolvedParentId && prisma51) {
-              try {
-                const parentExists = await prisma51.treeBranchLeafNode.findUnique({
-                  where: { id: resolvedParentId },
-                  select: { id: true }
-                });
-                if (!parentExists) {
-                  resolvedParentId = duplicatedOwnerNode.parentId ?? null;
-                }
-              } catch (parentCheckErr) {
+            if (resolvedParentId) {
+              const parentKnownToExist = existingNodeIds ? existingNodeIds.has(resolvedParentId) : await prisma51.treeBranchLeafNode.findUnique({ where: { id: resolvedParentId }, select: { id: true } }).then((r) => !!r).catch(() => false);
+              if (!parentKnownToExist) {
                 resolvedParentId = duplicatedOwnerNode.parentId ?? null;
               }
             } else if (!resolvedParentId) {
@@ -35308,7 +35304,7 @@ async function copyVariableWithCapacities(originalVarId, suffix, newNodeId, pris
             const copiedConditionIds = [];
             try {
               if (shouldCopyFormulaCapability) {
-                const originalFormulas = await prisma51.treeBranchLeafNodeFormula.findMany({
+                const originalFormulas = preloadedFormulas ?? await prisma51.treeBranchLeafNodeFormula.findMany({
                   where: { nodeId: tableSourceNode.id }
                 });
                 for (const f of originalFormulas) {
@@ -35444,16 +35440,16 @@ async function copyVariableWithCapacities(originalVarId, suffix, newNodeId, pris
       }
     }
     try {
-      const existingById = await prisma51.treeBranchLeafNodeVariable.findUnique({ where: { id: newVarId } });
-      if (existingById) {
+      const idCollision = existingVariableIds ? existingVariableIds.has(newVarId) : await prisma51.treeBranchLeafNodeVariable.findUnique({ where: { id: newVarId } }).then((r) => !!r).catch(() => false);
+      if (idCollision) {
         const tail = (finalNodeId2 || newNodeId || "").slice(-6) || `${Date.now()}`;
         newVarId = `${originalVarId}-${suffix}-${tail}`;
       }
     } catch (e) {
     }
     try {
-      const existingByKey = await prisma51.treeBranchLeafNodeVariable.findUnique({ where: { exposedKey: newExposedKey } });
-      if (existingByKey) {
+      const keyCollision = existingVariableKeys ? existingVariableKeys.has(newExposedKey) : await prisma51.treeBranchLeafNodeVariable.findUnique({ where: { exposedKey: newExposedKey } }).then((r) => !!r).catch(() => false);
+      if (keyCollision) {
         const tail = (finalNodeId2 || newNodeId || "").slice(-6) || `${Date.now()}`;
         newExposedKey = `${originalVar.exposedKey}-${suffix}-${tail}`;
       }
@@ -35512,10 +35508,7 @@ async function copyVariableWithCapacities(originalVarId, suffix, newNodeId, pris
       if (!finalNodeId2) {
         throw new Error(`Cannot create variable: finalNodeId is ${finalNodeId2}. This indicates the display node was not created properly.`);
       }
-      const nodeExists = await prisma51.treeBranchLeafNode.findUnique({
-        where: { id: finalNodeId2 },
-        select: { id: true }
-      });
+      const nodeExists = existingNodeIds ? existingNodeIds.has(finalNodeId2) : await prisma51.treeBranchLeafNode.findUnique({ where: { id: finalNodeId2 }, select: { id: true } }).then((r) => !!r);
       if (!nodeExists) {
         console.warn(`\u26A0\uFE0F Cannot create variable: node ${finalNodeId2} does not exist in database. Skipping variable creation.`);
         return {
@@ -35645,12 +35638,6 @@ async function copyVariableWithCapacities(originalVarId, suffix, newNodeId, pris
         await linkVariableToAllCapacityNodes(prisma51, newVariable.id, newVariable.sourceRef);
       } catch (e) {
       }
-    }
-    const verification = await prisma51.treeBranchLeafNodeVariable.findUnique({
-      where: { id: newVariable.id }
-    });
-    if (!verification) {
-      console.error(`\u274C Variable ${newVariable.id} N'EXISTE PAS apr\xE8s cr\xE9ation !`);
     }
     try {
       const normalizedNodeLabel = forceSingleSuffix(newVariable.displayName);
@@ -35808,12 +35795,8 @@ async function copyVariableWithCapacities(originalVarId, suffix, newNodeId, pris
       }
     }
     try {
-      const originalVariable = await prisma51.treeBranchLeafNodeVariable.findUnique({
-        where: { id: originalVarId },
-        select: { nodeId: true }
-      });
-      if (originalVariable?.nodeId) {
-        updateSumDisplayFieldAfterCopyChange(originalVariable.nodeId, prisma51).catch(() => {
+      if (originalVar?.nodeId) {
+        updateSumDisplayFieldAfterCopyChange(originalVar.nodeId, prisma51).catch(() => {
         });
       }
     } catch (sumErr) {
@@ -72557,6 +72540,7 @@ async function runRepeatExecution(prisma51, req2, execution) {
   const globalTableIdMap = /* @__PURE__ */ new Map();
   const globalVariableCopyCache = /* @__PURE__ */ new Map();
   const _preloadedTreeNodes = await prisma51.treeBranchLeafNode.findMany({ where: { treeId: repeaterNode.treeId } });
+  const _preloadedTreeNodesById = new Map(_preloadedTreeNodes.map((n) => [n.id, n]));
   const _t1 = Date.now();
   console.log(`[PERF] Setup: ${_t1 - _t0}ms`);
   const templateErrors = [];
@@ -72809,14 +72793,63 @@ async function runRepeatExecution(prisma51, req2, execution) {
   console.log(`[PERF] Template duplication loop: ${_t2 - _t1}ms`);
   const allTemplateVarIds = [...new Set(plan.variables.map((v) => v.templateVariableId))];
   const templateVarsMap = /* @__PURE__ */ new Map();
+  const fullVarsMap = /* @__PURE__ */ new Map();
+  const ownerNodesMap = /* @__PURE__ */ new Map();
+  const displayNodesMap = /* @__PURE__ */ new Map();
+  const formulasByNodeId = /* @__PURE__ */ new Map();
+  let allExistingNodeIds = /* @__PURE__ */ new Set();
+  let allExistingVarIds = /* @__PURE__ */ new Set();
+  let allExistingVarKeys = /* @__PURE__ */ new Set();
   if (allTemplateVarIds.length > 0) {
     const templateVars = await prisma51.treeBranchLeafNodeVariable.findMany({
-      where: { id: { in: allTemplateVarIds } },
-      select: { id: true, displayName: true }
+      where: { id: { in: allTemplateVarIds } }
     });
     for (const tv of templateVars) {
       templateVarsMap.set(tv.id, { displayName: tv.displayName });
+      fullVarsMap.set(tv.id, tv);
     }
+    const ownerNodeIds = [...new Set(templateVars.map((v) => v.nodeId).filter(Boolean))];
+    if (ownerNodeIds.length > 0) {
+      const ownerNodes = await prisma51.treeBranchLeafNode.findMany({
+        where: { id: { in: ownerNodeIds } }
+      });
+      for (const n of ownerNodes) {
+        ownerNodesMap.set(n.id, n);
+      }
+    }
+    const [displayNodes, allFormulas, existingVars] = await Promise.all([
+      prisma51.treeBranchLeafNode.findMany({
+        where: {
+          treeId: repeaterNode.treeId,
+          metadata: { path: ["autoCreatedDisplayNode"], equals: true }
+        }
+      }),
+      ownerNodeIds.length > 0 ? prisma51.treeBranchLeafNodeFormula.findMany({
+        where: { nodeId: { in: ownerNodeIds } }
+      }) : Promise.resolve([]),
+      prisma51.treeBranchLeafNodeVariable.findMany({
+        select: { id: true, exposedKey: true }
+      })
+    ]);
+    for (const dn of displayNodes) {
+      const meta = dn.metadata;
+      if (meta?.fromVariableId && typeof meta.fromVariableId === "string") {
+        if (!displayNodesMap.has(meta.fromVariableId)) {
+          displayNodesMap.set(meta.fromVariableId, dn);
+        }
+      }
+    }
+    for (const f of allFormulas) {
+      if (!formulasByNodeId.has(f.nodeId)) {
+        formulasByNodeId.set(f.nodeId, []);
+      }
+      formulasByNodeId.get(f.nodeId).push(f);
+    }
+    allExistingNodeIds = new Set(_preloadedTreeNodes.map((n) => n.id));
+    for (const id of duplicatedNodeIds) allExistingNodeIds.add(id);
+    for (const id of globalNodeIdMap.values()) allExistingNodeIds.add(id);
+    allExistingVarIds = new Set(existingVars.map((v) => v.id));
+    allExistingVarKeys = new Set(existingVars.map((v) => v.exposedKey));
   }
   for (const variablePlan of plan.variables) {
     try {
@@ -72846,6 +72879,15 @@ async function runRepeatExecution(prisma51, req2, execution) {
           conditionIdMap: globalConditionIdMap,
           tableIdMap: globalTableIdMap,
           variableCopyCache: globalVariableCopyCache,
+          // PERF: Pre-loaded data to skip per-variable DB queries
+          preloadedOriginalVar: fullVarsMap.get(templateVariableId),
+          preloadedOwnerNode: fullVarsMap.get(templateVariableId)?.nodeId ? ownerNodesMap.get(fullVarsMap.get(templateVariableId).nodeId) : void 0,
+          preloadedDuplicatedOwnerNode: { id: targetNodeId, parentId: _preloadedTreeNodesById?.get(targetNodeId)?.parentId ?? null },
+          preloadedDisplayNode: displayNodesMap.get(templateVariableId) ?? null,
+          preloadedFormulas: fullVarsMap.get(templateVariableId)?.nodeId ? formulasByNodeId.get(fullVarsMap.get(templateVariableId).nodeId) : void 0,
+          existingNodeIds: allExistingNodeIds,
+          existingVariableIds: allExistingVarIds,
+          existingVariableKeys: allExistingVarKeys,
           repeatContext: {
             repeaterNodeId,
             templateNodeId: targetNodeId.replace(`-${plannedSuffix}`, ""),
