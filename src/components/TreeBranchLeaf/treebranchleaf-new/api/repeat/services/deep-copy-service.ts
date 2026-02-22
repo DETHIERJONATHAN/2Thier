@@ -1734,7 +1734,9 @@ export async function deepCopyNodeInternal(
               displayNodeAlreadyCreated: false,
               displayParentId: targetNodeId,
               isFromRepeaterDuplication: isFromRepeaterDuplication,
-              repeatContext: normalizedRepeatContext
+              repeatContext: normalizedRepeatContext,
+              // PERF R12: Pass existingNodeIds to skip DB calls for non-existent nodes
+              existingNodeIds
             }
           );
         } catch (e) {

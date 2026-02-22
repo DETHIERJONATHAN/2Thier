@@ -191,6 +191,9 @@ export async function copyVariableWithCapacities(
   // displayNodeAlreadyCreated is not used anymore in this function; keep options API stable without reassigning
   } = options;
 
+  // PERF R12: Declare finalNodeId OUTSIDE try block so it's accessible in the catch handler
+  let finalNodeId = newNodeId;
+
   try {
     // ═══════════════════════════════════════════════════════════════════════
     // 🔍 ÉTAPE 1 : Vérifier le cache
@@ -455,7 +458,7 @@ export async function copyVariableWithCapacities(
     // 1) Si l'ancien nodeId de la variable a été copié (présent dans nodeIdMap), on utilise ce nouveau nodeId
     // 2) Sinon, si l'auto-création est activée, on crée un nœud d'affichage dédié et on l'utilise
     // 3) Sinon, fallback sur newNodeId (peut causer des collisions si plusieurs variables par nœud)
-  let finalNodeId = newNodeId;
+  finalNodeId = newNodeId;
     // Détermination du nodeId du nœud d'affichage
     // ⚠️ TOUJOURS créer un display node dédié quand autoCreateDisplayNode=true
     // Même si la variable a un nodeId et même s'il est dans nodeIdMap,
@@ -1449,8 +1452,19 @@ export async function copyVariableWithCapacities(
         // PERF: Update collision Sets to prevent stale checks for next variable
         if (existingVariableIds) existingVariableIds.add(newVarId);
         if (existingVariableKeys) existingVariableKeys.add(newExposedKey);
-      } catch (createError) {
-        throw createError;
+      } catch (createError: any) {
+        // PERF R12: Handle P2002 unique constraint on nodeId (race condition from parallel copies)
+        if (createError?.code === 'P2002' && createError?.meta?.target?.includes?.('nodeId')) {
+          const existing = await prisma.treeBranchLeafNodeVariable.findUnique({ where: { nodeId: finalNodeId } });
+          if (existing) {
+            newVariable = existing;
+            _reusingExistingVariable = true;
+          } else {
+            throw createError;
+          }
+        } else {
+          throw createError;
+        }
       }
     }
 
@@ -1882,14 +1896,17 @@ async function addToNodeLinkedField(
   idsToAdd: string[]
 ): Promise<void> {
   if (!idsToAdd || idsToAdd.length === 0) return;
-  // PERF: Use single update with push instead of findUnique + merge + update (saves 1 query per call)
+  const filtered = idsToAdd.filter(Boolean);
+  if (filtered.length === 0) return;
+  // PERF R12: Raw SQL — no P2025 error for non-existent nodes (0 affected rows instead of throw)
   try {
-    await prisma.treeBranchLeafNode.update({
-      where: { id: nodeId },
-      data: { [field]: { push: idsToAdd } }
-    });
+    await (prisma as any).$executeRawUnsafe(
+      `UPDATE "TreeBranchLeafNode" SET "${field}" = array_cat(COALESCE("${field}", ARRAY[]::text[]), $1::text[]) WHERE id = $2`,
+      filtered,
+      nodeId
+    );
   } catch (e) {
-    // Node doesn't exist — ignore silently
+    // Fallback: ignore silently
   }
 }
 

@@ -32421,11 +32421,14 @@ async function gatherNodeIdsRecursively(client, sourceRef, visited = /* @__PURE_
 }
 async function addToNodeLinkedField(client, nodeId, field, idsToAdd) {
   if (!idsToAdd || idsToAdd.length === 0) return;
+  const filtered = idsToAdd.filter(Boolean);
+  if (filtered.length === 0) return;
   try {
-    await client.treeBranchLeafNode.update({
-      where: { id: nodeId },
-      data: { [field]: { push: idsToAdd.filter(Boolean) } }
-    });
+    await client.$executeRawUnsafe(
+      `UPDATE "TreeBranchLeafNode" SET "${field}" = array_cat(COALESCE("${field}", ARRAY[]::text[]), $1::text[]) WHERE id = $2`,
+      filtered,
+      nodeId
+    );
   } catch (e) {
   }
 }
@@ -33908,11 +33911,14 @@ async function copyFormulaCapacity(originalFormulaId, newNodeId, suffix, prisma5
 }
 async function addToNodeLinkedField2(prisma51, nodeId, field, idsToAdd) {
   if (!idsToAdd || idsToAdd.length === 0) return;
+  const filtered = idsToAdd.filter(Boolean);
+  if (filtered.length === 0) return;
   try {
-    await prisma51.treeBranchLeafNode.update({
-      where: { id: nodeId },
-      data: { [field]: { push: idsToAdd } }
-    });
+    await prisma51.$executeRawUnsafe(
+      `UPDATE "TreeBranchLeafNode" SET "${field}" = array_cat(COALESCE("${field}", ARRAY[]::text[]), $1::text[]) WHERE id = $2`,
+      filtered,
+      nodeId
+    );
   } catch (e) {
   }
 }
@@ -34679,6 +34685,7 @@ async function copyVariableWithCapacities(originalVarId, suffix, newNodeId, pris
     preloadedVarsByNodeId
     // displayNodeAlreadyCreated is not used anymore in this function; keep options API stable without reassigning
   } = options;
+  let finalNodeId = newNodeId;
   try {
     const cacheKey = `${originalVarId}|${newNodeId}`;
     if (variableCopyCache.has(cacheKey)) {
@@ -34864,11 +34871,11 @@ async function copyVariableWithCapacities(originalVarId, suffix, newNodeId, pris
         }
       }
     }
-    let finalNodeId2 = newNodeId;
+    finalNodeId = newNodeId;
     if (autoCreateDisplayNode) {
       if (!originalVar.nodeId) {
         console.warn(`\u26A0\uFE0F [AUTO-CREATE-DISPLAY] Variable ${originalVar.id} n'a PAS de nodeId! Impossible de cr\xE9er display node. Fallback newNodeId.`);
-        finalNodeId2 = newNodeId;
+        finalNodeId = newNodeId;
       } else {
         try {
           const parseJsonIfNeeded = (value) => {
@@ -35062,7 +35069,7 @@ async function copyVariableWithCapacities(originalVarId, suffix, newNodeId, pris
             const displayNodeBaseId = originalVar.nodeId && nodeIdMap.get(originalVar.nodeId) || originalVar.nodeId;
             const baseNormalized = stripTrailingNumeric(displayNodeBaseId);
             const displayNodeId2 = appendSuffixOnce(baseNormalized);
-            finalNodeId2 = displayNodeId2;
+            finalNodeId = displayNodeId2;
             const now = /* @__PURE__ */ new Date();
             const cloneJson = (value) => {
               if (!value || typeof value !== "object") {
@@ -35408,7 +35415,7 @@ async function copyVariableWithCapacities(originalVarId, suffix, newNodeId, pris
     try {
       const idCollision = existingVariableIds ? existingVariableIds.has(newVarId) : await prisma51.treeBranchLeafNodeVariable.findUnique({ where: { id: newVarId } }).then((r) => !!r).catch(() => false);
       if (idCollision) {
-        const tail = (finalNodeId2 || newNodeId || "").slice(-6) || `${Date.now()}`;
+        const tail = (finalNodeId || newNodeId || "").slice(-6) || `${Date.now()}`;
         newVarId = `${originalVarId}-${suffix}-${tail}`;
       }
     } catch (e) {
@@ -35416,7 +35423,7 @@ async function copyVariableWithCapacities(originalVarId, suffix, newNodeId, pris
     try {
       const keyCollision = existingVariableKeys ? existingVariableKeys.has(newExposedKey) : await prisma51.treeBranchLeafNodeVariable.findUnique({ where: { exposedKey: newExposedKey } }).then((r) => !!r).catch(() => false);
       if (keyCollision) {
-        const tail = (finalNodeId2 || newNodeId || "").slice(-6) || `${Date.now()}`;
+        const tail = (finalNodeId || newNodeId || "").slice(-6) || `${Date.now()}`;
         newExposedKey = `${originalVar.exposedKey}-${suffix}-${tail}`;
       }
     } catch (e) {
@@ -35424,7 +35431,7 @@ async function copyVariableWithCapacities(originalVarId, suffix, newNodeId, pris
     let _reusingExistingVariable = false;
     let _existingVariableForReuse = null;
     try {
-      const existingForNode = preloadedVarsByNodeId ? preloadedVarsByNodeId.get(finalNodeId2) ?? null : await prisma51.treeBranchLeafNodeVariable.findUnique({ where: { nodeId: finalNodeId2 } });
+      const existingForNode = preloadedVarsByNodeId ? preloadedVarsByNodeId.get(finalNodeId) ?? null : await prisma51.treeBranchLeafNodeVariable.findUnique({ where: { nodeId: finalNodeId } });
       if (existingForNode) {
         const expectedVarId = `${originalVarId}-${suffix}`;
         const hasSuffixMatch = existingForNode.id === expectedVarId || existingForNode.id === newVarId;
@@ -35434,7 +35441,7 @@ async function copyVariableWithCapacities(originalVarId, suffix, newNodeId, pris
           try {
             const normalizedExistingName = forceSingleSuffix(existingForNode.displayName);
             await prisma51.treeBranchLeafNode.update({
-              where: { id: finalNodeId2 },
+              where: { id: finalNodeId },
               data: {
                 hasData: true,
                 data_activeId: existingForNode.id,
@@ -35447,13 +35454,13 @@ async function copyVariableWithCapacities(originalVarId, suffix, newNodeId, pris
                 field_label: normalizedExistingName || void 0
               }
             });
-            const isCopiedNode = finalNodeId2.includes("-") && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}-.+$/i.test(finalNodeId2);
+            const isCopiedNode = finalNodeId.includes("-") && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}-.+$/i.test(finalNodeId);
             if (isCopiedNode) {
-              await addToNodeLinkedField5(prisma51, finalNodeId2, "linkedVariableIds", [existingForNode.id]);
+              await addToNodeLinkedField5(prisma51, finalNodeId, "linkedVariableIds", [existingForNode.id]);
             }
           } catch (e) {
           }
-          const cacheKey2 = `${originalVarId}|${finalNodeId2}`;
+          const cacheKey2 = `${originalVarId}|${finalNodeId}`;
           variableCopyCache.set(cacheKey2, existingForNode.id);
         } else {
           try {
@@ -35471,21 +35478,21 @@ async function copyVariableWithCapacities(originalVarId, suffix, newNodeId, pris
       newVariable = _existingVariableForReuse;
     } else {
       const normalizedDisplayName = forceSingleSuffix(originalVar.displayName);
-      if (!finalNodeId2) {
-        throw new Error(`Cannot create variable: finalNodeId is ${finalNodeId2}. This indicates the display node was not created properly.`);
+      if (!finalNodeId) {
+        throw new Error(`Cannot create variable: finalNodeId is ${finalNodeId}. This indicates the display node was not created properly.`);
       }
-      const nodeExists = existingNodeIds ? existingNodeIds.has(finalNodeId2) : await prisma51.treeBranchLeafNode.findUnique({ where: { id: finalNodeId2 }, select: { id: true } }).then((r) => !!r);
+      const nodeExists = existingNodeIds ? existingNodeIds.has(finalNodeId) : await prisma51.treeBranchLeafNode.findUnique({ where: { id: finalNodeId }, select: { id: true } }).then((r) => !!r);
       if (!nodeExists) {
-        console.warn(`\u26A0\uFE0F Cannot create variable: node ${finalNodeId2} does not exist in database. Skipping variable creation.`);
+        console.warn(`\u26A0\uFE0F Cannot create variable: node ${finalNodeId} does not exist in database. Skipping variable creation.`);
         return {
           success: false,
-          error: `Node ${finalNodeId2} does not exist`,
+          error: `Node ${finalNodeId} does not exist`,
           originalVarId
         };
       }
       try {
-        if (originalVar.nodeId && finalNodeId2 && !nodeIdMap.has(originalVar.nodeId)) {
-          nodeIdMap.set(originalVar.nodeId, finalNodeId2);
+        if (originalVar.nodeId && finalNodeId && !nodeIdMap.has(originalVar.nodeId)) {
+          nodeIdMap.set(originalVar.nodeId, finalNodeId);
         }
         const newLinkedFormulaIds = [];
         for (const formulaId of originalVar.linkedFormulaIds || []) {
@@ -35496,7 +35503,7 @@ async function copyVariableWithCapacities(originalVarId, suffix, newNodeId, pris
             try {
               const formulaResult = await copyFormulaCapacity(
                 formulaId,
-                finalNodeId2,
+                finalNodeId,
                 suffix,
                 prisma51,
                 { nodeIdMap, formulaIdMap, conditionIdMap }
@@ -35521,7 +35528,7 @@ async function copyVariableWithCapacities(originalVarId, suffix, newNodeId, pris
             try {
               const conditionResult = await copyConditionCapacity(
                 conditionId,
-                finalNodeId2,
+                finalNodeId,
                 suffix,
                 prisma51,
                 { nodeIdMap, formulaIdMap, conditionIdMap }
@@ -35546,7 +35553,7 @@ async function copyVariableWithCapacities(originalVarId, suffix, newNodeId, pris
             try {
               const tableResult = await copyTableCapacity2(
                 tableId,
-                finalNodeId2,
+                finalNodeId,
                 suffix,
                 prisma51,
                 { nodeIdMap, formulaIdMap, conditionIdMap, tableIdMap: tableIdMap2 }
@@ -35565,7 +35572,7 @@ async function copyVariableWithCapacities(originalVarId, suffix, newNodeId, pris
         newVariable = await prisma51.treeBranchLeafNodeVariable.create({
           data: {
             id: newVarId,
-            nodeId: finalNodeId2,
+            nodeId: finalNodeId,
             exposedKey: newExposedKey,
             displayName: normalizedDisplayName,
             displayFormat: originalVar.displayFormat,
@@ -35586,14 +35593,24 @@ async function copyVariableWithCapacities(originalVarId, suffix, newNodeId, pris
         if (existingVariableIds) existingVariableIds.add(newVarId);
         if (existingVariableKeys) existingVariableKeys.add(newExposedKey);
       } catch (createError) {
-        throw createError;
+        if (createError?.code === "P2002" && createError?.meta?.target?.includes?.("nodeId")) {
+          const existing = await prisma51.treeBranchLeafNodeVariable.findUnique({ where: { nodeId: finalNodeId } });
+          if (existing) {
+            newVariable = existing;
+            _reusingExistingVariable = true;
+          } else {
+            throw createError;
+          }
+        } else {
+          throw createError;
+        }
       }
     }
     if (normalizedRepeatContext) {
       const metadataPayload = newVariable.metadata && typeof newVariable.metadata === "object" ? newVariable.metadata : void 0;
       logVariableEvent({
         nodeId: newVariable.nodeId,
-        displayNodeId: finalNodeId2,
+        displayNodeId: finalNodeId,
         variableId: newVariable.id,
         sourceRef: newVariable.sourceRef,
         sourceType: newVariable.sourceType,
@@ -35610,7 +35627,7 @@ async function copyVariableWithCapacities(originalVarId, suffix, newNodeId, pris
     try {
       const normalizedNodeLabel = forceSingleSuffix(newVariable.displayName);
       await prisma51.treeBranchLeafNode.update({
-        where: { id: finalNodeId2 },
+        where: { id: finalNodeId },
         data: {
           hasData: true,
           data_activeId: newVariable.id,
@@ -35649,9 +35666,9 @@ async function copyVariableWithCapacities(originalVarId, suffix, newNodeId, pris
       }
     } else if (autoCreateDisplayNode) {
       try {
-        const isCopiedNode = finalNodeId2.includes("-") && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}-.+$/i.test(finalNodeId2);
+        const isCopiedNode = finalNodeId.includes("-") && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}-.+$/i.test(finalNodeId);
         if (isCopiedNode) {
-          await addToNodeLinkedField5(prisma51, finalNodeId2, "linkedVariableIds", [newVariable.id]);
+          await addToNodeLinkedField5(prisma51, finalNodeId, "linkedVariableIds", [newVariable.id]);
         }
       } catch (e) {
       }
@@ -35662,13 +35679,13 @@ async function copyVariableWithCapacities(originalVarId, suffix, newNodeId, pris
           if (parsedCap && capId) {
             if (parsedCap.type === "condition") {
               await prisma51.treeBranchLeafNode.update({
-                where: { id: finalNodeId2 },
+                where: { id: finalNodeId },
                 data: {
                   hasCondition: true,
                   condition_activeId: capId
                 }
               });
-              await addToNodeLinkedField5(prisma51, finalNodeId2, "linkedConditionIds", [capId]);
+              await addToNodeLinkedField5(prisma51, finalNodeId, "linkedConditionIds", [capId]);
               try {
                 if (newNodeId) {
                   const suffixedVarId = `${originalVarId}-${suffix}`;
@@ -35699,10 +35716,10 @@ async function copyVariableWithCapacities(originalVarId, suffix, newNodeId, pris
                 where: { id: capId },
                 select: { name: true, type: true, nodeId: true }
               });
-              const tableOwnerIsFinalNode = tbl?.nodeId === finalNodeId2;
+              const tableOwnerIsFinalNode = tbl?.nodeId === finalNodeId;
               if (tableOwnerIsFinalNode) {
                 await prisma51.treeBranchLeafNode.update({
-                  where: { id: finalNodeId2 },
+                  where: { id: finalNodeId },
                   data: {
                     hasTable: true,
                     table_activeId: capId,
@@ -35710,7 +35727,7 @@ async function copyVariableWithCapacities(originalVarId, suffix, newNodeId, pris
                     table_type: tbl?.type || null
                   }
                 });
-                await addToNodeLinkedField5(prisma51, finalNodeId2, "linkedTableIds", [capId]);
+                await addToNodeLinkedField5(prisma51, finalNodeId, "linkedTableIds", [capId]);
               }
             }
           }
@@ -35722,12 +35739,12 @@ async function copyVariableWithCapacities(originalVarId, suffix, newNodeId, pris
       if (newNodeId) {
         await replaceLinkedVariableId(prisma51, newNodeId, originalVarId, newVariable.id, suffix);
       }
-      if (finalNodeId2 && finalNodeId2 !== newNodeId) {
-        await replaceLinkedVariableId(prisma51, finalNodeId2, originalVarId, newVariable.id, suffix);
+      if (finalNodeId && finalNodeId !== newNodeId) {
+        await replaceLinkedVariableId(prisma51, finalNodeId, originalVarId, newVariable.id, suffix);
       }
     } catch (e) {
     }
-    const cacheKeyFinal = `${originalVarId}|${finalNodeId2}`;
+    const cacheKeyFinal = `${originalVarId}|${finalNodeId}`;
     variableCopyCache.set(cacheKeyFinal, newVariable.id);
     if (capacityType && newSourceRef) {
       const parsed = parseSourceRef(newSourceRef);
@@ -35775,7 +35792,7 @@ async function copyVariableWithCapacities(originalVarId, suffix, newNodeId, pris
       capacityType,
       sourceRef: newSourceRef,
       success: true,
-      displayNodeId: autoCreateDisplayNode ? finalNodeId2 : void 0,
+      displayNodeId: autoCreateDisplayNode ? finalNodeId : void 0,
       // 🟢 RETOURNER LES MAPS pour que repeat-executor puisse les agréger
       formulaIdMap,
       conditionIdMap,
@@ -35893,11 +35910,14 @@ async function createDisplayNodeForExistingVariable(variableId, prisma51, displa
 }
 async function addToNodeLinkedField5(prisma51, nodeId, field, idsToAdd) {
   if (!idsToAdd || idsToAdd.length === 0) return;
+  const filtered = idsToAdd.filter(Boolean);
+  if (filtered.length === 0) return;
   try {
-    await prisma51.treeBranchLeafNode.update({
-      where: { id: nodeId },
-      data: { [field]: { push: idsToAdd } }
-    });
+    await prisma51.$executeRawUnsafe(
+      `UPDATE "TreeBranchLeafNode" SET "${field}" = array_cat(COALESCE("${field}", ARRAY[]::text[]), $1::text[]) WHERE id = $2`,
+      filtered,
+      nodeId
+    );
   } catch (e) {
   }
 }
@@ -35941,21 +35961,12 @@ async function copySelectorTablesAfterNodeCopy(prisma51, copiedRootNodeId, origi
         linkedTableIds: true
       }
     });
-    for (const originalSelector of selectorsInOriginal) {
-      const originalTableId = originalSelector.table_activeId;
-      if (!originalTableId) continue;
-      const copiedSelectorId = options.nodeIdMap.get(originalSelector.id);
-      if (!copiedSelectorId) {
-        continue;
-      }
-      const hasSelectConfig = await prisma51.treeBranchLeafSelectConfig.findUnique({
-        where: { nodeId: originalSelector.id }
-      });
-      if (hasSelectConfig) {
-        continue;
-      }
-      const originalTable = await prisma51.treeBranchLeafNodeTable.findUnique({
-        where: { id: originalTableId },
+    const selectorOriginalIds = selectorsInOriginal.map((s) => s.id);
+    const tableActiveIds = selectorsInOriginal.map((s) => s.table_activeId).filter(Boolean);
+    const [allSelectConfigs, allOriginalTables] = await Promise.all([
+      selectorOriginalIds.length > 0 ? prisma51.treeBranchLeafSelectConfig.findMany({ where: { nodeId: { in: selectorOriginalIds } } }) : Promise.resolve([]),
+      tableActiveIds.length > 0 ? prisma51.treeBranchLeafNodeTable.findMany({
+        where: { id: { in: tableActiveIds } },
         select: {
           id: true,
           nodeId: true,
@@ -35967,7 +35978,21 @@ async function copySelectorTablesAfterNodeCopy(prisma51, copiedRootNodeId, origi
           tableColumns: { select: { id: true } },
           tableRows: { select: { id: true, cells: true } }
         }
-      });
+      }) : Promise.resolve([])
+    ]);
+    const selectConfigByNodeId = new Set(allSelectConfigs.map((sc) => sc.nodeId));
+    const originalTableById = new Map(allOriginalTables.map((t) => [t.id, t]));
+    for (const originalSelector of selectorsInOriginal) {
+      const originalTableId = originalSelector.table_activeId;
+      if (!originalTableId) continue;
+      const copiedSelectorId = options.nodeIdMap.get(originalSelector.id);
+      if (!copiedSelectorId) {
+        continue;
+      }
+      if (selectConfigByNodeId.has(originalSelector.id)) {
+        continue;
+      }
+      const originalTable = originalTableById.get(originalTableId);
       if (!originalTable) {
         continue;
       }
@@ -36102,12 +36127,12 @@ async function addToNodeLinkedField6(client, nodeId, field, idsToAdd) {
   const sanitized2 = idsToAdd?.filter((id) => id && isRealNodeRef(id)) ?? [];
   if (!sanitized2.length) return;
   try {
-    await client.treeBranchLeafNode.update({
-      where: { id: nodeId },
-      data: { [field]: { push: sanitized2 } }
-    });
+    await client.$executeRawUnsafe(
+      `UPDATE "TreeBranchLeafNode" SET "${field}" = array_cat(COALESCE("${field}", ARRAY[]::text[]), $1::text[]) WHERE id = $2`,
+      sanitized2,
+      nodeId
+    );
   } catch (e) {
-    console.warn("[TreeBranchLeaf API] addToNodeLinkedField skipped:", { nodeId, field, error: e.message });
   }
 }
 function buildResponseFromColumns(node) {
@@ -37787,7 +37812,9 @@ async function deepCopyNodeInternal(prisma51, req2, nodeId, opts) {
               displayNodeAlreadyCreated: false,
               displayParentId: targetNodeId,
               isFromRepeaterDuplication,
-              repeatContext: normalizedRepeatContext
+              repeatContext: normalizedRepeatContext,
+              // PERF R12: Pass existingNodeIds to skip DB calls for non-existent nodes
+              existingNodeIds
             }
           );
         } catch (e) {
@@ -71111,9 +71138,9 @@ async function copyVariableWithCapacities2(originalVarId, suffix, newNodeId, pri
         }
       }
     }
-    let finalNodeId2 = newNodeId;
+    let finalNodeId = newNodeId;
     if (originalVar.nodeId && nodeIdMap.has(originalVar.nodeId)) {
-      finalNodeId2 = nodeIdMap.get(originalVar.nodeId);
+      finalNodeId = nodeIdMap.get(originalVar.nodeId);
     } else if (autoCreateDisplayNode) {
       try {
         const originalOwnerNode = await prisma51.treeBranchLeafNode.findUnique({
@@ -71144,7 +71171,7 @@ async function copyVariableWithCapacities2(originalVarId, suffix, newNodeId, pri
           }
           const baseDisplayNodeId = stripTrailingNumeric(originalVar.nodeId) || originalVar.nodeId;
           const displayNodeId2 = `${baseDisplayNodeId}-${suffix}`;
-          finalNodeId2 = displayNodeId2;
+          finalNodeId = displayNodeId2;
           const now = /* @__PURE__ */ new Date();
           const displayNodeData = {
             id: displayNodeId2,
@@ -71280,7 +71307,7 @@ async function copyVariableWithCapacities2(originalVarId, suffix, newNodeId, pri
     try {
       const existingById = await prisma51.treeBranchLeafNodeVariable.findUnique({ where: { id: newVarId } });
       if (existingById) {
-        const tail = (finalNodeId2 || newNodeId || "").slice(-6) || `${Date.now()}`;
+        const tail = (finalNodeId || newNodeId || "").slice(-6) || `${Date.now()}`;
         const adjusted = `${originalVarId}-${suffix}-${tail}`;
         newVarId = adjusted;
       }
@@ -71290,7 +71317,7 @@ async function copyVariableWithCapacities2(originalVarId, suffix, newNodeId, pri
     try {
       const existingByKey = await prisma51.treeBranchLeafNodeVariable.findUnique({ where: { exposedKey: newExposedKey } });
       if (existingByKey) {
-        const tail = (finalNodeId2 || newNodeId || "").slice(-6) || `${Date.now()}`;
+        const tail = (finalNodeId || newNodeId || "").slice(-6) || `${Date.now()}`;
         const adjustedKey = `${originalVar.exposedKey}-${suffix}-${tail}`;
         newExposedKey = adjustedKey;
       }
@@ -71300,13 +71327,13 @@ async function copyVariableWithCapacities2(originalVarId, suffix, newNodeId, pri
     let _reusingExistingVariable = false;
     let _existingVariableForReuse = null;
     try {
-      const existingForNode = await prisma51.treeBranchLeafNodeVariable.findUnique({ where: { nodeId: finalNodeId2 } });
+      const existingForNode = await prisma51.treeBranchLeafNodeVariable.findUnique({ where: { nodeId: finalNodeId } });
       if (existingForNode) {
         _reusingExistingVariable = true;
         _existingVariableForReuse = existingForNode;
         try {
           await prisma51.treeBranchLeafNode.update({
-            where: { id: finalNodeId2 },
+            where: { id: finalNodeId },
             data: {
               hasData: true,
               data_activeId: existingForNode.id,
@@ -71319,7 +71346,7 @@ async function copyVariableWithCapacities2(originalVarId, suffix, newNodeId, pri
               field_label: existingForNode.displayName || void 0
             }
           });
-          await addToNodeLinkedField8(prisma51, finalNodeId2, "linkedVariableIds", [existingForNode.id]);
+          await addToNodeLinkedField8(prisma51, finalNodeId, "linkedVariableIds", [existingForNode.id]);
         } catch (e) {
           console.warn(`\xE2\u0161\xA0\xEF\xB8\x8F Erreur MAJ display node (r\xC3\xA9utilisation):`, e.message);
         }
@@ -71337,7 +71364,7 @@ async function copyVariableWithCapacities2(originalVarId, suffix, newNodeId, pri
       newVariable = await prisma51.treeBranchLeafNodeVariable.create({
         data: {
           id: newVarId,
-          nodeId: finalNodeId2,
+          nodeId: finalNodeId,
           exposedKey: newExposedKey,
           displayName: originalVar.displayName ? `${originalVar.displayName}-${suffix}` : originalVar.displayName,
           displayFormat: originalVar.displayFormat,
@@ -71365,7 +71392,7 @@ async function copyVariableWithCapacities2(originalVarId, suffix, newNodeId, pri
     }
     try {
       await prisma51.treeBranchLeafNode.update({
-        where: { id: finalNodeId2 },
+        where: { id: finalNodeId },
         data: {
           hasData: true,
           data_activeId: newVariable.id,
@@ -71408,7 +71435,7 @@ async function copyVariableWithCapacities2(originalVarId, suffix, newNodeId, pri
       }
     } else if (autoCreateDisplayNode) {
       try {
-        await addToNodeLinkedField8(prisma51, finalNodeId2, "linkedVariableIds", [newVariable.id]);
+        await addToNodeLinkedField8(prisma51, finalNodeId, "linkedVariableIds", [newVariable.id]);
       } catch (e) {
         console.warn(`\xE2\u0161\xA0\xEF\xB8\x8F Erreur linkage variable\xE2\u2020\u2019display node:`, e.message);
       }
@@ -71419,28 +71446,28 @@ async function copyVariableWithCapacities2(originalVarId, suffix, newNodeId, pri
           if (parsedCap && capId) {
             if (parsedCap.type === "condition") {
               await prisma51.treeBranchLeafNode.update({
-                where: { id: finalNodeId2 },
+                where: { id: finalNodeId },
                 data: {
                   hasCondition: true,
                   condition_activeId: capId
                 }
               });
-              await addToNodeLinkedField8(prisma51, finalNodeId2, "linkedConditionIds", [capId]);
+              await addToNodeLinkedField8(prisma51, finalNodeId, "linkedConditionIds", [capId]);
             } else if (parsedCap.type === "formula") {
               const frm = await prisma51.treeBranchLeafNodeFormula.findUnique({ where: { id: capId }, select: { name: true } });
               await prisma51.treeBranchLeafNode.update({
-                where: { id: finalNodeId2 },
+                where: { id: finalNodeId },
                 data: {
                   hasFormula: true,
                   formula_activeId: capId,
                   formula_name: frm?.name || null
                 }
               });
-              await addToNodeLinkedField8(prisma51, finalNodeId2, "linkedFormulaIds", [capId]);
+              await addToNodeLinkedField8(prisma51, finalNodeId, "linkedFormulaIds", [capId]);
             } else if (parsedCap.type === "table") {
               const tbl = await prisma51.treeBranchLeafNodeTable.findUnique({ where: { id: capId }, select: { name: true, type: true } });
               await prisma51.treeBranchLeafNode.update({
-                where: { id: finalNodeId2 },
+                where: { id: finalNodeId },
                 data: {
                   hasTable: true,
                   table_activeId: capId,
@@ -71448,7 +71475,7 @@ async function copyVariableWithCapacities2(originalVarId, suffix, newNodeId, pri
                   table_type: tbl?.type || null
                 }
               });
-              await addToNodeLinkedField8(prisma51, finalNodeId2, "linkedTableIds", [capId]);
+              await addToNodeLinkedField8(prisma51, finalNodeId, "linkedTableIds", [capId]);
             }
           }
         }
@@ -71497,7 +71524,7 @@ async function copyVariableWithCapacities2(originalVarId, suffix, newNodeId, pri
       capacityType,
       sourceRef: newSourceRef,
       success: true,
-      displayNodeId: finalNodeId2
+      displayNodeId: finalNodeId
       // ðŸ”‘ IMPORTANT: Retourner l'ID du display node crÃ©Ã©!
     };
   } catch (error) {

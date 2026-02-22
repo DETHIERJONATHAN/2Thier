@@ -162,15 +162,16 @@ export async function addToNodeLinkedField(
 ) {
   const sanitized = idsToAdd?.filter(id => id && isRealNodeRef(id)) ?? [];
   if (!sanitized.length) return;
-  // PERF: Use single update with push instead of findUnique + merge + update (saves 1 query per call)
+  // PERF R12: Raw SQL — no P2025 error for non-existent nodes (0 affected rows instead of throw)
+  // Field name is from controlled LinkedField type, safe for template interpolation
   try {
-    await client.treeBranchLeafNode.update({
-      where: { id: nodeId },
-      data: { [field]: { push: sanitized } } as unknown as Prisma.TreeBranchLeafNodeUpdateInput
-    });
+    await (client as any).$executeRawUnsafe(
+      `UPDATE "TreeBranchLeafNode" SET "${field}" = array_cat(COALESCE("${field}", ARRAY[]::text[]), $1::text[]) WHERE id = $2`,
+      sanitized,
+      nodeId
+    );
   } catch (e) {
-    // Node doesn't exist or other error — fallback silently
-    console.warn('[TreeBranchLeaf API] addToNodeLinkedField skipped:', { nodeId, field, error: (e as Error).message });
+    // Fallback: ignore silently (connection issue, driver error, etc.)
   }
 }
 

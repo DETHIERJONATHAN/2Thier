@@ -460,13 +460,16 @@ async function addToNodeLinkedField(
   idsToAdd: string[]
 ): Promise<void> {
   if (!idsToAdd || idsToAdd.length === 0) return;
-  // PERF: Use single update with push instead of findUnique + merge + update (saves 1 query per call)
+  const filtered = idsToAdd.filter(Boolean);
+  if (filtered.length === 0) return;
+  // PERF R12: Raw SQL — no P2025 error for non-existent nodes (0 affected rows instead of throw)
   try {
-    await prisma.treeBranchLeafNode.update({
-      where: { id: nodeId },
-      data: { [field]: { push: idsToAdd } }
-    });
+    await (prisma as any).$executeRawUnsafe(
+      `UPDATE "TreeBranchLeafNode" SET "${field}" = array_cat(COALESCE("${field}", ARRAY[]::text[]), $1::text[]) WHERE id = $2`,
+      filtered,
+      nodeId
+    );
   } catch (e) {
-    // Node doesn't exist — ignore silently
+    // Fallback: ignore silently
   }
 }

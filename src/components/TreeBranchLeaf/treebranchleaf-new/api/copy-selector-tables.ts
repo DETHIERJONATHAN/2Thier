@@ -56,49 +56,57 @@ export async function copySelectorTablesAfterNodeCopy(
       }
     });
 
+    // PERF R12: Batch-load all selectConfigs and original tables (saves 2 findUnique per selector)
+    const selectorOriginalIds = selectorsInOriginal.map(s => s.id);
+    const tableActiveIds = selectorsInOriginal.map(s => s.table_activeId!).filter(Boolean);
+    
+    const [allSelectConfigs, allOriginalTables] = await Promise.all([
+      selectorOriginalIds.length > 0
+        ? prisma.treeBranchLeafSelectConfig.findMany({ where: { nodeId: { in: selectorOriginalIds } } })
+        : Promise.resolve([]),
+      tableActiveIds.length > 0
+        ? prisma.treeBranchLeafNodeTable.findMany({
+            where: { id: { in: tableActiveIds } },
+            select: {
+              id: true,
+              nodeId: true,
+              name: true,
+              meta: true,
+              type: true,
+              description: true,
+              displayInline: true,
+              tableColumns: { select: { id: true } },
+              tableRows: { select: { id: true, cells: true } }
+            }
+          })
+        : Promise.resolve([])
+    ]);
+    
+    const selectConfigByNodeId = new Set(allSelectConfigs.map(sc => sc.nodeId));
+    const originalTableById = new Map(allOriginalTables.map(t => [t.id, t]));
 
-    // 3Ã¯Â¸ÂÃ¢Æ’Â£ Pour chaque selector ORIGINAL, trouver son ÃƒÂ©quivalent COPIÃƒâ€° et copier sa table
+    // Pour chaque selector ORIGINAL, trouver son equivalent COPIE et copier sa table
     for (const originalSelector of selectorsInOriginal) {
       const originalTableId = originalSelector.table_activeId;
       if (!originalTableId) continue;
 
-      // Trouver le selector copiÃƒÂ© (via nodeIdMap)
       const copiedSelectorId = options.nodeIdMap.get(originalSelector.id);
       if (!copiedSelectorId) {
         continue;
       }
 
-      // Ã°Å¸Å½Â¯ SKIP si le selector a un selectConfig (lookup vers table partagÃƒÂ©e, pas de copie nÃƒÂ©cessaire)
-      const hasSelectConfig = await prisma.treeBranchLeafSelectConfig.findUnique({
-        where: { nodeId: originalSelector.id }
-      });
-      if (hasSelectConfig) {
+      // PERF R12: Use pre-loaded selectConfig set (was sequential findUnique)
+      if (selectConfigByNodeId.has(originalSelector.id)) {
         continue;
       }
 
-
-      // Chercher la table originale du selector
-      const originalTable = await prisma.treeBranchLeafNodeTable.findUnique({
-        where: { id: originalTableId },
-        select: {
-          id: true,
-          nodeId: true,
-          name: true,
-          meta: true,
-          type: true,
-          description: true,
-          displayInline: true,
-          tableColumns: { select: { id: true } },
-          tableRows: { select: { id: true, cells: true } }
-        }
-      });
-
+      // PERF R12: Use pre-loaded original table (was sequential findUnique)
+      const originalTable = originalTableById.get(originalTableId);
       if (!originalTable) {
         continue;
       }
 
-
-      // Copier la table avec la bonne signature
+// Copier la table avec la bonne signature
       try {
         
         const result = await copyTableCapacity(
