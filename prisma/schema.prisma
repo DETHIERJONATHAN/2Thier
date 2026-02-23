@@ -7,25 +7,23 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// Configuration de l'objet de référence pour mesures IA par organisation
 model OrganizationMeasurementReferenceConfig {
-  id                String   @id @default(cuid())
+  id                String       @id @default(cuid())
   organizationId    String
-  referenceType     String // 'meter', 'card', 'a4', 'custom'
+  referenceType     String
   customName        String?
-  customSize        Float // Taille en unité spécifiée
-  customUnit        String   @default("cm") // 'cm', 'm', 'mm', 'inch'
-  customWidth       Float? // Largeur pour références rectangulaires
-  customHeight      Float? // Hauteur pour références rectangulaires
-  referenceImageUrl String? // Photo de référence
-  detectionPrompt   String? // Prompt personnalisé pour détection
-  isActive          Boolean  @default(true)
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
+  customSize        Float
+  customUnit        String       @default("cm")
+  customWidth       Float?
+  customHeight      Float?
+  referenceImageUrl String?
+  detectionPrompt   String?
+  isActive          Boolean      @default(true)
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @updatedAt
   createdBy         String
-
-  Organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  User         User         @relation("MeasurementConfigCreator", fields: [createdBy], references: [id], onDelete: SetNull)
+  User              User         @relation("MeasurementConfigCreator", fields: [createdBy], references: [id], onDelete: SetNull)
+  Organization      Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
   @@index([organizationId])
   @@index([createdBy])
@@ -418,9 +416,9 @@ model EmailAccount {
   encryptedPassword String
   userId            String       @unique
   organizationId    String
-  mailProvider      String       @default("gmail") // "gmail" | "yandex" — Fournisseur de messagerie utilisé par cet utilisateur
   createdAt         DateTime     @default(now())
   updatedAt         DateTime
+  mailProvider      String       @default("gmail")
   Organization      Organization @relation(fields: [organizationId], references: [id], onDelete: NoAction, onUpdate: NoAction)
   User              User         @relation(fields: [userId], references: [id], onDelete: NoAction, onUpdate: NoAction)
 
@@ -462,10 +460,10 @@ model Field {
   type                                               String
   width                                              String?
   required                                           Boolean           @default(false)
-  isProtected                                        Boolean           @default(false)
   sectionId                                          String
   order                                              Int
   advancedConfig                                     Json?
+  isProtected                                        Boolean           @default(false)
   Section                                            Section           @relation(fields: [sectionId], references: [id], onDelete: NoAction, onUpdate: NoAction)
   FieldCondition                                     FieldCondition[]
   FieldDependency_FieldDependency_dependsOnIdToField FieldDependency[] @relation("FieldDependency_dependsOnIdToField")
@@ -679,10 +677,10 @@ model GoogleToken {
   createdAt      DateTime     @default(now())
   updatedAt      DateTime
   organizationId String
-  userId         String // Chaque utilisateur a son propre token
-  googleEmail    String? // Email du compte Google connecté
   lastRefreshAt  DateTime?
   refreshCount   Int          @default(0)
+  userId         String
+  googleEmail    String?
   Organization   Organization @relation(fields: [organizationId], references: [id], onDelete: NoAction, onUpdate: NoAction)
   User           User         @relation(fields: [userId], references: [id], onDelete: NoAction, onUpdate: NoAction)
 
@@ -691,13 +689,13 @@ model GoogleToken {
 
 model GoogleTokenRefreshHistory {
   id             String       @id @default(cuid())
-  organizationId String
   refreshedAt    DateTime     @default(now())
   success        Boolean
-  message        String?
-  errorDetails   String?
   oldExpiresAt   DateTime?
   newExpiresAt   DateTime?
+  errorDetails   String?
+  message        String?
+  organizationId String
   Organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
   @@index([organizationId])
@@ -1044,45 +1042,45 @@ model Organization {
   GeneratedDocument          GeneratedDocument[]
   GoogleMailWatch            GoogleMailWatch[]
   GoogleToken                GoogleToken[]
+  GoogleTokenRefreshHistory  GoogleTokenRefreshHistory[]
   GoogleVoiceCall            GoogleVoiceCall[]
   GoogleVoiceConfig          GoogleVoiceConfig?
   GoogleVoiceSMS             GoogleVoiceSMS[]
   GoogleWorkspaceConfig      GoogleWorkspaceConfig?
   IntegrationsSettings       IntegrationsSettings[]
   Invitation                 Invitation[]
+  JoinRequest                JoinRequest[]
   Lead                       Lead[]
   LeadSource                 LeadSource[]
   LeadStatus                 LeadStatus[]
   Module                     Module[]
   Notification               Notification[]
   Order                      Order[]
+  MeasurementReferenceConfig OrganizationMeasurementReferenceConfig[]
   OrganizationModuleStatus   OrganizationModuleStatus[]
   OrganizationRoleStatus     OrganizationRoleStatus[]
   Permission                 Permission[]
   Product                    Product[]
+  ProductDocument            ProductDocument[]
   PublicForm                 PublicForm[]
   PublicFormSubmission       PublicFormSubmission[]
   Quote                      Quote[]
   Role                       Role[]
   TechnicalData              TechnicalData[]
   TelnyxCall                 TelnyxCall[]
+  TelnyxConfig               TelnyxConfig?
   TelnyxConnection           TelnyxConnection[]
   TelnyxMessage              TelnyxMessage[]
   TelnyxPhoneNumber          TelnyxPhoneNumber[]
+  TelnyxSipEndpoint          TelnyxSipEndpoint[]
   TelnyxUserConfig           TelnyxUserConfig[]
-  TelnyxConfig               TelnyxConfig? // 🆕 Config API Telnyx
-  TelnyxSipEndpoint          TelnyxSipEndpoint[] // 🆕 Endpoints SIP
   TimelineEvent              TimelineEvent[]
-  UserOrganization           UserOrganization[]
-  UserFavoriteModule         UserFavoriteModule[]
-  JoinRequest                JoinRequest[]
-  contact_submissions        contact_submissions[]
-  websites                   websites[]
-  MeasurementReferenceConfig OrganizationMeasurementReferenceConfig[]
-  GoogleTokenRefreshHistory  GoogleTokenRefreshHistory[]
-  website_forms              website_forms[]
-  ProductDocument            ProductDocument[]
   TreeOrganizationAccess     TreeOrganizationAccess[]
+  UserFavoriteModule         UserFavoriteModule[]
+  UserOrganization           UserOrganization[]
+  contact_submissions        contact_submissions[]
+  website_forms              website_forms[]
+  websites                   websites[]
 }
 
 model OrganizationModuleStatus {
@@ -1174,10 +1172,10 @@ model PublicForm {
   lastSubmissionAt           DateTime?
   isActive                   Boolean                @default(true)
   isPublic                   Boolean                @default(true)
-  requiresCommercialTracking Boolean                @default(false)
   deletedAt                  DateTime?
   createdAt                  DateTime               @default(now())
   updatedAt                  DateTime
+  requiresCommercialTracking Boolean                @default(false)
   Organization               Organization           @relation(fields: [organizationId], references: [id], onDelete: NoAction, onUpdate: NoAction)
   PublicFormSubmission       PublicFormSubmission[]
 
@@ -1195,11 +1193,11 @@ model PublicFormSubmission {
   ipAddress        String?
   userAgent        String?
   leadId           String?
-  referredBy       String?
   privacyConsent   Boolean      @default(false)
   marketingConsent Boolean      @default(false)
   createdAt        DateTime     @default(now())
   updatedAt        DateTime
+  referredBy       String?
   PublicForm       PublicForm   @relation(fields: [formId], references: [id], onDelete: NoAction, onUpdate: NoAction)
   Organization     Organization @relation(fields: [organizationId], references: [id], onDelete: NoAction, onUpdate: NoAction)
 
@@ -1336,14 +1334,14 @@ model TelnyxCall {
   recordingUrl   String?
   organizationId String
   leadId         String?
-  answeredBy     String? // 🆕 Qui a répondu: "sip:username" | "pstn:+32477..." | null
   startedAt      DateTime
   endedAt        DateTime?
   createdAt      DateTime        @default(now())
   updatedAt      DateTime
+  answeredBy     String?
   Lead           Lead?           @relation(fields: [leadId], references: [id], onDelete: NoAction, onUpdate: NoAction)
   Organization   Organization    @relation(fields: [organizationId], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  TelnyxCallLeg  TelnyxCallLeg[] // 🆕 Relation vers les legs
+  TelnyxCallLeg  TelnyxCallLeg[]
 
   @@index([callId])
   @@index([fromNumber])
@@ -1360,10 +1358,10 @@ model TelnyxConnection {
   type             String
   webhookUrl       String?
   organizationId   String
-  sipDomain        String? // ex: votre-org.sip.telnyx.com
-  callControlAppId String? // ID de l'application Call Control Telnyx
   createdAt        DateTime     @default(now())
   updatedAt        DateTime
+  callControlAppId String?
+  sipDomain        String?
   Organization     Organization @relation(fields: [organizationId], references: [id], onDelete: NoAction, onUpdate: NoAction)
 
   @@index([organizationId])
@@ -1449,42 +1447,38 @@ model TelnyxUserConfig {
   @@index([userId])
 }
 
-// 🆕 NOUVEAUX MODÈLES POUR ARCHITECTURE "TELNYX COMME CERVEAU"
-
-// Configuration API Telnyx par organisation (sécurisée)
 model TelnyxConfig {
   id                   String       @id
   organizationId       String       @unique
-  encryptedApiKey      String // Clé API chiffrée avec ENCRYPTION_KEY
-  webhookSigningSecret String? // Pour valider l'authenticité des webhooks
+  encryptedApiKey      String
+  webhookSigningSecret String?
   webhookUrl           String       @default("__AUTO__")
-  defaultConnectionId  String? // Connexion par défaut pour les appels
-  callControlAppId     String? // ID de l'application Call Control Telnyx
-  fallbackPstnNumber   String? // 🆕 Fallback GSM/PSTN (ex: +32477123456)
+  defaultConnectionId  String?
+  callControlAppId     String?
   createdAt            DateTime     @default(now())
   updatedAt            DateTime
+  fallbackPstnNumber   String?
   Organization         Organization @relation(fields: [organizationId], references: [id], onDelete: NoAction, onUpdate: NoAction)
 
   @@index([organizationId])
 }
 
-// Endpoints SIP (CRM + Softphones utilisateurs)
 model TelnyxSipEndpoint {
   id             String          @id
   organizationId String
-  userId         String? // null = endpoint CRM principal
-  name           String // "CRM Principal", "Softphone Jonathan"
+  userId         String?
+  name           String
   sipUsername    String          @unique
-  sipPassword    String // Chiffré avec ENCRYPTION_KEY
-  sipDomain      String // votre-org.sip.telnyx.com
-  status         String          @default("active") // active, inactive
-  priority       Int             @default(1) // Ordre cascade: 1=CRM, 2=softphones, 3=PSTN
-  timeout        Int             @default(10) // Timeout en secondes
+  sipPassword    String
+  sipDomain      String
+  status         String          @default("active")
+  priority       Int             @default(1)
+  timeout        Int             @default(10)
   createdAt      DateTime        @default(now())
   updatedAt      DateTime
-  User           User?           @relation(fields: [userId], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  Organization   Organization    @relation(fields: [organizationId], references: [id], onDelete: NoAction, onUpdate: NoAction)
   TelnyxCallLeg  TelnyxCallLeg[]
+  Organization   Organization    @relation(fields: [organizationId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  User           User?           @relation(fields: [userId], references: [id], onDelete: NoAction, onUpdate: NoAction)
 
   @@index([organizationId])
   @@index([userId])
@@ -1492,19 +1486,18 @@ model TelnyxSipEndpoint {
   @@index([status])
 }
 
-// Tracking détaillé des legs d'appel (multi-étapes SIP + PSTN)
 model TelnyxCallLeg {
   id          String             @id
-  callId      String // Référence TelnyxCall.callId
-  legType     String // "sip" | "pstn"
-  endpointId  String? // ID TelnyxSipEndpoint si SIP
-  destination String // SIP username ou numéro PSTN (+32477...)
-  status      String // "no-answer" | "answered" | "busy" | "failed" | "timeout"
+  callId      String
+  legType     String
+  endpointId  String?
+  destination String
+  status      String
   dialedAt    DateTime           @default(now())
   answeredAt  DateTime?
   endedAt     DateTime?
-  duration    Int? // Durée en secondes
-  priority    Int // Position dans la cascade (1, 2, 3...)
+  duration    Int?
+  priority    Int
   createdAt   DateTime           @default(now())
   updatedAt   DateTime
   Call        TelnyxCall         @relation(fields: [callId], references: [callId], onDelete: NoAction, onUpdate: NoAction)
@@ -1622,47 +1615,43 @@ model TreeBranchLeafMarker {
 }
 
 model TreeBranchLeafNode {
-  id              String  @id
-  treeId          String
-  parentId        String?
-  type            String
-  subType         String?
-  label           String
-  description     String?
-  value           String?
-  order           Int     @default(0)
-  isRequired      Boolean @default(false)
-  isVisible       Boolean @default(true)
-  isActive        Boolean @default(true)
-  fieldConfig     Json?
-  conditionConfig Json?
-  formulaConfig   Json?
-  tableConfig     Json?
-  apiConfig       Json?
-  linkConfig      Json?
-
-  // Relation vers l'arbre parent
-  TreeBranchLeafTree          TreeBranchLeafTree @relation(fields: [treeId], references: [id], onDelete: Cascade)
+  id                          String                      @id
+  treeId                      String
+  parentId                    String?
+  type                        String
+  subType                     String?
+  label                       String
+  description                 String?
+  value                       String?
+  order                       Int                         @default(0)
+  isRequired                  Boolean                     @default(false)
+  isVisible                   Boolean                     @default(true)
+  isActive                    Boolean                     @default(true)
+  fieldConfig                 Json?
+  conditionConfig             Json?
+  formulaConfig               Json?
+  tableConfig                 Json?
+  apiConfig                   Json?
+  linkConfig                  Json?
   defaultValue                String?
   calculatedValue             String?
-  metadata                    Json               @default("{}")
-  createdAt                   DateTime           @default(now())
+  metadata                    Json                        @default("{}")
+  createdAt                   DateTime                    @default(now())
   updatedAt                   DateTime
-  hasAPI                      Boolean            @default(false)
-  hasCondition                Boolean            @default(false)
-  hasData                     Boolean            @default(false)
-  hasFormula                  Boolean            @default(false)
-  hasLink                     Boolean            @default(false)
-  hasMarkers                  Boolean            @default(false)
-  hasTable                    Boolean            @default(false)
+  hasAPI                      Boolean                     @default(false)
+  hasCondition                Boolean                     @default(false)
+  hasData                     Boolean                     @default(false)
+  hasFormula                  Boolean                     @default(false)
+  hasLink                     Boolean                     @default(false)
+  hasMarkers                  Boolean                     @default(false)
+  hasTable                    Boolean                     @default(false)
   api_activeId                String?
   api_bodyVars                Json?
   api_instances               Json?
   api_name                    String?
-  appearance_size             String?            @default("md")
+  appearance_size             String?                     @default("md")
   appearance_variant          String?
   appearance_width            String?
-  appearance_displayIcon      String?
   bool_defaultValue           Boolean?
   bool_falseLabel             String?
   bool_trueLabel              String?
@@ -1675,13 +1664,13 @@ model TreeBranchLeafNode {
   data_displayFormat          String?
   data_exposedKey             String?
   data_instances              Json?
-  data_precision              Int?               @default(2)
+  data_precision              Int?                        @default(2)
   data_unit                   String?
-  data_visibleToUser          Boolean?           @default(false)
-  date_format                 String?            @default("DD/MM/YYYY")
+  data_visibleToUser          Boolean?                    @default(false)
+  date_format                 String?                     @default("DD/MM/YYYY")
   date_maxDate                DateTime?
   date_minDate                DateTime?
-  date_showTime               Boolean?           @default(false)
+  date_showTime               Boolean?                    @default(false)
   fieldSubType                String?
   fieldType                   String?
   field_label                 String?
@@ -1689,14 +1678,14 @@ model TreeBranchLeafNode {
   formula_instances           Json?
   formula_name                String?
   formula_tokens              Json?
-  image_crop                  Boolean?           @default(false)
+  image_crop                  Boolean?                    @default(false)
   image_maxSize               Int?
   image_ratio                 String?
   image_thumbnails            Json?
   link_activeId               String?
-  link_carryContext           Boolean?           @default(false)
+  link_carryContext           Boolean?                    @default(false)
   link_instances              Json?
-  link_mode                   String?            @default("JUMP")
+  link_mode                   String?                     @default("JUMP")
   link_name                   String?
   link_params                 Json?
   link_targetNodeId           String?
@@ -1706,101 +1695,94 @@ model TreeBranchLeafNode {
   markers_instances           Json?
   markers_name                String?
   markers_selectedIds         Json?
-  number_decimals             Int?               @default(0)
+  number_decimals             Int?                        @default(0)
   number_defaultValue         Decimal?
   number_max                  Decimal?
   number_min                  Decimal?
   number_prefix               String?
-  number_step                 Decimal?           @default(1)
+  number_step                 Decimal?                    @default(1)
   number_suffix               String?
   number_unit                 String?
   option_label                String?
-  select_allowClear           Boolean?           @default(true)
+  select_allowClear           Boolean?                    @default(true)
   select_defaultValue         String?
-  select_multiple             Boolean?           @default(false)
+  select_multiple             Boolean?                    @default(false)
   select_options              Json?
-  select_searchable           Boolean?           @default(true)
+  select_searchable           Boolean?                    @default(true)
   table_activeId              String?
   table_columns               Json?
   table_data                  Json?
   table_importSource          String?
   table_instances             Json?
-  table_isImported            Boolean?           @default(false)
+  table_isImported            Boolean?                    @default(false)
   table_meta                  Json?
   table_name                  String?
   table_rows                  Json?
-  table_type                  String?            @default("columns")
+  table_type                  String?                     @default("columns")
   text_mask                   String?
   text_maxLength              Int?
   text_minLength              Int?
   text_placeholder            String?
   text_regex                  String?
-  text_rows                   Int?               @default(3)
-  tbl_auto_generated          Boolean            @default(false)
+  text_rows                   Int?                        @default(3)
+  tbl_auto_generated          Boolean                     @default(false)
   tbl_capacity                Int?
-  tbl_code                    String?            @db.VarChar(20)
+  tbl_code                    String?                     @db.VarChar(20)
   tbl_created_at              DateTime?
   tbl_type                    Int?
   tbl_updated_at              DateTime?
-  text_helpTooltipType        String?            @default("none")
+  text_helpTooltipType        String?                     @default("none")
   text_helpTooltipText        String?
   text_helpTooltipImage       String?
   repeater_templateNodeIds    String?
-  repeater_minItems           Int?               @default(0)
+  repeater_minItems           Int?                        @default(0)
   repeater_maxItems           Int?
   repeater_addButtonLabel     String?
   repeater_templateNodeLabels String?
-  repeater_countSourceNodeId  String?            // UUID du champ numérique qui contrôle le nombre de copies
-  isMultiple                  Boolean?           @default(false)
-  isSharedReference           Boolean?           @default(false)
+  isMultiple                  Boolean?                    @default(false)
+  isSharedReference           Boolean?                    @default(false)
   sharedReferenceCategory     String?
   sharedReferenceDescription  String?
   sharedReferenceId           String?
   sharedReferenceName         String?
-  sharedReferenceIds          String[]           @default([])
-  repeater_buttonSize         String?            @default("middle")
-  repeater_buttonWidth        String?            @default("auto")
-  repeater_iconOnly           Boolean?           @default(false)
-  linkedConditionIds          String[]           @default([])
-  linkedFormulaIds            String[]           @default([])
-  linkedTableIds              String[]           @default([])
-  linkedVariableIds           String[]           @default([])
+  sharedReferenceIds          String[]                    @default([])
+  repeater_buttonSize         String?                     @default("middle")
+  repeater_buttonWidth        String?                     @default("auto")
+  repeater_iconOnly           Boolean?                    @default(false)
+  linkedConditionIds          String[]                    @default([])
+  linkedFormulaIds            String[]                    @default([])
+  linkedTableIds              String[]                    @default([])
+  linkedVariableIds           String[]                    @default([])
   calculatedAt                DateTime?
   calculatedBy                String?
-  subtabs                     Json?              @db.Json
-  subtab                      Json?              @db.Json
+  subtabs                     Json?                       @db.Json
+  subtab                      Json?                       @db.Json
   file_allowedTypes           String?
   file_maxSize                Int?
-  file_multiple               Boolean?           @default(false)
-  file_showPreview            Boolean?           @default(true)
-  section_collapsible         Boolean?           @default(false)
-  section_columnsDesktop      Int?               @default(2)
-  section_columnsMobile       Int?               @default(1)
-  section_defaultCollapsed    Boolean?           @default(false)
-  section_gutter              Int?               @default(16)
-  section_showChildrenCount   Boolean?           @default(false)
-
-  // AI Measure configuration (colonnes dédiées pour éviter problèmes JSON)
-  aiMeasure_enabled     Boolean @default(false)
-  aiMeasure_autoTrigger Boolean @default(true)
-  aiMeasure_prompt      String?
-  aiMeasure_keys        Json?   @db.Json
-
-  // 🆕 Configuration complète IA Mesure (objets de référence + paramètres détection)
-  iaMesureConfig Json? @map("ia_mesure_config") @db.Json
-  // Structure: { enabled: boolean, referenceObjects: [{type,width,height,unit}], detectionSettings: {minPhotos,confidenceThreshold,useSharp,useFusion} }
-
-  // 📦 PRODUIT - Capacité de filtrage par produit
-  hasProduct                  Boolean            @default(false)
-  product_sourceNodeId        String?            // ID du nœud MULTISELECT qui pilote le filtrage
-  product_visibleFor          Json?              @db.Json // Liste des valeurs d'options pour lesquelles ce nœud est visible. Ex: ["panneaux","batteries"]. null = toujours visible.
-  product_options             Json?              @db.Json // Options du produit (stockées sur le nœud source). Ex: [{value:"panneaux",label:"Panneaux solaires"}]
-
-  // Relation vers la variable exposée (1-to-1)
-  TreeBranchLeafNodeVariable TreeBranchLeafNodeVariable?
-  TreeBranchLeafNodeTable    TreeBranchLeafNodeTable[]
-  TreeBranchLeafSelectConfig TreeBranchLeafSelectConfig?
+  file_multiple               Boolean?                    @default(false)
+  file_showPreview            Boolean?                    @default(true)
+  section_collapsible         Boolean?                    @default(false)
+  section_columnsDesktop      Int?                        @default(2)
+  section_columnsMobile       Int?                        @default(1)
+  section_defaultCollapsed    Boolean?                    @default(false)
+  section_gutter              Int?                        @default(16)
+  section_showChildrenCount   Boolean?                    @default(false)
+  aiMeasure_autoTrigger       Boolean                     @default(true)
+  aiMeasure_enabled           Boolean                     @default(false)
+  aiMeasure_keys              Json?                       @db.Json
+  aiMeasure_prompt            String?
+  iaMesureConfig              Json?                       @map("ia_mesure_config") @db.Json
+  repeater_countSourceNodeId  String?
+  appearance_displayIcon      String?
+  hasProduct                  Boolean                     @default(false)
+  product_options             Json?                       @db.Json
+  product_sourceNodeId        String?
+  product_visibleFor          Json?                       @db.Json
   ProductDocument             ProductDocument[]
+  TreeBranchLeafTree          TreeBranchLeafTree          @relation(fields: [treeId], references: [id], onDelete: Cascade)
+  TreeBranchLeafNodeTable     TreeBranchLeafNodeTable[]
+  TreeBranchLeafNodeVariable  TreeBranchLeafNodeVariable?
+  TreeBranchLeafSelectConfig  TreeBranchLeafSelectConfig?
 
   @@index([api_activeId])
   @@index([condition_activeId])
@@ -1873,26 +1855,24 @@ model TreeBranchLeafNodeMarker {
 }
 
 model TreeBranchLeafNodeTable {
-  id                   String   @id
+  id                   String                          @id
   nodeId               String
   organizationId       String?
   name                 String
   description          String?
-  type                 String   @default("basic")
-  meta                 Json     @default("{}")
-  isDefault            Boolean  @default(false)
-  order                Int      @default(0)
-  createdAt            DateTime @default(now())
+  type                 String                          @default("basic")
+  meta                 Json                            @default("{}")
+  isDefault            Boolean                         @default(false)
+  order                Int                             @default(0)
+  createdAt            DateTime                        @default(now())
   updatedAt            DateTime
-  lookupDisplayColumns String[] @default([])
+  lookupDisplayColumns String[]                        @default([])
   lookupSelectColumn   String?
-  columnCount          Int      @default(0)
-  rowCount             Int      @default(0)
-
-  // Relations
-  TreeBranchLeafNode TreeBranchLeafNode              @relation(fields: [nodeId], references: [id], onDelete: Cascade)
-  tableColumns       TreeBranchLeafNodeTableColumn[]
-  tableRows          TreeBranchLeafNodeTableRow[]
+  columnCount          Int                             @default(0)
+  rowCount             Int                             @default(0)
+  TreeBranchLeafNode   TreeBranchLeafNode              @relation(fields: [nodeId], references: [id], onDelete: Cascade)
+  tableColumns         TreeBranchLeafNodeTableColumn[]
+  tableRows            TreeBranchLeafNodeTableRow[]
 
   @@unique([nodeId, name])
   @@index([lookupSelectColumn])
@@ -1901,16 +1881,14 @@ model TreeBranchLeafNodeTable {
 }
 
 model TreeBranchLeafNodeTableColumn {
-  id          String  @id
-  tableId     String
-  columnIndex Int
-  name        String
-  type        String? @default("text")
-  width       Int?
-  format      String?
-  metadata    Json    @default("{}")
-
-  // Relation vers la table parente
+  id                      String                  @id
+  tableId                 String
+  columnIndex             Int
+  name                    String
+  type                    String?                 @default("text")
+  width                   Int?
+  format                  String?
+  metadata                Json                    @default("{}")
   TreeBranchLeafNodeTable TreeBranchLeafNodeTable @relation(fields: [tableId], references: [id], onDelete: Cascade)
 
   @@unique([tableId, columnIndex])
@@ -1918,39 +1896,35 @@ model TreeBranchLeafNodeTableColumn {
 }
 
 model TreeBranchLeafNodeTableRow {
-  id       String @id
-  tableId  String
-  cells    Json
-  rowIndex Int
-
-  // Relation vers la table parente
-  TreeBranchLeafNodeTable TreeBranchLeafNodeTable @relation(fields: [tableId], references: [id], onDelete: Cascade)
+  id                      String                  @id
+  tableId                 String
+  cells                   Json
+  rowIndex                Int
   ProductDocument         ProductDocument[]
+  TreeBranchLeafNodeTable TreeBranchLeafNodeTable @relation(fields: [tableId], references: [id], onDelete: Cascade)
 
   @@unique([tableId, rowIndex])
   @@index([tableId])
 }
 
 model TreeBranchLeafNodeVariable {
-  id             String   @id
-  nodeId         String   @unique
-  exposedKey     String   @unique
-  displayName    String
-  displayFormat  String   @default("number")
-  unit           String?
-  precision      Int?     @default(2)
-  visibleToUser  Boolean  @default(true)
-  isReadonly     Boolean  @default(false)
-  defaultValue   String?
-  metadata       Json     @default("{}")
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime
-  fixedValue     String?
-  selectedNodeId String?
-  sourceRef      String?
-  sourceType     String?  @default("fixed")
-
-  // Relation vers le node parent
+  id                 String             @id
+  nodeId             String             @unique
+  exposedKey         String             @unique
+  displayName        String
+  displayFormat      String             @default("number")
+  unit               String?
+  precision          Int?               @default(2)
+  visibleToUser      Boolean            @default(true)
+  isReadonly         Boolean            @default(false)
+  defaultValue       String?
+  metadata           Json               @default("{}")
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime
+  fixedValue         String?
+  selectedNodeId     String?
+  sourceRef          String?
+  sourceType         String?            @default("fixed")
   TreeBranchLeafNode TreeBranchLeafNode @relation(fields: [nodeId], references: [id], onDelete: Cascade)
 
   @@index([exposedKey])
@@ -1979,27 +1953,25 @@ model TreeBranchLeafNumberConfig {
 }
 
 model TreeBranchLeafSelectConfig {
-  id              String   @id
-  nodeId          String   @unique
-  options         Json     @default("[]")
-  multiple        Boolean  @default(false)
-  searchable      Boolean  @default(false)
-  allowCustom     Boolean  @default(false)
-  maxSelections   Int?
-  optionsSource   String?
-  apiEndpoint     String?
-  tableReference  String?
-  dependsOnNodeId String?
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime
-  keyColumn       String?
-  valueColumn     String?
-  displayColumn   String?
-  displayRow      String?
-  keyRow          String?
-  valueRow        String?
-
-  // Relation vers le node parent
+  id                 String             @id
+  nodeId             String             @unique
+  options            Json               @default("[]")
+  multiple           Boolean            @default(false)
+  searchable         Boolean            @default(false)
+  allowCustom        Boolean            @default(false)
+  maxSelections      Int?
+  optionsSource      String?
+  apiEndpoint        String?
+  tableReference     String?
+  dependsOnNodeId    String?
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime
+  keyColumn          String?
+  valueColumn        String?
+  displayColumn      String?
+  displayRow         String?
+  keyRow             String?
+  valueRow           String?
   TreeBranchLeafNode TreeBranchLeafNode @relation(fields: [nodeId], references: [id], onDelete: Cascade)
 
   @@index([nodeId])
@@ -2134,26 +2106,22 @@ model TreeBranchLeafTextConfig {
 }
 
 model TreeBranchLeafTree {
-  id               String             @id
-  organizationId   String
-  name             String
-  description      String?
-  category         String             @default("formulaire")
-  icon             String?
-  color            String             @default("#10b981")
-  version          String             @default("1.0.0")
-  status           String             @default("draft")
-  settings         Json               @default("{}")
-  metadata         Json               @default("{}")
-  isPublic         Boolean            @default(false)
-  createdAt        DateTime           @default(now())
-  updatedAt        DateTime
-  DocumentTemplate DocumentTemplate[]
-
-  // Relation vers les nodes de l'arbre
-  TreeBranchLeafNode TreeBranchLeafNode[]
-
-  // Relation vers les accès organisationnels
+  id                     String                   @id
+  organizationId         String
+  name                   String
+  description            String?
+  category               String                   @default("formulaire")
+  icon                   String?
+  color                  String                   @default("#10b981")
+  version                String                   @default("1.0.0")
+  status                 String                   @default("draft")
+  settings               Json                     @default("{}")
+  metadata               Json                     @default("{}")
+  isPublic               Boolean                  @default(false)
+  createdAt              DateTime                 @default(now())
+  updatedAt              DateTime
+  DocumentTemplate       DocumentTemplate[]
+  TreeBranchLeafNode     TreeBranchLeafNode[]
   TreeOrganizationAccess TreeOrganizationAccess[]
 
   @@index([category])
@@ -2163,19 +2131,16 @@ model TreeBranchLeafTree {
 
 /// Gestion des accès aux arbres par organisation, rôles et onglets
 model TreeOrganizationAccess {
-  id             String       @id @default(cuid())
-  treeId         String
-  organizationId String
-  isOwner        Boolean      @default(false)  // L'organisation propriétaire de l'arbre
-  active         Boolean      @default(true)
-  // Configuration JSON des accès par onglet/sous-onglet
-  // Structure: { tabs: { [nodeId]: { visible: bool, allowedRoles: string[], isSequential: bool, sequentialOrder: int, subTabs: { [subTabKey]: { visible: bool, allowedRoles: string[] } } } } }
-  tabAccessConfig Json        @default("{}")
-  createdAt      DateTime     @default(now())
-  updatedAt      DateTime     @updatedAt
-
-  tree           TreeBranchLeafTree @relation(fields: [treeId], references: [id], onDelete: Cascade)
-  organization   Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  id              String             @id @default(cuid())
+  treeId          String
+  organizationId  String
+  isOwner         Boolean            @default(false)
+  active          Boolean            @default(true)
+  tabAccessConfig Json               @default("{}")
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+  organization    Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  tree            TreeBranchLeafTree @relation(fields: [treeId], references: [id], onDelete: Cascade)
 
   @@unique([treeId, organizationId])
   @@index([organizationId])
@@ -2196,8 +2161,8 @@ model User {
   phoneNumber                                         String?
   vatNumber                                           String?
   role                                                String                                   @default("user")
-  organizationId                                      String? // Organisation principale
-  commercialSlug                                      String? // 🎯 Slug commercial (ex: "jean-dupont")
+  commercialSlug                                      String?
+  organizationId                                      String?
   CalendarEvent                                       CalendarEvent[]
   CalendarParticipant                                 CalendarParticipant[]
   DeletedEmail                                        DeletedEmail[]
@@ -2208,29 +2173,29 @@ model User {
   GeneratedDocument_GeneratedDocument_createdByToUser GeneratedDocument[]                      @relation("GeneratedDocument_createdByToUser")
   GeneratedDocument_GeneratedDocument_sentByToUser    GeneratedDocument[]                      @relation("GeneratedDocument_sentByToUser")
   GoogleMailWatch                                     GoogleMailWatch?
-  GoogleToken                                         GoogleToken[] // Tokens Google par organisation
+  GoogleToken                                         GoogleToken[]
   GoogleVoiceCall                                     GoogleVoiceCall[]
   GoogleVoiceSMS                                      GoogleVoiceSMS[]
   GoogleWorkspaceUser                                 GoogleWorkspaceUser?
   IntegrationsSettings                                IntegrationsSettings[]
   Invitation_Invitation_invitedByIdToUser             Invitation[]                             @relation("Invitation_invitedByIdToUser")
   Invitation_Invitation_targetUserIdToUser            Invitation[]                             @relation("Invitation_targetUserIdToUser")
+  JoinRequest                                         JoinRequest[]
   Lead                                                Lead[]
   Notification                                        Notification[]
+  MeasurementReferenceConfig                          OrganizationMeasurementReferenceConfig[] @relation("MeasurementConfigCreator")
+  ProductDocumentsUploaded                            ProductDocument[]                        @relation("ProductDocumentsUploaded")
   TelnyxPhoneNumber                                   TelnyxPhoneNumber[]
   TelnyxSettings                                      TelnyxSettings?
+  TelnyxSipEndpoint                                   TelnyxSipEndpoint[]
   TelnyxUserConfig                                    TelnyxUserConfig?
-  TelnyxSipEndpoint                                   TelnyxSipEndpoint[] // 🆕 Endpoints SIP utilisateur
+  UserFavoriteModule                                  UserFavoriteModule[]
   UserOrganization                                    UserOrganization[]
   UserService                                         UserService[]
-  UserFavoriteModule                                  UserFavoriteModule[]
-  JoinRequest                                         JoinRequest[]
   website_blog_posts                                  website_blog_posts[]
   website_media_files                                 website_media_files[]
-  MeasurementReferenceConfig                          OrganizationMeasurementReferenceConfig[] @relation("MeasurementConfigCreator")
-  ProductDocumentsUploaded                             ProductDocument[] @relation("ProductDocumentsUploaded")
 
-  @@index([organizationId, commercialSlug]) // 🎯 Index pour optimiser les recherches de slug
+  @@index([organizationId, commercialSlug])
 }
 
 model UserOrganization {
@@ -2524,33 +2489,334 @@ model websites {
   siteType                  String
   slug                      String
   domain                    String?
-  cloudRunDomain            String? // Domaine mappé dans Cloud Run (ex: 2thier.be)
-  cloudRunServiceName       String? // Nom du service Cloud Run (ex: crm2thier-vite-prod)
-  cloudRunRegion            String?                @default("europe-west1") // Région Cloud Run
-  cloudRunMappingVerified   Boolean                @default(false) // Mapping vérifié et fonctionnel
-  cloudRunMappingVerifiedAt DateTime? // Date de vérification
   isActive                  Boolean                @default(true)
   isPublished               Boolean                @default(false)
   maintenanceMode           Boolean                @default(false)
   maintenanceMessage        String?
   createdAt                 DateTime               @default(now())
   updatedAt                 DateTime
+  cloudRunDomain            String?
+  cloudRunMappingVerified   Boolean                @default(false)
+  cloudRunMappingVerifiedAt DateTime?
+  cloudRunRegion            String?                @default("europe-west1")
+  cloudRunServiceName       String?
   contact_submissions       contact_submissions[]
   website_blog_posts        website_blog_posts[]
   website_configs           website_configs?
+  website_form_website      website_form_website[]
   website_media_files       website_media_files[]
   website_projects          website_projects[]
   website_sections          website_sections[]
   website_services          website_services[]
   website_testimonials      website_testimonials[]
   website_themes            website_themes?
-  website_form_website      website_form_website[]
   Organization              Organization           @relation(fields: [organizationId], references: [id], onDelete: NoAction, onUpdate: NoAction)
 
   @@unique([organizationId, slug])
   @@index([organizationId])
   @@index([slug])
   @@index([cloudRunDomain])
+}
+
+/// Fiches techniques / documents liés aux produits (panneaux, onduleurs, etc.)
+/// Liés aux FieldOptionNode pour association automatique dans les devis
+model ProductDocument {
+  id             String                      @id @default(dbgenerated("(gen_random_uuid())::text"))
+  /// Référence au TreeBranchLeafNode (champ/option de l'arbre)
+  nodeId         String
+  organizationId String
+  /// Utilisateur qui a uploadé
+  uploadedById   String
+  /// Métadonnées du fichier
+  /// Nom affiché (ex: "Fiche technique JA Solar 425W")
+  name           String
+  /// Nom du fichier original
+  fileName       String
+  mimeType       String                      @default("application/pdf")
+  /// Taille en octets
+  fileSize       Int?
+  /// Stockage unifié
+  storageType    DocumentStorageType         @default(LOCAL)
+  /// Chemin local pour stockage CRM (users Yandex)
+  localPath      String?
+  /// ID fichier Google Drive (users Google)
+  driveFileId    String?
+  /// URL publique/partagée Google Drive
+  driveUrl       String?
+  /// URL externe (Yandex Disk ou autre)
+  externalUrl    String?
+  /// Catégorie pour filtrage
+  /// fiche_technique, certification, garantie, notice
+  category       String                      @default("fiche_technique")
+  createdAt      DateTime                    @default(now()) @db.Timestamp(6)
+  updatedAt      DateTime                    @updatedAt @db.Timestamp(6)
+  /// Référence optionnelle à une ligne de table lookup
+  tableRowId     String?
+  node           TreeBranchLeafNode          @relation(fields: [nodeId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  organization   Organization                @relation(fields: [organizationId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  tableRow       TreeBranchLeafNodeTableRow? @relation(fields: [tableRowId], references: [id], onUpdate: NoAction)
+  uploadedBy     User                        @relation("ProductDocumentsUploaded", fields: [uploadedById], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([nodeId])
+  @@index([tableRowId])
+  @@index([organizationId])
+  @@index([category])
+  @@index([storageType])
+}
+
+model JoinRequest {
+  id             String            @id @default(cuid())
+  userId         String
+  organizationId String
+  message        String?
+  status         JoinRequestStatus @default(PENDING)
+  reviewedBy     String?
+  reviewedAt     DateTime?
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+  Organization   Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  User           User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, organizationId])
+  @@index([userId])
+  @@index([organizationId])
+  @@index([status])
+}
+
+model UserFavoriteModule {
+  id             String       @id @default(cuid())
+  userId         String
+  organizationId String
+  moduleKey      String
+  createdAt      DateTime     @default(now())
+  Organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  User           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, organizationId, moduleKey])
+  @@index([userId])
+  @@index([organizationId])
+}
+
+model MeasurePhoto {
+  id                 String              @id @default(cuid())
+  organizationId     String
+  treeId             String?
+  nodeId             String?
+  fieldId            String?
+  fileUrl            String?
+  storageRef         String?
+  mimeType           String?
+  widthPx            Int?
+  heightPx           Int?
+  exif               Json?
+  deviceInfo         Json?
+  referenceType      String?
+  referenceSizeMm    Json?
+  arucoId            Int?
+  arucoCornersPx     Json?
+  homography         Json?
+  pose               Json?
+  measurements       Json?
+  status             String?
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+  MeasurePhotoPoints MeasurePhotoPoint[]
+
+  @@index([organizationId])
+  @@index([treeId])
+  @@index([nodeId])
+  @@index([fieldId])
+}
+
+model MeasurePhotoPoint {
+  id             String       @id @default(cuid())
+  measurePhotoId String
+  label          String
+  xPx            Float
+  yPx            Float
+  source         String?
+  confidence     Float?
+  MeasurePhoto   MeasurePhoto @relation(fields: [measurePhotoId], references: [id], onDelete: Cascade)
+
+  @@index([measurePhotoId])
+}
+
+model CalibrationProfile {
+  id              String   @id @default(cuid())
+  organizationId  String
+  name            String
+  referenceType   String
+  referenceSizeMm Json?
+  arucoId         Int?
+  cameraModel     String?
+  lensFov         Float?
+  notes           String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@unique([organizationId, name])
+  @@index([organizationId])
+}
+
+/// Définition d'un formulaire (peut être lié à plusieurs sites)
+model website_forms {
+  id                         Int                        @id @default(autoincrement())
+  organizationId             String
+  name                       String
+  slug                       String
+  description                String?
+  treeId                     String?
+  isActive                   Boolean                    @default(true)
+  settings                   Json                       @default("{}")
+  successTitle               String?                    @default("Merci pour votre demande !")
+  successMessage             String?                    @default("Nous vous recontacterons dans les plus brefs délais.")
+  createdAt                  DateTime                   @default(now())
+  updatedAt                  DateTime                   @updatedAt
+  startQuestionKey           String?
+  requiresCommercialTracking Boolean                    @default(false)
+  questions                  website_form_questions[]
+  steps                      website_form_steps[]
+  submissions                website_form_submissions[]
+  websites                   website_form_website[]
+  Organization               Organization               @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, slug])
+  @@index([organizationId])
+  @@index([slug])
+  @@index([isActive])
+}
+
+/// Étape du formulaire (une question par écran style Effy)
+model website_form_steps {
+  id         Int                   @id @default(autoincrement())
+  formId     Int
+  title      String
+  subtitle   String?
+  helpText   String?
+  stepType   String                @default("single_choice")
+  order      Int                   @default(0)
+  isRequired Boolean               @default(true)
+  condition  Json?
+  settings   Json                  @default("{}")
+  createdAt  DateTime              @default(now())
+  updatedAt  DateTime              @updatedAt
+  fields     website_form_fields[]
+  form       website_forms         @relation(fields: [formId], references: [id], onDelete: Cascade)
+
+  @@index([formId])
+  @@index([formId, order])
+}
+
+/// Champs/Options d'une étape
+model website_form_fields {
+  id            Int                   @id @default(autoincrement())
+  stepId        Int
+  label         String
+  value         String?
+  fieldType     String                @default("option")
+  icon          String?
+  imageUrl      String?
+  placeholder   String?
+  helpText      String?
+  defaultValue  String?
+  validation    Json?
+  tblNodeId     String?
+  tblNodeLabel  String?
+  order         Int                   @default(0)
+  isDefault     Boolean               @default(false)
+  condition     Json?
+  metadata      Json                  @default("{}")
+  createdAt     DateTime              @default(now())
+  updatedAt     DateTime              @updatedAt
+  allowMultiple Boolean               @default(false)
+  isRequired    Boolean               @default(false)
+  name          String?
+  options       Json?
+  parentFieldId Int?
+  parentField   website_form_fields?  @relation("FieldChildren", fields: [parentFieldId], references: [id], onDelete: Cascade)
+  childFields   website_form_fields[] @relation("FieldChildren")
+  step          website_form_steps    @relation(fields: [stepId], references: [id], onDelete: Cascade)
+
+  @@index([stepId])
+  @@index([stepId, order])
+  @@index([tblNodeId])
+  @@index([parentFieldId])
+}
+
+/// 🎯 QUESTIONS - Style Effy : 1 question = 1 écran pleine page
+/// Chaque question a sa propre navigation conditionnelle
+model website_form_questions {
+  id                     Int           @id @default(autoincrement())
+  formId                 Int
+  questionKey            String
+  title                  String
+  subtitle               String?
+  helpText               String?
+  icon                   String?
+  questionType           String        @default("single_choice")
+  placeholder            String?
+  inputSuffix            String?
+  minValue               Int?
+  maxValue               Int?
+  options                Json?
+  defaultNextQuestionKey String?
+  navigation             Json?
+  isEndQuestion          Boolean       @default(false)
+  tblNodeId              String?
+  tblNodeLabel           String?
+  order                  Int           @default(0)
+  isRequired             Boolean       @default(true)
+  metadata               Json          @default("{}")
+  createdAt              DateTime      @default(now())
+  updatedAt              DateTime      @updatedAt
+  form                   website_forms @relation(fields: [formId], references: [id], onDelete: Cascade)
+
+  @@unique([formId, questionKey])
+  @@index([formId])
+  @@index([formId, order])
+  @@index([questionKey])
+}
+
+/// Table de liaison formulaire <-> sites (N-N)
+model website_form_website {
+  id        Int           @id @default(autoincrement())
+  formId    Int
+  websiteId Int
+  isDefault Boolean       @default(false)
+  urlPath   String?       @default("/simulateur")
+  createdAt DateTime      @default(now())
+  form      website_forms @relation(fields: [formId], references: [id], onDelete: Cascade)
+  website   websites      @relation(fields: [websiteId], references: [id], onDelete: Cascade)
+
+  @@unique([formId, websiteId])
+  @@index([websiteId])
+  @@index([formId])
+}
+
+/// Soumissions de formulaires (tracking des leads créés)
+model website_form_submissions {
+  id           Int           @id @default(autoincrement())
+  formId       Int
+  leadId       String?
+  submissionId String?
+  formData     Json
+  ipAddress    String?
+  userAgent    String?
+  referrer     String?
+  utmSource    String?
+  utmMedium    String?
+  utmCampaign  String?
+  status       String        @default("completed")
+  errorMessage String?
+  createdAt    DateTime      @default(now())
+  referredBy   String?
+  form         website_forms @relation(fields: [formId], references: [id], onDelete: Cascade)
+
+  @@index([formId])
+  @@index([leadId])
+  @@index([submissionId])
+  @@index([createdAt])
+  @@index([status])
 }
 
 enum DocumentStatus {
@@ -2632,47 +2898,6 @@ enum DocumentStorageType {
   YANDEX_DISK
 }
 
-/// Fiches techniques / documents liés aux produits (panneaux, onduleurs, etc.)
-/// Liés aux FieldOptionNode pour association automatique dans les devis
-model ProductDocument {
-  id             String              @id @default(dbgenerated("(gen_random_uuid())::text"))
-  nodeId         String              /// Référence au TreeBranchLeafNode (champ/option de l'arbre)
-  tableRowId     String?             /// Référence optionnelle à une ligne de table lookup
-  organizationId String
-  uploadedById   String              /// Utilisateur qui a uploadé
-
-  /// Métadonnées du fichier
-  name           String              /// Nom affiché (ex: "Fiche technique JA Solar 425W")
-  fileName       String              /// Nom du fichier original
-  mimeType       String              @default("application/pdf")
-  fileSize       Int?                /// Taille en octets
-
-  /// Stockage unifié
-  storageType    DocumentStorageType @default(LOCAL)
-  localPath      String?             /// Chemin local pour stockage CRM (users Yandex)
-  driveFileId    String?             /// ID fichier Google Drive (users Google)
-  driveUrl       String?             /// URL publique/partagée Google Drive
-  externalUrl    String?             /// URL externe (Yandex Disk ou autre)
-
-  /// Catégorie pour filtrage
-  category       String              @default("fiche_technique") /// fiche_technique, certification, garantie, notice
-
-  createdAt      DateTime            @default(now()) @db.Timestamp(6)
-  updatedAt      DateTime            @updatedAt @db.Timestamp(6)
-
-  /// Relations
-  organization   Organization        @relation(fields: [organizationId], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  uploadedBy     User                @relation("ProductDocumentsUploaded", fields: [uploadedById], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  node           TreeBranchLeafNode  @relation(fields: [nodeId], references: [id], onDelete: Cascade, onUpdate: NoAction)
-  tableRow       TreeBranchLeafNodeTableRow? @relation(fields: [tableRowId], references: [id], onDelete: SetNull, onUpdate: NoAction)
-
-  @@index([nodeId])
-  @@index([tableRowId])
-  @@index([organizationId])
-  @@index([category])
-  @@index([storageType])
-}
-
 enum SectionType {
   COVER_PAGE
   COMPANY_PRESENTATION
@@ -2704,387 +2929,8 @@ enum UserOrganizationStatus {
   REJECTED
 }
 
-// Demandes d'adhésion à une organisation (type "joinOrg" à l'inscription)
 enum JoinRequestStatus {
   PENDING
   APPROVED
   REJECTED
-}
-
-model JoinRequest {
-  id             String            @id @default(cuid())
-  userId         String
-  organizationId String
-  message        String? // Message optionnel de l'utilisateur
-  status         JoinRequestStatus @default(PENDING)
-  reviewedBy     String? // ID de l'admin qui a traité la demande
-  reviewedAt     DateTime?
-  createdAt      DateTime          @default(now())
-  updatedAt      DateTime          @updatedAt
-
-  User         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
-  Organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-
-  @@unique([userId, organizationId]) // Un user ne peut faire qu'une demande par org
-  @@index([userId])
-  @@index([organizationId])
-  @@index([status])
-}
-
-model UserFavoriteModule {
-  id             String   @id @default(cuid())
-  userId         String
-  organizationId String
-  moduleKey      String // Ex: "leads", "dashboard", "email", etc.
-  createdAt      DateTime @default(now())
-
-  User         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
-  Organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-
-  @@unique([userId, organizationId, moduleKey])
-  @@index([userId])
-  @@index([organizationId])
-}
-
-// ============================================================================
-// 📷 Mesures photo (ArUco / homographie) - Nouveau flux vision
-// ============================================================================
-
-model MeasurePhoto {
-  id              String   @id @default(cuid())
-  organizationId  String
-  treeId          String?
-  nodeId          String?
-  fieldId         String?
-  fileUrl         String?
-  storageRef      String?
-  mimeType        String?
-  widthPx         Int?
-  heightPx        Int?
-  exif            Json?
-  deviceInfo      Json? // { make, model, focal, fov, orientation }
-  referenceType   String? // a4|card|arucoTag|custom
-  referenceSizeMm Json? // { width, height }
-  arucoId         Int?
-  arucoCornersPx  Json? // [[x,y]...]
-  homography      Json? // { matrix, quality, rmsePx }
-  pose            Json? // { pitch,yaw,roll,depthMm,reprojError }
-  measurements    Json? // { key: value }
-  status          String? // draft|ok|failed
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
-
-  MeasurePhotoPoints MeasurePhotoPoint[]
-
-  @@index([organizationId])
-  @@index([treeId])
-  @@index([nodeId])
-  @@index([fieldId])
-}
-
-model MeasurePhotoPoint {
-  id             String  @id @default(cuid())
-  measurePhotoId String
-  label          String
-  xPx            Float
-  yPx            Float
-  source         String? // detected|manual
-  confidence     Float?
-
-  MeasurePhoto MeasurePhoto @relation(fields: [measurePhotoId], references: [id], onDelete: Cascade)
-
-  @@index([measurePhotoId])
-}
-
-model CalibrationProfile {
-  id              String   @id @default(cuid())
-  organizationId  String
-  name            String
-  referenceType   String // a4|card|arucoTag|custom
-  referenceSizeMm Json? // { width, height }
-  arucoId         Int?
-  cameraModel     String?
-  lensFov         Float?
-  notes           String?
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
-
-  @@unique([organizationId, name])
-  @@index([organizationId])
-}
-
-// ============================================================================
-// 📋 MODULE FORMULAIRES - Style Effy
-// Formulaires publics avec mapping TBL pour création de leads
-// ============================================================================
-
-/// Définition d'un formulaire (peut être lié à plusieurs sites)
-model website_forms {
-  id             Int     @id @default(autoincrement())
-  organizationId String
-  name           String // "Simulateur Isolation"
-  slug           String // "simulateur-isolation" 
-  description    String?
-  treeId         String? // ID de l'arbre TBL pour le mapping des champs
-  isActive       Boolean @default(true)
-
-  // 🎯 Tracking commercial nominatif
-  requiresCommercialTracking Boolean @default(false) // Active le système de liens par commercial
-
-  // Configuration globale du formulaire
-  settings Json @default("{}") // {primaryColor, logo, trustpilotUrl, ...}
-
-  // 🧭 Question de départ (pour le nouveau système 1 question = 1 écran)
-  startQuestionKey String? // Clé de la première question à afficher
-
-  // Textes de fin de formulaire
-  successTitle   String? @default("Merci pour votre demande !")
-  successMessage String? @default("Nous vous recontacterons dans les plus brefs délais.")
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  // Relations
-  Organization Organization               @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  steps        website_form_steps[]
-  questions    website_form_questions[] // Nouveau système 1 question = 1 écran
-  websites     website_form_website[]
-  submissions  website_form_submissions[]
-
-  @@unique([organizationId, slug])
-  @@index([organizationId])
-  @@index([slug])
-  @@index([isActive])
-}
-
-/// Étape du formulaire (une question par écran style Effy)
-model website_form_steps {
-  id     Int @id @default(autoincrement())
-  formId Int
-
-  // Contenu de l'étape
-  title    String // "Votre projet concerne :"
-  subtitle String? // "Cela permet de nous assurer de votre éligibilité..."
-  helpText String? // Texte d'aide affiché en tooltip ou sous le titre
-
-  // Type d'étape
-  stepType String @default("single_choice") // single_choice, multiple_choice, text, number, email, phone, address, date
-
-  // Configuration
-  order      Int     @default(0)
-  isRequired Boolean @default(true)
-
-  // Logique conditionnelle (JSON)
-  // Ex: {"showIf": [{"stepId": 1, "fieldValue": "maison"}]}
-  condition Json?
-
-  // Configuration spécifique au type d'étape
-  settings Json @default("{}") // {layout: 'grid', columns: 2, ...}
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  // Relations
-  form   website_forms         @relation(fields: [formId], references: [id], onDelete: Cascade)
-  fields website_form_fields[]
-
-  @@index([formId])
-  @@index([formId, order])
-}
-
-/// Champs/Options d'une étape
-model website_form_fields {
-  id     Int @id @default(autoincrement())
-  stepId Int
-
-  // 🔗 Champ parent pour sous-questions imbriquées
-  parentFieldId Int? // Si défini, ce champ est une sous-question
-
-  // Contenu du champ
-  label String // "Une maison", "Surface habitable (m²)"
-  name  String? // Nom technique du champ (ex: "housing_type")
-  value String? // Valeur par défaut ou valeur unique pour les options
-
-  // Type de champ
-  fieldType String @default("option") // option, card_select, text, number, email, phone, textarea, select, radio, checkbox, date, address
-
-  // Visuel
-  icon     String? // Emoji "🏠" ou nom d'icône
-  imageUrl String? // URL image illustrative (style Effy)
-
-  // Configuration input
-  placeholder  String?
-  helpText     String?
-  defaultValue String?
-
-  // Options pour select/radio/checkbox/card_select (JSON array)
-  // Ex: [{"value": "maison", "label": "Maison", "icon": "🏠"}, ...]
-  options Json?
-
-  // Validation (JSON)
-  // Ex: {"min": 10, "max": 500, "pattern": "^[0-9]+$", "required": true, "errorMessage": "..."}
-  validation Json?
-
-  // 🔥 MAPPING TBL - Lien vers un nœud TreeBranchLeaf
-  tblNodeId    String? // ID du nœud TBL où sauvegarder la valeur
-  tblNodeLabel String? // Label du nœud pour affichage admin
-
-  // Configuration
-  order         Int     @default(0)
-  isRequired    Boolean @default(false) // Champ obligatoire
-  isDefault     Boolean @default(false) // Option pré-sélectionnée
-  allowMultiple Boolean @default(false) // Permet choix multiples (checkbox)
-
-  // 🎯 Logique conditionnelle avancée
-  // Format: {"showIf": {"field": "heating_type", "operator": "equals", "value": "fioul"}}
-  // Opérateurs: equals, notEquals, in, notIn, greaterThan, lessThan, contains
-  condition Json?
-
-  // Métadonnées additionnelles
-  metadata Json @default("{}")
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  // Relations
-  step        website_form_steps    @relation(fields: [stepId], references: [id], onDelete: Cascade)
-  parentField website_form_fields?  @relation("FieldChildren", fields: [parentFieldId], references: [id], onDelete: Cascade)
-  childFields website_form_fields[] @relation("FieldChildren")
-
-  @@index([stepId])
-  @@index([stepId, order])
-  @@index([tblNodeId])
-  @@index([parentFieldId])
-}
-
-/// 🎯 QUESTIONS - Style Effy : 1 question = 1 écran pleine page
-/// Chaque question a sa propre navigation conditionnelle
-model website_form_questions {
-  id     Int @id @default(autoincrement())
-  formId Int
-
-  // Identification
-  questionKey String // Clé unique: "type_logement", "chauffage_fioul_type"
-
-  // Contenu affiché
-  title    String // "Votre projet concerne :"
-  subtitle String? // "Sélectionnez votre type de logement"
-  helpText String? // Texte d'aide optionnel
-  icon     String? // Emoji ou icône pour le header
-
-  // Type de question
-  questionType String @default("single_choice")
-  // single_choice: une seule réponse (cartes cliquables)
-  // multiple_choice: plusieurs réponses (checkboxes)
-  // number: champ numérique
-  // text: champ texte
-  // email: champ email
-  // phone: champ téléphone
-  // address: champ adresse
-  // select: dropdown
-
-  // Configuration input (pour number, text, etc.)
-  placeholder String?
-  inputSuffix String? // "m²", "€", "kW"
-  minValue    Int?
-  maxValue    Int?
-
-  // 🎨 Options de réponse (pour single_choice / multiple_choice)
-  // Format: [{"value": "maison", "label": "Une maison", "icon": "🏡", "description": "Individuelle", "imageUrl": "/img/maison.png"}]
-  options Json?
-
-  // 🧭 NAVIGATION CONDITIONNELLE
-  // Question suivante par défaut (si pas de condition spécifique)
-  defaultNextQuestionKey String?
-
-  // Navigation conditionnelle basée sur la réponse
-  // Format: [{"answerValue": "maison", "nextQuestionKey": "annee_construction"}, 
-  //          {"answerValue": "appartement", "nextQuestionKey": "annee_construction"}]
-  // Ou avec conditions complexes:
-  // [{"condition": {"field": "type_logement", "operator": "equals", "value": "maison"}, "nextQuestionKey": "isolation_etat"}]
-  navigation Json?
-
-  // Question finale ? (déclenche soumission)
-  isEndQuestion Boolean @default(false)
-
-  // 🔥 MAPPING TBL
-  tblNodeId    String?
-  tblNodeLabel String?
-
-  // Ordre d'affichage dans l'admin
-  order      Int     @default(0)
-  isRequired Boolean @default(true)
-
-  // Métadonnées
-  metadata  Json     @default("{}")
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  // Relations
-  form website_forms @relation(fields: [formId], references: [id], onDelete: Cascade)
-
-  @@unique([formId, questionKey])
-  @@index([formId])
-  @@index([formId, order])
-  @@index([questionKey])
-}
-
-/// Table de liaison formulaire <-> sites (N-N)
-model website_form_website {
-  id        Int @id @default(autoincrement())
-  formId    Int
-  websiteId Int
-
-  // Configuration par site
-  isDefault Boolean @default(false) // Formulaire principal du site
-  urlPath   String? @default("/simulateur") // Chemin URL sur le site
-
-  createdAt DateTime @default(now())
-
-  // Relations
-  form    website_forms @relation(fields: [formId], references: [id], onDelete: Cascade)
-  website websites      @relation(fields: [websiteId], references: [id], onDelete: Cascade)
-
-  @@unique([formId, websiteId])
-  @@index([websiteId])
-  @@index([formId])
-}
-
-/// Soumissions de formulaires (tracking des leads créés)
-model website_form_submissions {
-  id     Int @id @default(autoincrement())
-  formId Int
-
-  // Lien vers les entités créées
-  leadId       String? // ID du lead créé
-  submissionId String? // ID de la TreeBranchLeafSubmission créée
-
-  // 🎯 Tracking commercial nominatif
-  referredBy String? // Slug du commercial référent (ex: "jean-dupont")
-
-  // Données brutes soumises
-  formData Json // Toutes les réponses du formulaire
-
-  // Métadonnées
-  ipAddress   String?
-  userAgent   String?
-  referrer    String?
-  utmSource   String?
-  utmMedium   String?
-  utmCampaign String?
-
-  // Statut
-  status       String  @default("completed") // completed, partial, error
-  errorMessage String?
-
-  createdAt DateTime @default(now())
-
-  // Relations
-  form website_forms @relation(fields: [formId], references: [id], onDelete: Cascade)
-
-  @@index([formId])
-  @@index([leadId])
-  @@index([submissionId])
-  @@index([createdAt])
-  @@index([status])
 }

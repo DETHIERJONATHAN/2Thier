@@ -315,21 +315,11 @@ const evaluateFilterConditions = (
       referenceValue === '' ||
       (Array.isArray(referenceValue) && referenceValue.length === 0)
     ) {
-      // 🔥 FIX 23/02/2026: Différencier les types de référence
-      // - Références CALCULÉES (@table, @calculated, formula): null = calcul pas encore abouti
-      //   → BLOQUER l'option pour garantir que le filtre est TOUJOURS respecté
-      // - Références DIRECTES (@value, @select = saisie/sélection utilisateur): null = pas encore rempli
-      //   → IGNORER la condition (ne pas filtrer sur un critère pas encore saisi)
-      const ref = condition.compareWithRef || '';
-      const isComputedRef = ref.startsWith('@table.') || 
-                            ref.startsWith('@calculated.') || ref.startsWith('@calculated:') ||
-                            ref.startsWith('node-formula:') || ref.startsWith('formula:');
-      if (isComputedRef) {
-        // Valeur calculée non disponible → BLOQUER l'option
-        // Les options ne s'afficheront que quand le calcul sera terminé
-        return false;
-      }
-      return true; // Valeur directe non remplie → ignorer la condition
+      // FIX 23/02/2026: Quand la référence n'est pas encore résolue (null/undefined),
+      // on IGNORE la condition (return true) car le filtrage PRINCIPAL est côté serveur
+      // via applyTableFilters + resolveFilterValueRef → les options arrivent déjà pré-filtrées.
+      // Bloquer ici causerait "Aucune donnée" si le calcul n'a pas encore abouti côté client.
+      return true;
     }
 
     // 2. Trouver la/les valeur(s) correspondante(s) dans le tableau pour cette option
@@ -1289,6 +1279,20 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
   // ✅ On utilise configLookupId pour charger depuis l'ID de base (sans suffix)
   const tableLookup = useTBLTableLookup(configLookupId, configLookupId, hasTableCapability, formData);
 
+  // � FIX 23/02/2026: Compteur réactif pour forcer la re-évaluation des alertes/caps
+  // quand les valeurs broadcast arrivent (KVA sum-total, etc.)
+  // TBL_FORM_DATA est mis à jour par broadcastCalculatedRefresh(), mais le useMemo ne le détecte pas
+  // → On écoute 'tbl-force-retransform' et on incrémente un compteur pour trigger le recalcul
+  const [broadcastGen, setBroadcastGen] = useState(0);
+  useEffect(() => {
+    // Seulement pour les champs avec filterConditions (alertes, caps, overrides)
+    const hasExtensions = !!field.capabilities?.table?.currentTable?.meta?.lookup?.filterConditions;
+    if (!hasExtensions) return;
+    const handler = () => setBroadcastGen(g => g + 1);
+    window.addEventListener('tbl-force-retransform', handler);
+    return () => window.removeEventListener('tbl-force-retransform', handler);
+  }, [field.capabilities?.table?.currentTable?.meta?.lookup?.filterConditions]);
+
   // 🔄 Évaluation des extensions du lookup (columnOverrides, valueCaps, lookupAlerts)
   const lookupExtensionsResult = useMemo(() => {
     const lookupConfig = field.capabilities?.table?.currentTable?.meta?.lookup;
@@ -1302,7 +1306,9 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
       ? { ...(window as any).TBL_FORM_DATA as Record<string, any>, ...formData }
       : formData;
     return evaluateLookupExtensions(fc, enrichedFormData);
-  }, [field.capabilities?.table?.currentTable?.meta?.lookup, formData]);
+  }, [field.capabilities?.table?.currentTable?.meta?.lookup, formData, tableLookup.options, broadcastGen]);
+  // 🔥 FIX 23/02/2026: broadcastGen + tableLookup.options ajoutés aux deps
+  // → re-évalue alertes/caps quand les valeurs broadcast arrivent (KVA sum-total, etc.)
 
   const templateAppearanceOverrides = useMemo(() => {
     if (!allNodes || allNodes.length === 0) return null;
