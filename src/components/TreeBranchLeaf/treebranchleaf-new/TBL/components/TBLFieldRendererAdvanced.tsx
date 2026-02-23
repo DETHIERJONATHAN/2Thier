@@ -308,16 +308,28 @@ const evaluateFilterConditions = (
       referenceValue = (referenceValue as any).value;
     }
     
-    // 🛡️ Si la valeur est vide/null/undefined (ex: select vidé), IGNORER cette condition
-    // Aligné sur le comportement serveur: un champ vide = filtre inactif (pas de filtrage)
-    // Couvre: null, undefined, '', [], objet vide
+    // 🛡️ Gestion des valeurs vides/null/undefined
     if (
       referenceValue === null || 
       referenceValue === undefined || 
       referenceValue === '' ||
       (Array.isArray(referenceValue) && referenceValue.length === 0)
     ) {
-      return true; // Condition ignorée = considérée comme passée
+      // 🔥 FIX 23/02/2026: Différencier les types de référence
+      // - Références CALCULÉES (@table, @calculated, formula): null = calcul pas encore abouti
+      //   → BLOQUER l'option pour garantir que le filtre est TOUJOURS respecté
+      // - Références DIRECTES (@value, @select = saisie/sélection utilisateur): null = pas encore rempli
+      //   → IGNORER la condition (ne pas filtrer sur un critère pas encore saisi)
+      const ref = condition.compareWithRef || '';
+      const isComputedRef = ref.startsWith('@table.') || 
+                            ref.startsWith('@calculated.') || ref.startsWith('@calculated:') ||
+                            ref.startsWith('node-formula:') || ref.startsWith('formula:');
+      if (isComputedRef) {
+        // Valeur calculée non disponible → BLOQUER l'option
+        // Les options ne s'afficheront que quand le calcul sera terminé
+        return false;
+      }
+      return true; // Valeur directe non remplie → ignorer la condition
     }
 
     // 2. Trouver la/les valeur(s) correspondante(s) dans le tableau pour cette option
@@ -3673,6 +3685,13 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
               (option?.label ?? '').toLowerCase().includes(input.toLowerCase())
             }
             tokenSeparators={allowCustomValues ? [','] : undefined}
+            onDropdownVisibleChange={(open) => {
+              // 🔥 FIX 23/02/2026: Forcer un re-fetch immédiat à l'ouverture du dropdown
+              // pour que les filtres utilisent les dernières valeurs calculées (broadcast)
+              if (open && fieldConfig.hasTable) {
+                tableLookup.refresh();
+              }
+            }}
           >
             {finalOptions.map((option) => (
               <Option 

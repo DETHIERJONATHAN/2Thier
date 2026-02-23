@@ -15,7 +15,7 @@
  * - Évite les appels API individuels /select-config et /trees/:id/nodes
  */
 
-import { useState, useEffect, useContext, useMemo, useRef } from 'react';
+import { useState, useEffect, useContext, useMemo, useRef, useCallback } from 'react';
 import { useAuthenticatedApi } from '../../../../../hooks/useAuthenticatedApi';
 import { tblLog, tblWarn, isTBLDebugEnabled } from '../../../../../utils/tblDebug';
 import { useTBLBatch } from '../contexts/TBLBatchContext';
@@ -51,6 +51,8 @@ interface TableLookupResult {
     type: 'columns' | 'matrix';
   };
   config?: TreeBranchLeafSelectConfig;
+  // 🔥 FIX 23/02/2026: Forcer un re-fetch immédiat (appelé à l'ouverture du dropdown)
+  refresh: () => void;
 }
 
 export interface TreeBranchLeafSelectConfig {
@@ -269,6 +271,22 @@ export function useTBLTableLookup(
   const lookupDebounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // 🚀 PERF: Ref pour savoir si c'est le premier montage (pas de debounce au premier chargement)
   const isFirstMountRef = useRef(true);
+
+  // 🔥 FIX 23/02/2026: Refresh trigger + force-immediate flag
+  // Permet de forcer un re-fetch immédiat à l'ouverture du dropdown
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
+  const isForceRefreshRef = useRef(false);
+  const refresh = useCallback(() => {
+    // Annuler tout debounce en cours
+    if (lookupDebounceTimerRef.current) {
+      clearTimeout(lookupDebounceTimerRef.current);
+      lookupDebounceTimerRef.current = null;
+    }
+    // Invalider le cache pour forcer un nouvel appel API
+    lastSentLookupKeyRef.current = '';
+    isForceRefreshRef.current = true;
+    setRefreshTrigger(prev => prev + 1);
+  }, []);
 
   useEffect(() => {
     const isTargetField = fieldId === '131a7b51-97d5-4f40-8a5a-9359f38939e8';
@@ -777,10 +795,11 @@ export function useTBLTableLookup(
       }
     };
 
-    // 🚀 PERF: Premier montage → exécution immédiate (pas de debounce)
+    // 🚀 PERF: Premier montage ou force-refresh → exécution immédiate (pas de debounce)
     // Changements suivants (formDataJson) → debounce 400ms pour coalescer les frappes rapides
-    if (isFirstMountRef.current) {
+    if (isFirstMountRef.current || isForceRefreshRef.current) {
       isFirstMountRef.current = false;
+      isForceRefreshRef.current = false;
       void executeLookup();
     } else {
       // Annuler le précédent timer si un nouveau changement arrive
@@ -800,9 +819,9 @@ export function useTBLTableLookup(
         lookupDebounceTimerRef.current = null;
       }
     };
-  }, [fieldId, nodeId, enabled, formDataJson, clearedKeysJson, batchContext.isReady]); // 🚀 PERF FIX 22/02/2026: retiré broadcastedCalcValues (était un ref, plus besoin en dep — évite 30 re-renders/broadcast)
+  }, [fieldId, nodeId, enabled, formDataJson, clearedKeysJson, batchContext.isReady, refreshTrigger]); // 🔥 FIX 23/02/2026: ajouté refreshTrigger pour forcer re-fetch à l'ouverture dropdown
 
-  return { options, loading, error, tableData, config };
+  return { options, loading, error, tableData, config, refresh };
 }
 
 /**
