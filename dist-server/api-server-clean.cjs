@@ -34234,8 +34234,17 @@ async function copyConditionCapacity(originalConditionId, newNodeId, suffix, pri
         }
       });
     } else {
-      newCondition = await prisma51.treeBranchLeafNodeCondition.create({
-        data: {
+      newCondition = await prisma51.treeBranchLeafNodeCondition.upsert({
+        where: { id: newConditionId },
+        update: {
+          nodeId: finalOwnerNodeId,
+          name: originalCondition.name ? `${originalCondition.name}-${suffix}` : null,
+          description: originalCondition.description,
+          conditionSet: rewrittenConditionSet,
+          metadata: originalCondition.metadata,
+          updatedAt: /* @__PURE__ */ new Date()
+        },
+        create: {
           id: newConditionId,
           nodeId: finalOwnerNodeId,
           organizationId: originalCondition.organizationId,
@@ -34427,49 +34436,62 @@ async function copyTableCapacity2(originalTableId, newNodeId, suffix, prisma51, 
         }
       });
     } else {
-      newTable = await prisma51.treeBranchLeafNodeTable.create({
-        data: {
-          id: newTableId,
-          nodeId: finalOwnerNodeId,
-          organizationId: originalTable.organizationId,
-          name: originalTable.name ? `${originalTable.name}-${suffix}` : null,
-          description: originalTable.description,
-          type: originalTable.type,
-          // Ã°Å¸â€Â¢ COPIE TABLE META: suffixer TOUS les UUIDs et comparisonColumn
-          meta: (() => {
-            const rewriteMaps2 = { nodeIdMap, formulaIdMap: /* @__PURE__ */ new Map(), conditionIdMap: /* @__PURE__ */ new Map(), tableIdMap: tableIdMap2 };
-            const rewritten = rewriteJsonReferences(originalTable.meta, rewriteMaps2);
-            const suffixNum = parseInt(suffix) || 1;
-            if (rewritten?.lookup?.selectors?.columnFieldId && !rewritten.lookup.selectors.columnFieldId.endsWith(`-${suffixNum}`)) {
-              rewritten.lookup.selectors.columnFieldId = `${rewritten.lookup.selectors.columnFieldId}-${suffixNum}`;
-            }
-            if (rewritten?.lookup?.selectors?.rowFieldId && !rewritten.lookup.selectors.rowFieldId.endsWith(`-${suffixNum}`)) {
-              rewritten.lookup.selectors.rowFieldId = `${rewritten.lookup.selectors.rowFieldId}-${suffixNum}`;
-            }
-            if (rewritten?.lookup?.rowSourceOption?.sourceField && !rewritten.lookup.rowSourceOption.sourceField.endsWith(`-${suffixNum}`)) {
-              rewritten.lookup.rowSourceOption.sourceField = `${rewritten.lookup.rowSourceOption.sourceField}-${suffixNum}`;
-            }
-            if (rewritten?.lookup?.columnSourceOption?.sourceField && !rewritten.lookup.columnSourceOption.sourceField.endsWith(`-${suffixNum}`)) {
-              rewritten.lookup.columnSourceOption.sourceField = `${rewritten.lookup.columnSourceOption.sourceField}-${suffixNum}`;
-            }
-            if (rewritten?.lookup?.rowSourceOption?.comparisonColumn) {
-              const val = rewritten.lookup.rowSourceOption.comparisonColumn;
-              if (!val.endsWith(`-${suffixNum}`)) {
-                rewritten.lookup.rowSourceOption.comparisonColumn = `${val}-${suffixNum}`;
+      try {
+        newTable = await prisma51.treeBranchLeafNodeTable.create({
+          data: {
+            id: newTableId,
+            nodeId: finalOwnerNodeId,
+            organizationId: originalTable.organizationId,
+            name: originalTable.name ? `${originalTable.name}-${suffix}` : null,
+            description: originalTable.description,
+            type: originalTable.type,
+            // Ã°Å¸â€Â¢ COPIE TABLE META: suffixer TOUS les UUIDs et comparisonColumn
+            meta: (() => {
+              const rewriteMaps2 = { nodeIdMap, formulaIdMap: /* @__PURE__ */ new Map(), conditionIdMap: /* @__PURE__ */ new Map(), tableIdMap: tableIdMap2 };
+              const rewritten = rewriteJsonReferences(originalTable.meta, rewriteMaps2);
+              const suffixNum = parseInt(suffix) || 1;
+              if (rewritten?.lookup?.selectors?.columnFieldId && !rewritten.lookup.selectors.columnFieldId.endsWith(`-${suffixNum}`)) {
+                rewritten.lookup.selectors.columnFieldId = `${rewritten.lookup.selectors.columnFieldId}-${suffixNum}`;
               }
-            }
-            if (rewritten?.lookup?.columnSourceOption?.comparisonColumn) {
-              const val = rewritten.lookup.columnSourceOption.comparisonColumn;
-              if (!val.endsWith(`-${suffixNum}`)) {
-                rewritten.lookup.columnSourceOption.comparisonColumn = `${val}-${suffixNum}`;
+              if (rewritten?.lookup?.selectors?.rowFieldId && !rewritten.lookup.selectors.rowFieldId.endsWith(`-${suffixNum}`)) {
+                rewritten.lookup.selectors.rowFieldId = `${rewritten.lookup.selectors.rowFieldId}-${suffixNum}`;
               }
-            }
-            return rewritten;
-          })(),
-          createdAt: /* @__PURE__ */ new Date(),
-          updatedAt: /* @__PURE__ */ new Date()
+              if (rewritten?.lookup?.rowSourceOption?.sourceField && !rewritten.lookup.rowSourceOption.sourceField.endsWith(`-${suffixNum}`)) {
+                rewritten.lookup.rowSourceOption.sourceField = `${rewritten.lookup.rowSourceOption.sourceField}-${suffixNum}`;
+              }
+              if (rewritten?.lookup?.columnSourceOption?.sourceField && !rewritten.lookup.columnSourceOption.sourceField.endsWith(`-${suffixNum}`)) {
+                rewritten.lookup.columnSourceOption.sourceField = `${rewritten.lookup.columnSourceOption.sourceField}-${suffixNum}`;
+              }
+              if (rewritten?.lookup?.rowSourceOption?.comparisonColumn) {
+                const val = rewritten.lookup.rowSourceOption.comparisonColumn;
+                if (!val.endsWith(`-${suffixNum}`)) {
+                  rewritten.lookup.rowSourceOption.comparisonColumn = `${val}-${suffixNum}`;
+                }
+              }
+              if (rewritten?.lookup?.columnSourceOption?.comparisonColumn) {
+                const val = rewritten.lookup.columnSourceOption.comparisonColumn;
+                if (!val.endsWith(`-${suffixNum}`)) {
+                  rewritten.lookup.columnSourceOption.comparisonColumn = `${val}-${suffixNum}`;
+                }
+              }
+              return rewritten;
+            })(),
+            createdAt: /* @__PURE__ */ new Date(),
+            updatedAt: /* @__PURE__ */ new Date()
+          }
+        });
+      } catch (createErr) {
+        if (createErr?.code === "P2002") {
+          newTable = await prisma51.treeBranchLeafNodeTable.findUnique({ where: { id: newTableId } });
+          if (newTable) {
+            tableAlreadyExisted = true;
+          } else {
+            throw createErr;
+          }
+        } else {
+          throw createErr;
         }
-      });
+      }
     }
     let columnsCount = 0;
     let rowsCount = 0;
@@ -35405,10 +35427,12 @@ async function copyVariableWithCapacities(originalVarId, suffix, newNodeId, pris
                 }
               }
             } catch (copyCapErr) {
+              console.warn(`[VAR-COPY] Erreur copie formules/conditions pour var ${originalVarId} \u2192 node ${finalNodeId}:`, copyCapErr.message);
             }
           } else {
           }
         } catch (e) {
+          console.warn(`[VAR-COPY] Erreur cr\xE9ation display node pour var ${originalVarId}:`, e.message);
         }
       }
     }
@@ -35419,6 +35443,7 @@ async function copyVariableWithCapacities(originalVarId, suffix, newNodeId, pris
         newVarId = `${originalVarId}-${suffix}-${tail}`;
       }
     } catch (e) {
+      console.warn(`[VAR-COPY] Erreur v\xE9rification collision ID pour var ${originalVarId}:`, e.message);
     }
     try {
       const keyCollision = existingVariableKeys ? existingVariableKeys.has(newExposedKey) : await prisma51.treeBranchLeafNodeVariable.findUnique({ where: { exposedKey: newExposedKey } }).then((r) => !!r).catch(() => false);
@@ -35427,7 +35452,10 @@ async function copyVariableWithCapacities(originalVarId, suffix, newNodeId, pris
         newExposedKey = `${originalVar.exposedKey}-${suffix}-${tail}`;
       }
     } catch (e) {
+      console.warn(`[VAR-COPY] Erreur v\xE9rification collision exposedKey pour var ${originalVarId}:`, e.message);
     }
+    if (existingVariableIds) existingVariableIds.add(newVarId);
+    if (existingVariableKeys) existingVariableKeys.add(newExposedKey);
     let _reusingExistingVariable = false;
     let _existingVariableForReuse = null;
     try {
@@ -35459,6 +35487,7 @@ async function copyVariableWithCapacities(originalVarId, suffix, newNodeId, pris
               await addToNodeLinkedField5(prisma51, finalNodeId, "linkedVariableIds", [existingForNode.id]);
             }
           } catch (e) {
+            console.warn(`[VAR-COPY] Erreur MAJ display node (r\xE9utilisation) pour var ${originalVarId}:`, e.message);
           }
           const cacheKey2 = `${originalVarId}|${finalNodeId}`;
           variableCopyCache.set(cacheKey2, existingForNode.id);
@@ -35466,12 +35495,14 @@ async function copyVariableWithCapacities(originalVarId, suffix, newNodeId, pris
           try {
             await prisma51.treeBranchLeafNodeVariable.delete({ where: { id: existingForNode.id } });
           } catch (delError) {
+            console.warn(`[VAR-COPY] Erreur suppression variable existante ${existingForNode.id}:`, delError.message);
           }
           _reusingExistingVariable = false;
           _existingVariableForReuse = null;
         }
       }
     } catch (e) {
+      console.warn(`[VAR-COPY] Erreur v\xE9rification variable existante pour node ${finalNodeId}:`, e.message);
     }
     let newVariable;
     if (_reusingExistingVariable && _existingVariableForReuse) {
@@ -35569,8 +35600,26 @@ async function copyVariableWithCapacities(originalVarId, suffix, newNodeId, pris
             }
           }
         }
-        newVariable = await prisma51.treeBranchLeafNodeVariable.create({
-          data: {
+        newVariable = await prisma51.treeBranchLeafNodeVariable.upsert({
+          where: { nodeId: finalNodeId },
+          update: {
+            // If a variable already exists for this nodeId, update data fields only (keep existing id)
+            exposedKey: newExposedKey,
+            displayName: normalizedDisplayName,
+            displayFormat: originalVar.displayFormat,
+            unit: originalVar.unit,
+            precision: originalVar.precision,
+            visibleToUser: originalVar.visibleToUser,
+            isReadonly: originalVar.isReadonly,
+            defaultValue: originalVar.defaultValue,
+            fixedValue: originalVar.fixedValue,
+            selectedNodeId: originalVar.selectedNodeId ? nodeIdMap.get(originalVar.selectedNodeId) || `${originalVar.selectedNodeId}-${suffix}` : null,
+            sourceRef: newSourceRef,
+            sourceType: originalVar.sourceType,
+            metadata: originalVar.metadata,
+            updatedAt: /* @__PURE__ */ new Date()
+          },
+          create: {
             id: newVarId,
             nodeId: finalNodeId,
             exposedKey: newExposedKey,
@@ -35590,14 +35639,27 @@ async function copyVariableWithCapacities(originalVarId, suffix, newNodeId, pris
             updatedAt: /* @__PURE__ */ new Date()
           }
         });
-        if (existingVariableIds) existingVariableIds.add(newVarId);
-        if (existingVariableKeys) existingVariableKeys.add(newExposedKey);
+        newVarId = newVariable.id;
+        if (preloadedVarsByNodeId) preloadedVarsByNodeId.set(finalNodeId, newVariable);
       } catch (createError) {
-        if (createError?.code === "P2002" && createError?.meta?.target?.includes?.("nodeId")) {
-          const existing = await prisma51.treeBranchLeafNodeVariable.findUnique({ where: { nodeId: finalNodeId } });
-          if (existing) {
-            newVariable = existing;
-            _reusingExistingVariable = true;
+        if (createError?.code === "P2002") {
+          const target = createError?.meta?.target;
+          if (target?.includes?.("nodeId")) {
+            const existing = await prisma51.treeBranchLeafNodeVariable.findUnique({ where: { nodeId: finalNodeId } });
+            if (existing) {
+              newVariable = existing;
+              _reusingExistingVariable = true;
+            } else {
+              throw createError;
+            }
+          } else if (target?.includes?.("id")) {
+            const existing = await prisma51.treeBranchLeafNodeVariable.findUnique({ where: { id: newVarId } });
+            if (existing) {
+              newVariable = existing;
+              _reusingExistingVariable = true;
+            } else {
+              throw createError;
+            }
           } else {
             throw createError;
           }
@@ -35622,6 +35684,7 @@ async function copyVariableWithCapacities(originalVarId, suffix, newNodeId, pris
       try {
         await linkVariableToAllCapacityNodes(prisma51, newVariable.id, newVariable.sourceRef);
       } catch (e) {
+        console.warn(`[VAR-COPY] Erreur liaison variable ${newVariable.id} \u2192 capacit\xE9s:`, e.message);
       }
     }
     try {
@@ -35641,6 +35704,7 @@ async function copyVariableWithCapacities(originalVarId, suffix, newNodeId, pris
         }
       });
     } catch (e) {
+      console.warn(`[VAR-COPY] Erreur MAJ display node ${finalNodeId}:`, e.message);
     }
     if (linkToDisplaySection) {
       try {
@@ -35663,6 +35727,7 @@ async function copyVariableWithCapacities(originalVarId, suffix, newNodeId, pris
           }
         }
       } catch (e) {
+        console.warn(`[VAR-COPY] Erreur linkage section display pour var ${newVariable.id}:`, e.message);
       }
     } else if (autoCreateDisplayNode) {
       try {
@@ -35671,6 +35736,7 @@ async function copyVariableWithCapacities(originalVarId, suffix, newNodeId, pris
           await addToNodeLinkedField5(prisma51, finalNodeId, "linkedVariableIds", [newVariable.id]);
         }
       } catch (e) {
+        console.warn(`[VAR-COPY] Erreur linkage linkedVariableIds pour node ${finalNodeId}:`, e.message);
       }
       try {
         if (capacityType && newSourceRef) {
@@ -35710,6 +35776,7 @@ async function copyVariableWithCapacities(originalVarId, suffix, newNodeId, pris
                   }
                 }
               } catch (e) {
+                console.warn(`[VAR-COPY] Erreur sync linkedVariableIds sur node ${newNodeId}:`, e.message);
               }
             } else if (parsedCap.type === "table") {
               const tbl = await prisma51.treeBranchLeafNodeTable.findUnique({
@@ -35733,6 +35800,7 @@ async function copyVariableWithCapacities(originalVarId, suffix, newNodeId, pris
           }
         }
       } catch (e) {
+        console.warn(`[VAR-COPY] Erreur sync capacit\xE9s (condition/table) pour node ${finalNodeId}:`, e.message);
       }
     }
     try {
@@ -35743,6 +35811,7 @@ async function copyVariableWithCapacities(originalVarId, suffix, newNodeId, pris
         await replaceLinkedVariableId(prisma51, finalNodeId, originalVarId, newVariable.id, suffix);
       }
     } catch (e) {
+      console.warn(`[VAR-COPY] Erreur replace linkedVariableIds pour var ${originalVarId} \u2192 ${newVariable.id}:`, e.message);
     }
     const cacheKeyFinal = `${originalVarId}|${finalNodeId}`;
     variableCopyCache.set(cacheKeyFinal, newVariable.id);
@@ -35776,6 +35845,7 @@ async function copyVariableWithCapacities(originalVarId, suffix, newNodeId, pris
             }
           }
         } catch (e) {
+          console.warn(`[VAR-COPY] Erreur MAJ bidirectionnelle linked pour capacit\xE9 ${capacityType}:`, e.message);
         }
       }
     }
@@ -35785,6 +35855,7 @@ async function copyVariableWithCapacities(originalVarId, suffix, newNodeId, pris
         });
       }
     } catch (sumErr) {
+      console.warn(`[VAR-COPY] Erreur mise \xE0 jour champ Total pour node ${originalVar?.nodeId}:`, sumErr.message);
     }
     return {
       variableId: newVariable.id,
@@ -35919,6 +35990,7 @@ async function addToNodeLinkedField5(prisma51, nodeId, field, idsToAdd) {
       nodeId
     );
   } catch (e) {
+    console.warn(`[VAR-COPY] Erreur addToNodeLinkedField ${field} sur node ${nodeId}:`, e.message);
   }
 }
 async function replaceLinkedVariableId(prisma51, nodeId, originalVarId, newVarId, suffix) {
@@ -35974,7 +36046,6 @@ async function copySelectorTablesAfterNodeCopy(prisma51, copiedRootNodeId, origi
           meta: true,
           type: true,
           description: true,
-          displayInline: true,
           tableColumns: { select: { id: true } },
           tableRows: { select: { id: true, cells: true } }
         }
@@ -37689,41 +37760,6 @@ async function deepCopyNodeInternal(prisma51, req2, nodeId, opts) {
       }
     }
   }));
-  if (pendingLinkedConditionUpdates.size > 0) {
-    let condSkipped = 0;
-    for (const refNodeId of pendingLinkedConditionUpdates.keys()) {
-      if (!existingNodeIds.has(refNodeId)) {
-        pendingLinkedConditionUpdates.delete(refNodeId);
-        condSkipped++;
-      }
-    }
-    if (condSkipped > 0) console.log(`[DEEP-COPY] PERF R8: Skipped ${condSkipped} non-existent nodes for linkedConditionIds`);
-    const batchPromises = [];
-    for (const [refNodeId, conditionIds] of pendingLinkedConditionUpdates) {
-      batchPromises.push(
-        addToNodeLinkedField6(prisma51, refNodeId, "linkedConditionIds", Array.from(conditionIds)).catch((e) => console.warn("[DEEP-COPY] Warning batch linkedConditionIds:", e.message))
-      );
-    }
-    await Promise.all(batchPromises);
-  }
-  if (pendingLinkedFormulaUpdates.size > 0) {
-    let formSkipped = 0;
-    for (const refNodeId of pendingLinkedFormulaUpdates.keys()) {
-      if (!existingNodeIds.has(refNodeId)) {
-        pendingLinkedFormulaUpdates.delete(refNodeId);
-        formSkipped++;
-      }
-    }
-    if (formSkipped > 0) console.log(`[DEEP-COPY] PERF R8: Skipped ${formSkipped} non-existent nodes for linkedFormulaIds`);
-    const batchFormulaPromises = [];
-    for (const [refNodeId, formulaIds] of pendingLinkedFormulaUpdates) {
-      batchFormulaPromises.push(
-        addToNodeLinkedField6(prisma51, refNodeId, "linkedFormulaIds", Array.from(formulaIds)).catch((e) => console.warn("[DEEP-COPY] Warning batch linkedFormulaIds:", e.message))
-      );
-    }
-    await Promise.all(batchFormulaPromises);
-    console.log(`[DEEP-COPY] PERF R8: Batch-flushed linkedFormulaIds for ${pendingLinkedFormulaUpdates.size} nodes (instead of per-formula linking)`);
-  }
   const variableCopyCache = /* @__PURE__ */ new Map();
   const varCopyTasks = [];
   const pendingFinalUpdateOps = [];
@@ -37835,6 +37871,41 @@ async function deepCopyNodeInternal(prisma51, req2, nodeId, opts) {
     } catch (e) {
       console.warn("[DEEP-COPY] PERF R7: Batch merged update error:", e.message);
     }
+  }
+  if (pendingLinkedConditionUpdates.size > 0) {
+    let condSkipped = 0;
+    for (const refNodeId of pendingLinkedConditionUpdates.keys()) {
+      if (!existingNodeIds.has(refNodeId)) {
+        pendingLinkedConditionUpdates.delete(refNodeId);
+        condSkipped++;
+      }
+    }
+    if (condSkipped > 0) console.log(`[DEEP-COPY] PERF R8: Skipped ${condSkipped} non-existent nodes for linkedConditionIds`);
+    const batchPromises = [];
+    for (const [refNodeId, conditionIds] of pendingLinkedConditionUpdates) {
+      batchPromises.push(
+        addToNodeLinkedField6(prisma51, refNodeId, "linkedConditionIds", Array.from(conditionIds)).catch((e) => console.warn("[DEEP-COPY] Warning batch linkedConditionIds:", e.message))
+      );
+    }
+    await Promise.all(batchPromises);
+  }
+  if (pendingLinkedFormulaUpdates.size > 0) {
+    let formSkipped = 0;
+    for (const refNodeId of pendingLinkedFormulaUpdates.keys()) {
+      if (!existingNodeIds.has(refNodeId)) {
+        pendingLinkedFormulaUpdates.delete(refNodeId);
+        formSkipped++;
+      }
+    }
+    if (formSkipped > 0) console.log(`[DEEP-COPY] PERF R8: Skipped ${formSkipped} non-existent nodes for linkedFormulaIds`);
+    const batchFormulaPromises = [];
+    for (const [refNodeId, formulaIds] of pendingLinkedFormulaUpdates) {
+      batchFormulaPromises.push(
+        addToNodeLinkedField6(prisma51, refNodeId, "linkedFormulaIds", Array.from(formulaIds)).catch((e) => console.warn("[DEEP-COPY] Warning batch linkedFormulaIds:", e.message))
+      );
+    }
+    await Promise.all(batchFormulaPromises);
+    console.log(`[DEEP-COPY] PERF R8: Batch-flushed linkedFormulaIds for ${pendingLinkedFormulaUpdates.size} nodes (instead of per-formula linking)`);
   }
   const rootNewId = idMap.get(source.id);
   if (displayNodeIds.length > 0) {
@@ -37981,8 +38052,10 @@ var EXCLUDED_NODES_CACHE_TTL = 6e4;
 function invalidateTriggerIndexCache(treeId) {
   if (treeId) {
     triggerIndexCache.delete(treeId);
+    excludedNodesCache.delete(treeId);
   } else {
     triggerIndexCache.clear();
+    excludedNodesCache.clear();
   }
 }
 function normalizeRefForTriggers(ref) {
@@ -38937,6 +39010,20 @@ async function evaluateCapacitiesForSubmission(submissionId, organizationId, use
         const isDisplayField = cap.TreeBranchLeafNode?.fieldType === "DISPLAY" || cap.TreeBranchLeafNode?.type === "DISPLAY" || cap.TreeBranchLeafNode?.type === "leaf_field";
         return isDisplayField;
       }).map((cap) => cap.nodeId);
+      {
+        const displayFieldIdSet = new Set(displayFieldIds);
+        let addedCount = 0;
+        for (const n of displayNodesParallel) {
+          if (!displayFieldIdSet.has(n.id)) {
+            displayFieldIds.push(n.id);
+            displayFieldIdSet.add(n.id);
+            addedCount++;
+          }
+        }
+        if (addedCount > 0) {
+          console.log(`\u{1F527} [FIX TRIGGER-COVERAGE] ${addedCount} display nodes ajout\xE9s au trigger index (absents de capacitiesRaw)`);
+        }
+      }
       const [selectFieldNodes, optionNodes, displayNodes, displayFieldTables, allLinkedNodes, allTreeNodeIds] = await Promise.all([
         prisma30.treeBranchLeafNode.findMany({
           where: { treeId, type: "leaf_option_field" },
@@ -67085,25 +67172,12 @@ router81.get("/trees/:treeId/conditions", async (req2, res) => {
       conditionsById[condition.id] = condition;
     }
     const allConditionIdsSet = new Set(allConditions.map((c) => c.id));
-    const orphanCleanups = [];
     for (const node of nodes) {
       if (!Array.isArray(node.linkedConditionIds) || node.linkedConditionIds.length === 0) continue;
-      const validIds = node.linkedConditionIds.filter((id) => allConditionIdsSet.has(id));
-      const orphanCount = node.linkedConditionIds.length - validIds.length;
+      const orphanCount = node.linkedConditionIds.filter((id) => !allConditionIdsSet.has(id)).length;
       if (orphanCount > 0) {
-        console.log(`\u{1F9F9} [AUTO-CLEANUP] Node ${node.id}: ${orphanCount} linkedConditionIds orphelins supprim\xE9s (${node.linkedConditionIds.length} \u2192 ${validIds.length})`);
-        orphanCleanups.push(
-          db.treeBranchLeafNode.update({
-            where: { id: node.id },
-            data: { linkedConditionIds: validIds }
-          }).catch((e) => console.warn(`[AUTO-CLEANUP] Erreur nettoyage node ${node.id}:`, e.message))
-        );
+        console.log(`\u2139\uFE0F [DIAGNOSTIC] Node ${node.id}: ${orphanCount}/${node.linkedConditionIds.length} linkedConditionIds non r\xE9solus (non supprim\xE9s)`);
       }
-    }
-    if (orphanCleanups.length > 0) {
-      Promise.all(orphanCleanups).then(() => {
-        console.log(`\u{1F9F9} [AUTO-CLEANUP] ${orphanCleanups.length} node(s) nettoy\xE9(s) de leurs linkedConditionIds orphelins`);
-      });
     }
     const activeConditionByNode = {};
     for (const node of nodes) {
@@ -72897,6 +72971,55 @@ async function runRepeatExecution(prisma51, req2, execution) {
     });
     allVarsByNodeId = new Map(targetVars.filter((v) => v.nodeId).map((v) => [v.nodeId, v]));
   }
+  const buildVarCopyOptions = (task) => ({
+    autoCreateDisplayNode: true,
+    isFromRepeaterDuplication: true,
+    nodeIdMap: globalNodeIdMap,
+    formulaIdMap: globalFormulaIdMap,
+    conditionIdMap: globalConditionIdMap,
+    tableIdMap: globalTableIdMap,
+    variableCopyCache: globalVariableCopyCache,
+    preloadedOriginalVar: fullVarsMap.get(task.templateVariableId),
+    preloadedOwnerNode: fullVarsMap.get(task.templateVariableId)?.nodeId ? ownerNodesMap.get(fullVarsMap.get(task.templateVariableId).nodeId) : void 0,
+    preloadedDuplicatedOwnerNode: { id: task.targetNodeId, parentId: _preloadedTreeNodesById?.get(task.targetNodeId)?.parentId ?? null },
+    preloadedDisplayNode: displayNodesMap.get(task.templateVariableId),
+    preloadedFormulas: fullVarsMap.get(task.templateVariableId)?.nodeId ? formulasByNodeId.get(fullVarsMap.get(task.templateVariableId).nodeId) : void 0,
+    existingNodeIds: allExistingNodeIds,
+    existingVariableIds: allExistingVarIds,
+    existingVariableKeys: allExistingVarKeys,
+    preloadedVarsByNodeId: allVarsByNodeId,
+    repeatContext: {
+      repeaterNodeId,
+      templateNodeId: task.targetNodeId.replace(`-${task.plannedSuffix}`, ""),
+      duplicatedFromNodeId: task.targetNodeId.replace(`-${task.plannedSuffix}`, ""),
+      scopeId,
+      mode: "repeater"
+    }
+  });
+  const aggregateResult = (result) => {
+    if (!result || !result.success) return;
+    if (result.formulaIdMap) {
+      for (const [oldId, newId] of result.formulaIdMap.entries()) {
+        globalFormulaIdMap.set(oldId, newId);
+      }
+    }
+    if (result.conditionIdMap) {
+      for (const [oldId, newId] of result.conditionIdMap.entries()) {
+        globalConditionIdMap.set(oldId, newId);
+      }
+    }
+    if (result.tableIdMap) {
+      for (const [oldId, newId] of result.tableIdMap.entries()) {
+        globalTableIdMap.set(oldId, newId);
+      }
+    }
+    if (result.displayNodeId) {
+      const originalDisplayNodeId = result.displayNodeId.replace(/-\d+$/, "");
+      globalNodeIdMap.set(originalDisplayNodeId, result.displayNodeId);
+    }
+  };
+  const failedVarTasks = [];
+  let varCopyWarnings = [];
   const VAR_CHUNK_SIZE = 5;
   for (let ci = 0; ci < varTasks.length; ci += VAR_CHUNK_SIZE) {
     const chunk = varTasks.slice(ci, ci + VAR_CHUNK_SIZE);
@@ -72907,58 +73030,42 @@ async function runRepeatExecution(prisma51, req2, execution) {
           task.plannedSuffix,
           task.targetNodeId,
           prisma51,
-          {
-            autoCreateDisplayNode: true,
-            isFromRepeaterDuplication: true,
-            nodeIdMap: globalNodeIdMap,
-            formulaIdMap: globalFormulaIdMap,
-            conditionIdMap: globalConditionIdMap,
-            tableIdMap: globalTableIdMap,
-            variableCopyCache: globalVariableCopyCache,
-            preloadedOriginalVar: fullVarsMap.get(task.templateVariableId),
-            preloadedOwnerNode: fullVarsMap.get(task.templateVariableId)?.nodeId ? ownerNodesMap.get(fullVarsMap.get(task.templateVariableId).nodeId) : void 0,
-            preloadedDuplicatedOwnerNode: { id: task.targetNodeId, parentId: _preloadedTreeNodesById?.get(task.targetNodeId)?.parentId ?? null },
-            preloadedDisplayNode: displayNodesMap.get(task.templateVariableId),
-            preloadedFormulas: fullVarsMap.get(task.templateVariableId)?.nodeId ? formulasByNodeId.get(fullVarsMap.get(task.templateVariableId).nodeId) : void 0,
-            existingNodeIds: allExistingNodeIds,
-            existingVariableIds: allExistingVarIds,
-            existingVariableKeys: allExistingVarKeys,
-            preloadedVarsByNodeId: allVarsByNodeId,
-            repeatContext: {
-              repeaterNodeId,
-              templateNodeId: task.targetNodeId.replace(`-${task.plannedSuffix}`, ""),
-              duplicatedFromNodeId: task.targetNodeId.replace(`-${task.plannedSuffix}`, ""),
-              scopeId,
-              mode: "repeater"
-            }
-          }
+          buildVarCopyOptions(task)
         );
         return { task, result: variableResult };
       } catch (varErr) {
-        console.error(`[repeat-executor] Erreur copie variable ${task.templateVariableId}:`, varErr instanceof Error ? varErr.message : String(varErr));
+        console.error(`[repeat-executor] Erreur copie variable ${task.templateVariableId}:`, varErr instanceof Error ? varErr.stack || varErr.message : String(varErr));
+        failedVarTasks.push(task);
         return { task, result: null };
       }
     }));
     for (const { result } of results) {
-      if (!result || !result.success) continue;
-      if (result.formulaIdMap) {
-        for (const [oldId, newId] of result.formulaIdMap.entries()) {
-          globalFormulaIdMap.set(oldId, newId);
+      aggregateResult(result);
+    }
+  }
+  if (failedVarTasks.length > 0) {
+    console.warn(`[repeat-executor] ${failedVarTasks.length} variable(s) \xE9chou\xE9e(s), retry s\xE9quentiel...`);
+    for (const task of failedVarTasks) {
+      try {
+        const retryResult = await copyVariableWithCapacities(
+          task.templateVariableId,
+          task.plannedSuffix,
+          task.targetNodeId,
+          prisma51,
+          buildVarCopyOptions(task)
+        );
+        aggregateResult(retryResult);
+        if (retryResult.success) {
+          console.log(`[repeat-executor] \u2705 Retry r\xE9ussi pour variable ${task.templateVariableId}`);
+        } else {
+          const msg = `Variable ${task.templateVariableId} \u2192 \xE9chec retry: ${retryResult.error || "unknown"}`;
+          console.warn(`[repeat-executor] \u26A0\uFE0F ${msg}`);
+          varCopyWarnings.push(msg);
         }
-      }
-      if (result.conditionIdMap) {
-        for (const [oldId, newId] of result.conditionIdMap.entries()) {
-          globalConditionIdMap.set(oldId, newId);
-        }
-      }
-      if (result.tableIdMap) {
-        for (const [oldId, newId] of result.tableIdMap.entries()) {
-          globalTableIdMap.set(oldId, newId);
-        }
-      }
-      if (result.displayNodeId) {
-        const originalDisplayNodeId = result.displayNodeId.replace(/-\d+$/, "");
-        globalNodeIdMap.set(originalDisplayNodeId, result.displayNodeId);
+      } catch (retryErr) {
+        const msg = `Variable ${task.templateVariableId} \u2192 \xE9chec retry: ${retryErr instanceof Error ? retryErr.message : String(retryErr)}`;
+        console.error(`[repeat-executor] \u274C ${msg}`);
+        varCopyWarnings.push(msg);
       }
     }
   }
@@ -73035,7 +73142,9 @@ async function runRepeatExecution(prisma51, req2, execution) {
         }
       });
     } catch (isolationError) {
-      console.warn("[REPEAT-EXECUTOR] Erreur lors de l'isolation stricte:", isolationError);
+      const errMsg = `Erreur post-duplication: ${isolationError instanceof Error ? isolationError.message : String(isolationError)}`;
+      console.warn("[REPEAT-EXECUTOR]", errMsg, isolationError instanceof Error ? isolationError.stack : "");
+      varCopyWarnings.push(errMsg);
     }
   }
   let nodesPayload = [];
@@ -73048,10 +73157,14 @@ async function runRepeatExecution(prisma51, req2, execution) {
     });
     nodesPayload = nodes.map(buildResponseFromColumns);
   }
+  if (varCopyWarnings.length > 0) {
+    console.warn(`[repeat-executor] \u26A0\uFE0F ${varCopyWarnings.length} avertissement(s) durant la copie:`, varCopyWarnings);
+  }
   return {
     duplicated: duplicatedSummaries,
     nodes: nodesPayload,
     count: duplicatedSummaries.length,
+    ...varCopyWarnings.length > 0 ? { warnings: varCopyWarnings } : {},
     debug: {
       templateNodeIds,
       nodesToDuplicateIds: nodesToDuplicate.map((n) => n.id),
@@ -73322,6 +73435,7 @@ function createRepeatRouter(prisma51) {
         req2,
         executionPlan
       );
+      invalidateTriggerIndexCache();
       return res.status(201).json({
         status: "completed",
         repeaterNodeId,

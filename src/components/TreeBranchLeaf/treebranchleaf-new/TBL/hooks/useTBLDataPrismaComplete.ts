@@ -1346,7 +1346,7 @@ const transformPrismaNodeToField = (
           const optionSubTabAssignments = resolveSubTabAssignments(optionNode, optionNode, nodeLookup);
           
           // 🔍 DEBUG: Vérifier la résolution du subtab
-          console.log(`🔍 [SHARED REF DEBUG] Option "${optionNode.label}" (${optionNode.id}):`, {
+          if (verbose()) console.log(`🔍 [SHARED REF DEBUG] Option "${optionNode.label}" (${optionNode.id}):`, {
             optionSubtab: optionNode.subtab,
             optionParentId: optionNode.parentId,
             parentInLookup: optionNode.parentId ? !!nodeLookup.get(optionNode.parentId) : false,
@@ -2727,8 +2727,7 @@ export const useTBLDataPrismaComplete = ({ tree_id, disabled = false, triggerRet
             const allTabsFields = Object.values(resolvedFieldsByTab).flat();
             
             // 🔍🔍🔍 DIAGNOSTIC pour cette section
-            // FORCE TOUJOURS LES LOGS DIAGNOSTICS (verbose désactivé temporairement)
-            if (process.env.NODE_ENV === 'development' && (section.name?.includes('Devis') || section.name?.includes('PV'))) {
+            if (process.env.NODE_ENV === 'development' && verbose() && (section.name?.includes('Devis') || section.name?.includes('PV'))) {
               console.log(`🔍🔍🔍 [DIAGNOSTIC SECTION "${section.name}"] sectionBaseFieldIds:`, sectionBaseFieldIds);
               const panneauInBase = sectionBaseFieldIds.filter(id => 
                 id === 'f117b34a-d74c-413a-b7c1-4b9290619012' || id === 'fb35d781-5b1b-4a2b-869b-ea0b902a444e'
@@ -2788,7 +2787,7 @@ export const useTBLDataPrismaComplete = ({ tree_id, disabled = false, triggerRet
     
     lastProcessedRetransformRef.current = triggerRetransform;
     
-    console.error('🔥 [useTBLDataPrismaComplete] Retransform triggered!', { triggerRetransform, rawNodesCount: rawNodes.length });
+    if (verbose()) console.log('🔥 [useTBLDataPrismaComplete] Retransform triggered!', { triggerRetransform, rawNodesCount: rawNodes.length });
     
     try {
       const formData = (typeof window !== 'undefined' && window.TBL_FORM_DATA) || {};
@@ -2821,7 +2820,7 @@ export const useTBLDataPrismaComplete = ({ tree_id, disabled = false, triggerRet
         resolvedSectionsByTab[tabId] = resolvedSections;
       }
       
-      console.error('✅ [useTBLDataPrismaComplete] Retransform complete, updating state');
+      if (verbose()) console.log('✅ [useTBLDataPrismaComplete] Retransform complete, updating state');
       setTabs(transformedData.tabs);
       setFieldsByTab(transformedData.fieldsByTab);
       setSectionsByTab(resolvedSectionsByTab);
@@ -3265,7 +3264,7 @@ export const useTBLDataPrismaComplete = ({ tree_id, disabled = false, triggerRet
                           // Debug: log inline node ids merged and basic metadata for diagnostics
                           try {
                             const inlineSummaries = inlineNodes.filter(n => n && n.id).map(n => ({ id: n.id, type: n.type, parentId: n.parentId, metadataSummary: (n.metadata && typeof n.metadata === 'object') ? (n.metadata as any).sourceTemplateId || (n.metadata as any).copiedFromNodeId || null : null }));
-                            console.error('[TBL Hook] inline nodes merged (summaries):', inlineSummaries);
+                            if (verbose()) console.log('[TBL Hook] inline nodes merged (summaries):', inlineSummaries);
                           } catch { /* noop */ }
                 }
               } catch (err) {
@@ -3314,7 +3313,7 @@ export const useTBLDataPrismaComplete = ({ tree_id, disabled = false, triggerRet
                     const nextRes = changed ? Array.from(byId.values()) : prev;
                     // Debug: log parent merge summary
                     try {
-                      console.error('[TBL Hook] merged parent node(s) into rawNodes:', nodes.map(n => n.id));
+                      if (verbose()) console.log('[TBL Hook] merged parent node(s) into rawNodes:', nodes.map(n => n.id));
                     } catch { /* noop */ }
                     return nextRes;
                   });
@@ -3340,7 +3339,7 @@ export const useTBLDataPrismaComplete = ({ tree_id, disabled = false, triggerRet
         // Re-transform AFTER reconciliation to ensure new nodes are merged and visible
         if (rawNodesRef.current.length > 0) {
           try {
-            console.error('[TBL Hook] retransform AFTER duplicate reconciled - rawNodes count', rawNodesRef.current.length);
+            if (verbose()) console.log('[TBL Hook] retransform AFTER duplicate reconciled - rawNodes count', rawNodesRef.current.length);
             retransformRef.current();
           } catch (err) {
             console.error('[TBL Hook] retransform after duplication failed:', err);
@@ -3371,7 +3370,7 @@ export const useTBLDataPrismaComplete = ({ tree_id, disabled = false, triggerRet
             };
 
             if (hasIdInTransformed()) {
-              console.error('[TBL Hook] Duplicated ids found in transformed fields after first retransform');
+              if (verbose()) console.log('[TBL Hook] Duplicated ids found in transformed fields after first retransform');
               return;
             }
 

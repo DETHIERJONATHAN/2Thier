@@ -832,8 +832,19 @@ export async function copyConditionCapacity(
         }
       });
     } else {
-      newCondition = await prisma.treeBranchLeafNodeCondition.create({
-        data: {
+      // 🔥 FIX P2002-CONDITION: Utiliser upsert au lieu de create pour éviter les erreurs
+      // de contrainte unique lors de copies parallèles
+      newCondition = await prisma.treeBranchLeafNodeCondition.upsert({
+        where: { id: newConditionId },
+        update: {
+          nodeId: finalOwnerNodeId,
+          name: originalCondition.name ? `${originalCondition.name}-${suffix}` : null,
+          description: originalCondition.description,
+          conditionSet: rewrittenConditionSet,
+          metadata: originalCondition.metadata as Prisma.InputJsonValue,
+          updatedAt: new Date()
+        },
+        create: {
           id: newConditionId,
           nodeId: finalOwnerNodeId,
           organizationId: originalCondition.organizationId,

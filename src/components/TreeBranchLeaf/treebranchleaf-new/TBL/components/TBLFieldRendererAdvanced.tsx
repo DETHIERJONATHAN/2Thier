@@ -1916,11 +1916,21 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
     for (const formula of constraintFormulas) {
       const sourceId = extractSourceNodeIdFromTokens(formula.tokens);
       if (sourceId) {
+        // 🔧 FIX CONSTRAINT-SUFFIX: Si le champ actuel a un suffixe repeat (-1, -2, ...)
+        // et que le sourceId N'a PAS de suffixe, appliquer le même suffixe.
+        // Cela arrive quand getFormulasForNode tombe en fallback sur les formules
+        // de l'original (base ID) dont les tokens référencent les sources sans suffixe.
+        const fieldSuffixMatch = field.id.match(/-(\d+)$/);
+        const sourceSuffixMatch = sourceId.match(/-(\d+)$/);
+        if (fieldSuffixMatch && !sourceSuffixMatch) {
+          const suffixedSourceId = `${sourceId}-${fieldSuffixMatch[1]}`;
+          return suffixedSourceId;
+        }
         return sourceId;
       }
     }
     return null;
-  }, [constraintFormulas, field.label]);
+  }, [constraintFormulas, field.id]);
 
   const constraintSourceNodeLabel = useMemo(() => {
     if (!constraintSourceNodeId || !allNodes || allNodes.length === 0) return null;
@@ -1957,8 +1967,8 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
     // Chercher la valeur dans formData avec différentes clés possibles
     const possibleKeys = new Set<string>([
       constraintSourceNodeId,
-      `${constraintSourceNodeId}-1`, // Avec suffix
-      constraintSourceNodeId.replace(/-1$/, ''), // Sans suffix
+      `${constraintSourceNodeId}-1`, // Avec suffix -1
+      constraintSourceNodeId.replace(/-\d+$/, ''), // Sans suffix numérique (-1, -2, ...)
       `${constraintSourceNodeId}-sum-total`,
       `__mirror_formula_${constraintSourceNodeId}`, // Valeur calculée miroir
       `__mirror_formula_${constraintSourceNodeId}-1`,
@@ -2109,6 +2119,9 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
     let hasShowCondition = false; // Pour gérer le SHOW: masqué par défaut si condition SHOW existe
     
     // Vérifier chaque condition
+    // 🔧 FIX COPY-VISIBLE: Détecter si ce champ est une copie (suffixe -1, -2, etc.)
+    const isCopyField = /-\d{1,3}$/.test(field.id);
+    
     for (const condition of allConditions) {
       let dependentValue = formData[condition.dependsOn];
       
@@ -2120,6 +2133,18 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
           // L'option EST sélectionnée → la valeur dépendante est l'ID de l'option
           dependentValue = condition.dependsOn;
         }
+      }
+      
+      // 🔧 FIX COPY-VISIBLE v2: Pour les champs copiés (repeat), si le champ dépendant
+      // n'a pas encore de valeur (undefined/null/vide), ne pas évaluer la condition.
+      // Le champ reste visible par défaut → l'utilisateur peut le voir et remplir
+      // les champs dépendants ensuite. Les opérateurs isEmpty/isNotEmpty sont exclus
+      // car ils gèrent correctement les valeurs undefined.
+      const isEmptyValue = dependentValue === undefined || dependentValue === null 
+          || (typeof dependentValue === 'string' && dependentValue.trim() === '');
+      if (isCopyField && isEmptyValue
+          && condition.operator !== 'isEmpty' && condition.operator !== 'isNotEmpty') {
+        continue; // Skip → le champ reste visible
       }
       
       let conditionResult = false;
@@ -2157,7 +2182,10 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
           conditionResult = true;
       }
       
-      console.log(`🔍 [TBLFieldRendererAdvanced] Condition "${field.label}": dependentValue="${dependentValue}", op="${condition.operator}", showWhen="${condition.showWhen}" → ${conditionResult}`);
+      // Log conditionnel pour éviter le spam console (était ×57 par render)
+      if (!conditionResult) {
+        console.log(`🔍 [TBLFieldRendererAdvanced] Condition "${field.label}": dependentValue="${dependentValue}", op="${condition.operator}", showWhen="${condition.showWhen}" → ${conditionResult}`);
+      }
       
       // 🔥 CRITIQUE: Gérer les actions SHOW vs HIDE
       const isInverseCondition = 'isInverse' in condition && condition.isInverse;
@@ -2185,7 +2213,10 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
       }
     }
     
-    console.log(`🔍 [TBLFieldRendererAdvanced] Champ "${field.label}" (${field.id}) visible: ${isVisible}, hasShowCondition: ${hasShowCondition}`);
+    // Log seulement quand le champ est masqué (réduit le bruit console)
+    if (!isVisible) {
+      console.log(`🔍 [TBLFieldRendererAdvanced] Champ "${field.label}" (${field.id}) visible: ${isVisible}, hasShowCondition: ${hasShowCondition}`);
+    }
     setConditionMet(isVisible);
   }, [allConditions, formData, field.label, field.id]);
 

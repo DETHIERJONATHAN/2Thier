@@ -1441,7 +1441,7 @@ const TBL: React.FC<TBLProps> = ({
                 calculatedValuesMap[nodeId] = value;
               }
             }
-            console.log(`🔗 [broadcastCalculatedRefresh] Fusionné ${Object.keys(accumulated).length} valeurs accumulées (broadcasts précédents sautés)`);
+            if (isVerbose()) console.log(`🔗 [broadcastCalculatedRefresh] Fusionné ${Object.keys(accumulated).length} valeurs accumulées (broadcasts précédents sautés)`);
             accumulatedDisplayValuesRef.current = {}; // Vider les accumulés
           }
           
@@ -1592,15 +1592,11 @@ const TBL: React.FC<TBLProps> = ({
 
             lastSavedSignatureRef.current = sig;
             setAutosaveLast(new Date());
-            // 🚀 FIX: Ne pas broadcast si autosave périodique OU si une requête pendante existe OU si un debounce est actif
-            // Une requête pendante = l'utilisateur a changé à nouveau pendant qu'on sauvegardait
-            // Un debounce actif = un nouveau changement est en attente des 80ms avant d'être envoyé
-            // La prochaine requête fera son propre broadcast avec les données à jour
-            // 🚀 FIX: Ne pas broadcast si autosave périodique OU si une requête pendante existe OU si un debounce est actif
+            // 🚀 PERF FIX 22/02/2026: RETIRÉ !hasDebounceActive — permet d'afficher
+            // les résultats intermédiaires pendant que l'utilisateur tape
             const isPeriodicAutosave = !changedField || changedField === 'NULL';
             const hasPendingRequest = !!pendingAutosaveRef.current;
-            const hasDebounceActive = !!debounceActiveRef.current;
-            if (!isPeriodicAutosave && !hasPendingRequest && !hasDebounceActive) {
+            if (!isPeriodicAutosave && !hasPendingRequest) {
               broadcastCalculatedRefresh({
                 reason: 'create-and-evaluate',
                 evaluatedSubmissionId: createdOrReusedId,
@@ -1651,11 +1647,11 @@ const TBL: React.FC<TBLProps> = ({
             setDevisName('Brouillon');
             lastSavedSignatureRef.current = sig;
             setAutosaveLast(new Date());
-            // 🚀 FIX: Ne pas broadcast si autosave périodique OU si une requête pendante existe OU si un debounce est actif
+            // 🚀 PERF FIX 22/02/2026: RETIRÉ !hasDebounceActive — permet d'afficher
+            // les résultats intermédiaires pendant que l'utilisateur tape
             const isPeriodicAutosave = !changedField || changedField === 'NULL';
             const hasPendingRequest = !!pendingAutosaveRef.current;
-            const hasDebounceActive = !!debounceActiveRef.current;
-            if (!isPeriodicAutosave && !hasPendingRequest && !hasDebounceActive) {
+            if (!isPeriodicAutosave && !hasPendingRequest) {
               broadcastCalculatedRefresh({
                 reason: 'create-and-evaluate',
                 evaluatedSubmissionId: createdOrReusedId,
@@ -1759,8 +1755,14 @@ const TBL: React.FC<TBLProps> = ({
         const isPeriodicAutosave = !changedField || changedField === 'NULL';
         const isOpenMode = effectiveMode === 'open';
         const hasPendingRequest = !!pendingAutosaveRef.current;
-        const hasDebounceActive = !!debounceActiveRef.current;
-        const shouldBroadcast = (!isPeriodicAutosave || isOpenMode) && !hasPendingRequest && !hasDebounceActive;
+        // 🚀 PERF FIX 22/02/2026: RETIRÉ !hasDebounceActive de la condition de broadcast.
+        // AVANT: Si l'utilisateur tapait rapidement (debounce actif), AUCUN résultat n'apparaissait
+        // car TOUS les broadcasts étaient skippés. L'utilisateur devait attendre la fin complète de la chaîne.
+        // APRÈS: On broadcast tant qu'il n'y a pas de requête pending (données non-obsolètes).
+        // Le debounce actif signifie juste que l'utilisateur tape encore — les résultats du cycle PRÉCÉDENT
+        // sont toujours valides et méritent d'être affichés comme résultats intermédiaires.
+        // Le risque de cascade Auto-Select est mitigé par le debounce de 400ms sur useTBLTableLookup.
+        const shouldBroadcast = (!isPeriodicAutosave || isOpenMode) && !hasPendingRequest;
         if (shouldBroadcast) {
           broadcastCalculatedRefresh({
             reason: 'create-and-evaluate',

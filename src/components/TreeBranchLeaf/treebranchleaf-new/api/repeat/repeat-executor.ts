@@ -19,6 +19,7 @@ export interface RepeatExecutionSummary {
   duplicated: Array<{ id: string; label: string | null; type: string; parentId: string | null; sourceTemplateId: string }>;
   nodes: Record<string, unknown>[];
   count: number;
+  warnings?: string[];
   debug?: {
     templateNodeIds: string[];
     nodesToDuplicateIds: string[];
@@ -617,6 +618,60 @@ export async function runRepeatExecution(
     allVarsByNodeId = new Map(targetVars.filter(v => v.nodeId).map(v => [v.nodeId, v]));
   }
 
+  // 🔧 Helper: build options for copyVariableWithCapacities
+  const buildVarCopyOptions = (task: typeof varTasks[number]) => ({
+    autoCreateDisplayNode: true,
+    isFromRepeaterDuplication: true,
+    nodeIdMap: globalNodeIdMap,
+    formulaIdMap: globalFormulaIdMap,
+    conditionIdMap: globalConditionIdMap,
+    tableIdMap: globalTableIdMap,
+    variableCopyCache: globalVariableCopyCache,
+    preloadedOriginalVar: fullVarsMap.get(task.templateVariableId),
+    preloadedOwnerNode: fullVarsMap.get(task.templateVariableId)?.nodeId ? ownerNodesMap.get(fullVarsMap.get(task.templateVariableId)!.nodeId) : undefined,
+    preloadedDuplicatedOwnerNode: { id: task.targetNodeId, parentId: _preloadedTreeNodesById?.get(task.targetNodeId)?.parentId ?? null },
+    preloadedDisplayNode: displayNodesMap.get(task.templateVariableId),
+    preloadedFormulas: fullVarsMap.get(task.templateVariableId)?.nodeId ? formulasByNodeId.get(fullVarsMap.get(task.templateVariableId)!.nodeId) : undefined,
+    existingNodeIds: allExistingNodeIds,
+    existingVariableIds: allExistingVarIds,
+    existingVariableKeys: allExistingVarKeys,
+    preloadedVarsByNodeId: allVarsByNodeId,
+    repeatContext: {
+      repeaterNodeId,
+      templateNodeId: task.targetNodeId.replace(`-${task.plannedSuffix}`, ''),
+      duplicatedFromNodeId: task.targetNodeId.replace(`-${task.plannedSuffix}`, ''),
+      scopeId,
+      mode: 'repeater' as const
+    }
+  });
+
+  // 🔧 Helper: aggregate result maps into global maps
+  const aggregateResult = (result: any) => {
+    if (!result || !result.success) return;
+    if (result.formulaIdMap) {
+      for (const [oldId, newId] of result.formulaIdMap.entries()) {
+        globalFormulaIdMap.set(oldId, newId);
+      }
+    }
+    if (result.conditionIdMap) {
+      for (const [oldId, newId] of result.conditionIdMap.entries()) {
+        globalConditionIdMap.set(oldId, newId);
+      }
+    }
+    if (result.tableIdMap) {
+      for (const [oldId, newId] of result.tableIdMap.entries()) {
+        globalTableIdMap.set(oldId, newId);
+      }
+    }
+    if (result.displayNodeId) {
+      const originalDisplayNodeId = result.displayNodeId.replace(/-\d+$/, '');
+      globalNodeIdMap.set(originalDisplayNodeId, result.displayNodeId);
+    }
+  };
+
+  const failedVarTasks: typeof varTasks = [];
+  let varCopyWarnings: string[] = [];
+
   const VAR_CHUNK_SIZE = 5;
   for (let ci = 0; ci < varTasks.length; ci += VAR_CHUNK_SIZE) {
     const chunk = varTasks.slice(ci, ci + VAR_CHUNK_SIZE);
@@ -627,59 +682,45 @@ export async function runRepeatExecution(
           task.plannedSuffix,
           task.targetNodeId,
           prisma,
-          {
-            autoCreateDisplayNode: true,
-            isFromRepeaterDuplication: true,
-            nodeIdMap: globalNodeIdMap,
-            formulaIdMap: globalFormulaIdMap,
-            conditionIdMap: globalConditionIdMap,
-            tableIdMap: globalTableIdMap,
-            variableCopyCache: globalVariableCopyCache,
-            preloadedOriginalVar: fullVarsMap.get(task.templateVariableId),
-            preloadedOwnerNode: fullVarsMap.get(task.templateVariableId)?.nodeId ? ownerNodesMap.get(fullVarsMap.get(task.templateVariableId)!.nodeId) : undefined,
-            preloadedDuplicatedOwnerNode: { id: task.targetNodeId, parentId: _preloadedTreeNodesById?.get(task.targetNodeId)?.parentId ?? null },
-            preloadedDisplayNode: displayNodesMap.get(task.templateVariableId),
-            preloadedFormulas: fullVarsMap.get(task.templateVariableId)?.nodeId ? formulasByNodeId.get(fullVarsMap.get(task.templateVariableId)!.nodeId) : undefined,
-            existingNodeIds: allExistingNodeIds,
-            existingVariableIds: allExistingVarIds,
-            existingVariableKeys: allExistingVarKeys,
-            preloadedVarsByNodeId: allVarsByNodeId,
-            repeatContext: {
-              repeaterNodeId,
-              templateNodeId: task.targetNodeId.replace(`-${task.plannedSuffix}`, ''),
-              duplicatedFromNodeId: task.targetNodeId.replace(`-${task.plannedSuffix}`, ''),
-              scopeId,
-              mode: 'repeater'
-            }
-          }
+          buildVarCopyOptions(task)
         );
         return { task, result: variableResult };
       } catch (varErr) {
-        console.error(`[repeat-executor] Erreur copie variable ${task.templateVariableId}:`, varErr instanceof Error ? varErr.message : String(varErr));
+        console.error(`[repeat-executor] Erreur copie variable ${task.templateVariableId}:`, varErr instanceof Error ? varErr.stack || varErr.message : String(varErr));
+        failedVarTasks.push(task);
         return { task, result: null as any };
       }
     }));
     // Aggregate chunk results into global maps
     for (const { result } of results) {
-      if (!result || !result.success) continue;
-      if (result.formulaIdMap) {
-        for (const [oldId, newId] of result.formulaIdMap.entries()) {
-          globalFormulaIdMap.set(oldId, newId);
+      aggregateResult(result);
+    }
+  }
+
+  // 🔁 RETRY: Retenter les variables échouées une par une (séquentiellement pour éviter les conflits)
+  if (failedVarTasks.length > 0) {
+    console.warn(`[repeat-executor] ${failedVarTasks.length} variable(s) échouée(s), retry séquentiel...`);
+    for (const task of failedVarTasks) {
+      try {
+        const retryResult = await copyVariableWithCapacities(
+          task.templateVariableId,
+          task.plannedSuffix,
+          task.targetNodeId,
+          prisma,
+          buildVarCopyOptions(task)
+        );
+        aggregateResult(retryResult);
+        if (retryResult.success) {
+          console.log(`[repeat-executor] ✅ Retry réussi pour variable ${task.templateVariableId}`);
+        } else {
+          const msg = `Variable ${task.templateVariableId} → échec retry: ${retryResult.error || 'unknown'}`;
+          console.warn(`[repeat-executor] ⚠️ ${msg}`);
+          varCopyWarnings.push(msg);
         }
-      }
-      if (result.conditionIdMap) {
-        for (const [oldId, newId] of result.conditionIdMap.entries()) {
-          globalConditionIdMap.set(oldId, newId);
-        }
-      }
-      if (result.tableIdMap) {
-        for (const [oldId, newId] of result.tableIdMap.entries()) {
-          globalTableIdMap.set(oldId, newId);
-        }
-      }
-      if (result.displayNodeId) {
-        const originalDisplayNodeId = result.displayNodeId.replace(/-\d+$/, '');
-        globalNodeIdMap.set(originalDisplayNodeId, result.displayNodeId);
+      } catch (retryErr) {
+        const msg = `Variable ${task.templateVariableId} → échec retry: ${retryErr instanceof Error ? retryErr.message : String(retryErr)}`;
+        console.error(`[repeat-executor] ❌ ${msg}`);
+        varCopyWarnings.push(msg);
       }
     }
   }
@@ -786,7 +827,9 @@ export async function runRepeatExecution(
       });
       
     } catch (isolationError) {
-      console.warn('[REPEAT-EXECUTOR] Erreur lors de l\'isolation stricte:', isolationError);
+      const errMsg = `Erreur post-duplication: ${isolationError instanceof Error ? isolationError.message : String(isolationError)}`;
+      console.warn('[REPEAT-EXECUTOR]', errMsg, isolationError instanceof Error ? isolationError.stack : '');
+      varCopyWarnings.push(errMsg);
     }
   }
 
@@ -801,10 +844,15 @@ export async function runRepeatExecution(
     nodesPayload = nodes.map(buildResponseFromColumns);
   }
 
+  if (varCopyWarnings.length > 0) {
+    console.warn(`[repeat-executor] ⚠️ ${varCopyWarnings.length} avertissement(s) durant la copie:`, varCopyWarnings);
+  }
+
   return {
     duplicated: duplicatedSummaries,
     nodes: nodesPayload,
     count: duplicatedSummaries.length,
+    ...(varCopyWarnings.length > 0 ? { warnings: varCopyWarnings } : {}),
     debug: {
       templateNodeIds,
       nodesToDuplicateIds: nodesToDuplicate.map(n => n.id),

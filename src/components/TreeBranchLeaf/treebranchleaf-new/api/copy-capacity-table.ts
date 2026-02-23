@@ -285,6 +285,7 @@ export async function copyTableCapacity(
         }
       });
     } else {
+      try {
       newTable = await prisma.treeBranchLeafNodeTable.create({
         data: {
           id: newTableId,
@@ -332,6 +333,19 @@ export async function copyTableCapacity(
           updatedAt: new Date()
         }
       });
+      } catch (createErr: any) {
+        // Race condition: another parallel copy already created this table
+        if (createErr?.code === 'P2002') {
+          newTable = await prisma.treeBranchLeafNodeTable.findUnique({ where: { id: newTableId } });
+          if (newTable) {
+            tableAlreadyExisted = true;
+          } else {
+            throw createErr;
+          }
+        } else {
+          throw createErr;
+        }
+      }
     }
 
 

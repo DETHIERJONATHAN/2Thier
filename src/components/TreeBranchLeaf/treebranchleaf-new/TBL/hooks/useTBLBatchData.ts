@@ -176,8 +176,8 @@ function extractNodeIdFromRef(ref: string): string {
   } else if (ref.startsWith('condition:')) {
     return ''; // Géré séparément
   } else {
-    // UUID direct ?
-    const uuidMatch = ref.match(/^([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})/i);
+    // UUID direct ? 🔧 FIX: Capturer aussi les suffixes repeater (-1, -2, etc.) et -sum-total
+    const uuidMatch = ref.match(/^([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}(?:-\d{1,3})?(?:-sum-total)?)/i);
     return uuidMatch ? uuidMatch[1] : ref;
   }
 }
@@ -582,6 +582,10 @@ export const useTBLBatchData = (
           setBatchData(data);
           lastLoadedTreeId.current = treeId;
           lastLoadedLeadId.current = leadId;
+          // 🔧 FIX: Remettre refreshKey à 0 après chargement réussi
+          // Sans ça, après un refresh(), refreshKey reste > 0 et le guard
+          // "refreshKey === 0" ne fonctionne plus → boucle infinie de rechargements
+          setRefreshKey(0);
 
           console.log(
             `✅ [useTBLBatchData] Batch chargé en ${duration.toFixed(0)}ms:`,
@@ -618,16 +622,19 @@ export const useTBLBatchData = (
       return batchData.formulasByNode[nodeId];
     }
     
-    // Si pas trouvé et nodeId a un suffixe "-1", essayer sans le suffixe
-    if (nodeId.endsWith('-1')) {
-      const baseId = nodeId.slice(0, -2);
+    // 🔧 FIX: Gérer TOUT suffixe numérique (-1, -2, -3, ...) et pas seulement -1
+    // Si pas trouvé et nodeId a un suffixe "-N", essayer sans le suffixe (fallback temporaire
+    // en attendant que le batch soit rafraîchi avec les formules des copies)
+    const suffixMatch = nodeId.match(/-(\d+)$/);
+    if (suffixMatch) {
+      const baseId = nodeId.slice(0, -suffixMatch[0].length);
       if (batchData.formulasByNode[baseId]) {
         return batchData.formulasByNode[baseId];
       }
     }
     
     // Si pas trouvé et nodeId n'a pas de suffixe, essayer avec "-1"
-    if (!nodeId.endsWith('-1')) {
+    if (!suffixMatch) {
       const suffixedId = `${nodeId}-1`;
       if (batchData.formulasByNode[suffixedId]) {
         return batchData.formulasByNode[suffixedId];
@@ -645,14 +652,16 @@ export const useTBLBatchData = (
       return batchData.valuesByNode[nodeId];
     }
     
-    if (nodeId.endsWith('-1')) {
-      const baseId = nodeId.slice(0, -2);
+    // 🔧 FIX: Gérer TOUT suffixe numérique (-1, -2, -3, ...)
+    const suffixMatch = nodeId.match(/-(\d+)$/);
+    if (suffixMatch) {
+      const baseId = nodeId.slice(0, -suffixMatch[0].length);
       if (batchData.valuesByNode[baseId]) {
         return batchData.valuesByNode[baseId];
       }
     }
     
-    if (!nodeId.endsWith('-1')) {
+    if (!suffixMatch) {
       const suffixedId = `${nodeId}-1`;
       if (batchData.valuesByNode[suffixedId]) {
         return batchData.valuesByNode[suffixedId];
@@ -680,14 +689,16 @@ export const useTBLBatchData = (
       return batchData.dataByNode[nodeId];
     }
     
-    if (nodeId.endsWith('-1')) {
-      const baseId = nodeId.slice(0, -2);
+    // 🔧 FIX: Gérer TOUT suffixe numérique (-1, -2, -3, ...)
+    const suffixMatch = nodeId.match(/-(\d+)$/);
+    if (suffixMatch) {
+      const baseId = nodeId.slice(0, -suffixMatch[0].length);
       if (batchData.dataByNode[baseId]) {
         return batchData.dataByNode[baseId];
       }
     }
     
-    if (!nodeId.endsWith('-1')) {
+    if (!suffixMatch) {
       const suffixedId = `${nodeId}-1`;
       if (batchData.dataByNode[suffixedId]) {
         return batchData.dataByNode[suffixedId];
@@ -705,14 +716,16 @@ export const useTBLBatchData = (
       return batchData.conditionsByNode[nodeId];
     }
     
-    if (nodeId.endsWith('-1')) {
-      const baseId = nodeId.slice(0, -2);
+    // 🔧 FIX: Gérer TOUT suffixe numérique (-1, -2, -3, ...)
+    const suffixMatch = nodeId.match(/-(\d+)$/);
+    if (suffixMatch) {
+      const baseId = nodeId.slice(0, -suffixMatch[0].length);
       if (batchData.conditionsByNode[baseId]) {
         return batchData.conditionsByNode[baseId];
       }
     }
     
-    if (!nodeId.endsWith('-1')) {
+    if (!suffixMatch) {
       const suffixedId = `${nodeId}-1`;
       if (batchData.conditionsByNode[suffixedId]) {
         return batchData.conditionsByNode[suffixedId];
@@ -758,20 +771,28 @@ export const useTBLBatchData = (
     }
     
     // Fallback: essayer des variantes connues de l'ID
-    const variants: string[] = [];
-    
-    // Suffixe "-1" (copies de repeater)
-    if (nodeId.endsWith('-1')) {
-      variants.push(nodeId.slice(0, -2));
-    } else {
-      variants.push(`${nodeId}-1`);
-    }
-    
-    for (const variant of variants) {
-      if (batchData.conditionsTargetingNode[variant]) {
-        return batchData.conditionsTargetingNode[variant];
+    // 🔧 FIX RAMPANT-1: Détecter le suffixe repeater (-1, -2, etc.)
+    const suffixMatch = nodeId.match(/-(\d{1,3})$/);
+    if (suffixMatch) {
+      const suffix = suffixMatch[0]; // e.g., "-1"
+      const baseId = nodeId.slice(0, -suffix.length);
+      if (batchData.conditionsTargetingNode[baseId]) {
+        // 🔥 CRITIQUE: Adapter les conditions pour le repeater copy
+        // Le dependsOn et showWhen référencent les IDs originaux, mais pour
+        // un champ dupliqué, ils doivent pointer vers les copies suffixées.
+        // Ex: Rampant-1 doit dépendre de Versant-1 (pas Versant),
+        //     et showWhen doit comparer avec l'option Rampant-1 (pas Rampant).
+        const isOptionId = (s: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-/i.test(s);
+        return batchData.conditionsTargetingNode[baseId].map(cond => ({
+          ...cond,
+          dependsOn: cond.dependsOn ? cond.dependsOn + suffix : cond.dependsOn,
+          showWhen: cond.showWhen && isOptionId(cond.showWhen) ? cond.showWhen + suffix : cond.showWhen,
+        }));
       }
     }
+    // 🔧 FIX: Supprimé le fallback nodeId+"-1" qui contaminait l'original
+    // avec les conditions de la copie. Avec extractNodeIdFromRef corrigé,
+    // les conditions des copies sont maintenant indexées sous le bon ID suffixé.
     
     return [];
   }, [batchData]);

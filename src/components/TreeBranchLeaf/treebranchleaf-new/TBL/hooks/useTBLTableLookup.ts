@@ -122,7 +122,15 @@ export function useTBLTableLookup(
   // le hook ratait les valeurs calculées → les filtres du lookup n'étaient pas appliqués
   // → le dropdown montrait TOUTES les options au lieu des options filtrées.
   // En initialisant depuis TBL_FORM_DATA, on récupère les valeurs déjà calculées.
-  const [broadcastedCalcValues, setBroadcastedCalcValues] = useState<Record<string, any>>(() => {
+  // 🚀 PERF FIX 22/02/2026: Converti de useState → useRef pour éliminer les boucles de re-render.
+  // AVANT: broadcastedCalcValues était un state React → chaque broadcast déclenchait un re-render
+  // dans TOUTES les ~30 instances de useTBLTableLookup → 30 useEffects → 30 appels API /table/lookup
+  // → l'UI était bloquée et les champs comme Inclinaison-1 ne répondaient plus.
+  // APRÈS: Le ref ne déclenche PAS de re-render. Les valeurs sont lues quand l'useEffect
+  // se déclenche pour d'autres raisons (formData change via saisie utilisateur).
+  // Les valeurs calculées sont aussi disponibles via window.TBL_FORM_DATA (déjà enrichi par broadcastCalculatedRefresh).
+  // Calculer la valeur initiale une seule fois (useRef n'accepte pas de fonction lazy comme useState)
+  const [initialBroadcastSnapshot] = useState<Record<string, any>>(() => {
     if (typeof window !== 'undefined' && (window as any).TBL_FORM_DATA) {
       const snapshot: Record<string, any> = {};
       for (const [key, value] of Object.entries((window as any).TBL_FORM_DATA as Record<string, any>)) {
@@ -140,6 +148,7 @@ export function useTBLTableLookup(
     }
     return {};
   });
+  const broadcastedCalcValuesRef = useRef<Record<string, any>>(initialBroadcastSnapshot);
   
   // 🚀 PERF: Debounce pour accumuler les broadcasts rapides en un seul state update
   const pendingCalcValuesRef = useRef<Record<string, any>>({});
@@ -168,15 +177,14 @@ export function useTBLTableLookup(
         lookupCacheGeneration++; // Invalide tous les lastSentLookupKeyRef en jeu
         const protectedIds = (event.detail as any)?.protectedNodeIds;
         if (Array.isArray(protectedIds) && protectedIds.length > 0) {
-          setBroadcastedCalcValues(prev => {
-            const kept: Record<string, any> = {};
-            for (const id of protectedIds) {
-              if (id in prev) kept[id] = prev[id];
-            }
-            return kept;
-          });
+          const prev = broadcastedCalcValuesRef.current;
+          const kept: Record<string, any> = {};
+          for (const id of protectedIds) {
+            if (id in prev) kept[id] = prev[id];
+          }
+          broadcastedCalcValuesRef.current = kept;
         } else {
-          setBroadcastedCalcValues({});
+          broadcastedCalcValuesRef.current = {};
         }
         return;
       }
@@ -198,11 +206,28 @@ export function useTBLTableLookup(
           const shouldReplaceAll = replaceAllRef.current;
           pendingCalcValuesRef.current = {};
           replaceAllRef.current = false;
-          console.log(`🔄 [useTBLTableLookup] Broadcast debounced: ${Object.keys(pending).length} valeurs calculées fraîches (replaceAll=${shouldReplaceAll})`);
           if (shouldReplaceAll) {
-            setBroadcastedCalcValues(pending);
+            if (isTBLDebugEnabled()) {
+              console.log(`🔄 [useTBLTableLookup] Broadcast ref update: ${Object.keys(pending).length} valeurs (replaceAll)`);
+            }
+            broadcastedCalcValuesRef.current = pending;
           } else {
-            setBroadcastedCalcValues(prev => ({ ...prev, ...pending }));
+            // 🚀 PERF: Mutation du ref directement — pas de re-render React.
+            // Avant (useState), chaque broadcast déclenchait 30 re-renders (1 par instance du hook).
+            const prev = broadcastedCalcValuesRef.current;
+            let hasChanges = false;
+            for (const key of Object.keys(pending)) {
+              if (prev[key] !== pending[key]) {
+                hasChanges = true;
+                break;
+              }
+            }
+            if (hasChanges) {
+              if (isTBLDebugEnabled()) {
+                console.log(`🔄 [useTBLTableLookup] Broadcast ref update: ${Object.keys(pending).length} valeurs (merge)`);
+              }
+              broadcastedCalcValuesRef.current = { ...prev, ...pending };
+            }
           }
         }, 50);
       }
@@ -240,6 +265,11 @@ export function useTBLTableLookup(
   const [tableData, setTableData] = useState<{columns: string[], rows: string[], data: unknown[][], type: 'columns' | 'matrix'} | undefined>(undefined);
   const [config, setConfig] = useState<TreeBranchLeafSelectConfig | undefined>(undefined);
 
+  // 🚀 PERF: Ref pour le timer de debounce du lookup (évite les appels API sur chaque frappe)
+  const lookupDebounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // 🚀 PERF: Ref pour savoir si c'est le premier montage (pas de debounce au premier chargement)
+  const isFirstMountRef = useRef(true);
+
   useEffect(() => {
     const isTargetField = fieldId === '131a7b51-97d5-4f40-8a5a-9359f38939e8';
 
@@ -264,8 +294,9 @@ export function useTBLTableLookup(
     const newDevisTs = typeof window !== 'undefined' ? (window as any).__TBL_NEW_DEVIS_TS : 0;
     const isNewDevisRecent = newDevisTs && (Date.now() - newDevisTs < 10000);
     
-    if (!isNewDevisRecent && formDataParsed && Object.keys(broadcastedCalcValues).length > 0) {
-      const safeBroadcast = { ...broadcastedCalcValues };
+    const currentBroadcastValues = broadcastedCalcValuesRef.current;
+    if (!isNewDevisRecent && formDataParsed && Object.keys(currentBroadcastValues).length > 0) {
+      const safeBroadcast = { ...currentBroadcastValues };
       for (const key of clearedKeys) {
         delete safeBroadcast[key];
       }
@@ -300,7 +331,7 @@ export function useTBLTableLookup(
           enrichedCount++;
         }
       }
-      if (enrichedCount > 0 || overwrittenCount > 0) {
+      if ((enrichedCount > 0 || overwrittenCount > 0) && isTBLDebugEnabled()) {
         console.log(`🔧 [useTBLTableLookup] formData enrichi avec ${enrichedCount}/${Object.keys(safeBroadcast).length} valeurs calculées (${overwrittenCount} valeurs stale écrasées)`);
       }
     }
@@ -333,7 +364,10 @@ export function useTBLTableLookup(
 
     let cancelled = false;
 
-    (async () => {
+    // 🚀 PERF FIX 22/02/2026: Debounce le lookup de 400ms pour éviter les appels API
+    // sur chaque frappe clavier. Ex: taper "35" ne fait qu'UN seul appel au lieu de deux.
+    // Au premier montage (isFirstMountRef), pas de debounce pour afficher les options initiales rapidement.
+    const executeLookup = async () => {
       try {
         if (isTargetField) console.log(`[DEBUG][Test - liste] 🔄 Statut initial: loading=true`);
         setLoading(true);
@@ -618,10 +652,13 @@ export function useTBLTableLookup(
           if (Object.keys(filteredFormData).length > 0) {
             const formValues = JSON.stringify(filteredFormData);
 
-            //  FIX: Si formValues > 8KB, utiliser POST au lieu de supprimer les formValues
-            // Cela permet le filtrage dynamique même avec beaucoup de champs
-            if (formValues.length > 8000) {
-              console.warn(`[useTBLTableLookup] ⚠️ formValues volumineuses (${(formValues.length / 1024).toFixed(1)} KB), envoi via POST`);
+            //  FIX: Si formValues > 4KB, utiliser POST au lieu de GET
+            // encodeURIComponent multiplie la taille ~2.5x (" → %22, { → %7B, etc.)
+            // Node.js limite les headers HTTP à 16KB → seuil bas pour éviter les erreurs 431
+            if (formValues.length > 4000) {
+              if (isTBLDebugEnabled()) {
+                console.log(`[useTBLTableLookup] 📦 formValues volumineuses (${(formValues.length / 1024).toFixed(1)} KB), envoi via POST`);
+              }
               usePostMethod = true;
               postFormValues = filteredFormData;
               queryParams = '';
@@ -738,12 +775,32 @@ export function useTBLTableLookup(
           setLoading(false);
         }
       }
-    })();
+    };
+
+    // 🚀 PERF: Premier montage → exécution immédiate (pas de debounce)
+    // Changements suivants (formDataJson) → debounce 400ms pour coalescer les frappes rapides
+    if (isFirstMountRef.current) {
+      isFirstMountRef.current = false;
+      void executeLookup();
+    } else {
+      // Annuler le précédent timer si un nouveau changement arrive
+      if (lookupDebounceTimerRef.current) {
+        clearTimeout(lookupDebounceTimerRef.current);
+      }
+      lookupDebounceTimerRef.current = setTimeout(() => {
+        lookupDebounceTimerRef.current = null;
+        void executeLookup();
+      }, 400);
+    }
 
     return () => {
       cancelled = true;
+      if (lookupDebounceTimerRef.current) {
+        clearTimeout(lookupDebounceTimerRef.current);
+        lookupDebounceTimerRef.current = null;
+      }
     };
-  }, [fieldId, nodeId, enabled, formDataJson, clearedKeysJson, batchContext.isReady, broadcastedCalcValues]); // 🔥 PERF FIX: retiré refreshTrigger (redondant avec broadcastedCalcValues)
+  }, [fieldId, nodeId, enabled, formDataJson, clearedKeysJson, batchContext.isReady]); // 🚀 PERF FIX 22/02/2026: retiré broadcastedCalcValues (était un ref, plus besoin en dep — évite 30 re-renders/broadcast)
 
   return { options, loading, error, tableData, config };
 }

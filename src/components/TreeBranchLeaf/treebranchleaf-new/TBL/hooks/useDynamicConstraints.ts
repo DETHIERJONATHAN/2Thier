@@ -132,14 +132,17 @@ export const buildConstraints = (
     // Chercher la valeur calculée pour ce nodeId source
     let value = calculatedValues[sourceNodeId];
     
+    // 🔧 FIX: Gérer TOUT suffixe numérique (-1, -2, -3, ...)
+    const sfxMatch = sourceNodeId.match(/-(\d+)$/);
+    
     // Essayer aussi avec le suffixe -1 si non trouvé
-    if (value === undefined && !sourceNodeId.endsWith('-1')) {
+    if (value === undefined && !sfxMatch) {
       value = calculatedValues[`${sourceNodeId}-1`];
     }
     
-    // Essayer sans le suffixe -1 si non trouvé
-    if (value === undefined && sourceNodeId.endsWith('-1')) {
-      value = calculatedValues[sourceNodeId.slice(0, -2)];
+    // Essayer sans le suffixe si non trouvé
+    if (value === undefined && sfxMatch) {
+      value = calculatedValues[sourceNodeId.slice(0, -sfxMatch[0].length)];
     }
     
     if (value === undefined || value === null) continue;

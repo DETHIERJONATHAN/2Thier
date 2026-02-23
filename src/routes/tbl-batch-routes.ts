@@ -606,33 +606,21 @@ router.get('/trees/:treeId/conditions', async (req: Request, res: Response) => {
       conditionsById[condition.id] = condition;
     }
 
-    // 🔥 AUTO-NETTOYAGE: Détecter et purger les linkedConditionIds orphelins
-    // (IDs qui référencent des conditions supprimées ou inexistantes)
+    // � DIAGNOSTIC ONLY: Détecter les linkedConditionIds orphelins sans les supprimer
+    // L'ancien AUTO-CLEANUP destructif supprimait des linkedConditionIds valides
+    // (conditions cross-référencées entre nœuds copiés pendant le repeat).
+    // Avec le fix exec-order dans deep-copy-service.ts, les orphelins ne devraient
+    // plus apparaître. On ne fait plus que logger pour diagnostic.
     const allConditionIdsSet = new Set(allConditions.map(c => c.id));
-    const orphanCleanups: Promise<unknown>[] = [];
     
     for (const node of nodes) {
       if (!Array.isArray(node.linkedConditionIds) || node.linkedConditionIds.length === 0) continue;
       
-      const validIds = node.linkedConditionIds.filter((id: string) => allConditionIdsSet.has(id));
-      const orphanCount = node.linkedConditionIds.length - validIds.length;
+      const orphanCount = node.linkedConditionIds.filter((id: string) => !allConditionIdsSet.has(id)).length;
       
       if (orphanCount > 0) {
-        console.log(`🧹 [AUTO-CLEANUP] Node ${node.id}: ${orphanCount} linkedConditionIds orphelins supprimés (${node.linkedConditionIds.length} → ${validIds.length})`);
-        orphanCleanups.push(
-          db.treeBranchLeafNode.update({
-            where: { id: node.id },
-            data: { linkedConditionIds: validIds }
-          }).catch(e => console.warn(`[AUTO-CLEANUP] Erreur nettoyage node ${node.id}:`, (e as Error).message))
-        );
+        console.log(`ℹ️ [DIAGNOSTIC] Node ${node.id}: ${orphanCount}/${node.linkedConditionIds.length} linkedConditionIds non résolus (non supprimés)`);
       }
-    }
-    
-    // Exécuter les nettoyages en parallèle (non-bloquant pour la réponse)
-    if (orphanCleanups.length > 0) {
-      Promise.all(orphanCleanups).then(() => {
-        console.log(`🧹 [AUTO-CLEANUP] ${orphanCleanups.length} node(s) nettoyé(s) de leurs linkedConditionIds orphelins`);
-      });
     }
 
     // Ajouter les activeConditionId par noeud

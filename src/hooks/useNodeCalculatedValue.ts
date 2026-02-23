@@ -110,7 +110,30 @@ export function clearAllNodeValueCaches(): void {
   lastKnownValueByKey.clear();
   inlineValueProtectedUntil.clear();
   changeInProgressUntil = 0;
+  preSeededValues.clear();
   // caches cleared
+}
+
+/**
+ * 🚀 PERF R13: Pre-seed calculated values for nodes that were just created by repeat execution.
+ * This allows useNodeCalculatedValue hooks to pick up the value IMMEDIATELY on mount
+ * instead of waiting for a batch GET request (50ms + network latency).
+ * Values expire after 10s (hooks that mount later will fetch from server).
+ */
+const preSeededValues = new Map<string, { value: string | number | boolean | null; expiresAt: number }>();
+
+export function preSeedCalculatedValues(values: Record<string, unknown>): void {
+  const expiresAt = Date.now() + 10000; // Expire after 10 seconds
+  let count = 0;
+  for (const [nodeId, value] of Object.entries(values)) {
+    if (value !== undefined && value !== null) {
+      preSeededValues.set(nodeId, { value: value as string | number | boolean | null, expiresAt });
+      count++;
+    }
+  }
+  if (isTBLDebugEnabled()) {
+    console.log(`🚀 [preSeedCalculatedValues] Seeded ${count} values, map size: ${preSeededValues.size}`, Object.keys(values).slice(0, 5));
+  }
 }
 
 interface CalculatedValueResult {
@@ -169,7 +192,7 @@ export function useNodeCalculatedValue(
   const lastGlobalRefreshKeyRef = useRef<string | null>(null);
   const lastGlobalRefreshAtRef = useRef<number>(0);
   // 🧯 Filet de sécurité: limiter les refetchs de cohérence quand un node est absent d'un broadcast partiel
-  const lastSafetyRefetchAtRef = useRef<number>(0);
+  // 🧯 (supprimé) lastSafetyRefetchAtRef — le safety refetch agressif a été supprimé le 22/02/2026
 
   // Fonction pour récupérer la valeur
   const fetchCalculatedValue = useCallback(async () => {
@@ -338,6 +361,21 @@ export function useNodeCalculatedValue(
   // Quand submissionId change, les valeurs arriveront via broadcast inline depuis create-and-evaluate
   useEffect(() => {
     if (nodeId && treeId) {
+      // � PERF R13: Check pre-seeded values FIRST, BEFORE any other guard
+      // CRITICAL: Must be before submissionIdChanged guard because newly-mounted
+      // display field components after repeat always have submissionIdChanged=true
+      // (prevSubmissionIdRef starts as undefined, submissionId is set) which would
+      // block reading the pre-seeded value and leave the display empty.
+      const preSeeded = preSeededValues.get(nodeId);
+      if (preSeeded && Date.now() < preSeeded.expiresAt) {
+        if (isTBLDebugEnabled()) {
+          console.log(`🚀 [useNodeCalcValue] PRE-SEED HIT for ${nodeId}: value=`, preSeeded.value);
+        }
+        setValue(preSeeded.value);
+        preSeededValues.delete(nodeId); // Consume the pre-seeded value
+        return;
+      }
+      
       // 🔥 FIX: Si SEUL submissionId a changé, ne PAS déclencher de GET
       // Les valeurs correctes arriveront via l'événement tbl-force-retransform avec calculatedValues inline
       const previousSubmissionId = prevSubmissionIdRef.current;
@@ -348,6 +386,9 @@ export function useNodeCalculatedValue(
       
       if (submissionIdChanged && submissionId) {
         // submissionId changed - wait for broadcast inline
+        if (isTBLDebugEnabled()) {
+          console.log(`⏳ [useNodeCalcValue] submissionIdChanged guard for ${nodeId}, waiting for broadcast`);
+        }
         return;
       }
       
@@ -478,7 +519,7 @@ export function useNodeCalculatedValue(
             currentVal === '∅'
           );
           if (isCurrentValueEmpty) {
-            // � FIX STALE-DEVIS: Après un nouveau devis, ne PAS déclencher de safety GET
+            // 🔐 FIX STALE-DEVIS: Après un nouveau devis, ne PAS déclencher de safety GET
             // car il rechargerait l'ancienne calculatedValue depuis la DB (TreeBranchLeafNode)
             // Les valeurs correctes arriveront via la première évaluation déclenchée par l'utilisateur
             const newDevisTs = typeof window !== 'undefined' ? (window as any).__TBL_NEW_DEVIS_TS : 0;
@@ -486,32 +527,26 @@ export function useNodeCalculatedValue(
               // safety GET blocked for new devis
               return;
             }
-            // �🔄 Valeur vide/null → NE PAS protéger, déclencher un GET retardé
+            // 🔄 Valeur vide/null → NE PAS protéger, déclencher un GET retardé
             // pour récupérer une éventuelle valeur calculée en DB
             // delayed GET for empty value not in calculatedValues
-            setTimeout(() => fetchCalculatedValue(), 350);
+            setTimeout(() => fetchCalculatedValue(), 250);
             return;
           }
-          // 🧯 Filet de sécurité: certains broadcasts "change" sont partiels (skip trigger-index)
-          // et peuvent laisser un DISPLAY avec une valeur stale. On garde la valeur actuelle
-          // par défaut, mais on autorise un refetch différé throttlé pour convergence.
-          // 🔥 FIX 2026-02-18: Réduit 2500ms → 800ms pour couvrir les saisies rapides
-          // (ex: Orientation puis Inclinaison en 1-2s → le 2ème broadcast ne doit pas rester throttled)
-          const safetyRefetchAge = now - lastSafetyRefetchAtRef.current;
-          const shouldSafetyRefetch = !!submissionId && safetyRefetchAge > 800;
-          if (shouldSafetyRefetch) {
-            // 🔐 FIX STALE-DEVIS: Bloquer aussi le safety refetch après nouveau devis
-            const newDevisTs2 = typeof window !== 'undefined' ? (window as any).__TBL_NEW_DEVIS_TS : 0;
-            if (newDevisTs2 && (Date.now() - newDevisTs2 < 15000)) {
-              // safety refetch blocked
-              return;
-            }
-            lastSafetyRefetchAtRef.current = now;
-            // safety refetch for partial broadcast
-            setTimeout(() => fetchCalculatedValue(), 650);
-            return;
-          }
-          // keep current value (not in calculatedValues)
+          // 🚀 PERF FIX 22/02/2026: SUPPRIMÉ le safety refetch agressif pour les valeurs NON-vides.
+          //
+          // AVANT: Chaque broadcast 'change' déclenchait un safety GET (300-650ms) pour CHAQUE display
+          // field absent du calculatedValues, même si la valeur actuelle était correcte (!).
+          // Avec 10 display fields et des changements rapides, ça faisait 10+ GET inutiles par cycle.
+          //
+          // MAINTENANT: Si la valeur actuelle n'est PAS vide et que ce nodeId n'est PAS dans le
+          // broadcast calculatedValues → la valeur est TOUJOURS correcte (le mode 'change' ne
+          // recalcule que les champs affectés par le trigger). Pas de refetch nécessaire.
+          //
+          // Exception: Si le mode est 'open' (évaluation complète), il n'y a pas de calculatedValues
+          // partiel — tous les champs sont inclus. Donc ce code n'est jamais atteint en mode 'open'.
+          //
+          // keep current value (not in calculatedValues, value is non-empty → still valid)
           return; // 🎯 Ne PAS faire de refetch - le champ n'a pas été impacté par le changement
         }
 

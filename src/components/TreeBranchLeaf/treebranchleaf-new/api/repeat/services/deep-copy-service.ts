@@ -1567,40 +1567,10 @@ export async function deepCopyNodeInternal(
     }
   }));
 
-  // PERF R8: Pre-filter batch flush — skip nodes that don't exist (eliminates wasted DB calls + error logs)
-  if (pendingLinkedConditionUpdates.size > 0) {
-    let condSkipped = 0;
-    for (const refNodeId of pendingLinkedConditionUpdates.keys()) {
-      if (!existingNodeIds.has(refNodeId)) { pendingLinkedConditionUpdates.delete(refNodeId); condSkipped++; }
-    }
-    if (condSkipped > 0) console.log(`[DEEP-COPY] PERF R8: Skipped ${condSkipped} non-existent nodes for linkedConditionIds`);
-    const batchPromises: Promise<void>[] = [];
-    for (const [refNodeId, conditionIds] of pendingLinkedConditionUpdates) {
-      batchPromises.push(
-        addToNodeLinkedField(prisma, refNodeId, 'linkedConditionIds', Array.from(conditionIds))
-          .catch(e => console.warn('[DEEP-COPY] Warning batch linkedConditionIds:', (e as Error).message))
-      );
-    }
-    await Promise.all(batchPromises);
-  }
-
-  // PERF R8: Pre-filter batch flush — skip nodes that don't exist (eliminates wasted DB calls + error logs)
-  if (pendingLinkedFormulaUpdates.size > 0) {
-    let formSkipped = 0;
-    for (const refNodeId of pendingLinkedFormulaUpdates.keys()) {
-      if (!existingNodeIds.has(refNodeId)) { pendingLinkedFormulaUpdates.delete(refNodeId); formSkipped++; }
-    }
-    if (formSkipped > 0) console.log(`[DEEP-COPY] PERF R8: Skipped ${formSkipped} non-existent nodes for linkedFormulaIds`);
-    const batchFormulaPromises: Promise<void>[] = [];
-    for (const [refNodeId, formulaIds] of pendingLinkedFormulaUpdates) {
-      batchFormulaPromises.push(
-        addToNodeLinkedField(prisma, refNodeId, 'linkedFormulaIds', Array.from(formulaIds))
-          .catch(e => console.warn('[DEEP-COPY] Warning batch linkedFormulaIds:', (e as Error).message))
-      );
-    }
-    await Promise.all(batchFormulaPromises);
-    console.log(`[DEEP-COPY] PERF R8: Batch-flushed linkedFormulaIds for ${pendingLinkedFormulaUpdates.size} nodes (instead of per-formula linking)`);
-  }
+  // 🔧 FIX EXEC-ORDER: Les batch flush des linkedConditionIds/linkedFormulaIds sont déplacés
+  // APRÈS pendingFinalUpdateOps pour éviter que le SET final n'écrase les APPEND.
+  // Avant: APPEND (cross-refs) → SET (own refs) = cross-refs perdues !
+  // Après: SET (own refs) → APPEND (cross-refs) = les deux sont préservés ✅
 
   const variableCopyCache = new Map<string, string>();
   // PERF R8: Separate variable copy tasks from final update computation
@@ -1759,6 +1729,43 @@ export async function deepCopyNodeInternal(
     } catch (e) {
       console.warn('[DEEP-COPY] PERF R7: Batch merged update error:', (e as Error).message);
     }
+  }
+
+  // 🔧 FIX EXEC-ORDER: Batch flush APRÈS pendingFinalUpdateOps pour que les APPEND
+  // s'ajoutent PER-DESSUS les SET (au lieu d'être écrasés par eux).
+  // Les linkedConditionIds/linkedFormulaIds cross-référencés (conditions d'autres nœuds
+  // qui RÉFÉRENCENT ce nœud) sont maintenant correctement préservés.
+  if (pendingLinkedConditionUpdates.size > 0) {
+    let condSkipped = 0;
+    for (const refNodeId of pendingLinkedConditionUpdates.keys()) {
+      if (!existingNodeIds.has(refNodeId)) { pendingLinkedConditionUpdates.delete(refNodeId); condSkipped++; }
+    }
+    if (condSkipped > 0) console.log(`[DEEP-COPY] PERF R8: Skipped ${condSkipped} non-existent nodes for linkedConditionIds`);
+    const batchPromises: Promise<void>[] = [];
+    for (const [refNodeId, conditionIds] of pendingLinkedConditionUpdates) {
+      batchPromises.push(
+        addToNodeLinkedField(prisma, refNodeId, 'linkedConditionIds', Array.from(conditionIds))
+          .catch(e => console.warn('[DEEP-COPY] Warning batch linkedConditionIds:', (e as Error).message))
+      );
+    }
+    await Promise.all(batchPromises);
+  }
+
+  if (pendingLinkedFormulaUpdates.size > 0) {
+    let formSkipped = 0;
+    for (const refNodeId of pendingLinkedFormulaUpdates.keys()) {
+      if (!existingNodeIds.has(refNodeId)) { pendingLinkedFormulaUpdates.delete(refNodeId); formSkipped++; }
+    }
+    if (formSkipped > 0) console.log(`[DEEP-COPY] PERF R8: Skipped ${formSkipped} non-existent nodes for linkedFormulaIds`);
+    const batchFormulaPromises: Promise<void>[] = [];
+    for (const [refNodeId, formulaIds] of pendingLinkedFormulaUpdates) {
+      batchFormulaPromises.push(
+        addToNodeLinkedField(prisma, refNodeId, 'linkedFormulaIds', Array.from(formulaIds))
+          .catch(e => console.warn('[DEEP-COPY] Warning batch linkedFormulaIds:', (e as Error).message))
+      );
+    }
+    await Promise.all(batchFormulaPromises);
+    console.log(`[DEEP-COPY] PERF R8: Batch-flushed linkedFormulaIds for ${pendingLinkedFormulaUpdates.size} nodes (instead of per-formula linking)`);
   }
 
   const rootNewId = idMap.get(source.id)!;

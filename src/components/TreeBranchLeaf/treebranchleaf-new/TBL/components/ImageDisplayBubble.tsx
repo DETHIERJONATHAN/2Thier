@@ -56,94 +56,129 @@ export const ImageDisplayBubble: React.FC<ImageDisplayBubbleProps> = ({
   const [loading, setLoading] = useState(false);
   const [previewVisible, setPreviewVisible] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  
+  // 🚀 PERF FIX 22/02/2026: Ref pour tracker si une requête API est déjà en cours
+  // Évite les requêtes API en doublon quand formData change rapidement
+  const apiFetchInFlightRef = useRef(false);
+  // 🚀 PERF: Ref pour stocker le dernier sourceNodeId chargé via API (ne pas re-fetch si identique)
+  const lastApiLoadedSourceRef = useRef<string | null>(null);
 
-  // Récupérer l'URL de l'image depuis le champ source
-  const fetchImageUrl = useCallback(async () => {
-    // 🔍 DEBUG: Afficher ce que reçoit ImageDisplayBubble
-    console.log(`🖼️🖼️🖼️ [ImageDisplayBubble] fetchImageUrl appelé:`, {
-      fieldId,
-      sourceNodeId,
-      formDataKeys: Object.keys(formData).slice(0, 10),
-      formDataFieldId: formData[fieldId],
-      formDataSourceNodeId: formData[sourceNodeId]
-    });
-    
+  // 🚀 PERF FIX 22/02/2026: Extraire l'image depuis formData de façon SYNCHRONE
+  // sans useCallback/useEffect — juste un useMemo qui vérifie les clés pertinentes.
+  // Seules les clés fieldId et sourceNodeId nous intéressent, pas TOUT formData.
+  const formDataImageUrl = useMemo(() => {
+    // 1. Vérifier formData[fieldId]
+    const formValueFieldId = formData[fieldId];
+    if (formValueFieldId && typeof formValueFieldId === 'string' && (formValueFieldId.startsWith('http') || formValueFieldId.startsWith('data:'))) {
+      return formValueFieldId;
+    }
+    // 2. Vérifier formData[sourceNodeId]
+    const formValue = formData[sourceNodeId];
+    if (formValue && typeof formValue === 'string' && (formValue.startsWith('http') || formValue.startsWith('data:'))) {
+      return formValue;
+    }
+    return null;
+  }, [formData[fieldId], formData[sourceNodeId], fieldId, sourceNodeId]);
+
+  // Si formData contient l'image, l'utiliser directement (pas d'API call)
+  useEffect(() => {
+    if (formDataImageUrl) {
+      setImageUrl(formDataImageUrl);
+    }
+  }, [formDataImageUrl]);
+
+  // 🚀 PERF FIX 22/02/2026: Fetch API uniquement au montage ou quand sourceNodeId change.
+  // NE DÉPEND PAS de formData — évite les refetches à chaque frappe clavier.
+  // Si l'image est dans formData (cas ci-dessus), on ne fait jamais d'appel API.
+  useEffect(() => {
     if (!sourceNodeId && !fieldId) {
       setImageUrl(null);
       return;
     }
-
-    // 🎯 FIX: D'abord vérifier si la valeur est dans formData[fieldId] (où le serveur stocke les valeurs Link)
-    const formValueFieldId = formData[fieldId];
-    if (formValueFieldId && typeof formValueFieldId === 'string' && (formValueFieldId.startsWith('http') || formValueFieldId.startsWith('data:'))) {
-      tblLog(`✅ [ImageDisplayBubble] Image trouvée dans formData[fieldId=${fieldId}]`);
-      setImageUrl(formValueFieldId);
+    
+    // Si formData a déjà l'image, pas besoin d'appel API
+    if (formDataImageUrl) {
+      return;
+    }
+    
+    // Si on a déjà chargé cette source via API et qu'on a un résultat, ne pas recharger
+    if (lastApiLoadedSourceRef.current === sourceNodeId && imageUrl !== null) {
+      return;
+    }
+    
+    // Éviter les requêtes API concurrentes
+    if (apiFetchInFlightRef.current) {
       return;
     }
 
-    // 2. Ensuite vérifier formData[sourceNodeId] (ancien comportement)
-    const formValue = formData[sourceNodeId];
-    if (formValue && typeof formValue === 'string' && (formValue.startsWith('http') || formValue.startsWith('data:'))) {
-      tblLog(`✅ [ImageDisplayBubble] Image trouvée dans formData[sourceNodeId=${sourceNodeId}]`);
-      setImageUrl(formValue);
-      return;
-    }
+    let cancelled = false;
+    
+    const fetchFromApi = async () => {
+      try {
+        apiFetchInFlightRef.current = true;
+        setLoading(true);
+        setError(null);
+        
+        tblLog(`🔍 [ImageDisplayBubble] Récupération de l'image pour nodeId: ${sourceNodeId}`);
+        
+        // Essayer de récupérer la valeur calculée/stockée du nœud
+        const response = await apiRef.current.get<{
+          value?: string;
+          calculatedValue?: string;
+        }>(`/api/tree-nodes/${sourceNodeId}/calculated-value`);
 
-    // 2. Sinon, récupérer depuis l'API
-    try {
-      setLoading(true);
-      setError(null);
-      
-      tblLog(`🔍 [ImageDisplayBubble] Récupération de l'image pour nodeId: ${sourceNodeId}`);
-      
-      // Essayer de récupérer la valeur calculée/stockée du nœud
-      const response = await apiRef.current.get<{
-        value?: string;
-        calculatedValue?: string;
-      }>(`/api/tree-nodes/${sourceNodeId}/calculated-value`);
+        if (cancelled) return;
 
-      if (response) {
-        const url = response.value ?? response.calculatedValue;
-        if (url && typeof url === 'string' && (url.startsWith('http') || url.startsWith('data:'))) {
-          tblLog(`✅ [ImageDisplayBubble] Image récupérée via API: ${url.substring(0, 50)}...`);
-          setImageUrl(url);
-          return;
+        if (response) {
+          const url = response.value ?? response.calculatedValue;
+          if (url && typeof url === 'string' && (url.startsWith('http') || url.startsWith('data:'))) {
+            tblLog(`✅ [ImageDisplayBubble] Image récupérée via API: ${url.substring(0, 50)}...`);
+            setImageUrl(url);
+            lastApiLoadedSourceRef.current = sourceNodeId;
+            return;
+          }
         }
-      }
 
-      // 3. Essayer de récupérer depuis les métadonnées du nœud
-      const nodeData = await apiRef.current.get<{
-        metadata?: { imageUrl?: string };
-        value?: string;
-      }>(`/api/treebranchleaf/nodes/${sourceNodeId}`);
+        // Essayer de récupérer depuis les métadonnées du nœud
+        const nodeData = await apiRef.current.get<{
+          metadata?: { imageUrl?: string };
+          value?: string;
+        }>(`/api/treebranchleaf/nodes/${sourceNodeId}`);
 
-      if (nodeData) {
-        const metaUrl = nodeData.metadata?.imageUrl || nodeData.value;
-        if (metaUrl && typeof metaUrl === 'string' && (metaUrl.startsWith('http') || metaUrl.startsWith('data:'))) {
-          tblLog(`✅ [ImageDisplayBubble] Image trouvée dans métadonnées: ${metaUrl.substring(0, 50)}...`);
-          setImageUrl(metaUrl);
-          return;
+        if (cancelled) return;
+
+        if (nodeData) {
+          const metaUrl = nodeData.metadata?.imageUrl || nodeData.value;
+          if (metaUrl && typeof metaUrl === 'string' && (metaUrl.startsWith('http') || metaUrl.startsWith('data:'))) {
+            tblLog(`✅ [ImageDisplayBubble] Image trouvée dans métadonnées: ${metaUrl.substring(0, 50)}...`);
+            setImageUrl(metaUrl);
+            lastApiLoadedSourceRef.current = sourceNodeId;
+            return;
+          }
         }
+
+        // Pas d'image trouvée
+        tblLog(`⚠️ [ImageDisplayBubble] Aucune image trouvée pour ${sourceNodeId}`);
+        lastApiLoadedSourceRef.current = sourceNodeId;
+        setImageUrl(null);
+      } catch (err) {
+        if (!cancelled) {
+          console.error(`❌ [ImageDisplayBubble] Erreur récupération image:`, err);
+          setError('Erreur de chargement');
+          setImageUrl(null);
+        }
+      } finally {
+        apiFetchInFlightRef.current = false;
+        if (!cancelled) setLoading(false);
       }
+    };
+    
+    fetchFromApi();
+    
+    return () => { cancelled = true; };
+  }, [fieldId, sourceNodeId]); // 🚀 PERF: PAS formData ! Seul le changement de source déclenche l'API call.
 
-      // Pas d'image trouvée
-      tblLog(`⚠️ [ImageDisplayBubble] Aucune image trouvée pour ${sourceNodeId}`);
-      setImageUrl(null);
-    } catch (err) {
-      console.error(`❌ [ImageDisplayBubble] Erreur récupération image:`, err);
-      setError('Erreur de chargement');
-      setImageUrl(null);
-    } finally {
-      setLoading(false);
-    }
-  }, [fieldId, sourceNodeId, formData]);
-
-  // Charger l'image au montage et quand sourceNodeId change
-  useEffect(() => {
-    fetchImageUrl();
-  }, [fetchImageUrl]);
-
-  // Écouter les mises à jour du nœud source
+  // Écouter les mises à jour du nœud source (ex: upload photo)
   useEffect(() => {
     const handler = (event: Event) => {
       try {
@@ -151,7 +186,8 @@ export const ImageDisplayBubble: React.FC<ImageDisplayBubbleProps> = ({
         const node = custom.detail?.node;
         if (node && node.id === sourceNodeId) {
           tblLog('🔔 [ImageDisplayBubble] Mise à jour détectée pour le nœud source');
-          fetchImageUrl();
+          lastApiLoadedSourceRef.current = null; // Invalider le cache pour forcer un refetch
+          // Re-render triggered by sourceNodeId change or forced refetch
         }
       } catch {
         // noop
@@ -159,7 +195,7 @@ export const ImageDisplayBubble: React.FC<ImageDisplayBubbleProps> = ({
     };
     window.addEventListener('tbl-node-updated', handler);
     return () => window.removeEventListener('tbl-node-updated', handler);
-  }, [sourceNodeId, fetchImageUrl]);
+  }, [sourceNodeId]);
 
   // Style de la bulle
   const bubbleStyle: React.CSSProperties = {

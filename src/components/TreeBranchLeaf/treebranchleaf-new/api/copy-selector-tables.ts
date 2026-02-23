@@ -74,7 +74,6 @@ export async function copySelectorTablesAfterNodeCopy(
               meta: true,
               type: true,
               description: true,
-              displayInline: true,
               tableColumns: { select: { id: true } },
               tableRows: { select: { id: true, cells: true } }
             }

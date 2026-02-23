@@ -5,6 +5,7 @@ import { runRepeatExecution } from './repeat-executor.js';
 import type { MinimalReq } from './services/shared-helpers.js';
 import { authenticateToken } from '../../../../../middleware/auth';
 import { updateSumDisplayFieldAfterCopyChange } from '../sum-display-field-routes.js';
+import { invalidateTriggerIndexCache } from '../../../tbl-bridge/routes/tbl-submission-evaluator.js';
 
 interface RepeatRequestBody {
   suffix?: string | number;
@@ -84,6 +85,13 @@ export default function createRepeatRouter(prisma: PrismaClient) {
         req as unknown as MinimalReq,
         executionPlan
       );
+
+      // 🔥 FIX CACHE-STALE: Invalider le trigger index cache après la duplication repeat.
+      // Sans cela, les display fields copiés (ex: display-uuid-1) ne sont PAS dans le
+      // trigger index → changer un champ dans l'instance repeat ne déclenche PAS le recalcul
+      // des display fields correspondants. Le cache a un TTL de 60s, mais l'utilisateur
+      // remplit les champs immédiatement après le repeat → cache stale → pas de calcul.
+      invalidateTriggerIndexCache();
 
       return res.status(201).json({
         status: 'completed',

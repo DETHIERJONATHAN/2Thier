@@ -44,6 +44,7 @@ import type { RawTreeNode } from '../types';
 import { useAuthenticatedApi } from '../../../../../hooks/useAuthenticatedApi';
 import { isCopyFromRepeater } from '../utils/isCopyFromRepeater';
 import { useTBLBatchOptional } from '../contexts/TBLBatchContext';
+import { preSeedCalculatedValues } from '../../../../../hooks/useNodeCalculatedValue';
 
 const { Text } = Typography;
 const { Panel } = Collapse;
@@ -5335,7 +5336,21 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
                                 
                                 if (isTBLDebugEnabled()) tblLog(`✅ [COPY-API] Repeat execute terminé:`, response);
                                 
-                                // 🔄 SYNC BIDIRECTIONNELLE: Mettre à jour le champ source si configuré
+                                // � FIX CRITIQUE: Rafraîchir le batch data après repeat
+                                // Après la duplication, la DB contient de nouvelles formules pour les nœuds copiés
+                                // (ex: "uuid-1" avec tokens suffixés). Sans refresh, getFormulasForNode("uuid-1")
+                                // retourne la formule du nœud original (tokens non-suffixés) → les contraintes
+                                // dynamiques (max/min) et les display fields pointent vers les mauvais nœuds sources.
+                                try {
+                                  if (batchCtx?.refresh) {
+                                    batchCtx.refresh();
+                                    if (isTBLDebugEnabled()) tblLog('🔄 [COPY-API] Batch data refresh déclenché après repeat');
+                                  }
+                                } catch (batchRefreshErr) {
+                                  console.warn('⚠️ [COPY-API] Batch refresh failed (silent):', batchRefreshErr);
+                                }
+                                
+                                // �🔄 SYNC BIDIRECTIONNELLE: Mettre à jour le champ source si configuré
                                 try {
                                   console.log(`🔍 [SYNC DEBUG ADD] parentField.id=${parentField?.id}`);
                                   console.log(`🔍 [SYNC DEBUG ADD] parentField.repeater_countSourceNodeId:`, parentField?.repeater_countSourceNodeId);
@@ -5407,7 +5422,28 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
                                   // Un sync silencieux en arrière-plan garantit la cohérence pour les clics suivants.
                                   try {
                                     if (isTBLDebugEnabled()) tblLog('✅ [COPY-API] Mise à jour optimiste appliquée (pas de forceRemote)');
-                                    // Dispatch un retransform LOCAL UNIQUEMENT (pas de refetch serveur)
+                                    
+                                    // 🚀 PERF R13: Extract calculatedValues from response nodes to pass inline
+                                    // This avoids individual GET requests by useNodeCalculatedValue for each display field
+                                    const repeatCalculatedValues: Record<string, unknown> = {};
+                                    if (Array.isArray(finalNodesPayload)) {
+                                      for (const node of finalNodesPayload) {
+                                        if (node && node.id && node.calculatedValue !== undefined && node.calculatedValue !== null) {
+                                          repeatCalculatedValues[node.id] = node.calculatedValue;
+                                        }
+                                      }
+                                    }
+                                    const hasInlineCalcValues = Object.keys(repeatCalculatedValues).length > 0;
+                                    if (hasInlineCalcValues) {
+                                      // 🚀 PERF R13: Pre-seed the cache so newly-mounted useNodeCalculatedValue hooks
+                                      // can pick up values instantly without making GET requests
+                                      preSeedCalculatedValues(repeatCalculatedValues);
+                                      if (isTBLDebugEnabled()) {
+                                        tblLog('🚀 [COPY-API] Pre-seeded calculatedValues cache for', Object.keys(repeatCalculatedValues).length, 'nodes');
+                                      }
+                                    }
+                                    
+                                    // Dispatch un retransform avec les calculatedValues inline
                                     window.dispatchEvent(new CustomEvent('tbl-force-retransform', {
                                       detail: {
                                         source: 'duplicate-templates',
@@ -5415,6 +5451,9 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
                                         forceRemote: false, // 🎯 IMPORTANT: false = pas de refresh complet
                                         skipFormReload: true,
                                         eventDebugId,
+                                        // 🚀 PERF R13: Pass calculated values inline so useNodeCalculatedValue
+                                        // picks them up immediately without needing a separate GET request
+                                        ...(hasInlineCalcValues ? { calculatedValues: repeatCalculatedValues } : {}),
                                       }
                                     }));
                                     if (isTBLDebugEnabled()) tblLog('✅ [COPY-API] Local retransform dispatched (no server refetch)');

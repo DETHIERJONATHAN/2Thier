@@ -65,8 +65,10 @@ const EXCLUDED_NODES_CACHE_TTL = 60_000; // 60s
 export function invalidateTriggerIndexCache(treeId?: string) {
   if (treeId) {
     triggerIndexCache.delete(treeId);
+    excludedNodesCache.delete(treeId);
   } else {
     triggerIndexCache.clear();
+    excludedNodesCache.clear();
   }
 }
 
@@ -1497,6 +1499,27 @@ const displayDeps = new Map<string, Set<string>>(); // nodeId → Set<dependsOn>
           return isDisplayField;
         })
         .map(cap => cap.nodeId);
+      
+      // 🔧 FIX TRIGGER-COVERAGE: Inclure TOUS les display nodes dans le trigger index,
+      // pas seulement ceux avec des records formula/variable dans capacitiesRaw.
+      // Certains display nodes (copies repeat, table-lookup-only) peuvent avoir hasFormula:true
+      // mais aucun record Formula/Variable en DB → absents de capacitiesRaw → absents du trigger index
+      // → jamais recalculés quand leurs triggers changent.
+      // displayNodesParallel (chargé plus haut) contient TOUS les display nodes par fieldType/subType.
+      {
+        const displayFieldIdSet = new Set(displayFieldIds);
+        let addedCount = 0;
+        for (const n of displayNodesParallel) {
+          if (!displayFieldIdSet.has(n.id)) {
+            displayFieldIds.push(n.id);
+            displayFieldIdSet.add(n.id);
+            addedCount++;
+          }
+        }
+        if (addedCount > 0) {
+          console.log(`🔧 [FIX TRIGGER-COVERAGE] ${addedCount} display nodes ajoutés au trigger index (absents de capacitiesRaw)`);
+        }
+      }
     
       // 🚀 PARALLÉLISER: charger options, display nodes, tables, links et conditions en parallèle
       const [selectFieldNodes, optionNodes, displayNodes, displayFieldTables, allLinkedNodes, allTreeNodeIds] = await Promise.all([

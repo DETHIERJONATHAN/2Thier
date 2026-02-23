@@ -1212,13 +1212,13 @@ export async function copyVariableWithCapacities(
             }
 
           } catch (copyCapErr) {
-            // Erreur silencieuse copie formules/conditions
+            console.warn(`[VAR-COPY] Erreur copie formules/conditions pour var ${originalVarId} → node ${finalNodeId}:`, (copyCapErr as Error).message);
           }
         } else {
           // Fallback si nœud propriétaire introuvable
         }
         } catch (e) {
-          // Erreur silencieuse création display node
+          console.warn(`[VAR-COPY] Erreur création display node pour var ${originalVarId}:`, (e as Error).message);
         }
       }
     }
@@ -1234,7 +1234,7 @@ export async function copyVariableWithCapacities(
         newVarId = `${originalVarId}-${suffix}-${tail}`;
       }
     } catch (e) {
-      // Vérification collision silencieuse
+      console.warn(`[VAR-COPY] Erreur vérification collision ID pour var ${originalVarId}:`, (e as Error).message);
     }
 
     try {
@@ -1246,8 +1246,13 @@ export async function copyVariableWithCapacities(
         newExposedKey = `${originalVar.exposedKey}-${suffix}-${tail}`;
       }
     } catch (e) {
-      // Vérification collision silencieuse
+      console.warn(`[VAR-COPY] Erreur vérification collision exposedKey pour var ${originalVarId}:`, (e as Error).message);
     }
+
+    // PERF R13: Pre-claim IDs in collision sets BEFORE the create to prevent
+    // parallel copies in the same chunk from planning the same id/key/nodeId
+    if (existingVariableIds) existingVariableIds.add(newVarId);
+    if (existingVariableKeys) existingVariableKeys.add(newExposedKey);
 
     // ═══════════════════════════════════════════════════════════════════════
     // 🔁 ÉTAPE 5A-bis : Réutiliser une variable existante pour ce nœud si présente
@@ -1291,7 +1296,7 @@ export async function copyVariableWithCapacities(
               await addToNodeLinkedField(prisma, finalNodeId, 'linkedVariableIds', [existingForNode.id]);
             }
           } catch (e) {
-            // Erreur MAJ display node silencieuse
+            console.warn(`[VAR-COPY] Erreur MAJ display node (réutilisation) pour var ${originalVarId}:`, (e as Error).message);
           }
 
           const cacheKey = `${originalVarId}|${finalNodeId}`;
@@ -1300,14 +1305,14 @@ export async function copyVariableWithCapacities(
           try {
             await prisma.treeBranchLeafNodeVariable.delete({ where: { id: existingForNode.id } });
           } catch (delError) {
-            // Erreur suppression silencieuse
+            console.warn(`[VAR-COPY] Erreur suppression variable existante ${existingForNode.id}:`, (delError as Error).message);
           }
           _reusingExistingVariable = false;
           _existingVariableForReuse = null;
         }
       }
     } catch (e) {
-      // Vérification silencieuse
+      console.warn(`[VAR-COPY] Erreur vérification variable existante pour node ${finalNodeId}:`, (e as Error).message);
     }
 
     // Utiliser la variable réutilisée ou en créer une nouvelle
@@ -1426,8 +1431,33 @@ export async function copyVariableWithCapacities(
           }
         }
 
-        newVariable = await prisma.treeBranchLeafNodeVariable.create({
-          data: {
+        // PERF R13: Use upsert to avoid P2002 on nodeId during parallel copies.
+        // The nodeId field is @unique, so parallel chunks may race to create for the same node.
+        // upsert atomically handles the conflict: if nodeId already exists, update instead of failing.
+        // ⚠️ IMPORTANT: Do NOT update `id` in update clause — changing PK would break
+        // linkedVariableIds references stored as JSON arrays in TreeBranchLeafNode.
+        newVariable = await prisma.treeBranchLeafNodeVariable.upsert({
+          where: { nodeId: finalNodeId },
+          update: {
+            // If a variable already exists for this nodeId, update data fields only (keep existing id)
+            exposedKey: newExposedKey,
+            displayName: normalizedDisplayName,
+            displayFormat: originalVar.displayFormat,
+            unit: originalVar.unit,
+            precision: originalVar.precision,
+            visibleToUser: originalVar.visibleToUser,
+            isReadonly: originalVar.isReadonly,
+            defaultValue: originalVar.defaultValue,
+            fixedValue: originalVar.fixedValue,
+            selectedNodeId: originalVar.selectedNodeId 
+              ? (nodeIdMap.get(originalVar.selectedNodeId) || `${originalVar.selectedNodeId}-${suffix}`)
+              : null,
+            sourceRef: newSourceRef,
+            sourceType: originalVar.sourceType,
+            metadata: originalVar.metadata as any,
+            updatedAt: new Date()
+          },
+          create: {
             id: newVarId,
             nodeId: finalNodeId,
             exposedKey: newExposedKey,
@@ -1449,16 +1479,31 @@ export async function copyVariableWithCapacities(
             updatedAt: new Date()
           }
         });
-        // PERF: Update collision Sets to prevent stale checks for next variable
-        if (existingVariableIds) existingVariableIds.add(newVarId);
-        if (existingVariableKeys) existingVariableKeys.add(newExposedKey);
+        // PERF R13: Sync newVarId with the actual variable id (may differ if upsert hit update path)
+        newVarId = newVariable.id;
+        // PERF R13: Update preloadedVarsByNodeId so parallel copies see this variable as existing
+        if (preloadedVarsByNodeId) preloadedVarsByNodeId.set(finalNodeId, newVariable);
       } catch (createError: any) {
-        // PERF R12: Handle P2002 unique constraint on nodeId (race condition from parallel copies)
-        if (createError?.code === 'P2002' && createError?.meta?.target?.includes?.('nodeId')) {
-          const existing = await prisma.treeBranchLeafNodeVariable.findUnique({ where: { nodeId: finalNodeId } });
-          if (existing) {
-            newVariable = existing;
-            _reusingExistingVariable = true;
+        // PERF R12: Handle P2002 unique constraint on id or nodeId (race condition from parallel copies)
+        if (createError?.code === 'P2002') {
+          const target = createError?.meta?.target;
+          if (target?.includes?.('nodeId')) {
+            const existing = await prisma.treeBranchLeafNodeVariable.findUnique({ where: { nodeId: finalNodeId } });
+            if (existing) {
+              newVariable = existing;
+              _reusingExistingVariable = true;
+            } else {
+              throw createError;
+            }
+          } else if (target?.includes?.('id')) {
+            // Race condition: another parallel copy already created this variable with the same id
+            const existing = await prisma.treeBranchLeafNodeVariable.findUnique({ where: { id: newVarId } });
+            if (existing) {
+              newVariable = existing;
+              _reusingExistingVariable = true;
+            } else {
+              throw createError;
+            }
           } else {
             throw createError;
           }
@@ -1490,7 +1535,7 @@ export async function copyVariableWithCapacities(
       try {
         await linkVariableToAllCapacityNodes(prisma, newVariable.id, newVariable.sourceRef);
       } catch (e) {
-        // Erreur liaison silencieuse
+        console.warn(`[VAR-COPY] Erreur liaison variable ${newVariable.id} → capacités:`, (e as Error).message);
       }
     }
     
@@ -1514,7 +1559,7 @@ export async function copyVariableWithCapacities(
         }
       });
     } catch (e) {
-      // Erreur MAJ display node silencieuse
+      console.warn(`[VAR-COPY] Erreur MAJ display node ${finalNodeId}:`, (e as Error).message);
     }
 
     // ═══════════════════════════════════════════════════════════════════════
@@ -1542,7 +1587,7 @@ export async function copyVariableWithCapacities(
           }
         }
       } catch (e) {
-        // Erreur linkage section silencieuse
+        console.warn(`[VAR-COPY] Erreur linkage section display pour var ${newVariable.id}:`, (e as Error).message);
       }
     } else if (autoCreateDisplayNode) {
       // Déjà géré ci-dessus: finalNodeId pointe vers le nœud d'affichage (copié ou créé)
@@ -1556,7 +1601,7 @@ export async function copyVariableWithCapacities(
           await addToNodeLinkedField(prisma, finalNodeId, 'linkedVariableIds', [newVariable.id]);
         }
       } catch (e) {
-        // Erreur linkage silencieuse
+        console.warn(`[VAR-COPY] Erreur linkage linkedVariableIds pour node ${finalNodeId}:`, (e as Error).message);
       }
       // Hydratation capacités condition/table si applicable
       try {
@@ -1607,7 +1652,7 @@ export async function copyVariableWithCapacities(
                 }
               }
             } catch (e) {
-              // Erreur sync linkedVariableIds silencieuse
+              console.warn(`[VAR-COPY] Erreur sync linkedVariableIds sur node ${newNodeId}:`, (e as Error).message);
             }
             } else if (parsedCap.type === 'table') {
               // 🔧 FIX 06/01/2026: Vérifier que la table appartient bien à finalNodeId avant de mettre hasTable: true
@@ -1636,7 +1681,7 @@ export async function copyVariableWithCapacities(
           }
         }
       } catch (e) {
-        // Erreur sync capacités silencieuse
+        console.warn(`[VAR-COPY] Erreur sync capacités (condition/table) pour node ${finalNodeId}:`, (e as Error).message);
       }
     }
 
@@ -1649,7 +1694,7 @@ export async function copyVariableWithCapacities(
         await replaceLinkedVariableId(prisma, finalNodeId, originalVarId, newVariable.id, suffix);
       }
     } catch (e) {
-      // Erreur replace linkedVariableIds silencieuse
+      console.warn(`[VAR-COPY] Erreur replace linkedVariableIds pour var ${originalVarId} → ${newVariable.id}:`, (e as Error).message);
     }
 
     // ═══════════════════════════════════════════════════════════════════════
@@ -1702,7 +1747,7 @@ export async function copyVariableWithCapacities(
             }
           }
         } catch (e) {
-          // Erreur MAJ bidirectionnelle silencieuse
+          console.warn(`[VAR-COPY] Erreur MAJ bidirectionnelle linked pour capacité ${capacityType}:`, (e as Error).message);
         }
       }
     }
@@ -1714,7 +1759,7 @@ export async function copyVariableWithCapacities(
         updateSumDisplayFieldAfterCopyChange(originalVar.nodeId, prisma).catch(() => {});
       }
     } catch (sumErr) {
-      // Erreur mise à jour Total silencieuse
+      console.warn(`[VAR-COPY] Erreur mise à jour champ Total pour node ${originalVar?.nodeId}:`, (sumErr as Error).message);
     }
 
     return {
@@ -1906,7 +1951,7 @@ async function addToNodeLinkedField(
       nodeId
     );
   } catch (e) {
-    // Fallback: ignore silently
+    console.warn(`[VAR-COPY] Erreur addToNodeLinkedField ${field} sur node ${nodeId}:`, (e as Error).message);
   }
 }
 
