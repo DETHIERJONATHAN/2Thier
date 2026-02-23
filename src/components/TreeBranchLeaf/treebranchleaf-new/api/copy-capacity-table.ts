@@ -285,66 +285,59 @@ export async function copyTableCapacity(
         }
       });
     } else {
-      try {
-      newTable = await prisma.treeBranchLeafNodeTable.create({
-        data: {
-          id: newTableId,
-          nodeId: finalOwnerNodeId,
-          organizationId: originalTable.organizationId,
-          name: originalTable.name ? `${originalTable.name}-${suffix}` : null,
-          description: originalTable.description,
-          type: originalTable.type,
-          // Ã°Å¸â€Â¢ COPIE TABLE META: suffixer TOUS les UUIDs et comparisonColumn
-          meta: (() => {
-            const rewriteMaps: RewriteMaps = { nodeIdMap, formulaIdMap: new Map(), conditionIdMap: new Map(), tableIdMap };
-            const rewritten = rewriteJsonReferences(originalTable.meta, rewriteMaps) as any;
-            const suffixNum = parseInt(suffix) || 1;
-            // Suffixer les UUIDs dans selectors
-            if (rewritten?.lookup?.selectors?.columnFieldId && !rewritten.lookup.selectors.columnFieldId.endsWith(`-${suffixNum}`)) {
-              rewritten.lookup.selectors.columnFieldId = `${rewritten.lookup.selectors.columnFieldId}-${suffixNum}`;
-            }
-            if (rewritten?.lookup?.selectors?.rowFieldId && !rewritten.lookup.selectors.rowFieldId.endsWith(`-${suffixNum}`)) {
-              rewritten.lookup.selectors.rowFieldId = `${rewritten.lookup.selectors.rowFieldId}-${suffixNum}`;
-            }
-            // Suffixer sourceField
-            if (rewritten?.lookup?.rowSourceOption?.sourceField && !rewritten.lookup.rowSourceOption.sourceField.endsWith(`-${suffixNum}`)) {
-              rewritten.lookup.rowSourceOption.sourceField = `${rewritten.lookup.rowSourceOption.sourceField}-${suffixNum}`;
-            }
-            if (rewritten?.lookup?.columnSourceOption?.sourceField && !rewritten.lookup.columnSourceOption.sourceField.endsWith(`-${suffixNum}`)) {
-              rewritten.lookup.columnSourceOption.sourceField = `${rewritten.lookup.columnSourceOption.sourceField}-${suffixNum}`;
-            }
-            // � FIX 06/01/2026 (v3): TOUJOURS suffixer comparisonColumn
-            // Les colonnes de table SONT suffixées (ex: "Orientation" → "Orientation-1")
-            if (rewritten?.lookup?.rowSourceOption?.comparisonColumn) {
-              const val = rewritten.lookup.rowSourceOption.comparisonColumn;
-              if (!val.endsWith(`-${suffixNum}`)) {
-                rewritten.lookup.rowSourceOption.comparisonColumn = `${val}-${suffixNum}`;
+      // Check-first: avoid noisy P2002 Prisma errors
+      const existing = await prisma.treeBranchLeafNodeTable.findUnique({ where: { id: newTableId } });
+      if (existing) {
+        newTable = existing;
+        tableAlreadyExisted = true;
+      } else {
+        newTable = await prisma.treeBranchLeafNodeTable.create({
+          data: {
+            id: newTableId,
+            nodeId: finalOwnerNodeId,
+            organizationId: originalTable.organizationId,
+            name: originalTable.name ? `${originalTable.name}-${suffix}` : null,
+            description: originalTable.description,
+            type: originalTable.type,
+            // Ã°Å¸â€Â¢ COPIE TABLE META: suffixer TOUS les UUIDs et comparisonColumn
+            meta: (() => {
+              const rewriteMaps: RewriteMaps = { nodeIdMap, formulaIdMap: new Map(), conditionIdMap: new Map(), tableIdMap };
+              const rewritten = rewriteJsonReferences(originalTable.meta, rewriteMaps) as any;
+              const suffixNum = parseInt(suffix) || 1;
+              // Suffixer les UUIDs dans selectors
+              if (rewritten?.lookup?.selectors?.columnFieldId && !rewritten.lookup.selectors.columnFieldId.endsWith(`-${suffixNum}`)) {
+                rewritten.lookup.selectors.columnFieldId = `${rewritten.lookup.selectors.columnFieldId}-${suffixNum}`;
               }
-            }
-            if (rewritten?.lookup?.columnSourceOption?.comparisonColumn) {
-              const val = rewritten.lookup.columnSourceOption.comparisonColumn;
-              if (!val.endsWith(`-${suffixNum}`)) {
-                rewritten.lookup.columnSourceOption.comparisonColumn = `${val}-${suffixNum}`;
+              if (rewritten?.lookup?.selectors?.rowFieldId && !rewritten.lookup.selectors.rowFieldId.endsWith(`-${suffixNum}`)) {
+                rewritten.lookup.selectors.rowFieldId = `${rewritten.lookup.selectors.rowFieldId}-${suffixNum}`;
               }
-            }
-            return rewritten;
-          })(),
-          createdAt: new Date(),
-          updatedAt: new Date()
-        }
-      });
-      } catch (createErr: any) {
-        // Race condition: another parallel copy already created this table
-        if (createErr?.code === 'P2002') {
-          newTable = await prisma.treeBranchLeafNodeTable.findUnique({ where: { id: newTableId } });
-          if (newTable) {
-            tableAlreadyExisted = true;
-          } else {
-            throw createErr;
+              // Suffixer sourceField
+              if (rewritten?.lookup?.rowSourceOption?.sourceField && !rewritten.lookup.rowSourceOption.sourceField.endsWith(`-${suffixNum}`)) {
+                rewritten.lookup.rowSourceOption.sourceField = `${rewritten.lookup.rowSourceOption.sourceField}-${suffixNum}`;
+              }
+              if (rewritten?.lookup?.columnSourceOption?.sourceField && !rewritten.lookup.columnSourceOption.sourceField.endsWith(`-${suffixNum}`)) {
+                rewritten.lookup.columnSourceOption.sourceField = `${rewritten.lookup.columnSourceOption.sourceField}-${suffixNum}`;
+              }
+              // � FIX 06/01/2026 (v3): TOUJOURS suffixer comparisonColumn
+              // Les colonnes de table SONT suffixées (ex: "Orientation" → "Orientation-1")
+              if (rewritten?.lookup?.rowSourceOption?.comparisonColumn) {
+                const val = rewritten.lookup.rowSourceOption.comparisonColumn;
+                if (!val.endsWith(`-${suffixNum}`)) {
+                  rewritten.lookup.rowSourceOption.comparisonColumn = `${val}-${suffixNum}`;
+                }
+              }
+              if (rewritten?.lookup?.columnSourceOption?.comparisonColumn) {
+                const val = rewritten.lookup.columnSourceOption.comparisonColumn;
+                if (!val.endsWith(`-${suffixNum}`)) {
+                  rewritten.lookup.columnSourceOption.comparisonColumn = `${val}-${suffixNum}`;
+                }
+              }
+              return rewritten;
+            })(),
+            createdAt: new Date(),
+            updatedAt: new Date()
           }
-        } else {
-          throw createErr;
-        }
+        });
       }
     }
 

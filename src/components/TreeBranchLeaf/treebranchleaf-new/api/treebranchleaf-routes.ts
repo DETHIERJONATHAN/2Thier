@@ -4407,13 +4407,8 @@ router.delete('/trees/:treeId/nodes/:nodeId', async (req, res) => {
     const deletedSubtreeIds: string[] = [];
     await prisma.$transaction(async (tx) => {
       for (const id of toDelete) {
-        try {
-          await tx.treeBranchLeafNode.delete({ where: { id } });
-          deletedSubtreeIds.push(id);
-        } catch (err) {
-          // Ignorer les erreurs individuelles (ex: id dÃƒÆ’Ã‚Â©jÃƒÆ’Ã‚Â  supprimÃƒÆ’Ã‚Â©) et logger
-          console.warn('[DELETE SUBTREE] Failed to delete node', id, (err as Error).message);
-        }
+          const result = await tx.treeBranchLeafNode.deleteMany({ where: { id } });
+          if (result.count > 0) deletedSubtreeIds.push(id);
       }
     });
 

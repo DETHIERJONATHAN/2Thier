@@ -34436,7 +34436,11 @@ async function copyTableCapacity2(originalTableId, newNodeId, suffix, prisma51, 
         }
       });
     } else {
-      try {
+      const existing = await prisma51.treeBranchLeafNodeTable.findUnique({ where: { id: newTableId } });
+      if (existing) {
+        newTable = existing;
+        tableAlreadyExisted = true;
+      } else {
         newTable = await prisma51.treeBranchLeafNodeTable.create({
           data: {
             id: newTableId,
@@ -34480,17 +34484,6 @@ async function copyTableCapacity2(originalTableId, newNodeId, suffix, prisma51, 
             updatedAt: /* @__PURE__ */ new Date()
           }
         });
-      } catch (createErr) {
-        if (createErr?.code === "P2002") {
-          newTable = await prisma51.treeBranchLeafNodeTable.findUnique({ where: { id: newTableId } });
-          if (newTable) {
-            tableAlreadyExisted = true;
-          } else {
-            throw createErr;
-          }
-        } else {
-          throw createErr;
-        }
       }
     }
     let columnsCount = 0;
@@ -44205,12 +44198,8 @@ router58.delete("/trees/:treeId/nodes/:nodeId", async (req2, res) => {
     const deletedSubtreeIds = [];
     await prisma32.$transaction(async (tx) => {
       for (const id of toDelete) {
-        try {
-          await tx.treeBranchLeafNode.delete({ where: { id } });
-          deletedSubtreeIds.push(id);
-        } catch (err) {
-          console.warn("[DELETE SUBTREE] Failed to delete node", id, err.message);
-        }
+        const result = await tx.treeBranchLeafNode.deleteMany({ where: { id } });
+        if (result.count > 0) deletedSubtreeIds.push(id);
       }
     });
     let deletedOrphans = 0;
