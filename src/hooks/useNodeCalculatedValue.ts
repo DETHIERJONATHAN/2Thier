@@ -376,7 +376,7 @@ export function useNodeCalculatedValue(
         return;
       }
       
-      // 🔥 FIX: Si SEUL submissionId a changé, ne PAS déclencher de GET
+      // 🔥 FIX: Si SEUL submissionId a changé (d'une vraie valeur à une autre), ne PAS déclencher de GET
       // Les valeurs correctes arriveront via l'événement tbl-force-retransform avec calculatedValues inline
       const previousSubmissionId = prevSubmissionIdRef.current;
       const submissionIdChanged = previousSubmissionId !== submissionId;
@@ -384,8 +384,12 @@ export function useNodeCalculatedValue(
       // Mettre à jour le ref APRÈS avoir comparé
       prevSubmissionIdRef.current = submissionId;
       
-      if (submissionIdChanged && submissionId) {
-        // submissionId changed - wait for broadcast inline
+      // 🔥 FIX DISPLAY-FIELDS-LOAD: Ajouter `&& previousSubmissionId` pour ne bloquer
+      // QUE quand on passe d'un vrai submissionId à un autre (switch de devis).
+      // Quand previousSubmissionId est undefined (premier mount / page reload),
+      // on DOIT laisser passer le fetch pour charger les données existantes.
+      if (submissionIdChanged && submissionId && previousSubmissionId) {
+        // submissionId changed from one real value to another - wait for broadcast inline
         if (isTBLDebugEnabled()) {
           console.log(`⏳ [useNodeCalcValue] submissionIdChanged guard for ${nodeId}, waiting for broadcast`);
         }
