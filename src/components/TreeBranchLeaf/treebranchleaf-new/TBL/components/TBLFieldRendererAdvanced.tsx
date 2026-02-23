@@ -2117,6 +2117,7 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
 
     let isVisible = true;
     let hasShowCondition = false; // Pour gérer le SHOW: masqué par défaut si condition SHOW existe
+    let anyShowConditionMet = false; // 🔧 FIX SHOW-OR: Au moins une condition SHOW est vraie → visible
     
     // Vérifier chaque condition
     // 🔧 FIX COPY-VISIBLE: Détecter si ce champ est une copie (suffixe -1, -2, etc.)
@@ -2194,9 +2195,11 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
       if (isInverseCondition) {
         if (actionType === 'SHOW') {
           hasShowCondition = true;
-          // SHOW: visible seulement si la condition est vraie
-          if (!conditionResult) {
-            isVisible = false;
+          // 🔧 FIX SHOW-OR: SHOW conditions use OR logic (any true → visible)
+          // Previously used AND logic (all must be true), which caused contradictory
+          // conditions (contains X + not_contains X) to ALWAYS hide the field.
+          if (conditionResult) {
+            anyShowConditionMet = true;
           }
         } else if (actionType === 'HIDE') {
           // HIDE: masqué seulement si la condition est vraie
@@ -2213,9 +2216,16 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
       }
     }
     
+    // 🔧 FIX SHOW-OR: Appliquer la logique OR pour les conditions SHOW inversées
+    // Si des conditions SHOW existent mais AUCUNE n'est vraie → cacher le champ
+    // Si au moins UNE est vraie → le champ reste visible (sauf si un HIDE l'a masqué)
+    if (hasShowCondition && !anyShowConditionMet) {
+      isVisible = false;
+    }
+    
     // Log seulement quand le champ est masqué (réduit le bruit console)
     if (!isVisible) {
-      console.log(`🔍 [TBLFieldRendererAdvanced] Champ "${field.label}" (${field.id}) visible: ${isVisible}, hasShowCondition: ${hasShowCondition}`);
+      console.log(`🔍 [TBLFieldRendererAdvanced] Champ "${field.label}" (${field.id}) visible: ${isVisible}, hasShowCondition: ${hasShowCondition}, anyShowMet: ${anyShowConditionMet}`);
     }
     setConditionMet(isVisible);
   }, [allConditions, formData, field.label, field.id]);
