@@ -2470,7 +2470,12 @@ const TBL: React.FC<TBLProps> = ({
         // Exposer en debug (lecture) pour analyse miroir
         if (typeof window !== 'undefined') {
           const prevGlobal = window.TBL_FORM_DATA || {};
-          window.TBL_FORM_DATA = next;
+          // 🔥 FIX 23/02/2026: MERGE au lieu de REPLACE pour préserver les valeurs broadcast
+          // AVANT: window.TBL_FORM_DATA = next → écrasait les valeurs calculées (KVA sum-total, etc.)
+          // injectées par broadcastCalculatedRefresh() → alertes lookupAlerts ne fonctionnaient JAMAIS
+          // APRÈS: merge prevGlobal (contient les valeurs broadcast) avec next (contient les inputs user)
+          // → les clés calculées (sum-total, etc.) survivent entre les changements de champs
+          window.TBL_FORM_DATA = { ...prevGlobal, ...next };
 
           // ⚠️ DISPATCH CONDITIONAL: Only emit event when the changed field affects shared refs or mirrors
           const isMirrorKey = fieldId && String(fieldId).startsWith('__mirror_data_');

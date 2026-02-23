@@ -806,10 +806,12 @@ export function useTBLTableLookup(
       if (lookupDebounceTimerRef.current) {
         clearTimeout(lookupDebounceTimerRef.current);
       }
+      // 🔥 FIX 23/02/2026: Réduit de 400ms à 150ms pour une réactivité plus rapide
+      // L'utilisateur voyait un délai trop long avant que les options onduleur se mettent à jour
       lookupDebounceTimerRef.current = setTimeout(() => {
         lookupDebounceTimerRef.current = null;
         void executeLookup();
-      }, 400);
+      }, 150);
     }
 
     return () => {
