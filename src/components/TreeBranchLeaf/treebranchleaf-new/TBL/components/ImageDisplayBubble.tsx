@@ -10,7 +10,7 @@
  * @author 2Thier CRM Team
  */
 
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { Modal, Spin, Tooltip, Image } from 'antd';
 import { PictureOutlined, EyeOutlined, LoadingOutlined } from '@ant-design/icons';
 import { useAuthenticatedApi } from '../../../../../hooks/useAuthenticatedApi';
