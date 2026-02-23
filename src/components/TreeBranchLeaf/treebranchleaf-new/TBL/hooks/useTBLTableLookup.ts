@@ -51,6 +51,8 @@ interface TableLookupResult {
     type: 'columns' | 'matrix';
   };
   config?: TreeBranchLeafSelectConfig;
+  // 🔥 FIX 24/02/2026: filterConditions depuis table.meta.lookup (alertes, caps, overrides)
+  filterConditions?: any;
   // 🔥 FIX 23/02/2026: Forcer un re-fetch immédiat (appelé à l'ouverture du dropdown)
   refresh: () => void;
 }
@@ -266,6 +268,8 @@ export function useTBLTableLookup(
   const [error, setError] = useState<string | null>(null);
   const [tableData, setTableData] = useState<{columns: string[], rows: string[], data: unknown[][], type: 'columns' | 'matrix'} | undefined>(undefined);
   const [config, setConfig] = useState<TreeBranchLeafSelectConfig | undefined>(undefined);
+  // 🔥 FIX 24/02/2026: filterConditions depuis le serveur (alertes, caps, overrides)
+  const [filterConditions, setFilterConditions] = useState<any>(undefined);
 
   // 🚀 PERF: Ref pour le timer de debounce du lookup (évite les appels API sur chaque frappe)
   const lookupDebounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -744,6 +748,7 @@ export function useTBLTableLookup(
           setOptions([]);
           setTableData(undefined);
           setConfig(undefined);
+          setFilterConditions(undefined);
           setLoading(false);
           return;
         }
@@ -768,6 +773,9 @@ export function useTBLTableLookup(
           type: (table as any).type
         } : undefined;
 
+        // 🔥 FIX 24/02/2026: Extraire filterConditions depuis la réponse du serveur
+        const newFilterConditions = (table as any)?.filterConditions || undefined;
+
         // 🚀 PERF: Stocker résultat dans le cache lookup 
         lookupResultCache.set(lookupCacheKey, {
           options: extractedOptions,
@@ -781,6 +789,7 @@ export function useTBLTableLookup(
         setOptions(extractedOptions);
         setConfig(selectConfig);
         setTableData(newTableData);
+        setFilterConditions(newFilterConditions);
         setLoading(false);
       } catch (err) {
         if (isTargetField) console.error(`[DEBUG][Test - liste] 💥 Erreur dans le hook:`, err);
@@ -790,6 +799,7 @@ export function useTBLTableLookup(
           setOptions([]);
           setTableData(undefined);
           setConfig(undefined);
+          setFilterConditions(undefined);
           setLoading(false);
         }
       }
@@ -823,7 +833,7 @@ export function useTBLTableLookup(
     };
   }, [fieldId, nodeId, enabled, formDataJson, clearedKeysJson, batchContext.isReady, refreshTrigger]); // 🔥 FIX 23/02/2026: ajouté refreshTrigger pour forcer re-fetch à l'ouverture dropdown
 
-  return { options, loading, error, tableData, config, refresh };
+  return { options, loading, error, tableData, config, filterConditions, refresh };
 }
 
 /**

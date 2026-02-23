@@ -11995,6 +11995,10 @@ router.all('/nodes/:nodeId/table/lookup', async (req, res) => {
       ? (table.meta as Record<string, unknown>).lookup as Record<string, unknown>
       : undefined;
 
+    // 🔥 FIX 24/02/2026: Extraire filterConditions depuis table.meta.lookup pour les envoyer au front-end
+    // Contient lookupAlerts, valueCaps, columnOverrides — nécessaire pour les alertes visuelles
+    const lookupFilterConditions = rawLookup?.filterConditions || null;
+
     // Construire la matrice complÃƒÆ’Ã‚Â¨te pour le filtrage (colonne A + donnÃƒÆ’Ã‚Â©es)
     const fullMatrix = rows.map((rowLabel, idx) => [rowLabel, ...(data[idx] || [])]);
 
@@ -12161,7 +12165,8 @@ router.all('/nodes/:nodeId/table/lookup', async (req, res) => {
           columns,
           rows: rows.slice(1).map(String), // Sans la ligne d'en-tête
           data: fullMatrixForFilters.slice(1), // Données complètes sans l'en-tête
-          type: 'columns' // Override: données structurées comme un tableau colonnes
+          type: 'columns', // Override: données structurées comme un tableau colonnes
+          filterConditions: lookupFilterConditions, // 🔥 FIX: alertes/caps/overrides pour le front-end
         });
       }
     }
@@ -12259,6 +12264,7 @@ router.all('/nodes/:nodeId/table/lookup', async (req, res) => {
           rows: rows.slice(1).map(String),
           data: fullMatrixForFilters.slice(1),
           type: 'columns',
+          filterConditions: lookupFilterConditions, // 🔥 FIX: alertes/caps/overrides pour le front-end
           autoDefault: { 
             source: isRowField ? 'rowA1' : 'columnA', 
             keyColumnCandidate: keyColumnValue,

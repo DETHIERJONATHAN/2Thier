@@ -1285,18 +1285,22 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
   // → On écoute 'tbl-force-retransform' et on incrémente un compteur pour trigger le recalcul
   const [broadcastGen, setBroadcastGen] = useState(0);
   useEffect(() => {
-    // Seulement pour les champs avec filterConditions (alertes, caps, overrides)
-    const hasExtensions = !!field.capabilities?.table?.currentTable?.meta?.lookup?.filterConditions;
-    if (!hasExtensions) return;
+    // 🔥 FIX 24/02/2026: Listener TOUJOURS actif (pas conditionnel sur filterConditions)
+    // AVANT: le listener dépendait de tableLookup.filterConditions → chaque refresh du lookup
+    // créait un nouvel objet filterConditions → useEffect cleanup désinscrivait l'ancien listener
+    // → race condition: tbl-force-retransform dispatché pendant le unmount/remount = IGNORÉ
+    // → broadcastGen ne s'incrémentait jamais → alertes STALE après changement d'onduleur
+    // APRÈS: listener toujours actif, le check filterConditions est dans le useMemo uniquement
     const handler = () => setBroadcastGen(g => g + 1);
     window.addEventListener('tbl-force-retransform', handler);
     return () => window.removeEventListener('tbl-force-retransform', handler);
-  }, [field.capabilities?.table?.currentTable?.meta?.lookup?.filterConditions]);
+  }, []); // ← aucune dépendance → jamais de re-registration → jamais d'événement manqué
 
   // 🔄 Évaluation des extensions du lookup (columnOverrides, valueCaps, lookupAlerts)
   const lookupExtensionsResult = useMemo(() => {
-    const lookupConfig = field.capabilities?.table?.currentTable?.meta?.lookup;
-    const fc = lookupConfig?.filterConditions;
+    // 🔥 FIX 24/02/2026: Lire filterConditions depuis tableLookup (serveur) au lieu de
+    // field.capabilities.table.currentTable.meta.lookup qui n'a JAMAIS de "meta"
+    const fc = tableLookup.filterConditions;
     if (!fc) {
       return { activeCaps: [], activeAlerts: [] } as LookupExtensionsResult;
     }
@@ -1306,7 +1310,7 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
       ? { ...(window as any).TBL_FORM_DATA as Record<string, any>, ...formData }
       : formData;
     return evaluateLookupExtensions(fc, enrichedFormData);
-  }, [field.capabilities?.table?.currentTable?.meta?.lookup, formData, tableLookup.options, broadcastGen]);
+  }, [tableLookup.filterConditions, formData, tableLookup.options, broadcastGen]);
   // 🔥 FIX 23/02/2026: broadcastGen + tableLookup.options ajoutés aux deps
   // → re-évalue alertes/caps quand les valeurs broadcast arrivent (KVA sum-total, etc.)
 
