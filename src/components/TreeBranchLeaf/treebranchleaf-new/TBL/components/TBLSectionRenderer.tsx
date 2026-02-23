@@ -4452,6 +4452,16 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
 
       // Si pas de valeur saisie, afficher placeholder
       if (rawValue == null || rawValue === undefined || rawValue === '') {
+        // 🔒 ULTIMATE FALLBACK DISPLAY: Avant d'afficher "---", essayer de récupérer
+        // la valeur calculée stockée en DB via CalculatedValueDisplay.
+        // Cela couvre TOUS les champs display (Panneau, Optimiseur, Matériaux, etc.)
+        // qui n'ont pas de capabilities data/formula mais ont une calculatedValue en DB.
+        // Sans ce fallback, ces champs restent vides après un rechargement de page.
+        if (treeId && isDataSection) {
+          return renderStoredCalculatedValue(resolveBackendNodeId(field) || field.id, {
+            fallbackValue: null
+          });
+        }
         dlog(`🔬 [TEST FALLBACK] Pas de valeur - affichage placeholder`);
         return '---';
       }
