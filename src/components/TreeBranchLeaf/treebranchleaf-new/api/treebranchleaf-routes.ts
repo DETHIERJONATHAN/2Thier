@@ -4860,7 +4860,77 @@ router.delete('/trees/:treeId/nodes/:nodeId', async (req, res) => {
         }
       }
     } catch (sumUpdateError) {
-      console.warn('[DELETE] Erreur lors de la mise ÃƒÂ¯Ã‚Â¿Ã‚Â½ jour des champs Total:', (sumUpdateError as Error).message);
+      console.warn('[DELETE] Erreur lors de la mise à jour des champs Total:', (sumUpdateError as Error).message);
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // 🔴 FIX CRITIQUE: Supprimer les nœuds orphelins dont le parentId pointe
+    // vers un nœud supprimé (ex: sum-total-1 dont le parent display-1 a été supprimé)
+    // ═══════════════════════════════════════════════════════════════════════════
+    try {
+      let orphanPassCount = 0;
+      const maxOrphanPasses = 5; // Limiter les passes pour éviter une boucle infinie
+      let totalOrphansDeleted = 0;
+      
+      while (orphanPassCount < maxOrphanPasses) {
+        orphanPassCount++;
+        // Trouver les nœuds dont le parentId n'existe plus
+        const orphanedNodes = await prisma.$queryRawUnsafe<Array<{ id: string }>>(
+          `SELECT n.id FROM "TreeBranchLeafNode" n
+           WHERE n."treeId" = $1
+             AND n."parentId" IS NOT NULL
+             AND NOT EXISTS (SELECT 1 FROM "TreeBranchLeafNode" p WHERE p.id = n."parentId")`,
+          treeId
+        );
+        
+        if (orphanedNodes.length === 0) break;
+        
+        // Supprimer du plus profond au plus haut (inverse)
+        for (const orphan of orphanedNodes) {
+          try {
+            await prisma.treeBranchLeafNode.delete({ where: { id: orphan.id } });
+            allDeletedIds.push(orphan.id);
+            totalOrphansDeleted++;
+          } catch (e) {
+            // Ignore si déjà supprimé
+          }
+        }
+      }
+      if (totalOrphansDeleted > 0) {
+        console.log(`[DELETE] 🧹 ${totalOrphansDeleted} nœud(s) orphelin(s) supprimé(s) en ${orphanPassCount} passe(s)`);
+      }
+    } catch (orphanNodeCleanError) {
+      console.warn('[DELETE] Erreur nettoyage nœuds orphelins:', (orphanNodeCleanError as Error).message);
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // 🔴 FIX CRITIQUE: Supprimer TOUTES les SubmissionData orphelines
+    // (nodeId ne correspond plus à aucun nœud existant dans la même soumission)
+    // Sans cela, les valeurs des copies supprimées persistent et polluent les
+    // calculs, lookups et filtres.
+    // ═══════════════════════════════════════════════════════════════════════════
+    try {
+      // Trouver toutes les soumissions liées à ce tree
+      const treeSubmissions = await prisma.treeBranchLeafSubmission.findMany({
+        where: { treeId },
+        select: { id: true }
+      });
+      const submissionIds = treeSubmissions.map(s => s.id);
+      
+      if (submissionIds.length > 0) {
+        const orphanedSD = await prisma.$queryRawUnsafe<Array<{ count: bigint }>>(
+          `DELETE FROM "TreeBranchLeafSubmissionData" sd
+           WHERE sd."submissionId" = ANY($1::text[])
+             AND NOT EXISTS (SELECT 1 FROM "TreeBranchLeafNode" n WHERE n.id = sd."nodeId")
+           RETURNING 1 as count`,
+          submissionIds
+        );
+        if (orphanedSD.length > 0) {
+          console.log(`[DELETE] 🧹 ${orphanedSD.length} SubmissionData orpheline(s) supprimée(s)`);
+        }
+      }
+    } catch (sdOrphanCleanError) {
+      console.warn('[DELETE] Erreur nettoyage SubmissionData orphelines:', (sdOrphanCleanError as Error).message);
     }
 
     res.json({
