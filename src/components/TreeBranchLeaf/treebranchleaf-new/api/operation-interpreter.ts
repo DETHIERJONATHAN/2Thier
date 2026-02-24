@@ -791,12 +791,15 @@ async function interpretReference(
   // Ã°Å¸â€™Â¾ Ãƒâ€°TAPE 5 : Mettre en cache le rÃƒÂ©sultat
   // Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
 
-  // 🔥 FIX R8: @calculated.{nodeId} - NE PLUS utiliser calculatedValue STOCKÉE GLOBALE
+  // 🔥 FIX R8 v2: @calculated.{nodeId} - NE PLUS utiliser calculatedValue STOCKÉE GLOBALE
   // La calculatedValue de TreeBranchLeafNode est GLOBALE (pas scopée par submission).
   // Elle contenait des valeurs d'anciennes soumissions qui polluaient les calculs.
   // Maintenant: utiliser UNIQUEMENT les valeurs du valueMap (fraîches) ou évaluer la formule.
+  // 🔥 FIX R8b: Déclencher le fallback aussi quand result est suspect (ex: '1' stale
+  // provenant d'un calculatedValue obsolète après duplication de copies -1).
+  // On vérifie TOUJOURS pour les @calculated refs, pas seulement quand result === '0'.
   const isCalculatedRef = ref.startsWith('@calculated.');
-  if (isCalculatedRef && result && String(result.result) === '0') {
+  if (isCalculatedRef && result) {
     try {
       const calcNode = await prisma.treeBranchLeafNode.findUnique({
         where: { id: cleanRef },

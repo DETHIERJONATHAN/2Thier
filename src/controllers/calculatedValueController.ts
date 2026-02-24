@@ -875,9 +875,12 @@ router.post('/batch-calculated-values', async (req: Request, res: Response) => {
       const node = nodeMap.get(id);
       if (!node) continue;
       
-      // Priorité: submissionValue > calculatedValue
+      // 🔥 FIX: Pour les DISPLAY/leaf_field nodes, NE PAS utiliser calculatedValue GLOBALE
+      // comme fallback car elle peut être stale (ex: copies -1 avec calculatedValue='1' obsolète).
+      // Seules les valeurs SubmissionData scopées sont fiables pour ces champs.
+      const isDisplayNode = node.fieldType === 'DISPLAY' || node.type === 'DISPLAY' || node.type === 'leaf_field';
       const subVal = submissionValues.get(id);
-      const rawValue = subVal ?? node.calculatedValue;
+      const rawValue = isDisplayNode ? (subVal ?? null) : (subVal ?? node.calculatedValue);
       
       results[id] = {
         value: parseStoredStringValue(rawValue),
