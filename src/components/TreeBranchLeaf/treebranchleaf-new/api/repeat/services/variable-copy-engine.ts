@@ -1216,193 +1216,235 @@ export async function copyVariableWithCapacities(
             }
 
             // ══════════════════════════════════════════════════════════════════════
-            // 🔄 DUPLICATION DES ENFANTS DU DISPLAY NODE ORIGINAL
+            // 🔄 DUPLICATION RÉCURSIVE DES ENFANTS DU DISPLAY NODE ORIGINAL
             // ══════════════════════════════════════════════════════════════════════
             // Quand un display node est copié (ex: PV achat → PV achat-1),
-            // ses enfants (ex: PV marge, PV TVAC) doivent aussi être copiés
-            // avec leurs formules et variables mises à jour pour référencer
-            // les copies (ex: @calculated.dfc77f3d → @calculated.dfc77f3d-1).
-            // Sans ce code, les champs calculés enfants sont absents du groupe répété.
+            // ses enfants (ex: PV marge, PV TVAC) ET petits-enfants (sum-total
+            // children) doivent aussi être copiés avec leurs formules et variables.
+            //
+            // 🔴 FIX CRITIQUE: Les formules des enfants peuvent référencer des
+            // nœuds NON dupliqués (ex: @value.dff0fe00 = Marge, @calculated.5e258abf = TVA).
+            // On ajoute des identity mappings (old→old) pour ces références afin
+            // d'empêcher rewriteReferences de les suffixer aveuglément.
             const childSourceNodeId = originalVar.nodeId;
             if (childSourceNodeId && isFromRepeaterDuplication) {
               try {
-                const childDisplayNodes = await prisma.treeBranchLeafNode.findMany({
-                  where: { parentId: childSourceNodeId },
-                  orderBy: { order: 'asc' }
-                });
+                // BFS queue: [{originalParentId, copyParentId}]
+                const bfsQueue: Array<{ origParentId: string; copyParentId: string }> = [
+                  { origParentId: childSourceNodeId, copyParentId: displayNodeId }
+                ];
 
-                for (const child of childDisplayNodes) {
-                  const childCopyId = appendSuffixOnce(stripTrailingNumeric(child.id));
+                while (bfsQueue.length > 0) {
+                  const { origParentId, copyParentId } = bfsQueue.shift()!;
 
-                  // Skip si déjà existant
-                  const childAlreadyExists = existingNodeIds
-                    ? existingNodeIds.has(childCopyId)
-                    : await prisma.treeBranchLeafNode.findUnique({ where: { id: childCopyId }, select: { id: true } }).then(r => !!r).catch(() => false);
-                  if (childAlreadyExists) continue;
-
-                  const childMeta = (child.metadata && typeof child.metadata === 'object')
-                    ? { ...(child.metadata as Record<string, unknown>) }
-                    : {};
-                  childMeta.autoCreatedDisplayNode = true;
-                  if (isFromRepeaterDuplication) childMeta.duplicatedFromRepeater = true;
-
-                  // Créer la copie du nœud enfant avec parentId = le nouveau display node
-                  await prisma.treeBranchLeafNode.create({
-                    data: {
-                      id: childCopyId,
-                      treeId: originalOwnerNode.treeId,
-                      parentId: displayNodeId,
-                      type: child.type,
-                      subType: child.subType,
-                      label: forceSingleSuffix(child.label),
-                      description: child.description,
-                      value: null,
-                      order: child.order,
-                      isRequired: child.isRequired,
-                      isVisible: child.isVisible,
-                      isActive: child.isActive,
-                      hasFormula: child.hasFormula,
-                      hasCondition: child.hasCondition,
-                      hasData: child.hasData,
-                      hasTable: child.hasTable,
-                      hasAPI: child.hasAPI ?? false,
-                      hasLink: child.hasLink ?? false,
-                      hasMarkers: child.hasMarkers ?? false,
-                      metadata: childMeta as any,
-                      calculatedValue: null,
-                      fieldType: child.fieldType,
-                      fieldSubType: child.fieldSubType as any,
-                      field_label: forceSingleSuffix(child.label) as any,
-                      subtab: child.subtab as any,
-                      subtabs: child.subtabs as any,
-                      data_displayFormat: child.data_displayFormat,
-                      data_exposedKey: child.data_exposedKey,
-                      data_precision: child.data_precision,
-                      data_unit: child.data_unit,
-                      data_visibleToUser: child.data_visibleToUser ?? false,
-                      appearance_size: child.appearance_size ?? 'md',
-                      appearance_variant: child.appearance_variant,
-                      appearance_width: child.appearance_width,
-                      appearance_displayIcon: child.appearance_displayIcon,
-                      linkedFormulaIds: [],
-                      linkedConditionIds: [],
-                      linkedVariableIds: [],
-                      linkedTableIds: [],
-                      updatedAt: now,
-                    }
-                  });
-                  if (existingNodeIds) existingNodeIds.add(childCopyId);
-                  nodeIdMap.set(child.id, childCopyId);
-                  childDisplayNodeIds.push(childCopyId);
-
-                  // Copier les formules de l'enfant
-                  const childFormulas = await prisma.treeBranchLeafNodeFormula.findMany({
-                    where: { nodeId: child.id }
+                  const childDisplayNodes = await prisma.treeBranchLeafNode.findMany({
+                    where: { parentId: origParentId },
+                    orderBy: { order: 'asc' }
                   });
 
-                  const childCopiedFormulaIds: string[] = [];
-                  for (const f of childFormulas) {
-                    if (formulaIdMap.has(f.id)) {
-                      childCopiedFormulaIds.push(formulaIdMap.get(f.id)!);
+                  for (const child of childDisplayNodes) {
+                    const childCopyId = appendSuffixOnce(stripTrailingNumeric(child.id));
+
+                    // Toujours ajouter au nodeIdMap pour la réécriture des références
+                    nodeIdMap.set(child.id, childCopyId);
+
+                    // Vérifier si déjà existant
+                    const childAlreadyExists = existingNodeIds
+                      ? existingNodeIds.has(childCopyId)
+                      : await prisma.treeBranchLeafNode.findUnique({ where: { id: childCopyId }, select: { id: true } }).then(r => !!r).catch(() => false);
+
+                    if (childAlreadyExists) {
+                      // Le nœud existe déjà mais ses enfants peuvent manquer → continuer BFS
+                      if (existingNodeIds) existingNodeIds.add(childCopyId);
+                      bfsQueue.push({ origParentId: child.id, copyParentId: childCopyId });
                       continue;
                     }
-                    try {
-                      const formulaResult = await copyFormulaCapacity(
-                        f.id,
-                        childCopyId,
-                        suffix,
-                        prisma,
-                        { formulaIdMap, nodeIdMap, skipLinking: true, skipCapacitySync: true }
-                      );
-                      if (formulaResult.success) {
-                        formulaIdMap.set(f.id, formulaResult.newFormulaId);
-                        childCopiedFormulaIds.push(formulaResult.newFormulaId);
-                      }
-                    } catch (fErr) {
-                      console.warn(`[VAR-COPY] Erreur copie formule enfant ${f.id}:`, (fErr as Error).message);
-                    }
-                  }
 
-                  // MAJ du nœud enfant avec les infos formule
-                  if (childCopiedFormulaIds.length > 0) {
-                    await prisma.treeBranchLeafNode.update({
-                      where: { id: childCopyId },
+                    const childMeta = (child.metadata && typeof child.metadata === 'object')
+                      ? { ...(child.metadata as Record<string, unknown>) }
+                      : {};
+                    childMeta.autoCreatedDisplayNode = true;
+                    childMeta.duplicatedFromRepeater = true;
+
+                    // Créer la copie du nœud enfant
+                    await prisma.treeBranchLeafNode.create({
                       data: {
-                        hasFormula: true,
-                        linkedFormulaIds: childCopiedFormulaIds,
-                        formula_activeId: child.formula_activeId
-                          ? (formulaIdMap.get(child.formula_activeId) || childCopiedFormulaIds[0])
-                          : childCopiedFormulaIds[0],
+                        id: childCopyId,
+                        treeId: originalOwnerNode.treeId,
+                        parentId: copyParentId,
+                        type: child.type,
+                        subType: child.subType,
+                        label: forceSingleSuffix(child.label),
+                        description: child.description,
+                        value: null,
+                        order: child.order,
+                        isRequired: child.isRequired,
+                        isVisible: child.isVisible,
+                        isActive: child.isActive,
+                        hasFormula: child.hasFormula,
+                        hasCondition: child.hasCondition,
+                        hasData: child.hasData,
+                        hasTable: child.hasTable,
+                        hasAPI: child.hasAPI ?? false,
+                        hasLink: child.hasLink ?? false,
+                        hasMarkers: child.hasMarkers ?? false,
+                        metadata: childMeta as any,
+                        calculatedValue: null,
+                        fieldType: child.fieldType,
+                        fieldSubType: child.fieldSubType as any,
+                        field_label: forceSingleSuffix(child.label) as any,
+                        subtab: child.subtab as any,
+                        subtabs: child.subtabs as any,
+                        data_displayFormat: child.data_displayFormat,
+                        data_exposedKey: child.data_exposedKey,
+                        data_precision: child.data_precision,
+                        data_unit: child.data_unit,
+                        data_visibleToUser: child.data_visibleToUser ?? false,
+                        appearance_size: child.appearance_size ?? 'md',
+                        appearance_variant: child.appearance_variant,
+                        appearance_width: child.appearance_width,
+                        appearance_displayIcon: child.appearance_displayIcon,
+                        linkedFormulaIds: [],
+                        linkedConditionIds: [],
+                        linkedVariableIds: [],
+                        linkedTableIds: [],
+                        updatedAt: now,
                       }
                     });
-                  }
+                    if (existingNodeIds) existingNodeIds.add(childCopyId);
+                    childDisplayNodeIds.push(childCopyId);
 
-                  // Copier la variable de l'enfant (nodeId est @unique dans le modèle Variable)
-                  const childVar = await prisma.treeBranchLeafNodeVariable.findUnique({
-                    where: { nodeId: child.id }
-                  });
+                    // ── Copier les formules de l'enfant ──
+                    const childFormulas = await prisma.treeBranchLeafNodeFormula.findMany({
+                      where: { nodeId: child.id }
+                    });
 
-                  if (childVar) {
-                    const newChildVarId = appendSuffixOnce(stripTrailingNumeric(childVar.id));
-                    const newChildExposedKey = appendSuffixOnce(stripTrailingNumeric(childVar.exposedKey));
-
-                    // Mettre à jour sourceRef pour pointer vers les formules copiées
-                    let newChildSourceRef = childVar.sourceRef;
-                    if (newChildSourceRef) {
-                      for (const [oldFId, newFId] of formulaIdMap.entries()) {
-                        newChildSourceRef = newChildSourceRef.replace(oldFId, newFId);
+                    // 🔴 FIX: Créer un nodeIdMap local avec identity mappings pour les
+                    // nœuds NON dupliqués référencés dans les formules. Sans cela,
+                    // rewriteReferences ajoute -1 à TOUTES les références UUID, même
+                    // celles pointant vers des champs partagés (Marge, TVA, etc.).
+                    const localNodeIdMap = new Map(nodeIdMap);
+                    for (const f of childFormulas) {
+                      if (f.tokens && Array.isArray(f.tokens)) {
+                        const tokenStr = JSON.stringify(f.tokens);
+                        const uuidRe = /([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})/gi;
+                        let m: RegExpExecArray | null;
+                        while ((m = uuidRe.exec(tokenStr)) !== null) {
+                          const uuid = m[1];
+                          if (!localNodeIdMap.has(uuid)) {
+                            localNodeIdMap.set(uuid, uuid); // identity → pas de suffixe
+                          }
+                        }
                       }
                     }
 
-                    // Vérifier collision avant création
-                    const varCollision = existingVariableIds
-                      ? existingVariableIds.has(newChildVarId)
-                      : await prisma.treeBranchLeafNodeVariable.findUnique({ where: { id: newChildVarId } }).then(r => !!r).catch(() => false);
-
-                    if (!varCollision) {
-                      await prisma.treeBranchLeafNodeVariable.create({
-                        data: {
-                          id: newChildVarId,
-                          nodeId: childCopyId,
-                          displayName: forceSingleSuffix(childVar.displayName),
-                          exposedKey: newChildExposedKey,
-                          sourceRef: newChildSourceRef,
-                          sourceType: childVar.sourceType,
-                          displayFormat: childVar.displayFormat,
-                          unit: childVar.unit,
-                          precision: childVar.precision,
-                          visibleToUser: childVar.visibleToUser,
-                          isReadonly: childVar.isReadonly,
-                          defaultValue: childVar.defaultValue,
-                          fixedValue: childVar.fixedValue,
-                          metadata: childVar.metadata as any,
-                          updatedAt: now,
+                    const childCopiedFormulaIds: string[] = [];
+                    for (const f of childFormulas) {
+                      if (formulaIdMap.has(f.id)) {
+                        childCopiedFormulaIds.push(formulaIdMap.get(f.id)!);
+                        continue;
+                      }
+                      try {
+                        const formulaResult = await copyFormulaCapacity(
+                          f.id,
+                          childCopyId,
+                          suffix,
+                          prisma,
+                          { formulaIdMap, nodeIdMap: localNodeIdMap, skipLinking: true, skipCapacitySync: true }
+                        );
+                        if (formulaResult.success) {
+                          formulaIdMap.set(f.id, formulaResult.newFormulaId);
+                          childCopiedFormulaIds.push(formulaResult.newFormulaId);
                         }
-                      });
-                      if (existingVariableIds) existingVariableIds.add(newChildVarId);
-                      if (existingVariableKeys) existingVariableKeys.add(newChildExposedKey);
-                      variableCopyCache.set(`${childVar.id}|${childCopyId}`, newChildVarId);
+                      } catch (fErr) {
+                        console.warn(`[VAR-COPY] Erreur copie formule enfant ${f.id}:`, (fErr as Error).message);
+                      }
+                    }
 
-                      // MAJ du nœud enfant avec les infos variable
-                      const childMetaUpdate = { ...childMeta, fromVariableId: newChildVarId };
+                    // MAJ du nœud enfant avec les infos formule
+                    if (childCopiedFormulaIds.length > 0) {
                       await prisma.treeBranchLeafNode.update({
                         where: { id: childCopyId },
                         data: {
-                          hasData: true,
-                          data_activeId: newChildVarId,
-                          data_exposedKey: newChildExposedKey,
-                          data_displayFormat: childVar.displayFormat,
-                          data_precision: childVar.precision,
-                          data_unit: childVar.unit,
-                          data_visibleToUser: childVar.visibleToUser,
-                          linkedVariableIds: [newChildVarId],
-                          metadata: childMetaUpdate as any,
+                          hasFormula: true,
+                          linkedFormulaIds: childCopiedFormulaIds,
+                          formula_activeId: child.formula_activeId
+                            ? (formulaIdMap.get(child.formula_activeId) || childCopiedFormulaIds[0])
+                            : childCopiedFormulaIds[0],
                         }
                       });
                     }
-                  }
 
-                  console.log(`[VAR-COPY] ✅ Enfant display node ${child.label} → ${childCopyId} dupliqué`);
+                    // ── Copier la variable de l'enfant ──
+                    const childVar = await prisma.treeBranchLeafNodeVariable.findUnique({
+                      where: { nodeId: child.id }
+                    });
+
+                    if (childVar) {
+                      const newChildVarId = appendSuffixOnce(stripTrailingNumeric(childVar.id));
+                      const newChildExposedKey = appendSuffixOnce(stripTrailingNumeric(childVar.exposedKey));
+
+                      // Mettre à jour sourceRef pour pointer vers les formules copiées
+                      let newChildSourceRef = childVar.sourceRef;
+                      if (newChildSourceRef) {
+                        for (const [oldFId, newFId] of formulaIdMap.entries()) {
+                          newChildSourceRef = newChildSourceRef.replace(oldFId, newFId);
+                        }
+                      }
+
+                      // Vérifier collision avant création
+                      const varCollision = existingVariableIds
+                        ? existingVariableIds.has(newChildVarId)
+                        : await prisma.treeBranchLeafNodeVariable.findUnique({ where: { id: newChildVarId } }).then(r => !!r).catch(() => false);
+
+                      if (!varCollision) {
+                        await prisma.treeBranchLeafNodeVariable.create({
+                          data: {
+                            id: newChildVarId,
+                            nodeId: childCopyId,
+                            displayName: forceSingleSuffix(childVar.displayName),
+                            exposedKey: newChildExposedKey,
+                            sourceRef: newChildSourceRef,
+                            sourceType: childVar.sourceType,
+                            displayFormat: childVar.displayFormat,
+                            unit: childVar.unit,
+                            precision: childVar.precision,
+                            visibleToUser: childVar.visibleToUser,
+                            isReadonly: childVar.isReadonly,
+                            defaultValue: childVar.defaultValue,
+                            fixedValue: childVar.fixedValue,
+                            metadata: childVar.metadata as any,
+                            updatedAt: now,
+                          }
+                        });
+                        if (existingVariableIds) existingVariableIds.add(newChildVarId);
+                        if (existingVariableKeys) existingVariableKeys.add(newChildExposedKey);
+                        variableCopyCache.set(`${childVar.id}|${childCopyId}`, newChildVarId);
+
+                        // MAJ du nœud enfant avec les infos variable
+                        const childMetaUpdate = { ...childMeta, fromVariableId: newChildVarId };
+                        await prisma.treeBranchLeafNode.update({
+                          where: { id: childCopyId },
+                          data: {
+                            hasData: true,
+                            data_activeId: newChildVarId,
+                            data_exposedKey: newChildExposedKey,
+                            data_displayFormat: childVar.displayFormat,
+                            data_precision: childVar.precision,
+                            data_unit: childVar.unit,
+                            data_visibleToUser: childVar.visibleToUser,
+                            linkedVariableIds: [newChildVarId],
+                            metadata: childMetaUpdate as any,
+                          }
+                        });
+                      }
+                    }
+
+                    console.log(`[VAR-COPY] ✅ Enfant display node ${child.label} → ${childCopyId} dupliqué`);
+
+                    // ── Ajouter enfants au BFS pour traitement récursif ──
+                    bfsQueue.push({ origParentId: child.id, copyParentId: childCopyId });
+                  }
                 }
               } catch (childDupErr) {
                 console.warn(`[VAR-COPY] Erreur duplication enfants du display node ${childSourceNodeId}:`, (childDupErr as Error).message);
