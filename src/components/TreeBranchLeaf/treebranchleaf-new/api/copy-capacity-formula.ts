@@ -463,9 +463,10 @@ async function addToNodeLinkedField(
   const filtered = idsToAdd.filter(Boolean);
   if (filtered.length === 0) return;
   // PERF R12: Raw SQL — no P2025 error for non-existent nodes (0 affected rows instead of throw)
+  // FIX: DISTINCT UNNEST to prevent duplicate accumulation
   try {
     await (prisma as any).$executeRawUnsafe(
-      `UPDATE "TreeBranchLeafNode" SET "${field}" = array_cat(COALESCE("${field}", ARRAY[]::text[]), $1::text[]) WHERE id = $2`,
+      `UPDATE "TreeBranchLeafNode" SET "${field}" = ARRAY(SELECT DISTINCT unnest(array_cat(COALESCE("${field}", ARRAY[]::text[]), $1::text[]))) WHERE id = $2`,
       filtered,
       nodeId
     );

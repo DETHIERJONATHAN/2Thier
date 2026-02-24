@@ -163,10 +163,11 @@ export async function addToNodeLinkedField(
   const sanitized = idsToAdd?.filter(id => id && isRealNodeRef(id)) ?? [];
   if (!sanitized.length) return;
   // PERF R12: Raw SQL — no P2025 error for non-existent nodes (0 affected rows instead of throw)
+  // FIX: Use DISTINCT UNNEST to deduplicate (was array_cat without dedupe, causing accumulation)
   // Field name is from controlled LinkedField type, safe for template interpolation
   try {
     await (client as any).$executeRawUnsafe(
-      `UPDATE "TreeBranchLeafNode" SET "${field}" = array_cat(COALESCE("${field}", ARRAY[]::text[]), $1::text[]) WHERE id = $2`,
+      `UPDATE "TreeBranchLeafNode" SET "${field}" = ARRAY(SELECT DISTINCT unnest(array_cat(COALESCE("${field}", ARRAY[]::text[]), $1::text[]))) WHERE id = $2`,
       sanitized,
       nodeId
     );
