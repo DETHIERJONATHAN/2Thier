@@ -2698,20 +2698,7 @@ async function deepCopyNodeInternal(
                 if (metaObj?.lookup?.columnSourceOption?.sourceField && !metaObj.lookup.columnSourceOption.sourceField.endsWith(`-${__copySuffixNum}`)) {
                   metaObj.lookup.columnSourceOption.sourceField = `${metaObj.lookup.columnSourceOption.sourceField}-${__copySuffixNum}`;
                 }
-                // Suffixer comparisonColumn dans rowSourceOption si c'est du texte
-                if (metaObj?.lookup?.rowSourceOption?.comparisonColumn) {
-                  const val = metaObj.lookup.rowSourceOption.comparisonColumn;
-                  if (!/^-?\d+(\.\d+)?$/.test(val.trim()) && !val.endsWith(__computedLabelSuffix)) {
-                    metaObj.lookup.rowSourceOption.comparisonColumn = `${val}${__computedLabelSuffix}`;
-                  }
-                }
-                // Suffixer comparisonColumn dans columnSourceOption si c'est du texte
-                if (metaObj?.lookup?.columnSourceOption?.comparisonColumn) {
-                  const val = metaObj.lookup.columnSourceOption.comparisonColumn;
-                  if (!/^-?\d+(\.\d+)?$/.test(val.trim()) && !val.endsWith(__computedLabelSuffix)) {
-                    metaObj.lookup.columnSourceOption.comparisonColumn = `${val}${__computedLabelSuffix}`;
-                  }
-                }
+                // 🛑 FIX: NE PAS suffixer comparisonColumn — noms de colonnes Excel
                 return metaObj as Prisma.InputJsonValue;
               } catch {
                 return t.meta as Prisma.InputJsonValue;
@@ -2727,10 +2714,8 @@ async function deepCopyNodeInternal(
               create: t.tableColumns.map(col => ({
                 id: `${col.id}-${__copySuffixNum}`,
                 columnIndex: col.columnIndex,
-                // ?? COPIE TABLE COLUMN: suffixe seulement pour texte, pas pour nombres
-                name: col.name 
-                  ? (/^-?\d+(\.\d+)?$/.test(col.name.trim()) ? col.name : `${col.name}${__computedLabelSuffix}`)
-                  : col.name,
+                // 🛑 FIX: NE PAS suffixer col.name — noms de colonnes Excel
+                name: col.name,
                 type: col.type,
                 width: col.width,
                 format: col.format,

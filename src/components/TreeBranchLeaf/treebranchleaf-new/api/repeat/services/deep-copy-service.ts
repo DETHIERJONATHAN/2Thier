@@ -584,45 +584,9 @@ export async function deepCopyNodeInternal(
           }
         }
         
-        // ETAPE 2.5: Suffixer comparisonColumn (colonne comparaison)
-        if ((newMeta as any).lookup.rowSourceOption?.comparisonColumn) {
-          const cc = (newMeta as any).lookup.rowSourceOption.comparisonColumn;
-          if (typeof cc === 'string' && !/^\d+$/.test(cc) && !cc.endsWith(suf)) {
-            (newMeta as any).lookup.rowSourceOption.comparisonColumn = `${cc}${suf}`;
-          }
-        }
-        if ((newMeta as any).lookup.columnSourceOption?.comparisonColumn) {
-          const cc = (newMeta as any).lookup.columnSourceOption.comparisonColumn;
-          if (typeof cc === 'string' && !/^\d+$/.test(cc) && !cc.endsWith(suf)) {
-            (newMeta as any).lookup.columnSourceOption.comparisonColumn = `${cc}${suf}`;
-          }
-        }
-        
-        // ETAPE 2.5 suite: Suffixer displayRow
-        if ((newMeta as any).lookup.displayRow) {
-          if (Array.isArray((newMeta as any).lookup.displayRow)) {
-            (newMeta as any).lookup.displayRow = ((newMeta as any).lookup.displayRow as string[]).map((r: string) =>
-              r && !/^\d+$/.test(r) && !r.endsWith(suf) ? `${r}${suf}` : r
-            );
-          } else if (typeof (newMeta as any).lookup.displayRow === 'string') {
-            const dr = (newMeta as any).lookup.displayRow;
-            if (!/^\d+$/.test(dr) && !dr.endsWith(suf)) {
-              (newMeta as any).lookup.displayRow = `${dr}${suf}`;
-            }
-          }
-        }
-        
-        // ETAPE 4: Suffixer displayColumn (colonnes affichage)
-        if ((newMeta as any).lookup.displayColumn) {
-          const col = (newMeta as any).lookup.displayColumn;
-          if (Array.isArray(col)) {
-            (newMeta as any).lookup.displayColumn = col.map((c: string) => 
-              c && !/^\d+$/.test(c) && !c.endsWith(suf) ? `${c}${suf}` : c
-            );
-          } else if (typeof col === 'string' && !/^\d+$/.test(col) && !col.endsWith(suf)) {
-            (newMeta as any).lookup.displayColumn = `${col}${suf}`;
-          }
-        }
+        // 🛑 FIX: NE PAS suffixer comparisonColumn, displayRow, displayColumn
+        // Ce sont des noms de colonnes Excel (ex: "MODELE", "Prix", "KVA")
+        // PAS des IDs de nœuds. Les suffixer casse les lookups de table.
       }
       // Ã°Å¸â€Â´ Ne pas copier la configuration de repeater dans les clones crÃƒÂ©ÃƒÂ©s via un repeater
       if (normalizedRepeatContext && newMeta.repeater) {
@@ -1324,46 +1288,9 @@ export async function deepCopyNodeInternal(
                 metaObj.lookup.columnSourceOption.sourceField = `${metaObj.lookup.columnSourceOption.sourceField}-${copySuffixNum}`;
               }
               
-              // 🎯 FIX 24/01/2026: SUFFIXER displayColumn, comparisonColumn, displayRow
-              // Contrairement au commentaire précédent, les noms de colonnes SONT suffixés
-              // quand on duplique une table contenant des références à des champs
-              // Ex: "Puissance" devient "Puissance-1" dans la table dupliquée
-              
-              // Suffixer displayColumn (peut être string ou array)
-              if (metaObj?.lookup?.displayColumn) {
-                const originalDisplay = JSON.stringify(metaObj.lookup.displayColumn);
-                if (Array.isArray(metaObj.lookup.displayColumn)) {
-                  metaObj.lookup.displayColumn = metaObj.lookup.displayColumn.map(col => {
-                    if (typeof col === 'string' && !col.endsWith(`-${copySuffixNum}`)) {
-                      return `${col}-${copySuffixNum}`;
-                    }
-                    return col;
-                  });
-                } else if (typeof metaObj.lookup.displayColumn === 'string' && !metaObj.lookup.displayColumn.endsWith(`-${copySuffixNum}`)) {
-                  metaObj.lookup.displayColumn = `${metaObj.lookup.displayColumn}-${copySuffixNum}`;
-                }
-              }
-              
-              // Suffixer comparisonColumn
-              if (metaObj?.lookup?.columnSourceOption?.comparisonColumn && !metaObj.lookup.columnSourceOption.comparisonColumn.endsWith(`-${copySuffixNum}`)) {
-                metaObj.lookup.columnSourceOption.comparisonColumn = `${metaObj.lookup.columnSourceOption.comparisonColumn}-${copySuffixNum}`;
-              }
-              
-              // Suffixer displayRow
-              if (metaObj?.lookup?.displayRow && typeof metaObj.lookup.displayRow === 'string' && !metaObj.lookup.displayRow.endsWith(`-${copySuffixNum}`)) {
-                metaObj.lookup.displayRow = `${metaObj.lookup.displayRow}-${copySuffixNum}`;
-              }
-              
-              // 🎯 FIX 24/01/2026: SUFFIXER les noms de colonnes dans meta.data.columns
-              // Les colonnes de la table qui référencent des champs doivent aussi prendre le suffix
-              if (metaObj?.data?.columns && Array.isArray(metaObj.data.columns)) {
-                metaObj.data.columns = metaObj.data.columns.map((col: string) => {
-                  if (typeof col === 'string' && !col.endsWith(`-${copySuffixNum}`)) {
-                    return `${col}-${copySuffixNum}`;
-                  }
-                  return col;
-                });
-              }
+              // 🛑 FIX: NE PAS suffixer displayColumn, comparisonColumn, displayRow, meta.data.columns
+              // Ce sont des noms de colonnes Excel (ex: "Prix", "MODELE", "KVA")
+              // PAS des IDs de nœuds. Les suffixer casse les lookups de table.
               
               return metaObj as Prisma.InputJsonValue;
             } catch (err) {
@@ -1381,10 +1308,8 @@ export async function deepCopyNodeInternal(
             create: t.tableColumns.map(col => ({
               id: appendSuffix(col.id),
               columnIndex: col.columnIndex,
-              // 🎯 FIX 24/01/2026: SUFFIXER les noms de colonnes !
-              // Quand on duplique une table avec des champs, les colonnes prennent aussi le suffix
-              // Ex: "Puissance" devient "Puissance-1" dans la table dupliquée
-              name: `${col.name}-${copySuffixNum}`,
+              // 🛑 FIX: NE PAS suffixer col.name — ce sont des noms de colonnes Excel
+              name: col.name,
               type: col.type,
               width: col.width,
               format: col.format,
@@ -1443,10 +1368,9 @@ export async function deepCopyNodeInternal(
         // - Table LOCALE/COPIÉE: la table A été copiée → suffixer tableReference
         
         let newTableReference: string | null = null;
-        // 🎯 FIX 06/01/2026 (v3): TOUJOURS suffixer les colonnes !
-        // Les colonnes de table SONT suffixées (ex: "Orientation" → "Orientation-1")
-        // Donc keyColumn doit aussi être suffixé pour matcher
-        const shouldSuffixColumns = true; // TOUJOURS suffixer pour matcher les colonnes copiées
+        // 🛑 FIX: NE PAS suffixer les colonnes de SelectConfig
+        // Les noms de colonnes Excel ne sont PAS suffixés, donc keyColumn/valueColumn/displayColumn non plus
+        const shouldSuffixColumns = false;
         let tableWasCopied = false;
         
         if (originalSelectConfig.tableReference) {
@@ -1520,7 +1444,7 @@ export async function deepCopyNodeInternal(
               const originalTable = [...tables, ...additionalTables].find(t => tableIdMap.get(t.id) === newTableReference);
               if (originalTable && originalTable.tableColumns.length > 0) {
                 const sortedCols = [...originalTable.tableColumns].sort((a, b) => a.columnIndex - b.columnIndex);
-                const firstColumnName = `${sortedCols[0].name}-${copySuffixNum}`;
+                const firstColumnName = sortedCols[0].name;
                 await prisma.treeBranchLeafSelectConfig.update({
                   where: { id: copiedSelectConfigId },
                   data: { displayColumn: firstColumnName }

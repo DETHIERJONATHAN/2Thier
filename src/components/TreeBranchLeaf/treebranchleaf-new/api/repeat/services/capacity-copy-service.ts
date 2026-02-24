@@ -227,54 +227,10 @@ export async function copyMissingCapacities(
               const metaObj = typeof table.meta === 'string' ? JSON.parse(table.meta) : JSON.parse(JSON.stringify(table.meta));
               const suffixNum = parseInt(suffix.replace('-', '')) || 1;
               
-              // Ã°Å¸â€Â¢ COPIE TABLE META: suffixer comparisonColumn si c'est du texte
-              if (metaObj?.lookup?.rowSourceOption?.comparisonColumn) {
-                const val = metaObj.lookup.rowSourceOption.comparisonColumn;
-                if (!/^-?\d+(\.\d+)?$/.test(val.trim())) {
-                  metaObj.lookup.rowSourceOption.comparisonColumn = `${val}${suffix}`;
-                }
-              }
-              if (metaObj?.lookup?.columnSourceOption?.comparisonColumn) {
-                const val = metaObj.lookup.columnSourceOption.comparisonColumn;
-                if (!/^-?\d+(\.\d+)?$/.test(val.trim())) {
-                  metaObj.lookup.columnSourceOption.comparisonColumn = `${val}${suffix}`;
-                }
-              }
-              
-              // Ã°Å¸â€Â¥ FIX: Suffixer displayColumn (peut ÃƒÂªtre string ou array)
-              if (metaObj?.lookup?.displayColumn) {
-                if (Array.isArray(metaObj.lookup.displayColumn)) {
-                  metaObj.lookup.displayColumn = metaObj.lookup.displayColumn.map((col: string) => {
-                    if (col && !/^-?\d+(\.\d+)?$/.test(col.trim()) && !col.endsWith(suffix)) {
-                      return `${col}${suffix}`;
-                    }
-                    return col;
-                  });
-                } else if (typeof metaObj.lookup.displayColumn === 'string') {
-                  const val = metaObj.lookup.displayColumn;
-                  if (!/^-?\d+(\.\d+)?$/.test(val.trim()) && !val.endsWith(suffix)) {
-                    metaObj.lookup.displayColumn = `${val}${suffix}`;
-                  }
-                }
-              }
-              
-              // Ã°Å¸â€Â¥ FIX: Suffixer displayRow (peut ÃƒÂªtre string ou array)
-              if (metaObj?.lookup?.displayRow) {
-                if (Array.isArray(metaObj.lookup.displayRow)) {
-                  metaObj.lookup.displayRow = metaObj.lookup.displayRow.map((row: string) => {
-                    if (row && !/^-?\d+(\.\d+)?$/.test(row.trim()) && !row.endsWith(suffix)) {
-                      return `${row}${suffix}`;
-                    }
-                    return row;
-                  });
-                } else if (typeof metaObj.lookup.displayRow === 'string') {
-                  const val = metaObj.lookup.displayRow;
-                  if (!/^-?\d+(\.\d+)?$/.test(val.trim()) && !val.endsWith(suffix)) {
-                    metaObj.lookup.displayRow = `${val}${suffix}`;
-                  }
-                }
-              }
-              
+              // 🛑 FIX: NE PAS suffixer comparisonColumn, displayColumn, displayRow
+              // Ce sont des noms de colonnes Excel (ex: "MODELE", "Prix", "KVA")
+              // PAS des IDs de nœuds. Les suffixer casse les lookups de table.
+
               // Remplacer les UUIDs par leurs versions suffixÃƒÂ©s
               let str = JSON.stringify(metaObj);
               str = str.replace(/([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})/gi, (uuid: string) => {
@@ -303,10 +259,8 @@ export async function copyMissingCapacities(
             create: table.tableColumns.map(col => ({
               id: `${col.id}${suffix}`,
               columnIndex: col.columnIndex,
-              // Ã°Å¸â€Â¢ COPIE TABLE COLUMN: suffixe seulement pour texte, pas pour nombres
-              name: col.name 
-                ? (/^-?\d+(\.\d+)?$/.test(col.name.trim()) ? col.name : `${col.name}${suffix}`)
-                : col.name,
+              // 🛑 FIX: NE PAS suffixer col.name — noms de colonnes Excel
+              name: col.name,
               type: col.type,
               width: col.width,
               format: col.format,
@@ -366,47 +320,9 @@ export async function copyMissingCapacities(
           }
         }
         
-        // ETAPE 2.5: Suffixer comparisonColumn (colonne comparaison)
-        if (metaObj.lookup.rowSourceOption?.comparisonColumn) {
-          const cc = metaObj.lookup.rowSourceOption.comparisonColumn;
-          if (typeof cc === 'string' && !/^\d+$/.test(cc) && !cc.endsWith(suf)) {
-            metaObj.lookup.rowSourceOption.comparisonColumn = `${cc}${suf}`;
-          }
-        }
-        if (metaObj.lookup.columnSourceOption?.comparisonColumn) {
-          const cc = metaObj.lookup.columnSourceOption.comparisonColumn;
-          if (typeof cc === 'string' && !/^\d+$/.test(cc) && !cc.endsWith(suf)) {
-            metaObj.lookup.columnSourceOption.comparisonColumn = `${cc}${suf}`;
-          }
-        }
-        
-        // ETAPE 2.5 suite: Suffixer displayRow
-        if (metaObj.lookup.displayRow) {
-          if (Array.isArray(metaObj.lookup.displayRow)) {
-            metaObj.lookup.displayRow = metaObj.lookup.displayRow.map((r: string) =>
-              r && !/^\d+$/.test(r) && !r.endsWith(suf) ? `${r}${suf}` : r
-            );
-          } else if (typeof metaObj.lookup.displayRow === 'string') {
-            const dr = metaObj.lookup.displayRow;
-            if (!/^\d+$/.test(dr) && !dr.endsWith(suf)) {
-              metaObj.lookup.displayRow = `${dr}${suf}`;
-            }
-          }
-        }
-        
-        // ETAPE 4: Suffixer displayColumn (colonnes affichage)
-        if (metaObj.lookup.displayColumn) {
-          const col = metaObj.lookup.displayColumn;
-          if (Array.isArray(col)) {
-            metaObj.lookup.displayColumn = col.map((c: string) => 
-              c && !/^\d+$/.test(c) && !c.endsWith(suf) ? `${c}${suf}` : c
-            );
-          } else if (typeof col === 'string' && !/^\d+$/.test(col) && !col.endsWith(suf)) {
-            metaObj.lookup.displayColumn = `${col}${suf}`;
-          }
-        }
-      }
-      
+        // 🛑 FIX: NE PAS suffixer comparisonColumn, displayRow, displayColumn
+        // Ce sont des noms de colonnes Excel, PAS des IDs de nœuds.
+
       updatedMetadata = metaObj as Prisma.InputJsonValue;
     } catch (error) {
       console.warn('[CAPACITY-COPY] Erreur traitement metadata nœud:', error);

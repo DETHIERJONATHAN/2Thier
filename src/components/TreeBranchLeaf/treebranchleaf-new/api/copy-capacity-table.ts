@@ -265,20 +265,7 @@ export async function copyTableCapacity(
             if (rewritten?.lookup?.columnSourceOption?.sourceField && !rewritten.lookup.columnSourceOption.sourceField.endsWith(`-${suffixNum}`)) {
               rewritten.lookup.columnSourceOption.sourceField = `${rewritten.lookup.columnSourceOption.sourceField}-${suffixNum}`;
             }
-            // � FIX 06/01/2026 (v3): TOUJOURS suffixer comparisonColumn
-            // Les colonnes de table SONT suffixées (ex: "Orientation" → "Orientation-1")
-            if (rewritten?.lookup?.rowSourceOption?.comparisonColumn) {
-              const val = rewritten.lookup.rowSourceOption.comparisonColumn;
-              if (!val.endsWith(`-${suffixNum}`)) {
-                rewritten.lookup.rowSourceOption.comparisonColumn = `${val}-${suffixNum}`;
-              }
-            }
-            if (rewritten?.lookup?.columnSourceOption?.comparisonColumn) {
-              const val = rewritten.lookup.columnSourceOption.comparisonColumn;
-              if (!val.endsWith(`-${suffixNum}`)) {
-                rewritten.lookup.columnSourceOption.comparisonColumn = `${val}-${suffixNum}`;
-              }
-            }
+            // 🛑 FIX: NE PAS suffixer comparisonColumn — noms de colonnes Excel
             return rewritten;
           })(),
           updatedAt: new Date()
@@ -318,20 +305,7 @@ export async function copyTableCapacity(
               if (rewritten?.lookup?.columnSourceOption?.sourceField && !rewritten.lookup.columnSourceOption.sourceField.endsWith(`-${suffixNum}`)) {
                 rewritten.lookup.columnSourceOption.sourceField = `${rewritten.lookup.columnSourceOption.sourceField}-${suffixNum}`;
               }
-              // � FIX 06/01/2026 (v3): TOUJOURS suffixer comparisonColumn
-              // Les colonnes de table SONT suffixées (ex: "Orientation" → "Orientation-1")
-              if (rewritten?.lookup?.rowSourceOption?.comparisonColumn) {
-                const val = rewritten.lookup.rowSourceOption.comparisonColumn;
-                if (!val.endsWith(`-${suffixNum}`)) {
-                  rewritten.lookup.rowSourceOption.comparisonColumn = `${val}-${suffixNum}`;
-                }
-              }
-              if (rewritten?.lookup?.columnSourceOption?.comparisonColumn) {
-                const val = rewritten.lookup.columnSourceOption.comparisonColumn;
-                if (!val.endsWith(`-${suffixNum}`)) {
-                  rewritten.lookup.columnSourceOption.comparisonColumn = `${val}-${suffixNum}`;
-                }
-              }
+              // 🛑 FIX: NE PAS suffixer comparisonColumn — noms de colonnes Excel
               return rewritten;
             })(),
             createdAt: new Date(),
@@ -371,18 +345,8 @@ export async function copyTableCapacity(
         const newColumnId = `${Math.random().toString(36).substring(2, 15)}${Math.random().toString(36).substring(2, 15)}`;
         columnIdMap.set(col.id, newColumnId);
 
-        // Normaliser le nom de colonne : 
-        // - Nombres purs ("35", "45", "90") Ã¢â€ â€™ garder sans suffixe
-        // - Texte ("Orientation") Ã¢â€ â€™ ajouter le suffixe (-1, -2, etc.)
-        // Ã°Å¸â€Â¢ COPIE TABLE COLUMN: suffixe seulement pour texte, pas pour nombres
-        const normalizedName = (() => {
-          const raw = col.name as string | null;
-          if (!raw) return raw;
-          // Si c'est un nombre pur (ex: "35", "90", "0.5"), pas de suffixe
-          if (/^-?\d+(\.\d+)?$/.test(raw.trim())) return raw;
-          // Sinon c'est du texte Ã¢â€ â€™ ajouter le suffixe
-          return `${raw}-${suffix}`;
-        })();
+        // 🛑 FIX: NE PAS suffixer col.name — noms de colonnes Excel
+        const normalizedName = col.name;
 
         // CrÃƒÂ©er directement - SANS rÃƒÂ©ÃƒÂ©crire le metadata/config (comme le script)
         await prisma.treeBranchLeafNodeTableColumn.create({
