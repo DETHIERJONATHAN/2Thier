@@ -666,6 +666,17 @@ export async function runRepeatExecution(
     if (result.displayNodeId) {
       const originalDisplayNodeId = result.displayNodeId.replace(/-\d+$/, '');
       globalNodeIdMap.set(originalDisplayNodeId, result.displayNodeId);
+      // 🔄 Ajouter le display node et ses enfants à duplicatedNodeIds pour le post-processing
+      duplicatedNodeIds.add(result.displayNodeId);
+      originalNodeIdByCopyId.set(result.displayNodeId, originalDisplayNodeId);
+    }
+    if (result.childDisplayNodeIds) {
+      for (const childId of result.childDisplayNodeIds) {
+        duplicatedNodeIds.add(childId);
+        const originalChildId = childId.replace(/-\d+$/, '');
+        originalNodeIdByCopyId.set(childId, originalChildId);
+        globalNodeIdMap.set(originalChildId, childId);
+      }
     }
   };
 
