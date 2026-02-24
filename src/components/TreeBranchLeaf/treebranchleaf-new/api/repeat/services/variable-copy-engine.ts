@@ -1442,6 +1442,15 @@ export async function copyVariableWithCapacities(
 
                     console.log(`[VAR-COPY] ✅ Enfant display node ${child.label} → ${childCopyId} dupliqué`);
 
+                    // ── Mettre à jour le champ sum-total de l'enfant ──
+                    // Quand PV marge est dupliqué, son Total doit être recalculé
+                    // pour inclure @value.f95e4dda + @value.f95e4dda-1
+                    try {
+                      await updateSumDisplayFieldAfterCopyChange(child.id, prisma);
+                    } catch (sumErr) {
+                      console.warn(`[VAR-COPY] Erreur mise à jour sum-total enfant ${child.id}:`, (sumErr as Error).message);
+                    }
+
                     // ── Ajouter enfants au BFS pour traitement récursif ──
                     bfsQueue.push({ origParentId: child.id, copyParentId: childCopyId });
                   }
