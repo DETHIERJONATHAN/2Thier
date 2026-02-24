@@ -1267,6 +1267,11 @@ export async function copyVariableWithCapacities(
                     childMeta.duplicatedFromRepeater = true;
 
                     // Créer la copie du nœud enfant
+                    // 🔴 FIX SUM-TOTAL: Détecter si le nœud est un sum-total
+                    // Les sum-total agrègent TOUTES les copies (original + -1),
+                    // donc leur formula_tokens doit être copiée telle quelle.
+                    const isSumTotalNode = child.id.endsWith('-sum-total');
+
                     await prisma.treeBranchLeafNode.create({
                       data: {
                         id: childCopyId,
@@ -1295,6 +1300,8 @@ export async function copyVariableWithCapacities(
                         field_label: forceSingleSuffix(child.label) as any,
                         subtab: child.subtab as any,
                         subtabs: child.subtabs as any,
+                        // 🔴 FIX: Copier formula_tokens (cruciale pour les sum-total)
+                        formula_tokens: child.formula_tokens as any,
                         data_displayFormat: child.data_displayFormat,
                         data_exposedKey: child.data_exposedKey,
                         data_precision: child.data_precision,
@@ -1345,16 +1352,56 @@ export async function copyVariableWithCapacities(
                         continue;
                       }
                       try {
-                        const formulaResult = await copyFormulaCapacity(
-                          f.id,
-                          childCopyId,
-                          suffix,
-                          prisma,
-                          { formulaIdMap, nodeIdMap: localNodeIdMap, skipLinking: true, skipCapacitySync: true }
-                        );
-                        if (formulaResult.success) {
-                          formulaIdMap.set(f.id, formulaResult.newFormulaId);
-                          childCopiedFormulaIds.push(formulaResult.newFormulaId);
+                        // 🔴 FIX SUM-TOTAL: Les formules de sum-total ne doivent PAS être
+                        // réécrites car elles agrègent TOUTES les copies.
+                        // Ex: ["@value.nodeId", "+", "@value.nodeId-1"] doit rester tel quel.
+                        // Sans ce fix, rewriteJsonReferences transforme:
+                        //   @value.nodeId   → @value.nodeId-1  (FAUX: double -1)
+                        //   @value.nodeId-1 → @value.nodeId-1  (OK mais perd l'original)
+                        if (isSumTotalNode) {
+                          const newSumFormulaId = `${f.id}-${suffix}`;
+                          const formulaIdShort = f.id.substring(0, 8);
+                          const uniqueName = f.name
+                            ? `${f.name}-${formulaIdShort}-${suffix}`
+                            : `formula-${formulaIdShort}-${suffix}`;
+                          await prisma.treeBranchLeafNodeFormula.upsert({
+                            where: { id: newSumFormulaId },
+                            update: {
+                              nodeId: childCopyId,
+                              name: uniqueName,
+                              tokens: f.tokens, // ← Tokens IDENTIQUES à l'original
+                              updatedAt: new Date()
+                            },
+                            create: {
+                              id: newSumFormulaId,
+                              nodeId: childCopyId,
+                              organizationId: f.organizationId,
+                              name: uniqueName,
+                              description: f.description,
+                              tokens: f.tokens, // ← Tokens IDENTIQUES à l'original
+                              targetProperty: f.targetProperty,
+                              constraintMessage: f.constraintMessage,
+                              isDefault: f.isDefault,
+                              order: f.order,
+                              createdAt: new Date(),
+                              updatedAt: new Date()
+                            }
+                          });
+                          formulaIdMap.set(f.id, newSumFormulaId);
+                          childCopiedFormulaIds.push(newSumFormulaId);
+                          console.log(`[VAR-COPY] ✅ Sum-total formule copiée SANS réécriture: ${f.id} → ${newSumFormulaId}`);
+                        } else {
+                          const formulaResult = await copyFormulaCapacity(
+                            f.id,
+                            childCopyId,
+                            suffix,
+                            prisma,
+                            { formulaIdMap, nodeIdMap: localNodeIdMap, skipLinking: true, skipCapacitySync: true }
+                          );
+                          if (formulaResult.success) {
+                            formulaIdMap.set(f.id, formulaResult.newFormulaId);
+                            childCopiedFormulaIds.push(formulaResult.newFormulaId);
+                          }
                         }
                       } catch (fErr) {
                         console.warn(`[VAR-COPY] Erreur copie formule enfant ${f.id}:`, (fErr as Error).message);
