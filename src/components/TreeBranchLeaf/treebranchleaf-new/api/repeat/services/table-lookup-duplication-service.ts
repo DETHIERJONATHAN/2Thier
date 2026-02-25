@@ -204,24 +204,60 @@ export class TableLookupDuplicationService {
         where: { id: copiedTableId }
       });
 
-      const rewrittenMeta = (() => {
+      // 🔧 FIX: Résolution intelligente des sourceField/selectors lors de la duplication
+      // Avant de suffixer un UUID, vérifier que le nœud suffixé EXISTE.
+      // Si le nœud suffixé n'existe pas (ex: LINK field hors du repeater), résoudre
+      // via link_targetNodeId pour trouver le bon nœud copié.
+      const resolveNodeIdForCopy = async (originalId: string, suffixNum: number): Promise<string> => {
+        const suffixedId = `${originalId}-${suffixNum}`;
+        // 1. Vérifier si le nœud suffixé existe
+        const suffixedNode = await prisma.treeBranchLeafNode.findUnique({
+          where: { id: suffixedId },
+          select: { id: true }
+        });
+        if (suffixedNode) return suffixedId;
+
+        // 2. Le nœud suffixé n'existe pas — vérifier si l'original est un LINK
+        const originalNode = await prisma.treeBranchLeafNode.findUnique({
+          where: { id: originalId },
+          select: { hasLink: true, link_targetNodeId: true }
+        });
+        if (originalNode?.hasLink && originalNode.link_targetNodeId) {
+          // 3. Essayer le LINK target suffixé
+          const linkTargetSuffixed = `${originalNode.link_targetNodeId}-${suffixNum}`;
+          const linkTargetNode = await prisma.treeBranchLeafNode.findUnique({
+            where: { id: linkTargetSuffixed },
+            select: { id: true }
+          });
+          if (linkTargetNode) {
+            console.log(`[TBL-DUP] 🔗 sourceField resolved: ${originalId} → LINK target ${linkTargetSuffixed}`);
+            return linkTargetSuffixed;
+          }
+        }
+
+        // 4. Fallback: utiliser le suffixé même s'il n'existe pas (comportement legacy)
+        console.warn(`[TBL-DUP] ⚠️ Node ${suffixedId} not found, LINK resolution failed. Using suffixed ID anyway.`);
+        return suffixedId;
+      };
+
+      const rewrittenMeta = await (async () => {
         if (!originalTable.meta) return originalTable.meta;
         try {
           const metaObj = typeof originalTable.meta === 'string' ? JSON.parse(originalTable.meta) : JSON.parse(JSON.stringify(originalTable.meta));
           const suffixNum = parseInt(suffix.replace('-', '')) || 1;
-          // Suffixer les UUIDs dans selectors
+          // Suffixer les UUIDs dans selectors (avec vérification d'existence)
           if (metaObj?.lookup?.selectors?.columnFieldId && !metaObj.lookup.selectors.columnFieldId.endsWith(`-${suffixNum}`)) {
-            metaObj.lookup.selectors.columnFieldId = `${metaObj.lookup.selectors.columnFieldId}-${suffixNum}`;
+            metaObj.lookup.selectors.columnFieldId = await resolveNodeIdForCopy(metaObj.lookup.selectors.columnFieldId, suffixNum);
           }
           if (metaObj?.lookup?.selectors?.rowFieldId && !metaObj.lookup.selectors.rowFieldId.endsWith(`-${suffixNum}`)) {
-            metaObj.lookup.selectors.rowFieldId = `${metaObj.lookup.selectors.rowFieldId}-${suffixNum}`;
+            metaObj.lookup.selectors.rowFieldId = await resolveNodeIdForCopy(metaObj.lookup.selectors.rowFieldId, suffixNum);
           }
-          // Suffixer sourceField
+          // Suffixer sourceField (avec vérification d'existence + résolution LINK)
           if (metaObj?.lookup?.rowSourceOption?.sourceField && !metaObj.lookup.rowSourceOption.sourceField.endsWith(`-${suffixNum}`)) {
-            metaObj.lookup.rowSourceOption.sourceField = `${metaObj.lookup.rowSourceOption.sourceField}-${suffixNum}`;
+            metaObj.lookup.rowSourceOption.sourceField = await resolveNodeIdForCopy(metaObj.lookup.rowSourceOption.sourceField, suffixNum);
           }
           if (metaObj?.lookup?.columnSourceOption?.sourceField && !metaObj.lookup.columnSourceOption.sourceField.endsWith(`-${suffixNum}`)) {
-            metaObj.lookup.columnSourceOption.sourceField = `${metaObj.lookup.columnSourceOption.sourceField}-${suffixNum}`;
+            metaObj.lookup.columnSourceOption.sourceField = await resolveNodeIdForCopy(metaObj.lookup.columnSourceOption.sourceField, suffixNum);
           }
           // Ajouter operator '=' si comparisonColumn défini
           if (metaObj?.lookup?.rowSourceOption?.comparisonColumn && !metaObj.lookup.rowSourceOption.operator) {
