@@ -230,52 +230,10 @@ export class TableLookupDuplicationService {
           if (metaObj?.lookup?.columnSourceOption?.comparisonColumn && !metaObj.lookup.columnSourceOption.operator) {
             metaObj.lookup.columnSourceOption.operator = '=';
           }
-          // Suffixer comparisonColumn
-          if (metaObj?.lookup?.rowSourceOption?.comparisonColumn) {
-            const val = metaObj.lookup.rowSourceOption.comparisonColumn;
-            if (!/^-?\d+(\.\d+)?$/.test(val.trim()) && !val.endsWith(suffix)) {
-              metaObj.lookup.rowSourceOption.comparisonColumn = `${val}${suffix}`;
-            }
-          }
-          if (metaObj?.lookup?.columnSourceOption?.comparisonColumn) {
-            const val = metaObj.lookup.columnSourceOption.comparisonColumn;
-            if (!/^-?\d+(\.\d+)?$/.test(val.trim()) && !val.endsWith(suffix)) {
-              metaObj.lookup.columnSourceOption.comparisonColumn = `${val}${suffix}`;
-            }
-          }
-          // Suffixer displayColumn
-          if (metaObj?.lookup?.displayColumn) {
-            if (Array.isArray(metaObj.lookup.displayColumn)) {
-              metaObj.lookup.displayColumn = metaObj.lookup.displayColumn.map((col: string) => {
-                if (col && !/^-?\d+(\.\d+)?$/.test(col.trim()) && !col.endsWith(suffix)) {
-                  return `${col}${suffix}`;
-                }
-                return col;
-              });
-            } else if (typeof metaObj.lookup.displayColumn === 'string') {
-              const val = metaObj.lookup.displayColumn;
-              if (!/^-?\d+(\.\d+)?$/.test(val.trim()) && !val.endsWith(suffix)) {
-                metaObj.lookup.displayColumn = `${val}${suffix}`;
-              }
-            }
-          } else {
-          }
-          // Suffixer displayRow
-          if (metaObj?.lookup?.displayRow) {
-            if (Array.isArray(metaObj.lookup.displayRow)) {
-              metaObj.lookup.displayRow = metaObj.lookup.displayRow.map((row: string) => {
-                if (row && !/^-?\d+(\.\d+)?$/.test(row.trim()) && !row.endsWith(suffix)) {
-                  return `${row}${suffix}`;
-                }
-                return row;
-              });
-            } else if (typeof metaObj.lookup.displayRow === 'string') {
-              const val = metaObj.lookup.displayRow;
-              if (!/^-?\d+(\.\d+)?$/.test(val.trim()) && !val.endsWith(suffix)) {
-                metaObj.lookup.displayRow = `${val}${suffix}`;
-              }
-            }
-          }
+          // 🛑 FIX: NE PAS suffixer comparisonColumn, displayColumn, displayRow
+          // Ce sont des noms de colonnes Excel (ex: "MODELE", "Prix", "KVA")
+          // PAS des IDs de nœuds. Les suffixer casse les lookups de table.
+
           return metaObj;
         } catch {
           return originalTable.meta;
@@ -305,9 +263,9 @@ export class TableLookupDuplicationService {
             tableColumns: {
               create: originalTable.tableColumns.map((col, idx) => {
                 const baseName = String(col.name ?? '');
-                const isNumericName = /^-?\d+(\.\d+)?$/.test(baseName.trim());
-                const shouldSuffix = baseName.length > 0 && !isNumericName && !baseName.endsWith(suffix);
-                const newName = shouldSuffix ? `${baseName}${suffix}` : baseName;
+
+
+                const newName = baseName;
                 return {
                   id: col.id ? `${col.id}${suffix}` : randomUUID(),
                   // ✅ FIX 11/01/2026: NE PAS inclure tableId dans nested create - Prisma le remplit automatiquement
@@ -345,9 +303,8 @@ export class TableLookupDuplicationService {
         
         const columnsData = originalTable.tableColumns.map((col, idx) => {
           const baseName = String(col.name ?? '');
-          const isNumericName = /^-?\d+(\.\d+)?$/.test(baseName.trim());
-          const shouldSuffix = baseName.length > 0 && !isNumericName && !baseName.endsWith(suffix);
-          const newName = shouldSuffix ? `${baseName}${suffix}` : baseName;
+          // 🛑 FIX: NE PAS suffixer les noms de colonnes — ce sont des en-têtes Excel
+          const newName = baseName;
           return {
             id: col.id ? `${col.id}${suffix}` : randomUUID(),
             tableId: copiedTableId,
@@ -383,11 +340,8 @@ export class TableLookupDuplicationService {
       
       if (!existingSelectConfig) {
         // 🔧 CRITICAL FIX: Générer l'id car il n'y a pas @default(uuid())
-        // 🔥 IMPORTANT: Suffixer aussi les keyColumn/keyRow/valueColumn pour pointer vers les colonnes/lignes suffixées!
-        // 🔥 FIX 07/01/2026: shouldSuffixColumns DOIT ÊTRE TOUJOURS TRUE pour les SelectConfigs
-        // Parce que la PREMIÈRE COLONNE de la table copiée s'appelle maintenant "Orientation-1" pas "Orientation"
-        const shouldSuffixColumns = true; // TOUJOURS suffixer les références pour la table copiée
-        // ✅ FIX 11/01/2026: Utiliser le paramètre 'suffix' déjà défini (computedLabelSuffix n'existe pas)
+        // � FIX: NE PAS suffixer les noms de colonnes/lignes — ce sont des en-têtes Excel
+        // Seuls les UUIDs (nodeId, tableReference, dependsOnNodeId, etc.) doivent être suffixés
         
         
         await prisma.treeBranchLeafSelectConfig.create({
@@ -396,39 +350,22 @@ export class TableLookupDuplicationService {
             nodeId: copiedNodeId,
             tableReference: copiedTableId,
             // 🔥 SUFFIXER les références de colonnes/lignes si elles pointent vers la première colonne/ligne
-            keyColumn: originalSelectConfig.keyColumn 
-              ? `${originalSelectConfig.keyColumn}${suffix}` 
-              : null,
-            keyRow: originalSelectConfig.keyRow 
-              ? `${originalSelectConfig.keyRow}${suffix}` 
-              : null,
-            valueColumn: originalSelectConfig.valueColumn
-              ? `${originalSelectConfig.valueColumn}${suffix}` 
-              : null,
-            valueRow: originalSelectConfig.valueRow
-              ? `${originalSelectConfig.valueRow}${suffix}` 
-              : null,
-            displayColumn: (() => {
-              // 🔥 FIX: Si displayColumn est vide, initialiser avec la 1ère colonne suffixée
-              if (originalSelectConfig.displayColumn) {
-                return `${originalSelectConfig.displayColumn}${suffix}`;
-              }
-              // Chercher la première colonne de la table originale (elle sera suffixée)
-              const firstCol = originalTable.tableColumns && originalTable.tableColumns.length > 0 
-                ? originalTable.tableColumns[0] 
-                : null;
-              if (firstCol && firstCol.name) {
-                const baseName = String(firstCol.name);
-                const isNumericName = /^-?\d+(\.\d+)?$/.test(baseName.trim());
-                const shouldSuffix = baseName.length > 0 && !isNumericName && !baseName.endsWith(suffix);
-                const result = shouldSuffix ? `${baseName}${suffix}` : baseName;
-                return result;
-              }
-              return null;
-            })(),
-            displayRow: originalSelectConfig.displayRow
-              ? `${originalSelectConfig.displayRow}${suffix}` 
-              : null,
+            keyColumn: originalSelectConfig.keyColumn || null,
+
+
+            keyRow: originalSelectConfig.keyRow || null,
+
+
+            valueColumn: originalSelectConfig.valueColumn || null,
+
+
+            valueRow: originalSelectConfig.valueRow || null,
+
+
+            // 🛑 FIX: NE PAS suffixer displayColumn — noms de colonnes Excel
+            displayColumn: originalSelectConfig.displayColumn || null,
+            // 🛑 FIX: NE PAS suffixer displayRow — noms de lignes Excel
+            displayRow: originalSelectConfig.displayRow || null,
             // 🔧 FIX 07/01/2026: Copier TOUS les autres champs du SelectConfig original
             options: originalSelectConfig.options,
             multiple: originalSelectConfig.multiple,
@@ -467,19 +404,8 @@ export class TableLookupDuplicationService {
             if (currentMetadata.lookup.tableRef) {
               currentMetadata.lookup.tableRef = copiedTableId;
             }
-            // Suffixer displayColumn (peut être string ou array)
-            if (currentMetadata.lookup.displayColumn) {
-              if (Array.isArray(currentMetadata.lookup.displayColumn)) {
-                currentMetadata.lookup.displayColumn = currentMetadata.lookup.displayColumn.map((col: string) => 
-                  col && !col.endsWith(suffix) ? `${col}${suffix}` : col
-                );
-              } else if (typeof currentMetadata.lookup.displayColumn === 'string') {
-                const val = currentMetadata.lookup.displayColumn;
-                if (!val.endsWith(suffix)) {
-                  currentMetadata.lookup.displayColumn = `${val}${suffix}`;
-                }
-              }
-            }
+            // 🛑 FIX: NE PAS suffixer displayColumn — ce sont des noms de colonnes Excel (ex: "Prix", "MODELE")
+            // Les noms de colonnes restent identiques dans la table copiée
           }
 
           if (isTableOwnedByThisNode) {
