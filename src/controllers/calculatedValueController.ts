@@ -217,7 +217,7 @@ router.get('/:nodeId/calculated-value', async (req: Request, res: Response) => {
     // puis fallback vers calculatedValue du nœud source.
     // Cela évite le blocage "isDisplayField" et l'évaluation par operation-interpreter
     // qui ne sait pas résoudre @value.{nodeId} depuis SubmissionData.
-    const isSumTotalNode = typeof nodeId === 'string' && nodeId.endsWith('-sum-total');
+    const isSumTotalNode = typeof nodeId === 'string' && /-sum-total(-\d+)?$/.test(nodeId);
     if (isSumTotalNode) {
       try {
         // Récupérer les formula_tokens du nœud (pas dans le select initial)

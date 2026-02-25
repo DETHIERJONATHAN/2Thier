@@ -766,7 +766,7 @@ export const useTBLBatchData = (
     // Ils ont leur propre logique de visibilité. Le fallback ci-dessous ne doit pas
     // s'appliquer aux sum-total → source car cela cache le Total quand la condition
     // du source est active (ex: Portrait/Paysage cache le source mais PAS le total)
-    if (nodeId.endsWith('-sum-total')) {
+    if (/-sum-total(-\d+)?$/.test(nodeId)) {
       return []; // Pas de conditions héritées pour les sum-total
     }
     

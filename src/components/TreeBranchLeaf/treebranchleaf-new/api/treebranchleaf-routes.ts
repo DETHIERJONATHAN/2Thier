@@ -4497,7 +4497,7 @@ router.delete('/trees/:treeId/nodes/:nodeId', async (req, res) => {
   const extraCandidates = nodesToScan.filter(n => {
         const meta: any = n.metadata || {};
         // ??? PROTECTION: Ne JAMAIS supprimer les nÃƒÂ¯Ã‚Â¿Ã‚Â½uds Total (sum-display-field)
-        if (meta?.isSumDisplayField === true || n.id.endsWith('-sum-total')) {
+        if (meta?.isSumDisplayField === true || /-sum-total(-\d+)?$/.test(n.id)) {
           return false;
         }
         const looksLikeDisplay = !!(meta?.autoCreateDisplayNode || meta?.copiedFromNodeId || meta?.fromVariableId || meta?.sourceTemplateId);
@@ -4963,7 +4963,7 @@ router.delete('/trees/:treeId/nodes/:nodeId', async (req, res) => {
           return false;
         }
         // ??? PROTECTION: Ne JAMAIS supprimer les nÃƒÂ¯Ã‚Â¿Ã‚Â½uds avec ID finissant par -sum-total
-        if (n.id.endsWith('-sum-total')) {
+        if (/-sum-total(-\d+)?$/.test(n.id)) {
           return false;
         }
         try { return containsRemovedId(n.metadata); } catch { return false; }

@@ -1270,7 +1270,7 @@ export async function copyVariableWithCapacities(
                     // 🔴 FIX SUM-TOTAL: Détecter si le nœud est un sum-total
                     // Les sum-total agrègent TOUTES les copies (original + -1),
                     // donc leur formula_tokens doit être copiée telle quelle.
-                    const isSumTotalNode = child.id.endsWith('-sum-total');
+                    const isSumTotalNode = /-sum-total(-\d+)?$/.test(child.id);
 
                     await prisma.treeBranchLeafNode.create({
                       data: {
