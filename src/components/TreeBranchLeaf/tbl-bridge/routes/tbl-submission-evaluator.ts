@@ -13,6 +13,11 @@ import { randomUUID } from 'crypto';
 
 type OperationSourceType = 'condition' | 'formula' | 'table' | 'neutral';
 
+/** 🔥 FIX: Détecte les sum-total nodes incluant les copies (-sum-total-1, -sum-total-2, etc.) */
+function isSumTotalNodeId(nodeId: string): boolean {
+  return /-sum-total(-\d+)?$/.test(nodeId);
+}
+
 interface SubmissionDataEntry {
   id: string;
   submissionId: string;
@@ -1189,7 +1194,7 @@ async function evaluateCapacitiesForSubmission(
   // Les sum-total (ex: e1007de0-...-sum-total) sont dans capacitiesRaw mais pas detectes comme DISPLAY.
   // Sans ca, le tri topologique ne peut pas les ordonner correctement par rapport aux fields qui en dependent.
   for (const cap of capacitiesRaw) {
-    if (cap.nodeId.endsWith('-sum-total')) {
+    if (isSumTotalNodeId(cap.nodeId)) {
       displayCapNodeIds.add(cap.nodeId);
     }
   }
@@ -1202,7 +1207,7 @@ const displayDeps = new Map<string, Set<string>>(); // nodeId → Set<dependsOn>
   // → depth=0 → évaluation AVANT les nœuds de base → valeurs STALE ("one step behind").
   const sumTotalFormulaTokensMap = new Map<string, string[]>();
   {
-    const sumTotalNodeIds = [...displayCapNodeIds].filter(id => id.endsWith('-sum-total'));
+    const sumTotalNodeIds = [...displayCapNodeIds].filter(id => isSumTotalNodeId(id));
     if (sumTotalNodeIds.length > 0) {
       const sumTotalNodes = await prisma.treeBranchLeafNode.findMany({
         where: { id: { in: sumTotalNodeIds } },
@@ -1282,7 +1287,7 @@ const displayDeps = new Map<string, Set<string>>(); // nodeId → Set<dependsOn>
       // 3b. 🔥 FIX R27: Pour les sum-total, extraire les deps depuis formula_tokens du NODE
       // Les sum-total ont des tokens ["@value.nodeId1", "+", "@value.nodeId2", ...]
       // stockés sur le node, PAS dans les tables Formula/Variable.
-      if (displayNodeId.endsWith('-sum-total')) {
+      if (isSumTotalNodeId(displayNodeId)) {
         const sumTokens = sumTotalFormulaTokensMap.get(displayNodeId);
         if (sumTokens) {
           for (const token of sumTokens) {
@@ -1667,7 +1672,7 @@ const displayDeps = new Map<string, Set<string>>(); // nodeId → Set<dependsOn>
       // mais leurs formules existent en DB. Il faut les ajouter pour que
       // e1007de0 -> e1007de0-sum-total -> dfc77f3d fonctionne.
       for (const cap of capacitiesRaw) {
-        if (!cap.nodeId.endsWith('-sum-total')) continue;
+        if (!isSumTotalNodeId(cap.nodeId)) continue;
         const sumTotalNodeId = cap.nodeId;
         // Extraire les references de la formule sum-total
         const sumFormulas = formulasByNodeId.get(sumTotalNodeId) || [];
@@ -1983,7 +1988,7 @@ const displayDeps = new Map<string, Set<string>>(); // nodeId → Set<dependsOn>
     // le forcer dans affectedDisplayFieldIds même si le trigger index ne l'a pas trouvé.
     // Cela couvre les cas où le cache trigger-index est stale ou incomplet.
     for (const cap of capacitiesRaw) {
-      if (!cap.nodeId.endsWith('-sum-total')) continue;
+      if (!isSumTotalNodeId(cap.nodeId)) continue;
       if (affectedDisplayFieldIds.has(cap.nodeId)) continue; // Déjà inclus
       const sumTokens = sumTotalFormulaTokensMap.get(cap.nodeId);
       if (sumTokens) {
@@ -2013,13 +2018,13 @@ const displayDeps = new Map<string, Set<string>>(); // nodeId → Set<dependsOn>
     {
       let forcedCount = 0;
       for (const cap of capacitiesRaw) {
-        if (cap.nodeId.endsWith('-sum-total') && !affectedDisplayFieldIds.has(cap.nodeId)) {
+        if (isSumTotalNodeId(cap.nodeId) && !affectedDisplayFieldIds.has(cap.nodeId)) {
           affectedDisplayFieldIds.add(cap.nodeId);
           forcedCount++;
         }
       }
       if (forcedCount > 0) {
-        // console.log(`🔥 [FIX R29b] ${forcedCount} sum-total forcés dans affectedDisplayFieldIds (total sum-totals: ${[...affectedDisplayFieldIds].filter(id => id.endsWith('-sum-total')).length})`);
+        // console.log(`🔥 [FIX R29b] ${forcedCount} sum-total forcés dans affectedDisplayFieldIds (total sum-totals: ${[...affectedDisplayFieldIds].filter(id => isSumTotalNodeId(id)).length})`);
       }
     }
 
@@ -2106,7 +2111,7 @@ const displayDeps = new Map<string, Set<string>>(); // nodeId → Set<dependsOn>
   // Maintenant: tout est pré-chargé en 0 requêtes supplémentaires (réutilise allTreeNodesForLabels)
   const sumTotalNodeMap = new Map<string, { formula_tokens: unknown; label: string | null; calculatedValue: string | null }>();
   for (const n of allTreeNodesForLabels) {
-    if (n.id.endsWith('-sum-total')) {
+    if (isSumTotalNodeId(n.id)) {
       sumTotalNodeMap.set(n.id, { 
         formula_tokens: n.formula_tokens, 
         label: n.label, 
@@ -2204,7 +2209,7 @@ const displayDeps = new Map<string, Set<string>>(); // nodeId → Set<dependsOn>
       // 🎯 INTERCEPT SUM-TOTAL: Évaluation directe sans passer par evaluateVariableOperation
       // Les champs sum-total ont des formula_tokens ["@value.nodeId1", "+", "@value.nodeId2", ...]
       // On les évalue en sommant directement les valeurs depuis valueMap / SubmissionData
-      const isSumTotalField = capacity.nodeId.endsWith('-sum-total');
+      const isSumTotalField = isSumTotalNodeId(capacity.nodeId);
       if (isSumTotalField) {
         try {
           // 🚀 PERF: Utiliser les données pré-chargées (0 requêtes DB ici!)
