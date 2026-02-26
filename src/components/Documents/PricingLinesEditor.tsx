@@ -6,7 +6,7 @@
  * - Lignes statiques (valeurs manuelles)
  * - Lignes dynamiques (liées à des sources TBL: formules, conditions, calculatedValue)
  * - Lignes répétées (génèrent N lignes selon les instances d'un repeater)
- * - Conditions d'affichage sur chaque ligne
+ * - Conditions d'affichage simples et uniformes sur chaque ligne
  */
 
 import React, { useState, useEffect, useCallback } from 'react';
@@ -33,18 +33,35 @@ import {
   PlusOutlined,
   DeleteOutlined,
   EditOutlined,
-  ThunderboltOutlined,
   LinkOutlined,
   CopyOutlined,
   ArrowUpOutlined,
   ArrowDownOutlined,
   ReloadOutlined,
+  CloseCircleOutlined,
 } from '@ant-design/icons';
 import NodeTreeSelector, { NodeTreeSelectorValue } from '../TreeBranchLeaf/treebranchleaf-new/components/Parameters/shared/NodeTreeSelector';
-import ConditionEditorModal, { ConditionalConfig } from './ConditionEditorModal';
 import { useAuthenticatedApi } from '../../hooks/useAuthenticatedApi';
 
 const { Text } = Typography;
+
+// Opérateurs pour condition simple
+const SIMPLE_OPERATORS = [
+  { value: 'EQUALS', label: '= Égal à' },
+  { value: 'NOT_EQUALS', label: '≠ Différent de' },
+  { value: 'CONTAINS', label: '⊃ Contient' },
+  { value: 'GREATER_THAN', label: '> Supérieur à' },
+  { value: 'LESS_THAN', label: '< Inférieur à' },
+  { value: 'IS_EMPTY', label: '∅ Est vide' },
+  { value: 'IS_NOT_EMPTY', label: '∃ N\'est pas vide' },
+];
+
+// Condition simple: un champ, un opérateur, une valeur
+export interface SimpleCondition {
+  fieldRef: string;      // @value.xxx ou {lead.xxx} etc.
+  operator: string;      // EQUALS, NOT_EQUALS, etc.
+  compareValue?: string;  // Valeur de comparaison (pas requis pour IS_EMPTY/IS_NOT_EMPTY)
+}
 
 // Types pour les lignes de pricing
 export type PricingLineType = 'static' | 'dynamic' | 'repeater';
@@ -60,9 +77,9 @@ export interface PricingLine {
   unitPriceSource?: string;   // Référence TBL pour le prix unitaire
   total?: number | string | null;
   totalSource?: string;       // Référence TBL pour le total
-  repeaterId?: string;        // ID du repeater pour type='repeater'
+  repeaterId?: string;        // ID du repeater (extrait de @repeat.{repeaterId}.xxx)
   repeaterLabel?: string;     // Label du repeater pour affichage
-  condition?: ConditionalConfig;
+  condition?: SimpleCondition; // Condition simple uniforme
   order: number;
 }
 
@@ -75,6 +92,13 @@ interface PricingLinesEditorProps {
 
 // Générer un ID unique
 const generateId = () => `line_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+
+// Extraire le repeaterId depuis une ref @repeat.{repeaterId}.{templateId}
+const extractRepeaterId = (ref?: string): string | undefined => {
+  if (!ref) return undefined;
+  const match = ref.match(/^@repeat\.([^.]+)\./);
+  return match ? match[1] : undefined;
+};
 
 const PricingLinesEditor: React.FC<PricingLinesEditorProps> = ({
   lines = [],
@@ -90,19 +114,18 @@ const PricingLinesEditor: React.FC<PricingLinesEditorProps> = ({
   const [form] = Form.useForm();
   const [selectorOpen, setSelectorOpen] = useState(false);
   const [currentSelectorField, setCurrentSelectorField] = useState<string>('');
-  const [conditionModalOpen, setConditionModalOpen] = useState(false);
-  const [repeaters, setRepeaters] = useState<Array<{ id: string; label: string }>>([]);
-  const [loadingRepeaters, setLoadingRepeaters] = useState(false);
   const [trees, setTrees] = useState<Array<{ id: string; label: string; nodeId?: string }>>([]);
   const [selectedTreeNodeId, setSelectedTreeNodeId] = useState<string | null>(nodeId || null);
+  // Pour la condition simple — sélecteur TBL pour le champ condition
+  const [conditionSelectorOpen, setConditionSelectorOpen] = useState(false);
 
-  // ✅ useWatch pour déclencher les re-renders quand les valeurs de formulaire changent
-  // (form.getFieldValue ne déclenche PAS de re-render → champs conditionnels invisibles)
+  // ✅ useWatch pour déclencher les re-renders
   const watchedType = Form.useWatch('type', form);
   const watchedLabelSource = Form.useWatch('labelSource', form);
   const watchedQuantitySource = Form.useWatch('quantitySource', form);
   const watchedUnitPriceSource = Form.useWatch('unitPriceSource', form);
-  const watchedCondition = Form.useWatch('condition', form);
+  const watchedConditionFieldRef = Form.useWatch(['condition', 'fieldRef'], form);
+  const watchedConditionOperator = Form.useWatch(['condition', 'operator'], form);
 
   // Charger les arbres TBL disponibles
   const loadTrees = useCallback(async () => {
@@ -121,7 +144,6 @@ const PricingLinesEditor: React.FC<PricingLinesEditorProps> = ({
       const filteredTrees = treesWithNodes.filter(t => t.nodeId);
       setTrees(filteredTrees);
       
-      // Sélectionner le premier arbre si pas déjà sélectionné
       if (!selectedTreeNodeId && filteredTrees.length > 0 && filteredTrees[0].nodeId) {
         setSelectedTreeNodeId(filteredTrees[0].nodeId);
       }
@@ -134,31 +156,6 @@ const PricingLinesEditor: React.FC<PricingLinesEditorProps> = ({
     loadTrees();
   }, [loadTrees]);
 
-  // Charger les repeaters disponibles
-  useEffect(() => {
-    const loadRepeaters = async () => {
-      if (!selectedTreeNodeId) return;
-      
-      // Trouver le treeId à partir du nodeId
-      const tree = trees.find(t => t.nodeId === selectedTreeNodeId);
-      if (!tree) return;
-      
-      setLoadingRepeaters(true);
-      try {
-        // Utiliser repeater-nodes pour obtenir les nœuds repeater PARENTS
-        // (fonctionne même si aucune instance n'a encore été créée)
-        const repeaterNodes = await api.get(`/api/treebranchleaf/trees/${tree.id}/repeater-nodes`) as Array<{ id: string; label: string }>;
-        setRepeaters(repeaterNodes);
-      } catch (error) {
-        console.error('Erreur chargement repeaters:', error);
-      } finally {
-        setLoadingRepeaters(false);
-      }
-    };
-    
-    loadRepeaters();
-  }, [selectedTreeNodeId, trees, api]);
-
   // Ouvrir le modal pour nouvelle ligne
   const handleAddLine = (type: PricingLineType) => {
     const newLine: PricingLine = {
@@ -170,7 +167,7 @@ const PricingLinesEditor: React.FC<PricingLinesEditorProps> = ({
       order: lines.length,
     };
     setCurrentLine(newLine);
-    form.setFieldsValue(newLine);
+    form.setFieldsValue({ ...newLine, condition: undefined });
     setEditModalOpen(true);
   };
 
@@ -184,7 +181,6 @@ const PricingLinesEditor: React.FC<PricingLinesEditorProps> = ({
   // Supprimer une ligne
   const handleDeleteLine = (lineId: string) => {
     const newLines = lines.filter(l => l.id !== lineId);
-    // Recalculer les ordres
     newLines.forEach((l, i) => l.order = i);
     onChange(newLines);
   };
@@ -204,10 +200,8 @@ const PricingLinesEditor: React.FC<PricingLinesEditorProps> = ({
   const handleMoveLine = (lineId: string, direction: 'up' | 'down') => {
     const index = lines.findIndex(l => l.id === lineId);
     if (index === -1) return;
-    
     const newIndex = direction === 'up' ? index - 1 : index + 1;
     if (newIndex < 0 || newIndex >= lines.length) return;
-    
     const newLines = [...lines];
     [newLines[index], newLines[newIndex]] = [newLines[newIndex], newLines[index]];
     newLines.forEach((l, i) => l.order = i);
@@ -222,7 +216,7 @@ const PricingLinesEditor: React.FC<PricingLinesEditorProps> = ({
         ...values,
       };
 
-      // Normalisation des champs numériques (InputNumber avec allowClear => null)
+      // Normalisation
       if (updatedLine.quantity === null || updatedLine.quantity === '') {
         delete (updatedLine as any).quantity;
       }
@@ -233,26 +227,36 @@ const PricingLinesEditor: React.FC<PricingLinesEditorProps> = ({
         delete (updatedLine as any).total;
       }
 
-      // ✅ Règle métier: éviter l'incohérence "qté + prix unitaire + total"
-      // Le total est calculé automatiquement côté rendu (PDF/preview). Si une ancienne config
-      // contient `total`/`totalSource`, on le supprime dès qu'on a quantité + prix unitaire.
+      // Extraire repeaterId depuis les refs @repeat.X.Y
+      const repId = extractRepeaterId(updatedLine.labelSource) 
+        || extractRepeaterId(updatedLine.quantitySource) 
+        || extractRepeaterId(updatedLine.unitPriceSource)
+        || updatedLine.repeaterId;
+      if (repId) {
+        updatedLine.repeaterId = repId;
+      }
+
+      // Nettoyage condition vide
+      if (updatedLine.condition && !updatedLine.condition.fieldRef) {
+        delete updatedLine.condition;
+      }
+
+      // Règle métier: total auto quand qté + prix
       const hasQuantity = updatedLine.quantitySource || updatedLine.quantity !== undefined;
       const hasUnitPrice = updatedLine.unitPriceSource || updatedLine.unitPrice !== undefined;
       const hasTotal = updatedLine.totalSource || updatedLine.total !== undefined;
       if (hasQuantity && hasUnitPrice && hasTotal) {
         delete (updatedLine as any).total;
         delete (updatedLine as any).totalSource;
-        message.info('Total supprimé: il est calculé automatiquement (Qté × Prix unitaire).');
+        message.info('Total calculé automatiquement (Qté × Prix unitaire).');
       }
       
       const existingIndex = lines.findIndex(l => l.id === updatedLine.id);
       if (existingIndex >= 0) {
-        // Mise à jour
         const newLines = [...lines];
         newLines[existingIndex] = updatedLine;
         onChange(newLines);
       } else {
-        // Nouvelle ligne
         onChange([...lines, updatedLine]);
       }
       
@@ -273,26 +277,32 @@ const PricingLinesEditor: React.FC<PricingLinesEditorProps> = ({
     const fieldName = currentSelectorField;
     const sourceField = `${fieldName}Source`;
     
+    // Pour les lignes repeater, extraire le label du repeater depuis la ref
+    if (value.ref.startsWith('@repeat.') && value.name) {
+      const parts = value.name.split(' / ');
+      if (parts.length > 0) {
+        form.setFieldsValue({ repeaterLabel: parts[0] });
+      }
+    }
+
     form.setFieldsValue({
       [fieldName]: value.ref,
       [sourceField]: value.ref,
     });
     
     setSelectorOpen(false);
-    // useWatch gère automatiquement le re-render
-    message.success(`Référence TBL ajoutée: ${value.ref}`);
+    message.success(`Référence ajoutée: ${value.name || value.ref}`);
   };
 
-  // Ouvrir l'éditeur de condition
-  const openConditionEditor = () => {
-    setConditionModalOpen(true);
-  };
-
-  // Sauvegarder la condition
-  const handleSaveCondition = (config: ConditionalConfig) => {
-    form.setFieldsValue({ condition: config });
-    setConditionModalOpen(false);
-    message.success('Condition configurée');
+  // Gérer la sélection TBL pour la condition
+  const handleConditionFieldSelect = (value: NodeTreeSelectorValue) => {
+    form.setFieldsValue({ 
+      condition: { 
+        ...form.getFieldValue('condition'),
+        fieldRef: value.ref 
+      } 
+    });
+    setConditionSelectorOpen(false);
   };
 
   // Colonnes du tableau
@@ -328,12 +338,12 @@ const PricingLinesEditor: React.FC<PricingLinesEditorProps> = ({
           <Text>{label || <Text type="secondary">Non défini</Text>}</Text>
           {record.labelSource && (
             <Text type="secondary" style={{ fontSize: 11 }}>
-              🔗 {record.labelSource}
+              {record.labelSource.startsWith('@repeat.') ? '🔁' : '🔗'} {record.labelSource}
             </Text>
           )}
-          {record.repeaterId && (
-            <Text type="secondary" style={{ fontSize: 11 }}>
-              🔁 Repeater: {record.repeaterLabel || record.repeaterId}
+          {record.repeaterLabel && record.type === 'repeater' && (
+            <Text type="secondary" style={{ fontSize: 11, color: '#722ed1' }}>
+              🔁 × N copies de "{record.repeaterLabel}"
             </Text>
           )}
         </Space>
@@ -347,7 +357,9 @@ const PricingLinesEditor: React.FC<PricingLinesEditorProps> = ({
         <Space direction="vertical" size={0}>
           <Text>{qty}</Text>
           {record.quantitySource && (
-            <Text type="secondary" style={{ fontSize: 10 }}>🔗</Text>
+            <Text type="secondary" style={{ fontSize: 10 }}>
+              {record.quantitySource.startsWith('@repeat.') ? '🔁' : '🔗'}
+            </Text>
           )}
         </Space>
       ),
@@ -360,18 +372,20 @@ const PricingLinesEditor: React.FC<PricingLinesEditorProps> = ({
         <Space direction="vertical" size={0}>
           <Text>{typeof price === 'number' ? `${price} €` : price}</Text>
           {record.unitPriceSource && (
-            <Text type="secondary" style={{ fontSize: 10 }}>🔗</Text>
+            <Text type="secondary" style={{ fontSize: 10 }}>
+              {record.unitPriceSource.startsWith('@repeat.') ? '🔁' : '🔗'}
+            </Text>
           )}
         </Space>
       ),
     },
     {
-      title: 'Condition',
+      title: 'Cond.',
       dataIndex: 'condition',
-      width: 80,
-      render: (condition: ConditionalConfig | undefined) => (
-        condition ? (
-          <Badge status="success" text="Active" />
+      width: 60,
+      render: (condition: SimpleCondition | undefined) => (
+        condition?.fieldRef ? (
+          <Badge status="success" text="" />
         ) : (
           <Text type="secondary">-</Text>
         )
@@ -417,6 +431,49 @@ const PricingLinesEditor: React.FC<PricingLinesEditorProps> = ({
     },
   ];
 
+  // Helper: afficher un champ source TBL avec bouton lier/supprimer
+  const renderSourceField = (
+    fieldName: string, 
+    sourceFieldName: string, 
+    sourceValue: string | undefined,
+    placeholder: string,
+    tagColor: string,
+    renderManualInput?: () => React.ReactNode
+  ) => {
+    if (sourceValue) {
+      return (
+        <div style={{ 
+          display: 'flex', alignItems: 'center', gap: 8,
+          padding: '8px 12px', borderRadius: 6,
+          backgroundColor: sourceValue.startsWith('@repeat.') ? '#f5f0ff' : '#f0f9ff',
+          border: `1px solid ${sourceValue.startsWith('@repeat.') ? '#d3adf7' : '#91caff'}`,
+        }}>
+          <Tag color={sourceValue.startsWith('@repeat.') ? 'purple' : tagColor} icon={<LinkOutlined />}>
+            {sourceValue.startsWith('@repeat.') ? 'REPEAT' : 'TBL'}
+          </Tag>
+          <Text code style={{ flex: 1, fontSize: 12 }}>{sourceValue}</Text>
+          <Tooltip title="Supprimer la liaison">
+            <Button size="small" danger icon={<DeleteOutlined />}
+              onClick={() => form.setFieldsValue({ [fieldName]: fieldName === 'label' ? '' : undefined, [sourceFieldName]: undefined })}
+            />
+          </Tooltip>
+        </div>
+      );
+    }
+    return (
+      <Space.Compact style={{ width: '100%' }}>
+        {renderManualInput ? renderManualInput() : (
+          <Form.Item name={fieldName} noStyle>
+            <Input placeholder={placeholder} style={{ flex: 1 }} />
+          </Form.Item>
+        )}
+        <Tooltip title="Lier à une donnée TBL ou Repeat">
+          <Button icon={<LinkOutlined />} onClick={() => openTblSelector(fieldName)} />
+        </Tooltip>
+      </Space.Compact>
+    );
+  };
+
   return (
     <Card 
       title="📊 Configuration des lignes du tableau"
@@ -453,7 +510,6 @@ const PricingLinesEditor: React.FC<PricingLinesEditorProps> = ({
           icon={<ReloadOutlined />} 
           onClick={() => handleAddLine('repeater')}
           style={{ borderColor: '#722ed1', color: '#722ed1' }}
-          disabled={repeaters.length === 0}
         >
           + Ligne Repeater
         </Button>
@@ -497,199 +553,114 @@ const PricingLinesEditor: React.FC<PricingLinesEditorProps> = ({
             <Select disabled>
               <Select.Option value="static">📝 Statique (valeurs manuelles)</Select.Option>
               <Select.Option value="dynamic">🔗 Dynamique (lié à TBL)</Select.Option>
-              <Select.Option value="repeater">🔁 Repeater (génère N lignes)</Select.Option>
+              <Select.Option value="repeater">🔁 Repeater (génère N lignes par copie)</Select.Option>
             </Select>
           </Form.Item>
 
+          {/* Explication pour repeater */}
+          {watchedType === 'repeater' && (
+            <div style={{ 
+              padding: '8px 12px', marginBottom: 16, borderRadius: 6,
+              backgroundColor: '#f5f0ff', border: '1px solid #d3adf7' 
+            }}>
+              <Text style={{ fontSize: 12, color: '#531dab' }}>
+                🔁 Utilisez l'onglet <strong>Repeat</strong> du sélecteur pour lier chaque colonne à un champ template. 
+                Le système génèrera automatiquement une ligne par copie dans le document final.
+              </Text>
+            </div>
+          )}
+
           <Divider orientation="left">Désignation</Divider>
           
-          {/* Libellé avec support TBL */}
           <Form.Item label="Libellé" style={{ marginBottom: 16 }}>
-            {watchedLabelSource ? (
-              // Affichage quand une source TBL est liée
-              <div style={{ 
-                display: 'flex', 
-                alignItems: 'center', 
-                gap: 8,
-                padding: '8px 12px',
-                backgroundColor: '#fff7e6',
-                border: '1px solid #ffd591',
-                borderRadius: 6,
-              }}>
-                <Tag color="orange" icon={<LinkOutlined />}>TBL</Tag>
-                <Text code style={{ flex: 1, fontSize: 12 }}>
-                  {watchedLabelSource}
-                </Text>
-                <Tooltip title="Supprimer la liaison">
-                  <Button 
-                    size="small" 
-                    danger 
-                    icon={<DeleteOutlined />}
-                    onClick={() => {
-                      form.setFieldsValue({ label: '', labelSource: undefined });
-                    }}
-                  />
-                </Tooltip>
-              </div>
-            ) : (
-              // Saisie manuelle ou sélection TBL
-              <Space.Compact style={{ width: '100%' }}>
-                <Form.Item name="label" noStyle>
-                  <Input placeholder="Ex: Travaux d'isolation" style={{ flex: 1 }} />
-                </Form.Item>
-                <Tooltip title="Lier à une donnée TBL (champ, formule, condition...)">
-                  <Button icon={<LinkOutlined />} onClick={() => openTblSelector('label')} />
-                </Tooltip>
-              </Space.Compact>
-            )}
+            {renderSourceField('label', 'labelSource', watchedLabelSource, 'Ex: Travaux d\'isolation', 'orange')}
           </Form.Item>
-          <Form.Item name="labelSource" hidden>
-            <Input />
-          </Form.Item>
-
-          {/* Sélection du repeater pour type='repeater' */}
-          {watchedType === 'repeater' && (
-            <>
-              <Form.Item 
-                name="repeaterId" 
-                label="Repeater source"
-                rules={[{ required: true, message: 'Sélectionnez un repeater' }]}
-              >
-                <Select
-                  placeholder="Sélectionnez le repeater"
-                  loading={loadingRepeaters}
-                  options={repeaters.map(r => ({ value: r.id, label: r.label }))}
-                  onChange={(value) => {
-                    const rep = repeaters.find(r => r.id === value);
-                    form.setFieldsValue({ repeaterLabel: rep?.label });
-                  }}
-                />
-              </Form.Item>
-              <Form.Item name="repeaterLabel" hidden>
-                <Input />
-              </Form.Item>
-            </>
-          )}
+          <Form.Item name="labelSource" hidden><Input /></Form.Item>
+          <Form.Item name="repeaterId" hidden><Input /></Form.Item>
+          <Form.Item name="repeaterLabel" hidden><Input /></Form.Item>
 
           <Divider orientation="left">Valeurs</Divider>
 
           {/* Quantité */}
           <Form.Item label="Quantité" style={{ marginBottom: 16 }}>
-            {watchedQuantitySource ? (
-              // Affichage quand une source TBL est liée
-              <div style={{ 
-                display: 'flex', 
-                alignItems: 'center', 
-                gap: 8,
-                padding: '8px 12px',
-                backgroundColor: '#f0f9ff',
-                border: '1px solid #91caff',
-                borderRadius: 6,
-              }}>
-                <Tag color="blue" icon={<LinkOutlined />}>TBL</Tag>
-                <Text code style={{ flex: 1, fontSize: 12 }}>
-                  {watchedQuantitySource}
-                </Text>
-                <Tooltip title="Supprimer la liaison">
-                  <Button 
-                    size="small" 
-                    danger 
-                    icon={<DeleteOutlined />}
-                    onClick={() => {
-                      form.setFieldsValue({ quantity: undefined, quantitySource: undefined });
-                    }}
-                  />
-                </Tooltip>
-              </div>
-            ) : (
-              // Saisie manuelle ou sélection TBL
-              <Space.Compact>
-                <Form.Item name="quantity" noStyle>
-                  <InputNumber allowClear min={0} placeholder="-" style={{ width: 100 }} />
-                </Form.Item>
-                <Tooltip title="Lier à une donnée TBL (calculatedValue, formule...)">
-                  <Button icon={<LinkOutlined />} onClick={() => openTblSelector('quantity')} />
-                </Tooltip>
-              </Space.Compact>
-            )}
+            {renderSourceField('quantity', 'quantitySource', watchedQuantitySource, '-', 'blue', () => (
+              <Form.Item name="quantity" noStyle>
+                <InputNumber allowClear min={0} placeholder="-" style={{ width: 100 }} />
+              </Form.Item>
+            ))}
           </Form.Item>
-          <Form.Item name="quantitySource" hidden>
-            <Input />
-          </Form.Item>
+          <Form.Item name="quantitySource" hidden><Input /></Form.Item>
           
           {/* Prix unitaire */}
           <Form.Item label="Prix unitaire" style={{ marginBottom: 16 }}>
-            {watchedUnitPriceSource ? (
-              // Affichage quand une source TBL est liée
-              <div style={{ 
-                display: 'flex', 
-                alignItems: 'center', 
-                gap: 8,
-                padding: '8px 12px',
-                backgroundColor: '#f6ffed',
-                border: '1px solid #b7eb8f',
-                borderRadius: 6,
-              }}>
-                <Tag color="green" icon={<LinkOutlined />}>TBL</Tag>
-                <Text code style={{ flex: 1, fontSize: 12 }}>
-                  {watchedUnitPriceSource}
-                </Text>
-                <Tooltip title="Supprimer la liaison">
-                  <Button 
-                    size="small" 
-                    danger 
-                    icon={<DeleteOutlined />}
-                    onClick={() => {
-                      form.setFieldsValue({ unitPrice: undefined, unitPriceSource: undefined });
-                    }}
+            {renderSourceField('unitPrice', 'unitPriceSource', watchedUnitPriceSource, '-', 'green', () => (
+              <Form.Item name="unitPrice" noStyle>
+                <InputNumber allowClear min={0} step={0.01} placeholder="-" style={{ width: 120 }} addonAfter="€" />
+              </Form.Item>
+            ))}
+          </Form.Item>
+          <Form.Item name="unitPriceSource" hidden><Input /></Form.Item>
+
+          {/* ── Condition simple uniforme ── */}
+          <Divider orientation="left">Condition d'affichage (optionnel)</Divider>
+
+          <div style={{ 
+            padding: '12px', borderRadius: 6,
+            backgroundColor: watchedConditionFieldRef ? '#f6ffed' : '#fafafa',
+            border: `1px solid ${watchedConditionFieldRef ? '#b7eb8f' : '#d9d9d9'}`,
+          }}>
+            {/* Champ de la condition */}
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 8 }}>
+              <Text style={{ fontSize: 12, whiteSpace: 'nowrap' }}>SI</Text>
+              <Form.Item name={['condition', 'fieldRef']} noStyle>
+                <Input 
+                  readOnly 
+                  placeholder="Champ TBL..."
+                  style={{ flex: 1, cursor: 'pointer' }}
+                  onClick={() => setConditionSelectorOpen(true)}
+                />
+              </Form.Item>
+              <Tooltip title="Sélectionner un champ">
+                <Button size="small" icon={<LinkOutlined />} onClick={() => setConditionSelectorOpen(true)} />
+              </Tooltip>
+              {watchedConditionFieldRef && (
+                <Tooltip title="Supprimer la condition">
+                  <Button size="small" danger icon={<CloseCircleOutlined />} 
+                    onClick={() => form.setFieldsValue({ condition: { fieldRef: undefined, operator: undefined, compareValue: undefined } })} 
                   />
                 </Tooltip>
-              </div>
-            ) : (
-              // Saisie manuelle ou sélection TBL
-              <Space.Compact>
-                <Form.Item name="unitPrice" noStyle>
-                  <InputNumber 
-                    allowClear
-                    min={0} 
-                    step={0.01} 
-                    placeholder="-"
-                    style={{ width: 120 }} 
-                    addonAfter="€"
-                  />
+              )}
+            </div>
+
+            {/* Opérateur + valeur */}
+            {watchedConditionFieldRef && (
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                <Form.Item name={['condition', 'operator']} noStyle initialValue="EQUALS">
+                  <Select style={{ width: 160 }} placeholder="Opérateur">
+                    {SIMPLE_OPERATORS.map(op => (
+                      <Select.Option key={op.value} value={op.value}>{op.label}</Select.Option>
+                    ))}
+                  </Select>
                 </Form.Item>
-                <Tooltip title="Lier à une donnée TBL (formule, condition, calculatedValue...)">
-                  <Button icon={<LinkOutlined />} onClick={() => openTblSelector('unitPrice')} />
-                </Tooltip>
-              </Space.Compact>
+                {watchedConditionOperator && !['IS_EMPTY', 'IS_NOT_EMPTY'].includes(watchedConditionOperator) && (
+                  <Form.Item name={['condition', 'compareValue']} noStyle>
+                    <Input placeholder="Valeur" style={{ flex: 1 }} />
+                  </Form.Item>
+                )}
+                <Text style={{ fontSize: 11, color: '#8c8c8c', whiteSpace: 'nowrap' }}>→ afficher</Text>
+              </div>
             )}
-          </Form.Item>
-          <Form.Item name="unitPriceSource" hidden>
-            <Input />
-          </Form.Item>
 
-          <Divider orientation="left">Condition d'affichage</Divider>
-
-          <Form.Item name="condition" label="Condition">
-            <Space>
-              <Badge 
-                status={watchedCondition ? 'success' : 'default'} 
-                text={watchedCondition ? 'Condition active' : 'Pas de condition'} 
-              />
-              <Button 
-                icon={<ThunderboltOutlined />} 
-                onClick={openConditionEditor}
-                type={watchedCondition ? 'primary' : 'default'}
-                ghost={!!watchedCondition}
-              >
-                {watchedCondition ? 'Modifier la condition' : 'Ajouter une condition'}
-              </Button>
-            </Space>
-          </Form.Item>
+            {!watchedConditionFieldRef && (
+              <Text type="secondary" style={{ fontSize: 11 }}>
+                La ligne s'affiche toujours. Ajoutez une condition pour l'afficher sous conditions.
+              </Text>
+            )}
+          </div>
         </Form>
       </Modal>
 
-      {/* Sélecteur TBL */}
+      {/* Sélecteur TBL pour les colonnes */}
       {selectedTreeNodeId && (
         <NodeTreeSelector
           open={selectorOpen}
@@ -700,14 +671,14 @@ const PricingLinesEditor: React.FC<PricingLinesEditorProps> = ({
         />
       )}
 
-      {/* Éditeur de conditions */}
+      {/* Sélecteur TBL pour le champ de condition */}
       {selectedTreeNodeId && (
-        <ConditionEditorModal
-          open={conditionModalOpen}
-          onClose={() => setConditionModalOpen(false)}
-          onSave={handleSaveCondition}
-          initialConfig={watchedCondition}
+        <NodeTreeSelector
+          open={conditionSelectorOpen}
+          onClose={() => setConditionSelectorOpen(false)}
+          onSelect={handleConditionFieldSelect}
           nodeId={selectedTreeNodeId}
+          selectionContext="token"
         />
       )}
     </Card>

@@ -1805,7 +1805,7 @@ router.get('/trees/:treeId/nodes', async (req, res) => {
 });
 
 // GET /api/treebranchleaf/trees/:treeId/repeater-fields - Liste des champs rÃƒÆ’Ã‚Â©pÃƒÆ’Ã‚Â©titeurs (instances)
-// GET /api/treebranchleaf/trees/:treeId/repeater-nodes - Liste des nœuds repeater PARENTS (pour config documents)
+// GET /api/treebranchleaf/trees/:treeId/repeater-nodes - Liste des nœuds repeater PARENTS avec leurs template children
 router.get('/trees/:treeId/repeater-nodes', async (req, res) => {
   try {
     const { treeId } = req.params;
@@ -1826,14 +1826,56 @@ router.get('/trees/:treeId/repeater-nodes', async (req, res) => {
       select: {
         id: true,
         label: true,
+        parentId: true,
         repeater_templateNodeIds: true,
+        metadata: true,
       },
     });
 
-    const result = repeaterNodes.map(node => ({
-      id: node.id,
-      label: node.label || 'Repeater sans nom',
-    }));
+    // Collecter tous les templateNodeIds pour un seul fetch DB
+    const allTemplateIds: string[] = [];
+    for (const node of repeaterNodes) {
+      try {
+        // Priorité metadata, fallback colonne
+        const meta = node.metadata as any;
+        const ids = meta?.repeater?.templateNodeIds || (node.repeater_templateNodeIds ? JSON.parse(node.repeater_templateNodeIds) : []);
+        if (Array.isArray(ids)) allTemplateIds.push(...ids);
+      } catch { /* skip parse errors */ }
+    }
+
+    // Fetch tous les template children en une seule requête
+    const templateChildren = allTemplateIds.length > 0
+      ? await prisma.treeBranchLeafNode.findMany({
+          where: { id: { in: allTemplateIds } },
+          select: { id: true, label: true, parentId: true, type: true, subType: true },
+        })
+      : [];
+    const childrenById = new Map(templateChildren.map(c => [c.id, c]));
+
+    const result = repeaterNodes.map(node => {
+      let templateIds: string[] = [];
+      try {
+        const meta = node.metadata as any;
+        templateIds = meta?.repeater?.templateNodeIds || (node.repeater_templateNodeIds ? JSON.parse(node.repeater_templateNodeIds) : []);
+      } catch { /* skip */ }
+
+      const children = templateIds
+        .map(tid => childrenById.get(tid))
+        .filter(Boolean)
+        .map(child => ({
+          id: child!.id,
+          label: child!.label || 'Champ sans nom',
+          type: child!.type,
+          subType: child!.subType,
+        }));
+
+      return {
+        id: node.id,
+        label: node.label || 'Repeater sans nom',
+        parentId: node.parentId,
+        children,
+      };
+    });
 
     res.json(result);
   } catch (error) {

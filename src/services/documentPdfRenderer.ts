@@ -3002,9 +3002,31 @@ export class DocumentPdfRenderer {
 
   /**
    * Évalue une condition d'affichage
+   * Supporte deux formats :
+   * - SimpleCondition: { fieldRef, operator, compareValue } (PricingLinesEditor)
+   * - Legacy rules: { rules: [{ source, operator, value }], operator: 'AND'|'OR' }
    */
   private evaluateCondition(condition: any): boolean {
-    if (!condition || !condition.rules || condition.rules.length === 0) {
+    if (!condition) return true;
+
+    // Format SimpleCondition (PricingLinesEditor)
+    if (condition.fieldRef) {
+      const sourceValue = this.resolveVariable(condition.fieldRef);
+      const compareValue = condition.compareValue;
+      switch (condition.operator) {
+        case 'EQUALS': return String(sourceValue) === String(compareValue);
+        case 'NOT_EQUALS': return String(sourceValue) !== String(compareValue);
+        case 'CONTAINS': return String(sourceValue).includes(String(compareValue || ''));
+        case 'GREATER_THAN': return parseFloat(sourceValue) > parseFloat(compareValue);
+        case 'LESS_THAN': return parseFloat(sourceValue) < parseFloat(compareValue);
+        case 'IS_EMPTY': return !sourceValue || sourceValue === '';
+        case 'IS_NOT_EMPTY': return !!sourceValue && sourceValue !== '';
+        default: return true;
+      }
+    }
+
+    // Format legacy avec rules[]
+    if (!condition.rules || condition.rules.length === 0) {
       return true; // Pas de condition = toujours visible
     }
     
