@@ -49,7 +49,7 @@ const TemplateCard: React.FC<{
         position: 'relative',
         transition: 'all 0.2s ease',
       }}
-      bodyStyle={{ padding: 16 }}
+      styles={{ body: { padding: 16 } }}
     >
       {selected && (
         <CheckCircleFilled 
@@ -120,14 +120,14 @@ const BlankDocumentCard: React.FC<{
         backgroundColor: selected ? '#e6f7ff' : '#fafafa',
         transition: 'all 0.2s ease',
       }}
-      bodyStyle={{ 
+      styles={{ body: { 
         padding: 16, 
         display: 'flex', 
         flexDirection: 'column', 
         alignItems: 'center',
         justifyContent: 'center',
         minHeight: 200,
-      }}
+      } }}
     >
       {selected && (
         <CheckCircleFilled 

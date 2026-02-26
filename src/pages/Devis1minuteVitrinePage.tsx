@@ -92,7 +92,7 @@ const Devis1minuteVitrinePage: React.FC = () => {
           borderRadius: 0,
           marginBottom: '20px'
         }}
-        bodyStyle={{ padding: '30px 16px', textAlign: 'center' }}
+        styles={{ body: { padding: '30px 16px', textAlign: 'center' } }}
       >
         <Space direction="vertical" size="middle" style={{ width: '100%' }}>
           <Title 
@@ -175,12 +175,12 @@ const Devis1minuteVitrinePage: React.FC = () => {
                 height: '100%',
                 minHeight: '110px'
               }}
-              bodyStyle={{ 
+              styles={{ body: { 
                 padding: '16px 8px',
                 display: 'flex',
                 flexDirection: 'column',
                 justifyContent: 'center'
-              }}
+              } }}
             >
               <Text 
                 style={{ 
@@ -221,12 +221,12 @@ const Devis1minuteVitrinePage: React.FC = () => {
                 height: '100%',
                 minHeight: '110px'
               }}
-              bodyStyle={{ 
+              styles={{ body: { 
                 padding: '16px 8px',
                 display: 'flex',
                 flexDirection: 'column',
                 justifyContent: 'center'
-              }}
+              } }}
             >
               <Text 
                 style={{ 
@@ -267,12 +267,12 @@ const Devis1minuteVitrinePage: React.FC = () => {
                 height: '100%',
                 minHeight: '110px'
               }}
-              bodyStyle={{ 
+              styles={{ body: { 
                 padding: '16px 8px',
                 display: 'flex',
                 flexDirection: 'column',
                 justifyContent: 'center'
-              }}
+              } }}
             >
               <Text 
                 style={{ 
@@ -313,12 +313,12 @@ const Devis1minuteVitrinePage: React.FC = () => {
                 height: '100%',
                 minHeight: '110px'
               }}
-              bodyStyle={{ 
+              styles={{ body: { 
                 padding: '16px 8px',
                 display: 'flex',
                 flexDirection: 'column',
                 justifyContent: 'center'
-              }}
+              } }}
             >
               <Text 
                 style={{ 
@@ -414,7 +414,7 @@ const Devis1minuteVitrinePage: React.FC = () => {
                         borderWidth: '2px',
                         borderRadius: '8px'
                       }}
-                      bodyStyle={{ padding: '12px' }}
+                      styles={{ body: { padding: '12px' } }}
                     >
                       <Title 
                         level={5}

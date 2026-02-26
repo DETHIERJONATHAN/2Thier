@@ -243,7 +243,7 @@ const AdvancedSelectProfessional = ({
                 <Card 
                     className="dynamic-field-card"
                     style={{ marginTop: 16 }}
-                    bodyStyle={{ padding: 16 }}
+                    styles={{ body: { padding: 16 } }}
                 >
                     {enrichedOptions
                         .filter(opt => opt.value === selectedOption)

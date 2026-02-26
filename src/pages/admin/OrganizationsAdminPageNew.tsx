@@ -1364,7 +1364,7 @@ const OrganizationsAdminPageNew: React.FC = () => {
         size="small"
         className="shadow-sm"
         style={{ borderRadius: 12 }}
-        bodyStyle={{ padding: 16 }}
+        styles={{ body: { padding: 16 } }}
       >
         <Space direction="vertical" size={16} style={{ width: '100%' }}>
           <div className="flex flex-wrap items-start gap-3 justify-between">
@@ -1516,7 +1516,7 @@ const OrganizationsAdminPageNew: React.FC = () => {
 
         <Row gutter={[16, 16]} style={{ marginBottom: isMobile ? 12 : 24 }}>
           <Col xs={24} sm={12} md={12} lg={6}>
-            <Card bodyStyle={{ padding: isMobile ? 16 : 20 }} style={{ borderRadius: 14 }}>
+            <Card styles={{ body: { padding: isMobile ? 16 : 20 } }} style={{ borderRadius: 14 }}>
               <Statistic
                 title="Total Organisations"
                 value={organizations.length}
@@ -1525,7 +1525,7 @@ const OrganizationsAdminPageNew: React.FC = () => {
             </Card>
           </Col>
           <Col xs={24} sm={12} md={12} lg={6}>
-            <Card bodyStyle={{ padding: isMobile ? 16 : 20 }} style={{ borderRadius: 14 }}>
+            <Card styles={{ body: { padding: isMobile ? 16 : 20 } }} style={{ borderRadius: 14 }}>
               <Statistic
                 title="Organisations Actives"
                 value={organizations.filter(o => o.status === 'ACTIVE').length}
@@ -1534,7 +1534,7 @@ const OrganizationsAdminPageNew: React.FC = () => {
             </Card>
           </Col>
           <Col xs={24} sm={12} md={12} lg={6}>
-            <Card bodyStyle={{ padding: isMobile ? 16 : 20 }} style={{ borderRadius: 14 }}>
+            <Card styles={{ body: { padding: isMobile ? 16 : 20 } }} style={{ borderRadius: 14 }}>
               <Statistic
                 title="Avec Google Workspace"
                 value={organizations.filter(o => o.googleWorkspaceEnabled).length}
@@ -1543,7 +1543,7 @@ const OrganizationsAdminPageNew: React.FC = () => {
             </Card>
           </Col>
           <Col xs={24} sm={12} md={12} lg={6}>
-            <Card bodyStyle={{ padding: isMobile ? 16 : 20 }} style={{ borderRadius: 14 }}>
+            <Card styles={{ body: { padding: isMobile ? 16 : 20 } }} style={{ borderRadius: 14 }}>
               <Statistic
                 title="Total Modules Actifs"
                 value={Object.values(moduleCache).reduce((sum, count) => sum + count, 0)}
@@ -1559,7 +1559,7 @@ const OrganizationsAdminPageNew: React.FC = () => {
             borderRadius: 18,
             boxShadow: isMobile ? 'none' : '0 12px 32px rgba(15, 23, 42, 0.08)'
           }}
-          bodyStyle={{ padding: isMobile ? 16 : 20 }}
+          styles={{ body: { padding: isMobile ? 16 : 20 } }}
         >
           <Row gutter={[12, 12]} align="middle">
             <Col xs={24} md={12} lg={10}>
@@ -1634,7 +1634,7 @@ const OrganizationsAdminPageNew: React.FC = () => {
             </Card>
           )
         ) : (
-          <Card bodyStyle={{ padding: 0 }} style={{ borderRadius: 20, overflow: 'hidden' }}>
+          <Card styles={{ body: { padding: 0 } }} style={{ borderRadius: 20, overflow: 'hidden' }}>
             <Table
               columns={columns}
               dataSource={filteredOrganizations}

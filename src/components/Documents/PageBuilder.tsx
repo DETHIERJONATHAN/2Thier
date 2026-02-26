@@ -912,7 +912,7 @@ const PageBuilder = ({ templateId, initialConfig, onSave, onClose }: PageBuilder
           {!isMobile && (
             <>
               <Tooltip title={gridMode ? 'Mode Liste (vertical)' : 'Mode Grille (libre)'}>
-                <Button.Group>
+                <Space.Compact>
                   <Button 
                     type={gridMode ? 'primary' : 'default'}
                     icon={<AppstoreOutlined />} 
@@ -923,7 +923,7 @@ const PageBuilder = ({ templateId, initialConfig, onSave, onClose }: PageBuilder
                     icon={<UnorderedListOutlined />} 
                     onClick={() => setGridMode(false)}
                   />
-                </Button.Group>
+                </Space.Compact>
               </Tooltip>
 
               {gridMode && (
@@ -1318,7 +1318,7 @@ const PageBuilder = ({ templateId, initialConfig, onSave, onClose }: PageBuilder
 
       {/* Theme Selector Modal - 8 Professional Themes */}
       <ThemeSelectorModal
-        visible={themeSelectorOpen}
+        open={themeSelectorOpen}
         currentThemeId={selectedThemeId}
         onThemeSelected={(theme) => {
           console.log('🎨 [PageBuilder] Theme selected:', theme);

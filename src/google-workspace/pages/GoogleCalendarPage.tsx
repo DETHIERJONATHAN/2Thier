@@ -375,7 +375,7 @@ const GoogleCalendarPage: React.FC = () => {
                     </Space>
                   </div>
                 }
-                bodyStyle={{ padding: 0, height: 'calc(100vh - 400px)' }}
+                styles={{ body: { padding: 0, height: 'calc(100vh - 400px)' } }}
               >
                 <div className="relative w-full h-full">
                   <Spin size="large" spinning={loading} className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-10" />

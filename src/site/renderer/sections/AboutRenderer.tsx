@@ -132,7 +132,7 @@ export const AboutRenderer: React.FC<AboutRendererProps> = ({ content }) => {
                     background: 'transparent',
                     boxShadow: 'none'
                   }}
-                  bodyStyle={{ padding: '24px 16px' }}
+                  styles={{ body: { padding: '24px 16px' } }}
                 >
                   <div style={{ 
                     fontSize: '36px', 

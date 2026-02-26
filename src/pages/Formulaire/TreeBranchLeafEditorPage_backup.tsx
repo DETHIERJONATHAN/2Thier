@@ -705,7 +705,7 @@ const SortableNode: React.FC<SortableNodeProps> = ({
           marginBottom: '8px',
           cursor: isDragging ? 'grabbing' : 'grab',
         }}
-        bodyStyle={{ padding: '8px 12px' }}
+        styles={{ body: { padding: '8px 12px' } }}
       >
         <Row justify="space-between" align="middle">
           <Col flex="auto">

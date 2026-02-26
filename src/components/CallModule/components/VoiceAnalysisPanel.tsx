@@ -314,7 +314,7 @@ export const VoiceAnalysisPanel: React.FC<VoiceAnalysisPanelProps> = ({
                   border: '1px solid #fadb14',
                   borderRadius: 6
                 }}
-                bodyStyle={{ padding: 12 }}
+                styles={{ body: { padding: 12 } }}
               >
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                   <Text style={{ flex: 1, fontSize: 13 }}>

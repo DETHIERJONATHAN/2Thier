@@ -165,7 +165,7 @@ export default function MyCommercialLinks() {
             <Card 
               key={form.id}
               className="hover:shadow-lg transition-shadow"
-              bodyStyle={{ padding: '24px' }}
+              styles={{ body: { padding: '24px' } }}
             >
               <div className="flex items-start justify-between">
                 <div className="flex-1">

@@ -95,8 +95,14 @@ const PricingLinesEditor: React.FC<PricingLinesEditorProps> = ({
   const [loadingRepeaters, setLoadingRepeaters] = useState(false);
   const [trees, setTrees] = useState<Array<{ id: string; label: string; nodeId?: string }>>([]);
   const [selectedTreeNodeId, setSelectedTreeNodeId] = useState<string | null>(nodeId || null);
-  // Force re-render quand une source TBL est sélectionnée
-  const [, forceUpdate] = useState({});
+
+  // ✅ useWatch pour déclencher les re-renders quand les valeurs de formulaire changent
+  // (form.getFieldValue ne déclenche PAS de re-render → champs conditionnels invisibles)
+  const watchedType = Form.useWatch('type', form);
+  const watchedLabelSource = Form.useWatch('labelSource', form);
+  const watchedQuantitySource = Form.useWatch('quantitySource', form);
+  const watchedUnitPriceSource = Form.useWatch('unitPriceSource', form);
+  const watchedCondition = Form.useWatch('condition', form);
 
   // Charger les arbres TBL disponibles
   const loadTrees = useCallback(async () => {
@@ -139,18 +145,10 @@ const PricingLinesEditor: React.FC<PricingLinesEditorProps> = ({
       
       setLoadingRepeaters(true);
       try {
-        const repeatersData = await api.get(`/api/treebranchleaf/trees/${tree.id}/repeater-fields`) as Array<{ id: string; label: string; repeaterLabel: string }>;
-        
-        // Extraire les repeaters uniques
-        const uniqueRepeaters = new Map<string, { id: string; label: string }>();
-        repeatersData.forEach(r => {
-          // Le repeater parent est identifié par son label
-          if (!uniqueRepeaters.has(r.repeaterLabel)) {
-            uniqueRepeaters.set(r.repeaterLabel, { id: r.id.split('::')[0], label: r.repeaterLabel });
-          }
-        });
-        
-        setRepeaters(Array.from(uniqueRepeaters.values()));
+        // Utiliser repeater-nodes pour obtenir les nœuds repeater PARENTS
+        // (fonctionne même si aucune instance n'a encore été créée)
+        const repeaterNodes = await api.get(`/api/treebranchleaf/trees/${tree.id}/repeater-nodes`) as Array<{ id: string; label: string }>;
+        setRepeaters(repeaterNodes);
       } catch (error) {
         console.error('Erreur chargement repeaters:', error);
       } finally {
@@ -281,8 +279,7 @@ const PricingLinesEditor: React.FC<PricingLinesEditorProps> = ({
     });
     
     setSelectorOpen(false);
-    // Forcer le re-render pour afficher le badge TBL
-    forceUpdate({});
+    // useWatch gère automatiquement le re-render
     message.success(`Référence TBL ajoutée: ${value.ref}`);
   };
 
@@ -508,7 +505,7 @@ const PricingLinesEditor: React.FC<PricingLinesEditorProps> = ({
           
           {/* Libellé avec support TBL */}
           <Form.Item label="Libellé" style={{ marginBottom: 16 }}>
-            {form.getFieldValue('labelSource') ? (
+            {watchedLabelSource ? (
               // Affichage quand une source TBL est liée
               <div style={{ 
                 display: 'flex', 
@@ -521,7 +518,7 @@ const PricingLinesEditor: React.FC<PricingLinesEditorProps> = ({
               }}>
                 <Tag color="orange" icon={<LinkOutlined />}>TBL</Tag>
                 <Text code style={{ flex: 1, fontSize: 12 }}>
-                  {form.getFieldValue('labelSource')}
+                  {watchedLabelSource}
                 </Text>
                 <Tooltip title="Supprimer la liaison">
                   <Button 
@@ -530,7 +527,6 @@ const PricingLinesEditor: React.FC<PricingLinesEditorProps> = ({
                     icon={<DeleteOutlined />}
                     onClick={() => {
                       form.setFieldsValue({ label: '', labelSource: undefined });
-                      forceUpdate({});
                     }}
                   />
                 </Tooltip>
@@ -552,7 +548,7 @@ const PricingLinesEditor: React.FC<PricingLinesEditorProps> = ({
           </Form.Item>
 
           {/* Sélection du repeater pour type='repeater' */}
-          {form.getFieldValue('type') === 'repeater' && (
+          {watchedType === 'repeater' && (
             <>
               <Form.Item 
                 name="repeaterId" 
@@ -579,7 +575,7 @@ const PricingLinesEditor: React.FC<PricingLinesEditorProps> = ({
 
           {/* Quantité */}
           <Form.Item label="Quantité" style={{ marginBottom: 16 }}>
-            {form.getFieldValue('quantitySource') ? (
+            {watchedQuantitySource ? (
               // Affichage quand une source TBL est liée
               <div style={{ 
                 display: 'flex', 
@@ -592,7 +588,7 @@ const PricingLinesEditor: React.FC<PricingLinesEditorProps> = ({
               }}>
                 <Tag color="blue" icon={<LinkOutlined />}>TBL</Tag>
                 <Text code style={{ flex: 1, fontSize: 12 }}>
-                  {form.getFieldValue('quantitySource')}
+                  {watchedQuantitySource}
                 </Text>
                 <Tooltip title="Supprimer la liaison">
                   <Button 
@@ -623,7 +619,7 @@ const PricingLinesEditor: React.FC<PricingLinesEditorProps> = ({
           
           {/* Prix unitaire */}
           <Form.Item label="Prix unitaire" style={{ marginBottom: 16 }}>
-            {form.getFieldValue('unitPriceSource') ? (
+            {watchedUnitPriceSource ? (
               // Affichage quand une source TBL est liée
               <div style={{ 
                 display: 'flex', 
@@ -636,7 +632,7 @@ const PricingLinesEditor: React.FC<PricingLinesEditorProps> = ({
               }}>
                 <Tag color="green" icon={<LinkOutlined />}>TBL</Tag>
                 <Text code style={{ flex: 1, fontSize: 12 }}>
-                  {form.getFieldValue('unitPriceSource')}
+                  {watchedUnitPriceSource}
                 </Text>
                 <Tooltip title="Supprimer la liaison">
                   <Button 
@@ -677,16 +673,16 @@ const PricingLinesEditor: React.FC<PricingLinesEditorProps> = ({
           <Form.Item name="condition" label="Condition">
             <Space>
               <Badge 
-                status={form.getFieldValue('condition') ? 'success' : 'default'} 
-                text={form.getFieldValue('condition') ? 'Condition active' : 'Pas de condition'} 
+                status={watchedCondition ? 'success' : 'default'} 
+                text={watchedCondition ? 'Condition active' : 'Pas de condition'} 
               />
               <Button 
                 icon={<ThunderboltOutlined />} 
                 onClick={openConditionEditor}
-                type={form.getFieldValue('condition') ? 'primary' : 'default'}
-                ghost={!!form.getFieldValue('condition')}
+                type={watchedCondition ? 'primary' : 'default'}
+                ghost={!!watchedCondition}
               >
-                {form.getFieldValue('condition') ? 'Modifier la condition' : 'Ajouter une condition'}
+                {watchedCondition ? 'Modifier la condition' : 'Ajouter une condition'}
               </Button>
             </Space>
           </Form.Item>
@@ -710,7 +706,7 @@ const PricingLinesEditor: React.FC<PricingLinesEditorProps> = ({
           open={conditionModalOpen}
           onClose={() => setConditionModalOpen(false)}
           onSave={handleSaveCondition}
-          initialConfig={form.getFieldValue('condition')}
+          initialConfig={watchedCondition}
           nodeId={selectedTreeNodeId}
         />
       )}

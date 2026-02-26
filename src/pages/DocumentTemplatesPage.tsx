@@ -474,7 +474,7 @@ const DocumentTemplatesPage = () => {
             </Button>
           </div>
         }
-        bodyStyle={{ padding: isMobile ? '8px' : '12px' }}
+        styles={{ body: { padding: isMobile ? '8px' : '12px' } }}
       >
         <Tabs defaultActiveKey="templates">
           <TabPane tab="Templates" key="templates">
@@ -665,7 +665,7 @@ const DocumentTemplatesPage = () => {
           loadTemplates();
         }}
         destroyOnClose
-        bodyStyle={{ padding: 0 }}
+        styles={{ body: { padding: 0 } }}
       >
         {editingTemplateId && (
           <DocumentTemplateEditor

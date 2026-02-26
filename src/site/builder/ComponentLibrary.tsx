@@ -178,7 +178,7 @@ export const ComponentLibrary: React.FC<ComponentLibraryProps> = ({ onSelectComp
                 transition: 'all 0.3s ease',
                 cursor: 'pointer'
               }}
-              bodyStyle={{ padding: '16px' }}
+              styles={{ body: { padding: '16px' } }}
             >
               <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px' }}>
                 {/* Icône */}

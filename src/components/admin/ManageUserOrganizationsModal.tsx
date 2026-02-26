@@ -4,19 +4,19 @@ import { useAuthenticatedApi } from '../../hooks/useAuthenticatedApi';
 import { User, Organization } from '../../types';
 
 interface Props {
-  visible: boolean;
+  open: boolean;
   user: User | null;
   onCancel: () => void;
 }
 
-const ManageUserOrganizationsModal: React.FC<Props> = ({ visible, user, onCancel }) => {
+const ManageUserOrganizationsModal: React.FC<Props> = ({ open, user, onCancel }) => {
   const { api } = useAuthenticatedApi();
   const [allOrganizations, setAllOrganizations] = useState<Organization[]>([]);
   const [userOrganizations, setUserOrganizations] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    if (visible && user) {
+    if (open && user) {
       const fetchOrgs = async () => {
         setLoading(true);
         try {
@@ -39,7 +39,7 @@ const ManageUserOrganizationsModal: React.FC<Props> = ({ visible, user, onCancel
       };
       fetchOrgs();
     }
-  }, [visible, user, api]);
+  }, [open, user, api]);
 
   const handleUpdateOrganizations = async () => {
     if (!user) return;
@@ -66,7 +66,7 @@ const ManageUserOrganizationsModal: React.FC<Props> = ({ visible, user, onCancel
   return (
     <Modal
       title={`Gérer les organisations de ${user.firstName} ${user.lastName}`}
-      visible={visible}
+      open={open}
       onCancel={onCancel}
       footer={[
         <Button key="back" onClick={onCancel}>

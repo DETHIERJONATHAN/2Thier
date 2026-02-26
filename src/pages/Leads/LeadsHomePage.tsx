@@ -769,7 +769,7 @@ export default function LeadsHomePage({
       {/*  Barre de recherche et filtres */}
       <Card
         className="mb-4"
-        bodyStyle={{ padding: isMobile ? '16px' : '24px' }}
+        styles={{ body: { padding: isMobile ? '16px' : '24px' } }}
       >
         <Row gutter={[16, 16]} align="middle">
           <Col xs={24} sm={24} md={12} lg={8} xl={6}>
@@ -881,7 +881,7 @@ export default function LeadsHomePage({
           title="⚡ Alertes IA Urgentes" 
           className="mt-4 border-red-500"
           extra={<BellOutlined className="text-red-500" />}
-          bodyStyle={{ padding: isMobile ? '16px' : '24px' }}
+          styles={{ body: { padding: isMobile ? '16px' : '24px' } }}
         >
           <div className="space-y-2">
             {leads

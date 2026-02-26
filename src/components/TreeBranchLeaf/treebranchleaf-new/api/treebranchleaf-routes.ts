@@ -1805,6 +1805,43 @@ router.get('/trees/:treeId/nodes', async (req, res) => {
 });
 
 // GET /api/treebranchleaf/trees/:treeId/repeater-fields - Liste des champs rÃƒÆ’Ã‚Â©pÃƒÆ’Ã‚Â©titeurs (instances)
+// GET /api/treebranchleaf/trees/:treeId/repeater-nodes - Liste des nœuds repeater PARENTS (pour config documents)
+router.get('/trees/:treeId/repeater-nodes', async (req, res) => {
+  try {
+    const { treeId } = req.params;
+    const { organizationId, isSuperAdmin } = getAuthCtx(req as unknown as MinimalReq);
+
+    const treeWhereFilter = isSuperAdmin || !organizationId ? { id: treeId } : { id: treeId, organizationId };
+    const tree = await prisma.treeBranchLeafTree.findFirst({ where: treeWhereFilter });
+    if (!tree) {
+      return res.status(404).json({ error: 'Arbre non trouvé' });
+    }
+
+    // Trouver tous les nœuds qui ont une config repeater (templateNodeIds non null)
+    const repeaterNodes = await prisma.treeBranchLeafNode.findMany({
+      where: {
+        treeId,
+        repeater_templateNodeIds: { not: null },
+      },
+      select: {
+        id: true,
+        label: true,
+        repeater_templateNodeIds: true,
+      },
+    });
+
+    const result = repeaterNodes.map(node => ({
+      id: node.id,
+      label: node.label || 'Repeater sans nom',
+    }));
+
+    res.json(result);
+  } catch (error) {
+    console.error('[TreeBranchLeaf API] Error fetching repeater nodes:', error);
+    res.status(500).json({ error: 'Impossible de récupérer les nœuds repeater' });
+  }
+});
+
 router.get('/trees/:treeId/repeater-fields', async (req, res) => {
   try {
     const { treeId } = req.params;
@@ -15118,13 +15155,14 @@ router.get('/trees/:treeId/calculated-values', async (req, res) => {
       return res.status(404).json({ error: 'Arbre non trouvÃƒÂ¯Ã‚Â¿Ã‚Â½' });
     }
 
-    // 🎯 Récupérer TOUS les nœuds qui ont une capacité (formule, condition, donnée)
+    // 🎯 Récupérer TOUS les nœuds qui ont une capacité (formule, condition, table, donnée)
     const nodesWithCapacity = await prisma.treeBranchLeafNode.findMany({
       where: { 
         treeId,
         OR: [
           { hasFormula: true },      // Nœuds avec formule
           { hasCondition: true },    // Nœuds avec condition
+          { hasTable: true },        // Nœuds avec table (lookup)
           { hasData: true },         // Nœuds avec donnée/variable
           { calculatedValue: { not: null } }  // Nœuds avec valeur pré-calculée
         ]
@@ -15139,6 +15177,7 @@ router.get('/trees/:treeId/calculated-values', async (req, res) => {
         parentId: true,
         hasFormula: true,
         hasCondition: true,
+        hasTable: true,
         hasData: true,
       }
     });
@@ -15170,6 +15209,7 @@ router.get('/trees/:treeId/calculated-values', async (req, res) => {
           const source = evaluation.operationSource || node.calculatedBy || 
             (node.hasFormula ? 'formule' :
              node.hasCondition ? 'condition' :
+             node.hasTable ? 'table' :
              node.hasData ? 'donnée' : 'inconnu');
 
           return {

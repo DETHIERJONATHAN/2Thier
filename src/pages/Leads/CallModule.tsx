@@ -664,7 +664,7 @@ Avez-vous quelques minutes pour échanger à ce sujet ?"
                   </div>
                 }
                 className="border-0 shadow-lg rounded-2xl"
-                bodyStyle={{ padding: 0 }}
+                styles={{ body: { padding: 0 } }}
               >
                 <div style={{ border: '1px solid #e5e7eb', borderRadius: '6px', overflow: 'hidden' }}>
                   {renderTableRow('Nom', displayName, 0)}
@@ -696,7 +696,7 @@ Avez-vous quelques minutes pour échanger à ce sujet ?"
               {/* 🎛️ Centre de contrôle d'appel */}
               <Card 
                 className="border-0 shadow-xl rounded-3xl overflow-hidden"
-                bodyStyle={{ padding: 0 }}
+                styles={{ body: { padding: 0 } }}
               >
                 {/* Header de statut */}
                 <div className={`p-4 text-center transition-all duration-500 ${

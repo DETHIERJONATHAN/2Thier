@@ -582,7 +582,7 @@ export default function LeadDetailModule({ leadId: propLeadId, onClose }: LeadDe
                   <Card
                     title="👤 Coordonnées"
                     className="mb-4"
-                    bodyStyle={{ padding: isMobile ? '16px' : '24px' }}
+                    styles={{ body: { padding: isMobile ? '16px' : '24px' } }}
                   >
                     <Descriptions column={1} bordered size={isMobile ? 'middle' : 'small'}>
                       <Descriptions.Item label="Nom">{displayName || 'N/A'}</Descriptions.Item>
@@ -600,7 +600,7 @@ export default function LeadDetailModule({ leadId: propLeadId, onClose }: LeadDe
                   <Card
                     title="📊 Statut & Suivi"
                     className="mb-4"
-                    bodyStyle={{ padding: isMobile ? '16px' : '24px' }}
+                    styles={{ body: { padding: isMobile ? '16px' : '24px' } }}
                   >
                     <Descriptions column={1} bordered size={isMobile ? 'middle' : 'small'}>
                       <Descriptions.Item label="Statut actuel">
@@ -637,7 +637,7 @@ export default function LeadDetailModule({ leadId: propLeadId, onClose }: LeadDe
             children: (
               <Card 
                 title="📞 Historique des interactions" 
-                bodyStyle={{ padding: isMobile ? '16px' : '24px' }}
+                styles={{ body: { padding: isMobile ? '16px' : '24px' } }}
                 extra={
                   <Button 
                     type="primary" 
@@ -743,7 +743,7 @@ export default function LeadDetailModule({ leadId: propLeadId, onClose }: LeadDe
 
                 <Card 
                   title="📄 Documents attachés" 
-                  bodyStyle={{ padding: isMobile ? '16px' : '24px' }}
+                  styles={{ body: { padding: isMobile ? '16px' : '24px' } }}
                   extra={
                     <Upload 
                       beforeUpload={handleDocumentUpload}
@@ -790,7 +790,7 @@ export default function LeadDetailModule({ leadId: propLeadId, onClose }: LeadDe
             children: (
               <Row gutter={[16, 16]}>
                 <Col xs={24} lg={12}>
-                  <Card title="🤖 Analyse IA du Lead" className="mb-4" bodyStyle={{ padding: isMobile ? '16px' : '24px' }}>
+                  <Card title="🤖 Analyse IA du Lead" className="mb-4" styles={{ body: { padding: isMobile ? '16px' : '24px' } }}>
                     <div className="space-y-3">
                       <div className="bg-blue-50 p-3 rounded">
                         <strong>💡 Opportunité détectée :</strong>
@@ -804,7 +804,7 @@ export default function LeadDetailModule({ leadId: propLeadId, onClose }: LeadDe
                   </Card>
                 </Col>
                 <Col xs={24} lg={12}>
-                  <Card title="🎯 Prochaines actions suggérées" className="mb-4" bodyStyle={{ padding: isMobile ? '16px' : '24px' }}>
+                  <Card title="🎯 Prochaines actions suggérées" className="mb-4" styles={{ body: { padding: isMobile ? '16px' : '24px' } }}>
                     <div className="space-y-2">
                       <Button block type="dashed" icon={<PhoneOutlined />} size={isMobile ? 'large' : 'middle'}>
                         Appeler avant 18h aujourd'hui

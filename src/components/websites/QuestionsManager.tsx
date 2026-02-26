@@ -225,7 +225,7 @@ const OptionsEditor: React.FC<OptionsEditorProps> = ({ value = [], onChange, for
               key={index} 
               size="small" 
               style={{ background: 'white' }}
-              bodyStyle={{ padding: '12px' }}
+              styles={{ body: { padding: '12px' } }}
             >
               {/* Ligne 1: Icône, Label, Valeur */}
               <Row gutter={8} align="middle" style={{ marginBottom: '8px' }}>
@@ -450,7 +450,7 @@ const NavigationEditor: React.FC<NavigationEditorProps> = ({
               key={index} 
               size="small" 
               style={{ background: 'white' }}
-              bodyStyle={{ padding: '8px 12px' }}
+              styles={{ body: { padding: '8px 12px' } }}
             >
               <Row gutter={8} align="middle">
                 <Col span={2}>

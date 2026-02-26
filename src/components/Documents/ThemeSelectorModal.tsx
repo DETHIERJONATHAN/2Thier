@@ -12,7 +12,7 @@ import { ALL_THEMES, DocumentTheme } from './DocumentThemes';
 interface ThemeSelectorProps {
   currentThemeId?: string;
   onThemeSelected: (theme: DocumentTheme) => void;
-  visible: boolean;
+  open: boolean;
   onCancel: () => void;
   title?: string;
 }
@@ -20,7 +20,7 @@ interface ThemeSelectorProps {
 const ThemeSelector: React.FC<ThemeSelectorProps> = ({
   currentThemeId,
   onThemeSelected,
-  visible,
+  open,
   onCancel,
   title = '🎨 Choisir un Thème',
 }) => {
@@ -44,7 +44,7 @@ const ThemeSelector: React.FC<ThemeSelectorProps> = ({
   return (
     <Modal
       title={title}
-      visible={visible}
+      open={open}
       onCancel={onCancel}
       width={1000}
       footer={[

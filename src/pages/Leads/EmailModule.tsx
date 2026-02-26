@@ -331,7 +331,7 @@ export default function EmailModule({ leadId: propLeadId, onClose, autoFillType 
       </Row>
 
       {/* 📋 Informations du lead */}
-      <Card className="mb-6" size="small" bodyStyle={{ padding: isMobile ? '16px' : '24px' }}>
+      <Card className="mb-6" size="small" styles={{ body: { padding: isMobile ? '16px' : '24px' } }}>
         <Row gutter={[16, 12]}>
           <Col xs={24} md={12}>
             <Text strong>Nom:</Text> {lead.data?.name}<br/>
@@ -345,7 +345,7 @@ export default function EmailModule({ leadId: propLeadId, onClose, autoFillType 
       </Card>
 
       {/* 🎨 Templates d'email */}
-      <Card title="📝 Templates d'email" className="mb-6" size="small" bodyStyle={{ padding: isMobile ? '16px' : '24px' }}>
+      <Card title="📝 Templates d'email" className="mb-6" size="small" styles={{ body: { padding: isMobile ? '16px' : '24px' } }}>
         <Row gutter={[8, 8]}>
           {emailTemplates.map(template => (
             <Col key={template.id} xs={12} sm={8} md={6} lg={6}>
@@ -363,7 +363,7 @@ export default function EmailModule({ leadId: propLeadId, onClose, autoFillType 
       </Card>
 
       {/* 🤖 Actions IA */}
-      <Card title="🤖 Génération IA" className="mb-6" size="small" bodyStyle={{ padding: isMobile ? '16px' : '24px' }}>
+      <Card title="🤖 Génération IA" className="mb-6" size="small" styles={{ body: { padding: isMobile ? '16px' : '24px' } }}>
         <Space wrap size={isMobile ? 12 : 16}>
           <Button
             icon={<RobotOutlined />}
@@ -393,7 +393,7 @@ export default function EmailModule({ leadId: propLeadId, onClose, autoFillType 
       </Card>
 
       {/* ✉️ Formulaire d'email */}
-      <Card title="✉️ Composer l'email" bodyStyle={{ padding: isMobile ? '16px' : '24px' }}>
+      <Card title="✉️ Composer l'email" styles={{ body: { padding: isMobile ? '16px' : '24px' } }}>
         <Form
           form={form}
           layout="vertical"
@@ -470,7 +470,7 @@ export default function EmailModule({ leadId: propLeadId, onClose, autoFillType 
       </Card>
 
       {/* 📊 Informations de suivi */}
-      <Card title="📊 Suivi et analytics" size="small" bodyStyle={{ padding: isMobile ? '16px' : '24px' }}>
+      <Card title="📊 Suivi et analytics" size="small" styles={{ body: { padding: isMobile ? '16px' : '24px' } }}>
         <Text type="secondary">
           ✅ Suivi d'ouverture activé<br/>
           ✅ Suivi des clics activé<br/>

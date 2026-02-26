@@ -1494,6 +1494,36 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
             console.log('🗑️ [DELETE COPY GROUP] Fallback 3 (baseId→parent):', repeaterId);
           }
         }
+        
+        // Fallback 3b: Le nœud copié (f.id avec suffixe) est lui-même dans allNodes
+        // → remonter au parent, puis au grand-parent (qui est le repeater)
+        if (!repeaterId) {
+          const copiedNode = allNodes?.find((n: any) => n.id === f.id);
+          if (copiedNode?.parentId) {
+            const parent = allNodes?.find((n: any) => n.id === copiedNode.parentId);
+            if (parent?.type === 'branch_repeater' || parent?.type === 'leaf_repeater') {
+              repeaterId = parent.id;
+              console.log('🗑️ [DELETE COPY GROUP] Fallback 3b (copiedNode→parent):', repeaterId);
+            } else if (parent?.parentId) {
+              // Le parent direct n'est pas un repeater → vérifier le grand-parent
+              const grandParent = allNodes?.find((n: any) => n.id === parent.parentId);
+              if (grandParent?.type === 'branch_repeater' || grandParent?.type === 'leaf_repeater') {
+                repeaterId = grandParent.id;
+                console.log('🗑️ [DELETE COPY GROUP] Fallback 3b (copiedNode→grandParent):', repeaterId);
+              }
+            }
+          }
+        }
+        
+        // Fallback 3c: Chercher dans metadata.repeaterParentId du champ copié dans allNodes
+        if (!repeaterId) {
+          const copiedNode = allNodes?.find((n: any) => n.id === f.id);
+          const meta: any = copiedNode?.metadata || {};
+          if (meta.repeaterParentId) {
+            repeaterId = meta.repeaterParentId;
+            console.log('🗑️ [DELETE COPY GROUP] Fallback 3c (metadata.repeaterParentId):', repeaterId);
+          }
+        }
       }
       
       console.log('🗑️ [DELETE COPY GROUP] repeaterId FINAL=', repeaterId);
@@ -1562,8 +1592,10 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
         return notInCurrentSection;
       });
       
-      // 🔥 FALLBACK AGRESSIF: Rechercher tous les nœuds avec le même suffixe dans tout l'arbre
-      const allNodesWithSameSuffix = (allNodes || []).filter(n => {
+      // 🔥 FALLBACK PAR SUFFIXE: Rechercher les nœuds avec le même suffixe
+      // ⚠️ SCOPE LIMITÉ: Uniquement si repeaterId est connu, sinon le scope est trop large
+      // et détruit les sous-champs d'autres nœuds (ex: Prix onduleur-1 perd ses enfants)
+      const allNodesWithSameSuffix = repeaterId ? (allNodes || []).filter(n => {
         // 🔒 EXCLUSION CRITIQUE: Ne jamais supprimer les champs Total
         if (isTotalFieldCheck(n)) return false;
         
@@ -1573,10 +1605,11 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
         const meta: any = n.metadata || {};
         const isCopy = !!(meta.sourceTemplateId || meta.copiedFromNodeId);
         return isCopy;
-      });
+      }) : []; // ⚠️ Si repeaterId inconnu → pas de fallback global (trop destructeur)
       
       dlog('🔍 [DELETE COPY GROUP] Recherche par suffixe:', { 
         suffixToMatch, 
+        repeaterId: repeaterId || 'UNDEFINED (fallback désactivé)',
         fieldsInSameCopy: fieldsInSameCopy.length, 
         fieldsInNewSection: fieldsInNewSection.length,
         allNodesWithSameSuffix: allNodesWithSameSuffix.length 

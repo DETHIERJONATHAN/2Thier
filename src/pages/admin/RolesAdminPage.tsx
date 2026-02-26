@@ -112,7 +112,7 @@ function RoleFormModal({
       centered={!isMobile}
       width={isMobile ? '100%' : 520}
       style={isMobile ? { top: 16 } : undefined}
-      bodyStyle={{ padding: isMobile ? 16 : undefined }}
+      styles={{ body: { padding: isMobile ? 16 : undefined } }}
       footer={
         <Space
           direction={isMobile ? 'vertical' : 'horizontal'}
@@ -360,7 +360,7 @@ function ModulesModal({ role, open, onClose }: { role: Role; open: boolean; onCl
       centered={!isMobile}
       width={isMobile ? '100%' : 720}
       style={isMobile ? { top: 16 } : undefined}
-      bodyStyle={{ padding: isMobile ? 16 : undefined }}
+      styles={{ body: { padding: isMobile ? 16 : undefined } }}
     >
       {error && <Alert type="error" message={error} className="mb-3" />}
       <div className={`flex items-center gap-3 mb-3 ${isMobile ? 'flex-wrap text-sm' : ''}`}>
@@ -673,10 +673,10 @@ export default function RolesAdminPage() {
 
 
       <div className="mb-4 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <Card size={isMobile ? 'small' : 'default'} className="shadow-sm" bodyStyle={{ padding: isMobile ? 16 : 20 }}>
+        <Card size={isMobile ? 'small' : 'default'} className="shadow-sm" styles={{ body: { padding: isMobile ? 16 : 20 } }}>
           <Statistic title="Total Rôles" value={roles.length} prefix={<TagsOutlined />} valueStyle={{ color: '#1890ff' }} />
         </Card>
-        <Card size={isMobile ? 'small' : 'default'} className="shadow-sm" bodyStyle={{ padding: isMobile ? 16 : 20 }}>
+        <Card size={isMobile ? 'small' : 'default'} className="shadow-sm" styles={{ body: { padding: isMobile ? 16 : 20 } }}>
           <Statistic
             title="Rôles Actifs"
             value={roles.filter((r) => !r.isGlobal || r.isActiveForOrg).length}
@@ -684,7 +684,7 @@ export default function RolesAdminPage() {
             valueStyle={{ color: '#52c41a' }}
           />
         </Card>
-        <Card size={isMobile ? 'small' : 'default'} className="shadow-sm" bodyStyle={{ padding: isMobile ? 16 : 20 }}>
+        <Card size={isMobile ? 'small' : 'default'} className="shadow-sm" styles={{ body: { padding: isMobile ? 16 : 20 } }}>
           <Statistic
             title="Rôles Globaux"
             value={roles.filter((r) => r.isGlobal).length}
@@ -692,7 +692,7 @@ export default function RolesAdminPage() {
             valueStyle={{ color: '#722ed1' }}
           />
         </Card>
-        <Card size={isMobile ? 'small' : 'default'} className="shadow-sm" bodyStyle={{ padding: isMobile ? 16 : 20 }}>
+        <Card size={isMobile ? 'small' : 'default'} className="shadow-sm" styles={{ body: { padding: isMobile ? 16 : 20 } }}>
           <Statistic
             title="Organisations"
             value={new Set(roles.filter((r) => r.organization).map((r) => r.organization?.id)).size}
@@ -706,7 +706,7 @@ export default function RolesAdminPage() {
         <Card
           className="mb-4 shadow-sm"
           size="small"
-          bodyStyle={{ padding: isMobile ? 12 : 16 }}
+          styles={{ body: { padding: isMobile ? 12 : 16 } }}
         >
           <Space
             direction={isMobile ? 'vertical' : 'horizontal'}
@@ -732,7 +732,7 @@ export default function RolesAdminPage() {
 
       {error && <Alert type="error" message={error} className="mb-4" />}
 
-      <Card className="shadow-sm" bodyStyle={{ padding: isMobile ? 0 : 24 }}>
+      <Card className="shadow-sm" styles={{ body: { padding: isMobile ? 0 : 24 } }}>
         <div className={isMobile ? 'overflow-x-auto' : undefined}>
           <Table
             rowKey={(r) => r.id}

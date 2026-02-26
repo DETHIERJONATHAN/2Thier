@@ -924,7 +924,7 @@ const SmartCameraMobile: React.FC<SmartCameraMobileProps> = ({
               background: '#1a1a1a',
               border: '2px solid #52c41a'
             }}
-            bodyStyle={{ padding: 8 }}
+            styles={{ body: { padding: 8 } }}
           >
             <div style={{ position: 'relative' }}>
               <Image
@@ -977,13 +977,13 @@ const SmartCameraMobile: React.FC<SmartCameraMobileProps> = ({
               cursor: 'pointer',
               minHeight: 140
             }}
-            bodyStyle={{ 
+            styles={{ body: { 
               padding: 8, 
               height: '100%',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center'
-            }}
+            } }}
             onClick={openGallery}
           >
             <div style={{ textAlign: 'center', color: '#888' }}>

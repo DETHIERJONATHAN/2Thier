@@ -740,13 +740,13 @@ const NodeTreeSelector: React.FC<Props> = ({ nodeId, open, onClose, onSelect, se
                         style={{ 
                           cursor: 'pointer', 
                           backgroundColor: isSelected ? '#1890ff' : undefined,
-                          color: isSelected ? 'white' : undefined,
+                          color: isSelected ? 'white' : 'rgba(0,0,0,0.85)',
                           padding: '8px 12px',
                         }}
                       >
                         <Space>
                           <span>{item.icon}</span>
-                          <Typography.Text style={{ color: isSelected ? 'white' : undefined }}>
+                          <Typography.Text style={{ color: isSelected ? 'white' : 'rgba(0,0,0,0.85)' }}>
                             {item.label}
                           </Typography.Text>
                           <Typography.Text 
@@ -785,13 +785,13 @@ const NodeTreeSelector: React.FC<Props> = ({ nodeId, open, onClose, onSelect, se
                         style={{ 
                           cursor: 'pointer', 
                           backgroundColor: isSelected ? '#52c41a' : undefined,
-                          color: isSelected ? 'white' : undefined,
+                          color: isSelected ? 'white' : 'rgba(0,0,0,0.85)',
                           padding: '8px 12px',
                         }}
                       >
                         <Space>
                           <span>{item.icon}</span>
-                          <Typography.Text style={{ color: isSelected ? 'white' : undefined }}>
+                          <Typography.Text style={{ color: isSelected ? 'white' : 'rgba(0,0,0,0.85)' }}>
                             {item.label}
                           </Typography.Text>
                           <Typography.Text 
@@ -830,13 +830,13 @@ const NodeTreeSelector: React.FC<Props> = ({ nodeId, open, onClose, onSelect, se
                         style={{ 
                           cursor: 'pointer', 
                           backgroundColor: isSelected ? '#722ed1' : undefined,
-                          color: isSelected ? 'white' : undefined,
+                          color: isSelected ? 'white' : 'rgba(0,0,0,0.85)',
                           padding: '8px 12px',
                         }}
                       >
                         <Space>
                           <span>{item.icon}</span>
-                          <Typography.Text style={{ color: isSelected ? 'white' : undefined }}>
+                          <Typography.Text style={{ color: isSelected ? 'white' : 'rgba(0,0,0,0.85)' }}>
                             {item.label}
                           </Typography.Text>
                           <Typography.Text 
@@ -985,13 +985,13 @@ const NodeTreeSelector: React.FC<Props> = ({ nodeId, open, onClose, onSelect, se
                                     return (
                                       <List.Item
                                         onClick={() => toggleValue(`node-formula:${item.id}`, item.name)}
-                                        style={{ cursor: 'pointer', backgroundColor: isSelected ? '#1890ff' : item._isCurrentNode ? '#f0f9ff' : '#fefce8', color: isSelected ? 'white' : 'inherit', transition: 'all 0.2s', padding: '6px 12px' }}
+                                        style={{ cursor: 'pointer', backgroundColor: isSelected ? '#1890ff' : item._isCurrentNode ? '#f0f9ff' : '#fefce8', color: isSelected ? 'white' : 'rgba(0,0,0,0.85)', transition: 'all 0.2s', padding: '6px 12px' }}
                                       >
                                         <Space>
                                           <span>🧮</span>
-                                          <Typography.Text style={{ color: isSelected ? 'white' : 'inherit' }}>{item.name}</Typography.Text>
+                                          <Typography.Text style={{ color: isSelected ? 'white' : 'rgba(0,0,0,0.85)' }}>{item.name}</Typography.Text>
                                           <Typography.Text style={{ fontSize: '10px', fontFamily: 'monospace', color: isSelected ? 'rgba(255,255,255,0.6)' : '#bbb' }}>[{item.id.slice(0, 8)}]</Typography.Text>
-                                          {item._isCurrentNode && <Typography.Text type="secondary" style={{ fontSize: '11px', color: isSelected ? 'rgba(255,255,255,0.7)' : undefined }}>(ce nœud)</Typography.Text>}
+                                          {item._isCurrentNode && <Typography.Text type="secondary" style={{ fontSize: '11px', color: isSelected ? 'rgba(255,255,255,0.7)' : '#999' }}>(ce nœud)</Typography.Text>}
                                           {isSelected && <span>✓</span>}
                                         </Space>
                                       </List.Item>
@@ -1063,13 +1063,13 @@ const NodeTreeSelector: React.FC<Props> = ({ nodeId, open, onClose, onSelect, se
                                     return (
                                       <List.Item
                                         onClick={() => toggleValue(valKey, item.name)}
-                                        style={{ cursor: 'pointer', backgroundColor: isSelected ? '#1890ff' : item._isCurrentNode ? '#f0f8e8' : '#fef3c7', color: isSelected ? 'white' : 'inherit', transition: 'all 0.2s', padding: '6px 12px' }}
+                                        style={{ cursor: 'pointer', backgroundColor: isSelected ? '#1890ff' : item._isCurrentNode ? '#f0f8e8' : '#fef3c7', color: isSelected ? 'white' : 'rgba(0,0,0,0.85)', transition: 'all 0.2s', padding: '6px 12px' }}
                                       >
                                         <Space>
                                           <span>⚡</span>
-                                          <Typography.Text style={{ color: isSelected ? 'white' : 'inherit' }}>{item.name}</Typography.Text>
+                                          <Typography.Text style={{ color: isSelected ? 'white' : 'rgba(0,0,0,0.85)' }}>{item.name}</Typography.Text>
                                           <Typography.Text style={{ fontSize: '10px', fontFamily: 'monospace', color: isSelected ? 'rgba(255,255,255,0.6)' : '#bbb' }}>[{item.id.slice(0, 8)}]</Typography.Text>
-                                          {item._isCurrentNode && <Typography.Text type="secondary" style={{ fontSize: '11px', color: isSelected ? 'rgba(255,255,255,0.7)' : undefined }}>(ce nœud)</Typography.Text>}
+                                          {item._isCurrentNode && <Typography.Text type="secondary" style={{ fontSize: '11px', color: isSelected ? 'rgba(255,255,255,0.7)' : '#999' }}>(ce nœud)</Typography.Text>}
                                           {isSelected && <span>✓</span>}
                                         </Space>
                                       </List.Item>
@@ -1141,13 +1141,13 @@ const NodeTreeSelector: React.FC<Props> = ({ nodeId, open, onClose, onSelect, se
                                     return (
                                       <List.Item
                                         onClick={() => toggleValue(valKey, item.name)}
-                                        style={{ cursor: 'pointer', backgroundColor: isSelected ? '#1890ff' : item._isCurrentNode ? '#e8f4fd' : '#fff4e6', color: isSelected ? 'white' : 'inherit', transition: 'all 0.2s', padding: '6px 12px' }}
+                                        style={{ cursor: 'pointer', backgroundColor: isSelected ? '#1890ff' : item._isCurrentNode ? '#e8f4fd' : '#fff4e6', color: isSelected ? 'white' : 'rgba(0,0,0,0.85)', transition: 'all 0.2s', padding: '6px 12px' }}
                                       >
                                         <Space>
                                           <span>🗂️</span>
-                                          <Typography.Text style={{ color: isSelected ? 'white' : 'inherit' }}>{item.name}</Typography.Text>
+                                          <Typography.Text style={{ color: isSelected ? 'white' : 'rgba(0,0,0,0.85)' }}>{item.name}</Typography.Text>
                                           <Typography.Text style={{ fontSize: '10px', fontFamily: 'monospace', color: isSelected ? 'rgba(255,255,255,0.6)' : '#bbb' }}>[{item.id.slice(0, 8)}]</Typography.Text>
-                                          {item._isCurrentNode && <Typography.Text type="secondary" style={{ fontSize: '11px', color: isSelected ? 'rgba(255,255,255,0.7)' : undefined }}>(ce nœud)</Typography.Text>}
+                                          {item._isCurrentNode && <Typography.Text type="secondary" style={{ fontSize: '11px', color: isSelected ? 'rgba(255,255,255,0.7)' : '#999' }}>(ce nœud)</Typography.Text>}
                                           {isSelected && <span>✓</span>}
                                         </Space>
                                       </List.Item>
@@ -1206,14 +1206,14 @@ const NodeTreeSelector: React.FC<Props> = ({ nodeId, open, onClose, onSelect, se
                             style={{ 
                               cursor: 'pointer', 
                               backgroundColor: isSelected ? '#1890ff' : '#f0f0f0',
-                              color: isSelected ? 'white' : 'inherit',
+                              color: isSelected ? 'white' : 'rgba(0,0,0,0.85)',
                               transition: 'all 0.2s'
                             }}
                           >
                             <Space direction="vertical" size={2} style={{ width: '100%' }}>
                               <Space>
                                 <span>🔁</span>
-                                <Typography.Text strong style={{ color: isSelected ? 'white' : 'inherit' }}>
+                                <Typography.Text strong style={{ color: isSelected ? 'white' : 'rgba(0,0,0,0.85)' }}>
                                   {item.label}
                                 </Typography.Text>
                                 <Typography.Text 
@@ -1318,12 +1318,12 @@ const NodeTreeSelector: React.FC<Props> = ({ nodeId, open, onClose, onSelect, se
                                       return (
                                         <List.Item
                                           onClick={() => toggleValue(`calculated:${item.id}`)}
-                                          style={{ cursor: 'pointer', backgroundColor: isSelected ? '#1890ff' : '#f0fff4', color: isSelected ? 'white' : 'inherit', transition: 'all 0.2s', borderLeft: '3px solid #52c41a', padding: '6px 12px' }}
+                                          style={{ cursor: 'pointer', backgroundColor: isSelected ? '#1890ff' : '#f0fff4', color: isSelected ? 'white' : 'rgba(0,0,0,0.85)', transition: 'all 0.2s', borderLeft: '3px solid #52c41a', padding: '6px 12px' }}
                                         >
                                           <Space direction="vertical" size={2} style={{ width: '100%' }}>
                                             <Space>
                                               <span>{sourceIcon}</span>
-                                              <Typography.Text strong style={{ color: isSelected ? 'white' : 'inherit' }}>{item.label}</Typography.Text>
+                                              <Typography.Text strong style={{ color: isSelected ? 'white' : 'rgba(0,0,0,0.85)' }}>{item.label}</Typography.Text>
                                               <Typography.Text style={{ fontSize: '10px', fontFamily: 'monospace', color: isSelected ? 'rgba(255,255,255,0.6)' : '#bbb' }}>[{item.id.slice(0, 8)}]</Typography.Text>
                                               {item.calculatedValue !== null && (
                                                 <Typography.Text style={{ color: isSelected ? 'rgba(255,255,255,0.9)' : '#52c41a', fontWeight: 'bold' }}>= {item.calculatedValue}</Typography.Text>
@@ -1397,7 +1397,7 @@ const NodeTreeSelector: React.FC<Props> = ({ nodeId, open, onClose, onSelect, se
                             style={{ 
                               cursor: 'pointer', 
                               backgroundColor: isSelected ? '#1890ff' : '#e6f7ff',
-                              color: isSelected ? 'white' : 'inherit',
+                              color: isSelected ? 'white' : 'rgba(0,0,0,0.85)',
                               transition: 'all 0.2s',
                               borderLeft: item.category ? `3px solid ${getCategoryColor(item.category)}` : undefined
                             }}
@@ -1405,7 +1405,7 @@ const NodeTreeSelector: React.FC<Props> = ({ nodeId, open, onClose, onSelect, se
                             <Space direction="vertical" size={2} style={{ width: '100%' }}>
                               <Space>
                                 <span>🔗</span>
-                                <Typography.Text strong style={{ color: isSelected ? 'white' : 'inherit' }}>
+                                <Typography.Text strong style={{ color: isSelected ? 'white' : 'rgba(0,0,0,0.85)' }}>
                                   {item.label}
                                 </Typography.Text>
                                 <Typography.Text 

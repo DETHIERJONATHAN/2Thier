@@ -95,7 +95,7 @@ const SortableSectionCard: React.FC<SortableSectionCardProps> = ({
           background: section.isActive ? 'white' : '#fafafa',
           opacity: section.isActive ? 1 : 0.6
         }}
-        bodyStyle={{ padding: '12px' }}
+        styles={{ body: { padding: '12px' } }}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
           {/* 🎯 DRAG HANDLE */}

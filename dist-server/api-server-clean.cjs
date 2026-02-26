@@ -49471,6 +49471,7 @@ router58.all("/nodes/:nodeId/table/lookup", async (req2, res) => {
       }
     });
     const rawLookup = table.meta && typeof table.meta === "object" && "lookup" in table.meta ? table.meta.lookup : void 0;
+    const lookupFilterConditions = rawLookup?.filterConditions || null;
     const fullMatrix = rows.map((rowLabel, idx) => [rowLabel, ...data[idx] || []]);
     let filters = [];
     if (rawLookup) {
@@ -49576,8 +49577,10 @@ router58.all("/nodes/:nodeId/table/lookup", async (req2, res) => {
           // Sans la ligne d'en-tête
           data: fullMatrixForFilters.slice(1),
           // Données complètes sans l'en-tête
-          type: "columns"
+          type: "columns",
           // Override: données structurées comme un tableau colonnes
+          filterConditions: lookupFilterConditions
+          // 🔥 FIX: alertes/caps/overrides pour le front-end
         });
       }
     }
@@ -49641,6 +49644,8 @@ router58.all("/nodes/:nodeId/table/lookup", async (req2, res) => {
           rows: rows.slice(1).map(String),
           data: fullMatrixForFilters.slice(1),
           type: "columns",
+          filterConditions: lookupFilterConditions,
+          // 🔥 FIX: alertes/caps/overrides pour le front-end
           autoDefault: {
             source: isRowField ? "rowA1" : "columnA",
             keyColumnCandidate: keyColumnValue,

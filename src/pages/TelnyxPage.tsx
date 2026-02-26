@@ -409,7 +409,7 @@ const TelnyxPage: React.FC = () => {
     <Card
       title="📊 Statistiques Telnyx"
       className="mb-4"
-      bodyStyle={{ padding: isMobileView ? 16 : 24 }}
+      styles={{ body: { padding: isMobileView ? 16 : 24 } }}
       bordered={!isMobileView}
       style={isMobileView ? { borderRadius: 14 } : undefined}
     >
@@ -519,7 +519,7 @@ const TelnyxPage: React.FC = () => {
     <Card
       title="🚀 Actions Rapides"
       className="mb-4"
-      bodyStyle={{ padding: isMobileView ? 16 : 24 }}
+      styles={{ body: { padding: isMobileView ? 16 : 24 } }}
       style={isMobileView ? { borderRadius: 14 } : undefined}
     >
       <Row gutter={[12, 12]}>
@@ -567,7 +567,7 @@ const TelnyxPage: React.FC = () => {
       title="🔗 État des Connexions"
       size={isMobileView ? 'default' : 'small'}
       className="mb-4"
-      bodyStyle={{ padding: isMobileView ? 16 : 20 }}
+      styles={{ body: { padding: isMobileView ? 16 : 20 } }}
       style={isMobileView ? { borderRadius: 14 } : undefined}
     >
       <List

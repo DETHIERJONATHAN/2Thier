@@ -345,7 +345,7 @@ export const ArrayFieldEditor: React.FC<ArrayFieldEditorProps> = (props) => {
     <Card
       size="small"
       style={{ backgroundColor: '#f5f5f5' }}
-      bodyStyle={{ padding: 12 }}
+      styles={{ body: { padding: 12 } }}
     >
       {/* Header avec bouton Ajouter */}
       <div style={{ marginBottom: 12 }}>

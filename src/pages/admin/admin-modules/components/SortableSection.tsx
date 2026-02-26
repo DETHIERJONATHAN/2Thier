@@ -95,7 +95,7 @@ const DraggableModuleCard: React.FC<DraggableModuleCardProps> = ({
       <Card
         size="small"
         hoverable
-        bodyStyle={{ padding: 12 }}
+        styles={{ body: { padding: 12 } }}
         className={`group relative overflow-hidden rounded-lg border transition-all duration-300 ${isDragging ? 'shadow-2xl ring-2 ring-blue-500/50 scale-105 z-50' : 'hover:border-gray-200 hover:shadow-md hover:-translate-y-0.5'} bg-white border-gray-200`}
       >
         <div className="p-3">

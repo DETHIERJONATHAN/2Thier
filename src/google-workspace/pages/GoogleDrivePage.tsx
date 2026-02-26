@@ -597,7 +597,7 @@ const GoogleDrivePage: React.FC = () => {
 
       {/* Barre de stockage */}
       {storageInfo && (
-        <Card className="mb-2 md:mb-4" size="small" bodyStyle={{ padding: isMobile ? '8px 12px' : '12px 16px' }}>
+        <Card className="mb-2 md:mb-4" size="small" styles={{ body: { padding: isMobile ? '8px 12px' : '12px 16px' } }}>
           <div className="flex items-center gap-2 md:gap-4 flex-wrap">
             <Text strong className="text-xs md:text-sm">Stockage :</Text>
             <Progress 
@@ -615,7 +615,7 @@ const GoogleDrivePage: React.FC = () => {
       )}
 
       {/* Barre d'outils */}
-      <Card className="mb-2 md:mb-4" size="small" bodyStyle={{ padding: isMobile ? '8px' : '12px 16px' }}>
+      <Card className="mb-2 md:mb-4" size="small" styles={{ body: { padding: isMobile ? '8px' : '12px 16px' } }}>
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-2">
           {/* Navigation */}
           <div className="flex items-center gap-2 overflow-x-auto">
@@ -676,7 +676,7 @@ const GoogleDrivePage: React.FC = () => {
       </Card>
 
       {/* Liste des fichiers ou drives partagés */}
-      <Card className="flex-1 overflow-hidden" bodyStyle={{ padding: isMobile ? '0' : '12px', height: '100%', overflow: 'auto' }}>
+      <Card className="flex-1 overflow-hidden" styles={{ body: { padding: isMobile ? '0' : '12px', height: '100%', overflow: 'auto' } }}>
         {loading ? (
           <div className="flex items-center justify-center h-48 md:h-64">
             <Spin size={isMobile ? 'default' : 'large'} />

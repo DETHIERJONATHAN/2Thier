@@ -897,7 +897,7 @@ const GoogleAgendaPage: React.FC = () => {
             borderRadius: 12,
             boxShadow: isDesktop ? 'none' : '0 8px 24px rgba(0,0,0,0.05)'
           }}
-          bodyStyle={{ padding: isDesktop ? 0 : 8 }}
+          styles={{ body: { padding: isDesktop ? 0 : 8 } }}
         >
           <FullCalendar
             ref={calendarRef}
@@ -926,7 +926,7 @@ const GoogleAgendaPage: React.FC = () => {
         footer={null}
         width={isDesktop ? 700 : '100%'}
         style={!isDesktop ? { top: 0 } : undefined}
-        bodyStyle={!isDesktop ? { padding: 16 } : undefined}
+        styles={{ body: !isDesktop ? { padding: 16 } : undefined }}
         destroyOnHidden
       >
         <Form form={form} layout="vertical" onFinish={handleFormSubmit} initialValues={{ priority: 'medium' }}>
@@ -991,7 +991,7 @@ const GoogleAgendaPage: React.FC = () => {
         confirmLoading={creatingNote}
         width={isDesktop ? 520 : '100%'}
         style={!isDesktop ? { top: 0 } : undefined}
-        bodyStyle={!isDesktop ? { padding: 16 } : undefined}
+        styles={{ body: !isDesktop ? { padding: 16 } : undefined }}
         destroyOnHidden
       >
         <Form form={noteForm} layout="vertical" initialValues={{ priority: 'medium', category: 'general' }} onFinish={handleNoteFinish}>
