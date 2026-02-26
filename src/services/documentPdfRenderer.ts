@@ -2840,7 +2840,7 @@ export class DocumentPdfRenderer {
       // 2. Traiter selon le type de ligne
       if (line.type === 'repeater' && line.repeaterId) {
         // Génère N lignes selon les instances du repeater
-        const repeaterInstances = this.getRepeaterInstances(line.repeaterId, tblData);
+        const repeaterInstances = this.getRepeaterInstances(line.repeaterId, tblData, line);
         
         for (const instance of repeaterInstances) {
           const resolvedLine = this.resolveLineValues(line, instance);
@@ -2857,9 +2857,33 @@ export class DocumentPdfRenderer {
   }
 
   /**
+   * Résout une ref @repeat en remplaçant le templateChildId par templateChildId-suffix
+   * pour obtenir la clé de la copie dans tblData.
+   * Ex: @repeat.{repeaterId}.{templateId} + suffix "1" → @value.{templateId}-1
+   */
+  private resolveRepeatRef(ref: string, suffix: string): string {
+    if (!ref || !ref.startsWith('@repeat.')) return ref;
+    const match = ref.match(/^@repeat\.[^.]+\.(.+)$/);
+    if (!match) return ref;
+    const templateChildId = match[1];
+    // Retourner sous format @value.{templateChildId}-{suffix} pour résolution normale
+    return `@value.${templateChildId}-${suffix}`;
+  }
+
+  /**
    * Résout les valeurs d'une ligne (substitue les tokens TBL)
+   * Pour les repeaters, repeaterInstance.suffix permet de résoudre les refs
+   * @repeat.X.Y en @value.Y-{suffix} avant résolution.
    */
   private resolveLineValues(line: any, repeaterInstance?: any): any {
+    const suffix = repeaterInstance?.suffix;
+    
+    // Helper: résoudre une ref (convertit @repeat si nécessaire)
+    const resolve = (ref: string): string => {
+      const effectiveRef = suffix ? this.resolveRepeatRef(ref, suffix) : ref;
+      return this.resolveVariable(effectiveRef);
+    };
+    
     console.log('📄 [PDF] resolveLineValues:', {
       label: line.label,
       labelSource: line.labelSource,
@@ -2867,6 +2891,7 @@ export class DocumentPdfRenderer {
       quantitySource: line.quantitySource,
       unitPrice: line.unitPrice,
       unitPriceSource: line.unitPriceSource,
+      suffix,
     });
     
     const resolvedLine: { description: string; quantity: number | null; unitPrice: number | null; total: number | null } = {
@@ -2878,8 +2903,8 @@ export class DocumentPdfRenderer {
     
     // Résoudre le label/description
     if (line.labelSource) {
-      const resolved = this.resolveVariable(line.labelSource);
-      console.log(`📄 [PDF] Label résolu: "${resolved}" (source: ${line.labelSource})`);
+      const resolved = resolve(line.labelSource);
+      console.log(`📄 [PDF] Label résolu: "${resolved}" (source: ${line.labelSource}, suffix: ${suffix})`);
       resolvedLine.description = resolved || line.label || 'Non défini';
     } else {
       resolvedLine.description = this.substituteVariables(line.label || '');
@@ -2892,12 +2917,12 @@ export class DocumentPdfRenderer {
     
     // Résoudre la quantité (optionnelle)
     if (line.quantitySource) {
-      const qty = this.resolveVariable(line.quantitySource);
-      console.log(`📄 [PDF] Quantité résolue: "${qty}" (source: ${line.quantitySource})`);
+      const qty = resolve(line.quantitySource);
+      console.log(`📄 [PDF] Quantité résolue: "${qty}" (source: ${line.quantitySource}, suffix: ${suffix})`);
       const n = parseFloat(qty);
       resolvedLine.quantity = Number.isFinite(n) ? n : null;
     } else if (typeof line.quantity === 'string' && line.quantity.startsWith('@')) {
-      const qty = this.resolveVariable(line.quantity);
+      const qty = resolve(line.quantity);
       const n = parseFloat(qty);
       resolvedLine.quantity = Number.isFinite(n) ? n : null;
     } else {
@@ -2911,12 +2936,12 @@ export class DocumentPdfRenderer {
     
     // Résoudre le prix unitaire (optionnel)
     if (line.unitPriceSource) {
-      const price = this.resolveVariable(line.unitPriceSource);
-      console.log(`📄 [PDF] Prix résolu: "${price}" (source: ${line.unitPriceSource})`);
+      const price = resolve(line.unitPriceSource);
+      console.log(`📄 [PDF] Prix résolu: "${price}" (source: ${line.unitPriceSource}, suffix: ${suffix})`);
       const n = parseFloat(price);
       resolvedLine.unitPrice = Number.isFinite(n) ? n : null;
     } else if (typeof line.unitPrice === 'string' && (line.unitPrice.startsWith('@') || line.unitPrice.startsWith('node-formula:') || line.unitPrice.startsWith('condition:'))) {
-      const price = this.resolveVariable(line.unitPrice);
+      const price = resolve(line.unitPrice);
       const n = parseFloat(price);
       resolvedLine.unitPrice = Number.isFinite(n) ? n : null;
     } else {
@@ -2937,11 +2962,11 @@ export class DocumentPdfRenderer {
       // ✅ Règle: on évite le "qté + prix + total" -> total calculé
       resolvedLine.total = (resolvedLine.quantity as number) * (resolvedLine.unitPrice as number);
     } else if (line.totalSource) {
-      const tot = this.resolveVariable(line.totalSource);
+      const tot = resolve(line.totalSource);
       const n = parseFloat(tot);
       resolvedLine.total = Number.isFinite(n) ? n : null;
     } else if (typeof line.total === 'string' && line.total.startsWith('@')) {
-      const tot = this.resolveVariable(line.total);
+      const tot = resolve(line.total);
       const n = parseFloat(tot);
       resolvedLine.total = Number.isFinite(n) ? n : null;
     } else if (line.total !== undefined) {
@@ -2956,47 +2981,56 @@ export class DocumentPdfRenderer {
   }
 
   /**
-   * Récupère les instances d'un repeater depuis les données TBL
+   * Récupère les instances d'un repeater depuis les données TBL.
+   * 
+   * Le repeaterId est l'UUID du noeud repeater PARENT.
+   * La ligne de pricing contient des refs @repeat.{repeaterId}.{templateChildId}.
+   * Dans tblData (= formData du TBL), les copies repeater ont pour clé:
+   *   {templateChildId}-1, {templateChildId}-2, etc.
+   * 
+   * Pour trouver le nombre d'instances, on collecte d'abord tous les templateChildIds
+   * depuis les sources de la ligne, puis on cherche les suffixes dans tblData.
    */
-  private getRepeaterInstances(repeaterId: string, tblData: Record<string, any>): any[] {
-    const instances: any[] = [];
+  private getRepeaterInstances(repeaterId: string, tblData: Record<string, any>, line?: any): any[] {
+    // 1. Collecter tous les templateChildIds depuis les sources de la ligne
+    const templateChildIds = new Set<string>();
+    const sources = [line?.labelSource, line?.quantitySource, line?.unitPriceSource, line?.totalSource];
+    for (const src of sources) {
+      if (typeof src === 'string' && src.startsWith('@repeat.')) {
+        const match = src.match(/^@repeat\.[^.]+\.(.+)$/);
+        if (match) templateChildIds.add(match[1]);
+      }
+    }
     
-    // Chercher les nœuds qui correspondent au repeater
-    // Format typique: nodeId-1, nodeId-2, etc.
-    const repeaterPattern = new RegExp(`^${repeaterId}-\\d+$`);
+    console.log(`📄 [PDF] Repeater ${repeaterId}: templateChildIds trouvés:`, [...templateChildIds]);
     
-    // Parcourir tblData pour trouver les instances
+    // 2. Chercher les suffixes en scannant tblData pour {templateChildId}-N
+    const suffixes = new Set<string>();
+    
+    // Aussi chercher directement par repeaterId-N (ancien format)
     for (const key of Object.keys(tblData)) {
-      if (repeaterPattern.test(key) || key.startsWith(`${repeaterId}-`)) {
-        const instanceNumber = key.split('-').pop();
-        instances.push({
-          id: key,
-          instanceLabel: `#${instanceNumber}`,
-          data: tblData[key],
-        });
+      // Format: {templateChildId}-{suffix}
+      for (const tplId of templateChildIds) {
+        const pattern = new RegExp(`^${tplId.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}-(\\d+)$`);
+        const m = key.match(pattern);
+        if (m) suffixes.add(m[1]);
       }
+      // Format ancien: {repeaterId}-{suffix}
+      const oldPattern = new RegExp(`^${repeaterId.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}-(\\d+)$`);
+      const oldM = key.match(oldPattern);
+      if (oldM) suffixes.add(oldM[1]);
     }
     
-    // Si aucune instance trouvée, chercher dans la structure des submissions
-    if (instances.length === 0 && this.ctx.submission) {
-      const submission = this.ctx.submission as Record<string, any>;
-      const values = submission.values || {};
-      
-      for (const key of Object.keys(values)) {
-        if (key.includes(repeaterId) && key.match(/-\d+$/)) {
-          const instanceNumber = key.split('-').pop();
-          if (!instances.find(i => i.instanceLabel === `#${instanceNumber}`)) {
-            instances.push({
-              id: key,
-              instanceLabel: `#${instanceNumber}`,
-              data: values[key],
-            });
-          }
-        }
-      }
-    }
+    // 3. Construire les instances
+    const sortedSuffixes = [...suffixes].sort((a, b) => parseInt(a) - parseInt(b));
+    const instances = sortedSuffixes.map(suffix => ({
+      id: `${repeaterId}-${suffix}`,
+      suffix,
+      instanceLabel: `#${suffix}`,
+      data: {},  // Les données seront résolues via resolveVariable avec le suffix
+    }));
     
-    console.log(`📄 [PDF] Repeater ${repeaterId}: ${instances.length} instance(s) trouvée(s)`);
+    console.log(`📄 [PDF] Repeater ${repeaterId}: ${instances.length} instance(s) trouvée(s) (suffixes: ${sortedSuffixes.join(', ')})`);
     return instances;
   }
 
@@ -3824,14 +3858,7 @@ export class DocumentPdfRenderer {
     return fallback;
   }
 
-  /**
-   * Évalue une condition d'affichage (legacy - pour sections)
-   */
-  private evaluateCondition(_condition: any): boolean {
-    // TODO: Implémenter l'évaluation des conditions legacy
-    // Pour l'instant, toujours afficher
-    return true;
-  }
+  // evaluateCondition est défini plus haut (ligne ~3009) — supporte SimpleCondition + legacy rules
 
   /**
    * Évalue une seule règle de condition
