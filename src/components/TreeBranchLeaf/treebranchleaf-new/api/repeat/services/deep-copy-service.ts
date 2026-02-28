@@ -1225,60 +1225,22 @@ export async function deepCopyNodeInternal(
 
         if (originalOwnerNode) {
           try {
-            // 🔧 FIX: Résoudre le parentId correctement.
-            // Si le parent est une section FIXE (pas dans toCopy), utiliser le parentId ORIGINAL (non suffixé).
-            // Sinon (parent dans toCopy = template node), suffixer.
-            // Exemple: Materiaux achat → parent = Comptabilité (011357f9) → section fixe → parentId non suffixé.
-            let stubParentId: string | null = null;
-            if (originalOwnerNode.parentId) {
-              if (toCopy.has(originalOwnerNode.parentId)) {
-                // Le parent fait partie de la copie → suffixer
-                stubParentId = appendSuffix(originalOwnerNode.parentId);
-              } else {
-                // Le parent est une section fixe (Comptabilité, etc.) → garder tel quel
-                stubParentId = originalOwnerNode.parentId;
-              }
-            }
-
-            // 🔧 FIX: Copier subType, metadata et les propriétés essentielles du nœud original.
-            // Sans cela, le stub a subType=null et metadata={}, ce qui le rend invisible dans l'UI.
-            const originalMeta = (originalOwnerNode.metadata && typeof originalOwnerNode.metadata === 'object')
-              ? { ...(originalOwnerNode.metadata as Record<string, unknown>) }
-              : {};
-            // Marquer comme auto-créé pour que le système sache qu'il peut le gérer
-            originalMeta.autoCreatedDisplayNode = true;
-
             const createdNode = await prisma.treeBranchLeafNode.create({
               data: {
                 id: tableOwnerNodeId,
                 type: originalOwnerNode.type,
-                subType: originalOwnerNode.subType,
-                label: originalOwnerNode.label ? `${originalOwnerNode.label}${computedLabelSuffix}` : 'Stub',
+                label: originalOwnerNode.label ? `${originalOwnerNode.label}-1` : 'Stub',
                 treeId: originalOwnerNode.treeId,
-                parentId: stubParentId,
-                order: originalOwnerNode.order,
-                hasData: originalOwnerNode.hasData,
-                hasFormula: originalOwnerNode.hasFormula,
-                hasTable: originalOwnerNode.hasTable,
-                hasCondition: originalOwnerNode.hasCondition,
-                fieldType: originalOwnerNode.fieldType,
-                fieldSubType: originalOwnerNode.fieldSubType as any,
-                metadata: originalMeta as any,
+                parentId: originalOwnerNode.parentId ? appendSuffix(originalOwnerNode.parentId) : null,
+                order: 0,
                 createdAt: new Date(),
                 updatedAt: new Date()
               }
             });
             nodeExists = createdNode;
-            if (existingNodeIds) existingNodeIds.add(tableOwnerNodeId);
-          } catch (err: any) {
-            // P2002 = unique constraint → le nœud a été créé entretemps par un autre processus
-            if (err?.code === 'P2002') {
-              nodeExists = { id: tableOwnerNodeId };
-              if (existingNodeIds) existingNodeIds.add(tableOwnerNodeId);
-            } else {
-              console.error(`[DEEP-COPY] ❌ Failed to create stub node: ${err.message}`);
-              throw err;
-            }
+          } catch (err) {
+            console.error(`[DEEP-COPY] ❌ Failed to create stub node: ${err.message}`);
+            throw err; // Propager l'erreur pour arrêter le processus
           }
         }
       }

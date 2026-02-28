@@ -625,58 +625,58 @@ export async function copyVariableWithCapacities(
         // PERF: Skip fallback display node search if pre-loaded data was provided
         if (!originalDisplayNode && preloadedDisplayNode === undefined) {
           // 🔍 IMPORTANT: Pour les variables LIÉES, on cherche le display node
-          // parmi les nœuds ayant la variable dans linkedVariableIds.
-          // On distingue les "template nodes" (leaf_field etc.) des "display nodes" (subType='display').
+          // BUT on EXCLUT tous les nœuds template eux-mêmes (les nœuds qui LIENT la variable)
+          // Sinon on récupère le nœud template comme "display node" ce qui est faux!
           //
-          // 🔧 FIX: L'ancienne logique faisait 2 requêtes identiques puis excluait
-          // TOUS les résultats de la première, obtenant TOUJOURS zéro candidats.
-          // Nouvelle logique: une seule requête, puis filtre en mémoire.
+          // PROBLÈME À ÉVITER:
+          // - Les nœuds template (Inclinaison, Orientation) ont linkedVariableIds contenant la variable
+          // - Ces nœuds SONT eux-mêmes de type leaf_field
+          // - Si on les incluait dans la recherche, on trouverait le template au lieu d'un display node
+          // - Le parent serait alors celui du template (Mesure) au lieu du propriétaire (Nouveau Section)
+          //
+          // SOLUTION:
+          // - Chercher tous les nœuds ayant la variable dans linkedVariableIds
+          // - Les identifier comme "template nodes"
+          // - Les EXCLURE de la recherche du display node
+          // - Chercher seulement les display nodes AUTRES que les templates
           
-          const allLinkedNodes = await prisma.treeBranchLeafNode.findMany({
+          // Les nœuds template sont ceux dans linkedVariableIds du nœud propriétaire
+          const templateNodeIds = await prisma.treeBranchLeafNode.findMany({
             where: {
               linkedVariableIds: {
                 has: originalVar.id
               }
             },
-            select: { ...displayNodeSelect, subType: true }
+            select: { id: true }
           });
           
-          // Filtrer: garder les display nodes (subType='display'), exclure le nœud propriétaire
-          const displayCandidates = allLinkedNodes.filter(n => {
-            // Exclure le nœud propriétaire de la variable (c'est un enfant, pas le display parent)
-            if (originalVar.nodeId && n.id === originalVar.nodeId) return false;
-            // Privilégier les nœuds de type display
-            if (n.subType === 'display') return true;
-            // Aussi accepter les nœuds avec metadata.autoCreatedDisplayNode
-            const meta = n.metadata as Record<string, unknown> | null;
-            if (meta?.autoCreatedDisplayNode) return true;
-            return false;
+          const templateIds = new Set(templateNodeIds.map(t => t.id));
+          
+          const candidates = await prisma.treeBranchLeafNode.findMany({
+            where: {
+              linkedVariableIds: {
+                has: originalVar.id
+              },
+              // ⚠️ CRITICAL: Exclude the template nodes themselves
+              // This ensures we find TRUE display nodes, not the templates
+              id: {
+                notIn: Array.from(templateIds)
+              },
+              ...(originalVar.nodeId
+                ? {
+                    NOT: {
+                      id: originalVar.nodeId
+                    }
+                  }
+                : {})
+            },
+            select: displayNodeSelect,
+            orderBy: {
+              createdAt: 'asc'
+            }
           });
 
-          // Si pas de display candidat, chercher le PARENT du nœud propriétaire
-          // (cas où la variable est sur un enfant du display node, et le display node
-          // ne figure pas dans linkedVariableIds)
-          if (displayCandidates.length === 0 && originalVar.nodeId) {
-            const ownerNode = await prisma.treeBranchLeafNode.findUnique({
-              where: { id: originalVar.nodeId },
-              select: { parentId: true }
-            });
-            if (ownerNode?.parentId) {
-              const parentNode = await prisma.treeBranchLeafNode.findUnique({
-                where: { id: ownerNode.parentId },
-                select: displayNodeSelect
-              });
-              if (parentNode) {
-                const parentMeta = parentNode.metadata as Record<string, unknown> | null;
-                const parentSubType = (parentNode as any).subType;
-                if (parentSubType === 'display' || parentMeta?.autoCreatedDisplayNode) {
-                  originalDisplayNode = parentNode;
-                }
-              }
-            }
-          } else {
-            originalDisplayNode = pickDisplayCandidate(displayCandidates);
-          }
+          originalDisplayNode = pickDisplayCandidate(candidates);
         }
 
         // Display node trouvé ou fallback vers parent du propriétaire
@@ -1273,33 +1273,7 @@ export async function copyVariableWithCapacities(
                       : await prisma.treeBranchLeafNode.findUnique({ where: { id: childCopyId }, select: { id: true } }).then(r => !!r).catch(() => false);
 
                     if (childAlreadyExists) {
-                      // 🔧 FIX: Le nœud existe déjà mais peut être un "stub" cassé
-                      // (créé par deep-copy-service avec subType=null, mauvais parentId, metadata vide).
-                      // On corrige ses propriétés essentielles pour qu'il fonctionne correctement.
-                      try {
-                        const childMeta = (child.metadata && typeof child.metadata === 'object')
-                          ? { ...(child.metadata as Record<string, unknown>) }
-                          : {};
-                        childMeta.autoCreatedDisplayNode = true;
-                        childMeta.duplicatedFromRepeater = true;
-
-                        await prisma.treeBranchLeafNode.update({
-                          where: { id: childCopyId },
-                          data: {
-                            subType: child.subType,
-                            parentId: copyParentId,
-                            metadata: childMeta as any,
-                            hasData: child.hasData,
-                            hasFormula: child.hasFormula,
-                            hasTable: child.hasTable,
-                            hasCondition: child.hasCondition,
-                            label: forceSingleSuffix(child.label),
-                            updatedAt: new Date()
-                          }
-                        });
-                      } catch (_updateErr) {
-                        // Non-bloquant: si l'update échoue, on continue le BFS
-                      }
+                      // Le nœud existe déjà mais ses enfants peuvent manquer → continuer BFS
                       if (existingNodeIds) existingNodeIds.add(childCopyId);
                       bfsQueue.push({ origParentId: child.id, copyParentId: childCopyId });
                       continue;
