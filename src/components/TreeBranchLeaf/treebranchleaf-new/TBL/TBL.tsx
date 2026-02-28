@@ -402,6 +402,15 @@ const TBL: React.FC<TBLProps> = ({
           evaluationMode: 'open'  // 🎯 Forcer recalcul complet des DISPLAY
         });
         leadDraftId = (resp as any)?.submission?.id || null;
+        // 🔥 FIX GRD: Broadcaster les valeurs calculées (DISPLAY fields) pour ce nouveau brouillon
+        // Sans ce broadcast, les DISPLAY fields (GRD, etc.) restent null car le hook
+        // useNodeCalculatedValue bloque le GET quand submissionId change (submissionIdChanged guard)
+        broadcastCalculatedRefresh({
+          reason: 'lead-selection-transfer',
+          evaluatedSubmissionId: leadDraftId,
+          submissionData: (resp as any)?.submission?.TreeBranchLeafSubmissionData,
+          freshlyComputedNodeIds: (resp as any)?.freshlyComputedNodeIds
+        });
       } else {
         const existing = await api.get(`/api/treebranchleaf/submissions?treeId=${effectiveTreeId}&leadId=${selectedLead.id}&status=draft`);
         const draftsArray = Array.isArray(existing) ? existing : (existing as any)?.data || [];
@@ -418,6 +427,13 @@ const TBL: React.FC<TBLProps> = ({
             evaluationMode: 'open'  // 🎯 Forcer recalcul complet des DISPLAY
           });
           leadDraftId = (created as any)?.submission?.id || null;
+          // 🔥 FIX GRD: Broadcaster les valeurs calculées pour le nouveau brouillon
+          broadcastCalculatedRefresh({
+            reason: 'lead-selection-new-draft',
+            evaluatedSubmissionId: leadDraftId,
+            submissionData: (created as any)?.submission?.TreeBranchLeafSubmissionData,
+            freshlyComputedNodeIds: (created as any)?.freshlyComputedNodeIds
+          });
         } else {
           // 🔥 FIX 01/02/2026: Forcer recalcul des DISPLAY fields pour le brouillon existant
           // Quand on sélectionne un lead avec un brouillon existant, les DISPLAY fields
@@ -436,7 +452,8 @@ const TBL: React.FC<TBLProps> = ({
             reason: 'lead-selection-refresh',
             evaluatedSubmissionId: leadDraftId,
             recalcCount: (refreshed as any)?.submission?.TreeBranchLeafSubmissionData?.length,
-            submissionData: (refreshed as any)?.submission?.TreeBranchLeafSubmissionData
+            submissionData: (refreshed as any)?.submission?.TreeBranchLeafSubmissionData,
+            freshlyComputedNodeIds: (refreshed as any)?.freshlyComputedNodeIds
           });
         }
       }
