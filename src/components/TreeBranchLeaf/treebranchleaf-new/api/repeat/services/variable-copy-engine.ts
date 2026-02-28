@@ -1228,7 +1228,6 @@ export async function copyVariableWithCapacities(
             // d'empêcher rewriteReferences de les suffixer aveuglément.
             const childSourceNodeId = originalVar.nodeId;
             if (childSourceNodeId && isFromRepeaterDuplication) {
-              try {
                 // BFS queue: [{originalParentId, copyParentId}]
                 const bfsQueue: Array<{ origParentId: string; copyParentId: string }> = [
                   { origParentId: childSourceNodeId, copyParentId: displayNodeId }
@@ -1237,12 +1236,23 @@ export async function copyVariableWithCapacities(
                 while (bfsQueue.length > 0) {
                   const { origParentId, copyParentId } = bfsQueue.shift()!;
 
-                  const childDisplayNodes = await prisma.treeBranchLeafNode.findMany({
-                    where: { parentId: origParentId },
-                    orderBy: { order: 'asc' }
-                  });
+                  let childDisplayNodes: typeof allNodes = [];
+                  try {
+                    childDisplayNodes = await prisma.treeBranchLeafNode.findMany({
+                      where: { parentId: origParentId },
+                      orderBy: { order: 'asc' }
+                    });
+                  } catch (findErr) {
+                    console.warn(`[VAR-COPY] Erreur recherche enfants de ${origParentId}:`, (findErr as Error).message);
+                    continue;
+                  }
 
                   for (const child of childDisplayNodes) {
+                    // 🔴 FIX ROBUSTESSE: try-catch PER-CHILD pour que l'échec d'un enfant
+                    // ne bloque pas la duplication des autres enfants et petits-enfants.
+                    // Auparavant un seul try-catch englobait TOUT le BFS, ce qui causait
+                    // la perte silencieuse de TOUS les enfants si un seul échouait.
+                    try {
                     const childCopyId = appendSuffixOnce(stripTrailingNumeric(child.id));
 
                     // Toujours ajouter au nodeIdMap pour la réécriture des références
@@ -1272,8 +1282,10 @@ export async function copyVariableWithCapacities(
                     // donc leur formula_tokens doit être copiée telle quelle.
                     const isSumTotalNode = /-sum-total(-\d+)?$/.test(child.id);
 
-                    await prisma.treeBranchLeafNode.create({
-                      data: {
+                    // 🔴 FIX: Utiliser upsert au lieu de create pour éviter les erreurs
+                    // de contrainte unique si un nœud a été partiellement créé par un 
+                    // processus parallèle ou une exécution précédente interrompue.
+                    const childNodeData = {
                         id: childCopyId,
                         treeId: originalOwnerNode.treeId,
                         parentId: copyParentId,
@@ -1281,7 +1293,7 @@ export async function copyVariableWithCapacities(
                         subType: child.subType,
                         label: forceSingleSuffix(child.label),
                         description: child.description,
-                        value: null,
+                        value: null as string | null,
                         order: child.order,
                         isRequired: child.isRequired,
                         isVisible: child.isVisible,
@@ -1294,13 +1306,12 @@ export async function copyVariableWithCapacities(
                         hasLink: child.hasLink ?? false,
                         hasMarkers: child.hasMarkers ?? false,
                         metadata: childMeta as any,
-                        calculatedValue: null,
+                        calculatedValue: null as string | null,
                         fieldType: child.fieldType,
                         fieldSubType: child.fieldSubType as any,
                         field_label: forceSingleSuffix(child.label) as any,
                         subtab: child.subtab as any,
                         subtabs: child.subtabs as any,
-                        // 🔴 FIX: Copier formula_tokens (cruciale pour les sum-total)
                         formula_tokens: child.formula_tokens as any,
                         data_displayFormat: child.data_displayFormat,
                         data_exposedKey: child.data_exposedKey,
@@ -1311,12 +1322,16 @@ export async function copyVariableWithCapacities(
                         appearance_variant: child.appearance_variant,
                         appearance_width: child.appearance_width,
                         appearance_displayIcon: child.appearance_displayIcon,
-                        linkedFormulaIds: [],
-                        linkedConditionIds: [],
-                        linkedVariableIds: [],
-                        linkedTableIds: [],
+                        linkedFormulaIds: [] as string[],
+                        linkedConditionIds: [] as string[],
+                        linkedVariableIds: [] as string[],
+                        linkedTableIds: [] as string[],
                         updatedAt: now,
-                      }
+                    };
+                    await prisma.treeBranchLeafNode.upsert({
+                      where: { id: childCopyId },
+                      update: { parentId: copyParentId, updatedAt: now },
+                      create: childNodeData as any
                     });
                     if (existingNodeIds) existingNodeIds.add(childCopyId);
                     childDisplayNodeIds.push(childCopyId);
@@ -1354,10 +1369,6 @@ export async function copyVariableWithCapacities(
                       try {
                         // 🔴 FIX SUM-TOTAL: Les formules de sum-total ne doivent PAS être
                         // réécrites car elles agrègent TOUTES les copies.
-                        // Ex: ["@value.nodeId", "+", "@value.nodeId-1"] doit rester tel quel.
-                        // Sans ce fix, rewriteJsonReferences transforme:
-                        //   @value.nodeId   → @value.nodeId-1  (FAUX: double -1)
-                        //   @value.nodeId-1 → @value.nodeId-1  (OK mais perd l'original)
                         if (isSumTotalNode) {
                           const newSumFormulaId = `${f.id}-${suffix}`;
                           const formulaIdShort = f.id.substring(0, 8);
@@ -1369,7 +1380,7 @@ export async function copyVariableWithCapacities(
                             update: {
                               nodeId: childCopyId,
                               name: uniqueName,
-                              tokens: f.tokens, // ← Tokens IDENTIQUES à l'original
+                              tokens: f.tokens,
                               updatedAt: new Date()
                             },
                             create: {
@@ -1378,7 +1389,7 @@ export async function copyVariableWithCapacities(
                               organizationId: f.organizationId,
                               name: uniqueName,
                               description: f.description,
-                              tokens: f.tokens, // ← Tokens IDENTIQUES à l'original
+                              tokens: f.tokens,
                               targetProperty: f.targetProperty,
                               constraintMessage: f.constraintMessage,
                               isDefault: f.isDefault,
@@ -1439,14 +1450,20 @@ export async function copyVariableWithCapacities(
                         }
                       }
 
-                      // Vérifier collision avant création
+                      // Vérifier collision avant création — utiliser upsert pour robustesse
                       const varCollision = existingVariableIds
                         ? existingVariableIds.has(newChildVarId)
                         : await prisma.treeBranchLeafNodeVariable.findUnique({ where: { id: newChildVarId } }).then(r => !!r).catch(() => false);
 
                       if (!varCollision) {
-                        await prisma.treeBranchLeafNodeVariable.create({
-                          data: {
+                        await prisma.treeBranchLeafNodeVariable.upsert({
+                          where: { id: newChildVarId },
+                          update: {
+                            nodeId: childCopyId,
+                            sourceRef: newChildSourceRef,
+                            updatedAt: now,
+                          },
+                          create: {
                             id: newChildVarId,
                             nodeId: childCopyId,
                             displayName: forceSingleSuffix(childVar.displayName),
@@ -1490,8 +1507,6 @@ export async function copyVariableWithCapacities(
                     console.log(`[VAR-COPY] ✅ Enfant display node ${child.label} → ${childCopyId} dupliqué`);
 
                     // ── Mettre à jour le champ sum-total de l'enfant ──
-                    // Quand PV marge est dupliqué, son Total doit être recalculé
-                    // pour inclure @value.f95e4dda + @value.f95e4dda-1
                     try {
                       await updateSumDisplayFieldAfterCopyChange(child.id, prisma);
                     } catch (sumErr) {
@@ -1500,11 +1515,16 @@ export async function copyVariableWithCapacities(
 
                     // ── Ajouter enfants au BFS pour traitement récursif ──
                     bfsQueue.push({ origParentId: child.id, copyParentId: childCopyId });
+                    } catch (perChildErr) {
+                      // 🔴 FIX: Erreur per-child ne bloque PAS les autres enfants
+                      console.error(`[VAR-COPY] ⚠️ Erreur duplication enfant ${child.id} (${child.label}) → continue avec les suivants:`, (perChildErr as Error).message);
+                      // Toujours ajouter au BFS même si la création a échoué,
+                      // car les petits-enfants pourraient réussir indépendamment
+                      const childCopyIdFallback = appendSuffixOnce(stripTrailingNumeric(child.id));
+                      bfsQueue.push({ origParentId: child.id, copyParentId: childCopyIdFallback });
+                    }
                   }
                 }
-              } catch (childDupErr) {
-                console.warn(`[VAR-COPY] Erreur duplication enfants du display node ${childSourceNodeId}:`, (childDupErr as Error).message);
-              }
             }
 
           } catch (copyCapErr) {
