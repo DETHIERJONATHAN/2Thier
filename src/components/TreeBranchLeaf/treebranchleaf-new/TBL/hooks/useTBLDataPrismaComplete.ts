@@ -2222,13 +2222,35 @@ export const transformNodesToTBLComplete = (
         } else if (child.type === 'leaf_repeater') {
           // 🔁 C'EST UN RÉPÉTABLE = AJOUTER COMME CHAMP SPÉCIAL
           const repeaterField = transformPrismaNodeToField(child, childrenMap, nodeMap, activeSharedReferences, formData);
-          processedFields.push(assignHierarchyOrder(repeaterField));
-          processedNodeIds.add(child.id); // 🎯 MARQUER COMME TRAITÉ
-          if (verbose()) dlog(`      🔁 Répétable: "${repeaterField.label}" avec metadata.repeater:`, repeaterField.metadata?.repeater);
           
           // 🆕 NOUVELLE LOGIQUE: Distinguer templates vs copies réelles
           const allChildren = childrenMap.get(child.id) || [];
           const templateNodeIds = repeaterField.metadata?.repeater?.templateNodeIds || [];
+          
+          // 🔧 FIX MULTI-ONGLET: Étendre les subTabKeys du repeater pour inclure TOUS les onglets
+          // de ses templates. Sans ça, le repeater n'apparaît que dans son onglet d'origine
+          // (ex: Mesure) et les copies dans d'autres onglets (ex: Devis) n'ont pas de bouton supprimer
+          // car TBL.tsx filtre le repeater hors de section.fields pour les autres onglets.
+          {
+            const repeaterSubTabs = new Set<string>((repeaterField as any).subTabKeys || []);
+            if ((repeaterField as any).subTabKey) repeaterSubTabs.add((repeaterField as any).subTabKey);
+            for (const tid of templateNodeIds) {
+              const templateNode = nodeMap.get(tid);
+              if (templateNode) {
+                const tSubTabs = resolveSubTabAssignments(templateNode, templateNode, nodeMap);
+                tSubTabs.forEach(t => repeaterSubTabs.add(t));
+              }
+            }
+            if (repeaterSubTabs.size > 0) {
+              const expandedSubTabs = Array.from(repeaterSubTabs);
+              (repeaterField as any).subTabKey = expandedSubTabs[0];
+              (repeaterField as any).subTabKeys = expandedSubTabs;
+            }
+          }
+          
+          processedFields.push(assignHierarchyOrder(repeaterField));
+          processedNodeIds.add(child.id); // 🎯 MARQUER COMME TRAITÉ
+          if (verbose()) dlog(`      🔁 Répétable: "${repeaterField.label}" avec metadata.repeater:`, repeaterField.metadata?.repeater, `subTabKeys:`, (repeaterField as any).subTabKeys);
           
           // Séparer templates des copies
           const templates = allChildren.filter(node => templateNodeIds.includes(node.id));
@@ -2563,6 +2585,11 @@ export const useTBLDataPrismaComplete = ({ tree_id, disabled = false, triggerRet
   
   type FetchOptions = { silent?: boolean };
 
+  // 🔧 FIX: Garder en mémoire les IDs récemment supprimés pour empêcher un fetch silent
+  // de les ramener avant que le cleanup serveur ne soit terminé
+  const recentlyDeletedIdsRef = useRef<Set<string>>(new Set());
+  const recentlyDeletedTimerRef = useRef<number | null>(null);
+
   const [tree, setTree] = useState<TBLTree | null>(null);
   const [tabs, setTabs] = useState<TBLTab[]>([]);
   const [fieldsByTab, setFieldsByTab] = useState<Record<string, TBLField[]>>({});
@@ -2640,14 +2667,19 @@ export const useTBLDataPrismaComplete = ({ tree_id, disabled = false, triggerRet
       }
       
       if (response && Array.isArray(response)) {
+        // 🔧 FIX: Filtrer les IDs récemment supprimés pour empêcher
+        // un fetch silent de ramener des display nodes que le serveur n'a pas encore nettoyé
+        const filteredResponse = recentlyDeletedIdsRef.current.size > 0 && silent
+          ? response.filter((n: any) => !recentlyDeletedIdsRef.current.has(n.id))
+          : response;
         // store raw
-        updateRawRef.current(response);
+        updateRawRef.current(filteredResponse);
         if (process.env.NODE_ENV === 'development') {
-          const withDisplayAlways = response.filter(r => r.metadata && typeof r.metadata === 'object' && (r.metadata as any).displayAlways === true);
+          const withDisplayAlways = filteredResponse.filter(r => r.metadata && typeof r.metadata === 'object' && (r.metadata as any).displayAlways === true);
           if (verbose()) console.log('🔎 [TBL Hook - Prisma] fetch nodes with displayAlways', withDisplayAlways.map(n => ({ id: n.id, label: n.label }))); 
         }
         const formData = (typeof window !== 'undefined' && window.TBL_FORM_DATA) || {};
-        const transformedData = transformNodesToTBLComplete(response, formData);
+        const transformedData = transformNodesToTBLComplete(filteredResponse, formData);
         if (verbose()) dlog('🔄 [TBL-PRISMA] Phase 2: Résolution des valeurs dynamiques...');
 
         const resolvedFieldsByTab: Record<string, TBLField[]> = {};
@@ -2657,7 +2689,7 @@ export const useTBLDataPrismaComplete = ({ tree_id, disabled = false, triggerRet
               if (field.needsValueResolution) {
                 try {
                   if (verbose()) dlog(`🔍 [TBL-PRISMA] Résolution valeur pour "${field.label}"`);
-                  const originalNode = response.find(node => node.id === field.id);
+                  const originalNode = filteredResponse.find(node => node.id === field.id);
                   if (originalNode) {
                     const { value: resolvedValue, variableConfig } = await resolveFieldValue(originalNode, api, tree_id);
                     let nextCapabilities = field.capabilities;
@@ -3275,8 +3307,165 @@ export const useTBLDataPrismaComplete = ({ tree_id, disabled = false, triggerRet
         }
 
         const idsToRemove = [...new Set([...(deletedIds || []), ...(deletingIds || [])])];
+        let idsActuallyRemoved = false;
         if (idsToRemove.length > 0) {
-          updateRawRef.current(prev => prev.filter(node => !idsToRemove.includes(node.id)));
+          // 🔧 FIX: Cascade par suffixe + scan des display nodes (comme le hook fixed)
+          const eventRepeaterId = String(detail.nodeId || '');
+          updateRawRef.current(prev => {
+            const removed = new Set(idsToRemove);
+            // Extraire les suffixes des nœuds supprimés
+            const deletedSuffixes = new Set<string>();
+            for (const id of idsToRemove) {
+              const m = String(id).match(/-(\d+)$/);
+              if (m) deletedSuffixes.add(m[1]);
+            }
+            // Cascade: supprimer les enfants dont le parent a été supprimé + même suffixe
+            let cascadeAdded = true;
+            while (cascadeAdded) {
+              cascadeAdded = false;
+              for (const n of prev) {
+                if (removed.has(n.id)) continue;
+                if (n.parentId && removed.has(n.parentId)) {
+                  const nodeSuffix = String(n.id).match(/-(\d+)$/)?.[1];
+                  if (nodeSuffix && deletedSuffixes.has(nodeSuffix)) {
+                    removed.add(n.id);
+                    cascadeAdded = true;
+                  } else if (!nodeSuffix) {
+                    removed.add(n.id);
+                    cascadeAdded = true;
+                  }
+                }
+              }
+            }
+            // 🔧 FIX DISPLAY: Scanner les display/derived nodes avec le même suffixe + même repeater
+            // 🔧 FIX SCOPE: TOUTES les conditions doivent être scopées au repeater courant.
+            // AVANT: meta.copiedFromNodeId/sourceTemplateId/etc. matchaient TOUT nœud copié,
+            // y compris les copies d'AUTRES repeaters → suppression croisée !
+            // APRÈS: on vérifie l'appartenance au repeater via duplicatedFromRepeater/repeaterParentId/repeatScopeId
+            if (eventRepeaterId && deletedSuffixes.size > 0) {
+              // Pré-calculer les templateNodeIds du repeater pour vérification d'appartenance
+              const repeaterNode = prev.find(n => n.id === eventRepeaterId);
+              const repeaterMeta: any = repeaterNode?.metadata || {};
+              const templateIds = new Set<string>([
+                ...(repeaterMeta.repeater?.templateNodeIds || []),
+                ...(() => {
+                  try {
+                    const raw = (repeaterNode as any)?.repeater_templateNodeIds 
+                                || (repeaterNode as any)?.repeaterTemplateNodeIds;
+                    if (raw) return typeof raw === 'string' ? JSON.parse(raw) : (Array.isArray(raw) ? raw : []);
+                  } catch { /* ignore */ }
+                  return [];
+                })()
+              ]);
+              
+              // 🔧 FIX: Étendre templateIds par BFS pour inclure TOUS les descendants
+              // (sous-sections, sous-champs, etc.) — nécessaire pour Toit dont les
+              // display nodes référencent des variables sur des enfants de templates
+              {
+                const bfsQueue = [...templateIds, eventRepeaterId];
+                const bfsVisited = new Set<string>(bfsQueue);
+                while (bfsQueue.length > 0) {
+                  const pid = bfsQueue.shift()!;
+                  for (const n of prev) {
+                    const nId = String(n.id);
+                    if (String(n.parentId) === pid && !bfsVisited.has(nId)) {
+                      const baseId = nId.replace(/-\d+$/, '');
+                      templateIds.add(baseId);
+                      bfsVisited.add(nId);
+                      bfsQueue.push(nId);
+                    }
+                  }
+                }
+              }
+
+              for (const n of prev) {
+                if (removed.has(n.id)) continue;
+                const nodeSuffix = String(n.id).match(/-(\d+)$/)?.[1];
+                if (!nodeSuffix || !deletedSuffixes.has(nodeSuffix)) continue;
+                if (String(n.id).includes('-sum-total')) continue;
+                const meta = ((n as any).metadata || {}) as Record<string, unknown>;
+                
+                // Vérifier que le nœud APPARTIENT au repeater courant
+                const belongsToRepeater = 
+                  meta.duplicatedFromRepeater === eventRepeaterId ||
+                  meta.repeaterParentId === eventRepeaterId ||
+                  meta.repeatScopeId === eventRepeaterId;
+                
+                // Pour les nœuds avec sourceTemplateId/copiedFromNodeId, vérifier que le template
+                // fait partie des templates du repeater courant
+                const baseId = String(n.id).replace(/-\d+$/, '');
+                const templateBelongsToRepeater = templateIds.has(baseId) || 
+                  (meta.sourceTemplateId && templateIds.has(String(meta.sourceTemplateId))) ||
+                  (meta.copiedFromNodeId && templateIds.has(String(meta.copiedFromNodeId)));
+                
+                // Le nœud parent est-il déjà supprimé ? (cascade directe)
+                const parentAlreadyRemoved = n.parentId && removed.has(String(n.parentId));
+
+                if (belongsToRepeater || templateBelongsToRepeater || parentAlreadyRemoved) {
+                  removed.add(n.id);
+                }
+              }
+              
+              // 🔧 FIX DISPLAY V2: Tracer les display nodes via linkedVariableIds → fromVariableId
+              // Les display nodes legacy/actuels peuvent avoir duplicatedFromRepeater: true (boolean)
+              // au lieu de l'ID du repeater. On utilise la chaîne: fromVariableId → variable hôte → template repeater
+              if (templateIds.size > 0) {
+                // Construire map: baseVariableId → Set<baseNodeId> (TOUS les nœuds hébergeant cette variable)
+                // 🔧 FIX V3: Une variable peut être liée à PLUSIEURS nœuds (linked variables).
+                // Si on ne garde qu'un seul nodeId, le "mauvais" nœud (hors templateIds) peut
+                // écraser le bon → la trace échoue pour KVA, Rampant toiture, M² toiture.
+                // Avec un Set, on vérifie si AU MOINS UN des hôtes est dans templateIds.
+                const varToNodeBasesMap = new Map<string, Set<string>>();
+                for (const n of prev) {
+                  const nMeta = ((n as any).metadata || {}) as Record<string, unknown>;
+                  // Skip display nodes — ils référencent la variable mais ne sont pas l'hôte
+                  if (nMeta.autoCreatedDisplayNode || nMeta.tbl_auto_generated) continue;
+                  const lvIds = (n as any).linkedVariableIds;
+                  if (Array.isArray(lvIds)) {
+                    const nodeBase = String(n.id).replace(/-\d+$/, '');
+                    for (const vid of lvIds) {
+                      const baseVid = String(vid).replace(/-\d+$/, '');
+                      let s = varToNodeBasesMap.get(baseVid);
+                      if (!s) { s = new Set(); varToNodeBasesMap.set(baseVid, s); }
+                      s.add(nodeBase);
+                    }
+                  }
+                }
+                if (varToNodeBasesMap.size > 0) {
+                  for (const n of prev) {
+                    if (removed.has(n.id)) continue;
+                    const nodeSuffix = String(n.id).match(/-(\d+)$/)?.[1];
+                    if (!nodeSuffix || !deletedSuffixes.has(nodeSuffix)) continue;
+                    const meta = ((n as any).metadata || {}) as Record<string, unknown>;
+                    // Accepter autoCreatedDisplayNode, tbl_auto_generated, OU fromVariableId seul
+                    const fromVarId = meta.fromVariableId;
+                    if (!fromVarId) continue;
+                    const baseFromVarId = String(fromVarId).replace(/-\d+$/, '');
+                    const hostNodeBases = varToNodeBasesMap.get(baseFromVarId);
+                    if (hostNodeBases) {
+                      for (const hBase of hostNodeBases) {
+                        if (templateIds.has(hBase)) {
+                          removed.add(n.id);
+                          break;
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+            if (removed.size === 0) return prev;
+            // 🔧 FIX: Mémoriser les IDs supprimés pour empêcher un fetch de les ramener
+            removed.forEach(id => recentlyDeletedIdsRef.current.add(id));
+            // Nettoyer après 10s (le serveur a largement fini son cleanup)
+            if (recentlyDeletedTimerRef.current) window.clearTimeout(recentlyDeletedTimerRef.current);
+            recentlyDeletedTimerRef.current = window.setTimeout(() => {
+              recentlyDeletedIdsRef.current.clear();
+              recentlyDeletedTimerRef.current = null;
+            }, 10000) as unknown as number;
+            idsActuallyRemoved = true;
+            return prev.filter(n => !removed.has(n.id));
+          });
         }
 
         // NEW: fetch updated parent repeater containers so their metadata lists new copy IDs immediately
@@ -3337,7 +3526,10 @@ export const useTBLDataPrismaComplete = ({ tree_id, disabled = false, triggerRet
         }
 
         // Re-transform AFTER reconciliation to ensure new nodes are merged and visible
-        if (rawNodesRef.current.length > 0) {
+        // 🔧 FIX: Ne retransformer que si quelque chose a changé (duplication OU IDs réellement supprimés)
+        // Sinon le second événement tbl-repeater-updated (deletedIds après deletingIds) provoquait
+        // une retransform REDONDANTE car les IDs étaient déjà supprimés par l'événement optimiste.
+        if (rawNodesRef.current.length > 0 && (duplicated.length > 0 || idsActuallyRemoved)) {
           try {
             if (verbose()) console.log('[TBL Hook] retransform AFTER duplicate reconciled - rawNodes count', rawNodesRef.current.length);
             retransformRef.current();
@@ -3565,13 +3757,16 @@ export const useTBLDataPrismaComplete = ({ tree_id, disabled = false, triggerRet
         })();
 
         // Dispatch a local silent retransform event for the top-level container UI to reconcile
-        // Note: We intentionally DO NOT set forceRemote so TBL's handler will NOT call refetchRef.current()
-        try {
-          window.dispatchEvent(new CustomEvent('tbl-force-retransform', {
-            detail: { source: 'repeater-update', treeId: tree_id }
-          }));
-        } catch {
-          // ignore dispatch errors
+        // 🔧 FIX: Skip pour les suppressions — la retransform inline ci-dessus suffit.
+        // Dispatcher un tbl-force-retransform ici provoquait une retransform REDONDANTE.
+        if (duplicated.length > 0) {
+          try {
+            window.dispatchEvent(new CustomEvent('tbl-force-retransform', {
+              detail: { source: 'repeater-update', treeId: tree_id }
+            }));
+          } catch {
+            // ignore dispatch errors
+          }
         }
 
         return;
@@ -3586,6 +3781,24 @@ export const useTBLDataPrismaComplete = ({ tree_id, disabled = false, triggerRet
       if (verbose()) console.log('🧹 [TBL Hook] Event listener tbl-repeater-updated détaché');
       window.removeEventListener('tbl-repeater-updated', handleRepeaterUpdate);
     };
+  }, [tree_id, disabled]);
+
+  // 🔧 FIX: Écouter tbl-force-retransform pour le refetch silencieux post-suppression
+  useEffect(() => {
+    if (!tree_id || disabled) return;
+    const handleForceRetransform = (event: Event) => {
+      const detail = (event as CustomEvent<{ treeId?: string | number; forceRemote?: boolean; silent?: boolean }>).detail || {};
+      if (!detail?.treeId || String(detail.treeId) !== String(tree_id)) return;
+      if (detail.forceRemote) {
+        const silent = detail.silent === true;
+        fetchDataRef.current({ silent });
+      } else {
+        // Retransform locale seulement
+        retransformRef.current();
+      }
+    };
+    window.addEventListener('tbl-force-retransform', handleForceRetransform);
+    return () => window.removeEventListener('tbl-force-retransform', handleForceRetransform);
   }, [tree_id, disabled]);
 
   const handleNodeMetadataUpdate = useCallback((updatedNode: TreeBranchLeafNode) => {

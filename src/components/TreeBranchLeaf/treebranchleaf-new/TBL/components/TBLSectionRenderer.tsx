@@ -144,11 +144,18 @@ const groupDisplayFieldsBySuffix = (fields: TBLField[]): Array<{ suffix: string;
   // Extraire le suffixe numérique d'un champ (-1, -2, etc.)
   const getSuffixNumber = (field: TBLField): number => {
     if (isTotal(field)) return Infinity; // Totaux toujours à la fin
-    // 🔧 Les boutons repeater (Ajouter/Supprimer) restent APRÈS les originaux mais AVANT les copies
-    // Ordre: Originaux (0) → Bouton Ajouter (0.5) → Copies (1, 2, ...) → Totaux (Infinity)
+    // 🔧 Les boutons repeater restent à la bonne position:
+    // - REPEATER_ADD_BUTTON: APRÈS les originaux mais AVANT les copies (0.5)
+    // - REPEATER_REMOVE_INSTANCE_BUTTON: AVEC son bloc de copie (même suffixe que la copie)
+    //   Ordre: Originaux (0) → Bouton Ajouter (0.5) → Copies+BoutonSuppr (1, 2, ...) → Totaux (Infinity)
     const fieldType = ((field as any).type || '').toString();
-    if (fieldType === 'REPEATER_ADD_BUTTON' || fieldType === 'REPEATER_REMOVE_INSTANCE_BUTTON') {
+    if (fieldType === 'REPEATER_ADD_BUTTON') {
       return 0.5; // Après les originaux, avant les copies
+    }
+    if (fieldType === 'REPEATER_REMOVE_INSTANCE_BUTTON') {
+      // Le bouton supprimer doit rester avec sa copie (instanceIndex + 1 = suffixe)
+      const instIdx = (field as any).repeaterInstanceIndex;
+      return typeof instIdx === 'number' ? instIdx + 1 : 0.5;
     }
     const suffix = extractFieldSuffix(field);
     if (suffix === BASE_SUFFIX_KEY) return 0; // Originaux = 0
@@ -166,11 +173,17 @@ const groupDisplayFieldsBySuffix = (fields: TBLField[]): Array<{ suffix: string;
   });
   
   // Reconstruire la liste triée et marquer isLastInCopyGroup
+  // 🔧 FIX: Préserver isLastInCopyGroup déjà marqué par le repeater (par bloc).
+  // Le recalcul basé uniquement sur le suffixe numérique fusionnait les blocs de
+  // repeaters DIFFÉRENTS ayant le même suffixe (ex: Toit-1 et Onduleur-1),
+  // → le trash icon n'apparaissait que sur le dernier repeater du lot.
   const sortedFields: TBLField[] = [];
   for (let i = 0; i < indexed.length; i++) {
     const current = indexed[i];
     const next = indexed[i + 1];
-    const isLastInGroup = !next || current.suffixNum !== next.suffixNum;
+    // Si le repeater a déjà marqué ce champ comme dernier de son bloc, on préserve
+    const alreadyMarked = (current.field as any).isLastInCopyGroup === true;
+    const isLastInGroup = alreadyMarked || !next || current.suffixNum !== next.suffixNum;
     sortedFields.push({ ...current.field, isLastInCopyGroup: isLastInGroup });
   }
   
@@ -1456,77 +1469,234 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
   const handleDeleteCopyGroup = useCallback(async (f: TBLField) => {
     console.log('🗑️ [DELETE COPY GROUP] *** CALLBACK APPELÉ ***', { fieldId: f.id, fieldLabel: f.label });
     try {
-      // 🔧 FIX: Récupérer le repeaterId de plusieurs sources possibles
-      let repeaterId = (f as any).parentRepeaterId as string | undefined;
+      // ========================================================================
+      // 🔧 ÉTAPE 1: Trouver le repeaterId en remontant l'arbre complet
+      // Approche: baseId → walk up ancestors → trouver branch_repeater/leaf_repeater
+      // ========================================================================
       
-      // Fallback 1: Chercher dans le metadata du champ
-      if (!repeaterId) {
-        const meta = (f as any).metadata || {};
-        repeaterId = meta.copyOf?.rootOriginalId || meta.sourceTemplateId?.split('-').slice(0, 5).join('-');
-        console.log('🗑️ [DELETE COPY GROUP] Fallback 1 (metadata):', repeaterId);
-      }
-      
-      // Fallback 2: Chercher le nœud dans allNodes pour avoir son parentId
-      if (!repeaterId && allNodes) {
-        const node = allNodes.find((n: any) => n.id === f.id);
-        if (node) {
-          repeaterId = node.parentId;
-          // Vérifier que c'est bien un repeater (branch_repeater OU leaf_repeater)
-          const parent = allNodes.find((n: any) => n.id === repeaterId);
-          if (parent?.type !== 'branch_repeater' && parent?.type !== 'leaf_repeater') {
-            // Le parent n'est pas un repeater, chercher dans metadata
-            const nodeMeta = node.metadata || {};
-            repeaterId = nodeMeta.copyOf?.rootOriginalId;
+      // Utilitaire: remonter l'arbre depuis un nodeId jusqu'à trouver un repeater ancestor
+      const findRepeaterAncestor = (startNodeId: string): string | undefined => {
+        if (!allNodes?.length) return undefined;
+        let currentId: string | undefined = startNodeId;
+        const visited = new Set<string>();
+        // Remonter max 20 niveaux pour éviter les boucles infinies
+        for (let depth = 0; depth < 20 && currentId; depth++) {
+          if (visited.has(currentId)) break;
+          visited.add(currentId);
+          const node = allNodes.find((n: any) => n.id === currentId);
+          if (!node) break;
+          if (node.type === 'branch_repeater' || node.type === 'leaf_repeater') {
+            return node.id;
           }
-          console.log('🗑️ [DELETE COPY GROUP] Fallback 2 (allNodes):', repeaterId);
+          currentId = node.parentId;
         }
-      }
-      
-      // Fallback 3: Extraire l'ID de base du champ copié (enlever le suffixe) et chercher le repeater parent
-      if (!repeaterId && f.id) {
-        const baseId = f.id.replace(/-\d+$/, ''); // Enlever -1, -2, etc.
-        const originalNode = allNodes?.find((n: any) => n.id === baseId);
-        if (originalNode?.parentId) {
-          const parent = allNodes?.find((n: any) => n.id === originalNode.parentId);
-          // 🔧 FIX: Accepter les deux types de repeater
-          if (parent?.type === 'branch_repeater' || parent?.type === 'leaf_repeater') {
-            repeaterId = parent.id;
-            console.log('🗑️ [DELETE COPY GROUP] Fallback 3 (baseId→parent):', repeaterId);
+        return undefined;
+      };
+
+      // Utilitaire: collecter tous les template IDs d'un repeater
+      // Les templates ne sont PAS enfants via parentId — ils sont référencés par metadata.repeater.templateNodeIds
+      const getRepeaterDescendantIds = (rootRepeaterId: string): Set<string> => {
+        const descendants = new Set<string>();
+        if (!allNodes?.length) return descendants;
+        
+        // 1. Trouver le nœud repeater et lire ses templateNodeIds
+        const repeaterNode = allNodes.find((n: any) => n.id === rootRepeaterId);
+        if (repeaterNode) {
+          const meta: any = repeaterNode.metadata || {};
+          const templateIds: string[] = meta.repeater?.templateNodeIds || [];
+          // Aussi vérifier la colonne repeater_templateNodeIds
+          let colTemplateIds: string[] = [];
+          try {
+            const raw = (repeaterNode as any).repeater_templateNodeIds || (repeaterNode as any).repeaterTemplateNodeIds;
+            if (raw) colTemplateIds = typeof raw === 'string' ? JSON.parse(raw) : (Array.isArray(raw) ? raw : []);
+          } catch { /* ignore */ }
+          const allTemplateIds = [...new Set([...templateIds, ...colTemplateIds])];
+          for (const tid of allTemplateIds) {
+            descendants.add(tid);
+          }
+          console.log('🔧 [getRepeaterDescendantIds] templateNodeIds du repeater:', allTemplateIds.length);
+        }
+        
+        // 2. BFS depuis les templates pour trouver leurs descendants (sous-champs, display, etc.)
+        const queue = [...descendants]; // commencer depuis les template IDs
+        // Aussi ajouter le repeater lui-même pour trouver les enfants directs via parentId
+        queue.push(rootRepeaterId);
+        const visited = new Set<string>([rootRepeaterId]);
+        while (queue.length > 0) {
+          const parentId = queue.shift()!;
+          for (const node of allNodes) {
+            if ((node as any).parentId === parentId && !visited.has(node.id)) {
+              descendants.add(node.id);
+              visited.add(node.id);
+              queue.push(node.id);
+            }
           }
         }
         
-        // Fallback 3b: Le nœud copié (f.id avec suffixe) est lui-même dans allNodes
-        // → remonter au parent, puis au grand-parent (qui est le repeater)
-        if (!repeaterId) {
-          const copiedNode = allNodes?.find((n: any) => n.id === f.id);
-          if (copiedNode?.parentId) {
-            const parent = allNodes?.find((n: any) => n.id === copiedNode.parentId);
-            if (parent?.type === 'branch_repeater' || parent?.type === 'leaf_repeater') {
-              repeaterId = parent.id;
-              console.log('🗑️ [DELETE COPY GROUP] Fallback 3b (copiedNode→parent):', repeaterId);
-            } else if (parent?.parentId) {
-              // Le parent direct n'est pas un repeater → vérifier le grand-parent
-              const grandParent = allNodes?.find((n: any) => n.id === parent.parentId);
-              if (grandParent?.type === 'branch_repeater' || grandParent?.type === 'leaf_repeater') {
-                repeaterId = grandParent.id;
-                console.log('🗑️ [DELETE COPY GROUP] Fallback 3b (copiedNode→grandParent):', repeaterId);
+        // 3. BONUS: Chercher via metadata.duplicatedFromRepeater pour attraper les copies
+        //    dont le baseId n'est pas dans les descendants
+        for (const node of allNodes) {
+          const nodeMeta: any = node.metadata || {};
+          if (nodeMeta.duplicatedFromRepeater === rootRepeaterId) {
+            // Le baseId de ce nœud copié est un template de ce repeater
+            const baseId = node.id.replace(/-\d+$/, '');
+            if (!descendants.has(baseId)) {
+              descendants.add(baseId);
+            }
+          }
+        }
+        
+        // 4. BONUS 2: Tracer les display nodes via fromVariableId → linkedVariableIds
+        //    Les display nodes (autoCreatedDisplayNode ou tbl_auto_generated) ont un fromVariableId
+        //    qui pointe vers la variable source. On retrouve le nœud hôte de cette variable
+        //    via linkedVariableIds, et si ce nœud est un template du repeater, le display node
+        //    appartient aussi à ce repeater.
+        //    🔧 FIX V3: Map Set<baseNodeId> par baseVariableId pour couvrir les variables liées
+        //    à PLUSIEURS nœuds (linked variables). Sinon un nœud hors template écrase le bon.
+        {
+          const varToNodeBasesMap = new Map<string, Set<string>>();
+          for (const an of allNodes) {
+            const anMeta: any = an.metadata || {};
+            // Skip display nodes – ils référencent la variable mais ne sont pas l'hôte
+            if (anMeta.autoCreatedDisplayNode || anMeta.tbl_auto_generated) continue;
+            const lvIds = (an as any).linkedVariableIds;
+            if (Array.isArray(lvIds)) {
+              const nodeBase = String(an.id).replace(/-\d+$/, '');
+              for (const vid of lvIds) {
+                const baseVid = String(vid).replace(/-\d+$/, '');
+                let s = varToNodeBasesMap.get(baseVid);
+                if (!s) { s = new Set(); varToNodeBasesMap.set(baseVid, s); }
+                s.add(nodeBase);
+              }
+            }
+          }
+          if (varToNodeBasesMap.size > 0) {
+            for (const an of allNodes) {
+              const nodeMeta: any = an.metadata || {};
+              const fromVarId = nodeMeta.fromVariableId;
+              if (!fromVarId) continue;
+              const baseFromVarId = String(fromVarId).replace(/-\d+$/, '');
+              const hostNodeBases = varToNodeBasesMap.get(baseFromVarId);
+              if (hostNodeBases) {
+                let found = false;
+                for (const hBase of hostNodeBases) {
+                  if (descendants.has(hBase)) { found = true; break; }
+                }
+                if (found) {
+                  const displayBaseId = an.id.replace(/-\d+$/, '');
+                  if (!descendants.has(displayBaseId)) {
+                    descendants.add(displayBaseId);
+                  }
+                }
               }
             }
           }
         }
         
-        // Fallback 3c: Chercher dans metadata.repeaterParentId du champ copié dans allNodes
-        if (!repeaterId) {
-          const copiedNode = allNodes?.find((n: any) => n.id === f.id);
-          const meta: any = copiedNode?.metadata || {};
-          if (meta.repeaterParentId) {
-            repeaterId = meta.repeaterParentId;
-            console.log('🗑️ [DELETE COPY GROUP] Fallback 3c (metadata.repeaterParentId):', repeaterId);
+        return descendants;
+      };
+      
+      let repeaterId = (f as any).parentRepeaterId as string | undefined;
+      
+      // Fallback 1: metadata.duplicatedFromRepeater (FIABLE - posé par repeat-executor)
+      if (!repeaterId) {
+        const meta = (f as any).metadata || {};
+        repeaterId = meta.duplicatedFromRepeater || meta.repeaterParentId;
+        console.log('🗑️ [DELETE COPY GROUP] Fallback 1 (metadata duplicatedFromRepeater/repeaterParentId):', repeaterId);
+      }
+      
+      // Fallback 2: Chercher le nœud RAW dans allNodes et vérifier metadata.duplicatedFromRepeater
+      if (!repeaterId && allNodes) {
+        const rawNode = allNodes.find((n: any) => n.id === f.id);
+        if (rawNode) {
+          const rawMeta: any = rawNode.metadata || {};
+          repeaterId = rawMeta.duplicatedFromRepeater || rawMeta.repeaterParentId;
+          console.log('🗑️ [DELETE COPY GROUP] Fallback 2 (raw node metadata):', repeaterId);
+        }
+      }
+      
+      // Fallback 3: Chercher le nœud dans allNodes et vérifier si parentId est un repeater
+      if (!repeaterId && allNodes) {
+        const node = allNodes.find((n: any) => n.id === f.id);
+        if (node?.parentId) {
+          const parent = allNodes.find((n: any) => n.id === node.parentId);
+          if (parent?.type === 'branch_repeater' || parent?.type === 'leaf_repeater') {
+            repeaterId = parent.id;
+            console.log('🗑️ [DELETE COPY GROUP] Fallback 3 (parent is repeater):', repeaterId);
+          }
+        }
+      }
+
+      // Fallback 4: REVERSE LOOKUP - chercher quel repeater possède le baseId dans ses templateNodeIds
+      if (!repeaterId && allNodes && f.id) {
+        const baseId = f.id.replace(/-\d+$/, '');
+        for (const node of allNodes) {
+          if (node.type !== 'branch_repeater' && node.type !== 'leaf_repeater') continue;
+          const nodeMeta: any = node.metadata || {};
+          // Vérifier dans metadata.repeater.templateNodeIds
+          const templateIds: string[] = nodeMeta.repeater?.templateNodeIds || [];
+          // Aussi vérifier le champ colonne repeater_templateNodeIds (JSON stringifié)
+          let colTemplateIds: string[] = [];
+          try {
+            const raw = (node as any).repeater_templateNodeIds || (node as any).repeaterTemplateNodeIds;
+            if (raw) colTemplateIds = typeof raw === 'string' ? JSON.parse(raw) : (Array.isArray(raw) ? raw : []);
+          } catch { /* ignore parse errors */ }
+          const allTemplateIds = [...new Set([...templateIds, ...colTemplateIds])];
+          if (allTemplateIds.includes(baseId)) {
+            repeaterId = node.id;
+            console.log('🗑️ [DELETE COPY GROUP] Fallback 4 (reverse lookup templateNodeIds):', repeaterId, 'templates:', allTemplateIds);
+            break;
+          }
+        }
+      }
+
+      // Fallback 5: Remonter l'arbre complet depuis le baseId / copiedId
+      if (!repeaterId && f.id) {
+        const baseId = f.id.replace(/-\d+$/, '');
+        repeaterId = findRepeaterAncestor(baseId);
+        if (repeaterId) {
+          console.log('🗑️ [DELETE COPY GROUP] Fallback 5a (tree walk from baseId):', repeaterId);
+        } else {
+          repeaterId = findRepeaterAncestor(f.id);
+          if (repeaterId) {
+            console.log('🗑️ [DELETE COPY GROUP] Fallback 5b (tree walk from copiedId):', repeaterId);
           }
         }
       }
       
       console.log('🗑️ [DELETE COPY GROUP] repeaterId FINAL=', repeaterId);
+
+      // 🔧 FIX: Construire un Set de "template IDs" valides pour CE repeater
+      // Seuls les champs dont le baseId est un descendant du repeater seront supprimés
+      // Cela empêche la suppression croisée entre repeaters (ex: Onduleur-1 ne touche plus Panneau-1)
+      let repeaterTemplateIds: Set<string> | null = null;
+      if (repeaterId) {
+        repeaterTemplateIds = getRepeaterDescendantIds(repeaterId);
+        console.log('🔧 [DELETE COPY GROUP] repeaterTemplateIds:', repeaterTemplateIds.size, 'descendants');
+      } else {
+        // Dernier recours: si on n'a pas trouvé le repeater, on restreint au baseId seul
+        // pour éviter de supprimer des champs d'autres repeaters
+        const baseId = f.id?.replace(/-\d+$/, '');
+        if (baseId) {
+          repeaterTemplateIds = new Set([baseId]);
+          console.warn('⚠️ [DELETE COPY GROUP] repeaterId inconnu, scope restreint au baseId seul:', baseId);
+        }
+      }
+
+      // Utilitaire: vérifier qu'un champ copié appartient bien au repeater trouvé
+      const belongsToSameRepeater = (fieldId: string): boolean => {
+        if (!repeaterTemplateIds) return false;
+        const baseId = fieldId.replace(/-\d+$/, '');
+        if (repeaterTemplateIds.has(baseId)) return true;
+        // Double check via metadata.duplicatedFromRepeater sur le noeud raw
+        if (repeaterId && allNodes) {
+          const rawNode = allNodes.find((n: any) => n.id === fieldId);
+          const meta: any = rawNode?.metadata || {};
+          if (meta.duplicatedFromRepeater === repeaterId) return true;
+        }
+        return false;
+      };
+
       // ✅ Priorité: utiliser l'index d'instance du repeater (plus fiable que le suffixe du label)
       const instanceIndex: number | null = (f as any).repeaterInstanceIndex ?? null;
       const label = String(f.label || '');
@@ -1566,7 +1736,9 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
         
         const metaIndex = (sf as any).repeaterInstanceIndex;
         const suffix = getSuffixFromId(sf.id);
-        const sameRepeater = (sf as any).parentRepeaterId === repeaterId;
+        // 🔧 FIX V3: Vérifier via belongsToSameRepeater (walk up tree) - fonctionne même
+        // quand les champs de repeaters différents sont dans la même section/onglet
+        const sameRepeater = sf.id ? belongsToSameRepeater(sf.id) : false;
         // ✅ NOUVEAU: Accepter si le suffixe correspond OU si l'index metadata correspond
         const sameIndex = suffix === suffixToMatch || String(metaIndex) === suffixToMatch;
         // ✅ NOUVEAU: Ne pas exiger isDeletableCopy - le suffixe suffit pour identifier une copie
@@ -1579,44 +1751,44 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
         // 🔒 EXCLUSION CRITIQUE: Ne jamais supprimer les champs Total
         if (isTotalFieldCheck(n)) return false;
         
+        // 🔧 FIX V4: TOUJOURS exiger belongsToSameRepeater - plus de bypass via sourceTemplateId
+        const sameRepeater = n.id ? belongsToSameRepeater(n.id) : false;
+        if (!sameRepeater) return false;
         const meta: any = n.metadata || {};
-        const sameRepeater = meta.repeaterParentId === repeaterId;
         const metaIndex = meta.repeaterInstanceIndex;
         const suffix = getSuffixFromId(n.id);
-        // ✅ NOUVEAU: Accepter si le suffixe correspond OU si l'index metadata correspond
+        // ✅ Accepter si le suffixe correspond OU si l'index metadata correspond
         const sameIndex = suffix === suffixToMatch || String(metaIndex) === suffixToMatch;
         if (!sameIndex) return false;
-        // Accepter si même repeater OU si suffixe identifie clairement une copie de ce repeater
-        if (!sameRepeater && !meta.sourceTemplateId) return false;
         const notInCurrentSection = !section.fields.some((sf: any) => sf.id === n.id);
         return notInCurrentSection;
       });
       
       // 🔥 FALLBACK PAR SUFFIXE: Rechercher les nœuds avec le même suffixe
-      // ⚠️ SCOPE LIMITÉ: Uniquement si repeaterId est connu, sinon le scope est trop large
-      // et détruit les sous-champs d'autres nœuds (ex: Prix onduleur-1 perd ses enfants)
-      const allNodesWithSameSuffix = repeaterId ? (allNodes || []).filter(n => {
+      // Scopé par belongsToSameRepeater pour éviter la suppression croisée
+      const allNodesWithSameSuffix = (allNodes || []).filter(n => {
         // 🔒 EXCLUSION CRITIQUE: Ne jamais supprimer les champs Total
         if (isTotalFieldCheck(n)) return false;
         
         const suffix = getSuffixFromId(n.id);
         if (suffix !== suffixToMatch) return false;
-        // Vérifier que c'est bien une copie (a sourceTemplateId ou copiedFromNodeId)
-        const meta: any = n.metadata || {};
-        const isCopy = !!(meta.sourceTemplateId || meta.copiedFromNodeId);
-        return isCopy;
-      }) : []; // ⚠️ Si repeaterId inconnu → pas de fallback global (trop destructeur)
+        // 🔧 FIX V3: Vérifier que le baseId est descendant du même repeater
+        if (!n.id || !belongsToSameRepeater(n.id)) return false;
+        // Vérifier que c'est bien une copie (a un suffixe numérique)
+        return true;
+      });
       
       dlog('🔍 [DELETE COPY GROUP] Recherche par suffixe:', { 
         suffixToMatch, 
-        repeaterId: repeaterId || 'UNDEFINED (fallback désactivé)',
+        repeaterId: repeaterId || 'UNDEFINED',
+        repeaterTemplateIds: repeaterTemplateIds?.size || 0,
         fieldsInSameCopy: fieldsInSameCopy.length, 
         fieldsInNewSection: fieldsInNewSection.length,
         allNodesWithSameSuffix: allNodesWithSameSuffix.length 
       });
 
       // ✅ Fallback supplémentaire: pattern d'ID namespacé "${repeaterId}_${effectiveIndex}_<originalFieldId>"
-      if (fieldsInNewSection.length === 0) {
+      if (fieldsInNewSection.length === 0 && repeaterId) {
         const prefix = `${repeaterId}_${effectiveIndex}_`;
         const patternMatches = (allNodes || []).filter(n => {
           // 🔒 EXCLUSION CRITIQUE: Ne jamais supprimer les champs Total
@@ -1773,7 +1945,7 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
             nodeId: repeaterId, 
             source: 'delete-copy-group-finished', 
             suppressReload: true,  // Pas de rechargement visible
-            forceRefresh: false,   // ❌ PAS de refetch - la mise à jour locale suffit
+            forceRefresh: false,   // Pas de refetch ici - on le fait via tbl-force-retransform
             deletedIds: globalSuccessIds, 
             timestamp: Date.now() 
           } 
@@ -1792,27 +1964,14 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
         
         if (isTBLDebugEnabled()) tblLog('✨ [DELETE COPY GROUP] Mise à jour locale sans rechargement:', globalSuccessIds.length, 'éléments');
         
-        // Déclencher une mise à jour du formData pour les composants dépendants
-        window.dispatchEvent(new CustomEvent('TBL_FORM_DATA_CHANGED', { 
-          detail: { 
-            reason: 'delete-copy-group-finished', 
-            deletedIds: globalSuccessIds 
-          } 
-        }));
-
-        // 🎯 CRITICAL: Forcer le recalcul des valeurs sum-total après suppression
-        // Le hook useNodeCalculatedValue écoute cet événement et re-fetch les valeurs
-        // depuis le backend qui a nettoyé les SubmissionData des copies supprimées
-        setTimeout(() => {
-          window.dispatchEvent(new CustomEvent('tbl-force-retransform', {
-            detail: {
-              treeId: eventTreeId,
-              reason: 'delete-copy-group',
-              timestamp: Date.now()
-            }
-          }));
-          dlog('🎯 [DELETE COPY GROUP] Dispatched tbl-force-retransform pour recalculer les sum-totals');
-        }, 800); // Délai pour laisser le serveur terminer updateSumDisplayFieldAfterCopyChange
+        // 🔧 FIX FINAL: NE PAS dispatcher TBL_FORM_DATA_CHANGED ni tbl-force-retransform.
+        // La suppression locale + retransform via tbl-repeater-updated est SUFFISANTE.
+        // Aucun fetch serveur n'est nécessaire après un delete :
+        // - La cascade locale (suffixe + display scan) supprime tous les nœuds concernés
+        // - Le recentlyDeletedIdsRef protège contre tout fetch qui ramènerait des nœuds supprimés
+        // - Le prochain chargement naturel (navigation, ajout copie, etc.) synchronisera avec le serveur
+        // AVANT: 5-6 opérations redondantes (3 fetch + 2 retransform + 1 refreshTree)
+        // APRÈS: 1 seule retransform locale, 0 fetch. Zéro refresh visible.
       } catch {
         dlog('⚠️ [DELETE COPY GROUP] Impossible de dispatch final tbl-repeater-updated (silent)');
       }
@@ -2296,9 +2455,25 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
             consumedFieldIds.add(cf.id);
             block.push(cf);
           }
-          // Marquer le dernier champ du bloc pour afficher le bouton poubelle de la copie
+          // Marquer le dernier champ du bloc PAR ONGLET pour afficher le bouton poubelle dans chaque tab
+          // 🔧 FIX: Le repeater peut avoir des champs dans plusieurs onglets (ex: Mesure + Devis).
+          // On marque le dernier champ de CHAQUE onglet comme isLastInCopyGroup,
+          // pour que chaque onglet ait son propre bouton supprimer.
+          const lastFieldPerSubTab = new Map<string, number>(); // subTabKey → dernier index dans block
           block.forEach((f, idx) => {
-            const isLast = idx === block.length - 1;
+            const tabs = extractSubTabAssignments(f);
+            if (tabs.length === 0) {
+              // Pas de subtab → groupe "default"
+              lastFieldPerSubTab.set('__no_subtab__', idx);
+            } else {
+              for (const tab of tabs) {
+                lastFieldPerSubTab.set(tab, idx);
+              }
+            }
+          });
+          const lastIndices = new Set(lastFieldPerSubTab.values());
+          block.forEach((f, idx) => {
+            const isLast = lastIndices.has(idx);
             // 1) Insérer le champ de copie
             finalFields.push({ ...f, order: nextOrder, isLastInCopyGroup: isLast });
             nextOrder++;
@@ -2446,6 +2621,71 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
               console.warn('[REPEATER COPY INJECTION] Échec injection conditionnels pour copie', { fieldId: f.id, error: e });
             }
           });
+
+          // 🗑️ Bouton "Supprimer" visible par bloc de copie — UN PAR ONGLET
+          // 🔧 FIX: Le repeater Toit a des champs dans Mesure ET Devis.
+          // On injecte un bouton supprimer dans chaque onglet distinct du bloc.
+          if (block.length > 0) {
+            const firstBlockField = block[0];
+            const copyLabel = repeaterLabel && repeaterLabel !== 'Entrée'
+              ? `Supprimer ${repeaterLabel}-${copyIndex + 1}`
+              : `Supprimer copie ${copyIndex + 1}`;
+            
+            // Collecter les onglets distincts du bloc
+            const blockSubTabs = new Set<string>();
+            for (const bf of block) {
+              const tabs = extractSubTabAssignments(bf);
+              if (tabs.length === 0) blockSubTabs.add('__no_subtab__');
+              else tabs.forEach(t => blockSubTabs.add(t));
+            }
+            
+            // S'il n'y a qu'un seul onglet (ou aucun), un seul bouton suffit
+            if (blockSubTabs.size <= 1) {
+              const singleTab = [...blockSubTabs][0];
+              const removeButtonField = {
+                ...field,
+                id: `${field.id}_removeBtn_${copyIndex}`,
+                type: 'REPEATER_REMOVE_INSTANCE_BUTTON' as any,
+                label: copyLabel,
+                order: nextOrder,
+                isRepeaterButton: true,
+                repeaterParentId: field.id,
+                repeaterInstanceIndex: copyIndex,
+                repeaterInstanceCount: maxBlocks,
+                _copyGroupField: firstBlockField,
+                repeater_buttonSize: 'middle',
+                repeater_buttonWidth: 'auto',
+                repeater_iconOnly: false,
+                ...(singleTab && singleTab !== '__no_subtab__' ? { subTabKey: singleTab, subTabKeys: [singleTab] } : {}),
+              } as TBLField & { isRepeaterButton?: boolean; _copyGroupField?: TBLField };
+              finalFields.push(removeButtonField);
+              nextOrder++;
+            } else {
+              // Plusieurs onglets → un bouton par onglet
+              let tabIdx = 0;
+              for (const tab of blockSubTabs) {
+                const removeButtonField = {
+                  ...field,
+                  id: `${field.id}_removeBtn_${copyIndex}_tab${tabIdx}`,
+                  type: 'REPEATER_REMOVE_INSTANCE_BUTTON' as any,
+                  label: copyLabel,
+                  order: nextOrder,
+                  isRepeaterButton: true,
+                  repeaterParentId: field.id,
+                  repeaterInstanceIndex: copyIndex,
+                  repeaterInstanceCount: maxBlocks,
+                  _copyGroupField: firstBlockField,
+                  repeater_buttonSize: 'middle',
+                  repeater_buttonWidth: 'auto',
+                  repeater_iconOnly: false,
+                  ...(tab !== '__no_subtab__' ? { subTabKey: tab, subTabKeys: [tab] } : {}),
+                } as TBLField & { isRepeaterButton?: boolean; _copyGroupField?: TBLField };
+                finalFields.push(removeButtonField);
+                nextOrder++;
+                tabIdx++;
+              }
+            }
+          }
         }
 
         // 5) Ajouter le bouton + APRÈS les blocs
@@ -5248,29 +5488,30 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
                           wrapperCol={{ span: 24 }}
                           colon={false}
                           // Réserver l'espace du label pour s'aligner avec les autres champs
-                          label={<span style={{ visibility: 'hidden' }}>.</span>}
-                          style={{ width: '150px' }}
+                          label={isRemoveInstanceButton ? null : <span style={{ visibility: 'hidden' }}>.</span>}
+                          style={{ width: isRemoveInstanceButton ? 'auto' : '150px', ...(isRemoveInstanceButton ? { marginBottom: 0, marginTop: -8 } : {}) }}
                         >
                           <Button
-                            type={isAddButton ? 'default' : 'dashed'}
+                            type={isAddButton ? 'default' : 'text'}
                             ghost={false}
-                            size={isAddButton ? 'middle' : 'middle'}
+                            size={'middle'}
                             block={false}
                             danger={isRemoveInstanceButton}
-                            icon={isAddButton ? <PlusOutlined /> : <MinusCircleOutlined />}
-                            aria-label={isAddButton ? (field.label || 'Ajouter') : 'Répéteur'}
+                            icon={isAddButton ? <PlusOutlined /> : <DeleteOutlined />}
+                            aria-label={isAddButton ? (field.label || 'Ajouter') : (field.label || 'Supprimer')}
                             disabled={isAddButton && isRepeating[repeaterParentId]}
                             loading={isAddButton && isRepeating[repeaterParentId]}
                             style={{
-                              height: isAddButton ? 32 : 32,
-                              width: '150px',
-                              fontSize: '14px',
+                              height: 32,
+                              width: isRemoveInstanceButton ? 'auto' : '150px',
+                              fontSize: isRemoveInstanceButton ? '13px' : '14px',
                               borderRadius: '6px',
-                              borderStyle: isAddButton ? 'solid' : 'dashed',
-                              backgroundColor: isAddButton ? REPEATER_ADD_BUTTON_STYLE.backgroundColor : undefined,
-                              borderColor: isAddButton ? REPEATER_ADD_BUTTON_STYLE.borderColor : undefined,
-                              color: isAddButton ? REPEATER_ADD_BUTTON_STYLE.color : undefined,
-                              fontWeight: isAddButton ? 600 : undefined,
+                              borderStyle: isAddButton ? 'solid' : (isRemoveInstanceButton ? 'dashed' : 'dashed'),
+                              border: isRemoveInstanceButton ? '1px dashed #ff4d4f' : undefined,
+                              backgroundColor: isAddButton ? REPEATER_ADD_BUTTON_STYLE.backgroundColor : (isRemoveInstanceButton ? '#fff2f0' : undefined),
+                              borderColor: isAddButton ? REPEATER_ADD_BUTTON_STYLE.borderColor : (isRemoveInstanceButton ? '#ff4d4f' : undefined),
+                              color: isAddButton ? REPEATER_ADD_BUTTON_STYLE.color : (isRemoveInstanceButton ? '#ff4d4f' : undefined),
+                              fontWeight: isAddButton ? 600 : (isRemoveInstanceButton ? 500 : undefined),
                               boxShadow: isAddButton ? '0 6px 20px rgba(11,92,107,0.25)' : undefined,
                               display: 'inline-flex',
                               alignItems: 'center',
@@ -5555,7 +5796,13 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
                                   }
                                 }
                             } else if (isRemoveInstanceButton) {
-                              // Supprimer une instance spécifique
+                              // 🗑️ Supprimer le bloc de copie via handleDeleteCopyGroup
+                              const copyGroupField = (field as any)._copyGroupField;
+                              if (copyGroupField) {
+                                await handleDeleteCopyGroup(copyGroupField);
+                                return;
+                              }
+                              // Fallback legacy: ancien système par compteur
                               dlog(`🔁 [REPEATER] Suppression instance #${instanceIndex + 1}:`, {
                                 repeaterParentId,
                                 instanceIndex,

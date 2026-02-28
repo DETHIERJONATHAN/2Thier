@@ -482,11 +482,11 @@ const Parameters: React.FC<ParametersProps> = (props) => {
       
       console.log('🗑️ [Parameters] IDs marqués comme supprimés:', detail.deletedIds.length, '→ Total:', recentlyDeletedIdsRef.current.size);
       
-      // Si c'est le repeater actuel, rafraîchir l'arbre
-      if (selectedNode?.id === detail.nodeId && typeof refreshTree === 'function') {
-        console.log('🔄 [Parameters] Rafraîchissement de l\'arbre après suppression');
-        refreshTree();
-      }
+      // 🔧 FIX: NE PAS appeler refreshTree() pour les suppressions.
+      // Le handler tbl-repeater-updated dans useTBLDataPrismaComplete gère déjà
+      // la suppression locale + retransform. Appeler refreshTree() ici provoquait
+      // un fetch complet NON silencieux → flash visible + re-ajout de display nodes.
+      // La cohérence serveur est assurée par le tbl-force-retransform à 3s.
     };
     
     window.addEventListener('delete-copy-group-finished', handleDeleteCopyEvent);

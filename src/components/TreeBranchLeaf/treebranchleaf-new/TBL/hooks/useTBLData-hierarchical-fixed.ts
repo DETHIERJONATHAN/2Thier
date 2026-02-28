@@ -138,7 +138,36 @@ export function useTBLDataHierarchicalFixed(params: UseTBLDataHierarchicalParams
       }
 
       ddiag('Nodes fetched', nodes.length);
-      setRawNodes(nodes);
+
+      if (silent) {
+        // 🔧 SMART MERGE: Quand silent=true (post-suppression), ne PAS remplacer tous les rawNodes.
+        // Seuls les nœuds supprimés/ajoutés changent — les nœuds identiques gardent leur référence
+        // stable → React ne re-render PAS les composants inchangés → aucun flash visible.
+        setRawNodes(prev => {
+          const serverIds = new Set(nodes.map(n => n.id));
+          const prevById = new Map(prev.map(n => [n.id, n]));
+
+          // Quick check: si même ensemble d'IDs et même taille → pas de changement
+          if (prev.length === nodes.length && prev.every(n => serverIds.has(n.id))) {
+            return prev; // Référence identique → zéro re-render
+          }
+
+          // Merge: garder les références existantes, ajouter les nouveaux, supprimer les absents
+          const merged: typeof prev = [];
+          for (const serverNode of nodes) {
+            const existing = prevById.get(serverNode.id);
+            merged.push(existing || serverNode); // Garder la ref stable si déjà présent
+          }
+          // Si le résultat est identique en taille et contenu → pas de changement
+          if (merged.length === prev.length && merged.every((n, i) => n === prev[i])) {
+            return prev;
+          }
+          ddiag('[SMART-MERGE] rawNodes updated:', { prev: prev.length, server: nodes.length, merged: merged.length, removed: prev.length - merged.length });
+          return merged;
+        });
+      } else {
+        setRawNodes(nodes);
+      }
     } catch (err) {
       console.error('❌ [useTBLDataHierarchicalFixed] fetch error:', err);
       setError(err instanceof Error ? err.message : 'Erreur inconnue');
@@ -410,6 +439,29 @@ export function useTBLDataHierarchicalFixed(params: UseTBLDataHierarchicalParams
                       }
                     }
                   }
+                  // 🔧 FIX DISPLAY: Scanner les display/derived nodes avec le même suffixe + même repeater
+                  // Les display nodes ne sont pas enfants des copies supprimées, mais ils partagent le même
+                  // suffixe et repeater. Sans ce scan, ils persistent jusqu'au smart merge (500ms).
+                  const eventRepeaterId = String((detail as any)?.nodeId || '');
+                  if (eventRepeaterId && deletedSuffixes.size > 0) {
+                    for (const n of prev) {
+                      if (removed.has(n.id)) continue;
+                      const nodeSuffix = String(n.id).match(/-(\d+)$/)?.[1];
+                      if (!nodeSuffix || !deletedSuffixes.has(nodeSuffix)) continue;
+                      // Skip sum-total nodes
+                      if (String(n.id).includes('-sum-total')) continue;
+                      const meta = ((n as any).metadata || {}) as Record<string, unknown>;
+                      // Must belong to same repeater via metadata
+                      if (
+                        meta.duplicatedFromRepeater === eventRepeaterId ||
+                        meta.repeaterParentId === eventRepeaterId ||
+                        meta.repeatScopeId === eventRepeaterId
+                      ) {
+                        if (debugEnabled) console.log('🔧 [OPTIMISTIC-REMOVE] display node caught by repeater+suffix match', { nodeId: n.id, suffix: nodeSuffix, repeaterId: eventRepeaterId });
+                        removed.add(n.id);
+                      }
+                    }
+                  }
                   if (removed.size === 0) return prev;
                   if (typeof window !== 'undefined' && (window as any).localStorage && localStorage.getItem('TBL_DEBUG_DELETE') === '1') {
                     const removedList = Array.from(removed);
@@ -461,6 +513,25 @@ export function useTBLDataHierarchicalFixed(params: UseTBLDataHierarchicalParams
                           removed.add(n.id);
                           added = true;
                         }
+                      }
+                    }
+                  }
+
+                  // 🔧 FIX DISPLAY: Scanner les display/derived nodes avec le même suffixe + même repeater
+                  const eventRepeaterId2 = String((detail as any)?.nodeId || '');
+                  if (eventRepeaterId2 && deletedSuffixes.size > 0) {
+                    for (const n of prev) {
+                      if (removed.has(n.id)) continue;
+                      const nodeSuffix = String(n.id).match(/-(\d+)$/)?.[1];
+                      if (!nodeSuffix || !deletedSuffixes.has(nodeSuffix)) continue;
+                      if (String(n.id).includes('-sum-total')) continue;
+                      const meta = ((n as any).metadata || {}) as Record<string, unknown>;
+                      if (
+                        meta.duplicatedFromRepeater === eventRepeaterId2 ||
+                        meta.repeaterParentId === eventRepeaterId2 ||
+                        meta.repeatScopeId === eventRepeaterId2
+                      ) {
+                        removed.add(n.id);
                       }
                     }
                   }
@@ -646,12 +717,15 @@ export function useTBLDataHierarchicalFixed(params: UseTBLDataHierarchicalParams
   useEffect(() => {
     if (!treeId || disabled) return;
     const handleForceRetransform = (event: Event) => {
-      const detail = (event as CustomEvent<{ treeId?: string | number; forceRemote?: boolean; eventDebugId?: string }>).detail || {};
+      const detail = (event as CustomEvent<{ treeId?: string | number; forceRemote?: boolean; silent?: boolean; eventDebugId?: string }>).detail || {};
       if (!matchesCurrentTreeId(detail?.treeId)) return;
       const forceRemote = !!detail.forceRemote;
-      ddiag('[useTBLDataHierarchicalFixed] tbl-force-retransform event received', { forceRemote, eventDebugId: detail?.eventDebugId || null, detail });
+      // 🔧 FIX: Respecter le flag silent pour éviter un flash de loading visible
+      // Les suppressions utilisent silent=true car l'optimistic removal a déjà mis à jour l'UI
+      const silent = detail.silent === true;
+      ddiag('[useTBLDataHierarchicalFixed] tbl-force-retransform event received', { forceRemote, silent, eventDebugId: detail?.eventDebugId || null, detail });
       if (forceRemote) {
-        fetchData({ silent: false });
+        fetchData({ silent });
       } else {
         setFormDataVersion(v => v + 1);
       }

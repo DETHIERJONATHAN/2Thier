@@ -273,9 +273,11 @@ export const MODULE_REGISTRY: ModuleDefinition[] = [
        * }
        */
       pricingLines: [],
-      showTotal: true,
-      showTVA: true,
-      tvaRate: 21,
+      // Sources TBL pour les totaux (liés via NodeTreeSelect)
+      totalHTVASource: '',
+      totalTVASource: '',
+      totalTVACSource: '',
+      remiseSource: '',
       currency: '€',
     },
     themes: [
@@ -286,10 +288,7 @@ export const MODULE_REGISTRY: ModuleDefinition[] = [
     ],
     configFields: [
       { key: 'title', label: 'Titre du tableau', type: 'text' },
-      // Note: pricingLines est géré par un éditeur spécial dans SectionConfigPanel
-      { key: 'showTotal', label: 'Afficher le total', type: 'toggle', defaultValue: true },
-      { key: 'showTVA', label: 'Afficher la TVA', type: 'toggle', defaultValue: true },
-      { key: 'tvaRate', label: 'Taux TVA (%)', type: 'number', defaultValue: 21 },
+      // Note: pricingLines, showTotal, showTVA, tvaRate sont gérés par la section custom dans ModuleConfigPanel
       { key: 'currency', label: 'Devise', type: 'select', options: [
         { value: '€', label: 'Euro (€)' },
         { value: '$', label: 'Dollar ($)' },

@@ -290,6 +290,11 @@ async function enrichDataFromSubmission(
   treeId?: string
 ): Promise<void> {
   
+  // 🛡️ Guard: si pas de submissionId, on ne peut rien enrichir — retour silencieux
+  if (!submissionId) {
+    return;
+  }
+  
   try {
     // 1. RÃƒÂ©cupÃƒÂ©rer les VALEURS depuis TreeBranchLeafSubmissionData
     const submissionData = await prisma.treeBranchLeafSubmissionData.findMany({

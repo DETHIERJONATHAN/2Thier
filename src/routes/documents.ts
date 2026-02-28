@@ -8,6 +8,104 @@ import { GoogleGmailService } from '../google-auth/services/GoogleGmailService';
 const router = Router();
 const prisma = db;
 
+/**
+ * Construit une map optionId → label pour TOUS les champs SELECT du TBL.
+ * Permet au PDF renderer de résoudre les UUID d'options stockés dans tblData
+ * vers les labels lisibles (ex: "346a4162-..." → "JINKO 440 FB").
+ *
+ * Stratégie multi-source :
+ *  1. TreeBranchLeafSelectConfig.options (JSON Array [{value, label}])
+ *  2. TreeBranchLeafNode.select_options (JSON Array [{value, label}])
+ *  3. Nœuds enfants de type leaf_option / leaf_option_field (id → option_label|label)
+ */
+async function buildSelectOptionsMap(
+  organizationId: string,
+  tblData: Record<string, any>
+): Promise<Record<string, string>> {
+  const map: Record<string, string> = {};
+
+  try {
+    // Collecter tous les nodeIds référencés dans tblData
+    const tblNodeIds = Object.keys(tblData).filter(k =>
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(k)
+    );
+    if (tblNodeIds.length === 0) return map;
+
+    // Collecter aussi les valeurs qui ressemblent à des UUIDs (potentielles optionIds)
+    const potentialOptionIds = new Set<string>();
+    for (const val of Object.values(tblData)) {
+      if (typeof val === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(val)) {
+        potentialOptionIds.add(val);
+      }
+    }
+    if (potentialOptionIds.size === 0) return map; // Aucune valeur UUID → pas de select à résoudre
+
+    // 1️⃣ Source: TreeBranchLeafSelectConfig — options JSON
+    const selectConfigs = await prisma.treeBranchLeafSelectConfig.findMany({
+      where: { nodeId: { in: tblNodeIds } },
+      select: { nodeId: true, options: true }
+    });
+    for (const cfg of selectConfigs) {
+      const opts = cfg.options;
+      if (Array.isArray(opts)) {
+        for (const opt of opts) {
+          if (opt && typeof opt === 'object' && opt.value && opt.label) {
+            map[String(opt.value)] = String(opt.label);
+          }
+        }
+      }
+    }
+
+    // 2️⃣ Source: TreeBranchLeafNode.select_options — JSON inline
+    const selectNodes = await prisma.treeBranchLeafNode.findMany({
+      where: {
+        id: { in: tblNodeIds },
+        select_options: { not: null }
+      },
+      select: { id: true, select_options: true }
+    });
+    for (const node of selectNodes) {
+      const opts = node.select_options;
+      if (Array.isArray(opts)) {
+        for (const opt of opts) {
+          if (opt && typeof opt === 'object' && opt.value && opt.label) {
+            if (!map[String(opt.value)]) {
+              map[String(opt.value)] = String(opt.label);
+            }
+          }
+        }
+      }
+    }
+
+    // 3️⃣ Source: Nœuds enfants de type leaf_option / leaf_option_field
+    // Chercher les enfants directs des nœuds référencés qui sont des options
+    const optionNodes = await prisma.treeBranchLeafNode.findMany({
+      where: {
+        parentId: { in: tblNodeIds },
+        type: { in: ['leaf_option', 'leaf_option_field'] }
+      },
+      select: { id: true, value: true, label: true, option_label: true }
+    });
+    for (const opt of optionNodes) {
+      const optValue = opt.value || opt.id;
+      const optLabel = opt.option_label || opt.label;
+      if (optLabel && !map[optValue]) {
+        map[optValue] = optLabel;
+      }
+      // Aussi mapper par id si la value est différente
+      if (optLabel && opt.id !== optValue && !map[opt.id]) {
+        map[opt.id] = optLabel;
+      }
+    }
+
+    console.log(`📋 [buildSelectOptionsMap] ${Object.keys(map).length} options mappées depuis ${selectConfigs.length} configs + ${selectNodes.length} select_options + ${optionNodes.length} option nodes`);
+  } catch (error: any) {
+    console.error('⚠️ [buildSelectOptionsMap] Erreur (non bloquante):', error?.message);
+  }
+
+  return map;
+}
+
 function toJsonSafe(value: any): any {
   const seen = new WeakSet<object>();
 
@@ -1119,6 +1217,103 @@ router.get('/generated/:id/download', async (req: AuthenticatedRequest, res: Res
       where: { id: organizationId }
     });
 
+    // 🔥 Construire la map de résolution SELECT (optionId → label)
+    // Cela permet au PDF renderer de traduire les UUID d'options en labels lisibles
+    const tblRawData = ((document.dataSnapshot || {}) as Record<string, any>).tblData || (document.dataSnapshot || {});
+    const selectOptionsMap = await buildSelectOptionsMap(organizationId, tblRawData);
+    console.log('📥 [DOWNLOAD] SelectOptionsMap:', { count: Object.keys(selectOptionsMap).length, keys: Object.keys(selectOptionsMap).slice(0, 10) });
+
+    // 🔥 SYSTÈME DYNAMIQUE: Résoudre TOUTES les refs de capacités TBL (formule, condition, table, value, etc.)
+    // Le système est 100% dynamique — interpretReference gère tous les types automatiquement
+    let formulaResultsMap: Record<string, string> = {};
+    const docSubmissionId = document.submissionId;
+    try {
+      // Collecter TOUTES les refs TBL dans les configs des modules
+      const allRefs: string[] = [];
+      const sections = document.DocumentTemplate?.DocumentSection || [];
+      for (const sec of sections) {
+        const config = (sec.config || {}) as Record<string, any>;
+        const modules = config.modules || [];
+        for (const mod of modules) {
+          const mc = mod.config || {};
+          for (const val of Object.values(mc)) {
+            if (typeof val === 'string' && (
+              val.startsWith('node-formula:') ||
+              val.startsWith('formula:') ||
+              val.startsWith('condition:') ||
+              val.startsWith('@calculated.') ||
+              val.startsWith('calculatedValue:') ||
+              val.startsWith('@value.') ||
+              val.startsWith('@select.') ||
+              val.startsWith('@table.') ||
+              val.startsWith('@repeat.')
+            )) {
+              if (!allRefs.includes(val)) allRefs.push(val);
+            }
+          }
+        }
+      }
+      
+      console.log('📥 [DOWNLOAD] Refs dynamiques à résoudre:', { refs: allRefs, submissionId: docSubmissionId });
+
+      if (allRefs.length > 0 && docSubmissionId) {
+        const { interpretReference } = await import('../components/TreeBranchLeaf/treebranchleaf-new/api/operation-interpreter.js');
+        
+        for (const ref of allRefs) {
+          try {
+            // Convertir le format de ref pour interpretReference
+            // node-formula:xxx → formula:xxx (interpretReference utilise le format sans "node-")
+            // @value.xxx → xxx (UUID du champ)
+            // @calculated.xxx → xxx (UUID du noeud)
+            // condition:xxx, @table.xxx, @select.xxx → passés tels quels
+            let evalRef = ref;
+            if (ref.startsWith('node-formula:')) {
+              evalRef = ref.replace('node-formula:', 'formula:');
+            } else if (ref.startsWith('@value.')) {
+              evalRef = ref.replace('@value.', '');
+            } else if (ref.startsWith('@calculated.')) {
+              evalRef = ref.replace('@calculated.', '');
+            } else if (ref.startsWith('@select.')) {
+              evalRef = ref.replace('@select.', '');
+            }
+
+            console.log(`📥 [DOWNLOAD] 🔍 Évaluation dynamique: "${ref}" → interpretReference("${evalRef}")`);
+            const evalResult = await interpretReference(evalRef, docSubmissionId, prisma);
+            const resultValue = evalResult?.result;
+            const errors = evalResult?.details?.evaluationErrors || [];
+            const formulaTokens = evalResult?.details?.tokens;
+            
+            console.log(`📥 [DOWNLOAD]   → result=${resultValue}, errors=${JSON.stringify(errors)}, hasTokens=${!!formulaTokens && Array.isArray(formulaTokens) && formulaTokens.length > 0}`);
+            
+            // Ne pas stocker si :
+            // - result est null/undefined/∅
+            // - result contient "Variable manquante"
+            // - formule avec tokens VIDES (expression non configurée) → result=0 est faux
+            const isEmptyFormula = ref.startsWith('node-formula:') && 
+              Array.isArray(formulaTokens) && formulaTokens.length === 0 &&
+              String(resultValue) === '0';
+            
+            if (isEmptyFormula) {
+              console.log(`📥 [DOWNLOAD]   ⚠️ Formule vide (tokens=[]), ignoré`);
+              continue;
+            }
+            
+            if (resultValue !== null && resultValue !== undefined && resultValue !== '∅' && 
+                !String(resultValue).includes('Variable manquante')) {
+              formulaResultsMap[ref] = String(resultValue);
+              console.log(`📥 [DOWNLOAD]   ✅ Résolu: ${ref} → ${resultValue}`);
+            }
+          } catch (refErr) {
+            console.warn(`📥 [DOWNLOAD] ⚠️ Résolution "${ref}" échouée:`, refErr);
+          }
+        }
+      }
+
+      console.log('📥 [DOWNLOAD] FormulaResultsMap final:', formulaResultsMap);
+    } catch (err) {
+      console.warn('📥 [DOWNLOAD] Erreur résolution dynamique:', err);
+    }
+
     // Construire le contexte pour le renderer
     const dataSnapshot = (document.dataSnapshot || {}) as Record<string, any>;
     
@@ -1235,6 +1430,8 @@ router.get('/generated/:id/download', async (req: AuthenticatedRequest, res: Res
         logo: (organization as any).logo || ''
       } : undefined,
       tblData: dataSnapshot.tblData || dataSnapshot,
+      selectOptionsMap,
+      formulaResultsMap,  // 🔥 FIX TOTALS-PDF: Map directe "node-formula:{id}" → valeur résultat
       quote: {
         // Priorité au dataSnapshot.quote s'il existe
         ...(dataSnapshot.quote || {}),

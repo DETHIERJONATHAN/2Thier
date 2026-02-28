@@ -108,7 +108,7 @@ const PageBuilder = ({ templateId, initialConfig, onSave, onClose }: PageBuilder
   const [gridMode, setGridMode] = useState(true); // Mode grille par défaut
   const [showGrid, setShowGrid] = useState(true); // Afficher la grille
   const [loading, setLoading] = useState(!initialConfig); // Chargement si pas de config initiale
-  const [rightPanelWidth, setRightPanelWidth] = useState(380); // Largeur du panneau de droite (redimensionnable)
+  const [rightPanelWidth, setRightPanelWidth] = useState(() => Math.min(520, Math.floor(window.innerWidth * 0.35))); // Largeur du panneau de droite (35% de l'écran, max 520px)
   const [isResizingPanel, setIsResizingPanel] = useState(false); // État du redimensionnement
   const [mobileActiveTab, setMobileActiveTab] = useState<'preview' | 'modules' | 'config'>('preview'); // Onglet mobile actif
   const [templateSelectorOpen, setTemplateSelectorOpen] = useState(false); // Sélecteur de templates pré-faits
@@ -214,7 +214,7 @@ const PageBuilder = ({ templateId, initialConfig, onSave, onClose }: PageBuilder
       // Calculer la nouvelle largeur depuis le bord droit de la fenêtre
       const newWidth = window.innerWidth - e.clientX;
       // Limiter entre 320px et 800px
-      setRightPanelWidth(Math.min(800, Math.max(320, newWidth)));
+      setRightPanelWidth(Math.min(Math.floor(window.innerWidth * 0.5), Math.max(320, newWidth)));
     };
 
     const handleMouseUp = () => {
@@ -1151,7 +1151,7 @@ const PageBuilder = ({ templateId, initialConfig, onSave, onClose }: PageBuilder
           {/* CENTER - Page Preview */}
           <div 
             style={{ 
-              flex: 1,
+              flex: selectedModule ? '0 1 auto' : 1,
               minWidth: 0,
               backgroundColor: '#0a0a0a',
               overflow: 'auto',
@@ -1237,9 +1237,9 @@ const PageBuilder = ({ templateId, initialConfig, onSave, onClose }: PageBuilder
           {/* RIGHT - Module Config Panel */}
           {selectedModule && (
             <div style={{ 
-              width: `${rightPanelWidth}px`,
+              flex: 1,
               minWidth: '320px',
-              maxWidth: '800px',
+              maxWidth: '50vw',
               borderLeft: '1px solid #333',
               display: 'flex',
               flexDirection: 'column',

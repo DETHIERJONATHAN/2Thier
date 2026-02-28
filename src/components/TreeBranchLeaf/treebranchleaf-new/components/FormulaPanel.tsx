@@ -153,15 +153,15 @@ const FormulaPanel: React.FC<FormulaPanelProps> = ({ treeId, nodeId, onChange, r
   // Fonction de sauvegarde ULTRA-OPTIMISÉE avec protection complète contre les boucles
   const saveFormula = useCallback(async (nextTokens: string[], nextName: string) => {
     // Vérifications de sécurité
-    if (!mountedRef.current || isSaving || !isLoaded) return;
+    if (!mountedRef.current || !isLoaded) return;
 
-    // 🛡️ Détection de références circulaires côté frontend
-    const circularToken = nextTokens.find(t => 
-      t === `@calculated.${nodeId}` || t === `@value.${nodeId}`
-    );
-    if (circularToken) {
-      message.error('⚠️ Référence circulaire détectée : cette formule ne peut pas utiliser sa propre valeur calculée');
-      return;
+    // 🛡️ Bloquer uniquement l'auto-référence directe (formule qui se référence elle-même)
+    if (activeId) {
+      const selfRefToken = nextTokens.find(t => t === `node-formula:${activeId}`);
+      if (selfRefToken) {
+        message.warning('⚠️ Référence circulaire : une formule ne peut pas se référencer elle-même.');
+        return;
+      }
     }
     
     // Éviter les sauvegardes identiques
@@ -169,8 +169,6 @@ const FormulaPanel: React.FC<FormulaPanelProps> = ({ treeId, nodeId, onChange, r
     if (tokensStr === lastSavedTokens.current && nextName === lastSavedName.current) {
       return;
     }
-
-    // console.log('💾 FormulaPanel: Sauvegarde demandée', { tokens: nextTokens, name: nextName }); // ✨ Log réduit
     
     // Debounce pour éviter les appels trop fréquents
     if (saveTimeoutRef.current) {
@@ -178,7 +176,7 @@ const FormulaPanel: React.FC<FormulaPanelProps> = ({ treeId, nodeId, onChange, r
     }
 
     saveTimeoutRef.current = setTimeout(async () => {
-      if (!mountedRef.current || isSaving) return;
+      if (!mountedRef.current) return;
       
       setIsSaving(true);
       try {
@@ -240,7 +238,7 @@ const FormulaPanel: React.FC<FormulaPanelProps> = ({ treeId, nodeId, onChange, r
         }
       }
     }, 500); // Debounce de 500ms
-  }, [api, nodeId, treeId, activeId, instances, onChange, isSaving, isLoaded]);
+  }, [api, nodeId, treeId, activeId, instances, onChange, isLoaded]);
 
   // Gestion des changements de tokens SANS déclencher de boucles
   const handleTokensChange = useCallback((nextTokens: string[]) => {

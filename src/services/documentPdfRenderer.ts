@@ -109,6 +109,8 @@ interface RenderContext {
   organization?: OrganizationData;
   quote?: QuoteData;
   tblData: Record<string, any>;
+  /** Map optionId → label pour résoudre les valeurs SELECT (UUID → texte lisible) */
+  selectOptionsMap?: Record<string, string>;
   language: string;
   documentNumber?: string;
 }
@@ -799,9 +801,6 @@ export class DocumentPdfRenderer {
   ): void {
     const title = config.title || 'Tarifs';
     const currency = config.currency || '€';
-    const tvaRate = config.tvaRate || config.vatRate || 21;
-    const showTotal = config.showTotal !== false;
-    const showTVA = config.showTVA !== false;
 
     let items: Array<{ description: string; quantity: number | null; unitPrice: number | null; total: number | null }> = [];
     if (config.pricingLines && config.pricingLines.length > 0) {
@@ -947,12 +946,33 @@ export class DocumentPdfRenderer {
           : (typeof item.quantity === 'number' && typeof item.unitPrice === 'number'
               ? item.quantity * item.unitPrice
               : null));
-        this.doc
-          .fontSize(this.scaleFontSize(10))
-          .font('Helvetica')
-          .fillColor(this.theme.textColor || '#333333');
+        
+        const lineStyle = item.style;
+        
+        // Fond de ligne personnalisé
+        if (lineStyle?.backgroundColor) {
+          this.doc.rect(x, currentY, width, rowHeight).fill(lineStyle.backgroundColor);
+        }
+        
+        // Description avec style personnalisé
+        let descText = this.applyTextTransform(item.description || '-', lineStyle?.textTransform);
+        if (lineStyle && (lineStyle.bold || lineStyle.italic || lineStyle.underline || lineStyle.fontSize || lineStyle.color)) {
+          const applied = this.applyLineStyle(lineStyle, 10);
+          if (applied.underline) {
+            this.drawUnderlinedText(descText, x + 5, currentY + 4, { width: colWidths[0] - 10 });
+          } else {
+            this.doc.text(descText, x + 5, currentY + 4, { width: colWidths[0] - 10 });
+          }
+          // Revenir au style normal pour les colonnes chiffres
+          this.doc.fontSize(this.scaleFontSize(10)).font('Helvetica').fillColor(this.theme.textColor || '#333333');
+        } else {
+          this.doc
+            .fontSize(this.scaleFontSize(10))
+            .font('Helvetica')
+            .fillColor(this.theme.textColor || '#333333');
+          this.doc.text(descText, x + 5, currentY + 4, { width: colWidths[0] - 10 });
+        }
 
-        this.doc.text(item.description || '-', x + 5, currentY + 4, { width: colWidths[0] - 10 });
         this.doc.text(typeof item.quantity === 'number' ? String(item.quantity) : '', x + colWidths[0], currentY + 4, { width: colWidths[1], align: 'center' });
         this.doc.text(typeof item.unitPrice === 'number' ? `${item.unitPrice.toFixed(2)} ${currency}` : '', x + colWidths[0] + colWidths[1], currentY + 4, { width: colWidths[2] - cellPadding, align: 'right' });
         this.doc.text(typeof lineTotal === 'number' ? `${lineTotal.toFixed(2)} ${currency}` : '', x + colWidths[0] + colWidths[1] + colWidths[2], currentY + 4, { width: colWidths[3] - cellPadding, align: 'right' });
@@ -968,46 +988,13 @@ export class DocumentPdfRenderer {
         rowIndex += 1;
       }
 
-      // Si on a fini les lignes, tenter d'afficher les totaux sur cette page
-      if (rowIndex >= items.length && showTotal && hasAnyPricedLine) {
-        const totalsHeight = showTVA ? 50 : 20;
-        if (!canFitUnderBottomLimit(currentY + 5, totalsHeight + 5)) {
-          // Pas assez de place pour les totaux + bas de page -> nouvelle page
+      // Si on a fini les lignes, tenter d'afficher les totaux TBL sur cette page
+      if (rowIndex >= items.length) {
+        const totalsResult = this.renderPricingTotalsTBL(config, x, currentY, width, colWidths, cellPadding, currency, (neededH: number) => canFitUnderBottomLimit(currentY + 5, neededH + 5));
+        if (totalsResult === 'needs-new-page') {
           startNewPage();
           pageIndex += 1;
           continue;
-        }
-
-        const tva = totalHT * (tvaRate / 100);
-        const totalTTC = totalHT + tva;
-        currentY += 5;
-
-        this.doc
-          .fontSize(this.scaleFontSize(10))
-          .font('Helvetica-Bold')
-          .fillColor(this.theme.textColor || '#333333')
-          .text('Total HT', x + colWidths[0] + colWidths[1], currentY, { width: colWidths[2] + colWidths[3] * 0.5 - cellPadding, align: 'right' });
-        this.doc.text(`${totalHT.toFixed(2)} ${currency}`, x + width - colWidths[3], currentY, { width: colWidths[3] - cellPadding, align: 'right' });
-
-        currentY += 15;
-        if (showTVA) {
-          this.doc
-            .font('Helvetica')
-            .text(`TVA (${tvaRate}%)`, x + colWidths[0] + colWidths[1], currentY, { width: colWidths[2] + colWidths[3] * 0.5 - cellPadding, align: 'right' });
-          this.doc.text(`${tva.toFixed(2)} ${currency}`, x + width - colWidths[3], currentY, { width: colWidths[3] - cellPadding, align: 'right' });
-
-          currentY += 15;
-
-          this.doc
-            .rect(x + width * 0.6, currentY - 2, width * 0.4, 20)
-            .fill(this.theme.primaryColor || '#1890ff');
-
-          this.doc
-            .fontSize(this.scaleFontSize(12))
-            .font('Helvetica-Bold')
-            .fillColor('#FFFFFF')
-            .text('Total TTC', x + width * 0.6 + 5, currentY + 3, { width: width * 0.2 - 10 });
-          this.doc.text(`${totalTTC.toFixed(2)} ${currency}`, x + width * 0.8, currentY + 3, { width: width * 0.2 - 10, align: 'right' });
         }
       }
 
@@ -1501,9 +1488,6 @@ export class DocumentPdfRenderer {
     // Version améliorée du tableau de prix avec support pricingLines
     const title = config.title || 'Tarifs';
     const currency = config.currency || '€';
-    const tvaRate = config.tvaRate || config.vatRate || 21;
-    const showTotal = config.showTotal !== false;
-    const showTVA = config.showTVA !== false;
     
     // 🆕 Support des pricingLines (nouveau système) ou items (ancien système)
     let items: Array<{ description: string; quantity: number | null; unitPrice: number | null; total: number | null }> = [];
@@ -1602,12 +1586,31 @@ export class DocumentPdfRenderer {
               : null));
         if (typeof lineTotal === 'number') totalHT += lineTotal;
         
-        this.doc
-          .fontSize(this.scaleFontSize(10))
-          .font('Helvetica')
-          .fillColor(this.theme.textColor || '#333333');
+        const lineStyle = item.style;
         
-        this.doc.text(item.description || '-', x + 5, currentY + 4, { width: colWidths[0] - 10 });
+        // Fond de ligne personnalisé
+        if (lineStyle?.backgroundColor) {
+          this.doc.rect(x, currentY, width, rowHeight).fill(lineStyle.backgroundColor);
+        }
+        
+        // Description avec style
+        let descText = this.applyTextTransform(item.description || '-', lineStyle?.textTransform);
+        if (lineStyle && (lineStyle.bold || lineStyle.italic || lineStyle.underline || lineStyle.fontSize || lineStyle.color)) {
+          const applied = this.applyLineStyle(lineStyle, 10);
+          if (applied.underline) {
+            this.drawUnderlinedText(descText, x + 5, currentY + 4, { width: colWidths[0] - 10 });
+          } else {
+            this.doc.text(descText, x + 5, currentY + 4, { width: colWidths[0] - 10 });
+          }
+          this.doc.fontSize(this.scaleFontSize(10)).font('Helvetica').fillColor(this.theme.textColor || '#333333');
+        } else {
+          this.doc
+            .fontSize(this.scaleFontSize(10))
+            .font('Helvetica')
+            .fillColor(this.theme.textColor || '#333333');
+          this.doc.text(descText, x + 5, currentY + 4, { width: colWidths[0] - 10 });
+        }
+        
         this.doc.text(typeof item.quantity === 'number' ? String(item.quantity) : '', x + colWidths[0], currentY + 4, { width: colWidths[1], align: 'center' });
         this.doc.text(typeof item.unitPrice === 'number' ? `${item.unitPrice.toFixed(2)} ${currency}` : '', x + colWidths[0] + colWidths[1], currentY + 4, { width: colWidths[2] - cellPadding, align: 'right' });
         this.doc.text(typeof lineTotal === 'number' ? `${lineTotal.toFixed(2)} ${currency}` : '', x + colWidths[0] + colWidths[1] + colWidths[2], currentY + 4, { width: colWidths[3] - cellPadding, align: 'right' });
@@ -1625,54 +1628,116 @@ export class DocumentPdfRenderer {
       }
     }
     
-    const hasAnyPricedLine = items.some((it) => typeof it.total === 'number' || (typeof it.quantity === 'number' && typeof it.unitPrice === 'number'));
+    // 🆕 Totaux via sources TBL
+    this.renderPricingTotalsTBL(config, x, currentY, width, colWidths, cellPadding, currency, (neededH: number) => this.canFitOnPage(currentY, neededH + 5));
+  }
 
-    // Totaux
-    if (showTotal && hasAnyPricedLine) {
-      // 🔥 Vérifier si les totaux peuvent tenir
-      const totalsHeight = showTVA ? 50 : 20;
-      if (!this.canFitOnPage(currentY, totalsHeight + 5)) {
-        console.warn(`📄 [PDF] PRICING_TABLE: Pas de place pour les totaux. Totaux masqués.`);
-        return;
-      }
-      
-      const tva = totalHT * (tvaRate / 100);
-      const totalTTC = totalHT + tva;
-      
-      currentY += 5;
-      
-      // Total HT
+  /**
+   * 🆕 Rend les totaux du tableau de prix à partir des sources TBL liées
+   * Affiche: Remise, Total HTVA, TVA, Total TVAC (si les sources sont configurées)
+   */
+  private renderPricingTotalsTBL(
+    config: Record<string, any>,
+    x: number,
+    startY: number,
+    width: number,
+    colWidths: number[],
+    cellPadding: number,
+    currency: string,
+    canFit: (neededHeight: number) => boolean
+  ): 'ok' | 'needs-new-page' {
+    const hasRemise = !!config.remiseSource;
+    const hasTotalHTVA = !!config.totalHTVASource;
+    const hasTotalTVA = !!config.totalTVASource;
+    const hasTotalTVAC = !!config.totalTVACSource;
+
+    if (!hasRemise && !hasTotalHTVA && !hasTotalTVA && !hasTotalTVAC) return 'ok';
+
+    // Calculer la hauteur nécessaire
+    let linesCount = 0;
+    if (hasRemise) linesCount++;
+    if (hasTotalHTVA) linesCount++;
+    if (hasTotalTVA) linesCount++;
+    if (hasTotalTVAC) linesCount++;
+    const totalsHeight = linesCount * 17 + (hasTotalTVAC ? 8 : 0) + 10;
+
+    if (!canFit(totalsHeight)) return 'needs-new-page';
+
+    let currentY = startY + 5;
+    const labelX = x + colWidths[0] + colWidths[1];
+    const labelW = colWidths[2] + colWidths[3] * 0.5 - cellPadding;
+    const valX = x + width - colWidths[3];
+    const valW = colWidths[3] - cellPadding;
+
+    const resolveAndFormat = (source: string): string => {
+      const raw = this.resolveVariable(source);
+      // 🔥 FIX: Nettoyer les nombres formatés en français (espaces insécables, virgule décimale)
+      // formatValue peut retourner "5 000" ou "1 234,56" qui cassent parseFloat
+      const cleaned = raw.replace(/[\s\u00A0]/g, '').replace(',', '.');
+      const num = parseFloat(cleaned);
+      console.log(`📄 [PDF] resolveAndFormat("${source}") → raw="${raw}", cleaned="${cleaned}", num=${num}, isFinite=${Number.isFinite(num)}`);
+      if (Number.isFinite(num)) return `${num.toFixed(2)} ${currency}`;
+      return raw || '-';
+    };
+
+    // 🔥 DEBUG: Log les sources configurées
+    console.log(`📄 [PDF] renderPricingTotalsTBL sources:`, {
+      remiseSource: config.remiseSource || '(non configuré)',
+      totalHTVASource: config.totalHTVASource || '(non configuré)',
+      totalTVASource: config.totalTVASource || '(non configuré)',
+      totalTVACSource: config.totalTVACSource || '(non configuré)',
+      tblDataKeys: Object.keys(this.ctx.tblData || {}).slice(0, 20),
+      formulaResultsMap: (this.ctx as any).formulaResultsMap || {},
+    });
+
+    // Remise
+    if (hasRemise) {
+      this.doc
+        .fontSize(this.scaleFontSize(10))
+        .font('Helvetica')
+        .fillColor('#fa541c');
+      this.doc.text('Remise', labelX, currentY, { width: labelW, align: 'right' });
+      this.doc.text(`- ${resolveAndFormat(config.remiseSource)}`, valX, currentY, { width: valW, align: 'right' });
+      currentY += 17;
+    }
+
+    // Total HTVA
+    if (hasTotalHTVA) {
       this.doc
         .fontSize(this.scaleFontSize(10))
         .font('Helvetica-Bold')
-        .fillColor(this.theme.textColor || '#333333')
-        .text('Total HT', x + colWidths[0] + colWidths[1], currentY, { width: colWidths[2] + colWidths[3] * 0.5 - cellPadding, align: 'right' });
-      this.doc.text(`${totalHT.toFixed(2)} ${currency}`, x + width - colWidths[3], currentY, { width: colWidths[3] - cellPadding, align: 'right' });
-      
-      currentY += 15;
-      
-      if (showTVA) {
-        // TVA
-        this.doc
-          .font('Helvetica')
-          .text(`TVA (${tvaRate}%)`, x + colWidths[0] + colWidths[1], currentY, { width: colWidths[2] + colWidths[3] * 0.5 - cellPadding, align: 'right' });
-        this.doc.text(`${tva.toFixed(2)} ${currency}`, x + width - colWidths[3], currentY, { width: colWidths[3] - cellPadding, align: 'right' });
-        
-        currentY += 15;
-        
-        // Total TTC
-        this.doc
-          .rect(x + width * 0.6, currentY - 2, width * 0.4, 20)
-          .fill(this.theme.primaryColor || '#1890ff');
-        
-        this.doc
-          .fontSize(this.scaleFontSize(12))
-          .font('Helvetica-Bold')
-          .fillColor('#FFFFFF')
-          .text('Total TTC', x + width * 0.6 + 5, currentY + 3, { width: width * 0.2 - 10 });
-        this.doc.text(`${totalTTC.toFixed(2)} ${currency}`, x + width * 0.8, currentY + 3, { width: width * 0.2 - 10, align: 'right' });
-      }
+        .fillColor(this.theme.textColor || '#333333');
+      this.doc.text('Total HTVA', labelX, currentY, { width: labelW, align: 'right' });
+      this.doc.text(resolveAndFormat(config.totalHTVASource), valX, currentY, { width: valW, align: 'right' });
+      currentY += 17;
     }
+
+    // TVA
+    if (hasTotalTVA) {
+      this.doc
+        .fontSize(this.scaleFontSize(10))
+        .font('Helvetica')
+        .fillColor(this.theme.textColor || '#333333');
+      this.doc.text('TVA', labelX, currentY, { width: labelW, align: 'right' });
+      this.doc.text(resolveAndFormat(config.totalTVASource), valX, currentY, { width: valW, align: 'right' });
+      currentY += 17;
+    }
+
+    // Total TVAC (encadré coloré)
+    if (hasTotalTVAC) {
+      this.doc
+        .rect(x + width * 0.6, currentY - 2, width * 0.4, 20)
+        .fill(this.theme.primaryColor || '#1890ff');
+
+      this.doc
+        .fontSize(this.scaleFontSize(12))
+        .font('Helvetica-Bold')
+        .fillColor('#FFFFFF')
+        .text('Total TVAC', x + width * 0.6 + 5, currentY + 3, { width: width * 0.2 - 10 });
+      this.doc.text(resolveAndFormat(config.totalTVACSource), x + width * 0.8, currentY + 3, { width: width * 0.2 - 10, align: 'right' });
+    }
+
+    return 'ok';
   }
 
   private renderModuleTestimonial(config: Record<string, any>, x: number, y: number, width: number): void {
@@ -2825,6 +2890,7 @@ export class DocumentPdfRenderer {
    * - Évalue les conditions d'affichage
    * - Résout les références TBL (@value.xxx, @calculated.xxx, node-formula:xxx, etc.)
    * - Génère N lignes pour les repeaters
+   * - Masque les lignes repeater qui n'ont aucune instance (0 copies)
    */
   private processPricingLines(pricingLines: any[], _config: Record<string, any>): any[] {
     const results: any[] = [];
@@ -2837,14 +2903,33 @@ export class DocumentPdfRenderer {
         continue;
       }
       
-      // 2. Traiter selon le type de ligne
-      if (line.type === 'repeater' && line.repeaterId) {
-        // Génère N lignes selon les instances du repeater
-        const repeaterInstances = this.getRepeaterInstances(line.repeaterId, tblData, line);
+      // 2. Détecter si c'est une ligne repeater (même si type n'est pas explicitement 'repeater')
+      //    Détection large : type === 'repeater', OU repeaterId présent, OU sources @repeat.xxx
+      const isRepeaterLine = line.type === 'repeater' 
+        || !!line.repeaterId 
+        || this.hasRepeatSources(line);
+      
+      if (isRepeaterLine) {
+        // Trouver le repeaterId depuis la ligne ou ses sources
+        const repeaterId = line.repeaterId || this.extractRepeaterIdFromSources(line);
         
-        for (const instance of repeaterInstances) {
-          const resolvedLine = this.resolveLineValues(line, instance);
-          results.push(resolvedLine);
+        if (repeaterId) {
+          const repeaterInstances = this.getRepeaterInstances(repeaterId, tblData, line);
+          
+          if (repeaterInstances.length === 0) {
+            // ✅ Pas d'instances → ne pas afficher la ligne du tout
+            console.log(`📄 [PDF] Ligne repeater "${line.label}" masquée (0 instances pour repeater ${repeaterId})`);
+            continue;
+          }
+          
+          for (const instance of repeaterInstances) {
+            const resolvedLine = this.resolveLineValues(line, instance);
+            results.push(resolvedLine);
+          }
+        } else {
+          // Type repeater mais pas de repeaterId trouvable → masquer
+          console.log(`📄 [PDF] Ligne repeater "${line.label}" masquée (repeaterId non trouvé)`);
+          continue;
         }
       } else {
         // Ligne statique ou dynamique simple
@@ -2854,6 +2939,85 @@ export class DocumentPdfRenderer {
     }
     
     return results;
+  }
+
+  /**
+   * Vérifie si une ligne a des sources @repeat.xxx
+   */
+  private hasRepeatSources(line: any): boolean {
+    const sources = [line.labelSource, line.quantitySource, line.unitPriceSource, line.totalSource];
+    return sources.some(s => typeof s === 'string' && s.startsWith('@repeat.'));
+  }
+
+  /**
+   * Extrait le repeaterId depuis les sources @repeat.{repeaterId}.xxx d'une ligne
+   */
+  private extractRepeaterIdFromSources(line: any): string | undefined {
+    const sources = [line.labelSource, line.quantitySource, line.unitPriceSource, line.totalSource];
+    for (const src of sources) {
+      if (typeof src === 'string' && src.startsWith('@repeat.')) {
+        const match = src.match(/^@repeat\.([^.]+)\./);
+        if (match) return match[1];
+      }
+    }
+    return undefined;
+  }
+
+  /**
+   * Applique le formatage de style (gras, italique, souligné, taille, couleur) 
+   * sur le document PDF pour une ligne de pricing.
+   * Retourne la police choisie pour pouvoir revenir au style normal après.
+   */
+  private applyLineStyle(style: any, defaultFontSize?: number): { font: string; fontSize: number; color: string; underline: boolean } {
+    const bold = style?.bold === true;
+    const italic = style?.italic === true;
+    const underline = style?.underline === true;
+    const fontSize = style?.fontSize || defaultFontSize || 10;
+    const color = style?.color || this.theme.textColor || '#333333';
+    
+    // Sélectionner la bonne police Helvetica selon bold/italic
+    let font = 'Helvetica';
+    if (bold && italic) font = 'Helvetica-BoldOblique';
+    else if (bold) font = 'Helvetica-Bold';
+    else if (italic) font = 'Helvetica-Oblique';
+    
+    this.doc
+      .fontSize(this.scaleFontSize(fontSize))
+      .font(font)
+      .fillColor(color);
+    
+    return { font, fontSize, color, underline };
+  }
+
+  /**
+   * Applique textTransform sur une chaîne
+   */
+  private applyTextTransform(text: string, transform?: string): string {
+    if (!transform || transform === 'none') return text;
+    switch (transform) {
+      case 'uppercase': return text.toUpperCase();
+      case 'lowercase': return text.toLowerCase();
+      case 'capitalize': return text.replace(/\b\w/g, c => c.toUpperCase());
+      default: return text;
+    }
+  }
+
+  /**
+   * Dessine du texte souligné à une position donnée
+   */
+  private drawUnderlinedText(text: string, x: number, y: number, options: any): void {
+    this.doc.text(text, x, y, options);
+    // Calculer la largeur du texte pour dessiner la ligne
+    const textWidth = this.doc.widthOfString(text, options);
+    const lineY = y + this.doc.currentLineHeight() - 1;
+    this.doc
+      .save()
+      .strokeColor(this.doc._fillColor?.[0] || '#333333')
+      .lineWidth(0.5)
+      .moveTo(x, lineY)
+      .lineTo(x + Math.min(textWidth, (options?.width || textWidth)), lineY)
+      .stroke()
+      .restore();
   }
 
   /**
@@ -2894,11 +3058,12 @@ export class DocumentPdfRenderer {
       suffix,
     });
     
-    const resolvedLine: { description: string; quantity: number | null; unitPrice: number | null; total: number | null } = {
+    const resolvedLine: { description: string; quantity: number | null; unitPrice: number | null; total: number | null; style?: any } = {
       description: '',
       quantity: null,
       unitPrice: null,
       total: null,
+      style: line.style || undefined,  // Propager les options de formatage
     };
     
     // Résoudre le label/description
@@ -3170,19 +3335,33 @@ export class DocumentPdfRenderer {
     for (let i = 0; i < items.length; i++) {
       const item = items[i];
       const rowY = this.currentY;
+      const lineStyle = item.style;
 
-      // Alternance de couleur
-      if (i % 2 === 1) {
-        this.doc
-          .rect(this.margin, rowY, this.contentWidth, 22)
-          .fill('#f9f9f9');
+      // Fond de ligne: couleur personnalisée OU alternance
+      if (lineStyle?.backgroundColor) {
+        this.doc.rect(this.margin, rowY, this.contentWidth, 22).fill(lineStyle.backgroundColor);
+      } else if (i % 2 === 1) {
+        this.doc.rect(this.margin, rowY, this.contentWidth, 22).fill('#f9f9f9');
       }
 
-      this.doc.fillColor(this.theme.textColor || '#333333').fontSize(9);
-
+      // Appliquer le style de la ligne pour la description
       xPos = this.margin + 5;
-      const desc = this.substituteVariables(item.description || item.name || '');
-      this.doc.text(desc, xPos, rowY + 5, { width: colWidths.description - 10 });
+      let desc = this.substituteVariables(item.description || item.name || '');
+      desc = this.applyTextTransform(desc, lineStyle?.textTransform);
+      
+      if (lineStyle && (lineStyle.bold || lineStyle.italic || lineStyle.underline || lineStyle.fontSize || lineStyle.color)) {
+        const applied = this.applyLineStyle(lineStyle, 9);
+        if (applied.underline) {
+          this.drawUnderlinedText(desc, xPos, rowY + 5, { width: colWidths.description - 10 });
+        } else {
+          this.doc.text(desc, xPos, rowY + 5, { width: colWidths.description - 10 });
+        }
+        // Revenir au style normal pour les autres colonnes
+        this.doc.font('Helvetica').fontSize(9).fillColor(this.theme.textColor || '#333333');
+      } else {
+        this.doc.fillColor(this.theme.textColor || '#333333').fontSize(9).font('Helvetica');
+        this.doc.text(desc, xPos, rowY + 5, { width: colWidths.description - 10 });
+      }
       
       xPos += colWidths.description;
       this.doc.text(String(item.quantity || 1), xPos, rowY + 5, { width: colWidths.quantity - 10, align: 'center' });
@@ -3707,6 +3886,14 @@ export class DocumentPdfRenderer {
     const quote = this.ctx.quote || {};
     const tblData = this.ctx.tblData || {};
 
+    // 🔥 SYSTÈME DYNAMIQUE: Vérifier d'abord dans formulaResultsMap (pré-résolu par interpretReference)
+    // Couvre TOUS les types: node-formula:, condition:, @calculated., @value., @table., etc.
+    const formulaResultsMap = (this.ctx as any).formulaResultsMap || {};
+    if (formulaResultsMap[ref] !== undefined) {
+      console.log(`📄 [PDF] ✅ Résolu via formulaResultsMap: "${ref}" → ${formulaResultsMap[ref]}`);
+      return this.formatValue(formulaResultsMap[ref]);
+    }
+
     // Variables lead.xxx
     if (ref.startsWith('lead.')) {
       const key = ref.replace('lead.', '');
@@ -3745,23 +3932,37 @@ export class DocumentPdfRenderer {
       const nodeRef = ref.replace(/^@(value|select)\./, '');
       console.log(`📄 [PDF] Cherche TBL ref: "${nodeRef}"`);
       
+      // Helper: résoudre les valeurs SELECT (UUID → label lisible)
+      const resolveSelectLabel = (rawValue: any): string => {
+        const formatted = this.formatValue(rawValue);
+        // Si la valeur ressemble à un UUID, chercher dans selectOptionsMap
+        if (this.ctx.selectOptionsMap && typeof rawValue === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}/i.test(rawValue)) {
+          const label = this.ctx.selectOptionsMap[rawValue];
+          if (label) {
+            console.log(`📄 [PDF] 🔄 SELECT résolu: "${rawValue}" → "${label}"`);
+            return label;
+          }
+        }
+        return formatted;
+      };
+      
       // Chercher dans tblData par ID exact
       if (tblData[nodeRef] !== undefined) {
         console.log(`📄 [PDF] ✅ Trouvé exact: ${tblData[nodeRef]}`);
-        return this.formatValue(tblData[nodeRef]);
+        return resolveSelectLabel(tblData[nodeRef]);
       }
       
       // Chercher dans values si c'est une submission
       if (tblData.values && tblData.values[nodeRef] !== undefined) {
         console.log(`📄 [PDF] ✅ Trouvé dans values: ${tblData.values[nodeRef]}`);
-        return this.formatValue(tblData.values[nodeRef]);
+        return resolveSelectLabel(tblData.values[nodeRef]);
       }
       
       // Chercher par clé partielle (le nodeRef peut être le dernier segment d'un ID plus long)
       for (const [key, value] of Object.entries(tblData)) {
         if (key.includes(nodeRef) || key.endsWith(nodeRef)) {
           console.log(`📄 [PDF] ✅ Trouvé partiel "${key}": ${value}`);
-          return this.formatValue(value);
+          return resolveSelectLabel(value);
         }
       }
       
@@ -3770,14 +3971,57 @@ export class DocumentPdfRenderer {
         for (const [key, value] of Object.entries(tblData.values)) {
           if (key.includes(nodeRef) || key.endsWith(nodeRef)) {
             console.log(`📄 [PDF] ✅ Trouvé partiel dans values "${key}": ${value}`);
-            return this.formatValue(value);
+            return resolveSelectLabel(value);
           }
         }
       }
     }
 
-    // 🆕 Variables calculatedValue:xxx ou @calculated.xxx
+    // 🆕 Variables node-formula:xxx ou formula:xxx
+    if (ref.startsWith('node-formula:') || ref.startsWith('formula:')) {
+      // 🔥 FIX TOTALS-PDF: Utiliser formulaResultsMap pour obtenir directement le résultat
+      const formulaResultsMap = (this.ctx as any).formulaResultsMap || {};
+      
+      // Chercher avec la ref exacte ET avec l'autre format (node-formula: ↔ formula:)
+      const formulaId = ref.replace(/^(node-formula:|formula:)/, '');
+      const altRef = ref.startsWith('node-formula:') ? `formula:${formulaId}` : `node-formula:${formulaId}`;
+      
+      if (formulaResultsMap[ref] !== undefined) {
+        console.log(`📄 [PDF] ✅ Formula résolu via formulaResultsMap: ${ref} → ${formulaResultsMap[ref]}`);
+        return this.formatValue(formulaResultsMap[ref]);
+      }
+      if (formulaResultsMap[altRef] !== undefined) {
+        console.log(`📄 [PDF] ✅ Formula résolu via formulaResultsMap (alt): ${altRef} → ${formulaResultsMap[altRef]}`);
+        return this.formatValue(formulaResultsMap[altRef]);
+      }
+      
+      console.log(`📄 [PDF] Cherche formula: "${formulaId}" (pas trouvé dans formulaResultsMap, keys: ${Object.keys(formulaResultsMap).join(', ')})`);
+      
+      // Fallback: chercher dans formulas ou directement dans tblData
+      if (tblData.formulas && tblData.formulas[formulaId] !== undefined) {
+        return this.formatValue(tblData.formulas[formulaId]);
+      }
+      if (tblData[formulaId] !== undefined) {
+        return this.formatValue(tblData[formulaId]);
+      }
+      
+      // Chercher par suffixe
+      for (const [key, value] of Object.entries(tblData)) {
+        if (key.includes(formulaId) || key.endsWith(formulaId)) {
+          return this.formatValue(value);
+        }
+      }
+    }
+
+    // 🆕 Variables @calculated.xxx ou calculatedValue:xxx — aussi pré-résolu
     if (ref.startsWith('calculatedValue:') || ref.startsWith('@calculated.')) {
+      // Vérifier d'abord dans formulaResultsMap (pré-résolu par la route)
+      const formulaResultsMap = (this.ctx as any).formulaResultsMap || {};
+      if (formulaResultsMap[ref] !== undefined) {
+        console.log(`📄 [PDF] ✅ Calculated résolu via formulaResultsMap: ${ref} → ${formulaResultsMap[ref]}`);
+        return this.formatValue(formulaResultsMap[ref]);
+      }
+      
       const calcRef = ref.replace(/^(calculatedValue:|@calculated\.)/, '');
       console.log(`📄 [PDF] Cherche calculatedValue: "${calcRef}"`);
       
@@ -3791,26 +4035,6 @@ export class DocumentPdfRenderer {
       // Chercher par suffixe
       for (const [key, value] of Object.entries(tblData)) {
         if (key.includes(calcRef) || key.endsWith(calcRef)) {
-          return this.formatValue(value);
-        }
-      }
-    }
-
-    // 🆕 Variables node-formula:xxx ou formula:xxx
-    if (ref.startsWith('node-formula:') || ref.startsWith('formula:')) {
-      const formulaRef = ref.replace(/^(node-formula:|formula:)/, '');
-      console.log(`📄 [PDF] Cherche formula: "${formulaRef}"`);
-      
-      // Chercher dans formulas ou directement
-      if (tblData.formulas && tblData.formulas[formulaRef] !== undefined) {
-        return this.formatValue(tblData.formulas[formulaRef]);
-      }
-      if (tblData[formulaRef] !== undefined) {
-        return this.formatValue(tblData[formulaRef]);
-      }
-      // Chercher par suffixe
-      for (const [key, value] of Object.entries(tblData)) {
-        if (key.includes(formulaRef) || key.endsWith(formulaRef)) {
           return this.formatValue(value);
         }
       }

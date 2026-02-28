@@ -143,15 +143,21 @@ const FormulaPanel: React.FC<FormulaPanelProps> = ({ nodeId, onChange, readOnly 
 
   // Fonction de sauvegarde avec debounce (inclut targetProperty et constraintMessage)
   const saveFormula = useCallback(async (nextTokens: string[], nextName: string, nextTargetProperty?: string, nextConstraintMessage?: string) => {
-    if (!mountedRef.current || isSaving) return;
+    if (!mountedRef.current) return;
 
-    // 🛡️ Détection de références circulaires côté frontend
-    const circularToken = nextTokens.find(t => 
-      t === `@calculated.${nodeId}` || t === `@value.${nodeId}`
-    );
-    if (circularToken) {
-      message.error('⚠️ Référence circulaire détectée : cette formule ne peut pas utiliser sa propre valeur calculée');
-      return;
+    // 🔄 Annuler le debounce précédent (évite les sauvegardes perdues)
+    if (saveTimeoutRef.current) {
+      clearTimeout(saveTimeoutRef.current);
+      saveTimeoutRef.current = undefined;
+    }
+
+    // 🛡️ Bloquer uniquement l'auto-référence directe (formule qui se référence elle-même)
+    if (activeId) {
+      const selfRefToken = nextTokens.find(t => t === `node-formula:${activeId}`);
+      if (selfRefToken) {
+        message.warning('⚠️ Référence circulaire : une formule ne peut pas se référencer elle-même.');
+        return;
+      }
     }
 
     const tokensStr = JSON.stringify(nextTokens);
@@ -166,9 +172,9 @@ const FormulaPanel: React.FC<FormulaPanelProps> = ({ nodeId, onChange, readOnly 
       return; // Pas de changement
     }
 
-    setIsSaving(true);
     const timeoutId = setTimeout(async () => {
       if (!mountedRef.current) return;
+      setIsSaving(true);
 
       try {
         let resultFormula: FormulaInstance | null = null;
@@ -218,7 +224,7 @@ const FormulaPanel: React.FC<FormulaPanelProps> = ({ nodeId, onChange, readOnly 
           onChange?.({ tokens: nextTokens, name: finalName, targetProperty: targetProp, constraintMessage: constraintMsg });
         }
 
-        // console.log('✅ FormulaPanel: Sauvegarde réussie dans la table'); // ✨ Log réduit
+        console.log('✅ FormulaPanel: Sauvegarde réussie', { activeId, tokens: nextTokens.length });
       } catch (err) {
         console.error('❌ FormulaPanel: Erreur sauvegarde', err);
         if (mountedRef.current) {
@@ -229,10 +235,10 @@ const FormulaPanel: React.FC<FormulaPanelProps> = ({ nodeId, onChange, readOnly 
           setIsSaving(false);
         }
       }
-    }, 300); // Debounce réduit à 300ms
+    }, 300); // Debounce 300ms
 
     saveTimeoutRef.current = timeoutId;
-  }, [api, nodeId, activeId, onChange, isSaving, localTargetProperty, localConstraintMessage]);
+  }, [api, nodeId, activeId, onChange, localTargetProperty, localConstraintMessage]);
 
   // Gestion des changements de tokens SANS déclencher de boucles
   const handleTokensChange = useCallback((nextTokens: string[]) => {

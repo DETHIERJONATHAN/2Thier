@@ -642,9 +642,18 @@ const TBL: React.FC<TBLProps> = ({
     if (typeof window === 'undefined') return;
     
     const handleForceRetransform = (event: Event) => {
-          const detail = (event as CustomEvent<{ source?: string; skipFormReload?: boolean; forceRemote?: boolean }>).detail;
+          const detail = (event as CustomEvent<{ source?: string; skipFormReload?: boolean; forceRemote?: boolean; reason?: string }>).detail;
           const forceRemote = !!detail?.forceRemote;
-          const debugId = (detail as any)?.eventDebugId || null;
+          
+          // 🔧 FIX: Ne PAS refetch pour les événements de suppression.
+          // La suppression locale est gérée par le handler tbl-repeater-updated.
+          // Un refetch ici provoquait 2-3 GET /nodes redondants via :
+          //   1) refetchRef.current() (ce handler)
+          //   2) le listener dans useTBLDataPrismaComplete
+          //   3) potentiellement le hook hierarchical-fixed
+          if ((detail as any)?.reason === 'delete-copy-group') {
+            return;
+          }
           
           // 🔥 CRITICAL: If forceRemote is true, ALWAYS process - NO EXCEPTIONS
           if (forceRemote) {
@@ -2712,12 +2721,20 @@ const TBL: React.FC<TBLProps> = ({
       setGeneratingPdf(true);
       
       // Préparer les données du document
+      // 🔥 FIX TOTALS-PDF: Fusionner formData (React state) avec window.TBL_FORM_DATA
+      // window.TBL_FORM_DATA contient TOUTES les valeurs y compris les valeurs calculées
+      // (formules, opérations, links, sum-totals) qui sont injectées par broadcastCalculatedRefresh
+      // mais ne sont PAS toujours dans le state React formData.
+      const mergedTblData = (typeof window !== 'undefined' && window.TBL_FORM_DATA)
+        ? { ...formData, ...window.TBL_FORM_DATA }
+        : formData;
+      
       const documentData = {
         templateId,
         submissionId,
         leadId: clientData.id,
-        // Données du formulaire TBL
-        tblData: formData,
+        // Données du formulaire TBL (avec valeurs calculées incluses)
+        tblData: mergedTblData,
         // Données du client
         lead: {
           firstName: clientData.name.split(' ')[0] || '',

@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { TreeSelect, Modal, Space, Tabs, Typography, Alert, Spin, Segmented, Tooltip, List, Input, Collapse, Badge, Tag } from 'antd';
+import { TreeSelect, Modal, Space, Tabs, Typography, Alert, Spin, Segmented, Tooltip, List, Input, Collapse, Badge, Tag, ConfigProvider } from 'antd';
 import { useAuthenticatedApi } from '../../../../../../hooks/useAuthenticatedApi';
 
 type NodeLite = { id: string; parentId?: string | null; label: string; type: string; subType?: string | null };
@@ -629,6 +629,73 @@ const NodeTreeSelector: React.FC<Props> = ({ nodeId, open, onClose, onSelect, se
   };
 
   return (
+    <ConfigProvider
+      theme={{
+        token: {
+          colorBgBase: '#1a1a2e',
+          colorTextBase: '#e0e0e0',
+          colorText: '#e0e0e0',
+          colorTextSecondary: '#aaa',
+          colorTextTertiary: '#777',
+          colorBorder: '#3a3a5c',
+          colorBgContainer: '#25253e',
+          colorBgElevated: '#2d2d4a',
+          colorBgLayout: '#1a1a2e',
+          colorPrimary: '#1890ff',
+          colorPrimaryBorder: '#0050b3',
+          colorTextPlaceholder: '#666',
+        },
+        components: {
+          Modal: {
+            contentBg: '#1e1e36',
+            headerBg: '#1e1e36',
+            titleColor: '#e0e0e0',
+            colorIcon: '#aaa',
+            colorIconHover: '#fff',
+          },
+          Input: {
+            colorBgContainer: '#2a2a48',
+            colorText: '#e0e0e0',
+            colorBorder: '#3a3a5c',
+            colorTextPlaceholder: '#666',
+          },
+          Tabs: {
+            colorText: '#aaa',
+            colorTextActive: '#69c0ff',
+            colorBorderSecondary: '#3a3a5c',
+          },
+          List: {
+            colorText: '#e0e0e0',
+            colorBorder: '#3a3a5c',
+          },
+          Collapse: {
+            colorBgContainer: '#25253e',
+            colorText: '#e0e0e0',
+            colorBorder: '#3a3a5c',
+            headerBg: '#2a2a48',
+          },
+          Alert: {
+            colorInfoBg: '#1a2a4a',
+            colorInfoBorder: '#1890ff44',
+          },
+          Segmented: {
+            trackBg: 'rgba(255,255,255,0.06)',
+            itemColor: '#aaa',
+            itemSelectedColor: '#fff',
+            itemSelectedBg: '#1890ff',
+          },
+          Button: {
+            colorBgContainer: '#2a2a48',
+            colorText: '#e0e0e0',
+            colorBorder: '#3a3a5c',
+          },
+          Typography: {
+            colorText: '#e0e0e0',
+            colorTextSecondary: '#999',
+          },
+        },
+      }}
+    >
     <Modal
       title={<Space>{"Sélectionner dans l'arborescence"}{allowMulti && selectedCount > 0 && <Badge count={selectedCount} style={{ backgroundColor: '#52c41a' }} />}</Space>}
       open={open}
@@ -638,6 +705,7 @@ const NodeTreeSelector: React.FC<Props> = ({ nodeId, open, onClose, onSelect, se
       okButtonProps={{ disabled: !value || (Array.isArray(value) && value.length === 0), loading }}
       className="node-tree-selector-modal"
       width={700}
+      styles={{ body: { background: '#1e1e36' }, header: { background: '#1e1e36', borderBottom: '1px solid #3a3a5c' }, footer: { background: '#1e1e36', borderTop: '1px solid #3a3a5c' } }}
     >
       <Space direction="vertical" style={{ width: '100%' }}>
         {error && (
@@ -645,19 +713,20 @@ const NodeTreeSelector: React.FC<Props> = ({ nodeId, open, onClose, onSelect, se
         )}
         {/* Barre d'onglets avec scroll horizontal drag-to-scroll */}
         <style>{`
+          /* === Scrollbar pour les onglets === */
           .node-tree-tabs-scroll-container::-webkit-scrollbar {
             height: 6px;
           }
           .node-tree-tabs-scroll-container::-webkit-scrollbar-track {
-            background: #f0f0f0;
+            background: #2a2a48;
             border-radius: 3px;
           }
           .node-tree-tabs-scroll-container::-webkit-scrollbar-thumb {
-            background: #bfbfbf;
+            background: #4a4a6c;
             border-radius: 3px;
           }
           .node-tree-tabs-scroll-container::-webkit-scrollbar-thumb:hover {
-            background: #999;
+            background: #6a6a8c;
           }
           .node-tree-tabs-scroll-container .ant-tabs-nav-list {
             gap: 4px;
@@ -665,21 +734,138 @@ const NodeTreeSelector: React.FC<Props> = ({ nodeId, open, onClose, onSelect, se
           .node-tree-tabs-scroll-container .ant-tabs-tab {
             padding: 6px 12px !important;
             margin: 0 !important;
-            border: 1px solid #d9d9d9 !important;
+            border: 1px solid #3a3a5c !important;
             border-radius: 6px !important;
-            background: #fafafa !important;
+            background: #25253e !important;
+            color: #b0b0cc !important;
             transition: all 0.2s ease !important;
           }
           .node-tree-tabs-scroll-container .ant-tabs-tab:hover {
             border-color: #1890ff !important;
-            color: #1890ff !important;
+            color: #69c0ff !important;
+            background: rgba(24,144,255,0.15) !important;
           }
           .node-tree-tabs-scroll-container .ant-tabs-tab-active {
-            background: #e6f4ff !important;
+            background: rgba(24,144,255,0.25) !important;
             border-color: #1890ff !important;
+            color: #69c0ff !important;
+            font-weight: 600 !important;
           }
           .node-tree-tabs-scroll-container .ant-tabs-ink-bar {
             display: none !important;
+          }
+          /* === NodeTreeSelector Modal — thème sombre unifié === */
+          .node-tree-selector-modal .ant-modal-content {
+            background: #1e1e36 !important;
+            color: #e0e0e0 !important;
+          }
+          .node-tree-selector-modal .ant-modal-header {
+            background: #1e1e36 !important;
+            border-bottom: 1px solid #3a3a5c !important;
+          }
+          .node-tree-selector-modal .ant-modal-title {
+            color: #e0e0e0 !important;
+          }
+          .node-tree-selector-modal .ant-modal-close {
+            color: #aaa !important;
+          }
+          .node-tree-selector-modal .ant-modal-close:hover {
+            color: #fff !important;
+          }
+          .node-tree-selector-modal .ant-modal-footer {
+            background: #1e1e36 !important;
+            border-top: 1px solid #3a3a5c !important;
+          }
+          .node-tree-selector-modal .ant-btn-default {
+            background: #2a2a48 !important;
+            border-color: #3a3a5c !important;
+            color: #ccc !important;
+          }
+          .node-tree-selector-modal .ant-btn-default:hover {
+            border-color: #1890ff !important;
+            color: #69c0ff !important;
+          }
+          .node-tree-selector-modal .ant-collapse {
+            background: #25253e !important;
+            border-color: #3a3a5c !important;
+          }
+          .node-tree-selector-modal .ant-collapse-item {
+            border-color: #3a3a5c !important;
+          }
+          .node-tree-selector-modal .ant-collapse-header {
+            color: #e0e0e0 !important;
+          }
+          .node-tree-selector-modal .ant-collapse-content {
+            background: #22223a !important;
+            border-color: #3a3a5c !important;
+            color: #e0e0e0 !important;
+          }
+          .node-tree-selector-modal .ant-list-bordered {
+            border-color: #3a3a5c !important;
+          }
+          .node-tree-selector-modal .ant-list-item {
+            border-block-end-color: #2d2d4a !important;
+            color: #e0e0e0 !important;
+          }
+          .node-tree-selector-modal .ant-list-item:hover:not([style*="background"]) {
+            background: #2d2d4a !important;
+          }
+          .node-tree-selector-modal .ant-typography {
+            color: inherit !important;
+          }
+          .node-tree-selector-modal .ant-typography.ant-typography-secondary {
+            color: #999 !important;
+          }
+          .node-tree-selector-modal .ant-input,
+          .node-tree-selector-modal .ant-input-search .ant-input {
+            background: #2a2a48 !important;
+            border-color: #3a3a5c !important;
+            color: #e0e0e0 !important;
+          }
+          .node-tree-selector-modal .ant-input::placeholder {
+            color: #666 !important;
+          }
+          .node-tree-selector-modal .ant-input-search .ant-btn {
+            background: #2d2d4a !important;
+            border-color: #3a3a5c !important;
+            color: #aaa !important;
+          }
+          .node-tree-selector-modal .ant-alert {
+            border-color: #3a3a5c !important;
+            background: #1a2a4a !important;
+          }
+          .node-tree-selector-modal .ant-alert-message {
+            color: #e0e0e0 !important;
+          }
+          .node-tree-selector-modal .ant-segmented {
+            background: #25253e !important;
+          }
+          .node-tree-selector-modal .ant-segmented-item-label {
+            color: #aaa !important;
+          }
+          .node-tree-selector-modal .ant-segmented-item-selected .ant-segmented-item-label {
+            color: #fff !important;
+          }
+          .node-tree-selector-modal .ant-select-selector {
+            background: #2a2a48 !important;
+            border-color: #3a3a5c !important;
+            color: #e0e0e0 !important;
+          }
+          .node-tree-selector-modal .ant-tree-select-dropdown {
+            background: #25253e !important;
+            color: #e0e0e0 !important;
+          }
+          .node-tree-selector-modal .ant-select-tree-title {
+            color: #e0e0e0 !important;
+          }
+          .node-tree-selector-modal .ant-select-tree-node-content-wrapper:hover {
+            background: #2d2d4a !important;
+          }
+          .node-tree-selector-modal .ant-empty-description {
+            color: #888 !important;
+          }
+          .node-tree-selector-modal .ant-spin-text {
+            color: #aaa !important;
           }
         `}</style>
         <Tabs
@@ -741,13 +927,13 @@ const NodeTreeSelector: React.FC<Props> = ({ nodeId, open, onClose, onSelect, se
                         style={{ 
                           cursor: 'pointer', 
                           backgroundColor: isSelected ? '#1890ff' : undefined,
-                          color: isSelected ? 'white' : 'rgba(0,0,0,0.85)',
+                          color: isSelected ? 'white' : 'inherit',
                           padding: '8px 12px',
                         }}
                       >
                         <Space>
                           <span>{item.icon}</span>
-                          <Typography.Text style={{ color: isSelected ? 'white' : 'rgba(0,0,0,0.85)' }}>
+                          <Typography.Text style={{ color: isSelected ? 'white' : 'inherit' }}>
                             {item.label}
                           </Typography.Text>
                           <Typography.Text 
@@ -786,13 +972,13 @@ const NodeTreeSelector: React.FC<Props> = ({ nodeId, open, onClose, onSelect, se
                         style={{ 
                           cursor: 'pointer', 
                           backgroundColor: isSelected ? '#52c41a' : undefined,
-                          color: isSelected ? 'white' : 'rgba(0,0,0,0.85)',
+                          color: isSelected ? 'white' : 'inherit',
                           padding: '8px 12px',
                         }}
                       >
                         <Space>
                           <span>{item.icon}</span>
-                          <Typography.Text style={{ color: isSelected ? 'white' : 'rgba(0,0,0,0.85)' }}>
+                          <Typography.Text style={{ color: isSelected ? 'white' : 'inherit' }}>
                             {item.label}
                           </Typography.Text>
                           <Typography.Text 
@@ -831,13 +1017,13 @@ const NodeTreeSelector: React.FC<Props> = ({ nodeId, open, onClose, onSelect, se
                         style={{ 
                           cursor: 'pointer', 
                           backgroundColor: isSelected ? '#722ed1' : undefined,
-                          color: isSelected ? 'white' : 'rgba(0,0,0,0.85)',
+                          color: isSelected ? 'white' : 'inherit',
                           padding: '8px 12px',
                         }}
                       >
                         <Space>
                           <span>{item.icon}</span>
-                          <Typography.Text style={{ color: isSelected ? 'white' : 'rgba(0,0,0,0.85)' }}>
+                          <Typography.Text style={{ color: isSelected ? 'white' : 'inherit' }}>
                             {item.label}
                           </Typography.Text>
                           <Typography.Text 
@@ -955,7 +1141,7 @@ const NodeTreeSelector: React.FC<Props> = ({ nodeId, open, onClose, onSelect, se
                   return (
                     <Collapse
                       defaultActiveKey={[]}
-                      style={{ background: '#fafafa' }}
+                      style={{ background: 'rgba(255,255,255,0.04)' }}
                       items={filtered.map((group, groupIdx) => ({
                         key: String(groupIdx),
                         label: (
@@ -979,18 +1165,18 @@ const NodeTreeSelector: React.FC<Props> = ({ nodeId, open, onClose, onSelect, se
                                 <List
                                   size="small"
                                   bordered
-                                  style={sg.sousOngletLabel ? { marginLeft: 12, borderLeft: '2px solid #e6f4ff' } : undefined}
+                                  style={sg.sousOngletLabel ? { marginLeft: 12, borderLeft: '2px solid rgba(24,144,255,0.25)' } : undefined}
                                   dataSource={sg.items}
                                   renderItem={(item) => {
                                     const isSelected = isValueSelected(`node-formula:${item.id}`);
                                     return (
                                       <List.Item
                                         onClick={() => toggleValue(`node-formula:${item.id}`, item.name)}
-                                        style={{ cursor: 'pointer', backgroundColor: isSelected ? '#1890ff' : item._isCurrentNode ? '#f0f9ff' : '#fefce8', color: isSelected ? 'white' : 'rgba(0,0,0,0.85)', transition: 'all 0.2s', padding: '6px 12px' }}
+                                        style={{ cursor: 'pointer', backgroundColor: isSelected ? '#1890ff' : item._isCurrentNode ? 'rgba(24,144,255,0.12)' : 'rgba(255,255,255,0.06)', color: isSelected ? 'white' : 'inherit', transition: 'all 0.2s', padding: '6px 12px' }}
                                       >
                                         <Space>
                                           <span>🧮</span>
-                                          <Typography.Text style={{ color: isSelected ? 'white' : 'rgba(0,0,0,0.85)' }}>{item.name}</Typography.Text>
+                                          <Typography.Text style={{ color: isSelected ? 'white' : 'inherit' }}>{item.name}</Typography.Text>
                                           <Typography.Text style={{ fontSize: '10px', fontFamily: 'monospace', color: isSelected ? 'rgba(255,255,255,0.6)' : '#bbb' }}>[{item.id.slice(0, 8)}]</Typography.Text>
                                           {item._isCurrentNode && <Typography.Text type="secondary" style={{ fontSize: '11px', color: isSelected ? 'rgba(255,255,255,0.7)' : '#999' }}>(ce nœud)</Typography.Text>}
                                           {isSelected && <span>✓</span>}
@@ -1032,7 +1218,7 @@ const NodeTreeSelector: React.FC<Props> = ({ nodeId, open, onClose, onSelect, se
                   return (
                     <Collapse
                       defaultActiveKey={[]}
-                      style={{ background: '#fafafa' }}
+                      style={{ background: 'rgba(255,255,255,0.04)' }}
                       items={filtered.map((group, groupIdx) => ({
                         key: String(groupIdx),
                         label: (
@@ -1056,7 +1242,7 @@ const NodeTreeSelector: React.FC<Props> = ({ nodeId, open, onClose, onSelect, se
                                 <List
                                   size="small"
                                   bordered
-                                  style={sg.sousOngletLabel ? { marginLeft: 12, borderLeft: '2px solid #e6f4ff' } : undefined}
+                                  style={sg.sousOngletLabel ? { marginLeft: 12, borderLeft: '2px solid rgba(24,144,255,0.25)' } : undefined}
                                   dataSource={sg.items}
                                   renderItem={(item) => {
                                     const valKey = item._isCurrentNode ? `condition:${item.id}` : `node-condition:${item.id}`;
@@ -1064,11 +1250,11 @@ const NodeTreeSelector: React.FC<Props> = ({ nodeId, open, onClose, onSelect, se
                                     return (
                                       <List.Item
                                         onClick={() => toggleValue(valKey, item.name)}
-                                        style={{ cursor: 'pointer', backgroundColor: isSelected ? '#1890ff' : item._isCurrentNode ? '#f0f8e8' : '#fef3c7', color: isSelected ? 'white' : 'rgba(0,0,0,0.85)', transition: 'all 0.2s', padding: '6px 12px' }}
+                                        style={{ cursor: 'pointer', backgroundColor: isSelected ? '#1890ff' : item._isCurrentNode ? 'rgba(82,196,26,0.12)' : 'rgba(255,255,255,0.06)', color: isSelected ? 'white' : 'inherit', transition: 'all 0.2s', padding: '6px 12px' }}
                                       >
                                         <Space>
                                           <span>⚡</span>
-                                          <Typography.Text style={{ color: isSelected ? 'white' : 'rgba(0,0,0,0.85)' }}>{item.name}</Typography.Text>
+                                          <Typography.Text style={{ color: isSelected ? 'white' : 'inherit' }}>{item.name}</Typography.Text>
                                           <Typography.Text style={{ fontSize: '10px', fontFamily: 'monospace', color: isSelected ? 'rgba(255,255,255,0.6)' : '#bbb' }}>[{item.id.slice(0, 8)}]</Typography.Text>
                                           {item._isCurrentNode && <Typography.Text type="secondary" style={{ fontSize: '11px', color: isSelected ? 'rgba(255,255,255,0.7)' : '#999' }}>(ce nœud)</Typography.Text>}
                                           {isSelected && <span>✓</span>}
@@ -1110,7 +1296,7 @@ const NodeTreeSelector: React.FC<Props> = ({ nodeId, open, onClose, onSelect, se
                   return (
                     <Collapse
                       defaultActiveKey={[]}
-                      style={{ background: '#fafafa' }}
+                      style={{ background: 'rgba(255,255,255,0.04)' }}
                       items={filtered.map((group, groupIdx) => ({
                         key: String(groupIdx),
                         label: (
@@ -1134,7 +1320,7 @@ const NodeTreeSelector: React.FC<Props> = ({ nodeId, open, onClose, onSelect, se
                                 <List
                                   size="small"
                                   bordered
-                                  style={sg.sousOngletLabel ? { marginLeft: 12, borderLeft: '2px solid #e6f4ff' } : undefined}
+                                  style={sg.sousOngletLabel ? { marginLeft: 12, borderLeft: '2px solid rgba(24,144,255,0.25)' } : undefined}
                                   dataSource={sg.items}
                                   renderItem={(item) => {
                                     const valKey = item._isCurrentNode ? `table:${item.id}` : `node-table:${item.id}`;
@@ -1142,11 +1328,11 @@ const NodeTreeSelector: React.FC<Props> = ({ nodeId, open, onClose, onSelect, se
                                     return (
                                       <List.Item
                                         onClick={() => toggleValue(valKey, item.name)}
-                                        style={{ cursor: 'pointer', backgroundColor: isSelected ? '#1890ff' : item._isCurrentNode ? '#e8f4fd' : '#fff4e6', color: isSelected ? 'white' : 'rgba(0,0,0,0.85)', transition: 'all 0.2s', padding: '6px 12px' }}
+                                        style={{ cursor: 'pointer', backgroundColor: isSelected ? '#1890ff' : item._isCurrentNode ? 'rgba(24,144,255,0.12)' : 'rgba(255,255,255,0.06)', color: isSelected ? 'white' : 'inherit', transition: 'all 0.2s', padding: '6px 12px' }}
                                       >
                                         <Space>
                                           <span>🗂️</span>
-                                          <Typography.Text style={{ color: isSelected ? 'white' : 'rgba(0,0,0,0.85)' }}>{item.name}</Typography.Text>
+                                          <Typography.Text style={{ color: isSelected ? 'white' : 'inherit' }}>{item.name}</Typography.Text>
                                           <Typography.Text style={{ fontSize: '10px', fontFamily: 'monospace', color: isSelected ? 'rgba(255,255,255,0.6)' : '#bbb' }}>[{item.id.slice(0, 8)}]</Typography.Text>
                                           {item._isCurrentNode && <Typography.Text type="secondary" style={{ fontSize: '11px', color: isSelected ? 'rgba(255,255,255,0.7)' : '#999' }}>(ce nœud)</Typography.Text>}
                                           {isSelected && <span>✓</span>}
@@ -1216,7 +1402,7 @@ const NodeTreeSelector: React.FC<Props> = ({ nodeId, open, onClose, onSelect, se
                           key={`rep-onglet-${gi}`}
                           header={
                             <Space>
-                              <Typography.Text strong style={{ color: 'rgba(0,0,0,0.85)' }}>
+                              <Typography.Text strong>
                                 {group.ongletLabel}
                               </Typography.Text>
                               <Badge count={group.subGroups.reduce((s, sg) => s + sg.items.length, 0)} style={{ backgroundColor: '#722ed1' }} />
@@ -1235,20 +1421,20 @@ const NodeTreeSelector: React.FC<Props> = ({ nodeId, open, onClose, onSelect, se
                             return (
                               <div key={`rep-sg-${si}`} style={{ marginBottom: 8 }}>
                                 {sg.sousOngletLabel && (
-                                  <Typography.Text type="secondary" style={{ fontSize: 11, display: 'block', marginBottom: 4, color: 'rgba(0,0,0,0.45)' }}>
+                                  <Typography.Text type="secondary" style={{ fontSize: 11, display: 'block', marginBottom: 4 }}>
                                     {sg.sousOngletLabel}
                                   </Typography.Text>
                                 )}
                                 {Array.from(byRepeater.entries()).map(([repId, items]) => (
                                   <div key={repId} style={{ marginBottom: 8 }}>
                                     <div style={{ 
-                                      padding: '4px 8px', 
-                                      backgroundColor: '#f5f0ff', 
-                                      borderLeft: '3px solid #722ed1',
+                                      padding: '6px 10px', 
+                                      backgroundColor: 'rgba(114, 46, 209, 0.18)', 
+                                      borderLeft: '3px solid #b37feb',
                                       marginBottom: 4,
                                       borderRadius: '0 4px 4px 0'
                                     }}>
-                                      <Typography.Text strong style={{ color: '#722ed1', fontSize: 12 }}>
+                                      <Typography.Text strong style={{ color: '#d3adf7', fontSize: 13 }}>
                                         🔁 {items[0].repeaterLabel}
                                       </Typography.Text>
                                     </div>
@@ -1263,17 +1449,17 @@ const NodeTreeSelector: React.FC<Props> = ({ nodeId, open, onClose, onSelect, se
                                             onClick={() => toggleValue(refKey, `${item.repeaterLabel} / ${item.label}`)}
                                             style={{ 
                                               cursor: 'pointer', 
-                                              backgroundColor: isSelected ? '#722ed1' : 'transparent',
-                                              color: isSelected ? 'white' : 'rgba(0,0,0,0.85)',
-                                              padding: '6px 12px 6px 20px',
+                                              backgroundColor: isSelected ? '#722ed1' : 'rgba(255,255,255,0.04)',
+                                              color: isSelected ? 'white' : 'inherit',
+                                              padding: '8px 12px 8px 20px',
                                               transition: 'all 0.2s',
-                                              borderBottom: '1px solid #f0f0f0'
+                                              borderBottom: '1px solid rgba(255,255,255,0.08)'
                                             }}
                                           >
                                             <Space style={{ width: '100%', justifyContent: 'space-between' }}>
                                               <Space>
-                                                <span style={{ fontSize: 11 }}>📄</span>
-                                                <Typography.Text style={{ color: isSelected ? 'white' : 'rgba(0,0,0,0.85)' }}>
+                                                <span style={{ fontSize: 12 }}>📄</span>
+                                                <Typography.Text style={{ color: isSelected ? 'white' : 'inherit', fontSize: 13 }}>
                                                   {item.label}
                                                 </Typography.Text>
                                               </Space>
@@ -1333,7 +1519,7 @@ const NodeTreeSelector: React.FC<Props> = ({ nodeId, open, onClose, onSelect, se
                       />
                       <Collapse
                         defaultActiveKey={[]}
-                        style={{ background: '#fafafa' }}
+                        style={{ background: 'rgba(255,255,255,0.04)' }}
                         items={filtered.map((group, groupIdx) => ({
                           key: String(groupIdx),
                           label: (
@@ -1357,7 +1543,7 @@ const NodeTreeSelector: React.FC<Props> = ({ nodeId, open, onClose, onSelect, se
                                   <List
                                     size="small"
                                     bordered
-                                    style={sg.sousOngletLabel ? { marginLeft: 12, borderLeft: '2px solid #e6f4ff' } : undefined}
+                                    style={sg.sousOngletLabel ? { marginLeft: 12, borderLeft: '2px solid rgba(24,144,255,0.25)' } : undefined}
                                     dataSource={sg.items}
                                     renderItem={(item) => {
                                       const isSelected = isValueSelected(`calculated:${item.id}`);
@@ -1367,12 +1553,12 @@ const NodeTreeSelector: React.FC<Props> = ({ nodeId, open, onClose, onSelect, se
                                       return (
                                         <List.Item
                                           onClick={() => toggleValue(`calculated:${item.id}`)}
-                                          style={{ cursor: 'pointer', backgroundColor: isSelected ? '#1890ff' : '#f0fff4', color: isSelected ? 'white' : 'rgba(0,0,0,0.85)', transition: 'all 0.2s', borderLeft: '3px solid #52c41a', padding: '6px 12px' }}
+                                          style={{ cursor: 'pointer', backgroundColor: isSelected ? '#1890ff' : 'rgba(82,196,26,0.08)', color: isSelected ? 'white' : 'inherit', transition: 'all 0.2s', borderLeft: '3px solid #52c41a', padding: '6px 12px' }}
                                         >
                                           <Space direction="vertical" size={2} style={{ width: '100%' }}>
                                             <Space>
                                               <span>{sourceIcon}</span>
-                                              <Typography.Text strong style={{ color: isSelected ? 'white' : 'rgba(0,0,0,0.85)' }}>{item.label}</Typography.Text>
+                                              <Typography.Text strong style={{ color: isSelected ? 'white' : 'inherit' }}>{item.label}</Typography.Text>
                                               <Typography.Text style={{ fontSize: '10px', fontFamily: 'monospace', color: isSelected ? 'rgba(255,255,255,0.6)' : '#bbb' }}>[{item.id.slice(0, 8)}]</Typography.Text>
                                               {item.calculatedValue !== null && (
                                                 <Typography.Text style={{ color: isSelected ? 'rgba(255,255,255,0.9)' : '#52c41a', fontWeight: 'bold' }}>= {item.calculatedValue}</Typography.Text>
@@ -1445,8 +1631,8 @@ const NodeTreeSelector: React.FC<Props> = ({ nodeId, open, onClose, onSelect, se
                             onClick={() => toggleValue(item.id)}
                             style={{ 
                               cursor: 'pointer', 
-                              backgroundColor: isSelected ? '#1890ff' : '#e6f7ff',
-                              color: isSelected ? 'white' : 'rgba(0,0,0,0.85)',
+                              backgroundColor: isSelected ? '#1890ff' : 'rgba(24,144,255,0.08)',
+                              color: isSelected ? 'white' : 'inherit',
                               transition: 'all 0.2s',
                               borderLeft: item.category ? `3px solid ${getCategoryColor(item.category)}` : undefined
                             }}
@@ -1454,7 +1640,7 @@ const NodeTreeSelector: React.FC<Props> = ({ nodeId, open, onClose, onSelect, se
                             <Space direction="vertical" size={2} style={{ width: '100%' }}>
                               <Space>
                                 <span>🔗</span>
-                                <Typography.Text strong style={{ color: isSelected ? 'white' : 'rgba(0,0,0,0.85)' }}>
+                                <Typography.Text strong style={{ color: isSelected ? 'white' : 'inherit' }}>
                                   {item.label}
                                 </Typography.Text>
                                 <Typography.Text 
@@ -1486,7 +1672,7 @@ const NodeTreeSelector: React.FC<Props> = ({ nodeId, open, onClose, onSelect, se
                                   type="secondary" 
                                   style={{ 
                                     fontSize: '11px',
-                                    color: isSelected ? 'rgba(255,255,255,0.8)' : '#666',
+                                    color: isSelected ? 'rgba(255,255,255,0.8)' : 'rgba(255,255,255,0.45)',
                                     paddingLeft: '24px',
                                     fontStyle: 'italic'
                                   }}
@@ -1512,8 +1698,8 @@ const NodeTreeSelector: React.FC<Props> = ({ nodeId, open, onClose, onSelect, se
         {allowMulti && selectedCount > 0 && (
           <div style={{ 
             padding: '8px 12px', 
-            background: '#f6ffed', 
-            border: '1px solid #b7eb8f', 
+            background: 'rgba(82,196,26,0.1)', 
+            border: '1px solid rgba(82,196,26,0.3)', 
             borderRadius: 6,
             maxHeight: 100,
             overflowY: 'auto'
@@ -1545,6 +1731,7 @@ const NodeTreeSelector: React.FC<Props> = ({ nodeId, open, onClose, onSelect, se
         )}
       </Space>
     </Modal>
+    </ConfigProvider>
   );
 };
 

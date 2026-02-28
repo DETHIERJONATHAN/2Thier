@@ -587,6 +587,22 @@ const ModuleConfigPanel = ({
   // Handlers pour le sélecteur TBL
   const handleTreeSelect = (val: NodeTreeSelectorValue) => {
     const newValue = val.ref;
+    
+    // 🆕 Gestion spéciale pour les champs totaux liés à TBL
+    const totalsFieldMap: Record<string, string> = {
+      '__totalHTVASource__': 'totalHTVASource',
+      '__totalTVASource__': 'totalTVASource',
+      '__totalTVACSource__': 'totalTVACSource',
+      '__remiseSource__': 'remiseSource',
+    };
+    if (totalsFieldMap[currentFieldKey]) {
+      onUpdate({ config: { ...moduleInstance.config, [totalsFieldMap[currentFieldKey]]: newValue } });
+      setSelectorOpen(false);
+      setCurrentFieldKey('');
+      message.success('Champ lié à TBL');
+      return;
+    }
+    
     form.setFieldValue(currentFieldKey, newValue);
     onUpdate({ config: { ...moduleInstance.config, [currentFieldKey]: newValue } });
     setSelectorOpen(false);
@@ -836,6 +852,63 @@ const ModuleConfigPanel = ({
               }}
               nodeId={selectedNodeId || undefined}
             />
+
+            {/* 🆕 TOTAUX liés via NodeTreeSelect */}
+            <Divider style={{ borderColor: '#444', margin: '24px 0 16px' }}>
+              <span style={{ color: '#888', fontSize: '12px' }}>💰 Totaux du tableau</span>
+            </Divider>
+            <div style={{ padding: '0 4px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              {[
+                { key: '__totalHTVASource__', configKey: 'totalHTVASource', label: 'Total HTVA', icon: '📊' },
+                { key: '__totalTVASource__', configKey: 'totalTVASource', label: 'TVA', icon: '💶' },
+                { key: '__totalTVACSource__', configKey: 'totalTVACSource', label: 'Total TVAC', icon: '💰' },
+                { key: '__remiseSource__', configKey: 'remiseSource', label: 'Remise', icon: '🏷️' },
+              ].map((field) => {
+                const boundRef = moduleInstance.config?.[field.configKey];
+                return (
+                  <div key={field.key}>
+                    <div style={{ fontSize: '12px', color: '#aaa', marginBottom: '4px' }}>{field.icon} {field.label}</div>
+                    {boundRef ? (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <Tag color="blue" style={{ flex: 1, margin: 0, padding: '4px 8px', fontSize: '11px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                          🌳 {boundRef}
+                        </Tag>
+                        <Tooltip title="Supprimer">
+                          <Button
+                            size="small"
+                            danger
+                            icon={<DeleteOutlined />}
+                            onClick={() => {
+                              onUpdate({ config: { ...moduleInstance.config, [field.configKey]: '' } });
+                            }}
+                          />
+                        </Tooltip>
+                      </div>
+                    ) : (
+                      <Button
+                        size="small"
+                        type="dashed"
+                        block
+                        onClick={() => {
+                          if (!selectedNodeId) {
+                            message.warning('Aucun arbre TBL disponible.');
+                            return;
+                          }
+                          setCurrentFieldKey(field.key);
+                          setSelectorOpen(true);
+                        }}
+                        disabled={!selectedNodeId}
+                      >
+                        🌳 Lier à un champ TBL
+                      </Button>
+                    )}
+                  </div>
+                );
+              })}
+              <div style={{ fontSize: '11px', color: '#666', marginTop: '4px' }}>
+                💡 Liez chaque total à un nœud TBL. Les valeurs apparaîtront en bas du tableau.
+              </div>
+            </div>
           </>
         )}
       </div>

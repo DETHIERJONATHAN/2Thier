@@ -538,11 +538,17 @@ const ModuleRenderer = ({
           quantitySource: line.quantitySource,
           unitPriceSource: line.unitPriceSource,
           type: line.type,
+          style: line.style,
         }))
       : legacyRows;
     
     const currency = config.currency || '€';
-    const tvaRate = config.tvaRate || config.vatRate || 21;
+    // 🆕 Sources TBL pour les totaux
+    const hasTotalHTVA = !!config.totalHTVASource;
+    const hasTotalTVA = !!config.totalTVASource;
+    const hasTotalTVAC = !!config.totalTVACSource;
+    const hasRemise = !!config.remiseSource;
+    const hasAnyTotalSource = hasTotalHTVA || hasTotalTVA || hasTotalTVAC || hasRemise;
     
     const pricedLines = rows
       .map((row: any) => {
@@ -551,11 +557,6 @@ const ModuleRenderer = ({
         const lineTotal = qty !== null && unit !== null ? qty * unit : null;
         return { ...row, _lineTotal: lineTotal };
       });
-
-    const totalHT = pricedLines.reduce((sum: number, row: any) => sum + (typeof row._lineTotal === 'number' ? row._lineTotal : 0), 0);
-    const tva = totalHT * (tvaRate / 100);
-    const totalTTC = totalHT + tva;
-    const hasAnyPricedLine = pricedLines.some((r: any) => typeof r._lineTotal === 'number');
 
     const stickyHeaderCellStyle: React.CSSProperties = {
       padding: '12px',
@@ -592,15 +593,25 @@ const ModuleRenderer = ({
                 </td>
               </tr>
             ) : (
-              pricedLines.map((row: any, idx: number) => (
-                <tr key={idx} style={{ borderBottom: '1px solid #e8e8e8', backgroundColor: '#fff' }}>
+              pricedLines.map((row: any, idx: number) => {
+                const rowStyle: React.CSSProperties = { borderBottom: '1px solid #e8e8e8', backgroundColor: row.style?.backgroundColor || '#fff' };
+                const textStyle: React.CSSProperties = {
+                  fontWeight: row.style?.bold ? 'bold' : undefined,
+                  fontStyle: row.style?.italic ? 'italic' : undefined,
+                  textDecoration: row.style?.underline ? 'underline' : undefined,
+                  fontSize: row.style?.fontSize ? `${row.style.fontSize}px` : undefined,
+                  color: row.style?.color || undefined,
+                  textTransform: row.style?.textTransform || undefined,
+                };
+                return (
+                <tr key={idx} style={rowStyle}>
                   <td style={{ padding: '12px', color: '#333' }}>
                     {row.hasLabelSource ? (
-                      <span style={{ color: '#fa8c16', fontWeight: 500 }} title={row.labelSource}>
+                      <span style={{ color: '#fa8c16', fontWeight: 500, ...textStyle }} title={row.labelSource}>
                         {row.designation}
                       </span>
                     ) : (
-                      <span style={{ color: '#333' }}>{row.designation || '-'}</span>
+                      <span style={{ color: '#333', ...textStyle }}>{row.designation || '-'}</span>
                     )}
                     {row.type === 'dynamic' && !row.hasLabelSource && (
                       <span style={{ 
@@ -649,36 +660,49 @@ const ModuleRenderer = ({
                     {typeof row._lineTotal === 'number' ? `${row._lineTotal.toFixed(2)} ${currency}` : ''}
                   </td>
                 </tr>
-              ))
+                );
+              })
             )}
           </tbody>
-          {config.showTotal && hasAnyPricedLine && (
+          {hasAnyTotalSource && (
             <tfoot>
-              <tr style={{ borderTop: '2px solid #e8e8e8' }}>
-                <td colSpan={3} style={{ padding: '12px', textAlign: 'right', fontWeight: 600 }}>
-                  Total HT
-                </td>
-                <td style={{ padding: '12px', textAlign: 'right', fontWeight: 600 }}>
-                  {totalHT.toFixed(2)} {currency}
-                </td>
-              </tr>
-              {config.showTVA && (
-                <tr>
-                  <td colSpan={3} style={{ padding: '12px', textAlign: 'right' }}>
-                    TVA ({tvaRate}%)
+              {hasRemise && (
+                <tr style={{ borderTop: '2px solid #e8e8e8' }}>
+                  <td colSpan={3} style={{ padding: '10px 12px', textAlign: 'right', color: '#888' }}>
+                    🏷️ Remise
                   </td>
-                  <td style={{ padding: '12px', textAlign: 'right' }}>
-                    {tva.toFixed(2)} {currency}
+                  <td style={{ padding: '10px 12px', textAlign: 'right', color: '#fa541c', fontWeight: 500 }}>
+                    🌳 <span style={{ fontSize: '10px', color: '#1890ff' }}>TBL</span>
                   </td>
                 </tr>
               )}
-              {config.showTVA && (
+              {hasTotalHTVA && (
+                <tr style={{ borderTop: hasRemise ? undefined : '2px solid #e8e8e8' }}>
+                  <td colSpan={3} style={{ padding: '10px 12px', textAlign: 'right', fontWeight: 600 }}>
+                    Total HTVA
+                  </td>
+                  <td style={{ padding: '10px 12px', textAlign: 'right', fontWeight: 600 }}>
+                    🌳 <span style={{ fontSize: '10px', color: '#1890ff' }}>TBL</span>
+                  </td>
+                </tr>
+              )}
+              {hasTotalTVA && (
+                <tr>
+                  <td colSpan={3} style={{ padding: '10px 12px', textAlign: 'right' }}>
+                    TVA
+                  </td>
+                  <td style={{ padding: '10px 12px', textAlign: 'right' }}>
+                    🌳 <span style={{ fontSize: '10px', color: '#1890ff' }}>TBL</span>
+                  </td>
+                </tr>
+              )}
+              {hasTotalTVAC && (
                 <tr style={{ backgroundColor: globalTheme.primaryColor, color: '#fff' }}>
                   <td colSpan={3} style={{ padding: '12px', textAlign: 'right', fontWeight: 700 }}>
-                    Total TTC
+                    Total TVAC
                   </td>
                   <td style={{ padding: '12px', textAlign: 'right', fontWeight: 700, fontSize: '18px' }}>
-                    {totalTTC.toFixed(2)} {currency}
+                    🌳 <span style={{ fontSize: '10px' }}>TBL</span>
                   </td>
                 </tr>
               )}

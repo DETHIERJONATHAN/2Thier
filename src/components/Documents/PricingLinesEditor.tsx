@@ -39,9 +39,16 @@ import {
   ArrowDownOutlined,
   ReloadOutlined,
   CloseCircleOutlined,
+  BoldOutlined,
+  ItalicOutlined,
+  UnderlineOutlined,
+  FontSizeOutlined,
+  BgColorsOutlined,
+  FontColorsOutlined,
 } from '@ant-design/icons';
 import NodeTreeSelector, { NodeTreeSelectorValue } from '../TreeBranchLeaf/treebranchleaf-new/components/Parameters/shared/NodeTreeSelector';
 import { useAuthenticatedApi } from '../../hooks/useAuthenticatedApi';
+import { ColorPicker } from 'antd';
 
 const { Text } = Typography;
 
@@ -66,6 +73,17 @@ export interface SimpleCondition {
 // Types pour les lignes de pricing
 export type PricingLineType = 'static' | 'dynamic' | 'repeater';
 
+// Options de formatage du texte pour une ligne
+export interface PricingLineStyle {
+  bold?: boolean;
+  italic?: boolean;
+  underline?: boolean;
+  fontSize?: number;          // Taille en pt (défaut: 10)
+  color?: string;             // Couleur du texte (ex: '#333333')
+  backgroundColor?: string;   // Couleur de fond de la ligne
+  textTransform?: 'none' | 'uppercase' | 'lowercase' | 'capitalize';
+}
+
 export interface PricingLine {
   id: string;
   type: PricingLineType;
@@ -80,6 +98,7 @@ export interface PricingLine {
   repeaterId?: string;        // ID du repeater (extrait de @repeat.{repeaterId}.xxx)
   repeaterLabel?: string;     // Label du repeater pour affichage
   condition?: SimpleCondition; // Condition simple uniforme
+  style?: PricingLineStyle;   // Options de formatage du texte
   order: number;
 }
 
@@ -89,6 +108,34 @@ interface PricingLinesEditorProps {
   treeId?: string;
   nodeId?: string;
 }
+
+// Bouton toggle pour le formatage (gras, italique, souligné)
+const StyleToggleButton: React.FC<{
+  icon: React.ReactNode;
+  title: string;
+  fieldName: (string | number)[];
+  form: any;
+  value?: boolean;
+  onChange?: (v: boolean) => void;
+}> = ({ icon, title, fieldName, form }) => {
+  const isActive = Form.useWatch(fieldName, form);
+  return (
+    <Tooltip title={title}>
+      <Button
+        size="small"
+        type={isActive ? 'primary' : 'default'}
+        icon={icon}
+        onClick={() => {
+          const current = form.getFieldValue(fieldName);
+          form.setFieldsValue(
+            fieldName.reduceRight((acc, key) => ({ [key]: acc }), !current as any)
+          );
+        }}
+        style={isActive ? {} : { borderColor: '#d9d9d9' }}
+      />
+    </Tooltip>
+  );
+};
 
 // Générer un ID unique
 const generateId = () => `line_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
@@ -234,6 +281,11 @@ const PricingLinesEditor: React.FC<PricingLinesEditorProps> = ({
         || updatedLine.repeaterId;
       if (repId) {
         updatedLine.repeaterId = repId;
+        // ✅ Auto-corriger le type en 'repeater' si des sources @repeat sont détectées
+        if (updatedLine.type !== 'repeater') {
+          updatedLine.type = 'repeater';
+          console.log(`[PricingLinesEditor] Type auto-corrigé en 'repeater' (repeaterId: ${repId})`);
+        }
       }
 
       // Nettoyage condition vide
@@ -600,6 +652,116 @@ const PricingLinesEditor: React.FC<PricingLinesEditorProps> = ({
             ))}
           </Form.Item>
           <Form.Item name="unitPriceSource" hidden><Input /></Form.Item>
+
+          {/* ── Formatage du texte ── */}
+          <Divider orientation="left"><FontSizeOutlined /> Formatage du texte</Divider>
+
+          <div style={{ 
+            padding: '12px', borderRadius: 6,
+            backgroundColor: '#fafafa',
+            border: '1px solid #d9d9d9',
+          }}>
+            {/* Barre d'outils de formatage */}
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 12, flexWrap: 'wrap' }}>
+              <Form.Item name={['style', 'bold']} valuePropName="checked" noStyle>
+                <StyleToggleButton icon={<BoldOutlined />} title="Gras" fieldName={['style', 'bold']} form={form} />
+              </Form.Item>
+              <Form.Item name={['style', 'italic']} valuePropName="checked" noStyle>
+                <StyleToggleButton icon={<ItalicOutlined />} title="Italique" fieldName={['style', 'italic']} form={form} />
+              </Form.Item>
+              <Form.Item name={['style', 'underline']} valuePropName="checked" noStyle>
+                <StyleToggleButton icon={<UnderlineOutlined />} title="Souligné" fieldName={['style', 'underline']} form={form} />
+              </Form.Item>
+
+              <div style={{ width: 1, height: 24, backgroundColor: '#d9d9d9', margin: '0 4px' }} />
+
+              <Form.Item name={['style', 'fontSize']} noStyle>
+                <Select 
+                  allowClear 
+                  placeholder="Taille" 
+                  style={{ width: 90 }}
+                  options={[
+                    { value: 7, label: '7 pt' },
+                    { value: 8, label: '8 pt' },
+                    { value: 9, label: '9 pt' },
+                    { value: 10, label: '10 pt' },
+                    { value: 11, label: '11 pt' },
+                    { value: 12, label: '12 pt' },
+                    { value: 14, label: '14 pt' },
+                    { value: 16, label: '16 pt' },
+                    { value: 18, label: '18 pt' },
+                  ]}
+                />
+              </Form.Item>
+
+              <Form.Item name={['style', 'textTransform']} noStyle>
+                <Select 
+                  allowClear 
+                  placeholder="Casse" 
+                  style={{ width: 120 }}
+                  options={[
+                    { value: 'none', label: 'Normal' },
+                    { value: 'uppercase', label: 'MAJUSCULES' },
+                    { value: 'lowercase', label: 'minuscules' },
+                    { value: 'capitalize', label: 'Majuscule Init.' },
+                  ]}
+                />
+              </Form.Item>
+            </div>
+
+            {/* Couleurs */}
+            <div style={{ display: 'flex', gap: 16, alignItems: 'center' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <FontColorsOutlined style={{ color: '#595959' }} />
+                <Text style={{ fontSize: 12, whiteSpace: 'nowrap' }}>Texte:</Text>
+                <Form.Item name={['style', 'color']} noStyle>
+                  <ColorPicker 
+                    size="small" 
+                    allowClear
+                    presets={[{
+                      label: 'Couleurs',
+                      colors: ['#000000', '#333333', '#666666', '#999999', '#1890ff', '#52c41a', '#faad14', '#ff4d4f', '#722ed1', '#eb2f96'],
+                    }]}
+                    onChange={(_, hex) => form.setFieldsValue({ style: { ...form.getFieldValue('style'), color: hex } })}
+                  />
+                </Form.Item>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <BgColorsOutlined style={{ color: '#595959' }} />
+                <Text style={{ fontSize: 12, whiteSpace: 'nowrap' }}>Fond:</Text>
+                <Form.Item name={['style', 'backgroundColor']} noStyle>
+                  <ColorPicker 
+                    size="small"
+                    allowClear
+                    presets={[{
+                      label: 'Couleurs',
+                      colors: ['#ffffff', '#f5f5f5', '#e6f7ff', '#f6ffed', '#fff7e6', '#fff1f0', '#f9f0ff', '#e8e8e8'],
+                    }]}
+                    onChange={(_, hex) => form.setFieldsValue({ style: { ...form.getFieldValue('style'), backgroundColor: hex } })}
+                  />
+                </Form.Item>
+              </div>
+            </div>
+
+            {/* Aperçu en temps réel */}
+            <div style={{ 
+              marginTop: 12, padding: '8px 12px', borderRadius: 4,
+              backgroundColor: form.getFieldValue(['style', 'backgroundColor']) || '#fff',
+              border: '1px dashed #d9d9d9'
+            }}>
+              <Text style={{ fontSize: 11, color: '#8c8c8c' }}>Aperçu: </Text>
+              <span style={{
+                fontWeight: form.getFieldValue(['style', 'bold']) ? 'bold' : 'normal',
+                fontStyle: form.getFieldValue(['style', 'italic']) ? 'italic' : 'normal',
+                textDecoration: form.getFieldValue(['style', 'underline']) ? 'underline' : 'none',
+                fontSize: form.getFieldValue(['style', 'fontSize']) ? `${form.getFieldValue(['style', 'fontSize'])}px` : '12px',
+                color: form.getFieldValue(['style', 'color']) || '#333',
+                textTransform: form.getFieldValue(['style', 'textTransform']) || 'none',
+              }}>
+                {form.getFieldValue('label') || 'Texte exemple'}
+              </span>
+            </div>
+          </div>
 
           {/* ── Condition simple uniforme ── */}
           <Divider orientation="left">Condition d'affichage (optionnel)</Divider>

@@ -784,7 +784,7 @@ export async function copyVariableWithCapacities(
             ...inheritedMetadataWithoutTriggers,
             fromVariableId: forceSingleSuffix(originalVar.id),
             autoCreatedDisplayNode: true,
-            ...(isFromRepeaterDuplication && { duplicatedFromRepeater: true }),
+            ...(isFromRepeaterDuplication && { duplicatedFromRepeater: normalizedRepeatContext?.repeaterNodeId || true }),
           };
 
           const ownerSubTabRaw = ownerMetadata?.subTab
