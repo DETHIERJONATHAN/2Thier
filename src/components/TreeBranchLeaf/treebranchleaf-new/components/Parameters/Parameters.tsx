@@ -6,8 +6,9 @@
  */
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Card, /* Typography, */ Empty, Space, Input, Select, Tooltip, Button, Alert, Popconfirm, Tag, Checkbox } from 'antd';
+import { Card, /* Typography, */ Empty, Space, Input, Select, Tooltip, Button, Alert, Popconfirm, Tag, Checkbox, Modal } from 'antd';
 import type { InputRef } from 'antd';
+import { EditOutlined, ExclamationCircleOutlined } from '@ant-design/icons';
 import {
   SettingOutlined, 
   AppstoreOutlined, 
@@ -75,12 +76,17 @@ const normalizeSubTabValue = (value: unknown): string[] => {
   return normalized.length > 0 ? normalized : EMPTY_SUBTAB_LIST;
 };
 
-// Composant pour un sous-onglet triable
+// Composant pour un sous-onglet triable (avec renommage double-clic + confirmation suppression)
 const SortableSubTabTag: React.FC<{ 
   id: string; 
   label: string; 
   onRemove: (label: string) => void;
-}> = ({ id, label, onRemove }) => {
+  onRename: (oldLabel: string, newLabel: string) => void;
+}> = ({ id, label, onRemove, onRename }) => {
+  const [isEditing, setIsEditing] = useState(false);
+  const [editValue, setEditValue] = useState(label);
+  const inputRef = useRef<HTMLInputElement>(null);
+
   const {
     attributes,
     listeners,
@@ -96,11 +102,23 @@ const SortableSubTabTag: React.FC<{
     opacity: isDragging ? 0.5 : 1,
   };
 
-  const handleDelete = (e: React.MouseEvent<HTMLButtonElement>) => {
-    e.preventDefault();
-    e.stopPropagation();
-    console.log('🗑️ [SortableSubTabTag] Suppression du tag:', label);
-    onRemove(label);
+  const startEditing = () => {
+    setEditValue(label);
+    setIsEditing(true);
+    setTimeout(() => inputRef.current?.focus(), 50);
+  };
+
+  const commitEdit = () => {
+    const trimmed = editValue.trim();
+    setIsEditing(false);
+    if (trimmed && trimmed !== label) {
+      onRename(label, trimmed);
+    }
+  };
+
+  const cancelEdit = () => {
+    setIsEditing(false);
+    setEditValue(label);
   };
 
   return (
@@ -136,42 +154,92 @@ const SortableSubTabTag: React.FC<{
         >
           <HolderOutlined style={{ fontSize: 10, color: '#999' }} />
         </span>
-        <span>{label}</span>
-        <button
-          type="button"
-          onClick={handleDelete}
+        {isEditing ? (
+          <input
+            ref={inputRef}
+            value={editValue}
+            onChange={(e) => setEditValue(e.target.value)}
+            onBlur={commitEdit}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') commitEdit();
+              if (e.key === 'Escape') cancelEdit();
+            }}
+            style={{
+              border: 'none',
+              outline: 'none',
+              background: 'transparent',
+              fontSize: '12px',
+              width: `${Math.max(editValue.length, 3) * 8 + 8}px`,
+              padding: '2px 0',
+            }}
+          />
+        ) : (
+          <span
+            onDoubleClick={startEditing}
+            style={{ cursor: 'text' }}
+            title="Double-cliquez pour renommer"
+          >
+            {label}
+          </span>
+        )}
+        <EditOutlined
+          onClick={startEditing}
           onPointerDown={(e) => e.stopPropagation()}
           style={{
             cursor: 'pointer',
-            marginLeft: '2px',
-            fontSize: '12px',
-            color: '#999',
-            fontWeight: 'bold',
-            padding: '0 2px',
-            borderRadius: '2px',
-            transition: 'all 0.2s',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            width: '16px',
-            height: '16px',
-            border: 'none',
-            backgroundColor: 'transparent',
-            margin: 0,
-            lineHeight: '1',
-            pointerEvents: 'auto'
+            fontSize: '10px',
+            color: '#bbb',
+            transition: 'color 0.2s',
           }}
-          onMouseEnter={(e) => {
-            (e.currentTarget as HTMLButtonElement).style.backgroundColor = '#ff7875';
-            (e.currentTarget as HTMLButtonElement).style.color = '#fff';
+          onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = '#1677ff'; }}
+          onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = '#bbb'; }}
+        />
+        <Popconfirm
+          title="Supprimer le sous-onglet ?"
+          description={`Supprimer « ${label} » ? Les champs affectés ne seront plus visibles dans cet onglet.`}
+          onConfirm={() => {
+            console.log('🗑️ [SortableSubTabTag] Suppression confirmée:', label);
+            onRemove(label);
           }}
-          onMouseLeave={(e) => {
-            (e.currentTarget as HTMLButtonElement).style.backgroundColor = 'transparent';
-            (e.currentTarget as HTMLButtonElement).style.color = '#999';
-          }}
+          okText="Supprimer"
+          cancelText="Annuler"
+          okButtonProps={{ danger: true }}
         >
-          ×
-        </button>
+          <button
+            type="button"
+            onPointerDown={(e) => e.stopPropagation()}
+            style={{
+              cursor: 'pointer',
+              marginLeft: '2px',
+              fontSize: '12px',
+              color: '#999',
+              fontWeight: 'bold',
+              padding: '0 2px',
+              borderRadius: '2px',
+              transition: 'all 0.2s',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              width: '16px',
+              height: '16px',
+              border: 'none',
+              backgroundColor: 'transparent',
+              margin: 0,
+              lineHeight: '1',
+              pointerEvents: 'auto'
+            }}
+            onMouseEnter={(e) => {
+              (e.currentTarget as HTMLButtonElement).style.backgroundColor = '#ff7875';
+              (e.currentTarget as HTMLButtonElement).style.color = '#fff';
+            }}
+            onMouseLeave={(e) => {
+              (e.currentTarget as HTMLButtonElement).style.backgroundColor = 'transparent';
+              (e.currentTarget as HTMLButtonElement).style.color = '#999';
+            }}
+          >
+            ×
+          </button>
+        </Popconfirm>
       </div>
     </div>
   );
@@ -228,6 +296,17 @@ const SubTabsEditor: React.FC<{ value?: string[]; onChange: (next: string[]) => 
     onChange(newValue);
   };
 
+  const rename = (oldLabel: string, newLabel: string) => {
+    if (localValue.includes(newLabel)) {
+      Modal.warning({ title: 'Nom déjà utilisé', content: `Un sous-onglet « ${newLabel} » existe déjà.` });
+      return;
+    }
+    console.log('✏️ [SubTabsEditor] Renommage:', oldLabel, '→', newLabel);
+    const newValue = localValue.map(v => v === oldLabel ? newLabel : v);
+    setLocalValue(newValue);
+    onChange(newValue);
+  };
+
   const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
 
@@ -256,6 +335,7 @@ const SubTabsEditor: React.FC<{ value?: string[]; onChange: (next: string[]) => 
                 id={label}
                 label={label}
                 onRemove={remove}
+                onRename={rename}
               />
             ))}
           </SortableContext>

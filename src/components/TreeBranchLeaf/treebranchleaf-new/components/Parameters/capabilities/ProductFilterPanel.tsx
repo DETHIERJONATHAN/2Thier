@@ -1,9 +1,158 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Card, Typography, Space, Select, Button, Checkbox, Tag, Input, message, Alert, Divider } from 'antd';
-import { ShoppingOutlined, PlusOutlined, EyeOutlined, EyeInvisibleOutlined } from '@ant-design/icons';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Card, Typography, Space, Select, Button, Checkbox, Tag, Input, message, Alert, Divider, Popconfirm } from 'antd';
+import { ShoppingOutlined, PlusOutlined, EyeOutlined, EyeInvisibleOutlined, HolderOutlined, EditOutlined } from '@ant-design/icons';
 import { useAuthenticatedApi } from '../../../../../../hooks/useAuthenticatedApi';
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragEndEvent
+} from '@dnd-kit/core';
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  horizontalListSortingStrategy
+} from '@dnd-kit/sortable';
+import { useSortable } from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 
 const { Text } = Typography;
+
+// ─── Composant Tag produit triable avec renommage + suppression confirmée ───
+const SortableProductTag: React.FC<{
+  id: string;
+  option: { value: string; label: string };
+  readOnly?: boolean;
+  onRemove: (value: string) => void;
+  onRename: (value: string, newLabel: string) => void;
+}> = ({ id, option, readOnly, onRemove, onRename }) => {
+  const [isEditing, setIsEditing] = useState(false);
+  const [editValue, setEditValue] = useState(option.label);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id });
+
+  const style: React.CSSProperties = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+    display: 'inline-flex',
+    alignItems: 'center',
+    marginBottom: 4,
+    marginRight: 4,
+  };
+
+  const startEditing = () => {
+    if (readOnly) return;
+    setEditValue(option.label);
+    setIsEditing(true);
+    setTimeout(() => inputRef.current?.focus(), 50);
+  };
+
+  const commitEdit = () => {
+    const trimmed = editValue.trim();
+    setIsEditing(false);
+    if (trimmed && trimmed !== option.label) {
+      onRename(option.value, trimmed);
+    }
+  };
+
+  const cancelEdit = () => {
+    setIsEditing(false);
+    setEditValue(option.label);
+  };
+
+  return (
+    <div ref={setNodeRef} style={style}>
+      <Tag
+        color="purple"
+        style={{
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: 3,
+          margin: 0,
+          userSelect: 'none',
+          cursor: 'default',
+        }}
+      >
+        {!readOnly && (
+          <span
+            {...attributes}
+            {...listeners}
+            style={{ cursor: 'grab', display: 'flex', alignItems: 'center', marginRight: 2 }}
+          >
+            <HolderOutlined style={{ fontSize: 10 }} />
+          </span>
+        )}
+        {isEditing ? (
+          <input
+            ref={inputRef}
+            value={editValue}
+            onChange={(e) => setEditValue(e.target.value)}
+            onBlur={commitEdit}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') commitEdit();
+              if (e.key === 'Escape') cancelEdit();
+            }}
+            style={{
+              border: 'none',
+              outline: 'none',
+              background: 'transparent',
+              color: 'inherit',
+              fontSize: 'inherit',
+              fontFamily: 'inherit',
+              width: `${Math.max(editValue.length, 2) * 8 + 8}px`,
+              padding: 0,
+            }}
+          />
+        ) : (
+          <span
+            onDoubleClick={startEditing}
+            style={{ cursor: readOnly ? 'default' : 'text' }}
+            title={readOnly ? undefined : 'Double-cliquez pour renommer'}
+          >
+            {option.label}
+          </span>
+        )}
+        {!readOnly && !isEditing && (
+          <EditOutlined
+            onClick={startEditing}
+            onPointerDown={(e) => e.stopPropagation()}
+            style={{ cursor: 'pointer', fontSize: 10, marginLeft: 2, opacity: 0.6 }}
+          />
+        )}
+        {!readOnly && (
+          <Popconfirm
+            title="Supprimer cette option ?"
+            description={`Supprimer « ${option.label} » des produits ?`}
+            onConfirm={() => onRemove(option.value)}
+            okText="Supprimer"
+            cancelText="Annuler"
+            okButtonProps={{ danger: true }}
+          >
+            <span
+              onPointerDown={(e) => e.stopPropagation()}
+              style={{ cursor: 'pointer', fontSize: 12, marginLeft: 2, fontWeight: 'bold', opacity: 0.6 }}
+            >
+              ×
+            </span>
+          </Popconfirm>
+        )}
+      </Tag>
+    </div>
+  );
+};
 
 interface ProductOption {
   value: string;
@@ -342,6 +491,62 @@ const ProductFilterPanel: React.FC<ProductFilterPanelProps> = ({ treeId, nodeId,
     message.info('Option supprimée');
   }, [productOptions, isCurrentNodeSource, saveNodeConfig, saveSourceNode, visibleFor]);
 
+  // ─── Renommer une option ───
+  const handleRenameOption = useCallback(async (optionValue: string, newLabel: string) => {
+    if (productOptions.some(o => o.value !== optionValue && o.label === newLabel)) {
+      message.warning(`Une option « ${newLabel} » existe déjà.`);
+      return;
+    }
+    const updatedOptions = productOptions.map(o =>
+      o.value === optionValue ? { ...o, label: newLabel } : o
+    );
+    setProductOptions(updatedOptions);
+
+    const syncData = {
+      product_options: updatedOptions,
+      select_options: updatedOptions,
+    };
+
+    if (isCurrentNodeSource) {
+      await saveNodeConfig(syncData);
+    } else {
+      await saveSourceNode(syncData);
+    }
+    message.success(`Option renommée en « ${newLabel} »`);
+  }, [productOptions, isCurrentNodeSource, saveNodeConfig, saveSourceNode]);
+
+  // ─── Réordonner les options (drag & drop) ───
+  const handleReorderOptions = useCallback(async (newOptions: ProductOption[]) => {
+    setProductOptions(newOptions);
+
+    const syncData = {
+      product_options: newOptions,
+      select_options: newOptions,
+    };
+
+    if (isCurrentNodeSource) {
+      await saveNodeConfig(syncData);
+    } else {
+      await saveSourceNode(syncData);
+    }
+  }, [isCurrentNodeSource, saveNodeConfig, saveSourceNode]);
+
+  // DnD sensors
+  const dndSensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 3 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
+  );
+
+  const handleOptionDragEnd = useCallback((event: DragEndEvent) => {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+    const oldIndex = productOptions.findIndex(o => o.value === active.id);
+    const newIndex = productOptions.findIndex(o => o.value === over.id);
+    if (oldIndex === -1 || newIndex === -1) return;
+    const reordered = arrayMove(productOptions, oldIndex, newIndex);
+    handleReorderOptions(reordered);
+  }, [productOptions, handleReorderOptions]);
+
   // ─── Toggle visibilité champ pour une option ───
   const handleToggleVisibility = useCallback(async (optionValue: string, checked: boolean) => {
     let newVisibleFor: string[] | null;
@@ -510,17 +715,22 @@ const ProductFilterPanel: React.FC<ProductFilterPanelProps> = ({ treeId, nodeId,
         </div>
 
         <div style={{ marginBottom: 8 }}>
-          {productOptions.map(opt => (
-            <Tag
-              key={opt.value}
-              closable={!readOnly}
-              onClose={() => handleRemoveOption(opt.value)}
-              color="purple"
-              style={{ marginBottom: 4 }}
-            >
-              {opt.label}
-            </Tag>
-          ))}
+          <DndContext sensors={dndSensors} collisionDetection={closestCenter} onDragEnd={handleOptionDragEnd}>
+            <div style={{ display: 'flex', flexWrap: 'wrap' }}>
+              <SortableContext items={productOptions.map(o => o.value)} strategy={horizontalListSortingStrategy}>
+                {productOptions.map(opt => (
+                  <SortableProductTag
+                    key={opt.value}
+                    id={opt.value}
+                    option={opt}
+                    readOnly={readOnly}
+                    onRemove={handleRemoveOption}
+                    onRename={handleRenameOption}
+                  />
+                ))}
+              </SortableContext>
+            </div>
+          </DndContext>
           {productOptions.length === 0 && (
             <Text type="secondary" style={{ fontSize: 11 }}>Aucune option. Ajoutez-en ci-dessous.</Text>
           )}
