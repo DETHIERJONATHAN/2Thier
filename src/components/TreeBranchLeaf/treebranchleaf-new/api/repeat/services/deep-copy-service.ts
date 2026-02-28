@@ -1219,28 +1219,71 @@ export async function deepCopyNodeInternal(
       let nodeExists: { id: string } | null = existingNodeIds.has(tableOwnerNodeId) ? { id: tableOwnerNodeId } : null;
 
       if (!nodeExists && tableOwnerNodeId !== newId) {
-        // C'est un node en linkedTableIds qui n'a pas été copié. On crée un stub.
+        // C'est un node en linkedTableIds qui n'a pas été copié (ex: Materiaux achat
+        // dans Comptabilité, référencé par la table de Couverture dans le repeat).
+        // On crée un nœud complet qui hérite de TOUTES les propriétés de l'original.
         // PERF: Use byId map for original node data instead of findUnique
         const originalOwnerNode = byId.get(t.nodeId) ?? null;
 
         if (originalOwnerNode) {
           try {
+            // 🔧 FIX parentId: Si le parent est une section FIXE (pas dans toCopy),
+            // on garde le parentId ORIGINAL (non suffixé).
+            // Ex: Materiaux achat → parent = Comptabilité (section fixe) → pas de suffixe.
+            // Si le parent fait partie de la copie (template), on suffixe.
+            let resolvedParentId: string | null = null;
+            if (originalOwnerNode.parentId) {
+              resolvedParentId = toCopy.has(originalOwnerNode.parentId)
+                ? appendSuffix(originalOwnerNode.parentId)
+                : originalOwnerNode.parentId;
+            }
+
+            // 🔧 FIX metadata: Copier les metadata originales + marquer autoCreatedDisplayNode
+            const originalMeta = (originalOwnerNode.metadata && typeof originalOwnerNode.metadata === 'object')
+              ? { ...(originalOwnerNode.metadata as Record<string, unknown>) }
+              : {};
+            originalMeta.autoCreatedDisplayNode = true;
+            originalMeta.fromVariableId = null; // sera rempli par copyVariableWithCapacities
+
             const createdNode = await prisma.treeBranchLeafNode.create({
               data: {
                 id: tableOwnerNodeId,
                 type: originalOwnerNode.type,
-                label: originalOwnerNode.label ? `${originalOwnerNode.label}-1` : 'Stub',
+                subType: originalOwnerNode.subType,        // 🔧 FIX: était manquant → null
+                label: originalOwnerNode.label ? `${originalOwnerNode.label}${computedLabelSuffix}` : 'Stub',
                 treeId: originalOwnerNode.treeId,
-                parentId: originalOwnerNode.parentId ? appendSuffix(originalOwnerNode.parentId) : null,
-                order: 0,
+                parentId: resolvedParentId,                // 🔧 FIX: section fixe → non suffixé
+                order: originalOwnerNode.order,            // 🔧 FIX: était 0 → hériter
+                fieldType: originalOwnerNode.fieldType,
+                fieldSubType: originalOwnerNode.fieldSubType as any,
+                hasData: originalOwnerNode.hasData,
+                hasFormula: originalOwnerNode.hasFormula,
+                hasCondition: originalOwnerNode.hasCondition,
+                hasTable: originalOwnerNode.hasTable,
+                hasAPI: originalOwnerNode.hasAPI ?? false,
+                hasLink: originalOwnerNode.hasLink ?? false,
+                hasMarkers: originalOwnerNode.hasMarkers ?? false,
+                metadata: originalMeta as any,             // 🔧 FIX: était vide → copié
+                data_unit: originalOwnerNode.data_unit,
+                data_precision: originalOwnerNode.data_precision,
+                data_displayFormat: originalOwnerNode.data_displayFormat,
+                data_exposedKey: originalOwnerNode.data_exposedKey,
+                data_visibleToUser: originalOwnerNode.data_visibleToUser,
                 createdAt: new Date(),
                 updatedAt: new Date()
               }
             });
             nodeExists = createdNode;
-          } catch (err) {
-            console.error(`[DEEP-COPY] ❌ Failed to create stub node: ${err.message}`);
-            throw err; // Propager l'erreur pour arrêter le processus
+            existingNodeIds.add(tableOwnerNodeId);
+          } catch (err: any) {
+            // P2002 = unique constraint → nœud créé entretemps par un processus parallèle
+            if (err?.code === 'P2002') {
+              nodeExists = { id: tableOwnerNodeId };
+              existingNodeIds.add(tableOwnerNodeId);
+            } else {
+              console.error(`[DEEP-COPY] ❌ Failed to create stub node ${tableOwnerNodeId}: ${err.message}`);
+              throw err;
+            }
           }
         }
       }
