@@ -4711,6 +4711,9 @@ function normalizeRef(ref) {
   return ref.replace("@value.", "").replace("@table.", "").replace("@calculated.", "").replace("@select.", "").replace("node-formula:", "").replace("node-table:", "").replace("node-condition:", "").replace("node-variable:", "").replace("condition:", "").replace("formula:", "").trim();
 }
 async function enrichDataFromSubmission(submissionId, prisma51, valueMap, labelMap, treeId) {
+  if (!submissionId) {
+    return;
+  }
   try {
     const submissionData = await prisma51.treeBranchLeafSubmissionData.findMany({
       where: { submissionId },
@@ -4970,7 +4973,7 @@ async function interpretReference(ref, submissionId, prisma51, valuesCache = /* 
     };
   }
   const isCalculatedRef = ref.startsWith("@calculated.");
-  if (isCalculatedRef && result && String(result.result) === "0") {
+  if (isCalculatedRef && result) {
     try {
       const calcNode = await prisma51.treeBranchLeafNode.findUnique({
         where: { id: cleanRef },
@@ -6769,6 +6772,247 @@ var init_operation_interpreter = __esm({
     RE_NODE_FORMULA = /node-formula:[a-z0-9-]+/i;
     RE_LEGACY_FORMULA = /formula:[a-z0-9-]+/i;
     UUID_REGEX = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i;
+  }
+});
+
+// src/components/TreeBranchLeaf/treebranchleaf-new/api/repeat/utils/universal-reference-rewriter.ts
+var universal_reference_rewriter_exports = {};
+__export(universal_reference_rewriter_exports, {
+  forceSharedRefSuffixes: () => forceSharedRefSuffixes,
+  forceSharedRefSuffixesInJson: () => forceSharedRefSuffixesInJson,
+  rewriteJsonReferences: () => rewriteJsonReferences,
+  rewriteReferences: () => rewriteReferences
+});
+function rewriteReferences(text, maps, suffix) {
+  if (!text) return text;
+  const suffixStr = suffix !== void 0 ? String(suffix) : void 0;
+  const stripAllSuffixes = (id) => {
+    return id.replace(/(-\d+)+$/, "");
+  };
+  const applySuffix = (id) => {
+    if (!suffixStr) return id;
+    const cleanId = stripAllSuffixes(id);
+    return `${cleanId}-${suffixStr}`;
+  };
+  const mapOrSuffix = (id, map, isSharedRef = false) => {
+    if (map.has(id)) {
+      const mapped = map.get(id);
+      return mapped;
+    }
+    if (isSharedRef) {
+      if (!suffixStr) {
+        return id;
+      }
+      const suffixed2 = applySuffix(id);
+      return suffixed2;
+    }
+    const suffixed = applySuffix(id);
+    if (suffixed !== id) {
+    }
+    return suffixed;
+  };
+  let result = text;
+  result = result.replace(
+    /@value\.node-formula:([A-Za-z0-9_-]+)/g,
+    (_match, formulaIdWithSuffix) => {
+      const formulaId = stripAllSuffixes(formulaIdWithSuffix);
+      const newId = mapOrSuffix(formulaId, maps.formulaIdMap);
+      return `@value.node-formula:${newId}`;
+    }
+  );
+  result = result.replace(
+    /@value\.node-condition:([A-Za-z0-9_-]+)/g,
+    (_match, conditionIdWithSuffix) => {
+      const conditionId = stripAllSuffixes(conditionIdWithSuffix);
+      const newId = mapOrSuffix(conditionId, maps.conditionIdMap);
+      return `@value.node-condition:${newId}`;
+    }
+  );
+  result = result.replace(
+    /@value\.condition:([A-Za-z0-9_-]+)/g,
+    (_match, conditionIdWithSuffix) => {
+      const conditionId = stripAllSuffixes(conditionIdWithSuffix);
+      const newId = mapOrSuffix(conditionId, maps.conditionIdMap);
+      return `@value.condition:${newId}`;
+    }
+  );
+  result = result.replace(
+    /@value\.node-table:([A-Za-z0-9_-]+)/g,
+    (_match, tableIdWithSuffix) => {
+      const tableId = stripAllSuffixes(tableIdWithSuffix);
+      const newId = mapOrSuffix(tableId, maps.tableIdMap);
+      return `@value.node-table:${newId}`;
+    }
+  );
+  result = result.replace(
+    /@value\.([A-Za-z0-9_:-]+)/g,
+    (_match, nodeIdWithSuffix) => {
+      if (nodeIdWithSuffix.startsWith("node-formula:") || nodeIdWithSuffix.startsWith("node-condition:") || nodeIdWithSuffix.startsWith("condition:") || nodeIdWithSuffix.startsWith("node-table:")) {
+        return _match;
+      }
+      const nodeId = stripAllSuffixes(nodeIdWithSuffix);
+      const isSharedRef = nodeId.startsWith("shared-ref-");
+      const newId = mapOrSuffix(nodeId, maps.nodeIdMap, isSharedRef);
+      return `@value.${newId}`;
+    }
+  );
+  result = result.replace(
+    /@table\.([A-Za-z0-9_-]+)/g,
+    (_match, tableIdWithSuffix) => {
+      const tableId = stripAllSuffixes(tableIdWithSuffix);
+      const newId = mapOrSuffix(tableId, maps.tableIdMap);
+      return `@table.${newId}`;
+    }
+  );
+  result = result.replace(
+    /node-formula:([A-Za-z0-9_-]+)/g,
+    (_match, formulaIdWithSuffix) => {
+      const formulaId = stripAllSuffixes(formulaIdWithSuffix);
+      const newId = mapOrSuffix(formulaId, maps.formulaIdMap);
+      return `node-formula:${newId}`;
+    }
+  );
+  result = result.replace(
+    /node-condition:([A-Za-z0-9_-]+)/g,
+    (_match, conditionIdWithSuffix) => {
+      const conditionId = stripAllSuffixes(conditionIdWithSuffix);
+      const newId = mapOrSuffix(conditionId, maps.conditionIdMap);
+      return `node-condition:${newId}`;
+    }
+  );
+  result = result.replace(
+    /condition:([A-Za-z0-9_-]+)/g,
+    (_match, conditionIdWithSuffix) => {
+      const conditionId = stripAllSuffixes(conditionIdWithSuffix);
+      const newId = mapOrSuffix(conditionId, maps.conditionIdMap);
+      return `condition:${newId}`;
+    }
+  );
+  result = result.replace(
+    /node-table:([A-Za-z0-9_-]+)/g,
+    (_match, tableIdWithSuffix) => {
+      const tableId = stripAllSuffixes(tableIdWithSuffix);
+      const newId = mapOrSuffix(tableId, maps.tableIdMap);
+      return `node-table:${newId}`;
+    }
+  );
+  result = result.replace(
+    /\b([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})(-\d+)?\b/gi,
+    (fullMatch, uuid, existingSuffix) => {
+      if (existingSuffix) {
+        return fullMatch;
+      }
+      const newId = mapOrSuffix(uuid, maps.nodeIdMap, false);
+      return newId;
+    }
+  );
+  result = result.replace(
+    /\b(node_[A-Za-z0-9_-]*[A-Za-z0-9])(-\d+)?\b/g,
+    (fullMatch, baseNodeId, existingSuffix) => {
+      if (existingSuffix) {
+        return fullMatch;
+      }
+      const newId = mapOrSuffix(baseNodeId, maps.nodeIdMap, false);
+      return newId;
+    }
+  );
+  result = result.replace(
+    /\b(shared-ref-[A-Za-z0-9_-]*[A-Za-z0-9])(-\d+)?\b/g,
+    (fullMatch, baseRefId, existingSuffix) => {
+      if (existingSuffix) {
+        return fullMatch;
+      }
+      const newId = mapOrSuffix(baseRefId, maps.nodeIdMap, true);
+      return newId;
+    }
+  );
+  return result;
+}
+function rewriteJsonReferences(obj, maps, suffix) {
+  if (obj === null || obj === void 0) return obj;
+  if (typeof obj === "string") {
+    return rewriteReferences(obj, maps, suffix);
+  }
+  if (Array.isArray(obj)) {
+    return obj.map((item) => rewriteJsonReferences(item, maps, suffix));
+  }
+  if (typeof obj === "object") {
+    const result = {};
+    for (const [key2, value] of Object.entries(obj)) {
+      result[key2] = rewriteJsonReferences(value, maps, suffix);
+    }
+    return result;
+  }
+  return obj;
+}
+function forceSharedRefSuffixes(tokens2, suffix) {
+  if (!Array.isArray(tokens2)) {
+    return tokens2;
+  }
+  let modified = 0;
+  let matchCount = 0;
+  const result = tokens2.map((token, idx) => {
+    if (typeof token === "string") {
+      const sharedRefPattern = /^(@value\.shared-ref-[A-Za-z0-9_-]+)(?:-\d+)?$/;
+      const match = token.match(sharedRefPattern);
+      if (match) {
+        matchCount++;
+        const baseRef = match[1];
+        const alreadySuffixed = /-\d+$/.test(token);
+        if (!alreadySuffixed) {
+          const suffixed = `${baseRef}-${suffix}`;
+          modified++;
+          return suffixed;
+        } else {
+        }
+      } else if (token.includes("shared-ref")) {
+        console.warn(`\xC3\xB0\xC5\xB8\xE2\u20AC\x9D\xC2\xA5 [idx ${idx}] \xC3\xA2\xC5\xA1\xC2\xA0\xC3\xAF\xC2\xB8\xC2\x8F CONTAINS 'shared-ref' MAIS NE MATCHE PAS regex: "${token}"`);
+      }
+    } else {
+      if (String(token).includes("shared-ref")) {
+        console.warn(`\xC3\xB0\xC5\xB8\xE2\u20AC\x9D\xC2\xA5 [idx ${idx}] \xC3\xA2\xC5\xA1\xC2\xA0\xC3\xAF\xC2\xB8\xC2\x8F Token NOT STRING mais contient 'shared-ref': Type=${typeof token}, Value=`, token);
+      }
+    }
+    return token;
+  });
+  return result;
+}
+function forceSharedRefSuffixesInJson(obj, suffix) {
+  if (obj === null || obj === void 0) return obj;
+  if (Array.isArray(obj)) {
+    return obj.map((item) => forceSharedRefSuffixesInJson(item, suffix));
+  }
+  if (typeof obj === "string") {
+    const sharedRefPattern = /^(@value\.shared-ref-[A-Za-z0-9_-]+)(?:-\d+)?$/;
+    const match = obj.match(sharedRefPattern);
+    if (match) {
+      const baseRef = match[1];
+      const alreadySuffixed = /-\d+$/.test(obj);
+      if (!alreadySuffixed) {
+        const suffixed = `${baseRef}-${suffix}`;
+        return suffixed;
+      }
+    }
+    return obj;
+  }
+  if (typeof obj === "object") {
+    let modified = 0;
+    const result = {};
+    for (const key2 in obj) {
+      if (Object.prototype.hasOwnProperty.call(obj, key2)) {
+        const newVal = forceSharedRefSuffixesInJson(obj[key2], suffix);
+        result[key2] = newVal;
+        if (newVal !== obj[key2]) modified++;
+      }
+    }
+    if (modified > 0) {
+    }
+    return result;
+  }
+  return obj;
+}
+var init_universal_reference_rewriter = __esm({
+  "src/components/TreeBranchLeaf/treebranchleaf-new/api/repeat/utils/universal-reference-rewriter.ts"() {
   }
 });
 
@@ -32425,7 +32669,7 @@ async function addToNodeLinkedField(client, nodeId, field, idsToAdd) {
   if (filtered.length === 0) return;
   try {
     await client.$executeRawUnsafe(
-      `UPDATE "TreeBranchLeafNode" SET "${field}" = array_cat(COALESCE("${field}", ARRAY[]::text[]), $1::text[]) WHERE id = $2`,
+      `UPDATE "TreeBranchLeafNode" SET "${field}" = ARRAY(SELECT DISTINCT unnest(array_cat(COALESCE("${field}", ARRAY[]::text[]), $1::text[]))) WHERE id = $2`,
       filtered,
       nodeId
     );
@@ -33533,237 +33777,8 @@ async function updateSumDisplayFieldAfterCopyChange(sourceNodeId, prismaClient) 
   }
 }
 
-// src/components/TreeBranchLeaf/treebranchleaf-new/api/repeat/utils/universal-reference-rewriter.ts
-function rewriteReferences(text, maps, suffix) {
-  if (!text) return text;
-  const suffixStr = suffix !== void 0 ? String(suffix) : void 0;
-  const stripAllSuffixes = (id) => {
-    return id.replace(/(-\d+)+$/, "");
-  };
-  const applySuffix = (id) => {
-    if (!suffixStr) return id;
-    const cleanId = stripAllSuffixes(id);
-    return `${cleanId}-${suffixStr}`;
-  };
-  const mapOrSuffix = (id, map, isSharedRef = false) => {
-    if (map.has(id)) {
-      const mapped = map.get(id);
-      return mapped;
-    }
-    if (isSharedRef) {
-      if (!suffixStr) {
-        return id;
-      }
-      const suffixed2 = applySuffix(id);
-      return suffixed2;
-    }
-    const suffixed = applySuffix(id);
-    if (suffixed !== id) {
-    }
-    return suffixed;
-  };
-  let result = text;
-  result = result.replace(
-    /@value\.node-formula:([A-Za-z0-9_-]+)/g,
-    (_match, formulaIdWithSuffix) => {
-      const formulaId = stripAllSuffixes(formulaIdWithSuffix);
-      const newId = mapOrSuffix(formulaId, maps.formulaIdMap);
-      return `@value.node-formula:${newId}`;
-    }
-  );
-  result = result.replace(
-    /@value\.node-condition:([A-Za-z0-9_-]+)/g,
-    (_match, conditionIdWithSuffix) => {
-      const conditionId = stripAllSuffixes(conditionIdWithSuffix);
-      const newId = mapOrSuffix(conditionId, maps.conditionIdMap);
-      return `@value.node-condition:${newId}`;
-    }
-  );
-  result = result.replace(
-    /@value\.condition:([A-Za-z0-9_-]+)/g,
-    (_match, conditionIdWithSuffix) => {
-      const conditionId = stripAllSuffixes(conditionIdWithSuffix);
-      const newId = mapOrSuffix(conditionId, maps.conditionIdMap);
-      return `@value.condition:${newId}`;
-    }
-  );
-  result = result.replace(
-    /@value\.node-table:([A-Za-z0-9_-]+)/g,
-    (_match, tableIdWithSuffix) => {
-      const tableId = stripAllSuffixes(tableIdWithSuffix);
-      const newId = mapOrSuffix(tableId, maps.tableIdMap);
-      return `@value.node-table:${newId}`;
-    }
-  );
-  result = result.replace(
-    /@value\.([A-Za-z0-9_:-]+)/g,
-    (_match, nodeIdWithSuffix) => {
-      if (nodeIdWithSuffix.startsWith("node-formula:") || nodeIdWithSuffix.startsWith("node-condition:") || nodeIdWithSuffix.startsWith("condition:") || nodeIdWithSuffix.startsWith("node-table:")) {
-        return _match;
-      }
-      const nodeId = stripAllSuffixes(nodeIdWithSuffix);
-      const isSharedRef = nodeId.startsWith("shared-ref-");
-      const newId = mapOrSuffix(nodeId, maps.nodeIdMap, isSharedRef);
-      return `@value.${newId}`;
-    }
-  );
-  result = result.replace(
-    /@table\.([A-Za-z0-9_-]+)/g,
-    (_match, tableIdWithSuffix) => {
-      const tableId = stripAllSuffixes(tableIdWithSuffix);
-      const newId = mapOrSuffix(tableId, maps.tableIdMap);
-      return `@table.${newId}`;
-    }
-  );
-  result = result.replace(
-    /node-formula:([A-Za-z0-9_-]+)/g,
-    (_match, formulaIdWithSuffix) => {
-      const formulaId = stripAllSuffixes(formulaIdWithSuffix);
-      const newId = mapOrSuffix(formulaId, maps.formulaIdMap);
-      return `node-formula:${newId}`;
-    }
-  );
-  result = result.replace(
-    /node-condition:([A-Za-z0-9_-]+)/g,
-    (_match, conditionIdWithSuffix) => {
-      const conditionId = stripAllSuffixes(conditionIdWithSuffix);
-      const newId = mapOrSuffix(conditionId, maps.conditionIdMap);
-      return `node-condition:${newId}`;
-    }
-  );
-  result = result.replace(
-    /condition:([A-Za-z0-9_-]+)/g,
-    (_match, conditionIdWithSuffix) => {
-      const conditionId = stripAllSuffixes(conditionIdWithSuffix);
-      const newId = mapOrSuffix(conditionId, maps.conditionIdMap);
-      return `condition:${newId}`;
-    }
-  );
-  result = result.replace(
-    /node-table:([A-Za-z0-9_-]+)/g,
-    (_match, tableIdWithSuffix) => {
-      const tableId = stripAllSuffixes(tableIdWithSuffix);
-      const newId = mapOrSuffix(tableId, maps.tableIdMap);
-      return `node-table:${newId}`;
-    }
-  );
-  result = result.replace(
-    /\b([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})(-\d+)?\b/gi,
-    (fullMatch, uuid, existingSuffix) => {
-      if (existingSuffix) {
-        return fullMatch;
-      }
-      const newId = mapOrSuffix(uuid, maps.nodeIdMap, false);
-      return newId;
-    }
-  );
-  result = result.replace(
-    /\b(node_[A-Za-z0-9_-]*[A-Za-z0-9])(-\d+)?\b/g,
-    (fullMatch, baseNodeId, existingSuffix) => {
-      if (existingSuffix) {
-        return fullMatch;
-      }
-      const newId = mapOrSuffix(baseNodeId, maps.nodeIdMap, false);
-      return newId;
-    }
-  );
-  result = result.replace(
-    /\b(shared-ref-[A-Za-z0-9_-]*[A-Za-z0-9])(-\d+)?\b/g,
-    (fullMatch, baseRefId, existingSuffix) => {
-      if (existingSuffix) {
-        return fullMatch;
-      }
-      const newId = mapOrSuffix(baseRefId, maps.nodeIdMap, true);
-      return newId;
-    }
-  );
-  return result;
-}
-function rewriteJsonReferences(obj, maps, suffix) {
-  if (obj === null || obj === void 0) return obj;
-  if (typeof obj === "string") {
-    return rewriteReferences(obj, maps, suffix);
-  }
-  if (Array.isArray(obj)) {
-    return obj.map((item) => rewriteJsonReferences(item, maps, suffix));
-  }
-  if (typeof obj === "object") {
-    const result = {};
-    for (const [key2, value] of Object.entries(obj)) {
-      result[key2] = rewriteJsonReferences(value, maps, suffix);
-    }
-    return result;
-  }
-  return obj;
-}
-function forceSharedRefSuffixes(tokens2, suffix) {
-  if (!Array.isArray(tokens2)) {
-    return tokens2;
-  }
-  let modified = 0;
-  let matchCount = 0;
-  const result = tokens2.map((token, idx) => {
-    if (typeof token === "string") {
-      const sharedRefPattern = /^(@value\.shared-ref-[A-Za-z0-9_-]+)(?:-\d+)?$/;
-      const match = token.match(sharedRefPattern);
-      if (match) {
-        matchCount++;
-        const baseRef = match[1];
-        const alreadySuffixed = /-\d+$/.test(token);
-        if (!alreadySuffixed) {
-          const suffixed = `${baseRef}-${suffix}`;
-          modified++;
-          return suffixed;
-        } else {
-        }
-      } else if (token.includes("shared-ref")) {
-        console.warn(`\xC3\xB0\xC5\xB8\xE2\u20AC\x9D\xC2\xA5 [idx ${idx}] \xC3\xA2\xC5\xA1\xC2\xA0\xC3\xAF\xC2\xB8\xC2\x8F CONTAINS 'shared-ref' MAIS NE MATCHE PAS regex: "${token}"`);
-      }
-    } else {
-      if (String(token).includes("shared-ref")) {
-        console.warn(`\xC3\xB0\xC5\xB8\xE2\u20AC\x9D\xC2\xA5 [idx ${idx}] \xC3\xA2\xC5\xA1\xC2\xA0\xC3\xAF\xC2\xB8\xC2\x8F Token NOT STRING mais contient 'shared-ref': Type=${typeof token}, Value=`, token);
-      }
-    }
-    return token;
-  });
-  return result;
-}
-function forceSharedRefSuffixesInJson(obj, suffix) {
-  if (obj === null || obj === void 0) return obj;
-  if (Array.isArray(obj)) {
-    return obj.map((item) => forceSharedRefSuffixesInJson(item, suffix));
-  }
-  if (typeof obj === "string") {
-    const sharedRefPattern = /^(@value\.shared-ref-[A-Za-z0-9_-]+)(?:-\d+)?$/;
-    const match = obj.match(sharedRefPattern);
-    if (match) {
-      const baseRef = match[1];
-      const alreadySuffixed = /-\d+$/.test(obj);
-      if (!alreadySuffixed) {
-        const suffixed = `${baseRef}-${suffix}`;
-        return suffixed;
-      }
-    }
-    return obj;
-  }
-  if (typeof obj === "object") {
-    let modified = 0;
-    const result = {};
-    for (const key2 in obj) {
-      if (Object.prototype.hasOwnProperty.call(obj, key2)) {
-        const newVal = forceSharedRefSuffixesInJson(obj[key2], suffix);
-        result[key2] = newVal;
-        if (newVal !== obj[key2]) modified++;
-      }
-    }
-    if (modified > 0) {
-    }
-    return result;
-  }
-  return obj;
-}
-
 // src/components/TreeBranchLeaf/treebranchleaf-new/api/copy-capacity-formula.ts
+init_universal_reference_rewriter();
 async function copyFormulaCapacity(originalFormulaId, newNodeId, suffix, prisma51, options = {}) {
   const {
     nodeIdMap = /* @__PURE__ */ new Map(),
@@ -33915,7 +33930,7 @@ async function addToNodeLinkedField2(prisma51, nodeId, field, idsToAdd) {
   if (filtered.length === 0) return;
   try {
     await prisma51.$executeRawUnsafe(
-      `UPDATE "TreeBranchLeafNode" SET "${field}" = array_cat(COALESCE("${field}", ARRAY[]::text[]), $1::text[]) WHERE id = $2`,
+      `UPDATE "TreeBranchLeafNode" SET "${field}" = ARRAY(SELECT DISTINCT unnest(array_cat(COALESCE("${field}", ARRAY[]::text[]), $1::text[]))) WHERE id = $2`,
       filtered,
       nodeId
     );
@@ -33924,6 +33939,7 @@ async function addToNodeLinkedField2(prisma51, nodeId, field, idsToAdd) {
 }
 
 // src/components/TreeBranchLeaf/treebranchleaf-new/api/copy-capacity-condition.ts
+init_universal_reference_rewriter();
 function regenerateInternalIds(conditionSet, suffix) {
   if (!conditionSet || typeof conditionSet !== "object") {
     return conditionSet;
@@ -34315,6 +34331,7 @@ async function addToNodeLinkedField3(prisma51, nodeId, field, idsToAdd) {
 }
 
 // src/components/TreeBranchLeaf/treebranchleaf-new/api/copy-capacity-table.ts
+init_universal_reference_rewriter();
 function stripNumericSuffix(value) {
   if (!value) return value;
   const numericWithAnySuffix = /^\d+(?:-\d+)+$/;
@@ -34418,18 +34435,6 @@ async function copyTableCapacity2(originalTableId, newNodeId, suffix, prisma51, 
             if (rewritten?.lookup?.columnSourceOption?.sourceField && !rewritten.lookup.columnSourceOption.sourceField.endsWith(`-${suffixNum}`)) {
               rewritten.lookup.columnSourceOption.sourceField = `${rewritten.lookup.columnSourceOption.sourceField}-${suffixNum}`;
             }
-            if (rewritten?.lookup?.rowSourceOption?.comparisonColumn) {
-              const val = rewritten.lookup.rowSourceOption.comparisonColumn;
-              if (!val.endsWith(`-${suffixNum}`)) {
-                rewritten.lookup.rowSourceOption.comparisonColumn = `${val}-${suffixNum}`;
-              }
-            }
-            if (rewritten?.lookup?.columnSourceOption?.comparisonColumn) {
-              const val = rewritten.lookup.columnSourceOption.comparisonColumn;
-              if (!val.endsWith(`-${suffixNum}`)) {
-                rewritten.lookup.columnSourceOption.comparisonColumn = `${val}-${suffixNum}`;
-              }
-            }
             return rewritten;
           })(),
           updatedAt: /* @__PURE__ */ new Date()
@@ -34466,18 +34471,6 @@ async function copyTableCapacity2(originalTableId, newNodeId, suffix, prisma51, 
               if (rewritten?.lookup?.columnSourceOption?.sourceField && !rewritten.lookup.columnSourceOption.sourceField.endsWith(`-${suffixNum}`)) {
                 rewritten.lookup.columnSourceOption.sourceField = `${rewritten.lookup.columnSourceOption.sourceField}-${suffixNum}`;
               }
-              if (rewritten?.lookup?.rowSourceOption?.comparisonColumn) {
-                const val = rewritten.lookup.rowSourceOption.comparisonColumn;
-                if (!val.endsWith(`-${suffixNum}`)) {
-                  rewritten.lookup.rowSourceOption.comparisonColumn = `${val}-${suffixNum}`;
-                }
-              }
-              if (rewritten?.lookup?.columnSourceOption?.comparisonColumn) {
-                const val = rewritten.lookup.columnSourceOption.comparisonColumn;
-                if (!val.endsWith(`-${suffixNum}`)) {
-                  rewritten.lookup.columnSourceOption.comparisonColumn = `${val}-${suffixNum}`;
-                }
-              }
               return rewritten;
             })(),
             createdAt: /* @__PURE__ */ new Date(),
@@ -34504,12 +34497,7 @@ async function copyTableCapacity2(originalTableId, newNodeId, suffix, prisma51, 
         try {
           const newColumnId = `${Math.random().toString(36).substring(2, 15)}${Math.random().toString(36).substring(2, 15)}`;
           columnIdMap.set(col.id, newColumnId);
-          const normalizedName = (() => {
-            const raw = col.name;
-            if (!raw) return raw;
-            if (/^-?\d+(\.\d+)?$/.test(raw.trim())) return raw;
-            return `${raw}-${suffix}`;
-          })();
+          const normalizedName = col.name;
           await prisma51.treeBranchLeafNodeTableColumn.create({
             data: {
               id: newColumnId,
@@ -34701,6 +34689,7 @@ async function copyVariableWithCapacities(originalVarId, suffix, newNodeId, pris
     // displayNodeAlreadyCreated is not used anymore in this function; keep options API stable without reassigning
   } = options;
   let finalNodeId = newNodeId;
+  const childDisplayNodeIds = [];
   try {
     const cacheKey = `${originalVarId}|${newNodeId}`;
     if (variableCopyCache.has(cacheKey)) {
@@ -35101,7 +35090,7 @@ async function copyVariableWithCapacities(originalVarId, suffix, newNodeId, pris
               ...inheritedMetadataWithoutTriggers,
               fromVariableId: forceSingleSuffix(originalVar.id),
               autoCreatedDisplayNode: true,
-              ...isFromRepeaterDuplication && { duplicatedFromRepeater: true }
+              ...isFromRepeaterDuplication && { duplicatedFromRepeater: normalizedRepeatContext?.repeaterNodeId || true }
             };
             const ownerSubTabRaw = ownerMetadata?.subTab ?? ownerMetadata?.subTabKey ?? parseJsonIfNeeded(originalOwnerNode.subtab ?? void 0);
             const ownerSubTabsRaw = ownerMetadata?.subTabs ?? parseJsonIfNeeded(originalOwnerNode.subtabs ?? void 0);
@@ -35416,6 +35405,251 @@ async function copyVariableWithCapacities(originalVarId, suffix, newNodeId, pris
                       where: { id: displayNodeId2 },
                       data: { hasTable: true, linkedTableIds: copiedTableIds }
                     });
+                  }
+                }
+              }
+              const childSourceNodeId = originalVar.nodeId;
+              if (childSourceNodeId && isFromRepeaterDuplication) {
+                if (childSourceNodeId && displayNodeId2) {
+                  nodeIdMap.set(childSourceNodeId, displayNodeId2);
+                }
+                const bfsQueue = [
+                  { origParentId: childSourceNodeId, copyParentId: displayNodeId2 }
+                ];
+                while (bfsQueue.length > 0) {
+                  const { origParentId, copyParentId } = bfsQueue.shift();
+                  let childDisplayNodes = [];
+                  try {
+                    childDisplayNodes = await prisma51.treeBranchLeafNode.findMany({
+                      where: { parentId: origParentId },
+                      orderBy: { order: "asc" }
+                    });
+                  } catch (findErr) {
+                    console.warn(`[VAR-COPY] Erreur recherche enfants de ${origParentId}:`, findErr.message);
+                    continue;
+                  }
+                  for (const child of childDisplayNodes) {
+                    try {
+                      const childCopyId = appendSuffixOnce(stripTrailingNumeric(child.id));
+                      nodeIdMap.set(child.id, childCopyId);
+                      const childAlreadyExists = existingNodeIds ? existingNodeIds.has(childCopyId) : await prisma51.treeBranchLeafNode.findUnique({ where: { id: childCopyId }, select: { id: true } }).then((r) => !!r).catch(() => false);
+                      if (childAlreadyExists) {
+                        if (existingNodeIds) existingNodeIds.add(childCopyId);
+                        bfsQueue.push({ origParentId: child.id, copyParentId: childCopyId });
+                        continue;
+                      }
+                      const childMeta = child.metadata && typeof child.metadata === "object" ? { ...child.metadata } : {};
+                      childMeta.autoCreatedDisplayNode = true;
+                      childMeta.duplicatedFromRepeater = true;
+                      const isSumTotalNode = /-sum-total(-\d+)?$/.test(child.id);
+                      const childNodeData = {
+                        id: childCopyId,
+                        treeId: originalOwnerNode.treeId,
+                        parentId: copyParentId,
+                        type: child.type,
+                        subType: child.subType,
+                        label: forceSingleSuffix(child.label),
+                        description: child.description,
+                        value: null,
+                        order: child.order,
+                        isRequired: child.isRequired,
+                        isVisible: child.isVisible,
+                        isActive: child.isActive,
+                        hasFormula: child.hasFormula,
+                        hasCondition: child.hasCondition,
+                        hasData: child.hasData,
+                        hasTable: child.hasTable,
+                        hasAPI: child.hasAPI ?? false,
+                        hasLink: child.hasLink ?? false,
+                        hasMarkers: child.hasMarkers ?? false,
+                        metadata: childMeta,
+                        calculatedValue: null,
+                        fieldType: child.fieldType,
+                        fieldSubType: child.fieldSubType,
+                        field_label: forceSingleSuffix(child.label),
+                        subtab: child.subtab,
+                        subtabs: child.subtabs,
+                        formula_tokens: child.formula_tokens,
+                        data_displayFormat: child.data_displayFormat,
+                        data_exposedKey: child.data_exposedKey,
+                        data_precision: child.data_precision,
+                        data_unit: child.data_unit,
+                        data_visibleToUser: child.data_visibleToUser ?? false,
+                        appearance_size: child.appearance_size ?? "md",
+                        appearance_variant: child.appearance_variant,
+                        appearance_width: child.appearance_width,
+                        appearance_displayIcon: child.appearance_displayIcon,
+                        linkedFormulaIds: [],
+                        linkedConditionIds: [],
+                        linkedVariableIds: [],
+                        linkedTableIds: [],
+                        updatedAt: now
+                      };
+                      await prisma51.treeBranchLeafNode.upsert({
+                        where: { id: childCopyId },
+                        update: { parentId: copyParentId, updatedAt: now },
+                        create: childNodeData
+                      });
+                      if (existingNodeIds) existingNodeIds.add(childCopyId);
+                      childDisplayNodeIds.push(childCopyId);
+                      const childFormulas = await prisma51.treeBranchLeafNodeFormula.findMany({
+                        where: { nodeId: child.id }
+                      });
+                      const localNodeIdMap = new Map(nodeIdMap);
+                      for (const f of childFormulas) {
+                        if (f.tokens && Array.isArray(f.tokens)) {
+                          const tokenStr = JSON.stringify(f.tokens);
+                          const uuidRe = /([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})/gi;
+                          let m;
+                          while ((m = uuidRe.exec(tokenStr)) !== null) {
+                            const uuid = m[1];
+                            if (!localNodeIdMap.has(uuid)) {
+                              localNodeIdMap.set(uuid, uuid);
+                            }
+                          }
+                        }
+                      }
+                      const childFormulaIdMap = /* @__PURE__ */ new Map();
+                      const childCopiedFormulaIds = [];
+                      for (const f of childFormulas) {
+                        const expectedSuffix = `-${suffix}`;
+                        const existingMapping = formulaIdMap.get(f.id);
+                        if (existingMapping && existingMapping.endsWith(expectedSuffix)) {
+                          childCopiedFormulaIds.push(existingMapping);
+                          childFormulaIdMap.set(f.id, existingMapping);
+                          continue;
+                        }
+                        try {
+                          if (isSumTotalNode) {
+                            const newSumFormulaId = `${f.id}-${suffix}`;
+                            const formulaIdShort = f.id.substring(0, 8);
+                            const uniqueName = f.name ? `${f.name}-${formulaIdShort}-${suffix}` : `formula-${formulaIdShort}-${suffix}`;
+                            await prisma51.treeBranchLeafNodeFormula.upsert({
+                              where: { id: newSumFormulaId },
+                              update: {
+                                nodeId: childCopyId,
+                                name: uniqueName,
+                                tokens: f.tokens,
+                                updatedAt: /* @__PURE__ */ new Date()
+                              },
+                              create: {
+                                id: newSumFormulaId,
+                                nodeId: childCopyId,
+                                organizationId: f.organizationId,
+                                name: uniqueName,
+                                description: f.description,
+                                tokens: f.tokens,
+                                targetProperty: f.targetProperty,
+                                constraintMessage: f.constraintMessage,
+                                isDefault: f.isDefault,
+                                order: f.order,
+                                createdAt: /* @__PURE__ */ new Date(),
+                                updatedAt: /* @__PURE__ */ new Date()
+                              }
+                            });
+                            formulaIdMap.set(f.id, newSumFormulaId);
+                            childFormulaIdMap.set(f.id, newSumFormulaId);
+                            childCopiedFormulaIds.push(newSumFormulaId);
+                            console.log(`[VAR-COPY] \u2705 Sum-total formule copi\xE9e SANS r\xE9\xE9criture: ${f.id} \u2192 ${newSumFormulaId}`);
+                          } else {
+                            const formulaResult = await copyFormulaCapacity(
+                              f.id,
+                              childCopyId,
+                              suffix,
+                              prisma51,
+                              { formulaIdMap: childFormulaIdMap, nodeIdMap: localNodeIdMap, skipLinking: true, skipCapacitySync: true }
+                            );
+                            if (formulaResult.success) {
+                              formulaIdMap.set(f.id, formulaResult.newFormulaId);
+                              childFormulaIdMap.set(f.id, formulaResult.newFormulaId);
+                              childCopiedFormulaIds.push(formulaResult.newFormulaId);
+                            }
+                          }
+                        } catch (fErr) {
+                          console.warn(`[VAR-COPY] Erreur copie formule enfant ${f.id}:`, fErr.message);
+                        }
+                      }
+                      if (childCopiedFormulaIds.length > 0) {
+                        await prisma51.treeBranchLeafNode.update({
+                          where: { id: childCopyId },
+                          data: {
+                            hasFormula: true,
+                            linkedFormulaIds: childCopiedFormulaIds,
+                            formula_activeId: child.formula_activeId ? childFormulaIdMap.get(child.formula_activeId) || formulaIdMap.get(child.formula_activeId) || childCopiedFormulaIds[0] : childCopiedFormulaIds[0]
+                          }
+                        });
+                      }
+                      const childVar = await prisma51.treeBranchLeafNodeVariable.findUnique({
+                        where: { nodeId: child.id }
+                      });
+                      if (childVar) {
+                        const newChildVarId = appendSuffixOnce(stripTrailingNumeric(childVar.id));
+                        const newChildExposedKey = appendSuffixOnce(stripTrailingNumeric(childVar.exposedKey));
+                        let newChildSourceRef = childVar.sourceRef;
+                        if (newChildSourceRef) {
+                          for (const [oldFId, newFId] of formulaIdMap.entries()) {
+                            newChildSourceRef = newChildSourceRef.replace(oldFId, newFId);
+                          }
+                        }
+                        const varCollision = existingVariableIds ? existingVariableIds.has(newChildVarId) : await prisma51.treeBranchLeafNodeVariable.findUnique({ where: { id: newChildVarId } }).then((r) => !!r).catch(() => false);
+                        if (!varCollision) {
+                          await prisma51.treeBranchLeafNodeVariable.upsert({
+                            where: { id: newChildVarId },
+                            update: {
+                              nodeId: childCopyId,
+                              sourceRef: newChildSourceRef,
+                              updatedAt: now
+                            },
+                            create: {
+                              id: newChildVarId,
+                              nodeId: childCopyId,
+                              displayName: forceSingleSuffix(childVar.displayName),
+                              exposedKey: newChildExposedKey,
+                              sourceRef: newChildSourceRef,
+                              sourceType: childVar.sourceType,
+                              displayFormat: childVar.displayFormat,
+                              unit: childVar.unit,
+                              precision: childVar.precision,
+                              visibleToUser: childVar.visibleToUser,
+                              isReadonly: childVar.isReadonly,
+                              defaultValue: childVar.defaultValue,
+                              fixedValue: childVar.fixedValue,
+                              metadata: childVar.metadata,
+                              updatedAt: now
+                            }
+                          });
+                          if (existingVariableIds) existingVariableIds.add(newChildVarId);
+                          if (existingVariableKeys) existingVariableKeys.add(newChildExposedKey);
+                          variableCopyCache.set(`${childVar.id}|${childCopyId}`, newChildVarId);
+                          const childMetaUpdate = { ...childMeta, fromVariableId: newChildVarId };
+                          await prisma51.treeBranchLeafNode.update({
+                            where: { id: childCopyId },
+                            data: {
+                              hasData: true,
+                              data_activeId: newChildVarId,
+                              data_exposedKey: newChildExposedKey,
+                              data_displayFormat: childVar.displayFormat,
+                              data_precision: childVar.precision,
+                              data_unit: childVar.unit,
+                              data_visibleToUser: childVar.visibleToUser,
+                              linkedVariableIds: [newChildVarId],
+                              metadata: childMetaUpdate
+                            }
+                          });
+                        }
+                      }
+                      console.log(`[VAR-COPY] \u2705 Enfant display node ${child.label} \u2192 ${childCopyId} dupliqu\xE9`);
+                      try {
+                        await updateSumDisplayFieldAfterCopyChange(child.id, prisma51);
+                      } catch (sumErr) {
+                        console.warn(`[VAR-COPY] Erreur mise \xE0 jour sum-total enfant ${child.id}:`, sumErr.message);
+                      }
+                      bfsQueue.push({ origParentId: child.id, copyParentId: childCopyId });
+                    } catch (perChildErr) {
+                      console.error(`[VAR-COPY] \u26A0\uFE0F Erreur duplication enfant ${child.id} (${child.label}) \u2192 continue avec les suivants:`, perChildErr.message);
+                      const childCopyIdFallback = appendSuffixOnce(stripTrailingNumeric(child.id));
+                      bfsQueue.push({ origParentId: child.id, copyParentId: childCopyIdFallback });
+                    }
                   }
                 }
               }
@@ -35860,7 +36094,9 @@ async function copyVariableWithCapacities(originalVarId, suffix, newNodeId, pris
       // 🟢 RETOURNER LES MAPS pour que repeat-executor puisse les agréger
       formulaIdMap,
       conditionIdMap,
-      tableIdMap: tableIdMap2
+      tableIdMap: tableIdMap2,
+      // 🔄 IDs des nœuds enfants dupliqués pour le post-processing
+      childDisplayNodeIds: childDisplayNodeIds.length > 0 ? childDisplayNodeIds : void 0
     };
   } catch (error) {
     console.error(`
@@ -35978,7 +36214,7 @@ async function addToNodeLinkedField5(prisma51, nodeId, field, idsToAdd) {
   if (filtered.length === 0) return;
   try {
     await prisma51.$executeRawUnsafe(
-      `UPDATE "TreeBranchLeafNode" SET "${field}" = array_cat(COALESCE("${field}", ARRAY[]::text[]), $1::text[]) WHERE id = $2`,
+      `UPDATE "TreeBranchLeafNode" SET "${field}" = ARRAY(SELECT DISTINCT unnest(array_cat(COALESCE("${field}", ARRAY[]::text[]), $1::text[]))) WHERE id = $2`,
       filtered,
       nodeId
     );
@@ -36005,6 +36241,9 @@ async function replaceLinkedVariableId(prisma51, nodeId, originalVarId, newVarId
     data: { linkedVariableIds: { set: next } }
   });
 }
+
+// src/components/TreeBranchLeaf/treebranchleaf-new/api/treebranchleaf-routes.ts
+init_universal_reference_rewriter();
 
 // src/components/TreeBranchLeaf/treebranchleaf-new/api/copy-selector-tables.ts
 async function copySelectorTablesAfterNodeCopy(prisma51, copiedRootNodeId, originalRootNodeId, options, suffix) {
@@ -36192,7 +36431,7 @@ async function addToNodeLinkedField6(client, nodeId, field, idsToAdd) {
   if (!sanitized2.length) return;
   try {
     await client.$executeRawUnsafe(
-      `UPDATE "TreeBranchLeafNode" SET "${field}" = array_cat(COALESCE("${field}", ARRAY[]::text[]), $1::text[]) WHERE id = $2`,
+      `UPDATE "TreeBranchLeafNode" SET "${field}" = ARRAY(SELECT DISTINCT unnest(array_cat(COALESCE("${field}", ARRAY[]::text[]), $1::text[]))) WHERE id = $2`,
       sanitized2,
       nodeId
     );
@@ -36997,40 +37236,6 @@ async function deepCopyNodeInternal(prisma51, req2, nodeId, opts) {
             newMeta.lookup.columnSourceOption.sourceField = `${sf}${suf}`;
           }
         }
-        if (newMeta.lookup.rowSourceOption?.comparisonColumn) {
-          const cc = newMeta.lookup.rowSourceOption.comparisonColumn;
-          if (typeof cc === "string" && !/^\d+$/.test(cc) && !cc.endsWith(suf)) {
-            newMeta.lookup.rowSourceOption.comparisonColumn = `${cc}${suf}`;
-          }
-        }
-        if (newMeta.lookup.columnSourceOption?.comparisonColumn) {
-          const cc = newMeta.lookup.columnSourceOption.comparisonColumn;
-          if (typeof cc === "string" && !/^\d+$/.test(cc) && !cc.endsWith(suf)) {
-            newMeta.lookup.columnSourceOption.comparisonColumn = `${cc}${suf}`;
-          }
-        }
-        if (newMeta.lookup.displayRow) {
-          if (Array.isArray(newMeta.lookup.displayRow)) {
-            newMeta.lookup.displayRow = newMeta.lookup.displayRow.map(
-              (r) => r && !/^\d+$/.test(r) && !r.endsWith(suf) ? `${r}${suf}` : r
-            );
-          } else if (typeof newMeta.lookup.displayRow === "string") {
-            const dr = newMeta.lookup.displayRow;
-            if (!/^\d+$/.test(dr) && !dr.endsWith(suf)) {
-              newMeta.lookup.displayRow = `${dr}${suf}`;
-            }
-          }
-        }
-        if (newMeta.lookup.displayColumn) {
-          const col = newMeta.lookup.displayColumn;
-          if (Array.isArray(col)) {
-            newMeta.lookup.displayColumn = col.map(
-              (c) => c && !/^\d+$/.test(c) && !c.endsWith(suf) ? `${c}${suf}` : c
-            );
-          } else if (typeof col === "string" && !/^\d+$/.test(col) && !col.endsWith(suf)) {
-            newMeta.lookup.displayColumn = `${col}${suf}`;
-          }
-        }
       }
       if (normalizedRepeatContext && newMeta.repeater) {
         delete newMeta.repeater;
@@ -37581,33 +37786,6 @@ async function deepCopyNodeInternal(prisma51, req2, nodeId, opts) {
               if (metaObj?.lookup?.columnSourceOption?.sourceField && !metaObj.lookup.columnSourceOption.sourceField.endsWith(`-${copySuffixNum}`)) {
                 metaObj.lookup.columnSourceOption.sourceField = `${metaObj.lookup.columnSourceOption.sourceField}-${copySuffixNum}`;
               }
-              if (metaObj?.lookup?.displayColumn) {
-                const originalDisplay = JSON.stringify(metaObj.lookup.displayColumn);
-                if (Array.isArray(metaObj.lookup.displayColumn)) {
-                  metaObj.lookup.displayColumn = metaObj.lookup.displayColumn.map((col) => {
-                    if (typeof col === "string" && !col.endsWith(`-${copySuffixNum}`)) {
-                      return `${col}-${copySuffixNum}`;
-                    }
-                    return col;
-                  });
-                } else if (typeof metaObj.lookup.displayColumn === "string" && !metaObj.lookup.displayColumn.endsWith(`-${copySuffixNum}`)) {
-                  metaObj.lookup.displayColumn = `${metaObj.lookup.displayColumn}-${copySuffixNum}`;
-                }
-              }
-              if (metaObj?.lookup?.columnSourceOption?.comparisonColumn && !metaObj.lookup.columnSourceOption.comparisonColumn.endsWith(`-${copySuffixNum}`)) {
-                metaObj.lookup.columnSourceOption.comparisonColumn = `${metaObj.lookup.columnSourceOption.comparisonColumn}-${copySuffixNum}`;
-              }
-              if (metaObj?.lookup?.displayRow && typeof metaObj.lookup.displayRow === "string" && !metaObj.lookup.displayRow.endsWith(`-${copySuffixNum}`)) {
-                metaObj.lookup.displayRow = `${metaObj.lookup.displayRow}-${copySuffixNum}`;
-              }
-              if (metaObj?.data?.columns && Array.isArray(metaObj.data.columns)) {
-                metaObj.data.columns = metaObj.data.columns.map((col) => {
-                  if (typeof col === "string" && !col.endsWith(`-${copySuffixNum}`)) {
-                    return `${col}-${copySuffixNum}`;
-                  }
-                  return col;
-                });
-              }
               return metaObj;
             } catch (err) {
               console.warn("[table.meta] Erreur traitement meta, copie tel quel:", err);
@@ -37624,10 +37802,8 @@ async function deepCopyNodeInternal(prisma51, req2, nodeId, opts) {
             create: t.tableColumns.map((col) => ({
               id: appendSuffix(col.id),
               columnIndex: col.columnIndex,
-              // 🎯 FIX 24/01/2026: SUFFIXER les noms de colonnes !
-              // Quand on duplique une table avec des champs, les colonnes prennent aussi le suffix
-              // Ex: "Puissance" devient "Puissance-1" dans la table dupliquée
-              name: `${col.name}-${copySuffixNum}`,
+              // 🛑 FIX: NE PAS suffixer col.name — ce sont des noms de colonnes Excel
+              name: col.name,
               type: col.type,
               width: col.width,
               format: col.format,
@@ -37668,7 +37844,7 @@ async function deepCopyNodeInternal(prisma51, req2, nodeId, opts) {
       const copyAlreadyExists = existingCopySelectConfigNodeIds.has(newId);
       if (!copyAlreadyExists) {
         let newTableReference = null;
-        const shouldSuffixColumns = true;
+        const shouldSuffixColumns = false;
         let tableWasCopied = false;
         if (originalSelectConfig.tableReference) {
           tableWasCopied = tableIdMap2.has(originalSelectConfig.tableReference);
@@ -37716,7 +37892,7 @@ async function deepCopyNodeInternal(prisma51, req2, nodeId, opts) {
               const originalTable = [...tables, ...additionalTables].find((t) => tableIdMap2.get(t.id) === newTableReference);
               if (originalTable && originalTable.tableColumns.length > 0) {
                 const sortedCols = [...originalTable.tableColumns].sort((a, b) => a.columnIndex - b.columnIndex);
-                const firstColumnName = `${sortedCols[0].name}-${copySuffixNum}`;
+                const firstColumnName = sortedCols[0].name;
                 await prisma51.treeBranchLeafSelectConfig.update({
                   where: { id: copiedSelectConfigId },
                   data: { displayColumn: firstColumnName }
@@ -38036,6 +38212,9 @@ var import_express57 = require("express");
 init_database();
 var import_crypto18 = require("crypto");
 init_operation_interpreter();
+function isSumTotalNodeId(nodeId) {
+  return /-sum-total(-\d+)?$/.test(nodeId);
+}
 var router56 = (0, import_express57.Router)();
 var prisma30 = db;
 var triggerIndexCache = /* @__PURE__ */ new Map();
@@ -38797,14 +38976,14 @@ async function evaluateCapacitiesForSubmission(submissionId, organizationId, use
     (c) => c.TreeBranchLeafNode?.fieldType === "DISPLAY" || c.TreeBranchLeafNode?.type === "DISPLAY" || c.TreeBranchLeafNode?.type === "leaf_field"
   ).map((c) => c.nodeId));
   for (const cap of capacitiesRaw) {
-    if (cap.nodeId.endsWith("-sum-total")) {
+    if (isSumTotalNodeId(cap.nodeId)) {
       displayCapNodeIds.add(cap.nodeId);
     }
   }
   const displayDeps = /* @__PURE__ */ new Map();
   const sumTotalFormulaTokensMap = /* @__PURE__ */ new Map();
   {
-    const sumTotalNodeIds = [...displayCapNodeIds].filter((id) => id.endsWith("-sum-total"));
+    const sumTotalNodeIds = [...displayCapNodeIds].filter((id) => isSumTotalNodeId(id));
     if (sumTotalNodeIds.length > 0) {
       const sumTotalNodes = await prisma30.treeBranchLeafNode.findMany({
         where: { id: { in: sumTotalNodeIds } },
@@ -38857,7 +39036,7 @@ async function evaluateCapacitiesForSubmission(submissionId, organizationId, use
       for (const condition of conditions) {
         collectReferencedNodeIdsForTriggers(condition.conditionSet, refs);
       }
-      if (displayNodeId2.endsWith("-sum-total")) {
+      if (isSumTotalNodeId(displayNodeId2)) {
         const sumTokens = sumTotalFormulaTokensMap.get(displayNodeId2);
         if (sumTokens) {
           for (const token of sumTokens) {
@@ -39130,7 +39309,7 @@ async function evaluateCapacitiesForSubmission(submissionId, organizationId, use
         }
       }
       for (const cap of capacitiesRaw) {
-        if (!cap.nodeId.endsWith("-sum-total")) continue;
+        if (!isSumTotalNodeId(cap.nodeId)) continue;
         const sumTotalNodeId = cap.nodeId;
         const sumFormulas = formulasByNodeId.get(sumTotalNodeId) || [];
         const sumVariable = variablesByNodeId.get(sumTotalNodeId);
@@ -39352,7 +39531,7 @@ async function evaluateCapacitiesForSubmission(submissionId, organizationId, use
       }
     }
     for (const cap of capacitiesRaw) {
-      if (!cap.nodeId.endsWith("-sum-total")) continue;
+      if (!isSumTotalNodeId(cap.nodeId)) continue;
       if (affectedDisplayFieldIds.has(cap.nodeId)) continue;
       const sumTokens = sumTotalFormulaTokensMap.get(cap.nodeId);
       if (sumTokens) {
@@ -39370,7 +39549,7 @@ async function evaluateCapacitiesForSubmission(submissionId, organizationId, use
     {
       let forcedCount = 0;
       for (const cap of capacitiesRaw) {
-        if (cap.nodeId.endsWith("-sum-total") && !affectedDisplayFieldIds.has(cap.nodeId)) {
+        if (isSumTotalNodeId(cap.nodeId) && !affectedDisplayFieldIds.has(cap.nodeId)) {
           affectedDisplayFieldIds.add(cap.nodeId);
           forcedCount++;
         }
@@ -39427,7 +39606,7 @@ async function evaluateCapacitiesForSubmission(submissionId, organizationId, use
   }
   const sumTotalNodeMap = /* @__PURE__ */ new Map();
   for (const n of allTreeNodesForLabels) {
-    if (n.id.endsWith("-sum-total")) {
+    if (isSumTotalNodeId(n.id)) {
       sumTotalNodeMap.set(n.id, {
         formula_tokens: n.formula_tokens,
         label: n.label,
@@ -39471,7 +39650,7 @@ async function evaluateCapacitiesForSubmission(submissionId, organizationId, use
     try {
       const injectedBaseKeys = applyCopyScopedInputAliases(valueMap, capacity.nodeId, capacity);
       let capacityResult;
-      const isSumTotalField = capacity.nodeId.endsWith("-sum-total");
+      const isSumTotalField = isSumTotalNodeId(capacity.nodeId);
       if (isSumTotalField) {
         try {
           const sumTokensNode = sumTotalNodeMap.get(capacity.nodeId);
@@ -42883,6 +43062,68 @@ router58.get("/trees/:treeId/nodes", async (req2, res) => {
     res.status(500).json({ error: "Impossible de r\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9cup\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9rer les n\xC3\u0192\xE2\u20AC\xA6\xC3\xA2\xE2\u201A\xAC\xC5\u201Cuds" });
   }
 });
+router58.get("/trees/:treeId/repeater-nodes", async (req2, res) => {
+  try {
+    const { treeId } = req2.params;
+    const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx3(req2);
+    const treeWhereFilter = isSuperAdmin2 || !organizationId ? { id: treeId } : { id: treeId, organizationId };
+    const tree = await prisma32.treeBranchLeafTree.findFirst({ where: treeWhereFilter });
+    if (!tree) {
+      return res.status(404).json({ error: "Arbre non trouv\xE9" });
+    }
+    const repeaterNodes = await prisma32.treeBranchLeafNode.findMany({
+      where: {
+        treeId,
+        repeater_templateNodeIds: { not: null }
+      },
+      select: {
+        id: true,
+        label: true,
+        parentId: true,
+        repeater_templateNodeIds: true,
+        metadata: true
+      }
+    });
+    const allTemplateIds = [];
+    for (const node of repeaterNodes) {
+      try {
+        const meta = node.metadata;
+        const ids = meta?.repeater?.templateNodeIds || (node.repeater_templateNodeIds ? JSON.parse(node.repeater_templateNodeIds) : []);
+        if (Array.isArray(ids)) allTemplateIds.push(...ids);
+      } catch {
+      }
+    }
+    const templateChildren = allTemplateIds.length > 0 ? await prisma32.treeBranchLeafNode.findMany({
+      where: { id: { in: allTemplateIds } },
+      select: { id: true, label: true, parentId: true, type: true, subType: true }
+    }) : [];
+    const childrenById = new Map(templateChildren.map((c) => [c.id, c]));
+    const result = repeaterNodes.map((node) => {
+      let templateIds = [];
+      try {
+        const meta = node.metadata;
+        templateIds = meta?.repeater?.templateNodeIds || (node.repeater_templateNodeIds ? JSON.parse(node.repeater_templateNodeIds) : []);
+      } catch {
+      }
+      const children = templateIds.map((tid) => childrenById.get(tid)).filter(Boolean).map((child) => ({
+        id: child.id,
+        label: child.label || "Champ sans nom",
+        type: child.type,
+        subType: child.subType
+      }));
+      return {
+        id: node.id,
+        label: node.label || "Repeater sans nom",
+        parentId: node.parentId,
+        children
+      };
+    });
+    res.json(result);
+  } catch (error) {
+    console.error("[TreeBranchLeaf API] Error fetching repeater nodes:", error);
+    res.status(500).json({ error: "Impossible de r\xE9cup\xE9rer les n\u0153uds repeater" });
+  }
+});
 router58.get("/trees/:treeId/repeater-fields", async (req2, res) => {
   try {
     const { treeId } = req2.params;
@@ -44285,7 +44526,7 @@ router58.delete("/trees/:treeId/nodes/:nodeId", async (req2, res) => {
       const debugDelete = typeof process !== "undefined" && process.env && process.env.DEBUG_TBL_DELETE === "1";
       const extraCandidates = nodesToScan.filter((n) => {
         const meta = n.metadata || {};
-        if (meta?.isSumDisplayField === true || n.id.endsWith("-sum-total")) {
+        if (meta?.isSumDisplayField === true || /-sum-total(-\d+)?$/.test(n.id)) {
           return false;
         }
         const looksLikeDisplay = !!(meta?.autoCreateDisplayNode || meta?.copiedFromNodeId || meta?.fromVariableId || meta?.sourceTemplateId);
@@ -44573,7 +44814,57 @@ router58.delete("/trees/:treeId/nodes/:nodeId", async (req2, res) => {
         }
       }
     } catch (sumUpdateError) {
-      console.warn("[DELETE] Erreur lors de la mise \xC3\u0192\xC2\xAF\xC3\u201A\xC2\xBF\xC3\u201A\xC2\xBD jour des champs Total:", sumUpdateError.message);
+      console.warn("[DELETE] Erreur lors de la mise \xE0 jour des champs Total:", sumUpdateError.message);
+    }
+    try {
+      let orphanPassCount = 0;
+      const maxOrphanPasses = 5;
+      let totalOrphansDeleted = 0;
+      while (orphanPassCount < maxOrphanPasses) {
+        orphanPassCount++;
+        const orphanedNodes = await prisma32.$queryRawUnsafe(
+          `SELECT n.id FROM "TreeBranchLeafNode" n
+           WHERE n."treeId" = $1
+             AND n."parentId" IS NOT NULL
+             AND NOT EXISTS (SELECT 1 FROM "TreeBranchLeafNode" p WHERE p.id = n."parentId")`,
+          treeId
+        );
+        if (orphanedNodes.length === 0) break;
+        for (const orphan of orphanedNodes) {
+          try {
+            await prisma32.treeBranchLeafNode.delete({ where: { id: orphan.id } });
+            allDeletedIds.push(orphan.id);
+            totalOrphansDeleted++;
+          } catch (e) {
+          }
+        }
+      }
+      if (totalOrphansDeleted > 0) {
+        console.log(`[DELETE] \u{1F9F9} ${totalOrphansDeleted} n\u0153ud(s) orphelin(s) supprim\xE9(s) en ${orphanPassCount} passe(s)`);
+      }
+    } catch (orphanNodeCleanError) {
+      console.warn("[DELETE] Erreur nettoyage n\u0153uds orphelins:", orphanNodeCleanError.message);
+    }
+    try {
+      const treeSubmissions = await prisma32.treeBranchLeafSubmission.findMany({
+        where: { treeId },
+        select: { id: true }
+      });
+      const submissionIds = treeSubmissions.map((s) => s.id);
+      if (submissionIds.length > 0) {
+        const orphanedSD = await prisma32.$queryRawUnsafe(
+          `DELETE FROM "TreeBranchLeafSubmissionData" sd
+           WHERE sd."submissionId" = ANY($1::text[])
+             AND NOT EXISTS (SELECT 1 FROM "TreeBranchLeafNode" n WHERE n.id = sd."nodeId")
+           RETURNING 1 as count`,
+          submissionIds
+        );
+        if (orphanedSD.length > 0) {
+          console.log(`[DELETE] \u{1F9F9} ${orphanedSD.length} SubmissionData orpheline(s) supprim\xE9e(s)`);
+        }
+      }
+    } catch (sdOrphanCleanError) {
+      console.warn("[DELETE] Erreur nettoyage SubmissionData orphelines:", sdOrphanCleanError.message);
     }
     res.json({
       success: true,
@@ -44614,7 +44905,7 @@ router58.delete("/trees/:treeId/nodes/:nodeId", async (req2, res) => {
         if (meta?.isSumDisplayField === true) {
           return false;
         }
-        if (n.id.endsWith("-sum-total")) {
+        if (/-sum-total(-\d+)?$/.test(n.id)) {
           return false;
         }
         try {
@@ -51752,6 +52043,8 @@ router58.get("/trees/:treeId/calculated-values", async (req2, res) => {
           // Nœuds avec formule
           { hasCondition: true },
           // Nœuds avec condition
+          { hasTable: true },
+          // Nœuds avec table (lookup)
           { hasData: true },
           // Nœuds avec donnée/variable
           { calculatedValue: { not: null } }
@@ -51769,6 +52062,7 @@ router58.get("/trees/:treeId/calculated-values", async (req2, res) => {
         parentId: true,
         hasFormula: true,
         hasCondition: true,
+        hasTable: true,
         hasData: true
       }
     });
@@ -51784,7 +52078,7 @@ router58.get("/trees/:treeId/calculated-values", async (req2, res) => {
         try {
           const evaluation = await evaluateVariableOperation2(node.id, void 0, prisma32);
           const resolvedValue = evaluation.value ?? evaluation.operationResult ?? node.calculatedValue ?? null;
-          const source = evaluation.operationSource || node.calculatedBy || (node.hasFormula ? "formule" : node.hasCondition ? "condition" : node.hasData ? "donn\xE9e" : "inconnu");
+          const source = evaluation.operationSource || node.calculatedBy || (node.hasFormula ? "formule" : node.hasCondition ? "condition" : node.hasTable ? "table" : node.hasData ? "donn\xE9e" : "inconnu");
           return {
             id: node.id,
             label: node.label || "Champ sans nom",
@@ -61253,9 +61547,6 @@ var DocumentPdfRenderer = class {
   renderModulePricingTablePaginated(config, x, y, width, height, options) {
     const title = config.title || "Tarifs";
     const currency = config.currency || "\u20AC";
-    const tvaRate = config.tvaRate || config.vatRate || 21;
-    const showTotal = config.showTotal !== false;
-    const showTVA = config.showTVA !== false;
     let items = [];
     if (config.pricingLines && config.pricingLines.length > 0) {
       items = this.processPricingLines(config.pricingLines, config);
@@ -61353,8 +61644,23 @@ var DocumentPdfRenderer = class {
           break;
         }
         const lineTotal = typeof item.total === "number" ? item.total : typeof item.quantity === "number" && typeof item.unitPrice === "number" ? item.quantity * item.unitPrice : null;
-        this.doc.fontSize(this.scaleFontSize(10)).font("Helvetica").fillColor(this.theme.textColor || "#333333");
-        this.doc.text(item.description || "-", x + 5, currentY + 4, { width: colWidths[0] - 10 });
+        const lineStyle = item.style;
+        if (lineStyle?.backgroundColor) {
+          this.doc.rect(x, currentY, width, rowHeight).fill(lineStyle.backgroundColor);
+        }
+        let descText = this.applyTextTransform(item.description || "-", lineStyle?.textTransform);
+        if (lineStyle && (lineStyle.bold || lineStyle.italic || lineStyle.underline || lineStyle.fontSize || lineStyle.color)) {
+          const applied = this.applyLineStyle(lineStyle, 10);
+          if (applied.underline) {
+            this.drawUnderlinedText(descText, x + 5, currentY + 4, { width: colWidths[0] - 10 });
+          } else {
+            this.doc.text(descText, x + 5, currentY + 4, { width: colWidths[0] - 10 });
+          }
+          this.doc.fontSize(this.scaleFontSize(10)).font("Helvetica").fillColor(this.theme.textColor || "#333333");
+        } else {
+          this.doc.fontSize(this.scaleFontSize(10)).font("Helvetica").fillColor(this.theme.textColor || "#333333");
+          this.doc.text(descText, x + 5, currentY + 4, { width: colWidths[0] - 10 });
+        }
         this.doc.text(typeof item.quantity === "number" ? String(item.quantity) : "", x + colWidths[0], currentY + 4, { width: colWidths[1], align: "center" });
         this.doc.text(typeof item.unitPrice === "number" ? `${item.unitPrice.toFixed(2)} ${currency}` : "", x + colWidths[0] + colWidths[1], currentY + 4, { width: colWidths[2] - cellPadding, align: "right" });
         this.doc.text(typeof lineTotal === "number" ? `${lineTotal.toFixed(2)} ${currency}` : "", x + colWidths[0] + colWidths[1] + colWidths[2], currentY + 4, { width: colWidths[3] - cellPadding, align: "right" });
@@ -61362,26 +61668,12 @@ var DocumentPdfRenderer = class {
         currentY += rowHeight;
         rowIndex += 1;
       }
-      if (rowIndex >= items.length && showTotal && hasAnyPricedLine) {
-        const totalsHeight = showTVA ? 50 : 20;
-        if (!canFitUnderBottomLimit(currentY + 5, totalsHeight + 5)) {
+      if (rowIndex >= items.length) {
+        const totalsResult = this.renderPricingTotalsTBL(config, x, currentY, width, colWidths, cellPadding, currency, (neededH) => canFitUnderBottomLimit(currentY + 5, neededH + 5));
+        if (totalsResult === "needs-new-page") {
           startNewPage();
           pageIndex += 1;
           continue;
-        }
-        const tva = totalHT * (tvaRate / 100);
-        const totalTTC = totalHT + tva;
-        currentY += 5;
-        this.doc.fontSize(this.scaleFontSize(10)).font("Helvetica-Bold").fillColor(this.theme.textColor || "#333333").text("Total HT", x + colWidths[0] + colWidths[1], currentY, { width: colWidths[2] + colWidths[3] * 0.5 - cellPadding, align: "right" });
-        this.doc.text(`${totalHT.toFixed(2)} ${currency}`, x + width - colWidths[3], currentY, { width: colWidths[3] - cellPadding, align: "right" });
-        currentY += 15;
-        if (showTVA) {
-          this.doc.font("Helvetica").text(`TVA (${tvaRate}%)`, x + colWidths[0] + colWidths[1], currentY, { width: colWidths[2] + colWidths[3] * 0.5 - cellPadding, align: "right" });
-          this.doc.text(`${tva.toFixed(2)} ${currency}`, x + width - colWidths[3], currentY, { width: colWidths[3] - cellPadding, align: "right" });
-          currentY += 15;
-          this.doc.rect(x + width * 0.6, currentY - 2, width * 0.4, 20).fill(this.theme.primaryColor || "#1890ff");
-          this.doc.fontSize(this.scaleFontSize(12)).font("Helvetica-Bold").fillColor("#FFFFFF").text("Total TTC", x + width * 0.6 + 5, currentY + 3, { width: width * 0.2 - 10 });
-          this.doc.text(`${totalTTC.toFixed(2)} ${currency}`, x + width * 0.8, currentY + 3, { width: width * 0.2 - 10, align: "right" });
         }
       }
       if (rowIndex < items.length) {
@@ -61758,9 +62050,6 @@ var DocumentPdfRenderer = class {
   renderModulePricingTable(config, x, y, width, _height) {
     const title = config.title || "Tarifs";
     const currency = config.currency || "\u20AC";
-    const tvaRate = config.tvaRate || config.vatRate || 21;
-    const showTotal = config.showTotal !== false;
-    const showTVA = config.showTVA !== false;
     let items = [];
     if (config.pricingLines && config.pricingLines.length > 0) {
       console.log("\u{1F4C4} [PDF] PRICING_TABLE: Utilisation de pricingLines", config.pricingLines.length);
@@ -61816,8 +62105,23 @@ var DocumentPdfRenderer = class {
         }
         const lineTotal = typeof item.total === "number" ? item.total : typeof item.quantity === "number" && typeof item.unitPrice === "number" ? item.quantity * item.unitPrice : null;
         if (typeof lineTotal === "number") totalHT += lineTotal;
-        this.doc.fontSize(this.scaleFontSize(10)).font("Helvetica").fillColor(this.theme.textColor || "#333333");
-        this.doc.text(item.description || "-", x + 5, currentY + 4, { width: colWidths[0] - 10 });
+        const lineStyle = item.style;
+        if (lineStyle?.backgroundColor) {
+          this.doc.rect(x, currentY, width, rowHeight).fill(lineStyle.backgroundColor);
+        }
+        let descText = this.applyTextTransform(item.description || "-", lineStyle?.textTransform);
+        if (lineStyle && (lineStyle.bold || lineStyle.italic || lineStyle.underline || lineStyle.fontSize || lineStyle.color)) {
+          const applied = this.applyLineStyle(lineStyle, 10);
+          if (applied.underline) {
+            this.drawUnderlinedText(descText, x + 5, currentY + 4, { width: colWidths[0] - 10 });
+          } else {
+            this.doc.text(descText, x + 5, currentY + 4, { width: colWidths[0] - 10 });
+          }
+          this.doc.fontSize(this.scaleFontSize(10)).font("Helvetica").fillColor(this.theme.textColor || "#333333");
+        } else {
+          this.doc.fontSize(this.scaleFontSize(10)).font("Helvetica").fillColor(this.theme.textColor || "#333333");
+          this.doc.text(descText, x + 5, currentY + 4, { width: colWidths[0] - 10 });
+        }
         this.doc.text(typeof item.quantity === "number" ? String(item.quantity) : "", x + colWidths[0], currentY + 4, { width: colWidths[1], align: "center" });
         this.doc.text(typeof item.unitPrice === "number" ? `${item.unitPrice.toFixed(2)} ${currency}` : "", x + colWidths[0] + colWidths[1], currentY + 4, { width: colWidths[2] - cellPadding, align: "right" });
         this.doc.text(typeof lineTotal === "number" ? `${lineTotal.toFixed(2)} ${currency}` : "", x + colWidths[0] + colWidths[1] + colWidths[2], currentY + 4, { width: colWidths[3] - cellPadding, align: "right" });
@@ -61826,28 +62130,70 @@ var DocumentPdfRenderer = class {
         rowsRendered++;
       }
     }
-    const hasAnyPricedLine = items.some((it) => typeof it.total === "number" || typeof it.quantity === "number" && typeof it.unitPrice === "number");
-    if (showTotal && hasAnyPricedLine) {
-      const totalsHeight = showTVA ? 50 : 20;
-      if (!this.canFitOnPage(currentY, totalsHeight + 5)) {
-        console.warn(`\u{1F4C4} [PDF] PRICING_TABLE: Pas de place pour les totaux. Totaux masqu\xE9s.`);
-        return;
-      }
-      const tva = totalHT * (tvaRate / 100);
-      const totalTTC = totalHT + tva;
-      currentY += 5;
-      this.doc.fontSize(this.scaleFontSize(10)).font("Helvetica-Bold").fillColor(this.theme.textColor || "#333333").text("Total HT", x + colWidths[0] + colWidths[1], currentY, { width: colWidths[2] + colWidths[3] * 0.5 - cellPadding, align: "right" });
-      this.doc.text(`${totalHT.toFixed(2)} ${currency}`, x + width - colWidths[3], currentY, { width: colWidths[3] - cellPadding, align: "right" });
-      currentY += 15;
-      if (showTVA) {
-        this.doc.font("Helvetica").text(`TVA (${tvaRate}%)`, x + colWidths[0] + colWidths[1], currentY, { width: colWidths[2] + colWidths[3] * 0.5 - cellPadding, align: "right" });
-        this.doc.text(`${tva.toFixed(2)} ${currency}`, x + width - colWidths[3], currentY, { width: colWidths[3] - cellPadding, align: "right" });
-        currentY += 15;
-        this.doc.rect(x + width * 0.6, currentY - 2, width * 0.4, 20).fill(this.theme.primaryColor || "#1890ff");
-        this.doc.fontSize(this.scaleFontSize(12)).font("Helvetica-Bold").fillColor("#FFFFFF").text("Total TTC", x + width * 0.6 + 5, currentY + 3, { width: width * 0.2 - 10 });
-        this.doc.text(`${totalTTC.toFixed(2)} ${currency}`, x + width * 0.8, currentY + 3, { width: width * 0.2 - 10, align: "right" });
-      }
+    this.renderPricingTotalsTBL(config, x, currentY, width, colWidths, cellPadding, currency, (neededH) => this.canFitOnPage(currentY, neededH + 5));
+  }
+  /**
+   * 🆕 Rend les totaux du tableau de prix à partir des sources TBL liées
+   * Affiche: Remise, Total HTVA, TVA, Total TVAC (si les sources sont configurées)
+   */
+  renderPricingTotalsTBL(config, x, startY, width, colWidths, cellPadding, currency, canFit) {
+    const hasRemise = !!config.remiseSource;
+    const hasTotalHTVA = !!config.totalHTVASource;
+    const hasTotalTVA = !!config.totalTVASource;
+    const hasTotalTVAC = !!config.totalTVACSource;
+    if (!hasRemise && !hasTotalHTVA && !hasTotalTVA && !hasTotalTVAC) return "ok";
+    let linesCount = 0;
+    if (hasRemise) linesCount++;
+    if (hasTotalHTVA) linesCount++;
+    if (hasTotalTVA) linesCount++;
+    if (hasTotalTVAC) linesCount++;
+    const totalsHeight = linesCount * 17 + (hasTotalTVAC ? 8 : 0) + 10;
+    if (!canFit(totalsHeight)) return "needs-new-page";
+    let currentY = startY + 5;
+    const labelX = x + colWidths[0] + colWidths[1];
+    const labelW = colWidths[2] + colWidths[3] * 0.5 - cellPadding;
+    const valX = x + width - colWidths[3];
+    const valW = colWidths[3] - cellPadding;
+    const resolveAndFormat = (source) => {
+      const raw = this.resolveVariable(source);
+      const cleaned = raw.replace(/[\s\u00A0]/g, "").replace(",", ".");
+      const num = parseFloat(cleaned);
+      console.log(`\u{1F4C4} [PDF] resolveAndFormat("${source}") \u2192 raw="${raw}", cleaned="${cleaned}", num=${num}, isFinite=${Number.isFinite(num)}`);
+      if (Number.isFinite(num)) return `${num.toFixed(2)} ${currency}`;
+      return raw || "-";
+    };
+    console.log(`\u{1F4C4} [PDF] renderPricingTotalsTBL sources:`, {
+      remiseSource: config.remiseSource || "(non configur\xE9)",
+      totalHTVASource: config.totalHTVASource || "(non configur\xE9)",
+      totalTVASource: config.totalTVASource || "(non configur\xE9)",
+      totalTVACSource: config.totalTVACSource || "(non configur\xE9)",
+      tblDataKeys: Object.keys(this.ctx.tblData || {}).slice(0, 20),
+      formulaResultsMap: this.ctx.formulaResultsMap || {}
+    });
+    if (hasRemise) {
+      this.doc.fontSize(this.scaleFontSize(10)).font("Helvetica").fillColor("#fa541c");
+      this.doc.text("Remise", labelX, currentY, { width: labelW, align: "right" });
+      this.doc.text(`- ${resolveAndFormat(config.remiseSource)}`, valX, currentY, { width: valW, align: "right" });
+      currentY += 17;
     }
+    if (hasTotalHTVA) {
+      this.doc.fontSize(this.scaleFontSize(10)).font("Helvetica-Bold").fillColor(this.theme.textColor || "#333333");
+      this.doc.text("Total HTVA", labelX, currentY, { width: labelW, align: "right" });
+      this.doc.text(resolveAndFormat(config.totalHTVASource), valX, currentY, { width: valW, align: "right" });
+      currentY += 17;
+    }
+    if (hasTotalTVA) {
+      this.doc.fontSize(this.scaleFontSize(10)).font("Helvetica").fillColor(this.theme.textColor || "#333333");
+      this.doc.text("TVA", labelX, currentY, { width: labelW, align: "right" });
+      this.doc.text(resolveAndFormat(config.totalTVASource), valX, currentY, { width: valW, align: "right" });
+      currentY += 17;
+    }
+    if (hasTotalTVAC) {
+      this.doc.rect(x + width * 0.6, currentY - 2, width * 0.4, 20).fill(this.theme.primaryColor || "#1890ff");
+      this.doc.fontSize(this.scaleFontSize(12)).font("Helvetica-Bold").fillColor("#FFFFFF").text("Total TVAC", x + width * 0.6 + 5, currentY + 3, { width: width * 0.2 - 10 });
+      this.doc.text(resolveAndFormat(config.totalTVACSource), x + width * 0.8, currentY + 3, { width: width * 0.2 - 10, align: "right" });
+    }
+    return "ok";
   }
   renderModuleTestimonial(config, x, y, width) {
     const quote = this.substituteVariables(config.quote || config.text || "");
@@ -62501,6 +62847,7 @@ var DocumentPdfRenderer = class {
    * - Évalue les conditions d'affichage
    * - Résout les références TBL (@value.xxx, @calculated.xxx, node-formula:xxx, etc.)
    * - Génère N lignes pour les repeaters
+   * - Masque les lignes repeater qui n'ont aucune instance (0 copies)
    */
   processPricingLines(pricingLines, _config) {
     const results = [];
@@ -62510,11 +62857,22 @@ var DocumentPdfRenderer = class {
         console.log(`\u{1F4C4} [PDF] Ligne "${line.label}" ignor\xE9e (condition non remplie)`);
         continue;
       }
-      if (line.type === "repeater" && line.repeaterId) {
-        const repeaterInstances = this.getRepeaterInstances(line.repeaterId, tblData);
-        for (const instance of repeaterInstances) {
-          const resolvedLine = this.resolveLineValues(line, instance);
-          results.push(resolvedLine);
+      const isRepeaterLine = line.type === "repeater" || !!line.repeaterId || this.hasRepeatSources(line);
+      if (isRepeaterLine) {
+        const repeaterId = line.repeaterId || this.extractRepeaterIdFromSources(line);
+        if (repeaterId) {
+          const repeaterInstances = this.getRepeaterInstances(repeaterId, tblData, line);
+          if (repeaterInstances.length === 0) {
+            console.log(`\u{1F4C4} [PDF] Ligne repeater "${line.label}" masqu\xE9e (0 instances pour repeater ${repeaterId})`);
+            continue;
+          }
+          for (const instance of repeaterInstances) {
+            const resolvedLine = this.resolveLineValues(line, instance);
+            results.push(resolvedLine);
+          }
+        } else {
+          console.log(`\u{1F4C4} [PDF] Ligne repeater "${line.label}" masqu\xE9e (repeaterId non trouv\xE9)`);
+          continue;
         }
       } else {
         const resolvedLine = this.resolveLineValues(line);
@@ -62524,26 +62882,111 @@ var DocumentPdfRenderer = class {
     return results;
   }
   /**
+   * Vérifie si une ligne a des sources @repeat.xxx
+   */
+  hasRepeatSources(line) {
+    const sources = [line.labelSource, line.quantitySource, line.unitPriceSource, line.totalSource];
+    return sources.some((s) => typeof s === "string" && s.startsWith("@repeat."));
+  }
+  /**
+   * Extrait le repeaterId depuis les sources @repeat.{repeaterId}.xxx d'une ligne
+   */
+  extractRepeaterIdFromSources(line) {
+    const sources = [line.labelSource, line.quantitySource, line.unitPriceSource, line.totalSource];
+    for (const src of sources) {
+      if (typeof src === "string" && src.startsWith("@repeat.")) {
+        const match = src.match(/^@repeat\.([^.]+)\./);
+        if (match) return match[1];
+      }
+    }
+    return void 0;
+  }
+  /**
+   * Applique le formatage de style (gras, italique, souligné, taille, couleur) 
+   * sur le document PDF pour une ligne de pricing.
+   * Retourne la police choisie pour pouvoir revenir au style normal après.
+   */
+  applyLineStyle(style, defaultFontSize) {
+    const bold = style?.bold === true;
+    const italic = style?.italic === true;
+    const underline = style?.underline === true;
+    const fontSize = style?.fontSize || defaultFontSize || 10;
+    const color = style?.color || this.theme.textColor || "#333333";
+    let font = "Helvetica";
+    if (bold && italic) font = "Helvetica-BoldOblique";
+    else if (bold) font = "Helvetica-Bold";
+    else if (italic) font = "Helvetica-Oblique";
+    this.doc.fontSize(this.scaleFontSize(fontSize)).font(font).fillColor(color);
+    return { font, fontSize, color, underline };
+  }
+  /**
+   * Applique textTransform sur une chaîne
+   */
+  applyTextTransform(text, transform) {
+    if (!transform || transform === "none") return text;
+    switch (transform) {
+      case "uppercase":
+        return text.toUpperCase();
+      case "lowercase":
+        return text.toLowerCase();
+      case "capitalize":
+        return text.replace(/\b\w/g, (c) => c.toUpperCase());
+      default:
+        return text;
+    }
+  }
+  /**
+   * Dessine du texte souligné à une position donnée
+   */
+  drawUnderlinedText(text, x, y, options) {
+    this.doc.text(text, x, y, options);
+    const textWidth = this.doc.widthOfString(text, options);
+    const lineY = y + this.doc.currentLineHeight() - 1;
+    this.doc.save().strokeColor(this.doc._fillColor?.[0] || "#333333").lineWidth(0.5).moveTo(x, lineY).lineTo(x + Math.min(textWidth, options?.width || textWidth), lineY).stroke().restore();
+  }
+  /**
+   * Résout une ref @repeat en remplaçant le templateChildId par templateChildId-suffix
+   * pour obtenir la clé de la copie dans tblData.
+   * Ex: @repeat.{repeaterId}.{templateId} + suffix "1" → @value.{templateId}-1
+   */
+  resolveRepeatRef(ref, suffix) {
+    if (!ref || !ref.startsWith("@repeat.")) return ref;
+    const match = ref.match(/^@repeat\.[^.]+\.(.+)$/);
+    if (!match) return ref;
+    const templateChildId = match[1];
+    return `@value.${templateChildId}-${suffix}`;
+  }
+  /**
    * Résout les valeurs d'une ligne (substitue les tokens TBL)
+   * Pour les repeaters, repeaterInstance.suffix permet de résoudre les refs
+   * @repeat.X.Y en @value.Y-{suffix} avant résolution.
    */
   resolveLineValues(line, repeaterInstance) {
+    const suffix = repeaterInstance?.suffix;
+    const resolve2 = (ref) => {
+      const effectiveRef = suffix ? this.resolveRepeatRef(ref, suffix) : ref;
+      return this.resolveVariable(effectiveRef);
+    };
     console.log("\u{1F4C4} [PDF] resolveLineValues:", {
       label: line.label,
       labelSource: line.labelSource,
       quantity: line.quantity,
       quantitySource: line.quantitySource,
       unitPrice: line.unitPrice,
-      unitPriceSource: line.unitPriceSource
+      unitPriceSource: line.unitPriceSource,
+      suffix
     });
     const resolvedLine = {
       description: "",
       quantity: null,
       unitPrice: null,
-      total: null
+      total: null,
+      style: line.style || void 0
+      // Propager les options de formatage
     };
     if (line.labelSource) {
-      const resolved = this.resolveVariable(line.labelSource);
-      console.log(`\u{1F4C4} [PDF] Label r\xE9solu: "${resolved}" (source: ${line.labelSource})`);
+      const resolved = resolve2(line.labelSource);
+      console.log(`\u{1F4C4} [PDF] Label r\xE9solu: "${resolved}" (source: ${line.labelSource}, suffix: ${suffix})`);
       resolvedLine.description = resolved || line.label || "Non d\xE9fini";
     } else {
       resolvedLine.description = this.substituteVariables(line.label || "");
@@ -62552,12 +62995,12 @@ var DocumentPdfRenderer = class {
       resolvedLine.description = `${resolvedLine.description} (${repeaterInstance.instanceLabel})`;
     }
     if (line.quantitySource) {
-      const qty = this.resolveVariable(line.quantitySource);
-      console.log(`\u{1F4C4} [PDF] Quantit\xE9 r\xE9solue: "${qty}" (source: ${line.quantitySource})`);
+      const qty = resolve2(line.quantitySource);
+      console.log(`\u{1F4C4} [PDF] Quantit\xE9 r\xE9solue: "${qty}" (source: ${line.quantitySource}, suffix: ${suffix})`);
       const n = parseFloat(qty);
       resolvedLine.quantity = Number.isFinite(n) ? n : null;
     } else if (typeof line.quantity === "string" && line.quantity.startsWith("@")) {
-      const qty = this.resolveVariable(line.quantity);
+      const qty = resolve2(line.quantity);
       const n = parseFloat(qty);
       resolvedLine.quantity = Number.isFinite(n) ? n : null;
     } else {
@@ -62569,12 +63012,12 @@ var DocumentPdfRenderer = class {
       }
     }
     if (line.unitPriceSource) {
-      const price = this.resolveVariable(line.unitPriceSource);
-      console.log(`\u{1F4C4} [PDF] Prix r\xE9solu: "${price}" (source: ${line.unitPriceSource})`);
+      const price = resolve2(line.unitPriceSource);
+      console.log(`\u{1F4C4} [PDF] Prix r\xE9solu: "${price}" (source: ${line.unitPriceSource}, suffix: ${suffix})`);
       const n = parseFloat(price);
       resolvedLine.unitPrice = Number.isFinite(n) ? n : null;
     } else if (typeof line.unitPrice === "string" && (line.unitPrice.startsWith("@") || line.unitPrice.startsWith("node-formula:") || line.unitPrice.startsWith("condition:"))) {
-      const price = this.resolveVariable(line.unitPrice);
+      const price = resolve2(line.unitPrice);
       const n = parseFloat(price);
       resolvedLine.unitPrice = Number.isFinite(n) ? n : null;
     } else {
@@ -62591,11 +63034,11 @@ var DocumentPdfRenderer = class {
     if (hasExplicitTotal && hasQtyAndUnit) {
       resolvedLine.total = resolvedLine.quantity * resolvedLine.unitPrice;
     } else if (line.totalSource) {
-      const tot = this.resolveVariable(line.totalSource);
+      const tot = resolve2(line.totalSource);
       const n = parseFloat(tot);
       resolvedLine.total = Number.isFinite(n) ? n : null;
     } else if (typeof line.total === "string" && line.total.startsWith("@")) {
-      const tot = this.resolveVariable(line.total);
+      const tot = resolve2(line.total);
       const n = parseFloat(tot);
       resolvedLine.total = Number.isFinite(n) ? n : null;
     } else if (line.total !== void 0) {
@@ -62607,45 +63050,79 @@ var DocumentPdfRenderer = class {
     return resolvedLine;
   }
   /**
-   * Récupère les instances d'un repeater depuis les données TBL
+   * Récupère les instances d'un repeater depuis les données TBL.
+   * 
+   * Le repeaterId est l'UUID du noeud repeater PARENT.
+   * La ligne de pricing contient des refs @repeat.{repeaterId}.{templateChildId}.
+   * Dans tblData (= formData du TBL), les copies repeater ont pour clé:
+   *   {templateChildId}-1, {templateChildId}-2, etc.
+   * 
+   * Pour trouver le nombre d'instances, on collecte d'abord tous les templateChildIds
+   * depuis les sources de la ligne, puis on cherche les suffixes dans tblData.
    */
-  getRepeaterInstances(repeaterId, tblData) {
-    const instances = [];
-    const repeaterPattern = new RegExp(`^${repeaterId}-\\d+$`);
+  getRepeaterInstances(repeaterId, tblData, line) {
+    const templateChildIds = /* @__PURE__ */ new Set();
+    const sources = [line?.labelSource, line?.quantitySource, line?.unitPriceSource, line?.totalSource];
+    for (const src of sources) {
+      if (typeof src === "string" && src.startsWith("@repeat.")) {
+        const match = src.match(/^@repeat\.[^.]+\.(.+)$/);
+        if (match) templateChildIds.add(match[1]);
+      }
+    }
+    console.log(`\u{1F4C4} [PDF] Repeater ${repeaterId}: templateChildIds trouv\xE9s:`, [...templateChildIds]);
+    const suffixes = /* @__PURE__ */ new Set();
     for (const key2 of Object.keys(tblData)) {
-      if (repeaterPattern.test(key2) || key2.startsWith(`${repeaterId}-`)) {
-        const instanceNumber = key2.split("-").pop();
-        instances.push({
-          id: key2,
-          instanceLabel: `#${instanceNumber}`,
-          data: tblData[key2]
-        });
+      for (const tplId of templateChildIds) {
+        const pattern = new RegExp(`^${tplId.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}-(\\d+)$`);
+        const m = key2.match(pattern);
+        if (m) suffixes.add(m[1]);
       }
+      const oldPattern = new RegExp(`^${repeaterId.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}-(\\d+)$`);
+      const oldM = key2.match(oldPattern);
+      if (oldM) suffixes.add(oldM[1]);
     }
-    if (instances.length === 0 && this.ctx.submission) {
-      const submission = this.ctx.submission;
-      const values = submission.values || {};
-      for (const key2 of Object.keys(values)) {
-        if (key2.includes(repeaterId) && key2.match(/-\d+$/)) {
-          const instanceNumber = key2.split("-").pop();
-          if (!instances.find((i) => i.instanceLabel === `#${instanceNumber}`)) {
-            instances.push({
-              id: key2,
-              instanceLabel: `#${instanceNumber}`,
-              data: values[key2]
-            });
-          }
-        }
-      }
-    }
-    console.log(`\u{1F4C4} [PDF] Repeater ${repeaterId}: ${instances.length} instance(s) trouv\xE9e(s)`);
+    const sortedSuffixes = [...suffixes].sort((a, b) => parseInt(a) - parseInt(b));
+    const instances = sortedSuffixes.map((suffix) => ({
+      id: `${repeaterId}-${suffix}`,
+      suffix,
+      instanceLabel: `#${suffix}`,
+      data: {}
+      // Les données seront résolues via resolveVariable avec le suffix
+    }));
+    console.log(`\u{1F4C4} [PDF] Repeater ${repeaterId}: ${instances.length} instance(s) trouv\xE9e(s) (suffixes: ${sortedSuffixes.join(", ")})`);
     return instances;
   }
   /**
    * Évalue une condition d'affichage
+   * Supporte deux formats :
+   * - SimpleCondition: { fieldRef, operator, compareValue } (PricingLinesEditor)
+   * - Legacy rules: { rules: [{ source, operator, value }], operator: 'AND'|'OR' }
    */
   evaluateCondition(condition) {
-    if (!condition || !condition.rules || condition.rules.length === 0) {
+    if (!condition) return true;
+    if (condition.fieldRef) {
+      const sourceValue = this.resolveVariable(condition.fieldRef);
+      const compareValue = condition.compareValue;
+      switch (condition.operator) {
+        case "EQUALS":
+          return String(sourceValue) === String(compareValue);
+        case "NOT_EQUALS":
+          return String(sourceValue) !== String(compareValue);
+        case "CONTAINS":
+          return String(sourceValue).includes(String(compareValue || ""));
+        case "GREATER_THAN":
+          return parseFloat(sourceValue) > parseFloat(compareValue);
+        case "LESS_THAN":
+          return parseFloat(sourceValue) < parseFloat(compareValue);
+        case "IS_EMPTY":
+          return !sourceValue || sourceValue === "";
+        case "IS_NOT_EMPTY":
+          return !!sourceValue && sourceValue !== "";
+        default:
+          return true;
+      }
+    }
+    if (!condition.rules || condition.rules.length === 0) {
       return true;
     }
     const operator = condition.operator || "AND";
@@ -62734,13 +63211,27 @@ var DocumentPdfRenderer = class {
     for (let i = 0; i < items.length; i++) {
       const item = items[i];
       const rowY = this.currentY;
-      if (i % 2 === 1) {
+      const lineStyle = item.style;
+      if (lineStyle?.backgroundColor) {
+        this.doc.rect(this.margin, rowY, this.contentWidth, 22).fill(lineStyle.backgroundColor);
+      } else if (i % 2 === 1) {
         this.doc.rect(this.margin, rowY, this.contentWidth, 22).fill("#f9f9f9");
       }
-      this.doc.fillColor(this.theme.textColor || "#333333").fontSize(9);
       xPos = this.margin + 5;
-      const desc = this.substituteVariables(item.description || item.name || "");
-      this.doc.text(desc, xPos, rowY + 5, { width: colWidths.description - 10 });
+      let desc = this.substituteVariables(item.description || item.name || "");
+      desc = this.applyTextTransform(desc, lineStyle?.textTransform);
+      if (lineStyle && (lineStyle.bold || lineStyle.italic || lineStyle.underline || lineStyle.fontSize || lineStyle.color)) {
+        const applied = this.applyLineStyle(lineStyle, 9);
+        if (applied.underline) {
+          this.drawUnderlinedText(desc, xPos, rowY + 5, { width: colWidths.description - 10 });
+        } else {
+          this.doc.text(desc, xPos, rowY + 5, { width: colWidths.description - 10 });
+        }
+        this.doc.font("Helvetica").fontSize(9).fillColor(this.theme.textColor || "#333333");
+      } else {
+        this.doc.fillColor(this.theme.textColor || "#333333").fontSize(9).font("Helvetica");
+        this.doc.text(desc, xPos, rowY + 5, { width: colWidths.description - 10 });
+      }
       xPos += colWidths.description;
       this.doc.text(String(item.quantity || 1), xPos, rowY + 5, { width: colWidths.quantity - 10, align: "center" });
       xPos += colWidths.quantity;
@@ -63050,6 +63541,11 @@ var DocumentPdfRenderer = class {
     const org = this.ctx.organization || {};
     const quote = this.ctx.quote || {};
     const tblData = this.ctx.tblData || {};
+    const formulaResultsMap = this.ctx.formulaResultsMap || {};
+    if (formulaResultsMap[ref] !== void 0) {
+      console.log(`\u{1F4C4} [PDF] \u2705 R\xE9solu via formulaResultsMap: "${ref}" \u2192 ${formulaResultsMap[ref]}`);
+      return this.formatValue(formulaResultsMap[ref]);
+    }
     if (ref.startsWith("lead.")) {
       const key2 = ref.replace("lead.", "");
       const value = lead[key2];
@@ -63077,30 +63573,71 @@ var DocumentPdfRenderer = class {
     if (ref.startsWith("@value.") || ref.startsWith("@select.")) {
       const nodeRef = ref.replace(/^@(value|select)\./, "");
       console.log(`\u{1F4C4} [PDF] Cherche TBL ref: "${nodeRef}"`);
+      const resolveSelectLabel = (rawValue) => {
+        const formatted = this.formatValue(rawValue);
+        if (this.ctx.selectOptionsMap && typeof rawValue === "string" && /^[0-9a-f]{8}-[0-9a-f]{4}/i.test(rawValue)) {
+          const label = this.ctx.selectOptionsMap[rawValue];
+          if (label) {
+            console.log(`\u{1F4C4} [PDF] \u{1F504} SELECT r\xE9solu: "${rawValue}" \u2192 "${label}"`);
+            return label;
+          }
+        }
+        return formatted;
+      };
       if (tblData[nodeRef] !== void 0) {
         console.log(`\u{1F4C4} [PDF] \u2705 Trouv\xE9 exact: ${tblData[nodeRef]}`);
-        return this.formatValue(tblData[nodeRef]);
+        return resolveSelectLabel(tblData[nodeRef]);
       }
       if (tblData.values && tblData.values[nodeRef] !== void 0) {
         console.log(`\u{1F4C4} [PDF] \u2705 Trouv\xE9 dans values: ${tblData.values[nodeRef]}`);
-        return this.formatValue(tblData.values[nodeRef]);
+        return resolveSelectLabel(tblData.values[nodeRef]);
       }
       for (const [key2, value] of Object.entries(tblData)) {
         if (key2.includes(nodeRef) || key2.endsWith(nodeRef)) {
           console.log(`\u{1F4C4} [PDF] \u2705 Trouv\xE9 partiel "${key2}": ${value}`);
-          return this.formatValue(value);
+          return resolveSelectLabel(value);
         }
       }
       if (tblData.values) {
         for (const [key2, value] of Object.entries(tblData.values)) {
           if (key2.includes(nodeRef) || key2.endsWith(nodeRef)) {
             console.log(`\u{1F4C4} [PDF] \u2705 Trouv\xE9 partiel dans values "${key2}": ${value}`);
-            return this.formatValue(value);
+            return resolveSelectLabel(value);
           }
         }
       }
     }
+    if (ref.startsWith("node-formula:") || ref.startsWith("formula:")) {
+      const formulaResultsMap2 = this.ctx.formulaResultsMap || {};
+      const formulaId = ref.replace(/^(node-formula:|formula:)/, "");
+      const altRef = ref.startsWith("node-formula:") ? `formula:${formulaId}` : `node-formula:${formulaId}`;
+      if (formulaResultsMap2[ref] !== void 0) {
+        console.log(`\u{1F4C4} [PDF] \u2705 Formula r\xE9solu via formulaResultsMap: ${ref} \u2192 ${formulaResultsMap2[ref]}`);
+        return this.formatValue(formulaResultsMap2[ref]);
+      }
+      if (formulaResultsMap2[altRef] !== void 0) {
+        console.log(`\u{1F4C4} [PDF] \u2705 Formula r\xE9solu via formulaResultsMap (alt): ${altRef} \u2192 ${formulaResultsMap2[altRef]}`);
+        return this.formatValue(formulaResultsMap2[altRef]);
+      }
+      console.log(`\u{1F4C4} [PDF] Cherche formula: "${formulaId}" (pas trouv\xE9 dans formulaResultsMap, keys: ${Object.keys(formulaResultsMap2).join(", ")})`);
+      if (tblData.formulas && tblData.formulas[formulaId] !== void 0) {
+        return this.formatValue(tblData.formulas[formulaId]);
+      }
+      if (tblData[formulaId] !== void 0) {
+        return this.formatValue(tblData[formulaId]);
+      }
+      for (const [key2, value] of Object.entries(tblData)) {
+        if (key2.includes(formulaId) || key2.endsWith(formulaId)) {
+          return this.formatValue(value);
+        }
+      }
+    }
     if (ref.startsWith("calculatedValue:") || ref.startsWith("@calculated.")) {
+      const formulaResultsMap2 = this.ctx.formulaResultsMap || {};
+      if (formulaResultsMap2[ref] !== void 0) {
+        console.log(`\u{1F4C4} [PDF] \u2705 Calculated r\xE9solu via formulaResultsMap: ${ref} \u2192 ${formulaResultsMap2[ref]}`);
+        return this.formatValue(formulaResultsMap2[ref]);
+      }
       const calcRef = ref.replace(/^(calculatedValue:|@calculated\.)/, "");
       console.log(`\u{1F4C4} [PDF] Cherche calculatedValue: "${calcRef}"`);
       if (tblData.calculatedValues && tblData.calculatedValues[calcRef] !== void 0) {
@@ -63111,21 +63648,6 @@ var DocumentPdfRenderer = class {
       }
       for (const [key2, value] of Object.entries(tblData)) {
         if (key2.includes(calcRef) || key2.endsWith(calcRef)) {
-          return this.formatValue(value);
-        }
-      }
-    }
-    if (ref.startsWith("node-formula:") || ref.startsWith("formula:")) {
-      const formulaRef = ref.replace(/^(node-formula:|formula:)/, "");
-      console.log(`\u{1F4C4} [PDF] Cherche formula: "${formulaRef}"`);
-      if (tblData.formulas && tblData.formulas[formulaRef] !== void 0) {
-        return this.formatValue(tblData.formulas[formulaRef]);
-      }
-      if (tblData[formulaRef] !== void 0) {
-        return this.formatValue(tblData[formulaRef]);
-      }
-      for (const [key2, value] of Object.entries(tblData)) {
-        if (key2.includes(formulaRef) || key2.endsWith(formulaRef)) {
           return this.formatValue(value);
         }
       }
@@ -63163,12 +63685,7 @@ var DocumentPdfRenderer = class {
     }
     return fallback;
   }
-  /**
-   * Évalue une condition d'affichage (legacy - pour sections)
-   */
-  evaluateCondition(_condition) {
-    return true;
-  }
+  // evaluateCondition est défini plus haut (ligne ~3009) — supporte SimpleCondition + legacy rules
   /**
    * Évalue une seule règle de condition
    */
@@ -63346,6 +63863,76 @@ async function renderDocumentPdf(context) {
 init_GoogleGmailService();
 var router75 = (0, import_express76.Router)();
 var prisma42 = db;
+async function buildSelectOptionsMap(organizationId, tblData) {
+  const map = {};
+  try {
+    const tblNodeIds = Object.keys(tblData).filter(
+      (k) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(k)
+    );
+    if (tblNodeIds.length === 0) return map;
+    const potentialOptionIds = /* @__PURE__ */ new Set();
+    for (const val of Object.values(tblData)) {
+      if (typeof val === "string" && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(val)) {
+        potentialOptionIds.add(val);
+      }
+    }
+    if (potentialOptionIds.size === 0) return map;
+    const selectConfigs = await prisma42.treeBranchLeafSelectConfig.findMany({
+      where: { nodeId: { in: tblNodeIds } },
+      select: { nodeId: true, options: true }
+    });
+    for (const cfg of selectConfigs) {
+      const opts = cfg.options;
+      if (Array.isArray(opts)) {
+        for (const opt of opts) {
+          if (opt && typeof opt === "object" && opt.value && opt.label) {
+            map[String(opt.value)] = String(opt.label);
+          }
+        }
+      }
+    }
+    const selectNodes = await prisma42.treeBranchLeafNode.findMany({
+      where: {
+        id: { in: tblNodeIds },
+        select_options: { not: null }
+      },
+      select: { id: true, select_options: true }
+    });
+    for (const node of selectNodes) {
+      const opts = node.select_options;
+      if (Array.isArray(opts)) {
+        for (const opt of opts) {
+          if (opt && typeof opt === "object" && opt.value && opt.label) {
+            if (!map[String(opt.value)]) {
+              map[String(opt.value)] = String(opt.label);
+            }
+          }
+        }
+      }
+    }
+    const optionNodes = await prisma42.treeBranchLeafNode.findMany({
+      where: {
+        parentId: { in: tblNodeIds },
+        type: { in: ["leaf_option", "leaf_option_field"] }
+      },
+      select: { id: true, value: true, label: true, option_label: true }
+    });
+    for (const opt of optionNodes) {
+      const optValue = opt.value || opt.id;
+      const optLabel = opt.option_label || opt.label;
+      if (optLabel && !map[optValue]) {
+        map[optValue] = optLabel;
+      }
+      if (optLabel && opt.id !== optValue && !map[opt.id]) {
+        map[opt.id] = optLabel;
+      }
+    }
+    console.log(`\u{1F4CB} [buildSelectOptionsMap] ${Object.keys(map).length} options mapp\xE9es depuis ${selectConfigs.length} configs + ${selectNodes.length} select_options + ${optionNodes.length} option nodes`);
+  } catch (error) {
+    console.error("\u26A0\uFE0F [buildSelectOptionsMap] Erreur (non bloquante):", error?.message);
+  }
+  return map;
+}
 function toJsonSafe2(value) {
   const seen = /* @__PURE__ */ new WeakSet();
   const inner = (v) => {
@@ -64202,6 +64789,65 @@ router75.get("/generated/:id/download", async (req2, res) => {
     const organization = await prisma42.organization.findFirst({
       where: { id: organizationId }
     });
+    const tblRawData = (document.dataSnapshot || {}).tblData || (document.dataSnapshot || {});
+    const selectOptionsMap = await buildSelectOptionsMap(organizationId, tblRawData);
+    console.log("\u{1F4E5} [DOWNLOAD] SelectOptionsMap:", { count: Object.keys(selectOptionsMap).length, keys: Object.keys(selectOptionsMap).slice(0, 10) });
+    let formulaResultsMap = {};
+    const docSubmissionId = document.submissionId;
+    try {
+      const allRefs = [];
+      const sections2 = document.DocumentTemplate?.DocumentSection || [];
+      for (const sec of sections2) {
+        const config = sec.config || {};
+        const modules = config.modules || [];
+        for (const mod of modules) {
+          const mc = mod.config || {};
+          for (const val of Object.values(mc)) {
+            if (typeof val === "string" && (val.startsWith("node-formula:") || val.startsWith("formula:") || val.startsWith("condition:") || val.startsWith("@calculated.") || val.startsWith("calculatedValue:") || val.startsWith("@value.") || val.startsWith("@select.") || val.startsWith("@table.") || val.startsWith("@repeat."))) {
+              if (!allRefs.includes(val)) allRefs.push(val);
+            }
+          }
+        }
+      }
+      console.log("\u{1F4E5} [DOWNLOAD] Refs dynamiques \xE0 r\xE9soudre:", { refs: allRefs, submissionId: docSubmissionId });
+      if (allRefs.length > 0 && docSubmissionId) {
+        const { interpretReference: interpretReference2 } = await Promise.resolve().then(() => (init_operation_interpreter(), operation_interpreter_exports));
+        for (const ref of allRefs) {
+          try {
+            let evalRef = ref;
+            if (ref.startsWith("node-formula:")) {
+              evalRef = ref.replace("node-formula:", "formula:");
+            } else if (ref.startsWith("@value.")) {
+              evalRef = ref.replace("@value.", "");
+            } else if (ref.startsWith("@calculated.")) {
+              evalRef = ref.replace("@calculated.", "");
+            } else if (ref.startsWith("@select.")) {
+              evalRef = ref.replace("@select.", "");
+            }
+            console.log(`\u{1F4E5} [DOWNLOAD] \u{1F50D} \xC9valuation dynamique: "${ref}" \u2192 interpretReference("${evalRef}")`);
+            const evalResult = await interpretReference2(evalRef, docSubmissionId, prisma42);
+            const resultValue = evalResult?.result;
+            const errors = evalResult?.details?.evaluationErrors || [];
+            const formulaTokens = evalResult?.details?.tokens;
+            console.log(`\u{1F4E5} [DOWNLOAD]   \u2192 result=${resultValue}, errors=${JSON.stringify(errors)}, hasTokens=${!!formulaTokens && Array.isArray(formulaTokens) && formulaTokens.length > 0}`);
+            const isEmptyFormula = ref.startsWith("node-formula:") && Array.isArray(formulaTokens) && formulaTokens.length === 0 && String(resultValue) === "0";
+            if (isEmptyFormula) {
+              console.log(`\u{1F4E5} [DOWNLOAD]   \u26A0\uFE0F Formule vide (tokens=[]), ignor\xE9`);
+              continue;
+            }
+            if (resultValue !== null && resultValue !== void 0 && resultValue !== "\u2205" && !String(resultValue).includes("Variable manquante")) {
+              formulaResultsMap[ref] = String(resultValue);
+              console.log(`\u{1F4E5} [DOWNLOAD]   \u2705 R\xE9solu: ${ref} \u2192 ${resultValue}`);
+            }
+          } catch (refErr) {
+            console.warn(`\u{1F4E5} [DOWNLOAD] \u26A0\uFE0F R\xE9solution "${ref}" \xE9chou\xE9e:`, refErr);
+          }
+        }
+      }
+      console.log("\u{1F4E5} [DOWNLOAD] FormulaResultsMap final:", formulaResultsMap);
+    } catch (err) {
+      console.warn("\u{1F4E5} [DOWNLOAD] Erreur r\xE9solution dynamique:", err);
+    }
     const dataSnapshot = document.dataSnapshot || {};
     const templateTheme = document.DocumentTemplate?.DocumentTheme;
     const themeSource = templateTheme || defaultTheme;
@@ -64305,6 +64951,9 @@ router75.get("/generated/:id/download", async (req2, res) => {
         logo: organization.logo || ""
       } : void 0,
       tblData: dataSnapshot.tblData || dataSnapshot,
+      selectOptionsMap,
+      formulaResultsMap,
+      // 🔥 FIX TOTALS-PDF: Map directe "node-formula:{id}" → valeur résultat
       quote: {
         // Priorité au dataSnapshot.quote s'il existe
         ...dataSnapshot.quote || {},
@@ -66205,7 +66854,7 @@ router80.get("/:nodeId/calculated-value", async (req2, res) => {
         });
       }
     }
-    const isSumTotalNode = typeof nodeId === "string" && nodeId.endsWith("-sum-total");
+    const isSumTotalNode = typeof nodeId === "string" && /-sum-total(-\d+)?$/.test(nodeId);
     if (isSumTotalNode) {
       try {
         const sumTokensNode = await prisma44.treeBranchLeafNode.findUnique({
@@ -66664,8 +67313,9 @@ router80.post("/batch-calculated-values", async (req2, res) => {
     for (const id of ids) {
       const node = nodeMap.get(id);
       if (!node) continue;
+      const isDisplayNode = node.fieldType === "DISPLAY" || node.type === "DISPLAY" || node.type === "leaf_field";
       const subVal = submissionValues.get(id);
-      const rawValue = subVal ?? node.calculatedValue;
+      const rawValue = isDisplayNode ? subVal ?? null : subVal ?? node.calculatedValue;
       results[id] = {
         value: parseStoredStringValue(rawValue),
         calculatedAt: toIsoString(node.calculatedAt),
@@ -72077,71 +72727,53 @@ var TableLookupDuplicationService = class {
       const existingCopiedTable = await prisma51.treeBranchLeafNodeTable.findUnique({
         where: { id: copiedTableId }
       });
-      const rewrittenMeta = (() => {
+      const resolveNodeIdForCopy = async (originalId, suffixNum) => {
+        const suffixedId = `${originalId}-${suffixNum}`;
+        const suffixedNode = await prisma51.treeBranchLeafNode.findUnique({
+          where: { id: suffixedId },
+          select: { id: true }
+        });
+        if (suffixedNode) return suffixedId;
+        const originalNode = await prisma51.treeBranchLeafNode.findUnique({
+          where: { id: originalId },
+          select: { hasLink: true, link_targetNodeId: true }
+        });
+        if (originalNode?.hasLink && originalNode.link_targetNodeId) {
+          const linkTargetSuffixed = `${originalNode.link_targetNodeId}-${suffixNum}`;
+          const linkTargetNode = await prisma51.treeBranchLeafNode.findUnique({
+            where: { id: linkTargetSuffixed },
+            select: { id: true }
+          });
+          if (linkTargetNode) {
+            console.log(`[TBL-DUP] \u{1F517} sourceField resolved: ${originalId} \u2192 LINK target ${linkTargetSuffixed}`);
+            return linkTargetSuffixed;
+          }
+        }
+        console.warn(`[TBL-DUP] \u26A0\uFE0F Node ${suffixedId} not found, LINK resolution failed. Using suffixed ID anyway.`);
+        return suffixedId;
+      };
+      const rewrittenMeta = await (async () => {
         if (!originalTable.meta) return originalTable.meta;
         try {
           const metaObj = typeof originalTable.meta === "string" ? JSON.parse(originalTable.meta) : JSON.parse(JSON.stringify(originalTable.meta));
           const suffixNum = parseInt(suffix.replace("-", "")) || 1;
           if (metaObj?.lookup?.selectors?.columnFieldId && !metaObj.lookup.selectors.columnFieldId.endsWith(`-${suffixNum}`)) {
-            metaObj.lookup.selectors.columnFieldId = `${metaObj.lookup.selectors.columnFieldId}-${suffixNum}`;
+            metaObj.lookup.selectors.columnFieldId = await resolveNodeIdForCopy(metaObj.lookup.selectors.columnFieldId, suffixNum);
           }
           if (metaObj?.lookup?.selectors?.rowFieldId && !metaObj.lookup.selectors.rowFieldId.endsWith(`-${suffixNum}`)) {
-            metaObj.lookup.selectors.rowFieldId = `${metaObj.lookup.selectors.rowFieldId}-${suffixNum}`;
+            metaObj.lookup.selectors.rowFieldId = await resolveNodeIdForCopy(metaObj.lookup.selectors.rowFieldId, suffixNum);
           }
           if (metaObj?.lookup?.rowSourceOption?.sourceField && !metaObj.lookup.rowSourceOption.sourceField.endsWith(`-${suffixNum}`)) {
-            metaObj.lookup.rowSourceOption.sourceField = `${metaObj.lookup.rowSourceOption.sourceField}-${suffixNum}`;
+            metaObj.lookup.rowSourceOption.sourceField = await resolveNodeIdForCopy(metaObj.lookup.rowSourceOption.sourceField, suffixNum);
           }
           if (metaObj?.lookup?.columnSourceOption?.sourceField && !metaObj.lookup.columnSourceOption.sourceField.endsWith(`-${suffixNum}`)) {
-            metaObj.lookup.columnSourceOption.sourceField = `${metaObj.lookup.columnSourceOption.sourceField}-${suffixNum}`;
+            metaObj.lookup.columnSourceOption.sourceField = await resolveNodeIdForCopy(metaObj.lookup.columnSourceOption.sourceField, suffixNum);
           }
           if (metaObj?.lookup?.rowSourceOption?.comparisonColumn && !metaObj.lookup.rowSourceOption.operator) {
             metaObj.lookup.rowSourceOption.operator = "=";
           }
           if (metaObj?.lookup?.columnSourceOption?.comparisonColumn && !metaObj.lookup.columnSourceOption.operator) {
             metaObj.lookup.columnSourceOption.operator = "=";
-          }
-          if (metaObj?.lookup?.rowSourceOption?.comparisonColumn) {
-            const val = metaObj.lookup.rowSourceOption.comparisonColumn;
-            if (!/^-?\d+(\.\d+)?$/.test(val.trim()) && !val.endsWith(suffix)) {
-              metaObj.lookup.rowSourceOption.comparisonColumn = `${val}${suffix}`;
-            }
-          }
-          if (metaObj?.lookup?.columnSourceOption?.comparisonColumn) {
-            const val = metaObj.lookup.columnSourceOption.comparisonColumn;
-            if (!/^-?\d+(\.\d+)?$/.test(val.trim()) && !val.endsWith(suffix)) {
-              metaObj.lookup.columnSourceOption.comparisonColumn = `${val}${suffix}`;
-            }
-          }
-          if (metaObj?.lookup?.displayColumn) {
-            if (Array.isArray(metaObj.lookup.displayColumn)) {
-              metaObj.lookup.displayColumn = metaObj.lookup.displayColumn.map((col) => {
-                if (col && !/^-?\d+(\.\d+)?$/.test(col.trim()) && !col.endsWith(suffix)) {
-                  return `${col}${suffix}`;
-                }
-                return col;
-              });
-            } else if (typeof metaObj.lookup.displayColumn === "string") {
-              const val = metaObj.lookup.displayColumn;
-              if (!/^-?\d+(\.\d+)?$/.test(val.trim()) && !val.endsWith(suffix)) {
-                metaObj.lookup.displayColumn = `${val}${suffix}`;
-              }
-            }
-          } else {
-          }
-          if (metaObj?.lookup?.displayRow) {
-            if (Array.isArray(metaObj.lookup.displayRow)) {
-              metaObj.lookup.displayRow = metaObj.lookup.displayRow.map((row) => {
-                if (row && !/^-?\d+(\.\d+)?$/.test(row.trim()) && !row.endsWith(suffix)) {
-                  return `${row}${suffix}`;
-                }
-                return row;
-              });
-            } else if (typeof metaObj.lookup.displayRow === "string") {
-              const val = metaObj.lookup.displayRow;
-              if (!/^-?\d+(\.\d+)?$/.test(val.trim()) && !val.endsWith(suffix)) {
-                metaObj.lookup.displayRow = `${val}${suffix}`;
-              }
-            }
           }
           return metaObj;
         } catch {
@@ -72172,9 +72804,7 @@ var TableLookupDuplicationService = class {
             tableColumns: {
               create: originalTable.tableColumns.map((col, idx) => {
                 const baseName = String(col.name ?? "");
-                const isNumericName = /^-?\d+(\.\d+)?$/.test(baseName.trim());
-                const shouldSuffix = baseName.length > 0 && !isNumericName && !baseName.endsWith(suffix);
-                const newName = shouldSuffix ? `${baseName}${suffix}` : baseName;
+                const newName = baseName;
                 return {
                   id: col.id ? `${col.id}${suffix}` : (0, import_crypto25.randomUUID)(),
                   // ✅ FIX 11/01/2026: NE PAS inclure tableId dans nested create - Prisma le remplit automatiquement
@@ -72207,9 +72837,7 @@ var TableLookupDuplicationService = class {
         });
         const columnsData = originalTable.tableColumns.map((col, idx) => {
           const baseName = String(col.name ?? "");
-          const isNumericName = /^-?\d+(\.\d+)?$/.test(baseName.trim());
-          const shouldSuffix = baseName.length > 0 && !isNumericName && !baseName.endsWith(suffix);
-          const newName = shouldSuffix ? `${baseName}${suffix}` : baseName;
+          const newName = baseName;
           return {
             id: col.id ? `${col.id}${suffix}` : (0, import_crypto25.randomUUID)(),
             tableId: copiedTableId,
@@ -72236,7 +72864,6 @@ var TableLookupDuplicationService = class {
         where: { nodeId: copiedNodeId }
       });
       if (!existingSelectConfig) {
-        const shouldSuffixColumns = true;
         await prisma51.treeBranchLeafSelectConfig.create({
           data: {
             id: (0, import_crypto25.randomUUID)(),
@@ -72244,25 +72871,14 @@ var TableLookupDuplicationService = class {
             nodeId: copiedNodeId,
             tableReference: copiedTableId,
             // 🔥 SUFFIXER les références de colonnes/lignes si elles pointent vers la première colonne/ligne
-            keyColumn: originalSelectConfig.keyColumn ? `${originalSelectConfig.keyColumn}${suffix}` : null,
-            keyRow: originalSelectConfig.keyRow ? `${originalSelectConfig.keyRow}${suffix}` : null,
-            valueColumn: originalSelectConfig.valueColumn ? `${originalSelectConfig.valueColumn}${suffix}` : null,
-            valueRow: originalSelectConfig.valueRow ? `${originalSelectConfig.valueRow}${suffix}` : null,
-            displayColumn: (() => {
-              if (originalSelectConfig.displayColumn) {
-                return `${originalSelectConfig.displayColumn}${suffix}`;
-              }
-              const firstCol = originalTable.tableColumns && originalTable.tableColumns.length > 0 ? originalTable.tableColumns[0] : null;
-              if (firstCol && firstCol.name) {
-                const baseName = String(firstCol.name);
-                const isNumericName = /^-?\d+(\.\d+)?$/.test(baseName.trim());
-                const shouldSuffix = baseName.length > 0 && !isNumericName && !baseName.endsWith(suffix);
-                const result = shouldSuffix ? `${baseName}${suffix}` : baseName;
-                return result;
-              }
-              return null;
-            })(),
-            displayRow: originalSelectConfig.displayRow ? `${originalSelectConfig.displayRow}${suffix}` : null,
+            keyColumn: originalSelectConfig.keyColumn || null,
+            keyRow: originalSelectConfig.keyRow || null,
+            valueColumn: originalSelectConfig.valueColumn || null,
+            valueRow: originalSelectConfig.valueRow || null,
+            // 🛑 FIX: NE PAS suffixer displayColumn — noms de colonnes Excel
+            displayColumn: originalSelectConfig.displayColumn || null,
+            // 🛑 FIX: NE PAS suffixer displayRow — noms de lignes Excel
+            displayRow: originalSelectConfig.displayRow || null,
             // 🔧 FIX 07/01/2026: Copier TOUS les autres champs du SelectConfig original
             options: originalSelectConfig.options,
             multiple: originalSelectConfig.multiple,
@@ -72286,18 +72902,6 @@ var TableLookupDuplicationService = class {
           if (currentMetadata.lookup) {
             if (currentMetadata.lookup.tableRef) {
               currentMetadata.lookup.tableRef = copiedTableId;
-            }
-            if (currentMetadata.lookup.displayColumn) {
-              if (Array.isArray(currentMetadata.lookup.displayColumn)) {
-                currentMetadata.lookup.displayColumn = currentMetadata.lookup.displayColumn.map(
-                  (col) => col && !col.endsWith(suffix) ? `${col}${suffix}` : col
-                );
-              } else if (typeof currentMetadata.lookup.displayColumn === "string") {
-                const val = currentMetadata.lookup.displayColumn;
-                if (!val.endsWith(suffix)) {
-                  currentMetadata.lookup.displayColumn = `${val}${suffix}`;
-                }
-              }
             }
           }
           if (isTableOwnedByThisNode) {
@@ -73010,6 +73614,16 @@ async function runRepeatExecution(prisma51, req2, execution) {
     if (result.displayNodeId) {
       const originalDisplayNodeId = result.displayNodeId.replace(/-\d+$/, "");
       globalNodeIdMap.set(originalDisplayNodeId, result.displayNodeId);
+      duplicatedNodeIds.add(result.displayNodeId);
+      originalNodeIdByCopyId.set(result.displayNodeId, originalDisplayNodeId);
+    }
+    if (result.childDisplayNodeIds) {
+      for (const childId of result.childDisplayNodeIds) {
+        duplicatedNodeIds.add(childId);
+        const originalChildId = childId.replace(/-\d+$/, "");
+        originalNodeIdByCopyId.set(childId, originalChildId);
+        globalNodeIdMap.set(originalChildId, childId);
+      }
     }
   };
   const failedVarTasks = [];
@@ -73115,6 +73729,24 @@ async function runRepeatExecution(prisma51, req2, execution) {
       const _t5 = Date.now();
       console.log(`[PERF] TBL-DUP: ${_t5 - _t4}ms`);
       await reassignCopiedNodesToDuplicatedParents(prisma51, duplicatedNodeIds, originalNodeIdByCopyId);
+      const _t5b = Date.now();
+      try {
+        const syncResult = await syncMissingDisplayNodeChildren(
+          prisma51,
+          duplicatedNodeIds,
+          originalNodeIdByCopyId,
+          repeaterNode.treeId
+        );
+        if (syncResult.created > 0) {
+          console.log(`[repeat-executor] \u{1F512} Safety net: ${syncResult.created} enfant(s) manquant(s) cr\xE9\xE9(s)`);
+          for (const id of syncResult.createdIds) {
+            duplicatedNodeIds.add(id);
+          }
+        }
+      } catch (syncErr) {
+        console.warn("[repeat-executor] Safety net sync failed (non-blocking):", syncErr.message);
+      }
+      console.log(`[PERF] DisplayNodeChildSync: ${Date.now() - _t5b}ms`);
       const _t6 = Date.now();
       const batchResult = await batchPostDuplicationProcessing(
         prisma51,
@@ -73368,6 +74000,243 @@ function normalizeMetadata(metadata) {
     return null;
   }
   return metadata;
+}
+async function syncMissingDisplayNodeChildren(prisma51, duplicatedNodeIds, originalNodeIdByCopyId, treeId) {
+  const createdIds = [];
+  if (!duplicatedNodeIds.size) return { created: 0, createdIds };
+  const dupIds = Array.from(duplicatedNodeIds);
+  const dupNodes = await prisma51.treeBranchLeafNode.findMany({
+    where: { id: { in: dupIds } },
+    select: { id: true, parentId: true, metadata: true, treeId: true }
+  });
+  const displayNodes = dupNodes.filter((n) => {
+    const meta = normalizeMetadata(n.metadata);
+    return meta?.autoCreatedDisplayNode === true;
+  });
+  if (!displayNodes.length) return { created: 0, createdIds };
+  const { rewriteJsonReferences: rewriteJsonReferences2 } = await Promise.resolve().then(() => (init_universal_reference_rewriter(), universal_reference_rewriter_exports));
+  for (const displayNode of displayNodes) {
+    const originalId = originalNodeIdByCopyId.get(displayNode.id);
+    if (!originalId) continue;
+    const suffixToken = deriveCopySuffixToken(originalId, displayNode.id);
+    if (!suffixToken) continue;
+    const suffixNum = parseInt(suffixToken.replace(/^-/, ""), 10);
+    if (isNaN(suffixNum)) continue;
+    const localNodeIdMap = /* @__PURE__ */ new Map();
+    localNodeIdMap.set(originalId, displayNode.id);
+    const bfsQueue = [
+      { origParentId: originalId, copyParentId: displayNode.id }
+    ];
+    while (bfsQueue.length > 0) {
+      const { origParentId, copyParentId } = bfsQueue.shift();
+      const originalChildren = await prisma51.treeBranchLeafNode.findMany({
+        where: { parentId: origParentId },
+        orderBy: { order: "asc" }
+      });
+      if (!originalChildren.length) continue;
+      const existingChildren = await prisma51.treeBranchLeafNode.findMany({
+        where: { parentId: copyParentId },
+        select: { id: true }
+      });
+      const existingChildIds = new Set(existingChildren.map((c) => c.id));
+      for (const origChild of originalChildren) {
+        const childBaseId = origChild.id.replace(/(-\d+)+\s*$/, "");
+        const expectedChildId = `${childBaseId}${suffixToken}`;
+        localNodeIdMap.set(origChild.id, expectedChildId);
+        if (existingChildIds.has(expectedChildId)) {
+          bfsQueue.push({ origParentId: origChild.id, copyParentId: expectedChildId });
+          continue;
+        }
+        const alreadyExists = await prisma51.treeBranchLeafNode.findUnique({
+          where: { id: expectedChildId },
+          select: { id: true }
+        });
+        if (alreadyExists) {
+          await prisma51.treeBranchLeafNode.update({
+            where: { id: expectedChildId },
+            data: { parentId: copyParentId }
+          }).catch(() => {
+          });
+          bfsQueue.push({ origParentId: origChild.id, copyParentId: expectedChildId });
+          continue;
+        }
+        try {
+          const now = /* @__PURE__ */ new Date();
+          const childMeta = {};
+          if (origChild.metadata && typeof origChild.metadata === "object" && !Array.isArray(origChild.metadata)) {
+            Object.assign(childMeta, origChild.metadata);
+          }
+          childMeta.autoCreatedDisplayNode = true;
+          childMeta.duplicatedFromRepeater = true;
+          childMeta.createdBySafetyNet = true;
+          const origLabel = origChild.label || "";
+          const labelBase = origLabel.replace(/(-\d+)+\s*$/, "");
+          const childLabel = `${labelBase}${suffixToken}`;
+          await prisma51.treeBranchLeafNode.create({
+            data: {
+              id: expectedChildId,
+              treeId,
+              parentId: copyParentId,
+              type: origChild.type,
+              subType: origChild.subType,
+              label: childLabel,
+              description: origChild.description,
+              value: null,
+              order: origChild.order,
+              isRequired: origChild.isRequired,
+              isVisible: origChild.isVisible,
+              isActive: origChild.isActive,
+              hasFormula: origChild.hasFormula,
+              hasCondition: origChild.hasCondition,
+              hasData: origChild.hasData,
+              hasTable: origChild.hasTable,
+              hasAPI: origChild.hasAPI ?? false,
+              hasLink: origChild.hasLink ?? false,
+              hasMarkers: origChild.hasMarkers ?? false,
+              metadata: childMeta,
+              calculatedValue: null,
+              fieldType: origChild.fieldType,
+              fieldSubType: origChild.fieldSubType,
+              field_label: childLabel,
+              subtab: origChild.subtab,
+              subtabs: origChild.subtabs,
+              formula_tokens: origChild.formula_tokens,
+              data_displayFormat: origChild.data_displayFormat,
+              data_exposedKey: origChild.data_exposedKey,
+              data_precision: origChild.data_precision,
+              data_unit: origChild.data_unit,
+              data_visibleToUser: origChild.data_visibleToUser ?? false,
+              appearance_size: origChild.appearance_size ?? "md",
+              appearance_variant: origChild.appearance_variant,
+              appearance_width: origChild.appearance_width,
+              appearance_displayIcon: origChild.appearance_displayIcon,
+              linkedFormulaIds: [],
+              linkedConditionIds: [],
+              linkedVariableIds: [],
+              linkedTableIds: [],
+              updatedAt: now
+            }
+          });
+          createdIds.push(expectedChildId);
+          console.log(`[repeat-executor] \u{1F512} Enfant manquant cr\xE9\xE9: ${origChild.label} \u2192 ${expectedChildId} (parent: ${copyParentId})`);
+          bfsQueue.push({ origParentId: origChild.id, copyParentId: expectedChildId });
+          const origChildVar = await prisma51.treeBranchLeafNodeVariable.findUnique({
+            where: { nodeId: origChild.id }
+          });
+          if (origChildVar) {
+            const childVarBaseId = origChildVar.id.replace(/(-\d+)+\s*$/, "");
+            const newChildVarId = `${childVarBaseId}${suffixToken}`;
+            const childKeyBase = origChildVar.exposedKey.replace(/(-\d+)+\s*$/, "");
+            const newChildKey = `${childKeyBase}${suffixToken}`;
+            await prisma51.treeBranchLeafNodeVariable.upsert({
+              where: { id: newChildVarId },
+              update: { nodeId: expectedChildId, updatedAt: now },
+              create: {
+                id: newChildVarId,
+                nodeId: expectedChildId,
+                displayName: `${(origChildVar.displayName || "").replace(/(-\d+)+\s*$/, "")}${suffixToken}`,
+                exposedKey: newChildKey,
+                sourceRef: origChildVar.sourceRef,
+                sourceType: origChildVar.sourceType,
+                displayFormat: origChildVar.displayFormat,
+                unit: origChildVar.unit,
+                precision: origChildVar.precision,
+                visibleToUser: origChildVar.visibleToUser,
+                isReadonly: origChildVar.isReadonly,
+                defaultValue: origChildVar.defaultValue,
+                fixedValue: origChildVar.fixedValue,
+                metadata: origChildVar.metadata,
+                updatedAt: now
+              }
+            });
+            await prisma51.treeBranchLeafNode.update({
+              where: { id: expectedChildId },
+              data: {
+                hasData: true,
+                data_activeId: newChildVarId,
+                data_exposedKey: newChildKey,
+                data_displayFormat: origChildVar.displayFormat,
+                data_precision: origChildVar.precision,
+                data_unit: origChildVar.unit,
+                data_visibleToUser: origChildVar.visibleToUser,
+                linkedVariableIds: [newChildVarId]
+              }
+            });
+          }
+          const origChildFormulas = await prisma51.treeBranchLeafNodeFormula.findMany({
+            where: { nodeId: origChild.id }
+          });
+          const copiedFormulaIds = [];
+          const localFormulaIdMap = /* @__PURE__ */ new Map();
+          const isSumTotal = /-sum-total(-\d+)?$/.test(origChild.id);
+          for (const f of origChildFormulas) {
+            const formulaBaseId = f.id.replace(/(-\d+)+\s*$/, "");
+            const newFormulaId = `${formulaBaseId}${suffixToken}`;
+            const formulaIdShort = f.id.substring(0, 8);
+            const uniqueName = f.name ? `${f.name}-${formulaIdShort}${suffixToken}` : `formula-${formulaIdShort}${suffixToken}`;
+            try {
+              let rewrittenTokens = f.tokens;
+              if (!isSumTotal && f.tokens) {
+                const rewriteMaps = {
+                  nodeIdMap: localNodeIdMap,
+                  formulaIdMap: localFormulaIdMap,
+                  conditionIdMap: /* @__PURE__ */ new Map(),
+                  tableIdMap: /* @__PURE__ */ new Map()
+                };
+                rewrittenTokens = rewriteJsonReferences2(f.tokens, rewriteMaps, suffixNum);
+              }
+              await prisma51.treeBranchLeafNodeFormula.upsert({
+                where: { id: newFormulaId },
+                update: { nodeId: expectedChildId, tokens: rewrittenTokens, updatedAt: /* @__PURE__ */ new Date() },
+                create: {
+                  id: newFormulaId,
+                  nodeId: expectedChildId,
+                  organizationId: f.organizationId,
+                  name: uniqueName,
+                  description: f.description,
+                  tokens: rewrittenTokens,
+                  targetProperty: f.targetProperty,
+                  constraintMessage: f.constraintMessage,
+                  isDefault: f.isDefault,
+                  order: f.order,
+                  createdAt: /* @__PURE__ */ new Date(),
+                  updatedAt: /* @__PURE__ */ new Date()
+                }
+              });
+              copiedFormulaIds.push(newFormulaId);
+              localFormulaIdMap.set(f.id, newFormulaId);
+            } catch (fErr) {
+              console.warn(`[repeat-executor] Safety net: erreur copie formule ${f.id}:`, fErr.message);
+            }
+          }
+          if (copiedFormulaIds.length > 0) {
+            let correctActiveId = copiedFormulaIds[0];
+            if (origChild.formula_activeId) {
+              const mappedActiveId = localFormulaIdMap.get(origChild.formula_activeId);
+              if (mappedActiveId) {
+                correctActiveId = mappedActiveId;
+              }
+            }
+            await prisma51.treeBranchLeafNode.update({
+              where: { id: expectedChildId },
+              data: {
+                hasFormula: true,
+                linkedFormulaIds: copiedFormulaIds,
+                formula_activeId: correctActiveId
+              }
+            });
+          }
+        } catch (createErr) {
+          if (isUniqueConstraintError(createErr)) {
+            bfsQueue.push({ origParentId: origChild.id, copyParentId: expectedChildId });
+          } else {
+            console.warn(`[repeat-executor] Safety net: erreur cr\xE9ation enfant ${expectedChildId}:`, createErr.message);
+          }
+        }
+      }
+    }
+  }
+  return { created: createdIds.length, createdIds };
 }
 
 // src/components/TreeBranchLeaf/treebranchleaf-new/api/repeat/repeat-routes.ts

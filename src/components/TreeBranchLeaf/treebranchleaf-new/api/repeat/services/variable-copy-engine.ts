@@ -1228,6 +1228,15 @@ export async function copyVariableWithCapacities(
             // d'empêcher rewriteReferences de les suffixer aveuglément.
             const childSourceNodeId = originalVar.nodeId;
             if (childSourceNodeId && isFromRepeaterDuplication) {
+                // 🔴 FIX CRITIQUE: Enregistrer le mapping du display node parent
+                // AVANT le BFS. Sans cela, la boucle d'identity-mapping ci-dessous
+                // ajoute le UUID du parent comme identity (old→old), empêchant
+                // @calculated.UUID et @value.UUID d'être correctement suffixés.
+                // Exemple: @calculated.dfc77f3d... doit devenir @calculated.dfc77f3d...-2
+                if (childSourceNodeId && displayNodeId) {
+                  nodeIdMap.set(childSourceNodeId, displayNodeId);
+                }
+
                 // BFS queue: [{originalParentId, copyParentId}]
                 const bfsQueue: Array<{ origParentId: string; copyParentId: string }> = [
                   { origParentId: childSourceNodeId, copyParentId: displayNodeId }
@@ -1360,10 +1369,24 @@ export async function copyVariableWithCapacities(
                       }
                     }
 
+                    // 🔴 FIX CRITIQUE: Utiliser un formulaIdMap LOCAL par enfant.
+                    // Le globalFormulaIdMap est partagé entre TOUTES les copies (-1, -2, -3...).
+                    // Si -1 a déjà copié cb411ff4 → cb411ff4-1, le global a cette entrée.
+                    // Quand -2 vérifie formulaIdMap.has("cb411ff4"), il trouve l'entrée -1
+                    // et RÉUTILISE cb411ff4-1 au lieu de créer cb411ff4-2. FAUX!
+                    // Solution: chaque enfant construit son propre map qui accumule les
+                    // formules copiées pour le suffixe ACTUEL.
+                    const childFormulaIdMap = new Map<string, string>();
                     const childCopiedFormulaIds: string[] = [];
                     for (const f of childFormulas) {
-                      if (formulaIdMap.has(f.id)) {
-                        childCopiedFormulaIds.push(formulaIdMap.get(f.id)!);
+                      // 🔴 FIX: Vérifier si la formule a DÉJÀ été copiée pour CE suffixe.
+                      // Si la mapping globale pointe vers un ID avec le BON suffixe, réutiliser.
+                      // Sinon, copier à nouveau pour le suffixe actuel.
+                      const expectedSuffix = `-${suffix}`;
+                      const existingMapping = formulaIdMap.get(f.id);
+                      if (existingMapping && existingMapping.endsWith(expectedSuffix)) {
+                        childCopiedFormulaIds.push(existingMapping);
+                        childFormulaIdMap.set(f.id, existingMapping);
                         continue;
                       }
                       try {
@@ -1399,6 +1422,7 @@ export async function copyVariableWithCapacities(
                             }
                           });
                           formulaIdMap.set(f.id, newSumFormulaId);
+                          childFormulaIdMap.set(f.id, newSumFormulaId);
                           childCopiedFormulaIds.push(newSumFormulaId);
                           console.log(`[VAR-COPY] ✅ Sum-total formule copiée SANS réécriture: ${f.id} → ${newSumFormulaId}`);
                         } else {
@@ -1407,10 +1431,11 @@ export async function copyVariableWithCapacities(
                             childCopyId,
                             suffix,
                             prisma,
-                            { formulaIdMap, nodeIdMap: localNodeIdMap, skipLinking: true, skipCapacitySync: true }
+                            { formulaIdMap: childFormulaIdMap, nodeIdMap: localNodeIdMap, skipLinking: true, skipCapacitySync: true }
                           );
                           if (formulaResult.success) {
                             formulaIdMap.set(f.id, formulaResult.newFormulaId);
+                            childFormulaIdMap.set(f.id, formulaResult.newFormulaId);
                             childCopiedFormulaIds.push(formulaResult.newFormulaId);
                           }
                         }
@@ -1421,13 +1446,15 @@ export async function copyVariableWithCapacities(
 
                     // MAJ du nœud enfant avec les infos formule
                     if (childCopiedFormulaIds.length > 0) {
+                      // 🔴 FIX: Utiliser childFormulaIdMap pour formula_activeId — le global
+                      // peut contenir l'entrée d'un AUTRE suffixe à cause du traitement parallèle.
                       await prisma.treeBranchLeafNode.update({
                         where: { id: childCopyId },
                         data: {
                           hasFormula: true,
                           linkedFormulaIds: childCopiedFormulaIds,
                           formula_activeId: child.formula_activeId
-                            ? (formulaIdMap.get(child.formula_activeId) || childCopiedFormulaIds[0])
+                            ? (childFormulaIdMap.get(child.formula_activeId) || formulaIdMap.get(child.formula_activeId) || childCopiedFormulaIds[0])
                             : childCopiedFormulaIds[0],
                         }
                       });
