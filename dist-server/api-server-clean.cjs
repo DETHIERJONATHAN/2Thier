@@ -5050,6 +5050,39 @@ async function interpretReference(ref, submissionId, prisma51, valuesCache = /* 
       console.warn(`[CALCULATED-FALLBACK] \u26A0\uFE0F Erreur fallback pour ${cleanRef}:`, calcError);
     }
   }
+  if (isCalculatedRef && valueMap && result) {
+    const baseNodeId = cleanRef;
+    if (!baseNodeId.match(/-\d+$/) && !baseNodeId.endsWith("-sum-total")) {
+      let copySum = 0;
+      let copiesFound = 0;
+      const prefix = `${baseNodeId}-`;
+      for (const [key2, val] of valueMap) {
+        if (key2.startsWith(prefix) && !key2.includes("-sum-total")) {
+          const suffix = key2.slice(prefix.length);
+          if (/^\d+$/.test(suffix)) {
+            const numVal = parseFloat(String(val)) || 0;
+            copySum += numVal;
+            copiesFound++;
+          }
+        }
+      }
+      if (copiesFound > 0) {
+        const baseValue = parseFloat(String(result.result)) || 0;
+        const totalWithCopies = baseValue + copySum;
+        result = {
+          result: String(totalWithCopies),
+          humanText: `${result.humanText || cleanRef} (+ ${copiesFound} copie(s) = ${totalWithCopies})`,
+          details: {
+            type: "auto-sum-copies",
+            baseValue,
+            copySum,
+            copiesFound,
+            totalWithCopies
+          }
+        };
+      }
+    }
+  }
   valuesCache.set(cleanRef, result);
   return result;
 }
@@ -5680,7 +5713,27 @@ async function interpretFormula(formulaId, submissionId, prisma51, valuesCache, 
       );
       detailCacheByEncoded.set(encoded, refResult);
       const numeric = parseNumericLookupValue(refResult.result);
-      const safeValue = Number.isFinite(numeric) ? numeric : 0;
+      let safeValue = Number.isFinite(numeric) ? numeric : 0;
+      if (meta.rawToken?.startsWith("@calculated.") && valueMap) {
+        const baseNodeId = meta.refId;
+        if (!baseNodeId.match(/-\d+$/) && !baseNodeId.endsWith("-sum-total")) {
+          let copySum = 0;
+          let copiesFound = 0;
+          const prefix = `${baseNodeId}-`;
+          for (const [key2, val] of valueMap) {
+            if (key2.startsWith(prefix) && !key2.includes("-sum-total")) {
+              const suffix = key2.slice(prefix.length);
+              if (/^\d+$/.test(suffix)) {
+                copySum += parseFloat(String(val)) || 0;
+                copiesFound++;
+              }
+            }
+          }
+          if (copiesFound > 0) {
+            safeValue += copySum;
+          }
+        }
+      }
       valueCacheByEncoded.set(encoded, safeValue);
       if (meta.refType === "formula") {
         const label = refResult.details?.formulaName || refResult.details?.label || `Formule ${meta.refId}`;
@@ -37732,22 +37785,55 @@ async function deepCopyNodeInternal(prisma51, req2, nodeId, opts) {
         const originalOwnerNode = byId.get(t.nodeId) ?? null;
         if (originalOwnerNode) {
           try {
+            let resolvedParentId = null;
+            if (originalOwnerNode.parentId) {
+              resolvedParentId = toCopy.has(originalOwnerNode.parentId) ? appendSuffix(originalOwnerNode.parentId) : originalOwnerNode.parentId;
+            }
+            const originalMeta = originalOwnerNode.metadata && typeof originalOwnerNode.metadata === "object" ? { ...originalOwnerNode.metadata } : {};
+            originalMeta.autoCreatedDisplayNode = true;
+            originalMeta.fromVariableId = null;
             const createdNode = await prisma51.treeBranchLeafNode.create({
               data: {
                 id: tableOwnerNodeId,
                 type: originalOwnerNode.type,
-                label: originalOwnerNode.label ? `${originalOwnerNode.label}-1` : "Stub",
+                subType: originalOwnerNode.subType,
+                // 🔧 FIX: était manquant → null
+                label: originalOwnerNode.label ? `${originalOwnerNode.label}${computedLabelSuffix}` : "Stub",
                 treeId: originalOwnerNode.treeId,
-                parentId: originalOwnerNode.parentId ? appendSuffix(originalOwnerNode.parentId) : null,
-                order: 0,
+                parentId: resolvedParentId,
+                // 🔧 FIX: section fixe → non suffixé
+                order: originalOwnerNode.order,
+                // 🔧 FIX: était 0 → hériter
+                fieldType: originalOwnerNode.fieldType,
+                fieldSubType: originalOwnerNode.fieldSubType,
+                hasData: originalOwnerNode.hasData,
+                hasFormula: originalOwnerNode.hasFormula,
+                hasCondition: originalOwnerNode.hasCondition,
+                hasTable: originalOwnerNode.hasTable,
+                hasAPI: originalOwnerNode.hasAPI ?? false,
+                hasLink: originalOwnerNode.hasLink ?? false,
+                hasMarkers: originalOwnerNode.hasMarkers ?? false,
+                metadata: originalMeta,
+                // 🔧 FIX: était vide → copié
+                data_unit: originalOwnerNode.data_unit,
+                data_precision: originalOwnerNode.data_precision,
+                data_displayFormat: originalOwnerNode.data_displayFormat,
+                data_exposedKey: originalOwnerNode.data_exposedKey,
+                data_visibleToUser: originalOwnerNode.data_visibleToUser,
                 createdAt: /* @__PURE__ */ new Date(),
                 updatedAt: /* @__PURE__ */ new Date()
               }
             });
             nodeExists = createdNode;
+            existingNodeIds.add(tableOwnerNodeId);
           } catch (err) {
-            console.error(`[DEEP-COPY] \u274C Failed to create stub node: ${err.message}`);
-            throw err;
+            if (err?.code === "P2002") {
+              nodeExists = { id: tableOwnerNodeId };
+              existingNodeIds.add(tableOwnerNodeId);
+            } else {
+              console.error(`[DEEP-COPY] \u274C Failed to create stub node ${tableOwnerNodeId}: ${err.message}`);
+              throw err;
+            }
           }
         }
       }

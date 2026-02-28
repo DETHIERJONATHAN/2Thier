@@ -878,6 +878,58 @@ async function interpretReference(
       console.warn(`[CALCULATED-FALLBACK] ⚠️ Erreur fallback pour ${cleanRef}:`, calcError);
     }
   }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // 🔥 FIX AUTO-SUM COPIES: Quand une formule référence @calculated.NODE_ID,
+  // et que ce nœud a des copies suffixées (-1, -2, etc.) dans le valueMap,
+  // sommer automatiquement la valeur de l'original + toutes les copies.
+  // 
+  // PROBLÈME: "Prix achat" inclut les panneaux (via sum-total) mais pas les
+  // matériaux car pas de sum-total configuré. Certains champs sont copiés par
+  // le repeater (ex: Materiaux achat-1) mais leur formule parent référence
+  // seulement @calculated.baseNodeId → manque les copies.
+  //
+  // FIX: Si le baseNodeId a des copies numériques (-1, -2...) dans le valueMap,
+  // les sommer automatiquement avec la valeur de base.
+  // On ne touche PAS aux nœuds déjà suffixés (-1, -2) ni aux sum-total.
+  // ═══════════════════════════════════════════════════════════════════════════
+  if (isCalculatedRef && valueMap && result) {
+    const baseNodeId = cleanRef;
+    // Seulement pour les nœuds de base (pas les copies -N ni les sum-total)
+    if (!baseNodeId.match(/-\d+$/) && !baseNodeId.endsWith('-sum-total')) {
+      let copySum = 0;
+      let copiesFound = 0;
+      const prefix = `${baseNodeId}-`;
+      for (const [key, val] of valueMap) {
+        if (key.startsWith(prefix) && !key.includes('-sum-total')) {
+          // Extraire le suffixe après le baseNodeId-
+          const suffix = key.slice(prefix.length);
+          // Vérifier que c'est un suffixe numérique simple (1, 2, 3...)
+          if (/^\d+$/.test(suffix)) {
+            const numVal = parseFloat(String(val)) || 0;
+            copySum += numVal;
+            copiesFound++;
+          }
+        }
+      }
+      if (copiesFound > 0) {
+        const baseValue = parseFloat(String(result.result)) || 0;
+        const totalWithCopies = baseValue + copySum;
+        result = {
+          result: String(totalWithCopies),
+          humanText: `${result.humanText || cleanRef} (+ ${copiesFound} copie(s) = ${totalWithCopies})`,
+          details: {
+            type: 'auto-sum-copies',
+            baseValue,
+            copySum,
+            copiesFound,
+            totalWithCopies
+          }
+        };
+      }
+    }
+  }
+
   valuesCache.set(cleanRef, result);
   
   return result;
@@ -1948,7 +2000,39 @@ async function interpretFormula(
       // ⚠️ IMPORTANT: tolérer formats FR ("12,5"), unités ("12.5 m"), etc.
       // Sinon Number("12,5") => NaN => 0 et la formule paraît "bloquée".
       const numeric = parseNumericLookupValue(refResult.result);
-      const safeValue = Number.isFinite(numeric) ? numeric : 0;
+      let safeValue = Number.isFinite(numeric) ? numeric : 0;
+
+      // ═══════════════════════════════════════════════════════════════════
+      // 🔥 FIX AUTO-SUM COPIES (dans resolveVariable de interpretFormula)
+      // Quand un token @calculated.NODE_ID est résolu dans une formule,
+      // et que ce nœud a des copies suffixées (-1, -2...) dans le valueMap,
+      // sommer automatiquement original + copies.
+      //
+      // Exemple: "Prix achat" = @calculated.Materiaux_achat + @calculated.PV_sum_total + ...
+      // Si Materiaux achat a des copies -1, -2, la somme doit les inclure.
+      // ═══════════════════════════════════════════════════════════════════
+      if (meta.rawToken?.startsWith('@calculated.') && valueMap) {
+        const baseNodeId = meta.refId;
+        // Seulement pour les nœuds de base (pas les copies -N ni les sum-total)
+        if (!baseNodeId.match(/-\d+$/) && !baseNodeId.endsWith('-sum-total')) {
+          let copySum = 0;
+          let copiesFound = 0;
+          const prefix = `${baseNodeId}-`;
+          for (const [key, val] of valueMap) {
+            if (key.startsWith(prefix) && !key.includes('-sum-total')) {
+              const suffix = key.slice(prefix.length);
+              if (/^\d+$/.test(suffix)) {
+                copySum += parseFloat(String(val)) || 0;
+                copiesFound++;
+              }
+            }
+          }
+          if (copiesFound > 0) {
+            safeValue += copySum;
+          }
+        }
+      }
+
       valueCacheByEncoded.set(encoded, safeValue);
 
       if (meta.refType === 'formula') {
