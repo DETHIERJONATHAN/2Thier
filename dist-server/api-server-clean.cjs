@@ -39118,6 +39118,24 @@ async function evaluateCapacitiesForSubmission(submissionId, organizationId, use
       if (variable) {
         collectReferencedNodeIdsForTriggers(variable.metadata, refs);
       }
+      if (variable && variable.sourceRef) {
+        const varSourceRef = String(variable.sourceRef).trim();
+        collectReferencedNodeIdsForTriggers(varSourceRef, refs);
+        if (varSourceRef.startsWith("node-formula:")) {
+          const fId = varSourceRef.slice("node-formula:".length).trim();
+          if (fId) {
+            const crossFormula = formulasByIdForTopo.get(fId);
+            if (crossFormula) {
+              if (crossFormula.nodeId && crossFormula.nodeId !== displayNodeId2) {
+                refs.add(crossFormula.nodeId);
+              }
+              if (crossFormula.tokens) {
+                collectReferencedNodeIdsForTriggers(crossFormula.tokens, refs);
+              }
+            }
+          }
+        }
+      }
       const conditions = conditionsByNodeIdForTopo.get(displayNodeId2) || [];
       for (const condition of conditions) {
         collectReferencedNodeIdsForTriggers(condition.conditionSet, refs);
@@ -39163,6 +39181,9 @@ async function evaluateCapacitiesForSubmission(submissionId, organizationId, use
         }
       };
       for (const formula of formulas) resolveTransitiveDeps(formula.tokens);
+      if (variable && variable.sourceRef) {
+        resolveTransitiveDeps(variable.sourceRef);
+      }
       refs.delete(displayNodeId2);
       for (const refId of refs) {
         if (refId.includes(".")) continue;

@@ -1278,6 +1278,37 @@ const displayDeps = new Map<string, Set<string>>(); // nodeId → Set<dependsOn>
         collectReferencedNodeIdsForTriggers((variable as any).metadata, refs);
       }
 
+      // 2b. 🔥 FIX R28: Analyser le sourceRef de la variable pour les dépendances transitives
+      // AVANT ce fix: seul le metadata (souvent vide {}) était scanné pour les dépendances.
+      // Le sourceRef (ex: "node-formula:14a876ae...") n'était jamais analysé dans le tri topo.
+      // CONSÉQUENCE: Un display field comme "Prix HTVA" dont la variable pointe vers une
+      // formule cross-node (sur le nœud parent "Prix TVAC") obtenait profondeur topo = 0
+      // → évalué AVANT ses dépendances → valeur manquante ou en retard.
+      // FIX: Résoudre transitivement le sourceRef de la variable exactement comme on fait
+      // pour les tokens des formules dans le step 4.
+      if (variable && (variable as any).sourceRef) {
+        const varSourceRef = String((variable as any).sourceRef).trim();
+        // Extraire les dépendances directes du sourceRef
+        collectReferencedNodeIdsForTriggers(varSourceRef, refs);
+        // Si c'est un node-formula cross-node, résoudre ses tokens transitivement
+        if (varSourceRef.startsWith('node-formula:')) {
+          const fId = varSourceRef.slice('node-formula:'.length).trim();
+          if (fId) {
+            const crossFormula = formulasByIdForTopo.get(fId);
+            if (crossFormula) {
+              // Ajouter le nœud propriétaire de la formule comme dépendance
+              if (crossFormula.nodeId && crossFormula.nodeId !== displayNodeId) {
+                refs.add(crossFormula.nodeId);
+              }
+              // Résoudre les tokens de cette formule transitivement
+              if (crossFormula.tokens) {
+                collectReferencedNodeIdsForTriggers(crossFormula.tokens, refs);
+              }
+            }
+          }
+        }
+      }
+
       // 3. 🔥 FIX R23: Collecter les refs depuis les conditionSets
       const conditions = conditionsByNodeIdForTopo.get(displayNodeId) || [];
       for (const condition of conditions) {
@@ -1330,6 +1361,13 @@ const displayDeps = new Map<string, Set<string>>(); // nodeId → Set<dependsOn>
         }
       };
       for (const formula of formulas) resolveTransitiveDeps(formula.tokens);
+
+      // 4b. 🔥 FIX R28: Résoudre aussi transitivement le sourceRef de la variable
+      // Sans ça, un sourceRef "node-formula:xxx" qui contient lui-même des node-formula:
+      // n'avait pas ses dépendances profondes détectées.
+      if (variable && (variable as any).sourceRef) {
+        resolveTransitiveDeps((variable as any).sourceRef);
+      }
 
       // Retirer l'auto-référence
       refs.delete(displayNodeId);
