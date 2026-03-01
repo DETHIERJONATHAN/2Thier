@@ -196,6 +196,27 @@ const UniversalPanel: React.FC<UniversalPanelProps> = ({ value = {}, onChange, r
             <ColorPicker showText allowClear />
           </Form.Item>
           <Form.Item 
+            name="textColor" 
+            label={<Tooltip title="Couleur du texte (valeur affichée) dans la bulle d'affichage. Par défaut: adapté au fond.">Couleur du texte</Tooltip>}
+            getValueFromEvent={(color) => color ? (typeof color === 'string' ? color : color.toHexString()) : ''}
+          >
+            <ColorPicker showText allowClear />
+          </Form.Item>
+          <Form.Item 
+            name="accentColor" 
+            label={<Tooltip title="Couleur d'accent / couleur principale de la bulle d'affichage. Détermine le fond et les bordures.">Couleur d'accent (Display)</Tooltip>}
+            getValueFromEvent={(color) => color ? (typeof color === 'string' ? color : color.toHexString()) : ''}
+          >
+            <ColorPicker showText allowClear />
+          </Form.Item>
+          <Form.Item 
+            name="backgroundColor" 
+            label={<Tooltip title="Couleur de fond personnalisée pour la bulle d'affichage. Remplace le fond généré par la couleur d'accent.">Couleur de fond (Display)</Tooltip>}
+            getValueFromEvent={(color) => color ? (typeof color === 'string' ? color : color.toHexString()) : ''}
+          >
+            <ColorPicker showText allowClear />
+          </Form.Item>
+          <Form.Item 
             name="displayIcon" 
             label={<Tooltip title="Icône affichée dans la colonne 'subtap display' de la table. Héritée par les copies du champ">Icône de champ (TBL)</Tooltip>}
           >

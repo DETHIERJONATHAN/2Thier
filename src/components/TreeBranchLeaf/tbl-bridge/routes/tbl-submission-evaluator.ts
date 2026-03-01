@@ -1691,12 +1691,48 @@ const displayDeps = new Map<string, Set<string>>(); // nodeId → Set<dependsOn>
         const nodeVar = variablesByNodeId.get(node.id);
         if (nodeVar) extractAndAddTriggers(nodeVar.metadata, node.id, triggerNodeIds);
         
+        // 🔥 FIX R31: Analyser le sourceRef de la variable pour le trigger index
+        // AVANT ce fix: seul variable.metadata était scanné (souvent vide {}).
+        // Le sourceRef (ex: "node-formula:14a876ae...") n'était JAMAIS analysé dans le trigger index.
+        // CONSÉQUENCE: Un display field comme "Prix HTVA" dont la variable pointe vers une
+        // formule cross-node (sur le nœud parent "Prix TVAC") n'avait AUCUN trigger auto-découvert
+        // → obligation de configurer manuellement des triggerNodeIds dans le metadata du NODE.
+        // FIX: Extraire les dépendances du sourceRef ET résoudre transitivement les node-formula:.
+        if (nodeVar && nodeVar.sourceRef) {
+          const varSourceRef = String(nodeVar.sourceRef).trim();
+          // Extraire les dépendances directes du sourceRef
+          extractAndAddTriggers(varSourceRef, node.id, triggerNodeIds);
+          // Si c'est un node-formula: cross-node, extraire aussi les deps de CETTE formule
+          if (varSourceRef.startsWith('node-formula:')) {
+            const fId = varSourceRef.slice('node-formula:'.length).trim();
+            if (fId) {
+              const crossFormula = formulasById.get(fId);
+              if (crossFormula) {
+                // Ajouter le nœud propriétaire de la formule comme trigger
+                if (crossFormula.nodeId && crossFormula.nodeId !== node.id) {
+                  if (!triggerNodeIds.includes(crossFormula.nodeId)) {
+                    triggerNodeIds.push(crossFormula.nodeId);
+                  }
+                }
+                // Extraire les deps des tokens de la formule cross-node
+                if (crossFormula.tokens) {
+                  extractAndAddTriggers(crossFormula.tokens, node.id, triggerNodeIds);
+                }
+              }
+            }
+          }
+        }
+
         // 🔥 FIX R21: Résoudre les dépendances transitives des node-formula: cross-node
         // Si un token "node-formula:formulaId" référence une formule d'un AUTRE noeud,
         // on extrait les dépendances de CETTE formule et on les ajoute comme triggers.
         const visitedFormulas = new Set<string>();
         if (nodeTokens.length > 0) resolveNodeFormulaTransitiveTriggers(nodeTokens, node.id, triggerNodeIds, visitedFormulas);
         for (const formula of nodeFormulas) resolveNodeFormulaTransitiveTriggers((formula as any).tokens, node.id, triggerNodeIds, visitedFormulas);
+        // 🔥 FIX R31: Résoudre aussi transitivement le sourceRef de la variable
+        if (nodeVar && nodeVar.sourceRef) {
+          resolveNodeFormulaTransitiveTriggers(nodeVar.sourceRef, node.id, triggerNodeIds, visitedFormulas);
+        }
         
         const expandedTriggers = expandTriggersForCopy(node.id, triggerNodeIds);
         for (const triggerId of expandedTriggers) {

@@ -4802,6 +4802,13 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
       ((field.metadata as Record<string, unknown> | undefined)?.appearance as Record<string, unknown> | undefined)?.bubbleColor
     ) as string | undefined;
     const customBubbleColor = rawBubbleColor ? normalizeHexColor(rawBubbleColor) : undefined;
+
+    // 🎨 Couleurs personnalisées depuis appearanceConfig (textColor, accentColor, backgroundColor)
+    const appearanceCfg = (field.appearanceConfig || {}) as Record<string, unknown>;
+    const metaAppearanceCfg = ((field.metadata as Record<string, unknown> | undefined)?.appearance || {}) as Record<string, unknown>;
+    const customTextColor = (appearanceCfg.textColor || metaAppearanceCfg.textColor) as string | undefined;
+    const customAccentColor = (appearanceCfg.accentColor || metaAppearanceCfg.accentColor) as string | undefined;
+    const customBgColor = (appearanceCfg.backgroundColor || metaAppearanceCfg.backgroundColor) as string | undefined;
     
     // 🎨 NOUVEAU: Système d'icônes pour les cartes de données
     // L'icône peut être définie dans field.config.displayIcon ou field.metadata.displayIcon
@@ -4911,9 +4918,11 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
     
     // 🎨 Déterminer si on utilise un style "foncé" (total ou couleur custom foncée)
     const hasCustomBubble = Boolean(customBubbleColor);
-    const usesDarkBubble = hasCustomBubble ? isColorDark(customBubbleColor!) : isTotalField;
+    const effectiveBubbleBg = customBubbleColor || customAccentColor || customBgColor;
+    const hasAnyCustomBg = Boolean(effectiveBubbleBg);
+    const usesDarkBubble = hasAnyCustomBg ? isColorDark(effectiveBubbleBg!) : isTotalField;
     
-    const bubbleSize = (isTotalField || hasCustomBubble) ? 90 : 80; // px - plus petit pour mobile
+    const bubbleSize = (isTotalField || hasAnyCustomBg) ? 90 : 80; // px - plus petit pour mobile
     
     // 🔢 Détecter si c'est une copie (suffixe -1, -2, etc.)
     const copyMatch = (field.id || '').match(/-(\d+)$/);
@@ -4928,13 +4937,13 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
       flexDirection: 'column',
       alignItems: 'center',
       justifyContent: 'center',
-      background: hasCustomBubble
-        ? `linear-gradient(135deg, ${customBubbleColor} 0%, ${customBubbleColor}dd 100%)`
+      background: effectiveBubbleBg
+        ? `linear-gradient(135deg, ${effectiveBubbleBg} 0%, ${effectiveBubbleBg}dd 100%)`
         : isTotalField 
           ? 'linear-gradient(135deg, #0b5c6b 0%, #0d4f59 100%)'
           : 'linear-gradient(135deg, #f0fdfa 0%, #e0f7f5 100%)',
-      border: hasCustomBubble
-        ? `2px solid ${customBubbleColor}`
+      border: effectiveBubbleBg
+        ? `2px solid ${effectiveBubbleBg}`
         : isTotalField ? '2px solid #094d56' : '2px solid #99f6e4',
       boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
       cursor: 'default',
@@ -4963,15 +4972,18 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
     };
     
     const iconStyle: React.CSSProperties = {
-      fontSize: (isTotalField || hasCustomBubble) ? 24 : 22,
+      fontSize: (isTotalField || hasAnyCustomBg) ? 24 : 22,
       marginBottom: 2,
       filter: usesDarkBubble ? 'brightness(0) invert(1)' : 'none',
     };
     
     const valueTextStyle: React.CSSProperties = {
-      fontSize: (isTotalField || hasCustomBubble) ? 14 : 12,
+      fontSize: (isTotalField || hasAnyCustomBg) ? 14 : 12,
       fontWeight: 600,
-      color: usesDarkBubble ? '#ffffff' : '#0d9488',
+      // 🎨 Priorité: textColor explicite > auto (dark/light) > défaut teal
+      color: customTextColor 
+        ? customTextColor 
+        : usesDarkBubble ? '#ffffff' : '#0d9488',
       textAlign: 'center',
       lineHeight: 1.2,
       maxWidth: bubbleSize - 16,

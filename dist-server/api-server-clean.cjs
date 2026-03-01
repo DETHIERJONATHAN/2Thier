@@ -39406,9 +39406,32 @@ async function evaluateCapacitiesForSubmission(submissionId, organizationId, use
         for (const table of nodeTables) extractAndAddTriggers(table.meta, node.id, triggerNodeIds);
         const nodeVar = variablesByNodeId.get(node.id);
         if (nodeVar) extractAndAddTriggers(nodeVar.metadata, node.id, triggerNodeIds);
+        if (nodeVar && nodeVar.sourceRef) {
+          const varSourceRef = String(nodeVar.sourceRef).trim();
+          extractAndAddTriggers(varSourceRef, node.id, triggerNodeIds);
+          if (varSourceRef.startsWith("node-formula:")) {
+            const fId = varSourceRef.slice("node-formula:".length).trim();
+            if (fId) {
+              const crossFormula = formulasById.get(fId);
+              if (crossFormula) {
+                if (crossFormula.nodeId && crossFormula.nodeId !== node.id) {
+                  if (!triggerNodeIds.includes(crossFormula.nodeId)) {
+                    triggerNodeIds.push(crossFormula.nodeId);
+                  }
+                }
+                if (crossFormula.tokens) {
+                  extractAndAddTriggers(crossFormula.tokens, node.id, triggerNodeIds);
+                }
+              }
+            }
+          }
+        }
         const visitedFormulas = /* @__PURE__ */ new Set();
         if (nodeTokens.length > 0) resolveNodeFormulaTransitiveTriggers(nodeTokens, node.id, triggerNodeIds, visitedFormulas);
         for (const formula of nodeFormulas) resolveNodeFormulaTransitiveTriggers(formula.tokens, node.id, triggerNodeIds, visitedFormulas);
+        if (nodeVar && nodeVar.sourceRef) {
+          resolveNodeFormulaTransitiveTriggers(nodeVar.sourceRef, node.id, triggerNodeIds, visitedFormulas);
+        }
         const expandedTriggers = expandTriggersForCopy(node.id, triggerNodeIds);
         for (const triggerId of expandedTriggers) {
           if (!triggerIndex.has(triggerId)) triggerIndex.set(triggerId, /* @__PURE__ */ new Set());
