@@ -7886,6 +7886,27 @@ async function applyTableFilters(
     let passesAllFilters = true;
 
     for (const filter of activeFilters) {
+      // 🆕 __ANY__: Vérifier TOUTES les colonnes de données (logique OR)
+      // Utilisé pour le filtre Financement: un mois est disponible si N'IMPORTE QUELLE
+      // colonne de taux (3.99, 4.99) a un seuil ≤ Prix TVAC
+      if (filter.column === '__ANY__') {
+        let anyColumnPasses = false;
+        for (let ci = 1; ci < columns.length; ci++) {
+          const cv = row[ci];
+          // Ignorer les cellules vides
+          if (cv === undefined || cv === null || cv === '') continue;
+          if (compareFilterValues(cv, filter.operator, filter.resolvedValue)) {
+            anyColumnPasses = true;
+            break;
+          }
+        }
+        if (!anyColumnPasses) {
+          passesAllFilters = false;
+          break;
+        }
+        continue;
+      }
+
       const columnIndex = columns.indexOf(filter.column);
       if (columnIndex === -1) {
         console.warn(`[applyTableFilters] ÃƒÂ¢Ã…Â¡Ã‚Â ÃƒÂ¯Ã‚Â¸Ã‚Â Colonne "${filter.column}" introuvable dans:`, columns);
@@ -12189,7 +12210,7 @@ router.all('/nodes/:nodeId/table/lookup', async (req, res) => {
     });
     
 
-    // Appliquer les filtres si configurÃƒÆ’Ã‚Â©s
+    // Appliquer les filtres si configurés
     let filteredRowIndices: number[] = fullMatrix.map((_, i) => i);
     if (filters.length > 0 && Object.keys(formValues).length > 0) {
       // Utiliser columns DIRECTEMENT (pas columnsWithA) car cells[i] = valeur pour columns[i]
