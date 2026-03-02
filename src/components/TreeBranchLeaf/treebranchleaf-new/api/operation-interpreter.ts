@@ -2547,104 +2547,12 @@ async function interpretTable(
   // Ã°Å¸Å½Â¯ DÃƒâ€°TECTION DU MODE (3 modes possibles)
   // Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
   
-  // MODE 3 : Les DEUX toggles activés ET les deux fieldIds configurés (croisement dynamique complet)
+  // MODE 3 : Les DEUX toggles activÃƒÂ©s ET les deux fieldIds configurÃƒÂ©s (croisement dynamique complet)
   if (rowEnabled && colEnabled && hasRowSelector && hasColSelector) {
-    // 🔧 Récupérer la valeur du sélecteur COLONNE (ex: mois de financement)
-    let colSelectorValue = await getSourceValue(
-      colSourceOption, lookup, colFieldId, submissionId, prisma, valuesCache, depth, valueMap, labelMap
-    );
-    const colLabel = await getSourceLabel(colSourceOption, lookup, colFieldId, prisma, labelMap);
-
-    // 🔧 Récupérer la valeur du sélecteur LIGNE (ex: Prix TVAC)
-    let rowSelectorValue = await getSourceValue(
-      rowSourceOption, lookup, rowFieldId, submissionId, prisma, valuesCache, depth, valueMap, labelMap
-    );
-    const rowLabel = await getSourceLabel(rowSourceOption, lookup, rowFieldId, prisma, labelMap);
-
-    if (!colSelectorValue && !rowSelectorValue) {
-      return {
-        result: '∅',
-        humanText: `Table "${table.name}" - En attente des deux sélections`,
-        details: { type: 'table', mode: 3, error: 'No selections' }
-      };
-    }
-
-    // 🔧 Résoudre les UUID en labels si nécessaire
-    const uuidPattern = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}(-\d+)?$/i;
-    if (colSelectorValue && uuidPattern.test(colSelectorValue)) {
-      try {
-        const optionNode = await prisma.treeBranchLeafNode.findFirst({
-          where: { id: { startsWith: colSelectorValue.substring(0, 36) } },
-          select: { label: true }
-        });
-        if (optionNode?.label) colSelectorValue = optionNode.label;
-      } catch (e) { /* ignore */ }
-    }
-    if (rowSelectorValue && uuidPattern.test(rowSelectorValue)) {
-      try {
-        const optionNode = await prisma.treeBranchLeafNode.findFirst({
-          where: { id: { startsWith: rowSelectorValue.substring(0, 36) } },
-          select: { label: true }
-        });
-        if (optionNode?.label) rowSelectorValue = optionNode.label;
-      } catch (e) { /* ignore */ }
-    }
-
-    // 🔧 Trouver la COLONNE correspondante (match texte ou numérique)
-    const allColIndices = columns.map((_: any, idx: number) => idx).filter((idx: number) => idx > 0); // Exclure col 0 (labels)
-    const colMatch = colSelectorValue ? findClosestIndexInLabels(colSelectorValue, columns, allColIndices) : null;
-
-    // 🔧 Trouver la LIGNE correspondante (match texte ou numérique closest)
-    const allRowIndices = rows.map((_: any, idx: number) => idx);
-    const rowMatch = rowSelectorValue ? findClosestIndexInLabels(rowSelectorValue, rows, allRowIndices) : null;
-
-    if (!colMatch && !rowMatch) {
-      return {
-        result: '∅',
-        humanText: `Table "${table.name}" - Aucune correspondance col=${colSelectorValue}, row=${rowSelectorValue}`,
-        details: { type: 'table', mode: 3, error: 'No match found' }
-      };
-    }
-
-    // Si on a les deux axes, croisement direct
-    if (colMatch && rowMatch) {
-      const dataColIndex = colMatch.index - 1; // columns[0] est le label, data commence à columns[1]
-      const dataRowIndex = rowMatch.index;
-      const cellValue = data[dataRowIndex]?.[dataColIndex];
-
-      const humanText = `Table "${table.name}"[${colLabel}=${colSelectorValue}→col${colMatch.index}, ${rowLabel}=${rowSelectorValue}→row${rowMatch.index}] = ${cellValue}`;
-      return {
-        result: cellValue != null ? String(cellValue) : '∅',
-        humanText,
-        details: {
-          type: 'table', mode: 3, tableId: table.id, tableName: table.name,
-          colSelector: colSelectorValue, colIndex: colMatch.index, colMatchType: colMatch.matchType,
-          rowSelector: rowSelectorValue, rowIndex: rowMatch.index, rowMatchType: rowMatch.matchType,
-          cellValue
-        }
-      };
-    }
-
-    // Si on a seulement la colonne, retourner la première ligne valide
-    if (colMatch && !rowMatch) {
-      const dataColIndex = colMatch.index - 1;
-      const cellValue = data[0]?.[dataColIndex];
-      return {
-        result: cellValue != null ? String(cellValue) : '∅',
-        humanText: `Table "${table.name}"[col=${colSelectorValue}, row=first] = ${cellValue}`,
-        details: { type: 'table', mode: 3, partial: 'col-only', cellValue }
-      };
-    }
-
-    // Si on a seulement la ligne, pas de colonne
-    return {
-      result: '∅',
-      humanText: `Table "${table.name}" - Colonne non trouvée pour ${colSelectorValue}`,
-      details: { type: 'table', mode: 3, partial: 'row-only' }
-    };
+    // Le code existant continue ici (rÃƒÂ©cupÃƒÂ©ration des deux valeurs + croisement)
   }
   
-  // MODE 1 : COLONNE activée avec displayColumn (peut avoir ligne activée mais sans rowFieldId)
+  // MODE 1 : COLONNE activÃƒÂ©e avec displayColumn (peut avoir ligne activÃƒÂ©e mais sans rowFieldId)
   else if (colEnabled && (colFieldId || colSourceOption) && lookup.displayColumn && !(rowEnabled && colEnabled && hasRowSelector && hasColSelector)) {
     
     // Ã°Å¸â€Â¥ NOUVEAU: Support des 3 options de source (SELECT/CHAMP/CAPACITÃƒâ€°)

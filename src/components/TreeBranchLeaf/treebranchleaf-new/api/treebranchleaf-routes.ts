@@ -12232,40 +12232,7 @@ router.all('/nodes/:nodeId/table/lookup', async (req, res) => {
         
         if (rowIndex === 0) {
           // Ligne A1 sélectionnée → Extraire les en-têtes de colonnes (SANS A1 lui-même)
-          // 🔧 FIX FINANCEMENT: Filtrer dynamiquement les colonnes disponibles
-          // Si la table a un lookup.selectors.rowFieldId configuré ET qu'on a
-          // la valeur du champ dans formValues, on ne retourne que les mois
-          // pour lesquels la ligne correspondante a des données.
-          // Ex: Prix TVAC = 10000€ → ligne "10000" a 6 valeurs → mois 12-48 uniquement
-          let maxAvailableCols = columns.length; // Par défaut toutes les colonnes
-          if (rawLookup) {
-            const lookupSelectors = (rawLookup as Record<string, unknown>)?.selectors as Record<string, unknown> | undefined;
-            const rowFieldIdForFilter = lookupSelectors?.rowFieldId as string | undefined;
-            if (rowFieldIdForFilter) {
-              // Chercher la valeur du champ montant dans formValues
-              const amountRaw = formValues[rowFieldIdForFilter];
-              const amountValue = amountRaw ? parseFloat(String(amountRaw)) : NaN;
-              if (!isNaN(amountValue) && amountValue > 0) {
-                // Trouver la ligne correspondante (première ligne dont le label >= montant)
-                let matchedDataRowIdx = -1;
-                for (let i = 1; i < rows.length; i++) {
-                  const rowLabel = parseFloat(String(rows[i]).replace(/\s/g, ''));
-                  if (!isNaN(rowLabel) && amountValue <= rowLabel) {
-                    matchedDataRowIdx = i;
-                    break;
-                  }
-                }
-                // Si aucune trouvée, prendre la dernière ligne
-                if (matchedDataRowIdx === -1) matchedDataRowIdx = rows.length - 1;
-                // Le nombre de valeurs non-vides dans cette ligne = nombre de mois disponibles
-                const matchedRowData = data[matchedDataRowIdx - 1] || [];
-                const availableCount = matchedRowData.filter((v: any) => v !== null && v !== undefined && v !== '').length;
-                maxAvailableCols = 1 + availableCount; // +1 car columns[0] est le label
-                console.log(`[table/lookup] 🎯 Filtrage financement: montant=${amountValue}, ligne="${rows[matchedDataRowIdx]}", mois disponibles=${availableCount}`);
-              }
-            }
-          }
-          options = columns.slice(1, maxAvailableCols).map((colName) => {
+          options = columns.slice(1).map((colName) => {
             return {
               value: colName,
               label: selectConfig.displayRow ? colName : colName,
