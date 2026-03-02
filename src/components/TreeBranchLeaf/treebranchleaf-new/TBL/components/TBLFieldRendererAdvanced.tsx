@@ -105,6 +105,11 @@ interface LookupExtensionsResult {
   capColumn?: string; // Colonne à lire pour comparer au plafond (ex: "KVA")
   activeCaps: Array<{ maxValue: number; scope: 'total' | 'per_unit'; label?: string }>;
   activeAlerts: ActiveAlert[];
+  // 📝 ROW equivalents
+  activeRow?: string;
+  capRow?: string; // Ligne à lire pour comparer au plafond ROW
+  activeRowCaps: Array<{ maxValue: number; scope: 'total' | 'per_unit'; label?: string }>;
+  activeRowAlerts: ActiveAlert[];
 }
 
 // 🔄 Évaluer une condition de lookup (utilisé par columnOverrides, valueCaps, lookupAlerts)
@@ -169,7 +174,7 @@ const evaluateLookupExtensions = (
   filterConditions: any,
   formData: Record<string, any>
 ): LookupExtensionsResult => {
-  const result: LookupExtensionsResult = { activeCaps: [], activeAlerts: [] };
+  const result: LookupExtensionsResult = { activeCaps: [], activeAlerts: [], activeRowCaps: [], activeRowAlerts: [] };
   if (!filterConditions) return result;
 
   // 0. Cap Column: quelle colonne contient la valeur à comparer aux plafonds (ex: "KVA")
@@ -213,6 +218,52 @@ const evaluateLookupExtensions = (
       console.log(`[LookupAlerts] "${alert.label}": ${allMet ? '✅ ACTIVE' : '❌ inactive'}`, condResults);
       if (allMet) {
         result.activeAlerts.push({ message: alert.message, level: alert.level || 'warning', label: alert.label });
+      }
+    }
+  }
+
+  // ────── ROW EQUIVALENTS ──────
+
+  // 4. Cap Row: quelle ligne contient la valeur à comparer aux plafonds ROW
+  if (filterConditions.capRow) {
+    result.capRow = filterConditions.capRow;
+  }
+
+  // 5. Row Overrides (change dynamiquement la ligne utilisée)
+  if (filterConditions.rowOverrides?.length) {
+    for (const override of filterConditions.rowOverrides) {
+      if (!override.enabled || !override.conditions?.length || !override.targetRow) continue;
+      if (override.conditions.every((c: LookupCondition) => evaluateLookupCondition(c, formData))) {
+        result.activeRow = override.targetRow;
+        break;
+      }
+    }
+    if (!result.activeRow && filterConditions.defaultRow) {
+      result.activeRow = filterConditions.defaultRow;
+    }
+  }
+
+  // 6. Row Caps (plafonds de valeur basés sur les lignes)
+  if (filterConditions.rowCaps?.length) {
+    for (const cap of filterConditions.rowCaps) {
+      if (!cap.enabled || !cap.conditions?.length) continue;
+      if (cap.conditions.every((c: LookupCondition) => evaluateLookupCondition(c, formData))) {
+        result.activeRowCaps.push({ maxValue: cap.maxValue, scope: cap.scope || 'total', label: cap.label });
+      }
+    }
+  }
+
+  // 7. Row Alerts (alertes contextuelles basées sur les lignes)
+  if (filterConditions.rowAlerts?.length) {
+    for (const alert of filterConditions.rowAlerts) {
+      if (!alert.enabled || !alert.conditions?.length || !alert.message) continue;
+      const condResults = alert.conditions.map((c: LookupCondition) => {
+        const met = evaluateLookupCondition(c, formData);
+        return { ref: c.fieldRef, op: c.operator, val: c.value, met };
+      });
+      const allMet = condResults.every((r: any) => r.met);
+      if (allMet) {
+        result.activeRowAlerts.push({ message: alert.message, level: alert.level || 'warning', label: alert.label });
       }
     }
   }
@@ -1302,7 +1353,7 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
     // field.capabilities.table.currentTable.meta.lookup qui n'a JAMAIS de "meta"
     const fc = tableLookup.filterConditions;
     if (!fc) {
-      return { activeCaps: [], activeAlerts: [] } as LookupExtensionsResult;
+      return { activeCaps: [], activeAlerts: [], activeRowCaps: [], activeRowAlerts: [] } as LookupExtensionsResult;
     }
     // 🚀 FIX PRÉ-FILTRAGE: Enrichir avec TBL_FORM_DATA pour que les valueCaps/columnOverrides
     // voient les valeurs calculées (DISPLAY) dès le premier render
@@ -4344,6 +4395,50 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
               }}
             >
               📏 Plafond: max {cap.maxValue.toLocaleString()} VA {cap.scope === 'per_unit' ? '(par unité)' : '(total)'}
+              {cap.label && ` — ${cap.label}`}
+            </div>
+          ))}
+        </div>
+      )}
+      
+      {/* 📝 ALERTES DU LOOKUP ROW */}
+      {lookupExtensionsResult.activeRowAlerts.length > 0 && (
+        <div style={{ marginTop: 6 }}>
+          {lookupExtensionsResult.activeRowAlerts.map((alert, idx) => (
+            <div 
+              key={`row-alert-${idx}`}
+              style={{
+                padding: '6px 10px',
+                marginBottom: 4,
+                borderRadius: 4,
+                fontSize: 12,
+                fontWeight: 500,
+                background: alert.level === 'error' ? '#fff2f0' : alert.level === 'warning' ? '#fffbe6' : '#f0f9ff',
+                border: `1px solid ${alert.level === 'error' ? '#ffccc7' : alert.level === 'warning' ? '#ffe58f' : '#bae7ff'}`,
+                color: alert.level === 'error' ? '#cf1322' : alert.level === 'warning' ? '#d48806' : '#096dd9',
+              }}
+            >
+              {alert.level === 'error' ? '🔴' : alert.level === 'warning' ? '⚠️' : 'ℹ️'} {alert.message}
+            </div>
+          ))}
+        </div>
+      )}
+      {lookupExtensionsResult.activeRowCaps.length > 0 && (
+        <div style={{ marginTop: 4 }}>
+          {lookupExtensionsResult.activeRowCaps.map((cap, idx) => (
+            <div 
+              key={`row-cap-${idx}`}
+              style={{
+                padding: '4px 8px',
+                fontSize: 10,
+                color: '#d48806',
+                background: '#fffbe6',
+                border: '1px solid #ffe58f',
+                borderRadius: 4,
+                marginBottom: 2,
+              }}
+            >
+              📏 Plafond (ligne): max {cap.maxValue.toLocaleString()} {cap.scope === 'per_unit' ? '(par unité)' : '(total)'}
               {cap.label && ` — ${cap.label}`}
             </div>
           ))}
