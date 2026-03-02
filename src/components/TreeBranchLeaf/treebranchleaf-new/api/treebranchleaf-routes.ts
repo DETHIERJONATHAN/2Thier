@@ -12228,7 +12228,7 @@ router.all('/nodes/:nodeId/table/lookup', async (req, res) => {
         }
 
         // RÈGLE A1: rows[0] = A1, rows[1] = première ligne de données, etc.
-        let options;
+        let options: { value: string; label: string }[];
         
         if (rowIndex === 0) {
           // Ligne A1 sélectionnée → Extraire les en-têtes de colonnes (SANS A1 lui-même)
@@ -12251,7 +12251,50 @@ router.all('/nodes/:nodeId/table/lookup', async (req, res) => {
           }).filter(opt => opt.value !== 'undefined' && opt.value !== 'null' && opt.value !== '');
         }
 
-        return res.json({ options });
+        // 🆕 FILTRAGE COLONNES PAR CROSS-REFERENCE LIGNE (keyRow mode)
+        // Quand des filtres existent (ex: filtre sur le mois choisi par Financement),
+        // on identifie la ligne correspondante et on ne garde que les colonnes
+        // ayant des données non-vides dans cette ligne.
+        // Ex: Mois = 60 → ligne "60" a 7 colonnes remplies → on ne montre que ces 7 taux.
+        if (filters.length > 0 && Object.keys(formValues).length > 0) {
+          const resolvedFilters = await Promise.all(
+            filters.map(async (filter) => {
+              const value = await resolveFilterValueRef(filter.valueRef, formValues);
+              return { ...filter, resolvedValue: value };
+            })
+          );
+
+          for (const filter of resolvedFilters) {
+            if (filter.resolvedValue === null || filter.resolvedValue === undefined || filter.resolvedValue === '') continue;
+
+            // Trouver la ligne dont le label (colonne A) correspond à la valeur résolue
+            if (filter.column === columns[0] && (filter.operator === 'equals' || filter.operator === '=')) {
+              const matchingRowIdx = rows.findIndex(r => String(r) === String(filter.resolvedValue));
+              if (matchingRowIdx >= 0 && matchingRowIdx < data.length) {
+                const refRowData = data[matchingRowIdx] || [];
+                // Ne garder que les colonnes ayant des données non-vides dans la ligne référencée
+                options = options.filter((_opt, idx) => {
+                  const cellValue = refRowData[idx];
+                  return cellValue !== undefined && cellValue !== null && cellValue !== '';
+                });
+              }
+            }
+          }
+        }
+
+        // 🆕 DÉDUPLICATION: Supprimer les doublons (ex: 9x "3.99" → 1x "3.99")
+        const seenValues = new Set<string>();
+        options = options.filter(opt => {
+          const key = String(opt.value);
+          if (seenValues.has(key)) return false;
+          seenValues.add(key);
+          return true;
+        });
+
+        return res.json({ 
+          options,
+          filterConditions: lookupFilterConditions,
+        });
       }
 
       // CAS 2: keyColumn défini → Extraire les VALEURS de cette colonne
