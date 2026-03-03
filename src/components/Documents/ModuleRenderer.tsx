@@ -179,13 +179,37 @@ const interpolateVariables = (
     return match;
   });
   
-  // Pattern pour @value.xxx ou @select.xxx (TBL)
-  const tblPattern = /@(value|select)\.([a-zA-Z0-9_.-]+)/g;
-  result = result.replace(tblPattern, (match, _type, key) => {
-    const value = documentData.tbl?.[key];
-    if (value !== undefined && value !== null) {
-      return String(value);
+  // Pattern pour @value.xxx, @select.xxx ou @calculated.xxx (TBL)
+  const tblPattern = /@(value|select|calculated)\.([a-zA-Z0-9_.-]+)/g;
+  result = result.replace(tblPattern, (match, type, key) => {
+    // Chercher la valeur dans tbl data
+    const tbl = documentData.tbl || {};
+    
+    // 1. Cherche directement par clé
+    if (tbl[key] !== undefined && tbl[key] !== null) {
+      return String(tbl[key]);
     }
+    
+    // 2. Cherche avec le préfixe complet (@calculated.xxx, @value.xxx)
+    const fullRef = `@${type}.${key}`;
+    if (tbl[fullRef] !== undefined && tbl[fullRef] !== null) {
+      return String(tbl[fullRef]);
+    }
+    
+    // 3. Cherche dans calculatedValues (sous-objet si présent)
+    if (type === 'calculated' && tbl.calculatedValues && tbl.calculatedValues[key] !== undefined) {
+      return String(tbl.calculatedValues[key]);
+    }
+    
+    // 4. Recherche par suffixe dans les clés de tbl
+    for (const [tblKey, tblVal] of Object.entries(tbl)) {
+      if (tblKey.includes(key) || tblKey.endsWith(key)) {
+        if (tblVal !== undefined && tblVal !== null) {
+          return String(tblVal);
+        }
+      }
+    }
+    
     return match;
   });
   
@@ -668,10 +692,10 @@ const ModuleRenderer = ({
             <tfoot>
               {hasRemise && (
                 <tr style={{ borderTop: '2px solid #e8e8e8' }}>
-                  <td colSpan={3} style={{ padding: '10px 12px', textAlign: 'right', color: '#888' }}>
+                  <td colSpan={3} style={{ padding: '10px 12px', textAlign: 'right', color: '#D9791F', fontWeight: 700 }}>
                     🏷️ Remise
                   </td>
-                  <td style={{ padding: '10px 12px', textAlign: 'right', color: '#fa541c', fontWeight: 500 }}>
+                  <td style={{ padding: '10px 12px', textAlign: 'right', color: '#D9791F', fontWeight: 700 }}>
                     🌳 <span style={{ fontSize: '10px', color: '#1890ff' }}>TBL</span>
                   </td>
                 </tr>
@@ -721,26 +745,31 @@ const ModuleRenderer = ({
     const signatureBox = (label: string) => (
       <div style={{ 
         flex: 1,
-        padding: '20px',
+        padding: '16px 20px',
         border: '1px solid #e8e8e8',
         borderRadius: '8px',
         ...(isStacked ? { marginBottom: '16px' } : {}),
       }}>
-        <div style={{ fontWeight: 600, marginBottom: '8px' }}>{label}</div>
-        {config.showDate && (
-          <div style={{ fontSize: '12px', color: '#666', marginBottom: '16px' }}>
+        {/* Ligne 1 : Label + mention sur la même ligne */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: '6px' }}>
+          <div style={{ fontWeight: 600 }}>{label}</div>
+          {config.showMention !== false && (
+            <div style={{ fontSize: '11px', color: '#999', fontStyle: 'italic' }}>
+              "{config.mention || 'Lu et approuvé, bon pour accord'}"
+            </div>
+          )}
+        </div>
+        {/* Ligne 2 : Date */}
+        {config.showDate !== false && (
+          <div style={{ fontSize: '12px', color: '#666', marginBottom: '10px' }}>
             Date: ____/____/________
           </div>
         )}
-        {config.showMention && (
-          <div style={{ fontSize: '12px', color: '#666', marginBottom: '8px', fontStyle: 'italic' }}>
-            "{config.mention || 'Lu et approuvé'}"
-          </div>
-        )}
+        {/* Zone signature */}
         <div style={{ 
-          height: '80px', 
+          height: '60px', 
           borderBottom: '1px dashed #ccc',
-          marginTop: '20px',
+          marginTop: '10px',
         }}>
           <span style={{ fontSize: '11px', color: '#999' }}>Signature</span>
         </div>
@@ -992,22 +1021,38 @@ const ModuleRenderer = ({
     );
     
     const InfoBlock = (
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
         {config.showName !== false && (
           <div style={{ fontWeight: 700, fontSize: '16px', color: globalTheme.primaryColor }}>
             {companyName}
           </div>
         )}
         {config.showAddress !== false && address && (
-          <div style={{ fontSize: '13px', color: '#444', whiteSpace: 'pre-line' }}>{address}</div>
+          <div style={{ fontSize: '12px', color: '#555', display: 'flex', alignItems: 'center', gap: '4px' }}>
+            <span style={{ fontSize: '11px' }}>📍</span>
+            <span style={{ whiteSpace: 'pre-line' }}>{address}</span>
+          </div>
         )}
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '12px', fontSize: '12px', color: '#666', marginTop: '4px' }}>
-          {config.showPhone !== false && phone && <span>📞 {phone}</span>}
-          {config.showEmail !== false && email && <span>✉️ {email}</span>}
-          {config.showWebsite !== false && config.showWebsite && website && <span>🌐 {website}</span>}
-        </div>
+        {config.showPhone !== false && phone && (
+          <div style={{ fontSize: '11px', color: '#666', display: 'flex', alignItems: 'center', gap: '4px' }}>
+            <span style={{ fontSize: '11px' }}>📞</span>
+            <span>{phone}</span>
+          </div>
+        )}
+        {config.showEmail !== false && email && (
+          <div style={{ fontSize: '11px', color: '#666', display: 'flex', alignItems: 'center', gap: '4px' }}>
+            <span style={{ fontSize: '11px' }}>✉️</span>
+            <span>{email}</span>
+          </div>
+        )}
+        {config.showWebsite !== false && config.showWebsite && website && (
+          <div style={{ fontSize: '11px', color: '#666', display: 'flex', alignItems: 'center', gap: '4px' }}>
+            <span style={{ fontSize: '11px' }}>🌐</span>
+            <span>{website}</span>
+          </div>
+        )}
         {config.showTVA !== false && tva && (
-          <div style={{ fontSize: '11px', color: '#888', marginTop: '4px' }}>TVA: {tva}</div>
+          <div style={{ fontSize: '10px', color: '#888', marginTop: '2px' }}>TVA: {tva}</div>
         )}
       </div>
     );
@@ -1060,31 +1105,43 @@ const ModuleRenderer = ({
       <div style={{ ...themeStyles }}>
         {config.showTitle !== false && (
           <div style={{ 
-            fontSize: '12px', 
-            color: '#888', 
-            marginBottom: '8px',
-            textTransform: 'uppercase',
-            letterSpacing: '0.5px',
+            fontWeight: 700,
+            fontSize: '16px', 
+            color: globalTheme.primaryColor || '#1677ff', 
+            marginBottom: '4px',
           }}>
-            {title}
+            {title.toUpperCase()}
           </div>
         )}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
           {config.showName !== false && clientName && (
-            <div style={{ fontWeight: 600, fontSize: '15px' }}>{clientName}</div>
+            <div style={{ fontWeight: 600, fontSize: '14px', color: '#222' }}>
+              {clientName}{config.showCompany !== false && clientCompany ? ` — ${clientCompany}` : ''}
+            </div>
           )}
-          {config.showCompany !== false && clientCompany && (
-            <div style={{ fontSize: '14px', color: '#333' }}>{clientCompany}</div>
+          {config.showCompany !== false && clientCompany && !(config.showName !== false && clientName) && (
+            <div style={{ fontSize: '13px', color: '#333' }}>{clientCompany}</div>
           )}
           {config.showAddress !== false && clientAddress && (
-            <div style={{ fontSize: '13px', color: '#555', whiteSpace: 'pre-line' }}>{clientAddress}</div>
+            <div style={{ fontSize: '12px', color: '#555', display: 'flex', alignItems: 'center', gap: '4px' }}>
+              <span style={{ fontSize: '11px' }}>📍</span>
+              <span style={{ whiteSpace: 'pre-line' }}>{clientAddress}</span>
+            </div>
           )}
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '12px', fontSize: '12px', color: '#666', marginTop: '4px' }}>
-            {config.showEmail !== false && clientEmail && <span>✉️ {clientEmail}</span>}
-            {config.showPhone !== false && config.showPhone && clientPhone && <span>📞 {clientPhone}</span>}
-          </div>
+          {config.showPhone !== false && clientPhone && (
+            <div style={{ fontSize: '11px', color: '#666', display: 'flex', alignItems: 'center', gap: '4px' }}>
+              <span style={{ fontSize: '11px' }}>📞</span>
+              <span>{clientPhone}</span>
+            </div>
+          )}
+          {config.showEmail !== false && clientEmail && (
+            <div style={{ fontSize: '11px', color: '#666', display: 'flex', alignItems: 'center', gap: '4px' }}>
+              <span style={{ fontSize: '11px' }}>✉️</span>
+              <span>{clientEmail}</span>
+            </div>
+          )}
           {config.showTVA !== false && config.showTVA && clientTVA && (
-            <div style={{ fontSize: '11px', color: '#888', marginTop: '4px' }}>TVA: {clientTVA}</div>
+            <div style={{ fontSize: '10px', color: '#888', marginTop: '2px' }}>TVA: {clientTVA}</div>
           )}
         </div>
       </div>
@@ -1103,62 +1160,129 @@ const ModuleRenderer = ({
     const companyTVA = interpolateVariables(config.companyTVA || '{org.tva}', documentData, isEditing);
     
     // Client
-    const clientTitle = config.clientTitle || 'Client:';
     const clientName = interpolateVariables(config.clientName || '{lead.firstName} {lead.lastName}', documentData, isEditing);
     const clientCompany = interpolateVariables(config.clientCompany || '{lead.company}', documentData, isEditing);
     const clientAddress = interpolateVariables(config.clientAddress || '{lead.address}', documentData, isEditing);
     const clientEmail = interpolateVariables(config.clientEmail || '{lead.email}', documentData, isEditing);
+    const clientPhone = interpolateVariables(config.clientPhone || '{lead.phone}', documentData, isEditing);
+    const clientTVA = interpolateVariables(config.clientTVA || '{lead.tva}', documentData, isEditing);
     
-    const CompanySection = (
-      <div style={{ flex: 1 }}>
-        <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px' }}>
-          {config.showLogo !== false && config.logo && (
-            <img 
-              src={config.logo} 
-              alt="Logo" 
-              style={{ width: config.logoSize || 60, height: 'auto', objectFit: 'contain' }} 
-            />
-          )}
-          {config.showCompanyInfo !== false && (
-            <div>
-              <div style={{ fontWeight: 700, fontSize: '16px', color: globalTheme.primaryColor }}>{companyName}</div>
-              {(companyPhone || companyEmail) && (
-                <div style={{ fontSize: '11px', color: '#666', marginTop: '4px', display: 'flex', flexDirection: 'column', gap: '2px' }}>
-                  {companyPhone && <span>📞 {companyPhone}</span>}
-                  {companyEmail && <span>✉️ {companyEmail}</span>}
-                </div>
-              )}
-              <div style={{ fontSize: '12px', color: '#555', whiteSpace: 'pre-line', marginTop: '2px' }}>{companyAddress}</div>
-              {companyTVA && <div style={{ fontSize: '10px', color: '#888', marginTop: '2px' }}>TVA: {companyTVA}</div>}
-            </div>
-          )}
-        </div>
+    const iconFs = '11px';
+    const labelColor = globalTheme.primaryColor || '#1677ff';
+    const nameFs = '14px';
+    const infoFs = '12px';
+    const smallInfoFs = '11px';
+    const tvaFs = '10px';
+
+    // Ligne d'info réutilisable : icône + texte
+    const InfoLine = ({ icon, text, align, fs }: { icon: string; text: string; align: 'left' | 'right'; fs?: string }) => (
+      <div style={{
+        fontSize: fs || smallInfoFs,
+        color: '#555',
+        display: 'flex',
+        alignItems: 'center',
+        gap: '4px',
+        justifyContent: align === 'right' ? 'flex-end' : 'flex-start',
+      }}>
+        <span style={{ fontSize: iconFs }}>{icon}</span>
+        <span>{text}</span>
       </div>
     );
-    
-    const ClientSection = config.showClientInfo !== false && (
-      <div style={{ flex: 1, textAlign: layout === 'side-by-side' ? 'right' : 'left' }}>
-        <div style={{ fontSize: '11px', color: '#888', marginBottom: '6px', textTransform: 'uppercase' }}>{clientTitle}</div>
-        <div style={{ fontWeight: 600, fontSize: '14px' }}>{clientName}</div>
-        {clientCompany && <div style={{ fontSize: '13px', color: '#444' }}>{clientCompany}</div>}
-        <div style={{ fontSize: '12px', color: '#555', whiteSpace: 'pre-line' }}>{clientAddress}</div>
-        {clientEmail && <div style={{ fontSize: '11px', color: '#666', marginTop: '4px' }}>✉️ {clientEmail}</div>}
-      </div>
-    );
-    
+
     if (layout === 'stacked') {
+      // Mode empilé — pas de grid, juste les deux blocs
       return (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '24px', ...themeStyles }}>
-          {CompanySection}
-          {ClientSection}
+          <div>
+            {config.showLogo !== false && config.logo && (
+              <img src={config.logo} alt="Logo" style={{ width: config.logoSize || 60, height: 'auto', objectFit: 'contain', marginBottom: '8px' }} />
+            )}
+            <div style={{ fontWeight: 700, fontSize: '16px', color: labelColor }}>SOCIÉTÉ</div>
+            <div style={{ fontWeight: 700, fontSize: nameFs, color: '#222' }}>{companyName}</div>
+            {companyAddress && <InfoLine icon="📍" text={companyAddress} align="left" fs={infoFs} />}
+            {companyPhone && <InfoLine icon="📞" text={companyPhone} align="left" />}
+            {companyEmail && <InfoLine icon="✉️" text={companyEmail} align="left" />}
+            {companyTVA && <div style={{ fontSize: tvaFs, color: '#888' }}>TVA: {companyTVA}</div>}
+          </div>
+          <div>
+            <div style={{ fontWeight: 700, fontSize: '16px', color: labelColor }}>CLIENT</div>
+            <div style={{ fontWeight: 700, fontSize: nameFs, color: '#222' }}>{clientName}{clientCompany ? ` — ${clientCompany}` : ''}</div>
+            {clientAddress && <InfoLine icon="📍" text={clientAddress} align="left" fs={infoFs} />}
+            {clientPhone && <InfoLine icon="📞" text={clientPhone} align="left" />}
+            {clientEmail && <InfoLine icon="✉️" text={clientEmail} align="left" />}
+            {clientTVA && <div style={{ fontSize: tvaFs, color: '#888' }}>TVA: {clientTVA}</div>}
+          </div>
         </div>
       );
     }
-    
+
+    // Mode côte à côte — Logo à gauche, infos alignées
+    const logoW = (config.showLogo !== false && config.logo) ? (config.logoSize || 60) : 0;
+    const logoGap = logoW > 0 ? 12 : 0;
+
     return (
-      <div style={{ display: 'flex', justifyContent: 'space-between', gap: '32px', ...themeStyles }}>
-        {CompanySection}
-        {ClientSection}
+      <div style={{ display: 'flex', alignItems: 'flex-start', gap: `${logoGap}px`, ...themeStyles }}>
+        {/* Logo à gauche des infos société */}
+        {logoW > 0 && (
+          <img src={config.logo} alt="Logo" style={{ width: logoW, height: 'auto', objectFit: 'contain', flexShrink: 0 }} />
+        )}
+
+        {/* Grille alignée : gauche = société, droite = client */}
+        <div style={{
+          flex: 1,
+          display: 'grid',
+          gridTemplateColumns: '1fr 1fr',
+          gap: '0 32px',
+          alignItems: 'start',
+        }}>
+          {/* Ligne 1 : Labels SOCIÉTÉ / CLIENT */}
+          <div style={{ fontWeight: 700, fontSize: '16px', color: labelColor, paddingBottom: '2px' }}>
+            SOCIÉTÉ
+          </div>
+          <div style={{ fontWeight: 700, fontSize: '16px', color: labelColor, textAlign: 'right', paddingBottom: '2px' }}>
+            CLIENT
+          </div>
+
+          {/* Ligne 2 : Noms */}
+          <div style={{ fontWeight: 700, fontSize: nameFs, color: '#222', paddingBottom: '1px' }}>
+            {companyName}
+          </div>
+          <div style={{ fontWeight: 700, fontSize: nameFs, color: '#222', textAlign: 'right', paddingBottom: '1px' }}>
+            {clientName}{clientCompany ? ` — ${clientCompany}` : ''}
+          </div>
+
+          {/* Ligne 3 : Adresses */}
+          <div>
+            {companyAddress ? <InfoLine icon="📍" text={companyAddress} align="left" fs={infoFs} /> : <div>&nbsp;</div>}
+          </div>
+          <div>
+            {clientAddress ? <InfoLine icon="📍" text={clientAddress} align="right" fs={infoFs} /> : <div>&nbsp;</div>}
+          </div>
+
+          {/* Ligne 4 : Téléphones */}
+          <div>
+            {companyPhone ? <InfoLine icon="📞" text={companyPhone} align="left" /> : <div>&nbsp;</div>}
+          </div>
+          <div>
+            {clientPhone ? <InfoLine icon="📞" text={clientPhone} align="right" /> : <div>&nbsp;</div>}
+          </div>
+
+          {/* Ligne 5 : Emails */}
+          <div>
+            {companyEmail ? <InfoLine icon="✉️" text={companyEmail} align="left" /> : <div>&nbsp;</div>}
+          </div>
+          <div>
+            {clientEmail ? <InfoLine icon="✉️" text={clientEmail} align="right" /> : <div>&nbsp;</div>}
+          </div>
+
+          {/* Ligne 6 : TVA */}
+          <div>
+            {companyTVA ? <div style={{ fontSize: tvaFs, color: '#888' }}>TVA: {companyTVA}</div> : <div>&nbsp;</div>}
+          </div>
+          <div>
+            {clientTVA ? <div style={{ fontSize: tvaFs, color: '#888', textAlign: 'right' }}>TVA: {clientTVA}</div> : <div>&nbsp;</div>}
+          </div>
+        </div>
       </div>
     );
   }
@@ -1179,7 +1303,8 @@ const ModuleRenderer = ({
       alignItems: 'center',
       gap: '6px',
       padding: '6px 12px',
-      backgroundColor: '#f5f5f5',
+      backgroundColor: globalTheme.primaryColor || '#1890ff',
+      color: '#ffffff',
       borderRadius: '4px',
       fontSize: '13px',
     };
@@ -1496,8 +1621,8 @@ const ModuleRenderer = ({
       <div style={{ ...themeStyles }}>
         {config.showDiscount && discount && (
           <div style={rowStyle}>
-            <span style={labelStyle}>Remise:</span>
-            <span style={{ ...valueStyle, color: '#52c41a' }}>-{discount} {currency}</span>
+            <span style={{ ...labelStyle, color: '#D9791F', fontWeight: 700 }}>Remise:</span>
+            <span style={{ ...valueStyle, color: '#D9791F', fontWeight: 700 }}>-{discount} {currency}</span>
           </div>
         )}
         {config.showTotalHT !== false && (
@@ -1824,6 +1949,463 @@ const ModuleRenderer = ({
             {notes || 'Aucune note.'}
           </div>
         </div>
+      </div>
+    );
+  }
+
+  // ============== KPI_BANNER ==============
+  if (module.moduleId === 'KPI_BANNER') {
+    const bannerTitle = config.title || 'Votre Investissement en un coup d\'œil';
+    const showTitle = config.showTitle !== false;
+    const bannerStyle = config.style || 'gradient';
+    const gradientFrom = config.gradientFrom || '#0F5C60';
+    const gradientTo = config.gradientTo || '#0A3E42';
+    const accentColor = config.accentColor || '#D9791F';
+    const textColor = config.textColor || '#ffffff';
+    const cornerRadius = config.cornerRadius ?? 12;
+    const showMiniChart = config.showMiniChart !== false;
+    const showProgressBar = config.showProgressBar !== false;
+    const compactMode = config.compactMode !== false;
+    const layout = config.layout || 'horizontal';
+
+    // ═══ ADAPTIVE : calculer un facteur d'échelle basé sur la hauteur du conteneur ═══
+    const containerHeight = module.position?.height || 160;
+    const containerWidth = module.position?.width || 714;
+    // Référence : 160px = taille nominale (scale = 1)
+    const scaleFactor = Math.max(0.5, Math.min(2, containerHeight / 160));
+    const s = (px: number) => `${Math.round(px * scaleFactor)}px`;
+
+    // ─── Helper : formater une valeur numérique avec décimales et séparateur ───
+    const formatKpiValue = (raw: string, decimals: string, useSeparator: boolean): string => {
+      const cleaned = raw.replace(/\s/g, '').replace(',', '.');
+      const num = parseFloat(cleaned);
+      if (isNaN(num)) return raw;
+      if (decimals === 'auto' && !useSeparator) return raw;
+      let decCount: number;
+      if (decimals === 'auto') {
+        const match = cleaned.match(/\.(\d+)/);
+        decCount = match ? Math.min(match[1].length, 6) : 0;
+      } else {
+        decCount = parseInt(decimals);
+      }
+      const fixed = num.toFixed(decCount);
+      const parts = fixed.split('.');
+      if (useSeparator) {
+        parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
+      }
+      return parts.length > 1 && decCount > 0 ? `${parts[0]},${parts[1]}` : parts[0];
+    };
+
+    // Collecter tous les KPIs actifs (1 à 8) — clés plates
+    const allKpis: Array<{
+      label: string; value: string; suffix: string; icon: string; color: string;
+      valueBold: boolean; valueItalic: boolean; labelBold: boolean; labelItalic: boolean;
+    }> = [];
+    for (let i = 1; i <= 8; i++) {
+      const label = config[`kpi${i}_label`];
+      const binding = config[`kpi${i}_binding`] || '';
+      const staticValue = config[`kpi${i}_value`] || '';
+      const rawValue = binding || staticValue;
+      const suffix = config[`kpi${i}_suffix`] || '';
+      const icon = config[`kpi${i}_icon`] || '';
+      const color = config[`kpi${i}_color`] || globalTheme.primaryColor || '#0F5C60';
+      const decimals = config[`kpi${i}_decimals`] || 'auto';
+      const separator = config[`kpi${i}_separator`] !== false;
+      const valueBold = config[`kpi${i}_valueBold`] !== false;
+      const valueItalic = config[`kpi${i}_valueItalic`] === true;
+      const labelBold = config[`kpi${i}_labelBold`] === true;
+      const labelItalic = config[`kpi${i}_labelItalic`] === true;
+
+      if (!label && !rawValue) continue; // Pas configuré → skip
+
+      // Toujours tenter l'interpolation, même en mode édition, pour les bindings TBL
+      const isBinding = rawValue.startsWith('@') || rawValue.startsWith('node-formula:') || rawValue.startsWith('{');
+      let resolvedValue: string;
+      if (isBinding && documentData) {
+        // Forcer la résolution même en mode édition
+        resolvedValue = interpolateVariables(rawValue, documentData, false);
+        // Si non résolu (reste identique au brut), afficher un placeholder en édition
+        if (resolvedValue === rawValue && isEditing) {
+          resolvedValue = staticValue || '...';
+        }
+      } else {
+        resolvedValue = interpolateVariables(rawValue, documentData, isEditing);
+      }
+
+      // Appliquer le formatage numérique
+      if (resolvedValue && resolvedValue !== '—' && resolvedValue !== '...') {
+        resolvedValue = formatKpiValue(resolvedValue, decimals, separator);
+      }
+
+      if (resolvedValue || isEditing) {
+        allKpis.push({
+          label: label || `KPI ${i}`, value: resolvedValue || '—', suffix, icon, color,
+          valueBold, valueItalic, labelBold, labelItalic,
+        });
+      }
+    }
+
+    // Backward compat : lire aussi config.kpis[] (ancien format tableau)
+    if (allKpis.length === 0 && Array.isArray(config.kpis)) {
+      for (const kpi of config.kpis) {
+        if (!kpi || (!kpi.label && !kpi.value && !kpi.binding)) continue;
+        const rawVal = kpi.binding || kpi.value || '';
+        const resolved = interpolateVariables(rawVal, documentData, isEditing);
+        if (resolved || isEditing) {
+          allKpis.push({
+            label: kpi.label || '',
+            value: resolved || '—',
+            suffix: kpi.suffix || '',
+            icon: kpi.icon || '',
+            color: kpi.color || globalTheme.primaryColor || '#0F5C60',
+            valueBold: true, valueItalic: false, labelBold: false, labelItalic: false,
+          });
+        }
+      }
+    }
+
+    // Fallback si aucun KPI configuré (mode éditeur ou données manquantes) — couleurs logo 2Thier
+    if (allKpis.length === 0) {
+      allKpis.push(
+        { label: 'Économie annuelle', value: '1 200', suffix: '€/an', icon: '⚡', color: '#D9791F', valueBold: true, valueItalic: false, labelBold: false, labelItalic: false },
+        { label: 'ROI', value: '8', suffix: 'ans', icon: '🔄', color: globalTheme.primaryColor || '#0F5C60', valueBold: true, valueItalic: false, labelBold: false, labelItalic: false },
+        { label: 'Gain 15 ans', value: '18 000', suffix: '€', icon: '📈', color: '#D9791F', valueBold: true, valueItalic: false, labelBold: false, labelItalic: false },
+        { label: 'Gain 25 ans', value: '32 000', suffix: '€', icon: '🏆', color: '#0F5C60', valueBold: true, valueItalic: false, labelBold: false, labelItalic: false },
+      );
+    }
+
+    // Calculer le background selon le style
+    let bgStyle: React.CSSProperties = {};
+    let cardBgStyle: React.CSSProperties = {};
+    let borderStyle: React.CSSProperties = {};
+
+    if (bannerStyle === 'gradient') {
+      bgStyle = { background: `linear-gradient(135deg, ${gradientFrom} 0%, ${gradientTo} 100%)` };
+    } else if (bannerStyle === 'glass') {
+      bgStyle = { 
+        background: `linear-gradient(135deg, ${gradientFrom}ee 0%, ${gradientTo}cc 100%)`,
+        backdropFilter: 'blur(10px)',
+      };
+      cardBgStyle = { background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)' };
+    } else if (bannerStyle === 'solid') {
+      bgStyle = { background: gradientFrom };
+    } else if (bannerStyle === 'outline') {
+      bgStyle = { background: 'transparent', border: `3px solid ${gradientFrom}` };
+      // En mode outline, le texte utilise la couleur du gradient
+      // On override textColor pour les valeurs
+    }
+
+    const isOutline = bannerStyle === 'outline';
+    const effectiveTextColor = isOutline ? gradientFrom : textColor;
+    const effectiveLabelColor = isOutline ? '#666' : 'rgba(255,255,255,0.85)';
+
+    // Nombre de colonnes en responsive
+    const cols = allKpis.length <= 2 ? allKpis.length : allKpis.length <= 4 ? allKpis.length : Math.ceil(allKpis.length / 2);
+
+    // Trouver le ROI pour la barre de progression
+    const roiKpi = allKpis.find(k => k.suffix?.toLowerCase().includes('an'));
+    const roiValue = roiKpi ? parseFloat(roiKpi.value.replace(/[^\d.,]/g, '').replace(',', '.')) : 0;
+
+    // Trouver la valeur max pour le mini chart
+    const numericValues = allKpis.map(k => parseFloat(k.value.replace(/[^\d.,]/g, '').replace(',', '.')) || 0);
+    const maxVal = Math.max(...numericValues, 1);
+
+    return (
+      <div style={{
+        ...bgStyle,
+        borderRadius: `${cornerRadius}px`,
+        padding: '0',
+        overflow: 'hidden',
+        fontFamily: globalTheme.fontFamily || 'Inter, system-ui, sans-serif',
+        position: 'relative',
+        width: '100%',
+        height: '100%',
+        display: 'flex',
+        flexDirection: 'column',
+        boxSizing: 'border-box' as const,
+        ...themeStyles,
+      }}>
+        {/* ═══ Motif décoratif en arrière-plan ═══ */}
+        {bannerStyle !== 'outline' && scaleFactor >= 0.9 && (
+          <div style={{
+            position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
+            opacity: 0.07, pointerEvents: 'none',
+            backgroundImage: `
+              radial-gradient(circle at 20% 80%, ${accentColor} 0%, transparent 50%),
+              radial-gradient(circle at 80% 20%, ${accentColor} 0%, transparent 50%)
+            `,
+          }} />
+        )}
+
+        {/* ═══ Mention "À titre d'information" en haut à droite ═══ */}
+        <div style={{
+          position: 'absolute',
+          top: s(2),
+          right: s(4),
+          zIndex: 2,
+          fontSize: s(compactMode ? 4 : 5),
+          color: isOutline ? '#999999' : accentColor,
+          fontStyle: 'italic',
+          pointerEvents: 'none',
+          whiteSpace: 'nowrap' as const,
+          opacity: isOutline ? 0.7 : 0.85,
+        }}>
+          * À titre d'information
+        </div>
+
+        {/* ═══ Titre du bandeau ═══ */}
+        {showTitle && (
+          <div style={{
+            padding: `${Math.round(4 * scaleFactor)}px ${Math.round(10 * scaleFactor)}px ${Math.round(2 * scaleFactor)}px`,
+            position: 'relative',
+            zIndex: 1,
+            flexShrink: 0,
+          }}>
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: s(4),
+            }}>
+              <span style={{
+                fontSize: s(compactMode ? 10 : 14),
+              }}>💰</span>
+              <span style={{
+                fontSize: s(compactMode ? 8 : 11),
+                fontWeight: 700,
+                color: effectiveTextColor,
+                letterSpacing: '-0.3px',
+                textShadow: isOutline ? 'none' : '0 1px 3px rgba(0,0,0,0.2)',
+                whiteSpace: 'nowrap' as const,
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+              }}>
+                {interpolateVariables(bannerTitle, documentData, isEditing)}
+              </span>
+              {/* Ligne d'accent */}
+              <div style={{
+                flex: 1,
+                height: '2px',
+                background: accentColor,
+                borderRadius: '2px',
+              }} />
+            </div>
+          </div>
+        )}
+
+        {/* ═══ Grille des KPIs ═══ */}
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: `repeat(${allKpis.length}, 1fr)`,
+          gap: s(compactMode ? 3 : 8),
+          padding: `${Math.round(3 * scaleFactor)}px ${Math.round(compactMode ? 8 : 12) * scaleFactor}px`,
+          position: 'relative',
+          zIndex: 1,
+          flex: 1,
+          minHeight: 0,
+        }}>
+          {allKpis.map((kpi, idx) => {
+            const numericVal = parseFloat(kpi.value.replace(/[^\d.,]/g, '').replace(',', '.')) || 0;
+
+            return (
+              <div key={idx} style={{
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                justifyContent: 'center',
+                padding: `${Math.round(2 * scaleFactor)}px ${Math.round(2 * scaleFactor)}px`,
+                borderRadius: s(compactMode ? 5 : 10),
+                background: isOutline 
+                  ? `${kpi.color}10` 
+                  : 'rgba(255,255,255,0.1)',
+                border: isOutline 
+                  ? `1px solid ${kpi.color}30`
+                  : '1px solid rgba(255,255,255,0.12)',
+                position: 'relative',
+                overflow: 'hidden',
+                minHeight: 0,
+                ...cardBgStyle,
+              }}>
+                {/* Valeur + suffix sur la même ligne (icône à gauche) */}
+                <div style={{
+                  display: 'flex',
+                  alignItems: 'baseline',
+                  justifyContent: 'center',
+                  gap: '3px',
+                  whiteSpace: 'nowrap' as const,
+                  flexShrink: 0,
+                  overflow: 'hidden',
+                }}>
+                  {/* Icône à gauche de la valeur */}
+                  {kpi.icon && (
+                    <span style={{
+                      fontSize: s(compactMode
+                        ? (allKpis.length > 4 ? 9 : 11)
+                        : (allKpis.length > 4 ? 14 : 18)),
+                      lineHeight: 1,
+                      flexShrink: 0,
+                      alignSelf: 'center',
+                    }}>
+                      {kpi.icon.includes(':') ? kpi.icon.split(':').slice(1).join(':') : kpi.icon}
+                    </span>
+                  )}
+                  <span style={{
+                    fontSize: s(compactMode
+                      ? (allKpis.length > 4 ? 10 : 13)
+                      : (allKpis.length > 4 ? 16 : 22)),
+                    fontWeight: kpi.valueBold ? 800 : 400,
+                    fontStyle: kpi.valueItalic ? 'italic' : 'normal',
+                    color: isOutline ? kpi.color : '#fff',
+                    letterSpacing: '-0.5px',
+                    lineHeight: 1.1,
+                    textShadow: isOutline ? 'none' : '0 1px 3px rgba(0,0,0,0.25)',
+                  }}>
+                    {kpi.value}
+                  </span>
+                  {/* Astérisque après la valeur (rappel mention) — orange accent */}
+                  <span style={{
+                    fontSize: s(compactMode
+                      ? (allKpis.length > 4 ? 5 : 6)
+                      : (allKpis.length > 4 ? 7 : 9)),
+                    color: isOutline ? kpi.color : accentColor,
+                    opacity: isOutline ? 0.6 : 0.85,
+                    verticalAlign: 'super',
+                    lineHeight: 1,
+                    marginLeft: '-1px',
+                  }}>*</span>
+                  {kpi.suffix && (
+                    <span style={{
+                      fontSize: s(compactMode
+                        ? (allKpis.length > 4 ? 6 : 7)
+                        : (allKpis.length > 4 ? 9 : 12)),
+                      fontWeight: 500,
+                      color: isOutline ? kpi.color : '#fff',
+                      textShadow: isOutline ? 'none' : '0 1px 2px rgba(0,0,0,0.2)',
+                    }}>
+                      {kpi.suffix}
+                    </span>
+                  )}
+                </div>
+
+                {/* Label */}
+                <div style={{
+                  fontSize: s(compactMode
+                    ? (allKpis.length > 4 ? 5 : 5.5)
+                    : (allKpis.length > 4 ? 7 : 9)),
+                  color: effectiveLabelColor,
+                  textAlign: 'center' as const,
+                  lineHeight: 1.15,
+                  fontWeight: kpi.labelBold ? 700 : 500,
+                  fontStyle: kpi.labelItalic ? 'italic' : 'normal',
+                  textTransform: 'uppercase' as const,
+                  letterSpacing: '0.3px',
+                  whiteSpace: 'nowrap' as const,
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  width: '100%',
+                  flexShrink: 0,
+                }}>
+                  {kpi.label}
+                </div>
+
+                {/* Mini barre graphique par KPI */}
+                {showMiniChart && numericVal > 0 && (
+                  <div style={{
+                    marginTop: s(1),
+                    width: '80%',
+                    flexShrink: 0,
+                  }}>
+                    <div style={{
+                      width: '100%',
+                      height: s(compactMode ? 2 : 3),
+                      borderRadius: '4px',
+                      background: isOutline ? '#e5e7eb' : 'rgba(255,255,255,0.15)',
+                      overflow: 'hidden',
+                    }}>
+                      <div style={{
+                        width: '100%',
+                        height: '100%',
+                        borderRadius: '4px',
+                        background: `linear-gradient(90deg, ${accentColor}, ${accentColor}aa)`,
+                      }} />
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+
+        {/* ═══ Barre de progression ROI ═══ */}
+        {showProgressBar && roiValue > 0 && (
+          <div style={{
+            padding: `0 ${Math.round(10 * scaleFactor)}px ${Math.round(4 * scaleFactor)}px`,
+            position: 'relative',
+            zIndex: 1,
+            flexShrink: 0,
+          }}>
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: s(compactMode ? 4 : 6),
+            }}>
+              <span style={{
+                fontSize: s(compactMode ? 5.5 : 7),
+                fontWeight: 600,
+                color: effectiveLabelColor,
+                textTransform: 'uppercase' as const,
+                letterSpacing: '0.5px',
+                whiteSpace: 'nowrap' as const,
+              }}>
+                ROI
+              </span>
+              <div style={{
+                flex: 1,
+                height: s(compactMode ? 3 : 5),
+                borderRadius: '8px',
+                background: isOutline ? '#e5e7eb' : 'rgba(255,255,255,0.15)',
+                overflow: 'hidden',
+                position: 'relative',
+              }}>
+                <div style={{
+                  width: `${Math.min(100, (1 / roiValue) * 100 * 15)}%`,
+                  height: '100%',
+                  borderRadius: '8px',
+                  background: `linear-gradient(90deg, ${accentColor}, ${accentColor}cc)`,
+                  position: 'relative',
+                }}>
+                  <div style={{
+                    position: 'absolute',
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    height: '50%',
+                    background: 'linear-gradient(to bottom, rgba(255,255,255,0.4), transparent)',
+                    borderRadius: '8px 8px 0 0',
+                  }} />
+                </div>
+              </div>
+              <span style={{
+                fontSize: s(compactMode ? 6 : 8),
+                fontWeight: 700,
+                color: accentColor,
+                whiteSpace: 'nowrap' as const,
+              }}>
+                {roiValue > 0 ? `${Math.min(100, Math.round((1 / roiValue) * 100 * 15))}%` : '—'}
+              </span>
+            </div>
+            {scaleFactor >= 1.0 && (
+              <div style={{
+                fontSize: s(compactMode ? 4.5 : 6),
+                color: effectiveLabelColor,
+                textAlign: 'center' as const,
+                marginTop: s(1),
+                letterSpacing: '0.3px',
+              }}>
+                Rentabilisé en {roiValue} an{roiValue > 1 ? 's' : ''} — progression sur 15 ans
+              </div>
+            )}
+          </div>
+        )}
       </div>
     );
   }

@@ -4,6 +4,7 @@ import { UploadOutlined } from '@ant-design/icons';
 import { useDebouncedCallback } from '../../../../hooks/useDebouncedCallback';
 import { FlexibleTooltip } from './FlexibleTooltip';
 import { TOOLTIP_CONFIGS } from './tooltipConfigs';
+import { TooltipRichEditor } from '../../../../../../common/TooltipRichEditor';
 
 const { Title, Text } = Typography;
 
@@ -17,9 +18,7 @@ const PreviewField: React.FC<{ localValues: Record<string, unknown> }> = ({ loca
     
     if (helpTooltipType === 'text') {
       return helpTooltipText ? (
-        <div style={{ maxWidth: 250 }}>
-          {String(helpTooltipText)}
-        </div>
+        <div style={{ maxWidth: 250 }} dangerouslySetInnerHTML={{ __html: String(helpTooltipText).replace(/\n/g, '<br>') }} />
       ) : null;
     }
     
@@ -52,9 +51,10 @@ const PreviewField: React.FC<{ localValues: Record<string, unknown> }> = ({ loca
       return (helpTooltipText || helpTooltipImage) ? (
         <div style={{ maxWidth: 300 }}>
           {helpTooltipText && (
-            <div style={{ marginBottom: helpTooltipImage ? 8 : 0 }}>
-              {String(helpTooltipText)}
-            </div>
+            <div 
+              style={{ marginBottom: helpTooltipImage ? 8 : 0 }} 
+              dangerouslySetInnerHTML={{ __html: String(helpTooltipText).replace(/\n/g, '<br>') }} 
+            />
           )}
           {helpTooltipImage && (
             <img 
@@ -320,9 +320,10 @@ const TextPanel: React.FC<TextPanelProps> = ({ value = {}, onChange, readOnly })
         </Form.Item>
 
         <Form.Item name="helpTooltipText" label="Texte d'aide">
-          <Input.TextArea 
-            rows={2}
-            placeholder="Entrez le texte explicatif qui apparaîtra au survol du champ..."
+          <TooltipRichEditor
+            rows={4}
+            placeholder="Entrez le texte explicatif qui apparaîtra au survol du champ...
+Utilisez **gras**, *italique* ou <u>souligné</u>"
             disabled={!localValues.helpTooltipType || localValues.helpTooltipType === 'image'}
           />
         </Form.Item>

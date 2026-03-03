@@ -87,6 +87,7 @@ const ModuleConfigPanel = ({
   const { api } = useAuthenticatedApi();
   const moduleDef = getModuleById(moduleInstance.moduleId);
   const [uploadingField, setUploadingField] = useState<string | null>(null);
+  const [iconPickerOpen, setIconPickerOpen] = useState<string | null>(null);
   const lastModuleIdRef = useRef<string | null>(null);
   
   // États pour le sélecteur TBL
@@ -243,7 +244,204 @@ const ModuleConfigPanel = ({
           </Form.Item>
         );
 
-      case 'image':
+      case 'icon-picker': {
+        // ═══ Bibliothèque d'icônes avec mapping vers catégorie vectorielle PDF ═══
+        // Chaque emoji est mappé vers une clé icoFns du renderer PDF
+        // Format stocké : "icoCategory:emoji" (ex: "lightning:⚡")
+        // Le PDF extrait la catégorie, le frontend extrait l'emoji
+        
+        // Mapping emoji → catégorie vectorielle icoFns
+        const EMOJI_TO_CAT: Record<string, string> = {
+          // ⚡ energy → lightning / sun / fire / leaf / drop / globe
+          '⚡': 'lightning', '🔋': 'lightning', '🔌': 'lightning', '🪫': 'lightning',
+          '💡': 'sun', '☀️': 'sun', '🌞': 'sun', '🌤️': 'sun', '🔆': 'sun',
+          '♻️': 'leaf', '🌱': 'leaf', '🍃': 'leaf', '🌿': 'leaf',
+          '🌍': 'globe', '🏭': 'house', '⛽': 'car', '🛢️': 'gear',
+          '💨': 'drop', '🌊': 'drop', '🔥': 'fire',
+          // 💰 money → coin / diamond / chart / target
+          '💰': 'coin', '💵': 'coin', '💶': 'coin', '💷': 'coin', '💸': 'coin',
+          '🪙': 'coin', '💎': 'diamond', '🏦': 'house', '💳': 'coin', '🧾': 'chart',
+          '📊': 'chart', '📈': 'chart', '📉': 'chart', '💹': 'chart',
+          '🤑': 'coin', '🏧': 'coin', '💲': 'coin', '🫰': 'coin', '🎯': 'target', '🎰': 'diamond',
+          // ⏱️ time → clock / leaf / chart / star
+          '⏱️': 'clock', '⏰': 'clock', '🕐': 'clock', '🕑': 'clock', '🕒': 'clock',
+          '🕓': 'clock', '🕔': 'clock', '🕕': 'clock', '⏳': 'clock', '⌛': 'clock',
+          '📅': 'clock', '📆': 'clock', '🔄': 'leaf', '🔁': 'leaf', '🔃': 'leaf',
+          '⏩': 'clock', '⏪': 'clock', '🗓️': 'clock', '📌': 'target', '🎗️': 'star',
+          // 📊 chart / données
+          '📋': 'chart', '📝': 'chart', '📑': 'chart', '🧮': 'chart',
+          '📐': 'chart', '📏': 'chart', '🔢': 'chart', '🔣': 'chart',
+          '➕': 'chart', '➖': 'chart', '✖️': 'chart', '➗': 'chart',
+          '💯': 'trophy', '🔟': 'chart', '📃': 'chart', '📄': 'chart', '📜': 'chart',
+          // 🏆 trophy / star / check / person
+          '🏆': 'trophy', '🥇': 'trophy', '🥈': 'trophy', '🥉': 'trophy',
+          '🎖️': 'trophy', '🏅': 'trophy', '⭐': 'star', '🌟': 'star',
+          '✨': 'star', '💫': 'star', '🎉': 'star', '🎊': 'star',
+          '👏': 'person', '👍': 'person', '✅': 'check', '☑️': 'check', '✔️': 'check',
+          '🙌': 'person', '💪': 'person', '🚀': 'car',
+          // 🌿 nature → leaf / drop / sun / gear
+          '🍀': 'leaf', '🌳': 'leaf', '🌲': 'leaf', '🪴': 'leaf',
+          '🌾': 'leaf', '🌻': 'leaf', '🌸': 'leaf', '🌺': 'leaf',
+          '🦋': 'leaf', '🐝': 'leaf', '🌈': 'star', '☁️': 'drop', '🌧️': 'drop',
+          '❄️': 'drop', '🌡️': 'sun', '🔬': 'gear', '🧪': 'gear',
+          // 🏠 building → house / gear
+          '🏠': 'house', '🏡': 'house', '🏢': 'house', '🏗️': 'house', '🏘️': 'house',
+          '🏰': 'house', '🏛️': 'house', '🔧': 'gear', '🔨': 'gear', '⚙️': 'gear',
+          '🛠️': 'gear', '🧱': 'house', '🪟': 'house', '🪜': 'gear', '🚪': 'house',
+          '🏚️': 'house', '📡': 'gear', '🏙️': 'house', '🔩': 'gear', '🪛': 'gear',
+          // 🚗 transport → car
+          '🚗': 'car', '🚕': 'car', '🚙': 'car', '🚌': 'car', '🚐': 'car',
+          '🚎': 'car', '🚲': 'car', '🛵': 'car', '🏎️': 'car',
+          '✈️': 'car', '🚢': 'car', '🚂': 'car', '🚁': 'car', '🛸': 'car',
+          '🚚': 'car', '🛒': 'car', '🛤️': 'car', '🗺️': 'globe',
+          // 💻 tech → gear / globe / shield / person
+          '💻': 'gear', '🖥️': 'gear', '📱': 'gear', '📲': 'gear', '⌨️': 'gear',
+          '🖱️': 'gear', '🖨️': 'gear', '📶': 'gear', '🔗': 'chat', '🌐': 'globe',
+          '🔒': 'shield', '🔓': 'shield', '🛡️': 'shield', '🤖': 'person', '🧠': 'person',
+          '📸': 'gear', '🎥': 'gear', '📹': 'gear', '🔍': 'target',
+          // 👥 people → person
+          '👤': 'person', '👥': 'person', '👨‍💼': 'person', '👩‍💼': 'person', '🤝': 'person',
+          '👨‍👩‍👧‍👦': 'person', '👷': 'person', '👨‍🔧': 'person', '👩‍🏫': 'person', '👨‍⚕️': 'person',
+          '🧑‍💻': 'person', '👨‍🎨': 'person', '👩‍🔬': 'person', '🧑‍🌾': 'person', '👨‍🍳': 'person',
+          '💼': 'person', '🎓': 'person', '📞': 'person', '✉️': 'person', '📧': 'person',
+          // 🎯 misc → target / shield / drop / gear / bell / chat / heart
+          '🔑': 'shield', '🗝️': 'shield', '🧲': 'gear', '🧊': 'drop', '🪨': 'house',
+          '💧': 'drop', '🩺': 'gear', '🎲': 'diamond', '🎮': 'gear', '🎵': 'bell',
+          '🔔': 'bell', '📣': 'bell', '💬': 'chat',
+          '❤️': 'heart', '🩷': 'heart', '💜': 'heart', '💙': 'heart', '💚': 'heart', '🧡': 'heart',
+        };
+
+        const ICON_LIBRARY: Record<string, { label: string; icons: string[] }> = {
+          energy: { label: '⚡ Énergie', icons: ['⚡', '🔋', '🔌', '💡', '☀️', '🌞', '🌤️', '🔆', '♻️', '🌱', '🍃', '🌿', '🌍', '🏭', '⛽', '🛢️', '💨', '🌊', '🔥', '🪫'] },
+          money: { label: '💰 Finance', icons: ['💰', '💵', '💶', '💷', '💸', '🪙', '💎', '🏦', '💳', '🧾', '📊', '📈', '📉', '💹', '🤑', '🏧', '💲', '🫰', '🎯', '🎰'] },
+          time: { label: '⏱️ Temps', icons: ['⏱️', '⏰', '🕐', '🕑', '🕒', '🕓', '🕔', '🕕', '⏳', '⌛', '📅', '📆', '🔄', '🔁', '🔃', '⏩', '⏪', '🗓️', '📌', '🎗️'] },
+          chart: { label: '📊 Données', icons: ['📊', '📈', '📉', '📋', '📝', '📑', '🧮', '📐', '📏', '🔢', '🔣', '➕', '➖', '✖️', '➗', '💯', '🔟', '📃', '📄', '📜'] },
+          trophy: { label: '🏆 Succès', icons: ['🏆', '🥇', '🥈', '🥉', '🎖️', '🏅', '⭐', '🌟', '✨', '💫', '🎉', '🎊', '👏', '👍', '✅', '☑️', '✔️', '🙌', '💪', '🚀'] },
+          nature: { label: '🌿 Nature', icons: ['🌿', '🌱', '🍀', '🍃', '🌳', '🌲', '🪴', '🌾', '🌻', '🌸', '🌺', '🦋', '🐝', '🌈', '☁️', '🌧️', '❄️', '🌡️', '🔬', '🧪'] },
+          building: { label: '🏠 Bâtiment', icons: ['🏠', '🏡', '🏢', '🏗️', '🏘️', '🏰', '🏛️', '🔧', '🔨', '⚙️', '🛠️', '🧱', '🪟', '🪜', '🚪', '🏚️', '📡', '🏙️', '🔩', '🪛'] },
+          transport: { label: '🚗 Transport', icons: ['🚗', '🚕', '🚙', '🚌', '🚐', '🚎', '🚲', '🛵', '🏎️', '🚀', '✈️', '🚢', '🚂', '🚁', '🛸', '🚚', '🛒', '⛽', '🛤️', '🗺️'] },
+          tech: { label: '💻 Tech', icons: ['💻', '🖥️', '📱', '📲', '⌨️', '🖱️', '🖨️', '📡', '📶', '🔗', '🌐', '🔒', '🔓', '🛡️', '🤖', '🧠', '📸', '🎥', '📹', '🔍'] },
+          people: { label: '👥 Personnes', icons: ['👤', '👥', '👨‍💼', '👩‍💼', '🤝', '👨‍👩‍👧‍👦', '👷', '👨‍🔧', '👩‍🏫', '👨‍⚕️', '🧑‍💻', '👨‍🎨', '👩‍🔬', '🧑‍🌾', '👨‍🍳', '💼', '🎓', '📞', '✉️', '📧'] },
+          misc: { label: '🎯 Divers', icons: ['🎯', '🔑', '🗝️', '🧲', '🧊', '🪨', '💧', '🩺', '🎲', '🎮', '🎵', '🔔', '📣', '💬', '❤️', '🩷', '💜', '💙', '💚', '🧡'] },
+        };
+        
+        // Extraire l'emoji d'affichage depuis la valeur stockée (format "cat:emoji" ou emoji brut)
+        const rawIcon = form.getFieldValue(field.key) || moduleInstance.config?.[field.key] || '';
+        const currentIcon = rawIcon.includes(':') ? rawIcon.split(':').slice(1).join(':') : rawIcon;
+        const isPickerOpen = iconPickerOpen === field.key;
+        
+        const selectIcon = (icon: string) => {
+          if (!icon) {
+            // Suppression
+            form.setFieldValue(field.key, '');
+            onUpdate({ config: { ...moduleInstance.config, [field.key]: '' } });
+            setIconPickerOpen(null);
+            return;
+          }
+          // Stocker au format "category:emoji" pour que le PDF puisse lire la catégorie directement
+          const cat = EMOJI_TO_CAT[icon] || 'dot';
+          const storedValue = `${cat}:${icon}`;
+          form.setFieldValue(field.key, storedValue);
+          onUpdate({ config: { ...moduleInstance.config, [field.key]: storedValue } });
+          setIconPickerOpen(null);
+        };
+        
+        return (
+          <Form.Item {...commonProps} key={field.key}>
+            <div>
+              {/* Bouton d'ouverture avec aperçu */}
+              <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                <Button
+                  onClick={() => setIconPickerOpen(isPickerOpen ? null : field.key)}
+                  style={{
+                    flex: 1,
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    justifyContent: 'flex-start',
+                    height: '36px',
+                  }}
+                >
+                  {currentIcon ? (
+                    <span style={{ fontSize: '20px', lineHeight: 1 }}>{currentIcon}</span>
+                  ) : (
+                    <span style={{ color: '#888' }}>Choisir une icône…</span>
+                  )}
+                  {currentIcon && <span style={{ fontSize: '12px', color: '#aaa' }}>{currentIcon}</span>}
+                </Button>
+                {currentIcon && (
+                  <Button
+                    size="small"
+                    danger
+                    icon={<DeleteOutlined />}
+                    onClick={() => selectIcon('')}
+                  />
+                )}
+              </div>
+
+              {/* Panneau d'icônes */}
+              {isPickerOpen && (
+                <div style={{
+                  marginTop: '8px',
+                  border: '1px solid #444',
+                  borderRadius: '8px',
+                  backgroundColor: '#1f1f1f',
+                  maxHeight: '320px',
+                  overflowY: 'auto',
+                  padding: '8px',
+                }}>
+                  {/* Champ de saisie manuelle */}
+                  <div style={{ marginBottom: '8px', paddingBottom: '8px', borderBottom: '1px solid #333' }}>
+                    <Input
+                      size="small"
+                      placeholder="Coller un emoji ou taper un caractère…"
+                      style={{ width: '100%' }}
+                      onChange={(e) => {
+                        const val = e.target.value.trim();
+                        if (val) selectIcon(val);
+                      }}
+                    />
+                  </div>
+                  
+                  {/* Grille par catégorie */}
+                  {Object.entries(ICON_LIBRARY).map(([catKey, cat]) => (
+                    <div key={catKey} style={{ marginBottom: '8px' }}>
+                      <div style={{ fontSize: '11px', color: '#888', marginBottom: '4px', fontWeight: 600 }}>
+                        {cat.label}
+                      </div>
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '2px' }}>
+                        {cat.icons.map((icon) => (
+                          <div
+                            key={icon}
+                            onClick={() => selectIcon(icon)}
+                            style={{
+                              width: '32px',
+                              height: '32px',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              fontSize: '18px',
+                              cursor: 'pointer',
+                              borderRadius: '4px',
+                              backgroundColor: currentIcon === icon ? '#1677ff33' : 'transparent',
+                              border: currentIcon === icon ? '1px solid #1677ff' : '1px solid transparent',
+                              transition: 'all 0.15s',
+                            }}
+                            onMouseEnter={(e) => { (e.target as HTMLElement).style.backgroundColor = '#ffffff15'; }}
+                            onMouseLeave={(e) => { (e.target as HTMLElement).style.backgroundColor = currentIcon === icon ? '#1677ff33' : 'transparent'; }}
+                          >
+                            {icon}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </Form.Item>
+        );
+      }
         const currentImageUrl = form.getFieldValue(field.key) || moduleInstance.config?.[field.key];
         // N'afficher l'aperçu que si c'est une vraie URL ou du base64
         const isValidImage = currentImageUrl && (

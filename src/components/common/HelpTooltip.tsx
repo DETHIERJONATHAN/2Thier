@@ -2,6 +2,20 @@ import React, { useState } from 'react';
 import { InfoCircleOutlined } from '@ant-design/icons';
 import { useImageModal } from './ImageModal';
 
+// 🎨 Composant interne pour le rendu riche (HTML) dans les tooltips
+// Convertit les \n en <br> pour respecter les retours à la ligne du texte brut
+const RichText: React.FC<{ children: string }> = ({ children }) => {
+  // Si le texte contient déjà des balises HTML (<b>, <div>, <br>, etc.), 
+  // on convertit juste les \n restants en <br>
+  const html = (children || '').replace(/\n/g, '<br>');
+  return (
+    <div 
+      style={{ lineHeight: 1.6 }}
+      dangerouslySetInnerHTML={{ __html: html }} 
+    />
+  );
+};
+
 /**
  * 🚨 ATTENTION: CECI EST LE FICHIER TOOLTIP PRINCIPAL ! 🚨
  * 
@@ -44,7 +58,7 @@ export const HelpTooltip: React.FC<HelpTooltipProps> = ({
   const [tooltipPosition, setTooltipPosition] = useState({ x: 0, y: 0 });
   
   // 🖼️ MODAL PLEIN ÉCRAN - Hook pour ouvrir images/texte en grand
-  const { openModal, ImageModalComponent } = useImageModal();
+  const { openModal, openRichModal, ImageModalComponent } = useImageModal();
 
   // Ne rien afficher si pas de tooltip configuré
   if (!type || type === 'none') {
@@ -77,6 +91,7 @@ export const HelpTooltip: React.FC<HelpTooltipProps> = ({
   };
 
   // 🚀 FONCTION PRINCIPALE - Clic sur le contenu pour ouvrir en plein écran
+  // Utilise openRichModal pour garder la MÊME mise en page que le tooltip (gras, italique, souligné, espaces)
   const handleContentClick = () => {
     console.log('🖼️📝 CLIC SUR CONTENU TOOLTIP COMPLET!');
     setIsTooltipVisible(false);
@@ -87,109 +102,13 @@ export const HelpTooltip: React.FC<HelpTooltipProps> = ({
       return;
     }
     
-    // Si on a juste du texte ou texte + image, créer un canvas combiné
-    const canvas = document.createElement('canvas');
-    const ctx = canvas.getContext('2d');
-    if (ctx) {
-      // Configurer la taille du canvas
-      canvas.width = 1000;
-      let canvasHeight = 100; // Marge de départ
-      
-      // Calculer la hauteur nécessaire pour le texte
-      if (text) {
-        const words = String(text).split(' ');
-        const maxWidth = canvas.width - 80;
-        ctx.font = '24px Arial, sans-serif';
-        let lines = 1;
-        let line = '';
-        
-        for (let n = 0; n < words.length; n++) {
-          const testLine = line + words[n] + ' ';
-          const metrics = ctx.measureText(testLine);
-          if (metrics.width > maxWidth && n > 0) {
-            lines++;
-            line = words[n] + ' ';
-          } else {
-            line = testLine;
-          }
-        }
-        canvasHeight += lines * 35 + 40; // 35px par ligne + marge
-      }
-      
-      // Si on a une image, ajouter de la place pour elle
-      if (image) {
-        canvasHeight += 400; // Place pour l'image
-      }
-      
-      canvas.height = canvasHeight;
-      
-      // Fond blanc
-      ctx.fillStyle = '#ffffff';
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
-      
-      let currentY = 40;
-      
-      // Dessiner le texte en premier
-      if (text) {
-        ctx.fillStyle = '#000000';
-        ctx.font = '24px Arial, sans-serif';
-        ctx.textAlign = 'left';
-        ctx.textBaseline = 'top';
-        
-        const words = String(text).split(' ');
-        let line = '';
-        const lineHeight = 35;
-        const maxWidth = canvas.width - 80;
-        
-        for (let n = 0; n < words.length; n++) {
-          const testLine = line + words[n] + ' ';
-          const metrics = ctx.measureText(testLine);
-          if (metrics.width > maxWidth && n > 0) {
-            ctx.fillText(line, 40, currentY);
-            line = words[n] + ' ';
-            currentY += lineHeight;
-          } else {
-            line = testLine;
-          }
-        }
-        ctx.fillText(line, 40, currentY);
-        currentY += lineHeight + 20; // Espace après le texte
-      }
-      
-      // Dessiner l'image ensuite
-      if (image) {
-        const img = new Image();
-        img.onload = () => {
-          // Calculer les dimensions pour que l'image tienne dans l'espace restant
-          const maxImgWidth = canvas.width - 80;
-          const maxImgHeight = 350;
-          let imgWidth = img.width;
-          let imgHeight = img.height;
-          
-          if (imgWidth > maxImgWidth) {
-            imgHeight = (imgHeight * maxImgWidth) / imgWidth;
-            imgWidth = maxImgWidth;
-          }
-          if (imgHeight > maxImgHeight) {
-            imgWidth = (imgWidth * maxImgHeight) / imgHeight;
-            imgHeight = maxImgHeight;
-          }
-          
-          // Centrer l'image
-          const imgX = (canvas.width - imgWidth) / 2;
-          ctx.drawImage(img, imgX, currentY, imgWidth, imgHeight);
-          
-          // Convertir en image et ouvrir la modal
-          const dataURL = canvas.toDataURL();
-          openModal(dataURL, 'Aide complète', 'Aide');
-        };
-        img.src = String(image);
-      } else {
-        // Pas d'image, juste convertir le texte
-        const dataURL = canvas.toDataURL();
-        openModal(dataURL, 'Aide complète', 'Aide');
-      }
-    }
+    // Pour texte seul ou texte + image : ouvrir la modal riche avec le HTML formaté
+    openRichModal({
+      title: 'Aide complète',
+      htmlContent: text ? String(text) : null,
+      imageSrc: image ? String(image) : null,
+      category: 'Aide'
+    });
   };
 
   // 🎨 RENDU DU CONTENU - Construction du JSX selon le type (text/image/both)
@@ -215,7 +134,7 @@ export const HelpTooltip: React.FC<HelpTooltipProps> = ({
             e.currentTarget.style.backgroundColor = 'transparent';
           }}
         >
-          {String(text)}
+          <RichText>{String(text)}</RichText>
           <div style={{ 
             fontSize: '11px', 
             color: '#ccc', 
@@ -294,7 +213,7 @@ export const HelpTooltip: React.FC<HelpTooltipProps> = ({
                 marginBottom: image ? 8 : 0
               }}
             >
-              {String(text)}
+              <RichText>{String(text)}</RichText>
             </div>
           )}
           {image && (

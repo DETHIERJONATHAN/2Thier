@@ -8,7 +8,7 @@
  * - Configuration du module sélectionné à droite
  */
 
-import { useState, useCallback, useMemo, useEffect } from 'react';
+import { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import { Button, message, Space, Modal, Tag, Tooltip, Switch, Spin, Tabs } from 'antd';
 import { 
   SaveOutlined, 
@@ -161,7 +161,18 @@ const PageBuilder = ({ templateId, initialConfig, onSave, onClose }: PageBuilder
         
         // Charger le template pour le globalTheme
         const template = await api.get(`/api/documents/templates/${templateId}`) as any;
-        console.log('📥 [PageBuilder] Template chargé, globalTheme:', !!template?.globalTheme);
+        console.log('📥 [PageBuilder] Template chargé, globalTheme:', !!template?.globalTheme, 'DocumentTheme:', !!template?.DocumentTheme);
+        
+        // Priorité : globalTheme > DocumentTheme (DB) > défaut
+        const loadedTheme = template?.globalTheme || (template?.DocumentTheme ? {
+          primaryColor: template.DocumentTheme.primaryColor,
+          secondaryColor: template.DocumentTheme.secondaryColor,
+          accentColor: template.DocumentTheme.accentColor,
+          textColor: template.DocumentTheme.textColor,
+          backgroundColor: template.DocumentTheme.backgroundColor,
+          fontFamily: template.DocumentTheme.fontFamily,
+          fontSize: template.DocumentTheme.fontSize,
+        } : null);
         
         if (sections && sections.length > 0) {
           // Convertir les sections en pages
@@ -186,7 +197,7 @@ const PageBuilder = ({ templateId, initialConfig, onSave, onClose }: PageBuilder
             setConfig(prev => ({
               ...prev,
               pages,
-              globalTheme: template?.globalTheme || prev.globalTheme,
+              globalTheme: loadedTheme || prev.globalTheme,
             }));
             
             setEditorState(prev => ({
@@ -445,7 +456,7 @@ const PageBuilder = ({ templateId, initialConfig, onSave, onClose }: PageBuilder
           x: 40 + offsetX,
           y: 40 + offsetY,
           width: 714, // PAGE_WIDTH - 80 (marges)
-          height: moduleId === 'TITLE' ? 60 : moduleId === 'IMAGE' ? 200 : moduleId === 'TABLE' ? 300 : 100,
+          height: moduleId === 'TITLE' ? 60 : moduleId === 'IMAGE' ? 200 : moduleId === 'TABLE' ? 300 : moduleId === 'KPI_BANNER' ? 160 : 100,
         };
 
     const newModule: ModuleInstance = {
@@ -844,6 +855,33 @@ const PageBuilder = ({ templateId, initialConfig, onSave, onClose }: PageBuilder
       setSaving(false);
     }
   }, [api, config, templateId, onSave]);
+
+  // ============== AUTO-SAVE (debounced 1.5s) ==============
+  const autoSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const isFirstRender = useRef(true);
+  const configJsonRef = useRef<string>('');
+
+  useEffect(() => {
+    // Ne pas sauvegarder au premier rendu ni pendant le chargement
+    if (isFirstRender.current || loading) {
+      isFirstRender.current = false;
+      try { configJsonRef.current = JSON.stringify(config); } catch {}
+      return;
+    }
+    // Vérifier que la config a VRAIMENT changé (comparaison JSON)
+    let newJson = '';
+    try { newJson = JSON.stringify(config); } catch {}
+    if (newJson === configJsonRef.current) return;
+    configJsonRef.current = newJson;
+
+    // Debounce : sauvegarder 1.5s après le dernier changement
+    if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current);
+    autoSaveTimer.current = setTimeout(() => {
+      console.log('💾 [AUTO-SAVE] ★ Sauvegarde automatique déclenchée ★');
+      handleSave();
+    }, 1500);
+    return () => { if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current); };
+  }, [config]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ============== RENDER ==============
 

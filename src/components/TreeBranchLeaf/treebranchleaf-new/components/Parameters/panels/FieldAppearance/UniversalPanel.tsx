@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState, useCallback } from 'react';
 import { Card, ColorPicker, Divider, Form, Input, InputNumber, Select, Switch, Typography, Upload, Button, Tooltip, message } from 'antd';
 import { UploadOutlined } from '@ant-design/icons';
 import { useDebouncedCallback } from '../../../../hooks/useDebouncedCallback';
+import { TooltipRichEditor } from '../../../../../../common/TooltipRichEditor';
 
 const { Title, Text } = Typography;
 
@@ -870,7 +871,11 @@ const UniversalPanel: React.FC<UniversalPanelProps> = ({ value = {}, onChange, r
             />
           </Form.Item>
           <Form.Item name="helpTooltipText" label="Texte">
-            <Input.TextArea rows={2} placeholder="Explication supplémentaire" />
+            <TooltipRichEditor
+              rows={4}
+              placeholder="Explication supplémentaire...
+Utilisez **gras**, *italique* ou <u>souligné</u>"
+            />
           </Form.Item>
           <Form.Item name="helpTooltipImage" label="Image">
             <Upload

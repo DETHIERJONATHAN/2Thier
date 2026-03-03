@@ -162,6 +162,7 @@ export class DocumentPdfRenderer {
   private contentWidth: number;
   private currentY: number;
   private imageCache: Map<string, Buffer> = new Map(); // Cache pour les images pré-chargées
+  private emojiPngCache: Map<string, string> = new Map(); // Cache emoji -> chemin PNG local
   private scaleX: number = 1;
   private scaleY: number = 1;
   private scaleFactor: number = 1;
@@ -418,6 +419,94 @@ export class DocumentPdfRenderer {
   /**
    * Pré-charge les images externes en parallèle
    */
+  /**
+   * Convertit un emoji en nom de fichier Twemoji (codepoints hex séparés par des tirets)
+   */
+  private emojiToTwemojiHex(emoji: string): string {
+    const codepoints: string[] = [];
+    for (const char of emoji) {
+      const cp = char.codePointAt(0);
+      if (cp && cp > 0x7F && cp !== 0xFE0F && cp !== 0x200D && cp !== 0x200B) {
+        codepoints.push(cp.toString(16));
+      }
+    }
+    return codepoints.join('-');
+  }
+
+  /**
+   * Pré-charge les images PNG Twemoji pour tous les emojis KPI utilisés dans le document.
+   * Les télécharge depuis le CDN et les met en cache local dans /tmp/emoji-cache/.
+   */
+  private async preloadEmojiPngs(): Promise<void> {
+    // Scanner toutes les sections pour trouver les emojis KPI
+    const emojis = new Set<string>();
+    for (const section of this.ctx.template.sections || []) {
+      const modules = section.config?.modules || [];
+      for (const mod of modules) {
+        const c = mod.config || {};
+        for (let i = 1; i <= 8; i++) {
+          const rawIcon = c[`kpi${i}_icon`] || '';
+          if (!rawIcon) continue;
+          // Extraire l'emoji depuis le format "cat:emoji"
+          const emoji = rawIcon.includes(':') ? rawIcon.split(':').slice(1).join(':') : rawIcon;
+          if (emoji.trim()) emojis.add(emoji.trim());
+        }
+        // Aussi scanner le tableau kpis[] en fallback
+        if (Array.isArray(c.kpis)) {
+          for (const kpi of c.kpis) {
+            if (kpi?.icon) emojis.add(kpi.icon.trim());
+          }
+        }
+      }
+    }
+
+    // Toujours pré-charger l'emoji 🏷️ pour la ligne Remise
+    emojis.add('🏷️');
+
+    if (emojis.size === 0) return;
+
+    const cacheDir = '/tmp/emoji-cache';
+    if (!fs.existsSync(cacheDir)) fs.mkdirSync(cacheDir, { recursive: true });
+
+    const downloadPromises = [...emojis].map(async (emoji) => {
+      const hex = this.emojiToTwemojiHex(emoji);
+      if (!hex) return;
+
+      const cachePath = path.join(cacheDir, `${hex}.png`);
+
+      // Si déjà en cache sur disque, juste enregistrer le chemin
+      if (fs.existsSync(cachePath) && fs.statSync(cachePath).size > 100) {
+        this.emojiPngCache.set(emoji, cachePath);
+        return;
+      }
+
+      // Télécharger depuis Twemoji CDN
+      const urls = [
+        `https://cdn.jsdelivr.net/gh/twitter/twemoji@latest/assets/72x72/${hex}.png`,
+        `https://cdn.jsdelivr.net/gh/jdecked/twemoji@latest/assets/72x72/${hex}.png`,
+      ];
+
+      for (const url of urls) {
+        try {
+          const resp = await fetch(url, { signal: AbortSignal.timeout(5000) });
+          if (resp.ok) {
+            const buf = Buffer.from(await resp.arrayBuffer());
+            fs.writeFileSync(cachePath, buf);
+            this.emojiPngCache.set(emoji, cachePath);
+            console.log(`📄 [PDF] Emoji ${emoji} → ${hex}.png (${buf.length}B)`);
+            return;
+          }
+        } catch { /* try next */ }
+      }
+      console.warn(`📄 [PDF] Emoji non trouvé sur Twemoji: ${emoji} (${hex})`);
+    });
+
+    await Promise.all(downloadPromises);
+    if (this.emojiPngCache.size > 0) {
+      console.log(`📄 [PDF] ${this.emojiPngCache.size} emojis KPI pré-chargés`);
+    }
+  }
+
   private async preloadImages(): Promise<void> {
     const urls = this.collectImageUrls();
     if (urls.length === 0) return;
@@ -454,6 +543,8 @@ export class DocumentPdfRenderer {
   async render(): Promise<Buffer> {
     // Pré-charger les images externes avant le rendu
     await this.preloadImages();
+    // Pré-charger les emojis KPI en PNG (Twemoji)
+    await this.preloadEmojiPngs();
     
     return new Promise((resolve, reject) => {
       const chunks: Buffer[] = [];
@@ -1038,7 +1129,8 @@ export class DocumentPdfRenderer {
       }
     }
 
-    console.log(`📄 [PDF] Module ${moduleType}: PageBuilder(${position.x ?? 0},${position.y ?? 0}) -> PDF(${rect.x.toFixed(1)},${rect.y.toFixed(1)}) size ${rect.width.toFixed(1)}x${rect.height.toFixed(1)}`);
+    console.log(`📄 [PDF] ★★★ FRESH CODE ★★★ Module ${moduleType}: PageBuilder(${position.x ?? 0},${position.y ?? 0}) -> PDF(${rect.x.toFixed(1)},${rect.y.toFixed(1)}) size ${rect.width.toFixed(1)}x${rect.height.toFixed(1)}`);
+    // debug dispatch removed
 
     this.doc.save();
     try {
@@ -1096,6 +1188,9 @@ export class DocumentPdfRenderer {
           break;
         case 'CONTACT_INFO':
           this.renderModuleContactInfo(effectiveConfig, rect.x, rect.y, rect.width, rect.height);
+          break;
+        case 'KPI_BANNER':
+          this.renderModuleKpiBanner(effectiveConfig, rect.x, rect.y, rect.width, rect.height);
           break;
         default:
           console.warn(`📄 [PDF] Module type inconnu: ${moduleType}`);
@@ -1692,10 +1787,19 @@ export class DocumentPdfRenderer {
 
     // Remise
     if (hasRemise) {
-      this.doc
-        .fontSize(this.scaleFontSize(10))
-        .font('Helvetica')
-        .fillColor('#fa541c');
+      const remFs = this.scaleFontSize(10);
+      this.doc.fontSize(remFs).font('Helvetica-Bold').fillColor('#D9791F');
+      // Icône 🏷️ en PNG Twemoji (même système que le bandeau KPI)
+      const remTextW = this.doc.widthOfString('Remise');
+      const remTextX = labelX + labelW - remTextW;
+      const tagS = remFs + 2;
+      const tagPng = this.emojiPngCache.get('🏷️');
+      if (tagPng && fs.existsSync(tagPng)) {
+        try {
+          this.doc.image(tagPng, remTextX - tagS - 3, currentY - 1, { width: tagS, height: tagS });
+        } catch (e) { console.warn('PDF tag icon error:', e); }
+      }
+      this.doc.fontSize(remFs).font('Helvetica-Bold').fillColor('#D9791F');
       this.doc.text('Remise', labelX, currentY, { width: labelW, align: 'right' });
       this.doc.text(`- ${resolveAndFormat(config.remiseSource)}`, valX, currentY, { width: valW, align: 'right' });
       currentY += 17;
@@ -1838,16 +1942,17 @@ export class DocumentPdfRenderer {
     const companyTVA = this.substituteVariables(config.companyTVA || '{org.tva}');
     
     // Client
-    const clientTitle = config.clientTitle || 'CLIENT:';
     const clientName = this.substituteVariables(config.clientName || '{lead.firstName} {lead.lastName}');
     const clientCompany = this.substituteVariables(config.clientCompany || '{lead.company}');
     const clientAddress = this.substituteVariables(config.clientAddress || '{lead.address}');
     const clientEmail = this.substituteVariables(config.clientEmail || '{lead.email}');
+    const clientPhone = this.substituteVariables(config.clientPhone || '{lead.phone}');
+    const clientTVA = this.substituteVariables(config.clientTVA || '{lead.tva}');
     
-    const halfWidth = width / 2 - 20;
     let currentY = y;
     
-    // Logo si présent
+    // ─── Logo à gauche des infos société ───
+    let logoOffset = 0;
     if (config.showLogo !== false && config.logo) {
       try {
         const logoSize = config.logoSize || 60;
@@ -1858,102 +1963,169 @@ export class DocumentPdfRenderer {
           const base64Data = logoData.split(',')[1];
           const buffer = Buffer.from(base64Data, 'base64');
           this.doc.image(buffer, x, currentY, { fit: [maxLogoWidth, maxLogoHeight] });
+          logoOffset = maxLogoWidth + 10;
         }
       } catch (e) {
         console.warn('📄 [PDF] Impossible de charger le logo:', e);
       }
     }
     
-    // Info entreprise (à gauche)
-    if (config.showCompanyInfo !== false) {
-      const logoOffset = (config.showLogo !== false && config.logo) ? (Math.min(config.logoSize || 60, width * 0.3)) + 12 : 0;
-      
-      this.doc
-        .font('Helvetica-Bold')
-        .fontSize(this.scaleFontSize(14))
-        .fillColor(this.theme.primaryColor || '#1890ff')
-        .text(companyName, x + logoOffset, currentY, { width: halfWidth - logoOffset });
-      
-      currentY += 18;
-      
-      if (companyPhone) {
-        this.doc
-          .fontSize(this.scaleFontSize(9))
-          .fillColor('#666666')
-          .text(`Tel: ${companyPhone}`, x + logoOffset, currentY, { width: halfWidth - logoOffset });
-        currentY += 12;
-      }
-
-      if (companyEmail) {
-        this.doc
-          .fontSize(this.scaleFontSize(9))
-          .fillColor('#666666')
-          .text(`Email: ${companyEmail}`, x + logoOffset, currentY, { width: halfWidth - logoOffset });
-        currentY += 12;
-      }
-
-      this.doc
-        .font('Helvetica')
-        .fontSize(this.scaleFontSize(10))
-        .fillColor('#555555')
-        .text(companyAddress, x + logoOffset, currentY, { width: halfWidth - logoOffset });
-      
-      const addrHeight = this.doc.heightOfString(companyAddress, { width: halfWidth - logoOffset });
-      currentY += addrHeight + 4;
-      
-      if (companyTVA) {
-        this.doc
-          .fontSize(this.scaleFontSize(8))
-          .fillColor('#888888')
-          .text(`TVA: ${companyTVA}`, x + logoOffset, currentY, { width: halfWidth - logoOffset });
-      }
-    }
+    // Colonnes : société (après logo) et client (à droite)
+    const leftX = x + logoOffset;
+    const availWidth = width - logoOffset;
+    const halfWidth = availWidth / 2 - 16;
+    const rightX = leftX + halfWidth + 32;
     
-    // Info client (à droite)
-    if (config.showClientInfo !== false) {
-      const clientX = x + halfWidth + 40;
-      let clientY = y;
-      
-      this.doc
-        .font('Helvetica')
-        .fontSize(this.scaleFontSize(9))
-        .fillColor('#888888')
-        .text(clientTitle, clientX, clientY, { width: halfWidth, align: 'right' });
-      
-      clientY += 14;
-      
-      this.doc
-        .font('Helvetica-Bold')
-        .fontSize(this.scaleFontSize(12))
-        .fillColor('#333333')
-        .text(clientName, clientX, clientY, { width: halfWidth, align: 'right' });
-      
-      clientY += 16;
-      
-      if (clientCompany) {
-        this.doc
-          .font('Helvetica')
-          .fontSize(this.scaleFontSize(11))
-          .fillColor('#444444')
-          .text(clientCompany, clientX, clientY, { width: halfWidth, align: 'right' });
-        clientY += 14;
+    // ═══════════════════════════════════════════════════════════
+    // Icônes vectorielles dessinées avec PDFKit path API
+    // (Ni ZapfDingbats, ni Unicode — 100% fiable)
+    // ═══════════════════════════════════════════════════════════
+    
+    // 📍 Pin de localisation (goutte inversée + petit cercle blanc)
+    const drawPinIcon = (ix: number, iy: number, s: number, color: string) => {
+      this.doc.save();
+      const cx = ix + s * 0.5;
+      const r = s * 0.3;
+      const headY = iy + s * 0.32;
+      const tipY = iy + s * 0.92;
+      // Tête du pin (cercle plein)
+      this.doc.circle(cx, headY, r).fillColor(color).fill();
+      // Pointe (triangle)
+      this.doc.moveTo(cx - r * 0.75, headY + r * 0.4)
+        .lineTo(cx, tipY)
+        .lineTo(cx + r * 0.75, headY + r * 0.4)
+        .closePath().fillColor(color).fill();
+      // Trou blanc au centre
+      this.doc.circle(cx, headY, r * 0.35).fillColor('white').fill();
+      this.doc.restore();
+    };
+    
+    // 📞 Combiné téléphone (rectangle arrondi = smartphone)
+    const drawPhoneIcon = (ix: number, iy: number, s: number, color: string) => {
+      this.doc.save();
+      const w = s * 0.5;
+      const h = s * 0.82;
+      const px = ix + (s - w) / 2;
+      const py = iy + (s - h) / 2;
+      // Corps du téléphone
+      this.doc.roundedRect(px, py, w, h, s * 0.08).fillColor(color).fill();
+      // Écran (rectangle blanc)
+      this.doc.fillColor('white');
+      this.doc.rect(px + w * 0.15, py + h * 0.13, w * 0.7, h * 0.58).fill();
+      // Bouton rond en bas
+      this.doc.circle(px + w / 2, py + h * 0.87, w * 0.1).fill();
+      this.doc.restore();
+    };
+    
+    // ✉️ Enveloppe (rectangle + V)
+    const drawEnvelopeIcon = (ix: number, iy: number, s: number, color: string) => {
+      this.doc.save();
+      const w = s * 0.88;
+      const h = s * 0.62;
+      const ex = ix + (s - w) / 2;
+      const ey = iy + (s - h) / 2;
+      // Corps enveloppe
+      this.doc.rect(ex, ey, w, h).fillColor(color).fill();
+      // Rabat en V (triangle blanc)
+      this.doc.moveTo(ex, ey)
+        .lineTo(ex + w / 2, ey + h * 0.55)
+        .lineTo(ex + w, ey)
+        .closePath().fillColor('white').fill();
+      this.doc.restore();
+    };
+    
+    // Helper : dessiner icône vectorielle + texte Helvetica
+    type IconDrawFn = (ix: number, iy: number, s: number, c: string) => void;
+    const drawIconLine = (drawFn: IconDrawFn, text: string, lineX: number, lineY: number, lineWidth: number, align: 'left' | 'right', color: string, fontSize: number) => {
+      const iconSize = fontSize + 2; // Icône légèrement plus grande que le texte
+      const gap = 4;
+      const textY = lineY + 1; // Petit décalage vertical pour aligner visuellement
+      if (align === 'left') {
+        drawFn(lineX, lineY - 1, iconSize, color);
+        this.doc.font('Helvetica').fontSize(fontSize).fillColor(color)
+          .text(text, lineX + iconSize + gap, textY, { width: lineWidth - iconSize - gap, lineBreak: false });
+      } else {
+        // Calculer la largeur du texte pour aligner à droite
+        this.doc.font('Helvetica').fontSize(fontSize);
+        const textW = this.doc.widthOfString(text);
+        const totalW = iconSize + gap + textW;
+        const startX = lineX + lineWidth - totalW;
+        drawFn(startX, lineY - 1, iconSize, color);
+        this.doc.font('Helvetica').fontSize(fontSize).fillColor(color)
+          .text(text, startX + iconSize + gap, textY, { lineBreak: false });
       }
-      
-      this.doc
-        .font('Helvetica')
-        .fontSize(this.scaleFontSize(10))
-        .fillColor('#555555')
-        .text(clientAddress, clientX, clientY, { width: halfWidth, align: 'right' });
-      
-      const clientAddrHeight = this.doc.heightOfString(clientAddress, { width: halfWidth });
-      clientY += clientAddrHeight + 4;
-      
-      if (clientEmail) {
-        this.doc
-          .fontSize(this.scaleFontSize(9))
-          .fillColor('#666666')
-          .text(`Email: ${clientEmail}`, clientX, clientY, { width: halfWidth, align: 'right' });
-      }
+    };
+    
+    // ─── Ligne 1 : Labels "SOCIÉTÉ" / "CLIENT" en couleur primaire du thème ───
+    const labelFs = this.scaleFontSize(14);
+    const headerLabelColor = this.theme.primaryColor || '#1890ff';
+    this.doc
+      .font('Helvetica-Bold')
+      .fontSize(labelFs)
+      .fillColor(headerLabelColor)
+      .text('SOCI\u00c9T\u00c9', leftX, currentY, { width: halfWidth, align: 'left' });
+    this.doc
+      .font('Helvetica-Bold')
+      .fontSize(labelFs)
+      .fillColor(headerLabelColor)
+      .text('CLIENT', rightX, currentY, { width: halfWidth, align: 'right' });
+    currentY += labelFs + 4;
+
+    // ─── Ligne 2 : Noms en noir gras ───
+    const nameFs = this.scaleFontSize(12);
+    this.doc
+      .font('Helvetica-Bold')
+      .fontSize(nameFs)
+      .fillColor('#222222')
+      .text(companyName, leftX, currentY, { width: halfWidth, align: 'left', lineBreak: false });
+    
+    const clientDisplayName = clientCompany ? `${clientName} \u2014 ${clientCompany}` : clientName;
+    this.doc
+      .font('Helvetica-Bold')
+      .fontSize(nameFs)
+      .fillColor('#222222')
+      .text(clientDisplayName, rightX, currentY, { width: halfWidth, align: 'right', lineBreak: false });
+    currentY += nameFs + 4;
+
+    // ─── Ligne 3 : Adresses (icône pin vectorielle) ───
+    const infoFs = this.scaleFontSize(10);
+    const lineH = infoFs + 6;
+    
+    if (companyAddress) {
+      drawIconLine(drawPinIcon, companyAddress, leftX, currentY, halfWidth, 'left', '#555555', infoFs);
+    }
+    if (clientAddress) {
+      drawIconLine(drawPinIcon, clientAddress, rightX, currentY, halfWidth, 'right', '#555555', infoFs);
+    }
+    if (companyAddress || clientAddress) currentY += lineH;
+
+    // ─── Ligne 4 : Téléphones (icône smartphone vectorielle) ───
+    if (companyPhone) {
+      drawIconLine(drawPhoneIcon, companyPhone, leftX, currentY, halfWidth, 'left', '#666666', infoFs);
+    }
+    if (clientPhone) {
+      drawIconLine(drawPhoneIcon, clientPhone, rightX, currentY, halfWidth, 'right', '#666666', infoFs);
+    }
+    if (companyPhone || clientPhone) currentY += lineH;
+
+    // ─── Ligne 5 : Emails (icône enveloppe vectorielle) ───
+    if (companyEmail) {
+      drawIconLine(drawEnvelopeIcon, companyEmail, leftX, currentY, halfWidth, 'left', '#666666', infoFs);
+    }
+    if (clientEmail) {
+      drawIconLine(drawEnvelopeIcon, clientEmail, rightX, currentY, halfWidth, 'right', '#666666', infoFs);
+    }
+    if (companyEmail || clientEmail) currentY += lineH;
+
+    // ─── Ligne 6 : TVA ───
+    const tvaFs = this.scaleFontSize(9);
+    if (companyTVA) {
+      this.doc.font('Helvetica').fontSize(tvaFs).fillColor('#888888')
+        .text(`TVA: ${companyTVA}`, leftX, currentY, { width: halfWidth, align: 'left', lineBreak: false });
+    }
+    if (clientTVA) {
+      this.doc.font('Helvetica').fontSize(tvaFs).fillColor('#888888')
+        .text(`TVA: ${clientTVA}`, rightX, currentY, { width: halfWidth, align: 'right', lineBreak: false });
     }
     
     console.log(`📄 [PDF] DOCUMENT_HEADER rendu: company=${companyName}, client=${clientName}`);
@@ -1998,6 +2170,7 @@ export class DocumentPdfRenderer {
       // Inline badges
       let currentX = x;
 
+      const badgeBgColor = this.theme.primaryColor || '#1890ff';
       const drawBadge = (label: string, value: string) => {
         const text = `${label}${value ? ` ${value}` : ''}`;
         this.doc.font('Helvetica').fontSize(badgeFontSize);
@@ -2007,13 +2180,11 @@ export class DocumentPdfRenderer {
         const textY = currentY + (badgeHeight - textHeight) / 2;
 
         this.doc
-          .lineWidth(1)
           .roundedRect(currentX, currentY, badgeWidth, badgeHeight, 4)
-          .fill('#f5f5f5')
-          .stroke('#e5e5e5');
+          .fill(badgeBgColor);
 
         this.doc
-          .fillColor('#333333')
+          .fillColor('#ffffff')
           .font('Helvetica-Bold')
           .fontSize(badgeFontSize)
           .text(label, currentX + badgePaddingX, textY, { continued: true, lineBreak: false })
@@ -2205,7 +2376,9 @@ export class DocumentPdfRenderer {
   private renderModuleSignatureBlock(config: Record<string, any>, x: number, y: number, width: number, height: number): void {
     // 🔥 Vérifier si le bloc peut tenir
     const availableHeight = this.getAvailableHeightOnPage(y);
-    const minHeight = 120; // Hauteur minimale pour un bloc de signature
+    const minHeight = 60; // Réduit car le bloc est compact maintenant
+    
+    console.log(`📄 [PDF] SIGNATURE_BLOCK: y=${y.toFixed(0)}, height=${height}, availableHeight=${availableHeight.toFixed(0)}, minHeight=${minHeight}`);
     
     if (availableHeight < minHeight) {
       console.warn(`📄 [PDF] SIGNATURE_BLOCK: Pas assez de place (${availableHeight.toFixed(0)}px restants). Bloc masqué.`);
@@ -2214,16 +2387,17 @@ export class DocumentPdfRenderer {
 
     const isStacked = config.layout === 'stacked';
     const gap = 16;
-    const actualHeight = Math.min(height || 140, availableHeight - 10); // -10 pour éviter de toucher le bas
+    const actualHeight = Math.max(height || 120, 100); // Au moins 100px de haut
     const boxHeight = isStacked ? Math.floor((actualHeight - gap) / 2) : Math.floor(actualHeight);
     const boxWidth = isStacked ? width : (width - 24) / 2;
     
     const clientLabel = config.clientLabel || 'Le Client';
     const companyLabel = config.companyLabel || 'Pour l\'entreprise';
     
-    // Clipping au niveau du module (comme l'overflow:hidden dans le Page Builder)
+    // Clipping au niveau du module — utiliser actualHeight pour éviter de clipper un bloc de hauteur 0
+    const clipH = Math.max(height || actualHeight, actualHeight);
     this.doc.save();
-    this.doc.rect(x, y, width, height).clip();
+    this.doc.rect(x, y, width, clipH).clip();
 
     const renderBox = (label: string, boxX: number, boxY: number) => {
       // Bordure
@@ -2231,51 +2405,49 @@ export class DocumentPdfRenderer {
         .roundedRect(boxX, boxY, boxWidth, boxHeight, 6)
         .stroke('#e8e8e8');
 
-      // Layout interne (comme le frontend)
-      const padding = 20;
+      const padding = 16;
+      const innerW = boxWidth - padding * 2;
 
-      // Label
+      // ─── Ligne 1 : Label (gauche) + Mention (droite, italique) ───
       const labelY = boxY + padding;
       this.doc
         .font('Helvetica-Bold')
         .fontSize(this.scaleFontSize(11))
         .fillColor('#333333')
-        .text(label, boxX + padding, labelY, { width: boxWidth - padding * 2 });
+        .text(label, boxX + padding, labelY, { width: innerW, continued: false, lineBreak: false });
 
-      let currentY = labelY + 11 + 8; // label + marginBottom
+      const showMention = config.showMention !== false;
+      if (showMention) {
+        const mention = config.mention || 'Lu et approuvé, bon pour accord';
+        this.doc
+          .font('Helvetica-Oblique')
+          .fontSize(this.scaleFontSize(9))
+          .fillColor('#999999')
+          .text(`"${mention}"`, boxX + padding, labelY + 1, { width: innerW, align: 'right', lineBreak: false });
+      }
 
-      // Date (par défaut true comme dans PageBuilder)
+      let currentY = labelY + 14; // juste après la ligne label+mention
+
+      // ─── Ligne 2 : Date ───
       const showDate = config.showDate !== false;
       if (showDate) {
         this.doc
           .font('Helvetica')
           .fontSize(this.scaleFontSize(10))
           .fillColor('#666666')
-          .text('Date: ____/____/________', boxX + padding, currentY, { width: boxWidth - padding * 2 });
-        currentY += 12 + 16; // texte + marginBottom
+          .text('Date: ____/____/________', boxX + padding, currentY, { width: innerW });
+        currentY += 14;
       }
 
-      // Mention (par défaut true comme dans PageBuilder)
-      const showMention = config.showMention !== false;
-      if (showMention) {
-        const mention = config.mention || 'Lu et approuvé, bon pour accord';
-        this.doc
-          .font('Helvetica-Oblique')
-          .fontSize(this.scaleFontSize(10))
-          .fillColor('#666666')
-          .text(`"${mention}"`, boxX + padding, currentY, { width: boxWidth - padding * 2 });
-        currentY += 12 + 8;
-      }
-
-      // Zone signature (marginTop 20, hauteur 80, borderBottom dashed)
-      const signatureAreaTop = currentY + 20;
-      const signatureLineY = signatureAreaTop + 80;
+      // ─── Zone signature (compacte) ───
+      const signatureAreaTop = currentY + 8;
+      const signatureLineY = Math.min(signatureAreaTop + 50, boxY + boxHeight - padding - 4);
 
       this.doc
         .font('Helvetica')
         .fontSize(this.scaleFontSize(11))
         .fillColor('#999999')
-        .text('Signature', boxX + padding, signatureAreaTop + 2, { width: boxWidth - padding * 2 });
+        .text('Signature', boxX + padding, signatureAreaTop + 2, { width: innerW });
 
       this.doc
         .moveTo(boxX + padding, signatureLineY)
@@ -2335,7 +2507,7 @@ export class DocumentPdfRenderer {
     const rowHeight = 22;
     let currentY = y + paddingTop;
 
-    const drawRow = (label: string, value: string, opts?: { valueColor?: string; negative?: boolean }) => {
+    const drawRow = (label: string, value: string, opts?: { valueColor?: string; labelColor?: string; negative?: boolean; labelBold?: boolean; valueBold?: boolean; icon?: 'tag' }) => {
       this.doc
         .strokeColor('#f0f0f0')
         .lineWidth(1)
@@ -2343,14 +2515,30 @@ export class DocumentPdfRenderer {
         .lineTo(x + width - paddingX, currentY + rowHeight)
         .stroke();
 
+      const labelFs = this.scaleFontSize(11);
       this.doc
-        .font('Helvetica')
-        .fontSize(this.scaleFontSize(11))
-        .fillColor('#666666')
-        .text(label, labelX, currentY + 6, { width: contentWidth - valueWidth - gap, align: 'right' });
+        .font(opts?.labelBold ? 'Helvetica-Bold' : 'Helvetica')
+        .fontSize(labelFs)
+        .fillColor(opts?.labelColor || '#666666');
+
+      // Icône 🏷️ PNG Twemoji avant le label (même système que le bandeau KPI)
+      if (opts?.icon === 'tag') {
+        const labelTextW = this.doc.widthOfString(label);
+        const labelAreaW = contentWidth - valueWidth - gap;
+        const textEndX = labelX + labelAreaW;
+        const iconSz = labelFs + 2;
+        const tagPng = this.emojiPngCache.get('🏷️');
+        if (tagPng && fs.existsSync(tagPng)) {
+          try {
+            this.doc.image(tagPng, textEndX - labelTextW - iconSz - 4, currentY + 5, { width: iconSz, height: iconSz });
+          } catch (e) { console.warn('PDF tag icon error:', e); }
+        }
+      }
+
+      this.doc.text(label, labelX, currentY + 6, { width: contentWidth - valueWidth - gap, align: 'right' });
 
       this.doc
-        .font('Helvetica-Bold')
+        .font(opts?.valueBold !== false ? 'Helvetica-Bold' : 'Helvetica')
         .fontSize(this.scaleFontSize(11))
         .fillColor(opts?.valueColor || '#333333')
         .text(value, valueX, currentY + 6, { width: valueWidth, align: 'right' });
@@ -2366,7 +2554,7 @@ export class DocumentPdfRenderer {
 
     if (showDiscount && discountValue) {
       const discountFormatted = this.formatMoney(discountValue, currency);
-      drawRow('Remise:', `-${discountFormatted}`, { valueColor: '#52c41a' });
+      drawRow('Remise:', `-${discountFormatted}`, { valueColor: '#D9791F', labelBold: true, valueBold: true, labelColor: '#D9791F', icon: 'tag' });
     }
 
     if (showTotalHT) {
@@ -2390,15 +2578,15 @@ export class DocumentPdfRenderer {
 
       this.doc
         .font('Helvetica-Bold')
-        .fontSize(this.scaleFontSize(12))
+        .fontSize(this.scaleFontSize(14))
         .fillColor('#FFFFFF')
         .text('Total TTC:', barLabelX, barY + 9, { width: width - innerPad * 2 - barValueWidth, align: 'right' });
 
       this.doc
         .font('Helvetica-Bold')
-        .fontSize(this.scaleFontSize(16))
+        .fontSize(this.scaleFontSize(18))
         .fillColor('#FFFFFF')
-        .text(this.formatMoney(totalTTCValue, currency), x + width - innerPad - barValueWidth, barY + 7, { width: barValueWidth, align: 'right' });
+        .text(this.formatMoney(totalTTCValue, currency), x + width - innerPad - barValueWidth, barY + 6, { width: barValueWidth, align: 'right' });
     }
 
     this.doc.restore();
@@ -3825,8 +4013,8 @@ export class DocumentPdfRenderer {
 
     let result = text;
 
-    // Substitution des variables @value.xxx et @select.xxx
-    result = result.replace(/@(value|select)\.([a-zA-Z0-9_.-]+)/g, (_match, type, ref) => {
+    // Substitution des variables @value.xxx, @select.xxx et @calculated.xxx
+    result = result.replace(/@(value|select|calculated)\.([a-zA-Z0-9_.-]+)/g, (_match, type, ref) => {
       return this.resolveVariable(`@${type}.${ref}`);
     });
 
@@ -4277,6 +4465,726 @@ export class DocumentPdfRenderer {
         lineBreak: false,
         height: 20 // Limiter strictement la hauteur
       });
+  }
+
+  // ============================================================
+  // KPI_BANNER - Bandeau KPI / ROI graphique
+  // ============================================================
+  private renderModuleKpiBanner(config: Record<string, any>, x: number, y: number, width: number, height: number): void {
+    console.log(`🎨 [KPI-ICON-DEBUG] BANNER CALLED! icon keys: ${Object.keys(config).filter(k => k.includes('icon')).map(k => `${k}="${config[k]}"`).join(', ')}`);
+    this.doc.save();
+    this.doc.rect(x, y, width, height).clip();
+
+    const gradientFrom = config.gradientFrom || '#0F5C60';
+    const gradientTo = config.gradientTo || '#0A3E42';
+    const accentColor = config.accentColor || '#D9791F';
+    const textColor = config.textColor || '#ffffff';
+    const cornerRadius = Math.min(config.cornerRadius ?? 12, 12) * this.scaleFactor;
+    const bannerStyle = config.style || 'gradient';
+
+    // Helper robuste pour lire les toggles (gère bool, string, undefined)
+    const toBool = (val: any, def: boolean): boolean => {
+      if (val === undefined || val === null) return def;
+      if (typeof val === 'boolean') return val;
+      if (typeof val === 'string') return val !== 'false' && val !== '0';
+      return Boolean(val);
+    };
+
+    const showTitle = toBool(config.showTitle, true);
+    const showProgressBar = toBool(config.showProgressBar, true);
+    const showMiniChart = toBool(config.showMiniChart, true);
+    const bannerTitle = this.substituteVariables(config.title || 'Votre Investissement en un coup d\'oeil');
+    const compactMode = toBool(config.compactMode, true);
+
+    // ─── Icônes vectorielles KPI (PDFKit/Helvetica ne supporte PAS les emojis) ───
+    // Chaque emoji est mappé vers une icône dessinée en paths vectoriels purs.
+    const doc = this.doc;
+
+    // Fonctions de dessin vectoriel par catégorie
+    type IcoFn = (cx: number, cy: number, sz: number, col: string) => void;
+    const icoFns: Record<string, IcoFn> = {
+      // ⚡ Éclair
+      lightning: (cx, cy, sz, col) => {
+        const r = sz * 0.42;
+        doc.moveTo(cx + r * 0.1, cy - r * 0.9)
+          .lineTo(cx - r * 0.5, cy + r * 0.1).lineTo(cx - r * 0.02, cy + r * 0.05)
+          .lineTo(cx - r * 0.15, cy + r * 0.9).lineTo(cx + r * 0.55, cy - r * 0.15)
+          .lineTo(cx + r * 0.08, cy - r * 0.1).closePath().fillColor(col).fill();
+      },
+      // ☀️ Soleil
+      sun: (cx, cy, sz, col) => {
+        const r = sz * 0.22;
+        doc.circle(cx, cy, r).fillColor(col).fill();
+        for (let i = 0; i < 8; i++) {
+          const a = (i / 8) * Math.PI * 2;
+          doc.moveTo(cx + Math.cos(a) * r * 1.35, cy + Math.sin(a) * r * 1.35)
+            .lineTo(cx + Math.cos(a) * r * 1.85, cy + Math.sin(a) * r * 1.85)
+            .lineWidth(sz * 0.06).strokeColor(col).stroke();
+        }
+      },
+      // 🔥 Flamme
+      fire: (cx, cy, sz, col) => {
+        const r = sz * 0.4;
+        doc.moveTo(cx, cy - r)
+          .bezierCurveTo(cx + r * 0.6, cy - r * 0.2, cx + r * 0.7, cy + r * 0.3, cx + r * 0.3, cy + r * 0.8)
+          .bezierCurveTo(cx + r * 0.1, cy + r, cx - r * 0.1, cy + r, cx - r * 0.3, cy + r * 0.8)
+          .bezierCurveTo(cx - r * 0.7, cy + r * 0.3, cx - r * 0.6, cy - r * 0.2, cx, cy - r)
+          .closePath().fillColor(col).fill();
+      },
+      // 🌿 Feuille
+      leaf: (cx, cy, sz, col) => {
+        const r = sz * 0.4;
+        doc.moveTo(cx - r * 0.8, cy + r * 0.2)
+          .bezierCurveTo(cx - r * 0.3, cy - r, cx + r * 0.3, cy - r, cx + r * 0.8, cy - r * 0.3)
+          .bezierCurveTo(cx + r * 0.3, cy + r * 0.5, cx - r * 0.2, cy + r, cx - r * 0.8, cy + r * 0.2)
+          .closePath().fillColor(col).fill();
+        doc.moveTo(cx - r * 0.6, cy + r * 0.55).lineTo(cx + r * 0.3, cy - r * 0.35)
+          .lineWidth(sz * 0.04).strokeColor('white').stroke();
+      },
+      // 💧 Goutte
+      drop: (cx, cy, sz, col) => {
+        const r = sz * 0.38;
+        doc.moveTo(cx, cy - r * 0.9)
+          .bezierCurveTo(cx + r * 0.9, cy + r * 0.1, cx + r * 0.6, cy + r * 0.95, cx, cy + r * 0.95)
+          .bezierCurveTo(cx - r * 0.6, cy + r * 0.95, cx - r * 0.9, cy + r * 0.1, cx, cy - r * 0.9)
+          .closePath().fillColor(col).fill();
+      },
+      // 💰 Pièce (€)
+      coin: (cx, cy, sz, col) => {
+        doc.circle(cx, cy, sz * 0.38).fillColor(col).fill();
+        doc.font('Helvetica-Bold').fontSize(sz * 0.36).fillColor('white')
+          .text('€', cx - sz * 0.12, cy - sz * 0.16, { width: sz * 0.3, align: 'center', lineBreak: false });
+      },
+      // 💎 Diamant
+      diamond: (cx, cy, sz, col) => {
+        const r = sz * 0.36;
+        doc.moveTo(cx, cy - r).lineTo(cx + r, cy).lineTo(cx, cy + r).lineTo(cx - r, cy)
+          .closePath().fillColor(col).fill();
+      },
+      // 📈 Graphique
+      chart: (cx, cy, sz, col) => {
+        const r = sz * 0.36;
+        doc.rect(cx - r * 0.85, cy + r * 0.05, r * 0.4, -r * 0.6).fillColor(col).fillOpacity(0.5).fill().fillOpacity(1);
+        doc.rect(cx - r * 0.25, cy + r * 0.05, r * 0.4, -r * 1.0).fillColor(col).fill();
+        doc.rect(cx + r * 0.35, cy + r * 0.05, r * 0.4, -r * 1.45).fillColor(col).fill();
+        doc.moveTo(cx - r, cy + r * 0.15).lineTo(cx + r, cy + r * 0.15)
+          .lineWidth(sz * 0.03).strokeColor(col).stroke();
+      },
+      // ⏰ Horloge
+      clock: (cx, cy, sz, col) => {
+        const r = sz * 0.36;
+        doc.circle(cx, cy, r).fillColor(col).fill();
+        doc.circle(cx, cy, r * 0.85).fillColor('white').fill();
+        doc.moveTo(cx, cy).lineTo(cx, cy - r * 0.55).lineWidth(sz * 0.05).strokeColor(col).stroke();
+        doc.moveTo(cx, cy).lineTo(cx + r * 0.4, cy + r * 0.1).lineWidth(sz * 0.04).strokeColor(col).stroke();
+        doc.circle(cx, cy, r * 0.08).fillColor(col).fill();
+      },
+      // 🏆 Trophée
+      trophy: (cx, cy, sz, col) => {
+        const r = sz * 0.35;
+        doc.moveTo(cx - r * 0.65, cy - r * 0.6).lineTo(cx - r * 0.45, cy + r * 0.3)
+          .lineTo(cx + r * 0.45, cy + r * 0.3).lineTo(cx + r * 0.65, cy - r * 0.6)
+          .closePath().fillColor(col).fill();
+        doc.rect(cx - r * 0.08, cy + r * 0.3, r * 0.16, r * 0.2).fillColor(col).fill();
+        doc.rect(cx - r * 0.3, cy + r * 0.5, r * 0.6, r * 0.15).fillColor(col).fill();
+      },
+      // ⭐ Étoile
+      star: (cx, cy, sz, col) => {
+        const r = sz * 0.4; const ri = r * 0.4;
+        const pts: number[][] = [];
+        for (let i = 0; i < 10; i++) {
+          const a = (i / 10) * Math.PI * 2 - Math.PI / 2;
+          const rad = i % 2 === 0 ? r : ri;
+          pts.push([cx + Math.cos(a) * rad, cy + Math.sin(a) * rad]);
+        }
+        doc.moveTo(pts[0][0], pts[0][1]);
+        for (let i = 1; i < pts.length; i++) doc.lineTo(pts[i][0], pts[i][1]);
+        doc.closePath().fillColor(col).fill();
+      },
+      // 🎯 Cible
+      target: (cx, cy, sz, col) => {
+        doc.circle(cx, cy, sz * 0.38).fillColor(col).fill();
+        doc.circle(cx, cy, sz * 0.26).fillColor('white').fill();
+        doc.circle(cx, cy, sz * 0.14).fillColor(col).fill();
+      },
+      // ✅ Coche
+      check: (cx, cy, sz, col) => {
+        const r = sz * 0.35;
+        doc.roundedRect(cx - r, cy - r, r * 2, r * 2, r * 0.25).fillColor(col).fill();
+        doc.moveTo(cx - r * 0.5, cy).lineTo(cx - r * 0.1, cy + r * 0.4).lineTo(cx + r * 0.55, cy - r * 0.35)
+          .lineWidth(sz * 0.08).lineCap('round').lineJoin('round').strokeColor('white').stroke();
+      },
+      // 🏠 Maison
+      house: (cx, cy, sz, col) => {
+        const r = sz * 0.38;
+        doc.moveTo(cx, cy - r).lineTo(cx + r, cy - r * 0.05).lineTo(cx - r, cy - r * 0.05)
+          .closePath().fillColor(col).fill();
+        doc.rect(cx - r * 0.7, cy - r * 0.05, r * 1.4, r * 0.85).fillColor(col).fill();
+        doc.rect(cx - r * 0.15, cy + r * 0.25, r * 0.3, r * 0.55).fillColor('white').fill();
+      },
+      // 👤 Personne
+      person: (cx, cy, sz, col) => {
+        const r = sz * 0.35;
+        doc.circle(cx, cy - r * 0.55, r * 0.35).fillColor(col).fill();
+        doc.moveTo(cx - r * 0.6, cy + r * 0.9).lineTo(cx - r * 0.25, cy + r * 0.05)
+          .lineTo(cx + r * 0.25, cy + r * 0.05).lineTo(cx + r * 0.6, cy + r * 0.9)
+          .closePath().fillColor(col).fill();
+      },
+      // 🌍 Globe
+      globe: (cx, cy, sz, col) => {
+        const r = sz * 0.36;
+        doc.circle(cx, cy, r).fillColor(col).fill();
+        doc.moveTo(cx - r, cy).lineTo(cx + r, cy).lineWidth(sz * 0.025).strokeColor('white').stroke();
+        doc.moveTo(cx - r * 0.85, cy - r * 0.45).lineTo(cx + r * 0.85, cy - r * 0.45)
+          .lineWidth(sz * 0.025).strokeColor('white').stroke();
+        doc.moveTo(cx - r * 0.85, cy + r * 0.45).lineTo(cx + r * 0.85, cy + r * 0.45)
+          .lineWidth(sz * 0.025).strokeColor('white').stroke();
+        doc.ellipse(cx, cy, r * 0.38, r).lineWidth(sz * 0.025).strokeColor('white').stroke();
+      },
+      // ❤️ Cœur
+      heart: (cx, cy, sz, col) => {
+        const r = sz * 0.2;
+        doc.circle(cx - r * 0.65, cy - r * 0.35, r * 0.7).fillColor(col).fill();
+        doc.circle(cx + r * 0.65, cy - r * 0.35, r * 0.7).fillColor(col).fill();
+        doc.moveTo(cx - r * 1.35, cy - r * 0.15).lineTo(cx, cy + r * 1.6)
+          .lineTo(cx + r * 1.35, cy - r * 0.15).closePath().fillColor(col).fill();
+      },
+      // 🛡️ Bouclier
+      shield: (cx, cy, sz, col) => {
+        const r = sz * 0.38;
+        doc.moveTo(cx, cy - r).lineTo(cx + r * 0.8, cy - r * 0.5).lineTo(cx + r * 0.7, cy + r * 0.3)
+          .lineTo(cx, cy + r).lineTo(cx - r * 0.7, cy + r * 0.3).lineTo(cx - r * 0.8, cy - r * 0.5)
+          .closePath().fillColor(col).fill();
+      },
+      // ⚙️ Engrenage
+      gear: (cx, cy, sz, col) => {
+        const r = sz * 0.36;
+        doc.circle(cx, cy, r * 0.7).fillColor(col).fill();
+        const tw = r * 0.3; const th = r * 0.35;
+        for (let i = 0; i < 6; i++) {
+          const a = (i / 6) * Math.PI * 2;
+          const tx = cx + Math.cos(a) * r * 0.65;
+          const ty = cy + Math.sin(a) * r * 0.65;
+          doc.circle(tx, ty, tw).fillColor(col).fill();
+        }
+        doc.circle(cx, cy, r * 0.28).fillColor('white').fill();
+      },
+      // 🚗 Véhicule
+      car: (cx, cy, sz, col) => {
+        const r = sz * 0.38;
+        doc.roundedRect(cx - r, cy - r * 0.1, r * 2, r * 0.65, r * 0.12).fillColor(col).fill();
+        doc.moveTo(cx - r * 0.5, cy - r * 0.1).lineTo(cx - r * 0.3, cy - r * 0.55)
+          .lineTo(cx + r * 0.35, cy - r * 0.55).lineTo(cx + r * 0.55, cy - r * 0.1)
+          .closePath().fillColor(col).fill();
+        doc.circle(cx - r * 0.5, cy + r * 0.55, r * 0.18).fillColor(col).fill();
+        doc.circle(cx + r * 0.5, cy + r * 0.55, r * 0.18).fillColor(col).fill();
+      },
+      // 🔔 Cloche
+      bell: (cx, cy, sz, col) => {
+        const r = sz * 0.35;
+        doc.moveTo(cx - r * 0.65, cy + r * 0.35)
+          .bezierCurveTo(cx - r * 0.65, cy - r * 0.5, cx - r * 0.3, cy - r * 0.9, cx, cy - r * 0.9)
+          .bezierCurveTo(cx + r * 0.3, cy - r * 0.9, cx + r * 0.65, cy - r * 0.5, cx + r * 0.65, cy + r * 0.35)
+          .closePath().fillColor(col).fill();
+        doc.rect(cx - r * 0.85, cy + r * 0.35, r * 1.7, r * 0.18).fillColor(col).fill();
+        doc.circle(cx, cy + r * 0.72, r * 0.14).fillColor(col).fill();
+      },
+      // 💬 Bulle de dialogue
+      chat: (cx, cy, sz, col) => {
+        const r = sz * 0.36;
+        doc.roundedRect(cx - r, cy - r * 0.6, r * 2, r * 1.2, r * 0.25).fillColor(col).fill();
+        doc.moveTo(cx - r * 0.3, cy + r * 0.6).lineTo(cx - r * 0.7, cy + r)
+          .lineTo(cx + r * 0.1, cy + r * 0.6).closePath().fillColor(col).fill();
+      },
+      // ⚫ Point (fallback générique)
+      dot: (cx, cy, sz, col) => {
+        doc.circle(cx, cy, sz * 0.28).fillColor(col).fill();
+      },
+    };
+
+    // Dessiner une icône vectorielle KPI à partir d'un emoji
+    // Mapping ultra-robuste basé sur le premier codepoint significatif
+    const cpToCat: Record<number, string> = {};
+    const addCp = (cp: number, cat: string) => { cpToCat[cp] = cat; };
+    // ⚡ Lightning
+    [0x26A1, 0x1F50C, 0x1F50B].forEach(cp => addCp(cp, 'lightning'));
+    // ☀️ Sun / Lumière
+    [0x2600, 0x1F31E, 0x1F324, 0x1F321, 0x1F4A1, 0x1F506].forEach(cp => addCp(cp, 'sun'));
+    // 🔥 Fire
+    [0x1F525, 0x1F30B].forEach(cp => addCp(cp, 'fire'));
+    // 🌿 Leaf / Nature / Recyclage
+    [0x1F33F, 0x1F343, 0x1F331, 0x2618, 0x1F33E, 0x1F33B, 0x1F333, 0x1F332, 0x1F334, 0x1F335, 0x1F338, 0x1F33A, 0x1F340,
+     0x267B, 0x1F504, 0x1F501, 0x1F503, 0x1F308, 0x1F98B, 0x1F41D, 0x1FAB4, 0x1F3ED].forEach(cp => addCp(cp, 'leaf'));
+    // 💧 Drop / Eau
+    [0x1F4A7, 0x1F30A, 0x1F4A6, 0x2744, 0x1F4A8, 0x1F32A, 0x1F327, 0x2601, 0x1F9CA].forEach(cp => addCp(cp, 'drop'));
+    // 💰 Coin / Finance
+    [0x1F4B0, 0x1F4B5, 0x1F4B6, 0x1F4B7, 0x1FA99, 0x1F4B2, 0x1F4B8, 0x1F911, 0x1F4B9, 0x1F3E7, 0x1F4B3, 0x1F9FE, 0x1F3E6,
+     0x1F4B4, 0x1FAF0].forEach(cp => addCp(cp, 'coin'));
+    // 💎 Diamond
+    [0x1F48E].forEach(cp => addCp(cp, 'diamond'));
+    // 📈 Chart / Données
+    [0x1F4C8, 0x1F4CA, 0x1F4C9, 0x1F522, 0x1F523, 0x1F4D0, 0x1F4CF, 0x1F9EE, 0x1F4CB, 0x1F4D1, 0x1F4DD, 0x270F,
+     0x2795, 0x2796, 0x2716, 0x2797, 0x1F51F, 0x1F4C3, 0x1F4C4, 0x1F4DC].forEach(cp => addCp(cp, 'chart'));
+    // ⏰ Clock / Temps
+    [0x23F0, 0x1F550, 0x1F551, 0x1F552, 0x1F553, 0x1F554, 0x1F555, 0x1F556, 0x1F557, 0x1F558, 0x1F559, 0x1F55A, 0x1F55B,
+     0x23F1, 0x23F3, 0x231B, 0x1F4C5, 0x1F4C6, 0x1F5D3, 0x23E9, 0x23EA].forEach(cp => addCp(cp, 'clock'));
+    // 🏆 Trophy
+    [0x1F3C6, 0x1F947, 0x1F948, 0x1F949, 0x1F3C5, 0x1F396, 0x1F3F5, 0x1F4AF, 0x1F451].forEach(cp => addCp(cp, 'trophy'));
+    // ⭐ Star
+    [0x2B50, 0x1F31F, 0x2728, 0x1F4AB, 0x1F381, 0x1F389, 0x1F38A, 0x1F3AA, 0x1F397, 0x1F380].forEach(cp => addCp(cp, 'star'));
+    // 🎯 Target
+    [0x1F3AF, 0x1F4CC, 0x1F50D, 0x1F50E, 0x2696].forEach(cp => addCp(cp, 'target'));
+    // ✅ Check
+    [0x2705, 0x2611, 0x2714].forEach(cp => addCp(cp, 'check'));
+    // 🏠 House / Bâtiment
+    [0x1F3E0, 0x1F3E1, 0x1F3E2, 0x1F3D7, 0x1F3D8, 0x1F3F0, 0x1F3DB, 0x26EA, 0x1F54C, 0x1F3E4, 0x1F3DA,
+     0x1F6AA, 0x1FA9F, 0x1F9F1, 0x1F3D9, 0x1F3E5, 0x1F3EA, 0x1F3EB].forEach(cp => addCp(cp, 'house'));
+    // 👤 Person
+    [0x1F464, 0x1F465, 0x1F91D, 0x1F477, 0x1F916, 0x1F9E0, 0x1F3C3, 0x1F9D8, 0x1F468, 0x1F469, 0x1F9D1,
+     0x1F4BC, 0x1F393, 0x1F4DE, 0x2709, 0x1F4E7, 0x1F44F, 0x1F44D, 0x1F64C, 0x1F4AA, 0x1F680].forEach(cp => addCp(cp, 'person'));
+    // 🌍 Globe
+    [0x1F30D, 0x1F30E, 0x1F30F, 0x1F5FA, 0x1F310].forEach(cp => addCp(cp, 'globe'));
+    // ❤️ Heart
+    [0x2764, 0x1F49A, 0x1F499, 0x1F49B, 0x1FA77, 0x1F49C, 0x1F9E1].forEach(cp => addCp(cp, 'heart'));
+    // 🛡️ Shield / Sécurité
+    [0x1F6E1, 0x1F512, 0x1F513, 0x1F511, 0x1F5DD].forEach(cp => addCp(cp, 'shield'));
+    // ⚙️ Gear / Outils
+    [0x2699, 0x1F527, 0x1F528, 0x1F6E0, 0x2702, 0x1F9F2, 0x1FA9B, 0x1F529, 0x1FA9C].forEach(cp => addCp(cp, 'gear'));
+    // 🚗 Car / Transport
+    [0x1F697, 0x1F698, 0x1F68C, 0x1F682, 0x1F3CE, 0x1F695, 0x1F690, 0x1F6FB, 0x1F688, 0x1F687, 0x1F69B, 0x1F6B2, 0x1F6F4,
+     0x2708, 0x1F681, 0x1F6E9, 0x1F680, 0x1F6F8, 0x26F5, 0x1F6A2, 0x1F699, 0x1F68E, 0x1F6F5, 0x1F6D2, 0x26FD, 0x1F6E4].forEach(cp => addCp(cp, 'car'));
+    // 🔔 Bell
+    [0x1F514, 0x1F4E2, 0x1F4E3, 0x1F50A].forEach(cp => addCp(cp, 'bell'));
+    // 💬 Chat
+    [0x1F4AC, 0x1F517, 0x1F4CE].forEach(cp => addCp(cp, 'chat'));
+    // 🖥️ Tech
+    [0x1F4BB, 0x1F5A5, 0x1F4F1, 0x1F4F2, 0x2328, 0x1F5B1, 0x1F5A8, 0x1F4F6, 0x1F4F7, 0x1F3A5, 0x1F4F9,
+     0x1F4A0, 0x1F50D, 0x1F3B5, 0x1F3AE, 0x1F3B2, 0x1FA7A, 0x1FA78].forEach(cp => addCp(cp, 'gear'));
+
+    const getFirstSignificantCodePoint = (emoji: string): number | null => {
+      // Strip modifiers to find the base emoji codepoint
+      const stripped = emoji
+        .replace(/[\uFE0E\uFE0F\u200D\u200B\u20E3]/g, '')
+        .replace(/[\u{1F3FB}-\u{1F3FF}]/gu, '')
+        .trim();
+      for (const char of stripped) {
+        const cp = char.codePointAt(0);
+        if (cp && cp > 0x7F) return cp; // First non-ASCII codepoint
+      }
+      return null;
+    };
+
+    const drawKpiIcon = (cx: number, cy: number, sz: number, col: string, emoji: string): boolean => {
+      if (!emoji || !emoji.trim()) return false;
+
+      // ─── Extraire l'emoji brut depuis le format "cat:emoji" ───
+      let rawEmoji = emoji.trim();
+      if (rawEmoji.includes(':')) {
+        rawEmoji = rawEmoji.split(':').slice(1).join(':').trim();
+      }
+
+      // ─── PRIORITÉ 1 : PNG Twemoji (vrai emoji) ───
+      const pngPath = this.emojiPngCache.get(rawEmoji);
+      if (pngPath && fs.existsSync(pngPath)) {
+        try {
+          doc.image(pngPath, cx - sz / 2, cy - sz / 2, { width: sz, height: sz });
+          return true;
+        } catch (e) {
+          console.warn(`📄 [PDF] Erreur doc.image emoji: ${e}`);
+        }
+      }
+
+      // ─── PRIORITÉ 2 : Fallback vectoriel ───
+      let cat = 'dot';
+      if (emoji.includes(':')) {
+        const candidateCat = emoji.split(':')[0].trim();
+        if (icoFns[candidateCat]) cat = candidateCat;
+      } else if (icoFns[emoji.trim()]) {
+        cat = emoji.trim();
+      } else {
+        const cp = getFirstSignificantCodePoint(emoji);
+        cat = cp ? (cpToCat[cp] || 'dot') : 'dot';
+      }
+      
+      const fn = icoFns[cat] || icoFns.dot;
+      doc.save();
+      fn(cx, cy, sz, col);
+      doc.restore();
+      return true;
+    };
+
+    // ─── Helper : formater une valeur numérique avec décimales et séparateur ───
+    const formatKpiValue = (raw: string, decimals: string, useSeparator: boolean): string => {
+      const cleaned = raw.replace(/\s/g, '').replace(',', '.');
+      const num = parseFloat(cleaned);
+      if (isNaN(num)) return raw;
+      if (decimals === 'auto' && !useSeparator) return raw;
+      let decCount: number;
+      if (decimals === 'auto') {
+        const match = cleaned.match(/\.(\d+)/);
+        decCount = match ? Math.min(match[1].length, 6) : 0;
+      } else {
+        decCount = parseInt(decimals);
+      }
+      const fixed = num.toFixed(decCount);
+      const parts = fixed.split('.');
+      if (useSeparator) {
+        parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
+      }
+      return parts.length > 1 && decCount > 0 ? `${parts[0]},${parts[1]}` : parts[0];
+    };
+
+    // ═══ Collecter les KPIs actifs ═══
+    const allKpis: Array<{
+      label: string; value: string; suffix: string; icon: string; color: string;
+      valueBold: boolean; valueItalic: boolean; labelBold: boolean; labelItalic: boolean;
+    }> = [];
+
+    // Lire KPIs depuis les clés plates (kpi1_*, kpi2_*, ...) qui ont les bindings
+    for (let i = 1; i <= 8; i++) {
+      const label = config[`kpi${i}_label`];
+      const rawValue = config[`kpi${i}_binding`] || config[`kpi${i}_value`] || '';
+      const suffix = config[`kpi${i}_suffix`] || '';
+      const rawIcon = config[`kpi${i}_icon`] || '';
+      const color = config[`kpi${i}_color`] || this.theme.primaryColor || '#0F5C60';
+      const decimals = config[`kpi${i}_decimals`] || 'auto';
+      const separator = config[`kpi${i}_separator`] !== false;
+      const valueBold = config[`kpi${i}_valueBold`] !== false;
+      const valueItalic = config[`kpi${i}_valueItalic`] === true;
+      const labelBold = config[`kpi${i}_labelBold`] === true;
+      const labelItalic = config[`kpi${i}_labelItalic`] === true;
+      if (!label && !rawValue) continue;
+      let resolvedValue = this.substituteVariables(rawValue);
+      if (resolvedValue) {
+        resolvedValue = formatKpiValue(resolvedValue, decimals, separator);
+      }
+      if (resolvedValue) {
+        allKpis.push({
+          label: label || `KPI ${i}`, value: resolvedValue, suffix, icon: rawIcon, color,
+          valueBold, valueItalic, labelBold, labelItalic,
+        });
+      }
+    }
+
+    // Les champs plats (kpi1_icon, kpi2_icon...) sont la source de vérité configurée par l'icon-picker.
+    // NE PAS enrichir/écraser avec config.kpis[] qui contient des icônes différentes.
+    console.log(`📊 [KPI-BANNER] ${allKpis.length} KPIs from flat fields: ${allKpis.map(k => `${k.label}(icon=${k.icon})`).join(', ')}`);
+
+    // Fallback : si pas de champs plats, essayer tableau complet
+    if (allKpis.length === 0 && Array.isArray(config.kpis)) {
+      for (const kpi of (config.kpis as any[])) {
+        if (!kpi || kpi.enabled === false) continue;
+        if (!kpi.label && !kpi.value && !kpi.binding) continue;
+        const rawVal = kpi.binding || kpi.value || '';
+        const resolved = this.substituteVariables(rawVal);
+        if (resolved) {
+          allKpis.push({
+            label: kpi.label || '',
+            value: resolved,
+            suffix: kpi.suffix || '',
+            icon: kpi.icon || '',
+            color: kpi.color || this.theme.primaryColor || '#0F5C60',
+            valueBold: true, valueItalic: false, labelBold: false, labelItalic: false,
+          });
+        }
+      }
+    }
+
+    // Fallback : données de démonstration (couleurs logo 2Thier)
+    if (allKpis.length === 0) {
+      allKpis.push(
+        { label: 'Economie annuelle', value: '1 200', suffix: '/an', icon: '💰', color: '#D9791F', valueBold: true, valueItalic: false, labelBold: false, labelItalic: false },
+        { label: 'ROI', value: '8', suffix: 'ans', icon: '⏰', color: '#0F5C60', valueBold: true, valueItalic: false, labelBold: false, labelItalic: false },
+        { label: 'Gain 15 ans', value: '18 000', suffix: 'EUR', icon: '📈', color: '#D9791F', valueBold: true, valueItalic: false, labelBold: false, labelItalic: false },
+        { label: 'Gain 25 ans', value: '32 000', suffix: 'EUR', icon: '🏆', color: '#0F5C60', valueBold: true, valueItalic: false, labelBold: false, labelItalic: false },
+      );
+    }
+
+    const isOutline = bannerStyle === 'outline';
+    const pad = 6 * this.scaleFactor;
+
+    // ═══ Fond du bandeau ═══
+    if (isOutline) {
+      this.doc
+        .roundedRect(x, y, width, height, cornerRadius)
+        .lineWidth(2 * this.scaleFactor)
+        .strokeColor(gradientFrom)
+        .stroke();
+    } else {
+      // Dégradé simulé
+      const grad = (this.doc as any).linearGradient?.(x, y, x + width, y);
+      if (grad) {
+        grad.stop(0, gradientFrom, 1).stop(1, gradientTo, 1);
+        this.doc.rect(x, y, width, height).fill(grad);
+      } else {
+        // Fallback sans gradient API
+        const halfW = width / 2;
+        this.doc.rect(x, y, halfW, height).fill(gradientFrom);
+        this.doc.rect(x + halfW, y, halfW, height).fill(gradientTo);
+      }
+    }
+
+    const effectiveTextColor = isOutline ? gradientFrom : textColor;
+    const labelColor = isOutline ? '#666666' : '#d4d4d4';
+    const cardOverlay = isOutline ? '#f0f0f0' : '#ffffff';
+
+    // ═══ Layout vertical ═══
+    let currentY = y + pad;
+    const bottomY = y + height - pad;
+
+    // ═══ Mention "* À titre d'information" en haut à droite ═══
+    const disclaimerFs = this.scaleFontSize(compactMode ? 4 : 5);
+    const disclaimerColor = isOutline ? '#999999' : accentColor;
+    this.doc
+      .font('Helvetica-Oblique')
+      .fontSize(disclaimerFs)
+      .fillColor(disclaimerColor)
+      .fillOpacity(isOutline ? 0.7 : 0.85)
+      .text('* A titre d\'information', x + pad, y + 2 * this.scaleFactor, {
+        width: width - pad * 2,
+        align: 'right',
+        lineBreak: false,
+      })
+      .fillOpacity(1);
+
+    // ═══ Titre ═══
+    if (showTitle) {
+      const titleFs = this.scaleFontSize(compactMode ? 8 : 10);
+      this.doc
+        .font('Helvetica-Bold')
+        .fontSize(titleFs)
+        .fillColor(effectiveTextColor);
+
+      const titleText = bannerTitle;
+      const titleW = this.doc.widthOfString(titleText);
+      this.doc.text(titleText, x + pad, currentY, {
+        width: width - pad * 2,
+        align: 'left',
+        lineBreak: false,
+      });
+
+      // Ligne d'accent (commence après le texte réel)
+      const lineY = currentY + titleFs + 1.5 * this.scaleFactor;
+      const lineStartX = x + pad + titleW + 6 * this.scaleFactor;
+      if (lineStartX < x + width - pad) {
+        this.doc
+          .moveTo(lineStartX, lineY)
+          .lineTo(x + width - pad, lineY)
+          .lineWidth(1.5 * this.scaleFactor)
+          .strokeColor(accentColor)
+          .stroke();
+      }
+      currentY = lineY + 3 * this.scaleFactor;
+    }
+
+    // ═══ Reserve pour la barre ROI ═══
+    const roiKpi = allKpis.find(k => k.suffix?.toLowerCase().includes('an'));
+    const hasRoiBar = showProgressBar && roiKpi;
+    const roiReserve = hasRoiBar ? (compactMode ? 14 : 18) * this.scaleFactor : 0;
+
+    // ═══ Grille KPIs ═══
+    const kpiCount = allKpis.length;
+    const kpiGap = 4 * this.scaleFactor;
+    const kpiWidth = (width - pad * 2 - kpiGap * (kpiCount - 1)) / kpiCount;
+    const kpiHeight = Math.max(20 * this.scaleFactor, bottomY - currentY - roiReserve);
+    const kpiY = currentY;
+
+    // Valeur max pour les mini-barres
+    const numericValues = allKpis.map(k => {
+      const cleaned = k.value.replace(/[^\d.,]/g, '').replace(',', '.');
+      return parseFloat(cleaned) || 0;
+    });
+    const maxVal = Math.max(...numericValues, 1);
+
+    // Tailles de police adaptées à la hauteur disponible
+    const valFs = this.scaleFontSize(compactMode ? (kpiCount > 4 ? 11 : 14) : (kpiCount > 4 ? 14 : 18));
+    const sufFs = this.scaleFontSize(compactMode ? 6 : 8);
+    const labFs = this.scaleFontSize(compactMode ? 5.5 : 6.5);
+    const elGap = 1 * this.scaleFactor;
+
+    allKpis.forEach((kpi, idx) => {
+      const kpiX = x + pad + idx * (kpiWidth + kpiGap);
+
+      // Fond de la carte KPI
+      const cardRadius = 3 * this.scaleFactor;
+      if (isOutline) {
+        this.doc
+          .roundedRect(kpiX, kpiY, kpiWidth, kpiHeight, cardRadius)
+          .fillOpacity(0.06).fill(kpi.color).fillOpacity(1);
+        this.doc
+          .roundedRect(kpiX, kpiY, kpiWidth, kpiHeight, cardRadius)
+          .lineWidth(0.5 * this.scaleFactor)
+          .strokeOpacity(0.25).strokeColor(kpi.color).stroke().strokeOpacity(1);
+      } else {
+        this.doc
+          .roundedRect(kpiX, kpiY, kpiWidth, kpiHeight, cardRadius)
+          .fillOpacity(0.12).fill(cardOverlay).fillOpacity(1);
+      }
+
+      // ─── Contenu : centré verticalement (icône À GAUCHE de la valeur) ───
+      const hasIcon = !!(kpi.icon && kpi.icon.trim());
+      const iconSz = hasIcon ? valFs * 0.95 : 0;
+      const iconLeftGap = hasIcon ? 3 * this.scaleFactor : 0;
+      const valueH = valFs + elGap;
+      const labelH = labFs + elGap;
+      const miniBarH = showMiniChart ? 5 * this.scaleFactor : 0;
+      const totalH = valueH + labelH + miniBarH;
+      const topOffset = Math.max(2 * this.scaleFactor, (kpiHeight - totalH) / 2);
+      let innerY = kpiY + topOffset;
+
+      // Valeur + suffixe sur la même ligne
+      const valueFont = kpi.valueBold
+        ? (kpi.valueItalic ? 'Helvetica-BoldOblique' : 'Helvetica-Bold')
+        : (kpi.valueItalic ? 'Helvetica-Oblique' : 'Helvetica');
+      const valueColor = isOutline ? kpi.color : '#ffffff';
+
+      // Calculer la largeur du texte valeur pour positionner le suffixe à droite
+      this.doc.font(valueFont).fontSize(valFs);
+      const valTextW = this.doc.widthOfString(kpi.value);
+      const sufGap = 2 * this.scaleFactor;
+      let sufTextW = 0;
+      if (kpi.suffix) {
+        this.doc.font('Helvetica').fontSize(sufFs);
+        sufTextW = this.doc.widthOfString(kpi.suffix);
+      }
+      // Inclure l'astérisque et l'icône dans le calcul de largeur combinée
+      const asteriskW = 3 * this.scaleFactor;
+      const iconTotalW = hasIcon ? iconSz + iconLeftGap : 0;
+      const combinedW = iconTotalW + valTextW + asteriskW + (kpi.suffix ? sufGap + sufTextW : 0);
+      const startX = kpiX + (kpiWidth - combinedW) / 2;
+
+      // Dessiner l'icône (PNG Twemoji ou fallback vectoriel) à gauche de la valeur
+      if (hasIcon) {
+        const iconCx = startX + iconSz / 2;
+        const iconCy = innerY + valFs / 2;
+        // Extraire l'emoji brut pour vérifier si on a un PNG
+        let rawEmojiCheck = (kpi.icon || '').trim();
+        if (rawEmojiCheck.includes(':')) rawEmojiCheck = rawEmojiCheck.split(':').slice(1).join(':').trim();
+        const hasPng = this.emojiPngCache.has(rawEmojiCheck);
+
+        if (!isOutline && !hasPng) {
+          // Sur dégradé avec fallback vectoriel : fond blanc circulaire
+          this.doc.save();
+          this.doc.circle(iconCx, iconCy, iconSz * 0.44)
+            .fillColor('#ffffff').fillOpacity(0.92).fill()
+            .fillOpacity(1);
+          this.doc.restore();
+        }
+        drawKpiIcon(iconCx, iconCy, iconSz, kpi.color, kpi.icon);
+      }
+
+      // Dessiner la valeur (décalée à droite si icône)
+      const valStartX = startX + iconTotalW;
+      this.doc
+        .font(valueFont)
+        .fontSize(valFs)
+        .fillColor(valueColor)
+        .text(kpi.value, valStartX, innerY, { width: valTextW + 2, lineBreak: false });
+
+      // Astérisque après la valeur (rappel mention) — orange accent
+      const asteriskFs = this.scaleFontSize(compactMode ? 5 : 6);
+      const asteriskColor = isOutline ? kpi.color : accentColor;
+      this.doc
+        .font('Helvetica')
+        .fontSize(asteriskFs)
+        .fillColor(asteriskColor)
+        .fillOpacity(isOutline ? 0.6 : 0.85)
+        .text('*', valStartX + valTextW, innerY, { width: 6 * this.scaleFactor, lineBreak: false })
+        .fillOpacity(1);
+
+      // Dessiner le suffixe à droite, aligné sur la baseline
+      if (kpi.suffix) {
+        const sufColor = valueColor;
+        const baselineOffset = valFs - sufFs;
+        this.doc
+          .font('Helvetica')
+          .fontSize(sufFs)
+          .fillColor(sufColor)
+          .text(kpi.suffix, valStartX + valTextW + asteriskW + sufGap, innerY + baselineOffset, { width: sufTextW + 2, lineBreak: false });
+      }
+      innerY += valueH;
+
+      // Label (tout en haut caps)
+      const labelFont = kpi.labelBold
+        ? (kpi.labelItalic ? 'Helvetica-BoldOblique' : 'Helvetica-Bold')
+        : (kpi.labelItalic ? 'Helvetica-Oblique' : 'Helvetica');
+      this.doc
+        .font(labelFont)
+        .fontSize(labFs)
+        .fillColor(labelColor)
+        .text(kpi.label.toUpperCase(), kpiX + 1, innerY, {
+          width: kpiWidth - 2,
+          align: 'center',
+          lineBreak: false,
+        });
+      innerY += labelH;
+
+      // Mini barre de progression
+      if (showMiniChart) {
+        const numVal = numericValues[idx];
+        if (numVal > 0) {
+          const barW = kpiWidth * 0.6;
+          const barH = 2.5 * this.scaleFactor;
+          const barX = kpiX + (kpiWidth - barW) / 2;
+          const barY = Math.min(innerY, kpiY + kpiHeight - 4 * this.scaleFactor);
+          // Track
+          const trackColor = isOutline ? '#e5e7eb' : '#ffffff';
+          this.doc
+            .roundedRect(barX, barY, barW, barH, 1.5 * this.scaleFactor)
+            .fillOpacity(0.2).fill(trackColor).fillOpacity(1);
+          // Fill (décoratif — 100%)
+          this.doc
+            .roundedRect(barX, barY, barW, barH, 1.5 * this.scaleFactor)
+            .fill(accentColor);
+        }
+      }
+    });
+
+    // ═══ Barre ROI globale ═══
+    if (hasRoiBar && roiKpi) {
+      const roiNumeric = parseFloat(roiKpi.value.replace(/[^\d.,]/g, '').replace(',', '.')) || 0;
+      if (roiNumeric > 0) {
+        const barH = 4 * this.scaleFactor;
+        const barY2 = bottomY - barH - (compactMode ? 4 : 6) * this.scaleFactor;
+        const barX = x + pad;
+        const pct = Math.min(100, Math.round((1 / roiNumeric) * 100 * 15));
+
+        // Label "ROI"
+        const roiLabelFs = this.scaleFontSize(compactMode ? 5.5 : 6.5);
+        this.doc
+          .font('Helvetica-Bold')
+          .fontSize(roiLabelFs)
+          .fillColor(labelColor)
+          .text('ROI', barX, barY2, { width: 18 * this.scaleFactor, align: 'left', lineBreak: false });
+
+        const trackX = barX + 20 * this.scaleFactor;
+        const barFullW = width - pad * 2 - 20 * this.scaleFactor - 30 * this.scaleFactor;
+
+        // Track
+        const trackColor = isOutline ? '#e5e7eb' : '#ffffff';
+        this.doc
+          .roundedRect(trackX, barY2, barFullW, barH, 2 * this.scaleFactor)
+          .fillOpacity(0.15).fill(trackColor).fillOpacity(1);
+        // Fill
+        const fillW = Math.max(barH, (pct / 100) * barFullW);
+        this.doc
+          .roundedRect(trackX, barY2, fillW, barH, 2 * this.scaleFactor)
+          .fill(accentColor);
+
+        // Percentage
+        this.doc
+          .font('Helvetica-Bold')
+          .fontSize(this.scaleFontSize(compactMode ? 6 : 7))
+          .fillColor(accentColor)
+          .text(`${pct}%`, trackX + barFullW + 3 * this.scaleFactor, barY2, {
+            width: 28 * this.scaleFactor,
+            align: 'left',
+            lineBreak: false,
+          });
+      }
+    }
+
+    this.doc.restore();
   }
 
   private ensureDocumentIsA4(): void {

@@ -1,4 +1,6 @@
 import React from 'react';
+import ReactMarkdown from 'react-markdown';
+import remarkBreaks from 'remark-breaks';
 import { Tooltip } from 'antd';
 
 // 🎯 Types pour les différents contenus de tooltip
@@ -40,11 +42,25 @@ export const FlexibleTooltip: React.FC<{
           {Array.isArray(content.text) ? (
             content.text.map((text, idx) => (
               <div key={idx} style={{ marginBottom: 4 }}>
-                {text}
+                <ReactMarkdown
+                  components={{
+                    strong: ({node, ...props}) => <strong style={{ fontWeight: 700 }}>{props.children}</strong>,
+                    em: ({node, ...props}) => <em style={{ fontStyle: 'italic' }}>{props.children}</em>,
+                    p: ({node, ...props}) => <p style={{ margin: '2px 0' }}>{props.children}</p>,
+                  }}
+                >{text}</ReactMarkdown>
               </div>
             ))
           ) : (
-            <div>{content.text}</div>
+            <div>
+              <ReactMarkdown                remarkPlugins={[remarkBreaks]}                remarkPlugins={[remarkBreaks]}
+                components={{
+                  strong: ({node, ...props}) => <strong style={{ fontWeight: 700 }}>{props.children}</strong>,
+                  em: ({node, ...props}) => <em style={{ fontStyle: 'italic' }}>{props.children}</em>,
+                  p: ({node, ...props}) => <p style={{ margin: '2px 0' }}>{props.children}</p>,
+                }}
+              >{content.text}</ReactMarkdown>
+            </div>
           )}
         </div>
       )}

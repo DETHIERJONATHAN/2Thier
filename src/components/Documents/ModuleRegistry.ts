@@ -34,7 +34,7 @@ export interface ModuleDefinition {
 export interface ConfigField {
   key: string;
   label: string;
-  type: 'text' | 'textarea' | 'number' | 'color' | 'select' | 'image' | 'toggle' | 'date' | 'rich-text' | 'data-binding';
+  type: 'text' | 'textarea' | 'number' | 'color' | 'select' | 'image' | 'toggle' | 'date' | 'rich-text' | 'data-binding' | 'icon-picker';
   options?: { value: string; label: string }[];
   defaultValue?: any;
   placeholder?: string;
@@ -758,15 +758,19 @@ export const MODULE_REGISTRY: ModuleDefinition[] = [
       { key: 'companyEmailBinding', label: '🔗 Lier email', type: 'data-binding', group: 'data' },
       { key: 'companyTVA', label: 'TVA entreprise', type: 'text', placeholder: '{org.tva}', allowManualInput: true },
       { key: 'companyTVABinding', label: '🔗 Lier TVA', type: 'data-binding', group: 'data' },
-      { key: 'clientTitle', label: 'Titre client', type: 'text', defaultValue: 'Client:', allowManualInput: true },
+      { key: 'clientTitle', label: 'Titre client', type: 'text', defaultValue: 'Client', allowManualInput: true },
       { key: 'clientName', label: 'Nom client', type: 'text', placeholder: '{lead.firstName} {lead.lastName}', allowManualInput: true },
       { key: 'clientNameBinding', label: '🔗 Lier nom client', type: 'data-binding', group: 'data' },
       { key: 'clientCompany', label: 'Société client', type: 'text', placeholder: '{lead.company}', allowManualInput: true },
       { key: 'clientCompanyBinding', label: '🔗 Lier société', type: 'data-binding', group: 'data' },
       { key: 'clientAddress', label: 'Adresse client', type: 'textarea', placeholder: '{lead.address}', allowManualInput: true },
       { key: 'clientAddressBinding', label: '🔗 Lier adresse client', type: 'data-binding', group: 'data' },
+      { key: 'clientPhone', label: 'Tél. client', type: 'text', placeholder: '{lead.phone}', allowManualInput: true },
+      { key: 'clientPhoneBinding', label: '🔗 Lier tél. client', type: 'data-binding', group: 'data' },
       { key: 'clientEmail', label: 'Email client', type: 'text', placeholder: '{lead.email}', allowManualInput: true },
       { key: 'clientEmailBinding', label: '🔗 Lier email client', type: 'data-binding', group: 'data' },
+      { key: 'clientTVA', label: 'TVA client', type: 'text', placeholder: '{lead.tva}', allowManualInput: true },
+      { key: 'clientTVABinding', label: '🔗 Lier TVA client', type: 'data-binding', group: 'data' },
       { key: 'showLogo', label: 'Afficher logo', type: 'toggle', defaultValue: true },
       { key: 'showCompanyInfo', label: 'Afficher infos entreprise', type: 'toggle', defaultValue: true },
       { key: 'showClientInfo', label: 'Afficher infos client', type: 'toggle', defaultValue: true },
@@ -1242,6 +1246,311 @@ export const MODULE_REGISTRY: ModuleDefinition[] = [
       { key: 'showName', label: 'Afficher nom', type: 'toggle', defaultValue: true },
       { key: 'showDate', label: 'Afficher date', type: 'toggle', defaultValue: true },
       { key: 'showSignature', label: 'Afficher signature', type: 'toggle', defaultValue: true },
+    ]
+  },
+
+  /**
+   * 💰 BANDEAU KPI / ROI
+   * Bandeau graphique dynamique avec indicateurs clés : économie, ROI, gains 15/25 ans, etc.
+   * Chaque KPI est configurable, lié à des données TBL, et le bandeau s'adapte automatiquement.
+   * Jusqu'à 8 indicateurs personnalisables avec icônes, couleurs et mini-barres.
+   */
+  {
+    id: 'KPI_BANNER',
+    name: 'Bandeau KPI / ROI',
+    icon: '💰',
+    category: 'data',
+    description: 'Bandeau graphique avec indicateurs clés : économie, ROI, gains, revente, etc. Entièrement dynamique et personnalisable.',
+    resizable: true,
+    defaultSize: { width: 100, height: 14 },
+    defaultConfig: {
+      title: 'Votre Investissement en un coup d\'œil',
+      showTitle: true,
+      style: 'gradient', // gradient | glass | solid | outline
+      gradientFrom: '#0F5C60',
+      gradientTo: '#0A3E42',
+      accentColor: '#D9791F',
+      textColor: '#ffffff',
+      cornerRadius: 12,
+      showMiniChart: true,
+      showProgressBar: true,
+      compactMode: true,
+      layout: 'horizontal', // horizontal | compact
+      // KPI 1 : Économie annuelle
+      kpi1_label: 'Économie annuelle',
+      kpi1_value: '1 200',
+      kpi1_suffix: '€/an',
+      kpi1_icon: '⚡',
+      kpi1_color: '#D9791F',
+      kpi1_decimals: 'auto',
+      kpi1_separator: true,
+      kpi1_valueBold: true,
+      kpi1_valueItalic: false,
+      kpi1_labelBold: false,
+      kpi1_labelItalic: false,
+      // KPI 2 : ROI
+      kpi2_label: 'Retour sur investissement',
+      kpi2_value: '8',
+      kpi2_suffix: 'ans',
+      kpi2_icon: '🔄',
+      kpi2_color: '#0F5C60',
+      kpi2_decimals: 'auto',
+      kpi2_separator: true,
+      kpi2_valueBold: true,
+      kpi2_valueItalic: false,
+      kpi2_labelBold: false,
+      kpi2_labelItalic: false,
+      // KPI 3 : Gain 15 ans
+      kpi3_label: 'Gain sur 15 ans',
+      kpi3_value: '18 000',
+      kpi3_suffix: '€',
+      kpi3_icon: '📈',
+      kpi3_color: '#D9791F',
+      kpi3_decimals: 'auto',
+      kpi3_separator: true,
+      kpi3_valueBold: true,
+      kpi3_valueItalic: false,
+      kpi3_labelBold: false,
+      kpi3_labelItalic: false,
+      // KPI 4 : Gain 25 ans
+      kpi4_label: 'Gain sur 25 ans',
+      kpi4_value: '32 000',
+      kpi4_suffix: '€',
+      kpi4_icon: '🏆',
+      kpi4_color: '#0F5C60',
+      kpi4_decimals: 'auto',
+      kpi4_separator: true,
+      kpi4_valueBold: true,
+      kpi4_valueItalic: false,
+      kpi4_labelBold: false,
+      kpi4_labelItalic: false,
+    },
+    themes: [
+      {
+        id: '2thier-brand',
+        name: '2Thier (Logo)',
+        description: 'Vert pétrole + accent orange du logo 2Thier',
+        styles: { gradientFrom: '#0F5C60', gradientTo: '#0A3E42', accentColor: '#D9791F' }
+      },
+      {
+        id: 'energy-green',
+        name: 'Énergie Verte',
+        description: 'Dégradé vert énergie → bleu ciel',
+        styles: { gradientFrom: '#059669', gradientTo: '#0284c7' }
+      },
+      {
+        id: 'solar-gold',
+        name: 'Solaire Doré',
+        description: 'Dégradé orange solaire → jaune doré',
+        styles: { gradientFrom: '#ea580c', gradientTo: '#d97706' }
+      },
+      {
+        id: 'premium-dark',
+        name: 'Premium Sombre',
+        description: 'Fond sombre avec accents lumineux',
+        styles: { gradientFrom: '#1e293b', gradientTo: '#334155' }
+      },
+      {
+        id: 'eco-nature',
+        name: 'Éco Nature',
+        description: 'Vert forêt → émeraude',
+        styles: { gradientFrom: '#065f46', gradientTo: '#047857' }
+      },
+      {
+        id: 'corporate-blue',
+        name: 'Corporate Bleu',
+        description: 'Bleu professionnel',
+        styles: { gradientFrom: '#1e3a5f', gradientTo: '#2563eb' }
+      },
+      {
+        id: 'glass',
+        name: 'Glass / Transparent',
+        description: 'Effet verre dépoli',
+        styles: { gradientFrom: 'rgba(255,255,255,0.15)', gradientTo: 'rgba(255,255,255,0.05)' }
+      },
+    ],
+    configFields: [
+      // ═══ Apparence générale ═══
+      { key: 'title', label: 'Titre du bandeau', type: 'text', defaultValue: 'Votre Investissement en un coup d\'œil', group: 'apparence' },
+      { key: 'showTitle', label: 'Afficher titre', type: 'toggle', defaultValue: true, group: 'apparence' },
+      { key: 'style', label: 'Style', type: 'select', options: [
+        { value: 'gradient', label: '🌈 Dégradé' },
+        { value: 'glass', label: '🪟 Glass / Dépoli' },
+        { value: 'solid', label: '🟩 Couleur unie' },
+        { value: 'outline', label: '🔲 Contour' },
+      ], group: 'apparence' },
+      { key: 'gradientFrom', label: 'Couleur dégradé début', type: 'color', defaultValue: '#0F5C60', group: 'apparence' },
+      { key: 'gradientTo', label: 'Couleur dégradé fin', type: 'color', defaultValue: '#0A3E42', group: 'apparence' },
+      { key: 'accentColor', label: 'Couleur accent', type: 'color', defaultValue: '#D9791F', group: 'apparence' },
+      { key: 'textColor', label: 'Couleur texte', type: 'color', defaultValue: '#ffffff', group: 'apparence' },
+      { key: 'cornerRadius', label: 'Coins arrondis (px)', type: 'number', defaultValue: 12, group: 'apparence' },
+      { key: 'layout', label: 'Disposition', type: 'select', options: [
+        { value: 'horizontal', label: '↔️ Horizontal' },
+        { value: 'compact', label: '📦 Compact (2 lignes)' },
+      ], group: 'apparence' },
+      { key: 'showMiniChart', label: 'Mini graphique', type: 'toggle', defaultValue: true, group: 'apparence' },
+      { key: 'showProgressBar', label: 'Barre de progression ROI', type: 'toggle', defaultValue: true, group: 'apparence' },
+      { key: 'compactMode', label: '📏 Mode compact (plus fin)', type: 'toggle', defaultValue: true, group: 'apparence' },
+
+      // ═══ KPI 1 : Économie ═══
+      { key: 'kpi1_label', label: '⚡ KPI 1 - Label', type: 'text', placeholder: 'Économie annuelle', group: 'KPI 1' },
+      { key: 'kpi1_value', label: 'KPI 1 - Valeur', type: 'text', placeholder: '1 200', allowManualInput: true, group: 'KPI 1' },
+      { key: 'kpi1_binding', label: '🔗 KPI 1 - Lier TBL', type: 'data-binding', group: 'KPI 1' },
+      { key: 'kpi1_suffix', label: 'KPI 1 - Unité', type: 'text', placeholder: '€/an', group: 'KPI 1' },
+      { key: 'kpi1_icon', label: 'KPI 1 - Icône', type: 'icon-picker', placeholder: '⚡', group: 'KPI 1' },
+      { key: 'kpi1_color', label: 'KPI 1 - Couleur', type: 'color', defaultValue: '#34d399', group: 'KPI 1' },
+      { key: 'kpi1_decimals', label: 'KPI 1 - Décimales', type: 'select', options: [
+        { value: 'auto', label: 'Auto (brut)' },
+        { value: '0', label: '0 (entier)' },
+        { value: '1', label: '1 décimale' },
+        { value: '2', label: '2 décimales' },
+        { value: '3', label: '3 décimales' },
+      ], defaultValue: 'auto', group: 'KPI 1' },
+      { key: 'kpi1_separator', label: 'KPI 1 - Séparateur milliers', type: 'toggle', defaultValue: true, group: 'KPI 1' },
+      { key: 'kpi1_valueBold', label: 'KPI 1 - Valeur en gras', type: 'toggle', defaultValue: true, group: 'KPI 1' },
+      { key: 'kpi1_valueItalic', label: 'KPI 1 - Valeur en italique', type: 'toggle', defaultValue: false, group: 'KPI 1' },
+      { key: 'kpi1_labelBold', label: 'KPI 1 - Label en gras', type: 'toggle', defaultValue: false, group: 'KPI 1' },
+      { key: 'kpi1_labelItalic', label: 'KPI 1 - Label en italique', type: 'toggle', defaultValue: false, group: 'KPI 1' },
+
+      // ═══ KPI 2 : ROI ═══
+      { key: 'kpi2_label', label: '🔄 KPI 2 - Label', type: 'text', placeholder: 'Retour sur investissement', group: 'KPI 2' },
+      { key: 'kpi2_value', label: 'KPI 2 - Valeur', type: 'text', placeholder: '8', allowManualInput: true, group: 'KPI 2' },
+      { key: 'kpi2_binding', label: '🔗 KPI 2 - Lier TBL', type: 'data-binding', group: 'KPI 2' },
+      { key: 'kpi2_suffix', label: 'KPI 2 - Unité', type: 'text', placeholder: 'ans', group: 'KPI 2' },
+      { key: 'kpi2_icon', label: 'KPI 2 - Icône', type: 'icon-picker', placeholder: '🔄', group: 'KPI 2' },
+      { key: 'kpi2_color', label: 'KPI 2 - Couleur', type: 'color', defaultValue: '#0F5C60', group: 'KPI 2' },
+      { key: 'kpi2_decimals', label: 'KPI 2 - Décimales', type: 'select', options: [
+        { value: 'auto', label: 'Auto (brut)' },
+        { value: '0', label: '0 (entier)' },
+        { value: '1', label: '1 décimale' },
+        { value: '2', label: '2 décimales' },
+        { value: '3', label: '3 décimales' },
+      ], defaultValue: 'auto', group: 'KPI 2' },
+      { key: 'kpi2_separator', label: 'KPI 2 - Séparateur milliers', type: 'toggle', defaultValue: true, group: 'KPI 2' },
+      { key: 'kpi2_valueBold', label: 'KPI 2 - Valeur en gras', type: 'toggle', defaultValue: true, group: 'KPI 2' },
+      { key: 'kpi2_valueItalic', label: 'KPI 2 - Valeur en italique', type: 'toggle', defaultValue: false, group: 'KPI 2' },
+      { key: 'kpi2_labelBold', label: 'KPI 2 - Label en gras', type: 'toggle', defaultValue: false, group: 'KPI 2' },
+      { key: 'kpi2_labelItalic', label: 'KPI 2 - Label en italique', type: 'toggle', defaultValue: false, group: 'KPI 2' },
+
+      // ═══ KPI 3 : Gain 15 ans ═══
+      { key: 'kpi3_label', label: '📈 KPI 3 - Label', type: 'text', placeholder: 'Gain sur 15 ans', group: 'KPI 3' },
+      { key: 'kpi3_value', label: 'KPI 3 - Valeur', type: 'text', placeholder: '18 000', allowManualInput: true, group: 'KPI 3' },
+      { key: 'kpi3_binding', label: '🔗 KPI 3 - Lier TBL', type: 'data-binding', group: 'KPI 3' },
+      { key: 'kpi3_suffix', label: 'KPI 3 - Unité', type: 'text', placeholder: '€', group: 'KPI 3' },
+      { key: 'kpi3_icon', label: 'KPI 3 - Icône', type: 'icon-picker', placeholder: '📈', group: 'KPI 3' },
+      { key: 'kpi3_color', label: 'KPI 3 - Couleur', type: 'color', defaultValue: '#fbbf24', group: 'KPI 3' },
+      { key: 'kpi3_decimals', label: 'KPI 3 - Décimales', type: 'select', options: [
+        { value: 'auto', label: 'Auto (brut)' },
+        { value: '0', label: '0 (entier)' },
+        { value: '1', label: '1 décimale' },
+        { value: '2', label: '2 décimales' },
+        { value: '3', label: '3 décimales' },
+      ], defaultValue: 'auto', group: 'KPI 3' },
+      { key: 'kpi3_separator', label: 'KPI 3 - Séparateur milliers', type: 'toggle', defaultValue: true, group: 'KPI 3' },
+      { key: 'kpi3_valueBold', label: 'KPI 3 - Valeur en gras', type: 'toggle', defaultValue: true, group: 'KPI 3' },
+      { key: 'kpi3_valueItalic', label: 'KPI 3 - Valeur en italique', type: 'toggle', defaultValue: false, group: 'KPI 3' },
+      { key: 'kpi3_labelBold', label: 'KPI 3 - Label en gras', type: 'toggle', defaultValue: false, group: 'KPI 3' },
+      { key: 'kpi3_labelItalic', label: 'KPI 3 - Label en italique', type: 'toggle', defaultValue: false, group: 'KPI 3' },
+
+      // ═══ KPI 4 : Gain 25 ans ═══
+      { key: 'kpi4_label', label: '🏆 KPI 4 - Label', type: 'text', placeholder: 'Gain sur 25 ans', group: 'KPI 4' },
+      { key: 'kpi4_value', label: 'KPI 4 - Valeur', type: 'text', placeholder: '32 000', allowManualInput: true, group: 'KPI 4' },
+      { key: 'kpi4_binding', label: '🔗 KPI 4 - Lier TBL', type: 'data-binding', group: 'KPI 4' },
+      { key: 'kpi4_suffix', label: 'KPI 4 - Unité', type: 'text', placeholder: '€', group: 'KPI 4' },
+      { key: 'kpi4_icon', label: 'KPI 4 - Icône', type: 'icon-picker', placeholder: '🏆', group: 'KPI 4' },
+      { key: 'kpi4_color', label: 'KPI 4 - Couleur', type: 'color', defaultValue: '#a78bfa', group: 'KPI 4' },
+      { key: 'kpi4_decimals', label: 'KPI 4 - Décimales', type: 'select', options: [
+        { value: 'auto', label: 'Auto (brut)' },
+        { value: '0', label: '0 (entier)' },
+        { value: '1', label: '1 décimale' },
+        { value: '2', label: '2 décimales' },
+        { value: '3', label: '3 décimales' },
+      ], defaultValue: 'auto', group: 'KPI 4' },
+      { key: 'kpi4_separator', label: 'KPI 4 - Séparateur milliers', type: 'toggle', defaultValue: true, group: 'KPI 4' },
+      { key: 'kpi4_valueBold', label: 'KPI 4 - Valeur en gras', type: 'toggle', defaultValue: true, group: 'KPI 4' },
+      { key: 'kpi4_valueItalic', label: 'KPI 4 - Valeur en italique', type: 'toggle', defaultValue: false, group: 'KPI 4' },
+      { key: 'kpi4_labelBold', label: 'KPI 4 - Label en gras', type: 'toggle', defaultValue: false, group: 'KPI 4' },
+      { key: 'kpi4_labelItalic', label: 'KPI 4 - Label en italique', type: 'toggle', defaultValue: false, group: 'KPI 4' },
+
+      // ═══ KPI 5 : Personnalisable ═══
+      { key: 'kpi5_label', label: '💡 KPI 5 - Label', type: 'text', placeholder: 'Revente du courant', group: 'KPI 5 (extra)' },
+      { key: 'kpi5_value', label: 'KPI 5 - Valeur', type: 'text', placeholder: '', allowManualInput: true, group: 'KPI 5 (extra)' },
+      { key: 'kpi5_binding', label: '🔗 KPI 5 - Lier TBL', type: 'data-binding', group: 'KPI 5 (extra)' },
+      { key: 'kpi5_suffix', label: 'KPI 5 - Unité', type: 'text', placeholder: '€/an', group: 'KPI 5 (extra)' },
+      { key: 'kpi5_icon', label: 'KPI 5 - Icône', type: 'icon-picker', placeholder: '💡', group: 'KPI 5 (extra)' },
+      { key: 'kpi5_color', label: 'KPI 5 - Couleur', type: 'color', defaultValue: '#f472b6', group: 'KPI 5 (extra)' },
+      { key: 'kpi5_decimals', label: 'KPI 5 - Décimales', type: 'select', options: [
+        { value: 'auto', label: 'Auto (brut)' },
+        { value: '0', label: '0 (entier)' },
+        { value: '1', label: '1 décimale' },
+        { value: '2', label: '2 décimales' },
+        { value: '3', label: '3 décimales' },
+      ], defaultValue: 'auto', group: 'KPI 5 (extra)' },
+      { key: 'kpi5_separator', label: 'KPI 5 - Séparateur milliers', type: 'toggle', defaultValue: true, group: 'KPI 5 (extra)' },
+      { key: 'kpi5_valueBold', label: 'KPI 5 - Valeur en gras', type: 'toggle', defaultValue: true, group: 'KPI 5 (extra)' },
+      { key: 'kpi5_valueItalic', label: 'KPI 5 - Valeur en italique', type: 'toggle', defaultValue: false, group: 'KPI 5 (extra)' },
+      { key: 'kpi5_labelBold', label: 'KPI 5 - Label en gras', type: 'toggle', defaultValue: false, group: 'KPI 5 (extra)' },
+      { key: 'kpi5_labelItalic', label: 'KPI 5 - Label en italique', type: 'toggle', defaultValue: false, group: 'KPI 5 (extra)' },
+
+      // ═══ KPI 6 : Personnalisable ═══
+      { key: 'kpi6_label', label: '🌱 KPI 6 - Label', type: 'text', placeholder: 'Subvention', group: 'KPI 6 (extra)' },
+      { key: 'kpi6_value', label: 'KPI 6 - Valeur', type: 'text', placeholder: '', allowManualInput: true, group: 'KPI 6 (extra)' },
+      { key: 'kpi6_binding', label: '🔗 KPI 6 - Lier TBL', type: 'data-binding', group: 'KPI 6 (extra)' },
+      { key: 'kpi6_suffix', label: 'KPI 6 - Unité', type: 'text', placeholder: '€', group: 'KPI 6 (extra)' },
+      { key: 'kpi6_icon', label: 'KPI 6 - Icône', type: 'icon-picker', placeholder: '🌱', group: 'KPI 6 (extra)' },
+      { key: 'kpi6_color', label: 'KPI 6 - Couleur', type: 'color', defaultValue: '#4ade80', group: 'KPI 6 (extra)' },
+      { key: 'kpi6_decimals', label: 'KPI 6 - Décimales', type: 'select', options: [
+        { value: 'auto', label: 'Auto (brut)' },
+        { value: '0', label: '0 (entier)' },
+        { value: '1', label: '1 décimale' },
+        { value: '2', label: '2 décimales' },
+        { value: '3', label: '3 décimales' },
+      ], defaultValue: 'auto', group: 'KPI 6 (extra)' },
+      { key: 'kpi6_separator', label: 'KPI 6 - Séparateur milliers', type: 'toggle', defaultValue: true, group: 'KPI 6 (extra)' },
+      { key: 'kpi6_valueBold', label: 'KPI 6 - Valeur en gras', type: 'toggle', defaultValue: true, group: 'KPI 6 (extra)' },
+      { key: 'kpi6_valueItalic', label: 'KPI 6 - Valeur en italique', type: 'toggle', defaultValue: false, group: 'KPI 6 (extra)' },
+      { key: 'kpi6_labelBold', label: 'KPI 6 - Label en gras', type: 'toggle', defaultValue: false, group: 'KPI 6 (extra)' },
+      { key: 'kpi6_labelItalic', label: 'KPI 6 - Label en italique', type: 'toggle', defaultValue: false, group: 'KPI 6 (extra)' },
+
+      // ═══ KPI 7 : Personnalisable ═══
+      { key: 'kpi7_label', label: '📊 KPI 7 - Label', type: 'text', placeholder: '', group: 'KPI 7 (extra)' },
+      { key: 'kpi7_value', label: 'KPI 7 - Valeur', type: 'text', placeholder: '', allowManualInput: true, group: 'KPI 7 (extra)' },
+      { key: 'kpi7_binding', label: '🔗 KPI 7 - Lier TBL', type: 'data-binding', group: 'KPI 7 (extra)' },
+      { key: 'kpi7_suffix', label: 'KPI 7 - Unité', type: 'text', placeholder: '', group: 'KPI 7 (extra)' },
+      { key: 'kpi7_icon', label: 'KPI 7 - Icône', type: 'icon-picker', placeholder: '📊', group: 'KPI 7 (extra)' },
+      { key: 'kpi7_color', label: 'KPI 7 - Couleur', type: 'color', defaultValue: '#fb923c', group: 'KPI 7 (extra)' },
+      { key: 'kpi7_decimals', label: 'KPI 7 - Décimales', type: 'select', options: [
+        { value: 'auto', label: 'Auto (brut)' },
+        { value: '0', label: '0 (entier)' },
+        { value: '1', label: '1 décimale' },
+        { value: '2', label: '2 décimales' },
+        { value: '3', label: '3 décimales' },
+      ], defaultValue: 'auto', group: 'KPI 7 (extra)' },
+      { key: 'kpi7_separator', label: 'KPI 7 - Séparateur milliers', type: 'toggle', defaultValue: true, group: 'KPI 7 (extra)' },
+      { key: 'kpi7_valueBold', label: 'KPI 7 - Valeur en gras', type: 'toggle', defaultValue: true, group: 'KPI 7 (extra)' },
+      { key: 'kpi7_valueItalic', label: 'KPI 7 - Valeur en italique', type: 'toggle', defaultValue: false, group: 'KPI 7 (extra)' },
+      { key: 'kpi7_labelBold', label: 'KPI 7 - Label en gras', type: 'toggle', defaultValue: false, group: 'KPI 7 (extra)' },
+      { key: 'kpi7_labelItalic', label: 'KPI 7 - Label en italique', type: 'toggle', defaultValue: false, group: 'KPI 7 (extra)' },
+
+      // ═══ KPI 8 : Personnalisable ═══
+      { key: 'kpi8_label', label: '🔋 KPI 8 - Label', type: 'text', placeholder: '', group: 'KPI 8 (extra)' },
+      { key: 'kpi8_value', label: 'KPI 8 - Valeur', type: 'text', placeholder: '', allowManualInput: true, group: 'KPI 8 (extra)' },
+      { key: 'kpi8_binding', label: '🔗 KPI 8 - Lier TBL', type: 'data-binding', group: 'KPI 8 (extra)' },
+      { key: 'kpi8_suffix', label: 'KPI 8 - Unité', type: 'text', placeholder: '', group: 'KPI 8 (extra)' },
+      { key: 'kpi8_icon', label: 'KPI 8 - Icône', type: 'icon-picker', placeholder: '🔋', group: 'KPI 8 (extra)' },
+      { key: 'kpi8_color', label: 'KPI 8 - Couleur', type: 'color', defaultValue: '#38bdf8', group: 'KPI 8 (extra)' },
+      { key: 'kpi8_decimals', label: 'KPI 8 - Décimales', type: 'select', options: [
+        { value: 'auto', label: 'Auto (brut)' },
+        { value: '0', label: '0 (entier)' },
+        { value: '1', label: '1 décimale' },
+        { value: '2', label: '2 décimales' },
+        { value: '3', label: '3 décimales' },
+      ], defaultValue: 'auto', group: 'KPI 8 (extra)' },
+      { key: 'kpi8_separator', label: 'KPI 8 - Séparateur milliers', type: 'toggle', defaultValue: true, group: 'KPI 8 (extra)' },
+      { key: 'kpi8_valueBold', label: 'KPI 8 - Valeur en gras', type: 'toggle', defaultValue: true, group: 'KPI 8 (extra)' },
+      { key: 'kpi8_valueItalic', label: 'KPI 8 - Valeur en italique', type: 'toggle', defaultValue: false, group: 'KPI 8 (extra)' },
+      { key: 'kpi8_labelBold', label: 'KPI 8 - Label en gras', type: 'toggle', defaultValue: false, group: 'KPI 8 (extra)' },
+      { key: 'kpi8_labelItalic', label: 'KPI 8 - Label en italique', type: 'toggle', defaultValue: false, group: 'KPI 8 (extra)' },
     ]
   },
 ];

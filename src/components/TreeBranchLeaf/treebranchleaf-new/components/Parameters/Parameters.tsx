@@ -1822,13 +1822,13 @@ const Parameters: React.FC<ParametersProps> = (props) => {
                   </Button>
                 </Tooltip>
                 
-                <Tooltip title="Requis">
+                <Tooltip title={isContainerNode ? "Requis (rend tous les sous-champs obligatoires)" : "Requis"}>
                   <Button
                     type={isRequired ? "primary" : "default"}
                     size="small"
                     style={{ width: 24, height: 24, padding: 0 }}
                     onClick={() => handleRequiredChange(!isRequired)}
-                    disabled={props.readOnly || isContainerNode}
+                    disabled={props.readOnly}
                   >
                     *
                   </Button>

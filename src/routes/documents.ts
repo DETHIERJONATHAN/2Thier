@@ -1952,16 +1952,27 @@ router.post('/templates/:templateId/preview-pdf', async (req: Request, res: Resp
       translations: {}
     }));
 
-    // Construire le thème
-    const theme = globalTheme ? {
-      primaryColor: globalTheme.primaryColor || '#1890ff',
-      secondaryColor: globalTheme.secondaryColor || '#52c41a',
-      accentColor: globalTheme.accentColor || '#faad14',
-      textColor: globalTheme.textColor || '#333333',
-      backgroundColor: globalTheme.backgroundColor || '#ffffff',
-      fontFamily: globalTheme.fontFamily || 'Helvetica',
-      fontSize: globalTheme.fontSize || 12,
-      logoUrl: globalTheme.logoUrl || ''
+    // Construire le thème — priorité: globalTheme du body > DocumentTheme en DB > défaut
+    let themeSource = globalTheme;
+    if (!themeSource) {
+      // Charger le thème depuis le template en DB
+      const templateWithTheme = await prisma.documentTemplate.findFirst({
+        where: { id: templateId },
+        include: { DocumentTheme: true }
+      });
+      if (templateWithTheme?.DocumentTheme) {
+        themeSource = templateWithTheme.DocumentTheme;
+      }
+    }
+    const theme = themeSource ? {
+      primaryColor: themeSource.primaryColor || '#1890ff',
+      secondaryColor: themeSource.secondaryColor || '#52c41a',
+      accentColor: themeSource.accentColor || '#faad14',
+      textColor: themeSource.textColor || '#333333',
+      backgroundColor: themeSource.backgroundColor || '#ffffff',
+      fontFamily: themeSource.fontFamily || 'Helvetica',
+      fontSize: themeSource.fontSize || 12,
+      logoUrl: themeSource.logoUrl || ''
     } : {
       primaryColor: '#1890ff',
       secondaryColor: '#52c41a',
