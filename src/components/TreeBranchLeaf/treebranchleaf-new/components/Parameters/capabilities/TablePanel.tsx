@@ -161,12 +161,12 @@
  */
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Button, Card, Divider, Input, InputNumber, Select, Space, Switch, Table, Tooltip, Typography, message, Progress, Spin, Timeline, Statistic, Row, Col } from 'antd';
+import { Button, Card, Divider, Dropdown, Input, InputNumber, Select, Space, Switch, Table, Tooltip, Typography, message, Progress, Spin, Timeline, Statistic, Row, Col } from 'antd';
 import { useAuthenticatedApi } from '../../../../../../hooks/useAuthenticatedApi';
 import { useTBLBatch } from '../../../TBL/contexts/TBLBatchContext';
 import { useDebouncedCallback } from '../../../hooks/useDebouncedCallback';
 import * as XLSX from 'xlsx';
-import { DeleteOutlined, PlusOutlined, InfoCircleOutlined, DownloadOutlined, FilterOutlined, PlayCircleOutlined, BulbOutlined, CheckCircleOutlined, CloseCircleOutlined, ThunderboltOutlined, FullscreenOutlined } from '@ant-design/icons';
+import { DeleteOutlined, PlusOutlined, LinkOutlined, InfoCircleOutlined, DownloadOutlined, FilterOutlined, PlayCircleOutlined, BulbOutlined, CheckCircleOutlined, CloseCircleOutlined, ThunderboltOutlined, FullscreenOutlined } from '@ant-design/icons';
 import NodeTreeSelector, { NodeTreeSelectorValue } from '../shared/NodeTreeSelector';
 import TableFullscreenEditor from './TableFullscreenEditor';
 
@@ -377,6 +377,7 @@ type TableInstance = {
   records?: Record<string, unknown>[];
   meta: TableMeta;
   order: number;
+  sourceTableId?: string | null; // 🔗 Si c'est une vue, pointe vers la table source
   createdAt?: string;
   updatedAt?: string;
 };
@@ -392,6 +393,7 @@ type NormalizedTableInstanceResponse = {
   data?: { matrix?: (string | number | boolean | null)[][] | null } | null;
   records?: Record<string, unknown>[] | null;
   meta?: Record<string, unknown> | null;
+  sourceTableId?: string | null;
   order?: number | null;
 };
 
@@ -477,6 +479,7 @@ const normalizedToInstance = (raw: NormalizedTableInstanceResponse): TableInstan
     records: Array.isArray(raw.records) ? raw.records : [],
     meta: (raw.meta || {}) as TableMeta,
     order: typeof raw.order === 'number' ? raw.order : 0,
+    sourceTableId: raw.sourceTableId || null,
   };
 };
 
@@ -1465,6 +1468,60 @@ const TablePanel: React.FC<TablePanelProps> = ({ treeId: initialTreeId, nodeId, 
     }
   }, [api, nodeId, instances, activeId]);
 
+  // 🔗 Créer une "vue" qui partage les données d'une table existante (pas de duplication)
+  const addTableView = useCallback(async (sourceId: string) => {
+    const sourceInstance = instances.find(i => i.id === sourceId);
+    if (!sourceInstance) return;
+
+    const tempId = `temp_view_${Date.now()}`;
+    const viewName = `${sourceInstance.name} - Vue ${instances.filter(i => (i as any).sourceTableId === sourceId).length + 2}`;
+
+    const tempInstance: TableInstance = {
+      id: tempId,
+      name: viewName,
+      description: '',
+      type: sourceInstance.type,
+      columns: sourceInstance.columns,
+      rows: sourceInstance.rows,
+      matrix: sourceInstance.matrix,
+      data: sourceInstance.data,
+      records: sourceInstance.records,
+      meta: {
+        lookup: {
+          enabled: true,
+          mode: 'columns',
+          exposeColumns: [],
+        },
+      },
+      order: instances.length,
+    };
+
+    setInstances(prev => [...prev, tempInstance]);
+    setActiveId(tempId);
+    setCfg(instanceToConfig(tempInstance));
+
+    try {
+      const created = await api.post(`/api/treebranchleaf/nodes/${nodeId}/tables`, {
+        name: viewName,
+        description: '',
+        type: sourceInstance.type,
+        sourceTableId: sourceId,
+        meta: tempInstance.meta,
+      });
+      const savedInstance = normalizedToInstance(created as NormalizedTableInstanceResponse);
+      // Marquer comme vue côté client
+      (savedInstance as any).sourceTableId = sourceId;
+      setInstances(prev => prev.map(item => item.id === tempId ? savedInstance : item));
+      setActiveId(savedInstance.id);
+      setCfg(instanceToConfig(savedInstance));
+      message.success(`Vue "${viewName}" créée (données partagées)`);
+    } catch (error) {
+      console.error('🔗 TablePanel: Erreur création vue:', error);
+      message.error('Impossible de créer la vue');
+      setInstances(prev => prev.filter(item => item.id !== tempId));
+    }
+  }, [api, nodeId, instances]);
+
   const deleteTableInstance = useCallback(async () => {
     if (!activeId) return;
     
@@ -1745,7 +1802,10 @@ const TablePanel: React.FC<TablePanelProps> = ({ treeId: initialTreeId, nodeId, 
           size="small"
           style={{ minWidth: 220 }}
           value={activeId || undefined}
-          options={instances.map(it => ({ value: it.id, label: it.name || 'Sans nom' }))}
+          options={instances.map(it => ({ 
+            value: it.id, 
+            label: `${(it as any).sourceTableId ? '🔗 ' : ''}${it.name || 'Sans nom'}` 
+          }))}
           onChange={(id) => {
             setActiveId(id);
             const selectedInstance = instances.find(x => x.id === id);
@@ -1758,6 +1818,25 @@ const TablePanel: React.FC<TablePanelProps> = ({ treeId: initialTreeId, nodeId, 
         <Button size="small" icon={<PlusOutlined />} onClick={addTableInstance} disabled={readOnly}>
           Ajouter
         </Button>
+        {instances.length > 0 && (
+          <Dropdown
+            disabled={readOnly}
+            menu={{
+              items: instances
+                .filter(i => !(i as any).sourceTableId) // Seulement les tables "sources" (pas les vues)
+                .map(i => ({
+                  key: i.id,
+                  label: `Vue depuis "${i.name}"`,
+                  icon: <LinkOutlined />,
+                })),
+              onClick: ({ key }) => addTableView(key),
+            }}
+          >
+            <Button size="small" icon={<LinkOutlined />} disabled={readOnly}>
+              Nouvelle vue
+            </Button>
+          </Dropdown>
+        )}
         <Button size="small" icon={<DeleteOutlined />} onClick={deleteTableInstance} disabled={readOnly} danger>
           Supprimer{instances.length > 1 ? ' cette instance' : ' le tableau'}
         </Button>
@@ -5749,7 +5828,11 @@ const TablePanel: React.FC<TablePanelProps> = ({ treeId: initialTreeId, nodeId, 
       {/* 📊 Éditeur plein écran */}
       <TableFullscreenEditor
         open={fullscreenOpen}
-        onClose={() => setFullscreenOpen(false)}
+        onClose={() => {
+          // 🔥 Flush la sauvegarde debounced pour ne pas perdre la dernière modification
+          debouncedSave.flush();
+          setFullscreenOpen(false);
+        }}
         cfg={cfg}
         onCfgChange={(newCfg) => {
           setCfg(newCfg);

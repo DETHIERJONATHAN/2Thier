@@ -549,21 +549,39 @@ const ModuleRenderer = ({
 
     // Convertir pricingLines en format rows pour l'affichage
     const rows = pricingLines.length > 0 
-      ? pricingLines.map((line: any) => ({
-          // 🔧 Utiliser labelSource si label est vide
-          designation: line.label || (line.labelSource ? `📊 ${extractTblLabel(line.labelSource)}` : 'Sans désignation'),
-          quantity: asNumberOrNull(line.quantity),
-          unitPrice: asNumberOrNull(line.unitPrice),
-          // Indicateurs visuels pour les sources TBL
-          hasLabelSource: !!line.labelSource,
-          labelSource: line.labelSource,
-          hasQuantitySource: !!line.quantitySource,
-          hasUnitPriceSource: !!line.unitPriceSource,
-          quantitySource: line.quantitySource,
-          unitPriceSource: line.unitPriceSource,
-          type: line.type,
-          style: line.style,
-        }))
+      ? pricingLines.map((line: any) => {
+          // 🆕 Support multi-libellés (labelParts)
+          let designation = '';
+          let hasLabelParts = false;
+          if (line.labelParts && Array.isArray(line.labelParts) && line.labelParts.length > 0) {
+            hasLabelParts = true;
+            const parts = line.labelParts.map((p: any) => {
+              const prefix = p.prefix || '';
+              const src = p.source ? `📊 ${extractTblLabel(p.source)}` : '';
+              const suffix = (p.suffix && p.source) ? p.suffix : '';
+              return `${prefix}${src}${suffix}`.trim();
+            }).filter((s: string) => s.length > 0);
+            designation = parts.join(' - ');
+          }
+          if (!designation) {
+            designation = line.label || (line.labelSource ? `📊 ${extractTblLabel(line.labelSource)}` : 'Sans désignation');
+          }
+          return {
+            designation,
+            quantity: asNumberOrNull(line.quantity),
+            unitPrice: asNumberOrNull(line.unitPrice),
+            // Indicateurs visuels pour les sources TBL
+            hasLabelSource: !!line.labelSource || hasLabelParts,
+            labelSource: line.labelSource,
+            labelParts: line.labelParts,
+            hasQuantitySource: !!line.quantitySource,
+            hasUnitPriceSource: !!line.unitPriceSource,
+            quantitySource: line.quantitySource,
+            unitPriceSource: line.unitPriceSource,
+            type: line.type,
+            style: line.style,
+          };
+        })
       : legacyRows;
     
     const currency = config.currency || '€';

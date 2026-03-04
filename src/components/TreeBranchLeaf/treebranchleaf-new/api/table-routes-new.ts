@@ -156,17 +156,18 @@ async function syncTableReferences(
 // =============================================================================
 router.post('/nodes/:nodeId/tables', async (req, res) => {
   const { nodeId } = req.params;
-  const { name, description, columns, rows, type = 'static', meta: incomingMeta } = req.body;
+  const { name, description, columns, rows, type = 'static', meta: incomingMeta, sourceTableId } = req.body;
   const { organizationId, isSuperAdmin } = getAuthCtx(req as unknown as MinimalReq);
 
 
   if (!name) {
     return res.status(400).json({ error: 'Le nom de la table est requis' });
   }
-  if (!Array.isArray(columns)) {
+  // Pour les vues (sourceTableId), columns et rows ne sont pas nécessaires
+  if (!sourceTableId && !Array.isArray(columns)) {
     return res.status(400).json({ error: 'La dÃƒÂ©finition des colonnes est requise (array)' });
   }
-  if (!Array.isArray(rows)) {
+  if (!sourceTableId && !Array.isArray(rows)) {
     return res.status(400).json({ error: 'Les donnÃƒÂ©es (rows) sont requises (array)' });
   }
 
@@ -199,6 +200,100 @@ router.post('/nodes/:nodeId/tables', async (req, res) => {
     }
 
     const tableId = randomUUID();
+
+    // 🔗 CHEMIN RAPIDE : création d'une "vue" (sourceTableId)
+    // Une vue ne duplique pas les colonnes/lignes — elle pointe vers la table source
+    if (sourceTableId) {
+      // Vérifier que la table source existe
+      const sourceTable = await prisma.treeBranchLeafNodeTable.findUnique({
+        where: { id: sourceTableId },
+        include: {
+          tableColumns: { orderBy: { columnIndex: 'asc' } },
+          tableRows: { orderBy: { rowIndex: 'asc' } },
+        },
+      });
+      if (!sourceTable) {
+        return res.status(404).json({ error: 'Table source introuvable' });
+      }
+
+      const defaultMeta = {
+        lookup: {
+          enabled: true,
+          columnLookupEnabled: true,
+          rowLookupEnabled: true,
+          selectors: {},
+        },
+      };
+      const finalMeta = incomingMeta
+        ? (() => {
+            const incoming = typeof incomingMeta === 'string' ? JSON.parse(incomingMeta) : incomingMeta;
+            return { ...defaultMeta, ...incoming, lookup: { ...defaultMeta.lookup, ...(incoming.lookup || {}) } };
+          })()
+        : defaultMeta;
+
+      const viewTable = await prisma.treeBranchLeafNodeTable.create({
+        data: {
+          id: tableId,
+          nodeId,
+          organizationId: node.TreeBranchLeafTree.organizationId,
+          name: finalName,
+          description: description || null,
+          type: sourceTable.type,
+          meta: toJsonSafe(finalMeta),
+          rowCount: sourceTable.rowCount,
+          columnCount: sourceTable.columnCount,
+          sourceTableId,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        },
+      });
+
+      // MAJ hasTable + linkedTableIds
+      await prisma.treeBranchLeafNode.update({
+        where: { id: nodeId },
+        data: { hasTable: true },
+      });
+      try {
+        const nodeData = await prisma.treeBranchLeafNode.findUnique({ where: { id: nodeId }, select: { linkedTableIds: true } });
+        const current = nodeData?.linkedTableIds ?? [];
+        const next = Array.from(new Set([...current, viewTable.id]));
+        await prisma.treeBranchLeafNode.update({ where: { id: nodeId }, data: { linkedTableIds: { set: next } } });
+      } catch { /* best-effort */ }
+
+      // Retourner la vue avec les données de la source (pour affichage immédiat)
+      // ⚠️ Format IDENTIQUE au GET /nodes/:nodeId/tables pour que normalizedToInstance fonctionne
+      const response = {
+        id: viewTable.id,
+        name: viewTable.name,
+        description: viewTable.description,
+        type: viewTable.type,
+        meta: viewTable.meta,
+        sourceTableId: viewTable.sourceTableId,
+        columns: sourceTable.tableColumns.map((c: any) => c.name),
+        rows: sourceTable.tableRows.map((r: any) => {
+          const cells = r.cells;
+          if (Array.isArray(cells)) return cells;
+          if (typeof cells === 'string') {
+            try {
+              const parsed = JSON.parse(cells);
+              return Array.isArray(parsed) ? parsed : [String(parsed)];
+            } catch {
+              return [String(cells)];
+            }
+          }
+          if (cells && typeof cells === 'object') return Object.values(cells);
+          return [String(cells || '')];
+        }),
+        rowCount: sourceTable.rowCount,
+        columnCount: sourceTable.columnCount,
+        createdAt: viewTable.createdAt,
+        updatedAt: viewTable.updatedAt,
+        order: viewTable.createdAt ? new Date(viewTable.createdAt).getTime() : 0,
+      };
+
+      console.log(`[POST table] ✅ Vue "${finalName}" créée (source: ${sourceTableId})`);
+      return res.status(201).json(response);
+    }
 
     // ✅ INITIALISER META AVEC LES DEFAULTS POUR LE LOOKUP
     // Ceci corrige le problème où les tables créées retournaient ∅ au lieu des valeurs lookup
@@ -956,7 +1051,7 @@ router.delete('/tables/:id', async (req, res) => {
 // Alias PUT: /nodes/:nodeId/tables/:tableId Ã¢â€ â€™ /tables/:id
 router.put('/nodes/:nodeId/tables/:tableId', async (req, res) => {
   const { tableId } = req.params;
-  const { name, description, columns, rows, type, meta } = req.body;
+  const { name, description, columns, rows, type, meta, data: dataMatrix } = req.body;
   const { organizationId, isSuperAdmin } = getAuthCtx(req as unknown as MinimalReq);
 
 
@@ -1038,6 +1133,13 @@ router.put('/nodes/:nodeId/tables/:tableId', async (req, res) => {
     }
 
     // Sinon, mise ÃƒÂ  jour complÃƒÂ¨te (colonnes + lignes)
+    // 🔗 VUES : Si cette table est une vue, rediriger colonnes/lignes vers la source
+    const viewCheck = await prisma.treeBranchLeafNodeTable.findUnique({
+      where: { id: tableId },
+      select: { sourceTableId: true },
+    });
+    const effectiveDataTableId = viewCheck?.sourceTableId || tableId;
+
     const updatedTable = await prisma.$transaction(async (tx) => {
       const table = await tx.treeBranchLeafNodeTable.findUnique({
         where: { id: tableId },
@@ -1072,15 +1174,24 @@ router.put('/nodes/:nodeId/tables/:tableId', async (req, res) => {
         where: { id: tableId },
         data: updateData,
       });
+      // 🔗 Si vue, aussi mettre à jour les counts sur la table source
+      if (effectiveDataTableId !== tableId) {
+        const srcUpdate: any = { updatedAt: new Date() };
+        if (Array.isArray(columns) && columns.length > 0) srcUpdate.columnCount = columns.length;
+        if (Array.isArray(rows) && rows.length > 0) srcUpdate.rowCount = rows.length;
+        await tx.treeBranchLeafNodeTable.update({ where: { id: effectiveDataTableId }, data: srcUpdate });
+      }
+
 
       // Ã¢Å¡Â Ã¯Â¸Â IMPORTANT: Ne remplacer les colonnes QUE si l'array n'est PAS vide
       // Un array vide signifie gÃƒÂ©nÃƒÂ©ralement que le frontend ne veut pas modifier les colonnes
+      // 🔗 effectiveDataTableId = sourceTableId pour les vues, sinon tableId
       if (Array.isArray(columns) && columns.length > 0) {
-        await tx.treeBranchLeafNodeTableColumn.deleteMany({ where: { tableId } });
+        await tx.treeBranchLeafNodeTableColumn.deleteMany({ where: { tableId: effectiveDataTableId } });
         
         const newColumnsData = columns.map((col: any, index: number) => ({
           id: randomUUID(),
-          tableId,
+          tableId: effectiveDataTableId,
           columnIndex: index,
           name: typeof col === 'string' ? col : (col.name || `Colonne ${index + 1}`),
           type: typeof col === 'object' ? col.type : 'text',
@@ -1094,19 +1205,34 @@ router.put('/nodes/:nodeId/tables/:tableId', async (req, res) => {
       // Ã¢Å¡Â Ã¯Â¸Â IMPORTANT: Ne remplacer les lignes QUE si l'array n'est PAS vide
       // Un array vide signifie gÃƒÂ©nÃƒÂ©ralement que le frontend ne veut pas modifier les lignes
       if (Array.isArray(rows) && rows.length > 0) {
-        await tx.treeBranchLeafNodeTableRow.deleteMany({ where: { tableId } });
+        await tx.treeBranchLeafNodeTableRow.deleteMany({ where: { tableId: effectiveDataTableId } });
         
         // Ã¢Å¡Â Ã¯Â¸Â CRITIQUE: Utiliser create() en boucle au lieu de createMany()
         // Prisma createMany() NE SUPPORTE PAS les champs JSONB correctement !
         // Il convertit les arrays JSON en simple strings, perdant les donnÃƒÂ©es
+        // 🔗 Le frontend envoie rows (labels) et dataMatrix (matrice cellules) séparément.
+        // On doit recombiner : cells = [label, ...dataRow] pour chaque ligne.
+        const hasDataMatrix = Array.isArray(dataMatrix) && dataMatrix.length > 0;
         for (let index = 0; index < rows.length; index++) {
-          const row = rows[index];
+          const rowLabel = rows[index];
+          let cellsValue: any;
+          if (hasDataMatrix && Array.isArray(dataMatrix[index])) {
+            // Recombiner label + données cellules = format complet [label, val1, val2, ...]
+            const label = Array.isArray(rowLabel) ? rowLabel[0] : rowLabel;
+            cellsValue = [label, ...dataMatrix[index]];
+          } else if (Array.isArray(rowLabel)) {
+            // Déjà un array complet (ancien format)
+            cellsValue = rowLabel;
+          } else {
+            // Juste un label string, pas de données
+            cellsValue = [rowLabel];
+          }
           await tx.treeBranchLeafNodeTableRow.create({
             data: {
               id: randomUUID(),
-              tableId,
+              tableId: effectiveDataTableId,
               rowIndex: index,
-              cells: toJsonSafe(row),
+              cells: toJsonSafe(cellsValue),
             }
           });
         }
@@ -1292,39 +1418,65 @@ router.get('/nodes/:nodeId/tables', async (req, res) => {
       }
     }
 
+    // 🔗 Résoudre les vues : charger les colonnes/lignes depuis la table source
+    const viewSourceIds = [...new Set(
+      allTables.filter(t => (t as any).sourceTableId).map(t => (t as any).sourceTableId as string)
+    )];
+    const sourceTablesMap: Record<string, any> = {};
+    if (viewSourceIds.length > 0) {
+      // D'abord chercher dans les tables déjà chargées
+      for (const t of allTables) {
+        if (viewSourceIds.includes(t.id)) sourceTablesMap[t.id] = t;
+      }
+      // Charger les sources manquantes
+      const missingIds = viewSourceIds.filter(sid => !sourceTablesMap[sid]);
+      if (missingIds.length > 0) {
+        const remoteSources = await prisma.treeBranchLeafNodeTable.findMany({
+          where: { id: { in: missingIds } },
+          include: {
+            tableColumns: { orderBy: { columnIndex: 'asc' } },
+            tableRows: { orderBy: { rowIndex: 'asc' } },
+          },
+        });
+        for (const rs of remoteSources) sourceTablesMap[rs.id] = rs;
+      }
+    }
+
     // Reformater la réponse pour correspondre au format attendu par le frontend
-    const formattedTables = allTables.map(table => ({
-      id: table.id,
-      name: table.name,
-      description: table.description,
-      type: table.type,
-      columns: table.tableColumns.map(c => c.name),
-      rows: table.tableRows.map(r => {
-        // Ã¢Å“â€¦ Convertir JSONB Prisma Ã¢â€ â€™ Array JavaScript natif
-        const cells = r.cells;
-        if (Array.isArray(cells)) {
-          return cells;
-        }
-        // Si cells n'est pas dÃƒÂ©jÃƒÂ  un array, essayer de le parser
-        if (typeof cells === 'string') {
-          try {
-            const parsed = JSON.parse(cells);
-            return Array.isArray(parsed) ? parsed : [String(parsed)];
-          } catch {
-            return [String(cells)];
+    const formattedTables = allTables.map(table => {
+      // Pour les vues, utiliser les colonnes/lignes de la table source
+      const srcId = (table as any).sourceTableId;
+      const resolvedTable = srcId && sourceTablesMap[srcId]
+        ? { ...table, tableColumns: sourceTablesMap[srcId].tableColumns, tableRows: sourceTablesMap[srcId].tableRows }
+        : table;
+
+      return {
+        id: table.id,
+        name: table.name,
+        description: table.description,
+        type: table.type,
+        sourceTableId: srcId || null,
+        columns: resolvedTable.tableColumns.map((c: any) => c.name),
+        rows: resolvedTable.tableRows.map((r: any) => {
+          const cells = r.cells;
+          if (Array.isArray(cells)) return cells;
+          if (typeof cells === 'string') {
+            try {
+              const parsed = JSON.parse(cells);
+              return Array.isArray(parsed) ? parsed : [String(parsed)];
+            } catch {
+              return [String(cells)];
+            }
           }
-        }
-        // Si cells est un objet (JSONB), vÃƒÂ©rifier s'il a une structure d'array
-        if (cells && typeof cells === 'object') {
-          return Object.values(cells);
-        }
-        return [String(cells || '')];
-      }),
-      meta: table.meta || {},
-      order: table.createdAt ? new Date(table.createdAt).getTime() : 0,
-      createdAt: table.createdAt,
-      updatedAt: table.updatedAt,
-    }));
+          if (cells && typeof cells === 'object') return Object.values(cells);
+          return [String(cells || '')];
+        }),
+        meta: table.meta || {},
+        order: table.createdAt ? new Date(table.createdAt).getTime() : 0,
+        createdAt: table.createdAt,
+        updatedAt: table.updatedAt,
+      };
+    });
 
     // console.log(`[GET /nodes/:nodeId/tables] Returning ${formattedTables.length} tables. First table columns: ${formattedTables[0]?.columns?.slice(0, 3).join(', ')}`);
     res.json(formattedTables);

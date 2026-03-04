@@ -18,6 +18,10 @@ import {
   FullscreenOutlined,
   SaveOutlined,
   ColumnWidthOutlined,
+  ArrowUpOutlined,
+  ArrowDownOutlined,
+  ArrowLeftOutlined,
+  ArrowRightOutlined,
 } from '@ant-design/icons';
 
 const { Text } = Typography;
@@ -197,6 +201,7 @@ const TableFullscreenEditor: React.FC<TableFullscreenEditorProps> = ({
     triggerSave({ ...cfg, columns: nextCols, data: nextData });
   }, [cfg, triggerSave]);
 
+
   // ─── Remove column ─────────────────────────────────────────────────────
   const removeColumn = useCallback((colIdx: number) => {
     const nextCols = (cfg.columns || []).filter((_, i) => i !== colIdx);
@@ -207,7 +212,13 @@ const TableFullscreenEditor: React.FC<TableFullscreenEditorProps> = ({
   // ─── Rename row label ──────────────────────────────────────────────────
   const renameRow = useCallback((rowIdx: number, val: string) => {
     const nextRows = [...(cfg.rows || [])];
-    nextRows[rowIdx] = val;
+    const existing = nextRows[rowIdx];
+    // Si la row est un array (full row), ne modifier que le premier élément (label)
+    if (Array.isArray(existing)) {
+      nextRows[rowIdx] = [val, ...existing.slice(1)];
+    } else {
+      nextRows[rowIdx] = val;
+    }
     triggerSave({ ...cfg, rows: nextRows });
   }, [cfg, triggerSave]);
 
@@ -219,11 +230,46 @@ const TableFullscreenEditor: React.FC<TableFullscreenEditorProps> = ({
     triggerSave({ ...cfg, rows: nextRows, data: nextData });
   }, [cfg, triggerSave]);
 
+
   // ─── Remove row ─────────────────────────────────────────────────────────
   const removeRow = useCallback((rowIdx: number) => {
     const nextRows = (cfg.rows || []).filter((_, i) => i !== rowIdx);
     const nextData = (cfg.data || []).filter((_, i) => i !== rowIdx);
     triggerSave({ ...cfg, rows: nextRows, data: nextData });
+  }, [cfg, triggerSave]);
+
+  // ─── Move row up/down ───────────────────────────────────────────────────
+  const moveRow = useCallback((fromIdx: number, direction: 'up' | 'down') => {
+    const toIdx = direction === 'up' ? fromIdx - 1 : fromIdx + 1;
+    const rows = [...(cfg.rows || [])];
+    const data = [...(cfg.data || [])];
+    // Vérifier les bornes (ne pas déplacer au-dessus de l'index 1 car 0 = header)
+    if (toIdx < 1 || toIdx >= rows.length) return;
+    // Swap rows
+    [rows[fromIdx], rows[toIdx]] = [rows[toIdx], rows[fromIdx]];
+    // Swap data (parallèle)
+    if (data[fromIdx] !== undefined && data[toIdx] !== undefined) {
+      [data[fromIdx], data[toIdx]] = [data[toIdx], data[fromIdx]];
+    }
+    triggerSave({ ...cfg, rows, data });
+  }, [cfg, triggerSave]);
+
+  // ─── Move column left/right ─────────────────────────────────────────────
+  const moveColumn = useCallback((fromIdx: number, direction: 'left' | 'right') => {
+    const toIdx = direction === 'left' ? fromIdx - 1 : fromIdx + 1;
+    const cols = [...(cfg.columns || [])];
+    if (toIdx < 0 || toIdx >= cols.length) return;
+    // Swap columns
+    [cols[fromIdx], cols[toIdx]] = [cols[toIdx], cols[fromIdx]];
+    // Swap dans chaque row de data
+    const data = (cfg.data || []).map((row) => {
+      const newRow = [...row];
+      if (newRow[fromIdx] !== undefined && newRow[toIdx] !== undefined) {
+        [newRow[fromIdx], newRow[toIdx]] = [newRow[toIdx], newRow[fromIdx]];
+      }
+      return newRow;
+    });
+    triggerSave({ ...cfg, columns: cols, data });
   }, [cfg, triggerSave]);
 
   // ─── Set cell value ─────────────────────────────────────────────────────
@@ -240,14 +286,16 @@ const TableFullscreenEditor: React.FC<TableFullscreenEditorProps> = ({
 
   // ─── Build visible data ─────────────────────────────────────────────────
   // rows[0] = header row (A1), skip it for data rows
-  // data[0] corresponds to rows[1]
+  // IMPORTANT: rows[] et data[] sont des tableaux parallèles (même longueur, même index)
+  // rows[0] = header, data[0] = header matrix → les deux sont skippés
   const columns = useMemo(() => cfg.columns || [], [cfg.columns]);
   const dataRows = useMemo(() => {
     const rows = cfg.rows || [];
     // Skip index 0 (header/A1 row) — data rows start from index 1
     return rows.slice(1).map((row, idx) => {
       const label = Array.isArray(row) ? String(row[0]) : String(row ?? '');
-      return { rowIndex: idx + 1, dataIndex: idx, label };
+      // dataIndex = idx + 1 car data[0] = header (parallèle à rows[0])
+      return { rowIndex: idx + 1, dataIndex: idx + 1, label };
     });
   }, [cfg.rows]);
 
@@ -349,6 +397,18 @@ const TableFullscreenEditor: React.FC<TableFullscreenEditorProps> = ({
                   }}
                 >
                   <div style={{ display: 'flex', alignItems: 'center', gap: 0 }}>
+                    {/* Flèche gauche */}
+                    {!readOnly && cIdx > 0 && (
+                      <Tooltip title="Déplacer à gauche">
+                        <Button
+                          type="text"
+                          size="small"
+                          icon={<ArrowLeftOutlined style={{ fontSize: 10 }} />}
+                          onClick={() => moveColumn(cIdx, 'left')}
+                          style={{ padding: 0, height: 20, width: 16, minWidth: 16, color: '#1890ff', opacity: 0.5 }}
+                        />
+                      </Tooltip>
+                    )}
                     <div style={{ flex: 1 }}>
                       <EditableCell
                         value={col}
@@ -357,6 +417,18 @@ const TableFullscreenEditor: React.FC<TableFullscreenEditorProps> = ({
                         isHeader
                       />
                     </div>
+                    {/* Flèche droite */}
+                    {!readOnly && cIdx < columns.length - 1 && (
+                      <Tooltip title="Déplacer à droite">
+                        <Button
+                          type="text"
+                          size="small"
+                          icon={<ArrowRightOutlined style={{ fontSize: 10 }} />}
+                          onClick={() => moveColumn(cIdx, 'right')}
+                          style={{ padding: 0, height: 20, width: 16, minWidth: 16, color: '#1890ff', opacity: 0.5 }}
+                        />
+                      </Tooltip>
+                    )}
                     {!readOnly && columns.length > 1 && (
                       <Popconfirm
                         title={`Supprimer la colonne "${col}" ?`}
@@ -414,7 +486,7 @@ const TableFullscreenEditor: React.FC<TableFullscreenEditorProps> = ({
                   <td
                     style={{
                       border: '1px solid #e8e8e8',
-                      padding: '2px 4px',
+                      padding: '2px 2px',
                       textAlign: 'center',
                       background: '#f0f0f0',
                       color: '#999',
@@ -422,27 +494,53 @@ const TableFullscreenEditor: React.FC<TableFullscreenEditorProps> = ({
                       position: 'sticky',
                       left: 0,
                       zIndex: 1,
-                      minWidth: 36,
+                      minWidth: 48,
                     }}
                   >
-                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
-                      <span>{dataIndex + 1}</span>
-                      {!readOnly && (
-                        <Popconfirm
-                          title={`Supprimer la ligne ${dataIndex + 1} ?`}
-                          description={`"${label}" sera supprimée définitivement.`}
-                          onConfirm={() => removeRow(rowIndex)}
-                          okText="Supprimer"
-                          cancelText="Annuler"
-                          okButtonProps={{ danger: true }}
-                        >
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1 }}>
+                      {/* Flèche monter */}
+                      {!readOnly && rowIndex > 1 && (
+                        <Tooltip title="Monter">
                           <Button
                             type="text"
                             size="small"
-                            icon={<DeleteOutlined style={{ fontSize: 10 }} />}
-                            style={{ color: '#ff4d4f', opacity: 0.4, padding: 0, height: 16, width: 16, minWidth: 16 }}
+                            icon={<ArrowUpOutlined style={{ fontSize: 9 }} />}
+                            onClick={() => moveRow(rowIndex, 'up')}
+                            style={{ padding: 0, height: 14, width: 14, minWidth: 14, color: '#1890ff', opacity: 0.6, lineHeight: 1 }}
                           />
-                        </Popconfirm>
+                        </Tooltip>
+                      )}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                        <span>{dataIndex}</span>
+                        {!readOnly && (
+                          <Popconfirm
+                            title={`Supprimer la ligne ${dataIndex} ?`}
+                            description={`"${label}" sera supprimée définitivement.`}
+                            onConfirm={() => removeRow(rowIndex)}
+                            okText="Supprimer"
+                            cancelText="Annuler"
+                            okButtonProps={{ danger: true }}
+                          >
+                            <Button
+                              type="text"
+                              size="small"
+                              icon={<DeleteOutlined style={{ fontSize: 9 }} />}
+                              style={{ color: '#ff4d4f', opacity: 0.4, padding: 0, height: 14, width: 14, minWidth: 14 }}
+                            />
+                          </Popconfirm>
+                        )}
+                      </div>
+                      {/* Flèche descendre */}
+                      {!readOnly && rowIndex < (cfg.rows?.length || 0) - 1 && (
+                        <Tooltip title="Descendre">
+                          <Button
+                            type="text"
+                            size="small"
+                            icon={<ArrowDownOutlined style={{ fontSize: 9 }} />}
+                            onClick={() => moveRow(rowIndex, 'down')}
+                            style={{ padding: 0, height: 14, width: 14, minWidth: 14, color: '#1890ff', opacity: 0.6, lineHeight: 1 }}
+                          />
+                        </Tooltip>
                       )}
                     </div>
                   </td>

@@ -7717,6 +7717,10 @@ const syncNodeTableCapability = async (
   const tables = await client.treeBranchLeafNodeTable.findMany({
     where: { nodeId },
     orderBy: [{ order: 'asc' }, { createdAt: 'asc' }],
+    include: {
+      tableColumns: { orderBy: { columnIndex: 'asc' } },
+      tableRows: { orderBy: { rowIndex: 'asc' } },
+    },
   });
 
   if (tables.length === 0) {
@@ -7739,7 +7743,45 @@ const syncNodeTableCapability = async (
     return;
   }
 
-  const normalizedList = tables.map(normalizeTableInstance);
+  // 🔗 Résoudre les vues (tables avec sourceTableId) :
+  // Leur contenu (colonnes/lignes) provient de la table source
+  const sourceIds = [...new Set(
+    tables.filter(t => t.sourceTableId).map(t => t.sourceTableId!)
+  )];
+  const sourceTables: Record<string, any> = {};
+  if (sourceIds.length > 0) {
+    // Charger les tables sources qui ne sont pas déjà dans la liste
+    const localSourceIds = sourceIds.filter(sid => tables.some(t => t.id === sid));
+    const remoteSourceIds = sourceIds.filter(sid => !tables.some(t => t.id === sid));
+    for (const t of tables) {
+      if (localSourceIds.includes(t.id)) sourceTables[t.id] = t;
+    }
+    if (remoteSourceIds.length > 0) {
+      const remoteSources = await client.treeBranchLeafNodeTable.findMany({
+        where: { id: { in: remoteSourceIds } },
+        include: {
+          tableColumns: { orderBy: { columnIndex: 'asc' } },
+          tableRows: { orderBy: { rowIndex: 'asc' } },
+        },
+      });
+      for (const rs of remoteSources) sourceTables[rs.id] = rs;
+    }
+  }
+
+  // Pour les vues, injecter les colonnes/lignes de la table source
+  const resolvedTables = tables.map(t => {
+    if (t.sourceTableId && sourceTables[t.sourceTableId]) {
+      const src = sourceTables[t.sourceTableId];
+      return {
+        ...t,
+        tableColumns: src.tableColumns,
+        tableRows: src.tableRows,
+      };
+    }
+    return t;
+  });
+
+  const normalizedList = resolvedTables.map(normalizeTableInstance);
   const instances = normalizedList.reduce<Record<string, unknown>>((acc, instance) => {
     acc[instance.id] = {
       id: instance.id,

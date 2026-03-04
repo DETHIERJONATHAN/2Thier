@@ -1228,30 +1228,47 @@ router.get('/generated/:id/download', async (req: AuthenticatedRequest, res: Res
     let formulaResultsMap: Record<string, string> = {};
     const docSubmissionId = document.submissionId;
     try {
-      // Collecter TOUTES les refs TBL dans les configs des modules
+      // 🔥 Helper: vérifie si une string est une référence TBL à résoudre
+      const isTblRef = (val: unknown): val is string => {
+        if (typeof val !== 'string' || !val) return false;
+        return (
+          val.startsWith('node-formula:') ||
+          val.startsWith('formula:') ||
+          val.startsWith('condition:') ||
+          val.startsWith('@calculated.') ||
+          val.startsWith('calculatedValue:') ||
+          val.startsWith('@value.') ||
+          val.startsWith('@select.') ||
+          val.startsWith('@table.') ||
+          val.startsWith('@repeat.')
+        );
+      };
+
+      // 🔥 Helper: collecte récursivement TOUTES les refs TBL dans un objet/tableau
+      const collectRefsDeep = (obj: unknown, refs: string[]): void => {
+        if (!obj) return;
+        if (typeof obj === 'string') {
+          if (isTblRef(obj) && !refs.includes(obj)) refs.push(obj);
+          return;
+        }
+        if (Array.isArray(obj)) {
+          for (const item of obj) collectRefsDeep(item, refs);
+          return;
+        }
+        if (typeof obj === 'object') {
+          for (const val of Object.values(obj as Record<string, unknown>)) {
+            collectRefsDeep(val, refs);
+          }
+        }
+      };
+
+      // Collecter TOUTES les refs TBL dans les configs des modules (y compris pricingLines, labelParts, etc.)
       const allRefs: string[] = [];
       const sections = document.DocumentTemplate?.DocumentSection || [];
       for (const sec of sections) {
         const config = (sec.config || {}) as Record<string, any>;
-        const modules = config.modules || [];
-        for (const mod of modules) {
-          const mc = mod.config || {};
-          for (const val of Object.values(mc)) {
-            if (typeof val === 'string' && (
-              val.startsWith('node-formula:') ||
-              val.startsWith('formula:') ||
-              val.startsWith('condition:') ||
-              val.startsWith('@calculated.') ||
-              val.startsWith('calculatedValue:') ||
-              val.startsWith('@value.') ||
-              val.startsWith('@select.') ||
-              val.startsWith('@table.') ||
-              val.startsWith('@repeat.')
-            )) {
-              if (!allRefs.includes(val)) allRefs.push(val);
-            }
-          }
-        }
+        // Parcourir en profondeur TOUTE la config de la section (modules, pricingLines, labelParts, conditions...)
+        collectRefsDeep(config, allRefs);
       }
       
       console.log('📥 [DOWNLOAD] Refs dynamiques à résoudre:', { refs: allRefs, submissionId: docSubmissionId });

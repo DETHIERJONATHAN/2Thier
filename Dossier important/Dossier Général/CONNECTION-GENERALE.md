@@ -63,8 +63,7 @@ Ce script fait automatiquement :
 4. ✅ Lance `npm run dev` (frontend + backend)
 
 ### Résultat attendu
-bash scripts/start-local.sh
-```
+ ```
 ✅ Environnement de développement prêt!
    🌐 Frontend: http://localhost:5173
    🔧 Backend API: http://localhost:4000

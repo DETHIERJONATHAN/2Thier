@@ -2305,6 +2305,7 @@ async function interpretTable(
       columnCount: true,
       meta: true,
       nodeId: true,
+      sourceTableId: true,
       tableColumns: {
         orderBy: { columnIndex: 'asc' },
         select: {
@@ -2340,6 +2341,8 @@ async function interpretTable(
         columnCount: true,
         meta: true,
         nodeId: true,
+
+        sourceTableId: true,
         tableColumns: {
           orderBy: { columnIndex: 'asc' },
           select: { id: true, columnIndex: true, name: true, type: true, width: true, format: true, metadata: true }
@@ -2365,6 +2368,8 @@ async function interpretTable(
           columnCount: true,
           meta: true,
           nodeId: true,
+
+          sourceTableId: true,
           tableColumns: {
             orderBy: { columnIndex: 'asc' },
             select: { id: true, columnIndex: true, name: true, type: true, width: true, format: true, metadata: true }
@@ -2397,6 +2402,8 @@ async function interpretTable(
           columnCount: true,
           meta: true,
           nodeId: true,
+
+          sourceTableId: true,
           tableColumns: {
             orderBy: { columnIndex: 'asc' },
             select: { id: true, columnIndex: true, name: true, type: true, width: true, format: true, metadata: true }
@@ -2423,6 +2430,33 @@ async function interpretTable(
       humanText: `Table introuvable: ${tableId}`,
       details: { type: 'table', error: 'Not found' }
     };
+  }
+  
+  // 🔗 RÉSOLUTION DES VUES : Si la table est une vue (sourceTableId), charger les données de la source
+  const tableSourceId = (table as any).sourceTableId;
+  if (tableSourceId) {
+    try {
+      const sourceTable = await prisma.treeBranchLeafNodeTable.findUnique({
+        where: { id: tableSourceId },
+        select: {
+          tableColumns: {
+            orderBy: { columnIndex: 'asc' },
+            select: { id: true, columnIndex: true, name: true, type: true, width: true, format: true, metadata: true }
+          },
+          tableRows: {
+            orderBy: { rowIndex: 'asc' },
+            select: { id: true, rowIndex: true, cells: true }
+          }
+        }
+      });
+      if (sourceTable) {
+        // Remplacer les colonnes/lignes par celles de la source
+        (table as any).tableColumns = sourceTable.tableColumns;
+        (table as any).tableRows = sourceTable.tableRows;
+      }
+    } catch (e) {
+      console.warn('[TABLE] ⚠️ Résolution vue échouée pour sourceTableId:', tableSourceId, e instanceof Error ? e.message : e);
+    }
   }
   
   

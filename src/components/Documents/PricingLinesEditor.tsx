@@ -73,6 +73,14 @@ export interface SimpleCondition {
 // Types pour les lignes de pricing
 export type PricingLineType = 'static' | 'dynamic' | 'repeater';
 
+// Segment de libellé composé (texte statique + source TBL optionnelle + suffixe)
+export interface LabelPart {
+  id: string;
+  prefix?: string;            // Texte statique avant la valeur (ex: "Garantie production : ")
+  source?: string;            // Référence TBL optionnelle (ex: @value.xxx)
+  suffix?: string;            // Texte statique après la valeur résolue (ex: " ans", " %", " Wc")
+}
+
 // Options de formatage du texte pour une ligne
 export interface PricingLineStyle {
   bold?: boolean;
@@ -88,7 +96,8 @@ export interface PricingLine {
   id: string;
   type: PricingLineType;
   label: string;
-  labelSource?: string;       // Référence TBL pour le label dynamique
+  labelSource?: string;       // Référence TBL pour le label dynamique (legacy)
+  labelParts?: LabelPart[];   // 🆕 Segments de libellé composés (multi-libellé)
   quantity?: number | string | null;
   quantitySource?: string;    // Référence TBL pour la quantité
   unitPrice?: number | string | null;
@@ -165,6 +174,9 @@ const PricingLinesEditor: React.FC<PricingLinesEditorProps> = ({
   const [selectedTreeNodeId, setSelectedTreeNodeId] = useState<string | null>(nodeId || null);
   // Pour la condition simple — sélecteur TBL pour le champ condition
   const [conditionSelectorOpen, setConditionSelectorOpen] = useState(false);
+  // 🆕 Multi-libellés : segments composés
+  const [labelParts, setLabelParts] = useState<LabelPart[]>([]);
+  const [labelPartSelectorIndex, setLabelPartSelectorIndex] = useState<number | null>(null);
 
   // ✅ useWatch pour déclencher les re-renders
   const watchedType = Form.useWatch('type', form);
@@ -214,6 +226,8 @@ const PricingLinesEditor: React.FC<PricingLinesEditorProps> = ({
       order: lines.length,
     };
     setCurrentLine(newLine);
+    // 🆕 Initialiser avec un seul segment vide
+    setLabelParts([{ id: generateId(), prefix: type === 'static' ? 'Nouvelle ligne' : '', source: undefined }]);
     form.setFieldsValue({ ...newLine, condition: undefined });
     setEditModalOpen(true);
   };
@@ -221,6 +235,16 @@ const PricingLinesEditor: React.FC<PricingLinesEditorProps> = ({
   // Éditer une ligne existante
   const handleEditLine = (line: PricingLine) => {
     setCurrentLine(line);
+    // 🆕 Restaurer les labelParts ou migrer depuis l'ancien format
+    if (line.labelParts && line.labelParts.length > 0) {
+      setLabelParts(line.labelParts);
+    } else if (line.labelSource) {
+      // Migration: ancien format avec labelSource → un segment avec source
+      setLabelParts([{ id: generateId(), prefix: '', source: line.labelSource }]);
+    } else {
+      // Migration: ancien format avec label texte → un segment avec prefix
+      setLabelParts([{ id: generateId(), prefix: line.label || '', source: undefined }]);
+    }
     form.setFieldsValue(line);
     setEditModalOpen(true);
   };
@@ -263,6 +287,23 @@ const PricingLinesEditor: React.FC<PricingLinesEditorProps> = ({
         ...values,
       };
 
+      // 🆕 Sauvegarder les labelParts et construire label/labelSource pour compatibilité
+      const cleanParts = labelParts.filter(p => p.prefix || p.source);
+      updatedLine.labelParts = cleanParts.length > 0 ? cleanParts : undefined;
+      
+      // Construire un label de preview (pour l'affichage dans le tableau)
+      if (cleanParts.length > 0) {
+        const previewParts = cleanParts.map(p => {
+          const prefix = p.prefix || '';
+          const src = p.source ? `[TBL]` : '';
+          return `${prefix}${src}`.trim();
+        });
+        updatedLine.label = previewParts.join(' - ');
+        // Si au moins un segment a une source, marquer le premier comme labelSource pour compat
+        const firstWithSource = cleanParts.find(p => p.source);
+        updatedLine.labelSource = firstWithSource?.source;
+      }
+
       // Normalisation
       if (updatedLine.quantity === null || updatedLine.quantity === '') {
         delete (updatedLine as any).quantity;
@@ -274,10 +315,16 @@ const PricingLinesEditor: React.FC<PricingLinesEditorProps> = ({
         delete (updatedLine as any).total;
       }
 
-      // Extraire repeaterId depuis les refs @repeat.X.Y
-      const repId = extractRepeaterId(updatedLine.labelSource) 
-        || extractRepeaterId(updatedLine.quantitySource) 
-        || extractRepeaterId(updatedLine.unitPriceSource)
+      // Extraire repeaterId depuis les refs @repeat.X.Y (vérifier aussi dans labelParts)
+      const labelPartRefs = (cleanParts || []).map(p => p.source).filter(Boolean);
+      const allRefs = [
+        ...labelPartRefs,
+        updatedLine.labelSource,
+        updatedLine.quantitySource,
+        updatedLine.unitPriceSource,
+      ].filter(Boolean) as string[];
+      
+      const repId = allRefs.map(extractRepeaterId).find(Boolean)
         || updatedLine.repeaterId;
       if (repId) {
         updatedLine.repeaterId = repId;
@@ -314,6 +361,7 @@ const PricingLinesEditor: React.FC<PricingLinesEditorProps> = ({
       
       setEditModalOpen(false);
       setCurrentLine(null);
+      setLabelParts([]);
       form.resetFields();
     });
   };
@@ -357,6 +405,56 @@ const PricingLinesEditor: React.FC<PricingLinesEditorProps> = ({
     setConditionSelectorOpen(false);
   };
 
+  // 🆕 Gérer la sélection TBL pour un segment de libellé
+  const handleLabelPartTblSelect = (value: NodeTreeSelectorValue) => {
+    if (labelPartSelectorIndex === null) return;
+    const updatedParts = [...labelParts];
+    if (updatedParts[labelPartSelectorIndex]) {
+      updatedParts[labelPartSelectorIndex] = {
+        ...updatedParts[labelPartSelectorIndex],
+        source: value.ref,
+      };
+      setLabelParts(updatedParts);
+      // Pour les repeaters, extraire le label
+      if (value.ref.startsWith('@repeat.') && value.name) {
+        const parts = value.name.split(' / ');
+        if (parts.length > 0) {
+          form.setFieldsValue({ repeaterLabel: parts[0] });
+        }
+      }
+    }
+    setLabelPartSelectorIndex(null);
+    message.success(`Référence ajoutée: ${value.name || value.ref}`);
+  };
+
+  // 🆕 Helpers pour gérer les segments de libellé
+  const addLabelPart = () => {
+    setLabelParts([...labelParts, { id: generateId(), prefix: '', source: undefined }]);
+  };
+
+  const removeLabelPart = (index: number) => {
+    const updated = labelParts.filter((_, i) => i !== index);
+    setLabelParts(updated.length > 0 ? updated : [{ id: generateId(), prefix: '', source: undefined }]);
+  };
+
+  const updateLabelPartPrefix = (index: number, prefix: string) => {
+    const updated = [...labelParts];
+    updated[index] = { ...updated[index], prefix };
+    setLabelParts(updated);
+  };
+
+  const updateLabelPartSuffix = (index: number, suffix: string) => {
+    const updated = [...labelParts];
+    updated[index] = { ...updated[index], suffix };
+    setLabelParts(updated);
+  };
+
+  const removeLabelPartSource = (index: number) => {
+    const updated = [...labelParts];
+    updated[index] = { ...updated[index], source: undefined };
+    setLabelParts(updated);
+  };
+
   // Colonnes du tableau
   const columns = [
     {
@@ -387,8 +485,28 @@ const PricingLinesEditor: React.FC<PricingLinesEditorProps> = ({
       dataIndex: 'label',
       render: (label: string, record: PricingLine) => (
         <Space direction="vertical" size={0}>
-          <Text>{label || <Text type="secondary">Non défini</Text>}</Text>
-          {record.labelSource && (
+          {/* 🆕 Affichage multi-segments */}
+          {record.labelParts && record.labelParts.length > 0 ? (
+            <Text style={{ fontSize: 12 }}>
+              {record.labelParts.map((p, i) => {
+                const prefix = p.prefix || '';
+                const src = p.source ? '📊' : '';
+                const suffix = p.suffix || '';
+                const segment = `${prefix}${src}${suffix}`.trim();
+                return segment ? (
+                  <span key={p.id}>
+                    {i > 0 && <span style={{ color: '#d9d9d9' }}> — </span>}
+                    {prefix && <span>{prefix}</span>}
+                    {p.source && <Tag color="orange" style={{ fontSize: 9, lineHeight: '14px', padding: '0 3px', margin: '0 2px' }}>TBL</Tag>}
+                    {suffix && <span style={{ color: '#389e0d', fontSize: 10 }}>{suffix}</span>}
+                  </span>
+                ) : null;
+              })}
+            </Text>
+          ) : (
+            <Text>{label || <Text type="secondary">Non défini</Text>}</Text>
+          )}
+          {record.labelSource && !record.labelParts?.length && (
             <Text type="secondary" style={{ fontSize: 11 }}>
               {record.labelSource.startsWith('@repeat.') ? '🔁' : '🔗'} {record.labelSource}
             </Text>
@@ -595,7 +713,7 @@ const PricingLinesEditor: React.FC<PricingLinesEditorProps> = ({
         }
         open={editModalOpen}
         onOk={handleSaveLine}
-        onCancel={() => { setEditModalOpen(false); setCurrentLine(null); form.resetFields(); }}
+        onCancel={() => { setEditModalOpen(false); setCurrentLine(null); setLabelParts([]); form.resetFields(); }}
         width={600}
         okText="Enregistrer"
         cancelText="Annuler"
@@ -624,9 +742,117 @@ const PricingLinesEditor: React.FC<PricingLinesEditorProps> = ({
 
           <Divider orientation="left">Désignation</Divider>
           
-          <Form.Item label="Libellé" style={{ marginBottom: 16 }}>
-            {renderSourceField('label', 'labelSource', watchedLabelSource, 'Ex: Travaux d\'isolation', 'orange')}
-          </Form.Item>
+          {/* 🆕 Multi-libellés : segments composés séparés par " - " */}
+          <div style={{ marginBottom: 16 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+              <Text strong style={{ fontSize: 13 }}>Libellés <Text type="secondary" style={{ fontWeight: 'normal', fontSize: 11 }}>(séparés par « - » dans le document)</Text></Text>
+              <Button 
+                type="dashed" 
+                size="small" 
+                icon={<PlusOutlined />} 
+                onClick={addLabelPart}
+              >
+                Ajouter un segment
+              </Button>
+            </div>
+
+            {/* Aperçu composite */}
+            {labelParts.length > 1 && (
+              <div style={{ 
+                marginBottom: 12, padding: '6px 12px', borderRadius: 4,
+                backgroundColor: '#f6ffed', border: '1px dashed #b7eb8f',
+                fontSize: 11, color: '#389e0d'
+              }}>
+                <Text style={{ fontSize: 11, color: '#8c8c8c' }}>Aperçu : </Text>
+                {labelParts.map((p, i) => (
+                  <span key={p.id}>
+                    {i > 0 && <span style={{ color: '#d9d9d9', fontWeight: 'bold' }}> — </span>}
+                    <span>{p.prefix || ''}</span>
+                    {p.source && <Tag color="orange" style={{ fontSize: 10, lineHeight: '16px', padding: '0 4px', margin: 0 }}>TBL</Tag>}
+                    {p.suffix && <span style={{ color: '#389e0d', fontSize: 10 }}>{p.suffix}</span>}
+                  </span>
+                ))}
+              </div>
+            )}
+
+            {labelParts.map((part, index) => (
+              <div 
+                key={part.id}
+                style={{ 
+                  marginBottom: 8, padding: '10px 12px', borderRadius: 6,
+                  backgroundColor: index % 2 === 0 ? '#fafafa' : '#f5f5f5',
+                  border: '1px solid #e8e8e8',
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
+                  <Badge count={index + 1} style={{ backgroundColor: '#1890ff', fontSize: 10 }} />
+                  <Text type="secondary" style={{ fontSize: 11, flex: 1 }}>
+                    {labelParts.length > 1 ? `Segment ${index + 1}` : 'Libellé'}
+                  </Text>
+                  {labelParts.length > 1 && (
+                    <Tooltip title="Supprimer ce segment">
+                      <Button size="small" danger type="text" icon={<DeleteOutlined />} onClick={() => removeLabelPart(index)} />
+                    </Tooltip>
+                  )}
+                </div>
+
+                {/* Texte statique (préfixe) */}
+                <div style={{ marginBottom: 6 }}>
+                  <Input
+                    placeholder="Texte (ex: Garantie production : )"
+                    value={part.prefix || ''}
+                    onChange={(e) => updateLabelPartPrefix(index, e.target.value)}
+                    size="small"
+                    addonBefore={<Text style={{ fontSize: 11, color: '#8c8c8c' }}>Texte</Text>}
+                  />
+                </div>
+
+                {/* Source TBL */}
+                {part.source ? (
+                  <div style={{ 
+                    display: 'flex', alignItems: 'center', gap: 8,
+                    padding: '6px 10px', borderRadius: 4,
+                    backgroundColor: part.source.startsWith('@repeat.') ? '#f5f0ff' : '#f0f9ff',
+                    border: `1px solid ${part.source.startsWith('@repeat.') ? '#d3adf7' : '#91caff'}`,
+                  }}>
+                    <Tag color={part.source.startsWith('@repeat.') ? 'purple' : 'orange'} icon={<LinkOutlined />} style={{ margin: 0 }}>
+                      {part.source.startsWith('@repeat.') ? 'REPEAT' : 'TBL'}
+                    </Tag>
+                    <Text code style={{ flex: 1, fontSize: 11 }}>{part.source}</Text>
+                    <Tooltip title="Supprimer la liaison">
+                      <Button size="small" danger icon={<DeleteOutlined />} onClick={() => removeLabelPartSource(index)} />
+                    </Tooltip>
+                  </div>
+                ) : (
+                  <Button 
+                    size="small" 
+                    icon={<LinkOutlined />} 
+                    onClick={() => { setLabelPartSelectorIndex(index); setSelectorOpen(true); }}
+                    style={{ borderStyle: 'dashed' }}
+                    block
+                  >
+                    Lier à une donnée TBL
+                  </Button>
+                )}
+
+                {/* Suffixe (texte après la valeur TBL) — affiché uniquement si une source TBL est liée */}
+                {part.source && (
+                  <div style={{ marginTop: 6 }}>
+                    <Input
+                      placeholder="Suffixe (ex: ans, %, Wc...)"
+                      value={part.suffix || ''}
+                      onChange={(e) => updateLabelPartSuffix(index, e.target.value)}
+                      size="small"
+                      addonBefore={<Text style={{ fontSize: 11, color: '#8c8c8c' }}>Après</Text>}
+                      style={{ maxWidth: 250 }}
+                    />
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+
+          <Form.Item name="label" hidden><Input /></Form.Item>
           <Form.Item name="labelSource" hidden><Input /></Form.Item>
           <Form.Item name="repeaterId" hidden><Input /></Form.Item>
           <Form.Item name="repeaterLabel" hidden><Input /></Form.Item>
@@ -758,7 +984,13 @@ const PricingLinesEditor: React.FC<PricingLinesEditorProps> = ({
                 color: form.getFieldValue(['style', 'color']) || '#333',
                 textTransform: form.getFieldValue(['style', 'textTransform']) || 'none',
               }}>
-                {form.getFieldValue('label') || 'Texte exemple'}
+                {labelParts.length > 0 
+                  ? labelParts.map((p, i) => {
+                      const text = `${p.prefix || ''}${p.source ? '[données]' : ''}`.trim();
+                      return text ? (i > 0 ? ` - ${text}` : text) : null;
+                    }).filter(Boolean).join('') || 'Texte exemple'
+                  : form.getFieldValue('label') || 'Texte exemple'
+                }
               </span>
             </div>
           </div>
@@ -822,12 +1054,19 @@ const PricingLinesEditor: React.FC<PricingLinesEditorProps> = ({
         </Form>
       </Modal>
 
-      {/* Sélecteur TBL pour les colonnes */}
+      {/* Sélecteur TBL pour les colonnes et segments de libellé */}
       {selectedTreeNodeId && (
         <NodeTreeSelector
           open={selectorOpen}
-          onClose={() => setSelectorOpen(false)}
-          onSelect={handleTblSelect}
+          onClose={() => { setSelectorOpen(false); setLabelPartSelectorIndex(null); }}
+          onSelect={(value) => {
+            // 🆕 Si on est en train de sélectionner pour un segment de libellé
+            if (labelPartSelectorIndex !== null) {
+              handleLabelPartTblSelect(value);
+            } else {
+              handleTblSelect(value);
+            }
+          }}
           nodeId={selectedTreeNodeId}
           selectionContext="token"
         />

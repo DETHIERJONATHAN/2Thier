@@ -1870,7 +1870,10 @@ model TreeBranchLeafNodeTable {
   lookupSelectColumn   String?
   columnCount          Int                             @default(0)
   rowCount             Int                             @default(0)
+  sourceTableId        String?
   TreeBranchLeafNode   TreeBranchLeafNode              @relation(fields: [nodeId], references: [id], onDelete: Cascade)
+  sourceTable          TreeBranchLeafNodeTable?        @relation("TableViews", fields: [sourceTableId], references: [id], onDelete: SetNull)
+  views                TreeBranchLeafNodeTable[]       @relation("TableViews")
   tableColumns         TreeBranchLeafNodeTableColumn[]
   tableRows            TreeBranchLeafNodeTableRow[]
 
@@ -1878,6 +1881,7 @@ model TreeBranchLeafNodeTable {
   @@index([lookupSelectColumn])
   @@index([nodeId])
   @@index([organizationId])
+  @@index([sourceTableId])
 }
 
 model TreeBranchLeafNodeTableColumn {

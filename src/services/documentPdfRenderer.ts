@@ -1931,6 +1931,90 @@ export class DocumentPdfRenderer {
   }
 
   // ============================================================
+  // Icônes vectorielles partagées (header + footer)
+  // ============================================================
+  private drawPinIcon(ix: number, iy: number, s: number, color: string) {
+    this.doc.save();
+    const cx = ix + s * 0.5;
+    const r = s * 0.3;
+    const headY = iy + s * 0.32;
+    const tipY = iy + s * 0.92;
+    this.doc.circle(cx, headY, r).fillColor(color).fill();
+    this.doc.moveTo(cx - r * 0.75, headY + r * 0.4)
+      .lineTo(cx, tipY)
+      .lineTo(cx + r * 0.75, headY + r * 0.4)
+      .closePath().fillColor(color).fill();
+    this.doc.circle(cx, headY, r * 0.35).fillColor('white').fill();
+    this.doc.restore();
+  }
+
+  private drawPhoneIcon(ix: number, iy: number, s: number, color: string) {
+    this.doc.save();
+    const w = s * 0.5;
+    const h = s * 0.82;
+    const px = ix + (s - w) / 2;
+    const py = iy + (s - h) / 2;
+    this.doc.roundedRect(px, py, w, h, s * 0.08).fillColor(color).fill();
+    this.doc.fillColor('white');
+    this.doc.rect(px + w * 0.15, py + h * 0.13, w * 0.7, h * 0.58).fill();
+    this.doc.circle(px + w / 2, py + h * 0.87, w * 0.1).fill();
+    this.doc.restore();
+  }
+
+  private drawEnvelopeIcon(ix: number, iy: number, s: number, color: string) {
+    this.doc.save();
+    const w = s * 0.88;
+    const h = s * 0.62;
+    const ex = ix + (s - w) / 2;
+    const ey = iy + (s - h) / 2;
+    this.doc.rect(ex, ey, w, h).fillColor(color).fill();
+    this.doc.moveTo(ex, ey)
+      .lineTo(ex + w / 2, ey + h * 0.55)
+      .lineTo(ex + w, ey)
+      .closePath().fillColor('white').fill();
+    this.doc.restore();
+  }
+
+  private drawGlobeIcon(ix: number, iy: number, s: number, color: string) {
+    this.doc.save();
+    const cx = ix + s * 0.5;
+    const cy = iy + s * 0.5;
+    const r = s * 0.4;
+    // Cercle principal
+    this.doc.circle(cx, cy, r).lineWidth(s * 0.06).strokeColor(color).stroke();
+    // Ligne horizontale (équateur)
+    this.doc.moveTo(cx - r, cy).lineTo(cx + r, cy).strokeColor(color).stroke();
+    // Ligne verticale (méridien)
+    this.doc.moveTo(cx, cy - r).lineTo(cx, cy + r).strokeColor(color).stroke();
+    // Ellipse intérieure (méridien courbe) simplifiée avec un ovale
+    this.doc.ellipse(cx, cy, r * 0.45, r).lineWidth(s * 0.05).strokeColor(color).stroke();
+    this.doc.restore();
+  }
+
+  private drawIconWithText(
+    drawFn: (ix: number, iy: number, s: number, c: string) => void,
+    text: string, lineX: number, lineY: number, lineWidth: number,
+    align: 'left' | 'right', color: string, fontSize: number
+  ) {
+    const iconSize = fontSize + 2;
+    const gap = 4;
+    const textY = lineY + 1;
+    if (align === 'left') {
+      drawFn(lineX, lineY - 1, iconSize, color);
+      this.doc.font('Helvetica').fontSize(fontSize).fillColor(color)
+        .text(text, lineX + iconSize + gap, textY, { width: lineWidth - iconSize - gap, lineBreak: false });
+    } else {
+      this.doc.font('Helvetica').fontSize(fontSize);
+      const textW = this.doc.widthOfString(text);
+      const totalW = iconSize + gap + textW;
+      const startX = lineX + lineWidth - totalW;
+      drawFn(startX, lineY - 1, iconSize, color);
+      this.doc.font('Helvetica').fontSize(fontSize).fillColor(color)
+        .text(text, startX + iconSize + gap, textY, { lineBreak: false });
+    }
+  }
+
+  // ============================================================
   // DOCUMENT_HEADER - En-tête avec logo entreprise et infos client
   // ============================================================
   private renderModuleDocumentHeader(config: Record<string, any>, x: number, y: number, width: number, height: number): void {
@@ -1976,84 +2060,9 @@ export class DocumentPdfRenderer {
     const halfWidth = availWidth / 2 - 16;
     const rightX = leftX + halfWidth + 32;
     
-    // ═══════════════════════════════════════════════════════════
-    // Icônes vectorielles dessinées avec PDFKit path API
-    // (Ni ZapfDingbats, ni Unicode — 100% fiable)
-    // ═══════════════════════════════════════════════════════════
-    
-    // 📍 Pin de localisation (goutte inversée + petit cercle blanc)
-    const drawPinIcon = (ix: number, iy: number, s: number, color: string) => {
-      this.doc.save();
-      const cx = ix + s * 0.5;
-      const r = s * 0.3;
-      const headY = iy + s * 0.32;
-      const tipY = iy + s * 0.92;
-      // Tête du pin (cercle plein)
-      this.doc.circle(cx, headY, r).fillColor(color).fill();
-      // Pointe (triangle)
-      this.doc.moveTo(cx - r * 0.75, headY + r * 0.4)
-        .lineTo(cx, tipY)
-        .lineTo(cx + r * 0.75, headY + r * 0.4)
-        .closePath().fillColor(color).fill();
-      // Trou blanc au centre
-      this.doc.circle(cx, headY, r * 0.35).fillColor('white').fill();
-      this.doc.restore();
-    };
-    
-    // 📞 Combiné téléphone (rectangle arrondi = smartphone)
-    const drawPhoneIcon = (ix: number, iy: number, s: number, color: string) => {
-      this.doc.save();
-      const w = s * 0.5;
-      const h = s * 0.82;
-      const px = ix + (s - w) / 2;
-      const py = iy + (s - h) / 2;
-      // Corps du téléphone
-      this.doc.roundedRect(px, py, w, h, s * 0.08).fillColor(color).fill();
-      // Écran (rectangle blanc)
-      this.doc.fillColor('white');
-      this.doc.rect(px + w * 0.15, py + h * 0.13, w * 0.7, h * 0.58).fill();
-      // Bouton rond en bas
-      this.doc.circle(px + w / 2, py + h * 0.87, w * 0.1).fill();
-      this.doc.restore();
-    };
-    
-    // ✉️ Enveloppe (rectangle + V)
-    const drawEnvelopeIcon = (ix: number, iy: number, s: number, color: string) => {
-      this.doc.save();
-      const w = s * 0.88;
-      const h = s * 0.62;
-      const ex = ix + (s - w) / 2;
-      const ey = iy + (s - h) / 2;
-      // Corps enveloppe
-      this.doc.rect(ex, ey, w, h).fillColor(color).fill();
-      // Rabat en V (triangle blanc)
-      this.doc.moveTo(ex, ey)
-        .lineTo(ex + w / 2, ey + h * 0.55)
-        .lineTo(ex + w, ey)
-        .closePath().fillColor('white').fill();
-      this.doc.restore();
-    };
-    
-    // Helper : dessiner icône vectorielle + texte Helvetica
-    type IconDrawFn = (ix: number, iy: number, s: number, c: string) => void;
-    const drawIconLine = (drawFn: IconDrawFn, text: string, lineX: number, lineY: number, lineWidth: number, align: 'left' | 'right', color: string, fontSize: number) => {
-      const iconSize = fontSize + 2; // Icône légèrement plus grande que le texte
-      const gap = 4;
-      const textY = lineY + 1; // Petit décalage vertical pour aligner visuellement
-      if (align === 'left') {
-        drawFn(lineX, lineY - 1, iconSize, color);
-        this.doc.font('Helvetica').fontSize(fontSize).fillColor(color)
-          .text(text, lineX + iconSize + gap, textY, { width: lineWidth - iconSize - gap, lineBreak: false });
-      } else {
-        // Calculer la largeur du texte pour aligner à droite
-        this.doc.font('Helvetica').fontSize(fontSize);
-        const textW = this.doc.widthOfString(text);
-        const totalW = iconSize + gap + textW;
-        const startX = lineX + lineWidth - totalW;
-        drawFn(startX, lineY - 1, iconSize, color);
-        this.doc.font('Helvetica').fontSize(fontSize).fillColor(color)
-          .text(text, startX + iconSize + gap, textY, { lineBreak: false });
-      }
+    // Utiliser les méthodes de classe pour les icônes vectorielles
+    const drawIconLine = (drawFn: (ix: number, iy: number, s: number, c: string) => void, text: string, lineX: number, lineY: number, lineWidth: number, align: 'left' | 'right', color: string, fontSize: number) => {
+      this.drawIconWithText(drawFn, text, lineX, lineY, lineWidth, align, color, fontSize);
     };
     
     // ─── Ligne 1 : Labels "SOCIÉTÉ" / "CLIENT" en couleur primaire du thème ───
@@ -2092,28 +2101,28 @@ export class DocumentPdfRenderer {
     const lineH = infoFs + 6;
     
     if (companyAddress) {
-      drawIconLine(drawPinIcon, companyAddress, leftX, currentY, halfWidth, 'left', '#555555', infoFs);
+      drawIconLine(this.drawPinIcon.bind(this), companyAddress, leftX, currentY, halfWidth, 'left', '#555555', infoFs);
     }
     if (clientAddress) {
-      drawIconLine(drawPinIcon, clientAddress, rightX, currentY, halfWidth, 'right', '#555555', infoFs);
+      drawIconLine(this.drawPinIcon.bind(this), clientAddress, rightX, currentY, halfWidth, 'right', '#555555', infoFs);
     }
     if (companyAddress || clientAddress) currentY += lineH;
 
     // ─── Ligne 4 : Téléphones (icône smartphone vectorielle) ───
     if (companyPhone) {
-      drawIconLine(drawPhoneIcon, companyPhone, leftX, currentY, halfWidth, 'left', '#666666', infoFs);
+      drawIconLine(this.drawPhoneIcon.bind(this), companyPhone, leftX, currentY, halfWidth, 'left', '#666666', infoFs);
     }
     if (clientPhone) {
-      drawIconLine(drawPhoneIcon, clientPhone, rightX, currentY, halfWidth, 'right', '#666666', infoFs);
+      drawIconLine(this.drawPhoneIcon.bind(this), clientPhone, rightX, currentY, halfWidth, 'right', '#666666', infoFs);
     }
     if (companyPhone || clientPhone) currentY += lineH;
 
     // ─── Ligne 5 : Emails (icône enveloppe vectorielle) ───
     if (companyEmail) {
-      drawIconLine(drawEnvelopeIcon, companyEmail, leftX, currentY, halfWidth, 'left', '#666666', infoFs);
+      drawIconLine(this.drawEnvelopeIcon.bind(this), companyEmail, leftX, currentY, halfWidth, 'left', '#666666', infoFs);
     }
     if (clientEmail) {
-      drawIconLine(drawEnvelopeIcon, clientEmail, rightX, currentY, halfWidth, 'right', '#666666', infoFs);
+      drawIconLine(this.drawEnvelopeIcon.bind(this), clientEmail, rightX, currentY, halfWidth, 'right', '#666666', infoFs);
     }
     if (companyEmail || clientEmail) currentY += lineH;
 
@@ -2345,29 +2354,105 @@ export class DocumentPdfRenderer {
       return;
     }
 
-    // Layout centered (default)
-    let currentY = y;
-    if (companyInfoText) {
-      const h1 = drawSingleLine(companyInfoText, currentY, { font: textFont, size: baseFontSize, color: '#666666', align: 'center' });
-      if (h1) currentY += h1 + 4;
-    }
+    // Layout centered (default) — Bandeau vert avec icônes blanches comme le header
+    const bannerColor = this.theme.primaryColor || '#0d7377';
+    const textColor = '#ffffff';
+    const bannerPaddingH = 12; // padding horizontal intérieur
+    const lineSpacing = 4;
 
+    // Calculer la hauteur du contenu (sans page number qui est dans le bandeau)
+    let contentH = 0;
+    const line1H = baseFontSize + 2; // Ligne infos société
+    if (showCompanyInfo) contentH += line1H;
     if (bankInfoText) {
-      const h2 = drawSingleLine(bankInfoText, currentY, { font: textFont, size: smallFontSize, color: '#888888', align: 'center' });
-      if (h2) currentY += h2 + 4;
+      if (contentH > 0) contentH += lineSpacing;
+      contentH += smallFontSize + 2;
+    }
+    if (config.showLegalMention && config.legalMention) {
+      if (contentH > 0) contentH += lineSpacing;
+      contentH += smallFontSize + 2;
     }
 
+    // Utiliser toute la hauteur allouée au module, ou un minimum si pas défini
+    const bannerH = Math.max(height || 40, contentH + 20);
+
+    // ═══ Dessiner le bandeau vert pleine largeur ═══
+    this.doc.save();
+    this.doc.rect(x, y, width, bannerH).fill(bannerColor);
+    this.doc.restore();
+
+    // Centrer verticalement le contenu dans le bandeau
+    const topPadding = (bannerH - contentH) / 2;
+    let currentY = y + topPadding;
+    
+    // ─── Ligne 1 : Infos société avec icônes vectorielles blanches (centrées) ───
+    if (showCompanyInfo) {
+      const iconSize = baseFontSize + 2;
+      const gap = 3;
+      const separatorText = '  |  ';
+      
+      // Construire la liste des segments {drawFn, text}
+      type Segment = { drawFn: ((ix: number, iy: number, s: number, c: string) => void) | null; text: string };
+      const segments: Segment[] = [];
+      if (companyName) segments.push({ drawFn: null, text: companyName });
+      if (phone) segments.push({ drawFn: this.drawPhoneIcon.bind(this), text: phone });
+      if (email) segments.push({ drawFn: this.drawEnvelopeIcon.bind(this), text: email });
+      if (website) segments.push({ drawFn: this.drawGlobeIcon.bind(this), text: website });
+      
+      // Calculer la largeur totale pour centrer
+      this.doc.font(textFont).fontSize(baseFontSize);
+      const sepW = this.doc.widthOfString(separatorText);
+      let totalW = 0;
+      for (let i = 0; i < segments.length; i++) {
+        const seg = segments[i];
+        if (seg.drawFn) totalW += iconSize + gap;
+        totalW += this.doc.widthOfString(seg.text);
+        if (i < segments.length - 1) totalW += sepW;
+      }
+      
+      // Dessiner centré en blanc
+      let drawX = x + (width - totalW) / 2;
+      for (let i = 0; i < segments.length; i++) {
+        const seg = segments[i];
+        if (seg.drawFn) {
+          seg.drawFn(drawX, currentY - 1, iconSize, textColor);
+          drawX += iconSize + gap;
+        }
+        this.doc.font(textFont).fontSize(baseFontSize).fillColor(textColor)
+          .text(seg.text, drawX, currentY, { lineBreak: false });
+        drawX += this.doc.widthOfString(seg.text);
+        if (i < segments.length - 1) {
+          this.doc.font(textFont).fontSize(baseFontSize).fillColor('rgba(255,255,255,0.6)')
+            .text(separatorText, drawX, currentY, { lineBreak: false });
+          drawX += sepW;
+        }
+      }
+      currentY += line1H + lineSpacing;
+    }
+
+    // ─── Ligne 2 : Infos bancaires (blanc centré) ───
+    if (bankInfoText) {
+      this.doc.font(textFont).fontSize(smallFontSize).fillColor(textColor)
+        .text(bankInfoText, x, currentY, { width, align: 'center', lineBreak: false });
+      currentY += smallFontSize + 2 + lineSpacing;
+    }
+
+    // ─── Mention légale ───
     if (config.showLegalMention && config.legalMention) {
       const legalText = String(config.legalMention);
-      const h3 = drawSingleLine(legalText, currentY, { font: 'Helvetica-Oblique', size: smallFontSize, color: '#888888', align: 'center' });
-      if (h3) currentY += h3 + 4;
+      this.doc.font('Helvetica-Oblique').fontSize(smallFontSize).fillColor('rgba(255,255,255,0.8)')
+        .text(legalText, x, currentY, { width, align: 'center', lineBreak: false });
+      currentY += smallFontSize + 2 + lineSpacing;
     }
 
+    // ─── Numéro de page (blanc, en bas à droite du bandeau avec marge) ───
     if (pageNumberText) {
-      drawSingleLine(pageNumberText, currentY, { font: textFont, size: baseFontSize, color: '#888888', align: 'center' });
+      const pageNumY = y + bannerH - baseFontSize - 6; // 6px du bas du bandeau
+      this.doc.font(textFont).fontSize(baseFontSize).fillColor(textColor)
+        .text(pageNumberText, x, pageNumY, { width: width - bannerPaddingH, align: 'right', lineBreak: false });
     }
     
-    console.log(`📄 [PDF] DOCUMENT_FOOTER rendu: ${companyName}`);
+    console.log(`📄 [PDF] DOCUMENT_FOOTER rendu (green banner+icons): ${companyName}`);
   }
 
   // ============================================================
@@ -3255,7 +3340,23 @@ export class DocumentPdfRenderer {
     };
     
     // Résoudre le label/description
-    if (line.labelSource) {
+    // 🆕 Support des multi-libellés (labelParts)
+    if (line.labelParts && Array.isArray(line.labelParts) && line.labelParts.length > 0) {
+      const parts = line.labelParts.map((part: any) => {
+        const prefix = part.prefix || '';
+        let value = '';
+        if (part.source) {
+          value = resolve(part.source);
+        }
+        const suffix = (part.suffix && value) ? part.suffix : '';
+        return `${prefix}${value}${suffix}`.trim();
+      }).filter((p: string) => p.length > 0);
+      resolvedLine.description = parts.join(' - ');
+      console.log(`📄 [PDF] Label multi-segments résolu: "${resolvedLine.description}" (${line.labelParts.length} segments)`);
+      if (!resolvedLine.description) {
+        resolvedLine.description = line.label || 'Non défini';
+      }
+    } else if (line.labelSource) {
       const resolved = resolve(line.labelSource);
       console.log(`📄 [PDF] Label résolu: "${resolved}" (source: ${line.labelSource}, suffix: ${suffix})`);
       resolvedLine.description = resolved || line.label || 'Non défini';
