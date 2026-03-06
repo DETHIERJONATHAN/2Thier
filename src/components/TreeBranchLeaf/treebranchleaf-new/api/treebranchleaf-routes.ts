@@ -1060,11 +1060,10 @@ async function buildConditionExpressionReadable(
       const calculationResult = await evaluateVariableOperation(
         conditionNode.nodeId,
         submissionId,
-        dbClient
+        dbClient,
+        undefined,
+        { organizationId } // 📋 Gestionnaire overrides
       );
-      
-      
-      // Retourner la traduction intelligente au lieu du message d'attente
       if (calculationResult && calculationResult.operationResult) {
         return calculationResult.operationResult as string;
       } else {
@@ -7130,7 +7129,8 @@ router.post('/evaluate/condition/:conditionId', async (req, res) => {
         condition.nodeId,
         submissionId || conditionId,
         prisma,
-        valueMapLocal
+        valueMapLocal,
+        { organizationId } // 📋 Gestionnaire overrides
       );
       
       
@@ -7406,6 +7406,9 @@ router.get('/tables/:id', async (req, res) => {
               }
             }
           }
+        },
+        tableColumns: {
+          orderBy: { columnIndex: 'asc' }
         }
       }
     });
@@ -7433,6 +7436,7 @@ router.get('/tables/:id', async (req, res) => {
     res.json({
       ...table,
       rows: rows.map(r => r.cells), // Renvoyer uniquement les donnÃƒÆ’Ã‚Â©es des cellules
+      columns: (table.tableColumns || []).map((c: any) => ({ name: c.name, type: c.type, width: c.width, format: c.format, metadata: c.metadata })),
       page,
       limit,
       totalRows: table.rowCount,
@@ -13570,7 +13574,9 @@ router.post('/v2/variables/:variableNodeId/evaluate', async (req, res) => {
     const evaluationResult = await evaluateVariableOperation(
       variableNodeId,
       submissionId,
-      prisma
+      prisma,
+      undefined,
+      { organizationId } // 📋 Gestionnaire overrides
     );
 
     const duration = Date.now() - startTime;

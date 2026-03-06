@@ -13,6 +13,7 @@ interface OptimizedApiHook {
     get: (url: string) => Promise<unknown>;
     post: (url: string, data?: unknown) => Promise<unknown>;
     put: (url: string, data?: unknown) => Promise<unknown>;
+    patch: (url: string, data?: unknown) => Promise<unknown>;
     delete: (url: string) => Promise<unknown>;
   };
   isLoading: boolean;
@@ -37,7 +38,7 @@ export const useOptimizedApi = (): OptimizedApiHook => {
   }, []);
   
   const makeRequest = useCallback(async (
-    method: 'get' | 'post' | 'put' | 'delete',
+    method: 'get' | 'post' | 'put' | 'patch' | 'delete',
     url: string, 
     data?: unknown
   ): Promise<unknown> => {
@@ -76,6 +77,9 @@ export const useOptimizedApi = (): OptimizedApiHook => {
             break;
           case 'put':
             result = await baseApiHook.api.put(url, data);
+            break;
+          case 'patch':
+            result = await baseApiHook.api.patch(url, data);
             break;
           case 'delete':
             result = await baseApiHook.api.delete(url);
@@ -127,6 +131,7 @@ export const useOptimizedApi = (): OptimizedApiHook => {
     get: (url: string) => makeRequest('get', url),
     post: (url: string, data?: unknown) => makeRequest('post', url, data),
     put: (url: string, data?: unknown) => makeRequest('put', url, data),
+    patch: (url: string, data?: unknown) => makeRequest('patch', url, data),
     delete: (url: string) => makeRequest('delete', url)
   }), [makeRequest]);
   

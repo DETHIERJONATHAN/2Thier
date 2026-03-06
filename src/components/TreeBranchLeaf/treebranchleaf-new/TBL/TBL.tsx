@@ -43,7 +43,7 @@ import {
   Tag,
   Switch
 } from 'antd';
-import { FileTextOutlined, DownloadOutlined, ClockCircleOutlined, FolderOpenOutlined, PlusOutlined, UserOutlined, FileAddOutlined, SearchOutlined, MailOutlined, PhoneOutlined, HomeOutlined, SwapOutlined, LeftOutlined, RightOutlined, SaveOutlined, SendOutlined, PaperClipOutlined } from '@ant-design/icons';
+import { FileTextOutlined, DownloadOutlined, ClockCircleOutlined, FolderOpenOutlined, PlusOutlined, UserOutlined, FileAddOutlined, SearchOutlined, MailOutlined, PhoneOutlined, HomeOutlined, SwapOutlined, LeftOutlined, RightOutlined, SaveOutlined, SendOutlined, PaperClipOutlined, ToolOutlined } from '@ant-design/icons';
 import { useAuth } from '../../../../auth/useAuth';
 import { useParams, useSearchParams } from 'react-router-dom';
 import { useTreeBranchLeafConfig } from '../../hooks/useTreeBranchLeafConfig';
@@ -68,6 +68,7 @@ const DocumentsSection = lazy(() => import('../../../Documents/DocumentsSection'
 const TBLDevCapabilitiesPanel = lazy(() => import('./components/Dev/TBLDevCapabilitiesPanel'));
 const LeadSelectorModal = lazy(() => import('../../lead-integration/LeadSelectorModal'));
 const LeadCreatorModalAdvanced = lazy(() => import('../../lead-integration/LeadCreatorModalAdvanced'));
+const GestionnairePanel = lazy(() => import('./GestionnairePanel'));
 
 // Déclaration étendue pour éviter usage de any lors de l'injection diag
 declare global { interface Window { TBL_DEP_GRAPH?: Map<string, Set<string>>; TBL_FORM_DATA?: Record<string, unknown>; } }
@@ -223,6 +224,9 @@ const TBL: React.FC<TBLProps> = ({
   const [devisPdfList, setDevisPdfList] = useState<Array<{id: string, documentNumber: string, createdAt: string, template?: {name: string}}>>([]);
   const [loadingDevisPdfs, setLoadingDevisPdfs] = useState(false);
   const [devisEmailRecipient, setDevisEmailRecipient] = useState<string>('');
+
+  // 📋 Gestionnaire panel
+  const [gestionnaireVisible, setGestionnaireVisible] = useState(false);
 
   // 🆕 NOUVEAU DEVIS
   // Règle: en brouillon (global ou lead) => on vide seulement les données et on reste en mode brouillon.
@@ -1948,6 +1952,18 @@ const TBL: React.FC<TBLProps> = ({
   useEffect(() => {
     scheduleCapabilityPreviewRef.current = scheduleCapabilityPreview;
   }, [scheduleCapabilityPreview]);
+
+  // 📋 Gestionnaire: forcer un recalcul TBL après sauvegarde d'un override
+  const handleGestionnaireOverrideSaved = useCallback(() => {
+    // Réinitialiser les signatures pour forcer le re-evaluate
+    // (les données de formulaire n'ont pas changé, mais les overrides oui)
+    lastSavedSignatureRef.current = null;
+    lastQueuedSignatureRef.current = null;
+    // Déclencher un recalcul avec les données courantes
+    if (Object.keys(formDataRef.current).length > 0) {
+      scheduleAutosaveRef.current(formDataRef.current, 'gestionnaire-override');
+    }
+  }, []);
 
   useEffect(() => {
     return () => {
@@ -3960,6 +3976,14 @@ const TBL: React.FC<TBLProps> = ({
                       style={lastGeneratedDocId ? { backgroundColor: '#1890ff', borderColor: '#1890ff', color: '#fff' } : undefined}
                     />
                   </Tooltip>
+                  <Tooltip title="Gestionnaire" placement="bottom">
+                    <Button 
+                      icon={<ToolOutlined />}
+                      onClick={() => setGestionnaireVisible(true)}
+                      block={actionButtonBlock}
+                      style={{ backgroundColor: '#1a1a1a', borderColor: '#1a1a1a', color: '#fff' }}
+                    />
+                  </Tooltip>
                 </Space>
               </div>
 
@@ -5021,6 +5045,16 @@ const TBL: React.FC<TBLProps> = ({
           </div>
         </div>
       </Modal>
+
+      {/* 📋 Panneau Gestionnaire */}
+      <Suspense fallback={null}>
+        <GestionnairePanel
+          open={gestionnaireVisible}
+          onClose={() => setGestionnaireVisible(false)}
+          treeId={effectiveTreeId}
+          onOverrideSaved={handleGestionnaireOverrideSaved}
+        />
+      </Suspense>
     </Layout>
     </TBLBatchProvider>
     </TBLValidationProvider>

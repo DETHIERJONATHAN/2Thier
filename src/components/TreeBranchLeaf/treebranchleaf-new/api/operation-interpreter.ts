@@ -77,7 +77,7 @@ export interface InterpretResult {
 /**
  * Ã°Å¸Å½Â¯ Types de rÃƒÂ©fÃƒÂ©rences possibles dans le systÃƒÂ¨me TBL
  */
-type ReferenceType = 'field' | 'formula' | 'condition' | 'table' | 'value';
+type ReferenceType = 'field' | 'formula' | 'condition' | 'table' | 'value' | 'gestionnaire-constant';
 
 // Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
 // Ã°Å¸â€Â MODULE 1 : IDENTIFICATION DU TYPE DE RÃƒâ€°FÃƒâ€°RENCE
@@ -1720,6 +1720,8 @@ interface FormulaReferenceMeta {
   refId: string;
   refType: ReferenceType;
   rawToken: string;
+  label?: string;
+  originalValue?: string;
 }
 
 interface FormulaExpressionBuildResult {
@@ -1806,6 +1808,18 @@ function tryParseTokenReference(token?: string | null): FormulaReferenceMeta | n
   // Support aussi "condition:" sans prÃƒÂ©fixe "node-"
   if (normalizedToken.startsWith('condition:') && !normalizedToken.startsWith('condition:node-')) {
     return createMeta('condition', normalizedToken.slice('condition:'.length));
+  }
+
+  // 📋 Support des constantes gestionnaire: @const.{constId}.{originalValue}
+  if (normalizedToken.startsWith('@const.')) {
+    const rest = normalizedToken.slice('@const.'.length);
+    // Le constId ne contient pas de '.', la première '.' sépare l'ID de la valeur
+    const firstDot = rest.indexOf('.');
+    if (firstDot > 0) {
+      const constId = rest.slice(0, firstDot);
+      const originalValue = rest.slice(firstDot + 1);
+      return { refType: 'gestionnaire-constant', refId: constId, rawToken, originalValue };
+    }
   }
 
   if (normalizedToken.startsWith('shared-ref-') || normalizedToken.startsWith('node_') || UUID_REGEX.test(normalizedToken)) {
@@ -1983,6 +1997,40 @@ async function interpretFormula(
       valueCacheByEncoded.set(encoded, 0);
       labelCacheByEncoded.set(encoded, meta?.rawToken || encoded);
       return 0;
+    }
+
+    // 📋 GESTIONNAIRE CONSTANT: nombre exposé dans une formule
+    if (meta.refType === 'gestionnaire-constant') {
+      const originalValue = parseFloat(meta.originalValue || '0');
+      const safeOriginal = Number.isFinite(originalValue) ? originalValue : 0;
+      try {
+        const sub = await prisma.treeBranchLeafSubmission.findUnique({
+          where: { id: submissionId },
+          select: { organizationId: true }
+        });
+        if (sub?.organizationId) {
+          const override = await prisma.gestionnaireOverride.findUnique({
+            where: {
+              organizationId_capabilityId: {
+                organizationId: sub.organizationId,
+                capabilityId: meta.refId,
+              }
+            }
+          });
+          if (override?.overrideValue != null) {
+            const val = parseFloat(override.overrideValue);
+            const finalVal = Number.isFinite(val) ? val : safeOriginal;
+            valueCacheByEncoded.set(encoded, finalVal);
+            labelCacheByEncoded.set(encoded, meta.label || String(finalVal));
+            return finalVal;
+          }
+        }
+      } catch (e) {
+        console.warn('[FORMULE] ⚠️ Gestionnaire constant override check failed:', e instanceof Error ? e.message : e);
+      }
+      valueCacheByEncoded.set(encoded, safeOriginal);
+      labelCacheByEncoded.set(encoded, meta.label || meta.originalValue || String(safeOriginal));
+      return safeOriginal;
     }
 
     try {
@@ -2464,9 +2512,9 @@ async function interpretTable(
   // Ã¯Â¿Â½ RECONSTRUCTION DES DONNÃƒâ€°ES depuis la structure normalisÃƒÂ©e
   // Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
   // Reconstituer columns, rows, data depuis les relations
-  const columns = table.tableColumns.map(col => col.name);
-  const rows: string[] = [];
-  const data: any[][] = [];
+  let columns = table.tableColumns.map(col => col.name);
+  let rows: string[] = [];
+  let data: any[][] = [];
   
   // Ã°Å¸â€â€ž Parser cells avec support hybride (JSON array OU plain string)
   table.tableRows.forEach(row => {
@@ -2511,6 +2559,44 @@ async function interpretTable(
       data.push([]);
     }
   });
+  
+  // 📋 GESTIONNAIRE OVERRIDE : Si l'org a un override pour cette table, remplacer les données
+  try {
+    const submission = await prisma.treeBranchLeafSubmission.findUnique({
+      where: { id: submissionId },
+      select: { organizationId: true }
+    });
+    const orgId = submission?.organizationId;
+    if (orgId) {
+      const tableOverride = await prisma.gestionnaireOverride.findUnique({
+        where: {
+          organizationId_capabilityId: {
+            organizationId: orgId,
+            capabilityId: table.id
+          }
+        },
+        select: { overrideData: true }
+      });
+      if (tableOverride?.overrideData) {
+        const od = tableOverride.overrideData as any;
+        if (od.columns && Array.isArray(od.columns) && od.data && Array.isArray(od.data)) {
+          columns = od.columns;
+          const overrideRows = Array.isArray(od.rows) ? od.rows : [];
+          rows.length = 0;
+          data.length = 0;
+          for (let i = 1; i < overrideRows.length; i++) {
+            const rowEntry = overrideRows[i];
+            const label = Array.isArray(rowEntry) ? String(rowEntry[0] ?? '') : String(rowEntry ?? '');
+            rows.push(label);
+            data.push(Array.isArray(od.data[i]) ? od.data[i] : []);
+          }
+          console.log(`[TABLE] 📋 Gestionnaire override appliqué pour table ${table.name} (org: ${orgId}): ${rows.length} lignes, ${columns.length} colonnes`);
+        }
+      }
+    }
+  } catch (e) {
+    console.warn('[TABLE] ⚠️ Erreur vérification gestionnaire override:', e instanceof Error ? e.message : e);
+  }
   
   // Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
   // Ã¯Â¿Â½Ã°Å¸â€Â Ãƒâ€°TAPE 2 : Extraire la configuration de lookup
@@ -3511,6 +3597,7 @@ export interface VariableEvalOptions {
   labelMap?: Map<string, string>;
   treeId?: string;
   preloadedVariable?: any;
+  organizationId?: string;
 }
 
 export async function evaluateVariableOperation(
@@ -3604,6 +3691,32 @@ export async function evaluateVariableOperation(
   // Ã°Å¸â€Â Ãƒâ€°TAPE 2 : Traiter selon le sourceType
   // Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
   
+  // CAS 0 : Gestionnaire Override (prioritaire sur fixedValue)
+  if (options.organizationId && variable.id) {
+    try {
+      const gestionnaireOverride = await prisma.gestionnaireOverride.findUnique({
+        where: {
+          organizationId_capabilityId: {
+            organizationId: options.organizationId,
+            capabilityId: variable.id,
+          }
+        }
+      });
+      if (gestionnaireOverride?.overrideValue != null) {
+        return {
+          value: gestionnaireOverride.overrideValue,
+          operationDetail: { type: 'gestionnaire-override', value: gestionnaireOverride.overrideValue, baseValue: variable.fixedValue },
+          operationResult: `Gestionnaire override: ${gestionnaireOverride.overrideValue}`,
+          operationSource: 'gestionnaire-override',
+          sourceRef: variable.sourceRef || ''
+        };
+      }
+    } catch (err) {
+      // Silently ignore — table might not exist yet or other transient errors
+      console.warn('[operation-interpreter] Gestionnaire override lookup failed:', err);
+    }
+  }
+
   // CAS 1 : Valeur fixe
   if (variable.sourceType === 'fixed' && variable.fixedValue) {
     return {

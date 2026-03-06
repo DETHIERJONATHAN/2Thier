@@ -45,7 +45,7 @@ const extractFormulaAlias = (token?: string | null): string | null => {
   return null;
 };
 
-const FormulaPanel: React.FC<FormulaPanelProps> = ({ nodeId, onChange, readOnly }) => {
+const FormulaPanel: React.FC<FormulaPanelProps> = ({ nodeId, treeId, onChange, readOnly }) => {
   // API optimisée pour éviter les conflits
   const { api, clearCache } = useOptimizedApi();
   
@@ -81,6 +81,12 @@ const FormulaPanel: React.FC<FormulaPanelProps> = ({ nodeId, onChange, readOnly 
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [formulaToDelete, setFormulaToDelete] = useState<string | null>(null);
   
+  // 📋 Gestionnaire - état pour tokens exposés
+  const [exposedNodeIds, setExposedNodeIds] = useState<Set<string>>(new Set());
+  const [exposedConstIds, setExposedConstIds] = useState<Set<string>>(new Set());
+  const [gestionnaireModal, setGestionnaireModal] = useState<{ open: boolean; token: string; nodeId: string; isNumber?: boolean; tokenIndex?: number; constId?: string }>({ open: false, token: '', nodeId: '' });
+  const [gestionnaireLabel, setGestionnaireLabel] = useState<string>('');
+  
   // Multi instances
   const [instances, setInstances] = useState<FormulaInstance[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
@@ -91,7 +97,49 @@ const FormulaPanel: React.FC<FormulaPanelProps> = ({ nodeId, onChange, readOnly 
     return () => { mountedRef.current = false; };
   }, []);
 
-  // 🔄 CHARGEMENT INITIAL DES FORMULES
+  // � Chargement des nodeIds exposés au Gestionnaire
+  useEffect(() => {
+    if (!treeId || !api) return;
+    const loadExposed = async () => {
+      try {
+        const res = await api.get(`/api/gestionnaire/exposed-tokens/${treeId}`) as { exposedNodeIds?: string[] };
+        if (res?.exposedNodeIds && mountedRef.current) {
+          setExposedNodeIds(new Set(res.exposedNodeIds));
+        }
+      } catch { /* silently fail */ }
+    };
+    loadExposed();
+  }, [treeId, api]);
+
+  // 📋 Handler double-clic sur un token → ouvrir modal Gestionnaire
+  const handleTokenDoubleClick = useCallback((token: string) => {
+    // Extraire le nodeId du token
+    let targetNodeId = '';
+    if (token.startsWith('@value.')) targetNodeId = token.slice('@value.'.length);
+    else if (token.startsWith('@select.')) targetNodeId = token.slice('@select.'.length).split('.')[0];
+    else if (token.startsWith('@const.')) {
+      // Constante déjà exposée — permettre de la retirer
+      const rest = token.slice('@const.'.length);
+      const firstDot = rest.indexOf('.');
+      const constId = firstDot > 0 ? rest.slice(0, firstDot) : rest;
+      const tokenIdx = localTokens.indexOf(token);
+      setGestionnaireModal({ open: true, token, nodeId: '', isNumber: true, tokenIndex: tokenIdx, constId });
+      setGestionnaireLabel('');
+      return;
+    } else if (/^-?\d+([.,]\d+)?$/.test(token.trim())) {
+      // Nombre littéral — proposer de l'exposer au Gestionnaire
+      const tokenIdx = localTokens.indexOf(token);
+      setGestionnaireModal({ open: true, token, nodeId: '', isNumber: true, tokenIndex: tokenIdx });
+      setGestionnaireLabel('');
+      return;
+    } else return; // Pas un token reconnu, ignorer
+
+    setGestionnaireModal({ open: true, token, nodeId: targetNodeId });
+    setGestionnaireLabel('');
+  }, [localTokens]);
+
+
+  // �🔄 CHARGEMENT INITIAL DES FORMULES
   useEffect(() => {
     if (!nodeId || !api) return;
 
@@ -248,6 +296,92 @@ const FormulaPanel: React.FC<FormulaPanelProps> = ({ nodeId, onChange, readOnly 
     saveFormula(nextTokens, localName);
   }, [saveFormula, localName]);
 
+  // 📋 Sauvegarder l'exposition au Gestionnaire
+  const handleGestionnaireSave = useCallback(async () => {
+    // ── CAS NOMBRE: exposer/retirer un nombre littéral ──
+    if (gestionnaireModal.isNumber) {
+      const idx = gestionnaireModal.tokenIndex ?? -1;
+
+      // Si c'est déjà un @const. → retirer (reconvertir en nombre simple)
+      if (gestionnaireModal.constId) {
+        const constToken = gestionnaireModal.token;
+        const rest = constToken.slice('@const.'.length);
+        const firstDot = rest.indexOf('.');
+        const originalValue = firstDot > 0 ? rest.slice(firstDot + 1) : '0';
+        const nextTokens = [...localTokens];
+        if (idx >= 0 && idx < nextTokens.length) {
+          nextTokens[idx] = originalValue;
+        }
+        setExposedConstIds(prev => { const next = new Set(prev); next.delete(gestionnaireModal.constId!); return next; });
+        handleTokensChange(nextTokens);
+        message.success('Retiré du Gestionnaire');
+        setGestionnaireModal({ open: false, token: '', nodeId: '' });
+        return;
+      }
+
+      // Exposer un nombre littéral → transformer en @const.{id}.{value}
+      const constId = 'gnc-' + crypto.randomUUID().slice(0, 12);
+      const constToken = `@const.${constId}.${gestionnaireModal.token}`;
+      const nextTokens = [...localTokens];
+      if (idx >= 0 && idx < nextTokens.length) {
+        nextTokens[idx] = constToken;
+      }
+      setExposedConstIds(prev => new Set([...prev, constId]));
+      handleTokensChange(nextTokens);
+
+      // Sauvegarder le label personnalisé côté backend (si renseigné)
+      if (gestionnaireLabel.trim()) {
+        try {
+          await api.post('/api/gestionnaire/override/constant', {
+            constId,
+            nodeId,
+            treeId,
+            label: gestionnaireLabel.trim(),
+          });
+        } catch (err) {
+          console.warn('[FormulaPanel] Could not save const label:', err);
+        }
+      }
+
+      message.success('Nombre exposé dans le Gestionnaire');
+      setGestionnaireModal({ open: false, token: '', nodeId: '' });
+      return;
+    }
+
+    // ── CAS VARIABLE: exposer/retirer une référence @value/@select ──
+    if (!gestionnaireModal.nodeId) return;
+    try {
+      // Trouver la variable associée au nodeId
+      const varRes = await api.get(`/api/treebranchleaf/nodes/${gestionnaireModal.nodeId}/variables`) as { variable?: { id: string } };
+      const variableId = varRes?.variable?.id;
+      if (!variableId) {
+        message.error('Ce champ n\'a pas de variable associée');
+        return;
+      }
+
+      const isCurrentlyExposed = exposedNodeIds.has(gestionnaireModal.nodeId);
+      await api.post('/api/gestionnaire/expose', {
+        capabilityType: 'variable',
+        capabilityId: variableId,
+        exposed: !isCurrentlyExposed,
+        label: gestionnaireLabel || null
+      });
+
+      // Mettre à jour l'état local
+      setExposedNodeIds(prev => {
+        const next = new Set(prev);
+        if (isCurrentlyExposed) next.delete(gestionnaireModal.nodeId);
+        else next.add(gestionnaireModal.nodeId);
+        return next;
+      });
+
+      message.success(isCurrentlyExposed ? 'Retiré du Gestionnaire' : 'Exposé dans le Gestionnaire');
+      setGestionnaireModal({ open: false, token: '', nodeId: '' });
+    } catch (err) {
+      console.error('[FormulaPanel] Gestionnaire expose error:', err);
+      message.error('Erreur lors de la mise à jour');
+    }
+  }, [api, gestionnaireModal, gestionnaireLabel, exposedNodeIds, localTokens, handleTokensChange, nodeId, treeId]);
   // Gestion des changements de nom SANS déclencher de boucles
   const handleNameChange = useCallback((nextName: string) => {
     if (!mountedRef.current) return;
@@ -615,6 +749,17 @@ const FormulaPanel: React.FC<FormulaPanelProps> = ({ nodeId, onChange, readOnly 
         const roleKey = getFormulaRole(tokenStr);
         rolesMap[roleKey] = tokenStr;
         parts.push(`{{${roleKey}}}`);
+        continue;
+      }
+
+      // 📋 Traiter les constantes gestionnaire @const.{id}.{value} → utiliser la valeur d'origine
+      if (tokenStr.startsWith('@const.')) {
+        const rest = tokenStr.slice('@const.'.length);
+        const firstDot = rest.indexOf('.');
+        if (firstDot > 0) {
+          const originalValue = rest.slice(firstDot + 1);
+          parts.push(originalValue);
+        }
         continue;
       }
 
@@ -1046,9 +1191,18 @@ const FormulaPanel: React.FC<FormulaPanelProps> = ({ nodeId, onChange, readOnly 
         <Text strong style={{ marginRight: 8 }}>Résumé test:</Text>
         <Space wrap size={6}>
           <Text type="secondary">Éléments ({localTokens?.length || 0}):</Text>
-          {localTokens.map((t, index) => (
-            <TokenChip key={`${t}-${index}`} token={t} />
-          ))}
+          {localTokens.map((t, index) => {
+            const nid = t.startsWith('@value.') ? t.slice('@value.'.length) : t.startsWith('@select.') ? t.slice('@select.'.length).split('.')[0] : null;
+            const isConst = t.startsWith('@const.');
+            return (
+              <TokenChip
+                key={`${t}-${index}`}
+                token={t}
+                onDoubleClick={handleTokenDoubleClick}
+                isGestionnaireExposed={isConst || (nid ? exposedNodeIds.has(nid) : false)}
+              />
+            );
+          })}
         </Space>
         
         {/* Zone de test intégrée */}
@@ -1187,6 +1341,8 @@ const FormulaPanel: React.FC<FormulaPanelProps> = ({ nodeId, onChange, readOnly 
         value={localTokens}
         onChange={handleTokensChange}
         readOnly={readOnly}
+        onTokenDoubleClick={handleTokenDoubleClick}
+        exposedNodeIds={exposedNodeIds}
       />
       
       <Text type="secondary" style={{ fontSize: 12 }}>
@@ -1214,6 +1370,61 @@ const FormulaPanel: React.FC<FormulaPanelProps> = ({ nodeId, onChange, readOnly 
         <Text>Cette action supprime définitivement la formule de la table TreeBranchLeafNodeFormula.</Text>
         <br />
         <Text type="secondary">Cette action est irréversible.</Text>
+      </Modal>
+
+      {/* 📋 Modal Gestionnaire — expose/retire un token */}
+      <Modal
+        title={
+          gestionnaireModal.isNumber
+            ? (gestionnaireModal.constId ? '📋 Retirer le nombre du Gestionnaire' : '📋 Exposer le nombre dans le Gestionnaire')
+            : (exposedNodeIds.has(gestionnaireModal.nodeId) ? '📋 Retirer du Gestionnaire' : '📋 Exposer dans le Gestionnaire')
+        }
+        open={gestionnaireModal.open}
+        onCancel={() => setGestionnaireModal({ open: false, token: '', nodeId: '' })}
+        onOk={handleGestionnaireSave}
+        okText={
+          gestionnaireModal.isNumber
+            ? (gestionnaireModal.constId ? 'Retirer' : 'Exposer')
+            : (exposedNodeIds.has(gestionnaireModal.nodeId) ? 'Retirer' : 'Exposer')
+        }
+        cancelText="Annuler"
+        okButtonProps={(gestionnaireModal.isNumber ? gestionnaireModal.constId : exposedNodeIds.has(gestionnaireModal.nodeId)) ? { danger: true } : {}}
+      >
+        {gestionnaireModal.isNumber ? (
+          gestionnaireModal.constId ? (
+            <Text>Le nombre <strong>{gestionnaireModal.token.startsWith('@const.') ? gestionnaireModal.token.slice(gestionnaireModal.token.indexOf('.', '@const.'.length) + 1) : gestionnaireModal.token}</strong> sera retiré du Gestionnaire.</Text>
+          ) : (
+            <>
+              <Text>Le nombre <strong>{gestionnaireModal.token}</strong> sera accessible dans le Gestionnaire pour modification.</Text>
+              <div style={{ marginTop: 12 }}>
+                <Text strong>Libellé (optionnel) :</Text>
+                <Input
+                  style={{ marginTop: 4 }}
+                  placeholder="Ex: Coefficient TVA, Marge %..."
+                  value={gestionnaireLabel}
+                  onChange={(e) => setGestionnaireLabel(e.target.value)}
+                  autoFocus
+                />
+              </div>
+            </>
+          )
+        ) : exposedNodeIds.has(gestionnaireModal.nodeId) ? (
+          <Text>Ce champ sera retiré du Gestionnaire. Les utilisateurs ne pourront plus le modifier.</Text>
+        ) : (
+          <>
+            <Text>Ce champ sera accessible dans le Gestionnaire pour modification par l'entreprise.</Text>
+            <div style={{ marginTop: 12 }}>
+              <Text strong>Libellé dans le Gestionnaire :</Text>
+              <Input
+                style={{ marginTop: 4 }}
+                placeholder="Ex: Puissance panneau max, Prix kWh..."
+                value={gestionnaireLabel}
+                onChange={(e) => setGestionnaireLabel(e.target.value)}
+                autoFocus
+              />
+            </div>
+          </>
+        )}
       </Modal>
     </Card>
   );

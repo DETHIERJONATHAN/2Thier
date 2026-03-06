@@ -1870,7 +1870,9 @@ model TreeBranchLeafNodeTable {
   lookupSelectColumn   String?
   columnCount          Int                             @default(0)
   rowCount             Int                             @default(0)
-  sourceTableId        String?
+  sourceTableId           String?
+  gestionnaireExposed     Boolean                         @default(false)
+  gestionnaireLabel       String?
   TreeBranchLeafNode   TreeBranchLeafNode              @relation(fields: [nodeId], references: [id], onDelete: Cascade)
   sourceTable          TreeBranchLeafNodeTable?        @relation("TableViews", fields: [sourceTableId], references: [id], onDelete: SetNull)
   views                TreeBranchLeafNodeTable[]       @relation("TableViews")
@@ -1882,6 +1884,7 @@ model TreeBranchLeafNodeTable {
   @@index([nodeId])
   @@index([organizationId])
   @@index([sourceTableId])
+  @@index([gestionnaireExposed])
 }
 
 model TreeBranchLeafNodeTableColumn {
@@ -1928,7 +1931,9 @@ model TreeBranchLeafNodeVariable {
   fixedValue         String?
   selectedNodeId     String?
   sourceRef          String?
-  sourceType         String?            @default("fixed")
+  sourceType              String?            @default("fixed")
+  gestionnaireExposed     Boolean            @default(false)
+  gestionnaireLabel       String?
   TreeBranchLeafNode TreeBranchLeafNode @relation(fields: [nodeId], references: [id], onDelete: Cascade)
 
   @@index([exposedKey])
@@ -1936,6 +1941,7 @@ model TreeBranchLeafNodeVariable {
   @@index([selectedNodeId])
   @@index([sourceType])
   @@index([visibleToUser])
+  @@index([gestionnaireExposed])
 }
 
 model TreeBranchLeafNumberConfig {
@@ -2821,6 +2827,26 @@ model website_form_submissions {
   @@index([submissionId])
   @@index([createdAt])
   @@index([status])
+}
+
+model GestionnaireOverride {
+  id              String   @id @default(uuid())
+  organizationId  String
+  treeId          String
+  nodeId          String
+  capabilityType  String   // 'variable' | 'table'
+  capabilityId    String   // ID of the Variable or Table record
+  overrideValue   String?  // For variables: the overridden fixedValue
+  overrideData    Json?    // For tables: overridden table data (rows/columns/data)
+  updatedBy       String?  // userId who last modified
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@unique([organizationId, capabilityId])
+  @@index([organizationId])
+  @@index([treeId])
+  @@index([nodeId])
+  @@index([capabilityType])
 }
 
 enum DocumentStatus {

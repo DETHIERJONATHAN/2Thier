@@ -6,6 +6,8 @@ import { NODE_THEMES } from '../../../shared/hierarchyRules';
 export type TokenChipProps = {
   token: string;
   onRemove?: (token: string) => void;
+  onDoubleClick?: (token: string) => void;
+  isGestionnaireExposed?: boolean;
 };
 
 // Cache simple en mémoire pour limiter les appels API
@@ -53,6 +55,7 @@ const baseTokenKind = (rawToken: string) => {
   
   if (token.startsWith('formula:')) return 'formula' as const;
   if (token.startsWith('condition:') || token.startsWith('node-condition:')) return 'conditionRef' as const;
+  if (token.startsWith('@const.')) return 'constGest' as const;
   if (token.startsWith('@table.') || token.startsWith('node-table:') || token.startsWith('table:')) return 'tableRef' as const;
   if (token.startsWith('@value.') || token.includes('@value.')) return 'nodeValue' as const;
   if (token.startsWith('@select.') || token.includes('@select.')) return 'nodeOption' as const;
@@ -66,7 +69,7 @@ const baseTokenKind = (rawToken: string) => {
   return 'other' as const;
 };
 
-export const TokenChip: React.FC<TokenChipProps> = ({ token, onRemove }) => {
+export const TokenChip: React.FC<TokenChipProps> = ({ token, onRemove, onDoubleClick, isGestionnaireExposed }) => {
   const { api } = useAuthenticatedApi();
   const normToken = useMemo(() => normalizeToken(token), [token]);
   const kind = useMemo(() => baseTokenKind(normToken), [normToken]);
@@ -264,6 +267,18 @@ export const TokenChip: React.FC<TokenChipProps> = ({ token, onRemove }) => {
           return;
         }
 
+        // 📋 Constante gestionnaire (@const.id.value)
+        if (kind === 'constGest') {
+          const rest = normToken.slice('@const.'.length);
+          const firstDot = rest.indexOf('.');
+          const displayValue = firstDot > 0 ? rest.slice(firstDot + 1) : rest;
+          setColor('geekblue');
+          setLabel(displayValue);
+          setIcon('📋');
+          setTooltip(`Gestionnaire: ${displayValue}`);
+          return;
+        }
+
         // Constantes et opérateurs
         if (kind === 'operator') { setColor('gold'); setLabel(token); setIcon('➕'); setTooltip('Opérateur'); return; }
         if (kind === 'string') { setColor('cyan'); setLabel(token); setIcon('"'); setTooltip('Texte'); return; }
@@ -308,9 +323,19 @@ export const TokenChip: React.FC<TokenChipProps> = ({ token, onRemove }) => {
     </span>
   );
 
+  const gestionnaireStyle: React.CSSProperties | undefined = isGestionnaireExposed
+    ? { backgroundColor: '#1a1a1a', color: '#ffffff', borderColor: '#1a1a1a', marginBottom: 4, cursor: onDoubleClick ? 'pointer' : undefined }
+    : { marginBottom: 4, cursor: onDoubleClick ? 'pointer' : undefined };
+
   return (
-    <Tooltip title={tooltip || token}>
-      <Tag color={color} closable={!!onRemove} onClose={(e) => { e.preventDefault(); onRemove?.(token); }} style={{ marginBottom: 4 }}>
+    <Tooltip title={isGestionnaireExposed ? `📋 Gestionnaire: ${tooltip || token}` : (tooltip || token)}>
+      <Tag
+        color={isGestionnaireExposed ? undefined : color}
+        closable={!!onRemove}
+        onClose={(e) => { e.preventDefault(); onRemove?.(token); }}
+        style={gestionnaireStyle}
+        onDoubleClick={onDoubleClick ? (e) => { e.stopPropagation(); onDoubleClick(token); } : undefined}
+      >
         {content}
       </Tag>
     </Tooltip>

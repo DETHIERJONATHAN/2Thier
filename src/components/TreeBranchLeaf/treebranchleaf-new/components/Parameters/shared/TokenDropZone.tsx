@@ -14,9 +14,11 @@ export type TokenDropZoneProps = {
   value?: string[];
   onChange?: (tokens: string[]) => void;
   readOnly?: boolean;
+  onTokenDoubleClick?: (token: string) => void;
+  exposedNodeIds?: Set<string>;
 };
 
-export const TokenDropZone: React.FC<TokenDropZoneProps> = ({ nodeId, capability, label, placeholder, value, onChange, readOnly }) => {
+export const TokenDropZone: React.FC<TokenDropZoneProps> = ({ nodeId, capability, label, placeholder, value, onChange, readOnly, onTokenDoubleClick, exposedNodeIds }) => {
   const [tokens, setTokens] = useState<string[]>(() => value || []);
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -78,6 +80,20 @@ export const TokenDropZone: React.FC<TokenDropZoneProps> = ({ nodeId, capability
     });
   }, [onChange]);
 
+  const extractNodeIdFromToken = useCallback((token: string): string | null => {
+    if (token.startsWith('@value.')) return token.slice('@value.'.length);
+    if (token.startsWith('@select.')) return token.slice('@select.'.length).split('.')[0];
+    return null;
+  }, []);
+
+  const isTokenExposed = useCallback((token: string): boolean => {
+    // @const. tokens are always gestionnaire-exposed
+    if (token.startsWith('@const.')) return true;
+    if (!exposedNodeIds || exposedNodeIds.size === 0) return false;
+    const nid = extractNodeIdFromToken(token);
+    return nid ? exposedNodeIds.has(nid) : false;
+  }, [exposedNodeIds, extractNodeIdFromToken]);
+
   const body = useMemo(() => {
     if (!tokens.length) {
       return <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={placeholder || 'Glissez des références ici'} />;
@@ -87,7 +103,12 @@ export const TokenDropZone: React.FC<TokenDropZoneProps> = ({ nodeId, capability
       return (
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
           {tokens.map((token, idx) => (
-            <TokenChip key={`${token}-${idx}`} token={token} />
+            <TokenChip
+              key={`${token}-${idx}`}
+              token={token}
+              onDoubleClick={onTokenDoubleClick}
+              isGestionnaireExposed={isTokenExposed(token)}
+            />
           ))}
         </div>
       );
@@ -103,13 +124,15 @@ export const TokenDropZone: React.FC<TokenDropZoneProps> = ({ nodeId, capability
                 id={item.id}
                 token={item.token}
                 onRemove={(_token) => removeAtIndex(item.index)}
+                onDoubleClick={onTokenDoubleClick}
+                isGestionnaireExposed={isTokenExposed(item.token)}
               />
             ))}
           </div>
         </SortableContext>
       </DndContext>
     );
-  }, [tokens, placeholder, readOnly, sensors, sortableItems, handleReorder, removeAtIndex]);
+  }, [tokens, placeholder, readOnly, sensors, sortableItems, handleReorder, removeAtIndex, onTokenDoubleClick, isTokenExposed]);
 
   return (
     <div ref={setNodeRef}>
@@ -124,9 +147,11 @@ type SortableTokenChipProps = {
   id: string;
   token: string;
   onRemove?: (token: string) => void;
+  onDoubleClick?: (token: string) => void;
+  isGestionnaireExposed?: boolean;
 };
 
-const SortableTokenChip: React.FC<SortableTokenChipProps> = ({ id, token, onRemove }) => {
+const SortableTokenChip: React.FC<SortableTokenChipProps> = ({ id, token, onRemove, onDoubleClick, isGestionnaireExposed }) => {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
   const style: React.CSSProperties = {
     transform: CSS.Transform.toString(transform),
@@ -137,7 +162,7 @@ const SortableTokenChip: React.FC<SortableTokenChipProps> = ({ id, token, onRemo
   };
   return (
     <div ref={setNodeRef} style={style} {...attributes} {...listeners}>
-      <TokenChip token={token} onRemove={onRemove} />
+      <TokenChip token={token} onRemove={onRemove} onDoubleClick={onDoubleClick} isGestionnaireExposed={isGestionnaireExposed} />
     </div>
   );
 };

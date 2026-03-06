@@ -161,7 +161,7 @@
  */
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Button, Card, Divider, Dropdown, Input, InputNumber, Select, Space, Switch, Table, Tooltip, Typography, message, Progress, Spin, Timeline, Statistic, Row, Col } from 'antd';
+import { Button, Card, Checkbox, Divider, Dropdown, Input, InputNumber, Modal as AntModal, Select, Space, Switch, Table, Tooltip, Typography, message, Progress, Spin, Timeline, Statistic, Row, Col } from 'antd';
 import { useAuthenticatedApi } from '../../../../../../hooks/useAuthenticatedApi';
 import { useTBLBatch } from '../../../TBL/contexts/TBLBatchContext';
 import { useDebouncedCallback } from '../../../hooks/useDebouncedCallback';
@@ -576,6 +576,30 @@ const TablePanel: React.FC<TablePanelProps> = ({ treeId: initialTreeId, nodeId, 
   } | null>(null);
   const [evaluationLoading, setEvaluationLoading] = useState(false);
   const [fullscreenOpen, setFullscreenOpen] = useState(false);
+
+  // 📋 Gestionnaire: états pour exposer le tableau
+  const [gestionnaireExposed, setGestionnaireExposed] = useState(false);
+  const [gestionnaireLabel, setGestionnaireLabel] = useState('');
+  const [showGestionnaireModal, setShowGestionnaireModal] = useState(false);
+
+  // 📋 Gestionnaire: charger l'état initial quand activeId change
+  useEffect(() => {
+    if (!activeId || !initialTreeId) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await api.get(`/api/gestionnaire/trees/${initialTreeId}/exposed`);
+        if (cancelled) return;
+        const tables = res?.tables || [];
+        const found = tables.find((t: any) => t.id === activeId);
+        setGestionnaireExposed(!!found);
+        setGestionnaireLabel(found?.gestionnaireLabel || '');
+      } catch (err) {
+        console.warn('[TablePanel] Failed to load gestionnaire state:', err);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [activeId, initialTreeId, api]);
 
   const isPhysicalNodeId = useCallback((fieldId?: string | null): fieldId is string => {
     if (!fieldId) return false;
@@ -1890,6 +1914,39 @@ const TablePanel: React.FC<TablePanelProps> = ({ treeId: initialTreeId, nodeId, 
           <Tooltip title="Ce libellÃ© sert de nom humainement lisible au tableau. Il est enregistrÃ© dans Prisma (tableConfig.meta.name).">
             <InfoCircleOutlined style={{ color: '#999' }} />
           </Tooltip>
+        </div>
+        {/* 📋 Gestionnaire: exposer ce tableau */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' as const }}>
+          <Checkbox
+            checked={gestionnaireExposed}
+            disabled={readOnly}
+            onChange={(e) => {
+              if (e.target.checked) {
+                setShowGestionnaireModal(true);
+              } else {
+                // Désexposer directement
+                setGestionnaireExposed(false);
+                setGestionnaireLabel('');
+                if (activeId && initialTreeId) {
+                  api.patch('/api/gestionnaire/expose', {
+                    capabilityType: 'table',
+                    capabilityId: activeId,
+                    exposed: false,
+                    label: null,
+                  }).catch((err: any) => console.error('[Gestionnaire] Failed to unexpose table:', err));
+                }
+              }
+            }}
+          >
+            <Text strong style={{ color: gestionnaireExposed ? '#1a1a1a' : undefined }}>
+              📋 Exposer dans le Gestionnaire
+            </Text>
+          </Checkbox>
+          {gestionnaireExposed && gestionnaireLabel && (
+            <Text type="secondary" style={{ fontStyle: 'italic' }}>
+              Label: {gestionnaireLabel}
+            </Text>
+          )}
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' as const }}>
           <Button onClick={triggerFilePicker} disabled={readOnly || isImporting} loading={isImporting}>
@@ -5841,6 +5898,49 @@ const TablePanel: React.FC<TablePanelProps> = ({ treeId: initialTreeId, nodeId, 
         readOnly={readOnly}
         tableName={instances.find(i => i.id === activeId)?.name}
       />
+
+      {/* 📋 Modal Gestionnaire: saisie du label */}
+      <AntModal
+        title="📋 Exposer ce tableau dans le Gestionnaire"
+        open={showGestionnaireModal}
+        onOk={async () => {
+          if (!activeId || !initialTreeId) return;
+          try {
+            await api.patch('/api/gestionnaire/expose', {
+              capabilityType: 'table',
+              capabilityId: activeId,
+              exposed: true,
+              label: gestionnaireLabel || null,
+            });
+            setGestionnaireExposed(true);
+            setShowGestionnaireModal(false);
+            message.success('Tableau exposé dans le Gestionnaire');
+          } catch (err) {
+            console.error('[Gestionnaire] Failed to expose table:', err);
+            message.error('Erreur lors de l\'exposition du tableau');
+          }
+        }}
+        onCancel={() => {
+          setShowGestionnaireModal(false);
+          setGestionnaireLabel('');
+        }}
+        okText="Exposer"
+        cancelText="Annuler"
+      >
+        <div style={{ marginBottom: 12 }}>
+          <Text>Donnez un label lisible pour ce tableau. Il sera visible dans le panneau Gestionnaire.</Text>
+        </div>
+        <Input
+          placeholder="Ex: Tableau des prix panneaux"
+          value={gestionnaireLabel}
+          onChange={(e) => setGestionnaireLabel(e.target.value)}
+          onPressEnter={() => {
+            // Trigger OK via Enter key
+            const okBtn = document.querySelector('.ant-modal-footer .ant-btn-primary') as HTMLButtonElement;
+            okBtn?.click();
+          }}
+        />
+      </AntModal>
     </Card>
   );
 };

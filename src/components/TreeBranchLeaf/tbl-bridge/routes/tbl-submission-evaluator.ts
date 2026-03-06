@@ -2401,7 +2401,8 @@ const displayDeps = new Map<string, Set<string>>(); // nodeId → Set<dependsOn>
             {
               treeId,
               labelMap: safeLabelMap,
-              preloadedVariable: preloadedVariablesMap.get(capacity.nodeId) // 🔥 OPTIMISATION: Passer variable préchargée (évite N+1)
+              preloadedVariable: preloadedVariablesMap.get(capacity.nodeId), // 🔥 OPTIMISATION: Passer variable préchargée (évite N+1)
+              organizationId, // 📋 Gestionnaire: permettre les overrides par org
             }
           );
           
@@ -2870,7 +2871,9 @@ router.post('/submissions/:submissionId/evaluate-all', async (req, res) => {
         const calculationResult = await evaluateVariableOperation(
           data.nodeId,
           submissionId,
-          prisma
+          prisma,
+          undefined,
+          { organizationId: organizationId as string } // 📋 Gestionnaire overrides
         );
         
 
@@ -3837,7 +3840,8 @@ router.post('/submissions/preview-evaluate', async (req, res) => {
             {
               treeId: context.treeId,
               labelMap: safeLabelMap, // 🔥 Use outer safeLabelMap
-              preloadedVariable: cap // Passer la variable déjà fetchée
+              preloadedVariable: cap, // Passer la variable déjà fetchée
+              organizationId: context.organizationId, // 📋 Gestionnaire overrides
             }
           );
         }
@@ -4042,7 +4046,8 @@ router.post('/submissions/stage/preview', async (req, res) => {
           c.nodeId,
           context.submissionId,
           prisma,
-          context.valueMap
+          context.valueMap,
+          { organizationId: context.organizationId } // 📋 Gestionnaire overrides
         );
 
         // Rollback des alias temporaires (évite la pollution cross-capacities)
