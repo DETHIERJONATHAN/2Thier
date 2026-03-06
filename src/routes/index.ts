@@ -20,6 +20,8 @@ import notificationsRoutes from './notifications';
 import notificationSystemRoutes from './notificationSystemRoutes'; // 🔔 Routes système notifications
 import settingsRoutes from './settingsRoutes';
 import leadsRoutes from './leadsRoutes'; // ✅ Routes leads corrigées
+import chantiersRoutes from './chantiersRoutes'; // 🏗️ Routes chantiers
+import chantierStatusesRoutes from './chantier-statuses'; // 🏗️ Routes statuts chantiers
 import rolesRoutes from './rolesRoutes';
 import usersRoutes from './usersRoutes';
 import adminPasswordRoutes from './adminPasswordRoutes';
@@ -172,6 +174,14 @@ apiRouter.use('/settings', settingsRoutes);
 
 // Routes des leads
 apiRouter.use('/leads', leadsRoutes);
+
+
+// Routes des chantiers 🏗️
+apiRouter.use('/chantiers', chantiersRoutes);
+
+
+// Routes des statuts de chantier 🏗️
+apiRouter.use('/chantier-statuses', chantierStatusesRoutes);
 
 
 // Routes du dashboard

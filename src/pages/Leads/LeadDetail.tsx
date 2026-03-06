@@ -21,6 +21,7 @@ import { getErrorMessage, getErrorResponseDetails } from '../../utils/errorHandl
 import { unwrapApiData } from '../../utils/apiResponse';
 import { LEAD_STATUSES, LEAD_SOURCES } from './LeadsConfig';
 import type { Lead, LeadApiResponse } from '../../types/leads';
+import LeadGagneTab from './components/LeadGagneTab';
 
 const { TabPane } = Tabs;
 
@@ -453,7 +454,7 @@ export default function LeadDetail({
 
       {/* Contenu principal avec onglets */}
       <Card>
-        <Tabs defaultActiveKey="details" type="card">
+        <Tabs defaultActiveKey={lead.status === 'won' ? 'gagne' : 'details'} type="card">
           {/* Onglet Détails */}
           <TabPane tab="Détails" key="details">
             <Row gutter={[24, 16]}>
@@ -659,6 +660,22 @@ export default function LeadDetail({
                 </div>
               )}
             </Card>
+          </TabPane>
+
+          {/* Onglet Gagné — Produits signés / Chantiers */}
+          <TabPane tab="🏆 Gagné" key="gagne">
+            {lead && leadId && (
+              <LeadGagneTab
+                leadId={leadId}
+                organizationId={lead.organizationId}
+                leadData={{
+                  firstName: lead.firstName || undefined,
+                  lastName: lead.lastName || undefined,
+                  company: lead.company || undefined,
+                  assignedToId: lead.assignedToId || undefined,
+                }}
+              />
+            )}
           </TabPane>
 
           {/* Onglet Propositions (PDFs) - Placeholder */}

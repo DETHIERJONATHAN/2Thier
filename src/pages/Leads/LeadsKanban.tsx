@@ -1,5 +1,6 @@
-﻿import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+﻿import React, { useState, useEffect, useCallback, useMemo, useRef, createContext, useContext } from 'react';
 import { Button, Spin, message, Alert, Avatar, Tooltip, Grid, Modal, Select, App } from 'antd';
+import { renderProductIcon } from '../../components/TreeBranchLeaf/treebranchleaf-new/components/Parameters/capabilities/ProductFilterPanel';
 import * as XLSX from 'xlsx';
 import { 
   ClockCircleOutlined,
@@ -51,10 +52,19 @@ const HTML5toTouch = {
 };
 import type { Lead } from '../../types/leads';
 import { getErrorMessage, getErrorResponseDetails } from '../../utils/errorHandling';
+import { useChantiers } from '../../hooks/useChantiers';
 
 
 // Types pour le drag & drop
 const ITEM_TYPE = 'LEAD_CARD';
+
+// 🏗️ Context pour les produits chantier par lead (évite de threader props)
+interface LeadProduct {
+  label: string;
+  icon?: string | null;
+  color?: string | null;
+}
+const ChantierProductsContext = createContext<Record<string, LeadProduct[]>>({});
 
 const hexToRgba = (hex: string, alpha: number) => {
   const normalizedHex = hex.replace('#', '');
@@ -215,6 +225,8 @@ const LeadCard: React.FC<LeadCardProps> = ({ lead, onView, onCall, onEmail, onSc
   const timeline = calculateLeadTimeline(lead.createdAt, lead.source);
   const priority = getLeadPriority(lead.createdAt, lead.source, lead.lastContactDate);
   const timelineColor = getTimelineColor(timeline.status);
+  const chantierProducts = useContext(ChantierProductsContext);
+  const leadProducts = chantierProducts[lead.id] || [];
   
   // 🎯 Refs pour distinguer tap vs drag sur mobile
   const touchStartTime = useRef<number>(0);
@@ -357,6 +369,39 @@ const LeadCard: React.FC<LeadCardProps> = ({ lead, onView, onCall, onEmail, onSc
             }}
           />
         </div>
+
+        {/* 🏗️ Badges produits signés (chantiers) */}
+        {leadProducts.length > 0 && (
+          <div style={{ display: 'flex', gap: '4px', marginBottom: '6px', flexWrap: 'wrap' }}>
+            {leadProducts.map((p, i) => {
+              const bgColor = p.color || '#722ed1';
+              return (
+                <Tooltip key={i} title={p.label}>
+                  <span
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '2px',
+                      backgroundColor: bgColor,
+                      color: '#FFFFFF',
+                      padding: '1px 6px',
+                      borderRadius: '3px',
+                      fontSize: '11px',
+                      lineHeight: '16px',
+                      maxWidth: '90px',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap',
+                    }}
+                  >
+                    {p.icon && <span style={{ fontSize: '10px' }}>{renderProductIcon(p.icon, 10)}</span>}
+                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{p.label}</span>
+                  </span>
+                </Tooltip>
+              );
+            })}
+          </div>
+        )}
 
         {/* Titre */}
         <div style={{ 
@@ -637,6 +682,7 @@ const LeadsKanban: React.FC<LeadsKanbanProps> = ({
   const { currentOrganization, isSuperAdmin, user } = useAuth();
   const { leadStatuses, isLoading: statusesLoading } = useLeadStatuses();
   const { notification } = App.useApp(); // 🎯 Hook pour notifications React 19
+  const { chantiers } = useChantiers(); // 🏗️ Chantiers pour badges produits
   
   const [leads, setLeads] = useState<Lead[]>([]);
   const [loading, setLoading] = useState(false);
@@ -759,9 +805,40 @@ const LeadsKanban: React.FC<LeadsKanbanProps> = ({
     }
   }, [user, currentOrganization, isSuperAdmin, fetchLeads, refreshTrigger, isUpdatingLead]);
 
-  // 🎯 Gestion du drag & drop
+  // �️ Map leadId → produits chantier (pour badges sur les cartes + rétrogradation lock)
+  const chantierProductsByLeadId = useMemo(() => {
+    const map: Record<string, LeadProduct[]> = {};
+    for (const c of chantiers) {
+      if (!c.leadId) continue;
+      if (!map[c.leadId]) map[c.leadId] = [];
+      const exists = map[c.leadId].some(p => p.label === c.productLabel);
+      if (!exists) {
+        map[c.leadId].push({
+          label: c.productLabel,
+          icon: c.productIcon,
+          color: c.productColor,
+        });
+      }
+    }
+    return map;
+  }, [chantiers]);
+
+  // �🎯 Gestion du drag & drop
   const handleDropLead = useCallback(async (leadId: string, newStatusId: string) => {
     try {
+      // 🔒 Vérification rétrogradation : bloquer si le lead a des chantiers signés
+      const leadHasChantiers = (chantierProductsByLeadId[leadId] || []).length > 0;
+      if (leadHasChantiers && !isSuperAdmin) {
+        // Trouver l'ordre des statuts
+        const currentLead = leads.find(l => l.id === leadId);
+        const currentStatus = leadStatuses.find(s => s.id === currentLead?.statusId);
+        const newStatus = leadStatuses.find(s => s.id === newStatusId);
+        if (currentStatus && newStatus && newStatus.order < currentStatus.order) {
+          message.warning('⚠️ Ce lead a des produits signés (chantiers). Impossible de rétrograder le statut.');
+          return;
+        }
+      }
+
       // Mise à jour optimiste
       setLeads(prevLeads => 
         prevLeads.map(lead => 
@@ -802,7 +879,7 @@ const LeadsKanban: React.FC<LeadsKanbanProps> = ({
       // Revert optimistic update
       fetchLeads();
     }
-  }, [api, fetchLeads, user, currentOrganization, isSuperAdmin, onLeadUpdated]);
+  }, [api, fetchLeads, user, currentOrganization, isSuperAdmin, onLeadUpdated, chantierProductsByLeadId, leads, leadStatuses]);
 
   // 📋 Filtrage des leads
   const filteredLeads = useMemo(() => {
@@ -1142,6 +1219,7 @@ const LeadsKanban: React.FC<LeadsKanbanProps> = ({
   }
 
   return (
+    <ChantierProductsContext.Provider value={chantierProductsByLeadId}>
     <DndProvider backend={MultiBackend} options={HTML5toTouch}>
       {/* 🎯 Layer de drag personnalisé pour mobile */}
       <CustomDragLayer />
@@ -1439,6 +1517,7 @@ const LeadsKanban: React.FC<LeadsKanbanProps> = ({
         }}
       />
     </DndProvider>
+    </ChantierProductsContext.Provider>
   );
 };
 

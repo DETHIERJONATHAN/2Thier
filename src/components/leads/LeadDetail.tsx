@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Card, Descriptions, Tag, Avatar, Space, Button, Timeline, Spin, Row, Col, Tabs, Upload, message, Tooltip, Grid, Popconfirm } from 'antd';
 import { 
   UserOutlined, 
@@ -16,12 +16,14 @@ import {
   DownloadOutlined,
   EyeOutlined,
   FolderOpenOutlined,
-  DeleteOutlined
+  DeleteOutlined,
+  TrophyOutlined
 } from '@ant-design/icons';
 import { useAuthenticatedApi } from '../../hooks/useAuthenticatedApi';
 import type { Lead } from '../../types/leads';
 import dayjs from 'dayjs';
 import { useNavigate } from 'react-router-dom';
+import LeadGagneTab from '../../pages/Leads/components/LeadGagneTab';
 
 interface LeadDetailProps {
   leadId: string;
@@ -313,7 +315,7 @@ export default function LeadDetail({ leadId, onEdit, onDelete, onCall, onEmail, 
 
       {/* Onglets */}
       <Tabs
-        defaultActiveKey="info"
+        defaultActiveKey={lead.status === 'won' || lead.leadStatus?.name?.toLowerCase()?.includes('gagn') ? 'gagne' : 'info'}
         size="small"
         items={[
           {
@@ -542,6 +544,22 @@ export default function LeadDetail({ leadId, onEdit, onDelete, onCall, onEmail, 
                   )}
                 </Card>
               </div>
+            ),
+          },
+          {
+            key: 'gagne',
+            label: <span><TrophyOutlined /> Gagné</span>,
+            children: (
+              <LeadGagneTab
+                leadId={leadId}
+                organizationId={lead.organizationId}
+                leadData={{
+                  firstName: lead.firstName || undefined,
+                  lastName: lead.lastName || undefined,
+                  company: lead.company || undefined,
+                  assignedToId: lead.assignedToId || undefined,
+                }}
+              />
             ),
           },
           {

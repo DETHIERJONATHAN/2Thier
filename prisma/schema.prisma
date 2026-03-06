@@ -639,6 +639,7 @@ model GeneratedDocument {
   User_GeneratedDocument_sentByToUser    User?                     @relation("GeneratedDocument_sentByToUser", fields: [sentBy], references: [id], onDelete: NoAction, onUpdate: NoAction)
   TreeBranchLeafSubmission               TreeBranchLeafSubmission? @relation(fields: [submissionId], references: [id], onDelete: NoAction, onUpdate: NoAction)
   DocumentTemplate                       DocumentTemplate          @relation(fields: [templateId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  Chantier                               Chantier[]
 
   @@index([clientAccessToken])
   @@index([createdAt])
@@ -902,6 +903,8 @@ model Lead {
   TelnyxMessage       TelnyxMessage[]
   TimelineEvent       TimelineEvent[]
 
+  Chantier            Chantier[]
+
   @@index([email])
   @@index([firstName, lastName])
   @@index([organizationId, createdAt])
@@ -1053,6 +1056,8 @@ model Organization {
   Lead                       Lead[]
   LeadSource                 LeadSource[]
   LeadStatus                 LeadStatus[]
+  Chantier                   Chantier[]
+  ChantierStatus             ChantierStatus[]
   Module                     Module[]
   Notification               Notification[]
   Order                      Order[]
@@ -2027,6 +2032,7 @@ model TreeBranchLeafSubmission {
   lockedAt          DateTime?
   organizationId    String?
   GeneratedDocument GeneratedDocument[]
+  Chantier          Chantier[]
 
   @@index([createdAt])
   @@index([lastEditedBy])
@@ -2192,6 +2198,8 @@ model User {
   Invitation_Invitation_targetUserIdToUser            Invitation[]                             @relation("Invitation_targetUserIdToUser")
   JoinRequest                                         JoinRequest[]
   Lead                                                Lead[]
+  ChantierResponsable                                 Chantier[]                               @relation("ChantierResponsable")
+  ChantierCommercial                                  Chantier[]                               @relation("ChantierCommercial")
   Notification                                        Notification[]
   MeasurementReferenceConfig                          OrganizationMeasurementReferenceConfig[] @relation("MeasurementConfigCreator")
   ProductDocumentsUploaded                            ProductDocument[]                        @relation("ProductDocumentsUploaded")
@@ -2899,6 +2907,67 @@ enum OperationSource {
   neutral
   fixed
   field
+}
+
+// ═══════════════════════════════════════════════════════
+// CHANTIER MODULE — Suivi des chantiers par produit/métier
+// ═══════════════════════════════════════════════════════
+
+model ChantierStatus {
+  id             String     @id
+  organizationId String
+  name           String
+  color          String     @default("#1677ff")
+  order          Int        @default(0)
+  isDefault      Boolean    @default(false)
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime
+  Chantier       Chantier[]
+  Organization   Organization @relation(fields: [organizationId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([organizationId])
+  @@index([organizationId, order])
+}
+
+model Chantier {
+  id                    String             @id
+  organizationId        String
+  leadId                String?
+  statusId              String?
+  responsableId         String?
+  commercialId          String?
+  generatedDocumentId   String?
+  submissionId          String?
+  productValue          String
+  productLabel          String
+  productIcon           String?
+  productColor          String?
+  customLabel           String?
+  clientName            String?
+  siteAddress           String?
+  notes                 String?
+  amount                Float?
+  signedAt              DateTime?
+  documentUrl           String?
+  documentName          String?
+  uploadedById          String?
+  data                  Json?
+  createdAt             DateTime           @default(now())
+  updatedAt             DateTime
+
+  Lead                  Lead?              @relation(fields: [leadId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  Organization          Organization       @relation(fields: [organizationId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  ChantierStatus        ChantierStatus?    @relation(fields: [statusId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  Responsable           User?              @relation("ChantierResponsable", fields: [responsableId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  Commercial            User?              @relation("ChantierCommercial", fields: [commercialId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  GeneratedDocument     GeneratedDocument? @relation(fields: [generatedDocumentId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  TreeBranchLeafSubmission TreeBranchLeafSubmission? @relation(fields: [submissionId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([organizationId, createdAt])
+  @@index([leadId])
+  @@index([organizationId, productValue])
+  @@index([generatedDocumentId])
+  @@index([submissionId])
 }
 
 enum PaymentStatus {

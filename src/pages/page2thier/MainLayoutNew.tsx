@@ -94,6 +94,7 @@ const MODULE_ROUTES: Record<string, string> = {
   analytics: '/analytics',
   Facture: '/facture',
   leads: '/leads',
+  chantiers: '/chantiers',
   google_groups: '/google-groups',
   google_maps: '/google-maps',
   google_meet: '/google-meet',

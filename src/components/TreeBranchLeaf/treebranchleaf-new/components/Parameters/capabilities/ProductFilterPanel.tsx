@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Card, Typography, Space, Select, Button, Checkbox, Tag, Input, message, Alert, Divider, Popconfirm } from 'antd';
-import { ShoppingOutlined, PlusOutlined, EyeOutlined, EyeInvisibleOutlined, HolderOutlined, EditOutlined } from '@ant-design/icons';
+import { Card, Typography, Space, Select, Button, Checkbox, Tag, Input, message, Alert, Divider, Popconfirm, Popover, ColorPicker, Upload, Segmented } from 'antd';
+import { ShoppingOutlined, PlusOutlined, EyeOutlined, EyeInvisibleOutlined, HolderOutlined, EditOutlined, BgColorsOutlined, SmileOutlined, UploadOutlined, PictureOutlined } from '@ant-design/icons';
 import { useAuthenticatedApi } from '../../../../../../hooks/useAuthenticatedApi';
 import {
   DndContext,
@@ -22,14 +22,168 @@ import { CSS } from '@dnd-kit/utilities';
 
 const { Text } = Typography;
 
+// ─── Icônes prédéfinies pour les produits ───
+const PRODUCT_ICON_PRESETS = [
+  '☀️', '🔧', '🏠', '💧', '🔥', '❄️', '⚡', '🌡️',
+  '🛠️', '📐', '🧱', '🪟', '🚿', '🔌', '💨', '🌿',
+  '🏗️', '📋', '🎯', '✅', '⭐', '🔶', '🔷', '🟢',
+];
+
+// ─── Helper : détecter si une icône est une image (base64 ou URL) ───
+export const isImageIcon = (icon?: string): boolean => {
+  if (!icon) return false;
+  return icon.startsWith('data:image') || /^https?:\/\//i.test(icon);
+};
+
+// ─── Helper : afficher une icône produit (emoji ou image) ───
+export const renderProductIcon = (icon?: string, size: number = 16): React.ReactNode => {
+  if (!icon) return null;
+  if (isImageIcon(icon)) {
+    return <img src={icon} alt="" style={{ width: size, height: size, objectFit: 'contain', verticalAlign: 'middle', borderRadius: 2 }} />;
+  }
+  return <span style={{ fontSize: size }}>{icon}</span>;
+};
+
+// ─── Convertir une image uploadée en base64 redimensionné ───
+const resizeImageToBase64 = (file: File, maxSize: number = 48): Promise<string> => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const img = new window.Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        canvas.width = maxSize;
+        canvas.height = maxSize;
+        const ctx = canvas.getContext('2d')!;
+        // Dessiner en préservant le ratio dans un carré
+        const scale = Math.min(maxSize / img.width, maxSize / img.height);
+        const w = img.width * scale;
+        const h = img.height * scale;
+        ctx.drawImage(img, (maxSize - w) / 2, (maxSize - h) / 2, w, h);
+        resolve(canvas.toDataURL('image/png', 0.9));
+      };
+      img.onerror = reject;
+      img.src = e.target?.result as string;
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+};
+
+// ─── Sélecteur d'icône inline (emojis + upload image) ───
+const IconPickerContent: React.FC<{
+  value?: string;
+  onChange: (icon: string) => void;
+}> = ({ value, onChange }) => {
+  const [customIcon, setCustomIcon] = useState('');
+  const [mode, setMode] = useState<'emoji' | 'image'>(isImageIcon(value) ? 'image' : 'emoji');
+  const [uploading, setUploading] = useState(false);
+
+  return (
+    <div style={{ width: 240 }}>
+      <Segmented
+        size="small"
+        value={mode}
+        onChange={(v) => setMode(v as 'emoji' | 'image')}
+        options={[
+          { label: '😀 Emoji', value: 'emoji' },
+          { label: '🖼️ Image', value: 'image' },
+        ]}
+        block
+        style={{ marginBottom: 8 }}
+      />
+
+      {mode === 'emoji' ? (
+        <>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginBottom: 8 }}>
+            {PRODUCT_ICON_PRESETS.map(icon => (
+              <Button
+                key={icon}
+                size="small"
+                type={value === icon ? 'primary' : 'default'}
+                onClick={() => onChange(icon)}
+                style={{ width: 32, height: 32, padding: 0, fontSize: 16 }}
+              >
+                {icon}
+              </Button>
+            ))}
+          </div>
+          <Space.Compact style={{ width: '100%' }}>
+            <Input
+              size="small"
+              placeholder="Emoji custom..."
+              maxLength={2}
+              value={customIcon}
+              onChange={e => setCustomIcon(e.target.value)}
+              style={{ width: '70%' }}
+            />
+            <Button
+              size="small"
+              type="primary"
+              disabled={!customIcon.trim()}
+              onClick={() => { onChange(customIcon.trim()); setCustomIcon(''); }}
+            >
+              OK
+            </Button>
+          </Space.Compact>
+        </>
+      ) : (
+        <div>
+          {isImageIcon(value) && (
+            <div style={{ textAlign: 'center', marginBottom: 8, padding: 8, background: '#f5f5f5', borderRadius: 8 }}>
+              <img src={value} alt="Icône actuelle" style={{ width: 48, height: 48, objectFit: 'contain' }} />
+            </div>
+          )}
+          <Upload
+            accept="image/*"
+            showUploadList={false}
+            beforeUpload={async (file) => {
+              try {
+                setUploading(true);
+                const base64 = await resizeImageToBase64(file as unknown as File, 48);
+                onChange(base64);
+                message.success('Icône uploadée !');
+              } catch {
+                message.error('Erreur lors du traitement de l\'image');
+              } finally {
+                setUploading(false);
+              }
+              return false;
+            }}
+          >
+            <Button icon={<UploadOutlined />} size="small" loading={uploading} block>
+              {isImageIcon(value) ? 'Changer l\'image' : 'Uploader une image'}
+            </Button>
+          </Upload>
+          <div style={{ fontSize: 11, color: '#8c8c8c', marginTop: 4 }}>
+            PNG, JPG, SVG — redimensionné en 48×48
+          </div>
+        </div>
+      )}
+
+      {value && (
+        <Button
+          size="small"
+          danger
+          style={{ marginTop: 8, width: '100%' }}
+          onClick={() => onChange('')}
+        >
+          Supprimer l'icône
+        </Button>
+      )}
+    </div>
+  );
+};
+
 // ─── Composant Tag produit triable avec renommage + suppression confirmée ───
 const SortableProductTag: React.FC<{
   id: string;
-  option: { value: string; label: string };
+  option: { value: string; label: string; icon?: string; color?: string };
   readOnly?: boolean;
   onRemove: (value: string) => void;
   onRename: (value: string, newLabel: string) => void;
-}> = ({ id, option, readOnly, onRemove, onRename }) => {
+  onUpdateMeta: (value: string, icon?: string, color?: string) => void;
+}> = ({ id, option, readOnly, onRemove, onRename, onUpdateMeta }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [editValue, setEditValue] = useState(option.label);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -76,7 +230,7 @@ const SortableProductTag: React.FC<{
   return (
     <div ref={setNodeRef} style={style}>
       <Tag
-        color="purple"
+        color={option.color || 'purple'}
         style={{
           display: 'inline-flex',
           alignItems: 'center',
@@ -95,6 +249,7 @@ const SortableProductTag: React.FC<{
             <HolderOutlined style={{ fontSize: 10 }} />
           </span>
         )}
+        {option.icon && <span style={{ fontSize: 14, marginRight: 2 }}>{renderProductIcon(option.icon, 14)}</span>}
         {isEditing ? (
           <input
             ref={inputRef}
@@ -132,6 +287,56 @@ const SortableProductTag: React.FC<{
             style={{ cursor: 'pointer', fontSize: 10, marginLeft: 2, opacity: 0.6 }}
           />
         )}
+        {!readOnly && !isEditing && (
+          <Popover
+            trigger="click"
+            content={
+              <IconPickerContent
+                value={option.icon}
+                onChange={(icon) => onUpdateMeta(option.value, icon, option.color)}
+              />
+            }
+            title="Icône du produit"
+          >
+            <SmileOutlined
+              onPointerDown={(e) => e.stopPropagation()}
+              style={{ cursor: 'pointer', fontSize: 10, marginLeft: 2, opacity: 0.6 }}
+            />
+          </Popover>
+        )}
+        {!readOnly && !isEditing && (
+          <Popover
+            trigger="click"
+            content={
+              <div style={{ width: 200 }}>
+                <ColorPicker
+                  value={option.color || '#722ed1'}
+                  onChange={(_value, hex) => onUpdateMeta(option.value, option.icon, hex)}
+                  presets={[{
+                    label: 'Couleurs',
+                    colors: ['#722ed1', '#1677ff', '#52c41a', '#faad14', '#ff4d4f', '#13c2c2', '#eb2f96', '#fa8c16', '#2f54eb', '#a0d911'],
+                  }]}
+                />
+                {option.color && (
+                  <Button
+                    size="small"
+                    danger
+                    style={{ marginTop: 4, width: '100%' }}
+                    onClick={() => onUpdateMeta(option.value, option.icon, '')}
+                  >
+                    Couleur par défaut
+                  </Button>
+                )}
+              </div>
+            }
+            title="Couleur du produit"
+          >
+            <BgColorsOutlined
+              onPointerDown={(e) => e.stopPropagation()}
+              style={{ cursor: 'pointer', fontSize: 10, marginLeft: 2, opacity: 0.6, color: option.color || undefined }}
+            />
+          </Popover>
+        )}
         {!readOnly && (
           <Popconfirm
             title="Supprimer cette option ?"
@@ -157,6 +362,8 @@ const SortableProductTag: React.FC<{
 interface ProductOption {
   value: string;
   label: string;
+  icon?: string;
+  color?: string;
 }
 
 interface NodeData {
@@ -515,6 +722,26 @@ const ProductFilterPanel: React.FC<ProductFilterPanelProps> = ({ treeId, nodeId,
     message.success(`Option renommée en « ${newLabel} »`);
   }, [productOptions, isCurrentNodeSource, saveNodeConfig, saveSourceNode]);
 
+  // ─── Mettre à jour icon/color d'une option ───
+  const handleUpdateOptionMeta = useCallback(async (optionValue: string, icon?: string, color?: string) => {
+    const updatedOptions = productOptions.map(o =>
+      o.value === optionValue ? { ...o, icon: icon || undefined, color: color || undefined } : o
+    );
+    setProductOptions(updatedOptions);
+
+    const syncData = {
+      product_options: updatedOptions,
+      select_options: updatedOptions.map(o => ({ value: o.value, label: o.label })),
+    };
+
+    if (isCurrentNodeSource) {
+      await saveNodeConfig(syncData);
+    } else {
+      await saveSourceNode(syncData);
+    }
+    message.success('Produit mis à jour');
+  }, [productOptions, isCurrentNodeSource, saveNodeConfig, saveSourceNode]);
+
   // ─── Réordonner les options (drag & drop) ───
   const handleReorderOptions = useCallback(async (newOptions: ProductOption[]) => {
     setProductOptions(newOptions);
@@ -683,7 +910,7 @@ const ProductFilterPanel: React.FC<ProductFilterPanelProps> = ({ treeId, nodeId,
                     onChange={e => handleSubTabToggle(tab, opt.value, e.target.checked)}
                     disabled={readOnly}
                   >
-                    <Text style={{ fontSize: 10 }}>{opt.label}</Text>
+                    <Text style={{ fontSize: 10 }}>{opt.icon ? `${opt.icon} ` : ''}{opt.label}</Text>
                   </Checkbox>
                 ))}
               </div>
@@ -726,6 +953,7 @@ const ProductFilterPanel: React.FC<ProductFilterPanelProps> = ({ treeId, nodeId,
                     readOnly={readOnly}
                     onRemove={handleRemoveOption}
                     onRename={handleRenameOption}
+                    onUpdateMeta={handleUpdateOptionMeta}
                   />
                 ))}
               </SortableContext>
@@ -846,7 +1074,8 @@ const ProductFilterPanel: React.FC<ProductFilterPanelProps> = ({ treeId, nodeId,
                         ? <EyeOutlined style={{ color: '#52c41a', fontSize: 12 }} />
                         : <EyeInvisibleOutlined style={{ color: '#ff4d4f', fontSize: 12 }} />
                       }
-                      <Text style={{ fontSize: 12 }}>{opt.label}</Text>
+                      {opt.icon && <span style={{ fontSize: 13 }}>{opt.icon}</span>}
+                      <Text style={{ fontSize: 12, color: opt.color || undefined }}>{opt.label}</Text>
                     </Space>
                   </Checkbox>
                 </div>

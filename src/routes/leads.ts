@@ -386,6 +386,29 @@ router.put('/:id', async (req: Request, res: Response): Promise<void> => {
             return;
         }
 
+        // 🔒 Rétrogradation lock: bloquer si le lead a des chantiers signés et le nouveau statut est inférieur
+        if (statusId && existingLead.statusId && statusId !== existingLead.statusId) {
+            const isSuperAdmin = authReq.user.role === 'SUPER_ADMIN';
+            if (!isSuperAdmin) {
+                const chantiersCount = await prisma.chantier.count({
+                    where: { leadId: id, organizationId }
+                });
+                if (chantiersCount > 0) {
+                    const [currentStatus, targetStatus] = await Promise.all([
+                        prisma.leadStatus.findUnique({ where: { id: existingLead.statusId } }),
+                        prisma.leadStatus.findUnique({ where: { id: statusId } })
+                    ]);
+                    if (currentStatus && targetStatus && targetStatus.order < currentStatus.order) {
+                        res.status(403).json({
+                            success: false,
+                            message: 'Ce lead a des produits signés (chantiers). Impossible de rétrograder le statut.'
+                        });
+                        return;
+                    }
+                }
+            }
+        }
+
         // Mapping des anciens statuts vers les nouveaux noms de statuts
         const statusMapping: Record<string, string> = {
             'new': 'Nouveau',

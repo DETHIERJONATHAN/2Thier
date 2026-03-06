@@ -100,6 +100,11 @@ const AIMeasureSettings = lazy(() => import('./pages/settings/AIMeasureSettings'
 // Pages Documents (Admin)
 const DocumentTemplatesPage = lazy(() => import('./pages/DocumentTemplatesPage'));
 
+// Pages Chantiers 🏗️
+const ChantiersPage = lazy(() => import('./pages/Chantiers/ChantiersPage'));
+const ChantierSettingsPage = lazy(() => import('./pages/Chantiers/ChantierSettingsPage'));
+const ChantierDetailPage = lazy(() => import('./pages/Chantiers/ChantierDetailPage'));
+
 // Pages diagnostics
 const FormulaDiagnosticPage = lazy(() => import('./pages/Diagnostics/FormulaDiagnosticPage'));
 const FormulaTestPage = lazy(() => import('./pages/Diagnostics/FormulaTestPage'));
@@ -194,6 +199,12 @@ export default function AppLayout() {
             {hasFeature('clients_access') && <Route path="/clients" element={<CRMPage />} />} 
             {hasFeature('gestion_sav') && <Route path="/gestion_sav" element={<GestionSAVPage />} />} 
             {(hasFeature('leads_access') || isSuperAdmin) && <Route path="/leads/*" element={<LeadsPage />} />} 
+            
+            {/* Routes Chantiers 🏗️ */}
+            {(hasFeature('leads_access') || hasFeature('chantiers_access') || isSuperAdmin) && <Route path="/chantiers" element={<ChantiersPage />} />}
+            {(hasFeature('leads_access') || hasFeature('chantiers_access') || isSuperAdmin) && <Route path="/chantiers/settings" element={<ChantierSettingsPage />} />}
+            {(hasFeature('leads_access') || hasFeature('chantiers_access') || isSuperAdmin) && <Route path="/chantiers/:id" element={<ChantierDetailPage />} />}
+            
             {hasFeature('MAIL') && <Route path="/mail" element={<MailPage />} />}
 
             {/* Routes modules métier - CORRESPONDANT EXACTEMENT AUX ROUTES DE LA DB */}
