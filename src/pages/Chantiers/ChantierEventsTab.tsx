@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import {
-  Card, Button, Tag, Modal, Form, Input, Select, message, Empty, Typography, Space, Popconfirm, Badge, Alert,
+  Card, Button, Tag, Modal, Form, Input, Select, DatePicker, message, Empty, Typography, Space, Popconfirm, Badge, Alert,
 } from 'antd';
 import {
   PlusOutlined, DeleteOutlined, EditOutlined, CalendarOutlined,
@@ -11,6 +11,7 @@ import { useAuth } from '../../auth/useAuth';
 import dayjs from 'dayjs';
 
 const { Text } = Typography;
+const { RangePicker } = DatePicker;
 
 interface CalendarEventInfo {
   id: string;
@@ -41,6 +42,8 @@ interface ChantierEvent {
 
 interface Props {
   chantierId: string;
+  chantierAddress?: string;
+  chantierLabel?: string;
 }
 
 const EVENT_TYPES = [
@@ -57,7 +60,7 @@ const EVENT_STATUSES: Record<string, { label: string; color: string; badgeStatus
   PROBLEM: { label: 'Problème', color: 'error', badgeStatus: 'error' },
 };
 
-const ChantierEventsTab: React.FC<Props> = ({ chantierId }) => {
+const ChantierEventsTab: React.FC<Props> = ({ chantierId, chantierAddress, chantierLabel }) => {
   const apiHook = useAuthenticatedApi();
   const api = useMemo(() => apiHook.api, [apiHook.api]);
   const { isSuperAdmin, userRole } = useAuth();
@@ -67,7 +70,12 @@ const ChantierEventsTab: React.FC<Props> = ({ chantierId }) => {
   const [loading, setLoading] = useState(true);
   const [modalVisible, setModalVisible] = useState(false);
   const [editingEvent, setEditingEvent] = useState<ChantierEvent | null>(null);
+  const [saving, setSaving] = useState(false);
   const [form] = Form.useForm();
+
+  // Calendrier existants pour lier un événement
+  const [existingCalendarEvents, setExistingCalendarEvents] = useState<CalendarEventInfo[]>([]);
+  const [linkMode, setLinkMode] = useState<'new' | 'existing'>('new');
 
   const fetchEvents = useCallback(async () => {
     try {
@@ -81,6 +89,18 @@ const ChantierEventsTab: React.FC<Props> = ({ chantierId }) => {
     }
   }, [api, chantierId]);
 
+  // Charger les événements calendrier existants pour le select "lier un événement"
+  const fetchCalendarEvents = useCallback(async () => {
+    try {
+      const res = await api.get('/api/calendar/events');
+      const calEvents = (res.events || res.data || res || []) as CalendarEventInfo[];
+      setExistingCalendarEvents(Array.isArray(calEvents) ? calEvents : []);
+    } catch {
+      // pas bloquant
+      setExistingCalendarEvents([]);
+    }
+  }, [api]);
+
   useEffect(() => {
     fetchEvents();
   }, [fetchEvents]);
@@ -88,37 +108,80 @@ const ChantierEventsTab: React.FC<Props> = ({ chantierId }) => {
   const handleOpenModal = useCallback((event?: ChantierEvent) => {
     if (event) {
       setEditingEvent(event);
+      setLinkMode(event.calendarEventId ? 'existing' : 'new');
       form.setFieldsValue({
         type: event.type,
         status: event.status,
         problemNote: event.problemNote,
         subcontractAmount: event.subcontractAmount,
         notes: event.notes,
+        calendarEventId: event.calendarEventId,
       });
     } else {
       setEditingEvent(null);
+      setLinkMode('new');
       form.resetFields();
     }
     setModalVisible(true);
-  }, [form]);
+    fetchCalendarEvents();
+  }, [form, fetchCalendarEvents]);
 
   const handleSave = useCallback(async () => {
     try {
+      setSaving(true);
       const values = await form.validateFields();
+
+      let calendarEventId = values.calendarEventId || null;
+
+      // Si mode "new" et on crée un événement → créer d'abord un CalendarEvent via l'API calendrier existante
+      if (!editingEvent && linkMode === 'new' && values.dateRange) {
+        const [start, end] = values.dateRange;
+        const typeLabel = EVENT_TYPES.find(t => t.value === values.type)?.label || values.type;
+        const calTitle = `${typeLabel} — ${chantierLabel || 'Chantier'}`;
+
+        try {
+          const calRes = await api.post('/api/calendar/events', {
+            title: calTitle,
+            description: values.notes || `Événement lié au chantier`,
+            start: start.toISOString(),
+            end: end.toISOString(),
+            location: chantierAddress || '',
+            category: 'rendez-vous',
+            priority: 'normal',
+            linkedChantierId: chantierId,
+          });
+          calendarEventId = calRes.id || calRes.data?.id || null;
+        } catch (calErr) {
+          console.warn('Erreur création CalendarEvent (non bloquant):', calErr);
+          // On continue quand même — l'événement chantier sera créé sans lien calendrier
+        }
+      }
+
+      const payload = {
+        type: values.type,
+        status: values.status,
+        problemNote: values.problemNote,
+        subcontractAmount: values.subcontractAmount ? Number(values.subcontractAmount) : null,
+        notes: values.notes,
+        calendarEventId,
+      };
+
       if (editingEvent) {
-        await api.put(`/api/chantier-workflow/events/${editingEvent.id}`, values);
+        await api.put(`/api/chantier-workflow/events/${editingEvent.id}`, payload);
         message.success('Événement mis à jour');
       } else {
-        await api.post(`/api/chantier-workflow/chantiers/${chantierId}/events`, values);
-        message.success('Événement créé');
+        await api.post(`/api/chantier-workflow/chantiers/${chantierId}/events`, payload);
+        message.success('Événement créé' + (calendarEventId ? ' et ajouté au calendrier' : ''));
       }
       setModalVisible(false);
       fetchEvents();
     } catch (err: any) {
       if (err?.errorFields) return;
       message.error(err?.message || 'Erreur');
+    } finally {
+      setSaving(false);
     }
-  }, [api, chantierId, editingEvent, form, fetchEvents]);
+  }, [api, chantierId, editingEvent, form, fetchEvents, linkMode, chantierAddress, chantierLabel]);
 
   const handleValidate = useCallback(async (eventId: string) => {
     try {
@@ -283,12 +346,62 @@ const ChantierEventsTab: React.FC<Props> = ({ chantierId }) => {
         onOk={handleSave}
         onCancel={() => setModalVisible(false)}
         okText={editingEvent ? 'Modifier' : 'Créer'}
-        width={480}
+        confirmLoading={saving}
+        width={520}
       >
         <Form form={form} layout="vertical">
           <Form.Item name="type" label="Type d'événement" rules={[{ required: true }]} initialValue="CUSTOM">
             <Select options={EVENT_TYPES.map(t => ({ value: t.value, label: t.label }))} />
           </Form.Item>
+
+          {/* Mode de liaison au calendrier : nouveau ou existant */}
+          {!editingEvent && (
+            <>
+              <Form.Item label="Planification">
+                <Select
+                  value={linkMode}
+                  onChange={(v) => setLinkMode(v)}
+                  style={{ marginBottom: 8 }}
+                  options={[
+                    { value: 'new', label: '📅 Créer un nouvel événement calendrier' },
+                    { value: 'existing', label: '🔗 Lier à un événement calendrier existant' },
+                  ]}
+                />
+              </Form.Item>
+
+              {linkMode === 'new' && (
+                <Form.Item
+                  name="dateRange"
+                  label="Dates (début — fin)"
+                  rules={[{ required: true, message: 'Sélectionnez les dates' }]}
+                >
+                  <RangePicker
+                    showTime={{ format: 'HH:mm' }}
+                    format="DD/MM/YYYY HH:mm"
+                    style={{ width: '100%' }}
+                    placeholder={['Date début', 'Date fin']}
+                  />
+                </Form.Item>
+              )}
+
+              {linkMode === 'existing' && (
+                <Form.Item name="calendarEventId" label="Événement calendrier">
+                  <Select
+                    showSearch
+                    allowClear
+                    placeholder="Rechercher un événement..."
+                    optionFilterProp="label"
+                    loading={existingCalendarEvents.length === 0}
+                    options={existingCalendarEvents.map(ce => ({
+                      value: ce.id,
+                      label: `${ce.title} — ${dayjs(ce.startDate).format('DD/MM/YYYY HH:mm')}`,
+                    }))}
+                  />
+                </Form.Item>
+              )}
+            </>
+          )}
+
           {editingEvent && (
             <Form.Item name="status" label="Statut">
               <Select options={Object.entries(EVENT_STATUSES).map(([k, v]) => ({ value: k, label: v.label }))} />

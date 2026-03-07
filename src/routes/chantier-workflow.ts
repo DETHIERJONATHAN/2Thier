@@ -1217,4 +1217,137 @@ async function notifyProblem(
   }
 }
 
+// ═══════════════════════════════════════════════════════
+// SEED — Initialiser les transitions et templates par défaut
+// Réutilise le même pattern que POST /api/chantier-statuses/seed
+// ═══════════════════════════════════════════════════════
+
+/**
+ * POST /api/chantier-workflow/seed
+ * Initialise les transitions et templates de factures par défaut pour une organisation
+ * Ne fait rien si des transitions existent déjà
+ */
+router.post('/seed', authenticateToken, isAdmin, async (req, res) => {
+  try {
+    const organizationId = req.headers['x-organization-id'] as string;
+    if (!organizationId) {
+      return res.status(400).json({ success: false, message: 'ID d\'organisation requis' });
+    }
+
+    // Vérifier s'il y a déjà des données
+    const existingTransitions = await db.chantierStatusTransition.count({ where: { organizationId } });
+    const existingTemplates = await db.chantierInvoiceTemplate.count({ where: { organizationId } });
+
+    if (existingTransitions > 0 && existingTemplates > 0) {
+      return res.status(400).json({ success: false, message: 'Le workflow est déjà configuré pour cette organisation' });
+    }
+
+    // Récupérer les statuts existants pour mapper par nom
+    const statuses = await db.chantierStatus.findMany({
+      where: { organizationId },
+      orderBy: { order: 'asc' },
+    });
+
+    if (statuses.length === 0) {
+      return res.status(400).json({ success: false, message: 'Aucun statut de chantier trouvé. Créez d\'abord les statuts.' });
+    }
+
+    const findStatus = (name: string) => statuses.find(s => s.name.toLowerCase().includes(name.toLowerCase()));
+
+    const results: { transitions: number; templates: number } = { transitions: 0, templates: 0 };
+
+    // ─── SEED TRANSITIONS (si pas existantes) ───
+    if (existingTransitions === 0) {
+      // Défaut : tout le monde peut drag-drop entre tous les statuts (modulable ensuite)
+      // On crée les transitions logiques du workflow standard
+      const transitionDefs: Array<{
+        fromName: string;
+        toName: string;
+        triggerType: string;
+        label: string;
+        allowedRoles?: string[];
+        sendEmail?: boolean;
+        notifyRoles?: string[];
+      }> = [
+        // Flux normal
+        { fromName: 'planifié', toName: 'en cours', triggerType: 'MANUAL', label: 'Démarrer le chantier', allowedRoles: ['admin', 'commercial', 'technicien'] },
+        { fromName: 'en cours', toName: 'en attente', triggerType: 'MANUAL', label: 'Mettre en attente', allowedRoles: ['admin', 'commercial', 'technicien'] },
+        { fromName: 'en attente', toName: 'en cours', triggerType: 'MANUAL', label: 'Reprendre le chantier', allowedRoles: ['admin', 'commercial', 'technicien'] },
+        { fromName: 'en cours', toName: 'terminé', triggerType: 'MANUAL', label: 'Marquer terminé', allowedRoles: ['admin', 'technicien'], notifyRoles: ['commercial', 'admin', 'comptable'], sendEmail: true },
+        // Annulation depuis n'importe quel statut actif
+        { fromName: 'planifié', toName: 'annulé', triggerType: 'MANUAL', label: 'Annuler avant démarrage', allowedRoles: ['admin'] },
+        { fromName: 'en cours', toName: 'annulé', triggerType: 'MANUAL', label: 'Annuler chantier en cours', allowedRoles: ['admin'], notifyRoles: ['commercial', 'comptable'], sendEmail: true },
+        { fromName: 'en attente', toName: 'annulé', triggerType: 'MANUAL', label: 'Annuler chantier en attente', allowedRoles: ['admin'] },
+        // Retour planifié
+        { fromName: 'en attente', toName: 'planifié', triggerType: 'MANUAL', label: 'Replanifier', allowedRoles: ['admin', 'commercial'] },
+      ];
+
+      let order = 0;
+      for (const def of transitionDefs) {
+        const fromStatus = findStatus(def.fromName);
+        const toStatus = findStatus(def.toName);
+        if (!fromStatus || !toStatus) continue;
+
+        await db.chantierStatusTransition.create({
+          data: {
+            id: crypto.randomUUID(),
+            organizationId,
+            fromStatusId: fromStatus.id,
+            toStatusId: toStatus.id,
+            triggerType: def.triggerType,
+            label: def.label,
+            allowedRoles: def.allowedRoles || undefined,
+            notifyRoles: def.notifyRoles || undefined,
+            sendEmail: def.sendEmail || false,
+            isActive: true,
+            order: order++,
+            updatedAt: new Date(),
+          }
+        });
+        results.transitions++;
+      }
+    }
+
+    // ─── SEED TEMPLATES FACTURES (si pas existants) ───
+    if (existingTemplates === 0) {
+      const templateDefs = [
+        { type: 'ACOMPTE', label: 'Acompte 30%', percentage: 30, statusName: 'planifié', isRequired: true, order: 0 },
+        { type: 'MATERIEL', label: 'Facture matériel', percentage: null, statusName: 'en cours', isRequired: false, order: 1 },
+        { type: 'FIN_CHANTIER', label: 'Facture fin de chantier', percentage: 60, statusName: 'terminé', isRequired: true, order: 2 },
+        { type: 'RECEPTION', label: 'Facture réception (solde)', percentage: 10, statusName: 'terminé', isRequired: false, order: 3 },
+      ];
+
+      for (const tpl of templateDefs) {
+        const status = tpl.statusName ? findStatus(tpl.statusName) : null;
+        await db.chantierInvoiceTemplate.create({
+          data: {
+            id: crypto.randomUUID(),
+            organizationId,
+            statusId: status?.id || null,
+            type: tpl.type,
+            label: tpl.label,
+            percentage: tpl.percentage,
+            isRequired: tpl.isRequired,
+            isActive: true,
+            order: tpl.order,
+            updatedAt: new Date(),
+          }
+        });
+        results.templates++;
+      }
+    }
+
+    console.log(`[ChantierWorkflow] Seed terminé pour org ${organizationId}: ${results.transitions} transitions, ${results.templates} templates`);
+
+    res.status(201).json({
+      success: true,
+      data: results,
+      message: `Workflow initialisé : ${results.transitions} transitions, ${results.templates} templates de factures`
+    });
+  } catch (error) {
+    console.error('[ChantierWorkflow] Erreur POST /seed:', error);
+    res.status(500).json({ success: false, message: 'Erreur interne du serveur' });
+  }
+});
+
 export default router;

@@ -320,6 +320,24 @@ const ChantierWorkflowSettingsPage: React.FC = () => {
     },
   ];
 
+  // ═══ SEED WORKFLOW ═══
+  const [seeding, setSeeding] = useState(false);
+  const canSeed = !transLoading && !templLoading && transitions.length === 0 && templates.length === 0;
+
+  const handleSeedWorkflow = useCallback(async () => {
+    try {
+      setSeeding(true);
+      const res = await api.post('/api/chantier-workflow/seed', {});
+      message.success(res.message || 'Workflow initialisé !');
+      fetchTransitions();
+      fetchTemplates();
+    } catch (err: any) {
+      message.error(err?.message || 'Erreur à l\'initialisation');
+    } finally {
+      setSeeding(false);
+    }
+  }, [api, fetchTransitions, fetchTemplates]);
+
   return (
     <div style={{ maxWidth: 900, margin: '0 auto', padding: 24 }}>
       <div style={{ marginBottom: 16, display: 'flex', alignItems: 'center', gap: 12 }}>
@@ -328,6 +346,21 @@ const ChantierWorkflowSettingsPage: React.FC = () => {
         </Button>
         <Title level={4} style={{ margin: 0 }}>⚙️ Workflow Chantiers</Title>
       </div>
+
+      {/* Bouton seed si workflow vide */}
+      {canSeed && (
+        <Card size="small" style={{ marginBottom: 24, borderColor: '#1677ff', background: '#f0f5ff' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <div>
+              <Text strong>🚀 Aucune configuration détectée</Text>
+              <div><Text type="secondary">Initialisez le workflow avec les transitions et factures par défaut en un clic.</Text></div>
+            </div>
+            <Button type="primary" loading={seeding} onClick={handleSeedWorkflow}>
+              Initialiser le workflow par défaut
+            </Button>
+          </div>
+        </Card>
+      )}
 
       {/* ═══ TRANSITIONS ═══ */}
       <Card

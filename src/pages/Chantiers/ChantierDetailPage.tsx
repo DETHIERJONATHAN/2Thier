@@ -635,7 +635,11 @@ const ChantierDetailPage: React.FC = () => {
 
         {/* Onglet Événements */}
         <TabPane tab={<span><CalendarOutlined /> Événements</span>} key="events">
-          <ChantierEventsTab chantierId={chantier.id} />
+          <ChantierEventsTab
+            chantierId={chantier.id}
+            chantierAddress={displayAddress}
+            chantierLabel={chantier.customLabel || chantier.clientName || chantier.productLabel || ''}
+          />
         </TabPane>
       </Tabs>
     </div>
