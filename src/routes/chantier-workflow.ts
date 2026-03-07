@@ -475,7 +475,7 @@ router.delete('/invoice-templates/:id', authenticateToken, isAdmin, async (req, 
 router.get('/chantiers/:chantierId/billing-plan', authenticateToken, async (req, res) => {
   try {
     const { chantierId } = req.params;
-    const organizationId = (req as any).user.organizationId;
+    const organizationId = req.headers['x-organization-id'] as string || (req as any).user.organizationId;
 
     // 1) Charger les items du plan spécifique au chantier
     const items = await db.chantierBillingPlanItem.findMany({
@@ -510,7 +510,7 @@ router.get('/chantiers/:chantierId/billing-plan', authenticateToken, async (req,
 router.put('/chantiers/:chantierId/billing-plan', authenticateToken, isAdmin, async (req, res) => {
   try {
     const { chantierId } = req.params;
-    const organizationId = (req as any).user.organizationId;
+    const organizationId = req.headers['x-organization-id'] as string || (req as any).user.organizationId;
     const { items } = req.body as { items: Array<{
       statusId?: string | null;
       type: string;
@@ -584,7 +584,7 @@ router.put('/chantiers/:chantierId/billing-plan', authenticateToken, isAdmin, as
 router.post('/chantiers/:chantierId/billing-plan/init', authenticateToken, isAdmin, async (req, res) => {
   try {
     const { chantierId } = req.params;
-    const organizationId = (req as any).user.organizationId;
+    const organizationId = req.headers['x-organization-id'] as string || (req as any).user.organizationId;
 
     // Vérifier que le chantier existe
     const chantier = await db.chantier.findFirst({ where: { id: chantierId, organizationId } });
@@ -638,7 +638,7 @@ router.post('/chantiers/:chantierId/billing-plan/init', authenticateToken, isAdm
 router.post('/chantiers/:chantierId/validate', authenticateToken, isAdmin, async (req, res) => {
   try {
     const { chantierId } = req.params;
-    const organizationId = (req as any).user.organizationId;
+    const organizationId = req.headers['x-organization-id'] as string || (req as any).user.organizationId;
     const userId = (req as any).user.userId;
     const { notes } = req.body || {};
 
@@ -695,7 +695,7 @@ router.post('/chantiers/:chantierId/validate', authenticateToken, isAdmin, async
 router.post('/chantiers/:chantierId/unvalidate', authenticateToken, isAdmin, async (req, res) => {
   try {
     const { chantierId } = req.params;
-    const organizationId = (req as any).user.organizationId;
+    const organizationId = req.headers['x-organization-id'] as string || (req as any).user.organizationId;
 
     const chantier = await db.chantier.findFirst({ where: { id: chantierId, organizationId } });
     if (!chantier) return res.status(404).json({ success: false, message: 'Chantier introuvable' });
