@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   Card, Tabs, Descriptions, Tag, Button, Spin, Avatar, Input, message,
-  Select, Empty, Typography, Space, Divider, Tooltip
+  Select, Empty, Typography, Space, Divider, Tooltip, Alert, Modal
 } from 'antd';
 import {
   ArrowLeftOutlined,
@@ -21,6 +21,8 @@ import {
   DollarOutlined,
   HistoryOutlined,
   ClockCircleOutlined,
+  SafetyCertificateOutlined,
+  ExclamationCircleOutlined,
 } from '@ant-design/icons';
 import { useAuthenticatedApi } from '../../hooks/useAuthenticatedApi';
 import { useChantierStatuses } from '../../hooks/useChantierStatuses';
@@ -279,6 +281,61 @@ const ChantierDetailPage: React.FC = () => {
           ) : null}
         </Space>
       </div>
+
+      {/* ── Bandeau validation admin ── */}
+      {!chantier.isValidated && isAdminOrAbove && (
+        <Alert
+          type="warning"
+          banner
+          showIcon
+          icon={<SafetyCertificateOutlined />}
+          message={
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
+              <span style={{ fontWeight: 600 }}>
+                ⚠️ Ce chantier n'est pas encore validé — il n'apparaît pas dans le pipeline actif
+              </span>
+              <Button
+                type="primary"
+                icon={<SafetyCertificateOutlined />}
+                size="small"
+                style={{ background: '#52c41a', borderColor: '#52c41a' }}
+                onClick={() => {
+                  Modal.confirm({
+                    title: 'Valider ce chantier ?',
+                    icon: <ExclamationCircleOutlined />,
+                    content: 'Le chantier sera marqué comme validé et apparaîtra dans le pipeline. Assurez-vous que le plan de facturation est correct.',
+                    okText: 'Valider',
+                    okButtonProps: { style: { background: '#52c41a', borderColor: '#52c41a' } },
+                    cancelText: 'Annuler',
+                    onOk: async () => {
+                      try {
+                        await api.post(`/api/chantier-workflow/chantiers/${chantier.id}/validate`, {});
+                        message.success('Chantier validé !');
+                        fetchChantier();
+                      } catch (err: any) {
+                        message.error(err?.data?.message || err?.message || 'Erreur lors de la validation');
+                      }
+                    },
+                  });
+                }}
+              >
+                Valider le chantier
+              </Button>
+            </div>
+          }
+          style={{ marginBottom: 16, borderLeft: '4px solid #faad14' }}
+        />
+      )}
+      {chantier.isValidated && (
+        <Alert
+          type="success"
+          banner
+          showIcon
+          icon={<SafetyCertificateOutlined />}
+          message={<span style={{ fontWeight: 500 }}>✅ Chantier validé</span>}
+          style={{ marginBottom: 16 }}
+        />
+      )}
 
       {/* Content Tabs */}
       <Tabs defaultActiveKey="info" type="card">
