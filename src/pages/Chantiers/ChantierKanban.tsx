@@ -1,10 +1,11 @@
-import React, { useCallback, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Spin, message, Avatar, Tooltip, Empty, Tag, Button } from 'antd';
 import {
   UserOutlined,
   SettingOutlined,
   EnvironmentOutlined,
   DollarOutlined,
+  LockOutlined,
 } from '@ant-design/icons';
 import { renderProductIcon } from '../../components/TreeBranchLeaf/treebranchleaf-new/components/Parameters/capabilities/ProductFilterPanel';
 import { DndProvider, useDrag, useDrop } from 'react-dnd';
@@ -13,6 +14,7 @@ import { TouchBackend } from 'react-dnd-touch-backend';
 import { MultiBackend, TouchTransition, MouseTransition } from 'react-dnd-multi-backend';
 import { useChantiers } from '../../hooks/useChantiers';
 import { useChantierStatuses } from '../../hooks/useChantierStatuses';
+import { useAuthenticatedApi } from '../../hooks/useAuthenticatedApi';
 import type { Chantier, ChantierStatus } from '../../types/chantier';
 
 // ─── Configuration MultiBackend ───
@@ -51,20 +53,28 @@ interface DragItem {
 interface ChantierCardProps {
   chantier: Chantier;
   onView: () => void;
+  onDragStart?: (statusId: string) => void;
+  onDragEnd?: () => void;
 }
 
-const ChantierCard: React.FC<ChantierCardProps> = ({ chantier, onView }) => {
+const ChantierCard: React.FC<ChantierCardProps> = ({ chantier, onView, onDragStart, onDragEnd }) => {
   const touchStartTime = useRef(0);
   const touchStartPos = useRef({ x: 0, y: 0 });
   const hasMoved = useRef(false);
 
   const [{ isDragging }, drag] = useDrag({
     type: ITEM_TYPE,
-    item: (): DragItem => ({
-      id: chantier.id,
-      type: ITEM_TYPE,
-      fromColumn: chantier.statusId || '',
-    }),
+    item: (): DragItem => {
+      onDragStart?.(chantier.statusId || '');
+      return {
+        id: chantier.id,
+        type: ITEM_TYPE,
+        fromColumn: chantier.statusId || '',
+      };
+    },
+    end: () => {
+      onDragEnd?.();
+    },
     collect: (monitor) => ({
       isDragging: monitor.isDragging(),
     }),
@@ -215,15 +225,23 @@ interface KanbanColumnProps {
   chantiers: Chantier[];
   onDrop: (chantierId: string, statusId: string) => void;
   onViewChantier: (chantierId: string) => void;
+  dropState?: 'allowed' | 'blocked' | 'none';
+  onDragStart?: (statusId: string) => void;
+  onDragEnd?: () => void;
 }
 
-const KanbanColumn: React.FC<KanbanColumnProps> = ({ status, chantiers, onDrop, onViewChantier }) => {
+const KanbanColumn: React.FC<KanbanColumnProps> = ({ status, chantiers, onDrop, onViewChantier, dropState = 'none', onDragStart, onDragEnd }) => {
   const [{ isOver, canDrop }, drop] = useDrop({
     accept: ITEM_TYPE,
     drop: (item: DragItem) => {
       if (item.fromColumn !== status.id) {
         onDrop(item.id, status.id);
       }
+    },
+    canDrop: (item: DragItem) => {
+      // Block drop if transition is not allowed
+      if (item.fromColumn === status.id) return false;
+      return dropState !== 'blocked';
     },
     collect: (monitor) => ({
       isOver: monitor.isOver(),
@@ -232,14 +250,32 @@ const KanbanColumn: React.FC<KanbanColumnProps> = ({ status, chantiers, onDrop, 
   });
 
   const isActive = isOver && canDrop;
+  const isBlocked = isOver && !canDrop && dropState === 'blocked';
+
+  // Visual indicator styles based on drop state
+  const borderStyle = isActive
+    ? `2px dashed ${status.color}`
+    : isBlocked
+    ? '2px dashed #ff4d4f'
+    : dropState === 'allowed'
+    ? `2px dashed ${hexToRgba(status.color, 0.4)}`
+    : dropState === 'blocked'
+    ? '2px dashed rgba(255, 77, 79, 0.3)'
+    : '2px solid transparent';
+
+  const bgStyle = isActive
+    ? hexToRgba(status.color, 0.12)
+    : isBlocked
+    ? 'rgba(255, 77, 79, 0.06)'
+    : dropState === 'allowed'
+    ? hexToRgba(status.color, 0.05)
+    : '#F4F5F7';
 
   return (
     <div
       ref={drop}
       style={{
-        backgroundColor: isActive
-          ? hexToRgba(status.color, 0.12)
-          : '#F4F5F7',
+        backgroundColor: bgStyle,
         borderRadius: 8,
         width: 280,
         minWidth: 280,
@@ -247,10 +283,26 @@ const KanbanColumn: React.FC<KanbanColumnProps> = ({ status, chantiers, onDrop, 
         display: 'flex',
         flexDirection: 'column',
         flexShrink: 0,
-        transition: 'background-color 0.2s',
-        border: isActive ? `2px dashed ${status.color}` : '2px solid transparent',
+        transition: 'background-color 0.2s, border-color 0.2s',
+        border: borderStyle,
+        position: 'relative',
       }}
     >
+      {/* Blocked overlay icon */}
+      {isBlocked && (
+        <div style={{
+          position: 'absolute',
+          top: '50%',
+          left: '50%',
+          transform: 'translate(-50%, -50%)',
+          zIndex: 10,
+          background: 'rgba(255,77,79,0.1)',
+          borderRadius: '50%',
+          padding: 16,
+        }}>
+          <LockOutlined style={{ fontSize: 28, color: '#ff4d4f' }} />
+        </div>
+      )}
       {/* Header */}
       <div
         style={{
@@ -304,6 +356,8 @@ const KanbanColumn: React.FC<KanbanColumnProps> = ({ status, chantiers, onDrop, 
             key={chantier.id}
             chantier={chantier}
             onView={() => onViewChantier(chantier.id)}
+            onDragStart={onDragStart}
+            onDragEnd={onDragEnd}
           />
         ))}
         {chantiers.length === 0 && (
@@ -331,6 +385,30 @@ const ChantierKanban: React.FC<ChantierKanbanProps> = ({ onViewChantier, onSetti
   const { chantiers, isLoading, refetch, updateChantierStatus } = useChantiers();
   const { statuses, isLoading: statusesLoading } = useChantierStatuses();
   const [selectedProducts, setSelectedProducts] = useState<Set<string>>(new Set());
+  const [allowedTargets, setAllowedTargets] = useState<Record<string, string[]>>({});
+  const [draggingFromStatusId, setDraggingFromStatusId] = useState<string | null>(null);
+
+  const apiHook = useAuthenticatedApi();
+  const api = useMemo(() => apiHook.api, [apiHook.api]);
+
+  // Charger les transitions autorisées au montage
+  useEffect(() => {
+    const fetchAllowedTargets = async () => {
+      try {
+        const response = await api.get('/api/chantier-workflow/transitions/allowed-targets') as {
+          success: boolean;
+          data: Record<string, string[]>;
+        };
+        if (response.success) {
+          setAllowedTargets(response.data);
+        }
+      } catch (err) {
+        console.warn('[Kanban] Impossible de charger les transitions autorisées:', err);
+        // En cas d'erreur, on garde tout ouvert (backward compatible)
+      }
+    };
+    fetchAllowedTargets();
+  }, [api]);
 
   // Extraire les produits uniques depuis les chantiers existants
   const uniqueProducts = useMemo(() => {
@@ -375,12 +453,40 @@ const ChantierKanban: React.FC<ChantierKanbanProps> = ({ onViewChantier, onSetti
     try {
       await updateChantierStatus(chantierId, statusId);
       message.success('Statut mis à jour');
+      setDraggingFromStatusId(null);
       refetch();
-    } catch {
-      message.error('Erreur lors du changement de statut');
+    } catch (err: any) {
+      // Extraire le message d'erreur du backend (403 = transition non autorisée)
+      const errorMsg = err?.response?.data?.message || err?.message || 'Erreur lors du changement de statut';
+      if (errorMsg.includes('rôle') || errorMsg.includes('autorisé')) {
+        message.warning(`🔒 ${errorMsg}`);
+      } else {
+        message.error(errorMsg);
+      }
+      setDraggingFromStatusId(null);
       refetch();
     }
   }, [updateChantierStatus, refetch]);
+
+  // Drag handlers pour tracker la colonne source
+  const handleCardDragStart = useCallback((statusId: string) => {
+    setDraggingFromStatusId(statusId);
+  }, []);
+
+  const handleCardDragEnd = useCallback(() => {
+    setDraggingFromStatusId(null);
+  }, []);
+
+  // Calcul de l'état de drop pour chaque colonne (allowed / blocked / none)
+  const getDropState = useCallback((targetStatusId: string): 'allowed' | 'blocked' | 'none' => {
+    if (!draggingFromStatusId) return 'none';
+    if (draggingFromStatusId === targetStatusId) return 'none';
+
+    const targets = allowedTargets[draggingFromStatusId];
+    // Si pas de données = pas de restrictions (backward compatible)
+    if (!targets) return 'allowed';
+    return targets.includes(targetStatusId) ? 'allowed' : 'blocked';
+  }, [draggingFromStatusId, allowedTargets]);
 
   const handleViewChantier = useCallback((chantierId: string) => {
     if (onViewChantier) {
@@ -540,6 +646,9 @@ const ChantierKanban: React.FC<ChantierKanbanProps> = ({ onViewChantier, onSetti
               chantiers={chantiersByStatus[status.id] || []}
               onDrop={handleDrop}
               onViewChantier={handleViewChantier}
+              dropState={getDropState(status.id)}
+              onDragStart={handleCardDragStart}
+              onDragEnd={handleCardDragEnd}
             />
           ))}
         </div>

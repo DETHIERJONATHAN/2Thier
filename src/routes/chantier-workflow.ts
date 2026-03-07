@@ -3,6 +3,8 @@ import { db } from '../lib/database';
 import { authenticateToken, isAdmin } from '../middleware/auth';
 import { z } from 'zod';
 import crypto from 'crypto';
+import nodemailer from 'nodemailer';
+import { decrypt } from '../utils/crypto.js';
 
 const router = Router();
 
@@ -166,6 +168,82 @@ router.delete('/transitions/:id', authenticateToken, isAdmin, async (req, res) =
     res.json({ success: true, message: 'Transition supprimée' });
   } catch (error) {
     console.error('[ChantierWorkflow] Erreur DELETE /transitions/:id:', error);
+    res.status(500).json({ success: false, message: 'Erreur interne du serveur' });
+  }
+});
+
+/**
+ * GET /api/chantier-workflow/transitions/allowed-targets
+ * Retourne les statuts cibles autorisés pour l'utilisateur depuis un statut donné
+ * Utilisé par le Kanban pour les indicateurs visuels de drag-drop
+ */
+router.get('/transitions/allowed-targets', authenticateToken, async (req, res) => {
+  try {
+    const organizationId = req.headers['x-organization-id'] as string;
+    const { fromStatusId } = req.query;
+    const user = (req as any).user;
+    const userRole = user?.role || 'commercial';
+    const isSuperAdmin = user?.isSuperAdmin === true;
+
+    if (!organizationId) {
+      return res.status(400).json({ success: false, message: 'organizationId requis' });
+    }
+
+    // Récupérer tous les statuts
+    const allStatuses = await db.chantierStatus.findMany({
+      where: { organizationId },
+      select: { id: true, name: true },
+      orderBy: { order: 'asc' }
+    });
+
+    // SuperAdmin peut tout faire
+    if (isSuperAdmin) {
+      const allMap: Record<string, string[]> = {};
+      for (const s of allStatuses) {
+        allMap[s.id] = allStatuses.filter(t => t.id !== s.id).map(t => t.id);
+      }
+      return res.json({ success: true, data: allMap });
+    }
+
+    // Récupérer toutes les transitions actives
+    const transitions = await db.chantierStatusTransition.findMany({
+      where: { organizationId, isActive: true, triggerType: 'MANUAL' },
+      select: { fromStatusId: true, toStatusId: true, allowedRoles: true }
+    });
+
+    // Si aucune transition configurée → tout est permis (backward compatible)
+    if (transitions.length === 0) {
+      const allMap: Record<string, string[]> = {};
+      for (const s of allStatuses) {
+        allMap[s.id] = allStatuses.filter(t => t.id !== s.id).map(t => t.id);
+      }
+      return res.json({ success: true, data: allMap });
+    }
+
+    // Construire la map des transitions autorisées par fromStatusId
+    const allowedMap: Record<string, string[]> = {};
+    for (const s of allStatuses) {
+      allowedMap[s.id] = [];
+    }
+
+    for (const t of transitions) {
+      const roles = t.allowedRoles as string[] | null;
+      const isAllowed = !roles || roles.length === 0 || roles.includes(userRole);
+      if (isAllowed && allowedMap[t.fromStatusId]) {
+        if (!allowedMap[t.fromStatusId].includes(t.toStatusId)) {
+          allowedMap[t.fromStatusId].push(t.toStatusId);
+        }
+      }
+    }
+
+    // Si fromStatusId spécifié, ne retourner que celui-là
+    if (fromStatusId && typeof fromStatusId === 'string') {
+      return res.json({ success: true, data: { [fromStatusId]: allowedMap[fromStatusId] || [] } });
+    }
+
+    res.json({ success: true, data: allowedMap });
+  } catch (error) {
+    console.error('[ChantierWorkflow] Erreur GET /transitions/allowed-targets:', error);
     res.status(500).json({ success: false, message: 'Erreur interne du serveur' });
   }
 });
@@ -1089,6 +1167,7 @@ async function checkAutoTransitions(
 
 /**
  * Envoie les notifications de transition de statut
+ * Si sendEmail=true, envoie aussi un email via SMTP (utilise les credentials d'un admin de l'org)
  */
 async function sendTransitionNotifications(
   chantierId: string,
@@ -1096,7 +1175,7 @@ async function sendTransitionNotifications(
   fromStatusId: string,
   toStatusId: string,
   notifyRoles: string[],
-  _sendEmail: boolean
+  sendEmail: boolean
 ): Promise<void> {
   try {
     // Récupérer le chantier et les statuts
@@ -1138,6 +1217,87 @@ async function sendTransitionNotifications(
           data: { chantierId, fromStatusId, toStatusId },
         }
       });
+    }
+
+    // ── Envoi d'email si activé sur la transition ──
+    if (sendEmail && targetUsers.length > 0) {
+      try {
+        // Trouver un EmailAccount configuré dans l'org (préférence: admin)
+        const emailAccount = await db.emailAccount.findFirst({
+          where: { organizationId },
+          select: { emailAddress: true, encryptedPassword: true, mailProvider: true }
+        });
+
+        if (emailAccount?.encryptedPassword) {
+          const decryptedPassword = decrypt(emailAccount.encryptedPassword);
+
+          // Déterminer les paramètres SMTP selon le provider
+          let smtpHost = 'smtp.gmail.com';
+          let smtpPort = 465;
+          if (emailAccount.mailProvider === 'one.com' || emailAccount.mailProvider === 'onecom') {
+            smtpHost = 'send.one.com';
+            smtpPort = 465;
+          } else if (emailAccount.mailProvider === 'outlook' || emailAccount.mailProvider === 'hotmail') {
+            smtpHost = 'smtp.office365.com';
+            smtpPort = 587;
+          } else if (emailAccount.mailProvider === 'yandex') {
+            smtpHost = 'smtp.yandex.com';
+            smtpPort = 465;
+          }
+
+          const transporter = nodemailer.createTransport({
+            host: smtpHost,
+            port: smtpPort,
+            secure: smtpPort === 465,
+            auth: {
+              user: emailAccount.emailAddress,
+              pass: decryptedPassword,
+            },
+          });
+
+          const subject = `🏗️ Chantier "${chantierLabel}" — ${fromStatus?.name || '?'} → ${toStatus?.name || '?'}`;
+          const html = `
+            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+              <div style="background: #1677ff; color: white; padding: 16px 24px; border-radius: 8px 8px 0 0;">
+                <h2 style="margin: 0; font-size: 18px;">🏗️ Changement de statut</h2>
+              </div>
+              <div style="padding: 24px; border: 1px solid #e8e8e8; border-top: none; border-radius: 0 0 8px 8px;">
+                <p style="font-size: 16px; color: #333;">
+                  Le chantier <strong>"${chantierLabel}"</strong> a changé de statut :
+                </p>
+                <div style="background: #f5f5f5; padding: 16px; border-radius: 8px; text-align: center; margin: 16px 0;">
+                  <span style="font-size: 18px; font-weight: 600; color: #ff4d4f;">${fromStatus?.name || '?'}</span>
+                  <span style="font-size: 24px; margin: 0 12px;">→</span>
+                  <span style="font-size: 18px; font-weight: 600; color: #52c41a;">${toStatus?.name || '?'}</span>
+                </div>
+                <p style="font-size: 13px; color: #8c8c8c; text-align: center; margin-top: 24px;">
+                  Notification automatique CRM 2Thier
+                </p>
+              </div>
+            </div>
+          `;
+
+          // Envoyer l'email à tous les utilisateurs ciblés
+          const emailTargets = targetUsers
+            .map(u => u.User.email)
+            .filter((email): email is string => !!email);
+
+          if (emailTargets.length > 0) {
+            await transporter.sendMail({
+              from: emailAccount.emailAddress,
+              to: emailTargets.join(', '),
+              subject,
+              html,
+            });
+            console.log(`[ChantierWorkflow] ✉️ Email envoyé à ${emailTargets.length} destinataires`);
+          }
+        } else {
+          console.warn('[ChantierWorkflow] ⚠️ sendEmail=true mais aucun EmailAccount configuré dans l\'org');
+        }
+      } catch (emailErr) {
+        // L'envoi d'email est non-bloquant
+        console.error('[ChantierWorkflow] ❌ Erreur envoi email (non bloquant):', emailErr);
+      }
     }
 
     console.log(`[ChantierWorkflow] ${targetUsers.length} notifications envoyées pour transition ${fromStatus?.name} → ${toStatus?.name}`);
@@ -1350,4 +1510,5 @@ router.post('/seed', authenticateToken, isAdmin, async (req, res) => {
   }
 });
 
+export { sendTransitionNotifications };
 export default router;

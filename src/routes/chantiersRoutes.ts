@@ -5,6 +5,7 @@ import { z } from 'zod';
 import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
+import { sendTransitionNotifications } from './chantier-workflow';
 
 const router = Router();
 
@@ -936,7 +937,7 @@ router.put('/:id/status', authenticateToken, async (req, res) => {
       console.error('[Chantiers] Erreur historique (non bloquant):', histErr);
     }
 
-    // Envoyer les notifications configurées pour cette transition
+    // Envoyer les notifications configurées pour cette transition (réutilise la logique partagée avec emails)
     if (oldStatusId) {
       try {
         const transitions = await db.chantierStatusTransition.findMany({
@@ -950,31 +951,7 @@ router.put('/:id/status', authenticateToken, async (req, res) => {
         for (const t of transitions) {
           if (t.notifyRoles) {
             const roles = t.notifyRoles as string[];
-            // Envoyer les notifications aux rôles configurés
-            const userOrgs = await db.userOrganization.findMany({
-              where: { organizationId, status: 'ACTIVE' },
-              include: {
-                User: { select: { id: true } },
-                Role: { select: { name: true } }
-              }
-            });
-            const targets = userOrgs.filter(u => {
-              const roleName = u.Role?.name?.toLowerCase() || '';
-              return roles.some(r => roleName.includes(r.toLowerCase()));
-            });
-            for (const target of targets) {
-              await db.notification.create({
-                data: {
-                  id: crypto.randomUUID(),
-                  userId: target.User.id,
-                  organizationId,
-                  type: 'CHANTIER_STATUS_CHANGED',
-                  title: `Chantier déplacé`,
-                  message: `"${chantier.customLabel || chantier.clientName || chantier.productLabel}" → ${chantier.ChantierStatus?.name}`,
-                  data: { chantierId: id, fromStatusId: oldStatusId, toStatusId: statusId },
-                }
-              });
-            }
+            await sendTransitionNotifications(id, organizationId, oldStatusId, statusId, roles, t.sendEmail);
           }
         }
       } catch (notifErr) {
