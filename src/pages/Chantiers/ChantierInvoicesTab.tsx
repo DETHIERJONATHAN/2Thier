@@ -442,30 +442,6 @@ const ChantierInvoicesTab: React.FC<Props> = ({ chantierId, chantierAmount, isVa
 
   return (
     <div style={{ padding: '16px 0' }}>
-      {/* ── Validation admin ── */}
-      {!isValidated && isAdminOrAbove && (
-        <Alert
-          type="warning"
-          showIcon
-          icon={<SafetyCertificateOutlined />}
-          message="Chantier en attente de validation"
-          description="Vérifiez le PDF/devis, définissez le plan de facturation, puis validez le chantier pour l'injecter dans le pipeline."
-          style={{ marginBottom: 16, borderColor: '#faad14' }}
-          action={
-            billingSource === 'chantier' && billingPlan.length > 0 ? (
-              <Button type="primary" icon={<SafetyCertificateOutlined />} onClick={handleValidateChantier}
-                style={{ background: '#52c41a', borderColor: '#52c41a' }}>
-                Valider le chantier
-              </Button>
-            ) : (
-              <Button disabled>Définissez d'abord le plan de facturation</Button>
-            )
-          }
-        />
-      )}
-      {isValidated && (
-        <Alert type="success" showIcon message="Chantier validé" style={{ marginBottom: 16 }} />
-      )}
 
       {/* ── Plan de facturation per-chantier ── */}
       <Card
