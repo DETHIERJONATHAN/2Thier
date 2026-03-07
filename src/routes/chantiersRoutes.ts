@@ -293,6 +293,18 @@ router.get('/:id', authenticateToken, async (req, res) => {
             status: true,
           }
         },
+        ChantierAssignments: {
+          select: {
+            id: true,
+            technicianId: true,
+            role: true,
+            teamId: true,
+            assignedAt: true,
+            Technician: { select: { id: true, firstName: true, lastName: true, color: true, type: true, specialties: true, company: true, phone: true, email: true } },
+            Team: { select: { id: true, name: true, color: true } },
+          },
+          orderBy: [{ role: 'asc' as const }, { assignedAt: 'asc' as const }],
+        },
       }
     });
 

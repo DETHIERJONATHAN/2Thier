@@ -114,6 +114,8 @@ export interface Chantier {
 
 export type TechnicianType = 'INTERNAL' | 'SUBCONTRACTOR';
 export type UnavailabilityType = 'CONGE' | 'FORMATION' | 'MALADIE' | 'AUTRE';
+export type BillingMode = 'FORFAIT' | 'REGIE';
+export type TimeEntryType = 'CHANTIER' | 'DEPLACEMENT' | 'PAUSE' | 'REGIE';
 
 export interface ChantierAssignment {
   id: string;
@@ -184,6 +186,7 @@ export interface Technician {
   id: string;
   userId?: string | null;
   type: TechnicianType;
+  billingMode?: BillingMode | null;
   firstName: string;
   lastName: string;
   email?: string | null;
@@ -207,6 +210,29 @@ export interface Technician {
     memberRole: 'LEADER' | 'MEMBER';
   }>;
   weekChantiers: WeekChantier[];
+}
+
+export interface TimeEntry {
+  id: string;
+  organizationId: string;
+  technicianId: string;
+  chantierId: string | null;
+  date: string;
+  startTime: string;
+  endTime: string | null;
+  breakMinutes: number;
+  type: TimeEntryType;
+  durationMinutes: number | null;
+  note: string | null;
+  Technician: {
+    id: string;
+    firstName: string;
+    lastName: string;
+    color: string;
+    type: TechnicianType;
+    billingMode?: BillingMode | null;
+  };
+  Chantier?: { id: string; clientName: string } | null;
 }
 
 export interface ChantierCreatePayload {

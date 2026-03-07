@@ -48,6 +48,7 @@ export function useTeams() {
 
   const createTechnician = useCallback(async (data: {
     type: TechnicianType;
+    billingMode?: string;
     userId?: string;
     firstName: string;
     lastName: string;

@@ -755,6 +755,7 @@ const ChantierKanban: React.FC<ChantierKanbanProps> = ({ onViewChantier, onSetti
   const [techFormOpen, setTechFormOpen] = useState(false);
   const [techFormData, setTechFormData] = useState<{
     type: 'INTERNAL' | 'SUBCONTRACTOR';
+    billingMode: string;
     firstName: string;
     lastName: string;
     email: string;
@@ -762,7 +763,7 @@ const ChantierKanban: React.FC<ChantierKanbanProps> = ({ onViewChantier, onSetti
     company: string;
     specialties: string[];
     color: string;
-  }>({ type: 'INTERNAL', firstName: '', lastName: '', email: '', phone: '', company: '', specialties: [], color: '#1677ff' });
+  }>({ type: 'INTERNAL', billingMode: '', firstName: '', lastName: '', email: '', phone: '', company: '', specialties: [], color: '#1677ff' });
   const [unavailModalOpen, setUnavailModalOpen] = useState(false);
   const [unavailTechId, setUnavailTechId] = useState<string>('');
   const [unavailData, setUnavailData] = useState<{ startDate: string; endDate: string; type: string; note: string }>({ startDate: '', endDate: '', type: 'CONGE', note: '' });
@@ -1393,7 +1394,7 @@ const ChantierKanban: React.FC<ChantierKanbanProps> = ({ onViewChantier, onSetti
                     🔄 Sync
                   </button>
                   <button
-                    onClick={() => { setTechFormData({ type: 'SUBCONTRACTOR', firstName: '', lastName: '', email: '', phone: '', company: '', specialties: [], color: '#8c8c8c' }); setTechFormOpen(true); }}
+                    onClick={() => { setTechFormData({ type: 'SUBCONTRACTOR', billingMode: 'FORFAIT', firstName: '', lastName: '', email: '', phone: '', company: '', specialties: [], color: '#8c8c8c' }); setTechFormOpen(true); }}
                     style={{ flex: 1, padding: '4px 6px', borderRadius: 4, border: '1px dashed #8c8c8c', background: '#fff', cursor: 'pointer', fontSize: 10, color: '#8c8c8c' }}
                     title="Ajouter un sous-traitant"
                   >
@@ -1679,10 +1680,11 @@ const ChantierKanban: React.FC<ChantierKanbanProps> = ({ onViewChantier, onSetti
             return;
           }
           try {
-            await createTechnician(techFormData);
+            const payload = { ...techFormData, billingMode: techFormData.billingMode || null };
+            await createTechnician(payload);
             message.success('Technicien créé !');
             setTechFormOpen(false);
-            setTechFormData({ type: 'INTERNAL', firstName: '', lastName: '', email: '', phone: '', company: '', specialties: [], color: '#1677ff' });
+            setTechFormData({ type: 'INTERNAL', billingMode: '', firstName: '', lastName: '', email: '', phone: '', company: '', specialties: [], color: '#1677ff' });
           } catch (err: any) {
             message.error(err?.message || 'Erreur création');
           }
@@ -1719,6 +1721,20 @@ const ChantierKanban: React.FC<ChantierKanbanProps> = ({ onViewChantier, onSetti
               <Input value={techFormData.company} onChange={e => setTechFormData(d => ({ ...d, company: e.target.value }))} placeholder="Nom de l'entreprise" />
             </div>
           )}
+          {techFormData.type === 'SUBCONTRACTOR' && (
+            <div>
+              <label style={{ fontSize: 12, fontWeight: 500 }}>Mode de facturation</label>
+              <Select
+                style={{ width: '100%' }}
+                value={techFormData.billingMode || 'FORFAIT'}
+                onChange={v => setTechFormData(d => ({ ...d, billingMode: v }))}
+                options={[
+                  { value: 'FORFAIT', label: '💰 Forfait (pas de pointage)' },
+                  { value: 'REGIE', label: '⏱️ Régie (pointage requis)' },
+                ]}
+              />
+            </div>
+          )}
           <div style={{ display: 'flex', gap: 8 }}>
             <div style={{ flex: 1 }}>
               <label style={{ fontSize: 12, fontWeight: 500 }}>Email</label>
@@ -1737,7 +1753,7 @@ const ChantierKanban: React.FC<ChantierKanbanProps> = ({ onViewChantier, onSetti
               value={techFormData.specialties}
               onChange={v => setTechFormData(d => ({ ...d, specialties: v }))}
               placeholder="Sélectionner les spécialités..."
-              options={uniqueProducts.map(p => ({ value: p.value, label: `${p.icon || ''} ${p.label}`.trim() }))}
+              options={uniqueProducts.map(p => ({ value: p.value, label: p.label }))}
             />
           </div>
           <div>

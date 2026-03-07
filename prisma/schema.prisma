@@ -1066,6 +1066,7 @@ model Organization {
   ChantierInvoice            ChantierInvoice[]
   Team                       Team[]
   Technician                 Technician[]
+  TimeEntry                  TimeEntry[]
   Module                     Module[]
   Notification               Notification[]
   Order                      Order[]
@@ -2998,6 +2999,7 @@ model Chantier {
   ChantierHistory        ChantierHistory[]
   ChantierBillingPlanItem ChantierBillingPlanItem[]
   ChantierAssignments      ChantierAssignment[]
+  TimeEntries              TimeEntry[]
 
   @@index([organizationId, createdAt])
   @@index([leadId])
@@ -3231,11 +3233,24 @@ enum TechnicianType {
   SUBCONTRACTOR
 }
 
+enum BillingMode {
+  FORFAIT   // Sous-traitant au forfait (pas de pointage)
+  REGIE     // Sous-traitant en régie (pointage requis)
+}
+
+enum TimeEntryType {
+  CHANTIER     // Travail sur chantier
+  DEPLACEMENT  // Trajet
+  PAUSE        // Pause
+  REGIE        // Heures en régie sous-traitant
+}
+
 model Technician {
   id             String          @id @default(cuid())
   organizationId String
   userId         String?         // null pour sous-traitants, lié pour internes
   type           TechnicianType  @default(INTERNAL)
+  billingMode    BillingMode?    // null pour internes, FORFAIT ou REGIE pour sous-traitants
   firstName      String
   lastName       String
   email          String?
@@ -3254,10 +3269,37 @@ model Technician {
   TeamMemberships     TeamMember[]
   ChantierAssignments ChantierAssignment[]
   Unavailabilities    TechnicianUnavailability[]
+  TimeEntries         TimeEntry[]
 
   @@unique([organizationId, userId])
   @@index([organizationId])
   @@index([userId])
+}
+
+model TimeEntry {
+  id             String        @id @default(cuid())
+  organizationId String
+  technicianId   String
+  chantierId     String?       // null si pointage hors-chantier
+  date           DateTime      @db.Date
+  startTime      DateTime      // Heure d'arrivée
+  endTime        DateTime?     // Heure de départ (null = en cours)
+  breakMinutes   Int           @default(0)  // Durée pause en minutes
+  type           TimeEntryType @default(CHANTIER)
+  durationMinutes Int?         // Calculé: endTime - startTime - breakMinutes
+  note           String?
+  validatedBy    String?       // userId du validateur
+  validatedAt    DateTime?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  Organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  Technician   Technician   @relation(fields: [technicianId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  Chantier     Chantier?    @relation(fields: [chantierId], references: [id], onDelete: SetNull, onUpdate: NoAction)
+
+  @@index([organizationId, date])
+  @@index([technicianId, date])
+  @@index([chantierId])
 }
 
 enum UnavailabilityType {

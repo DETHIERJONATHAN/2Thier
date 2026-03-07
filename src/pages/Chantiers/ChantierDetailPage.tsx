@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import {
   Card, Tabs, Descriptions, Tag, Button, Spin, Avatar, Input, message,
-  Select, Empty, Typography, Space, Divider, Tooltip, Alert, Modal, DatePicker
+  Select, Empty, Typography, Space, Divider, Tooltip, Alert, DatePicker
 } from 'antd';
 import {
   ArrowLeftOutlined,
@@ -22,7 +22,6 @@ import {
   HistoryOutlined,
   ClockCircleOutlined,
   SafetyCertificateOutlined,
-  ExclamationCircleOutlined,
 } from '@ant-design/icons';
 import { useAuthenticatedApi } from '../../hooks/useAuthenticatedApi';
 import { useChantierStatuses } from '../../hooks/useChantierStatuses';
@@ -35,6 +34,7 @@ dayjs.locale('fr');
 import ChantierInvoicesTab from './ChantierInvoicesTab';
 import ChantierEventsTab from './ChantierEventsTab';
 import ChantierHistoryTab from './ChantierHistoryTab';
+import ChantierPointageTab from './ChantierPointageTab';
 
 const { TabPane } = Tabs;
 const { TextArea } = Input;
@@ -625,6 +625,78 @@ const ChantierDetailPage: React.FC = () => {
                       <Text>{commercialName || <Text type="secondary">Non assigné</Text>}</Text>
                     </div>
                   </div>
+
+                  {/* Techniciens assignés */}
+                  {chantier.ChantierAssignments && chantier.ChantierAssignments.length > 0 && (
+                    <>
+                      <Divider style={{ margin: '4px 0' }} />
+                      <div>
+                        <Text type="secondary" style={{ fontSize: '12px' }}>Techniciens assignés</Text>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginTop: '6px' }}>
+                          {chantier.ChantierAssignments.map((a: any) => (
+                            <div key={a.id} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '4px 8px', borderRadius: 6, background: '#fafafa' }}>
+                              <Avatar
+                                size={28}
+                                style={{
+                                  backgroundColor: a.Technician?.color || '#722ed1',
+                                  fontSize: 11,
+                                  border: a.Technician?.type === 'SUBCONTRACTOR' ? '2px dashed #8c8c8c' : undefined,
+                                }}
+                              >
+                                {(a.Technician?.firstName?.[0] || '') + (a.Technician?.lastName?.[0] || '')}
+                              </Avatar>
+                              <div style={{ flex: 1, minWidth: 0 }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                                  <Text style={{ fontSize: 13 }}>
+                                    {a.Technician?.firstName || ''} {a.Technician?.lastName || ''}
+                                  </Text>
+                                  {a.role === 'CHEF_EQUIPE' && <Tag color="orange" style={{ fontSize: 10, lineHeight: '16px', padding: '0 4px', margin: 0 }}>Chef</Tag>}
+                                  {a.Technician?.type === 'SUBCONTRACTOR' && <Tag color="default" style={{ fontSize: 10, lineHeight: '16px', padding: '0 4px', margin: 0 }}>🏢 ST</Tag>}
+                                </div>
+                                <div style={{ display: 'flex', gap: 3, marginTop: 2 }}>
+                                  {a.Technician?.specialties?.map((s: string) => (
+                                    <Tag key={s} style={{ fontSize: 9, lineHeight: '14px', padding: '0 3px', margin: 0 }} color={s === 'all' ? 'blue' : 'green'}>
+                                      {s === 'all' ? 'ALL' : s === 'pc' ? 'PV' : s}
+                                    </Tag>
+                                  ))}
+                                  {a.Team && <Tag style={{ fontSize: 9, lineHeight: '14px', padding: '0 3px', margin: 0 }} color={a.Team.color}>👥 {a.Team.name}</Tag>}
+                                </div>
+                              </div>
+                              <Tooltip title="Retirer du chantier">
+                                <Button
+                                  type="text"
+                                  size="small"
+                                  danger
+                                  icon={<CloseOutlined />}
+                                  onClick={async () => {
+                                    try {
+                                      await api.delete(`/api/teams/assignments/${a.id}`);
+                                      message.success('Technicien retiré');
+                                      fetchChantier();
+                                    } catch (err: any) {
+                                      message.error(err?.message || 'Erreur lors du retrait');
+                                    }
+                                  }}
+                                  style={{ fontSize: 10 }}
+                                />
+                              </Tooltip>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </>
+                  )}
+                  {(!chantier.ChantierAssignments || chantier.ChantierAssignments.length === 0) && (
+                    <>
+                      <Divider style={{ margin: '4px 0' }} />
+                      <div>
+                        <Text type="secondary" style={{ fontSize: '12px' }}>Techniciens assignés</Text>
+                        <div style={{ marginTop: '4px' }}>
+                          <Text type="secondary" style={{ fontSize: 12, fontStyle: 'italic' }}>Glissez un technicien ou une équipe depuis le Kanban</Text>
+                        </div>
+                      </div>
+                    </>
+                  )}
                 </div>
               </Card>
 
@@ -844,6 +916,11 @@ const ChantierDetailPage: React.FC = () => {
             chantierAddress={displayAddress}
             chantierLabel={chantier.customLabel || chantier.clientName || chantier.productLabel || ''}
           />
+        </TabPane>
+
+        {/* Onglet Pointage */}
+        <TabPane tab={<span><ClockCircleOutlined /> Pointage</span>} key="pointage">
+          <ChantierPointageTab chantierId={chantier.id} />
         </TabPane>
       </Tabs>
     </div>
