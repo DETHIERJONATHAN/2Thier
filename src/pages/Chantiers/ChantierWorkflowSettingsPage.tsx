@@ -5,7 +5,7 @@ import {
 } from 'antd';
 import {
   PlusOutlined, DeleteOutlined, EditOutlined, ArrowLeftOutlined, ArrowRightOutlined,
-  ThunderboltOutlined, DollarOutlined,
+  ThunderboltOutlined, DollarOutlined, ReloadOutlined, ExclamationCircleOutlined,
 } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import { useAuthenticatedApi } from '../../hooks/useAuthenticatedApi';
@@ -337,17 +337,23 @@ const ChantierWorkflowSettingsPage: React.FC = () => {
 
   // ═══ SEED WORKFLOW ═══
   const [seeding, setSeeding] = useState(false);
-  const canSeed = !transLoading && !templLoading && transitions.length === 0 && templates.length === 0;
+  const [resetConfirmVisible, setResetConfirmVisible] = useState(false);
+  const isEmpty = !transLoading && !templLoading && transitions.length === 0 && templates.length === 0;
+  const hasData = !transLoading && !templLoading && (transitions.length > 0 || templates.length > 0);
 
-  const handleSeedWorkflow = useCallback(async () => {
+  const handleSeedWorkflow = useCallback(async (force = false) => {
     try {
       setSeeding(true);
-      const res = await api.post('/api/chantier-workflow/seed', {});
+      const res = await api.post('/api/chantier-workflow/seed', { force });
       message.success(res.message || 'Workflow initialisé !');
+      if (res.data?.skipped?.length) {
+        message.warning(`${res.data.skipped.length} règle(s) ignorée(s) — statuts introuvables`);
+      }
       fetchTransitions();
       fetchTemplates();
+      setResetConfirmVisible(false);
     } catch (err: any) {
-      message.error(err?.message || 'Erreur à l\'initialisation');
+      message.error(err?.data?.message || err?.message || 'Erreur à l\'initialisation');
     } finally {
       setSeeding(false);
     }
@@ -363,19 +369,55 @@ const ChantierWorkflowSettingsPage: React.FC = () => {
       </div>
 
       {/* Bouton seed si workflow vide */}
-      {canSeed && (
+      {isEmpty && (
         <Card size="small" style={{ marginBottom: 24, borderColor: '#1677ff', background: '#f0f5ff' }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <div>
               <Text strong>🚀 Aucune configuration détectée</Text>
               <div><Text type="secondary">Initialisez le workflow avec les transitions et factures par défaut en un clic.</Text></div>
             </div>
-            <Button type="primary" loading={seeding} onClick={handleSeedWorkflow}>
+            <Button type="primary" loading={seeding} onClick={() => handleSeedWorkflow(false)}>
               Initialiser le workflow par défaut
             </Button>
           </div>
         </Card>
       )}
+
+      {/* Bouton réinitialiser si des données existent */}
+      {hasData && (
+        <Card size="small" style={{ marginBottom: 24, borderColor: '#faad14', background: '#fffbe6' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <div>
+              <Text strong><ExclamationCircleOutlined style={{ color: '#faad14', marginRight: 8 }} />Réinitialiser le workflow</Text>
+              <div><Text type="secondary">Supprime toutes les transitions et templates actuels, puis recrée les valeurs par défaut.</Text></div>
+            </div>
+            <Button
+              danger
+              icon={<ReloadOutlined />}
+              loading={seeding}
+              onClick={() => setResetConfirmVisible(true)}
+            >
+              Réinitialiser
+            </Button>
+          </div>
+        </Card>
+      )}
+
+      {/* Modal de confirmation reset */}
+      <Modal
+        title={<span><ExclamationCircleOutlined style={{ color: '#ff4d4f', marginRight: 8 }} />Confirmer la réinitialisation</span>}
+        open={resetConfirmVisible}
+        onCancel={() => setResetConfirmVisible(false)}
+        footer={[
+          <Button key="cancel" onClick={() => setResetConfirmVisible(false)}>Annuler</Button>,
+          <Button key="reset" danger type="primary" loading={seeding} onClick={() => handleSeedWorkflow(true)}>
+            Oui, réinitialiser le workflow
+          </Button>,
+        ]}
+      >
+        <p>Cette action va <strong>supprimer</strong> toutes les transitions ({transitions.length}) et templates de factures ({templates.length}) existants, puis les recréer avec les valeurs par défaut adaptées au pipeline actuel.</p>
+        <p style={{ color: '#ff4d4f' }}><strong>Cette action est irréversible.</strong></p>
+      </Modal>
 
       {/* ═══ TRANSITIONS ═══ */}
       <Card

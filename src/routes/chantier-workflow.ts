@@ -1662,8 +1662,8 @@ async function notifyProblem(
 
 /**
  * POST /api/chantier-workflow/seed
- * Initialise les transitions et templates de factures par défaut pour une organisation
- * Ne fait rien si des transitions existent déjà
+ * Initialise les transitions et templates de factures par défaut pour une organisation.
+ * Accepte { force: true } pour supprimer les données existantes et re-seeder.
  */
 router.post('/seed', authenticateToken, isAdmin, async (req, res) => {
   try {
@@ -1672,12 +1672,24 @@ router.post('/seed', authenticateToken, isAdmin, async (req, res) => {
       return res.status(400).json({ success: false, message: 'ID d\'organisation requis' });
     }
 
+    const { force } = req.body || {};
+
     // Vérifier s'il y a déjà des données
     const existingTransitions = await db.chantierStatusTransition.count({ where: { organizationId } });
     const existingTemplates = await db.chantierInvoiceTemplate.count({ where: { organizationId } });
 
-    if (existingTransitions > 0 && existingTemplates > 0) {
-      return res.status(400).json({ success: false, message: 'Le workflow est déjà configuré pour cette organisation' });
+    if ((existingTransitions > 0 || existingTemplates > 0) && !force) {
+      return res.status(400).json({
+        success: false,
+        message: 'Le workflow est déjà configuré. Utilisez "Réinitialiser" pour re-créer les données par défaut.',
+        hasData: { transitions: existingTransitions, templates: existingTemplates },
+      });
+    }
+
+    // Si force, supprimer les données existantes
+    if (force) {
+      await db.chantierStatusTransition.deleteMany({ where: { organizationId } });
+      await db.chantierInvoiceTemplate.deleteMany({ where: { organizationId } });
     }
 
     // Récupérer les statuts existants pour mapper par nom
@@ -1690,112 +1702,124 @@ router.post('/seed', authenticateToken, isAdmin, async (req, res) => {
       return res.status(400).json({ success: false, message: 'Aucun statut de chantier trouvé. Créez d\'abord les statuts.' });
     }
 
-    const findStatus = (name: string) => statuses.find(s => s.name.toLowerCase().includes(name.toLowerCase()));
+    // Match exact (case-insensitive) sur le nom du statut
+    const findStatus = (name: string) =>
+      statuses.find(s => s.name.toLowerCase().trim() === name.toLowerCase().trim());
 
-    const results: { transitions: number; templates: number } = { transitions: 0, templates: 0 };
+    const results: { transitions: number; templates: number; skipped: string[] } = { transitions: 0, templates: 0, skipped: [] };
 
-    // ─── SEED TRANSITIONS (si pas existantes) ───
-    if (existingTransitions === 0) {
-      // Défaut : tout le monde peut drag-drop entre tous les statuts (modulable ensuite)
-      // On crée les transitions logiques du workflow standard
-      const transitionDefs: Array<{
-        fromName: string;
-        toName: string;
-        triggerType: string;
-        label: string;
-        allowedRoles?: string[];
-        sendEmail?: boolean;
-        notifyRoles?: string[];
-      }> = [
-        // ── Pipeline principal (8 étapes) ──
-        // Phase pré-chantier
-        { fromName: 'nouveau', toName: 'visite technique', triggerType: 'MANUAL', label: 'Planifier visite technique', allowedRoles: ['admin', 'commercial'] },
-        { fromName: 'visite technique', toName: 'commande', triggerType: 'MANUAL', label: 'Valider visite → Commande', allowedRoles: ['admin', 'commercial'], notifyRoles: ['comptable'], sendEmail: false },
-        { fromName: 'commande', toName: 'planifié', triggerType: 'MANUAL', label: 'Planifier le chantier', allowedRoles: ['admin', 'commercial'] },
-        // Phase chantier
-        { fromName: 'planifié', toName: 'en cours', triggerType: 'MANUAL', label: 'Démarrer le chantier', allowedRoles: ['admin', 'commercial', 'technicien'] },
-        { fromName: 'en cours', toName: 'terminé', triggerType: 'MANUAL', label: 'Marquer terminé', allowedRoles: ['admin', 'technicien'], notifyRoles: ['commercial', 'admin', 'comptable'], sendEmail: true },
-        // Phase post-chantier
-        { fromName: 'terminé', toName: 'réception', triggerType: 'MANUAL', label: 'Lancer la réception', allowedRoles: ['admin', 'commercial'] },
-        // Auto-transition: quand toutes les factures requises sont payées → Réception validée automatiquement
-        { fromName: 'terminé', toName: 'réception', triggerType: 'AUTO_INVOICE_PAID', label: 'Auto: factures payées → Réception', notifyRoles: ['admin', 'commercial'], sendEmail: true },
-        // Auto-transition: quand la visite technique est validée → passe en commande
-        { fromName: 'visite technique', toName: 'commande', triggerType: 'AUTO_VISIT_VALIDATED', label: 'Auto: visite validée → Commande', notifyRoles: ['comptable', 'admin'], sendEmail: true },
+    // ─── SEED TRANSITIONS ───
+    // Pipeline actuel (10 étapes, order 0-9):
+    //   Nouveau(0) → Visite technique(1) → Commande(2) → Réception commande(3) →
+    //   Planification(4) → Fin de chantier(5) → Réception(6) → Terminé(7) → SAV(8) → Annulé(9)
+    const transitionDefs: Array<{
+      fromName: string;
+      toName: string;
+      triggerType: string;
+      label: string;
+      allowedRoles?: string[];
+      sendEmail?: boolean;
+      notifyRoles?: string[];
+    }> = [
+      // ── Pipeline principal (avancement normal) ──
+      { fromName: 'Nouveau', toName: 'Visite technique', triggerType: 'MANUAL', label: 'Planifier visite technique', allowedRoles: ['admin', 'commercial'] },
+      { fromName: 'Visite technique', toName: 'Commande', triggerType: 'MANUAL', label: 'Valider visite → Commande', allowedRoles: ['admin', 'commercial'], notifyRoles: ['comptable'], sendEmail: false },
+      { fromName: 'Commande', toName: 'Réception commande', triggerType: 'MANUAL', label: 'Commande passée → Attente réception', allowedRoles: ['admin', 'commercial'] },
+      { fromName: 'Réception commande', toName: 'Planification', triggerType: 'MANUAL', label: 'Matériel reçu → Planifier le chantier', allowedRoles: ['admin', 'commercial'] },
+      { fromName: 'Planification', toName: 'Fin de chantier', triggerType: 'MANUAL', label: 'Chantier réalisé → Fin de chantier', allowedRoles: ['admin', 'commercial', 'technicien'], notifyRoles: ['comptable', 'admin'], sendEmail: true },
+      { fromName: 'Fin de chantier', toName: 'Réception', triggerType: 'MANUAL', label: 'Lancer la réception client', allowedRoles: ['admin', 'commercial'] },
+      { fromName: 'Réception', toName: 'Terminé', triggerType: 'MANUAL', label: 'Réception OK → Terminé', allowedRoles: ['admin', 'commercial'], notifyRoles: ['comptable', 'admin'], sendEmail: true },
 
-        // ── Retours et mises en pause ──
-        { fromName: 'visite technique', toName: 'nouveau', triggerType: 'MANUAL', label: 'Retour en attente', allowedRoles: ['admin', 'commercial'] },
-        { fromName: 'commande', toName: 'visite technique', triggerType: 'MANUAL', label: 'Refaire visite technique', allowedRoles: ['admin'] },
-        { fromName: 'planifié', toName: 'commande', triggerType: 'MANUAL', label: 'Retour en commande', allowedRoles: ['admin'] },
+      // ── Auto-transitions ──
+      { fromName: 'Visite technique', toName: 'Commande', triggerType: 'AUTO_VISIT_VALIDATED', label: 'Auto: visite validée → Commande', notifyRoles: ['comptable', 'admin'], sendEmail: true },
+      { fromName: 'Réception commande', toName: 'Planification', triggerType: 'AUTO_MATERIAL_RECEIVED', label: 'Auto: matériel reçu → Planification', notifyRoles: ['admin', 'commercial'], sendEmail: true },
+      { fromName: 'Fin de chantier', toName: 'Réception', triggerType: 'AUTO_INVOICE_PAID', label: 'Auto: factures payées → Réception', notifyRoles: ['admin', 'commercial'], sendEmail: true },
 
-        // ── Annulation (depuis tout statut actif) ──
-        { fromName: 'nouveau', toName: 'annulé', triggerType: 'MANUAL', label: 'Annuler (nouveau)', allowedRoles: ['admin'] },
-        { fromName: 'visite technique', toName: 'annulé', triggerType: 'MANUAL', label: 'Annuler (visite)', allowedRoles: ['admin'] },
-        { fromName: 'commande', toName: 'annulé', triggerType: 'MANUAL', label: 'Annuler (commande)', allowedRoles: ['admin'] },
-        { fromName: 'planifié', toName: 'annulé', triggerType: 'MANUAL', label: 'Annuler avant démarrage', allowedRoles: ['admin'] },
-        { fromName: 'en cours', toName: 'annulé', triggerType: 'MANUAL', label: 'Annuler chantier en cours', allowedRoles: ['admin'], notifyRoles: ['commercial', 'comptable'], sendEmail: true },
-      ];
+      // ── Retours (corrections) ──
+      { fromName: 'Visite technique', toName: 'Nouveau', triggerType: 'MANUAL', label: 'Retour en attente', allowedRoles: ['admin', 'commercial'] },
+      { fromName: 'Commande', toName: 'Visite technique', triggerType: 'MANUAL', label: 'Refaire visite technique', allowedRoles: ['admin'] },
+      { fromName: 'Réception commande', toName: 'Commande', triggerType: 'MANUAL', label: 'Problème réception → Retour commande', allowedRoles: ['admin'] },
+      { fromName: 'Planification', toName: 'Réception commande', triggerType: 'MANUAL', label: 'Retour en attente matériel', allowedRoles: ['admin'] },
+      { fromName: 'Fin de chantier', toName: 'Planification', triggerType: 'MANUAL', label: 'Travaux supplémentaires', allowedRoles: ['admin'] },
 
-      let order = 0;
-      for (const def of transitionDefs) {
-        const fromStatus = findStatus(def.fromName);
-        const toStatus = findStatus(def.toName);
-        if (!fromStatus || !toStatus) continue;
+      // ── SAV (depuis Terminé) ──
+      { fromName: 'Terminé', toName: 'SAV', triggerType: 'MANUAL', label: 'Ouvrir un SAV', allowedRoles: ['admin', 'commercial', 'technicien'] },
+      { fromName: 'SAV', toName: 'Terminé', triggerType: 'MANUAL', label: 'Clôturer le SAV', allowedRoles: ['admin', 'commercial'] },
 
-        await db.chantierStatusTransition.create({
-          data: {
-            id: crypto.randomUUID(),
-            organizationId,
-            fromStatusId: fromStatus.id,
-            toStatusId: toStatus.id,
-            triggerType: def.triggerType,
-            label: def.label,
-            allowedRoles: def.allowedRoles || undefined,
-            notifyRoles: def.notifyRoles || undefined,
-            sendEmail: def.sendEmail || false,
-            isActive: true,
-            order: order++,
-            updatedAt: new Date(),
-          }
-        });
-        results.transitions++;
+      // ── Annulation (depuis tout statut actif) ──
+      { fromName: 'Nouveau', toName: 'Annulé', triggerType: 'MANUAL', label: 'Annuler (nouveau)', allowedRoles: ['admin'] },
+      { fromName: 'Visite technique', toName: 'Annulé', triggerType: 'MANUAL', label: 'Annuler (visite)', allowedRoles: ['admin'] },
+      { fromName: 'Commande', toName: 'Annulé', triggerType: 'MANUAL', label: 'Annuler (commande)', allowedRoles: ['admin'], notifyRoles: ['comptable'], sendEmail: true },
+      { fromName: 'Réception commande', toName: 'Annulé', triggerType: 'MANUAL', label: 'Annuler (en attente)', allowedRoles: ['admin'] },
+      { fromName: 'Planification', toName: 'Annulé', triggerType: 'MANUAL', label: 'Annuler (planifié)', allowedRoles: ['admin'] },
+      { fromName: 'Fin de chantier', toName: 'Annulé', triggerType: 'MANUAL', label: 'Annuler (fin chantier)', allowedRoles: ['admin'], notifyRoles: ['commercial', 'comptable'], sendEmail: true },
+    ];
+
+    let order = 0;
+    for (const def of transitionDefs) {
+      const fromStatus = findStatus(def.fromName);
+      const toStatus = findStatus(def.toName);
+      if (!fromStatus || !toStatus) {
+        results.skipped.push(`${def.fromName} → ${def.toName} (statut introuvable)`);
+        continue;
       }
+
+      await db.chantierStatusTransition.create({
+        data: {
+          id: crypto.randomUUID(),
+          organizationId,
+          fromStatusId: fromStatus.id,
+          toStatusId: toStatus.id,
+          triggerType: def.triggerType,
+          label: def.label,
+          allowedRoles: def.allowedRoles || undefined,
+          notifyRoles: def.notifyRoles || undefined,
+          sendEmail: def.sendEmail || false,
+          isActive: true,
+          order: order++,
+          updatedAt: new Date(),
+        }
+      });
+      results.transitions++;
     }
 
-    // ─── SEED TEMPLATES FACTURES (si pas existants) ───
-    if (existingTemplates === 0) {
-      const templateDefs = [
-        { type: 'ACOMPTE', label: 'Acompte 30%', percentage: 30, statusName: 'commande', isRequired: true, order: 0 },
-        { type: 'MATERIEL', label: 'Facture matériel', percentage: null, statusName: 'en cours', isRequired: false, order: 1 },
-        { type: 'FIN_CHANTIER', label: 'Facture fin de chantier 60%', percentage: 60, statusName: 'terminé', isRequired: true, order: 2 },
-        { type: 'RECEPTION', label: 'Facture réception (solde 10%)', percentage: 10, statusName: 'réception', isRequired: true, order: 3 },
-      ];
+    // ─── SEED TEMPLATES FACTURES ───
+    // Associés aux statuts du pipeline actuel
+    const templateDefs = [
+      { type: 'ACOMPTE', label: 'Acompte 30%', percentage: 30, statusName: 'Commande', isRequired: true, order: 0 },
+      { type: 'MATERIEL', label: 'Facture matériel', percentage: null, statusName: 'Réception commande', isRequired: false, order: 1 },
+      { type: 'FIN_CHANTIER', label: 'Facture fin de chantier 60%', percentage: 60, statusName: 'Fin de chantier', isRequired: true, order: 2 },
+      { type: 'RECEPTION', label: 'Facture réception (solde 10%)', percentage: 10, statusName: 'Réception', isRequired: true, order: 3 },
+    ];
 
-      for (const tpl of templateDefs) {
-        const status = tpl.statusName ? findStatus(tpl.statusName) : null;
-        await db.chantierInvoiceTemplate.create({
-          data: {
-            id: crypto.randomUUID(),
-            organizationId,
-            statusId: status?.id || null,
-            type: tpl.type,
-            label: tpl.label,
-            percentage: tpl.percentage,
-            isRequired: tpl.isRequired,
-            isActive: true,
-            order: tpl.order,
-            updatedAt: new Date(),
-          }
-        });
-        results.templates++;
+    for (const tpl of templateDefs) {
+      const status = tpl.statusName ? findStatus(tpl.statusName) : null;
+      if (tpl.statusName && !status) {
+        results.skipped.push(`Template "${tpl.label}" → statut "${tpl.statusName}" introuvable`);
       }
+      await db.chantierInvoiceTemplate.create({
+        data: {
+          id: crypto.randomUUID(),
+          organizationId,
+          statusId: status?.id || null,
+          type: tpl.type,
+          label: tpl.label,
+          percentage: tpl.percentage,
+          isRequired: tpl.isRequired,
+          isActive: true,
+          order: tpl.order,
+          updatedAt: new Date(),
+        }
+      });
+      results.templates++;
     }
 
-    console.log(`[ChantierWorkflow] Seed terminé pour org ${organizationId}: ${results.transitions} transitions, ${results.templates} templates`);
+    console.log(`[ChantierWorkflow] Seed terminé pour org ${organizationId}: ${results.transitions} transitions, ${results.templates} templates${results.skipped.length ? `, ${results.skipped.length} ignorés` : ''}`);
 
     res.status(201).json({
       success: true,
       data: results,
-      message: `Workflow initialisé : ${results.transitions} transitions, ${results.templates} templates de factures`
+      message: `Workflow initialisé : ${results.transitions} transitions, ${results.templates} templates de factures${results.skipped.length ? `. ${results.skipped.length} ignoré(s).` : ''}`
     });
   } catch (error) {
     console.error('[ChantierWorkflow] Erreur POST /seed:', error);
