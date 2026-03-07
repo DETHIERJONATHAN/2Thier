@@ -508,13 +508,18 @@ const ChantierKanban: React.FC<ChantierKanbanProps> = ({ onViewChantier, onSetti
     } catch (err: any) {
       const responseData = err?.data;
       const errorCode = responseData?.code;
+      const isBillingBlock = errorCode === 'BILLING_BLOCK'
+        || err?.status === 409
+        || err?.message?.includes('Facture(s) requise(s)');
 
       // ── Blocage facturation : ouvrir le modal state-driven ──
-      if (errorCode === 'BILLING_BLOCK') {
+      if (isBillingBlock) {
+        const unpaid = responseData?.unpaidInvoices
+          || (err?.message ? [{ label: err.message.split(':').pop()?.trim() || 'Facture(s) requise(s)', type: 'UNKNOWN', percentage: null }] : []);
         setBillingBlock({
           chantierId,
           statusId,
-          unpaidInvoices: responseData?.unpaidInvoices || [],
+          unpaidInvoices: unpaid,
         });
         setDraggingFromStatusId(null);
         return;

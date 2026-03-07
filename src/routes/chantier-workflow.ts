@@ -791,14 +791,14 @@ router.post('/chantiers/:chantierId/unvalidate', authenticateToken, isAdmin, asy
 const invoiceSchema = z.object({
   type: z.enum(['ACOMPTE', 'MATERIEL', 'FIN_CHANTIER', 'RECEPTION', 'CUSTOM']).default('CUSTOM'),
   label: z.string().min(1),
-  amount: z.number().min(0),
-  percentage: z.number().min(0).max(100).nullable().optional(),
+  amount: z.preprocess((v) => (v === null || v === undefined || v === '') ? 0 : Number(v), z.number().min(0)),
+  percentage: z.preprocess((v) => (v === null || v === undefined || v === '') ? null : Number(v), z.number().min(0).max(100).nullable().optional()),
   status: z.enum(['DRAFT', 'SENT', 'PAID', 'OVERDUE', 'CANCELLED']).default('DRAFT'),
-  dueDate: z.string().optional(),
-  documentUrl: z.string().optional(),
-  invoiceNumber: z.string().optional(),
-  notes: z.string().optional(),
-  order: z.number().int().min(0).default(0),
+  dueDate: z.string().nullable().optional(),
+  documentUrl: z.string().nullable().optional(),
+  invoiceNumber: z.string().nullable().optional(),
+  notes: z.string().nullable().optional(),
+  order: z.preprocess((v) => (v === null || v === undefined) ? 0 : Number(v), z.number().int().min(0)),
 });
 
 /**
