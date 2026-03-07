@@ -1062,6 +1062,7 @@ model Organization {
   ChantierStatus             ChantierStatus[]
   ChantierStatusTransition   ChantierStatusTransition[]
   ChantierInvoiceTemplate    ChantierInvoiceTemplate[]
+  ChantierBillingPlanItem    ChantierBillingPlanItem[]
   ChantierInvoice            ChantierInvoice[]
   Module                     Module[]
   Notification               Notification[]
@@ -2206,6 +2207,7 @@ model User {
   ChantierResponsable                                 Chantier[]                               @relation("ChantierResponsable")
   ChantierCommercial                                  Chantier[]                               @relation("ChantierCommercial")
   ChantierEventValidations                            ChantierEvent[]                          @relation("ChantierEventValidator")
+  ChantierValidations                                 Chantier[]                               @relation("ChantierValidator")
   ChantierHistoryEntries                              ChantierHistory[]                        @relation("ChantierHistoryUser")
   Notification                                        Notification[]
   MeasurementReferenceConfig                          OrganizationMeasurementReferenceConfig[] @relation("MeasurementConfigCreator")
@@ -2939,6 +2941,7 @@ model ChantierStatus {
   TransitionsFrom ChantierStatusTransition[] @relation("TransitionFrom")
   TransitionsTo   ChantierStatusTransition[] @relation("TransitionTo")
   InvoiceTemplates ChantierInvoiceTemplate[]
+  BillingPlanItems ChantierBillingPlanItem[]
 
   @@index([organizationId])
   @@index([organizationId, order])
@@ -2967,6 +2970,10 @@ model Chantier {
   documentName          String?
   uploadedById          String?
   data                  Json?
+  isValidated           Boolean            @default(false)
+  validatedAt           DateTime?
+  validatedById         String?
+  validationNotes       String?
   createdAt             DateTime           @default(now())
   updatedAt             DateTime
 
@@ -2975,11 +2982,13 @@ model Chantier {
   ChantierStatus        ChantierStatus?    @relation(fields: [statusId], references: [id], onDelete: NoAction, onUpdate: NoAction)
   Responsable           User?              @relation("ChantierResponsable", fields: [responsableId], references: [id], onDelete: NoAction, onUpdate: NoAction)
   Commercial            User?              @relation("ChantierCommercial", fields: [commercialId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  ValidatedBy           User?              @relation("ChantierValidator", fields: [validatedById], references: [id], onDelete: NoAction, onUpdate: NoAction)
   GeneratedDocument     GeneratedDocument? @relation(fields: [generatedDocumentId], references: [id], onDelete: NoAction, onUpdate: NoAction)
   TreeBranchLeafSubmission TreeBranchLeafSubmission? @relation(fields: [submissionId], references: [id], onDelete: NoAction, onUpdate: NoAction)
   ChantierInvoice        ChantierInvoice[]
   ChantierEvent          ChantierEvent[]
   ChantierHistory        ChantierHistory[]
+  ChantierBillingPlanItem ChantierBillingPlanItem[]
 
   @@index([organizationId, createdAt])
   @@index([leadId])
@@ -3085,6 +3094,30 @@ model ChantierStatusTransition {
 }
 
 // Templates de factures associés à un statut (configurables par org)
+// Plan de facturation spécifique à un chantier (copié depuis les templates puis personnalisable)
+model ChantierBillingPlanItem {
+  id             String   @id
+  chantierId     String
+  organizationId String
+  statusId       String?  // à quel statut cette facture est associée
+  type           String   @default("CUSTOM") // ACOMPTE | MATERIEL | FIN_CHANTIER | RECEPTION | CUSTOM
+  label          String
+  percentage     Float?   // ex: 30.0 pour 30%
+  fixedAmount    Float?   // montant fixe alternatif
+  isRequired     Boolean  @default(false)
+  order          Int      @default(0)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime
+
+  Chantier       Chantier        @relation(fields: [chantierId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  Organization   Organization    @relation(fields: [organizationId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  Status         ChantierStatus? @relation(fields: [statusId], references: [id], onDelete: SetNull, onUpdate: NoAction)
+
+  @@index([chantierId])
+  @@index([organizationId])
+}
+
+// Templates de facturation globaux par organisation (config admin)
 model ChantierInvoiceTemplate {
   id             String   @id
   organizationId String

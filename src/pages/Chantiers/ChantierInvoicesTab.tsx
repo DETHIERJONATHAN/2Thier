@@ -1,13 +1,16 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   Card, Button, Tag, Table, Modal, Form, Input, InputNumber, Select, DatePicker,
-  message, Empty, Typography, Space, Popconfirm, Badge, Progress, Alert,
+  message, Empty, Typography, Space, Popconfirm, Badge, Progress, Alert, Divider, Switch,
 } from 'antd';
 import {
   PlusOutlined, DeleteOutlined, EditOutlined, DollarOutlined,
   CheckCircleOutlined, SendOutlined, ThunderboltOutlined, FileAddOutlined,
+  SaveOutlined, ReloadOutlined, SafetyCertificateOutlined, MinusCircleOutlined,
 } from '@ant-design/icons';
 import { useAuthenticatedApi } from '../../hooks/useAuthenticatedApi';
+import { useAuth } from '../../auth/useAuth';
+import { useChantierStatuses } from '../../hooks/useChantierStatuses';
 import dayjs from 'dayjs';
 
 const { Text } = Typography;
@@ -38,7 +41,19 @@ interface InvoiceTemplate {
   percentage?: number | null;
   fixedAmount?: number | null;
   isRequired: boolean;
-  isActive: boolean;
+  isActive?: boolean;
+  order: number;
+  statusId?: string | null;
+  Status?: { id: string; name: string; color: string } | null;
+}
+
+interface BillingPlanItem {
+  id?: string;
+  type: string;
+  label: string;
+  percentage?: number | null;
+  fixedAmount?: number | null;
+  isRequired: boolean;
   order: number;
   statusId?: string | null;
   Status?: { id: string; name: string; color: string } | null;
@@ -47,7 +62,9 @@ interface InvoiceTemplate {
 interface Props {
   chantierId: string;
   chantierAmount?: number | null;
+  isValidated?: boolean;
   onChantierStatusChanged?: () => void;
+  onValidationChanged?: () => void;
 }
 
 const INVOICE_TYPES = [
@@ -66,12 +83,18 @@ const STATUS_LABELS: Record<string, { label: string; color: string }> = {
   CANCELLED: { label: 'Annulée', color: 'default' },
 };
 
-const ChantierInvoicesTab: React.FC<Props> = ({ chantierId, chantierAmount, onChantierStatusChanged }) => {
+const ChantierInvoicesTab: React.FC<Props> = ({ chantierId, chantierAmount, isValidated, onChantierStatusChanged, onValidationChanged }) => {
   const apiHook = useAuthenticatedApi();
   const api = useMemo(() => apiHook.api, [apiHook.api]);
+  const { isSuperAdmin, userRole } = useAuth();
+  const isAdminOrAbove = isSuperAdmin || userRole === 'admin';
+  const { statuses: chantierStatuses } = useChantierStatuses();
 
   const [invoices, setInvoices] = useState<ChantierInvoice[]>([]);
-  const [templates, setTemplates] = useState<InvoiceTemplate[]>([]);
+  const [billingPlan, setBillingPlan] = useState<BillingPlanItem[]>([]);
+  const [billingSource, setBillingSource] = useState<'chantier' | 'templates'>('templates');
+  const [editingPlan, setEditingPlan] = useState(false);
+  const [savingPlan, setSavingPlan] = useState(false);
   const [loading, setLoading] = useState(true);
   const [modalVisible, setModalVisible] = useState(false);
   const [editingInvoice, setEditingInvoice] = useState<ChantierInvoice | null>(null);
@@ -89,20 +112,21 @@ const ChantierInvoicesTab: React.FC<Props> = ({ chantierId, chantierAmount, onCh
     }
   }, [api, chantierId]);
 
-  // Charger les templates de factures de l'organisation
-  const fetchTemplates = useCallback(async () => {
+  // Charger le plan de facturation (per-chantier ou templates)
+  const fetchBillingPlan = useCallback(async () => {
     try {
-      const res = await api.get('/api/chantier-workflow/invoice-templates');
-      setTemplates((res.data || []).filter((t: InvoiceTemplate) => t.isActive));
+      const res = await api.get(`/api/chantier-workflow/chantiers/${chantierId}/billing-plan`) as any;
+      setBillingPlan(res.data || []);
+      setBillingSource(res.source || 'templates');
     } catch {
       // non bloquant
     }
-  }, [api]);
+  }, [api, chantierId]);
 
   useEffect(() => {
     fetchInvoices();
-    fetchTemplates();
-  }, [fetchInvoices, fetchTemplates]);
+    fetchBillingPlan();
+  }, [fetchInvoices, fetchBillingPlan]);
 
   const handleOpenModal = useCallback((invoice?: ChantierInvoice) => {
     if (invoice) {
@@ -176,9 +200,8 @@ const ChantierInvoicesTab: React.FC<Props> = ({ chantierId, chantierAmount, onCh
     }
   }, [form, chantierAmount]);
 
-  // Créer une facture depuis un template
-  const handleCreateFromTemplate = useCallback(async (tpl: InvoiceTemplate) => {
-    // Vérifier si cette facture existe déjà
+  // Créer une facture depuis un item du plan
+  const handleCreateFromTemplate = useCallback(async (tpl: BillingPlanItem | InvoiceTemplate) => {
     const alreadyExists = invoices.some(inv => inv.type === tpl.type && inv.label === tpl.label);
     if (alreadyExists) {
       message.warning(`La facture "${tpl.label}" existe déjà pour ce chantier`);
@@ -204,10 +227,10 @@ const ChantierInvoicesTab: React.FC<Props> = ({ chantierId, chantierAmount, onCh
     }
   }, [api, chantierId, chantierAmount, invoices, fetchInvoices]);
 
-  // Créer TOUTES les factures manquantes depuis les templates
+  // Créer TOUTES les factures manquantes depuis le billing plan
   const handleCreateAllFromTemplates = useCallback(async () => {
     let created = 0;
-    for (const tpl of templates) {
+    for (const tpl of billingPlan) {
       const alreadyExists = invoices.some(inv => inv.type === tpl.type && inv.label === tpl.label);
       if (alreadyExists) continue;
 
@@ -235,7 +258,82 @@ const ChantierInvoicesTab: React.FC<Props> = ({ chantierId, chantierAmount, onCh
     } else {
       message.info('Toutes les factures du plan existent déjà');
     }
-  }, [api, chantierId, chantierAmount, templates, invoices, fetchInvoices]);
+  }, [api, chantierId, chantierAmount, billingPlan, invoices, fetchInvoices]);
+
+  // ── Plan de facturation — édition ──
+
+  const totalPercentage = useMemo(() => billingPlan.reduce((sum, item) => sum + (item.percentage || 0), 0), [billingPlan]);
+
+  const handleAddPlanItem = useCallback(() => {
+    setBillingPlan(prev => [...prev, {
+      type: 'CUSTOM',
+      label: '',
+      percentage: null,
+      fixedAmount: null,
+      isRequired: false,
+      order: prev.length,
+      statusId: null,
+    }]);
+  }, []);
+
+  const handleRemovePlanItem = useCallback((index: number) => {
+    setBillingPlan(prev => prev.filter((_, i) => i !== index));
+  }, []);
+
+  const handleUpdatePlanItem = useCallback((index: number, field: string, value: any) => {
+    setBillingPlan(prev => prev.map((item, i) => i === index ? { ...item, [field]: value } : item));
+  }, []);
+
+  const handleSavePlan = useCallback(async () => {
+    // Validation
+    const emptyLabels = billingPlan.filter(item => !item.label.trim());
+    if (emptyLabels.length > 0) {
+      message.warning('Tous les labels doivent être remplis');
+      return;
+    }
+    try {
+      setSavingPlan(true);
+      await api.put(`/api/chantier-workflow/chantiers/${chantierId}/billing-plan`, { items: billingPlan });
+      message.success('Plan de facturation sauvegardé');
+      setEditingPlan(false);
+      setBillingSource('chantier');
+      fetchBillingPlan();
+    } catch (err: any) {
+      message.error(err?.data?.message || err?.message || 'Erreur sauvegarde plan');
+    } finally {
+      setSavingPlan(false);
+    }
+  }, [api, chantierId, billingPlan, fetchBillingPlan]);
+
+  const handleInitFromTemplates = useCallback(async () => {
+    try {
+      const res = await api.post(`/api/chantier-workflow/chantiers/${chantierId}/billing-plan/init`, {});
+      message.success(res.message || 'Plan initialisé depuis les templates');
+      fetchBillingPlan();
+    } catch (err: any) {
+      message.error(err?.message || 'Erreur initialisation');
+    }
+  }, [api, chantierId, fetchBillingPlan]);
+
+  const handleValidateChantier = useCallback(async () => {
+    Modal.confirm({
+      title: 'Valider ce chantier ?',
+      icon: <SafetyCertificateOutlined style={{ color: '#52c41a' }} />,
+      content: 'Le chantier sera validé et les factures pourront être auto-créées lors des changements de statut. Le plan de facturation sera verrouillé.',
+      okText: 'Valider',
+      okButtonProps: { style: { background: '#52c41a', borderColor: '#52c41a' } },
+      cancelText: 'Annuler',
+      async onOk() {
+        try {
+          await api.post(`/api/chantier-workflow/chantiers/${chantierId}/validate`, {});
+          message.success('Chantier validé !');
+          onValidationChanged?.();
+        } catch (err: any) {
+          message.error(err?.data?.message || err?.message || 'Erreur validation');
+        }
+      },
+    });
+  }, [api, chantierId, onValidationChanged]);
 
   // Statistiques
   const stats = useMemo(() => {
@@ -325,92 +423,206 @@ const ChantierInvoicesTab: React.FC<Props> = ({ chantierId, chantierAmount, onCh
 
   return (
     <div style={{ padding: '16px 0' }}>
-      {/* Plan de facturation — Templates configurés */}
-      {templates.length > 0 && (
-        <Card
-          size="small"
-          title={<span><ThunderboltOutlined /> Plan de facturation</span>}
-          style={{ marginBottom: 16, borderColor: '#d9d9d9' }}
-          extra={
-            <Button
-              size="small"
-              type="primary"
-              icon={<FileAddOutlined />}
-              onClick={handleCreateAllFromTemplates}
-            >
-              Créer toutes les factures
-            </Button>
+      {/* ── Validation admin ── */}
+      {!isValidated && isAdminOrAbove && (
+        <Alert
+          type="warning"
+          showIcon
+          icon={<SafetyCertificateOutlined />}
+          message="Chantier en attente de validation"
+          description="Vérifiez le PDF/devis, définissez le plan de facturation, puis validez le chantier pour l'injecter dans le pipeline."
+          style={{ marginBottom: 16, borderColor: '#faad14' }}
+          action={
+            billingSource === 'chantier' && billingPlan.length > 0 ? (
+              <Button type="primary" icon={<SafetyCertificateOutlined />} onClick={handleValidateChantier}
+                style={{ background: '#52c41a', borderColor: '#52c41a' }}>
+                Valider le chantier
+              </Button>
+            ) : (
+              <Button disabled>Définissez d'abord le plan de facturation</Button>
+            )
           }
-        >
-          {!chantierAmount && (
-            <Alert
-              type="warning"
-              message="Montant du devis non défini — les montants seront à 0 €. Définissez le montant dans les informations du chantier."
-              showIcon
-              style={{ marginBottom: 12 }}
-            />
-          )}
-          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-            {templates.map(tpl => {
-              const typeInfo = INVOICE_TYPES.find(t => t.value === tpl.type);
-              const alreadyExists = invoices.some(inv => inv.type === tpl.type && inv.label === tpl.label);
-              const amount = tpl.percentage && chantierAmount
-                ? Math.round((Number(chantierAmount) * tpl.percentage / 100) * 100) / 100
-                : (tpl.fixedAmount || 0);
+        />
+      )}
+      {isValidated && (
+        <Alert type="success" showIcon message="Chantier validé" style={{ marginBottom: 16 }} />
+      )}
 
-              return (
-                <Card
-                  key={tpl.id}
-                  size="small"
-                  style={{
-                    flex: '1 1 200px',
-                    maxWidth: 260,
+      {/* ── Plan de facturation per-chantier ── */}
+      <Card
+        size="small"
+        title={<span><ThunderboltOutlined /> Plan de facturation {billingSource === 'templates' && <Tag color="orange" style={{ marginLeft: 8 }}>Depuis templates — non sauvegardé</Tag>}</span>}
+        style={{ marginBottom: 16, borderColor: billingSource === 'chantier' ? '#52c41a' : '#faad14' }}
+        extra={
+          <Space>
+            {billingSource === 'templates' && isAdminOrAbove && (
+              <Button size="small" icon={<ReloadOutlined />} onClick={handleInitFromTemplates}>
+                Initialiser depuis templates
+              </Button>
+            )}
+            {isAdminOrAbove && !editingPlan && (
+              <Button size="small" type="dashed" icon={<EditOutlined />} onClick={() => setEditingPlan(true)}>
+                Modifier le plan
+              </Button>
+            )}
+            {editingPlan && (
+              <>
+                <Button size="small" onClick={() => { setEditingPlan(false); fetchBillingPlan(); }}>Annuler</Button>
+                <Button size="small" type="primary" icon={<SaveOutlined />} loading={savingPlan} onClick={handleSavePlan}>
+                  Sauvegarder
+                </Button>
+              </>
+            )}
+            {!editingPlan && billingPlan.length > 0 && (
+              <Button size="small" type="primary" icon={<FileAddOutlined />} onClick={handleCreateAllFromTemplates}>
+                Créer toutes les factures
+              </Button>
+            )}
+          </Space>
+        }
+      >
+        {!chantierAmount && (
+          <Alert type="warning" message="Montant du devis non défini — les montants seront à 0 €" showIcon style={{ marginBottom: 12 }} />
+        )}
+
+        {billingPlan.length === 0 && !editingPlan ? (
+          <Empty description="Aucun plan de facturation défini">
+            {isAdminOrAbove && (
+              <Space>
+                <Button type="primary" icon={<ReloadOutlined />} onClick={handleInitFromTemplates}>
+                  Initialiser depuis les templates par défaut
+                </Button>
+                <Button icon={<PlusOutlined />} onClick={() => { setEditingPlan(true); handleAddPlanItem(); }}>
+                  Créer un plan personnalisé
+                </Button>
+              </Space>
+            )}
+          </Empty>
+        ) : editingPlan ? (
+          /* Mode édition du plan */
+          <div>
+            {billingPlan.map((item, index) => (
+              <div key={index} style={{
+                display: 'flex', gap: 8, alignItems: 'center', marginBottom: 8,
+                padding: '8px 12px', background: '#fafafa', borderRadius: 6, border: '1px solid #f0f0f0',
+              }}>
+                <Select
+                  size="small" style={{ width: 140 }}
+                  value={item.type}
+                  onChange={val => handleUpdatePlanItem(index, 'type', val)}
+                  options={INVOICE_TYPES.map(t => ({ value: t.value, label: t.label }))}
+                />
+                <Input
+                  size="small" style={{ flex: 1 }}
+                  value={item.label}
+                  onChange={e => handleUpdatePlanItem(index, 'label', e.target.value)}
+                  placeholder="Label facture"
+                />
+                <InputNumber
+                  size="small" style={{ width: 80 }}
+                  value={item.percentage} min={0} max={100} suffix="%"
+                  onChange={val => handleUpdatePlanItem(index, 'percentage', val)}
+                  placeholder="%"
+                />
+                <InputNumber
+                  size="small" style={{ width: 100 }}
+                  value={item.fixedAmount} min={0} suffix="€"
+                  onChange={val => handleUpdatePlanItem(index, 'fixedAmount', val)}
+                  placeholder="Fixe €"
+                />
+                <Select
+                  size="small" style={{ width: 130 }}
+                  value={item.statusId || undefined}
+                  onChange={val => handleUpdatePlanItem(index, 'statusId', val || null)}
+                  placeholder="Étape"
+                  allowClear
+                  options={(chantierStatuses || []).map(s => ({ value: s.id, label: s.name }))}
+                />
+                <Switch
+                  size="small" checked={item.isRequired}
+                  onChange={val => handleUpdatePlanItem(index, 'isRequired', val)}
+                  checkedChildren="Req" unCheckedChildren="Opt"
+                />
+                <Button size="small" danger icon={<MinusCircleOutlined />} onClick={() => handleRemovePlanItem(index)} />
+              </div>
+            ))}
+            <Button type="dashed" block icon={<PlusOutlined />} onClick={handleAddPlanItem} style={{ marginTop: 8 }}>
+              Ajouter une ligne
+            </Button>
+            <Divider style={{ margin: '12px 0' }} />
+            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+              <Text type={Math.abs(totalPercentage - 100) <= 0.1 ? 'success' : 'danger'} strong>
+                Total : {totalPercentage.toFixed(1)}%
+                {Math.abs(totalPercentage - 100) > 0.1 && ' (doit être 100%)'}
+              </Text>
+              {chantierAmount && (
+                <Text type="secondary">
+                  = {(billingPlan.reduce((sum, item) => {
+                    const amt = item.percentage ? Math.round((Number(chantierAmount) * item.percentage / 100) * 100) / 100 : (item.fixedAmount || 0);
+                    return sum + amt;
+                  }, 0)).toLocaleString('fr-BE', { minimumFractionDigits: 2 })} €
+                </Text>
+              )}
+            </div>
+          </div>
+        ) : (
+          /* Mode lecture du plan */
+          <>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              {billingPlan.map((tpl, idx) => {
+                const typeInfo = INVOICE_TYPES.find(t => t.value === tpl.type);
+                const alreadyExists = invoices.some(inv => inv.type === tpl.type && inv.label === tpl.label);
+                const amount = tpl.percentage && chantierAmount
+                  ? Math.round((Number(chantierAmount) * tpl.percentage / 100) * 100) / 100
+                  : (tpl.fixedAmount || 0);
+
+                return (
+                  <Card key={idx} size="small" style={{
+                    flex: '1 1 200px', maxWidth: 260,
                     borderColor: alreadyExists ? '#52c41a' : '#d9d9d9',
                     background: alreadyExists ? '#f6ffed' : undefined,
                     opacity: alreadyExists ? 0.8 : 1,
-                  }}
-                >
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
-                    <Tag color={typeInfo?.color} style={{ margin: 0 }}>{typeInfo?.label || tpl.type}</Tag>
-                    {tpl.isRequired && <Tag color="red" style={{ margin: 0, fontSize: 10 }}>Obligatoire</Tag>}
-                  </div>
-                  <Text strong style={{ display: 'block', marginBottom: 2 }}>{tpl.label}</Text>
-                  <Text type="secondary" style={{ fontSize: 12 }}>
-                    {tpl.percentage ? `${tpl.percentage}%` : '—'} = {amount.toLocaleString('fr-BE', { minimumFractionDigits: 2 })} €
-                  </Text>
-                  {tpl.Status && (
-                    <div style={{ marginTop: 4 }}>
-                      <Text type="secondary" style={{ fontSize: 11 }}>Étape : </Text>
-                      <Tag color={tpl.Status.color} style={{ fontSize: 11 }}>{tpl.Status.name}</Tag>
+                  }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                      <Tag color={typeInfo?.color} style={{ margin: 0 }}>{typeInfo?.label || tpl.type}</Tag>
+                      {tpl.isRequired && <Tag color="red" style={{ margin: 0, fontSize: 10 }}>Obligatoire</Tag>}
                     </div>
-                  )}
-                  <div style={{ marginTop: 8 }}>
-                    {alreadyExists ? (
-                      <Tag color="success" icon={<CheckCircleOutlined />}>Créée</Tag>
-                    ) : (
-                      <Button size="small" type="dashed" icon={<PlusOutlined />} onClick={() => handleCreateFromTemplate(tpl)}>
-                        Créer
-                      </Button>
+                    <Text strong style={{ display: 'block', marginBottom: 2 }}>{tpl.label}</Text>
+                    <Text type="secondary" style={{ fontSize: 12 }}>
+                      {tpl.percentage ? `${tpl.percentage}%` : '—'} = {amount.toLocaleString('fr-BE', { minimumFractionDigits: 2 })} €
+                    </Text>
+                    {tpl.Status && (
+                      <div style={{ marginTop: 4 }}>
+                        <Text type="secondary" style={{ fontSize: 11 }}>Étape : </Text>
+                        <Tag color={tpl.Status.color} style={{ fontSize: 11 }}>{tpl.Status.name}</Tag>
+                      </div>
                     )}
-                  </div>
-                </Card>
-              );
-            })}
-          </div>
-          {chantierAmount && (
-            <div style={{ marginTop: 12, textAlign: 'right' }}>
-              <Text type="secondary">
-                Total plan : {templates.reduce((sum, t) => sum + (t.percentage || 0), 0)}% = {
-                  (templates.reduce((sum, t) => {
-                    const amt = t.percentage ? Math.round((Number(chantierAmount) * t.percentage / 100) * 100) / 100 : (t.fixedAmount || 0);
-                    return sum + amt;
-                  }, 0)).toLocaleString('fr-BE', { minimumFractionDigits: 2 })
-                } €
-              </Text>
+                    <div style={{ marginTop: 8 }}>
+                      {alreadyExists ? (
+                        <Tag color="success" icon={<CheckCircleOutlined />}>Créée</Tag>
+                      ) : (
+                        <Button size="small" type="dashed" icon={<PlusOutlined />} onClick={() => handleCreateFromTemplate(tpl)}>Créer</Button>
+                      )}
+                    </div>
+                  </Card>
+                );
+              })}
             </div>
-          )}
-        </Card>
-      )}
+            {chantierAmount && (
+              <div style={{ marginTop: 12, textAlign: 'right' }}>
+                <Text type="secondary">
+                  Total plan : {totalPercentage.toFixed(0)}% = {
+                    (billingPlan.reduce((sum, t) => {
+                      const amt = t.percentage ? Math.round((Number(chantierAmount) * t.percentage / 100) * 100) / 100 : (t.fixedAmount || 0);
+                      return sum + amt;
+                    }, 0)).toLocaleString('fr-BE', { minimumFractionDigits: 2 })
+                  } €
+                </Text>
+              </div>
+            )}
+          </>
+        )}
+      </Card>
 
       {/* Statistiques */}
       <div style={{ display: 'flex', gap: 16, marginBottom: 16, flexWrap: 'wrap' }}>

@@ -37,6 +37,10 @@ export interface Chantier {
   generatedDocumentId?: string | null;
   submissionId?: string | null;
   data?: Record<string, unknown> | null;
+  isValidated?: boolean;
+  validatedAt?: string | null;
+  validatedById?: string | null;
+  validationNotes?: string | null;
   createdAt: string;
   updatedAt: string;
 

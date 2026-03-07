@@ -6,6 +6,7 @@ import {
   EnvironmentOutlined,
   DollarOutlined,
   LockOutlined,
+  SafetyCertificateOutlined,
 } from '@ant-design/icons';
 import { renderProductIcon } from '../../components/TreeBranchLeaf/treebranchleaf-new/components/Parameters/capabilities/ProductFilterPanel';
 import { DndProvider, useDrag, useDrop } from 'react-dnd';
@@ -124,13 +125,14 @@ const ChantierCard: React.FC<ChantierCardProps> = ({ chantier, onView, onDragSta
     >
       <div
         style={{
-          backgroundColor: '#fff',
+          backgroundColor: chantier.isValidated ? '#fff' : '#fffbe6',
           borderRadius: 8,
           boxShadow: '0 1px 0 rgba(9,30,66,.25)',
           padding: 8,
           cursor: 'pointer',
           transition: 'background-color 0.1s ease',
           marginBottom: 6,
+          borderLeft: chantier.isValidated ? 'none' : '3px solid #faad14',
         }}
       >
         {/* Barre produit colorée */}
@@ -151,8 +153,8 @@ const ChantierCard: React.FC<ChantierCardProps> = ({ chantier, onView, onDragSta
           />
         </div>
 
-        {/* Badge produit */}
-        <div style={{ marginBottom: 4 }}>
+        {/* Badge produit + validation */}
+        <div style={{ marginBottom: 4, display: 'flex', alignItems: 'center', gap: 4 }}>
           <Tag
             color={chantier.productColor || 'purple'}
             style={{ fontSize: 11, margin: 0 }}
@@ -161,6 +163,13 @@ const ChantierCard: React.FC<ChantierCardProps> = ({ chantier, onView, onDragSta
             {chantier.productLabel}
             {chantier.customLabel && ` — ${chantier.customLabel}`}
           </Tag>
+          {!chantier.isValidated && (
+            <Tooltip title="Non validé par l'admin">
+              <Tag color="warning" style={{ fontSize: 10, margin: 0, lineHeight: '16px', padding: '0 4px' }}>
+                <SafetyCertificateOutlined style={{ fontSize: 10 }} />
+              </Tag>
+            </Tooltip>
+          )}
         </div>
 
         {/* Nom client */}

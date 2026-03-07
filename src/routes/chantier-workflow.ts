@@ -464,6 +464,274 @@ router.delete('/invoice-templates/:id', authenticateToken, isAdmin, async (req, 
 });
 
 // ═══════════════════════════════════════════════════════
+// BILLING PLAN — Plan de facturation par chantier
+// ═══════════════════════════════════════════════════════
+
+/**
+ * GET /api/chantier-workflow/chantiers/:chantierId/billing-plan
+ * Retourne le plan de facturation du chantier.
+ * Si aucun plan n'existe, retourne les templates org comme suggestion.
+ */
+router.get('/chantiers/:chantierId/billing-plan', authenticateToken, async (req, res) => {
+  try {
+    const { chantierId } = req.params;
+    const organizationId = (req as any).user.organizationId;
+
+    // 1) Charger les items du plan spécifique au chantier
+    const items = await db.chantierBillingPlanItem.findMany({
+      where: { chantierId, organizationId },
+      include: { Status: { select: { id: true, name: true, color: true } } },
+      orderBy: { order: 'asc' },
+    });
+
+    if (items.length > 0) {
+      return res.json({ success: true, data: items, source: 'chantier' });
+    }
+
+    // 2) Pas de plan personnalisé → retourner les templates org comme suggestion
+    const templates = await db.chantierInvoiceTemplate.findMany({
+      where: { organizationId, isActive: true },
+      include: { Status: { select: { id: true, name: true, color: true } } },
+      orderBy: { order: 'asc' },
+    });
+
+    res.json({ success: true, data: templates, source: 'templates' });
+  } catch (error) {
+    console.error('[BILLING-PLAN] Erreur GET:', error);
+    res.status(500).json({ success: false, message: 'Erreur interne' });
+  }
+});
+
+/**
+ * PUT /api/chantier-workflow/chantiers/:chantierId/billing-plan
+ * Sauvegarde ou met à jour le plan de facturation du chantier.
+ * Reçoit un tableau complet d'items (remplace tout).
+ */
+router.put('/chantiers/:chantierId/billing-plan', authenticateToken, isAdmin, async (req, res) => {
+  try {
+    const { chantierId } = req.params;
+    const organizationId = (req as any).user.organizationId;
+    const { items } = req.body as { items: Array<{
+      statusId?: string | null;
+      type: string;
+      label: string;
+      percentage?: number | null;
+      fixedAmount?: number | null;
+      isRequired?: boolean;
+      order?: number;
+    }> };
+
+    if (!Array.isArray(items)) {
+      return res.status(400).json({ success: false, message: 'items doit être un tableau' });
+    }
+
+    // Validation: vérifier que les % totalisent ~100% (tolérance 0.1%)
+    const totalPercentage = items.reduce((sum, it) => sum + (it.percentage || 0), 0);
+    if (totalPercentage > 0 && Math.abs(totalPercentage - 100) > 0.1) {
+      return res.status(400).json({
+        success: false,
+        message: `Le total des pourcentages doit être 100% (actuellement ${totalPercentage.toFixed(1)}%)`,
+      });
+    }
+
+    // Supprimer l'ancien plan
+    await db.chantierBillingPlanItem.deleteMany({ where: { chantierId, organizationId } });
+
+    // Créer les nouveaux items
+    const created = [];
+    for (let i = 0; i < items.length; i++) {
+      const item = items[i];
+      const record = await db.chantierBillingPlanItem.create({
+        data: {
+          id: crypto.randomUUID(),
+          chantierId,
+          organizationId,
+          statusId: item.statusId || null,
+          type: item.type || 'CUSTOM',
+          label: item.label,
+          percentage: item.percentage ?? null,
+          fixedAmount: item.fixedAmount ?? null,
+          isRequired: item.isRequired ?? false,
+          order: item.order ?? i,
+          updatedAt: new Date(),
+        },
+      });
+      created.push(record);
+    }
+
+    // Historique
+    await db.chantierHistory.create({
+      data: {
+        id: crypto.randomUUID(),
+        chantierId,
+        action: 'BILLING_PLAN_UPDATED',
+        toValue: `${items.length} lignes, total ${totalPercentage.toFixed(0)}%`,
+        userId: (req as any).user.userId,
+        updatedAt: new Date(),
+      },
+    });
+
+    res.json({ success: true, data: created });
+  } catch (error) {
+    console.error('[BILLING-PLAN] Erreur PUT:', error);
+    res.status(500).json({ success: false, message: 'Erreur interne' });
+  }
+});
+
+/**
+ * POST /api/chantier-workflow/chantiers/:chantierId/billing-plan/init
+ * Initialise le plan de facturation depuis les templates globaux de l'organisation.
+ */
+router.post('/chantiers/:chantierId/billing-plan/init', authenticateToken, isAdmin, async (req, res) => {
+  try {
+    const { chantierId } = req.params;
+    const organizationId = (req as any).user.organizationId;
+
+    // Vérifier que le chantier existe
+    const chantier = await db.chantier.findFirst({ where: { id: chantierId, organizationId } });
+    if (!chantier) return res.status(404).json({ success: false, message: 'Chantier introuvable' });
+
+    // Supprimer un éventuel plan existant
+    await db.chantierBillingPlanItem.deleteMany({ where: { chantierId, organizationId } });
+
+    // Copier les templates org actifs
+    const templates = await db.chantierInvoiceTemplate.findMany({
+      where: { organizationId, isActive: true },
+      orderBy: { order: 'asc' },
+    });
+
+    const created = [];
+    for (const tpl of templates) {
+      const record = await db.chantierBillingPlanItem.create({
+        data: {
+          id: crypto.randomUUID(),
+          chantierId,
+          organizationId,
+          statusId: tpl.statusId,
+          type: tpl.type,
+          label: tpl.label,
+          percentage: tpl.percentage,
+          fixedAmount: tpl.fixedAmount,
+          isRequired: tpl.isRequired,
+          order: tpl.order,
+          updatedAt: new Date(),
+        },
+      });
+      created.push(record);
+    }
+
+    res.json({ success: true, data: created, message: `${created.length} lignes initialisées depuis les templates` });
+  } catch (error) {
+    console.error('[BILLING-PLAN] Erreur INIT:', error);
+    res.status(500).json({ success: false, message: 'Erreur interne' });
+  }
+});
+
+// ═══════════════════════════════════════════════════════
+// VALIDATION ADMIN — Valider un chantier avant pipeline
+// ═══════════════════════════════════════════════════════
+
+/**
+ * POST /api/chantier-workflow/chantiers/:chantierId/validate
+ * Valide le chantier : vérifie que le plan de facturation est défini,
+ * marque le chantier comme validé, et l'injecte dans le pipeline.
+ */
+router.post('/chantiers/:chantierId/validate', authenticateToken, isAdmin, async (req, res) => {
+  try {
+    const { chantierId } = req.params;
+    const organizationId = (req as any).user.organizationId;
+    const userId = (req as any).user.userId;
+    const { notes } = req.body || {};
+
+    const chantier = await db.chantier.findFirst({ where: { id: chantierId, organizationId } });
+    if (!chantier) return res.status(404).json({ success: false, message: 'Chantier introuvable' });
+
+    if (chantier.isValidated) {
+      return res.status(400).json({ success: false, message: 'Ce chantier est déjà validé' });
+    }
+
+    // Vérifier qu'un plan de facturation existe
+    const planItems = await db.chantierBillingPlanItem.count({ where: { chantierId, organizationId } });
+    if (planItems === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Veuillez définir le plan de facturation avant de valider',
+      });
+    }
+
+    // Marquer comme validé
+    const updated = await db.chantier.update({
+      where: { id: chantierId },
+      data: {
+        isValidated: true,
+        validatedAt: new Date(),
+        validatedById: userId,
+        validationNotes: notes || null,
+        updatedAt: new Date(),
+      },
+    });
+
+    // Historique
+    await db.chantierHistory.create({
+      data: {
+        id: crypto.randomUUID(),
+        chantierId,
+        action: 'CHANTIER_VALIDATED',
+        toValue: notes || 'Chantier validé par admin',
+        userId,
+        updatedAt: new Date(),
+      },
+    });
+
+    res.json({ success: true, data: updated, message: 'Chantier validé avec succès' });
+  } catch (error) {
+    console.error('[VALIDATION] Erreur:', error);
+    res.status(500).json({ success: false, message: 'Erreur interne' });
+  }
+});
+
+/**
+ * POST /api/chantier-workflow/chantiers/:chantierId/unvalidate
+ * Retire la validation d'un chantier (admin only).
+ */
+router.post('/chantiers/:chantierId/unvalidate', authenticateToken, isAdmin, async (req, res) => {
+  try {
+    const { chantierId } = req.params;
+    const organizationId = (req as any).user.organizationId;
+
+    const chantier = await db.chantier.findFirst({ where: { id: chantierId, organizationId } });
+    if (!chantier) return res.status(404).json({ success: false, message: 'Chantier introuvable' });
+
+    await db.chantier.update({
+      where: { id: chantierId },
+      data: {
+        isValidated: false,
+        validatedAt: null,
+        validatedById: null,
+        validationNotes: null,
+        updatedAt: new Date(),
+      },
+    });
+
+    await db.chantierHistory.create({
+      data: {
+        id: crypto.randomUUID(),
+        chantierId,
+        action: 'CHANTIER_UNVALIDATED',
+        toValue: 'Validation retirée',
+        userId: (req as any).user.userId,
+        updatedAt: new Date(),
+      },
+    });
+
+    res.json({ success: true, message: 'Validation retirée' });
+  } catch (error) {
+    console.error('[VALIDATION] Erreur unvalidate:', error);
+    res.status(500).json({ success: false, message: 'Erreur interne' });
+  }
+});
+
+// ═══════════════════════════════════════════════════════
 // INVOICES — Factures réelles liées aux chantiers
 // ═══════════════════════════════════════════════════════
 

@@ -911,6 +911,34 @@ router.put('/:id/status', authenticateToken, async (req, res) => {
       // Si aucune transition configurée → autorise par défaut (backward compatible)
     }
 
+    // ── Bloquer si des factures requises du statut actuel ne sont pas payées ──
+    if (oldStatusId) {
+      try {
+        const requiredPlanItems = await db.chantierBillingPlanItem.findMany({
+          where: { chantierId: id, statusId: oldStatusId, isRequired: true },
+        });
+        if (requiredPlanItems.length > 0) {
+          const existingInvoices = await db.chantierInvoice.findMany({
+            where: { chantierId: id },
+            select: { type: true, label: true, status: true },
+          });
+          const unpaid = requiredPlanItems.filter(item => {
+            const invoice = existingInvoices.find(inv => inv.type === item.type && inv.label === item.label);
+            return !invoice || invoice.status !== 'PAID';
+          });
+          if (unpaid.length > 0) {
+            const labels = unpaid.map(u => u.label).join(', ');
+            return res.status(400).json({
+              success: false,
+              message: `Facture(s) requise(s) non payée(s) : ${labels}. Veuillez les marquer comme payées avant de changer de statut.`,
+            });
+          }
+        }
+      } catch (checkErr) {
+        console.error('[Chantiers] Erreur vérif factures requises (non bloquant):', checkErr);
+      }
+    }
+
     const chantier = await db.chantier.update({
       where: { id },
       data: {
@@ -961,13 +989,27 @@ router.put('/:id/status', authenticateToken, async (req, res) => {
       }
     }
 
-    // ── Auto-création des factures depuis les templates pour ce nouveau statut ──
+    // ── Auto-création des factures depuis le plan de facturation du chantier ──
     try {
-      const templates = await db.chantierInvoiceTemplate.findMany({
-        where: { organizationId, statusId, isActive: true },
+      // 1) Chercher d'abord le billing plan per-chantier
+      let planItems = await db.chantierBillingPlanItem.findMany({
+        where: { chantierId: id, statusId: statusId },
         orderBy: { order: 'asc' },
       });
-      if (templates.length > 0) {
+
+      // 2) Fallback: si pas de plan per-chantier, utiliser les templates globaux
+      if (planItems.length === 0) {
+        const templates = await db.chantierInvoiceTemplate.findMany({
+          where: { organizationId, statusId, isActive: true },
+          orderBy: { order: 'asc' },
+        });
+        planItems = templates.map(t => ({
+          ...t,
+          chantierId: id,
+        })) as any;
+      }
+
+      if (planItems.length > 0) {
         // Récupérer le montant du chantier pour calculer les pourcentages
         const chantierFull = await db.chantier.findUnique({
           where: { id },
@@ -984,7 +1026,7 @@ router.put('/:id/status', authenticateToken, async (req, res) => {
           select: { type: true, label: true },
         });
 
-        for (const tpl of templates) {
+        for (const tpl of planItems) {
           // Ne pas re-créer si une facture de même type+label existe déjà
           const alreadyExists = existingInvoices.some(
             inv => inv.type === tpl.type && inv.label === tpl.label
