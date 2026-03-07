@@ -54,11 +54,12 @@ interface DragItem {
 interface ChantierCardProps {
   chantier: Chantier;
   onView: () => void;
+  onViewCompta?: () => void;
   onDragStart?: (statusId: string) => void;
   onDragEnd?: () => void;
 }
 
-const ChantierCard: React.FC<ChantierCardProps> = ({ chantier, onView, onDragStart, onDragEnd }) => {
+const ChantierCard: React.FC<ChantierCardProps> = ({ chantier, onView, onViewCompta, onDragStart, onDragEnd }) => {
   const touchStartTime = useRef(0);
   const touchStartPos = useRef({ x: 0, y: 0 });
   const hasMoved = useRef(false);
@@ -164,8 +165,15 @@ const ChantierCard: React.FC<ChantierCardProps> = ({ chantier, onView, onDragSta
             {chantier.customLabel && ` — ${chantier.customLabel}`}
           </Tag>
           {!chantier.isValidated && (
-            <Tooltip title="Non validé par l'admin">
-              <Tag color="warning" style={{ fontSize: 10, margin: 0, lineHeight: '16px', padding: '0 4px' }}>
+            <Tooltip title="Non validé — cliquez pour valider">
+              <Tag
+                color="warning"
+                style={{ fontSize: 10, margin: 0, lineHeight: '16px', padding: '0 4px', cursor: 'pointer' }}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onViewCompta?.();
+                }}
+              >
                 <SafetyCertificateOutlined style={{ fontSize: 10 }} />
               </Tag>
             </Tooltip>
@@ -239,7 +247,7 @@ interface KanbanColumnProps {
   onDragEnd?: () => void;
 }
 
-const KanbanColumn: React.FC<KanbanColumnProps> = ({ status, chantiers, onDrop, onViewChantier, dropState = 'none', onDragStart, onDragEnd }) => {
+const KanbanColumn: React.FC<KanbanColumnProps> = ({ status, chantiers, onDrop, onViewChantier, onViewChantierCompta, dropState = 'none', onDragStart, onDragEnd }) => {
   const [{ isOver, canDrop }, drop] = useDrop({
     accept: ITEM_TYPE,
     drop: (item: DragItem) => {
@@ -365,6 +373,7 @@ const KanbanColumn: React.FC<KanbanColumnProps> = ({ status, chantiers, onDrop, 
             key={chantier.id}
             chantier={chantier}
             onView={() => onViewChantier(chantier.id)}
+            onViewCompta={() => onViewChantierCompta?.(chantier.id)}
             onDragStart={onDragStart}
             onDragEnd={onDragEnd}
           />
@@ -501,8 +510,15 @@ const ChantierKanban: React.FC<ChantierKanbanProps> = ({ onViewChantier, onSetti
     if (onViewChantier) {
       onViewChantier(chantierId);
     } else {
-      // Navigate to detail page if no handler
       window.location.hash = `#/chantiers/${chantierId}`;
+    }
+  }, [onViewChantier]);
+
+  const handleViewChantierCompta = useCallback((chantierId: string) => {
+    if (onViewChantier) {
+      onViewChantier(chantierId + '?tab=compta');
+    } else {
+      window.location.hash = `#/chantiers/${chantierId}?tab=compta`;
     }
   }, [onViewChantier]);
 
@@ -655,6 +671,7 @@ const ChantierKanban: React.FC<ChantierKanbanProps> = ({ onViewChantier, onSetti
               chantiers={chantiersByStatus[status.id] || []}
               onDrop={handleDrop}
               onViewChantier={handleViewChantier}
+              onViewChantierCompta={handleViewChantierCompta}
               dropState={getDropState(status.id)}
               onDragStart={handleCardDragStart}
               onDragEnd={handleCardDragEnd}

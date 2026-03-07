@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import {
   Card, Tabs, Descriptions, Tag, Button, Spin, Avatar, Input, message,
   Select, Empty, Typography, Space, Divider, Tooltip, Alert, Modal
@@ -40,6 +40,8 @@ const { Text, Title } = Typography;
 const ChantierDetailPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const initialTab = searchParams.get('tab') || 'info';
   const apiHook = useAuthenticatedApi();
   const api = useMemo(() => apiHook.api, [apiHook.api]);
   const { statuses: chantierStatuses } = useChantierStatuses();
@@ -338,7 +340,7 @@ const ChantierDetailPage: React.FC = () => {
       )}
 
       {/* Content Tabs */}
-      <Tabs defaultActiveKey="info" type="card">
+      <Tabs defaultActiveKey={initialTab} type="card">
         <TabPane tab={<span><FileTextOutlined /> Informations</span>} key="info">
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px', padding: '16px 0' }}>
             {/* Colonne gauche - Détails chantier */}

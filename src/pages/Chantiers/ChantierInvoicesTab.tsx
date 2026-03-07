@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import {
   Card, Button, Tag, Table, Modal, Form, Input, InputNumber, Select, DatePicker,
   message, Empty, Typography, Space, Popconfirm, Badge, Progress, Alert, Divider, Switch,
@@ -127,6 +127,25 @@ const ChantierInvoicesTab: React.FC<Props> = ({ chantierId, chantierAmount, isVa
     fetchInvoices();
     fetchBillingPlan();
   }, [fetchInvoices, fetchBillingPlan]);
+
+  // Auto-initialiser le plan depuis les templates si aucun plan per-chantier n'existe
+  const autoInitDone = useRef(false);
+  useEffect(() => {
+    if (autoInitDone.current) return;
+    if (billingSource === 'templates' && billingPlan.length > 0 && isAdminOrAbove) {
+      autoInitDone.current = true;
+      // Des templates existent mais pas encore de plan per-chantier — init automatiquement
+      const autoInit = async () => {
+        try {
+          await api.post(`/api/chantier-workflow/chantiers/${chantierId}/billing-plan/init`, {});
+          fetchBillingPlan();
+        } catch {
+          // silencieux
+        }
+      };
+      autoInit();
+    }
+  }, [billingSource, billingPlan.length, isAdminOrAbove, api, chantierId, fetchBillingPlan]);
 
   const handleOpenModal = useCallback((invoice?: ChantierInvoice) => {
     if (invoice) {
