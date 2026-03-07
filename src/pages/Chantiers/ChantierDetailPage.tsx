@@ -63,7 +63,7 @@ const ChantierDetailPage: React.FC = () => {
   const fetchUpcomingEvents = useCallback(async () => {
     if (!id) return;
     try {
-      const res = await api.get(`/api/chantier-workflow/events?chantierId=${id}`) as any;
+      const res = await api.get(`/api/chantier-workflow/chantiers/${id}/events`) as any;
       const all = res.data || res || [];
       const now = new Date();
       const upcoming = all
