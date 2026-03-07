@@ -670,6 +670,61 @@ router.post('/chantiers/:chantierId/validate', authenticateToken, isAdmin, async
       },
     });
 
+    // ── Auto-création des factures depuis le plan de facturation ──
+    const billingPlanItems = await db.chantierBillingPlanItem.findMany({
+      where: { chantierId, organizationId },
+      orderBy: { order: 'asc' },
+    });
+
+    const existingInvoices = await db.chantierInvoice.findMany({
+      where: { chantierId },
+      select: { type: true, label: true },
+    });
+
+    const chantierAmount = chantier.amount ? Number(chantier.amount) : 0;
+    let invoicesCreated = 0;
+
+    for (const item of billingPlanItems) {
+      // Ne pas créer en double
+      const alreadyExists = existingInvoices.some(inv => inv.type === item.type && inv.label === item.label);
+      if (alreadyExists) continue;
+
+      const amount = item.percentage && chantierAmount
+        ? Math.round((chantierAmount * item.percentage / 100) * 100) / 100
+        : (item.fixedAmount ? Number(item.fixedAmount) : 0);
+
+      await db.chantierInvoice.create({
+        data: {
+          id: crypto.randomUUID(),
+          chantierId,
+          organizationId,
+          type: item.type,
+          label: item.label,
+          amount,
+          percentage: item.percentage,
+          status: 'DRAFT', // Toutes en brouillon par défaut
+          order: item.order,
+          updatedAt: new Date(),
+        },
+      });
+      invoicesCreated++;
+    }
+
+    // ── Auto-envoi de la première facture (acompte) : passer en SENT ──
+    if (invoicesCreated > 0) {
+      const acompteInvoice = await db.chantierInvoice.findFirst({
+        where: { chantierId, type: 'ACOMPTE', status: 'DRAFT' },
+        orderBy: { order: 'asc' },
+      });
+      if (acompteInvoice) {
+        await db.chantierInvoice.update({
+          where: { id: acompteInvoice.id },
+          data: { status: 'SENT', sentAt: new Date(), updatedAt: new Date() },
+        });
+        console.log(`[VALIDATION] Facture acompte ${acompteInvoice.id} auto-envoyée pour chantier ${chantierId}`);
+      }
+    }
+
     // Historique
     await db.chantierHistory.create({
       data: {
@@ -681,7 +736,8 @@ router.post('/chantiers/:chantierId/validate', authenticateToken, isAdmin, async
       },
     });
 
-    res.json({ success: true, data: updated, message: 'Chantier validé avec succès' });
+    const invoiceMsg = invoicesCreated > 0 ? ` ${invoicesCreated} facture(s) créée(s) automatiquement.` : '';
+    res.json({ success: true, data: updated, message: `Chantier validé avec succès.${invoiceMsg}` });
   } catch (error) {
     console.error('[VALIDATION] Erreur:', error);
     res.status(500).json({ success: false, message: 'Erreur interne' });
@@ -1784,10 +1840,11 @@ router.post('/seed', authenticateToken, isAdmin, async (req, res) => {
     }
 
     // ─── SEED TEMPLATES FACTURES ───
-    // Associés aux statuts du pipeline actuel
+    // Le statusName = "pour quitter CE statut, cette facture doit être payée si isRequired"
+    // Pipeline: Nouveau → Visite technique → Commande → Réception commande → Planification → Fin de chantier → Réception → Terminé
     const templateDefs = [
-      { type: 'ACOMPTE', label: 'Acompte 30%', percentage: 30, statusName: 'Commande', isRequired: true, order: 0 },
-      { type: 'MATERIEL', label: 'Facture matériel', percentage: null, statusName: 'Réception commande', isRequired: false, order: 1 },
+      { type: 'ACOMPTE', label: 'Acompte 30%', percentage: 30, statusName: 'Nouveau', isRequired: true, order: 0 },
+      { type: 'MATERIEL', label: 'Facture matériel', percentage: null, statusName: 'Commande', isRequired: false, order: 1 },
       { type: 'FIN_CHANTIER', label: 'Facture fin de chantier 60%', percentage: 60, statusName: 'Fin de chantier', isRequired: true, order: 2 },
       { type: 'RECEPTION', label: 'Facture réception (solde 10%)', percentage: 10, statusName: 'Réception', isRequired: true, order: 3 },
     ];
