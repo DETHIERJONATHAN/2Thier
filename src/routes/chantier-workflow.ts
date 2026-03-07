@@ -1,0 +1,1220 @@
+import { Router } from 'express';
+import { db } from '../lib/database';
+import { authenticateToken, isAdmin } from '../middleware/auth';
+import { z } from 'zod';
+import crypto from 'crypto';
+
+const router = Router();
+
+// ═══════════════════════════════════════════════════════
+// TRANSITIONS — Règles configurables entre colonnes Kanban
+// ═══════════════════════════════════════════════════════
+
+const transitionSchema = z.object({
+  fromStatusId: z.string().min(1),
+  toStatusId: z.string().min(1),
+  triggerType: z.enum(['MANUAL', 'AUTO_INVOICE_PAID', 'AUTO_MATERIAL_RECEIVED', 'AUTO_VISIT_VALIDATED', 'AUTO_CLIENT_SIGNED', 'AUTO_DATE_REACHED']).default('MANUAL'),
+  requiredConditions: z.any().optional(),
+  allowedRoles: z.array(z.string()).optional(),
+  notifyRoles: z.array(z.string()).optional(),
+  sendEmail: z.boolean().default(false),
+  emailTemplateId: z.string().optional(),
+  label: z.string().optional(),
+  isActive: z.boolean().default(true),
+  order: z.number().int().min(0).default(0),
+});
+
+/**
+ * GET /api/chantier-workflow/transitions
+ * Liste toutes les transitions configurées pour l'organisation
+ */
+router.get('/transitions', authenticateToken, async (req, res) => {
+  try {
+    const organizationId = req.headers['x-organization-id'] as string;
+    if (!organizationId) {
+      return res.status(400).json({ success: false, message: 'ID d\'organisation requis' });
+    }
+
+    const transitions = await db.chantierStatusTransition.findMany({
+      where: { organizationId },
+      orderBy: { order: 'asc' },
+      include: {
+        FromStatus: { select: { id: true, name: true, color: true } },
+        ToStatus: { select: { id: true, name: true, color: true } },
+      }
+    });
+
+    res.json({ success: true, data: transitions });
+  } catch (error) {
+    console.error('[ChantierWorkflow] Erreur GET /transitions:', error);
+    res.status(500).json({ success: false, message: 'Erreur interne du serveur' });
+  }
+});
+
+/**
+ * POST /api/chantier-workflow/transitions
+ * Crée une nouvelle règle de transition
+ */
+router.post('/transitions', authenticateToken, isAdmin, async (req, res) => {
+  try {
+    const organizationId = req.headers['x-organization-id'] as string;
+    if (!organizationId) {
+      return res.status(400).json({ success: false, message: 'ID d\'organisation requis' });
+    }
+
+    const validation = transitionSchema.safeParse(req.body);
+    if (!validation.success) {
+      return res.status(400).json({ success: false, message: 'Données invalides', errors: validation.error.errors });
+    }
+
+    const data = validation.data;
+
+    const transition = await db.chantierStatusTransition.create({
+      data: {
+        id: crypto.randomUUID(),
+        organizationId,
+        fromStatusId: data.fromStatusId,
+        toStatusId: data.toStatusId,
+        triggerType: data.triggerType,
+        requiredConditions: data.requiredConditions || undefined,
+        allowedRoles: data.allowedRoles || undefined,
+        notifyRoles: data.notifyRoles || undefined,
+        sendEmail: data.sendEmail,
+        emailTemplateId: data.emailTemplateId,
+        label: data.label,
+        isActive: data.isActive,
+        order: data.order,
+        updatedAt: new Date(),
+      },
+      include: {
+        FromStatus: { select: { id: true, name: true, color: true } },
+        ToStatus: { select: { id: true, name: true, color: true } },
+      }
+    });
+
+    res.status(201).json({ success: true, data: transition });
+  } catch (error) {
+    console.error('[ChantierWorkflow] Erreur POST /transitions:', error);
+    res.status(500).json({ success: false, message: 'Erreur interne du serveur' });
+  }
+});
+
+/**
+ * PUT /api/chantier-workflow/transitions/:id
+ * Met à jour une règle de transition
+ */
+router.put('/transitions/:id', authenticateToken, isAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const organizationId = req.headers['x-organization-id'] as string;
+    if (!organizationId) {
+      return res.status(400).json({ success: false, message: 'ID d\'organisation requis' });
+    }
+
+    const existing = await db.chantierStatusTransition.findFirst({
+      where: { id, organizationId }
+    });
+    if (!existing) {
+      return res.status(404).json({ success: false, message: 'Transition non trouvée' });
+    }
+
+    const validation = transitionSchema.partial().safeParse(req.body);
+    if (!validation.success) {
+      return res.status(400).json({ success: false, message: 'Données invalides', errors: validation.error.errors });
+    }
+
+    const data = validation.data;
+    const transition = await db.chantierStatusTransition.update({
+      where: { id },
+      data: {
+        ...data,
+        updatedAt: new Date(),
+      },
+      include: {
+        FromStatus: { select: { id: true, name: true, color: true } },
+        ToStatus: { select: { id: true, name: true, color: true } },
+      }
+    });
+
+    res.json({ success: true, data: transition });
+  } catch (error) {
+    console.error('[ChantierWorkflow] Erreur PUT /transitions/:id:', error);
+    res.status(500).json({ success: false, message: 'Erreur interne du serveur' });
+  }
+});
+
+/**
+ * DELETE /api/chantier-workflow/transitions/:id
+ * Supprime une règle de transition
+ */
+router.delete('/transitions/:id', authenticateToken, isAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const organizationId = req.headers['x-organization-id'] as string;
+    if (!organizationId) {
+      return res.status(400).json({ success: false, message: 'ID d\'organisation requis' });
+    }
+
+    const existing = await db.chantierStatusTransition.findFirst({
+      where: { id, organizationId }
+    });
+    if (!existing) {
+      return res.status(404).json({ success: false, message: 'Transition non trouvée' });
+    }
+
+    await db.chantierStatusTransition.delete({ where: { id } });
+    res.json({ success: true, message: 'Transition supprimée' });
+  } catch (error) {
+    console.error('[ChantierWorkflow] Erreur DELETE /transitions/:id:', error);
+    res.status(500).json({ success: false, message: 'Erreur interne du serveur' });
+  }
+});
+
+/**
+ * POST /api/chantier-workflow/transitions/check
+ * Vérifie si une transition est autorisée pour le rôle de l'utilisateur
+ */
+router.post('/transitions/check', authenticateToken, async (req, res) => {
+  try {
+    const organizationId = req.headers['x-organization-id'] as string;
+    const { fromStatusId, toStatusId } = req.body;
+    const user = (req as any).user;
+    const userRole = user?.role || 'commercial';
+    const isSuperAdmin = user?.isSuperAdmin === true;
+
+    if (!organizationId || !fromStatusId || !toStatusId) {
+      return res.status(400).json({ success: false, message: 'fromStatusId et toStatusId requis' });
+    }
+
+    // SuperAdmin peut toujours tout faire
+    if (isSuperAdmin) {
+      return res.json({ success: true, data: { allowed: true, reason: 'Super Admin' } });
+    }
+
+    // Chercher toutes les transitions actives depuis ce statut vers le statut cible
+    const transitions = await db.chantierStatusTransition.findMany({
+      where: {
+        organizationId,
+        fromStatusId,
+        toStatusId,
+        isActive: true,
+      }
+    });
+
+    // Si aucune transition configurée → on autorise par défaut (backward compatible)
+    if (transitions.length === 0) {
+      return res.json({ success: true, data: { allowed: true, reason: 'Aucune restriction configurée' } });
+    }
+
+    // Vérifier si au moins une transition autorise ce rôle
+    const allowed = transitions.some(t => {
+      const roles = t.allowedRoles as string[] | null;
+      if (!roles || roles.length === 0) return true; // pas de restriction de rôles
+      return roles.includes(userRole);
+    });
+
+    res.json({
+      success: true,
+      data: {
+        allowed,
+        reason: allowed ? 'Transition autorisée' : `Rôle "${userRole}" non autorisé pour cette transition`,
+        transitions: transitions.map(t => ({
+          id: t.id,
+          triggerType: t.triggerType,
+          allowedRoles: t.allowedRoles,
+          label: t.label,
+        }))
+      }
+    });
+  } catch (error) {
+    console.error('[ChantierWorkflow] Erreur POST /transitions/check:', error);
+    res.status(500).json({ success: false, message: 'Erreur interne du serveur' });
+  }
+});
+
+// ═══════════════════════════════════════════════════════
+// INVOICE TEMPLATES — Templates de factures par organisation
+// ═══════════════════════════════════════════════════════
+
+const invoiceTemplateSchema = z.object({
+  statusId: z.string().nullable().optional(),
+  type: z.enum(['ACOMPTE', 'MATERIEL', 'FIN_CHANTIER', 'RECEPTION', 'CUSTOM']).default('CUSTOM'),
+  label: z.string().min(1, 'Le label est requis'),
+  percentage: z.number().min(0).max(100).nullable().optional(),
+  fixedAmount: z.number().min(0).nullable().optional(),
+  isRequired: z.boolean().default(false),
+  isActive: z.boolean().default(true),
+  order: z.number().int().min(0).default(0),
+});
+
+/**
+ * GET /api/chantier-workflow/invoice-templates
+ * Liste tous les templates de factures pour l'organisation
+ */
+router.get('/invoice-templates', authenticateToken, async (req, res) => {
+  try {
+    const organizationId = req.headers['x-organization-id'] as string;
+    if (!organizationId) {
+      return res.status(400).json({ success: false, message: 'ID d\'organisation requis' });
+    }
+
+    const templates = await db.chantierInvoiceTemplate.findMany({
+      where: { organizationId },
+      orderBy: { order: 'asc' },
+      include: {
+        Status: { select: { id: true, name: true, color: true } },
+      }
+    });
+
+    res.json({ success: true, data: templates });
+  } catch (error) {
+    console.error('[ChantierWorkflow] Erreur GET /invoice-templates:', error);
+    res.status(500).json({ success: false, message: 'Erreur interne du serveur' });
+  }
+});
+
+/**
+ * POST /api/chantier-workflow/invoice-templates
+ * Crée un nouveau template de facture
+ */
+router.post('/invoice-templates', authenticateToken, isAdmin, async (req, res) => {
+  try {
+    const organizationId = req.headers['x-organization-id'] as string;
+    if (!organizationId) {
+      return res.status(400).json({ success: false, message: 'ID d\'organisation requis' });
+    }
+
+    const validation = invoiceTemplateSchema.safeParse(req.body);
+    if (!validation.success) {
+      return res.status(400).json({ success: false, message: 'Données invalides', errors: validation.error.errors });
+    }
+
+    const data = validation.data;
+    const template = await db.chantierInvoiceTemplate.create({
+      data: {
+        id: crypto.randomUUID(),
+        organizationId,
+        statusId: data.statusId || null,
+        type: data.type,
+        label: data.label,
+        percentage: data.percentage ?? null,
+        fixedAmount: data.fixedAmount ?? null,
+        isRequired: data.isRequired,
+        isActive: data.isActive,
+        order: data.order,
+        updatedAt: new Date(),
+      },
+      include: {
+        Status: { select: { id: true, name: true, color: true } },
+      }
+    });
+
+    res.status(201).json({ success: true, data: template });
+  } catch (error) {
+    console.error('[ChantierWorkflow] Erreur POST /invoice-templates:', error);
+    res.status(500).json({ success: false, message: 'Erreur interne du serveur' });
+  }
+});
+
+/**
+ * PUT /api/chantier-workflow/invoice-templates/:id
+ * Met à jour un template de facture
+ */
+router.put('/invoice-templates/:id', authenticateToken, isAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const organizationId = req.headers['x-organization-id'] as string;
+    if (!organizationId) {
+      return res.status(400).json({ success: false, message: 'ID d\'organisation requis' });
+    }
+
+    const existing = await db.chantierInvoiceTemplate.findFirst({
+      where: { id, organizationId }
+    });
+    if (!existing) {
+      return res.status(404).json({ success: false, message: 'Template non trouvé' });
+    }
+
+    const validation = invoiceTemplateSchema.partial().safeParse(req.body);
+    if (!validation.success) {
+      return res.status(400).json({ success: false, message: 'Données invalides', errors: validation.error.errors });
+    }
+
+    const template = await db.chantierInvoiceTemplate.update({
+      where: { id },
+      data: {
+        ...validation.data,
+        updatedAt: new Date(),
+      },
+      include: {
+        Status: { select: { id: true, name: true, color: true } },
+      }
+    });
+
+    res.json({ success: true, data: template });
+  } catch (error) {
+    console.error('[ChantierWorkflow] Erreur PUT /invoice-templates/:id:', error);
+    res.status(500).json({ success: false, message: 'Erreur interne du serveur' });
+  }
+});
+
+/**
+ * DELETE /api/chantier-workflow/invoice-templates/:id
+ * Supprime un template de facture
+ */
+router.delete('/invoice-templates/:id', authenticateToken, isAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const organizationId = req.headers['x-organization-id'] as string;
+    if (!organizationId) {
+      return res.status(400).json({ success: false, message: 'ID d\'organisation requis' });
+    }
+
+    const existing = await db.chantierInvoiceTemplate.findFirst({
+      where: { id, organizationId }
+    });
+    if (!existing) {
+      return res.status(404).json({ success: false, message: 'Template non trouvé' });
+    }
+
+    await db.chantierInvoiceTemplate.delete({ where: { id } });
+    res.json({ success: true, message: 'Template supprimé' });
+  } catch (error) {
+    console.error('[ChantierWorkflow] Erreur DELETE /invoice-templates/:id:', error);
+    res.status(500).json({ success: false, message: 'Erreur interne du serveur' });
+  }
+});
+
+// ═══════════════════════════════════════════════════════
+// INVOICES — Factures réelles liées aux chantiers
+// ═══════════════════════════════════════════════════════
+
+const invoiceSchema = z.object({
+  type: z.enum(['ACOMPTE', 'MATERIEL', 'FIN_CHANTIER', 'RECEPTION', 'CUSTOM']).default('CUSTOM'),
+  label: z.string().min(1),
+  amount: z.number().min(0),
+  percentage: z.number().min(0).max(100).nullable().optional(),
+  status: z.enum(['DRAFT', 'SENT', 'PAID', 'OVERDUE', 'CANCELLED']).default('DRAFT'),
+  dueDate: z.string().optional(),
+  documentUrl: z.string().optional(),
+  invoiceNumber: z.string().optional(),
+  notes: z.string().optional(),
+  order: z.number().int().min(0).default(0),
+});
+
+/**
+ * GET /api/chantier-workflow/chantiers/:chantierId/invoices
+ * Liste toutes les factures d'un chantier
+ */
+router.get('/chantiers/:chantierId/invoices', authenticateToken, async (req, res) => {
+  try {
+    const { chantierId } = req.params;
+    const organizationId = req.headers['x-organization-id'] as string;
+    if (!organizationId) {
+      return res.status(400).json({ success: false, message: 'ID d\'organisation requis' });
+    }
+
+    // Vérifier accès au chantier
+    const chantier = await db.chantier.findFirst({
+      where: { id: chantierId, organizationId }
+    });
+    if (!chantier) {
+      return res.status(404).json({ success: false, message: 'Chantier non trouvé' });
+    }
+
+    const invoices = await db.chantierInvoice.findMany({
+      where: { chantierId },
+      orderBy: { order: 'asc' },
+    });
+
+    res.json({ success: true, data: invoices });
+  } catch (error) {
+    console.error('[ChantierWorkflow] Erreur GET /chantiers/:id/invoices:', error);
+    res.status(500).json({ success: false, message: 'Erreur interne du serveur' });
+  }
+});
+
+/**
+ * POST /api/chantier-workflow/chantiers/:chantierId/invoices
+ * Crée une facture pour un chantier
+ */
+router.post('/chantiers/:chantierId/invoices', authenticateToken, isAdmin, async (req, res) => {
+  try {
+    const { chantierId } = req.params;
+    const organizationId = req.headers['x-organization-id'] as string;
+    const user = (req as any).user;
+
+    if (!organizationId) {
+      return res.status(400).json({ success: false, message: 'ID d\'organisation requis' });
+    }
+
+    const chantier = await db.chantier.findFirst({
+      where: { id: chantierId, organizationId }
+    });
+    if (!chantier) {
+      return res.status(404).json({ success: false, message: 'Chantier non trouvé' });
+    }
+
+    const validation = invoiceSchema.safeParse(req.body);
+    if (!validation.success) {
+      return res.status(400).json({ success: false, message: 'Données invalides', errors: validation.error.errors });
+    }
+
+    const data = validation.data;
+    const invoice = await db.chantierInvoice.create({
+      data: {
+        id: crypto.randomUUID(),
+        chantierId,
+        organizationId,
+        type: data.type,
+        label: data.label,
+        amount: data.amount,
+        percentage: data.percentage ?? null,
+        status: data.status,
+        dueDate: data.dueDate ? new Date(data.dueDate) : null,
+        documentUrl: data.documentUrl,
+        invoiceNumber: data.invoiceNumber,
+        notes: data.notes,
+        order: data.order,
+        updatedAt: new Date(),
+      }
+    });
+
+    // Historique
+    await db.chantierHistory.create({
+      data: {
+        id: crypto.randomUUID(),
+        chantierId,
+        action: 'INVOICE_CREATED',
+        toValue: `${data.type}: ${data.label} (${data.amount}€)`,
+        userId: user?.userId || user?.id,
+        data: { invoiceId: invoice.id, type: data.type, amount: data.amount },
+      }
+    });
+
+    res.status(201).json({ success: true, data: invoice });
+  } catch (error) {
+    console.error('[ChantierWorkflow] Erreur POST /chantiers/:id/invoices:', error);
+    res.status(500).json({ success: false, message: 'Erreur interne du serveur' });
+  }
+});
+
+/**
+ * PUT /api/chantier-workflow/invoices/:id
+ * Met à jour une facture
+ */
+router.put('/invoices/:id', authenticateToken, isAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const organizationId = req.headers['x-organization-id'] as string;
+    const user = (req as any).user;
+
+    if (!organizationId) {
+      return res.status(400).json({ success: false, message: 'ID d\'organisation requis' });
+    }
+
+    const existing = await db.chantierInvoice.findFirst({
+      where: { id, organizationId }
+    });
+    if (!existing) {
+      return res.status(404).json({ success: false, message: 'Facture non trouvée' });
+    }
+
+    const validation = invoiceSchema.partial().safeParse(req.body);
+    if (!validation.success) {
+      return res.status(400).json({ success: false, message: 'Données invalides', errors: validation.error.errors });
+    }
+
+    const data = validation.data;
+    const updateData: any = { ...data, updatedAt: new Date() };
+
+    // Si le statut passe à PAID, enregistrer paidAt
+    if (data.status === 'PAID' && existing.status !== 'PAID') {
+      updateData.paidAt = new Date();
+
+      // Historique
+      await db.chantierHistory.create({
+        data: {
+          id: crypto.randomUUID(),
+          chantierId: existing.chantierId,
+          action: 'INVOICE_PAID',
+          fromValue: existing.status,
+          toValue: 'PAID',
+          userId: user?.userId || user?.id,
+          data: { invoiceId: id, type: existing.type, amount: existing.amount },
+        }
+      });
+
+      // Vérifier transitions automatiques basées sur le paiement
+      await checkAutoTransitions(existing.chantierId, organizationId, 'AUTO_INVOICE_PAID', user);
+    }
+
+    // Si le statut passe à SENT, enregistrer sentAt
+    if (data.status === 'SENT' && existing.status !== 'SENT') {
+      updateData.sentAt = new Date();
+    }
+
+    if (data.dueDate) {
+      updateData.dueDate = new Date(data.dueDate);
+    }
+
+    const invoice = await db.chantierInvoice.update({
+      where: { id },
+      data: updateData,
+    });
+
+    res.json({ success: true, data: invoice });
+  } catch (error) {
+    console.error('[ChantierWorkflow] Erreur PUT /invoices/:id:', error);
+    res.status(500).json({ success: false, message: 'Erreur interne du serveur' });
+  }
+});
+
+/**
+ * DELETE /api/chantier-workflow/invoices/:id
+ * Supprime une facture
+ */
+router.delete('/invoices/:id', authenticateToken, isAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const organizationId = req.headers['x-organization-id'] as string;
+    if (!organizationId) {
+      return res.status(400).json({ success: false, message: 'ID d\'organisation requis' });
+    }
+
+    const existing = await db.chantierInvoice.findFirst({
+      where: { id, organizationId }
+    });
+    if (!existing) {
+      return res.status(404).json({ success: false, message: 'Facture non trouvée' });
+    }
+
+    await db.chantierInvoice.delete({ where: { id } });
+    res.json({ success: true, message: 'Facture supprimée' });
+  } catch (error) {
+    console.error('[ChantierWorkflow] Erreur DELETE /invoices/:id:', error);
+    res.status(500).json({ success: false, message: 'Erreur interne du serveur' });
+  }
+});
+
+// ═══════════════════════════════════════════════════════
+// EVENTS — Événements liés aux chantiers
+// ═══════════════════════════════════════════════════════
+
+const eventSchema = z.object({
+  calendarEventId: z.string().optional(),
+  type: z.enum(['VISITE_TECHNIQUE', 'CHANTIER', 'RECEPTION', 'CUSTOM']).default('CUSTOM'),
+  status: z.enum(['PLANNED', 'COMPLETED', 'CANCELLED', 'PROBLEM']).default('PLANNED'),
+  problemNote: z.string().optional(),
+  subcontractAmount: z.number().min(0).nullable().optional(),
+  notes: z.string().optional(),
+});
+
+/**
+ * GET /api/chantier-workflow/chantiers/:chantierId/events
+ * Liste tous les événements d'un chantier
+ */
+router.get('/chantiers/:chantierId/events', authenticateToken, async (req, res) => {
+  try {
+    const { chantierId } = req.params;
+    const organizationId = req.headers['x-organization-id'] as string;
+    if (!organizationId) {
+      return res.status(400).json({ success: false, message: 'ID d\'organisation requis' });
+    }
+
+    const chantier = await db.chantier.findFirst({
+      where: { id: chantierId, organizationId }
+    });
+    if (!chantier) {
+      return res.status(404).json({ success: false, message: 'Chantier non trouvé' });
+    }
+
+    const events = await db.chantierEvent.findMany({
+      where: { chantierId },
+      orderBy: { createdAt: 'asc' },
+      include: {
+        CalendarEvent: {
+          select: {
+            id: true,
+            title: true,
+            description: true,
+            startDate: true,
+            endDate: true,
+            location: true,
+          }
+        },
+        ValidatedBy: {
+          select: { id: true, firstName: true, lastName: true }
+        }
+      }
+    });
+
+    res.json({ success: true, data: events });
+  } catch (error) {
+    console.error('[ChantierWorkflow] Erreur GET /chantiers/:id/events:', error);
+    res.status(500).json({ success: false, message: 'Erreur interne du serveur' });
+  }
+});
+
+/**
+ * POST /api/chantier-workflow/chantiers/:chantierId/events
+ * Crée un événement pour un chantier
+ */
+router.post('/chantiers/:chantierId/events', authenticateToken, async (req, res) => {
+  try {
+    const { chantierId } = req.params;
+    const organizationId = req.headers['x-organization-id'] as string;
+    const user = (req as any).user;
+
+    if (!organizationId) {
+      return res.status(400).json({ success: false, message: 'ID d\'organisation requis' });
+    }
+
+    const chantier = await db.chantier.findFirst({
+      where: { id: chantierId, organizationId }
+    });
+    if (!chantier) {
+      return res.status(404).json({ success: false, message: 'Chantier non trouvé' });
+    }
+
+    const validation = eventSchema.safeParse(req.body);
+    if (!validation.success) {
+      return res.status(400).json({ success: false, message: 'Données invalides', errors: validation.error.errors });
+    }
+
+    const data = validation.data;
+    const event = await db.chantierEvent.create({
+      data: {
+        id: crypto.randomUUID(),
+        chantierId,
+        calendarEventId: data.calendarEventId,
+        type: data.type,
+        status: data.status,
+        problemNote: data.problemNote,
+        subcontractAmount: data.subcontractAmount ?? null,
+        notes: data.notes,
+        updatedAt: new Date(),
+      },
+      include: {
+        CalendarEvent: {
+          select: { id: true, title: true, startDate: true, endDate: true }
+        },
+      }
+    });
+
+    // Historique
+    await db.chantierHistory.create({
+      data: {
+        id: crypto.randomUUID(),
+        chantierId,
+        action: 'EVENT_PLANNED',
+        toValue: `${data.type}`,
+        userId: user?.userId || user?.id,
+        data: { eventId: event.id, type: data.type, calendarEventId: data.calendarEventId },
+      }
+    });
+
+    res.status(201).json({ success: true, data: event });
+  } catch (error) {
+    console.error('[ChantierWorkflow] Erreur POST /chantiers/:id/events:', error);
+    res.status(500).json({ success: false, message: 'Erreur interne du serveur' });
+  }
+});
+
+/**
+ * PUT /api/chantier-workflow/events/:id
+ * Met à jour un événement
+ */
+router.put('/events/:id', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const user = (req as any).user;
+    const organizationId = req.headers['x-organization-id'] as string;
+
+    if (!organizationId) {
+      return res.status(400).json({ success: false, message: 'ID d\'organisation requis' });
+    }
+
+    const existing = await db.chantierEvent.findFirst({
+      where: { id },
+      include: { Chantier: { select: { organizationId: true } } }
+    });
+    if (!existing || existing.Chantier.organizationId !== organizationId) {
+      return res.status(404).json({ success: false, message: 'Événement non trouvé' });
+    }
+
+    // Si sous-traitance verrouillée, empêcher modification du montant
+    if (existing.subcontractLocked && req.body.subcontractAmount !== undefined && req.body.subcontractAmount !== existing.subcontractAmount) {
+      return res.status(403).json({ success: false, message: 'Le montant de sous-traitance est verrouillé' });
+    }
+
+    const validation = eventSchema.partial().safeParse(req.body);
+    if (!validation.success) {
+      return res.status(400).json({ success: false, message: 'Données invalides', errors: validation.error.errors });
+    }
+
+    const data = validation.data;
+    const updateData: any = { ...data, updatedAt: new Date() };
+
+    // Si problème signalé → historique + notification
+    if (data.status === 'PROBLEM' && existing.status !== 'PROBLEM') {
+      await db.chantierHistory.create({
+        data: {
+          id: crypto.randomUUID(),
+          chantierId: existing.chantierId,
+          action: 'PROBLEM_REPORTED',
+          fromValue: existing.status,
+          toValue: 'PROBLEM',
+          userId: user?.userId || user?.id,
+          data: { eventId: id, problemNote: data.problemNote },
+        }
+      });
+
+      // Envoyer notifications (CRM + email) vers commercial et admin
+      await notifyProblem(existing.chantierId, organizationId, data.problemNote || 'Problème signalé', user);
+    }
+
+    // Si validé → enregistrer validation
+    if (data.status === 'COMPLETED' && existing.status !== 'COMPLETED') {
+      updateData.validatedAt = new Date();
+      updateData.validatedById = user?.userId || user?.id;
+
+      await db.chantierHistory.create({
+        data: {
+          id: crypto.randomUUID(),
+          chantierId: existing.chantierId,
+          action: 'EVENT_VALIDATED',
+          fromValue: existing.status,
+          toValue: 'COMPLETED',
+          userId: user?.userId || user?.id,
+          data: { eventId: id, type: existing.type },
+        }
+      });
+
+      // Vérifier transitions automatiques basées sur la validation visite
+      if (existing.type === 'VISITE_TECHNIQUE') {
+        await checkAutoTransitions(existing.chantierId, organizationId, 'AUTO_VISIT_VALIDATED', user);
+      }
+    }
+
+    const event = await db.chantierEvent.update({
+      where: { id },
+      data: updateData,
+      include: {
+        CalendarEvent: {
+          select: { id: true, title: true, startDate: true, endDate: true }
+        },
+        ValidatedBy: {
+          select: { id: true, firstName: true, lastName: true }
+        }
+      }
+    });
+
+    res.json({ success: true, data: event });
+  } catch (error) {
+    console.error('[ChantierWorkflow] Erreur PUT /events/:id:', error);
+    res.status(500).json({ success: false, message: 'Erreur interne du serveur' });
+  }
+});
+
+/**
+ * PUT /api/chantier-workflow/events/:id/lock-subcontract
+ * Verrouille le montant de sous-traitance
+ */
+router.put('/events/:id/lock-subcontract', authenticateToken, isAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const organizationId = req.headers['x-organization-id'] as string;
+    const user = (req as any).user;
+
+    if (!organizationId) {
+      return res.status(400).json({ success: false, message: 'ID d\'organisation requis' });
+    }
+
+    const existing = await db.chantierEvent.findFirst({
+      where: { id },
+      include: { Chantier: { select: { organizationId: true } } }
+    });
+    if (!existing || existing.Chantier.organizationId !== organizationId) {
+      return res.status(404).json({ success: false, message: 'Événement non trouvé' });
+    }
+
+    const event = await db.chantierEvent.update({
+      where: { id },
+      data: { subcontractLocked: true, updatedAt: new Date() },
+    });
+
+    // Historique
+    await db.chantierHistory.create({
+      data: {
+        id: crypto.randomUUID(),
+        chantierId: existing.chantierId,
+        action: 'SUBCONTRACT_LOCKED',
+        toValue: `${existing.subcontractAmount}€`,
+        userId: user?.userId || user?.id,
+        data: { eventId: id, amount: existing.subcontractAmount },
+      }
+    });
+
+    res.json({ success: true, data: event });
+  } catch (error) {
+    console.error('[ChantierWorkflow] Erreur PUT /events/:id/lock-subcontract:', error);
+    res.status(500).json({ success: false, message: 'Erreur interne du serveur' });
+  }
+});
+
+/**
+ * DELETE /api/chantier-workflow/events/:id
+ * Supprime un événement
+ */
+router.delete('/events/:id', authenticateToken, isAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const organizationId = req.headers['x-organization-id'] as string;
+
+    if (!organizationId) {
+      return res.status(400).json({ success: false, message: 'ID d\'organisation requis' });
+    }
+
+    const existing = await db.chantierEvent.findFirst({
+      where: { id },
+      include: { Chantier: { select: { organizationId: true } } }
+    });
+    if (!existing || existing.Chantier.organizationId !== organizationId) {
+      return res.status(404).json({ success: false, message: 'Événement non trouvé' });
+    }
+
+    await db.chantierEvent.delete({ where: { id } });
+    res.json({ success: true, message: 'Événement supprimé' });
+  } catch (error) {
+    console.error('[ChantierWorkflow] Erreur DELETE /events/:id:', error);
+    res.status(500).json({ success: false, message: 'Erreur interne du serveur' });
+  }
+});
+
+// ═══════════════════════════════════════════════════════
+// HISTORY — Historique complet d'un chantier
+// ═══════════════════════════════════════════════════════
+
+/**
+ * GET /api/chantier-workflow/chantiers/:chantierId/history
+ * Liste l'historique complet d'un chantier
+ */
+router.get('/chantiers/:chantierId/history', authenticateToken, async (req, res) => {
+  try {
+    const { chantierId } = req.params;
+    const organizationId = req.headers['x-organization-id'] as string;
+    if (!organizationId) {
+      return res.status(400).json({ success: false, message: 'ID d\'organisation requis' });
+    }
+
+    const chantier = await db.chantier.findFirst({
+      where: { id: chantierId, organizationId }
+    });
+    if (!chantier) {
+      return res.status(404).json({ success: false, message: 'Chantier non trouvé' });
+    }
+
+    const history = await db.chantierHistory.findMany({
+      where: { chantierId },
+      orderBy: { createdAt: 'desc' },
+      include: {
+        User: {
+          select: { id: true, firstName: true, lastName: true, email: true }
+        }
+      }
+    });
+
+    res.json({ success: true, data: history });
+  } catch (error) {
+    console.error('[ChantierWorkflow] Erreur GET /chantiers/:id/history:', error);
+    res.status(500).json({ success: false, message: 'Erreur interne du serveur' });
+  }
+});
+
+/**
+ * POST /api/chantier-workflow/chantiers/:chantierId/history
+ * Ajoute une entrée manuelle dans l'historique (note, commentaire)
+ */
+router.post('/chantiers/:chantierId/history', authenticateToken, async (req, res) => {
+  try {
+    const { chantierId } = req.params;
+    const organizationId = req.headers['x-organization-id'] as string;
+    const user = (req as any).user;
+
+    if (!organizationId) {
+      return res.status(400).json({ success: false, message: 'ID d\'organisation requis' });
+    }
+
+    const chantier = await db.chantier.findFirst({
+      where: { id: chantierId, organizationId }
+    });
+    if (!chantier) {
+      return res.status(404).json({ success: false, message: 'Chantier non trouvé' });
+    }
+
+    const { action, note, data: extraData } = req.body;
+    if (!action) {
+      return res.status(400).json({ success: false, message: 'Action requise' });
+    }
+
+    const entry = await db.chantierHistory.create({
+      data: {
+        id: crypto.randomUUID(),
+        chantierId,
+        action: action || 'NOTE_ADDED',
+        toValue: note || null,
+        userId: user?.userId || user?.id,
+        data: extraData || undefined,
+      },
+      include: {
+        User: {
+          select: { id: true, firstName: true, lastName: true, email: true }
+        }
+      }
+    });
+
+    res.status(201).json({ success: true, data: entry });
+  } catch (error) {
+    console.error('[ChantierWorkflow] Erreur POST /chantiers/:id/history:', error);
+    res.status(500).json({ success: false, message: 'Erreur interne du serveur' });
+  }
+});
+
+// ═══════════════════════════════════════════════════════
+// HELPERS — Fonctions utilitaires internes
+// ═══════════════════════════════════════════════════════
+
+/**
+ * Vérifie et exécute les transitions automatiques
+ * Appelé après un événement déclencheur (paiement facture, validation visite, etc.)
+ */
+async function checkAutoTransitions(
+  chantierId: string,
+  organizationId: string,
+  triggerType: string,
+  user: any
+): Promise<void> {
+  try {
+    const chantier = await db.chantier.findFirst({
+      where: { id: chantierId },
+      select: { id: true, statusId: true }
+    });
+    if (!chantier?.statusId) return;
+
+    // Trouver les transitions automatiques actives pour ce trigger
+    const transitions = await db.chantierStatusTransition.findMany({
+      where: {
+        organizationId,
+        fromStatusId: chantier.statusId,
+        triggerType,
+        isActive: true,
+      },
+      include: {
+        ToStatus: { select: { id: true, name: true } }
+      }
+    });
+
+    if (transitions.length === 0) return;
+
+    // ➤ Prendre la première transition active (order ASC)
+    const transition = transitions[0];
+
+    // Vérifier les conditions requises si définies
+    if (transition.requiredConditions) {
+      const conditions = transition.requiredConditions as any;
+
+      // Condition: toutes les factures d'un type doivent être payées
+      if (conditions.invoiceType && conditions.allPaid) {
+        const unpaidInvoices = await db.chantierInvoice.count({
+          where: {
+            chantierId,
+            type: conditions.invoiceType,
+            status: { not: 'PAID' }
+          }
+        });
+        if (unpaidInvoices > 0) return; // conditions non remplies
+      }
+
+      // Condition: toutes les factures required doivent être payées
+      if (conditions.allRequiredPaid) {
+        const templates = await db.chantierInvoiceTemplate.findMany({
+          where: { organizationId, isRequired: true }
+        });
+        const requiredTypes = templates.map(t => t.type);
+        if (requiredTypes.length > 0) {
+          const unpaid = await db.chantierInvoice.count({
+            where: {
+              chantierId,
+              type: { in: requiredTypes },
+              status: { not: 'PAID' }
+            }
+          });
+          if (unpaid > 0) return;
+        }
+      }
+    }
+
+    // Exécuter la transition
+    const oldStatusId = chantier.statusId;
+    await db.chantier.update({
+      where: { id: chantierId },
+      data: { statusId: transition.toStatusId, updatedAt: new Date() }
+    });
+
+    // Historique
+    await db.chantierHistory.create({
+      data: {
+        id: crypto.randomUUID(),
+        chantierId,
+        action: 'STATUS_CHANGED',
+        fromValue: oldStatusId,
+        toValue: transition.toStatusId,
+        userId: user?.userId || user?.id,
+        data: { triggerType, transitionId: transition.id, auto: true },
+      }
+    });
+
+    // Notifications si configurées
+    if (transition.notifyRoles) {
+      const roles = transition.notifyRoles as string[];
+      await sendTransitionNotifications(chantierId, organizationId, oldStatusId, transition.toStatusId, roles, transition.sendEmail);
+    }
+
+    console.log(`[ChantierWorkflow] Auto-transition: chantier ${chantierId} → ${transition.ToStatus.name} (trigger: ${triggerType})`);
+  } catch (error) {
+    console.error('[ChantierWorkflow] Erreur checkAutoTransitions:', error);
+  }
+}
+
+/**
+ * Envoie les notifications de transition de statut
+ */
+async function sendTransitionNotifications(
+  chantierId: string,
+  organizationId: string,
+  fromStatusId: string,
+  toStatusId: string,
+  notifyRoles: string[],
+  _sendEmail: boolean
+): Promise<void> {
+  try {
+    // Récupérer le chantier et les statuts
+    const [chantier, fromStatus, toStatus] = await Promise.all([
+      db.chantier.findFirst({ where: { id: chantierId }, select: { productLabel: true, clientName: true, customLabel: true } }),
+      db.chantierStatus.findFirst({ where: { id: fromStatusId }, select: { name: true } }),
+      db.chantierStatus.findFirst({ where: { id: toStatusId }, select: { name: true } }),
+    ]);
+
+    const chantierLabel = chantier?.customLabel || chantier?.clientName || chantier?.productLabel || 'Chantier';
+
+    // Trouver les utilisateurs avec ces rôles dans cette organisation
+    const users = await db.userOrganization.findMany({
+      where: {
+        organizationId,
+        status: 'ACTIVE',
+      },
+      include: {
+        User: { select: { id: true, email: true, firstName: true } },
+        Role: { select: { name: true } }
+      }
+    });
+
+    const targetUsers = users.filter(u => {
+      const roleName = u.Role?.name?.toLowerCase() || '';
+      return notifyRoles.some(r => roleName.includes(r.toLowerCase()));
+    });
+
+    // Créer les notifications CRM
+    for (const u of targetUsers) {
+      await db.notification.create({
+        data: {
+          id: crypto.randomUUID(),
+          userId: u.User.id,
+          organizationId,
+          type: 'CHANTIER_STATUS_CHANGED',
+          title: `Chantier "${chantierLabel}" déplacé`,
+          message: `${fromStatus?.name || '?'} → ${toStatus?.name || '?'}`,
+          data: { chantierId, fromStatusId, toStatusId },
+        }
+      });
+    }
+
+    console.log(`[ChantierWorkflow] ${targetUsers.length} notifications envoyées pour transition ${fromStatus?.name} → ${toStatus?.name}`);
+  } catch (error) {
+    console.error('[ChantierWorkflow] Erreur sendTransitionNotifications:', error);
+  }
+}
+
+/**
+ * Notifie le commercial et l'admin quand un technicien signale un problème
+ */
+async function notifyProblem(
+  chantierId: string,
+  organizationId: string,
+  problemNote: string,
+  user: any
+): Promise<void> {
+  try {
+    const chantier = await db.chantier.findFirst({
+      where: { id: chantierId },
+      select: { productLabel: true, clientName: true, customLabel: true, commercialId: true }
+    });
+
+    const chantierLabel = chantier?.customLabel || chantier?.clientName || chantier?.productLabel || 'Chantier';
+    const reporterName = `${user?.firstName || ''} ${user?.lastName || ''}`.trim() || 'Un utilisateur';
+
+    // Notifier le commercial assigné
+    if (chantier?.commercialId) {
+      await db.notification.create({
+        data: {
+          id: crypto.randomUUID(),
+          userId: chantier.commercialId,
+          organizationId,
+          type: 'CHANTIER_PROBLEM_REPORTED',
+          title: `⚠️ Problème signalé — ${chantierLabel}`,
+          message: `${reporterName}: ${problemNote}`,
+          data: { chantierId, problemNote },
+        }
+      });
+    }
+
+    // Notifier tous les admins de l'organisation
+    const admins = await db.userOrganization.findMany({
+      where: {
+        organizationId,
+        status: 'ACTIVE',
+      },
+      include: {
+        User: { select: { id: true } },
+        Role: { select: { name: true } }
+      }
+    });
+
+    const adminUsers = admins.filter(u => {
+      const role = u.Role?.name?.toLowerCase() || '';
+      return role.includes('admin') || role.includes('super');
+    });
+
+    for (const admin of adminUsers) {
+      // Ne pas dupliquer si c'est le même que le commercial
+      if (admin.User.id === chantier?.commercialId) continue;
+
+      await db.notification.create({
+        data: {
+          id: crypto.randomUUID(),
+          userId: admin.User.id,
+          organizationId,
+          type: 'CHANTIER_PROBLEM_REPORTED',
+          title: `⚠️ Problème signalé — ${chantierLabel}`,
+          message: `${reporterName}: ${problemNote}`,
+          data: { chantierId, problemNote },
+        }
+      });
+    }
+  } catch (error) {
+    console.error('[ChantierWorkflow] Erreur notifyProblem:', error);
+  }
+}
+
+export default router;

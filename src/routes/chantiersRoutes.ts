@@ -4,6 +4,7 @@ import { authenticateToken, isAdmin } from '../middleware/auth';
 import { z } from 'zod';
 import fs from 'fs';
 import path from 'path';
+import crypto from 'crypto';
 
 const router = Router();
 
@@ -847,12 +848,16 @@ router.put('/:id', authenticateToken, isAdmin, async (req, res) => {
 /**
  * PUT /api/chantiers/:id/status
  * Change le statut d'un chantier (drag & drop Kanban)
+ * Respecte les transitions configurées et les rôles autorisés
  */
 router.put('/:id/status', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
     const { statusId } = req.body;
     const organizationId = req.headers['x-organization-id'] as string;
+    const user = (req as any).user;
+    const userRole = user?.role || 'commercial';
+    const isSuperAdmin = user?.isSuperAdmin === true;
 
     if (!organizationId || !statusId) {
       return res.status(400).json({
@@ -872,6 +877,37 @@ router.put('/:id/status', authenticateToken, async (req, res) => {
       });
     }
 
+    const oldStatusId = existing.statusId;
+
+    // Vérifier les transitions configurées (sauf SuperAdmin qui bypass tout)
+    if (!isSuperAdmin && oldStatusId) {
+      const transitions = await db.chantierStatusTransition.findMany({
+        where: {
+          organizationId,
+          fromStatusId: oldStatusId,
+          toStatusId: statusId,
+          isActive: true,
+        }
+      });
+
+      // Si des transitions existent, vérifier les rôles autorisés
+      if (transitions.length > 0) {
+        const allowed = transitions.some(t => {
+          const roles = t.allowedRoles as string[] | null;
+          if (!roles || roles.length === 0) return true;
+          return roles.includes(userRole);
+        });
+
+        if (!allowed) {
+          return res.status(403).json({
+            success: false,
+            message: `Votre rôle "${userRole}" n'est pas autorisé pour cette transition`
+          });
+        }
+      }
+      // Si aucune transition configurée → autorise par défaut (backward compatible)
+    }
+
     const chantier = await db.chantier.update({
       where: { id },
       data: {
@@ -882,6 +918,69 @@ router.put('/:id/status', authenticateToken, async (req, res) => {
         ChantierStatus: true,
       }
     });
+
+    // Historique du changement de statut
+    try {
+      await db.chantierHistory.create({
+        data: {
+          id: crypto.randomUUID(),
+          chantierId: id,
+          action: 'DRAG_DROP',
+          fromValue: oldStatusId || null,
+          toValue: statusId,
+          userId: user?.userId || user?.id,
+          data: { method: 'kanban_drag_drop' },
+        }
+      });
+    } catch (histErr) {
+      console.error('[Chantiers] Erreur historique (non bloquant):', histErr);
+    }
+
+    // Envoyer les notifications configurées pour cette transition
+    if (oldStatusId) {
+      try {
+        const transitions = await db.chantierStatusTransition.findMany({
+          where: {
+            organizationId,
+            fromStatusId: oldStatusId,
+            toStatusId: statusId,
+            isActive: true,
+          }
+        });
+        for (const t of transitions) {
+          if (t.notifyRoles) {
+            const roles = t.notifyRoles as string[];
+            // Envoyer les notifications aux rôles configurés
+            const userOrgs = await db.userOrganization.findMany({
+              where: { organizationId, status: 'ACTIVE' },
+              include: {
+                User: { select: { id: true } },
+                Role: { select: { name: true } }
+              }
+            });
+            const targets = userOrgs.filter(u => {
+              const roleName = u.Role?.name?.toLowerCase() || '';
+              return roles.some(r => roleName.includes(r.toLowerCase()));
+            });
+            for (const target of targets) {
+              await db.notification.create({
+                data: {
+                  id: crypto.randomUUID(),
+                  userId: target.User.id,
+                  organizationId,
+                  type: 'CHANTIER_STATUS_CHANGED',
+                  title: `Chantier déplacé`,
+                  message: `"${chantier.customLabel || chantier.clientName || chantier.productLabel}" → ${chantier.ChantierStatus?.name}`,
+                  data: { chantierId: id, fromStatusId: oldStatusId, toStatusId: statusId },
+                }
+              });
+            }
+          }
+        }
+      } catch (notifErr) {
+        console.error('[Chantiers] Erreur notifications (non bloquant):', notifErr);
+      }
+    }
 
     res.json({
       success: true,

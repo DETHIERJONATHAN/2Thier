@@ -4,6 +4,7 @@ import {
 } from 'antd';
 import {
   PlusOutlined, DeleteOutlined, EditOutlined, ArrowLeftOutlined, HolderOutlined,
+  ThunderboltOutlined,
 } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import { useAuthenticatedApi } from '../../hooks/useAuthenticatedApi';
@@ -281,6 +282,19 @@ const ChantierSettingsPage: React.FC = () => {
             disabled={!newName.trim()}
           >
             Ajouter
+          </Button>
+        </div>
+      </Card>
+
+      {/* Lien vers les paramètres workflow */}
+      <Card size="small" style={{ marginTop: 16 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div>
+            <Text strong><ThunderboltOutlined /> Workflow & Facturation</Text>
+            <div><Text type="secondary" style={{ fontSize: 12 }}>Transitions, déclencheurs automatiques, templates de factures</Text></div>
+          </div>
+          <Button type="primary" ghost onClick={() => navigate('/chantiers/settings/workflow')}>
+            Configurer
           </Button>
         </div>
       </Card>

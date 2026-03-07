@@ -17,13 +17,17 @@ import {
   CloseOutlined,
   DownloadOutlined,
   LinkOutlined,
-  PartitionOutlined
+  PartitionOutlined,
+  DollarOutlined,
 } from '@ant-design/icons';
 import { useAuthenticatedApi } from '../../hooks/useAuthenticatedApi';
 import { useChantierStatuses } from '../../hooks/useChantierStatuses';
 import { useAuth } from '../../auth/useAuth';
 import { renderProductIcon } from '../../components/TreeBranchLeaf/treebranchleaf-new/components/Parameters/capabilities/ProductFilterPanel';
 import type { Chantier } from '../../types/chantier';
+import ChantierInvoicesTab from './ChantierInvoicesTab';
+import ChantierEventsTab from './ChantierEventsTab';
+import ChantierHistoryTab from './ChantierHistoryTab';
 
 const { TabPane } = Tabs;
 const { TextArea } = Input;
@@ -37,6 +41,7 @@ const ChantierDetailPage: React.FC = () => {
   const { chantierStatuses } = useChantierStatuses();
   const { isSuperAdmin, userRole } = useAuth();
   const isAdminOrAbove = isSuperAdmin || userRole === 'admin';
+  const canSeeCompta = isAdminOrAbove || userRole === 'comptable';
 
   const [chantier, setChantier] = useState<Chantier | null>(null);
   const [loading, setLoading] = useState(true);
@@ -100,6 +105,15 @@ const ChantierDetailPage: React.FC = () => {
       setSaving(false);
     }
   }, [api, id, editForm, fetchChantier]);
+
+  // Map des statuts pour le composant historique (doit être avant les early returns)
+  const statusesMap = useMemo(() => {
+    const map: Record<string, { name: string; color: string }> = {};
+    for (const s of (chantierStatuses || [])) {
+      map[s.id] = { name: s.name, color: s.color };
+    }
+    return map;
+  }, [chantierStatuses]);
 
   if (loading) {
     return (
@@ -611,71 +625,18 @@ const ChantierDetailPage: React.FC = () => {
         </TabPane>
 
         {isAdminOrAbove && <TabPane tab={<span><CalendarOutlined /> Historique</span>} key="history">
-          <div style={{ padding: '24px 0' }}>
-            <div style={{ borderLeft: '2px solid #f0f0f0', paddingLeft: '20px' }}>
-              {/* Création */}
-              <div style={{ position: 'relative', marginBottom: '24px' }}>
-                <div style={{
-                  position: 'absolute', left: '-27px', top: '4px',
-                  width: '12px', height: '12px', borderRadius: '50%',
-                  backgroundColor: '#52c41a', border: '2px solid #fff',
-                  boxShadow: '0 0 0 2px #52c41a'
-                }} />
-                <div>
-                  <Text strong>Chantier créé</Text>
-                  <div><Text type="secondary" style={{ fontSize: '12px' }}>
-                    {new Date(chantier.createdAt).toLocaleDateString('fr-FR', {
-                      year: 'numeric', month: 'long', day: 'numeric',
-                      hour: '2-digit', minute: '2-digit'
-                    })}
-                  </Text></div>
-                  <Text>
-                    Produit : <Tag color={chantier.productColor || '#722ed1'}>
-                      {renderProductIcon(chantier.productIcon, 14)} {chantier.productLabel}
-                    </Tag>
-                    {displayAmount && <> · Montant : <Text strong style={{ color: '#52c41a' }}>{displayAmount.toLocaleString('fr-BE', { minimumFractionDigits: 2 })} €</Text></>}
-                  </Text>
-                </div>
-              </div>
-
-              {/* Signature */}
-              {chantier.signedAt && (
-                <div style={{ position: 'relative', marginBottom: '24px' }}>
-                  <div style={{
-                    position: 'absolute', left: '-27px', top: '4px',
-                    width: '12px', height: '12px', borderRadius: '50%',
-                    backgroundColor: '#1890ff', border: '2px solid #fff',
-                    boxShadow: '0 0 0 2px #1890ff'
-                  }} />
-                  <div>
-                    <Text strong>Document signé</Text>
-                    <div><Text type="secondary" style={{ fontSize: '12px' }}>
-                      {new Date(chantier.signedAt).toLocaleDateString('fr-FR', {
-                        year: 'numeric', month: 'long', day: 'numeric',
-                        hour: '2-digit', minute: '2-digit'
-                      })}
-                    </Text></div>
-                    {chantier.documentName && <Text>Fichier : {chantier.documentName}</Text>}
-                  </div>
-                </div>
-              )}
-
-              {/* Statut actuel */}
-              <div style={{ position: 'relative' }}>
-                <div style={{
-                  position: 'absolute', left: '-27px', top: '4px',
-                  width: '12px', height: '12px', borderRadius: '50%',
-                  backgroundColor: statusColor, border: '2px solid #fff',
-                  boxShadow: `0 0 0 2px ${statusColor}`
-                }} />
-                <div>
-                  <Text strong>Statut actuel</Text>
-                  <div><Tag color={statusColor}>{statusName}</Tag></div>
-                </div>
-              </div>
-            </div>
-          </div>
+          <ChantierHistoryTab chantierId={chantier.id} statusesMap={statusesMap} />
         </TabPane>}
+
+        {/* Onglet Comptabilité — visible par admin, comptable, super_admin */}
+        {canSeeCompta && <TabPane tab={<span><DollarOutlined /> Comptabilité</span>} key="compta">
+          <ChantierInvoicesTab chantierId={chantier.id} chantierAmount={displayAmount} />
+        </TabPane>}
+
+        {/* Onglet Événements */}
+        <TabPane tab={<span><CalendarOutlined /> Événements</span>} key="events">
+          <ChantierEventsTab chantierId={chantier.id} />
+        </TabPane>
       </Tabs>
     </div>
   );

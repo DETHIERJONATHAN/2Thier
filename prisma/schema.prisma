@@ -202,10 +202,12 @@ model CalendarEvent {
   linkedLeadId        String?
   linkedClientId      String?
   linkedProjectId     String?
+  linkedChantierId    String?
   externalCalendarId  String?
   Organization        Organization?         @relation(fields: [organizationId], references: [id], onDelete: NoAction, onUpdate: NoAction)
   User                User?                 @relation(fields: [ownerId], references: [id], onDelete: NoAction, onUpdate: NoAction)
   CalendarParticipant CalendarParticipant[]
+  ChantierEvent       ChantierEvent[]
 }
 
 model CalendarParticipant {
@@ -1058,6 +1060,9 @@ model Organization {
   LeadStatus                 LeadStatus[]
   Chantier                   Chantier[]
   ChantierStatus             ChantierStatus[]
+  ChantierStatusTransition   ChantierStatusTransition[]
+  ChantierInvoiceTemplate    ChantierInvoiceTemplate[]
+  ChantierInvoice            ChantierInvoice[]
   Module                     Module[]
   Notification               Notification[]
   Order                      Order[]
@@ -2200,6 +2205,8 @@ model User {
   Lead                                                Lead[]
   ChantierResponsable                                 Chantier[]                               @relation("ChantierResponsable")
   ChantierCommercial                                  Chantier[]                               @relation("ChantierCommercial")
+  ChantierEventValidations                            ChantierEvent[]                          @relation("ChantierEventValidator")
+  ChantierHistoryEntries                              ChantierHistory[]                        @relation("ChantierHistoryUser")
   Notification                                        Notification[]
   MeasurementReferenceConfig                          OrganizationMeasurementReferenceConfig[] @relation("MeasurementConfigCreator")
   ProductDocumentsUploaded                            ProductDocument[]                        @relation("ProductDocumentsUploaded")
@@ -2898,6 +2905,11 @@ enum NotificationType {
   CALENDAR_EVENT_INVITATION
   CALENDAR_EVENT_UPDATED
   CALENDAR_EVENT_CANCELLED
+  CHANTIER_STATUS_CHANGED
+  CHANTIER_PROBLEM_REPORTED
+  CHANTIER_INVOICE_PAID
+  CHANTIER_VISIT_VALIDATED
+  CHANTIER_MATERIAL_RECEIVED
 }
 
 enum OperationSource {
@@ -2924,6 +2936,9 @@ model ChantierStatus {
   updatedAt      DateTime
   Chantier       Chantier[]
   Organization   Organization @relation(fields: [organizationId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  TransitionsFrom ChantierStatusTransition[] @relation("TransitionFrom")
+  TransitionsTo   ChantierStatusTransition[] @relation("TransitionTo")
+  InvoiceTemplates ChantierInvoiceTemplate[]
 
   @@index([organizationId])
   @@index([organizationId, order])
@@ -2962,6 +2977,9 @@ model Chantier {
   Commercial            User?              @relation("ChantierCommercial", fields: [commercialId], references: [id], onDelete: NoAction, onUpdate: NoAction)
   GeneratedDocument     GeneratedDocument? @relation(fields: [generatedDocumentId], references: [id], onDelete: NoAction, onUpdate: NoAction)
   TreeBranchLeafSubmission TreeBranchLeafSubmission? @relation(fields: [submissionId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  ChantierInvoice        ChantierInvoice[]
+  ChantierEvent          ChantierEvent[]
+  ChantierHistory        ChantierHistory[]
 
   @@index([organizationId, createdAt])
   @@index([leadId])
@@ -3032,4 +3050,132 @@ enum JoinRequestStatus {
   PENDING
   APPROVED
   REJECTED
+}
+
+// ═══════════════════════════════════════════════════════
+// CHANTIER WORKFLOW — Transitions, Factures, Événements, Historique
+// Tout est modulable et configurable par organisation
+// ═══════════════════════════════════════════════════════
+
+// Règles de transition entre colonnes du kanban (configurables par org)
+model ChantierStatusTransition {
+  id                 String   @id
+  organizationId     String
+  fromStatusId       String
+  toStatusId         String
+  triggerType        String   @default("MANUAL") // MANUAL | AUTO_INVOICE_PAID | AUTO_MATERIAL_RECEIVED | AUTO_VISIT_VALIDATED | AUTO_CLIENT_SIGNED | AUTO_DATE_REACHED
+  requiredConditions Json?    // {"invoiceType": "ACOMPTE", "allPaid": true} etc.
+  allowedRoles       Json?    // ["admin", "comptable", "super_admin"] — qui peut drag-drop
+  notifyRoles        Json?    // ["commercial", "admin"] — qui reçoit notification
+  sendEmail          Boolean  @default(false)
+  emailTemplateId    String?  // optionnel : template email à envoyer
+  label              String?  // "Passage auto après paiement acompte"
+  isActive           Boolean  @default(true)
+  order              Int      @default(0)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime
+
+  Organization       Organization    @relation(fields: [organizationId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  FromStatus         ChantierStatus  @relation("TransitionFrom", fields: [fromStatusId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  ToStatus           ChantierStatus  @relation("TransitionTo", fields: [toStatusId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([organizationId])
+  @@index([fromStatusId])
+  @@index([organizationId, triggerType])
+}
+
+// Templates de factures associés à un statut (configurables par org)
+model ChantierInvoiceTemplate {
+  id             String   @id
+  organizationId String
+  statusId       String?  // à quel statut cette facture est associée (null = global)
+  type           String   @default("CUSTOM") // ACOMPTE | MATERIEL | FIN_CHANTIER | RECEPTION | CUSTOM
+  label          String   // "Facture acompte 30%"
+  percentage     Float?   // ex: 30.0 pour 30%
+  fixedAmount    Float?   // montant fixe alternatif
+  isRequired     Boolean  @default(false) // doit être payée pour passer au statut suivant
+  isActive       Boolean  @default(true)
+  order          Int      @default(0)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime
+
+  Organization   Organization    @relation(fields: [organizationId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  Status         ChantierStatus? @relation(fields: [statusId], references: [id], onDelete: SetNull, onUpdate: NoAction)
+
+  @@index([organizationId])
+  @@index([organizationId, statusId])
+}
+
+// Factures réelles liées à un chantier
+model ChantierInvoice {
+  id                    String    @id
+  chantierId            String
+  organizationId        String
+  type                  String    @default("CUSTOM") // ACOMPTE | MATERIEL | FIN_CHANTIER | RECEPTION | CUSTOM
+  label                 String
+  amount                Float
+  percentage            Float?    // % du montant total du devis
+  status                String    @default("DRAFT") // DRAFT | SENT | PAID | OVERDUE | CANCELLED
+  dueDate               DateTime?
+  paidAt                DateTime?
+  sentAt                DateTime?
+  documentUrl           String?   // lien vers le PDF
+  generatedDocumentId   String?   // lien vers le système de documents TBL
+  invoiceNumber         String?   // numéro de facture
+  notes                 String?
+  order                 Int       @default(0)
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime
+
+  Chantier              Chantier       @relation(fields: [chantierId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  Organization          Organization   @relation(fields: [organizationId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([chantierId])
+  @@index([organizationId])
+  @@index([chantierId, status])
+  @@index([organizationId, status])
+}
+
+// Événements liés à un chantier (visites, chantier, réception) — lien vers CalendarEvent
+model ChantierEvent {
+  id               String    @id
+  chantierId       String
+  calendarEventId  String?
+  type             String    @default("CUSTOM") // VISITE_TECHNIQUE | CHANTIER | RECEPTION | CUSTOM
+  status           String    @default("PLANNED") // PLANNED | COMPLETED | CANCELLED | PROBLEM
+  problemNote      String?   // note si problème signalé par technicien
+  validatedAt      DateTime?
+  validatedById    String?   // qui a validé
+  subcontractAmount Float?   // montant sous-traitance fixé après validation
+  subcontractLocked Boolean  @default(false) // verrouillé après validation
+  notes            String?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime
+
+  Chantier         Chantier       @relation(fields: [chantierId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  CalendarEvent    CalendarEvent? @relation(fields: [calendarEventId], references: [id], onDelete: SetNull, onUpdate: NoAction)
+  ValidatedBy      User?          @relation("ChantierEventValidator", fields: [validatedById], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([chantierId])
+  @@index([calendarEventId])
+  @@index([chantierId, type])
+}
+
+// Historique complet de toutes les actions sur un chantier
+model ChantierHistory {
+  id          String   @id
+  chantierId  String
+  action      String   // STATUS_CHANGED | INVOICE_CREATED | INVOICE_PAID | EVENT_PLANNED | EVENT_VALIDATED | PROBLEM_REPORTED | NOTE_ADDED | SUBCONTRACT_LOCKED | DRAG_DROP
+  fromValue   String?  // ancienne valeur (ex: ancien statut)
+  toValue     String?  // nouvelle valeur (ex: nouveau statut)
+  userId      String?  // qui a fait l'action
+  data        Json?    // détails supplémentaires
+  createdAt   DateTime @default(now())
+
+  Chantier    Chantier @relation(fields: [chantierId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  User        User?    @relation("ChantierHistoryUser", fields: [userId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([chantierId])
+  @@index([chantierId, action])
+  @@index([chantierId, createdAt])
 }

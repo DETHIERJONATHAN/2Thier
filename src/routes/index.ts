@@ -22,6 +22,7 @@ import settingsRoutes from './settingsRoutes';
 import leadsRoutes from './leadsRoutes'; // ✅ Routes leads corrigées
 import chantiersRoutes from './chantiersRoutes'; // 🏗️ Routes chantiers
 import chantierStatusesRoutes from './chantier-statuses'; // 🏗️ Routes statuts chantiers
+import chantierWorkflowRoutes from './chantier-workflow'; // 🏗️ Routes workflow chantiers (transitions, factures, événements, historique)
 import rolesRoutes from './rolesRoutes';
 import usersRoutes from './usersRoutes';
 import adminPasswordRoutes from './adminPasswordRoutes';
@@ -182,6 +183,9 @@ apiRouter.use('/chantiers', chantiersRoutes);
 
 // Routes des statuts de chantier 🏗️
 apiRouter.use('/chantier-statuses', chantierStatusesRoutes);
+
+// Routes workflow chantier (transitions, factures, événements, historique) 🏗️
+apiRouter.use('/chantier-workflow', chantierWorkflowRoutes);
 
 
 // Routes du dashboard
