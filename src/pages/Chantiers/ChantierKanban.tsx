@@ -107,7 +107,7 @@ interface ChantierCardProps {
   onViewCompta?: () => void;
   onDragStart?: (statusId: string) => void;
   onDragEnd?: () => void;
-  onTechDrop?: (chantierId: string, userId: string, role: 'CHEF_EQUIPE' | 'TECHNICIEN') => void;
+  onTechDrop?: (chantierId: string, technicianId: string, role: 'CHEF_EQUIPE' | 'TECHNICIEN') => void;
   onTeamDrop?: (chantierId: string, teamId: string) => void;
 }
 
@@ -119,9 +119,9 @@ const ChantierCard: React.FC<ChantierCardProps> = ({ chantier, onView, onViewCom
   // Accept tech/team drops on this card
   const [{ isOverTech }, techDrop] = useDrop({
     accept: [TECH_DRAG_TYPE, TEAM_DRAG_TYPE],
-    drop: (item: { type: string; userId?: string; teamId?: string }) => {
-      if (item.type === TECH_DRAG_TYPE && item.userId) {
-        onTechDrop?.(chantier.id, item.userId, 'TECHNICIEN');
+    drop: (item: { type: string; technicianId?: string; teamId?: string }) => {
+      if (item.type === TECH_DRAG_TYPE && item.technicianId) {
+        onTechDrop?.(chantier.id, item.technicianId, 'TECHNICIEN');
       } else if (item.type === TEAM_DRAG_TYPE && item.teamId) {
         onTeamDrop?.(chantier.id, item.teamId);
       }
@@ -318,19 +318,19 @@ const ChantierCard: React.FC<ChantierCardProps> = ({ chantier, onView, onViewCom
           <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 2 }}>
             {/* Badges techniciens assignés */}
             {chantier.ChantierAssignments && chantier.ChantierAssignments.length > 0 && (
-              <Tooltip title={chantier.ChantierAssignments.map(a => `${a.role === 'CHEF_EQUIPE' ? '👑 ' : '🔧 '}${a.User.firstName || ''} ${a.User.lastName || ''}`).join('\n')}>
+              <Tooltip title={chantier.ChantierAssignments.map(a => `${a.role === 'CHEF_EQUIPE' ? '👑 ' : '🔧 '}${a.Technician.firstName || ''} ${a.Technician.lastName || ''}${a.Technician.type === 'SUBCONTRACTOR' ? ' (ST)' : ''}`).join('\n')}>
                 <Avatar.Group size={20} max={{ count: 3, style: { fontSize: 9, backgroundColor: '#722ed1' } }}>
                   {chantier.ChantierAssignments.map(a => (
                     <Avatar
                       key={a.id}
                       size={20}
                       style={{
-                        backgroundColor: a.role === 'CHEF_EQUIPE' ? '#fa8c16' : (a.Team?.color || '#722ed1'),
+                        backgroundColor: a.role === 'CHEF_EQUIPE' ? '#fa8c16' : (a.Technician.color || a.Team?.color || '#722ed1'),
                         fontSize: 9,
-                        border: a.role === 'CHEF_EQUIPE' ? '2px solid #fa8c16' : '1px solid #fff',
+                        border: a.role === 'CHEF_EQUIPE' ? '2px solid #fa8c16' : a.Technician.type === 'SUBCONTRACTOR' ? '2px dashed #8c8c8c' : '1px solid #fff',
                       }}
                     >
-                      {(a.User.firstName?.[0] || '') + (a.User.lastName?.[0] || '')}
+                      {(a.Technician.firstName?.[0] || '') + (a.Technician.lastName?.[0] || '')}
                     </Avatar>
                   ))}
                 </Avatar.Group>
@@ -368,7 +368,7 @@ interface KanbanColumnProps {
   dropState?: 'allowed' | 'blocked' | 'none';
   onDragStart?: (statusId: string) => void;
   onDragEnd?: () => void;
-  onTechDrop?: (chantierId: string, userId: string, role: 'CHEF_EQUIPE' | 'TECHNICIEN') => void;
+  onTechDrop?: (chantierId: string, technicianId: string, role: 'CHEF_EQUIPE' | 'TECHNICIEN') => void;
   onTeamDrop?: (chantierId: string, teamId: string) => void;
 }
 
@@ -530,54 +530,93 @@ interface TechnicianDragItemProps {
 const TechnicianDragItem: React.FC<TechnicianDragItemProps> = ({ technician, isSelected, onClick }) => {
   const [{ isDragging }, drag] = useDrag({
     type: TECH_DRAG_TYPE,
-    item: { type: TECH_DRAG_TYPE, userId: technician.id },
+    item: { type: TECH_DRAG_TYPE, technicianId: technician.id },
     collect: (monitor) => ({ isDragging: monitor.isDragging() }),
   });
 
   const initials = (technician.firstName?.[0] || '') + (technician.lastName?.[0] || '');
   const name = [technician.firstName, technician.lastName].filter(Boolean).join(' ') || technician.email || 'Inconnu';
+  const isSubcontractor = technician.type === 'SUBCONTRACTOR';
 
-  // Charge de travail : vert (0-2), orange (3-4), rouge (5+)
-  const loadColor = technician.chantierCount <= 2 ? '#52c41a' : technician.chantierCount <= 4 ? '#fa8c16' : '#ff4d4f';
+  // Charge de travail semaine : vert (0-2), orange (3-4), rouge (5+)
+  const wc = technician.weekChantierCount || 0;
+  const loadColor = wc <= 2 ? '#52c41a' : wc <= 4 ? '#fa8c16' : '#ff4d4f';
+
+  // Disponibilité
+  const isBusy = technician.busyToday;
+  const isUnavailable = technician.unavailableToday;
+
+  // Spécialités labels
+  const specLabels: Record<string, string> = { all: 'ALL', pc: 'PV' };
+
+  // Tooltip détaillé
+  const tooltipLines = [
+    `${name}${isSubcontractor ? ' (Sous-traitant)' : ''}`,
+    `Charge semaine: ${wc} chantier${wc > 1 ? 's' : ''}`,
+    isBusy ? '⚡ Sur chantier aujourd\'hui' : '',
+    isUnavailable ? '🚫 Indisponible aujourd\'hui' : '',
+    technician.specialties?.length ? `Spécialités: ${technician.specialties.map(s => specLabels[s] || s).join(', ')}` : '',
+    technician.weekChantiers?.length ? `Cette semaine:\n${technician.weekChantiers.map(c => `  • ${c.clientName || 'Sans nom'} (${c.status})`).join('\n')}` : '',
+  ].filter(Boolean).join('\n');
 
   return (
-    <div
-      ref={drag}
-      onClick={onClick}
-      style={{
-        display: 'flex',
-        alignItems: 'center',
-        gap: 6,
-        padding: '5px 8px',
-        borderRadius: 6,
-        border: isSelected ? '2px solid #722ed1' : '1px solid transparent',
-        background: isSelected ? '#f9f0ff' : isDragging ? '#e6f4ff' : '#fff',
-        cursor: isDragging ? 'grabbing' : 'grab',
-        opacity: isDragging ? 0.5 : 1,
-        marginBottom: 3,
-        transition: 'all 0.15s',
-        fontSize: 12,
-      }}
-    >
-      <Avatar size={24} style={{ backgroundColor: technician.teams[0]?.teamColor || '#1677ff', fontSize: 10, flexShrink: 0 }}>
-        {initials}
-      </Avatar>
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontWeight: 500, color: '#262626', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 11 }}>
-          {name}
+    <Tooltip title={<span style={{ whiteSpace: 'pre-line', fontSize: 11 }}>{tooltipLines}</span>} placement="right">
+      <div
+        ref={drag}
+        onClick={onClick}
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 6,
+          padding: '5px 8px',
+          borderRadius: 6,
+          border: isSelected ? '2px solid #722ed1' : isUnavailable ? '1px dashed #ff4d4f' : '1px solid transparent',
+          background: isUnavailable ? '#fff1f0' : isSelected ? '#f9f0ff' : isDragging ? '#e6f4ff' : '#fff',
+          cursor: isUnavailable ? 'not-allowed' : isDragging ? 'grabbing' : 'grab',
+          opacity: isDragging ? 0.5 : isUnavailable ? 0.6 : 1,
+          marginBottom: 3,
+          transition: 'all 0.15s',
+          fontSize: 12,
+        }}
+      >
+        <div style={{ position: 'relative', flexShrink: 0 }}>
+          <Avatar size={24} style={{ backgroundColor: technician.color || technician.teams?.[0]?.teamColor || '#1677ff', fontSize: 10, border: isSubcontractor ? '2px dashed #8c8c8c' : undefined }}>
+            {initials}
+          </Avatar>
+          {isBusy && !isUnavailable && (
+            <div style={{ position: 'absolute', bottom: -1, right: -1, width: 8, height: 8, borderRadius: '50%', backgroundColor: '#fa8c16', border: '1px solid #fff' }} />
+          )}
+          {isUnavailable && (
+            <div style={{ position: 'absolute', bottom: -1, right: -1, width: 8, height: 8, borderRadius: '50%', backgroundColor: '#ff4d4f', border: '1px solid #fff' }} />
+          )}
         </div>
-        {technician.teams.length > 0 && (
-          <div style={{ fontSize: 9, color: '#8c8c8c', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-            {technician.teams.map(t => t.memberRole === 'LEADER' ? `👑 ${t.teamName}` : t.teamName).join(', ')}
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 3, overflow: 'hidden' }}>
+            <span style={{ fontWeight: 500, color: '#262626', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 11 }}>
+              {name}
+            </span>
+            {isSubcontractor && <span style={{ fontSize: 8, color: '#8c8c8c', flexShrink: 0 }}>🏢</span>}
           </div>
-        )}
+          <div style={{ display: 'flex', gap: 2, flexWrap: 'wrap', marginTop: 1 }}>
+            {technician.specialties?.map(s => (
+              <span key={s} style={{ fontSize: 8, padding: '0 3px', borderRadius: 3, backgroundColor: s === 'all' ? '#e6f7ff' : '#f6ffed', color: s === 'all' ? '#1890ff' : '#52c41a', lineHeight: '14px' }}>
+                {specLabels[s] || s}
+              </span>
+            ))}
+            {technician.teams && technician.teams.length > 0 && (
+              <span style={{ fontSize: 8, color: '#8c8c8c', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {technician.teams.map(t => t.memberRole === 'LEADER' ? `👑${t.teamName}` : t.teamName).join(', ')}
+              </span>
+            )}
+          </div>
+        </div>
+        <Badge
+          count={wc}
+          showZero
+          style={{ backgroundColor: loadColor, fontSize: 9, minWidth: 18, height: 18, lineHeight: '18px' }}
+        />
       </div>
-      <Badge
-        count={technician.chantierCount}
-        showZero
-        style={{ backgroundColor: loadColor, fontSize: 9, minWidth: 18, height: 18, lineHeight: '18px' }}
-      />
-    </div>
+    </Tooltip>
   );
 };
 
@@ -631,7 +670,7 @@ const TeamDragItem: React.FC<TeamDragItemProps> = ({ team, isSelected, onClick, 
             {team.name}
           </div>
           <div style={{ fontSize: 9, color: '#8c8c8c' }}>
-            {leaders.length > 0 && <span>👑 {leaders.map(l => l.User.firstName).join(', ')} </span>}
+            {leaders.length > 0 && <span>👑 {leaders.map(l => l.Technician.firstName).join(', ')} </span>}
             {members.length > 0 && <span>🔧 {members.length}</span>}
           </div>
         </div>
@@ -659,7 +698,7 @@ const TeamDragItem: React.FC<TeamDragItemProps> = ({ team, isSelected, onClick, 
               <span style={{ cursor: 'pointer' }} onClick={() => onToggleLeader(m.id, m.role)} title={m.role === 'LEADER' ? 'Retirer chef' : 'Nommer chef'}>
                 {m.role === 'LEADER' ? '👑' : '🔧'}
               </span>
-              <span style={{ flex: 1 }}>{m.User.firstName} {m.User.lastName}</span>
+              <span style={{ flex: 1 }}>{m.Technician.firstName} {m.Technician.lastName}{m.Technician.type === 'SUBCONTRACTOR' ? ' 🏢' : ''}</span>
               <button
                 onClick={() => onRemoveMember(m.id)}
                 style={{ border: 'none', background: 'none', cursor: 'pointer', color: '#ff4d4f', fontSize: 9, padding: 0 }}
@@ -695,7 +734,7 @@ interface ChantierKanbanProps {
 const ChantierKanban: React.FC<ChantierKanbanProps> = ({ onViewChantier, onSettings }) => {
   const { chantiers, isLoading, refetch, updateChantierStatus } = useChantiers();
   const { statuses, isLoading: statusesLoading } = useChantierStatuses();
-  const { teams, technicians, isLoading: _teamsLoading, createTeam, deleteTeam, addTeamMember, removeTeamMember, updateMemberRole, assignToChantier, assignTeamToChantier, removeAssignment: _removeAssignment, refetch: _refetchTeams } = useTeams();
+  const { teams, technicians, isLoading: _teamsLoading, createTeam, deleteTeam, addTeamMember, removeTeamMember, updateMemberRole, assignToChantier, assignTeamToChantier, removeAssignment: _removeAssignment, refetch: _refetchTeams, createTechnician, updateTechnician: _updateTechnician, deleteTechnician: _deleteTechnician, syncTechnicians, addUnavailability, removeUnavailability: _removeUnavailability } = useTeams();
   const [selectedProducts, setSelectedProducts] = useState<Set<string>>(new Set());
   const [dateRange, setDateRange] = useState<[Dayjs, Dayjs] | null>(null);
   const [activePreset, setActivePreset] = useState<DatePreset | null>(null);
@@ -705,12 +744,29 @@ const ChantierKanban: React.FC<ChantierKanbanProps> = ({ onViewChantier, onSetti
 
   // Panel techniciens
   const [techPanelOpen, setTechPanelOpen] = useState(true);
-  const [selectedTechFilter, setSelectedTechFilter] = useState<string | null>(null); // userId or 'unassigned' or teamId
+  const [selectedTechFilter, setSelectedTechFilter] = useState<string | null>(null); // technicianId or 'unassigned' or team:teamId
   const [teamModalOpen, setTeamModalOpen] = useState(false);
   const [newTeamName, setNewTeamName] = useState('');
   const [newTeamColor, setNewTeamColor] = useState('#1677ff');
   const [addMemberTeamId, setAddMemberTeamId] = useState<string | null>(null);
-  const [addMemberUserId, setAddMemberUserId] = useState<string>('');
+  const [addMemberTechId, setAddMemberTechId] = useState<string>('');
+
+  // Modals technicien + indisponibilité
+  const [techFormOpen, setTechFormOpen] = useState(false);
+  const [techFormData, setTechFormData] = useState<{
+    type: 'INTERNAL' | 'SUBCONTRACTOR';
+    firstName: string;
+    lastName: string;
+    email: string;
+    phone: string;
+    company: string;
+    specialties: string[];
+    color: string;
+  }>({ type: 'INTERNAL', firstName: '', lastName: '', email: '', phone: '', company: '', specialties: [], color: '#1677ff' });
+  const [unavailModalOpen, setUnavailModalOpen] = useState(false);
+  const [unavailTechId, setUnavailTechId] = useState<string>('');
+  const [unavailData, setUnavailData] = useState<{ startDate: string; endDate: string; type: string; note: string }>({ startDate: '', endDate: '', type: 'CONGE', note: '' });
+  const [panelTab, setPanelTab] = useState<'techs' | 'teams'>('techs');
 
   // State pour le modal de blocage facturation
   const [billingBlock, setBillingBlock] = useState<{
@@ -800,7 +856,7 @@ const ChantierKanban: React.FC<ChantierKanbanProps> = ({ onViewChantier, onSetti
         const teamId = selectedTechFilter.replace('team:', '');
         result = result.filter(c => c.ChantierAssignments?.some(a => a.teamId === teamId));
       } else {
-        result = result.filter(c => c.ChantierAssignments?.some(a => a.userId === selectedTechFilter));
+        result = result.filter(c => c.ChantierAssignments?.some(a => a.technicianId === selectedTechFilter));
       }
     }
 
@@ -850,9 +906,9 @@ const ChantierKanban: React.FC<ChantierKanbanProps> = ({ onViewChantier, onSetti
   }, []);
 
   // ── Handlers assignation tech ──
-  const handleTechDrop = useCallback(async (chantierId: string, userId: string, role: 'CHEF_EQUIPE' | 'TECHNICIEN') => {
+  const handleTechDrop = useCallback(async (chantierId: string, technicianId: string, role: 'CHEF_EQUIPE' | 'TECHNICIEN') => {
     try {
-      await assignToChantier(chantierId, userId, role);
+      await assignToChantier(chantierId, technicianId, role);
       message.success('Technicien assigné !');
       refetch(); // Refresh chantiers to update badges
     } catch (err: any) {
@@ -896,16 +952,16 @@ const ChantierKanban: React.FC<ChantierKanbanProps> = ({ onViewChantier, onSetti
   }, [deleteTeam]);
 
   const handleAddMember = useCallback(async () => {
-    if (!addMemberTeamId || !addMemberUserId) return;
+    if (!addMemberTeamId || !addMemberTechId) return;
     try {
-      await addTeamMember(addMemberTeamId, addMemberUserId);
+      await addTeamMember(addMemberTeamId, addMemberTechId);
       message.success('Membre ajouté à l\'équipe');
-      setAddMemberUserId('');
+      setAddMemberTechId('');
       setAddMemberTeamId(null);
     } catch (err: any) {
       message.error(err?.message || 'Erreur ajout membre');
     }
-  }, [addTeamMember, addMemberTeamId, addMemberUserId]);
+  }, [addTeamMember, addMemberTeamId, addMemberTechId]);
 
   const handleDrop = useCallback(async (chantierId: string, statusId: string) => {
     try {
@@ -1320,7 +1376,32 @@ const ChantierKanban: React.FC<ChantierKanbanProps> = ({ onViewChantier, onSetti
               overflow: 'hidden',
             }}>
               <div style={{ overflowY: 'auto', flex: 1, padding: '8px 6px' }}>
-                {/* Section : Filtre rapide */}
+                {/* Section : Actions rapides */}
+                <div style={{ display: 'flex', gap: 4, marginBottom: 8 }}>
+                  <button
+                    onClick={async () => {
+                      try {
+                        const result = await syncTechnicians();
+                        message.success(result.message || 'Synchronisation terminée');
+                      } catch (err: any) {
+                        message.error(err?.message || 'Erreur sync');
+                      }
+                    }}
+                    style={{ flex: 1, padding: '4px 6px', borderRadius: 4, border: '1px solid #d9d9d9', background: '#fff', cursor: 'pointer', fontSize: 10, color: '#1677ff' }}
+                    title="Importer les utilisateurs de l'organisation comme techniciens"
+                  >
+                    🔄 Sync
+                  </button>
+                  <button
+                    onClick={() => { setTechFormData({ type: 'SUBCONTRACTOR', firstName: '', lastName: '', email: '', phone: '', company: '', specialties: [], color: '#8c8c8c' }); setTechFormOpen(true); }}
+                    style={{ flex: 1, padding: '4px 6px', borderRadius: 4, border: '1px dashed #8c8c8c', background: '#fff', cursor: 'pointer', fontSize: 10, color: '#8c8c8c' }}
+                    title="Ajouter un sous-traitant"
+                  >
+                    🏢 + Sous-traitant
+                  </button>
+                </div>
+
+                {/* Filtre rapide - Sans technicien */}
                 <div style={{ marginBottom: 8 }}>
                   <button
                     onClick={() => setSelectedTechFilter(selectedTechFilter === 'unassigned' ? null : 'unassigned')}
@@ -1355,46 +1436,98 @@ const ChantierKanban: React.FC<ChantierKanbanProps> = ({ onViewChantier, onSetti
                   </button>
                 </div>
 
-                {/* Section : Techniciens solo */}
-                <div style={{ fontSize: 10, fontWeight: 600, color: '#8c8c8c', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 4, padding: '0 4px' }}>
-                  👤 Techniciens ({technicians.length})
-                </div>
-                {technicians.map(tech => (
-                  <TechnicianDragItem
-                    key={tech.id}
-                    technician={tech}
-                    isSelected={selectedTechFilter === tech.id}
-                    onClick={() => setSelectedTechFilter(selectedTechFilter === tech.id ? null : tech.id)}
-                  />
-                ))}
-
-                {/* Section : Équipes */}
-                <div style={{ fontSize: 10, fontWeight: 600, color: '#8c8c8c', textTransform: 'uppercase', letterSpacing: '0.5px', marginTop: 12, marginBottom: 4, padding: '0 4px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                  <span>👥 Équipes ({teams.length})</span>
+                {/* Tabs: Techniciens / Équipes */}
+                <div style={{ display: 'flex', gap: 0, marginBottom: 8, borderBottom: '1px solid #f0f0f0' }}>
                   <button
-                    onClick={() => setTeamModalOpen(true)}
-                    style={{ border: 'none', background: 'none', cursor: 'pointer', color: '#1677ff', fontSize: 14, padding: 0, lineHeight: 1 }}
-                    title="Créer une équipe"
+                    onClick={() => setPanelTab('techs')}
+                    style={{ flex: 1, padding: '4px 0', border: 'none', borderBottom: panelTab === 'techs' ? '2px solid #722ed1' : '2px solid transparent', background: 'none', cursor: 'pointer', fontSize: 10, fontWeight: panelTab === 'techs' ? 600 : 400, color: panelTab === 'techs' ? '#722ed1' : '#8c8c8c' }}
                   >
-                    <PlusOutlined />
+                    👤 Techniciens ({technicians.length})
+                  </button>
+                  <button
+                    onClick={() => setPanelTab('teams')}
+                    style={{ flex: 1, padding: '4px 0', border: 'none', borderBottom: panelTab === 'teams' ? '2px solid #722ed1' : '2px solid transparent', background: 'none', cursor: 'pointer', fontSize: 10, fontWeight: panelTab === 'teams' ? 600 : 400, color: panelTab === 'teams' ? '#722ed1' : '#8c8c8c' }}
+                  >
+                    👥 Équipes ({teams.length})
                   </button>
                 </div>
-                {teams.map(team => (
-                  <TeamDragItem
-                    key={team.id}
-                    team={team}
-                    isSelected={selectedTechFilter === `team:${team.id}`}
-                    onClick={() => setSelectedTechFilter(selectedTechFilter === `team:${team.id}` ? null : `team:${team.id}`)}
-                    onDelete={() => handleDeleteTeam(team.id)}
-                    onAddMember={() => setAddMemberTeamId(team.id)}
-                    onToggleLeader={(memberId, currentRole) => updateMemberRole(team.id, memberId, currentRole === 'LEADER' ? 'MEMBER' : 'LEADER')}
-                    onRemoveMember={(memberId) => removeTeamMember(team.id, memberId)}
-                  />
-                ))}
-                {teams.length === 0 && (
-                  <div style={{ textAlign: 'center', color: '#bfbfbf', fontSize: 11, padding: '12px 8px' }}>
-                    Aucune équipe créée
-                  </div>
+
+                {panelTab === 'techs' && (
+                  <>
+                    {/* Internes */}
+                    {technicians.filter(t => t.type !== 'SUBCONTRACTOR').length > 0 && (
+                      <>
+                        <div style={{ fontSize: 9, fontWeight: 600, color: '#52c41a', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 3, padding: '0 4px' }}>
+                          Internes ({technicians.filter(t => t.type !== 'SUBCONTRACTOR').length})
+                        </div>
+                        {technicians.filter(t => t.type !== 'SUBCONTRACTOR').map(tech => (
+                          <TechnicianDragItem
+                            key={tech.id}
+                            technician={tech}
+                            isSelected={selectedTechFilter === tech.id}
+                            onClick={() => setSelectedTechFilter(selectedTechFilter === tech.id ? null : tech.id)}
+                          />
+                        ))}
+                      </>
+                    )}
+
+                    {/* Sous-traitants */}
+                    {technicians.filter(t => t.type === 'SUBCONTRACTOR').length > 0 && (
+                      <>
+                        <div style={{ fontSize: 9, fontWeight: 600, color: '#8c8c8c', textTransform: 'uppercase', letterSpacing: '0.5px', marginTop: 8, marginBottom: 3, padding: '0 4px' }}>
+                          🏢 Sous-traitants ({technicians.filter(t => t.type === 'SUBCONTRACTOR').length})
+                        </div>
+                        {technicians.filter(t => t.type === 'SUBCONTRACTOR').map(tech => (
+                          <TechnicianDragItem
+                            key={tech.id}
+                            technician={tech}
+                            isSelected={selectedTechFilter === tech.id}
+                            onClick={() => setSelectedTechFilter(selectedTechFilter === tech.id ? null : tech.id)}
+                          />
+                        ))}
+                      </>
+                    )}
+
+                    {technicians.length === 0 && (
+                      <div style={{ textAlign: 'center', color: '#bfbfbf', fontSize: 11, padding: '16px 8px' }}>
+                        Aucun technicien.<br />
+                        <button onClick={async () => { try { const r = await syncTechnicians(); message.success(r.message || 'Sync OK'); } catch { message.error('Erreur sync'); } }} style={{ border: 'none', background: 'none', cursor: 'pointer', color: '#1677ff', textDecoration: 'underline', fontSize: 11 }}>
+                          Synchroniser les utilisateurs
+                        </button>
+                      </div>
+                    )}
+                  </>
+                )}
+
+                {panelTab === 'teams' && (
+                  <>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', marginBottom: 4, padding: '0 4px' }}>
+                      <button
+                        onClick={() => setTeamModalOpen(true)}
+                        style={{ border: 'none', background: 'none', cursor: 'pointer', color: '#1677ff', fontSize: 12, padding: 0, lineHeight: 1 }}
+                        title="Créer une équipe"
+                      >
+                        <PlusOutlined /> Nouvelle
+                      </button>
+                    </div>
+                    {teams.map(team => (
+                      <TeamDragItem
+                        key={team.id}
+                        team={team}
+                        isSelected={selectedTechFilter === `team:${team.id}`}
+                        onClick={() => setSelectedTechFilter(selectedTechFilter === `team:${team.id}` ? null : `team:${team.id}`)}
+                        onDelete={() => handleDeleteTeam(team.id)}
+                        onAddMember={() => setAddMemberTeamId(team.id)}
+                        onToggleLeader={(memberId, currentRole) => updateMemberRole(team.id, memberId, currentRole === 'LEADER' ? 'MEMBER' : 'LEADER')}
+                        onRemoveMember={(memberId) => removeTeamMember(team.id, memberId)}
+                      />
+                    ))}
+                    {teams.length === 0 && (
+                      <div style={{ textAlign: 'center', color: '#bfbfbf', fontSize: 11, padding: '12px 8px' }}>
+                        Aucune équipe créée
+                      </div>
+                    )}
+                  </>
                 )}
               </div>
             </div>
@@ -1513,26 +1646,190 @@ const ChantierKanban: React.FC<ChantierKanbanProps> = ({ onViewChantier, onSetti
       <Modal
         open={!!addMemberTeamId}
         title={<span><PlusOutlined style={{ marginRight: 8 }} />Ajouter un membre à {teams.find(t => t.id === addMemberTeamId)?.name}</span>}
-        onCancel={() => { setAddMemberTeamId(null); setAddMemberUserId(''); }}
+        onCancel={() => { setAddMemberTeamId(null); setAddMemberTechId(''); }}
         onOk={handleAddMember}
         okText="Ajouter"
         cancelText="Annuler"
-        okButtonProps={{ disabled: !addMemberUserId }}
+        okButtonProps={{ disabled: !addMemberTechId }}
       >
         <Select
           style={{ width: '100%' }}
           placeholder="Sélectionner un technicien..."
-          value={addMemberUserId || undefined}
-          onChange={v => setAddMemberUserId(v)}
+          value={addMemberTechId || undefined}
+          onChange={v => setAddMemberTechId(v)}
           showSearch
           optionFilterProp="label"
           options={technicians
-            .filter(t => !teams.find(team => team.id === addMemberTeamId)?.Members.some(m => m.userId === t.id))
+            .filter(t => !teams.find(team => team.id === addMemberTeamId)?.Members.some(m => m.technicianId === t.id))
             .map(t => ({
               value: t.id,
-              label: `${t.firstName || ''} ${t.lastName || ''} (${t.email || ''})`,
+              label: `${t.firstName || ''} ${t.lastName || ''} ${t.type === 'SUBCONTRACTOR' ? '(ST)' : ''} (${t.email || ''})`,
             }))}
         />
+      </Modal>
+
+      {/* Modal création/édition technicien (sous-traitant) */}
+      <Modal
+        open={techFormOpen}
+        title={<span>🏢 {techFormData.type === 'SUBCONTRACTOR' ? 'Nouveau sous-traitant' : 'Nouveau technicien'}</span>}
+        onCancel={() => setTechFormOpen(false)}
+        onOk={async () => {
+          if (!techFormData.firstName.trim() || !techFormData.lastName.trim()) {
+            message.warning('Prénom et nom requis');
+            return;
+          }
+          try {
+            await createTechnician(techFormData);
+            message.success('Technicien créé !');
+            setTechFormOpen(false);
+            setTechFormData({ type: 'INTERNAL', firstName: '', lastName: '', email: '', phone: '', company: '', specialties: [], color: '#1677ff' });
+          } catch (err: any) {
+            message.error(err?.message || 'Erreur création');
+          }
+        }}
+        okText="Créer"
+        cancelText="Annuler"
+      >
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          <div>
+            <label style={{ fontSize: 12, fontWeight: 500 }}>Type</label>
+            <Select
+              style={{ width: '100%' }}
+              value={techFormData.type}
+              onChange={v => setTechFormData(d => ({ ...d, type: v }))}
+              options={[
+                { value: 'INTERNAL', label: '👤 Interne' },
+                { value: 'SUBCONTRACTOR', label: '🏢 Sous-traitant' },
+              ]}
+            />
+          </div>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <div style={{ flex: 1 }}>
+              <label style={{ fontSize: 12, fontWeight: 500 }}>Prénom</label>
+              <Input value={techFormData.firstName} onChange={e => setTechFormData(d => ({ ...d, firstName: e.target.value }))} placeholder="Prénom" />
+            </div>
+            <div style={{ flex: 1 }}>
+              <label style={{ fontSize: 12, fontWeight: 500 }}>Nom</label>
+              <Input value={techFormData.lastName} onChange={e => setTechFormData(d => ({ ...d, lastName: e.target.value }))} placeholder="Nom" />
+            </div>
+          </div>
+          {techFormData.type === 'SUBCONTRACTOR' && (
+            <div>
+              <label style={{ fontSize: 12, fontWeight: 500 }}>Entreprise</label>
+              <Input value={techFormData.company} onChange={e => setTechFormData(d => ({ ...d, company: e.target.value }))} placeholder="Nom de l'entreprise" />
+            </div>
+          )}
+          <div style={{ display: 'flex', gap: 8 }}>
+            <div style={{ flex: 1 }}>
+              <label style={{ fontSize: 12, fontWeight: 500 }}>Email</label>
+              <Input value={techFormData.email} onChange={e => setTechFormData(d => ({ ...d, email: e.target.value }))} placeholder="email@exemple.com" />
+            </div>
+            <div style={{ flex: 1 }}>
+              <label style={{ fontSize: 12, fontWeight: 500 }}>Téléphone</label>
+              <Input value={techFormData.phone} onChange={e => setTechFormData(d => ({ ...d, phone: e.target.value }))} placeholder="+32..." />
+            </div>
+          </div>
+          <div>
+            <label style={{ fontSize: 12, fontWeight: 500 }}>Spécialités</label>
+            <Select
+              mode="multiple"
+              style={{ width: '100%' }}
+              value={techFormData.specialties}
+              onChange={v => setTechFormData(d => ({ ...d, specialties: v }))}
+              placeholder="Sélectionner les spécialités..."
+              options={uniqueProducts.map(p => ({ value: p.value, label: `${p.icon || ''} ${p.label}`.trim() }))}
+            />
+          </div>
+          <div>
+            <label style={{ fontSize: 12, fontWeight: 500 }}>Couleur</label>
+            <div style={{ display: 'flex', gap: 6, marginTop: 4 }}>
+              {['#1677ff', '#52c41a', '#fa8c16', '#722ed1', '#f5222d', '#13c2c2', '#eb2f96', '#8c8c8c'].map(c => (
+                <div
+                  key={c}
+                  onClick={() => setTechFormData(d => ({ ...d, color: c }))}
+                  style={{
+                    width: 24, height: 24, borderRadius: '50%', backgroundColor: c, cursor: 'pointer',
+                    border: techFormData.color === c ? '3px solid #262626' : '2px solid transparent',
+                  }}
+                />
+              ))}
+            </div>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Modal indisponibilité */}
+      <Modal
+        open={unavailModalOpen}
+        title={<span>📅 Ajouter une indisponibilité</span>}
+        onCancel={() => { setUnavailModalOpen(false); setUnavailTechId(''); setUnavailData({ startDate: '', endDate: '', type: 'CONGE', note: '' }); }}
+        onOk={async () => {
+          if (!unavailTechId || !unavailData.startDate || !unavailData.endDate) {
+            message.warning('Technicien et dates requis');
+            return;
+          }
+          try {
+            await addUnavailability({
+              technicianId: unavailTechId,
+              startDate: unavailData.startDate,
+              endDate: unavailData.endDate,
+              type: unavailData.type,
+              allDay: true,
+              note: unavailData.note,
+            });
+            message.success('Indisponibilité ajoutée');
+            setUnavailModalOpen(false);
+            setUnavailTechId('');
+            setUnavailData({ startDate: '', endDate: '', type: 'CONGE', note: '' });
+          } catch (err: any) {
+            message.error(err?.message || 'Erreur');
+          }
+        }}
+        okText="Ajouter"
+        cancelText="Annuler"
+      >
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          <div>
+            <label style={{ fontSize: 12, fontWeight: 500 }}>Technicien</label>
+            <Select
+              style={{ width: '100%' }}
+              placeholder="Sélectionner un technicien..."
+              value={unavailTechId || undefined}
+              onChange={v => setUnavailTechId(v)}
+              showSearch
+              optionFilterProp="label"
+              options={technicians.map(t => ({ value: t.id, label: `${t.firstName || ''} ${t.lastName || ''} ${t.type === 'SUBCONTRACTOR' ? '(ST)' : ''}`.trim() }))}
+            />
+          </div>
+          <div>
+            <label style={{ fontSize: 12, fontWeight: 500 }}>Type</label>
+            <Select
+              style={{ width: '100%' }}
+              value={unavailData.type}
+              onChange={v => setUnavailData(d => ({ ...d, type: v }))}
+              options={[
+                { value: 'CONGE', label: '🏖️ Congé' },
+                { value: 'FORMATION', label: '📚 Formation' },
+                { value: 'MALADIE', label: '🏥 Maladie' },
+                { value: 'AUTRE', label: '📌 Autre' },
+              ]}
+            />
+          </div>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <div style={{ flex: 1 }}>
+              <label style={{ fontSize: 12, fontWeight: 500 }}>Date début</label>
+              <Input type="date" value={unavailData.startDate} onChange={e => setUnavailData(d => ({ ...d, startDate: e.target.value }))} />
+            </div>
+            <div style={{ flex: 1 }}>
+              <label style={{ fontSize: 12, fontWeight: 500 }}>Date fin</label>
+              <Input type="date" value={unavailData.endDate} onChange={e => setUnavailData(d => ({ ...d, endDate: e.target.value }))} />
+            </div>
+          </div>
+          <div>
+            <label style={{ fontSize: 12, fontWeight: 500 }}>Note (optionnel)</label>
+            <Input.TextArea value={unavailData.note} onChange={e => setUnavailData(d => ({ ...d, note: e.target.value }))} placeholder="Note optionnelle..." rows={2} />
+          </div>
+        </div>
       </Modal>
     </div>
   );

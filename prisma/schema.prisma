@@ -1065,6 +1065,7 @@ model Organization {
   ChantierBillingPlanItem    ChantierBillingPlanItem[]
   ChantierInvoice            ChantierInvoice[]
   Team                       Team[]
+  Technician                 Technician[]
   Module                     Module[]
   Notification               Notification[]
   Order                      Order[]
@@ -2223,8 +2224,7 @@ model User {
   UserService                                         UserService[]
   website_blog_posts                                  website_blog_posts[]
   website_media_files                                 website_media_files[]
-  TeamMemberships                                     TeamMember[]
-  ChantierAssignments                                 ChantierAssignment[]
+  Technicians                                         Technician[]
 
   @@index([organizationId, commercialSlug])
 }
@@ -3226,6 +3226,63 @@ model ChantierHistory {
 // ═══ Techniciens & Équipes ═══════════════════════
 // ═══════════════════════════════════════════════════
 
+enum TechnicianType {
+  INTERNAL
+  SUBCONTRACTOR
+}
+
+model Technician {
+  id             String          @id @default(cuid())
+  organizationId String
+  userId         String?         // null pour sous-traitants, lié pour internes
+  type           TechnicianType  @default(INTERNAL)
+  firstName      String
+  lastName       String
+  email          String?
+  phone          String?
+  company        String?         // Société du sous-traitant
+  specialties    String[]        @default([]) // productValue[] : ["pc", "all", "toiture"]
+  hourlyRate     Float?
+  notes          String?
+  color          String          @default("#1677ff")
+  isActive       Boolean         @default(true)
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+
+  Organization        Organization              @relation(fields: [organizationId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  User                User?                     @relation(fields: [userId], references: [id], onDelete: SetNull, onUpdate: NoAction)
+  TeamMemberships     TeamMember[]
+  ChantierAssignments ChantierAssignment[]
+  Unavailabilities    TechnicianUnavailability[]
+
+  @@unique([organizationId, userId])
+  @@index([organizationId])
+  @@index([userId])
+}
+
+enum UnavailabilityType {
+  CONGE
+  FORMATION
+  MALADIE
+  AUTRE
+}
+
+model TechnicianUnavailability {
+  id           String             @id @default(cuid())
+  technicianId String
+  startDate    DateTime
+  endDate      DateTime
+  type         UnavailabilityType @default(AUTRE)
+  allDay       Boolean            @default(true)
+  note         String?
+  createdAt    DateTime           @default(now())
+
+  Technician   Technician         @relation(fields: [technicianId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([technicianId])
+  @@index([startDate, endDate])
+}
+
 model Team {
   id             String       @id @default(cuid())
   organizationId String
@@ -3235,8 +3292,8 @@ model Team {
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
 
-  Organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade, onUpdate: NoAction)
-  Members        TeamMember[]
+  Organization        Organization         @relation(fields: [organizationId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  Members             TeamMember[]
   ChantierAssignments ChantierAssignment[]
 
   @@unique([organizationId, name])
@@ -3249,17 +3306,17 @@ enum TeamMemberRole {
 }
 
 model TeamMember {
-  id        String         @id @default(cuid())
-  teamId    String
-  userId    String
-  role      TeamMemberRole @default(MEMBER)
-  createdAt DateTime       @default(now())
+  id           String         @id @default(cuid())
+  teamId       String
+  technicianId String
+  role         TeamMemberRole @default(MEMBER)
+  createdAt    DateTime       @default(now())
 
-  Team      Team           @relation(fields: [teamId], references: [id], onDelete: Cascade, onUpdate: NoAction)
-  User      User           @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  Team       Team       @relation(fields: [teamId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  Technician Technician @relation(fields: [technicianId], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
-  @@unique([teamId, userId])
-  @@index([userId])
+  @@unique([teamId, technicianId])
+  @@index([technicianId])
 }
 
 enum ChantierAssignmentRole {
@@ -3268,19 +3325,19 @@ enum ChantierAssignmentRole {
 }
 
 model ChantierAssignment {
-  id         String                  @id @default(cuid())
-  chantierId String
-  userId     String
-  teamId     String?
-  role       ChantierAssignmentRole  @default(TECHNICIEN)
-  assignedAt DateTime                @default(now())
+  id           String                  @id @default(cuid())
+  chantierId   String
+  technicianId String
+  teamId       String?
+  role         ChantierAssignmentRole  @default(TECHNICIEN)
+  assignedAt   DateTime                @default(now())
 
-  Chantier   Chantier                @relation(fields: [chantierId], references: [id], onDelete: Cascade, onUpdate: NoAction)
-  User       User                    @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: NoAction)
-  Team       Team?                   @relation(fields: [teamId], references: [id], onDelete: SetNull, onUpdate: NoAction)
+  Chantier   Chantier   @relation(fields: [chantierId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  Technician Technician @relation(fields: [technicianId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  Team       Team?      @relation(fields: [teamId], references: [id], onDelete: SetNull, onUpdate: NoAction)
 
-  @@unique([chantierId, userId])
+  @@unique([chantierId, technicianId])
   @@index([chantierId])
-  @@index([userId])
+  @@index([technicianId])
   @@index([teamId])
 }

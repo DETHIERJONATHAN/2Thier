@@ -1,9 +1,9 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useAuthenticatedApi } from './useAuthenticatedApi';
-import type { Team, Technician, ChantierAssignment } from '../types/chantier';
+import type { Team, Technician, ChantierAssignment, TechnicianType } from '../types/chantier';
 
 /**
- * Hook pour gérer les équipes, techniciens et assignations chantier
+ * Hook complet pour techniciens, équipes, assignations et indisponibilités
  */
 export function useTeams() {
   const [teams, setTeams] = useState<Team[]>([]);
@@ -23,7 +23,7 @@ export function useTeams() {
     }
   }, [api]);
 
-  // ── Charger techniciens ──
+  // ── Charger techniciens (enrichis) ──
   const fetchTechnicians = useCallback(async () => {
     try {
       const response = await api.get('/api/teams/technicians') as { success: boolean; data: Technician[] };
@@ -43,6 +43,58 @@ export function useTeams() {
   useEffect(() => {
     refetch();
   }, [refetch]);
+
+  // ═══ CRUD Techniciens ═══
+
+  const createTechnician = useCallback(async (data: {
+    type: TechnicianType;
+    userId?: string;
+    firstName: string;
+    lastName: string;
+    email?: string;
+    phone?: string;
+    company?: string;
+    specialties?: string[];
+    hourlyRate?: number;
+    notes?: string;
+    color?: string;
+  }) => {
+    const response = await api.post('/api/teams/technicians', data) as { success: boolean; data: Technician };
+    await fetchTechnicians();
+    return response.data;
+  }, [api, fetchTechnicians]);
+
+  const updateTechnician = useCallback(async (techId: string, data: Partial<{
+    firstName: string;
+    lastName: string;
+    email: string;
+    phone: string;
+    company: string;
+    specialties: string[];
+    hourlyRate: number;
+    notes: string;
+    color: string;
+    isActive: boolean;
+  }>) => {
+    const response = await api.put(`/api/teams/technicians/${techId}`, data) as { success: boolean; data: Technician };
+    await fetchTechnicians();
+    return response.data;
+  }, [api, fetchTechnicians]);
+
+  const deleteTechnician = useCallback(async (techId: string) => {
+    await api.delete(`/api/teams/technicians/${techId}`);
+    await fetchTechnicians();
+  }, [api, fetchTechnicians]);
+
+  const syncTechnicians = useCallback(async () => {
+    const response = await api.post('/api/teams/technicians/sync', {}) as {
+      success: boolean;
+      message: string;
+      data: { created: number; total: number };
+    };
+    await fetchTechnicians();
+    return response;
+  }, [api, fetchTechnicians]);
 
   // ═══ CRUD Équipes ═══
 
@@ -65,8 +117,8 @@ export function useTeams() {
 
   // ═══ CRUD Membres ═══
 
-  const addTeamMember = useCallback(async (teamId: string, userId: string, role: 'LEADER' | 'MEMBER' = 'MEMBER') => {
-    await api.post(`/api/teams/${teamId}/members`, { userId, role });
+  const addTeamMember = useCallback(async (teamId: string, technicianId: string, role: 'LEADER' | 'MEMBER' = 'MEMBER') => {
+    await api.post(`/api/teams/${teamId}/members`, { technicianId, role });
     await Promise.all([fetchTeams(), fetchTechnicians()]);
   }, [api, fetchTeams, fetchTechnicians]);
 
@@ -84,15 +136,15 @@ export function useTeams() {
 
   const assignToChantier = useCallback(async (
     chantierId: string,
-    userId: string,
+    technicianId: string,
     role: 'CHEF_EQUIPE' | 'TECHNICIEN' = 'TECHNICIEN',
     teamId?: string
   ) => {
-    const response = await api.post(`/api/teams/assignments/${chantierId}`, { userId, role, teamId }) as {
+    const response = await api.post(`/api/teams/assignments/${chantierId}`, { technicianId, role, teamId }) as {
       success: boolean;
       data: ChantierAssignment;
     };
-    await fetchTechnicians(); // Met à jour les compteurs
+    await fetchTechnicians();
     return response.data;
   }, [api, fetchTechnicians]);
 
@@ -111,11 +163,36 @@ export function useTeams() {
     await fetchTechnicians();
   }, [api, fetchTechnicians]);
 
+  // ═══ Indisponibilités ═══
+
+  const addUnavailability = useCallback(async (data: {
+    technicianId: string;
+    startDate: string;
+    endDate: string;
+    type?: 'CONGE' | 'FORMATION' | 'MALADIE' | 'AUTRE';
+    allDay?: boolean;
+    note?: string;
+  }) => {
+    const response = await api.post('/api/teams/unavailabilities', data);
+    await fetchTechnicians();
+    return response;
+  }, [api, fetchTechnicians]);
+
+  const removeUnavailability = useCallback(async (id: string) => {
+    await api.delete(`/api/teams/unavailabilities/${id}`);
+    await fetchTechnicians();
+  }, [api, fetchTechnicians]);
+
   return {
     teams,
     technicians,
     isLoading,
     refetch,
+    // CRUD Technicians
+    createTechnician,
+    updateTechnician,
+    deleteTechnician,
+    syncTechnicians,
     // CRUD Teams
     createTeam,
     updateTeam,
@@ -128,5 +205,8 @@ export function useTeams() {
     assignToChantier,
     assignTeamToChantier,
     removeAssignment,
+    // Unavailabilities
+    addUnavailability,
+    removeUnavailability,
   };
 }

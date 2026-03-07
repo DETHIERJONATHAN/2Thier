@@ -112,16 +112,21 @@ export interface Chantier {
 
 // ═══ Types Équipes & Techniciens ═══
 
+export type TechnicianType = 'INTERNAL' | 'SUBCONTRACTOR';
+export type UnavailabilityType = 'CONGE' | 'FORMATION' | 'MALADIE' | 'AUTRE';
+
 export interface ChantierAssignment {
   id: string;
-  userId: string;
+  technicianId: string;
   role: 'CHEF_EQUIPE' | 'TECHNICIEN';
   teamId?: string | null;
-  User: {
+  Technician: {
     id: string;
-    firstName?: string | null;
-    lastName?: string | null;
-    avatarUrl?: string | null;
+    firstName: string;
+    lastName: string;
+    color: string;
+    type: TechnicianType;
+    specialties: string[];
   };
   Team?: {
     id: string;
@@ -133,15 +138,17 @@ export interface ChantierAssignment {
 export interface TeamMember {
   id: string;
   teamId: string;
-  userId: string;
+  technicianId: string;
   role: 'LEADER' | 'MEMBER';
-  User: {
+  Technician: {
     id: string;
-    firstName?: string | null;
-    lastName?: string | null;
-    avatarUrl?: string | null;
+    firstName: string;
+    lastName: string;
     email?: string | null;
-    role?: string;
+    color: string;
+    type: TechnicianType;
+    specialties: string[];
+    isActive: boolean;
   };
 }
 
@@ -155,22 +162,51 @@ export interface Team {
   _count?: { ChantierAssignments: number };
 }
 
+export interface TechnicianUnavailability {
+  id: string;
+  startDate: string;
+  endDate: string;
+  type: UnavailabilityType;
+  allDay: boolean;
+  note?: string | null;
+}
+
+export interface WeekChantier {
+  chantierId: string;
+  plannedDate?: string | null;
+  clientName?: string | null;
+  product: string;
+  status?: string | null;
+  role: 'CHEF_EQUIPE' | 'TECHNICIEN';
+}
+
 export interface Technician {
   id: string;
-  firstName?: string | null;
-  lastName?: string | null;
-  avatarUrl?: string | null;
+  userId?: string | null;
+  type: TechnicianType;
+  firstName: string;
+  lastName: string;
   email?: string | null;
-  role?: string;
-  phoneNumber?: string | null;
-  orgRole?: { id: string; name: string; label?: string | null };
-  chantierCount: number;
+  phone?: string | null;
+  company?: string | null;
+  specialties: string[];
+  hourlyRate?: number | null;
+  notes?: string | null;
+  color: string;
+  isActive: boolean;
+  // Computed by API
+  weekChantierCount: number;
+  totalChantierCount: number;
+  busyToday: boolean;
+  unavailableToday: boolean;
+  weekUnavailabilities: TechnicianUnavailability[];
   teams: Array<{
     teamId: string;
     teamName: string;
     teamColor: string;
     memberRole: 'LEADER' | 'MEMBER';
   }>;
+  weekChantiers: WeekChantier[];
 }
 
 export interface ChantierCreatePayload {

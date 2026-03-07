@@ -112,10 +112,10 @@ router.get('/', authenticateToken, async (req, res) => {
         ChantierAssignments: {
           select: {
             id: true,
-            userId: true,
+            technicianId: true,
             role: true,
             teamId: true,
-            User: { select: { id: true, firstName: true, lastName: true, avatarUrl: true } },
+            Technician: { select: { id: true, firstName: true, lastName: true, color: true, type: true, specialties: true } },
             Team: { select: { id: true, name: true, color: true } },
           },
           orderBy: [{ role: 'asc' }, { assignedAt: 'asc' }],
