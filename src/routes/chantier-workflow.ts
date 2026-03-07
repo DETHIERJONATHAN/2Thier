@@ -567,7 +567,6 @@ router.put('/chantiers/:chantierId/billing-plan', authenticateToken, isAdmin, as
         action: 'BILLING_PLAN_UPDATED',
         toValue: `${items.length} lignes, total ${totalPercentage.toFixed(0)}%`,
         userId: (req as any).user.userId,
-        updatedAt: new Date(),
       },
     });
 
@@ -679,7 +678,6 @@ router.post('/chantiers/:chantierId/validate', authenticateToken, isAdmin, async
         action: 'CHANTIER_VALIDATED',
         toValue: notes || 'Chantier validé par admin',
         userId,
-        updatedAt: new Date(),
       },
     });
 
@@ -720,7 +718,6 @@ router.post('/chantiers/:chantierId/unvalidate', authenticateToken, isAdmin, asy
         action: 'CHANTIER_UNVALIDATED',
         toValue: 'Validation retirée',
         userId: (req as any).user.userId,
-        updatedAt: new Date(),
       },
     });
 
