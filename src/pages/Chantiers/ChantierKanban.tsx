@@ -711,8 +711,6 @@ const ChantierKanban: React.FC<ChantierKanbanProps> = ({ onViewChantier, onSetti
   const [newTeamColor, setNewTeamColor] = useState('#1677ff');
   const [addMemberTeamId, setAddMemberTeamId] = useState<string | null>(null);
   const [addMemberUserId, setAddMemberUserId] = useState<string>('');
-  const [allowedTargets, setAllowedTargets] = useState<Record<string, string[]>>({});
-  const [draggingFromStatusId, setDraggingFromStatusId] = useState<string | null>(null);
 
   // State pour le modal de blocage facturation
   const [billingBlock, setBillingBlock] = useState<{
