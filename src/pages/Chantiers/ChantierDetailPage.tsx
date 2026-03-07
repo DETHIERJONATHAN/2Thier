@@ -38,7 +38,7 @@ const ChantierDetailPage: React.FC = () => {
   const navigate = useNavigate();
   const apiHook = useAuthenticatedApi();
   const api = useMemo(() => apiHook.api, [apiHook.api]);
-  const { chantierStatuses } = useChantierStatuses();
+  const { statuses: chantierStatuses } = useChantierStatuses();
   const { isSuperAdmin, userRole } = useAuth();
   const isAdminOrAbove = isSuperAdmin || userRole === 'admin';
   const canSeeCompta = isAdminOrAbove || userRole === 'comptable';

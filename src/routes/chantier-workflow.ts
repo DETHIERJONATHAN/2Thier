@@ -1212,9 +1212,14 @@ async function sendTransitionNotifications(
           userId: u.User.id,
           organizationId,
           type: 'CHANTIER_STATUS_CHANGED',
-          title: `Chantier "${chantierLabel}" déplacé`,
-          message: `${fromStatus?.name || '?'} → ${toStatus?.name || '?'}`,
-          data: { chantierId, fromStatusId, toStatusId },
+          data: {
+            chantierId,
+            fromStatusId,
+            toStatusId,
+            title: `Chantier "${chantierLabel}" déplacé`,
+            message: `${fromStatus?.name || '?'} → ${toStatus?.name || '?'}`,
+          },
+          status: 'PENDING',
         }
       });
     }
@@ -1332,9 +1337,13 @@ async function notifyProblem(
           userId: chantier.commercialId,
           organizationId,
           type: 'CHANTIER_PROBLEM_REPORTED',
-          title: `⚠️ Problème signalé — ${chantierLabel}`,
-          message: `${reporterName}: ${problemNote}`,
-          data: { chantierId, problemNote },
+          data: {
+            chantierId,
+            problemNote,
+            title: `⚠️ Problème signalé — ${chantierLabel}`,
+            message: `${reporterName}: ${problemNote}`,
+          },
+          status: 'PENDING',
         }
       });
     }
@@ -1366,9 +1375,13 @@ async function notifyProblem(
           userId: admin.User.id,
           organizationId,
           type: 'CHANTIER_PROBLEM_REPORTED',
-          title: `⚠️ Problème signalé — ${chantierLabel}`,
-          message: `${reporterName}: ${problemNote}`,
-          data: { chantierId, problemNote },
+          data: {
+            chantierId,
+            problemNote,
+            title: `⚠️ Problème signalé — ${chantierLabel}`,
+            message: `${reporterName}: ${problemNote}`,
+          },
+          status: 'PENDING',
         }
       });
     }
