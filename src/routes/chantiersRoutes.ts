@@ -367,20 +367,21 @@ router.post('/', authenticateToken, async (req, res) => {
 
     const data = validation.data;
 
-    // Trouver le statut par défaut si pas fourni
+    // Toujours placer les nouveaux chantiers dans la première colonne (order le plus bas)
     let statusId = data.statusId;
     if (!statusId) {
-      const defaultStatus = await db.chantierStatus.findFirst({
-        where: { organizationId, isDefault: true }
+      const firstStatus = await db.chantierStatus.findFirst({
+        where: { organizationId },
+        orderBy: { order: 'asc' }
       });
-      if (!defaultStatus) {
+      if (!firstStatus) {
         // Créer les statuts par défaut s'ils n'existent pas
         const { randomUUID } = await import('crypto');
         const created = await db.chantierStatus.create({
           data: {
             id: randomUUID(),
             organizationId,
-            name: 'Planifié',
+            name: 'Nouveau',
             color: '#1677ff',
             order: 0,
             isDefault: true,
@@ -389,7 +390,7 @@ router.post('/', authenticateToken, async (req, res) => {
         });
         statusId = created.id;
       } else {
-        statusId = defaultStatus.id;
+        statusId = firstStatus.id;
       }
     }
 
@@ -648,13 +649,14 @@ router.post('/from-lead-document', authenticateToken, async (req, res) => {
       documentName = uploadedFile.name;
     }
 
-    // Trouver le statut par défaut
+    // Toujours placer les nouveaux chantiers dans la première colonne (order le plus bas)
     let statusId: string | undefined;
-    const defaultStatus = await db.chantierStatus.findFirst({
-      where: { organizationId, isDefault: true }
+    const firstStatus = await db.chantierStatus.findFirst({
+      where: { organizationId },
+      orderBy: { order: 'asc' }
     });
-    if (defaultStatus) {
-      statusId = defaultStatus.id;
+    if (firstStatus) {
+      statusId = firstStatus.id;
     } else {
       // Auto-créer les statuts
       const { randomUUID: uuid } = await import('crypto');
@@ -662,7 +664,7 @@ router.post('/from-lead-document', authenticateToken, async (req, res) => {
         data: {
           id: uuid(),
           organizationId,
-          name: 'Planifié',
+          name: 'Nouveau',
           color: '#1677ff',
           order: 0,
           isDefault: true,
