@@ -44,6 +44,16 @@ export interface Chantier {
   createdAt: string;
   updatedAt: string;
 
+  // Résumé facturation (calculé côté backend)
+  _invoiceSummary?: {
+    total: number;      // nb factures
+    paid: number;       // nb payées
+    sent: number;       // nb envoyées
+    overdue: number;    // nb en retard
+    totalAmount: number; // montant total
+    paidAmount: number;  // montant payé
+  } | null;
+
   // Relations incluses par l'API
   Lead?: {
     id: string;

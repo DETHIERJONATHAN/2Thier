@@ -301,24 +301,14 @@ const ChantierDetailPage: React.FC = () => {
                 icon={<SafetyCertificateOutlined />}
                 size="small"
                 style={{ background: '#52c41a', borderColor: '#52c41a' }}
-                onClick={() => {
-                  Modal.confirm({
-                    title: 'Valider ce chantier ?',
-                    icon: <ExclamationCircleOutlined />,
-                    content: 'Le chantier sera marqué comme validé et apparaîtra dans le pipeline. Assurez-vous que le plan de facturation est correct.',
-                    okText: 'Valider',
-                    okButtonProps: { style: { background: '#52c41a', borderColor: '#52c41a' } },
-                    cancelText: 'Annuler',
-                    onOk: async () => {
-                      try {
-                        await api.post(`/api/chantier-workflow/chantiers/${chantier.id}/validate`, {});
-                        message.success('Chantier validé !');
-                        fetchChantier();
-                      } catch (err: any) {
-                        message.error(err?.data?.message || err?.message || 'Erreur lors de la validation');
-                      }
-                    },
-                  });
+                onClick={async () => {
+                  try {
+                    await api.post(`/api/chantier-workflow/chantiers/${chantier.id}/validate`, {});
+                    message.success('Chantier validé !');
+                    fetchChantier();
+                  } catch (err: any) {
+                    message.error(err?.message || 'Erreur lors de la validation');
+                  }
                 }}
               >
                 Valider le chantier

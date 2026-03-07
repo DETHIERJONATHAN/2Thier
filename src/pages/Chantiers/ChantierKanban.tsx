@@ -7,6 +7,7 @@ import {
   DollarOutlined,
   LockOutlined,
   SafetyCertificateOutlined,
+  FileTextOutlined,
 } from '@ant-design/icons';
 import { renderProductIcon } from '../../components/TreeBranchLeaf/treebranchleaf-new/components/Parameters/capabilities/ProductFilterPanel';
 import { DndProvider, useDrag, useDrop } from 'react-dnd';
@@ -154,7 +155,7 @@ const ChantierCard: React.FC<ChantierCardProps> = ({ chantier, onView, onViewCom
           />
         </div>
 
-        {/* Badge produit + validation */}
+        {/* Badge produit + validation + facturation */}
         <div style={{ marginBottom: 4, display: 'flex', alignItems: 'center', gap: 4 }}>
           <Tag
             color={chantier.productColor || 'purple'}
@@ -176,6 +177,28 @@ const ChantierCard: React.FC<ChantierCardProps> = ({ chantier, onView, onViewCom
               >
                 <SafetyCertificateOutlined style={{ fontSize: 10 }} />
               </Tag>
+            </Tooltip>
+          )}
+          {/* Mini indicateur facturation en haut à droite */}
+          {chantier._invoiceSummary && (
+            <Tooltip title={`Factures: ${chantier._invoiceSummary.paid}/${chantier._invoiceSummary.total} payées${chantier._invoiceSummary.overdue > 0 ? ` — ${chantier._invoiceSummary.overdue} en retard !` : ''}${chantier._invoiceSummary.totalAmount > 0 ? `\n${chantier._invoiceSummary.paidAmount.toLocaleString('fr-BE')} / ${chantier._invoiceSummary.totalAmount.toLocaleString('fr-BE')} €` : ''}`}>
+              <div
+                style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 3, cursor: 'pointer' }}
+                onClick={(e) => { e.stopPropagation(); onViewCompta?.(); }}
+              >
+                <FileTextOutlined style={{ fontSize: 10, color: chantier._invoiceSummary.overdue > 0 ? '#ff4d4f' : chantier._invoiceSummary.paid === chantier._invoiceSummary.total ? '#52c41a' : '#faad14' }} />
+                {/* Mini barre de progression */}
+                <div style={{ display: 'flex', gap: 2 }}>
+                  {Array.from({ length: chantier._invoiceSummary.total }).map((_, i) => {
+                    const inv = chantier._invoiceSummary!;
+                    let color = '#e8e8e8'; // draft
+                    if (i < inv.paid) color = '#52c41a'; // payé
+                    else if (i < inv.paid + inv.sent) color = '#1677ff'; // envoyé
+                    else if (inv.overdue > 0 && i >= inv.total - inv.overdue) color = '#ff4d4f'; // overdue
+                    return <div key={i} style={{ width: 6, height: 6, borderRadius: '50%', backgroundColor: color }} />;
+                  })}
+                </div>
+              </div>
             </Tooltip>
           )}
         </div>

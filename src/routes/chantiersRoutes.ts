@@ -96,14 +96,39 @@ router.get('/', authenticateToken, async (req, res) => {
             id: true,
             name: true,
           }
+        },
+        ChantierInvoice: {
+          select: {
+            id: true,
+            status: true,
+            amount: true,
+            type: true,
+          }
         }
       },
       orderBy: { createdAt: 'desc' }
     });
 
+    // Calculer le résumé de facturation pour chaque chantier
+    const chantiersWithSummary = chantiers.map((c: any) => {
+      const invoices = c.ChantierInvoice || [];
+      const total = invoices.length;
+      const paid = invoices.filter((i: any) => i.status === 'PAID').length;
+      const sent = invoices.filter((i: any) => i.status === 'SENT').length;
+      const overdue = invoices.filter((i: any) => i.status === 'OVERDUE').length;
+      const totalAmount = invoices.reduce((s: number, i: any) => s + (i.amount || 0), 0);
+      const paidAmount = invoices.filter((i: any) => i.status === 'PAID').reduce((s: number, i: any) => s + (i.amount || 0), 0);
+      // Supprimer la liste brute des factures (trop lourd pour le Kanban)
+      const { ChantierInvoice: _, ...rest } = c;
+      return {
+        ...rest,
+        _invoiceSummary: total > 0 ? { total, paid, sent, overdue, totalAmount, paidAmount } : null,
+      };
+    });
+
     res.json({
       success: true,
-      data: chantiers
+      data: chantiersWithSummary
     });
   } catch (error) {
     console.error('[Chantiers] Erreur GET /:', error);
