@@ -1,5 +1,11 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Spin, message, Avatar, Tooltip, Empty, Tag, Button, Modal } from 'antd';
+import { Spin, message, Avatar, Tooltip, Empty, Tag, Button, Modal, DatePicker, Dropdown } from 'antd';
+import type { Dayjs } from 'dayjs';
+import dayjs from 'dayjs';
+import 'dayjs/locale/fr';
+import isBetween from 'dayjs/plugin/isBetween';
+import isoWeek from 'dayjs/plugin/isoWeek';
+import quarterOfYear from 'dayjs/plugin/quarterOfYear';
 import {
   UserOutlined,
   SettingOutlined,
@@ -9,7 +15,30 @@ import {
   SafetyCertificateOutlined,
   FileTextOutlined,
   WarningOutlined,
+  CalendarOutlined,
+  CloseCircleOutlined,
 } from '@ant-design/icons';
+
+dayjs.locale('fr');
+dayjs.extend(isBetween);
+dayjs.extend(isoWeek);
+dayjs.extend(quarterOfYear);
+
+const { RangePicker } = DatePicker;
+
+// ─── Presets de dates ───
+type DatePreset = 'today' | 'yesterday' | '7days' | '30days' | 'this_week' | 'this_month' | 'last_month' | 'this_quarter' | 'custom';
+
+const DATE_PRESETS: { key: DatePreset; label: string; getRange: () => [Dayjs, Dayjs] }[] = [
+  { key: 'today', label: "Aujourd'hui", getRange: () => [dayjs().startOf('day'), dayjs().endOf('day')] },
+  { key: 'yesterday', label: 'Hier', getRange: () => [dayjs().subtract(1, 'day').startOf('day'), dayjs().subtract(1, 'day').endOf('day')] },
+  { key: 'this_week', label: 'Cette semaine', getRange: () => [dayjs().startOf('isoWeek'), dayjs().endOf('isoWeek')] },
+  { key: '7days', label: '7 derniers jours', getRange: () => [dayjs().subtract(6, 'day').startOf('day'), dayjs().endOf('day')] },
+  { key: 'this_month', label: 'Ce mois', getRange: () => [dayjs().startOf('month'), dayjs().endOf('month')] },
+  { key: 'last_month', label: 'Mois dernier', getRange: () => [dayjs().subtract(1, 'month').startOf('month'), dayjs().subtract(1, 'month').endOf('month')] },
+  { key: '30days', label: '30 derniers jours', getRange: () => [dayjs().subtract(29, 'day').startOf('day'), dayjs().endOf('day')] },
+  { key: 'this_quarter', label: 'Ce trimestre', getRange: () => [dayjs().startOf('quarter'), dayjs().endOf('quarter')] },
+];
 import { renderProductIcon } from '../../components/TreeBranchLeaf/treebranchleaf-new/components/Parameters/capabilities/ProductFilterPanel';
 import { DndProvider, useDrag, useDrop } from 'react-dnd';
 import { HTML5Backend } from 'react-dnd-html5-backend';
@@ -427,6 +456,8 @@ const ChantierKanban: React.FC<ChantierKanbanProps> = ({ onViewChantier, onSetti
   const { chantiers, isLoading, refetch, updateChantierStatus } = useChantiers();
   const { statuses, isLoading: statusesLoading } = useChantierStatuses();
   const [selectedProducts, setSelectedProducts] = useState<Set<string>>(new Set());
+  const [dateRange, setDateRange] = useState<[Dayjs, Dayjs] | null>(null);
+  const [activePreset, setActivePreset] = useState<DatePreset | null>(null);
   const [allowedTargets, setAllowedTargets] = useState<Record<string, string[]>>({});
   const [draggingFromStatusId, setDraggingFromStatusId] = useState<string | null>(null);
 
@@ -481,11 +512,50 @@ const ChantierKanban: React.FC<ChantierKanbanProps> = ({ onViewChantier, onSetti
     return Array.from(map.values());
   }, [chantiers]);
 
-  // Chantiers filtrés selon les produits sélectionnés
+  // Chantiers filtrés selon les produits sélectionnés ET la plage de dates
   const filteredChantiers = useMemo(() => {
-    if (selectedProducts.size === 0) return chantiers;
-    return chantiers.filter(c => selectedProducts.has(c.productValue));
-  }, [chantiers, selectedProducts]);
+    let result = chantiers;
+    if (selectedProducts.size > 0) {
+      result = result.filter(c => selectedProducts.has(c.productValue));
+    }
+    if (dateRange) {
+      const [start, end] = dateRange;
+      result = result.filter(c => {
+        const d = dayjs(c.createdAt);
+        return d.isBetween(start, end, 'day', '[]');
+      });
+    }
+    return result;
+  }, [chantiers, selectedProducts, dateRange]);
+
+  // Handlers pour le filtre de dates
+  const handlePresetClick = useCallback((preset: DatePreset) => {
+    if (activePreset === preset) {
+      setDateRange(null);
+      setActivePreset(null);
+    } else {
+      const config = DATE_PRESETS.find(p => p.key === preset);
+      if (config) {
+        setDateRange(config.getRange());
+        setActivePreset(preset);
+      }
+    }
+  }, [activePreset]);
+
+  const handleCustomRange = useCallback((dates: [Dayjs | null, Dayjs | null] | null) => {
+    if (dates && dates[0] && dates[1]) {
+      setDateRange([dates[0].startOf('day'), dates[1].endOf('day')]);
+      setActivePreset('custom');
+    } else {
+      setDateRange(null);
+      setActivePreset(null);
+    }
+  }, []);
+
+  const clearDateFilter = useCallback(() => {
+    setDateRange(null);
+    setActivePreset(null);
+  }, []);
 
   const toggleProduct = useCallback((value: string) => {
     setSelectedProducts(prev => {
@@ -640,8 +710,120 @@ const ChantierKanban: React.FC<ChantierKanbanProps> = ({ onViewChantier, onSetti
           <span style={{ fontSize: 16, fontWeight: 600 }}>🏗️ Chantiers</span>
           <span style={{ fontSize: 13, color: '#5e6c84' }}>
             {filteredChantiers.length} chantier{filteredChantiers.length > 1 ? 's' : ''}
-            {selectedProducts.size > 0 && ` / ${chantiers.length}`}
+            {(selectedProducts.size > 0 || dateRange) && ` / ${chantiers.length}`}
           </span>
+        </div>
+
+        {/* Date filter */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
+          <Dropdown
+            trigger={['click']}
+            placement="bottomRight"
+            dropdownRender={() => (
+              <div style={{
+                background: '#fff',
+                borderRadius: 8,
+                boxShadow: '0 6px 16px rgba(0,0,0,0.12)',
+                padding: 12,
+                minWidth: 260,
+              }}>
+                <div style={{ fontSize: 12, fontWeight: 600, color: '#8c8c8c', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.5px' }}>Filtrer par date</div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginBottom: 10 }}>
+                  {DATE_PRESETS.map(preset => (
+                    <button
+                      key={preset.key}
+                      onClick={() => handlePresetClick(preset.key)}
+                      style={{
+                        padding: '4px 10px',
+                        borderRadius: 14,
+                        border: activePreset === preset.key ? '2px solid #1677ff' : '1px solid #d9d9d9',
+                        background: activePreset === preset.key ? '#e6f4ff' : '#fff',
+                        cursor: 'pointer',
+                        fontSize: 12,
+                        fontWeight: activePreset === preset.key ? 600 : 400,
+                        color: activePreset === preset.key ? '#1677ff' : '#595959',
+                        transition: 'all 0.2s',
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
+                      {preset.label}
+                    </button>
+                  ))}
+                </div>
+                <div style={{ borderTop: '1px solid #f0f0f0', paddingTop: 8 }}>
+                  <div style={{ fontSize: 11, color: '#8c8c8c', marginBottom: 4 }}>Plage personnalisée</div>
+                  <RangePicker
+                    size="small"
+                    format="DD/MM/YYYY"
+                    value={activePreset === 'custom' && dateRange ? dateRange : undefined}
+                    onChange={(dates) => handleCustomRange(dates as [Dayjs | null, Dayjs | null] | null)}
+                    style={{ width: '100%' }}
+                    allowClear
+                    placeholder={['Début', 'Fin']}
+                  />
+                </div>
+                {dateRange && (
+                  <div style={{ borderTop: '1px solid #f0f0f0', paddingTop: 8, marginTop: 8, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span style={{ fontSize: 11, color: '#595959' }}>
+                      {dateRange[0].format('DD MMM')} → {dateRange[1].format('DD MMM YYYY')}
+                    </span>
+                    <button
+                      onClick={clearDateFilter}
+                      style={{ border: 'none', background: 'none', cursor: 'pointer', color: '#ff4d4f', fontSize: 12, display: 'flex', alignItems: 'center', gap: 3 }}
+                    >
+                      <CloseCircleOutlined style={{ fontSize: 11 }} /> Effacer
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+          >
+            <button
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 5,
+                padding: '3px 10px',
+                borderRadius: 16,
+                border: dateRange ? '2px solid #1677ff' : '1px solid #d9d9d9',
+                background: dateRange ? '#e6f4ff' : '#fff',
+                cursor: 'pointer',
+                fontSize: 12,
+                fontWeight: dateRange ? 600 : 400,
+                color: dateRange ? '#1677ff' : '#595959',
+                transition: 'all 0.2s',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              <CalendarOutlined style={{ fontSize: 13 }} />
+              {dateRange
+                ? (activePreset && activePreset !== 'custom'
+                  ? DATE_PRESETS.find(p => p.key === activePreset)?.label
+                  : `${dateRange[0].format('DD/MM')} — ${dateRange[1].format('DD/MM')}`)
+                : 'Dates'
+              }
+            </button>
+          </Dropdown>
+          {dateRange && (
+            <button
+              onClick={clearDateFilter}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                padding: '3px 6px',
+                borderRadius: '50%',
+                border: 'none',
+                background: '#ff4d4f',
+                color: '#fff',
+                cursor: 'pointer',
+                fontSize: 10,
+                lineHeight: 1,
+              }}
+              title="Effacer le filtre date"
+            >
+              ✕
+            </button>
+          )}
         </div>
 
         {/* Product filter buttons */}
