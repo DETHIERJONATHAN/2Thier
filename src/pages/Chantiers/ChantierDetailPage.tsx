@@ -630,7 +630,7 @@ const ChantierDetailPage: React.FC = () => {
 
         {/* Onglet Comptabilité — visible par admin, comptable, super_admin */}
         {canSeeCompta && <TabPane tab={<span><DollarOutlined /> Comptabilité</span>} key="compta">
-          <ChantierInvoicesTab chantierId={chantier.id} chantierAmount={displayAmount} />
+          <ChantierInvoicesTab chantierId={chantier.id} chantierAmount={displayAmount} onChantierStatusChanged={fetchChantier} />
         </TabPane>}
 
         {/* Onglet Événements */}

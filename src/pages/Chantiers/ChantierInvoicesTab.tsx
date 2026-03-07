@@ -34,6 +34,7 @@ interface ChantierInvoice {
 interface Props {
   chantierId: string;
   chantierAmount?: number | null;
+  onChantierStatusChanged?: () => void;
 }
 
 const INVOICE_TYPES = [
@@ -52,7 +53,7 @@ const STATUS_LABELS: Record<string, { label: string; color: string }> = {
   CANCELLED: { label: 'Annulée', color: 'default' },
 };
 
-const ChantierInvoicesTab: React.FC<Props> = ({ chantierId, chantierAmount }) => {
+const ChantierInvoicesTab: React.FC<Props> = ({ chantierId, chantierAmount, onChantierStatusChanged }) => {
   const apiHook = useAuthenticatedApi();
   const api = useMemo(() => apiHook.api, [apiHook.api]);
 
@@ -124,10 +125,15 @@ const ChantierInvoicesTab: React.FC<Props> = ({ chantierId, chantierAmount }) =>
       await api.put(`/api/chantier-workflow/invoices/${invoiceId}`, { status: newStatus });
       message.success(`Statut facture → ${STATUS_LABELS[newStatus]?.label || newStatus}`);
       fetchInvoices();
+      // Si la facture passe à PAID, une auto-transition peut avoir changé le statut du chantier
+      if (newStatus === 'PAID' && onChantierStatusChanged) {
+        // Petit délai pour laisser le backend finir l'auto-transition
+        setTimeout(() => onChantierStatusChanged(), 500);
+      }
     } catch {
       message.error('Erreur changement statut facture');
     }
-  }, [api, fetchInvoices]);
+  }, [api, fetchInvoices, onChantierStatusChanged]);
 
   const handleDelete = useCallback(async (invoiceId: string) => {
     try {

@@ -1429,17 +1429,30 @@ router.post('/seed', authenticateToken, isAdmin, async (req, res) => {
         sendEmail?: boolean;
         notifyRoles?: string[];
       }> = [
-        // Flux normal
+        // ── Pipeline principal (8 étapes) ──
+        // Phase pré-chantier
+        { fromName: 'nouveau', toName: 'visite technique', triggerType: 'MANUAL', label: 'Planifier visite technique', allowedRoles: ['admin', 'commercial'] },
+        { fromName: 'visite technique', toName: 'commande', triggerType: 'MANUAL', label: 'Valider visite → Commande', allowedRoles: ['admin', 'commercial'], notifyRoles: ['comptable'], sendEmail: false },
+        { fromName: 'commande', toName: 'planifié', triggerType: 'MANUAL', label: 'Planifier le chantier', allowedRoles: ['admin', 'commercial'] },
+        // Phase chantier
         { fromName: 'planifié', toName: 'en cours', triggerType: 'MANUAL', label: 'Démarrer le chantier', allowedRoles: ['admin', 'commercial', 'technicien'] },
-        { fromName: 'en cours', toName: 'en attente', triggerType: 'MANUAL', label: 'Mettre en attente', allowedRoles: ['admin', 'commercial', 'technicien'] },
-        { fromName: 'en attente', toName: 'en cours', triggerType: 'MANUAL', label: 'Reprendre le chantier', allowedRoles: ['admin', 'commercial', 'technicien'] },
         { fromName: 'en cours', toName: 'terminé', triggerType: 'MANUAL', label: 'Marquer terminé', allowedRoles: ['admin', 'technicien'], notifyRoles: ['commercial', 'admin', 'comptable'], sendEmail: true },
-        // Annulation depuis n'importe quel statut actif
+        // Phase post-chantier
+        { fromName: 'terminé', toName: 'réception', triggerType: 'MANUAL', label: 'Lancer la réception', allowedRoles: ['admin', 'commercial'] },
+        // Auto-transition: quand toutes les factures requises sont payées → Réception validée automatiquement
+        { fromName: 'terminé', toName: 'réception', triggerType: 'AUTO_INVOICE_PAID', label: 'Auto: factures payées → Réception', notifyRoles: ['admin', 'commercial'], sendEmail: true },
+
+        // ── Retours et mises en pause ──
+        { fromName: 'visite technique', toName: 'nouveau', triggerType: 'MANUAL', label: 'Retour en attente', allowedRoles: ['admin', 'commercial'] },
+        { fromName: 'commande', toName: 'visite technique', triggerType: 'MANUAL', label: 'Refaire visite technique', allowedRoles: ['admin'] },
+        { fromName: 'planifié', toName: 'commande', triggerType: 'MANUAL', label: 'Retour en commande', allowedRoles: ['admin'] },
+
+        // ── Annulation (depuis tout statut actif) ──
+        { fromName: 'nouveau', toName: 'annulé', triggerType: 'MANUAL', label: 'Annuler (nouveau)', allowedRoles: ['admin'] },
+        { fromName: 'visite technique', toName: 'annulé', triggerType: 'MANUAL', label: 'Annuler (visite)', allowedRoles: ['admin'] },
+        { fromName: 'commande', toName: 'annulé', triggerType: 'MANUAL', label: 'Annuler (commande)', allowedRoles: ['admin'] },
         { fromName: 'planifié', toName: 'annulé', triggerType: 'MANUAL', label: 'Annuler avant démarrage', allowedRoles: ['admin'] },
         { fromName: 'en cours', toName: 'annulé', triggerType: 'MANUAL', label: 'Annuler chantier en cours', allowedRoles: ['admin'], notifyRoles: ['commercial', 'comptable'], sendEmail: true },
-        { fromName: 'en attente', toName: 'annulé', triggerType: 'MANUAL', label: 'Annuler chantier en attente', allowedRoles: ['admin'] },
-        // Retour planifié
-        { fromName: 'en attente', toName: 'planifié', triggerType: 'MANUAL', label: 'Replanifier', allowedRoles: ['admin', 'commercial'] },
       ];
 
       let order = 0;
@@ -1471,10 +1484,10 @@ router.post('/seed', authenticateToken, isAdmin, async (req, res) => {
     // ─── SEED TEMPLATES FACTURES (si pas existants) ───
     if (existingTemplates === 0) {
       const templateDefs = [
-        { type: 'ACOMPTE', label: 'Acompte 30%', percentage: 30, statusName: 'planifié', isRequired: true, order: 0 },
+        { type: 'ACOMPTE', label: 'Acompte 30%', percentage: 30, statusName: 'commande', isRequired: true, order: 0 },
         { type: 'MATERIEL', label: 'Facture matériel', percentage: null, statusName: 'en cours', isRequired: false, order: 1 },
-        { type: 'FIN_CHANTIER', label: 'Facture fin de chantier', percentage: 60, statusName: 'terminé', isRequired: true, order: 2 },
-        { type: 'RECEPTION', label: 'Facture réception (solde)', percentage: 10, statusName: 'terminé', isRequired: false, order: 3 },
+        { type: 'FIN_CHANTIER', label: 'Facture fin de chantier 60%', percentage: 60, statusName: 'terminé', isRequired: true, order: 2 },
+        { type: 'RECEPTION', label: 'Facture réception (solde 10%)', percentage: 10, statusName: 'réception', isRequired: true, order: 3 },
       ];
 
       for (const tpl of templateDefs) {

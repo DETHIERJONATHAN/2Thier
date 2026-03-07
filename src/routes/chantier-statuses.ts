@@ -332,11 +332,14 @@ router.post('/seed', authenticateToken, async (req, res) => {
 
     const { randomUUID } = await import('crypto');
     const defaultStatuses = [
-      { name: 'Planifié', color: '#1677ff', order: 0, isDefault: true },
-      { name: 'En cours', color: '#fa8c16', order: 1, isDefault: false },
-      { name: 'En attente', color: '#faad14', order: 2, isDefault: false },
-      { name: 'Terminé', color: '#52c41a', order: 3, isDefault: false },
-      { name: 'Annulé', color: '#ff4d4f', order: 4, isDefault: false },
+      { name: 'Nouveau', color: '#8c8c8c', order: 0, isDefault: true },
+      { name: 'Visite technique', color: '#2f54eb', order: 1, isDefault: false },
+      { name: 'Commande', color: '#13c2c2', order: 2, isDefault: false },
+      { name: 'Planifié', color: '#1677ff', order: 3, isDefault: false },
+      { name: 'En cours', color: '#fa8c16', order: 4, isDefault: false },
+      { name: 'Terminé', color: '#52c41a', order: 5, isDefault: false },
+      { name: 'Réception', color: '#722ed1', order: 6, isDefault: false },
+      { name: 'Annulé', color: '#ff4d4f', order: 7, isDefault: false },
     ];
 
     const created = await Promise.all(

@@ -247,6 +247,21 @@ const ChantierWorkflowSettingsPage: React.FC = () => {
         : <Text type="secondary">Tous</Text>
     },
     {
+      title: 'Notifier',
+      dataIndex: 'notifyRoles',
+      key: 'notifyRoles',
+      width: 140,
+      render: (roles: string[] | null, r: Transition) => (
+        <Space size={2} wrap>
+          {roles?.length
+            ? roles.map(role => <Tag key={role} color="orange" style={{ fontSize: 11 }}>{role}</Tag>)
+            : <Text type="secondary" style={{ fontSize: 11 }}>—</Text>
+          }
+          {r.sendEmail && <Tag color="red" style={{ fontSize: 11 }}>📧</Tag>}
+        </Space>
+      ),
+    },
+    {
       title: 'Actif',
       dataIndex: 'isActive',
       key: 'isActive',
