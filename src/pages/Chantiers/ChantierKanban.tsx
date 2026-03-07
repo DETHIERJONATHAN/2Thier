@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Spin, message, Avatar, Tooltip, Empty, Tag, Button } from 'antd';
+import { Spin, message, Avatar, Tooltip, Empty, Tag, Button, Modal } from 'antd';
 import {
   UserOutlined,
   SettingOutlined,
@@ -8,6 +8,7 @@ import {
   LockOutlined,
   SafetyCertificateOutlined,
   FileTextOutlined,
+  ExclamationCircleOutlined,
 } from '@ant-design/icons';
 import { renderProductIcon } from '../../components/TreeBranchLeaf/treebranchleaf-new/components/Parameters/capabilities/ProductFilterPanel';
 import { DndProvider, useDrag, useDrop } from 'react-dnd';
@@ -497,8 +498,50 @@ const ChantierKanban: React.FC<ChantierKanbanProps> = ({ onViewChantier, onSetti
       setDraggingFromStatusId(null);
       refetch();
     } catch (err: any) {
-      // Extraire le message d'erreur du backend (403 = transition non autorisée)
-      const errorMsg = err?.response?.data?.message || err?.message || 'Erreur lors du changement de statut';
+      const responseData = err?.data;
+      const errorCode = responseData?.code;
+
+      // ── Blocage facturation : afficher un Modal interactif ──
+      if (errorCode === 'BILLING_BLOCK') {
+        const unpaid = responseData?.unpaidInvoices || [];
+        
+        Modal.confirm({
+          title: '💰 Facture(s) non payée(s)',
+          icon: <ExclamationCircleOutlined style={{ color: '#faad14' }} />,
+          content: (
+            <div>
+              <p style={{ marginBottom: 12 }}>Ce chantier a des factures requises non payées :</p>
+              <div style={{ background: '#fff7e6', border: '1px solid #ffd591', borderRadius: 6, padding: '8px 12px', marginBottom: 12 }}>
+                {unpaid.map((inv: any, i: number) => (
+                  <div key={i} style={{ fontWeight: 500 }}>• {inv.label} ({inv.percentage}%)</div>
+                ))}
+              </div>
+              <p style={{ color: '#8c8c8c', fontSize: 13 }}>
+                Vous pouvez ouvrir le chantier pour marquer les factures comme payées,
+                ou forcer le déplacement.
+              </p>
+            </div>
+          ),
+          okText: '⚡ Forcer le déplacement',
+          cancelText: 'Annuler',
+          okButtonProps: { danger: true },
+          onOk: async () => {
+            try {
+              await updateChantierStatus(chantierId, statusId, true);
+              message.success('Statut mis à jour (facturation ignorée)');
+              refetch();
+            } catch (forceErr: any) {
+              message.error(forceErr?.message || 'Erreur lors du déplacement forcé');
+            }
+          },
+        });
+
+        setDraggingFromStatusId(null);
+        return;
+      }
+
+      // Autres erreurs
+      const errorMsg = err?.message || 'Erreur lors du changement de statut';
       if (errorMsg.includes('rôle') || errorMsg.includes('autorisé')) {
         message.warning(`🔒 ${errorMsg}`);
       } else {

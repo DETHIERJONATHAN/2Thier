@@ -47,9 +47,9 @@ export function useChantiers(filters?: {
     fetchChantiers();
   }, [fetchChantiers]);
 
-  const updateChantierStatus = useCallback(async (chantierId: string, statusId: string) => {
+  const updateChantierStatus = useCallback(async (chantierId: string, statusId: string, force?: boolean) => {
     try {
-      await api.put(`/api/chantiers/${chantierId}/status`, { statusId });
+      await api.put(`/api/chantiers/${chantierId}/status`, { statusId, force });
       // Optimistic update
       setChantiers(prev =>
         prev.map(c => c.id === chantierId ? { ...c, statusId } : c)

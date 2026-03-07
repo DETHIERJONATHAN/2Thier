@@ -881,7 +881,7 @@ router.put('/:id', authenticateToken, isAdmin, async (req, res) => {
 router.put('/:id/status', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
-    const { statusId } = req.body;
+    const { statusId, force } = req.body;
     const organizationId = req.headers['x-organization-id'] as string;
     const user = (req as any).user;
     const userRole = user?.role || 'commercial';
@@ -937,7 +937,7 @@ router.put('/:id/status', authenticateToken, async (req, res) => {
     }
 
     // ── Bloquer si des factures requises du statut actuel ne sont pas payées ──
-    if (oldStatusId) {
+    if (oldStatusId && !force) {
       try {
         const requiredPlanItems = await db.chantierBillingPlanItem.findMany({
           where: { chantierId: id, statusId: oldStatusId, isRequired: true },
@@ -953,8 +953,10 @@ router.put('/:id/status', authenticateToken, async (req, res) => {
           });
           if (unpaid.length > 0) {
             const labels = unpaid.map(u => u.label).join(', ');
-            return res.status(400).json({
+            return res.status(409).json({
               success: false,
+              code: 'BILLING_BLOCK',
+              unpaidInvoices: unpaid.map(u => ({ label: u.label, type: u.type, percentage: u.percentage })),
               message: `Facture(s) requise(s) non payée(s) : ${labels}. Veuillez les marquer comme payées avant de changer de statut.`,
             });
           }

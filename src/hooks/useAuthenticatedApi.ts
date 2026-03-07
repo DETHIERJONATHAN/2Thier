@@ -257,8 +257,9 @@ export function useAuthenticatedApi() {
             }
 
             if (showErrors) setGlobalError(messageText);
-            const apiError = new Error(messageText) as Error & { status?: number };
+            const apiError = new Error(messageText) as Error & { status?: number; data?: unknown };
             apiError.status = response.status;
+            apiError.data = data;
             return Promise.reject(apiError);
           }
         }
