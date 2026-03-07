@@ -28,6 +28,16 @@ const { RangePicker } = DatePicker;
 
 // ─── Presets de dates ───
 type DatePreset = 'today' | 'yesterday' | '7days' | '30days' | 'this_week' | 'this_month' | 'last_month' | 'this_quarter' | 'custom';
+type DateField = 'createdAt' | 'signedAt' | 'plannedDate' | 'deliveryDate' | 'receptionDate' | 'completedDate';
+
+const DATE_FIELDS: { key: DateField; label: string; icon: string; color: string }[] = [
+  { key: 'createdAt', label: "Date d'arrivée", icon: '📥', color: '#8c8c8c' },
+  { key: 'signedAt', label: 'Signature', icon: '✍️', color: '#1677ff' },
+  { key: 'plannedDate', label: 'Chantier prévu', icon: '📅', color: '#fa8c16' },
+  { key: 'deliveryDate', label: 'Livraison', icon: '📦', color: '#722ed1' },
+  { key: 'receptionDate', label: 'Réception', icon: '✅', color: '#52c41a' },
+  { key: 'completedDate', label: 'Fin chantier', icon: '🏁', color: '#f5222d' },
+];
 
 const DATE_PRESETS: { key: DatePreset; label: string; getRange: () => [Dayjs, Dayjs] }[] = [
   { key: 'today', label: "Aujourd'hui", getRange: () => [dayjs().startOf('day'), dayjs().endOf('day')] },
@@ -265,6 +275,15 @@ const ChantierCard: React.FC<ChantierCardProps> = ({ chantier, onView, onViewCom
             </div>
           )}
 
+          {/* Date chantier prévu */}
+          {chantier.plannedDate && (
+            <Tooltip title={`Chantier prévu: ${new Date(chantier.plannedDate).toLocaleDateString('fr-BE', { weekday: 'short', day: 'numeric', month: 'short' })}`}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 2, fontSize: 10, color: '#fa8c16' }}>
+                📅 {new Date(chantier.plannedDate).toLocaleDateString('fr-BE', { day: 'numeric', month: 'short' })}
+              </div>
+            </Tooltip>
+          )}
+
           {/* Avatar responsable */}
           <div style={{ marginLeft: 'auto' }}>
             {chantier.Responsable ? (
@@ -458,6 +477,7 @@ const ChantierKanban: React.FC<ChantierKanbanProps> = ({ onViewChantier, onSetti
   const [selectedProducts, setSelectedProducts] = useState<Set<string>>(new Set());
   const [dateRange, setDateRange] = useState<[Dayjs, Dayjs] | null>(null);
   const [activePreset, setActivePreset] = useState<DatePreset | null>(null);
+  const [dateField, setDateField] = useState<DateField>('createdAt');
   const [allowedTargets, setAllowedTargets] = useState<Record<string, string[]>>({});
   const [draggingFromStatusId, setDraggingFromStatusId] = useState<string | null>(null);
 
@@ -521,12 +541,14 @@ const ChantierKanban: React.FC<ChantierKanbanProps> = ({ onViewChantier, onSetti
     if (dateRange) {
       const [start, end] = dateRange;
       result = result.filter(c => {
-        const d = dayjs(c.createdAt);
-        return d.isBetween(start, end, 'day', '[]');
+        const dateValue = (c as any)[dateField];
+        if (!dateValue) return false; // pas de date = exclu du filtre
+        const d = dayjs(dateValue);
+        return d.isValid() && d.isBetween(start, end, 'day', '[]');
       });
     }
     return result;
-  }, [chantiers, selectedProducts, dateRange]);
+  }, [chantiers, selectedProducts, dateRange, dateField]);
 
   // Handlers pour le filtre de dates
   const handlePresetClick = useCallback((preset: DatePreset) => {
@@ -555,6 +577,7 @@ const ChantierKanban: React.FC<ChantierKanbanProps> = ({ onViewChantier, onSetti
   const clearDateFilter = useCallback(() => {
     setDateRange(null);
     setActivePreset(null);
+    setDateField('createdAt');
   }, []);
 
   const toggleProduct = useCallback((value: string) => {
@@ -725,31 +748,61 @@ const ChantierKanban: React.FC<ChantierKanbanProps> = ({ onViewChantier, onSetti
                 borderRadius: 8,
                 boxShadow: '0 6px 16px rgba(0,0,0,0.12)',
                 padding: 12,
-                minWidth: 260,
+                minWidth: 280,
               }}>
-                <div style={{ fontSize: 12, fontWeight: 600, color: '#8c8c8c', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.5px' }}>Filtrer par date</div>
+                {/* Sélecteur du type de date */}
+                <div style={{ fontSize: 11, fontWeight: 600, color: '#8c8c8c', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.5px' }}>Sur quelle date ?</div>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginBottom: 10 }}>
-                  {DATE_PRESETS.map(preset => (
+                  {DATE_FIELDS.map(df => (
                     <button
-                      key={preset.key}
-                      onClick={() => handlePresetClick(preset.key)}
+                      key={df.key}
+                      onClick={() => setDateField(df.key)}
                       style={{
-                        padding: '4px 10px',
-                        borderRadius: 14,
-                        border: activePreset === preset.key ? '2px solid #1677ff' : '1px solid #d9d9d9',
-                        background: activePreset === preset.key ? '#e6f4ff' : '#fff',
+                        padding: '3px 8px',
+                        borderRadius: 12,
+                        border: dateField === df.key ? `2px solid ${df.color}` : '1px solid #e8e8e8',
+                        background: dateField === df.key ? `${df.color}12` : '#fafafa',
                         cursor: 'pointer',
-                        fontSize: 12,
-                        fontWeight: activePreset === preset.key ? 600 : 400,
-                        color: activePreset === preset.key ? '#1677ff' : '#595959',
+                        fontSize: 11,
+                        fontWeight: dateField === df.key ? 600 : 400,
+                        color: dateField === df.key ? df.color : '#8c8c8c',
                         transition: 'all 0.2s',
                         whiteSpace: 'nowrap',
                       }}
                     >
-                      {preset.label}
+                      {df.icon} {df.label}
                     </button>
                   ))}
                 </div>
+
+                {/* Présets de période */}
+                <div style={{ borderTop: '1px solid #f0f0f0', paddingTop: 8, marginBottom: 8 }}>
+                  <div style={{ fontSize: 11, fontWeight: 600, color: '#8c8c8c', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.5px' }}>Période</div>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                    {DATE_PRESETS.map(preset => (
+                      <button
+                        key={preset.key}
+                        onClick={() => handlePresetClick(preset.key)}
+                        style={{
+                          padding: '4px 10px',
+                          borderRadius: 14,
+                          border: activePreset === preset.key ? '2px solid #1677ff' : '1px solid #d9d9d9',
+                          background: activePreset === preset.key ? '#e6f4ff' : '#fff',
+                          cursor: 'pointer',
+                          fontSize: 12,
+                          fontWeight: activePreset === preset.key ? 600 : 400,
+                          color: activePreset === preset.key ? '#1677ff' : '#595959',
+                          transition: 'all 0.2s',
+                          whiteSpace: 'nowrap',
+                        }}
+                      >
+                        {preset.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Plage personnalisée */}
                 <div style={{ borderTop: '1px solid #f0f0f0', paddingTop: 8 }}>
                   <div style={{ fontSize: 11, color: '#8c8c8c', marginBottom: 4 }}>Plage personnalisée</div>
                   <RangePicker
@@ -762,10 +815,12 @@ const ChantierKanban: React.FC<ChantierKanbanProps> = ({ onViewChantier, onSetti
                     placeholder={['Début', 'Fin']}
                   />
                 </div>
+
+                {/* Résumé actif */}
                 {dateRange && (
                   <div style={{ borderTop: '1px solid #f0f0f0', paddingTop: 8, marginTop: 8, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <span style={{ fontSize: 11, color: '#595959' }}>
-                      {dateRange[0].format('DD MMM')} → {dateRange[1].format('DD MMM YYYY')}
+                      {DATE_FIELDS.find(f => f.key === dateField)?.icon} {DATE_FIELDS.find(f => f.key === dateField)?.label}: {dateRange[0].format('DD MMM')} → {dateRange[1].format('DD MMM YYYY')}
                     </span>
                     <button
                       onClick={clearDateFilter}
@@ -785,21 +840,21 @@ const ChantierKanban: React.FC<ChantierKanbanProps> = ({ onViewChantier, onSetti
                 gap: 5,
                 padding: '3px 10px',
                 borderRadius: 16,
-                border: dateRange ? '2px solid #1677ff' : '1px solid #d9d9d9',
-                background: dateRange ? '#e6f4ff' : '#fff',
+                border: dateRange ? `2px solid ${DATE_FIELDS.find(f => f.key === dateField)?.color || '#1677ff'}` : '1px solid #d9d9d9',
+                background: dateRange ? `${DATE_FIELDS.find(f => f.key === dateField)?.color || '#1677ff'}12` : '#fff',
                 cursor: 'pointer',
                 fontSize: 12,
                 fontWeight: dateRange ? 600 : 400,
-                color: dateRange ? '#1677ff' : '#595959',
+                color: dateRange ? (DATE_FIELDS.find(f => f.key === dateField)?.color || '#1677ff') : '#595959',
                 transition: 'all 0.2s',
                 whiteSpace: 'nowrap',
               }}
             >
               <CalendarOutlined style={{ fontSize: 13 }} />
               {dateRange
-                ? (activePreset && activePreset !== 'custom'
+                ? `${DATE_FIELDS.find(f => f.key === dateField)?.icon || '📅'} ${activePreset && activePreset !== 'custom'
                   ? DATE_PRESETS.find(p => p.key === activePreset)?.label
-                  : `${dateRange[0].format('DD/MM')} — ${dateRange[1].format('DD/MM')}`)
+                  : `${dateRange[0].format('DD/MM')} — ${dateRange[1].format('DD/MM')}`}`
                 : 'Dates'
               }
             </button>

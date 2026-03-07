@@ -27,6 +27,10 @@ const createChantierSchema = z.object({
   signedAt: z.string().optional(), // ISO date string
   documentUrl: z.string().optional(),
   documentName: z.string().optional(),
+  plannedDate: z.string().nullable().optional(),
+  receptionDate: z.string().nullable().optional(),
+  deliveryDate: z.string().nullable().optional(),
+  completedDate: z.string().nullable().optional(),
 });
 
 // Schéma pour mise à jour
@@ -830,6 +834,10 @@ router.put('/:id', authenticateToken, isAdmin, async (req, res) => {
         ...(safeData.siteAddress !== undefined && { siteAddress: safeData.siteAddress }),
         ...(safeData.notes !== undefined && { notes: safeData.notes }),
         ...(safeData.amount !== undefined && { amount: safeData.amount }),
+        ...(safeData.plannedDate !== undefined && { plannedDate: safeData.plannedDate ? new Date(safeData.plannedDate) : null }),
+        ...(safeData.receptionDate !== undefined && { receptionDate: safeData.receptionDate ? new Date(safeData.receptionDate) : null }),
+        ...(safeData.deliveryDate !== undefined && { deliveryDate: safeData.deliveryDate ? new Date(safeData.deliveryDate) : null }),
+        ...(safeData.completedDate !== undefined && { completedDate: safeData.completedDate ? new Date(safeData.completedDate) : null }),
         updatedAt: new Date()
       },
       include: {

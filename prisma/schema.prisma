@@ -2974,6 +2974,10 @@ model Chantier {
   validatedAt           DateTime?
   validatedById         String?
   validationNotes       String?
+  plannedDate           DateTime?
+  receptionDate         DateTime?
+  deliveryDate          DateTime?
+  completedDate         DateTime?
   createdAt             DateTime           @default(now())
   updatedAt             DateTime
 

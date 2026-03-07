@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import {
   Card, Tabs, Descriptions, Tag, Button, Spin, Avatar, Input, message,
-  Select, Empty, Typography, Space, Divider, Tooltip, Alert, Modal
+  Select, Empty, Typography, Space, Divider, Tooltip, Alert, Modal, DatePicker
 } from 'antd';
 import {
   ArrowLeftOutlined,
@@ -29,6 +29,9 @@ import { useChantierStatuses } from '../../hooks/useChantierStatuses';
 import { useAuth } from '../../auth/useAuth';
 import { renderProductIcon } from '../../components/TreeBranchLeaf/treebranchleaf-new/components/Parameters/capabilities/ProductFilterPanel';
 import type { Chantier } from '../../types/chantier';
+import dayjs from 'dayjs';
+import 'dayjs/locale/fr';
+dayjs.locale('fr');
 import ChantierInvoicesTab from './ChantierInvoicesTab';
 import ChantierEventsTab from './ChantierEventsTab';
 import ChantierHistoryTab from './ChantierHistoryTab';
@@ -59,6 +62,10 @@ const ChantierDetailPage: React.FC = () => {
     amount?: number | null;
     statusId?: string;
     customLabel?: string;
+    plannedDate?: string | null;
+    receptionDate?: string | null;
+    deliveryDate?: string | null;
+    completedDate?: string | null;
   }>({});
 
   // Mini-agenda : prochains événements
@@ -105,6 +112,10 @@ const ChantierDetailPage: React.FC = () => {
       amount: chantier.amount,
       statusId: chantier.statusId || undefined,
       customLabel: chantier.customLabel || '',
+      plannedDate: chantier.plannedDate || null,
+      receptionDate: chantier.receptionDate || null,
+      deliveryDate: chantier.deliveryDate || null,
+      completedDate: chantier.completedDate || null,
     });
     setEditing(true);
   }, [chantier]);
@@ -413,6 +424,70 @@ const ChantierDetailPage: React.FC = () => {
                     ? <><CalendarOutlined style={{ marginRight: '4px' }} />{new Date(chantier.signedAt).toLocaleDateString('fr-FR')}</>
                     : <Text type="secondary">—</Text>
                   }
+                </Descriptions.Item>
+                <Descriptions.Item label="📅 Date chantier prévue">
+                  {editing ? (
+                    <DatePicker
+                      value={editForm.plannedDate ? dayjs(editForm.plannedDate) : null}
+                      onChange={d => setEditForm(f => ({ ...f, plannedDate: d ? d.toISOString() : null }))}
+                      format="DD/MM/YYYY"
+                      size="small"
+                      style={{ width: '100%' }}
+                      placeholder="Sélectionner"
+                    />
+                  ) : (
+                    chantier.plannedDate
+                      ? <><CalendarOutlined style={{ marginRight: '4px', color: '#1677ff' }} />{dayjs(chantier.plannedDate).format('DD/MM/YYYY')}</>
+                      : <Text type="secondary">—</Text>
+                  )}
+                </Descriptions.Item>
+                <Descriptions.Item label="📦 Date livraison matériel">
+                  {editing ? (
+                    <DatePicker
+                      value={editForm.deliveryDate ? dayjs(editForm.deliveryDate) : null}
+                      onChange={d => setEditForm(f => ({ ...f, deliveryDate: d ? d.toISOString() : null }))}
+                      format="DD/MM/YYYY"
+                      size="small"
+                      style={{ width: '100%' }}
+                      placeholder="Sélectionner"
+                    />
+                  ) : (
+                    chantier.deliveryDate
+                      ? <><CalendarOutlined style={{ marginRight: '4px', color: '#722ed1' }} />{dayjs(chantier.deliveryDate).format('DD/MM/YYYY')}</>
+                      : <Text type="secondary">—</Text>
+                  )}
+                </Descriptions.Item>
+                <Descriptions.Item label="✅ Date réception">
+                  {editing ? (
+                    <DatePicker
+                      value={editForm.receptionDate ? dayjs(editForm.receptionDate) : null}
+                      onChange={d => setEditForm(f => ({ ...f, receptionDate: d ? d.toISOString() : null }))}
+                      format="DD/MM/YYYY"
+                      size="small"
+                      style={{ width: '100%' }}
+                      placeholder="Sélectionner"
+                    />
+                  ) : (
+                    chantier.receptionDate
+                      ? <><CalendarOutlined style={{ marginRight: '4px', color: '#52c41a' }} />{dayjs(chantier.receptionDate).format('DD/MM/YYYY')}</>
+                      : <Text type="secondary">—</Text>
+                  )}
+                </Descriptions.Item>
+                <Descriptions.Item label="🏁 Date fin de chantier">
+                  {editing ? (
+                    <DatePicker
+                      value={editForm.completedDate ? dayjs(editForm.completedDate) : null}
+                      onChange={d => setEditForm(f => ({ ...f, completedDate: d ? d.toISOString() : null }))}
+                      format="DD/MM/YYYY"
+                      size="small"
+                      style={{ width: '100%' }}
+                      placeholder="Sélectionner"
+                    />
+                  ) : (
+                    chantier.completedDate
+                      ? <><CalendarOutlined style={{ marginRight: '4px', color: '#fa8c16' }} />{dayjs(chantier.completedDate).format('DD/MM/YYYY')}</>
+                      : <Text type="secondary">—</Text>
+                  )}
                 </Descriptions.Item>
                 <Descriptions.Item label="Créé le">
                   {new Date(chantier.createdAt).toLocaleDateString('fr-FR', {

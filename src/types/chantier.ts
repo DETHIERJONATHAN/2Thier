@@ -41,6 +41,10 @@ export interface Chantier {
   validatedAt?: string | null;
   validatedById?: string | null;
   validationNotes?: string | null;
+  plannedDate?: string | null;
+  receptionDate?: string | null;
+  deliveryDate?: string | null;
+  completedDate?: string | null;
   createdAt: string;
   updatedAt: string;
 
