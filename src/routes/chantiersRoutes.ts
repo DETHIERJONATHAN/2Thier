@@ -792,17 +792,19 @@ router.put('/:id', authenticateToken, isAdmin, async (req, res) => {
     }
 
     const data = validation.data;
+    // ⚠️ Le statusId ne passe PAS par le PUT général — il doit passer par PUT /:id/status
+    // pour respecter les transitions workflow, l'historique et les notifications
+    const { statusId: _ignoredStatusId, ...safeData } = data;
     const chantier = await db.chantier.update({
       where: { id },
       data: {
-        ...(data.statusId !== undefined && { statusId: data.statusId }),
-        ...(data.responsableId !== undefined && { responsableId: data.responsableId }),
-        ...(data.commercialId !== undefined && { commercialId: data.commercialId }),
-        ...(data.customLabel !== undefined && { customLabel: data.customLabel }),
-        ...(data.clientName !== undefined && { clientName: data.clientName }),
-        ...(data.siteAddress !== undefined && { siteAddress: data.siteAddress }),
-        ...(data.notes !== undefined && { notes: data.notes }),
-        ...(data.amount !== undefined && { amount: data.amount }),
+        ...(safeData.responsableId !== undefined && { responsableId: safeData.responsableId }),
+        ...(safeData.commercialId !== undefined && { commercialId: safeData.commercialId }),
+        ...(safeData.customLabel !== undefined && { customLabel: safeData.customLabel }),
+        ...(safeData.clientName !== undefined && { clientName: safeData.clientName }),
+        ...(safeData.siteAddress !== undefined && { siteAddress: safeData.siteAddress }),
+        ...(safeData.notes !== undefined && { notes: safeData.notes }),
+        ...(safeData.amount !== undefined && { amount: safeData.amount }),
         updatedAt: new Date()
       },
       include: {
@@ -957,6 +959,72 @@ router.put('/:id/status', authenticateToken, async (req, res) => {
       } catch (notifErr) {
         console.error('[Chantiers] Erreur notifications (non bloquant):', notifErr);
       }
+    }
+
+    // ── Auto-création des factures depuis les templates pour ce nouveau statut ──
+    try {
+      const templates = await db.chantierInvoiceTemplate.findMany({
+        where: { organizationId, statusId, isActive: true },
+        orderBy: { order: 'asc' },
+      });
+      if (templates.length > 0) {
+        // Récupérer le montant du chantier pour calculer les pourcentages
+        const chantierFull = await db.chantier.findUnique({
+          where: { id },
+          select: { amount: true, GeneratedDocument: { select: { dataSnapshot: true, paymentAmount: true } } },
+        });
+        const chantierAmount = chantierFull?.amount
+          || (chantierFull?.GeneratedDocument?.dataSnapshot as any)?.quote?.totalTTC
+          || chantierFull?.GeneratedDocument?.paymentAmount
+          || null;
+
+        // Vérifier quelles factures de ce type existent déjà pour ce chantier
+        const existingInvoices = await db.chantierInvoice.findMany({
+          where: { chantierId: id },
+          select: { type: true, label: true },
+        });
+
+        for (const tpl of templates) {
+          // Ne pas re-créer si une facture de même type+label existe déjà
+          const alreadyExists = existingInvoices.some(
+            inv => inv.type === tpl.type && inv.label === tpl.label
+          );
+          if (alreadyExists) continue;
+
+          const amount = tpl.percentage && chantierAmount
+            ? Math.round((Number(chantierAmount) * tpl.percentage / 100) * 100) / 100
+            : (tpl as any).fixedAmount || 0;
+
+          await db.chantierInvoice.create({
+            data: {
+              id: crypto.randomUUID(),
+              chantierId: id,
+              organizationId,
+              type: tpl.type,
+              label: tpl.label,
+              amount,
+              percentage: tpl.percentage,
+              status: 'DRAFT',
+              order: tpl.order,
+              updatedAt: new Date(),
+            },
+          });
+
+          // Historique
+          await db.chantierHistory.create({
+            data: {
+              id: crypto.randomUUID(),
+              chantierId: id,
+              action: 'INVOICE_CREATED',
+              toValue: tpl.label,
+              userId: user?.userId || user?.id,
+              data: { autoCreated: true, templateId: tpl.id, type: tpl.type, amount },
+            },
+          });
+        }
+      }
+    } catch (autoInvErr) {
+      console.error('[Chantiers] Erreur auto-création factures (non bloquant):', autoInvErr);
     }
 
     res.json({

@@ -1,11 +1,11 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   Card, Button, Tag, Table, Modal, Form, Input, InputNumber, Select, DatePicker,
-  message, Empty, Typography, Space, Popconfirm, Badge,
+  message, Empty, Typography, Space, Popconfirm, Badge, Progress, Alert,
 } from 'antd';
 import {
   PlusOutlined, DeleteOutlined, EditOutlined, DollarOutlined,
-  CheckCircleOutlined, SendOutlined,
+  CheckCircleOutlined, SendOutlined, ThunderboltOutlined, FileAddOutlined,
 } from '@ant-design/icons';
 import { useAuthenticatedApi } from '../../hooks/useAuthenticatedApi';
 import dayjs from 'dayjs';
@@ -29,6 +29,19 @@ interface ChantierInvoice {
   order: number;
   createdAt: string;
   updatedAt: string;
+}
+
+interface InvoiceTemplate {
+  id: string;
+  type: string;
+  label: string;
+  percentage?: number | null;
+  fixedAmount?: number | null;
+  isRequired: boolean;
+  isActive: boolean;
+  order: number;
+  statusId?: string | null;
+  Status?: { id: string; name: string; color: string } | null;
 }
 
 interface Props {
@@ -58,6 +71,7 @@ const ChantierInvoicesTab: React.FC<Props> = ({ chantierId, chantierAmount, onCh
   const api = useMemo(() => apiHook.api, [apiHook.api]);
 
   const [invoices, setInvoices] = useState<ChantierInvoice[]>([]);
+  const [templates, setTemplates] = useState<InvoiceTemplate[]>([]);
   const [loading, setLoading] = useState(true);
   const [modalVisible, setModalVisible] = useState(false);
   const [editingInvoice, setEditingInvoice] = useState<ChantierInvoice | null>(null);
@@ -75,9 +89,20 @@ const ChantierInvoicesTab: React.FC<Props> = ({ chantierId, chantierAmount, onCh
     }
   }, [api, chantierId]);
 
+  // Charger les templates de factures de l'organisation
+  const fetchTemplates = useCallback(async () => {
+    try {
+      const res = await api.get('/api/chantier-workflow/invoice-templates');
+      setTemplates((res.data || []).filter((t: InvoiceTemplate) => t.isActive));
+    } catch {
+      // non bloquant
+    }
+  }, [api]);
+
   useEffect(() => {
     fetchInvoices();
-  }, [fetchInvoices]);
+    fetchTemplates();
+  }, [fetchInvoices, fetchTemplates]);
 
   const handleOpenModal = useCallback((invoice?: ChantierInvoice) => {
     if (invoice) {
@@ -150,6 +175,67 @@ const ChantierInvoicesTab: React.FC<Props> = ({ chantierId, chantierAmount, onCh
       form.setFieldsValue({ amount: Math.round((chantierAmount * pct / 100) * 100) / 100 });
     }
   }, [form, chantierAmount]);
+
+  // Créer une facture depuis un template
+  const handleCreateFromTemplate = useCallback(async (tpl: InvoiceTemplate) => {
+    // Vérifier si cette facture existe déjà
+    const alreadyExists = invoices.some(inv => inv.type === tpl.type && inv.label === tpl.label);
+    if (alreadyExists) {
+      message.warning(`La facture "${tpl.label}" existe déjà pour ce chantier`);
+      return;
+    }
+    try {
+      const amount = tpl.percentage && chantierAmount
+        ? Math.round((Number(chantierAmount) * tpl.percentage / 100) * 100) / 100
+        : (tpl.fixedAmount || 0);
+
+      await api.post(`/api/chantier-workflow/chantiers/${chantierId}/invoices`, {
+        type: tpl.type,
+        label: tpl.label,
+        amount,
+        percentage: tpl.percentage || null,
+        status: 'DRAFT',
+        order: tpl.order,
+      });
+      message.success(`Facture "${tpl.label}" créée (${amount.toLocaleString('fr-BE', { minimumFractionDigits: 2 })} €)`);
+      fetchInvoices();
+    } catch {
+      message.error('Erreur lors de la création');
+    }
+  }, [api, chantierId, chantierAmount, invoices, fetchInvoices]);
+
+  // Créer TOUTES les factures manquantes depuis les templates
+  const handleCreateAllFromTemplates = useCallback(async () => {
+    let created = 0;
+    for (const tpl of templates) {
+      const alreadyExists = invoices.some(inv => inv.type === tpl.type && inv.label === tpl.label);
+      if (alreadyExists) continue;
+
+      const amount = tpl.percentage && chantierAmount
+        ? Math.round((Number(chantierAmount) * tpl.percentage / 100) * 100) / 100
+        : (tpl.fixedAmount || 0);
+
+      try {
+        await api.post(`/api/chantier-workflow/chantiers/${chantierId}/invoices`, {
+          type: tpl.type,
+          label: tpl.label,
+          amount,
+          percentage: tpl.percentage || null,
+          status: 'DRAFT',
+          order: tpl.order,
+        });
+        created++;
+      } catch {
+        // continue
+      }
+    }
+    if (created > 0) {
+      message.success(`${created} facture(s) créée(s) depuis le plan`);
+      fetchInvoices();
+    } else {
+      message.info('Toutes les factures du plan existent déjà');
+    }
+  }, [api, chantierId, chantierAmount, templates, invoices, fetchInvoices]);
 
   // Statistiques
   const stats = useMemo(() => {
@@ -239,6 +325,93 @@ const ChantierInvoicesTab: React.FC<Props> = ({ chantierId, chantierAmount, onCh
 
   return (
     <div style={{ padding: '16px 0' }}>
+      {/* Plan de facturation — Templates configurés */}
+      {templates.length > 0 && (
+        <Card
+          size="small"
+          title={<span><ThunderboltOutlined /> Plan de facturation</span>}
+          style={{ marginBottom: 16, borderColor: '#d9d9d9' }}
+          extra={
+            <Button
+              size="small"
+              type="primary"
+              icon={<FileAddOutlined />}
+              onClick={handleCreateAllFromTemplates}
+            >
+              Créer toutes les factures
+            </Button>
+          }
+        >
+          {!chantierAmount && (
+            <Alert
+              type="warning"
+              message="Montant du devis non défini — les montants seront à 0 €. Définissez le montant dans les informations du chantier."
+              showIcon
+              style={{ marginBottom: 12 }}
+            />
+          )}
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            {templates.map(tpl => {
+              const typeInfo = INVOICE_TYPES.find(t => t.value === tpl.type);
+              const alreadyExists = invoices.some(inv => inv.type === tpl.type && inv.label === tpl.label);
+              const amount = tpl.percentage && chantierAmount
+                ? Math.round((Number(chantierAmount) * tpl.percentage / 100) * 100) / 100
+                : (tpl.fixedAmount || 0);
+
+              return (
+                <Card
+                  key={tpl.id}
+                  size="small"
+                  style={{
+                    flex: '1 1 200px',
+                    maxWidth: 260,
+                    borderColor: alreadyExists ? '#52c41a' : '#d9d9d9',
+                    background: alreadyExists ? '#f6ffed' : undefined,
+                    opacity: alreadyExists ? 0.8 : 1,
+                  }}
+                >
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                    <Tag color={typeInfo?.color} style={{ margin: 0 }}>{typeInfo?.label || tpl.type}</Tag>
+                    {tpl.isRequired && <Tag color="red" style={{ margin: 0, fontSize: 10 }}>Obligatoire</Tag>}
+                  </div>
+                  <Text strong style={{ display: 'block', marginBottom: 2 }}>{tpl.label}</Text>
+                  <Text type="secondary" style={{ fontSize: 12 }}>
+                    {tpl.percentage ? `${tpl.percentage}%` : '—'} = {amount.toLocaleString('fr-BE', { minimumFractionDigits: 2 })} €
+                  </Text>
+                  {tpl.Status && (
+                    <div style={{ marginTop: 4 }}>
+                      <Text type="secondary" style={{ fontSize: 11 }}>Étape : </Text>
+                      <Tag color={tpl.Status.color} style={{ fontSize: 11 }}>{tpl.Status.name}</Tag>
+                    </div>
+                  )}
+                  <div style={{ marginTop: 8 }}>
+                    {alreadyExists ? (
+                      <Tag color="success" icon={<CheckCircleOutlined />}>Créée</Tag>
+                    ) : (
+                      <Button size="small" type="dashed" icon={<PlusOutlined />} onClick={() => handleCreateFromTemplate(tpl)}>
+                        Créer
+                      </Button>
+                    )}
+                  </div>
+                </Card>
+              );
+            })}
+          </div>
+          {chantierAmount && (
+            <div style={{ marginTop: 12, textAlign: 'right' }}>
+              <Text type="secondary">
+                Total plan : {templates.reduce((sum, t) => sum + (t.percentage || 0), 0)}% = {
+                  (templates.reduce((sum, t) => {
+                    const amt = t.percentage ? Math.round((Number(chantierAmount) * t.percentage / 100) * 100) / 100 : (t.fixedAmount || 0);
+                    return sum + amt;
+                  }, 0)).toLocaleString('fr-BE', { minimumFractionDigits: 2 })
+                } €
+              </Text>
+            </div>
+          )}
+        </Card>
+      )}
+
       {/* Statistiques */}
       <div style={{ display: 'flex', gap: 16, marginBottom: 16, flexWrap: 'wrap' }}>
         <Card size="small" style={{ flex: 1, minWidth: 150 }}>
@@ -260,6 +433,18 @@ const ChantierInvoicesTab: React.FC<Props> = ({ chantierId, chantierAmount, onCh
           </Card>
         )}
       </div>
+
+      {/* Progression paiement */}
+      {stats.total > 0 && (
+        <div style={{ marginBottom: 16 }}>
+          <Progress
+            percent={Math.round((stats.paid / stats.total) * 100)}
+            strokeColor="#52c41a"
+            trailColor="#f0f0f0"
+            format={pct => `${pct}% payé`}
+          />
+        </div>
+      )}
 
       {/* Tableau */}
       <Card size="small" title={<span><DollarOutlined /> Factures</span>}

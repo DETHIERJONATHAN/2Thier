@@ -1454,6 +1454,8 @@ router.post('/seed', authenticateToken, isAdmin, async (req, res) => {
         { fromName: 'terminé', toName: 'réception', triggerType: 'MANUAL', label: 'Lancer la réception', allowedRoles: ['admin', 'commercial'] },
         // Auto-transition: quand toutes les factures requises sont payées → Réception validée automatiquement
         { fromName: 'terminé', toName: 'réception', triggerType: 'AUTO_INVOICE_PAID', label: 'Auto: factures payées → Réception', notifyRoles: ['admin', 'commercial'], sendEmail: true },
+        // Auto-transition: quand la visite technique est validée → passe en commande
+        { fromName: 'visite technique', toName: 'commande', triggerType: 'AUTO_VISIT_VALIDATED', label: 'Auto: visite validée → Commande', notifyRoles: ['comptable', 'admin'], sendEmail: true },
 
         // ── Retours et mises en pause ──
         { fromName: 'visite technique', toName: 'nouveau', triggerType: 'MANUAL', label: 'Retour en attente', allowedRoles: ['admin', 'commercial'] },

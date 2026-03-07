@@ -19,6 +19,8 @@ import {
   LinkOutlined,
   PartitionOutlined,
   DollarOutlined,
+  HistoryOutlined,
+  ClockCircleOutlined,
 } from '@ant-design/icons';
 import { useAuthenticatedApi } from '../../hooks/useAuthenticatedApi';
 import { useChantierStatuses } from '../../hooks/useChantierStatuses';
@@ -55,6 +57,23 @@ const ChantierDetailPage: React.FC = () => {
     customLabel?: string;
   }>({});
 
+  // Mini-agenda : prochains événements
+  const [upcomingEvents, setUpcomingEvents] = useState<any[]>([]);
+
+  const fetchUpcomingEvents = useCallback(async () => {
+    if (!id) return;
+    try {
+      const res = await api.get(`/api/chantier-workflow/events?chantierId=${id}`) as any;
+      const all = res.data || res || [];
+      const now = new Date();
+      const upcoming = all
+        .filter((e: any) => new Date(e.startDate) >= now && e.status !== 'CANCELLED')
+        .sort((a: any, b: any) => new Date(a.startDate).getTime() - new Date(b.startDate).getTime())
+        .slice(0, 3);
+      setUpcomingEvents(upcoming);
+    } catch { /* silencieux */ }
+  }, [api, id]);
+
   const fetchChantier = useCallback(async () => {
     if (!id) return;
     try {
@@ -71,7 +90,8 @@ const ChantierDetailPage: React.FC = () => {
 
   useEffect(() => {
     fetchChantier();
-  }, [fetchChantier]);
+    fetchUpcomingEvents();
+  }, [fetchChantier, fetchUpcomingEvents]);
 
   const startEditing = useCallback(() => {
     if (!chantier) return;
@@ -94,8 +114,25 @@ const ChantierDetailPage: React.FC = () => {
     if (!id) return;
     try {
       setSaving(true);
-      await api.put(`/api/chantiers/${id}`, editForm);
-      message.success('Chantier mis à jour');
+      // Séparer le changement de statut du reste — le statut passe par le workflow
+      const { statusId: newStatusId, ...otherFields } = editForm;
+
+      // 1) Sauvegarder les champs classiques (sans statusId)
+      await api.put(`/api/chantiers/${id}`, otherFields);
+
+      // 2) Si le statut a changé, passer par l'API workflow dédiée
+      if (newStatusId && chantier && newStatusId !== chantier.statusId) {
+        try {
+          await api.put(`/api/chantiers/${id}/status`, { statusId: newStatusId });
+          message.success('Chantier et statut mis à jour');
+        } catch (statusErr: any) {
+          const errMsg = statusErr?.message || statusErr?.data?.message || 'Transition non autorisée';
+          message.warning(`Chantier sauvegardé, mais le statut n'a pas changé : ${errMsg}`);
+        }
+      } else {
+        message.success('Chantier mis à jour');
+      }
+
       setEditing(false);
       fetchChantier();
     } catch (err) {
@@ -104,7 +141,7 @@ const ChantierDetailPage: React.FC = () => {
     } finally {
       setSaving(false);
     }
-  }, [api, id, editForm, fetchChantier]);
+  }, [api, id, editForm, fetchChantier, chantier]);
 
   // Map des statuts pour le composant historique (doit être avant les early returns)
   const statusesMap = useMemo(() => {
@@ -244,8 +281,8 @@ const ChantierDetailPage: React.FC = () => {
       </div>
 
       {/* Content Tabs */}
-      <Tabs defaultActiveKey={isAdminOrAbove ? 'info' : 'tbl'} type="card">
-        {isAdminOrAbove && <TabPane tab={<span><FileTextOutlined /> Informations</span>} key="info">
+      <Tabs defaultActiveKey="info" type="card">
+        <TabPane tab={<span><FileTextOutlined /> Informations</span>} key="info">
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px', padding: '16px 0' }}>
             {/* Colonne gauche - Détails chantier */}
             <Card title="Détails du chantier" size="small">
@@ -466,6 +503,43 @@ const ChantierDetailPage: React.FC = () => {
                   </div>
                 </div>
               </Card>
+
+              {/* Mini-agenda : prochains événements */}
+              {upcomingEvents.length > 0 && (
+                <Card
+                  title={<span><ClockCircleOutlined /> Prochains événements</span>}
+                  size="small"
+                  extra={<Button type="link" size="small" onClick={() => {
+                    // Scroll to events tab
+                    const tabsEl = document.querySelector('.ant-tabs');
+                    if (tabsEl) tabsEl.scrollIntoView({ behavior: 'smooth' });
+                  }}>Voir tout</Button>}
+                >
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    {upcomingEvents.map((evt: any) => (
+                      <div key={evt.id} style={{
+                        display: 'flex', alignItems: 'center', gap: 8,
+                        padding: '6px 8px', borderRadius: 6,
+                        background: '#fafafa', border: '1px solid #f0f0f0',
+                      }}>
+                        <CalendarOutlined style={{ color: '#1890ff', fontSize: 14 }} />
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <Text style={{ fontSize: 12, fontWeight: 500, display: 'block' }} ellipsis>
+                            {evt.type === 'VISITE' ? 'Visite' : evt.type === 'INSTALLATION' ? 'Installation' : evt.type === 'LIVRAISON' ? 'Livraison' : evt.type === 'REUNION' ? 'Réunion' : evt.type}
+                          </Text>
+                          <Text type="secondary" style={{ fontSize: 11 }}>
+                            {new Date(evt.startDate).toLocaleDateString('fr-BE', { day: 'numeric', month: 'short' })}
+                            {evt.endDate && ` — ${new Date(evt.endDate).toLocaleDateString('fr-BE', { day: 'numeric', month: 'short' })}`}
+                          </Text>
+                        </div>
+                        <Tag color={evt.status === 'COMPLETED' ? 'green' : evt.status === 'PROBLEM' ? 'red' : 'blue'} style={{ fontSize: 10, margin: 0 }}>
+                          {evt.status === 'PLANNED' ? 'Planifié' : evt.status === 'COMPLETED' ? 'OK' : evt.status === 'PROBLEM' ? 'Problème' : evt.status}
+                        </Tag>
+                      </div>
+                    ))}
+                  </div>
+                </Card>
+              )}
             </div>
           </div>
 
@@ -484,9 +558,9 @@ const ChantierDetailPage: React.FC = () => {
                 : <Text type="secondary">Aucune note</Text>
             )}
           </Card>
-        </TabPane>}
+        </TabPane>
 
-        {isAdminOrAbove && <TabPane tab={<span><FileTextOutlined /> Document</span>} key="document">
+        <TabPane tab={<span><FileTextOutlined /> Document</span>} key="document">
           <div style={{ padding: '24px 0', display: 'flex', flexDirection: 'column', gap: 16 }}>
             {/* Document signé (uploadé) */}
             {chantier.documentUrl ? (
@@ -559,7 +633,7 @@ const ChantierDetailPage: React.FC = () => {
               </Card>
             )}
           </div>
-        </TabPane>}
+        </TabPane>
 
         {/* Onglet TBL — visible par tous */}
         <TabPane tab={<span><PartitionOutlined /> TBL</span>} key="tbl">
@@ -624,9 +698,9 @@ const ChantierDetailPage: React.FC = () => {
           </div>
         </TabPane>
 
-        {isAdminOrAbove && <TabPane tab={<span><CalendarOutlined /> Historique</span>} key="history">
+        <TabPane tab={<span><HistoryOutlined /> Historique</span>} key="history">
           <ChantierHistoryTab chantierId={chantier.id} statusesMap={statusesMap} />
-        </TabPane>}
+        </TabPane>
 
         {/* Onglet Comptabilité — visible par admin, comptable, super_admin */}
         {canSeeCompta && <TabPane tab={<span><DollarOutlined /> Comptabilité</span>} key="compta">

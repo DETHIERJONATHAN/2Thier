@@ -193,16 +193,36 @@ const ChantierEventsTab: React.FC<Props> = ({ chantierId, chantierAddress, chant
     }
   }, [api, fetchEvents]);
 
-  const handleReportProblem = useCallback(async (eventId: string) => {
-    const note = window.prompt('Décrivez le problème :');
-    if (!note) return;
-    try {
-      await api.put(`/api/chantier-workflow/events/${eventId}`, { status: 'PROBLEM', problemNote: note });
-      message.warning('Problème signalé — commercial et admin notifiés');
-      fetchEvents();
-    } catch {
-      message.error('Erreur signalement');
-    }
+  const handleReportProblem = useCallback((eventId: string) => {
+    let problemText = '';
+    Modal.confirm({
+      title: 'Signaler un problème',
+      icon: <WarningOutlined style={{ color: '#ff4d4f' }} />,
+      content: (
+        <Input.TextArea
+          rows={4}
+          placeholder="Décrivez le problème rencontré..."
+          onChange={e => { problemText = e.target.value; }}
+        />
+      ),
+      okText: 'Signaler',
+      okButtonProps: { danger: true },
+      cancelText: 'Annuler',
+      async onOk() {
+        if (!problemText.trim()) {
+          message.warning('Veuillez décrire le problème');
+          throw new Error('empty'); // empêche la fermeture
+        }
+        try {
+          await api.put(`/api/chantier-workflow/events/${eventId}`, { status: 'PROBLEM', problemNote: problemText.trim() });
+          message.warning('Problème signalé — commercial et admin notifiés');
+          fetchEvents();
+        } catch (err: any) {
+          if (err?.message === 'empty') throw err;
+          message.error('Erreur signalement');
+        }
+      },
+    });
   }, [api, fetchEvents]);
 
   const handleLockSubcontract = useCallback(async (eventId: string) => {
