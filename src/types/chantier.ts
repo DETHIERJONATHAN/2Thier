@@ -105,6 +105,72 @@ export interface Chantier {
     summary?: Record<string, any> | null;
     status?: string;
   } | null;
+
+  // Assignations techniciens (Phase techniciens)
+  ChantierAssignments?: ChantierAssignment[];
+}
+
+// ═══ Types Équipes & Techniciens ═══
+
+export interface ChantierAssignment {
+  id: string;
+  userId: string;
+  role: 'CHEF_EQUIPE' | 'TECHNICIEN';
+  teamId?: string | null;
+  User: {
+    id: string;
+    firstName?: string | null;
+    lastName?: string | null;
+    avatarUrl?: string | null;
+  };
+  Team?: {
+    id: string;
+    name: string;
+    color: string;
+  } | null;
+}
+
+export interface TeamMember {
+  id: string;
+  teamId: string;
+  userId: string;
+  role: 'LEADER' | 'MEMBER';
+  User: {
+    id: string;
+    firstName?: string | null;
+    lastName?: string | null;
+    avatarUrl?: string | null;
+    email?: string | null;
+    role?: string;
+  };
+}
+
+export interface Team {
+  id: string;
+  organizationId: string;
+  name: string;
+  color: string;
+  description?: string | null;
+  Members: TeamMember[];
+  _count?: { ChantierAssignments: number };
+}
+
+export interface Technician {
+  id: string;
+  firstName?: string | null;
+  lastName?: string | null;
+  avatarUrl?: string | null;
+  email?: string | null;
+  role?: string;
+  phoneNumber?: string | null;
+  orgRole?: { id: string; name: string; label?: string | null };
+  chantierCount: number;
+  teams: Array<{
+    teamId: string;
+    teamName: string;
+    teamColor: string;
+    memberRole: 'LEADER' | 'MEMBER';
+  }>;
 }
 
 export interface ChantierCreatePayload {

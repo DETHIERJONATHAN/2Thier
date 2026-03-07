@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Spin, message, Avatar, Tooltip, Empty, Tag, Button, Modal, DatePicker, Dropdown } from 'antd';
+import { Spin, message, Avatar, Tooltip, Empty, Tag, Button, Modal, DatePicker, Dropdown, Input, Select, Popconfirm, Badge } from 'antd';
 import type { Dayjs } from 'dayjs';
 import dayjs from 'dayjs';
 import 'dayjs/locale/fr';
@@ -17,6 +17,12 @@ import {
   WarningOutlined,
   CalendarOutlined,
   CloseCircleOutlined,
+  TeamOutlined,
+  PlusOutlined,
+  CloseOutlined,
+  MenuFoldOutlined,
+  MenuUnfoldOutlined,
+  DeleteOutlined,
 } from '@ant-design/icons';
 
 dayjs.locale('fr');
@@ -57,7 +63,8 @@ import { MultiBackend, TouchTransition, MouseTransition } from 'react-dnd-multi-
 import { useChantiers } from '../../hooks/useChantiers';
 import { useChantierStatuses } from '../../hooks/useChantierStatuses';
 import { useAuthenticatedApi } from '../../hooks/useAuthenticatedApi';
-import type { Chantier, ChantierStatus } from '../../types/chantier';
+import { useTeams } from '../../hooks/useTeams';
+import type { Chantier, ChantierStatus, Team, Technician } from '../../types/chantier';
 
 // ─── Configuration MultiBackend ───
 const HTML5toTouch = {
@@ -78,6 +85,8 @@ const HTML5toTouch = {
 };
 
 const ITEM_TYPE = 'CHANTIER_CARD';
+const TECH_DRAG_TYPE = 'TECHNICIAN';
+const TEAM_DRAG_TYPE = 'TEAM';
 
 const hexToRgba = (hex: string, alpha: number) => {
   const h = hex.replace('#', '');
@@ -98,12 +107,29 @@ interface ChantierCardProps {
   onViewCompta?: () => void;
   onDragStart?: (statusId: string) => void;
   onDragEnd?: () => void;
+  onTechDrop?: (chantierId: string, userId: string, role: 'CHEF_EQUIPE' | 'TECHNICIEN') => void;
+  onTeamDrop?: (chantierId: string, teamId: string) => void;
 }
 
-const ChantierCard: React.FC<ChantierCardProps> = ({ chantier, onView, onViewCompta, onDragStart, onDragEnd }) => {
+const ChantierCard: React.FC<ChantierCardProps> = ({ chantier, onView, onViewCompta, onDragStart, onDragEnd, onTechDrop, onTeamDrop }) => {
   const touchStartTime = useRef(0);
   const touchStartPos = useRef({ x: 0, y: 0 });
   const hasMoved = useRef(false);
+
+  // Accept tech/team drops on this card
+  const [{ isOverTech }, techDrop] = useDrop({
+    accept: [TECH_DRAG_TYPE, TEAM_DRAG_TYPE],
+    drop: (item: { type: string; userId?: string; teamId?: string }) => {
+      if (item.type === TECH_DRAG_TYPE && item.userId) {
+        onTechDrop?.(chantier.id, item.userId, 'TECHNICIEN');
+      } else if (item.type === TEAM_DRAG_TYPE && item.teamId) {
+        onTeamDrop?.(chantier.id, item.teamId);
+      }
+    },
+    collect: (monitor) => ({
+      isOverTech: monitor.isOver(),
+    }),
+  });
 
   const [{ isDragging }, drag] = useDrag({
     type: ITEM_TYPE,
@@ -150,9 +176,13 @@ const ChantierCard: React.FC<ChantierCardProps> = ({ chantier, onView, onViewCom
     }
   };
 
+  // Combine drag and drop refs
+  const cardRef = useRef<HTMLDivElement>(null);
+  drag(techDrop(cardRef));
+
   return (
     <div
-      ref={drag}
+      ref={cardRef}
       style={{
         opacity: isDragging ? 0.5 : 1,
         cursor: isDragging ? 'grabbing' : 'grab',
@@ -167,9 +197,9 @@ const ChantierCard: React.FC<ChantierCardProps> = ({ chantier, onView, onViewCom
     >
       <div
         style={{
-          backgroundColor: chantier.isValidated ? '#fff' : '#fffbe6',
+          backgroundColor: isOverTech ? '#f0e6ff' : chantier.isValidated ? '#fff' : '#fffbe6',
           borderRadius: 8,
-          boxShadow: '0 1px 0 rgba(9,30,66,.25)',
+          boxShadow: isOverTech ? '0 0 0 2px #722ed1, 0 2px 8px rgba(114,46,209,0.25)' : '0 1px 0 rgba(9,30,66,.25)',
           padding: 8,
           cursor: 'pointer',
           transition: 'background-color 0.1s ease',
@@ -284,8 +314,28 @@ const ChantierCard: React.FC<ChantierCardProps> = ({ chantier, onView, onViewCom
             </Tooltip>
           )}
 
-          {/* Avatar responsable */}
-          <div style={{ marginLeft: 'auto' }}>
+          {/* Avatar responsable + badges techniciens */}
+          <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 2 }}>
+            {/* Badges techniciens assignés */}
+            {chantier.ChantierAssignments && chantier.ChantierAssignments.length > 0 && (
+              <Tooltip title={chantier.ChantierAssignments.map(a => `${a.role === 'CHEF_EQUIPE' ? '👑 ' : '🔧 '}${a.User.firstName || ''} ${a.User.lastName || ''}`).join('\n')}>
+                <Avatar.Group size={20} max={{ count: 3, style: { fontSize: 9, backgroundColor: '#722ed1' } }}>
+                  {chantier.ChantierAssignments.map(a => (
+                    <Avatar
+                      key={a.id}
+                      size={20}
+                      style={{
+                        backgroundColor: a.role === 'CHEF_EQUIPE' ? '#fa8c16' : (a.Team?.color || '#722ed1'),
+                        fontSize: 9,
+                        border: a.role === 'CHEF_EQUIPE' ? '2px solid #fa8c16' : '1px solid #fff',
+                      }}
+                    >
+                      {(a.User.firstName?.[0] || '') + (a.User.lastName?.[0] || '')}
+                    </Avatar>
+                  ))}
+                </Avatar.Group>
+              </Tooltip>
+            )}
             {chantier.Responsable ? (
               <Tooltip title={`${chantier.Responsable.firstName} ${chantier.Responsable.lastName}`}>
                 <Avatar size={22} style={{ backgroundColor: '#87d068', fontSize: 10 }}>
@@ -314,12 +364,15 @@ interface KanbanColumnProps {
   chantiers: Chantier[];
   onDrop: (chantierId: string, statusId: string) => void;
   onViewChantier: (chantierId: string) => void;
+  onViewChantierCompta?: (chantierId: string) => void;
   dropState?: 'allowed' | 'blocked' | 'none';
   onDragStart?: (statusId: string) => void;
   onDragEnd?: () => void;
+  onTechDrop?: (chantierId: string, userId: string, role: 'CHEF_EQUIPE' | 'TECHNICIEN') => void;
+  onTeamDrop?: (chantierId: string, teamId: string) => void;
 }
 
-const KanbanColumn: React.FC<KanbanColumnProps> = ({ status, chantiers, onDrop, onViewChantier, onViewChantierCompta, dropState = 'none', onDragStart, onDragEnd }) => {
+const KanbanColumn: React.FC<KanbanColumnProps> = ({ status, chantiers, onDrop, onViewChantier, onViewChantierCompta, dropState = 'none', onDragStart, onDragEnd, onTechDrop, onTeamDrop }) => {
   const [{ isOver, canDrop }, drop] = useDrop({
     accept: ITEM_TYPE,
     drop: (item: DragItem) => {
@@ -448,6 +501,8 @@ const KanbanColumn: React.FC<KanbanColumnProps> = ({ status, chantiers, onDrop, 
             onViewCompta={() => onViewChantierCompta?.(chantier.id)}
             onDragStart={onDragStart}
             onDragEnd={onDragEnd}
+            onTechDrop={onTechDrop}
+            onTeamDrop={onTeamDrop}
           />
         ))}
         {chantiers.length === 0 && (
@@ -465,6 +520,172 @@ const KanbanColumn: React.FC<KanbanColumnProps> = ({ status, chantiers, onDrop, 
   );
 };
 
+// ═══ TechnicianDragItem (panel gauche) ═══
+interface TechnicianDragItemProps {
+  technician: Technician;
+  isSelected: boolean;
+  onClick: () => void;
+}
+
+const TechnicianDragItem: React.FC<TechnicianDragItemProps> = ({ technician, isSelected, onClick }) => {
+  const [{ isDragging }, drag] = useDrag({
+    type: TECH_DRAG_TYPE,
+    item: { type: TECH_DRAG_TYPE, userId: technician.id },
+    collect: (monitor) => ({ isDragging: monitor.isDragging() }),
+  });
+
+  const initials = (technician.firstName?.[0] || '') + (technician.lastName?.[0] || '');
+  const name = [technician.firstName, technician.lastName].filter(Boolean).join(' ') || technician.email || 'Inconnu';
+
+  // Charge de travail : vert (0-2), orange (3-4), rouge (5+)
+  const loadColor = technician.chantierCount <= 2 ? '#52c41a' : technician.chantierCount <= 4 ? '#fa8c16' : '#ff4d4f';
+
+  return (
+    <div
+      ref={drag}
+      onClick={onClick}
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: 6,
+        padding: '5px 8px',
+        borderRadius: 6,
+        border: isSelected ? '2px solid #722ed1' : '1px solid transparent',
+        background: isSelected ? '#f9f0ff' : isDragging ? '#e6f4ff' : '#fff',
+        cursor: isDragging ? 'grabbing' : 'grab',
+        opacity: isDragging ? 0.5 : 1,
+        marginBottom: 3,
+        transition: 'all 0.15s',
+        fontSize: 12,
+      }}
+    >
+      <Avatar size={24} style={{ backgroundColor: technician.teams[0]?.teamColor || '#1677ff', fontSize: 10, flexShrink: 0 }}>
+        {initials}
+      </Avatar>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontWeight: 500, color: '#262626', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 11 }}>
+          {name}
+        </div>
+        {technician.teams.length > 0 && (
+          <div style={{ fontSize: 9, color: '#8c8c8c', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {technician.teams.map(t => t.memberRole === 'LEADER' ? `👑 ${t.teamName}` : t.teamName).join(', ')}
+          </div>
+        )}
+      </div>
+      <Badge
+        count={technician.chantierCount}
+        showZero
+        style={{ backgroundColor: loadColor, fontSize: 9, minWidth: 18, height: 18, lineHeight: '18px' }}
+      />
+    </div>
+  );
+};
+
+// ═══ TeamDragItem (panel gauche) ═══
+interface TeamDragItemProps {
+  team: Team;
+  isSelected: boolean;
+  onClick: () => void;
+  onDelete: () => void;
+  onAddMember: () => void;
+  onToggleLeader: (memberId: string, currentRole: string) => void;
+  onRemoveMember: (memberId: string) => void;
+}
+
+const TeamDragItem: React.FC<TeamDragItemProps> = ({ team, isSelected, onClick, onDelete, onAddMember, onToggleLeader, onRemoveMember }) => {
+  const [expanded, setExpanded] = useState(false);
+
+  const [{ isDragging }, drag] = useDrag({
+    type: TEAM_DRAG_TYPE,
+    item: { type: TEAM_DRAG_TYPE, teamId: team.id },
+    collect: (monitor) => ({ isDragging: monitor.isDragging() }),
+  });
+
+  const leaders = team.Members.filter(m => m.role === 'LEADER');
+  const members = team.Members.filter(m => m.role === 'MEMBER');
+
+  return (
+    <div style={{ marginBottom: 4 }}>
+      <div
+        ref={drag}
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 6,
+          padding: '5px 8px',
+          borderRadius: 6,
+          border: isSelected ? `2px solid ${team.color}` : '1px solid transparent',
+          background: isSelected ? `${team.color}12` : isDragging ? '#e6f4ff' : '#fff',
+          cursor: isDragging ? 'grabbing' : 'grab',
+          opacity: isDragging ? 0.5 : 1,
+          transition: 'all 0.15s',
+          fontSize: 12,
+        }}
+      >
+        <div
+          style={{ width: 10, height: 10, borderRadius: '50%', backgroundColor: team.color, flexShrink: 0 }}
+          onClick={(e) => { e.stopPropagation(); onClick(); }}
+        />
+        <div style={{ flex: 1, minWidth: 0, cursor: 'pointer' }} onClick={(e) => { e.stopPropagation(); onClick(); }}>
+          <div style={{ fontWeight: 600, color: '#262626', fontSize: 11, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {team.name}
+          </div>
+          <div style={{ fontSize: 9, color: '#8c8c8c' }}>
+            {leaders.length > 0 && <span>👑 {leaders.map(l => l.User.firstName).join(', ')} </span>}
+            {members.length > 0 && <span>🔧 {members.length}</span>}
+          </div>
+        </div>
+        <div style={{ display: 'flex', gap: 2, flexShrink: 0 }}>
+          <button
+            onClick={(e) => { e.stopPropagation(); setExpanded(!expanded); }}
+            style={{ border: 'none', background: 'none', cursor: 'pointer', fontSize: 10, color: '#8c8c8c', padding: 2 }}
+            title="Détails"
+          >
+            {expanded ? '▲' : '▼'}
+          </button>
+          <Badge
+            count={team._count?.ChantierAssignments || 0}
+            showZero
+            style={{ backgroundColor: team.color, fontSize: 9, minWidth: 18, height: 18, lineHeight: '18px' }}
+          />
+        </div>
+      </div>
+
+      {/* Détail étendu des membres */}
+      {expanded && (
+        <div style={{ padding: '4px 8px 4px 24px', fontSize: 10 }}>
+          {team.Members.map(m => (
+            <div key={m.id} style={{ display: 'flex', alignItems: 'center', gap: 4, marginBottom: 2, color: '#595959' }}>
+              <span style={{ cursor: 'pointer' }} onClick={() => onToggleLeader(m.id, m.role)} title={m.role === 'LEADER' ? 'Retirer chef' : 'Nommer chef'}>
+                {m.role === 'LEADER' ? '👑' : '🔧'}
+              </span>
+              <span style={{ flex: 1 }}>{m.User.firstName} {m.User.lastName}</span>
+              <button
+                onClick={() => onRemoveMember(m.id)}
+                style={{ border: 'none', background: 'none', cursor: 'pointer', color: '#ff4d4f', fontSize: 9, padding: 0 }}
+                title="Retirer"
+              >
+                <CloseOutlined />
+              </button>
+            </div>
+          ))}
+          <button
+            onClick={onAddMember}
+            style={{ border: '1px dashed #d9d9d9', borderRadius: 4, background: '#fafafa', cursor: 'pointer', fontSize: 10, color: '#8c8c8c', padding: '2px 6px', width: '100%', marginTop: 2 }}
+          >
+            <PlusOutlined /> Ajouter
+          </button>
+          <Popconfirm title="Supprimer cette équipe ?" onConfirm={onDelete} okText="Oui" cancelText="Non">
+            <button style={{ border: 'none', background: 'none', cursor: 'pointer', color: '#ff4d4f', fontSize: 10, padding: '2px 0', marginTop: 2, display: 'flex', alignItems: 'center', gap: 3 }}>
+              <DeleteOutlined /> Supprimer l'équipe
+            </button>
+          </Popconfirm>
+        </div>
+      )}
+    </div>
+  );
+};
+
 // ═══ ChantierKanban Main Component ═══
 interface ChantierKanbanProps {
   onViewChantier?: (chantierId: string) => void;
@@ -474,10 +695,22 @@ interface ChantierKanbanProps {
 const ChantierKanban: React.FC<ChantierKanbanProps> = ({ onViewChantier, onSettings }) => {
   const { chantiers, isLoading, refetch, updateChantierStatus } = useChantiers();
   const { statuses, isLoading: statusesLoading } = useChantierStatuses();
+  const { teams, technicians, isLoading: _teamsLoading, createTeam, deleteTeam, addTeamMember, removeTeamMember, updateMemberRole, assignToChantier, assignTeamToChantier, removeAssignment: _removeAssignment, refetch: _refetchTeams } = useTeams();
   const [selectedProducts, setSelectedProducts] = useState<Set<string>>(new Set());
   const [dateRange, setDateRange] = useState<[Dayjs, Dayjs] | null>(null);
   const [activePreset, setActivePreset] = useState<DatePreset | null>(null);
   const [dateField, setDateField] = useState<DateField>('createdAt');
+  const [allowedTargets, setAllowedTargets] = useState<Record<string, string[]>>({});
+  const [draggingFromStatusId, setDraggingFromStatusId] = useState<string | null>(null);
+
+  // Panel techniciens
+  const [techPanelOpen, setTechPanelOpen] = useState(true);
+  const [selectedTechFilter, setSelectedTechFilter] = useState<string | null>(null); // userId or 'unassigned' or teamId
+  const [teamModalOpen, setTeamModalOpen] = useState(false);
+  const [newTeamName, setNewTeamName] = useState('');
+  const [newTeamColor, setNewTeamColor] = useState('#1677ff');
+  const [addMemberTeamId, setAddMemberTeamId] = useState<string | null>(null);
+  const [addMemberUserId, setAddMemberUserId] = useState<string>('');
   const [allowedTargets, setAllowedTargets] = useState<Record<string, string[]>>({});
   const [draggingFromStatusId, setDraggingFromStatusId] = useState<string | null>(null);
 
@@ -561,8 +794,20 @@ const ChantierKanban: React.FC<ChantierKanbanProps> = ({ onViewChantier, onSetti
       });
     }
 
+    // 4) Filtre technicien
+    if (selectedTechFilter) {
+      if (selectedTechFilter === 'unassigned') {
+        result = result.filter(c => !c.ChantierAssignments || c.ChantierAssignments.length === 0);
+      } else if (selectedTechFilter.startsWith('team:')) {
+        const teamId = selectedTechFilter.replace('team:', '');
+        result = result.filter(c => c.ChantierAssignments?.some(a => a.teamId === teamId));
+      } else {
+        result = result.filter(c => c.ChantierAssignments?.some(a => a.userId === selectedTechFilter));
+      }
+    }
+
     return result;
-  }, [chantiers, selectedProducts, dateRange, dateField]);
+  }, [chantiers, selectedProducts, dateRange, dateField, selectedTechFilter]);
 
   // Handlers pour le filtre de dates
   const handlePresetClick = useCallback((preset: DatePreset) => {
@@ -605,6 +850,64 @@ const ChantierKanban: React.FC<ChantierKanbanProps> = ({ onViewChantier, onSetti
       return next;
     });
   }, []);
+
+  // ── Handlers assignation tech ──
+  const handleTechDrop = useCallback(async (chantierId: string, userId: string, role: 'CHEF_EQUIPE' | 'TECHNICIEN') => {
+    try {
+      await assignToChantier(chantierId, userId, role);
+      message.success('Technicien assigné !');
+      refetch(); // Refresh chantiers to update badges
+    } catch (err: any) {
+      if (err?.message?.includes('déjà assigné')) {
+        message.info('Ce technicien est déjà assigné à ce chantier');
+      } else {
+        message.error(err?.message || 'Erreur lors de l\'assignation');
+      }
+    }
+  }, [assignToChantier, refetch]);
+
+  const handleTeamDrop = useCallback(async (chantierId: string, teamId: string) => {
+    try {
+      const result = await assignTeamToChantier(chantierId, teamId);
+      message.success(result.message || 'Équipe assignée !');
+      refetch();
+    } catch (err: any) {
+      message.error(err?.message || 'Erreur lors de l\'assignation de l\'équipe');
+    }
+  }, [assignTeamToChantier, refetch]);
+
+  const handleCreateTeam = useCallback(async () => {
+    if (!newTeamName.trim()) return;
+    try {
+      await createTeam({ name: newTeamName.trim(), color: newTeamColor });
+      message.success('Équipe créée !');
+      setNewTeamName('');
+      setTeamModalOpen(false);
+    } catch (err: any) {
+      message.error(err?.message || 'Erreur création équipe');
+    }
+  }, [createTeam, newTeamName, newTeamColor]);
+
+  const handleDeleteTeam = useCallback(async (teamId: string) => {
+    try {
+      await deleteTeam(teamId);
+      message.success('Équipe supprimée');
+    } catch (err: any) {
+      message.error(err?.message || 'Erreur suppression équipe');
+    }
+  }, [deleteTeam]);
+
+  const handleAddMember = useCallback(async () => {
+    if (!addMemberTeamId || !addMemberUserId) return;
+    try {
+      await addTeamMember(addMemberTeamId, addMemberUserId);
+      message.success('Membre ajouté à l\'équipe');
+      setAddMemberUserId('');
+      setAddMemberTeamId(null);
+    } catch (err: any) {
+      message.error(err?.message || 'Erreur ajout membre');
+    }
+  }, [addTeamMember, addMemberTeamId, addMemberUserId]);
 
   const handleDrop = useCallback(async (chantierId: string, statusId: string) => {
     try {
@@ -968,6 +1271,34 @@ const ChantierKanban: React.FC<ChantierKanbanProps> = ({ onViewChantier, onSetti
         )}
 
         <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
+          {/* Toggle panel techniciens */}
+          <Tooltip title={techPanelOpen ? 'Masquer le panel techniciens' : 'Afficher le panel techniciens'}>
+            <Button
+              icon={techPanelOpen ? <MenuFoldOutlined /> : <MenuUnfoldOutlined />}
+              size="small"
+              type={techPanelOpen ? 'primary' : 'default'}
+              ghost={techPanelOpen}
+              onClick={() => setTechPanelOpen(!techPanelOpen)}
+            >
+              <TeamOutlined /> {technicians.length}
+            </Button>
+          </Tooltip>
+          {/* Filtre technicien actif */}
+          {selectedTechFilter && (
+            <Tag
+              closable
+              onClose={() => setSelectedTechFilter(null)}
+              color="purple"
+              style={{ fontSize: 11, display: 'flex', alignItems: 'center' }}
+            >
+              {selectedTechFilter === 'unassigned'
+                ? '🚫 Sans technicien'
+                : selectedTechFilter.startsWith('team:')
+                  ? `👥 ${teams.find(t => t.id === selectedTechFilter.replace('team:', ''))?.name || 'Équipe'}`
+                  : `🔧 ${technicians.find(t => t.id === selectedTechFilter)?.firstName || ''} ${technicians.find(t => t.id === selectedTechFilter)?.lastName || ''}`
+              }
+            </Tag>
+          )}
           {onSettings && (
             <Button icon={<SettingOutlined />} size="small" onClick={onSettings}>
               Paramètres
@@ -976,31 +1307,128 @@ const ChantierKanban: React.FC<ChantierKanbanProps> = ({ onViewChantier, onSetti
         </div>
       </div>
 
-      {/* Kanban Board */}
+      {/* Kanban Board + Panel techniciens */}
       <DndProvider backend={MultiBackend} options={HTML5toTouch}>
-        <div
-          style={{
-            display: 'flex',
-            gap: 10,
-            padding: 12,
-            overflowX: 'auto',
-            flex: 1,
-            alignItems: 'flex-start',
-          }}
-        >
-          {statuses.map(status => (
-            <KanbanColumn
-              key={status.id}
-              status={status}
-              chantiers={chantiersByStatus[status.id] || []}
-              onDrop={handleDrop}
-              onViewChantier={handleViewChantier}
-              onViewChantierCompta={handleViewChantierCompta}
-              dropState={getDropState(status.id)}
-              onDragStart={handleCardDragStart}
-              onDragEnd={handleCardDragEnd}
-            />
-          ))}
+        <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
+          {/* ═══ Panel Techniciens (gauche) ═══ */}
+          {techPanelOpen && (
+            <div style={{
+              width: 220,
+              minWidth: 220,
+              borderRight: '1px solid #f0f0f0',
+              backgroundColor: '#fafafa',
+              display: 'flex',
+              flexDirection: 'column',
+              overflow: 'hidden',
+            }}>
+              <div style={{ overflowY: 'auto', flex: 1, padding: '8px 6px' }}>
+                {/* Section : Filtre rapide */}
+                <div style={{ marginBottom: 8 }}>
+                  <button
+                    onClick={() => setSelectedTechFilter(selectedTechFilter === 'unassigned' ? null : 'unassigned')}
+                    style={{
+                      width: '100%',
+                      padding: '5px 8px',
+                      borderRadius: 6,
+                      border: selectedTechFilter === 'unassigned' ? '2px solid #ff4d4f' : '1px solid #e8e8e8',
+                      background: selectedTechFilter === 'unassigned' ? '#fff2f0' : '#fff',
+                      cursor: 'pointer',
+                      fontSize: 11,
+                      fontWeight: selectedTechFilter === 'unassigned' ? 600 : 400,
+                      color: selectedTechFilter === 'unassigned' ? '#ff4d4f' : '#8c8c8c',
+                      textAlign: 'left',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 6,
+                    }}
+                  >
+                    🚫 Sans technicien
+                    <span style={{
+                      marginLeft: 'auto',
+                      background: '#fff1f0',
+                      color: '#ff4d4f',
+                      borderRadius: 8,
+                      padding: '0 5px',
+                      fontSize: 10,
+                      fontWeight: 600,
+                    }}>
+                      {chantiers.filter(c => !c.ChantierAssignments || c.ChantierAssignments.length === 0).length}
+                    </span>
+                  </button>
+                </div>
+
+                {/* Section : Techniciens solo */}
+                <div style={{ fontSize: 10, fontWeight: 600, color: '#8c8c8c', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 4, padding: '0 4px' }}>
+                  👤 Techniciens ({technicians.length})
+                </div>
+                {technicians.map(tech => (
+                  <TechnicianDragItem
+                    key={tech.id}
+                    technician={tech}
+                    isSelected={selectedTechFilter === tech.id}
+                    onClick={() => setSelectedTechFilter(selectedTechFilter === tech.id ? null : tech.id)}
+                  />
+                ))}
+
+                {/* Section : Équipes */}
+                <div style={{ fontSize: 10, fontWeight: 600, color: '#8c8c8c', textTransform: 'uppercase', letterSpacing: '0.5px', marginTop: 12, marginBottom: 4, padding: '0 4px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <span>👥 Équipes ({teams.length})</span>
+                  <button
+                    onClick={() => setTeamModalOpen(true)}
+                    style={{ border: 'none', background: 'none', cursor: 'pointer', color: '#1677ff', fontSize: 14, padding: 0, lineHeight: 1 }}
+                    title="Créer une équipe"
+                  >
+                    <PlusOutlined />
+                  </button>
+                </div>
+                {teams.map(team => (
+                  <TeamDragItem
+                    key={team.id}
+                    team={team}
+                    isSelected={selectedTechFilter === `team:${team.id}`}
+                    onClick={() => setSelectedTechFilter(selectedTechFilter === `team:${team.id}` ? null : `team:${team.id}`)}
+                    onDelete={() => handleDeleteTeam(team.id)}
+                    onAddMember={() => setAddMemberTeamId(team.id)}
+                    onToggleLeader={(memberId, currentRole) => updateMemberRole(team.id, memberId, currentRole === 'LEADER' ? 'MEMBER' : 'LEADER')}
+                    onRemoveMember={(memberId) => removeTeamMember(team.id, memberId)}
+                  />
+                ))}
+                {teams.length === 0 && (
+                  <div style={{ textAlign: 'center', color: '#bfbfbf', fontSize: 11, padding: '12px 8px' }}>
+                    Aucune équipe créée
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* ═══ Kanban Columns ═══ */}
+          <div
+            style={{
+              display: 'flex',
+              gap: 10,
+              padding: 12,
+              overflowX: 'auto',
+              flex: 1,
+              alignItems: 'flex-start',
+            }}
+          >
+            {statuses.map(status => (
+              <KanbanColumn
+                key={status.id}
+                status={status}
+                chantiers={chantiersByStatus[status.id] || []}
+                onDrop={handleDrop}
+                onViewChantier={handleViewChantier}
+                onViewChantierCompta={handleViewChantierCompta}
+                dropState={getDropState(status.id)}
+                onDragStart={handleCardDragStart}
+                onDragEnd={handleCardDragEnd}
+                onTechDrop={handleTechDrop}
+                onTeamDrop={handleTeamDrop}
+              />
+            ))}
+          </div>
         </div>
       </DndProvider>
 
@@ -1039,6 +1467,74 @@ const ChantierKanban: React.FC<ChantierKanbanProps> = ({ onViewChantier, onSetti
           Vous pouvez ouvrir le chantier pour marquer les factures comme payées,
           ou forcer le déplacement.
         </p>
+      </Modal>
+
+      {/* Modal création équipe */}
+      <Modal
+        open={teamModalOpen}
+        title={<span><TeamOutlined style={{ marginRight: 8 }} />Nouvelle équipe</span>}
+        onCancel={() => setTeamModalOpen(false)}
+        onOk={handleCreateTeam}
+        okText="Créer"
+        cancelText="Annuler"
+      >
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <div>
+            <label style={{ fontSize: 12, fontWeight: 500 }}>Nom de l'équipe</label>
+            <Input
+              value={newTeamName}
+              onChange={e => setNewTeamName(e.target.value)}
+              placeholder="Ex: Équipe Toiture, Équipe PV..."
+              onPressEnter={handleCreateTeam}
+            />
+          </div>
+          <div>
+            <label style={{ fontSize: 12, fontWeight: 500 }}>Couleur</label>
+            <div style={{ display: 'flex', gap: 6, marginTop: 4 }}>
+              {['#1677ff', '#52c41a', '#fa8c16', '#722ed1', '#f5222d', '#13c2c2', '#eb2f96', '#faad14'].map(c => (
+                <div
+                  key={c}
+                  onClick={() => setNewTeamColor(c)}
+                  style={{
+                    width: 28,
+                    height: 28,
+                    borderRadius: '50%',
+                    backgroundColor: c,
+                    cursor: 'pointer',
+                    border: newTeamColor === c ? '3px solid #262626' : '2px solid transparent',
+                    transition: 'border 0.15s',
+                  }}
+                />
+              ))}
+            </div>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Modal ajout membre à équipe */}
+      <Modal
+        open={!!addMemberTeamId}
+        title={<span><PlusOutlined style={{ marginRight: 8 }} />Ajouter un membre à {teams.find(t => t.id === addMemberTeamId)?.name}</span>}
+        onCancel={() => { setAddMemberTeamId(null); setAddMemberUserId(''); }}
+        onOk={handleAddMember}
+        okText="Ajouter"
+        cancelText="Annuler"
+        okButtonProps={{ disabled: !addMemberUserId }}
+      >
+        <Select
+          style={{ width: '100%' }}
+          placeholder="Sélectionner un technicien..."
+          value={addMemberUserId || undefined}
+          onChange={v => setAddMemberUserId(v)}
+          showSearch
+          optionFilterProp="label"
+          options={technicians
+            .filter(t => !teams.find(team => team.id === addMemberTeamId)?.Members.some(m => m.userId === t.id))
+            .map(t => ({
+              value: t.id,
+              label: `${t.firstName || ''} ${t.lastName || ''} (${t.email || ''})`,
+            }))}
+        />
       </Modal>
     </div>
   );
