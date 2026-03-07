@@ -532,21 +532,35 @@ const ChantierKanban: React.FC<ChantierKanbanProps> = ({ onViewChantier, onSetti
     return Array.from(map.values());
   }, [chantiers]);
 
-  // Chantiers filtrés selon les produits sélectionnés ET la plage de dates
+  // Chantiers filtrés : produit + type de date (présence) + plage de dates
   const filteredChantiers = useMemo(() => {
     let result = chantiers;
+
+    // 1) Filtre produit
     if (selectedProducts.size > 0) {
       result = result.filter(c => selectedProducts.has(c.productValue));
     }
+
+    // 2) Si un type de date spécifique est sélectionné (pas createdAt qui existe toujours),
+    //    ne garder que les chantiers qui ont ce champ renseigné
+    if (dateField !== 'createdAt') {
+      result = result.filter(c => {
+        const dateValue = (c as any)[dateField];
+        return dateValue != null;
+      });
+    }
+
+    // 3) Filtre plage de dates sur le champ sélectionné
     if (dateRange) {
       const [start, end] = dateRange;
       result = result.filter(c => {
         const dateValue = (c as any)[dateField];
-        if (!dateValue) return false; // pas de date = exclu du filtre
+        if (!dateValue) return false;
         const d = dayjs(dateValue);
         return d.isValid() && d.isBetween(start, end, 'day', '[]');
       });
     }
+
     return result;
   }, [chantiers, selectedProducts, dateRange, dateField]);
 
@@ -733,11 +747,11 @@ const ChantierKanban: React.FC<ChantierKanbanProps> = ({ onViewChantier, onSetti
           <span style={{ fontSize: 16, fontWeight: 600 }}>🏗️ Chantiers</span>
           <span style={{ fontSize: 13, color: '#5e6c84' }}>
             {filteredChantiers.length} chantier{filteredChantiers.length > 1 ? 's' : ''}
-            {(selectedProducts.size > 0 || dateRange) && ` / ${chantiers.length}`}
+            {(selectedProducts.size > 0 || dateField !== 'createdAt' || dateRange) && ` / ${chantiers.length}`}
           </span>
         </div>
 
-        {/* Date filter */}
+        {/* ─── Filtre dates : dropdown unique (type de date + période) ─── */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
           <Dropdown
             trigger={['click']}
@@ -817,10 +831,12 @@ const ChantierKanban: React.FC<ChantierKanbanProps> = ({ onViewChantier, onSetti
                 </div>
 
                 {/* Résumé actif */}
-                {dateRange && (
+                {(dateField !== 'createdAt' || dateRange) && (
                   <div style={{ borderTop: '1px solid #f0f0f0', paddingTop: 8, marginTop: 8, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <span style={{ fontSize: 11, color: '#595959' }}>
-                      {DATE_FIELDS.find(f => f.key === dateField)?.icon} {DATE_FIELDS.find(f => f.key === dateField)?.label}: {dateRange[0].format('DD MMM')} → {dateRange[1].format('DD MMM YYYY')}
+                      {DATE_FIELDS.find(f => f.key === dateField)?.icon} {DATE_FIELDS.find(f => f.key === dateField)?.label}
+                      {dateRange && <>: {dateRange[0].format('DD MMM')} → {dateRange[1].format('DD MMM YYYY')}</>}
+                      {!dateRange && dateField !== 'createdAt' && <> — tous les chantiers avec cette date</>}
                     </span>
                     <button
                       onClick={clearDateFilter}
@@ -840,26 +856,30 @@ const ChantierKanban: React.FC<ChantierKanbanProps> = ({ onViewChantier, onSetti
                 gap: 5,
                 padding: '3px 10px',
                 borderRadius: 16,
-                border: dateRange ? `2px solid ${DATE_FIELDS.find(f => f.key === dateField)?.color || '#1677ff'}` : '1px solid #d9d9d9',
-                background: dateRange ? `${DATE_FIELDS.find(f => f.key === dateField)?.color || '#1677ff'}12` : '#fff',
+                border: (dateField !== 'createdAt' || dateRange) ? `2px solid ${DATE_FIELDS.find(f => f.key === dateField)?.color || '#1677ff'}` : '1px solid #d9d9d9',
+                background: (dateField !== 'createdAt' || dateRange) ? `${DATE_FIELDS.find(f => f.key === dateField)?.color || '#1677ff'}12` : '#fff',
                 cursor: 'pointer',
                 fontSize: 12,
-                fontWeight: dateRange ? 600 : 400,
-                color: dateRange ? (DATE_FIELDS.find(f => f.key === dateField)?.color || '#1677ff') : '#595959',
+                fontWeight: (dateField !== 'createdAt' || dateRange) ? 600 : 400,
+                color: (dateField !== 'createdAt' || dateRange) ? (DATE_FIELDS.find(f => f.key === dateField)?.color || '#1677ff') : '#595959',
                 transition: 'all 0.2s',
                 whiteSpace: 'nowrap',
               }}
             >
               <CalendarOutlined style={{ fontSize: 13 }} />
-              {dateRange
-                ? `${DATE_FIELDS.find(f => f.key === dateField)?.icon || '📅'} ${activePreset && activePreset !== 'custom'
-                  ? DATE_PRESETS.find(p => p.key === activePreset)?.label
-                  : `${dateRange[0].format('DD/MM')} — ${dateRange[1].format('DD/MM')}`}`
-                : 'Dates'
+              {dateField !== 'createdAt'
+                ? `${DATE_FIELDS.find(f => f.key === dateField)?.icon || '📅'} ${DATE_FIELDS.find(f => f.key === dateField)?.label}${dateRange ? (activePreset && activePreset !== 'custom'
+                  ? ` · ${DATE_PRESETS.find(p => p.key === activePreset)?.label}`
+                  : ` · ${dateRange[0].format('DD/MM')} — ${dateRange[1].format('DD/MM')}`) : ''}`
+                : dateRange
+                  ? (activePreset && activePreset !== 'custom'
+                    ? DATE_PRESETS.find(p => p.key === activePreset)?.label
+                    : `${dateRange[0].format('DD/MM')} — ${dateRange[1].format('DD/MM')}`)
+                  : 'Dates'
               }
             </button>
           </Dropdown>
-          {dateRange && (
+          {(dateField !== 'createdAt' || dateRange) && (
             <button
               onClick={clearDateFilter}
               style={{
