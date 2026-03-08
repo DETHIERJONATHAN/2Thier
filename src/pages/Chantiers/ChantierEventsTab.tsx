@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import {
-  Card, Button, Tag, Modal, Form, Input, Select, DatePicker, Empty, Typography, Popconfirm, Badge, Alert, Calendar, App,
+  Card, Button, Tag, Modal, Form, Input, Select, DatePicker, Empty, Typography, Popconfirm, Badge, Alert, Calendar, App, Spin,
 } from 'antd';
 import {
   PlusOutlined, DeleteOutlined, EditOutlined, CalendarOutlined,
@@ -290,7 +290,7 @@ const ChantierEventsTab: React.FC<Props> = ({ chantierId, chantierAddress, chant
         }
       >
         {loading ? (
-          <div style={{ textAlign: 'center', padding: 40 }}><Text type="secondary">Chargement...</Text></div>
+          <div style={{ textAlign: 'center', padding: 40 }}><Spin tip="Chargement..." /></div>
         ) : events.length === 0 ? (
           <Empty description="Aucun événement planifié" />
         ) : (
@@ -365,23 +365,23 @@ const ChantierEventsTab: React.FC<Props> = ({ chantierId, chantierAddress, chant
                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, borderTop: '1px solid #f0f0f0', paddingTop: 8 }}>
                       {event.status === 'PLANNED' && (
                         <>
-                          <Button size="small" type="primary" icon={<CheckCircleOutlined />} onClick={() => handleValidate(event.id)}>
+                          <Button size="small" type="primary" icon={<CheckCircleOutlined />} onClick={() => handleValidate(event.id)} style={{ minHeight: 36 }}>
                             Valider
                           </Button>
-                          <Button size="small" danger icon={<WarningOutlined />} onClick={() => handleReportProblem(event.id)}>
+                          <Button size="small" danger icon={<WarningOutlined />} onClick={() => handleReportProblem(event.id)} style={{ minHeight: 36 }}>
                             Problème
                           </Button>
                         </>
                       )}
                       {isAdminOrAbove && event.subcontractAmount != null && !event.subcontractLocked && (
                         <Popconfirm title="Verrouiller le montant de sous-traitance ?" onConfirm={() => handleLockSubcontract(event.id)}>
-                          <Button size="small" icon={<LockOutlined />}>Verrouiller</Button>
+                          <Button size="small" icon={<LockOutlined />} style={{ minHeight: 36 }}>Verrouiller</Button>
                         </Popconfirm>
                       )}
-                      <Button size="small" icon={<EditOutlined />} onClick={() => handleOpenModal(event)} />
+                      <Button size="small" icon={<EditOutlined />} onClick={() => handleOpenModal(event)} style={{ minHeight: 36 }} />
                       {isAdminOrAbove && (
                         <Popconfirm title="Supprimer cet événement ?" onConfirm={() => handleDelete(event.id)}>
-                          <Button size="small" danger icon={<DeleteOutlined />} />
+                          <Button size="small" danger icon={<DeleteOutlined />} style={{ minHeight: 36 }} />
                         </Popconfirm>
                       )}
                     </div>

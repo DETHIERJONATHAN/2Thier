@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { db } from '../lib/database';
-import { authenticateToken } from '../middleware/auth';
+import { authenticateToken, isAdmin } from '../middleware/auth';
 import { z } from 'zod';
 
 const router = Router();
@@ -55,7 +55,7 @@ router.get('/', authenticateToken, async (req, res) => {
  * POST /api/chantier-statuses
  * Crée un nouveau statut de chantier
  */
-router.post('/', authenticateToken, async (req, res) => {
+router.post('/', authenticateToken, isAdmin, async (req, res) => {
   try {
     const organizationId = req.headers['x-organization-id'] as string;
 
@@ -132,7 +132,7 @@ router.post('/', authenticateToken, async (req, res) => {
  * PUT /api/chantier-statuses/:id
  * Met à jour un statut de chantier
  */
-router.put('/:id', authenticateToken, async (req, res) => {
+router.put('/:id', authenticateToken, isAdmin, async (req, res) => {
   try {
     const { id } = req.params;
     const organizationId = req.headers['x-organization-id'] as string;
@@ -208,7 +208,7 @@ router.put('/:id', authenticateToken, async (req, res) => {
  * DELETE /api/chantier-statuses/:id
  * Supprime un statut de chantier
  */
-router.delete('/:id', authenticateToken, async (req, res) => {
+router.delete('/:id', authenticateToken, isAdmin, async (req, res) => {
   try {
     const { id } = req.params;
     const organizationId = req.headers['x-organization-id'] as string;
@@ -262,7 +262,7 @@ router.delete('/:id', authenticateToken, async (req, res) => {
  * POST /api/chantier-statuses/reorder
  * Réorganise l'ordre des statuts
  */
-router.post('/reorder', authenticateToken, async (req, res) => {
+router.post('/reorder', authenticateToken, isAdmin, async (req, res) => {
   try {
     const organizationId = req.headers['x-organization-id'] as string;
     const { statusIds } = req.body;
@@ -307,7 +307,7 @@ router.post('/reorder', authenticateToken, async (req, res) => {
  * POST /api/chantier-statuses/seed
  * Initialise les statuts par défaut pour une organisation
  */
-router.post('/seed', authenticateToken, async (req, res) => {
+router.post('/seed', authenticateToken, isAdmin, async (req, res) => {
   try {
     const organizationId = req.headers['x-organization-id'] as string;
 

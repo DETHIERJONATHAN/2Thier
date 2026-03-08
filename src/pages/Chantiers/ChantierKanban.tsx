@@ -77,7 +77,7 @@ const HTML5toTouch = {
     {
       id: 'touch',
       backend: TouchBackend,
-      options: { enableMouseEvents: false, delayTouchStart: 150 },
+      options: { enableMouseEvents: false, delayTouchStart: 300 },
       preview: true,
       transition: TouchTransition,
     },
@@ -187,7 +187,7 @@ const ChantierCard: React.FC<ChantierCardProps> = ({ chantier, onView, onViewCom
         opacity: isDragging ? 0.5 : 1,
         cursor: isDragging ? 'grabbing' : 'grab',
         transform: isDragging ? 'rotate(3deg)' : 'none',
-        touchAction: 'none',
+        touchAction: 'auto',
         userSelect: 'none',
       }}
       onClick={() => !isDragging && onView()}

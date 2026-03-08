@@ -158,6 +158,76 @@ router.get('/', authenticateToken, async (req, res) => {
 });
 
 /**
+ * GET /api/chantiers/stats/overview
+ * Statistiques des chantiers pour le dashboard
+ * (IMPORTANT: déclaré avant /:id pour éviter le route shadowing)
+ */
+router.get('/stats/overview', authenticateToken, async (req, res) => {
+  try {
+    const organizationId = req.headers['x-organization-id'] as string;
+
+    if (!organizationId) {
+      return res.status(400).json({
+        success: false,
+        message: 'ID d\'organisation requis'
+      });
+    }
+
+    const [total, byStatus, byProduct, totalAmount] = await Promise.all([
+      db.chantier.count({ where: { organizationId } }),
+      db.chantier.groupBy({
+        by: ['statusId'],
+        where: { organizationId },
+        _count: true,
+      }),
+      db.chantier.groupBy({
+        by: ['productValue'],
+        where: { organizationId },
+        _count: true,
+      }),
+      db.chantier.aggregate({
+        where: { organizationId },
+        _sum: { amount: true },
+      }),
+    ]);
+
+    const statuses = await db.chantierStatus.findMany({
+      where: { organizationId },
+      orderBy: { order: 'asc' }
+    });
+
+    const byStatusEnriched = byStatus.map(s => {
+      const status = statuses.find(st => st.id === s.statusId);
+      return {
+        statusId: s.statusId,
+        statusName: status?.name || 'Sans statut',
+        statusColor: status?.color || '#999',
+        count: s._count,
+      };
+    });
+
+    res.json({
+      success: true,
+      data: {
+        total,
+        totalAmount: totalAmount._sum.amount || 0,
+        byStatus: byStatusEnriched,
+        byProduct: byProduct.map(p => ({
+          productValue: p.productValue,
+          count: p._count,
+        })),
+      }
+    });
+  } catch (error) {
+    console.error('[Chantiers] Erreur GET /stats/overview:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Erreur interne du serveur'
+    });
+  }
+});
+
+/**
  * GET /api/chantiers/by-lead/:leadId
  * Récupère tous les chantiers liés à un lead
  */
@@ -1190,76 +1260,6 @@ router.delete('/:id', authenticateToken, isAdmin, async (req, res) => {
     });
   } catch (error) {
     console.error('[Chantiers] Erreur DELETE /:id:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Erreur interne du serveur'
-    });
-  }
-});
-
-/**
- * GET /api/chantiers/stats/overview
- * Statistiques des chantiers pour le dashboard
- */
-router.get('/stats/overview', authenticateToken, async (req, res) => {
-  try {
-    const organizationId = req.headers['x-organization-id'] as string;
-
-    if (!organizationId) {
-      return res.status(400).json({
-        success: false,
-        message: 'ID d\'organisation requis'
-      });
-    }
-
-    const [total, byStatus, byProduct, totalAmount] = await Promise.all([
-      db.chantier.count({ where: { organizationId } }),
-      db.chantier.groupBy({
-        by: ['statusId'],
-        where: { organizationId },
-        _count: true,
-      }),
-      db.chantier.groupBy({
-        by: ['productValue'],
-        where: { organizationId },
-        _count: true,
-      }),
-      db.chantier.aggregate({
-        where: { organizationId },
-        _sum: { amount: true },
-      }),
-    ]);
-
-    // Enrichir byStatus avec les noms des statuts
-    const statuses = await db.chantierStatus.findMany({
-      where: { organizationId },
-      orderBy: { order: 'asc' }
-    });
-
-    const byStatusEnriched = byStatus.map(s => {
-      const status = statuses.find(st => st.id === s.statusId);
-      return {
-        statusId: s.statusId,
-        statusName: status?.name || 'Sans statut',
-        statusColor: status?.color || '#999',
-        count: s._count,
-      };
-    });
-
-    res.json({
-      success: true,
-      data: {
-        total,
-        totalAmount: totalAmount._sum.amount || 0,
-        byStatus: byStatusEnriched,
-        byProduct: byProduct.map(p => ({
-          productValue: p.productValue,
-          count: p._count,
-        })),
-      }
-    });
-  } catch (error) {
-    console.error('[Chantiers] Erreur GET /stats/overview:', error);
     res.status(500).json({
       success: false,
       message: 'Erreur interne du serveur'

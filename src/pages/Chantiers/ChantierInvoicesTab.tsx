@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import {
   Card, Button, Tag, Table, Modal, Form, Input, InputNumber, Select, DatePicker,
-  message, Empty, Typography, Space, Popconfirm, Badge, Progress, Alert, Divider, Switch,
+  Empty, Typography, Space, Popconfirm, Badge, Progress, Alert, Divider, Switch, App, Grid,
 } from 'antd';
 import {
   PlusOutlined, DeleteOutlined, EditOutlined, DollarOutlined,
@@ -89,6 +89,8 @@ const ChantierInvoicesTab: React.FC<Props> = ({ chantierId, chantierAmount, isVa
   const { isSuperAdmin, userRole } = useAuth();
   const isAdminOrAbove = isSuperAdmin || userRole === 'admin';
   const { statuses: chantierStatuses } = useChantierStatuses();
+  const { message, modal } = App.useApp();
+  const screens = Grid.useBreakpoint();
 
   const [invoices, setInvoices] = useState<ChantierInvoice[]>([]);
   const [billingPlan, setBillingPlan] = useState<BillingPlanItem[]>([]);
@@ -335,7 +337,7 @@ const ChantierInvoicesTab: React.FC<Props> = ({ chantierId, chantierAmount, isVa
   }, [api, chantierId, fetchBillingPlan]);
 
   const handleValidateChantier = useCallback(async () => {
-    Modal.confirm({
+    modal.confirm({
       title: 'Valider ce chantier ?',
       icon: <SafetyCertificateOutlined style={{ color: '#52c41a' }} />,
       content: 'Le chantier sera validé et les factures pourront être auto-créées lors des changements de statut. Le plan de facturation sera verrouillé.',
@@ -352,7 +354,7 @@ const ChantierInvoicesTab: React.FC<Props> = ({ chantierId, chantierAmount, isVa
         }
       },
     });
-  }, [api, chantierId, onValidationChanged]);
+  }, [api, chantierId, onValidationChanged, modal, message]);
 
   // Statistiques
   const stats = useMemo(() => {
@@ -498,47 +500,51 @@ const ChantierInvoicesTab: React.FC<Props> = ({ chantierId, chantierAmount, isVa
           <div>
             {billingPlan.map((item, index) => (
               <div key={index} style={{
-                display: 'flex', gap: 8, alignItems: 'center', marginBottom: 8, flexWrap: 'wrap',
-                padding: '8px 12px', background: '#fafafa', borderRadius: 6, border: '1px solid #f0f0f0',
+                display: 'flex', gap: 8, alignItems: 'flex-start', marginBottom: 8, flexWrap: 'wrap',
+                padding: '10px 12px', background: '#fafafa', borderRadius: 6, border: '1px solid #f0f0f0',
               }}>
                 <Select
-                  size="small" style={{ width: 140 }}
+                  size="small" style={{ width: screens.md ? 140 : '100%' }}
                   value={item.type}
                   onChange={val => handleUpdatePlanItem(index, 'type', val)}
                   options={INVOICE_TYPES.map(t => ({ value: t.value, label: t.label }))}
                 />
                 <Input
-                  size="small" style={{ flex: 1 }}
+                  size="small" style={{ flex: 1, minWidth: screens.md ? undefined : '100%' }}
                   value={item.label}
                   onChange={e => handleUpdatePlanItem(index, 'label', e.target.value)}
                   placeholder="Label facture"
                 />
-                <InputNumber
-                  size="small" style={{ width: 80 }}
-                  value={item.percentage} min={0} max={100} suffix="%"
-                  onChange={val => handleUpdatePlanItem(index, 'percentage', val)}
-                  placeholder="%"
-                />
-                <InputNumber
-                  size="small" style={{ width: 100 }}
-                  value={item.fixedAmount} min={0} suffix="€"
-                  onChange={val => handleUpdatePlanItem(index, 'fixedAmount', val)}
-                  placeholder="Fixe €"
-                />
-                <Select
-                  size="small" style={{ width: 130 }}
-                  value={item.statusId || undefined}
-                  onChange={val => handleUpdatePlanItem(index, 'statusId', val || null)}
-                  placeholder="Étape"
-                  allowClear
-                  options={(chantierStatuses || []).map(s => ({ value: s.id, label: s.name }))}
-                />
-                <Switch
-                  size="small" checked={item.isRequired}
-                  onChange={val => handleUpdatePlanItem(index, 'isRequired', val)}
-                  checkedChildren="Req" unCheckedChildren="Opt"
-                />
-                <Button size="small" danger icon={<MinusCircleOutlined />} onClick={() => handleRemovePlanItem(index)} />
+                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', width: screens.md ? 'auto' : '100%' }}>
+                  <InputNumber
+                    size="small" style={{ width: screens.md ? 80 : 'calc(50% - 3px)' }}
+                    value={item.percentage} min={0} max={100} suffix="%"
+                    onChange={val => handleUpdatePlanItem(index, 'percentage', val)}
+                    placeholder="%"
+                  />
+                  <InputNumber
+                    size="small" style={{ width: screens.md ? 100 : 'calc(50% - 3px)' }}
+                    value={item.fixedAmount} min={0} suffix="€"
+                    onChange={val => handleUpdatePlanItem(index, 'fixedAmount', val)}
+                    placeholder="Fixe €"
+                  />
+                </div>
+                <div style={{ display: 'flex', gap: 6, alignItems: 'center', width: screens.md ? 'auto' : '100%' }}>
+                  <Select
+                    size="small" style={{ width: screens.md ? 130 : 'calc(100% - 100px)' }}
+                    value={item.statusId || undefined}
+                    onChange={val => handleUpdatePlanItem(index, 'statusId', val || null)}
+                    placeholder="Étape"
+                    allowClear
+                    options={(chantierStatuses || []).map(s => ({ value: s.id, label: s.name }))}
+                  />
+                  <Switch
+                    size="small" checked={item.isRequired}
+                    onChange={val => handleUpdatePlanItem(index, 'isRequired', val)}
+                    checkedChildren="Req" unCheckedChildren="Opt"
+                  />
+                  <Button size="small" danger icon={<MinusCircleOutlined />} onClick={() => handleRemovePlanItem(index)} />
+                </div>
               </div>
             ))}
             <Button type="dashed" block icon={<PlusOutlined />} onClick={handleAddPlanItem} style={{ marginTop: 8 }}>
@@ -653,20 +659,68 @@ const ChantierInvoicesTab: React.FC<Props> = ({ chantierId, chantierAmount, isVa
         </div>
       )}
 
-      {/* Tableau */}
+      {/* Factures */}
       <Card size="small" title={<span><DollarOutlined /> Factures</span>}
         extra={<Button type="primary" size="small" icon={<PlusOutlined />} onClick={() => handleOpenModal()}>Nouvelle facture</Button>}
       >
-        <Table
-          dataSource={invoices}
-          columns={columns}
-          rowKey="id"
-          loading={loading}
-          size="small"
-          pagination={false}
-          locale={{ emptyText: <Empty description="Aucune facture" /> }}
-          scroll={{ x: 750 }}
-        />
+        {invoices.length === 0 ? (
+          <Empty description="Aucune facture" />
+        ) : !screens.md ? (
+          /* ── Vue mobile : cartes ── */
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {invoices.map(inv => {
+              const t = INVOICE_TYPES.find(i => i.value === inv.type);
+              const s = STATUS_LABELS[inv.status];
+              return (
+                <div key={inv.id} style={{
+                  padding: '10px 12px', borderRadius: 8, border: '1px solid #f0f0f0', background: '#fafafa',
+                }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                      <Tag color={t?.color} style={{ margin: 0 }}>{t?.label || inv.type}</Tag>
+                      <Badge status={s?.color as any || 'default'} text={s?.label || inv.status} />
+                    </div>
+                    <Space size={4}>
+                      <Button size="small" icon={<EditOutlined />} onClick={() => handleOpenModal(inv)} style={{ minWidth: 32, minHeight: 32 }} />
+                      <Popconfirm title="Supprimer ?" onConfirm={() => handleDelete(inv.id)}>
+                        <Button size="small" danger icon={<DeleteOutlined />} style={{ minWidth: 32, minHeight: 32 }} />
+                      </Popconfirm>
+                    </Space>
+                  </div>
+                  <Text strong style={{ display: 'block', fontSize: 13 }}>{inv.label}</Text>
+                  {inv.invoiceNumber && <Text type="secondary" style={{ fontSize: 11 }}>N° {inv.invoiceNumber}</Text>}
+                  <div style={{ display: 'flex', gap: 12, marginTop: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+                    <Text strong style={{ color: inv.status === 'PAID' ? '#52c41a' : undefined }}>
+                      {inv.amount.toLocaleString('fr-BE', { minimumFractionDigits: 2 })} €
+                    </Text>
+                    {inv.percentage && <Text type="secondary" style={{ fontSize: 11 }}>({inv.percentage}%)</Text>}
+                    {inv.dueDate && <Text type="secondary" style={{ fontSize: 11 }}>Éch. {dayjs(inv.dueDate).format('DD/MM/YYYY')}</Text>}
+                  </div>
+                  <div style={{ display: 'flex', gap: 6, marginTop: 8, flexWrap: 'wrap' }}>
+                    {inv.status === 'DRAFT' && (
+                      <Button size="small" icon={<SendOutlined />} onClick={() => handleStatusChange(inv.id, 'SENT')} style={{ minHeight: 32 }}>Envoyer</Button>
+                    )}
+                    {(inv.status === 'SENT' || inv.status === 'OVERDUE') && (
+                      <Button size="small" type="primary" icon={<CheckCircleOutlined />} onClick={() => handleStatusChange(inv.id, 'PAID')} style={{ minHeight: 32 }}>Payée</Button>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          /* ── Vue desktop : table ── */
+          <Table
+            dataSource={invoices}
+            columns={columns}
+            rowKey="id"
+            loading={loading}
+            size="small"
+            pagination={false}
+            locale={{ emptyText: <Empty description="Aucune facture" /> }}
+            scroll={{ x: 750 }}
+          />
+        )}
       </Card>
 
       {/* Modal création / édition */}

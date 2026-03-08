@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import {
-  Card, Tabs, Descriptions, Tag, Button, Spin, Avatar, Input, message,
-  Select, Empty, Typography, Space, Divider, Tooltip, Alert, DatePicker
+  Card, Tabs, Descriptions, Tag, Button, Spin, Avatar, Input,
+  Select, Empty, Typography, Space, Divider, Tooltip, Alert, DatePicker, App,
 } from 'antd';
 import {
   ArrowLeftOutlined,
@@ -50,6 +50,7 @@ const ChantierDetailPage: React.FC = () => {
   const { isSuperAdmin, userRole } = useAuth();
   const isAdminOrAbove = isSuperAdmin || userRole === 'admin';
   const canSeeCompta = isAdminOrAbove || userRole === 'comptable';
+  const { message } = App.useApp();
 
   const [chantier, setChantier] = useState<Chantier | null>(null);
   const [loading, setLoading] = useState(true);
@@ -96,7 +97,7 @@ const ChantierDetailPage: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, [api, id]);
+  }, [api, id, message]);
 
   useEffect(() => {
     fetchChantier();
@@ -155,7 +156,7 @@ const ChantierDetailPage: React.FC = () => {
     } finally {
       setSaving(false);
     }
-  }, [api, id, editForm, fetchChantier, chantier]);
+  }, [api, id, editForm, fetchChantier, chantier, message]);
 
   // Map des statuts pour le composant historique (doit être avant les early returns)
   const statusesMap = useMemo(() => {
@@ -263,7 +264,7 @@ const ChantierDetailPage: React.FC = () => {
           </div>
         </div>
 
-        <Space>
+        <Space wrap>
           {chantier.leadId && (
             <Tooltip title="Ouvrir le formulaire TBL">
               <Button
@@ -338,7 +339,7 @@ const ChantierDetailPage: React.FC = () => {
       )}
 
       {/* Content Tabs */}
-      <Tabs defaultActiveKey={initialTab} type="card" items={[
+      <Tabs defaultActiveKey={initialTab} type="line" items={[
         { key: 'info', label: <span><FileTextOutlined /> Informations</span>, children: (<>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '16px', padding: '16px 0' }}>
             {/* Colonne gauche - Détails chantier */}

@@ -534,30 +534,32 @@ router.put('/chantiers/:chantierId/billing-plan', authenticateToken, isAdmin, as
       });
     }
 
-    // Supprimer l'ancien plan
-    await db.chantierBillingPlanItem.deleteMany({ where: { chantierId, organizationId } });
+    // Supprimer l'ancien plan et créer les nouveaux items dans une transaction
+    const created = await db.$transaction(async (tx) => {
+      await tx.chantierBillingPlanItem.deleteMany({ where: { chantierId, organizationId } });
 
-    // Créer les nouveaux items
-    const created = [];
-    for (let i = 0; i < items.length; i++) {
-      const item = items[i];
-      const record = await db.chantierBillingPlanItem.create({
-        data: {
-          id: crypto.randomUUID(),
-          chantierId,
-          organizationId,
-          statusId: item.statusId || null,
-          type: item.type || 'CUSTOM',
-          label: item.label,
-          percentage: item.percentage ?? null,
-          fixedAmount: item.fixedAmount ?? null,
-          isRequired: item.isRequired ?? false,
-          order: item.order ?? i,
-          updatedAt: new Date(),
-        },
-      });
-      created.push(record);
-    }
+      const items_created = [];
+      for (let i = 0; i < items.length; i++) {
+        const item = items[i];
+        const record = await tx.chantierBillingPlanItem.create({
+          data: {
+            id: crypto.randomUUID(),
+            chantierId,
+            organizationId,
+            statusId: item.statusId || null,
+            type: item.type || 'CUSTOM',
+            label: item.label,
+            percentage: item.percentage ?? null,
+            fixedAmount: item.fixedAmount ?? null,
+            isRequired: item.isRequired ?? false,
+            order: item.order ?? i,
+            updatedAt: new Date(),
+          },
+        });
+        items_created.push(record);
+      }
+      return items_created;
+    });
 
     // Historique
     await db.chantierHistory.create({
@@ -1353,8 +1355,16 @@ router.post('/chantiers/:chantierId/history', authenticateToken, async (req, res
     }
 
     const { action, note, data: extraData } = req.body;
-    if (!action) {
-      return res.status(400).json({ success: false, message: 'Action requise' });
+
+    // Validation Zod
+    const historySchema = z.object({
+      action: z.string().min(1, 'Action requise'),
+      note: z.string().max(2000).optional(),
+      data: z.any().optional(),
+    });
+    const validation = historySchema.safeParse({ action, note, data: extraData });
+    if (!validation.success) {
+      return res.status(400).json({ success: false, message: 'Données invalides', errors: validation.error.errors });
     }
 
     const entry = await db.chantierHistory.create({

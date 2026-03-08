@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   Card, Button, Table, Tag, Space, Select,
   message, Empty, Tooltip, Statistic, Typography, Popconfirm,
-  Image,
+  Image, Grid,
 } from 'antd';
 import {
   ClockCircleOutlined, DeleteOutlined,
@@ -91,6 +91,7 @@ const ChantierPointageTab: React.FC<ChantierPointageTabProps> = ({ chantierId, c
   const [entries, setEntries] = useState<TimeEntry[]>([]);
   const [loading, setLoading] = useState(false);
   const [technicians, setTechnicians] = useState<any[]>([]);
+  const screens = Grid.useBreakpoint();
 
   // Quick pointage state
   const [quickTechId, setQuickTechId] = useState('');
@@ -429,7 +430,60 @@ const ChantierPointageTab: React.FC<ChantierPointageTabProps> = ({ chantierId, c
       >
         {entries.length === 0 ? (
           <Empty description="Aucun pointage enregistré pour ce chantier" image={Empty.PRESENTED_IMAGE_SIMPLE} />
+        ) : !screens.md ? (
+          /* ── Vue mobile : cartes ── */
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {entries.slice(0, 20).map(r => {
+              const cfg = TYPE_CONFIG[r.type] || TYPE_CONFIG.CHANTIER;
+              const sl = STATUS_LABELS[r.type];
+              const fenceRadius = r.Chantier?.geoFenceRadius || geoFenceRadius || 500;
+              const inOk = r.clockInDistance != null && r.clockInDistance <= fenceRadius;
+              const inFar = r.clockInDistance != null && r.clockInDistance > fenceRadius;
+              return (
+                <div key={r.id} style={{
+                  padding: '10px 12px', borderRadius: 8, border: '1px solid #f0f0f0', background: '#fafafa',
+                }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <div style={{ width: 8, height: 8, borderRadius: '50%', backgroundColor: r.Technician.color }} />
+                      <Text strong style={{ fontSize: 13 }}>
+                        {r.Technician.firstName} {r.Technician.lastName}
+                      </Text>
+                      {r.Technician.type === 'SUBCONTRACTOR' && <Tag style={{ fontSize: 9, lineHeight: '14px', padding: '0 3px' }} color="default">🏢 ST</Tag>}
+                    </div>
+                    <Popconfirm title="Supprimer ?" onConfirm={() => handleDelete(r.id)} okText="Oui" cancelText="Non">
+                      <Button danger size="small" icon={<DeleteOutlined />} style={{ minWidth: 32, minHeight: 32 }} />
+                    </Popconfirm>
+                  </div>
+                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+                    <Tag icon={cfg.icon} color={cfg.color} style={{ fontSize: 11 }}>{sl?.emoji || ''} {cfg.label}</Tag>
+                    <Text type="secondary" style={{ fontSize: 12 }}>{dayjs(r.date).format('DD/MM/YYYY')}</Text>
+                    <Text style={{ fontSize: 12, fontFamily: 'monospace' }}>{dayjs(r.startTime).format('HH:mm')}</Text>
+                    {r.durationMinutes && r.durationMinutes > 0 && (
+                      <Text strong style={{ fontSize: 12 }}>{formatDuration(r.durationMinutes)}</Text>
+                    )}
+                  </div>
+                  <div style={{ display: 'flex', gap: 8, marginTop: 6, alignItems: 'center' }}>
+                    {r.clockInLatitude != null && (
+                      <Tag style={{ fontSize: 10, margin: 0 }} color={inFar ? 'red' : inOk ? 'green' : 'default'}>
+                        📍 {r.clockInDistance != null ? `${r.clockInDistance}m` : 'GPS'}
+                      </Tag>
+                    )}
+                    {r.clockInPhotoUrl && (
+                      <Image src={r.clockInPhotoUrl} width={28} height={28} style={{ borderRadius: 4, objectFit: 'cover', border: '1px solid #d9d9d9' }} preview={{ mask: <CameraOutlined style={{ fontSize: 10 }} /> }} />
+                    )}
+                    {r.clockOutPhotoUrl && (
+                      <Image src={r.clockOutPhotoUrl} width={28} height={28} style={{ borderRadius: 4, objectFit: 'cover', border: '1px solid #ff4d4f' }} preview={{ mask: <CameraOutlined style={{ fontSize: 10 }} /> }} />
+                    )}
+                    {r.note && <Text type="secondary" style={{ fontSize: 11 }}>{r.note}</Text>}
+                  </div>
+                </div>
+              );
+            })}
+            {entries.length > 20 && <Text type="secondary" style={{ textAlign: 'center', padding: 8 }}>+{entries.length - 20} pointages...</Text>}
+          </div>
         ) : (
+          /* ── Vue desktop : table ── */
           <Table
             dataSource={entries}
             columns={columns}
