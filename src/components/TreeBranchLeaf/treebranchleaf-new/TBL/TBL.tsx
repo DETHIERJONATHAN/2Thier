@@ -5440,7 +5440,7 @@ const TBLTabContentWithSections: React.FC<TBLTabContentWithSectionsProps> = Reac
               allSubTabs={allSubTabs}
               reviewMode={reviewMode}
             />
-          )))
+          ))}
         </div>
       );
     }
