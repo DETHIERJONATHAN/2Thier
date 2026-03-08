@@ -73,6 +73,8 @@ const ChantierDetailPage: React.FC = () => {
 
   // Mini-agenda : prochains événements
   const [upcomingEvents, setUpcomingEvents] = useState<any[]>([]);
+  // Tous les événements (pour le reviewEventId, même si passés)
+  const [allEvents, setAllEvents] = useState<any[]>([]);
 
   // Réception client
   const [receptionData, setReceptionData] = useState<any>(null);
@@ -84,6 +86,8 @@ const ChantierDetailPage: React.FC = () => {
     try {
       const res = await api.get(`/api/chantier-workflow/chantiers/${id}/events`) as any;
       const all = res.data || res || [];
+      // Stocker tous les événements non annulés (pour le reviewEventId)
+      setAllEvents(all.filter((e: any) => e.status !== 'CANCELLED'));
       const now = new Date();
       const upcoming = all
         .filter((e: any) => new Date(e.startDate) >= now && e.status !== 'CANCELLED')
@@ -247,13 +251,24 @@ const ChantierDetailPage: React.FC = () => {
   const statusName = chantier.ChantierStatus?.name || 'Non défini';
 
   // URL TBL avec le devisId lié — mode=review pour la version technique
-  // Trouver le dernier événement pertinent (VISITE_TECHNIQUE ou CHANTIER non complété) pour lier la revue
+  // Trouver l'événement le plus pertinent parmi TOUS les événements (pas que futurs)
+  // Priorité: 1) VISITE_TECHNIQUE/CHANTIER non complété futur, 2) idem passé, 3) n'importe quel événement
   const reviewEventId = (() => {
-    if (!upcomingEvents?.length) return null;
-    const relevant = upcomingEvents.find((e: any) =>
+    if (!allEvents?.length) return null;
+    // D'abord chercher dans les événements futurs non complétés
+    const now = new Date();
+    const futureRelevant = allEvents.find((e: any) =>
+      ['VISITE_TECHNIQUE', 'CHANTIER'].includes(e.type) && e.status !== 'COMPLETED' && new Date(e.startDate) >= now
+    );
+    if (futureRelevant) return futureRelevant.id;
+    // Ensuite chercher parmi tous les événements non complétés (même passés)
+    const anyRelevant = allEvents.find((e: any) =>
       ['VISITE_TECHNIQUE', 'CHANTIER'].includes(e.type) && e.status !== 'COMPLETED'
     );
-    return relevant?.id || upcomingEvents[0]?.id || null;
+    if (anyRelevant) return anyRelevant.id;
+    // En dernier recours, prendre le plus récent événement (même complété)
+    const sorted = [...allEvents].sort((a: any, b: any) => new Date(b.startDate).getTime() - new Date(a.startDate).getTime());
+    return sorted[0]?.id || null;
   })();
   const tblUrl = chantier.leadId
     ? `/tbl/${chantier.leadId}${chantier.submissionId ? `?devisId=${chantier.submissionId}&mode=review` : '?mode=review'}${reviewEventId ? `&eventId=${reviewEventId}` : ''}`
