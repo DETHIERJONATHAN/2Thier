@@ -6296,6 +6296,11 @@ const MemoizedTBLSectionRenderer = React.memo(TBLSectionRenderer, (prevProps, ne
     }
   }
   
+  // 🔍 REVIEW MODE: Comparer l'état des checkboxes et commentaires
+  if (prevProps.reviewMode !== nextProps.reviewMode) return false;
+  if (prevProps.reviewChecked !== nextProps.reviewChecked) return false;
+  if (prevProps.reviewComments !== nextProps.reviewComments) return false;
+
   // Aucun changement pertinent, ne pas re-render
   return true;
 });
