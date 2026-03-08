@@ -18914,6 +18914,7 @@ router22.post("/events/:id/submit-review", authenticateToken, async (req2, res) 
             submissionId: true,
             amount: true,
             commercialId: true,
+            leadId: true,
             TreeBranchLeafSubmission: { select: { id: true, treeId: true } }
           }
         }
@@ -19041,13 +19042,72 @@ router22.post("/events/:id/submit-review", authenticateToken, async (req2, res) 
         console.error("[ChantierWorkflow] Erreur envoi notifications review:", notifError);
       }
     }
+    if (hasModifications && event.Chantier.leadId) {
+      try {
+        let rectifyStatus = await db.leadStatus.findFirst({
+          where: { organizationId, name: "\xC0 rectifier" }
+        });
+        if (!rectifyStatus) {
+          const maxOrder = await db.leadStatus.aggregate({
+            where: { organizationId },
+            _max: { order: true }
+          });
+          rectifyStatus = await db.leadStatus.create({
+            data: {
+              id: import_crypto11.default.randomUUID(),
+              organizationId,
+              name: "\xC0 rectifier",
+              color: "#fa8c16",
+              order: (maxOrder._max.order ?? 0) + 1,
+              isDefault: false,
+              updatedAt: /* @__PURE__ */ new Date()
+            }
+          });
+          console.log(`[ChantierWorkflow] Cr\xE9\xE9 LeadStatus "\xC0 rectifier" (${rectifyStatus.id}) pour org ${organizationId}`);
+        }
+        await db.lead.update({
+          where: { id: event.Chantier.leadId },
+          data: {
+            statusId: rectifyStatus.id,
+            status: "\xE0_rectifier",
+            updatedAt: /* @__PURE__ */ new Date()
+          }
+        });
+        console.log(`[ChantierWorkflow] Lead ${event.Chantier.leadId} d\xE9plac\xE9 vers "\xC0 rectifier"`);
+        const lead = await db.lead.findUnique({
+          where: { id: event.Chantier.leadId },
+          select: { assignedToId: true, firstName: true, lastName: true }
+        });
+        if (lead?.assignedToId) {
+          await db.notification.create({
+            data: {
+              id: import_crypto11.default.randomUUID(),
+              userId: lead.assignedToId,
+              organizationId,
+              title: "\u{1F504} Lead \xE0 rectifier",
+              message: `Le lead ${lead.firstName || ""} ${lead.lastName || ""} n\xE9cessite des corrections suite \xE0 la v\xE9rification terrain.`,
+              type: "warning",
+              link: `/leads`,
+              isRead: false,
+              createdAt: /* @__PURE__ */ new Date()
+            }
+          });
+        }
+      } catch (leadErr) {
+        console.error("[ChantierWorkflow] Erreur auto-return lead:", leadErr);
+      }
+    }
     if (event.type === "VISITE_TECHNIQUE") {
       await checkAutoTransitions(event.Chantier.id, organizationId, "AUTO_VISIT_VALIDATED", user);
     }
     res.json({
       success: true,
-      data: { reviewStatus, modifiedCount: reviews.filter((r) => r.isModified).length },
-      message: hasModifications ? `Revue soumise avec ${reviews.filter((r) => r.isModified).length} modification(s) \u2014 Admin notifi\xE9` : "Revue soumise \u2014 Toutes les donn\xE9es confirm\xE9es \u2705"
+      data: {
+        reviewStatus,
+        modifiedCount: reviews.filter((r) => r.isModified).length,
+        leadReturned: hasModifications && !!event.Chantier.leadId
+      },
+      message: hasModifications ? `Analyse termin\xE9e \u2014 ${reviews.filter((r) => r.isModified).length} probl\xE8me(s) d\xE9tect\xE9(s). Lead renvoy\xE9 au commercial.` : "Analyse termin\xE9e \u2014 Toutes les donn\xE9es confirm\xE9es \u2705"
     });
   } catch (error) {
     console.error("[ChantierWorkflow] Erreur POST /events/:id/submit-review:", error);

@@ -41,9 +41,10 @@ import {
   Skeleton,
   Tooltip,
   Tag,
-  Switch
+  Switch,
+  Result
 } from 'antd';
-import { FileTextOutlined, DownloadOutlined, ClockCircleOutlined, FolderOpenOutlined, PlusOutlined, UserOutlined, FileAddOutlined, SearchOutlined, MailOutlined, PhoneOutlined, HomeOutlined, SwapOutlined, LeftOutlined, RightOutlined, SaveOutlined, SendOutlined, PaperClipOutlined, ToolOutlined } from '@ant-design/icons';
+import { FileTextOutlined, DownloadOutlined, ClockCircleOutlined, FolderOpenOutlined, PlusOutlined, UserOutlined, FileAddOutlined, SearchOutlined, MailOutlined, PhoneOutlined, HomeOutlined, SwapOutlined, LeftOutlined, RightOutlined, SaveOutlined, SendOutlined, PaperClipOutlined, ToolOutlined, CheckCircleOutlined, ExclamationCircleOutlined } from '@ant-design/icons';
 import { useAuth } from '../../../../auth/useAuth';
 import { useParams, useSearchParams } from 'react-router-dom';
 import { useTreeBranchLeafConfig } from '../../hooks/useTreeBranchLeafConfig';
@@ -130,6 +131,7 @@ const TBL: React.FC<TBLProps> = ({
   const [reviewChecked, setReviewChecked] = useState<Record<string, boolean>>({});
   const [reviewComments, setReviewComments] = useState<Record<string, string>>({});
   const [submittingReview, setSubmittingReview] = useState(false);
+  const [analysisResult, setAnalysisResult] = useState<{ status: 'validated' | 'to_rectify'; modifiedCount: number; message: string } | null>(null);
   // 🔍 REVIEW MODE: Snapshot des valeurs originales du devis (capturé au premier chargement)
   const originalFormDataRef = useRef<Record<string, any> | null>(null);
   const [originalFormData, setOriginalFormData] = useState<Record<string, any>>({});
@@ -768,7 +770,7 @@ const TBL: React.FC<TBLProps> = ({
   const rawNodes = useMemo(() => (useFixed ? (newData.rawNodes || []) : (oldData.rawNodes || [])), [useFixed, newData.rawNodes, oldData.rawNodes]); // 🔥 NOUVEAU: Nœuds bruts pour Cascader
   const effectiveTreeId = tree?.id || requestedTreeId;
 
-  // 🔍 REVIEW MODE: Callback de soumission (après rawNodes + formData)
+  // 🔍 REVIEW MODE: Callback "Analyse" (après rawNodes + formData)
   const onSubmitReview = useCallback(async () => {
     const checkedFields = Object.entries(reviewChecked).filter(([, v]) => v);
     const missingComments = checkedFields.filter(([id]) => !reviewComments[id]?.trim());
@@ -777,7 +779,7 @@ const TBL: React.FC<TBLProps> = ({
       return;
     }
     if (!reviewEventId) {
-      message.error('Pas d\'événement lié — Impossible d\'envoyer la revue');
+      message.error('Pas d\'événement lié — Impossible de lancer l\'analyse');
       return;
     }
     setSubmittingReview(true);
@@ -791,15 +793,22 @@ const TBL: React.FC<TBLProps> = ({
         isModified: reviewChecked[node.id] === true,
         modificationNote: reviewChecked[node.id] ? (reviewComments[node.id] || null) : null,
       }));
-      await api.post(`/api/chantier-workflow/events/${reviewEventId}/submit-review`, {
+      const response = await api.post(`/api/chantier-workflow/events/${reviewEventId}/submit-review`, {
         reviews,
         reviewType: 'TECHNICAL',
       });
-      message.success('Revue technique envoyée avec succès !');
-      window.history.back();
+      const data = response?.data || response;
+      const hasProblems = checkedFields.length > 0;
+      setAnalysisResult({
+        status: hasProblems ? 'to_rectify' : 'validated',
+        modifiedCount: checkedFields.length,
+        message: hasProblems
+          ? `${checkedFields.length} problème${checkedFields.length > 1 ? 's' : ''} signalé${checkedFields.length > 1 ? 's' : ''} — Le lead est renvoyé au commercial pour correction.`
+          : 'Tous les champs ont été vérifiés et validés. Le chantier peut continuer.',
+      });
     } catch (err: any) {
-      console.error('[TBL Review] Erreur submit:', err);
-      message.error(err?.message || 'Erreur lors de l\'envoi de la revue');
+      console.error('[TBL Review] Erreur analyse:', err);
+      message.error(err?.message || 'Erreur lors de l\'analyse');
     } finally {
       setSubmittingReview(false);
     }
@@ -5630,20 +5639,20 @@ const TBLTabContentWithSections: React.FC<TBLTabContentWithSectionsProps> = Reac
     <div>
       {reviewMode && (
         <div style={{
-          padding: '10px 16px',
+          padding: '12px 16px',
           marginBottom: 12,
-          background: 'linear-gradient(135deg, #fff7e6 0%, #fffbe6 100%)',
-          border: '1px solid #ffd591',
+          background: 'linear-gradient(135deg, #e6f7ff 0%, #f0f5ff 100%)',
+          border: '1px solid #91d5ff',
           borderRadius: 8,
           display: 'flex',
           alignItems: 'center',
           gap: 10,
         }}>
-          <span style={{ fontSize: 20 }}>🔍</span>
+          <span style={{ fontSize: 22 }}>🔧</span>
           <div>
-            <div style={{ fontWeight: 600, color: '#fa8c16', fontSize: 14 }}>Mode Revue Technique</div>
+            <div style={{ fontWeight: 600, color: '#1890ff', fontSize: 14 }}>Mode Technicien — Vérification terrain</div>
             <div style={{ fontSize: 12, color: '#595959' }}>
-              Tous les champs sont <strong>OK par défaut</strong>. Cochez <strong>uniquement</strong> ceux qui posent problème et ajoutez un commentaire.
+              Vérifiez chaque champ. <strong>Cochez uniquement les problèmes</strong> et ajoutez un commentaire. Puis cliquez sur <strong>Analyse</strong>.
             </div>
           </div>
         </div>
@@ -5679,20 +5688,61 @@ const TBLTabContentWithSections: React.FC<TBLTabContentWithSectionsProps> = Reac
           <Button
             type="primary"
             size="large"
-            icon={<SendOutlined />}
+            icon={<SearchOutlined />}
             loading={submittingReview}
             onClick={onSubmitReview}
             style={{
-              height: 44,
-              fontSize: 15,
-              fontWeight: 600,
+              height: 48,
+              fontSize: 16,
+              fontWeight: 700,
               borderRadius: 8,
+              background: '#1890ff',
+              minWidth: 160,
             }}
           >
-            Envoyer la revue technique
+            Analyse
           </Button>
         </div>
       )}
+      {/* 🔍 MODAL RÉSULTAT ANALYSE */}
+      <Modal
+        open={!!analysisResult}
+        footer={null}
+        closable={false}
+        centered
+        width={480}
+      >
+        {analysisResult && (
+          <Result
+            status={analysisResult.status === 'validated' ? 'success' : 'warning'}
+            icon={analysisResult.status === 'validated'
+              ? <CheckCircleOutlined style={{ color: '#52c41a' }} />
+              : <ExclamationCircleOutlined style={{ color: '#fa8c16' }} />
+            }
+            title={analysisResult.status === 'validated' ? 'Validé ✅' : 'À rectifier ⚠️'}
+            subTitle={analysisResult.message}
+            extra={
+              <Button
+                type="primary"
+                size="large"
+                onClick={() => {
+                  setAnalysisResult(null);
+                  window.history.back();
+                }}
+                style={{
+                  height: 44,
+                  fontWeight: 600,
+                  borderRadius: 8,
+                  background: analysisResult.status === 'validated' ? '#52c41a' : '#fa8c16',
+                  borderColor: analysisResult.status === 'validated' ? '#52c41a' : '#fa8c16',
+                }}
+              >
+                Retour au chantier
+              </Button>
+            }
+          />
+        )}
+      </Modal>
       <div className="mt-6 text-xs text-gray-400 text-right">
         {stats.completed}/{stats.required} requis complétés
       </div>

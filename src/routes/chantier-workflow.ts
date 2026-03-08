@@ -1906,6 +1906,7 @@ router.post('/events/:id/submit-review', authenticateToken, async (req, res) => 
             submissionId: true,
             amount: true,
             commercialId: true,
+            leadId: true,
             TreeBranchLeafSubmission: { select: { id: true, treeId: true } }
           }
         }
@@ -2061,6 +2062,69 @@ router.post('/events/:id/submit-review', authenticateToken, async (req, res) => 
       }
     }
 
+    // 🔁 AUTO-RETURN TO LEAD: Si modifications détectées → renvoyer le lead dans la colonne "À rectifier"
+    if (hasModifications && event.Chantier.leadId) {
+      try {
+        // Trouver ou créer le statut "À rectifier" pour cette organisation
+        let rectifyStatus = await db.leadStatus.findFirst({
+          where: { organizationId, name: 'À rectifier' },
+        });
+        if (!rectifyStatus) {
+          // Trouver le plus grand order existant pour positionner la nouvelle colonne à la fin
+          const maxOrder = await db.leadStatus.aggregate({
+            where: { organizationId },
+            _max: { order: true },
+          });
+          rectifyStatus = await db.leadStatus.create({
+            data: {
+              id: crypto.randomUUID(),
+              organizationId,
+              name: 'À rectifier',
+              color: '#fa8c16',
+              order: (maxOrder._max.order ?? 0) + 1,
+              isDefault: false,
+              updatedAt: new Date(),
+            }
+          });
+          console.log(`[ChantierWorkflow] Créé LeadStatus "À rectifier" (${rectifyStatus.id}) pour org ${organizationId}`);
+        }
+
+        // Déplacer le lead vers "À rectifier"
+        await db.lead.update({
+          where: { id: event.Chantier.leadId },
+          data: {
+            statusId: rectifyStatus.id,
+            status: 'à_rectifier',
+            updatedAt: new Date(),
+          }
+        });
+        console.log(`[ChantierWorkflow] Lead ${event.Chantier.leadId} déplacé vers "À rectifier"`);
+
+        // Notifier le commercial assigné du lead
+        const lead = await db.lead.findUnique({
+          where: { id: event.Chantier.leadId },
+          select: { assignedToId: true, firstName: true, lastName: true },
+        });
+        if (lead?.assignedToId) {
+          await db.notification.create({
+            data: {
+              id: crypto.randomUUID(),
+              userId: lead.assignedToId,
+              organizationId,
+              title: '🔄 Lead à rectifier',
+              message: `Le lead ${lead.firstName || ''} ${lead.lastName || ''} nécessite des corrections suite à la vérification terrain.`,
+              type: 'warning',
+              link: `/leads`,
+              isRead: false,
+              createdAt: new Date(),
+            }
+          });
+        }
+      } catch (leadErr) {
+        console.error('[ChantierWorkflow] Erreur auto-return lead:', leadErr);
+      }
+    }
+
     // Auto-transition si visite technique
     if (event.type === 'VISITE_TECHNIQUE') {
       await checkAutoTransitions(event.Chantier.id, organizationId, 'AUTO_VISIT_VALIDATED', user);
@@ -2068,10 +2132,14 @@ router.post('/events/:id/submit-review', authenticateToken, async (req, res) => 
 
     res.json({
       success: true,
-      data: { reviewStatus, modifiedCount: reviews.filter(r => r.isModified).length },
+      data: {
+        reviewStatus,
+        modifiedCount: reviews.filter(r => r.isModified).length,
+        leadReturned: hasModifications && !!event.Chantier.leadId,
+      },
       message: hasModifications
-        ? `Revue soumise avec ${reviews.filter(r => r.isModified).length} modification(s) — Admin notifié`
-        : 'Revue soumise — Toutes les données confirmées ✅'
+        ? `Analyse terminée — ${reviews.filter(r => r.isModified).length} problème(s) détecté(s). Lead renvoyé au commercial.`
+        : 'Analyse terminée — Toutes les données confirmées ✅'
     });
   } catch (error) {
     console.error('[ChantierWorkflow] Erreur POST /events/:id/submit-review:', error);
