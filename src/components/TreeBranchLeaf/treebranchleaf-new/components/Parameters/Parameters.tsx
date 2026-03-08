@@ -447,6 +447,7 @@ const Parameters: React.FC<ParametersProps> = (props) => {
   const [isRequired, setIsRequired] = useState<boolean>(false);
   const [isVisible, setIsVisible] = useState<boolean>(true);
   const [isMultiple, setIsMultiple] = useState<boolean>(false);
+  const [technicianVisible, setTechnicianVisible] = useState<boolean>(false);
   // Repliable supprimé: état supprimé pour simplifier l'UI
   const [fieldType, setFieldType] = useState<string | undefined>(undefined);
   const [capsState, setCapsState] = useState<Record<string, boolean>>({});
@@ -1396,6 +1397,7 @@ const Parameters: React.FC<ParametersProps> = (props) => {
     setIsRequired(!!selectedNode.isRequired);
     setIsVisible(selectedNode.isVisible !== false);
     setIsMultiple(!!selectedNode.isMultiple);
+    setTechnicianVisible(!!(selectedNode as any).technicianVisible);
 
     if (isNewNode) {
       setAppearanceOpen(false);
@@ -1639,6 +1641,11 @@ const Parameters: React.FC<ParametersProps> = (props) => {
     patchNode({ isMultiple: value });
   }, [patchNode]);
 
+  const handleTechnicianVisibleChange = useCallback((value: boolean) => {
+    setTechnicianVisible(value);
+    patchNode({ technicianVisible: value });
+  }, [patchNode]);
+
   // Gestionnaire de changement de fieldType
   const handleFieldTypeChange = useCallback((value: string) => {
     setFieldType(value);
@@ -1845,6 +1852,24 @@ const Parameters: React.FC<ParametersProps> = (props) => {
                       disabled={props.readOnly}
                     >
                       ✓
+                    </Button>
+                  </Tooltip>
+                )}
+
+                {/* Bouton Visible pour technicien (revue terrain) */}
+                {selectedNode?.type === 'leaf' && (
+                  <Tooltip title={technicianVisible ? "Visible pour le technicien (actif)" : "Rendre visible pour le technicien"}>
+                    <Button
+                      type={technicianVisible ? "primary" : "default"}
+                      size="small"
+                      style={{ 
+                        width: 24, height: 24, padding: 0, fontSize: 12,
+                        ...(technicianVisible ? { backgroundColor: '#1890ff', borderColor: '#1890ff' } : {})
+                      }}
+                      onClick={() => handleTechnicianVisibleChange(!technicianVisible)}
+                      disabled={props.readOnly}
+                    >
+                      🔧
                     </Button>
                   </Tooltip>
                 )}

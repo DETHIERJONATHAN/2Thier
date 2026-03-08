@@ -122,6 +122,7 @@ const TBL: React.FC<TBLProps> = ({
   const { leadId: urlLeadId } = useParams<{ leadId?: string }>();
   const [searchParams] = useSearchParams();
   const requestedDevisId = searchParams.get('devisId');
+  const reviewMode = searchParams.get('mode') === 'review';
   const { api } = useAuthenticatedApi();
   const screens = useBreakpoint();
   const isMobile = !screens.lg;
@@ -5437,8 +5438,9 @@ const TBLTabContentWithSections: React.FC<TBLTabContentWithSectionsProps> = Reac
               submissionId={submissionId}
               activeSubTab={activeSubTab}
               allSubTabs={allSubTabs}
+              reviewMode={reviewMode}
             />
-          ))}
+          )))
         </div>
       );
     }
@@ -5517,6 +5519,7 @@ const TBLTabContentWithSections: React.FC<TBLTabContentWithSectionsProps> = Reac
             submissionId={submissionId}
             activeSubTab={activeSubTab}
             allSubTabs={allSubTabs}
+            reviewMode={reviewMode}
           />
         </div>
       );
@@ -5526,6 +5529,27 @@ const TBLTabContentWithSections: React.FC<TBLTabContentWithSectionsProps> = Reac
 
   return (
     <div>
+      {reviewMode && (
+        <div style={{
+          padding: '10px 16px',
+          marginBottom: 12,
+          background: 'linear-gradient(135deg, #e6f7ff 0%, #f0f5ff 100%)',
+          border: '1px solid #91d5ff',
+          borderRadius: 8,
+          display: 'flex',
+          alignItems: 'center',
+          gap: 10,
+        }}>
+          <span style={{ fontSize: 20 }}>🔍</span>
+          <div>
+            <div style={{ fontWeight: 600, color: '#1890ff', fontSize: 14 }}>Mode Revue Technique</div>
+            <div style={{ fontSize: 12, color: '#595959' }}>
+              Les champs encadrés en <span style={{ color: '#1890ff', fontWeight: 600 }}>bleu</span> doivent être vérifiés sur le terrain.
+              Cochez chaque champ une fois validé.
+            </div>
+          </div>
+        </div>
+      )}
       {renderContent()}
       <div className="mt-6 text-xs text-gray-400 text-right">
         {stats.completed}/{stats.required} requis complétés

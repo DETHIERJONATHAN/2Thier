@@ -283,9 +283,9 @@ const ChantierDetailPage: React.FC = () => {
   const statusColor = chantier.ChantierStatus?.color || '#1890ff';
   const statusName = chantier.ChantierStatus?.name || 'Non défini';
 
-  // URL TBL avec le devisId lié
+  // URL TBL avec le devisId lié — mode=review pour la version technique
   const tblUrl = chantier.leadId
-    ? `/tbl/${chantier.leadId}${chantier.submissionId ? `?devisId=${chantier.submissionId}` : ''}`
+    ? `/tbl/${chantier.leadId}${chantier.submissionId ? `?devisId=${chantier.submissionId}&mode=review` : '?mode=review'}`
     : null;
 
   // Données du devis lié (GeneratedDocument + dataSnapshot)

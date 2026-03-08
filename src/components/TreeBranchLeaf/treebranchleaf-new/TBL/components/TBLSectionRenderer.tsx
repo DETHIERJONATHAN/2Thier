@@ -28,13 +28,15 @@ import {
   Button,
   Form,
   Tooltip,
+  Checkbox,
 } from 'antd';
 import { 
   BranchesOutlined,
   EyeInvisibleOutlined,
   PlusOutlined,
   MinusCircleOutlined,
-  DeleteOutlined
+  DeleteOutlined,
+  CheckCircleOutlined,
 } from '@ant-design/icons';
 import TBLFieldRendererAdvanced from './TBLFieldRendererAdvanced';
 import type { TBLSection, TBLField } from '../hooks/useTBLDataPrismaComplete';
@@ -1010,6 +1012,7 @@ interface TBLSectionRendererProps {
   submissionId?: string | null;
   activeSubTab?: string; // 🔧 FIX: Sous-onglet actif pour filtrer les champs conditionnels
   allSubTabs?: Array<{ key: string; label: string }>; // 🔧 FIX: Liste des sous-onglets reconnus pour filtrage cohérent
+  reviewMode?: boolean; // 🔍 Mode revue technique: affiche checkboxes sur les champs technicianVisible
 }
 
 const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
@@ -1025,7 +1028,8 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
   isValidation = false,
   submissionId,
   activeSubTab,
-  allSubTabs = []
+  allSubTabs = [],
+  reviewMode = false,
 }) => {
   // ✅ CRITIQUE: Stabiliser l'API pour éviter les re-rendus à chaque frappe
   const apiHook = useAuthenticatedApi();
@@ -1038,6 +1042,17 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
   
   // dlog alias to global debug logger (globalDlog checks DEBUG_VERBOSE)
   const dlog = globalDlog;
+
+  // 🔍 REVIEW MODE: Set des champs technicianVisible + état des checkboxes
+  const techVisibleSet = useMemo(() => {
+    if (!reviewMode) return new Set<string>();
+    return new Set<string>(
+      allNodes
+        .filter((n: any) => n.technicianVisible === true)
+        .map((n: any) => n.id)
+    );
+  }, [reviewMode, allNodes]);
+  const [reviewChecked, setReviewChecked] = useState<Record<string, boolean>>({});
 
   const resolveEventTreeId = useCallback(() => {
     if (treeId && String(treeId).length > 0) {
@@ -5990,12 +6005,49 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
 
                   // Rendu normal des champs (si pas d'injection de conditionalFields)
                   const defaultFormColProps = getFieldColProps(section, field);
+                  const isTechField = reviewMode && techVisibleSet.has(field.id);
+                  const isFieldChecked = reviewChecked[field.id] === true;
                   return (
                     <Col
                       key={field.id}
                       {...defaultFormColProps}
                       className="mb-2 tbl-form-col"
+                      style={isTechField ? {
+                        borderLeft: `3px solid ${isFieldChecked ? '#52c41a' : '#1890ff'}`,
+                        borderRadius: 6,
+                        background: isFieldChecked ? '#f6ffed' : '#e6f7ff22',
+                        paddingLeft: 8,
+                        position: 'relative',
+                        transition: 'all 0.2s ease',
+                      } : undefined}
                     >
+                      {/* 🔍 REVIEW MODE: Checkbox de validation terrain */}
+                      {isTechField && (
+                        <div style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 6,
+                          marginBottom: 4,
+                          padding: '2px 0',
+                        }}>
+                          <Checkbox
+                            checked={isFieldChecked}
+                            onChange={e => setReviewChecked(prev => ({ ...prev, [field.id]: e.target.checked }))}
+                            style={{ transform: 'scale(1.15)' }}
+                          />
+                          <Text style={{
+                            fontSize: 11,
+                            color: isFieldChecked ? '#52c41a' : '#1890ff',
+                            fontWeight: 500,
+                          }}>
+                            {isFieldChecked ? (
+                              <><CheckCircleOutlined /> Vérifié</>
+                            ) : (
+                              '🔍 À vérifier sur terrain'
+                            )}
+                          </Text>
+                        </div>
+                      )}
                       {/* Contrôles de copies: on garde seulement ➕ (sur le dernier champ du groupe) et un bouton 🗑️ pour supprimer TOUTE la copie (sur le dernier champ du groupe) */}
                       {(field.canAddNewCopy || (field as any).isLastInCopyGroup) && (
                         <div style={{ 
@@ -6119,6 +6171,7 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
                     level={level + 1}
                     parentConditions={parentConditions}
                     submissionId={submissionId}
+                    reviewMode={reviewMode}
                   />
                 ))}
               </>
@@ -6149,6 +6202,7 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
                       level={level + 1}
                       parentConditions={parentConditions}
                       submissionId={submissionId}
+                      reviewMode={reviewMode}
                     />
                   </Panel>
                 ))}
