@@ -424,6 +424,7 @@ const KanbanColumn: React.FC<KanbanColumnProps> = ({ status, chantiers, onDrop, 
         display: 'flex',
         flexDirection: 'column',
         flexShrink: 0,
+        minHeight: '100%',
         transition: 'background-color 0.2s, border-color 0.2s',
         border: borderStyle,
         position: 'relative',
@@ -1379,7 +1380,7 @@ const ChantierKanban: React.FC<ChantierKanbanProps> = ({ onViewChantier, onSetti
 
       {/* Kanban Board + Panel techniciens */}
       <DndProvider backend={MultiBackend} options={HTML5toTouch}>
-        <div style={{ display: 'flex', flex: 1, overflow: 'hidden', position: 'relative' }}>
+        <div style={{ display: 'flex', flex: 1, overflow: 'hidden', position: 'relative', minHeight: 0 }}>
           {/* ═══ Backdrop overlay (mobile) ═══ */}
           {techPanelOpen && (
             <div
@@ -1625,6 +1626,7 @@ const ChantierKanban: React.FC<ChantierKanbanProps> = ({ onViewChantier, onSetti
               alignItems: 'stretch',
               WebkitOverflowScrolling: 'touch',
               minHeight: 0,
+              height: '100%',
             }}
           >
             {statuses.map(status => (
