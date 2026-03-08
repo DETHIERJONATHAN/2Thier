@@ -4268,6 +4268,7 @@ const TBL: React.FC<TBLProps> = ({
                         controlledActiveSubTab={isMobile ? activeSubTabs[tab.id] : undefined}
                         onSubTabChange={isMobile ? (subTabKey) => handleSwipeSubTabChange(tab.id, subTabKey) : undefined}
                         onSubTabsComputed={isMobile ? (subTabs) => handleSubTabsComputed(tab.id, subTabs) : undefined}
+                        reviewMode={reviewMode}
                       />
                     </div>
                   )
@@ -5086,6 +5087,7 @@ interface TBLTabContentWithSectionsProps {
   controlledActiveSubTab?: string;
   onSubTabChange?: (subTabKey: string | undefined) => void;
   onSubTabsComputed?: (subTabs: { key: string; label: string }[]) => void;
+  reviewMode?: boolean;
 }
 
 const TBLTabContentWithSections: React.FC<TBLTabContentWithSectionsProps> = React.memo(({
@@ -5107,7 +5109,8 @@ const TBLTabContentWithSections: React.FC<TBLTabContentWithSectionsProps> = Reac
   productSourceNodeId,
   controlledActiveSubTab,
   onSubTabChange,
-  onSubTabsComputed
+  onSubTabsComputed,
+  reviewMode = false
 }) => {
   const stats = useMemo(() => {
     let total = 0;
