@@ -79,7 +79,7 @@ interface TBLImageFieldWithAIProps {
 /**
  * Composant de champ IMAGE avec support IA pour l'extraction de mesures
  */
-const TBLImageFieldWithAI: React.FC<TBLImageFieldWithAIProps> = ({
+const TBLImageFieldWithAI: React.FC<TBLImageFieldWithAIProps> = React.memo(({
   nodeId,
   metadata = {},
   // Colonnes dédiées AI Measure
@@ -232,25 +232,16 @@ const TBLImageFieldWithAI: React.FC<TBLImageFieldWithAIProps> = ({
   const smartConfig = useMemo(() => smartCameraHook.config, [smartCameraHook.config]);
   
   // 🔧 NOUVEAU: Récupérer la config AI depuis les colonnes dédiées OU metadata (fallback)
-  const aiConfig = getAIMeasureConfig({ 
+  const aiConfig = useMemo(() => getAIMeasureConfig({ 
     metadata,
     // Colonnes dédiées (prioritaires)
     aiMeasure_enabled,
     aiMeasure_autoTrigger,
     aiMeasure_prompt,
     aiMeasure_keys
-  });
+  }), [metadata, aiMeasure_enabled, aiMeasure_autoTrigger, aiMeasure_prompt, aiMeasure_keys]);
   const isAIEnabled = aiConfig?.enabled === true;
   const autoTrigger = aiConfig?.autoTrigger !== false; // true par défaut si AI activé
-  
-  // Debug log
-  console.log('[TBLImageFieldWithAI] AI Config:', { 
-    isAIEnabled, 
-    autoTrigger, 
-    aiMeasure_enabled,
-    aiMeasure_keys,
-    mappingsCount: aiConfig?.mappings?.length || 0 
-  });
   
   // Configuration image
   const acceptedFormats = Array.isArray(imageConfig.formats) && imageConfig.formats.length > 0
@@ -1425,6 +1416,8 @@ const TBLImageFieldWithAI: React.FC<TBLImageFieldWithAIProps> = ({
       </Modal>
     </div>
   );
-};
+});
+
+TBLImageFieldWithAI.displayName = 'TBLImageFieldWithAI';
 
 export default TBLImageFieldWithAI;

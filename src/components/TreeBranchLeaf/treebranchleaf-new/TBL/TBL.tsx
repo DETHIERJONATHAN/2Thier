@@ -5429,7 +5429,6 @@ const TBLTabContentWithSections: React.FC<TBLTabContentWithSectionsProps> = Reac
       
       // Si pas de sélection produit → tout visible
       if (sourceValue === undefined || sourceValue === null || sourceValue === '') {
-        console.log('🛒🏷️ [SUBTAB VISIBILITY] Pas de sélection produit → tous visibles');
         return allSubTabs;
       }
       
@@ -5444,7 +5443,6 @@ const TBLTabContentWithSections: React.FC<TBLTabContentWithSectionsProps> = Reac
       }
       
       if (selectedValues.length === 0) {
-        console.log('🛒🏷️ [SUBTAB VISIBILITY] Sélection vide → tous visibles');
         return allSubTabs;
       }
       
@@ -5454,19 +5452,16 @@ const TBLTabContentWithSections: React.FC<TBLTabContentWithSectionsProps> = Reac
         
         // Si pas configuré (undefined) → toujours visible
         if (visConfig === undefined || visConfig === null) {
-          console.log(`🛒🏷️ [SUBTAB VISIBILITY] "${subTab.label}": config=null → VISIBLE (toujours)`);
           return true;
         }
         
         // Si tableau vide → jamais visible
         if (Array.isArray(visConfig) && visConfig.length === 0) {
-          console.log(`🛒🏷️ [SUBTAB VISIBILITY] "${subTab.label}": config=[] → MASQUÉ (jamais visible)`);
           return false;
         }
         
         // Vérifier si au moins une valeur sélectionnée est dans la config
         const isVisible = visConfig.some((v: string) => selectedValues.includes(v));
-        console.log(`🛒🏷️ [SUBTAB VISIBILITY] "${subTab.label}": config=${JSON.stringify(visConfig)}, selected=${JSON.stringify(selectedValues)} → ${isVisible ? 'VISIBLE' : 'MASQUÉ'}`);
         return isVisible;
       });
       

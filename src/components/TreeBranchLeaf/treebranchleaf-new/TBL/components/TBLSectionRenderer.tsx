@@ -3970,14 +3970,7 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
     // 🛒 PRODUIT: Filtrer les champs par visibilité produit
     // Si un champ a product_visibleFor configuré, il n'est visible que si
     // un des produits sélectionnés dans le champ source correspond
-    {
-      // Debug: compter les champs avec product config
-      const productFields = fieldsAfterDeletion.filter(f => (f as any).hasProduct || (f as any).product_visibleFor);
-      if (productFields.length > 0) {
-        console.log(`🛒🛒🛒 [PRODUCT FILTER] Section "${section.title}": ${productFields.length} champs avec config produit sur ${fieldsAfterDeletion.length} total`, 
-          productFields.map(f => ({ id: f.id, label: f.label, hasProduct: (f as any).hasProduct, visibleFor: (f as any).product_visibleFor, sourceId: (f as any).product_sourceNodeId })));
-      }
-    }
+
     fieldsAfterDeletion = fieldsAfterDeletion.filter(field => {
       const f = field as any;
       // Si pas de configuration produit, toujours visible
@@ -3987,7 +3980,6 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
 
       // Récupérer la valeur du champ source produit depuis formData
       const sourceValue = formData[f.product_sourceNodeId];
-      console.log(`🛒 [PRODUCT VISIBILITY] "${field.label}": sourceNodeId=${f.product_sourceNodeId}, sourceValue=${JSON.stringify(sourceValue)}, visibleFor=${JSON.stringify(f.product_visibleFor)}`);
       // Si aucune valeur sélectionnée → tout afficher
       if (sourceValue === undefined || sourceValue === null || sourceValue === '') return true;
 
@@ -4004,7 +3996,6 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
       if (selectedValues.length === 0) return true;
 
       const isVisible = f.product_visibleFor.some((v: string) => selectedValues.includes(v));
-      console.log(`🛒 [PRODUCT VISIBILITY RESULT] "${field.label}": selected=${JSON.stringify(selectedValues)}, visible=${isVisible}`);
       return isVisible;
     });
 
@@ -6299,6 +6290,29 @@ const buildSectionStructureSignature = (section: TBLSection): string[] => {
 };
 
 // ✅ MÉMOÏSATION AVEC COMPARAISON CUSTOM pour éviter les re-rendus à chaque frappe
+// Collecte tous les field IDs pertinents pour cette section (y compris sous-sections et dépendances cross-section)
+const collectRelevantFieldIds = (section: any): Set<string> => {
+  const ids = new Set<string>();
+  const visit = (sec: any) => {
+    (sec.fields || []).forEach((f: any) => {
+      ids.add(f.id);
+      // Dépendances cross-section: conditions (ex: Versant select dans une autre section)
+      if (f.conditions?.[0]?.dependsOn) {
+        ids.add(f.conditions[0].dependsOn);
+      }
+      // Dépendances cross-section: source produit pour visibilité
+      if (f.product_sourceNodeId) {
+        ids.add(f.product_sourceNodeId);
+      }
+    });
+    if (Array.isArray(sec.subsections)) {
+      sec.subsections.forEach((sub: any) => visit(sub));
+    }
+  };
+  visit(section);
+  return ids;
+};
+
 const MemoizedTBLSectionRenderer = React.memo(TBLSectionRenderer, (prevProps, nextProps) => {
   // Ne re-render que si les props pertinentes changent
   if (prevProps.section.id !== nextProps.section.id) return false;
@@ -6306,12 +6320,8 @@ const MemoizedTBLSectionRenderer = React.memo(TBLSectionRenderer, (prevProps, ne
   if (prevProps.treeId !== nextProps.treeId) return false;
   if (prevProps.level !== nextProps.level) return false;
   if (prevProps.submissionId !== nextProps.submissionId) return false;
-  // ⚠️ IMPORTANT: Si formData a changé (référence), forcer le re-render
-  // Les champs conditionnels d'une section peuvent dépendre d'un select situé dans une AUTRE section (ex: Versant)
-  // En comparant la référence, on garantit l'actualisation immédiate après toute sélection.
-  if (prevProps.formData !== nextProps.formData) return false;
   
-  // ⚠️ CRITIQUE: Comparer SEULEMENT les valeurs des champs de CETTE section
+  // ⚠️ Comparer la STRUCTURE de la section (champs ajoutés/supprimés/réordonnés)
   const prevStructure = buildSectionStructureSignature(prevProps.section);
   const nextStructure = buildSectionStructureSignature(nextProps.section);
 
@@ -6322,11 +6332,16 @@ const MemoizedTBLSectionRenderer = React.memo(TBLSectionRenderer, (prevProps, ne
     }
   }
   
-  // Comparer les VALEURS des champs de cette section uniquement
-  const prevFieldIds = (prevProps.section.fields || []).map(f => f.id);
-  for (const fieldId of prevFieldIds) {
+  // ⚠️ CRITIQUE: Comparer formData UNIQUEMENT pour les champs pertinents de cette section
+  // Inclut: champs propres + sous-sections + dépendances cross-section (conditions, product_sourceNodeId)
+  // Cela évite le re-render de TOUTES les sections quand UN seul champ change dans une autre section
+  const relevantIds = collectRelevantFieldIds(prevProps.section);
+  // Aussi vérifier les IDs de nextProps au cas où la structure a changé
+  collectRelevantFieldIds(nextProps.section).forEach(id => relevantIds.add(id));
+  
+  for (const fieldId of relevantIds) {
     if (prevProps.formData[fieldId] !== nextProps.formData[fieldId]) {
-      return false; // Une valeur a changé, re-render
+      return false;
     }
   }
   

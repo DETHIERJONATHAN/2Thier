@@ -4466,5 +4466,5 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
   );
 };
 
-export default TBLFieldRendererAdvanced;
+export default React.memo(TBLFieldRendererAdvanced);
 
