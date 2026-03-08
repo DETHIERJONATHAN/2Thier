@@ -5141,6 +5141,46 @@ const TBL: React.FC<TBLProps> = ({
           onOverrideSaved={handleGestionnaireOverrideSaved}
         />
       </Suspense>
+
+      {/* 🔍 MODAL RÉSULTAT ANALYSE (dans TBL principal pour accès au state) */}
+      <Modal
+        open={!!analysisResult}
+        footer={null}
+        closable={false}
+        centered
+        width={480}
+      >
+        {analysisResult && (
+          <Result
+            status={analysisResult.status === 'validated' ? 'success' : 'warning'}
+            icon={analysisResult.status === 'validated'
+              ? <CheckCircleOutlined style={{ color: '#52c41a' }} />
+              : <ExclamationCircleOutlined style={{ color: '#fa8c16' }} />
+            }
+            title={analysisResult.status === 'validated' ? 'Validé ✅' : 'À rectifier ⚠️'}
+            subTitle={analysisResult.message}
+            extra={
+              <Button
+                type="primary"
+                size="large"
+                onClick={() => {
+                  setAnalysisResult(null);
+                  window.history.back();
+                }}
+                style={{
+                  height: 44,
+                  fontWeight: 600,
+                  borderRadius: 8,
+                  background: analysisResult.status === 'validated' ? '#52c41a' : '#fa8c16',
+                  borderColor: analysisResult.status === 'validated' ? '#52c41a' : '#fa8c16',
+                }}
+              >
+                Retour au chantier
+              </Button>
+            }
+          />
+        )}
+      </Modal>
     </Layout>
     </TBLBatchProvider>
     </TBLValidationProvider>
@@ -5704,45 +5744,6 @@ const TBLTabContentWithSections: React.FC<TBLTabContentWithSectionsProps> = Reac
           </Button>
         </div>
       )}
-      {/* 🔍 MODAL RÉSULTAT ANALYSE */}
-      <Modal
-        open={!!analysisResult}
-        footer={null}
-        closable={false}
-        centered
-        width={480}
-      >
-        {analysisResult && (
-          <Result
-            status={analysisResult.status === 'validated' ? 'success' : 'warning'}
-            icon={analysisResult.status === 'validated'
-              ? <CheckCircleOutlined style={{ color: '#52c41a' }} />
-              : <ExclamationCircleOutlined style={{ color: '#fa8c16' }} />
-            }
-            title={analysisResult.status === 'validated' ? 'Validé ✅' : 'À rectifier ⚠️'}
-            subTitle={analysisResult.message}
-            extra={
-              <Button
-                type="primary"
-                size="large"
-                onClick={() => {
-                  setAnalysisResult(null);
-                  window.history.back();
-                }}
-                style={{
-                  height: 44,
-                  fontWeight: 600,
-                  borderRadius: 8,
-                  background: analysisResult.status === 'validated' ? '#52c41a' : '#fa8c16',
-                  borderColor: analysisResult.status === 'validated' ? '#52c41a' : '#fa8c16',
-                }}
-              >
-                Retour au chantier
-              </Button>
-            }
-          />
-        )}
-      </Modal>
       <div className="mt-6 text-xs text-gray-400 text-right">
         {stats.completed}/{stats.required} requis complétés
       </div>
