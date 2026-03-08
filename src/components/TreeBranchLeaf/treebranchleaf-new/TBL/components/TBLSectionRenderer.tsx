@@ -6013,7 +6013,7 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
                       {...defaultFormColProps}
                       className="mb-2 tbl-form-col"
                     >
-                      {/* 🔍 REVIEW MODE: Checkbox de validation terrain */}
+                      {/* � REVIEW MODE: Cocher uniquement si erreur/problème */}
                       {isTechField && (
                         <div style={{
                           display: 'flex',
@@ -6029,13 +6029,13 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
                           />
                           <Text style={{
                             fontSize: 11,
-                            color: isFieldChecked ? '#52c41a' : '#1890ff',
-                            fontWeight: 500,
+                            color: isFieldChecked ? '#ff4d4f' : '#8c8c8c',
+                            fontWeight: isFieldChecked ? 600 : 400,
                           }}>
                             {isFieldChecked ? (
-                              <><CheckCircleOutlined /> Vérifié</>
+                              <><span style={{ color: '#ff4d4f' }}>⚠️ Problème signalé</span></>
                             ) : (
-                              '🔍 À vérifier sur terrain'
+                              '✓ OK'
                             )}
                           </Text>
                         </div>
