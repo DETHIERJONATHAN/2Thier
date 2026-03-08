@@ -5537,7 +5537,11 @@ const TBLTabContentWithSections: React.FC<TBLTabContentWithSectionsProps> = Reac
               onReviewComment={onReviewComment}
               originalFormData={originalFormDataProp}
             />
-      // When no explicit sections, build a synthetic one and respect subTabs
+          ))}
+        </div>
+      );
+    }
+    // When no explicit sections, build a synthetic one and respect subTabs
       const synthetic: TBLSection = {
         id: '__synthetic__',
         title: 'Champs',
@@ -5620,7 +5624,6 @@ const TBLTabContentWithSections: React.FC<TBLTabContentWithSectionsProps> = Reac
           />
         </div>
       );
-    }
     return <div className="text-sm text-gray-400">Aucun champ.</div>;
   };
 
