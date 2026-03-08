@@ -30,9 +30,17 @@ function endOfWeek(): Date {
 }
 
 // ═══ Pointage photo helpers ═══
-const POINTAGE_UPLOADS_DIR = path.resolve(process.cwd(), 'public', 'uploads', 'pointages');
-if (!fs.existsSync(POINTAGE_UPLOADS_DIR)) {
-  fs.mkdirSync(POINTAGE_UPLOADS_DIR, { recursive: true });
+// En production (Cloud Run), le filesystem est en lecture seule sauf /tmp
+// On utilise /tmp en production pour stocker les photos temporairement
+const POINTAGE_UPLOADS_DIR = process.env.NODE_ENV === 'production'
+  ? path.resolve('/tmp', 'uploads', 'pointages')
+  : path.resolve(process.cwd(), 'public', 'uploads', 'pointages');
+try {
+  if (!fs.existsSync(POINTAGE_UPLOADS_DIR)) {
+    fs.mkdirSync(POINTAGE_UPLOADS_DIR, { recursive: true });
+  }
+} catch (err) {
+  console.warn('[Teams] ⚠️ Impossible de créer le dossier pointages:', (err as Error).message);
 }
 
 /** Save a base64 photo to disk, return relative URL */
@@ -42,7 +50,11 @@ function savePointagePhoto(base64Data: string, prefix: string): string {
   const buffer = Buffer.from(cleanBase64, 'base64');
   const filename = `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.jpg`;
   const filepath = path.join(POINTAGE_UPLOADS_DIR, filename);
-  fs.writeFileSync(filepath, buffer);
+  try {
+    fs.writeFileSync(filepath, buffer);
+  } catch (err) {
+    console.error('[Teams] ❌ Erreur sauvegarde photo pointage:', (err as Error).message);
+  }
   return `/uploads/pointages/${filename}`;
 }
 

@@ -5590,6 +5590,15 @@ function tryParseTokenReference(token) {
   if (normalizedToken.startsWith("condition:") && !normalizedToken.startsWith("condition:node-")) {
     return createMeta("condition", normalizedToken.slice("condition:".length));
   }
+  if (normalizedToken.startsWith("@const.")) {
+    const rest = normalizedToken.slice("@const.".length);
+    const firstDot = rest.indexOf(".");
+    if (firstDot > 0) {
+      const constId = rest.slice(0, firstDot);
+      const originalValue = rest.slice(firstDot + 1);
+      return { refType: "gestionnaire-constant", refId: constId, rawToken, originalValue };
+    }
+  }
   if (normalizedToken.startsWith("shared-ref-") || normalizedToken.startsWith("node_") || UUID_REGEX.test(normalizedToken)) {
     return createMeta("field", normalizedToken);
   }
@@ -5699,6 +5708,38 @@ async function interpretFormula(formulaId, submissionId, prisma51, valuesCache, 
       valueCacheByEncoded.set(encoded, 0);
       labelCacheByEncoded.set(encoded, meta?.rawToken || encoded);
       return 0;
+    }
+    if (meta.refType === "gestionnaire-constant") {
+      const originalValue = parseFloat(meta.originalValue || "0");
+      const safeOriginal = Number.isFinite(originalValue) ? originalValue : 0;
+      try {
+        const sub = await prisma51.treeBranchLeafSubmission.findUnique({
+          where: { id: submissionId },
+          select: { organizationId: true }
+        });
+        if (sub?.organizationId) {
+          const override = await prisma51.gestionnaireOverride.findUnique({
+            where: {
+              organizationId_capabilityId: {
+                organizationId: sub.organizationId,
+                capabilityId: meta.refId
+              }
+            }
+          });
+          if (override?.overrideValue != null) {
+            const val = parseFloat(override.overrideValue);
+            const finalVal = Number.isFinite(val) ? val : safeOriginal;
+            valueCacheByEncoded.set(encoded, finalVal);
+            labelCacheByEncoded.set(encoded, meta.label || String(finalVal));
+            return finalVal;
+          }
+        }
+      } catch (e) {
+        console.warn("[FORMULE] \u26A0\uFE0F Gestionnaire constant override check failed:", e instanceof Error ? e.message : e);
+      }
+      valueCacheByEncoded.set(encoded, safeOriginal);
+      labelCacheByEncoded.set(encoded, meta.label || meta.originalValue || String(safeOriginal));
+      return safeOriginal;
     }
     try {
       const refResult = await interpretReference(
@@ -5875,6 +5916,7 @@ async function interpretTable(tableId, submissionId, prisma51, valuesCache, dept
       columnCount: true,
       meta: true,
       nodeId: true,
+      sourceTableId: true,
       tableColumns: {
         orderBy: { columnIndex: "asc" },
         select: {
@@ -5908,6 +5950,7 @@ async function interpretTable(tableId, submissionId, prisma51, valuesCache, dept
         columnCount: true,
         meta: true,
         nodeId: true,
+        sourceTableId: true,
         tableColumns: {
           orderBy: { columnIndex: "asc" },
           select: { id: true, columnIndex: true, name: true, type: true, width: true, format: true, metadata: true }
@@ -5931,6 +5974,7 @@ async function interpretTable(tableId, submissionId, prisma51, valuesCache, dept
           columnCount: true,
           meta: true,
           nodeId: true,
+          sourceTableId: true,
           tableColumns: {
             orderBy: { columnIndex: "asc" },
             select: { id: true, columnIndex: true, name: true, type: true, width: true, format: true, metadata: true }
@@ -5961,6 +6005,7 @@ async function interpretTable(tableId, submissionId, prisma51, valuesCache, dept
           columnCount: true,
           meta: true,
           nodeId: true,
+          sourceTableId: true,
           tableColumns: {
             orderBy: { columnIndex: "asc" },
             select: { id: true, columnIndex: true, name: true, type: true, width: true, format: true, metadata: true }
@@ -5986,9 +6031,33 @@ async function interpretTable(tableId, submissionId, prisma51, valuesCache, dept
       details: { type: "table", error: "Not found" }
     };
   }
-  const columns = table.tableColumns.map((col) => col.name);
-  const rows = [];
-  const data = [];
+  const tableSourceId = table.sourceTableId;
+  if (tableSourceId) {
+    try {
+      const sourceTable = await prisma51.treeBranchLeafNodeTable.findUnique({
+        where: { id: tableSourceId },
+        select: {
+          tableColumns: {
+            orderBy: { columnIndex: "asc" },
+            select: { id: true, columnIndex: true, name: true, type: true, width: true, format: true, metadata: true }
+          },
+          tableRows: {
+            orderBy: { rowIndex: "asc" },
+            select: { id: true, rowIndex: true, cells: true }
+          }
+        }
+      });
+      if (sourceTable) {
+        table.tableColumns = sourceTable.tableColumns;
+        table.tableRows = sourceTable.tableRows;
+      }
+    } catch (e) {
+      console.warn("[TABLE] \u26A0\uFE0F R\xE9solution vue \xE9chou\xE9e pour sourceTableId:", tableSourceId, e instanceof Error ? e.message : e);
+    }
+  }
+  let columns = table.tableColumns.map((col) => col.name);
+  let rows = [];
+  let data = [];
   table.tableRows.forEach((row) => {
     try {
       let cellsData;
@@ -6019,6 +6088,42 @@ async function interpretTable(tableId, submissionId, prisma51, valuesCache, dept
       data.push([]);
     }
   });
+  try {
+    const submission = await prisma51.treeBranchLeafSubmission.findUnique({
+      where: { id: submissionId },
+      select: { organizationId: true }
+    });
+    const orgId = submission?.organizationId;
+    if (orgId) {
+      const tableOverride = await prisma51.gestionnaireOverride.findUnique({
+        where: {
+          organizationId_capabilityId: {
+            organizationId: orgId,
+            capabilityId: table.id
+          }
+        },
+        select: { overrideData: true }
+      });
+      if (tableOverride?.overrideData) {
+        const od = tableOverride.overrideData;
+        if (od.columns && Array.isArray(od.columns) && od.data && Array.isArray(od.data)) {
+          columns = od.columns;
+          const overrideRows = Array.isArray(od.rows) ? od.rows : [];
+          rows.length = 0;
+          data.length = 0;
+          for (let i = 1; i < overrideRows.length; i++) {
+            const rowEntry = overrideRows[i];
+            const label = Array.isArray(rowEntry) ? String(rowEntry[0] ?? "") : String(rowEntry ?? "");
+            rows.push(label);
+            data.push(Array.isArray(od.data[i]) ? od.data[i] : []);
+          }
+          console.log(`[TABLE] \u{1F4CB} Gestionnaire override appliqu\xE9 pour table ${table.name} (org: ${orgId}): ${rows.length} lignes, ${columns.length} colonnes`);
+        }
+      }
+    }
+  } catch (e) {
+    console.warn("[TABLE] \u26A0\uFE0F Erreur v\xE9rification gestionnaire override:", e instanceof Error ? e.message : e);
+  }
   const meta = table.meta;
   const lookup = meta?.lookup;
   const isLookupActive = lookup && (lookup.enabled === true || lookup.columnLookupEnabled === true || lookup.rowLookupEnabled === true);
@@ -6742,6 +6847,29 @@ async function evaluateVariableOperation(variableNodeId, submissionId, prisma51,
       sourceRef: ""
     };
   }
+  if (options.organizationId && variable.id) {
+    try {
+      const gestionnaireOverride = await prisma51.gestionnaireOverride.findUnique({
+        where: {
+          organizationId_capabilityId: {
+            organizationId: options.organizationId,
+            capabilityId: variable.id
+          }
+        }
+      });
+      if (gestionnaireOverride?.overrideValue != null) {
+        return {
+          value: gestionnaireOverride.overrideValue,
+          operationDetail: { type: "gestionnaire-override", value: gestionnaireOverride.overrideValue, baseValue: variable.fixedValue },
+          operationResult: `Gestionnaire override: ${gestionnaireOverride.overrideValue}`,
+          operationSource: "gestionnaire-override",
+          sourceRef: variable.sourceRef || ""
+        };
+      }
+    } catch (err) {
+      console.warn("[operation-interpreter] Gestionnaire override lookup failed:", err);
+    }
+  }
   if (variable.sourceType === "fixed" && variable.fixedValue) {
     return {
       value: variable.fixedValue,
@@ -7076,9 +7204,9 @@ __export(api_server_clean_exports, {
 });
 module.exports = __toCommonJS(api_server_clean_exports);
 var import_dotenv = __toESM(require("dotenv"), 1);
-var import_express102 = __toESM(require("express"), 1);
-var import_path9 = __toESM(require("path"), 1);
-var import_fs9 = __toESM(require("fs"), 1);
+var import_express107 = __toESM(require("express"), 1);
+var import_path11 = __toESM(require("path"), 1);
+var import_fs11 = __toESM(require("fs"), 1);
 var import_cors = __toESM(require("cors"), 1);
 var import_express_session = __toESM(require("express-session"), 1);
 var import_cookie_parser = __toESM(require("cookie-parser"), 1);
@@ -7089,7 +7217,7 @@ var import_compression = __toESM(require("compression"), 1);
 var import_express_winston = __toESM(require("express-winston"), 1);
 
 // src/routes/index.ts
-var import_express80 = require("express");
+var import_express85 = require("express");
 
 // src/routes/authRoutes.ts
 var import_express = require("express");
@@ -7387,6 +7515,13 @@ var fetchFullUser = async (req2, res, next) => {
     console.error("[MIDDLEWARE] fetchFullUser: Erreur", error);
     res.status(500).json({ message: "Erreur interne du serveur." });
   }
+};
+var isAdmin = (req2, res, next) => {
+  const role = req2.user?.role?.toLowerCase().replace(/_/g, "");
+  if (role === "admin" || role === "superadmin") {
+    return next();
+  }
+  return res.status(403).json({ error: "Acc\xE8s non autoris\xE9. R\xF4le Administrateur requis." });
 };
 var extractOrganization = (req2, res, next) => {
   const orgHeader = req2.headers["x-organization-id"];
@@ -9869,9 +10004,9 @@ router6.post("/:treeId/duplicate", async (req2, res) => {
       }
     });
     const idMap = /* @__PURE__ */ new Map();
-    const crypto6 = await import("crypto");
+    const crypto8 = await import("crypto");
     for (const node of sourceTree.TreeBranchLeafNode) {
-      const newId = crypto6.randomUUID();
+      const newId = crypto8.randomUUID();
       idMap.set(node.id, newId);
     }
     for (const node of sourceTree.TreeBranchLeafNode) {
@@ -17333,31 +17468,4610 @@ router21.post("/:id/documents", async (req2, res) => {
 });
 var leadsRoutes_default = router21;
 
-// src/routes/rolesRoutes.ts
+// src/routes/chantiersRoutes.ts
+var import_express24 = require("express");
+init_database();
+var import_zod5 = require("zod");
+var import_fs6 = __toESM(require("fs"), 1);
+var import_path5 = __toESM(require("path"), 1);
+var import_crypto13 = __toESM(require("crypto"), 1);
+
+// src/routes/chantier-workflow.ts
 var import_express23 = require("express");
 init_database();
 var import_zod4 = require("zod");
-var import_express_rate_limit2 = __toESM(require("express-rate-limit"), 1);
+var import_crypto11 = __toESM(require("crypto"), 1);
+var import_nodemailer = __toESM(require("nodemailer"), 1);
+init_crypto();
 var router22 = (0, import_express23.Router)();
+var transitionSchema = import_zod4.z.object({
+  fromStatusId: import_zod4.z.string().min(1),
+  toStatusId: import_zod4.z.string().min(1),
+  triggerType: import_zod4.z.enum(["MANUAL", "AUTO_INVOICE_PAID", "AUTO_MATERIAL_RECEIVED", "AUTO_VISIT_VALIDATED", "AUTO_CLIENT_SIGNED", "AUTO_DATE_REACHED"]).default("MANUAL"),
+  requiredConditions: import_zod4.z.any().optional(),
+  allowedRoles: import_zod4.z.array(import_zod4.z.string()).optional(),
+  notifyRoles: import_zod4.z.array(import_zod4.z.string()).optional(),
+  sendEmail: import_zod4.z.boolean().default(false),
+  emailTemplateId: import_zod4.z.string().optional(),
+  label: import_zod4.z.string().optional(),
+  isActive: import_zod4.z.boolean().default(true),
+  order: import_zod4.z.number().int().min(0).default(0)
+});
+router22.get("/transitions", authenticateToken, async (req2, res) => {
+  try {
+    const organizationId = req2.headers["x-organization-id"];
+    if (!organizationId) {
+      return res.status(400).json({ success: false, message: "ID d'organisation requis" });
+    }
+    const transitions = await db.chantierStatusTransition.findMany({
+      where: { organizationId },
+      orderBy: { order: "asc" },
+      include: {
+        FromStatus: { select: { id: true, name: true, color: true } },
+        ToStatus: { select: { id: true, name: true, color: true } }
+      }
+    });
+    res.json({ success: true, data: transitions });
+  } catch (error) {
+    console.error("[ChantierWorkflow] Erreur GET /transitions:", error);
+    res.status(500).json({ success: false, message: "Erreur interne du serveur" });
+  }
+});
+router22.post("/transitions", authenticateToken, isAdmin, async (req2, res) => {
+  try {
+    const organizationId = req2.headers["x-organization-id"];
+    if (!organizationId) {
+      return res.status(400).json({ success: false, message: "ID d'organisation requis" });
+    }
+    const validation = transitionSchema.safeParse(req2.body);
+    if (!validation.success) {
+      return res.status(400).json({ success: false, message: "Donn\xE9es invalides", errors: validation.error.errors });
+    }
+    const data = validation.data;
+    const transition = await db.chantierStatusTransition.create({
+      data: {
+        id: import_crypto11.default.randomUUID(),
+        organizationId,
+        fromStatusId: data.fromStatusId,
+        toStatusId: data.toStatusId,
+        triggerType: data.triggerType,
+        requiredConditions: data.requiredConditions || void 0,
+        allowedRoles: data.allowedRoles || void 0,
+        notifyRoles: data.notifyRoles || void 0,
+        sendEmail: data.sendEmail,
+        emailTemplateId: data.emailTemplateId,
+        label: data.label,
+        isActive: data.isActive,
+        order: data.order,
+        updatedAt: /* @__PURE__ */ new Date()
+      },
+      include: {
+        FromStatus: { select: { id: true, name: true, color: true } },
+        ToStatus: { select: { id: true, name: true, color: true } }
+      }
+    });
+    res.status(201).json({ success: true, data: transition });
+  } catch (error) {
+    console.error("[ChantierWorkflow] Erreur POST /transitions:", error);
+    res.status(500).json({ success: false, message: "Erreur interne du serveur" });
+  }
+});
+router22.put("/transitions/:id", authenticateToken, isAdmin, async (req2, res) => {
+  try {
+    const { id } = req2.params;
+    const organizationId = req2.headers["x-organization-id"];
+    if (!organizationId) {
+      return res.status(400).json({ success: false, message: "ID d'organisation requis" });
+    }
+    const existing = await db.chantierStatusTransition.findFirst({
+      where: { id, organizationId }
+    });
+    if (!existing) {
+      return res.status(404).json({ success: false, message: "Transition non trouv\xE9e" });
+    }
+    const validation = transitionSchema.partial().safeParse(req2.body);
+    if (!validation.success) {
+      return res.status(400).json({ success: false, message: "Donn\xE9es invalides", errors: validation.error.errors });
+    }
+    const data = validation.data;
+    const transition = await db.chantierStatusTransition.update({
+      where: { id },
+      data: {
+        ...data,
+        updatedAt: /* @__PURE__ */ new Date()
+      },
+      include: {
+        FromStatus: { select: { id: true, name: true, color: true } },
+        ToStatus: { select: { id: true, name: true, color: true } }
+      }
+    });
+    res.json({ success: true, data: transition });
+  } catch (error) {
+    console.error("[ChantierWorkflow] Erreur PUT /transitions/:id:", error);
+    res.status(500).json({ success: false, message: "Erreur interne du serveur" });
+  }
+});
+router22.delete("/transitions/:id", authenticateToken, isAdmin, async (req2, res) => {
+  try {
+    const { id } = req2.params;
+    const organizationId = req2.headers["x-organization-id"];
+    if (!organizationId) {
+      return res.status(400).json({ success: false, message: "ID d'organisation requis" });
+    }
+    const existing = await db.chantierStatusTransition.findFirst({
+      where: { id, organizationId }
+    });
+    if (!existing) {
+      return res.status(404).json({ success: false, message: "Transition non trouv\xE9e" });
+    }
+    await db.chantierStatusTransition.delete({ where: { id } });
+    res.json({ success: true, message: "Transition supprim\xE9e" });
+  } catch (error) {
+    console.error("[ChantierWorkflow] Erreur DELETE /transitions/:id:", error);
+    res.status(500).json({ success: false, message: "Erreur interne du serveur" });
+  }
+});
+router22.get("/transitions/allowed-targets", authenticateToken, async (req2, res) => {
+  try {
+    const organizationId = req2.headers["x-organization-id"];
+    const { fromStatusId } = req2.query;
+    const user = req2.user;
+    const userRole = user?.role || "commercial";
+    const isSuperAdmin2 = user?.isSuperAdmin === true;
+    if (!organizationId) {
+      return res.status(400).json({ success: false, message: "organizationId requis" });
+    }
+    const allStatuses = await db.chantierStatus.findMany({
+      where: { organizationId },
+      select: { id: true, name: true },
+      orderBy: { order: "asc" }
+    });
+    if (isSuperAdmin2) {
+      const allMap = {};
+      for (const s of allStatuses) {
+        allMap[s.id] = allStatuses.filter((t) => t.id !== s.id).map((t) => t.id);
+      }
+      return res.json({ success: true, data: allMap });
+    }
+    const transitions = await db.chantierStatusTransition.findMany({
+      where: { organizationId, isActive: true, triggerType: "MANUAL" },
+      select: { fromStatusId: true, toStatusId: true, allowedRoles: true }
+    });
+    if (transitions.length === 0) {
+      const allMap = {};
+      for (const s of allStatuses) {
+        allMap[s.id] = allStatuses.filter((t) => t.id !== s.id).map((t) => t.id);
+      }
+      return res.json({ success: true, data: allMap });
+    }
+    const allowedMap = {};
+    for (const s of allStatuses) {
+      allowedMap[s.id] = [];
+    }
+    for (const t of transitions) {
+      const roles = t.allowedRoles;
+      const isAllowed = !roles || roles.length === 0 || roles.includes(userRole);
+      if (isAllowed && allowedMap[t.fromStatusId]) {
+        if (!allowedMap[t.fromStatusId].includes(t.toStatusId)) {
+          allowedMap[t.fromStatusId].push(t.toStatusId);
+        }
+      }
+    }
+    if (fromStatusId && typeof fromStatusId === "string") {
+      return res.json({ success: true, data: { [fromStatusId]: allowedMap[fromStatusId] || [] } });
+    }
+    res.json({ success: true, data: allowedMap });
+  } catch (error) {
+    console.error("[ChantierWorkflow] Erreur GET /transitions/allowed-targets:", error);
+    res.status(500).json({ success: false, message: "Erreur interne du serveur" });
+  }
+});
+router22.post("/transitions/check", authenticateToken, async (req2, res) => {
+  try {
+    const organizationId = req2.headers["x-organization-id"];
+    const { fromStatusId, toStatusId } = req2.body;
+    const user = req2.user;
+    const userRole = user?.role || "commercial";
+    const isSuperAdmin2 = user?.isSuperAdmin === true;
+    if (!organizationId || !fromStatusId || !toStatusId) {
+      return res.status(400).json({ success: false, message: "fromStatusId et toStatusId requis" });
+    }
+    if (isSuperAdmin2) {
+      return res.json({ success: true, data: { allowed: true, reason: "Super Admin" } });
+    }
+    const transitions = await db.chantierStatusTransition.findMany({
+      where: {
+        organizationId,
+        fromStatusId,
+        toStatusId,
+        isActive: true
+      }
+    });
+    if (transitions.length === 0) {
+      return res.json({ success: true, data: { allowed: true, reason: "Aucune restriction configur\xE9e" } });
+    }
+    const allowed = transitions.some((t) => {
+      const roles = t.allowedRoles;
+      if (!roles || roles.length === 0) return true;
+      return roles.includes(userRole);
+    });
+    res.json({
+      success: true,
+      data: {
+        allowed,
+        reason: allowed ? "Transition autoris\xE9e" : `R\xF4le "${userRole}" non autoris\xE9 pour cette transition`,
+        transitions: transitions.map((t) => ({
+          id: t.id,
+          triggerType: t.triggerType,
+          allowedRoles: t.allowedRoles,
+          label: t.label
+        }))
+      }
+    });
+  } catch (error) {
+    console.error("[ChantierWorkflow] Erreur POST /transitions/check:", error);
+    res.status(500).json({ success: false, message: "Erreur interne du serveur" });
+  }
+});
+var invoiceTemplateSchema = import_zod4.z.object({
+  statusId: import_zod4.z.string().nullable().optional(),
+  type: import_zod4.z.enum(["ACOMPTE", "MATERIEL", "FIN_CHANTIER", "RECEPTION", "CUSTOM"]).default("CUSTOM"),
+  label: import_zod4.z.string().min(1, "Le label est requis"),
+  percentage: import_zod4.z.number().min(0).max(100).nullable().optional(),
+  fixedAmount: import_zod4.z.number().min(0).nullable().optional(),
+  isRequired: import_zod4.z.boolean().default(false),
+  isActive: import_zod4.z.boolean().default(true),
+  order: import_zod4.z.number().int().min(0).default(0)
+});
+router22.get("/invoice-templates", authenticateToken, async (req2, res) => {
+  try {
+    const organizationId = req2.headers["x-organization-id"];
+    if (!organizationId) {
+      return res.status(400).json({ success: false, message: "ID d'organisation requis" });
+    }
+    const templates = await db.chantierInvoiceTemplate.findMany({
+      where: { organizationId },
+      orderBy: { order: "asc" },
+      include: {
+        Status: { select: { id: true, name: true, color: true } }
+      }
+    });
+    res.json({ success: true, data: templates });
+  } catch (error) {
+    console.error("[ChantierWorkflow] Erreur GET /invoice-templates:", error);
+    res.status(500).json({ success: false, message: "Erreur interne du serveur" });
+  }
+});
+router22.post("/invoice-templates", authenticateToken, isAdmin, async (req2, res) => {
+  try {
+    const organizationId = req2.headers["x-organization-id"];
+    if (!organizationId) {
+      return res.status(400).json({ success: false, message: "ID d'organisation requis" });
+    }
+    const validation = invoiceTemplateSchema.safeParse(req2.body);
+    if (!validation.success) {
+      return res.status(400).json({ success: false, message: "Donn\xE9es invalides", errors: validation.error.errors });
+    }
+    const data = validation.data;
+    const template = await db.chantierInvoiceTemplate.create({
+      data: {
+        id: import_crypto11.default.randomUUID(),
+        organizationId,
+        statusId: data.statusId || null,
+        type: data.type,
+        label: data.label,
+        percentage: data.percentage ?? null,
+        fixedAmount: data.fixedAmount ?? null,
+        isRequired: data.isRequired,
+        isActive: data.isActive,
+        order: data.order,
+        updatedAt: /* @__PURE__ */ new Date()
+      },
+      include: {
+        Status: { select: { id: true, name: true, color: true } }
+      }
+    });
+    res.status(201).json({ success: true, data: template });
+  } catch (error) {
+    console.error("[ChantierWorkflow] Erreur POST /invoice-templates:", error);
+    res.status(500).json({ success: false, message: "Erreur interne du serveur" });
+  }
+});
+router22.put("/invoice-templates/:id", authenticateToken, isAdmin, async (req2, res) => {
+  try {
+    const { id } = req2.params;
+    const organizationId = req2.headers["x-organization-id"];
+    if (!organizationId) {
+      return res.status(400).json({ success: false, message: "ID d'organisation requis" });
+    }
+    const existing = await db.chantierInvoiceTemplate.findFirst({
+      where: { id, organizationId }
+    });
+    if (!existing) {
+      return res.status(404).json({ success: false, message: "Template non trouv\xE9" });
+    }
+    const validation = invoiceTemplateSchema.partial().safeParse(req2.body);
+    if (!validation.success) {
+      return res.status(400).json({ success: false, message: "Donn\xE9es invalides", errors: validation.error.errors });
+    }
+    const template = await db.chantierInvoiceTemplate.update({
+      where: { id },
+      data: {
+        ...validation.data,
+        updatedAt: /* @__PURE__ */ new Date()
+      },
+      include: {
+        Status: { select: { id: true, name: true, color: true } }
+      }
+    });
+    res.json({ success: true, data: template });
+  } catch (error) {
+    console.error("[ChantierWorkflow] Erreur PUT /invoice-templates/:id:", error);
+    res.status(500).json({ success: false, message: "Erreur interne du serveur" });
+  }
+});
+router22.delete("/invoice-templates/:id", authenticateToken, isAdmin, async (req2, res) => {
+  try {
+    const { id } = req2.params;
+    const organizationId = req2.headers["x-organization-id"];
+    if (!organizationId) {
+      return res.status(400).json({ success: false, message: "ID d'organisation requis" });
+    }
+    const existing = await db.chantierInvoiceTemplate.findFirst({
+      where: { id, organizationId }
+    });
+    if (!existing) {
+      return res.status(404).json({ success: false, message: "Template non trouv\xE9" });
+    }
+    await db.chantierInvoiceTemplate.delete({ where: { id } });
+    res.json({ success: true, message: "Template supprim\xE9" });
+  } catch (error) {
+    console.error("[ChantierWorkflow] Erreur DELETE /invoice-templates/:id:", error);
+    res.status(500).json({ success: false, message: "Erreur interne du serveur" });
+  }
+});
+router22.get("/chantiers/:chantierId/billing-plan", authenticateToken, async (req2, res) => {
+  try {
+    const { chantierId } = req2.params;
+    const organizationId = req2.headers["x-organization-id"] || req2.user.organizationId;
+    const items = await db.chantierBillingPlanItem.findMany({
+      where: { chantierId, organizationId },
+      include: { Status: { select: { id: true, name: true, color: true } } },
+      orderBy: { order: "asc" }
+    });
+    if (items.length > 0) {
+      return res.json({ success: true, data: items, source: "chantier" });
+    }
+    const templates = await db.chantierInvoiceTemplate.findMany({
+      where: { organizationId, isActive: true },
+      include: { Status: { select: { id: true, name: true, color: true } } },
+      orderBy: { order: "asc" }
+    });
+    res.json({ success: true, data: templates, source: "templates" });
+  } catch (error) {
+    console.error("[BILLING-PLAN] Erreur GET:", error);
+    res.status(500).json({ success: false, message: "Erreur interne" });
+  }
+});
+router22.put("/chantiers/:chantierId/billing-plan", authenticateToken, isAdmin, async (req2, res) => {
+  try {
+    const { chantierId } = req2.params;
+    const organizationId = req2.headers["x-organization-id"] || req2.user.organizationId;
+    const { items } = req2.body;
+    if (!Array.isArray(items)) {
+      return res.status(400).json({ success: false, message: "items doit \xEAtre un tableau" });
+    }
+    const totalPercentage = items.reduce((sum, it) => sum + (it.percentage || 0), 0);
+    if (totalPercentage > 0 && Math.abs(totalPercentage - 100) > 0.1) {
+      return res.status(400).json({
+        success: false,
+        message: `Le total des pourcentages doit \xEAtre 100% (actuellement ${totalPercentage.toFixed(1)}%)`
+      });
+    }
+    const created = await db.$transaction(async (tx) => {
+      await tx.chantierBillingPlanItem.deleteMany({ where: { chantierId, organizationId } });
+      const items_created = [];
+      for (let i = 0; i < items.length; i++) {
+        const item = items[i];
+        const record = await tx.chantierBillingPlanItem.create({
+          data: {
+            id: import_crypto11.default.randomUUID(),
+            chantierId,
+            organizationId,
+            statusId: item.statusId || null,
+            type: item.type || "CUSTOM",
+            label: item.label,
+            percentage: item.percentage ?? null,
+            fixedAmount: item.fixedAmount ?? null,
+            isRequired: item.isRequired ?? false,
+            order: item.order ?? i,
+            updatedAt: /* @__PURE__ */ new Date()
+          }
+        });
+        items_created.push(record);
+      }
+      return items_created;
+    });
+    await db.chantierHistory.create({
+      data: {
+        id: import_crypto11.default.randomUUID(),
+        chantierId,
+        action: "BILLING_PLAN_UPDATED",
+        toValue: `${items.length} lignes, total ${totalPercentage.toFixed(0)}%`,
+        userId: req2.user.userId
+      }
+    });
+    res.json({ success: true, data: created });
+  } catch (error) {
+    console.error("[BILLING-PLAN] Erreur PUT:", error);
+    res.status(500).json({ success: false, message: "Erreur interne" });
+  }
+});
+router22.post("/chantiers/:chantierId/billing-plan/init", authenticateToken, isAdmin, async (req2, res) => {
+  try {
+    const { chantierId } = req2.params;
+    const organizationId = req2.headers["x-organization-id"] || req2.user.organizationId;
+    const chantier = await db.chantier.findFirst({ where: { id: chantierId, organizationId } });
+    if (!chantier) return res.status(404).json({ success: false, message: "Chantier introuvable" });
+    await db.chantierBillingPlanItem.deleteMany({ where: { chantierId, organizationId } });
+    const templates = await db.chantierInvoiceTemplate.findMany({
+      where: { organizationId, isActive: true },
+      orderBy: { order: "asc" }
+    });
+    const created = [];
+    for (const tpl of templates) {
+      const record = await db.chantierBillingPlanItem.create({
+        data: {
+          id: import_crypto11.default.randomUUID(),
+          chantierId,
+          organizationId,
+          statusId: tpl.statusId,
+          type: tpl.type,
+          label: tpl.label,
+          percentage: tpl.percentage,
+          fixedAmount: tpl.fixedAmount,
+          isRequired: tpl.isRequired,
+          order: tpl.order,
+          updatedAt: /* @__PURE__ */ new Date()
+        }
+      });
+      created.push(record);
+    }
+    res.json({ success: true, data: created, message: `${created.length} lignes initialis\xE9es depuis les templates` });
+  } catch (error) {
+    console.error("[BILLING-PLAN] Erreur INIT:", error);
+    res.status(500).json({ success: false, message: "Erreur interne" });
+  }
+});
+router22.post("/chantiers/:chantierId/validate", authenticateToken, isAdmin, async (req2, res) => {
+  try {
+    const { chantierId } = req2.params;
+    const organizationId = req2.headers["x-organization-id"] || req2.user.organizationId;
+    const userId = req2.user.userId;
+    const { notes } = req2.body || {};
+    const chantier = await db.chantier.findFirst({ where: { id: chantierId, organizationId } });
+    if (!chantier) return res.status(404).json({ success: false, message: "Chantier introuvable" });
+    if (chantier.isValidated) {
+      return res.status(400).json({ success: false, message: "Ce chantier est d\xE9j\xE0 valid\xE9" });
+    }
+    const planItems = await db.chantierBillingPlanItem.count({ where: { chantierId, organizationId } });
+    if (planItems === 0) {
+      return res.status(400).json({
+        success: false,
+        message: "Veuillez d\xE9finir le plan de facturation avant de valider"
+      });
+    }
+    const updated = await db.chantier.update({
+      where: { id: chantierId },
+      data: {
+        isValidated: true,
+        validatedAt: /* @__PURE__ */ new Date(),
+        validatedById: userId,
+        validationNotes: notes || null,
+        updatedAt: /* @__PURE__ */ new Date()
+      }
+    });
+    const billingPlanItems = await db.chantierBillingPlanItem.findMany({
+      where: { chantierId, organizationId },
+      orderBy: { order: "asc" }
+    });
+    const existingInvoices = await db.chantierInvoice.findMany({
+      where: { chantierId },
+      select: { type: true, label: true }
+    });
+    const chantierAmount = chantier.amount ? Number(chantier.amount) : 0;
+    let invoicesCreated = 0;
+    for (const item of billingPlanItems) {
+      const alreadyExists = existingInvoices.some((inv) => inv.type === item.type && inv.label === item.label);
+      if (alreadyExists) continue;
+      const amount = item.percentage && chantierAmount ? Math.round(chantierAmount * item.percentage / 100 * 100) / 100 : item.fixedAmount ? Number(item.fixedAmount) : 0;
+      await db.chantierInvoice.create({
+        data: {
+          id: import_crypto11.default.randomUUID(),
+          chantierId,
+          organizationId,
+          type: item.type,
+          label: item.label,
+          amount,
+          percentage: item.percentage,
+          status: "DRAFT",
+          // Toutes en brouillon par défaut
+          order: item.order,
+          updatedAt: /* @__PURE__ */ new Date()
+        }
+      });
+      invoicesCreated++;
+    }
+    if (invoicesCreated > 0) {
+      const acompteInvoice = await db.chantierInvoice.findFirst({
+        where: { chantierId, type: "ACOMPTE", status: "DRAFT" },
+        orderBy: { order: "asc" }
+      });
+      if (acompteInvoice) {
+        await db.chantierInvoice.update({
+          where: { id: acompteInvoice.id },
+          data: { status: "SENT", sentAt: /* @__PURE__ */ new Date(), updatedAt: /* @__PURE__ */ new Date() }
+        });
+        console.log(`[VALIDATION] Facture acompte ${acompteInvoice.id} auto-envoy\xE9e pour chantier ${chantierId}`);
+      }
+    }
+    await db.chantierHistory.create({
+      data: {
+        id: import_crypto11.default.randomUUID(),
+        chantierId,
+        action: "CHANTIER_VALIDATED",
+        toValue: notes || "Chantier valid\xE9 par admin",
+        userId
+      }
+    });
+    const invoiceMsg = invoicesCreated > 0 ? ` ${invoicesCreated} facture(s) cr\xE9\xE9e(s) automatiquement.` : "";
+    res.json({ success: true, data: updated, message: `Chantier valid\xE9 avec succ\xE8s.${invoiceMsg}` });
+  } catch (error) {
+    console.error("[VALIDATION] Erreur:", error);
+    res.status(500).json({ success: false, message: "Erreur interne" });
+  }
+});
+router22.post("/chantiers/:chantierId/unvalidate", authenticateToken, isAdmin, async (req2, res) => {
+  try {
+    const { chantierId } = req2.params;
+    const organizationId = req2.headers["x-organization-id"] || req2.user.organizationId;
+    const chantier = await db.chantier.findFirst({ where: { id: chantierId, organizationId } });
+    if (!chantier) return res.status(404).json({ success: false, message: "Chantier introuvable" });
+    await db.chantier.update({
+      where: { id: chantierId },
+      data: {
+        isValidated: false,
+        validatedAt: null,
+        validatedById: null,
+        validationNotes: null,
+        updatedAt: /* @__PURE__ */ new Date()
+      }
+    });
+    await db.chantierHistory.create({
+      data: {
+        id: import_crypto11.default.randomUUID(),
+        chantierId,
+        action: "CHANTIER_UNVALIDATED",
+        toValue: "Validation retir\xE9e",
+        userId: req2.user.userId
+      }
+    });
+    res.json({ success: true, message: "Validation retir\xE9e" });
+  } catch (error) {
+    console.error("[VALIDATION] Erreur unvalidate:", error);
+    res.status(500).json({ success: false, message: "Erreur interne" });
+  }
+});
+var invoiceSchema = import_zod4.z.object({
+  type: import_zod4.z.enum(["ACOMPTE", "MATERIEL", "FIN_CHANTIER", "RECEPTION", "CUSTOM"]).default("CUSTOM"),
+  label: import_zod4.z.string().min(1),
+  amount: import_zod4.z.preprocess((v) => v === null || v === void 0 || v === "" ? 0 : Number(v), import_zod4.z.number().min(0)),
+  percentage: import_zod4.z.preprocess((v) => v === null || v === void 0 || v === "" ? null : Number(v), import_zod4.z.number().min(0).max(100).nullable().optional()),
+  status: import_zod4.z.enum(["DRAFT", "SENT", "PAID", "OVERDUE", "CANCELLED"]).default("DRAFT"),
+  dueDate: import_zod4.z.string().nullable().optional(),
+  documentUrl: import_zod4.z.string().nullable().optional(),
+  invoiceNumber: import_zod4.z.string().nullable().optional(),
+  notes: import_zod4.z.string().nullable().optional(),
+  order: import_zod4.z.preprocess((v) => v === null || v === void 0 ? 0 : Number(v), import_zod4.z.number().int().min(0))
+});
+router22.get("/chantiers/:chantierId/invoices", authenticateToken, async (req2, res) => {
+  try {
+    const { chantierId } = req2.params;
+    const organizationId = req2.headers["x-organization-id"];
+    if (!organizationId) {
+      return res.status(400).json({ success: false, message: "ID d'organisation requis" });
+    }
+    const chantier = await db.chantier.findFirst({
+      where: { id: chantierId, organizationId }
+    });
+    if (!chantier) {
+      return res.status(404).json({ success: false, message: "Chantier non trouv\xE9" });
+    }
+    const invoices = await db.chantierInvoice.findMany({
+      where: { chantierId },
+      orderBy: { order: "asc" }
+    });
+    res.json({ success: true, data: invoices });
+  } catch (error) {
+    console.error("[ChantierWorkflow] Erreur GET /chantiers/:id/invoices:", error);
+    res.status(500).json({ success: false, message: "Erreur interne du serveur" });
+  }
+});
+router22.post("/chantiers/:chantierId/invoices", authenticateToken, isAdmin, async (req2, res) => {
+  try {
+    const { chantierId } = req2.params;
+    const organizationId = req2.headers["x-organization-id"];
+    const user = req2.user;
+    if (!organizationId) {
+      return res.status(400).json({ success: false, message: "ID d'organisation requis" });
+    }
+    const chantier = await db.chantier.findFirst({
+      where: { id: chantierId, organizationId }
+    });
+    if (!chantier) {
+      return res.status(404).json({ success: false, message: "Chantier non trouv\xE9" });
+    }
+    const validation = invoiceSchema.safeParse(req2.body);
+    if (!validation.success) {
+      return res.status(400).json({ success: false, message: "Donn\xE9es invalides", errors: validation.error.errors });
+    }
+    const data = validation.data;
+    const invoice = await db.chantierInvoice.create({
+      data: {
+        id: import_crypto11.default.randomUUID(),
+        chantierId,
+        organizationId,
+        type: data.type,
+        label: data.label,
+        amount: data.amount,
+        percentage: data.percentage ?? null,
+        status: data.status,
+        dueDate: data.dueDate ? new Date(data.dueDate) : null,
+        documentUrl: data.documentUrl,
+        invoiceNumber: data.invoiceNumber,
+        notes: data.notes,
+        order: data.order,
+        updatedAt: /* @__PURE__ */ new Date()
+      }
+    });
+    await db.chantierHistory.create({
+      data: {
+        id: import_crypto11.default.randomUUID(),
+        chantierId,
+        action: "INVOICE_CREATED",
+        toValue: `${data.type}: ${data.label} (${data.amount}\u20AC)`,
+        userId: user?.userId || user?.id,
+        data: { invoiceId: invoice.id, type: data.type, amount: data.amount }
+      }
+    });
+    res.status(201).json({ success: true, data: invoice });
+  } catch (error) {
+    console.error("[ChantierWorkflow] Erreur POST /chantiers/:id/invoices:", error);
+    res.status(500).json({ success: false, message: "Erreur interne du serveur" });
+  }
+});
+router22.put("/invoices/:id", authenticateToken, isAdmin, async (req2, res) => {
+  try {
+    const { id } = req2.params;
+    const organizationId = req2.headers["x-organization-id"];
+    const user = req2.user;
+    if (!organizationId) {
+      return res.status(400).json({ success: false, message: "ID d'organisation requis" });
+    }
+    const existing = await db.chantierInvoice.findFirst({
+      where: { id, organizationId }
+    });
+    if (!existing) {
+      return res.status(404).json({ success: false, message: "Facture non trouv\xE9e" });
+    }
+    const validation = invoiceSchema.partial().safeParse(req2.body);
+    if (!validation.success) {
+      return res.status(400).json({ success: false, message: "Donn\xE9es invalides", errors: validation.error.errors });
+    }
+    const data = validation.data;
+    const updateData = { ...data, updatedAt: /* @__PURE__ */ new Date() };
+    if (data.status === "PAID" && existing.status !== "PAID") {
+      updateData.paidAt = /* @__PURE__ */ new Date();
+      await db.chantierHistory.create({
+        data: {
+          id: import_crypto11.default.randomUUID(),
+          chantierId: existing.chantierId,
+          action: "INVOICE_PAID",
+          fromValue: existing.status,
+          toValue: "PAID",
+          userId: user?.userId || user?.id,
+          data: { invoiceId: id, type: existing.type, amount: existing.amount }
+        }
+      });
+      await checkAutoTransitions(existing.chantierId, organizationId, "AUTO_INVOICE_PAID", user);
+    }
+    if (data.status === "SENT" && existing.status !== "SENT") {
+      updateData.sentAt = /* @__PURE__ */ new Date();
+    }
+    if (data.dueDate) {
+      updateData.dueDate = new Date(data.dueDate);
+    }
+    const invoice = await db.chantierInvoice.update({
+      where: { id },
+      data: updateData
+    });
+    res.json({ success: true, data: invoice });
+  } catch (error) {
+    console.error("[ChantierWorkflow] Erreur PUT /invoices/:id:", error);
+    res.status(500).json({ success: false, message: "Erreur interne du serveur" });
+  }
+});
+router22.delete("/invoices/:id", authenticateToken, isAdmin, async (req2, res) => {
+  try {
+    const { id } = req2.params;
+    const organizationId = req2.headers["x-organization-id"];
+    if (!organizationId) {
+      return res.status(400).json({ success: false, message: "ID d'organisation requis" });
+    }
+    const existing = await db.chantierInvoice.findFirst({
+      where: { id, organizationId }
+    });
+    if (!existing) {
+      return res.status(404).json({ success: false, message: "Facture non trouv\xE9e" });
+    }
+    await db.chantierInvoice.delete({ where: { id } });
+    res.json({ success: true, message: "Facture supprim\xE9e" });
+  } catch (error) {
+    console.error("[ChantierWorkflow] Erreur DELETE /invoices/:id:", error);
+    res.status(500).json({ success: false, message: "Erreur interne du serveur" });
+  }
+});
+var eventSchema = import_zod4.z.object({
+  calendarEventId: import_zod4.z.string().nullable().optional(),
+  type: import_zod4.z.enum(["VISITE_TECHNIQUE", "CHANTIER", "RECEPTION", "CUSTOM"]).default("CUSTOM"),
+  status: import_zod4.z.enum(["PLANNED", "COMPLETED", "CANCELLED", "PROBLEM"]).default("PLANNED"),
+  problemNote: import_zod4.z.string().nullable().optional(),
+  subcontractAmount: import_zod4.z.number().min(0).nullable().optional(),
+  notes: import_zod4.z.string().nullable().optional()
+});
+router22.get("/chantiers/:chantierId/events", authenticateToken, async (req2, res) => {
+  try {
+    const { chantierId } = req2.params;
+    const organizationId = req2.headers["x-organization-id"];
+    if (!organizationId) {
+      return res.status(400).json({ success: false, message: "ID d'organisation requis" });
+    }
+    const chantier = await db.chantier.findFirst({
+      where: { id: chantierId, organizationId }
+    });
+    if (!chantier) {
+      return res.status(404).json({ success: false, message: "Chantier non trouv\xE9" });
+    }
+    const events = await db.chantierEvent.findMany({
+      where: { chantierId },
+      orderBy: { createdAt: "asc" },
+      include: {
+        CalendarEvent: {
+          select: {
+            id: true,
+            title: true,
+            description: true,
+            startDate: true,
+            endDate: true,
+            location: true
+          }
+        },
+        ValidatedBy: {
+          select: { id: true, firstName: true, lastName: true }
+        }
+      }
+    });
+    res.json({ success: true, data: events });
+  } catch (error) {
+    console.error("[ChantierWorkflow] Erreur GET /chantiers/:id/events:", error);
+    res.status(500).json({ success: false, message: "Erreur interne du serveur" });
+  }
+});
+router22.post("/chantiers/:chantierId/events", authenticateToken, async (req2, res) => {
+  try {
+    const { chantierId } = req2.params;
+    const organizationId = req2.headers["x-organization-id"];
+    const user = req2.user;
+    if (!organizationId) {
+      return res.status(400).json({ success: false, message: "ID d'organisation requis" });
+    }
+    const chantier = await db.chantier.findFirst({
+      where: { id: chantierId, organizationId }
+    });
+    if (!chantier) {
+      return res.status(404).json({ success: false, message: "Chantier non trouv\xE9" });
+    }
+    const validation = eventSchema.safeParse(req2.body);
+    if (!validation.success) {
+      return res.status(400).json({ success: false, message: "Donn\xE9es invalides", errors: validation.error.errors });
+    }
+    const data = validation.data;
+    const event = await db.chantierEvent.create({
+      data: {
+        id: import_crypto11.default.randomUUID(),
+        chantierId,
+        calendarEventId: data.calendarEventId,
+        type: data.type,
+        status: data.status,
+        problemNote: data.problemNote,
+        subcontractAmount: data.subcontractAmount ?? null,
+        notes: data.notes,
+        updatedAt: /* @__PURE__ */ new Date()
+      },
+      include: {
+        CalendarEvent: {
+          select: { id: true, title: true, startDate: true, endDate: true }
+        }
+      }
+    });
+    await db.chantierHistory.create({
+      data: {
+        id: import_crypto11.default.randomUUID(),
+        chantierId,
+        action: "EVENT_PLANNED",
+        toValue: `${data.type}`,
+        userId: user?.userId || user?.id,
+        data: { eventId: event.id, type: data.type, calendarEventId: data.calendarEventId }
+      }
+    });
+    res.status(201).json({ success: true, data: event });
+  } catch (error) {
+    console.error("[ChantierWorkflow] Erreur POST /chantiers/:id/events:", error);
+    res.status(500).json({ success: false, message: "Erreur interne du serveur" });
+  }
+});
+router22.put("/events/:id", authenticateToken, async (req2, res) => {
+  try {
+    const { id } = req2.params;
+    const user = req2.user;
+    const organizationId = req2.headers["x-organization-id"];
+    if (!organizationId) {
+      return res.status(400).json({ success: false, message: "ID d'organisation requis" });
+    }
+    const existing = await db.chantierEvent.findFirst({
+      where: { id },
+      include: { Chantier: { select: { organizationId: true } } }
+    });
+    if (!existing || existing.Chantier.organizationId !== organizationId) {
+      return res.status(404).json({ success: false, message: "\xC9v\xE9nement non trouv\xE9" });
+    }
+    if (existing.subcontractLocked && req2.body.subcontractAmount !== void 0 && req2.body.subcontractAmount !== existing.subcontractAmount) {
+      return res.status(403).json({ success: false, message: "Le montant de sous-traitance est verrouill\xE9" });
+    }
+    const validation = eventSchema.partial().safeParse(req2.body);
+    if (!validation.success) {
+      return res.status(400).json({ success: false, message: "Donn\xE9es invalides", errors: validation.error.errors });
+    }
+    const data = validation.data;
+    const updateData = { ...data, updatedAt: /* @__PURE__ */ new Date() };
+    if (data.status === "PROBLEM" && existing.status !== "PROBLEM") {
+      await db.chantierHistory.create({
+        data: {
+          id: import_crypto11.default.randomUUID(),
+          chantierId: existing.chantierId,
+          action: "PROBLEM_REPORTED",
+          fromValue: existing.status,
+          toValue: "PROBLEM",
+          userId: user?.userId || user?.id,
+          data: { eventId: id, problemNote: data.problemNote }
+        }
+      });
+      await notifyProblem(existing.chantierId, organizationId, data.problemNote || "Probl\xE8me signal\xE9", user);
+    }
+    if (data.status === "COMPLETED" && existing.status !== "COMPLETED") {
+      updateData.validatedAt = /* @__PURE__ */ new Date();
+      updateData.validatedById = user?.userId || user?.id;
+      await db.chantierHistory.create({
+        data: {
+          id: import_crypto11.default.randomUUID(),
+          chantierId: existing.chantierId,
+          action: "EVENT_VALIDATED",
+          fromValue: existing.status,
+          toValue: "COMPLETED",
+          userId: user?.userId || user?.id,
+          data: { eventId: id, type: existing.type }
+        }
+      });
+      if (existing.type === "VISITE_TECHNIQUE") {
+        await checkAutoTransitions(existing.chantierId, organizationId, "AUTO_VISIT_VALIDATED", user);
+      }
+    }
+    const event = await db.chantierEvent.update({
+      where: { id },
+      data: updateData,
+      include: {
+        CalendarEvent: {
+          select: { id: true, title: true, startDate: true, endDate: true }
+        },
+        ValidatedBy: {
+          select: { id: true, firstName: true, lastName: true }
+        }
+      }
+    });
+    res.json({ success: true, data: event });
+  } catch (error) {
+    console.error("[ChantierWorkflow] Erreur PUT /events/:id:", error);
+    res.status(500).json({ success: false, message: "Erreur interne du serveur" });
+  }
+});
+router22.put("/events/:id/lock-subcontract", authenticateToken, isAdmin, async (req2, res) => {
+  try {
+    const { id } = req2.params;
+    const organizationId = req2.headers["x-organization-id"];
+    const user = req2.user;
+    if (!organizationId) {
+      return res.status(400).json({ success: false, message: "ID d'organisation requis" });
+    }
+    const existing = await db.chantierEvent.findFirst({
+      where: { id },
+      include: { Chantier: { select: { organizationId: true } } }
+    });
+    if (!existing || existing.Chantier.organizationId !== organizationId) {
+      return res.status(404).json({ success: false, message: "\xC9v\xE9nement non trouv\xE9" });
+    }
+    const event = await db.chantierEvent.update({
+      where: { id },
+      data: { subcontractLocked: true, updatedAt: /* @__PURE__ */ new Date() }
+    });
+    await db.chantierHistory.create({
+      data: {
+        id: import_crypto11.default.randomUUID(),
+        chantierId: existing.chantierId,
+        action: "SUBCONTRACT_LOCKED",
+        toValue: `${existing.subcontractAmount}\u20AC`,
+        userId: user?.userId || user?.id,
+        data: { eventId: id, amount: existing.subcontractAmount }
+      }
+    });
+    res.json({ success: true, data: event });
+  } catch (error) {
+    console.error("[ChantierWorkflow] Erreur PUT /events/:id/lock-subcontract:", error);
+    res.status(500).json({ success: false, message: "Erreur interne du serveur" });
+  }
+});
+router22.delete("/events/:id", authenticateToken, isAdmin, async (req2, res) => {
+  try {
+    const { id } = req2.params;
+    const organizationId = req2.headers["x-organization-id"];
+    if (!organizationId) {
+      return res.status(400).json({ success: false, message: "ID d'organisation requis" });
+    }
+    const existing = await db.chantierEvent.findFirst({
+      where: { id },
+      include: { Chantier: { select: { organizationId: true } } }
+    });
+    if (!existing || existing.Chantier.organizationId !== organizationId) {
+      return res.status(404).json({ success: false, message: "\xC9v\xE9nement non trouv\xE9" });
+    }
+    await db.chantierEvent.delete({ where: { id } });
+    res.json({ success: true, message: "\xC9v\xE9nement supprim\xE9" });
+  } catch (error) {
+    console.error("[ChantierWorkflow] Erreur DELETE /events/:id:", error);
+    res.status(500).json({ success: false, message: "Erreur interne du serveur" });
+  }
+});
+router22.get("/chantiers/:chantierId/history", authenticateToken, async (req2, res) => {
+  try {
+    const { chantierId } = req2.params;
+    const organizationId = req2.headers["x-organization-id"];
+    if (!organizationId) {
+      return res.status(400).json({ success: false, message: "ID d'organisation requis" });
+    }
+    const chantier = await db.chantier.findFirst({
+      where: { id: chantierId, organizationId }
+    });
+    if (!chantier) {
+      return res.status(404).json({ success: false, message: "Chantier non trouv\xE9" });
+    }
+    const history = await db.chantierHistory.findMany({
+      where: { chantierId },
+      orderBy: { createdAt: "desc" },
+      include: {
+        User: {
+          select: { id: true, firstName: true, lastName: true, email: true }
+        }
+      }
+    });
+    res.json({ success: true, data: history });
+  } catch (error) {
+    console.error("[ChantierWorkflow] Erreur GET /chantiers/:id/history:", error);
+    res.status(500).json({ success: false, message: "Erreur interne du serveur" });
+  }
+});
+router22.post("/chantiers/:chantierId/history", authenticateToken, async (req2, res) => {
+  try {
+    const { chantierId } = req2.params;
+    const organizationId = req2.headers["x-organization-id"];
+    const user = req2.user;
+    if (!organizationId) {
+      return res.status(400).json({ success: false, message: "ID d'organisation requis" });
+    }
+    const chantier = await db.chantier.findFirst({
+      where: { id: chantierId, organizationId }
+    });
+    if (!chantier) {
+      return res.status(404).json({ success: false, message: "Chantier non trouv\xE9" });
+    }
+    const { action: action2, note, data: extraData } = req2.body;
+    const historySchema = import_zod4.z.object({
+      action: import_zod4.z.string().min(1, "Action requise"),
+      note: import_zod4.z.string().max(2e3).optional(),
+      data: import_zod4.z.any().optional()
+    });
+    const validation = historySchema.safeParse({ action: action2, note, data: extraData });
+    if (!validation.success) {
+      return res.status(400).json({ success: false, message: "Donn\xE9es invalides", errors: validation.error.errors });
+    }
+    const entry = await db.chantierHistory.create({
+      data: {
+        id: import_crypto11.default.randomUUID(),
+        chantierId,
+        action: action2 || "NOTE_ADDED",
+        toValue: note || null,
+        userId: user?.userId || user?.id,
+        data: extraData || void 0
+      },
+      include: {
+        User: {
+          select: { id: true, firstName: true, lastName: true, email: true }
+        }
+      }
+    });
+    res.status(201).json({ success: true, data: entry });
+  } catch (error) {
+    console.error("[ChantierWorkflow] Erreur POST /chantiers/:id/history:", error);
+    res.status(500).json({ success: false, message: "Erreur interne du serveur" });
+  }
+});
+async function checkAutoTransitions(chantierId, organizationId, triggerType, user) {
+  try {
+    const chantier = await db.chantier.findFirst({
+      where: { id: chantierId },
+      select: { id: true, statusId: true }
+    });
+    if (!chantier?.statusId) return;
+    const transitions = await db.chantierStatusTransition.findMany({
+      where: {
+        organizationId,
+        fromStatusId: chantier.statusId,
+        triggerType,
+        isActive: true
+      },
+      include: {
+        ToStatus: { select: { id: true, name: true } }
+      }
+    });
+    if (transitions.length === 0) return;
+    const transition = transitions[0];
+    if (transition.requiredConditions) {
+      const conditions = transition.requiredConditions;
+      if (conditions.invoiceType && conditions.allPaid) {
+        const unpaidInvoices = await db.chantierInvoice.count({
+          where: {
+            chantierId,
+            type: conditions.invoiceType,
+            status: { not: "PAID" }
+          }
+        });
+        if (unpaidInvoices > 0) return;
+      }
+      if (conditions.allRequiredPaid) {
+        const templates = await db.chantierInvoiceTemplate.findMany({
+          where: { organizationId, isRequired: true }
+        });
+        const requiredTypes = templates.map((t) => t.type);
+        if (requiredTypes.length > 0) {
+          const unpaid = await db.chantierInvoice.count({
+            where: {
+              chantierId,
+              type: { in: requiredTypes },
+              status: { not: "PAID" }
+            }
+          });
+          if (unpaid > 0) return;
+        }
+      }
+    }
+    const oldStatusId = chantier.statusId;
+    await db.chantier.update({
+      where: { id: chantierId },
+      data: { statusId: transition.toStatusId, updatedAt: /* @__PURE__ */ new Date() }
+    });
+    await db.chantierHistory.create({
+      data: {
+        id: import_crypto11.default.randomUUID(),
+        chantierId,
+        action: "STATUS_CHANGED",
+        fromValue: oldStatusId,
+        toValue: transition.toStatusId,
+        userId: user?.userId || user?.id,
+        data: { triggerType, transitionId: transition.id, auto: true }
+      }
+    });
+    if (transition.notifyRoles) {
+      const roles = transition.notifyRoles;
+      await sendTransitionNotifications(chantierId, organizationId, oldStatusId, transition.toStatusId, roles, transition.sendEmail);
+    }
+    console.log(`[ChantierWorkflow] Auto-transition: chantier ${chantierId} \u2192 ${transition.ToStatus.name} (trigger: ${triggerType})`);
+  } catch (error) {
+    console.error("[ChantierWorkflow] Erreur checkAutoTransitions:", error);
+  }
+}
+async function sendTransitionNotifications(chantierId, organizationId, fromStatusId, toStatusId, notifyRoles, sendEmail) {
+  try {
+    const [chantier, fromStatus, toStatus] = await Promise.all([
+      db.chantier.findFirst({ where: { id: chantierId }, select: { productLabel: true, clientName: true, customLabel: true } }),
+      db.chantierStatus.findFirst({ where: { id: fromStatusId }, select: { name: true } }),
+      db.chantierStatus.findFirst({ where: { id: toStatusId }, select: { name: true } })
+    ]);
+    const chantierLabel = chantier?.customLabel || chantier?.clientName || chantier?.productLabel || "Chantier";
+    const users = await db.userOrganization.findMany({
+      where: {
+        organizationId,
+        status: "ACTIVE"
+      },
+      include: {
+        User: { select: { id: true, email: true, firstName: true } },
+        Role: { select: { name: true } }
+      }
+    });
+    const targetUsers = users.filter((u) => {
+      const roleName = u.Role?.name?.toLowerCase() || "";
+      return notifyRoles.some((r) => roleName.includes(r.toLowerCase()));
+    });
+    for (const u of targetUsers) {
+      await db.notification.create({
+        data: {
+          id: import_crypto11.default.randomUUID(),
+          userId: u.User.id,
+          organizationId,
+          type: "CHANTIER_STATUS_CHANGED",
+          data: {
+            chantierId,
+            fromStatusId,
+            toStatusId,
+            title: `Chantier "${chantierLabel}" d\xE9plac\xE9`,
+            message: `${fromStatus?.name || "?"} \u2192 ${toStatus?.name || "?"}`
+          },
+          status: "PENDING"
+        }
+      });
+    }
+    if (sendEmail && targetUsers.length > 0) {
+      try {
+        const emailAccount = await db.emailAccount.findFirst({
+          where: { organizationId },
+          select: { emailAddress: true, encryptedPassword: true, mailProvider: true }
+        });
+        if (emailAccount?.encryptedPassword) {
+          const decryptedPassword = decrypt(emailAccount.encryptedPassword);
+          let smtpHost = "smtp.gmail.com";
+          let smtpPort = 465;
+          if (emailAccount.mailProvider === "one.com" || emailAccount.mailProvider === "onecom") {
+            smtpHost = "send.one.com";
+            smtpPort = 465;
+          } else if (emailAccount.mailProvider === "outlook" || emailAccount.mailProvider === "hotmail") {
+            smtpHost = "smtp.office365.com";
+            smtpPort = 587;
+          } else if (emailAccount.mailProvider === "yandex") {
+            smtpHost = "smtp.yandex.com";
+            smtpPort = 465;
+          }
+          const transporter = import_nodemailer.default.createTransport({
+            host: smtpHost,
+            port: smtpPort,
+            secure: smtpPort === 465,
+            auth: {
+              user: emailAccount.emailAddress,
+              pass: decryptedPassword
+            }
+          });
+          const subject = `\u{1F3D7}\uFE0F Chantier "${chantierLabel}" \u2014 ${fromStatus?.name || "?"} \u2192 ${toStatus?.name || "?"}`;
+          const html = `
+            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+              <div style="background: #1677ff; color: white; padding: 16px 24px; border-radius: 8px 8px 0 0;">
+                <h2 style="margin: 0; font-size: 18px;">\u{1F3D7}\uFE0F Changement de statut</h2>
+              </div>
+              <div style="padding: 24px; border: 1px solid #e8e8e8; border-top: none; border-radius: 0 0 8px 8px;">
+                <p style="font-size: 16px; color: #333;">
+                  Le chantier <strong>"${chantierLabel}"</strong> a chang\xE9 de statut :
+                </p>
+                <div style="background: #f5f5f5; padding: 16px; border-radius: 8px; text-align: center; margin: 16px 0;">
+                  <span style="font-size: 18px; font-weight: 600; color: #ff4d4f;">${fromStatus?.name || "?"}</span>
+                  <span style="font-size: 24px; margin: 0 12px;">\u2192</span>
+                  <span style="font-size: 18px; font-weight: 600; color: #52c41a;">${toStatus?.name || "?"}</span>
+                </div>
+                <p style="font-size: 13px; color: #8c8c8c; text-align: center; margin-top: 24px;">
+                  Notification automatique CRM 2Thier
+                </p>
+              </div>
+            </div>
+          `;
+          const emailTargets = targetUsers.map((u) => u.User.email).filter((email) => !!email);
+          if (emailTargets.length > 0) {
+            await transporter.sendMail({
+              from: emailAccount.emailAddress,
+              to: emailTargets.join(", "),
+              subject,
+              html
+            });
+            console.log(`[ChantierWorkflow] \u2709\uFE0F Email envoy\xE9 \xE0 ${emailTargets.length} destinataires`);
+          }
+        } else {
+          console.warn("[ChantierWorkflow] \u26A0\uFE0F sendEmail=true mais aucun EmailAccount configur\xE9 dans l'org");
+        }
+      } catch (emailErr) {
+        console.error("[ChantierWorkflow] \u274C Erreur envoi email (non bloquant):", emailErr);
+      }
+    }
+    console.log(`[ChantierWorkflow] ${targetUsers.length} notifications envoy\xE9es pour transition ${fromStatus?.name} \u2192 ${toStatus?.name}`);
+  } catch (error) {
+    console.error("[ChantierWorkflow] Erreur sendTransitionNotifications:", error);
+  }
+}
+async function notifyProblem(chantierId, organizationId, problemNote, user) {
+  try {
+    const chantier = await db.chantier.findFirst({
+      where: { id: chantierId },
+      select: { productLabel: true, clientName: true, customLabel: true, commercialId: true }
+    });
+    const chantierLabel = chantier?.customLabel || chantier?.clientName || chantier?.productLabel || "Chantier";
+    const reporterName = `${user?.firstName || ""} ${user?.lastName || ""}`.trim() || "Un utilisateur";
+    if (chantier?.commercialId) {
+      await db.notification.create({
+        data: {
+          id: import_crypto11.default.randomUUID(),
+          userId: chantier.commercialId,
+          organizationId,
+          type: "CHANTIER_PROBLEM_REPORTED",
+          data: {
+            chantierId,
+            problemNote,
+            title: `\u26A0\uFE0F Probl\xE8me signal\xE9 \u2014 ${chantierLabel}`,
+            message: `${reporterName}: ${problemNote}`
+          },
+          status: "PENDING"
+        }
+      });
+    }
+    const admins = await db.userOrganization.findMany({
+      where: {
+        organizationId,
+        status: "ACTIVE"
+      },
+      include: {
+        User: { select: { id: true } },
+        Role: { select: { name: true } }
+      }
+    });
+    const adminUsers = admins.filter((u) => {
+      const role = u.Role?.name?.toLowerCase() || "";
+      return role.includes("admin") || role.includes("super");
+    });
+    for (const admin of adminUsers) {
+      if (admin.User.id === chantier?.commercialId) continue;
+      await db.notification.create({
+        data: {
+          id: import_crypto11.default.randomUUID(),
+          userId: admin.User.id,
+          organizationId,
+          type: "CHANTIER_PROBLEM_REPORTED",
+          data: {
+            chantierId,
+            problemNote,
+            title: `\u26A0\uFE0F Probl\xE8me signal\xE9 \u2014 ${chantierLabel}`,
+            message: `${reporterName}: ${problemNote}`
+          },
+          status: "PENDING"
+        }
+      });
+    }
+  } catch (error) {
+    console.error("[ChantierWorkflow] Erreur notifyProblem:", error);
+  }
+}
+router22.get("/events/:id/review-fields", authenticateToken, async (req2, res) => {
+  try {
+    const { id } = req2.params;
+    const organizationId = req2.headers["x-organization-id"];
+    if (!organizationId) {
+      return res.status(400).json({ success: false, message: "ID d'organisation requis" });
+    }
+    const event = await db.chantierEvent.findFirst({
+      where: { id },
+      include: {
+        Chantier: {
+          select: {
+            id: true,
+            organizationId: true,
+            submissionId: true,
+            amount: true,
+            clientName: true,
+            siteAddress: true,
+            productLabel: true,
+            GeneratedDocument: {
+              select: { dataSnapshot: true, paymentAmount: true }
+            },
+            TreeBranchLeafSubmission: {
+              select: { id: true, treeId: true, status: true }
+            }
+          }
+        },
+        TechnicianFieldReviews: {
+          include: {
+            ReviewedBy: { select: { id: true, firstName: true, lastName: true } }
+          }
+        }
+      }
+    });
+    if (!event || event.Chantier.organizationId !== organizationId) {
+      return res.status(404).json({ success: false, message: "\xC9v\xE9nement non trouv\xE9" });
+    }
+    const submission = event.Chantier.TreeBranchLeafSubmission;
+    if (!submission) {
+      return res.json({
+        success: true,
+        data: { fields: [], reviews: event.TechnicianFieldReviews, chantierAmount: event.Chantier.amount }
+      });
+    }
+    const visibleNodes = await db.treeBranchLeafNode.findMany({
+      where: {
+        treeId: submission.treeId,
+        technicianVisible: true,
+        isVisible: true,
+        isActive: true
+      },
+      select: {
+        id: true,
+        label: true,
+        fieldType: true,
+        type: true,
+        subType: true,
+        order: true,
+        parentId: true,
+        number_unit: true,
+        number_suffix: true,
+        select_options: true
+      },
+      orderBy: { order: "asc" }
+    });
+    const nodeIds = visibleNodes.map((n) => n.id);
+    const submissionData = nodeIds.length > 0 ? await db.treeBranchLeafSubmissionData.findMany({
+      where: {
+        submissionId: submission.id,
+        nodeId: { in: nodeIds }
+      }
+    }) : [];
+    const valueMap = new Map(submissionData.map((d) => [d.nodeId, d]));
+    const fields = visibleNodes.map((node) => {
+      const data = valueMap.get(node.id);
+      return {
+        nodeId: node.id,
+        label: node.label,
+        fieldType: node.fieldType,
+        type: node.type,
+        subType: node.subType,
+        unit: node.number_unit || node.number_suffix || null,
+        options: node.select_options,
+        originalValue: data?.value || null,
+        fieldLabel: data?.fieldLabel || node.label,
+        variableKey: data?.variableKey || null,
+        variableUnit: data?.variableUnit || null
+      };
+    });
+    const snapshot = event.Chantier.GeneratedDocument?.dataSnapshot || {};
+    const quoteData = snapshot?.quote || {};
+    const chantierAmount = event.Chantier.amount || (quoteData.totalTTC ? Number(quoteData.totalTTC) : null) || (event.Chantier.GeneratedDocument?.paymentAmount ? Number(event.Chantier.GeneratedDocument.paymentAmount) : null) || null;
+    res.json({
+      success: true,
+      data: {
+        fields,
+        reviews: event.TechnicianFieldReviews,
+        chantierAmount,
+        reviewStatus: event.reviewStatus,
+        clientName: event.Chantier.clientName,
+        siteAddress: event.Chantier.siteAddress,
+        productLabel: event.Chantier.productLabel
+      }
+    });
+  } catch (error) {
+    console.error("[ChantierWorkflow] Erreur GET /events/:id/review-fields:", error);
+    res.status(500).json({ success: false, message: "Erreur interne du serveur" });
+  }
+});
+var reviewItemSchema = import_zod4.z.object({
+  nodeId: import_zod4.z.string().min(1),
+  reviewedValue: import_zod4.z.string().nullable().optional(),
+  isModified: import_zod4.z.boolean(),
+  modificationNote: import_zod4.z.string().nullable().optional()
+});
+var submitReviewSchema = import_zod4.z.object({
+  reviews: import_zod4.z.array(reviewItemSchema).min(1),
+  subcontractAmount: import_zod4.z.number().optional(),
+  reviewType: import_zod4.z.enum(["TECHNICAL", "RECEPTION"]).default("TECHNICAL")
+});
+router22.post("/events/:id/submit-review", authenticateToken, async (req2, res) => {
+  try {
+    const { id } = req2.params;
+    const user = req2.user;
+    const organizationId = req2.headers["x-organization-id"];
+    const userId = user?.userId || user?.id;
+    if (!organizationId) {
+      return res.status(400).json({ success: false, message: "ID d'organisation requis" });
+    }
+    const validation = submitReviewSchema.safeParse(req2.body);
+    if (!validation.success) {
+      return res.status(400).json({ success: false, message: "Donn\xE9es invalides", errors: validation.error.errors });
+    }
+    const { reviews, subcontractAmount, reviewType } = validation.data;
+    const event = await db.chantierEvent.findFirst({
+      where: { id },
+      include: {
+        Chantier: {
+          select: {
+            id: true,
+            organizationId: true,
+            submissionId: true,
+            amount: true,
+            commercialId: true,
+            TreeBranchLeafSubmission: { select: { id: true, treeId: true } }
+          }
+        }
+      }
+    });
+    if (!event || event.Chantier.organizationId !== organizationId) {
+      return res.status(404).json({ success: false, message: "\xC9v\xE9nement non trouv\xE9" });
+    }
+    const submission = event.Chantier.TreeBranchLeafSubmission;
+    const nodeIds = reviews.map((r) => r.nodeId);
+    const nodes = submission ? await db.treeBranchLeafNode.findMany({
+      where: { id: { in: nodeIds }, treeId: submission.treeId },
+      select: { id: true, label: true }
+    }) : [];
+    const nodeLabels = new Map(nodes.map((n) => [n.id, n.label]));
+    const originalData = submission ? await db.treeBranchLeafSubmissionData.findMany({
+      where: { submissionId: submission.id, nodeId: { in: nodeIds } }
+    }) : [];
+    const originalValues = new Map(originalData.map((d) => [d.nodeId, d.value]));
+    const invalidReviews = reviews.filter((r) => r.isModified && (!r.modificationNote || !r.modificationNote.trim()));
+    if (invalidReviews.length > 0) {
+      return res.status(400).json({
+        success: false,
+        message: "Une note explicative est obligatoire pour chaque champ modifi\xE9",
+        fields: invalidReviews.map((r) => r.nodeId)
+      });
+    }
+    const hasModifications = reviews.some((r) => r.isModified);
+    const reviewStatus = hasModifications ? "CHANGES_DETECTED" : "CONFIRMED";
+    await db.$transaction(async (tx) => {
+      await tx.technicianFieldReview.deleteMany({
+        where: { chantierEventId: id, reviewType }
+      });
+      for (const review of reviews) {
+        await tx.technicianFieldReview.create({
+          data: {
+            chantierEventId: id,
+            nodeId: review.nodeId,
+            fieldLabel: nodeLabels.get(review.nodeId) || "Champ inconnu",
+            originalValue: originalValues.get(review.nodeId) || null,
+            reviewedValue: review.isModified ? review.reviewedValue || null : originalValues.get(review.nodeId) || null,
+            isModified: review.isModified,
+            modificationNote: review.isModified ? review.modificationNote : null,
+            reviewType,
+            reviewedById: userId
+          }
+        });
+      }
+      const eventUpdate = {
+        status: "COMPLETED",
+        reviewStatus,
+        reviewData: {
+          totalFields: reviews.length,
+          modifiedFields: reviews.filter((r) => r.isModified).length,
+          confirmedFields: reviews.filter((r) => !r.isModified).length,
+          reviewType,
+          reviewedAt: (/* @__PURE__ */ new Date()).toISOString()
+        },
+        validatedAt: /* @__PURE__ */ new Date(),
+        validatedById: userId,
+        updatedAt: /* @__PURE__ */ new Date()
+      };
+      if (subcontractAmount !== void 0) {
+        eventUpdate.subcontractAmount = subcontractAmount;
+      }
+      await tx.chantierEvent.update({ where: { id }, data: eventUpdate });
+      await tx.chantierHistory.create({
+        data: {
+          id: import_crypto11.default.randomUUID(),
+          chantierId: event.Chantier.id,
+          action: reviewType === "TECHNICAL" ? "TECHNICAL_REVIEW_SUBMITTED" : "RECEPTION_REVIEW_SUBMITTED",
+          fromValue: event.status,
+          toValue: "COMPLETED",
+          userId,
+          data: {
+            eventId: id,
+            eventType: event.type,
+            reviewStatus,
+            totalFields: reviews.length,
+            modifiedFields: reviews.filter((r) => r.isModified).length,
+            subcontractAmount
+          }
+        }
+      });
+    });
+    if (hasModifications) {
+      try {
+        const admins = await db.userOrganization.findMany({
+          where: { organizationId, role: { in: ["admin", "super_admin"] } },
+          select: { userId: true }
+        });
+        const modifiedLabels = reviews.filter((r) => r.isModified).map((r) => nodeLabels.get(r.nodeId) || r.nodeId);
+        const notifMessage = `\u26A0\uFE0F Revue technique: ${reviews.filter((r) => r.isModified).length} modifications d\xE9tect\xE9es (${modifiedLabels.join(", ")})`;
+        for (const admin of admins) {
+          await db.notification.create({
+            data: {
+              id: import_crypto11.default.randomUUID(),
+              userId: admin.userId,
+              organizationId,
+              title: "\u26A0\uFE0F Modifications terrain d\xE9tect\xE9es",
+              message: notifMessage,
+              type: "warning",
+              link: `/chantiers/${event.Chantier.id}?tab=events`,
+              isRead: false,
+              createdAt: /* @__PURE__ */ new Date()
+            }
+          });
+        }
+        if (event.Chantier.commercialId) {
+          await db.notification.create({
+            data: {
+              id: import_crypto11.default.randomUUID(),
+              userId: event.Chantier.commercialId,
+              organizationId,
+              title: "\u26A0\uFE0F Modifications terrain sur votre chantier",
+              message: notifMessage,
+              type: "warning",
+              link: `/chantiers/${event.Chantier.id}?tab=events`,
+              isRead: false,
+              createdAt: /* @__PURE__ */ new Date()
+            }
+          });
+        }
+      } catch (notifError) {
+        console.error("[ChantierWorkflow] Erreur envoi notifications review:", notifError);
+      }
+    }
+    if (event.type === "VISITE_TECHNIQUE") {
+      await checkAutoTransitions(event.Chantier.id, organizationId, "AUTO_VISIT_VALIDATED", user);
+    }
+    res.json({
+      success: true,
+      data: { reviewStatus, modifiedCount: reviews.filter((r) => r.isModified).length },
+      message: hasModifications ? `Revue soumise avec ${reviews.filter((r) => r.isModified).length} modification(s) \u2014 Admin notifi\xE9` : "Revue soumise \u2014 Toutes les donn\xE9es confirm\xE9es \u2705"
+    });
+  } catch (error) {
+    console.error("[ChantierWorkflow] Erreur POST /events/:id/submit-review:", error);
+    res.status(500).json({ success: false, message: "Erreur interne du serveur" });
+  }
+});
+router22.get("/chantiers/:chantierId/review-summary", authenticateToken, async (req2, res) => {
+  try {
+    const { chantierId } = req2.params;
+    const organizationId = req2.headers["x-organization-id"];
+    if (!organizationId) {
+      return res.status(400).json({ success: false, message: "ID d'organisation requis" });
+    }
+    const chantier = await db.chantier.findFirst({
+      where: { id: chantierId, organizationId },
+      select: { id: true, amount: true }
+    });
+    if (!chantier) {
+      return res.status(404).json({ success: false, message: "Chantier non trouv\xE9" });
+    }
+    const events = await db.chantierEvent.findMany({
+      where: { chantierId },
+      include: {
+        TechnicianFieldReviews: {
+          include: {
+            ReviewedBy: { select: { id: true, firstName: true, lastName: true } }
+          },
+          orderBy: { reviewedAt: "desc" }
+        },
+        CalendarEvent: {
+          select: { title: true, startDate: true }
+        },
+        ValidatedBy: {
+          select: { id: true, firstName: true, lastName: true }
+        }
+      },
+      orderBy: { createdAt: "asc" }
+    });
+    const summary = events.filter((e) => e.TechnicianFieldReviews.length > 0).map((e) => ({
+      eventId: e.id,
+      eventType: e.type,
+      eventTitle: e.CalendarEvent?.title,
+      eventDate: e.CalendarEvent?.startDate,
+      reviewStatus: e.reviewStatus,
+      subcontractAmount: e.subcontractAmount,
+      validatedBy: e.ValidatedBy,
+      validatedAt: e.validatedAt,
+      reviews: e.TechnicianFieldReviews.map((r) => ({
+        nodeId: r.nodeId,
+        fieldLabel: r.fieldLabel,
+        originalValue: r.originalValue,
+        reviewedValue: r.reviewedValue,
+        isModified: r.isModified,
+        modificationNote: r.modificationNote,
+        reviewType: r.reviewType,
+        reviewedBy: r.ReviewedBy,
+        reviewedAt: r.reviewedAt
+      })),
+      totalFields: e.TechnicianFieldReviews.length,
+      modifiedFields: e.TechnicianFieldReviews.filter((r) => r.isModified).length
+    }));
+    const totalSubcontract = events.reduce((sum, e) => sum + (e.subcontractAmount || 0), 0);
+    res.json({
+      success: true,
+      data: {
+        summary,
+        totalSubcontract,
+        chantierAmount: chantier.amount,
+        marginAmount: chantier.amount ? chantier.amount - totalSubcontract : null,
+        marginPercent: chantier.amount ? (chantier.amount - totalSubcontract) / chantier.amount * 100 : null,
+        hasModifications: summary.some((s) => s.modifiedFields > 0)
+      }
+    });
+  } catch (error) {
+    console.error("[ChantierWorkflow] Erreur GET review-summary:", error);
+    res.status(500).json({ success: false, message: "Erreur interne du serveur" });
+  }
+});
+router22.post("/chantiers/:chantierId/reject-to-lead", authenticateToken, isAdmin, async (req2, res) => {
+  try {
+    const { chantierId } = req2.params;
+    const user = req2.user;
+    const organizationId = req2.headers["x-organization-id"];
+    const userId = user?.userId || user?.id;
+    if (!organizationId) {
+      return res.status(400).json({ success: false, message: "ID d'organisation requis" });
+    }
+    const rejectSchema = import_zod4.z.object({
+      reason: import_zod4.z.string().min(1, "La raison est obligatoire"),
+      notifyCommercial: import_zod4.z.boolean().default(true)
+    });
+    const validation = rejectSchema.safeParse(req2.body);
+    if (!validation.success) {
+      return res.status(400).json({ success: false, message: "Donn\xE9es invalides", errors: validation.error.errors });
+    }
+    const { reason, notifyCommercial } = validation.data;
+    const chantier = await db.chantier.findFirst({
+      where: { id: chantierId, organizationId },
+      select: {
+        id: true,
+        leadId: true,
+        commercialId: true,
+        clientName: true,
+        statusId: true,
+        submissionId: true,
+        notes: true
+      }
+    });
+    if (!chantier) {
+      return res.status(404).json({ success: false, message: "Chantier non trouv\xE9" });
+    }
+    if (!chantier.leadId) {
+      return res.status(400).json({ success: false, message: "Ce chantier n'a pas de lead associ\xE9, impossible de le renvoyer" });
+    }
+    const cancelStatus = await db.chantierStatus.findFirst({
+      where: { organizationId, name: { in: ["Annul\xE9", "\xC0 revoir", "Rejet\xE9"] } },
+      orderBy: { order: "desc" }
+    });
+    await db.$transaction(async (tx) => {
+      if (cancelStatus) {
+        await tx.chantier.update({
+          where: { id: chantierId },
+          data: {
+            statusId: cancelStatus.id,
+            notes: `${chantier.notes ? chantier.notes + "\n\n" : ""}--- REJET\xC9 PAR ADMIN ---
+${reason}
+(${(/* @__PURE__ */ new Date()).toLocaleDateString("fr-BE")})`,
+            isValidated: false,
+            validatedAt: null,
+            validatedById: null,
+            updatedAt: /* @__PURE__ */ new Date()
+          }
+        });
+      }
+      const leadStatus = await tx.leadStatus.findFirst({
+        where: { organizationId },
+        orderBy: { order: "asc" }
+      });
+      await tx.lead.update({
+        where: { id: chantier.leadId },
+        data: {
+          status: "\xE0_revoir_technique",
+          statusId: leadStatus?.id || void 0,
+          notes: `\u26A0\uFE0F RETOUR TECHNIQUE \u2014 Chantier rejet\xE9 par l'admin.
+Raison: ${reason}
+Date: ${(/* @__PURE__ */ new Date()).toLocaleDateString("fr-BE")} ${(/* @__PURE__ */ new Date()).toLocaleTimeString("fr-BE")}
+
+Le commercial doit corriger le TBL et reg\xE9n\xE9rer un nouveau devis.`,
+          updatedAt: /* @__PURE__ */ new Date()
+        }
+      });
+      await tx.chantierHistory.create({
+        data: {
+          id: import_crypto11.default.randomUUID(),
+          chantierId,
+          action: "REJECTED_TO_LEAD",
+          fromValue: chantier.statusId || "unknown",
+          toValue: "LEAD",
+          userId,
+          data: {
+            reason,
+            leadId: chantier.leadId,
+            previousStatus: chantier.statusId
+          }
+        }
+      });
+    });
+    if (notifyCommercial && chantier.commercialId) {
+      try {
+        await db.notification.create({
+          data: {
+            id: import_crypto11.default.randomUUID(),
+            userId: chantier.commercialId,
+            organizationId,
+            title: "\u21A9\uFE0F Chantier renvoy\xE9 \u2014 Correction requise",
+            message: `Le chantier "${chantier.clientName}" a \xE9t\xE9 renvoy\xE9 apr\xE8s la revue technique.
+Raison: ${reason}
+
+Veuillez corriger le TBL et reg\xE9n\xE9rer le devis.`,
+            type: "warning",
+            link: `/leads?id=${chantier.leadId}`,
+            isRead: false,
+            createdAt: /* @__PURE__ */ new Date()
+          }
+        });
+      } catch (notifError) {
+        console.error("[ChantierWorkflow] Erreur notification reject-to-lead:", notifError);
+      }
+    }
+    res.json({
+      success: true,
+      message: "Chantier renvoy\xE9 au commercial \u2014 Lead r\xE9ouvert pour correction",
+      data: { leadId: chantier.leadId }
+    });
+  } catch (error) {
+    console.error("[ChantierWorkflow] Erreur POST reject-to-lead:", error);
+    res.status(500).json({ success: false, message: "Erreur interne du serveur" });
+  }
+});
+var RECEPTION_LEGAL_TEXT = `Je soussign\xE9(e) d\xE9clare avoir r\xE9ceptionn\xE9 les travaux d\xE9crits ci-dessus. Je confirme que les travaux ont \xE9t\xE9 r\xE9alis\xE9s conform\xE9ment au devis accept\xE9 et que l'installation est fonctionnelle. Je reconnais avoir v\xE9rifi\xE9 chaque point mentionn\xE9 dans cette fiche de r\xE9ception et confirme l'\xE9tat d\xE9crit pour chacun. En cas de r\xE9serves, celles-ci sont mentionn\xE9es ci-dessus et devront \xEAtre lev\xE9es dans le d\xE9lai convenu. Cette r\xE9ception vaut acceptation d\xE9finitive des travaux, sous r\xE9serve des points mentionn\xE9s ci-dessus.`;
+var DEFAULT_SATISFACTION_QUESTIONS = [
+  { id: "quality", question: "Qualit\xE9 g\xE9n\xE9rale des travaux r\xE9alis\xE9s", type: "rating" },
+  { id: "cleanliness", question: "Propret\xE9 du chantier apr\xE8s intervention", type: "rating" },
+  { id: "punctuality", question: "Respect des d\xE9lais et de la ponctualit\xE9", type: "rating" },
+  { id: "communication", question: "Communication et suivi du chantier", type: "rating" },
+  { id: "recommendation", question: "Recommanderiez-vous notre entreprise ?", type: "boolean" },
+  { id: "comments", question: "Commentaires ou suggestions", type: "text" }
+];
+router22.post("/chantiers/:chantierId/reception/prepare", authenticateToken, async (req2, res) => {
+  try {
+    const { chantierId } = req2.params;
+    const user = req2.user;
+    const organizationId = req2.headers["x-organization-id"];
+    const userId = user?.userId || user?.id;
+    if (!organizationId) {
+      return res.status(400).json({ success: false, message: "ID d'organisation requis" });
+    }
+    const chantier = await db.chantier.findFirst({
+      where: { id: chantierId, organizationId },
+      select: {
+        id: true,
+        clientName: true,
+        siteAddress: true,
+        amount: true,
+        productLabel: true,
+        submissionId: true,
+        Lead: { select: { email: true, phone: true, firstName: true, lastName: true } },
+        GeneratedDocument: { select: { dataSnapshot: true } },
+        ChantierEvent: {
+          where: { status: "COMPLETED" },
+          select: { subcontractAmount: true }
+        }
+      }
+    });
+    if (!chantier) {
+      return res.status(404).json({ success: false, message: "Chantier non trouv\xE9" });
+    }
+    const existingReception = await db.chantierReception.findUnique({
+      where: { chantierId }
+    });
+    if (existingReception && existingReception.status !== "DRAFT") {
+      return res.status(409).json({ success: false, message: "Une r\xE9ception existe d\xE9j\xE0 pour ce chantier" });
+    }
+    const subcontractTotal = chantier.ChantierEvent.reduce((sum, e) => sum + (e.subcontractAmount || 0), 0);
+    let checklist = [];
+    if (chantier.submissionId) {
+      const submission = await db.treeBranchLeafSubmission.findUnique({
+        where: { id: chantier.submissionId },
+        select: { treeId: true }
+      });
+      if (submission) {
+        const nodes = await db.treeBranchLeafNode.findMany({
+          where: { treeId: submission.treeId, technicianVisible: true, isVisible: true, isActive: true },
+          select: { id: true, label: true },
+          orderBy: { order: "asc" }
+        });
+        const subData = await db.treeBranchLeafSubmissionData.findMany({
+          where: { submissionId: chantier.submissionId, nodeId: { in: nodes.map((n) => n.id) } }
+        });
+        const valueMap = new Map(subData.map((d) => [d.nodeId, d.value]));
+        checklist = nodes.map((n) => ({
+          nodeId: n.id,
+          label: n.label,
+          expectedValue: valueMap.get(n.id) || null,
+          checked: false,
+          note: null
+        }));
+      }
+    }
+    const clientAccessToken = import_crypto11.default.randomUUID();
+    const clientTokenExpiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1e3);
+    const reception = existingReception ? await db.chantierReception.update({
+      where: { chantierId },
+      data: {
+        checklist,
+        workSummary: { product: chantier.productLabel, address: chantier.siteAddress },
+        totalAmount: chantier.amount,
+        subcontractTotal,
+        clientName: chantier.Lead ? `${chantier.Lead.firstName || ""} ${chantier.Lead.lastName || ""}`.trim() : chantier.clientName,
+        clientEmail: chantier.Lead?.email,
+        clientPhone: chantier.Lead?.phone,
+        clientAccessToken,
+        clientTokenExpiresAt,
+        legalText: RECEPTION_LEGAL_TEXT,
+        satisfactionAnswers: DEFAULT_SATISFACTION_QUESTIONS,
+        preparedById: userId,
+        updatedAt: /* @__PURE__ */ new Date()
+      }
+    }) : await db.chantierReception.create({
+      data: {
+        chantierId,
+        status: "DRAFT",
+        checklist,
+        workSummary: { product: chantier.productLabel, address: chantier.siteAddress },
+        totalAmount: chantier.amount,
+        subcontractTotal,
+        clientName: chantier.Lead ? `${chantier.Lead.firstName || ""} ${chantier.Lead.lastName || ""}`.trim() : chantier.clientName,
+        clientEmail: chantier.Lead?.email,
+        clientPhone: chantier.Lead?.phone,
+        clientAccessToken,
+        clientTokenExpiresAt,
+        legalText: RECEPTION_LEGAL_TEXT,
+        satisfactionAnswers: DEFAULT_SATISFACTION_QUESTIONS,
+        preparedById: userId,
+        updatedAt: /* @__PURE__ */ new Date()
+      }
+    });
+    await db.chantierHistory.create({
+      data: {
+        id: import_crypto11.default.randomUUID(),
+        chantierId,
+        action: "RECEPTION_PREPARED",
+        userId,
+        data: { receptionId: reception.id, checklistItems: checklist.length }
+      }
+    });
+    res.json({
+      success: true,
+      data: {
+        reception,
+        clientLink: `/reception/${clientAccessToken}`,
+        satisfactionQuestions: DEFAULT_SATISFACTION_QUESTIONS
+      },
+      message: "PV de r\xE9ception pr\xE9par\xE9 \u2014 Lien client g\xE9n\xE9r\xE9"
+    });
+  } catch (error) {
+    console.error("[ChantierWorkflow] Erreur POST reception/prepare:", error);
+    res.status(500).json({ success: false, message: "Erreur interne du serveur" });
+  }
+});
+router22.get("/reception/:token", async (req2, res) => {
+  try {
+    const { token } = req2.params;
+    const reception = await db.chantierReception.findUnique({
+      where: { clientAccessToken: token },
+      include: {
+        Chantier: {
+          select: {
+            clientName: true,
+            siteAddress: true,
+            productLabel: true,
+            amount: true,
+            Organization: { select: { name: true } }
+          }
+        }
+      }
+    });
+    if (!reception) {
+      return res.status(404).json({ success: false, message: "Lien de r\xE9ception invalide ou expir\xE9" });
+    }
+    if (reception.clientTokenExpiresAt && reception.clientTokenExpiresAt < /* @__PURE__ */ new Date()) {
+      return res.status(410).json({ success: false, message: "Ce lien de r\xE9ception a expir\xE9" });
+    }
+    if (reception.status === "ACCEPTED" || reception.status === "ACCEPTED_WITH_RESERVES") {
+      return res.json({
+        success: true,
+        data: { ...reception, alreadySigned: true },
+        message: "Ce PV de r\xE9ception a d\xE9j\xE0 \xE9t\xE9 sign\xE9"
+      });
+    }
+    res.json({
+      success: true,
+      data: {
+        id: reception.id,
+        status: reception.status,
+        checklist: reception.checklist,
+        workSummary: reception.workSummary,
+        satisfactionQuestions: DEFAULT_SATISFACTION_QUESTIONS,
+        legalText: reception.legalText,
+        clientName: reception.clientName,
+        totalAmount: reception.totalAmount,
+        organizationName: reception.Chantier.Organization?.name,
+        productLabel: reception.Chantier.productLabel,
+        siteAddress: reception.Chantier.siteAddress
+      }
+    });
+  } catch (error) {
+    console.error("[ChantierWorkflow] Erreur GET /reception/:token:", error);
+    res.status(500).json({ success: false, message: "Erreur interne du serveur" });
+  }
+});
+var signReceptionSchema = import_zod4.z.object({
+  clientName: import_zod4.z.string().min(1, "Le nom est obligatoire"),
+  clientSignature: import_zod4.z.string().min(1, "La signature est obligatoire"),
+  checklist: import_zod4.z.array(import_zod4.z.object({
+    nodeId: import_zod4.z.string().optional(),
+    label: import_zod4.z.string(),
+    checked: import_zod4.z.boolean(),
+    note: import_zod4.z.string().nullable().optional()
+  })),
+  satisfactionAnswers: import_zod4.z.array(import_zod4.z.object({
+    id: import_zod4.z.string(),
+    question: import_zod4.z.string(),
+    answer: import_zod4.z.any(),
+    rating: import_zod4.z.number().min(1).max(5).optional()
+  })).optional(),
+  reserves: import_zod4.z.array(import_zod4.z.object({
+    description: import_zod4.z.string().min(1),
+    severity: import_zod4.z.enum(["minor", "major", "critical"]).default("minor")
+  })).optional(),
+  legalAccepted: import_zod4.z.boolean()
+});
+router22.post("/reception/:token/sign", async (req2, res) => {
+  try {
+    const { token } = req2.params;
+    const ip = req2.headers["x-forwarded-for"] || req2.socket.remoteAddress || "unknown";
+    const userAgent = req2.headers["user-agent"] || "unknown";
+    const validation = signReceptionSchema.safeParse(req2.body);
+    if (!validation.success) {
+      return res.status(400).json({ success: false, message: "Donn\xE9es invalides", errors: validation.error.errors });
+    }
+    const data = validation.data;
+    if (!data.legalAccepted) {
+      return res.status(400).json({ success: false, message: "Vous devez accepter les conditions pour signer le PV de r\xE9ception" });
+    }
+    const reception = await db.chantierReception.findUnique({
+      where: { clientAccessToken: token }
+    });
+    if (!reception) {
+      return res.status(404).json({ success: false, message: "Lien de r\xE9ception invalide" });
+    }
+    if (reception.clientTokenExpiresAt && reception.clientTokenExpiresAt < /* @__PURE__ */ new Date()) {
+      return res.status(410).json({ success: false, message: "Ce lien a expir\xE9" });
+    }
+    if (reception.clientSignedAt) {
+      return res.status(409).json({ success: false, message: "Ce PV a d\xE9j\xE0 \xE9t\xE9 sign\xE9" });
+    }
+    const hasReserves = data.reserves && data.reserves.length > 0;
+    const avgRating = data.satisfactionAnswers ? data.satisfactionAnswers.filter((a) => a.rating).reduce((sum, a) => sum + (a.rating || 0), 0) / (data.satisfactionAnswers.filter((a) => a.rating).length || 1) : null;
+    await db.$transaction(async (tx) => {
+      await tx.chantierReception.update({
+        where: { id: reception.id },
+        data: {
+          status: hasReserves ? "ACCEPTED_WITH_RESERVES" : "ACCEPTED",
+          clientName: data.clientName,
+          clientSignature: data.clientSignature,
+          clientSignedAt: /* @__PURE__ */ new Date(),
+          clientIpAddress: ip,
+          clientUserAgent: userAgent,
+          checklist: data.checklist,
+          satisfactionRating: avgRating ? Math.round(avgRating) : null,
+          satisfactionAnswers: data.satisfactionAnswers,
+          legalAccepted: true,
+          legalAcceptedAt: /* @__PURE__ */ new Date(),
+          hasReserves,
+          reserves: hasReserves ? data.reserves : null,
+          updatedAt: /* @__PURE__ */ new Date()
+        }
+      });
+      await tx.chantierHistory.create({
+        data: {
+          id: import_crypto11.default.randomUUID(),
+          chantierId: reception.chantierId,
+          action: "RECEPTION_SIGNED",
+          toValue: hasReserves ? "ACCEPTED_WITH_RESERVES" : "ACCEPTED",
+          data: {
+            receptionId: reception.id,
+            clientName: data.clientName,
+            signedAt: (/* @__PURE__ */ new Date()).toISOString(),
+            ip,
+            hasReserves,
+            reserveCount: data.reserves?.length || 0,
+            satisfactionRating: avgRating
+          }
+        }
+      });
+    });
+    try {
+      const chantier = await db.chantier.findUnique({
+        where: { id: reception.chantierId },
+        select: { organizationId: true, clientName: true }
+      });
+      if (chantier) {
+        const admins = await db.userOrganization.findMany({
+          where: { organizationId: chantier.organizationId, role: { in: ["admin", "super_admin"] } },
+          select: { userId: true }
+        });
+        for (const admin of admins) {
+          await db.notification.create({
+            data: {
+              id: import_crypto11.default.randomUUID(),
+              userId: admin.userId,
+              organizationId: chantier.organizationId,
+              title: hasReserves ? "\u26A0\uFE0F PV sign\xE9 avec r\xE9serves" : "\u2705 PV de r\xE9ception sign\xE9",
+              message: `${data.clientName} a sign\xE9 le PV de r\xE9ception pour "${chantier.clientName}"${hasReserves ? ` avec ${data.reserves.length} r\xE9serve(s)` : ""}`,
+              type: hasReserves ? "warning" : "success",
+              link: `/chantiers/${reception.chantierId}?tab=reception`,
+              isRead: false,
+              createdAt: /* @__PURE__ */ new Date()
+            }
+          });
+        }
+      }
+    } catch (notifError) {
+      console.error("[ChantierWorkflow] Erreur notification reception sign:", notifError);
+    }
+    res.json({
+      success: true,
+      message: hasReserves ? "PV de r\xE9ception sign\xE9 avec r\xE9serves \u2014 L'entreprise a \xE9t\xE9 notifi\xE9e" : "PV de r\xE9ception sign\xE9 \u2705 \u2014 Merci pour votre confiance",
+      data: { status: hasReserves ? "ACCEPTED_WITH_RESERVES" : "ACCEPTED" }
+    });
+  } catch (error) {
+    console.error("[ChantierWorkflow] Erreur POST /reception/:token/sign:", error);
+    res.status(500).json({ success: false, message: "Erreur interne du serveur" });
+  }
+});
+router22.get("/chantiers/:chantierId/reception", authenticateToken, async (req2, res) => {
+  try {
+    const { chantierId } = req2.params;
+    const organizationId = req2.headers["x-organization-id"];
+    if (!organizationId) {
+      return res.status(400).json({ success: false, message: "ID d'organisation requis" });
+    }
+    const chantier = await db.chantier.findFirst({
+      where: { id: chantierId, organizationId }
+    });
+    if (!chantier) {
+      return res.status(404).json({ success: false, message: "Chantier non trouv\xE9" });
+    }
+    const reception = await db.chantierReception.findUnique({
+      where: { chantierId }
+    });
+    res.json({ success: true, data: reception });
+  } catch (error) {
+    console.error("[ChantierWorkflow] Erreur GET reception:", error);
+    res.status(500).json({ success: false, message: "Erreur interne du serveur" });
+  }
+});
+router22.post("/chantiers/:chantierId/reception/send-to-client", authenticateToken, async (req2, res) => {
+  try {
+    const { chantierId } = req2.params;
+    const user = req2.user;
+    const organizationId = req2.headers["x-organization-id"];
+    if (!organizationId) {
+      return res.status(400).json({ success: false, message: "ID d'organisation requis" });
+    }
+    const reception = await db.chantierReception.findUnique({
+      where: { chantierId }
+    });
+    if (!reception) {
+      return res.status(404).json({ success: false, message: "R\xE9ception non trouv\xE9e \u2014 veuillez d'abord la pr\xE9parer" });
+    }
+    if (!reception.clientEmail) {
+      return res.status(400).json({ success: false, message: "Email client manquant" });
+    }
+    await db.chantierReception.update({
+      where: { id: reception.id },
+      data: { status: "PENDING_CLIENT", updatedAt: /* @__PURE__ */ new Date() }
+    });
+    const chantier = await db.chantier.findFirst({
+      where: { id: chantierId },
+      select: {
+        clientName: true,
+        siteAddress: true,
+        Organization: { select: { name: true } }
+      }
+    });
+    try {
+      const orgSettings = await db.organizationSettings.findFirst({
+        where: { organizationId }
+      });
+      const smtpConfig = orgSettings?.smtpConfig;
+      if (smtpConfig?.host) {
+        const decryptedPassword = smtpConfig.password ? decrypt(smtpConfig.password) : "";
+        const transporter = import_nodemailer.default.createTransport({
+          host: smtpConfig.host,
+          port: smtpConfig.port || 587,
+          secure: smtpConfig.secure || false,
+          auth: { user: smtpConfig.user, pass: decryptedPassword }
+        });
+        const receptionUrl = `${req2.headers.origin || "https://app.2thier.be"}/reception/${reception.clientAccessToken}`;
+        await transporter.sendMail({
+          from: smtpConfig.from || smtpConfig.user,
+          to: reception.clientEmail,
+          subject: `R\xE9ception de vos travaux \u2014 ${chantier?.Organization?.name || "2Thier"}`,
+          html: `
+            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+              <h2>Bonjour ${reception.clientName},</h2>
+              <p>Les travaux r\xE9alis\xE9s \xE0 l'adresse <strong>${chantier?.siteAddress || "votre domicile"}</strong> sont termin\xE9s.</p>
+              <p>Nous vous invitons \xE0 consulter et signer le proc\xE8s-verbal de r\xE9ception en cliquant sur le button ci-dessous :</p>
+              <div style="text-align: center; margin: 30px 0;">
+                <a href="${receptionUrl}" style="background-color: #52c41a; color: white; padding: 14px 28px; text-decoration: none; border-radius: 6px; font-size: 16px; font-weight: bold;">
+                  \u{1F4DD} Signer le PV de r\xE9ception
+                </a>
+              </div>
+              <p style="color: #666; font-size: 13px;">Ce lien est valide pendant 30 jours. Si vous rencontrez des probl\xE8mes, contactez-nous.</p>
+              <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;" />
+              <p style="color: #999; font-size: 12px;">${chantier?.Organization?.name || "2Thier"}</p>
+            </div>
+          `
+        });
+      }
+    } catch (emailError) {
+      console.error("[ChantierWorkflow] Erreur envoi email reception:", emailError);
+    }
+    await db.chantierHistory.create({
+      data: {
+        id: import_crypto11.default.randomUUID(),
+        chantierId,
+        action: "RECEPTION_SENT_TO_CLIENT",
+        userId: user?.userId || user?.id,
+        data: { email: reception.clientEmail }
+      }
+    });
+    res.json({
+      success: true,
+      message: `Lien de r\xE9ception envoy\xE9 \xE0 ${reception.clientEmail}`
+    });
+  } catch (error) {
+    console.error("[ChantierWorkflow] Erreur POST send-to-client:", error);
+    res.status(500).json({ success: false, message: "Erreur interne du serveur" });
+  }
+});
+router22.post("/seed", authenticateToken, isAdmin, async (req2, res) => {
+  try {
+    const organizationId = req2.headers["x-organization-id"];
+    if (!organizationId) {
+      return res.status(400).json({ success: false, message: "ID d'organisation requis" });
+    }
+    const { force } = req2.body || {};
+    const existingTransitions = await db.chantierStatusTransition.count({ where: { organizationId } });
+    const existingTemplates = await db.chantierInvoiceTemplate.count({ where: { organizationId } });
+    if ((existingTransitions > 0 || existingTemplates > 0) && !force) {
+      return res.status(400).json({
+        success: false,
+        message: 'Le workflow est d\xE9j\xE0 configur\xE9. Utilisez "R\xE9initialiser" pour re-cr\xE9er les donn\xE9es par d\xE9faut.',
+        hasData: { transitions: existingTransitions, templates: existingTemplates }
+      });
+    }
+    if (force) {
+      await db.chantierStatusTransition.deleteMany({ where: { organizationId } });
+      await db.chantierInvoiceTemplate.deleteMany({ where: { organizationId } });
+    }
+    const statuses = await db.chantierStatus.findMany({
+      where: { organizationId },
+      orderBy: { order: "asc" }
+    });
+    if (statuses.length === 0) {
+      return res.status(400).json({ success: false, message: "Aucun statut de chantier trouv\xE9. Cr\xE9ez d'abord les statuts." });
+    }
+    const findStatus = (name) => statuses.find((s) => s.name.toLowerCase().trim() === name.toLowerCase().trim());
+    const results = { transitions: 0, templates: 0, skipped: [] };
+    const transitionDefs = [
+      // ── Pipeline principal (avancement normal) ──
+      { fromName: "Nouveau", toName: "Visite technique", triggerType: "MANUAL", label: "Planifier visite technique", allowedRoles: ["admin", "commercial"] },
+      { fromName: "Visite technique", toName: "Commande", triggerType: "MANUAL", label: "Valider visite \u2192 Commande", allowedRoles: ["admin", "commercial"], notifyRoles: ["comptable"], sendEmail: false },
+      { fromName: "Commande", toName: "R\xE9ception commande", triggerType: "MANUAL", label: "Commande pass\xE9e \u2192 Attente r\xE9ception", allowedRoles: ["admin", "commercial"] },
+      { fromName: "R\xE9ception commande", toName: "Planification", triggerType: "MANUAL", label: "Mat\xE9riel re\xE7u \u2192 Planifier le chantier", allowedRoles: ["admin", "commercial"] },
+      { fromName: "Planification", toName: "Fin de chantier", triggerType: "MANUAL", label: "Chantier r\xE9alis\xE9 \u2192 Fin de chantier", allowedRoles: ["admin", "commercial", "technicien"], notifyRoles: ["comptable", "admin"], sendEmail: true },
+      { fromName: "Fin de chantier", toName: "R\xE9ception", triggerType: "MANUAL", label: "Lancer la r\xE9ception client", allowedRoles: ["admin", "commercial"] },
+      { fromName: "R\xE9ception", toName: "Termin\xE9", triggerType: "MANUAL", label: "R\xE9ception OK \u2192 Termin\xE9", allowedRoles: ["admin", "commercial"], notifyRoles: ["comptable", "admin"], sendEmail: true },
+      // ── Auto-transitions ──
+      { fromName: "Visite technique", toName: "Commande", triggerType: "AUTO_VISIT_VALIDATED", label: "Auto: visite valid\xE9e \u2192 Commande", notifyRoles: ["comptable", "admin"], sendEmail: true },
+      { fromName: "R\xE9ception commande", toName: "Planification", triggerType: "AUTO_MATERIAL_RECEIVED", label: "Auto: mat\xE9riel re\xE7u \u2192 Planification", notifyRoles: ["admin", "commercial"], sendEmail: true },
+      { fromName: "Fin de chantier", toName: "R\xE9ception", triggerType: "AUTO_INVOICE_PAID", label: "Auto: factures pay\xE9es \u2192 R\xE9ception", notifyRoles: ["admin", "commercial"], sendEmail: true },
+      // ── Retours (corrections) ──
+      { fromName: "Visite technique", toName: "Nouveau", triggerType: "MANUAL", label: "Retour en attente", allowedRoles: ["admin", "commercial"] },
+      { fromName: "Commande", toName: "Visite technique", triggerType: "MANUAL", label: "Refaire visite technique", allowedRoles: ["admin"] },
+      { fromName: "R\xE9ception commande", toName: "Commande", triggerType: "MANUAL", label: "Probl\xE8me r\xE9ception \u2192 Retour commande", allowedRoles: ["admin"] },
+      { fromName: "Planification", toName: "R\xE9ception commande", triggerType: "MANUAL", label: "Retour en attente mat\xE9riel", allowedRoles: ["admin"] },
+      { fromName: "Fin de chantier", toName: "Planification", triggerType: "MANUAL", label: "Travaux suppl\xE9mentaires", allowedRoles: ["admin"] },
+      // ── SAV (depuis Terminé) ──
+      { fromName: "Termin\xE9", toName: "SAV", triggerType: "MANUAL", label: "Ouvrir un SAV", allowedRoles: ["admin", "commercial", "technicien"] },
+      { fromName: "SAV", toName: "Termin\xE9", triggerType: "MANUAL", label: "Cl\xF4turer le SAV", allowedRoles: ["admin", "commercial"] },
+      // ── Annulation (depuis tout statut actif) ──
+      { fromName: "Nouveau", toName: "Annul\xE9", triggerType: "MANUAL", label: "Annuler (nouveau)", allowedRoles: ["admin"] },
+      { fromName: "Visite technique", toName: "Annul\xE9", triggerType: "MANUAL", label: "Annuler (visite)", allowedRoles: ["admin"] },
+      { fromName: "Commande", toName: "Annul\xE9", triggerType: "MANUAL", label: "Annuler (commande)", allowedRoles: ["admin"], notifyRoles: ["comptable"], sendEmail: true },
+      { fromName: "R\xE9ception commande", toName: "Annul\xE9", triggerType: "MANUAL", label: "Annuler (en attente)", allowedRoles: ["admin"] },
+      { fromName: "Planification", toName: "Annul\xE9", triggerType: "MANUAL", label: "Annuler (planifi\xE9)", allowedRoles: ["admin"] },
+      { fromName: "Fin de chantier", toName: "Annul\xE9", triggerType: "MANUAL", label: "Annuler (fin chantier)", allowedRoles: ["admin"], notifyRoles: ["commercial", "comptable"], sendEmail: true }
+    ];
+    let order = 0;
+    for (const def of transitionDefs) {
+      const fromStatus = findStatus(def.fromName);
+      const toStatus = findStatus(def.toName);
+      if (!fromStatus || !toStatus) {
+        results.skipped.push(`${def.fromName} \u2192 ${def.toName} (statut introuvable)`);
+        continue;
+      }
+      await db.chantierStatusTransition.create({
+        data: {
+          id: import_crypto11.default.randomUUID(),
+          organizationId,
+          fromStatusId: fromStatus.id,
+          toStatusId: toStatus.id,
+          triggerType: def.triggerType,
+          label: def.label,
+          allowedRoles: def.allowedRoles || void 0,
+          notifyRoles: def.notifyRoles || void 0,
+          sendEmail: def.sendEmail || false,
+          isActive: true,
+          order: order++,
+          updatedAt: /* @__PURE__ */ new Date()
+        }
+      });
+      results.transitions++;
+    }
+    const templateDefs = [
+      { type: "ACOMPTE", label: "Acompte 30%", percentage: 30, statusName: "Nouveau", isRequired: true, order: 0 },
+      { type: "MATERIEL", label: "Facture mat\xE9riel", percentage: null, statusName: "Commande", isRequired: false, order: 1 },
+      { type: "FIN_CHANTIER", label: "Facture fin de chantier 60%", percentage: 60, statusName: "Fin de chantier", isRequired: true, order: 2 },
+      { type: "RECEPTION", label: "Facture r\xE9ception (solde 10%)", percentage: 10, statusName: "R\xE9ception", isRequired: true, order: 3 }
+    ];
+    for (const tpl of templateDefs) {
+      const status = tpl.statusName ? findStatus(tpl.statusName) : null;
+      if (tpl.statusName && !status) {
+        results.skipped.push(`Template "${tpl.label}" \u2192 statut "${tpl.statusName}" introuvable`);
+      }
+      await db.chantierInvoiceTemplate.create({
+        data: {
+          id: import_crypto11.default.randomUUID(),
+          organizationId,
+          statusId: status?.id || null,
+          type: tpl.type,
+          label: tpl.label,
+          percentage: tpl.percentage,
+          isRequired: tpl.isRequired,
+          isActive: true,
+          order: tpl.order,
+          updatedAt: /* @__PURE__ */ new Date()
+        }
+      });
+      results.templates++;
+    }
+    console.log(`[ChantierWorkflow] Seed termin\xE9 pour org ${organizationId}: ${results.transitions} transitions, ${results.templates} templates${results.skipped.length ? `, ${results.skipped.length} ignor\xE9s` : ""}`);
+    res.status(201).json({
+      success: true,
+      data: results,
+      message: `Workflow initialis\xE9 : ${results.transitions} transitions, ${results.templates} templates de factures${results.skipped.length ? `. ${results.skipped.length} ignor\xE9(s).` : ""}`
+    });
+  } catch (error) {
+    console.error("[ChantierWorkflow] Erreur POST /seed:", error);
+    res.status(500).json({ success: false, message: "Erreur interne du serveur" });
+  }
+});
+var chantier_workflow_default = router22;
+
+// src/routes/chantiersRoutes.ts
+var router23 = (0, import_express24.Router)();
+var createChantierSchema = import_zod5.z.object({
+  leadId: import_zod5.z.string().optional(),
+  statusId: import_zod5.z.string().optional(),
+  responsableId: import_zod5.z.string().optional(),
+  commercialId: import_zod5.z.string().optional(),
+  productValue: import_zod5.z.string().min(1, "Le produit est requis"),
+  productLabel: import_zod5.z.string().min(1, "Le label produit est requis"),
+  productIcon: import_zod5.z.string().optional(),
+  productColor: import_zod5.z.string().optional(),
+  customLabel: import_zod5.z.string().optional(),
+  clientName: import_zod5.z.string().optional(),
+  siteAddress: import_zod5.z.string().optional(),
+  latitude: import_zod5.z.number().nullable().optional(),
+  longitude: import_zod5.z.number().nullable().optional(),
+  geoFenceRadius: import_zod5.z.number().int().nullable().optional(),
+  notes: import_zod5.z.string().optional(),
+  amount: import_zod5.z.number().optional(),
+  signedAt: import_zod5.z.string().optional(),
+  // ISO date string
+  documentUrl: import_zod5.z.string().optional(),
+  documentName: import_zod5.z.string().optional(),
+  plannedDate: import_zod5.z.string().nullable().optional(),
+  receptionDate: import_zod5.z.string().nullable().optional(),
+  deliveryDate: import_zod5.z.string().nullable().optional(),
+  completedDate: import_zod5.z.string().nullable().optional()
+});
+var updateChantierSchema = createChantierSchema.partial();
+router23.get("/", authenticateToken, async (req2, res) => {
+  try {
+    const organizationId = req2.headers["x-organization-id"];
+    const { statusId, productValue, leadId, responsableId } = req2.query;
+    if (!organizationId) {
+      return res.status(400).json({
+        success: false,
+        message: "ID d'organisation requis"
+      });
+    }
+    const user = req2.user;
+    const isSuperAdmin2 = user?.role === "super_admin" || user?.isSuperAdmin === true;
+    const where = {};
+    if (!isSuperAdmin2) {
+      where.organizationId = organizationId;
+    }
+    if (statusId) where.statusId = statusId;
+    if (productValue) where.productValue = productValue;
+    if (leadId) where.leadId = leadId;
+    if (responsableId) where.responsableId = responsableId;
+    const chantiers = await db.chantier.findMany({
+      where,
+      include: {
+        Lead: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            company: true,
+            email: true,
+            phone: true
+          }
+        },
+        ChantierStatus: true,
+        Responsable: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            email: true
+          }
+        },
+        Commercial: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            email: true
+          }
+        },
+        Organization: {
+          select: {
+            id: true,
+            name: true
+          }
+        },
+        ChantierInvoice: {
+          select: {
+            id: true,
+            status: true,
+            amount: true,
+            type: true
+          }
+        },
+        ChantierAssignments: {
+          select: {
+            id: true,
+            technicianId: true,
+            role: true,
+            teamId: true,
+            Technician: { select: { id: true, firstName: true, lastName: true, color: true, type: true, specialties: true } },
+            Team: { select: { id: true, name: true, color: true } }
+          },
+          orderBy: [{ role: "asc" }, { assignedAt: "asc" }]
+        }
+      },
+      orderBy: { createdAt: "desc" }
+    });
+    const chantiersWithSummary = chantiers.map((c) => {
+      const invoices = c.ChantierInvoice || [];
+      const total = invoices.length;
+      const paid = invoices.filter((i) => i.status === "PAID").length;
+      const sent = invoices.filter((i) => i.status === "SENT").length;
+      const overdue = invoices.filter((i) => i.status === "OVERDUE").length;
+      const totalAmount = invoices.reduce((s, i) => s + (i.amount || 0), 0);
+      const paidAmount = invoices.filter((i) => i.status === "PAID").reduce((s, i) => s + (i.amount || 0), 0);
+      const { ChantierInvoice: _, ...rest } = c;
+      return {
+        ...rest,
+        _invoiceSummary: total > 0 ? { total, paid, sent, overdue, totalAmount, paidAmount } : null
+      };
+    });
+    res.json({
+      success: true,
+      data: chantiersWithSummary
+    });
+  } catch (error) {
+    console.error("[Chantiers] Erreur GET /:", error);
+    res.status(500).json({
+      success: false,
+      message: "Erreur interne du serveur"
+    });
+  }
+});
+router23.get("/stats/overview", authenticateToken, async (req2, res) => {
+  try {
+    const organizationId = req2.headers["x-organization-id"];
+    if (!organizationId) {
+      return res.status(400).json({
+        success: false,
+        message: "ID d'organisation requis"
+      });
+    }
+    const [total, byStatus, byProduct, totalAmount] = await Promise.all([
+      db.chantier.count({ where: { organizationId } }),
+      db.chantier.groupBy({
+        by: ["statusId"],
+        where: { organizationId },
+        _count: true
+      }),
+      db.chantier.groupBy({
+        by: ["productValue"],
+        where: { organizationId },
+        _count: true
+      }),
+      db.chantier.aggregate({
+        where: { organizationId },
+        _sum: { amount: true }
+      })
+    ]);
+    const statuses = await db.chantierStatus.findMany({
+      where: { organizationId },
+      orderBy: { order: "asc" }
+    });
+    const byStatusEnriched = byStatus.map((s) => {
+      const status = statuses.find((st) => st.id === s.statusId);
+      return {
+        statusId: s.statusId,
+        statusName: status?.name || "Sans statut",
+        statusColor: status?.color || "#999",
+        count: s._count
+      };
+    });
+    res.json({
+      success: true,
+      data: {
+        total,
+        totalAmount: totalAmount._sum.amount || 0,
+        byStatus: byStatusEnriched,
+        byProduct: byProduct.map((p) => ({
+          productValue: p.productValue,
+          count: p._count
+        }))
+      }
+    });
+  } catch (error) {
+    console.error("[Chantiers] Erreur GET /stats/overview:", error);
+    res.status(500).json({
+      success: false,
+      message: "Erreur interne du serveur"
+    });
+  }
+});
+router23.get("/by-lead/:leadId", authenticateToken, async (req2, res) => {
+  try {
+    const { leadId } = req2.params;
+    const organizationId = req2.headers["x-organization-id"];
+    if (!organizationId) {
+      return res.status(400).json({
+        success: false,
+        message: "ID d'organisation requis"
+      });
+    }
+    const chantiers = await db.chantier.findMany({
+      where: { leadId, organizationId },
+      include: {
+        ChantierStatus: true,
+        Responsable: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true
+          }
+        },
+        Commercial: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true
+          }
+        },
+        GeneratedDocument: {
+          select: {
+            id: true,
+            title: true,
+            documentNumber: true,
+            type: true,
+            status: true,
+            submissionId: true,
+            pdfUrl: true
+          }
+        }
+      },
+      orderBy: { createdAt: "desc" }
+    });
+    res.json({
+      success: true,
+      data: chantiers
+    });
+  } catch (error) {
+    console.error("[Chantiers] Erreur GET /by-lead/:leadId:", error);
+    res.status(500).json({
+      success: false,
+      message: "Erreur interne du serveur"
+    });
+  }
+});
+router23.get("/:id", authenticateToken, async (req2, res) => {
+  try {
+    const { id } = req2.params;
+    const organizationId = req2.headers["x-organization-id"];
+    if (!organizationId) {
+      return res.status(400).json({
+        success: false,
+        message: "ID d'organisation requis"
+      });
+    }
+    const chantier = await db.chantier.findFirst({
+      where: { id, organizationId },
+      include: {
+        Lead: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            company: true,
+            email: true,
+            phone: true,
+            data: true
+          }
+        },
+        ChantierStatus: true,
+        Responsable: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            email: true,
+            avatarUrl: true
+          }
+        },
+        Commercial: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            email: true,
+            avatarUrl: true
+          }
+        },
+        Organization: {
+          select: {
+            id: true,
+            name: true
+          }
+        },
+        GeneratedDocument: {
+          select: {
+            id: true,
+            title: true,
+            documentNumber: true,
+            type: true,
+            status: true,
+            pdfUrl: true,
+            submissionId: true,
+            dataSnapshot: true,
+            paymentAmount: true,
+            createdAt: true
+          }
+        },
+        TreeBranchLeafSubmission: {
+          select: {
+            id: true,
+            treeId: true,
+            summary: true,
+            status: true
+          }
+        },
+        ChantierAssignments: {
+          select: {
+            id: true,
+            technicianId: true,
+            role: true,
+            teamId: true,
+            assignedAt: true,
+            Technician: { select: { id: true, firstName: true, lastName: true, color: true, type: true, specialties: true, company: true, phone: true, email: true } },
+            Team: { select: { id: true, name: true, color: true } }
+          },
+          orderBy: [{ role: "asc" }, { assignedAt: "asc" }]
+        }
+      }
+    });
+    if (!chantier) {
+      return res.status(404).json({
+        success: false,
+        message: "Chantier non trouv\xE9"
+      });
+    }
+    let computedAmount = null;
+    if (!chantier.amount && chantier.generatedDocumentId && chantier.submissionId) {
+      try {
+        const docTemplate = await db.generatedDocument.findUnique({
+          where: { id: chantier.generatedDocumentId },
+          select: {
+            DocumentTemplate: {
+              select: {
+                DocumentSection: {
+                  select: { type: true, config: true }
+                }
+              }
+            }
+          }
+        });
+        if (docTemplate?.DocumentTemplate?.DocumentSection) {
+          const { interpretReference: interpretReference2 } = await Promise.resolve().then(() => (init_operation_interpreter(), operation_interpreter_exports));
+          const findTotalSourceInConfig = (config) => {
+            if (config.totalTVACSource) return config.totalTVACSource;
+            if (config.totalHTVASource) return config.totalHTVASource;
+            if (Array.isArray(config.modules)) {
+              for (const mod of config.modules) {
+                const mc = mod.config || mod;
+                if (mc.totalTVACSource) return mc.totalTVACSource;
+                if (mc.totalHTVASource) return mc.totalHTVASource;
+              }
+            }
+            return null;
+          };
+          for (const section of docTemplate.DocumentTemplate.DocumentSection) {
+            const sConfig = section.config || {};
+            const totalSource = findTotalSourceInConfig(sConfig);
+            if (totalSource) {
+              const evalRef = totalSource.startsWith("node-formula:") ? totalSource.replace("node-formula:", "formula:") : totalSource;
+              const result = await interpretReference2(evalRef, chantier.submissionId, db);
+              if (result?.result !== null && result?.result !== void 0) {
+                const cleaned = String(result.result).replace(/[\s\u00A0]/g, "").replace(",", ".");
+                const val = parseFloat(cleaned);
+                if (!isNaN(val) && val > 0) {
+                  computedAmount = val;
+                  await db.chantier.update({
+                    where: { id: chantier.id },
+                    data: { amount: val, updatedAt: /* @__PURE__ */ new Date() }
+                  });
+                  console.log(`[Chantiers] \u2705 Montant lazy-r\xE9solu pour ${chantier.id}: ${val}\u20AC`);
+                  break;
+                }
+              }
+            }
+          }
+        }
+      } catch (err) {
+        console.warn("[Chantiers] \u26A0\uFE0F Lazy-compute montant \xE9chou\xE9:", err.message);
+      }
+    }
+    res.json({
+      success: true,
+      data: {
+        ...chantier,
+        amount: chantier.amount || computedAmount
+      }
+    });
+  } catch (error) {
+    console.error("[Chantiers] Erreur GET /:id:", error);
+    res.status(500).json({
+      success: false,
+      message: "Erreur interne du serveur"
+    });
+  }
+});
+router23.post("/", authenticateToken, async (req2, res) => {
+  try {
+    const organizationId = req2.headers["x-organization-id"];
+    const user = req2.user;
+    if (!organizationId) {
+      return res.status(400).json({
+        success: false,
+        message: "ID d'organisation requis"
+      });
+    }
+    const validation = createChantierSchema.safeParse(req2.body);
+    if (!validation.success) {
+      return res.status(400).json({
+        success: false,
+        message: "Donn\xE9es invalides",
+        errors: validation.error.errors
+      });
+    }
+    const data = validation.data;
+    let statusId = data.statusId;
+    if (!statusId) {
+      const firstStatus = await db.chantierStatus.findFirst({
+        where: { organizationId },
+        orderBy: { order: "asc" }
+      });
+      if (!firstStatus) {
+        const { randomUUID: randomUUID14 } = await import("crypto");
+        const created = await db.chantierStatus.create({
+          data: {
+            id: randomUUID14(),
+            organizationId,
+            name: "Nouveau",
+            color: "#1677ff",
+            order: 0,
+            isDefault: true,
+            updatedAt: /* @__PURE__ */ new Date()
+          }
+        });
+        statusId = created.id;
+      } else {
+        statusId = firstStatus.id;
+      }
+    }
+    let clientName = data.clientName;
+    if (!clientName && data.leadId) {
+      const lead = await db.lead.findUnique({
+        where: { id: data.leadId },
+        select: { firstName: true, lastName: true, company: true }
+      });
+      if (lead) {
+        clientName = lead.company || [lead.firstName, lead.lastName].filter(Boolean).join(" ") || "Client inconnu";
+      }
+    }
+    const { randomUUID: randomUUID13 } = await import("crypto");
+    const chantier = await db.chantier.create({
+      data: {
+        id: randomUUID13(),
+        organizationId,
+        leadId: data.leadId || null,
+        statusId,
+        responsableId: data.responsableId || null,
+        commercialId: data.commercialId || user?.id || null,
+        productValue: data.productValue,
+        productLabel: data.productLabel,
+        productIcon: data.productIcon || null,
+        productColor: data.productColor || null,
+        customLabel: data.customLabel || null,
+        clientName: clientName || null,
+        siteAddress: data.siteAddress || null,
+        notes: data.notes || null,
+        amount: data.amount || null,
+        signedAt: data.signedAt ? new Date(data.signedAt) : /* @__PURE__ */ new Date(),
+        documentUrl: data.documentUrl || null,
+        documentName: data.documentName || null,
+        uploadedById: user?.id || null,
+        updatedAt: /* @__PURE__ */ new Date()
+      },
+      include: {
+        Lead: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            company: true
+          }
+        },
+        ChantierStatus: true,
+        Responsable: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true
+          }
+        },
+        Commercial: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true
+          }
+        }
+      }
+    });
+    res.status(201).json({
+      success: true,
+      data: chantier,
+      message: `Chantier "${data.productLabel}" cr\xE9\xE9 avec succ\xE8s`
+    });
+  } catch (error) {
+    console.error("[Chantiers] Erreur POST /:", error);
+    res.status(500).json({
+      success: false,
+      message: "Erreur interne du serveur"
+    });
+  }
+});
+router23.post("/from-lead-document", authenticateToken, async (req2, res) => {
+  try {
+    const organizationId = req2.headers["x-organization-id"];
+    const user = req2.user;
+    if (!organizationId) {
+      return res.status(400).json({
+        success: false,
+        message: "ID d'organisation requis"
+      });
+    }
+    const { leadId, productValue, productLabel, productIcon, productColor, customLabel, amount, generatedDocumentId, submissionId } = req2.body;
+    if (!productValue || !productLabel) {
+      return res.status(400).json({
+        success: false,
+        message: "productValue et productLabel sont requis"
+      });
+    }
+    let clientName = "";
+    let commercialId = user?.id;
+    let siteAddress = null;
+    if (leadId) {
+      const lead = await db.lead.findFirst({
+        where: { id: leadId, organizationId },
+        select: {
+          firstName: true,
+          lastName: true,
+          company: true,
+          assignedToId: true,
+          data: true
+        }
+      });
+      if (lead) {
+        clientName = lead.company || [lead.firstName, lead.lastName].filter(Boolean).join(" ") || "";
+        commercialId = lead.assignedToId || user?.id;
+        const leadData = lead.data || {};
+        const addressParts = [];
+        const street = leadData.street || leadData.address || "";
+        const number = leadData.number || "";
+        const box = leadData.box || leadData.boite || "";
+        const postalCode = leadData.postalCode || leadData.zipCode || leadData.zip || "";
+        const city = leadData.city || leadData.ville || "";
+        if (street) {
+          let streetPart = street;
+          if (number) streetPart += " " + number;
+          if (box) streetPart += " " + box;
+          addressParts.push(streetPart);
+        }
+        if (postalCode || city) {
+          addressParts.push([postalCode, city].filter(Boolean).join(" "));
+        }
+        if (addressParts.length > 0) {
+          siteAddress = addressParts.join(", ");
+        }
+      }
+    }
+    let autoAmount = null;
+    if (generatedDocumentId) {
+      try {
+        const genDoc = await db.generatedDocument.findUnique({
+          where: { id: generatedDocumentId },
+          select: {
+            dataSnapshot: true,
+            paymentAmount: true,
+            DocumentTemplate: {
+              select: {
+                DocumentSection: {
+                  select: { type: true, config: true }
+                }
+              }
+            }
+          }
+        });
+        if (genDoc) {
+          const snapshot = genDoc.dataSnapshot || {};
+          const quote = snapshot.quote || {};
+          const ttc = quote.totalTTC || snapshot.totalTTC || null;
+          if (ttc && !isNaN(Number(ttc))) {
+            autoAmount = Number(ttc);
+          } else if (genDoc.paymentAmount) {
+            autoAmount = Number(genDoc.paymentAmount);
+          }
+          if (!autoAmount && submissionId && genDoc.DocumentTemplate?.DocumentSection) {
+            try {
+              const { interpretReference: interpretReference2 } = await Promise.resolve().then(() => (init_operation_interpreter(), operation_interpreter_exports));
+              const findTotalSource = (config) => {
+                if (config.totalTVACSource) return config.totalTVACSource;
+                if (config.totalHTVASource) return config.totalHTVASource;
+                if (Array.isArray(config.modules)) {
+                  for (const mod of config.modules) {
+                    const mc = mod.config || mod;
+                    if (mc.totalTVACSource) return mc.totalTVACSource;
+                    if (mc.totalHTVASource) return mc.totalHTVASource;
+                  }
+                }
+                return null;
+              };
+              for (const section of genDoc.DocumentTemplate.DocumentSection) {
+                const sConfig = section.config || {};
+                const totalSource = findTotalSource(sConfig);
+                if (totalSource) {
+                  const evalRef = totalSource.startsWith("node-formula:") ? totalSource.replace("node-formula:", "formula:") : totalSource;
+                  const result = await interpretReference2(evalRef, submissionId, db);
+                  if (result?.result !== null && result?.result !== void 0) {
+                    const cleaned = String(result.result).replace(/[\s\u00A0]/g, "").replace(",", ".");
+                    const val = parseFloat(cleaned);
+                    if (!isNaN(val) && val > 0) {
+                      autoAmount = val;
+                      console.log(`[Chantiers] \u2705 Montant r\xE9solu via formule TBL: ${val}\u20AC (source: ${totalSource})`);
+                      break;
+                    }
+                  }
+                }
+              }
+            } catch (formulaErr) {
+              console.warn("[Chantiers] \u26A0\uFE0F Impossible de r\xE9soudre le montant via formules TBL:", formulaErr.message);
+            }
+          }
+          if (!siteAddress && snapshot.lead) {
+            const sl = snapshot.lead;
+            const parts = [];
+            const addr = sl.address || "";
+            if (addr) {
+              parts.push(addr);
+            } else {
+              const s = sl.street || "";
+              const n = sl.number || "";
+              if (s) parts.push(s + (n ? " " + n : ""));
+              if (sl.postalCode || sl.city) parts.push([sl.postalCode, sl.city].filter(Boolean).join(" "));
+            }
+            if (parts.length > 0) siteAddress = parts.join(", ");
+          }
+        }
+      } catch (err) {
+        console.warn("[Chantiers] Impossible de lire le dataSnapshot du GeneratedDocument:", err.message);
+      }
+    }
+    let documentUrl = null;
+    let documentName = null;
+    const uploadedFile = req2.files?.document;
+    if (uploadedFile) {
+      const timestamp = Date.now();
+      const safeName = uploadedFile.name.replace(/[^a-zA-Z0-9.-]/g, "_");
+      const filename = `${timestamp}-${safeName}`;
+      const uploadDir = import_path5.default.join(process.cwd(), "public", "uploads", "chantiers");
+      import_fs6.default.mkdirSync(uploadDir, { recursive: true });
+      const filePath = import_path5.default.join(uploadDir, filename);
+      await uploadedFile.mv(filePath);
+      documentUrl = `/uploads/chantiers/${filename}`;
+      documentName = uploadedFile.name;
+    }
+    let statusId;
+    const firstStatus = await db.chantierStatus.findFirst({
+      where: { organizationId },
+      orderBy: { order: "asc" }
+    });
+    if (firstStatus) {
+      statusId = firstStatus.id;
+    } else {
+      const { randomUUID: uuid } = await import("crypto");
+      const created = await db.chantierStatus.create({
+        data: {
+          id: uuid(),
+          organizationId,
+          name: "Nouveau",
+          color: "#1677ff",
+          order: 0,
+          isDefault: true,
+          updatedAt: /* @__PURE__ */ new Date()
+        }
+      });
+      statusId = created.id;
+    }
+    const { randomUUID: randomUUID13 } = await import("crypto");
+    if (generatedDocumentId) {
+      await db.generatedDocument.update({
+        where: { id: generatedDocumentId },
+        data: {
+          status: "SIGNED",
+          signedAt: /* @__PURE__ */ new Date(),
+          updatedAt: /* @__PURE__ */ new Date()
+        }
+      }).catch((err) => {
+        console.warn("[Chantiers] Impossible de mettre \xE0 jour le GeneratedDocument:", err.message);
+      });
+    }
+    const chantier = await db.chantier.create({
+      data: {
+        id: randomUUID13(),
+        organizationId,
+        leadId: leadId || null,
+        statusId,
+        responsableId: null,
+        commercialId: commercialId || null,
+        generatedDocumentId: generatedDocumentId || null,
+        submissionId: submissionId || null,
+        productValue,
+        productLabel,
+        productIcon: productIcon || null,
+        productColor: productColor || null,
+        customLabel: customLabel || null,
+        clientName: clientName || null,
+        siteAddress: siteAddress || null,
+        notes: null,
+        amount: amount ? parseFloat(amount) : autoAmount || null,
+        signedAt: /* @__PURE__ */ new Date(),
+        documentUrl,
+        documentName,
+        uploadedById: user?.id || null,
+        updatedAt: /* @__PURE__ */ new Date()
+      },
+      include: {
+        Lead: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            company: true
+          }
+        },
+        ChantierStatus: true,
+        GeneratedDocument: {
+          select: {
+            id: true,
+            title: true,
+            documentNumber: true,
+            type: true,
+            status: true,
+            submissionId: true,
+            pdfUrl: true
+          }
+        }
+      }
+    });
+    res.status(201).json({
+      success: true,
+      data: chantier,
+      message: `\u{1F3D7}\uFE0F Chantier "${productLabel}" cr\xE9\xE9 \xE0 partir du document sign\xE9`
+    });
+  } catch (error) {
+    console.error("[Chantiers] Erreur POST /from-lead-document:", error);
+    res.status(500).json({
+      success: false,
+      message: "Erreur interne du serveur"
+    });
+  }
+});
+router23.put("/:id", authenticateToken, isAdmin, async (req2, res) => {
+  try {
+    const { id } = req2.params;
+    const organizationId = req2.headers["x-organization-id"];
+    if (!organizationId) {
+      return res.status(400).json({
+        success: false,
+        message: "ID d'organisation requis"
+      });
+    }
+    const existing = await db.chantier.findFirst({
+      where: { id, organizationId }
+    });
+    if (!existing) {
+      return res.status(404).json({
+        success: false,
+        message: "Chantier non trouv\xE9"
+      });
+    }
+    const validation = updateChantierSchema.safeParse(req2.body);
+    if (!validation.success) {
+      return res.status(400).json({
+        success: false,
+        message: "Donn\xE9es invalides",
+        errors: validation.error.errors
+      });
+    }
+    const data = validation.data;
+    const { statusId: _ignoredStatusId, ...safeData } = data;
+    const chantier = await db.chantier.update({
+      where: { id },
+      data: {
+        ...safeData.responsableId !== void 0 && { responsableId: safeData.responsableId },
+        ...safeData.commercialId !== void 0 && { commercialId: safeData.commercialId },
+        ...safeData.customLabel !== void 0 && { customLabel: safeData.customLabel },
+        ...safeData.clientName !== void 0 && { clientName: safeData.clientName },
+        ...safeData.siteAddress !== void 0 && { siteAddress: safeData.siteAddress },
+        ...safeData.latitude !== void 0 && { latitude: safeData.latitude },
+        ...safeData.longitude !== void 0 && { longitude: safeData.longitude },
+        ...safeData.geoFenceRadius !== void 0 && { geoFenceRadius: safeData.geoFenceRadius },
+        ...safeData.notes !== void 0 && { notes: safeData.notes },
+        ...safeData.amount !== void 0 && { amount: safeData.amount },
+        ...safeData.plannedDate !== void 0 && { plannedDate: safeData.plannedDate ? new Date(safeData.plannedDate) : null },
+        ...safeData.receptionDate !== void 0 && { receptionDate: safeData.receptionDate ? new Date(safeData.receptionDate) : null },
+        ...safeData.deliveryDate !== void 0 && { deliveryDate: safeData.deliveryDate ? new Date(safeData.deliveryDate) : null },
+        ...safeData.completedDate !== void 0 && { completedDate: safeData.completedDate ? new Date(safeData.completedDate) : null },
+        updatedAt: /* @__PURE__ */ new Date()
+      },
+      include: {
+        Lead: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            company: true
+          }
+        },
+        ChantierStatus: true,
+        Responsable: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true
+          }
+        },
+        Commercial: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true
+          }
+        }
+      }
+    });
+    res.json({
+      success: true,
+      data: chantier,
+      message: "Chantier mis \xE0 jour avec succ\xE8s"
+    });
+  } catch (error) {
+    console.error("[Chantiers] Erreur PUT /:id:", error);
+    res.status(500).json({
+      success: false,
+      message: "Erreur interne du serveur"
+    });
+  }
+});
+router23.put("/:id/status", authenticateToken, async (req2, res) => {
+  try {
+    const { id } = req2.params;
+    const { statusId, force } = req2.body;
+    const organizationId = req2.headers["x-organization-id"];
+    const user = req2.user;
+    const userRole = user?.role || "commercial";
+    const isSuperAdmin2 = user?.isSuperAdmin === true;
+    if (!organizationId || !statusId) {
+      return res.status(400).json({
+        success: false,
+        message: "organizationId et statusId requis"
+      });
+    }
+    const existing = await db.chantier.findFirst({
+      where: { id, organizationId }
+    });
+    if (!existing) {
+      return res.status(404).json({
+        success: false,
+        message: "Chantier non trouv\xE9"
+      });
+    }
+    const oldStatusId = existing.statusId;
+    if (!isSuperAdmin2 && oldStatusId) {
+      const transitions = await db.chantierStatusTransition.findMany({
+        where: {
+          organizationId,
+          fromStatusId: oldStatusId,
+          toStatusId: statusId,
+          isActive: true
+        }
+      });
+      if (transitions.length > 0) {
+        const allowed = transitions.some((t) => {
+          const roles = t.allowedRoles;
+          if (!roles || roles.length === 0) return true;
+          return roles.includes(userRole);
+        });
+        if (!allowed) {
+          return res.status(403).json({
+            success: false,
+            message: `Votre r\xF4le "${userRole}" n'est pas autoris\xE9 pour cette transition`
+          });
+        }
+      }
+    }
+    if (oldStatusId && !force) {
+      try {
+        const requiredPlanItems = await db.chantierBillingPlanItem.findMany({
+          where: { chantierId: id, statusId: oldStatusId, isRequired: true }
+        });
+        if (requiredPlanItems.length > 0) {
+          const existingInvoices = await db.chantierInvoice.findMany({
+            where: { chantierId: id },
+            select: { type: true, label: true, status: true }
+          });
+          const unpaid = requiredPlanItems.filter((item) => {
+            const invoice = existingInvoices.find((inv) => inv.type === item.type && inv.label === item.label);
+            return !invoice || invoice.status !== "PAID";
+          });
+          if (unpaid.length > 0) {
+            const labels = unpaid.map((u) => u.label).join(", ");
+            return res.status(409).json({
+              success: false,
+              code: "BILLING_BLOCK",
+              unpaidInvoices: unpaid.map((u) => ({ label: u.label, type: u.type, percentage: u.percentage })),
+              message: `Facture(s) requise(s) non pay\xE9e(s) : ${labels}. Veuillez les marquer comme pay\xE9es avant de changer de statut.`
+            });
+          }
+        }
+      } catch (checkErr) {
+        console.error("[Chantiers] Erreur v\xE9rif factures requises (non bloquant):", checkErr);
+      }
+    }
+    const chantier = await db.chantier.update({
+      where: { id },
+      data: {
+        statusId,
+        updatedAt: /* @__PURE__ */ new Date()
+      },
+      include: {
+        ChantierStatus: true
+      }
+    });
+    try {
+      await db.chantierHistory.create({
+        data: {
+          id: import_crypto13.default.randomUUID(),
+          chantierId: id,
+          action: "DRAG_DROP",
+          fromValue: oldStatusId || null,
+          toValue: statusId,
+          userId: user?.userId || user?.id,
+          data: { method: "kanban_drag_drop" }
+        }
+      });
+    } catch (histErr) {
+      console.error("[Chantiers] Erreur historique (non bloquant):", histErr);
+    }
+    if (oldStatusId) {
+      try {
+        const transitions = await db.chantierStatusTransition.findMany({
+          where: {
+            organizationId,
+            fromStatusId: oldStatusId,
+            toStatusId: statusId,
+            isActive: true
+          }
+        });
+        for (const t of transitions) {
+          if (t.notifyRoles) {
+            const roles = t.notifyRoles;
+            await sendTransitionNotifications(id, organizationId, oldStatusId, statusId, roles, t.sendEmail);
+          }
+        }
+      } catch (notifErr) {
+        console.error("[Chantiers] Erreur notifications (non bloquant):", notifErr);
+      }
+    }
+    try {
+      let planItems = await db.chantierBillingPlanItem.findMany({
+        where: { chantierId: id, statusId },
+        orderBy: { order: "asc" }
+      });
+      if (planItems.length === 0) {
+        const templates = await db.chantierInvoiceTemplate.findMany({
+          where: { organizationId, statusId, isActive: true },
+          orderBy: { order: "asc" }
+        });
+        planItems = templates.map((t) => ({
+          ...t,
+          chantierId: id
+        }));
+      }
+      if (planItems.length > 0) {
+        const chantierFull = await db.chantier.findUnique({
+          where: { id },
+          select: { amount: true, GeneratedDocument: { select: { dataSnapshot: true, paymentAmount: true } } }
+        });
+        const chantierAmount = chantierFull?.amount || chantierFull?.GeneratedDocument?.dataSnapshot?.quote?.totalTTC || chantierFull?.GeneratedDocument?.paymentAmount || null;
+        const existingInvoices = await db.chantierInvoice.findMany({
+          where: { chantierId: id },
+          select: { type: true, label: true }
+        });
+        for (const tpl of planItems) {
+          const alreadyExists = existingInvoices.some(
+            (inv) => inv.type === tpl.type && inv.label === tpl.label
+          );
+          if (alreadyExists) continue;
+          const amount = tpl.percentage && chantierAmount ? Math.round(Number(chantierAmount) * tpl.percentage / 100 * 100) / 100 : tpl.fixedAmount || 0;
+          await db.chantierInvoice.create({
+            data: {
+              id: import_crypto13.default.randomUUID(),
+              chantierId: id,
+              organizationId,
+              type: tpl.type,
+              label: tpl.label,
+              amount,
+              percentage: tpl.percentage,
+              status: "DRAFT",
+              order: tpl.order,
+              updatedAt: /* @__PURE__ */ new Date()
+            }
+          });
+          await db.chantierHistory.create({
+            data: {
+              id: import_crypto13.default.randomUUID(),
+              chantierId: id,
+              action: "INVOICE_CREATED",
+              toValue: tpl.label,
+              userId: user?.userId || user?.id,
+              data: { autoCreated: true, templateId: tpl.id, type: tpl.type, amount }
+            }
+          });
+        }
+      }
+    } catch (autoInvErr) {
+      console.error("[Chantiers] Erreur auto-cr\xE9ation factures (non bloquant):", autoInvErr);
+    }
+    res.json({
+      success: true,
+      data: chantier,
+      message: `Statut chang\xE9 vers "${chantier.ChantierStatus?.name}"`
+    });
+  } catch (error) {
+    console.error("[Chantiers] Erreur PUT /:id/status:", error);
+    res.status(500).json({
+      success: false,
+      message: "Erreur interne du serveur"
+    });
+  }
+});
+router23.delete("/:id", authenticateToken, isAdmin, async (req2, res) => {
+  try {
+    const { id } = req2.params;
+    const organizationId = req2.headers["x-organization-id"];
+    if (!organizationId) {
+      return res.status(400).json({
+        success: false,
+        message: "ID d'organisation requis"
+      });
+    }
+    const existing = await db.chantier.findFirst({
+      where: { id, organizationId }
+    });
+    if (!existing) {
+      return res.status(404).json({
+        success: false,
+        message: "Chantier non trouv\xE9"
+      });
+    }
+    if (existing.documentUrl) {
+      const filePath = import_path5.default.join(process.cwd(), "public", existing.documentUrl);
+      if (import_fs6.default.existsSync(filePath)) {
+        import_fs6.default.unlinkSync(filePath);
+      }
+    }
+    await db.chantier.delete({ where: { id } });
+    res.json({
+      success: true,
+      message: "Chantier supprim\xE9 avec succ\xE8s"
+    });
+  } catch (error) {
+    console.error("[Chantiers] Erreur DELETE /:id:", error);
+    res.status(500).json({
+      success: false,
+      message: "Erreur interne du serveur"
+    });
+  }
+});
+var chantiersRoutes_default = router23;
+
+// src/routes/chantier-statuses.ts
+var import_express25 = require("express");
+init_database();
+var import_zod6 = require("zod");
+var router24 = (0, import_express25.Router)();
+var chantierStatusSchema = import_zod6.z.object({
+  name: import_zod6.z.string().min(1, "Le nom est requis"),
+  color: import_zod6.z.string().regex(/^#[0-9A-Fa-f]{6,8}$/i, "Couleur hexad\xE9cimale invalide").transform((c) => c.slice(0, 7)),
+  order: import_zod6.z.number().int().min(0).optional(),
+  isDefault: import_zod6.z.boolean().optional()
+});
+router24.get("/", authenticateToken, async (req2, res) => {
+  try {
+    const organizationId = req2.headers["x-organization-id"];
+    if (!organizationId) {
+      return res.status(400).json({
+        success: false,
+        message: "ID d'organisation requis"
+      });
+    }
+    const statuses = await db.chantierStatus.findMany({
+      where: { organizationId },
+      orderBy: { order: "asc" },
+      include: {
+        _count: {
+          select: { Chantier: true }
+        }
+      }
+    });
+    res.json({
+      success: true,
+      data: statuses
+    });
+  } catch (error) {
+    console.error("[ChantierStatuses] Erreur GET /:", error);
+    res.status(500).json({
+      success: false,
+      message: "Erreur interne du serveur"
+    });
+  }
+});
+router24.post("/", authenticateToken, isAdmin, async (req2, res) => {
+  try {
+    const organizationId = req2.headers["x-organization-id"];
+    if (!organizationId) {
+      return res.status(400).json({
+        success: false,
+        message: "ID d'organisation requis"
+      });
+    }
+    const validation = chantierStatusSchema.safeParse(req2.body);
+    if (!validation.success) {
+      return res.status(400).json({
+        success: false,
+        message: "Donn\xE9es invalides",
+        errors: validation.error.errors
+      });
+    }
+    const { name, color, order, isDefault } = validation.data;
+    if (isDefault) {
+      await db.chantierStatus.updateMany({
+        where: { organizationId, isDefault: true },
+        data: { isDefault: false }
+      });
+    }
+    let finalOrder = order;
+    if (finalOrder === void 0) {
+      const maxOrder = await db.chantierStatus.findFirst({
+        where: { organizationId },
+        orderBy: { order: "desc" },
+        select: { order: true }
+      });
+      finalOrder = (maxOrder?.order ?? -1) + 1;
+    }
+    const { randomUUID: randomUUID13 } = await import("crypto");
+    const status = await db.chantierStatus.create({
+      data: {
+        id: randomUUID13(),
+        name,
+        color,
+        order: finalOrder,
+        isDefault: isDefault ?? false,
+        organizationId,
+        updatedAt: /* @__PURE__ */ new Date()
+      },
+      include: {
+        _count: {
+          select: { Chantier: true }
+        }
+      }
+    });
+    res.status(201).json({
+      success: true,
+      data: status,
+      message: "Statut de chantier cr\xE9\xE9 avec succ\xE8s"
+    });
+  } catch (error) {
+    console.error("[ChantierStatuses] Erreur POST /:", error);
+    res.status(500).json({
+      success: false,
+      message: "Erreur interne du serveur"
+    });
+  }
+});
+router24.put("/:id", authenticateToken, isAdmin, async (req2, res) => {
+  try {
+    const { id } = req2.params;
+    const organizationId = req2.headers["x-organization-id"];
+    if (!organizationId) {
+      return res.status(400).json({
+        success: false,
+        message: "ID d'organisation requis"
+      });
+    }
+    const validation = chantierStatusSchema.partial().safeParse(req2.body);
+    if (!validation.success) {
+      return res.status(400).json({
+        success: false,
+        message: "Donn\xE9es invalides",
+        errors: validation.error.errors
+      });
+    }
+    const existing = await db.chantierStatus.findFirst({
+      where: { id, organizationId }
+    });
+    if (!existing) {
+      return res.status(404).json({
+        success: false,
+        message: "Statut de chantier non trouv\xE9"
+      });
+    }
+    const { name, color, order, isDefault } = validation.data;
+    if (isDefault) {
+      await db.chantierStatus.updateMany({
+        where: { organizationId, isDefault: true, id: { not: id } },
+        data: { isDefault: false }
+      });
+    }
+    const status = await db.chantierStatus.update({
+      where: { id },
+      data: {
+        ...name && { name },
+        ...color && { color },
+        ...order !== void 0 && { order },
+        ...isDefault !== void 0 && { isDefault },
+        updatedAt: /* @__PURE__ */ new Date()
+      },
+      include: {
+        _count: {
+          select: { Chantier: true }
+        }
+      }
+    });
+    res.json({
+      success: true,
+      data: status,
+      message: "Statut mis \xE0 jour avec succ\xE8s"
+    });
+  } catch (error) {
+    console.error("[ChantierStatuses] Erreur PUT /:id:", error);
+    res.status(500).json({
+      success: false,
+      message: "Erreur interne du serveur"
+    });
+  }
+});
+router24.delete("/:id", authenticateToken, isAdmin, async (req2, res) => {
+  try {
+    const { id } = req2.params;
+    const organizationId = req2.headers["x-organization-id"];
+    if (!organizationId) {
+      return res.status(400).json({
+        success: false,
+        message: "ID d'organisation requis"
+      });
+    }
+    const existing = await db.chantierStatus.findFirst({
+      where: { id, organizationId },
+      include: {
+        _count: {
+          select: { Chantier: true }
+        }
+      }
+    });
+    if (!existing) {
+      return res.status(404).json({
+        success: false,
+        message: "Statut de chantier non trouv\xE9"
+      });
+    }
+    if (existing._count.Chantier > 0) {
+      return res.status(400).json({
+        success: false,
+        message: `Impossible de supprimer : ${existing._count.Chantier} chantier(s) utilisent ce statut`
+      });
+    }
+    await db.chantierStatus.delete({ where: { id } });
+    res.json({
+      success: true,
+      message: "Statut supprim\xE9 avec succ\xE8s"
+    });
+  } catch (error) {
+    console.error("[ChantierStatuses] Erreur DELETE /:id:", error);
+    res.status(500).json({
+      success: false,
+      message: "Erreur interne du serveur"
+    });
+  }
+});
+router24.post("/reorder", authenticateToken, isAdmin, async (req2, res) => {
+  try {
+    const organizationId = req2.headers["x-organization-id"];
+    const { statusIds } = req2.body;
+    if (!organizationId) {
+      return res.status(400).json({
+        success: false,
+        message: "ID d'organisation requis"
+      });
+    }
+    if (!Array.isArray(statusIds)) {
+      return res.status(400).json({
+        success: false,
+        message: "Array d'IDs requis"
+      });
+    }
+    const updatePromises = statusIds.map(
+      (statusId, index) => db.chantierStatus.updateMany({
+        where: { id: statusId, organizationId },
+        data: { order: index }
+      })
+    );
+    await Promise.all(updatePromises);
+    res.json({
+      success: true,
+      message: "Ordre mis \xE0 jour avec succ\xE8s"
+    });
+  } catch (error) {
+    console.error("[ChantierStatuses] Erreur POST /reorder:", error);
+    res.status(500).json({
+      success: false,
+      message: "Erreur interne du serveur"
+    });
+  }
+});
+router24.post("/seed", authenticateToken, isAdmin, async (req2, res) => {
+  try {
+    const organizationId = req2.headers["x-organization-id"];
+    if (!organizationId) {
+      return res.status(400).json({
+        success: false,
+        message: "ID d'organisation requis"
+      });
+    }
+    const existingCount = await db.chantierStatus.count({
+      where: { organizationId }
+    });
+    if (existingCount > 0) {
+      return res.status(400).json({
+        success: false,
+        message: "Des statuts existent d\xE9j\xE0 pour cette organisation"
+      });
+    }
+    const { randomUUID: randomUUID13 } = await import("crypto");
+    const defaultStatuses = [
+      { name: "Nouveau", color: "#8c8c8c", order: 0, isDefault: true },
+      { name: "Visite technique", color: "#2f54eb", order: 1, isDefault: false },
+      { name: "Commande", color: "#13c2c2", order: 2, isDefault: false },
+      { name: "Planifi\xE9", color: "#1677ff", order: 3, isDefault: false },
+      { name: "En cours", color: "#fa8c16", order: 4, isDefault: false },
+      { name: "Termin\xE9", color: "#52c41a", order: 5, isDefault: false },
+      { name: "R\xE9ception", color: "#722ed1", order: 6, isDefault: false },
+      { name: "Annul\xE9", color: "#ff4d4f", order: 7, isDefault: false }
+    ];
+    const created = await Promise.all(
+      defaultStatuses.map(
+        (s) => db.chantierStatus.create({
+          data: {
+            id: randomUUID13(),
+            organizationId,
+            ...s,
+            updatedAt: /* @__PURE__ */ new Date()
+          }
+        })
+      )
+    );
+    res.status(201).json({
+      success: true,
+      data: created,
+      message: `${created.length} statuts par d\xE9faut cr\xE9\xE9s`
+    });
+  } catch (error) {
+    console.error("[ChantierStatuses] Erreur POST /seed:", error);
+    res.status(500).json({
+      success: false,
+      message: "Erreur interne du serveur"
+    });
+  }
+});
+var chantier_statuses_default = router24;
+
+// src/routes/teams.ts
+var import_express26 = require("express");
+init_database();
+var import_zod7 = require("zod");
+var import_fs7 = __toESM(require("fs"), 1);
+var import_path6 = __toESM(require("path"), 1);
+var router25 = (0, import_express26.Router)();
+function getOrgId(req2) {
+  return req2.headers["x-organization-id"] || null;
+}
+function startOfWeek() {
+  const d = /* @__PURE__ */ new Date();
+  const day = d.getDay();
+  const diff = d.getDate() - day + (day === 0 ? -6 : 1);
+  const start = new Date(d);
+  start.setDate(diff);
+  start.setHours(0, 0, 0, 0);
+  return start;
+}
+function endOfWeek() {
+  const s = startOfWeek();
+  const end = new Date(s);
+  end.setDate(end.getDate() + 6);
+  end.setHours(23, 59, 59, 999);
+  return end;
+}
+var POINTAGE_UPLOADS_DIR = process.env.NODE_ENV === "production" ? import_path6.default.resolve("/tmp", "uploads", "pointages") : import_path6.default.resolve(process.cwd(), "public", "uploads", "pointages");
+try {
+  if (!import_fs7.default.existsSync(POINTAGE_UPLOADS_DIR)) {
+    import_fs7.default.mkdirSync(POINTAGE_UPLOADS_DIR, { recursive: true });
+  }
+} catch (err) {
+  console.warn("[Teams] \u26A0\uFE0F Impossible de cr\xE9er le dossier pointages:", err.message);
+}
+function savePointagePhoto(base64Data, prefix) {
+  const cleanBase64 = base64Data.replace(/^data:image\/\w+;base64,/, "");
+  const buffer = Buffer.from(cleanBase64, "base64");
+  const filename = `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.jpg`;
+  const filepath = import_path6.default.join(POINTAGE_UPLOADS_DIR, filename);
+  try {
+    import_fs7.default.writeFileSync(filepath, buffer);
+  } catch (err) {
+    console.error("[Teams] \u274C Erreur sauvegarde photo pointage:", err.message);
+  }
+  return `/uploads/pointages/${filename}`;
+}
+function haversineDistance(lat1, lon1, lat2, lon2) {
+  const R = 6371e3;
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLon = (lon2 - lon1) * Math.PI / 180;
+  const a = Math.sin(dLat / 2) ** 2 + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLon / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+var techSelect = {
+  id: true,
+  firstName: true,
+  lastName: true,
+  email: true,
+  phone: true,
+  type: true,
+  billingMode: true,
+  company: true,
+  specialties: true,
+  color: true,
+  isActive: true,
+  hourlyRate: true,
+  notes: true,
+  userId: true
+};
+var createTechnicianSchema = import_zod7.z.object({
+  type: import_zod7.z.enum(["INTERNAL", "SUBCONTRACTOR"]).default("INTERNAL"),
+  billingMode: import_zod7.z.enum(["FORFAIT", "REGIE"]).optional().nullable(),
+  userId: import_zod7.z.string().optional(),
+  firstName: import_zod7.z.string().min(1),
+  lastName: import_zod7.z.string().min(1),
+  email: import_zod7.z.string().email().optional().or(import_zod7.z.literal("")),
+  phone: import_zod7.z.string().optional(),
+  company: import_zod7.z.string().optional(),
+  specialties: import_zod7.z.array(import_zod7.z.string()).default([]),
+  hourlyRate: import_zod7.z.number().optional(),
+  notes: import_zod7.z.string().optional(),
+  color: import_zod7.z.string().default("#1677ff")
+});
+var updateTechnicianSchema = createTechnicianSchema.partial();
+router25.get("/technicians", authenticateToken, async (req2, res) => {
+  try {
+    const organizationId = getOrgId(req2);
+    if (!organizationId) return res.status(400).json({ success: false, message: "ID d'organisation requis" });
+    const weekStart = startOfWeek();
+    const weekEnd = endOfWeek();
+    const today = /* @__PURE__ */ new Date();
+    today.setHours(0, 0, 0, 0);
+    const todayEnd = new Date(today);
+    todayEnd.setHours(23, 59, 59, 999);
+    const techs = await db.technician.findMany({
+      where: { organizationId, isActive: true },
+      include: {
+        TeamMemberships: {
+          include: {
+            Team: { select: { id: true, name: true, color: true } }
+          }
+        },
+        ChantierAssignments: {
+          include: {
+            Chantier: {
+              select: {
+                id: true,
+                plannedDate: true,
+                completedDate: true,
+                statusId: true,
+                productValue: true,
+                clientName: true,
+                customLabel: true,
+                ChantierStatus: { select: { name: true, order: true } }
+              }
+            }
+          }
+        },
+        Unavailabilities: {
+          where: {
+            startDate: { lte: weekEnd },
+            endDate: { gte: weekStart }
+          },
+          orderBy: { startDate: "asc" }
+        }
+      },
+      orderBy: [{ type: "asc" }, { firstName: "asc" }]
+    });
+    const enriched = techs.map((tech) => {
+      const weekChantiers = tech.ChantierAssignments.filter((a) => {
+        const ch = a.Chantier;
+        if (!ch) return false;
+        if (ch.plannedDate) {
+          const pd = new Date(ch.plannedDate);
+          if (pd >= weekStart && pd <= weekEnd) return true;
+        }
+        const order = ch.ChantierStatus?.order;
+        if (order !== void 0 && order >= 2 && order <= 5) return true;
+        return false;
+      });
+      const busyToday = tech.ChantierAssignments.some((a) => {
+        const ch = a.Chantier;
+        if (!ch?.plannedDate) return false;
+        const pd = new Date(ch.plannedDate);
+        return pd >= today && pd <= todayEnd;
+      });
+      const unavailableToday = tech.Unavailabilities.some((u) => {
+        return new Date(u.startDate) <= todayEnd && new Date(u.endDate) >= today;
+      });
+      const weekUnavailabilities = tech.Unavailabilities.map((u) => ({
+        id: u.id,
+        startDate: u.startDate,
+        endDate: u.endDate,
+        type: u.type,
+        allDay: u.allDay,
+        note: u.note
+      }));
+      return {
+        id: tech.id,
+        userId: tech.userId,
+        type: tech.type,
+        firstName: tech.firstName,
+        lastName: tech.lastName,
+        email: tech.email,
+        phone: tech.phone,
+        company: tech.company,
+        specialties: tech.specialties,
+        hourlyRate: tech.hourlyRate,
+        notes: tech.notes,
+        color: tech.color,
+        isActive: tech.isActive,
+        weekChantierCount: weekChantiers.length,
+        totalChantierCount: tech.ChantierAssignments.length,
+        busyToday,
+        unavailableToday,
+        weekUnavailabilities,
+        teams: tech.TeamMemberships.map((tm) => ({
+          teamId: tm.Team.id,
+          teamName: tm.Team.name,
+          teamColor: tm.Team.color,
+          memberRole: tm.role
+        })),
+        weekChantiers: weekChantiers.map((a) => ({
+          chantierId: a.Chantier.id,
+          plannedDate: a.Chantier.plannedDate,
+          clientName: a.Chantier.clientName,
+          product: a.Chantier.productValue,
+          status: a.Chantier.ChantierStatus?.name,
+          role: a.role
+        }))
+      };
+    });
+    return res.json({ success: true, data: enriched });
+  } catch (error) {
+    console.error("[Teams] Erreur liste techniciens:", error);
+    return res.status(500).json({ success: false, message: error.message });
+  }
+});
+router25.post("/technicians", authenticateToken, async (req2, res) => {
+  try {
+    const organizationId = getOrgId(req2);
+    if (!organizationId) return res.status(400).json({ success: false, message: "ID d'organisation requis" });
+    const parsed = createTechnicianSchema.safeParse(req2.body);
+    if (!parsed.success) return res.status(400).json({ success: false, errors: parsed.error.flatten() });
+    const data = parsed.data;
+    if (data.type === "INTERNAL" && data.userId) {
+      const uo = await db.userOrganization.findFirst({
+        where: { userId: data.userId, organizationId, status: "ACTIVE" }
+      });
+      if (!uo) return res.status(400).json({ success: false, message: "Utilisateur non trouv\xE9 dans l'organisation" });
+      const existing = await db.technician.findFirst({ where: { organizationId, userId: data.userId } });
+      if (existing) return res.status(409).json({ success: false, message: "Cet utilisateur est d\xE9j\xE0 enregistr\xE9 comme technicien" });
+    }
+    const tech = await db.technician.create({
+      data: {
+        organizationId,
+        userId: data.type === "INTERNAL" ? data.userId || null : null,
+        type: data.type,
+        firstName: data.firstName,
+        lastName: data.lastName,
+        email: data.email || null,
+        phone: data.phone || null,
+        company: data.company || null,
+        specialties: data.specialties,
+        hourlyRate: data.hourlyRate || null,
+        notes: data.notes || null,
+        color: data.color
+      }
+    });
+    return res.status(201).json({ success: true, data: tech });
+  } catch (error) {
+    if (error.code === "P2002") return res.status(409).json({ success: false, message: "Un technicien avec ces informations existe d\xE9j\xE0" });
+    console.error("[Teams] Erreur cr\xE9ation technicien:", error);
+    return res.status(500).json({ success: false, message: error.message });
+  }
+});
+router25.put("/technicians/:id", authenticateToken, async (req2, res) => {
+  try {
+    const organizationId = getOrgId(req2);
+    const parsed = updateTechnicianSchema.safeParse(req2.body);
+    if (!parsed.success) return res.status(400).json({ success: false, errors: parsed.error.flatten() });
+    const tech = await db.technician.update({
+      where: { id: req2.params.id, organizationId },
+      data: parsed.data
+    });
+    return res.json({ success: true, data: tech });
+  } catch (error) {
+    console.error("[Teams] Erreur modif technicien:", error);
+    return res.status(500).json({ success: false, message: error.message });
+  }
+});
+router25.delete("/technicians/:id", authenticateToken, async (req2, res) => {
+  try {
+    const organizationId = getOrgId(req2);
+    await db.technician.update({ where: { id: req2.params.id, organizationId }, data: { isActive: false } });
+    return res.json({ success: true, message: "Technicien d\xE9sactiv\xE9" });
+  } catch (error) {
+    console.error("[Teams] Erreur suppression technicien:", error);
+    return res.status(500).json({ success: false, message: error.message });
+  }
+});
+router25.post("/technicians/sync", authenticateToken, async (req2, res) => {
+  try {
+    const organizationId = getOrgId(req2);
+    if (!organizationId) return res.status(400).json({ success: false, message: "ID d'organisation requis" });
+    const userOrgs = await db.userOrganization.findMany({
+      where: { organizationId, status: "ACTIVE" },
+      include: { User: { select: { id: true, firstName: true, lastName: true, email: true, phoneNumber: true } } }
+    });
+    const existingTechs = await db.technician.findMany({
+      where: { organizationId, type: "INTERNAL" },
+      select: { userId: true }
+    });
+    const existingUserIds = new Set(existingTechs.map((t) => t.userId).filter(Boolean));
+    const newTechs = [];
+    for (const uo of userOrgs) {
+      if (existingUserIds.has(uo.userId)) continue;
+      const user = uo.User;
+      const tech = await db.technician.create({
+        data: {
+          organizationId,
+          userId: user.id,
+          type: "INTERNAL",
+          firstName: user.firstName || "Utilisateur",
+          lastName: user.lastName || "",
+          email: user.email,
+          phone: user.phoneNumber || null
+        }
+      });
+      newTechs.push(tech);
+    }
+    return res.json({
+      success: true,
+      message: `${newTechs.length} technicien(s) synchronis\xE9(s)`,
+      data: { created: newTechs.length, total: userOrgs.length }
+    });
+  } catch (error) {
+    console.error("[Teams] Erreur sync techniciens:", error);
+    return res.status(500).json({ success: false, message: error.message });
+  }
+});
+router25.get("/technicians/org-users", authenticateToken, async (req2, res) => {
+  try {
+    const organizationId = getOrgId(req2);
+    if (!organizationId) return res.status(400).json({ success: false, message: "ID d'organisation requis" });
+    const existingTechs = await db.technician.findMany({
+      where: { organizationId, type: "INTERNAL", userId: { not: null } },
+      select: { userId: true }
+    });
+    const existingUserIds = new Set(existingTechs.map((t) => t.userId));
+    const userOrgs = await db.userOrganization.findMany({
+      where: { organizationId, status: "ACTIVE" },
+      include: {
+        User: { select: { id: true, firstName: true, lastName: true, email: true, phoneNumber: true } },
+        Role: { select: { name: true, label: true } }
+      }
+    });
+    const available = userOrgs.filter((uo) => !existingUserIds.has(uo.userId)).map((uo) => ({ ...uo.User, orgRole: uo.Role }));
+    return res.json({ success: true, data: available });
+  } catch (error) {
+    console.error("[Teams] Erreur org-users:", error);
+    return res.status(500).json({ success: false, message: error.message });
+  }
+});
+var unavailabilitySchema = import_zod7.z.object({
+  technicianId: import_zod7.z.string().min(1),
+  startDate: import_zod7.z.string().min(1),
+  endDate: import_zod7.z.string().min(1),
+  type: import_zod7.z.enum(["CONGE", "FORMATION", "MALADIE", "AUTRE"]).default("AUTRE"),
+  allDay: import_zod7.z.boolean().default(true),
+  note: import_zod7.z.string().optional()
+});
+router25.get("/unavailabilities", authenticateToken, async (req2, res) => {
+  try {
+    const { technicianId, startDate, endDate } = req2.query;
+    const where = {};
+    if (technicianId) where.technicianId = technicianId;
+    if (startDate && endDate) {
+      where.startDate = { lte: new Date(endDate) };
+      where.endDate = { gte: new Date(startDate) };
+    }
+    const items = await db.technicianUnavailability.findMany({
+      where,
+      include: { Technician: { select: { id: true, firstName: true, lastName: true, color: true } } },
+      orderBy: { startDate: "asc" }
+    });
+    return res.json({ success: true, data: items });
+  } catch (error) {
+    console.error("[Teams] Erreur unavailabilities:", error);
+    return res.status(500).json({ success: false, message: error.message });
+  }
+});
+router25.post("/unavailabilities", authenticateToken, async (req2, res) => {
+  try {
+    const parsed = unavailabilitySchema.safeParse(req2.body);
+    if (!parsed.success) return res.status(400).json({ success: false, errors: parsed.error.flatten() });
+    const item = await db.technicianUnavailability.create({
+      data: {
+        technicianId: parsed.data.technicianId,
+        startDate: new Date(parsed.data.startDate),
+        endDate: new Date(parsed.data.endDate),
+        type: parsed.data.type,
+        allDay: parsed.data.allDay,
+        note: parsed.data.note || null
+      },
+      include: { Technician: { select: techSelect } }
+    });
+    return res.status(201).json({ success: true, data: item });
+  } catch (error) {
+    console.error("[Teams] Erreur cr\xE9ation unavailability:", error);
+    return res.status(500).json({ success: false, message: error.message });
+  }
+});
+router25.delete("/unavailabilities/:id", authenticateToken, async (req2, res) => {
+  try {
+    await db.technicianUnavailability.delete({ where: { id: req2.params.id } });
+    return res.json({ success: true, message: "Indisponibilit\xE9 supprim\xE9e" });
+  } catch (error) {
+    console.error("[Teams] Erreur delete unavailability:", error);
+    return res.status(500).json({ success: false, message: error.message });
+  }
+});
+var createTeamSchema = import_zod7.z.object({
+  name: import_zod7.z.string().min(1, "Le nom est requis"),
+  color: import_zod7.z.string().default("#1677ff"),
+  description: import_zod7.z.string().optional()
+});
+var updateTeamSchema = createTeamSchema.partial();
+router25.get("/", authenticateToken, async (req2, res) => {
+  try {
+    const organizationId = getOrgId(req2);
+    if (!organizationId) return res.status(400).json({ success: false, message: "ID d'organisation requis" });
+    const teams = await db.team.findMany({
+      where: { organizationId },
+      include: {
+        Members: {
+          include: { Technician: { select: techSelect } },
+          orderBy: [{ role: "asc" }, { createdAt: "asc" }]
+        },
+        _count: { select: { ChantierAssignments: true } }
+      },
+      orderBy: { name: "asc" }
+    });
+    return res.json({ success: true, data: teams });
+  } catch (error) {
+    console.error("[Teams] Erreur liste:", error);
+    return res.status(500).json({ success: false, message: error.message });
+  }
+});
+router25.post("/", authenticateToken, async (req2, res) => {
+  try {
+    const organizationId = getOrgId(req2);
+    if (!organizationId) return res.status(400).json({ success: false, message: "ID d'organisation requis" });
+    const parsed = createTeamSchema.safeParse(req2.body);
+    if (!parsed.success) return res.status(400).json({ success: false, errors: parsed.error.flatten() });
+    const team = await db.team.create({
+      data: { organizationId, name: parsed.data.name, color: parsed.data.color || "#1677ff", description: parsed.data.description },
+      include: { Members: { include: { Technician: { select: techSelect } } } }
+    });
+    return res.status(201).json({ success: true, data: team });
+  } catch (error) {
+    if (error.code === "P2002") return res.status(409).json({ success: false, message: "Une \xE9quipe avec ce nom existe d\xE9j\xE0" });
+    console.error("[Teams] Erreur cr\xE9ation:", error);
+    return res.status(500).json({ success: false, message: error.message });
+  }
+});
+router25.put("/:id", authenticateToken, async (req2, res) => {
+  try {
+    const organizationId = getOrgId(req2);
+    const parsed = updateTeamSchema.safeParse(req2.body);
+    if (!parsed.success) return res.status(400).json({ success: false, errors: parsed.error.flatten() });
+    const team = await db.team.update({
+      where: { id: req2.params.id, organizationId },
+      data: parsed.data,
+      include: { Members: { include: { Technician: { select: techSelect } } } }
+    });
+    return res.json({ success: true, data: team });
+  } catch (error) {
+    console.error("[Teams] Erreur modification:", error);
+    return res.status(500).json({ success: false, message: error.message });
+  }
+});
+router25.delete("/:id", authenticateToken, async (req2, res) => {
+  try {
+    const organizationId = getOrgId(req2);
+    await db.team.delete({ where: { id: req2.params.id, organizationId } });
+    return res.json({ success: true, message: "\xC9quipe supprim\xE9e" });
+  } catch (error) {
+    console.error("[Teams] Erreur suppression:", error);
+    return res.status(500).json({ success: false, message: error.message });
+  }
+});
+var teamMemberSchema = import_zod7.z.object({
+  technicianId: import_zod7.z.string().min(1),
+  role: import_zod7.z.enum(["LEADER", "MEMBER"]).default("MEMBER")
+});
+router25.post("/:teamId/members", authenticateToken, async (req2, res) => {
+  try {
+    const organizationId = getOrgId(req2);
+    const { teamId } = req2.params;
+    const parsed = teamMemberSchema.safeParse(req2.body);
+    if (!parsed.success) return res.status(400).json({ success: false, errors: parsed.error.flatten() });
+    const team = await db.team.findFirst({ where: { id: teamId, organizationId } });
+    if (!team) return res.status(404).json({ success: false, message: "\xC9quipe non trouv\xE9e" });
+    const member = await db.teamMember.create({
+      data: { teamId, technicianId: parsed.data.technicianId, role: parsed.data.role },
+      include: { Technician: { select: techSelect } }
+    });
+    return res.status(201).json({ success: true, data: member });
+  } catch (error) {
+    if (error.code === "P2002") return res.status(409).json({ success: false, message: "Ce technicien est d\xE9j\xE0 dans l'\xE9quipe" });
+    console.error("[Teams] Erreur ajout membre:", error);
+    return res.status(500).json({ success: false, message: error.message });
+  }
+});
+router25.put("/:teamId/members/:memberId", authenticateToken, async (req2, res) => {
+  try {
+    const { role } = req2.body;
+    if (!["LEADER", "MEMBER"].includes(role)) return res.status(400).json({ success: false, message: "R\xF4le invalide" });
+    const member = await db.teamMember.update({
+      where: { id: req2.params.memberId },
+      data: { role },
+      include: { Technician: { select: techSelect } }
+    });
+    return res.json({ success: true, data: member });
+  } catch (error) {
+    console.error("[Teams] Erreur modif membre:", error);
+    return res.status(500).json({ success: false, message: error.message });
+  }
+});
+router25.delete("/:teamId/members/:memberId", authenticateToken, async (req2, res) => {
+  try {
+    await db.teamMember.delete({ where: { id: req2.params.memberId } });
+    return res.json({ success: true, message: "Membre retir\xE9" });
+  } catch (error) {
+    console.error("[Teams] Erreur suppression membre:", error);
+    return res.status(500).json({ success: false, message: error.message });
+  }
+});
+var assignmentSchema = import_zod7.z.object({
+  technicianId: import_zod7.z.string().min(1),
+  role: import_zod7.z.enum(["CHEF_EQUIPE", "TECHNICIEN"]).default("TECHNICIEN"),
+  teamId: import_zod7.z.string().optional()
+});
+router25.get("/assignments/by-chantier/:chantierId", authenticateToken, async (req2, res) => {
+  try {
+    const assignments = await db.chantierAssignment.findMany({
+      where: { chantierId: req2.params.chantierId },
+      include: {
+        Technician: { select: techSelect },
+        Team: { select: { id: true, name: true, color: true } }
+      },
+      orderBy: [{ role: "asc" }, { assignedAt: "asc" }]
+    });
+    return res.json({ success: true, data: assignments });
+  } catch (error) {
+    console.error("[Teams] Erreur assignments:", error);
+    return res.status(500).json({ success: false, message: error.message });
+  }
+});
+router25.post("/assignments/:chantierId", authenticateToken, async (req2, res) => {
+  try {
+    const parsed = assignmentSchema.safeParse(req2.body);
+    if (!parsed.success) return res.status(400).json({ success: false, errors: parsed.error.flatten() });
+    const assignment = await db.chantierAssignment.create({
+      data: {
+        chantierId: req2.params.chantierId,
+        technicianId: parsed.data.technicianId,
+        role: parsed.data.role,
+        teamId: parsed.data.teamId || null
+      },
+      include: {
+        Technician: { select: techSelect },
+        Team: { select: { id: true, name: true, color: true } }
+      }
+    });
+    return res.status(201).json({ success: true, data: assignment });
+  } catch (error) {
+    if (error.code === "P2002") return res.status(409).json({ success: false, message: "Ce technicien est d\xE9j\xE0 assign\xE9 \xE0 ce chantier" });
+    console.error("[Teams] Erreur assignation:", error);
+    return res.status(500).json({ success: false, message: error.message });
+  }
+});
+router25.post("/assignments/:chantierId/team", authenticateToken, async (req2, res) => {
+  try {
+    const { teamId } = req2.body;
+    if (!teamId) return res.status(400).json({ success: false, message: "teamId requis" });
+    const members = await db.teamMember.findMany({
+      where: { teamId },
+      include: { Technician: { select: { id: true, firstName: true, lastName: true } } }
+    });
+    if (members.length === 0) return res.status(400).json({ success: false, message: "L'\xE9quipe n'a aucun membre" });
+    const results = [];
+    for (const member of members) {
+      try {
+        const assignment = await db.chantierAssignment.upsert({
+          where: { chantierId_technicianId: { chantierId: req2.params.chantierId, technicianId: member.technicianId } },
+          update: { teamId, role: member.role === "LEADER" ? "CHEF_EQUIPE" : "TECHNICIEN" },
+          create: {
+            chantierId: req2.params.chantierId,
+            technicianId: member.technicianId,
+            teamId,
+            role: member.role === "LEADER" ? "CHEF_EQUIPE" : "TECHNICIEN"
+          },
+          include: {
+            Technician: { select: techSelect },
+            Team: { select: { id: true, name: true, color: true } }
+          }
+        });
+        results.push(assignment);
+      } catch {
+      }
+    }
+    return res.status(201).json({
+      success: true,
+      data: results,
+      message: `${results.length} technicien(s) assign\xE9(s) depuis l'\xE9quipe`
+    });
+  } catch (error) {
+    console.error("[Teams] Erreur assignation \xE9quipe:", error);
+    return res.status(500).json({ success: false, message: error.message });
+  }
+});
+router25.delete("/assignments/:assignmentId", authenticateToken, async (req2, res) => {
+  try {
+    await db.chantierAssignment.delete({ where: { id: req2.params.assignmentId } });
+    return res.json({ success: true, message: "Assignation supprim\xE9e" });
+  } catch (error) {
+    console.error("[Teams] Erreur suppression assignation:", error);
+    return res.status(500).json({ success: false, message: error.message });
+  }
+});
+router25.get("/time-entries", authenticateToken, async (req2, res) => {
+  try {
+    const organizationId = getOrgId(req2);
+    if (!organizationId) return res.status(400).json({ error: "Organization ID required" });
+    const { chantierId, technicianId, date, startDate, endDate } = req2.query;
+    const where = { organizationId };
+    if (chantierId) where.chantierId = chantierId;
+    if (technicianId) where.technicianId = technicianId;
+    if (date) {
+      const d = new Date(date);
+      where.date = d;
+    } else if (startDate && endDate) {
+      where.date = { gte: new Date(startDate), lte: new Date(endDate) };
+    }
+    const entries = await db.timeEntry.findMany({
+      where,
+      include: {
+        Technician: { select: { id: true, firstName: true, lastName: true, color: true, type: true, billingMode: true, company: true } },
+        Chantier: { select: { id: true, clientName: true, productLabel: true, siteAddress: true } }
+      },
+      orderBy: [{ date: "desc" }, { startTime: "desc" }]
+    });
+    return res.json({ success: true, data: entries });
+  } catch (error) {
+    console.error("[Teams] Erreur liste pointages:", error);
+    return res.status(500).json({ success: false, message: error.message });
+  }
+});
+router25.post("/time-entries", authenticateToken, async (req2, res) => {
+  try {
+    const organizationId = getOrgId(req2);
+    if (!organizationId) return res.status(400).json({ error: "Organization ID required" });
+    const {
+      technicianId,
+      chantierId,
+      date,
+      startTime,
+      endTime,
+      breakMinutes,
+      type,
+      note,
+      // Anti-fraud fields
+      latitude,
+      longitude,
+      photo,
+      deviceInfo
+    } = req2.body;
+    if (!technicianId || !date || !startTime) {
+      return res.status(400).json({ success: false, message: "technicianId, date et startTime requis" });
+    }
+    const tech = await db.technician.findFirst({ where: { id: technicianId, organizationId } });
+    if (!tech) {
+      return res.status(404).json({ success: false, message: "Technicien non trouv\xE9" });
+    }
+    if (tech.type === "SUBCONTRACTOR" && tech.billingMode !== "REGIE") {
+      return res.status(400).json({ success: false, message: "Le pointage n'est pas disponible pour les sous-traitants au forfait" });
+    }
+    let durationMinutes = null;
+    if (endTime) {
+      const start = new Date(startTime).getTime();
+      const end = new Date(endTime).getTime();
+      durationMinutes = Math.round((end - start) / 6e4) - (breakMinutes || 0);
+    }
+    let clockInPhotoUrl = null;
+    if (photo) {
+      try {
+        clockInPhotoUrl = savePointagePhoto(photo, "in");
+      } catch (e) {
+        console.error("[Pointage] Erreur sauvegarde photo:", e);
+      }
+    }
+    let clockInDistance = null;
+    if (latitude && longitude && chantierId) {
+      const chantier = await db.chantier.findUnique({ where: { id: chantierId }, select: { latitude: true, longitude: true } });
+      if (chantier?.latitude && chantier?.longitude) {
+        clockInDistance = Math.round(haversineDistance(latitude, longitude, chantier.latitude, chantier.longitude));
+      }
+    }
+    const ipAddress = req2.headers["x-forwarded-for"]?.split(",")[0]?.trim() || req2.socket.remoteAddress || null;
+    const WORK_END_TYPES = ["FIN", "DEPART_PAUSE", "DEPART_MIDI", "DEPART_DEPLACEMENT"];
+    const WORK_START_TYPES = ["ARRIVEE", "RETOUR_PAUSE", "RETOUR_MIDI", "RETOUR_DEPLACEMENT"];
+    if (WORK_END_TYPES.includes(type) && !endTime) {
+      const dateStart = new Date(date);
+      dateStart.setHours(0, 0, 0, 0);
+      const dateEnd = new Date(date);
+      dateEnd.setHours(23, 59, 59, 999);
+      const prevWhere = {
+        organizationId,
+        technicianId,
+        date: { gte: dateStart, lte: dateEnd },
+        type: { in: WORK_START_TYPES }
+      };
+      if (chantierId) prevWhere.chantierId = chantierId;
+      const prevEntry = await db.timeEntry.findFirst({
+        where: prevWhere,
+        orderBy: { startTime: "desc" }
+      });
+      if (prevEntry) {
+        const start = new Date(prevEntry.startTime).getTime();
+        const end = new Date(startTime).getTime();
+        durationMinutes = Math.max(0, Math.round((end - start) / 6e4));
+      }
+    }
+    const entry = await db.timeEntry.create({
+      data: {
+        organizationId,
+        technicianId,
+        chantierId: chantierId || null,
+        date: new Date(date),
+        startTime: new Date(startTime),
+        endTime: endTime ? new Date(endTime) : null,
+        breakMinutes: breakMinutes || 0,
+        type: type || "CHANTIER",
+        durationMinutes,
+        note: note || null,
+        // Anti-fraud data
+        clockInLatitude: latitude || null,
+        clockInLongitude: longitude || null,
+        clockInPhotoUrl,
+        clockInDistance,
+        deviceInfo: deviceInfo || null,
+        ipAddress
+      },
+      include: {
+        Technician: { select: { id: true, firstName: true, lastName: true, color: true, type: true } },
+        Chantier: { select: { id: true, clientName: true, latitude: true, longitude: true, geoFenceRadius: true } }
+      }
+    });
+    return res.status(201).json({ success: true, data: entry });
+  } catch (error) {
+    console.error("[Teams] Erreur cr\xE9ation pointage:", error);
+    return res.status(500).json({ success: false, message: error.message });
+  }
+});
+router25.get("/time-entries/summary", authenticateToken, async (req2, res) => {
+  try {
+    const organizationId = getOrgId(req2);
+    if (!organizationId) return res.status(400).json({ error: "Organization ID required" });
+    const { startDate, endDate, technicianId } = req2.query;
+    const where = { organizationId, endTime: { not: null } };
+    if (startDate && endDate) {
+      where.date = { gte: new Date(startDate), lte: new Date(endDate) };
+    }
+    if (technicianId) where.technicianId = technicianId;
+    const entries = await db.timeEntry.findMany({
+      where,
+      include: {
+        Technician: { select: { id: true, firstName: true, lastName: true, type: true, billingMode: true, hourlyRate: true, color: true } }
+      }
+    });
+    const summaryMap = /* @__PURE__ */ new Map();
+    for (const e of entries) {
+      const key2 = e.technicianId;
+      if (!summaryMap.has(key2)) {
+        summaryMap.set(key2, { technician: e.Technician, totalMinutes: 0, totalEntries: 0, byType: {} });
+      }
+      const s = summaryMap.get(key2);
+      s.totalMinutes += e.durationMinutes || 0;
+      s.totalEntries += 1;
+      s.byType[e.type] = (s.byType[e.type] || 0) + (e.durationMinutes || 0);
+    }
+    const summary = Array.from(summaryMap.values()).map((s) => ({
+      ...s,
+      totalHours: Math.round(s.totalMinutes / 60 * 100) / 100,
+      estimatedCost: s.technician.hourlyRate ? Math.round(s.totalMinutes / 60 * s.technician.hourlyRate * 100) / 100 : null
+    }));
+    return res.json({ success: true, data: summary });
+  } catch (error) {
+    console.error("[Teams] Erreur r\xE9sum\xE9 pointages:", error);
+    return res.status(500).json({ success: false, message: error.message });
+  }
+});
+router25.put("/time-entries/:id", authenticateToken, async (req2, res) => {
+  try {
+    const organizationId = getOrgId(req2);
+    if (!organizationId) return res.status(400).json({ error: "Organization ID required" });
+    const { startTime, endTime, breakMinutes, type, note } = req2.body;
+    const existing = await db.timeEntry.findFirst({ where: { id: req2.params.id, organizationId } });
+    if (!existing) {
+      return res.status(404).json({ success: false, message: "Pointage non trouv\xE9" });
+    }
+    const effectiveStart = startTime ? new Date(startTime) : existing.startTime;
+    const effectiveEnd = endTime ? new Date(endTime) : existing.endTime;
+    const effectiveBreak = breakMinutes !== void 0 ? breakMinutes : existing.breakMinutes;
+    let durationMinutes = null;
+    if (effectiveEnd) {
+      durationMinutes = Math.round((effectiveEnd.getTime() - effectiveStart.getTime()) / 6e4) - effectiveBreak;
+    }
+    const entry = await db.timeEntry.update({
+      where: { id: req2.params.id },
+      data: {
+        ...startTime && { startTime: new Date(startTime) },
+        ...endTime && { endTime: new Date(endTime) },
+        ...breakMinutes !== void 0 && { breakMinutes },
+        ...type && { type },
+        ...note !== void 0 && { note },
+        durationMinutes
+      },
+      include: {
+        Technician: { select: { id: true, firstName: true, lastName: true, color: true, type: true } },
+        Chantier: { select: { id: true, clientName: true } }
+      }
+    });
+    return res.json({ success: true, data: entry });
+  } catch (error) {
+    console.error("[Teams] Erreur update pointage:", error);
+    return res.status(500).json({ success: false, message: error.message });
+  }
+});
+router25.put("/time-entries/:id/clock-out", authenticateToken, async (req2, res) => {
+  try {
+    const organizationId = getOrgId(req2);
+    if (!organizationId) return res.status(400).json({ error: "Organization ID required" });
+    const { latitude, longitude, photo, deviceInfo } = req2.body || {};
+    const existing = await db.timeEntry.findFirst({ where: { id: req2.params.id, organizationId } });
+    if (!existing) {
+      return res.status(404).json({ success: false, message: "Pointage non trouv\xE9" });
+    }
+    if (existing.endTime) {
+      return res.status(400).json({ success: false, message: "D\xE9j\xE0 point\xE9" });
+    }
+    const endTime = /* @__PURE__ */ new Date();
+    const durationMinutes = Math.round((endTime.getTime() - existing.startTime.getTime()) / 6e4) - existing.breakMinutes;
+    let clockOutPhotoUrl = null;
+    if (photo) {
+      try {
+        clockOutPhotoUrl = savePointagePhoto(photo, "out");
+      } catch (e) {
+        console.error("[Pointage] Erreur sauvegarde photo sortie:", e);
+      }
+    }
+    let clockOutDistance = null;
+    if (latitude && longitude && existing.chantierId) {
+      const chantier = await db.chantier.findUnique({ where: { id: existing.chantierId }, select: { latitude: true, longitude: true } });
+      if (chantier?.latitude && chantier?.longitude) {
+        clockOutDistance = Math.round(haversineDistance(latitude, longitude, chantier.latitude, chantier.longitude));
+      }
+    }
+    const ipAddress = req2.headers["x-forwarded-for"]?.split(",")[0]?.trim() || req2.socket.remoteAddress || null;
+    const entry = await db.timeEntry.update({
+      where: { id: req2.params.id },
+      data: {
+        endTime,
+        durationMinutes,
+        clockOutLatitude: latitude || null,
+        clockOutLongitude: longitude || null,
+        clockOutPhotoUrl,
+        clockOutDistance,
+        // Update device info & IP if provided (captures clock-out device too)
+        ...deviceInfo && { deviceInfo },
+        ipAddress
+      },
+      include: {
+        Technician: { select: { id: true, firstName: true, lastName: true } },
+        Chantier: { select: { id: true, clientName: true } }
+      }
+    });
+    return res.json({ success: true, data: entry });
+  } catch (error) {
+    console.error("[Teams] Erreur clock-out:", error);
+    return res.status(500).json({ success: false, message: error.message });
+  }
+});
+router25.delete("/time-entries/:id", authenticateToken, async (req2, res) => {
+  try {
+    const organizationId = getOrgId(req2);
+    if (!organizationId) return res.status(400).json({ error: "Organization ID required" });
+    const existing = await db.timeEntry.findFirst({ where: { id: req2.params.id, organizationId } });
+    if (!existing) {
+      return res.status(404).json({ success: false, message: "Pointage non trouv\xE9" });
+    }
+    await db.timeEntry.delete({ where: { id: req2.params.id } });
+    return res.json({ success: true, message: "Pointage supprim\xE9" });
+  } catch (error) {
+    console.error("[Teams] Erreur suppression pointage:", error);
+    return res.status(500).json({ success: false, message: error.message });
+  }
+});
+var teams_default = router25;
+
+// src/routes/rolesRoutes.ts
+var import_express27 = require("express");
+init_database();
+var import_zod8 = require("zod");
+var import_express_rate_limit2 = __toESM(require("express-rate-limit"), 1);
+var router26 = (0, import_express27.Router)();
 var prisma10 = db;
 var sanitizeString2 = (input) => {
   return input.trim().replace(/[<>]/g, "");
 };
-var roleCreateSchema = import_zod4.z.object({
-  name: import_zod4.z.string().min(2, "Nom du r\xF4le minimum 2 caract\xE8res").max(50, "Nom du r\xF4le maximum 50 caract\xE8res").regex(/^[a-zA-ZÀ-ÿ0-9_\-\s]+$/, "Nom du r\xF4le contient des caract\xE8res non autoris\xE9s"),
-  label: import_zod4.z.string().max(100, "Label maximum 100 caract\xE8res").optional(),
-  description: import_zod4.z.string().max(500, "Description maximum 500 caract\xE8res").optional(),
-  organizationId: import_zod4.z.string().min(1, "ID organisation invalide").nullish()
+var roleCreateSchema = import_zod8.z.object({
+  name: import_zod8.z.string().min(2, "Nom du r\xF4le minimum 2 caract\xE8res").max(50, "Nom du r\xF4le maximum 50 caract\xE8res").regex(/^[a-zA-ZÀ-ÿ0-9_\-\s]+$/, "Nom du r\xF4le contient des caract\xE8res non autoris\xE9s"),
+  label: import_zod8.z.string().max(100, "Label maximum 100 caract\xE8res").optional(),
+  description: import_zod8.z.string().max(500, "Description maximum 500 caract\xE8res").optional(),
+  organizationId: import_zod8.z.string().min(1, "ID organisation invalide").nullish()
 });
-var roleUpdateSchema = import_zod4.z.object({
-  name: import_zod4.z.string().min(2, "Nom du r\xF4le minimum 2 caract\xE8res").max(50, "Nom du r\xF4le maximum 50 caract\xE8res").regex(/^[a-zA-ZÀ-ÿ0-9_\-\s]+$/, "Nom du r\xF4le contient des caract\xE8res non autoris\xE9s").optional(),
-  label: import_zod4.z.string().max(100, "Label maximum 100 caract\xE8res").optional(),
-  description: import_zod4.z.string().max(500, "Description maximum 500 caract\xE8res").optional(),
-  organizationId: import_zod4.z.string().min(1, "ID organisation invalide").nullish()
+var roleUpdateSchema = import_zod8.z.object({
+  name: import_zod8.z.string().min(2, "Nom du r\xF4le minimum 2 caract\xE8res").max(50, "Nom du r\xF4le maximum 50 caract\xE8res").regex(/^[a-zA-ZÀ-ÿ0-9_\-\s]+$/, "Nom du r\xF4le contient des caract\xE8res non autoris\xE9s").optional(),
+  label: import_zod8.z.string().max(100, "Label maximum 100 caract\xE8res").optional(),
+  description: import_zod8.z.string().max(500, "Description maximum 500 caract\xE8res").optional(),
+  organizationId: import_zod8.z.string().min(1, "ID organisation invalide").nullish()
 });
-var roleQuerySchema = import_zod4.z.object({
+var roleQuerySchema = import_zod8.z.object({
   // Accepter 'current' OU n'importe quelle chaîne non vide (IDs personnalisés autorisés)
-  organizationId: import_zod4.z.string().min(1, "ID organisation invalide").optional()
+  organizationId: import_zod8.z.string().min(1, "ID organisation invalide").optional()
 });
 var rolesRateLimit = (0, import_express_rate_limit2.default)({
   windowMs: 15 * 60 * 1e3,
@@ -17388,9 +22102,9 @@ var handleZodError2 = (error) => {
     errors: error.errors.map((e) => `${e.path.join(".")}: ${e.message}`)
   };
 };
-router22.use(authMiddleware);
-router22.use(rolesRateLimit);
-router22.get("/", async (req2, res) => {
+router26.use(authMiddleware);
+router26.use(rolesRateLimit);
+router26.get("/", async (req2, res) => {
   console.log("[ROLES] GET /roles - R\xE9cup\xE9ration des r\xF4les S\xC9CURIS\xC9E");
   try {
     const queryValidation = roleQuerySchema.safeParse(req2.query);
@@ -17446,7 +22160,7 @@ router22.get("/", async (req2, res) => {
     });
   }
 });
-router22.get("/:id", async (req2, res) => {
+router26.get("/:id", async (req2, res) => {
   const { id } = req2.params;
   console.log(`[ROLES] GET /roles/${id} - R\xE9cup\xE9ration du r\xF4le S\xC9CURIS\xC9E`);
   try {
@@ -17510,7 +22224,7 @@ router22.get("/:id", async (req2, res) => {
     });
   }
 });
-router22.post("/", rolesCreateRateLimit, async (req2, res) => {
+router26.post("/", rolesCreateRateLimit, async (req2, res) => {
   console.log("[ROLES] POST /roles - Cr\xE9ation d'un r\xF4le S\xC9CURIS\xC9E");
   try {
     const bodyValidation = roleCreateSchema.safeParse(req2.body);
@@ -17716,9 +22430,9 @@ var handleUpdateRole = async (req2, res) => {
     });
   }
 };
-router22.put("/:id", handleUpdateRole);
-router22.patch("/:id", handleUpdateRole);
-router22.delete("/:id", async (req2, res) => {
+router26.put("/:id", handleUpdateRole);
+router26.patch("/:id", handleUpdateRole);
+router26.delete("/:id", async (req2, res) => {
   const { id } = req2.params;
   console.log(`[ROLES] DELETE /roles/${id} - Suppression du r\xF4le S\xC9CURIS\xC9E`);
   try {
@@ -17788,30 +22502,30 @@ router22.delete("/:id", async (req2, res) => {
     res.status(500).json({ success: false, message: "Erreur interne du serveur" });
   }
 });
-var rolesRoutes_default = router22;
+var rolesRoutes_default = router26;
 
 // src/routes/usersRoutes.ts
-var import_express24 = require("express");
+var import_express28 = require("express");
 init_database();
-var import_zod5 = require("zod");
+var import_zod9 = require("zod");
 var import_express_rate_limit3 = __toESM(require("express-rate-limit"), 1);
-var router23 = (0, import_express24.Router)();
+var router27 = (0, import_express28.Router)();
 var prisma11 = db;
 var sanitizeString3 = (input) => {
   return input.trim().replace(/[<>]/g, "");
 };
-var userUpdateSchema = import_zod5.z.object({
+var userUpdateSchema = import_zod9.z.object({
   // Accepter des IDs non-UUID (ex: cuid, chaînes custom)
-  roleId: import_zod5.z.string().min(1, "ID r\xF4le requis").optional(),
-  status: import_zod5.z.enum(["ACTIVE", "INACTIVE"], {
+  roleId: import_zod9.z.string().min(1, "ID r\xF4le requis").optional(),
+  status: import_zod9.z.enum(["ACTIVE", "INACTIVE"], {
     errorMap: () => ({ message: "Statut doit \xEAtre ACTIVE ou INACTIVE" })
   }).optional()
 });
-var userOrganizationSchema = import_zod5.z.object({
+var userOrganizationSchema = import_zod9.z.object({
   // IDs non-UUID supportés
-  userId: import_zod5.z.string().min(1, "ID utilisateur requis"),
-  organizationId: import_zod5.z.string().min(1, "ID organisation requis"),
-  roleId: import_zod5.z.string().min(1, "ID r\xF4le requis")
+  userId: import_zod9.z.string().min(1, "ID utilisateur requis"),
+  organizationId: import_zod9.z.string().min(1, "ID organisation requis"),
+  roleId: import_zod9.z.string().min(1, "ID r\xF4le requis")
 });
 var usersRateLimit = (0, import_express_rate_limit3.default)({
   windowMs: 15 * 60 * 1e3,
@@ -17840,10 +22554,10 @@ var handleZodError3 = (error) => {
     errors: error.errors.map((e) => `${e.path.join(".")}: ${e.message}`)
   };
 };
-router23.use(authMiddleware);
-router23.use(usersRateLimit);
-router23.use("/invitations", invitations_default);
-router23.get("/free", requireRole2(["admin", "super_admin"]), async (req2, res) => {
+router27.use(authMiddleware);
+router27.use(usersRateLimit);
+router27.use("/invitations", invitations_default);
+router27.get("/free", requireRole2(["admin", "super_admin"]), async (req2, res) => {
   console.log("[USERS] GET /users/free - R\xE9cup\xE9ration utilisateurs libres S\xC9CURIS\xC9E");
   try {
     const freeUsers = await prisma11.user.findMany({
@@ -17872,7 +22586,7 @@ router23.get("/free", requireRole2(["admin", "super_admin"]), async (req2, res) 
     });
   }
 });
-router23.get("/", requireRole2(["admin", "super_admin"]), async (req2, res) => {
+router27.get("/", requireRole2(["admin", "super_admin"]), async (req2, res) => {
   console.log("[USERS] GET /users - R\xE9cup\xE9ration utilisateurs S\xC9CURIS\xC9E");
   try {
     const sessionUser = req2.user;
@@ -17935,11 +22649,11 @@ router23.get("/", requireRole2(["admin", "super_admin"]), async (req2, res) => {
     });
   }
 });
-router23.get("/:userId/organizations", requireRole2(["admin", "super_admin"]), async (req2, res) => {
+router27.get("/:userId/organizations", requireRole2(["admin", "super_admin"]), async (req2, res) => {
   const { userId } = req2.params;
   console.log(`[USERS] GET /users/${userId}/organizations - S\xC9CURIS\xC9`);
   try {
-    if (!userId || !import_zod5.z.string().min(1).safeParse(userId).success) {
+    if (!userId || !import_zod9.z.string().min(1).safeParse(userId).success) {
       return res.status(400).json({
         success: false,
         message: "ID utilisateur invalide ou manquant"
@@ -17965,7 +22679,7 @@ router23.get("/:userId/organizations", requireRole2(["admin", "super_admin"]), a
     });
   }
 });
-router23.post("/user-organizations", usersModifyRateLimit, requireRole2(["admin", "super_admin"]), async (req2, res) => {
+router27.post("/user-organizations", usersModifyRateLimit, requireRole2(["admin", "super_admin"]), async (req2, res) => {
   console.log("[USERS] POST /users/user-organizations - Assignation S\xC9CURIS\xC9E");
   try {
     const validation = userOrganizationSchema.safeParse(req2.body);
@@ -18009,11 +22723,11 @@ router23.post("/user-organizations", usersModifyRateLimit, requireRole2(["admin"
     });
   }
 });
-router23.patch("/user-organizations/:userOrganizationId", usersModifyRateLimit, requireRole2(["admin", "super_admin"]), async (req2, res) => {
+router27.patch("/user-organizations/:userOrganizationId", usersModifyRateLimit, requireRole2(["admin", "super_admin"]), async (req2, res) => {
   const { userOrganizationId } = req2.params;
   console.log(`[USERS] PATCH /users/user-organizations/${userOrganizationId} - S\xC9CURIS\xC9`);
   try {
-    if (!userOrganizationId || !import_zod5.z.string().min(1).safeParse(userOrganizationId).success) {
+    if (!userOrganizationId || !import_zod9.z.string().min(1).safeParse(userOrganizationId).success) {
       return res.status(400).json({
         success: false,
         message: "ID relation utilisateur-organisation invalide ou manquant"
@@ -18061,11 +22775,11 @@ router23.patch("/user-organizations/:userOrganizationId", usersModifyRateLimit, 
     });
   }
 });
-router23.delete("/user-organizations/:userOrganizationId", usersModifyRateLimit, requireRole2(["admin", "super_admin"]), async (req2, res) => {
+router27.delete("/user-organizations/:userOrganizationId", usersModifyRateLimit, requireRole2(["admin", "super_admin"]), async (req2, res) => {
   const { userOrganizationId } = req2.params;
   console.log(`[USERS] DELETE /users/user-organizations/${userOrganizationId} - S\xC9CURIS\xC9`);
   try {
-    if (!userOrganizationId || !import_zod5.z.string().min(1).safeParse(userOrganizationId).success) {
+    if (!userOrganizationId || !import_zod9.z.string().min(1).safeParse(userOrganizationId).success) {
       return res.status(400).json({
         success: false,
         message: "ID relation utilisateur-organisation invalide ou manquant"
@@ -18106,18 +22820,18 @@ router23.delete("/user-organizations/:userOrganizationId", usersModifyRateLimit,
     });
   }
 });
-router23.patch("/:userId", usersModifyRateLimit, requireRole2(["admin", "super_admin"]), async (req2, res) => {
+router27.patch("/:userId", usersModifyRateLimit, requireRole2(["admin", "super_admin"]), async (req2, res) => {
   const { userId } = req2.params;
   console.log(`[USERS] PATCH /users/${userId} - Modification informations utilisateur`);
   try {
-    const userInfoSchema = import_zod5.z.object({
-      firstName: import_zod5.z.string().min(1, "Pr\xE9nom requis").max(50, "Pr\xE9nom trop long").optional(),
-      lastName: import_zod5.z.string().min(1, "Nom requis").max(50, "Nom trop long").optional(),
-      email: import_zod5.z.string().email("Email invalide").optional(),
-      phoneNumber: import_zod5.z.string().nullable().optional(),
-      address: import_zod5.z.string().nullable().optional(),
-      vatNumber: import_zod5.z.string().nullable().optional(),
-      avatarUrl: import_zod5.z.string().url("URL avatar invalide").nullable().optional()
+    const userInfoSchema = import_zod9.z.object({
+      firstName: import_zod9.z.string().min(1, "Pr\xE9nom requis").max(50, "Pr\xE9nom trop long").optional(),
+      lastName: import_zod9.z.string().min(1, "Nom requis").max(50, "Nom trop long").optional(),
+      email: import_zod9.z.string().email("Email invalide").optional(),
+      phoneNumber: import_zod9.z.string().nullable().optional(),
+      address: import_zod9.z.string().nullable().optional(),
+      vatNumber: import_zod9.z.string().nullable().optional(),
+      avatarUrl: import_zod9.z.string().url("URL avatar invalide").nullable().optional()
     });
     const validationResult2 = userInfoSchema.safeParse(req2.body);
     if (!validationResult2.success) {
@@ -18183,12 +22897,12 @@ router23.patch("/:userId", usersModifyRateLimit, requireRole2(["admin", "super_a
     });
   }
 });
-router23.delete("/:userId", usersModifyRateLimit, requireRole2(["admin", "super_admin"]), async (req2, res) => {
+router27.delete("/:userId", usersModifyRateLimit, requireRole2(["admin", "super_admin"]), async (req2, res) => {
   const { userId } = req2.params;
   const sessionUser = req2.user;
   console.log(`[USERS] DELETE /users/${userId} - ADMIN/SUPER ADMIN S\xC9CURIS\xC9`);
   try {
-    if (!userId || !import_zod5.z.string().min(1).safeParse(userId).success) {
+    if (!userId || !import_zod9.z.string().min(1).safeParse(userId).success) {
       return res.status(400).json({
         success: false,
         message: "ID utilisateur invalide ou manquant"
@@ -18243,7 +22957,7 @@ router23.delete("/:userId", usersModifyRateLimit, requireRole2(["admin", "super_
     });
   }
 });
-router23.get("/:userId/rights-summary", requireRole2(["admin", "super_admin"]), async (req2, res) => {
+router27.get("/:userId/rights-summary", requireRole2(["admin", "super_admin"]), async (req2, res) => {
   try {
     const { userId } = req2.params;
     const { organizationId } = req2.query;
@@ -18369,7 +23083,7 @@ router23.get("/:userId/rights-summary", requireRole2(["admin", "super_admin"]), 
     });
   }
 });
-router23.post("/me/current-organization", async (req2, res) => {
+router27.post("/me/current-organization", async (req2, res) => {
   const authReq = req2;
   try {
     const userId = authReq.user?.id;
@@ -18435,13 +23149,13 @@ router23.post("/me/current-organization", async (req2, res) => {
     });
   }
 });
-var usersRoutes_default = router23;
+var usersRoutes_default = router27;
 
 // src/routes/adminPasswordRoutes.ts
-var import_express25 = require("express");
-var router24 = (0, import_express25.Router)();
-router24.use(authenticateToken);
-router24.get("/users-emails", (_req, res) => {
+var import_express29 = require("express");
+var router28 = (0, import_express29.Router)();
+router28.use(authenticateToken);
+router28.get("/users-emails", (_req, res) => {
   console.log("[ADMIN-PASSWORD] GET /admin-password/users-emails - R\xE9cup\xE9ration des emails");
   const defaultUsersEmails = [
     {
@@ -18467,7 +23181,7 @@ router24.get("/users-emails", (_req, res) => {
   ];
   res.json(defaultUsersEmails);
 });
-router24.get("/users-services", (_req, res) => {
+router28.get("/users-services", (_req, res) => {
   console.log("[ADMIN-PASSWORD] GET /admin-password/users-services - R\xE9cup\xE9ration des utilisateurs et services");
   const defaultUsersServices = [
     {
@@ -18499,7 +23213,7 @@ router24.get("/users-services", (_req, res) => {
   ];
   res.json(defaultUsersServices);
 });
-router24.post("/configure-email", (_req, res) => {
+router28.post("/configure-email", (_req, res) => {
   console.log("[ADMIN-PASSWORD] POST /admin-password/configure-email - Configuration email");
   res.status(201).json({
     success: true,
@@ -18507,7 +23221,7 @@ router24.post("/configure-email", (_req, res) => {
     configuredAt: (/* @__PURE__ */ new Date()).toISOString()
   });
 });
-router24.put("/update-password", (_req, res) => {
+router28.put("/update-password", (_req, res) => {
   console.log("[ADMIN-PASSWORD] PUT /admin-password/update-password - Mise \xE0 jour mot de passe");
   res.json({
     success: true,
@@ -18515,7 +23229,7 @@ router24.put("/update-password", (_req, res) => {
     updatedAt: (/* @__PURE__ */ new Date()).toISOString()
   });
 });
-router24.get("/email-status/:userId", (req2, res) => {
+router28.get("/email-status/:userId", (req2, res) => {
   const { userId } = req2.params;
   console.log(`[ADMIN-PASSWORD] GET /admin-password/email-status/${userId} - Statut email`);
   res.json({
@@ -18525,14 +23239,14 @@ router24.get("/email-status/:userId", (req2, res) => {
     status: "active"
   });
 });
-var adminPasswordRoutes_default = router24;
+var adminPasswordRoutes_default = router28;
 
 // src/routes/services.ts
-var import_express26 = __toESM(require("express"), 1);
+var import_express30 = __toESM(require("express"), 1);
 var import_express_rate_limit4 = __toESM(require("express-rate-limit"), 1);
-var import_zod6 = require("zod");
+var import_zod10 = require("zod");
 init_prisma();
-var router25 = import_express26.default.Router();
+var router29 = import_express30.default.Router();
 var servicesRateLimit = (0, import_express_rate_limit4.default)({
   windowMs: 15 * 60 * 1e3,
   // 15 minutes
@@ -18545,16 +23259,16 @@ var servicesRateLimit = (0, import_express_rate_limit4.default)({
   standardHeaders: true,
   legacyHeaders: false
 });
-var serviceParamsSchema = import_zod6.z.object({
-  serviceName: import_zod6.z.enum(["email", "telnyx"]),
+var serviceParamsSchema = import_zod10.z.object({
+  serviceName: import_zod10.z.enum(["email", "telnyx"]),
   // Certains environnements utilisent des IDs non-UUID (cuid, etc.)
-  userId: import_zod6.z.string().min(1, "ID utilisateur invalide")
+  userId: import_zod10.z.string().min(1, "ID utilisateur invalide")
 });
-router25.use(authMiddleware);
-router25.use(servicesRateLimit);
+router29.use(authMiddleware);
+router29.use(servicesRateLimit);
 var handleServiceToggle = async (res, userId, serviceType, isActive) => {
   try {
-    const validatedUserId = import_zod6.z.string().min(1).parse(userId);
+    const validatedUserId = import_zod10.z.string().min(1).parse(userId);
     await db.userService.upsert({
       where: {
         userId_serviceType: { userId: validatedUserId, serviceType }
@@ -18569,7 +23283,7 @@ var handleServiceToggle = async (res, userId, serviceType, isActive) => {
     });
   } catch (error) {
     console.error(`[API/Services] Erreur lors de la mise \xE0 jour du service ${serviceType}:`, error);
-    if (error instanceof import_zod6.z.ZodError) {
+    if (error instanceof import_zod10.z.ZodError) {
       return res.status(400).json({ success: false, message: "Param\xE8tres invalides", errors: error.errors });
     }
     res.status(500).json({ success: false, message: `Impossible de mettre \xE0 jour le service ${serviceType}.` });
@@ -18589,22 +23303,22 @@ var mapService = (s) => ({
   createdAt: s.createdAt,
   updatedAt: s.updatedAt
 });
-router25.get("/status/:userId", async (req2, res) => {
+router29.get("/status/:userId", async (req2, res) => {
   try {
-    const { userId } = import_zod6.z.object({ userId: import_zod6.z.string().min(1) }).parse(req2.params);
+    const { userId } = import_zod10.z.object({ userId: import_zod10.z.string().min(1) }).parse(req2.params);
     const services = await db.userService.findMany({ where: { userId } });
     res.json({ success: true, data: services.map(mapService) });
   } catch (error) {
     console.error(`[API/Services] Erreur GET /status/${req2.params.userId}:`, error);
-    if (error instanceof import_zod6.z.ZodError) {
+    if (error instanceof import_zod10.z.ZodError) {
       return res.status(400).json({ success: false, message: "ID utilisateur invalide." });
     }
     res.status(500).json({ success: false, message: "Erreur serveur." });
   }
 });
-router25.post("/status/bulk", async (req2, res) => {
+router29.post("/status/bulk", async (req2, res) => {
   try {
-    const { userIds } = import_zod6.z.object({ userIds: import_zod6.z.array(import_zod6.z.string().min(1)) }).parse(req2.body);
+    const { userIds } = import_zod10.z.object({ userIds: import_zod10.z.array(import_zod10.z.string().min(1)) }).parse(req2.body);
     if (userIds.length === 0) {
       return res.json({ success: true, data: {} });
     }
@@ -18619,28 +23333,28 @@ router25.post("/status/bulk", async (req2, res) => {
     res.json({ success: true, data: servicesByUser });
   } catch (error) {
     console.error("[API/Services] Erreur POST /status/bulk:", error);
-    if (error instanceof import_zod6.z.ZodError) {
+    if (error instanceof import_zod10.z.ZodError) {
       return res.status(400).json({ success: false, message: "Donn\xE9es invalides." });
     }
     res.status(500).json({ success: false, message: "Erreur serveur." });
   }
 });
-router25.post("/:serviceName/enable/:userId", async (req2, res) => {
+router29.post("/:serviceName/enable/:userId", async (req2, res) => {
   const { serviceName, userId } = serviceParamsSchema.parse(req2.params);
   await handleServiceToggle(res, userId, serviceName.toUpperCase(), true);
 });
-router25.post("/:serviceName/disable/:userId", async (req2, res) => {
+router29.post("/:serviceName/disable/:userId", async (req2, res) => {
   const { serviceName, userId } = serviceParamsSchema.parse(req2.params);
   await handleServiceToggle(res, userId, serviceName.toUpperCase(), false);
 });
-var services_default = router25;
+var services_default = router29;
 
 // src/routes/permissions.ts
-var import_express27 = require("express");
+var import_express31 = require("express");
 init_database();
 var prisma12 = db;
-var router26 = (0, import_express27.Router)();
-router26.use(authMiddleware, impersonationMiddleware);
+var router30 = (0, import_express31.Router)();
+router30.use(authMiddleware, impersonationMiddleware);
 var getEffectiveUser = async (req2) => {
   const originalUser = req2.user;
   const impersonatedUser = req2.impersonatedUser;
@@ -18657,7 +23371,7 @@ var getEffectiveUser = async (req2) => {
   }
   return req2.user;
 };
-router26.get("/", async (req2, res) => {
+router30.get("/", async (req2, res) => {
   const { roleId, organizationId } = req2.query;
   if (!req2.user) {
     res.status(401).json({ success: false, message: "Utilisateur non authentifi\xE9." });
@@ -18705,7 +23419,7 @@ router26.get("/", async (req2, res) => {
     res.status(500).json({ success: false, message: "Erreur interne du serveur" });
   }
 });
-router26.post("/bulk", async (req2, res) => {
+router30.post("/bulk", async (req2, res) => {
   const { roleId, permissions, organizationId } = req2.body;
   if (!req2.user) {
     res.status(401).json({ success: false, message: "Utilisateur non authentifi\xE9." });
@@ -18770,7 +23484,7 @@ router26.post("/bulk", async (req2, res) => {
     res.status(500).json({ success: false, message: "Erreur interne du serveur" });
   }
 });
-router26.post("/", async (req2, res) => {
+router30.post("/", async (req2, res) => {
   const { roleId, permissions, organizationId } = req2.body;
   if (!req2.user) {
     res.status(401).json({ success: false, message: "Utilisateur non authentifi\xE9." });
@@ -18835,16 +23549,16 @@ router26.post("/", async (req2, res) => {
     res.status(500).json({ success: false, message: "Erreur interne du serveur" });
   }
 });
-var permissions_default = router26;
+var permissions_default = router30;
 
 // src/routes/admin.ts
-var import_express28 = __toESM(require("express"), 1);
+var import_express32 = __toESM(require("express"), 1);
 init_database();
 init_crypto();
 var prisma13 = db;
-var router27 = import_express28.default.Router();
-router27.use(authMiddleware, impersonationMiddleware);
-router27.get("/users/:id", requireRole2(["super_admin"]), async (req2, res) => {
+var router31 = import_express32.default.Router();
+router31.use(authMiddleware, impersonationMiddleware);
+router31.get("/users/:id", requireRole2(["super_admin"]), async (req2, res) => {
   const { id } = req2.params;
   try {
     const user = await prisma13.user.findUnique({
@@ -18869,7 +23583,7 @@ router27.get("/users/:id", requireRole2(["super_admin"]), async (req2, res) => {
     res.status(500).json({ error: "Erreur interne du serveur" });
   }
 });
-router27.get("/users/mail-status", requireRole2(["super_admin"]), async (_req, res) => {
+router31.get("/users/mail-status", requireRole2(["super_admin"]), async (_req, res) => {
   try {
     const users = await prisma13.user.findMany({
       include: {
@@ -18890,7 +23604,7 @@ router27.get("/users/mail-status", requireRole2(["super_admin"]), async (_req, r
     res.status(500).json({ error: "Erreur interne du serveur" });
   }
 });
-router27.post("/mail/settings", requireRole2(["super_admin"]), async (req2, res) => {
+router31.post("/mail/settings", requireRole2(["super_admin"]), async (req2, res) => {
   const { userId, password } = req2.body;
   if (!userId || !password) {
     res.status(400).json({ error: "L'ID de l'utilisateur et le mot de passe sont requis." });
@@ -18932,7 +23646,7 @@ router27.post("/mail/settings", requireRole2(["super_admin"]), async (req2, res)
     res.status(500).json({ error: "Erreur interne du serveur" });
   }
 });
-router27.get("/mail/settings", async (req2, res) => {
+router31.get("/mail/settings", async (req2, res) => {
   try {
     const userId = req2.user?.userId;
     if (!userId) {
@@ -18953,12 +23667,12 @@ router27.get("/mail/settings", async (req2, res) => {
     res.status(500).json({ error: "Erreur interne du serveur" });
   }
 });
-var admin_default = router27;
+var admin_default = router31;
 
 // src/routes/impersonate.ts
-var import_express29 = require("express");
-var router28 = (0, import_express29.Router)();
-router28.post("/", authMiddleware, async (req2, res) => {
+var import_express33 = require("express");
+var router32 = (0, import_express33.Router)();
+router32.post("/", authMiddleware, async (req2, res) => {
   try {
     const { userId, organizationId } = req2.body;
     console.log("[Impersonate Route] Nouvelle demande d'usurpation:", { userId, organizationId });
@@ -18987,7 +23701,7 @@ router28.post("/", authMiddleware, async (req2, res) => {
     });
   }
 });
-router28.delete("/", authMiddleware, async (req2, res) => {
+router32.delete("/", authMiddleware, async (req2, res) => {
   try {
     const currentUser = req2.user;
     if (!currentUser || currentUser.role !== "super_admin") {
@@ -19009,10 +23723,10 @@ router28.delete("/", authMiddleware, async (req2, res) => {
     });
   }
 });
-var impersonate_default = router28;
+var impersonate_default = router32;
 
 // src/routes/calendar.ts
-var import_express30 = require("express");
+var import_express34 = require("express");
 
 // src/middlewares/impersonation.js
 var impersonationMiddleware2 = (req2, res, next) => {
@@ -19023,8 +23737,8 @@ var impersonationMiddleware2 = (req2, res, next) => {
 init_GoogleCalendarService();
 init_prisma();
 init_database();
-var router29 = (0, import_express30.Router)();
-router29.use((req2, _res, next) => {
+var router33 = (0, import_express34.Router)();
+router33.use((req2, _res, next) => {
   try {
     const hasUser = Boolean(req2.user);
     console.log(`[CALENDAR ROUTES][TRACE] ${req2.method} ${req2.originalUrl} avant middlewares sp\xE9cifiques - user?`, hasUser);
@@ -19071,13 +23785,13 @@ data: {"clientId":"${clientId}"}
     if (idx !== -1) sseClients.splice(idx, 1);
   });
 }
-router29.use(authMiddleware, impersonationMiddleware2);
-router29.get("/stream", (req2, res) => {
+router33.use(authMiddleware, impersonationMiddleware2);
+router33.get("/stream", (req2, res) => {
   initSSE(req2, res);
 });
 async function hasGoogleCalendarAccess(userId, organizationId) {
   const googleToken = await db.googleToken.findFirst({
-    where: { userId, organizationId, isValid: true },
+    where: { userId, organizationId },
     select: { id: true }
   });
   return !!googleToken;
@@ -19087,7 +23801,6 @@ async function pushToCompanyCalendar(organizationId, event, ownerName) {
     const adminToken = await db.googleToken.findFirst({
       where: {
         organizationId,
-        isValid: true,
         User: {
           UserOrganization: {
             some: {
@@ -19127,7 +23840,7 @@ async function pushToCompanyCalendar(organizationId, event, ownerName) {
     return null;
   }
 }
-router29.get("/events", async (req2, res) => {
+router33.get("/events", async (req2, res) => {
   try {
     console.log("[CALENDAR ROUTES] GET /events - D\xE9but de la requ\xEAte");
     const { userId, startDate, endDate, forceSync } = req2.query;
@@ -19234,7 +23947,7 @@ router29.get("/events", async (req2, res) => {
     return res.status(500).json({ error: "Erreur serveur" });
   }
 });
-router29.get("/ai-suggestions", async (req2, res) => {
+router33.get("/ai-suggestions", async (req2, res) => {
   try {
     const { leadId } = req2.query;
     const organizationId = req2.user.organizationId;
@@ -19339,7 +24052,7 @@ router29.get("/ai-suggestions", async (req2, res) => {
     res.status(500).json({ error: "Erreur g\xE9n\xE9ration suggestions" });
   }
 });
-router29.post("/sync", async (req2, res) => {
+router33.post("/sync", async (req2, res) => {
   try {
     const userId = req2.user.userId;
     const organizationId = req2.user.organizationId;
@@ -19387,7 +24100,7 @@ router29.post("/sync", async (req2, res) => {
     res.status(500).json({ error: "Erreur lors de la synchronisation." });
   }
 });
-router29.post("/events", async (req2, res) => {
+router33.post("/events", async (req2, res) => {
   try {
     console.log("[CALENDAR ROUTES] POST /events - D\xE9but cr\xE9ation \xE9v\xE9nement");
     console.log("[CALENDAR ROUTES] Body:", req2.body);
@@ -19415,6 +24128,9 @@ router29.post("/events", async (req2, res) => {
       organizationId,
       updatedAt: /* @__PURE__ */ new Date()
     };
+    if (eventData.linkedChantierId) {
+      prismaData.linkedChantierId = eventData.linkedChantierId;
+    }
     console.log("[CALENDAR ROUTES] Donn\xE9es pr\xE9par\xE9es pour Prisma:", prismaData);
     console.log("[CALENDAR ROUTES] Champs mapp\xE9s correctement:", {
       "category \u2192 type": eventData.category + " \u2192 " + prismaData.type,
@@ -19443,11 +24159,7 @@ router29.post("/events", async (req2, res) => {
         const externalCalendarId = await googleCalendarService.createEvent(organizationId, googleEventData, userId);
         const updatedEvent = await db.calendarEvent.update({
           where: { id: event.id },
-          data: { externalCalendarId },
-          include: {
-            project: { select: { id: true, name: true, clientName: true } },
-            lead: { select: { id: true, firstName: true, lastName: true, email: true } }
-          }
+          data: { externalCalendarId }
         });
         broadcast(organizationId, "event.created", updatedEvent);
         return res.status(201).json(updatedEvent);
@@ -19484,11 +24196,15 @@ router29.post("/events", async (req2, res) => {
     broadcast(organizationId, "event.created", event);
     res.status(201).json(event);
   } catch (error) {
-    console.error("Erreur cr\xE9ation \xE9v\xE9nement:", error);
-    res.status(500).json({ error: "Erreur lors de la cr\xE9ation de l'\xE9v\xE9nement" });
+    console.error("Erreur cr\xE9ation \xE9v\xE9nement:", error?.message || error);
+    console.error("Erreur d\xE9tails:", error?.stack);
+    res.status(500).json({
+      error: "Erreur lors de la cr\xE9ation de l'\xE9v\xE9nement",
+      details: error?.message || String(error)
+    });
   }
 });
-router29.post("/notes", async (req2, res) => {
+router33.post("/notes", async (req2, res) => {
   const startedAt = Date.now();
   console.log("\n[CALENDAR ROUTES] \u25B6 POST /notes - D\xE9but");
   console.log("[CALENDAR ROUTES] \u25B6 Body re\xE7u:", req2.body);
@@ -19575,7 +24291,7 @@ router29.post("/notes", async (req2, res) => {
     res.status(500).json({ error: "Erreur cr\xE9ation note" });
   }
 });
-router29.patch("/notes/:id/done", async (req2, res) => {
+router33.patch("/notes/:id/done", async (req2, res) => {
   try {
     const { id } = req2.params;
     const organizationId = req2.user.organizationId;
@@ -19592,7 +24308,7 @@ router29.patch("/notes/:id/done", async (req2, res) => {
     res.status(500).json({ error: "Erreur completion note" });
   }
 });
-router29.get("/notes/summary", async (req2, res) => {
+router33.get("/notes/summary", async (req2, res) => {
   try {
     const organizationId = req2.user.organizationId;
     const todayStart = /* @__PURE__ */ new Date();
@@ -19608,7 +24324,7 @@ router29.get("/notes/summary", async (req2, res) => {
     res.status(500).json({ error: "Erreur summary notes" });
   }
 });
-router29.get("/notes/history", async (req2, res) => {
+router33.get("/notes/history", async (req2, res) => {
   try {
     const organizationId = req2.user.organizationId;
     const { from, to, format } = req2.query;
@@ -19644,7 +24360,7 @@ router29.get("/notes/history", async (req2, res) => {
     res.status(500).json({ error: "Erreur history notes" });
   }
 });
-router29.put("/events/:id", async (req2, res) => {
+router33.put("/events/:id", async (req2, res) => {
   try {
     const { id } = req2.params;
     const eventData = req2.body;
@@ -19678,7 +24394,7 @@ router29.put("/events/:id", async (req2, res) => {
     res.status(500).json({ error: "Erreur lors de la modification de l'\xE9v\xE9nement" });
   }
 });
-router29.delete("/events/:id", async (req2, res) => {
+router33.delete("/events/:id", async (req2, res) => {
   try {
     console.log("[CALENDAR ROUTES] DELETE /events/:id - D\xE9but suppression");
     const { id } = req2.params;
@@ -19710,15 +24426,15 @@ router29.delete("/events/:id", async (req2, res) => {
     res.status(500).json({ error: "Erreur lors de la suppression de l'\xE9v\xE9nement" });
   }
 });
-var calendar_default = router29;
+var calendar_default = router33;
 
 // src/routes/clients.ts
-var import_express31 = require("express");
+var import_express35 = require("express");
 init_database();
-var router30 = (0, import_express31.Router)();
+var router34 = (0, import_express35.Router)();
 var prisma14 = db;
-router30.use(authenticateToken);
-router30.get("/", async (req2, res) => {
+router34.use(authenticateToken);
+router34.get("/", async (req2, res) => {
   try {
     console.log("[CLIENTS] R\xE9cup\xE9ration des clients pour l'organisation:", req2.organizationId);
     const leads = await prisma14.lead.findMany({
@@ -19770,7 +24486,7 @@ router30.get("/", async (req2, res) => {
     });
   }
 });
-router30.get("/:id", async (req2, res) => {
+router34.get("/:id", async (req2, res) => {
   try {
     const { id } = req2.params;
     console.log("[CLIENTS] R\xE9cup\xE9ration du client:", id);
@@ -19816,7 +24532,7 @@ router30.get("/:id", async (req2, res) => {
     });
   }
 });
-router30.post("/", async (req2, res) => {
+router34.post("/", async (req2, res) => {
   try {
     const { name, email, phone, company } = req2.body;
     console.log("[CLIENTS] Cr\xE9ation d'un nouveau client:", { name, email, company });
@@ -19863,15 +24579,15 @@ router30.post("/", async (req2, res) => {
     });
   }
 });
-var clients_default = router30;
+var clients_default = router34;
 
 // src/routes/projects.ts
-var import_express32 = require("express");
+var import_express36 = require("express");
 init_database();
-var router31 = (0, import_express32.Router)();
+var router35 = (0, import_express36.Router)();
 var prisma15 = db;
-router31.use(authenticateToken);
-router31.get("/", async (req2, res) => {
+router35.use(authenticateToken);
+router35.get("/", async (req2, res) => {
   try {
     console.log("[PROJECTS] R\xE9cup\xE9ration des projets pour l'organisation:", req2.organizationId);
     const projectLeads = await prisma15.lead.findMany({
@@ -19956,7 +24672,7 @@ router31.get("/", async (req2, res) => {
     });
   }
 });
-router31.get("/:id", async (req2, res) => {
+router35.get("/:id", async (req2, res) => {
   try {
     const { id } = req2.params;
     console.log("[PROJECTS] R\xE9cup\xE9ration du projet:", id);
@@ -20019,7 +24735,7 @@ router31.get("/:id", async (req2, res) => {
     });
   }
 });
-router31.post("/", async (req2, res) => {
+router35.post("/", async (req2, res) => {
   try {
     const { name, description, clientName, budget, deadline, priority } = req2.body;
     console.log("[PROJECTS] Cr\xE9ation d'un nouveau projet:", { name, clientName });
@@ -20070,10 +24786,10 @@ router31.post("/", async (req2, res) => {
     });
   }
 });
-var projects_default = router31;
+var projects_default = router35;
 
 // src/routes/emails.ts
-var import_express33 = require("express");
+var import_express37 = require("express");
 
 // src/services/GmailService.ts
 var import_googleapis8 = require("googleapis");
@@ -20446,8 +25162,8 @@ var GmailService = class {
 var GmailService_default = new GmailService();
 
 // src/routes/emails.ts
-var router32 = (0, import_express33.Router)();
-router32.get("/", authMiddleware, async (req2, res) => {
+var router36 = (0, import_express37.Router)();
+router36.get("/", authMiddleware, async (req2, res) => {
   if (!req2.user?.userId) {
     return res.status(401).json({ error: "Authentification requise" });
   }
@@ -20470,7 +25186,7 @@ router32.get("/", authMiddleware, async (req2, res) => {
     res.status(200).json([]);
   }
 });
-router32.get("/thread/:threadId", authMiddleware, async (req2, res) => {
+router36.get("/thread/:threadId", authMiddleware, async (req2, res) => {
   if (!req2.user?.userId) {
     return res.status(401).json({ error: "Authentification requise" });
   }
@@ -20483,7 +25199,7 @@ router32.get("/thread/:threadId", authMiddleware, async (req2, res) => {
     res.status(500).json({ error: "Une erreur interne est survenue." });
   }
 });
-router32.post("/send", authMiddleware, async (req2, res) => {
+router36.post("/send", authMiddleware, async (req2, res) => {
   if (!req2.user?.userId) {
     return res.status(401).json({ error: "Authentification requise" });
   }
@@ -20499,10 +25215,10 @@ router32.post("/send", authMiddleware, async (req2, res) => {
     res.status(500).json({ error: "Une erreur interne est survenue." });
   }
 });
-var emails_default = router32;
+var emails_default = router36;
 
 // src/routes/gemini.ts
-var import_express34 = __toESM(require("express"), 1);
+var import_express38 = __toESM(require("express"), 1);
 
 // src/services/GoogleGeminiService.ts
 var import_generative_ai = require("@google/generative-ai");
@@ -21276,10 +25992,10 @@ function getGeminiService() {
 }
 
 // src/routes/gemini.ts
-var router33 = import_express34.default.Router();
+var router37 = import_express38.default.Router();
 var geminiService = getGeminiService();
-router33.use(authenticateToken);
-router33.post("/generate-email", async (req2, res) => {
+router37.use(authenticateToken);
+router37.post("/generate-email", async (req2, res) => {
   try {
     const { leadData, emailType = "initial" } = req2.body;
     if (!leadData || !leadData.name && !leadData.context) {
@@ -21315,7 +26031,7 @@ router33.post("/generate-email", async (req2, res) => {
     });
   }
 });
-router33.post("/analyze-lead", async (req2, res) => {
+router37.post("/analyze-lead", async (req2, res) => {
   try {
     const { leadData } = req2.body;
     if (!leadData) {
@@ -21350,7 +26066,7 @@ router33.post("/analyze-lead", async (req2, res) => {
     });
   }
 });
-router33.post("/generate-proposal", async (req2, res) => {
+router37.post("/generate-proposal", async (req2, res) => {
   try {
     const { leadData, productData } = req2.body;
     if (!leadData || !productData) {
@@ -21386,7 +26102,7 @@ router33.post("/generate-proposal", async (req2, res) => {
     });
   }
 });
-router33.post("/analyze-sentiment", async (req2, res) => {
+router37.post("/analyze-sentiment", async (req2, res) => {
   try {
     const { emailContent } = req2.body;
     if (!emailContent) {
@@ -21421,7 +26137,7 @@ router33.post("/analyze-sentiment", async (req2, res) => {
     });
   }
 });
-router33.post("/suggest-response", async (req2, res) => {
+router37.post("/suggest-response", async (req2, res) => {
   try {
     const { emailContent, context = {} } = req2.body;
     if (!emailContent) {
@@ -21456,7 +26172,7 @@ router33.post("/suggest-response", async (req2, res) => {
     });
   }
 });
-router33.get("/test", async (req2, res) => {
+router37.get("/test", async (req2, res) => {
   try {
     console.log("\u{1F9EA} [Gemini] Test de connexion");
     const testLead = {
@@ -21480,7 +26196,7 @@ router33.get("/test", async (req2, res) => {
     });
   }
 });
-router33.get("/stats", async (req2, res) => {
+router37.get("/stats", async (req2, res) => {
   try {
     res.json({
       success: true,
@@ -21502,15 +26218,15 @@ router33.get("/stats", async (req2, res) => {
     });
   }
 });
-var gemini_default = router33;
+var gemini_default = router37;
 
 // src/routes/telnyx.ts
-var import_express36 = require("express");
+var import_express40 = require("express");
 
 // src/api/telnyx.ts
-var import_express35 = require("express");
+var import_express39 = require("express");
 init_database();
-var import_zod7 = require("zod");
+var import_zod11 = require("zod");
 var import_axios2 = __toESM(require("axios"), 1);
 
 // src/services/TelnyxCascadeService.ts
@@ -21557,9 +26273,9 @@ function getBackendBaseUrl(options = {}) {
   }
   throw new Error("BACKEND_URL/APP_URL/API_URL non configur\xE9e (impossible de construire une URL en production)");
 }
-function joinUrl(base, path13) {
+function joinUrl(base, path15) {
   const cleanBase = base.endsWith("/") ? base.slice(0, -1) : base;
-  const cleanPath = path13.startsWith("/") ? path13 : `/${path13}`;
+  const cleanPath = path15.startsWith("/") ? path15 : `/${path15}`;
   return `${cleanBase}${cleanPath}`;
 }
 
@@ -21758,10 +26474,10 @@ var TelnyxCascadeService = {
 
 // src/api/telnyx.ts
 init_crypto();
-var import_crypto14 = __toESM(require("crypto"), 1);
-var router34 = (0, import_express35.Router)();
+var import_crypto17 = __toESM(require("crypto"), 1);
+var router38 = (0, import_express39.Router)();
 var prisma17 = db;
-router34.use(async (_req, _res, next) => {
+router38.use(async (_req, _res, next) => {
   await ensureTelnyxCascadeSchema();
   next();
 });
@@ -21940,7 +26656,7 @@ async function getTelnyxAuth(organizationId) {
 function getApiKeyMeta(rawKey) {
   const trimmed = rawKey.replace(/^Bearer\s+/i, "").trim();
   const prefix = trimmed.length >= 4 ? trimmed.slice(0, 4) : trimmed.length > 0 ? trimmed : null;
-  const fingerprint = import_crypto14.default.createHash("sha256").update(trimmed).digest("hex").slice(0, 12);
+  const fingerprint = import_crypto17.default.createHash("sha256").update(trimmed).digest("hex").slice(0, 12);
   return { length: trimmed.length, prefix, fingerprint };
 }
 function normalizeE164(value) {
@@ -22111,7 +26827,7 @@ async function transferCallToLeg(params) {
     throw error;
   }
 }
-router34.get("/diagnostic", async (req2, res) => {
+router38.get("/diagnostic", async (req2, res) => {
   const organizationId = getOrganizationIdFromRequest(req2);
   if (!organizationId) return res.status(401).json({ ok: false, error: "Non autoris\xE9" });
   const computedWebhookUrl = computeTelnyxWebhookUrlFromRequest(req2);
@@ -22399,27 +27115,27 @@ async function patchTelnyxConnectionWebhook(params) {
     return { ok: false, status, detail };
   }
 }
-var makeCallSchema = import_zod7.z.object({
-  to: import_zod7.z.string().min(1),
-  from: import_zod7.z.string().min(1),
-  connection_id: import_zod7.z.string().optional(),
-  lead_id: import_zod7.z.string().optional(),
-  webhook_url: import_zod7.z.string().url().optional()
+var makeCallSchema = import_zod11.z.object({
+  to: import_zod11.z.string().min(1),
+  from: import_zod11.z.string().min(1),
+  connection_id: import_zod11.z.string().optional(),
+  lead_id: import_zod11.z.string().optional(),
+  webhook_url: import_zod11.z.string().url().optional()
 });
-var sendMessageSchema = import_zod7.z.object({
-  to: import_zod7.z.string().min(1),
-  from: import_zod7.z.string().min(1),
-  text: import_zod7.z.string().min(1).max(1600),
-  type: import_zod7.z.enum(["SMS", "MMS"]).default("SMS"),
-  lead_id: import_zod7.z.string().optional(),
-  media_urls: import_zod7.z.array(import_zod7.z.string().url()).optional()
+var sendMessageSchema = import_zod11.z.object({
+  to: import_zod11.z.string().min(1),
+  from: import_zod11.z.string().min(1),
+  text: import_zod11.z.string().min(1).max(1600),
+  type: import_zod11.z.enum(["SMS", "MMS"]).default("SMS"),
+  lead_id: import_zod11.z.string().optional(),
+  media_urls: import_zod11.z.array(import_zod11.z.string().url()).optional()
 });
-var purchaseNumberSchema = import_zod7.z.object({
-  country: import_zod7.z.string().length(2),
-  type: import_zod7.z.enum(["local", "toll-free", "national", "mobile"]),
-  area_code: import_zod7.z.string().optional()
+var purchaseNumberSchema = import_zod11.z.object({
+  country: import_zod11.z.string().length(2),
+  type: import_zod11.z.enum(["local", "toll-free", "national", "mobile"]),
+  area_code: import_zod11.z.string().optional()
 });
-router34.get("/connections", async (req2, res) => {
+router38.get("/connections", async (req2, res) => {
   try {
     console.log("\u{1F50D} [Telnyx API] R\xE9cup\xE9ration des connexions...");
     const organizationId = getOrganizationIdFromRequest(req2);
@@ -22517,7 +27233,7 @@ router34.get("/connections", async (req2, res) => {
     return res.json([]);
   }
 });
-router34.get("/phone-numbers", async (req2, res) => {
+router38.get("/phone-numbers", async (req2, res) => {
   try {
     console.log("\u{1F50D} [Telnyx API] R\xE9cup\xE9ration des num\xE9ros...");
     const organizationId = getOrganizationIdFromRequest(req2);
@@ -22629,7 +27345,7 @@ router34.get("/phone-numbers", async (req2, res) => {
     return res.json([]);
   }
 });
-router34.post("/phone-numbers/purchase", async (req2, res) => {
+router38.post("/phone-numbers/purchase", async (req2, res) => {
   try {
     const parsed = purchaseNumberSchema.safeParse(req2.body);
     if (!parsed.success) {
@@ -22674,7 +27390,7 @@ router34.post("/phone-numbers/purchase", async (req2, res) => {
     return respondTelnyxAxiosError(res, error, "Erreur lors de l'achat du num\xE9ro");
   }
 });
-router34.get("/calls", async (req2, res) => {
+router38.get("/calls", async (req2, res) => {
   try {
     const limit = parseInt(req2.query.limit) || 50;
     const organizationId = getOrganizationIdFromRequest(req2);
@@ -22706,7 +27422,7 @@ router34.get("/calls", async (req2, res) => {
     res.status(500).json({ error: "Erreur lors de la r\xE9cup\xE9ration des appels" });
   }
 });
-router34.post("/calls", async (req2, res) => {
+router38.post("/calls", async (req2, res) => {
   try {
     const data = makeCallSchema.parse(req2.body);
     const organizationId = getOrganizationIdFromRequest(req2);
@@ -22733,7 +27449,7 @@ router34.post("/calls", async (req2, res) => {
     return respondTelnyxAxiosError(res, error, "Erreur lors de l'initiation de l'appel");
   }
 });
-router34.post("/calls/hangup-active", async (req2, res) => {
+router38.post("/calls/hangup-active", async (req2, res) => {
   try {
     const requesterOrgId = getOrganizationIdFromRequest(req2);
     const isSuperAdmin2 = isSuperAdminFromRequest(req2);
@@ -22799,7 +27515,7 @@ router34.post("/calls/hangup-active", async (req2, res) => {
     return respondTelnyxAxiosError(res, error, "Erreur lors du raccrochage des appels actifs");
   }
 });
-router34.post("/calls/:callId/hangup", async (req2, res) => {
+router38.post("/calls/:callId/hangup", async (req2, res) => {
   try {
     const { callId } = req2.params;
     const organizationId = getOrganizationIdFromRequest(req2);
@@ -22836,7 +27552,7 @@ router34.post("/calls/:callId/hangup", async (req2, res) => {
     return respondTelnyxAxiosError(res, error, "Erreur lors du raccrochage");
   }
 });
-router34.post("/calls/:callId/mute", async (req2, res) => {
+router38.post("/calls/:callId/mute", async (req2, res) => {
   try {
     const { callId } = req2.params;
     const organizationId = getOrganizationIdFromRequest(req2);
@@ -22856,7 +27572,7 @@ router34.post("/calls/:callId/mute", async (req2, res) => {
     return respondTelnyxAxiosError(res, error, "Erreur lors de la coupure du micro");
   }
 });
-router34.post("/calls/:callId/unmute", async (req2, res) => {
+router38.post("/calls/:callId/unmute", async (req2, res) => {
   try {
     const { callId } = req2.params;
     const organizationId = getOrganizationIdFromRequest(req2);
@@ -22876,7 +27592,7 @@ router34.post("/calls/:callId/unmute", async (req2, res) => {
     return respondTelnyxAxiosError(res, error, "Erreur lors de l'activation du micro");
   }
 });
-router34.get("/messages", async (req2, res) => {
+router38.get("/messages", async (req2, res) => {
   try {
     const limit = parseInt(req2.query.limit) || 50;
     const organizationId = getOrganizationIdFromRequest(req2);
@@ -22909,7 +27625,7 @@ router34.get("/messages", async (req2, res) => {
     res.status(500).json({ error: "Erreur lors de la r\xE9cup\xE9ration des messages" });
   }
 });
-router34.post("/messages", async (req2, res) => {
+router38.post("/messages", async (req2, res) => {
   try {
     const data = sendMessageSchema.parse(req2.body);
     const organizationId = getOrganizationIdFromRequest(req2);
@@ -22957,7 +27673,7 @@ router34.post("/messages", async (req2, res) => {
     return respondTelnyxAxiosError(res, error, "Erreur lors de l'envoi du message");
   }
 });
-router34.post("/webhooks/calls", async (req2, res) => {
+router38.post("/webhooks/calls", async (req2, res) => {
   try {
     const webhook = req2.body;
     console.log("\u{1FA9D} [Telnyx Webhook] Appel:", webhook.data?.event_type);
@@ -22991,7 +27707,7 @@ router34.post("/webhooks/calls", async (req2, res) => {
     res.status(500).json({ error: "Erreur webhook appel" });
   }
 });
-router34.post("/webhooks/messages", async (req2, res) => {
+router38.post("/webhooks/messages", async (req2, res) => {
   try {
     const webhook = req2.body;
     console.log("\u{1FA9D} [Telnyx Webhook] Message:", webhook.data?.event_type);
@@ -23046,7 +27762,7 @@ router34.post("/webhooks/messages", async (req2, res) => {
     res.status(500).json({ error: "Erreur webhook message" });
   }
 });
-router34.post("/sync", async (req2, res) => {
+router38.post("/sync", async (req2, res) => {
   try {
     console.log("\u{1F504} [Telnyx API] Synchronisation compl\xE8te...");
     const organizationId = getOrganizationIdFromRequest(req2);
@@ -23133,22 +27849,22 @@ router34.post("/sync", async (req2, res) => {
     return respondTelnyxAxiosError(res, error, "Erreur lors de la synchronisation");
   }
 });
-router34.post("/config", async (req2, res) => {
+router38.post("/config", async (req2, res) => {
   try {
-    const schema = import_zod7.z.object({
-      api_key: import_zod7.z.string().optional().or(import_zod7.z.literal("")),
-      webhook_url: import_zod7.z.string().url().optional().or(import_zod7.z.literal("")).or(import_zod7.z.literal("__AUTO__")),
-      default_connection: import_zod7.z.string().optional().or(import_zod7.z.literal("")),
-      call_control_app_id: import_zod7.z.string().optional().or(import_zod7.z.literal("")),
-      webhook_signing_secret: import_zod7.z.string().optional().or(import_zod7.z.literal("")),
-      fallback_pstn_number: import_zod7.z.string().optional().or(import_zod7.z.literal("")),
-      organizationId: import_zod7.z.string().optional().or(import_zod7.z.literal(""))
+    const schema = import_zod11.z.object({
+      api_key: import_zod11.z.string().optional().or(import_zod11.z.literal("")),
+      webhook_url: import_zod11.z.string().url().optional().or(import_zod11.z.literal("")).or(import_zod11.z.literal("__AUTO__")),
+      default_connection: import_zod11.z.string().optional().or(import_zod11.z.literal("")),
+      call_control_app_id: import_zod11.z.string().optional().or(import_zod11.z.literal("")),
+      webhook_signing_secret: import_zod11.z.string().optional().or(import_zod11.z.literal("")),
+      fallback_pstn_number: import_zod11.z.string().optional().or(import_zod11.z.literal("")),
+      organizationId: import_zod11.z.string().optional().or(import_zod11.z.literal(""))
     });
     let parsed;
     try {
       parsed = schema.parse(req2.body);
     } catch (e) {
-      if (e instanceof import_zod7.z.ZodError) {
+      if (e instanceof import_zod11.z.ZodError) {
         return res.status(400).json({
           code: "TELNYX_CONFIG_INVALID_PAYLOAD",
           message: "Payload invalide pour la configuration Telnyx",
@@ -23234,7 +27950,7 @@ router34.post("/config", async (req2, res) => {
       ...incomingKey ? { apiKeyMeta: getApiKeyMeta(incomingKey) } : {}
     });
   } catch (error) {
-    const errorId = import_crypto14.default.randomUUID();
+    const errorId = import_crypto17.default.randomUUID();
     console.error(`\u274C [Telnyx API] Erreur sauvegarde configuration (errorId=${errorId}):`, error);
     const anyErr = error;
     const prismaCode = anyErr?.code;
@@ -23266,7 +27982,7 @@ router34.post("/config", async (req2, res) => {
     });
   }
 });
-router34.post("/provision", async (req2, res) => {
+router38.post("/provision", async (req2, res) => {
   try {
     const requesterOrgId = getOrganizationIdFromRequest(req2);
     const isSuperAdmin2 = isSuperAdminFromRequest(req2);
@@ -23511,7 +28227,7 @@ router34.post("/provision", async (req2, res) => {
     return respondTelnyxAxiosError(res, error, "Erreur provisioning Telnyx");
   }
 });
-router34.get("/users", async (req2, res) => {
+router38.get("/users", async (req2, res) => {
   try {
     const requesterOrgId = getOrganizationIdFromRequest(req2);
     const isSuperAdmin2 = isSuperAdminFromRequest(req2);
@@ -23539,7 +28255,7 @@ router34.get("/users", async (req2, res) => {
     return res.status(500).json({ error: "Erreur lors de la r\xE9cup\xE9ration des utilisateurs" });
   }
 });
-router34.post("/user-config", async (req2, res) => {
+router38.post("/user-config", async (req2, res) => {
   try {
     const { userId, assignedNumber, canMakeCalls, canSendSms, monthlyLimit } = req2.body;
     const organizationId = getOrganizationIdFromRequest(req2);
@@ -23607,7 +28323,7 @@ router34.post("/user-config", async (req2, res) => {
     res.status(500).json({ error: "Erreur lors de la sauvegarde de la configuration" });
   }
 });
-router34.get("/user-config/:userId", async (req2, res) => {
+router38.get("/user-config/:userId", async (req2, res) => {
   try {
     const { userId } = req2.params;
     const organizationId = getOrganizationIdFromRequest(req2);
@@ -23632,7 +28348,7 @@ router34.get("/user-config/:userId", async (req2, res) => {
     res.status(500).json({ error: "Erreur lors de la r\xE9cup\xE9ration de la configuration" });
   }
 });
-router34.get("/stats", async (req2, res) => {
+router38.get("/stats", async (req2, res) => {
   try {
     const organizationId = getOrganizationIdFromRequest(req2);
     if (!organizationId) return res.status(401).json({ error: "Non autoris\xE9" });
@@ -23686,7 +28402,7 @@ router34.get("/stats", async (req2, res) => {
     res.status(500).json({ error: "Erreur lors de la r\xE9cup\xE9ration des statistiques" });
   }
 });
-router34.post("/webhooks", async (req2, res) => {
+router38.post("/webhooks", async (req2, res) => {
   const debug = process.env.TELNYX_DEBUG_WEBHOOKS === "1";
   const webhook = req2.body;
   const eventType = webhook?.data?.event_type;
@@ -24087,7 +28803,7 @@ function normalizeSipEndpointInput(input) {
   sipDomain = sipDomain.split(/[\/;?]/)[0].trim();
   return { sipUsername, sipDomain };
 }
-router34.get("/sip-endpoints", async (req2, res) => {
+router38.get("/sip-endpoints", async (req2, res) => {
   try {
     const requesterOrgId = getOrganizationIdFromRequest(req2);
     const isSuperAdmin2 = isSuperAdminFromRequest(req2);
@@ -24127,7 +28843,7 @@ router34.get("/sip-endpoints", async (req2, res) => {
     res.status(500).json({ error: "Erreur lors de la r\xE9cup\xE9ration des endpoints SIP" });
   }
 });
-router34.get("/recent-calls", async (req2, res) => {
+router38.get("/recent-calls", async (req2, res) => {
   try {
     const requesterOrgId = getOrganizationIdFromRequest(req2);
     const isSuperAdmin2 = isSuperAdminFromRequest(req2);
@@ -24184,7 +28900,7 @@ router34.get("/recent-calls", async (req2, res) => {
     res.status(500).json({ error: "Erreur lors de la r\xE9cup\xE9ration des derniers appels" });
   }
 });
-router34.post("/sip-endpoints", async (req2, res) => {
+router38.post("/sip-endpoints", async (req2, res) => {
   try {
     const { organizationId, name, sipUsername, sipPassword, sipDomain, priority, timeout, userId } = req2.body;
     const requesterOrgId = getOrganizationIdFromRequest(req2);
@@ -24237,7 +28953,7 @@ router34.post("/sip-endpoints", async (req2, res) => {
     res.status(500).json({ error: "Erreur lors de la cr\xE9ation de l'endpoint SIP" });
   }
 });
-router34.put("/sip-endpoints/:id", async (req2, res) => {
+router38.put("/sip-endpoints/:id", async (req2, res) => {
   try {
     const { id } = req2.params;
     const { name, sipUsername, sipPassword, sipDomain, priority, timeout, userId } = req2.body;
@@ -24288,7 +29004,7 @@ router34.put("/sip-endpoints/:id", async (req2, res) => {
     res.status(500).json({ error: "Erreur lors de la modification de l'endpoint SIP" });
   }
 });
-router34.delete("/sip-endpoints/:id", async (req2, res) => {
+router38.delete("/sip-endpoints/:id", async (req2, res) => {
   try {
     const { id } = req2.params;
     const requesterOrgId = getOrganizationIdFromRequest(req2);
@@ -24309,7 +29025,7 @@ router34.delete("/sip-endpoints/:id", async (req2, res) => {
     res.status(500).json({ error: "Erreur lors de la suppression de l'endpoint SIP" });
   }
 });
-router34.post("/sip-endpoints/:id/test", async (req2, res) => {
+router38.post("/sip-endpoints/:id/test", async (req2, res) => {
   let lockToken = null;
   let lockOrgId = null;
   try {
@@ -24421,17 +29137,17 @@ router34.post("/sip-endpoints/:id/test", async (req2, res) => {
     if (lockOrgId) releaseSipTestLock(lockOrgId, lockToken);
   }
 });
-var telnyx_default = router34;
+var telnyx_default = router38;
 
 // src/routes/telnyx.ts
-var router35 = (0, import_express36.Router)();
-router35.use((req2, res, next) => {
-  const path13 = req2.path || "";
+var router39 = (0, import_express40.Router)();
+router39.use((req2, res, next) => {
+  const path15 = req2.path || "";
   const originalUrl = req2.originalUrl || "";
-  const isWebhook = path13 === "/webhooks" || path13.startsWith("/webhooks/") || originalUrl.includes("/api/telnyx/webhooks");
+  const isWebhook = path15 === "/webhooks" || path15.startsWith("/webhooks/") || originalUrl.includes("/api/telnyx/webhooks");
   if (isWebhook) {
     if (process.env.TELNYX_DEBUG_WEBHOOKS === "1") {
-      console.log("\u{1F9F7} [Telnyx Webhook Debug] bypass auth", { path: path13, originalUrl });
+      console.log("\u{1F9F7} [Telnyx Webhook Debug] bypass auth", { path: path15, originalUrl });
     }
     return next();
   }
@@ -24440,15 +29156,15 @@ router35.use((req2, res, next) => {
     return impersonationMiddleware2(req2, res, next);
   });
 });
-router35.use("/", telnyx_default);
-var telnyx_default2 = router35;
+router39.use("/", telnyx_default);
+var telnyx_default2 = router39;
 
 // src/routes/quotes.ts
-var import_express37 = require("express");
+var import_express41 = require("express");
 init_database();
-var router36 = (0, import_express37.Router)();
+var router40 = (0, import_express41.Router)();
 var prisma18 = db;
-router36.use(authMiddleware);
+router40.use(authMiddleware);
 var allowedTransitions = {
   ["DRAFT" /* DRAFT */]: ["SENT" /* SENT */, "CANCELLED" /* CANCELLED */],
   ["SENT" /* SENT */]: ["ACCEPTED" /* ACCEPTED */, "REJECTED" /* REJECTED */, "CANCELLED" /* CANCELLED */, "EXPIRED" /* EXPIRED */],
@@ -24499,7 +29215,7 @@ function round4(n) {
 function toDecimal(value) {
   return new import_client.Prisma.Decimal(value.toString());
 }
-router36.get("/", async (req2, res) => {
+router40.get("/", async (req2, res) => {
   try {
     const { leadId, status, page = "1", pageSize = "20" } = req2.query;
     const { user } = req2;
@@ -24535,7 +29251,7 @@ router36.get("/", async (req2, res) => {
     res.status(500).json({ success: false, error: "Erreur lors du chargement des devis" });
   }
 });
-router36.get("/:id", async (req2, res) => {
+router40.get("/:id", async (req2, res) => {
   try {
     const { id } = req2.params;
     const { user } = req2;
@@ -24555,7 +29271,7 @@ router36.get("/:id", async (req2, res) => {
     res.status(500).json({ error: "Erreur lors du chargement du devis" });
   }
 });
-router36.post("/", async (req2, res) => {
+router40.post("/", async (req2, res) => {
   try {
     const { user } = req2;
     const organizationId = user?.organizationId;
@@ -24587,7 +29303,7 @@ router36.post("/", async (req2, res) => {
     res.status(500).json({ error: "Erreur lors de la cr\xE9ation du devis" });
   }
 });
-router36.patch("/:id", async (req2, res) => {
+router40.patch("/:id", async (req2, res) => {
   try {
     const { id } = req2.params;
     const { user } = req2;
@@ -24616,7 +29332,7 @@ router36.patch("/:id", async (req2, res) => {
     res.status(500).json({ error: "Erreur lors de la mise \xE0 jour du devis" });
   }
 });
-router36.delete("/:id", async (req2, res) => {
+router40.delete("/:id", async (req2, res) => {
   try {
     const { id } = req2.params;
     const { user } = req2;
@@ -24631,7 +29347,7 @@ router36.delete("/:id", async (req2, res) => {
     res.status(500).json({ error: "Erreur lors de l'annulation du devis" });
   }
 });
-router36.post("/:id/items", async (req2, res) => {
+router40.post("/:id/items", async (req2, res) => {
   try {
     const { id } = req2.params;
     const { user } = req2;
@@ -24689,7 +29405,7 @@ router36.post("/:id/items", async (req2, res) => {
     res.status(500).json({ error: "Erreur lors de la mise \xE0 jour des lignes" });
   }
 });
-router36.post("/:id/duplicate", async (req2, res) => {
+router40.post("/:id/duplicate", async (req2, res) => {
   try {
     const { id } = req2.params;
     const { user } = req2;
@@ -24742,16 +29458,16 @@ router36.post("/:id/duplicate", async (req2, res) => {
     res.status(500).json({ error: "Erreur lors de la duplication du devis" });
   }
 });
-router36.post("/:id/generate-document", (_req, res) => {
+router40.post("/:id/generate-document", (_req, res) => {
   return res.status(501).json({ error: "G\xE9n\xE9ration de document non encore impl\xE9ment\xE9e (Phase 2)" });
 });
-var quotes_default = router36;
+var quotes_default = router40;
 
 // src/routes/google-drive.ts
-var import_express38 = require("express");
+var import_express42 = require("express");
 init_GoogleDriveService();
-var router37 = (0, import_express38.Router)();
-router37.get("/files", authMiddleware, async (req2, res) => {
+var router41 = (0, import_express42.Router)();
+router41.get("/files", authMiddleware, async (req2, res) => {
   try {
     const organizationId = req2.user?.organizationId;
     const userId = req2.user?.id || req2.user?.userId;
@@ -24769,7 +29485,7 @@ router37.get("/files", authMiddleware, async (req2, res) => {
     res.status(500).json({ error: "Erreur lors de la r\xE9cup\xE9ration des fichiers Drive" });
   }
 });
-router37.get("/shared", authMiddleware, async (req2, res) => {
+router41.get("/shared", authMiddleware, async (req2, res) => {
   try {
     const organizationId = req2.user?.organizationId;
     const userId = req2.user?.id || req2.user?.userId;
@@ -24786,7 +29502,7 @@ router37.get("/shared", authMiddleware, async (req2, res) => {
     res.status(500).json({ error: "Erreur lors de la r\xE9cup\xE9ration des fichiers partag\xE9s" });
   }
 });
-router37.get("/shared-drives", authMiddleware, async (req2, res) => {
+router41.get("/shared-drives", authMiddleware, async (req2, res) => {
   try {
     const organizationId = req2.user?.organizationId;
     const userId = req2.user?.id || req2.user?.userId;
@@ -24801,7 +29517,7 @@ router37.get("/shared-drives", authMiddleware, async (req2, res) => {
     res.status(500).json({ error: "Erreur lors de la r\xE9cup\xE9ration des drives partag\xE9s" });
   }
 });
-router37.get("/shared-drives/:driveId/files", authMiddleware, async (req2, res) => {
+router41.get("/shared-drives/:driveId/files", authMiddleware, async (req2, res) => {
   try {
     const organizationId = req2.user?.organizationId;
     const userId = req2.user?.id || req2.user?.userId;
@@ -24820,7 +29536,7 @@ router37.get("/shared-drives/:driveId/files", authMiddleware, async (req2, res) 
     res.status(500).json({ error: "Erreur lors de la r\xE9cup\xE9ration des fichiers du drive partag\xE9" });
   }
 });
-router37.get("/search", authMiddleware, async (req2, res) => {
+router41.get("/search", authMiddleware, async (req2, res) => {
   try {
     const organizationId = req2.user?.organizationId;
     const userId = req2.user?.id || req2.user?.userId;
@@ -24839,7 +29555,7 @@ router37.get("/search", authMiddleware, async (req2, res) => {
     res.status(500).json({ error: "Erreur lors de la recherche de fichiers" });
   }
 });
-router37.get("/storage", authMiddleware, async (req2, res) => {
+router41.get("/storage", authMiddleware, async (req2, res) => {
   try {
     const organizationId = req2.user?.organizationId;
     const userId = req2.user?.id || req2.user?.userId;
@@ -24854,7 +29570,7 @@ router37.get("/storage", authMiddleware, async (req2, res) => {
     res.status(500).json({ error: "Erreur lors de la r\xE9cup\xE9ration des infos de stockage" });
   }
 });
-router37.get("/files/:fileId", authMiddleware, async (req2, res) => {
+router41.get("/files/:fileId", authMiddleware, async (req2, res) => {
   try {
     const organizationId = req2.user?.organizationId;
     const userId = req2.user?.id || req2.user?.userId;
@@ -24870,7 +29586,7 @@ router37.get("/files/:fileId", authMiddleware, async (req2, res) => {
     res.status(500).json({ error: "Erreur lors de la r\xE9cup\xE9ration des infos du fichier" });
   }
 });
-router37.post("/folders", authMiddleware, async (req2, res) => {
+router41.post("/folders", authMiddleware, async (req2, res) => {
   try {
     const organizationId = req2.user?.organizationId;
     const userId = req2.user?.id || req2.user?.userId;
@@ -24889,7 +29605,7 @@ router37.post("/folders", authMiddleware, async (req2, res) => {
     res.status(500).json({ error: "Erreur lors de la cr\xE9ation du dossier" });
   }
 });
-router37.delete("/files/:fileId", authMiddleware, async (req2, res) => {
+router41.delete("/files/:fileId", authMiddleware, async (req2, res) => {
   try {
     const organizationId = req2.user?.organizationId;
     const userId = req2.user?.id || req2.user?.userId;
@@ -24905,7 +29621,7 @@ router37.delete("/files/:fileId", authMiddleware, async (req2, res) => {
     res.status(500).json({ error: "Erreur lors de la suppression du fichier" });
   }
 });
-router37.post("/upload", authMiddleware, async (req2, res) => {
+router41.post("/upload", authMiddleware, async (req2, res) => {
   try {
     const organizationId = req2.user?.organizationId;
     const userId = req2.user?.id || req2.user?.userId;
@@ -24942,7 +29658,7 @@ router37.post("/upload", authMiddleware, async (req2, res) => {
     res.status(500).json({ error: "Erreur lors de l'upload du fichier" });
   }
 });
-router37.patch("/files/:fileId/rename", authMiddleware, async (req2, res) => {
+router41.patch("/files/:fileId/rename", authMiddleware, async (req2, res) => {
   try {
     const organizationId = req2.user?.organizationId;
     const userId = req2.user?.id || req2.user?.userId;
@@ -24962,7 +29678,7 @@ router37.patch("/files/:fileId/rename", authMiddleware, async (req2, res) => {
     res.status(500).json({ error: "Erreur lors du renommage" });
   }
 });
-router37.patch("/files/:fileId/move", authMiddleware, async (req2, res) => {
+router41.patch("/files/:fileId/move", authMiddleware, async (req2, res) => {
   try {
     const organizationId = req2.user?.organizationId;
     const userId = req2.user?.id || req2.user?.userId;
@@ -24982,7 +29698,7 @@ router37.patch("/files/:fileId/move", authMiddleware, async (req2, res) => {
     res.status(500).json({ error: "Erreur lors du d\xE9placement" });
   }
 });
-router37.post("/files/:fileId/copy", authMiddleware, async (req2, res) => {
+router41.post("/files/:fileId/copy", authMiddleware, async (req2, res) => {
   try {
     const organizationId = req2.user?.organizationId;
     const userId = req2.user?.id || req2.user?.userId;
@@ -24999,7 +29715,7 @@ router37.post("/files/:fileId/copy", authMiddleware, async (req2, res) => {
     res.status(500).json({ error: "Erreur lors de la copie" });
   }
 });
-router37.get("/files/:fileId/share", authMiddleware, async (req2, res) => {
+router41.get("/files/:fileId/share", authMiddleware, async (req2, res) => {
   try {
     const organizationId = req2.user?.organizationId;
     const userId = req2.user?.id || req2.user?.userId;
@@ -25015,7 +29731,7 @@ router37.get("/files/:fileId/share", authMiddleware, async (req2, res) => {
     res.status(500).json({ error: "Erreur lors de la r\xE9cup\xE9ration du lien" });
   }
 });
-router37.post("/files/:fileId/make-public", authMiddleware, async (req2, res) => {
+router41.post("/files/:fileId/make-public", authMiddleware, async (req2, res) => {
   try {
     const organizationId = req2.user?.organizationId;
     const userId = req2.user?.id || req2.user?.userId;
@@ -25031,7 +29747,7 @@ router37.post("/files/:fileId/make-public", authMiddleware, async (req2, res) =>
     res.status(500).json({ error: "Erreur lors du partage" });
   }
 });
-router37.get("/recent", authMiddleware, async (req2, res) => {
+router41.get("/recent", authMiddleware, async (req2, res) => {
   try {
     const organizationId = req2.user?.organizationId;
     const userId = req2.user?.id || req2.user?.userId;
@@ -25046,7 +29762,7 @@ router37.get("/recent", authMiddleware, async (req2, res) => {
     res.status(500).json({ error: "Erreur lors de la r\xE9cup\xE9ration des fichiers r\xE9cents" });
   }
 });
-router37.get("/starred", authMiddleware, async (req2, res) => {
+router41.get("/starred", authMiddleware, async (req2, res) => {
   try {
     const organizationId = req2.user?.organizationId;
     const userId = req2.user?.id || req2.user?.userId;
@@ -25061,7 +29777,7 @@ router37.get("/starred", authMiddleware, async (req2, res) => {
     res.status(500).json({ error: "Erreur lors de la r\xE9cup\xE9ration des fichiers favoris" });
   }
 });
-router37.patch("/files/:fileId/star", authMiddleware, async (req2, res) => {
+router41.patch("/files/:fileId/star", authMiddleware, async (req2, res) => {
   try {
     const organizationId = req2.user?.organizationId;
     const userId = req2.user?.id || req2.user?.userId;
@@ -25078,7 +29794,7 @@ router37.patch("/files/:fileId/star", authMiddleware, async (req2, res) => {
     res.status(500).json({ error: "Erreur lors de la mise \xE0 jour du favori" });
   }
 });
-router37.get("/trash", authMiddleware, async (req2, res) => {
+router41.get("/trash", authMiddleware, async (req2, res) => {
   try {
     const organizationId = req2.user?.organizationId;
     const userId = req2.user?.id || req2.user?.userId;
@@ -25093,7 +29809,7 @@ router37.get("/trash", authMiddleware, async (req2, res) => {
     res.status(500).json({ error: "Erreur lors de la r\xE9cup\xE9ration de la corbeille" });
   }
 });
-router37.post("/files/:fileId/restore", authMiddleware, async (req2, res) => {
+router41.post("/files/:fileId/restore", authMiddleware, async (req2, res) => {
   try {
     const organizationId = req2.user?.organizationId;
     const userId = req2.user?.id || req2.user?.userId;
@@ -25109,7 +29825,7 @@ router37.post("/files/:fileId/restore", authMiddleware, async (req2, res) => {
     res.status(500).json({ error: "Erreur lors de la restauration" });
   }
 });
-router37.delete("/files/:fileId/permanent", authMiddleware, async (req2, res) => {
+router41.delete("/files/:fileId/permanent", authMiddleware, async (req2, res) => {
   try {
     const organizationId = req2.user?.organizationId;
     const userId = req2.user?.id || req2.user?.userId;
@@ -25125,7 +29841,7 @@ router37.delete("/files/:fileId/permanent", authMiddleware, async (req2, res) =>
     res.status(500).json({ error: "Erreur lors de la suppression d\xE9finitive" });
   }
 });
-router37.delete("/trash", authMiddleware, async (req2, res) => {
+router41.delete("/trash", authMiddleware, async (req2, res) => {
   try {
     const organizationId = req2.user?.organizationId;
     const userId = req2.user?.id || req2.user?.userId;
@@ -25140,7 +29856,7 @@ router37.delete("/trash", authMiddleware, async (req2, res) => {
     res.status(500).json({ error: "Erreur lors du vidage de la corbeille" });
   }
 });
-router37.get("/files/:fileId/download", authMiddleware, async (req2, res) => {
+router41.get("/files/:fileId/download", authMiddleware, async (req2, res) => {
   try {
     const organizationId = req2.user?.organizationId;
     const userId = req2.user?.id || req2.user?.userId;
@@ -25156,7 +29872,7 @@ router37.get("/files/:fileId/download", authMiddleware, async (req2, res) => {
     res.status(500).json({ error: "Erreur lors de la r\xE9cup\xE9ration de l'URL" });
   }
 });
-router37.post("/create-doc", authMiddleware, async (req2, res) => {
+router41.post("/create-doc", authMiddleware, async (req2, res) => {
   try {
     const organizationId = req2.user?.organizationId;
     const userId = req2.user?.id || req2.user?.userId;
@@ -25175,12 +29891,12 @@ router37.post("/create-doc", authMiddleware, async (req2, res) => {
     res.status(500).json({ error: "Erreur lors de la cr\xE9ation du document" });
   }
 });
-var google_drive_default = router37;
+var google_drive_default = router41;
 
 // src/routes/google-meet.ts
-var import_express39 = require("express");
-var router38 = (0, import_express39.Router)();
-router38.get("/meetings", authMiddleware, async (req2, res) => {
+var import_express43 = require("express");
+var router42 = (0, import_express43.Router)();
+router42.get("/meetings", authMiddleware, async (req2, res) => {
   try {
     res.json({
       meetings: [],
@@ -25191,7 +29907,7 @@ router38.get("/meetings", authMiddleware, async (req2, res) => {
     res.status(500).json({ error: "Erreur lors de la r\xE9cup\xE9ration des r\xE9unions Meet" });
   }
 });
-router38.get("/analytics", authMiddleware, async (req2, res) => {
+router42.get("/analytics", authMiddleware, async (req2, res) => {
   try {
     res.json({
       analytics: {},
@@ -25202,7 +29918,7 @@ router38.get("/analytics", authMiddleware, async (req2, res) => {
     res.status(500).json({ error: "Erreur lors de la r\xE9cup\xE9ration des analytics Meet" });
   }
 });
-router38.post("/meetings", authMiddleware, async (req2, res) => {
+router42.post("/meetings", authMiddleware, async (req2, res) => {
   try {
     const meetingData = req2.body;
     res.json({
@@ -25215,7 +29931,7 @@ router38.post("/meetings", authMiddleware, async (req2, res) => {
     res.status(500).json({ error: "Erreur lors de la cr\xE9ation de la r\xE9union Meet" });
   }
 });
-router38.post("/join/:meetingCode", authMiddleware, async (req2, res) => {
+router42.post("/join/:meetingCode", authMiddleware, async (req2, res) => {
   try {
     const { meetingCode } = req2.params;
     res.json({
@@ -25228,7 +29944,7 @@ router38.post("/join/:meetingCode", authMiddleware, async (req2, res) => {
     res.status(500).json({ error: "Erreur lors de la jointure \xE0 la r\xE9union Meet" });
   }
 });
-router38.post("/instant", authMiddleware, async (req2, res) => {
+router42.post("/instant", authMiddleware, async (req2, res) => {
   try {
     res.json({
       meetingId: "temp-instant-meeting-id",
@@ -25240,7 +29956,7 @@ router38.post("/instant", authMiddleware, async (req2, res) => {
     res.status(500).json({ error: "Erreur lors de la cr\xE9ation de la r\xE9union instantan\xE9e Meet" });
   }
 });
-router38.delete("/meetings/:meetingId", authMiddleware, async (req2, res) => {
+router42.delete("/meetings/:meetingId", authMiddleware, async (req2, res) => {
   try {
     const { meetingId } = req2.params;
     res.json({
@@ -25253,13 +29969,13 @@ router38.delete("/meetings/:meetingId", authMiddleware, async (req2, res) => {
     res.status(500).json({ error: "Erreur lors de la suppression de la r\xE9union Meet" });
   }
 });
-var google_meet_default = router38;
+var google_meet_default = router42;
 
 // src/routes/analytics.ts
-var import_express40 = require("express");
+var import_express44 = require("express");
 init_database();
 var import_express_rate_limit5 = __toESM(require("express-rate-limit"), 1);
-var router39 = (0, import_express40.Router)();
+var router43 = (0, import_express44.Router)();
 var prisma19 = db;
 var analyticsRateLimit = (0, import_express_rate_limit5.default)({
   windowMs: 60 * 1e3,
@@ -25268,9 +29984,9 @@ var analyticsRateLimit = (0, import_express_rate_limit5.default)({
   // 100 requêtes par minute
   message: { success: false, message: "Trop de requ\xEAtes analytics" }
 });
-router39.use(authMiddleware);
-router39.use(analyticsRateLimit);
-router39.get("/dashboard", requireRole2(["admin", "super_admin"]), async (req2, res) => {
+router43.use(authMiddleware);
+router43.use(analyticsRateLimit);
+router43.get("/dashboard", requireRole2(["admin", "super_admin"]), async (req2, res) => {
   console.log("[ANALYTICS] \u{1F4CA} G\xE9n\xE9ration m\xE9triques dashboard");
   try {
     const requestingUser = req2.user;
@@ -25323,7 +30039,7 @@ router39.get("/dashboard", requireRole2(["admin", "super_admin"]), async (req2, 
     res.status(500).json({ success: false, message: "Erreur g\xE9n\xE9ration m\xE9triques" });
   }
 });
-router39.get("/export", requireRole2(["admin", "super_admin"]), async (req2, res) => {
+router43.get("/export", requireRole2(["admin", "super_admin"]), async (req2, res) => {
   console.log("[ANALYTICS] \u{1F4C8} Export donn\xE9es");
   try {
     const { format = "csv", type = "users" } = req2.query;
@@ -25357,7 +30073,7 @@ router39.get("/export", requireRole2(["admin", "super_admin"]), async (req2, res
     res.status(500).json({ success: false, message: "Erreur export donn\xE9es" });
   }
 });
-router39.get("/audit-trail", requireRole2(["admin", "super_admin"]), async (req2, res) => {
+router43.get("/audit-trail", requireRole2(["admin", "super_admin"]), async (req2, res) => {
   console.log("[ANALYTICS] \u{1F4CB} R\xE9cup\xE9ration audit trail");
   try {
     const { page = 1, limit = 50, userId, action: action2 } = req2.query;
@@ -25476,17 +30192,17 @@ function convertToCSV(data) {
   );
   return [headers, ...rows].join("\n");
 }
-var analytics_default = router39;
+var analytics_default = router43;
 
 // src/routes/ai.ts
-var import_express41 = __toESM(require("express"), 1);
-var import_fs6 = __toESM(require("fs"), 1);
-var import_path5 = __toESM(require("path"), 1);
+var import_express45 = __toESM(require("express"), 1);
+var import_fs8 = __toESM(require("fs"), 1);
+var import_path7 = __toESM(require("path"), 1);
 init_prisma();
-var import_crypto15 = require("crypto");
+var import_crypto18 = require("crypto");
 var geminiSingleton = getGeminiService();
-var router40 = import_express41.default.Router();
-router40.use(authMiddleware);
+var router44 = import_express45.default.Router();
+router44.use(authMiddleware);
 var aiUsageTableEnsured = null;
 async function ensureAiUsageLogTable() {
   if (!aiUsageTableEnsured) {
@@ -25557,7 +30273,7 @@ async function logAiUsage(params) {
     };
     await db.aiUsageLog?.create?.({
       data: {
-        id: (0, import_crypto15.randomUUID)(),
+        id: (0, import_crypto18.randomUUID)(),
         organizationId: organizationId || void 0,
         userId: userId || void 0,
         type,
@@ -25573,7 +30289,7 @@ async function logAiUsage(params) {
     }).catch(async () => {
       await db.$executeRawUnsafe(
         'INSERT INTO "AiUsageLog" (id, "userId", "organizationId", type, model, "tokensPrompt", "tokensOutput", "latencyMs", success, "errorCode", "errorMessage", meta) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12);',
-        (0, import_crypto15.randomUUID)(),
+        (0, import_crypto18.randomUUID)(),
         userId,
         organizationId,
         type,
@@ -25591,7 +30307,7 @@ async function logAiUsage(params) {
     console.warn("\u26A0\uFE0F Log AI usage \xE9chou\xE9:", e.message);
   }
 }
-router40.post("/analyze-section", async (req2, res) => {
+router44.post("/analyze-section", async (req2, res) => {
   const t0 = Date.now();
   try {
     const { sectionType, content, prompt } = req2.body;
@@ -26098,10 +30814,10 @@ function generateMockSectionAnalysis(sectionType, content) {
     }
   };
 }
-router40.post("/generate-response", async (req2, res) => {
+router44.post("/generate-response", async (req2, res) => {
   await handleChatLike(req2, res, "generate-response");
 });
-router40.post("/chat", async (req2, res) => {
+router44.post("/chat", async (req2, res) => {
   await handleChatLike(req2, res, "chat");
 });
 function buildChatPrompt({ message, context, conversationHistory, analysis, memory }) {
@@ -26137,10 +30853,10 @@ function buildChatPrompt({ message, context, conversationHistory, analysis, memo
       if (source) parts.push(`\u{1F4CD} Source: ${source}`);
       if (createdAt) parts.push(`\u{1F550} Contact depuis: ${new Date(createdAt).toLocaleDateString("fr-FR")}`);
       if (Array.isArray(formSubmissions) && formSubmissions.length > 0) {
-        const formData = formSubmissions.map((fs14) => {
-          const formTitle = fs14.formTitle || "Formulaire";
-          const data = fs14.data;
-          if (!data || typeof data !== "object") return `${formTitle} (${new Date(fs14.createdAt).toLocaleDateString("fr-FR")})`;
+        const formData = formSubmissions.map((fs16) => {
+          const formTitle = fs16.formTitle || "Formulaire";
+          const data = fs16.data;
+          if (!data || typeof data !== "object") return `${formTitle} (${new Date(fs16.createdAt).toLocaleDateString("fr-FR")})`;
           const dataObj = data;
           const allFields = Object.entries(dataObj).map(([k, v]) => {
             const cleanKey = k.replace(/([A-Z])/g, " $1").toLowerCase().trim().split(" ").map((word) => word.charAt(0).toUpperCase() + word.slice(1)).join(" ");
@@ -26148,7 +30864,7 @@ function buildChatPrompt({ message, context, conversationHistory, analysis, memo
             val = val.slice(0, 80);
             return `${cleanKey}: ${val}`;
           }).join(" | ");
-          return `${formTitle} (${new Date(fs14.createdAt).toLocaleDateString("fr-FR")}): ${allFields}`;
+          return `${formTitle} (${new Date(fs16.createdAt).toLocaleDateString("fr-FR")}): ${allFields}`;
         }).join("\n");
         parts.push(`\u{1F4CB} FORMULAIRES REMPLIS (\xC0 UTILISER SP\xC9CIFIQUEMENT!):
 ${formData}`);
@@ -26304,22 +31020,22 @@ var __AI_FILE_SUMMARY_CACHE = {};
 var __AI_FILE_SUMMARY_TTL = 9e4;
 function __aiBuildCodeIndex() {
   if (__AI_CODE_INDEX) return __AI_CODE_INDEX;
-  const base = import_path5.default.join(process.cwd(), "src");
+  const base = import_path7.default.join(process.cwd(), "src");
   const acc = [];
   function walk(dir, depth = 0) {
     if (depth > 6) return;
     let entries = [];
     try {
-      entries = import_fs6.default.readdirSync(dir);
+      entries = import_fs8.default.readdirSync(dir);
     } catch {
       return;
     }
     for (const e of entries) {
-      const full = import_path5.default.join(dir, e);
+      const full = import_path7.default.join(dir, e);
       if (/node_modules|\.git|dist|build/.test(full)) continue;
       let st;
       try {
-        st = import_fs6.default.statSync(full);
+        st = import_fs8.default.statSync(full);
       } catch {
         continue;
       }
@@ -26337,8 +31053,8 @@ function __aiBuildSymbolIndex() {
   const m = {};
   for (const rel of idx.slice(0, 1200)) {
     try {
-      const abs2 = import_path5.default.join(process.cwd(), "src", rel);
-      const content = import_fs6.default.readFileSync(abs2, "utf8");
+      const abs2 = import_path7.default.join(process.cwd(), "src", rel);
+      const content = import_fs8.default.readFileSync(abs2, "utf8");
       const regexes = [
         /export\s+class\s+([A-Za-z0-9_]+)/g,
         /export\s+(?:async\s+)?function\s+([A-Za-z0-9_]+)/g,
@@ -26394,9 +31110,9 @@ function __aiSummarizeFile(rel) {
     const now = Date.now();
     const cached = __AI_FILE_SUMMARY_CACHE[rel];
     if (cached && now - cached.ts < __AI_FILE_SUMMARY_TTL) return cached.summary;
-    const abs2 = import_path5.default.join(process.cwd(), "src", rel);
-    if (!import_fs6.default.existsSync(abs2)) return null;
-    const content = import_fs6.default.readFileSync(abs2, "utf8");
+    const abs2 = import_path7.default.join(process.cwd(), "src", rel);
+    if (!import_fs8.default.existsSync(abs2)) return null;
+    const content = import_fs8.default.readFileSync(abs2, "utf8");
     const lines = content.split(/\r?\n/);
     const first = lines.slice(0, 80).join("\n");
     const importMatches = Array.from(content.matchAll(/import\s+[^;]+from\s+['"]([^'".][^'"/]*)['"]/g)).map((m) => m[1]).slice(0, 8);
@@ -26508,12 +31224,12 @@ Restitue: Points forts, Probl\xE8mes, Am\xE9liorations, Ajouts \xE0 envisager, \
     try {
       let resolvePageFile = function(name) {
         if (!name) return null;
-        const base = import_path5.default.join(process.cwd(), "src", "pages");
-        if (name.endsWith(".tsx") && import_fs6.default.existsSync(import_path5.default.join(process.cwd(), "src", name))) return name;
-        const candidate = import_path5.default.join(base, name.endsWith(".tsx") ? name : name + ".tsx");
-        if (import_fs6.default.existsSync(candidate)) return "pages/" + import_path5.default.basename(candidate);
+        const base = import_path7.default.join(process.cwd(), "src", "pages");
+        if (name.endsWith(".tsx") && import_fs8.default.existsSync(import_path7.default.join(process.cwd(), "src", name))) return name;
+        const candidate = import_path7.default.join(base, name.endsWith(".tsx") ? name : name + ".tsx");
+        if (import_fs8.default.existsSync(candidate)) return "pages/" + import_path7.default.basename(candidate);
         try {
-          const entries = import_fs6.default.readdirSync(base);
+          const entries = import_fs8.default.readdirSync(base);
           const hit = entries.find((e) => e.toLowerCase() === (name.toLowerCase().endsWith(".tsx") ? name.toLowerCase() : name.toLowerCase() + ".tsx"));
           if (hit) return "pages/" + hit;
         } catch {
@@ -26526,11 +31242,11 @@ Restitue: Points forts, Probl\xE8mes, Am\xE9liorations, Ajouts \xE0 envisager, \
       const lowerMsg = message.toLowerCase();
       const wantAnalysis = /(analyse|audite|qualité|amélior|refactor|optimis|structure|complexité|lisibilité|accessibilité|ux|ui)/i.test(message);
       let featureKey = null;
-      const featureMapPath = import_path5.default.join(process.cwd(), "src", "feature-map.json");
+      const featureMapPath = import_path7.default.join(process.cwd(), "src", "feature-map.json");
       let featureMap = null;
-      if (import_fs6.default.existsSync(featureMapPath)) {
+      if (import_fs8.default.existsSync(featureMapPath)) {
         try {
-          featureMap = JSON.parse(import_fs6.default.readFileSync(featureMapPath, "utf8"));
+          featureMap = JSON.parse(import_fs8.default.readFileSync(featureMapPath, "utf8"));
         } catch {
         }
       }
@@ -26551,14 +31267,14 @@ Restitue: Points forts, Probl\xE8mes, Am\xE9liorations, Ajouts \xE0 envisager, \
       if (maybePage) pagePath = resolvePageFile(maybePage);
       if (!pagePath && /(page|mailpage|googlemailpage|inbox)/i.test(message)) {
         const guess = ["pages/GoogleMailPageFixed_New.tsx", "pages/GoogleMailPageFixed.tsx", "pages/GoogleMailPage.tsx", "pages/MailPage.tsx"];
-        pagePath = guess.find((g) => import_fs6.default.existsSync(import_path5.default.join(process.cwd(), "src", g))) || null;
+        pagePath = guess.find((g) => import_fs8.default.existsSync(import_path7.default.join(process.cwd(), "src", g))) || null;
       }
       if ((wantAnalysis || featureKey || pagePath) && (featureKey || pagePath)) {
         autoAnalysis = {};
-        if (pagePath && import_fs6.default.existsSync(import_path5.default.join(process.cwd(), "src", pagePath))) {
+        if (pagePath && import_fs8.default.existsSync(import_path7.default.join(process.cwd(), "src", pagePath))) {
           try {
-            const absPage = import_path5.default.join(process.cwd(), "src", pagePath);
-            const content = import_fs6.default.readFileSync(absPage, "utf8");
+            const absPage = import_path7.default.join(process.cwd(), "src", pagePath);
+            const content = import_fs8.default.readFileSync(absPage, "utf8");
             const linesArr = content.split(/\r?\n/);
             const hooksCount = (content.match(/\buse(State|Effect|Memo|Callback|Ref|Context|Reducer)\b/g) || []).length;
             const useEffectCount = (content.match(/\buseEffect\b/g) || []).length;
@@ -26597,10 +31313,10 @@ Restitue: Points forts, Probl\xE8mes, Am\xE9liorations, Ajouts \xE0 envisager, \
             const files = [...def.primaryPages || [], ...def.relatedServices || []].filter(Boolean).slice(0, 30);
             let totalLines = 0, totalHooks = 0, i18nYes = 0, antdYes = 0, tailwindYes = 0, count = 0;
             for (const f of files) {
-              const absF = import_path5.default.join(process.cwd(), f);
-              if (!import_fs6.default.existsSync(absF)) continue;
+              const absF = import_path7.default.join(process.cwd(), f);
+              if (!import_fs8.default.existsSync(absF)) continue;
               count++;
-              const content = import_fs6.default.readFileSync(absF, "utf8");
+              const content = import_fs8.default.readFileSync(absF, "utf8");
               const linesArr = content.split(/\r?\n/);
               totalLines += linesArr.length;
               const hooksCount = (content.match(/\buse(State|Effect|Memo|Callback|Ref|Context|Reducer)\b/g) || []).length;
@@ -26700,7 +31416,7 @@ Restitue: Points forts, Probl\xE8mes, Am\xE9liorations, Ajouts \xE0 envisager, \
     void logAiUsage({ req: req2, endpoint, success: false, latencyMs: Date.now() - t0, model: null, mode: null, error: error.message });
   }
 }
-router40.post("/schedule-recommendations", async (req2, res) => {
+router44.post("/schedule-recommendations", async (req2, res) => {
   const t0 = Date.now();
   try {
     const { leadId, targetDate, preferences, constraints } = req2.body;
@@ -26787,7 +31503,7 @@ router40.post("/schedule-recommendations", async (req2, res) => {
     void logAiUsage({ req: req2, endpoint: "schedule-recommendations", success: false, latencyMs: Date.now() - t0, model: null, mode: null, error: error.message });
   }
 });
-router40.post("/schedule-explain", async (req2, res) => {
+router44.post("/schedule-explain", async (req2, res) => {
   const t0 = Date.now();
   try {
     const { slots = [], objective = "planifier un rendez-vous", lead = {} } = req2.body || {};
@@ -26824,7 +31540,7 @@ R\xE9ponds en fran\xE7ais concis (<=110 mots).`;
     void logAiUsage({ req: req2, endpoint: "schedule-explain", success: false, latencyMs: Date.now() - t0, model: null, mode: null, error: error.message });
   }
 });
-router40.post("/analyze-conversation", async (req2, res) => {
+router44.post("/analyze-conversation", async (req2, res) => {
   const t0 = Date.now();
   try {
     const { transcription, context, speakers } = req2.body;
@@ -26878,7 +31594,7 @@ router40.post("/analyze-conversation", async (req2, res) => {
     void logAiUsage({ req: req2, endpoint: "analyze-conversation", success: false, latencyMs: Date.now() - t0, model: null, mode: null, error: error.message });
   }
 });
-router40.get("/test", async (req2, res) => {
+router44.get("/test", async (req2, res) => {
   try {
     console.log("\u{1F9EA} [AI] Test de connexion IA");
     res.json({
@@ -26901,7 +31617,7 @@ router40.get("/test", async (req2, res) => {
     });
   }
 });
-router40.get("/status", async (_req, res) => {
+router44.get("/status", async (_req, res) => {
   try {
     const status = geminiSingleton.getStatus?.() || { mode: geminiSingleton.isLive() ? "live" : "mock" };
     res.json({
@@ -26916,7 +31632,7 @@ router40.get("/status", async (_req, res) => {
     res.status(500).json({ success: false, error: "Erreur status IA", details: error.message });
   }
 });
-router40.get("/context/summary", async (req2, res) => {
+router44.get("/context/summary", async (req2, res) => {
   const t0 = Date.now();
   try {
     const authReq = req2;
@@ -26993,7 +31709,7 @@ router40.get("/context/summary", async (req2, res) => {
     void logAiUsage({ req: req2, endpoint: "context-summary", success: false, latencyMs: Date.now() - t0, model: null, mode: "context", error: error.message });
   }
 });
-router40.get("/context/lead/:id", async (req2, res) => {
+router44.get("/context/lead/:id", async (req2, res) => {
   const leadId = req2.params.id;
   const user = req2.user;
   const orgId = user?.organizationId || null;
@@ -27070,12 +31786,12 @@ router40.get("/context/lead/:id", async (req2, res) => {
         messages: wanted.has("messages") ? messages : void 0,
         upcomingEvents: wanted.has("events") ? upcomingEvents : void 0,
         timeline: wanted.has("timeline") ? timeline : void 0,
-        formSubmissions: formSubmissions.length > 0 ? formSubmissions.map((fs14) => ({
-          id: fs14.id,
-          formTitle: fs14.PublicForm?.title || fs14.PublicForm?.name || "Formulaire",
-          data: fs14.data,
-          createdAt: fs14.createdAt,
-          status: fs14.status
+        formSubmissions: formSubmissions.length > 0 ? formSubmissions.map((fs16) => ({
+          id: fs16.id,
+          formTitle: fs16.PublicForm?.title || fs16.PublicForm?.name || "Formulaire",
+          data: fs16.data,
+          createdAt: fs16.createdAt,
+          status: fs16.status
         })) : void 0,
         metrics: { activityScore, formCount: formSubmissions.length },
         meta: { generatedAt: (/* @__PURE__ */ new Date()).toISOString(), version: 1, filtered: Array.from(wanted) }
@@ -27088,7 +31804,7 @@ router40.get("/context/lead/:id", async (req2, res) => {
     void logAiUsage({ req: req2, endpoint: "context-lead", success: false, latencyMs: Date.now() - t0, model: null, mode: "context", error: error.message });
   }
 });
-router40.get("/context/leads", async (req2, res) => {
+router44.get("/context/leads", async (req2, res) => {
   const user = req2.user;
   const orgId = user?.organizationId || null;
   const isSuperAdmin2 = user?.isSuperAdmin || false;
@@ -27122,7 +31838,7 @@ router40.get("/context/leads", async (req2, res) => {
     void logAiUsage({ req: req2, endpoint: "context-leads-batch", success: false, latencyMs: Date.now() - t0, model: null, mode: "context", error: error.message });
   }
 });
-router40.post("/ultimate-recommendation", async (req2, res) => {
+router44.post("/ultimate-recommendation", async (req2, res) => {
   const t0 = Date.now();
   try {
     const { lead, context } = req2.body;
@@ -27258,7 +31974,7 @@ function calculateOptimalDate() {
   }
   return baseDate;
 }
-router40.get("/usage/recent", async (req2, res) => {
+router44.get("/usage/recent", async (req2, res) => {
   const t0 = Date.now();
   try {
     await ensureAiUsageLogTable();
@@ -27347,15 +32063,15 @@ router40.get("/usage/recent", async (req2, res) => {
     res.status(500).json({ success: false, error: "Erreur r\xE9cup\xE9ration logs IA", details: error.message });
   }
 });
-var ai_default = router40;
+var ai_default = router44;
 
 // src/routes/ai-code.ts
-var import_express42 = __toESM(require("express"), 1);
-var import_fs7 = __toESM(require("fs"), 1);
-var import_path6 = __toESM(require("path"), 1);
-var import_crypto16 = __toESM(require("crypto"), 1);
-var router41 = import_express42.default.Router();
-router41.use(authenticateToken);
+var import_express46 = __toESM(require("express"), 1);
+var import_fs9 = __toESM(require("fs"), 1);
+var import_path8 = __toESM(require("path"), 1);
+var import_crypto19 = __toESM(require("crypto"), 1);
+var router45 = import_express46.default.Router();
+router45.use(authenticateToken);
 var ALLOWED_ROOTS = ["src", "prisma"];
 var REPO_ROOT = process.cwd().replace(/\\/g, "/");
 var MAX_FILE_LINES_RETURN = 800;
@@ -27387,30 +32103,30 @@ function ensureSuper(req2, res) {
 }
 function sanitizeRelative(p) {
   if (!p) return null;
-  const norm = import_path6.default.posix.normalize(p.replace(/\\/g, "/")).replace(/^\/+/, "");
+  const norm = import_path8.default.posix.normalize(p.replace(/\\/g, "/")).replace(/^\/+/, "");
   const base = norm.split("/")[0];
   if (!ALLOWED_ROOTS.includes(base)) return null;
   return norm;
 }
 function abs(rel) {
-  return import_path6.default.join(REPO_ROOT, rel);
+  return import_path8.default.join(REPO_ROOT, rel);
 }
-router41.get("/code/tree", (req2, res) => {
+router45.get("/code/tree", (req2, res) => {
   if (!ensureSuper(req2, res)) return;
   const rel = sanitizeRelative(String(req2.query.path || "src"));
   if (!rel) return res.status(400).json({ success: false, error: "Chemin non autoris\xE9" });
   const depth = Math.min(4, Math.max(0, parseInt(String(req2.query.depth || "2"), 10) || 0));
   const target = abs(rel);
-  if (!import_fs7.default.existsSync(target)) return res.status(404).json({ success: false, error: "Chemin introuvable" });
+  if (!import_fs9.default.existsSync(target)) return res.status(404).json({ success: false, error: "Chemin introuvable" });
   function build(p, d) {
-    const stat = import_fs7.default.statSync(p);
-    const name = import_path6.default.basename(p);
+    const stat = import_fs9.default.statSync(p);
+    const name = import_path8.default.basename(p);
     const relPath = p.substring(REPO_ROOT.length + 1).replace(/\\/g, "/");
     if (stat.isDirectory()) {
       if (d >= depth) return { type: "dir", name, path: relPath };
       let children = [];
       try {
-        children = import_fs7.default.readdirSync(p).slice(0, 200).map((f) => build(import_path6.default.join(p, f), d + 1));
+        children = import_fs9.default.readdirSync(p).slice(0, 200).map((f) => build(import_path8.default.join(p, f), d + 1));
       } catch {
         children = [];
       }
@@ -27425,19 +32141,19 @@ router41.get("/code/tree", (req2, res) => {
     res.status(500).json({ success: false, error: "Erreur lecture", details: e.message });
   }
 });
-router41.get("/code/file", (req2, res) => {
+router45.get("/code/file", (req2, res) => {
   if (!ensureSuper(req2, res)) return;
   const rel = sanitizeRelative(String(req2.query.path || ""));
   if (!rel) return res.status(400).json({ success: false, error: "Chemin non autoris\xE9" });
   const target = abs(rel);
-  if (!import_fs7.default.existsSync(target) || !import_fs7.default.statSync(target).isFile()) return res.status(404).json({ success: false, error: "Fichier introuvable" });
+  if (!import_fs9.default.existsSync(target) || !import_fs9.default.statSync(target).isFile()) return res.status(404).json({ success: false, error: "Fichier introuvable" });
   const offset = Math.max(0, parseInt(String(req2.query.offset || "0"), 10) || 0);
   const limit = Math.min(800, Math.max(50, parseInt(String(req2.query.limit || "400"), 10) || 400));
   try {
-    const content = import_fs7.default.readFileSync(target, "utf8");
+    const content = import_fs9.default.readFileSync(target, "utf8");
     const totalBytes = Buffer.byteLength(content, "utf8");
     const lines = content.split(/\r?\n/);
-    const etag = 'W/"' + import_crypto16.default.createHash("sha256").update(content).digest("hex").slice(0, 16) + '"';
+    const etag = 'W/"' + import_crypto19.default.createHash("sha256").update(content).digest("hex").slice(0, 16) + '"';
     const ifNoneMatch = req2.headers["if-none-match"];
     if (ifNoneMatch && ifNoneMatch === etag) {
       res.status(304).end();
@@ -27458,10 +32174,10 @@ function buildFileIndex() {
   const acc = [];
   function walk(rel) {
     const full = abs(rel);
-    if (!import_fs7.default.existsSync(full)) return;
-    const stat = import_fs7.default.statSync(full);
+    if (!import_fs9.default.existsSync(full)) return;
+    const stat = import_fs9.default.statSync(full);
     if (stat.isDirectory()) {
-      const entries = import_fs7.default.readdirSync(full).slice(0, 500);
+      const entries = import_fs9.default.readdirSync(full).slice(0, 500);
       for (const e of entries) {
         const childRel = rel + "/" + e;
         if (/node_modules|\.git|dist|build/.test(childRel)) continue;
@@ -27475,7 +32191,7 @@ function buildFileIndex() {
   FILE_INDEX = acc;
   return FILE_INDEX;
 }
-router41.get("/code/search", (req2, res) => {
+router45.get("/code/search", (req2, res) => {
   if (!ensureSuper(req2, res)) return;
   const q = String(req2.query.q || "").trim();
   if (!q) return res.status(400).json({ success: false, error: "Param\xE8tre q requis" });
@@ -27487,7 +32203,7 @@ router41.get("/code/search", (req2, res) => {
   for (const f of files) {
     if (results.length >= max) break;
     try {
-      const content = import_fs7.default.readFileSync(abs(f), "utf8");
+      const content = import_fs9.default.readFileSync(abs(f), "utf8");
       const lines = content.split(/\r?\n/);
       for (let idx = 0; idx < lines.length && results.length < max; idx++) {
         const line = lines[idx];
@@ -27498,14 +32214,14 @@ router41.get("/code/search", (req2, res) => {
   }
   res.json({ success: true, data: { query: q, matches: results, scope, max } });
 });
-router41.get("/code/summary", (req2, res) => {
+router45.get("/code/summary", (req2, res) => {
   if (!ensureSuper(req2, res)) return;
   const rel = sanitizeRelative(String(req2.query.path || ""));
   if (!rel) return res.status(400).json({ success: false, error: "Chemin non autoris\xE9" });
   const target = abs(rel);
-  if (!import_fs7.default.existsSync(target) || !import_fs7.default.statSync(target).isFile()) return res.status(404).json({ success: false, error: "Fichier introuvable" });
+  if (!import_fs9.default.existsSync(target) || !import_fs9.default.statSync(target).isFile()) return res.status(404).json({ success: false, error: "Fichier introuvable" });
   try {
-    const content = import_fs7.default.readFileSync(target, "utf8");
+    const content = import_fs9.default.readFileSync(target, "utf8");
     const lines = content.split(/\r?\n/);
     const totalBytes = Buffer.byteLength(content, "utf8");
     const importRegex = /import\s+[^;]*?from\s+['"]([^'";]+)['"]/g;
@@ -27538,7 +32254,7 @@ router41.get("/code/summary", (req2, res) => {
       exports: named.slice(0, 50),
       dependencies: deps.slice(0, 100),
       sizeCategory: totalBytes > MAX_FILE_SIZE_BYTES ? "large" : "normal",
-      lastModified: import_fs7.default.statSync(target).mtime
+      lastModified: import_fs9.default.statSync(target).mtime
     };
     recordRecent({ path: rel, at: Date.now(), lines: lines.length });
     res.json({ success: true, data: summary });
@@ -27546,18 +32262,18 @@ router41.get("/code/summary", (req2, res) => {
     res.status(500).json({ success: false, error: "Erreur r\xE9sum\xE9 fichier", details: e.message });
   }
 });
-router41.get("/code/diff", (req2, res) => {
+router45.get("/code/diff", (req2, res) => {
   if (!ensureSuper(req2, res)) return;
   const oldRel = sanitizeRelative(String(req2.query.old || ""));
   const newRel = sanitizeRelative(String(req2.query.new || ""));
   if (!oldRel || !newRel) return res.status(400).json({ success: false, error: "Param\xE8tres old et new requis" });
   const oldPath = abs(oldRel);
   const newPath = abs(newRel);
-  if (!import_fs7.default.existsSync(oldPath) || !import_fs7.default.statSync(oldPath).isFile()) return res.status(404).json({ success: false, error: "Ancien fichier introuvable" });
-  if (!import_fs7.default.existsSync(newPath) || !import_fs7.default.statSync(newPath).isFile()) return res.status(404).json({ success: false, error: "Nouveau fichier introuvable" });
+  if (!import_fs9.default.existsSync(oldPath) || !import_fs9.default.statSync(oldPath).isFile()) return res.status(404).json({ success: false, error: "Ancien fichier introuvable" });
+  if (!import_fs9.default.existsSync(newPath) || !import_fs9.default.statSync(newPath).isFile()) return res.status(404).json({ success: false, error: "Nouveau fichier introuvable" });
   try {
-    const oldLines = import_fs7.default.readFileSync(oldPath, "utf8").split(/\r?\n/);
-    const newLines = import_fs7.default.readFileSync(newPath, "utf8").split(/\r?\n/);
+    const oldLines = import_fs9.default.readFileSync(oldPath, "utf8").split(/\r?\n/);
+    const newLines = import_fs9.default.readFileSync(newPath, "utf8").split(/\r?\n/);
     const diffs = [];
     const max = Math.max(oldLines.length, newLines.length);
     const maxOutput = 800;
@@ -27579,24 +32295,24 @@ router41.get("/code/diff", (req2, res) => {
     res.status(500).json({ success: false, error: "Erreur diff", details: e.message });
   }
 });
-router41.get("/code/recent", (req2, res) => {
+router45.get("/code/recent", (req2, res) => {
   if (!ensureSuper(req2, res)) return;
   const list = RECENT_FILES.sort((a, b) => b.at - a.at).slice(0, 20);
   res.json({ success: true, data: list });
 });
-router41.get("/code/analyze", (req2, res) => {
+router45.get("/code/analyze", (req2, res) => {
   if (!ensureSuper(req2, res)) return;
   const rel = sanitizeRelative(String(req2.query.path || ""));
   if (!rel) return res.status(400).json({ success: false, error: "Chemin non autoris\xE9" });
   const target = abs(rel);
-  if (!import_fs7.default.existsSync(target) || !import_fs7.default.statSync(target).isFile()) return res.status(404).json({ success: false, error: "Fichier introuvable" });
+  if (!import_fs9.default.existsSync(target) || !import_fs9.default.statSync(target).isFile()) return res.status(404).json({ success: false, error: "Fichier introuvable" });
   try {
     const cached = ANALYZE_CACHE[rel];
     const now = Date.now();
     if (cached && now - cached.ts < ANALYZE_TTL_MS) {
       return res.json({ success: true, data: cached.data, meta: { cached: true, ageMs: now - cached.ts } });
     }
-    const content = import_fs7.default.readFileSync(target, "utf8");
+    const content = import_fs9.default.readFileSync(target, "utf8");
     const lines = content.split(/\r?\n/);
     const size = lines.length;
     const jsx = /<[^>]+>/g.test(content) || rel.endsWith(".tsx");
@@ -27698,20 +32414,20 @@ router41.get("/code/analyze", (req2, res) => {
     res.status(500).json({ success: false, error: "Erreur analyse", details: e.message });
   }
 });
-router41.get("/code/feature/analyze", (req2, res) => {
+router45.get("/code/feature/analyze", (req2, res) => {
   if (!ensureSuper(req2, res)) return;
   const feature = String(req2.query.feature || "").trim();
   if (!feature) return res.status(400).json({ success: false, error: "Param\xE8tre feature requis" });
   const fmapPath = abs("src/feature-map.json");
-  if (!import_fs7.default.existsSync(fmapPath)) return res.status(500).json({ success: false, error: "feature-map.json manquant" });
+  if (!import_fs9.default.existsSync(fmapPath)) return res.status(500).json({ success: false, error: "feature-map.json manquant" });
   try {
     let analyzeFile = function(rel) {
       const target = abs(rel);
-      if (!import_fs7.default.existsSync(target) || !import_fs7.default.statSync(target).isFile()) {
+      if (!import_fs9.default.existsSync(target) || !import_fs9.default.statSync(target).isFile()) {
         errors.push({ path: rel, error: "introuvable" });
         return;
       }
-      const content = import_fs7.default.readFileSync(target, "utf8");
+      const content = import_fs9.default.readFileSync(target, "utf8");
       const lines = content.split(/\r?\n/);
       const jsx = /<[^>]+>/g.test(content) || rel.endsWith(".tsx");
       const hooksCount = (content.match(/\buse(State|Effect|Memo|Callback|Ref|Context|Reducer)\b/g) || []).length;
@@ -27735,7 +32451,7 @@ router41.get("/code/feature/analyze", (req2, res) => {
         importAntd
       });
     };
-    const fmap = JSON.parse(import_fs7.default.readFileSync(fmapPath, "utf8"));
+    const fmap = JSON.parse(import_fs9.default.readFileSync(fmapPath, "utf8"));
     const def = fmap[feature];
     if (!def) return res.status(404).json({ success: false, error: "Feature inconnue" });
     const files = [...def.primaryPages || [], ...def.relatedServices || []].filter(Boolean);
@@ -27763,7 +32479,7 @@ router41.get("/code/feature/analyze", (req2, res) => {
     res.status(500).json({ success: false, error: "Erreur analyse feature", details: e.message });
   }
 });
-router41.post("/code/analyze/batch", (req2, res) => {
+router45.post("/code/analyze/batch", (req2, res) => {
   if (!ensureSuper(req2, res)) return;
   const body2 = req2.body || {};
   const paths = body2.paths;
@@ -27779,7 +32495,7 @@ router41.post("/code/analyze/batch", (req2, res) => {
       return;
     }
     const full = abs(safe);
-    if (!import_fs7.default.existsSync(full) || !import_fs7.default.statSync(full).isFile()) {
+    if (!import_fs9.default.existsSync(full) || !import_fs9.default.statSync(full).isFile()) {
       errors.push({ path: rel, error: "introuvable" });
       return;
     }
@@ -27789,7 +32505,7 @@ router41.post("/code/analyze/batch", (req2, res) => {
       return;
     }
     try {
-      const content = import_fs7.default.readFileSync(full, "utf8");
+      const content = import_fs9.default.readFileSync(full, "utf8");
       const lines = content.split(/\r?\n/);
       const hooksCount = (content.match(/\buse(State|Effect|Memo|Callback|Ref|Context|Reducer)\b/g) || []).length;
       const useEffectCount = (content.match(/\buseEffect\b/g) || []).length;
@@ -27832,20 +32548,20 @@ router41.post("/code/analyze/batch", (req2, res) => {
   unique.forEach(analyzeOne);
   res.json({ success: true, data: { analyses, errors, count: analyses.length } });
 });
-var ai_code_default = router41;
+var ai_code_default = router45;
 
 // src/routes/fields.ts
-var import_express46 = require("express");
+var import_express50 = require("express");
 var import_uuid5 = require("uuid");
 init_database();
 
 // src/routes/formulas.ts
-var import_express43 = require("express");
+var import_express47 = require("express");
 init_database();
 var import_uuid3 = require("uuid");
 var prisma20 = db;
-var router42 = (0, import_express43.Router)({ mergeParams: true });
-router42.use((req2, _res, next) => {
+var router46 = (0, import_express47.Router)({ mergeParams: true });
+router46.use((req2, _res, next) => {
   console.log("[DEBUG FORMULAS] Request URL:", req2.originalUrl);
   console.log("[DEBUG FORMULAS] Route Path:", req2.route?.path);
   console.log("[DEBUG FORMULAS] Request Params:", req2.params);
@@ -27853,8 +32569,8 @@ router42.use((req2, _res, next) => {
   console.log("[DEBUG FORMULAS] Request Body:", req2.body);
   next();
 });
-router42.use(authMiddleware, impersonationMiddleware);
-router42.get("/all", requireRole2(["admin", "super_admin"]), async (_req, res) => {
+router46.use(authMiddleware, impersonationMiddleware);
+router46.get("/all", requireRole2(["admin", "super_admin"]), async (_req, res) => {
   try {
     const formulas = await prisma20.fieldFormula.findMany({
       include: {
@@ -27878,7 +32594,7 @@ router42.get("/all", requireRole2(["admin", "super_admin"]), async (_req, res) =
     res.status(500).json({ error: "Erreur lors de la r\xE9cup\xE9ration des formules" });
   }
 });
-router42.get("/", requireRole2(["admin", "super_admin"]), async (req2, res) => {
+router46.get("/", requireRole2(["admin", "super_admin"]), async (req2, res) => {
   try {
     const { fieldId } = req2.params;
     const formulas = await prisma20.fieldFormula.findMany({
@@ -27894,7 +32610,7 @@ router42.get("/", requireRole2(["admin", "super_admin"]), async (req2, res) => {
     res.status(500).json({ error: err.message });
   }
 });
-router42.post("/", requireRole2(["admin", "super_admin"]), async (req2, res) => {
+router46.post("/", requireRole2(["admin", "super_admin"]), async (req2, res) => {
   try {
     const { fieldId } = req2.params;
     const { name, sequence } = req2.body;
@@ -27966,7 +32682,7 @@ router42.post("/", requireRole2(["admin", "super_admin"]), async (req2, res) => 
     res.status(500).json({ error: err.message });
   }
 });
-router42.put("/:formulaId", requireRole2(["admin", "super_admin"]), async (req2, res) => {
+router46.put("/:formulaId", requireRole2(["admin", "super_admin"]), async (req2, res) => {
   try {
     const { formulaId } = req2.params;
     const fieldId = req2.params.id;
@@ -28051,7 +32767,7 @@ router42.put("/:formulaId", requireRole2(["admin", "super_admin"]), async (req2,
     });
   }
 });
-router42.delete("/:formulaId", requireRole2(["admin", "super_admin"]), async (req2, res) => {
+router46.delete("/:formulaId", requireRole2(["admin", "super_admin"]), async (req2, res) => {
   const { formulaId, fieldId } = req2.params;
   try {
     console.log(`[AUDIT_API_DELETE] Demande de suppression formule ${formulaId} pour champ ${fieldId}`);
@@ -28090,7 +32806,7 @@ router42.delete("/:formulaId", requireRole2(["admin", "super_admin"]), async (re
     }
   }
 });
-router42.delete("/:formulaId/sequence/:index", requireRole2(["admin", "super_admin"]), async (req2, res) => {
+router46.delete("/:formulaId/sequence/:index", requireRole2(["admin", "super_admin"]), async (req2, res) => {
   const { formulaId, fieldId } = req2.params;
   const index = parseInt(req2.params.index, 10);
   if (isNaN(index) || index < 0) {
@@ -28141,7 +32857,7 @@ router42.delete("/:formulaId/sequence/:index", requireRole2(["admin", "super_adm
     });
   }
 });
-router42.post("/reorder", requireRole2(["admin", "super_admin"]), async (req2, res) => {
+router46.post("/reorder", requireRole2(["admin", "super_admin"]), async (req2, res) => {
   const { fieldId } = req2.params;
   const { formulas } = req2.body;
   if (!Array.isArray(formulas)) {
@@ -28163,15 +32879,15 @@ router42.post("/reorder", requireRole2(["admin", "super_admin"]), async (req2, r
     res.status(500).json({ error: "Erreur lors de la mise \xE0 jour de l'ordre des formules.", details: error.message });
   }
 });
-var formulas_default = router42;
+var formulas_default = router46;
 
 // src/routes/dependencies.ts
-var import_express44 = require("express");
+var import_express48 = require("express");
 init_prisma();
 var import_uuid4 = require("uuid");
-var router43 = (0, import_express44.Router)({ mergeParams: true });
-router43.use(authMiddleware, impersonationMiddleware);
-router43.get("/", requireRole2(["admin", "super_admin"]), async (req2, res) => {
+var router47 = (0, import_express48.Router)({ mergeParams: true });
+router47.use(authMiddleware, impersonationMiddleware);
+router47.get("/", requireRole2(["admin", "super_admin"]), async (req2, res) => {
   const fieldId = req2.params.fieldId || req2.params.id;
   if (!fieldId) {
     res.status(400).json({ error: "Param\xE8tre 'fieldId' manquant dans l'URL." });
@@ -28200,7 +32916,7 @@ router43.get("/", requireRole2(["admin", "super_admin"]), async (req2, res) => {
     res.status(500).json({ error: "Erreur lors de la r\xE9cup\xE9ration des d\xE9pendances", details: error.message });
   }
 });
-router43.get("/read", async (req2, res) => {
+router47.get("/read", async (req2, res) => {
   const fieldId = req2.params.fieldId || req2.params.id;
   if (!fieldId) {
     res.status(400).json({ error: "Param\xE8tre 'fieldId' manquant dans l'URL." });
@@ -28226,7 +32942,7 @@ router43.get("/read", async (req2, res) => {
     res.status(500).json({ success: false, error: "Erreur lors de la r\xE9cup\xE9ration des d\xE9pendances", details: error.message });
   }
 });
-router43.post("/", requireRole2(["admin", "super_admin"]), async (req2, res) => {
+router47.post("/", requireRole2(["admin", "super_admin"]), async (req2, res) => {
   const fieldId = req2.params.fieldId || req2.params.id;
   if (!fieldId) {
     res.status(400).json({ error: "Param\xE8tre 'fieldId' manquant dans l'URL." });
@@ -28274,7 +32990,7 @@ router43.post("/", requireRole2(["admin", "super_admin"]), async (req2, res) => 
     res.status(500).json({ error: "Erreur lors de la cr\xE9ation de la d\xE9pendance", details: error.message });
   }
 });
-router43.post("/reorder", requireRole2(["admin", "super_admin"]), async (req2, res) => {
+router47.post("/reorder", requireRole2(["admin", "super_admin"]), async (req2, res) => {
   const fieldId = req2.params.fieldId || req2.params.id;
   const { dependencies } = req2.body;
   if (!Array.isArray(dependencies)) {
@@ -28296,7 +33012,7 @@ router43.post("/reorder", requireRole2(["admin", "super_admin"]), async (req2, r
     res.status(500).json({ error: "Erreur lors du r\xE9ordonnancement", details: error.message });
   }
 });
-router43.put("/:dependencyId", requireRole2(["admin", "super_admin"]), async (req2, res) => {
+router47.put("/:dependencyId", requireRole2(["admin", "super_admin"]), async (req2, res) => {
   const { dependencyId } = req2.params;
   const { name, description, sequence, order, targetFieldId, operator, value, action: action2, prefillValue } = req2.body || {};
   try {
@@ -28328,7 +33044,7 @@ router43.put("/:dependencyId", requireRole2(["admin", "super_admin"]), async (re
     res.status(500).json({ error: "Erreur lors de la mise \xE0 jour de la d\xE9pendance", details: error.message });
   }
 });
-router43.delete("/:dependencyId", requireRole2(["admin", "super_admin"]), async (req2, res) => {
+router47.delete("/:dependencyId", requireRole2(["admin", "super_admin"]), async (req2, res) => {
   const { dependencyId } = req2.params;
   try {
     await db.fieldDependency.delete({ where: { id: dependencyId } });
@@ -28343,10 +33059,10 @@ router43.delete("/:dependencyId", requireRole2(["admin", "super_admin"]), async 
     }
   }
 });
-var dependencies_default = router43;
+var dependencies_default = router47;
 
 // src/routes/validations.ts
-var import_express45 = __toESM(require("express"), 1);
+var import_express49 = __toESM(require("express"), 1);
 
 // src/services/validationService.ts
 init_prisma();
@@ -28499,8 +33215,8 @@ var deleteValidationById = async (validationId) => {
 };
 
 // src/routes/validations.ts
-var router44 = import_express45.default.Router({ mergeParams: true });
-router44.get("/", requireRole2(["admin", "super_admin"]), async (req2, res) => {
+var router48 = import_express49.default.Router({ mergeParams: true });
+router48.get("/", requireRole2(["admin", "super_admin"]), async (req2, res) => {
   const params = req2.params;
   const rawId = params.id || params.fieldId;
   console.log(`[ValidationsRouter] GET validations - params:`, req2.params);
@@ -28516,7 +33232,7 @@ router44.get("/", requireRole2(["admin", "super_admin"]), async (req2, res) => {
     return res.json({ success: true, data: [] });
   }
 });
-router44.get("/read", async (req2, res) => {
+router48.get("/read", async (req2, res) => {
   const params = req2.params;
   const rawId = params.id || params.fieldId;
   if (!rawId) {
@@ -28530,7 +33246,7 @@ router44.get("/read", async (req2, res) => {
     return res.json({ success: true, data: [] });
   }
 });
-router44.post("/", requireRole2(["admin", "super_admin"]), async (req2, res) => {
+router48.post("/", requireRole2(["admin", "super_admin"]), async (req2, res) => {
   const { id } = req2.params;
   const validationData = req2.body;
   console.log(`[POST] Tentative de cr\xE9ation d'une validation pour le champ ${id}:`, validationData);
@@ -28571,7 +33287,7 @@ router44.post("/", requireRole2(["admin", "super_admin"]), async (req2, res) => 
     res.status(500).json({ success: false, message: "Erreur interne du serveur." });
   }
 });
-router44.delete("/:id", async (req2, res) => {
+router48.delete("/:id", async (req2, res) => {
   const { id } = req2.params;
   console.log(`[DELETE] Tentative de suppression de la validation ${id}`);
   if (!id) {
@@ -28603,7 +33319,7 @@ router44.delete("/:id", async (req2, res) => {
     });
   }
 });
-router44.patch("/:id", async (req2, res) => {
+router48.patch("/:id", async (req2, res) => {
   const { id } = req2.params;
   const validationData = req2.body;
   console.log(`[PATCH] Tentative de mise \xE0 jour de la validation ${id}:`, validationData);
@@ -28643,12 +33359,12 @@ router44.patch("/:id", async (req2, res) => {
     res.status(500).json({ success: false, message: "Erreur interne du serveur." });
   }
 });
-var validations_default = router44;
+var validations_default = router48;
 
 // src/routes/fields.ts
-var router45 = (0, import_express46.Router)();
+var router49 = (0, import_express50.Router)();
 var prisma21 = db;
-router45.use(authMiddleware);
+router49.use(authMiddleware);
 function mapFieldForFrontend(field) {
   if (!field || typeof field !== "object") return field;
   const f = field;
@@ -28657,7 +33373,7 @@ function mapFieldForFrontend(field) {
   delete rest["FieldOption"];
   return { ...rest, options };
 }
-router45.get("/", requireRole2(["admin", "super_admin"]), async (req2, res) => {
+router49.get("/", requireRole2(["admin", "super_admin"]), async (req2, res) => {
   try {
     const organizationId = req2.user?.organizationId;
     const userRole = req2.user?.role;
@@ -28681,10 +33397,10 @@ router45.get("/", requireRole2(["admin", "super_admin"]), async (req2, res) => {
     res.status(500).json({ error: "Erreur interne du serveur" });
   }
 });
-router45.use("/:id/formulas", formulas_default);
-router45.use("/:id/dependencies", dependencies_default);
-router45.use("/:id/validations", validations_default);
-router45.post("/:id/reorder-dependencies", requireRole2(["admin", "super_admin"]), async (req2, res) => {
+router49.use("/:id/formulas", formulas_default);
+router49.use("/:id/dependencies", dependencies_default);
+router49.use("/:id/validations", validations_default);
+router49.post("/:id/reorder-dependencies", requireRole2(["admin", "super_admin"]), async (req2, res) => {
   const { dependencyIds } = req2.body ?? {};
   if (!Array.isArray(dependencyIds)) {
     return res.status(400).json({ error: "Le corps doit contenir 'dependencyIds' (array)." });
@@ -28702,7 +33418,7 @@ router45.post("/:id/reorder-dependencies", requireRole2(["admin", "super_admin"]
     res.status(500).json({ error: "Erreur lors du r\xE9ordonnancement des d\xE9pendances", details: error.message });
   }
 });
-router45.put("/:id", requireRole2(["admin", "super_admin"]), async (req2, res) => {
+router49.put("/:id", requireRole2(["admin", "super_admin"]), async (req2, res) => {
   const { id } = req2.params;
   const { label, type, required, width, advancedConfig, isProtected } = req2.body;
   console.log("[fields.ts] PUT /:id - fieldId:", id);
@@ -28728,7 +33444,7 @@ router45.put("/:id", requireRole2(["admin", "super_admin"]), async (req2, res) =
     res.status(404).json({ error: "Champ non trouv\xE9 ou erreur lors de la mise \xE0 jour", details: errorMessage });
   }
 });
-router45.post("/:fieldId/options", requireRole2(["admin", "super_admin"]), async (req2, res) => {
+router49.post("/:fieldId/options", requireRole2(["admin", "super_admin"]), async (req2, res) => {
   const { fieldId } = req2.params;
   const { label, order, value } = req2.body;
   if (!label || !value) {
@@ -28767,7 +33483,7 @@ router45.post("/:fieldId/options", requireRole2(["admin", "super_admin"]), async
     res.status(400).json({ error: "Erreur lors de la cr\xE9ation de l'option", details: err.message });
   }
 });
-router45.delete("/field-options/:optionId", requireRole2(["admin", "super_admin"]), async (req2, res) => {
+router49.delete("/field-options/:optionId", requireRole2(["admin", "super_admin"]), async (req2, res) => {
   const { optionId } = req2.params;
   try {
     await prisma21.fieldOption.delete({ where: { id: optionId } });
@@ -28776,7 +33492,7 @@ router45.delete("/field-options/:optionId", requireRole2(["admin", "super_admin"
     res.status(400).json({ error: "Erreur lors de la suppression de l'option", details: err.message });
   }
 });
-router45.delete("/:fieldId/options/:optionId", requireRole2(["admin", "super_admin"]), async (req2, res) => {
+router49.delete("/:fieldId/options/:optionId", requireRole2(["admin", "super_admin"]), async (req2, res) => {
   const { fieldId, optionId } = req2.params;
   try {
     await prisma21.fieldOption.delete({ where: { id: optionId } });
@@ -28793,7 +33509,7 @@ router45.delete("/:fieldId/options/:optionId", requireRole2(["admin", "super_adm
     res.status(400).json({ error: "Erreur lors de la suppression de l'option", details: err.message });
   }
 });
-router45.get("/:id", requireRole2(["admin", "super_admin"]), async (req2, res) => {
+router49.get("/:id", requireRole2(["admin", "super_admin"]), async (req2, res) => {
   const { id } = req2.params;
   try {
     const field = await prisma21.field.findUnique({
@@ -28809,7 +33525,7 @@ router45.get("/:id", requireRole2(["admin", "super_admin"]), async (req2, res) =
     res.status(400).json({ error: "Erreur lors de la r\xE9cup\xE9ration du champ", details: err.message });
   }
 });
-router45.post("/meta-counts", requireRole2(["admin", "super_admin"]), async (req2, res) => {
+router49.post("/meta-counts", requireRole2(["admin", "super_admin"]), async (req2, res) => {
   const { fieldIds } = req2.body;
   if (!Array.isArray(fieldIds) || fieldIds.length === 0) {
     res.status(400).json({ error: "fieldIds doit \xEAtre un tableau non vide." });
@@ -28835,7 +33551,7 @@ router45.post("/meta-counts", requireRole2(["admin", "super_admin"]), async (req
     res.status(500).json({ error: "Erreur serveur lors de la r\xE9cup\xE9ration des m\xE9tadonn\xE9es", details: err.message });
   }
 });
-router45.patch("/:id/protection", requireRole2(["super_admin"]), async (req2, res) => {
+router49.patch("/:id/protection", requireRole2(["super_admin"]), async (req2, res) => {
   const { id } = req2.params;
   const { isProtected } = req2.body;
   if (typeof isProtected !== "boolean") {
@@ -28858,7 +33574,7 @@ router45.patch("/:id/protection", requireRole2(["super_admin"]), async (req2, re
     res.status(500).json({ error: "Erreur lors de la mise \xE0 jour de la protection du champ" });
   }
 });
-router45.delete("/:id", requireRole2(["admin", "super_admin"]), async (req2, res) => {
+router49.delete("/:id", requireRole2(["admin", "super_admin"]), async (req2, res) => {
   const { id } = req2.params;
   try {
     const field = await prisma21.field.findUnique({
@@ -28919,7 +33635,7 @@ router45.delete("/:id", requireRole2(["admin", "super_admin"]), async (req2, res
     res.status(500).json({ error: "An error occurred while deleting the field" });
   }
 });
-router45.put("/:id/move", requireRole2(["admin", "super_admin"]), async (req2, res) => {
+router49.put("/:id/move", requireRole2(["admin", "super_admin"]), async (req2, res) => {
   const { id } = req2.params;
   const { targetSectionId, newOrder } = req2.body;
   if (targetSectionId === void 0 || newOrder === void 0) {
@@ -28984,7 +33700,7 @@ router45.put("/:id/move", requireRole2(["admin", "super_admin"]), async (req2, r
     res.status(500).json({ error: "Erreur lors du d\xE9placement du champ", details: err.message });
   }
 });
-router45.put("/:id/reorder", requireRole2(["admin", "super_admin"]), async (req2, res) => {
+router49.put("/:id/reorder", requireRole2(["admin", "super_admin"]), async (req2, res) => {
   const { newIndex } = req2.body;
   const { id } = req2.params;
   try {
@@ -29030,10 +33746,10 @@ router45.put("/:id/reorder", requireRole2(["admin", "super_admin"]), async (req2
     res.status(500).json({ error: "An error occurred while reordering the field" });
   }
 });
-var fields_default = router45;
+var fields_default = router49;
 
 // src/routes/api/formulas.ts
-var import_express47 = __toESM(require("express"), 1);
+var import_express51 = __toESM(require("express"), 1);
 init_database();
 
 // src/global-mock-formulas.ts
@@ -29514,9 +34230,9 @@ var evaluateFormula = (formula, fieldValues, context) => {
 };
 
 // src/routes/api/formulas.ts
-var router46 = import_express47.default.Router({ mergeParams: true });
+var router50 = import_express51.default.Router({ mergeParams: true });
 var prisma22 = db;
-router46.get("/all", async (_req, res) => {
+router50.get("/all", async (_req, res) => {
   try {
     const formulas = await prisma22.fieldFormula.findMany({
       include: {
@@ -29541,7 +34257,7 @@ router46.get("/all", async (_req, res) => {
     res.status(500).json({ error: "Erreur lors de la r\xE9cup\xE9ration des formules" });
   }
 });
-router46.get("/field/:fieldId", async (req2, res) => {
+router50.get("/field/:fieldId", async (req2, res) => {
   try {
     const { fieldId } = req2.params;
     const formulas = await prisma22.fieldFormula.findMany({
@@ -29586,7 +34302,7 @@ router46.get("/field/:fieldId", async (req2, res) => {
     res.status(500).json({ error: `Erreur lors de la r\xE9cup\xE9ration des formules pour le champ ${req2.params.fieldId}` });
   }
 });
-router46.get("/:formulaId/debug", async (req2, res) => {
+router50.get("/:formulaId/debug", async (req2, res) => {
   const { formulaId } = req2.params;
   try {
     if (!formulaId) return res.status(400).json({ error: "formulaId manquant" });
@@ -29611,7 +34327,7 @@ router46.get("/:formulaId/debug", async (req2, res) => {
     return res.status(500).json({ error: "Erreur debug formule", details: e.message });
   }
 });
-router46.put("/:formulaId", async (req2, res) => {
+router50.put("/:formulaId", async (req2, res) => {
   try {
     const { formulaId } = req2.params;
     const fieldId = req2.params.id;
@@ -29710,7 +34426,7 @@ router46.put("/:formulaId", async (req2, res) => {
     }
   }
 });
-router46.delete("/:formulaId", async (req2, res) => {
+router50.delete("/:formulaId", async (req2, res) => {
   const { formulaId } = req2.params;
   try {
     if (!formulaId) {
@@ -29740,14 +34456,14 @@ router46.delete("/:formulaId", async (req2, res) => {
     return res.status(500).json({ error: "Erreur interne du serveur lors de la suppression de la formule." });
   }
 });
-var formulas_default2 = router46;
+var formulas_default2 = router50;
 
 // src/routes/api/dependencies.ts
-var import_express48 = __toESM(require("express"), 1);
+var import_express52 = __toESM(require("express"), 1);
 init_database();
-var router47 = import_express48.default.Router({ mergeParams: true });
+var router51 = import_express52.default.Router({ mergeParams: true });
 var prisma23 = db;
-router47.put("/:dependencyId", async (req2, res) => {
+router51.put("/:dependencyId", async (req2, res) => {
   const { dependencyId } = req2.params;
   const { name, description, sequence, order, targetFieldId, operator, value, action: action2, prefillValue } = req2.body || {};
   try {
@@ -29779,7 +34495,7 @@ router47.put("/:dependencyId", async (req2, res) => {
     return res.status(500).json({ error: "Erreur lors de la mise \xE0 jour de la d\xE9pendance", details: error.message });
   }
 });
-router47.delete("/:dependencyId", async (req2, res) => {
+router51.delete("/:dependencyId", async (req2, res) => {
   const { dependencyId } = req2.params;
   try {
     const existing = await prisma23.fieldDependency.findUnique({ where: { id: dependencyId } });
@@ -29803,14 +34519,14 @@ router47.delete("/:dependencyId", async (req2, res) => {
     return res.status(500).json({ error: "Erreur lors de la suppression de la d\xE9pendance", details: error.message });
   }
 });
-var dependencies_default2 = router47;
+var dependencies_default2 = router51;
 
 // src/routes/sections.ts
-var import_express49 = require("express");
+var import_express53 = require("express");
 init_prisma();
-var router48 = (0, import_express49.Router)();
-router48.use(authMiddleware, impersonationMiddleware);
-router48.get("/", async (req2, res) => {
+var router52 = (0, import_express53.Router)();
+router52.use(authMiddleware, impersonationMiddleware);
+router52.get("/", async (req2, res) => {
   try {
     const organizationId = req2.query.organizationId;
     console.log("[SECTIONS\u2192CATEGORIES] GET - R\xE9cup\xE9ration des Categories existantes depuis admin-modules");
@@ -29847,7 +34563,7 @@ router48.get("/", async (req2, res) => {
     });
   }
 });
-router48.post("/bulk", async (req2, res) => {
+router52.post("/bulk", async (req2, res) => {
   try {
     const { sections } = req2.body;
     console.log(`[SECTIONS\u2192CATEGORIES] POST/bulk - Cr\xE9ation de ${sections.length} Categories`);
@@ -29888,7 +34604,7 @@ router48.post("/bulk", async (req2, res) => {
     });
   }
 });
-router48.post("/", async (req2, res) => {
+router52.post("/", async (req2, res) => {
   try {
     const { name, description, iconName, iconColor, order, active, organizationId } = req2.body;
     console.log(`[SECTIONS\u2192CATEGORIES] POST - Cr\xE9ation Category "${name}"`);
@@ -29926,7 +34642,7 @@ router48.post("/", async (req2, res) => {
     });
   }
 });
-router48.patch("/:id", async (req2, res) => {
+router52.patch("/:id", async (req2, res) => {
   try {
     const { id } = req2.params;
     const updateData = req2.body;
@@ -29964,7 +34680,7 @@ router48.patch("/:id", async (req2, res) => {
     });
   }
 });
-router48.delete("/:id", async (req2, res) => {
+router52.delete("/:id", async (req2, res) => {
   try {
     const { id } = req2.params;
     console.log(`[SECTIONS\u2192CATEGORIES] DELETE - Suppression Category ${id}`);
@@ -29981,14 +34697,14 @@ router48.delete("/:id", async (req2, res) => {
     });
   }
 });
-var sections_default = router48;
+var sections_default = router52;
 
 // src/routes/module-navigation.ts
-var import_express50 = require("express");
+var import_express54 = require("express");
 init_prisma();
-var router49 = (0, import_express50.Router)();
-router49.use(authMiddleware, impersonationMiddleware);
-router49.get("/", async (req2, res) => {
+var router53 = (0, import_express54.Router)();
+router53.use(authMiddleware, impersonationMiddleware);
+router53.get("/", async (req2, res) => {
   try {
     const organizationId = req2.query.organizationId;
     if (!organizationId) {
@@ -30075,14 +34791,14 @@ router49.get("/", async (req2, res) => {
     res.status(500).json({ error: "Erreur lors de la r\xE9cup\xE9ration des cat\xE9gories depuis la table Category" });
   }
 });
-var module_navigation_default = router49;
+var module_navigation_default = router53;
 
 // src/routes/form-sections.ts
-var import_express51 = require("express");
+var import_express55 = require("express");
 init_database();
-var router50 = (0, import_express51.Router)();
+var router54 = (0, import_express55.Router)();
 var prisma24 = db;
-router50.get("/:blockId", async (req2, res) => {
+router54.get("/:blockId", async (req2, res) => {
   const { blockId } = req2.params;
   try {
     console.log(`[API] GET /api/form-sections/${blockId} - R\xE9cup\xE9ration sections de formulaire`);
@@ -30112,7 +34828,7 @@ router50.get("/:blockId", async (req2, res) => {
     res.status(500).json({ error: "Erreur lors de la r\xE9cup\xE9ration des sections", details: e });
   }
 });
-router50.post("/", async (req2, res) => {
+router54.post("/", async (req2, res) => {
   try {
     const { name, blockId, order, sectionType } = req2.body;
     console.log(`[API] POST /api/form-sections - Cr\xE9ation section: ${name} pour bloc ${blockId}`);
@@ -30140,7 +34856,7 @@ router50.post("/", async (req2, res) => {
     res.status(500).json({ error: "Erreur lors de la cr\xE9ation de la section de formulaire" });
   }
 });
-router50.put("/:sectionId", async (req2, res) => {
+router54.put("/:sectionId", async (req2, res) => {
   try {
     const { sectionId } = req2.params;
     const { name, order, sectionType, active } = req2.body;
@@ -30164,7 +34880,7 @@ router50.put("/:sectionId", async (req2, res) => {
     res.status(500).json({ error: "Erreur lors de la modification de la section de formulaire" });
   }
 });
-router50.delete("/:sectionId", async (req2, res) => {
+router54.delete("/:sectionId", async (req2, res) => {
   try {
     const { sectionId } = req2.params;
     console.log(`[API] DELETE /api/form-sections/${sectionId} - Suppression section`);
@@ -30178,15 +34894,15 @@ router50.delete("/:sectionId", async (req2, res) => {
     res.status(500).json({ error: "Erreur lors de la suppression de la section de formulaire" });
   }
 });
-var form_sections_default = router50;
+var form_sections_default = router54;
 
 // src/routes/fieldTypes.ts
-var import_express52 = require("express");
+var import_express56 = require("express");
 init_database();
-var router51 = (0, import_express52.Router)();
+var router55 = (0, import_express56.Router)();
 var prisma25 = db;
-router51.use(authMiddleware);
-router51.get("/", async (_req, res) => {
+router55.use(authMiddleware);
+router55.get("/", async (_req, res) => {
   try {
     const types = await prisma25.fieldType.findMany({
       orderBy: { label: "asc" }
@@ -30197,14 +34913,14 @@ router51.get("/", async (_req, res) => {
     res.status(500).json({ success: false, message: "Erreur serveur lors de la r\xE9cup\xE9ration des types de champs" });
   }
 });
-var fieldTypes_default = router51;
+var fieldTypes_default = router55;
 
 // src/routes/optionNodes.ts
-var import_express53 = require("express");
+var import_express57 = require("express");
 init_database();
-var router52 = (0, import_express53.Router)();
+var router56 = (0, import_express57.Router)();
 var prisma26 = db;
-router52.use(authMiddleware);
+router56.use(authMiddleware);
 function buildTree(nodes) {
   const byId = new Map(nodes.map((n) => [n.id, { ...n, children: [] }]));
   const roots = [];
@@ -30223,7 +34939,7 @@ function buildTree(nodes) {
   sortRec(roots);
   return roots;
 }
-router52.get("/:id", async (req2, res) => {
+router56.get("/:id", async (req2, res) => {
   try {
     const { id } = req2.params;
     const node = await prisma26.fieldOptionNode.findUnique({ where: { id }, select: { id: true, label: true, value: true, parentId: true, order: true, data: true, fieldId: true } });
@@ -30234,7 +34950,7 @@ router52.get("/:id", async (req2, res) => {
     return res.status(500).json({ success: false, message: "Erreur serveur" });
   }
 });
-router52.get("/field/:fieldId/tree", async (req2, res) => {
+router56.get("/field/:fieldId/tree", async (req2, res) => {
   try {
     const { fieldId } = req2.params;
     const nodes = await prisma26.fieldOptionNode.findMany({
@@ -30277,7 +34993,7 @@ router52.get("/field/:fieldId/tree", async (req2, res) => {
     return res.status(500).json({ success: false, message: "Erreur serveur" });
   }
 });
-router52.get("/search", async (req2, res) => {
+router56.get("/search", async (req2, res) => {
   try {
     const q = (req2.query.q || "").trim();
     const limit = parseInt(req2.query.limit || "20");
@@ -30314,7 +35030,7 @@ router52.get("/search", async (req2, res) => {
     return res.status(500).json({ success: false, message: "Erreur serveur" });
   }
 });
-router52.get("/field/:fieldId/children", async (req2, res) => {
+router56.get("/field/:fieldId/children", async (req2, res) => {
   try {
     const { fieldId } = req2.params;
     const parentId = req2.query.parentId || null;
@@ -30326,7 +35042,7 @@ router52.get("/field/:fieldId/children", async (req2, res) => {
     return res.status(500).json({ success: false, message: "Erreur serveur" });
   }
 });
-router52.post("/", async (req2, res) => {
+router56.post("/", async (req2, res) => {
   try {
     const { fieldId, parentId, label, value, order, data } = req2.body;
     if (!fieldId || !label) return res.status(400).json({ success: false, message: "fieldId et label requis" });
@@ -30347,7 +35063,7 @@ router52.post("/", async (req2, res) => {
     return res.status(500).json({ success: false, message: "Erreur serveur" });
   }
 });
-router52.put("/:id", async (req2, res) => {
+router56.put("/:id", async (req2, res) => {
   try {
     const { id } = req2.params;
     const { label, value, order, data, parentId } = req2.body;
@@ -30358,7 +35074,7 @@ router52.put("/:id", async (req2, res) => {
     return res.status(500).json({ success: false, message: "Erreur serveur" });
   }
 });
-router52.delete("/:id", async (req2, res) => {
+router56.delete("/:id", async (req2, res) => {
   try {
     const { id } = req2.params;
     const mode = req2.query.mode || "with-children";
@@ -30386,7 +35102,7 @@ router52.delete("/:id", async (req2, res) => {
     return res.status(500).json({ success: false, message: "Erreur serveur" });
   }
 });
-router52.post("/reorder", async (req2, res) => {
+router56.post("/reorder", async (req2, res) => {
   try {
     const { fieldId, orderedIds } = req2.body;
     if (!fieldId || !Array.isArray(orderedIds)) return res.status(400).json({ success: false, message: "Payload invalide" });
@@ -30397,7 +35113,7 @@ router52.post("/reorder", async (req2, res) => {
     return res.status(500).json({ success: false, message: "Erreur serveur" });
   }
 });
-router52.post("/import", async (req2, res) => {
+router56.post("/import", async (req2, res) => {
   try {
     const { fieldId, tree } = req2.body;
     if (!fieldId || !Array.isArray(tree)) return res.status(400).json({ success: false, message: "Payload invalide" });
@@ -30423,7 +35139,7 @@ router52.post("/import", async (req2, res) => {
     return res.status(500).json({ success: false, message: e?.message || "Erreur serveur" });
   }
 });
-router52.get("/export/:fieldId", async (req2, res) => {
+router56.get("/export/:fieldId", async (req2, res) => {
   try {
     const { fieldId } = req2.params;
     const nodes = await prisma26.fieldOptionNode.findMany({ where: { fieldId }, orderBy: [{ parentId: "asc" }, { order: "asc" }], select: { id: true, label: true, value: true, parentId: true, order: true, data: true } });
@@ -30433,10 +35149,10 @@ router52.get("/export/:fieldId", async (req2, res) => {
     return res.status(500).json({ success: false, message: "Erreur serveur" });
   }
 });
-var optionNodes_default = router52;
+var optionNodes_default = router56;
 
 // src/api/advanced-select.js
-var import_express54 = __toESM(require("express"), 1);
+var import_express58 = __toESM(require("express"), 1);
 
 // src/services/AdvancedSelectService.js
 init_database();
@@ -30788,9 +35504,9 @@ module.exports = AdvancedSelectService;
 var AdvancedSelectService_default = AdvancedSelectService;
 
 // src/api/advanced-select.js
-var router53 = import_express54.default.Router();
+var router57 = import_express58.default.Router();
 var advancedSelectService = new AdvancedSelectService_default();
-router53.get("/:fieldId", async (req2, res) => {
+router57.get("/:fieldId", async (req2, res) => {
   try {
     const { fieldId } = req2.params;
     const { organizationId } = req2.query;
@@ -30817,7 +35533,7 @@ router53.get("/:fieldId", async (req2, res) => {
     });
   }
 });
-router53.post("/:fieldId/calculate", async (req2, res) => {
+router57.post("/:fieldId/calculate", async (req2, res) => {
   try {
     const { fieldId } = req2.params;
     const {
@@ -30863,7 +35579,7 @@ router53.post("/:fieldId/calculate", async (req2, res) => {
     });
   }
 });
-router53.put("/:fieldId/update", async (req2, res) => {
+router57.put("/:fieldId/update", async (req2, res) => {
   try {
     const { fieldId } = req2.params;
     const { value, organizationId, metadata = {} } = req2.body;
@@ -30891,7 +35607,7 @@ router53.put("/:fieldId/update", async (req2, res) => {
     });
   }
 });
-router53.post("/validate", async (req2, res) => {
+router57.post("/validate", async (req2, res) => {
   try {
     const { value, unit, rules = [] } = req2.body;
     if (value === void 0) {
@@ -30917,7 +35633,7 @@ router53.post("/validate", async (req2, res) => {
     });
   }
 });
-router53.post("/templates", async (req2, res) => {
+router57.post("/templates", async (req2, res) => {
   try {
     const { templateType, fieldConfig, organizationId } = req2.body;
     if (!templateType || !fieldConfig || !organizationId) {
@@ -31008,7 +35724,7 @@ router53.post("/templates", async (req2, res) => {
     });
   }
 });
-router53.get("/:fieldId/analytics", async (req2, res) => {
+router57.get("/:fieldId/analytics", async (req2, res) => {
   try {
     const { fieldId } = req2.params;
     const { organizationId, period = "30d" } = req2.query;
@@ -31052,8 +35768,8 @@ router53.get("/:fieldId/analytics", async (req2, res) => {
     });
   }
 });
-module.exports = router53;
-var advanced_select_default = router53;
+module.exports = router57;
+var advanced_select_default = router57;
 
 // src/config/fieldMapping.ts
 var DEFAULT_FIELD_MAPPING = {
@@ -31066,7 +35782,7 @@ function getFieldMapping(organizationId) {
 }
 
 // src/api/dynamic-formulas.ts
-var import_express55 = __toESM(require("express"), 1);
+var import_express59 = __toESM(require("express"), 1);
 
 // src/services/DynamicFormulaEngine.ts
 init_database();
@@ -31646,8 +36362,8 @@ var DynamicFormulaEngine = class {
 var DynamicFormulaEngine_default = DynamicFormulaEngine;
 
 // src/api/dynamic-formulas.ts
-var router54 = import_express55.default.Router();
-router54.get("/configurations", async (req2, res) => {
+var router58 = import_express59.default.Router();
+router58.get("/configurations", async (req2, res) => {
   try {
     const organizationId = req2.headers["x-organization-id"];
     if (!organizationId) {
@@ -31679,7 +36395,7 @@ router54.get("/configurations", async (req2, res) => {
     });
   }
 });
-router54.post("/calculate", async (req2, res) => {
+router58.post("/calculate", async (req2, res) => {
   try {
     const organizationId = req2.headers["x-organization-id"];
     const { fieldValues } = req2.body;
@@ -31724,7 +36440,7 @@ router54.post("/calculate", async (req2, res) => {
     });
   }
 });
-router54.post("/calculate-prix-kwh", async (req2, res) => {
+router58.post("/calculate-prix-kwh", async (req2, res) => {
   try {
     const organizationId = req2.headers["x-organization-id"];
     const {
@@ -31783,7 +36499,7 @@ router54.post("/calculate-prix-kwh", async (req2, res) => {
     });
   }
 });
-router54.put("/configurations/:fieldId", async (req2, res) => {
+router58.put("/configurations/:fieldId", async (req2, res) => {
   try {
     const { fieldId } = req2.params;
     const { advancedConfig, formulas, dependencies } = req2.body;
@@ -31811,7 +36527,7 @@ router54.put("/configurations/:fieldId", async (req2, res) => {
     });
   }
 });
-router54.get("/field/:fieldId/logic", async (req2, res) => {
+router58.get("/field/:fieldId/logic", async (req2, res) => {
   try {
     const { fieldId } = req2.params;
     const organizationId = req2.headers["x-organization-id"];
@@ -31848,7 +36564,7 @@ router54.get("/field/:fieldId/logic", async (req2, res) => {
     });
   }
 });
-router54.get("/analytics", async (req2, res) => {
+router58.get("/analytics", async (req2, res) => {
   try {
     const organizationId = req2.headers["x-organization-id"];
     const engine = new DynamicFormulaEngine_default();
@@ -31880,14 +36596,14 @@ router54.get("/analytics", async (req2, res) => {
     });
   }
 });
-var dynamic_formulas_default = router54;
+var dynamic_formulas_default = router58;
 
 // src/routes/dashboard.ts
-var import_express56 = __toESM(require("express"), 1);
+var import_express60 = __toESM(require("express"), 1);
 init_database();
-var router55 = import_express56.default.Router();
+var router59 = import_express60.default.Router();
 var prisma28 = db;
-router55.get("/stats", authMiddleware, async (req2, res) => {
+router59.get("/stats", authMiddleware, async (req2, res) => {
   try {
     const organizationId = req2.user?.organizationId;
     const isSuperAdmin2 = req2.user?.role === "super_admin";
@@ -31972,7 +36688,7 @@ router55.get("/stats", authMiddleware, async (req2, res) => {
     });
   }
 });
-router55.get("/activities", authMiddleware, async (req2, res) => {
+router59.get("/activities", authMiddleware, async (req2, res) => {
   try {
     const organizationId = req2.user?.organizationId;
     const isSuperAdmin2 = req2.user?.role === "super_admin";
@@ -32132,7 +36848,7 @@ router55.get("/activities", authMiddleware, async (req2, res) => {
     });
   }
 });
-router55.get("/top-leads", authMiddleware, async (req2, res) => {
+router59.get("/top-leads", authMiddleware, async (req2, res) => {
   try {
     const organizationId = req2.user?.organizationId;
     const isSuperAdmin2 = req2.user?.role === "super_admin";
@@ -32246,7 +36962,7 @@ router55.get("/top-leads", authMiddleware, async (req2, res) => {
     });
   }
 });
-router55.get("/tasks", authMiddleware, async (req2, res) => {
+router59.get("/tasks", authMiddleware, async (req2, res) => {
   try {
     const organizationId = req2.user?.organizationId;
     const isSuperAdmin2 = req2.user?.role === "super_admin";
@@ -32314,10 +37030,10 @@ router55.get("/tasks", authMiddleware, async (req2, res) => {
     });
   }
 });
-var dashboard_default = router55;
+var dashboard_default = router59;
 
 // src/components/TreeBranchLeaf/treebranchleaf-new/api/treebranchleaf-routes.ts
-var import_express59 = require("express");
+var import_express63 = require("express");
 init_formulaEngine();
 
 // src/components/TreeBranchLeaf/treebranchleaf-new/api/evaluation/orchestrator.ts
@@ -33091,7 +37807,7 @@ function getValidationErrorMessage(parentType, parentSubType, childType, childSu
 }
 
 // src/components/TreeBranchLeaf/treebranchleaf-new/api/treebranchleaf-routes.ts
-var import_crypto20 = require("crypto");
+var import_crypto23 = require("crypto");
 init_operation_interpreter();
 
 // src/components/TreeBranchLeaf/treebranchleaf-new/api/registry/repeat-id-registry.ts
@@ -33201,18 +37917,18 @@ function logCapacityEvent(payload) {
 // src/components/TreeBranchLeaf/treebranchleaf-new/api/sum-display-field-routes.ts
 var import_client4 = require("@prisma/client");
 init_database();
-var import_crypto17 = require("crypto");
+var import_crypto20 = require("crypto");
 var prisma29 = db;
-function getOrgId(req2) {
+function getOrgId2(req2) {
   const user = req2.user || {};
   const headerOrg = req2.headers?.["x-organization-id"] || req2.headers?.["x-organization"] || req2.headers?.["organization-id"];
   return user.organizationId || headerOrg || null;
 }
-function registerSumDisplayFieldRoutes(router99) {
-  router99.post("/trees/:treeId/nodes/:nodeId/sum-display-field", async (req2, res) => {
+function registerSumDisplayFieldRoutes(router104) {
+  router104.post("/trees/:treeId/nodes/:nodeId/sum-display-field", async (req2, res) => {
     try {
       const { treeId, nodeId } = req2.params;
-      const organizationId = getOrgId(req2);
+      const organizationId = getOrgId2(req2);
       const tree = await prisma29.treeBranchLeafTree.findFirst({
         where: organizationId ? { id: treeId, organizationId } : { id: treeId }
       });
@@ -33257,7 +37973,7 @@ function registerSumDisplayFieldRoutes(router99) {
         }
       });
       if (!mainVariable) {
-        const newId = (0, import_crypto17.randomUUID)();
+        const newId = (0, import_crypto20.randomUUID)();
         const exposedKey = `var_${nodeId.slice(0, 4)}`;
         const existing = await prisma29.treeBranchLeafNodeVariable.findUnique({ where: { exposedKey } });
         const finalExposedKey = existing ? `var_${nodeId.slice(0, 8)}` : exposedKey;
@@ -33581,10 +38297,10 @@ function registerSumDisplayFieldRoutes(router99) {
       res.status(500).json({ error: "Erreur lors de la cr\xC3\u0192\xC2\xA9ation du champ Total", details: errMsg });
     }
   });
-  router99.delete("/trees/:treeId/nodes/:nodeId/sum-display-field", async (req2, res) => {
+  router104.delete("/trees/:treeId/nodes/:nodeId/sum-display-field", async (req2, res) => {
     try {
       const { treeId, nodeId } = req2.params;
-      const organizationId = getOrgId(req2);
+      const organizationId = getOrgId2(req2);
       const tree = await prisma29.treeBranchLeafTree.findFirst({
         where: organizationId ? { id: treeId, organizationId } : { id: treeId }
       });
@@ -38294,14 +43010,14 @@ async function deepCopyNodeInternal(prisma51, req2, nodeId, opts) {
 }
 
 // src/components/TreeBranchLeaf/tbl-bridge/routes/tbl-submission-evaluator.ts
-var import_express57 = require("express");
+var import_express61 = require("express");
 init_database();
-var import_crypto18 = require("crypto");
+var import_crypto21 = require("crypto");
 init_operation_interpreter();
 function isSumTotalNodeId(nodeId) {
   return /-sum-total(-\d+)?$/.test(nodeId);
 }
-var router56 = (0, import_express57.Router)();
+var router60 = (0, import_express61.Router)();
 var prisma30 = db;
 var triggerIndexCache = /* @__PURE__ */ new Map();
 var TRIGGER_INDEX_CACHE_TTL = 6e4;
@@ -38471,7 +43187,7 @@ async function cloneCompletedSubmissionToDraft(params) {
         // (Prisma/Postgres) Empêche un crash si (submissionId,nodeId) existe déjà.
         skipDuplicates: true,
         data: uniqueOriginalRows.map((r) => ({
-          id: (0, import_crypto18.randomUUID)(),
+          id: (0, import_crypto21.randomUUID)(),
           submissionId: newSubmissionId,
           nodeId: r.nodeId,
           value: r.value,
@@ -39873,8 +44589,10 @@ async function evaluateCapacitiesForSubmission(submissionId, organizationId, use
               {
                 treeId,
                 labelMap: safeLabelMap,
-                preloadedVariable: preloadedVariablesMap.get(capacity.nodeId)
+                preloadedVariable: preloadedVariablesMap.get(capacity.nodeId),
                 // 🔥 OPTIMISATION: Passer variable préchargée (évite N+1)
+                organizationId
+                // 📋 Gestionnaire: permettre les overrides par org
               }
             );
             if (capacityResult.value === null && capacityResult.operationDetail?.type === "missing-variable") {
@@ -40192,7 +44910,7 @@ async function evaluateCapacitiesForSubmission(submissionId, organizationId, use
   results.computedValues = computedValuesToStore;
   return results;
 }
-router56.post("/submissions/:submissionId/evaluate-all", async (req2, res) => {
+router60.post("/submissions/:submissionId/evaluate-all", async (req2, res) => {
   try {
     const { submissionId } = req2.params;
     const { forceUpdate = false } = req2.body || {};
@@ -40238,7 +44956,10 @@ router56.post("/submissions/:submissionId/evaluate-all", async (req2, res) => {
         const calculationResult = await evaluateVariableOperation(
           data.nodeId,
           submissionId,
-          prisma30
+          prisma30,
+          void 0,
+          { organizationId }
+          // 📋 Gestionnaire overrides
         );
         const normalize2 = (v) => {
           if (v === null || v === void 0) return null;
@@ -40307,7 +45028,7 @@ router56.post("/submissions/:submissionId/evaluate-all", async (req2, res) => {
     });
   }
 });
-router56.get("/submissions/:submissionId/verification", async (req2, res) => {
+router60.get("/submissions/:submissionId/verification", async (req2, res) => {
   try {
     const { submissionId } = req2.params;
     const rows = await prisma30.treeBranchLeafSubmissionData.findMany({
@@ -40362,7 +45083,7 @@ router56.get("/submissions/:submissionId/verification", async (req2, res) => {
     });
   }
 });
-router56.post("/submissions/create-and-evaluate", async (req2, res) => {
+router60.post("/submissions/create-and-evaluate", async (req2, res) => {
   try {
     const {
       treeId,
@@ -40638,7 +45359,7 @@ router56.post("/submissions/create-and-evaluate", async (req2, res) => {
     });
   }
 });
-router56.put("/submissions/:submissionId/update-and-evaluate", async (req2, res) => {
+router60.put("/submissions/:submissionId/update-and-evaluate", async (req2, res) => {
   try {
     const { submissionId } = req2.params;
     const { formData, status } = req2.body || {};
@@ -40698,7 +45419,7 @@ router56.put("/submissions/:submissionId/update-and-evaluate", async (req2, res)
     return res.status(500).json({ success: false, error: error instanceof Error ? error.message : "Erreur interne" });
   }
 });
-router56.post("/submissions/preview-evaluate", async (req2, res) => {
+router60.post("/submissions/preview-evaluate", async (req2, res) => {
   try {
     const { treeId, formData, baseSubmissionId, leadId } = req2.body || {};
     if (formData) {
@@ -40946,8 +45667,10 @@ router56.post("/submissions/preview-evaluate", async (req2, res) => {
               treeId: context.treeId,
               labelMap: safeLabelMap,
               // 🔥 Use outer safeLabelMap
-              preloadedVariable: cap
+              preloadedVariable: cap,
               // Passer la variable déjà fetchée
+              organizationId: context.organizationId
+              // 📋 Gestionnaire overrides
             }
           );
         }
@@ -41056,7 +45779,7 @@ router56.post("/submissions/preview-evaluate", async (req2, res) => {
     return res.status(500).json({ success: false, error: error instanceof Error ? error.message : "Erreur interne" });
   }
 });
-router56.post("/submissions/stage", async (req2, res) => {
+router60.post("/submissions/stage", async (req2, res) => {
   try {
     pruneStages();
     const { stageId, treeId, submissionId, formData } = req2.body || {};
@@ -41087,7 +45810,7 @@ router56.post("/submissions/stage", async (req2, res) => {
     return res.status(500).json({ success: false, error: e instanceof Error ? e.message : "Erreur interne" });
   }
 });
-router56.post("/submissions/stage/preview", async (req2, res) => {
+router60.post("/submissions/stage/preview", async (req2, res) => {
   try {
     pruneStages();
     const { stageId } = req2.body || {};
@@ -41121,7 +45844,9 @@ router56.post("/submissions/stage/preview", async (req2, res) => {
           c.nodeId,
           context.submissionId,
           prisma30,
-          context.valueMap
+          context.valueMap,
+          { organizationId: context.organizationId }
+          // 📋 Gestionnaire overrides
         );
         if (injectedBaseKeys.length) {
           for (const k of injectedBaseKeys) {
@@ -41172,7 +45897,7 @@ router56.post("/submissions/stage/preview", async (req2, res) => {
     return res.status(500).json({ success: false, error: e instanceof Error ? e.message : "Erreur interne" });
   }
 });
-router56.post("/submissions/stage/commit", async (req2, res) => {
+router60.post("/submissions/stage/commit", async (req2, res) => {
   try {
     pruneStages();
     const { stageId, asNew } = req2.body || {};
@@ -41198,14 +45923,14 @@ router56.post("/submissions/stage/commit", async (req2, res) => {
     return res.status(500).json({ success: false, error: e instanceof Error ? e.message : "Erreur interne" });
   }
 });
-router56.post("/submissions/stage/discard", (req2, res) => {
+router60.post("/submissions/stage/discard", (req2, res) => {
   pruneStages();
   const { stageId } = req2.body || {};
   if (!stageId || !stagingStore.has(stageId)) return res.json({ success: true, discarded: false });
   stagingStore.delete(stageId);
   return res.json({ success: true, discarded: true });
 });
-router56.get("/tables/:tableId", async (req2, res) => {
+router60.get("/tables/:tableId", async (req2, res) => {
   try {
     const { tableId } = req2.params;
     const table = await prisma30.treeBranchLeafNodeTable.findUnique({
@@ -41268,14 +45993,14 @@ router56.get("/tables/:tableId", async (req2, res) => {
     });
   }
 });
-var tbl_submission_evaluator_default = router56;
+var tbl_submission_evaluator_default = router60;
 
 // src/components/TreeBranchLeaf/treebranchleaf-new/api/table-routes-new.ts
-var import_express58 = require("express");
+var import_express62 = require("express");
 var import_client5 = require("@prisma/client");
 init_database();
-var import_crypto19 = require("crypto");
-var router57 = (0, import_express58.Router)();
+var import_crypto22 = require("crypto");
+var router61 = (0, import_express62.Router)();
 var prisma31 = db;
 function toJsonSafe(value) {
   if (value === void 0) return null;
@@ -41363,17 +46088,17 @@ async function syncTableReferences(oldTableId, newTableId, ownerNodeId, tableNam
     console.error(`[syncTableRefs] \u274C Erreur lors de la sync des r\xE9f\xE9rences:`, error);
   }
 }
-router57.post("/nodes/:nodeId/tables", async (req2, res) => {
+router61.post("/nodes/:nodeId/tables", async (req2, res) => {
   const { nodeId } = req2.params;
-  const { name, description, columns, rows, type = "static", meta: incomingMeta } = req2.body;
+  const { name, description, columns, rows, type = "static", meta: incomingMeta, sourceTableId } = req2.body;
   const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx2(req2);
   if (!name) {
     return res.status(400).json({ error: "Le nom de la table est requis" });
   }
-  if (!Array.isArray(columns)) {
+  if (!sourceTableId && !Array.isArray(columns)) {
     return res.status(400).json({ error: "La d\xC3\u0192\xC2\xA9finition des colonnes est requise (array)" });
   }
-  if (!Array.isArray(rows)) {
+  if (!sourceTableId && !Array.isArray(rows)) {
     return res.status(400).json({ error: "Les donn\xC3\u0192\xC2\xA9es (rows) sont requises (array)" });
   }
   try {
@@ -41397,7 +46122,88 @@ router57.post("/nodes/:nodeId/tables", async (req2, res) => {
       });
       finalName = `${name} (${existingCount + 1})`;
     }
-    const tableId = (0, import_crypto19.randomUUID)();
+    const tableId = (0, import_crypto22.randomUUID)();
+    if (sourceTableId) {
+      const sourceTable = await prisma31.treeBranchLeafNodeTable.findUnique({
+        where: { id: sourceTableId },
+        include: {
+          tableColumns: { orderBy: { columnIndex: "asc" } },
+          tableRows: { orderBy: { rowIndex: "asc" } }
+        }
+      });
+      if (!sourceTable) {
+        return res.status(404).json({ error: "Table source introuvable" });
+      }
+      const defaultMeta2 = {
+        lookup: {
+          enabled: true,
+          columnLookupEnabled: true,
+          rowLookupEnabled: true,
+          selectors: {}
+        }
+      };
+      const finalMeta2 = incomingMeta ? (() => {
+        const incoming = typeof incomingMeta === "string" ? JSON.parse(incomingMeta) : incomingMeta;
+        return { ...defaultMeta2, ...incoming, lookup: { ...defaultMeta2.lookup, ...incoming.lookup || {} } };
+      })() : defaultMeta2;
+      const viewTable = await prisma31.treeBranchLeafNodeTable.create({
+        data: {
+          id: tableId,
+          nodeId,
+          organizationId: node.TreeBranchLeafTree.organizationId,
+          name: finalName,
+          description: description || null,
+          type: sourceTable.type,
+          meta: toJsonSafe(finalMeta2),
+          rowCount: sourceTable.rowCount,
+          columnCount: sourceTable.columnCount,
+          sourceTableId,
+          createdAt: /* @__PURE__ */ new Date(),
+          updatedAt: /* @__PURE__ */ new Date()
+        }
+      });
+      await prisma31.treeBranchLeafNode.update({
+        where: { id: nodeId },
+        data: { hasTable: true }
+      });
+      try {
+        const nodeData = await prisma31.treeBranchLeafNode.findUnique({ where: { id: nodeId }, select: { linkedTableIds: true } });
+        const current = nodeData?.linkedTableIds ?? [];
+        const next = Array.from(/* @__PURE__ */ new Set([...current, viewTable.id]));
+        await prisma31.treeBranchLeafNode.update({ where: { id: nodeId }, data: { linkedTableIds: { set: next } } });
+      } catch {
+      }
+      const response = {
+        id: viewTable.id,
+        name: viewTable.name,
+        description: viewTable.description,
+        type: viewTable.type,
+        meta: viewTable.meta,
+        sourceTableId: viewTable.sourceTableId,
+        columns: sourceTable.tableColumns.map((c) => c.name),
+        rows: sourceTable.tableRows.map((r) => {
+          const cells = r.cells;
+          if (Array.isArray(cells)) return cells;
+          if (typeof cells === "string") {
+            try {
+              const parsed = JSON.parse(cells);
+              return Array.isArray(parsed) ? parsed : [String(parsed)];
+            } catch {
+              return [String(cells)];
+            }
+          }
+          if (cells && typeof cells === "object") return Object.values(cells);
+          return [String(cells || "")];
+        }),
+        rowCount: sourceTable.rowCount,
+        columnCount: sourceTable.columnCount,
+        createdAt: viewTable.createdAt,
+        updatedAt: viewTable.updatedAt,
+        order: viewTable.createdAt ? new Date(viewTable.createdAt).getTime() : 0
+      };
+      console.log(`[POST table] \u2705 Vue "${finalName}" cr\xE9\xE9e (source: ${sourceTableId})`);
+      return res.status(201).json(response);
+    }
     const defaultMeta = {
       lookup: {
         enabled: true,
@@ -41437,7 +46243,7 @@ router57.post("/nodes/:nodeId/tables", async (req2, res) => {
       const colFormat = typeof col === "object" && col !== null && col.format ? col.format : null;
       const colMetadata = typeof col === "object" && col !== null && col.metadata ? col.metadata : {};
       return {
-        id: (0, import_crypto19.randomUUID)(),
+        id: (0, import_crypto22.randomUUID)(),
         tableId,
         columnIndex: index,
         name: colName,
@@ -41448,7 +46254,7 @@ router57.post("/nodes/:nodeId/tables", async (req2, res) => {
       };
     });
     const tableRowsData = rows.map((row, index) => ({
-      id: (0, import_crypto19.randomUUID)(),
+      id: (0, import_crypto22.randomUUID)(),
       tableId,
       rowIndex: index,
       // IMPORTANT: Prisma JSON ne supporte pas undefined/NaN/BigInt/Date
@@ -41518,7 +46324,7 @@ router57.post("/nodes/:nodeId/tables", async (req2, res) => {
               if (!existingRowConfig) {
                 await prisma31.treeBranchLeafSelectConfig.create({
                   data: {
-                    id: (0, import_crypto19.randomUUID)(),
+                    id: (0, import_crypto22.randomUUID)(),
                     nodeId: rowSourceField,
                     options: [],
                     multiple: false,
@@ -41550,7 +46356,7 @@ router57.post("/nodes/:nodeId/tables", async (req2, res) => {
               if (!existingColConfig) {
                 await prisma31.treeBranchLeafSelectConfig.create({
                   data: {
-                    id: (0, import_crypto19.randomUUID)(),
+                    id: (0, import_crypto22.randomUUID)(),
                     nodeId: colSourceField,
                     options: [],
                     multiple: false,
@@ -41580,7 +46386,7 @@ router57.post("/nodes/:nodeId/tables", async (req2, res) => {
             if (!existingCompositeConfig) {
               await prisma31.treeBranchLeafSelectConfig.create({
                 data: {
-                  id: (0, import_crypto19.randomUUID)(),
+                  id: (0, import_crypto22.randomUUID)(),
                   nodeId,
                   options: [],
                   multiple: false,
@@ -41680,7 +46486,7 @@ router57.post("/nodes/:nodeId/tables", async (req2, res) => {
     res.status(500).json({ error: "Impossible de cr\xC3\u0192\xC2\xA9er la table" });
   }
 });
-router57.get("/tables/:id", async (req2, res) => {
+router61.get("/tables/:id", async (req2, res) => {
   const { id } = req2.params;
   const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx2(req2);
   const page = parseInt(req2.query.page) || 1;
@@ -41743,7 +46549,7 @@ router57.get("/tables/:id", async (req2, res) => {
     res.status(500).json({ error: "Impossible de r\xC3\u0192\xC2\xA9cup\xC3\u0192\xC2\xA9rer la table" });
   }
 });
-router57.put("/tables/:id", async (req2, res) => {
+router61.put("/tables/:id", async (req2, res) => {
   const { id } = req2.params;
   const { name, description, columns, rows, type, lookupSelectColumn, lookupDisplayColumns } = req2.body;
   const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx2(req2);
@@ -41782,7 +46588,7 @@ router57.put("/tables/:id", async (req2, res) => {
         await tx.treeBranchLeafNodeTableColumn.deleteMany({ where: { tableId: id } });
         if (columns.length > 0) {
           const newColumnsData = columns.map((col, index) => ({
-            id: (0, import_crypto19.randomUUID)(),
+            id: (0, import_crypto22.randomUUID)(),
             tableId: id,
             columnIndex: index,
             name: typeof col === "string" ? col : col.name || `Colonne ${index + 1}`,
@@ -41801,7 +46607,7 @@ router57.put("/tables/:id", async (req2, res) => {
             const row = rows[index];
             await tx.treeBranchLeafNodeTableRow.create({
               data: {
-                id: (0, import_crypto19.randomUUID)(),
+                id: (0, import_crypto22.randomUUID)(),
                 tableId: id,
                 rowIndex: index,
                 cells: toJsonSafe(row)
@@ -41823,7 +46629,7 @@ router57.put("/tables/:id", async (req2, res) => {
     res.status(500).json({ error: "Impossible de mettre \xC3\u0192\xC2\xA0 jour la table" });
   }
 });
-router57.delete("/tables/:id", async (req2, res) => {
+router61.delete("/tables/:id", async (req2, res) => {
   const { id } = req2.params;
   const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx2(req2);
   try {
@@ -41967,9 +46773,9 @@ router57.delete("/tables/:id", async (req2, res) => {
     res.status(500).json({ error: "Impossible de supprimer la table" });
   }
 });
-router57.put("/nodes/:nodeId/tables/:tableId", async (req2, res) => {
+router61.put("/nodes/:nodeId/tables/:tableId", async (req2, res) => {
   const { tableId } = req2.params;
-  const { name, description, columns, rows, type, meta } = req2.body;
+  const { name, description, columns, rows, type, meta, data: dataMatrix } = req2.body;
   const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx2(req2);
   try {
     if (meta && !columns && !rows) {
@@ -42009,6 +46815,11 @@ router57.put("/nodes/:nodeId/tables/:tableId", async (req2, res) => {
       }
       return res.json(updatedTable2);
     }
+    const viewCheck = await prisma31.treeBranchLeafNodeTable.findUnique({
+      where: { id: tableId },
+      select: { sourceTableId: true }
+    });
+    const effectiveDataTableId = viewCheck?.sourceTableId || tableId;
     const updatedTable = await prisma31.$transaction(async (tx) => {
       const table2 = await tx.treeBranchLeafNodeTable.findUnique({
         where: { id: tableId },
@@ -42038,11 +46849,17 @@ router57.put("/nodes/:nodeId/tables/:tableId", async (req2, res) => {
         where: { id: tableId },
         data: updateData
       });
+      if (effectiveDataTableId !== tableId) {
+        const srcUpdate = { updatedAt: /* @__PURE__ */ new Date() };
+        if (Array.isArray(columns) && columns.length > 0) srcUpdate.columnCount = columns.length;
+        if (Array.isArray(rows) && rows.length > 0) srcUpdate.rowCount = rows.length;
+        await tx.treeBranchLeafNodeTable.update({ where: { id: effectiveDataTableId }, data: srcUpdate });
+      }
       if (Array.isArray(columns) && columns.length > 0) {
-        await tx.treeBranchLeafNodeTableColumn.deleteMany({ where: { tableId } });
+        await tx.treeBranchLeafNodeTableColumn.deleteMany({ where: { tableId: effectiveDataTableId } });
         const newColumnsData = columns.map((col, index) => ({
-          id: (0, import_crypto19.randomUUID)(),
-          tableId,
+          id: (0, import_crypto22.randomUUID)(),
+          tableId: effectiveDataTableId,
           columnIndex: index,
           name: typeof col === "string" ? col : col.name || `Colonne ${index + 1}`,
           type: typeof col === "object" ? col.type : "text",
@@ -42053,15 +46870,25 @@ router57.put("/nodes/:nodeId/tables/:tableId", async (req2, res) => {
         await tx.treeBranchLeafNodeTableColumn.createMany({ data: newColumnsData });
       }
       if (Array.isArray(rows) && rows.length > 0) {
-        await tx.treeBranchLeafNodeTableRow.deleteMany({ where: { tableId } });
+        await tx.treeBranchLeafNodeTableRow.deleteMany({ where: { tableId: effectiveDataTableId } });
+        const hasDataMatrix = Array.isArray(dataMatrix) && dataMatrix.length > 0;
         for (let index = 0; index < rows.length; index++) {
-          const row = rows[index];
+          const rowLabel = rows[index];
+          let cellsValue;
+          if (hasDataMatrix && Array.isArray(dataMatrix[index])) {
+            const label = Array.isArray(rowLabel) ? rowLabel[0] : rowLabel;
+            cellsValue = [label, ...dataMatrix[index]];
+          } else if (Array.isArray(rowLabel)) {
+            cellsValue = rowLabel;
+          } else {
+            cellsValue = [rowLabel];
+          }
           await tx.treeBranchLeafNodeTableRow.create({
             data: {
-              id: (0, import_crypto19.randomUUID)(),
-              tableId,
+              id: (0, import_crypto22.randomUUID)(),
+              tableId: effectiveDataTableId,
               rowIndex: index,
-              cells: toJsonSafe(row)
+              cells: toJsonSafe(cellsValue)
             }
           });
         }
@@ -42091,7 +46918,7 @@ router57.put("/nodes/:nodeId/tables/:tableId", async (req2, res) => {
     res.status(500).json({ error: "Impossible de mettre \xC3\u0192\xC2\xA0 jour la table" });
   }
 });
-router57.get("/nodes/:nodeId/tables", async (req2, res) => {
+router61.get("/nodes/:nodeId/tables", async (req2, res) => {
   const { nodeId } = req2.params;
   const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx2(req2);
   try {
@@ -42210,47 +47037,68 @@ router57.get("/nodes/:nodeId/tables", async (req2, res) => {
         table.meta = metaObj;
       }
     }
-    const formattedTables = allTables.map((table) => ({
-      id: table.id,
-      name: table.name,
-      description: table.description,
-      type: table.type,
-      columns: table.tableColumns.map((c) => c.name),
-      rows: table.tableRows.map((r) => {
-        const cells = r.cells;
-        if (Array.isArray(cells)) {
-          return cells;
-        }
-        if (typeof cells === "string") {
-          try {
-            const parsed = JSON.parse(cells);
-            return Array.isArray(parsed) ? parsed : [String(parsed)];
-          } catch {
-            return [String(cells)];
+    const viewSourceIds = [...new Set(
+      allTables.filter((t) => t.sourceTableId).map((t) => t.sourceTableId)
+    )];
+    const sourceTablesMap = {};
+    if (viewSourceIds.length > 0) {
+      for (const t of allTables) {
+        if (viewSourceIds.includes(t.id)) sourceTablesMap[t.id] = t;
+      }
+      const missingIds = viewSourceIds.filter((sid) => !sourceTablesMap[sid]);
+      if (missingIds.length > 0) {
+        const remoteSources = await prisma31.treeBranchLeafNodeTable.findMany({
+          where: { id: { in: missingIds } },
+          include: {
+            tableColumns: { orderBy: { columnIndex: "asc" } },
+            tableRows: { orderBy: { rowIndex: "asc" } }
           }
-        }
-        if (cells && typeof cells === "object") {
-          return Object.values(cells);
-        }
-        return [String(cells || "")];
-      }),
-      meta: table.meta || {},
-      order: table.createdAt ? new Date(table.createdAt).getTime() : 0,
-      createdAt: table.createdAt,
-      updatedAt: table.updatedAt
-    }));
+        });
+        for (const rs of remoteSources) sourceTablesMap[rs.id] = rs;
+      }
+    }
+    const formattedTables = allTables.map((table) => {
+      const srcId = table.sourceTableId;
+      const resolvedTable = srcId && sourceTablesMap[srcId] ? { ...table, tableColumns: sourceTablesMap[srcId].tableColumns, tableRows: sourceTablesMap[srcId].tableRows } : table;
+      return {
+        id: table.id,
+        name: table.name,
+        description: table.description,
+        type: table.type,
+        sourceTableId: srcId || null,
+        columns: resolvedTable.tableColumns.map((c) => c.name),
+        rows: resolvedTable.tableRows.map((r) => {
+          const cells = r.cells;
+          if (Array.isArray(cells)) return cells;
+          if (typeof cells === "string") {
+            try {
+              const parsed = JSON.parse(cells);
+              return Array.isArray(parsed) ? parsed : [String(parsed)];
+            } catch {
+              return [String(cells)];
+            }
+          }
+          if (cells && typeof cells === "object") return Object.values(cells);
+          return [String(cells || "")];
+        }),
+        meta: table.meta || {},
+        order: table.createdAt ? new Date(table.createdAt).getTime() : 0,
+        createdAt: table.createdAt,
+        updatedAt: table.updatedAt
+      };
+    });
     res.json(formattedTables);
   } catch (error) {
     console.error(`\xC3\xA2\xC2\x9D\xC5\u2019 [NEW GET /nodes/:nodeId/tables] Erreur:`, error);
     res.status(500).json({ error: "Impossible de r\xC3\u0192\xC2\xA9cup\xC3\u0192\xC2\xA9rer les tables" });
   }
 });
-var table_routes_new_default = router57;
+var table_routes_new_default = router61;
 
 // src/components/TreeBranchLeaf/treebranchleaf-new/api/treebranchleaf-routes.ts
-var router58 = (0, import_express59.Router)();
-router58.use("/", table_routes_new_default);
-registerSumDisplayFieldRoutes(router58);
+var router62 = (0, import_express63.Router)();
+router62.use("/", table_routes_new_default);
+registerSumDisplayFieldRoutes(router62);
 var prisma32 = db;
 var normalizeRolesMap = (rolesMap) => {
   if (!rolesMap || typeof rolesMap !== "object") {
@@ -42312,7 +47160,7 @@ var computeLogicVersion = () => {
     entries: stats.entries,
     parseCount: stats.parseCount
   });
-  const version = (0, import_crypto20.createHash)("sha1").update(seed).digest("hex").slice(0, 8);
+  const version = (0, import_crypto23.createHash)("sha1").update(seed).digest("hex").slice(0, 8);
   return { version, metrics, stats };
 };
 function getAuthCtx3(req2) {
@@ -42593,7 +47441,7 @@ function calculateResult(expression) {
     return null;
   }
 }
-router58.use((req2, res, next) => {
+router62.use((req2, res, next) => {
   req2.user = {
     id: "1757366075163-2vdibc2ve",
     userId: "1757366075163-2vdibc2ve",
@@ -42604,7 +47452,7 @@ router58.use((req2, res, next) => {
   };
   next();
 });
-router58.get("/trees", async (req2, res) => {
+router62.get("/trees", async (req2, res) => {
   try {
     const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx3(req2);
     const whereFilter = isSuperAdmin2 || !organizationId ? {} : { organizationId };
@@ -42627,7 +47475,7 @@ router58.get("/trees", async (req2, res) => {
     res.status(500).json({ error: "Impossible de r\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9cup\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9rer les arbres" });
   }
 });
-router58.get("/trees/:id", async (req2, res) => {
+router62.get("/trees/:id", async (req2, res) => {
   try {
     const { id } = req2.params;
     const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx3(req2);
@@ -42650,7 +47498,7 @@ router58.get("/trees/:id", async (req2, res) => {
     res.status(500).json({ error: "Impossible de r\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9cup\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9rer l'arbre" });
   }
 });
-router58.post("/trees", async (req2, res) => {
+router62.post("/trees", async (req2, res) => {
   try {
     const {
       name,
@@ -42672,7 +47520,7 @@ router58.post("/trees", async (req2, res) => {
     if (!targetOrgId) {
       return res.status(400).json({ error: "organizationId requis (en-t\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xAAte x-organization-id ou dans le corps)" });
     }
-    const id = (0, import_crypto20.randomUUID)();
+    const id = (0, import_crypto23.randomUUID)();
     const tree = await prisma32.treeBranchLeafTree.create({
       data: {
         id,
@@ -42696,7 +47544,7 @@ router58.post("/trees", async (req2, res) => {
     res.status(500).json({ error: "Impossible de cr\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9er l'arbre" });
   }
 });
-router58.post("/trees/:id/duplicate", async (req2, res) => {
+router62.post("/trees/:id/duplicate", async (req2, res) => {
   try {
     const { id: sourceTreeId } = req2.params;
     const { name } = req2.body || {};
@@ -42711,7 +47559,7 @@ router58.post("/trees/:id/duplicate", async (req2, res) => {
     if (!sourceTree) {
       return res.status(404).json({ error: "Arbre source non trouv\xE9" });
     }
-    const newTreeId = (0, import_crypto20.randomUUID)();
+    const newTreeId = (0, import_crypto23.randomUUID)();
     const newTree = await prisma32.treeBranchLeafTree.create({
       data: {
         id: newTreeId,
@@ -42737,7 +47585,7 @@ router58.post("/trees/:id/duplicate", async (req2, res) => {
     }
     const idMap = /* @__PURE__ */ new Map();
     for (const node of sourceNodes) {
-      idMap.set(node.id, (0, import_crypto20.randomUUID)());
+      idMap.set(node.id, (0, import_crypto23.randomUUID)());
     }
     const now = /* @__PURE__ */ new Date();
     const nodeCreateData = sourceNodes.map((node) => {
@@ -42950,7 +47798,7 @@ router58.post("/trees/:id/duplicate", async (req2, res) => {
     });
     if (sourceVariables.length > 0) {
       const varCreateData = sourceVariables.map((v) => ({
-        id: (0, import_crypto20.randomUUID)(),
+        id: (0, import_crypto23.randomUUID)(),
         nodeId: idMap.get(v.nodeId) ?? v.nodeId,
         exposedKey: `${v.exposedKey}_${newTreeId.slice(0, 8)}`,
         displayName: v.displayName,
@@ -42975,7 +47823,7 @@ router58.post("/trees/:id/duplicate", async (req2, res) => {
     });
     if (sourceConditions.length > 0) {
       const condCreateData = sourceConditions.map((c) => ({
-        id: (0, import_crypto20.randomUUID)(),
+        id: (0, import_crypto23.randomUUID)(),
         nodeId: idMap.get(c.nodeId) ?? c.nodeId,
         organizationId: targetOrgId,
         name: c.name,
@@ -42993,7 +47841,7 @@ router58.post("/trees/:id/duplicate", async (req2, res) => {
     });
     if (sourceFormulas.length > 0) {
       const formulaCreateData = sourceFormulas.map((f) => ({
-        id: (0, import_crypto20.randomUUID)(),
+        id: (0, import_crypto23.randomUUID)(),
         nodeId: idMap.get(f.nodeId) ?? f.nodeId,
         organizationId: targetOrgId,
         name: f.name,
@@ -43013,7 +47861,7 @@ router58.post("/trees/:id/duplicate", async (req2, res) => {
       include: { tableColumns: true, tableRows: true }
     });
     for (const table of sourceTables) {
-      const newTableId = (0, import_crypto20.randomUUID)();
+      const newTableId = (0, import_crypto23.randomUUID)();
       await prisma32.treeBranchLeafNodeTable.create({
         data: {
           id: newTableId,
@@ -43036,7 +47884,7 @@ router58.post("/trees/:id/duplicate", async (req2, res) => {
       if (table.tableColumns.length > 0) {
         await prisma32.treeBranchLeafNodeTableColumn.createMany({
           data: table.tableColumns.map((col) => ({
-            id: (0, import_crypto20.randomUUID)(),
+            id: (0, import_crypto23.randomUUID)(),
             tableId: newTableId,
             columnIndex: col.columnIndex,
             name: col.name,
@@ -43050,7 +47898,7 @@ router58.post("/trees/:id/duplicate", async (req2, res) => {
       if (table.tableRows.length > 0) {
         await prisma32.treeBranchLeafNodeTableRow.createMany({
           data: table.tableRows.map((row) => ({
-            id: (0, import_crypto20.randomUUID)(),
+            id: (0, import_crypto23.randomUUID)(),
             tableId: newTableId,
             rowIndex: row.rowIndex,
             cells: row.cells
@@ -43063,7 +47911,7 @@ router58.post("/trees/:id/duplicate", async (req2, res) => {
     });
     if (sourceSelectConfigs.length > 0) {
       const selectCreateData = sourceSelectConfigs.map((sc) => ({
-        id: (0, import_crypto20.randomUUID)(),
+        id: (0, import_crypto23.randomUUID)(),
         nodeId: idMap.get(sc.nodeId) ?? sc.nodeId,
         options: sc.options,
         multiple: sc.multiple,
@@ -43088,7 +47936,7 @@ router58.post("/trees/:id/duplicate", async (req2, res) => {
     res.status(500).json({ error: "Erreur lors de la duplication de l'arbre" });
   }
 });
-router58.put("/trees/:id", async (req2, res) => {
+router62.put("/trees/:id", async (req2, res) => {
   try {
     const { id } = req2.params;
     const { organizationId } = req2.user;
@@ -43118,7 +47966,7 @@ router58.put("/trees/:id", async (req2, res) => {
     res.status(500).json({ error: "Impossible de mettre \xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA0 jour l'arbre" });
   }
 });
-router58.delete("/trees/:id", async (req2, res) => {
+router62.delete("/trees/:id", async (req2, res) => {
   try {
     const { id } = req2.params;
     const { organizationId } = req2.user;
@@ -43140,7 +47988,7 @@ router58.delete("/trees/:id", async (req2, res) => {
     res.status(500).json({ error: "Impossible de supprimer l'arbre" });
   }
 });
-router58.get("/trees/:treeId/nodes", async (req2, res) => {
+router62.get("/trees/:treeId/nodes", async (req2, res) => {
   try {
     const { treeId } = req2.params;
     const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx3(req2);
@@ -43192,7 +48040,7 @@ router58.get("/trees/:treeId/nodes", async (req2, res) => {
     res.status(500).json({ error: "Impossible de r\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9cup\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9rer les n\xC3\u0192\xE2\u20AC\xA6\xC3\xA2\xE2\u201A\xAC\xC5\u201Cuds" });
   }
 });
-router58.get("/trees/:treeId/repeater-nodes", async (req2, res) => {
+router62.get("/trees/:treeId/repeater-nodes", async (req2, res) => {
   try {
     const { treeId } = req2.params;
     const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx3(req2);
@@ -43254,7 +48102,7 @@ router58.get("/trees/:treeId/repeater-nodes", async (req2, res) => {
     res.status(500).json({ error: "Impossible de r\xE9cup\xE9rer les n\u0153uds repeater" });
   }
 });
-router58.get("/trees/:treeId/repeater-fields", async (req2, res) => {
+router62.get("/trees/:treeId/repeater-fields", async (req2, res) => {
   try {
     const { treeId } = req2.params;
     const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx3(req2);
@@ -43308,7 +48156,7 @@ router58.get("/trees/:treeId/repeater-fields", async (req2, res) => {
     res.status(500).json({ error: "Impossible de r\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9cup\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9rer les champs r\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9p\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9titeurs" });
   }
 });
-router58.get("/trees/:treeId/shared-references", async (req2, res) => {
+router62.get("/trees/:treeId/shared-references", async (req2, res) => {
   try {
     const { treeId } = req2.params;
     const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx3(req2);
@@ -43343,7 +48191,7 @@ router58.get("/trees/:treeId/shared-references", async (req2, res) => {
     res.status(500).json({ error: "Impossible de r\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9cup\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9rer les r\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9f\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9rences partag\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9es" });
   }
 });
-router58.post("/nodes/:nodeId/duplicate-templates", async (req2, res) => {
+router62.post("/nodes/:nodeId/duplicate-templates", async (req2, res) => {
   try {
     const { nodeId } = req2.params;
     const { templateNodeIds } = req2.body;
@@ -43504,7 +48352,7 @@ router58.post("/nodes/:nodeId/duplicate-templates", async (req2, res) => {
     res.status(500).json({ error: "Erreur lors de la duplication des templates", details: msg });
   }
 });
-router58.post("/nodes/:nodeId/deep-copy", async (req2, res) => {
+router62.post("/nodes/:nodeId/deep-copy", async (req2, res) => {
   try {
     const { nodeId } = req2.params;
     const { targetParentId, labelSuffix } = req2.body || {};
@@ -43547,7 +48395,7 @@ router58.post("/nodes/:nodeId/deep-copy", async (req2, res) => {
     res.status(500).json({ error: "Erreur lors de la copie profonde" });
   }
 });
-router58.post("/trees/:treeId/nodes", async (req2, res) => {
+router62.post("/trees/:treeId/nodes", async (req2, res) => {
   try {
     const { treeId } = req2.params;
     const { organizationId } = req2.user;
@@ -44501,9 +49349,9 @@ var updateOrMoveNode = async (req2, res) => {
     res.status(500).json({ error: "Impossible de mettre \xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA0 jour le n\xC3\u0192\xE2\u20AC\xA6\xC3\xA2\xE2\u201A\xAC\xC5\u201Cud", details: error.message });
   }
 };
-router58.put("/trees/:treeId/nodes/:nodeId", updateOrMoveNode);
-router58.patch("/trees/:treeId/nodes/:nodeId", updateOrMoveNode);
-router58.put("/nodes/:nodeId", async (req2, res) => {
+router62.put("/trees/:treeId/nodes/:nodeId", updateOrMoveNode);
+router62.patch("/trees/:treeId/nodes/:nodeId", updateOrMoveNode);
+router62.put("/nodes/:nodeId", async (req2, res) => {
   try {
     const { nodeId } = req2.params;
     const node = await prisma32.treeBranchLeafNode.findUnique({
@@ -44520,7 +49368,7 @@ router58.put("/nodes/:nodeId", async (req2, res) => {
     res.status(500).json({ error: "Erreur lors de la mise a jour du noeud", details: error.message });
   }
 });
-router58.delete("/trees/:treeId/nodes/:nodeId", async (req2, res) => {
+router62.delete("/trees/:treeId/nodes/:nodeId", async (req2, res) => {
   try {
     const { treeId, nodeId } = req2.params;
     const { organizationId, isSuperAdmin: isSuperAdmin2 } = req2.user;
@@ -45067,7 +49915,7 @@ router58.delete("/trees/:treeId/nodes/:nodeId", async (req2, res) => {
     res.status(500).json({ error: "Impossible de supprimer le n\xC3\u0192\xE2\u20AC\xA6\xC3\xA2\xE2\u201A\xAC\xC5\u201Cud et ses descendants" });
   }
 });
-router58.get("/nodes/:nodeId", async (req2, res) => {
+router62.get("/nodes/:nodeId", async (req2, res) => {
   try {
     const { nodeId } = req2.params;
     const { organizationId, isSuperAdmin: isSuperAdmin2 } = req2.user;
@@ -45153,7 +50001,7 @@ router58.get("/nodes/:nodeId", async (req2, res) => {
     res.status(500).json({ error: "Erreur lors de la r\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9cup\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9ration du n\xC3\u0192\xE2\u20AC\xA6\xC3\xA2\xE2\u201A\xAC\xC5\u201Cud" });
   }
 });
-router58.get("/nodes/:nodeId/full", async (req2, res) => {
+router62.get("/nodes/:nodeId/full", async (req2, res) => {
   try {
     const { nodeId } = req2.params;
     const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx3(req2);
@@ -45224,7 +50072,7 @@ router58.get("/nodes/:nodeId/full", async (req2, res) => {
     res.status(500).json({ error: "Erreur lors de l\xC3\u0192\xC2\xA2\xC3\xA2\xE2\u20AC\u0161\xC2\xAC\xC3\xA2\xE2\u20AC\u017E\xC2\xA2analyse compl\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA8te de la branche" });
   }
 });
-router58.get("/nodes/:nodeId/shared-references", async (req2, res) => {
+router62.get("/nodes/:nodeId/shared-references", async (req2, res) => {
   try {
     const { nodeId } = req2.params;
     const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx3(req2);
@@ -45464,7 +50312,7 @@ async function applySharedReferencesFromOriginalInternal(req2, nodeId) {
   await prisma32.$transaction(updates);
   return { success: true, applied, suffix: chosenSuffix };
 }
-router58.post("/nodes/:nodeId/apply-shared-references-from-original", async (req2, res) => {
+router62.post("/nodes/:nodeId/apply-shared-references-from-original", async (req2, res) => {
   try {
     const { nodeId } = req2.params;
     const result = await applySharedReferencesFromOriginalInternal(req2, nodeId);
@@ -45474,7 +50322,7 @@ router58.post("/nodes/:nodeId/apply-shared-references-from-original", async (req
     res.status(500).json({ error: "Erreur lors de l'application des r\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9f\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9rences partag\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9es" });
   }
 });
-router58.post("/nodes/:nodeId/unlink-shared-references", async (req2, res) => {
+router62.post("/nodes/:nodeId/unlink-shared-references", async (req2, res) => {
   try {
     const { nodeId } = req2.params;
     const { deleteOrphans } = req2.body || {};
@@ -45562,7 +50410,7 @@ router58.post("/nodes/:nodeId/unlink-shared-references", async (req2, res) => {
     res.status(500).json({ error: "Erreur lors du d\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9lier/suppression des r\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9f\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9rences partag\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9es" });
   }
 });
-router58.get("/trees/:treeId/nodes/:nodeId/data", async (req2, res) => {
+router62.get("/trees/:treeId/nodes/:nodeId/data", async (req2, res) => {
   try {
     const { treeId, nodeId } = req2.params;
     const { organizationId } = req2.user;
@@ -45598,7 +50446,7 @@ router58.get("/trees/:treeId/nodes/:nodeId/data", async (req2, res) => {
     res.status(500).json({ error: "Erreur lors de la recuperation de la donnee du noeud" });
   }
 });
-router58.put("/trees/:treeId/nodes/:nodeId/data", async (req2, res) => {
+router62.put("/trees/:treeId/nodes/:nodeId/data", async (req2, res) => {
   try {
     const { treeId, nodeId } = req2.params;
     const { organizationId } = req2.user;
@@ -45666,7 +50514,7 @@ router58.put("/trees/:treeId/nodes/:nodeId/data", async (req2, res) => {
           updatedAt: /* @__PURE__ */ new Date()
         },
         create: {
-          id: (0, import_crypto20.randomUUID)(),
+          id: (0, import_crypto23.randomUUID)(),
           nodeId: targetNodeId,
           exposedKey: safeExposedKey || `var_${String(nodeId).slice(0, 4)}`,
           displayName,
@@ -45913,7 +50761,7 @@ router58.put("/trees/:treeId/nodes/:nodeId/data", async (req2, res) => {
     res.status(500).json({ error: "Erreur lors de la mise \xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA0 jour de la donn\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9e du n\xC3\u0192\xE2\u20AC\xA6\xC3\xA2\xE2\u201A\xAC\xC5\u201Cud" });
   }
 });
-router58.delete("/trees/:treeId/nodes/:nodeId/data", async (req2, res) => {
+router62.delete("/trees/:treeId/nodes/:nodeId/data", async (req2, res) => {
   try {
     const { treeId, nodeId } = req2.params;
     const { organizationId } = req2.user;
@@ -45969,7 +50817,7 @@ router58.delete("/trees/:treeId/nodes/:nodeId/data", async (req2, res) => {
     res.status(500).json({ error: "Erreur lors de la suppression de la variable" });
   }
 });
-router58.put("/nodes/:nodeId/conditions", async (req2, res) => {
+router62.put("/nodes/:nodeId/conditions", async (req2, res) => {
   try {
     const { nodeId } = req2.params;
     const { organizationId, isSuperAdmin: isSuperAdmin2 } = req2.user;
@@ -46005,7 +50853,7 @@ router58.put("/nodes/:nodeId/conditions", async (req2, res) => {
     res.status(500).json({ error: "Erreur lors de la mise \xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA0 jour des conditions du n\xC3\u0192\xE2\u20AC\xA6\xC3\xA2\xE2\u201A\xAC\xC5\u201Cud" });
   }
 });
-router58.get("/nodes/:nodeId/formula", async (req2, res) => {
+router62.get("/nodes/:nodeId/formula", async (req2, res) => {
   try {
     const { nodeId } = req2.params;
     const { organizationId, isSuperAdmin: isSuperAdmin2 } = req2.user;
@@ -46030,7 +50878,7 @@ router58.get("/nodes/:nodeId/formula", async (req2, res) => {
     res.status(500).json({ error: "Erreur lors de la r\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9cup\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9ration de la formule du n\xC3\u0192\xE2\u20AC\xA6\xC3\xA2\xE2\u201A\xAC\xC5\u201Cud" });
   }
 });
-router58.put("/nodes/:nodeId/formula", async (req2, res) => {
+router62.put("/nodes/:nodeId/formula", async (req2, res) => {
   try {
     const { nodeId } = req2.params;
     const { organizationId, isSuperAdmin: isSuperAdmin2 } = req2.user;
@@ -46067,7 +50915,7 @@ router58.put("/nodes/:nodeId/formula", async (req2, res) => {
     res.status(500).json({ error: "Erreur lors de la mise \xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA0 jour de la formule du n\xC3\u0192\xE2\u20AC\xA6\xC3\xA2\xE2\u201A\xAC\xC5\u201Cud" });
   }
 });
-router58.get("/nodes/:nodeId/formulas", async (req2, res) => {
+router62.get("/nodes/:nodeId/formulas", async (req2, res) => {
   try {
     const { nodeId } = req2.params;
     const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx3(req2);
@@ -46083,7 +50931,7 @@ router58.get("/nodes/:nodeId/formulas", async (req2, res) => {
     res.status(500).json({ error: "Erreur lors de la r\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9cup\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9ration des formules du n\xC3\u0192\xE2\u20AC\xA6\xC3\xA2\xE2\u201A\xAC\xC5\u201Cud" });
   }
 });
-router58.post("/nodes/:nodeId/formulas", async (req2, res) => {
+router62.post("/nodes/:nodeId/formulas", async (req2, res) => {
   try {
     const { nodeId } = req2.params;
     const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx3(req2);
@@ -46115,7 +50963,7 @@ router58.post("/nodes/:nodeId/formulas", async (req2, res) => {
     }
     const formula = await prisma32.treeBranchLeafNodeFormula.create({
       data: {
-        id: (0, import_crypto20.randomUUID)(),
+        id: (0, import_crypto23.randomUUID)(),
         nodeId,
         organizationId: organizationId || null,
         name: uniqueName,
@@ -46152,7 +51000,7 @@ router58.post("/nodes/:nodeId/formulas", async (req2, res) => {
     res.status(500).json({ error: "Erreur lors de la cr\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9ation de la formule" });
   }
 });
-router58.put("/nodes/:nodeId/formulas/:formulaId", async (req2, res) => {
+router62.put("/nodes/:nodeId/formulas/:formulaId", async (req2, res) => {
   try {
     const { nodeId, formulaId } = req2.params;
     const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx3(req2);
@@ -46202,7 +51050,7 @@ router58.put("/nodes/:nodeId/formulas/:formulaId", async (req2, res) => {
     res.status(500).json({ error: "Erreur lors de la mise \xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA0 jour de la formule" });
   }
 });
-router58.delete("/nodes/:nodeId/formulas/:formulaId", async (req2, res) => {
+router62.delete("/nodes/:nodeId/formulas/:formulaId", async (req2, res) => {
   try {
     const { nodeId, formulaId } = req2.params;
     const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx3(req2);
@@ -46253,7 +51101,7 @@ router58.delete("/nodes/:nodeId/formulas/:formulaId", async (req2, res) => {
     res.status(500).json({ error: "Erreur lors de la suppression de la formule" });
   }
 });
-router58.get("/reusables/formulas", async (req2, res) => {
+router62.get("/reusables/formulas", async (req2, res) => {
   try {
     const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx3(req2);
     const hasOrg = typeof organizationId === "string" && organizationId.length > 0;
@@ -46288,7 +51136,7 @@ router58.get("/reusables/formulas", async (req2, res) => {
     res.status(500).json({ error: "Erreur lors de la recuperation des formules" });
   }
 });
-router58.get("/reusables/formulas/:id", async (req2, res) => {
+router62.get("/reusables/formulas/:id", async (req2, res) => {
   try {
     const { id } = req2.params;
     const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx3(req2);
@@ -46316,7 +51164,7 @@ router58.get("/reusables/formulas/:id", async (req2, res) => {
     res.status(500).json({ error: "Erreur lors de la recuperation de la formule" });
   }
 });
-router58.get("/reusables/conditions", async (req2, res) => {
+router62.get("/reusables/conditions", async (req2, res) => {
   try {
     const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx3(req2);
     const hasOrg = typeof organizationId === "string" && organizationId.length > 0;
@@ -46352,7 +51200,7 @@ router58.get("/reusables/conditions", async (req2, res) => {
     res.status(500).json({ error: "Erreur lors de la recuperation des conditions reutilisables" });
   }
 });
-router58.get("/reusables/conditions/:id", async (req2, res) => {
+router62.get("/reusables/conditions/:id", async (req2, res) => {
   try {
     const { id } = req2.params;
     const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx3(req2);
@@ -46380,7 +51228,7 @@ router58.get("/reusables/conditions/:id", async (req2, res) => {
     res.status(500).json({ error: "Erreur lors de la recuperation de la condition" });
   }
 });
-router58.get("/reusables/tables", async (req2, res) => {
+router62.get("/reusables/tables", async (req2, res) => {
   try {
     const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx3(req2);
     const hasOrg = typeof organizationId === "string" && organizationId.length > 0;
@@ -46420,7 +51268,7 @@ router58.get("/reusables/tables", async (req2, res) => {
     res.status(500).json({ error: "Erreur lors de la recuperation des tables reutilisables" });
   }
 });
-router58.get("/nodes/:nodeId/conditions", async (req2, res) => {
+router62.get("/nodes/:nodeId/conditions", async (req2, res) => {
   try {
     const { nodeId } = req2.params;
     const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx3(req2);
@@ -46440,7 +51288,7 @@ router58.get("/nodes/:nodeId/conditions", async (req2, res) => {
     res.status(500).json({ error: "Erreur lors de la r\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9cup\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9ration des conditions du n\xC3\u0192\xE2\u20AC\xA6\xC3\xA2\xE2\u201A\xAC\xC5\u201Cud" });
   }
 });
-router58.post("/evaluate/condition/:conditionId", async (req2, res) => {
+router62.post("/evaluate/condition/:conditionId", async (req2, res) => {
   try {
     const { conditionId } = req2.params;
     const { fieldValues = {}, values = {}, submissionId, testMode = true } = req2.body;
@@ -46473,7 +51321,9 @@ router58.post("/evaluate/condition/:conditionId", async (req2, res) => {
         condition.nodeId,
         submissionId || conditionId,
         prisma32,
-        valueMapLocal
+        valueMapLocal,
+        { organizationId }
+        // 📋 Gestionnaire overrides
       );
       const result = {
         conditionId: condition.id,
@@ -46502,7 +51352,7 @@ router58.post("/evaluate/condition/:conditionId", async (req2, res) => {
     res.status(500).json({ error: "Erreur lors de l'\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9valuation de la condition" });
   }
 });
-router58.post("/nodes/:nodeId/conditions", async (req2, res) => {
+router62.post("/nodes/:nodeId/conditions", async (req2, res) => {
   try {
     const { nodeId } = req2.params;
     const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx3(req2);
@@ -46534,7 +51384,7 @@ router58.post("/nodes/:nodeId/conditions", async (req2, res) => {
     }
     const condition = await prisma32.treeBranchLeafNodeCondition.create({
       data: {
-        id: (0, import_crypto20.randomUUID)(),
+        id: (0, import_crypto23.randomUUID)(),
         nodeId,
         organizationId: organizationId || null,
         name: uniqueName,
@@ -46566,7 +51416,7 @@ router58.post("/nodes/:nodeId/conditions", async (req2, res) => {
     res.status(500).json({ error: "Erreur lors de la cr\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9ation de la condition" });
   }
 });
-router58.put("/nodes/:nodeId/conditions/:conditionId", async (req2, res) => {
+router62.put("/nodes/:nodeId/conditions/:conditionId", async (req2, res) => {
   try {
     const { nodeId, conditionId } = req2.params;
     const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx3(req2);
@@ -46611,7 +51461,7 @@ router58.put("/nodes/:nodeId/conditions/:conditionId", async (req2, res) => {
     res.status(500).json({ error: "Erreur lors de la mise \xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA0 jour de la condition" });
   }
 });
-router58.delete("/nodes/:nodeId/conditions/:conditionId", async (req2, res) => {
+router62.delete("/nodes/:nodeId/conditions/:conditionId", async (req2, res) => {
   try {
     const { nodeId, conditionId } = req2.params;
     const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx3(req2);
@@ -46661,7 +51511,7 @@ router58.delete("/nodes/:nodeId/conditions/:conditionId", async (req2, res) => {
     res.status(500).json({ error: "Erreur lors de la suppression de la condition" });
   }
 });
-router58.get("/tables/:id", async (req2, res) => {
+router62.get("/tables/:id", async (req2, res) => {
   const { id } = req2.params;
   const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx3(req2);
   const page = parseInt(req2.query.page) || 1;
@@ -46680,6 +51530,9 @@ router58.get("/tables/:id", async (req2, res) => {
               }
             }
           }
+        },
+        tableColumns: {
+          orderBy: { columnIndex: "asc" }
         }
       }
     });
@@ -46700,6 +51553,7 @@ router58.get("/tables/:id", async (req2, res) => {
       ...table,
       rows: rows.map((r) => r.cells),
       // Renvoyer uniquement les donnÃƒÆ’Ã‚Â©es des cellules
+      columns: (table.tableColumns || []).map((c) => ({ name: c.name, type: c.type, width: c.width, format: c.format, metadata: c.metadata })),
       page,
       limit,
       totalRows: table.rowCount,
@@ -46828,6 +51682,22 @@ async function applyTableFilters(matrix, columns, filters, formValues) {
     const row = matrix[rowIndex];
     let passesAllFilters = true;
     for (const filter of activeFilters) {
+      if (filter.column === "__ANY__") {
+        let anyColumnPasses = false;
+        for (let ci = 1; ci < columns.length; ci++) {
+          const cv = row[ci];
+          if (cv === void 0 || cv === null || cv === "") continue;
+          if (compareFilterValues(cv, filter.operator, filter.resolvedValue)) {
+            anyColumnPasses = true;
+            break;
+          }
+        }
+        if (!anyColumnPasses) {
+          passesAllFilters = false;
+          break;
+        }
+        continue;
+      }
       const columnIndex = columns.indexOf(filter.column);
       if (columnIndex === -1) {
         console.warn(`[applyTableFilters] \xC3\u0192\xC2\xA2\xC3\u2026\xC2\xA1\xC3\u201A\xC2\xA0\xC3\u0192\xC2\xAF\xC3\u201A\xC2\xB8\xC3\u201A\xC2\x8F Colonne "${filter.column}" introuvable dans:`, columns);
@@ -47219,7 +52089,7 @@ function normalizeForFilterComparison(value) {
   if (!isNaN(num) && isFinite(num)) return num;
   return str;
 }
-router58.get("/nodes/:nodeId/tables", async (req2, res) => {
+router62.get("/nodes/:nodeId/tables", async (req2, res) => {
   try {
     const { nodeId } = req2.params;
     const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx3(req2);
@@ -47244,7 +52114,7 @@ router58.get("/nodes/:nodeId/tables", async (req2, res) => {
     res.status(500).json({ error: "Erreur lors de la r\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9cup\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9ration des tableaux" });
   }
 });
-router58.delete("/nodes/:nodeId/tables/:tableId", async (req2, res) => {
+router62.delete("/nodes/:nodeId/tables/:tableId", async (req2, res) => {
   const { tableId } = req2.params;
   try {
     const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx3(req2);
@@ -47369,7 +52239,7 @@ router58.delete("/nodes/:nodeId/tables/:tableId", async (req2, res) => {
     res.status(500).json({ error: "Erreur lors de la suppression du tableau" });
   }
 });
-router58.get("/nodes/:nodeId/tables/options", async (req2, res) => {
+router62.get("/nodes/:nodeId/tables/options", async (req2, res) => {
   try {
     const { nodeId } = req2.params;
     const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx3(req2);
@@ -47401,7 +52271,7 @@ router58.get("/nodes/:nodeId/tables/options", async (req2, res) => {
     res.status(500).json({ error: "Erreur lors de la r\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9cup\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9ration des options du tableau" });
   }
 });
-router58.get("/nodes/:nodeId/tables/lookup", async (req2, res) => {
+router62.get("/nodes/:nodeId/tables/lookup", async (req2, res) => {
   try {
     const { nodeId } = req2.params;
     const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx3(req2);
@@ -47499,7 +52369,7 @@ router58.get("/nodes/:nodeId/tables/lookup", async (req2, res) => {
     res.status(500).json({ error: "Erreur lors du lookup dans le tableau" });
   }
 });
-router58.post("/nodes/:nodeId/table/generate-selects", async (req2, res) => {
+router62.post("/nodes/:nodeId/table/generate-selects", async (req2, res) => {
   try {
     const { nodeId } = req2.params;
     const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx3(req2);
@@ -47550,7 +52420,7 @@ router58.post("/nodes/:nodeId/table/generate-selects", async (req2, res) => {
     let insertOrder = siblingsCount;
     const now = /* @__PURE__ */ new Date();
     for (const item of toCreate) {
-      const newNodeId = (0, import_crypto20.randomUUID)();
+      const newNodeId = (0, import_crypto23.randomUUID)();
       const nodeMetadata = {
         generatedFrom: "table_lookup",
         tableNodeId: baseNode.id,
@@ -47589,7 +52459,7 @@ router58.post("/nodes/:nodeId/table/generate-selects", async (req2, res) => {
       });
       await prisma32.treeBranchLeafSelectConfig.create({
         data: {
-          id: (0, import_crypto20.randomUUID)(),
+          id: (0, import_crypto23.randomUUID)(),
           nodeId: newNode.id,
           options: [],
           multiple: false,
@@ -47614,7 +52484,7 @@ router58.post("/nodes/:nodeId/table/generate-selects", async (req2, res) => {
     res.status(500).json({ error: "Erreur lors de la g\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9n\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9ration des champs d\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9pendants" });
   }
 });
-router58.get("/effective-values", async (req2, res) => {
+router62.get("/effective-values", async (req2, res) => {
   try {
     const idsParam = String(req2.query.ids || "").trim();
     if (!idsParam) return res.json({ success: true, data: {} });
@@ -47638,7 +52508,7 @@ router58.get("/effective-values", async (req2, res) => {
     res.status(500).json({ error: "Erreur lors de la r\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9cup\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9ration des valeurs effectives" });
   }
 });
-router58.get("/debug/formula-vars", async (req2, res) => {
+router62.get("/debug/formula-vars", async (req2, res) => {
   try {
     const vars = await prisma32.treeBranchLeafNodeVariable.findMany({
       include: {
@@ -47661,7 +52531,7 @@ router58.get("/debug/formula-vars", async (req2, res) => {
     res.status(500).json({ error: "Erreur lors de la r\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9cup\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9ration des variables de formule" });
   }
 });
-router58.get("/debug/formula-eval", async (req2, res) => {
+router62.get("/debug/formula-eval", async (req2, res) => {
   try {
     const { formulaId, nodeId } = req2.query;
     if (typeof formulaId !== "string" || typeof nodeId !== "string") {
@@ -47702,7 +52572,7 @@ router58.get("/debug/formula-eval", async (req2, res) => {
     res.status(500).json({ error: "Erreur lors de l'\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9valuation de la formule en mode d\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9bogage" });
   }
 });
-router58.get("/formulas-version", async (req2, res) => {
+router62.get("/formulas-version", async (req2, res) => {
   try {
     res.setHeader("X-TBL-Legacy-Deprecated", "true");
     if (process.env.NODE_ENV !== "production") {
@@ -47721,7 +52591,7 @@ router58.get("/formulas-version", async (req2, res) => {
     res.status(500).json({ error: "Erreur lors de la r\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9cup\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9ration de la version des formules" });
   }
 });
-router58.post("/formulas/validate", (req2, res) => {
+router62.post("/formulas/validate", (req2, res) => {
   try {
     const { expression, rolesMap } = req2.body ?? {};
     if (typeof expression !== "string" || !expression.trim()) {
@@ -47742,19 +52612,19 @@ router58.post("/formulas/validate", (req2, res) => {
     });
   }
 });
-router58.get("/logic/version", (_req, res) => {
+router62.get("/logic/version", (_req, res) => {
   const payload = computeLogicVersion();
   return res.json(payload);
 });
-router58.post("/formulas/cache/clear", (_req, res) => {
+router62.post("/formulas/cache/clear", (_req, res) => {
   clearRpnCache();
   const stats = getRpnCacheStats();
   return res.json({ cleared: true, stats });
 });
-router58.post("/nodes/:nodeId/table/evaluate", (req2, res) => {
+router62.post("/nodes/:nodeId/table/evaluate", (req2, res) => {
   return res.status(404).json({ error: "node_not_found", nodeId: req2.params.nodeId });
 });
-router58.post("/evaluate/formula", async (req2, res) => {
+router62.post("/evaluate/formula", async (req2, res) => {
   try {
     const { expr, rolesMap, values, options } = req2.body ?? {};
     if (typeof expr !== "string" || !expr.trim()) {
@@ -47788,7 +52658,7 @@ router58.post("/evaluate/formula", async (req2, res) => {
     return res.status(500).json({ error: "Erreur \xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9valuation inline" });
   }
 });
-router58.post("/evaluate/formula/:formulaId", async (req2, res) => {
+router62.post("/evaluate/formula/:formulaId", async (req2, res) => {
   try {
     res.setHeader("X-TBL-Legacy-Deprecated", "true");
     if (process.env.NODE_ENV !== "production") {
@@ -48189,7 +53059,7 @@ router58.post("/evaluate/formula/:formulaId", async (req2, res) => {
     res.status(500).json({ error: "Erreur lors de l'\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9valuation de la formule" });
   }
 });
-router58.post("/evaluate/batch", async (req2, res) => {
+router62.post("/evaluate/batch", async (req2, res) => {
   try {
     const { requests = [], nodeIds = [], fieldValues = {} } = req2.body;
     const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx3(req2);
@@ -48468,7 +53338,7 @@ async function ensureNodeOrgAccess(prisma51, nodeId, auth) {
     return { ok: false, status: 500, error: "Erreur de v\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9rification d'acc\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA8s" };
   }
 }
-router58.get("/conditions/:conditionId", async (req2, res) => {
+router62.get("/conditions/:conditionId", async (req2, res) => {
   try {
     const { conditionId } = req2.params;
     const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx3(req2);
@@ -48499,7 +53369,7 @@ router58.get("/conditions/:conditionId", async (req2, res) => {
     res.status(500).json({ error: "Erreur lors de la r\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9cup\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9ration de la condition" });
   }
 });
-router58.get("/formulas/:formulaId", async (req2, res) => {
+router62.get("/formulas/:formulaId", async (req2, res) => {
   try {
     const { formulaId } = req2.params;
     const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx3(req2);
@@ -48530,7 +53400,7 @@ router58.get("/formulas/:formulaId", async (req2, res) => {
     res.status(500).json({ error: "Erreur lors de la r\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9cup\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9ration de la formule" });
   }
 });
-router58.get("/submissions", async (req2, res) => {
+router62.get("/submissions", async (req2, res) => {
   try {
     const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx3(req2);
     const { treeId, leadId, userId, status } = req2.query;
@@ -48571,7 +53441,7 @@ router58.get("/submissions", async (req2, res) => {
     res.status(500).json({ error: "Erreur lors de la r\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9cup\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9ration des soumissions" });
   }
 });
-router58.get("/submissions/by-leads", async (req2, res) => {
+router62.get("/submissions/by-leads", async (req2, res) => {
   try {
     const authCtx = getAuthCtx3(req2);
     const { organizationId, isSuperAdmin: isSuperAdmin2 } = authCtx;
@@ -48672,7 +53542,7 @@ router58.get("/submissions/by-leads", async (req2, res) => {
     res.status(500).json({ error: "Erreur lors de la r\xE9cup\xE9ration des devis par leads" });
   }
 });
-router58.get("/submissions/:id/fields", async (req2, res) => {
+router62.get("/submissions/:id/fields", async (req2, res) => {
   try {
     const { id } = req2.params;
     const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx3(req2);
@@ -48799,7 +53669,7 @@ router58.get("/submissions/:id/fields", async (req2, res) => {
     return res.status(500).json({ error: "Erreur lors de la r\xE9cup\xE9ration des champs", details: errorMsg });
   }
 });
-router58.get("/submissions/:id", async (req2, res) => {
+router62.get("/submissions/:id", async (req2, res) => {
   try {
     const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx3(req2);
     const { id } = req2.params;
@@ -48848,7 +53718,7 @@ router58.get("/submissions/:id", async (req2, res) => {
     res.status(500).json({ error: "Erreur lors de la r\xE9cup\xE9ration de la soumission" });
   }
 });
-router58.get("/submissions/:id/summary", async (req2, res) => {
+router62.get("/submissions/:id/summary", async (req2, res) => {
   try {
     const { id } = req2.params;
     const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx3(req2);
@@ -48905,7 +53775,7 @@ router58.get("/submissions/:id/summary", async (req2, res) => {
     return res.status(500).json({ error: "Erreur lors du calcul du r\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9sum\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9 de la soumission" });
   }
 });
-router58.get("/submissions/:id/operations", async (req2, res) => {
+router62.get("/submissions/:id/operations", async (req2, res) => {
   try {
     const { id } = req2.params;
     const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx3(req2);
@@ -49146,7 +54016,7 @@ router58.get("/submissions/:id/operations", async (req2, res) => {
     return res.status(500).json({ error: "Erreur lors de la r\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9cup\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9ration des op\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9rations" });
   }
 });
-router58.post("/submissions/:id/repair-ops", async (req2, res) => {
+router62.post("/submissions/:id/repair-ops", async (req2, res) => {
   try {
     const { id } = req2.params;
     const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx3(req2);
@@ -49238,7 +54108,7 @@ router58.post("/submissions/:id/repair-ops", async (req2, res) => {
     return res.status(500).json({ error: "Erreur lors du backfill des op\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9rations" });
   }
 });
-router58.post("/submissions", async (req2, res) => {
+router62.post("/submissions", async (req2, res) => {
   const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx3(req2);
   const userId = req2.user?.id;
   const { treeId, leadId, name, data } = req2.body;
@@ -49324,7 +54194,7 @@ router58.post("/submissions", async (req2, res) => {
       const now = /* @__PURE__ */ new Date();
       const created = await prisma32.treeBranchLeafSubmission.create({
         data: {
-          id: (0, import_crypto20.randomUUID)(),
+          id: (0, import_crypto23.randomUUID)(),
           treeId: normalizedTreeId,
           userId: safeUserId,
           leadId: normalizedLeadId,
@@ -49350,7 +54220,7 @@ router58.post("/submissions", async (req2, res) => {
           if (toCreate.length > 0) {
             await tx.treeBranchLeafSubmissionData.createMany({
               data: toCreate.map(({ nodeId, value: raw }) => ({
-                id: (0, import_crypto20.randomUUID)(),
+                id: (0, import_crypto23.randomUUID)(),
                 submissionId: created.id,
                 nodeId,
                 value: raw == null ? null : String(raw),
@@ -49500,7 +54370,7 @@ router58.post("/submissions", async (req2, res) => {
     return res.status(500).json({ error: "Erreur interne inattendue" });
   }
 });
-router58.delete("/submissions/:id", async (req2, res) => {
+router62.delete("/submissions/:id", async (req2, res) => {
   try {
     const { id } = req2.params;
     const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx3(req2);
@@ -49547,7 +54417,7 @@ router58.delete("/submissions/:id", async (req2, res) => {
     res.status(500).json({ error: "Erreur lors de la suppression de la soumission" });
   }
 });
-router58.get("/nodes/:fieldId/select-config", async (req2, res) => {
+router62.get("/nodes/:fieldId/select-config", async (req2, res) => {
   try {
     const { fieldId } = req2.params;
     const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx3(req2);
@@ -49576,7 +54446,7 @@ router58.get("/nodes/:fieldId/select-config", async (req2, res) => {
         if (isRowBased || isColumnBased) {
           selectConfig = await prisma32.treeBranchLeafSelectConfig.create({
             data: {
-              id: (0, import_crypto20.randomUUID)(),
+              id: (0, import_crypto23.randomUUID)(),
               nodeId: fieldId,
               options: [],
               multiple: false,
@@ -49604,7 +54474,7 @@ router58.get("/nodes/:fieldId/select-config", async (req2, res) => {
     res.status(500).json({ error: "Erreur lors de la r\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9cup\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9ration de la configuration SELECT" });
   }
 });
-router58.post("/nodes/:fieldId/select-config", async (req2, res) => {
+router62.post("/nodes/:fieldId/select-config", async (req2, res) => {
   try {
     const { fieldId } = req2.params;
     const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx3(req2);
@@ -49628,7 +54498,7 @@ router58.post("/nodes/:fieldId/select-config", async (req2, res) => {
     const selectConfig = await prisma32.treeBranchLeafSelectConfig.upsert({
       where: { nodeId: fieldId },
       create: {
-        id: (0, import_crypto20.randomUUID)(),
+        id: (0, import_crypto23.randomUUID)(),
         nodeId: fieldId,
         options: [],
         multiple: false,
@@ -49665,7 +54535,7 @@ router58.post("/nodes/:fieldId/select-config", async (req2, res) => {
     res.status(500).json({ error: "Erreur lors de la cr\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9ation de la configuration SELECT" });
   }
 });
-router58.post("/nodes/:nodeId/normalize-step4", async (req2, res) => {
+router62.post("/nodes/:nodeId/normalize-step4", async (req2, res) => {
   try {
     const { nodeId } = req2.params;
     const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx3(req2);
@@ -49719,7 +54589,7 @@ router58.post("/nodes/:nodeId/normalize-step4", async (req2, res) => {
     const sc = await prisma32.treeBranchLeafSelectConfig.upsert({
       where: { nodeId },
       create: {
-        id: (0, import_crypto20.randomUUID)(),
+        id: (0, import_crypto23.randomUUID)(),
         nodeId,
         options: [],
         multiple: false,
@@ -49755,7 +54625,7 @@ router58.post("/nodes/:nodeId/normalize-step4", async (req2, res) => {
     res.status(500).json({ error: "Erreur lors de la normalisation \xC9tape 4" });
   }
 });
-router58.all("/nodes/:nodeId/table/lookup", async (req2, res) => {
+router62.all("/nodes/:nodeId/table/lookup", async (req2, res) => {
   try {
     const { nodeId } = req2.params;
     const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx3(req2);
@@ -49801,7 +54671,7 @@ router58.all("/nodes/:nodeId/table/lookup", async (req2, res) => {
         await prisma32.treeBranchLeafSelectConfig.upsert({
           where: { nodeId },
           create: {
-            id: (0, import_crypto20.randomUUID)(),
+            id: (0, import_crypto23.randomUUID)(),
             nodeId,
             options: [],
             multiple: false,
@@ -49967,7 +54837,38 @@ router58.all("/nodes/:nodeId/table/lookup", async (req2, res) => {
             };
           }).filter((opt) => opt.value !== "undefined" && opt.value !== "null" && opt.value !== "");
         }
-        return res.json({ options });
+        if (filters.length > 0 && Object.keys(formValues).length > 0) {
+          const resolvedFilters = await Promise.all(
+            filters.map(async (filter) => {
+              const value = await resolveFilterValueRef(filter.valueRef, formValues);
+              return { ...filter, resolvedValue: value };
+            })
+          );
+          for (const filter of resolvedFilters) {
+            if (filter.resolvedValue === null || filter.resolvedValue === void 0 || filter.resolvedValue === "") continue;
+            if (filter.column === columns[0] && (filter.operator === "equals" || filter.operator === "=")) {
+              const matchingRowIdx = rows.findIndex((r) => String(r) === String(filter.resolvedValue));
+              if (matchingRowIdx >= 0 && matchingRowIdx < data.length) {
+                const refRowData = data[matchingRowIdx] || [];
+                options = options.filter((_opt, idx) => {
+                  const cellValue = refRowData[idx];
+                  return cellValue !== void 0 && cellValue !== null && cellValue !== "";
+                });
+              }
+            }
+          }
+        }
+        const seenValues = /* @__PURE__ */ new Set();
+        options = options.filter((opt) => {
+          const key2 = String(opt.value);
+          if (seenValues.has(key2)) return false;
+          seenValues.add(key2);
+          return true;
+        });
+        return res.json({
+          options,
+          filterConditions: lookupFilterConditions
+        });
       }
       if (selectConfig?.keyColumn) {
         const colIndex = columns.indexOf(selectConfig.keyColumn);
@@ -50029,7 +54930,7 @@ router58.all("/nodes/:nodeId/table/lookup", async (req2, res) => {
           await prisma32.treeBranchLeafSelectConfig.upsert({
             where: { nodeId },
             create: {
-              id: (0, import_crypto20.randomUUID)(),
+              id: (0, import_crypto23.randomUUID)(),
               nodeId,
               options: [],
               multiple: false,
@@ -50082,7 +54983,7 @@ router58.all("/nodes/:nodeId/table/lookup", async (req2, res) => {
     res.status(500).json({ error: "Erreur lors de la r\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9cup\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9ration du tableau" });
   }
 });
-router58.patch("/nodes/:nodeId", async (req2, res) => {
+router62.patch("/nodes/:nodeId", async (req2, res) => {
   try {
     const { nodeId } = req2.params;
     const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx3(req2);
@@ -50103,7 +55004,7 @@ router58.patch("/nodes/:nodeId", async (req2, res) => {
     res.status(500).json({ error: "Erreur lors de la mise \xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA0 jour du n\xC3\u0192\xE2\u20AC\xA6\xC3\xA2\xE2\u201A\xAC\xC5\u201Cud" });
   }
 });
-router58.put("/nodes/:nodeId/capabilities/table", async (req2, res) => {
+router62.put("/nodes/:nodeId/capabilities/table", async (req2, res) => {
   try {
     const { nodeId } = req2.params;
     const { enabled, activeId, currentTable } = req2.body;
@@ -50158,7 +55059,7 @@ router58.put("/nodes/:nodeId/capabilities/table", async (req2, res) => {
         await prisma32.treeBranchLeafSelectConfig.upsert({
           where: { nodeId },
           create: {
-            id: (0, import_crypto20.randomUUID)(),
+            id: (0, import_crypto23.randomUUID)(),
             nodeId,
             options: [],
             multiple: false,
@@ -50215,7 +55116,7 @@ router58.put("/nodes/:nodeId/capabilities/table", async (req2, res) => {
     return res.status(500).json({ error: "Erreur lors de la mise \xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA0 jour de la capacit\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9 Table" });
   }
 });
-router58.patch("/submissions/:id", async (req2, res) => {
+router62.patch("/submissions/:id", async (req2, res) => {
   const { id } = req2.params;
   const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx3(req2);
   const { clientId, status, name, formData } = req2.body;
@@ -50285,7 +55186,7 @@ router58.patch("/submissions/:id", async (req2, res) => {
     return res.status(400).json({ error: "PATCH_UPDATE_ERROR", message: err?.message || "Erreur lors de la mise \xE0 jour de la soumission" });
   }
 });
-router58.post("/submissions/:id/reset-data", async (req2, res) => {
+router62.post("/submissions/:id/reset-data", async (req2, res) => {
   const { id } = req2.params;
   const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx3(req2);
   const { status } = req2.body;
@@ -50344,7 +55245,7 @@ router58.post("/submissions/:id/reset-data", async (req2, res) => {
     return res.status(500).json({ error: "Erreur lors de la r\xE9initialisation de la soumission" });
   }
 });
-router58.put("/submissions/:id", async (req2, res) => {
+router62.put("/submissions/:id", async (req2, res) => {
   const { id } = req2.params;
   const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx3(req2);
   const { data, status } = req2.body;
@@ -50504,7 +55405,7 @@ router58.put("/submissions/:id", async (req2, res) => {
               }
             }
             return {
-              id: (0, import_crypto20.randomUUID)(),
+              id: (0, import_crypto23.randomUUID)(),
               submissionId: id,
               nodeId,
               value: valueStr,
@@ -50654,7 +55555,7 @@ router58.put("/submissions/:id", async (req2, res) => {
         const allRows2 = await tx.treeBranchLeafSubmissionData.findMany({ where: { submissionId: id }, select: { nodeId: true, value: true } });
         const valuesMapTxAll = new Map(allRows2.map((r) => [r.nodeId, r.value == null ? null : String(r.value)]));
         const missingRows = await Promise.all(missingVars.map(async (v) => ({
-          id: (0, import_crypto20.randomUUID)(),
+          id: (0, import_crypto23.randomUUID)(),
           submissionId: id,
           nodeId: v.nodeId,
           value: null,
@@ -50811,7 +55712,7 @@ router58.put("/submissions/:id", async (req2, res) => {
     return res.status(500).json({ error: "Erreur lors de la mise \xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA0 jour de la soumission" });
   }
 });
-router58.post("/v2/variables/:variableNodeId/evaluate", async (req2, res) => {
+router62.post("/v2/variables/:variableNodeId/evaluate", async (req2, res) => {
   try {
     const { variableNodeId } = req2.params;
     const { submissionId } = req2.body;
@@ -50896,7 +55797,10 @@ router58.post("/v2/variables/:variableNodeId/evaluate", async (req2, res) => {
     const evaluationResult = await evaluateVariableOperation(
       variableNodeId,
       submissionId,
-      prisma32
+      prisma32,
+      void 0,
+      { organizationId }
+      // 📋 Gestionnaire overrides
     );
     const duration = Date.now() - startTime;
     await prisma32.treeBranchLeafSubmissionData.upsert({
@@ -50966,7 +55870,7 @@ router58.post("/v2/variables/:variableNodeId/evaluate", async (req2, res) => {
     });
   }
 });
-router58.get("/v2/submissions/:submissionId/variables", async (req2, res) => {
+router62.get("/v2/submissions/:submissionId/variables", async (req2, res) => {
   try {
     const { submissionId } = req2.params;
     const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx3(req2);
@@ -51060,7 +55964,7 @@ router58.get("/v2/submissions/:submissionId/variables", async (req2, res) => {
     });
   }
 });
-router58.post("/submissions/stage", async (req2, res) => {
+router62.post("/submissions/stage", async (req2, res) => {
   try {
     const { stageId, treeId, submissionId, leadId, formData, baseVersion } = req2.body;
     const userId = req2.user?.id || "system";
@@ -51093,7 +55997,7 @@ router58.post("/submissions/stage", async (req2, res) => {
       }
       stage = await prisma32.treeBranchLeafStage.create({
         data: {
-          id: (0, import_crypto20.randomUUID)(),
+          id: (0, import_crypto23.randomUUID)(),
           treeId,
           submissionId,
           leadId,
@@ -51121,7 +56025,7 @@ router58.post("/submissions/stage", async (req2, res) => {
     });
   }
 });
-router58.post("/submissions/stage/preview", async (req2, res) => {
+router62.post("/submissions/stage/preview", async (req2, res) => {
   try {
     const { stageId } = req2.body;
     if (!stageId) {
@@ -51202,7 +56106,7 @@ router58.post("/submissions/stage/preview", async (req2, res) => {
     });
   }
 });
-router58.post("/submissions/stage/commit", async (req2, res) => {
+router62.post("/submissions/stage/commit", async (req2, res) => {
   try {
     const { stageId, asNew } = req2.body;
     const userId = req2.user?.id || "system";
@@ -51269,7 +56173,7 @@ router58.post("/submissions/stage/commit", async (req2, res) => {
       const result = await prisma32.$transaction(async (tx) => {
         const submission = await tx.treeBranchLeafSubmission.create({
           data: {
-            id: (0, import_crypto20.randomUUID)(),
+            id: (0, import_crypto23.randomUUID)(),
             treeId: stage.treeId,
             userId: stage.userId,
             leadId: stage.leadId,
@@ -51283,7 +56187,7 @@ router58.post("/submissions/stage/commit", async (req2, res) => {
         if (results.length > 0) {
           await tx.treeBranchLeafSubmissionData.createMany({
             data: results.map((r) => ({
-              id: (0, import_crypto20.randomUUID)(),
+              id: (0, import_crypto23.randomUUID)(),
               submissionId: submission.id,
               nodeId: r.nodeId,
               value: String(r.operationResult || ""),
@@ -51298,7 +56202,7 @@ router58.post("/submissions/stage/commit", async (req2, res) => {
         }
         await tx.treeBranchLeafSubmissionVersion.create({
           data: {
-            id: (0, import_crypto20.randomUUID)(),
+            id: (0, import_crypto23.randomUUID)(),
             submissionId: submission.id,
             version: 1,
             formData: stage.formData,
@@ -51425,7 +56329,7 @@ router58.post("/submissions/stage/commit", async (req2, res) => {
         if (results.length > 0) {
           await tx.treeBranchLeafSubmissionData.createMany({
             data: results.map((r) => ({
-              id: (0, import_crypto20.randomUUID)(),
+              id: (0, import_crypto23.randomUUID)(),
               submissionId: updated.id,
               nodeId: r.nodeId,
               value: String(r.operationResult || ""),
@@ -51440,7 +56344,7 @@ router58.post("/submissions/stage/commit", async (req2, res) => {
         }
         await tx.treeBranchLeafSubmissionVersion.create({
           data: {
-            id: (0, import_crypto20.randomUUID)(),
+            id: (0, import_crypto23.randomUUID)(),
             submissionId: updated.id,
             version: nextVersion,
             formData: stage.formData,
@@ -51481,7 +56385,7 @@ router58.post("/submissions/stage/commit", async (req2, res) => {
     });
   }
 });
-router58.post("/submissions/stage/discard", async (req2, res) => {
+router62.post("/submissions/stage/discard", async (req2, res) => {
   try {
     const { stageId } = req2.body;
     if (!stageId) {
@@ -51506,7 +56410,7 @@ router58.post("/submissions/stage/discard", async (req2, res) => {
     });
   }
 });
-router58.get("/submissions/my-drafts", async (req2, res) => {
+router62.get("/submissions/my-drafts", async (req2, res) => {
   try {
     const userId = req2.user?.id || "system";
     const { leadId, treeId } = req2.query;
@@ -51553,7 +56457,7 @@ router58.get("/submissions/my-drafts", async (req2, res) => {
     });
   }
 });
-router58.get("/submissions/:id/versions", async (req2, res) => {
+router62.get("/submissions/:id/versions", async (req2, res) => {
   try {
     const { id } = req2.params;
     const versions = await prisma32.treeBranchLeafSubmissionVersion.findMany({
@@ -51593,7 +56497,7 @@ router58.get("/submissions/:id/versions", async (req2, res) => {
     });
   }
 });
-router58.post("/submissions/:id/restore/:version", async (req2, res) => {
+router62.post("/submissions/:id/restore/:version", async (req2, res) => {
   try {
     const { id, version } = req2.params;
     const userId = req2.user?.id || "system";
@@ -51623,7 +56527,7 @@ router58.post("/submissions/:id/restore/:version", async (req2, res) => {
     }
     const stage = await prisma32.treeBranchLeafStage.create({
       data: {
-        id: (0, import_crypto20.randomUUID)(),
+        id: (0, import_crypto23.randomUUID)(),
         treeId: submission.treeId,
         submissionId: id,
         leadId: submission.leadId || "unknown",
@@ -51647,7 +56551,7 @@ router58.post("/submissions/:id/restore/:version", async (req2, res) => {
     });
   }
 });
-router58.get("/shared-references", async (req2, res) => {
+router62.get("/shared-references", async (req2, res) => {
   try {
     const { organizationId } = getAuthCtx3(req2);
     const templates = await prisma32.treeBranchLeafNode.findMany({
@@ -51694,7 +56598,7 @@ router58.get("/shared-references", async (req2, res) => {
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
-router58.get("/shared-references/:refId", async (req2, res) => {
+router62.get("/shared-references/:refId", async (req2, res) => {
   try {
     const { refId } = req2.params;
     const { organizationId } = getAuthCtx3(req2);
@@ -51731,7 +56635,7 @@ router58.get("/shared-references/:refId", async (req2, res) => {
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
-router58.put("/shared-references/:refId", async (req2, res) => {
+router62.put("/shared-references/:refId", async (req2, res) => {
   try {
     const { refId } = req2.params;
     const { name, description } = req2.body;
@@ -51770,7 +56674,7 @@ router58.put("/shared-references/:refId", async (req2, res) => {
     res.status(500).json({ error: "Erreur lors de la modification" });
   }
 });
-router58.delete("/shared-references/:refId", async (req2, res) => {
+router62.delete("/shared-references/:refId", async (req2, res) => {
   try {
     const { refId } = req2.params;
     const { organizationId } = getAuthCtx3(req2);
@@ -51812,7 +56716,7 @@ router58.delete("/shared-references/:refId", async (req2, res) => {
     res.status(500).json({ error: "Erreur lors de la suppression" });
   }
 });
-router58.post("/trees/:treeId/create-shared-reference", async (req2, res) => {
+router62.post("/trees/:treeId/create-shared-reference", async (req2, res) => {
   try {
     const { treeId } = req2.params;
     const { name, description, fieldType, label } = req2.body;
@@ -51865,7 +56769,7 @@ router58.post("/trees/:treeId/create-shared-reference", async (req2, res) => {
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
-router58.post("/nodes/:nodeId/link-shared-references", async (req2, res) => {
+router62.post("/nodes/:nodeId/link-shared-references", async (req2, res) => {
   try {
     const { nodeId } = req2.params;
     const { referenceIds } = req2.body;
@@ -51896,7 +56800,7 @@ router58.post("/nodes/:nodeId/link-shared-references", async (req2, res) => {
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
-router58.post("/nodes/:nodeId/convert-to-reference", async (req2, res) => {
+router62.post("/nodes/:nodeId/convert-to-reference", async (req2, res) => {
   try {
     const { nodeId } = req2.params;
     const { name, description } = req2.body;
@@ -51933,7 +56837,7 @@ router58.post("/nodes/:nodeId/convert-to-reference", async (req2, res) => {
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
-router58.post("/nodes/:nodeId/copy-linked-variable", async (req2, res) => {
+router62.post("/nodes/:nodeId/copy-linked-variable", async (req2, res) => {
   try {
     const { nodeId } = req2.params;
     const { variableId, newSuffix, duplicateNode, targetNodeId: bodyTargetNodeId } = req2.body;
@@ -52128,7 +57032,7 @@ router58.post("/nodes/:nodeId/copy-linked-variable", async (req2, res) => {
     res.status(500).json({ error: msg });
   }
 });
-router58.post("/variables/:variableId/create-display", async (req2, res) => {
+router62.post("/variables/:variableId/create-display", async (req2, res) => {
   try {
     const { variableId } = req2.params;
     const { label, suffix } = req2.body || {};
@@ -52140,7 +57044,7 @@ router58.post("/variables/:variableId/create-display", async (req2, res) => {
     res.status(400).json({ error: msg });
   }
 });
-router58.get("/variables/search", async (req2, res) => {
+router62.get("/variables/search", async (req2, res) => {
   try {
     const q = String(req2.query.displayName || "").trim();
     if (!q) return res.status(400).json({ error: "displayName query string requis" });
@@ -52154,7 +57058,7 @@ router58.get("/variables/search", async (req2, res) => {
     res.status(500).json({ error: msg });
   }
 });
-router58.get("/trees/:treeId/calculated-values", async (req2, res) => {
+router62.get("/trees/:treeId/calculated-values", async (req2, res) => {
   try {
     const { treeId } = req2.params;
     const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx3(req2);
@@ -52241,12 +57145,12 @@ router58.get("/trees/:treeId/calculated-values", async (req2, res) => {
     res.status(500).json({ error: "Impossible de r\xC3\u0192\xC2\xAF\xC3\u201A\xC2\xBF\xC3\u201A\xC2\xBDcup\xC3\u0192\xC2\xAF\xC3\u201A\xC2\xBF\xC3\u201A\xC2\xBDrer les valeurs calcul\xC3\u0192\xC2\xAF\xC3\u201A\xC2\xBF\xC3\u201A\xC2\xBDes" });
   }
 });
-var treebranchleaf_routes_default = router58;
+var treebranchleaf_routes_default = router62;
 
 // src/components/TreeBranchLeaf/treebranchleaf-new/TBL/routes/tbl-routes.ts
-var import_express60 = __toESM(require("express"), 1);
+var import_express64 = __toESM(require("express"), 1);
 init_database();
-var router59 = import_express60.default.Router();
+var router63 = import_express64.default.Router();
 var prisma33 = db;
 function getAuthCtx4(req2) {
   const role = (req2.user?.role || "").toLowerCase();
@@ -52255,7 +57159,7 @@ function getAuthCtx4(req2) {
   const organizationId = req2.user?.organizationId || null;
   return { isSuperAdmin: isSuperAdmin2, organizationId };
 }
-router59.get("/variables", authMiddleware, requireRole(["user", "admin", "super_admin"]), async (req2, res) => {
+router63.get("/variables", authMiddleware, requireRole(["user", "admin", "super_admin"]), async (req2, res) => {
   try {
     const { isSuperAdmin: isSuperAdmin2, organizationId } = getAuthCtx4(req2);
     const existingNodes = await prisma33.treeBranchLeafNode.findMany({
@@ -52293,7 +57197,7 @@ router59.get("/variables", authMiddleware, requireRole(["user", "admin", "super_
     return res.status(500).json({ error: "Erreur serveur variables", details: err.message });
   }
 });
-router59.get(["/calculation-modes", "/modes"], authMiddleware, requireRole(["user", "admin", "super_admin"]), async (req2, res) => {
+router63.get(["/calculation-modes", "/modes"], authMiddleware, requireRole(["user", "admin", "super_admin"]), async (req2, res) => {
   try {
     let detectCapacity = function(sourceRef) {
       if (!sourceRef) return "1";
@@ -52358,7 +57262,7 @@ router59.get(["/calculation-modes", "/modes"], authMiddleware, requireRole(["use
     return res.status(500).json({ error: "Erreur serveur calculation-modes", details: err.message });
   }
 });
-router59.get("/fields", authMiddleware, requireRole(["user", "admin", "super_admin"]), async (req2, res) => {
+router63.get("/fields", authMiddleware, requireRole(["user", "admin", "super_admin"]), async (req2, res) => {
   try {
     const { isSuperAdmin: isSuperAdmin2, organizationId } = getAuthCtx4(req2);
     const nodes = await prisma33.treeBranchLeafNode.findMany({
@@ -52411,7 +57315,7 @@ router59.get("/fields", authMiddleware, requireRole(["user", "admin", "super_adm
     return res.status(500).json({ error: "Erreur serveur fields" });
   }
 });
-router59.post("/devis", authMiddleware, requireRole(["user", "admin", "super_admin"]), async (req2, res) => {
+router63.post("/devis", authMiddleware, requireRole(["user", "admin", "super_admin"]), async (req2, res) => {
   try {
     const { clientId, treeId, organizationId, userId, projectName, notes, isDraft, formData, metadata } = req2.body || {};
     if (req2.user?.organizationId && organizationId && req2.user.organizationId !== organizationId) {
@@ -52438,7 +57342,7 @@ router59.post("/devis", authMiddleware, requireRole(["user", "admin", "super_adm
     return res.status(500).json({ success: false, error: "Erreur serveur lors de la sauvegarde du devis" });
   }
 });
-router59.get("/config/health", authMiddleware, requireRole(["user", "admin", "super_admin"]), async (req2, res) => {
+router63.get("/config/health", authMiddleware, requireRole(["user", "admin", "super_admin"]), async (req2, res) => {
   try {
     const [varCount, formulaCount, conditionCount, tableCount] = await Promise.all([
       prisma33.treeBranchLeafNodeVariable.count(),
@@ -52478,7 +57382,7 @@ router59.get("/config/health", authMiddleware, requireRole(["user", "admin", "su
     return res.status(500).json({ success: false, error: "Erreur health config", details: err.message });
   }
 });
-router59.get("/devis/client/:clientId", authMiddleware, requireRole(["user", "admin", "super_admin"]), async (_req, res) => {
+router63.get("/devis/client/:clientId", authMiddleware, requireRole(["user", "admin", "super_admin"]), async (_req, res) => {
   try {
     res.json([]);
   } catch (error) {
@@ -52488,7 +57392,7 @@ router59.get("/devis/client/:clientId", authMiddleware, requireRole(["user", "ad
     });
   }
 });
-router59.get("/devis/:devisId", authMiddleware, requireRole(["user", "admin", "super_admin"]), async (req2, res) => {
+router63.get("/devis/:devisId", authMiddleware, requireRole(["user", "admin", "super_admin"]), async (req2, res) => {
   try {
     const { devisId } = req2.params;
     res.json({
@@ -52512,7 +57416,7 @@ router59.get("/devis/:devisId", authMiddleware, requireRole(["user", "admin", "s
     });
   }
 });
-router59.get("/clients/:clientId/access-check", authMiddleware, requireRole(["user", "admin", "super_admin"]), async (req2, res) => {
+router63.get("/clients/:clientId/access-check", authMiddleware, requireRole(["user", "admin", "super_admin"]), async (req2, res) => {
   try {
     const { clientId } = req2.params;
     const { role } = req2.user || {};
@@ -52528,10 +57432,10 @@ router59.get("/clients/:clientId/access-check", authMiddleware, requireRole(["us
     });
   }
 });
-var tbl_routes_default = router59;
+var tbl_routes_default = router63;
 
 // src/components/TreeBranchLeaf/tbl-bridge/routes/tbl-intelligence-routes.ts
-var import_express61 = __toESM(require("express"), 1);
+var import_express65 = __toESM(require("express"), 1);
 
 // src/components/TreeBranchLeaf/tbl-bridge/intelligence/TBLIntelligence.ts
 init_database();
@@ -53967,11 +58871,11 @@ var TBLEvaluationEngine_default = TBLEvaluationEngine;
 // src/components/TreeBranchLeaf/tbl-bridge/routes/tbl-intelligence-routes.ts
 init_operation_interpreter();
 init_database();
-var router60 = import_express61.default.Router();
+var router64 = import_express65.default.Router();
 var evaluationEngine = new TBLEvaluationEngine_default();
 function logRouteHit(route) {
 }
-router60.post("/evaluate", async (req2, res) => {
+router64.post("/evaluate", async (req2, res) => {
   logRouteHit("POST /api/tbl/evaluate");
   const prisma51 = db;
   try {
@@ -54376,7 +59280,7 @@ async function resolveSingleEvaluation(prisma51, elementId, contextData) {
   }
   return { payload: { success: true, type: "neutral", capacity, value: null }, trace };
 }
-router60.get("/_debug_list", (req2, res) => {
+router64.get("/_debug_list", (req2, res) => {
   logRouteHit("GET /api/tbl/_debug_list");
   return res.json({
     routes: [
@@ -54391,10 +59295,10 @@ router60.get("/_debug_list", (req2, res) => {
     timestamp: (/* @__PURE__ */ new Date()).toISOString()
   });
 });
-router60.post("/evaluate/formula/:tblCode", async (req2, res) => {
+router64.post("/evaluate/formula/:tblCode", async (req2, res) => {
   return res.status(503).json({ success: false, error: "Route d\xE9sactiv\xE9e pour d\xE9bogage." });
 });
-router60.post("/condition", async (req2, res) => {
+router64.post("/condition", async (req2, res) => {
   logRouteHit("POST /api/tbl/condition");
   try {
     const { elementId, contextData = {}, submissionId = "df833cac-0b44-4b2b-bb1c-de3878f00182" } = req2.body || {};
@@ -54426,7 +59330,7 @@ router60.post("/condition", async (req2, res) => {
     });
   }
 });
-router60.post("/evaluate/condition/:tblCode", async (req2, res) => {
+router64.post("/evaluate/condition/:tblCode", async (req2, res) => {
   logRouteHit("POST /api/tbl/evaluate/condition/:tblCode");
   const { tblCode } = req2.params;
   const { submissionId = "df833cac-0b44-4b2b-bb1c-de3878f00182" } = req2.body || {};
@@ -54471,16 +59375,16 @@ router60.post("/evaluate/condition/:tblCode", async (req2, res) => {
     });
   }
 });
-router60.post("/evaluate/table/:tblCode", async (req2, res) => {
+router64.post("/evaluate/table/:tblCode", async (req2, res) => {
   return res.status(503).json({ success: false, error: "Route d\xE9sactiv\xE9e pour d\xE9bogage." });
 });
-router60.get("/analyze/:tblCode", async (req2, res) => {
+router64.get("/analyze/:tblCode", async (req2, res) => {
   return res.status(503).json({ success: false, error: "Route d\xE9sactiv\xE9e pour d\xE9bogage." });
 });
-router60.get("/status", async (req2, res) => {
+router64.get("/status", async (req2, res) => {
   return res.status(503).json({ success: false, error: "Route d\xE9sactiv\xE9e pour d\xE9bogage." });
 });
-router60.post("/update-database-results", async (req2, res) => {
+router64.post("/update-database-results", async (req2, res) => {
   logRouteHit("POST /api/tbl/update-database-results");
   try {
     const { submissionId = "df833cac-0b44-4b2b-bb1c-de3878f00182" } = req2.body || {};
@@ -54553,7 +59457,7 @@ router60.post("/update-database-results", async (req2, res) => {
     });
   }
 });
-router60.post("/check-submission-data", async (req2, res) => {
+router64.post("/check-submission-data", async (req2, res) => {
   logRouteHit("POST /api/tbl/check-submission-data");
   try {
     const { submissionId = "df833cac-0b44-4b2b-bb1c-de3878f00182" } = req2.body || {};
@@ -54587,7 +59491,7 @@ router60.post("/check-submission-data", async (req2, res) => {
     });
   }
 });
-router60.post("/update-database-with-intelligent-translations", async (req2, res) => {
+router64.post("/update-database-with-intelligent-translations", async (req2, res) => {
   logRouteHit("POST /api/tbl/update-database-with-intelligent-translations");
   try {
     const { submissionId = "df833cac-0b44-4b2b-bb1c-de3878f00182" } = req2.body || {};
@@ -54662,7 +59566,7 @@ router60.post("/update-database-with-intelligent-translations", async (req2, res
     });
   }
 });
-router60.get("/check-intelligent-translations", async (req2, res) => {
+router64.get("/check-intelligent-translations", async (req2, res) => {
   logRouteHit("GET /api/tbl/check-intelligent-translations");
   try {
     const { submissionId = "df833cac-0b44-4b2b-bb1c-de3878f00182" } = req2.query;
@@ -54713,7 +59617,7 @@ router60.get("/check-intelligent-translations", async (req2, res) => {
     });
   }
 });
-router60.get("/nodes/:nodeId", async (req2, res) => {
+router64.get("/nodes/:nodeId", async (req2, res) => {
   logRouteHit("GET /api/tbl/nodes/:nodeId");
   try {
     const { nodeId } = req2.params;
@@ -54734,7 +59638,7 @@ router60.get("/nodes/:nodeId", async (req2, res) => {
     });
   }
 });
-router60.get("/reusables/conditions", async (req2, res) => {
+router64.get("/reusables/conditions", async (req2, res) => {
   logRouteHit("GET /api/tbl/reusables/conditions");
   try {
     const prisma51 = db;
@@ -54757,7 +59661,7 @@ router60.get("/reusables/conditions", async (req2, res) => {
     });
   }
 });
-router60.get("/reusables/formulas", async (req2, res) => {
+router64.get("/reusables/formulas", async (req2, res) => {
   logRouteHit("GET /api/tbl/reusables/formulas");
   try {
     const prisma51 = db;
@@ -54780,13 +59684,13 @@ router60.get("/reusables/formulas", async (req2, res) => {
     });
   }
 });
-var tbl_intelligence_routes_default = router60;
+var tbl_intelligence_routes_default = router64;
 
 // src/routes/tbl-capabilities.ts
-var import_express62 = __toESM(require("express"), 1);
+var import_express66 = __toESM(require("express"), 1);
 init_database();
 var prisma34 = db;
-var router61 = import_express62.default.Router();
+var router65 = import_express66.default.Router();
 function extractFormulaDependencies(tokens2) {
   const deps = [];
   for (const t of tokens2 || []) {
@@ -54897,7 +59801,7 @@ async function resolveCapabilities(treeId, opts = {}) {
   }
   return capabilities;
 }
-router61.get("/capabilities", authenticateToken, async (req2, res) => {
+router65.get("/capabilities", authenticateToken, async (req2, res) => {
   try {
     const treeId = String(req2.query.treeId || "");
     if (!treeId) {
@@ -54923,10 +59827,398 @@ router61.get("/capabilities", authenticateToken, async (req2, res) => {
     res.status(500).json({ error: "Erreur serveur capabilities", details: err.message });
   }
 });
-var tbl_capabilities_default = router61;
+var tbl_capabilities_default = router65;
+
+// src/routes/gestionnaire.ts
+var import_express67 = require("express");
+init_database();
+var router66 = (0, import_express67.Router)();
+router66.get("/trees/:treeId/exposed", async (req2, res) => {
+  try {
+    const { treeId } = req2.params;
+    const user = req2.user;
+    const organizationId = user?.organizationId;
+    if (!organizationId) {
+      return res.status(400).json({ error: "Organization ID required" });
+    }
+    const exposedVariables = await db.treeBranchLeafNodeVariable.findMany({
+      where: {
+        gestionnaireExposed: true,
+        TreeBranchLeafNode: {
+          treeId
+        }
+      },
+      select: {
+        id: true,
+        nodeId: true,
+        displayName: true,
+        gestionnaireLabel: true,
+        fixedValue: true,
+        unit: true,
+        displayFormat: true,
+        precision: true,
+        sourceType: true
+      }
+    });
+    const exposedTables = await db.treeBranchLeafNodeTable.findMany({
+      where: {
+        gestionnaireExposed: true,
+        TreeBranchLeafNode: {
+          treeId
+        }
+      },
+      select: {
+        id: true,
+        nodeId: true,
+        name: true,
+        gestionnaireLabel: true,
+        type: true,
+        columnCount: true,
+        rowCount: true
+      }
+    });
+    const overrides = await db.gestionnaireOverride.findMany({
+      where: {
+        organizationId,
+        treeId
+      }
+    });
+    const overrideMap = new Map(overrides.map((o) => [o.capabilityId, o]));
+    const variables = exposedVariables.map((v) => {
+      const override = overrideMap.get(v.id);
+      const currentValue = override?.overrideValue ?? v.fixedValue;
+      const valueChanged = override?.overrideValue != null && override.overrideValue !== v.fixedValue;
+      return {
+        ...v,
+        currentValue,
+        hasOverride: valueChanged,
+        overrideId: override?.id,
+        lastUpdatedBy: override?.updatedBy,
+        lastUpdatedAt: override?.updatedAt
+      };
+    });
+    const tables = exposedTables.map((t) => {
+      const override = overrideMap.get(t.id);
+      return {
+        ...t,
+        hasOverride: !!override,
+        overrideId: override?.id,
+        overrideData: override?.overrideData,
+        lastUpdatedBy: override?.updatedBy,
+        lastUpdatedAt: override?.updatedAt
+      };
+    });
+    const treeNodeIds = await db.treeBranchLeafNode.findMany({
+      where: { treeId },
+      select: { id: true }
+    });
+    const nodeIdSet = treeNodeIds.map((n) => n.id);
+    const allFormulas = await db.treeBranchLeafNodeFormula.findMany({
+      where: {
+        nodeId: { in: nodeIdSet }
+      },
+      select: {
+        id: true,
+        nodeId: true,
+        name: true,
+        tokens: true
+      }
+    });
+    const constants = [];
+    for (const formula of allFormulas) {
+      const tokens2 = Array.isArray(formula.tokens) ? formula.tokens : [];
+      for (const token of tokens2) {
+        if (typeof token === "string" && token.startsWith("@const.")) {
+          const rest = token.slice("@const.".length);
+          const firstDot = rest.indexOf(".");
+          if (firstDot > 0) {
+            const constId = rest.slice(0, firstDot);
+            const originalValue = rest.slice(firstDot + 1);
+            const override = overrideMap.get(constId);
+            const overrideData = override?.overrideData && typeof override.overrideData === "object" ? override.overrideData : {};
+            const customLabel = typeof overrideData.label === "string" ? overrideData.label : "";
+            const currentValue = override?.overrideValue ?? originalValue;
+            const valueChanged = override?.overrideValue != null && override.overrideValue !== originalValue;
+            constants.push({
+              constId,
+              formulaId: formula.id,
+              formulaName: formula.name,
+              nodeId: formula.nodeId,
+              originalValue,
+              label: customLabel || `${formula.name} \u2014 ${originalValue}`,
+              customLabel: customLabel || "",
+              currentValue,
+              hasOverride: valueChanged,
+              overrideId: override?.id ?? null
+            });
+          }
+        }
+      }
+    }
+    return res.json({ variables, tables, constants });
+  } catch (error) {
+    console.error("[GESTIONNAIRE] Error fetching exposed items:", error);
+    return res.status(500).json({ error: "Internal server error" });
+  }
+});
+router66.patch("/override/variable", async (req2, res) => {
+  try {
+    const user = req2.user;
+    const organizationId = user?.organizationId;
+    const { variableId, nodeId, treeId, value } = req2.body;
+    if (!organizationId || !variableId || !treeId) {
+      return res.status(400).json({ error: "Missing required fields: variableId, treeId" });
+    }
+    const variable = await db.treeBranchLeafNodeVariable.findUnique({
+      where: { id: variableId }
+    });
+    if (!variable || !variable.gestionnaireExposed) {
+      return res.status(403).json({ error: "Variable not exposed to gestionnaire" });
+    }
+    const override = await db.gestionnaireOverride.upsert({
+      where: {
+        organizationId_capabilityId: {
+          organizationId,
+          capabilityId: variableId
+        }
+      },
+      create: {
+        organizationId,
+        treeId,
+        nodeId: nodeId || variable.nodeId,
+        capabilityType: "variable",
+        capabilityId: variableId,
+        overrideValue: String(value),
+        updatedBy: user?.id
+      },
+      update: {
+        overrideValue: String(value),
+        updatedBy: user?.id
+      }
+    });
+    return res.json({ success: true, override });
+  } catch (error) {
+    console.error("[GESTIONNAIRE] Error saving variable override:", error);
+    return res.status(500).json({ error: "Internal server error" });
+  }
+});
+var handleOverrideConstant = async (req2, res) => {
+  try {
+    const user = req2.user;
+    const organizationId = user?.organizationId;
+    const { constId, nodeId, treeId, value, label } = req2.body;
+    if (!organizationId || !constId || !treeId) {
+      return res.status(400).json({ error: "Missing required fields: constId, treeId" });
+    }
+    const existing = await db.gestionnaireOverride.findUnique({
+      where: { organizationId_capabilityId: { organizationId, capabilityId: constId } }
+    });
+    const prevData = existing?.overrideData && typeof existing.overrideData === "object" ? existing.overrideData : {};
+    const nextData = { ...prevData, ...label !== void 0 ? { label } : {} };
+    const override = await db.gestionnaireOverride.upsert({
+      where: {
+        organizationId_capabilityId: {
+          organizationId,
+          capabilityId: constId
+        }
+      },
+      create: {
+        organizationId,
+        treeId,
+        nodeId: nodeId || "",
+        capabilityType: "formula-constant",
+        capabilityId: constId,
+        overrideValue: value !== void 0 ? String(value) : null,
+        overrideData: nextData,
+        updatedBy: user?.id
+      },
+      update: {
+        ...value !== void 0 ? { overrideValue: String(value) } : {},
+        overrideData: nextData,
+        updatedBy: user?.id
+      }
+    });
+    return res.json({ success: true, override });
+  } catch (error) {
+    console.error("[GESTIONNAIRE] Error saving constant override:", error);
+    return res.status(500).json({ error: "Internal server error" });
+  }
+};
+router66.patch("/override/constant", handleOverrideConstant);
+router66.post("/override/constant", handleOverrideConstant);
+router66.patch("/override/table", async (req2, res) => {
+  try {
+    const user = req2.user;
+    const organizationId = user?.organizationId;
+    const { tableId, nodeId, treeId, data } = req2.body;
+    if (!organizationId || !tableId || !treeId) {
+      return res.status(400).json({ error: "Missing required fields: tableId, treeId" });
+    }
+    const table = await db.treeBranchLeafNodeTable.findUnique({
+      where: { id: tableId }
+    });
+    if (!table || !table.gestionnaireExposed) {
+      return res.status(403).json({ error: "Table not exposed to gestionnaire" });
+    }
+    const override = await db.gestionnaireOverride.upsert({
+      where: {
+        organizationId_capabilityId: {
+          organizationId,
+          capabilityId: tableId
+        }
+      },
+      create: {
+        organizationId,
+        treeId,
+        nodeId: nodeId || table.nodeId,
+        capabilityType: "table",
+        capabilityId: tableId,
+        overrideData: data,
+        updatedBy: user?.id
+      },
+      update: {
+        overrideData: data,
+        updatedBy: user?.id
+      }
+    });
+    return res.json({ success: true, override });
+  } catch (error) {
+    console.error("[GESTIONNAIRE] Error saving table override:", error);
+    return res.status(500).json({ error: "Internal server error" });
+  }
+});
+router66.delete("/constant/:constId", async (req2, res) => {
+  try {
+    const { constId } = req2.params;
+    const user = req2.user;
+    const organizationId = user?.organizationId;
+    if (!organizationId || !constId) {
+      return res.status(400).json({ error: "Missing constId" });
+    }
+    const allFormulas = await db.treeBranchLeafNodeFormula.findMany({
+      select: { id: true, tokens: true }
+    });
+    let updated = false;
+    for (const formula of allFormulas) {
+      const tokens2 = Array.isArray(formula.tokens) ? formula.tokens : [];
+      const prefix = `@const.${constId}.`;
+      const idx = tokens2.findIndex((t) => typeof t === "string" && t.startsWith(prefix));
+      if (idx >= 0) {
+        const rest = tokens2[idx].slice(prefix.length);
+        tokens2[idx] = rest;
+        await db.treeBranchLeafNodeFormula.update({
+          where: { id: formula.id },
+          data: { tokens: tokens2 }
+        });
+        updated = true;
+        break;
+      }
+    }
+    await db.gestionnaireOverride.deleteMany({
+      where: { organizationId, capabilityId: constId }
+    });
+    return res.json({ success: true, updated });
+  } catch (error) {
+    console.error("[GESTIONNAIRE] Error deleting constant:", error);
+    return res.status(500).json({ error: "Internal server error" });
+  }
+});
+router66.delete("/override/:overrideId", async (req2, res) => {
+  try {
+    const { overrideId } = req2.params;
+    const user = req2.user;
+    const organizationId = user?.organizationId;
+    const override = await db.gestionnaireOverride.findUnique({
+      where: { id: overrideId }
+    });
+    if (!override || override.organizationId !== organizationId) {
+      return res.status(404).json({ error: "Override not found" });
+    }
+    await db.gestionnaireOverride.delete({
+      where: { id: overrideId }
+    });
+    return res.json({ success: true });
+  } catch (error) {
+    console.error("[GESTIONNAIRE] Error deleting override:", error);
+    return res.status(500).json({ error: "Internal server error" });
+  }
+});
+var handleExpose = async (req2, res) => {
+  try {
+    const { capabilityType, capabilityId, exposed, label } = req2.body;
+    if (!capabilityType || !capabilityId) {
+      return res.status(400).json({ error: "Missing capabilityType and capabilityId" });
+    }
+    if (capabilityType === "variable") {
+      const updated = await db.treeBranchLeafNodeVariable.update({
+        where: { id: capabilityId },
+        data: {
+          gestionnaireExposed: exposed !== false,
+          gestionnaireLabel: label || null
+        }
+      });
+      return res.json({ success: true, updated });
+    }
+    if (capabilityType === "table") {
+      const updated = await db.treeBranchLeafNodeTable.update({
+        where: { id: capabilityId },
+        data: {
+          gestionnaireExposed: exposed !== false,
+          gestionnaireLabel: label || null
+        }
+      });
+      return res.json({ success: true, updated });
+    }
+    return res.status(400).json({ error: 'Invalid capabilityType. Must be "variable" or "table"' });
+  } catch (error) {
+    console.error("[GESTIONNAIRE] Error toggling expose:", error);
+    return res.status(500).json({ error: "Internal server error" });
+  }
+};
+router66.patch("/expose", handleExpose);
+router66.post("/expose", handleExpose);
+router66.get("/exposed-tokens/:treeId", async (req2, res) => {
+  try {
+    const { treeId } = req2.params;
+    const exposedVariables = await db.treeBranchLeafNodeVariable.findMany({
+      where: {
+        gestionnaireExposed: true,
+        TreeBranchLeafNode: { treeId }
+      },
+      select: { id: true, nodeId: true, gestionnaireLabel: true }
+    });
+    const exposedTables = await db.treeBranchLeafNodeTable.findMany({
+      where: {
+        gestionnaireExposed: true,
+        TreeBranchLeafNode: { treeId }
+      },
+      select: { id: true, nodeId: true, gestionnaireLabel: true }
+    });
+    const exposedNodeIds = /* @__PURE__ */ new Set();
+    const exposedMap = {};
+    exposedVariables.forEach((v) => {
+      exposedNodeIds.add(v.nodeId);
+      exposedMap[v.nodeId] = { type: "variable", id: v.id, label: v.gestionnaireLabel };
+    });
+    exposedTables.forEach((t) => {
+      exposedNodeIds.add(t.nodeId);
+      exposedMap[t.nodeId] = { type: "table", id: t.id, label: t.gestionnaireLabel };
+    });
+    return res.json({
+      exposedNodeIds: Array.from(exposedNodeIds),
+      exposedMap,
+      variables: exposedVariables,
+      tables: exposedTables
+    });
+  } catch (error) {
+    console.error("[GESTIONNAIRE] Error fetching exposed tokens:", error);
+    return res.status(500).json({ error: "Internal server error" });
+  }
+});
+var gestionnaire_default = router66;
 
 // src/routes/tbl-select-config-route.ts
-var import_express63 = require("express");
+var import_express68 = require("express");
 init_database();
 
 // src/routes/utils/getAuthCtx.ts
@@ -54965,8 +60257,8 @@ function shouldAutoCreateSelectConfig(input) {
 }
 
 // src/routes/tbl-select-config-route.ts
-var router62 = (0, import_express63.Router)();
-router62.get("/nodes/:nodeId/select-config", async (req2, res) => {
+var router67 = (0, import_express68.Router)();
+router67.get("/nodes/:nodeId/select-config", async (req2, res) => {
   try {
     const { nodeId } = req2.params;
     const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx5(req2);
@@ -55033,13 +60325,13 @@ router62.get("/nodes/:nodeId/select-config", async (req2, res) => {
     res.status(500).json({ error: "Erreur interne du serveur", details: err.message });
   }
 });
-var tblSelectConfigRouter = router62;
+var tblSelectConfigRouter = router67;
 
 // src/routes/leadGeneration.ts
-var import_express64 = require("express");
+var import_express69 = require("express");
 init_database();
 var import_express_rate_limit6 = __toESM(require("express-rate-limit"), 1);
-var router63 = (0, import_express64.Router)();
+var router68 = (0, import_express69.Router)();
 var prisma35 = db;
 var leadGenRateLimit = (0, import_express_rate_limit6.default)({
   windowMs: 60 * 1e3,
@@ -55048,8 +60340,8 @@ var leadGenRateLimit = (0, import_express_rate_limit6.default)({
   // 50 requêtes par minute
   message: { success: false, message: "Trop de requ\xEAtes lead generation" }
 });
-router63.use(authMiddleware);
-router63.use(leadGenRateLimit);
+router68.use(authMiddleware);
+router68.use(leadGenRateLimit);
 var getQueryString = (value) => {
   if (typeof value === "string") return value;
   if (Array.isArray(value)) {
@@ -55067,7 +60359,7 @@ var buildOriginFilter = (origin) => {
     ]
   };
 };
-router63.get("/campaigns", requireRole2(["admin", "super_admin"]), async (req2, res) => {
+router68.get("/campaigns", requireRole2(["admin", "super_admin"]), async (req2, res) => {
   try {
     const organizationId = req2.user?.organizationId;
     if (!organizationId) {
@@ -55119,7 +60411,7 @@ router63.get("/campaigns", requireRole2(["admin", "super_admin"]), async (req2, 
     res.status(500).json({ success: false, message: "Erreur lors de la r\xE9cup\xE9ration des campagnes" });
   }
 });
-router63.post("/campaigns", requireRole2(["admin", "super_admin"]), async (req2, res) => {
+router68.post("/campaigns", requireRole2(["admin", "super_admin"]), async (req2, res) => {
   try {
     const organizationId = req2.user?.organizationId;
     if (!organizationId) return res.status(400).json({ success: false, message: "Organization ID manquant" });
@@ -55134,7 +60426,7 @@ router63.post("/campaigns", requireRole2(["admin", "super_admin"]), async (req2,
     res.status(500).json({ success: false, message: "Erreur lors de la cr\xE9ation de la campagne" });
   }
 });
-router63.get("/stats", requireRole2(["admin", "super_admin"]), async (req2, res) => {
+router68.get("/stats", requireRole2(["admin", "super_admin"]), async (req2, res) => {
   try {
     const organizationId = req2.user?.organizationId;
     if (!organizationId) return res.status(400).json({ success: false, message: "Organization ID manquant" });
@@ -55155,7 +60447,7 @@ router63.get("/stats", requireRole2(["admin", "super_admin"]), async (req2, res)
     res.status(500).json({ success: false, message: "Erreur lors de la r\xE9cup\xE9ration des statistiques" });
   }
 });
-router63.put("/campaigns/:id", requireRole2(["admin", "super_admin"]), async (req2, res) => {
+router68.put("/campaigns/:id", requireRole2(["admin", "super_admin"]), async (req2, res) => {
   try {
     const { id } = req2.params;
     const organizationId = req2.user?.organizationId;
@@ -55170,7 +60462,7 @@ router63.put("/campaigns/:id", requireRole2(["admin", "super_admin"]), async (re
     res.status(500).json({ success: false, message: "Erreur lors de la modification de la campagne" });
   }
 });
-router63.delete("/campaigns/:id", requireRole2(["admin", "super_admin"]), async (req2, res) => {
+router68.delete("/campaigns/:id", requireRole2(["admin", "super_admin"]), async (req2, res) => {
   try {
     const { id } = req2.params;
     const organizationId = req2.user?.organizationId;
@@ -55183,7 +60475,7 @@ router63.delete("/campaigns/:id", requireRole2(["admin", "super_admin"]), async 
     res.status(500).json({ success: false, message: "Erreur lors de la suppression de la campagne" });
   }
 });
-router63.patch("/campaigns/:id/status", requireRole2(["admin", "super_admin"]), async (req2, res) => {
+router68.patch("/campaigns/:id/status", requireRole2(["admin", "super_admin"]), async (req2, res) => {
   try {
     const { id } = req2.params;
     const { status } = req2.body;
@@ -55199,7 +60491,7 @@ router63.patch("/campaigns/:id/status", requireRole2(["admin", "super_admin"]), 
     res.status(500).json({ success: false, message: "Erreur lors de la mise \xE0 jour du statut" });
   }
 });
-router63.post("/campaigns/:id/duplicate", requireRole2(["admin", "super_admin"]), async (req2, res) => {
+router68.post("/campaigns/:id/duplicate", requireRole2(["admin", "super_admin"]), async (req2, res) => {
   try {
     const { id } = req2.params;
     const organizationId = req2.user?.organizationId;
@@ -55222,7 +60514,7 @@ router63.post("/campaigns/:id/duplicate", requireRole2(["admin", "super_admin"])
     res.status(500).json({ success: false, message: "Erreur lors de la duplication de la campagne" });
   }
 });
-router63.get("/stats/timeseries", requireRole2(["admin", "super_admin"]), async (req2, res) => {
+router68.get("/stats/timeseries", requireRole2(["admin", "super_admin"]), async (req2, res) => {
   try {
     const organizationId = req2.user?.organizationId;
     if (!organizationId) return res.status(400).json({ success: false, message: "Organization ID manquant" });
@@ -55260,13 +60552,13 @@ router63.get("/stats/timeseries", requireRole2(["admin", "super_admin"]), async 
     res.status(500).json({ success: false, message: "Erreur lors de la r\xE9cup\xE9ration des s\xE9ries temporelles" });
   }
 });
-var leadGeneration_default = router63;
+var leadGeneration_default = router68;
 
 // src/routes/marketplace-fixed.ts
-var import_express65 = require("express");
+var import_express70 = require("express");
 init_prisma();
 var import_express_rate_limit7 = __toESM(require("express-rate-limit"), 1);
-var router64 = (0, import_express65.Router)();
+var router69 = (0, import_express70.Router)();
 var marketplaceRateLimit = (0, import_express_rate_limit7.default)({
   windowMs: 60 * 1e3,
   // 1 minute
@@ -55274,9 +60566,9 @@ var marketplaceRateLimit = (0, import_express_rate_limit7.default)({
   // 100 requêtes par minute
   message: { success: false, message: "Trop de requ\xEAtes marketplace" }
 });
-router64.use(authMiddleware);
-router64.use(marketplaceRateLimit);
-router64.get("/leads", requireRole2(["admin", "super_admin"]), async (req2, res) => {
+router69.use(authMiddleware);
+router69.use(marketplaceRateLimit);
+router69.get("/leads", requireRole2(["admin", "super_admin"]), async (req2, res) => {
   try {
     const organizationId = req2.user?.organizationId;
     if (!organizationId) {
@@ -55396,7 +60688,7 @@ router64.get("/leads", requireRole2(["admin", "super_admin"]), async (req2, res)
     });
   }
 });
-router64.get("/stats", requireRole2(["admin", "super_admin"]), async (req2, res) => {
+router69.get("/stats", requireRole2(["admin", "super_admin"]), async (req2, res) => {
   try {
     const organizationId = req2.user?.organizationId;
     if (!organizationId) {
@@ -55457,7 +60749,7 @@ router64.get("/stats", requireRole2(["admin", "super_admin"]), async (req2, res)
     });
   }
 });
-router64.get("/saved-searches", requireRole2(["admin", "super_admin"]), async (req2, res) => {
+router69.get("/saved-searches", requireRole2(["admin", "super_admin"]), async (req2, res) => {
   try {
     const organizationId = req2.user?.organizationId;
     if (!organizationId) {
@@ -55479,7 +60771,7 @@ router64.get("/saved-searches", requireRole2(["admin", "super_admin"]), async (r
     });
   }
 });
-router64.post("/purchase/:leadId", requireRole2(["admin", "super_admin"]), async (req2, res) => {
+router69.post("/purchase/:leadId", requireRole2(["admin", "super_admin"]), async (req2, res) => {
   try {
     const { leadId } = req2.params;
     const organizationId = req2.user?.organizationId;
@@ -55518,13 +60810,13 @@ router64.post("/purchase/:leadId", requireRole2(["admin", "super_admin"]), async
     });
   }
 });
-var marketplace_fixed_default = router64;
+var marketplace_fixed_default = router69;
 
 // src/routes/partner.ts
-var import_express66 = require("express");
+var import_express71 = require("express");
 init_database();
 var import_express_rate_limit8 = __toESM(require("express-rate-limit"), 1);
-var router65 = (0, import_express66.Router)();
+var router70 = (0, import_express71.Router)();
 var prisma36 = db;
 var partnerRateLimit = (0, import_express_rate_limit8.default)({
   windowMs: 60 * 1e3,
@@ -55533,9 +60825,9 @@ var partnerRateLimit = (0, import_express_rate_limit8.default)({
   // 30 requêtes par minute
   message: { success: false, message: "Trop de requ\xEAtes partner portal" }
 });
-router65.use(authMiddleware);
-router65.use(partnerRateLimit);
-router65.get("/dashboard", requireRole2(["admin", "super_admin"]), async (req2, res) => {
+router70.use(authMiddleware);
+router70.use(partnerRateLimit);
+router70.get("/dashboard", requireRole2(["admin", "super_admin"]), async (req2, res) => {
   try {
     const organizationId = req2.user?.organizationId;
     if (!organizationId) {
@@ -55622,7 +60914,7 @@ router65.get("/dashboard", requireRole2(["admin", "super_admin"]), async (req2, 
     });
   }
 });
-router65.get("/earnings", requireRole2(["admin", "super_admin"]), async (req2, res) => {
+router70.get("/earnings", requireRole2(["admin", "super_admin"]), async (req2, res) => {
   try {
     const organizationId = req2.user?.organizationId;
     if (!organizationId) {
@@ -55684,7 +60976,7 @@ router65.get("/earnings", requireRole2(["admin", "super_admin"]), async (req2, r
     });
   }
 });
-router65.get("/leads", requireRole2(["admin", "super_admin"]), async (req2, res) => {
+router70.get("/leads", requireRole2(["admin", "super_admin"]), async (req2, res) => {
   try {
     const organizationId = req2.user?.organizationId;
     if (!organizationId) {
@@ -55763,7 +61055,7 @@ router65.get("/leads", requireRole2(["admin", "super_admin"]), async (req2, res)
     });
   }
 });
-router65.post("/register", requireRole2(["admin", "super_admin"]), async (req2, res) => {
+router70.post("/register", requireRole2(["admin", "super_admin"]), async (req2, res) => {
   try {
     const organizationId = req2.user?.organizationId;
     if (!organizationId) {
@@ -55830,15 +61122,15 @@ router65.post("/register", requireRole2(["admin", "super_admin"]), async (req2, 
     });
   }
 });
-var partner_default = router65;
+var partner_default = router70;
 
 // src/routes/publicForms.ts
-var import_express67 = require("express");
+var import_express72 = require("express");
 var import_express_rate_limit9 = __toESM(require("express-rate-limit"), 1);
-var import_zod8 = require("zod");
+var import_zod12 = require("zod");
 init_prisma();
 console.log("[PUBLIC-FORMS-DEBUG] prisma import\xE9:", typeof db, db ? "\u2705 OK" : "\u274C UNDEFINED");
-var router66 = (0, import_express67.Router)();
+var router71 = (0, import_express72.Router)();
 var submissionRateLimit = (0, import_express_rate_limit9.default)({
   windowMs: 5 * 60 * 1e3,
   max: 10,
@@ -55936,7 +61228,7 @@ var mapSubmissionToResponse = (submission) => ({
   data: submission.data ?? {},
   status: submission.status ?? "new"
 });
-var optionalPositiveInt = import_zod8.z.preprocess((value) => {
+var optionalPositiveInt = import_zod12.z.preprocess((value) => {
   if (value === null || value === void 0 || value === "") {
     return void 0;
   }
@@ -55945,37 +61237,37 @@ var optionalPositiveInt = import_zod8.z.preprocess((value) => {
     return Number.isFinite(parsed) ? parsed : value;
   }
   return value;
-}, import_zod8.z.number().int().positive().optional());
-var formFieldSchema = import_zod8.z.object({
-  id: import_zod8.z.union([import_zod8.z.string(), import_zod8.z.number()]).optional(),
-  name: import_zod8.z.string().optional(),
-  label: import_zod8.z.string().optional(),
-  type: import_zod8.z.string().optional(),
-  required: import_zod8.z.boolean().optional(),
-  placeholder: import_zod8.z.string().optional(),
-  options: import_zod8.z.array(import_zod8.z.string()).optional(),
-  order: import_zod8.z.number().int().optional()
+}, import_zod12.z.number().int().positive().optional());
+var formFieldSchema = import_zod12.z.object({
+  id: import_zod12.z.union([import_zod12.z.string(), import_zod12.z.number()]).optional(),
+  name: import_zod12.z.string().optional(),
+  label: import_zod12.z.string().optional(),
+  type: import_zod12.z.string().optional(),
+  required: import_zod12.z.boolean().optional(),
+  placeholder: import_zod12.z.string().optional(),
+  options: import_zod12.z.array(import_zod12.z.string()).optional(),
+  order: import_zod12.z.number().int().optional()
 }).passthrough();
-var baseFormSchema = import_zod8.z.object({
-  name: import_zod8.z.string().min(1, "Nom requis"),
-  description: import_zod8.z.string().max(1e3).optional(),
-  category: import_zod8.z.string().max(120).optional(),
-  slug: import_zod8.z.string().max(160).optional(),
-  fields: import_zod8.z.array(formFieldSchema).default([]),
-  thankYouMessage: import_zod8.z.string().min(1).max(1e3).optional(),
-  redirectUrl: import_zod8.z.string().max(500).optional(),
-  collectsRgpdConsent: import_zod8.z.boolean().optional(),
-  autoPublishLeads: import_zod8.z.boolean().optional(),
-  requiresCommercialTracking: import_zod8.z.boolean().optional(),
+var baseFormSchema = import_zod12.z.object({
+  name: import_zod12.z.string().min(1, "Nom requis"),
+  description: import_zod12.z.string().max(1e3).optional(),
+  category: import_zod12.z.string().max(120).optional(),
+  slug: import_zod12.z.string().max(160).optional(),
+  fields: import_zod12.z.array(formFieldSchema).default([]),
+  thankYouMessage: import_zod12.z.string().min(1).max(1e3).optional(),
+  redirectUrl: import_zod12.z.string().max(500).optional(),
+  collectsRgpdConsent: import_zod12.z.boolean().optional(),
+  autoPublishLeads: import_zod12.z.boolean().optional(),
+  requiresCommercialTracking: import_zod12.z.boolean().optional(),
   maxSubmissionsPerDay: optionalPositiveInt,
-  customCss: import_zod8.z.string().optional(),
-  campaigns: import_zod8.z.array(import_zod8.z.string().min(1)).optional(),
-  isActive: import_zod8.z.boolean().optional(),
-  isPublic: import_zod8.z.boolean().optional()
+  customCss: import_zod12.z.string().optional(),
+  campaigns: import_zod12.z.array(import_zod12.z.string().min(1)).optional(),
+  isActive: import_zod12.z.boolean().optional(),
+  isPublic: import_zod12.z.boolean().optional()
 });
 var createFormSchema = baseFormSchema;
 var updateFormSchema = baseFormSchema.partial();
-var toggleSchema = import_zod8.z.object({ isActive: import_zod8.z.boolean() });
+var toggleSchema = import_zod12.z.object({ isActive: import_zod12.z.boolean() });
 var generateUserSlug = async (firstName, lastName, organizationId) => {
   const slugify2 = (text) => {
     return text.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
@@ -56010,10 +61302,10 @@ var generateUserSlug = async (firstName, lastName, organizationId) => {
   }
   return slug;
 };
-var submissionSchema = import_zod8.z.object({
-  formId: import_zod8.z.string().min(1),
-  privacyConsent: import_zod8.z.boolean(),
-  marketingConsent: import_zod8.z.boolean().optional()
+var submissionSchema = import_zod12.z.object({
+  formId: import_zod12.z.string().min(1),
+  privacyConsent: import_zod12.z.boolean(),
+  marketingConsent: import_zod12.z.boolean().optional()
 }).passthrough();
 var normalizeFormPayload = (payload) => {
   if (!payload || typeof payload !== "object") {
@@ -56292,28 +61584,28 @@ var deleteFormHandler = async (req2, res) => {
     res.status(500).json({ success: false, message: "Erreur lors de la suppression du formulaire" });
   }
 };
-router66.get(
+router71.get(
   "/",
   authMiddleware,
   requireRole2(["admin", "super_admin"]),
   adminRateLimit,
   listFormsHandler
 );
-router66.get(
+router71.get(
   "/stats",
   authMiddleware,
   requireRole2(["admin", "super_admin"]),
   adminRateLimit,
   statsHandler
 );
-router66.get(
+router71.get(
   "/:formId/submissions",
   authMiddleware,
   requireRole2(["admin", "super_admin"]),
   adminRateLimit,
   submissionsHandler
 );
-router66.get(
+router71.get(
   "/:formId",
   authMiddleware,
   requireRole2(["admin", "super_admin"]),
@@ -56339,35 +61631,35 @@ router66.get(
     }
   }
 );
-router66.post(
+router71.post(
   "/",
   authMiddleware,
   requireRole2(["admin", "super_admin"]),
   adminRateLimit,
   createFormHandler
 );
-router66.put(
+router71.put(
   "/:formId",
   authMiddleware,
   requireRole2(["admin", "super_admin"]),
   adminRateLimit,
   updateFormHandler
 );
-router66.patch(
+router71.patch(
   "/:formId/toggle",
   authMiddleware,
   requireRole2(["admin", "super_admin"]),
   adminRateLimit,
   toggleFormHandler
 );
-router66.delete(
+router71.delete(
   "/:formId",
   authMiddleware,
   requireRole2(["admin", "super_admin"]),
   adminRateLimit,
   deleteFormHandler
 );
-var adminRouter = (0, import_express67.Router)();
+var adminRouter = (0, import_express72.Router)();
 adminRouter.get("/list", listFormsHandler);
 adminRouter.get("/stats", statsHandler);
 adminRouter.get("/:formId/submissions", submissionsHandler);
@@ -56376,14 +61668,14 @@ adminRouter.put("/:formId", updateFormHandler);
 adminRouter.patch("/:formId/toggle", toggleFormHandler);
 adminRouter.post("/:formId/toggle", toggleFormHandler);
 adminRouter.delete("/:formId", deleteFormHandler);
-router66.use(
+router71.use(
   "/admin",
   authMiddleware,
   requireRole2(["admin", "super_admin"]),
   adminRateLimit,
   adminRouter
 );
-router66.get("/my-commercial-links", authMiddleware, async (req2, res) => {
+router71.get("/my-commercial-links", authMiddleware, async (req2, res) => {
   const userId = req2.user?.id;
   const organizationId = req2.user?.organizationId;
   if (!userId || !organizationId) {
@@ -56426,7 +61718,7 @@ router66.get("/my-commercial-links", authMiddleware, async (req2, res) => {
     res.status(500).json({ success: false, message: "Erreur lors de la r\xE9cup\xE9ration" });
   }
 });
-router66.get("/public/:identifier/config", async (req2, res) => {
+router71.get("/public/:identifier/config", async (req2, res) => {
   try {
     const { identifier } = req2.params;
     const form = await db.publicForm.findFirst({
@@ -56463,7 +61755,7 @@ router66.get("/public/:identifier/config", async (req2, res) => {
     res.status(500).json({ success: false, message: "Erreur lors de la recuperation de la configuration du formulaire" });
   }
 });
-router66.post("/submit", submissionRateLimit, async (req2, res) => {
+router71.post("/submit", submissionRateLimit, async (req2, res) => {
   const parsed = submissionSchema.safeParse(req2.body);
   if (!parsed.success) {
     res.status(400).json({ success: false, message: "Donnees de soumission invalides", issues: parsed.error.flatten() });
@@ -56584,13 +61876,13 @@ router66.post("/submit", submissionRateLimit, async (req2, res) => {
     res.status(500).json({ success: false, message: "Erreur lors de la soumission du formulaire" });
   }
 });
-var publicForms_default = router66;
+var publicForms_default = router71;
 
 // src/routes/landingPages.ts
-var import_express68 = require("express");
+var import_express73 = require("express");
 var import_express_rate_limit10 = __toESM(require("express-rate-limit"), 1);
 init_prisma();
-var router67 = (0, import_express68.Router)();
+var router72 = (0, import_express73.Router)();
 var publicLandingRateLimit = (0, import_express_rate_limit10.default)({
   windowMs: 60 * 1e3,
   // 1 minute
@@ -56630,7 +61922,7 @@ var toSnapshots = (value) => {
     return snapshot;
   }).filter((snapshot) => snapshot !== null);
 };
-router67.get("/public/:slug", publicLandingRateLimit, async (req2, res) => {
+router72.get("/public/:slug", publicLandingRateLimit, async (req2, res) => {
   try {
     const { slug } = req2.params;
     const landingPage = await db.treeBranchLeafTree.findFirst({
@@ -56697,7 +61989,7 @@ router67.get("/public/:slug", publicLandingRateLimit, async (req2, res) => {
     });
   }
 });
-router67.post("/public/:slug/track", publicLandingRateLimit, async (req2, res) => {
+router72.post("/public/:slug/track", publicLandingRateLimit, async (req2, res) => {
   try {
     const { slug } = req2.params;
     const { event, data = {} } = req2.body;
@@ -56744,9 +62036,9 @@ router67.post("/public/:slug/track", publicLandingRateLimit, async (req2, res) =
     });
   }
 });
-router67.use("/admin", authMiddleware);
-router67.use("/admin", adminLandingRateLimit);
-router67.get("/admin/list", requireRole2(["admin", "super_admin"]), async (req2, res) => {
+router72.use("/admin", authMiddleware);
+router72.use("/admin", adminLandingRateLimit);
+router72.get("/admin/list", requireRole2(["admin", "super_admin"]), async (req2, res) => {
   try {
     const organizationId = req2.user?.organizationId;
     if (!organizationId) {
@@ -56796,7 +62088,7 @@ router67.get("/admin/list", requireRole2(["admin", "super_admin"]), async (req2,
     res.status(500).json({ success: false, message: "Erreur lors de la r\xE9cup\xE9ration des landing pages" });
   }
 });
-router67.get("/", authMiddleware, adminLandingRateLimit, requireRole2(["admin", "super_admin"]), async (req2, res) => {
+router72.get("/", authMiddleware, adminLandingRateLimit, requireRole2(["admin", "super_admin"]), async (req2, res) => {
   try {
     const organizationId = req2.user?.organizationId;
     if (!organizationId) return res.status(400).json({ success: false, message: "Organization ID manquant" });
@@ -56838,7 +62130,7 @@ router67.get("/", authMiddleware, adminLandingRateLimit, requireRole2(["admin", 
     res.status(500).json({ success: false, message: "Erreur lors de la r\xE9cup\xE9ration des landing pages" });
   }
 });
-router67.get("/stats", authMiddleware, adminLandingRateLimit, requireRole2(["admin", "super_admin"]), async (req2, res) => {
+router72.get("/stats", authMiddleware, adminLandingRateLimit, requireRole2(["admin", "super_admin"]), async (req2, res) => {
   try {
     const organizationId = req2.user?.organizationId;
     if (!organizationId) return res.status(400).json({ success: false, message: "Organization ID manquant" });
@@ -56856,7 +62148,7 @@ router67.get("/stats", authMiddleware, adminLandingRateLimit, requireRole2(["adm
     res.status(500).json({ success: false, message: "Erreur lors de la r\xE9cup\xE9ration des statistiques" });
   }
 });
-router67.get("/stats/timeseries", authMiddleware, adminLandingRateLimit, requireRole2(["admin", "super_admin"]), async (req2, res) => {
+router72.get("/stats/timeseries", authMiddleware, adminLandingRateLimit, requireRole2(["admin", "super_admin"]), async (req2, res) => {
   try {
     const organizationId = req2.user?.organizationId;
     if (!organizationId) return res.status(400).json({ success: false, message: "Organization ID manquant" });
@@ -56891,7 +62183,7 @@ router67.get("/stats/timeseries", authMiddleware, adminLandingRateLimit, require
     res.status(500).json({ success: false, message: "Erreur s\xE9ries temporelles landing" });
   }
 });
-router67.post("/", authMiddleware, adminLandingRateLimit, requireRole2(["admin", "super_admin"]), async (req2, res) => {
+router72.post("/", authMiddleware, adminLandingRateLimit, requireRole2(["admin", "super_admin"]), async (req2, res) => {
   try {
     const organizationId = req2.user?.organizationId;
     if (!organizationId) return res.status(400).json({ success: false, message: "Organization ID manquant" });
@@ -56914,7 +62206,7 @@ router67.post("/", authMiddleware, adminLandingRateLimit, requireRole2(["admin",
     res.status(500).json({ success: false, message: "Erreur lors de la cr\xE9ation" });
   }
 });
-router67.put("/:id", authMiddleware, adminLandingRateLimit, requireRole2(["admin", "super_admin"]), async (req2, res) => {
+router72.put("/:id", authMiddleware, adminLandingRateLimit, requireRole2(["admin", "super_admin"]), async (req2, res) => {
   try {
     const { id } = req2.params;
     const organizationId = req2.user?.organizationId;
@@ -56938,7 +62230,7 @@ router67.put("/:id", authMiddleware, adminLandingRateLimit, requireRole2(["admin
     res.status(500).json({ success: false, message: "Erreur lors de la mise \xE0 jour" });
   }
 });
-router67.delete("/:id", authMiddleware, adminLandingRateLimit, requireRole2(["admin", "super_admin"]), async (req2, res) => {
+router72.delete("/:id", authMiddleware, adminLandingRateLimit, requireRole2(["admin", "super_admin"]), async (req2, res) => {
   try {
     const { id } = req2.params;
     const organizationId = req2.user?.organizationId;
@@ -56951,7 +62243,7 @@ router67.delete("/:id", authMiddleware, adminLandingRateLimit, requireRole2(["ad
     res.status(500).json({ success: false, message: "Erreur lors de la suppression" });
   }
 });
-router67.patch("/:id/publish", authMiddleware, adminLandingRateLimit, requireRole2(["admin", "super_admin"]), async (req2, res) => {
+router72.patch("/:id/publish", authMiddleware, adminLandingRateLimit, requireRole2(["admin", "super_admin"]), async (req2, res) => {
   try {
     const { id } = req2.params;
     const { publish } = req2.body;
@@ -56967,7 +62259,7 @@ router67.patch("/:id/publish", authMiddleware, adminLandingRateLimit, requireRol
     res.status(500).json({ success: false, message: "Erreur lors de la publication" });
   }
 });
-router67.get("/admin/:id", requireRole2(["admin", "super_admin"]), async (req2, res) => {
+router72.get("/admin/:id", requireRole2(["admin", "super_admin"]), async (req2, res) => {
   try {
     const { id } = req2.params;
     const organizationId = req2.user?.organizationId;
@@ -57007,7 +62299,7 @@ router67.get("/admin/:id", requireRole2(["admin", "super_admin"]), async (req2, 
     res.status(500).json({ success: false, message: "Erreur lors de la r\xE9cup\xE9ration du d\xE9tail" });
   }
 });
-router67.post("/:id/duplicate", authMiddleware, adminLandingRateLimit, requireRole2(["admin", "super_admin"]), async (req2, res) => {
+router72.post("/:id/duplicate", authMiddleware, adminLandingRateLimit, requireRole2(["admin", "super_admin"]), async (req2, res) => {
   try {
     const { id } = req2.params;
     const organizationId = req2.user?.organizationId;
@@ -57033,7 +62325,7 @@ router67.post("/:id/duplicate", authMiddleware, adminLandingRateLimit, requireRo
     res.status(500).json({ success: false, message: "Erreur lors de la duplication" });
   }
 });
-router67.post("/:id/snapshot", authMiddleware, adminLandingRateLimit, requireRole2(["admin", "super_admin"]), async (req2, res) => {
+router72.post("/:id/snapshot", authMiddleware, adminLandingRateLimit, requireRole2(["admin", "super_admin"]), async (req2, res) => {
   try {
     const { id } = req2.params;
     const { label } = req2.body;
@@ -57062,7 +62354,7 @@ router67.post("/:id/snapshot", authMiddleware, adminLandingRateLimit, requireRol
     res.status(500).json({ success: false, message: "Erreur lors de la cr\xE9ation du snapshot" });
   }
 });
-router67.get("/:id/versions", authMiddleware, adminLandingRateLimit, requireRole2(["admin", "super_admin"]), async (req2, res) => {
+router72.get("/:id/versions", authMiddleware, adminLandingRateLimit, requireRole2(["admin", "super_admin"]), async (req2, res) => {
   try {
     const { id } = req2.params;
     const organizationId = req2.user?.organizationId;
@@ -57084,7 +62376,7 @@ router67.get("/:id/versions", authMiddleware, adminLandingRateLimit, requireRole
     res.status(500).json({ success: false, message: "Erreur lors de la r\xE9cup\xE9ration des versions" });
   }
 });
-router67.post("/:id/restore", authMiddleware, adminLandingRateLimit, requireRole2(["admin", "super_admin"]), async (req2, res) => {
+router72.post("/:id/restore", authMiddleware, adminLandingRateLimit, requireRole2(["admin", "super_admin"]), async (req2, res) => {
   try {
     const { id } = req2.params;
     const { snapshotId } = req2.body;
@@ -57110,13 +62402,13 @@ router67.post("/:id/restore", authMiddleware, adminLandingRateLimit, requireRole
     res.status(500).json({ success: false, message: "Erreur lors de la restauration" });
   }
 });
-var landingPages_default = router67;
+var landingPages_default = router72;
 
 // src/routes/yandex-mail.ts
-var import_express69 = require("express");
+var import_express74 = require("express");
 
 // src/services/YandexMailService.ts
-var import_nodemailer = __toESM(require("nodemailer"), 1);
+var import_nodemailer2 = __toESM(require("nodemailer"), 1);
 var import_imap = __toESM(require("imap"), 1);
 var import_mailparser = require("mailparser");
 var YandexMailService = class {
@@ -57125,7 +62417,7 @@ var YandexMailService = class {
   userEmail;
   constructor(emailAddress, password) {
     this.userEmail = emailAddress;
-    this.smtpTransporter = import_nodemailer.default.createTransport({
+    this.smtpTransporter = import_nodemailer2.default.createTransport({
       host: "smtp.yandex.com",
       port: 465,
       secure: true,
@@ -57337,7 +62629,7 @@ var YandexMailService = class {
 // src/routes/yandex-mail.ts
 init_database();
 init_crypto();
-var router68 = (0, import_express69.Router)();
+var router73 = (0, import_express74.Router)();
 async function getYandexServiceForUser(userId) {
   const emailAccount = await db.emailAccount.findUnique({
     where: { userId }
@@ -57352,7 +62644,7 @@ async function getYandexServiceForUser(userId) {
   const service = new YandexMailService(emailAccount.emailAddress, decryptedPassword);
   return { service, emailAddress: emailAccount.emailAddress };
 }
-router68.post("/setup", authMiddleware, async (req2, res) => {
+router73.post("/setup", authMiddleware, async (req2, res) => {
   if (!req2.user?.userId) {
     return res.status(401).json({ error: "Authentification requise" });
   }
@@ -57398,7 +62690,7 @@ router68.post("/setup", authMiddleware, async (req2, res) => {
     });
   }
 });
-router68.post("/sync", authMiddleware, async (req2, res) => {
+router73.post("/sync", authMiddleware, async (req2, res) => {
   if (!req2.user?.userId) {
     return res.status(401).json({ error: "Authentification requise" });
   }
@@ -57421,7 +62713,7 @@ router68.post("/sync", authMiddleware, async (req2, res) => {
     });
   }
 });
-router68.post("/send", authMiddleware, async (req2, res) => {
+router73.post("/send", authMiddleware, async (req2, res) => {
   if (!req2.user?.userId) {
     return res.status(401).json({ error: "Authentification requise" });
   }
@@ -57459,7 +62751,7 @@ router68.post("/send", authMiddleware, async (req2, res) => {
     });
   }
 });
-router68.post("/test", authMiddleware, async (req2, res) => {
+router73.post("/test", authMiddleware, async (req2, res) => {
   if (!req2.user?.userId) {
     return res.status(401).json({ error: "Authentification requise" });
   }
@@ -57481,7 +62773,7 @@ router68.post("/test", authMiddleware, async (req2, res) => {
     });
   }
 });
-router68.get("/emails", authMiddleware, async (req2, res) => {
+router73.get("/emails", authMiddleware, async (req2, res) => {
   if (!req2.user?.userId) {
     return res.status(401).json({ error: "Authentification requise" });
   }
@@ -57566,7 +62858,7 @@ router68.get("/emails", authMiddleware, async (req2, res) => {
     });
   }
 });
-router68.get("/emails/:id", authMiddleware, async (req2, res) => {
+router73.get("/emails/:id", authMiddleware, async (req2, res) => {
   if (!req2.user?.userId) {
     return res.status(401).json({ error: "Authentification requise" });
   }
@@ -57607,7 +62899,7 @@ router68.get("/emails/:id", authMiddleware, async (req2, res) => {
     });
   }
 });
-router68.delete("/emails/:id", authMiddleware, async (req2, res) => {
+router73.delete("/emails/:id", authMiddleware, async (req2, res) => {
   if (!req2.user?.userId) {
     return res.status(401).json({ error: "Authentification requise" });
   }
@@ -57635,7 +62927,7 @@ router68.delete("/emails/:id", authMiddleware, async (req2, res) => {
     });
   }
 });
-router68.post("/emails/:id/star", authMiddleware, async (req2, res) => {
+router73.post("/emails/:id/star", authMiddleware, async (req2, res) => {
   if (!req2.user?.userId) {
     return res.status(401).json({ error: "Authentification requise" });
   }
@@ -57663,7 +62955,7 @@ router68.post("/emails/:id/star", authMiddleware, async (req2, res) => {
     });
   }
 });
-router68.get("/folders", authMiddleware, async (req2, res) => {
+router73.get("/folders", authMiddleware, async (req2, res) => {
   if (!req2.user?.userId) {
     return res.status(401).json({ error: "Authentification requise" });
   }
@@ -57693,13 +62985,13 @@ router68.get("/folders", authMiddleware, async (req2, res) => {
     });
   }
 });
-var yandex_mail_default = router68;
+var yandex_mail_default = router73;
 
 // src/routes/mail-provider.ts
-var import_express70 = require("express");
+var import_express75 = require("express");
 init_database();
-var router69 = (0, import_express70.Router)();
-router69.get("/provider", authMiddleware, async (req2, res) => {
+var router74 = (0, import_express75.Router)();
+router74.get("/provider", authMiddleware, async (req2, res) => {
   try {
     const userId = req2.user?.userId;
     if (!userId) {
@@ -57747,13 +63039,13 @@ router69.get("/provider", authMiddleware, async (req2, res) => {
     });
   }
 });
-var mail_provider_default = router69;
+var mail_provider_default = router74;
 
 // src/routes/campaignAnalytics.ts
-var import_express71 = require("express");
+var import_express76 = require("express");
 init_database();
 var import_express_rate_limit11 = __toESM(require("express-rate-limit"), 1);
-var router70 = (0, import_express71.Router)();
+var router75 = (0, import_express76.Router)();
 var prisma37 = db;
 var campaignAnalyticsRateLimit = (0, import_express_rate_limit11.default)({
   windowMs: 60 * 1e3,
@@ -57762,9 +63054,9 @@ var campaignAnalyticsRateLimit = (0, import_express_rate_limit11.default)({
   // 50 requêtes par minute
   message: { success: false, message: "Trop de requ\xEAtes campaign analytics" }
 });
-router70.use(authMiddleware);
-router70.use(campaignAnalyticsRateLimit);
-router70.get("/dashboard", requireRole2(["admin", "super_admin"]), async (req2, res) => {
+router75.use(authMiddleware);
+router75.use(campaignAnalyticsRateLimit);
+router75.get("/dashboard", requireRole2(["admin", "super_admin"]), async (req2, res) => {
   try {
     const organizationId = req2.user?.organizationId;
     if (!organizationId) {
@@ -57892,7 +63184,7 @@ router70.get("/dashboard", requireRole2(["admin", "super_admin"]), async (req2, 
     });
   }
 });
-router70.get("/campaign/:id", requireRole2(["admin", "super_admin"]), async (req2, res) => {
+router75.get("/campaign/:id", requireRole2(["admin", "super_admin"]), async (req2, res) => {
   try {
     const { id } = req2.params;
     const organizationId = req2.user?.organizationId;
@@ -58064,7 +63356,7 @@ router70.get("/campaign/:id", requireRole2(["admin", "super_admin"]), async (req
     });
   }
 });
-router70.get("/ai-insights", requireRole2(["admin", "super_admin"]), async (req2, res) => {
+router75.get("/ai-insights", requireRole2(["admin", "super_admin"]), async (req2, res) => {
   try {
     const organizationId = req2.user?.organizationId;
     if (!organizationId) {
@@ -58169,7 +63461,7 @@ router70.get("/ai-insights", requireRole2(["admin", "super_admin"]), async (req2
     });
   }
 });
-router70.get("/export", requireRole2(["admin", "super_admin"]), async (req2, res) => {
+router75.get("/export", requireRole2(["admin", "super_admin"]), async (req2, res) => {
   try {
     const organizationId = req2.user?.organizationId;
     if (!organizationId) {
@@ -58248,22 +63540,22 @@ router70.get("/export", requireRole2(["admin", "super_admin"]), async (req2, res
     });
   }
 });
-var campaignAnalytics_default = router70;
+var campaignAnalytics_default = router75;
 
 // src/routes/dispatch.ts
-var import_express72 = require("express");
+var import_express77 = require("express");
 var import_express_rate_limit12 = __toESM(require("express-rate-limit"), 1);
 init_database();
-var router71 = (0, import_express72.Router)();
+var router76 = (0, import_express77.Router)();
 var prisma38 = db;
 var dispatchRateLimit = (0, import_express_rate_limit12.default)({
   windowMs: 60 * 1e3,
   max: 60,
   message: { success: false, message: "Trop de requ\xEAtes dispatch" }
 });
-router71.use(authMiddleware);
-router71.use(dispatchRateLimit);
-router71.get("/rules", requireRole2(["admin", "super_admin"]), async (req2, res) => {
+router76.use(authMiddleware);
+router76.use(dispatchRateLimit);
+router76.get("/rules", requireRole2(["admin", "super_admin"]), async (req2, res) => {
   try {
     const organizationId = req2.user?.organizationId;
     if (!organizationId) return res.status(400).json({ success: false, message: "Organization ID manquant" });
@@ -58277,7 +63569,7 @@ router71.get("/rules", requireRole2(["admin", "super_admin"]), async (req2, res)
     res.status(500).json({ success: false, message: "Erreur lors de la r\xE9cup\xE9ration des r\xE8gles" });
   }
 });
-router71.post("/rules", requireRole2(["admin", "super_admin"]), async (req2, res) => {
+router76.post("/rules", requireRole2(["admin", "super_admin"]), async (req2, res) => {
   try {
     const organizationId = req2.user?.organizationId;
     if (!organizationId) return res.status(400).json({ success: false, message: "Organization ID manquant" });
@@ -58290,7 +63582,7 @@ router71.post("/rules", requireRole2(["admin", "super_admin"]), async (req2, res
     res.status(500).json({ success: false, message: "Erreur lors de la cr\xE9ation de la r\xE8gle" });
   }
 });
-router71.put("/rules/:id", requireRole2(["admin", "super_admin"]), async (req2, res) => {
+router76.put("/rules/:id", requireRole2(["admin", "super_admin"]), async (req2, res) => {
   try {
     const { id } = req2.params;
     const organizationId = req2.user?.organizationId;
@@ -58305,7 +63597,7 @@ router71.put("/rules/:id", requireRole2(["admin", "super_admin"]), async (req2, 
     res.status(500).json({ success: false, message: "Erreur lors de la mise \xE0 jour de la r\xE8gle" });
   }
 });
-router71.delete("/rules/:id", requireRole2(["admin", "super_admin"]), async (req2, res) => {
+router76.delete("/rules/:id", requireRole2(["admin", "super_admin"]), async (req2, res) => {
   try {
     const { id } = req2.params;
     const organizationId = req2.user?.organizationId;
@@ -58318,7 +63610,7 @@ router71.delete("/rules/:id", requireRole2(["admin", "super_admin"]), async (req
     res.status(500).json({ success: false, message: "Erreur lors de la suppression de la r\xE8gle" });
   }
 });
-router71.post("/simulate", requireRole2(["admin", "super_admin"]), async (req2, res) => {
+router76.post("/simulate", requireRole2(["admin", "super_admin"]), async (req2, res) => {
   try {
     const organizationId = req2.user?.organizationId;
     if (!organizationId) return res.status(400).json({ success: false, message: "Organization ID manquant" });
@@ -58346,19 +63638,19 @@ router71.post("/simulate", requireRole2(["admin", "super_admin"]), async (req2, 
     res.status(500).json({ success: false, message: "Erreur lors de la simulation" });
   }
 });
-var dispatch_default = router71;
+var dispatch_default = router76;
 
 // src/routes/integrationsStatus.ts
-var import_express73 = require("express");
-var import_crypto22 = require("crypto");
+var import_express78 = require("express");
+var import_crypto25 = require("crypto");
 var import_express_rate_limit13 = __toESM(require("express-rate-limit"), 1);
 init_database();
-var router72 = (0, import_express73.Router)();
+var router77 = (0, import_express78.Router)();
 var prisma39 = db;
 var rl = (0, import_express_rate_limit13.default)({ windowMs: 60 * 1e3, max: 60 });
-router72.use(authMiddleware);
-router72.use(rl);
-router72.get("/status", requireRole2(["admin", "super_admin"]), async (req2, res) => {
+router77.use(authMiddleware);
+router77.use(rl);
+router77.get("/status", requireRole2(["admin", "super_admin"]), async (req2, res) => {
   try {
     const organizationId = req2.user?.organizationId;
     if (!organizationId) return res.status(400).json({ success: false, message: "Organization ID manquant" });
@@ -58390,7 +63682,7 @@ router72.get("/status", requireRole2(["admin", "super_admin"]), async (req2, res
     res.status(500).json({ success: false, message: "Erreur lors de la r\xE9cup\xE9ration du statut des int\xE9grations" });
   }
 });
-router72.post("/ad-platform/connect", requireRole2(["admin", "super_admin"]), async (req2, res) => {
+router77.post("/ad-platform/connect", requireRole2(["admin", "super_admin"]), async (req2, res) => {
   try {
     const organizationId = req2.user?.organizationId;
     if (!organizationId) return res.status(400).json({ success: false, message: "Organization ID manquant" });
@@ -58413,7 +63705,7 @@ router72.post("/ad-platform/connect", requireRole2(["admin", "super_admin"]), as
     } else {
       rec = await prisma39.adPlatformIntegration.create({
         data: {
-          id: (0, import_crypto22.randomUUID)(),
+          id: (0, import_crypto25.randomUUID)(),
           organizationId,
           platform,
           name: name || platform,
@@ -58431,7 +63723,7 @@ router72.post("/ad-platform/connect", requireRole2(["admin", "super_admin"]), as
     res.status(500).json({ success: false, message: "Erreur connexion plateforme" });
   }
 });
-router72.post("/ad-platform/disconnect", requireRole2(["admin", "super_admin"]), async (req2, res) => {
+router77.post("/ad-platform/disconnect", requireRole2(["admin", "super_admin"]), async (req2, res) => {
   try {
     const organizationId = req2.user?.organizationId;
     if (!organizationId) return res.status(400).json({ success: false, message: "Organization ID manquant" });
@@ -58449,7 +63741,7 @@ router72.post("/ad-platform/disconnect", requireRole2(["admin", "super_admin"]),
     res.status(500).json({ success: false, message: "Erreur d\xE9connexion plateforme" });
   }
 });
-router72.post("/ad-platform/sync", requireRole2(["admin", "super_admin"]), async (req2, res) => {
+router77.post("/ad-platform/sync", requireRole2(["admin", "super_admin"]), async (req2, res) => {
   try {
     const organizationId = req2.user?.organizationId;
     if (!organizationId) return res.status(400).json({ success: false, message: "Organization ID manquant" });
@@ -58464,14 +63756,14 @@ router72.post("/ad-platform/sync", requireRole2(["admin", "super_admin"]), async
     res.status(500).json({ success: false, message: "Erreur lors de la synchronisation" });
   }
 });
-var integrationsStatus_default = router72;
+var integrationsStatus_default = router77;
 
 // src/routes/integrations.ts
-var import_express74 = require("express");
+var import_express79 = require("express");
 init_database();
 var import_axios3 = __toESM(require("axios"), 1);
 var import_googleapis9 = require("googleapis");
-var import_crypto23 = require("crypto");
+var import_crypto26 = require("crypto");
 init_googleConfig();
 
 // src/services/adPlatformService.ts
@@ -59239,7 +64531,7 @@ var EcommerceService = class {
 
 // src/routes/integrations.ts
 var prisma40 = db;
-var router73 = (0, import_express74.Router)();
+var router78 = (0, import_express79.Router)();
 var memCache = /* @__PURE__ */ new Map();
 function cacheGet(key2) {
   const it = memCache.get(key2);
@@ -59290,7 +64582,7 @@ function sanitizeClientValue(raw) {
 function fingerprintSecret(secret) {
   if (!secret) return null;
   try {
-    const hex = (0, import_crypto23.createHash)("sha256").update(secret).digest("hex");
+    const hex = (0, import_crypto26.createHash)("sha256").update(secret).digest("hex");
     return hex.slice(0, 12);
   } catch {
     return null;
@@ -59313,7 +64605,7 @@ function formatGoogleAdsCustomerId(raw) {
   if (!normalized) return void 0;
   return `${normalized.slice(0, 3)}-${normalized.slice(3, 6)}-${normalized.slice(6)}`;
 }
-router73.get("/", async (req2, res) => {
+router78.get("/", async (req2, res) => {
   const { code, state } = req2.query;
   if (code && state) {
     try {
@@ -59334,7 +64626,7 @@ router73.get("/", async (req2, res) => {
   }
   res.send("CRM API Server - Facebook OAuth Callback Handler");
 });
-router73.get("/callback", async (req2, res) => {
+router78.get("/callback", async (req2, res) => {
   const { code, state } = req2.query;
   if (code && state) {
     try {
@@ -59355,7 +64647,7 @@ router73.get("/callback", async (req2, res) => {
   }
   res.status(400).send("Callback invalide");
 });
-router73.get("/advertising/oauth/:platform/callback", async (req2, res) => {
+router78.get("/advertising/oauth/:platform/callback", async (req2, res) => {
   res.setHeader("ngrok-skip-browser-warning", "true");
   res.setHeader("User-Agent", "CRM-OAuth-Handler");
   try {
@@ -59390,7 +64682,7 @@ router73.get("/advertising/oauth/:platform/callback", async (req2, res) => {
       }
       const created = await prisma40.adPlatformIntegration.create({
         data: {
-          id: (0, import_crypto23.randomUUID)(),
+          id: (0, import_crypto26.randomUUID)(),
           organizationId,
           platform,
           name: data.name || platform,
@@ -59471,7 +64763,7 @@ router73.get("/advertising/oauth/:platform/callback", async (req2, res) => {
     res.status(500).send("OAuth callback error");
   }
 });
-router73.get("/advertising/oauth/callback-close.js", (req2, res) => {
+router78.get("/advertising/oauth/callback-close.js", (req2, res) => {
   const platform = req2.query.platform || "google_ads";
   const js = `(() => {
   const payload = { type: 'ads_oauth_done', platform: ${JSON.stringify(platform)}, ts: Date.now() };
@@ -59494,7 +64786,7 @@ router73.get("/advertising/oauth/callback-close.js", (req2, res) => {
   res.setHeader("Content-Type", "application/javascript; charset=utf-8");
   res.send(js);
 });
-router73.use(authMiddleware, impersonationMiddleware);
+router78.use(authMiddleware, impersonationMiddleware);
 var getEffectiveOrgId = (req2) => {
   const headerOrgId = req2.headers["x-organization-id"];
   if (typeof headerOrgId === "string" && headerOrgId !== "all") return headerOrgId;
@@ -59503,7 +64795,7 @@ var getEffectiveOrgId = (req2) => {
   const user = req2.user;
   return user?.organizationId;
 };
-router73.get("/", async (req2, res) => {
+router78.get("/", async (req2, res) => {
   const user = req2.user;
   const organizationId = getEffectiveOrgId(req2);
   if (!user) {
@@ -59527,7 +64819,7 @@ router73.get("/", async (req2, res) => {
     res.status(500).json({ success: false, message: "Failed to get integrations" });
   }
 });
-router73.post("/", async (req2, res) => {
+router78.post("/", async (req2, res) => {
   const user = req2.user;
   const organizationId = getEffectiveOrgId(req2);
   const { type, config, enabled } = req2.body;
@@ -59570,7 +64862,7 @@ router73.post("/", async (req2, res) => {
     res.status(500).json({ success: false, message: "Failed to upsert integration" });
   }
 });
-router73.delete("/:type", async (req2, res) => {
+router78.delete("/:type", async (req2, res) => {
   const user = req2.user;
   const organizationId = getEffectiveOrgId(req2);
   const { type } = req2.params;
@@ -59601,13 +64893,13 @@ router73.delete("/:type", async (req2, res) => {
     res.status(500).json({ success: false, message: "Failed to delete integration" });
   }
 });
-router73.get("/advertising/platforms", (req2, res) => {
+router78.get("/advertising/platforms", (req2, res) => {
   res.json({
     success: true,
     platforms: Object.values(AD_PLATFORMS)
   });
 });
-router73.get("/advertising/env-check", (_req, res) => {
+router78.get("/advertising/env-check", (_req, res) => {
   const backendUrl = process.env.BACKEND_URL;
   const googleClientId = sanitizeClientValue(process.env.GOOGLE_ADS_CLIENT_ID);
   const googleClientSecret = sanitizeClientValue(process.env.GOOGLE_ADS_CLIENT_SECRET);
@@ -59730,7 +65022,7 @@ router73.get("/advertising/env-check", (_req, res) => {
     details
   });
 });
-router73.get("/advertising", async (req2, res) => {
+router78.get("/advertising", async (req2, res) => {
   try {
     const organizationId = getEffectiveOrgId(req2);
     if (!organizationId) {
@@ -59746,7 +65038,7 @@ router73.get("/advertising", async (req2, res) => {
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
-router73.get("/advertising/oauth/:platform/url", async (req2, res) => {
+router78.get("/advertising/oauth/:platform/url", async (req2, res) => {
   try {
     const platform = req2.params.platform;
     const user = req2.user;
@@ -59825,7 +65117,7 @@ router73.get("/advertising/oauth/:platform/url", async (req2, res) => {
     res.status(500).json({ success: false, message: "Erreur g\xE9n\xE9ration URL OAuth" });
   }
 });
-router73.get("/advertising/oauth/google_ads/debug", async (req2, res) => {
+router78.get("/advertising/oauth/google_ads/debug", async (req2, res) => {
   try {
     const user = req2.user;
     const organizationId = getEffectiveOrgId(req2);
@@ -59879,7 +65171,7 @@ router73.get("/advertising/oauth/google_ads/debug", async (req2, res) => {
     res.status(500).json({ success: false, message: "Erreur serveur (debug OAuth)" });
   }
 });
-router73.get("/advertising/oauth/:platform/demo", (req2, res) => {
+router78.get("/advertising/oauth/:platform/demo", (req2, res) => {
   const platform = req2.params.platform;
   const missing = String(req2.query.missing || "").split(",").filter(Boolean);
   const platformLabel = platform === "google_ads" ? "Google Ads" : platform === "meta_ads" ? "Meta Ads" : platform;
@@ -59920,7 +65212,7 @@ router73.get("/advertising/oauth/:platform/demo", (req2, res) => {
     </body>
   </html>`);
 });
-router73.get("/advertising/:platform/accounts", async (req2, res) => {
+router78.get("/advertising/:platform/accounts", async (req2, res) => {
   try {
     const platform = req2.params.platform;
     const organizationId = getEffectiveOrgId(req2);
@@ -60589,7 +65881,7 @@ router73.get("/advertising/:platform/accounts", async (req2, res) => {
     res.status(500).json({ success: false, message: "Erreur listing comptes" });
   }
 });
-router73.get("/advertising/google_ads/test/customers-get", async (req2, res) => {
+router78.get("/advertising/google_ads/test/customers-get", async (req2, res) => {
   try {
     const organizationId = getEffectiveOrgId(req2);
     if (!organizationId) return res.status(400).json({ success: false, message: "Organisation requise" });
@@ -60710,7 +66002,7 @@ router73.get("/advertising/google_ads/test/customers-get", async (req2, res) => 
     res.status(500).json({ success: false, message: "Erreur test customers.get" });
   }
 });
-router73.delete("/advertising/:platform", async (req2, res) => {
+router78.delete("/advertising/:platform", async (req2, res) => {
   const user = req2.user;
   const organizationId = getEffectiveOrgId(req2);
   const platform = req2.params.platform;
@@ -60739,7 +66031,7 @@ router73.delete("/advertising/:platform", async (req2, res) => {
     res.status(500).json({ success: false, message: "Failed to delete integration" });
   }
 });
-router73.post("/advertising/:platform/select-account", async (req2, res) => {
+router78.post("/advertising/:platform/select-account", async (req2, res) => {
   try {
     const platform = req2.params.platform;
     const organizationId = getEffectiveOrgId(req2);
@@ -60767,7 +66059,7 @@ router73.post("/advertising/:platform/select-account", async (req2, res) => {
     res.status(500).json({ success: false, message: "Erreur s\xE9lection compte" });
   }
 });
-router73.post("/advertising", async (req2, res) => {
+router78.post("/advertising", async (req2, res) => {
   try {
     const organizationId = getEffectiveOrgId(req2);
     if (!organizationId) {
@@ -60800,13 +66092,13 @@ router73.post("/advertising", async (req2, res) => {
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
-router73.get("/ecommerce/platforms", (req2, res) => {
+router78.get("/ecommerce/platforms", (req2, res) => {
   res.json({
     success: true,
     platforms: Object.values(ECOMMERCE_PLATFORMS)
   });
 });
-router73.get("/ecommerce", async (req2, res) => {
+router78.get("/ecommerce", async (req2, res) => {
   try {
     const organizationId = getEffectiveOrgId(req2);
     if (!organizationId) {
@@ -60822,7 +66114,7 @@ router73.get("/ecommerce", async (req2, res) => {
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
-router73.post("/ecommerce", async (req2, res) => {
+router78.post("/ecommerce", async (req2, res) => {
   try {
     const organizationId = getEffectiveOrgId(req2);
     if (!organizationId) {
@@ -60856,14 +66148,14 @@ router73.post("/ecommerce", async (req2, res) => {
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
-var integrations_default = router73;
+var integrations_default = router78;
 
 // src/routes/publicLeads.ts
-var import_express75 = require("express");
+var import_express80 = require("express");
 var import_express_rate_limit14 = require("express-rate-limit");
 var import_express_validator = require("express-validator");
 init_database();
-var router74 = (0, import_express75.Router)();
+var router79 = (0, import_express80.Router)();
 var prisma41 = db;
 var geminiService2 = getGeminiService();
 var publicRateLimit = (0, import_express_rate_limit14.rateLimit)({
@@ -60941,7 +66233,7 @@ async function calculateLeadScore(leadData) {
     return 50;
   }
 }
-router74.get("/health", (req2, res) => {
+router79.get("/health", (req2, res) => {
   res.json({
     status: "healthy",
     service: "Devis1Minute Public API",
@@ -60954,7 +66246,7 @@ router74.get("/health", (req2, res) => {
     }
   });
 });
-router74.get("/stats", publicRateLimit, async (req2, res) => {
+router79.get("/stats", publicRateLimit, async (req2, res) => {
   try {
     const stats = await prisma41.$transaction(async (tx) => {
       const totalLeads = await tx.lead.count();
@@ -60990,7 +66282,7 @@ router74.get("/stats", publicRateLimit, async (req2, res) => {
     });
   }
 });
-router74.get("/categories", publicRateLimit, (req2, res) => {
+router79.get("/categories", publicRateLimit, (req2, res) => {
   const categories = [
     {
       id: "website",
@@ -61043,7 +66335,7 @@ router74.get("/categories", publicRateLimit, (req2, res) => {
   ];
   res.json(categories);
 });
-router74.post("/leads", leadCreationLimit, validateLead, async (req2, res) => {
+router79.post("/leads", leadCreationLimit, validateLead, async (req2, res) => {
   try {
     const errors = (0, import_express_validator.validationResult)(req2);
     if (!errors.isEmpty()) {
@@ -61128,7 +66420,7 @@ router74.post("/leads", leadCreationLimit, validateLead, async (req2, res) => {
     });
   }
 });
-router74.get("/lead-status/:id", publicRateLimit, async (req2, res) => {
+router79.get("/lead-status/:id", publicRateLimit, async (req2, res) => {
   try {
     const { id } = req2.params;
     if (!id || typeof id !== "string") {
@@ -61176,18 +66468,18 @@ router74.get("/lead-status/:id", publicRateLimit, async (req2, res) => {
     });
   }
 });
-var publicLeads_default = router74;
+var publicLeads_default = router79;
 
 // src/routes/documents.ts
-var import_express76 = require("express");
+var import_express81 = require("express");
 init_database();
 var import_nanoid2 = require("nanoid");
 
 // src/services/documentPdfRenderer.ts
 var import_pdfkit2 = __toESM(require("pdfkit"), 1);
 var import_stream = require("stream");
-var path7 = __toESM(require("path"), 1);
-var fs8 = __toESM(require("fs"), 1);
+var path9 = __toESM(require("path"), 1);
+var fs10 = __toESM(require("fs"), 1);
 
 // src/services/textAlignmentUtils.ts
 function calculateVerticalCenterOffset(actualHeight, textHeight) {
@@ -61230,6 +66522,8 @@ var DocumentPdfRenderer = class {
   currentY;
   imageCache = /* @__PURE__ */ new Map();
   // Cache pour les images pré-chargées
+  emojiPngCache = /* @__PURE__ */ new Map();
+  // Cache emoji -> chemin PNG local
   scaleX = 1;
   scaleY = 1;
   scaleFactor = 1;
@@ -61263,7 +66557,7 @@ var DocumentPdfRenderer = class {
     });
     try {
       const dejavuPath = "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf";
-      if (fs8.existsSync(dejavuPath)) {
+      if (fs10.existsSync(dejavuPath)) {
         this.doc.registerFont("DejaVuSans", dejavuPath);
         this.unicodeFontName = "DejaVuSans";
       }
@@ -61391,6 +66685,78 @@ var DocumentPdfRenderer = class {
   /**
    * Pré-charge les images externes en parallèle
    */
+  /**
+   * Convertit un emoji en nom de fichier Twemoji (codepoints hex séparés par des tirets)
+   */
+  emojiToTwemojiHex(emoji) {
+    const codepoints = [];
+    for (const char of emoji) {
+      const cp = char.codePointAt(0);
+      if (cp && cp > 127 && cp !== 65039 && cp !== 8205 && cp !== 8203) {
+        codepoints.push(cp.toString(16));
+      }
+    }
+    return codepoints.join("-");
+  }
+  /**
+   * Pré-charge les images PNG Twemoji pour tous les emojis KPI utilisés dans le document.
+   * Les télécharge depuis le CDN et les met en cache local dans /tmp/emoji-cache/.
+   */
+  async preloadEmojiPngs() {
+    const emojis = /* @__PURE__ */ new Set();
+    for (const section of this.ctx.template.sections || []) {
+      const modules = section.config?.modules || [];
+      for (const mod of modules) {
+        const c = mod.config || {};
+        for (let i = 1; i <= 8; i++) {
+          const rawIcon = c[`kpi${i}_icon`] || "";
+          if (!rawIcon) continue;
+          const emoji = rawIcon.includes(":") ? rawIcon.split(":").slice(1).join(":") : rawIcon;
+          if (emoji.trim()) emojis.add(emoji.trim());
+        }
+        if (Array.isArray(c.kpis)) {
+          for (const kpi of c.kpis) {
+            if (kpi?.icon) emojis.add(kpi.icon.trim());
+          }
+        }
+      }
+    }
+    emojis.add("\u{1F3F7}\uFE0F");
+    if (emojis.size === 0) return;
+    const cacheDir = "/tmp/emoji-cache";
+    if (!fs10.existsSync(cacheDir)) fs10.mkdirSync(cacheDir, { recursive: true });
+    const downloadPromises = [...emojis].map(async (emoji) => {
+      const hex = this.emojiToTwemojiHex(emoji);
+      if (!hex) return;
+      const cachePath = path9.join(cacheDir, `${hex}.png`);
+      if (fs10.existsSync(cachePath) && fs10.statSync(cachePath).size > 100) {
+        this.emojiPngCache.set(emoji, cachePath);
+        return;
+      }
+      const urls = [
+        `https://cdn.jsdelivr.net/gh/twitter/twemoji@latest/assets/72x72/${hex}.png`,
+        `https://cdn.jsdelivr.net/gh/jdecked/twemoji@latest/assets/72x72/${hex}.png`
+      ];
+      for (const url of urls) {
+        try {
+          const resp = await fetch(url, { signal: AbortSignal.timeout(5e3) });
+          if (resp.ok) {
+            const buf = Buffer.from(await resp.arrayBuffer());
+            fs10.writeFileSync(cachePath, buf);
+            this.emojiPngCache.set(emoji, cachePath);
+            console.log(`\u{1F4C4} [PDF] Emoji ${emoji} \u2192 ${hex}.png (${buf.length}B)`);
+            return;
+          }
+        } catch {
+        }
+      }
+      console.warn(`\u{1F4C4} [PDF] Emoji non trouv\xE9 sur Twemoji: ${emoji} (${hex})`);
+    });
+    await Promise.all(downloadPromises);
+    if (this.emojiPngCache.size > 0) {
+      console.log(`\u{1F4C4} [PDF] ${this.emojiPngCache.size} emojis KPI pr\xE9-charg\xE9s`);
+    }
+  }
   async preloadImages() {
     const urls = this.collectImageUrls();
     if (urls.length === 0) return;
@@ -61421,6 +66787,7 @@ var DocumentPdfRenderer = class {
    */
   async render() {
     await this.preloadImages();
+    await this.preloadEmojiPngs();
     return new Promise((resolve2, reject) => {
       const chunks = [];
       const stream = new import_stream.PassThrough();
@@ -61835,7 +67202,7 @@ var DocumentPdfRenderer = class {
         effectiveConfig.text = conditionResult.content;
       }
     }
-    console.log(`\u{1F4C4} [PDF] Module ${moduleType}: PageBuilder(${position.x ?? 0},${position.y ?? 0}) -> PDF(${rect.x.toFixed(1)},${rect.y.toFixed(1)}) size ${rect.width.toFixed(1)}x${rect.height.toFixed(1)}`);
+    console.log(`\u{1F4C4} [PDF] \u2605\u2605\u2605 FRESH CODE \u2605\u2605\u2605 Module ${moduleType}: PageBuilder(${position.x ?? 0},${position.y ?? 0}) -> PDF(${rect.x.toFixed(1)},${rect.y.toFixed(1)}) size ${rect.width.toFixed(1)}x${rect.height.toFixed(1)}`);
     this.doc.save();
     try {
       switch (moduleType) {
@@ -61891,6 +67258,9 @@ var DocumentPdfRenderer = class {
           break;
         case "CONTACT_INFO":
           this.renderModuleContactInfo(effectiveConfig, rect.x, rect.y, rect.width, rect.height);
+          break;
+        case "KPI_BANNER":
+          this.renderModuleKpiBanner(effectiveConfig, rect.x, rect.y, rect.width, rect.height);
           break;
         default:
           console.warn(`\u{1F4C4} [PDF] Module type inconnu: ${moduleType}`);
@@ -62065,8 +67435,8 @@ var DocumentPdfRenderer = class {
           this.renderImagePlaceholder(x, y, width, height, "Base64 vide");
         }
       } else if (imageUrl.startsWith("/uploads/") || imageUrl.startsWith("uploads/")) {
-        const localPath = path7.join(process.cwd(), "public", imageUrl);
-        if (fs8.existsSync(localPath)) {
+        const localPath = path9.join(process.cwd(), "public", imageUrl);
+        if (fs10.existsSync(localPath)) {
           this.doc.image(localPath, x, y, imageOptions);
         } else {
           console.warn(`\u{1F4C4} [PDF] Image locale non trouv\xE9e: ${localPath}`);
@@ -62120,9 +67490,9 @@ var DocumentPdfRenderer = class {
           }
           console.warn(`\u{1F4C4} [PDF] BACKGROUND: \u26A0\uFE0F pas de donn\xE9es base64`);
         } else if (imageUrl.startsWith("/uploads/") || imageUrl.startsWith("uploads/")) {
-          const localPath = path7.join(process.cwd(), "public", imageUrl);
-          if (fs8.existsSync(localPath)) {
-            this.drawBackgroundImage(fs8.readFileSync(localPath), x, y, width, height);
+          const localPath = path9.join(process.cwd(), "public", imageUrl);
+          if (fs10.existsSync(localPath)) {
+            this.drawBackgroundImage(fs10.readFileSync(localPath), x, y, width, height);
             return;
           }
           console.warn(`\u{1F4C4} [PDF] Image locale non trouv\xE9e: ${localPath}`);
@@ -62301,7 +67671,20 @@ var DocumentPdfRenderer = class {
       formulaResultsMap: this.ctx.formulaResultsMap || {}
     });
     if (hasRemise) {
-      this.doc.fontSize(this.scaleFontSize(10)).font("Helvetica").fillColor("#fa541c");
+      const remFs = this.scaleFontSize(10);
+      this.doc.fontSize(remFs).font("Helvetica-Bold").fillColor("#D9791F");
+      const remTextW = this.doc.widthOfString("Remise");
+      const remTextX = labelX + labelW - remTextW;
+      const tagS = remFs + 2;
+      const tagPng = this.emojiPngCache.get("\u{1F3F7}\uFE0F");
+      if (tagPng && fs10.existsSync(tagPng)) {
+        try {
+          this.doc.image(tagPng, remTextX - tagS - 3, currentY - 1, { width: tagS, height: tagS });
+        } catch (e) {
+          console.warn("PDF tag icon error:", e);
+        }
+      }
+      this.doc.fontSize(remFs).font("Helvetica-Bold").fillColor("#D9791F");
       this.doc.text("Remise", labelX, currentY, { width: labelW, align: "right" });
       this.doc.text(`- ${resolveAndFormat(config.remiseSource)}`, valX, currentY, { width: valW, align: "right" });
       currentY += 17;
@@ -62363,6 +67746,69 @@ var DocumentPdfRenderer = class {
     }
   }
   // ============================================================
+  // Icônes vectorielles partagées (header + footer)
+  // ============================================================
+  drawPinIcon(ix, iy, s, color) {
+    this.doc.save();
+    const cx = ix + s * 0.5;
+    const r = s * 0.3;
+    const headY = iy + s * 0.32;
+    const tipY = iy + s * 0.92;
+    this.doc.circle(cx, headY, r).fillColor(color).fill();
+    this.doc.moveTo(cx - r * 0.75, headY + r * 0.4).lineTo(cx, tipY).lineTo(cx + r * 0.75, headY + r * 0.4).closePath().fillColor(color).fill();
+    this.doc.circle(cx, headY, r * 0.35).fillColor("white").fill();
+    this.doc.restore();
+  }
+  drawPhoneIcon(ix, iy, s, color) {
+    this.doc.save();
+    const w = s * 0.5;
+    const h = s * 0.82;
+    const px = ix + (s - w) / 2;
+    const py = iy + (s - h) / 2;
+    this.doc.roundedRect(px, py, w, h, s * 0.08).fillColor(color).fill();
+    this.doc.fillColor("white");
+    this.doc.rect(px + w * 0.15, py + h * 0.13, w * 0.7, h * 0.58).fill();
+    this.doc.circle(px + w / 2, py + h * 0.87, w * 0.1).fill();
+    this.doc.restore();
+  }
+  drawEnvelopeIcon(ix, iy, s, color) {
+    this.doc.save();
+    const w = s * 0.88;
+    const h = s * 0.62;
+    const ex = ix + (s - w) / 2;
+    const ey = iy + (s - h) / 2;
+    this.doc.rect(ex, ey, w, h).fillColor(color).fill();
+    this.doc.moveTo(ex, ey).lineTo(ex + w / 2, ey + h * 0.55).lineTo(ex + w, ey).closePath().fillColor("white").fill();
+    this.doc.restore();
+  }
+  drawGlobeIcon(ix, iy, s, color) {
+    this.doc.save();
+    const cx = ix + s * 0.5;
+    const cy = iy + s * 0.5;
+    const r = s * 0.4;
+    this.doc.circle(cx, cy, r).lineWidth(s * 0.06).strokeColor(color).stroke();
+    this.doc.moveTo(cx - r, cy).lineTo(cx + r, cy).strokeColor(color).stroke();
+    this.doc.moveTo(cx, cy - r).lineTo(cx, cy + r).strokeColor(color).stroke();
+    this.doc.ellipse(cx, cy, r * 0.45, r).lineWidth(s * 0.05).strokeColor(color).stroke();
+    this.doc.restore();
+  }
+  drawIconWithText(drawFn, text, lineX, lineY, lineWidth, align, color, fontSize) {
+    const iconSize = fontSize + 2;
+    const gap = 4;
+    const textY = lineY + 1;
+    if (align === "left") {
+      drawFn(lineX, lineY - 1, iconSize, color);
+      this.doc.font("Helvetica").fontSize(fontSize).fillColor(color).text(text, lineX + iconSize + gap, textY, { width: lineWidth - iconSize - gap, lineBreak: false });
+    } else {
+      this.doc.font("Helvetica").fontSize(fontSize);
+      const textW = this.doc.widthOfString(text);
+      const totalW = iconSize + gap + textW;
+      const startX = lineX + lineWidth - totalW;
+      drawFn(startX, lineY - 1, iconSize, color);
+      this.doc.font("Helvetica").fontSize(fontSize).fillColor(color).text(text, startX + iconSize + gap, textY, { lineBreak: false });
+    }
+  }
+  // ============================================================
   // DOCUMENT_HEADER - En-tête avec logo entreprise et infos client
   // ============================================================
   renderModuleDocumentHeader(config, x, y, width, height) {
@@ -62371,13 +67817,14 @@ var DocumentPdfRenderer = class {
     const companyPhone = this.substituteVariables(config.companyPhone || "{org.phone}");
     const companyEmail = this.substituteVariables(config.companyEmail || "{org.email}");
     const companyTVA = this.substituteVariables(config.companyTVA || "{org.tva}");
-    const clientTitle = config.clientTitle || "CLIENT:";
     const clientName = this.substituteVariables(config.clientName || "{lead.firstName} {lead.lastName}");
     const clientCompany = this.substituteVariables(config.clientCompany || "{lead.company}");
     const clientAddress = this.substituteVariables(config.clientAddress || "{lead.address}");
     const clientEmail = this.substituteVariables(config.clientEmail || "{lead.email}");
-    const halfWidth = width / 2 - 20;
+    const clientPhone = this.substituteVariables(config.clientPhone || "{lead.phone}");
+    const clientTVA = this.substituteVariables(config.clientTVA || "{lead.tva}");
     let currentY = y;
+    let logoOffset = 0;
     if (config.showLogo !== false && config.logo) {
       try {
         const logoSize = config.logoSize || 60;
@@ -62388,47 +67835,58 @@ var DocumentPdfRenderer = class {
           const base64Data = logoData.split(",")[1];
           const buffer = Buffer.from(base64Data, "base64");
           this.doc.image(buffer, x, currentY, { fit: [maxLogoWidth, maxLogoHeight] });
+          logoOffset = maxLogoWidth + 10;
         }
       } catch (e) {
         console.warn("\u{1F4C4} [PDF] Impossible de charger le logo:", e);
       }
     }
-    if (config.showCompanyInfo !== false) {
-      const logoOffset = config.showLogo !== false && config.logo ? Math.min(config.logoSize || 60, width * 0.3) + 12 : 0;
-      this.doc.font("Helvetica-Bold").fontSize(this.scaleFontSize(14)).fillColor(this.theme.primaryColor || "#1890ff").text(companyName, x + logoOffset, currentY, { width: halfWidth - logoOffset });
-      currentY += 18;
-      if (companyPhone) {
-        this.doc.fontSize(this.scaleFontSize(9)).fillColor("#666666").text(`Tel: ${companyPhone}`, x + logoOffset, currentY, { width: halfWidth - logoOffset });
-        currentY += 12;
-      }
-      if (companyEmail) {
-        this.doc.fontSize(this.scaleFontSize(9)).fillColor("#666666").text(`Email: ${companyEmail}`, x + logoOffset, currentY, { width: halfWidth - logoOffset });
-        currentY += 12;
-      }
-      this.doc.font("Helvetica").fontSize(this.scaleFontSize(10)).fillColor("#555555").text(companyAddress, x + logoOffset, currentY, { width: halfWidth - logoOffset });
-      const addrHeight = this.doc.heightOfString(companyAddress, { width: halfWidth - logoOffset });
-      currentY += addrHeight + 4;
-      if (companyTVA) {
-        this.doc.fontSize(this.scaleFontSize(8)).fillColor("#888888").text(`TVA: ${companyTVA}`, x + logoOffset, currentY, { width: halfWidth - logoOffset });
-      }
+    const leftX = x + logoOffset;
+    const availWidth = width - logoOffset;
+    const halfWidth = availWidth / 2 - 16;
+    const rightX = leftX + halfWidth + 32;
+    const drawIconLine = (drawFn, text, lineX, lineY, lineWidth, align, color, fontSize) => {
+      this.drawIconWithText(drawFn, text, lineX, lineY, lineWidth, align, color, fontSize);
+    };
+    const labelFs = this.scaleFontSize(14);
+    const headerLabelColor = this.theme.primaryColor || "#1890ff";
+    this.doc.font("Helvetica-Bold").fontSize(labelFs).fillColor(headerLabelColor).text("SOCI\xC9T\xC9", leftX, currentY, { width: halfWidth, align: "left" });
+    this.doc.font("Helvetica-Bold").fontSize(labelFs).fillColor(headerLabelColor).text("CLIENT", rightX, currentY, { width: halfWidth, align: "right" });
+    currentY += labelFs + 4;
+    const nameFs = this.scaleFontSize(12);
+    this.doc.font("Helvetica-Bold").fontSize(nameFs).fillColor("#222222").text(companyName, leftX, currentY, { width: halfWidth, align: "left", lineBreak: false });
+    const clientDisplayName = clientCompany ? `${clientName} \u2014 ${clientCompany}` : clientName;
+    this.doc.font("Helvetica-Bold").fontSize(nameFs).fillColor("#222222").text(clientDisplayName, rightX, currentY, { width: halfWidth, align: "right", lineBreak: false });
+    currentY += nameFs + 4;
+    const infoFs = this.scaleFontSize(10);
+    const lineH = infoFs + 6;
+    if (companyAddress) {
+      drawIconLine(this.drawPinIcon.bind(this), companyAddress, leftX, currentY, halfWidth, "left", "#555555", infoFs);
     }
-    if (config.showClientInfo !== false) {
-      const clientX = x + halfWidth + 40;
-      let clientY = y;
-      this.doc.font("Helvetica").fontSize(this.scaleFontSize(9)).fillColor("#888888").text(clientTitle, clientX, clientY, { width: halfWidth, align: "right" });
-      clientY += 14;
-      this.doc.font("Helvetica-Bold").fontSize(this.scaleFontSize(12)).fillColor("#333333").text(clientName, clientX, clientY, { width: halfWidth, align: "right" });
-      clientY += 16;
-      if (clientCompany) {
-        this.doc.font("Helvetica").fontSize(this.scaleFontSize(11)).fillColor("#444444").text(clientCompany, clientX, clientY, { width: halfWidth, align: "right" });
-        clientY += 14;
-      }
-      this.doc.font("Helvetica").fontSize(this.scaleFontSize(10)).fillColor("#555555").text(clientAddress, clientX, clientY, { width: halfWidth, align: "right" });
-      const clientAddrHeight = this.doc.heightOfString(clientAddress, { width: halfWidth });
-      clientY += clientAddrHeight + 4;
-      if (clientEmail) {
-        this.doc.fontSize(this.scaleFontSize(9)).fillColor("#666666").text(`Email: ${clientEmail}`, clientX, clientY, { width: halfWidth, align: "right" });
-      }
+    if (clientAddress) {
+      drawIconLine(this.drawPinIcon.bind(this), clientAddress, rightX, currentY, halfWidth, "right", "#555555", infoFs);
+    }
+    if (companyAddress || clientAddress) currentY += lineH;
+    if (companyPhone) {
+      drawIconLine(this.drawPhoneIcon.bind(this), companyPhone, leftX, currentY, halfWidth, "left", "#666666", infoFs);
+    }
+    if (clientPhone) {
+      drawIconLine(this.drawPhoneIcon.bind(this), clientPhone, rightX, currentY, halfWidth, "right", "#666666", infoFs);
+    }
+    if (companyPhone || clientPhone) currentY += lineH;
+    if (companyEmail) {
+      drawIconLine(this.drawEnvelopeIcon.bind(this), companyEmail, leftX, currentY, halfWidth, "left", "#666666", infoFs);
+    }
+    if (clientEmail) {
+      drawIconLine(this.drawEnvelopeIcon.bind(this), clientEmail, rightX, currentY, halfWidth, "right", "#666666", infoFs);
+    }
+    if (companyEmail || clientEmail) currentY += lineH;
+    const tvaFs = this.scaleFontSize(9);
+    if (companyTVA) {
+      this.doc.font("Helvetica").fontSize(tvaFs).fillColor("#888888").text(`TVA: ${companyTVA}`, leftX, currentY, { width: halfWidth, align: "left", lineBreak: false });
+    }
+    if (clientTVA) {
+      this.doc.font("Helvetica").fontSize(tvaFs).fillColor("#888888").text(`TVA: ${clientTVA}`, rightX, currentY, { width: halfWidth, align: "right", lineBreak: false });
     }
     console.log(`\u{1F4C4} [PDF] DOCUMENT_HEADER rendu: company=${companyName}, client=${clientName}`);
   }
@@ -62465,6 +67923,7 @@ var DocumentPdfRenderer = class {
     const badgeGap = 12;
     if (layout === "inline") {
       let currentX = x;
+      const badgeBgColor = this.theme.primaryColor || "#1890ff";
       const drawBadge = (label, value) => {
         const text = `${label}${value ? ` ${value}` : ""}`;
         this.doc.font("Helvetica").fontSize(badgeFontSize);
@@ -62472,8 +67931,8 @@ var DocumentPdfRenderer = class {
         const badgeWidth = this.doc.widthOfString(text) + badgePaddingX * 2;
         const badgeHeight = textHeight + badgePaddingY * 2;
         const textY = currentY + (badgeHeight - textHeight) / 2;
-        this.doc.lineWidth(1).roundedRect(currentX, currentY, badgeWidth, badgeHeight, 4).fill("#f5f5f5").stroke("#e5e5e5");
-        this.doc.fillColor("#333333").font("Helvetica-Bold").fontSize(badgeFontSize).text(label, currentX + badgePaddingX, textY, { continued: true, lineBreak: false }).font("Helvetica").text(value ? ` ${value}` : "", { continued: false, lineBreak: false });
+        this.doc.roundedRect(currentX, currentY, badgeWidth, badgeHeight, 4).fill(badgeBgColor);
+        this.doc.fillColor("#ffffff").font("Helvetica-Bold").fontSize(badgeFontSize).text(label, currentX + badgePaddingX, textY, { continued: true, lineBreak: false }).font("Helvetica").text(value ? ` ${value}` : "", { continued: false, lineBreak: false });
         currentX += badgeWidth + badgeGap;
       };
       if (config.showReference !== false) {
@@ -62573,64 +68032,117 @@ var DocumentPdfRenderer = class {
       console.log(`\u{1F4C4} [PDF] DOCUMENT_FOOTER rendu (minimal): ${companyName}`);
       return;
     }
-    let currentY = y;
-    if (companyInfoText) {
-      const h1 = drawSingleLine(companyInfoText, currentY, { font: textFont, size: baseFontSize, color: "#666666", align: "center" });
-      if (h1) currentY += h1 + 4;
+    const bannerColor = this.theme.primaryColor || "#0d7377";
+    const textColor = "#ffffff";
+    const bannerPaddingH = 12;
+    const lineSpacing = 4;
+    let contentH = 0;
+    const line1H = baseFontSize + 2;
+    if (showCompanyInfo) contentH += line1H;
+    if (bankInfoText) {
+      if (contentH > 0) contentH += lineSpacing;
+      contentH += smallFontSize + 2;
+    }
+    if (config.showLegalMention && config.legalMention) {
+      if (contentH > 0) contentH += lineSpacing;
+      contentH += smallFontSize + 2;
+    }
+    const bannerH = Math.max(height || 40, contentH + 20);
+    this.doc.save();
+    this.doc.rect(x, y, width, bannerH).fill(bannerColor);
+    this.doc.restore();
+    const topPadding = (bannerH - contentH) / 2;
+    let currentY = y + topPadding;
+    if (showCompanyInfo) {
+      const iconSize = baseFontSize + 2;
+      const gap = 3;
+      const separatorText = "  |  ";
+      const segments = [];
+      if (companyName) segments.push({ drawFn: null, text: companyName });
+      if (phone) segments.push({ drawFn: this.drawPhoneIcon.bind(this), text: phone });
+      if (email) segments.push({ drawFn: this.drawEnvelopeIcon.bind(this), text: email });
+      if (website) segments.push({ drawFn: this.drawGlobeIcon.bind(this), text: website });
+      this.doc.font(textFont).fontSize(baseFontSize);
+      const sepW = this.doc.widthOfString(separatorText);
+      let totalW = 0;
+      for (let i = 0; i < segments.length; i++) {
+        const seg = segments[i];
+        if (seg.drawFn) totalW += iconSize + gap;
+        totalW += this.doc.widthOfString(seg.text);
+        if (i < segments.length - 1) totalW += sepW;
+      }
+      let drawX = x + (width - totalW) / 2;
+      for (let i = 0; i < segments.length; i++) {
+        const seg = segments[i];
+        if (seg.drawFn) {
+          seg.drawFn(drawX, currentY - 1, iconSize, textColor);
+          drawX += iconSize + gap;
+        }
+        this.doc.font(textFont).fontSize(baseFontSize).fillColor(textColor).text(seg.text, drawX, currentY, { lineBreak: false });
+        drawX += this.doc.widthOfString(seg.text);
+        if (i < segments.length - 1) {
+          this.doc.font(textFont).fontSize(baseFontSize).fillColor("rgba(255,255,255,0.6)").text(separatorText, drawX, currentY, { lineBreak: false });
+          drawX += sepW;
+        }
+      }
+      currentY += line1H + lineSpacing;
     }
     if (bankInfoText) {
-      const h2 = drawSingleLine(bankInfoText, currentY, { font: textFont, size: smallFontSize, color: "#888888", align: "center" });
-      if (h2) currentY += h2 + 4;
+      this.doc.font(textFont).fontSize(smallFontSize).fillColor(textColor).text(bankInfoText, x, currentY, { width, align: "center", lineBreak: false });
+      currentY += smallFontSize + 2 + lineSpacing;
     }
     if (config.showLegalMention && config.legalMention) {
       const legalText = String(config.legalMention);
-      const h3 = drawSingleLine(legalText, currentY, { font: "Helvetica-Oblique", size: smallFontSize, color: "#888888", align: "center" });
-      if (h3) currentY += h3 + 4;
+      this.doc.font("Helvetica-Oblique").fontSize(smallFontSize).fillColor("rgba(255,255,255,0.8)").text(legalText, x, currentY, { width, align: "center", lineBreak: false });
+      currentY += smallFontSize + 2 + lineSpacing;
     }
     if (pageNumberText) {
-      drawSingleLine(pageNumberText, currentY, { font: textFont, size: baseFontSize, color: "#888888", align: "center" });
+      const pageNumY = y + bannerH - baseFontSize - 6;
+      this.doc.font(textFont).fontSize(baseFontSize).fillColor(textColor).text(pageNumberText, x, pageNumY, { width: width - bannerPaddingH, align: "right", lineBreak: false });
     }
-    console.log(`\u{1F4C4} [PDF] DOCUMENT_FOOTER rendu: ${companyName}`);
+    console.log(`\u{1F4C4} [PDF] DOCUMENT_FOOTER rendu (green banner+icons): ${companyName}`);
   }
   // ============================================================
   // SIGNATURE_BLOCK - Zone de signatures
   // ============================================================
   renderModuleSignatureBlock(config, x, y, width, height) {
     const availableHeight = this.getAvailableHeightOnPage(y);
-    const minHeight = 120;
+    const minHeight = 60;
+    console.log(`\u{1F4C4} [PDF] SIGNATURE_BLOCK: y=${y.toFixed(0)}, height=${height}, availableHeight=${availableHeight.toFixed(0)}, minHeight=${minHeight}`);
     if (availableHeight < minHeight) {
       console.warn(`\u{1F4C4} [PDF] SIGNATURE_BLOCK: Pas assez de place (${availableHeight.toFixed(0)}px restants). Bloc masqu\xE9.`);
       return;
     }
     const isStacked = config.layout === "stacked";
     const gap = 16;
-    const actualHeight = Math.min(height || 140, availableHeight - 10);
+    const actualHeight = Math.max(height || 120, 100);
     const boxHeight = isStacked ? Math.floor((actualHeight - gap) / 2) : Math.floor(actualHeight);
     const boxWidth = isStacked ? width : (width - 24) / 2;
     const clientLabel = config.clientLabel || "Le Client";
     const companyLabel = config.companyLabel || "Pour l'entreprise";
+    const clipH = Math.max(height || actualHeight, actualHeight);
     this.doc.save();
-    this.doc.rect(x, y, width, height).clip();
+    this.doc.rect(x, y, width, clipH).clip();
     const renderBox = (label, boxX, boxY) => {
       this.doc.roundedRect(boxX, boxY, boxWidth, boxHeight, 6).stroke("#e8e8e8");
-      const padding = 20;
+      const padding = 16;
+      const innerW = boxWidth - padding * 2;
       const labelY = boxY + padding;
-      this.doc.font("Helvetica-Bold").fontSize(this.scaleFontSize(11)).fillColor("#333333").text(label, boxX + padding, labelY, { width: boxWidth - padding * 2 });
-      let currentY = labelY + 11 + 8;
-      const showDate = config.showDate !== false;
-      if (showDate) {
-        this.doc.font("Helvetica").fontSize(this.scaleFontSize(10)).fillColor("#666666").text("Date: ____/____/________", boxX + padding, currentY, { width: boxWidth - padding * 2 });
-        currentY += 12 + 16;
-      }
+      this.doc.font("Helvetica-Bold").fontSize(this.scaleFontSize(11)).fillColor("#333333").text(label, boxX + padding, labelY, { width: innerW, continued: false, lineBreak: false });
       const showMention = config.showMention !== false;
       if (showMention) {
         const mention = config.mention || "Lu et approuv\xE9, bon pour accord";
-        this.doc.font("Helvetica-Oblique").fontSize(this.scaleFontSize(10)).fillColor("#666666").text(`"${mention}"`, boxX + padding, currentY, { width: boxWidth - padding * 2 });
-        currentY += 12 + 8;
+        this.doc.font("Helvetica-Oblique").fontSize(this.scaleFontSize(9)).fillColor("#999999").text(`"${mention}"`, boxX + padding, labelY + 1, { width: innerW, align: "right", lineBreak: false });
       }
-      const signatureAreaTop = currentY + 20;
-      const signatureLineY = signatureAreaTop + 80;
-      this.doc.font("Helvetica").fontSize(this.scaleFontSize(11)).fillColor("#999999").text("Signature", boxX + padding, signatureAreaTop + 2, { width: boxWidth - padding * 2 });
+      let currentY = labelY + 14;
+      const showDate = config.showDate !== false;
+      if (showDate) {
+        this.doc.font("Helvetica").fontSize(this.scaleFontSize(10)).fillColor("#666666").text("Date: ____/____/________", boxX + padding, currentY, { width: innerW });
+        currentY += 14;
+      }
+      const signatureAreaTop = currentY + 8;
+      const signatureLineY = Math.min(signatureAreaTop + 50, boxY + boxHeight - padding - 4);
+      this.doc.font("Helvetica").fontSize(this.scaleFontSize(11)).fillColor("#999999").text("Signature", boxX + padding, signatureAreaTop + 2, { width: innerW });
       this.doc.moveTo(boxX + padding, signatureLineY).lineTo(boxX + boxWidth - padding, signatureLineY).dash(3, { space: 3 }).stroke("#cccccc").undash();
       return true;
     };
@@ -62673,8 +68185,24 @@ var DocumentPdfRenderer = class {
     let currentY = y + paddingTop;
     const drawRow = (label, value, opts) => {
       this.doc.strokeColor("#f0f0f0").lineWidth(1).moveTo(x + paddingX, currentY + rowHeight).lineTo(x + width - paddingX, currentY + rowHeight).stroke();
-      this.doc.font("Helvetica").fontSize(this.scaleFontSize(11)).fillColor("#666666").text(label, labelX, currentY + 6, { width: contentWidth - valueWidth - gap, align: "right" });
-      this.doc.font("Helvetica-Bold").fontSize(this.scaleFontSize(11)).fillColor(opts?.valueColor || "#333333").text(value, valueX, currentY + 6, { width: valueWidth, align: "right" });
+      const labelFs = this.scaleFontSize(11);
+      this.doc.font(opts?.labelBold ? "Helvetica-Bold" : "Helvetica").fontSize(labelFs).fillColor(opts?.labelColor || "#666666");
+      if (opts?.icon === "tag") {
+        const labelTextW = this.doc.widthOfString(label);
+        const labelAreaW = contentWidth - valueWidth - gap;
+        const textEndX = labelX + labelAreaW;
+        const iconSz = labelFs + 2;
+        const tagPng = this.emojiPngCache.get("\u{1F3F7}\uFE0F");
+        if (tagPng && fs10.existsSync(tagPng)) {
+          try {
+            this.doc.image(tagPng, textEndX - labelTextW - iconSz - 4, currentY + 5, { width: iconSz, height: iconSz });
+          } catch (e) {
+            console.warn("PDF tag icon error:", e);
+          }
+        }
+      }
+      this.doc.text(label, labelX, currentY + 6, { width: contentWidth - valueWidth - gap, align: "right" });
+      this.doc.font(opts?.valueBold !== false ? "Helvetica-Bold" : "Helvetica").fontSize(this.scaleFontSize(11)).fillColor(opts?.valueColor || "#333333").text(value, valueX, currentY + 6, { width: valueWidth, align: "right" });
       currentY += rowHeight;
     };
     const totalHTValue = this.ctx.quote?.totalHT ?? this.substituteVariables(String(config.totalHTBinding || config.totalHT || "{quote.totalHT}"));
@@ -62683,7 +68211,7 @@ var DocumentPdfRenderer = class {
     const discountValue = this.substituteVariables(String(config.discount || ""));
     if (showDiscount && discountValue) {
       const discountFormatted = this.formatMoney(discountValue, currency);
-      drawRow("Remise:", `-${discountFormatted}`, { valueColor: "#52c41a" });
+      drawRow("Remise:", `-${discountFormatted}`, { valueColor: "#D9791F", labelBold: true, valueBold: true, labelColor: "#D9791F", icon: "tag" });
     }
     if (showTotalHT) {
       drawRow("Sous-Total HT:", this.formatMoney(totalHTValue, currency));
@@ -62698,8 +68226,8 @@ var DocumentPdfRenderer = class {
       const innerPad = 16;
       const barLabelX = x + innerPad;
       const barValueWidth = Math.min(valueWidth + 20, width - innerPad * 2);
-      this.doc.font("Helvetica-Bold").fontSize(this.scaleFontSize(12)).fillColor("#FFFFFF").text("Total TTC:", barLabelX, barY + 9, { width: width - innerPad * 2 - barValueWidth, align: "right" });
-      this.doc.font("Helvetica-Bold").fontSize(this.scaleFontSize(16)).fillColor("#FFFFFF").text(this.formatMoney(totalTTCValue, currency), x + width - innerPad - barValueWidth, barY + 7, { width: barValueWidth, align: "right" });
+      this.doc.font("Helvetica-Bold").fontSize(this.scaleFontSize(14)).fillColor("#FFFFFF").text("Total TTC:", barLabelX, barY + 9, { width: width - innerPad * 2 - barValueWidth, align: "right" });
+      this.doc.font("Helvetica-Bold").fontSize(this.scaleFontSize(18)).fillColor("#FFFFFF").text(this.formatMoney(totalTTCValue, currency), x + width - innerPad - barValueWidth, barY + 6, { width: barValueWidth, align: "right" });
     }
     this.doc.restore();
   }
@@ -63114,7 +68642,22 @@ var DocumentPdfRenderer = class {
       style: line.style || void 0
       // Propager les options de formatage
     };
-    if (line.labelSource) {
+    if (line.labelParts && Array.isArray(line.labelParts) && line.labelParts.length > 0) {
+      const parts = line.labelParts.map((part) => {
+        const prefix = part.prefix || "";
+        let value = "";
+        if (part.source) {
+          value = resolve2(part.source);
+        }
+        const suffix2 = part.suffix && value ? part.suffix : "";
+        return `${prefix}${value}${suffix2}`.trim();
+      }).filter((p) => p.length > 0);
+      resolvedLine.description = parts.join(" - ");
+      console.log(`\u{1F4C4} [PDF] Label multi-segments r\xE9solu: "${resolvedLine.description}" (${line.labelParts.length} segments)`);
+      if (!resolvedLine.description) {
+        resolvedLine.description = line.label || "Non d\xE9fini";
+      }
+    } else if (line.labelSource) {
       const resolved = resolve2(line.labelSource);
       console.log(`\u{1F4C4} [PDF] Label r\xE9solu: "${resolved}" (source: ${line.labelSource}, suffix: ${suffix})`);
       resolvedLine.description = resolved || line.label || "Non d\xE9fini";
@@ -63629,7 +69172,7 @@ var DocumentPdfRenderer = class {
   substituteVariables(text) {
     if (!text || typeof text !== "string") return text || "";
     let result = text;
-    result = result.replace(/@(value|select)\.([a-zA-Z0-9_.-]+)/g, (_match, type, ref) => {
+    result = result.replace(/@(value|select|calculated)\.([a-zA-Z0-9_.-]+)/g, (_match, type, ref) => {
       return this.resolveVariable(`@${type}.${ref}`);
     });
     result = result.replace(/\{\{([a-zA-Z0-9_.]+)\}\}/g, (_match, ref) => {
@@ -63969,6 +69512,673 @@ var DocumentPdfRenderer = class {
       // Limiter strictement la hauteur
     });
   }
+  // ============================================================
+  // KPI_BANNER - Bandeau KPI / ROI graphique
+  // ============================================================
+  renderModuleKpiBanner(config, x, y, width, height) {
+    console.log(`\u{1F3A8} [KPI-ICON-DEBUG] BANNER CALLED! icon keys: ${Object.keys(config).filter((k) => k.includes("icon")).map((k) => `${k}="${config[k]}"`).join(", ")}`);
+    this.doc.save();
+    this.doc.rect(x, y, width, height).clip();
+    const gradientFrom = config.gradientFrom || "#0F5C60";
+    const gradientTo = config.gradientTo || "#0A3E42";
+    const accentColor = config.accentColor || "#D9791F";
+    const textColor = config.textColor || "#ffffff";
+    const cornerRadius = Math.min(config.cornerRadius ?? 12, 12) * this.scaleFactor;
+    const bannerStyle = config.style || "gradient";
+    const toBool = (val, def) => {
+      if (val === void 0 || val === null) return def;
+      if (typeof val === "boolean") return val;
+      if (typeof val === "string") return val !== "false" && val !== "0";
+      return Boolean(val);
+    };
+    const showTitle = toBool(config.showTitle, true);
+    const showProgressBar = toBool(config.showProgressBar, true);
+    const showMiniChart = toBool(config.showMiniChart, true);
+    const bannerTitle = this.substituteVariables(config.title || "Votre Investissement en un coup d'oeil");
+    const compactMode = toBool(config.compactMode, true);
+    const doc = this.doc;
+    const icoFns = {
+      // ⚡ Éclair
+      lightning: (cx, cy, sz, col) => {
+        const r = sz * 0.42;
+        doc.moveTo(cx + r * 0.1, cy - r * 0.9).lineTo(cx - r * 0.5, cy + r * 0.1).lineTo(cx - r * 0.02, cy + r * 0.05).lineTo(cx - r * 0.15, cy + r * 0.9).lineTo(cx + r * 0.55, cy - r * 0.15).lineTo(cx + r * 0.08, cy - r * 0.1).closePath().fillColor(col).fill();
+      },
+      // ☀️ Soleil
+      sun: (cx, cy, sz, col) => {
+        const r = sz * 0.22;
+        doc.circle(cx, cy, r).fillColor(col).fill();
+        for (let i = 0; i < 8; i++) {
+          const a = i / 8 * Math.PI * 2;
+          doc.moveTo(cx + Math.cos(a) * r * 1.35, cy + Math.sin(a) * r * 1.35).lineTo(cx + Math.cos(a) * r * 1.85, cy + Math.sin(a) * r * 1.85).lineWidth(sz * 0.06).strokeColor(col).stroke();
+        }
+      },
+      // 🔥 Flamme
+      fire: (cx, cy, sz, col) => {
+        const r = sz * 0.4;
+        doc.moveTo(cx, cy - r).bezierCurveTo(cx + r * 0.6, cy - r * 0.2, cx + r * 0.7, cy + r * 0.3, cx + r * 0.3, cy + r * 0.8).bezierCurveTo(cx + r * 0.1, cy + r, cx - r * 0.1, cy + r, cx - r * 0.3, cy + r * 0.8).bezierCurveTo(cx - r * 0.7, cy + r * 0.3, cx - r * 0.6, cy - r * 0.2, cx, cy - r).closePath().fillColor(col).fill();
+      },
+      // 🌿 Feuille
+      leaf: (cx, cy, sz, col) => {
+        const r = sz * 0.4;
+        doc.moveTo(cx - r * 0.8, cy + r * 0.2).bezierCurveTo(cx - r * 0.3, cy - r, cx + r * 0.3, cy - r, cx + r * 0.8, cy - r * 0.3).bezierCurveTo(cx + r * 0.3, cy + r * 0.5, cx - r * 0.2, cy + r, cx - r * 0.8, cy + r * 0.2).closePath().fillColor(col).fill();
+        doc.moveTo(cx - r * 0.6, cy + r * 0.55).lineTo(cx + r * 0.3, cy - r * 0.35).lineWidth(sz * 0.04).strokeColor("white").stroke();
+      },
+      // 💧 Goutte
+      drop: (cx, cy, sz, col) => {
+        const r = sz * 0.38;
+        doc.moveTo(cx, cy - r * 0.9).bezierCurveTo(cx + r * 0.9, cy + r * 0.1, cx + r * 0.6, cy + r * 0.95, cx, cy + r * 0.95).bezierCurveTo(cx - r * 0.6, cy + r * 0.95, cx - r * 0.9, cy + r * 0.1, cx, cy - r * 0.9).closePath().fillColor(col).fill();
+      },
+      // 💰 Pièce (€)
+      coin: (cx, cy, sz, col) => {
+        doc.circle(cx, cy, sz * 0.38).fillColor(col).fill();
+        doc.font("Helvetica-Bold").fontSize(sz * 0.36).fillColor("white").text("\u20AC", cx - sz * 0.12, cy - sz * 0.16, { width: sz * 0.3, align: "center", lineBreak: false });
+      },
+      // 💎 Diamant
+      diamond: (cx, cy, sz, col) => {
+        const r = sz * 0.36;
+        doc.moveTo(cx, cy - r).lineTo(cx + r, cy).lineTo(cx, cy + r).lineTo(cx - r, cy).closePath().fillColor(col).fill();
+      },
+      // 📈 Graphique
+      chart: (cx, cy, sz, col) => {
+        const r = sz * 0.36;
+        doc.rect(cx - r * 0.85, cy + r * 0.05, r * 0.4, -r * 0.6).fillColor(col).fillOpacity(0.5).fill().fillOpacity(1);
+        doc.rect(cx - r * 0.25, cy + r * 0.05, r * 0.4, -r * 1).fillColor(col).fill();
+        doc.rect(cx + r * 0.35, cy + r * 0.05, r * 0.4, -r * 1.45).fillColor(col).fill();
+        doc.moveTo(cx - r, cy + r * 0.15).lineTo(cx + r, cy + r * 0.15).lineWidth(sz * 0.03).strokeColor(col).stroke();
+      },
+      // ⏰ Horloge
+      clock: (cx, cy, sz, col) => {
+        const r = sz * 0.36;
+        doc.circle(cx, cy, r).fillColor(col).fill();
+        doc.circle(cx, cy, r * 0.85).fillColor("white").fill();
+        doc.moveTo(cx, cy).lineTo(cx, cy - r * 0.55).lineWidth(sz * 0.05).strokeColor(col).stroke();
+        doc.moveTo(cx, cy).lineTo(cx + r * 0.4, cy + r * 0.1).lineWidth(sz * 0.04).strokeColor(col).stroke();
+        doc.circle(cx, cy, r * 0.08).fillColor(col).fill();
+      },
+      // 🏆 Trophée
+      trophy: (cx, cy, sz, col) => {
+        const r = sz * 0.35;
+        doc.moveTo(cx - r * 0.65, cy - r * 0.6).lineTo(cx - r * 0.45, cy + r * 0.3).lineTo(cx + r * 0.45, cy + r * 0.3).lineTo(cx + r * 0.65, cy - r * 0.6).closePath().fillColor(col).fill();
+        doc.rect(cx - r * 0.08, cy + r * 0.3, r * 0.16, r * 0.2).fillColor(col).fill();
+        doc.rect(cx - r * 0.3, cy + r * 0.5, r * 0.6, r * 0.15).fillColor(col).fill();
+      },
+      // ⭐ Étoile
+      star: (cx, cy, sz, col) => {
+        const r = sz * 0.4;
+        const ri = r * 0.4;
+        const pts = [];
+        for (let i = 0; i < 10; i++) {
+          const a = i / 10 * Math.PI * 2 - Math.PI / 2;
+          const rad = i % 2 === 0 ? r : ri;
+          pts.push([cx + Math.cos(a) * rad, cy + Math.sin(a) * rad]);
+        }
+        doc.moveTo(pts[0][0], pts[0][1]);
+        for (let i = 1; i < pts.length; i++) doc.lineTo(pts[i][0], pts[i][1]);
+        doc.closePath().fillColor(col).fill();
+      },
+      // 🎯 Cible
+      target: (cx, cy, sz, col) => {
+        doc.circle(cx, cy, sz * 0.38).fillColor(col).fill();
+        doc.circle(cx, cy, sz * 0.26).fillColor("white").fill();
+        doc.circle(cx, cy, sz * 0.14).fillColor(col).fill();
+      },
+      // ✅ Coche
+      check: (cx, cy, sz, col) => {
+        const r = sz * 0.35;
+        doc.roundedRect(cx - r, cy - r, r * 2, r * 2, r * 0.25).fillColor(col).fill();
+        doc.moveTo(cx - r * 0.5, cy).lineTo(cx - r * 0.1, cy + r * 0.4).lineTo(cx + r * 0.55, cy - r * 0.35).lineWidth(sz * 0.08).lineCap("round").lineJoin("round").strokeColor("white").stroke();
+      },
+      // 🏠 Maison
+      house: (cx, cy, sz, col) => {
+        const r = sz * 0.38;
+        doc.moveTo(cx, cy - r).lineTo(cx + r, cy - r * 0.05).lineTo(cx - r, cy - r * 0.05).closePath().fillColor(col).fill();
+        doc.rect(cx - r * 0.7, cy - r * 0.05, r * 1.4, r * 0.85).fillColor(col).fill();
+        doc.rect(cx - r * 0.15, cy + r * 0.25, r * 0.3, r * 0.55).fillColor("white").fill();
+      },
+      // 👤 Personne
+      person: (cx, cy, sz, col) => {
+        const r = sz * 0.35;
+        doc.circle(cx, cy - r * 0.55, r * 0.35).fillColor(col).fill();
+        doc.moveTo(cx - r * 0.6, cy + r * 0.9).lineTo(cx - r * 0.25, cy + r * 0.05).lineTo(cx + r * 0.25, cy + r * 0.05).lineTo(cx + r * 0.6, cy + r * 0.9).closePath().fillColor(col).fill();
+      },
+      // 🌍 Globe
+      globe: (cx, cy, sz, col) => {
+        const r = sz * 0.36;
+        doc.circle(cx, cy, r).fillColor(col).fill();
+        doc.moveTo(cx - r, cy).lineTo(cx + r, cy).lineWidth(sz * 0.025).strokeColor("white").stroke();
+        doc.moveTo(cx - r * 0.85, cy - r * 0.45).lineTo(cx + r * 0.85, cy - r * 0.45).lineWidth(sz * 0.025).strokeColor("white").stroke();
+        doc.moveTo(cx - r * 0.85, cy + r * 0.45).lineTo(cx + r * 0.85, cy + r * 0.45).lineWidth(sz * 0.025).strokeColor("white").stroke();
+        doc.ellipse(cx, cy, r * 0.38, r).lineWidth(sz * 0.025).strokeColor("white").stroke();
+      },
+      // ❤️ Cœur
+      heart: (cx, cy, sz, col) => {
+        const r = sz * 0.2;
+        doc.circle(cx - r * 0.65, cy - r * 0.35, r * 0.7).fillColor(col).fill();
+        doc.circle(cx + r * 0.65, cy - r * 0.35, r * 0.7).fillColor(col).fill();
+        doc.moveTo(cx - r * 1.35, cy - r * 0.15).lineTo(cx, cy + r * 1.6).lineTo(cx + r * 1.35, cy - r * 0.15).closePath().fillColor(col).fill();
+      },
+      // 🛡️ Bouclier
+      shield: (cx, cy, sz, col) => {
+        const r = sz * 0.38;
+        doc.moveTo(cx, cy - r).lineTo(cx + r * 0.8, cy - r * 0.5).lineTo(cx + r * 0.7, cy + r * 0.3).lineTo(cx, cy + r).lineTo(cx - r * 0.7, cy + r * 0.3).lineTo(cx - r * 0.8, cy - r * 0.5).closePath().fillColor(col).fill();
+      },
+      // ⚙️ Engrenage
+      gear: (cx, cy, sz, col) => {
+        const r = sz * 0.36;
+        doc.circle(cx, cy, r * 0.7).fillColor(col).fill();
+        const tw = r * 0.3;
+        const th = r * 0.35;
+        for (let i = 0; i < 6; i++) {
+          const a = i / 6 * Math.PI * 2;
+          const tx = cx + Math.cos(a) * r * 0.65;
+          const ty = cy + Math.sin(a) * r * 0.65;
+          doc.circle(tx, ty, tw).fillColor(col).fill();
+        }
+        doc.circle(cx, cy, r * 0.28).fillColor("white").fill();
+      },
+      // 🚗 Véhicule
+      car: (cx, cy, sz, col) => {
+        const r = sz * 0.38;
+        doc.roundedRect(cx - r, cy - r * 0.1, r * 2, r * 0.65, r * 0.12).fillColor(col).fill();
+        doc.moveTo(cx - r * 0.5, cy - r * 0.1).lineTo(cx - r * 0.3, cy - r * 0.55).lineTo(cx + r * 0.35, cy - r * 0.55).lineTo(cx + r * 0.55, cy - r * 0.1).closePath().fillColor(col).fill();
+        doc.circle(cx - r * 0.5, cy + r * 0.55, r * 0.18).fillColor(col).fill();
+        doc.circle(cx + r * 0.5, cy + r * 0.55, r * 0.18).fillColor(col).fill();
+      },
+      // 🔔 Cloche
+      bell: (cx, cy, sz, col) => {
+        const r = sz * 0.35;
+        doc.moveTo(cx - r * 0.65, cy + r * 0.35).bezierCurveTo(cx - r * 0.65, cy - r * 0.5, cx - r * 0.3, cy - r * 0.9, cx, cy - r * 0.9).bezierCurveTo(cx + r * 0.3, cy - r * 0.9, cx + r * 0.65, cy - r * 0.5, cx + r * 0.65, cy + r * 0.35).closePath().fillColor(col).fill();
+        doc.rect(cx - r * 0.85, cy + r * 0.35, r * 1.7, r * 0.18).fillColor(col).fill();
+        doc.circle(cx, cy + r * 0.72, r * 0.14).fillColor(col).fill();
+      },
+      // 💬 Bulle de dialogue
+      chat: (cx, cy, sz, col) => {
+        const r = sz * 0.36;
+        doc.roundedRect(cx - r, cy - r * 0.6, r * 2, r * 1.2, r * 0.25).fillColor(col).fill();
+        doc.moveTo(cx - r * 0.3, cy + r * 0.6).lineTo(cx - r * 0.7, cy + r).lineTo(cx + r * 0.1, cy + r * 0.6).closePath().fillColor(col).fill();
+      },
+      // ⚫ Point (fallback générique)
+      dot: (cx, cy, sz, col) => {
+        doc.circle(cx, cy, sz * 0.28).fillColor(col).fill();
+      }
+    };
+    const cpToCat = {};
+    const addCp = (cp, cat) => {
+      cpToCat[cp] = cat;
+    };
+    [9889, 128268, 128267].forEach((cp) => addCp(cp, "lightning"));
+    [9728, 127774, 127780, 127777, 128161, 128262].forEach((cp) => addCp(cp, "sun"));
+    [128293, 127755].forEach((cp) => addCp(cp, "fire"));
+    [
+      127807,
+      127811,
+      127793,
+      9752,
+      127806,
+      127803,
+      127795,
+      127794,
+      127796,
+      127797,
+      127800,
+      127802,
+      127808,
+      9851,
+      128260,
+      128257,
+      128259,
+      127752,
+      129419,
+      128029,
+      129716,
+      127981
+    ].forEach((cp) => addCp(cp, "leaf"));
+    [128167, 127754, 128166, 10052, 128168, 127786, 127783, 9729, 129482].forEach((cp) => addCp(cp, "drop"));
+    [
+      128176,
+      128181,
+      128182,
+      128183,
+      129689,
+      128178,
+      128184,
+      129297,
+      128185,
+      127975,
+      128179,
+      129534,
+      127974,
+      128180,
+      129776
+    ].forEach((cp) => addCp(cp, "coin"));
+    [128142].forEach((cp) => addCp(cp, "diamond"));
+    [
+      128200,
+      128202,
+      128201,
+      128290,
+      128291,
+      128208,
+      128207,
+      129518,
+      128203,
+      128209,
+      128221,
+      9999,
+      10133,
+      10134,
+      10006,
+      10135,
+      128287,
+      128195,
+      128196,
+      128220
+    ].forEach((cp) => addCp(cp, "chart"));
+    [
+      9200,
+      128336,
+      128337,
+      128338,
+      128339,
+      128340,
+      128341,
+      128342,
+      128343,
+      128344,
+      128345,
+      128346,
+      128347,
+      9201,
+      9203,
+      8987,
+      128197,
+      128198,
+      128467,
+      9193,
+      9194
+    ].forEach((cp) => addCp(cp, "clock"));
+    [127942, 129351, 129352, 129353, 127941, 127894, 127989, 128175, 128081].forEach((cp) => addCp(cp, "trophy"));
+    [11088, 127775, 10024, 128171, 127873, 127881, 127882, 127914, 127895, 127872].forEach((cp) => addCp(cp, "star"));
+    [127919, 128204, 128269, 128270, 9878].forEach((cp) => addCp(cp, "target"));
+    [9989, 9745, 10004].forEach((cp) => addCp(cp, "check"));
+    [
+      127968,
+      127969,
+      127970,
+      127959,
+      127960,
+      127984,
+      127963,
+      9962,
+      128332,
+      127972,
+      127962,
+      128682,
+      129695,
+      129521,
+      127961,
+      127973,
+      127978,
+      127979
+    ].forEach((cp) => addCp(cp, "house"));
+    [
+      128100,
+      128101,
+      129309,
+      128119,
+      129302,
+      129504,
+      127939,
+      129496,
+      128104,
+      128105,
+      129489,
+      128188,
+      127891,
+      128222,
+      9993,
+      128231,
+      128079,
+      128077,
+      128588,
+      128170,
+      128640
+    ].forEach((cp) => addCp(cp, "person"));
+    [127757, 127758, 127759, 128506, 127760].forEach((cp) => addCp(cp, "globe"));
+    [10084, 128154, 128153, 128155, 129655, 128156, 129505].forEach((cp) => addCp(cp, "heart"));
+    [128737, 128274, 128275, 128273, 128477].forEach((cp) => addCp(cp, "shield"));
+    [9881, 128295, 128296, 128736, 9986, 129522, 129691, 128297, 129692].forEach((cp) => addCp(cp, "gear"));
+    [
+      128663,
+      128664,
+      128652,
+      128642,
+      127950,
+      128661,
+      128656,
+      128763,
+      128648,
+      128647,
+      128667,
+      128690,
+      128756,
+      9992,
+      128641,
+      128745,
+      128640,
+      128760,
+      9973,
+      128674,
+      128665,
+      128654,
+      128757,
+      128722,
+      9981,
+      128740
+    ].forEach((cp) => addCp(cp, "car"));
+    [128276, 128226, 128227, 128266].forEach((cp) => addCp(cp, "bell"));
+    [128172, 128279, 128206].forEach((cp) => addCp(cp, "chat"));
+    [
+      128187,
+      128421,
+      128241,
+      128242,
+      9e3,
+      128433,
+      128424,
+      128246,
+      128247,
+      127909,
+      128249,
+      128160,
+      128269,
+      127925,
+      127918,
+      127922,
+      129658,
+      129656
+    ].forEach((cp) => addCp(cp, "gear"));
+    const getFirstSignificantCodePoint = (emoji) => {
+      const stripped = emoji.replace(/[\uFE0E\uFE0F\u200D\u200B\u20E3]/g, "").replace(/[\u{1F3FB}-\u{1F3FF}]/gu, "").trim();
+      for (const char of stripped) {
+        const cp = char.codePointAt(0);
+        if (cp && cp > 127) return cp;
+      }
+      return null;
+    };
+    const drawKpiIcon = (cx, cy, sz, col, emoji) => {
+      if (!emoji || !emoji.trim()) return false;
+      let rawEmoji = emoji.trim();
+      if (rawEmoji.includes(":")) {
+        rawEmoji = rawEmoji.split(":").slice(1).join(":").trim();
+      }
+      const pngPath = this.emojiPngCache.get(rawEmoji);
+      if (pngPath && fs10.existsSync(pngPath)) {
+        try {
+          doc.image(pngPath, cx - sz / 2, cy - sz / 2, { width: sz, height: sz });
+          return true;
+        } catch (e) {
+          console.warn(`\u{1F4C4} [PDF] Erreur doc.image emoji: ${e}`);
+        }
+      }
+      let cat = "dot";
+      if (emoji.includes(":")) {
+        const candidateCat = emoji.split(":")[0].trim();
+        if (icoFns[candidateCat]) cat = candidateCat;
+      } else if (icoFns[emoji.trim()]) {
+        cat = emoji.trim();
+      } else {
+        const cp = getFirstSignificantCodePoint(emoji);
+        cat = cp ? cpToCat[cp] || "dot" : "dot";
+      }
+      const fn = icoFns[cat] || icoFns.dot;
+      doc.save();
+      fn(cx, cy, sz, col);
+      doc.restore();
+      return true;
+    };
+    const formatKpiValue = (raw, decimals, useSeparator) => {
+      const cleaned = raw.replace(/\s/g, "").replace(",", ".");
+      const num = parseFloat(cleaned);
+      if (isNaN(num)) return raw;
+      if (decimals === "auto" && !useSeparator) return raw;
+      let decCount;
+      if (decimals === "auto") {
+        const match = cleaned.match(/\.(\d+)/);
+        decCount = match ? Math.min(match[1].length, 6) : 0;
+      } else {
+        decCount = parseInt(decimals);
+      }
+      const fixed = num.toFixed(decCount);
+      const parts = fixed.split(".");
+      if (useSeparator) {
+        parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, " ");
+      }
+      return parts.length > 1 && decCount > 0 ? `${parts[0]},${parts[1]}` : parts[0];
+    };
+    const allKpis = [];
+    for (let i = 1; i <= 8; i++) {
+      const label = config[`kpi${i}_label`];
+      const rawValue = config[`kpi${i}_binding`] || config[`kpi${i}_value`] || "";
+      const suffix = config[`kpi${i}_suffix`] || "";
+      const rawIcon = config[`kpi${i}_icon`] || "";
+      const color = config[`kpi${i}_color`] || this.theme.primaryColor || "#0F5C60";
+      const decimals = config[`kpi${i}_decimals`] || "auto";
+      const separator = config[`kpi${i}_separator`] !== false;
+      const valueBold = config[`kpi${i}_valueBold`] !== false;
+      const valueItalic = config[`kpi${i}_valueItalic`] === true;
+      const labelBold = config[`kpi${i}_labelBold`] === true;
+      const labelItalic = config[`kpi${i}_labelItalic`] === true;
+      if (!label && !rawValue) continue;
+      let resolvedValue = this.substituteVariables(rawValue);
+      if (resolvedValue) {
+        resolvedValue = formatKpiValue(resolvedValue, decimals, separator);
+      }
+      if (resolvedValue) {
+        allKpis.push({
+          label: label || `KPI ${i}`,
+          value: resolvedValue,
+          suffix,
+          icon: rawIcon,
+          color,
+          valueBold,
+          valueItalic,
+          labelBold,
+          labelItalic
+        });
+      }
+    }
+    console.log(`\u{1F4CA} [KPI-BANNER] ${allKpis.length} KPIs from flat fields: ${allKpis.map((k) => `${k.label}(icon=${k.icon})`).join(", ")}`);
+    if (allKpis.length === 0 && Array.isArray(config.kpis)) {
+      for (const kpi of config.kpis) {
+        if (!kpi || kpi.enabled === false) continue;
+        if (!kpi.label && !kpi.value && !kpi.binding) continue;
+        const rawVal = kpi.binding || kpi.value || "";
+        const resolved = this.substituteVariables(rawVal);
+        if (resolved) {
+          allKpis.push({
+            label: kpi.label || "",
+            value: resolved,
+            suffix: kpi.suffix || "",
+            icon: kpi.icon || "",
+            color: kpi.color || this.theme.primaryColor || "#0F5C60",
+            valueBold: true,
+            valueItalic: false,
+            labelBold: false,
+            labelItalic: false
+          });
+        }
+      }
+    }
+    if (allKpis.length === 0) {
+      allKpis.push(
+        { label: "Economie annuelle", value: "1 200", suffix: "/an", icon: "\u{1F4B0}", color: "#D9791F", valueBold: true, valueItalic: false, labelBold: false, labelItalic: false },
+        { label: "ROI", value: "8", suffix: "ans", icon: "\u23F0", color: "#0F5C60", valueBold: true, valueItalic: false, labelBold: false, labelItalic: false },
+        { label: "Gain 15 ans", value: "18 000", suffix: "EUR", icon: "\u{1F4C8}", color: "#D9791F", valueBold: true, valueItalic: false, labelBold: false, labelItalic: false },
+        { label: "Gain 25 ans", value: "32 000", suffix: "EUR", icon: "\u{1F3C6}", color: "#0F5C60", valueBold: true, valueItalic: false, labelBold: false, labelItalic: false }
+      );
+    }
+    const isOutline = bannerStyle === "outline";
+    const pad = 6 * this.scaleFactor;
+    if (isOutline) {
+      this.doc.roundedRect(x, y, width, height, cornerRadius).lineWidth(2 * this.scaleFactor).strokeColor(gradientFrom).stroke();
+    } else {
+      const grad = this.doc.linearGradient?.(x, y, x + width, y);
+      if (grad) {
+        grad.stop(0, gradientFrom, 1).stop(1, gradientTo, 1);
+        this.doc.rect(x, y, width, height).fill(grad);
+      } else {
+        const halfW = width / 2;
+        this.doc.rect(x, y, halfW, height).fill(gradientFrom);
+        this.doc.rect(x + halfW, y, halfW, height).fill(gradientTo);
+      }
+    }
+    const effectiveTextColor = isOutline ? gradientFrom : textColor;
+    const labelColor = isOutline ? "#666666" : "#d4d4d4";
+    const cardOverlay = isOutline ? "#f0f0f0" : "#ffffff";
+    let currentY = y + pad;
+    const bottomY = y + height - pad;
+    const disclaimerFs = this.scaleFontSize(compactMode ? 4 : 5);
+    const disclaimerColor = isOutline ? "#999999" : accentColor;
+    this.doc.font("Helvetica-Oblique").fontSize(disclaimerFs).fillColor(disclaimerColor).fillOpacity(isOutline ? 0.7 : 0.85).text("* A titre d'information", x + pad, y + 2 * this.scaleFactor, {
+      width: width - pad * 2,
+      align: "right",
+      lineBreak: false
+    }).fillOpacity(1);
+    if (showTitle) {
+      const titleFs = this.scaleFontSize(compactMode ? 8 : 10);
+      this.doc.font("Helvetica-Bold").fontSize(titleFs).fillColor(effectiveTextColor);
+      const titleText = bannerTitle;
+      const titleW = this.doc.widthOfString(titleText);
+      this.doc.text(titleText, x + pad, currentY, {
+        width: width - pad * 2,
+        align: "left",
+        lineBreak: false
+      });
+      const lineY = currentY + titleFs + 1.5 * this.scaleFactor;
+      const lineStartX = x + pad + titleW + 6 * this.scaleFactor;
+      if (lineStartX < x + width - pad) {
+        this.doc.moveTo(lineStartX, lineY).lineTo(x + width - pad, lineY).lineWidth(1.5 * this.scaleFactor).strokeColor(accentColor).stroke();
+      }
+      currentY = lineY + 3 * this.scaleFactor;
+    }
+    const roiKpi = allKpis.find((k) => k.suffix?.toLowerCase().includes("an"));
+    const hasRoiBar = showProgressBar && roiKpi;
+    const roiReserve = hasRoiBar ? (compactMode ? 14 : 18) * this.scaleFactor : 0;
+    const kpiCount = allKpis.length;
+    const kpiGap = 4 * this.scaleFactor;
+    const kpiWidth = (width - pad * 2 - kpiGap * (kpiCount - 1)) / kpiCount;
+    const kpiHeight = Math.max(20 * this.scaleFactor, bottomY - currentY - roiReserve);
+    const kpiY = currentY;
+    const numericValues = allKpis.map((k) => {
+      const cleaned = k.value.replace(/[^\d.,]/g, "").replace(",", ".");
+      return parseFloat(cleaned) || 0;
+    });
+    const maxVal = Math.max(...numericValues, 1);
+    const valFs = this.scaleFontSize(compactMode ? kpiCount > 4 ? 11 : 14 : kpiCount > 4 ? 14 : 18);
+    const sufFs = this.scaleFontSize(compactMode ? 6 : 8);
+    const labFs = this.scaleFontSize(compactMode ? 5.5 : 6.5);
+    const elGap = 1 * this.scaleFactor;
+    allKpis.forEach((kpi, idx) => {
+      const kpiX = x + pad + idx * (kpiWidth + kpiGap);
+      const cardRadius = 3 * this.scaleFactor;
+      if (isOutline) {
+        this.doc.roundedRect(kpiX, kpiY, kpiWidth, kpiHeight, cardRadius).fillOpacity(0.06).fill(kpi.color).fillOpacity(1);
+        this.doc.roundedRect(kpiX, kpiY, kpiWidth, kpiHeight, cardRadius).lineWidth(0.5 * this.scaleFactor).strokeOpacity(0.25).strokeColor(kpi.color).stroke().strokeOpacity(1);
+      } else {
+        this.doc.roundedRect(kpiX, kpiY, kpiWidth, kpiHeight, cardRadius).fillOpacity(0.12).fill(cardOverlay).fillOpacity(1);
+      }
+      const hasIcon = !!(kpi.icon && kpi.icon.trim());
+      const iconSz = hasIcon ? valFs * 0.95 : 0;
+      const iconLeftGap = hasIcon ? 3 * this.scaleFactor : 0;
+      const valueH = valFs + elGap;
+      const labelH = labFs + elGap;
+      const miniBarH = showMiniChart ? 5 * this.scaleFactor : 0;
+      const totalH = valueH + labelH + miniBarH;
+      const topOffset = Math.max(2 * this.scaleFactor, (kpiHeight - totalH) / 2);
+      let innerY = kpiY + topOffset;
+      const valueFont = kpi.valueBold ? kpi.valueItalic ? "Helvetica-BoldOblique" : "Helvetica-Bold" : kpi.valueItalic ? "Helvetica-Oblique" : "Helvetica";
+      const valueColor = isOutline ? kpi.color : "#ffffff";
+      this.doc.font(valueFont).fontSize(valFs);
+      const valTextW = this.doc.widthOfString(kpi.value);
+      const sufGap = 2 * this.scaleFactor;
+      let sufTextW = 0;
+      if (kpi.suffix) {
+        this.doc.font("Helvetica").fontSize(sufFs);
+        sufTextW = this.doc.widthOfString(kpi.suffix);
+      }
+      const asteriskW = 3 * this.scaleFactor;
+      const iconTotalW = hasIcon ? iconSz + iconLeftGap : 0;
+      const combinedW = iconTotalW + valTextW + asteriskW + (kpi.suffix ? sufGap + sufTextW : 0);
+      const startX = kpiX + (kpiWidth - combinedW) / 2;
+      if (hasIcon) {
+        const iconCx = startX + iconSz / 2;
+        const iconCy = innerY + valFs / 2;
+        let rawEmojiCheck = (kpi.icon || "").trim();
+        if (rawEmojiCheck.includes(":")) rawEmojiCheck = rawEmojiCheck.split(":").slice(1).join(":").trim();
+        const hasPng = this.emojiPngCache.has(rawEmojiCheck);
+        if (!isOutline && !hasPng) {
+          this.doc.save();
+          this.doc.circle(iconCx, iconCy, iconSz * 0.44).fillColor("#ffffff").fillOpacity(0.92).fill().fillOpacity(1);
+          this.doc.restore();
+        }
+        drawKpiIcon(iconCx, iconCy, iconSz, kpi.color, kpi.icon);
+      }
+      const valStartX = startX + iconTotalW;
+      this.doc.font(valueFont).fontSize(valFs).fillColor(valueColor).text(kpi.value, valStartX, innerY, { width: valTextW + 2, lineBreak: false });
+      const asteriskFs = this.scaleFontSize(compactMode ? 5 : 6);
+      const asteriskColor = isOutline ? kpi.color : accentColor;
+      this.doc.font("Helvetica").fontSize(asteriskFs).fillColor(asteriskColor).fillOpacity(isOutline ? 0.6 : 0.85).text("*", valStartX + valTextW, innerY, { width: 6 * this.scaleFactor, lineBreak: false }).fillOpacity(1);
+      if (kpi.suffix) {
+        const sufColor = valueColor;
+        const baselineOffset = valFs - sufFs;
+        this.doc.font("Helvetica").fontSize(sufFs).fillColor(sufColor).text(kpi.suffix, valStartX + valTextW + asteriskW + sufGap, innerY + baselineOffset, { width: sufTextW + 2, lineBreak: false });
+      }
+      innerY += valueH;
+      const labelFont = kpi.labelBold ? kpi.labelItalic ? "Helvetica-BoldOblique" : "Helvetica-Bold" : kpi.labelItalic ? "Helvetica-Oblique" : "Helvetica";
+      this.doc.font(labelFont).fontSize(labFs).fillColor(labelColor).text(kpi.label.toUpperCase(), kpiX + 1, innerY, {
+        width: kpiWidth - 2,
+        align: "center",
+        lineBreak: false
+      });
+      innerY += labelH;
+      if (showMiniChart) {
+        const numVal = numericValues[idx];
+        if (numVal > 0) {
+          const barW = kpiWidth * 0.6;
+          const barH = 2.5 * this.scaleFactor;
+          const barX = kpiX + (kpiWidth - barW) / 2;
+          const barY = Math.min(innerY, kpiY + kpiHeight - 4 * this.scaleFactor);
+          const trackColor = isOutline ? "#e5e7eb" : "#ffffff";
+          this.doc.roundedRect(barX, barY, barW, barH, 1.5 * this.scaleFactor).fillOpacity(0.2).fill(trackColor).fillOpacity(1);
+          this.doc.roundedRect(barX, barY, barW, barH, 1.5 * this.scaleFactor).fill(accentColor);
+        }
+      }
+    });
+    if (hasRoiBar && roiKpi) {
+      const roiNumeric = parseFloat(roiKpi.value.replace(/[^\d.,]/g, "").replace(",", ".")) || 0;
+      if (roiNumeric > 0) {
+        const barH = 4 * this.scaleFactor;
+        const barY2 = bottomY - barH - (compactMode ? 4 : 6) * this.scaleFactor;
+        const barX = x + pad;
+        const pct = Math.min(100, Math.round(1 / roiNumeric * 100 * 15));
+        const roiLabelFs = this.scaleFontSize(compactMode ? 5.5 : 6.5);
+        this.doc.font("Helvetica-Bold").fontSize(roiLabelFs).fillColor(labelColor).text("ROI", barX, barY2, { width: 18 * this.scaleFactor, align: "left", lineBreak: false });
+        const trackX = barX + 20 * this.scaleFactor;
+        const barFullW = width - pad * 2 - 20 * this.scaleFactor - 30 * this.scaleFactor;
+        const trackColor = isOutline ? "#e5e7eb" : "#ffffff";
+        this.doc.roundedRect(trackX, barY2, barFullW, barH, 2 * this.scaleFactor).fillOpacity(0.15).fill(trackColor).fillOpacity(1);
+        const fillW = Math.max(barH, pct / 100 * barFullW);
+        this.doc.roundedRect(trackX, barY2, fillW, barH, 2 * this.scaleFactor).fill(accentColor);
+        this.doc.font("Helvetica-Bold").fontSize(this.scaleFontSize(compactMode ? 6 : 7)).fillColor(accentColor).text(`${pct}%`, trackX + barFullW + 3 * this.scaleFactor, barY2, {
+          width: 28 * this.scaleFactor,
+          align: "left",
+          lineBreak: false
+        });
+      }
+    }
+    this.doc.restore();
+  }
   ensureDocumentIsA4() {
     const page = this.doc.page;
     if (!page) return;
@@ -63991,7 +70201,7 @@ async function renderDocumentPdf(context) {
 
 // src/routes/documents.ts
 init_GoogleGmailService();
-var router75 = (0, import_express76.Router)();
+var router80 = (0, import_express81.Router)();
 var prisma42 = db;
 async function buildSelectOptionsMap(organizationId, tblData) {
   const map = {};
@@ -64158,7 +70368,7 @@ function parseAddress(address) {
   }
   return result;
 }
-router75.get("/templates", async (req2, res) => {
+router80.get("/templates", async (req2, res) => {
   try {
     const organizationId = req2.headers["x-organization-id"];
     const isSuperAdmin2 = req2.headers["x-is-super-admin"] === "true";
@@ -64215,7 +70425,7 @@ router75.get("/templates", async (req2, res) => {
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
-router75.get("/templates/:id", async (req2, res) => {
+router80.get("/templates/:id", async (req2, res) => {
   try {
     const { id } = req2.params;
     const organizationId = req2.headers["x-organization-id"];
@@ -64242,7 +70452,7 @@ router75.get("/templates/:id", async (req2, res) => {
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
-router75.post("/templates", async (req2, res) => {
+router80.post("/templates", async (req2, res) => {
   try {
     const organizationId = req2.headers["x-organization-id"];
     const userId = req2.headers["x-user-id"];
@@ -64297,7 +70507,7 @@ router75.post("/templates", async (req2, res) => {
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
-router75.put("/templates/:id", async (req2, res) => {
+router80.put("/templates/:id", async (req2, res) => {
   try {
     const { id } = req2.params;
     const organizationId = req2.headers["x-organization-id"];
@@ -64372,7 +70582,7 @@ router75.put("/templates/:id", async (req2, res) => {
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
-router75.delete("/templates/:id", async (req2, res) => {
+router80.delete("/templates/:id", async (req2, res) => {
   try {
     const { id } = req2.params;
     const organizationId = req2.headers["x-organization-id"];
@@ -64414,7 +70624,7 @@ router75.delete("/templates/:id", async (req2, res) => {
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
-router75.get("/themes", async (req2, res) => {
+router80.get("/themes", async (req2, res) => {
   try {
     const organizationId = req2.headers["x-organization-id"];
     const themes = await prisma42.documentTheme.findMany({
@@ -64430,7 +70640,7 @@ router75.get("/themes", async (req2, res) => {
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
-router75.post("/themes", async (req2, res) => {
+router80.post("/themes", async (req2, res) => {
   try {
     const organizationId = req2.headers["x-organization-id"];
     const themeData = req2.body;
@@ -64453,7 +70663,7 @@ router75.post("/themes", async (req2, res) => {
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
-router75.put("/themes/:id", async (req2, res) => {
+router80.put("/themes/:id", async (req2, res) => {
   try {
     const { id } = req2.params;
     const organizationId = req2.headers["x-organization-id"];
@@ -64478,7 +70688,7 @@ router75.put("/themes/:id", async (req2, res) => {
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
-router75.delete("/themes/:id", async (req2, res) => {
+router80.delete("/themes/:id", async (req2, res) => {
   try {
     const { id } = req2.params;
     const templatesCount = await prisma42.documentTemplate.count({
@@ -64499,7 +70709,7 @@ router75.delete("/themes/:id", async (req2, res) => {
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
-router75.get("/templates/:templateId/sections", async (req2, res) => {
+router80.get("/templates/:templateId/sections", async (req2, res) => {
   try {
     const { templateId } = req2.params;
     const organizationId = req2.headers["x-organization-id"];
@@ -64525,7 +70735,7 @@ router75.get("/templates/:templateId/sections", async (req2, res) => {
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
-router75.post("/templates/:templateId/sections", async (req2, res) => {
+router80.post("/templates/:templateId/sections", async (req2, res) => {
   try {
     const { templateId } = req2.params;
     const { type, order, config } = req2.body;
@@ -64558,7 +70768,7 @@ router75.post("/templates/:templateId/sections", async (req2, res) => {
     res.status(500).json({ error: "Erreur serveur", details: error?.message });
   }
 });
-router75.put("/templates/:templateId/sections/:sectionId", async (req2, res) => {
+router80.put("/templates/:templateId/sections/:sectionId", async (req2, res) => {
   try {
     const { templateId, sectionId } = req2.params;
     const { order, config } = req2.body;
@@ -64587,7 +70797,7 @@ router75.put("/templates/:templateId/sections/:sectionId", async (req2, res) => 
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
-router75.delete("/templates/:templateId/sections/:sectionId", async (req2, res) => {
+router80.delete("/templates/:templateId/sections/:sectionId", async (req2, res) => {
   try {
     const { templateId, sectionId } = req2.params;
     const organizationId = req2.headers["x-organization-id"];
@@ -64611,7 +70821,7 @@ router75.delete("/templates/:templateId/sections/:sectionId", async (req2, res) 
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
-router75.get("/generated", async (req2, res) => {
+router80.get("/generated", async (req2, res) => {
   try {
     const organizationId = req2.headers["x-organization-id"];
     const { leadId, submissionId, templateId } = req2.query;
@@ -64674,7 +70884,7 @@ router75.get("/generated", async (req2, res) => {
     res.status(500).json({ error: "Erreur serveur", details: error?.message });
   }
 });
-router75.get("/generated/:id", async (req2, res) => {
+router80.get("/generated/:id", async (req2, res) => {
   try {
     const { id } = req2.params;
     const organizationId = req2.headers["x-organization-id"];
@@ -64714,7 +70924,7 @@ router75.get("/generated/:id", async (req2, res) => {
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
-router75.post("/generated/generate", async (req2, res) => {
+router80.post("/generated/generate", async (req2, res) => {
   try {
     const organizationId = req2.headers["x-organization-id"] || req2.user?.organizationId || void 0;
     const userId = req2.headers["x-user-id"] || req2.user?.userId || void 0;
@@ -64862,7 +71072,7 @@ router75.post("/generated/generate", async (req2, res) => {
     });
   }
 });
-router75.delete("/generated/:id", async (req2, res) => {
+router80.delete("/generated/:id", async (req2, res) => {
   try {
     const { id } = req2.params;
     const organizationId = req2.headers["x-organization-id"];
@@ -64884,7 +71094,7 @@ router75.delete("/generated/:id", async (req2, res) => {
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
-router75.get("/generated/:id/download", async (req2, res) => {
+router80.get("/generated/:id/download", async (req2, res) => {
   try {
     const { id } = req2.params;
     console.log("\u{1F4E5} [DOWNLOAD] Demande de t\xE9l\xE9chargement:", { id });
@@ -64925,19 +71135,31 @@ router75.get("/generated/:id/download", async (req2, res) => {
     let formulaResultsMap = {};
     const docSubmissionId = document.submissionId;
     try {
+      const isTblRef = (val) => {
+        if (typeof val !== "string" || !val) return false;
+        return val.startsWith("node-formula:") || val.startsWith("formula:") || val.startsWith("condition:") || val.startsWith("@calculated.") || val.startsWith("calculatedValue:") || val.startsWith("@value.") || val.startsWith("@select.") || val.startsWith("@table.") || val.startsWith("@repeat.");
+      };
+      const collectRefsDeep = (obj, refs) => {
+        if (!obj) return;
+        if (typeof obj === "string") {
+          if (isTblRef(obj) && !refs.includes(obj)) refs.push(obj);
+          return;
+        }
+        if (Array.isArray(obj)) {
+          for (const item of obj) collectRefsDeep(item, refs);
+          return;
+        }
+        if (typeof obj === "object") {
+          for (const val of Object.values(obj)) {
+            collectRefsDeep(val, refs);
+          }
+        }
+      };
       const allRefs = [];
       const sections2 = document.DocumentTemplate?.DocumentSection || [];
       for (const sec of sections2) {
         const config = sec.config || {};
-        const modules = config.modules || [];
-        for (const mod of modules) {
-          const mc = mod.config || {};
-          for (const val of Object.values(mc)) {
-            if (typeof val === "string" && (val.startsWith("node-formula:") || val.startsWith("formula:") || val.startsWith("condition:") || val.startsWith("@calculated.") || val.startsWith("calculatedValue:") || val.startsWith("@value.") || val.startsWith("@select.") || val.startsWith("@table.") || val.startsWith("@repeat."))) {
-              if (!allRefs.includes(val)) allRefs.push(val);
-            }
-          }
-        }
+        collectRefsDeep(config, allRefs);
       }
       console.log("\u{1F4E5} [DOWNLOAD] Refs dynamiques \xE0 r\xE9soudre:", { refs: allRefs, submissionId: docSubmissionId });
       if (allRefs.length > 0 && docSubmissionId) {
@@ -65218,7 +71440,7 @@ async function downloadDriveFileAsBuffer(organizationId, driveFileId, userId) {
     return null;
   }
 }
-router75.post("/generated/:id/send-email", async (req2, res) => {
+router80.post("/generated/:id/send-email", async (req2, res) => {
   try {
     const { id } = req2.params;
     const { to, subject, body: body2, cc, bcc, includeProductDocs, tblData: clientTblData } = req2.body;
@@ -65358,9 +71580,9 @@ router75.post("/generated/:id/send-email", async (req2, res) => {
             if (doc.storageType === "GOOGLE_DRIVE" && doc.driveFileId) {
               fileBuffer = await downloadDriveFileAsBuffer(organizationId, doc.driveFileId, userId);
             } else if (doc.localPath) {
-              const fs14 = await import("fs/promises");
+              const fs16 = await import("fs/promises");
               try {
-                fileBuffer = await fs14.readFile(doc.localPath);
+                fileBuffer = await fs16.readFile(doc.localPath);
               } catch {
               }
             } else if (doc.externalUrl) {
@@ -65496,7 +71718,7 @@ router75.post("/generated/:id/send-email", async (req2, res) => {
     res.status(500).json({ error: "Erreur lors de l'envoi", details: error?.message });
   }
 });
-router75.post("/templates/:templateId/preview-pdf", async (req2, res) => {
+router80.post("/templates/:templateId/preview-pdf", async (req2, res) => {
   try {
     const { templateId } = req2.params;
     const organizationId = req2.headers["x-organization-id"];
@@ -65526,15 +71748,25 @@ router75.post("/templates/:templateId/preview-pdf", async (req2, res) => {
       linkedVariables: [],
       translations: {}
     }));
-    const theme = globalTheme ? {
-      primaryColor: globalTheme.primaryColor || "#1890ff",
-      secondaryColor: globalTheme.secondaryColor || "#52c41a",
-      accentColor: globalTheme.accentColor || "#faad14",
-      textColor: globalTheme.textColor || "#333333",
-      backgroundColor: globalTheme.backgroundColor || "#ffffff",
-      fontFamily: globalTheme.fontFamily || "Helvetica",
-      fontSize: globalTheme.fontSize || 12,
-      logoUrl: globalTheme.logoUrl || ""
+    let themeSource = globalTheme;
+    if (!themeSource) {
+      const templateWithTheme = await prisma42.documentTemplate.findFirst({
+        where: { id: templateId },
+        include: { DocumentTheme: true }
+      });
+      if (templateWithTheme?.DocumentTheme) {
+        themeSource = templateWithTheme.DocumentTheme;
+      }
+    }
+    const theme = themeSource ? {
+      primaryColor: themeSource.primaryColor || "#1890ff",
+      secondaryColor: themeSource.secondaryColor || "#52c41a",
+      accentColor: themeSource.accentColor || "#faad14",
+      textColor: themeSource.textColor || "#333333",
+      backgroundColor: themeSource.backgroundColor || "#ffffff",
+      fontFamily: themeSource.fontFamily || "Helvetica",
+      fontSize: themeSource.fontSize || 12,
+      logoUrl: themeSource.logoUrl || ""
     } : {
       primaryColor: "#1890ff",
       secondaryColor: "#52c41a",
@@ -65614,7 +71846,7 @@ router75.post("/templates/:templateId/preview-pdf", async (req2, res) => {
     res.status(500).json({ error: "Erreur serveur", details: error?.message });
   }
 });
-router75.get("/generated/:id/preview", async (req2, res) => {
+router80.get("/generated/:id/preview", async (req2, res) => {
   try {
     const { id } = req2.params;
     const organizationId = req2.headers["x-organization-id"];
@@ -65667,14 +71899,14 @@ router75.get("/generated/:id/preview", async (req2, res) => {
     res.status(500).json({ error: "Erreur serveur", details: error?.message });
   }
 });
-var documents_default = router75;
+var documents_default = router80;
 
 // src/routes/product-documents.ts
-var import_express77 = require("express");
+var import_express82 = require("express");
 init_database();
-var import_path7 = __toESM(require("path"), 1);
-var import_fs8 = __toESM(require("fs"), 1);
-var router76 = (0, import_express77.Router)();
+var import_path9 = __toESM(require("path"), 1);
+var import_fs10 = __toESM(require("fs"), 1);
+var router81 = (0, import_express82.Router)();
 function getUser(req2) {
   const headerUserId = req2.headers["x-user-id"];
   const headerOrgId = req2.headers["x-organization-id"];
@@ -65687,13 +71919,13 @@ function getUser(req2) {
   }
   return req2.user;
 }
-function getOrgId2(req2) {
+function getOrgId3(req2) {
   const orgHeader = req2.headers["x-organization-id"];
   if (orgHeader) return orgHeader;
   const user = getUser(req2);
   return user?.organizationId || "";
 }
-router76.get("/fields", async (_req, res) => {
+router81.get("/fields", async (_req, res) => {
   try {
     const optionNodes = await db.treeBranchLeafNode.findMany({
       where: {
@@ -65729,7 +71961,7 @@ router76.get("/fields", async (_req, res) => {
     res.status(500).json({ error: "Erreur liste des champs" });
   }
 });
-router76.get("/fields/:id/options", async (req2, res) => {
+router81.get("/fields/:id/options", async (req2, res) => {
   try {
     const { id } = req2.params;
     const childOptions = await db.treeBranchLeafNode.findMany({
@@ -65790,13 +72022,13 @@ router76.get("/fields/:id/options", async (req2, res) => {
     res.status(500).json({ error: "Erreur chargement options" });
   }
 });
-router76.get("/provider", async (req2, res) => {
+router81.get("/provider", async (req2, res) => {
   try {
     const user = getUser(req2);
     if (!user?.id) {
       return res.json({ provider: "local", hasGoogleDrive: false, mailProvider: "none" });
     }
-    const organizationId = getOrgId2(req2);
+    const organizationId = getOrgId3(req2);
     const emailAccount = await db.emailAccount.findUnique({
       where: { userId: user.id },
       select: { mailProvider: true }
@@ -65826,10 +72058,10 @@ router76.get("/provider", async (req2, res) => {
     res.status(500).json({ error: "Erreur d\xE9tection du provider de stockage" });
   }
 });
-router76.get("/node/:nodeId", async (req2, res) => {
+router81.get("/node/:nodeId", async (req2, res) => {
   try {
     const { nodeId } = req2.params;
-    const organizationId = getOrgId2(req2);
+    const organizationId = getOrgId3(req2);
     const documents = await db.productDocument.findMany({
       where: {
         nodeId,
@@ -65848,9 +72080,9 @@ router76.get("/node/:nodeId", async (req2, res) => {
     res.status(500).json({ error: "Erreur lors de la r\xE9cup\xE9ration des documents" });
   }
 });
-router76.get("/search", async (req2, res) => {
+router81.get("/search", async (req2, res) => {
   try {
-    const organizationId = getOrgId2(req2);
+    const organizationId = getOrgId3(req2);
     const { q, category, page = "1", limit = "20" } = req2.query;
     const where = { organizationId };
     if (q) {
@@ -65895,10 +72127,10 @@ router76.get("/search", async (req2, res) => {
     res.status(500).json({ error: "Erreur lors de la recherche" });
   }
 });
-router76.get("/:id", async (req2, res) => {
+router81.get("/:id", async (req2, res) => {
   try {
     const { id } = req2.params;
-    const organizationId = getOrgId2(req2);
+    const organizationId = getOrgId3(req2);
     const document = await db.productDocument.findFirst({
       where: { id, organizationId },
       include: {
@@ -65919,10 +72151,10 @@ router76.get("/:id", async (req2, res) => {
     res.status(500).json({ error: "Erreur lors de la r\xE9cup\xE9ration du document" });
   }
 });
-router76.post("/upload", async (req2, res) => {
+router81.post("/upload", async (req2, res) => {
   try {
     const user = getUser(req2);
-    const organizationId = getOrgId2(req2);
+    const organizationId = getOrgId3(req2);
     const {
       nodeId,
       nodeIds: nodeIdsRaw,
@@ -66016,13 +72248,13 @@ router76.post("/upload", async (req2, res) => {
         });
       }
     } else {
-      const uploadsDir2 = import_path7.default.join(process.cwd(), "public", "uploads", "product-documents", organizationId);
-      if (!import_fs8.default.existsSync(uploadsDir2)) {
-        import_fs8.default.mkdirSync(uploadsDir2, { recursive: true });
+      const uploadsDir2 = import_path9.default.join(process.cwd(), "public", "uploads", "product-documents", organizationId);
+      if (!import_fs10.default.existsSync(uploadsDir2)) {
+        import_fs10.default.mkdirSync(uploadsDir2, { recursive: true });
       }
       const uniqueName = `${Date.now()}-${fileName.replace(/[^a-zA-Z0-9._-]/g, "_")}`;
-      const filePath = import_path7.default.join(uploadsDir2, uniqueName);
-      import_fs8.default.writeFileSync(filePath, fileBuffer);
+      const filePath = import_path9.default.join(uploadsDir2, uniqueName);
+      import_fs10.default.writeFileSync(filePath, fileBuffer);
       localPath = `/uploads/product-documents/${organizationId}/${uniqueName}`;
     }
     const documents = [];
@@ -66105,10 +72337,10 @@ router76.post("/upload", async (req2, res) => {
     res.status(500).json({ error: "Erreur lors de l'upload du document" });
   }
 });
-router76.post("/upload-url", async (req2, res) => {
+router81.post("/upload-url", async (req2, res) => {
   try {
     const user = getUser(req2);
-    const organizationId = getOrgId2(req2);
+    const organizationId = getOrgId3(req2);
     const {
       nodeId,
       nodeIds: nodeIdsRaw,
@@ -66206,10 +72438,10 @@ router76.post("/upload-url", async (req2, res) => {
     res.status(500).json({ error: "Erreur lors de l'ajout du document" });
   }
 });
-router76.get("/:id/download", async (req2, res) => {
+router81.get("/:id/download", async (req2, res) => {
   try {
     const { id } = req2.params;
-    const organizationId = getOrgId2(req2);
+    const organizationId = getOrgId3(req2);
     const document = await db.productDocument.findFirst({
       where: { id, organizationId }
     });
@@ -66237,9 +72469,9 @@ router76.get("/:id/download", async (req2, res) => {
     res.status(500).json({ error: "Erreur lors du t\xE9l\xE9chargement" });
   }
 });
-router76.get("/nodes/with-documents", async (req2, res) => {
+router81.get("/nodes/with-documents", async (req2, res) => {
   try {
-    const organizationId = getOrgId2(req2);
+    const organizationId = getOrgId3(req2);
     const { fieldId } = req2.query;
     const where = { organizationId };
     if (fieldId) {
@@ -66266,11 +72498,11 @@ router76.get("/nodes/with-documents", async (req2, res) => {
     res.status(500).json({ error: "Erreur" });
   }
 });
-router76.delete("/:id", async (req2, res) => {
+router81.delete("/:id", async (req2, res) => {
   try {
     const { id } = req2.params;
     const user = getUser(req2);
-    const organizationId = getOrgId2(req2);
+    const organizationId = getOrgId3(req2);
     const document = await db.productDocument.findFirst({
       where: { id, organizationId }
     });
@@ -66287,9 +72519,9 @@ router76.delete("/:id", async (req2, res) => {
         console.warn("[ProductDocuments] \u26A0\uFE0F Impossible de supprimer le fichier Drive:", error);
       }
     } else if (document.localPath) {
-      const fullPath = import_path7.default.join(process.cwd(), "public", document.localPath);
-      if (import_fs8.default.existsSync(fullPath)) {
-        import_fs8.default.unlinkSync(fullPath);
+      const fullPath = import_path9.default.join(process.cwd(), "public", document.localPath);
+      if (import_fs10.default.existsSync(fullPath)) {
+        import_fs10.default.unlinkSync(fullPath);
         console.log(`[ProductDocuments] \u{1F5D1}\uFE0F Fichier local supprim\xE9: ${document.localPath}`);
       }
     }
@@ -66301,9 +72533,9 @@ router76.delete("/:id", async (req2, res) => {
     res.status(500).json({ error: "Erreur lors de la suppression" });
   }
 });
-router76.post("/for-devis", async (req2, res) => {
+router81.post("/for-devis", async (req2, res) => {
   try {
-    const organizationId = getOrgId2(req2);
+    const organizationId = getOrgId3(req2);
     const { nodeIds } = req2.body;
     if (!Array.isArray(nodeIds) || nodeIds.length === 0) {
       return res.json({ documents: [] });
@@ -66335,14 +72567,14 @@ router76.post("/for-devis", async (req2, res) => {
     res.status(500).json({ error: "Erreur r\xE9cup\xE9ration documents devis" });
   }
 });
-var product_documents_default = router76;
+var product_documents_default = router81;
 
 // src/routes/sync-temp.ts
-var import_express78 = require("express");
+var import_express83 = require("express");
 init_database();
-var router77 = (0, import_express78.Router)();
+var router82 = (0, import_express83.Router)();
 var prisma43 = db;
-router77.post("/sync-documents", async (req2, res) => {
+router82.post("/sync-documents", async (req2, res) => {
   const { secret } = req2.body;
   if (secret !== "SYNC_2THIER_2024") {
     return res.status(401).json({ error: "Non autoris\xE9" });
@@ -66407,14 +72639,14 @@ router77.post("/sync-documents", async (req2, res) => {
     res.status(500).json({ error: error.message });
   }
 });
-var sync_temp_default = router77;
+var sync_temp_default = router82;
 
 // src/routes/join-requests.ts
-var import_express79 = require("express");
+var import_express84 = require("express");
 init_database();
 var import_client6 = require("@prisma/client");
-var router78 = (0, import_express79.Router)();
-router78.post("/", authMiddleware, async (req2, res) => {
+var router83 = (0, import_express84.Router)();
+router83.post("/", authMiddleware, async (req2, res) => {
   try {
     const userId = req2.user?.userId;
     const { organizationId, message } = req2.body;
@@ -66471,7 +72703,7 @@ router78.post("/", authMiddleware, async (req2, res) => {
     res.status(500).json({ success: false, error: "Erreur serveur" });
   }
 });
-router78.get("/my-requests", authMiddleware, async (req2, res) => {
+router83.get("/my-requests", authMiddleware, async (req2, res) => {
   try {
     const userId = req2.user?.userId;
     if (!userId) {
@@ -66490,7 +72722,7 @@ router78.get("/my-requests", authMiddleware, async (req2, res) => {
     res.status(500).json({ success: false, error: "Erreur serveur" });
   }
 });
-router78.get("/pending", authMiddleware, requireRole2(["admin", "super_admin"]), async (req2, res) => {
+router83.get("/pending", authMiddleware, requireRole2(["admin", "super_admin"]), async (req2, res) => {
   try {
     const organizationId = req2.user?.organizationId;
     const isSuperAdmin2 = req2.user?.role === "super_admin";
@@ -66512,7 +72744,7 @@ router78.get("/pending", authMiddleware, requireRole2(["admin", "super_admin"]),
     res.status(500).json({ success: false, error: "Erreur serveur" });
   }
 });
-router78.post("/:id/approve", authMiddleware, requireRole2(["admin", "super_admin"]), async (req2, res) => {
+router83.post("/:id/approve", authMiddleware, requireRole2(["admin", "super_admin"]), async (req2, res) => {
   try {
     const { id } = req2.params;
     const { roleId } = req2.body;
@@ -66584,7 +72816,7 @@ router78.post("/:id/approve", authMiddleware, requireRole2(["admin", "super_admi
     res.status(500).json({ success: false, error: "Erreur serveur" });
   }
 });
-router78.post("/:id/reject", authMiddleware, requireRole2(["admin", "super_admin"]), async (req2, res) => {
+router83.post("/:id/reject", authMiddleware, requireRole2(["admin", "super_admin"]), async (req2, res) => {
   try {
     const { id } = req2.params;
     const { reason } = req2.body;
@@ -66625,7 +72857,7 @@ router78.post("/:id/reject", authMiddleware, requireRole2(["admin", "super_admin
     res.status(500).json({ success: false, error: "Erreur serveur" });
   }
 });
-router78.delete("/:id", authMiddleware, async (req2, res) => {
+router83.delete("/:id", authMiddleware, async (req2, res) => {
   try {
     const { id } = req2.params;
     const userId = req2.user?.userId;
@@ -66651,10 +72883,10 @@ router78.delete("/:id", authMiddleware, async (req2, res) => {
     res.status(500).json({ success: false, error: "Erreur serveur" });
   }
 });
-var join_requests_default = router78;
+var join_requests_default = router83;
 
 // src/routes/index.ts
-var apiRouter = (0, import_express80.Router)();
+var apiRouter = (0, import_express85.Router)();
 apiRouter.use("/auth", authRoutes_default);
 console.log("[ROUTER] Routes d'authentification mont\xE9es sur /auth");
 apiRouter.use("/auto-google-auth", autoGoogleAuthRoutes_default);
@@ -66678,6 +72910,10 @@ apiRouter.use("/notifications", notifications_default);
 apiRouter.use("/notifications-system", notificationSystemRoutes_default);
 apiRouter.use("/settings", settingsRoutes_default);
 apiRouter.use("/leads", leadsRoutes_default);
+apiRouter.use("/chantiers", chantiersRoutes_default);
+apiRouter.use("/chantier-statuses", chantier_statuses_default);
+apiRouter.use("/chantier-workflow", chantier_workflow_default);
+apiRouter.use("/teams", teams_default);
 apiRouter.use("/dashboard", dashboard_default);
 apiRouter.use("/clients", clients_default);
 apiRouter.use("/company", company_default);
@@ -66713,6 +72949,7 @@ apiRouter.use("/treebranchleaf", authenticateToken, fetchFullUser, treebranchlea
 apiRouter.use("/tbl", tbl_intelligence_routes_default);
 apiRouter.use("/tbl", tbl_routes_default);
 apiRouter.use("/tbl", tbl_capabilities_default);
+apiRouter.use("/gestionnaire", authenticateToken, fetchFullUser, gestionnaire_default);
 apiRouter.use("/treebranchleaf", tblSelectConfigRouter);
 apiRouter.use("/validations", validations_default);
 apiRouter.use("/formulas", formulas_default2);
@@ -66743,10 +72980,10 @@ var routes_default = apiRouter;
 init_prisma();
 
 // src/components/TreeBranchLeaf/treebranchleaf-new/TBL/routes/ia-config-routes.ts
-var import_express81 = __toESM(require("express"), 1);
+var import_express86 = __toESM(require("express"), 1);
 init_database();
-var router79 = import_express81.default.Router();
-router79.get("/nodes/:nodeId/ia-config", async (req2, res) => {
+var router84 = import_express86.default.Router();
+router84.get("/nodes/:nodeId/ia-config", async (req2, res) => {
   try {
     const { nodeId } = req2.params;
     console.log(`\u{1F4CA} [IA-CONFIG] R\xE9cup\xE9ration config pour node ${nodeId}`);
@@ -66776,7 +73013,7 @@ router79.get("/nodes/:nodeId/ia-config", async (req2, res) => {
     res.status(500).json({ error: "Failed to fetch IA config" });
   }
 });
-router79.put("/nodes/:nodeId/ia-config", async (req2, res) => {
+router84.put("/nodes/:nodeId/ia-config", async (req2, res) => {
   try {
     const { nodeId } = req2.params;
     const config = req2.body;
@@ -66805,7 +73042,7 @@ router79.put("/nodes/:nodeId/ia-config", async (req2, res) => {
     res.status(500).json({ error: "Failed to update IA config" });
   }
 });
-router79.delete("/nodes/:nodeId/ia-config", async (req2, res) => {
+router84.delete("/nodes/:nodeId/ia-config", async (req2, res) => {
   try {
     const { nodeId } = req2.params;
     console.log(`\u{1F5D1}\uFE0F [IA-CONFIG] Suppression config pour node ${nodeId}`);
@@ -66823,13 +73060,13 @@ router79.delete("/nodes/:nodeId/ia-config", async (req2, res) => {
     res.status(500).json({ error: "Failed to delete IA config" });
   }
 });
-var ia_config_routes_default = router79;
+var ia_config_routes_default = router84;
 
 // src/controllers/calculatedValueController.ts
-var import_express82 = require("express");
-var import_crypto24 = require("crypto");
+var import_express87 = require("express");
+var import_crypto27 = require("crypto");
 init_database();
-var router80 = (0, import_express82.Router)();
+var router85 = (0, import_express87.Router)();
 var prisma44 = db;
 var parseStoredStringValue = (raw) => {
   if (raw === null || raw === void 0) {
@@ -66898,7 +73135,7 @@ var toIsoString = (date) => {
     return void 0;
   }
 };
-router80.get("/:nodeId/calculated-value", async (req2, res) => {
+router85.get("/:nodeId/calculated-value", async (req2, res) => {
   try {
     const { nodeId } = req2.params;
     const pickQueryString = (key2) => {
@@ -67042,7 +73279,7 @@ router80.get("/:nodeId/calculated-value", async (req2, res) => {
               fieldLabel: node.label
             },
             create: {
-              id: (0, import_crypto24.randomUUID)(),
+              id: (0, import_crypto27.randomUUID)(),
               submissionId,
               nodeId,
               value: String(sum),
@@ -67166,7 +73403,7 @@ router80.get("/:nodeId/calculated-value", async (req2, res) => {
                   lastResolved: resolvedAt
                 },
                 create: {
-                  id: (0, import_crypto24.randomUUID)(),
+                  id: (0, import_crypto27.randomUUID)(),
                   submissionId,
                   nodeId,
                   value: persistedValue,
@@ -67337,7 +73574,7 @@ router80.get("/:nodeId/calculated-value", async (req2, res) => {
                 fieldLabel: node.label
               },
               create: {
-                id: (0, import_crypto24.randomUUID)(),
+                id: (0, import_crypto27.randomUUID)(),
                 submissionId,
                 nodeId,
                 value: stringValue,
@@ -67407,7 +73644,7 @@ router80.get("/:nodeId/calculated-value", async (req2, res) => {
     return res.status(500).json({ error: String(error) });
   }
 });
-router80.post("/batch-calculated-values", async (req2, res) => {
+router85.post("/batch-calculated-values", async (req2, res) => {
   try {
     const { nodeIds, submissionId } = req2.body;
     if (!Array.isArray(nodeIds) || nodeIds.length === 0) {
@@ -67458,7 +73695,7 @@ router80.post("/batch-calculated-values", async (req2, res) => {
     return res.status(500).json({ error: String(error) });
   }
 });
-router80.post("/:nodeId/store-calculated-value", async (req2, res) => {
+router85.post("/:nodeId/store-calculated-value", async (req2, res) => {
   try {
     const { nodeId } = req2.params;
     const { calculatedValue, calculatedBy, submissionId } = req2.body;
@@ -67495,7 +73732,7 @@ router80.post("/:nodeId/store-calculated-value", async (req2, res) => {
     return res.status(500).json({ error: String(error) });
   }
 });
-router80.post("/store-batch-calculated-values", async (req2, res) => {
+router85.post("/store-batch-calculated-values", async (req2, res) => {
   try {
     const { values, submissionId } = req2.body;
     if (!Array.isArray(values) || values.length === 0) {
@@ -67536,12 +73773,12 @@ router80.post("/store-batch-calculated-values", async (req2, res) => {
     return res.status(500).json({ error: String(error) });
   }
 });
-var calculatedValueController_default = router80;
+var calculatedValueController_default = router85;
 
 // src/routes/tbl-batch-routes.ts
-var import_express83 = require("express");
+var import_express88 = require("express");
 init_database();
-var router81 = (0, import_express83.Router)();
+var router86 = (0, import_express88.Router)();
 function getAuthCtx6(req2) {
   const user = req2.user;
   return {
@@ -67549,7 +73786,7 @@ function getAuthCtx6(req2) {
     isSuperAdmin: user?.isSuperAdmin || false
   };
 }
-router81.get("/trees/:treeId/formulas", async (req2, res) => {
+router86.get("/trees/:treeId/formulas", async (req2, res) => {
   try {
     const { treeId } = req2.params;
     const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx6(req2);
@@ -67586,7 +73823,7 @@ router81.get("/trees/:treeId/formulas", async (req2, res) => {
     res.status(500).json({ error: "Erreur lors de la r\xE9cup\xE9ration batch des formules" });
   }
 });
-router81.get("/trees/:treeId/calculated-values", async (req2, res) => {
+router86.get("/trees/:treeId/calculated-values", async (req2, res) => {
   try {
     const { treeId } = req2.params;
     const { leadId, submissionId: qsSubmissionId } = req2.query;
@@ -67656,7 +73893,7 @@ router81.get("/trees/:treeId/calculated-values", async (req2, res) => {
     res.status(500).json({ error: "Erreur lors de la r\xE9cup\xE9ration batch des valeurs calcul\xE9es" });
   }
 });
-router81.get("/trees/:treeId/select-configs", async (req2, res) => {
+router86.get("/trees/:treeId/select-configs", async (req2, res) => {
   try {
     const { treeId } = req2.params;
     const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx6(req2);
@@ -67718,7 +73955,7 @@ router81.get("/trees/:treeId/select-configs", async (req2, res) => {
     res.status(500).json({ error: "Erreur lors de la r\xE9cup\xE9ration batch des configs select" });
   }
 });
-router81.get("/trees/:treeId/all", async (req2, res) => {
+router86.get("/trees/:treeId/all", async (req2, res) => {
   const { treeId } = req2.params;
   console.log(`[TBL Batch API] /all called for treeId: ${treeId}`);
   try {
@@ -67848,7 +74085,7 @@ router81.get("/trees/:treeId/all", async (req2, res) => {
     });
   }
 });
-router81.get("/trees/:treeId/node-data", async (req2, res) => {
+router86.get("/trees/:treeId/node-data", async (req2, res) => {
   try {
     const { treeId } = req2.params;
     const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx6(req2);
@@ -67916,7 +74153,7 @@ router81.get("/trees/:treeId/node-data", async (req2, res) => {
     res.status(500).json({ error: "Erreur lors de la r\xE9cup\xE9ration batch des donn\xE9es de noeuds" });
   }
 });
-router81.get("/trees/:treeId/conditions", async (req2, res) => {
+router86.get("/trees/:treeId/conditions", async (req2, res) => {
   try {
     const { treeId } = req2.params;
     const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx6(req2);
@@ -67971,13 +74208,13 @@ router81.get("/trees/:treeId/conditions", async (req2, res) => {
     res.status(500).json({ error: "Erreur lors de la r\xE9cup\xE9ration batch des conditions" });
   }
 });
-var tbl_batch_routes_default = router81;
+var tbl_batch_routes_default = router86;
 
 // src/routes/batch-routes.ts
-var import_express84 = require("express");
+var import_express89 = require("express");
 init_database();
 var import_googleapis10 = require("googleapis");
-var router82 = (0, import_express84.Router)();
+var router87 = (0, import_express89.Router)();
 function getAuthCtx7(req2) {
   const user = req2.user;
   return {
@@ -67986,7 +74223,7 @@ function getAuthCtx7(req2) {
     isSuperAdmin: user?.isSuperAdmin || false
   };
 }
-router82.post("/gmail/modify", async (req2, res) => {
+router87.post("/gmail/modify", async (req2, res) => {
   try {
     const { userId, organizationId } = getAuthCtx7(req2);
     const { messageIds, addLabelIds = [], removeLabelIds = [] } = req2.body;
@@ -68024,7 +74261,7 @@ router82.post("/gmail/modify", async (req2, res) => {
     res.status(500).json({ error: error.message || "Erreur batch Gmail" });
   }
 });
-router82.post("/gmail/trash", async (req2, res) => {
+router87.post("/gmail/trash", async (req2, res) => {
   try {
     const { userId } = getAuthCtx7(req2);
     const { messageIds } = req2.body;
@@ -68062,7 +74299,7 @@ router82.post("/gmail/trash", async (req2, res) => {
     res.status(500).json({ error: error.message || "Erreur batch Gmail" });
   }
 });
-router82.delete("/gmail/delete", async (req2, res) => {
+router87.delete("/gmail/delete", async (req2, res) => {
   try {
     const { userId } = getAuthCtx7(req2);
     const { messageIds } = req2.body;
@@ -68098,7 +74335,7 @@ router82.delete("/gmail/delete", async (req2, res) => {
     res.status(500).json({ error: error.message || "Erreur batch Gmail" });
   }
 });
-router82.patch("/leads/status", async (req2, res) => {
+router87.patch("/leads/status", async (req2, res) => {
   try {
     const { organizationId } = getAuthCtx7(req2);
     const { leadIds, statusId } = req2.body;
@@ -68135,7 +74372,7 @@ router82.patch("/leads/status", async (req2, res) => {
     res.status(500).json({ error: error.message || "Erreur batch leads" });
   }
 });
-router82.patch("/leads/assign", async (req2, res) => {
+router87.patch("/leads/assign", async (req2, res) => {
   try {
     const { organizationId } = getAuthCtx7(req2);
     const { leadIds, assignedToId } = req2.body;
@@ -68163,7 +74400,7 @@ router82.patch("/leads/assign", async (req2, res) => {
     res.status(500).json({ error: error.message || "Erreur batch leads" });
   }
 });
-router82.delete("/leads", async (req2, res) => {
+router87.delete("/leads", async (req2, res) => {
   try {
     const { organizationId } = getAuthCtx7(req2);
     const { leadIds } = req2.body;
@@ -68187,7 +74424,7 @@ router82.delete("/leads", async (req2, res) => {
     res.status(500).json({ error: error.message || "Erreur batch leads" });
   }
 });
-router82.post("/fields/configs", async (req2, res) => {
+router87.post("/fields/configs", async (req2, res) => {
   try {
     const { fieldIds } = req2.body;
     if (!fieldIds || !Array.isArray(fieldIds) || fieldIds.length === 0) {
@@ -68216,7 +74453,7 @@ router82.post("/fields/configs", async (req2, res) => {
     res.status(500).json({ error: error.message || "Erreur batch fields" });
   }
 });
-router82.patch("/modules/toggle", async (req2, res) => {
+router87.patch("/modules/toggle", async (req2, res) => {
   try {
     const { organizationId } = getAuthCtx7(req2);
     const { moduleIds, enabled } = req2.body;
@@ -68247,7 +74484,7 @@ router82.patch("/modules/toggle", async (req2, res) => {
     res.status(500).json({ error: error.message || "Erreur batch modules" });
   }
 });
-router82.get("/analytics/leads-by-status", async (req2, res) => {
+router87.get("/analytics/leads-by-status", async (req2, res) => {
   try {
     const { organizationId } = getAuthCtx7(req2);
     const counts = await db.lead.groupBy({
@@ -68278,7 +74515,7 @@ router82.get("/analytics/leads-by-status", async (req2, res) => {
     res.status(500).json({ error: error.message || "Erreur analytics" });
   }
 });
-router82.get("/analytics/leads-by-source", async (req2, res) => {
+router87.get("/analytics/leads-by-source", async (req2, res) => {
   try {
     const { organizationId } = getAuthCtx7(req2);
     const counts = await db.lead.groupBy({
@@ -68301,7 +74538,7 @@ router82.get("/analytics/leads-by-source", async (req2, res) => {
     res.status(500).json({ error: error.message || "Erreur analytics" });
   }
 });
-router82.get("/analytics/leads-by-assignee", async (req2, res) => {
+router87.get("/analytics/leads-by-assignee", async (req2, res) => {
   try {
     const { organizationId } = getAuthCtx7(req2);
     const counts = await db.lead.groupBy({
@@ -68331,13 +74568,13 @@ router82.get("/analytics/leads-by-assignee", async (req2, res) => {
     res.status(500).json({ error: error.message || "Erreur analytics" });
   }
 });
-var batch_routes_default = router82;
+var batch_routes_default = router87;
 
 // src/api/websites.ts
-var import_express85 = require("express");
+var import_express90 = require("express");
 init_database();
-var router83 = (0, import_express85.Router)();
-router83.get("/websites", authenticateToken, async (req2, res) => {
+var router88 = (0, import_express90.Router)();
+router88.get("/websites", authenticateToken, async (req2, res) => {
   try {
     const organizationId = req2.headers["x-organization-id"];
     const showAll = req2.query.all === "true";
@@ -68365,7 +74602,7 @@ router83.get("/websites", authenticateToken, async (req2, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
-router83.get("/websites/id/:id", authenticateToken, async (req2, res) => {
+router88.get("/websites/id/:id", authenticateToken, async (req2, res) => {
   try {
     const { id } = req2.params;
     const websiteId = parseInt(id, 10);
@@ -68388,7 +74625,7 @@ router83.get("/websites/id/:id", authenticateToken, async (req2, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
-router83.put("/websites/:id", authenticateToken, async (req2, res) => {
+router88.put("/websites/:id", authenticateToken, async (req2, res) => {
   try {
     const websiteId = parseInt(req2.params.id);
     const organizationId = req2.headers["x-organization-id"];
@@ -68453,7 +74690,7 @@ router83.put("/websites/:id", authenticateToken, async (req2, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
-router83.delete("/websites/:id", authenticateToken, async (req2, res) => {
+router88.delete("/websites/:id", authenticateToken, async (req2, res) => {
   try {
     const websiteId = parseInt(req2.params.id);
     const organizationId = req2.headers["x-organization-id"];
@@ -68477,7 +74714,7 @@ router83.delete("/websites/:id", authenticateToken, async (req2, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
-router83.post("/websites", authenticateToken, async (req2, res) => {
+router88.post("/websites", authenticateToken, async (req2, res) => {
   try {
     const organizationId = req2.headers["x-organization-id"];
     const data = req2.body;
@@ -68508,7 +74745,7 @@ router83.post("/websites", authenticateToken, async (req2, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
-router83.get("/websites/:idOrSlug", async (req2, res) => {
+router88.get("/websites/:idOrSlug", async (req2, res) => {
   try {
     const { idOrSlug } = req2.params;
     const organizationId = req2.headers["x-organization-id"];
@@ -68568,7 +74805,7 @@ router83.get("/websites/:idOrSlug", async (req2, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
-router83.get("/websites/:slug/services", async (req2, res) => {
+router88.get("/websites/:slug/services", async (req2, res) => {
   try {
     const { slug } = req2.params;
     const website = await db.websites.findFirst({
@@ -68591,7 +74828,7 @@ router83.get("/websites/:slug/services", async (req2, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
-router83.get("/websites/:slug/projects", async (req2, res) => {
+router88.get("/websites/:slug/projects", async (req2, res) => {
   try {
     const { slug } = req2.params;
     const { featured } = req2.query;
@@ -68619,7 +74856,7 @@ router83.get("/websites/:slug/projects", async (req2, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
-router83.get("/websites/:slug/testimonials", async (req2, res) => {
+router88.get("/websites/:slug/testimonials", async (req2, res) => {
   try {
     const { slug } = req2.params;
     const { featured } = req2.query;
@@ -68647,7 +74884,7 @@ router83.get("/websites/:slug/testimonials", async (req2, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
-router83.get("/websites/:slug/blog", async (req2, res) => {
+router88.get("/websites/:slug/blog", async (req2, res) => {
   try {
     const { slug } = req2.params;
     const { limit = "10", featured } = req2.query;
@@ -68686,7 +74923,7 @@ router83.get("/websites/:slug/blog", async (req2, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
-router83.get("/websites/:slug/blog/:postSlug", async (req2, res) => {
+router88.get("/websites/:slug/blog/:postSlug", async (req2, res) => {
   try {
     const { slug, postSlug } = req2.params;
     const website = await db.websites.findFirst({
@@ -68723,14 +74960,14 @@ router83.get("/websites/:slug/blog/:postSlug", async (req2, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
-var websites_default = router83;
+var websites_default = router88;
 
 // src/api/website-services.ts
-var import_express86 = require("express");
+var import_express91 = require("express");
 init_database();
-var router84 = (0, import_express86.Router)();
+var router89 = (0, import_express91.Router)();
 var prisma45 = db;
-router84.get("/website-services/:websiteId", async (req2, res) => {
+router89.get("/website-services/:websiteId", async (req2, res) => {
   try {
     const { websiteId } = req2.params;
     const services = await prisma45.webSiteService.findMany({
@@ -68747,7 +74984,7 @@ router84.get("/website-services/:websiteId", async (req2, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
-router84.post("/website-services", async (req2, res) => {
+router89.post("/website-services", async (req2, res) => {
   try {
     const { websiteId, key: key2, icon, title, description, features, ctaText, ctaUrl, isActive } = req2.body;
     if (!websiteId || !key2 || !title) {
@@ -68777,7 +75014,7 @@ router84.post("/website-services", async (req2, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
-router84.put("/website-services/:id", async (req2, res) => {
+router89.put("/website-services/:id", async (req2, res) => {
   try {
     const { id } = req2.params;
     const { key: key2, icon, title, description, features, ctaText, ctaUrl, isActive } = req2.body;
@@ -68800,7 +75037,7 @@ router84.put("/website-services/:id", async (req2, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
-router84.delete("/website-services/:id", async (req2, res) => {
+router89.delete("/website-services/:id", async (req2, res) => {
   try {
     const { id } = req2.params;
     await prisma45.webSiteService.delete({
@@ -68812,7 +75049,7 @@ router84.delete("/website-services/:id", async (req2, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
-router84.post("/website-services/reorder", async (req2, res) => {
+router89.post("/website-services/reorder", async (req2, res) => {
   try {
     const { services } = req2.body;
     if (!Array.isArray(services)) {
@@ -68832,14 +75069,14 @@ router84.post("/website-services/reorder", async (req2, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
-var website_services_default = router84;
+var website_services_default = router89;
 
 // src/api/website-projects.ts
-var import_express87 = require("express");
+var import_express92 = require("express");
 init_database();
-var router85 = (0, import_express87.Router)();
+var router90 = (0, import_express92.Router)();
 var prisma46 = db;
-router85.get("/website-projects/:websiteId", async (req2, res) => {
+router90.get("/website-projects/:websiteId", async (req2, res) => {
   try {
     const { websiteId } = req2.params;
     const projects = await prisma46.webSiteProject.findMany({
@@ -68856,7 +75093,7 @@ router85.get("/website-projects/:websiteId", async (req2, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
-router85.post("/website-projects", async (req2, res) => {
+router90.post("/website-projects", async (req2, res) => {
   try {
     const { websiteId, title, location, details, tags, isActive, isFeatured, completedAt } = req2.body;
     if (!websiteId || !title) {
@@ -68885,7 +75122,7 @@ router85.post("/website-projects", async (req2, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
-router85.put("/website-projects/:id", async (req2, res) => {
+router90.put("/website-projects/:id", async (req2, res) => {
   try {
     const { id } = req2.params;
     const { title, location, details, tags, isActive, isFeatured, completedAt } = req2.body;
@@ -68907,7 +75144,7 @@ router85.put("/website-projects/:id", async (req2, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
-router85.delete("/website-projects/:id", async (req2, res) => {
+router90.delete("/website-projects/:id", async (req2, res) => {
   try {
     const { id } = req2.params;
     await prisma46.webSiteProject.delete({
@@ -68919,7 +75156,7 @@ router85.delete("/website-projects/:id", async (req2, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
-router85.post("/website-projects/reorder", async (req2, res) => {
+router90.post("/website-projects/reorder", async (req2, res) => {
   try {
     const { projects } = req2.body;
     if (!Array.isArray(projects)) {
@@ -68939,14 +75176,14 @@ router85.post("/website-projects/reorder", async (req2, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
-var website_projects_default = router85;
+var website_projects_default = router90;
 
 // src/api/website-testimonials.ts
-var import_express88 = require("express");
+var import_express93 = require("express");
 init_database();
-var router86 = (0, import_express88.Router)();
+var router91 = (0, import_express93.Router)();
 var prisma47 = db;
-router86.get("/website-testimonials/:websiteId", async (req2, res) => {
+router91.get("/website-testimonials/:websiteId", async (req2, res) => {
   try {
     const { websiteId } = req2.params;
     const testimonials = await prisma47.webSiteTestimonial.findMany({
@@ -68963,7 +75200,7 @@ router86.get("/website-testimonials/:websiteId", async (req2, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
-router86.post("/website-testimonials", async (req2, res) => {
+router91.post("/website-testimonials", async (req2, res) => {
   try {
     const { websiteId, customerName, location, service, rating, text, isActive, isFeatured, publishedAt } = req2.body;
     if (!websiteId || !customerName || !text) {
@@ -68993,7 +75230,7 @@ router86.post("/website-testimonials", async (req2, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
-router86.put("/website-testimonials/:id", async (req2, res) => {
+router91.put("/website-testimonials/:id", async (req2, res) => {
   try {
     const { id } = req2.params;
     const { customerName, location, service, rating, text, isActive, isFeatured, publishedAt } = req2.body;
@@ -69016,7 +75253,7 @@ router86.put("/website-testimonials/:id", async (req2, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
-router86.delete("/website-testimonials/:id", async (req2, res) => {
+router91.delete("/website-testimonials/:id", async (req2, res) => {
   try {
     const { id } = req2.params;
     await prisma47.webSiteTestimonial.delete({
@@ -69028,7 +75265,7 @@ router86.delete("/website-testimonials/:id", async (req2, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
-router86.post("/website-testimonials/reorder", async (req2, res) => {
+router91.post("/website-testimonials/reorder", async (req2, res) => {
   try {
     const { testimonials } = req2.body;
     if (!Array.isArray(testimonials)) {
@@ -69048,13 +75285,13 @@ router86.post("/website-testimonials/reorder", async (req2, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
-var website_testimonials_default = router86;
+var website_testimonials_default = router91;
 
 // src/api/website-sections.ts
-var import_express89 = __toESM(require("express"), 1);
+var import_express94 = __toESM(require("express"), 1);
 init_database();
-var router87 = import_express89.default.Router();
-router87.get("/website-sections/:websiteId", async (req2, res) => {
+var router92 = import_express94.default.Router();
+router92.get("/website-sections/:websiteId", async (req2, res) => {
   try {
     const { websiteId } = req2.params;
     const sections = await db.website_sections.findMany({
@@ -69071,7 +75308,7 @@ router87.get("/website-sections/:websiteId", async (req2, res) => {
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
-router87.post("/website-sections", async (req2, res) => {
+router92.post("/website-sections", async (req2, res) => {
   try {
     const { websiteId, key: key2, type, name, content, backgroundColor, textColor, customCss } = req2.body;
     const maxOrder = await db.website_sections.aggregate({
@@ -69099,7 +75336,7 @@ router87.post("/website-sections", async (req2, res) => {
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
-router87.put("/website-sections/:id", async (req2, res) => {
+router92.put("/website-sections/:id", async (req2, res) => {
   try {
     const { id } = req2.params;
     const { name, content, backgroundColor, textColor, customCss, isActive } = req2.body;
@@ -69150,7 +75387,7 @@ router87.put("/website-sections/:id", async (req2, res) => {
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
-router87.patch("/website-sections/:id", async (req2, res) => {
+router92.patch("/website-sections/:id", async (req2, res) => {
   try {
     const { id } = req2.params;
     const { name, content, backgroundColor, textColor, customCss, isActive } = req2.body;
@@ -69198,7 +75435,7 @@ router87.patch("/website-sections/:id", async (req2, res) => {
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
-router87.delete("/website-sections/:id", async (req2, res) => {
+router92.delete("/website-sections/:id", async (req2, res) => {
   try {
     const { id } = req2.params;
     const section = await db.website_sections.findUnique({
@@ -69216,7 +75453,7 @@ router87.delete("/website-sections/:id", async (req2, res) => {
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
-router87.post("/website-sections/reorder", async (req2, res) => {
+router92.post("/website-sections/reorder", async (req2, res) => {
   try {
     const { sections } = req2.body;
     await db.$transaction(
@@ -69233,7 +75470,7 @@ router87.post("/website-sections/reorder", async (req2, res) => {
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
-router87.post("/website-sections/duplicate/:id", async (req2, res) => {
+router92.post("/website-sections/duplicate/:id", async (req2, res) => {
   try {
     const { id } = req2.params;
     const original = await db.website_sections.findUnique({
@@ -69264,13 +75501,13 @@ router87.post("/website-sections/duplicate/:id", async (req2, res) => {
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
-var website_sections_default = router87;
+var website_sections_default = router92;
 
 // src/api/website-themes.ts
-var import_express90 = require("express");
+var import_express95 = require("express");
 init_prisma();
-var router88 = (0, import_express90.Router)();
-router88.get("/:websiteId", async (req2, res) => {
+var router93 = (0, import_express95.Router)();
+router93.get("/:websiteId", async (req2, res) => {
   try {
     const { websiteId } = req2.params;
     console.log("\u{1F4E1} [API] GET theme websiteId:", websiteId);
@@ -69286,7 +75523,7 @@ router88.get("/:websiteId", async (req2, res) => {
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
-router88.post("/", async (req2, res) => {
+router93.post("/", async (req2, res) => {
   try {
     const themeData = req2.body;
     console.log("\u{1F4E1} [API] POST theme:", themeData);
@@ -69299,7 +75536,7 @@ router88.post("/", async (req2, res) => {
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
-router88.put("/:id", async (req2, res) => {
+router93.put("/:id", async (req2, res) => {
   try {
     const { id } = req2.params;
     const themeData = req2.body;
@@ -69314,7 +75551,7 @@ router88.put("/:id", async (req2, res) => {
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
-router88.delete("/:id", async (req2, res) => {
+router93.delete("/:id", async (req2, res) => {
   try {
     const { id } = req2.params;
     console.log("\u{1F4E1} [API] DELETE theme:", id);
@@ -69327,12 +75564,12 @@ router88.delete("/:id", async (req2, res) => {
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
-var website_themes_default = router88;
+var website_themes_default = router93;
 
 // src/api/contact-form.ts
-var import_express91 = require("express");
+var import_express96 = require("express");
 init_database();
-var router89 = (0, import_express91.Router)();
+var router94 = (0, import_express96.Router)();
 var prisma48 = db;
 var isValidEmail = (email) => {
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -69350,7 +75587,7 @@ var isSpam = (data) => {
   }
   return false;
 };
-router89.post("/contact-form", async (req2, res) => {
+router94.post("/contact-form", async (req2, res) => {
   try {
     const data = req2.body;
     if (!data.name || data.name.trim().length < 2) {
@@ -69426,7 +75663,7 @@ router89.post("/contact-form", async (req2, res) => {
     });
   }
 });
-router89.get("/contact-submissions/:websiteId", async (req2, res) => {
+router94.get("/contact-submissions/:websiteId", async (req2, res) => {
   try {
     const websiteId = parseInt(req2.params.websiteId);
     const submissions = await prisma48.contactSubmission.findMany({
@@ -69441,7 +75678,7 @@ router89.get("/contact-submissions/:websiteId", async (req2, res) => {
     res.status(500).json({ success: false, message: "Erreur serveur" });
   }
 });
-router89.patch("/contact-submission/:id/read", async (req2, res) => {
+router94.patch("/contact-submission/:id/read", async (req2, res) => {
   try {
     const id = parseInt(req2.params.id);
     const submission = await prisma48.contactSubmission.update({
@@ -69454,7 +75691,7 @@ router89.patch("/contact-submission/:id/read", async (req2, res) => {
     res.status(500).json({ success: false, message: "Erreur serveur" });
   }
 });
-router89.patch("/contact-submission/:id/status", async (req2, res) => {
+router94.patch("/contact-submission/:id/status", async (req2, res) => {
   try {
     const id = parseInt(req2.params.id);
     const { status, notes } = req2.body;
@@ -69476,7 +75713,7 @@ router89.patch("/contact-submission/:id/status", async (req2, res) => {
     res.status(500).json({ success: false, message: "Erreur serveur" });
   }
 });
-router89.delete("/contact-submission/:id", async (req2, res) => {
+router94.delete("/contact-submission/:id", async (req2, res) => {
   try {
     const id = parseInt(req2.params.id);
     await prisma48.contactSubmission.delete({
@@ -69488,19 +75725,19 @@ router89.delete("/contact-submission/:id", async (req2, res) => {
     res.status(500).json({ success: false, message: "Erreur serveur" });
   }
 });
-var contact_form_default = router89;
+var contact_form_default = router94;
 
 // src/api/image-upload.ts
-var import_express92 = require("express");
+var import_express97 = require("express");
 var import_multer2 = __toESM(require("multer"), 1);
-var import_path8 = __toESM(require("path"), 1);
+var import_path10 = __toESM(require("path"), 1);
 var import_promises = __toESM(require("fs/promises"), 1);
 init_database();
-var router90 = (0, import_express92.Router)();
+var router95 = (0, import_express97.Router)();
 var prisma49 = db;
 var storage2 = import_multer2.default.diskStorage({
   destination: async (req2, file, cb) => {
-    const uploadDir = import_path8.default.join(process.cwd(), "public", "uploads", "websites");
+    const uploadDir = import_path10.default.join(process.cwd(), "public", "uploads", "websites");
     await import_promises.default.mkdir(uploadDir, { recursive: true });
     cb(null, uploadDir);
   },
@@ -69525,7 +75762,7 @@ var upload2 = (0, import_multer2.default)({
     // 5MB max
   }
 });
-router90.post("/upload", upload2.single("file"), async (req2, res) => {
+router95.post("/upload", upload2.single("file"), async (req2, res) => {
   try {
     if (!req2.file) {
       return res.status(400).json({
@@ -69568,7 +75805,7 @@ router90.post("/upload", upload2.single("file"), async (req2, res) => {
     });
   }
 });
-router90.post("/upload-image", upload2.single("image"), async (req2, res) => {
+router95.post("/upload-image", upload2.single("image"), async (req2, res) => {
   try {
     if (!req2.file) {
       return res.status(400).json({
@@ -69625,7 +75862,7 @@ router90.post("/upload-image", upload2.single("image"), async (req2, res) => {
     });
   }
 });
-router90.get("/images/:websiteId", async (req2, res) => {
+router95.get("/images/:websiteId", async (req2, res) => {
   try {
     const websiteId = parseInt(req2.params.websiteId);
     const { category } = req2.query;
@@ -69649,7 +75886,7 @@ router90.get("/images/:websiteId", async (req2, res) => {
     });
   }
 });
-router90.delete("/image/:id", async (req2, res) => {
+router95.delete("/image/:id", async (req2, res) => {
   try {
     const id = parseInt(req2.params.id);
     const mediaFile = await prisma49.webSiteMediaFile.findUnique({
@@ -69681,10 +75918,10 @@ router90.delete("/image/:id", async (req2, res) => {
     });
   }
 });
-var image_upload_default = router90;
+var image_upload_default = router95;
 
 // src/api/ai-content.ts
-var import_express93 = require("express");
+var import_express98 = require("express");
 
 // src/services/aiContentService.ts
 var AIContentService = class {
@@ -69897,8 +76134,8 @@ R\xE8gles :
 var aiContentService = new AIContentService();
 
 // src/api/ai-content.ts
-var router91 = (0, import_express93.Router)();
-router91.post("/generate-service", async (req2, res) => {
+var router96 = (0, import_express98.Router)();
+router96.post("/generate-service", async (req2, res) => {
   try {
     const { siteName, industry, serviceType, keywords } = req2.body;
     if (!siteName || !industry || !serviceType) {
@@ -69924,7 +76161,7 @@ router91.post("/generate-service", async (req2, res) => {
     });
   }
 });
-router91.post("/generate-project", async (req2, res) => {
+router96.post("/generate-project", async (req2, res) => {
   try {
     const { siteName, industry, projectType, location } = req2.body;
     if (!siteName || !industry || !projectType) {
@@ -69950,7 +76187,7 @@ router91.post("/generate-project", async (req2, res) => {
     });
   }
 });
-router91.post("/generate-testimonial", async (req2, res) => {
+router96.post("/generate-testimonial", async (req2, res) => {
   try {
     const { siteName, industry, serviceType, customerType } = req2.body;
     if (!siteName || !industry || !serviceType) {
@@ -69976,7 +76213,7 @@ router91.post("/generate-testimonial", async (req2, res) => {
     });
   }
 });
-router91.post("/generate-page", async (req2, res) => {
+router96.post("/generate-page", async (req2, res) => {
   try {
     const { siteName, siteType, industry, mainServices, targetAudience } = req2.body;
     if (!siteName || !siteType || !industry || !mainServices) {
@@ -70003,7 +76240,7 @@ router91.post("/generate-page", async (req2, res) => {
     });
   }
 });
-router91.post("/optimize-seo", async (req2, res) => {
+router96.post("/optimize-seo", async (req2, res) => {
   try {
     const { currentTitle, currentDescription, pageContent, targetKeywords, siteName, industry } = req2.body;
     if (!pageContent || !siteName || !industry) {
@@ -70031,7 +76268,7 @@ router91.post("/optimize-seo", async (req2, res) => {
     });
   }
 });
-router91.post("/generate-multiple-services", async (req2, res) => {
+router96.post("/generate-multiple-services", async (req2, res) => {
   try {
     const { siteName, industry, serviceTypes } = req2.body;
     if (!siteName || !industry || !serviceTypes || !Array.isArray(serviceTypes)) {
@@ -70057,15 +76294,15 @@ router91.post("/generate-multiple-services", async (req2, res) => {
     });
   }
 });
-var ai_content_default = router91;
+var ai_content_default = router96;
 
 // src/api/ai.ts
-var import_express94 = __toESM(require("express"), 1);
+var import_express99 = __toESM(require("express"), 1);
 var import_generative_ai2 = require("@google/generative-ai");
-var router92 = import_express94.default.Router();
+var router97 = import_express99.default.Router();
 var genAI = new import_generative_ai2.GoogleGenerativeAI(process.env.GEMINI_API_KEY || "");
 var MODEL_NAME = "gemini-pro";
-router92.post("/generate", async (req2, res) => {
+router97.post("/generate", async (req2, res) => {
   try {
     const { prompt, context, sectionType, currentValue } = req2.body;
     if (!prompt) {
@@ -70228,7 +76465,7 @@ function formatSuggestions(data, context) {
       return [{ value: data }];
   }
 }
-router92.post("/analyze-section", async (req2, res) => {
+router97.post("/analyze-section", async (req2, res) => {
   try {
     const { sectionType, content, prompt } = req2.body;
     if (!process.env.GEMINI_API_KEY) {
@@ -70363,7 +76600,7 @@ function generateFallbackAnalysis(sectionType, content) {
     }
   };
 }
-router92.post("/optimize-seo", async (req2, res) => {
+router97.post("/optimize-seo", async (req2, res) => {
   try {
     const { content, sectionType } = req2.body;
     if (!process.env.GEMINI_API_KEY) {
@@ -70403,7 +76640,7 @@ Format de r\xE9ponse : JSON avec { metaTitle, metaDescription, keywords: [], slu
     });
   }
 });
-router92.post("/improve-content", async (req2, res) => {
+router97.post("/improve-content", async (req2, res) => {
   try {
     const { content, instructions } = req2.body;
     if (!process.env.GEMINI_API_KEY) {
@@ -70440,7 +76677,7 @@ Retourne le contenu am\xE9lior\xE9 au format JSON identique \xE0 l'original.`;
     });
   }
 });
-router92.post("/optimize-layout", async (req2, res) => {
+router97.post("/optimize-layout", async (req2, res) => {
   try {
     const { itemCount, sectionType, currentLayout } = req2.body;
     if (!process.env.GEMINI_API_KEY) {
@@ -70495,7 +76732,7 @@ Format de r\xE9ponse : JSON array avec :
     });
   }
 });
-router92.post("/generate-palette", async (req2, res) => {
+router97.post("/generate-palette", async (req2, res) => {
   try {
     const { baseColor, mood, industry } = req2.body;
     if (!process.env.GEMINI_API_KEY) {
@@ -70635,7 +76872,7 @@ function generateFallbackPalettes(baseColor) {
   ];
 }
 var geminiMeasureService = getGeminiService();
-router92.post("/measure-image", async (req2, res) => {
+router97.post("/measure-image", async (req2, res) => {
   const startTime = Date.now();
   try {
     const {
@@ -70715,7 +76952,7 @@ router92.post("/measure-image", async (req2, res) => {
     });
   }
 });
-router92.post("/measure-image/apply", async (req2, res) => {
+router97.post("/measure-image/apply", async (req2, res) => {
   try {
     const {
       measurements,
@@ -70774,7 +77011,7 @@ router92.post("/measure-image/apply", async (req2, res) => {
     });
   }
 });
-router92.get("/measure-image/status", async (_req, res) => {
+router97.get("/measure-image/status", async (_req, res) => {
   try {
     const status = geminiMeasureService.getStatus();
     res.json({
@@ -70794,13 +77031,13 @@ router92.get("/measure-image/status", async (_req, res) => {
     });
   }
 });
-var ai_default2 = router92;
+var ai_default2 = router97;
 
 // src/routes/ai-field-generator.ts
-var import_express95 = __toESM(require("express"), 1);
-var router93 = import_express95.default.Router();
+var import_express100 = __toESM(require("express"), 1);
+var router98 = import_express100.default.Router();
 var geminiService3 = getGeminiService();
-router93.use(authMiddleware);
+router98.use(authMiddleware);
 var SmartPromptBuilder = class {
   /**
    * Construit un prompt optimisé selon le type de champ
@@ -71183,7 +77420,7 @@ var QualityAnalyzer = class {
     }
   }
 };
-router93.post("/generate-field", async (req2, res) => {
+router98.post("/generate-field", async (req2, res) => {
   const startTime = Date.now();
   try {
     const { fieldId, fieldType, fieldLabel, currentValue, aiContext } = req2.body;
@@ -71270,7 +77507,7 @@ router93.post("/generate-field", async (req2, res) => {
     });
   }
 });
-router93.get("/status", async (_req, res) => {
+router98.get("/status", async (_req, res) => {
   try {
     const isAvailable = !!process.env.GOOGLE_API_KEY || !!process.env.GEMINI_API_KEY;
     res.json({
@@ -71287,10 +77524,10 @@ router93.get("/status", async (_req, res) => {
     });
   }
 });
-var ai_field_generator_default = router93;
+var ai_field_generator_default = router98;
 
 // src/components/TreeBranchLeaf/treebranchleaf-new/api/repeat/repeat-routes.ts
-var import_express96 = require("express");
+var import_express101 = require("express");
 
 // src/components/TreeBranchLeaf/treebranchleaf-new/api/repeat/repeat-blueprint-builder.ts
 var parseJsonArray = (value) => {
@@ -72711,7 +78948,7 @@ async function batchPostDuplicationProcessing(prisma51, copiedNodeIds) {
 }
 
 // src/components/TreeBranchLeaf/treebranchleaf-new/api/repeat/services/table-lookup-duplication-service.ts
-var import_crypto25 = require("crypto");
+var import_crypto28 = require("crypto");
 var TableLookupDuplicationService = class {
   /**
    * Duplique complÃƒÂ¨tement les tables TBL et leurs configurations SELECT associÃƒÂ©es
@@ -72751,7 +78988,7 @@ var TableLookupDuplicationService = class {
             const displayCol = firstColName;
             await prisma51.treeBranchLeafSelectConfig.create({
               data: {
-                id: (0, import_crypto25.randomUUID)(),
+                id: (0, import_crypto28.randomUUID)(),
                 nodeId: copiedNodeId,
                 tableReference: copiedTableId,
                 // 🔥 CRITICAL: Remplir TOUS les champs nécessaires (pas juste displayColumn)
@@ -72936,7 +79173,7 @@ var TableLookupDuplicationService = class {
                 const baseName = String(col.name ?? "");
                 const newName = baseName;
                 return {
-                  id: col.id ? `${col.id}${suffix}` : (0, import_crypto25.randomUUID)(),
+                  id: col.id ? `${col.id}${suffix}` : (0, import_crypto28.randomUUID)(),
                   // ✅ FIX 11/01/2026: NE PAS inclure tableId dans nested create - Prisma le remplit automatiquement
                   columnIndex: idx,
                   // ✅ FIX: Réassigner en séquence au lieu de copier
@@ -72952,7 +79189,7 @@ var TableLookupDuplicationService = class {
             // ✅ FIX 07/01/2026: Réassigner aussi les rowIndex en séquence pour préserver l'ordre
             tableRows: {
               create: originalTable.tableRows.map((row, idx) => ({
-                id: row.id ? `${row.id}${suffix}` : (0, import_crypto25.randomUUID)(),
+                id: row.id ? `${row.id}${suffix}` : (0, import_crypto28.randomUUID)(),
                 // ✅ FIX 11/01/2026: NE PAS inclure tableId dans nested create - Prisma le remplit automatiquement
                 rowIndex: idx,
                 // ✅ FIX: Réassigner en séquence
@@ -72969,7 +79206,7 @@ var TableLookupDuplicationService = class {
           const baseName = String(col.name ?? "");
           const newName = baseName;
           return {
-            id: col.id ? `${col.id}${suffix}` : (0, import_crypto25.randomUUID)(),
+            id: col.id ? `${col.id}${suffix}` : (0, import_crypto28.randomUUID)(),
             tableId: copiedTableId,
             columnIndex: idx,
             name: newName,
@@ -72996,7 +79233,7 @@ var TableLookupDuplicationService = class {
       if (!existingSelectConfig) {
         await prisma51.treeBranchLeafSelectConfig.create({
           data: {
-            id: (0, import_crypto25.randomUUID)(),
+            id: (0, import_crypto28.randomUUID)(),
             // 🔧 FIX: Générer l'id manuellement
             nodeId: copiedNodeId,
             tableReference: copiedTableId,
@@ -74371,10 +80608,10 @@ async function syncMissingDisplayNodeChildren(prisma51, duplicatedNodeIds, origi
 
 // src/components/TreeBranchLeaf/treebranchleaf-new/api/repeat/repeat-routes.ts
 function createRepeatRouter(prisma51) {
-  const router99 = (0, import_express96.Router)();
+  const router104 = (0, import_express101.Router)();
   const inFlightExecuteByRepeater = /* @__PURE__ */ new Set();
-  router99.use(authenticateToken);
-  router99.post("/:repeaterNodeId/instances", async (req2, res) => {
+  router104.use(authenticateToken);
+  router104.post("/:repeaterNodeId/instances", async (req2, res) => {
     const { repeaterNodeId } = req2.params;
     const body2 = req2.body || {};
     try {
@@ -74406,7 +80643,7 @@ function createRepeatRouter(prisma51) {
       });
     }
   });
-  router99.post("/:repeaterNodeId/instances/execute", async (req2, res) => {
+  router104.post("/:repeaterNodeId/instances/execute", async (req2, res) => {
     const { repeaterNodeId } = req2.params;
     const body2 = req2.body || {};
     if (inFlightExecuteByRepeater.has(repeaterNodeId)) {
@@ -74459,7 +80696,7 @@ function createRepeatRouter(prisma51) {
       inFlightExecuteByRepeater.delete(repeaterNodeId);
     }
   });
-  router99.post("/:repeaterId/preload-copies", async (req2, res) => {
+  router104.post("/:repeaterId/preload-copies", async (req2, res) => {
     try {
       const { repeaterId } = req2.params;
       const { targetCount } = req2.body || {};
@@ -74595,7 +80832,7 @@ function createRepeatRouter(prisma51) {
       res.status(500).json({ error: "Erreur lors du pr\xE9-chargement des copies" });
     }
   });
-  return router99;
+  return router104;
 }
 async function deleteNodeWithCascade(prisma51, treeId, nodeId) {
   const allNodes = await prisma51.treeBranchLeafNode.findMany({
@@ -74635,9 +80872,9 @@ async function deleteNodeWithCascade(prisma51, treeId, nodeId) {
 }
 
 // src/api/cloud-run-domains.ts
-var import_express97 = require("express");
-var router94 = (0, import_express97.Router)();
-router94.get("/cloud-run-domains", authenticateToken, async (req2, res) => {
+var import_express102 = require("express");
+var router99 = (0, import_express102.Router)();
+router99.get("/cloud-run-domains", authenticateToken, async (req2, res) => {
   try {
     const user = req2.user;
     if (!user.isSuperAdmin) {
@@ -74679,7 +80916,7 @@ router94.get("/cloud-run-domains", authenticateToken, async (req2, res) => {
     });
   }
 });
-router94.post("/cloud-run-domains/verify", authenticateToken, async (req2, res) => {
+router99.post("/cloud-run-domains/verify", authenticateToken, async (req2, res) => {
   try {
     const user = req2.user;
     const { domain } = req2.body;
@@ -74732,10 +80969,10 @@ async function checkDomainReachability(domain) {
     return false;
   }
 }
-var cloud_run_domains_default = router94;
+var cloud_run_domains_default = router99;
 
 // src/api/measurement-reference.ts
-var import_express98 = require("express");
+var import_express103 = require("express");
 var sharpModule = __toESM(require("sharp"), 1);
 
 // src/lib/apriltag-detector-server.ts
@@ -75616,8 +81853,8 @@ function computeObjectDimensions(calibration, objectCorners) {
 
 // src/api/measurement-reference.ts
 var sharp = sharpModule.default || sharpModule;
-var router95 = (0, import_express98.Router)();
-router95.post("/ultra-fusion-detect", authenticateToken, async (req2, res) => {
+var router100 = (0, import_express103.Router)();
+router100.post("/ultra-fusion-detect", authenticateToken, async (req2, res) => {
   const startTime = Date.now();
   try {
     const { photos } = req2.body;
@@ -75744,7 +81981,7 @@ ${"=".repeat(80)}`);
     });
   }
 });
-router95.post("/compute-dimensions-simple", authenticateToken, async (req2, res) => {
+router100.post("/compute-dimensions-simple", authenticateToken, async (req2, res) => {
   try {
     if (!req2.user?.id) {
       return res.status(401).json({ error: "Non authentifi\xE9" });
@@ -75834,13 +82071,13 @@ router95.post("/compute-dimensions-simple", authenticateToken, async (req2, res)
     });
   }
 });
-var measurement_reference_default = router95;
+var measurement_reference_default = router100;
 
 // src/routes/userFavoritesRoutes.ts
-var import_express99 = require("express");
+var import_express104 = require("express");
 init_database();
-var router96 = (0, import_express99.Router)();
-router96.get("/", authMiddleware, async (req2, res) => {
+var router101 = (0, import_express104.Router)();
+router101.get("/", authMiddleware, async (req2, res) => {
   try {
     const userId = req2.user?.userId;
     const organizationId = req2.user?.organizationId;
@@ -75872,7 +82109,7 @@ router96.get("/", authMiddleware, async (req2, res) => {
     });
   }
 });
-router96.post("/", authMiddleware, async (req2, res) => {
+router101.post("/", authMiddleware, async (req2, res) => {
   try {
     const userId = req2.user?.userId;
     const organizationId = req2.user?.organizationId;
@@ -75914,7 +82151,7 @@ router96.post("/", authMiddleware, async (req2, res) => {
     });
   }
 });
-router96.delete("/:moduleKey", authMiddleware, async (req2, res) => {
+router101.delete("/:moduleKey", authMiddleware, async (req2, res) => {
   try {
     const userId = req2.user?.userId;
     const organizationId = req2.user?.organizationId;
@@ -75947,20 +82184,20 @@ router96.delete("/:moduleKey", authMiddleware, async (req2, res) => {
     });
   }
 });
-var userFavoritesRoutes_default = router96;
+var userFavoritesRoutes_default = router101;
 
 // src/routes/website-forms.ts
-var import_express100 = require("express");
+var import_express105 = require("express");
 init_database();
-var router97 = (0, import_express100.Router)();
-var getOrgId3 = (req2) => {
+var router102 = (0, import_express105.Router)();
+var getOrgId4 = (req2) => {
   const orgId = req2.organizationId || req2.headers["x-organization-id"];
   if (!orgId) throw new Error("Organization ID manquant");
   return orgId;
 };
-router97.get("/", async (req2, res) => {
+router102.get("/", async (req2, res) => {
   try {
-    const organizationId = getOrgId3(req2);
+    const organizationId = getOrgId4(req2);
     const { websiteId } = req2.query;
     console.log("\u{1F4CB} [WebsiteForms] GET all forms for org:", organizationId);
     const forms = await db.website_forms.findMany({
@@ -76004,9 +82241,9 @@ router97.get("/", async (req2, res) => {
     });
   }
 });
-router97.get("/by-website/:websiteId", async (req2, res) => {
+router102.get("/by-website/:websiteId", async (req2, res) => {
   try {
-    const organizationId = getOrgId3(req2);
+    const organizationId = getOrgId4(req2);
     const { websiteId } = req2.params;
     console.log("\u{1F4CB} [WebsiteForms] GET forms for website:", websiteId);
     const forms = await db.website_forms.findMany({
@@ -76048,9 +82285,9 @@ router97.get("/by-website/:websiteId", async (req2, res) => {
     });
   }
 });
-router97.get("/my-commercial-links", authMiddleware, async (req2, res) => {
+router102.get("/my-commercial-links", authMiddleware, async (req2, res) => {
   try {
-    const organizationId = getOrgId3(req2);
+    const organizationId = getOrgId4(req2);
     const userId = req2.user.userId;
     console.log("\u{1F3AF} [WebsiteForms] GET my-commercial-links for user:", userId);
     const user = await db.user.findUnique({
@@ -76122,9 +82359,9 @@ router97.get("/my-commercial-links", authMiddleware, async (req2, res) => {
     });
   }
 });
-router97.get("/:id", async (req2, res) => {
+router102.get("/:id", async (req2, res) => {
   try {
-    const organizationId = getOrgId3(req2);
+    const organizationId = getOrgId4(req2);
     const { id } = req2.params;
     console.log("\u{1F4CB} [WebsiteForms] GET form:", id);
     const form = await db.website_forms.findFirst({
@@ -76166,9 +82403,9 @@ router97.get("/:id", async (req2, res) => {
     });
   }
 });
-router97.post("/", async (req2, res) => {
+router102.post("/", async (req2, res) => {
   try {
-    const organizationId = getOrgId3(req2);
+    const organizationId = getOrgId4(req2);
     const { name, slug, description, treeId, settings, successTitle, successMessage, requiresCommercialTracking } = req2.body;
     console.log("\u{1F4CB} [WebsiteForms] CREATE form:", name);
     const existing = await db.website_forms.findFirst({
@@ -76206,9 +82443,9 @@ router97.post("/", async (req2, res) => {
     });
   }
 });
-router97.put("/:id", async (req2, res) => {
+router102.put("/:id", async (req2, res) => {
   try {
-    const organizationId = getOrgId3(req2);
+    const organizationId = getOrgId4(req2);
     const { id } = req2.params;
     const { name, slug, description, treeId, settings, successTitle, successMessage, isActive, requiresCommercialTracking } = req2.body;
     console.log("\u{1F4CB} [WebsiteForms] UPDATE form:", id);
@@ -76260,9 +82497,9 @@ router97.put("/:id", async (req2, res) => {
     });
   }
 });
-router97.delete("/:id", async (req2, res) => {
+router102.delete("/:id", async (req2, res) => {
   try {
-    const organizationId = getOrgId3(req2);
+    const organizationId = getOrgId4(req2);
     const { id } = req2.params;
     console.log("\u{1F4CB} [WebsiteForms] DELETE form:", id);
     const existing = await db.website_forms.findFirst({
@@ -76284,9 +82521,9 @@ router97.delete("/:id", async (req2, res) => {
     });
   }
 });
-router97.post("/:id/steps", async (req2, res) => {
+router102.post("/:id/steps", async (req2, res) => {
   try {
-    const organizationId = getOrgId3(req2);
+    const organizationId = getOrgId4(req2);
     const { id } = req2.params;
     const { title, subtitle, helpText, stepType, isRequired, condition, settings } = req2.body;
     console.log("\u{1F4CB} [WebsiteForms] ADD step to form:", id);
@@ -76322,7 +82559,7 @@ router97.post("/:id/steps", async (req2, res) => {
     });
   }
 });
-router97.put("/steps/:stepId", async (req2, res) => {
+router102.put("/steps/:stepId", async (req2, res) => {
   try {
     const { stepId } = req2.params;
     const { title, subtitle, helpText, stepType, order, isRequired, condition, settings } = req2.body;
@@ -76351,7 +82588,7 @@ router97.put("/steps/:stepId", async (req2, res) => {
     });
   }
 });
-router97.delete("/steps/:stepId", async (req2, res) => {
+router102.delete("/steps/:stepId", async (req2, res) => {
   try {
     const { stepId } = req2.params;
     console.log("\u{1F4CB} [WebsiteForms] DELETE step:", stepId);
@@ -76368,7 +82605,7 @@ router97.delete("/steps/:stepId", async (req2, res) => {
     });
   }
 });
-router97.put("/:id/steps/reorder", async (req2, res) => {
+router102.put("/:id/steps/reorder", async (req2, res) => {
   try {
     const { id } = req2.params;
     const { stepIds } = req2.body;
@@ -76390,7 +82627,7 @@ router97.put("/:id/steps/reorder", async (req2, res) => {
     });
   }
 });
-router97.post("/steps/:stepId/fields", async (req2, res) => {
+router102.post("/steps/:stepId/fields", async (req2, res) => {
   try {
     const { stepId } = req2.params;
     const {
@@ -76448,7 +82685,7 @@ router97.post("/steps/:stepId/fields", async (req2, res) => {
     });
   }
 });
-router97.put("/fields/:fieldId", async (req2, res) => {
+router102.put("/fields/:fieldId", async (req2, res) => {
   try {
     const { fieldId } = req2.params;
     const {
@@ -76499,7 +82736,7 @@ router97.put("/fields/:fieldId", async (req2, res) => {
     });
   }
 });
-router97.delete("/fields/:fieldId", async (req2, res) => {
+router102.delete("/fields/:fieldId", async (req2, res) => {
   try {
     const { fieldId } = req2.params;
     console.log("\u{1F4CB} [WebsiteForms] DELETE field:", fieldId);
@@ -76516,7 +82753,7 @@ router97.delete("/fields/:fieldId", async (req2, res) => {
     });
   }
 });
-router97.put("/steps/:stepId/fields/reorder", async (req2, res) => {
+router102.put("/steps/:stepId/fields/reorder", async (req2, res) => {
   try {
     const { stepId } = req2.params;
     const { fieldIds } = req2.body;
@@ -76538,7 +82775,7 @@ router97.put("/steps/:stepId/fields/reorder", async (req2, res) => {
     });
   }
 });
-router97.post("/:id/link-website", async (req2, res) => {
+router102.post("/:id/link-website", async (req2, res) => {
   try {
     const { id } = req2.params;
     const { websiteId, isDefault, urlPath } = req2.body;
@@ -76571,7 +82808,7 @@ router97.post("/:id/link-website", async (req2, res) => {
     });
   }
 });
-router97.delete("/:id/unlink-website/:websiteId", async (req2, res) => {
+router102.delete("/:id/unlink-website/:websiteId", async (req2, res) => {
   try {
     const { id, websiteId } = req2.params;
     console.log("\u{1F4CB} [WebsiteForms] UNLINK form", id, "from website", websiteId);
@@ -76591,9 +82828,9 @@ router97.delete("/:id/unlink-website/:websiteId", async (req2, res) => {
     });
   }
 });
-router97.get("/:id/stats", async (req2, res) => {
+router102.get("/:id/stats", async (req2, res) => {
   try {
-    const _organizationId = getOrgId3(req2);
+    const _organizationId = getOrgId4(req2);
     const { id } = req2.params;
     console.log("\u{1F4CB} [WebsiteForms] GET stats for form:", id);
     const [total, completed, partial, recent] = await Promise.all([
@@ -76629,9 +82866,9 @@ router97.get("/:id/stats", async (req2, res) => {
     });
   }
 });
-router97.get("/:id/questions", async (req2, res) => {
+router102.get("/:id/questions", async (req2, res) => {
   try {
-    const organizationId = getOrgId3(req2);
+    const organizationId = getOrgId4(req2);
     const { id } = req2.params;
     console.log("\u{1F4CB} [WebsiteForms] GET questions for form:", id);
     const form = await db.website_forms.findFirst({
@@ -76654,9 +82891,9 @@ router97.get("/:id/questions", async (req2, res) => {
     });
   }
 });
-router97.post("/:id/questions", async (req2, res) => {
+router102.post("/:id/questions", async (req2, res) => {
   try {
-    const organizationId = getOrgId3(req2);
+    const organizationId = getOrgId4(req2);
     const { id } = req2.params;
     const {
       questionKey,
@@ -76712,9 +82949,9 @@ router97.post("/:id/questions", async (req2, res) => {
     });
   }
 });
-router97.put("/questions/:questionId", async (req2, res) => {
+router102.put("/questions/:questionId", async (req2, res) => {
   try {
-    const organizationId = getOrgId3(req2);
+    const organizationId = getOrgId4(req2);
     const { questionId } = req2.params;
     const {
       questionType,
@@ -76763,9 +83000,9 @@ router97.put("/questions/:questionId", async (req2, res) => {
     });
   }
 });
-router97.delete("/questions/:questionId", async (req2, res) => {
+router102.delete("/questions/:questionId", async (req2, res) => {
   try {
-    const organizationId = getOrgId3(req2);
+    const organizationId = getOrgId4(req2);
     const { questionId } = req2.params;
     console.log("\u{1F4CB} [WebsiteForms] DELETE question:", questionId);
     const existing = await db.website_form_questions.findUnique({
@@ -76821,16 +83058,16 @@ var generateUserSlug2 = async (firstName, lastName, organizationId) => {
   }
   return slug;
 };
-var website_forms_default = router97;
+var website_forms_default = router102;
 
 // src/routes/public-forms.ts
-var import_express101 = require("express");
+var import_express106 = require("express");
 init_database();
 var import_uuid6 = require("uuid");
-var fs11 = __toESM(require("fs"), 1);
-var path10 = __toESM(require("path"), 1);
-var router98 = (0, import_express101.Router)();
-router98.get("/:slug", async (req2, res) => {
+var fs13 = __toESM(require("fs"), 1);
+var path12 = __toESM(require("path"), 1);
+var router103 = (0, import_express106.Router)();
+router103.get("/:slug", async (req2, res) => {
   try {
     const { slug } = req2.params;
     const { websiteSlug: _websiteSlug } = req2.query;
@@ -76940,7 +83177,7 @@ router98.get("/:slug", async (req2, res) => {
     });
   }
 });
-router98.get("/:slug/questions", async (req2, res) => {
+router103.get("/:slug/questions", async (req2, res) => {
   try {
     const { slug } = req2.params;
     console.log("\u{1F3AF} [PublicForms] GET form questions (Effy mode) by slug:", slug);
@@ -77003,7 +83240,7 @@ router98.get("/:slug/questions", async (req2, res) => {
     });
   }
 });
-router98.get("/by-website/:websiteSlug", async (req2, res) => {
+router103.get("/by-website/:websiteSlug", async (req2, res) => {
   try {
     const { websiteSlug } = req2.params;
     console.log("\u{1F4CB} [PublicForms] GET form for website:", websiteSlug);
@@ -77078,7 +83315,7 @@ router98.get("/by-website/:websiteSlug", async (req2, res) => {
     });
   }
 });
-router98.post("/:slug/submit", async (req2, res) => {
+router103.post("/:slug/submit", async (req2, res) => {
   try {
     const { slug } = req2.params;
     const {
@@ -77356,13 +83593,13 @@ router98.post("/:slug/submit", async (req2, res) => {
         leadNumber: existingLead ? void 0 : `LEAD-${(await db.lead.count({ where: { organizationId: form.organizationId } })).toString().padStart(5, "0")}`
       };
       const pdfBuffer = await generateFormResponsePdf(pdfData);
-      const uploadsDir2 = path10.join(process.cwd(), "public", "uploads", "form-responses");
-      if (!fs11.existsSync(uploadsDir2)) {
-        fs11.mkdirSync(uploadsDir2, { recursive: true });
+      const uploadsDir2 = path12.join(process.cwd(), "public", "uploads", "form-responses");
+      if (!fs13.existsSync(uploadsDir2)) {
+        fs13.mkdirSync(uploadsDir2, { recursive: true });
       }
       const pdfFileName = `formulaire-${slug}-${leadId.substring(0, 8)}-${Date.now()}.pdf`;
-      const pdfPath = path10.join(uploadsDir2, pdfFileName);
-      fs11.writeFileSync(pdfPath, pdfBuffer);
+      const pdfPath = path12.join(uploadsDir2, pdfFileName);
+      fs13.writeFileSync(pdfPath, pdfBuffer);
       pdfUrl = `/uploads/form-responses/${pdfFileName}`;
       await db.lead.update({
         where: { id: leadId },
@@ -77413,7 +83650,7 @@ router98.post("/:slug/submit", async (req2, res) => {
     });
   }
 });
-router98.post("/:slug/partial", async (req2, res) => {
+router103.post("/:slug/partial", async (req2, res) => {
   try {
     const { slug } = req2.params;
     const { formData, currentStep, metadata } = req2.body;
@@ -77442,14 +83679,14 @@ router98.post("/:slug/partial", async (req2, res) => {
     res.status(500).json({ error: "Erreur" });
   }
 });
-var public_forms_default = router98;
+var public_forms_default = router103;
 
 // src/middleware/websiteDetection.ts
 init_prisma();
 
 // src/middleware/websiteRenderer.ts
-var fs12 = __toESM(require("fs"), 1);
-var path11 = __toESM(require("path"), 1);
+var fs14 = __toESM(require("fs"), 1);
+var path13 = __toESM(require("path"), 1);
 function renderSection(section) {
   const content = section.content || {};
   const sectionType = section.type;
@@ -77623,10 +83860,10 @@ async function renderWebsite(req2, res) {
         </html>
       `);
     }
-    const distDir = path11.resolve(process.cwd(), "dist");
-    const indexHtmlPath = path11.join(distDir, "index.html");
-    if (fs12.existsSync(indexHtmlPath)) {
-      let indexHtml = fs12.readFileSync(indexHtmlPath, "utf-8");
+    const distDir = path13.resolve(process.cwd(), "dist");
+    const indexHtmlPath = path13.join(distDir, "index.html");
+    if (fs14.existsSync(indexHtmlPath)) {
+      let indexHtml = fs14.readFileSync(indexHtmlPath, "utf-8");
       const seoMeta = `
         <title>${website.name || "2Thier Energy"}</title>
         <meta name="description" content="${website.config?.metaDescription || website.config?.seo?.description || "Votre partenaire en transition \xE9nerg\xE9tique"}">
@@ -77785,13 +84022,13 @@ function websiteInterceptor(req2, res, next) {
 
 // src/security/securityMiddleware.ts
 var import_express_rate_limit15 = __toESM(require("express-rate-limit"), 1);
-var import_crypto26 = __toESM(require("crypto"), 1);
+var import_crypto29 = __toESM(require("crypto"), 1);
 var isCodespaces = process.env.CODESPACES === "true" || typeof process.env.GITHUB_CODESPACES_PORT_FORWARDING_DOMAIN === "string";
 var isRateLimitEnabled = process.env.NODE_ENV === "production" && !isCodespaces;
 var noopMiddleware = (_req, _res, next) => next();
 var securityMonitoring = (req2, res, next) => {
   const startTime = Date.now();
-  const requestId = import_crypto26.default.randomUUID();
+  const requestId = import_crypto29.default.randomUUID();
   req2.requestId = requestId;
   const suspiciousPatterns = [
     /(\<script\>)/gi,
@@ -78100,7 +84337,7 @@ logSecurityEvent("SERVER_STARTUP", {
   environment: process.env.NODE_ENV || "development",
   securityLevel: "ENTERPRISE"
 }, "info");
-var app = (0, import_express102.default)();
+var app = (0, import_express107.default)();
 app.set("trust proxy", 1);
 var port = Number(process.env.PORT || 8080);
 console.log("\u{1F3AF} [BOOTSTRAP] Server will listen on port:", port);
@@ -78228,7 +84465,7 @@ app.use((0, import_cors.default)({
   exposedHeaders: ["X-Total-Count", "X-Rate-Limit-Remaining", "x-organization-id"]
 }));
 app.use(inputSanitization);
-app.use(import_express102.default.json({
+app.use(import_express107.default.json({
   limit: "50mb",
   verify: (req2, res, buf) => {
     try {
@@ -78242,7 +84479,7 @@ app.use(import_express102.default.json({
     }
   }
 }));
-app.use(import_express102.default.urlencoded({ extended: true, limit: "50mb" }));
+app.use(import_express107.default.urlencoded({ extended: true, limit: "50mb" }));
 app.use((0, import_cookie_parser.default)());
 app.use((0, import_express_fileupload.default)({
   limits: { fileSize: 25 * 1024 * 1024 },
@@ -78270,14 +84507,14 @@ app.use((0, import_express_session.default)({
   // TODO: Ajouter un store persistant en production
 }));
 console.log("\u2705 [ENTERPRISE-SECURITY] Configuration s\xE9curit\xE9 niveau Enterprise activ\xE9e");
-var uploadsDir = import_path9.default.resolve(process.cwd(), "public", "uploads");
+var uploadsDir = import_path11.default.resolve(process.cwd(), "public", "uploads");
 app.use("/uploads", (req2, res, next) => {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "GET, OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type");
   res.setHeader("Cross-Origin-Resource-Policy", "cross-origin");
   next();
-}, import_express102.default.static(uploadsDir, {
+}, import_express107.default.static(uploadsDir, {
   maxAge: "1h",
   // Cache 1 heure
   etag: true,
@@ -78336,20 +84573,20 @@ app.get("/api/health/db", async (_req, res) => {
 app.use(detectWebsite);
 app.use(websiteInterceptor);
 if (process.env.NODE_ENV === "production") {
-  const distDir = import_path9.default.resolve(process.cwd(), "dist");
-  const indexHtml = import_path9.default.join(distDir, "index.html");
-  if (import_fs9.default.existsSync(indexHtml)) {
+  const distDir = import_path11.default.resolve(process.cwd(), "dist");
+  const indexHtml = import_path11.default.join(distDir, "index.html");
+  if (import_fs11.default.existsSync(indexHtml)) {
     console.log("\u{1F5C2}\uFE0F [STATIC] Distribution front d\xE9tect\xE9e, activation du serveur statique");
-    const assetsDir = import_path9.default.join(distDir, "assets");
-    app.use("/assets", import_express102.default.static(assetsDir, {
+    const assetsDir = import_path11.default.join(distDir, "assets");
+    app.use("/assets", import_express107.default.static(assetsDir, {
       setHeaders: (res) => {
         res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
       }
     }));
     app.get(/^\/[^/]+\.(png|jpg|jpeg|gif|svg|ico|webp|js|css|woff|woff2|ttf|eot|json|webmanifest|html|txt|xml)$/i, (req2, res, next) => {
-      const filePath = import_path9.default.join(distDir, req2.path);
-      if (import_fs9.default.existsSync(filePath)) {
-        const ext = import_path9.default.extname(req2.path).toLowerCase();
+      const filePath = import_path11.default.join(distDir, req2.path);
+      if (import_fs11.default.existsSync(filePath)) {
+        const ext = import_path11.default.extname(req2.path).toLowerCase();
         const mimeTypes = {
           ".png": "image/png",
           ".jpg": "image/jpeg",
@@ -78380,19 +84617,19 @@ if (process.env.NODE_ENV === "production") {
       next();
     });
     app.get(/^\/pwa-.*/, (req2, res) => {
-      const filePath = import_path9.default.join(distDir, req2.path);
-      if (import_fs9.default.existsSync(filePath)) {
+      const filePath = import_path11.default.join(distDir, req2.path);
+      if (import_fs11.default.existsSync(filePath)) {
         res.sendFile(filePath);
       } else {
         res.status(404).end();
       }
     });
-    app.get("/favicon.ico", (req2, res) => res.sendFile(import_path9.default.join(distDir, "favicon.ico")));
-    app.get("/manifest.json", (req2, res) => res.sendFile(import_path9.default.join(distDir, "manifest.json")));
-    app.get("/manifest.webmanifest", (req2, res) => res.sendFile(import_path9.default.join(distDir, "manifest.webmanifest")));
+    app.get("/favicon.ico", (req2, res) => res.sendFile(import_path11.default.join(distDir, "favicon.ico")));
+    app.get("/manifest.json", (req2, res) => res.sendFile(import_path11.default.join(distDir, "manifest.json")));
+    app.get("/manifest.webmanifest", (req2, res) => res.sendFile(import_path11.default.join(distDir, "manifest.webmanifest")));
     app.get("/registerSW.js", (req2, res) => {
-      const swPath = import_path9.default.join(distDir, "registerSW.js");
-      if (import_fs9.default.existsSync(swPath)) {
+      const swPath = import_path11.default.join(distDir, "registerSW.js");
+      if (import_fs11.default.existsSync(swPath)) {
         res.setHeader("Content-Type", "application/javascript");
         res.sendFile(swPath);
       } else {
@@ -78400,8 +84637,8 @@ if (process.env.NODE_ENV === "production") {
       }
     });
     app.get("/sw.js", (req2, res) => {
-      const swPath = import_path9.default.join(distDir, "sw.js");
-      if (import_fs9.default.existsSync(swPath)) {
+      const swPath = import_path11.default.join(distDir, "sw.js");
+      if (import_fs11.default.existsSync(swPath)) {
         res.setHeader("Content-Type", "application/javascript");
         res.sendFile(swPath);
       } else {
@@ -78409,8 +84646,8 @@ if (process.env.NODE_ENV === "production") {
       }
     });
     app.get(/^\/workbox-.*\.js$/, (req2, res) => {
-      const filePath = import_path9.default.join(distDir, req2.path);
-      if (import_fs9.default.existsSync(filePath)) {
+      const filePath = import_path11.default.join(distDir, req2.path);
+      if (import_fs11.default.existsSync(filePath)) {
         res.setHeader("Content-Type", "application/javascript");
         res.sendFile(filePath);
       } else {
@@ -78418,8 +84655,8 @@ if (process.env.NODE_ENV === "production") {
       }
     });
     app.get("/env-config.js", (req2, res) => {
-      const envPath = import_path9.default.join(distDir, "env-config.js");
-      if (import_fs9.default.existsSync(envPath)) {
+      const envPath = import_path11.default.join(distDir, "env-config.js");
+      if (import_fs11.default.existsSync(envPath)) {
         res.setHeader("Content-Type", "application/javascript");
         res.sendFile(envPath);
       } else {
@@ -78460,13 +84697,13 @@ app.get("/api/root-info", (_req, res) => {
   });
 });
 app.get("/api/debug/static-status", (_req, res) => {
-  const distDir = import_path9.default.resolve(process.cwd(), "dist");
-  const indexHtml = import_path9.default.join(distDir, "index.html");
+  const distDir = import_path11.default.resolve(process.cwd(), "dist");
+  const indexHtml = import_path11.default.join(distDir, "index.html");
   res.json({
     env: process.env.NODE_ENV,
-    distExists: import_fs9.default.existsSync(distDir),
-    indexExists: import_fs9.default.existsSync(indexHtml),
-    served: process.env.NODE_ENV === "production" && import_fs9.default.existsSync(indexHtml)
+    distExists: import_fs11.default.existsSync(distDir),
+    indexExists: import_fs11.default.existsSync(indexHtml),
+    served: process.env.NODE_ENV === "production" && import_fs11.default.existsSync(indexHtml)
   });
 });
 var errorHandler = (err, req2, res, next) => {
