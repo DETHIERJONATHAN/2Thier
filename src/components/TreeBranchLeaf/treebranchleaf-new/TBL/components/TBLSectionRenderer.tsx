@@ -1018,6 +1018,7 @@ interface TBLSectionRendererProps {
   reviewComments?: Record<string, string>;
   onReviewCheck?: (fieldId: string, checked: boolean) => void;
   onReviewComment?: (fieldId: string, comment: string) => void;
+  originalFormData?: Record<string, any>; // 📸 Snapshot des valeurs originales (devis) pour traçabilité
 }
 
 const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
@@ -1039,6 +1040,7 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
   reviewComments: reviewCommentsProp,
   onReviewCheck,
   onReviewComment,
+  originalFormData: originalFormDataProp,
 }) => {
   // ✅ CRITIQUE: Stabiliser l'API pour éviter les re-rendus à chaque frappe
   const apiHook = useAuthenticatedApi();
@@ -6085,12 +6087,26 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
                               allNodes={allNodes}
                               onChange={(value) => handleFieldChange(field.id, value, field.label)}
                               onUpdateAnyField={onChange} // 🤖 AI Measure
-                              disabled={disabled}
+                              disabled={disabled || (isTechField && !isFieldChecked)}
                               formData={formData}
                               treeMetadata={field.treeMetadata}
                               treeId={treeId}
                               submissionId={submissionId}
                             />
+                            {/* 📋 REVIEW: Afficher la valeur originale du devis quand le champ est coché */}
+                            {isTechField && isFieldChecked && originalFormDataProp && originalFormDataProp[field.id] != null && (
+                              <div style={{
+                                marginTop: 4,
+                                padding: '4px 8px',
+                                background: '#f0f5ff',
+                                border: '1px dashed #91caff',
+                                borderRadius: 4,
+                                fontSize: 11,
+                                color: '#1677ff',
+                              }}>
+                                📋 <strong>Valeur devis :</strong> {String(originalFormDataProp[field.id])}
+                              </div>
+                            )}
                           </div>
                           
                           {/* BOUTONS D'ACTION (par groupe de copie) */}
@@ -6148,17 +6164,33 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
                       
                       {/* RENDU NORMAL (sans boutons d'action) */}
                       {!field.canAddNewCopy && !(field as any).isLastInCopyGroup && (
-                        <TBLFieldRendererAdvanced
-                          field={field}
-                          value={extractFieldValue(field.id)}
-                          allNodes={allNodes}
-                          onChange={(value) => handleFieldChange(field.id, value, field.label)}
-                          onUpdateAnyField={onChange} // 🤖 AI Measure
-                          disabled={disabled}
-                          formData={formData}
-                          treeMetadata={field.treeMetadata}
-                          treeId={treeId}
-                        />
+                        <>
+                          <TBLFieldRendererAdvanced
+                            field={field}
+                            value={extractFieldValue(field.id)}
+                            allNodes={allNodes}
+                            onChange={(value) => handleFieldChange(field.id, value, field.label)}
+                            onUpdateAnyField={onChange} // 🤖 AI Measure
+                            disabled={disabled || (isTechField && !isFieldChecked)}
+                            formData={formData}
+                            treeMetadata={field.treeMetadata}
+                            treeId={treeId}
+                          />
+                          {/* 📋 REVIEW: Afficher la valeur originale du devis quand le champ est coché */}
+                          {isTechField && isFieldChecked && originalFormDataProp && originalFormDataProp[field.id] != null && (
+                            <div style={{
+                              marginTop: 4,
+                              padding: '4px 8px',
+                              background: '#f0f5ff',
+                              border: '1px dashed #91caff',
+                              borderRadius: 4,
+                              fontSize: 11,
+                              color: '#1677ff',
+                            }}>
+                              📋 <strong>Valeur devis :</strong> {String(originalFormDataProp[field.id])}
+                            </div>
+                          )}
+                        </>
                       )}
                     </Col>
                   );
@@ -6198,6 +6230,7 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
                     reviewComments={reviewCommentsProp}
                     onReviewCheck={onReviewCheck}
                     onReviewComment={onReviewComment}
+                    originalFormData={originalFormDataProp}
                   />
                 ))}
               </>
@@ -6233,6 +6266,7 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
                       reviewComments={reviewCommentsProp}
                       onReviewCheck={onReviewCheck}
                       onReviewComment={onReviewComment}
+                      originalFormData={originalFormDataProp}
                     />
                   </Panel>
                 ))}
@@ -6300,6 +6334,7 @@ const MemoizedTBLSectionRenderer = React.memo(TBLSectionRenderer, (prevProps, ne
   if (prevProps.reviewMode !== nextProps.reviewMode) return false;
   if (prevProps.reviewChecked !== nextProps.reviewChecked) return false;
   if (prevProps.reviewComments !== nextProps.reviewComments) return false;
+  if (prevProps.originalFormData !== nextProps.originalFormData) return false;
 
   // Aucun changement pertinent, ne pas re-render
   return true;

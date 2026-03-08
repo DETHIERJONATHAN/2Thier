@@ -130,6 +130,9 @@ const TBL: React.FC<TBLProps> = ({
   const [reviewChecked, setReviewChecked] = useState<Record<string, boolean>>({});
   const [reviewComments, setReviewComments] = useState<Record<string, string>>({});
   const [submittingReview, setSubmittingReview] = useState(false);
+  // 🔍 REVIEW MODE: Snapshot des valeurs originales du devis (capturé au premier chargement)
+  const originalFormDataRef = useRef<Record<string, any> | null>(null);
+  const [originalFormData, setOriginalFormData] = useState<Record<string, any>>({});
   const onReviewCheck = useCallback((fieldId: string, checked: boolean) => {
     setReviewChecked(prev => ({ ...prev, [fieldId]: checked }));
     if (!checked) setReviewComments(prev => { const n = { ...prev }; delete n[fieldId]; return n; });
@@ -780,8 +783,10 @@ const TBL: React.FC<TBLProps> = ({
     setSubmittingReview(true);
     try {
       const allTechNodes = (rawNodes || []).filter((n: any) => n.technicianVisible === true);
+      const snapshot = originalFormDataRef.current || {};
       const reviews = allTechNodes.map((node: any) => ({
         nodeId: node.id,
+        originalValue: snapshot[node.id] != null ? String(snapshot[node.id]) : null,
         reviewedValue: formData[node.id] != null ? String(formData[node.id]) : null,
         isModified: reviewChecked[node.id] === true,
         modificationNote: reviewChecked[node.id] ? (reviewComments[node.id] || null) : null,
@@ -799,6 +804,21 @@ const TBL: React.FC<TBLProps> = ({
       setSubmittingReview(false);
     }
   }, [reviewChecked, reviewComments, reviewEventId, rawNodes, formData, api]);
+
+  // 🔍 REVIEW MODE: Capturer un snapshot des valeurs originales du devis
+  // Ce snapshot est pris UNE SEULE FOIS quand formData est chargé en mode review
+  useEffect(() => {
+    if (!reviewMode) return;
+    if (originalFormDataRef.current) return; // Déjà capturé
+    // Attendre qu'il y ait des données significatives (au moins 5 champs remplis)
+    const meaningfulKeys = Object.keys(formData).filter(k => !k.startsWith('__') && formData[k] != null && formData[k] !== '');
+    if (meaningfulKeys.length < 5) return;
+    // Prendre le snapshot
+    const snapshot = { ...formData };
+    originalFormDataRef.current = snapshot;
+    setOriginalFormData(snapshot);
+    console.log(`📸 [TBL Review] Snapshot valeurs originales capturé: ${meaningfulKeys.length} champs`);
+  }, [reviewMode, formData]);
 
   // ⚡ OPTIMISATION: Index O(1) pour résolution des alias sharedRef (remplace boucle O(n²))
   const sharedRefAliasMap = useMemo(() => {
@@ -4323,6 +4343,7 @@ const TBL: React.FC<TBLProps> = ({
                         onReviewComment={onReviewComment}
                         submittingReview={submittingReview}
                         onSubmitReview={onSubmitReview}
+                        originalFormData={originalFormData}
                       />
                     </div>
                   )
@@ -5148,6 +5169,7 @@ interface TBLTabContentWithSectionsProps {
   onReviewComment?: (fieldId: string, comment: string) => void;
   submittingReview?: boolean;
   onSubmitReview?: () => void;
+  originalFormData?: Record<string, any>;
 }
 
 const TBLTabContentWithSections: React.FC<TBLTabContentWithSectionsProps> = React.memo(({
@@ -5177,6 +5199,7 @@ const TBLTabContentWithSections: React.FC<TBLTabContentWithSectionsProps> = Reac
   onReviewComment,
   submittingReview = false,
   onSubmitReview,
+  originalFormData: originalFormDataProp,
 }) => {
   const stats = useMemo(() => {
     let total = 0;
@@ -5512,12 +5535,8 @@ const TBLTabContentWithSections: React.FC<TBLTabContentWithSectionsProps> = Reac
               reviewComments={reviewComments}
               onReviewCheck={onReviewCheck}
               onReviewComment={onReviewComment}
+              originalFormData={originalFormDataProp}
             />
-          ))}
-        </div>
-      );
-    }
-    if (fields.length) {
       // When no explicit sections, build a synthetic one and respect subTabs
       const synthetic: TBLSection = {
         id: '__synthetic__',
@@ -5597,6 +5616,7 @@ const TBLTabContentWithSections: React.FC<TBLTabContentWithSectionsProps> = Reac
             reviewComments={reviewComments}
             onReviewCheck={onReviewCheck}
             onReviewComment={onReviewComment}
+            originalFormData={originalFormDataProp}
           />
         </div>
       );
