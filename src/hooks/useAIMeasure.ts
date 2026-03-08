@@ -404,8 +404,6 @@ export function getAIMeasureConfig(field: {
       }))
     };
     
-    console.log('[getAIMeasureConfig] Config depuis colonnes dédiées:', config);
-    
     if (!config.enabled) return null;
     return config;
   }
@@ -415,7 +413,6 @@ export function getAIMeasureConfig(field: {
   if (legacyConfig) {
     const aiMeasure = legacyConfig.aiMeasure as AIMeasureConfig | undefined;
     if (aiMeasure?.enabled) {
-      console.log('[getAIMeasureConfig] Config depuis legacy advancedConfig/config:', aiMeasure);
       return aiMeasure;
     }
   }
@@ -425,7 +422,6 @@ export function getAIMeasureConfig(field: {
   if (metadata?.aiMeasure) {
     const aiMeasure = metadata.aiMeasure as AIMeasureConfig;
     if (aiMeasure?.enabled) {
-      console.log('[getAIMeasureConfig] Config depuis metadata.aiMeasure:', aiMeasure);
       return aiMeasure;
     }
   }

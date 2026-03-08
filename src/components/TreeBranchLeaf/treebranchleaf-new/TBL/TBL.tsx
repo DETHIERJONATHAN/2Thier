@@ -50,7 +50,6 @@ import { useParams, useSearchParams } from 'react-router-dom';
 import { useTreeBranchLeafConfig } from '../../hooks/useTreeBranchLeafConfig';
 import { useAuthenticatedApi } from '../../../../hooks/useAuthenticatedApi';
 import { blockGetRequestsTemporarily, unblockGetRequests, clearAllNodeValueCaches } from '../../../../hooks/useNodeCalculatedValue';
-import { ClientSidebar } from './components/ClientSidebar';
 import TBLSectionRenderer from './components/TBLSectionRenderer';
 import { useTBLDataPrismaComplete, type TBLField, type TBLSection } from './hooks/useTBLDataPrismaComplete';
 import { useTBLDataHierarchicalFixed } from './hooks/useTBLData-hierarchical-fixed';

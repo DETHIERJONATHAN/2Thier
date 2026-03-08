@@ -2,6 +2,9 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useAuthenticatedApi } from '../../../hooks/useAuthenticatedApi';
 import { useAuth } from '../../../auth/useAuth';
 
+// 🚀 Cache module-level : évite de refaire 3 requêtes API à chaque montage du TBL
+let moduleCache: { config: TreeBranchLeafConfig; orgId: string | null } | null = null;
+
 // Interfaces pour la configuration
 export interface TreeBranchLeafVariable {
   id: string;
@@ -66,11 +69,16 @@ interface UseTreeBranchLeafConfigReturn {
 export function useTreeBranchLeafConfig(): UseTreeBranchLeafConfigReturn {
   const { api } = useAuthenticatedApi();
   const { currentOrganization } = useAuth();
-  const [config, setConfig] = useState<TreeBranchLeafConfig | null>(null);
-  const [loading, setLoading] = useState(true);
+  const organizationId = currentOrganization?.id ?? null;
+  
+  // 🚀 Initialiser depuis le cache module-level si disponible pour cette org
+  const [config, setConfig] = useState<TreeBranchLeafConfig | null>(
+    moduleCache && moduleCache.orgId === organizationId ? moduleCache.config : null
+  );
+  const [loading, setLoading] = useState(config === null);
   const [error, setError] = useState<string | null>(null);
-  const hasFetchedRef = useRef(false);
-  const lastOrgIdRef = useRef<string | null>(null);
+  const hasFetchedRef = useRef(config !== null);
+  const lastOrgIdRef = useRef<string | null>(config !== null ? organizationId : null);
 
   const fetchConfig = useCallback(async () => {
     try {
@@ -136,15 +144,24 @@ export function useTreeBranchLeafConfig(): UseTreeBranchLeafConfigReturn {
         calculationModes: mappedModes,
         meta: { fetchedAt: new Date().toISOString(), source: 'api' }
       });
+      // 🚀 Sauvegarder dans le cache module-level
+      moduleCache = {
+        config: {
+          variables: mappedVariables,
+          fields: mappedFields,
+          calculationModes: mappedModes,
+          meta: { fetchedAt: new Date().toISOString(), source: 'api' }
+        },
+        orgId: organizationId
+      };
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Erreur lors du chargement de la configuration');
     } finally {
       setLoading(false);
     }
-  }, [api]);
+  }, [api, organizationId]);
 
   // Charger la configuration au montage
-  const organizationId = currentOrganization?.id ?? null;
 
   useEffect(() => {
     const shouldFetch = !hasFetchedRef.current || lastOrgIdRef.current !== organizationId;

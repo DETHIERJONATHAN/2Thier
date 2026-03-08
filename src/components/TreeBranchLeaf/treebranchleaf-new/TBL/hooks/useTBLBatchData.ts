@@ -475,6 +475,7 @@ export const useTBLBatchData = (
   const loadingRef = useRef(false);
   const lastLoadedTreeId = useRef<string | null>(null);
   const lastLoadedLeadId = useRef<string | undefined>(undefined);
+  const lastLoadedSubmissionId = useRef<string | undefined>(undefined);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -492,10 +493,11 @@ export const useTBLBatchData = (
       return;
     }
 
-    // Si déjà chargé pour ce tree/lead, ne pas recharger (sauf si refresh)
+    // Si déjà chargé pour ce tree/lead/submission, ne pas recharger (sauf si refresh)
     if (
       lastLoadedTreeId.current === treeId &&
       lastLoadedLeadId.current === leadId &&
+      lastLoadedSubmissionId.current === submissionId &&
       refreshKey === 0 &&
       batchData !== null
     ) {
@@ -582,6 +584,7 @@ export const useTBLBatchData = (
           setBatchData(data);
           lastLoadedTreeId.current = treeId;
           lastLoadedLeadId.current = leadId;
+          lastLoadedSubmissionId.current = submissionId;
           // 🔧 FIX: Remettre refreshKey à 0 après chargement réussi
           // Sans ça, après un refresh(), refreshKey reste > 0 et le guard
           // "refreshKey === 0" ne fonctionne plus → boucle infinie de rechargements
@@ -611,7 +614,8 @@ export const useTBLBatchData = (
     };
 
     loadBatchData();
-  }, [treeId, leadId, submissionId, api, refreshKey, batchData]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [treeId, leadId, submissionId, api, refreshKey]);
 
   // Helpers pour accéder aux données
   const getFormulasForNode = useCallback((nodeId: string): BatchFormula[] => {
