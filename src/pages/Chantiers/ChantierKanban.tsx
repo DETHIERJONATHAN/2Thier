@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Spin, message, Avatar, Tooltip, Empty, Tag, Button, Modal, DatePicker, Dropdown, Input, Select, Popconfirm, Badge } from 'antd';
+import { Spin, message, Avatar, Tooltip, Empty, Tag, Button, Modal, DatePicker, Input, Select, Popconfirm, Badge } from 'antd';
 import type { Dayjs } from 'dayjs';
 import dayjs from 'dayjs';
 import 'dayjs/locale/fr';
@@ -749,6 +749,7 @@ const ChantierKanban: React.FC<ChantierKanbanProps> = ({ onViewChantier, onSetti
   const [dateRange, setDateRange] = useState<[Dayjs, Dayjs] | null>(null);
   const [activePreset, setActivePreset] = useState<DatePreset | null>(null);
   const [dateField, setDateField] = useState<DateField>('createdAt');
+  const [dateDropdownOpen, setDateDropdownOpen] = useState(false);
   const [allowedTargets, setAllowedTargets] = useState<Record<string, string[]>>({});
   const [draggingFromStatusId, setDraggingFromStatusId] = useState<string | null>(null);
 
@@ -1120,138 +1121,39 @@ const ChantierKanban: React.FC<ChantierKanbanProps> = ({ onViewChantier, onSetti
           </span>
         </div>
 
-        {/* ─── Filtre dates : dropdown unique (type de date + période) ─── */}
+        {/* ─── Filtre dates : panel fixe plein écran (mobile-friendly) ─── */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
-          <Dropdown
-            trigger={['click']}
-            placement="bottomRight"
-            autoAdjustOverflow
-            dropdownRender={() => (
-              <div style={{
-                background: '#fff',
-                borderRadius: 8,
-                boxShadow: '0 6px 16px rgba(0,0,0,0.12)',
-                padding: 12,
-                width: 'min(calc(100vw - 24px), 320px)',
-                maxHeight: 'calc(100vh - 120px)',
-                overflowY: 'auto',
-              }}>
-                {/* Sélecteur du type de date */}
-                <div style={{ fontSize: 11, fontWeight: 600, color: '#8c8c8c', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.5px' }}>Sur quelle date ?</div>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginBottom: 10 }}>
-                  {DATE_FIELDS.map(df => (
-                    <button
-                      key={df.key}
-                      onClick={() => setDateField(df.key)}
-                      style={{
-                        padding: '3px 8px',
-                        borderRadius: 12,
-                        border: dateField === df.key ? `2px solid ${df.color}` : '1px solid #e8e8e8',
-                        background: dateField === df.key ? `${df.color}12` : '#fafafa',
-                        cursor: 'pointer',
-                        fontSize: 11,
-                        fontWeight: dateField === df.key ? 600 : 400,
-                        color: dateField === df.key ? df.color : '#8c8c8c',
-                        transition: 'all 0.2s',
-                        whiteSpace: 'nowrap',
-                      }}
-                    >
-                      {df.icon} {df.label}
-                    </button>
-                  ))}
-                </div>
-
-                {/* Présets de période */}
-                <div style={{ borderTop: '1px solid #f0f0f0', paddingTop: 8, marginBottom: 8 }}>
-                  <div style={{ fontSize: 11, fontWeight: 600, color: '#8c8c8c', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.5px' }}>Période</div>
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
-                    {DATE_PRESETS.map(preset => (
-                      <button
-                        key={preset.key}
-                        onClick={() => handlePresetClick(preset.key)}
-                        style={{
-                          padding: '4px 10px',
-                          borderRadius: 14,
-                          border: activePreset === preset.key ? '2px solid #1677ff' : '1px solid #d9d9d9',
-                          background: activePreset === preset.key ? '#e6f4ff' : '#fff',
-                          cursor: 'pointer',
-                          fontSize: 12,
-                          fontWeight: activePreset === preset.key ? 600 : 400,
-                          color: activePreset === preset.key ? '#1677ff' : '#595959',
-                          transition: 'all 0.2s',
-                          whiteSpace: 'nowrap',
-                        }}
-                      >
-                        {preset.label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Plage personnalisée */}
-                <div style={{ borderTop: '1px solid #f0f0f0', paddingTop: 8 }}>
-                  <div style={{ fontSize: 11, color: '#8c8c8c', marginBottom: 4 }}>Plage personnalisée</div>
-                  <RangePicker
-                    size="small"
-                    format="DD/MM/YYYY"
-                    value={activePreset === 'custom' && dateRange ? dateRange : undefined}
-                    onChange={(dates) => handleCustomRange(dates as [Dayjs | null, Dayjs | null] | null)}
-                    style={{ width: '100%' }}
-                    allowClear
-                    placeholder={['Début', 'Fin']}
-                  />
-                </div>
-
-                {/* Résumé actif */}
-                {(dateField !== 'createdAt' || dateRange) && (
-                  <div style={{ borderTop: '1px solid #f0f0f0', paddingTop: 8, marginTop: 8, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span style={{ fontSize: 11, color: '#595959' }}>
-                      {DATE_FIELDS.find(f => f.key === dateField)?.icon} {DATE_FIELDS.find(f => f.key === dateField)?.label}
-                      {dateRange && <>: {dateRange[0].format('DD MMM')} → {dateRange[1].format('DD MMM YYYY')}</>}
-                      {!dateRange && dateField !== 'createdAt' && <> — tous les chantiers avec cette date</>}
-                    </span>
-                    <button
-                      onClick={clearDateFilter}
-                      style={{ border: 'none', background: 'none', cursor: 'pointer', color: '#ff4d4f', fontSize: 12, display: 'flex', alignItems: 'center', gap: 3 }}
-                    >
-                      <CloseCircleOutlined style={{ fontSize: 11 }} /> Effacer
-                    </button>
-                  </div>
-                )}
-              </div>
-            )}
+          <button
+            onClick={() => setDateDropdownOpen(!dateDropdownOpen)}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 5,
+              padding: '3px 10px',
+              borderRadius: 16,
+              border: (dateField !== 'createdAt' || dateRange) ? `2px solid ${DATE_FIELDS.find(f => f.key === dateField)?.color || '#1677ff'}` : '1px solid #d9d9d9',
+              background: (dateField !== 'createdAt' || dateRange) ? `${DATE_FIELDS.find(f => f.key === dateField)?.color || '#1677ff'}12` : '#fff',
+              cursor: 'pointer',
+              fontSize: 12,
+              fontWeight: (dateField !== 'createdAt' || dateRange) ? 600 : 400,
+              color: (dateField !== 'createdAt' || dateRange) ? (DATE_FIELDS.find(f => f.key === dateField)?.color || '#1677ff') : '#595959',
+              transition: 'all 0.2s',
+              whiteSpace: 'nowrap',
+              minHeight: 32,
+            }}
           >
-            <button
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: 5,
-                padding: '3px 10px',
-                borderRadius: 16,
-                border: (dateField !== 'createdAt' || dateRange) ? `2px solid ${DATE_FIELDS.find(f => f.key === dateField)?.color || '#1677ff'}` : '1px solid #d9d9d9',
-                background: (dateField !== 'createdAt' || dateRange) ? `${DATE_FIELDS.find(f => f.key === dateField)?.color || '#1677ff'}12` : '#fff',
-                cursor: 'pointer',
-                fontSize: 12,
-                fontWeight: (dateField !== 'createdAt' || dateRange) ? 600 : 400,
-                color: (dateField !== 'createdAt' || dateRange) ? (DATE_FIELDS.find(f => f.key === dateField)?.color || '#1677ff') : '#595959',
-                transition: 'all 0.2s',
-                whiteSpace: 'nowrap',
-                minHeight: 32,
-              }}
-            >
-              <CalendarOutlined style={{ fontSize: 13 }} />
-              {dateField !== 'createdAt'
-                ? `${DATE_FIELDS.find(f => f.key === dateField)?.icon || '📅'} ${DATE_FIELDS.find(f => f.key === dateField)?.label}${dateRange ? (activePreset && activePreset !== 'custom'
-                  ? ` · ${DATE_PRESETS.find(p => p.key === activePreset)?.label}`
-                  : ` · ${dateRange[0].format('DD/MM')} — ${dateRange[1].format('DD/MM')}`) : ''}`
-                : dateRange
-                  ? (activePreset && activePreset !== 'custom'
-                    ? DATE_PRESETS.find(p => p.key === activePreset)?.label
-                    : `${dateRange[0].format('DD/MM')} — ${dateRange[1].format('DD/MM')}`)
-                  : 'Dates'
-              }
-            </button>
-          </Dropdown>
+            <CalendarOutlined style={{ fontSize: 13 }} />
+            {dateField !== 'createdAt'
+              ? `${DATE_FIELDS.find(f => f.key === dateField)?.icon || '📅'} ${DATE_FIELDS.find(f => f.key === dateField)?.label}${dateRange ? (activePreset && activePreset !== 'custom'
+                ? ` · ${DATE_PRESETS.find(p => p.key === activePreset)?.label}`
+                : ` · ${dateRange[0].format('DD/MM')} — ${dateRange[1].format('DD/MM')}`) : ''}`
+              : dateRange
+                ? (activePreset && activePreset !== 'custom'
+                  ? DATE_PRESETS.find(p => p.key === activePreset)?.label
+                  : `${dateRange[0].format('DD/MM')} — ${dateRange[1].format('DD/MM')}`)
+                : 'Dates'
+            }
+          </button>
           {(dateField !== 'createdAt' || dateRange) && (
             <button
               onClick={clearDateFilter}
@@ -1276,6 +1178,122 @@ const ChantierKanban: React.FC<ChantierKanbanProps> = ({ onViewChantier, onSetti
             </button>
           )}
         </div>
+
+        {/* ─── Date filter panel (fixed overlay) ─── */}
+        {dateDropdownOpen && (
+          <>
+            {/* Backdrop */}
+            <div
+              onClick={() => setDateDropdownOpen(false)}
+              style={{ position: 'fixed', inset: 0, zIndex: 1000, background: 'rgba(0,0,0,0.25)' }}
+            />
+            {/* Panel */}
+            <div style={{
+              position: 'fixed',
+              top: '50%',
+              left: '50%',
+              transform: 'translate(-50%, -50%)',
+              zIndex: 1001,
+              background: '#fff',
+              borderRadius: 12,
+              boxShadow: '0 8px 24px rgba(0,0,0,0.18)',
+              padding: 16,
+              width: 'min(calc(100vw - 32px), 340px)',
+              maxHeight: 'calc(100vh - 80px)',
+              overflowY: 'auto',
+            }}>
+              {/* Header */}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                <span style={{ fontSize: 14, fontWeight: 600, color: '#262626' }}>📅 Filtre par date</span>
+                <Button icon={<CloseOutlined />} size="small" type="text" onClick={() => setDateDropdownOpen(false)} style={{ color: '#8c8c8c' }} />
+              </div>
+
+              {/* Sélecteur du type de date */}
+              <div style={{ fontSize: 11, fontWeight: 600, color: '#8c8c8c', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.5px' }}>Sur quelle date ?</div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginBottom: 12 }}>
+                {DATE_FIELDS.map(df => (
+                  <button
+                    key={df.key}
+                    onClick={() => setDateField(df.key)}
+                    style={{
+                      padding: '4px 10px',
+                      borderRadius: 12,
+                      border: dateField === df.key ? `2px solid ${df.color}` : '1px solid #e8e8e8',
+                      background: dateField === df.key ? `${df.color}12` : '#fafafa',
+                      cursor: 'pointer',
+                      fontSize: 11,
+                      fontWeight: dateField === df.key ? 600 : 400,
+                      color: dateField === df.key ? df.color : '#8c8c8c',
+                      transition: 'all 0.2s',
+                      whiteSpace: 'nowrap',
+                    }}
+                  >
+                    {df.icon} {df.label}
+                  </button>
+                ))}
+              </div>
+
+              {/* Présets de période */}
+              <div style={{ borderTop: '1px solid #f0f0f0', paddingTop: 10, marginBottom: 10 }}>
+                <div style={{ fontSize: 11, fontWeight: 600, color: '#8c8c8c', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.5px' }}>Période</div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                  {DATE_PRESETS.map(preset => (
+                    <button
+                      key={preset.key}
+                      onClick={() => { handlePresetClick(preset.key); setDateDropdownOpen(false); }}
+                      style={{
+                        padding: '5px 12px',
+                        borderRadius: 14,
+                        border: activePreset === preset.key ? '2px solid #1677ff' : '1px solid #d9d9d9',
+                        background: activePreset === preset.key ? '#e6f4ff' : '#fff',
+                        cursor: 'pointer',
+                        fontSize: 12,
+                        fontWeight: activePreset === preset.key ? 600 : 400,
+                        color: activePreset === preset.key ? '#1677ff' : '#595959',
+                        transition: 'all 0.2s',
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
+                      {preset.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Plage personnalisée */}
+              <div style={{ borderTop: '1px solid #f0f0f0', paddingTop: 10 }}>
+                <div style={{ fontSize: 11, color: '#8c8c8c', marginBottom: 4 }}>Plage personnalisée</div>
+                <RangePicker
+                  size="small"
+                  format="DD/MM/YYYY"
+                  value={activePreset === 'custom' && dateRange ? dateRange : undefined}
+                  onChange={(dates) => { handleCustomRange(dates as [Dayjs | null, Dayjs | null] | null); setDateDropdownOpen(false); }}
+                  style={{ width: '100%' }}
+                  allowClear
+                  placeholder={['Début', 'Fin']}
+                  getPopupContainer={(trigger) => trigger.parentElement || document.body}
+                />
+              </div>
+
+              {/* Résumé actif + effacer */}
+              {(dateField !== 'createdAt' || dateRange) && (
+                <div style={{ borderTop: '1px solid #f0f0f0', paddingTop: 10, marginTop: 10, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={{ fontSize: 11, color: '#595959' }}>
+                    {DATE_FIELDS.find(f => f.key === dateField)?.icon} {DATE_FIELDS.find(f => f.key === dateField)?.label}
+                    {dateRange && <>: {dateRange[0].format('DD MMM')} → {dateRange[1].format('DD MMM YYYY')}</>}
+                    {!dateRange && dateField !== 'createdAt' && <> — tous</>}
+                  </span>
+                  <button
+                    onClick={() => { clearDateFilter(); setDateDropdownOpen(false); }}
+                    style={{ border: 'none', background: 'none', cursor: 'pointer', color: '#ff4d4f', fontSize: 12, display: 'flex', alignItems: 'center', gap: 3 }}
+                  >
+                    <CloseCircleOutlined style={{ fontSize: 11 }} /> Effacer
+                  </button>
+                </div>
+              )}
+            </div>
+          </>
+        )}
 
         {/* Product filter buttons */}
         {uniqueProducts.length > 0 && (
