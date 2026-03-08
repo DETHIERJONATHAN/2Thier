@@ -267,10 +267,10 @@ const ChantierPointageTab: React.FC<ChantierPointageTabProps> = ({ chantierId, c
               <Tooltip title="Photo d'arrivée">
                 <Image
                   src={r.clockInPhotoUrl!}
-                  width={22}
-                  height={22}
+                  width={30}
+                  height={30}
                   style={{ borderRadius: 4, objectFit: 'cover', cursor: 'pointer', border: '1px solid #d9d9d9' }}
-                  preview={{ mask: <CameraOutlined style={{ fontSize: 10 }} /> }}
+                  preview={{ mask: <CameraOutlined style={{ fontSize: 11 }} /> }}
                 />
               </Tooltip>
             )}
@@ -278,10 +278,10 @@ const ChantierPointageTab: React.FC<ChantierPointageTabProps> = ({ chantierId, c
               <Tooltip title="Photo de départ">
                 <Image
                   src={r.clockOutPhotoUrl!}
-                  width={22}
-                  height={22}
+                  width={30}
+                  height={30}
                   style={{ borderRadius: 4, objectFit: 'cover', cursor: 'pointer', border: '1px solid #ff4d4f' }}
-                  preview={{ mask: <CameraOutlined style={{ fontSize: 10 }} /> }}
+                  preview={{ mask: <CameraOutlined style={{ fontSize: 11 }} /> }}
                 />
               </Tooltip>
             )}
@@ -352,7 +352,7 @@ const ChantierPointageTab: React.FC<ChantierPointageTabProps> = ({ chantierId, c
           <Space wrap>
             {technicians.length > 0 && (
               <Select
-                style={{ width: 200 }}
+                style={{ minWidth: 140, flex: '1 1 140px', maxWidth: 200 }}
                 placeholder="Technicien"
                 value={quickTechId || undefined}
                 onChange={setQuickTechId}
@@ -366,7 +366,7 @@ const ChantierPointageTab: React.FC<ChantierPointageTabProps> = ({ chantierId, c
               />
             )}
             <Select
-              style={{ width: 200 }}
+              style={{ minWidth: 140, flex: '1 1 140px', maxWidth: 200 }}
               value={quickStatus}
               onChange={setQuickStatus}
               size="small"
@@ -438,6 +438,7 @@ const ChantierPointageTab: React.FC<ChantierPointageTabProps> = ({ chantierId, c
             loading={loading}
             pagination={{ pageSize: 20, showTotal: (t) => `${t} pointage(s)` }}
             style={{ fontSize: 12 }}
+            scroll={{ x: 750 }}
           />
         )}
       </Card>

@@ -449,7 +449,7 @@ const ChantierInvoicesTab: React.FC<Props> = ({ chantierId, chantierAmount, isVa
         title={<span><ThunderboltOutlined /> Plan de facturation {billingSource === 'templates' && <Tag color="orange" style={{ marginLeft: 8 }}>Depuis templates — non sauvegardé</Tag>}</span>}
         style={{ marginBottom: 16, borderColor: billingSource === 'chantier' ? '#52c41a' : '#faad14' }}
         extra={
-          <Space>
+          <Space wrap>
             {billingSource === 'templates' && isAdminOrAbove && (
               <Button size="small" icon={<ReloadOutlined />} onClick={handleInitFromTemplates}>
                 Initialiser depuis templates
@@ -498,7 +498,7 @@ const ChantierInvoicesTab: React.FC<Props> = ({ chantierId, chantierAmount, isVa
           <div>
             {billingPlan.map((item, index) => (
               <div key={index} style={{
-                display: 'flex', gap: 8, alignItems: 'center', marginBottom: 8,
+                display: 'flex', gap: 8, alignItems: 'center', marginBottom: 8, flexWrap: 'wrap',
                 padding: '8px 12px', background: '#fafafa', borderRadius: 6, border: '1px solid #f0f0f0',
               }}>
                 <Select
@@ -573,7 +573,7 @@ const ChantierInvoicesTab: React.FC<Props> = ({ chantierId, chantierAmount, isVa
 
                 return (
                   <Card key={idx} size="small" style={{
-                    flex: '1 1 200px', maxWidth: 260,
+                    flex: '1 1 200px', maxWidth: 320,
                     borderColor: alreadyExists ? '#52c41a' : '#d9d9d9',
                     background: alreadyExists ? '#f6ffed' : undefined,
                     opacity: alreadyExists ? 0.8 : 1,
@@ -665,6 +665,7 @@ const ChantierInvoicesTab: React.FC<Props> = ({ chantierId, chantierAmount, isVa
           size="small"
           pagination={false}
           locale={{ emptyText: <Empty description="Aucune facture" /> }}
+          scroll={{ x: 750 }}
         />
       </Card>
 
@@ -675,7 +676,8 @@ const ChantierInvoicesTab: React.FC<Props> = ({ chantierId, chantierAmount, isVa
         onOk={handleSave}
         onCancel={() => setModalVisible(false)}
         okText={editingInvoice ? 'Modifier' : 'Créer'}
-        width={500}
+        width="95vw"
+        style={{ maxWidth: 500, top: 20 }}
       >
         <Form form={form} layout="vertical">
           <Form.Item name="type" label="Type" rules={[{ required: true }]} initialValue="CUSTOM">
@@ -684,7 +686,7 @@ const ChantierInvoicesTab: React.FC<Props> = ({ chantierId, chantierAmount, isVa
           <Form.Item name="label" label="Label" rules={[{ required: true, message: 'Label requis' }]}>
             <Input placeholder="Ex: Facture acompte 30%" />
           </Form.Item>
-          <div style={{ display: 'flex', gap: 12 }}>
+          <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
             <Form.Item name="percentage" label="% du devis" style={{ flex: 1 }}>
               <InputNumber
                 min={0} max={100} suffix="%" style={{ width: '100%' }}

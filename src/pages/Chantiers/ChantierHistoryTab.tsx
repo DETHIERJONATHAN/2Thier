@@ -155,7 +155,7 @@ const ChantierHistoryTab: React.FC<Props> = ({ chantierId, statusesMap }) => {
                 {dayjs(entry.createdAt).fromNow()}
               </Text>
             </div>
-            <div style={{ marginLeft: 22 }}>
+            <div style={{ marginLeft: 12 }}>
               {renderDescription(entry)}
               {entry.User && (
                 <div style={{ marginTop: 2 }}>
@@ -164,7 +164,7 @@ const ChantierHistoryTab: React.FC<Props> = ({ chantierId, statusesMap }) => {
                   </Text>
                 </div>
               )}
-              <Text type="secondary" style={{ fontSize: 10 }}>
+              <Text type="secondary" style={{ fontSize: 11 }}>
                 {dayjs(entry.createdAt).format('DD/MM/YYYY HH:mm')}
               </Text>
             </div>
@@ -178,7 +178,7 @@ const ChantierHistoryTab: React.FC<Props> = ({ chantierId, statusesMap }) => {
     <div style={{ padding: '16px 0' }}>
       {/* Ajout de note */}
       <Card size="small" style={{ marginBottom: 16 }}>
-        <div style={{ display: 'flex', gap: 8 }}>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
           <Input.TextArea
             value={noteText}
             onChange={e => setNoteText(e.target.value)}

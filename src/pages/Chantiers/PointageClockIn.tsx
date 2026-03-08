@@ -329,7 +329,8 @@ const PointageClockIn: React.FC<PointageClockInProps> = ({
         open={open}
         onCancel={handleClose}
         footer={null}
-        width={480}
+        width="95vw"
+        style={{ maxWidth: 480, top: 20 }}
         title={null}
         closable={step !== 'sending'}
         maskClosable={false}
@@ -500,7 +501,7 @@ const PointageClockIn: React.FC<PointageClockInProps> = ({
                   onClick={takePhoto}
                   disabled={!cameraReady}
                   style={{
-                    height: 48, width: 200, fontSize: 16, fontWeight: 600,
+                    height: 48, minWidth: 160, fontSize: 16, fontWeight: 600,
                     background: '#1677ff', borderRadius: 24,
                   }}
                 >

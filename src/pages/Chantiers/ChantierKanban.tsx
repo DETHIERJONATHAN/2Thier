@@ -599,7 +599,7 @@ const TechnicianDragItem: React.FC<TechnicianDragItemProps> = ({ technician, isS
           </div>
           <div style={{ display: 'flex', gap: 2, flexWrap: 'wrap', marginTop: 1 }}>
             {technician.specialties?.map(s => (
-              <span key={s} style={{ fontSize: 8, padding: '0 3px', borderRadius: 3, backgroundColor: s === 'all' ? '#e6f7ff' : '#f6ffed', color: s === 'all' ? '#1890ff' : '#52c41a', lineHeight: '14px' }}>
+              <span key={s} style={{ fontSize: 9, padding: '1px 4px', borderRadius: 3, backgroundColor: s === 'all' ? '#e6f7ff' : '#f6ffed', color: s === 'all' ? '#1890ff' : '#52c41a', lineHeight: '16px' }}>
                 {specLabels[s] || s}
               </span>
             ))}
@@ -669,7 +669,7 @@ const TeamDragItem: React.FC<TeamDragItemProps> = ({ team, isSelected, onClick, 
           <div style={{ fontWeight: 600, color: '#262626', fontSize: 11, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
             {team.name}
           </div>
-          <div style={{ fontSize: 9, color: '#8c8c8c' }}>
+          <div style={{ fontSize: 10, color: '#8c8c8c' }}>
             {leaders.length > 0 && <span>👑 {leaders.map(l => l.Technician.firstName).join(', ')} </span>}
             {members.length > 0 && <span>🔧 {members.length}</span>}
           </div>
@@ -677,7 +677,7 @@ const TeamDragItem: React.FC<TeamDragItemProps> = ({ team, isSelected, onClick, 
         <div style={{ display: 'flex', gap: 2, flexShrink: 0 }}>
           <button
             onClick={(e) => { e.stopPropagation(); setExpanded(!expanded); }}
-            style={{ border: 'none', background: 'none', cursor: 'pointer', fontSize: 10, color: '#8c8c8c', padding: 2 }}
+            style={{ border: 'none', background: 'none', cursor: 'pointer', fontSize: 11, color: '#8c8c8c', padding: 4, minWidth: 28, minHeight: 28, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
             title="Détails"
           >
             {expanded ? '▲' : '▼'}
@@ -1093,13 +1093,14 @@ const ChantierKanban: React.FC<ChantierKanbanProps> = ({ onViewChantier, onSetti
     <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
       {/* Toolbar */}
       <div style={{
-        padding: '8px 16px',
+        padding: '8px 12px',
         display: 'flex',
+        flexWrap: 'wrap',
         justifyContent: 'space-between',
         alignItems: 'center',
         borderBottom: '1px solid #f0f0f0',
         backgroundColor: '#fff',
-        gap: 12,
+        gap: 8,
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
           <span style={{ fontSize: 16, fontWeight: 600 }}>🏗️ Chantiers</span>
@@ -1222,6 +1223,7 @@ const ChantierKanban: React.FC<ChantierKanbanProps> = ({ onViewChantier, onSetti
                 color: (dateField !== 'createdAt' || dateRange) ? (DATE_FIELDS.find(f => f.key === dateField)?.color || '#1677ff') : '#595959',
                 transition: 'all 0.2s',
                 whiteSpace: 'nowrap',
+                minHeight: 32,
               }}
             >
               <CalendarOutlined style={{ fontSize: 13 }} />
@@ -1243,6 +1245,7 @@ const ChantierKanban: React.FC<ChantierKanbanProps> = ({ onViewChantier, onSetti
               style={{
                 display: 'inline-flex',
                 alignItems: 'center',
+                justifyContent: 'center',
                 padding: '3px 6px',
                 borderRadius: '50%',
                 border: 'none',
@@ -1251,6 +1254,8 @@ const ChantierKanban: React.FC<ChantierKanbanProps> = ({ onViewChantier, onSetti
                 cursor: 'pointer',
                 fontSize: 10,
                 lineHeight: 1,
+                minWidth: 28,
+                minHeight: 28,
               }}
               title="Effacer le filtre date"
             >
@@ -1273,7 +1278,7 @@ const ChantierKanban: React.FC<ChantierKanbanProps> = ({ onViewChantier, onSetti
                       display: 'inline-flex',
                       alignItems: 'center',
                       gap: 5,
-                      padding: '3px 10px',
+                      padding: '4px 10px',
                       borderRadius: 16,
                       border: isActive ? `2px solid ${bgColor}` : '1px solid #d9d9d9',
                       background: isActive ? hexToRgba(bgColor, 0.12) : '#fff',
@@ -1283,6 +1288,7 @@ const ChantierKanban: React.FC<ChantierKanbanProps> = ({ onViewChantier, onSetti
                       color: isActive ? bgColor : '#595959',
                       transition: 'all 0.2s',
                       whiteSpace: 'nowrap',
+                      minHeight: 32,
                     }}
                   >
                     <span style={{ fontSize: 16, lineHeight: 1 }}>
@@ -1370,11 +1376,13 @@ const ChantierKanban: React.FC<ChantierKanbanProps> = ({ onViewChantier, onSetti
             <div style={{
               width: 220,
               minWidth: 220,
+              maxWidth: '100%',
               borderRight: '1px solid #f0f0f0',
               backgroundColor: '#fafafa',
               display: 'flex',
               flexDirection: 'column',
               overflow: 'hidden',
+              position: 'relative',
             }}>
               <div style={{ overflowY: 'auto', flex: 1, padding: '8px 6px' }}>
                 {/* Section : Actions rapides */}
@@ -1388,14 +1396,14 @@ const ChantierKanban: React.FC<ChantierKanbanProps> = ({ onViewChantier, onSetti
                         message.error(err?.message || 'Erreur sync');
                       }
                     }}
-                    style={{ flex: 1, padding: '4px 6px', borderRadius: 4, border: '1px solid #d9d9d9', background: '#fff', cursor: 'pointer', fontSize: 10, color: '#1677ff' }}
+                    style={{ flex: 1, padding: '6px 8px', borderRadius: 4, border: '1px solid #d9d9d9', background: '#fff', cursor: 'pointer', fontSize: 11, color: '#1677ff', minHeight: 36 }}
                     title="Importer les utilisateurs de l'organisation comme techniciens"
                   >
                     🔄 Sync
                   </button>
                   <button
                     onClick={() => { setTechFormData({ type: 'SUBCONTRACTOR', billingMode: 'FORFAIT', firstName: '', lastName: '', email: '', phone: '', company: '', specialties: [], color: '#8c8c8c' }); setTechFormOpen(true); }}
-                    style={{ flex: 1, padding: '4px 6px', borderRadius: 4, border: '1px dashed #8c8c8c', background: '#fff', cursor: 'pointer', fontSize: 10, color: '#8c8c8c' }}
+                    style={{ flex: 1, padding: '6px 8px', borderRadius: 4, border: '1px dashed #8c8c8c', background: '#fff', cursor: 'pointer', fontSize: 11, color: '#8c8c8c', minHeight: 36 }}
                     title="Ajouter un sous-traitant"
                   >
                     🏢 + Sous-traitant
@@ -1420,6 +1428,7 @@ const ChantierKanban: React.FC<ChantierKanbanProps> = ({ onViewChantier, onSetti
                       display: 'flex',
                       alignItems: 'center',
                       gap: 6,
+                      minHeight: 36,
                     }}
                   >
                     🚫 Sans technicien
@@ -1441,13 +1450,13 @@ const ChantierKanban: React.FC<ChantierKanbanProps> = ({ onViewChantier, onSetti
                 <div style={{ display: 'flex', gap: 0, marginBottom: 8, borderBottom: '1px solid #f0f0f0' }}>
                   <button
                     onClick={() => setPanelTab('techs')}
-                    style={{ flex: 1, padding: '4px 0', border: 'none', borderBottom: panelTab === 'techs' ? '2px solid #722ed1' : '2px solid transparent', background: 'none', cursor: 'pointer', fontSize: 10, fontWeight: panelTab === 'techs' ? 600 : 400, color: panelTab === 'techs' ? '#722ed1' : '#8c8c8c' }}
+                    style={{ flex: 1, padding: '6px 0', border: 'none', borderBottom: panelTab === 'techs' ? '2px solid #722ed1' : '2px solid transparent', background: 'none', cursor: 'pointer', fontSize: 11, fontWeight: panelTab === 'techs' ? 600 : 400, color: panelTab === 'techs' ? '#722ed1' : '#8c8c8c', minHeight: 36 }}
                   >
                     👤 Techniciens ({technicians.length})
                   </button>
                   <button
                     onClick={() => setPanelTab('teams')}
-                    style={{ flex: 1, padding: '4px 0', border: 'none', borderBottom: panelTab === 'teams' ? '2px solid #722ed1' : '2px solid transparent', background: 'none', cursor: 'pointer', fontSize: 10, fontWeight: panelTab === 'teams' ? 600 : 400, color: panelTab === 'teams' ? '#722ed1' : '#8c8c8c' }}
+                    style={{ flex: 1, padding: '6px 0', border: 'none', borderBottom: panelTab === 'teams' ? '2px solid #722ed1' : '2px solid transparent', background: 'none', cursor: 'pointer', fontSize: 11, fontWeight: panelTab === 'teams' ? 600 : 400, color: panelTab === 'teams' ? '#722ed1' : '#8c8c8c', minHeight: 36 }}
                   >
                     👥 Équipes ({teams.length})
                   </button>

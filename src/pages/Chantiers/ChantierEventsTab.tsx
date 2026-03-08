@@ -271,8 +271,8 @@ const ChantierEventsTab: React.FC<Props> = ({ chantierId, chantierAddress, chant
                   borderLeft: `3px solid ${typeInfo?.color || '#d9d9d9'}`,
                   background: event.status === 'PROBLEM' ? '#fff2f0' : undefined,
                 }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                    <div style={{ flex: 1 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 8 }}>
+                    <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
                         <Tag color={typeInfo?.color}>{typeInfo?.label || event.type}</Tag>
                         <Badge status={statusInfo?.badgeStatus as any || 'default'} text={statusInfo?.label || event.status} />
@@ -288,9 +288,11 @@ const ChantierEventsTab: React.FC<Props> = ({ chantierId, chantierAddress, chant
                               {event.CalendarEvent.endDate && ` — ${dayjs(event.CalendarEvent.endDate).format('HH:mm')}`}
                             </Text>
                             {event.CalendarEvent.location && (
-                              <Text type="secondary" style={{ fontSize: 12, marginLeft: 8 }}>
-                                📍 {event.CalendarEvent.location}
-                              </Text>
+                              <div>
+                                <Text type="secondary" style={{ fontSize: 12 }}>
+                                  📍 {event.CalendarEvent.location}
+                                </Text>
+                              </div>
                             )}
                           </div>
                         </div>
@@ -328,7 +330,7 @@ const ChantierEventsTab: React.FC<Props> = ({ chantierId, chantierAddress, chant
                     </div>
 
                     {/* Actions */}
-                    <Space size="small" style={{ flexShrink: 0 }}>
+                    <Space wrap size="small" style={{ flexShrink: 0 }}>
                       {event.status === 'PLANNED' && (
                         <>
                           <Button size="small" type="primary" icon={<CheckCircleOutlined />} onClick={() => handleValidate(event.id)}>
@@ -367,7 +369,8 @@ const ChantierEventsTab: React.FC<Props> = ({ chantierId, chantierAddress, chant
         onCancel={() => setModalVisible(false)}
         okText={editingEvent ? 'Modifier' : 'Créer'}
         confirmLoading={saving}
-        width={520}
+        width="95vw"
+        style={{ maxWidth: 520, top: 20 }}
       >
         <Form form={form} layout="vertical">
           <Form.Item name="type" label="Type d'événement" rules={[{ required: true }]} initialValue="CUSTOM">

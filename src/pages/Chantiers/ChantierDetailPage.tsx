@@ -231,35 +231,33 @@ const ChantierDetailPage: React.FC = () => {
     || null;
 
   return (
-    <div style={{ padding: '16px 24px', maxWidth: '1200px', margin: '0 auto', backgroundColor: '#FFFFFF', minHeight: '100vh' }}>
+    <div style={{ padding: '12px 12px', maxWidth: '1200px', margin: '0 auto', backgroundColor: '#FFFFFF', minHeight: '100vh' }}>
       {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '24px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px', flexWrap: 'wrap', gap: 8 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', minWidth: 0, flex: 1 }}>
           <Button 
             icon={<ArrowLeftOutlined />}
             onClick={() => navigate('/chantiers')}
             type="text"
           />
           <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
               {chantier.productIcon && <span style={{ fontSize: '24px' }}>{renderProductIcon(chantier.productIcon, 24)}</span>}
-              <Title level={3} style={{ margin: 0 }}>
+              <Title level={4} style={{ margin: 0, fontSize: 'clamp(16px, 4vw, 22px)' }}>
                 {chantier.productLabel}
-                {chantier.customLabel && <Text type="secondary" style={{ fontSize: '16px', marginLeft: '8px' }}>({chantier.customLabel})</Text>}
+                {chantier.customLabel && <Text type="secondary" style={{ fontSize: '14px', marginLeft: '6px' }}>({chantier.customLabel})</Text>}
               </Title>
-              <Tag color={statusColor} style={{ fontSize: '13px', padding: '2px 12px' }}>
+              <Tag color={statusColor} style={{ fontSize: '12px', padding: '2px 10px' }}>
                 {statusName}
               </Tag>
             </div>
-            <Text type="secondary" style={{ fontSize: '14px' }}>
-              <UserOutlined style={{ marginRight: '6px' }} />
-              {clientName}
+            <Text type="secondary" style={{ fontSize: '13px', display: 'flex', flexWrap: 'wrap', gap: '4px 8px', alignItems: 'center' }}>
+              <span><UserOutlined style={{ marginRight: '4px' }} />{clientName}</span>
               {displayAddress && (
-                <>
-                  <span style={{ margin: '0 10px' }}>·</span>
+                <span>
                   <EnvironmentOutlined style={{ marginRight: '4px' }} />
                   {displayAddress}
-                </>
+                </span>
               )}
             </Text>
           </div>
@@ -342,10 +340,10 @@ const ChantierDetailPage: React.FC = () => {
       {/* Content Tabs */}
       <Tabs defaultActiveKey={initialTab} type="card" items={[
         { key: 'info', label: <span><FileTextOutlined /> Informations</span>, children: (<>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px', padding: '16px 0' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '16px', padding: '16px 0' }}>
             {/* Colonne gauche - Détails chantier */}
             <Card title="Détails du chantier" size="small">
-              <Descriptions column={1} styles={{ label: { fontWeight: 600, width: '140px' } }}>
+              <Descriptions column={1} styles={{ label: { fontWeight: 600, maxWidth: '140px' } }}>
                 <Descriptions.Item label="Produit">
                   <Tag color={chantier.productColor || '#722ed1'}>
                     {renderProductIcon(chantier.productIcon, 14)} {chantier.productLabel}
@@ -545,7 +543,7 @@ const ChantierDetailPage: React.FC = () => {
                   size="small"
                   style={{ borderColor: '#722ed1', borderWidth: 1 }}
                 >
-                  <Descriptions column={1} styles={{ label: { fontWeight: 600, width: '120px' } }} size="small">
+                  <Descriptions column={1} styles={{ label: { fontWeight: 600, maxWidth: '120px' } }} size="small">
                     {genDoc.documentNumber && (
                       <Descriptions.Item label="N° devis">
                         <Tag color="purple">{genDoc.documentNumber}</Tag>
@@ -759,11 +757,11 @@ const ChantierDetailPage: React.FC = () => {
             {/* Document signé (uploadé) */}
             {chantier.documentUrl ? (
               <Card title="Document signé">
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                    <FileTextOutlined style={{ fontSize: '32px', color: '#52c41a' }} />
-                    <div>
-                      <Text strong>{chantier.documentName || 'Document'}</Text>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px', minWidth: 0, flex: 1 }}>
+                    <FileTextOutlined style={{ fontSize: '28px', color: '#52c41a', flexShrink: 0 }} />
+                    <div style={{ minWidth: 0 }}>
+                      <Text strong style={{ wordBreak: 'break-word' }}>{chantier.documentName || 'Document'}</Text>
                       <div>
                         <Text type="secondary" style={{ fontSize: '12px' }}>
                           {chantier.signedAt
@@ -797,10 +795,10 @@ const ChantierDetailPage: React.FC = () => {
             {/* Devis PDF généré (lié) */}
             {genDoc?.pdfUrl && (
               <Card title={<Space><LinkOutlined /> Devis PDF généré</Space>} style={{ borderColor: '#722ed1' }}>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                    <FileTextOutlined style={{ fontSize: '32px', color: '#722ed1' }} />
-                    <div>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px', minWidth: 0, flex: 1 }}>
+                    <FileTextOutlined style={{ fontSize: '28px', color: '#722ed1', flexShrink: 0 }} />
+                    <div style={{ minWidth: 0 }}>
                       <Text strong>{genDoc.documentNumber || genDoc.title || 'Devis TBL'}</Text>
                       <div>
                         <Text type="secondary" style={{ fontSize: '12px' }}>
@@ -855,7 +853,7 @@ const ChantierDetailPage: React.FC = () => {
 
             {/* Infos résumées pour les techniciens */}
             <Card title="Résumé du chantier" size="small" style={{ marginTop: 16 }}>
-              <Descriptions column={2} size="small" styles={{ label: { fontWeight: 600 } }}>
+              <Descriptions column={{ xs: 1, sm: 2 }} size="small" styles={{ label: { fontWeight: 600 } }}>
                 <Descriptions.Item label="Produit">
                   <Tag color={chantier.productColor || '#722ed1'}>
                     {renderProductIcon(chantier.productIcon, 14)} {chantier.productLabel}
