@@ -920,7 +920,13 @@ const ChantierDetailPage: React.FC = () => {
 
         {/* Onglet Pointage */}
         <TabPane tab={<span><ClockCircleOutlined /> Pointage</span>} key="pointage">
-          <ChantierPointageTab chantierId={chantier.id} />
+          <ChantierPointageTab
+            chantierId={chantier.id}
+            chantierName={chantier.clientName || chantier.customLabel || chantier.productLabel}
+            chantierLatitude={chantier.latitude}
+            chantierLongitude={chantier.longitude}
+            geoFenceRadius={chantier.geoFenceRadius}
+          />
         </TabPane>
       </Tabs>
     </div>

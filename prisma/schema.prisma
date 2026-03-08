@@ -2968,6 +2968,9 @@ model Chantier {
   customLabel           String?
   clientName            String?
   siteAddress           String?
+  latitude              Float?             // GPS du chantier (pour géofencing pointage)
+  longitude             Float?             // GPS du chantier (pour géofencing pointage)
+  geoFenceRadius        Int?               @default(500) // Rayon de tolérance en mètres
   notes                 String?
   amount                Float?
   signedAt              DateTime?
@@ -3239,10 +3242,18 @@ enum BillingMode {
 }
 
 enum TimeEntryType {
-  CHANTIER     // Travail sur chantier
-  DEPLACEMENT  // Trajet
-  PAUSE        // Pause
-  REGIE        // Heures en régie sous-traitant
+  CHANTIER        // Travail sur chantier (legacy)
+  DEPLACEMENT     // Trajet (legacy)
+  PAUSE           // Pause (legacy)
+  REGIE           // Heures en régie sous-traitant (legacy)
+  ARRIVEE         // Arrivée sur chantier
+  DEPART_PAUSE    // Départ en pause
+  RETOUR_PAUSE    // Retour de pause
+  DEPART_MIDI     // Départ midi
+  RETOUR_MIDI     // Retour de midi
+  DEPART_DEPLACEMENT // Départ en déplacement
+  RETOUR_DEPLACEMENT // Retour de déplacement
+  FIN             // Fin de journée / départ du chantier
 }
 
 model Technician {
@@ -3288,6 +3299,25 @@ model TimeEntry {
   type           TimeEntryType @default(CHANTIER)
   durationMinutes Int?         // Calculé: endTime - startTime - breakMinutes
   note           String?
+
+  // 📍 Géolocalisation anti-fraude
+  clockInLatitude    Float?    // GPS arrivée
+  clockInLongitude   Float?
+  clockInAddress     String?   // Adresse inversée arrivée
+  clockInDistance     Int?     // Distance en mètres par rapport au chantier
+  clockOutLatitude   Float?    // GPS départ
+  clockOutLongitude  Float?
+  clockOutAddress    String?   // Adresse inversée départ
+  clockOutDistance    Int?     // Distance en mètres par rapport au chantier
+
+  // 📸 Photos anti-fraude
+  clockInPhotoUrl    String?   // Photo prise à l'arrivée
+  clockOutPhotoUrl   String?   // Photo prise au départ
+
+  // 📱 Empreinte appareil
+  deviceInfo         Json?     // { userAgent, platform, screenWidth, screenHeight, deviceId }
+  ipAddress          String?   // IP côté serveur
+
   validatedBy    String?       // userId du validateur
   validatedAt    DateTime?
   createdAt      DateTime      @default(now())

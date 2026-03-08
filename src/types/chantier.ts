@@ -115,7 +115,7 @@ export interface Chantier {
 export type TechnicianType = 'INTERNAL' | 'SUBCONTRACTOR';
 export type UnavailabilityType = 'CONGE' | 'FORMATION' | 'MALADIE' | 'AUTRE';
 export type BillingMode = 'FORFAIT' | 'REGIE';
-export type TimeEntryType = 'CHANTIER' | 'DEPLACEMENT' | 'PAUSE' | 'REGIE';
+export type TimeEntryType = 'CHANTIER' | 'DEPLACEMENT' | 'PAUSE' | 'REGIE' | 'ARRIVEE' | 'DEPART_PAUSE' | 'RETOUR_PAUSE' | 'DEPART_MIDI' | 'RETOUR_MIDI' | 'DEPART_DEPLACEMENT' | 'RETOUR_DEPLACEMENT' | 'FIN';
 
 export interface ChantierAssignment {
   id: string;
@@ -224,6 +224,19 @@ export interface TimeEntry {
   type: TimeEntryType;
   durationMinutes: number | null;
   note: string | null;
+  // Anti-fraud
+  clockInLatitude: number | null;
+  clockInLongitude: number | null;
+  clockInAddress: string | null;
+  clockInDistance: number | null;
+  clockInPhotoUrl: string | null;
+  clockOutLatitude: number | null;
+  clockOutLongitude: number | null;
+  clockOutAddress: string | null;
+  clockOutDistance: number | null;
+  clockOutPhotoUrl: string | null;
+  deviceInfo: any;
+  ipAddress: string | null;
   Technician: {
     id: string;
     firstName: string;
@@ -232,7 +245,7 @@ export interface TimeEntry {
     type: TechnicianType;
     billingMode?: BillingMode | null;
   };
-  Chantier?: { id: string; clientName: string } | null;
+  Chantier?: { id: string; clientName: string; latitude?: number; longitude?: number; geoFenceRadius?: number } | null;
 }
 
 export interface ChantierCreatePayload {

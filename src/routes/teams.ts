@@ -2,6 +2,8 @@ import { Router } from 'express';
 import { db } from '../lib/database';
 import { authenticateToken } from '../middleware/auth';
 import { z } from 'zod';
+import fs from 'fs';
+import path from 'path';
 
 const router = Router();
 
@@ -25,6 +27,32 @@ function endOfWeek(): Date {
   end.setDate(end.getDate() + 6);
   end.setHours(23, 59, 59, 999);
   return end;
+}
+
+// ═══ Pointage photo helpers ═══
+const POINTAGE_UPLOADS_DIR = path.resolve(process.cwd(), 'public', 'uploads', 'pointages');
+if (!fs.existsSync(POINTAGE_UPLOADS_DIR)) {
+  fs.mkdirSync(POINTAGE_UPLOADS_DIR, { recursive: true });
+}
+
+/** Save a base64 photo to disk, return relative URL */
+function savePointagePhoto(base64Data: string, prefix: string): string {
+  // Remove data:image/...;base64, prefix if present
+  const cleanBase64 = base64Data.replace(/^data:image\/\w+;base64,/, '');
+  const buffer = Buffer.from(cleanBase64, 'base64');
+  const filename = `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.jpg`;
+  const filepath = path.join(POINTAGE_UPLOADS_DIR, filename);
+  fs.writeFileSync(filepath, buffer);
+  return `/uploads/pointages/${filename}`;
+}
+
+/** Calculate distance in meters between two GPS points (Haversine) */
+function haversineDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
+  const R = 6371000; // Earth radius in meters
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLon = (lon2 - lon1) * Math.PI / 180;
+  const a = Math.sin(dLat / 2) ** 2 + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLon / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
 // Common select for Technician in includes
@@ -726,7 +754,11 @@ router.post('/time-entries', authenticateToken, async (req, res) => {
   try {
     const organizationId = getOrgId(req, res);
     if (!organizationId) return;
-    const { technicianId, chantierId, date, startTime, endTime, breakMinutes, type, note } = req.body;
+    const {
+      technicianId, chantierId, date, startTime, endTime, breakMinutes, type, note,
+      // Anti-fraud fields
+      latitude, longitude, photo, deviceInfo,
+    } = req.body;
 
     if (!technicianId || !date || !startTime) {
       return res.status(400).json({ success: false, message: 'technicianId, date et startTime requis' });
@@ -749,6 +781,28 @@ router.post('/time-entries', authenticateToken, async (req, res) => {
       durationMinutes = Math.round((end - start) / 60000) - (breakMinutes || 0);
     }
 
+    // 📸 Save clock-in photo if provided
+    let clockInPhotoUrl: string | null = null;
+    if (photo) {
+      try {
+        clockInPhotoUrl = savePointagePhoto(photo, 'in');
+      } catch (e) {
+        console.error('[Pointage] Erreur sauvegarde photo:', e);
+      }
+    }
+
+    // 📍 Calculate distance from chantier if GPS provided
+    let clockInDistance: number | null = null;
+    if (latitude && longitude && chantierId) {
+      const chantier = await db.chantier.findUnique({ where: { id: chantierId }, select: { latitude: true, longitude: true } });
+      if (chantier?.latitude && chantier?.longitude) {
+        clockInDistance = Math.round(haversineDistance(latitude, longitude, chantier.latitude, chantier.longitude));
+      }
+    }
+
+    // 📱 Capture IP address
+    const ipAddress = (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim() || req.socket.remoteAddress || null;
+
     const entry = await db.timeEntry.create({
       data: {
         organizationId,
@@ -761,10 +815,17 @@ router.post('/time-entries', authenticateToken, async (req, res) => {
         type: type || 'CHANTIER',
         durationMinutes,
         note: note || null,
+        // Anti-fraud data
+        clockInLatitude: latitude || null,
+        clockInLongitude: longitude || null,
+        clockInPhotoUrl,
+        clockInDistance,
+        deviceInfo: deviceInfo || null,
+        ipAddress,
       },
       include: {
         Technician: { select: { id: true, firstName: true, lastName: true, color: true, type: true } },
-        Chantier: { select: { id: true, clientName: true } },
+        Chantier: { select: { id: true, clientName: true, latitude: true, longitude: true, geoFenceRadius: true } },
       },
     });
 
@@ -873,6 +934,8 @@ router.put('/time-entries/:id/clock-out', authenticateToken, async (req, res) =>
     const organizationId = getOrgId(req, res);
     if (!organizationId) return;
 
+    const { latitude, longitude, photo, deviceInfo } = req.body || {};
+
     const existing = await db.timeEntry.findFirst({ where: { id: req.params.id, organizationId } });
     if (!existing) {
       return res.status(404).json({ success: false, message: 'Pointage non trouvé' });
@@ -884,9 +947,40 @@ router.put('/time-entries/:id/clock-out', authenticateToken, async (req, res) =>
     const endTime = new Date();
     const durationMinutes = Math.round((endTime.getTime() - existing.startTime.getTime()) / 60000) - existing.breakMinutes;
 
+    // 📸 Save clock-out photo
+    let clockOutPhotoUrl: string | null = null;
+    if (photo) {
+      try {
+        clockOutPhotoUrl = savePointagePhoto(photo, 'out');
+      } catch (e) {
+        console.error('[Pointage] Erreur sauvegarde photo sortie:', e);
+      }
+    }
+
+    // 📍 Calculate distance from chantier 
+    let clockOutDistance: number | null = null;
+    if (latitude && longitude && existing.chantierId) {
+      const chantier = await db.chantier.findUnique({ where: { id: existing.chantierId }, select: { latitude: true, longitude: true } });
+      if (chantier?.latitude && chantier?.longitude) {
+        clockOutDistance = Math.round(haversineDistance(latitude, longitude, chantier.latitude, chantier.longitude));
+      }
+    }
+
+    const ipAddress = (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim() || req.socket.remoteAddress || null;
+
     const entry = await db.timeEntry.update({
       where: { id: req.params.id },
-      data: { endTime, durationMinutes },
+      data: {
+        endTime,
+        durationMinutes,
+        clockOutLatitude: latitude || null,
+        clockOutLongitude: longitude || null,
+        clockOutPhotoUrl,
+        clockOutDistance,
+        // Update device info & IP if provided (captures clock-out device too)
+        ...(deviceInfo && { deviceInfo }),
+        ipAddress,
+      },
       include: {
         Technician: { select: { id: true, firstName: true, lastName: true } },
         Chantier: { select: { id: true, clientName: true } },

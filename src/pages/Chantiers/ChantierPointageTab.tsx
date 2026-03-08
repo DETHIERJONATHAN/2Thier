@@ -1,13 +1,19 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
-  Card, Button, Table, Tag, Space, Modal, Select, Input, DatePicker,
-  TimePicker, message, Empty, Tooltip, Statistic, Typography, Popconfirm,
+  Card, Button, Table, Tag, Space, Select,
+  message, Empty, Tooltip, Statistic, Typography, Popconfirm,
+  Image,
 } from 'antd';
 import {
-  PlusOutlined, ClockCircleOutlined, DeleteOutlined,
-  CheckCircleOutlined, CarOutlined, CoffeeOutlined, CalendarOutlined,
+  ClockCircleOutlined, DeleteOutlined,
+  CarOutlined, CoffeeOutlined,
+  EnvironmentOutlined, CameraOutlined, MobileOutlined, WarningOutlined,
+  LoginOutlined, PauseCircleOutlined, PlayCircleOutlined,
+  CarryOutOutlined, StopOutlined,
 } from '@ant-design/icons';
 import { useAuthenticatedApi } from '../../hooks/useAuthenticatedApi';
+import PointageClockIn from './PointageClockIn';
+import { STATUS_LABELS, POINTAGE_STATUS_OPTIONS } from './pointageConstants';
 import dayjs from 'dayjs';
 import duration from 'dayjs/plugin/duration';
 dayjs.extend(duration);
@@ -25,6 +31,19 @@ interface TimeEntry {
   type: string;
   durationMinutes: number | null;
   note: string | null;
+  // Anti-fraud
+  clockInLatitude: number | null;
+  clockInLongitude: number | null;
+  clockInAddress: string | null;
+  clockInDistance: number | null;
+  clockInPhotoUrl: string | null;
+  clockOutLatitude: number | null;
+  clockOutLongitude: number | null;
+  clockOutAddress: string | null;
+  clockOutDistance: number | null;
+  clockOutPhotoUrl: string | null;
+  deviceInfo: any;
+  ipAddress: string | null;
   Technician: {
     id: string;
     firstName: string;
@@ -34,14 +53,27 @@ interface TimeEntry {
     billingMode: string | null;
     company?: string;
   };
-  Chantier?: { id: string; clientName: string } | null;
+  Chantier?: { id: string; clientName: string; latitude?: number; longitude?: number; geoFenceRadius?: number } | null;
 }
 
 interface ChantierPointageTabProps {
   chantierId: string;
+  chantierName?: string;
+  chantierLatitude?: number | null;
+  chantierLongitude?: number | null;
+  geoFenceRadius?: number | null;
 }
 
 const TYPE_CONFIG: Record<string, { label: string; color: string; icon: React.ReactNode }> = {
+  ARRIVEE: { label: 'Arrivée', color: 'green', icon: <LoginOutlined /> },
+  DEPART_PAUSE: { label: 'Départ pause', color: 'orange', icon: <PauseCircleOutlined /> },
+  RETOUR_PAUSE: { label: 'Reprise pause', color: 'cyan', icon: <PlayCircleOutlined /> },
+  DEPART_MIDI: { label: 'Départ midi', color: 'gold', icon: <CoffeeOutlined /> },
+  RETOUR_MIDI: { label: 'Reprise midi', color: 'lime', icon: <PlayCircleOutlined /> },
+  DEPART_DEPLACEMENT: { label: 'Départ déplac.', color: 'orange', icon: <CarOutlined /> },
+  RETOUR_DEPLACEMENT: { label: 'Retour déplac.', color: 'blue', icon: <CarryOutOutlined /> },
+  FIN: { label: 'Fin', color: 'red', icon: <StopOutlined /> },
+  // Legacy
   CHANTIER: { label: 'Chantier', color: 'blue', icon: <ClockCircleOutlined /> },
   DEPLACEMENT: { label: 'Déplacement', color: 'orange', icon: <CarOutlined /> },
   PAUSE: { label: 'Pause', color: 'default', icon: <CoffeeOutlined /> },
@@ -55,22 +87,47 @@ function formatDuration(minutes: number | null): string {
   return h > 0 ? `${h}h${m > 0 ? String(m).padStart(2, '0') : ''}` : `${m}min`;
 }
 
-const ChantierPointageTab: React.FC<ChantierPointageTabProps> = ({ chantierId }) => {
+const ChantierPointageTab: React.FC<ChantierPointageTabProps> = ({ chantierId, chantierName, chantierLatitude, chantierLongitude, geoFenceRadius }) => {
   const apiHook = useAuthenticatedApi();
   const api = useMemo(() => apiHook.api, [apiHook.api]);
   const [entries, setEntries] = useState<TimeEntry[]>([]);
   const [_loading, setLoading] = useState(false);
-  const [modalOpen, setModalOpen] = useState(false);
   const [technicians, setTechnicians] = useState<any[]>([]);
 
-  // Form state
-  const [formTechId, setFormTechId] = useState('');
-  const [formDate, setFormDate] = useState(dayjs());
-  const [formStartTime, setFormStartTime] = useState<dayjs.Dayjs | null>(null);
-  const [formEndTime, setFormEndTime] = useState<dayjs.Dayjs | null>(null);
-  const [formBreak, setFormBreak] = useState(0);
-  const [formType, setFormType] = useState('CHANTIER');
-  const [formNote, setFormNote] = useState('');
+  // Quick pointage state
+  const [quickTechId, setQuickTechId] = useState('');
+  const [quickStatus, setQuickStatus] = useState('ARRIVEE');
+  const [settingGeo, setSettingGeo] = useState(false);
+
+  const handleSetChantierGPS = useCallback(() => {
+    if (!navigator.geolocation) {
+      message.error('Géolocalisation non disponible');
+      return;
+    }
+    setSettingGeo(true);
+    navigator.geolocation.getCurrentPosition(
+      async (position) => {
+        try {
+          await api.put(`/api/chantiers/${chantierId}`, {
+            latitude: position.coords.latitude,
+            longitude: position.coords.longitude,
+          });
+          message.success(`📍 Position du chantier enregistrée (±${Math.round(position.coords.accuracy)}m)`);
+          // Force reload of the parent page to pick up new coordinates
+          window.location.reload();
+        } catch (err: any) {
+          message.error(err?.message || 'Erreur');
+        } finally {
+          setSettingGeo(false);
+        }
+      },
+      (_error) => {
+        setSettingGeo(false);
+        message.error('Impossible d\'obtenir la position GPS. Activez la localisation et réessayez.');
+      },
+      { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
+    );
+  }, [api, chantierId]);
 
   const fetchEntries = useCallback(async () => {
     try {
@@ -102,46 +159,6 @@ const ChantierPointageTab: React.FC<ChantierPointageTabProps> = ({ chantierId })
     fetchTechnicians();
   }, [fetchEntries, fetchTechnicians]);
 
-  const handleCreate = useCallback(async () => {
-    if (!formTechId || !formStartTime) {
-      message.warning('Technicien et heure de début requis');
-      return;
-    }
-
-    const dateStr = formDate.format('YYYY-MM-DD');
-    const startTime = formDate.hour(formStartTime.hour()).minute(formStartTime.minute()).second(0).toISOString();
-    const endTime = formEndTime ? formDate.hour(formEndTime.hour()).minute(formEndTime.minute()).second(0).toISOString() : null;
-
-    try {
-      await api.post('/api/teams/time-entries', {
-        technicianId: formTechId,
-        chantierId,
-        date: dateStr,
-        startTime,
-        endTime,
-        breakMinutes: formBreak,
-        type: formType,
-        note: formNote || null,
-      });
-      message.success('Pointage enregistré');
-      setModalOpen(false);
-      resetForm();
-      fetchEntries();
-    } catch (err: any) {
-      message.error(err?.message || 'Erreur');
-    }
-  }, [api, chantierId, formTechId, formDate, formStartTime, formEndTime, formBreak, formType, formNote, fetchEntries]);
-
-  const handleClockOut = useCallback(async (entryId: string) => {
-    try {
-      await api.put(`/api/teams/time-entries/${entryId}/clock-out`, {});
-      message.success('Sortie pointée');
-      fetchEntries();
-    } catch (err: any) {
-      message.error(err?.message || 'Erreur');
-    }
-  }, [api, fetchEntries]);
-
   const handleDelete = useCallback(async (entryId: string) => {
     try {
       await api.delete(`/api/teams/time-entries/${entryId}`);
@@ -152,26 +169,15 @@ const ChantierPointageTab: React.FC<ChantierPointageTabProps> = ({ chantierId })
     }
   }, [api, fetchEntries]);
 
-  const resetForm = () => {
-    setFormTechId('');
-    setFormDate(dayjs());
-    setFormStartTime(null);
-    setFormEndTime(null);
-    setFormBreak(0);
-    setFormType('CHANTIER');
-    setFormNote('');
-  };
-
   // Stats
   const totalMinutes = entries.reduce((acc, e) => acc + (e.durationMinutes || 0), 0);
-  const activeEntries = entries.filter(e => !e.endTime);
-  const todayEntries = entries.filter(e => dayjs(e.date).isSame(dayjs(), 'day'));
+  const gpsEntries = entries.filter(e => e.clockInLatitude != null).length;
 
   const columns = [
     {
       title: 'Technicien',
       key: 'tech',
-      width: 160,
+      width: 150,
       render: (_: any, r: TimeEntry) => (
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
           <div style={{ width: 8, height: 8, borderRadius: '50%', backgroundColor: r.Technician.color }} />
@@ -185,48 +191,114 @@ const ChantierPointageTab: React.FC<ChantierPointageTabProps> = ({ chantierId })
     {
       title: 'Date',
       key: 'date',
-      width: 100,
+      width: 90,
       render: (_: any, r: TimeEntry) => <span style={{ fontSize: 12 }}>{dayjs(r.date).format('DD/MM/YYYY')}</span>,
     },
     {
-      title: 'Arrivée',
+      title: 'Heure',
       key: 'start',
       width: 70,
       render: (_: any, r: TimeEntry) => <span style={{ fontSize: 12, fontFamily: 'monospace' }}>{dayjs(r.startTime).format('HH:mm')}</span>,
     },
     {
-      title: 'Départ',
-      key: 'end',
-      width: 70,
-      render: (_: any, r: TimeEntry) => (
-        r.endTime
-          ? <span style={{ fontSize: 12, fontFamily: 'monospace' }}>{dayjs(r.endTime).format('HH:mm')}</span>
-          : <Tag color="processing" style={{ fontSize: 10 }}>En cours</Tag>
-      ),
-    },
-    {
-      title: 'Pause',
-      key: 'break',
-      width: 60,
-      render: (_: any, r: TimeEntry) => <span style={{ fontSize: 11, color: '#8c8c8c' }}>{r.breakMinutes > 0 ? `${r.breakMinutes}min` : '-'}</span>,
-    },
-    {
-      title: 'Durée',
-      key: 'duration',
-      width: 70,
-      render: (_: any, r: TimeEntry) => (
-        <Text strong style={{ fontSize: 12, color: r.durationMinutes ? '#262626' : '#bfbfbf' }}>
-          {formatDuration(r.durationMinutes)}
-        </Text>
-      ),
-    },
-    {
-      title: 'Type',
+      title: 'Statut',
       key: 'type',
-      width: 100,
+      width: 130,
       render: (_: any, r: TimeEntry) => {
         const cfg = TYPE_CONFIG[r.type] || TYPE_CONFIG.CHANTIER;
-        return <Tag icon={cfg.icon} color={cfg.color} style={{ fontSize: 10 }}>{cfg.label}</Tag>;
+        const sl = STATUS_LABELS[r.type];
+        return <Tag icon={cfg.icon} color={cfg.color} style={{ fontSize: 10 }}>{sl?.emoji || ''} {cfg.label}</Tag>;
+      },
+    },
+    {
+      title: '📍',
+      key: 'geo',
+      width: 55,
+      render: (_: any, r: TimeEntry) => {
+        const hasIn = r.clockInLatitude != null;
+        const hasOut = r.clockOutLatitude != null;
+        const fenceRadius = r.Chantier?.geoFenceRadius || geoFenceRadius || 500;
+        const inOk = r.clockInDistance != null && r.clockInDistance <= fenceRadius;
+        const outOk = r.clockOutDistance != null && r.clockOutDistance <= fenceRadius;
+        const inFar = r.clockInDistance != null && r.clockInDistance > fenceRadius;
+        const outFar = r.clockOutDistance != null && r.clockOutDistance > fenceRadius;
+
+        return (
+          <Tooltip title={
+            <div style={{ fontSize: 11 }}>
+              {hasIn && <div>📍 Entrée: {r.clockInLatitude?.toFixed(5)}, {r.clockInLongitude?.toFixed(5)}</div>}
+              {r.clockInDistance != null && <div>↳ Distance: {r.clockInDistance}m {inOk ? '✅' : '⚠️'}</div>}
+              {hasOut && <div>📍 Sortie: {r.clockOutLatitude?.toFixed(5)}, {r.clockOutLongitude?.toFixed(5)}</div>}
+              {r.clockOutDistance != null && <div>↳ Distance: {r.clockOutDistance}m {outOk ? '✅' : '⚠️'}</div>}
+              {r.ipAddress && <div>🌐 IP: {r.ipAddress}</div>}
+              {!hasIn && !hasOut && <div>Pas de données GPS</div>}
+            </div>
+          }>
+            <Space size={2}>
+              {hasIn && <EnvironmentOutlined style={{ color: inFar ? '#ff4d4f' : inOk ? '#52c41a' : '#8c8c8c', fontSize: 13 }} />}
+              {hasOut && <EnvironmentOutlined style={{ color: outFar ? '#ff4d4f' : outOk ? '#52c41a' : '#8c8c8c', fontSize: 13 }} />}
+              {!hasIn && !hasOut && <EnvironmentOutlined style={{ color: '#d9d9d9', fontSize: 13 }} />}
+            </Space>
+          </Tooltip>
+        );
+      },
+    },
+    {
+      title: '📸',
+      key: 'photos',
+      width: 55,
+      render: (_: any, r: TimeEntry) => {
+        const hasInPhoto = !!r.clockInPhotoUrl;
+        const hasOutPhoto = !!r.clockOutPhotoUrl;
+        return (
+          <Space size={2}>
+            {hasInPhoto && (
+              <Tooltip title="Photo d'arrivée">
+                <Image
+                  src={r.clockInPhotoUrl!}
+                  width={22}
+                  height={22}
+                  style={{ borderRadius: 4, objectFit: 'cover', cursor: 'pointer', border: '1px solid #d9d9d9' }}
+                  preview={{ mask: <CameraOutlined style={{ fontSize: 10 }} /> }}
+                />
+              </Tooltip>
+            )}
+            {hasOutPhoto && (
+              <Tooltip title="Photo de départ">
+                <Image
+                  src={r.clockOutPhotoUrl!}
+                  width={22}
+                  height={22}
+                  style={{ borderRadius: 4, objectFit: 'cover', cursor: 'pointer', border: '1px solid #ff4d4f' }}
+                  preview={{ mask: <CameraOutlined style={{ fontSize: 10 }} /> }}
+                />
+              </Tooltip>
+            )}
+            {!hasInPhoto && !hasOutPhoto && <CameraOutlined style={{ color: '#d9d9d9', fontSize: 13 }} />}
+          </Space>
+        );
+      },
+    },
+    {
+      title: '📱',
+      key: 'device',
+      width: 35,
+      render: (_: any, r: TimeEntry) => {
+        if (!r.deviceInfo) return <MobileOutlined style={{ color: '#d9d9d9', fontSize: 13 }} />;
+        const info = typeof r.deviceInfo === 'string' ? JSON.parse(r.deviceInfo) : r.deviceInfo;
+        const isAndroid = /Android/i.test(info.userAgent || '');
+        const isIOS = /iPhone|iPad/i.test(info.userAgent || '');
+        return (
+          <Tooltip title={
+            <div style={{ fontSize: 10 }}>
+              <div>{isAndroid ? '📱 Android' : isIOS ? '📱 iOS' : '💻 Desktop'}</div>
+              <div>Écran: {info.screenWidth}×{info.screenHeight}</div>
+              {r.ipAddress && <div>IP: {r.ipAddress}</div>}
+            </div>
+          }>
+            <MobileOutlined style={{ color: '#1677ff', fontSize: 13 }} />
+          </Tooltip>
+        );
       },
     },
     {
@@ -238,14 +310,9 @@ const ChantierPointageTab: React.FC<ChantierPointageTabProps> = ({ chantierId })
     {
       title: '',
       key: 'actions',
-      width: 80,
+      width: 50,
       render: (_: any, r: TimeEntry) => (
         <Space size={4}>
-          {!r.endTime && (
-            <Tooltip title="Pointer la sortie">
-              <Button type="primary" size="small" icon={<CheckCircleOutlined />} onClick={() => handleClockOut(r.id)} style={{ fontSize: 10 }} />
-            </Tooltip>
-          )}
           <Popconfirm title="Supprimer ce pointage ?" onConfirm={() => handleDelete(r.id)} okText="Oui" cancelText="Non">
             <Button danger size="small" icon={<DeleteOutlined />} style={{ fontSize: 10 }} />
           </Popconfirm>
@@ -256,33 +323,98 @@ const ChantierPointageTab: React.FC<ChantierPointageTabProps> = ({ chantierId })
 
   return (
     <div style={{ padding: 16 }}>
+      {/* Quick pointage buttons (mobile-first) */}
+      <Card size="small" style={{ marginBottom: 16, background: 'linear-gradient(135deg, #f6ffed 0%, #e6f7ff 100%)', border: '1px solid #b7eb8f' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
+          <div>
+            <Text strong style={{ fontSize: 14 }}>📍 Pointage avec géolocalisation</Text>
+            <br />
+            <Text type="secondary" style={{ fontSize: 11 }}>
+              GPS + photo + appareil capturés automatiquement
+              {chantierLatitude && chantierLongitude && (
+                <Tag color="blue" style={{ marginLeft: 6, fontSize: 9 }}>
+                  <EnvironmentOutlined /> Géofencing actif ({geoFenceRadius || 500}m)
+                </Tag>
+              )}
+            </Text>
+          </div>
+          <Space wrap>
+            {technicians.length > 0 && (
+              <Select
+                style={{ width: 200 }}
+                placeholder="Technicien"
+                value={quickTechId || undefined}
+                onChange={setQuickTechId}
+                size="small"
+                showSearch
+                optionFilterProp="label"
+                options={technicians.map((t: any) => ({
+                  value: t.id,
+                  label: `${t.firstName} ${t.lastName}`.trim(),
+                }))}
+              />
+            )}
+            <Select
+              style={{ width: 200 }}
+              value={quickStatus}
+              onChange={setQuickStatus}
+              size="small"
+              options={POINTAGE_STATUS_OPTIONS}
+            />
+            {quickTechId && (
+              <PointageClockIn
+                chantierId={chantierId}
+                chantierName={chantierName}
+                chantierLatitude={chantierLatitude}
+                chantierLongitude={chantierLongitude}
+                geoFenceRadius={geoFenceRadius}
+                api={api}
+                onSuccess={fetchEntries}
+                technicianId={quickTechId}
+                pointageType={quickStatus}
+              />
+            )}
+          </Space>
+        </div>
+        {/* Geofencing setup — if chantier has no GPS coordinates */}
+        {(!chantierLatitude || !chantierLongitude) && (
+          <div style={{ marginTop: 12, padding: '8px 12px', background: '#fff7e6', border: '1px solid #ffd591', borderRadius: 6 }}>
+            <Space>
+              <WarningOutlined style={{ color: '#fa8c16' }} />
+              <Text style={{ fontSize: 12 }}>
+                Le chantier n'a pas de coordonnées GPS — le géofencing est désactivé.
+              </Text>
+              <Button
+                size="small"
+                type="primary"
+                ghost
+                icon={<EnvironmentOutlined />}
+                loading={settingGeo}
+                onClick={handleSetChantierGPS}
+              >
+                Géolocaliser maintenant
+              </Button>
+            </Space>
+          </div>
+        )}
+      </Card>
+
       {/* Stats résumé */}
-      <div style={{ display: 'flex', gap: 16, marginBottom: 16 }}>
-        <Card size="small" style={{ flex: 1 }}>
+      <div style={{ display: 'flex', gap: 16, marginBottom: 16, flexWrap: 'wrap' }}>
+        <Card size="small" style={{ flex: 1, minWidth: 120 }}>
           <Statistic title="Total heures" value={formatDuration(totalMinutes)} prefix={<ClockCircleOutlined />} valueStyle={{ fontSize: 18 }} />
         </Card>
-        <Card size="small" style={{ flex: 1 }}>
+        <Card size="small" style={{ flex: 1, minWidth: 120 }}>
           <Statistic title="Pointages" value={entries.length} prefix={<ClockCircleOutlined />} valueStyle={{ fontSize: 18 }} />
         </Card>
-        <Card size="small" style={{ flex: 1 }}>
-          <Statistic title="Aujourd'hui" value={todayEntries.length} prefix={<CalendarOutlined />} valueStyle={{ fontSize: 18 }} />
+        <Card size="small" style={{ flex: 1, minWidth: 120 }}>
+          <Statistic title="Avec GPS" value={gpsEntries} suffix={`/ ${entries.length}`} prefix={<EnvironmentOutlined />} valueStyle={{ fontSize: 18, color: gpsEntries === entries.length && entries.length > 0 ? '#52c41a' : '#1677ff' }} />
         </Card>
-        {activeEntries.length > 0 && (
-          <Card size="small" style={{ flex: 1, borderColor: '#52c41a' }}>
-            <Statistic title="En cours" value={activeEntries.length} prefix={<CheckCircleOutlined />} valueStyle={{ fontSize: 18, color: '#52c41a' }} />
-          </Card>
-        )}
       </div>
 
-      {/* Table + bouton */}
       <Card
         title={<span><ClockCircleOutlined /> Pointage des heures</span>}
         size="small"
-        extra={
-          <Button type="primary" icon={<PlusOutlined />} size="small" onClick={() => setModalOpen(true)}>
-            Nouveau pointage
-          </Button>
-        }
       >
         {entries.length === 0 ? (
           <Empty description="Aucun pointage enregistré pour ce chantier" image={Empty.PRESENTED_IMAGE_SIMPLE} />
@@ -297,94 +429,6 @@ const ChantierPointageTab: React.FC<ChantierPointageTabProps> = ({ chantierId })
           />
         )}
       </Card>
-
-      {/* Modal nouveau pointage */}
-      <Modal
-        open={modalOpen}
-        title={<span><ClockCircleOutlined /> Nouveau pointage</span>}
-        onCancel={() => { setModalOpen(false); resetForm(); }}
-        onOk={handleCreate}
-        okText="Enregistrer"
-        cancelText="Annuler"
-        okButtonProps={{ disabled: !formTechId || !formStartTime }}
-      >
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-          <div>
-            <label style={{ fontSize: 12, fontWeight: 500 }}>Technicien</label>
-            <Select
-              style={{ width: '100%' }}
-              placeholder="Sélectionner un technicien..."
-              value={formTechId || undefined}
-              onChange={v => setFormTechId(v)}
-              showSearch
-              optionFilterProp="label"
-              options={technicians.map((t: any) => ({
-                value: t.id,
-                label: `${t.firstName || ''} ${t.lastName || ''} ${t.type === 'SUBCONTRACTOR' ? '(ST-Régie)' : ''}`.trim(),
-              }))}
-            />
-            <Text type="secondary" style={{ fontSize: 10, display: 'block', marginTop: 2 }}>
-              Seuls les internes et sous-traitants en régie sont éligibles
-            </Text>
-          </div>
-          <div>
-            <label style={{ fontSize: 12, fontWeight: 500 }}>Date</label>
-            <DatePicker
-              style={{ width: '100%' }}
-              value={formDate}
-              onChange={v => v && setFormDate(v)}
-              format="DD/MM/YYYY"
-            />
-          </div>
-          <div style={{ display: 'flex', gap: 12 }}>
-            <div style={{ flex: 1 }}>
-              <label style={{ fontSize: 12, fontWeight: 500 }}>Heure d'arrivée</label>
-              <TimePicker
-                style={{ width: '100%' }}
-                value={formStartTime}
-                onChange={v => setFormStartTime(v)}
-                format="HH:mm"
-                minuteStep={5}
-              />
-            </div>
-            <div style={{ flex: 1 }}>
-              <label style={{ fontSize: 12, fontWeight: 500 }}>Heure de départ</label>
-              <TimePicker
-                style={{ width: '100%' }}
-                value={formEndTime}
-                onChange={v => setFormEndTime(v)}
-                format="HH:mm"
-                minuteStep={5}
-                placeholder="Laisser vide si en cours"
-              />
-            </div>
-          </div>
-          <div style={{ display: 'flex', gap: 12 }}>
-            <div style={{ flex: 1 }}>
-              <label style={{ fontSize: 12, fontWeight: 500 }}>Pause (minutes)</label>
-              <Input type="number" value={formBreak} onChange={e => setFormBreak(parseInt(e.target.value) || 0)} min={0} step={5} />
-            </div>
-            <div style={{ flex: 1 }}>
-              <label style={{ fontSize: 12, fontWeight: 500 }}>Type</label>
-              <Select
-                style={{ width: '100%' }}
-                value={formType}
-                onChange={v => setFormType(v)}
-                options={[
-                  { value: 'CHANTIER', label: '🔧 Chantier' },
-                  { value: 'DEPLACEMENT', label: '🚗 Déplacement' },
-                  { value: 'PAUSE', label: '☕ Pause' },
-                  { value: 'REGIE', label: '⏱️ Régie' },
-                ]}
-              />
-            </div>
-          </div>
-          <div>
-            <label style={{ fontSize: 12, fontWeight: 500 }}>Note (optionnel)</label>
-            <Input.TextArea value={formNote} onChange={e => setFormNote(e.target.value)} placeholder="Note optionnelle..." rows={2} />
-          </div>
-        </div>
-      </Modal>
     </div>
   );
 };
