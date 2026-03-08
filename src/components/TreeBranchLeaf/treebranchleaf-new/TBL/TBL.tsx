@@ -782,7 +782,7 @@ const TBL: React.FC<TBLProps> = ({
       return;
     }
     if (reviewHasSubcontractors && (!reviewSubcontractAmount || Number(reviewSubcontractAmount) <= 0)) {
-      message.error('Ce chantier a des sous-traitants — Le coût sous-traitant est obligatoire !');
+      message.error('⚠️ Sous-traitant assigné — Vous devez obligatoirement indiquer le coût sous-traitant. Ce montant vous engage juridiquement et sera verrouillé après validation.');
       return;
     }
     if (!reviewEventId) {
@@ -5763,40 +5763,41 @@ const TBLTabContentWithSections: React.FC<TBLTabContentWithSectionsProps> = Reac
             })()}
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <Text style={{ fontWeight: 600, whiteSpace: 'nowrap', color: reviewHasSubcontractors ? '#ff4d4f' : undefined }}>
-                  💰 Coût sous-traitant (€){reviewHasSubcontractors ? ' *' : ''} :
+            {reviewHasSubcontractors && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <Text style={{ fontWeight: 600, whiteSpace: 'nowrap', color: '#ff4d4f' }}>
+                    💰 Coût sous-traitant (€) * :
+                  </Text>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={reviewSubcontractAmount}
+                    onChange={e => onReviewSubcontractAmountChange?.(e.target.value)}
+                    placeholder="Montant obligatoire"
+                    style={{
+                      width: 160,
+                      height: 40,
+                      padding: '4px 12px',
+                      border: (!reviewSubcontractAmount || Number(reviewSubcontractAmount) <= 0)
+                        ? '2px solid #ff4d4f'
+                        : '2px solid #52c41a',
+                      borderRadius: 6,
+                      fontSize: 15,
+                      fontWeight: 600,
+                      outline: 'none',
+                      background: (!reviewSubcontractAmount || Number(reviewSubcontractAmount) <= 0)
+                        ? '#fff2f0' : '#f6ffed',
+                    }}
+                  />
+                </div>
+                <Text style={{ fontSize: 11, color: '#ff4d4f', maxWidth: 320 }}>
+                  ⚠️ Sous-traitant{reviewSubcontractorNames.length > 1 ? 's' : ''} : <strong>{reviewSubcontractorNames.join(', ') || 'assigné(s)'}</strong><br/>
+                  🔒 Ce montant vous engage — il sera verrouillé après validation.
                 </Text>
-                <input
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  value={reviewSubcontractAmount}
-                  onChange={e => onReviewSubcontractAmountChange?.(e.target.value)}
-                  placeholder="0.00"
-                  style={{
-                    width: 140,
-                    height: 40,
-                    padding: '4px 12px',
-                    border: reviewHasSubcontractors && (!reviewSubcontractAmount || Number(reviewSubcontractAmount) <= 0)
-                      ? '2px solid #ff4d4f'
-                      : '1px solid #d9d9d9',
-                    borderRadius: 6,
-                    fontSize: 15,
-                    fontWeight: 600,
-                    outline: 'none',
-                    background: reviewHasSubcontractors && (!reviewSubcontractAmount || Number(reviewSubcontractAmount) <= 0)
-                      ? '#fff2f0' : '#fff',
-                  }}
-                />
               </div>
-              {reviewHasSubcontractors && (
-                <Text style={{ fontSize: 11, color: '#ff4d4f' }}>
-                  ⚠️ Sous-traitant{reviewSubcontractorNames.length > 1 ? 's' : ''} : {reviewSubcontractorNames.join(', ') || 'assigné(s)'} — montant obligatoire
-                </Text>
-              )}
-            </div>
+            )}
             <Button
               type="primary"
               size="large"

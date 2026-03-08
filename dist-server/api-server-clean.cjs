@@ -19028,8 +19028,9 @@ router22.post("/events/:id/submit-review", authenticateToken, async (req2, res) 
         validatedById: userId,
         updatedAt: /* @__PURE__ */ new Date()
       };
-      if (subcontractAmount !== void 0) {
+      if (subcontractAmount !== void 0 && subcontractAmount > 0) {
         eventUpdate.subcontractAmount = subcontractAmount;
+        eventUpdate.subcontractLocked = true;
       }
       await tx.chantierEvent.update({ where: { id }, data: eventUpdate });
       await tx.chantierHistory.create({

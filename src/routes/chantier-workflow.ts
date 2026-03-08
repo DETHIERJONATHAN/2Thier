@@ -2049,8 +2049,9 @@ router.post('/events/:id/submit-review', authenticateToken, async (req, res) => 
         updatedAt: new Date(),
       };
 
-      if (subcontractAmount !== undefined) {
+      if (subcontractAmount !== undefined && subcontractAmount > 0) {
         eventUpdate.subcontractAmount = subcontractAmount;
+        eventUpdate.subcontractLocked = true; // 🔒 Verrouiller le montant après validation
       }
 
       await tx.chantierEvent.update({ where: { id }, data: eventUpdate });
