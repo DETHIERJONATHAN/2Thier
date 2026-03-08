@@ -5716,20 +5716,20 @@ const TBLTabContentWithSections: React.FC<TBLTabContentWithSectionsProps> = Reac
     <div>
       {reviewMode && (
         <div style={{
-          padding: '12px 16px',
+          padding: '10px 12px',
           marginBottom: 12,
           background: 'linear-gradient(135deg, #e6f7ff 0%, #f0f5ff 100%)',
           border: '1px solid #91d5ff',
           borderRadius: 8,
           display: 'flex',
-          alignItems: 'center',
-          gap: 10,
+          alignItems: 'flex-start',
+          gap: 8,
         }}>
-          <span style={{ fontSize: 22 }}>🔧</span>
-          <div>
-            <div style={{ fontWeight: 600, color: '#1890ff', fontSize: 14 }}>Mode Technicien — Vérification terrain</div>
-            <div style={{ fontSize: 12, color: '#595959' }}>
-              Vérifiez chaque champ. <strong>Cochez uniquement les problèmes</strong> et ajoutez un commentaire. Puis cliquez sur <strong>Analyse</strong>.
+          <span style={{ fontSize: 20, lineHeight: '24px', flexShrink: 0 }}>🔧</span>
+          <div style={{ minWidth: 0 }}>
+            <div style={{ fontWeight: 600, color: '#1890ff', fontSize: 13 }}>Mode Technicien — Vérification terrain</div>
+            <div style={{ fontSize: 11, color: '#595959', lineHeight: 1.4 }}>
+              Vérifiez chaque champ. <strong>Cochez les problèmes</strong> puis cliquez <strong>Analyse</strong>.
             </div>
           </div>
         </div>
@@ -5737,85 +5737,93 @@ const TBLTabContentWithSections: React.FC<TBLTabContentWithSectionsProps> = Reac
       {renderContent()}
       {reviewMode && (
         <div style={{
-          marginTop: 24,
-          padding: '16px 20px',
+          marginTop: 16,
+          padding: '12px',
           background: '#fafafa',
           borderRadius: 8,
           border: '1px solid #d9d9d9',
           display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          flexWrap: 'wrap',
-          gap: 12,
+          flexDirection: 'column',
+          gap: 10,
         }}>
+          {/* Status line */}
           <div>
             {(() => {
               const errorCount = Object.values(reviewChecked).filter(Boolean).length;
               return errorCount > 0 ? (
-                <Text style={{ color: '#ff4d4f', fontWeight: 600 }}>
+                <Text style={{ color: '#ff4d4f', fontWeight: 600, fontSize: 13 }}>
                   ⚠️ {errorCount} problème{errorCount > 1 ? 's' : ''} signalé{errorCount > 1 ? 's' : ''}
                 </Text>
               ) : (
-                <Text style={{ color: '#52c41a', fontWeight: 600 }}>
+                <Text style={{ color: '#52c41a', fontWeight: 600, fontSize: 13 }}>
                   ✅ Aucun problème — Tout est conforme
                 </Text>
               );
             })()}
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-            {reviewHasSubcontractors && (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <Text style={{ fontWeight: 600, whiteSpace: 'nowrap', color: '#ff4d4f' }}>
-                    💰 Coût sous-traitant (€) * :
-                  </Text>
-                  <input
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    value={reviewSubcontractAmount}
-                    onChange={e => onReviewSubcontractAmountChange?.(e.target.value)}
-                    placeholder="Montant obligatoire"
-                    style={{
-                      width: 160,
-                      height: 40,
-                      padding: '4px 12px',
-                      border: (!reviewSubcontractAmount || Number(reviewSubcontractAmount) <= 0)
-                        ? '2px solid #ff4d4f'
-                        : '2px solid #52c41a',
-                      borderRadius: 6,
-                      fontSize: 15,
-                      fontWeight: 600,
-                      outline: 'none',
-                      background: (!reviewSubcontractAmount || Number(reviewSubcontractAmount) <= 0)
-                        ? '#fff2f0' : '#f6ffed',
-                    }}
-                  />
-                </div>
-                <Text style={{ fontSize: 11, color: '#ff4d4f', maxWidth: 320 }}>
-                  ⚠️ Sous-traitant{reviewSubcontractorNames.length > 1 ? 's' : ''} : <strong>{reviewSubcontractorNames.join(', ') || 'assigné(s)'}</strong><br/>
-                  🔒 Ce montant vous engage — il sera verrouillé après validation.
-                </Text>
-              </div>
-            )}
-            <Button
-              type="primary"
-              size="large"
-              icon={<SearchOutlined />}
-              loading={submittingReview}
-              onClick={onSubmitReview}
-              style={{
-                height: 48,
-                fontSize: 16,
-                fontWeight: 700,
-                borderRadius: 8,
-                background: '#1890ff',
-                minWidth: 160,
-              }}
-            >
-              Analyse
-            </Button>
-          </div>
+
+          {/* Subcontract cost block */}
+          {reviewHasSubcontractors && (
+            <div style={{
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 6,
+              padding: '10px',
+              background: (!reviewSubcontractAmount || Number(reviewSubcontractAmount) <= 0) ? '#fff2f0' : '#f6ffed',
+              borderRadius: 6,
+              border: (!reviewSubcontractAmount || Number(reviewSubcontractAmount) <= 0) ? '1px solid #ffccc7' : '1px solid #b7eb8f',
+            }}>
+              <Text style={{ fontWeight: 600, color: '#ff4d4f', fontSize: 12 }}>
+                💰 Coût sous-traitant (€) *
+              </Text>
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                inputMode="decimal"
+                value={reviewSubcontractAmount}
+                onChange={e => onReviewSubcontractAmountChange?.(e.target.value)}
+                placeholder="Montant obligatoire"
+                style={{
+                  width: '100%',
+                  height: 44,
+                  padding: '6px 12px',
+                  border: (!reviewSubcontractAmount || Number(reviewSubcontractAmount) <= 0)
+                    ? '2px solid #ff4d4f'
+                    : '2px solid #52c41a',
+                  borderRadius: 6,
+                  fontSize: 16,
+                  fontWeight: 600,
+                  outline: 'none',
+                  background: '#fff',
+                  boxSizing: 'border-box' as const,
+                }}
+              />
+              <Text style={{ fontSize: 11, color: '#8c8c8c', lineHeight: 1.3 }}>
+                ⚠️ Sous-traitant{reviewSubcontractorNames.length > 1 ? 's' : ''} : <strong style={{ color: '#fa541c' }}>{reviewSubcontractorNames.join(', ') || 'assigné(s)'}</strong><br/>
+                🔒 Ce montant vous engage — il sera verrouillé après validation.
+              </Text>
+            </div>
+          )}
+
+          {/* Analyse button — full width on mobile */}
+          <Button
+            type="primary"
+            size="large"
+            icon={<SearchOutlined />}
+            loading={submittingReview}
+            onClick={onSubmitReview}
+            style={{
+              width: '100%',
+              height: 48,
+              fontSize: 16,
+              fontWeight: 700,
+              borderRadius: 8,
+              background: '#1890ff',
+            }}
+          >
+            Analyse
+          </Button>
         </div>
       )}
       <div className="mt-6 text-xs text-gray-400 text-right">
