@@ -1981,6 +1981,9 @@ router.post('/events/:id/submit-review', authenticateToken, async (req, res) => 
     }
 
     const submission = event.Chantier.TreeBranchLeafSubmission;
+
+    // Récupérer les labels des nodes
+    const nodeIds = reviews.map(r => r.nodeId);
     const nodes = submission ? await db.treeBranchLeafNode.findMany({
       where: { id: { in: nodeIds }, treeId: submission.treeId },
       select: { id: true, label: true },
