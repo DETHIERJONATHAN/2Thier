@@ -198,12 +198,12 @@ const ChantierCard: React.FC<ChantierCardProps> = ({ chantier, onView, onViewCom
       <div
         style={{
           backgroundColor: isOverTech ? '#f0e6ff' : chantier.isValidated ? '#fff' : '#fffbe6',
-          borderRadius: 8,
+          borderRadius: 6,
           boxShadow: isOverTech ? '0 0 0 2px #722ed1, 0 2px 8px rgba(114,46,209,0.25)' : '0 1px 0 rgba(9,30,66,.25)',
-          padding: 8,
+          padding: '6px 7px',
           cursor: 'pointer',
           transition: 'background-color 0.1s ease',
-          marginBottom: 6,
+          marginBottom: 5,
           borderLeft: chantier.isValidated ? 'none' : '3px solid #faad14',
         }}
       >
@@ -212,12 +212,12 @@ const ChantierCard: React.FC<ChantierCardProps> = ({ chantier, onView, onViewCom
           style={{
             display: 'flex',
             gap: 4,
-            marginBottom: 6,
+            marginBottom: 4,
           }}
         >
           <div
             style={{
-              height: 6,
+              height: 4,
               flex: 1,
               borderRadius: 3,
               backgroundColor: chantier.productColor || '#722ed1',
@@ -226,12 +226,12 @@ const ChantierCard: React.FC<ChantierCardProps> = ({ chantier, onView, onViewCom
         </div>
 
         {/* Badge produit + validation + facturation */}
-        <div style={{ marginBottom: 4, display: 'flex', alignItems: 'center', gap: 4 }}>
+        <div style={{ marginBottom: 3, display: 'flex', alignItems: 'center', gap: 3, flexWrap: 'wrap' }}>
           <Tag
             color={chantier.productColor || 'purple'}
-            style={{ fontSize: 11, margin: 0 }}
+            style={{ fontSize: 10, margin: 0, lineHeight: '18px', padding: '0 5px', maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
           >
-            {chantier.productIcon && <span style={{ marginRight: 3 }}>{renderProductIcon(chantier.productIcon, 12)}</span>}
+            {chantier.productIcon && <span style={{ marginRight: 2 }}>{renderProductIcon(chantier.productIcon, 11)}</span>}
             {chantier.productLabel}
             {chantier.customLabel && ` — ${chantier.customLabel}`}
           </Tag>
@@ -274,17 +274,17 @@ const ChantierCard: React.FC<ChantierCardProps> = ({ chantier, onView, onViewCom
         </div>
 
         {/* Nom client */}
-        <div style={{ fontSize: 13, fontWeight: 600, color: '#172B4D', marginBottom: 4 }}>
+        <div style={{ fontSize: 12, fontWeight: 600, color: '#172B4D', marginBottom: 3, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
           {displayName}
         </div>
 
         {/* Infos complémentaires */}
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, alignItems: 'center' }}>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 3, alignItems: 'center' }}>
           {chantier.siteAddress && (
             <Tooltip title={chantier.siteAddress}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 2, fontSize: 11, color: '#5e6c84' }}>
-                <EnvironmentOutlined style={{ fontSize: 10 }} />
-                <span style={{ maxWidth: 100, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 2, fontSize: 10, color: '#5e6c84' }}>
+                <EnvironmentOutlined style={{ fontSize: 9 }} />
+                <span style={{ maxWidth: 80, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                   {chantier.siteAddress}
                 </span>
               </div>
@@ -292,8 +292,8 @@ const ChantierCard: React.FC<ChantierCardProps> = ({ chantier, onView, onViewCom
           )}
 
           {chantier.amount != null && chantier.amount > 0 && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 2, fontSize: 11, color: '#52c41a' }}>
-              <DollarOutlined style={{ fontSize: 10 }} />
+            <div style={{ display: 'flex', alignItems: 'center', gap: 2, fontSize: 10, color: '#52c41a' }}>
+              <DollarOutlined style={{ fontSize: 9 }} />
               <span>{chantier.amount.toLocaleString('fr-BE')} €</span>
             </div>
           )}
@@ -419,9 +419,9 @@ const KanbanColumn: React.FC<KanbanColumnProps> = ({ status, chantiers, onDrop, 
       style={{
         backgroundColor: bgStyle,
         borderRadius: 8,
-        width: 280,
-        minWidth: 280,
-        maxHeight: 'calc(100vh - 200px)',
+        width: 'clamp(200px, 60vw, 280px)',
+        minWidth: 'clamp(200px, 60vw, 280px)',
+        maxHeight: 'calc(100vh - 180px)',
         display: 'flex',
         flexDirection: 'column',
         flexShrink: 0,
@@ -448,7 +448,7 @@ const KanbanColumn: React.FC<KanbanColumnProps> = ({ status, chantiers, onDrop, 
       {/* Header */}
       <div
         style={{
-          padding: '10px 12px 8px',
+          padding: '8px 10px 6px',
           borderBottom: `2px solid ${status.color}`,
           background: `linear-gradient(135deg, ${hexToRgba(status.color, 0.16)}, ${hexToRgba(status.color, 0.04)})`,
           borderRadius: '8px 8px 0 0',
@@ -457,26 +457,28 @@ const KanbanColumn: React.FC<KanbanColumnProps> = ({ status, chantiers, onDrop, 
           justifyContent: 'space-between',
         }}
       >
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
           <div
             style={{
-              width: 10,
-              height: 10,
+              width: 8,
+              height: 8,
               borderRadius: '50%',
               backgroundColor: status.color,
+              flexShrink: 0,
             }}
           />
-          <span style={{ fontSize: 13, fontWeight: 600, color: '#172B4D' }}>
+          <span style={{ fontSize: 12, fontWeight: 600, color: '#172B4D', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
             {status.name}
           </span>
           <span
             style={{
-              fontSize: 11,
+              fontSize: 10,
               color: '#5E6C84',
               backgroundColor: hexToRgba(status.color, 0.2),
               borderRadius: 8,
-              padding: '1px 8px',
+              padding: '1px 6px',
               fontWeight: 500,
+              flexShrink: 0,
             }}
           >
             {chantiers.length}
@@ -487,10 +489,10 @@ const KanbanColumn: React.FC<KanbanColumnProps> = ({ status, chantiers, onDrop, 
       {/* Cards */}
       <div
         style={{
-          padding: '6px 6px',
+          padding: '4px 5px',
           overflowY: 'auto',
           flex: 1,
-          minHeight: 100,
+          minHeight: 80,
         }}
       >
         {chantiers.map(chantier => (
@@ -1370,20 +1372,50 @@ const ChantierKanban: React.FC<ChantierKanbanProps> = ({ onViewChantier, onSetti
 
       {/* Kanban Board + Panel techniciens */}
       <DndProvider backend={MultiBackend} options={HTML5toTouch}>
-        <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
-          {/* ═══ Panel Techniciens (gauche) ═══ */}
+        <div style={{ display: 'flex', flex: 1, overflow: 'hidden', position: 'relative' }}>
+          {/* ═══ Backdrop overlay (mobile) ═══ */}
           {techPanelOpen && (
-            <div style={{
-              width: 220,
-              minWidth: 220,
-              maxWidth: '100%',
-              borderRight: '1px solid #f0f0f0',
-              backgroundColor: '#fafafa',
-              display: 'flex',
-              flexDirection: 'column',
-              overflow: 'hidden',
-              position: 'relative',
-            }}>
+            <div
+              onClick={() => setTechPanelOpen(false)}
+              style={{
+                position: 'absolute',
+                inset: 0,
+                backgroundColor: 'rgba(0,0,0,0.3)',
+                zIndex: 19,
+                transition: 'opacity 0.3s',
+              }}
+            />
+          )}
+
+          {/* ═══ Panel Techniciens (gauche) — Sliding drawer ═══ */}
+          <div style={{
+            position: 'absolute',
+            top: 0,
+            left: techPanelOpen ? 0 : -260,
+            bottom: 0,
+            width: 250,
+            zIndex: 20,
+            borderRight: '1px solid #f0f0f0',
+            backgroundColor: '#fafafa',
+            display: 'flex',
+            flexDirection: 'column',
+            overflow: 'hidden',
+            transition: 'left 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+            boxShadow: techPanelOpen ? '4px 0 12px rgba(0,0,0,0.15)' : 'none',
+          }}>
+            {/* Close button inside panel */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 10px', borderBottom: '1px solid #f0f0f0', background: '#fff' }}>
+              <span style={{ fontWeight: 600, fontSize: 13, color: '#262626' }}>
+                <TeamOutlined style={{ marginRight: 6 }} /> Techniciens
+              </span>
+              <Button
+                icon={<CloseOutlined />}
+                size="small"
+                type="text"
+                onClick={() => setTechPanelOpen(false)}
+                style={{ color: '#8c8c8c' }}
+              />
+            </div>
               <div style={{ overflowY: 'auto', flex: 1, padding: '8px 6px' }}>
                 {/* Section : Actions rapides */}
                 <div style={{ display: 'flex', gap: 4, marginBottom: 8 }}>
@@ -1540,6 +1572,35 @@ const ChantierKanban: React.FC<ChantierKanbanProps> = ({ onViewChantier, onSetti
                   </>
                 )}
               </div>
+          </div>
+
+          {/* ═══ Toggle tab on left edge (visible when panel closed) ═══ */}
+          {!techPanelOpen && (
+            <div
+              onClick={() => setTechPanelOpen(true)}
+              style={{
+                position: 'absolute',
+                left: 0,
+                top: '50%',
+                transform: 'translateY(-50%)',
+                zIndex: 15,
+                width: 28,
+                height: 80,
+                background: 'linear-gradient(135deg, #722ed1, #9254de)',
+                borderRadius: '0 8px 8px 0',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                cursor: 'pointer',
+                boxShadow: '2px 0 8px rgba(0,0,0,0.15)',
+                flexDirection: 'column',
+                gap: 2,
+              }}
+            >
+              <MenuUnfoldOutlined style={{ color: '#fff', fontSize: 14 }} />
+              <span style={{ color: '#fff', fontSize: 9, fontWeight: 600, writingMode: 'vertical-lr', letterSpacing: 1 }}>
+                {technicians.length}
+              </span>
             </div>
           )}
 
@@ -1547,11 +1608,12 @@ const ChantierKanban: React.FC<ChantierKanbanProps> = ({ onViewChantier, onSetti
           <div
             style={{
               display: 'flex',
-              gap: 10,
-              padding: 12,
+              gap: 8,
+              padding: '8px 8px 8px 36px',
               overflowX: 'auto',
               flex: 1,
               alignItems: 'flex-start',
+              WebkitOverflowScrolling: 'touch',
             }}
           >
             {statuses.map(status => (
