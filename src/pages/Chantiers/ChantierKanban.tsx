@@ -421,7 +421,6 @@ const KanbanColumn: React.FC<KanbanColumnProps> = ({ status, chantiers, onDrop, 
         borderRadius: 8,
         width: 'clamp(200px, 60vw, 280px)',
         minWidth: 'clamp(200px, 60vw, 280px)',
-        maxHeight: 'calc(100vh - 180px)',
         display: 'flex',
         flexDirection: 'column',
         flexShrink: 0,
@@ -527,12 +526,16 @@ interface TechnicianDragItemProps {
   technician: Technician;
   isSelected: boolean;
   onClick: () => void;
+  onDragStart?: () => void;
 }
 
-const TechnicianDragItem: React.FC<TechnicianDragItemProps> = ({ technician, isSelected, onClick }) => {
+const TechnicianDragItem: React.FC<TechnicianDragItemProps> = ({ technician, isSelected, onClick, onDragStart }) => {
   const [{ isDragging }, drag] = useDrag({
     type: TECH_DRAG_TYPE,
-    item: { type: TECH_DRAG_TYPE, technicianId: technician.id },
+    item: () => {
+      onDragStart?.();
+      return { type: TECH_DRAG_TYPE, technicianId: technician.id };
+    },
     collect: (monitor) => ({ isDragging: monitor.isDragging() }),
   });
 
@@ -631,14 +634,18 @@ interface TeamDragItemProps {
   onAddMember: () => void;
   onToggleLeader: (memberId: string, currentRole: string) => void;
   onRemoveMember: (memberId: string) => void;
+  onDragStart?: () => void;
 }
 
-const TeamDragItem: React.FC<TeamDragItemProps> = ({ team, isSelected, onClick, onDelete, onAddMember, onToggleLeader, onRemoveMember }) => {
+const TeamDragItem: React.FC<TeamDragItemProps> = ({ team, isSelected, onClick, onDelete, onAddMember, onToggleLeader, onRemoveMember, onDragStart }) => {
   const [expanded, setExpanded] = useState(false);
 
   const [{ isDragging }, drag] = useDrag({
     type: TEAM_DRAG_TYPE,
-    item: { type: TEAM_DRAG_TYPE, teamId: team.id },
+    item: () => {
+      onDragStart?.();
+      return { type: TEAM_DRAG_TYPE, teamId: team.id };
+    },
     collect: (monitor) => ({ isDragging: monitor.isDragging() }),
   });
 
@@ -1508,6 +1515,7 @@ const ChantierKanban: React.FC<ChantierKanbanProps> = ({ onViewChantier, onSetti
                             technician={tech}
                             isSelected={selectedTechFilter === tech.id}
                             onClick={() => setSelectedTechFilter(selectedTechFilter === tech.id ? null : tech.id)}
+                            onDragStart={() => setTechPanelOpen(false)}
                           />
                         ))}
                       </>
@@ -1525,6 +1533,7 @@ const ChantierKanban: React.FC<ChantierKanbanProps> = ({ onViewChantier, onSetti
                             technician={tech}
                             isSelected={selectedTechFilter === tech.id}
                             onClick={() => setSelectedTechFilter(selectedTechFilter === tech.id ? null : tech.id)}
+                            onDragStart={() => setTechPanelOpen(false)}
                           />
                         ))}
                       </>
@@ -1562,6 +1571,7 @@ const ChantierKanban: React.FC<ChantierKanbanProps> = ({ onViewChantier, onSetti
                         onAddMember={() => setAddMemberTeamId(team.id)}
                         onToggleLeader={(memberId, currentRole) => updateMemberRole(team.id, memberId, currentRole === 'LEADER' ? 'MEMBER' : 'LEADER')}
                         onRemoveMember={(memberId) => removeTeamMember(team.id, memberId)}
+                        onDragStart={() => setTechPanelOpen(false)}
                       />
                     ))}
                     {teams.length === 0 && (
@@ -1612,8 +1622,9 @@ const ChantierKanban: React.FC<ChantierKanbanProps> = ({ onViewChantier, onSetti
               padding: '8px 8px 8px 36px',
               overflowX: 'auto',
               flex: 1,
-              alignItems: 'flex-start',
+              alignItems: 'stretch',
               WebkitOverflowScrolling: 'touch',
+              minHeight: 0,
             }}
           >
             {statuses.map(status => (
