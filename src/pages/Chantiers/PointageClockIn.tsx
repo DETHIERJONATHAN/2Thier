@@ -306,8 +306,6 @@ const PointageClockIn: React.FC<PointageClockInProps> = ({
     ? distance <= geoFenceRadius ? 'ok' : distance <= geoFenceRadius * 2 ? 'warning' : 'danger'
     : null;
 
-  const _distanceColor = distanceStatus === 'ok' ? '#52c41a' : distanceStatus === 'warning' ? '#faad14' : distanceStatus === 'danger' ? '#ff4d4f' : '#8c8c8c';
-
   return (
     <>
       <Button

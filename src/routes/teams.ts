@@ -719,8 +719,8 @@ router.delete('/assignments/:assignmentId', authenticateToken, async (req, res) 
 // Query: ?chantierId=xxx | ?technicianId=xxx | ?date=YYYY-MM-DD | ?startDate=&endDate=
 router.get('/time-entries', authenticateToken, async (req, res) => {
   try {
-    const organizationId = getOrgId(req, res);
-    if (!organizationId) return;
+    const organizationId = getOrgId(req);
+    if (!organizationId) return res.status(400).json({ error: 'Organization ID required' });
     const { chantierId, technicianId, date, startDate, endDate } = req.query;
 
     const where: any = { organizationId };
@@ -752,8 +752,8 @@ router.get('/time-entries', authenticateToken, async (req, res) => {
 // ── POST /api/teams/time-entries ──
 router.post('/time-entries', authenticateToken, async (req, res) => {
   try {
-    const organizationId = getOrgId(req, res);
-    if (!organizationId) return;
+    const organizationId = getOrgId(req);
+    if (!organizationId) return res.status(400).json({ error: 'Organization ID required' });
     const {
       technicianId, chantierId, date, startTime, endTime, breakMinutes, type, note,
       // Anti-fraud fields
@@ -873,8 +873,8 @@ router.post('/time-entries', authenticateToken, async (req, res) => {
 // Query: ?startDate=&endDate= | ?technicianId=
 router.get('/time-entries/summary', authenticateToken, async (req, res) => {
   try {
-    const organizationId = getOrgId(req, res);
-    if (!organizationId) return;
+    const organizationId = getOrgId(req);
+    if (!organizationId) return res.status(400).json({ error: 'Organization ID required' });
     const { startDate, endDate, technicianId } = req.query;
 
     const where: any = { organizationId, endTime: { not: null } };
@@ -919,8 +919,8 @@ router.get('/time-entries/summary', authenticateToken, async (req, res) => {
 // ── PUT /api/teams/time-entries/:id ──
 router.put('/time-entries/:id', authenticateToken, async (req, res) => {
   try {
-    const organizationId = getOrgId(req, res);
-    if (!organizationId) return;
+    const organizationId = getOrgId(req);
+    if (!organizationId) return res.status(400).json({ error: 'Organization ID required' });
     const { startTime, endTime, breakMinutes, type, note } = req.body;
 
     const existing = await db.timeEntry.findFirst({ where: { id: req.params.id, organizationId } });
@@ -963,8 +963,8 @@ router.put('/time-entries/:id', authenticateToken, async (req, res) => {
 // ── PUT /api/teams/time-entries/:id/clock-out ── (Pointer la sortie)
 router.put('/time-entries/:id/clock-out', authenticateToken, async (req, res) => {
   try {
-    const organizationId = getOrgId(req, res);
-    if (!organizationId) return;
+    const organizationId = getOrgId(req);
+    if (!organizationId) return res.status(400).json({ error: 'Organization ID required' });
 
     const { latitude, longitude, photo, deviceInfo } = req.body || {};
 
@@ -1029,8 +1029,8 @@ router.put('/time-entries/:id/clock-out', authenticateToken, async (req, res) =>
 // ── DELETE /api/teams/time-entries/:id ──
 router.delete('/time-entries/:id', authenticateToken, async (req, res) => {
   try {
-    const organizationId = getOrgId(req, res);
-    if (!organizationId) return;
+    const organizationId = getOrgId(req);
+    if (!organizationId) return res.status(400).json({ error: 'Organization ID required' });
     const existing = await db.timeEntry.findFirst({ where: { id: req.params.id, organizationId } });
     if (!existing) {
       return res.status(404).json({ success: false, message: 'Pointage non trouvé' });

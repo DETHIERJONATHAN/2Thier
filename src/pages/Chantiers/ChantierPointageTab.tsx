@@ -15,8 +15,6 @@ import { useAuthenticatedApi } from '../../hooks/useAuthenticatedApi';
 import PointageClockIn from './PointageClockIn';
 import { STATUS_LABELS, POINTAGE_STATUS_OPTIONS } from './pointageConstants';
 import dayjs from 'dayjs';
-import duration from 'dayjs/plugin/duration';
-dayjs.extend(duration);
 
 const { Text } = Typography;
 
@@ -91,7 +89,7 @@ const ChantierPointageTab: React.FC<ChantierPointageTabProps> = ({ chantierId, c
   const apiHook = useAuthenticatedApi();
   const api = useMemo(() => apiHook.api, [apiHook.api]);
   const [entries, setEntries] = useState<TimeEntry[]>([]);
-  const [_loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(false);
   const [technicians, setTechnicians] = useState<any[]>([]);
 
   // Quick pointage state
@@ -437,6 +435,7 @@ const ChantierPointageTab: React.FC<ChantierPointageTabProps> = ({ chantierId, c
             columns={columns}
             rowKey="id"
             size="small"
+            loading={loading}
             pagination={{ pageSize: 20, showTotal: (t) => `${t} pointage(s)` }}
             style={{ fontSize: 12 }}
           />

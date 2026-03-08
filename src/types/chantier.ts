@@ -45,6 +45,9 @@ export interface Chantier {
   receptionDate?: string | null;
   deliveryDate?: string | null;
   completedDate?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
+  geoFenceRadius?: number | null;
   createdAt: string;
   updatedAt: string;
 
@@ -129,6 +132,7 @@ export interface ChantierAssignment {
     color: string;
     type: TechnicianType;
     specialties: string[];
+    company?: string | null;
   };
   Team?: {
     id: string;

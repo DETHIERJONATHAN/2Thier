@@ -36,7 +36,6 @@ import ChantierEventsTab from './ChantierEventsTab';
 import ChantierHistoryTab from './ChantierHistoryTab';
 import ChantierPointageTab from './ChantierPointageTab';
 
-const { TabPane } = Tabs;
 const { TextArea } = Input;
 const { Text, Title } = Typography;
 
@@ -341,12 +340,12 @@ const ChantierDetailPage: React.FC = () => {
       )}
 
       {/* Content Tabs */}
-      <Tabs defaultActiveKey={initialTab} type="card">
-        <TabPane tab={<span><FileTextOutlined /> Informations</span>} key="info">
+      <Tabs defaultActiveKey={initialTab} type="card" items={[
+        { key: 'info', label: <span><FileTextOutlined /> Informations</span>, children: (<>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px', padding: '16px 0' }}>
             {/* Colonne gauche - Détails chantier */}
             <Card title="Détails du chantier" size="small">
-              <Descriptions column={1} labelStyle={{ fontWeight: 600, width: '140px' }}>
+              <Descriptions column={1} styles={{ label: { fontWeight: 600, width: '140px' } }}>
                 <Descriptions.Item label="Produit">
                   <Tag color={chantier.productColor || '#722ed1'}>
                     {renderProductIcon(chantier.productIcon, 14)} {chantier.productLabel}
@@ -546,7 +545,7 @@ const ChantierDetailPage: React.FC = () => {
                   size="small"
                   style={{ borderColor: '#722ed1', borderWidth: 1 }}
                 >
-                  <Descriptions column={1} labelStyle={{ fontWeight: 600, width: '120px' }} size="small">
+                  <Descriptions column={1} styles={{ label: { fontWeight: 600, width: '120px' } }} size="small">
                     {genDoc.documentNumber && (
                       <Descriptions.Item label="N° devis">
                         <Tag color="purple">{genDoc.documentNumber}</Tag>
@@ -754,9 +753,8 @@ const ChantierDetailPage: React.FC = () => {
                 : <Text type="secondary">Aucune note</Text>
             )}
           </Card>
-        </TabPane>
-
-        <TabPane tab={<span><FileTextOutlined /> Document</span>} key="document">
+        </>), },
+        { key: 'document', label: <span><FileTextOutlined /> Document</span>, children: (
           <div style={{ padding: '24px 0', display: 'flex', flexDirection: 'column', gap: 16 }}>
             {/* Document signé (uploadé) */}
             {chantier.documentUrl ? (
@@ -829,10 +827,8 @@ const ChantierDetailPage: React.FC = () => {
               </Card>
             )}
           </div>
-        </TabPane>
-
-        {/* Onglet TBL — visible par tous */}
-        <TabPane tab={<span><PartitionOutlined /> TBL</span>} key="tbl">
+        ), },
+        { key: 'tbl', label: <span><PartitionOutlined /> TBL</span>, children: (
           <div style={{ padding: '24px 0' }}>
             <Card>
               <div style={{ textAlign: 'center', padding: '32px 16px' }}>
@@ -859,7 +855,7 @@ const ChantierDetailPage: React.FC = () => {
 
             {/* Infos résumées pour les techniciens */}
             <Card title="Résumé du chantier" size="small" style={{ marginTop: 16 }}>
-              <Descriptions column={2} size="small" labelStyle={{ fontWeight: 600 }}>
+              <Descriptions column={2} size="small" styles={{ label: { fontWeight: 600 } }}>
                 <Descriptions.Item label="Produit">
                   <Tag color={chantier.productColor || '#722ed1'}>
                     {renderProductIcon(chantier.productIcon, 14)} {chantier.productLabel}
@@ -892,14 +888,11 @@ const ChantierDetailPage: React.FC = () => {
               </Card>
             )}
           </div>
-        </TabPane>
-
-        <TabPane tab={<span><HistoryOutlined /> Historique</span>} key="history">
+        ), },
+        { key: 'history', label: <span><HistoryOutlined /> Historique</span>, children: (
           <ChantierHistoryTab chantierId={chantier.id} statusesMap={statusesMap} />
-        </TabPane>
-
-        {/* Onglet Comptabilité — visible par admin, comptable, super_admin */}
-        {canSeeCompta && <TabPane tab={<span><DollarOutlined /> Comptabilité</span>} key="compta">
+        ), },
+        ...(canSeeCompta ? [{ key: 'compta', label: <span><DollarOutlined /> Comptabilité</span>, children: (
           <ChantierInvoicesTab
             chantierId={chantier.id}
             chantierAmount={displayAmount}
@@ -907,19 +900,15 @@ const ChantierDetailPage: React.FC = () => {
             onChantierStatusChanged={fetchChantier}
             onValidationChanged={fetchChantier}
           />
-        </TabPane>}
-
-        {/* Onglet Événements */}
-        <TabPane tab={<span><CalendarOutlined /> Événements</span>} key="events">
+        ), }] : []),
+        { key: 'events', label: <span><CalendarOutlined /> Événements</span>, children: (
           <ChantierEventsTab
             chantierId={chantier.id}
             chantierAddress={displayAddress}
             chantierLabel={chantier.customLabel || chantier.clientName || chantier.productLabel || ''}
           />
-        </TabPane>
-
-        {/* Onglet Pointage */}
-        <TabPane tab={<span><ClockCircleOutlined /> Pointage</span>} key="pointage">
+        ), },
+        { key: 'pointage', label: <span><ClockCircleOutlined /> Pointage</span>, children: (
           <ChantierPointageTab
             chantierId={chantier.id}
             chantierName={chantier.clientName || chantier.customLabel || chantier.productLabel}
@@ -927,8 +916,8 @@ const ChantierDetailPage: React.FC = () => {
             chantierLongitude={chantier.longitude}
             geoFenceRadius={chantier.geoFenceRadius}
           />
-        </TabPane>
-      </Tabs>
+        ), },
+      ]} />
     </div>
   );
 };
