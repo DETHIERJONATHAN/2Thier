@@ -107,6 +107,20 @@ const ChantierDetailPage: React.FC = () => {
     } catch { /* silencieux — pas de review = pas d'affichage */ }
   }, [api, id]);
 
+  const fetchChantier = useCallback(async () => {
+    if (!id) return;
+    try {
+      setLoading(true);
+      const response = await api.get(`/api/chantiers/${id}`) as { success: boolean; data: Chantier };
+      setChantier(response.data);
+    } catch (err) {
+      console.error('[ChantierDetail] Erreur:', err);
+      message.error('Erreur lors du chargement du chantier');
+    } finally {
+      setLoading(false);
+    }
+  }, [api, id, message]);
+
   const handleRejectToLead = useCallback(async () => {
     if (!id || !rejectReason.trim()) {
       message.warning('Veuillez indiquer la raison du rejet');
@@ -164,20 +178,6 @@ const ChantierDetailPage: React.FC = () => {
       setSendingToClient(false);
     }
   }, [api, id, message, fetchReception]);
-
-  const fetchChantier = useCallback(async () => {
-    if (!id) return;
-    try {
-      setLoading(true);
-      const response = await api.get(`/api/chantiers/${id}`) as { success: boolean; data: Chantier };
-      setChantier(response.data);
-    } catch (err) {
-      console.error('[ChantierDetail] Erreur:', err);
-      message.error('Erreur lors du chargement du chantier');
-    } finally {
-      setLoading(false);
-    }
-  }, [api, id, message]);
 
   useEffect(() => {
     fetchChantier();
