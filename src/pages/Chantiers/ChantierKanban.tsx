@@ -424,7 +424,7 @@ const KanbanColumn: React.FC<KanbanColumnProps> = ({ status, chantiers, onDrop, 
         display: 'flex',
         flexDirection: 'column',
         flexShrink: 0,
-        minHeight: '100%',
+        alignSelf: 'stretch',
         transition: 'background-color 0.2s, border-color 0.2s',
         border: borderStyle,
         position: 'relative',
@@ -1101,7 +1101,7 @@ const ChantierKanban: React.FC<ChantierKanbanProps> = ({ onViewChantier, onSetti
   }
 
   return (
-    <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+    <div style={{ height: '100dvh', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
       {/* Toolbar */}
       <div style={{
         padding: '8px 12px',
