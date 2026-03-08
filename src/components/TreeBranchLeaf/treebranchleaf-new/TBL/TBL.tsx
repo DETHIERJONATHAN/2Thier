@@ -765,6 +765,41 @@ const TBL: React.FC<TBLProps> = ({
   const rawNodes = useMemo(() => (useFixed ? (newData.rawNodes || []) : (oldData.rawNodes || [])), [useFixed, newData.rawNodes, oldData.rawNodes]); // 🔥 NOUVEAU: Nœuds bruts pour Cascader
   const effectiveTreeId = tree?.id || requestedTreeId;
 
+  // 🔍 REVIEW MODE: Callback de soumission (après rawNodes + formData)
+  const onSubmitReview = useCallback(async () => {
+    const checkedFields = Object.entries(reviewChecked).filter(([, v]) => v);
+    const missingComments = checkedFields.filter(([id]) => !reviewComments[id]?.trim());
+    if (missingComments.length > 0) {
+      message.warning('Ajoutez un commentaire pour chaque problème signalé');
+      return;
+    }
+    if (!reviewEventId) {
+      message.error('Pas d\'événement lié — Impossible d\'envoyer la revue');
+      return;
+    }
+    setSubmittingReview(true);
+    try {
+      const allTechNodes = (rawNodes || []).filter((n: any) => n.technicianVisible === true);
+      const reviews = allTechNodes.map((node: any) => ({
+        nodeId: node.id,
+        reviewedValue: formData[node.id] != null ? String(formData[node.id]) : null,
+        isModified: reviewChecked[node.id] === true,
+        modificationNote: reviewChecked[node.id] ? (reviewComments[node.id] || null) : null,
+      }));
+      await api.post(`/api/chantier-workflow/events/${reviewEventId}/submit-review`, {
+        reviews,
+        reviewType: 'TECHNICAL',
+      });
+      message.success('Revue technique envoyée avec succès !');
+      window.history.back();
+    } catch (err: any) {
+      console.error('[TBL Review] Erreur submit:', err);
+      message.error(err?.message || 'Erreur lors de l\'envoi de la revue');
+    } finally {
+      setSubmittingReview(false);
+    }
+  }, [reviewChecked, reviewComments, reviewEventId, rawNodes, formData, api]);
+
   // ⚡ OPTIMISATION: Index O(1) pour résolution des alias sharedRef (remplace boucle O(n²))
   const sharedRefAliasMap = useMemo(() => {
     const map = new Map<string, string>();
@@ -4286,6 +4321,8 @@ const TBL: React.FC<TBLProps> = ({
                         reviewComments={reviewComments}
                         onReviewCheck={onReviewCheck}
                         onReviewComment={onReviewComment}
+                        submittingReview={submittingReview}
+                        onSubmitReview={onSubmitReview}
                       />
                     </div>
                   )
@@ -5109,6 +5146,8 @@ interface TBLTabContentWithSectionsProps {
   reviewComments?: Record<string, string>;
   onReviewCheck?: (fieldId: string, checked: boolean) => void;
   onReviewComment?: (fieldId: string, comment: string) => void;
+  submittingReview?: boolean;
+  onSubmitReview?: () => void;
 }
 
 const TBLTabContentWithSections: React.FC<TBLTabContentWithSectionsProps> = React.memo(({
@@ -5136,6 +5175,8 @@ const TBLTabContentWithSections: React.FC<TBLTabContentWithSectionsProps> = Reac
   reviewComments,
   onReviewCheck,
   onReviewComment,
+  submittingReview = false,
+  onSubmitReview,
 }) => {
   const stats = useMemo(() => {
     let total = 0;
@@ -5618,43 +5659,7 @@ const TBLTabContentWithSections: React.FC<TBLTabContentWithSectionsProps> = Reac
             size="large"
             icon={<SendOutlined />}
             loading={submittingReview}
-            onClick={async () => {
-              // Vérifier que chaque champ coché a un commentaire
-              const checkedFields = Object.entries(reviewChecked).filter(([, v]) => v);
-              const missingComments = checkedFields.filter(([id]) => !reviewComments[id]?.trim());
-              if (missingComments.length > 0) {
-                message.warning('Ajoutez un commentaire pour chaque problème signalé');
-                return;
-              }
-              if (!reviewEventId) {
-                message.error('Pas d\'événement lié — Impossible d\'envoyer la revue');
-                return;
-              }
-              setSubmittingReview(true);
-              try {
-                // Construire les reviews à partir du techVisibleSet
-                // Tous les champs technicianVisible sont envoyés : non-cochés = confirmés, cochés = modifiés
-                const allTechNodes = (rawNodes || []).filter((n: any) => n.technicianVisible === true);
-                const reviews = allTechNodes.map((node: any) => ({
-                  nodeId: node.id,
-                  reviewedValue: formData[node.id] != null ? String(formData[node.id]) : null,
-                  isModified: reviewChecked[node.id] === true,
-                  modificationNote: reviewChecked[node.id] ? (reviewComments[node.id] || null) : null,
-                }));
-                await api.post(`/api/chantier-workflow/events/${reviewEventId}/submit-review`, {
-                  reviews,
-                  reviewType: 'TECHNICAL',
-                });
-                message.success('Revue technique envoyée avec succès !');
-                // Retour à la page chantier
-                window.history.back();
-              } catch (err: any) {
-                console.error('[TBL Review] Erreur submit:', err);
-                message.error(err?.message || 'Erreur lors de l\'envoi de la revue');
-              } finally {
-                setSubmittingReview(false);
-              }
-            }}
+            onClick={onSubmitReview}
             style={{
               height: 44,
               fontSize: 15,
